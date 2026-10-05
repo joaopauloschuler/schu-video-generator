@@ -40,9 +40,9 @@ Rules that apply to every step:
 - [x] Works with `--preview`, variants and `--scene`
 
 ### Step 11 — `vidgen storyboard`
-- [ ] Contact sheet PNG per scene and one for the whole video: grid of stills labelled `beat @ time`, narration text under each
-- [ ] Options: `--scene`, `--per-beat N`, `--variant`, `--preview` (default), `--json` (paths)
-- [ ] Readable at a glance when opened as an image by an AI (fixed max width, legible label size)
+- [x] Contact sheet PNG per scene and one for the whole video: grid of stills labelled `beat @ time`, narration text under each
+- [x] Options: `--scene`, `--per-beat N`, `--variant`, `--preview` (default), `--json` (paths)
+- [x] Readable at a glance when opened as an image by an AI (fixed max width, legible label size)
 
 ### Step 12 — Layout introspection
 - [ ] Worker dumps, at each captured frame, every visible mobject: kind, text content, pixel bbox, font size in px, fill colour, opacity

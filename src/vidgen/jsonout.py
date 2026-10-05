@@ -23,6 +23,7 @@ from vidgen.project import Project
 
 if TYPE_CHECKING:
     from vidgen.render.pipeline import RenderResult
+    from vidgen.storyboard import StoryboardResult
 
 #: Version of the JSON document shapes (not of vidgen).
 SCHEMA_VERSION = 1
@@ -218,3 +219,53 @@ def render_document(
 def schema_document(project: Project | None, schema: Mapping[str, Any], warnings: Iterable[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """The ``vidgen schema --json`` document: the JSON Schema under ``schema``."""
     return envelope("schema", True, warnings, project=None if project is None else _path(project.root), schema=dict(schema))
+
+
+# ----- storyboard --------------------------------------------------------------------------------
+
+
+def storyboard_document(
+    project: Project, result: StoryboardResult, elapsed: float, warnings: Iterable[Mapping[str, Any]] = ()
+) -> dict[str, Any]:
+    """The ``vidgen storyboard --json`` document: every sheet page with the stills it shows."""
+    worker_warnings = [warning(message, scene) for scene, message in result.warnings]
+    sheets = [
+        {
+            "kind": sheet.kind,
+            "scene": sheet.scene,
+            "page": sheet.page,
+            "pages": sheet.pages,
+            "path": _path(sheet.path),
+            "width": sheet.width,
+            "height": sheet.height,
+            "frames": [
+                {
+                    "scene": still.scene_id,
+                    "beat": still.beat_id,
+                    "k": still.k,
+                    "n": still.n,
+                    "time": still.time,
+                    "scene_time": still.scene_time,
+                    "path": _path(still.path),
+                }
+                for still in sheet.stills
+            ],
+        }
+        for sheet in result.sheets
+    ]
+    fmt = result.format
+    return envelope(
+        "storyboard",
+        True,
+        [*warnings, *worker_warnings],
+        project=_path(project.root),
+        variant=project.variant,
+        preview=result.preview,
+        per_beat=result.per_beat,
+        format={"width": fmt.width, "height": fmt.height, "fps": fmt.fps},
+        folder=_path(result.folder),
+        rendered=result.rendered,
+        reused=result.reused,
+        elapsed=round(elapsed, 3),
+        sheets=sheets,
+    )

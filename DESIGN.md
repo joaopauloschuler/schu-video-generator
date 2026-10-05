@@ -53,11 +53,14 @@ src/vidgen/
   runtime.py              # "current project/theme" context used by helpers and extensions
   scene.py                # NarratedScene base class + narrate()
   capture.py              # frame capture: stills at beat ends / N per beat (see §13)
+  storyboard.py           # `vidgen storyboard`: reuse/render stills, write contact sheets (§14)
+  sheets.py               # contact-sheet layout and drawing with Pillow (§14)
   helpers.py              # theme-aware text helpers and generic drawing utilities
   layout.py               # fit/wrap text, beat distribution, chart numbers, LaTeX detection
   tts/__init__.py         # provider seam: get_provider(cfg)
   tts/elevenlabs.py       # ElevenLabs provider (stdlib urllib), cache by hash
-  render/                 # worker.py (one scene per process), pipeline.py, ffmpeg.py
+  render/                 # worker.py (one scene per process), pipeline.py, ffmpeg.py,
+                          # fingerprint.py (what a scene's render depends on, §14)
   subtitles.py            # SRT from beat timings
   fileio.py               # atomic writes; replacing files that Windows programs keep open
   scenes/                 # built-in scene library (registered like extensions)
@@ -524,6 +527,8 @@ vidgen schema [PROJECT] [--scene TYPE | --all] [--json]   # JSON Schema of video
 vidgen tts [PROJECT] [--force] [--dry-run] [--beat ID ...] [--variant NAME]
 vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going]
               [--jobs N] [--frames] [--frames-per-beat N] [--json]
+vidgen storyboard [PROJECT] [--scene ID ...] [--per-beat N] [--variant NAME] [--preview | --final]
+              [--width PX] [--jobs N] [--force] [--json]      # contact sheets (§14)
 ```
 PROJECT defaults to the current directory. `--scene` re-renders only those scenes and re-joins
 using the existing renders of the others (missing ones are rendered). Exit code non-zero on error.
@@ -704,3 +709,50 @@ using the existing renders of the others (missing ones are rendered). Exit code 
   empty list in the combined index and a warning.
 - **Outputs**: `RenderResult.frames_index` (`Path | None`); `vidgen render` prints `frames:
   <index>`; `render --json` `outputs.frames` (path or `null`; key added within version 1).
+
+## 14. Refinements (Step 11, storyboard)
+
+- **`vidgen storyboard [PROJECT] [--scene ID ...] [--per-beat N] [--variant NAME] [--preview |
+  --final] [--width PX] [--jobs N] [--force] [--json]`** (`vidgen/storyboard.py`
+  `make_storyboard(project, *, preview=True, scenes=None, per_beat=1, width=1280, jobs=1,
+  force=False) -> StoryboardResult`; reference: docs/CONFIG.md "Storyboard"). Preview format by
+  default. Writes `<render_dir>/storyboard/video-<p>.png` (whole video; not with `--scene`) and
+  `storyboard/scenes/<scene>-<p>.png`, `p` = page 1, 2, ... The folder is cleared first (with
+  `--scene`: the video pages and those scenes' pages), so no stale sheet survives.
+- **Built on Step 10's stills**: for each selected scene, `storyboard.stills_current(project,
+  preview, scene_id, per_beat)` checks the scene's timings (format, `render.frames ==
+  per_beat`, `render.fingerprint`), its `frames/<scene>/index.json` and PNGs. Scenes that fail
+  (or all selected with `force`) are rendered by `pipeline.render_scenes(project, preview, ids,
+  jobs, frames)`: the same workers as `render_project` (`_render_scenes`, renamed result type
+  `SceneRuns`), with audio, dispatching `post_scene` but not `pre_render`/`post_render`, no join;
+  it removes the combined `frames/index.json` when it renders anything. Stills are then read
+  from the per-scene indexes and timings (beat texts); a still's video time uses scene starts
+  summed from the per-scene timings' durations (`null` if a scene has no render at the format).
+- **Fingerprint** (`vidgen/render/fingerprint.py`, `scene_fingerprint(project, scene_id)`): a
+  SHA-256 over the scene's config entry, the config minus `scenes`/`variants` (with the variant
+  applied), the beats' MP3 size+mtime, the contents of the `.py` files of the extension folders,
+  size+mtime of the files under `<root>/assets`, the vidgen version and a digest of vidgen's own
+  source except `NOT_RENDER_INPUTS` (CLI, JSON, schema, sheets, storyboard, pipeline, ffmpeg,
+  subtitles, tts: modules that cannot change pixels or timing; new modules count by default).
+  The worker computes it before rendering and stores it as `render.fingerprint` in the scene's
+  timings (key added; older renders have none and count as stale). `vidgen render` does not use
+  it (it re-renders what it is asked to, as before).
+- **Sheet layout** (`vidgen/sheets.py`, `compose_pages(title, subtitle, scenes, frame_size, *,
+  width, detail, video_times, max_height) -> list[SheetPage]`): white page, a title line and a
+  line saying what stills/times mean; per scene a grey header band `N/M  id · type ·
+  start–end (duration)` (details dropped when narrow); stills of a beat side by side (a
+  *block*), each labelled `beat @ time` (`k/n @ time` with several per beat, the beat id then
+  prefixes the narration), the narration wrapped under the block (4 lines on video sheets, 6 on
+  scene sheets, `…` when cut). Columns: 16:9 → 4 (scene sheets 2), ~square → 5 (3), 9:16 → 5
+  (4); with N stills per beat the multiple of N nearest to that (≤ 8). Scenes that fit in the
+  rest of a row share it. Pages are `width` px wide (640–2000, default 1280; font sizes scale
+  with it) and at most about `1.25 x width` high, balanced so the last page is not nearly
+  empty; a scene continued on a new page repeats its header marked `(continued)`. Fonts: Inter,
+  else DejaVu Sans / Arial / Liberation Sans / Helvetica, else Pillow's built-in font.
+- **Why these sizes**: an AI agent sees the PNG through an image tool that downsizes large
+  images (around 1.2 megapixels / 1568 px long edge); at 1280 px wide the 19 px labels and
+  narration stay readable after that, which one huge image of the whole video would not.
+- **JSON** (`jsonout.storyboard_document`, `storyboard` in `cli.JSON_COMMANDS`): `project,
+  variant, preview, per_beat, format, folder, rendered, reused, elapsed, sheets: [{kind
+  (video|scene), scene, page, pages, path, width, height, frames: [{scene, beat, k, n, time,
+  scene_time, path}]}]`.

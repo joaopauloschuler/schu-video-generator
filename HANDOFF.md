@@ -737,3 +737,99 @@ Known gaps / TODOs
 How to test: `/home/claude/venv/bin/python -m pytest -q` (471 passed, 1 skipped). Manual:
 `vidgen render examples/minimal --preview --frames-per-beat 2 --jobs 4`, then look at
 `examples/minimal/build/preview/frames/`.
+
+## Step 11 — `vidgen storyboard`
+What was built
+- `vidgen storyboard [PROJECT] [--scene ID ...] [--per-beat N] [--variant NAME] [--preview |
+  --final] [--width PX] [--jobs N] [--force] [--json]` writes contact sheets to
+  `build/<preview|final>[_<variant>]/storyboard/`: `video-<p>.png` (the whole video, pages of
+  bounded size) and `scenes/<scene>-<p>.png` (one scene, larger stills). Each still is
+  labelled `beat @ time` (video time `m:ss.s` on video sheets, scene time on scene sheets;
+  `k/n @ time` with several stills per beat), the beat's narration is wrapped (and cut with
+  `…`) under it, every scene has a header band `N/M  id · type · start–end (duration)`.
+  Preview format by default.
+- Reuse: a scene is rendered (with stills, in the usual worker processes, `--jobs`) only when
+  its stills are missing, at another `--per-beat`/format, or stale. Staleness uses a new **scene
+  fingerprint** the worker stores in `timings/<scene>.json` (`render.fingerprint`): scene entry,
+  rest of the config (variant applied), beat MP3 stat, extension `.py` contents, `assets/` stat,
+  vidgen's own rendering source. So `storyboard` after `render --preview --frames` or after an
+  earlier storyboard renders nothing (~2 s for examples/minimal), and after an edit only the
+  edited scenes.
+- Sheet design (iterated by looking at the PNGs): white page, 1280 px wide (640–2000, fonts
+  scale with the width), at most ~1.25 x width high, balanced pages; 16:9 → 4 stills per row
+  (scene sheets 2), 9:16 → 5 (4), N stills per beat → the nearest multiple of N; short scenes
+  share a row; a scene continued on the next page repeats its header `(continued)`.
+- `--json`: Step 8 envelope with `project, variant, preview, per_beat, format, folder, rendered,
+  reused, elapsed, sheets: [{kind, scene, page, pages, path, width, height, frames: [{scene,
+  beat, k, n, time, scene_time, path}]}]`.
+- Docs: docs/CONFIG.md "Storyboard (`vidgen storyboard`)" + "`vidgen storyboard --json`";
+  README (quick start, command table, paragraph); EXTENDING.md (check scenes with storyboard,
+  hooks); `examples/minimal/video.yaml` usage line; DESIGN §2, §8, new §14.
+
+Files
+- New: `src/vidgen/storyboard.py`, `src/vidgen/sheets.py`, `src/vidgen/render/fingerprint.py`,
+  `tests/test_storyboard.py` (21 tests, 2 render tests).
+- Changed: `cli.py` (`cmd_storyboard`, parser, `JSON_COMMANDS`), `jsonout.py`
+  (`storyboard_document`), `render/pipeline.py` (`render_scenes`, `_SceneRuns` → `SceneRuns`),
+  `render/worker.py` (`render.fingerprint`), docs above, `examples/minimal/video.yaml`,
+  tasklist.md.
+
+Public interfaces added/changed (internal modules; `vidgen.api` unchanged)
+- `vidgen.storyboard`: `make_storyboard(project, *, preview=True, scenes=None, per_beat=1,
+  width=1280, jobs=1, force=False) -> StoryboardResult` (`folder, format, preview, per_beat,
+  sheets: [Sheet], rendered, reused, warnings`), `Sheet(kind, scene, page, pages, path, width,
+  height, stills)`, `stills_current(project, preview, scene_id, per_beat)`, `storyboard_dir`.
+- `vidgen.sheets`: `compose_pages(...) -> list[SheetPage]`, `SheetScene`, `SheetStill`,
+  `SheetPage`, `load_font`, `wrap_text`, `fit_line`, `format_time`, `DEFAULT_WIDTH`,
+  `MIN_WIDTH`/`MAX_WIDTH`, `PAGE_RATIO`, `MAX_COLUMNS`.
+- `vidgen.render.fingerprint`: `scene_fingerprint(project, scene_id)`, `vidgen_source_digest()`,
+  `NOT_RENDER_INPUTS`, `FINGERPRINT_VERSION`.
+- `pipeline.render_scenes(project, preview, scene_ids, jobs=1, frames=0) -> SceneRuns`.
+- Per-scene timings `render` block: new key `fingerprint`. JSON: new `storyboard` document.
+
+Decisions / deviations
+- Options beyond the task list: `--final` (the opposite of the default `--preview`), `--width`,
+  `--jobs`, `--force` (files outside `assets/` are not tracked by the fingerprint).
+- With `--scene`, no whole-video sheet is written and old `video-*.png` are deleted (they could
+  show the scene's old stills). Without it, the storyboard folder is cleared first.
+- Storyboard renders scenes but does not join the video (and does not dispatch
+  `pre_render`/`post_render`); `vidgen render` behaviour is unchanged (it does not use the
+  fingerprint). Video times come from the per-scene timings' durations (the joined video probes
+  the MP4s; the difference is below a frame).
+- Default page 1280 px x ≤1600 px rather than 2000 px wide: image tools downscale big images
+  (to ~1.2 MP), and at this size the 19 px labels/narration remained clearly legible when I
+  opened the sheets with the Read tool; a 9:16 video at 5 per row gets 2 rows per page.
+- Light sheet background: dark frames stand out and text has maximum contrast.
+
+What I saw in the storyboards (examples/minimal at 16:9 and `--variant vertical`, kphi3 16:9)
+- Sheets read well: labels, times and narration legible; long kphi3 narration is cut after 4
+  lines with `…`; `--per-beat 3` shows animations in progress (e.g. the title still being
+  written at 1/3 of the first beat).
+- Built-in scene issues for later steps (Step 15 layout regions / Step 21+ reviews / lint):
+  - 9:16 in general: most built-ins keep their 16:9 layout centred in the tall frame, leaving
+    the top and bottom thirds empty. Worst: `code` (the listing is scaled to the frame width,
+    text becomes illegibly small), `bullets` (small items in the middle band), `quote` and
+    `text_card` (small text in a large empty frame), `line_chart` (narrow plot, tiny tick and
+    axis labels). `image` with `fit: cover` + Ken Burns `end_focus [0.7, 0.35]` pushes the sun
+    half out of frame in 9:16.
+  - Small/dim secondary text at 16:9 too: `title` authors line, `quote` source line,
+    `equation` and `bar_chart` captions, `line_chart` tick/axis labels, `image` caption,
+    `end_card` lines — likely below a sensible minimum size for 480p/mobile (Step 13 lint).
+  - `equation`: the formula is small with lots of empty space; `bullets` 16:9 leaves the lower
+    half empty with 4 short items.
+- Generated PNGs were not committed (`build/` is ignored).
+
+Known gaps / TODOs
+- The fingerprint does not see files a scene reads outside `assets/` or the extension folders'
+  `.py` files (`--force`), nor changes in installed libraries (Manim, fonts).
+- `vidgen render` could reuse unchanged scenes via the fingerprint too (not done: it would
+  change its documented behaviour).
+- Pages are capped by height but a single scene with very many stills just gets more pages; no
+  overall cap on page count.
+- Step 12 can add layout boxes to the stills; a later step could overlay lint findings (Step 13)
+  on the sheets.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (492 passed, 1 skipped). Manual:
+`vidgen storyboard examples/minimal -j 4`, `vidgen storyboard examples/minimal --variant
+vertical`, `--per-beat 3`, `--json`; open `examples/minimal/build/preview/storyboard/*.png`.
+

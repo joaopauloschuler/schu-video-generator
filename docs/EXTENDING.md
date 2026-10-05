@@ -202,7 +202,10 @@ def validate_project(cls, params, project):
   `with self.narrate(...)` block has ended (or, for a silent scene, at `duration - outro`), so
   a scene reads best in stills when each beat ends showing what it explained. Capturing only
   observes the frames written; it never changes timing. `self.capture` is the active
-  capture object, or `None` (internal: vidgen's own tools attach to it).
+  capture object, or `None` (internal: vidgen's own tools attach to it). Check your scene
+  with `vidgen storyboard --scene ID` (add `--variant vertical` for 9:16): it shows those
+  stills with their narration. Its reuse of stills tracks the `.py` files of your extension
+  folders and `assets/`; if your scene reads other files, use `--force` after changing them.
 
 ```python
 @scene("checklist")
@@ -305,6 +308,8 @@ Event data (see DESIGN.md §6.2):
 
 Render hooks run in the `vidgen render` process (not in the per-scene worker processes);
 `post_scene` runs once per scene rendered in this run (not for reused renders).
+`vidgen storyboard` dispatches `post_scene` for the scenes it renders, but not `pre_render` or
+`post_render` (it does not make a video).
 
 ```python
 @hook("pre_tts")

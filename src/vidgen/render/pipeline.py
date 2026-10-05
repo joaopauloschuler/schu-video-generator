@@ -66,8 +66,10 @@ class RenderResult:
 
 
 @dataclass
-class _SceneRuns:
-    """What :func:`_render_scenes` did, in config order."""
+class SceneRuns:
+    """What :func:`render_scenes` did, in config order: scenes rendered, failures
+    (``{scene, exit_code, output_tail}``), wall seconds per scene and ``(scene_id, message)``
+    worker warnings."""
 
     rendered: list[str] = field(default_factory=list)
     failed: list[dict[str, Any]] = field(default_factory=list)
@@ -211,7 +213,7 @@ def _runs(task: Callable[[int, str], _WorkerRun], scene_ids: list[str], jobs: in
 
 def _render_scenes(
     project: Project, preview: bool, scene_ids: list[str], no_audio: bool, keep_going: bool, jobs: int, frames: int = 0
-) -> _SceneRuns:
+) -> SceneRuns:
     """Render ``scene_ids`` with up to ``jobs`` workers.
 
     Without ``keep_going`` the first failure raises (with ``jobs > 1``, scenes already running
@@ -220,7 +222,7 @@ def _render_scenes(
     live = jobs == 1 and sys.stderr.isatty()
     total = len(scene_ids)
     order = {sid: i for i, sid in enumerate(scene_ids)}
-    runs = _SceneRuns()
+    runs = SceneRuns()
     print_lock = threading.Lock()
 
     def say(message: str, err: bool = False) -> None:
@@ -266,6 +268,30 @@ def _render_scenes(
     runs.failed.sort(key=lambda f: order[f["scene"]])
     runs.warnings.sort(key=lambda w: order[w[0]])  # stable: a scene's warnings keep their order
     return runs
+
+
+def render_scenes(project: Project, preview: bool, scene_ids: list[str], jobs: int = 1, frames: int = 0) -> SceneRuns:
+    """Render only ``scene_ids`` (with narration sounds, ``frames`` stills per beat), without
+    joining the video; used by ``vidgen storyboard``.
+
+    Checks the scenes and (if any is rendered) warns about missing/stale audio like
+    :func:`render_project`, then runs
+    the workers (``jobs`` at a time; the first failure raises :class:`VidgenError`) and
+    dispatches ``post_scene`` after each. ``pre_render``/``post_render`` are not dispatched (no
+    video is made). The combined ``frames/index.json`` is removed when a scene is rendered, as
+    it no longer matches the scenes' stills.
+    """
+    from vidgen import extensions
+
+    if frames < 0:
+        raise VidgenError("frames per beat must not be negative")
+    with extensions.project_session(project):
+        _check_scenes(project)
+        if not scene_ids:
+            return SceneRuns()
+        warn_audio(project)
+        remove_file(project.render_dir(preview) / "frames" / "index.json")
+        return _render_scenes(project, preview, scene_ids, no_audio=False, keep_going=False, jobs=jobs, frames=frames)
 
 
 def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) -> tuple[Path, dict[str, Any]]:

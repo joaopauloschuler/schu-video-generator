@@ -7,7 +7,8 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 [format](#format-and-preview), [variants](#variants), [theme](#theme), [voice](#voice-voice),
 [narration](#narration-narration), [narration audio](#narration-audio-elevenlabs),
 [built-in scene types](#built-in-scenes),
-[JSON Schema](#json-schema-vidgen-schema), [JSON output of commands](#json-output---json).
+[JSON Schema](#json-schema-vidgen-schema), [frame stills](#frame-stills-vidgen-render---frames),
+[storyboard](#storyboard-vidgen-storyboard), [JSON output of commands](#json-output---json).
 
 ## Top level
 
@@ -536,9 +537,53 @@ Every scene render deletes the scene's old stills, and every `vidgen render` del
 older render. With `--scene ID --frames`, scenes that would be reused but have no stills at
 this count are rendered again.
 
+## Storyboard (`vidgen storyboard`)
+
+`vidgen storyboard [PROJECT]` writes **contact sheets**: PNG pages showing the stills of the
+video in a grid, each labelled `beat @ time` with the beat's narration under it and a header
+band per scene (`N/M  id · type · start–end (duration)`). It is the way to *look* at a video
+without watching it, and is made for AI agents that open the PNG with an image viewer: pages
+are 1280 px wide (`--width PX`, 640–2000) and at most about 1.25 times as high, the font sizes
+grow with the width, long narration is wrapped and cut with `…`, and long videos are split into
+several pages instead of one huge image. 16:9 videos get 4 stills per row (2 on a scene's
+sheet), 9:16 videos 5 (4); with `--per-beat N` a beat's stills stay side by side on one row.
+
+Files, in `build/<preview|final>[_<variant>]/storyboard/`:
+
+```
+storyboard/
+  video-1.png, video-2.png ...   # the whole video (times in the video, m:ss.s)
+  scenes/<scene>-1.png ...        # one scene, larger stills (times from the scene start)
+```
+
+Options:
+
+| option | |
+|---|---|
+| `--scene ID` | only this scene's sheet (repeatable); no `video-*.png` is written (old ones are deleted) |
+| `--per-beat N` | N stills per beat, evenly spaced, the last at the beat's end (default 1: the end of each beat) |
+| `--variant NAME` | storyboard a variant (e.g. the vertical one) |
+| `--preview` / `--final` | preview format (the default) or the final format |
+| `--width PX` | page width (default 1280) |
+| `--jobs N` | scenes rendered in parallel |
+| `--force` | render the selected scenes again even if their stills are current |
+| `--json` | print the sheets and the stills on each (below) |
+
+**What gets rendered.** The sheets are built from the stills of `vidgen render --frames` (see
+above). A scene is rendered again (with stills, in worker processes like `vidgen render`) only
+if its stills are missing, were taken at another `--per-beat` count or format, or are stale:
+each render records a fingerprint of what the scene depends on (its config entry, the other
+config sections except `scenes`/`variants`, its beats' MP3s, the project's extension code,
+the files under `assets/`, and vidgen's own rendering code), and a scene whose fingerprint
+changed is rendered again. So `vidgen storyboard` right after `vidgen render --preview
+--frames` renders nothing, and after an edit it renders only the edited scenes. Files a scene
+reads from outside `assets/` are not tracked: use `--force`. The storyboard does not join the
+video; `vidgen render` does. It dispatches `post_scene` for the scenes it renders, not
+`pre_render`/`post_render`.
+
 ## JSON output (`--json`)
 
-`vidgen validate`, `vidgen list-scenes`, `vidgen render` and `vidgen schema` accept `--json`: stdout then holds
+`vidgen validate`, `vidgen list-scenes`, `vidgen render`, `vidgen schema` and `vidgen storyboard` accept `--json`: stdout then holds
 exactly one JSON document (ASCII-only, non-ASCII characters escaped), and everything else
 (progress, `warning:` lines, Manim output) goes to stderr. These shapes are meant for programs
 and AI agents driving vidgen. Without `--json` the human output is unchanged.
@@ -553,7 +598,7 @@ it. Times are seconds (floats), paths are absolute strings, absent values are `n
 |---|---|---|
 | `version` | int | schema version of the document (1) |
 | `vidgen` | str | vidgen package version |
-| `command` | str \| null | `validate`, `list-scenes`, `render`, `schema` (`null` if the command line could not be parsed) |
+| `command` | str \| null | `validate`, `list-scenes`, `render`, `schema`, `storyboard` (`null` if the command line could not be parsed) |
 | `ok` | bool | `true` on success; the exit code is 0 exactly when `ok` is true |
 | `warnings` | list | `{scene, message}`: vidgen warnings of the run (`scene` is `null`, or the scene whose render printed it) |
 | `error` | object | only when `ok` is false: `{kind, message, problems, details}` |
@@ -639,3 +684,21 @@ narrated), with their `scene`. On failure, `error.details` is `{failed, rendered
 lists `{scene, exit_code, output_tail}` (the last 60 lines of the worker's output; exit code 1
 for a vidgen error, 2 for an exception in scene code), `rendered` the scene ids rendered before
 (or, with `--keep-going`, besides) the failures.
+
+### `vidgen storyboard --json`
+
+| key | type | |
+|---|---|---|
+| `project` | str | |
+| `variant` | str \| null | |
+| `preview` | bool | `false` with `--final` |
+| `per_beat` | int | stills per beat |
+| `format` | object | `{width, height, fps}` of the stills |
+| `folder` | str | the `storyboard/` folder |
+| `rendered` | list | ids of the scenes rendered by this command (config order) |
+| `reused` | list | ids of the selected scenes whose current stills were reused |
+| `elapsed` | float | wall time of the command |
+| `sheets` | list | every page written: `{kind, scene, page, pages, path, width, height, frames}`; `kind` is `video` (the whole video, `scene` is `null`) or `scene`; `page` of `pages` (1-based); `width`/`height` in px; `frames` lists the stills on the page in order: `{scene, beat, k, n, time, scene_time, path}` (`beat` `null` for a silent scene, `k` of `n` stills of the beat, `time` in the video or `null` when not every scene has a render at this format, `scene_time` from the scene start, `path` the still's PNG) |
+
+Video sheets come first, then the scene sheets in config order. `warnings` and `error.details`
+on a failed scene are as for `vidgen render --json`.

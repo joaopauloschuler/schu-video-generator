@@ -23,13 +23,14 @@ from vidgen.config import validation_problems
 from vidgen.describe import describe_params
 from vidgen.errors import Problem, VidgenError
 from vidgen.project import CONFIG_NAMES, Project
+from vidgen.sheets import DEFAULT_WIDTH as DEFAULT_SHEET_WIDTH
 from vidgen.theme import Theme
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 #: Template files copied as ``.<name>`` by ``vidgen init``.
 TEMPLATE_DOTFILES: tuple[str, ...] = ("gitignore",)
 #: Subcommands that accept ``--json``.
-JSON_COMMANDS: tuple[str, ...] = ("validate", "list-scenes", "render", "schema")
+JSON_COMMANDS: tuple[str, ...] = ("validate", "list-scenes", "render", "schema", "storyboard")
 
 #: What a command function returns: an exit code, or (with ``--json``) the JSON document.
 CommandResult = int | dict[str, Any]
@@ -261,6 +262,32 @@ def cmd_render(args: argparse.Namespace) -> CommandResult:
     return 0
 
 
+def cmd_storyboard(args: argparse.Namespace) -> CommandResult:
+    """Render what is needed with frame stills and write contact sheets (PNG) of the video."""
+    from vidgen.storyboard import make_storyboard
+
+    started = time.monotonic()
+    project = Project.load(args.project, variant=args.variant)
+    result = make_storyboard(
+        project,
+        preview=not args.final,
+        scenes=args.scene or None,
+        per_beat=args.per_beat,
+        width=args.width,
+        jobs=args.jobs,
+        force=args.force,
+    )
+    if args.json:
+        return jsonout.storyboard_document(project, result, time.monotonic() - started)
+    reused = f", {len(result.reused)} reused" if result.reused else ""
+    print(f"rendered {len(result.rendered)} scene(s){reused}")
+    print(f"storyboard: {result.folder}")
+    for sheet in result.sheets:
+        rel = sheet.path.relative_to(result.folder).as_posix()
+        print(f"  {rel}  ({len(sheet.stills)} still{'s' if len(sheet.stills) != 1 else ''}, {sheet.width}x{sheet.height})")
+    return 0
+
+
 def _print_scene_types() -> None:
     from vidgen import registry
 
@@ -393,6 +420,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--frames-per-beat", type=int, metavar="N", help="save N evenly spaced stills per beat, the last at its end (implies --frames)"
     )
     p.set_defaults(func=cmd_render)
+
+    p = sub.add_parser("storyboard", help="contact sheets (PNG) of the video's frames, for review")
+    project_arg(p)
+    p.add_argument("--scene", action="append", default=[], metavar="ID", help="only this scene's sheet (repeatable)")
+    p.add_argument("--per-beat", type=int, default=1, metavar="N", help="stills per beat, the last at its end (default: 1)")
+    p.add_argument("--variant", metavar="NAME", help="apply a named variant")
+    quality = p.add_mutually_exclusive_group()
+    quality.add_argument("--preview", action="store_true", help="use the preview format (the default)")
+    quality.add_argument("--final", action="store_true", help="use the final format (slower)")
+    p.add_argument("--width", type=int, default=DEFAULT_SHEET_WIDTH, metavar="PX", help=f"sheet width in pixels (default: {DEFAULT_SHEET_WIDTH})")
+    p.add_argument("--jobs", "-j", type=int, default=1, metavar="N", help="render N scenes in parallel (default: 1)")
+    p.add_argument("--force", action="store_true", help="render the scenes again even if their stills are current")
+    p.set_defaults(func=cmd_storyboard)
 
     p = sub.add_parser("schema", help="print the JSON Schema of video.yaml")
     project_arg(p)

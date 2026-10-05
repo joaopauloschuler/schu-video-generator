@@ -4,6 +4,7 @@
 #   vidgen render examples/minimal --preview --variant vertical  # 9:16
 #   vidgen validate examples/minimal --json                      # machine-readable report
 #   vidgen render examples/minimal --preview --frames            # + a PNG at the end of each beat
+#   vidgen storyboard examples/minimal [--variant vertical]      # contact sheets of every beat (PNG)
 # There is no narration audio in this example, so beats are timed from their word count
 # (narration.words_per_second); run `vidgen tts` with an ElevenLabs key to voice it.
 title: "vidgen: the built-in scenes"

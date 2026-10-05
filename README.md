@@ -57,6 +57,7 @@ vidgen init my_video            # scaffold video.yaml, extensions/, assets/, .gi
 cd my_video
 vidgen validate                 # check config, scene types, params, assets and audio status
 vidgen render --preview         # 854x480 check, timed from word counts -> my_video_preview.mp4
+vidgen storyboard               # contact sheets of every beat -> build/preview/storyboard/*.png
 vidgen tts --dry-run            # what would be sent to ElevenLabs, and how many characters
 vidgen tts                      # generate narration MP3s (only new/changed beats)
 vidgen render                   # final render -> my_video.mp4 + my_video.srt
@@ -76,6 +77,7 @@ narration.
 | `vidgen schema [PROJECT] [--scene TYPE \| --all] [--json]` | JSON Schema of `video.yaml` (params checked per scene type, the project's extension types included), for editors and AI agents |
 | `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--variant NAME]` | generate missing/stale narration into `audio/`; `--dry-run` needs no key |
 | `vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going] [--jobs N] [--frames] [--frames-per-beat N] [--json]` | render and join the video |
+| `vidgen storyboard [PROJECT] [--scene ID ...] [--per-beat N] [--variant NAME] [--preview \| --final] [--width PX] [--jobs N] [--force] [--json]` | contact sheets (PNG) of the video's stills with labels and narration, to review a video without watching it |
 
 `PROJECT` is a project folder or its config file (default: the current folder).
 `render` options: `--preview` uses the `preview` resolution; `--scene ID` re-renders only those
@@ -90,6 +92,13 @@ with an `index.json` (beat, time, path) — a way to look at a render without pl
 config location, scene types with params/defaults/docs, output paths and per-scene durations;
 errors too, with a non-zero exit code) — for scripts and AI agents. The shapes are documented
 in [docs/CONFIG.md](docs/CONFIG.md#json-output---json).
+`vidgen storyboard` writes contact sheets to `build/<preview|final>[_<variant>]/storyboard/`:
+`video-<page>.png` (the whole video, split into pages of bounded size) and
+`scenes/<scene>-<page>.png` (one scene, larger stills); each still is labelled `beat @ time`
+with the beat's narration under it. It renders (preview format by default, with stills) only
+the scenes whose stills are missing or out of date, so after `vidgen render --preview --frames`
+or an earlier storyboard it is quick; see
+[docs/CONFIG.md](docs/CONFIG.md#storyboard-vidgen-storyboard).
 `vidgen schema > video.schema.json` writes a JSON Schema (draft 2020-12) that editors and
 agents can check `video.yaml` against before running `vidgen validate`; see
 [docs/CONFIG.md](docs/CONFIG.md#json-schema-vidgen-schema).
@@ -102,7 +111,7 @@ my_video/
   extensions/         # optional: your own scene types, helpers, hooks (*.py)
   assets/             # images, code files, ... referenced from params
   audio/              # generated narration: <beat_id>.mp3 + .hash (keep it; it cost money)
-  build/              # intermediate render files and --frames stills (safe to delete)
+  build/              # intermediate render files, --frames stills, storyboards (safe to delete)
   my_video.mp4  my_video.srt  my_video_preview.mp4 ...
 ```
 

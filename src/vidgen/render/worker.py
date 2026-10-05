@@ -158,6 +158,7 @@ def render_scene(
     """
     from vidgen import extensions, registry
     from vidgen.capture import FrameCapture, StillWriter
+    from vidgen.render.fingerprint import scene_fingerprint
 
     if frames < 0:
         raise VidgenError("frames per beat must not be negative")
@@ -166,6 +167,7 @@ def render_scene(
     theme = extensions.activate(project)
     spec = project.scene(scene_id)
     cls = registry.get(spec.type).cls
+    fingerprint = scene_fingerprint(project, scene_id)  # the inputs as they are when rendering starts
     render_dir = project.render_dir(preview)
     # A failed render must not leave the previous render behind to be reused by `--scene`.
     for stale in (scene_video_path, scene_audio_path, scene_timings_path):
@@ -201,6 +203,7 @@ def render_scene(
         "audio": audio,
         "frames": frames,
         "vidgen": __version__,
+        "fingerprint": fingerprint,
     }
     if writer is not None:
         write_json(frames_dir / "index.json", writer.index(scene_id, frames, fmt.width, fmt.height, fmt.fps))
