@@ -77,6 +77,23 @@ def _check_class(name: str, cls: object) -> None:
         raise VidgenError(
             f"scene type '{name}' ({cls.__qualname__}): 'Params' must be a subclass of SceneParams"
         )
+    if not _valid_beat_count(cls.beat_count):
+        raise VidgenError(
+            f"scene type '{name}' ({cls.__qualname__}): beat_count must be None, a number of beats "
+            f"(e.g. 2) or a (min, max) tuple with max None for no limit, got {cls.beat_count!r}"
+        )
+
+
+def _valid_beat_count(spec: object) -> bool:
+    def count(v: object) -> bool:
+        return isinstance(v, int) and not isinstance(v, bool) and v >= 0
+
+    if spec is None or count(spec):
+        return True
+    if not (isinstance(spec, tuple) and len(spec) == 2 and count(spec[0])):
+        return False
+    hi = spec[1]
+    return hi is None or (count(hi) and hi >= spec[0])  # type: ignore[operator]
 
 
 def register(name: str, cls: type[NarratedScene], *, override: bool = False) -> SceneType:
@@ -123,6 +140,9 @@ def scene(name: str, *, override: bool = False) -> Callable[[S], S]:
     Reusing a built-in's name is an error unless ``override=True`` (then the extension replaces
     the built-in and a warning is logged).
     """
+
+    if isinstance(name, type):
+        raise VidgenError(f'use @scene("name") with a scene type name, not bare @scene (on {name.__qualname__})')
 
     def decorate(cls: S) -> S:
         register(name, cls, override=override)  # type: ignore[arg-type]

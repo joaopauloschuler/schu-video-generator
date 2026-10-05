@@ -1,8 +1,107 @@
 # vidgen config reference
 
-A project is a folder with a `video.yaml` (or `video.json`). This page documents the config
-keys; the full schema is in `DESIGN.md` §4. Sections: voice, narration, narration audio, and
-the [built-in scene types](#built-in-scenes). (The remaining top-level keys are completed in a later step.)
+A project is a folder with one config file: `video.yaml` (or `video.yml` / `video.json`), UTF-8.
+Unknown keys are an error everywhere except inside `params`, `theme.colors`, `theme.sizes` and
+the bodies of `variants`, so typos are caught by `vidgen validate`. Paths are relative to the
+project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-and-beats),
+[format](#format-and-preview), [variants](#variants), [theme](#theme), [voice](#voice-voice),
+[narration](#narration-narration), [narration audio](#narration-audio-elevenlabs),
+[built-in scene types](#built-in-scenes).
+
+## Top level
+
+| key | default | |
+|---|---|---|
+| `title` | required | the video's title (used in `timings.json`; not drawn by itself) |
+| `output` | folder name | base name of the output files: `<output>.mp4`, `<output>.srt`, `<output>_preview.mp4`, `<output>_<variant>.mp4`; no path separators |
+| `format` | `{width: 1920, height: 1080, fps: 30}` | final render (`vidgen render`) |
+| `preview` | `{width: 854, height: 480, fps: 15}` | `vidgen render --preview` |
+| `variants` | `{}` | named overrides, see [variants](#variants) |
+| `theme` | see [theme](#theme) | colors, sizes, font, background |
+| `voice` | see [voice](#voice-voice) | ElevenLabs voice |
+| `narration` | see [narration](#narration-narration) | beat padding, duration estimate |
+| `extensions` | `[extensions]` | folders whose `*.py` files and packages are imported (see docs/EXTENDING.md); the default may be missing, a folder you list must exist |
+| `scenes` | required | the scenes in order, at least one |
+
+## Scenes and beats
+
+```yaml
+scenes:
+  - id: intro                 # required, unique; letters, digits and _ only
+    type: title               # a built-in or extension scene type (`vidgen list-scenes`)
+    params: {title: "Hello"}  # checked against the type's params (tables below)
+    beats:                    # what the narrator says, in order
+      - text: "Welcome."      # required, non-empty
+        id: intro_b1          # optional; default <scene id>_b<n> (1-based); unique in the video
+      - text: "Let's start."
+  - id: pause
+    type: text_card
+    params: {text: "Part 2"}
+    duration: 2               # a silent scene: no beats, a duration in seconds
+```
+
+| key | default | |
+|---|---|---|
+| `id` | required | names the scene in `--scene`, build files and errors |
+| `type` | required | scene type name |
+| `params` | `{}` | free-form for types without a params model |
+| `beats` | `[]` | each beat is narrated into `audio/<beat id>.mp3`; its animation lasts as long as its audio plus `narration.pad` |
+| `duration` | none | seconds; required on a scene without beats and not allowed on a scene with beats |
+
+Beat `id`s name the audio files: keep them when you edit the text (only that beat is
+re-voiced). A beat `text` is spoken as written; it is also the subtitle.
+
+## Format and preview
+
+`format` and `preview` have the same keys: `width` (default 1920 / 854), `height` (1080 / 480)
+and `fps` (30 / 15), all positive integers; `width` and `height` must be even (H.264). Any
+aspect ratio works: the shorter side of the frame is always 8 Manim units, so 9:16 gives a frame
+8 units wide and 14.22 high.
+
+## Variants
+
+A variant is a named set of overrides deep-merged onto the config: mappings merge key by key,
+anything else (lists such as `scenes`, strings, numbers) replaces the base value. The result is
+validated like a normal config; a variant cannot contain `variants`. `vidgen validate` checks
+every variant.
+
+```yaml
+variants:
+  vertical:                                   # vidgen render --variant vertical
+    format: {width: 1080, height: 1920}       #   -> <output>_vertical.mp4
+    preview: {width: 480, height: 854}
+  spanish:
+    voice: {voice_id: "XXXXXXXXXXXXXXXXXXXX"}   # own audio folder: audio/spanish/
+    scenes: [...]                             # a list replaces the whole base list
+```
+
+Renders of a variant go to `build/<final|preview>_<variant>/`. Audio sharing rules are under
+[narration audio](#narration-audio-elevenlabs).
+
+## Theme
+
+```yaml
+theme:
+  background: "#0E1116"     # frame background
+  font: Inter               # font family for all text (must be installed; see README)
+  colors:                   # tokens; these are the defaults, add any name you like
+    text: "#E8EAED"
+    dim: "#6B7280"
+    accent: "#FF6B6B"
+    highlight: "#FFD166"
+    primary: "#58C4DD"
+    secondary: "#F2A541"
+    tertiary: "#83C167"
+    surface: "#161B24"      # panels, code window
+    # brand: "#7C3AED"      # your own tokens work in every color param
+  palette: ["#58C4DD", "#F2A541", "#C792EA", "#83C167"]   # series colors (charts), in order
+  sizes: {title: 56, subtitle: 42, heading: 36, body: 32, caption: 24, small: 20}  # font points
+```
+
+You only write what you change: `colors` and `sizes` are merged over the defaults (and over
+tokens registered by extensions); `palette` replaces the default list. Colors are hex
+(`#RGB`, `#RRGGBB` or `#RRGGBBAA`, quoted in YAML because of the `#`); token names use letters,
+digits and `_`. Sizes are positive numbers.
 
 ## Voice (`voice:`)
 
@@ -20,7 +119,8 @@ voice:
   context: true                     # send the neighbouring beats' text for smoother intonation
 ```
 
-All keys are optional; the values shown are the defaults. Unknown keys are an error.
+All keys are optional; the values shown are the defaults. Unknown keys are an error. Changing
+`voice_id`, `model_id`, `output_format` or `settings` re-voices every beat on the next `vidgen tts`.
 
 ## Narration (`narration:`)
 

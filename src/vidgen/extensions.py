@@ -139,7 +139,7 @@ def load_extensions(project: Project) -> list[str]:
             importlib.import_module(f"{package}.{module}")
         except VidgenError:
             raise
-        except Exception as exc:
+        except (Exception, SystemExit) as exc:  # sys.exit() in an extension must not end vidgen silently
             raise _import_error(path, project.root, exc) from None
         loaded.append(f"{package}.{module}")
     return loaded

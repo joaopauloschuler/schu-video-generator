@@ -1,0 +1,82 @@
+# A small project that extends vidgen from its own folder: built-in scenes plus one custom scene
+# type (`gear_pair`, extensions/gears.py, with a nested Params model and a helper module
+# extensions/geometry.py), a vertical variant and a post_render hook (extensions/report.py).
+#   vidgen validate examples/custom_scene
+#   vidgen list-scenes examples/custom_scene                         # shows gear_pair + its params
+#   vidgen render examples/custom_scene --preview                    # 16:9, word-count timing
+#   vidgen render examples/custom_scene --preview --variant vertical # 9:16
+# No narration audio is included; run `vidgen tts` with an ElevenLabs key to voice it.
+title: "How a bicycle gear works"
+output: bicycle_gears
+
+format: {width: 1920, height: 1080, fps: 30}
+preview: {width: 854, height: 480, fps: 15}
+
+variants:
+  vertical:
+    format: {width: 1080, height: 1920}
+    preview: {width: 480, height: 854}
+
+theme:
+  colors:
+    chainring: "#F2A541"
+    sprocket: "#58C4DD"
+
+narration:
+  pad: 0.35
+  words_per_second: 2.6
+
+scenes:
+  - id: intro
+    type: title
+    params:
+      kicker: "BIKE BASICS"
+      title: "How a bicycle gear works"
+      highlight: "gear"
+      subtitle: "Teeth, ratios and speed"
+    beats:
+      - text: "Why does one gear feel easy and another feel hard?"
+      - text: "It all comes down to counting teeth."
+
+  - id: pair
+    type: gear_pair
+    params:
+      front: {teeth: 44, label: "chainring, 44", color: chainring}
+      rear: {teeth: 16, label: "sprocket, 16", color: sprocket}
+    beats:
+      - text: "The chain links a big chainring at the pedals to a small sprocket on the wheel."
+      - text: "One turn of the pedals pulls forty-four teeth of chain, so the wheel turns almost three times."
+      - text: "That is the gear ratio."
+
+  - id: rules
+    type: bullets
+    params:
+      heading: "Rules of thumb"
+      items:
+        - "Big ring, small sprocket: fast but hard"
+        - "Small ring, big sprocket: slow but easy"
+        - "Shift before the hill, not on it"
+    beats:
+      - text: "A big chainring with a small sprocket is fast, but hard to push."
+      - text: "A small chainring with a big sprocket is slow, but easy to climb with."
+      - text: "And shift before the hill, while the chain is not under load."
+
+  - id: speed
+    type: bar_chart
+    params:
+      title: "Speed at 90 pedal turns per minute"
+      labels: ["34/28", "34/16", "50/16", "50/11"]
+      values: [15.3, 26.8, 39.4, 57.3]
+      unit: " km/h"
+      highlight: "50/11"
+      colors: palette
+    beats:
+      - text: "At the same cadence, the gear alone takes you from fifteen to almost sixty kilometres per hour."
+
+  - id: outro
+    type: end_card
+    params:
+      title: "Count the teeth"
+      lines: ["front teeth ÷ rear teeth = wheel turns per pedal turn"]
+    beats:
+      - text: "So next time, count the teeth. Happy riding."

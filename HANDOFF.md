@@ -421,3 +421,111 @@ Known gaps / for Step 7
 How to test: `/home/claude/venv/bin/python -m pytest -q` (334 passed, ~29 s). Manual:
 `vidgen validate examples/kphi3`, `vidgen tts examples/kphi3 --dry-run`,
 `vidgen render examples/kphi3 --preview --jobs 2`.
+
+## Step 7 — Independent review
+Reviewed all code, tests, docs and examples; ran the suite on **Python 3.10** too (uv-installed
+CPython 3.10.20 + `pip install -e .[dev]`, which resolves to Manim 0.19.1 / PyAV 13.1) besides
+the 3.13 venv (Manim 0.21 / PyAV 19). `vermin -t=3.10-` reports no 3.11+ syntax or stdlib.
+
+Findings (severity — status)
+1. **High — fixed.** Beat timing depended on the PyAV version: `audio_duration` used the
+   container duration, which PyAV 13 (every Python 3.10 install, since Manim 0.19 pins `av<14`)
+   reports including MP3 encoder padding: +25–50 ms per beat (kphi3: up to +49 ms per beat,
+   ~1.3 s over the video) and the SRT test failed on 3.10. Now decoded samples / rate:
+   identical on both stacks, unchanged for kphi3 on PyAV 19. Test in `test_robustness.py`.
+2. **High — fixed.** Odd `width`/`height` made the worker segfault (exit -11, no message).
+   Config now requires even sizes (`must be an even number of pixels`).
+3. **Medium — fixed (Windows).** Re-rendering while the previous MP4 is open in a player:
+   `os.replace` raises `PermissionError` → raw traceback and the joined video was deleted. New
+   `vidgen/fileio.py` (`replace_file` with ~1.5 s of retries, `write_bytes_atomic`,
+   `write_text_atomic`, `remove_file`): clear `VidgenError`, joined video kept as
+   `<name>.partial.mp4`. Also used for SRT, timings JSON, TTS MP3/hash, worker cleanup.
+4. **Medium — fixed (Windows).** Output to a redirected console with a legacy code page crashed
+   on non-cp1252 characters (titles, paths). CLI reconfigures stdout/stderr with
+   `errors="backslashreplace"` (subprocess test with `PYTHONIOENCODING=cp1252`).
+   `BrokenPipeError` (`| head`, `| more`) now ends quietly.
+5. **Medium — fixed.** `video.json` saved with a BOM (Notepad) failed to parse; config files are
+   read as `utf-8-sig`.
+6. **Medium — fixed.** Packaging: setuptools skips dot files, so the wheel had no
+   `templates/minimal/assets/.gitkeep` → `vidgen init` from an installed vidgen created no
+   `assets/`. `init` now creates `assets/` and `extensions/` and writes a `.gitignore` (template
+   file `gitignore`, renamed). Test that the template has no dot files.
+7. **Medium — fixed.** Extension robustness: invalid `beat_count` (e.g. `'two'`) gave a
+   traceback in `validate` → validated at registration; an exception in `validate_project`
+   gave a traceback → reported per scene, other scenes still checked (also non-list
+   returns); `sys.exit()` in an extension ended vidgen silently with its code → import error;
+   bare `@scene` silently did nothing (class replaced by the inner function) and bare `@hook`
+   gave a cryptic message → both explain the right form; `register_theme_defaults(sizes=...)`
+   accepted strings → positive numbers required; hook tracebacks no longer start in
+   `hooks.py`. `render` checks beat counts before starting workers.
+8. **Low — fixed.** API-key hygiene: render workers (which run user scene code) no longer
+   inherit `ELEVENLABS_API_KEY`. No other leaks found (key only in the request header; errors
+   scrubbed; not in hook data or files — existing tests cover it).
+9. **Low — fixed.** `pyproject` allowed `manim>=0.18`, whose `Code` API differs from what the
+   `code` scene uses → `manim>=0.19` (0.19.1 passes the full suite).
+10. **Low — fixed.** `list-scenes` printed nested params only as `front: Ring`; nested
+    `SceneParams` fields are now listed indented. `init` no longer `\u`-escapes non-ASCII titles.
+11. **Docs — fixed.** CONFIG.md lacked every top-level key (title, output, format, preview,
+    variants, theme, extensions, scenes/beats/duration) — now complete, with defaults;
+    `tests/test_docs.py` checks every pydantic config field and every built-in param is
+    documented, scalar/theme defaults match the code, and doc YAML snippets parse.
+    EXTENDING.md's hook example printed `ctx.project.output_path()` (wrong for preview/variant
+    renders) → `ctx.data["output"]`. README rewritten (Windows install incl. venv, ffmpeg,
+    Inter font "install for all users", MiKTeX, `setx`, command reference, layout,
+    troubleshooting). DESIGN.md: status line, layout, new §10 "Refinements (Step 7)".
+
+Tried and found working (no change needed): name collisions between extension files, builtin
+clash without/with `override=True`, import/syntax errors (file + traceback), circular relative
+imports (Python's ImportError with both files), relative import beyond the package, `import
+common` (clear ModuleNotFoundError; docs say use relative imports), hook raising in `pre_tts`,
+unknown hook event, heavy module-level work (works, but repeated per worker → documented),
+variant + extension theme tokens, nested params with `ThemeColor`, wrong beat count, missing
+asset, unknown theme token, extension modules named `json.py`/`yaml.py`/`manim.py`/`vidgen.py`
+(no shadowing: private package), Unicode and non-identifier file names (`café.py`,
+`my-scene.py`), sub-packages, folders without `__init__.py` (skipped), CRLF and BOM in
+extension files and YAML, project paths with spaces, `'` and non-ASCII (rendered).
+
+Docs-only walkthrough ("How a bicycle gear works", built only from README/CONFIG/EXTENDING):
+5 scenes (title, custom `gear_pair` with nested `Ring` params + `geometry.py` helper, bullets,
+bar_chart, end_card), vertical variant, `post_render` hook writing a summary. validate, tts
+--dry-run, `render --preview` and `--variant vertical` worked first time; frames checked in
+both orientations. Friction recorded and fixed in the docs: no config reference for top-level
+keys/variants/theme, wrong path in the hook example, nothing said about what `self.project`
+offers, that scenes run in separate processes (print hidden, imports repeated, no shared
+state), nested params, `@scene` needing parentheses. Added as `examples/custom_scene/`
+(+ `tests/test_custom_scene_example.py`: validate, nested-token error, tiny render in both
+orientations with the hook).
+
+Packaging: `pip wheel . --no-deps` → fresh 3.13 venv, `pip install` (deps from PyPI) →
+`vidgen --version`, `init` (non-ASCII folder), `validate`, `list-scenes`, `tts --dry-run`,
+`render --preview` all work outside the repo.
+
+Regression: `vidgen validate` + `tts --dry-run` on all three examples OK (kphi3: 27 up to
+date); `render --preview` minimal 97.93 s (28 s wall, `--jobs 4`), kphi3 231.46 s (56 s wall).
+
+Files: new `src/vidgen/fileio.py`, `src/vidgen/templates/minimal/gitignore` (removed
+`assets/.gitkeep`), `examples/custom_scene/`, `tests/test_robustness.py`,
+`tests/test_docs.py`, `tests/test_custom_scene_example.py`; changed `cli.py`, `config.py`,
+`extensions.py`, `hooks.py`, `project.py`, `registry.py`, `scene.py`, `subtitles.py`,
+`theme.py`, `render/{ffmpeg,pipeline,worker}.py`, `tts/cache.py`, `tests/test_tts.py`,
+`pyproject.toml`, README.md, docs/CONFIG.md, docs/EXTENDING.md, DESIGN.md.
+
+Remaining known limitations / suggested next steps
+- Not run on real Windows (no Windows machine here): the Windows fixes are exercised by
+  simulation (monkeypatched `PermissionError`, cp1252 stdout). A first run on Windows should
+  check font discovery (Inter installed per-user), MiKTeX's on-the-fly package install
+  dialog during an `equation` render, and long paths (> 260 chars inside `build/`).
+- No up-to-date detection: `vidgen render` re-renders every scene unless `--scene`; reused
+  renders are not checked against config/extension/audio changes. A per-scene fingerprint
+  (spec + extension sources + audio hashes + format) would make plain `render` incremental.
+- Every worker re-imports all extensions and Manim (~1–2 s per scene); fine for ≤ 20 scenes.
+- No `vidgen clean`; `build/` grows (Manim media, WAVs).
+- TTS is serial; no ElevenLabs quota/request-id reporting.
+- Theme token names registered with `register_theme_defaults` are not checked against the
+  id pattern (a name with `-` cannot be overridden from YAML).
+- `vidgen validate` aborts on the first variant that fails to *load* (structural error)
+  instead of listing it with the others.
+- kphi3 scenes are 16:9-only (hard-coded coordinates).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (382 passed, ~35 s; same on Python
+3.10). Manual: see the commands in each example's `video.yaml` header.

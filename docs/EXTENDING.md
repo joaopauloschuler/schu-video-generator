@@ -15,7 +15,7 @@ my_video/
 ```
 
 vidgen imports every `*.py` file and every package in `extensions/` (sorted by name) whenever it
-loads the project (`validate`, `list-scenes`, `render`). Check your work with:
+loads the project (`validate`, `list-scenes`, `tts`, `render`). Check your work with:
 
 ```
 vidgen validate          # unknown types, bad params, import errors (with file + traceback)
@@ -24,6 +24,20 @@ vidgen list-scenes       # every scene type, where it comes from, its params
 
 Import everything from **`vidgen.api`** only: it re-exports all of `from manim import *` plus the
 vidgen names. Anything else in vidgen is internal.
+
+Two complete examples: [examples/custom_scene](../examples/custom_scene) (a small video with one
+custom scene type, a helper module, a vertical variant and a hook) and
+[examples/kphi3](../examples/kphi3) (a 4-minute paper video made only of custom scenes).
+
+**How your code runs.** Extension modules are imported as a private package (`vidgen_ext_<project
+folder>`), not from `sys.path`, so any file name works — even `json.py` or `manim.py` does not
+shadow the real library. Every command imports all of them again, and `vidgen render` renders
+**each scene in its own Python process**, which imports every extension module once more:
+keep module-level code light (no downloads or heavy computation at import), and do not count on
+module-level state being shared between scenes or with hooks. `print()` inside a scene is only
+shown when the render fails (or with `--jobs 1` in a terminal); log warnings with
+`logging.getLogger(__name__).warning(...)` — they are always shown as `warning: ...`. Raise
+`VidgenError("...")` for problems the user must fix: it is printed without a traceback.
 
 ## 1. A new scene type
 
@@ -34,6 +48,8 @@ from vidgen.api import *
 
 @scene("big_number")                      # the name used as `type:` in video.yaml
 class BigNumber(NarratedScene):
+    beat_count = 2                        # narrates beats 0 and 1 (see "Fixed beats" below)
+
     class Params(SceneParams):            # optional; validated by `vidgen validate`
         value: str
         label: str = ""
@@ -59,9 +75,11 @@ scenes:
       - text: "And the model still learns."
 ```
 
-Inside `construct()` you have `self.spec` (the scene's config), `self.params` (a `Params`
-instance, or a plain dict without a `Params` class), `self.beats`, `self.theme`, `self.project`
-(`self.project.asset("assets/logo.png")` resolves files).
+Inside `construct()` you have `self.spec` (the scene's config: `id`, `type`, `params`, `beats`,
+`duration`), `self.params` (a `Params` instance, or a plain dict without a `Params` class),
+`self.beats` (each with `id` and `text`), `self.theme` (`color(name)`, `size(name)`,
+`palette_color(i)`, `font`, `background`) and `self.project` (`root` folder, `config`,
+`variant` name or `None`, `asset("assets/logo.png")` → absolute path, error if missing).
 
 Timing rules:
 - `with self.narrate(beat) as d:` starts the beat's audio, and when the block ends waits until
@@ -88,6 +106,7 @@ both orientations; wide content needs to wrap, stack or scale in portrait.
 
 Params errors are reported with their config path, e.g.
 `scenes[2].params.values.x: Input should be a valid number`. Unknown keys are errors.
+`@scene` always takes the name in parentheses: `@scene("big_number")`.
 
 ## 2. Building blocks: params, layout, timing, validation
 
@@ -110,6 +129,26 @@ class Params(SceneParams):
         if len(self.items) > 12:
             raise ValueError("at most 12 items")
         return self
+```
+
+Params can nest: use another `SceneParams` class as a field type (also in lists). Theme tokens
+are checked inside nested models too, and `vidgen list-scenes` prints the nested fields.
+
+```python
+class Ring(SceneParams):
+    teeth: int = Field(ge=8, le=60)
+    color: ThemeColor = "primary"
+
+class Params(SceneParams):        # inside the scene class
+    front: Ring
+    rear: Ring
+    extra: list[Ring] = []
+```
+
+```yaml
+params:
+  front: {teeth: 44, color: secondary}
+  rear: {teeth: 16}
 ```
 
 **Project-aware checks.** Override the classmethod `validate_project(params, project)` for
@@ -234,11 +273,12 @@ from vidgen.api import *
 
 @hook("post_render")          # pre_tts, post_tts, pre_render, post_scene, post_render
 def announce(ctx):            # ctx.project, ctx.event, ctx.data (dict; may be modified)
-    print("rendered", ctx.project.output_path())
+    print("rendered", ctx.data["output"])      # the MP4 just written (preview/variant aware)
 ```
 
-Hooks run in registration order. If a hook raises, the command stops with an error naming the
-hook and its file.
+Hooks run in registration order (each project's hooks only for that project). If a hook raises,
+the command stops with an error naming the hook and its file. Paths in `ctx.data` are
+`pathlib.Path` objects; `ctx.project.variant` tells which variant is being rendered.
 
 Event data (see DESIGN.md §6.2):
 

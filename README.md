@@ -1,42 +1,117 @@
 # vidgen
 
-Generate narrated, animated explainer videos from a project folder: scenes are drawn with
-[Manim](https://www.manim.community/), narration comes from ElevenLabs, and ffmpeg joins
-everything into one MP4 with SRT subtitles. Projects can add their own scene types and hooks in
-an `extensions/` folder.
+Generate narrated, animated explainer videos from a project folder. You write the narration as
+short *beats* and pick a *scene type* for each scene in `video.yaml`; vidgen voices the beats with
+ElevenLabs, animates every scene with [Manim](https://www.manim.community/) (each beat lasts
+exactly as long as its narration), and joins everything with ffmpeg into one MP4 plus SRT
+subtitles.
 
-## Requirements
+- **Config-only videos** with ten built-in scene types (title, bullets, charts, image, quote,
+  equation, code, end card...), in landscape and vertical formats.
+- **Extensible per video**: a project can add its own scene types, helpers, theme tokens and
+  pipeline hooks in its `extensions/` folder, without touching vidgen.
+- **Cheap to iterate**: only new or edited beats are sent to ElevenLabs; fast low-resolution
+  previews; re-render one scene at a time.
+- Windows, macOS and Linux; Python 3.10–3.13.
 
-- Python 3.10+, `pip install -e .` (installs Manim, pydantic, PyYAML, PyAV)
-- ffmpeg on PATH (Windows: `winget install ffmpeg`; macOS: `brew install ffmpeg`)
-- An ElevenLabs API key in `ELEVENLABS_API_KEY` for narration
-  (Windows: `setx ELEVENLABS_API_KEY your_key`, then open a new terminal)
-- Optional: LaTeX (with `dvisvgm`) for the `equation` scene type — MiKTeX on Windows
+## Install
+
+### Windows
+
+1. **Python 3.10–3.13** from [python.org](https://www.python.org/downloads/) (tick "Add
+   python.exe to PATH").
+2. **ffmpeg**: `winget install ffmpeg`, then open a new terminal (`ffmpeg -version` must work).
+3. **vidgen** (in PowerShell, from a copy of this repository):
+   ```
+   cd video-generator
+   py -m venv .venv
+   .venv\Scripts\Activate.ps1          # cmd.exe: .venv\Scripts\activate.bat
+   pip install .                       # or `pip install -e ".[dev]"` to work on vidgen itself
+   vidgen --version
+   ```
+   This installs Manim, pydantic, PyYAML and PyAV (pre-built wheels; no compiler needed).
+4. **Font**: the default theme uses [Inter](https://rsms.me/inter/). Download it, select the
+   `.ttf` files, right-click → *Install for all users*. Or set `theme.font` to an installed
+   font, e.g. `Segoe UI`.
+5. **ElevenLabs API key** (only for `vidgen tts`): `setx ELEVENLABS_API_KEY your_key`, then open
+   a new terminal. vidgen reads the key only from this variable and never writes it anywhere.
+6. Optional, only for the `equation` scene type: **LaTeX** — install
+   [MiKTeX](https://miktex.org/download) (it includes `dvisvgm`; allow it to install missing
+   packages on the fly) and open a new terminal.
+
+If PowerShell refuses to run `Activate.ps1`, run
+`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
+
+### macOS / Linux
+
+`python3 -m venv .venv && . .venv/bin/activate && pip install .`, ffmpeg from
+`brew install ffmpeg` / `sudo apt install ffmpeg`, the Inter font, and
+`export ELEVENLABS_API_KEY=your_key` in your shell profile. Linux may need Manim's system
+libraries first (`sudo apt install libcairo2-dev libpango1.0-dev`). Optional LaTeX: MacTeX, or
+`sudo apt install texlive texlive-latex-extra dvisvgm`.
 
 ## Quick start
 
 ```
-vidgen init my_video            # scaffold video.yaml, extensions/, assets/
+vidgen init my_video            # scaffold video.yaml, extensions/, assets/, .gitignore
 cd my_video
-vidgen validate                 # check the config, scene types and audio status
+vidgen validate                 # check config, scene types, params, assets and audio status
+vidgen render --preview         # 854x480 check, timed from word counts -> my_video_preview.mp4
+vidgen tts --dry-run            # what would be sent to ElevenLabs, and how many characters
 vidgen tts                      # generate narration MP3s (only new/changed beats)
-vidgen render --preview         # fast low-resolution check -> my_video_preview.mp4
 vidgen render                   # final render -> my_video.mp4 + my_video.srt
 ```
 
-Useful options: `vidgen render --scene ID` re-renders one scene and re-joins the video,
-`--variant NAME` renders a named variant (e.g. a vertical 1080x1920 version), `--no-audio`
-renders without narration, `--keep-going` continues past a failing scene, `--jobs N` renders
-N scenes in parallel. `vidgen list-scenes` shows the available scene types.
+Edit `video.yaml` (reference: [docs/CONFIG.md](docs/CONFIG.md)) and repeat. Until audio exists,
+beats are timed from their word count, so you can lay out the whole video before paying for
+narration.
 
-Built-in scene types: `title`, `bullets`, `bar_chart`, `line_chart`, `image`, `quote`,
-`equation`, `code`, `end_card`, `text_card` — all of them work in landscape and vertical
-(9:16) formats. [examples/minimal](examples/minimal) uses every one of them without a line of
-Python: `vidgen render examples/minimal --preview` (add `--variant vertical` for 9:16).
+## Commands
 
-[examples/kphi3](examples/kphi3) is a real 4-minute paper video whose eight bespoke animated
-scenes all live in the project's `extensions/` folder (narration MP3s included, so it renders
-without an ElevenLabs key): `vidgen render examples/kphi3 --preview`.
+| command | |
+|---|---|
+| `vidgen init DIR [--example minimal]` | create a new project (DIR must not exist or be empty) |
+| `vidgen validate [PROJECT]` | load config and extensions, report every problem (also in every variant), estimated length, audio status |
+| `vidgen list-scenes [PROJECT]` | scene types (built-in and the project's) with their params |
+| `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--variant NAME]` | generate missing/stale narration into `audio/`; `--dry-run` needs no key |
+| `vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going] [--jobs N]` | render and join the video |
 
-Docs: [DESIGN.md](DESIGN.md) (architecture), [docs/CONFIG.md](docs/CONFIG.md) (config
-reference), [docs/EXTENDING.md](docs/EXTENDING.md) (writing project extensions).
+`PROJECT` is a project folder or its config file (default: the current folder).
+`render` options: `--preview` uses the `preview` resolution; `--scene ID` re-renders only those
+scenes and re-joins with the existing renders of the others; `--variant NAME` applies a named
+variant (e.g. vertical 1080x1920); `--no-audio` leaves the narration out (timing is unchanged);
+`--keep-going` renders the remaining scenes after a failure; `--jobs N` renders N scenes in
+parallel. Errors are printed as `error: ...` with exit code 1.
+
+## Project layout
+
+```
+my_video/
+  video.yaml          # the config
+  extensions/         # optional: your own scene types, helpers, hooks (*.py)
+  assets/             # images, code files, ... referenced from params
+  audio/              # generated narration: <beat_id>.mp3 + .hash (keep it; it cost money)
+  build/              # intermediate render files (safe to delete)
+  my_video.mp4  my_video.srt  my_video_preview.mp4 ...
+```
+
+## Examples and docs
+
+- [examples/minimal](examples/minimal) — every built-in scene type, no Python:
+  `vidgen render examples/minimal --preview [--variant vertical]`.
+- [examples/custom_scene](examples/custom_scene) — "How a bicycle gear works": built-ins plus a
+  custom scene type with a helper module, a vertical variant and a hook.
+- [examples/kphi3](examples/kphi3) — a real 4-minute paper video whose eight bespoke scenes all
+  live in its `extensions/` folder (narration MP3s included, so it renders without a key).
+- [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.
+- [docs/EXTENDING.md](docs/EXTENDING.md) — writing scene types, helpers, theme tokens and hooks.
+- [DESIGN.md](DESIGN.md) — architecture and internal contracts.
+
+## Troubleshooting
+
+- `ffmpeg not found on PATH` — install it and open a new terminal.
+- Text in a fallback font — the theme font is not installed (for all users, on Windows).
+- `cannot write ...mp4 ... is it open in another program` — close the video player showing the
+  previous render; the new video was kept as `<name>.partial.mp4`.
+- Windows paths longer than 260 characters can fail inside Manim: keep projects in a short
+  folder (e.g. `C:\videos\my_video`) or enable long paths in Windows.

@@ -17,6 +17,7 @@ from pathlib import Path
 import av
 
 from vidgen.errors import VidgenError
+from vidgen.fileio import replace_file
 
 #: Audio of every padded scene (and so of the final video): AAC, 48 kHz, stereo.
 AUDIO_RATE = 48000
@@ -128,7 +129,8 @@ def join(ffmpeg: str, videos: list[Path], audios: list[Path], dst: Path, work_di
     into ``dst`` with the concat demuxer.
 
     ``dst`` is written via a temporary file next to it and replaced at the end, so a failed join
-    never leaves a truncated output.
+    never leaves a truncated output. If ``dst`` cannot be replaced (on Windows: it is open in a
+    video player), the joined video is kept as ``<name>.partial.mp4`` and the error says so.
     """
     video_list = work_dir / "video_concat.txt"
     audio_list = work_dir / "audio_concat.txt"
@@ -148,6 +150,10 @@ def join(ffmpeg: str, videos: list[Path], audios: list[Path], dst: Path, work_di
             ],
             f"joining the scenes into {dst.name}",
         )
-        tmp.replace(dst)
-    finally:
+    except BaseException:
         tmp.unlink(missing_ok=True)
+        raise
+    try:
+        replace_file(tmp, dst)
+    except VidgenError as exc:
+        raise VidgenError(f"{exc}\nthe new video was saved as {tmp}") from None

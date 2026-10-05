@@ -372,7 +372,7 @@ def test_failed_write_leaves_no_hash(make_project, api: FakeAPI, monkeypatch, ca
     def broken_replace(src: Any, dst: Any) -> None:
         raise OSError("disk full")
 
-    monkeypatch.setattr("vidgen.tts.cache.os.replace", broken_replace)
+    monkeypatch.setattr("vidgen.fileio.os.replace", broken_replace)
     assert run(root, "--beat", "intro_b1") == 1
     assert "disk full" in capsys.readouterr().err
     audio = root / "audio"

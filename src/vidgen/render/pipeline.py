@@ -33,6 +33,7 @@ from vidgen.project import Project
 from vidgen.render import ffmpeg as ff
 from vidgen.render.worker import scene_audio_path, scene_timings_path, scene_video_path, write_json
 from vidgen.subtitles import write_srt
+from vidgen.tts.elevenlabs import API_KEY_ENV
 
 log = logging.getLogger("vidgen.render")
 
@@ -61,11 +62,16 @@ class _WorkerRun:
 
 
 def _check_scenes(project: Project) -> None:
-    """Every scene's type is registered and its params validate (fast, before any rendering)."""
+    """Every scene's type is registered, its params validate and its beat count fits (fast,
+    before any rendering)."""
     from vidgen import registry
 
     for spec in project.config.scenes:
-        registry.get(spec.type).cls.parse_params(spec.params, scene_id=spec.id)
+        cls = registry.get(spec.type).cls
+        cls.parse_params(spec.params, scene_id=spec.id)
+        problem = cls.check_beat_count(len(spec.beats))
+        if problem is not None:
+            raise VidgenError(f"scene '{spec.id}' (type {spec.type}): {problem}")
 
 
 def warn_audio(project: Project) -> None:
@@ -124,7 +130,9 @@ def _run_worker(project: Project, preview: bool, scene_id: str, no_audio: bool, 
         cmd.append("--no-audio")
     if live:
         cmd.append("--progress")
-    env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
+    # Scenes never need the ElevenLabs key: keep it out of the processes that run scene code.
+    env = {k: v for k, v in os.environ.items() if k != API_KEY_ENV}
+    env.update(PYTHONIOENCODING="utf-8", PYTHONUTF8="1")
     started = time.monotonic()
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, cwd=project.root)
     assert proc.stdout is not None

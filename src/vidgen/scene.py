@@ -85,15 +85,23 @@ class BeatTiming(NamedTuple):
 
 
 def audio_duration(path: Path) -> float:
-    """Length of an audio file in seconds (read with PyAV)."""
+    """Length of an audio file in seconds: its decoded samples / sample rate (read with PyAV).
+
+    Decoding (rather than reading the container's duration) gives the same answer with every
+    PyAV/FFmpeg version: older ones (PyAV 13, which Manim 0.19 pins on Python 3.10) include the
+    MP3 encoder padding in the container duration, ~25-50 ms more per file.
+    """
     try:
         with av.open(str(path)) as container:
-            if container.duration is not None:
-                return container.duration / av.time_base
             stream = container.streams.audio[0]
-            if stream.duration is None or stream.time_base is None:
-                raise ValueError("no duration information")
-            return float(stream.duration * stream.time_base)
+            samples = 0
+            rate = stream.rate or 0
+            for frame in container.decode(stream):
+                samples += frame.samples
+                rate = frame.sample_rate or rate
+            if not samples or not rate:
+                raise ValueError("no audio samples")
+            return samples / rate
     except (OSError, ValueError, IndexError, av.error.FFmpegError) as exc:
         raise VidgenError(f"cannot read audio file {path}: {exc}") from None
 

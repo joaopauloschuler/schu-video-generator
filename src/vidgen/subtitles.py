@@ -13,6 +13,8 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import NamedTuple
 
+from vidgen.fileio import write_text_atomic
+
 LINE_WIDTH = 42
 MAX_LINES = 2
 
@@ -74,5 +76,5 @@ def format_srt(cues: Iterable[Cue]) -> str:
 def write_srt(path: Path, timings: dict) -> list[Cue]:
     """Write the SRT for a combined timings mapping as UTF-8; returns the cues."""
     cues = cues_from_timings(timings)
-    path.write_text(format_srt(cues), encoding="utf-8")
+    write_text_atomic(path, format_srt(cues))
     return cues

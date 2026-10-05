@@ -50,9 +50,9 @@ def find_config_file(path: str | Path) -> Path:
 
 
 def read_config_file(path: Path) -> Any:
-    """Parse a YAML or JSON config file (UTF-8)."""
+    """Parse a YAML or JSON config file (UTF-8, with or without a byte order mark)."""
     try:
-        text = path.read_text(encoding="utf-8")
+        text = path.read_text(encoding="utf-8-sig")
     except (OSError, UnicodeDecodeError) as exc:
         raise VidgenError(f"{path.name}: cannot read file: {exc}") from None
     try:

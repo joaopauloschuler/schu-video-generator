@@ -45,6 +45,14 @@ class FormatConfig(_Strict):
     height: PositiveInt = 1080
     fps: PositiveInt = 30
 
+    @field_validator("width", "height")
+    @classmethod
+    def _even(cls, value: int) -> int:
+        # H.264 in yuv420p needs even sizes; Manim's encoder crashes on odd ones.
+        if value % 2:
+            raise ValueError(f"must be an even number of pixels (got {value}; H.264 video needs even sizes)")
+        return value
+
 
 def _preview_format() -> FormatConfig:
     return FormatConfig(width=854, height=480, fps=15)

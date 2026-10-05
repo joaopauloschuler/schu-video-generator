@@ -1,0 +1,51 @@
+from vidgen.api import *
+from .geometry import gear
+
+
+class Ring(SceneParams):
+    teeth: int = Field(ge=8, le=60)
+    label: str = ""
+    color: ThemeColor = "primary"
+
+
+@scene("gear_pair")
+class GearPair(NarratedScene):
+    """Beat 1: both gears appear. Beat 2: the pedals turn once and the wheel follows."""
+
+    beat_count = (2, 3)
+    outro = 0.5
+
+    class Params(SceneParams):
+        front: Ring
+        rear: Ring
+        caption: str = ""
+
+    def construct(self):
+        p = self.params
+        front = gear(p.front.teeth, color=p.front.color)
+        rear = gear(p.rear.teeth, color=p.rear.color)
+        pair = VGroup(front, rear).arrange(DOWN if self.is_portrait else RIGHT, buff=1.0)
+        shrink_to_fit(pair, self.safe_width, self.safe_height * 0.6)
+        labels = VGroup(
+            self.text(p.front.label or f"{p.front.teeth} teeth", size="caption", color=p.front.color).next_to(front, DOWN),
+            self.text(p.rear.label or f"{p.rear.teeth} teeth", size="caption", color=p.rear.color).next_to(rear, DOWN),
+        )
+        ratio = p.front.teeth / p.rear.teeth
+        caption = fit_text(p.caption or f"ratio {ratio:.2f} : 1", self.safe_width, size="body", color="highlight")
+        caption.to_edge(UP, buff=self.margin_y)
+
+        with self.narrate(0) as d:
+            self.play(FadeIn(front), FadeIn(rear), FadeIn(labels), run_time=min(1.0, 0.5 * d))
+        with self.narrate(1) as d:
+            spin = max(d - 0.5, 0.5)
+            self.play(
+                Rotate(front, -TAU, about_point=front.get_center()),
+                Rotate(rear, -TAU * ratio, about_point=rear.get_center()),
+                FadeIn(caption),
+                run_time=spin,
+                rate_func=linear,
+            )
+        if len(self.beats) > 2:
+            with self.narrate(2):
+                self.play(Indicate(caption))
+        self.finish()

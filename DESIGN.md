@@ -5,8 +5,12 @@ It generalises the one-off `kphi3_paper_video` project: the pipeline is shared, 
 **project folder** with a config file, and each project can **extend** the tool with its own
 scene types, helpers, theme tokens and pipeline hooks.
 
-Status of this document: agreed contract for all implementation steps. Changing a public
-interface defined here requires updating this file in the same commit and noting it in HANDOFF.md.
+Status of this document: describes the implemented system (version 0.1, after the Step 7
+review). Sections 1–9 give the original contract; the "Refinements (Step N)" lists record how
+each step made it precise, and where a refinement differs from the text above it, the
+refinement is what the code does. Changing a public interface requires updating this file in
+the same commit and noting it in HANDOFF.md. User documentation: README.md, docs/CONFIG.md
+(every config key, checked by `tests/test_docs.py`) and docs/EXTENDING.md.
 
 ---
 
@@ -50,10 +54,12 @@ src/vidgen/
   tts/elevenlabs.py       # ElevenLabs provider (stdlib urllib), cache by hash
   render/                 # worker.py (one scene per process), pipeline.py, ffmpeg.py
   subtitles.py            # SRT from beat timings
+  fileio.py               # atomic writes; replacing files that Windows programs keep open
   scenes/                 # built-in scene library (registered like extensions)
 tests/                    # pytest; no network; slow renders marked `render`
 examples/
   minimal/                # config-only example using built-ins
+  custom_scene/           # built-ins + one extension scene type, helper module, variant, hook
   kphi3/                  # migrated paper video, custom scenes as extensions
 docs/
   CONFIG.md               # config reference
@@ -258,7 +264,8 @@ Refinements (Step 4):
   the videos (stream copy) and the WAVs (PCM) with two concat-demuxer lists, and encodes the
   audio once to AAC 192k in the final mux. Measured beat onsets in the output match
   `timings.json` within 1 ms. Scene durations are measured from the rendered videos with PyAV
-  (frames / fps). The final MP4 is written to `<name>.partial.mp4` and renamed.
+  (frames / fps). The final MP4 is written to `<name>.partial.mp4` and renamed (Step 7: if
+  the target stays locked, the partial file is kept and the error says so).
 - **Timings**: `build/<q>[_<variant>]/timings.json` = `{title, variant, preview, format: {width,
   height, fps}, audio, duration, vidgen, scenes: [{id, type, start, duration, beats: [{id,
   start, end, text}]}]}`, all times absolute seconds. SRT cues come from it (`subtitles.py`):
@@ -518,3 +525,37 @@ using the existing renders of the others (missing ones are rendered). Exit code 
 - Tests that invoke Manim rendering are marked `@pytest.mark.render` and use tiny resolutions
   (e.g. 160x90 @ 5 fps); they run by default but can be skipped with `-m "not render"`.
 - ffmpeg is required on PATH for render tests; skip with a clear reason if missing.
+
+## 10. Refinements (Step 7, independent review)
+
+- **Audio length** (`scene.audio_duration`) = decoded samples / sample rate. The container
+  duration depends on the PyAV/FFmpeg version: PyAV 13 (what Manim 0.19 pins, i.e. every
+  Python 3.10 install) includes MP3 encoder padding, ~25–50 ms more per beat than PyAV 14+.
+  Decoding gives identical timings everywhere (kphi3: unchanged with PyAV 19).
+- **Dependencies**: `manim>=0.19` (the `code` scene uses the 0.19 `Code` API). Tested with
+  Manim 0.19.1 / PyAV 13 on Python 3.10 and Manim 0.21 / PyAV 19 on Python 3.13.
+- **Config**: `format`/`preview` `width` and `height` must be even (Manim's H.264 writer
+  crashed with a segfault on odd sizes). Config files may start with a UTF-8 BOM (Windows
+  Notepad) and use CRLF line endings.
+- **Files on Windows** (`vidgen.fileio`): every output that may be open in another program is
+  written to a temporary file and moved with `replace_file`, which retries for ~1.5 s
+  (virus scanners) and then raises `VidgenError("cannot write X (...); is it open in another
+  program...")`. Used for the final MP4 (the joined video is kept as `<name>.partial.mp4`),
+  SRT, timings JSON, TTS MP3/hash files; the worker deletes a scene's old render with
+  `remove_file` (same error). The CLI reconfigures stdout/stderr with
+  `errors="backslashreplace"`, so a console with a legacy code page never crashes on a title
+  or path; a closed pipe (`vidgen list-scenes | more`) ends quietly.
+- **API key**: render worker processes get the environment without `ELEVENLABS_API_KEY` (scene
+  code never needs it).
+- **Extensions**: `beat_count` is validated when the class is registered (`VidgenError` naming
+  the type); `SystemExit` raised while importing an extension is reported like any import error;
+  an exception in (or a non-list returned by) `validate_project` is reported by `vidgen
+  validate` as `scenes[i]: validate_project of scene type 'x' (<file>) failed: ...` and the
+  other scenes are still checked; `register_theme_defaults(sizes=...)` requires positive
+  numbers; bare `@scene` / `@hook` (no parentheses) raise a message showing the right form;
+  hook tracebacks start at the hook. `render` also checks beat counts before starting workers.
+- **CLI**: `vidgen list-scenes` prints the fields of nested `SceneParams` models indented
+  under their field. `vidgen init` creates `assets/`, `extensions/` and a `.gitignore`
+  (template files cannot start with a dot, because setuptools does not package dot files: the
+  template stores `gitignore` and `init` renames it).
+

@@ -5,8 +5,6 @@ Nothing here needs an API key or the network.
 
 from __future__ import annotations
 
-import os
-import tempfile
 from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -14,6 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from vidgen.errors import VidgenError
+from vidgen.fileio import write_bytes_atomic
 from vidgen.project import Project
 
 if TYPE_CHECKING:
@@ -120,15 +119,6 @@ def orphaned_audio(project: Project) -> list[Path]:
 def atomic_write(path: Path, data: bytes) -> None:
     """Write ``data`` to a temporary file next to ``path``, then replace ``path`` with it.
 
-    ``path`` is either left untouched or fully written; the temporary file is removed on failure.
+    ``path`` is either left untouched or fully written (see :mod:`vidgen.fileio`).
     """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
-    tmp = Path(tmp_name)
-    try:
-        with os.fdopen(fd, "wb") as handle:
-            handle.write(data)
-        os.replace(tmp, path)
-    except BaseException:
-        tmp.unlink(missing_ok=True)
-        raise
+    write_bytes_atomic(path, data)

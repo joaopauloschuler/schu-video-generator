@@ -5,8 +5,10 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import shutil
 import sys
+import traceback
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
@@ -20,6 +22,8 @@ from vidgen.errors import VidgenError
 from vidgen.project import CONFIG_NAMES, Project
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
+#: Template files copied as ``.<name>`` by ``vidgen init``.
+TEMPLATE_DOTFILES: tuple[str, ...] = ("gitignore",)
 
 
 def _format_seconds(seconds: float) -> str:
@@ -34,8 +38,14 @@ def cmd_init(args: argparse.Namespace) -> int:
         raise VidgenError(f"{target} already exists and is not an empty directory")
     template = TEMPLATES_DIR / args.example
     shutil.copytree(template, target, dirs_exist_ok=True)
+    # Dot files are not packaged in the wheel, so the template stores them without the dot.
+    for name in TEMPLATE_DOTFILES:
+        if (target / name).is_file():
+            (target / name).replace(target / f".{name}")
+    for folder in ("assets", "extensions"):
+        (target / folder).mkdir(exist_ok=True)
     config_file = target / "video.yaml"
-    title = json.dumps(target.resolve().name.replace("_", " ").replace("-", " ").title())
+    title = json.dumps(target.resolve().name.replace("_", " ").replace("-", " ").title(), ensure_ascii=False)
     config_file.write_text(
         config_file.read_text(encoding="utf-8").replace("__TITLE__", title), encoding="utf-8"
     )
@@ -70,10 +80,30 @@ def check_project(project: Project) -> list[str]:
                 except ValidationError as exc:
                     problems.extend(validation_error_lines(exc, ("scenes", i, "params")))
                     continue
-                problems.extend(f"scenes[{i}].params.{p}" for p in entry.cls.validate_project(params, project))
+                try:
+                    problems.extend(f"scenes[{i}].params.{p}" for p in _project_checks(entry, params, project))
+                except VidgenError as exc:
+                    problems.append(f"scenes[{i}]: {exc}")
     except VidgenError as exc:
         problems.append(str(exc))
     return problems
+
+
+def _project_checks(entry: Any, params: Any, project: Project) -> list[str]:
+    """``entry.cls.validate_project(params, project)``; a scene type whose check raises or does
+    not return a list of strings becomes a :class:`VidgenError` naming the type and its file."""
+    where = f"validate_project of scene type '{entry.name}' ({entry.origin})"
+    try:
+        result = entry.cls.validate_project(params, project)
+    except VidgenError as exc:
+        raise VidgenError(f"{where} failed: {exc}") from None
+    except Exception as exc:
+        tb = exc.__traceback__.tb_next if exc.__traceback__ is not None else None
+        details = "".join(traceback.format_exception(type(exc), exc, tb)).rstrip()
+        raise VidgenError(f"{where} failed: {type(exc).__name__}: {exc}\n{details}") from None
+    if not isinstance(result, list) or not all(isinstance(p, str) for p in result):
+        raise VidgenError(f"{where} must return a list of strings, got {result!r}")
+    return result
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
@@ -185,17 +215,33 @@ def _type_name(annotation: Any, metadata: Sequence[Any] = ()) -> str:
     return str(annotation).replace("typing.", "")
 
 
-def describe_params(model: type[BaseModel] | None) -> list[str]:
-    """``name: type [= default]`` for each field of a ``Params`` model (empty for plain dicts)."""
+def _nested_models(annotation: Any) -> list[type[BaseModel]]:
+    """Pydantic models used inside a field type (``Ring``, ``list[Ring]``, ``Ring | None``...)."""
+    import typing
+
+    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+        return [annotation]
+    found: list[type[BaseModel]] = []
+    for arg in typing.get_args(annotation):
+        found += [m for m in _nested_models(arg) if m not in found]
+    return found
+
+
+def describe_params(model: type[BaseModel] | None, indent: str = "", _seen: tuple[type, ...] = ()) -> list[str]:
+    """``name: type [= default]`` for each field of a ``Params`` model (empty for plain dicts);
+    the fields of nested models follow their field, indented."""
     if model is None:
         return []
     lines = []
     for name, field in model.model_fields.items():
-        line = f"{name}: {_type_name(field.annotation, field.metadata)}"
+        line = f"{indent}{name}: {_type_name(field.annotation, field.metadata)}"
         if not field.is_required():
             default = field.get_default(call_default_factory=True)
             line += f" = {default!r}"
         lines.append(line)
+        for nested in _nested_models(field.annotation):
+            if nested not in _seen:
+                lines += describe_params(nested, indent + "    ", (*_seen, model, nested))
     return lines
 
 
@@ -302,10 +348,22 @@ def _cli_logging() -> Iterator[None]:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the CLI; returns the process exit code."""
+    for stream in (sys.stdout, sys.stderr):
+        # A Windows console redirected to a file/pipe uses a legacy code page (cp1252...):
+        # never crash on a character it cannot show (titles, paths, tracebacks).
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(errors="backslashreplace")
     args = build_parser().parse_args(argv)
     try:
         with _cli_logging():
             return args.func(args)
     except VidgenError as exc:
         print(f"error: {exc}", file=sys.stderr)
+        return 1
+    except BrokenPipeError:  # output piped into e.g. `head` or `more`, which stopped reading
+        try:
+            sys.stdout = open(os.devnull, "w", encoding="utf-8")  # noqa: SIM115 - silence the flush at exit
+        except OSError:
+            pass
         return 1

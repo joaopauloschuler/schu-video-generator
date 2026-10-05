@@ -108,4 +108,7 @@ class Theme:
                     raise VidgenError(f"theme default color '{name}' must be a hex string, got {value!r}")
             self._registered_colors.update(colors)
         if sizes:
+            for name, value in sizes.items():
+                if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+                    raise VidgenError(f"theme default size '{name}' must be a positive number, got {value!r}")
             self._registered_sizes.update(sizes)

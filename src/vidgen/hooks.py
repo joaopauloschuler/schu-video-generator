@@ -62,6 +62,8 @@ Snapshot = list[Hook]
 
 
 def _check_event(event: str) -> None:
+    if callable(event):
+        raise VidgenError(f"use @hook(\"event\") with an event name ({', '.join(EVENTS)}), not bare @hook")
     if event not in EVENTS:
         raise VidgenError(f"unknown hook event {event!r}; events: {', '.join(EVENTS)}")
 
@@ -110,7 +112,9 @@ def dispatch(event: str, project: Project, **data: Any) -> HookContext:
         except VidgenError as exc:
             raise VidgenError(f"hook {entry.name} ({entry.origin}) failed during {event}: {exc}") from exc
         except Exception as exc:
-            details = "".join(traceback.format_exception(exc)).rstrip()
+            # start the traceback at the hook (skip this dispatch frame)
+            tb = exc.__traceback__.tb_next if exc.__traceback__ is not None else None
+            details = "".join(traceback.format_exception(type(exc), exc, tb)).rstrip()
             raise VidgenError(
                 f"hook {entry.name} ({entry.origin}) failed during {event}: "
                 f"{type(exc).__name__}: {exc}\n{details}"

@@ -26,6 +26,7 @@ from typing import Any
 
 from vidgen import __version__
 from vidgen.errors import VidgenError
+from vidgen.fileio import remove_file, write_text_atomic
 from vidgen.project import Project
 
 #: Manim's units on the shorter side of the frame (Manim's default frame height).
@@ -122,10 +123,7 @@ def _round(value: Any) -> Any:
 
 def write_json(path: Path, data: Any) -> None:
     """Write ``data`` as UTF-8 JSON atomically (temp file + replace)."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    tmp.replace(path)
+    write_text_atomic(path, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
 
 
 def render_scene(
@@ -149,7 +147,7 @@ def render_scene(
     render_dir = project.render_dir(preview)
     # A failed render must not leave the previous render behind to be reused by `--scene`.
     for stale in (scene_video_path, scene_audio_path, scene_timings_path):
-        stale(project, preview, scene_id).unlink(missing_ok=True)
+        remove_file(stale(project, preview, scene_id))
     media_dir, temporary = _manim_media_dir(render_dir)
     shutil.rmtree(media_dir / "videos" / scene_id, ignore_errors=True)  # no stale .wav from a previous run
     try:
