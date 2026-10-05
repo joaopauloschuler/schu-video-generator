@@ -1210,3 +1210,116 @@ Known gaps / TODOs
 How to test: `/home/claude/venv/bin/python -m pytest -q` (582 passed, 1 skipped; regions:
 `pytest tests/test_regions.py`). Manual: `vidgen storyboard examples/minimal --variant vertical
 --scene steps --scene listing`, `vidgen lint examples/minimal [--variant vertical]`.
+
+## Step 16 — Theme presets (mechanism + 3 presets)
+What was built
+- `theme: {preset: NAME, ...}` in `video.yaml`: a preset is a named set of theme values
+  (`background`, `font`, `code_style`, `colors`, `palette`, `sizes`). Precedence, highest
+  first: values written under `theme:` (after merging a variant) > the preset (then its `base`)
+  > `register_theme_defaults` > built-in defaults. No preset → that level is empty, so existing
+  projects render as before (apart from the `dim` fix below). Variants switch presets with
+  `variants: {light: {theme: {preset: light_academic}}}`.
+- Built-in presets (`src/vidgen/presets.py`): `dark_tech` (= the defaults), `light_academic`
+  (off-white `#F8F7F3`, near-black text, ink accents, white `surface`, Pygments `xcode`),
+  `high_contrast` (black, white text, accents ≥ 7:1, `caption` 26 / `small` 24).
+- New theme key `code_style` (Pygments style, validated); the `code` scene's `style` param now
+  defaults to it (was hard-coded `github-dark`, unreadable on a light window).
+- Project presets: `vidgen.api.register_theme_preset(name, *, base, background, font, colors,
+  palette, sizes, code_style, description)`, stored on the active Theme (per project).
+- Reusable contrast check `vidgen.lint.color.theme_contrast(theme, text_ratio=4.5,
+  graphic_ratio=3.0) -> list[ContrastCheck]`: text/dim vs background and surface (4.5:1),
+  accent tokens and palette vs background (3:1).
+- `vidgen validate` reports an unknown preset (`theme.preset: unknown theme preset ...; known
+  presets: ...`); `vidgen schema` has `preset` (built-in + project presets) and `code_style`
+  (installed Pygments styles) enums.
+- Example: `examples/minimal` base theme `preset: dark_tech`, new variants `light`
+  (`light_academic`) and `contrast` (`high_contrast`); the init template uses `preset:
+  dark_tech` instead of an explicit background.
+
+Files
+- New: `src/vidgen/presets.py`, `tests/test_presets.py` (35 tests, 3 render tests: 7 built-in
+  scene types rendered at 640x360 with each preset, lint `contrast` must be clean).
+- Changed: `theme.py` (preset resolution, `preset`, `presets`, `preset_chain()`,
+  `add_preset()`, `derive()`, `code_style`; `DEFAULT_*` now defined in `presets.py` and
+  re-exported), `config.py` (`ThemeConfig.preset`, `code_style`; `background`/`font` default
+  `None`), `api.py` (`register_theme_preset`), `cli.py` (preset check in `project_problems`),
+  `schema.py` (`theme_presets`, enums, `project_themes` uses `Theme.derive`, `theme_tokens`
+  skips themes with an unknown preset), `lint/color.py` (`theme_contrast`, `ContrastCheck`,
+  `hex_rgb` accepts `#RGB`/`#RRGGBBAA`), `scenes/code.py` (`style` default), `scenes/bullets.py`
+  (`dimmed_opacity = 0.45`), `templates/minimal/video.yaml`, `examples/minimal/video.yaml`,
+  tests `test_config.py`, `test_docs.py` (preset table in sync), docs/CONFIG.md (Theme section
+  rewritten: precedence, "Theme presets" table, `code_style`; schema enums; `code.style` row),
+  docs/EXTENDING.md (§4 project presets), README (feature line), DESIGN.md (§2, §4, §6.2, §6.4,
+  new §19), tasklist.md.
+
+Public interfaces added/changed
+- `vidgen.api.register_theme_preset` (new export).
+- Config: `theme.preset`, `theme.code_style` (additive). `ThemeConfig.background`/`.font` are
+  now `None` unless written (read resolved values from `Theme`, never from the config).
+- `vidgen.theme.Theme`: `preset`, `presets`, `preset_chain()`, `add_preset()`, `derive()`,
+  `code_style`. `vidgen.presets`: `ThemePreset`, `make_preset`, `BUILTIN_PRESETS`,
+  `code_styles()`, `check_code_style()`, `DEFAULT_BACKGROUND/FONT/CODE_STYLE/COLORS/PALETTE/SIZES`.
+- `vidgen.lint.color`: `theme_contrast`, `ContrastCheck`, `TEXT_RATIO`, `GRAPHIC_RATIO`,
+  `TEXT_TOKENS`, `ACCENT_TOKENS`. `vidgen.schema.theme_presets`.
+- `code` param `style`: default `None` (= theme `code_style`). `Bullets.dimmed_opacity`.
+
+Decisions / deviations
+- **Preset above extension defaults** (task: "define the precedence"): choosing a preset is an
+  explicit config decision, so it beats defaults an extension registered in code, but never a
+  value written in `video.yaml`. Built-in presets set all 8 built-in colour tokens, so an
+  extension that re-defaults e.g. `dim` is overridden once a preset is chosen; extension-only
+  tokens (`k2`) are unaffected. Brands should use `register_theme_preset(..., base=...)`.
+- **Default `dim` fixed (visible change)**: `#6B7280` → `#838B98` (3.91:1 → 5.5:1 on the
+  background, 5.0:1 on `surface`). Removes the five `contrast` warnings Steps 13–15 reported on
+  examples/minimal. kphi3 writes its own `dim: "#6B7280"` in its config and is unchanged
+  (faithful to the original video).
+- Gotcha documented rather than changed: values written in the base `theme:` also override a
+  variant's preset (deep merge), e.g. a base `background` keeps a light variant dark; the
+  example and init template therefore select `preset: dark_tech` instead of writing
+  `background`.
+- `bullets` `dim_previous` opacity 0.4 → 0.45: the dimmed `primary` marker on `light_academic`
+  was 1.93:1 (< lint's 2:1 for de-emphasised text); 0.45 gives 2.12:1. Dark output changes
+  imperceptibly.
+- Contrast scope of the check: text/dim on background and surface; accents and palette 3:1
+  (WCAG 1.4.11). Accents are also used as text (title highlight, kicker, end-card title, bar
+  value labels), so the built-in presets keep them ≥ 4.5:1 anyway (light) / ≥ 7:1 (high
+  contrast). Code-style token colours are not part of `theme_contrast`; the render test runs
+  lint's `contrast` rule on the code listing instead (xcode on white min 5.07:1, github-dark on
+  `#161B24` 5.6:1).
+- Presets are resolved lazily (on every read), so extensions can register a preset after the
+  runtime context exists; a module reading the theme at import before the preset is registered
+  gets the "unknown theme preset" error (documented: register in a module that sorts first).
+- `light_academic` uses Inter like the others: no serif is guaranteed on every platform until
+  Step 18 bundles fonts.
+- Built-ins checked on light backgrounds: no hard-coded white/black anywhere in
+  `src/vidgen/scenes`; image caption band uses `theme.background` (light band, dark text: fine);
+  chart gridlines are `dim` at 0.4 opacity (light grey on light: fine); code window `surface`
+  + `dim` border. Only `code` (style) and `bullets` (dim opacity) needed changes.
+
+Verification (examples/minimal, preview 854x480, `vidgen storyboard` sheets viewed + `vidgen lint`)
+- Default / `dark_tech` 16:9: 2 warnings (was 7 before this step: the 5 `dim` contrast
+  warnings are gone). Remaining: `bar_chart` caption at theme `small` (`min_font`), `image`
+  caption 12 px into the bottom margin (`safe_area`) — both pre-existing, Step 22.
+- `--variant vertical` (dark): 2 warnings (same two; was 7).
+- `--variant light` (`light_academic`): 2 warnings (same two). Before the bullets fix: +3
+  `contrast` warnings on dimmed numbered markers.
+- `--variant contrast` (`high_contrast`): 1 warning (only `safe_area`; `small` 24 pt clears
+  `min_font`).
+- `examples/custom_scene`: 0 findings. Sheets: every scene reads well on all three presets
+  (light: dark text on off-white, xcode listing in a white window with an amber highlight band,
+  pastel dimmed bars, image band light with dark caption).
+
+Known gaps / TODOs (Step 17+)
+- No `vidgen list-themes` yet (Step 17): it could print each preset with `theme_contrast`
+  results. `vidgen lint`/`validate` do not yet run `theme_contrast` on the project's own theme
+  (a `theme_contrast` lint rule of scope "project" would need a third scope).
+- Type scales (`compact`/`standard`/`large`) are Step 17; `high_contrast` only raises
+  `caption`/`small` for now.
+- `register_theme_defaults` cannot set `background`/`font`/`palette` (unchanged); use a preset.
+- Variant themes in `vidgen schema` share the base project's registered presets (`derive`),
+  but a variant whose extensions differ is not modelled (variants cannot change extensions'
+  code anyway).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (618 passed, 1 skipped). Presets only:
+`pytest tests/test_presets.py`. Manual: `vidgen storyboard examples/minimal --variant light`,
+`vidgen lint examples/minimal --variant contrast`, `vidgen schema examples/minimal`.

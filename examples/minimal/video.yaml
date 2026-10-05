@@ -6,6 +6,7 @@
 #   vidgen render examples/minimal --preview --frames            # + a PNG at the end of each beat
 #   vidgen storyboard examples/minimal [--variant vertical]      # contact sheets of every beat (PNG)
 #   vidgen lint examples/minimal [--variant vertical]            # layout + timing checks (dead air, ...)
+#   vidgen storyboard examples/minimal --variant light           # same video with the light_academic preset
 # There is no narration audio in this example, so beats are timed from their word count
 # (narration.words_per_second); run `vidgen tts` with an ElevenLabs key to voice it.
 title: "vidgen: the built-in scenes"
@@ -18,9 +19,13 @@ variants:
   vertical:
     format: {width: 1080, height: 1920}
     preview: {width: 480, height: 854}
+  light:                          # a theme preset per variant (docs/CONFIG.md "Theme presets")
+    theme: {preset: light_academic}
+  contrast:
+    theme: {preset: high_contrast}
 
 theme:
-  background: "#0E1116"
+  preset: dark_tech   # the default look; values written here would override every variant's preset
   font: Inter
 
 narration:

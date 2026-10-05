@@ -120,8 +120,8 @@ class CodeListing(NarratedScene):
         """Entry i applies at beat i: 3, '2-4', '1, 5-6' or [1, 4] (1-based lines)."""
         line_numbers: bool = True
         """Show line numbers."""
-        style: str = "github-dark"
-        """Pygments style (monokai, dracula, one-dark, ...)."""
+        style: str | None = None
+        """Pygments style (monokai, dracula, xcode, ...); default: the theme's code_style."""
         font: str = "Monospace"
         """Monospace font family (e.g. Consolas on Windows)."""
         size: ThemeSize = "caption"
@@ -136,7 +136,7 @@ class CodeListing(NarratedScene):
         def _check(self) -> SceneParams:
             if (self.code is None) == (self.path is None):
                 raise ValueError("give exactly one of 'code' (inline text) or 'path' (a file in the project)")
-            if self.style not in _style_names():
+            if self.style is not None and self.style not in _style_names():
                 raise ValueError(f"unknown style {self.style!r}; available: {', '.join(_style_names())}")
             if self.language is not None:
                 from pygments.lexers import get_lexer_by_name
@@ -282,7 +282,7 @@ class CodeListing(NarratedScene):
         return Code(
             code_string=text,
             language=language,
-            formatter_style=p.style,
+            formatter_style=p.style or self.theme.code_style,
             add_line_numbers=p.line_numbers,
             background="window",
             background_config={

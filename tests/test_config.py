@@ -17,8 +17,8 @@ def test_defaults() -> None:
     assert (cfg.format.width, cfg.format.height, cfg.format.fps) == (1920, 1080, 30)
     assert (cfg.preview.width, cfg.preview.height, cfg.preview.fps) == (854, 480, 15)
     assert cfg.variants == {}
-    assert cfg.theme.background == "#0E1116"
-    assert cfg.theme.font == "Inter"
+    assert cfg.theme.preset is None and cfg.theme.code_style is None
+    assert cfg.theme.background is None and cfg.theme.font is None  # Theme fills in the defaults
     assert cfg.theme.colors == {} and cfg.theme.palette is None
     assert cfg.voice.provider == "elevenlabs"
     assert cfg.voice.voice_id == "nPczCjzI2devNBz1zQrb"

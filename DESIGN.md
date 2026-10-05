@@ -46,7 +46,8 @@ src/vidgen/
   errors.py               # VidgenError, Problem
   config.py               # pydantic v2 models for video.yaml (see §4)
   project.py              # Project: locate/load config, resolve paths, variants
-  theme.py                # Theme object (colors, font, sizes, background)
+  theme.py                # Theme object (colors, font, sizes, background, code style; precedence §19)
+  presets.py              # theme presets: built-in dark_tech / light_academic / high_contrast (§19)
   registry.py             # scene-type registry
   extensions.py           # discovery + import of project extensions
   hooks.py                # hook registry + dispatch
@@ -126,11 +127,13 @@ variants:                                        # optional named overrides, dee
     preview: {width: 480, height: 854}
 
 theme:
+  preset: light_academic                         # optional (Step 16, §19); values below still win
   background: "#0E1116"
   font: Inter
+  code_style: github-dark                        # Pygments style of `code` listings (Step 16)
   colors:                                        # open dict; these names are the defaults
     text: "#E8EAED"
-    dim: "#6B7280"
+    dim: "#838B98"                               # Step 16 (was #6B7280, below WCAG AA)
     accent: "#FF6B6B"
     highlight: "#FFD166"
     primary: "#58C4DD"
@@ -377,6 +380,7 @@ class LossPanel(NarratedScene):
 def add_watermark(ctx): ...       # ctx: HookContext(project, event, data: dict)
 
 register_theme_defaults({"k2": "#F2A541"})   # extra theme tokens; video.yaml values still win
+register_theme_preset("acme", base="light_academic", colors={"primary": "#0B5FFF"})   # Step 16
 ```
 - **Scene types**: `@scene(name, *, override=False)`. Name collision with another extension is an
   error. Colliding with a built-in raises unless `override=True`, which replaces it and logs a
@@ -415,7 +419,7 @@ current_project, T, MT`, generic helpers from `helpers.py`, and `from manim impo
 Step 5 adds `ThemeColor, ThemeSize`, the `vidgen.layout` helpers (§5.3) and pydantic's
 `Field, field_validator, model_validator`.
 Step 15 adds the layout regions (§18): `Region, frame_region, safe_area, region, grid, place,
-orientation, readable_size, readable_text`.
+orientation, readable_size, readable_text`. Step 16 adds `register_theme_preset` (§19).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -1020,4 +1024,51 @@ using the existing renders of the others (missing ones are rendered). Exit code 
   replaced by empty groups; the dumped `text` of the number column is still Manim's string)
   and highlights map original lines to all their wrapped lines. Landscape output of both is
   unchanged except the title/heading now centered in `header` (a few px lower).
+
+## 19. Refinements (Step 16, theme presets)
+
+- **Config**: `ThemeConfig` gains `preset: Identifier | None` and `code_style: str | None`
+  (a Pygments style, checked against the installed styles); `background` and `font` now default
+  to `None` (= "not written"), so a preset can supply them. Variants deep-merge as before, so a
+  variant `theme: {preset: NAME}` switches the preset while base `theme:` values still apply
+  (and still win). Reference: docs/CONFIG.md "Theme presets".
+- **Precedence** (highest first, `Theme` in `theme.py`): `video.yaml` `theme.*` > the preset
+  (`preset_chain()`: the preset, below it its `base`, recursively) > `register_theme_defaults`
+  > built-in defaults. For `colors`/`sizes` the layers merge per token; `background`, `font`,
+  `code_style` and `palette` take the highest layer that sets them. Without `theme.preset` the
+  preset layer is empty, so output is unchanged for existing projects (the built-in defaults are
+  the `dark_tech` values). Rationale: a preset is an explicit choice in the config, so it beats
+  defaults an extension registered in code, but never a value written in the config.
+- **Presets** (`vidgen/presets.py`, `ThemePreset` frozen dataclass: `name, description, base,
+  background, font, code_style, colors, palette, sizes, origin`; `None`/empty = not set):
+  `BUILTIN_PRESETS` = `dark_tech` (= the defaults), `light_academic` (off-white `#F8F7F3`,
+  near-black text, ink accents, white `surface`, `code_style: xcode`), `high_contrast` (black,
+  white text, saturated accents ≥ 7:1, `caption` 26 / `small` 24). Values: docs/CONFIG.md table
+  (a test keeps it in sync). `DEFAULT_*` constants moved here (`vidgen.theme` re-exports them).
+- **Default `dim` changed** from `#6B7280` (3.91:1 on `#0E1116`, below WCAG AA; every dim
+  caption was a lint `contrast` warning) to `#838B98` (5.5:1 on the background, 5.0:1 on
+  `surface`): a visible change, dim text is slightly lighter.
+- **Project presets**: `vidgen.api.register_theme_preset(name, *, base, background, font,
+  colors, palette, sizes, code_style, description)` → `presets.make_preset` (validates names,
+  hex colours, positive sizes, Pygments style) → `Theme.add_preset` (error on a built-in name,
+  a duplicate, or an unknown `base`). Stored on the active `Theme`, so they are per project like
+  `register_theme_defaults` (every `activate` builds a fresh Theme). Presets are looked up when
+  a value is read; an unknown name raises `VidgenError("unknown theme preset ...; known
+  presets: ...")`. `Theme.derive(config)` builds a variant's theme sharing the registered
+  defaults and presets (used by `schema.project_themes`).
+- **Validation/schema**: `vidgen validate` reports an unknown preset as `theme.preset: ...`
+  (and skips the scene checks, which all need the theme); `vidgen schema` gives `preset` an
+  `enum` of the built-in and project presets (`schema.theme_presets`) and `code_style` an
+  `enum` of the installed Pygments styles.
+- **Contrast check** (`vidgen/lint/color.py`): `theme_contrast(theme, *, text_ratio=4.5,
+  graphic_ratio=3.0) -> list[ContrastCheck(subject, color, against, against_color, ratio,
+  minimum)]` (`.ok`): `text`/`dim` on the background and on `surface` need 4.5:1 (WCAG AA
+  text), the accent tokens (`accent, highlight, primary, secondary, tertiary`) and the palette
+  3:1 on the background (WCAG 1.4.11 graphical objects / large text). Tests run it on every
+  built-in preset. `hex_rgb` now accepts `#RGB` and `#RRGGBBAA` (alpha ignored).
+- **Built-ins on light backgrounds**: no built-in hard-codes white/black; colours come from
+  theme tokens and the image caption band from `theme.background`. Changed: `code` `style`
+  defaults to `None` = `theme.code_style` (a dark style on a white window was unreadable);
+  `bullets` dims earlier items to `dimmed_opacity = 0.45` (was 0.4: a dimmed `primary` marker
+  on `light_academic` was 1.9:1, under lint's 2:1 for de-emphasised text).
 

@@ -70,9 +70,9 @@ Rules that apply to every step:
 - [x] Refactor two built-in scenes to use it; tests at 16:9 and 9:16
 
 ### Step 16 — Theme presets (mechanism + 3 presets)
-- [ ] `theme: {preset: NAME, ...overrides}`; preset values merged under user values
-- [ ] Presets: `dark_tech` (current default), `light_academic`, `high_contrast`
-- [ ] Test: every preset passes WCAG AA for text/dim/palette vs background
+- [x] `theme: {preset: NAME, ...overrides}`; preset values merged under user values
+- [x] Presets: `dark_tech` (current default), `light_academic`, `high_contrast`
+- [x] Test: every preset passes WCAG AA for text/dim/palette vs background
 
 ### Step 17 — Theme presets (4 more + type scales)
 - [ ] Presets: `warm_editorial`, `brand_neutral`, `soft_pastel`, `bold_neon`

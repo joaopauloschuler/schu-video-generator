@@ -8,6 +8,8 @@ subtitles.
 
 - **Config-only videos** with ten built-in scene types (title, bullets, charts, image, quote,
   equation, code, end card...), in landscape and vertical formats.
+- **Theme presets** (`theme: {preset: light_academic}`; also `dark_tech`, the default look, and
+  `high_contrast`), all WCAG AA; projects can register their own (e.g. a brand look).
 - **Extensible per video**: a project can add its own scene types, helpers, theme tokens and
   pipeline hooks in its `extensions/` folder, without touching vidgen.
 - **Cheap to iterate**: only new or edited beats are sent to ElevenLabs; fast low-resolution

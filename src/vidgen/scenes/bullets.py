@@ -44,6 +44,9 @@ class Bullets(NarratedScene):
     #: In a vertical frame the heading grows by this factor, and a short list up to it, to use
     #: the taller frame.
     portrait_growth = 1.3
+    #: Opacity of earlier items with ``dim_previous`` (0.45 keeps a dimmed ``primary`` marker
+    #: above lint's 2:1 for de-emphasised text on light themes too).
+    dimmed_opacity = 0.45
 
     def construct(self) -> None:
         p = self.params
@@ -66,7 +69,7 @@ class Bullets(NarratedScene):
                 if i == 0 and heading is not None:
                     anims.insert(0, FadeIn(heading, shift=DOWN * 0.15))
                 if p.dim_previous:
-                    anims += [rows[j].animate.set_opacity(0.4) for j in range(i)]
+                    anims += [rows[j].animate.set_opacity(self.dimmed_opacity) for j in range(i)]
                 return anims
 
             return build

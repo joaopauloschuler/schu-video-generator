@@ -56,6 +56,44 @@ def register_theme_defaults(colors: dict[str, str] | None = None, sizes: dict[st
     current_theme().add_defaults(colors=colors, sizes=sizes)
 
 
+def register_theme_preset(
+    name: str,
+    *,
+    base: str | None = None,
+    background: str | None = None,
+    font: str | None = None,
+    colors: dict[str, str] | None = None,
+    palette: list[str] | None = None,
+    sizes: dict[str, float] | None = None,
+    code_style: str | None = None,
+    description: str = "",
+) -> None:
+    """Add a project theme preset, selectable with ``theme: {preset: NAME}`` (DESIGN.md §19).
+
+    Values left out come from ``base`` (a built-in or earlier registered preset), else from the
+    defaults; ``video.yaml`` values still win. Call at module level in an extension, e.g.
+    ``register_theme_preset("acme", base="light_academic", colors={"primary": "#0B5FFF"})``.
+    """
+    import sys
+
+    from vidgen._origin import origin_of
+    from vidgen.presets import make_preset
+
+    preset = make_preset(
+        name,
+        description=description,
+        base=base,
+        background=background,
+        font=font,
+        code_style=code_style,
+        colors=colors,
+        palette=palette,
+        sizes=sizes,
+        origin=origin_of(sys._getframe(1).f_globals.get("__name__", "")),
+    )
+    current_theme().add_preset(preset)
+
+
 VIDGEN_NAMES: tuple[str, ...] = (
     "NarratedScene",
     "SceneParams",
@@ -63,6 +101,7 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "hook",
     "HookContext",
     "register_theme_defaults",
+    "register_theme_preset",
     "current_theme",
     "current_project",
     "VidgenError",

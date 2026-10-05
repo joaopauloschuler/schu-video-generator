@@ -11,7 +11,7 @@ preview: {width: 854, height: 480, fps: 15}
 #     preview: {width: 480, height: 854}
 
 theme:
-  background: "#0E1116"
+  preset: dark_tech               # or light_academic, high_contrast (docs/CONFIG.md "Theme presets")
   font: Inter
   # colors: {accent: "#FF6B6B"}   # override or add color tokens
 

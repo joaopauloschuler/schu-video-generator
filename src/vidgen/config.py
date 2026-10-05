@@ -68,20 +68,33 @@ def _preview_format() -> FormatConfig:
 class ThemeConfig(_Strict):
     """Theme values from the config.
 
-    Only the values written in the config are stored here; ``colors``, ``sizes`` and
-    ``palette`` are merged with the built-in defaults by :class:`vidgen.theme.Theme`.
+    Only the values written in the config are stored here (unset values are ``None``/empty);
+    :class:`vidgen.theme.Theme` merges them over the preset and the defaults.
     """
 
-    background: HexColor = "#0E1116"
-    """Background color (hex)."""
-    font: str = "Inter"
-    """Font family for all text."""
+    preset: Identifier | None = None
+    """Theme preset (dark_tech, light_academic, high_contrast or a project preset); values set here win over it."""
+    background: HexColor | None = None
+    """Background color (hex); default: the preset's, else #0E1116."""
+    font: str | None = Field(default=None, min_length=1)
+    """Font family for all text; default: the preset's, else Inter."""
+    code_style: str | None = None
+    """Pygments style of code listings; default: the preset's, else github-dark."""
     colors: dict[Identifier, HexColor] = Field(default_factory=dict)
     """Color tokens (name: hex) merged over the defaults; projects may add any name."""
     palette: list[HexColor] | None = Field(default=None, min_length=1)
     """Ordered series colors (charts, groups); replaces the default palette."""
     sizes: dict[Identifier, Size] = Field(default_factory=dict)
     """Font size tokens (name: points) merged over the defaults; projects may add any name."""
+
+    @field_validator("code_style")
+    @classmethod
+    def _known_style(cls, value: str | None) -> str | None:
+        if value is not None:
+            from vidgen.presets import check_code_style
+
+            check_code_style(value)
+        return value
 
 
 class VoiceSettings(_Strict):

@@ -80,6 +80,10 @@ def project_problems(project: Project) -> list[Problem]:
     problems: list[Problem] = []
     try:
         with extensions.project_session(project) as theme:
+            try:
+                theme.preset_chain()
+            except VidgenError as exc:  # every theme lookup would fail; nothing else to check
+                return [Problem("theme.preset", str(exc))]
             for i, scene in enumerate(project.config.scenes):
                 entry = registry.find(scene.type)
                 if entry is None:

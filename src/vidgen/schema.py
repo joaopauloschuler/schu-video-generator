@@ -29,6 +29,7 @@ from vidgen import __version__
 from vidgen.config import HEX_COLOR_PATTERN, VideoConfig, parse_config
 from vidgen.describe import scene_doc
 from vidgen.errors import VidgenError
+from vidgen.presets import code_styles
 from vidgen.project import Project, find_config_file, read_config_file
 from vidgen.registry import SceneType
 from vidgen.theme import Theme
@@ -46,14 +47,22 @@ def theme_tokens(themes: Iterable[Theme]) -> dict[str, list[str]]:
     colors: set[str] = set()
     sizes: set[str] = set()
     for theme in themes:
-        colors.update(theme.colors)
-        sizes.update(theme.sizes)
+        try:
+            colors.update(theme.colors)
+            sizes.update(theme.sizes)
+        except VidgenError:  # unknown preset: `vidgen validate` reports it
+            continue
     return {"color": sorted(colors), "size": sorted(sizes)}
 
 
+def theme_presets(themes: Iterable[Theme]) -> list[str]:
+    """Names of the presets known to any of ``themes`` (built-in and project presets)."""
+    return sorted({name for theme in themes for name in theme.presets})
+
+
 def project_themes(project: Project | None, theme: Theme) -> list[Theme]:
-    """``theme`` (the active one, with extension defaults) plus the theme of every variant of
-    ``project`` that loads, so tokens a variant defines are accepted too."""
+    """``theme`` (the active one, with extension defaults and presets) plus the theme of every
+    variant of ``project`` that loads (sharing those), so tokens a variant defines are accepted too."""
     themes = [theme]
     if project is None:
         return themes
@@ -62,7 +71,7 @@ def project_themes(project: Project | None, theme: Theme) -> list[Theme]:
             variant = Project.load(project.config_file, variant=name)
         except VidgenError:
             continue  # `vidgen validate` reports it
-        themes.append(Theme(variant.config.theme))
+        themes.append(theme.derive(variant.config.theme))
     return themes
 
 
@@ -292,6 +301,10 @@ def config_schema(entries: list[SceneType], themes: Iterable[Theme]) -> dict[str
     schema = VideoConfig.model_json_schema()
     _fix_dict_keys(schema)
     defs = schema.pop("$defs")
+    themes = list(themes)
+    theme_props = defs["ThemeConfig"]["properties"]
+    theme_props["preset"]["anyOf"] = [{"enum": theme_presets(themes)}, {"type": "null"}]
+    theme_props["code_style"]["anyOf"] = [{"enum": code_styles()}, {"type": "null"}]
     scene, scene_defs = _scene_schema(entries, theme_tokens(themes))
     defs.update(scene_defs, SceneConfig=scene)
     props = schema["properties"]

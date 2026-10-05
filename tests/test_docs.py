@@ -11,7 +11,8 @@ import yaml
 from pydantic import BaseModel
 
 from vidgen import config, extensions, registry
-from vidgen.theme import DEFAULT_COLORS, DEFAULT_PALETTE, DEFAULT_SIZES
+from vidgen.presets import BUILTIN_PRESETS
+from vidgen.theme import DEFAULT_COLORS, DEFAULT_PALETTE, DEFAULT_SIZES, Theme
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_MD = (ROOT / "docs" / "CONFIG.md").read_text(encoding="utf-8")
@@ -57,12 +58,24 @@ def test_format_and_theme_defaults_match() -> None:
     fmt, prev = config.FormatConfig(), config.VideoConfig.model_fields["preview"].get_default(call_default_factory=True)
     assert f"`{{width: {fmt.width}, height: {fmt.height}, fps: {fmt.fps}}}`" in CONFIG_MD
     assert f"`{{width: {prev.width}, height: {prev.height}, fps: {prev.fps}}}`" in CONFIG_MD
-    theme = config.ThemeConfig()
+    theme = Theme()
     assert f'background: "{theme.background}"' in CONFIG_MD and f"font: {theme.font}" in CONFIG_MD
+    assert f"code_style: {theme.code_style}" in CONFIG_MD
     for name, value in DEFAULT_COLORS.items():
         assert f'{name}: "{value}"' in CONFIG_MD
     assert "palette: [" + ", ".join(f'"{c}"' for c in DEFAULT_PALETTE) + "]" in CONFIG_MD
     assert "sizes: {" + ", ".join(f"{k}: {v}" for k, v in DEFAULT_SIZES.items()) + "}" in CONFIG_MD
+
+
+def test_every_builtin_preset_is_documented_with_its_values() -> None:
+    start = CONFIG_MD.find("### Theme presets")
+    assert start != -1
+    section = CONFIG_MD[start : CONFIG_MD.find("\n## ", start)]
+    for preset in BUILTIN_PRESETS.values():
+        assert f"`{preset.name}`" in section, preset.name
+        assert preset.background in section and preset.code_style in section, preset.name
+        for value in [*preset.colors.values(), *(preset.palette or ())]:
+            assert value in section, f"{preset.name}: {value} missing from the presets table"
 
 
 def test_every_builtin_scene_and_param_is_documented() -> None:

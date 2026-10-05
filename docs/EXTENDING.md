@@ -341,6 +341,33 @@ C_K2 = current_theme().color("k2")        # module-level theme access is fine
 Then `self.text("x", color="k2")`, `T("x", "huge", "k3")`. Values in `video.yaml`
 (`theme.colors.k2: ...`) always win over registered defaults, which win over vidgen's built-ins.
 
+**Theme presets** (docs/CONFIG.md "Theme presets"). A project can add its own preset, e.g. a
+brand look, and select it in `video.yaml` with `theme: {preset: acme}`:
+
+```python
+# extensions/_brand.py is skipped (leading _), so use a name that sorts first: extensions/a_brand.py
+from vidgen.api import *
+
+register_theme_preset(
+    "acme",
+    base="light_academic",                  # optional: values not given here come from it
+    colors={"primary": "#0B5FFF", "accent": "#E4002B", "brand": "#0B5FFF"},
+    palette=["#0B5FFF", "#E4002B", "#7E22CE", "#15803D"],
+    description="ACME corporate look",
+)
+```
+
+Arguments (all optional except the name): `base`, `background`, `font`, `colors`, `palette`,
+`sizes`, `code_style` (a Pygments style), `description`. Names must not clash with a built-in
+or another project preset. Full precedence, highest first: `video.yaml` `theme:` values > the
+selected preset (then its `base`) > `register_theme_defaults` > built-in defaults. So a preset
+chosen in the config overrides tokens an extension registered as defaults, but never what the
+config writes itself. Presets are resolved whenever a theme value is read, so register a preset
+before any module reads the theme at import time (extensions are imported in sorted file
+order) — otherwise that read fails with "unknown theme preset". Check a preset's contrast with
+`vidgen lint` on a render, or in a test: `vidgen.lint.color.theme_contrast(theme)` lists every
+text/dim/accent/palette pair with its WCAG ratio (`[c for c in ... if not c.ok]`).
+
 ## 5. Hooks
 
 ```python

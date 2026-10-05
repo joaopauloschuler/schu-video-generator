@@ -20,7 +20,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `format` | `{width: 1920, height: 1080, fps: 30}` | final render (`vidgen render`) |
 | `preview` | `{width: 854, height: 480, fps: 15}` | `vidgen render --preview` |
 | `variants` | `{}` | named overrides, see [variants](#variants) |
-| `theme` | see [theme](#theme) | colors, sizes, font, background |
+| `theme` | see [theme](#theme) | preset, colors, sizes, font, background, code style |
 | `voice` | see [voice](#voice-voice) | ElevenLabs voice |
 | `narration` | see [narration](#narration-narration) | beat padding, duration estimate |
 | `extensions` | `[extensions]` | folders whose `*.py` files and packages are imported (see docs/EXTENDING.md); the default may be missing, a folder you list must exist |
@@ -87,11 +87,13 @@ Renders of a variant go to `build/<final|preview>_<variant>/`. Audio sharing rul
 
 ```yaml
 theme:
+  preset: light_academic    # optional: a named set of theme values (see below)
   background: "#0E1116"     # frame background
   font: Inter               # font family for all text (must be installed; see README)
+  code_style: github-dark   # Pygments style of `code` listings
   colors:                   # tokens; these are the defaults, add any name you like
     text: "#E8EAED"
-    dim: "#6B7280"
+    dim: "#838B98"
     accent: "#FF6B6B"
     highlight: "#FFD166"
     primary: "#58C4DD"
@@ -103,10 +105,42 @@ theme:
   sizes: {title: 56, subtitle: 42, heading: 36, body: 32, caption: 24, small: 20}  # font points
 ```
 
-You only write what you change: `colors` and `sizes` are merged over the defaults (and over
-tokens registered by extensions); `palette` replaces the default list. Colors are hex
+You only write what you change: `colors` and `sizes` are merged over the preset and the
+defaults (and over tokens registered by extensions); `palette` replaces the list. Colors are hex
 (`#RGB`, `#RRGGBB` or `#RRGGBBAA`, quoted in YAML because of the `#`); token names use letters,
-digits and `_`. Sizes are positive numbers.
+digits and `_`. Sizes are positive numbers. `code_style` is any installed Pygments style
+(`vidgen schema` lists them); a `code` scene's own `style` param wins over it.
+
+**Precedence** (highest first): the values written under `theme:` (after merging a variant) >
+the preset (and its base preset) > defaults registered by extensions
+(`register_theme_defaults`, docs/EXTENDING.md) > the built-in defaults shown above (the
+`dark_tech` look). Without `preset` the preset level is simply empty, so an existing project
+looks exactly as before.
+
+### Theme presets
+
+`theme: {preset: NAME}` selects a named set of values; anything else under `theme:` still
+wins, so `{preset: light_academic, colors: {primary: "#0B5FFF"}}` is the light look with your
+blue. A variant can switch presets: `variants: {light: {theme: {preset: light_academic}}}`.
+Mind that values written in the base `theme:` also override the variant's preset (a base
+`background: "#0E1116"` would keep a light variant dark): write in the base only what every
+variant shares, or select the default look with `preset: dark_tech` there instead.
+
+| preset | background | text / dim | accents (`accent`, `highlight`, `primary`, `secondary`, `tertiary`) | `surface` | palette | `code_style` | sizes |
+|---|---|---|---|---|---|---|---|
+| `dark_tech` (the default look) | `#0E1116` | `#E8EAED` / `#838B98` | `#FF6B6B`, `#FFD166`, `#58C4DD`, `#F2A541`, `#83C167` | `#161B24` | `#58C4DD`, `#F2A541`, `#C792EA`, `#83C167` | `github-dark` | defaults |
+| `light_academic` | `#F8F7F3` (off-white) | `#1F2328` / `#59606B` | `#B42318`, `#A64B00`, `#1D4ED8`, `#C2410C`, `#15803D` | `#FFFFFF` | `#1D4ED8`, `#C2410C`, `#7E22CE`, `#15803D` | `xcode` | defaults |
+| `high_contrast` | `#000000` | `#FFFFFF` / `#C9CED6` | `#FF7A7A`, `#FFE14D`, `#4DD2FF`, `#FFAA4D`, `#7EE787` | `#141414` | `#4DD2FF`, `#FFAA4D`, `#D7A8FF`, `#7EE787` | `github-dark` | `caption: 26`, `small: 24` |
+
+All presets use the font Inter. Every built-in preset passes WCAG AA (tested): `text` and
+`dim` at least 4.5:1 on the background and on `surface`, the accent tokens and the palette at
+least 3:1 on the background (`high_contrast`: 7:1 for all of them). Projects can add their own
+presets (e.g. a brand look based on `light_academic`) with `register_theme_preset` in an
+extension (docs/EXTENDING.md); `vidgen validate` reports an unknown preset name, and
+`vidgen schema` lists the built-in and the project's presets.
+
+Changed in Step 16: the default `dim` is `#838B98` (was `#6B7280`, 3.9:1 on the default
+background, below WCAG AA); dim captions, axis labels and sources are a little lighter.
 
 ## Voice (`voice:`)
 
@@ -413,7 +447,7 @@ number and highlights still count original lines.
 | `title` | str | `""` | |
 | `highlight` | list of line specs | `[]` | entry *i* applies at beat *i*: `3`, `"2-4"`, `"1, 5-6"` or `[1, 4]` (1-based) |
 | `line_numbers` | bool | `true` | |
-| `style` | str | `github-dark` | a Pygments style (`monokai`, `dracula`, `one-dark`, ...) |
+| `style` | str | theme `code_style` | a Pygments style (`monokai`, `dracula`, `xcode`, ...); default: the theme's `code_style` (`github-dark`, `xcode` in `light_academic`) |
 | `font` | str | `Monospace` | monospace font family (e.g. `Consolas` on Windows) |
 | `size` | size | `caption` | starting font size (scaled to fill the frame, up to 1.5x) |
 | `highlight_color` | color | `highlight` | |
@@ -492,8 +526,10 @@ models); a type's fixed beat count (`minItems`/`maxItems` of `beats`); the silen
 `variants` (partial configs: the same keys, none required). Color and size params accept a
 `#hex` color / a positive number or a token name of the project's theme (defaults, extension
 defaults, `theme.colors`/`theme.sizes` of the base config and of every variant); such
-properties carry `"x-vidgen-theme": "color"` or `"size"`. Descriptions come from the field
-docs (the same text as `doc` in `vidgen list-scenes --json`).
+properties carry `"x-vidgen-theme": "color"` or `"size"`. `theme.preset` is an enum of the
+built-in presets and those the project registers, `theme.code_style` of the installed Pygments
+styles. Descriptions come from the field docs (the same text as `doc` in
+`vidgen list-scenes --json`).
 
 What only `vidgen validate` checks: unique scene and beat ids, files referenced by params
 (images, code, logos), the checks written in Python (`validate_project`, pydantic validators,
