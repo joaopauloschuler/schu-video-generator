@@ -26,7 +26,7 @@ Read `DESIGN.md` (the contract) and `HANDOFF.md` (what previous steps did) befor
 - Rendering tests: `@pytest.mark.render`, tiny resolution (e.g. 160x90, 5 fps), use `tmp_path`.
 
 ## Git
-- Work on branch `main`. **Never push. Never add remotes.** One commit per step (you may make
+- Work on branch `a1` (the user's current branch). **Never push. Never add remotes.** One commit per step (you may make
   more, but the step must end with everything committed and the tree clean).
 - Commit message: `Step N: <summary>` followed by a short body, then exactly these trailer lines:
 
@@ -40,3 +40,7 @@ Read `DESIGN.md` (the contract) and `HANDOFF.md` (what previous steps did) befor
 At the end of your step, append a section to `HANDOFF.md`:
 `## Step N — <title>` with: what was built, files touched, public interfaces added/changed,
 decisions/deviations from DESIGN.md (and why), known gaps / TODOs for later steps, how to test.
+
+## Task list
+`tasklist.md` is the roadmap. Each step is done by one agent, in order. Tick the boxes of your
+step (`[x]` done, `[~]` partial with a note) in the same commit.
