@@ -63,16 +63,34 @@ scenes:
       heading: "How a video is made"
       numbered: true
       dim_previous: true
-      items:
-        - "Write the narration as short beats"
-        - "Pick a scene type and its parameters for each scene"
-        - "Generate the voice once; only edited beats are re-voiced"
-        - "Render a preview, then the final video with subtitles"
+      items:              # plain strings, or {text, icon} (icons: docs/ICONS.md, `vidgen list-icons`)
+        - {text: "Write the narration as short beats", icon: pencil}
+        - {text: "Pick a scene type and its parameters for each scene", icon: shapes}
+        - {text: "Generate the voice once; only edited beats are re-voiced", icon: megaphone}
+        - {text: "Render a preview, then the final video with subtitles", icon: play}
     beats:
       - text: "First, you write the narration as a list of short beats."
       - text: "Each scene gets a type, like a title, a chart or a code listing."
       - text: "The voice is generated once, and only edited beats are paid for again."
       - text: "Then you render a quick preview, and finally the full video."
+
+  - id: feedback
+    type: icon_grid
+    params:
+      heading: "Feedback while you write"
+      icon_color: palette
+      highlight: "Lint"
+      items:
+        - {icon: presentation, label: "Storyboard", sublabel: "every beat at a glance"}
+        - {icon: shield-check, label: "Lint", sublabel: "layout and timing checks"}
+        - {icon: file-text, label: "JSON output", sublabel: "for scripts and agents"}
+        - {icon: palette, label: "Theme presets", sublabel: "one line restyles it all"}
+    beats:
+      - text: "Icon grids reveal one item per beat. A storyboard shows every beat at a glance."
+      - text: "Lint checks the layout and the timing for you."
+      - text: "Every command can also answer in JSON, for scripts and agents."
+      - text: "And a theme preset restyles the whole video."
+      - text: "At the end, one item can be highlighted, like lint here."
 
   - id: sizes
     type: bar_chart

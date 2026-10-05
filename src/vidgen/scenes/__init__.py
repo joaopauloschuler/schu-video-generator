@@ -11,6 +11,7 @@ from vidgen.scenes import (  # noqa: F401
     code,
     end_card,
     equation,
+    icon_grid,
     image,
     line_chart,
     quote,

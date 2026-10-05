@@ -1,4 +1,4 @@
-"""``end_card``: closing message, follow-up lines (links, credits) and an optional logo."""
+"""``end_card``: closing message, follow-up lines (links, credits), an optional logo and icon."""
 
 from typing import Any
 
@@ -8,19 +8,25 @@ from .image import check_image, load_image
 
 @scene("end_card")
 class EndCard(NarratedScene):
-    """Beat 1 reveals the logo and title, beat 2 the lines (both in beat 1 if there is only
+    """Beat 1 reveals the logo, icon and title, beat 2 the lines (both in beat 1 if there is only
     one); further beats hold. The scene ends with a slower fade-out.
     """
 
     outro = 1.0
+    #: Height of the icon in Manim units (the frame's shorter side is 8).
+    icon_height = 1.1
 
     class Params(SceneParams):
         title: str = ""
-        """Closing message; at least one of title, lines, logo."""
+        """Closing message; at least one of title, lines, logo, icon."""
         lines: list[str] = []
         """Links, credits; short lines shrink together instead of wrapping."""
         logo: str | None = None
         """Image file in the project."""
+        icon: IconName | None = None
+        """Icon above the title (below the logo, if both)."""
+        icon_color: ThemeColor = "primary"
+        """Icon color."""
         title_color: ThemeColor = "highlight"
         """Title color."""
         color: ThemeColor = "text"
@@ -32,8 +38,8 @@ class EndCard(NarratedScene):
 
         @model_validator(mode="after")
         def _something(self) -> SceneParams:
-            if not (self.title or self.lines or self.logo):
-                raise ValueError("give at least one of title, lines or logo")
+            if not (self.title or self.lines or self.logo or self.icon):
+                raise ValueError("give at least one of title, lines, logo or icon")
             return self
 
     @classmethod
@@ -52,6 +58,8 @@ class EndCard(NarratedScene):
             logo = load_image(self.project.asset(p.logo))
             shrink_to_fit(logo.scale_to_fit_height(self.safe_height * 0.2), width, None)
             head.add(logo)
+        if p.icon:
+            head.add(icon(p.icon, color=p.icon_color, height=self.icon_height, theme=self.theme))
         if p.title:
             head.add(fit_text(p.title, width, self.safe_height * 0.35, size=p.title_size, color=p.title_color, weight=BOLD, font=self.theme.font_for("heading")))
         head.arrange(DOWN, buff=0.45)

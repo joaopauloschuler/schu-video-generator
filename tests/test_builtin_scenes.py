@@ -20,21 +20,22 @@ from vidgen.render.worker import frame_size
 from vidgen.scenes.code import parse_line_spec
 from vidgen.theme import Theme
 
-BUILTINS = ["bar_chart", "bullets", "code", "end_card", "equation", "image", "line_chart", "quote", "text_card", "title"]
+BUILTINS = ["bar_chart", "bullets", "code", "end_card", "equation", "icon_grid", "image", "line_chart", "quote", "text_card", "title"]
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "minimal"
 FPS = 5
 
 #: Valid params for every built-in (the image/logo/code files are written by `asset_project`).
 SAMPLES: dict[str, dict[str, Any]] = {
-    "title": {"title": "A title with highlight", "highlight": "highlight", "subtitle": "Sub", "kicker": "K", "authors": ["A", "B"]},
-    "bullets": {"heading": "Heading", "items": ["one", "two", "three is longer than the others"], "numbered": True, "dim_previous": True},
+    "title": {"title": "A title with highlight", "highlight": "highlight", "subtitle": "Sub", "kicker": "K", "authors": ["A", "B"], "icon": "idea"},
+    "bullets": {"heading": "Heading", "items": ["one", {"text": "two", "icon": "cpu"}, "three is longer than the others"], "numbered": True, "dim_previous": True},
     "bar_chart": {"title": "Bars", "labels": ["a", "b", "c"], "values": [1, 2.5, -1], "highlight": "b", "unit": "%"},
     "line_chart": {"title": "Lines", "x": [1, 2, 3], "series": {"s1": [1, 2, 3], "s2": [3, 2, 2.5]}, "x_label": "x", "y_label": "y"},
     "image": {"path": "assets/pic.png", "caption": "Caption", "ken_burns": True},
     "quote": {"text": "“To be or not to be.”", "author": "Someone", "source": "Somewhere"},
     "equation": {"latex": ["x^2", "x \\cdot x"], "caption": "Square"},
     "code": {"code": "a = 1\nb = 2\nprint(a + b)\n", "language": "python", "highlight": ["1-2", 3], "title": "Code"},
-    "end_card": {"title": "Thanks", "lines": ["example.com"], "logo": "assets/pic.png"},
+    "end_card": {"title": "Thanks", "lines": ["example.com"], "logo": "assets/pic.png", "icon": "heart"},
+    "icon_grid": {"heading": "Grid", "items": [{"icon": "cpu", "label": "CPU", "sublabel": "compute"}, {"icon": "home", "label": "Home"}, {"icon": "cloud", "label": "Cloud"}], "highlight": 1, "icon_color": "palette"},
     "text_card": {"text": "Hello world"},
 }
 
@@ -125,7 +126,7 @@ def test_unknown_keys_are_rejected(name: str) -> None:
         ("code", {"code": "x", "language": "klingon"}, "unknown language"),
         ("code", {"code": "a\nb\n", "highlight": ["2-3"]}, "only 2 lines"),
         ("code", {"code": "a", "highlight": ["x-y"]}, "invalid line spec"),
-        ("end_card", {}, "at least one of title, lines or logo"),
+        ("end_card", {}, "at least one of title, lines, logo or icon"),
         ("text_card", {"text": "x", "color": "#12"}, "invalid hex color"),
     ],
 )

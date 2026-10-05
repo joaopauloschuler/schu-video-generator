@@ -208,6 +208,14 @@ def validate_project(cls, params, project):
   `grid(rows, cols, area="full")`), `.inset(x, y)`, `.below(mobject_or_y, gap)` / `.above(...)`
   (the rest of a region under a title you placed), `.to_rectangle()` (outline, for debugging).
   `orientation()` is `"landscape"`, `"portrait"` or `"square"`.
+- `grid_shape(n, aspect=None, cell_aspect=1.0, max_cols=None)` — `(rows, cols)` for `n` items
+  in an area of that aspect (width / height; a number, a region name or a `Region`; default
+  the safe area): the shape whose cells, kept at `cell_aspect` (width / height of one item),
+  come out largest; near-ties (3 %) go to fewer empty cells, then fewer rows. So 3 items in a
+  16:9 body make one row and in 9:16 three rows; 6 items 2 x 3 and 3 x 2. Combine it with
+  `grid`: `rows, cols = grid_shape(len(items), body)`, `cells = body.grid(rows, cols)`. The
+  built-in `icon_grid` tries a few `cell_aspect`s and keeps the layout with the largest text
+  and icons.
 - `place(mobject, region, fit="contain", align="center", max_scale=None, buff=0)` — scales and
   moves a mobject into a region (a name or a `Region`): `contain` fits both ways (up or down),
   `width` / `height` match one side, `none` only moves. `max_scale=1` never enlarges. `align`
@@ -220,6 +228,8 @@ def validate_project(cls, params, project):
   region like `fit_text` but never below that size (it wraps onto more lines instead; if it
   still does not fit, it is scaled down and a warning is logged). It does not move the text:
   `place(t, region, fit="none", align=...)` does.
+- `place()` and `shrink_to_fit()` scale icons inside a group with the group, strokes included
+  (a plain `group.scale()` leaves stroke widths alone).
 
 **Icons.** `icon(name, size="body", color="text", stroke_width=None, *, height=None)` returns
 an `Icon` (a `VGroup`) drawn from the built-in set or the project's `assets/icons/<name>.svg`
@@ -250,6 +260,11 @@ row = VGroup(*[
 ]).arrange(RIGHT, buff=1.0)
 place(row, self.region("hero"), max_scale=1.0)
 ```
+
+The built-in `bullets` (items `{text, icon}`), `title`, `end_card` and `icon_grid` take
+`IconName` params (docs/CONFIG.md "Built-in scenes"); their code is a worked example. Animate an icon that belongs to a group with the whole
+group, or add the group to the scene first (`self.add(group)`): an introducing animation of a
+part alone (`FadeIn(group[0])`) adds that part by itself and dissolves the group in the scene.
 
 **Text and numbers.**
 - `fit_text(text, max_width, max_height=None, size="body", color="text", weight=NORMAL,

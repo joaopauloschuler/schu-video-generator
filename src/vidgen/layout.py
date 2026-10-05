@@ -19,6 +19,7 @@ from manim import NORMAL, Mobject, Paragraph, Text, config
 
 from vidgen.errors import VidgenError
 from vidgen.helpers import resolve_color
+from vidgen.icon_mobject import scale_icon_strokes
 from vidgen.runtime import current_theme
 from vidgen.theme import Theme
 
@@ -70,7 +71,9 @@ def _highlight_ranges(normalized: str, highlights: Mapping[str, Any]) -> dict[st
 
 
 def shrink_to_fit(m: Mobject, max_width: float | None = None, max_height: float | None = None) -> Mobject:
-    """Scale ``m`` down (never up) so it fits within ``max_width`` x ``max_height``; returns ``m``."""
+    """Scale ``m`` down (never up) so it fits within ``max_width`` x ``max_height``; returns ``m``.
+
+    Icons inside ``m`` keep their proportions (their strokes are scaled too)."""
     factor = 1.0
     if max_width is not None and m.width > max_width > 0:
         factor = min(factor, max_width / m.width)
@@ -78,6 +81,7 @@ def shrink_to_fit(m: Mobject, max_width: float | None = None, max_height: float 
         factor = min(factor, max_height / m.height)
     if factor < 1.0:
         m.scale(factor)
+        scale_icon_strokes(m, factor)
     return m
 
 

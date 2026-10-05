@@ -436,7 +436,7 @@ Step 5 adds `ThemeColor, ThemeSize`, the `vidgen.layout` helpers (§5.3) and pyd
 Step 15 adds the layout regions (§18): `Region, frame_region, safe_area, region, grid, place,
 orientation, readable_size, readable_text`. Step 16 adds `register_theme_preset` (§19); Step 17
 gives it the keyword arguments `scale` and `fonts` (§20). Step 19 adds `icon`, `Icon` and
-`IconName` (§22).
+`IconName` (§22). Step 21 adds `grid_shape` (§24).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -1303,3 +1303,55 @@ using the existing renders of the others (missing ones are rendered). Exit code 
   dependency) at 192 px: overlap of inked pixels >= 0.97 for all 200 (arcs, spirals, filled
   dots), so the loader needed no change; tests build all 200 (box, colours, extent) and render
   six with arcs/fills at 96 px.
+
+## 24. Refinements (Step 21, icons in built-in scenes)
+
+- **`grid_shape(n, aspect=None, *, cell_aspect=1.0, max_cols=None) -> (rows, cols)`**
+  (`vidgen/regions.py`, exported by `vidgen.api`): `aspect` = width / height as a number, a
+  region name or a `Region` (default: the safe area). Every column count without an empty row
+  is scored by the cell size it allows at `cell_aspect` (`min(aspect / cols / cell_aspect, 1 /
+  rows)`); among shapes within 3 % of the best, fewest empty cells, then fewest rows. `n < 1`,
+  non-positive `aspect`/`cell_aspect` → `VidgenError`.
+- **Icons scaled with their group**: `vidgen.icon_mobject.scale_icon_strokes(mob, factor)`
+  multiplies the stroke widths of the `Icon`s inside a scaled group (not of `mob` itself when it
+  is an `Icon`, whose `scale` already does it). `shrink_to_fit` and `place` call it, so icons
+  in a list or card keep their proportions when the layout shrinks it. Only icons are affected
+  (other mobjects keep Manim's behaviour), so existing output is unchanged.
+- **`bullets`**: `items: list[BulletItem]`; `BulletItem(text: str (min 1), icon: IconName |
+  None = None)` accepts a plain string (`model_validator(mode="before")` → `{text}`), so old
+  configs are unchanged; its JSON Schema is `anyOf: [string (minLength 1), object]`
+  (`__get_pydantic_json_schema__`), so the exported schema accepts both forms. Layout per row
+  `VGroup(marker?, icon?, text)` (text last): without icons exactly as before. With icons, the
+  icons (size = item size x `icon_scale` 0.95 points, box 1.5 em) form a column left of the
+  text, centred on the cap height of the first line; numbers stand right-aligned left of that
+  column; an item without an icon shows its marker centred in the column (unless numbered).
+  Icons use `marker_color`. `dim_previous` now uses `fade(1 - dimmed_opacity)` once per row
+  (multiplies each part's opacity) instead of `set_opacity`, which would have made an icon's
+  invisible box and unfilled paths visible; for text the result is identical.
+- **`title`**: `icon: IconName | None`, `icon_color` (`primary`), `icon_position: above | left`
+  (`left` falls back to `above` in portrait). The icon is `icon_height` (1.25) units; above, it
+  is stacked over kicker/title/subtitle and the title gets 36 % (was 42 %) of the safe height;
+  left, the text width shrinks by the icon and `icon_gap` (0.5) and the icon is scaled to at
+  most 1.1x the text block's height. Revealed first in beat 1 (`FadeIn(scale=0.6)`).
+- **`end_card`**: `icon: IconName | None`, `icon_color` (`primary`), `icon_height` 1.1 units,
+  between logo and title; an icon alone satisfies "at least one of title, lines, logo, icon".
+- **`icon_grid`** (`scenes/icon_grid.py`): params in docs/CONFIG.md. Layout: heading in
+  `header` (portrait x1.3 like `bullets`), grid in the safe area below it. Shape: `columns` if
+  given, else `grid_shape` for each of `cell_aspects` (0.7, 0.9, 1.2, 1.6, 2.2) and each
+  distinct shape is planned (`_plan`): column width `min((W - gaps) / cols, 4.2)`; labels and
+  sublabels built at one size each, reduced by 10 % steps (not below `readable_size()`) until
+  the tallest label block takes ≤ 45 % of a row and the widest word fits the column; icon (or
+  disc) height `min(0.6 cell width, 0.85 (row - labels - 0.2), 1.9)`, at least 0.5. Score:
+  `(fits, icon_h * min(1, label_size / size)^2)`, so a shape that keeps text at its size and
+  icons large wins; if nothing fits, the best one is used and the grid is shrunk as a whole.
+  Rows are spread over spare height (≤ 1 unit extra per gap), a short last row is centred,
+  labels/sublabels are placed by baseline. Cells (`VGroup(visual, label, sublabel?)`, visual
+  = `VGroup(disc, icon)` with `badge`, else `VGroup(icon)`) are added to the scene whole before
+  their entrance (a part's introducing animation would otherwise add it alone and dissolve the
+  cell); entrance `GrowFromCenter(disc)`, `FadeIn(icon, scale=0.6)`, labels `FadeIn(shift=UP)`,
+  lagged. Steps: per item, per `groups` entry, or all; `highlight` adds a last step: other
+  cells `fade` to `dimmed_opacity` 0.55 (0.45 left a `dim` sublabel at 1.93:1 on the light
+  presets, under lint's 2:1 for dimmed text), the chosen visual is transformed into a 1.15x
+  copy in `highlight_color`. `groups`/`highlight` items are 0-based indices (as `bar_chart`'s
+  `highlight`) or labels; groups must list every item once.
+

@@ -25,7 +25,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from manim import ORIGIN, SVGMobject, VGroup, VMobject
+from manim import ORIGIN, Mobject, SVGMobject, VGroup, VMobject
 from manim.constants import CapStyleType, LineJointType
 
 from vidgen.errors import VidgenError
@@ -76,6 +76,23 @@ class Icon(VGroup):
     def parts(self) -> list[VMobject]:
         """The drawn parts."""
         return self.submobjects[1:]
+
+
+def scale_icon_strokes(mob: Mobject, factor: float) -> None:
+    """After ``mob.scale(factor)`` of a group holding icons: scale the icons' strokes too.
+
+    A group's ``scale`` leaves stroke widths alone, so an icon shrunk with its group would draw
+    relatively heavier lines; the layout helpers (``shrink_to_fit``, ``place``) call this. An
+    :class:`Icon` scaled directly already scales its strokes.
+    """
+    if isinstance(mob, Icon) or factor == 1.0:
+        return
+    for member in mob.get_family():
+        if isinstance(member, Icon):
+            for part in member.parts:
+                for leaf in part.get_family():
+                    if isinstance(leaf, VMobject) and leaf.get_stroke_width() > 0:
+                        leaf.set_stroke(width=leaf.get_stroke_width() * abs(factor), family=False)
 
 
 @lru_cache(maxsize=1)

@@ -247,7 +247,9 @@ AI author can compare them by opening one image. JSON shape: [below](#vidgen-lis
 vidgen ships 200 line icons (from [Lucide](https://lucide.dev), ISC licence), 25 in each
 category `tech`, `data`, `science`, `business`, `people`, `ui` (arrows and interface),
 `nature`, `education`, chosen for what explainer videos show; the full list with aliases and
-tags is the [icon catalogue](ICONS.md). Scenes draw them with `icon(name, ...)` (see
+tags is the [icon catalogue](ICONS.md). Built-in scenes take them as params: `icon` on
+[`title`](#title) and [`end_card`](#end_card), `{text, icon}` items of [`bullets`](#bullets),
+and the [`icon_grid`](#icon_grid) scene. Extension scenes draw them with `icon(name, ...)` (see
 docs/EXTENDING.md "Icons"); scene params that take an icon name are typed `icon` in
 `vidgen list-scenes` and checked by `vidgen validate` (an unknown name gets suggestions).
 
@@ -371,7 +373,7 @@ its params. Conventions shared by all built-ins:
 
 ### `title`
 
-Steps: (1) kicker, title and subtitle, (2) authors.
+Steps: (1) icon, kicker, title and subtitle, (2) authors.
 
 | param | type | default | |
 |---|---|---|---|
@@ -381,12 +383,16 @@ Steps: (1) kicker, title and subtitle, (2) authors.
 | `authors` | list[str] | `[]` | one line each |
 | `highlight` | str | `""` | part of the title drawn in `highlight_color` |
 | `color`, `highlight_color`, `subtitle_color`, `kicker_color`, `authors_color` | color | `text`, `highlight`, `text`, `primary`, `dim` | |
+| `icon` | icon | none | optional icon (name or alias, see [Icons](#icons)) |
+| `icon_color` | color | `primary` | |
+| `icon_position` | `above` \| `left` | `above` | above the kicker/title, or left of the title block, level with it (`left` falls back to `above` in a vertical frame) |
 
 ```yaml
 - id: intro
   type: title
   params:
     kicker: "TECHNICAL REPORT"
+    icon: brain-circuit
     title: "Saving 77% of the Parameters"
     highlight: "77%"
     subtitle: "in Large Language Models"
@@ -405,26 +411,86 @@ use the taller frame.
 
 | param | type | default | |
 |---|---|---|---|
-| `items` | list[str] | required | at least one |
+| `items` | list[str \| item] | required | at least one; each a string or `{text, icon}` (below) |
 | `heading` | str | `""` | |
 | `reveal` | `per_beat` \| `all` | `per_beat` | |
 | `numbered` | bool | `false` | `1.` `2.` ... instead of `marker` |
 | `marker` | str | `"•"` | |
 | `dim_previous` | bool | `false` | fade earlier items when a new one appears |
 | `size`, `heading_size` | size | `body`, `heading` | shrunk automatically for long lists |
-| `color`, `heading_color`, `marker_color` | color | `text`, `text`, `primary` | |
+| `color`, `heading_color`, `marker_color` | color | `text`, `text`, `primary` | `marker_color` also colours icons |
+
+**Icons.** An item can be `{text: "...", icon: NAME}` (`text` required, `icon` optional; plain
+strings keep working, and both forms mix in one list). The icon replaces the bullet; with
+`numbered: true` it stands between the number and the text. Icons form a column of their own,
+sized to the item text and centred on the capitals of its first line; in a list that mixes
+icons and plain items, the plain items' bullets sit centred in that column, so all texts start
+at one edge. Icons take `marker_color` and fade with their item (`dim_previous`).
 
 ```yaml
 - id: points
   type: bullets
   params:
     heading: "Takeaways"
-    items: ["Fewer parameters", "Same validation loss", "One GPU, three days"]
+    items:
+      - {text: "Fewer parameters", icon: layers}
+      - {text: "Same validation loss", icon: chart-line}
+      - "One GPU, three days"
     dim_previous: true
   beats:
     - text: "First, the model is much smaller."
     - text: "Second, it learns just as well."
     - text: "And it trained on a single GPU."
+```
+
+### `icon_grid`
+
+Icons with a label (and an optional smaller sublabel) in a grid. Steps: one per item (the
+heading comes with the first), or one per entry of `groups`; `reveal: all` shows every item in
+beat 1; with `highlight`, a last step dims the other items and enlarges the highlighted one in
+`highlight_color`. Each item fades in with its icon growing from its centre.
+
+Layout: the heading sits in the `header` region and the grid fills the space below it. Without
+`columns`, the shape (rows x columns) is chosen for the frame with `grid_shape` (see
+docs/EXTENDING.md), trying narrow and wide cells and keeping the layout whose labels and icons
+come out largest: 4 items make one row in 16:9 and a 2 x 2 grid in 9:16, 12 items 2 x 6 or (with
+longer labels) 3 x 4 in 16:9. Labels share one size, wrap inside their column and are reduced
+(down to the readable minimum that `vidgen lint` accepts) when they need the room; a word wider
+than its column reduces all labels. Icons are as large as the rest of the row allows (at most
+1.9 units, a quarter of the frame's shorter side). A last row with fewer items is centred;
+labels and sublabels of a row share their baselines. 2–12 items read well in 16:9 and 9:16 (at
+most 16).
+
+| param | type | default | |
+|---|---|---|---|
+| `items` | list[item] | required | 1–16 items `{icon, label, sublabel}`: `icon` (name or alias), `label` (str, required), `sublabel` (str, `""`) |
+| `heading` | str | `""` | |
+| `columns` | int | auto | fixed number of columns |
+| `reveal` | `per_beat` \| `all` | `per_beat` | ignored when `groups` is given |
+| `groups` | list[list[int \| str]] | none | reveal steps, each a list of items by 0-based index or label; every item exactly once |
+| `highlight` | int \| str | none | item (0-based index or label) emphasised in a last step |
+| `badge` | bool | `true` | draw each icon on a soft disc in its colour |
+| `icon_color` | `palette` \| color | `primary` | one colour for all icons, or `palette`: one `theme.palette` colour per item |
+| `color`, `sublabel_color`, `heading_color`, `highlight_color` | color | `text`, `dim`, `text`, `highlight` | |
+| `size`, `sublabel_size`, `heading_size` | size | `body`, `caption`, `heading` | |
+
+```yaml
+- id: stack
+  type: icon_grid
+  params:
+    heading: "What the platform covers"
+    icon_color: palette
+    highlight: "Security"
+    items:
+      - {icon: cpu, label: "Compute", sublabel: "GPUs and CPUs"}
+      - {icon: database, label: "Storage"}
+      - {icon: network, label: "Networking"}
+      - {icon: shield-check, label: "Security", sublabel: "zero trust"}
+    groups: [[0, 1], [2, 3]]       # two items per beat
+  beats:
+    - text: "Compute and storage come first."
+    - text: "Then networking and security."
+    - text: "And security matters most."
 ```
 
 ### `bar_chart`
@@ -612,13 +678,15 @@ number and highlights still count original lines.
 
 ### `end_card`
 
-Steps: (1) logo and title, (2) lines. Fades out over 1 s.
+Steps: (1) logo, icon and title, (2) lines. Fades out over 1 s.
 
 | param | type | default | |
 |---|---|---|---|
-| `title` | str | `""` | at least one of `title`, `lines`, `logo` |
+| `title` | str | `""` | at least one of `title`, `lines`, `logo`, `icon` |
 | `lines` | list[str] | `[]` | links, credits; short lines shrink together instead of wrapping |
 | `logo` | str | none | image file in the project (checked by `vidgen validate`) |
+| `icon` | icon | none | icon above the title (below the logo, if both) |
+| `icon_color` | color | `primary` | |
 | `title_color`, `color` | color | `highlight`, `text` | |
 | `title_size`, `size` | size | `title`, `body` | |
 
@@ -627,6 +695,7 @@ Steps: (1) logo and title, (2) lines. Fades out over 1 s.
   type: end_card
   params:
     title: "Are LLMs over-parameterized?"
+    icon: link
     lines: ["github.com/me/my-project", "huggingface.co/me"]
   beats:
     - text: "Code and models are online. Thanks for watching."

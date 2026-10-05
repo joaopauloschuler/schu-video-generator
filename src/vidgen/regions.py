@@ -24,6 +24,7 @@ from manim import DOWN, LEFT, ORIGIN, RIGHT, UP, Mobject, Paragraph, Rectangle, 
 
 from vidgen.errors import VidgenError
 from vidgen.fonts import register_bundled_fonts
+from vidgen.icon_mobject import scale_icon_strokes
 from vidgen.runtime import current_theme, has_context
 from vidgen.scales import Orientation, frame_orientation
 from vidgen.theme import Theme
@@ -265,6 +266,40 @@ def grid(
     return _resolve(area).grid(rows, cols, gap, gap_y)
 
 
+def grid_shape(
+    n: int, aspect: float | str | Region | None = None, *, cell_aspect: float = 1.0, max_cols: int | None = None
+) -> tuple[int, int]:
+    """``(rows, cols)`` for laying out ``n`` items in an area of ``aspect`` (width / height).
+
+    ``aspect`` is a number, a region name or a :class:`Region` (default: the safe area).
+    Chooses the shape whose cells, kept at ``cell_aspect`` (width / height of one item, e.g.
+    1.2 for an icon above a label), come out largest; among shapes within 3 % of that, the one
+    with fewer empty cells, then fewer rows. So 4 items in a wide band make one row, in 16:9
+    a 2 x 2 or 4 x 1 grid, and 6 items in a 9:16 frame 3 rows of 2. ``max_cols`` caps the
+    columns. ``n < 1`` is a :class:`VidgenError`.
+    """
+    if n < 1:
+        raise VidgenError(f"grid_shape needs at least one item, got {n}")
+    if cell_aspect <= 0:
+        raise VidgenError(f"cell_aspect must be positive, got {cell_aspect}")
+    if aspect is None or isinstance(aspect, (str, Region)):
+        area = _resolve(aspect if aspect is not None else "full")
+        aspect = area.width / area.height if area.height > 0 else 1.0
+    if aspect <= 0:
+        raise VidgenError(f"aspect must be positive, got {aspect}")
+    limit = n if max_cols is None else max(1, min(n, max_cols))
+    shapes = []
+    for cols in range(1, limit + 1):
+        rows = -(-n // cols)
+        if (rows - 1) * cols >= n:  # an empty row: a smaller column count gives the same rows
+            continue
+        size = min(aspect / cols / cell_aspect, 1.0 / rows)
+        shapes.append((size, rows * cols - n, rows, cols))
+    best = max(s[0] for s in shapes)
+    _, _, rows, cols = min((s for s in shapes if s[0] >= best * 0.97), key=lambda s: (s[1], s[2]))
+    return rows, cols
+
+
 def _resolve(area: str | Region) -> Region:
     return region(area) if isinstance(area, str) else area
 
@@ -288,7 +323,8 @@ def place(
     ``width``/``height`` match that side only (the other may overflow), ``none`` keeps the
     size. ``max_scale`` caps the scale factor (e.g. ``1.0``: shrink only, never enlarge).
     ``align`` (``"center"``, ``"top"``, ``"bottom_left"``, ... or a Manim direction such as
-    ``UL``) puts that edge/corner of ``mob`` on the same edge/corner of the region.
+    ``UL``) puts that edge/corner of ``mob`` on the same edge/corner of the region. Icons
+    inside a scaled group keep their proportions (their strokes are scaled too).
     """
     target = _resolve(area)
     if buff:
@@ -306,6 +342,7 @@ def place(
             if max_scale is not None:
                 factor = min(factor, max_scale)
             mob.scale(factor)
+            scale_icon_strokes(mob, factor)
     direction = _direction(align)
     mob.move_to(target.point(direction), aligned_edge=direction)
     return mob

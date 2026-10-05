@@ -205,10 +205,10 @@ def test_list_scenes_json_builtins(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     assert (bullets["origin"], bullets["builtin"], bullets["overrides_builtin"], bullets["beats"]) == ("builtin", True, False, None)
     assert bullets["doc"].startswith("``reveal: per_beat`` (default)")
     fields = {f["name"]: f for f in bullets["params"]}
-    assert fields["items"] == {
-        "name": "items", "type": "list[str]", "required": True, "default": None,
-        "doc": "The list items (at least one); item i appears at beat i.", "nested": [],
-    }
+    items = fields["items"]
+    assert (items["type"], items["required"], items["default"]) == ("list[BulletItem]", True, None)
+    assert items["doc"] == "The list items (at least one): text, or {text, icon}; item i appears at beat i."
+    assert [(f["name"], f["type"]) for f in items["nested"][0]["fields"]] == [("text", "str"), ("icon", "icon | None")]
     assert (fields["reveal"]["type"], fields["reveal"]["default"]) == ("'per_beat' | 'all'", "per_beat")
     assert (fields["color"]["type"], fields["size"]["type"], fields["marker"]["default"]) == ("color", "size", "•")
     ken = {f["name"]: f for f in types["image"]["params"]}["ken_burns"]

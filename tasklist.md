@@ -95,8 +95,8 @@ Rules that apply to every step:
 - [x] Tags in the manifest for search; test that every manifest entry loads and renders (catalogue `docs/ICONS.md` generated + kept in sync)
 
 ### Step 21 — Icons in built-in scenes
-- [ ] `icon:` accepted by bullets items, title, end_card (and documented)
-- [ ] `icon_grid` scene: a grid of icons with labels revealed per beat
+- [x] `icon:` accepted by bullets items, title, end_card (and documented)
+- [x] `icon_grid` scene: a grid of icons with labels revealed per beat (groups, highlight, palette; `grid_shape` helper in `vidgen.api`)
 
 ### Step 22 — Review 1
 - [ ] Run storyboard + lint on every example (16:9 and vertical); fix what they reveal

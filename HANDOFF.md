@@ -1744,3 +1744,89 @@ How to test: `/home/claude/venv/bin/python -m pytest -q` (728 passed, 1 skipped)
 `pytest tests/test_icons.py`. Manual: `vidgen list-icons --sheet build/icons.png` (3 pages),
 `vidgen list-icons --search money`, re-vendor: `python tools/vendor_icons.py` (npm) or
 `--package-dir DIR`.
+
+## Step 21 — Icons in built-in scenes
+What was built
+- **`grid_shape(n, aspect=None, *, cell_aspect=1.0, max_cols=None) -> (rows, cols)`** in
+  `vidgen/regions.py`, exported by `vidgen.api` (the helper Step 15 left out): picks the shape
+  whose cells (at `cell_aspect`) come out largest in an area of `aspect` (number, region name or
+  `Region`; default the safe area); near-ties go to fewer empty cells, then fewer rows.
+- **`bullets`**: items are a string or `{text, icon}` (`BulletItem`; plain strings still work
+  and mix with icon items). Icons form a column next to the text, sized to the item text,
+  centred on the first line's capitals; they replace the bullet, or stand between number and
+  text when `numbered`; a plain item in a list with icons shows its bullet centred in the icon
+  column. Colour `marker_color`; `dim_previous` fades icons with their row.
+- **`title`**: `icon`, `icon_color` (`primary`), `icon_position: above | left` (`left` → `above`
+  in portrait). **`end_card`**: `icon`, `icon_color` (icon between logo and title; an icon alone
+  is a valid card).
+- **`icon_grid`** (new built-in, `src/vidgen/scenes/icon_grid.py`): items `{icon, label,
+  sublabel?}` (1–16), optional `heading`, `columns`, `reveal: per_beat | all`, `groups` (reveal
+  steps by index or label), `highlight` (last step: others dim, the item grows in
+  `highlight_color`), `badge` (soft disc behind each icon), `icon_color: palette | color`,
+  label/sublabel/heading colours and sizes. Shape from `grid_shape` tried at five cell
+  proportions, best resulting layout wins (labels at the requested size, then largest icons);
+  labels share one size, shrink (not below `readable_size()`) for room or a long word; rows
+  spread over spare height, short last row centred, labels on common baselines.
+- **Icons scaled with their group**: `shrink_to_fit` and `place` now also scale the strokes of
+  icons inside the group they scale (`icon_mobject.scale_icon_strokes`).
+- `examples/minimal`: new `feedback` icon_grid scene (palette colours, highlight), icons on the
+  numbered `steps` bullets.
+
+Verification (looked at every sheet with Read)
+- Scratch project (11 scenes: title above/left, bullets with icons/mixed/numbered, icon_grid
+  with 2, 3, 4, 6 (sublabels, highlight), 9 (no badge, groups), 12 (sublabels, palette, reveal
+  all) items, end_card) storyboarded at preview 16:9, `vertical`, `light` (light_academic) and
+  `large` scale. Fixed along the way: labels of different sizes when one long word was scaled
+  alone (now all labels shrink together), sublabels at uneven heights (baseline placement),
+  2 x 6 grids with tiny text at the `large` scale (now several shapes are planned and
+  compared), dimmed `dim` sublabels at 1.96:1 on light presets (dimmed opacity 0.55), and
+  cells dissolved by part animations (cells are added whole before their entrance).
+- `vidgen lint` of that project: no layout finding except the deliberate stress case (12 items
+  with "Thermodynamics" in 9:16: min_font on that label); the rest are timing findings of its
+  two-word beats.
+- `examples/minimal` lint, before → after: 16:9 2 warnings → 2 (same: `sizes` caption
+  min_font, `picture` caption safe_area); vertical 1 → 1; light 2 → 2. `--scene feedback
+  --scene steps` with the contrast, editorial, neutral, pastel and neon variants: 0 findings.
+  Storyboards of `feedback` and `steps` checked in 16:9, vertical and light.
+
+Files
+- New: `src/vidgen/scenes/icon_grid.py`, `tests/test_icon_scenes.py` (50 tests, 19 render).
+- Changed: `src/vidgen/regions.py` (`grid_shape`; `place` scales icon strokes), `api.py`,
+  `icon_mobject.py` (`scale_icon_strokes`), `layout.py` (`shrink_to_fit` scales icon strokes),
+  `scenes/__init__.py`, `scenes/bullets.py`, `scenes/title.py`, `scenes/end_card.py`,
+  `examples/minimal/video.yaml`, `tests/test_builtin_scenes.py` (icon_grid in BUILTINS/SAMPLES,
+  icons in samples), `tests/test_json_output.py` (bullets items type), docs/CONFIG.md (Icons
+  intro, `title`, `bullets`, new `icon_grid`, `end_card`), docs/EXTENDING.md (`grid_shape`,
+  icon strokes in `place`/`shrink_to_fit`, animating icons inside groups), README, DESIGN.md
+  (§6.4, new §24), tasklist.md.
+
+Public interfaces added/changed
+- `vidgen.api.grid_shape` (new). Built-in scene type `icon_grid` (new).
+- `bullets.items`: `list[BulletItem]` (strings still accepted; `list-scenes` shows
+  `list[BulletItem]` with nested `text`, `icon`; JSON Schema `anyOf` string | object).
+  `title`: `icon`, `icon_color`, `icon_position`; `end_card`: `icon`, `icon_color`, and its
+  "at least one of" message now names `icon`.
+- `shrink_to_fit` / `place` scale strokes of icons inside a scaled group (other mobjects
+  unchanged). `vidgen.icon_mobject.scale_icon_strokes` (internal).
+
+Decisions / deviations
+- `groups` and `highlight` refer to items by 0-based index (as `bar_chart.highlight`) or label.
+- `bullets` icon items use one `BulletItem` model with a "string → {text}" pre-validator and a
+  custom JSON Schema instead of `str | BulletItem`: errors read `items.1.icon: unknown icon...`
+  instead of two union-branch errors per item.
+- `dim_previous` uses `fade()` (multiplies opacities) instead of `set_opacity()`, which would
+  have shown an icon's invisible box and filled its open paths; text looks identical.
+- `icon_grid` dims to 0.55 (bullets keep 0.45): its sublabels are `dim` already.
+- No list-wide `icon` on bullets (per-item only), no icon for `text_card`/`quote` (not asked).
+
+Known gaps / TODOs
+- `icon_grid` with 12 items and sublabels in 16:9 draws small icons (~0.6 units): the labels
+  keep their readable size first. Long single words in narrow 9:16 columns can still go below
+  the lint minimum (the stress case above); shorter labels or `columns` fix it.
+- `list-scenes` prints `items: list[BulletItem]` although plain strings are accepted (the
+  field doc says so); a describe hook for "also accepts" could make it exact (Step 22).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (782 passed, 1 skipped). Step only:
+`pytest tests/test_icon_scenes.py`. Manual: `vidgen storyboard examples/minimal --scene
+feedback --scene steps [--variant vertical|light]`, `vidgen lint examples/minimal [--variant
+vertical]`, `vidgen schema --scene icon_grid`.
