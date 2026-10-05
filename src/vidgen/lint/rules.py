@@ -7,9 +7,10 @@ yielding :class:`Issue` objects. The runner (:mod:`vidgen.lint.run`) turns issue
 the config's severities and ``lint_ignore`` entries and merges repeats.
 
 Scopes: ``still`` rules (:mod:`vidgen.lint.layout_rules`) get a :class:`StillContext`, one per
-beat-end still of a scene, built from the layout dump (DESIGN.md §15). Other scopes (e.g. the
-timing rules of Step 14, per beat) add their own context type and a branch in the runner; the
-report format is the same for all.
+beat-end still of a scene, built from the layout dump (DESIGN.md §15). ``scene`` rules
+(:mod:`vidgen.lint.timing_rules`) get a :class:`SceneContext`, one per scene, built from the
+scene's activity file (DESIGN.md §17); their issues say which beat and when. The report format
+is the same for all.
 """
 
 from __future__ import annotations
@@ -27,7 +28,7 @@ from vidgen.config import LINT_RULES, RuleConfig
 SEVERITIES: tuple[str, ...] = ("error", "warning", "info")
 
 Bbox = tuple[float, float, float, float]
-Scope = Literal["still"]
+Scope = Literal["still", "scene"]
 
 
 @dataclass(frozen=True)
@@ -36,7 +37,11 @@ class Issue:
     a pair), ``bbox`` the region to look at (output px), ``severity`` overrides the rule's
     default (e.g. an escalation), ``value``/``limit`` the measured number and the threshold.
     Issues of one still with the same ``group`` are reported as one finding (default group: the
-    object's parent, e.g. the tick labels of an axis)."""
+    object's parent, e.g. the tick labels of an axis).
+
+    ``scene`` rules also set ``beat`` (the beat concerned, ``None`` in a silent scene) and
+    ``time`` (seconds from the scene start); their issues with the same ``group`` are reported
+    as one finding listing every beat (no group: one finding each)."""
 
     message: str
     bbox: Bbox | None
@@ -45,6 +50,8 @@ class Issue:
     value: float | None = None
     limit: float | None = None
     group: tuple[Any, ...] | None = None
+    beat: str | None = None
+    time: float = 0.0
 
 
 @dataclass
@@ -92,6 +99,39 @@ class StillContext:
         """The frame's shorter side in px (the height of landscape video): sizes are measured
         against it, so a 480p preview and the 1080p video (and 16:9 and 9:16) agree."""
         return min(self.width, self.height)
+
+
+@dataclass
+class SceneContext:
+    """One scene as the ``scene`` (timing) rules see it.
+
+    ``activity`` is the scene's activity file (:mod:`vidgen.activity`: beats with their
+    narration times and ``busy`` time, plays, motion), ``audio_dir`` where the beats' MP3s are.
+    """
+
+    scene_id: str
+    activity: dict[str, Any]
+    audio_dir: Path
+
+    @property
+    def fps(self) -> int:
+        return int(self.activity["fps"])
+
+    @property
+    def beats(self) -> list[dict[str, Any]]:
+        """``[{id, start, end, busy, source, text}]`` in order (empty for a silent scene)."""
+        return list(self.activity["beats"])
+
+    def beat_at(self, time: float) -> str | None:
+        """The beat on screen at scene time ``time`` (a beat lasts until the next one starts,
+        so its pad counts); ``None`` in a silent scene."""
+        current = None
+        for beat in self.activity["beats"]:
+            if beat["start"] <= time + 1e-6:
+                current = beat["id"]
+        if current is None and self.activity["beats"]:
+            return str(self.activity["beats"][0]["id"])
+        return current
 
 
 #: ``check(context, settings) -> issues``; ``settings`` is the rule's model from the config.

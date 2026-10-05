@@ -25,7 +25,7 @@ from vidgen.lint.layout_rules import cap_height
 from vidgen.project import Project
 from vidgen.render import fingerprint
 from vidgen.render.fingerprint import scene_fingerprint
-from vidgen.render.worker import scene_frames_dir, scene_layout_path, scene_timings_path
+from vidgen.render.worker import scene_activity_path, scene_frames_dir, scene_layout_path, scene_timings_path
 
 ROOT = Path(__file__).resolve().parents[1]
 BG = "#0E1116"
@@ -260,9 +260,11 @@ def test_docs_list_the_lint_defaults() -> None:
 # ----- runner on fake renders (no Manim) ---------------------------------------------------------
 
 
-def fake_render(project: Project, scene_id: str, frames: list[list[dict[str, Any]]], size: tuple[int, int] = (854, 480)) -> None:
+def fake_render(project: Project, scene_id: str, frames: list[list[dict[str, Any]]], size: tuple[int, int] = (854, 480),
+                activity: dict[str, Any] | None = None) -> None:
     """Write what a render with one still per beat leaves behind: timings (with the current
-    fingerprint), the stills, their index and the layout dump; ``frames`` = objects per beat."""
+    fingerprint), the stills, their index, the layout dump and the activity file (``activity``
+    overrides its keys); ``frames`` = objects per beat."""
     spec = project.scene(scene_id)
     beats = [b.id for b in spec.beats] or [None]
     folder = scene_frames_dir(project, True, scene_id)
@@ -285,6 +287,13 @@ def fake_render(project: Project, scene_id: str, frames: list[list[dict[str, Any
                           "fingerprint": scene_fingerprint(project, scene_id)}}
     scene_timings_path(project, True, scene_id).parent.mkdir(parents=True, exist_ok=True)
     scene_timings_path(project, True, scene_id).write_text(json.dumps(timings), encoding="utf-8")
+    doc = {"version": 1, "scene": scene_id, "type": spec.type, "fps": 10, "frames": 10 * len(beats),
+           "duration": float(len(beats)), "pad": 0.35, "silent": None if spec.beats else {"duration": 1.0, "busy": 1.0},
+           "beats": [{"id": b, "start": float(i), "end": i + 0.6, "busy": 0.6, "source": "estimate", "text": "x"}
+                     for i, b in enumerate(beats) if b],
+           "plays": [], "motion": {"step": 3, "grid": [285, 160], "level": 6, "changes": [[0, 1.0]]}, **(activity or {})}
+    scene_activity_path(project, True, scene_id).parent.mkdir(parents=True, exist_ok=True)
+    scene_activity_path(project, True, scene_id).write_text(json.dumps(doc), encoding="utf-8")
 
 
 @pytest.fixture
@@ -354,7 +363,7 @@ def test_cli_human_and_json(faked: Path, capsys: pytest.CaptureFixture[str], mon
     assert main(["lint"]) == 1
     out = capsys.readouterr().out.splitlines()
     assert out[0] == "lint: 2 scenes, 3 beat-end stills (preview 854x480)"
-    assert out[1] == "intro:" and out[2].startswith("  warning contrast     intro_b1 @ 1.0s (+1 more beat): text 'Illustrative numbers'")
+    assert out[1] == "intro:" and out[2].startswith("  warning contrast          intro_b1 @ 1.0s (+1 more beat): text 'Illustrative numbers'")
     assert out[3].strip() == f"still: {Path('build', 'preview', 'frames', 'intro', 'intro_b1-1.png')}"
     assert out[-2:] == ["2 errors, 2 warnings, 0 info", "failed: findings at or above 'error'"]
     assert main(["lint", "--fail-on", "never", "--rule", "contrast"]) == 0

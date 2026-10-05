@@ -58,7 +58,7 @@ cd my_video
 vidgen validate                 # check config, scene types, params, assets and audio status
 vidgen render --preview         # 854x480 check, timed from word counts -> my_video_preview.mp4
 vidgen storyboard               # contact sheets of every beat -> build/preview/storyboard/*.png
-vidgen lint                     # layout checks of every beat's end: text cut off, too small, low contrast...
+vidgen lint                     # layout + timing checks: text cut off, too small, low contrast, dead air...
 vidgen tts --dry-run            # what would be sent to ElevenLabs, and how many characters
 vidgen tts                      # generate narration MP3s (only new/changed beats)
 vidgen render                   # final render -> my_video.mp4 + my_video.srt
@@ -79,7 +79,7 @@ narration.
 | `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--variant NAME]` | generate missing/stale narration into `audio/`; `--dry-run` needs no key |
 | `vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going] [--jobs N] [--frames] [--frames-per-beat N] [--json]` | render and join the video |
 | `vidgen storyboard [PROJECT] [--scene ID ...] [--per-beat N] [--variant NAME] [--preview \| --final] [--width PX] [--jobs N] [--force] [--json]` | contact sheets (PNG) of the video's stills with labels and narration, to review a video without watching it |
-| `vidgen lint [PROJECT] [--scene ID ...] [--rule NAME ...] [--variant NAME] [--preview \| --final] [--fail-on SEVERITY] [--jobs N] [--force] [--json]` | check the layout at the end of every beat (text off the frame or in the margins, overlapping or covered text, text too small, low contrast, too many words); exit code 1 on errors |
+| `vidgen lint [PROJECT] [--scene ID ...] [--rule NAME ...] [--variant NAME] [--preview \| --final] [--fail-on SEVERITY] [--jobs N] [--force] [--json]` | check the layout at the end of every beat (text off the frame or in the margins, overlapping or covered text, text too small, low contrast, too many words) and the timing (narration too fast/slow, dead air, animations overrunning their narration or squeezed into a short beat); exit code 1 on errors |
 
 `PROJECT` is a project folder or its config file (default: the current folder).
 `render` options: `--preview` uses the `preview` resolution; `--scene ID` re-renders only those
@@ -103,8 +103,10 @@ with the beat's narration under it. It renders (preview format by default, with 
 the scenes whose stills are missing or out of date, so after `vidgen render --preview --frames`
 or an earlier storyboard it is quick; see
 [docs/CONFIG.md](docs/CONFIG.md#storyboard-vidgen-storyboard).
-`vidgen lint` checks the same stills (rendering only what is missing or stale, like the
-storyboard) and prints one line per problem with the still to look at; thresholds and
+`vidgen lint` checks the same stills and each scene's activity over time
+(`build/.../activity/<scene>.json`: beat timings, every `play`, a per-frame change signal),
+rendering only what is missing or stale like the storyboard, and prints one line per problem
+with the still to look at; thresholds and
 severities are set in an optional `lint:` section, findings a scene means to have are skipped
 with its `lint_ignore`; see [docs/CONFIG.md](docs/CONFIG.md#lint-vidgen-lint).
 `vidgen schema > video.schema.json` writes a JSON Schema (draft 2020-12) that editors and

@@ -1006,3 +1006,114 @@ Known gaps / TODOs
 How to test: `/home/claude/venv/bin/python -m pytest -q` (536 passed, 1 skipped). Manual:
 `vidgen lint examples/minimal`, `vidgen lint examples/minimal --variant vertical`,
 `vidgen lint examples/kphi3` (exit 1: one error), `--json`, `--rule min_font`.
+
+## Step 14 — Timing lint
+What was built
+- Four timing rules in `vidgen lint` (same command, report, JSON, `lint:` config, `lint_ignore`,
+  JSON Schema): `narration_speed` (spoken words per second of speech per beat outside
+  `[min_rate 1.8, max_rate 3.5]`, beats of ≥ `min_words` 5), `dead_air` (nothing on screen
+  changes for > `max_seconds` 6 s; `min_change` 0.0002 of the frame), `animation_overrun` (a
+  beat's code takes longer than its narration + pad by > `tolerance` 0.1 s, so the next beat
+  starts late; lists the animations still running when the narration ends; silent scenes
+  whose animations exceed `duration` too), `rushed_animation` (animations `play_steps` had to
+  shorten below `min_run_time` 0.5 s because the beat is too short for its steps). All
+  default `warning`; `narration_speed` on beats without audio is `info` and grouped.
+- **Activity file** `build/<q>[_<variant>]/activity/<scene>.json`, written by the worker with
+  the stills/layout: beats (`start`, `end`, `busy`, `source`, `text`), every `play`/`wait`
+  (scene times, beat, animation names, `requested` when `play_steps` shortened it), silent
+  `{duration, busy}`, and a per-frame motion signal.
+- `NarratedScene` records `play_log` (it overrides `play`; `wait` goes through it),
+  `beat_busy`, `silent_busy`; `play_steps` marks shortened plays.
+- Docs: docs/CONFIG.md new "Activity file" section, Lint intro/rule table/defaults block/JSON
+  finding text, frames index `activity`; README (quick start, command table, paragraph);
+  EXTENDING.md (how timing lint sees custom scenes); DESIGN §2, §5.1, §16, new §17;
+  `examples/minimal/video.yaml` usage line.
+
+Files
+- New: `src/vidgen/activity.py`, `src/vidgen/lint/timing_rules.py`, `tests/test_timing_lint.py`
+  (10 tests, 1 render test).
+- Changed: `scene.py` (`PlayRecord`, `play`, `play_log`, `beat_busy`, `silent_busy`,
+  `narrate`, `play_steps`, `tear_down`), `capture.py` (`FrameCapture(..., motion=)`),
+  `render/worker.py` (`scene_activity_path`, MotionTrack, activity written/deleted),
+  `render/pipeline.py` (`_has_stills` needs the activity; frames index `activity`),
+  `storyboard.py` (`stills_current` needs it), `config.py` (4 rule names + settings models),
+  `lint/rules.py` (scope `scene`, `SceneContext`, `Issue.beat/time`), `lint/run.py`
+  (`_timing_findings`), `lint/findings.py` (`still` optional), `lint/report.py` (wider rule
+  column, no still line without one), `lint/__init__.py`, tests `test_lint.py` (fake renders
+  write an activity file; report spacing), `test_introspect.py` (activity in index/reuse),
+  docs above, tasklist.md.
+
+Public interfaces added/changed (`vidgen.api` unchanged)
+- `NarratedScene.play_log: list[PlayRecord]`, `.beat_busy: dict[str, float]`,
+  `.silent_busy: float | None`, `PlayRecord` (in `vidgen.scene`), `play` override.
+- `vidgen.activity`: `MotionTrack(samples=180, level=6)` (`observe(frame, index, count)`,
+  `to_json()`), `activity_document(scene, motion, fps)`, `ACTIVITY_VERSION`.
+- `FrameCapture(per_beat, listeners, motion=None)`; `worker.scene_activity_path`.
+- `vidgen.lint`: `SceneContext` exported; `Issue(..., beat=None, time=0.0)`; rule scope
+  `"scene"`; `Finding.still: Path | None` (JSON `still` may be null);
+  `vidgen.lint.timing_rules`: `spoken_words`, `speech_bounds`, `static_runs`.
+- Config: `lint.rules.{narration_speed, dead_air, animation_overrun, rushed_animation}`; the
+  same names in `lint_ignore`. Frames index scene entries: `activity`.
+
+Decisions / deviations
+- **Change signal from the renderer, not by decoding the MP4**: `FrameCapture` already sees
+  every frame written (frozen waits once, with a count), the pixels are exact so a static
+  frame is bit-identical (no codec noise to threshold away), and there is no second decode
+  pass. Frames are sampled on a grid (every 3rd px at 480p, 6th at 1080p, ≤ 180 points on the
+  shorter side) and compared with the previous: measured ~1.3 ms per written frame, i.e. at
+  most ~2 s CPU for the 98 s examples/minimal preview (~55 s CPU render), a few percent.
+  Only recorded when stills are captured (lint/storyboard/`--frames`), when it is needed.
+- `min_change` 0.0002 (≈ 9 sample points): eased animations' first/last frames change only
+  1-5 points and do not matter; a counter digit changes more than that.
+- `narration_speed` uses the **speech** inside the MP3 (leading/trailing silence below -40 dB
+  cut: ElevenLabs adds 0-0.8 s of trailing silence) and **spoken** words. Plain
+  `len(text.split()) / mp3 length` gave kphi3 rates 1.60-3.12 with false "too slow" beats
+  (`s7_b2` 1.72: "1.60", "1.58", "1.57", "K-Phi-3"; `s2_b4` 1.60: a short question plus 0.5 s
+  trailing silence); with both corrections the 27 kphi3 beats are 2.13-3.40 words/s, so the
+  defaults 1.8-3.5 flag none of them. Without audio the beat length is the estimate, so the
+  rate only shows where numbers/acronyms make the estimate wrong (or the configured
+  `words_per_second` is implausible): `info`, one finding per scene.
+- `dead_air` treats narrated and silent time alike (one threshold): a silent card held still
+  for > 6 s is dead air too; 6 s keeps title holds and short end cards quiet (none in the
+  examples is flagged). Static stretches are attributed to the beat where they start, the
+  message lists the beats they span.
+- `animation_overrun` uses `busy` measured in `narrate` (the body's time before the wait to
+  `d + pad`), so user `self.wait()` past the narration counts too. Running into the pad only
+  is not reported (`tolerance` is beyond `d + pad`).
+- `rushed_animation` only sees `play_steps` compression (it knows what was wanted); plays a
+  scene shortens itself (`run_time=d/5`) are invisible. The task's "beat too short for its
+  animations" is covered by `animation_overrun` for custom scenes (they overrun) and by
+  `rushed_animation` for `play_steps`/`reveal`/built-ins (they compress).
+- Timing findings are not merged across beats by object (they have none): one finding per
+  issue, or per `group` (estimates). Rule column of the human report widened to 17 chars.
+
+Findings on the examples (all real; not fixed here: Review 1 / Step 22)
+- `examples/minimal` 16:9 and `--variant vertical`: no timing findings (layout findings as in
+  Step 13). Closest: `note` holds still 5.5 s while narrating (the whole card appears in 0.8 s
+  of a 5.8 s beat), `steps` beat 2 5.0 s still. No audio, all estimates within range.
+- `examples/kphi3` (real MP3s): 4 `dead_air` warnings, checked on frames extracted from the
+  scene MP4s (identical pixels across the interval):
+  - `setup` 3.0-10.4 s (7.4 s, beat `s5_b1`: the Phi-3 setup diagram appears in 3 s of a
+    9.8 s beat), `setup` 22.3-29.2 s (6.9 s, `s5_b3` into `s5_b4`).
+  - `loss` 16.3-23.7 s (7.3 s, `s7_b2`, the 15.7 s beat about validation loss: the "best 1.57"
+    highlight appears early, then nothing moves).
+  - `method` 38.0-44.5 s (6.5 s, `s4_b5`: the zoomed-out diagram holds while narrating).
+  - Near misses: `conclusion` 5.7 s and 5.8 s still stretches.
+  - No `narration_speed`, `animation_overrun` or `rushed_animation` findings: every kphi3 beat
+    finishes its animations 0.7-7 s before its narration ends.
+- The render tests exercise all four rules on a real render (overrun, rushed steps, dead air
+  in a narrated beat and in a silent scene).
+
+Known gaps / TODOs
+- `rushed_animation` cannot see run times a scene computes itself; per-animation intended
+  durations would need an API (e.g. `self.play(..., min_run_time=...)`).
+- The speech-rate count is English-centric (digits read as English words, acronym rule).
+- Dead air does not distinguish meaningful from trivial motion (a slow Ken Burns pan counts as
+  change, which is intended); a tiny blinking element resets the timer.
+- Renders from before Step 14 have no activity file and are re-rendered by lint/storyboard.
+- Storyboard sheets could mark dead-air stretches / overruns on the timeline.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (546 passed, 1 skipped). Manual:
+`vidgen lint examples/kphi3 --rule dead_air --rule narration_speed --rule animation_overrun
+--rule rushed_animation`, `vidgen lint examples/minimal [--variant vertical]`, then read
+`examples/*/build/preview/activity/*.json`.

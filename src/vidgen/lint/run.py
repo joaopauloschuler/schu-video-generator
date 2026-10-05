@@ -1,4 +1,5 @@
-"""``vidgen lint``: run the rules over a video's beat-end stills (DESIGN.md §16)."""
+"""``vidgen lint``: run the rules over a video's beat-end stills (DESIGN.md §16) and its scenes'
+activity over time (§17)."""
 
 from __future__ import annotations
 
@@ -12,9 +13,9 @@ from typing import Any
 from vidgen.config import FormatConfig, LintIgnore
 from vidgen.errors import VidgenError
 from vidgen.lint.findings import Finding
-from vidgen.lint.rules import RULES, Issue, StillContext, severity_rank
+from vidgen.lint.rules import RULES, Issue, SceneContext, StillContext, severity_rank
 from vidgen.project import Project
-from vidgen.render.worker import scene_layout_path
+from vidgen.render.worker import scene_activity_path, scene_layout_path
 
 #: ``fail_on`` values: the lowest severity that fails the command (``never``: none).
 FAIL_ON: tuple[str, ...] = ("error", "warning", "info", "never")
@@ -84,27 +85,34 @@ def _severity(issue: Issue, rule_default: str, configured: str | None) -> str:
     return configured or issue.severity or rule_default
 
 
+def _read(path: Path, scene_id: str, what: str) -> dict[str, Any]:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise VidgenError(f"scene '{scene_id}': cannot read its {what} {path}: {exc}") from None
+
+
 def _scene_findings(
     project: Project, preview: bool, scene_id: str, start: float | None, rules: list[str]
 ) -> tuple[list[Finding], int, int]:
     """Findings of one scene (merged across beats), stills checked, findings ignored."""
     path = scene_layout_path(project, preview, scene_id)
-    try:
-        layout = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        raise VidgenError(f"scene '{scene_id}': cannot read its layout dump {path}: {exc}") from None
+    layout = _read(path, scene_id, "layout dump")
     lint = project.config.lint
     ignores = project.scene(scene_id).lint_ignores()
     merged: dict[tuple[Any, ...], Finding] = {}
     stills = ignored = 0
+    beat_stills: dict[str | None, Path] = {}
+    still_rules = [name for name in rules if RULES[name].scope == "still"]
     for frame in layout["frames"]:
         if frame["k"] != frame["n"]:
             continue  # mid-beat stills show animations in progress; lint the settled beat ends
         stills += 1
         objects = [o for o in frame["objects"] if o["opacity"] >= lint.min_opacity]
         still = Path(os.path.normpath(path.parent / frame["still"]))
+        beat_stills.setdefault(frame["beat"], still)
         ctx = StillContext(layout, frame, objects, still=still)
-        for name in rules:
+        for name in still_rules:
             entry = RULES[name]
             settings = entry.settings(lint.rules)
             if settings.severity == "off":
@@ -134,7 +142,63 @@ def _scene_findings(
                     merged[finding.key] = finding
                 elif finding.beat not in first.beats:
                     first.beats.append(finding.beat)
-    return _group_similar(list(merged.values())), stills, ignored
+    findings = _group_similar(list(merged.values()))
+    timing, skipped = _timing_findings(project, preview, scene_id, start, rules, beat_stills)
+    return findings + timing, stills, ignored + skipped
+
+
+def _timing_findings(
+    project: Project,
+    preview: bool,
+    scene_id: str,
+    start: float | None,
+    rules: list[str],
+    beat_stills: dict[str | None, Path],
+) -> tuple[list[Finding], int]:
+    """Findings of the ``scene`` (timing) rules for one scene, findings ignored. Issues sharing
+    a ``group`` become one finding listing their beats."""
+    names = [name for name in rules if RULES[name].scope == "scene"]
+    if not names:
+        return [], 0
+    lint = project.config.lint
+    activity = _read(scene_activity_path(project, preview, scene_id), scene_id, "activity file")
+    ctx = SceneContext(scene_id, activity, project.audio_dir)
+    ignores = project.scene(scene_id).lint_ignores()
+    findings: list[Finding] = []
+    groups: dict[tuple[Any, ...], Finding] = {}
+    ignored = 0
+    for name in names:
+        entry = RULES[name]
+        settings = entry.settings(lint.rules)
+        if settings.severity == "off":
+            continue
+        for issue in entry.check(ctx, settings):
+            finding = Finding(
+                scene=scene_id,
+                beat=issue.beat,
+                time=None if start is None else round(start + issue.time, 6),
+                scene_time=round(issue.time, 6),
+                rule=name,
+                severity=_severity(issue, entry.default, settings.severity),
+                message=issue.message,
+                bbox=issue.bbox,
+                still=beat_stills.get(issue.beat),
+                value=issue.value,
+                limit=issue.limit,
+                beats=[issue.beat],
+            )
+            if any(_matches(e, finding) for e in ignores):
+                ignored += 1
+                continue
+            key = (name, finding.severity, issue.group)
+            first = groups.get(key) if issue.group is not None else None
+            if first is None:
+                findings.append(finding)
+                if issue.group is not None:
+                    groups[key] = finding
+            elif finding.beat not in first.beats:
+                first.beats.append(finding.beat)
+    return findings, ignored
 
 
 def _group_similar(findings: list[Finding]) -> list[Finding]:

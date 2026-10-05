@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Annotated, Any, NamedTuple, Union
 
 import av
-from manim import NORMAL, Animation, FadeOut, MarkupText, Scene, Text, config
+from manim import NORMAL, Animation, FadeOut, MarkupText, Scene, Text, Wait, config
 from pydantic import AfterValidator, BaseModel, ConfigDict, GetJsonSchemaHandler, ValidationError, ValidationInfo
 
 from vidgen import helpers, runtime
@@ -95,6 +95,34 @@ class BeatTiming(NamedTuple):
     text: str
 
 
+class PlayRecord(NamedTuple):
+    """One ``self.play(...)`` (``self.wait`` included) as the scene ran it: scene times
+    ``start``/``end`` (s), the beat being narrated (``None`` outside ``narrate``), the
+    animations' names, whether it only waited, and ``requested``: the run time the caller
+    wanted when :meth:`NarratedScene.play_steps` had to shorten it to fit the beat."""
+
+    start: float
+    end: float
+    beat: str | None
+    animations: tuple[str, ...]
+    wait: bool
+    requested: float | None = None
+
+
+def _animation_name(item: Any) -> str:
+    """``FadeIn``, ``animate`` (``mobject.animate...``) or ``AnimationGroup(Write, FadeIn)``."""
+    if isinstance(item, Animation):
+        inner = getattr(item, "animations", None)
+        name = type(item).__name__
+        if inner:
+            parts = list(dict.fromkeys(_animation_name(a) for a in inner))
+            name += "(" + ", ".join(parts[:3]) + (", …" if len(parts) > 3 else "") + ")"
+        return name
+    if type(item).__name__ == "_AnimationBuilder":
+        return "animate"
+    return type(item).__name__
+
+
 def audio_duration(path: Path) -> float:
     """Length of an audio file in seconds: its decoded samples / sample rate (read with PyAV).
 
@@ -162,7 +190,16 @@ class NarratedScene(Scene):
         self.beats: list[BeatConfig] = list(spec.beats)
         self.audio_enabled = audio
         self.beat_log: list[BeatTiming] = []
+        #: Every ``play``/``wait`` in order (:class:`PlayRecord`); read by ``vidgen lint``.
+        self.play_log: list[PlayRecord] = []
+        #: Seconds each narrated beat's body took (before the wait to ``d + pad``); more than
+        #: ``d + pad`` means its animations overran the narration.
+        self.beat_busy: dict[str, float] = {}
+        #: Seconds a silent scene's code took before being held to its ``duration``.
+        self.silent_busy: float | None = None
         self._durations: dict[str, float] = {}
+        self._current_beat: str | None = None
+        self._requested: float | None = None
         super().__init__(**scene_kwargs)
         self.capture = capture
         if capture is not None:
@@ -303,8 +340,13 @@ class NarratedScene(Scene):
         start = float(self.renderer.time)
         if self.capture is not None:
             self.capture.begin_segment(b.id, round((d + self.pad) * config.frame_rate), include_end=False)
-        yield d
-        self.wait_seconds(d + self.pad - (self.renderer.time - start))
+        self._current_beat = b.id
+        try:
+            yield d
+            self.beat_busy[b.id] = float(self.renderer.time) - start
+            self.wait_seconds(d + self.pad - (self.renderer.time - start))
+        finally:
+            self._current_beat = None
         self.beat_log.append(BeatTiming(b.id, start, start + d, b.text))
         if self.capture is not None:
             self.capture.end_segment(b.id)
@@ -387,8 +429,28 @@ class NarratedScene(Scene):
                 built = step() if callable(step) and not isinstance(step, Animation) else step
                 anims += [built] if isinstance(built, Animation) else list(built or [])
             if anims:
-                self.play(*anims, run_time=run_time)
+                self._requested = cap if run_time < cap - 1e-9 else None
+                try:
+                    self.play(*anims, run_time=run_time)
+                finally:
+                    self._requested = None
             self.wait_seconds(slot - (self.renderer.time - start))
+
+    def play(self, *args: Any, **kwargs: Any) -> None:
+        """Manim's ``play``, also recorded in :attr:`play_log` (scene times, beat, names)."""
+        start = float(self.renderer.time)
+        super().play(*args, **kwargs)
+        waiting = bool(args) and all(isinstance(a, Wait) for a in args)
+        self.play_log.append(
+            PlayRecord(
+                start,
+                float(self.renderer.time),
+                self._current_beat,
+                tuple(_animation_name(a) for a in args),
+                waiting,
+                self._requested,
+            )
+        )
 
     def wait_seconds(self, seconds: float) -> None:
         """Wait ``seconds`` rounded to whole frames (no-op if that is zero frames).
@@ -422,6 +484,7 @@ class NarratedScene(Scene):
     def tear_down(self) -> None:
         """Hold silent scenes to ``spec.duration``; warn about beats that were never narrated."""
         if self.spec.silent:
+            self.silent_busy = float(self.renderer.time)
             self.hold()
         narrated = {entry.beat_id for entry in self.beat_log}
         missing = [b.id for b in self.beats if b.id not in narrated]

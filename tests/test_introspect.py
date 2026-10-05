@@ -334,11 +334,16 @@ def test_layout_matches_the_stills(layout_project: Path) -> None:
 
     combined = read_json(result.frames_index)
     assert [s["layout"] for s in combined["scenes"]] == ["../layout/b.json", "../layout/z.json"]
+    assert [s["activity"] for s in combined["scenes"]] == ["../activity/b.json", "../activity/z.json"]
     project = Project.load(root)
     assert _usable_render(project, False, "b", False, frames=2)
+    worker.scene_activity_path(project, False, "b").rename(build / "activity.json")  # nor without activity
+    assert not _usable_render(project, False, "b", False, frames=2)
+    (build / "activity.json").rename(worker.scene_activity_path(project, False, "b"))
     (build / "layout" / "b.json").unlink()  # stills without their layout must be rendered again
     assert not _usable_render(project, False, "b", False, frames=2)
 
     # rendering without frames removes the scene's layout with its stills
     render(root, scenes=["z"])
     assert not worker.scene_layout_path(project, False, "z").exists()
+    assert not worker.scene_activity_path(project, False, "z").exists()

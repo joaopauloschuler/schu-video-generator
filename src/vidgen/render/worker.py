@@ -5,8 +5,10 @@
 
 Writes ``<render_dir>/scenes/<scene_id>.mp4`` and ``<render_dir>/timings/<scene_id>.json``
 (``render_dir`` = ``build/<final|preview>[_<variant>]``); with ``--frames N``, also N PNG stills
-per beat and an index in ``<render_dir>/frames/<scene_id>/`` (see :mod:`vidgen.capture`) and the
-layout of those frames in ``<render_dir>/layout/<scene_id>.json`` (:mod:`vidgen.introspect`). Exit code 0 on success, 1 for a
+per beat and an index in ``<render_dir>/frames/<scene_id>/`` (see :mod:`vidgen.capture`), the
+layout of those frames in ``<render_dir>/layout/<scene_id>.json`` (:mod:`vidgen.introspect`) and
+the scene's timing activity in ``<render_dir>/activity/<scene_id>.json`` (:mod:`vidgen.activity`).
+Exit code 0 on success, 1 for a
 :class:`VidgenError` (message on stderr as ``error: ...``), 2 for any other exception (full
 traceback on stderr, so extension authors see where their scene code failed).
 
@@ -62,6 +64,11 @@ def scene_frames_dir(project: Project, preview: bool, scene_id: str) -> Path:
 def scene_layout_path(project: Project, preview: bool, scene_id: str) -> Path:
     """``<render_dir>/layout/<scene_id>.json``: what is on screen at each still (see :mod:`vidgen.introspect`)."""
     return project.render_dir(preview) / "layout" / f"{scene_id}.json"
+
+
+def scene_activity_path(project: Project, preview: bool, scene_id: str) -> Path:
+    """``<render_dir>/activity/<scene_id>.json``: beats, plays and motion over time (see :mod:`vidgen.activity`)."""
+    return project.render_dir(preview) / "activity" / f"{scene_id}.json"
 
 
 def remove_tree(path: Path) -> None:
@@ -159,11 +166,12 @@ def render_scene(
 ) -> Path:
     """Render one scene in this process (Manim's global config is modified); returns its video.
 
-    ``frames``: also save that many stills per beat (0: none) in :func:`scene_frames_dir` and
-    their layout in :func:`scene_layout_path`.
+    ``frames``: also save that many stills per beat (0: none) in :func:`scene_frames_dir`,
+    their layout in :func:`scene_layout_path` and the activity in :func:`scene_activity_path`.
     Call it only in a fresh process: this is the body of the worker.
     """
     from vidgen import extensions, registry
+    from vidgen.activity import MotionTrack, activity_document
     from vidgen.capture import FrameCapture, StillWriter
     from vidgen.introspect import LayoutRecorder
     from vidgen.render.fingerprint import scene_fingerprint
@@ -184,9 +192,12 @@ def render_scene(
     remove_tree(frames_dir)  # stills (and their layout) always belong to the scene's current render
     layout_path = scene_layout_path(project, preview, scene_id)
     remove_file(layout_path)
+    activity_path = scene_activity_path(project, preview, scene_id)
+    remove_file(activity_path)
     writer = StillWriter(frames_dir) if frames else None
     recorder = LayoutRecorder() if frames else None
-    capture = FrameCapture(frames, [writer, recorder]) if writer is not None and recorder is not None else None
+    motion = MotionTrack()
+    capture = FrameCapture(frames, [writer, recorder], motion) if writer is not None and recorder is not None else None
     media_dir, temporary = _manim_media_dir(render_dir)
     shutil.rmtree(media_dir / "videos" / scene_id, ignore_errors=True)  # no stale .wav from a previous run
     try:
@@ -219,6 +230,7 @@ def render_scene(
     if writer is not None and recorder is not None:
         write_json(frames_dir / "index.json", writer.index(scene_id, frames, fmt.width, fmt.height, fmt.fps))
         write_json(layout_path, recorder.document(scene, frames))
+        write_json(activity_path, activity_document(scene, motion, fmt.fps))
     write_json(scene_timings_path(project, preview, scene_id), timings)
     return target
 

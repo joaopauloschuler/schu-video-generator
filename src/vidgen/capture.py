@@ -28,6 +28,7 @@ from PIL import Image
 from vidgen.fileio import write_bytes_atomic
 
 if TYPE_CHECKING:
+    from vidgen.activity import MotionTrack
     from vidgen.scene import NarratedScene
 
 
@@ -85,13 +86,20 @@ class _Target:
 
 
 class FrameCapture:
-    """Takes ``per_beat`` stills per beat of one scene and passes them to ``listeners``."""
+    """Takes ``per_beat`` stills per beat of one scene and passes them to ``listeners``.
 
-    def __init__(self, per_beat: int = 1, listeners: Sequence[CaptureListener] = ()) -> None:
+    ``motion`` (a :class:`vidgen.activity.MotionTrack`) is shown every frame written, for the
+    timing lint's change signal.
+    """
+
+    def __init__(
+        self, per_beat: int = 1, listeners: Sequence[CaptureListener] = (), motion: MotionTrack | None = None
+    ) -> None:
         if per_beat < 1:
             raise ValueError("per_beat must be at least 1")
         self.per_beat = per_beat
         self.listeners: list[CaptureListener] = list(listeners)
+        self.motion = motion
         self._scene: NarratedScene | None = None
         self._written = 0
         self._last: np.ndarray | None = None
@@ -143,6 +151,8 @@ class FrameCapture:
 
     def _observe(self, frame: np.ndarray, num_frames: int) -> None:
         end = self._written + num_frames
+        if self.motion is not None:
+            self.motion.observe(frame, self._written, num_frames)
         due = [t for t in self._pending if t.frame < end]
         if due:
             self._pending = [t for t in self._pending if t.frame >= end]

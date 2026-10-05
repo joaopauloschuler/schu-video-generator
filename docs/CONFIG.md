@@ -533,7 +533,8 @@ and the PNG file name.
 is `{id, start, duration, frames}` (`start` in the video) and each still is as above with
 `time` in the **video** (scene start + time in the scene), `scene_time` (time in the scene)
 and `path` relative to `frames/` (`<scene>/<file>.png`); each scene also has `layout`, its
-layout file relative to `frames/` (`../layout/<scene>.json`, see below). The beat texts are in
+layout file relative to `frames/` (`../layout/<scene>.json`, see below) and `activity`, its
+activity file (`../activity/<scene>.json`, see below). The beat texts are in
 `build/.../timings.json`.
 
 Every scene render deletes the scene's old stills, and every `vidgen render` deletes
@@ -592,30 +593,63 @@ visible part is not listed. `text` is the string the mobject was created with; M
 `become()` and `Transform` change the glyphs but not that string, and while
 `TransformMatchingShapes`/`TransformMatchingTex` run, the moving glyphs are shapes.
 
+## Activity file (`build/.../activity/<scene>.json`)
+
+Written with the stills and the layout dump (and deleted with them): what happens in the scene
+over time, the input of `vidgen lint`'s timing rules. Recording it costs about 1.3 ms per
+frame of the render (a sampled comparison with the previous frame).
+
+```
+{version: 1, scene, type, fps,
+ frames, duration,         # frames written, seconds
+ pad,                      # narration.pad
+ silent: {duration, busy} | null,   # silent scene: its duration, and how long its code ran
+ beats: [{id, start, end,  # scene seconds; end = start + narration length d
+          busy,            # seconds the beat's own code (animations, waits) took; more than
+                           # d + pad means the beat ran past its narration
+          source,          # "audio" (d from the MP3) or "estimate" (from the word count)
+          text}],
+ plays: [{start, end, beat, animations: ["Write", ...], wait, requested}],
+ motion: {step, grid: [w, h], level, changes: [[frame, fraction], ...]}}
+```
+
+`plays` lists every `self.play(...)` and `self.wait(...)` (`wait: true`) with the beat being
+narrated (`null` outside `narrate`) and the animations' class names (`animate` for
+`mobject.animate`, groups with their parts); `requested` is the run time `play_steps` wanted
+when it had to shorten an animation to fit the beat, else `null`. `motion.changes` lists the
+frames that differ from the previous frame: `fraction` is the part of the frame's sample points
+(every `step`-th pixel, `grid` points, at most 180 on the shorter side) whose colour changed by
+more than `level` (0-255); frames not listed are identical to the one before.
+
 ## Lint (`vidgen lint`)
 
-`vidgen lint [PROJECT]` checks what is on screen at the **end of every beat** and reports
-problems an author cannot see without watching: text cut off by the frame edge or in the
-margins, overlapping text, shapes drawn over text, text too small for the frame, low contrast
-and too many words at once. It reads the [layout dump](#layout-dump-buildlayoutscenejson) of the
-beat-end stills; scenes whose stills are current (from `vidgen render --frames` or `vidgen
-storyboard`, any `--per-beat`) are reused, the others are rendered first with one still per
-beat (preview format unless `--final`; reuse works as for the
-[storyboard](#storyboard-vidgen-storyboard)). Only beat-end stills are checked: mid-beat
-stills show animations in progress (half-faded or moving objects), which would only add noise.
+`vidgen lint [PROJECT]` checks what is on screen at the **end of every beat**, and how the
+scenes play over time, and reports problems an author cannot see without watching: text cut
+off by the frame edge or in the margins, overlapping text, shapes drawn over text, text too
+small for the frame, low contrast and too many words at once (**layout rules**); narration too
+fast or too slow, nothing moving for a long time, animations running past their narration or
+squeezed into a too short beat (**timing rules**). It reads the
+[layout dump](#layout-dump-buildlayoutscenejson) of the beat-end stills and each scene's
+[activity file](#activity-file-buildactivityscenejson); scenes whose stills are current (from
+`vidgen render --frames` or `vidgen storyboard`, any `--per-beat`) are reused, the others are
+rendered first with one still per beat (preview format unless `--final`; reuse works as for
+the [storyboard](#storyboard-vidgen-storyboard)). Only beat-end stills are checked by the
+layout rules: mid-beat stills show animations in progress (half-faded or moving objects),
+which would only add noise.
 
 ```
 $ vidgen lint examples/minimal
 lint: 10 scenes, 23 beat-end stills (preview 854x480)
 picture:
-  warning safe_area    picture_b2 @ 7.2s: text 'Images can slowly zoom and pan' is outside the safe area at the bottom (12 px into the bottom margin)
+  warning safe_area         picture_b2 @ 7.2s: text 'Images can slowly zoom and pan' is outside the safe area at the bottom (12 px into the bottom margin)
           still: examples/minimal/build/preview/frames/picture/picture_b2-1.png
 0 errors, 7 warnings, 0 info
 ```
 
 Each finding names the scene, the beat at whose end it was seen (`+N more beats` when the same
 problem stays on screen), the rule, a message with the measured value and the limit, and the
-**still** to open to see it. The same problem with several objects of one group (an axis' tick
+**still** to open to see it. Timing findings name the beat concerned and the scene time where
+the problem starts; their still is the end of that beat. The same problem with several objects of one group (an axis' tick
 labels, several texts in the same colour) is reported once (`also N more like it`).
 
 Options:
@@ -648,6 +682,10 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `min_font` | warning; error below `error_size` | text whose cap height is below `min_size` of the shorter side. The cap height is the layout's `font_px` corrected for the text's letters (`font_px` of all-lowercase text is about its x-height); a lone symbol (`+`, `·`) is not checked |
 | `contrast` | warning | text whose WCAG contrast ratio with its `backdrop` is below `min_ratio` (4.5, WCAG AA), `large_ratio` (3) for text with a cap height of at least `large_size`, or `dimmed_ratio` (2) for text faded on purpose (opacity below 1, e.g. previous bullets); the text colour is blended with the backdrop at the text's opacity, every colour of a multi-coloured text is checked. A code listing's line numbers are not checked |
 | `max_words` | warning | more than `max_words` words (tokens with a letter) of visible `text` objects in one still; code and math do not count |
+| `narration_speed` | warning; info without audio | a beat (of at least `min_words` spoken words) narrated at fewer than `min_rate` or more than `max_rate` words per second. With an MP3 the time is the speech in it (leading and trailing silence below -40 dB of its peak cut off). Words count as spoken: hyphens, dashes and slashes separate words (`K-Phi-3` is 3), a number counts one word per digit up to 3 per digit run, plus one per decimal point and symbol (`2.58` is 4, `15%` 3), an all-capitals acronym of 2-5 letters half a word per letter (`GPU` 1.5). **Without audio** the beat's length is the word-count estimate (`narration.words_per_second`), so the rate is only off when the text is (many numbers or acronyms) or the configured rate itself is implausible: reported as `info`, one finding per scene listing the beats |
+| `dead_air` | warning | nothing on screen changes for more than `max_seconds` (a frame counts as changed when at least `min_change` of it changed, from the activity file's `motion`), narrated or not; the finding names the beat where the still picture starts and the beats it lasts through. Silent scenes are checked the same way: a silent card held longer than `max_seconds` without motion is reported |
+| `animation_overrun` | warning | a beat whose code (animations and waits inside `narrate`) takes longer than its narration plus `narration.pad` by more than `tolerance` seconds: the next beat (and its audio) starts late, leaving silence. The message lists the animations still running when the narration ends. A silent scene whose animations take longer than its `duration` is reported the same way |
+| `rushed_animation` | warning | animations that `play_steps` (and so `reveal` and most built-in scenes) had to shorten below `min_run_time` seconds because the beat is too short for its steps |
 
 **Config** (all optional; the values shown are the defaults):
 
@@ -663,6 +701,10 @@ lint:
     min_font: {min_size: 0.025, error_size: 0.018}   # cap height: 12 / 8.6 px at 480p, 27 / 19.4 px at 1080p
     contrast: {min_ratio: 4.5, large_ratio: 3.0, large_size: 0.045, dimmed_ratio: 2.0}
     max_words: {max_words: 40}
+    narration_speed: {min_rate: 1.8, max_rate: 3.5, min_words: 5}   # spoken words per second
+    dead_air: {max_seconds: 6.0, min_change: 0.0002}   # min_change: fraction of the frame
+    animation_overrun: {tolerance: 0.1}     # seconds past narration + pad
+    rushed_animation: {min_run_time: 0.5}   # seconds
 ```
 
 `severity` on a rule sets the severity of all its findings (`off` disables the rule). The
@@ -876,12 +918,16 @@ on a failed scene are as for `vidgen render --json`.
 Each finding: `scene`; `beat` (the beat at whose end it was seen, `null` for a silent scene);
 `time` (in the video, `null` when not every scene has a render at this format) and
 `scene_time` (from the scene start); `rule`; `severity` (`error`, `warning`, `info`);
-`object` (the object concerned, `null` for `max_words`) and `other` (the second object of a
+`object` (the object concerned, `null` for `max_words` and the timing rules) and `other` (the second object of a
 pair: the other text for `text_overlap`, the shape for `covered_text`; else `null`), each
 `{id, kind, class, name, path, text, bbox}` as in the [layout dump](#layout-dump-buildlayoutscenejson)
 (`text` `null` for shapes); `similar` (further objects with the same problem, reported with
 this one, e.g. the other tick labels); `bbox` (the region to look at in the still, px:
 the object, the overlap of a pair, or all counted texts); `message`; `value` and `limit` (the
 measured number and the threshold it broke: a fraction of the shorter side for sizes, a ratio
-for contrast, px for `off_frame`/`safe_area`, a word count); `beats` (every beat end where the
-same problem was seen, the first is `beat`); `still` (the PNG at `beat`'s end).
+for contrast, px for `off_frame`/`safe_area`, a word count, words per second for
+`narration_speed`, seconds for the other timing rules); `beats` (every beat end where the
+same problem was seen, the first is `beat`); `still` (the PNG at `beat`'s end; `null` if the
+scene has none). Timing findings have `bbox` `null` and `time`/`scene_time` where the problem
+starts (the beat's start, the start of the still stretch, the narration's end, the first
+rushed animation).

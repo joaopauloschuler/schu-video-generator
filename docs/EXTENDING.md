@@ -215,6 +215,15 @@ def validate_project(cls, params, project):
   attributes (`self.title = ...`) or give a `name` appear under that name there, which also
   makes `lint_ignore` entries (`object: title`) stable. A `Text` updated with `m.become(new)` keeps its
   old string as its `text`; set `m.original_text = new.original_text` if it matters.
+- `vidgen lint` also checks timing (docs/CONFIG.md "Activity file"): every `self.play` /
+  `self.wait` is recorded with the beat being narrated (`self.play_log`), and how long each
+  `narrate` block's own code took (`self.beat_busy`). Animations inside a beat that take longer
+  than its narration plus `narration.pad` are reported as `animation_overrun` (the next beat
+  starts late): derive run times from the `d` that `narrate` yields, or use `play_steps` /
+  `reveal`, which never take longer than `d` (when they have to shorten animations below
+  0.5 s, `rushed_animation` says the beat is too short for its steps). Nothing changing on
+  screen for more than 6 s is `dead_air`: reveal, highlight or move something during long
+  beats.
 
 ```python
 @scene("checklist")

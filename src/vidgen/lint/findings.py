@@ -32,7 +32,8 @@ class Finding:
     ``beats`` lists every beat end where the same rule found the same problem with the same
     object(s) (the finding is reported once, at the first: ``beat``/``time``/``still``).
     ``time`` is in the video (``None`` if not every scene has a render at the format),
-    ``scene_time`` from the scene start. ``bbox`` is the region to look at in the still.
+    ``scene_time`` from the scene start. ``bbox`` is the region to look at in the still
+    (``None`` for timing findings, whose ``still`` is the end of the beat concerned).
     ``similar`` holds further objects of the same group with the same problem (e.g. every tick
     label of an axis), reported with the first instead of one finding each; ``group`` is what
     makes findings alike (internal, not in the JSON).
@@ -46,7 +47,7 @@ class Finding:
     severity: str
     message: str
     bbox: Bbox | None
-    still: Path
+    still: Path | None
     objects: tuple[dict[str, Any], ...] = ()
     value: float | None = None
     limit: float | None = None
@@ -77,5 +78,5 @@ class Finding:
             "value": self.value,
             "limit": self.limit,
             "beats": list(self.beats),
-            "still": str(self.still.resolve()),
+            "still": None if self.still is None else str(self.still.resolve()),
         }

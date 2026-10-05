@@ -54,10 +54,10 @@ Rules that apply to every step:
 - [x] Thresholds configurable in an optional `lint:` config section; per-scene `lint_ignore`
 
 ### Step 14 — Timing lint
-- [ ] Narration speed per beat (words/second from audio or estimate) outside a configurable range
-- [ ] Dead air: no visual change for more than N seconds (frame difference on sampled low-res frames)
-- [ ] Beat too short for its animations / animations still running after the narration ends
-- [ ] Added to `vidgen lint` with the same report format
+- [x] Narration speed per beat (words/second from audio or estimate) outside a configurable range
+- [x] Dead air: no visual change for more than N seconds (frame difference on sampled low-res frames)
+- [x] Beat too short for its animations / animations still running after the narration ends
+- [x] Added to `vidgen lint` with the same report format
 
 ---
 

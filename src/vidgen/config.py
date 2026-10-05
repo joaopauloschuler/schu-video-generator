@@ -133,8 +133,24 @@ LINT_RULES: tuple[str, ...] = (
     "min_font",
     "contrast",
     "max_words",
+    "narration_speed",
+    "dead_air",
+    "animation_overrun",
+    "rushed_animation",
 )
-RuleName = Literal["off_frame", "safe_area", "text_overlap", "covered_text", "min_font", "contrast", "max_words"]
+RuleName = Literal[
+    "off_frame",
+    "safe_area",
+    "text_overlap",
+    "covered_text",
+    "min_font",
+    "contrast",
+    "max_words",
+    "narration_speed",
+    "dead_air",
+    "animation_overrun",
+    "rushed_animation",
+]
 #: Severity of a lint finding; ``off`` disables a rule.
 Severity = Literal["error", "warning", "info", "off"]
 #: A fraction of the frame's shorter side (its height for landscape video).
@@ -211,6 +227,46 @@ class MaxWordsRule(RuleConfig):
     """Most words of visible text (not code or math) in one still."""
 
 
+class NarrationSpeedRule(RuleConfig):
+    """``narration_speed``: a beat spoken too fast or too slow (spoken words per second)."""
+
+    min_rate: PositiveFloat = 1.8
+    """Slowest acceptable rate in words per second (1.8 = 108 words a minute)."""
+    max_rate: PositiveFloat = 3.5
+    """Fastest acceptable rate in words per second (3.5 = 210 words a minute)."""
+    min_words: PositiveInt = 5
+    """Beats with fewer spoken words are not checked (their rate is mostly pauses)."""
+
+    @model_validator(mode="after")
+    def _ordered(self) -> NarrationSpeedRule:
+        if self.min_rate >= self.max_rate:
+            raise ValueError("min_rate must be smaller than max_rate")
+        return self
+
+
+class DeadAirRule(RuleConfig):
+    """``dead_air``: nothing on screen changes for too long."""
+
+    max_seconds: PositiveFloat = 6.0
+    """Longest acceptable stretch without any visual change, in seconds."""
+    min_change: Fraction = 0.0002
+    """Part of the frame that must change between two frames to count as a change."""
+
+
+class AnimationOverrunRule(RuleConfig):
+    """``animation_overrun``: a beat's animations take longer than its narration (+ pad)."""
+
+    tolerance: float = Field(default=0.1, ge=0)
+    """Seconds a beat may run past its narration and pad unflagged."""
+
+
+class RushedAnimationRule(RuleConfig):
+    """``rushed_animation``: animations squeezed to fit a beat that is too short for them."""
+
+    min_run_time: PositiveFloat = 0.5
+    """Shortest acceptable run time (seconds) of an animation `play_steps` had to shorten."""
+
+
 class LintRules(_Strict):
     """Per-rule settings of ``vidgen lint``."""
 
@@ -228,6 +284,14 @@ class LintRules(_Strict):
     """Low text contrast (default: warning)."""
     max_words: MaxWordsRule = Field(default_factory=MaxWordsRule)
     """Too many words on screen (default: warning)."""
+    narration_speed: NarrationSpeedRule = Field(default_factory=NarrationSpeedRule)
+    """Narration too fast or too slow (default: warning; info for beats without audio)."""
+    dead_air: DeadAirRule = Field(default_factory=DeadAirRule)
+    """No visual change for too long (default: warning)."""
+    animation_overrun: AnimationOverrunRule = Field(default_factory=AnimationOverrunRule)
+    """Animations running past the narration (default: warning)."""
+    rushed_animation: RushedAnimationRule = Field(default_factory=RushedAnimationRule)
+    """Animations shortened to fit a too short beat (default: warning)."""
 
 
 class LintConfig(_Strict):

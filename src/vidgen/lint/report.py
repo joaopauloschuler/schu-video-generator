@@ -36,8 +36,9 @@ def report_lines(result: LintResult, root: Path) -> list[str]:
         when = f"{f.beat or scene} @ {f.scene_time:.1f}s"
         if len(f.beats) > 1:
             when += f" (+{len(f.beats) - 1} more beat{'s' if len(f.beats) > 2 else ''})"
-        lines.append(f"  {f.severity:<7} {f.rule:<12} {when}: {f.message}")
-        lines.append(f"          still: {_where(f.still, root)}")
+        lines.append(f"  {f.severity:<7} {f.rule:<17} {when}: {f.message}")
+        if f.still is not None:
+            lines.append(f"          still: {_where(f.still, root)}")
     counts = result.counts()
     summary = ", ".join(_plural(counts[sev], sev) for sev in ("error", "warning")) + f", {counts['info']} info"
     if result.ignored:

@@ -54,10 +54,11 @@ src/vidgen/
   scene.py                # NarratedScene base class + narrate()
   capture.py              # frame capture: stills at beat ends / N per beat (see §13)
   introspect.py           # layout dump of the captured frames: objects, px boxes, sizes (§15)
+  activity.py             # activity file: beat timings, play log, per-frame motion signal (§17)
   storyboard.py           # `vidgen storyboard`: reuse/render stills, write contact sheets (§14)
   sheets.py               # contact-sheet layout and drawing with Pillow (§14)
-  lint/                   # `vidgen lint` (§16): rules.py (framework), layout_rules.py, color.py,
-                          # run.py (lint_project), findings.py, report.py
+  lint/                   # `vidgen lint` (§16, §17): rules.py (framework), layout_rules.py,
+                          # timing_rules.py, color.py, run.py (lint_project), findings.py, report.py
   helpers.py              # theme-aware text helpers and generic drawing utilities
   layout.py               # fit/wrap text, beat distribution, chart numbers, LaTeX detection
   tts/__init__.py         # provider seam: get_provider(cfg)
@@ -203,6 +204,9 @@ Methods:
   or the word-count estimate), and on exit waits until `d + pad` has elapsed. Records
   `(beat_id, start, end, text)` into `self.beat_log` (used for subtitles).
 - `self.beat_duration(beat) -> float`
+- (Step 14) `self.play_log` (every `play`/`wait`: `PlayRecord(start, end, beat, animations,
+  wait, requested)`), `self.beat_busy` (seconds each `narrate` body took), `self.silent_busy`;
+  recorded always, written to the activity file (§17) when stills are captured.
 - `self.clear_all(run_time=0.6)` — fade out everything.
 - `self.narrate_all()` — convenience generator: `for beat, d in self.narrate_all(): ...`.
 
@@ -837,8 +841,8 @@ using the existing renders of the others (missing ones are rendered). Exit code 
   keeps the three in sync. `Issue(message, bbox, objects=(), severity=None, value=None,
   limit=None, group=None)`. Scope `still` gets a `StillContext(layout, frame, objects, still)`
   (`width`, `height`, `short_side`, `region(box)` = the still's RGB pixels, read lazily).
-  Step 14's timing rules add a scope (per beat/scene) with its own context and a branch in
-  `run._scene_findings`; findings, config, ignores and report are shared.
+  Step 14's timing rules use scope `scene` (§17); findings, config, ignores and report are
+  shared.
 - **Severity** of a finding: the rule's configured `severity`, else the issue's own (rules
   escalate: `off_frame` error for text / warning otherwise, `min_font` error below
   `error_size`), else the rule's default. `off` skips the rule.
@@ -892,3 +896,61 @@ using the existing renders of the others (missing ones are rendered). Exit code 
   (the still and `bbox` are right); `backdrop` is the most common colour, approximate over
   busy images.
 
+## 17. Refinements (Step 14, timing lint)
+
+- **Rules** (`vidgen/lint/timing_rules.py`, scope `scene`, all default `warning`):
+  `narration_speed`, `dead_air`, `animation_overrun`, `rushed_animation`; settings models
+  `NarrationSpeedRule`, `DeadAirRule`, `AnimationOverrunRule`, `RushedAnimationRule` in
+  `config.LintRules` (names added to `LINT_RULES`/`RuleName`); defaults and the rule table in
+  docs/CONFIG.md "Lint". Same command, report, JSON, `lint:` config and `lint_ignore` as §16.
+- **Framework**: `Scope = "still" | "scene"`. A `scene` rule gets `SceneContext(scene_id,
+  activity, audio_dir)` (`fps`, `beats`, `beat_at(t)`: the beat whose start ≤ t, pad
+  included) once per scene and yields `Issue`s with the new fields `beat` (`None` in a silent
+  scene) and `time` (scene seconds). The runner (`run._timing_findings`) makes one finding per
+  issue (`still` = the beat-end still of `beat`, `bbox` and `object` null); issues sharing a
+  `group` become one finding with all their `beats`. `Finding.still` may be `None` (report and
+  JSON handle it). Human report: rule column widened to 17 characters.
+- **Input: the activity file** (`vidgen/activity.py`, `ACTIVITY_VERSION = 1`,
+  `worker.scene_activity_path` = `<render_dir>/activity/<scene>.json`), written by the worker
+  whenever stills are captured, deleted before every render like the stills and layout;
+  `storyboard.stills_current` and `pipeline._usable_render` (with frames) require it, so
+  renders from before Step 14 count as stale; `frames/index.json` scenes gain `activity`.
+  Content: `{version, scene, type, fps, frames, duration, pad, silent: {duration, busy} |
+  null, beats: [{id, start, end, busy, source: audio|estimate, text}], plays: [{start, end,
+  beat, animations, wait, requested}], motion: {step, grid, level, changes: [[frame,
+  fraction]]}}` (docs/CONFIG.md "Activity file").
+- **Play log** (`NarratedScene.play` overrides Manim's to append a `PlayRecord`; Manim's `wait`
+  goes through `play`, so waits are recorded with `wait: true`). `narrate()` sets the current
+  beat for the log and stores `beat_busy[id]` = time its body took before the wait up to
+  `d + pad`; `tear_down` stores `silent_busy` before holding a silent scene. `play_steps` marks
+  the plays it shortened with `requested = cap`. Recording never changes frames or timing.
+- **Motion signal — why from the renderer**: `MotionTrack` is fed by `FrameCapture._observe`
+  (`FrameCapture(per_beat, listeners, motion=None)`), which already sees every frame Manim
+  writes, with `num_frames` for frozen waits. Each written frame is sampled on a grid (every
+  `step = ceil(short side / 180)`-th pixel: 3 at 480p, 6 at 1080p) and compared with the
+  previous one; `fraction` = share of sample points with a channel moved by > 6 (0-255);
+  only changed frames are stored. ~1.3 ms per written frame (a frozen wait is one), a few
+  percent of a preview render. Decoding the scene MP4 with ffmpeg/PyAV afterwards would be a
+  second pass, add codec noise (every frame "changes" slightly, needing a fuzzy threshold) and
+  could not run without the MP4; the renderer's frames are exact (a static frame is
+  bit-identical), so a tiny threshold works. Only recorded with stills (`--frames`,
+  storyboard, lint), which is when lint needs it.
+- **`narration_speed`**: spoken words (`timing_rules.spoken_words`: hyphens/dashes/slashes
+  split words; digit runs `min(len, 3)` words, `+1` per decimal separator and symbol, `+1` for
+  letters next to digits; 2-5 letter all-caps acronyms half a word per letter) per second of
+  speech: with an MP3, its length minus leading/trailing silence (10 ms envelope below -40 dB
+  of the peak; `speech_bounds`, cached by path+mtime); without audio, the estimated `d`, so
+  the rate only deviates where spoken words differ from `len(text.split())` or the configured
+  `words_per_second` is itself outside the range: those findings are `info`, grouped into one
+  per scene. Beats under `min_words` (5) spoken words are skipped.
+- **`dead_air`**: static runs between changed frames (`fraction >= min_change`, default 0.0002
+  ≈ 9 sample points, which ignores the near-zero first/last frames of eased animations), the
+  tail to the scene end included, longer than `max_seconds` (6). Applies to narrated and
+  silent scenes alike (a silent card held still longer than 6 s is reported); the beat is
+  where the run starts.
+- **`animation_overrun`**: `busy - (d + pad) > tolerance` (0.1 s); the message lists the
+  non-wait plays of the beat ending after the narration end. Silent scenes: `silent.busy >
+  duration + tolerance`. `time` = narration end (or `duration`).
+- **`rushed_animation`**: plays with `requested` set whose run time is below `min_run_time`
+  (0.5 s), one finding per beat. Plays a scene shortens itself (e.g. `run_time=d / 5`) are not
+  seen: only `play_steps` says what it wanted.

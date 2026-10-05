@@ -24,7 +24,13 @@ from vidgen.errors import VidgenError
 from vidgen.fileio import remove_file, write_bytes_atomic
 from vidgen.project import Project
 from vidgen.render.fingerprint import scene_fingerprint
-from vidgen.render.worker import remove_tree, scene_frames_dir, scene_layout_path, scene_timings_path
+from vidgen.render.worker import (
+    remove_tree,
+    scene_activity_path,
+    scene_frames_dir,
+    scene_layout_path,
+    scene_timings_path,
+)
 from vidgen.sheets import DEFAULT_WIDTH, MAX_WIDTH, MIN_WIDTH, SheetPage, SheetScene, SheetStill, compose_pages
 
 
@@ -90,6 +96,8 @@ def stills_current(project: Project, preview: bool, scene_id: str, per_beat: int
     if not count or index.get("per_beat") != count or per_beat not in (None, count):
         return False
     if not scene_layout_path(project, preview, scene_id).is_file():
+        return False
+    if not scene_activity_path(project, preview, scene_id).is_file():
         return False
     if not all((folder / still["path"]).is_file() for still in index.get("frames", [])):
         return False
