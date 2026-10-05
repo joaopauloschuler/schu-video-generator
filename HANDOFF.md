@@ -68,3 +68,71 @@ For Step 2
   `extensions/example.py.txt` uses `self.text`, `self.narrate`, `SceneParams` per DESIGN §6.
 
 How to test: `/home/claude/venv/bin/python -m pytest -q`; manual: `vidgen init /tmp/x && vidgen validate /tmp/x`.
+
+## Step 2 — Extension system and scene base
+What was built
+- `runtime.py` (active Project/Theme), `registry.py` (scene types), `hooks.py`, `extensions.py`
+  (discovery/import/activation), `scene.py` (`NarratedScene`, `SceneParams`, `BeatTiming`,
+  `audio_duration`), `helpers.py` (`T`, `MT`, `column`, `edges`, `dense_pairs`,
+  `grouped_pairs`, `counter`, `resolve_color`, `styled`), `api.py`, private `_origin.py`.
+- `vidgen/scenes/` package with one built-in, `text_card` (params `text`, `size="title"`,
+  `color="text"`), so built-in/override paths are real.
+- CLI: `check_project()` (isolated load, unknown types with difflib suggestions, params
+  validation with `scenes[i].params.<field>` paths), `list-scenes`; vidgen log warnings are
+  printed as `warning: ...` while a command runs. `config.validation_error_lines(err, prefix)`
+  (used by `format_validation_error` too).
+- `docs/EXTENDING.md` (first version; its examples were run end to end).
+- Tests: `test_registry.py`, `test_extensions.py`, `test_api.py`, `test_scene.py` (5 real
+  renders at 160x90@5fps); `conftest.py` gained an autouse isolation fixture and `write_files()`.
+  The fixture `minimal_config()` now uses `text_card` scenes (validate needs registered types).
+
+Exact API for the Step 4 worker
+```python
+from manim import tempconfig            # or set manim.config fields directly
+from vidgen import extensions, registry
+project = Project.load(project_dir, variant=variant)
+theme = extensions.activate(project)    # runtime context + reset + built-ins + extensions
+spec = project.scene(scene_id)
+cls = registry.get(spec.type).cls       # VidgenError with suggestions if unknown
+# configure manim: pixel size/fps from project.render_format(preview), background_color =
+# theme.background, media_dir under build/, explicit output_file, disable_caching=True (!)
+scene = cls(spec, project, theme, audio=not no_audio)   # VidgenError on bad params
+scene.render()
+timings = scene.timings()   # {"scene", "duration", "beats": [{"id","start","end","text"}]}
+```
+- `timings["duration"]` equals the frame count / fps of the written movie (verified by tests);
+  values carry float noise (e.g. 5.200000000000001) — round when writing JSON if desired.
+- Manim's caching must be off: on a cache hit Manim advances time by the unquantized duration.
+- Hooks: `hooks.dispatch(event, project, **data) -> HookContext`. Step 3 calls `pre_tts`/`post_tts`,
+  Step 4 the render events; document the `data` keys you pass in DESIGN.md §6.2. The TTS command
+  must `extensions.activate(project)` (or use `project_session`) before dispatching, otherwise no
+  extension hooks are registered.
+
+Isolation / reset API
+- Built-ins are permanent per process; extension scene types and hooks are a per-project layer:
+  `registry.reset()/snapshot()/restore()/isolated()`, same in `hooks`;
+  `runtime.set_context()/clear_context()/use_context()/has_context()`;
+  `extensions.activate(project)` (process-wide) and `extensions.project_session(project)`
+  (context manager, restores everything, unloads `vidgen_ext_<name>` from `sys.modules`).
+
+Decisions / deviations (DESIGN.md §5.1, §5.2 and new §6.5 updated)
+- Injection = constructor `cls(spec, project=None, theme=None, *, audio=True)`; validation is a
+  classmethod (`validate_params`/`parse_params`), so `vidgen validate` needs no Manim config.
+- Built-in vs extension is decided by the defining module (`vidgen.*` = built-in), which is what
+  makes promotion work unchanged.
+- Multiple extension dirs share one synthetic package; duplicate module names error.
+- Frame-exact waits (`wait_seconds`) so each beat is `d + pad` within half a frame.
+- Silent scenes are auto-held in `tear_down()` (subclasses must call `super().tear_down()`).
+- `api` also exports `VidgenError` and `resolve_color`; `scene` shadows manim's `scene` module.
+
+Known gaps / for later steps
+- Step 5: the init template uses `title`/`bullets`; `tests/test_cli.py::test_init_scaffold_validates`
+  is `xfail(strict=True)` and will start failing (XPASS) once those exist — remove the marker.
+- Step 5 built-ins go in `src/vidgen/scenes/` and must be added to the import list in
+  `scenes/__init__.py`.
+- Stale-audio detection (hash mismatch) is not done by `narrate()`; Step 3/4 decide.
+- Extension imports write `__pycache__/` into the project's `extensions/` (normal Python
+  behaviour); consider adding it to the init template's `.gitignore` if one is added.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (126 tests incl. 5 renders, ~2.5 s);
+skip renders with `-m "not render"`. Manual: `vidgen list-scenes`, `vidgen validate <project>`.

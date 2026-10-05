@@ -181,6 +181,27 @@ Methods:
 Theme-aware text: `self.text(s, size="body"|int, color="text"|"#hex", weight=...)` and
 `self.markup(...)`; sizes and colors accept theme token names or literal values.
 
+Refinements (Step 2):
+- Injection is the constructor: `SceneClass(spec, project=None, theme=None, *, audio=True,
+  **manim_scene_kwargs)`. `project`/`theme` default to the runtime context (§6.3); without a
+  context the theme is built from `project.config.theme`. Constructing needs Manim's config set
+  up (Manim creates its renderer); params validation does not: `SceneClass.validate_params(raw)`
+  (raises `pydantic.ValidationError`), `SceneClass.parse_params(raw, scene_id)` (raises
+  `VidgenError`), `SceneClass.params_model()`. `Params` must subclass `SceneParams`
+  (pydantic, `extra="forbid"`); inherited `Params` count.
+- `audio=False` (`--no-audio`) skips `add_sound` but still takes durations from the MP3s, so
+  timing is identical.
+- `self.beat_log: list[BeatTiming]`, `BeatTiming(beat_id, start, end, text)` (NamedTuple; seconds
+  from scene start; `end = start + d`). `self.timings()` returns
+  `{"scene": id, "duration": total_seconds, "beats": [{"id", "start", "end", "text"}]}`.
+- Waits are frame-exact (`self.wait_seconds(t)` rounds to whole frames), so a beat lasts
+  `d + pad` within half a frame. Narrating a beat twice is an error; beats never narrated are
+  logged as a warning at the end of the scene.
+- Silent scenes are held to `spec.duration` automatically in `tear_down()`; `self.hold(until=None)`
+  holds earlier. Subclasses overriding `tear_down` must call `super().tear_down()`.
+- Also available: `self.beat(id|index|BeatConfig)`, `self.beat_audio(beat) -> Path | None`,
+  `self.pad`. `text()`/`markup()` colors may also be `ManimColor` objects.
+
 ### 5.2 How a scene gets rendered
 
 The renderer renders **each scene in its own subprocess** (Manim's global config is not
@@ -195,6 +216,13 @@ re-entrant): `python -m vidgen.render.worker <project_dir> <scene_id> --quality 
 
 The parent then pads each scene's audio with silence to the exact video length, concatenates in
 config order, and writes the final MP4 and SRT (SRT times = scene offset + beat start/end).
+
+Refinements (Step 2): the worker does steps 1–2 with `vidgen.extensions.activate(project)`
+(returns the Theme), then `cls = vidgen.registry.get(spec.type).cls`,
+`scene = cls(spec, project, theme, audio=not no_audio)`, `scene.render()`, and writes
+`scene.timings()`. Manim caching must be disabled (`disable_caching=True`): on a cache hit Manim
+advances its clock by the unquantized duration, which would desynchronise `beat_log` from the
+frames.
 
 ## 6. Extension system (the core requirement)
 
@@ -245,6 +273,48 @@ so module-level code in an extension may read theme values
 `NarratedScene, SceneParams, scene, hook, HookContext, register_theme_defaults, current_theme,
 current_project, T, MT`, generic helpers from `helpers.py`, and `from manim import *`.
 Anything not exported from `vidgen.api` is internal and may change.
+
+### 6.5 Refinements (Step 2)
+- **Built-in vs extension** is decided by the module that defines the class/function: modules
+  inside the `vidgen` package are built-in, anything else is an extension. The origin shown in
+  messages and `list-scenes` is `builtin` or the defining file relative to the project root.
+- **Discovery**: names starting with `_` or `.` are skipped; folders without `__init__.py` are
+  skipped. Several `extensions` directories share the one synthetic package (its `__path__`
+  lists them all), so relative imports work across them; the same module name in two
+  directories is an error. The default `extensions/` may be absent; a directory written
+  explicitly in `extensions:` must exist. The package name is `vidgen_ext_<folder name,
+  lower-cased, non-word characters replaced by _>`; it is removed from `sys.modules` before each
+  load. An exception raised while importing becomes a `VidgenError` with the file (relative to
+  the project) and the traceback (importlib frames removed); a `VidgenError` raised during
+  import (e.g. a name collision) propagates unchanged.
+- **Override**: `override=True` replacing a built-in logs a warning on logger `vidgen.registry`;
+  `override=True` without a built-in of that name also logs a warning. The CLI prints vidgen log
+  warnings as `warning: <message>` on stderr.
+- **Isolation** (several projects/variants in one process): built-in registrations are
+  permanent (their modules stay imported); extension scene types and hooks form a per-project
+  layer. `registry.reset()/snapshot()/restore()/isolated()` and the same four in `hooks`;
+  `runtime.set_context()/clear_context()/use_context()`;
+  `extensions.activate(project)` (process-wide: context + reset + load) and
+  `extensions.project_session(project)` (context manager: everything restored on exit, the
+  synthetic package unloaded). Every `activate` builds a fresh Theme, so theme defaults
+  registered by one project never leak into another.
+- **Hooks**: built-in hooks run before extension hooks, each group in registration order.
+  `dispatch(event, project, **data)` returns the `HookContext` (hooks may modify `ctx.data`).
+  Errors are wrapped as `hook <module.qualname> (<origin>) failed during <event>: ...` with the
+  traceback appended (a `VidgenError` from a hook keeps just its message).
+- **`vidgen.api`** additionally exports `VidgenError` (for extensions to raise clear errors) and
+  `resolve_color(color, theme=None)`. The only name shared with `from manim import *` is
+  `scene` (manim's `manim.scene` subpackage); `vidgen.api.scene` is the decorator.
+  `vidgen.api.SHADOWED_MANIM_NAMES` records this and a test pins it.
+- **Validation** (`vidgen validate`): unknown types are reported as
+  `scenes[i].type: unknown scene type 'x'; did you mean 'y'? (known types: ...)`; params errors as
+  `scenes[i].params.<field>: <message>`. Variant problems are prefixed `[variant NAME]`; problems
+  identical to the base config's are not repeated.
+- **`vidgen list-scenes [PROJECT]`** prints `name  origin  [(overrides builtin)]` and one indented
+  line per `Params` field (`name: type [= default]`), or `params: free-form`. Without a PROJECT
+  argument and no config file in the current directory it lists the built-ins only.
+- **Built-in library**: `vidgen/scenes/__init__.py` imports each scene module explicitly
+  (Step 2 ships `text_card`: params `text`, `size="title"`, `color="text"`).
 
 ## 7. TTS (ElevenLabs)
 

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+import sys
+import textwrap
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -16,8 +18,13 @@ def minimal_config(**overrides: Any) -> dict[str, Any]:
     data: dict[str, Any] = {
         "title": "Test video",
         "scenes": [
-            {"id": "intro", "type": "title", "beats": [{"text": "Hello there."}, {"text": "Second beat."}]},
-            {"id": "main", "type": "bullets", "beats": [{"id": "custom", "text": "One two three four."}]},
+            {
+                "id": "intro",
+                "type": "text_card",
+                "params": {"text": "Hello"},
+                "beats": [{"text": "Hello there."}, {"text": "Second beat."}],
+            },
+            {"id": "main", "type": "text_card", "params": {"text": "Main"}, "beats": [{"id": "custom", "text": "One two three four."}]},
         ],
     }
     data.update(overrides)
@@ -37,3 +44,24 @@ def make_project(tmp_path: Path) -> Callable[..., Path]:
         return root
 
     return make
+
+
+@pytest.fixture(autouse=True)
+def _isolate_vidgen_state() -> Iterator[None]:
+    """Each test starts with no extension scene types/hooks and no active project."""
+    from vidgen import extensions, hooks, registry, runtime
+
+    runtime.clear_context()
+    with registry.isolated(), hooks.isolated():
+        yield
+    runtime.clear_context()
+    for name in [n for n in sys.modules if n.startswith(extensions.PACKAGE_PREFIX)]:
+        del sys.modules[name]
+
+
+def write_files(root: Path, files: dict[str, str]) -> None:
+    """Write ``{relative path: source}`` under ``root`` (sources are dedented)."""
+    for rel, text in files.items():
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(textwrap.dedent(text).lstrip("\n"), encoding="utf-8")

@@ -139,7 +139,7 @@ def test_scene_and_beat_lookup(make_project) -> None:
     p = Project.load(make_project())
     assert [(s.id, b.id) for s, b in p.beats()] == [("intro", "intro_b1"), ("intro", "intro_b2"), ("main", "custom")]
     assert p.beat("custom").text == "One two three four."
-    assert p.scene("main").type == "bullets"
+    assert p.scene("main").type == "text_card"
     with pytest.raises(VidgenError, match="unknown beat 'nope'"):
         p.beat("nope")
     with pytest.raises(VidgenError, match="unknown scene 'nope'; scenes: intro, main"):

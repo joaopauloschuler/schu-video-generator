@@ -10,7 +10,9 @@ from vidgen.errors import VidgenError
 
 
 def test_defaults() -> None:
-    cfg = parse_config(minimal_config())
+    data = minimal_config()
+    del data["scenes"][0]["params"]
+    cfg = parse_config(data)
     assert cfg.output is None
     assert (cfg.format.width, cfg.format.height, cfg.format.fps) == (1920, 1080, 30)
     assert (cfg.preview.width, cfg.preview.height, cfg.preview.fps) == (854, 480, 15)

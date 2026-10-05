@@ -4,14 +4,20 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import shutil
 import sys
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
+
+from pydantic import BaseModel, ValidationError
 
 from vidgen import __version__
+from vidgen.config import validation_error_lines
 from vidgen.errors import VidgenError
-from vidgen.project import Project
+from vidgen.project import CONFIG_NAMES, Project
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
@@ -41,20 +47,43 @@ def cmd_init(args: argparse.Namespace) -> int:
 def check_project(project: Project) -> list[str]:
     """Checks beyond config structure; returns problems found (empty if none).
 
-    Step 1 validates structure only (done by ``Project.load``). The registry step adds here:
-    load extensions, check that every scene ``type`` is registered, validate ``params``.
+    Loads built-ins and the project's extensions in isolation (nothing leaks into the caller's
+    registry), checks that every scene ``type`` is registered and validates each scene's
+    ``params`` against the type's ``Params`` model.
     """
-    return []
+    from vidgen import extensions, registry
+
+    problems: list[str] = []
+    try:
+        with extensions.project_session(project):
+            for i, scene in enumerate(project.config.scenes):
+                entry = registry.find(scene.type)
+                if entry is None:
+                    problems.append(f"scenes[{i}].type: {registry.unknown_type_message(scene.type)}")
+                    continue
+                try:
+                    entry.cls.validate_params(scene.params)
+                except ValidationError as exc:
+                    problems.extend(validation_error_lines(exc, ("scenes", i, "params")))
+    except VidgenError as exc:
+        problems.append(str(exc))
+    return problems
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
-    """Load the project (and every variant) and print a short summary."""
+    """Load the project (and every variant), check it and print a short summary."""
     project = Project.load(args.project)
-    problems = check_project(project)
+    base = check_project(project)
+    problems = list(base)
     for name in project.config.variants:
-        problems.extend(check_project(Project.load(args.project, variant=name)))
+        problems.extend(
+            f"[variant {name}] {p}" for p in check_project(Project.load(args.project, variant=name)) if p not in base
+        )
     if problems:
-        raise VidgenError("\n".join([f"{project.config_file.name}: invalid project", *problems]))
+        lines = [f"{project.config_file.name}: invalid project"]
+        for problem in problems:
+            lines.extend(f"  {line}" for line in problem.splitlines())
+        raise VidgenError("\n".join(lines))
 
     config = project.config
     n_beats = sum(1 for _ in project.beats())
@@ -65,6 +94,56 @@ def cmd_validate(args: argparse.Namespace) -> int:
     if config.variants:
         print(f"variants:  {', '.join(config.variants)}")
     print("ok")
+    return 0
+
+
+def _type_name(annotation: Any) -> str:
+    if isinstance(annotation, type) and not getattr(annotation, "__args__", None):
+        return annotation.__name__
+    return str(annotation).replace("typing.", "")
+
+
+def describe_params(model: type[BaseModel] | None) -> list[str]:
+    """``name: type [= default]`` for each field of a ``Params`` model (empty for plain dicts)."""
+    if model is None:
+        return []
+    lines = []
+    for name, field in model.model_fields.items():
+        line = f"{name}: {_type_name(field.annotation)}"
+        if not field.is_required():
+            default = field.get_default(call_default_factory=True)
+            line += f" = {default!r}"
+        lines.append(line)
+    return lines
+
+
+def _print_scene_types() -> None:
+    from vidgen import registry
+
+    entries = registry.all()
+    width = max((len(e.name) for e in entries), default=0)
+    for entry in entries:
+        marker = "  (overrides builtin)" if entry.overrides is not None else ""
+        print(f"{entry.name:<{width}}  {entry.origin}{marker}")
+        if entry.params_model is None:
+            print("    params: free-form (no Params model)")
+        for line in describe_params(entry.params_model):
+            print(f"    {line}")
+
+
+def cmd_list_scenes(args: argparse.Namespace) -> int:
+    """Print every scene type (built-ins and the project's extensions) with its params."""
+    from vidgen import extensions, registry
+
+    if args.project == "." and not any((Path.cwd() / name).is_file() for name in CONFIG_NAMES):
+        # No project here: list the built-ins only.
+        with registry.isolated():
+            extensions.load_builtins()
+            _print_scene_types()
+        return 0
+    project = Project.load(args.project)
+    with extensions.project_session(project):
+        _print_scene_types()
     return 0
 
 
@@ -98,7 +177,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("list-scenes", help="list available scene types")
     project_arg(p)
-    p.set_defaults(func=_not_implemented(2))
+    p.set_defaults(func=cmd_list_scenes)
 
     p = sub.add_parser("tts", help="generate narration audio")
     project_arg(p)
@@ -118,11 +197,35 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+class _LevelFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        return f"{record.levelname.lower()}: {record.getMessage()}"
+
+
+@contextmanager
+def _cli_logging() -> Iterator[None]:
+    """Print vidgen's log warnings as ``warning: <message>`` on stderr while a command runs."""
+    logger = logging.getLogger("vidgen")
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(_LevelFormatter())
+    saved = (logger.level, logger.propagate)
+    logger.addHandler(handler)
+    logger.setLevel(logging.WARNING)
+    logger.propagate = False
+    try:
+        yield
+    finally:
+        logger.removeHandler(handler)
+        logger.setLevel(saved[0])
+        logger.propagate = saved[1]
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the CLI; returns the process exit code."""
     args = build_parser().parse_args(argv)
     try:
-        return args.func(args)
+        with _cli_logging():
+            return args.func(args)
     except VidgenError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

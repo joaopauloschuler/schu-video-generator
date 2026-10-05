@@ -201,14 +201,22 @@ def format_location(loc: tuple[str | int, ...]) -> str:
     return out
 
 
-def format_validation_error(error: ValidationError, source: str) -> str:
-    """A readable multi-line message for a pydantic ``ValidationError``."""
-    lines = [f"{source}: invalid config"]
+def validation_error_lines(error: ValidationError, prefix: tuple[str | int, ...] = ()) -> list[str]:
+    """One ``path: message`` line per error; ``prefix`` is prepended to every path
+    (e.g. ``("scenes", 2, "params")`` gives ``scenes[2].params.values: ...``)."""
+    lines = []
     for item in error.errors():
         # Model validators raise from the model itself; drop pydantic's "Value error, " prefix.
         message = item["msg"].removeprefix("Value error, ")
-        path = format_location(tuple(item["loc"]))
-        lines.append(f"  {path}: {message}" if path else f"  {message}")
+        path = format_location((*prefix, *item["loc"]))
+        lines.append(f"{path}: {message}" if path else message)
+    return lines
+
+
+def format_validation_error(error: ValidationError, source: str) -> str:
+    """A readable multi-line message for a pydantic ``ValidationError``."""
+    lines = [f"{source}: invalid config"]
+    lines.extend(f"  {line}" for line in validation_error_lines(error))
     return "\n".join(lines)
 
 
