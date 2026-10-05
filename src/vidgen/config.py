@@ -123,6 +123,135 @@ class NarrationConfig(_Strict):
     """Speech rate used to estimate a beat's duration when it has no audio yet."""
 
 
+#: ``vidgen lint`` rule names (DESIGN.md §16). :class:`LintRules` has one field per name and
+#: :mod:`vidgen.lint` one rule per name (a test keeps the three in sync).
+LINT_RULES: tuple[str, ...] = (
+    "off_frame",
+    "safe_area",
+    "text_overlap",
+    "covered_text",
+    "min_font",
+    "contrast",
+    "max_words",
+)
+RuleName = Literal["off_frame", "safe_area", "text_overlap", "covered_text", "min_font", "contrast", "max_words"]
+#: Severity of a lint finding; ``off`` disables a rule.
+Severity = Literal["error", "warning", "info", "off"]
+#: A fraction of the frame's shorter side (its height for landscape video).
+Fraction = Annotated[float, Field(gt=0, lt=1)]
+
+
+class RuleConfig(_Strict):
+    """Settings every lint rule has."""
+
+    severity: Severity | None = None
+    """Severity of all this rule's findings (error, warning, info), or off; default: the rule's own."""
+
+
+class OffFrameRule(RuleConfig):
+    """``off_frame``: an object cut off by the frame edge."""
+
+    tolerance: Fraction = 0.004
+    """How far (fraction of the frame's shorter side) an object may cross the edge unflagged."""
+
+
+class SafeAreaRule(RuleConfig):
+    """``safe_area``: text inside the frame but outside the safe area (the scene's margins)."""
+
+    tolerance: Fraction = 0.01
+    """How far (fraction of the frame's shorter side) text may cross the safe area unflagged."""
+
+
+class TextOverlapRule(RuleConfig):
+    """``text_overlap``: two texts whose boxes overlap."""
+
+    min_overlap: Fraction = 0.1
+    """Overlap (fraction of the smaller box's area) from which two texts count as overlapping."""
+
+
+class CoveredTextRule(RuleConfig):
+    """``covered_text``: a shape or image drawn on top of text."""
+
+    min_covered: Fraction = 0.02
+    """Part of the middle of the text's box that must show the shape's colour to be reported."""
+
+
+class MinFontRule(RuleConfig):
+    """``min_font``: text too small for the frame (cap height, fraction of the shorter side)."""
+
+    min_size: Fraction = 0.025
+    """Warning below this cap height (0.025: 12 px at 480p, 27 px at 1080p)."""
+    error_size: Fraction = 0.018
+    """Error below this cap height (0.018: 8.6 px at 480p, 19.4 px at 1080p)."""
+
+    @model_validator(mode="after")
+    def _ordered(self) -> MinFontRule:
+        if self.error_size > self.min_size:
+            raise ValueError("error_size must not be larger than min_size")
+        return self
+
+
+class ContrastRule(RuleConfig):
+    """``contrast``: WCAG contrast ratio of text against what is behind it."""
+
+    min_ratio: float = Field(default=4.5, ge=1, le=21)
+    """Minimum ratio for normal text (WCAG AA: 4.5)."""
+    large_ratio: float = Field(default=3.0, ge=1, le=21)
+    """Minimum ratio for large text (WCAG AA: 3)."""
+    large_size: Fraction = 0.045
+    """Cap height (fraction of the shorter side) from which text counts as large."""
+    dimmed_ratio: float = Field(default=2.0, ge=1, le=21)
+    """Minimum ratio for text faded on purpose (opacity below 1, e.g. a previous bullet)."""
+
+
+class MaxWordsRule(RuleConfig):
+    """``max_words``: too many words on screen at once."""
+
+    max_words: PositiveInt = 40
+    """Most words of visible text (not code or math) in one still."""
+
+
+class LintRules(_Strict):
+    """Per-rule settings of ``vidgen lint``."""
+
+    off_frame: OffFrameRule = Field(default_factory=OffFrameRule)
+    """Objects cut off by the frame edge (default: error for text, warning for other objects)."""
+    safe_area: SafeAreaRule = Field(default_factory=SafeAreaRule)
+    """Text outside the safe area (default: warning)."""
+    text_overlap: TextOverlapRule = Field(default_factory=TextOverlapRule)
+    """Overlapping texts (default: error)."""
+    covered_text: CoveredTextRule = Field(default_factory=CoveredTextRule)
+    """Shapes or images drawn over text (default: warning)."""
+    min_font: MinFontRule = Field(default_factory=MinFontRule)
+    """Text too small (default: warning, error below error_size)."""
+    contrast: ContrastRule = Field(default_factory=ContrastRule)
+    """Low text contrast (default: warning)."""
+    max_words: MaxWordsRule = Field(default_factory=MaxWordsRule)
+    """Too many words on screen (default: warning)."""
+
+
+class LintConfig(_Strict):
+    """The optional ``lint:`` section: thresholds and severities of ``vidgen lint``."""
+
+    fail_on: Literal["error", "warning", "info", "never"] = "error"
+    """Lowest severity that makes `vidgen lint` fail (exit code 1); never: always exit 0."""
+    min_opacity: float = Field(default=0.1, ge=0, le=1)
+    """Objects fainter than this are ignored by every rule (the end of a fade)."""
+    rules: LintRules = Field(default_factory=LintRules)
+    """Per-rule settings (severity and thresholds)."""
+
+
+class LintIgnore(_Strict):
+    """A ``lint_ignore`` entry: skip a rule's findings in this scene, optionally only some."""
+
+    rule: RuleName | Literal["all"]
+    """Rule name, or all."""
+    object: str | None = None
+    """Only findings about objects whose name, path or text matches this pattern (* and ? wildcards)."""
+    beat: Identifier | None = None
+    """Only findings at this beat's end."""
+
+
 class BeatConfig(_Strict):
     """One narrated sentence/paragraph. ``id`` is filled in by :class:`SceneConfig` if omitted."""
 
@@ -154,6 +283,8 @@ class SceneConfig(_Strict):
     """Narrated beats in order; each animation lasts as long as its audio plus narration.pad."""
     duration: PositiveFloat | None = None
     """Seconds; required on a silent scene (no beats), not allowed on a scene with beats."""
+    lint_ignore: list[RuleName | Literal["all"] | LintIgnore] = Field(default_factory=list)
+    """`vidgen lint` findings to skip in this scene: rule names, or {rule, object, beat} filters."""
 
     @model_validator(mode="before")
     @classmethod
@@ -178,7 +309,15 @@ class SceneConfig(_Strict):
             raise ValueError("a scene without beats (silent scene) needs a 'duration' in seconds")
         if self.beats and self.duration is not None:
             raise ValueError("'duration' is only allowed on silent scenes (scenes without beats)")
+        beat_ids = {beat.id for beat in self.beats}
+        for entry in self.lint_ignore:
+            if isinstance(entry, LintIgnore) and entry.beat is not None and entry.beat not in beat_ids:
+                raise ValueError(f"lint_ignore: scene '{self.id}' has no beat '{entry.beat}'")
         return self
+
+    def lint_ignores(self) -> list[LintIgnore]:
+        """``lint_ignore`` with plain rule names turned into :class:`LintIgnore` entries."""
+        return [LintIgnore(rule=e) if isinstance(e, str) else e for e in self.lint_ignore]
 
     @property
     def silent(self) -> bool:
@@ -207,6 +346,8 @@ class VideoConfig(_Strict):
     """Beat padding and duration estimate."""
     extensions: list[str] = Field(default_factory=lambda: ["extensions"])
     """Folders (relative to the project) whose *.py files and packages are imported."""
+    lint: LintConfig = Field(default_factory=LintConfig)
+    """Thresholds and severities of `vidgen lint`."""
     scenes: list[SceneConfig] = Field(min_length=1)
     """The scenes in order (at least one); scene ids and beat ids must be unique."""
 

@@ -23,6 +23,7 @@ from vidgen.project import Project
 
 if TYPE_CHECKING:
     from vidgen.render.pipeline import RenderResult
+    from vidgen.lint import LintResult
     from vidgen.storyboard import StoryboardResult
 
 #: Version of the JSON document shapes (not of vidgen).
@@ -269,3 +270,40 @@ def storyboard_document(
         elapsed=round(elapsed, 3),
         sheets=sheets,
     )
+
+
+# ----- lint --------------------------------------------------------------------------------------
+
+
+def lint_document(
+    project: Project, result: LintResult, elapsed: float, warnings: Iterable[Mapping[str, Any]] = ()
+) -> dict[str, Any]:
+    """The ``vidgen lint --json`` document: every finding; ``ok`` is false (exit code 1) when a
+    finding is at least as severe as ``fail_on``."""
+    worker_warnings = [warning(message, scene) for scene, message in result.warnings]
+    fmt = result.format
+    counts = result.counts()
+    doc = envelope(
+        "lint",
+        not result.failed,
+        [*warnings, *worker_warnings],
+        project=_path(project.root),
+        variant=project.variant,
+        preview=result.preview,
+        format={"width": fmt.width, "height": fmt.height, "fps": fmt.fps},
+        fail_on=result.fail_on,
+        rules=result.rules,
+        scenes=result.scenes,
+        stills=result.stills,
+        rendered=result.rendered,
+        reused=result.reused,
+        elapsed=round(elapsed, 3),
+        counts=counts,
+        ignored=result.ignored,
+        findings=[f.to_json() for f in result.findings],
+    )
+    if result.failed:
+        summary = ", ".join(f"{n} {sev}" for sev, n in counts.items())
+        message = f"lint found {summary} (fails on {result.fail_on} or worse)"
+        doc["error"] = error_json("error", message, details={"fail_on": result.fail_on, "counts": counts})
+    return doc

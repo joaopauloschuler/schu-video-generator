@@ -901,3 +901,108 @@ How to test: `/home/claude/venv/bin/python -m pytest -q` (506 passed, 1 skipped)
 `vidgen render examples/minimal --preview --frames`, then read
 `examples/minimal/build/preview/layout/*.json`.
 
+
+## Step 13 — `vidgen lint` (layout rules)
+What was built
+- `vidgen lint [PROJECT] [--scene ID ...] [--rule NAME ...] [--variant NAME] [--preview |
+  --final] [--fail-on error|warning|info|never] [--jobs N] [--force] [--json]` checks the
+  layout dump (Step 12) of every **beat-end still** and prints one finding per problem:
+  severity, rule, `beat @ scene time (+N more beats)`, a message with the measured value and
+  the limit, and the still to open. Exit code 1 iff a finding is at least as severe as
+  `fail_on` (default `error`). Stills are reused when current (any `--per-beat`, e.g. from a
+  storyboard; ~0.7 s for examples/minimal); otherwise the scene is rendered with one still per
+  beat, like the storyboard does.
+- Rules (`vidgen/lint/layout_rules.py`), sizes as fractions of the frame's shorter side:
+  `off_frame` (error for text, warning for other objects; full-frame bleeds such as cover
+  images/Ken Burns/backgrounds/bands and wholly off-frame objects are not reported),
+  `safe_area` (text in the margins), `text_overlap` (error), `covered_text` (a shape drawn
+  over text, checked on the still's **pixels**), `min_font` (cap height < 2.5 % warning,
+  < 1.8 % error; `font_px` corrected for lowercase letters), `contrast` (WCAG 2 ratio of the
+  text colour blended at its opacity over the sampled backdrop: 4.5 / 3 large / 2 dimmed),
+  `max_words` (> 40 words of `text` on screen).
+- Noise control: only beat-end stills; objects below `lint.min_opacity` (0.1) ignored; the
+  same problem on several beats is one finding (`beats`); same-rule findings of one still
+  sharing a parent group (tick labels) or a colour pair (contrast) are one finding with
+  `similar` objects (`also N more like it (...)`).
+- Config: optional `lint:` section (`fail_on`, `min_opacity`, `rules.<name>.{severity,
+  thresholds}`; `severity: off` disables a rule) and per-scene `lint_ignore` (rule names /
+  `all`, or `{rule, object, beat}` with `*`/`?` wildcards matched against name, path or text).
+  Both are in the JSON Schema (generated) and excluded from the render fingerprint.
+- JSON (`--json`): envelope + `{project, variant, preview, format, fail_on, rules, scenes,
+  stills, rendered, reused, elapsed, counts, ignored, findings}`; each finding `{scene, beat,
+  time, scene_time, rule, severity, object, other, similar, bbox, message, value, limit,
+  beats, still}`; failing → `ok: false`, `error.details {fail_on, counts}`.
+- Docs: docs/CONFIG.md new "Lint (`vidgen lint`)" section + "`vidgen lint --json`", `lint`
+  / `lint_ignore` rows; README (quick start, command table, paragraph); EXTENDING.md (lint new
+  scene types; what lint treats as intentional); DESIGN §2, §8, §14 (fingerprint), new §16;
+  `examples/minimal/video.yaml` usage line and a `lint:` section.
+
+Files
+- New: `src/vidgen/lint/{__init__,rules,layout_rules,color,run,findings,report}.py`,
+  `tests/test_lint.py` (20 tests, 1 render test).
+- Changed: `config.py` (`LINT_RULES`, `RuleName`, `Severity`, `RuleConfig` + one model per
+  rule, `LintRules`, `LintConfig`, `LintIgnore`, `VideoConfig.lint`, `SceneConfig.lint_ignore`
+  + `lint_ignores()`), `cli.py` (`cmd_lint`, parser, `JSON_COMMANDS`), `jsonout.py`
+  (`lint_document`), `storyboard.py` (`stills_current(..., per_beat=None)` accepts any count
+  and requires the layout file; `_scene_starts` → public `scene_starts`),
+  `render/fingerprint.py` (`lint`/`lint_ignore` excluded; `lint` package not a render input),
+  `tests/test_docs.py` (lint models), docs above, tasklist.md.
+
+Public interfaces added/changed (internal modules; `vidgen.api` unchanged)
+- `vidgen.lint`: `lint_project`, `LintResult` (`counts()`, `failed`), `Finding` (`to_json()`),
+  `RULES`, `Rule`, `rule(name, *, scope="still", default=...)`, `Issue`, `StillContext`
+  (`width`, `height`, `short_side`, `region(box)`), `SEVERITIES`, `FAIL_ON`, `report_lines`.
+- Config: `lint` and `scenes[].lint_ignore` (new keys). `storyboard.stills_current` signature
+  (`per_beat: int | None`), `storyboard.scene_starts`.
+
+Decisions / deviations
+- Sizes relative to the **shorter side**, not the height (the task said height): identical for
+  16:9, but for 9:16 the height would make every text count 1.78x smaller than the same text
+  in 16:9, flagging nearly everything in vertical videos.
+- Thresholds were tuned by looking at the flagged stills (Read) of examples/minimal (16:9 and
+  vertical) and kphi3: `min_font` 2.5 % / 1.8 % (theme `small` = 2.46 % is flagged, `caption`
+  3.0 % and chart tick labels ≈ 2.55 % pass; kphi3's 1.6 % zoomed-out labels are errors). A
+  first draft at 2.8 % / 2.0 % flagged many readable kphi3 labels.
+- `font_px` (p75 of glyph heights) measured "sparse" at 11.3 px and "baseline" at 14.6 px at
+  the same font size; `min_font` estimates the cap height from the characters' typical
+  heights so lowercase labels are not penalised.
+- `covered_text` (not in the task list; the "text vs shape" overlap the task called lower
+  severity) uses the still's pixels: group/curve boxes are far larger than what they draw
+  (the kphi3 network's box covered the title text but its lines did not), and a
+  strike-through in the text's colour (kphi3 `setup`) is intentional.
+- Contrast: text faded on purpose (opacity < 0.95: previous bullets, dimmed bars) needs only
+  2:1, and a listing's line numbers are skipped (WCAG "incidental" text); otherwise WCAG AA.
+- Exit code with `--json` follows the Step 8 rule (`ok` ⇔ exit 0): a failing lint is `ok:
+  false` with `error.kind` `error`, findings still in the document.
+
+Real findings (not fixed here: Review 1 / Step 15 should act on them)
+- Theme `dim` (#6B7280) on the default background is 3.91:1, below WCAG AA 4.5:1 for normal
+  text: every dim caption/label is flagged (minimal: `title` authors, `bar_chart` caption,
+  `line_chart` axis/tick labels, `quote` source, `equation` caption; most kphi3 labels). One
+  theme fix (Step 16 presets) removes most warnings.
+- `image` caption sits 12 px into the bottom margin at 480p (both 16:9 and 9:16).
+- `bar_chart` caption uses theme `small` (11.8 px cap at 480p, 2.46 %): too small.
+- 9:16 `code`: the listing is scaled to the frame width, text 9.8 px (2.0 % of the width).
+- kphi3: `method` beat 5 zooms the diagram out to 5.6–7.6 px labels (**error**, the only one);
+  `loss` axis ticks and bar labels 9.8–9.9 px, its footnote 23 px into the bottom margin;
+  `equivalence` left label 23 px into the left margin and the rotated `H = length` 8.9 px;
+  `setup` block labels 11.4 px. Seen but not lintable: in `equivalence`/`title` the dumped
+  `text` is the pre-`Transform` string (messages quote it; the still is right).
+- No off_frame, text_overlap, covered_text or max_words findings in the examples (all three
+  are exercised by tests, including a render test with overlapping and cut-off text).
+
+Known gaps / TODOs
+- Only beat-end stills are checked; problems that exist only mid-beat are not seen.
+- Per-part opacity is not in the layout dump (max over parts), so dimmed lines inside one
+  `Code`/`Paragraph` are invisible to `contrast`; `backdrop` is a single most-common colour
+  (approximate over busy images); boxes are axis-aligned (rotated text).
+- Same-size texts can measure ±5 % apart (`font_px` + letter correction), so a text near a
+  threshold can flip between runs of different content.
+- Step 14 (timing rules): add a scope (e.g. `beat`) in `lint/rules.py`, its context and a
+  branch in `run._scene_findings`; add names to `config.LINT_RULES`/`RuleName` and settings
+  models to `LintRules` (a test keeps them in sync); docs table + defaults block (tested).
+- Storyboard sheets could draw lint findings (bbox) on the stills.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (536 passed, 1 skipped). Manual:
+`vidgen lint examples/minimal`, `vidgen lint examples/minimal --variant vertical`,
+`vidgen lint examples/kphi3` (exit 1: one error), `--json`, `--rule min_font`.

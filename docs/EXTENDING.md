@@ -207,8 +207,13 @@ def validate_project(cls, params, project):
   stills with their narration. Its reuse of stills tracks the `.py` files of your extension
   folders and `assets/`; if your scene reads other files, use `--force` after changing them.
 - The same frames are described in `build/.../layout/<scene>.json` (docs/CONFIG.md "Layout
-  dump"), the input of layout checks. Mobjects you keep as attributes (`self.title = ...`) or
-  give a `name` appear under that name there. A `Text` updated with `m.become(new)` keeps its
+  dump"), the input of `vidgen lint --scene ID` (docs/CONFIG.md "Lint"): run it on new scene
+  types at 16:9 and `--variant vertical`. It checks the end of each beat, so a beat should end
+  in a settled state. Text measured against the safe area uses the scene's `margin_x` /
+  `margin_y`; a background or band meant to bleed should run from edge to edge; a shape meant
+  to sit on top of text (a strike-through) should use the text's colour. Mobjects you keep as
+  attributes (`self.title = ...`) or give a `name` appear under that name there, which also
+  makes `lint_ignore` entries (`object: title`) stable. A `Text` updated with `m.become(new)` keeps its
   old string as its `text`; set `m.original_text = new.original_text` if it matters.
 
 ```python

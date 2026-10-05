@@ -49,9 +49,9 @@ Rules that apply to every step:
 - [x] Written to `build/.../layout/<scene>.json`; documented format
 
 ### Step 13 — `vidgen lint` (layout rules)
-- [ ] Rules: off-frame / outside safe area, text–text overlap, font too small for the output height, low contrast (WCAG ratio vs background), too many words on screen
-- [ ] JSON report `{scene, beat, time, rule, severity, object, bbox, message}` and a human-readable summary
-- [ ] Thresholds configurable in an optional `lint:` config section; per-scene `lint_ignore`
+- [x] Rules: off-frame / outside safe area, text–text overlap, font too small for the output height, low contrast (WCAG ratio vs background), too many words on screen (+ `covered_text`: shapes drawn over text)
+- [x] JSON report `{scene, beat, time, rule, severity, object, bbox, message}` and a human-readable summary
+- [x] Thresholds configurable in an optional `lint:` config section; per-scene `lint_ignore`
 
 ### Step 14 — Timing lint
 - [ ] Narration speed per beat (words/second from audio or estimate) outside a configurable range

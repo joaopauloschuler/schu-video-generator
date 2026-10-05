@@ -24,7 +24,7 @@ from vidgen.errors import VidgenError
 from vidgen.fileio import remove_file, write_bytes_atomic
 from vidgen.project import Project
 from vidgen.render.fingerprint import scene_fingerprint
-from vidgen.render.worker import remove_tree, scene_frames_dir, scene_timings_path
+from vidgen.render.worker import remove_tree, scene_frames_dir, scene_layout_path, scene_timings_path
 from vidgen.sheets import DEFAULT_WIDTH, MAX_WIDTH, MIN_WIDTH, SheetPage, SheetScene, SheetStill, compose_pages
 
 
@@ -76,23 +76,27 @@ def _matches_format(timings: dict[str, Any], fmt: FormatConfig) -> bool:
     return (meta.get("width"), meta.get("height"), meta.get("fps")) == (fmt.width, fmt.height, fmt.fps)
 
 
-def stills_current(project: Project, preview: bool, scene_id: str, per_beat: int) -> bool:
-    """True if the scene's stills exist at ``per_beat`` per beat, were made at the current
-    format and nothing the scene depends on changed since (its render fingerprint matches)."""
+def stills_current(project: Project, preview: bool, scene_id: str, per_beat: int | None) -> bool:
+    """True if the scene's stills and layout dump exist at ``per_beat`` per beat (``None``: any
+    count), were made at the current format and nothing the scene depends on changed since (its
+    render fingerprint matches)."""
     timings = _read_json(scene_timings_path(project, preview, scene_id))
     folder = scene_frames_dir(project, preview, scene_id)
     index = _read_json(folder / "index.json")
     if timings is None or index is None or not _matches_format(timings, project.render_format(preview)):
         return False
     meta = timings.get("render", {})
-    if meta.get("frames") != per_beat or index.get("per_beat") != per_beat:
+    count = meta.get("frames")
+    if not count or index.get("per_beat") != count or per_beat not in (None, count):
+        return False
+    if not scene_layout_path(project, preview, scene_id).is_file():
         return False
     if not all((folder / still["path"]).is_file() for still in index.get("frames", [])):
         return False
     return meta.get("fingerprint") == scene_fingerprint(project, scene_id)
 
 
-def _scene_starts(project: Project, preview: bool) -> dict[str, float | None]:
+def scene_starts(project: Project, preview: bool) -> dict[str, float | None]:
     """Each scene's start in the video, from the rendered scenes' durations (all ``None`` if a
     scene has no render at the current format)."""
     fmt = project.render_format(preview)
@@ -224,7 +228,7 @@ def make_storyboard(
         warnings=runs.warnings,
     )
 
-    starts = _scene_starts(project, preview)
+    starts = scene_starts(project, preview)
     sections = [_sheet_scene(project, preview, sid, starts[sid]) for sid in selected]
     frame_size = (fmt.width, fmt.height)
     title = f"{project.config.title} — storyboard"

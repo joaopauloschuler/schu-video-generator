@@ -24,6 +24,16 @@ MODELS: list[type[BaseModel]] = [
     config.NarrationConfig,
     config.SceneConfig,
     config.BeatConfig,
+    config.LintConfig,
+    config.LintRules,
+    config.LintIgnore,
+    config.OffFrameRule,
+    config.SafeAreaRule,
+    config.TextOverlapRule,
+    config.CoveredTextRule,
+    config.MinFontRule,
+    config.ContrastRule,
+    config.MaxWordsRule,
 ]
 
 

@@ -8,7 +8,8 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 [narration](#narration-narration), [narration audio](#narration-audio-elevenlabs),
 [built-in scene types](#built-in-scenes),
 [JSON Schema](#json-schema-vidgen-schema), [frame stills](#frame-stills-vidgen-render---frames),
-[storyboard](#storyboard-vidgen-storyboard), [JSON output of commands](#json-output---json).
+[storyboard](#storyboard-vidgen-storyboard), [lint](#lint-vidgen-lint),
+[JSON output of commands](#json-output---json).
 
 ## Top level
 
@@ -23,6 +24,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `voice` | see [voice](#voice-voice) | ElevenLabs voice |
 | `narration` | see [narration](#narration-narration) | beat padding, duration estimate |
 | `extensions` | `[extensions]` | folders whose `*.py` files and packages are imported (see docs/EXTENDING.md); the default may be missing, a folder you list must exist |
+| `lint` | see [lint](#lint-vidgen-lint) | thresholds and severities of `vidgen lint` |
 | `scenes` | required | the scenes in order, at least one |
 
 ## Scenes and beats
@@ -49,6 +51,7 @@ scenes:
 | `params` | `{}` | free-form for types without a params model |
 | `beats` | `[]` | each beat is narrated into `audio/<beat id>.mp3`; its animation lasts as long as its audio plus `narration.pad` |
 | `duration` | none | seconds; required on a scene without beats and not allowed on a scene with beats |
+| `lint_ignore` | `[]` | `vidgen lint` findings to skip in this scene, see [lint](#lint-vidgen-lint) |
 
 Beat `id`s name the audio files: keep them when you edit the text (only that beat is
 re-voiced). A beat `text` is spoken as written; it is also the subtitle.
@@ -542,9 +545,9 @@ this count are rendered again.
 
 Whenever stills are taken (`--frames`, `--frames-per-beat N`, `vidgen storyboard`), the same
 frames are also described as data: for each still, every **visible** object on screen with its
-position in pixels, size, colours and opacity: the input for layout checks (the planned `vidgen
-lint`: text off the frame or outside the safe area, overlapping text, text too small, low
-contrast, too many words); you or an agent can read it directly too. It costs a few milliseconds per still and is deleted
+position in pixels, size, colours and opacity: the input of [`vidgen lint`](#lint-vidgen-lint)
+(text off the frame or outside the safe area, overlapping text, text too small, low contrast,
+too many words); you or an agent can read it directly too. It costs a few milliseconds per still and is deleted
 and rewritten with the stills, so it always describes the current render.
 
 File `build/<final|preview>[_<variant>]/layout/<scene>.json`:
@@ -589,6 +592,99 @@ visible part is not listed. `text` is the string the mobject was created with; M
 `become()` and `Transform` change the glyphs but not that string, and while
 `TransformMatchingShapes`/`TransformMatchingTex` run, the moving glyphs are shapes.
 
+## Lint (`vidgen lint`)
+
+`vidgen lint [PROJECT]` checks what is on screen at the **end of every beat** and reports
+problems an author cannot see without watching: text cut off by the frame edge or in the
+margins, overlapping text, shapes drawn over text, text too small for the frame, low contrast
+and too many words at once. It reads the [layout dump](#layout-dump-buildlayoutscenejson) of the
+beat-end stills; scenes whose stills are current (from `vidgen render --frames` or `vidgen
+storyboard`, any `--per-beat`) are reused, the others are rendered first with one still per
+beat (preview format unless `--final`; reuse works as for the
+[storyboard](#storyboard-vidgen-storyboard)). Only beat-end stills are checked: mid-beat
+stills show animations in progress (half-faded or moving objects), which would only add noise.
+
+```
+$ vidgen lint examples/minimal
+lint: 10 scenes, 23 beat-end stills (preview 854x480)
+picture:
+  warning safe_area    picture_b2 @ 7.2s: text 'Images can slowly zoom and pan' is outside the safe area at the bottom (12 px into the bottom margin)
+          still: examples/minimal/build/preview/frames/picture/picture_b2-1.png
+0 errors, 7 warnings, 0 info
+```
+
+Each finding names the scene, the beat at whose end it was seen (`+N more beats` when the same
+problem stays on screen), the rule, a message with the measured value and the limit, and the
+**still** to open to see it. The same problem with several objects of one group (an axis' tick
+labels, several texts in the same colour) is reported once (`also N more like it`).
+
+Options:
+
+| option | |
+|---|---|
+| `--scene ID` | only this scene (repeatable) |
+| `--rule NAME` | only this rule (repeatable) |
+| `--variant NAME` | lint a variant (e.g. the vertical one) |
+| `--preview` / `--final` | preview format (the default) or the final format |
+| `--fail-on SEVERITY` | `error`, `warning`, `info` or `never`; overrides `lint.fail_on` |
+| `--jobs N` | scenes rendered in parallel |
+| `--force` | render the selected scenes again even if their stills are current |
+| `--json` | print every finding as JSON (below) |
+
+**Exit code**: 1 when a finding is at least as severe as `fail_on` (default `error`), else 0;
+with `--fail-on never` it is 0 whatever is found (and 1 only if the command itself fails).
+
+**Rules.** Sizes are fractions of the frame's **shorter side** (the height of a landscape
+video, the width of a vertical one), so the same thresholds hold for the 480p preview and the
+1080p video, and for 16:9 and 9:16 (a phone shows either orientation with its shorter side
+across the screen's width). Objects fainter than `lint.min_opacity` are ignored by every rule.
+
+| rule | default severity | finds |
+|---|---|---|
+| `off_frame` | error for text, warning for other objects | an object cut off by the frame edge by more than `tolerance`. Not reported: objects wholly outside (not visible), and non-text objects running from edge to edge on the side they cross (a full-frame image with `fit: cover` or Ken Burns, a background, a band or divider): those bleeds are intentional |
+| `safe_area` | warning | text inside the frame but in its margins (the scene's `margin_x`/`margin_y`, `safe_area` in the layout dump) by more than `tolerance` |
+| `text_overlap` | error | two texts whose boxes overlap by at least `min_overlap` of the smaller box (the same text drawn twice in the same place is not reported) |
+| `covered_text` | warning | a shape or image drawn **after** (on top of) a text whose colour shows in at least `min_covered` of the middle of the text's box, measured on the still's pixels. Not reported: shapes drawn before the text (plates, highlight bands, a code window), the text's own parent group, shapes fainter than 0.3, and shapes in the text's own colour (a strike-through) |
+| `min_font` | warning; error below `error_size` | text whose cap height is below `min_size` of the shorter side. The cap height is the layout's `font_px` corrected for the text's letters (`font_px` of all-lowercase text is about its x-height); a lone symbol (`+`, `·`) is not checked |
+| `contrast` | warning | text whose WCAG contrast ratio with its `backdrop` is below `min_ratio` (4.5, WCAG AA), `large_ratio` (3) for text with a cap height of at least `large_size`, or `dimmed_ratio` (2) for text faded on purpose (opacity below 1, e.g. previous bullets); the text colour is blended with the backdrop at the text's opacity, every colour of a multi-coloured text is checked. A code listing's line numbers are not checked |
+| `max_words` | warning | more than `max_words` words (tokens with a letter) of visible `text` objects in one still; code and math do not count |
+
+**Config** (all optional; the values shown are the defaults):
+
+```yaml
+lint:
+  fail_on: error              # error | warning | info | never: lowest severity that fails
+  min_opacity: 0.1            # objects fainter than this are ignored (end of a fade)
+  rules:                      # each rule also takes severity: error | warning | info | off
+    off_frame: {tolerance: 0.004}           # fraction of the shorter side (2 px at 480p)
+    safe_area: {tolerance: 0.01}            # 5 px at 480p
+    text_overlap: {min_overlap: 0.1}        # fraction of the smaller box
+    covered_text: {min_covered: 0.02}       # fraction of the middle of the text's box
+    min_font: {min_size: 0.025, error_size: 0.018}   # cap height: 12 / 8.6 px at 480p, 27 / 19.4 px at 1080p
+    contrast: {min_ratio: 4.5, large_ratio: 3.0, large_size: 0.045, dimmed_ratio: 2.0}
+    max_words: {max_words: 40}
+```
+
+`severity` on a rule sets the severity of all its findings (`off` disables the rule). The
+`lint` section and `lint_ignore` do not count in a scene's render fingerprint: changing them
+never makes stills stale.
+
+**Ignoring findings in a scene** (`lint_ignore` on the scene): a list of rule names (or `all`),
+or `{rule, object, beat}` filters. `object` is a pattern (`*` and `?` wildcards, case-sensitive)
+matched against the object's `name`, `path` and `text` (for a pair, either object); `beat`
+limits the entry to the end of that beat (it must be a beat of the scene).
+
+```yaml
+scenes:
+  - id: chart
+    type: line_chart
+    params: {...}
+    lint_ignore:
+      - max_words                                   # every max_words finding of this scene
+      - {rule: min_font, object: "VGroup[2]/*"}     # the small tick labels, by path
+      - {rule: contrast, object: "Illustrative*", beat: chart_b2}
+```
+
 ## Storyboard (`vidgen storyboard`)
 
 `vidgen storyboard [PROJECT]` writes **contact sheets**: PNG pages showing the stills of the
@@ -625,7 +721,7 @@ Options:
 above). A scene is rendered again (with stills, in worker processes like `vidgen render`) only
 if its stills are missing, were taken at another `--per-beat` count or format, or are stale:
 each render records a fingerprint of what the scene depends on (its config entry, the other
-config sections except `scenes`/`variants`, its beats' MP3s, the project's extension code,
+config sections except `scenes`/`variants`/`lint`, its beats' MP3s, the project's extension code,
 the files under `assets/`, and vidgen's own rendering code), and a scene whose fingerprint
 changed is rendered again. So `vidgen storyboard` right after `vidgen render --preview
 --frames` renders nothing, and after an edit it renders only the edited scenes. Files a scene
@@ -635,7 +731,7 @@ video; `vidgen render` does. It dispatches `post_scene` for the scenes it render
 
 ## JSON output (`--json`)
 
-`vidgen validate`, `vidgen list-scenes`, `vidgen render`, `vidgen schema` and `vidgen storyboard` accept `--json`: stdout then holds
+`vidgen validate`, `vidgen list-scenes`, `vidgen render`, `vidgen schema`, `vidgen storyboard` and `vidgen lint` accept `--json`: stdout then holds
 exactly one JSON document (ASCII-only, non-ASCII characters escaped), and everything else
 (progress, `warning:` lines, Manim output) goes to stderr. These shapes are meant for programs
 and AI agents driving vidgen. Without `--json` the human output is unchanged.
@@ -650,7 +746,7 @@ it. Times are seconds (floats), paths are absolute strings, absent values are `n
 |---|---|---|
 | `version` | int | schema version of the document (1) |
 | `vidgen` | str | vidgen package version |
-| `command` | str \| null | `validate`, `list-scenes`, `render`, `schema`, `storyboard` (`null` if the command line could not be parsed) |
+| `command` | str \| null | `validate`, `list-scenes`, `render`, `schema`, `storyboard`, `lint` (`null` if the command line could not be parsed) |
 | `ok` | bool | `true` on success; the exit code is 0 exactly when `ok` is true |
 | `warnings` | list | `{scene, message}`: vidgen warnings of the run (`scene` is `null`, or the scene whose render printed it) |
 | `error` | object | only when `ok` is false: `{kind, message, problems, details}` |
@@ -754,3 +850,38 @@ for a vidgen error, 2 for an exception in scene code), `rendered` the scene ids 
 
 Video sheets come first, then the scene sheets in config order. `warnings` and `error.details`
 on a failed scene are as for `vidgen render --json`.
+
+### `vidgen lint --json`
+
+`ok` is false (exit code 1) when a finding is at least as severe as `fail_on`; `error` is then
+`{"kind": "error", "message": "lint found 1 error, 3 warning, 0 info (fails on error or worse)",
+"problems": [], "details": {"fail_on", "counts"}}` and the findings are still in the document.
+
+| key | type | |
+|---|---|---|
+| `project` | str | |
+| `variant` | str \| null | |
+| `preview` | bool | `false` with `--final` |
+| `format` | object | `{width, height, fps}` of the stills |
+| `fail_on` | str | `error`, `warning`, `info` or `never` |
+| `rules` | list | names of the rules run |
+| `scenes` | list | ids of the scenes checked (config order) |
+| `stills` | int | beat-end stills checked |
+| `rendered`, `reused` | list | scene ids rendered for this command / whose current stills were reused |
+| `elapsed` | float | wall time of the command |
+| `counts` | object | `{error, warning, info}`: findings per severity |
+| `ignored` | int | findings skipped by `lint_ignore` |
+| `findings` | list | in scene order, then by time and severity, as below |
+
+Each finding: `scene`; `beat` (the beat at whose end it was seen, `null` for a silent scene);
+`time` (in the video, `null` when not every scene has a render at this format) and
+`scene_time` (from the scene start); `rule`; `severity` (`error`, `warning`, `info`);
+`object` (the object concerned, `null` for `max_words`) and `other` (the second object of a
+pair: the other text for `text_overlap`, the shape for `covered_text`; else `null`), each
+`{id, kind, class, name, path, text, bbox}` as in the [layout dump](#layout-dump-buildlayoutscenejson)
+(`text` `null` for shapes); `similar` (further objects with the same problem, reported with
+this one, e.g. the other tick labels); `bbox` (the region to look at in the still, px:
+the object, the overlap of a pair, or all counted texts); `message`; `value` and `limit` (the
+measured number and the threshold it broke: a fraction of the shorter side for sizes, a ratio
+for contrast, px for `off_frame`/`safe_area`, a word count); `beats` (every beat end where the
+same problem was seen, the first is `beat`); `still` (the PNG at `beat`'s end).

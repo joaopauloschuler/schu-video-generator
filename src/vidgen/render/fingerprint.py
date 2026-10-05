@@ -3,8 +3,8 @@
 The worker records :func:`scene_fingerprint` in the scene's timings (``render.fingerprint``);
 ``vidgen storyboard`` reuses a scene's stills only while the fingerprint still matches.
 
-What counts: the scene's config (type, params, beats), every other config section except
-``scenes`` and ``variants`` (theme, narration, format...), the narration MP3s of the scene's
+What counts: the scene's config (type, params, beats; not ``lint_ignore``), every other config
+section except ``scenes``, ``variants`` and ``lint`` (theme, narration, format...), the narration MP3s of the scene's
 beats (size and modification time), the source of vidgen itself and of the project's extension
 folders (file contents), and the files under ``<project>/assets`` (size and modification time).
 Files a scene reads from elsewhere are not tracked (``--force`` renders again).
@@ -31,7 +31,7 @@ _PACKAGE_DIR = Path(__file__).resolve().parent.parent
 #: contact sheets, TTS); every other module, including new ones, is part of the fingerprint.
 NOT_RENDER_INPUTS: frozenset[str] = frozenset(
     {
-        "__main__.py", "cli.py", "describe.py", "jsonout.py", "schema.py", "sheets.py", "storyboard.py",
+        "__main__.py", "cli.py", "describe.py", "jsonout.py", "lint", "schema.py", "sheets.py", "storyboard.py",
         "render/fingerprint.py", "render/pipeline.py", "render/ffmpeg.py", "subtitles.py", "tts",
     }
 )
@@ -80,14 +80,15 @@ def _stat(path: Path) -> list[int] | None:
 def scene_fingerprint(project: Project, scene_id: str) -> str:
     """A hex digest of everything (that vidgen knows of) the render of ``scene_id`` depends on."""
     spec = project.scene(scene_id)
-    config = project.config.model_dump(mode="json", exclude={"scenes", "variants"})
+    # Lint settings cannot change pixels or timing: editing them must not make renders stale.
+    config = project.config.model_dump(mode="json", exclude={"scenes", "variants", "lint"})
     assets = project.root / "assets"
     data: dict[str, Any] = {
         "fingerprint": FINGERPRINT_VERSION,
         "vidgen": __version__,
         "vidgen_source": vidgen_source_digest(),
         "config": config,
-        "scene": spec.model_dump(mode="json"),
+        "scene": spec.model_dump(mode="json", exclude={"lint_ignore"}),
         "audio": {beat.id: _stat(project.audio_dir / f"{beat.id}.mp3") for beat in spec.beats},
         "extensions": [_contents_digest(_files(folder, ".py"), folder) for folder in project.extension_dirs],
         "assets": {path.relative_to(assets).as_posix(): _stat(path) for path in _files(assets)},

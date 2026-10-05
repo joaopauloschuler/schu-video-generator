@@ -56,6 +56,8 @@ src/vidgen/
   introspect.py           # layout dump of the captured frames: objects, px boxes, sizes (§15)
   storyboard.py           # `vidgen storyboard`: reuse/render stills, write contact sheets (§14)
   sheets.py               # contact-sheet layout and drawing with Pillow (§14)
+  lint/                   # `vidgen lint` (§16): rules.py (framework), layout_rules.py, color.py,
+                          # run.py (lint_project), findings.py, report.py
   helpers.py              # theme-aware text helpers and generic drawing utilities
   layout.py               # fit/wrap text, beat distribution, chart numbers, LaTeX detection
   tts/__init__.py         # provider seam: get_provider(cfg)
@@ -530,6 +532,8 @@ vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audi
               [--jobs N] [--frames] [--frames-per-beat N] [--json]
 vidgen storyboard [PROJECT] [--scene ID ...] [--per-beat N] [--variant NAME] [--preview | --final]
               [--width PX] [--jobs N] [--force] [--json]      # contact sheets (§14)
+vidgen lint [PROJECT] [--scene ID ...] [--rule NAME ...] [--variant NAME] [--preview | --final]
+              [--fail-on SEVERITY] [--jobs N] [--force] [--json]   # layout checks (§16)
 ```
 PROJECT defaults to the current directory. `--scene` re-renders only those scenes and re-joins
 using the existing renders of the others (missing ones are rendered). Exit code non-zero on error.
@@ -730,7 +734,7 @@ using the existing renders of the others (missing ones are rendered). Exit code 
   from the per-scene indexes and timings (beat texts); a still's video time uses scene starts
   summed from the per-scene timings' durations (`null` if a scene has no render at the format).
 - **Fingerprint** (`vidgen/render/fingerprint.py`, `scene_fingerprint(project, scene_id)`): a
-  SHA-256 over the scene's config entry, the config minus `scenes`/`variants` (with the variant
+  SHA-256 over the scene's config entry, the config minus `scenes`/`variants`/`lint` (Step 13; the entry without `lint_ignore`) (with the variant
   applied), the beats' MP3 size+mtime, the contents of the `.py` files of the extension folders,
   size+mtime of the files under `<root>/assets`, the vidgen version and a digest of vidgen's own
   source except `NOT_RENDER_INPUTS` (CLI, JSON, schema, sheets, storyboard, pipeline, ffmpeg,
@@ -766,7 +770,7 @@ using the existing renders of the others (missing ones are rendered). Exit code 
   worker writes `<render_dir>/layout/<scene>.json` (`worker.scene_layout_path`). Not behind a
   separate flag: it costs ~50 ms per 1080p still (measured on kphi3; negligible next to the
   render), and stills and layout then always come from the same render. It is the input of
-  Step 13's `vidgen lint`. Reference: docs/CONFIG.md "Layout dump".
+  Step 13's `vidgen lint` (§16). Reference: docs/CONFIG.md "Layout dump".
 - **Format** (`LAYOUT_VERSION = 1`): `{version, scene, type, width, height, fps, per_beat,
   px_per_unit, background, safe_area: [x0, y0, x1, y1], frames: [{beat, k, n, frame, time,
   still, camera: {center, width, height}, objects}]}`; frames carry the stills index keys and
@@ -810,3 +814,81 @@ using the existing renders of the others (missing ones are rendered). Exit code 
   `TransformMatchingShapes`/`TransformMatchingTex` loose glyphs are shapes; while Manim's Cairo
   renderer animates, moving mobjects are drawn over static ones regardless of z-index, which
   `order` does not model; 3D cameras are only as right as `transform_points_pre_display`.
+
+## 16. Refinements (Step 13, `vidgen lint` layout rules)
+
+- **Command**: `vidgen lint [PROJECT] [--scene ID ...] [--rule NAME ...] [--variant NAME]
+  [--preview | --final] [--fail-on error|warning|info|never] [--jobs N] [--force] [--json]`
+  (`vidgen.lint.lint_project(project, *, preview=True, scenes=None, rules=None, fail_on=None,
+  jobs=1, force=False) -> LintResult`; reference: docs/CONFIG.md "Lint"). Exit code 1 iff a
+  finding is at least as severe as `fail_on` (`--fail-on`, else `lint.fail_on`, default
+  `error`); with `--json` that document has `ok: false` and `error.kind` `error` (`details:
+  {fail_on, counts}`) and still lists every finding.
+- **Input**: the layout dumps (§15) of the **beat-end stills** (`k == n`) only: mid-beat stills
+  show fades and motion in progress, which would be noise. Stills are reused when
+  `storyboard.stills_current(project, preview, scene, per_beat=None)` holds (now: any stills
+  count, and the layout file must exist); other scenes are rendered with one still per beat
+  by `pipeline.render_scenes` (as the storyboard does). Objects below `lint.min_opacity`
+  (0.1) are dropped first (the end of a fade).
+- **Framework** (`vidgen/lint/rules.py`): `@rule(name, scope="still", default=severity)`
+  registers `check(context, settings) -> Iterable[Issue]` in `RULES`; `name` must be in
+  `config.LINT_RULES`, whose order is `RULES`' order, and `config.LintRules` has one settings
+  model per rule (subclass of `RuleConfig`: `severity: error|warning|info|off|None`); a test
+  keeps the three in sync. `Issue(message, bbox, objects=(), severity=None, value=None,
+  limit=None, group=None)`. Scope `still` gets a `StillContext(layout, frame, objects, still)`
+  (`width`, `height`, `short_side`, `region(box)` = the still's RGB pixels, read lazily).
+  Step 14's timing rules add a scope (per beat/scene) with its own context and a branch in
+  `run._scene_findings`; findings, config, ignores and report are shared.
+- **Severity** of a finding: the rule's configured `severity`, else the issue's own (rules
+  escalate: `off_frame` error for text / warning otherwise, `min_font` error below
+  `error_size`), else the rule's default. `off` skips the rule.
+- **Merging** (one problem, one line): findings of a scene with the same rule, severity and
+  object ids are merged across beats (`beats` lists them, the first gives `beat`, `time`,
+  `still`); then findings first seen at the same still with the same rule, severity and
+  `group` (default: the object's parent path, e.g. an axis' tick labels; `contrast` groups by
+  colour, backdrop and opacity) become one finding with the others in `similar` and `also N
+  more like it (...)` in the message. Order: scenes in config order, then scene time,
+  severity, rule order.
+- **Sizes** are fractions of the frame's **shorter side** (`StillContext.short_side`), not the
+  height: equal for landscape, and for 9:16 the height would make the same text count 1.78x
+  smaller, although a phone shows either orientation with its shorter side across the screen.
+- **Rules** (thresholds in `config.LintRules`, defaults documented in docs/CONFIG.md):
+  `off_frame` (bbox beyond the frame by > `tolerance` 0.004; wholly outside objects skipped;
+  non-text objects spanning an axis edge to edge are intentional bleeds on that axis: cover
+  images, Ken Burns, backgrounds, bands), `safe_area` (text only, inside the frame but past
+  the layout's `safe_area` by > `tolerance` 0.01), `text_overlap` (intersection ≥
+  `min_overlap` 0.1 of the smaller box; identical text with IoU > 0.9 skipped), `covered_text`
+  (a non-text object drawn later (`order`) whose fill/stroke colour, blended at its opacity
+  over the text's backdrop, shows in ≥ `min_covered` 0.02 of the middle of the text's box,
+  counted on the still's pixels, excluding pixels of the text's own colours; skipped: the
+  text's ancestors, shapes below opacity 0.3, shapes whose colour is within RGB distance 40
+  of the text or backdrop colour (a strike-through); images: their box), `min_font` (cap
+  height < `min_size` 0.025 → warning, < `error_size` 0.018 → error; cap height =
+  `font_px * 0.73 / p75(per-character em heights)` with x-height letters 0.55, descender
+  letters 0.76, punctuation 0.15, others 0.73, so all-lowercase text is not penalised; math
+  uses `font_px`; text without a letter or digit skipped), `contrast` (WCAG 2 ratio of each
+  text colour blended at the text's opacity over `backdrop`, worst colour counts; needs
+  `min_ratio` 4.5, `large_ratio` 3 when the cap height ≥ `large_size` 0.045, `dimmed_ratio`
+  2 when opacity < 0.95 (de-emphasised on purpose); a `code` object of only digits (line
+  numbers) skipped), `max_words` (> `max_words` 40 tokens with a letter in `text` objects; code,
+  math and numbers do not count; `object` null, `bbox` the union).
+- **Config**: `VideoConfig.lint: LintConfig` (`fail_on`, `min_opacity`, `rules`) and
+  `SceneConfig.lint_ignore: list[RuleName | "all" | LintIgnore]` (`LintIgnore(rule, object,
+  beat)`; `beat` must be a beat of the scene; `SceneConfig.lint_ignores()` normalises).
+  `object` is matched with `*`/`?` wildcards only (brackets literal, so paths like
+  `VGroup[2]/*` work) against the object's name, path and text (either object of a pair).
+  Both are excluded from the render fingerprint (`fingerprint.scene_fingerprint`), and the
+  `lint` package is in `NOT_RENDER_INPUTS`.
+- **Output**: `Finding.to_json()` = `{scene, beat, time, scene_time, rule, severity, object,
+  other, similar, bbox, message, value, limit, beats, still}` (objects as `{id, kind, class,
+  name, path, text, bbox}`); `jsonout.lint_document` adds `{project, variant, preview,
+  format, fail_on, rules, scenes, stills, rendered, reused, elapsed, counts, ignored,
+  findings}` to the envelope. Human report (`lint.report_lines`): a header, findings grouped
+  by scene (`severity rule beat @ t (+N more beats): message` + `still: <path>` relative to
+  the current folder), a count line and `failed: ...` when failing.
+- **Limits**: only beat-end stills; boxes are rectangles (rotated text, curves); `opacity` is
+  the max over an object's parts, so per-line dimming inside one `Paragraph`/`Code` is not
+  seen; `text` may be stale after `Transform` (§15), so messages can quote the old string
+  (the still and `bbox` are right); `backdrop` is the most common colour, approximate over
+  busy images.
+
