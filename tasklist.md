@@ -30,9 +30,9 @@ Rules that apply to every step:
 - [x] Stable, documented JSON shapes (version field); tests for each
 
 ### Step 9 — JSON Schema export
-- [ ] `vidgen schema` prints the JSON Schema of `video.yaml`
-- [ ] `vidgen schema --scene TYPE` prints one scene type's `Params` schema; `--all` bundles every type
-- [ ] Test: all example configs validate against the exported schema
+- [x] `vidgen schema` prints the JSON Schema of `video.yaml`
+- [x] `vidgen schema --scene TYPE` prints one scene type's `Params` schema; `--all` bundles every type
+- [x] Test: all example configs validate against the exported schema
 
 ### Step 10 — Frame capture in the worker
 - [ ] Worker option to save PNG stills at chosen times: end of each beat (default) or N evenly spaced per beat

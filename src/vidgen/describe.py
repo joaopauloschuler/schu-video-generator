@@ -115,7 +115,7 @@ def _beats_json(entry: SceneType) -> dict[str, Any] | None:
     return {"min": lo, "max": hi, "text": entry.cls.beat_count_text()}
 
 
-def _doc(entry: SceneType) -> str | None:
+def scene_doc(entry: SceneType) -> str | None:
     """The class's own docstring, else its module's docstring, cleaned; ``None`` if neither."""
     doc = entry.cls.__dict__.get("__doc__")
     if not doc:
@@ -136,7 +136,7 @@ def scene_type_json(entry: SceneType) -> dict[str, Any]:
         "origin": entry.origin,
         "builtin": entry.builtin,
         "overrides_builtin": entry.overrides is not None,
-        "doc": _doc(entry),
+        "doc": scene_doc(entry),
         "beats": _beats_json(entry),
         "params": None if model is None else params_json(model),
     }

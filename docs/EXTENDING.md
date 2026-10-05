@@ -119,7 +119,10 @@ Use `ThemeColor` / `ThemeSize` for colors and sizes: they accept a theme token o
 project's theme, including your `register_theme_defaults` and `theme.colors`).
 
 A docstring under a field documents it: `vidgen list-scenes --json` shows it as the field's
-`doc` (so does `Field(description=...)`).
+`doc` (so does `Field(description=...)`), and `vidgen schema` as its `description`. The
+exported JSON Schema comes from your `Params` model (types, defaults, `Field` constraints,
+`Literal`s, nested models; `ThemeColor`/`ThemeSize` accept the project's token names) and
+from `beat_count`; validators written in Python are only run by `vidgen validate`.
 
 ```python
 class Params(SceneParams):

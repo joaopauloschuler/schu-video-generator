@@ -597,3 +597,67 @@ Known gaps / TODOs
 How to test: `/home/claude/venv/bin/python -m pytest -q` (404 passed, 1 skipped; also passes on
 Python 3.10 / Manim 0.19). Manual: `vidgen validate examples/minimal --json`,
 `vidgen list-scenes --json`, `vidgen render examples/minimal --preview --json 2>/dev/null`.
+
+## Step 9 — JSON Schema export
+What was built
+- `vidgen schema [PROJECT] [--scene TYPE | --all] [--json]` prints a JSON Schema (draft
+  2020-12) generated from the pydantic models for the project's scene types (built-ins + its
+  extensions; built-ins only without a PROJECT and no config in the current folder):
+  - default: the whole `video.yaml`. `scenes[].type` is an `enum` of the registered types and
+    `scenes[].params` is checked per type (`allOf` of `if type == NAME then params: $ref
+    #/$defs/scene.NAME`, plus `required: [params]` when the type has required params and
+    `beats` min/maxItems from `beat_count`). Also encoded: silent-scene rule, optional/null beat
+    ids, even width/height (`multipleOf: 2`), `variants` bodies as partial configs,
+    `dict[Identifier, X]` keys (`propertyNames`), and `min_length` of union fields moved to
+    each branch as `minItems`/`minProperties` (pydantic emits a `minLength` that validators
+    ignore for arrays, e.g. `line_chart.x`).
+  - `--scene TYPE`: one type's params schema (unknown type: error with did-you-mean).
+  - `--all`: the schema of one `scenes[]` item with every type's params in `$defs`.
+  - Theme color/size params (`ThemeColor`/`ThemeSize`) accept hex / positive number or a
+    token name of the project's theme (defaults + extension defaults + `theme.*` of the base
+    config and every variant); marked `"x-vidgen-theme": "color"|"size"`.
+  - Descriptions: field docstrings (every config field now has one; built-in params already
+    had them) and the scene type's doc + beat count.
+  - Works on an invalid `video.yaml` (that is when an agent needs it): falls back to the
+    file's `extensions`/`theme` as far as they are valid, with a warning.
+  - Output: indented ASCII JSON on stdout (extension prints go to stderr). `--json` wraps it in
+    the Step 8 envelope (`project`, `schema`); errors are JSON documents too.
+- Docs: docs/CONFIG.md new section "JSON Schema (`vidgen schema`)" and "`vidgen schema
+  --json`"; README command table; EXTENDING.md (what the schema takes from `Params`); DESIGN
+  §2, §8 and new §12.
+
+Files
+- New: `src/vidgen/schema.py`, `tests/test_schema.py` (51 tests).
+- Changed: `cli.py` (`cmd_schema`, `scene_types_session`, `JSON_COMMANDS`), `jsonout.py`
+  (`schema_document`), `config.py` (field docstrings, `use_attribute_docstrings`, `multipleOf`
+  hint, `Size` JSON schema), `scene.py` (`ThemeToken.__get_pydantic_json_schema__`),
+  `describe.py` (`_doc` → public `scene_doc`), `pyproject.toml` (dev extra `jsonschema>=4.18`),
+  docs above, tasklist.md.
+
+Public interfaces added/changed (internal modules; `vidgen.api` unchanged)
+- `vidgen.schema`: `config_schema(entries, themes)`, `scene_schema(entries, themes)`,
+  `params_schema(entry, themes)`, `project_themes(project, theme)`, `theme_tokens(themes)`,
+  `lenient_project(path)`, `DIALECT`, `THEME_KEY`.
+- `cli.scene_types_session(path, lenient=False)` (context manager → `(project | None,
+  theme)`; `list-scenes` uses it too), `cli.cmd_schema`; `jsonout.schema_document`.
+- `describe.scene_doc(entry)`.
+- Config model fields have `description`s; validation behaviour and messages unchanged.
+
+Decisions / deviations
+- `--scene` and `--all` are mutually exclusive; `--all` is "one scene item with every type"
+  (a valid schema an agent can apply per scene), not a name → schema map.
+- Without `--json` the raw schema is printed (so `vidgen schema > video.schema.json` works);
+  `--json` adds the envelope, like the other commands.
+- Token enums are the union of base and variant themes (a variant may define a color its own
+  scenes use); slightly permissive for the base config.
+- Per-type nested models are `$defs/scene.<type>.<Model>` to avoid collisions between types.
+
+Known gaps / TODOs
+- Not expressible in the schema (only `vidgen validate`): unique scene/beat ids, referenced
+  files, `validate_project`, pydantic validators written in Python (e.g. "one value per
+  label"). Values pydantic coerces (`"30"` for an int) pass validate but not the schema.
+- The schema is a snapshot: regenerate after adding scene types, theme tokens or variants.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (455 passed, 1 skipped; needs the dev
+extra `jsonschema`: `pip install -e .[dev]`). Manual: `vidgen schema examples/custom_scene`,
+`vidgen schema --scene bar_chart`, `vidgen schema --all --json`.

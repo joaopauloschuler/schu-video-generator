@@ -42,6 +42,7 @@ src/vidgen/
   cli.py                  # argparse CLI (see §8)
   jsonout.py              # --json documents of the CLI (see §11)
   describe.py             # scene-type/params descriptions for list-scenes
+  schema.py               # JSON Schema export (see §12)
   errors.py               # VidgenError, Problem
   config.py               # pydantic v2 models for video.yaml (see §4)
   project.py              # Project: locate/load config, resolve paths, variants
@@ -514,6 +515,7 @@ Refinements (Step 3):
 vidgen init <dir> [--example minimal]   # scaffold a project
 vidgen validate [PROJECT] [--json]      # load config + extensions, report all errors
 vidgen list-scenes [PROJECT] [--json]   # built-ins + extensions (+ which overrides)
+vidgen schema [PROJECT] [--scene TYPE | --all] [--json]   # JSON Schema of video.yaml (§12)
 vidgen tts [PROJECT] [--force] [--dry-run] [--beat ID ...] [--variant NAME]
 vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going]
               [--jobs N] [--json]
@@ -602,3 +604,45 @@ using the existing renders of the others (missing ones are rendered). Exit code 
 - **Usage errors**: the CLI parser raises `cli.UsageError` instead of exiting; `main` prints
   argparse's usual `usage:` + `prog: error:` lines and returns 2 (so `main()` returns 2 rather
   than raising `SystemExit(2)`); `--help`/`--version` still exit through argparse.
+
+## 12. Refinements (Step 9, JSON Schema export)
+
+- **`vidgen schema [PROJECT] [--scene TYPE | --all] [--json]`** (`vidgen/schema.py`; reference:
+  docs/CONFIG.md "JSON Schema"). Default: the schema of the whole `video.yaml`
+  (`schema.config_schema(entries, themes)`); `--scene TYPE`: one type's params
+  (`params_schema`, unknown type → `VidgenError` with the did-you-mean message); `--all`: one
+  `scenes[]` item with every type's params (`scene_schema`). Draft 2020-12, generated from the
+  pydantic models (`model_json_schema`, validation mode) and post-processed. Output is
+  `jsonout.dumps` (indented, ASCII) on stdout; extension output during loading goes to stderr.
+  With `--json` (now in `cli.JSON_COMMANDS`) the envelope holds `project` and `schema`.
+- **Scene types** come from `cli.scene_types_session(path, lenient)` (also used by
+  `list-scenes`): without a PROJECT and no config file in the current directory, built-ins
+  only. `lenient=True` (schema): if the config does not load, `schema.lenient_project` loads
+  the project from a placeholder config keeping the file's `extensions` and `theme` (each only
+  if valid) and logs a warning; a missing project is still an error.
+- **Per-type params**: `$defs/SceneConfig` gets `type: {enum: [registered names]}` and an
+  `allOf` of `if {type: const NAME} then {params: $ref #/$defs/scene.NAME}` (plus `required:
+  [params]` when the model has required fields, and `beats` `minItems`/`maxItems`/required from
+  `beat_count`); a type without `Params` gets `{type: object}`. Nested models of a type are
+  `$defs/scene.NAME.Model` (no collisions between types). Also encoded: the silent-scene rule
+  (`if beats non-empty then duration null else duration required`), beat `id` optional/null,
+  `variants` bodies (the top-level properties without `variants`, none required,
+  `additionalProperties: false`), and `dict[Identifier, X]` as `propertyNames` +
+  `additionalProperties` (pydantic's `patternProperties` alone let other keys through);
+  `minLength`/`maxLength` pydantic puts on an `anyOf` (a union field's `min_length`) move to
+  each branch as `minItems`/`minProperties`/`minLength` by the branch's type.
+- **Theme tokens**: `ThemeToken` adds `"x-vidgen-theme": "color"|"size"` to the field's JSON
+  Schema (`__get_pydantic_json_schema__`); the export replaces such a node's type by `anyOf`
+  [hex pattern | positive number, `enum` of token names]. Token names are the union of the
+  active theme (defaults + `register_theme_defaults` + `theme.*`) and every loadable variant's
+  theme (`schema.project_themes`).
+- **Config models**: `_Strict` uses `use_attribute_docstrings=True` and every config field has a
+  one-line docstring (the schema's `description`); `FormatConfig.width/height` carry
+  `multipleOf: 2` (`json_schema_extra`; the check stays the `_even` validator, same message);
+  `config.Size` has an explicit `WithJsonSchema` (pydantic emitted a non-standard `gt` for the
+  `int | float` union). Validation behaviour and messages are unchanged.
+- **Not in the schema** (only `vidgen validate`): unique ids, referenced files,
+  `validate_project`, Python validators. Values pydantic coerces (`"30"` for an int) pass
+  `vidgen validate` but not the schema.
+- `describe._doc` is now public as `describe.scene_doc(entry)`. `jsonschema` is a dev
+  dependency (tests only).

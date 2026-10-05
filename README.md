@@ -73,6 +73,7 @@ narration.
 | `vidgen init DIR [--example minimal]` | create a new project (DIR must not exist or be empty) |
 | `vidgen validate [PROJECT] [--json]` | load config and extensions, report every problem (also in every variant), estimated length, audio status |
 | `vidgen list-scenes [PROJECT] [--json]` | scene types (built-in and the project's) with their params |
+| `vidgen schema [PROJECT] [--scene TYPE \| --all] [--json]` | JSON Schema of `video.yaml` (params checked per scene type, the project's extension types included), for editors and AI agents |
 | `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--variant NAME]` | generate missing/stale narration into `audio/`; `--dry-run` needs no key |
 | `vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going] [--jobs N] [--json]` | render and join the video |
 
@@ -86,6 +87,9 @@ parallel. Errors are printed as `error: ...` with exit code 1.
 config location, scene types with params/defaults/docs, output paths and per-scene durations;
 errors too, with a non-zero exit code) — for scripts and AI agents. The shapes are documented
 in [docs/CONFIG.md](docs/CONFIG.md#json-output---json).
+`vidgen schema > video.schema.json` writes a JSON Schema (draft 2020-12) that editors and
+agents can check `video.yaml` against before running `vidgen validate`; see
+[docs/CONFIG.md](docs/CONFIG.md#json-schema-vidgen-schema).
 
 ## Project layout
 

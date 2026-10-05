@@ -23,12 +23,13 @@ from vidgen.config import validation_problems
 from vidgen.describe import describe_params
 from vidgen.errors import Problem, VidgenError
 from vidgen.project import CONFIG_NAMES, Project
+from vidgen.theme import Theme
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 #: Template files copied as ``.<name>`` by ``vidgen init``.
 TEMPLATE_DOTFILES: tuple[str, ...] = ("gitignore",)
 #: Subcommands that accept ``--json``.
-JSON_COMMANDS: tuple[str, ...] = ("validate", "list-scenes", "render")
+JSON_COMMANDS: tuple[str, ...] = ("validate", "list-scenes", "render", "schema")
 
 #: What a command function returns: an exit code, or (with ``--json``) the JSON document.
 CommandResult = int | dict[str, Any]
@@ -271,23 +272,53 @@ def _print_scene_types() -> None:
             print(f"    {line}")
 
 
-def cmd_list_scenes(args: argparse.Namespace) -> CommandResult:
-    """Print every scene type (built-ins and the project's extensions) with its params."""
+@contextmanager
+def scene_types_session(path: str, lenient: bool = False) -> Iterator[tuple[Project | None, Theme]]:
+    """Activate the scene types of the project at ``path`` (built-ins + its extensions) and yield
+    ``(project, theme)``; with the default path and no config file in the current directory,
+    only the built-ins (``project`` is ``None``, default theme). ``lenient`` loads a project
+    whose config is invalid (see :func:`vidgen.schema.lenient_project`)."""
     from vidgen import extensions, registry
+    from vidgen.schema import lenient_project
 
-    if args.project == "." and not any((Path.cwd() / name).is_file() for name in CONFIG_NAMES):
-        # No project here: list the built-ins only.
+    if path == "." and not any((Path.cwd() / name).is_file() for name in CONFIG_NAMES):
         with registry.isolated():
             extensions.load_builtins()
-            if args.json:
-                return jsonout.list_scenes_document(None)
-            _print_scene_types()
-        return 0
-    project = Project.load(args.project)
-    with extensions.project_session(project):
+            yield None, Theme()
+        return
+    project = lenient_project(path) if lenient else Project.load(path)
+    with extensions.project_session(project) as theme:
+        yield project, theme
+
+
+def cmd_list_scenes(args: argparse.Namespace) -> CommandResult:
+    """Print every scene type (built-ins and the project's extensions) with its params."""
+    with scene_types_session(args.project) as (project, _):
         if args.json:
             return jsonout.list_scenes_document(project)
         _print_scene_types()
+    return 0
+
+
+def cmd_schema(args: argparse.Namespace) -> CommandResult:
+    """Print the JSON Schema of video.yaml (or of one scene type's params, or of a scene)."""
+    from vidgen import registry, schema
+
+    # Extension modules may print while importing; stdout must hold only the schema.
+    with redirect_stdout(sys.stderr), scene_types_session(args.project, lenient=True) as (project, theme):
+        themes = schema.project_themes(project, theme)
+        if args.scene is not None:
+            entry = registry.find(args.scene)
+            if entry is None:
+                raise VidgenError(registry.unknown_type_message(args.scene))
+            doc = schema.params_schema(entry, themes)
+        elif args.all:
+            doc = schema.scene_schema(registry.all(), themes)
+        else:
+            doc = schema.config_schema(registry.all(), themes)
+    if args.json:
+        return jsonout.schema_document(project, doc)
+    _print_json(doc)
     return 0
 
 
@@ -352,6 +383,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--keep-going", action="store_true", help="continue after a scene fails")
     p.add_argument("--jobs", "-j", type=int, default=1, metavar="N", help="render N scenes in parallel (default: 1)")
     p.set_defaults(func=cmd_render)
+
+    p = sub.add_parser("schema", help="print the JSON Schema of video.yaml")
+    project_arg(p)
+    which = p.add_mutually_exclusive_group()
+    which.add_argument("--scene", metavar="TYPE", help="only the params schema of this scene type")
+    which.add_argument("--all", action="store_true", help="the schema of one scene, with every type's params")
+    p.set_defaults(func=cmd_schema)
 
     for name in JSON_COMMANDS:
         json_arg(sub.choices[name])

@@ -20,7 +20,7 @@ from typing import Annotated, Any, NamedTuple, Union
 
 import av
 from manim import NORMAL, Animation, FadeOut, MarkupText, Scene, Text, config
-from pydantic import AfterValidator, BaseModel, ConfigDict, ValidationError, ValidationInfo
+from pydantic import AfterValidator, BaseModel, ConfigDict, GetJsonSchemaHandler, ValidationError, ValidationInfo
 
 from vidgen import helpers, runtime
 from vidgen.layout import distribute
@@ -70,6 +70,12 @@ class ThemeToken(NamedTuple):
     """Marker in ``ThemeColor``/``ThemeSize`` annotations (``kind`` is ``"color"`` or ``"size"``)."""
 
     kind: str
+
+    def __get_pydantic_json_schema__(self, core_schema: Any, handler: GetJsonSchemaHandler) -> dict[str, Any]:
+        """Mark the field's JSON Schema with ``x-vidgen-theme: <kind>`` (see ``vidgen.schema``)."""
+        schema = handler(core_schema)
+        schema["x-vidgen-theme"] = self.kind
+        return schema
 
 
 #: A ``Params`` field holding a color: a theme token (``"primary"``) or ``#hex``. Tokens are

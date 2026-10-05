@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "jsonschema>=4.18"]
 
 [project.scripts]
 vidgen = "vidgen.cli:main"

@@ -209,3 +209,11 @@ def render_document(
         elapsed=round(elapsed, 3),
         scenes=scenes,
     )
+
+
+# ----- schema ------------------------------------------------------------------------------------
+
+
+def schema_document(project: Project | None, schema: Mapping[str, Any], warnings: Iterable[Mapping[str, Any]] = ()) -> dict[str, Any]:
+    """The ``vidgen schema --json`` document: the JSON Schema under ``schema``."""
+    return envelope("schema", True, warnings, project=None if project is None else _path(project.root), schema=dict(schema))

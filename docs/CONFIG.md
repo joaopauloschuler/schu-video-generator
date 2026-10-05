@@ -7,7 +7,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 [format](#format-and-preview), [variants](#variants), [theme](#theme), [voice](#voice-voice),
 [narration](#narration-narration), [narration audio](#narration-audio-elevenlabs),
 [built-in scene types](#built-in-scenes),
-[JSON output of commands](#json-output---json).
+[JSON Schema](#json-schema-vidgen-schema), [JSON output of commands](#json-output---json).
 
 ## Top level
 
@@ -460,9 +460,46 @@ One block of text, wrapped to fit, faded in at the first beat and held (no fade-
   duration: 2
 ```
 
+## JSON Schema (`vidgen schema`)
+
+`vidgen schema [PROJECT]` prints a [JSON Schema](https://json-schema.org) (draft 2020-12) of
+`video.yaml` for the project's scene types: the built-ins plus its extensions (without a
+PROJECT and no config file in the current folder: the built-ins only). Editors (e.g. the YAML
+language server: `# yaml-language-server: $schema=video.schema.json` on the first line) and AI
+agents can check a config with it before running `vidgen validate`:
+
+```
+vidgen schema > video.schema.json          # the whole config
+vidgen schema --scene bar_chart            # one scene type's params
+vidgen schema --all                        # one item of `scenes`, with every type's params
+```
+
+What the schema checks: every key and type of this reference (unknown keys are errors);
+`scenes[].type` is one of the registered types and `scenes[].params` is checked against that
+type's params (`if`/`then` per type: required params, types, `Literal` values, ranges, nested
+models); a type's fixed beat count (`minItems`/`maxItems` of `beats`); the silent-scene rule
+(`duration` exactly when there are no beats); even `width`/`height`; and the bodies of
+`variants` (partial configs: the same keys, none required). Color and size params accept a
+`#hex` color / a positive number or a token name of the project's theme (defaults, extension
+defaults, `theme.colors`/`theme.sizes` of the base config and of every variant); such
+properties carry `"x-vidgen-theme": "color"` or `"size"`. Descriptions come from the field
+docs (the same text as `doc` in `vidgen list-scenes --json`).
+
+What only `vidgen validate` checks: unique scene and beat ids, files referenced by params
+(images, code, logos), the checks written in Python (`validate_project`, pydantic validators,
+e.g. "values has one entry per label") and loading the extensions. A schema-valid config can
+still fail `vidgen validate`. The reverse happens only for values vidgen converts, such as
+the string `"30"` for a number: write values with their real type (tests check both
+directions on the examples and on common mistakes).
+
+The schema is generated for the project as it is now: regenerate it after adding scene types,
+theme tokens or variants. If `video.yaml` is invalid, `vidgen schema` still works (that is
+when it is most useful): it uses the file's `extensions` and `theme` as far as they are valid
+and prints a warning. `--scene` with an unknown type is an error (exit code 1).
+
 ## JSON output (`--json`)
 
-`vidgen validate`, `vidgen list-scenes` and `vidgen render` accept `--json`: stdout then holds
+`vidgen validate`, `vidgen list-scenes`, `vidgen render` and `vidgen schema` accept `--json`: stdout then holds
 exactly one JSON document (ASCII-only, non-ASCII characters escaped), and everything else
 (progress, `warning:` lines, Manim output) goes to stderr. These shapes are meant for programs
 and AI agents driving vidgen. Without `--json` the human output is unchanged.
@@ -477,7 +514,7 @@ it. Times are seconds (floats), paths are absolute strings, absent values are `n
 |---|---|---|
 | `version` | int | schema version of the document (1) |
 | `vidgen` | str | vidgen package version |
-| `command` | str \| null | `validate`, `list-scenes`, `render` (`null` if the command line could not be parsed) |
+| `command` | str \| null | `validate`, `list-scenes`, `render`, `schema` (`null` if the command line could not be parsed) |
 | `ok` | bool | `true` on success; the exit code is 0 exactly when `ok` is true |
 | `warnings` | list | `{scene, message}`: vidgen warnings of the run (`scene` is `null`, or the scene whose render printed it) |
 | `error` | object | only when `ok` is false: `{kind, message, problems, details}` |
@@ -533,6 +570,16 @@ Each field: `name`; `type` (readable type as in the human listing: `str`, `list[
 `color`, `size`, `'all' | 'per_beat'`, ...); `required` (bool); `default` (JSON value, `null`
 when required); `doc` (the docstring under the field or its `Field(description=...)`, or
 `null`); `nested` (fields of `SceneParams` models used in the type, as `{model, fields}`).
+
+### `vidgen schema --json`
+
+| key | type | |
+|---|---|---|
+| `project` | str \| null | the project whose scene types were used (`null`: built-ins only) |
+| `schema` | object | the JSON Schema that `vidgen schema` prints without `--json` |
+
+`warnings` includes the warning about an invalid `video.yaml` (see
+[JSON Schema](#json-schema-vidgen-schema)).
 
 ### `vidgen render --json`
 

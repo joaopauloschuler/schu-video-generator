@@ -18,6 +18,7 @@ from pydantic import (
     PositiveFloat,
     PositiveInt,
     ValidationError,
+    WithJsonSchema,
     field_validator,
     model_validator,
 )
@@ -29,21 +30,27 @@ HEX_COLOR_PATTERN = r"^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$"
 
 Identifier = Annotated[str, Field(pattern=ID_PATTERN)]
 HexColor = Annotated[str, Field(pattern=HEX_COLOR_PATTERN)]
-Size = Annotated[int | float, Field(gt=0)]
+#: A positive font size (pydantic would put a non-standard ``gt`` into the JSON Schema of the union).
+Size = Annotated[int | float, Field(gt=0), WithJsonSchema({"type": "number", "exclusiveMinimum": 0})]
+#: JSON Schema hint for even pixel sizes (the check itself is ``FormatConfig._even``).
+_EVEN = {"multipleOf": 2}
 
 
 class _Strict(BaseModel):
     """Base for structural models: unknown keys are an error (typo protection)."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", use_attribute_docstrings=True)
 
 
 class FormatConfig(_Strict):
     """Resolution and frame rate of a render."""
 
-    width: PositiveInt = 1920
-    height: PositiveInt = 1080
+    width: PositiveInt = Field(default=1920, json_schema_extra=_EVEN)
+    """Width in pixels (even)."""
+    height: PositiveInt = Field(default=1080, json_schema_extra=_EVEN)
+    """Height in pixels (even)."""
     fps: PositiveInt = 30
+    """Frames per second."""
 
     @field_validator("width", "height")
     @classmethod
@@ -66,44 +73,63 @@ class ThemeConfig(_Strict):
     """
 
     background: HexColor = "#0E1116"
+    """Background color (hex)."""
     font: str = "Inter"
+    """Font family for all text."""
     colors: dict[Identifier, HexColor] = Field(default_factory=dict)
+    """Color tokens (name: hex) merged over the defaults; projects may add any name."""
     palette: list[HexColor] | None = Field(default=None, min_length=1)
+    """Ordered series colors (charts, groups); replaces the default palette."""
     sizes: dict[Identifier, Size] = Field(default_factory=dict)
+    """Font size tokens (name: points) merged over the defaults; projects may add any name."""
 
 
 class VoiceSettings(_Strict):
     """ElevenLabs ``voice_settings``."""
 
     stability: float = Field(default=0.55, ge=0, le=1)
+    """ElevenLabs stability (0-1)."""
     similarity_boost: float = Field(default=0.75, ge=0, le=1)
+    """ElevenLabs similarity boost (0-1)."""
     style: float = Field(default=0.0, ge=0, le=1)
+    """ElevenLabs style exaggeration (0-1)."""
     use_speaker_boost: bool = True
+    """ElevenLabs speaker boost."""
 
 
 class VoiceConfig(_Strict):
     """Text-to-speech voice. Only the ElevenLabs provider exists for now."""
 
     provider: Literal["elevenlabs"] = "elevenlabs"
+    """TTS provider; only elevenlabs."""
     voice_id: str = Field(default="nPczCjzI2devNBz1zQrb", min_length=1)
+    """ElevenLabs voice id."""
     model_id: str = Field(default="eleven_multilingual_v2", min_length=1)
+    """ElevenLabs model id."""
     output_format: str = Field(default="mp3_44100_128", min_length=1)
+    """ElevenLabs output format."""
     settings: VoiceSettings = Field(default_factory=VoiceSettings)
+    """ElevenLabs voice_settings."""
     context: bool = True
+    """Send the neighbouring beats' text for continuous intonation."""
 
 
 class NarrationConfig(_Strict):
     """Timing of narrated beats."""
 
     pad: float = Field(default=0.35, ge=0)
+    """Seconds of silence after each beat."""
     words_per_second: PositiveFloat = 2.6
+    """Speech rate used to estimate a beat's duration when it has no audio yet."""
 
 
 class BeatConfig(_Strict):
     """One narrated sentence/paragraph. ``id`` is filled in by :class:`SceneConfig` if omitted."""
 
     id: Identifier
+    """Unique in the whole video (names audio/<id>.mp3); default <scene id>_b<n> (1-based)."""
     text: str = Field(min_length=1)
+    """What the narrator says; also the subtitle."""
 
     def estimated_duration(self, words_per_second: float) -> float:
         """Speech duration estimated from the word count (no padding)."""
@@ -119,10 +145,15 @@ class SceneConfig(_Strict):
     """
 
     id: Identifier
+    """Scene id (letters, digits, _), unique."""
     type: Identifier
+    """Scene type: a built-in or project extension type (`vidgen list-scenes`)."""
     params: dict[str, Any] = Field(default_factory=dict)
+    """Parameters of the scene type."""
     beats: list[BeatConfig] = Field(default_factory=list)
+    """Narrated beats in order; each animation lasts as long as its audio plus narration.pad."""
     duration: PositiveFloat | None = None
+    """Seconds; required on a silent scene (no beats), not allowed on a scene with beats."""
 
     @model_validator(mode="before")
     @classmethod
@@ -159,15 +190,25 @@ class VideoConfig(_Strict):
     """The whole ``video.yaml``."""
 
     title: str = Field(min_length=1)
+    """The video's title."""
     output: str | None = Field(default=None, pattern=r"^[^/\\:*?\"<>|]+$")
+    """Base name of the output files (no path separators); default: the project folder name."""
     format: FormatConfig = Field(default_factory=FormatConfig)
+    """Final render resolution and frame rate."""
     preview: FormatConfig = Field(default_factory=_preview_format)
+    """Resolution and frame rate of `vidgen render --preview`."""
     variants: dict[Identifier, dict[str, Any]] = Field(default_factory=dict)
+    """Named overrides deep-merged onto this config (mappings merge, lists and scalars replace)."""
     theme: ThemeConfig = Field(default_factory=ThemeConfig)
+    """Colors, sizes, font and background."""
     voice: VoiceConfig = Field(default_factory=VoiceConfig)
+    """Text-to-speech voice."""
     narration: NarrationConfig = Field(default_factory=NarrationConfig)
+    """Beat padding and duration estimate."""
     extensions: list[str] = Field(default_factory=lambda: ["extensions"])
+    """Folders (relative to the project) whose *.py files and packages are imported."""
     scenes: list[SceneConfig] = Field(min_length=1)
+    """The scenes in order (at least one); scene ids and beat ids must be unique."""
 
     @field_validator("variants")
     @classmethod
