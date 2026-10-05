@@ -1,0 +1,264 @@
+# vidgen — design spec
+
+A configurable generator for narrated, animated explainer videos (Manim + ElevenLabs + ffmpeg).
+It generalises the one-off `kphi3_paper_video` project: the pipeline is shared, each video is a
+**project folder** with a config file, and each project can **extend** the tool with its own
+scene types, helpers, theme tokens and pipeline hooks.
+
+Status of this document: agreed contract for all implementation steps. Changing a public
+interface defined here requires updating this file in the same commit and noting it in HANDOFF.md.
+
+---
+
+## 1. Goals and non-goals
+
+Goals
+- One engine, many videos. A new video = a new project folder, no engine edits.
+- Config-only videos for common explainers (built-in scene library).
+- **First-class extensibility**: any project can add new scene types, helpers, theme tokens and
+  hooks in its own `extensions/` folder, and use them from config by name. A project extension can
+  later be promoted into the core library unchanged.
+- Narration-driven timing: every beat's animation lasts as long as its audio (+ padding).
+- Incremental work: TTS only for changed beats; render one scene at a time; fast previews.
+- Runs on Windows (primary user platform), Linux and macOS.
+
+Non-goals (for now)
+- Voice providers other than ElevenLabs (keep a small seam, but implement ElevenLabs only).
+- Declarative animation DSL. Complex animation lives in Python scene classes.
+- GUI / web editor.
+
+## 2. Repository layout
+
+```
+pyproject.toml            # package "vidgen", console script `vidgen`, Python >= 3.10
+src/vidgen/
+  __init__.py             # __version__
+  __main__.py             # `python -m vidgen` -> cli.main()
+  api.py                  # THE public surface for project extensions (see §6)
+  cli.py                  # argparse CLI (see §8)
+  config.py               # pydantic v2 models for video.yaml (see §4)
+  project.py              # Project: locate/load config, resolve paths, variants
+  theme.py                # Theme object (colors, font, sizes, background)
+  registry.py             # scene-type registry
+  extensions.py           # discovery + import of project extensions
+  hooks.py                # hook registry + dispatch
+  runtime.py              # "current project/theme" context used by helpers and extensions
+  scene.py                # NarratedScene base class + narrate()
+  helpers.py              # theme-aware text helpers and generic drawing utilities
+  tts/__init__.py         # provider seam: get_provider(cfg)
+  tts/elevenlabs.py       # ElevenLabs provider (stdlib urllib), cache by hash
+  render/                 # per-scene render, audio padding, concat, timings
+  subtitles.py            # SRT from beat timings
+  scenes/                 # built-in scene library (registered like extensions)
+tests/                    # pytest; no network; slow renders marked `render`
+examples/
+  minimal/                # config-only example using built-ins
+  kphi3/                  # migrated paper video, custom scenes as extensions
+docs/
+  CONFIG.md               # config reference
+  EXTENDING.md            # how to write project extensions
+DESIGN.md  CLAUDE.md  HANDOFF.md  README.md
+```
+
+## 3. Project folder layout
+
+```
+my_video/
+  video.yaml              # config (video.json also accepted)
+  extensions/             # optional; every *.py and every package here is auto-imported
+  assets/                 # images, data files referenced by scenes (paths relative to project)
+  audio/                  # generated: <beat_id>.mp3 + <beat_id>.hash  (kept, cheap to reuse)
+  build/                  # generated: manim media, per-scene mp4, timings json, concat list
+  <output>.mp4            # final video   (<output>_preview.mp4 for previews,
+  <output>.srt            #               <output>_<variant>.mp4 for variants)
+```
+
+## 4. Config schema (`video.yaml`)
+
+Pydantic v2 models in `config.py`. Unknown top-level keys are an error (typo protection);
+`params` of scenes and `theme.colors` are open dictionaries.
+
+```yaml
+title: "Saving 77% of the Parameters in LLMs"   # required
+output: kphi3_video                              # basename of output files; default: folder name
+
+format:                                          # final render
+  width: 1920
+  height: 1080
+  fps: 30
+preview:                                         # `--preview` render
+  width: 854
+  height: 480
+  fps: 15
+
+variants:                                        # optional named overrides, deep-merged onto the config
+  vertical:
+    format: {width: 1080, height: 1920}
+    preview: {width: 480, height: 854}
+
+theme:
+  background: "#0E1116"
+  font: Inter
+  colors:                                        # open dict; these names are the defaults
+    text: "#E8EAED"
+    dim: "#6B7280"
+    accent: "#FF6B6B"
+    highlight: "#FFD166"
+    primary: "#58C4DD"
+    secondary: "#F2A541"
+    tertiary: "#83C167"
+    # projects may add any name, e.g. k2: "#F2A541"
+  palette: ["#58C4DD", "#F2A541", "#C792EA", "#83C167"]   # ordered series colors (charts, groups)
+  sizes: {title: 56, subtitle: 42, heading: 36, body: 32, caption: 24, small: 20}
+
+voice:
+  provider: elevenlabs                           # only allowed value for now
+  voice_id: nPczCjzI2devNBz1zQrb
+  model_id: eleven_multilingual_v2
+  output_format: mp3_44100_128
+  settings: {stability: 0.55, similarity_boost: 0.75, style: 0.0, use_speaker_boost: true}
+  context: true                                  # send previous_text/next_text for continuity
+
+narration:
+  pad: 0.35                                      # seconds of silence after each beat
+  words_per_second: 2.6                          # duration estimate when a beat has no audio
+
+extensions: [extensions]                         # dirs (relative to project) to auto-import; default shown
+
+scenes:
+  - id: intro                                    # required, unique, [A-Za-z0-9_]+
+    type: title                                  # registered scene type (built-in or extension)
+    params:                                      # validated by the scene type's Params model, if any
+      title: "Saving 77% of the Parameters"
+      subtitle: "in Large Language Models"
+    beats:
+      - id: s1_b1                                # optional; default f"{scene.id}_b{n}" (1-based)
+        text: "What if a large language model ..."
+      - text: "This technical report ..."
+```
+
+Validation rules: beat ids unique across the whole video; scene ids unique; `type` must be
+registered after extensions load (`vidgen validate` reports unknown types with the list of known
+ones); `params` validated against the scene class's `Params` model when it defines one.
+
+## 5. Scene runtime
+
+### 5.1 `NarratedScene` (in `scene.py`, subclass of `manim.Scene`)
+
+Attributes available inside `construct()`:
+- `self.spec` — the `SceneConfig` from video.yaml
+- `self.params` — validated params (instance of the class's `Params` model, or a plain dict)
+- `self.beats` — list of `BeatConfig` in order
+- `self.theme` — the active `Theme`
+- `self.project` — the active `Project` (paths: `self.project.asset(rel)` resolves assets)
+
+Methods:
+- `with self.narrate(beat) as d:` — `beat` is a beat id **or** 0-based index into `self.beats`.
+  Adds the beat's MP3 (if present) at the current time, yields its duration `d` (audio length,
+  or the word-count estimate), and on exit waits until `d + pad` has elapsed. Records
+  `(beat_id, start, end, text)` into `self.beat_log` (used for subtitles).
+- `self.beat_duration(beat) -> float`
+- `self.clear_all(run_time=0.6)` — fade out everything.
+- `self.narrate_all()` — convenience generator: `for beat, d in self.narrate_all(): ...`.
+
+Theme-aware text: `self.text(s, size="body"|int, color="text"|"#hex", weight=...)` and
+`self.markup(...)`; sizes and colors accept theme token names or literal values.
+
+### 5.2 How a scene gets rendered
+
+The renderer renders **each scene in its own subprocess** (Manim's global config is not
+re-entrant): `python -m vidgen.render.worker <project_dir> <scene_id> --quality final|preview
+[--variant NAME] [--no-audio]`. The worker:
+1. loads the project + variant, builds the Theme, sets the runtime context (§6.3),
+2. imports built-in scenes and project extensions,
+3. configures Manim (resolution, fps, background, explicit `media_dir` under `build/`, explicit
+   output file name — never guess Manim's folder naming),
+4. instantiates the registered class for `scene.type`, injects spec/params/beats/theme/project,
+   renders, and writes `build/<quality>[_<variant>]/timings/<scene_id>.json` from `beat_log`.
+
+The parent then pads each scene's audio with silence to the exact video length, concatenates in
+config order, and writes the final MP4 and SRT (SRT times = scene offset + beat start/end).
+
+## 6. Extension system (the core requirement)
+
+### 6.1 Discovery
+For each directory in `extensions` (default `extensions/`, silently skipped if absent):
+every `*.py` file (not starting with `_`) and every sub-package is imported, in sorted order,
+under a private package name `vidgen_ext_<sanitised project name>` so that extension modules can
+import each other with relative imports (`from .common import column`). The project's
+directory is **not** put on `sys.path` globally. Import errors are reported with the file name
+and the original traceback.
+
+### 6.2 What an extension can register (all via `vidgen.api`)
+```python
+from vidgen.api import *          # NarratedScene, scene, hook, theme helpers, manim names
+
+@scene("loss_panel")              # name used as `type:` in video.yaml
+class LossPanel(NarratedScene):
+    class Params(SceneParams):    # optional pydantic model for params validation
+        values: dict[str, float]
+        best: str | None = None
+
+    def construct(self):
+        with self.narrate(0) as d:
+            ...
+
+@hook("post_render")              # events: pre_tts, post_tts, pre_render, post_scene, post_render
+def add_watermark(ctx): ...       # ctx: HookContext(project, event, data: dict)
+
+register_theme_defaults({"k2": "#F2A541"})   # extra theme tokens; video.yaml values still win
+```
+- **Scene types**: `@scene(name, *, override=False)`. Name collision with another extension is an
+  error. Colliding with a built-in raises unless `override=True`, which replaces it and logs a
+  warning (`vidgen list-scenes` marks it as overridden).
+- **Helpers**: plain Python functions/modules inside `extensions/`; shared via relative imports.
+- **Theme tokens**: `register_theme_defaults()`; `theme.color("k2")`, `theme.size("body")`.
+- **Hooks**: `@hook(event)`; called in registration order; exceptions abort the command with the
+  hook's name in the message.
+- **Promotion**: an extension module copied into `src/vidgen/scenes/` works unchanged, because
+  built-ins use exactly the same `@scene` API.
+
+### 6.3 Runtime context
+`vidgen.runtime` holds the active Project and Theme. It is set **before** extensions are imported,
+so module-level code in an extension may read theme values
+(`C_BASE = current_theme().color("primary")`). `api.T(...)` / `api.MT(...)` are function forms of
+`self.text`/`self.markup` that use the current theme — this makes porting old scripts easy.
+
+### 6.4 `vidgen.api` exports (stable surface)
+`NarratedScene, SceneParams, scene, hook, HookContext, register_theme_defaults, current_theme,
+current_project, T, MT`, generic helpers from `helpers.py`, and `from manim import *`.
+Anything not exported from `vidgen.api` is internal and may change.
+
+## 7. TTS (ElevenLabs)
+
+- Endpoint `POST https://api.elevenlabs.io/v1/text-to-speech/{voice_id}?output_format=...`,
+  header `xi-api-key` from env `ELEVENLABS_API_KEY`. Standard library only (urllib).
+- Cache key: sha1 of `voice_id | model_id | output_format | json(settings, sorted keys) | text`,
+  stored as `audio/<beat_id>.hash`. Neighbouring beats' text is sent as `previous_text` /
+  `next_text` for intonation but is **not** hashed, so editing one beat regenerates only that beat.
+- Backward compatibility: the kphi3 hash format (`sha1(voice_id + model_id + text)`) is also
+  accepted as "up to date" when settings/output_format equal the old defaults, so existing audio
+  is reused without paying for regeneration.
+- `vidgen tts [--force] [--dry-run] [--beat ID ...]`; dry run lists what would be generated and the
+  character count. Missing API key → clear error, no traceback. HTTP errors show status + body.
+- Orphaned mp3s (beat ids no longer in config) are reported, not deleted.
+- Tests mock `urllib.request.urlopen`; no network.
+
+## 8. CLI
+
+```
+vidgen init <dir> [--example minimal]   # scaffold a project
+vidgen validate [PROJECT]               # load config + extensions, report all errors
+vidgen list-scenes [PROJECT]            # built-ins + extensions (+ which overrides)
+vidgen tts [PROJECT] [--force] [--dry-run] [--beat ID ...]
+vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going]
+```
+PROJECT defaults to the current directory. `--scene` re-renders only those scenes and re-joins
+using the existing renders of the others (missing ones are rendered). Exit code non-zero on error.
+
+## 9. Testing
+
+- `pytest -q` must pass at every step. No network, no API keys.
+- Tests that invoke Manim rendering are marked `@pytest.mark.render` and use tiny resolutions
+  (e.g. 160x90 @ 5 fps); they run by default but can be skipped with `-m "not render"`.
+- ffmpeg is required on PATH for render tests; skip with a clear reason if missing.
