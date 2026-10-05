@@ -661,3 +661,79 @@ Known gaps / TODOs
 How to test: `/home/claude/venv/bin/python -m pytest -q` (455 passed, 1 skipped; needs the dev
 extra `jsonschema`: `pip install -e .[dev]`). Manual: `vidgen schema examples/custom_scene`,
 `vidgen schema --scene bar_chart`, `vidgen schema --all --json`.
+
+## Step 10 — Frame capture in the worker
+What was built
+- `vidgen render --frames` saves a PNG still of the **last frame of every beat** (what is on
+  screen when the beat's narration + pad is over); `--frames-per-beat N` saves N evenly spaced
+  stills per beat, the last at its end (implies `--frames`). Off by default. Works with
+  `--preview`, `--variant`, `--scene`, `--jobs`, `--no-audio` and `--json`.
+- Files in `build/<final|preview>[_<variant>]/frames/`: `<scene>/<beat>-<k>.png` (silent scenes:
+  `<scene>-<k>.png`), `<scene>/index.json` (`{scene, per_beat, width, height, fps, frames:
+  [{beat, k, n, frame, time, path}]}`, time from scene start) and `index.json` for the whole
+  video (`time` in the video, `scene_time`, `path` relative to `frames/`; scene `start`/
+  `duration`). Silent scenes are one segment of `duration - outro` (the still is taken before
+  the fade-out).
+- Capture hook (`vidgen/capture.py`): `FrameCapture(per_beat, listeners)` wraps
+  `renderer.add_frame`; `NarratedScene.narrate()` marks beat start/end
+  (`begin_segment`/`end_segment`), silent scenes are planned at construction, `tear_down`
+  calls `finish()`. Listeners `(scene, CapturedFrame)` run at the captured frame with the scene
+  in that frame's state — **Step 12 attaches its layout dump here** (append a listener in the
+  worker next to `StillWriter`, or pass it in `FrameCapture(..., [writer, layout])`).
+- Docs: docs/CONFIG.md "Frame stills (`vidgen render --frames`)" + `outputs.frames` in the
+  render JSON table; README (command table, options, layout); EXTENDING.md (hook keys, where
+  stills are taken, `self.capture`); `examples/minimal/video.yaml` usage line; DESIGN §2, §3,
+  §6.2, §8 and new §13.
+
+Files
+- New: `src/vidgen/capture.py`, `tests/test_frames.py` (16 tests, 4 render tests).
+- Changed: `scene.py` (`capture=` kwarg, `self.capture`, calls in `narrate`/`__init__`/
+  `tear_down`), `render/worker.py` (`--frames N`, `scene_frames_dir`, `remove_tree`, stills
+  folder cleared before every render, `render.frames` in timings), `render/pipeline.py`
+  (`frames=` arg, `write_frames_index`, `_usable_render` checks stills, combined index removed
+  before each render, hook keys), `cli.py` (`--frames`, `--frames-per-beat`, `frames:` line),
+  `jsonout.py` (`outputs.frames`), `tests/test_json_output.py` (outputs now include `frames`),
+  docs above, tasklist.md.
+
+Public interfaces added/changed
+- `NarratedScene(spec, project=None, theme=None, *, audio=True, capture=None, ...)`;
+  attribute `self.capture` (`FrameCapture | None`). `vidgen.api` exports unchanged.
+- `vidgen.capture`: `FrameCapture(per_beat=1, listeners=())` (`.attach(scene)`,
+  `.begin_segment(beat_id, frames, *, include_end)`, `.end_segment(beat_id)`, `.finish()`,
+  `.listeners`, `.frames_written`), `CapturedFrame`, `CaptureListener`, `StillWriter(folder)`
+  (`.entries`, `.index(...)`), `plan_targets(start, frames, n, include_end)`.
+- `render_project(..., frames=0)`, `RenderResult.frames_index`, `pipeline.write_frames_index`;
+  `worker.render_scene(..., frames=0)`, `worker.scene_frames_dir`, `worker.remove_tree`.
+- Hook data: `post_scene.frames`, `post_render.frames_index` (both `None` without frames).
+- `render --json`: `outputs.frames` (added within JSON version 1).
+
+Decisions / deviations
+- Captured from Manim's renderer, not by decoding the MP4: exact pixels and frame index (no
+  H.264 loss or seek rounding), no extra pass, and listeners see the live scene state at that
+  moment, which Step 12 needs. The stills are the uncompressed frames (tests compare them with
+  the decoded video: same frame, small codec difference).
+- "End of beat" = last frame of the beat including `narration.pad` (the frame before the next
+  beat starts), taken when the beat actually ends, so it is right even when a beat's animations
+  overrun. Mid-beat stills are planned from `round((d + pad) * fps)`.
+- CLI: two flags (`--frames`, `--frames-per-beat N`) instead of `--frames [N]`, because an
+  optional value would swallow the PROJECT argument (`vidgen render --frames proj`).
+- Stills are always deleted when a scene is re-rendered (with or without `--frames`), and
+  `frames/index.json` on every render, so nothing stale is ever indexed. Requesting stills makes
+  scenes without matching stills non-reusable (`--scene` renders them again).
+- The listener API is internal (`vidgen.capture`), not in `vidgen.api`; `self.capture` is
+  documented as internal in EXTENDING.md.
+
+Known gaps / TODOs
+- Stills are only taken by narrated beats via `narrate()` (incl. `narrate_all`, `timeline`,
+  `reveal`) and for silent scenes; a scene that never calls `narrate` for its beats gets no
+  stills for them (it already warns about un-narrated beats).
+- Only the Cairo renderer is supported (vidgen never selects OpenGL).
+- No max for N; large N at final quality writes many 1080p PNGs (Step 11 storyboard will
+  normally use preview).
+- Step 11: build contact sheets from `frames/index.json` + `timings.json` (beat texts); default
+  to `--preview`. Step 12: add a layout listener (scene mobjects → pixel bboxes) to the same
+  `FrameCapture` in `worker.render_scene`.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (471 passed, 1 skipped). Manual:
+`vidgen render examples/minimal --preview --frames-per-beat 2 --jobs 4`, then look at
+`examples/minimal/build/preview/frames/`.

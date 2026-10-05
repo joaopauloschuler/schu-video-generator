@@ -52,6 +52,7 @@ src/vidgen/
   hooks.py                # hook registry + dispatch
   runtime.py              # "current project/theme" context used by helpers and extensions
   scene.py                # NarratedScene base class + narrate()
+  capture.py              # frame capture: stills at beat ends / N per beat (see §13)
   helpers.py              # theme-aware text helpers and generic drawing utilities
   layout.py               # fit/wrap text, beat distribution, chart numbers, LaTeX detection
   tts/__init__.py         # provider seam: get_provider(cfg)
@@ -90,6 +91,8 @@ with Manim's own audio) and `scenes/<id>.wav` (Manim's uncompressed sound mix, o
 has sound), `timings/<id>.json` (beat timings + the render settings), `media/` (Manim's
 intermediate files), `padded/<id>.wav` (each scene's audio padded to its exact video length) with
 `padded/video_concat.txt` / `audio_concat.txt`, and `timings.json` (the whole video).
+With `--frames` (Step 10, §13) also `frames/<id>/*.png` + `frames/<id>/index.json` and
+`frames/index.json`.
 
 ## 4. Config schema (`video.yaml`)
 
@@ -375,6 +378,8 @@ register_theme_defaults({"k2": "#F2A541"})   # extra theme tokens; video.yaml va
   `dry_run: bool`; dispatched on dry runs too. `post_tts` — `generated: list[str]` (ids written,
   in order), `audio_dir: Path`; not dispatched on dry runs or when the command fails. The API key
   is never part of hook data.
+- **Hook data** (Step 10): `post_scene` also gets `frames` (the scene's stills folder, or `None`
+  without `--frames`), `post_render` gets `frames_index` (`frames/index.json` or `None`).
 - **Hook data** (Step 4, render; hooks run in the parent `vidgen render` process): `pre_render` —
   `scenes: list[str]` (ids about to be rendered, config order; a hook may remove ids to reuse
   their existing render), `preview: bool`, `variant: str | None`, `no_audio: bool`,
@@ -518,7 +523,7 @@ vidgen list-scenes [PROJECT] [--json]   # built-ins + extensions (+ which overri
 vidgen schema [PROJECT] [--scene TYPE | --all] [--json]   # JSON Schema of video.yaml (§12)
 vidgen tts [PROJECT] [--force] [--dry-run] [--beat ID ...] [--variant NAME]
 vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going]
-              [--jobs N] [--json]
+              [--jobs N] [--frames] [--frames-per-beat N] [--json]
 ```
 PROJECT defaults to the current directory. `--scene` re-renders only those scenes and re-joins
 using the existing renders of the others (missing ones are rendered). Exit code non-zero on error.
@@ -646,3 +651,56 @@ using the existing renders of the others (missing ones are rendered). Exit code 
   `vidgen validate` but not the schema.
 - `describe._doc` is now public as `describe.scene_doc(entry)`. `jsonschema` is a dev
   dependency (tests only).
+
+## 13. Refinements (Step 10, frame capture)
+
+- **Option**: `vidgen render --frames` (one still per beat, its last frame) or
+  `--frames-per-beat N` (N evenly spaced stills per beat; implies `--frames`; N >= 1);
+  `render_project(..., frames=N)` (0 = off, the default); worker flag `--frames N`. Off by
+  default. Reference: docs/CONFIG.md "Frame stills".
+- **Where stills are taken** (`vidgen.capture`): a `FrameCapture(per_beat, listeners)` is
+  passed to the scene (`NarratedScene(..., capture=None)`, keyword-only, available as
+  `self.capture`) and wraps `scene.renderer.add_frame`, the single point where Manim's Cairo
+  renderer hands every frame (`num_frames` copies for a frozen wait) to the file writer. It
+  counts frames written (skipped animations are not written and not counted), so a still's
+  `frame` is its 0-based index in the scene's video and `time = frame / fps`. The wrapper calls
+  the original unchanged and only reads the array (Manim passes a fresh copy), so frames,
+  `renderer.time` and the beat log are identical to a render without capture (tested:
+  identical per-scene timings and frame counts). `narrate()` calls `begin_segment(beat_id,
+  round((d + pad) * fps), include_end=False)` on entry and `end_segment(beat_id)` after its
+  wait: still `k < N` is planned on entry on the last frame before `k/N` of the beat
+  (`capture.plan_targets`) and taken when that frame is written; still `N` is the last frame
+  written when the beat ends (exact even if the beat's animations overran `d + pad`). A
+  silent scene is one segment (`beat_id = None`) of `duration - outro` (at least one frame),
+  planned with its end at construction; `tear_down` calls `finish()`, which takes planned
+  stills never reached from the last frame. Stills of a short beat that fall on the same frame
+  are merged (highest `k` kept).
+- **Listeners** (the seam for Step 12 layout introspection): `capture.listeners` is a list of
+  `CaptureListener = Callable[[NarratedScene, CapturedFrame], None]`, called at the moment the
+  captured frame is written (mid-beat: inside `add_frame`, after Manim updated the mobjects to
+  that frame; end of beat: right after the beat's wait), so `scene.mobjects`, the camera and
+  `renderer` are in the state of that frame. `CapturedFrame(scene_id, beat_id, k, n, frame,
+  time, pixels)` (`pixels`: H x W x 4 RGBA uint8). `StillWriter(folder)` is the listener that
+  writes `<beat>-<k>.png` (`<scene>-<k>.png` for silent scenes; RGB PNG via Pillow, atomic)
+  and builds the scene index.
+- **Why from the renderer, not by decoding the MP4**: exact pixels and exact frame index (no
+  H.264 loss, no seeking/rounding of times), no second pass over the video, works the same for
+  every Manim/PyAV version, and it gives listeners the live scene state at the same moment
+  (decoding the video afterwards could not). Cost: PNG encoding during the render (~ms per
+  still at preview size).
+- **Files** (`worker.scene_frames_dir`): `<render_dir>/frames/<scene>/` with the PNGs and
+  `index.json` = `{scene, per_beat, width, height, fps, frames: [{beat, k, n, frame, time,
+  path}]}` (time from scene start, path relative to the folder); the parent writes
+  `frames/index.json` after joining (`pipeline.write_frames_index`) = `{title, variant,
+  preview, format, per_beat, vidgen, scenes: [{id, start, duration, frames}]}` with `time` in
+  the video, `scene_time` and `path` relative to `frames/`. The per-scene timings' `render`
+  block records `frames` (stills per beat, 0 = none).
+- **Staleness**: the worker deletes the scene's stills folder before every render (so stills
+  always match the scene's current render; `worker.remove_tree`, a locked file is a
+  `VidgenError`), and `render_project` deletes `frames/index.json` before rendering. With
+  frames requested, `_usable_render` also requires the render's `frames` to equal the count
+  and its index to exist, so `--scene ID --frames` renders other scenes again when they have no
+  such stills. A scene a `pre_render` hook kept from rendering without matching stills gets an
+  empty list in the combined index and a warning.
+- **Outputs**: `RenderResult.frames_index` (`Path | None`); `vidgen render` prints `frames:
+  <index>`; `render --json` `outputs.frames` (path or `null`; key added within version 1).

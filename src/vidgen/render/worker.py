@@ -1,10 +1,11 @@
 """Render one scene in its own process (DESIGN.md §5.2)::
 
     python -m vidgen.render.worker <project_dir> <scene_id> --quality final|preview
-        [--variant NAME] [--no-audio] [--progress]
+        [--variant NAME] [--no-audio] [--progress] [--frames N]
 
 Writes ``<render_dir>/scenes/<scene_id>.mp4`` and ``<render_dir>/timings/<scene_id>.json``
-(``render_dir`` = ``build/<final|preview>[_<variant>]``). Exit code 0 on success, 1 for a
+(``render_dir`` = ``build/<final|preview>[_<variant>]``); with ``--frames N``, also N PNG stills
+per beat and an index in ``<render_dir>/frames/<scene_id>/`` (see :mod:`vidgen.capture`). Exit code 0 on success, 1 for a
 :class:`VidgenError` (message on stderr as ``error: ...``), 2 for any other exception (full
 traceback on stderr, so extension authors see where their scene code failed).
 
@@ -26,7 +27,7 @@ from typing import Any
 
 from vidgen import __version__
 from vidgen.errors import VidgenError
-from vidgen.fileio import remove_file, write_text_atomic
+from vidgen.fileio import locked_message, remove_file, write_text_atomic
 from vidgen.project import Project
 
 #: Manim's units on the shorter side of the frame (Manim's default frame height).
@@ -50,6 +51,21 @@ def scene_audio_path(project: Project, preview: bool, scene_id: str) -> Path:
     """``<render_dir>/scenes/<scene_id>.wav``: Manim's uncompressed mix of the scene's sounds
     (only exists if the scene added any sound)."""
     return project.render_dir(preview) / "scenes" / f"{scene_id}.wav"
+
+
+def scene_frames_dir(project: Project, preview: bool, scene_id: str) -> Path:
+    """``<render_dir>/frames/<scene_id>/``: the scene's stills and their ``index.json``."""
+    return project.render_dir(preview) / "frames" / scene_id
+
+
+def remove_tree(path: Path) -> None:
+    """Delete the folder ``path`` if it exists; a locked file in it becomes a :class:`VidgenError`."""
+    try:
+        shutil.rmtree(path)
+    except FileNotFoundError:
+        return
+    except PermissionError as exc:
+        raise VidgenError(locked_message(Path(exc.filename or path), exc)) from None
 
 
 def frame_size(width: int, height: int) -> tuple[float, float]:
@@ -133,12 +149,18 @@ def render_scene(
     variant: str | None = None,
     audio: bool = True,
     progress: bool = False,
+    frames: int = 0,
 ) -> Path:
     """Render one scene in this process (Manim's global config is modified); returns its video.
 
+    ``frames``: also save that many stills per beat (0: none) in :func:`scene_frames_dir`.
     Call it only in a fresh process: this is the body of the worker.
     """
     from vidgen import extensions, registry
+    from vidgen.capture import FrameCapture, StillWriter
+
+    if frames < 0:
+        raise VidgenError("frames per beat must not be negative")
 
     project = Project.load(project_path, variant=variant)
     theme = extensions.activate(project)
@@ -148,11 +170,15 @@ def render_scene(
     # A failed render must not leave the previous render behind to be reused by `--scene`.
     for stale in (scene_video_path, scene_audio_path, scene_timings_path):
         remove_file(stale(project, preview, scene_id))
+    frames_dir = scene_frames_dir(project, preview, scene_id)
+    remove_tree(frames_dir)  # stills always belong to the scene's current render
+    writer = StillWriter(frames_dir) if frames else None
+    capture = FrameCapture(frames, [writer]) if writer is not None else None
     media_dir, temporary = _manim_media_dir(render_dir)
     shutil.rmtree(media_dir / "videos" / scene_id, ignore_errors=True)  # no stale .wav from a previous run
     try:
         configure_manim(project, preview, theme.background, media_dir, scene_id, progress)
-        scene = cls(spec, project, theme, audio=audio)
+        scene = cls(spec, project, theme, audio=audio, capture=capture)
         scene.render()
         movie = Path(scene.renderer.file_writer.movie_file_path)
         if not movie.is_file():
@@ -173,8 +199,11 @@ def render_scene(
         "height": fmt.height,
         "fps": fmt.fps,
         "audio": audio,
+        "frames": frames,
         "vidgen": __version__,
     }
+    if writer is not None:
+        write_json(frames_dir / "index.json", writer.index(scene_id, frames, fmt.width, fmt.height, fmt.fps))
     write_json(scene_timings_path(project, preview, scene_id), timings)
     return target
 
@@ -195,6 +224,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--variant", metavar="NAME")
     parser.add_argument("--no-audio", action="store_true", help="do not add narration sounds")
     parser.add_argument("--progress", action="store_true", help="show Manim's progress bars")
+    parser.add_argument("--frames", type=int, default=0, metavar="N", help="save N PNG stills per beat (default: 0)")
     return parser
 
 
@@ -208,7 +238,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     logger.setLevel(logging.WARNING)
     logger.propagate = False
     try:
-        render_scene(args.project, args.scene_id, args.quality == "preview", args.variant, not args.no_audio, args.progress)
+        render_scene(
+            args.project, args.scene_id, args.quality == "preview", args.variant, not args.no_audio, args.progress, args.frames
+        )
     except VidgenError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

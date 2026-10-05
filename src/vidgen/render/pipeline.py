@@ -9,7 +9,8 @@ Steps of :func:`render_project`:
 4. render each scene with ``python -m vidgen.render.worker`` (``jobs`` at a time), dispatching
    ``post_scene`` in this process after each successful scene;
 5. pad every scene's audio to its exact video length, concatenate in config order, write the
-   final MP4, ``timings.json`` and the SRT, dispatch ``post_render``.
+   final MP4, ``timings.json``, the SRT (and with ``frames``, ``frames/index.json``), dispatch
+   ``post_render``.
 """
 
 from __future__ import annotations
@@ -31,7 +32,8 @@ from vidgen import __version__, hooks
 from vidgen.errors import VidgenError
 from vidgen.project import Project
 from vidgen.render import ffmpeg as ff
-from vidgen.render.worker import scene_audio_path, scene_timings_path, scene_video_path, write_json
+from vidgen.fileio import remove_file
+from vidgen.render.worker import scene_audio_path, scene_frames_dir, scene_timings_path, scene_video_path, write_json
 from vidgen.subtitles import write_srt
 from vidgen.tts.elevenlabs import API_KEY_ENV
 
@@ -47,7 +49,8 @@ class RenderResult:
 
     ``timings`` is the content of ``timings_file``; ``render_seconds`` the wall time of each
     scene rendered in this run; ``warnings`` the ``(scene_id, message)`` warnings printed by
-    the workers of this run, in config order.
+    the workers of this run, in config order. ``frames_index`` is ``build/.../frames/index.json``
+    when stills were requested, else ``None``.
     """
 
     output: Path
@@ -59,6 +62,7 @@ class RenderResult:
     timings: dict[str, Any] = field(default_factory=dict)
     render_seconds: dict[str, float] = field(default_factory=dict)
     warnings: list[tuple[str, str]] = field(default_factory=list)
+    frames_index: Path | None = None
 
 
 @dataclass
@@ -110,8 +114,9 @@ def warn_audio(project: Project) -> None:
         )
 
 
-def _usable_render(project: Project, preview: bool, scene_id: str, no_audio: bool) -> bool:
-    """True if a previous render of the scene exists and matches the current format/audio mode."""
+def _usable_render(project: Project, preview: bool, scene_id: str, no_audio: bool, frames: int = 0) -> bool:
+    """True if a previous render of the scene exists and matches the current format/audio mode
+    (and, when ``frames`` stills per beat are requested, was made with them)."""
     video = scene_video_path(project, preview, scene_id)
     timings_file = scene_timings_path(project, preview, scene_id)
     if not (video.is_file() and timings_file.is_file()):
@@ -126,7 +131,12 @@ def _usable_render(project: Project, preview: bool, scene_id: str, no_audio: boo
         and meta.get("height") == fmt.height
         and meta.get("fps") == fmt.fps
         and (no_audio or meta.get("audio") is True)
+        and (not frames or (meta.get("frames") == frames and _has_stills(project, preview, scene_id)))
     )
+
+
+def _has_stills(project: Project, preview: bool, scene_id: str) -> bool:
+    return (scene_frames_dir(project, preview, scene_id) / "index.json").is_file()
 
 
 def _tail(text: str, lines: int = TAIL_LINES) -> str:
@@ -136,7 +146,7 @@ def _tail(text: str, lines: int = TAIL_LINES) -> str:
     return "\n".join(cleaned[-lines:])
 
 
-def _run_worker(project: Project, preview: bool, scene_id: str, no_audio: bool, live: bool) -> _WorkerRun:
+def _run_worker(project: Project, preview: bool, scene_id: str, no_audio: bool, live: bool, frames: int = 0) -> _WorkerRun:
     """Run the worker for one scene; its output is captured (and echoed to stderr if ``live``)."""
     cmd = [
         sys.executable, "-m", "vidgen.render.worker", str(project.config_file), scene_id,
@@ -148,6 +158,8 @@ def _run_worker(project: Project, preview: bool, scene_id: str, no_audio: bool, 
         cmd.append("--no-audio")
     if live:
         cmd.append("--progress")
+    if frames:
+        cmd += ["--frames", str(frames)]
     # Scenes never need the ElevenLabs key: keep it out of the processes that run scene code.
     env = {k: v for k, v in os.environ.items() if k != API_KEY_ENV}
     env.update(PYTHONIOENCODING="utf-8", PYTHONUTF8="1")
@@ -198,7 +210,7 @@ def _runs(task: Callable[[int, str], _WorkerRun], scene_ids: list[str], jobs: in
 
 
 def _render_scenes(
-    project: Project, preview: bool, scene_ids: list[str], no_audio: bool, keep_going: bool, jobs: int
+    project: Project, preview: bool, scene_ids: list[str], no_audio: bool, keep_going: bool, jobs: int, frames: int = 0
 ) -> _SceneRuns:
     """Render ``scene_ids`` with up to ``jobs`` workers.
 
@@ -217,7 +229,7 @@ def _render_scenes(
 
     def task(index: int, scene_id: str) -> _WorkerRun:
         say(f"[{index}/{total}] {scene_id}: rendering")
-        return _run_worker(project, preview, scene_id, no_audio, live)
+        return _run_worker(project, preview, scene_id, no_audio, live, frames)
 
     for run in _runs(task, scene_ids, jobs):
         if run.returncode != 0:
@@ -244,6 +256,7 @@ def _render_scenes(
             scene_id=run.scene_id,
             video=scene_video_path(project, preview, run.scene_id),
             timings=timings,
+            frames=scene_frames_dir(project, preview, run.scene_id) if frames else None,
             preview=preview,
             variant=project.variant,
         )
@@ -311,6 +324,45 @@ def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) ->
     return output, combined
 
 
+def write_frames_index(project: Project, preview: bool, timings: dict[str, Any], frames: int) -> Path:
+    """Combine the scenes' ``frames/<id>/index.json`` into ``frames/index.json`` (config order).
+
+    Each still gets ``time`` in the video (scene start + its time in the scene), ``scene_time``
+    and ``path`` relative to the ``frames`` folder. A scene without stills of this ``frames``
+    count (a ``pre_render`` hook kept it from rendering) gets none, with a warning.
+    """
+    root = project.render_dir(preview) / "frames"
+    scenes = []
+    for scene in timings["scenes"]:
+        index_file = scene_frames_dir(project, preview, scene["id"]) / "index.json"
+        index = json.loads(index_file.read_text(encoding="utf-8")) if index_file.is_file() else {}
+        if index.get("per_beat") != frames:  # only if a pre_render hook kept a scene from rendering
+            log.warning("scene '%s' has no stills at %d per beat; render it again to get them", scene["id"], frames)
+            index = {"frames": []}
+        stills = [
+            {
+                **still,
+                "time": round(scene["start"] + still["time"], 6),
+                "scene_time": still["time"],
+                "path": f"{scene['id']}/{still['path']}",
+            }
+            for still in index["frames"]
+        ]
+        scenes.append({"id": scene["id"], "start": scene["start"], "duration": scene["duration"], "frames": stills})
+    combined = {
+        "title": timings["title"],
+        "variant": timings["variant"],
+        "preview": timings["preview"],
+        "format": timings["format"],
+        "per_beat": frames,
+        "vidgen": __version__,
+        "scenes": scenes,
+    }
+    target = root / "index.json"
+    write_json(target, combined)
+    return target
+
+
 def render_project(
     project: Project,
     preview: bool = False,
@@ -318,6 +370,7 @@ def render_project(
     no_audio: bool = False,
     keep_going: bool = False,
     jobs: int = 1,
+    frames: int = 0,
 ) -> RenderResult:
     """Render ``project`` (already loaded with its variant) and write the final MP4 + SRT.
 
@@ -325,9 +378,13 @@ def render_project(
     usable render, e.g. never rendered or rendered at another format, are rendered too).
     ``keep_going``: render the remaining scenes after a failure; the video is then not joined and
     a :class:`VidgenError` listing the failed scenes is raised at the end.
+    ``frames``: also save that many PNG stills per beat of every scene (1: the end of each beat)
+    under ``build/.../frames/``; reused scenes without such stills are rendered again. 0: none.
     """
     from vidgen import extensions
 
+    if frames < 0:
+        raise VidgenError("frames per beat must not be negative")
     with extensions.project_session(project):
         _check_scenes(project)
         ffmpeg = ff.find_ffmpeg()
@@ -339,7 +396,7 @@ def render_project(
         warn_audio(project)
         to_render = [
             sid for sid in known
-            if not selected or sid in selected or not _usable_render(project, preview, sid, no_audio)
+            if not selected or sid in selected or not _usable_render(project, preview, sid, no_audio, frames)
         ]
         ctx = hooks.dispatch(
             "pre_render",
@@ -351,7 +408,9 @@ def render_project(
             render_dir=project.render_dir(preview),
         )
         to_render = [sid for sid in known if sid in ctx.data["scenes"]]
-        runs = _render_scenes(project, preview, to_render, no_audio, keep_going, jobs)
+        frames_index = project.render_dir(preview) / "frames" / "index.json"
+        remove_file(frames_index)  # rewritten below when stills are requested; never stale
+        runs = _render_scenes(project, preview, to_render, no_audio, keep_going, jobs, frames)
         if runs.failed:
             raise VidgenError(
                 f"{len(runs.failed)} scene(s) failed: {', '.join(f['scene'] for f in runs.failed)}; "
@@ -364,6 +423,7 @@ def render_project(
         write_json(timings_file, timings)
         srt = project.srt_path(preview)
         write_srt(srt, timings)
+        index = write_frames_index(project, preview, timings, frames) if frames else None
         hooks.dispatch(
             "post_render",
             project,
@@ -371,6 +431,7 @@ def render_project(
             srt=srt,
             timings=timings,
             timings_file=timings_file,
+            frames_index=index,
             preview=preview,
             variant=project.variant,
         )
@@ -384,4 +445,5 @@ def render_project(
             timings=timings,
             render_seconds=runs.seconds,
             warnings=runs.warnings,
+            frames_index=index,
         )

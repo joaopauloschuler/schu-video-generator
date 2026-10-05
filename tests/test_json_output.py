@@ -387,8 +387,9 @@ def test_render_json(render_project_dir: Callable[..., Path], capsys: pytest.Cap
         "video": str((root / "out_preview.mp4").resolve()),
         "subtitles": str((root / "out_preview.srt").resolve()),
         "timings": str((root / "build" / "preview" / "timings.json").resolve()),
+        "frames": None,
     }
-    assert all(Path(p).is_file() for p in doc["outputs"].values())
+    assert all(Path(p).is_file() for p in doc["outputs"].values() if p is not None)
     timings = json.loads((root / "build" / "preview" / "timings.json").read_text(encoding="utf-8"))
     assert doc["duration"] == timings["duration"] and doc["elapsed"] > 0
     a, b = doc["scenes"]

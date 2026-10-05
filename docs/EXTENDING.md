@@ -198,6 +198,11 @@ def validate_project(cls, params, project):
 - `self.finish()` fades everything out over `self.outro` seconds (class attribute, default 0;
   the built-ins use 0.5). Set `outro` on your class and call `finish()` at the end of
   `construct()`; silent scenes then fade out within their `duration`.
+- Stills (`vidgen render --frames`) are taken on the last frame of each beat, i.e. when the
+  `with self.narrate(...)` block has ended (or, for a silent scene, at `duration - outro`), so
+  a scene reads best in stills when each beat ends showing what it explained. Capturing only
+  observes the frames written; it never changes timing. `self.capture` is the active
+  capture object, or `None` (internal: vidgen's own tools attach to it).
 
 ```python
 @scene("checklist")
@@ -295,8 +300,8 @@ Event data (see DESIGN.md §6.2):
 | `pre_tts`     | `beats` (list of beat ids about to be generated; remove ids to skip them), `audio_dir`, `force`, `dry_run` |
 | `post_tts`    | `generated` (beat ids written, in order), `audio_dir` |
 | `pre_render`  | `scenes` (scene ids about to be rendered, config order; remove ids to reuse their existing render), `preview`, `variant`, `no_audio`, `render_dir` |
-| `post_scene`  | `scene_id`, `video` (the scene's MP4, before audio padding), `timings` (the scene's timings dict), `preview`, `variant` |
-| `post_render` | `output` (final MP4), `srt`, `timings` (combined timings dict), `timings_file`, `preview`, `variant` |
+| `post_scene`  | `scene_id`, `video` (the scene's MP4, before audio padding), `timings` (the scene's timings dict), `frames` (folder of the scene's stills with `--frames`, else `None`), `preview`, `variant` |
+| `post_render` | `output` (final MP4), `srt`, `timings` (combined timings dict), `timings_file`, `frames_index` (`frames/index.json` with `--frames`, else `None`), `preview`, `variant` |
 
 Render hooks run in the `vidgen render` process (not in the per-scene worker processes);
 `post_scene` runs once per scene rendered in this run (not for reused renders).

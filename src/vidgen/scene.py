@@ -23,6 +23,7 @@ from manim import NORMAL, Animation, FadeOut, MarkupText, Scene, Text, config
 from pydantic import AfterValidator, BaseModel, ConfigDict, GetJsonSchemaHandler, ValidationError, ValidationInfo
 
 from vidgen import helpers, runtime
+from vidgen.capture import FrameCapture
 from vidgen.layout import distribute
 from vidgen.config import BeatConfig, SceneConfig, validation_error_lines
 from vidgen.errors import VidgenError
@@ -130,6 +131,10 @@ class NarratedScene(Scene):
     ``audio=False`` renders without adding narration sounds; durations still come from the
     audio files, so timing is identical to a render with audio.
 
+    ``capture`` (a :class:`~vidgen.capture.FrameCapture`, set by the worker for ``vidgen
+    render --frames``) takes stills at the end of / during each beat; it only observes the
+    frames written, so timing is unchanged. ``self.capture`` is ``None`` otherwise.
+
     If you override ``tear_down``, call ``super().tear_down()`` (it pads silent scenes to their
     ``duration``).
     """
@@ -141,6 +146,7 @@ class NarratedScene(Scene):
         theme: Theme | None = None,
         *,
         audio: bool = True,
+        capture: FrameCapture | None = None,
         **scene_kwargs: Any,
     ) -> None:
         self.spec = spec
@@ -158,6 +164,12 @@ class NarratedScene(Scene):
         self.beat_log: list[BeatTiming] = []
         self._durations: dict[str, float] = {}
         super().__init__(**scene_kwargs)
+        self.capture = capture
+        if capture is not None:
+            capture.attach(self)
+            if spec.silent:
+                length = max((spec.duration or 0.0) - self.outro, 1 / config.frame_rate)
+                capture.begin_segment(None, round(length * config.frame_rate), include_end=True)
 
     # ----- params ----------------------------------------------------------------------------
 
@@ -289,9 +301,13 @@ class NarratedScene(Scene):
         if path is not None and self.audio_enabled:
             self.add_sound(str(path))
         start = float(self.renderer.time)
+        if self.capture is not None:
+            self.capture.begin_segment(b.id, round((d + self.pad) * config.frame_rate), include_end=False)
         yield d
         self.wait_seconds(d + self.pad - (self.renderer.time - start))
         self.beat_log.append(BeatTiming(b.id, start, start + d, b.text))
+        if self.capture is not None:
+            self.capture.end_segment(b.id)
 
     def narrate_all(self) -> Iterator[tuple[BeatConfig, float]]:
         """Narrate every beat in order: ``for beat, d in self.narrate_all(): ...``."""
@@ -411,6 +427,8 @@ class NarratedScene(Scene):
         missing = [b.id for b in self.beats if b.id not in narrated]
         if missing:
             log.warning("scene '%s' never narrated beats: %s", self.spec.id, ", ".join(missing))
+        if self.capture is not None:
+            self.capture.finish()
         super().tear_down()
 
     def timings(self) -> dict[str, Any]:

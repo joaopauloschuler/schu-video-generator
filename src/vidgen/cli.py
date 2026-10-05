@@ -235,6 +235,9 @@ def cmd_render(args: argparse.Namespace) -> CommandResult:
 
     if args.jobs < 1:
         raise VidgenError("--jobs must be at least 1")
+    if args.frames_per_beat is not None and args.frames_per_beat < 1:
+        raise VidgenError("--frames-per-beat must be at least 1")
+    frames = args.frames_per_beat or (1 if args.frames else 0)
     started = time.monotonic()
     project = Project.load(args.project, variant=args.variant)
     result = render_project(
@@ -244,6 +247,7 @@ def cmd_render(args: argparse.Namespace) -> CommandResult:
         no_audio=args.no_audio,
         keep_going=args.keep_going,
         jobs=args.jobs,
+        frames=frames,
     )
     if args.json:
         return jsonout.render_document(project, result, args.preview, time.monotonic() - started)
@@ -251,6 +255,8 @@ def cmd_render(args: argparse.Namespace) -> CommandResult:
     print(f"rendered {len(result.rendered)} scene(s){reused}")
     print(f"video:     {result.output}")
     print(f"subtitles: {result.srt}")
+    if result.frames_index is not None:
+        print(f"frames:    {result.frames_index}")
     print(f"duration:  {_format_seconds(result.duration)} ({result.duration:.2f} s)")
     return 0
 
@@ -382,6 +388,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--no-audio", action="store_true", help="render without narration audio")
     p.add_argument("--keep-going", action="store_true", help="continue after a scene fails")
     p.add_argument("--jobs", "-j", type=int, default=1, metavar="N", help="render N scenes in parallel (default: 1)")
+    p.add_argument("--frames", action="store_true", help="also save a PNG still at the end of each beat (build/.../frames/)")
+    p.add_argument(
+        "--frames-per-beat", type=int, metavar="N", help="save N evenly spaced stills per beat, the last at its end (implies --frames)"
+    )
     p.set_defaults(func=cmd_render)
 
     p = sub.add_parser("schema", help="print the JSON Schema of video.yaml")

@@ -204,6 +204,7 @@ def render_document(
             "video": _path(result.output),
             "subtitles": _path(result.srt),
             "timings": _path(result.timings_file),
+            "frames": None if result.frames_index is None else _path(result.frames_index),
         },
         duration=result.duration,
         elapsed=round(elapsed, 3),

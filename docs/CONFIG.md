@@ -497,6 +497,45 @@ theme tokens or variants. If `video.yaml` is invalid, `vidgen schema` still work
 when it is most useful): it uses the file's `extensions` and `theme` as far as they are valid
 and prints a warning. `--scene` with an unknown type is an error (exit code 1).
 
+## Frame stills (`vidgen render --frames`)
+
+`vidgen render --frames` also saves PNG stills of the render, so you (or an AI agent, which
+cannot watch a video) can check what is on screen without playing it. `--frames` takes one
+still per beat: its **last frame**, i.e. what is on screen when the narration of the beat (and
+its `narration.pad`) is over. `--frames-per-beat N` takes N evenly spaced stills per beat, the
+last one again at the end (N=3: after a third, two thirds and all of the beat). A silent scene
+counts as one beat lasting `duration` minus the scene's fade-out, so its last still is taken
+before the fade. Stills are off by default; they work with `--preview`, `--variant`, `--scene`
+and `--jobs`. They are taken from Manim's renderer while it writes the video (the same pixels
+as the video frame, before compression), so they do not change the video or its timings.
+
+Files, in `build/<final|preview>[_<variant>]/frames/`:
+
+```
+frames/
+  index.json            # every still of the video
+  <scene>/
+    index.json          # the scene's stills
+    <beat>-<k>.png      # still k (1..N) of a beat; <scene>-<k>.png for a silent scene
+```
+
+`<scene>/index.json`: `{scene, per_beat, width, height, fps, frames}`; `frames` lists, in time
+order, `{beat, k, n, frame, time, path}`: the beat id (`null` for a silent scene), the still's
+number within its beat (`k == n` is the end of the beat), `n` = stills per beat, the frame's
+0-based index in the scene's video, its time in seconds from the scene start (`frame / fps`)
+and the PNG file name.
+
+`frames/index.json`: `{title, variant, preview, format, per_beat, vidgen, scenes}`; each scene
+is `{id, start, duration, frames}` (`start` in the video) and each still is as above with
+`time` in the **video** (scene start + time in the scene), `scene_time` (time in the scene)
+and `path` relative to `frames/` (`<scene>/<file>.png`). The beat texts are in
+`build/.../timings.json`.
+
+Every scene render deletes the scene's old stills, and every `vidgen render` deletes
+`frames/index.json` (it is rewritten when stills are requested), so stills never belong to an
+older render. With `--scene ID --frames`, scenes that would be reused but have no stills at
+this count are rendered again.
+
 ## JSON output (`--json`)
 
 `vidgen validate`, `vidgen list-scenes`, `vidgen render` and `vidgen schema` accept `--json`: stdout then holds
@@ -590,7 +629,7 @@ when required); `doc` (the docstring under the field or its `Field(description=.
 | `preview` | bool | |
 | `audio` | bool | `false` with `--no-audio` |
 | `format` | object | `{width, height, fps}` of this render |
-| `outputs` | object | `{video, subtitles, timings}`: the MP4, the SRT and `build/.../timings.json` |
+| `outputs` | object | `{video, subtitles, timings, frames}`: the MP4, the SRT, `build/.../timings.json` and `build/.../frames/index.json` (`null` without `--frames`) |
 | `duration` | float | length of the video |
 | `elapsed` | float | wall time of the command |
 | `scenes` | list | config order: `{id, type, status, start, duration, render_seconds, beats}`; `status` is `rendered` or `reused` (an existing render was joined, see `--scene`), `render_seconds` the worker's wall time (`null` when reused), `start`/`duration` in the video, `beats` lists `{id, start, end}` (absolute; `end` excludes `narration.pad`) |

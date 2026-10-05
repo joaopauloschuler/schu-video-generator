@@ -75,14 +75,17 @@ narration.
 | `vidgen list-scenes [PROJECT] [--json]` | scene types (built-in and the project's) with their params |
 | `vidgen schema [PROJECT] [--scene TYPE \| --all] [--json]` | JSON Schema of `video.yaml` (params checked per scene type, the project's extension types included), for editors and AI agents |
 | `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--variant NAME]` | generate missing/stale narration into `audio/`; `--dry-run` needs no key |
-| `vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going] [--jobs N] [--json]` | render and join the video |
+| `vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going] [--jobs N] [--frames] [--frames-per-beat N] [--json]` | render and join the video |
 
 `PROJECT` is a project folder or its config file (default: the current folder).
 `render` options: `--preview` uses the `preview` resolution; `--scene ID` re-renders only those
 scenes and re-joins with the existing renders of the others; `--variant NAME` applies a named
 variant (e.g. vertical 1080x1920); `--no-audio` leaves the narration out (timing is unchanged);
 `--keep-going` renders the remaining scenes after a failure; `--jobs N` renders N scenes in
-parallel. Errors are printed as `error: ...` with exit code 1.
+parallel; `--frames` also saves a PNG still of the last frame of every beat (`--frames-per-beat
+N`: N evenly spaced stills per beat) in `build/<final|preview>[_<variant>]/frames/<scene>/`,
+with an `index.json` (beat, time, path) — a way to look at a render without playing it, see
+[docs/CONFIG.md](docs/CONFIG.md#frame-stills-vidgen-render---frames). Errors are printed as `error: ...` with exit code 1.
 `--json` prints one machine-readable JSON document on stdout instead (problems with their
 config location, scene types with params/defaults/docs, output paths and per-scene durations;
 errors too, with a non-zero exit code) — for scripts and AI agents. The shapes are documented
@@ -99,7 +102,7 @@ my_video/
   extensions/         # optional: your own scene types, helpers, hooks (*.py)
   assets/             # images, code files, ... referenced from params
   audio/              # generated narration: <beat_id>.mp3 + .hash (keep it; it cost money)
-  build/              # intermediate render files (safe to delete)
+  build/              # intermediate render files and --frames stills (safe to delete)
   my_video.mp4  my_video.srt  my_video_preview.mp4 ...
 ```
 

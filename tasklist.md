@@ -35,9 +35,9 @@ Rules that apply to every step:
 - [x] Test: all example configs validate against the exported schema
 
 ### Step 10 — Frame capture in the worker
-- [ ] Worker option to save PNG stills at chosen times: end of each beat (default) or N evenly spaced per beat
-- [ ] Files under `build/<quality>[_<variant>]/frames/<scene>/` plus an index JSON (beat, time, path)
-- [ ] Works with `--preview`, variants and `--scene`
+- [x] Worker option to save PNG stills at chosen times: end of each beat (default) or N evenly spaced per beat
+- [x] Files under `build/<quality>[_<variant>]/frames/<scene>/` plus an index JSON (beat, time, path)
+- [x] Works with `--preview`, variants and `--scene`
 
 ### Step 11 — `vidgen storyboard`
 - [ ] Contact sheet PNG per scene and one for the whole video: grid of stills labelled `beat @ time`, narration text under each
