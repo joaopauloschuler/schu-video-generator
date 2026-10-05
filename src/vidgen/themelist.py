@@ -7,9 +7,10 @@ import math
 from pathlib import Path
 from typing import Any
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 from vidgen.config import ThemeConfig
+from vidgen.fonts import BUILTIN_ROLES, bundled_font_file
 from vidgen.lint.color import ACCENT_TOKENS, TEXT_TOKENS, hex_rgb, palette_distinctness, theme_contrast
 from vidgen.scales import AUTO_SCALES, SCALE_TOKENS, TYPE_SCALES
 from vidgen.sheets import load_font, wrap_text
@@ -37,7 +38,10 @@ def preset_entry(theme: Theme, name: str, selected: str | None) -> dict[str, Any
         "selected": name == selected,
         "background": resolved.background,
         "font": resolved.font,
+        "font_serif": resolved.font_serif,
+        "font_mono": resolved.font_mono,
         "fonts": resolved.fonts,
+        "font_roles": {role: resolved.font_for(role) for role in BUILTIN_ROLES},
         "code_style": resolved.code_style,
         "scale": resolved.scale_setting,
         "scale_resolved": resolved.scale,
@@ -79,7 +83,12 @@ def summary_lines(entries: list[dict[str, Any]], orientation: str) -> list[str]:
             f"    background {e['background']}  surface {c.get('surface', '-')}  text {c.get('text', '-')}  dim {c.get('dim', '-')}"
         )
         lines.append("    " + "  ".join(f"{t} {c[t]}" for t in ACCENT_TOKENS if t in c))
-        lines.append(f"    palette {' '.join(e['palette'])}  code_style {e['code_style']}  font {e['font']}")
+        lines.append(f"    palette {' '.join(e['palette'])}  code_style {e['code_style']}")
+        roles = e["font_roles"]
+        lines.append(
+            f"    fonts: sans {e['font']}  serif {e['font_serif']}  mono {e['font_mono']}; "
+            f"headings {roles['heading']}  quotes {roles['quote']}  code {roles['code']}"
+        )
         contrast = e["contrast"]
         verdict = "ok" if contrast["ok"] else f"{len(contrast['failures'])} too low"
         worst = min(e["palette_distinctness"].items(), key=lambda kv: kv[1])
@@ -98,6 +107,12 @@ def summary_lines(entries: list[dict[str, Any]], orientation: str) -> list[str]:
 def _rgb(color: str) -> tuple[int, int, int]:
     r, g, b = hex_rgb(color)
     return (round(r * 255), round(g * 255), round(b * 255))
+
+
+def _heading_font(entry: dict[str, Any], fallback: Any) -> Any:
+    """The preset's heading family at the swatch's heading size, if it is a bundled font."""
+    path = bundled_font_file(entry["font_roles"]["heading"], bold=True)
+    return ImageFont.truetype(str(path), 30) if path is not None and path.is_file() else fallback
 
 
 def render_swatches(entries: list[dict[str, Any]], path: Path) -> Path:
@@ -124,7 +139,7 @@ def render_swatches(entries: list[dict[str, Any]], path: Path) -> Path:
                 x += 50
         panel = (660, top + pad, 900, top + SWATCH_ROW - pad)
         draw.rounded_rectangle(panel, radius=10, fill=_rgb(colors.get("surface", e["background"])))
-        draw.text((panel[0] + 16, panel[1] + 14), "Aa Heading", font=name_font, fill=text)
+        draw.text((panel[0] + 16, panel[1] + 14), "Aa Heading", font=_heading_font(e, name_font), fill=text)
         draw.text((panel[0] + 16, panel[1] + 60), "body text", font=text_font, fill=text)
         draw.text((panel[0] + 16, panel[1] + 96), "dim caption", font=small_font, fill=dim)
         bars = e["palette"]

@@ -13,6 +13,8 @@ subtitles.
   `bold_neon`), all WCAG AA with colour-blind-safe palettes, and **type scales** (`compact`,
   `standard`, `large`; vertical video gets `large` automatically); `vidgen list-themes
   --swatches themes.png` shows them; projects can register their own (e.g. a brand look).
+- **Bundled fonts**: Inter, Source Serif 4 and JetBrains Mono NL ship with vidgen (no install);
+  presets pick them per role (serif headings in `light_academic` and `warm_editorial`).
 - **Extensible per video**: a project can add its own scene types, helpers, theme tokens and
   pipeline hooks in its `extensions/` folder, without touching vidgen.
 - **Cheap to iterate**: only new or edited beats are sent to ElevenLabs; fast low-resolution
@@ -35,9 +37,9 @@ subtitles.
    vidgen --version
    ```
    This installs Manim, pydantic, PyYAML and PyAV (pre-built wheels; no compiler needed).
-4. **Font**: the default theme uses [Inter](https://rsms.me/inter/). Download it, select the
-   `.ttf` files, right-click → *Install for all users*. Or set `theme.font` to an installed
-   font, e.g. `Segoe UI`.
+4. **Fonts**: nothing to install. vidgen bundles Inter (sans), Source Serif 4 (serif) and
+   JetBrains Mono NL (code), all SIL Open Font License (see `THIRD_PARTY_NOTICES.md`). Any
+   installed font works too, e.g. `theme: {font: Segoe UI}`.
 5. **ElevenLabs API key** (only for `vidgen tts`): `setx ELEVENLABS_API_KEY your_key`, then open
    a new terminal. vidgen reads the key only from this variable and never writes it anywhere.
 6. Optional, only for the `equation` scene type: **LaTeX** — install
@@ -50,7 +52,7 @@ If PowerShell refuses to run `Activate.ps1`, run
 ### macOS / Linux
 
 `python3 -m venv .venv && . .venv/bin/activate && pip install .`, ffmpeg from
-`brew install ffmpeg` / `sudo apt install ffmpeg`, the Inter font, and
+`brew install ffmpeg` / `sudo apt install ffmpeg` (fonts are bundled), and
 `export ELEVENLABS_API_KEY=your_key` in your shell profile. Linux may need Manim's system
 libraries first (`sudo apt install libcairo2-dev libpango1.0-dev`). Optional LaTeX: MacTeX, or
 `sudo apt install texlive texlive-latex-extra dvisvgm`.
@@ -147,7 +149,8 @@ my_video/
 ## Troubleshooting
 
 - `ffmpeg not found on PATH` — install it and open a new terminal.
-- Text in a fallback font — the theme font is not installed (for all users, on Windows).
+- Text in a fallback font — a font named in the theme (other than the bundled Inter, Source
+  Serif 4 and JetBrains Mono NL) is not installed (for all users, on Windows).
 - `cannot write ...mp4 ... is it open in another program` — close the video player showing the
   previous render; the new video was kept as `<name>.partial.mp4`.
 - Windows paths longer than 260 characters can fail inside Manim: keep projects in a short

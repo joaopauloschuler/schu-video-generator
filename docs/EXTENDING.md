@@ -78,7 +78,7 @@ scenes:
 Inside `construct()` you have `self.spec` (the scene's config: `id`, `type`, `params`, `beats`,
 `duration`), `self.params` (a `Params` instance, or a plain dict without a `Params` class),
 `self.beats` (each with `id` and `text`), `self.theme` (`color(name)`, `size(name)`,
-`palette_color(i)`, `font`, `background`) and `self.project` (`root` folder, `config`,
+`palette_color(i)`, `font`, `font_serif`, `font_mono`, `font_for(role)`, `background`) and `self.project` (`root` folder, `config`,
 `variant` name or `None`, `asset("assets/logo.png")` → absolute path, error if missing).
 
 Timing rules:
@@ -218,9 +218,13 @@ def validate_project(cls, params, project):
 
 **Text and numbers.**
 - `fit_text(text, max_width, max_height=None, size="body", color="text", weight=NORMAL,
-  align="center", highlights={"77%": "highlight"}, squeeze=1.0, ...)` — wraps by measured width,
-  lowers the font size (down to `min_size`) until the block fits `max_height`, then scales down
-  if still needed. Returns a Manim `Paragraph` (one submobject per line).
+  align="center", highlights={"77%": "highlight"}, squeeze=1.0, font=None, ...)` — wraps by
+  measured width, lowers the font size (down to `min_size`) until the block fits `max_height`,
+  then scales down if still needed. Returns a Manim `Paragraph` (one submobject per line).
+  `font` defaults to the theme font; pass `font=self.theme.font_for("heading")` (or any role)
+  so your scene follows the theme's font roles like the built-ins (docs/CONFIG.md "Fonts"). The
+  bundled families (Inter, Source Serif 4, JetBrains Mono NL) are registered before any scene
+  code runs, so `self.text("x", font="Source Serif 4")` works without an installed font.
 - `shrink_to_fit(mobject, max_width, max_height)` — scale down only, never up.
 - `wrap_lines(text, max_chars)`, `normalize_text(text)` — pure helpers.
 - `nice_ticks(lo, hi, max_ticks)`, `auto_format(values)`, `format_value(v, fmt, unit)`,
@@ -358,13 +362,14 @@ register_theme_preset(
 )
 ```
 
-Arguments (all optional except the name): `base`, `background`, `font`, `colors`, `palette`,
-`sizes`, `code_style` (a Pygments style), `scale` (type scale, docs/CONFIG.md "Type scales";
-applied below the preset's own `sizes`), `fonts` (font family per role, e.g. `{"heading":
-"Source Serif 4", "mono": "JetBrains Mono"}`), `description`. Font roles are a hook for scenes:
-`current_theme().font_for("heading")` returns the preset's family for the role, else the
-theme `font` (a `font` written in `video.yaml` wins over every role); built-in scenes do not
-read roles yet (planned with bundled fonts). Names must not clash with a built-in
+Arguments (all optional except the name): `base`, `background`, `font` (sans), `font_serif`,
+`font_mono`, `colors`, `palette`, `sizes`, `code_style` (a Pygments style), `scale` (type scale,
+docs/CONFIG.md "Type scales"; applied below the preset's own `sizes`), `fonts` (font per role:
+a token `sans` / `serif` / `mono` or a family name, e.g. `{"heading": "serif", "quote":
+"Lora"}`), `description`. `current_theme().font_for(role)` resolves a role: `video.yaml`
+`fonts`, else the preset chain, else the built-in default (`code` → `mono`, `quote_mark` →
+`serif`, anything else `sans`); tokens resolve to the theme's `font` / `font_serif` /
+`font_mono` (docs/CONFIG.md "Fonts"). Names must not clash with a built-in
 or another project preset. Full precedence, highest first: `video.yaml` `theme:` values > the
 selected preset (then its `base`) > `register_theme_defaults` > built-in defaults. So a preset
 chosen in the config overrides tokens an extension registered as defaults, but never what the

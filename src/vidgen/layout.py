@@ -96,6 +96,7 @@ def fit_text(
     line_spacing: float = 0.7,
     squeeze: float = 1.0,
     theme: Theme | None = None,
+    font: str | None = None,
 ) -> Paragraph:
     """Text in the theme font, word-wrapped to ``max_width`` and fitted into ``max_height``.
 
@@ -107,11 +108,13 @@ def fit_text(
     ``line_spacing`` is Manim's ``Paragraph`` setting (it scales with the font size; Manim's
     own default -1 sets lines almost touching). With ``squeeze > 1``, text that fits on one line
     at up to ``squeeze * max_width`` is scaled down instead of wrapped (good for links).
+    ``font`` is a family name (default: the theme font), e.g. ``theme.font_for("heading")``.
     Returns a Manim ``Paragraph`` (one submobject per line).
     """
     block, _ = fit_text_sized(
         text, max_width, max_height, size=size, color=color, weight=weight, slant=slant, align=align,
         min_size=min_size, highlights=highlights, line_spacing=line_spacing, squeeze=squeeze, theme=theme,
+        font=font,
     )
     return block
 
@@ -131,6 +134,7 @@ def fit_text_sized(
     line_spacing: float = 0.7,
     squeeze: float = 1.0,
     theme: Theme | None = None,
+    font: str | None = None,
 ) -> tuple[Paragraph, float]:
     """:func:`fit_text` that also returns the font size the text ends up at (points, after
     any final scaling), e.g. to tell whether it was shrunk below ``min_size``."""
@@ -141,7 +145,7 @@ def fit_text_sized(
     if not normalized:
         raise VidgenError("fit_text: text is empty")
     kwargs: dict[str, Any] = {
-        "font": theme.font,
+        "font": font or theme.font,
         "color": resolve_color(color, theme),
         "weight": weight,
         "slant": slant,
@@ -159,7 +163,7 @@ def fit_text_sized(
             return _shrunk(line, font_size, max_width, max_height)
     # Search the font size arithmetically (word widths and line pitch scale linearly with the
     # size), then build the Paragraph once; re-wrap narrower if the estimate was off.
-    metrics = _Metrics(normalized, theme.font, kwargs["weight"], kwargs["slant"], line_spacing)
+    metrics = _Metrics(normalized, kwargs["font"], kwargs["weight"], kwargs["slant"], line_spacing)
     for _ in range(40):
         lines = metrics.wrap(font_size, max_width)
         if max_height is None or font_size <= floor or metrics.height(len(lines), font_size) <= max_height:

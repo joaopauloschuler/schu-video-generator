@@ -56,7 +56,7 @@ class Bullets(NarratedScene):
             header = self.region("header")
             grow = self.portrait_growth if self.is_portrait else 1.0
             size = float(self.theme.size(p.heading_size)) * grow
-            heading = fit_text(p.heading, header.width, header.height, size=size, color=p.heading_color, weight=BOLD)
+            heading = fit_text(p.heading, header.width, header.height, size=size, color=p.heading_color, weight=BOLD, font=self.theme.font_for("heading"))
             place(heading, header, fit="none", align="center")
             body = body.below(heading, gap=0.6 if self.is_portrait else 0.5)
         width = body.width if self.is_portrait else min(body.width * 0.85, 11.5)

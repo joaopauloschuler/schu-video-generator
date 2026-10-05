@@ -22,15 +22,18 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
+from vidgen.fonts import FONTS_DIR
+
 Font = ImageFont.FreeTypeFont | ImageFont.ImageFont
 
-#: Font files tried in order (found by Pillow in the system font folders on Windows/macOS/Linux).
+#: Font files tried in order: vidgen's bundled Inter first, then names Pillow finds in the system
+#: font folders on Windows/macOS/Linux.
 REGULAR_FONTS: tuple[str, ...] = (
-    "Inter-Regular.otf", "Inter-Regular.ttf", "DejaVuSans.ttf", "arial.ttf", "Arial.ttf",
+    str(FONTS_DIR / "Inter" / "Inter-Regular.ttf"), "Inter-Regular.otf", "Inter-Regular.ttf", "DejaVuSans.ttf", "arial.ttf", "Arial.ttf",
     "LiberationSans-Regular.ttf", "Helvetica.ttc",
 )
 BOLD_FONTS: tuple[str, ...] = (
-    "Inter-SemiBold.otf", "Inter-SemiBold.ttf", "Inter-Bold.otf", "DejaVuSans-Bold.ttf", "arialbd.ttf",
+    str(FONTS_DIR / "Inter" / "Inter-Bold.ttf"), "Inter-SemiBold.otf", "Inter-SemiBold.ttf", "Inter-Bold.otf", "DejaVuSans-Bold.ttf", "arialbd.ttf",
     "Arial Bold.ttf", "LiberationSans-Bold.ttf", "Helvetica.ttc",
 )
 

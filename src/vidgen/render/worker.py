@@ -173,11 +173,13 @@ def render_scene(
     from vidgen import extensions, registry
     from vidgen.activity import MotionTrack, activity_document
     from vidgen.capture import FrameCapture, StillWriter
+    from vidgen.fonts import register_bundled_fonts
     from vidgen.introspect import LayoutRecorder
     from vidgen.render.fingerprint import scene_fingerprint
 
     if frames < 0:
         raise VidgenError("frames per beat must not be negative")
+    register_bundled_fonts()  # before extensions or scenes lay out any text
 
     project = Project.load(project_path, variant=variant)
     theme = extensions.activate(project)

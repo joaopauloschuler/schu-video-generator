@@ -1,4 +1,4 @@
-"""Theme: colors, sizes, font, background and code style resolved from config, preset and defaults.
+"""Theme: colors, sizes, fonts, background and code style resolved from config, preset and defaults.
 
 Lookup precedence (highest first, DESIGN.md §19):
 
@@ -21,12 +21,15 @@ from collections.abc import Mapping
 
 from vidgen.config import FormatConfig, ThemeConfig
 from vidgen.errors import VidgenError
+from vidgen.fonts import FONT_TOKENS, ROLE_DEFAULTS
 from vidgen.presets import (
     BUILTIN_PRESETS,
     DEFAULT_BACKGROUND,
     DEFAULT_CODE_STYLE,
     DEFAULT_COLORS,
     DEFAULT_FONT,
+    DEFAULT_FONT_MONO,
+    DEFAULT_FONT_SERIF,
     DEFAULT_PALETTE,
     DEFAULT_SIZES,
     ThemePreset,
@@ -38,6 +41,8 @@ __all__ = [
     "DEFAULT_CODE_STYLE",
     "DEFAULT_COLORS",
     "DEFAULT_FONT",
+    "DEFAULT_FONT_MONO",
+    "DEFAULT_FONT_SERIF",
     "DEFAULT_PALETTE",
     "DEFAULT_SIZES",
     "Theme",
@@ -133,24 +138,43 @@ class Theme:
 
     @property
     def font(self) -> str:
-        """Font family name."""
+        """Sans font family: body text and every role without its own family."""
         value = self._config.font or self._from_preset("font")
         return str(value) if value is not None else DEFAULT_FONT
 
     @property
+    def font_serif(self) -> str:
+        """Serif font family (the ``serif`` token of font roles)."""
+        value = self._config.font_serif or self._from_preset("font_serif")
+        return str(value) if value is not None else DEFAULT_FONT_SERIF
+
+    @property
+    def font_mono(self) -> str:
+        """Monospace font family (the ``mono`` token; code listings)."""
+        value = self._config.font_mono or self._from_preset("font_mono")
+        return str(value) if value is not None else DEFAULT_FONT_MONO
+
+    @property
     def fonts(self) -> dict[str, str]:
-        """Font families the preset chain names per role (``heading``, ``mono``...; a copy)."""
+        """Font roles as set by the preset chain, then ``video.yaml`` ``fonts`` (role -> family
+        token or family name; a copy, without the built-in role defaults)."""
         fonts: dict[str, str] = {}
         for preset in self.preset_chain():
             fonts.update(preset.fonts)
+        fonts.update(self._config.fonts)
         return fonts
 
     def font_for(self, role: str) -> str:
-        """The font family for ``role``: :attr:`font` when ``video.yaml`` writes ``font`` (it
-        sets every text) or no preset names the role, else the preset's family for it."""
-        if self._config.font:
-            return self._config.font
-        return self.fonts.get(role, self.font)
+        """The font family for text of ``role`` (``heading``, ``quote``, ``code``...).
+
+        The role's setting comes from ``video.yaml`` ``fonts``, else the preset chain, else the
+        built-in default (``code`` -> ``mono``, ``quote_mark`` -> ``serif``, others ``sans``);
+        a family token (``sans``, ``serif``, ``mono``) resolves to :attr:`font`,
+        :attr:`font_serif` or :attr:`font_mono`, anything else is a family name.
+        """
+        setting = self.fonts.get(role) or ROLE_DEFAULTS.get(role, "sans")
+        token = FONT_TOKENS.get(setting)
+        return str(getattr(self, token)) if token is not None else setting
 
     @property
     def scale_setting(self) -> str:

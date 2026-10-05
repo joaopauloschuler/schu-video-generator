@@ -116,11 +116,11 @@ def test_project_context_uses_the_variant_format(make_project: Callable[..., Pat
 def test_font_roles_hook() -> None:
     theme = Theme(ThemeConfig(preset="serif_look"))
     theme.add_preset(make_preset("serif_look", base="warm_editorial", fonts={"heading": "Georgia"}))
-    assert theme.fonts == {"heading": "Georgia"}
+    assert theme.fonts == {"heading": "Georgia", "quote": "serif"}
     assert theme.font_for("heading") == "Georgia" and theme.font_for("body") == "Inter"
-    # a font written in video.yaml sets every text, roles included
+    # Step 18: a font written in video.yaml is the sans family; roles naming another family stay
     written = theme.derive(ThemeConfig(preset="serif_look", font="DejaVu Sans"))
-    assert written.font_for("heading") == "DejaVu Sans"
+    assert written.font_for("heading") == "Georgia" and written.font_for("body") == "DejaVu Sans"
     assert Theme().fonts == {} and Theme().font_for("mono") == "Inter"
 
 

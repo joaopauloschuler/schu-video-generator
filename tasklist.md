@@ -80,9 +80,9 @@ Rules that apply to every step:
 - [x] `vidgen list-themes [--json]`; storyboard of `examples/minimal` per preset checked in the step
 
 ### Step 18 — Bundled fonts
-- [ ] Ship three open-licensed families as package data with licences: Inter (sans), a serif (e.g. Source Serif 4), a mono (e.g. JetBrains Mono)
-- [ ] Registered at worker start (no system install needed); system fonts still work
-- [ ] Theme tokens `font_serif`, `font_mono`; code scene uses `font_mono`
+- [x] Ship three open-licensed families as package data with licences: Inter (sans), a serif (e.g. Source Serif 4), a mono (e.g. JetBrains Mono)
+- [x] Registered at worker start (no system install needed); system fonts still work
+- [x] Theme tokens `font_serif`, `font_mono`; code scene uses `font_mono`
 
 ### Step 19 — Icons: mechanism + seed set
 - [ ] `icon(name, size, color)` helper in `vidgen.api` (SVG → Mobject, recoloured by theme token)

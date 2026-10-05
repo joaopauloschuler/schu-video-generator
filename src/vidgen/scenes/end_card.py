@@ -53,7 +53,7 @@ class EndCard(NarratedScene):
             shrink_to_fit(logo.scale_to_fit_height(self.safe_height * 0.2), width, None)
             head.add(logo)
         if p.title:
-            head.add(fit_text(p.title, width, self.safe_height * 0.35, size=p.title_size, color=p.title_color, weight=BOLD))
+            head.add(fit_text(p.title, width, self.safe_height * 0.35, size=p.title_size, color=p.title_color, weight=BOLD, font=self.theme.font_for("heading")))
         head.arrange(DOWN, buff=0.45)
         rows = self._lines(width)
         rows.arrange(DOWN, buff=0.28)

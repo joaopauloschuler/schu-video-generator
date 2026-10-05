@@ -89,7 +89,10 @@ Renders of a variant go to `build/<final|preview>_<variant>/`. Audio sharing rul
 theme:
   preset: light_academic    # optional: a named set of theme values (see below)
   background: "#0E1116"     # frame background
-  font: Inter               # font family for all text (must be installed; see README)
+  font: Inter               # sans family: body text and every role not set below (bundled)
+  font_serif: Source Serif 4  # serif family, the `serif` font token (bundled)
+  font_mono: JetBrains Mono NL  # monospace family, the `mono` token: code listings (bundled)
+  fonts: {heading: serif}   # optional: font per role (see "Fonts" below)
   code_style: github-dark   # Pygments style of `code` listings
   colors:                   # tokens; these are the defaults, add any name you like
     text: "#E8EAED"
@@ -120,6 +123,45 @@ looks exactly as before. `vidgen list-themes` shows every preset with its values
 `vidgen validate` warns (without failing) when the project's own theme has a colour pair below
 WCAG AA (`warning: theme contrast: colors.dim #6B7280 on background #0E1116: 3.91:1 (needs
 4.5:1, too low)`; same check as the presets' tests, see below).
+
+### Fonts
+
+vidgen ships three open-licence font families (SIL OFL 1.1; licences in
+`src/vidgen/data/fonts/`, list in `THIRD_PARTY_NOTICES.md`) and registers them for its own
+renders, so they need **no installation** on Windows, macOS or Linux: **Inter** (sans; Regular,
+Bold, Italic), **Source Serif 4** (serif; Regular, Bold, Italic) and **JetBrains Mono NL**
+(monospace without coding ligatures, so code shows the characters as typed; Regular, Bold).
+Any installed font works too: write its family name (`font: Segoe UI`). A bundled family that is
+also installed system-wide is fine (either copy is used; they are the same font).
+
+The theme has three family tokens: `font` (sans; default Inter), `font_serif` (default Source
+Serif 4) and `font_mono` (default JetBrains Mono NL). Built-in scenes ask for a font by
+**role**, and `fonts` maps a role to a token — `sans`, `serif`, `mono` — or directly to a family
+name:
+
+| role | used for | default |
+|---|---|---|
+| `body` | all other text (subtitles, bullets, captions, labels...) | `sans` |
+| `heading` | `title` title, `bullets` heading, chart and `code` titles, `end_card` title | `sans` (`serif` in `light_academic`, `warm_editorial`) |
+| `quote` | `quote` text | `sans` (`serif` in `warm_editorial`) |
+| `quote_mark` | the large mark of `quote` | `serif` |
+| `code` | `code` listings and their line numbers | `mono` |
+
+```yaml
+theme:
+  preset: warm_editorial
+  font_serif: Georgia            # an installed serif instead of the bundled one
+  fonts: {quote: sans, heading: "Playfair Display"}   # roles: token or family name
+```
+
+`fonts` merges over the preset's roles per role; extension scenes can use any role name
+(`current_theme().font_for("kicker")`, unknown roles are `sans`). A scene's own font param
+(`code.font`, `quote.mark_font`) wins over the role.
+
+Changed in Step 18: `font` is the sans family; a `font` written in `video.yaml` no longer
+overrides the roles a preset sets (headings of `light_academic` stay serif; write `fonts:
+{heading: sans}` for all-sans). `code` listings use JetBrains Mono NL (was the system's
+`Monospace`), the quote mark Source Serif 4 (was Georgia / DejaVu Serif).
 
 ### Type scales
 
@@ -169,8 +211,9 @@ What they are for: `dark_tech` technical explainers; `light_academic` papers and
 base for a company colour (`{preset: brand_neutral, colors: {primary: "#..."}}` or a project
 preset based on it); `soft_pastel` friendly tutorials; `bold_neon` short social clips.
 
-All presets use the font Inter for now (presets can already name fonts per role, see
-docs/EXTENDING.md; serif and mono families arrive with bundled fonts). Every built-in preset
+All presets use the bundled families (Inter, Source Serif 4, JetBrains Mono NL);
+`light_academic` sets headings and `warm_editorial` headings and quotes in the serif (see
+[Fonts](#fonts)). Every built-in preset
 passes WCAG AA (tested): `text` and `dim` at least 4.5:1 on the background and on `surface`,
 the accent tokens at least 3:1 on the background and the palette at least 4.5:1 (charts label
 series in palette colours; `high_contrast`: 7:1 for all of them). The palettes are ordered and
@@ -192,8 +235,8 @@ background, below WCAG AA); dim captions, axis labels and sources are a little l
 ### `vidgen list-themes`
 
 `vidgen list-themes [PROJECT] [--json] [--swatches PNG]` lists every preset (built-in, then the
-project's own) with its resolved values in this project (background, colours, palette, font,
-`code_style`, scale and the sizes it gives here), the contrast check (minimum ratios, any
+project's own) with its resolved values in this project (background, colours, palette, fonts
+and the family of each built-in role, `code_style`, scale and the sizes it gives here), the contrast check (minimum ratios, any
 failing pair), the palette's smallest colour difference and for which vision, and the type
 scales. `--swatches PNG` also writes a picture of all presets (one row each: name and
 description in its text colours, accent chips, a `surface` panel, the palette as bars), so an
@@ -450,7 +493,9 @@ the scene draws a large typographic mark.
 | `author`, `source` | str | `""` | shown as `— author` and, smaller, `source` |
 | `size` | size | `subtitle` | of the quote text (shrunk if long) |
 | `color`, `mark_color`, `author_color`, `source_color` | color | `text`, `primary`, `text`, `dim` | |
-| `mark_font` | str | `"Georgia,DejaVu Serif,serif"` | font list for the quote mark |
+| `mark_font` | str | role `quote_mark` (Source Serif 4) | font of the quote mark |
+
+The quote text uses the font role `quote`, the mark `quote_mark` ([Fonts](#fonts)).
 
 ```yaml
 - id: saying
@@ -505,7 +550,7 @@ number and highlights still count original lines.
 | `highlight` | list of line specs | `[]` | entry *i* applies at beat *i*: `3`, `"2-4"`, `"1, 5-6"` or `[1, 4]` (1-based) |
 | `line_numbers` | bool | `true` | |
 | `style` | str | theme `code_style` | a Pygments style (`monokai`, `dracula`, `xcode`, ...); default: the theme's `code_style` (`github-dark`, `xcode` in `light_academic`) |
-| `font` | str | `Monospace` | monospace font family (e.g. `Consolas` on Windows) |
+| `font` | str | role `code` (`font_mono`: JetBrains Mono NL) | font family of the listing |
 | `size` | size | `caption` | starting font size (scaled to fill the frame, up to 1.5x) |
 | `highlight_color` | color | `highlight` | |
 | `wrap` | bool | `true` | wrap long lines instead of shrinking the listing below `size` / the readable minimum |
@@ -959,7 +1004,9 @@ when required); `doc` (the docstring under the field or its `Field(description=.
 
 Each preset: `name`, `origin` (`builtin` or the extension file), `base`, `description`,
 `selected` (bool: the project's preset), and what selecting it gives in this project:
-`background`, `font`, `fonts` (role → family), `code_style`, `scale` (as set, e.g. `auto`),
+`background`, `font`, `font_serif`, `font_mono`, `fonts` (the roles the preset and config
+set: role → token or family), `font_roles` (the family of every built-in role: `body`,
+`heading`, `quote`, `quote_mark`, `code`), `code_style`, `scale` (as set, e.g. `auto`),
 `scale_resolved`, `colors`, `palette`, `sizes`; `contrast` `{ok, min_text_ratio,
 min_graphic_ratio, failures}` (`failures`: messages like the validate warnings) and
 `palette_distinctness` `{normal, protanopia, deuteranopia, tritanopia}` (smallest CIEDE2000

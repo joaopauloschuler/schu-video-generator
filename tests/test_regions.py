@@ -345,7 +345,7 @@ def render_unfaded(project: Project, scene_id: str, media: Path, size: tuple[int
         scene.render()
         scene.layout_safe = scene.safe_area  # while the frame is still configured
         scene.readable = readable_size()
-        scene.readable_mono = readable_size("Monospace")
+        scene.readable_mono = readable_size("JetBrains Mono NL")
         return scene
 
 
@@ -358,7 +358,7 @@ def code_font_size(scene: Any) -> float:
     """Font size the listing ends up at (points): cap height of its 'd' line vs Text."""
     listing = find(scene, "Code")
     first = listing.code_lines[0][0]  # the 'd' of def
-    return float(first.height / Text("d", font="Monospace", font_size=48).height * 48)
+    return float(first.height / Text("d", font="JetBrains Mono NL", font_size=48).height * 48)
 
 
 @pytest.mark.render

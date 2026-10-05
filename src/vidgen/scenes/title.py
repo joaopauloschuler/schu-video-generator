@@ -54,6 +54,7 @@ class Title(NarratedScene):
             size="title",
             color=p.color,
             weight=BOLD,
+            font=self.theme.font_for("heading"),
             highlights={p.highlight: p.highlight_color} if p.highlight else None,
         )
         head.add(title)

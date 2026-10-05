@@ -15,10 +15,13 @@ from types import MappingProxyType
 
 from vidgen.config import HEX_COLOR_PATTERN, ID_PATTERN
 from vidgen.errors import VidgenError
+from vidgen.fonts import FONT_TOKENS, MONO_FAMILY, SANS_FAMILY, SERIF_FAMILY
 from vidgen.scales import SCALE_CHOICES, TYPE_SCALES
 
 DEFAULT_BACKGROUND = "#0E1116"
-DEFAULT_FONT = "Inter"
+DEFAULT_FONT = SANS_FAMILY
+DEFAULT_FONT_SERIF = SERIF_FAMILY
+DEFAULT_FONT_MONO = MONO_FAMILY
 DEFAULT_CODE_STYLE = "github-dark"
 DEFAULT_COLORS: dict[str, str] = {
     "text": "#E8EAED",
@@ -40,7 +43,8 @@ class ThemePreset:
 
     Values not set fall through to ``base`` (another preset, if given), then to the defaults.
     ``scale`` names a type scale (``vidgen.scales``) applied below ``sizes``; ``fonts`` maps font
-    roles (``heading``, ``mono``, ...) to families, read with ``Theme.font_for`` (DESIGN.md §20).
+    roles (``heading``, ``quote``, ``code``...) to a family token (``sans``, ``serif``, ``mono``)
+    or a family name, read with ``Theme.font_for`` (DESIGN.md §20, §21).
     Build one with :func:`make_preset`, which validates the values.
     """
 
@@ -49,6 +53,8 @@ class ThemePreset:
     base: str | None = None
     background: str | None = None
     font: str | None = None
+    font_serif: str | None = None
+    font_mono: str | None = None
     code_style: str | None = None
     colors: Mapping[str, str] = field(default_factory=dict)
     palette: tuple[str, ...] | None = None
@@ -83,6 +89,8 @@ def make_preset(
     base: str | None = None,
     background: str | None = None,
     font: str | None = None,
+    font_serif: str | None = None,
+    font_mono: str | None = None,
     code_style: str | None = None,
     colors: Mapping[str, str] | None = None,
     palette: Sequence[str] | None = None,
@@ -108,13 +116,16 @@ def make_preset(
             raise VidgenError(f"{where}: size '{key}' must be a positive number, got {value!r}")
     if palette is not None and len(palette) == 0:
         raise VidgenError(f"{where}: palette must have at least one color")
-    if font is not None and (not isinstance(font, str) or not font.strip()):
-        raise VidgenError(f"{where}: font must be a font family name, got {font!r}")
+    for key, family in (("font", font), ("font_serif", font_serif), ("font_mono", font_mono)):
+        if family is not None and (not isinstance(family, str) or not family.strip()):
+            raise VidgenError(f"{where}: {key} must be a font family name, got {family!r}")
     for role, family in (fonts or {}).items():
         if not isinstance(role, str) or not re.match(ID_PATTERN, role):
             raise VidgenError(f"{where}: font role {role!r} must use only letters, digits and _")
         if not isinstance(family, str) or not family.strip():
-            raise VidgenError(f"{where}: fonts.{role} must be a font family name, got {family!r}")
+            raise VidgenError(
+                f"{where}: fonts.{role} must be a font family name or one of {', '.join(FONT_TOKENS)}, got {family!r}"
+            )
     if scale is not None and scale not in SCALE_CHOICES:
         raise VidgenError(f"{where}: unknown type scale {scale!r}; available: {', '.join(SCALE_CHOICES)}")
     if code_style is not None:
@@ -128,6 +139,8 @@ def make_preset(
         base=base,
         background=background,
         font=font,
+        font_serif=font_serif,
+        font_mono=font_mono,
         code_style=code_style,
         colors=MappingProxyType(dict(colors or {})),
         palette=tuple(palette) if palette is not None else None,
@@ -160,7 +173,7 @@ BUILTIN_PRESETS: Mapping[str, ThemePreset] = MappingProxyType(
             ),
             _builtin(
                 "light_academic",
-                "Paper-like off-white background, near-black text, deep ink accents.",
+                "Paper-like off-white background, near-black text, deep ink accents, serif headings.",
                 background="#F8F7F3",
                 font=DEFAULT_FONT,
                 code_style="xcode",
@@ -176,6 +189,7 @@ BUILTIN_PRESETS: Mapping[str, ThemePreset] = MappingProxyType(
                 },
                 palette=("#1D4ED8", "#C2410C", "#9D2F8F", "#15803D"),
                 scale="auto",
+                fonts={"heading": "serif"},
             ),
             _builtin(
                 "high_contrast",
@@ -198,7 +212,7 @@ BUILTIN_PRESETS: Mapping[str, ThemePreset] = MappingProxyType(
             ),
             _builtin(
                 "warm_editorial",
-                "Warm cream paper, espresso text, petrol and terracotta accents: a magazine feel.",
+                "Warm cream paper, espresso text, petrol and terracotta accents, serif headings and quotes: a magazine feel.",
                 background="#F6F0E4",
                 font=DEFAULT_FONT,
                 code_style="default",
@@ -214,6 +228,7 @@ BUILTIN_PRESETS: Mapping[str, ThemePreset] = MappingProxyType(
                 },
                 palette=("#1F5E6E", "#B04A16", "#8D4AAB", "#1A7C4D", "#8C2024"),
                 scale="auto",
+                fonts={"heading": "serif", "quote": "serif"},
             ),
             _builtin(
                 "brand_neutral",

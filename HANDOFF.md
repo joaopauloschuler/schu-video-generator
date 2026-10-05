@@ -1432,3 +1432,114 @@ How to test: `/home/claude/venv/bin/python -m pytest -q` (662 passed, 1 skipped)
 --swatches build/themes.png`, `vidgen storyboard examples/minimal --variant neon`, `vidgen lint
 examples/minimal --variant vertical`, `vidgen validate examples/kphi3` (theme warnings).
 
+## Step 18 — Bundled fonts
+What was built
+- Three SIL OFL families ship as package data in `src/vidgen/data/fonts/<Family>/` with their
+  `OFL.txt`; `THIRD_PARTY_NOTICES.md` (repo root) lists source, version, copyright, files:
+  | family (Pango name) | files | size | source (via npm, the only allowed channel; GitHub is blocked) |
+  |---|---|---|---|
+  | Inter 4.001 (`Inter`) | Regular, Bold, Italic `.ttf` | 985 KB | `inter-ui` 4.1.1 `web/*.woff2` → TTF (fontTools, lossless) |
+  | Source Serif 4 4.005 (`Source Serif 4`) | Regular, Bold, It `.ttf` | 721 KB | Adobe's `source-serif` 4.5.1 `TTF/` (as shipped) |
+  | JetBrains Mono NL 2.242 (`JetBrains Mono NL`) | Regular, Bold `.ttf` | 290 KB | `jetbrains-mono` 1.0.6 `fonts/webfonts/*.woff2` → TTF; OFL text from `@fontsource/jetbrains-mono` |
+  Total 2.0 MB on disk, the wheel grows to ~1.1 MB (checked with a local `pip wheel`: all 11
+  files are in it). `pyproject.toml` package-data `data/fonts/**/*`.
+- `src/vidgen/fonts.py`: `BUNDLED_FAMILIES`, `FONTS_DIR`, `SANS/SERIF/MONO_FAMILY`,
+  `bundled_font_files()`, `bundled_font_file(family, bold, italic)`,
+  `register_bundled_fonts()` (manimpango.register_font per file, idempotent, failures are
+  warnings, clears Manim's cached font list), `FONT_TOKENS`, `ROLE_DEFAULTS`, `BUILTIN_ROLES`.
+  Registration runs at import of `vidgen.helpers` / `vidgen.regions` and first thing in the
+  worker's `render_scene` (Pango only sees fonts registered before its first text layout —
+  verified: registering after a first `Text` has no effect on Linux).
+- Theme tokens `font_serif` (Source Serif 4), `font_mono` (JetBrains Mono NL), `font` stays the
+  sans family (Inter); config `theme.font_serif`, `theme.font_mono`, `theme.fonts` (role →
+  `sans`/`serif`/`mono` or a family); presets/`make_preset`/`register_theme_preset` gain
+  `font_serif`, `font_mono`. `Theme.font_for(role)`: config `fonts` > preset chain > role default
+  (`code` → mono, `quote_mark` → serif, else sans), tokens resolved to the families.
+- Built-in scenes read roles: `heading` (title/bullets/chart/code titles, end-card title),
+  `quote` (quote text), `quote_mark` (`quote.mark_font` default now the role), `code` (`code.font`
+  default now the role = JetBrains Mono NL). `fit_text(..., font=None)`.
+- Presets: `light_academic` serif headings; `warm_editorial` serif headings and quotes.
+- `list-themes`: `font_serif`, `font_mono`, `font_roles` in entries and the text listing; swatch
+  heading drawn in the preset's heading family. Contact sheets prefer the bundled Inter files.
+- Fingerprint includes the bundled font files.
+
+Verification
+- Pango really uses the bundled files: `test_pango_renders_with_the_bundled_faces` compares the
+  ink width of three sample strings laid out by Pango (Manim `Text`) with FreeType's
+  measurement of the same strings from the bundled file (Pillow), for all 3 families × Regular/Bold:
+  the ratio agrees within 2 % per sample across families (a substituted face is off far more).
+  Source Serif 4 and JetBrains Mono NL are *not* installed system-wide here (`fc-list`), and
+  `test_fonts_need_no_system_install` checks that a fresh process without vidgen does not know
+  them while one importing `vidgen.helpers` does. Inter IS installed system-wide here:
+  registration still succeeds for its bundled files (tested).
+- Storyboards of examples/minimal viewed: `editorial` (serif title/headings/chart titles/code
+  window title/end-card title, serif quote with serif mark, JetBrains Mono listing),
+  `light` (serif headings, sans quote), default and `vertical` (all Inter, JetBrains Mono
+  listing; wrapping in portrait unchanged in character). Looks tasteful; the serif headings in
+  bold read well on the paper backgrounds.
+- `vidgen lint`: default 2 warnings, `light` 2, `editorial` 2 (the same pre-existing
+  `bar_chart` caption `min_font` and `image` caption `safe_area`), `vertical` 1 (`safe_area`),
+  `examples/custom_scene` 0. `vidgen validate examples/kphi3` ok (its own `font: Inter`).
+
+Files
+- New: `src/vidgen/fonts.py`, `src/vidgen/data/fonts/**` (8 TTF + 3 OFL.txt),
+  `THIRD_PARTY_NOTICES.md`, `tests/test_fonts.py` (19 tests, 2 render).
+- Changed: `presets.py`, `theme.py`, `config.py`, `api.py`, `helpers.py`, `regions.py`,
+  `layout.py`, `sheets.py`, `themelist.py`, `render/worker.py`, `render/fingerprint.py`,
+  scenes `title.py`, `bullets.py`, `bar_chart.py`, `line_chart.py`, `end_card.py`, `code.py`,
+  `quote.py`; `pyproject.toml`; tests `test_scales.py` (font-role semantics), `test_regions.py`
+  (mono measured with JetBrains Mono NL); README (install: fonts bundled, feature line,
+  troubleshooting), docs/CONFIG.md (theme keys, new "Fonts" section with the role table,
+  presets note, `quote.mark_font`, `code.font`, list-themes JSON), docs/EXTENDING.md
+  (`fit_text(font=)`, theme font attributes, preset font args), DESIGN.md (§2, §4, §15 note,
+  §20 note, new §21), tasklist.md.
+
+Public interfaces added/changed
+- Config: `theme.font_serif`, `theme.font_mono`, `theme.fonts` (additive).
+- `vidgen.api.register_theme_preset(..., font_serif=None, font_mono=None)`; `fit_text(...,
+  font=None)` (also `fit_text_sized`). `Theme.font_serif`, `Theme.font_mono`; `Theme.fonts` now
+  includes config roles; `ThemePreset.font_serif/.font_mono`; `presets.DEFAULT_FONT_SERIF/MONO`.
+- Params: `code.font` default `None` (= role `code`), `quote.mark_font` default `None` (= role
+  `quote_mark`).
+- `vidgen.fonts` module (internal helpers listed above). list-themes JSON entries: `font_serif`,
+  `font_mono`, `font_roles`.
+
+Decisions / deviations
+- **`font_for` precedence changed from Step 17** (DESIGN §21): a `font` written in `video.yaml`
+  is the sans family and no longer overrides every role. With the old rule `examples/minimal`'s
+  base `font: Inter` would have cancelled the serif headings of its light/editorial variants and
+  turned code listings into Inter. No output changed for anyone before this step (no preset set
+  roles). Test in `test_scales.py` updated.
+- Roles may name a token (`sans`, `serif`, `mono`) rather than only a family, so `font_serif:
+  Georgia` in the config also changes a preset's serif headings.
+- **JetBrains Mono NL** (no ligatures) instead of JetBrains Mono: a teaching video should show
+  `!=`, `->`, `>=` as typed. Pango family name is `JetBrains Mono NL`.
+- npm `jetbrains-mono` 1.0.6 has font version 2.242 (current upstream 2.304; GitHub releases are
+  blocked here). Fontsource 5.x only has unicode-range-split WOFF2 subsets, so it was used only
+  for the licence text.
+- Weights: Regular + Bold for all, Italic for Inter and Source Serif 4 (Markup `<i>` in user
+  text); no Medium/SemiBold — built-ins only use NORMAL/BOLD. Pango synthesises other weights
+  from the nearest face (or an installed copy).
+- Registration at import time of `vidgen.helpers`/`vidgen.regions` (a side effect) because
+  Pango freezes its font map at the first layout; in-process users (tests, notebooks) need it
+  before any vidgen text.
+- `Source Serif 4` has an ~8 % smaller cap height per point than Inter; serif headings are a bit
+  smaller at the same size token. Left as is (headings are far above `min_font`).
+
+Known gaps / TODOs
+- Windows/macOS registration (`AddFontResourceEx` private / CoreText process scope via
+  manimpango) is not exercised here (Linux only). If a Windows Pango build ignores private GDI
+  fonts, text falls back to an installed font of that name; worth a check on the user's machine
+  (`vidgen storyboard examples/minimal --variant editorial`: titles must be serif).
+- Manim's text SVG cache (`build/.../media/texts/<scene>`) is keyed by text+font name: an SVG
+  made before a font became available is reused. Not a problem for fresh projects (the bundled
+  families are new names); deleting `build/` fixes any stale case.
+- `T()`/`MT()`/`self.text` take `font=` but no `role=` shortcut; extension authors call
+  `self.theme.font_for(role)`. Could be added in the Step 22 API review.
+- kphi3 scenes are unchanged (own scenes, `font: Inter`).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (681 passed, 1 skipped). Step only:
+`pytest tests/test_fonts.py`. Manual: `vidgen storyboard examples/minimal --variant editorial`,
+`vidgen list-themes examples/minimal --swatches build/themes.png`, `fc-list | grep -i "source
+serif"` (empty: the bundled copy is what renders).
+

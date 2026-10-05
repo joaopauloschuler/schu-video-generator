@@ -32,6 +32,8 @@ Identifier = Annotated[str, Field(pattern=ID_PATTERN)]
 HexColor = Annotated[str, Field(pattern=HEX_COLOR_PATTERN)]
 #: A positive font size (pydantic would put a non-standard ``gt`` into the JSON Schema of the union).
 Size = Annotated[int | float, Field(gt=0), WithJsonSchema({"type": "number", "exclusiveMinimum": 0})]
+#: A font role's family: a token (``sans``, ``serif``, ``mono``) or a font family name.
+FontChoice = Annotated[str, Field(min_length=1)]
 #: JSON Schema hint for even pixel sizes (the check itself is ``FormatConfig._even``).
 _EVEN = {"multipleOf": 2}
 
@@ -77,7 +79,13 @@ class ThemeConfig(_Strict):
     background: HexColor | None = None
     """Background color (hex); default: the preset's, else #0E1116."""
     font: str | None = Field(default=None, min_length=1)
-    """Font family for all text; default: the preset's, else Inter."""
+    """Sans font family (body text and roles without their own); default: the preset's, else Inter (bundled)."""
+    font_serif: str | None = Field(default=None, min_length=1)
+    """Serif font family (font role token `serif`); default: the preset's, else Source Serif 4 (bundled)."""
+    font_mono: str | None = Field(default=None, min_length=1)
+    """Monospace font family (token `mono`, code listings); default: the preset's, else JetBrains Mono NL (bundled)."""
+    fonts: dict[Identifier, FontChoice] = Field(default_factory=dict)
+    """Font per role (heading, quote, quote_mark, code, body...): sans, serif, mono or a family name; merged over the preset's."""
     code_style: str | None = None
     """Pygments style of code listings; default: the preset's, else github-dark."""
     colors: dict[Identifier, HexColor] = Field(default_factory=dict)

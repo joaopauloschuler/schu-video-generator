@@ -23,9 +23,12 @@ import numpy as np
 from manim import DOWN, LEFT, ORIGIN, RIGHT, UP, Mobject, Paragraph, Rectangle, Text, config
 
 from vidgen.errors import VidgenError
+from vidgen.fonts import register_bundled_fonts
 from vidgen.runtime import current_theme, has_context
 from vidgen.scales import Orientation, frame_orientation
 from vidgen.theme import Theme
+
+register_bundled_fonts()  # Pango only sees fonts registered before the first text is laid out
 
 log = logging.getLogger(__name__)
 
@@ -366,7 +369,7 @@ def readable_text(
     from vidgen.layout import fit_text_sized
 
     theme = theme or current_theme()
-    floor = readable_size(theme.font)
+    floor = readable_size(kwargs.get("font") or theme.font)
     if min_size is not None:
         floor = max(floor, float(theme.size(min_size)))
     start = max(float(theme.size(size)), floor)

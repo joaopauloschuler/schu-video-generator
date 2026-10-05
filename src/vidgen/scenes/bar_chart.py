@@ -87,7 +87,7 @@ class BarChart(NarratedScene):
         bottom = -self.frame_height / 2 + self.margin_y
         head = VGroup()
         if p.title:
-            title = fit_text(p.title, self.safe_width, self.safe_height * 0.18, size="heading", weight=BOLD)
+            title = fit_text(p.title, self.safe_width, self.safe_height * 0.18, size="heading", weight=BOLD, font=self.theme.font_for("heading"))
             head.add(title.move_to([0, top - title.height / 2, 0]))
             top = title.get_bottom()[1] - 0.45
         if p.caption:

@@ -13,8 +13,11 @@ from typing import Any, TypeVar
 import numpy as np
 from manim import NORMAL, Dot, Line, MarkupText, Mobject, Text, ValueTracker, VGroup, always_redraw
 
+from vidgen.fonts import register_bundled_fonts
 from vidgen.runtime import current_theme
 from vidgen.theme import Theme
+
+register_bundled_fonts()  # Pango only sees fonts registered before the first text is laid out
 
 M = TypeVar("M", Text, MarkupText)
 

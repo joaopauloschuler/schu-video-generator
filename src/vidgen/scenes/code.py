@@ -122,8 +122,8 @@ class CodeListing(NarratedScene):
         """Show line numbers."""
         style: str | None = None
         """Pygments style (monokai, dracula, xcode, ...); default: the theme's code_style."""
-        font: str = "Monospace"
-        """Monospace font family (e.g. Consolas on Windows)."""
+        font: str | None = None
+        """Font family of the listing; default: the theme's font for the `code` role (font_mono, JetBrains Mono NL)."""
         size: ThemeSize = "caption"
         """Starting font size (scaled to fill the frame, up to 1.5x)."""
         highlight_color: ThemeColor = "highlight"
@@ -192,7 +192,7 @@ class CodeListing(NarratedScene):
         title = None
         if p.title:
             header = self.region("header")
-            title = fit_text(p.title, header.width, header.height, size="heading", weight=BOLD)
+            title = fit_text(p.title, header.width, header.height, size="heading", weight=BOLD, font=self.theme.font_for("heading"))
             place(title, header, fit="none", align="center")
             body = body.below(title, gap=0.45)
         listing, groups = self._fit_listing(text.expandtabs(4).split("\n"), language or "python", body)
@@ -256,13 +256,18 @@ class CodeListing(NarratedScene):
         self.reveal(plan, fraction=0.6, cap=1.0)
         self.finish()
 
+    @property
+    def _font(self) -> str:
+        """The listing's font family."""
+        return self.params.font or self.theme.font_for("code")
+
     def _fit_listing(self, lines: list[str], language: str, body: Region) -> tuple[Code, list[list[int]]]:
         """The listing scaled to fill ``body`` (up to 1.5x the requested size, never
         overflowing), wrapped narrower while its width makes it smaller than the requested size
         (and at least the readable size). Returns it and, per original line, its lines."""
         p = self.params
         size = float(self.theme.size(p.size))
-        floor = max(size, readable_size(p.font))
+        floor = max(size, readable_size(self._font))
         columns: int | None = None
         while True:
             shown, groups = wrap_code(lines, columns) if columns else (lines, [[i] for i in range(len(lines))])
@@ -291,7 +296,7 @@ class CodeListing(NarratedScene):
                 "stroke_width": 1,
                 "corner_radius": 0.15,
             },
-            paragraph_config={"font": p.font, "font_size": size},
+            paragraph_config={"font": self._font, "font_size": size},
         )
 
     def _renumber(self, listing: Code, groups: list[list[int]], size: float) -> None:
@@ -301,7 +306,7 @@ class CodeListing(NarratedScene):
         for i, group in enumerate(groups):
             first, *rest = group
             old = numbers[first]
-            label = self.text(str(i + 1), size=size, color=color, font=self.params.font)
+            label = self.text(str(i + 1), size=size, color=color, font=self._font)
             label.align_to(old, RIGHT).align_to(old, DOWN)
             numbers.submobjects[first] = label
             for j in rest:

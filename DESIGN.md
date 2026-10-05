@@ -46,7 +46,8 @@ src/vidgen/
   errors.py               # VidgenError, Problem
   config.py               # pydantic v2 models for video.yaml (see §4)
   project.py              # Project: locate/load config, resolve paths, variants
-  theme.py                # Theme object (colors, font, sizes, background, code style; precedence §19)
+  theme.py                # Theme object (colors, fonts, sizes, background, code style; precedence §19)
+  fonts.py                # bundled fonts (data/fonts/, OFL), Pango registration, font roles (§21)
   presets.py              # theme presets: seven built-in presets (§19, §20)
   scales.py               # type scales compact / standard / large / auto, frame orientation (§20)
   themelist.py            # `vidgen list-themes`: preset listing, JSON entries, swatch PNG (§20)
@@ -72,6 +73,7 @@ src/vidgen/
   subtitles.py            # SRT from beat timings
   fileio.py               # atomic writes; replacing files that Windows programs keep open
   scenes/                 # built-in scene library (registered like extensions)
+  data/fonts/             # Inter, Source Serif 4, JetBrains Mono NL (.ttf + OFL.txt; package data)
 tests/                    # pytest; no network; slow renders marked `render`
 examples/
   minimal/                # config-only example using built-ins
@@ -80,7 +82,7 @@ examples/
 docs/
   CONFIG.md               # config reference
   EXTENDING.md            # how to write project extensions
-DESIGN.md  CLAUDE.md  HANDOFF.md  README.md
+DESIGN.md  CLAUDE.md  HANDOFF.md  README.md  THIRD_PARTY_NOTICES.md (bundled fonts, §21)
 ```
 
 ## 3. Project folder layout
@@ -131,7 +133,10 @@ variants:                                        # optional named overrides, dee
 theme:
   preset: light_academic                         # optional (Step 16, §19); values below still win
   background: "#0E1116"
-  font: Inter
+  font: Inter                                    # sans family (Step 18: bundled, §21)
+  font_serif: Source Serif 4                     # serif family (Step 18)
+  font_mono: JetBrains Mono NL                   # mono family, code listings (Step 18)
+  fonts: {heading: serif}                        # font roles -> sans/serif/mono or a family (Step 18)
   code_style: github-dark                        # Pygments style of `code` listings (Step 16)
   scale: auto                                    # type scale (Step 17, §20): compact/standard/large/auto
   colors:                                        # open dict; these names are the defaults
@@ -1007,7 +1012,7 @@ using the existing renders of the others (missing ones are rendered). Exit code 
   `lint.rules.min_font.min_size` (default `MIN_TEXT_FRACTION = 0.025`), so layout and lint
   share the threshold; that one lint value is therefore part of the render fingerprint (key
   `readable`), while other lint settings still are not. Inter and the default `Monospace`
-  measure ≈ 0.0101 units of cap height per point → ≈ 20.8 pt at any resolution (theme `small`
+  (JetBrains Mono NL since Step 18) measure ≈ 0.0101 units of cap height per point → ≈ 20.8 pt at any resolution (theme `small`
   20 is below it, `caption` 24 above, matching what lint reports).
 - **`readable_text(text, area, *, size="body", min_size=None, theme=None, **fit_text_kwargs)`**:
   `fit_text` into the region starting at `max(size, floor)` with `min_size = floor =
@@ -1105,7 +1110,8 @@ using the existing renders of the others (missing ones are rendered). Exit code 
 - **Font roles hook**: `ThemePreset.fonts` (role → family, roles are identifiers);
   `Theme.fonts` merges the chain, `Theme.font_for(role)` = `video.yaml` `font` if written, else
   the chain's family for the role, else `Theme.font`. No built-in preset sets roles and no
-  built-in scene reads them yet (Step 18 bundles serif/mono fonts and wires them).
+  built-in scene reads them yet (Step 18 bundles serif/mono fonts and wires them; §21 changes
+  the precedence: a config `font` no longer overrides roles).
 - **Presets**: `BUILTIN_PRESETS` (built through `make_preset`, so validated at import) adds
   `warm_editorial` (cream `#F6F0E4`, espresso text, petrol/terracotta, Pygments `default`),
   `brand_neutral` (grey `#F4F5F7` with white `surface`, graphite text, one blue, `xcode`),
@@ -1134,3 +1140,53 @@ using the existing renders of the others (missing ones are rendered). Exit code 
 - **`vidgen validate`** logs `theme_contrast` failures of the project's theme (and of each
   variant's, prefixed `[variant]`, unless equal to the base's) as warnings: stderr
   `warning: theme contrast: ...`, JSON `warnings`; they never fail validation.
+
+## 21. Refinements (Step 18, bundled fonts)
+
+- **Bundled families** (package data `src/vidgen/data/fonts/<Family>/`, each with its `OFL.txt`;
+  `THIRD_PARTY_NOTICES.md` lists sources, versions and sizes; `pyproject` package-data
+  `data/fonts/**/*`): Inter 4.001 (`Inter`: Regular, Bold, Italic), Source Serif 4 4.005
+  (`Source Serif 4`: Regular, Bold, Italic), JetBrains Mono NL 2.242 (`JetBrains Mono NL`:
+  Regular, Bold; the no-ligature variant, so code shows the typed characters). ~2.0 MB of TTF,
+  ~1.1 MB in the wheel. All SIL OFL 1.1, unmodified (Inter/JetBrains Mono decompressed from
+  WOFF2, lossless).
+- **Registration** (`vidgen/fonts.py`): `register_bundled_fonts()` calls
+  `manimpango.register_font` for every file (Linux: fontconfig app font; Windows:
+  `AddFontResourceEx` private; macOS: CoreText), once per process, and clears Manim's cached
+  `Text.font_list` so its missing-font warning knows them. Pango reads registered fonts when it
+  builds its font map (the first text laid out), so registration must precede any text:
+  `vidgen.helpers` and `vidgen.regions` call it at import (every vidgen text path imports one
+  of them; extensions import them through `vidgen.api`), and the worker calls it first in
+  `render_scene`. A file that fails to register is a logged warning (text then uses an
+  installed font of that name or Pango's fallback), never an error. A family that is also
+  installed system-wide is found twice by fontconfig; either copy renders it (same font).
+  Pillow contact sheets and `list-themes --swatches` also prefer the bundled Inter files.
+- **Theme tokens**: `font` (sans; default Inter), `font_serif` (default Source Serif 4) and
+  `font_mono` (default JetBrains Mono NL), each with the usual precedence (config > preset chain
+  > default; `ThemeConfig`, `ThemePreset`, `make_preset`, `register_theme_preset` gain
+  `font_serif`/`font_mono`). Config `theme.fonts: {role: token-or-family}` (new, merged per role
+  over the preset chain's `fonts`).
+- **Font roles** (`Theme.font_for(role)`): setting = config `fonts[role]` > preset chain
+  `fonts[role]` > `fonts.ROLE_DEFAULTS` (`code` → `mono`, `quote_mark` → `serif`) > `sans`;
+  the tokens `sans`/`serif`/`mono` (`fonts.FONT_TOKENS`) resolve to `font`/`font_serif`/
+  `font_mono`, any other value is a family name. **Changed from §20**: a `font` written in
+  `video.yaml` is the sans family only and no longer overrides every role (otherwise a config
+  `font: Inter`, as in examples/minimal, would silently cancel a preset's serif headings, and
+  code listings would lose their mono font). `Theme.fonts` = the roles set by presets + config
+  (without defaults).
+- **Built-in scenes**: role `heading` for the `title` title, `bullets` heading, `bar_chart` /
+  `line_chart` / `code` titles and the `end_card` title; `quote` for the quote text;
+  `quote_mark` for its mark (param `mark_font` default `None` = the role; was
+  `"Georgia,DejaVu Serif,serif"`); `code` for listings and line numbers (param `font` default
+  `None` = the role; was `"Monospace"`, which on Windows was not a monospace font). All other
+  text: `body` = theme `font`. `fit_text`/`fit_text_sized` gain `font=None` (default the theme
+  font); `readable_text` measures its floor with the `font` it is given.
+- **Presets**: `light_academic` `fonts: {heading: serif}`, `warm_editorial` `{heading: serif,
+  quote: serif}`; every other preset keeps all-sans text. Source Serif 4 has a smaller cap
+  height per point (0.0093 vs Inter 0.0101 units), so serif headings look ~8 % smaller at the
+  same size token; headings are far above the `min_font` floor, so sizes were left alone.
+- **Fingerprint**: the bundled font files are part of `vidgen_source_digest` (a font update
+  re-renders storyboards).
+- `vidgen list-themes`: entries gain `font_serif`, `font_mono` and `font_roles` (the family of
+  every built-in role); the swatch panel draws "Aa Heading" in the preset's heading family when
+  it is bundled.

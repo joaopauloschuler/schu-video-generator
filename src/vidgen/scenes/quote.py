@@ -27,8 +27,8 @@ class Quote(NarratedScene):
         """Quote text color."""
         mark_color: ThemeColor = "primary"
         """Color of the large quote mark."""
-        mark_font: str = "Georgia,DejaVu Serif,serif"
-        """Font list for the quote mark."""
+        mark_font: str | None = None
+        """Font of the quote mark; default: the theme's font for the `quote_mark` role (font_serif, Source Serif 4)."""
         author_color: ThemeColor = "text"
         """Author color."""
         source_color: ThemeColor = "dim"
@@ -38,8 +38,8 @@ class Quote(NarratedScene):
         p = self.params
         width = self.safe_width * (1.0 if self.is_portrait else 0.78)
         body_text = p.text.strip().strip(QUOTE_CHARS).strip() or p.text
-        mark = self.text("“", size=float(self.theme.size(p.size)) * 4, color=p.mark_color, weight=BOLD, font=p.mark_font)
-        body = fit_text(body_text, width, self.safe_height * 0.55, size=p.size, color=p.color)
+        mark = self.text("“", size=float(self.theme.size(p.size)) * 4, color=p.mark_color, weight=BOLD, font=p.mark_font or self.theme.font_for("quote_mark"))
+        body = fit_text(body_text, width, self.safe_height * 0.55, size=p.size, color=p.color, font=self.theme.font_for("quote"))
         attribution = VGroup()
         if p.author:
             attribution.add(fit_text(f"— {p.author}", width, size="body", color=p.author_color, weight=BOLD))
