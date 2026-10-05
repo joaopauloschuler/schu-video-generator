@@ -53,6 +53,7 @@ src/vidgen/
   runtime.py              # "current project/theme" context used by helpers and extensions
   scene.py                # NarratedScene base class + narrate()
   capture.py              # frame capture: stills at beat ends / N per beat (see §13)
+  introspect.py           # layout dump of the captured frames: objects, px boxes, sizes (§15)
   storyboard.py           # `vidgen storyboard`: reuse/render stills, write contact sheets (§14)
   sheets.py               # contact-sheet layout and drawing with Pillow (§14)
   helpers.py              # theme-aware text helpers and generic drawing utilities
@@ -95,7 +96,7 @@ has sound), `timings/<id>.json` (beat timings + the render settings), `media/` (
 intermediate files), `padded/<id>.wav` (each scene's audio padded to its exact video length) with
 `padded/video_concat.txt` / `audio_concat.txt`, and `timings.json` (the whole video).
 With `--frames` (Step 10, §13) also `frames/<id>/*.png` + `frames/<id>/index.json` and
-`frames/index.json`.
+`frames/index.json`, and `layout/<id>.json` (Step 12, §15).
 
 ## 4. Config schema (`video.yaml`)
 
@@ -756,3 +757,56 @@ using the existing renders of the others (missing ones are rendered). Exit code 
   variant, preview, per_beat, format, folder, rendered, reused, elapsed, sheets: [{kind
   (video|scene), scene, page, pages, path, width, height, frames: [{scene, beat, k, n, time,
   scene_time, path}]}]`.
+
+## 15. Refinements (Step 12, layout introspection)
+
+- **What**: whenever stills are captured (worker `--frames N`, so `render --frames`,
+  `--frames-per-beat` and `storyboard`), `vidgen.introspect.LayoutRecorder` — a second
+  `FrameCapture` listener next to `StillWriter` — describes the same frames as data and the
+  worker writes `<render_dir>/layout/<scene>.json` (`worker.scene_layout_path`). Not behind a
+  separate flag: it costs ~50 ms per 1080p still (measured on kphi3; negligible next to the
+  render), and stills and layout then always come from the same render. It is the input of
+  Step 13's `vidgen lint`. Reference: docs/CONFIG.md "Layout dump".
+- **Format** (`LAYOUT_VERSION = 1`): `{version, scene, type, width, height, fps, per_beat,
+  px_per_unit, background, safe_area: [x0, y0, x1, y1], frames: [{beat, k, n, frame, time,
+  still, camera: {center, width, height}, objects}]}`; frames carry the stills index keys and
+  `still` (`../frames/<scene>/<file>`, relative to the layout file; `capture.still_name`).
+  Objects: `{id, kind, class, path, name, bbox, opacity, z, order, parts}` plus, for text kinds
+  (`text|code|math|number`), `{text, font_px, color, colors, backdrop}` and otherwise
+  (`shape|group|image`) `{fill: {color, opacity}|null, stroke: {color, opacity,
+  width_px}|null}`. Pixels: output frame, origin top-left, y down, frame `[0,W] x [0,H]`,
+  1 decimal. Colours `#RRGGBB`.
+- **Measuring**: points go through the scene's own `camera.points_to_subpixel_coords`, so a
+  `MovingCamera` frame (zoom/pan) is honoured. VMobject curves are sampled at 5 parameters per
+  cubic (anchors+handles would overstate round glyphs); visible strokes widen the box by half
+  their width (`stroke_width * camera.cairo_line_width_multiple` units). Images: their corner
+  points, opacity = max alpha of the pixel array. Visibility per drawn leaf: max of fill alpha
+  and (if `stroke_width > 0`) stroke alpha; leaves at 0 are ignored, objects without a visible
+  leaf are not listed (fade-ins show as fractional `opacity`).
+- **Grouping** (walk of `scene.mobjects`): text mobjects (`Text`, `MarkupText`, `Paragraph`,
+  `SingleStringMathTex` = `Tex`/`MathTex`, `DecimalNumber`) are one object; inside a `Code`,
+  paragraphs are kind `code` (Manim's invisible alignment suffix ` pA<n>` removed from `text`)
+  and the background is a shape; a group whose family has no text or image is one `group`
+  object (fill/stroke of its largest part); other groups are walked into; a group drawing
+  points itself also yields a `shape`. Each mobject is visited once.
+- **Identity**: `id` = `m<N>` per Python object for the whole scene (the recorder keeps the
+  objects alive so `id()` is never reused); `path` = parent chain of `Class[index]` segments,
+  replaced by the name where the scene named a mobject (a public attribute of the scene, or a
+  `Mobject.name` other than the class name).
+- **Sizes and colours**: `font_px` = 75th percentile of the visible glyph heights (outline,
+  output px): ≈ cap height for mixed case, x-height for all-lowercase-without-ascenders text;
+  robust to punctuation and to one large glyph, and works the same for Tex. `backdrop` = the
+  most common exact colour inside the text box in the captured frame, after dropping pixels
+  within RGB distance 60 of the text's own colours (unless that leaves < 5 %; boxes are
+  subsampled to ≤ 40 000 pixels; colours are grouped in 5-bit bins first so anti-aliasing does
+  not split the vote). `order` = position of the object's top-most part in Manim's draw order
+  (`extract_mobject_family_members` with z-index).
+- **Staleness/reuse**: the worker deletes the layout file before every render (like the stills);
+  `pipeline._usable_render` with frames requested also requires it; `frames/index.json` scene
+  entries gain `layout` (`../layout/<id>.json` or `null`). `introspect.py` counts in the scene
+  fingerprint (it changes the layout output).
+- **Limits**: `text` is the string the mobject was built with (Manim's `become`/`Transform`
+  keep it; the built-in `bar_chart` counter now updates it); during
+  `TransformMatchingShapes`/`TransformMatchingTex` loose glyphs are shapes; while Manim's Cairo
+  renderer animates, moving mobjects are drawn over static ones regardless of z-index, which
+  `order` does not model; 3D cameras are only as right as `transform_points_pre_display`.

@@ -529,13 +529,65 @@ and the PNG file name.
 `frames/index.json`: `{title, variant, preview, format, per_beat, vidgen, scenes}`; each scene
 is `{id, start, duration, frames}` (`start` in the video) and each still is as above with
 `time` in the **video** (scene start + time in the scene), `scene_time` (time in the scene)
-and `path` relative to `frames/` (`<scene>/<file>.png`). The beat texts are in
+and `path` relative to `frames/` (`<scene>/<file>.png`); each scene also has `layout`, its
+layout file relative to `frames/` (`../layout/<scene>.json`, see below). The beat texts are in
 `build/.../timings.json`.
 
 Every scene render deletes the scene's old stills, and every `vidgen render` deletes
 `frames/index.json` (it is rewritten when stills are requested), so stills never belong to an
 older render. With `--scene ID --frames`, scenes that would be reused but have no stills at
 this count are rendered again.
+
+## Layout dump (`build/.../layout/<scene>.json`)
+
+Whenever stills are taken (`--frames`, `--frames-per-beat N`, `vidgen storyboard`), the same
+frames are also described as data: for each still, every **visible** object on screen with its
+position in pixels, size, colours and opacity: the input for layout checks (the planned `vidgen
+lint`: text off the frame or outside the safe area, overlapping text, text too small, low
+contrast, too many words); you or an agent can read it directly too. It costs a few milliseconds per still and is deleted
+and rewritten with the stills, so it always describes the current render.
+
+File `build/<final|preview>[_<variant>]/layout/<scene>.json`:
+
+```
+{version: 1, scene, type, width, height, fps, per_beat,
+ px_per_unit,              # output pixels per Manim unit (camera not zoomed)
+ background: "#0E1116",    # the theme background
+ safe_area: [x0, y0, x1, y1],  # frame minus the scene's margins (margin_x/margin_y), in px
+ frames: [{beat, k, n, frame, time,     # the same keys as the stills index
+           still: "../frames/<scene>/<file>.png",
+           camera: {center: [x, y], width, height},   # the camera frame in Manim units
+           objects: [...]}]}
+```
+
+Coordinates are output-frame pixels: origin at the top-left corner, y downwards, the frame
+spans `[0, width] x [0, height]`; boxes are `[x0, y0, x1, y1]` (1 decimal) and may lie partly or
+wholly outside the frame. A moving or zoomed camera (`MovingCamera`) is taken into account.
+
+Each object:
+
+| key | meaning |
+|---|---|
+| `id` | `m1`, `m2`, ...: the same Python object keeps its id in every frame of the scene |
+| `kind` | `text` (`Text`, `MarkupText`, `Paragraph`), `code` (the text of a `Code` listing), `math` (`Tex`, `MathTex`), `number` (`DecimalNumber`, `Integer`), `shape` (one path), `group` (a group of shapes with no text or image inside, e.g. an axis' ticks), `image` |
+| `class` | the Manim class |
+| `path` | where it sits: parent groups from the top-level mobject down, each `Class[index]` (index among its parent's submobjects; top level: in the scene), or the name the scene gave it |
+| `name` | the scene attribute that holds it (`self.title = ...`) or a `Mobject.name` set by the scene, else `null` |
+| `bbox` | the box of its visible parts, stroke included |
+| `opacity` | the highest opacity of its visible parts (fill, or stroke when it has one); a fade-in in progress shows here |
+| `z`, `order` | Manim `z_index`, and the drawing position (higher is drawn later, i.e. on top) of its top-most part |
+| `parts` | number of visible parts (glyphs, paths) |
+| text kinds only: `text` | the characters (markup tags removed; the LaTeX source for `math`) |
+| `font_px` | the 75th percentile of its visible glyphs' heights in output pixels: about the cap height (≈ 0.7 em) for mixed-case text, the x-height for lowercase text without ascenders |
+| `color`, `colors` | the most common glyph colour, and all of them (most common first) |
+| `backdrop` | the most common colour of the frame inside its box, ignoring its own colours: what the text is read against (`null` when off-frame) |
+| other kinds: `fill`, `stroke` | `{color, opacity}` / `{color, opacity, width_px}` of the largest visible part, or `null` |
+
+An object is one text mobject (not one per glyph), one path, one image, or one group of shapes.
+Parts with opacity 0 are not visible: they do not count in the box, and an object with no
+visible part is not listed. `text` is the string the mobject was created with; Manim's
+`become()` and `Transform` change the glyphs but not that string, and while
+`TransformMatchingShapes`/`TransformMatchingTex` run, the moving glyphs are shapes.
 
 ## Storyboard (`vidgen storyboard`)
 

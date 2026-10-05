@@ -9,7 +9,8 @@ Moments: ``per_beat`` stills per beat, evenly spaced, the last one on the beat's
 (``per_beat=1``: the end of each beat). A silent scene counts as one beat (``beat`` is
 ``None``) lasting ``duration - outro``. For each moment the capture calls its listeners with
 the scene (in the state of that frame) and a :class:`CapturedFrame`; :class:`StillWriter` is
-the listener that saves PNGs and the index. Later tools (layout introspection) add listeners.
+the listener that saves PNGs and the index; :class:`vidgen.introspect.LayoutRecorder` records
+the layout of the same frames.
 """
 
 from __future__ import annotations
@@ -51,6 +52,11 @@ class CapturedFrame:
 
 #: A capture listener: called with the scene (in the state of the captured frame) and the frame.
 CaptureListener = Callable[["NarratedScene", CapturedFrame], None]
+
+
+def still_name(captured: CapturedFrame) -> str:
+    """File name of a still: ``<beat_id>-<k>.png`` (``<scene_id>-<k>.png`` for a silent scene)."""
+    return f"{captured.beat_id or captured.scene_id}-{captured.k}.png"
 
 
 def plan_targets(start: int, frames: int, n: int, include_end: bool) -> list[tuple[int, int]]:
@@ -169,7 +175,7 @@ class StillWriter:
         self.entries: list[dict[str, Any]] = []
 
     def __call__(self, scene: NarratedScene, captured: CapturedFrame) -> None:
-        name = f"{captured.beat_id or captured.scene_id}-{captured.k}.png"
+        name = still_name(captured)
         buffer = io.BytesIO()
         Image.fromarray(np.asarray(captured.pixels, dtype=np.uint8)).convert("RGB").save(
             buffer, format="PNG", compress_level=3

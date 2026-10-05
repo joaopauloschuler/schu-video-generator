@@ -833,3 +833,71 @@ How to test: `/home/claude/venv/bin/python -m pytest -q` (492 passed, 1 skipped)
 `vidgen storyboard examples/minimal -j 4`, `vidgen storyboard examples/minimal --variant
 vertical`, `--per-beat 3`, `--json`; open `examples/minimal/build/preview/storyboard/*.png`.
 
+## Step 12 — Layout introspection
+What was built
+- Whenever stills are captured (`render --frames` / `--frames-per-beat N`, `storyboard`), the
+  worker also writes `build/<final|preview>[_<variant>]/layout/<scene>.json`: for each captured
+  frame (same `beat, k, n, frame, time` as the stills index, plus `still` = the PNG relative to
+  the layout file and the `camera` frame) every **visible** object: `id` (stable per object
+  across the scene's frames), `kind` (`text|code|math|number|shape|group|image`), `class`,
+  `path` (parent chain `Class[i]`, or the scene's name for it), `name` (scene attribute or
+  `Mobject.name`), `bbox` (output px, top-left origin, stroke included, may exceed the frame),
+  `opacity` (fade states included; opacity-0 parts/objects are left out), `z`, `order` (draw
+  position), `parts`; text kinds add `text`, `font_px`, `color`, `colors`, `backdrop`; others
+  `fill`/`stroke` (`width_px`). Header: `version, scene, type, width, height, fps, per_beat,
+  px_per_unit, background, safe_area` (px, from `margin_x/margin_y`).
+- `font_px` = 75th percentile of the visible glyph heights in output px (≈ cap height for mixed
+  case). `backdrop` = most common frame colour inside the text box excluding the text's own
+  colours (sampled from the captured pixels, so it sees plates, images and highlight bands).
+- Grouping: one object per text mobject (not per glyph), `Code` split into its paragraphs
+  (kind `code`, Manim's invisible ` pA<n>` alignment suffix stripped) and background; groups
+  with only shapes collapse into one `group`; MovingCamera zoom/pan handled via the scene's
+  camera transform.
+- Verified by drawing the boxes on stills (scratch script, not committed) for all of
+  examples/minimal (16:9, per-beat 2, and vertical `listing`/`sizes`) and all kphi3 scenes:
+  boxes hug the glyphs/shapes/images; `font_px` values look right (e.g. 9.9 px code text in
+  9:16 preview, 35 px title at 480p).
+
+Files
+- New: `src/vidgen/introspect.py`, `tests/test_introspect.py` (14 tests, 1 render test).
+- Changed: `capture.py` (`still_name`), `render/worker.py` (`scene_layout_path`, recorder
+  listener, layout deleted before every render), `render/pipeline.py` (`_has_stills` requires
+  the layout; `frames/index.json` scenes get `layout`), `scenes/bar_chart.py` (the counting
+  value label keeps `original_text` in sync after `become`), DESIGN (§2, §3, new §15),
+  docs/CONFIG.md (new "Layout dump" section, combined index `layout`), README, EXTENDING.md,
+  tasklist.md.
+
+Public interfaces added/changed (internal modules; `vidgen.api` unchanged)
+- `vidgen.introspect`: `LayoutRecorder()` (capture listener; `.objects(scene, pixels)`,
+  `.document(scene, per_beat)`, `.frames`), `LAYOUT_VERSION = 1`, `FONT_PERCENTILE = 75`.
+- `vidgen.capture.still_name(captured)`; `worker.scene_layout_path(project, preview, scene_id)`.
+- `frames/index.json` scene entries: new key `layout` (within its version).
+
+Decisions / deviations
+- Always on with stills, no flag: ~50 ms per 1080p still (kphi3 `setup`: 224 ms for 4 stills
+  in a 50 s render), and stills/layout can never come from different renders.
+- `font_px` is glyph-height based (works for Text, Paragraph, Tex alike; Manim's `font_size`
+  is not defined for Paragraph and is wrong after transforms); documented as p75 of glyph
+  heights, not em size. Lint thresholds (Step 13) should be set in these units.
+- Contrast input is `backdrop` sampled from pixels instead of searching shapes under the text:
+  exact for images, gradients, translucent plates.
+- Bezier curves are sampled (5 points per cubic) rather than using control points, so round
+  glyph boxes are tight.
+
+Known gaps / TODOs (Step 13 lint)
+- `text` is the construction string: `become()`/`Transform` don't update it (built-ins fixed
+  where it matters); during `TransformMatching*` loose glyphs are `shape`/`group` objects.
+- `order` follows z-index draw order; Manim's Cairo renderer draws moving mobjects over static
+  ones mid-animation regardless of that. Objects covered by an opaque one are still listed.
+- `opacity` is the max over parts (e.g. a code listing with dimmed lines reports 1.0).
+- Image objects are often intentionally larger than the frame (`fit: cover`): lint should not
+  flag images as off-frame. Findings to expect: `image` caption and `bar_chart` caption touch
+  or cross the bottom safe margin; kphi3 `setup` text slightly outside the safe area; 9:16
+  `code` text ≈ 10 px at 854 px height.
+- No CLI to view layouts; Step 13's `vidgen lint` should check `scene_layout_path` exists
+  alongside `storyboard.stills_current` (fingerprint covers `introspect.py`).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (506 passed, 1 skipped). Manual:
+`vidgen render examples/minimal --preview --frames`, then read
+`examples/minimal/build/preview/layout/*.json`.
+

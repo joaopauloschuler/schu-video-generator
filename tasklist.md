@@ -45,8 +45,8 @@ Rules that apply to every step:
 - [x] Readable at a glance when opened as an image by an AI (fixed max width, legible label size)
 
 ### Step 12 — Layout introspection
-- [ ] Worker dumps, at each captured frame, every visible mobject: kind, text content, pixel bbox, font size in px, fill colour, opacity
-- [ ] Written to `build/.../layout/<scene>.json`; documented format
+- [x] Worker dumps, at each captured frame, every visible mobject: kind, text content, pixel bbox, font size in px, fill colour, opacity
+- [x] Written to `build/.../layout/<scene>.json`; documented format
 
 ### Step 13 — `vidgen lint` (layout rules)
 - [ ] Rules: off-frame / outside safe area, text–text overlap, font too small for the output height, low contrast (WCAG ratio vs background), too many words on screen

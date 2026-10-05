@@ -33,7 +33,14 @@ from vidgen.errors import VidgenError
 from vidgen.project import Project
 from vidgen.render import ffmpeg as ff
 from vidgen.fileio import remove_file
-from vidgen.render.worker import scene_audio_path, scene_frames_dir, scene_timings_path, scene_video_path, write_json
+from vidgen.render.worker import (
+    scene_audio_path,
+    scene_frames_dir,
+    scene_layout_path,
+    scene_timings_path,
+    scene_video_path,
+    write_json,
+)
 from vidgen.subtitles import write_srt
 from vidgen.tts.elevenlabs import API_KEY_ENV
 
@@ -138,7 +145,9 @@ def _usable_render(project: Project, preview: bool, scene_id: str, no_audio: boo
 
 
 def _has_stills(project: Project, preview: bool, scene_id: str) -> bool:
-    return (scene_frames_dir(project, preview, scene_id) / "index.json").is_file()
+    return (scene_frames_dir(project, preview, scene_id) / "index.json").is_file() and scene_layout_path(
+        project, preview, scene_id
+    ).is_file()
 
 
 def _tail(text: str, lines: int = TAIL_LINES) -> str:
@@ -354,7 +363,8 @@ def write_frames_index(project: Project, preview: bool, timings: dict[str, Any],
     """Combine the scenes' ``frames/<id>/index.json`` into ``frames/index.json`` (config order).
 
     Each still gets ``time`` in the video (scene start + its time in the scene), ``scene_time``
-    and ``path`` relative to the ``frames`` folder. A scene without stills of this ``frames``
+    and ``path`` relative to the ``frames`` folder; each scene its ``layout`` file (relative to the
+    ``frames`` folder). A scene without stills of this ``frames``
     count (a ``pre_render`` hook kept it from rendering) gets none, with a warning.
     """
     root = project.render_dir(preview) / "frames"
@@ -374,7 +384,16 @@ def write_frames_index(project: Project, preview: bool, timings: dict[str, Any],
             }
             for still in index["frames"]
         ]
-        scenes.append({"id": scene["id"], "start": scene["start"], "duration": scene["duration"], "frames": stills})
+        layout = scene_layout_path(project, preview, scene["id"])
+        scenes.append(
+            {
+                "id": scene["id"],
+                "start": scene["start"],
+                "duration": scene["duration"],
+                "layout": f"../layout/{layout.name}" if stills and layout.is_file() else None,
+                "frames": stills,
+            }
+        )
     combined = {
         "title": timings["title"],
         "variant": timings["variant"],

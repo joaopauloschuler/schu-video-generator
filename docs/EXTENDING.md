@@ -206,6 +206,10 @@ def validate_project(cls, params, project):
   with `vidgen storyboard --scene ID` (add `--variant vertical` for 9:16): it shows those
   stills with their narration. Its reuse of stills tracks the `.py` files of your extension
   folders and `assets/`; if your scene reads other files, use `--force` after changing them.
+- The same frames are described in `build/.../layout/<scene>.json` (docs/CONFIG.md "Layout
+  dump"), the input of layout checks. Mobjects you keep as attributes (`self.title = ...`) or
+  give a `name` appear under that name there. A `Text` updated with `m.become(new)` keeps its
+  old string as its `text`; set `m.original_text = new.original_text` if it matters.
 
 ```python
 @scene("checklist")

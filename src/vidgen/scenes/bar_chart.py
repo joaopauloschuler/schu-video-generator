@@ -131,7 +131,9 @@ class BarChart(NarratedScene):
 
             def count(m: Mobject, a: float, i: int = i, v: float = v) -> None:
                 value = p.baseline + a * (v - p.baseline)
-                m.become(place(value_label(value, i), i, value))
+                label = place(value_label(value, i), i, value)
+                m.become(label)
+                m.original_text = label.original_text  # become() keeps the old string (layout dump)
 
             seed = bar_rects[i].copy().stretch(1e-3, 0 if horizontal else 1, about_edge=edge)
             return [ReplacementTransform(seed, bar_rects[i]), UpdateFromAlphaFunc(label, count), FadeIn(cats[i])]

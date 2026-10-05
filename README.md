@@ -87,7 +87,9 @@ variant (e.g. vertical 1080x1920); `--no-audio` leaves the narration out (timing
 parallel; `--frames` also saves a PNG still of the last frame of every beat (`--frames-per-beat
 N`: N evenly spaced stills per beat) in `build/<final|preview>[_<variant>]/frames/<scene>/`,
 with an `index.json` (beat, time, path) — a way to look at a render without playing it, see
-[docs/CONFIG.md](docs/CONFIG.md#frame-stills-vidgen-render---frames). Errors are printed as `error: ...` with exit code 1.
+[docs/CONFIG.md](docs/CONFIG.md#frame-stills-vidgen-render---frames) — and, for the same frames,
+`build/.../layout/<scene>.json`: every visible text/shape/image with its pixel box, font size in
+px, colours and opacity ([layout dump](docs/CONFIG.md#layout-dump-buildlayoutscenejson)). Errors are printed as `error: ...` with exit code 1.
 `--json` prints one machine-readable JSON document on stdout instead (problems with their
 config location, scene types with params/defaults/docs, output paths and per-scene durations;
 errors too, with a non-zero exit code) — for scripts and AI agents. The shapes are documented
@@ -111,7 +113,7 @@ my_video/
   extensions/         # optional: your own scene types, helpers, hooks (*.py)
   assets/             # images, code files, ... referenced from params
   audio/              # generated narration: <beat_id>.mp3 + .hash (keep it; it cost money)
-  build/              # intermediate render files, --frames stills, storyboards (safe to delete)
+  build/              # intermediate render files, --frames stills + layout, storyboards (safe to delete)
   my_video.mp4  my_video.srt  my_video_preview.mp4 ...
 ```
 
