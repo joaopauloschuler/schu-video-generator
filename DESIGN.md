@@ -231,8 +231,14 @@ Anything not exported from `vidgen.api` is internal and may change.
 
 ## 7. TTS (ElevenLabs)
 
-- Endpoint `POST https://api.elevenlabs.io/v1/text-to-speech/{voice_id}?output_format=...`,
-  header `xi-api-key` from env `ELEVENLABS_API_KEY`. Standard library only (urllib).
+- Endpoint `POST https://api.elevenlabs.io/v1/text-to-speech/{voice_id}?output_format=...`.
+  Standard library only (urllib).
+- **API key location**: read only from the environment variable `ELEVENLABS_API_KEY`
+  (Windows: `setx ELEVENLABS_API_KEY your_key` once, then open a new terminal; Linux/macOS:
+  `export ELEVENLABS_API_KEY=...`). vidgen never stores the key: it is not a config field, and it
+  is never written to video.yaml, audio/, build/, logs, error messages, hook contexts or git.
+  It is sent only as the `xi-api-key` header to api.elevenlabs.io. Only `vidgen tts` (without
+  `--dry-run`) needs it; validate/render/dry-run work without it.
 - Cache key: sha1 of `voice_id | model_id | output_format | json(settings, sorted keys) | text`,
   stored as `audio/<beat_id>.hash`. Neighbouring beats' text is sent as `previous_text` /
   `next_text` for intonation but is **not** hashed, so editing one beat regenerates only that beat.
