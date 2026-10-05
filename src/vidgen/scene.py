@@ -22,7 +22,7 @@ import av
 from manim import NORMAL, Animation, FadeOut, MarkupText, Scene, Text, Wait, config
 from pydantic import AfterValidator, BaseModel, ConfigDict, GetJsonSchemaHandler, ValidationError, ValidationInfo
 
-from vidgen import helpers, runtime
+from vidgen import helpers, regions, runtime
 from vidgen.capture import FrameCapture
 from vidgen.layout import distribute
 from vidgen.config import BeatConfig, SceneConfig, validation_error_lines
@@ -526,19 +526,30 @@ class NarratedScene(Scene):
         """True when the frame is taller than wide (e.g. a 1080x1920 vertical variant)."""
         return config.pixel_height > config.pixel_width
 
-    #: Margins (Manim units) between the frame edge and the safe area used by built-in layouts.
-    margin_x: float = 0.6
-    margin_y: float = 0.5
+    #: Margins (Manim units) between the frame edge and the safe area (``vidgen.regions``
+    #: defaults). The layout dump and ``vidgen lint``'s ``safe_area`` rule use the same values.
+    margin_x: float = regions.MARGIN_X
+    margin_y: float = regions.MARGIN_Y
+
+    @property
+    def safe_area(self) -> regions.Region:
+        """The frame minus this scene's margins, as a :class:`~vidgen.regions.Region`."""
+        return regions.safe_area(self.margin_x, self.margin_y)
 
     @property
     def safe_width(self) -> float:
         """Frame width minus the side margins: the width content should stay within."""
-        return self.frame_width - 2 * self.margin_x
+        return self.safe_area.width
 
     @property
     def safe_height(self) -> float:
         """Frame height minus the top/bottom margins."""
-        return self.frame_height - 2 * self.margin_y
+        return self.safe_area.height
+
+    def region(self, name: str, gap: float = regions.GAP) -> regions.Region:
+        """A named region (``header``, ``body``, ``left``...) of this scene's safe area; see
+        :func:`vidgen.regions.region`."""
+        return regions.region(name, self.safe_area, gap)
 
     # ----- drawing ---------------------------------------------------------------------------
 

@@ -61,6 +61,7 @@ src/vidgen/
                           # timing_rules.py, color.py, run.py (lint_project), findings.py, report.py
   helpers.py              # theme-aware text helpers and generic drawing utilities
   layout.py               # fit/wrap text, beat distribution, chart numbers, LaTeX detection
+  regions.py              # layout regions: safe area, named regions, grids, place(), readable text (§18)
   tts/__init__.py         # provider seam: get_provider(cfg)
   tts/elevenlabs.py       # ElevenLabs provider (stdlib urllib), cache by hash
   render/                 # worker.py (one scene per process), pipeline.py, ffmpeg.py,
@@ -328,7 +329,8 @@ Added to `NarratedScene` so built-ins and extensions share it:
   than `d` (if `d` has fewer frames than steps, consecutive steps are merged).
 - `reveal(steps, fraction, cap)`: `distribute(len(steps), len(beats))` + `timeline()` +
   `play_steps()` per beat.
-- `safe_width` / `safe_height` (frame minus `margin_x = 0.6`, `margin_y = 0.5` units).
+- `safe_width` / `safe_height` (frame minus `margin_x = 0.6`, `margin_y = 0.5` units; Step 15:
+  derived from `self.safe_area`, §18).
 
 Refinements (Step 6, found while porting kphi3):
 - `beat_count: int | tuple[int, int | None] | None = None` (class attribute): how many beats a
@@ -412,6 +414,8 @@ so module-level code in an extension may read theme values
 current_project, T, MT`, generic helpers from `helpers.py`, and `from manim import *`.
 Step 5 adds `ThemeColor, ThemeSize`, the `vidgen.layout` helpers (§5.3) and pydantic's
 `Field, field_validator, model_validator`.
+Step 15 adds the layout regions (§18): `Region, frame_region, safe_area, region, grid, place,
+orientation, readable_size, readable_text`.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -954,3 +958,66 @@ using the existing renders of the others (missing ones are rendered). Exit code 
 - **`rushed_animation`**: plays with `requested` set whose run time is below `min_run_time`
   (0.5 s), one finding per beat. Plays a scene shortens itself (e.g. `run_time=d / 5`) are not
   seen: only `play_steps` says what it wanted.
+
+## 18. Refinements (Step 15, layout regions)
+
+- **Module** `vidgen/regions.py`, exported by `vidgen.api`; reference: docs/EXTENDING.md
+  "Layout regions". `Region(x0, y0, x1, y1)` (frozen dataclass, Manim units, y up; negative
+  sizes are a `VidgenError`): `width`, `height`, `center`, `orientation`, `point(align)`,
+  `contains(mob, tolerance)`, `inset(x, y)`, `below(mob_or_y, gap)` / `above(...)` (clamped,
+  may have zero height), `rows(n | weights, gap)` (top to bottom), `columns(...)` (left to
+  right), `split(...)` (columns, or rows when the **active frame** is portrait), `grid(rows,
+  cols, gap, gap_y)` (row-major cells), `to_rectangle()`. Default gap `GAP = 0.3` units.
+- **Frame and safe area**: `frame_region()` from `config.frame_width/height` (shorter side 8,
+  §5.2); `safe_area(margin_x=MARGIN_X, margin_y=MARGIN_Y)` (0.6 / 0.5). Single source of truth:
+  `NarratedScene.margin_x/margin_y` default to those constants, `NarratedScene.safe_area` is
+  `regions.safe_area(self.margin_x, self.margin_y)` (`safe_width`/`safe_height` derive from
+  it), and the layout dump's `safe_area` (§15), which lint's `safe_area` rule reads, is built
+  from the same function (`introspect.LayoutRecorder.document`), so values are unchanged.
+- **Orientation**: `orientation(w, h)` = `landscape` if w > 1.2 h, `portrait` if h > 1.2 w,
+  else `square`.
+- **Named regions** (`region(name, area=None, gap=GAP)`; `NarratedScene.region(name)` uses the
+  scene's safe area): `full`; `header` (top band, height share of the area 0.16 landscape /
+  0.15 square / 0.12 portrait); `caption` (bottom band 0.12 / 0.11 / 0.09); `body` (below the
+  header, gap apart); `hero` (between header and caption); `top` / `bottom` (halves);
+  `left` / `right` (`area.split(2)`: halves side by side, **but the upper/lower half in
+  portrait**, so a two-column layout written for 16:9 becomes two rows in 9:16; literal halves:
+  `area.columns(2)`); `center` (centered box, shares of width x height 0.72 x 0.72 / 0.86 x
+  0.72 / 1.0 x 0.6). Unknown names → `VidgenError` listing `REGION_NAMES`.
+  `grid(rows, cols, area="full", gap, gap_y)` takes a name or a Region.
+- **`place(mob, area, fit="contain", align="center", *, max_scale=None, buff=0.0)`**: `contain`
+  scales up or down to fit both sides, `width`/`height` match one side (the other may
+  overflow), `none` keeps the size; zero-size sides are ignored; `max_scale` caps the factor
+  (`1.0`: shrink only). `align` is one of `ALIGNMENTS` (`center, top, bottom, left, right,
+  top_left, top_right, bottom_left, bottom_right`; spaces/hyphens accepted) or a Manim
+  direction (`UL`, only its signs count): the mobject's matching edge/corner goes on the
+  region's (`move_to(point, aligned_edge=...)`). Unknown fit/align → `VidgenError`.
+- **Readable size**: `readable_size(font=None, *, fraction=None, margin=1.05)` = the font size
+  (points) whose capital `H` is `fraction` of the frame's shorter side, times `margin`.
+  `fraction` defaults to `min_text_fraction()`: the active project's
+  `lint.rules.min_font.min_size` (default `MIN_TEXT_FRACTION = 0.025`), so layout and lint
+  share the threshold; that one lint value is therefore part of the render fingerprint (key
+  `readable`), while other lint settings still are not. Inter and the default `Monospace`
+  measure ≈ 0.0101 units of cap height per point → ≈ 20.8 pt at any resolution (theme `small`
+  20 is below it, `caption` 24 above, matching what lint reports).
+- **`readable_text(text, area, *, size="body", min_size=None, theme=None, **fit_text_kwargs)`**:
+  `fit_text` into the region starting at `max(size, floor)` with `min_size = floor =
+  max(readable_size(), min_size)`, so long text wraps instead of shrinking; if it still does
+  not fit the height it is scaled down (as `fit_text` does) and a warning is logged on
+  `vidgen.regions` (shown as `warning:` by the worker). Not positioned. Built on
+  `layout.fit_text_sized` (new, internal: `fit_text` returning the final font size after any
+  scaling; `fit_text` delegates to it, behaviour unchanged).
+- **Built-ins on regions**: `bullets` — heading fitted into and centered in `header`, list
+  centered in `safe_area.below(heading)`; in portrait the heading is `portrait_growth` (1.3,
+  class attribute) larger, a short list (≤ 5 items, rows < 75 % of the space) grows up to 1.3x
+  and rows are spaced 0.8 x the line pitch (0.55 in landscape). `code` — title in `header`,
+  listing scaled into the rest (up to 1.5x, as before); new param `wrap: bool = True`: while
+  the listing is width-bound and would end below `max(size, readable_size(font))`, long lines
+  are wrapped (`scenes/code.py` `wrap_code(lines, columns)`: break after the last space/comma
+  outside a string literal if past half the line, else after an opening bracket, else any
+  space, else hard; continuation lines indented 4 more; never narrower than `MIN_COLUMNS` 20)
+  and the listing rebuilt. Wrapped listings number original lines only (continuation numbers
+  replaced by empty groups; the dumped `text` of the number column is still Manim's string)
+  and highlights map original lines to all their wrapped lines. Landscape output of both is
+  unchanged except the title/heading now centered in `header` (a few px lower).
+

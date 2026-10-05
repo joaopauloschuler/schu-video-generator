@@ -4,7 +4,8 @@ The worker records :func:`scene_fingerprint` in the scene's timings (``render.fi
 ``vidgen storyboard`` reuses a scene's stills only while the fingerprint still matches.
 
 What counts: the scene's config (type, params, beats; not ``lint_ignore``), every other config
-section except ``scenes``, ``variants`` and ``lint`` (theme, narration, format...), the narration MP3s of the scene's
+section except ``scenes``, ``variants`` and ``lint`` (theme, narration, format...) but including
+``lint.rules.min_font.min_size`` (``vidgen.regions.readable_size`` lays text out by it), the narration MP3s of the scene's
 beats (size and modification time), the source of vidgen itself and of the project's extension
 folders (file contents), and the files under ``<project>/assets`` (size and modification time).
 Files a scene reads from elsewhere are not tracked (``--force`` renders again).
@@ -80,7 +81,8 @@ def _stat(path: Path) -> list[int] | None:
 def scene_fingerprint(project: Project, scene_id: str) -> str:
     """A hex digest of everything (that vidgen knows of) the render of ``scene_id`` depends on."""
     spec = project.scene(scene_id)
-    # Lint settings cannot change pixels or timing: editing them must not make renders stale.
+    # Lint settings cannot change pixels or timing (except the readable text size scenes use):
+    # editing them must not make renders stale.
     config = project.config.model_dump(mode="json", exclude={"scenes", "variants", "lint"})
     assets = project.root / "assets"
     data: dict[str, Any] = {
@@ -88,6 +90,7 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
         "vidgen": __version__,
         "vidgen_source": vidgen_source_digest(),
         "config": config,
+        "readable": project.config.lint.rules.min_font.min_size,
         "scene": spec.model_dump(mode="json", exclude={"lint_ignore"}),
         "audio": {beat.id: _stat(project.audio_dir / f"{beat.id}.mp3") for beat in spec.beats},
         "extensions": [_contents_digest(_files(folder, ".py"), folder) for folder in project.extension_dirs],

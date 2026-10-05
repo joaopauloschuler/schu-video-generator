@@ -134,7 +134,8 @@ my_video/
 - [examples/kphi3](examples/kphi3) — a real 4-minute paper video whose eight bespoke scenes all
   live in its `extensions/` folder (narration MP3s included, so it renders without a key).
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.
-- [docs/EXTENDING.md](docs/EXTENDING.md) — writing scene types, helpers, theme tokens and hooks.
+- [docs/EXTENDING.md](docs/EXTENDING.md) — writing scene types, helpers, theme tokens and hooks;
+  layout regions (`region("header")`, `grid`, `place`, `readable_text`) that adapt to 16:9 and 9:16.
 - [DESIGN.md](DESIGN.md) — architecture and internal contracts.
 
 ## Troubleshooting

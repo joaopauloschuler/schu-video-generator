@@ -175,8 +175,48 @@ def validate_project(cls, params, project):
     return problems
 ```
 
-**Layout.** `self.safe_width` / `self.safe_height` are the frame minus margins
-(`self.margin_x`, `self.margin_y`); place content inside them so it works at 16:9 and 9:16.
+**Layout regions.** Lay out in regions rather than raw coordinates, so one scene works at
+16:9, 1:1 and 9:16 (the frame's shorter side is always 8 units; 16:9 is 14.22 x 8, 9:16 is
+8 x 14.22). A `Region` is a rectangle in Manim units (`x0, y0, x1, y1`; `width`, `height`,
+`center`, `point("top_left")`, `contains(m)`).
+- `self.safe_area` — the frame minus the scene's `margin_x` / `margin_y` (0.6 / 0.5 units). It
+  is the rectangle the layout dump records and `vidgen lint`'s `safe_area` rule checks.
+  `self.safe_width` / `self.safe_height` are its size. Without a scene: `safe_area()`;
+  `frame_region()` is the whole frame.
+- `self.region(name)` (or `region(name, area=None)`) — named parts of the safe area:
+
+  | name | landscape / square | portrait (9:16) |
+  |---|---|---|
+  | `full` | the safe area | same |
+  | `header` | top band, 16 % of the height (15 % square) | 12 % |
+  | `caption` | bottom band, 12 % (11 % square) | 9 % |
+  | `body` | below `header` | same |
+  | `hero` | between `header` and `caption` | same |
+  | `top`, `bottom` | upper / lower half | same |
+  | `left`, `right` | left / right half | **upper / lower half** |
+  | `center` | centered 72 % x 72 % (86 % x 72 % square) | full width x 60 % |
+
+  Neighbouring regions are `gap` (0.3 units) apart. `left`/`right` turn into rows in a vertical
+  frame so a two-column layout stays readable; for literal halves use `area.columns(2)`.
+- `Region.rows(n | weights, gap)`, `.columns(...)`, `.split(...)` (columns in landscape/square,
+  rows in portrait), `.grid(rows, cols, gap, gap_y)` (cells row-major; also
+  `grid(rows, cols, area="full")`), `.inset(x, y)`, `.below(mobject_or_y, gap)` / `.above(...)`
+  (the rest of a region under a title you placed), `.to_rectangle()` (outline, for debugging).
+  `orientation()` is `"landscape"`, `"portrait"` or `"square"`.
+- `place(mobject, region, fit="contain", align="center", max_scale=None, buff=0)` — scales and
+  moves a mobject into a region (a name or a `Region`): `contain` fits both ways (up or down),
+  `width` / `height` match one side, `none` only moves. `max_scale=1` never enlarges. `align`
+  (`"top"`, `"bottom_left"`, ... or a direction such as `UL`) puts that edge or corner of the
+  mobject on the same edge or corner of the region.
+- `readable_size(font=None)` — the smallest font size (points) `vidgen lint`'s `min_font` rule
+  accepts in the current frame (the project's `lint.rules.min_font.min_size`, default 2.5 % of
+  the shorter side as cap height, plus 5 %): about 21 points for Inter at any resolution.
+  `readable_text(text, region, size="body", min_size=None, **fit_text_args)` wraps text into a
+  region like `fit_text` but never below that size (it wraps onto more lines instead; if it
+  still does not fit, it is scaled down and a warning is logged). It does not move the text:
+  `place(t, region, fit="none", align=...)` does.
+
+**Text and numbers.**
 - `fit_text(text, max_width, max_height=None, size="body", color="text", weight=NORMAL,
   align="center", highlights={"77%": "highlight"}, squeeze=1.0, ...)` — wraps by measured width,
   lowers the font size (down to `min_size`) until the block fits `max_height`, then scales down
@@ -234,9 +274,10 @@ class Checklist(NarratedScene):
         items: list[str] = Field(min_length=1)
 
     def construct(self):
-        rows = VGroup(*[fit_text(f"✓ {t}", self.safe_width, align="left") for t in self.params.items])
+        body = self.region("body")
+        rows = VGroup(*[readable_text(f"✓ {t}", body, align="left") for t in self.params.items])
         rows.arrange(DOWN, aligned_edge=LEFT, buff=0.3)
-        shrink_to_fit(rows, self.safe_width, self.safe_height)
+        place(rows, body, fit="contain", max_scale=1.0, align="top_left")
         self.reveal([FadeIn(r, shift=RIGHT * 0.2) for r in rows])
         self.finish()
 ```

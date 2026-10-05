@@ -144,9 +144,13 @@ class LayoutRecorder:
         """The scene's layout file content (frames in frame order)."""
         from manim import config
 
+        from vidgen.regions import safe_area
+
         width, height = config.pixel_width, config.pixel_height
         sx, sy = width / config.frame_width, height / config.frame_height
-        mx, my = scene.margin_x * sx, scene.margin_y * sy
+        safe = safe_area(scene.margin_x, scene.margin_y)
+        x0, x1 = (safe.x0 + config.frame_width / 2) * sx, (safe.x1 + config.frame_width / 2) * sx
+        y0, y1 = (config.frame_height / 2 - safe.y1) * sy, (config.frame_height / 2 - safe.y0) * sy
         return {
             "version": LAYOUT_VERSION,
             "scene": scene.spec.id,
@@ -157,7 +161,7 @@ class LayoutRecorder:
             "per_beat": per_beat,
             "px_per_unit": _r(sx, 4),
             "background": _hex(np.asarray(config.background_color.to_rgb())),
-            "safe_area": [_r(mx), _r(my), _r(width - mx), _r(height - my)],
+            "safe_area": [_r(x0), _r(y0), _r(x1), _r(y1)],
             "frames": sorted(self.frames, key=lambda f: (f["frame"], f["k"])),
         }
 

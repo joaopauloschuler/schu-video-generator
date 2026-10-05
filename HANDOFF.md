@@ -1117,3 +1117,96 @@ How to test: `/home/claude/venv/bin/python -m pytest -q` (546 passed, 1 skipped)
 `vidgen lint examples/kphi3 --rule dead_air --rule narration_speed --rule animation_overrun
 --rule rushed_animation`, `vidgen lint examples/minimal [--variant vertical]`, then read
 `examples/*/build/preview/activity/*.json`.
+
+## Step 15 — Layout regions
+What was built
+- `vidgen/regions.py`, exported by `vidgen.api`: `Region` (rectangle in Manim units with
+  `width/height/center/orientation`, `point(align)`, `contains`, `inset`, `below`/`above`,
+  `rows`/`columns`/`split`, `grid`, `to_rectangle`), `frame_region()`, `safe_area()`,
+  `region(name)` (`full, header, body, hero, caption, top, bottom, left, right, center`),
+  `grid(rows, cols, area)`, `place(mob, area, fit="contain"|"width"|"height"|"none",
+  align=..., max_scale=None, buff=0)`, `orientation()`, `readable_size(font)` and
+  `readable_text(text, area, size, min_size, **fit_text_args)`.
+- `NarratedScene.safe_area` and `NarratedScene.region(name)`; `safe_width`/`safe_height` now
+  derive from `safe_area`.
+- Aspect-aware: `left`/`right` are side by side in landscape/square and the upper/lower half in
+  portrait (`Region.split` likewise; literal halves via `Region.columns(2)`); band and
+  `center` shares differ per orientation (table in docs/EXTENDING.md).
+- Built-ins refactored onto regions (the two worst 9:16 offenders per Steps 11–13):
+  - `code`: title in `header`, listing in the rest; new param `wrap` (default true): when the
+    listing is width-bound and would be smaller than `size` (or the readable minimum), long
+    lines are wrapped with a hanging indent and the listing rebuilt; wrapped listings keep one
+    number per original line and highlights cover the wrapped continuation lines.
+  - `bullets`: heading in `header`, list centered below it; in portrait the heading is 1.3x
+    (`portrait_growth`), a short list grows up to 1.3x and spreads out.
+- `examples/custom_scene/extensions/gears.py` uses `region("center")`, `place` and
+  `readable_text` (usage example); docs/EXTENDING.md's `checklist` example now uses regions
+  and is executed by a test.
+
+Before / after (examples/minimal, preview, `vidgen lint` + `vidgen storyboard`)
+- 16:9: 7 warnings before, 7 after (identical findings; none from `steps`/`listing`). Stills of
+  `steps` and `listing` look the same (heading/title a few px lower: centered in `header`).
+- 9:16: 8 warnings before, 7 after: the `listing` `min_font` warning (code 9.8 px cap height,
+  2.04 %) is gone — code is now 15.6 px font_px (wrapped to ~31 columns, 13 lines for 9 original
+  lines, at the requested `caption` size). `steps` items went from 19.4 to 21.3 px `font_px` (the
+  width limits growth: they wrap) and the heading from 22.0 to 28.5 px; rows are spread out, so
+  the list fills the frame instead of a small block in the middle band.
+- The remaining 7 (both orientations) are outside this step: theme `dim` contrast (5, Step 16
+  presets), `bar_chart` caption at theme `small` (min_font), `image` caption 12 px into the
+  bottom margin. `examples/custom_scene` 16:9 and vertical: 0 findings.
+
+Files
+- New: `src/vidgen/regions.py`, `tests/test_regions.py` (36 tests; 10 tiny renders at 160x90 and
+  90x160).
+- Changed: `api.py` (exports), `scene.py` (`safe_area`, `region`, margins from `regions`),
+  `introspect.py` (layout `safe_area` from `regions.safe_area`), `layout.py`
+  (`fit_text_sized`; `fit_text` delegates), `render/fingerprint.py` (key `readable`),
+  `scenes/bullets.py`, `scenes/code.py`, `examples/custom_scene/extensions/gears.py`,
+  DESIGN.md (§2, §5.3, §6.4, new §18), docs/EXTENDING.md ("Layout regions", checklist
+  example), docs/CONFIG.md (`bullets`, `code` + `wrap`), README, tasklist.md.
+
+Public interfaces added/changed
+- `vidgen.api`: `Region, frame_region, safe_area, region, grid, place, orientation,
+  readable_size, readable_text` (DESIGN §18). `NarratedScene.safe_area`, `.region()`,
+  `Bullets.portrait_growth`. `vidgen.regions`: also `MARGIN_X/MARGIN_Y`, `GAP`,
+  `REGION_NAMES`, `ALIGNMENTS`, `MIN_TEXT_FRACTION`, `min_text_fraction()`.
+- `vidgen.layout.fit_text_sized` (internal, not exported). `vidgen.scenes.code.wrap_code`,
+  `MIN_COLUMNS`, `HANGING_INDENT`.
+- Config: `code` param `wrap: bool = true` (additive; existing configs unchanged). Render
+  fingerprint now includes `lint.rules.min_font.min_size`.
+
+Decisions / deviations
+- **Single source of truth for the safe area**: the margins stay on the scene (`margin_x`,
+  `margin_y`, defaults from `regions`), and the layout dump builds its `safe_area` with
+  `regions.safe_area(scene.margin_x, scene.margin_y)`; lint reads the dump, so scene layout,
+  dump and lint cannot drift. Values unchanged (0.6 / 0.5 units).
+- **`left`/`right` adapt** instead of adding a separate orientation-aware pair: code written
+  for a 16:9 two-column layout gets two rows in 9:16 for free; `Region.columns(2)` remains for
+  literal halves and `Region.split(n)` is the general orientation-aware split.
+- **Readable size from the lint threshold**: `readable_size` uses the project's
+  `lint.rules.min_font.min_size` (5 % margin), so "what layout aims for" and "what lint
+  accepts" are one setting; that value had to join the render fingerprint (other lint
+  settings still do not invalidate renders).
+- `readable_text` shrinks below the floor (with a logged warning) rather than overflowing when
+  text cannot fit even when wrapped: layouts never break, and lint reports `min_font`.
+- `code` wraps to reach the requested `size` (not just the lint minimum): wrapping only to the
+  2.5 % floor left the 9:16 listing barely legible on a phone. Wrapping happens only when the
+  listing is width-bound, so 16:9 output is unchanged.
+- `bullets` grows in portrait only for short lists (≤ 5 items, < 75 % of the space), and the
+  heading grows with it (items larger than the heading looked wrong in the first try).
+
+Known gaps / TODOs
+- Other built-ins (`quote`, `text_card`, `title`, `end_card`, `equation`, charts, `image`)
+  still use `safe_width`/`safe_height` arithmetic; moving them to regions (and fixing the
+  `image` caption margin, `bar_chart` caption size) fits Step 22 (Review 1) or the scene steps.
+- Wrapped code: the layout dump's `text` of the line-number column is Manim's original string
+  (`1..13`), not the shown labels; syntax highlighting of a line wrapped inside a string
+  literal may be off (the wrapper avoids it when it can).
+- `readable_size` measures the capital H of the font; a font with unusual proportions is
+  measured correctly, but lint's cap-height estimate for lowercase-only text differs slightly.
+- No `grid_shape(n)` helper (choose rows x cols for n items per orientation) yet; Step 21
+  (`icon_grid`) may want one.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (582 passed, 1 skipped; regions:
+`pytest tests/test_regions.py`). Manual: `vidgen storyboard examples/minimal --variant vertical
+--scene steps --scene listing`, `vidgen lint examples/minimal [--variant vertical]`.

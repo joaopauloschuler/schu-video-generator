@@ -222,6 +222,9 @@ Steps: (1) kicker, title and subtitle, (2) authors.
 ### `bullets`
 
 Steps: one per item (the heading comes with the first). `reveal: all` shows every item in beat 1.
+The heading sits in the `header` region, the list is centered in the space below it. In a
+vertical video the heading is 1.3x larger and a short list grows up to 1.3x and spreads out to
+use the taller frame.
 
 | param | type | default | |
 |---|---|---|---|
@@ -397,8 +400,10 @@ In YAML, write backslashes in single quotes (`'\frac{1}{3}'`) or double them in 
 
 Steps: (1) the listing (with the first highlight applied), then one per further `highlight`
 entry. Highlighting dims the other lines and puts a soft band behind the selected ones. Uses
-Manim's `Code` (Pygments highlighting); the listing is scaled to fit, so keep lines short for
-vertical videos.
+Manim's `Code` (Pygments highlighting); the listing is scaled to fill the space below the
+title. When its width would make it smaller than `size` (typical for long lines in a vertical
+video), long lines are wrapped with a hanging indent (`wrap`); wrapped lines keep their line
+number and highlights still count original lines.
 
 | param | type | default | |
 |---|---|---|---|
@@ -412,6 +417,7 @@ vertical videos.
 | `font` | str | `Monospace` | monospace font family (e.g. `Consolas` on Windows) |
 | `size` | size | `caption` | starting font size (scaled to fill the frame, up to 1.5x) |
 | `highlight_color` | color | `highlight` | |
+| `wrap` | bool | `true` | wrap long lines instead of shrinking the listing below `size` / the readable minimum |
 
 ```yaml
 - id: listing

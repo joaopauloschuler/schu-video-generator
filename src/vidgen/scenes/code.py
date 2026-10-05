@@ -35,6 +35,63 @@ def parse_line_spec(spec: LineSpec) -> list[int]:
     return sorted(set(items))
 
 
+#: Wrapped listings never get narrower than this many characters per line.
+MIN_COLUMNS = 20
+#: Extra indent (spaces) of the continuation lines of a wrapped code line.
+HANGING_INDENT = 4
+
+
+def wrap_code(lines: list[str], columns: int) -> tuple[list[str], list[list[int]]]:
+    """Wrap code lines longer than ``columns`` characters; continuation lines are indented by
+    :data:`HANGING_INDENT` more than the line. Returns the new lines and, for each original
+    line, the indices of the lines it became (so highlights still address original lines)."""
+    out: list[str] = []
+    groups: list[list[int]] = []
+    for line in lines:
+        pieces = _wrap_code_line(line, columns)
+        groups.append(list(range(len(out), len(out) + len(pieces))))
+        out.extend(pieces)
+    return out, groups
+
+
+def _wrap_code_line(line: str, columns: int) -> list[str]:
+    if len(line) <= columns:
+        return [line]
+    lead = len(line) - len(line.lstrip(" "))
+    prefix = " " * min(lead + HANGING_INDENT, columns // 2)
+    pieces: list[str] = []
+    rest = line
+    while len(rest) > columns:
+        cut = _break_at(rest, columns)
+        pieces.append(rest[:cut].rstrip())
+        rest = prefix + rest[cut:].lstrip()
+    return pieces + [rest]
+
+
+def _break_at(text: str, columns: int) -> int:
+    """Where to cut ``text`` (at most ``columns`` characters kept): after the last space or
+    comma outside a string literal (if past half the line), else after the last opening
+    bracket, else at any space, else hard at ``columns``."""
+    start = len(text) - len(text.lstrip(" ")) + 1
+    space = bracket = loose = 0
+    quote = ""
+    for k, ch in enumerate(text[:columns], start=1):
+        if k > start and ch == " ":
+            loose = k
+        if quote:
+            if ch == quote and text[k - 2 : k - 1] != "\\":
+                quote = ""
+        elif ch in "\"'":
+            quote = ch
+        elif k > start and ch in " ,":
+            space = k
+        elif k > start and ch in "([{":
+            bracket = k
+    if space >= columns / 2:
+        return space
+    return max(space, bracket) or loose or columns
+
+
 def _style_names() -> list[str]:
     from pygments.styles import get_all_styles
 
@@ -71,6 +128,9 @@ class CodeListing(NarratedScene):
         """Starting font size (scaled to fill the frame, up to 1.5x)."""
         highlight_color: ThemeColor = "highlight"
         """Color of the highlight band."""
+        wrap: bool = True
+        """Wrap long lines (hanging indent) when the listing would otherwise be scaled below
+        size (or the readable minimum), mostly in vertical formats; highlights keep their lines."""
 
         @model_validator(mode="after")
         def _check(self) -> SceneParams:
@@ -128,30 +188,16 @@ class CodeListing(NarratedScene):
                 language = get_lexer_for_filename(p.path).aliases[0]
             except ClassNotFound:
                 language = "text"
-        listing = Code(
-            code_string=text,
-            language=language or "python",
-            formatter_style=p.style,
-            add_line_numbers=p.line_numbers,
-            background="window",
-            background_config={
-                "fill_color": self.theme.color("surface"),
-                "stroke_color": self.theme.color("dim"),
-                "stroke_width": 1,
-                "corner_radius": 0.15,
-            },
-            paragraph_config={"font": p.font, "font_size": float(self.theme.size(p.size))},
-        )
-        top = self.frame_height / 2 - self.margin_y
-        bottom = -self.frame_height / 2 + self.margin_y
+        body = self.safe_area
         title = None
         if p.title:
-            title = fit_text(p.title, self.safe_width, self.safe_height * 0.15, size="heading", weight=BOLD)
-            title.move_to([0, top - title.height / 2, 0])
-            top = title.get_bottom()[1] - 0.45
-        # fill the space (up to 1.5x the requested font size), never overflow
-        listing.scale(min(1.5, self.safe_width / listing.width, (top - bottom) / listing.height))
-        listing.move_to([0, (top + bottom) / 2, 0])
+            header = self.region("header")
+            title = fit_text(p.title, header.width, header.height, size="heading", weight=BOLD)
+            place(title, header, fit="none", align="center")
+            body = body.below(title, gap=0.45)
+        listing, groups = self._fit_listing(text.expandtabs(4).split("\n"), language or "python", body)
+        place(listing, body, fit="none", align="center")
+        wrapped = len(groups) != len(listing.code_lines)
 
         lines = listing.code_lines
         numbers = listing.line_numbers if p.line_numbers else None
@@ -159,11 +205,14 @@ class CodeListing(NarratedScene):
         lines.set_z_index(2)
         if numbers is not None:
             numbers.set_z_index(2)
-        ys = self._line_centers(lines, numbers)
+        ys = self._line_centers(lines, None if wrapped else numbers)
         pitch = abs(ys[0] - ys[1]) if len(ys) > 1 else lines.height
         x_left = (numbers.get_left()[0] if numbers is not None else lines.get_left()[0]) - 0.12
         x_right = listing.background.get_right()[0] - 0.15
         state: dict[str, Any] = {"band": VGroup()}
+
+        def physical(spec: LineSpec) -> set[int]:
+            return {j for k in parse_line_spec(spec) for j in groups[k - 1]}
 
         def bands_for(chosen: set[int]) -> VGroup:
             bands = VGroup()
@@ -182,7 +231,7 @@ class CodeListing(NarratedScene):
 
         def highlight(spec: LineSpec) -> Callable[[], list[Animation]]:
             def build() -> list[Animation]:
-                chosen = {k - 1 for k in parse_line_spec(spec)}
+                chosen = physical(spec)
                 bands = bands_for(chosen)
                 anims: list[Animation] = [m.animate.set_opacity(o) for m, o in opacities(chosen)]
                 if len(state["band"]):
@@ -196,7 +245,7 @@ class CodeListing(NarratedScene):
 
         intro = Group(listing)
         if p.highlight:  # the first highlight is already applied when the listing fades in
-            chosen = {k - 1 for k in parse_line_spec(p.highlight[0])}
+            chosen = physical(p.highlight[0])
             for m, o in opacities(chosen):
                 m.set_opacity(o)
             state["band"] = bands_for(chosen)
@@ -206,6 +255,57 @@ class CodeListing(NarratedScene):
         plan: list = [FadeIn(intro, shift=UP * 0.12)] + [highlight(spec) for spec in p.highlight[1:]]
         self.reveal(plan, fraction=0.6, cap=1.0)
         self.finish()
+
+    def _fit_listing(self, lines: list[str], language: str, body: Region) -> tuple[Code, list[list[int]]]:
+        """The listing scaled to fill ``body`` (up to 1.5x the requested size, never
+        overflowing), wrapped narrower while its width makes it smaller than the requested size
+        (and at least the readable size). Returns it and, per original line, its lines."""
+        p = self.params
+        size = float(self.theme.size(p.size))
+        floor = max(size, readable_size(p.font))
+        columns: int | None = None
+        while True:
+            shown, groups = wrap_code(lines, columns) if columns else (lines, [[i] for i in range(len(lines))])
+            listing = self._listing("\n".join(shown), language, size)
+            by_width, by_height = body.width / listing.width, body.height / listing.height
+            scale = min(1.5, by_width, by_height)
+            longest = max(len(line) for line in shown)
+            if not p.wrap or size * scale >= floor or by_width > by_height or longest <= MIN_COLUMNS:
+                break
+            columns = max(MIN_COLUMNS, min(longest - 1, int(longest * size * scale / floor)))
+        if len(shown) != len(lines) and p.line_numbers:
+            self._renumber(listing, groups, size)
+        return listing.scale(scale), groups
+
+    def _listing(self, text: str, language: str, size: float) -> Code:
+        p = self.params
+        return Code(
+            code_string=text,
+            language=language,
+            formatter_style=p.style,
+            add_line_numbers=p.line_numbers,
+            background="window",
+            background_config={
+                "fill_color": self.theme.color("surface"),
+                "stroke_color": self.theme.color("dim"),
+                "stroke_width": 1,
+                "corner_radius": 0.15,
+            },
+            paragraph_config={"font": p.font, "font_size": size},
+        )
+
+    def _renumber(self, listing: Code, groups: list[list[int]], size: float) -> None:
+        """Number the original lines of a wrapped listing: continuation lines get no number."""
+        numbers = listing.line_numbers
+        color = numbers[0][0].get_fill_color() if len(numbers[0]) else self.theme.color("dim")
+        for i, group in enumerate(groups):
+            first, *rest = group
+            old = numbers[first]
+            label = self.text(str(i + 1), size=size, color=color, font=self.params.font)
+            label.align_to(old, RIGHT).align_to(old, DOWN)
+            numbers.submobjects[first] = label
+            for j in rest:
+                numbers.submobjects[j] = VGroup()
 
     @staticmethod
     def _line_centers(lines: VGroup, numbers: VGroup | None) -> list[float]:

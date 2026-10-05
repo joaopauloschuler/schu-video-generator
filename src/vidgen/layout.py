@@ -109,6 +109,31 @@ def fit_text(
     at up to ``squeeze * max_width`` is scaled down instead of wrapped (good for links).
     Returns a Manim ``Paragraph`` (one submobject per line).
     """
+    block, _ = fit_text_sized(
+        text, max_width, max_height, size=size, color=color, weight=weight, slant=slant, align=align,
+        min_size=min_size, highlights=highlights, line_spacing=line_spacing, squeeze=squeeze, theme=theme,
+    )
+    return block
+
+
+def fit_text_sized(
+    text: str,
+    max_width: float,
+    max_height: float | None = None,
+    *,
+    size: str | float = "body",
+    color: Any = "text",
+    weight: str = NORMAL,
+    slant: str = NORMAL,
+    align: str = "center",
+    min_size: str | float | None = None,
+    highlights: Mapping[str, Any] | None = None,
+    line_spacing: float = 0.7,
+    squeeze: float = 1.0,
+    theme: Theme | None = None,
+) -> tuple[Paragraph, float]:
+    """:func:`fit_text` that also returns the font size the text ends up at (points, after
+    any final scaling), e.g. to tell whether it was shrunk below ``min_size``."""
     theme = theme or current_theme()
     font_size = float(theme.size(size))
     floor = float(theme.size(min_size)) if min_size is not None else font_size * 0.6
@@ -131,7 +156,7 @@ def fit_text(
     if squeeze > 1.0 and "\n" not in normalized:
         line = Paragraph(normalized, font_size=font_size, **kwargs)
         if line.width <= max_width * squeeze:
-            return shrink_to_fit(line, max_width, max_height)  # type: ignore[return-value]
+            return _shrunk(line, font_size, max_width, max_height)
     # Search the font size arithmetically (word widths and line pitch scale linearly with the
     # size), then build the Paragraph once; re-wrap narrower if the estimate was off.
     metrics = _Metrics(normalized, theme.font, kwargs["weight"], kwargs["slant"], line_spacing)
@@ -148,7 +173,14 @@ def fit_text(
         target *= max_width / block.width * 0.98
         lines = metrics.wrap(font_size, target)
         block = Paragraph(*lines, font_size=font_size, **kwargs)
-    return shrink_to_fit(block, max_width, max_height)  # type: ignore[return-value]
+    return _shrunk(block, font_size, max_width, max_height)
+
+
+def _shrunk(block: Paragraph, font_size: float, max_width: float, max_height: float | None) -> tuple[Paragraph, float]:
+    """``block`` shrunk to fit, and its font size after shrinking."""
+    before = block.width
+    shrink_to_fit(block, max_width, max_height)
+    return block, font_size * (block.width / before if before > 0 else 1.0)
 
 
 _REF_SIZE = 48.0

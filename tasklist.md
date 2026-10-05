@@ -64,10 +64,10 @@ Rules that apply to every step:
 ## Phase B — Foundations for better visuals
 
 ### Step 15 — Layout regions
-- [ ] `vidgen.api`: safe area, named regions (`full`, `left`, `right`, `top`, `bottom`, `center`, `hero`, `caption`), grids `rows x cols`
-- [ ] `place(obj, region, fit="contain"|"width"|"height", align=...)` with automatic scaling
-- [ ] Aspect-aware: regions adapt to vertical (9:16) formats
-- [ ] Refactor two built-in scenes to use it; tests at 16:9 and 9:16
+- [x] `vidgen.api`: safe area, named regions (`full`, `left`, `right`, `top`, `bottom`, `center`, `hero`, `caption`), grids `rows x cols`
+- [x] `place(obj, region, fit="contain"|"width"|"height", align=...)` with automatic scaling
+- [x] Aspect-aware: regions adapt to vertical (9:16) formats
+- [x] Refactor two built-in scenes to use it; tests at 16:9 and 9:16
 
 ### Step 16 — Theme presets (mechanism + 3 presets)
 - [ ] `theme: {preset: NAME, ...overrides}`; preset values merged under user values

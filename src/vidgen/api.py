@@ -32,6 +32,17 @@ from vidgen.layout import (  # noqa: E402
     shrink_to_fit,
     wrap_lines,
 )
+from vidgen.regions import (  # noqa: E402
+    Region,
+    frame_region,
+    grid,
+    orientation,
+    place,
+    readable_size,
+    readable_text,
+    region,
+    safe_area,
+)
 from vidgen.registry import scene  # noqa: E402
 from vidgen.runtime import current_project, current_theme  # noqa: E402
 from vidgen.scene import NarratedScene, SceneParams, ThemeColor, ThemeSize  # noqa: E402
@@ -76,6 +87,15 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "check_format",
     "latex_available",
     "require_latex",
+    "Region",
+    "frame_region",
+    "safe_area",
+    "region",
+    "grid",
+    "place",
+    "orientation",
+    "readable_size",
+    "readable_text",
     "Field",
     "field_validator",
     "model_validator",
