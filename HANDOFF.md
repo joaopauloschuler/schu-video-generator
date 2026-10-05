@@ -136,3 +136,54 @@ Known gaps / for later steps
 
 How to test: `/home/claude/venv/bin/python -m pytest -q` (126 tests incl. 5 renders, ~2.5 s);
 skip renders with `-m "not render"`. Manual: `vidgen list-scenes`, `vidgen validate <project>`.
+
+## Step 3 — ElevenLabs TTS
+What was built
+- `vidgen/tts/__init__.py` (provider seam: `TTSProvider` protocol, `get_provider`; re-exports the
+  cache API), `tts/elevenlabs.py` (`ElevenLabsProvider`, urllib, retries, key handling),
+  `tts/cache.py` (hash/mp3 paths, `audio_status`, `orphaned_audio`, `atomic_write`),
+  `tts/run.py` (`plan_tts`, `run_tts` — the command).
+- CLI: `vidgen tts [PROJECT] [--force] [--dry-run] [--beat ID ...] [--variant NAME]` (runs inside
+  `extensions.project_session`, so extension hooks fire); `vidgen validate` prints an audio
+  summary line (+ one per variant with its own audio folder) via `cli.audio_summary_lines()`.
+- `Project`: new `base_config` attribute (constructor kwarg, defaults to `config`),
+  `has_own_audio` property; `audio_dir` now returns `audio/<variant>/` when it is true.
+- Docs: DESIGN §3, §6.2 (hook data), §7 "Refinements (Step 3)", §8; new `docs/CONFIG.md`
+  (voice, narration, "Narration audio (ElevenLabs)"); EXTENDING.md hook data table.
+- Tests: `tests/test_tts.py` (36 tests, urlopen mocked, incl. the real kphi3 hash files —
+  skipped if `/home/claude/work/kphi3_paper_video` is missing). Removed the `tts` case from
+  `test_cli.py::test_not_implemented_commands`.
+
+For Step 4 (render)
+```python
+from vidgen import tts
+statuses = tts.audio_status(project)        # list[BeatAudioStatus], video order, no key needed
+bad = [s for s in statuses if s.state != "ok"]   # state: "ok" | "stale" | "missing"
+# warn (do not fail), e.g. "warning: audio stale for s2_b1, missing for s3_b1; run `vidgen tts`"
+tts.format_audio_summary(statuses)           # "18 ok, 2 stale, 1 missing"
+```
+`BeatAudioStatus(scene_id, beat_id, text, state, mp3, hash_file)`. Use the variant-loaded Project
+(`Project.load(dir, variant=...)`): its `audio_dir` already points at the right folder and
+`NarratedScene.beat_audio` uses it. Render hooks' data keys still need documenting in §6.2.
+
+Decisions
+- Cache key exactly as DESIGN §7 refinements; `context` not hashed (toggling it does not regenerate).
+- kphi3-format hashes are accepted (only with the default output_format/settings) and **not
+  rewritten** — avoids churn in the committed kphi3 example audio; a regeneration writes the new format.
+- Variant audio rule: own folder iff effective voice differs or a shared beat id has different
+  text; unchanged beats are copied from `audio/` when generating into a variant folder. Variants
+  that only add new beat ids share `audio/`; orphan detection considers all configs sharing a folder.
+- `--beat` restricts but does not force; the key is only required when something must be synthesised.
+- `pre_tts` runs on dry runs (so a filtering hook is reflected in the listing); `post_tts` only after
+  a successful real run.
+- Retries: 3 (backoff 2/4/8 s, honours `Retry-After`, cap 30 s); sleep injectable (`sleep=` kwarg).
+- Any unexpected exception during the request (e.g. http.client rejecting a malformed header) is
+  converted to a scrubbed `VidgenError` so the key cannot leak through a traceback.
+
+Known gaps
+- No ElevenLabs request-id / character-quota reporting; no concurrency (beats generated serially).
+- The provider protocol is minimal; a second provider would also need its own legacy-hash story.
+- `vidgen validate` loads every variant again for the audio summary (cheap, but repeated parsing).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (161 passed + 1 xfail). Manual without a key:
+`vidgen init /tmp/x && vidgen tts /tmp/x --dry-run`.

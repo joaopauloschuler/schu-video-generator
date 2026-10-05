@@ -93,7 +93,39 @@ def cmd_validate(args: argparse.Namespace) -> int:
     print(f"duration:  ~{_format_seconds(project.estimated_duration())} (estimated from word count)")
     if config.variants:
         print(f"variants:  {', '.join(config.variants)}")
+    for line in audio_summary_lines(project):
+        print(line)
     print("ok")
+    return 0
+
+
+def audio_summary_lines(project: Project) -> list[str]:
+    """``audio: 18 ok, 2 stale, 1 missing`` for the base config and for each variant that has
+    its own audio folder (no API key needed)."""
+    from vidgen import tts
+
+    lines = []
+    projects = [project] + [Project.load(project.config_file, variant=name) for name in project.config.variants]
+    for p in projects:
+        if p.variant is not None and not p.has_own_audio:
+            continue
+        label = "audio:" if p.variant is None else f"audio [{p.variant}]:"
+        summary = tts.format_audio_summary(tts.audio_status(p))
+        orphans = tts.orphaned_audio(p)
+        if orphans:
+            summary += f" ({len(orphans)} orphaned mp3)"
+        lines.append(f"{label:<10} {summary}" if p.variant is None else f"{label} {summary}")
+    return lines
+
+
+def cmd_tts(args: argparse.Namespace) -> int:
+    """Generate narration audio for beats whose MP3 is missing or stale."""
+    from vidgen import extensions
+    from vidgen.tts.run import run_tts
+
+    project = Project.load(args.project, variant=args.variant)
+    with extensions.project_session(project):
+        run_tts(project, beat_ids=args.beat, force=args.force, dry_run=args.dry_run)
     return 0
 
 
@@ -184,7 +216,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--force", action="store_true", help="regenerate even if up to date")
     p.add_argument("--dry-run", action="store_true", help="only list what would be generated")
     p.add_argument("--beat", action="append", default=[], metavar="ID", help="only this beat (repeatable)")
-    p.set_defaults(func=_not_implemented(3))
+    p.add_argument("--variant", metavar="NAME", help="apply a named variant (may have its own voice)")
+    p.set_defaults(func=cmd_tts)
 
     p = sub.add_parser("render", help="render the video")
     project_arg(p)

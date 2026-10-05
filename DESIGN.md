@@ -68,6 +68,7 @@ my_video/
   extensions/             # optional; every *.py and every package here is auto-imported
   assets/                 # images, data files referenced by scenes (paths relative to project)
   audio/                  # generated: <beat_id>.mp3 + <beat_id>.hash  (kept, cheap to reuse)
+    <variant>/            #   only for a variant whose voice or beat texts differ (§7)
   build/                  # generated: manim media, per-scene mp4, timings json, concat list
   <output>.mp4            # final video   (<output>_preview.mp4 for previews,
   <output>.srt            #               <output>_<variant>.mp4 for variants)
@@ -260,6 +261,11 @@ register_theme_defaults({"k2": "#F2A541"})   # extra theme tokens; video.yaml va
 - **Theme tokens**: `register_theme_defaults()`; `theme.color("k2")`, `theme.size("body")`.
 - **Hooks**: `@hook(event)`; called in registration order; exceptions abort the command with the
   hook's name in the message.
+- **Hook data** (Step 3, TTS): `pre_tts` — `beats: list[str]` (ids about to be generated, video
+  order; a hook may remove ids to skip them or add known ids), `audio_dir: Path`, `force: bool`,
+  `dry_run: bool`; dispatched on dry runs too. `post_tts` — `generated: list[str]` (ids written,
+  in order), `audio_dir: Path`; not dispatched on dry runs or when the command fails. The API key
+  is never part of hook data.
 - **Promotion**: an extension module copied into `src/vidgen/scenes/` works unchanged, because
   built-ins use exactly the same `@scene` API.
 
@@ -337,13 +343,56 @@ Anything not exported from `vidgen.api` is internal and may change.
 - Orphaned mp3s (beat ids no longer in config) are reported, not deleted.
 - Tests mock `urllib.request.urlopen`; no network.
 
+Refinements (Step 3):
+- **Provider seam** (`vidgen.tts`): `get_provider(voice) -> TTSProvider` (ElevenLabs only; other
+  providers raise `VidgenError`). `TTSProvider`: `name`, `cache_key(text)`, `matches(text,
+  stored_hash)`, `check_credentials()`, `synthesize(text, previous_text=None, next_text=None) ->
+  bytes`. Constructing a provider never needs the key; it is read from the environment on every
+  request (stripped) and never kept on the object.
+- **Exact cache key**: `sha1("|".join([voice_id, model_id, output_format,
+  json.dumps(settings, sort_keys=True), text]).encode("utf-8"))` where `settings` is
+  `voice.settings.model_dump()` (default `json.dumps` separators). `voice.context` is not hashed.
+- **kphi3 hashes**: accepted when `output_format == mp3_44100_128` and settings equal
+  `{stability 0.55, similarity_boost 0.75, style 0.0, use_speaker_boost true}` (the defaults).
+  They are **not rewritten** to the new format: the files stay untouched (no git noise for the
+  committed kphi3 example audio); any regeneration writes a new-format hash.
+- **Requests**: JSON body `{text, model_id, voice_settings}` plus `previous_text`/`next_text` (the
+  neighbouring beats in video order, across scene boundaries, omitted at the ends) only when
+  `voice.context` is true. Timeout 120 s. Transient failures (HTTP 429/500/502/503/504, timeouts,
+  dropped connections) are retried 3 times with backoff 2, 4, 8 s (or `Retry-After`, capped at
+  30 s). Errors become `VidgenError`: `ElevenLabs returned HTTP <code>: <body, max 500 chars>` or
+  `cannot reach ElevenLabs: ...`; any occurrence of the key is replaced by `***`. The CLI prefixes
+  `beat '<id>': ` and says how many beats were done before the error.
+- **Writes**: MP3 via temp file + `os.replace` in the same folder, then the hash the same way, so a
+  hash never vouches for a partially written MP3. Already generated beats are kept on failure.
+- **Command details**: `--variant NAME` added. `--beat` restricts the selection (unknown id →
+  error) but up-to-date beats are still skipped unless `--force`. The key is required only when
+  at least one beat must be synthesised (an up-to-date project needs no key). Output: one
+  `[n/N] generated <id>.mp3 (<chars> chars)` line per beat and a summary; dry run prints
+  `would generate ...` lines and `dry run: N beat(s) to generate, C characters; U up to date`.
+  The character count is what is billed (beat text only, not context).
+- **Variant audio**: a variant uses `audio/<variant>/` when its effective `voice` (after merging)
+  differs from the base config's, or a beat id present in both configs has a different text;
+  otherwise it shares `audio/`. `Project.audio_dir` implements this (`Project.has_own_audio`,
+  `Project.base_config`), so `NarratedScene.beat_audio` picks the right files. When generating
+  into a variant folder, beats whose audio in `audio/` is up to date for the variant's voice
+  and text are copied instead of synthesised.
+- **Orphans**: MP3s in the audio folder whose id is used by no config sharing that folder (base +
+  variants) are listed, never deleted; subfolders are ignored.
+- **Audio status** (no key): `vidgen.tts.audio_status(project) -> list[BeatAudioStatus]`
+  (`scene_id, beat_id, text, state, mp3, hash_file`; state `ok` | `stale` | `missing`; stale =
+  MP3 exists but its hash is missing or does not match). `format_audio_summary(statuses)` →
+  `"18 ok, 2 stale, 1 missing"`; `orphaned_audio(project) -> list[Path]`. `vidgen validate`
+  prints `audio:     <summary>` (plus `(N orphaned mp3)`) and one `audio [<variant>]: ...` line
+  per variant with its own audio folder. `render` (Step 4) should warn, not fail, on stale/missing.
+
 ## 8. CLI
 
 ```
 vidgen init <dir> [--example minimal]   # scaffold a project
 vidgen validate [PROJECT]               # load config + extensions, report all errors
 vidgen list-scenes [PROJECT]            # built-ins + extensions (+ which overrides)
-vidgen tts [PROJECT] [--force] [--dry-run] [--beat ID ...]
+vidgen tts [PROJECT] [--force] [--dry-run] [--beat ID ...] [--variant NAME]
 vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going]
 ```
 PROJECT defaults to the current directory. `--scene` re-renders only those scenes and re-joins

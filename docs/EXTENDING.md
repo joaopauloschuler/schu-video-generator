@@ -126,8 +126,21 @@ def announce(ctx):            # ctx.project, ctx.event, ctx.data (dict; may be m
 ```
 
 Hooks run in registration order. If a hook raises, the command stops with an error naming the
-hook and its file. (Which `data` keys each event carries is listed in DESIGN.md once the TTS and
-render steps define them.)
+hook and its file.
+
+Event data (render events are added by the render step; see DESIGN.md §6.2):
+
+| event      | `ctx.data` keys |
+|------------|-----------------|
+| `pre_tts`  | `beats` (list of beat ids about to be generated; remove ids to skip them), `audio_dir`, `force`, `dry_run` |
+| `post_tts` | `generated` (beat ids written, in order), `audio_dir` |
+
+```python
+@hook("pre_tts")
+def never_regenerate_intro(ctx):
+    if "intro_b1" in ctx.data["beats"]:
+        ctx.data["beats"].remove("intro_b1")
+```
 
 ## 5. Overriding a built-in
 

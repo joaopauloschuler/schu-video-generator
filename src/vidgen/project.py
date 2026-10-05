@@ -68,11 +68,20 @@ def read_config_file(path: Path) -> Any:
 class Project:
     """A loaded project folder. Create with :meth:`Project.load`."""
 
-    def __init__(self, root: Path, config_file: Path, config: VideoConfig, variant: str | None) -> None:
+    def __init__(
+        self,
+        root: Path,
+        config_file: Path,
+        config: VideoConfig,
+        variant: str | None,
+        base_config: VideoConfig | None = None,
+    ) -> None:
         self.root = root
         self.config_file = config_file
         self.config = config
         self.variant = variant
+        #: The config without the variant applied (equals ``config`` when there is no variant).
+        self.base_config = base_config if base_config is not None else config
 
     @classmethod
     def load(cls, path: str | Path = ".", variant: str | None = None) -> Project:
@@ -84,13 +93,14 @@ class Project:
         source = config_file.name
         data = read_config_file(config_file)
         base = parse_config(data, source)
+        config = base
         if variant is not None:
             if variant not in base.variants:
                 known = ", ".join(sorted(base.variants)) or "(none defined)"
                 raise VidgenError(f"{source}: unknown variant '{variant}'; available variants: {known}")
             data = deep_merge(data, base.variants[variant])
-            base = parse_config(data, f"{source} (variant '{variant}')")
-        return cls(config_file.parent, config_file, base, variant)
+            config = parse_config(data, f"{source} (variant '{variant}')")
+        return cls(config_file.parent, config_file, config, variant, base)
 
     # ----- names and paths -------------------------------------------------------------------
 
@@ -101,8 +111,21 @@ class Project:
 
     @property
     def audio_dir(self) -> Path:
-        """``<root>/audio``: narration MP3s and their hash files."""
-        return self.root / "audio"
+        """Narration MP3s and their hash files: ``<root>/audio``, or ``<root>/audio/<variant>``
+        when :attr:`has_own_audio` (the variant's voice or beat texts differ from the base)."""
+        base = self.root / "audio"
+        return base / self.variant if self.variant and self.has_own_audio else base
+
+    @property
+    def has_own_audio(self) -> bool:
+        """True for a variant whose audio would differ from the base config's: its effective
+        ``voice`` differs, or a beat id present in both configs has a different text."""
+        if self.variant is None:
+            return False
+        if self.config.voice.model_dump() != self.base_config.voice.model_dump():
+            return True
+        base_texts = {beat.id: beat.text for scene in self.base_config.scenes for beat in scene.beats}
+        return any(base_texts.get(beat.id, beat.text) != beat.text for _, beat in self.beats())
 
     @property
     def build_dir(self) -> Path:
