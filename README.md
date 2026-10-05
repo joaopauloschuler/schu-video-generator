@@ -34,5 +34,9 @@ Built-in scene types: `title`, `bullets`, `bar_chart`, `line_chart`, `image`, `q
 (9:16) formats. [examples/minimal](examples/minimal) uses every one of them without a line of
 Python: `vidgen render examples/minimal --preview` (add `--variant vertical` for 9:16).
 
+[examples/kphi3](examples/kphi3) is a real 4-minute paper video whose eight bespoke animated
+scenes all live in the project's `extensions/` folder (narration MP3s included, so it renders
+without an ElevenLabs key): `vidgen render examples/kphi3 --preview`.
+
 Docs: [DESIGN.md](DESIGN.md) (architecture), [docs/CONFIG.md](docs/CONFIG.md) (config
 reference), [docs/EXTENDING.md](docs/EXTENDING.md) (writing project extensions).

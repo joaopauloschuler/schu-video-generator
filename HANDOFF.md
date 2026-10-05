@@ -342,3 +342,82 @@ Known gaps / for later steps
 How to test: `/home/claude/venv/bin/python -m pytest -q` (323 passed, ~24 s; 28 tiny renders of
 all built-ins at 160x90 and 90x160 @ 5 fps ≈ 10 s). Manual: `vidgen list-scenes`,
 `vidgen validate examples/minimal`, `vidgen render examples/minimal --preview [--variant vertical] --jobs 4`.
+
+## Step 6 — kphi3 migration
+What was built
+- `examples/kphi3/`: the paper video as a vidgen project. `video.yaml` (title, `output:
+  kphi3_video`, 1920x1080@30, preview 854x480@15, theme with the original colors: standard
+  tokens plus `base`/`k2`/`k3` model colors, `highlight` = gold, `palette` = group colors;
+  voice = script.json + the original voice settings; pad 0.35, wps 2.6; 8 scenes with the
+  same 27 beat ids and texts, verified programmatically against script.json).
+- `examples/kphi3/audio/`: the 27 MP3s + hashes copied byte-for-byte (committed, per
+  CLAUDE.md). `vidgen tts --dry-run` → 0 to generate; `vidgen validate` → audio 27 ok.
+- `examples/kphi3/extensions/`: `common.py` (dark fill constants, `group_color`, `mini_net`,
+  `decoder_layer`, `loss_panel`) and one module per scene, `s1_title.py` … `s8_conclusion.py`,
+  registering `kphi_title`, `kphi_sparsity`, `kphi_equivalence`, `kphi_method`, `kphi_setup`,
+  `kphi_params`, `kphi_loss`, `kphi_conclusion`. Only `from vidgen.api import *` + relative
+  imports. Generic helpers (`T`, `MT`, `column`, `edges`, `dense_pairs`, `grouped_pairs`,
+  `counter`, `resolve_color`) come from the API; beats are narrated by index. On-screen
+  content moved to `params` for the title card, synapse numbers, the method's result line,
+  dataset/hardware facts, parameter rows (nested `ParamRow(SceneParams)` with a `ThemeColor`
+  field), losses and takeaways; the schematic scenes keep their diagram labels in code.
+- `examples/kphi3/README.md` (re-rendering + original-file mapping), `REGRESSION.md`
+  (method, tables), README.md pointer, EXTENDING.md pointer to the example.
+- `tests/test_kphi3_example.py`: validate (custom types only, beat ids), committed audio up to
+  date + `tts --dry-run` says nothing to do, and 2 tiny worker renders (`title`, `params` at
+  160x90@5, `--no-audio`) asserting beat length = MP3 duration and beat spacing = d + pad
+  (± half a frame). ~6 s.
+
+API gaps found (and fixes)
+1. **No way for a scene type to declare how many beats it narrates.** Every kphi scene narrates
+   fixed indices; a missing beat failed only at render time ("beat index out of range"), an
+   extra one only produced a warning after rendering. Fix (general): `NarratedScene.beat_count`
+   (`None` | int | `(min, max|None)`), classmethods `check_beat_count(n)` / `beat_count_text()`;
+   checked by `vidgen validate` (`scenes[i].beats: type 'x' needs exactly 2 beats, got 1`), by
+   the constructor (`VidgenError`), and printed by `list-scenes` (`beats: exactly 2 beats`).
+   Tests in `test_scene.py` (parametrized semantics, constructor) and `test_builtin_scenes.py`
+   (validate + list-scenes). DESIGN §5.3 "Refinements (Step 6)", EXTENDING §2 "Fixed beats".
+2. Nothing else was missing. Things that worked as designed: module-level theme access,
+   relative imports between extension modules, nested `SceneParams` models with `ThemeColor`
+   (theme context reaches nested validators: `scenes[5].params.rows[1].color: unknown theme
+   color`), `T`/`MT` with numeric sizes and extra kwargs (`line_spacing`), `counter` with a
+   callable anchor, `self.wait()`/`clear_all()` inside narrated beats.
+   Friction, not gaps: Manim calls (`set_color`, `Line(color=...)`) need hex, so token colors
+   go through `resolve_color("k3")` often; Manim's `t2c` is NOT a drop-in for coloring part of a
+   `Text` (Pango re-shapes the runs, see REGRESSION.md), so the title keeps a glyph-slice helper.
+
+Regression summary (details in examples/kphi3/REGRESSION.md)
+- Original per-scene lengths came from re-rendering the original `scenes.py` at 320x180@30 in
+  a temp copy (sum = 6932 frames = the original MP4 exactly). vidgen final render: 6944 frames
+  (231.47 s vs 231.07 s); per scene +2, +1, +1, +1, +1, +2, +2, +2 frames. The original
+  `narrate()` was instrumented: it truncates the end-of-beat wait (`int(rest*fps)`, skipped if
+  ≤ 0.02 s) where vidgen rounds; the predicted per-scene difference matches exactly (12 beats
+  with fractional part ≥ 0.5).
+- Frames: 81 pairs (early/mid/end of every beat, aligned for the rounding shift, extracted by
+  frame index): 72 bit-identical, 9 at SSIM 1.0000 / PSNR 75–98 dB (encoder noise on still
+  holds). Time-based seeking is off by one frame in the original, whose video stream starts at
+  0.021 s.
+- Audio: narration onsets lag the original's frames by 42–61 ms; vidgen's within 1 ms.
+- Final 1080p render: `vidgen render examples/kphi3 --jobs 2` 2 min 40 s; `--preview` 54 s.
+  A copy is at /home/claude/work/kphi3_vidgen_render.mp4 (outside the repo).
+
+Decisions / deviations
+- vidgen's nearest-frame beat rounding was kept (no kphi-specific narrate); the +0.4 s total
+  is documented as the only timing difference.
+- Scene ids are descriptive (`title`, `sparsity`, …); beat ids keep the original `sN_bM` so the
+  committed audio and hashes are reused.
+- The `minimal` example and `kphi3` share the `**/build/`, `*.mp4`, `*.srt` ignores; extension
+  `__pycache__/` is ignored by the global rule.
+
+Known gaps / for Step 7
+- `beat_count` is not validated itself (a wrong type on the class attribute raises a plain
+  exception at validate time); fine for now.
+- The kphi scenes use hard-coded 16:9 coordinates (faithful to the original); a vertical
+  variant of this example would need layout work (not attempted).
+- Reused renders (`--scene`) are still not checked against extension changes: editing an
+  extension module while a render is running breaks the workers that start afterwards (seen
+  once while porting); re-run the render.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (334 passed, ~29 s). Manual:
+`vidgen validate examples/kphi3`, `vidgen tts examples/kphi3 --dry-run`,
+`vidgen render examples/kphi3 --preview --jobs 2`.

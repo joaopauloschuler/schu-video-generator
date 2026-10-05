@@ -62,6 +62,9 @@ def check_project(project: Project) -> list[str]:
                 if entry is None:
                     problems.append(f"scenes[{i}].type: {registry.unknown_type_message(scene.type)}")
                     continue
+                beat_problem = entry.cls.check_beat_count(len(scene.beats))
+                if beat_problem is not None:
+                    problems.append(f"scenes[{i}].beats: type '{scene.type}' {beat_problem}")
                 try:
                     params = entry.cls.validate_params(scene.params, theme)
                 except ValidationError as exc:
@@ -204,6 +207,9 @@ def _print_scene_types() -> None:
     for entry in entries:
         marker = "  (overrides builtin)" if entry.overrides is not None else ""
         print(f"{entry.name:<{width}}  {entry.origin}{marker}")
+        beats = entry.cls.beat_count_text()
+        if beats is not None:
+            print(f"    beats: {beats}")
         if entry.params_model is None:
             print("    params: free-form (no Params model)")
         for line in describe_params(entry.params_model):

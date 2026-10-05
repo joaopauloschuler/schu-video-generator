@@ -362,3 +362,40 @@ def test_validate_project_hook_for_extensions(make_project) -> None:
     assert check_project(Project.load(root)) == ["scenes[0].params.data: file not found: data.csv"]
     (root / "data.csv").write_text("x\n", encoding="utf-8")
     assert check_project(Project.load(root)) == []
+
+
+def test_beat_count_checked_by_validate_and_listed(make_project, capsys: pytest.CaptureFixture[str]) -> None:
+    from conftest import write_files
+
+    scenes = [
+        {"id": "a", "type": "two_beats", "beats": [{"text": "one"}]},
+        {"id": "b", "type": "two_beats", "beats": [{"text": "one"}, {"text": "two"}]},
+        {"id": "c", "type": "two_beats", "duration": 1},
+    ]
+    root = make_project(minimal_config(scenes=scenes))
+    write_files(
+        root,
+        {
+            "extensions/fixed.py": """
+            from vidgen.api import *
+
+            @scene("two_beats")
+            class TwoBeats(NarratedScene):
+                beat_count = 2
+
+                def construct(self):
+                    with self.narrate(0):
+                        pass
+                    with self.narrate(1):
+                        pass
+            """
+        },
+    )
+    assert check_project(Project.load(root)) == [
+        "scenes[0].beats: type 'two_beats' needs exactly 2 beats, got 1",
+        "scenes[2].beats: type 'two_beats' needs exactly 2 beats, got 0",
+    ]
+    assert main(["list-scenes", str(root)]) == 0
+    out = capsys.readouterr().out
+    assert "extensions/fixed.py\n    beats: exactly 2 beats\n" in out
+    assert "\n    beats:" not in out.split("two_beats")[0]  # built-ins accept any number of beats

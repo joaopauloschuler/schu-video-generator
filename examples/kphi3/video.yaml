@@ -1,0 +1,179 @@
+# "Saving 77% of the Parameters in Large Language Models" - the kphi-3 paper video, ported from
+# a one-off Manim project. Every scene is a custom scene type from extensions/ (no built-ins).
+#   vidgen validate examples/kphi3
+#   vidgen tts examples/kphi3 --dry-run      # nothing to do: the narration MP3s are committed
+#   vidgen render examples/kphi3 --preview   # 854x480 @ 15 fps
+#   vidgen render examples/kphi3 --jobs 2    # 1920x1080 @ 30 fps -> kphi3_video.mp4
+# Narration text lives in the beats below; the text drawn on screen in each scene's params.
+title: "Saving 77% of the Parameters in Large Language Models"
+output: kphi3_video
+
+format: {width: 1920, height: 1080, fps: 30}
+preview: {width: 854, height: 480, fps: 15}
+
+theme:
+  background: "#0E1116"
+  font: Inter
+  colors:
+    text: "#E8EAED"
+    dim: "#6B7280"
+    accent: "#FF6B6B"      # warnings, "memorize", filtered phrases
+    highlight: "#FFD166"   # gold: emphasis, best values, flashes
+    primary: "#58C4DD"
+    secondary: "#F2A541"
+    tertiary: "#83C167"
+    surface: "#161B24"     # decoder boxes, funnel
+    # one color per model, used across scenes
+    base: "#58C4DD"        # phi-3 baseline / dense layers
+    k2: "#F2A541"          # kphi-3, 2 layers
+    k3: "#83C167"          # kphi-3, 3 layers
+  palette: ["#58C4DD", "#F2A541", "#C792EA"]   # channel groups
+
+voice:
+  provider: elevenlabs
+  voice_id: nPczCjzI2devNBz1zQrb
+  model_id: eleven_multilingual_v2
+  output_format: mp3_44100_128
+  settings: {stability: 0.55, similarity_boost: 0.75, style: 0.0, use_speaker_boost: true}
+  context: true
+
+narration:
+  pad: 0.35
+  words_per_second: 2.6
+
+scenes:
+  - id: title
+    type: kphi_title
+    params:
+      title: "Saving 77% of the Parameters"
+      highlight: "77%"
+      subtitle: "in Large Language Models"
+      kind: "Technical Report"
+      authors:
+        - "Dr. João Paulo Schwarz Schuler  ·  schulers.com, Porto Alegre"
+        - "Dr. Alejandra Rojas Gómez  ·  Universitat Rovira i Virgili, Reus"
+      connections_label: "connections"
+      kept_percent: 23
+    beats:
+      - id: s1_b1
+        text: "What if a large language model could keep its ability to learn, while dropping more than three quarters of its parameters?"
+      - id: s1_b2
+        text: "This technical report, by João Paulo Schwarz Schuler and Alejandra Rojas Gómez, shows that it can."
+
+  - id: sparsity
+    type: kphi_sparsity
+    params:
+      possible: "10<sup>22</sup>"
+      actual: "10<sup>15</sup>"
+      ratio: "≈ 1 in 10,000,000"
+      question: "Over-parameterized?"
+    beats:
+      - id: s2_b1
+        text: "Layers in artificial neural networks are usually densely connected. Every input talks to every output."
+      - id: s2_b2
+        text: "Biological brains are the opposite. Cortical neurons five hundred microns apart connect with a probability of only zero to fifteen percent."
+      - id: s2_b3
+        text: "In the human brain, out of ten to the twenty-two possible synaptic connections, only about ten to the fifteen actually exist."
+      - id: s2_b4
+        text: "So, are our artificial networks over-parameterized?"
+
+  - id: equivalence
+    type: kphi_equivalence
+    beats:
+      - id: s3_b1
+        text: "In computer vision, a pointwise, or one-by-one, convolution looks at one pixel at a time, and mixes its channels with a learned weight matrix."
+      - id: s3_b2
+        text: "A dense layer in a transformer does exactly the same thing to the dimensions of each token. Think of the sequence as an image whose height is the sequence length, and whose width is one."
+      - id: s3_b3
+        text: "So a dense layer is a pointwise convolution. And a trick that works for one should work for the other."
+
+  - id: method
+    type: kphi_method
+    params:
+      result: "Vision models: ~80% fewer parameters, same accuracy"
+    beats:
+      - id: s4_b1
+        text: "In earlier computer vision work, the authors replaced each dense pointwise layer with a small subnetwork."
+      - id: s4_b2
+        text: "First, a grouped pointwise convolution, K, splits the channels into groups. Each group only sees its own inputs."
+      - id: s4_b3
+        text: "Then, an interleaving layer shuffles the channels, so that every group in the next layer receives information from every group of the first."
+      - id: s4_b4
+        text: "A second grouped convolution, L, mixes them again, and a summation layer adds both paths together."
+      - id: s4_b5
+        text: "With N groups, each grouped layer keeps only one N-th of the weights. In image classification, this removed around eighty percent of the parameters, while keeping accuracy."
+
+  - id: setup
+    type: kphi_setup
+    params:
+      pairs_before: 2.58
+      pairs_after: 2.52
+      filtered: ["“I am an AI”", "“I cannot”", "“I do not”", "“I don't have”"]
+      channels_per_group: 256
+      gpu: "L4"
+      blocks: 57
+      days: "≈ 3 days"
+    beats:
+      - id: s5_b1
+        text: "To test this on language, the authors took Microsoft's Phi-3 mini code base, used just two transformer decoder layers, and trained it from scratch."
+      - id: s5_b2
+        text: "The training data was the LaMini instruction dataset: 2.58 million instruction and response pairs, filtered down to 2.52 million."
+      - id: s5_b3
+        text: "The optimized model, called K-Phi-3, replaces every dense layer with the grouped subnetwork, using 256 channels per group."
+      - id: s5_b4
+        text: "Every experiment ran on a single NVIDIA L4 GPU, in about three days."
+
+  - id: params
+    type: kphi_params
+    params:
+      title: "Non-embedding parameters"
+      unit: "M"
+      rows:
+        - {label: "phi-3 · 2 layers", value: 227, color: base}
+        - {label: "kphi-3 · 2 layers", value: 35, color: k2, percent: "15%"}
+        - {label: "kphi-3 · 3 layers", value: 53, color: k3, percent: "23%"}
+      saving: "−77% parameters"
+    beats:
+      - id: s6_b1
+        text: "Let's count the non-embedding parameters. The Phi-3 baseline has 227 million."
+      - id: s6_b2
+        text: "The two-layer K-Phi-3 has just 35 million. That's fifteen percent of the original."
+      - id: s6_b3
+        text: "Even with a third layer, K-Phi-3 needs only 53 million, or twenty-three percent. That is the seventy-seven percent saving in the title."
+
+  - id: loss
+    type: kphi_loss
+    params:
+      models: ["phi-3\n2 layers", "kphi-3\n2 layers", "kphi-3\n3 layers"]
+      colors: [base, k2, k3]
+      training: [1.08, 1.26, 1.21]
+      validation: [1.58, 1.60, 1.57]
+      note: "lower is better · axis starts at 1.0"
+    beats:
+      - id: s7_b1
+        text: "But can it still learn? On the training data, the baseline reaches the lowest loss: 1.08."
+      - id: s7_b2
+        text: "On unseen validation data, however, the picture changes. The two-layer K-Phi-3 reaches 1.60, close to the baseline's 1.58. And the three-layer K-Phi-3 actually beats it, with 1.57."
+      - id: s7_b3
+        text: "The authors suggest that the smaller parameter space acts as an information bottleneck, pushing the model to generalize instead of memorizing."
+
+  - id: conclusion
+    type: kphi_conclusion
+    params:
+      heading: "Takeaways"
+      items:
+        - "Vision technique  →  large language models"
+        - "Up to 85% fewer non-embedding parameters"
+        - "Similar (or better) validation loss"
+        - "One GPU · about 3 days"
+      question: "Are LLMs over-parameterized?"
+      links:
+        - "github.com/joaopauloschuler/less-parameters-llm"
+        - "huggingface.co/schuler"
+    beats:
+      - id: s8_b1
+        text: "In short: a parameter reduction technique from computer vision carries over to large language models."
+      - id: s8_b2
+        text: "Up to eighty-five percent fewer non-embedding parameters, a similar validation loss, and all of it on a single GPU."
+      - id: s8_b3
+        text: "Current language models may be heavily over-parameterized. The code and the trained models are open, on GitHub and Hugging Face."

@@ -103,6 +103,32 @@ def test_invalid_params_raise_on_construction(make_project, manim_config: None) 
         Panel(project.scene("s"), project)
 
 
+@pytest.mark.parametrize(
+    ("spec", "text", "ok", "bad"),
+    [
+        (None, None, [0, 1, 7], []),
+        (2, "exactly 2 beats", [2], [(1, "needs exactly 2 beats, got 1"), (3, "needs exactly 2 beats, got 3")]),
+        (1, "exactly 1 beat", [1], [(0, "needs exactly 1 beat, got 0")]),
+        ((1, None), "at least 1 beat", [1, 9], [(0, "needs at least 1 beat, got 0")]),
+        ((2, 4), "2 to 4 beats", [2, 3, 4], [(5, "needs 2 to 4 beats, got 5")]),
+    ],
+)
+def test_beat_count(spec, text, ok, bad) -> None:
+    cls = type("Fixed", (NarratedScene,), {"beat_count": spec})
+    assert cls.beat_count_text() == text
+    assert all(cls.check_beat_count(n) is None for n in ok)
+    assert [(n, cls.check_beat_count(n)) for n, _ in bad] == bad
+
+
+def test_wrong_beat_count_raises_on_construction(make_project, manim_config: None) -> None:
+    class TwoBeats(NarratedScene):
+        beat_count = 2
+
+    project = project_with(make_project, [{"id": "s", "type": "t", "beats": [{"text": "x"}]}])
+    with pytest.raises(VidgenError, match=r"scene 's': needs exactly 2 beats, got 1"):
+        TwoBeats(project.scene("s"), project)
+
+
 def test_beat_lookup_and_durations(make_project, manim_config: None) -> None:
     project = project_with(
         make_project,

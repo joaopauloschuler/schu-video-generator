@@ -168,6 +168,16 @@ class Checklist(NarratedScene):
         self.finish()
 ```
 
+**Fixed beats.** A scene that narrates beats by index (`self.narrate(0)`, `self.narrate(1)`)
+should say how many it needs, so `vidgen validate` catches a missing or extra beat before
+rendering (`list-scenes` shows it too):
+
+```python
+@scene("kphi_title")
+class KphiTitle(NarratedScene):
+    beat_count = 2            # exactly 2; or (1, None): at least one; (2, 4): two to four
+```
+
 **LaTeX.** `latex_available()` and `require_latex("scene 'x'")` (raises a `VidgenError` with
 install hints, e.g. MiKTeX on Windows) let a scene that uses `Tex`/`MathTex` fail clearly on
 machines without LaTeX.
@@ -199,6 +209,10 @@ in the theme font — the function forms of `self.text` / `self.markup`), `colum
 `dense_pairs`, `grouped_pairs`, `counter` (text redrawn from a `ValueTracker`), `resolve_color`,
 and the layout/timing helpers of section 2 (`fit_text`, `distribute`, `nice_ticks`, ...).
 Sizes and colors take theme token names (`"body"`, `"accent"`) or literals (`32`, `"#FF0000"`).
+
+A complete real-world example is [examples/kphi3](../examples/kphi3): eight bespoke animated
+scenes of a paper video, each an extension scene type, with shared helpers in
+`extensions/common.py` and the on-screen text in `params`.
 
 ## 4. Theme tokens
 

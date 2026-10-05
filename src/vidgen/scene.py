@@ -98,6 +98,10 @@ def audio_duration(path: Path) -> float:
         raise VidgenError(f"cannot read audio file {path}: {exc}") from None
 
 
+def _beats(k: int) -> str:
+    return f"{k} beat" if k == 1 else f"{k} beats"
+
+
 class NarratedScene(Scene):
     """A Manim scene timed by narration.
 
@@ -128,6 +132,9 @@ class NarratedScene(Scene):
             theme = runtime.current_theme() if active else Theme(self.project.config.theme)
         self.theme = theme
         self.params = type(self).parse_params(spec.params, scene_id=spec.id, theme=self.theme)
+        problem = type(self).check_beat_count(len(spec.beats))
+        if problem is not None:
+            raise VidgenError(f"scene '{spec.id}': {problem}")
         self.beats: list[BeatConfig] = list(spec.beats)
         self.audio_enabled = audio
         self.beat_log: list[BeatTiming] = []
@@ -176,6 +183,38 @@ class NarratedScene(Scene):
         checks of a parent class.
         """
         return []
+
+    #: How many beats the scene type narrates: ``None`` (any number, the default), an ``int``
+    #: (exactly that many) or ``(min, max)`` (``max`` may be ``None``). Checked by
+    #: ``vidgen validate`` and when the scene is built; set it on types that narrate fixed
+    #: beat indices (``self.narrate(0)``, ``self.narrate(1)``...).
+    beat_count: int | tuple[int, int | None] | None = None
+
+    @classmethod
+    def beat_count_text(cls) -> str | None:
+        """:attr:`beat_count` in words (``"exactly 2 beats"``, ``"at least 1 beat"``,
+        ``"2 to 4 beats"``), or ``None`` when any number of beats is accepted."""
+        spec = cls.beat_count
+        if spec is None:
+            return None
+        lo, hi = (spec, spec) if isinstance(spec, int) else spec
+        if lo == hi:
+            return f"exactly {_beats(lo)}"
+        if hi is None:
+            return f"at least {_beats(lo)}"
+        return f"{lo} to {hi} beats"
+
+    @classmethod
+    def check_beat_count(cls, n: int) -> str | None:
+        """Why ``n`` beats do not fit :attr:`beat_count` (``"needs exactly 2 beats, got 3"``),
+        or ``None`` when they do."""
+        spec = cls.beat_count
+        if spec is None:
+            return None
+        lo, hi = (spec, spec) if isinstance(spec, int) else spec
+        if lo <= n and (hi is None or n <= hi):
+            return None
+        return f"needs {cls.beat_count_text()}, got {n}"
 
     # ----- beats and timing ------------------------------------------------------------------
 

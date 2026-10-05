@@ -306,6 +306,15 @@ Added to `NarratedScene` so built-ins and extensions share it:
   `play_steps()` per beat.
 - `safe_width` / `safe_height` (frame minus `margin_x = 0.6`, `margin_y = 0.5` units).
 
+Refinements (Step 6, found while porting kphi3):
+- `beat_count: int | tuple[int, int | None] | None = None` (class attribute): how many beats a
+  scene type narrates (`None` any, `2` exactly, `(1, None)` at least one, `(2, 4)` a range).
+  Types that narrate fixed beat indices set it. `check_beat_count(n) -> str | None` (e.g.
+  `"needs exactly 2 beats, got 3"`) and `beat_count_text()` (`"exactly 2 beats"`) are
+  classmethods. `vidgen validate` reports `scenes[i].beats: type 'x' needs ...`; the constructor
+  raises `VidgenError("scene 'id': needs ...")`; `vidgen list-scenes` prints `beats: ...`.
+  Built-ins leave it `None` (they adapt to any number of beats).
+
 `vidgen.layout` (exported by `vidgen.api`): `fit_text`, `shrink_to_fit`, `wrap_lines`,
 `normalize_text`, `distribute`, `nice_ticks`, `auto_format`, `format_value`, `check_format`,
 `latex_available`, `require_latex` (+ `missing_latex_tools`, not exported). `fit_text` measures
