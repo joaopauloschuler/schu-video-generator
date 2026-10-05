@@ -85,10 +85,10 @@ Rules that apply to every step:
 - [x] Theme tokens `font_serif`, `font_mono`; code scene uses `font_mono`
 
 ### Step 19 — Icons: mechanism + seed set
-- [ ] `icon(name, size, color)` helper in `vidgen.api` (SVG → Mobject, recoloured by theme token)
-- [ ] Vendored icon folder with licence and a manifest (name, tags, category); project `assets/icons/` overrides/extends it
-- [ ] Seed set: 40 icons from one open-licensed set (Lucide preferred)
-- [ ] `vidgen list-icons [--search TEXT] [--json]`
+- [x] `icon(name, size, color)` helper in `vidgen.api` (SVG → Mobject, recoloured by theme token)
+- [x] Vendored icon folder with licence and a manifest (name, tags, category); project `assets/icons/` overrides/extends it
+- [x] Seed set: 40 icons from one open-licensed set (Lucide preferred)
+- [x] `vidgen list-icons [--search TEXT] [--json]` (also `--category`, `--sheet PNG`; `IconName` param type; `tools/vendor_icons.py` for Step 20)
 
 ### Step 20 — Icons: curated expansion
 - [ ] Expand to ~200 icons, ~25 per category: tech, data, science, business, people, arrows/UI, nature, education

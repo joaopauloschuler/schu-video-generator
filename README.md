@@ -15,6 +15,9 @@ subtitles.
   --swatches themes.png` shows them; projects can register their own (e.g. a brand look).
 - **Bundled fonts**: Inter, Source Serif 4 and JetBrains Mono NL ship with vidgen (no install);
   presets pick them per role (serif headings in `light_academic` and `warm_editorial`).
+- **Icons**: a built-in set of line icons (Lucide, ISC) in eight categories, recoloured by the
+  theme and crisp at any size; `vidgen list-icons --search chart --sheet icons.png` finds and
+  shows them; a project adds or replaces icons with SVGs in `assets/icons/`.
 - **Extensible per video**: a project can add its own scene types, helpers, theme tokens and
   pipeline hooks in its `extensions/` folder, without touching vidgen.
 - **Cheap to iterate**: only new or edited beats are sent to ElevenLabs; fast low-resolution
@@ -83,6 +86,7 @@ narration.
 | `vidgen validate [PROJECT] [--json]` | load config and extensions, report every problem (also in every variant), estimated length, audio status |
 | `vidgen list-scenes [PROJECT] [--json]` | scene types (built-in and the project's) with their params |
 | `vidgen list-themes [PROJECT] [--swatches PNG] [--json]` | theme presets (built-in and the project's) with colours, type scale, contrast check; `--swatches` draws them all in one PNG |
+| `vidgen list-icons [PROJECT] [--search TEXT] [--category NAME] [--sheet PNG] [--json]` | icons (built-in and the project's `assets/icons`) with category and tags; `--sheet` draws the listed icons, labelled, into a PNG |
 | `vidgen schema [PROJECT] [--scene TYPE \| --all] [--json]` | JSON Schema of `video.yaml` (params checked per scene type, the project's extension types included), for editors and AI agents |
 | `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--variant NAME]` | generate missing/stale narration into `audio/`; `--dry-run` needs no key |
 | `vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going] [--jobs N] [--frames] [--frames-per-beat N] [--json]` | render and join the video |
@@ -128,6 +132,7 @@ my_video/
   video.yaml          # the config
   extensions/         # optional: your own scene types, helpers, hooks (*.py)
   assets/             # images, code files, ... referenced from params
+    icons/            # optional: your own icons <name>.svg (+ icons.json with tags)
   audio/              # generated narration: <beat_id>.mp3 + .hash (keep it; it cost money)
   build/              # intermediate render files, --frames stills + layout, storyboards (safe to delete)
   my_video.mp4  my_video.srt  my_video_preview.mp4 ...
@@ -138,7 +143,7 @@ my_video/
 - [examples/minimal](examples/minimal) — every built-in scene type, no Python:
   `vidgen render examples/minimal --preview [--variant vertical]`.
 - [examples/custom_scene](examples/custom_scene) — "How a bicycle gear works": built-ins plus a
-  custom scene type with a helper module, a vertical variant and a hook.
+  custom scene type with a helper module, a project icon, a vertical variant and a hook.
 - [examples/kphi3](examples/kphi3) — a real 4-minute paper video whose eight bespoke scenes all
   live in its `extensions/` folder (narration MP3s included, so it renders without a key).
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.

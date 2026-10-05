@@ -6,7 +6,8 @@ The worker records :func:`scene_fingerprint` in the scene's timings (``render.fi
 What counts: the scene's config (type, params, beats; not ``lint_ignore``), every other config
 section except ``scenes``, ``variants`` and ``lint`` (theme, narration, format...) but including
 ``lint.rules.min_font.min_size`` (``vidgen.regions.readable_size`` lays text out by it), the narration MP3s of the scene's
-beats (size and modification time), the source of vidgen itself (with its bundled fonts) and of
+beats (size and modification time), the source of vidgen itself (with its bundled fonts and
+icons) and of
 the project's extension folders (file contents), and the files under ``<project>/assets`` (size and modification time).
 Files a scene reads from elsewhere are not tracked (``--force`` renders again).
 """
@@ -32,7 +33,7 @@ _PACKAGE_DIR = Path(__file__).resolve().parent.parent
 #: contact sheets, TTS); every other module, including new ones, is part of the fingerprint.
 NOT_RENDER_INPUTS: frozenset[str] = frozenset(
     {
-        "__main__.py", "cli.py", "describe.py", "jsonout.py", "lint", "schema.py", "sheets.py", "storyboard.py",
+        "__main__.py", "cli.py", "describe.py", "iconlist.py", "jsonout.py", "lint", "schema.py", "sheets.py", "storyboard.py",
         "render/fingerprint.py", "render/pipeline.py", "render/ffmpeg.py", "subtitles.py", "themelist.py", "tts",
     }
 )
@@ -65,9 +66,11 @@ def _render_input(path: Path) -> bool:
 @lru_cache(maxsize=1)
 def vidgen_source_digest() -> str:
     """Digest of vidgen's own Python source that renders depend on (built-in scenes, helpers,
-    the scene base, the worker...; not :data:`NOT_RENDER_INPUTS`) and of its bundled fonts."""
+    the scene base, the worker...; not :data:`NOT_RENDER_INPUTS`), of its bundled fonts and of
+    its vendored icons (SVGs and manifest)."""
     paths = [p for p in _files(_PACKAGE_DIR, ".py") if _render_input(p)]
     paths += [p for p in _files(_PACKAGE_DIR / "data" / "fonts") if p.suffix in (".ttf", ".otf")]
+    paths += [p for p in _files(_PACKAGE_DIR / "data" / "icons") if p.suffix in (".svg", ".json")]
     return _contents_digest(paths, _PACKAGE_DIR)
 
 

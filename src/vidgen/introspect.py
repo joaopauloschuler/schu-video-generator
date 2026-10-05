@@ -8,7 +8,8 @@ the stills; ``vidgen lint`` reads it. Format: DESIGN.md §15 and docs/CONFIG.md.
 
 Grouping: a text mobject (``Text``, ``MarkupText``, ``Paragraph``, ``Tex``/``MathTex``,
 ``DecimalNumber``) is one object, not one per glyph; the paragraphs of a ``Code`` listing are
-objects of kind ``code`` and its background a shape. A group with no text or image anywhere
+objects of kind ``code`` and its background a shape; an icon (``vidgen.icon_mobject.Icon``) is
+one object of kind ``icon`` with its name in ``icon``. A group with no text or image anywhere
 inside is one ``group`` object (an axis' ticks, a network's edges); any other group is walked
 into. Parts at opacity 0 are not visible: they are left out of an object's box, and an object
 without visible parts is not recorded.
@@ -179,6 +180,8 @@ class LayoutRecorder:
         from manim import Code
         from manim.mobject.types.image_mobject import AbstractImageMobject
 
+        from vidgen.icon_mobject import Icon
+
         if id(mob) in walk.seen:
             return
         walk.seen.add(id(mob))
@@ -190,6 +193,9 @@ class LayoutRecorder:
             return
         if isinstance(mob, AbstractImageMobject):
             self._emit_parts(walk, mob, path, name, "image", [mob])
+            return
+        if isinstance(mob, Icon):
+            self._emit_parts(walk, mob, path, name, "icon", [m for m in mob.get_family() if _drawn(m)], icon=mob.icon_name)
             return
         own = [mob] if _drawn(mob) else []
         if own and not mob.submobjects:
@@ -243,12 +249,21 @@ class LayoutRecorder:
         walk.objects.append(item)
 
     def _emit_parts(
-        self, walk: _Walk, mob: Mobject, path: list[str], name: str | None, kind: str, leaves: list[Mobject]
+        self,
+        walk: _Walk,
+        mob: Mobject,
+        path: list[str],
+        name: str | None,
+        kind: str,
+        leaves: list[Mobject],
+        icon: str | None = None,
     ) -> None:
         parts = [p for p in (_measure(walk, m) for m in leaves) if p is not None]
         if not parts:
             return
         item = self._base(mob, path, name, kind, parts)
+        if icon is not None:
+            item["icon"] = icon
         filled = [p for p in parts if p.fill is not None]
         stroked = [p for p in parts if p.stroke is not None]
         fill = max(filled, key=lambda p: p.area).fill if filled else None

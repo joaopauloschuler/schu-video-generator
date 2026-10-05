@@ -51,6 +51,9 @@ src/vidgen/
   presets.py              # theme presets: seven built-in presets (§19, §20)
   scales.py               # type scales compact / standard / large / auto, frame orientation (§20)
   themelist.py            # `vidgen list-themes`: preset listing, JSON entries, swatch PNG (§20)
+  icons.py                # icon registry: vendored set + project assets/icons, search (§22; no manim)
+  icon_mobject.py         # icon() / Icon: SVG -> recoloured VGroup with scaling strokes (§22)
+  iconlist.py             # `vidgen list-icons`: listing, JSON entries, labelled contact sheet (§22)
   registry.py             # scene-type registry
   extensions.py           # discovery + import of project extensions
   hooks.py                # hook registry + dispatch
@@ -74,6 +77,8 @@ src/vidgen/
   fileio.py               # atomic writes; replacing files that Windows programs keep open
   scenes/                 # built-in scene library (registered like extensions)
   data/fonts/             # Inter, Source Serif 4, JetBrains Mono NL (.ttf + OFL.txt; package data)
+  data/icons/             # manifest.json + lucide/*.svg + lucide/LICENSE (ISC; package data, §22)
+tools/                    # maintainer scripts, not shipped: vendor_icons.py + icon_set.json (§22)
 tests/                    # pytest; no network; slow renders marked `render`
 examples/
   minimal/                # config-only example using built-ins
@@ -92,6 +97,7 @@ my_video/
   video.yaml              # config (video.json also accepted)
   extensions/             # optional; every *.py and every package here is auto-imported
   assets/                 # images, data files referenced by scenes (paths relative to project)
+    icons/                #   optional project icons <name>.svg (+ icons.json: category, tags) (§22)
   audio/                  # generated: <beat_id>.mp3 + <beat_id>.hash  (kept, cheap to reuse)
     <variant>/            #   only for a variant whose voice or beat texts differ (§7)
   build/                  # generated: manim media, per-scene mp4, timings json, concat list
@@ -428,7 +434,8 @@ Step 5 adds `ThemeColor, ThemeSize`, the `vidgen.layout` helpers (§5.3) and pyd
 `Field, field_validator, model_validator`.
 Step 15 adds the layout regions (§18): `Region, frame_region, safe_area, region, grid, place,
 orientation, readable_size, readable_text`. Step 16 adds `register_theme_preset` (§19); Step 17
-gives it the keyword arguments `scale` and `fonts` (§20).
+gives it the keyword arguments `scale` and `fonts` (§20). Step 19 adds `icon`, `Icon` and
+`IconName` (§22).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -548,6 +555,7 @@ vidgen init <dir> [--example minimal]   # scaffold a project
 vidgen validate [PROJECT] [--json]      # load config + extensions, report all errors
 vidgen list-scenes [PROJECT] [--json]   # built-ins + extensions (+ which overrides)
 vidgen list-themes [PROJECT] [--swatches PNG] [--json]   # theme presets + type scales (§20)
+vidgen list-icons [PROJECT] [--search TEXT] [--category NAME] [--sheet PNG] [--json]   # icons (§22)
 vidgen schema [PROJECT] [--scene TYPE | --all] [--json]   # JSON Schema of video.yaml (§12)
 vidgen tts [PROJECT] [--force] [--dry-run] [--beat ID ...] [--variant NAME]
 vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going]
@@ -799,8 +807,8 @@ using the existing renders of the others (missing ones are rendered). Exit code 
   `still` (`../frames/<scene>/<file>`, relative to the layout file; `capture.still_name`).
   Objects: `{id, kind, class, path, name, bbox, opacity, z, order, parts}` plus, for text kinds
   (`text|code|math|number`), `{text, font_px, color, colors, backdrop}` and otherwise
-  (`shape|group|image`) `{fill: {color, opacity}|null, stroke: {color, opacity,
-  width_px}|null}`. Pixels: output frame, origin top-left, y down, frame `[0,W] x [0,H]`,
+  (`shape|group|image|icon`) `{fill: {color, opacity}|null, stroke: {color, opacity,
+  width_px}|null}`; kind `icon` (Step 19, §22) also has `icon` (the name). Pixels: output frame, origin top-left, y down, frame `[0,W] x [0,H]`,
   1 decimal. Colours `#RRGGBB`.
 - **Measuring**: points go through the scene's own `camera.points_to_subpixel_coords`, so a
   `MovingCamera` frame (zoom/pan) is honoured. VMobject curves are sampled at 5 parameters per
@@ -1190,3 +1198,67 @@ using the existing renders of the others (missing ones are rendered). Exit code 
 - `vidgen list-themes`: entries gain `font_serif`, `font_mono` and `font_roles` (the family of
   every built-in role); the swatch panel draws "Aa Heading" in the preset's heading family when
   it is bundled.
+
+## 22. Refinements (Step 19, icons: mechanism + seed set)
+
+- **Vendored set** (package data `src/vidgen/data/icons/`, `pyproject` `data/icons/**/*`):
+  `lucide/<name>.svg` (unmodified files of npm `lucide-static` 1.52.0), `lucide/LICENSE` (ISC +
+  the MIT notice of the Feather-derived icons) and `manifest.json` = `{version: 1, sources:
+  {lucide: {package, version, license, license_file, homepage}}, icons: [{name, category, tags,
+  source}]}` (sorted by name; tags = Lucide's `tags.json` + `extra_tags`). Seed set: 40 icons,
+  5 in each of the 8 categories `icons.CATEGORIES` (`tech, data, science, business, people,
+  ui, nature, education`; `ui` = arrows and interface), listed in `tools/icon_set.json`.
+  `tools/vendor_icons.py` (not shipped) re-creates the folder from that list (`npm pack`, or
+  `--package-dir`), checks names/categories/version, removes unlisted SVGs; Step 20 extends the
+  list and re-runs it. `THIRD_PARTY_NOTICES.md` records the source.
+- **Registry** (`vidgen/icons.py`, manim-free): `IconInfo(name, path, category, tags, source,
+  origin, overrides)`; `builtin_icons()`, `builtin_sources()`, `project_icons(root)` (every
+  `<root>/assets/icons/*.svg`, names `[A-Za-z0-9][A-Za-z0-9_-]*`, optional `icons.json` `{icons:
+  [{name, category, tags}]}`, category default `project`; cached per folder by file
+  names/sizes/mtimes), `available_icons(root=None)` (built-ins, then project icons replacing by
+  name; sorted), `active_icons()` (the runtime project's), `search_icons(icons, text,
+  category)` (every word of `text` must be in the name, a tag, or equal the category; ranked
+  exact name < name prefix < in name < exact tag < in tag < category, then by name),
+  `find_icon(name)` / `unknown_icon_message` (difflib close names + icons whose tags match,
+  pointing at `vidgen list-icons --search`). Project icon problems are `VidgenError`s;
+  `vidgen validate` reports them as `assets/icons: ...`.
+- **Mobject** (`vidgen/icon_mobject.py`): `icon(name, size="body", color="text",
+  stroke_width=None, *, height=None, theme=None) -> Icon`; `build_icon(info, height, color,
+  stroke_width, current=)`. The SVG is pre-processed into a per-process temporary folder
+  (Manim's `SVGMobject` writes `<stem>_.svg` next to the file it parses, which would race
+  between parallel workers and fail in a read-only install): an invisible `<rect>` spanning the
+  `viewBox` is inserted first, `currentColor` becomes a marker colour (Manim reads it as black)
+  and `stroke="none"` a zero stroke width (Manim draws it as a white stroke). Then: the rect is
+  the `Icon`'s `box` (submobject 0, opacity 0: layout, `place()` and alignment use the design
+  box; the layout dump ignores it as invisible), every visible fill/stroke gets `color` (or,
+  with `color=None`, only the marker-coloured paint gets the theme `text` colour), each SVG
+  stroke width `w` (viewBox units) becomes Manim `w * height / viewBox_height / 0.01` (Cairo
+  draws `stroke_width * 0.01` frame units, so the result is resolution independent),
+  `stroke-linecap`/`-linejoin` of the root map to `cap_style`/`joint_type`. **Sizes**: a
+  size token or number is points as for text; box height = `points * ICON_UNITS_PER_POINT`
+  (0.0208 = 1.5 em of Inter: a `body` icon draws ~1.7x the cap height of body text, the ratio
+  of 24 px icons to 16 px text in UI kits); `height` is Manim units. `Icon.scale(f,
+  scale_stroke=True)` scales strokes by default (Manim's default is False), so `place()`,
+  `animate.scale` and `GrowFromCenter` keep proportions. `icon_name`, `icon_origin`.
+- **Params**: `vidgen.scene.IconName` = `Annotated[str, AfterValidator, ThemeToken("icon")]`:
+  syntax always; with a theme in the validation context (validate, scene construction) the name
+  must be in `active_icons()`. `ThemeToken.kind` may now be `icon`: `list-scenes` prints type
+  `icon`; the schema export turns `x-vidgen-theme: icon` into `enum` of the active project's
+  icon names (`schema.theme_tokens()["icon"]`; built-ins if the project's icon folder is broken).
+- **Layout dump / lint**: an `Icon` is one object, kind `icon`, `class` `Icon`, `icon` = its name,
+  `fill`/`stroke` of its largest part, `bbox` of its drawn parts. Lint treats icons like other
+  non-text objects (`covered_text` when drawn over text, `off_frame`); `describe()` prints
+  `icon 'cpu'`; findings' objects gain the key `icon` (`null` for other kinds; added within JSON
+  version 1); `lint_ignore` `object` patterns also match the icon name.
+- **`vidgen list-icons [PROJECT] [--search TEXT] [--category NAME] [--sheet PNG] [--json]`**
+  (`iconlist.py`, not a render input): project root from `find_config_file` without loading the
+  config (works while `video.yaml` is broken; no PROJECT and no config in the current folder:
+  built-ins); unknown category → `VidgenError` listing them. `--sheet`: 1280 px wide pages, 8
+  icons per row (150 px cells, 64 px icon box), name + category under each, at most ~1.25 x
+  width high (`<stem>-2.png`... for more; stale extra pages removed); icons drawn by
+  `build_icon` through Manim's Cairo `Camera` in one capture per page (same pixels as a render).
+  JSON (Step 8 envelope, command `list-icons`): `project, search, category, sources,
+  categories [{name, description, count}], count, icons [IconInfo.to_json()], sheets`.
+- **Fingerprint**: `icons.py`/`icon_mobject.py` count as vidgen source; the vendored SVGs and
+  manifest are part of `vidgen_source_digest`; project icons are under `assets/` (already
+  tracked by size+mtime).

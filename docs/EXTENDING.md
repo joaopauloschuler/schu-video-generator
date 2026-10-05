@@ -138,6 +138,11 @@ class Params(SceneParams):
         return self
 ```
 
+An icon param is typed `IconName` (`icon: IconName = "cpu"`, or `IconName | None`): `vidgen
+validate` checks the name against the built-in and the project's icons (suggesting close names
+and icons tagged like it), `vidgen list-scenes` shows its type as `icon`, and `vidgen schema`
+gives it an `enum` of the icon names.
+
 Params can nest: use another `SceneParams` class as a field type (also in lists). Theme tokens
 are checked inside nested models too, and `vidgen list-scenes` prints the nested fields.
 
@@ -215,6 +220,35 @@ def validate_project(cls, params, project):
   region like `fit_text` but never below that size (it wraps onto more lines instead; if it
   still does not fit, it is scaled down and a warning is logged). It does not move the text:
   `place(t, region, fit="none", align=...)` does.
+
+**Icons.** `icon(name, size="body", color="text", stroke_width=None, *, height=None)` returns
+an `Icon` (a `VGroup`) drawn from the built-in set or the project's `assets/icons/<name>.svg`
+(docs/CONFIG.md "Icons"; `vidgen list-icons --search TEXT --sheet icons.png` to choose one).
+- `size` is a theme size token or a number of points, like text: the icon suits text of that
+  size (its box is 1.5 em high: `ICON_UNITS_PER_POINT` = 0.0208 units per point, a `body` icon
+  is 0.67 units). `height=` gives the box height in Manim units instead (a hero icon:
+  `icon("brain", height=3)`, or `place(icon("brain"), self.region("hero"))`).
+- The box is the SVG's whole `viewBox` (Lucide: 24 x 24 including ~2 units of padding), so icons
+  of one size align and centre alike; it is an invisible first part (`mob.box`, drawn parts:
+  `mob.parts`). The layout dump and lint measure what is drawn.
+- `color` is a theme token, `#hex` or Manim colour for every visible stroke and fill; `None`
+  keeps the colours written in a project SVG (only `currentColor` becomes `text`).
+- Strokes are converted from SVG units (Lucide: 2 of 24) to Manim's stroke width for the size,
+  and `Icon.scale()` scales them too (`scale_stroke=True` by default, unlike other mobjects), so
+  `place()`, `.scale()`, `.animate.scale()` and `GrowFromCenter` keep the drawing's
+  proportions at any size and resolution. `stroke_width=1.5` (SVG units) draws lighter lines,
+  `2.5` bolder.
+- `FadeIn`, `Create`, `Write`, `GrowFromCenter`, `Transform` work as on any `VGroup`. Unknown
+  names raise `VidgenError` with suggestions. In the layout dump an icon is one object of kind
+  `icon` with its name (`icon: "cpu"`); `lint_ignore` `object:` patterns match the icon name.
+
+```python
+row = VGroup(*[
+    VGroup(icon(name, "heading", "primary"), self.text(label, size="caption")).arrange(DOWN, buff=0.15)
+    for name, label in [("database", "Store"), ("cpu", "Compute"), ("chart-line", "Report")]
+]).arrange(RIGHT, buff=1.0)
+place(row, self.region("hero"), max_scale=1.0)
+```
 
 **Text and numbers.**
 - `fit_text(text, max_width, max_height=None, size="body", color="text", weight=NORMAL,

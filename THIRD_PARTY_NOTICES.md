@@ -15,3 +15,15 @@ not be sold on their own.
 
 JetBrains Mono NL is the variant of JetBrains Mono without coding ligatures, so code listings
 show exactly the characters that were typed.
+
+## Icons
+
+vidgen bundles icons from **Lucide** (https://lucide.dev) as package data in
+`src/vidgen/data/icons/lucide/` (the SVG files unmodified, each keeps its `@license` comment),
+obtained from the npm package `lucide-static` 1.52.0. Lucide is under the **ISC License**,
+© Lucide Icons and Contributors; the icons Lucide derived from Feather are also under the
+**MIT License**, © 2013-present Cole Bemis. Both licence texts, and the list of the
+Feather-derived icons, are in `src/vidgen/data/icons/lucide/LICENSE`. The icon names, categories
+and search tags are in `src/vidgen/data/icons/manifest.json` (tags from Lucide's `tags.json`,
+plus a few added by vidgen); `tools/vendor_icons.py` re-creates the folder from
+`tools/icon_set.json`.

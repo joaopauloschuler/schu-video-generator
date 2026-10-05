@@ -377,7 +377,7 @@ def test_cli_human_and_json(faked: Path, capsys: pytest.CaptureFixture[str], mon
     assert list(first) == ["scene", "beat", "time", "scene_time", "rule", "severity", "object", "other", "similar", "bbox",
                            "message", "value", "limit", "beats", "still"]
     assert first["object"] == {"id": "m1", "kind": "text", "class": "Text", "name": None, "path": "VGroup[1]/Text[0]",
-                               "text": "Illustrative numbers", "bbox": [300, 300, 500, 320]}
+                               "text": "Illustrative numbers", "icon": None, "bbox": [300, 300, 500, 320]}
     assert Path(first["still"]).is_absolute() and Path(first["still"]).is_file()
     overlap = doc["findings"][2]
     assert overlap["object"]["id"] == "b" and overlap["other"]["id"] == "a" and overlap["bbox"] == [200, 70, 400, 90]

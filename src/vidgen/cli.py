@@ -22,7 +22,7 @@ from vidgen import __version__, jsonout
 from vidgen.config import validation_problems
 from vidgen.describe import describe_params
 from vidgen.errors import Problem, VidgenError
-from vidgen.project import CONFIG_NAMES, Project
+from vidgen.project import CONFIG_NAMES, Project, find_config_file
 from vidgen.sheets import DEFAULT_WIDTH as DEFAULT_SHEET_WIDTH
 from vidgen.theme import Theme
 
@@ -30,7 +30,9 @@ TEMPLATES_DIR = Path(__file__).parent / "templates"
 #: Template files copied as ``.<name>`` by ``vidgen init``.
 TEMPLATE_DOTFILES: tuple[str, ...] = ("gitignore",)
 #: Subcommands that accept ``--json``.
-JSON_COMMANDS: tuple[str, ...] = ("validate", "list-scenes", "list-themes", "render", "schema", "storyboard", "lint")
+JSON_COMMANDS: tuple[str, ...] = (
+    "validate", "list-scenes", "list-themes", "list-icons", "render", "schema", "storyboard", "lint",
+)
 
 #: What a command function returns: an exit code, or (with ``--json``) the JSON document.
 CommandResult = int | dict[str, Any]
@@ -73,9 +75,11 @@ def project_problems(project: Project) -> list[Problem]:
     Loads built-ins and the project's extensions in isolation (nothing leaks into the caller's
     registry), checks that every scene ``type`` is registered, validates each scene's
     ``params`` against the type's ``Params`` model (theme tokens against the project's theme)
-    and runs the type's ``validate_project`` (e.g. missing asset files).
+    and runs the type's ``validate_project`` (e.g. missing asset files); also checks the
+    project's ``assets/icons``.
     """
     from vidgen import extensions, registry
+    from vidgen.icons import PROJECT_ICONS_DIR, project_icons
 
     problems: list[Problem] = []
     try:
@@ -84,6 +88,10 @@ def project_problems(project: Project) -> list[Problem]:
                 theme.preset_chain()
             except VidgenError as exc:  # every theme lookup would fail; nothing else to check
                 return [Problem("theme.preset", str(exc))]
+            try:
+                project_icons(project.root)
+            except VidgenError as exc:
+                problems.append(Problem(PROJECT_ICONS_DIR.as_posix(), str(exc)))
             for i, scene in enumerate(project.config.scenes):
                 entry = registry.find(scene.type)
                 if entry is None:
@@ -407,6 +415,34 @@ def cmd_list_themes(args: argparse.Namespace) -> CommandResult:
     return 0
 
 
+def cmd_list_icons(args: argparse.Namespace) -> CommandResult:
+    """Print the available icons (built-in and the project's), optionally filtered, and write a
+    contact sheet of them."""
+    from vidgen import iconlist
+    from vidgen.icons import available_icons, search_icons
+
+    root = None
+    if args.project != "." or any((Path.cwd() / name).is_file() for name in CONFIG_NAMES):
+        root = find_config_file(args.project).resolve().parent
+    icons = available_icons(root)
+    iconlist.check_category(args.category, list(icons.values()))
+    found = search_icons(icons, args.search, args.category)
+    sheets: list[Path] = []
+    if args.sheet:
+        filters = [f"search '{args.search}'" if args.search else "", f"category {args.category}" if args.category else ""]
+        title = f"vidgen icons: {len(found)}" + "".join(f", {f}" for f in filters if f)
+        sheets = iconlist.render_sheets(found, Path(args.sheet), title)
+    if args.json:
+        return jsonout.list_icons_document(
+            root, args.search, args.category, found, iconlist.categories_json(list(icons.values())), sheets
+        )
+    for line in iconlist.summary_lines(found, len(icons)):
+        print(line)
+    for sheet in sheets:
+        print(f"sheet: {sheet}")
+    return 0
+
+
 def cmd_schema(args: argparse.Namespace) -> CommandResult:
     """Print the JSON Schema of video.yaml (or of one scene type's params, or of a scene)."""
     from vidgen import registry, schema
@@ -477,6 +513,13 @@ def build_parser() -> argparse.ArgumentParser:
     project_arg(p)
     p.add_argument("--swatches", metavar="PNG", help="also write a swatch sheet of every preset to this PNG file")
     p.set_defaults(func=cmd_list_themes)
+
+    p = sub.add_parser("list-icons", help="list icons (built-in and the project's assets/icons)")
+    project_arg(p)
+    p.add_argument("--search", metavar="TEXT", help="only icons whose name or tags contain every word of TEXT")
+    p.add_argument("--category", metavar="NAME", help="only icons of this category (tech, data, science, ...)")
+    p.add_argument("--sheet", metavar="PNG", help="also draw the listed icons, labelled, into this PNG file")
+    p.set_defaults(func=cmd_list_icons)
 
     p = sub.add_parser("tts", help="generate narration audio")
     project_arg(p)

@@ -19,6 +19,7 @@ from pydantic import Field, field_validator, model_validator  # noqa: E402
 from vidgen.errors import VidgenError  # noqa: E402
 from vidgen.helpers import MT, T, column, counter, dense_pairs, edges, grouped_pairs, resolve_color  # noqa: E402
 from vidgen.hooks import HookContext, hook  # noqa: E402
+from vidgen.icon_mobject import Icon, icon  # noqa: E402
 from vidgen.layout import (  # noqa: E402
     auto_format,
     check_format,
@@ -45,7 +46,7 @@ from vidgen.regions import (  # noqa: E402
 )
 from vidgen.registry import scene  # noqa: E402
 from vidgen.runtime import current_project, current_theme  # noqa: E402
-from vidgen.scene import NarratedScene, SceneParams, ThemeColor, ThemeSize  # noqa: E402
+from vidgen.scene import IconName, NarratedScene, SceneParams, ThemeColor, ThemeSize  # noqa: E402
 
 
 def register_theme_defaults(colors: dict[str, str] | None = None, sizes: dict[str, float] | None = None) -> None:
@@ -148,6 +149,9 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "orientation",
     "readable_size",
     "readable_text",
+    "icon",
+    "Icon",
+    "IconName",
     "Field",
     "field_validator",
     "model_validator",

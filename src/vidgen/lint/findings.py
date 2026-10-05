@@ -10,8 +10,8 @@ from vidgen.lint.rules import Bbox
 
 
 def object_json(obj: dict[str, Any] | None) -> dict[str, Any] | None:
-    """The identifying keys of a layout object: ``{id, kind, class, name, path, text, bbox}``
-    (``text`` ``null`` for non-text kinds)."""
+    """The identifying keys of a layout object: ``{id, kind, class, name, path, text, icon, bbox}``
+    (``text`` ``null`` for non-text kinds, ``icon`` the icon name for kind ``icon``, else ``null``)."""
     if obj is None:
         return None
     return {
@@ -21,6 +21,7 @@ def object_json(obj: dict[str, Any] | None) -> dict[str, Any] | None:
         "name": obj.get("name"),
         "path": obj["path"],
         "text": obj.get("text"),
+        "icon": obj.get("icon"),
         "bbox": list(obj["bbox"]),
     }
 

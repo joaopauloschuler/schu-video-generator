@@ -22,6 +22,7 @@ from vidgen.errors import Problem, VidgenError
 from vidgen.project import Project
 
 if TYPE_CHECKING:
+    from vidgen.icons import IconInfo
     from vidgen.render.pipeline import RenderResult
     from vidgen.lint import LintResult
     from vidgen.storyboard import StoryboardResult
@@ -192,6 +193,38 @@ def list_themes_document(
         presets=presets,
         type_scales=dict(scales),
         swatches=None if swatches is None else _path(swatches),
+    )
+
+
+# ----- list-icons --------------------------------------------------------------------------------
+
+
+def list_icons_document(
+    root: Path | None,
+    search: str | None,
+    category: str | None,
+    icons: Iterable[IconInfo],
+    categories: list[dict[str, Any]],
+    sheets: Iterable[Path],
+    warnings: Iterable[Mapping[str, Any]] = (),
+) -> dict[str, Any]:
+    """The ``vidgen list-icons --json`` document: the filter, the built-in sources, every
+    category with its icon count, the matching icons (``IconInfo.to_json``) and sheet paths."""
+    from vidgen.icons import builtin_sources
+
+    icons = list(icons)
+    return envelope(
+        "list-icons",
+        True,
+        warnings,
+        project=None if root is None else _path(root),
+        search=search,
+        category=category,
+        sources=builtin_sources(),
+        categories=categories,
+        count=len(icons),
+        icons=[icon.to_json() for icon in icons],
+        sheets=[_path(p) for p in sheets],
     )
 
 

@@ -242,6 +242,40 @@ scales. `--swatches PNG` also writes a picture of all presets (one row each: nam
 description in its text colours, accent chips, a `surface` panel, the palette as bars), so an
 AI author can compare them by opening one image. JSON shape: [below](#vidgen-list-themes---json).
 
+## Icons
+
+vidgen ships a set of line icons (from [Lucide](https://lucide.dev), ISC licence; the seed set
+has 40, five per category `tech`, `data`, `science`, `business`, `people`, `ui` (arrows and
+interface), `nature`, `education`). Scenes draw them with `icon(name, ...)` (see
+docs/EXTENDING.md "Icons"); scene params that take an icon name are typed `icon` in
+`vidgen list-scenes` and checked by `vidgen validate` (an unknown name gets suggestions).
+
+**Project icons.** Put SVG files in `assets/icons/`: `assets/icons/<name>.svg` adds the icon
+`<name>` or replaces the built-in icon of that name (letters, digits, `-` and `_`). Draw them on
+a square `viewBox` (Lucide's is 24 x 24, with about 2 units of padding) with strokes or fills in
+`currentColor`, so they size and recolour like the built-ins. An optional
+`assets/icons/icons.json` gives them a category and search tags:
+
+```json
+{"icons": [{"name": "bicycle", "category": "transport", "tags": ["bike", "cycling"]}]}
+```
+
+Entries need a `name` whose SVG exists; `category` defaults to `project`, `tags` to none.
+Problems (bad file names, a broken `icons.json`) are reported by `vidgen validate` under
+`assets/icons`.
+
+### `vidgen list-icons`
+
+`vidgen list-icons [PROJECT] [--search TEXT] [--category NAME] [--sheet PNG] [--json]` lists
+the icons available in the project (built-in and `assets/icons`; without a PROJECT and no
+config in the current folder: built-ins only), one line each: name, category, `[project]` for
+project icons, tags. `--search` keeps icons whose name, tags or category contain every word of
+TEXT (case-insensitive; name matches first): `--search "chart"`, `--search computer`.
+`--category` keeps one category (unknown → error listing them). `--sheet PNG` also draws the
+listed icons, labelled with name and category, on a 1280 px wide contact sheet (8 per row; a
+long list continues in `<stem>-2.png`, ... ), drawn by the same code as a render: open it to
+choose icons by eye. JSON shape: [below](#vidgen-list-icons---json).
+
 ## Voice (`voice:`)
 
 ```yaml
@@ -717,7 +751,7 @@ Each object:
 | key | meaning |
 |---|---|
 | `id` | `m1`, `m2`, ...: the same Python object keeps its id in every frame of the scene |
-| `kind` | `text` (`Text`, `MarkupText`, `Paragraph`), `code` (the text of a `Code` listing), `math` (`Tex`, `MathTex`), `number` (`DecimalNumber`, `Integer`), `shape` (one path), `group` (a group of shapes with no text or image inside, e.g. an axis' ticks), `image` |
+| `kind` | `text` (`Text`, `MarkupText`, `Paragraph`), `code` (the text of a `Code` listing), `math` (`Tex`, `MathTex`), `number` (`DecimalNumber`, `Integer`), `shape` (one path), `group` (a group of shapes with no text or image inside, e.g. an axis' ticks), `image`, `icon` (an icon from `icon()`: one object, not one per path) |
 | `class` | the Manim class |
 | `path` | where it sits: parent groups from the top-level mobject down, each `Class[index]` (index among its parent's submobjects; top level: in the scene), or the name the scene gave it |
 | `name` | the scene attribute that holds it (`self.title = ...`) or a `Mobject.name` set by the scene, else `null` |
@@ -730,6 +764,7 @@ Each object:
 | `color`, `colors` | the most common glyph colour, and all of them (most common first) |
 | `backdrop` | the most common colour of the frame inside its box, ignoring its own colours: what the text is read against (`null` when off-frame) |
 | other kinds: `fill`, `stroke` | `{color, opacity}` / `{color, opacity, width_px}` of the largest visible part, or `null` |
+| `icon` only: `icon` | the icon's name (`cpu`); its `bbox` is what it draws, not its padded design box |
 
 An object is one text mobject (not one per glyph), one path, one image, or one group of shapes.
 Parts with opacity 0 are not visible: they do not count in the box, and an object with no
@@ -857,7 +892,7 @@ never makes stills stale.
 
 **Ignoring findings in a scene** (`lint_ignore` on the scene): a list of rule names (or `all`),
 or `{rule, object, beat}` filters. `object` is a pattern (`*` and `?` wildcards, case-sensitive)
-matched against the object's `name`, `path` and `text` (for a pair, either object); `beat`
+matched against the object's `name`, `path`, `text` and icon name (for a pair, either object); `beat`
 limits the entry to the end of that beat (it must be a beat of the scene).
 
 ```yaml
@@ -917,7 +952,7 @@ video; `vidgen render` does. It dispatches `post_scene` for the scenes it render
 
 ## JSON output (`--json`)
 
-`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen render`, `vidgen schema`, `vidgen storyboard` and `vidgen lint` accept `--json`: stdout then holds
+`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard` and `vidgen lint` accept `--json`: stdout then holds
 exactly one JSON document (ASCII-only, non-ASCII characters escaped), and everything else
 (progress, `warning:` lines, Manim output) goes to stderr. These shapes are meant for programs
 and AI agents driving vidgen. Without `--json` the human output is unchanged.
@@ -932,7 +967,7 @@ it. Times are seconds (floats), paths are absolute strings, absent values are `n
 |---|---|---|
 | `version` | int | schema version of the document (1) |
 | `vidgen` | str | vidgen package version |
-| `command` | str \| null | `validate`, `list-scenes`, `list-themes`, `render`, `schema`, `storyboard`, `lint` (`null` if the command line could not be parsed) |
+| `command` | str \| null | `validate`, `list-scenes`, `list-themes`, `list-icons`, `render`, `schema`, `storyboard`, `lint` (`null` if the command line could not be parsed) |
 | `ok` | bool | `true` on success; the exit code is 0 exactly when `ok` is true |
 | `warnings` | list | `{scene, message}`: vidgen warnings of the run (`scene` is `null`, or the scene whose render printed it) |
 | `error` | object | only when `ok` is false: `{kind, message, problems, details}` |
@@ -1012,6 +1047,18 @@ min_graphic_ratio, failures}` (`failures`: messages like the validate warnings) 
 `palette_distinctness` `{normal, protanopia, deuteranopia, tritanopia}` (smallest CIEDE2000
 difference between two palette colours).
 
+### `vidgen list-icons --json`
+
+| key | type | |
+|---|---|---|
+| `project` | str \| null | the project folder whose `assets/icons` were included (`null`: built-ins only) |
+| `search`, `category` | str \| null | the filters given |
+| `sources` | object | the built-in set: `{lucide: {package, version, license, license_file, homepage}}` |
+| `categories` | list | `{name, description, count}` for every category (built-in ones first, then project categories); `count` over all icons, not only the listed ones |
+| `count` | int | number of listed icons |
+| `icons` | list | the listed icons, best matches first: `{name, category, tags, source, origin, overrides, path}` (`origin` `builtin` or `project`; `overrides`: a project icon replacing a built-in; `path` the SVG) |
+| `sheets` | list | the PNG files written with `--sheet` |
+
 ### `vidgen schema --json`
 
 | key | type | |
@@ -1087,8 +1134,8 @@ Each finding: `scene`; `beat` (the beat at whose end it was seen, `null` for a s
 `scene_time` (from the scene start); `rule`; `severity` (`error`, `warning`, `info`);
 `object` (the object concerned, `null` for `max_words` and the timing rules) and `other` (the second object of a
 pair: the other text for `text_overlap`, the shape for `covered_text`; else `null`), each
-`{id, kind, class, name, path, text, bbox}` as in the [layout dump](#layout-dump-buildlayoutscenejson)
-(`text` `null` for shapes); `similar` (further objects with the same problem, reported with
+`{id, kind, class, name, path, text, icon, bbox}` as in the [layout dump](#layout-dump-buildlayoutscenejson)
+(`text` `null` for shapes, `icon` the icon name for kind `icon`, else `null`); `similar` (further objects with the same problem, reported with
 this one, e.g. the other tick labels); `bbox` (the region to look at in the still, px:
 the object, the overlap of a pair, or all counted texts); `message`; `value` and `limit` (the
 measured number and the threshold it broke: a fraction of the shorter side for sizes, a ratio

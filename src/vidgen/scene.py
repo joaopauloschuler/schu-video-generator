@@ -67,8 +67,21 @@ def _check_theme_size(value: str | float, info: ValidationInfo) -> str | float:
     return value
 
 
+def _check_icon_name(value: str, info: ValidationInfo) -> str:
+    from vidgen.icons import NAME_PATTERN, active_icons, unknown_icon_message
+
+    if not NAME_PATTERN.match(value):
+        raise ValueError(f"invalid icon name {value!r} (letters, digits, '-' and '_')")
+    if (info.context or {}).get("theme") is not None:
+        icons = active_icons()
+        if value not in icons:
+            raise ValueError(unknown_icon_message(value, icons))
+    return value
+
+
 class ThemeToken(NamedTuple):
-    """Marker in ``ThemeColor``/``ThemeSize`` annotations (``kind`` is ``"color"`` or ``"size"``)."""
+    """Marker in ``ThemeColor``/``ThemeSize``/``IconName`` annotations: names resolved in the
+    project (``kind`` is ``"color"``, ``"size"`` or ``"icon"``)."""
 
     kind: str
 
@@ -84,6 +97,9 @@ class ThemeToken(NamedTuple):
 ThemeColor = Annotated[str, AfterValidator(_check_theme_color), ThemeToken("color")]
 #: A ``Params`` field holding a font size: a theme token (``"body"``) or a number of points.
 ThemeSize = Annotated[Union[str, float], AfterValidator(_check_theme_size), ThemeToken("size")]
+#: A ``Params`` field holding an icon name (built-in or the project's ``assets/icons``); checked
+#: against the available icons by ``vidgen validate`` and when the scene is built.
+IconName = Annotated[str, AfterValidator(_check_icon_name), ThemeToken("icon")]
 
 
 class BeatTiming(NamedTuple):
@@ -221,7 +237,8 @@ class NarratedScene(Scene):
         """Validate raw params; raises ``pydantic.ValidationError``. No Manim setup needed.
 
         With ``theme``, :data:`ThemeColor` / :data:`ThemeSize` fields must name tokens that exist
-        in it (it is passed to validators as ``info.context["theme"]``).
+        in it (it is passed to validators as ``info.context["theme"]``) and :data:`IconName`
+        fields icons of the active project (or built-ins).
         """
         model = cls.params_model()
         if model is None:

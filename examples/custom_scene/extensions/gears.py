@@ -19,6 +19,8 @@ class GearPair(NarratedScene):
         front: Ring
         rear: Ring
         caption: str = ""
+        icon: IconName | None = "bicycle"
+        """Icon left of the ratio caption: built-in or assets/icons (`vidgen list-icons`)."""
 
     def construct(self):
         p = self.params
@@ -33,6 +35,8 @@ class GearPair(NarratedScene):
         ratio = p.front.teeth / p.rear.teeth
         header = self.region("header")
         caption = readable_text(p.caption or f"ratio {ratio:.2f} : 1", header, size="body", color="highlight")
+        if p.icon:  # assets/icons/bicycle.svg is a project icon; built-ins: `vidgen list-icons`
+            caption = VGroup(icon(p.icon, size="body", color="highlight"), caption).arrange(RIGHT, buff=0.25)
         place(caption, header, fit="none", align="top")
 
         with self.narrate(0) as d:

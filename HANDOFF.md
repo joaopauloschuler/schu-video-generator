@@ -1543,3 +1543,128 @@ How to test: `/home/claude/venv/bin/python -m pytest -q` (681 passed, 1 skipped)
 `vidgen list-themes examples/minimal --swatches build/themes.png`, `fc-list | grep -i "source
 serif"` (empty: the bundled copy is what renders).
 
+
+## Step 19 — Icons: mechanism + seed set
+What was built
+- **Vendored icons** (package data `src/vidgen/data/icons/`): 40 Lucide SVGs (npm `lucide-static`
+  1.52.0, ISC; files unmodified), `lucide/LICENSE` (ISC + Feather MIT notice) and `manifest.json`
+  (`sources` + `icons: [{name, category, tags, source}]`; tags from Lucide's `tags.json` plus a
+  few `extra_tags`). Seed set, 5 per category:
+  | category | icons |
+  |---|---|
+  | tech | cpu, server, cloud, code, smartphone |
+  | data | database, chart-column, chart-line, chart-pie, chart-scatter |
+  | science | atom, flask-conical, microscope, dna, zap |
+  | business | briefcase, trending-up, target, handshake, dollar-sign |
+  | people | user, users, user-check, message-circle, brain |
+  | ui (arrows/interface) | arrow-right, refresh-cw, check, x, search |
+  | nature | leaf, sun, droplet, mountain, tree-pine |
+  | education | book-open, graduation-cap, lightbulb, pencil, presentation |
+- **`tools/vendor_icons.py` + `tools/icon_set.json`** (not shipped): re-vendors from the list
+  (`npm pack lucide-static@<version>` into a temp dir, or `--package-dir DIR`), validates
+  names/categories/version/`extra_tags`, removes unlisted SVGs, writes the manifest. Step 20:
+  add names to `icon_set.json` (and `extra_tags` where Lucide's tags miss the obvious word), run
+  `python tools/vendor_icons.py`.
+- **Registry** `src/vidgen/icons.py` (no manim): built-ins + project `assets/icons/<name>.svg`
+  (adds or overrides by name) with optional `assets/icons/icons.json` (category, tags);
+  `search_icons` (name > tag > category ranking), `find_icon` with did-you-mean + "matching
+  tags" suggestions. `vidgen validate` reports a broken project icon folder (`assets/icons: ...`).
+- **`icon()` / `Icon`** (`src/vidgen/icon_mobject.py`, exported by `vidgen.api`): `icon(name,
+  size="body", color="text", stroke_width=None, *, height=None, theme=None)`. Box = the SVG
+  viewBox (invisible first submobject), size tokens/points → `points * 0.0208` units (1.5 em),
+  `height=` in units; recoloured by theme token/hex (`color=None` keeps a project SVG's own
+  colours, `currentColor` → `text`); SVG stroke widths converted to Manim units for the size;
+  `Icon.scale()` scales strokes by default; round caps/joins kept.
+- **`IconName`** param type (`vidgen.api`): checked against the project's icons in validate and at
+  scene construction; `list-scenes` type `icon`; `vidgen schema` gives an `enum` of icon names.
+- **`vidgen list-icons [PROJECT] [--search TEXT] [--category NAME] [--sheet PNG] [--json]`**
+  (`src/vidgen/iconlist.py`): text listing, Step 8 JSON envelope, and a labelled 1280 px contact
+  sheet drawn with the same `build_icon` + Manim Cairo camera (paginated like storyboard sheets).
+- **Layout dump / lint**: an icon is one object of kind `icon` with `icon: <name>` (not a pile of
+  paths); lint describes it as `icon 'x'`, finding objects gain `icon`, `lint_ignore` `object`
+  matches icon names.
+- Example: `examples/custom_scene` has a project icon `assets/icons/bicycle.svg` (+ `icons.json`)
+  shown left of the ratio caption by `gear_pair` (new param `icon: IconName | None = "bicycle"`),
+  and a `vidgen list-icons ... --sheet` usage line.
+
+Verification (looked at every image with Read)
+- Rendered all 40 icons through Manim's Cairo camera at 854x480 and 1920x1080 (4 sizes from 0.25
+  to 1.6 units plus one icon scaled 2.5x after creation): identical proportions at both
+  resolutions, strokes 2/24 of the box, round caps, filled dots of `chart-scatter` correct, the
+  scaled icon's strokes thicken with it. Test `test_icon_strokes_are_resolution_independent`
+  pins the ink share at 480x270 and 1920x1080 (equal within 0.3 %).
+- Storyboards of a scratch project (all 40 icons in a grid + a scaled `GrowFromCenter`/`Write`
+  beat) at preview 16:9, final 1080p, `--variant vertical` and `--variant light`
+  (`light_academic`): crisp, theme-coloured on dark and light backgrounds. `vidgen lint` there:
+  no finding involves an icon (only my test labels at theme `small`, and their overlaps in 9:16).
+  The invisible box never shows during `Write`/`DrawBorderThenFill`/`Create`/`FadeIn`/
+  `GrowFromCenter`/`SpinInFromNothing` (checked at 40 % progress).
+- `examples/custom_scene` storyboard (`pair`): bicycle icon in `highlight` next to the caption;
+  layout dump has one `icon` object `bicycle`; `vidgen lint examples/custom_scene`: 0 findings.
+- `vidgen list-icons --sheet` sheet viewed: 5 rows of 8, names and categories legible.
+- Wheel built locally: 40 SVGs + manifest + LICENSE included; `tools/` not shipped.
+
+Files
+- New: `src/vidgen/icons.py`, `src/vidgen/icon_mobject.py`, `src/vidgen/iconlist.py`,
+  `src/vidgen/data/icons/**` (manifest, 40 SVG, LICENSE), `tools/vendor_icons.py`,
+  `tools/icon_set.json`, `tests/test_icons.py` (36 tests, 4 render),
+  `examples/custom_scene/assets/icons/bicycle.svg` + `icons.json`.
+- Changed: `api.py` (exports), `scene.py` (`IconName`, `ThemeToken` kind `icon`), `schema.py`
+  (icon enum), `cli.py` (`list-icons`, icon check in `project_problems`), `jsonout.py`
+  (`list_icons_document`), `introspect.py` (kind `icon`), `lint/layout_rules.py` (`describe`),
+  `lint/findings.py` (`icon` key), `lint/run.py` (ignore matches icon names),
+  `render/fingerprint.py` (vendored icons in the source digest; `iconlist.py` not a render
+  input), `pyproject.toml` (package data), `examples/custom_scene/{video.yaml,extensions/gears.py}`,
+  `tests/test_lint.py` (finding object has `icon`), README, docs/CONFIG.md ("Icons",
+  `vidgen list-icons`, JSON shape, layout dump kind, lint object key), docs/EXTENDING.md
+  (`IconName`, "Icons"), DESIGN.md (§2, §6.4, §8, §15 note, new §22), THIRD_PARTY_NOTICES.md,
+  tasklist.md.
+
+Public interfaces added/changed
+- `vidgen.api`: `icon`, `Icon`, `IconName` (additive). CLI: `vidgen list-icons` (JSON command
+  `list-icons`, envelope v1).
+- Layout dump: kind `icon` + key `icon` (additive). Lint finding objects: key `icon` (added
+  within JSON version 1).
+- `vidgen.icons` (`IconInfo`, `CATEGORIES`, `builtin_icons`, `builtin_sources`, `project_icons`,
+  `available_icons(root)`, `active_icons`, `search_icons`, `find_icon`, `unknown_icon_message`,
+  `categories`), `vidgen.icon_mobject` (`build_icon`, `icon_height`, `ICON_UNITS_PER_POINT`),
+  `vidgen.iconlist` — internal.
+
+Decisions / deviations
+- **Size semantics**: `size` follows text (theme token or points) so an icon next to text of
+  token X uses `size=X`; box = 1.5 em (`0.0208` units/pt), matching the 24 px icon / 16 px text
+  pairing of UI kits (body icon drawing ≈ 1.7x body cap height, tested). Manim units via
+  `height=`. `stroke_width` is in the SVG's own units (Lucide users know "1.5" / "2").
+- **Box includes the viewBox padding** (invisible rect): consistent alignment and sizes across
+  icons for grids/bullets (Step 21); the layout dump/lint ignore it (opacity 0) and measure the
+  drawing.
+- **Prepared SVG copies in a per-process temp dir**: Manim's `SVGMobject` writes `<stem>_.svg`
+  beside the source, which would race between `--jobs` workers and fail for a read-only
+  site-packages; also fixes two Manim parsing quirks (`currentColor` → black, `stroke="none"` →
+  white stroke).
+- **`Icon.scale` scales strokes by default**: otherwise `place()` (which scales) would leave
+  hairlines on big icons and blobs on small ones.
+- `IconName` reuses the `ThemeToken` marker (`x-vidgen-theme: icon`) instead of a new schema
+  key: one mechanism for "names resolved in the project" in describe/schema.
+- `list-icons` finds the project root without validating the config (an agent fixing a broken
+  `video.yaml` still needs the icon list); `--sheet` added (cheap, reuses sheet fonts/helpers).
+- Category ids: `ui` for "arrows/UI". Lucide's own categories are not in the npm package; ours
+  are curated in `tools/icon_set.json`.
+
+Known gaps / TODOs
+- Step 20: expand `tools/icon_set.json` to ~200 (25 per category) and re-run the tool; maybe a
+  manifest `aliases` field (Lucide renamed icons, e.g. `bar-chart` → `chart-column`; search by
+  old names would help).
+- Step 21: `icon:` on bullets/title/end_card and `icon_grid` — use `IconName` params and
+  `icon(name, size=<the text's size token>)`; a `grid_shape(n)` helper is still missing (Step 15
+  note).
+- Project SVGs: only the root's `stroke-linecap`/`-linejoin` are honoured (per-element ones are
+  ignored); gradients/patterns/text in SVGs are whatever Manim's SVG parser does (documented:
+  use simple stroke/fill icons).
+- The contact sheet always draws dark-on-white; a `--theme` option could preview icons in a
+  project's colours.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (717 passed, 1 skipped). Step only:
+`pytest tests/test_icons.py`. Manual: `vidgen list-icons --search chart --sheet build/icons.png`,
+`vidgen list-icons examples/custom_scene --json`, `vidgen storyboard examples/custom_scene --scene
+pair`, `vidgen lint examples/custom_scene`.

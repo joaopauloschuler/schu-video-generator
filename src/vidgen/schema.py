@@ -9,6 +9,8 @@ AI agent can check a config before running ``vidgen validate``:
   beat count (``beat_count``) becomes ``minItems``/``maxItems`` of ``beats``;
 - theme color/size params (``ThemeColor``/``ThemeSize``, marked ``x-vidgen-theme``) accept a
   hex color / positive number or one of the theme's token names (base config and variants);
+  icon params (``IconName``, ``x-vidgen-theme: icon``) one of the icon names (built-in and the
+  project's ``assets/icons``);
 - the silent-scene rule (``duration`` iff no beats), even ``width``/``height``, optional beat
   ids and the bodies of ``variants`` (partial configs) are expressed too.
 
@@ -37,13 +39,16 @@ from vidgen.theme import Theme
 log = logging.getLogger("vidgen.schema")
 
 DIALECT = "https://json-schema.org/draft/2020-12/schema"
-#: Annotation on theme color/size params (set by ``vidgen.scene.ThemeToken``).
+#: Annotation on theme color/size and icon params (set by ``vidgen.scene.ThemeToken``).
 THEME_KEY = "x-vidgen-theme"
 _REF_PREFIX = "#/$defs/"
 
 
 def theme_tokens(themes: Iterable[Theme]) -> dict[str, list[str]]:
-    """``{"color": [...], "size": [...]}``: the token names defined in any of ``themes``."""
+    """``{"color": [...], "size": [...], "icon": [...]}``: the token names defined in any of
+    ``themes`` and the icons of the active project (built-ins without one)."""
+    from vidgen.icons import active_icons, builtin_icons
+
     colors: set[str] = set()
     sizes: set[str] = set()
     for theme in themes:
@@ -52,7 +57,11 @@ def theme_tokens(themes: Iterable[Theme]) -> dict[str, list[str]]:
             sizes.update(theme.sizes)
         except VidgenError:  # unknown preset: `vidgen validate` reports it
             continue
-    return {"color": sorted(colors), "size": sorted(sizes)}
+    try:
+        icons = sorted(active_icons())
+    except VidgenError:  # a broken project icon folder: `vidgen validate` reports it
+        icons = sorted(builtin_icons())
+    return {"color": sorted(colors), "size": sorted(sizes), "icon": icons}
 
 
 def theme_presets(themes: Iterable[Theme]) -> list[str]:
@@ -123,9 +132,13 @@ def _walk(node: Any) -> Iterable[dict[str, Any]]:
 
 
 def _apply_theme(schema: dict[str, Any], tokens: dict[str, list[str]]) -> None:
-    """Replace the type of every ``x-vidgen-theme`` node by ``hex|number`` or a token name."""
+    """Replace the type of every ``x-vidgen-theme`` node by ``hex|number`` or a token name (an
+    icon name for ``icon``)."""
     for node in _walk(schema):
         kind = node.get(THEME_KEY)
+        if kind == "icon":
+            node["enum"] = tokens["icon"]
+            continue
         if kind not in ("color", "size"):
             continue
         for key in ("type", "anyOf", "pattern"):

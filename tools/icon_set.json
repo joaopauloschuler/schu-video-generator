@@ -1,0 +1,125 @@
+{
+  "package": "lucide-static",
+  "version": "1.52.0",
+  "categories": {
+    "tech": [
+      "cpu",
+      "server",
+      "cloud",
+      "code",
+      "smartphone"
+    ],
+    "data": [
+      "database",
+      "chart-column",
+      "chart-line",
+      "chart-pie",
+      "chart-scatter"
+    ],
+    "science": [
+      "atom",
+      "flask-conical",
+      "microscope",
+      "dna",
+      "zap"
+    ],
+    "business": [
+      "briefcase",
+      "trending-up",
+      "target",
+      "handshake",
+      "dollar-sign"
+    ],
+    "people": [
+      "user",
+      "users",
+      "user-check",
+      "message-circle",
+      "brain"
+    ],
+    "ui": [
+      "arrow-right",
+      "refresh-cw",
+      "check",
+      "x",
+      "search"
+    ],
+    "nature": [
+      "leaf",
+      "sun",
+      "droplet",
+      "mountain",
+      "tree-pine"
+    ],
+    "education": [
+      "book-open",
+      "graduation-cap",
+      "lightbulb",
+      "pencil",
+      "presentation"
+    ]
+  },
+  "extra_tags": {
+    "cloud": [
+      "computing",
+      "internet",
+      "hosting",
+      "online"
+    ],
+    "server": [
+      "computer",
+      "backend",
+      "hardware",
+      "data center"
+    ],
+    "code": [
+      "software",
+      "developer",
+      "coding"
+    ],
+    "trending-up": [
+      "growth",
+      "increase",
+      "rise",
+      "progress"
+    ],
+    "brain": [
+      "thinking",
+      "ai",
+      "learning"
+    ],
+    "zap": [
+      "fast",
+      "speed"
+    ],
+    "target": [
+      "goal",
+      "aim",
+      "focus"
+    ],
+    "users": [
+      "team",
+      "community"
+    ],
+    "check": [
+      "yes",
+      "correct",
+      "ok"
+    ],
+    "x": [
+      "no",
+      "wrong",
+      "error"
+    ],
+    "lightbulb": [
+      "insight",
+      "tip",
+      "innovation"
+    ],
+    "leaf": [
+      "green",
+      "ecology",
+      "environment"
+    ]
+  }
+}
