@@ -48,23 +48,26 @@ def check_project(project: Project) -> list[str]:
     """Checks beyond config structure; returns problems found (empty if none).
 
     Loads built-ins and the project's extensions in isolation (nothing leaks into the caller's
-    registry), checks that every scene ``type`` is registered and validates each scene's
-    ``params`` against the type's ``Params`` model.
+    registry), checks that every scene ``type`` is registered, validates each scene's
+    ``params`` against the type's ``Params`` model (theme tokens against the project's theme)
+    and runs the type's ``validate_project`` (e.g. missing asset files).
     """
     from vidgen import extensions, registry
 
     problems: list[str] = []
     try:
-        with extensions.project_session(project):
+        with extensions.project_session(project) as theme:
             for i, scene in enumerate(project.config.scenes):
                 entry = registry.find(scene.type)
                 if entry is None:
                     problems.append(f"scenes[{i}].type: {registry.unknown_type_message(scene.type)}")
                     continue
                 try:
-                    entry.cls.validate_params(scene.params)
+                    params = entry.cls.validate_params(scene.params, theme)
                 except ValidationError as exc:
                     problems.extend(validation_error_lines(exc, ("scenes", i, "params")))
+                    continue
+                problems.extend(f"scenes[{i}].params.{p}" for p in entry.cls.validate_project(params, project))
     except VidgenError as exc:
         problems.append(str(exc))
     return problems
@@ -152,8 +155,29 @@ def cmd_render(args: argparse.Namespace) -> int:
     return 0
 
 
-def _type_name(annotation: Any) -> str:
-    if isinstance(annotation, type) and not getattr(annotation, "__args__", None):
+def _type_name(annotation: Any, metadata: Sequence[Any] = ()) -> str:
+    """Readable type: ``color`` / ``size`` for theme tokens, ``a | b`` for unions and literals."""
+    import types
+    import typing
+
+    from vidgen.scene import ThemeToken
+
+    for meta in metadata:
+        if isinstance(meta, ThemeToken):
+            return meta.kind
+    origin, args = typing.get_origin(annotation), typing.get_args(annotation)
+    if origin is typing.Annotated:
+        return _type_name(args[0], annotation.__metadata__)
+    if origin in (typing.Union, types.UnionType):
+        return " | ".join(_type_name(a) for a in args)
+    if origin is typing.Literal:
+        return " | ".join(repr(a) for a in args)
+    if origin is not None and args:
+        name = getattr(origin, "__name__", str(origin))
+        return f"{name}[{', '.join(_type_name(a) for a in args)}]"
+    if annotation is type(None):
+        return "None"
+    if isinstance(annotation, type):
         return annotation.__name__
     return str(annotation).replace("typing.", "")
 
@@ -164,7 +188,7 @@ def describe_params(model: type[BaseModel] | None) -> list[str]:
         return []
     lines = []
     for name, field in model.model_fields.items():
-        line = f"{name}: {_type_name(field.annotation)}"
+        line = f"{name}: {_type_name(field.annotation, field.metadata)}"
         if not field.is_required():
             default = field.get_default(call_default_factory=True)
             line += f" = {default!r}"

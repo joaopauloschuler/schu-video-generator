@@ -89,7 +89,90 @@ both orientations; wide content needs to wrap, stack or scale in portrait.
 Params errors are reported with their config path, e.g.
 `scenes[2].params.values.x: Input should be a valid number`. Unknown keys are errors.
 
-## 2. Helpers shared across modules
+## 2. Building blocks: params, layout, timing, validation
+
+The built-in scene types (`src/vidgen/scenes/*.py`) are written with nothing but
+`from vidgen.api import *`, so they double as examples for everything below.
+
+**Params.** `vidgen.api` re-exports pydantic's `Field`, `field_validator` and `model_validator`.
+Use `ThemeColor` / `ThemeSize` for colors and sizes: they accept a theme token or a literal
+(`#hex` / points) and `vidgen validate` reports unknown tokens (it checks them against the
+project's theme, including your `register_theme_defaults` and `theme.colors`).
+
+```python
+class Params(SceneParams):
+    items: list[str] = Field(min_length=1)
+    color: ThemeColor = "text"
+    size: ThemeSize = "body"
+
+    @model_validator(mode="after")
+    def _check(self):
+        if len(self.items) > 12:
+            raise ValueError("at most 12 items")
+        return self
+```
+
+**Project-aware checks.** Override the classmethod `validate_project(params, project)` for
+checks a `Params` model cannot do (a file exists, a data file parses...). It runs in `vidgen
+validate` after the params validated; return one message per problem, starting with the param
+name. Messages are reported as `scenes[i].params.<message>`. Log warnings with `logging` (they
+are printed as `warning: ...`). Repeat the check in `construct()` if rendering cannot work
+without it.
+
+```python
+@classmethod
+def validate_project(cls, params, project):
+    problems = super().validate_project(params, project)
+    if not (project.root / params.data).is_file():
+        problems.append(f"data: file not found: {params.data}")
+    return problems
+```
+
+**Layout.** `self.safe_width` / `self.safe_height` are the frame minus margins
+(`self.margin_x`, `self.margin_y`); place content inside them so it works at 16:9 and 9:16.
+- `fit_text(text, max_width, max_height=None, size="body", color="text", weight=NORMAL,
+  align="center", highlights={"77%": "highlight"}, squeeze=1.0, ...)` — wraps by measured width,
+  lowers the font size (down to `min_size`) until the block fits `max_height`, then scales down
+  if still needed. Returns a Manim `Paragraph` (one submobject per line).
+- `shrink_to_fit(mobject, max_width, max_height)` — scale down only, never up.
+- `wrap_lines(text, max_chars)`, `normalize_text(text)` — pure helpers.
+- `nice_ticks(lo, hi, max_ticks)`, `auto_format(values)`, `format_value(v, fmt, unit)`,
+  `check_format(fmt)` — chart axes and labels without LaTeX.
+
+**Timing.** Beat-driven reveals without arithmetic:
+- `self.reveal(steps)` narrates the whole scene: step *i* at beat *i*; more steps than beats are
+  spread evenly (`distribute(n_steps, n_beats)` gives the plan), extra beats hold. A step is an
+  animation, a list of animations played together, or a callable returning them (built when it
+  plays — use this when a step depends on what happened before).
+- `self.play_steps(d, steps, fraction=0.7, cap=1.2)` spreads steps over `d` seconds; each
+  animation lasts `min(cap, fraction * slot)`, so a beat is never stretched by its animations.
+- `self.timeline()` is `narrate_all()` that also works for silent scenes (yields `(index, d)`;
+  a silent scene yields one step of its `duration`).
+- `self.finish()` fades everything out over `self.outro` seconds (class attribute, default 0;
+  the built-ins use 0.5). Set `outro` on your class and call `finish()` at the end of
+  `construct()`; silent scenes then fade out within their `duration`.
+
+```python
+@scene("checklist")
+class Checklist(NarratedScene):
+    outro = 0.5
+
+    class Params(SceneParams):
+        items: list[str] = Field(min_length=1)
+
+    def construct(self):
+        rows = VGroup(*[fit_text(f"✓ {t}", self.safe_width, align="left") for t in self.params.items])
+        rows.arrange(DOWN, aligned_edge=LEFT, buff=0.3)
+        shrink_to_fit(rows, self.safe_width, self.safe_height)
+        self.reveal([FadeIn(r, shift=RIGHT * 0.2) for r in rows])
+        self.finish()
+```
+
+**LaTeX.** `latex_available()` and `require_latex("scene 'x'")` (raises a `VidgenError` with
+install hints, e.g. MiKTeX on Windows) let a scene that uses `Tex`/`MathTex` fail clearly on
+machines without LaTeX.
+
+## 3. Helpers shared across modules
 
 Extension modules form one private package, so use **relative imports**:
 
@@ -113,10 +196,11 @@ import ...` does.
 
 Ready-made helpers in `vidgen.api`: `T(s, size, color, weight)` / `MT(...)` (text / Pango markup
 in the theme font — the function forms of `self.text` / `self.markup`), `column`, `edges`,
-`dense_pairs`, `grouped_pairs`, `counter` (text redrawn from a `ValueTracker`), `resolve_color`.
+`dense_pairs`, `grouped_pairs`, `counter` (text redrawn from a `ValueTracker`), `resolve_color`,
+and the layout/timing helpers of section 2 (`fit_text`, `distribute`, `nice_ticks`, ...).
 Sizes and colors take theme token names (`"body"`, `"accent"`) or literals (`32`, `"#FF0000"`).
 
-## 3. Theme tokens
+## 4. Theme tokens
 
 ```python
 # extensions/tokens.py
@@ -129,7 +213,7 @@ C_K2 = current_theme().color("k2")        # module-level theme access is fine
 Then `self.text("x", color="k2")`, `T("x", "huge", "k3")`. Values in `video.yaml`
 (`theme.colors.k2: ...`) always win over registered defaults, which win over vidgen's built-ins.
 
-## 4. Hooks
+## 5. Hooks
 
 ```python
 from vidgen.api import *
@@ -162,7 +246,7 @@ def never_regenerate_intro(ctx):
         ctx.data["beats"].remove("intro_b1")
 ```
 
-## 5. Overriding a built-in
+## 6. Overriding a built-in
 
 ```python
 @scene("title", override=True)   # replaces the built-in "title" for this project only
@@ -172,7 +256,7 @@ class MyTitle(NarratedScene): ...
 Without `override=True` a name clash with a built-in is an error; two extension files using the
 same name is always an error. `vidgen list-scenes` marks overrides.
 
-## 6. Promoting an extension into the core
+## 7. Promoting an extension into the core
 
 Built-in scenes use exactly the same API. To promote `extensions/big_number.py`:
 1. copy it to `src/vidgen/scenes/big_number.py` (turn relative imports of your helpers into

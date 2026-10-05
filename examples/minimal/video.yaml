@@ -1,0 +1,144 @@
+# A config-only vidgen project: every built-in scene type, no extensions.
+#   vidgen validate examples/minimal
+#   vidgen render examples/minimal --preview                     # 16:9
+#   vidgen render examples/minimal --preview --variant vertical  # 9:16
+# There is no narration audio in this example, so beats are timed from their word count
+# (narration.words_per_second); run `vidgen tts` with an ElevenLabs key to voice it.
+title: "vidgen: the built-in scenes"
+output: minimal
+
+format: {width: 1920, height: 1080, fps: 30}
+preview: {width: 854, height: 480, fps: 15}
+
+variants:
+  vertical:
+    format: {width: 1080, height: 1920}
+    preview: {width: 480, height: 854}
+
+theme:
+  background: "#0E1116"
+  font: Inter
+
+narration:
+  pad: 0.35
+  words_per_second: 2.6
+
+scenes:
+  - id: intro
+    type: title
+    params:
+      kicker: "VIDGEN EXAMPLE"
+      title: "Narrated videos from a single config file"
+      highlight: "single config file"
+      subtitle: "A tour of the built-in scene types"
+      authors: ["Made with Manim, ElevenLabs and ffmpeg"]
+    beats:
+      - text: "This whole video comes from one config file, with no Python code at all."
+      - text: "Every scene you are about to see is a built-in scene type."
+
+  - id: steps
+    type: bullets
+    params:
+      heading: "How a video is made"
+      numbered: true
+      dim_previous: true
+      items:
+        - "Write the narration as short beats"
+        - "Pick a scene type and its parameters for each scene"
+        - "Generate the voice once; only edited beats are re-voiced"
+        - "Render a preview, then the final video with subtitles"
+    beats:
+      - text: "First, you write the narration as a list of short beats."
+      - text: "Each scene gets a type, like a title, a chart or a code listing."
+      - text: "The voice is generated once, and only edited beats are paid for again."
+      - text: "Then you render a quick preview, and finally the full video."
+
+  - id: sizes
+    type: bar_chart
+    params:
+      title: "Render time per minute of video"
+      labels: ["Preview 480p", "720p", "1080p", "4K"]
+      values: [0.4, 1.1, 2.6, 9.8]
+      unit: " min"
+      colors: palette
+      highlight: "Preview 480p"
+      caption: "Illustrative numbers"
+    beats:
+      - text: "Bar charts grow their bars while the values count up."
+      - text: "And one bar can be highlighted: previews are the fast way to iterate."
+
+  - id: trend
+    type: line_chart
+    params:
+      title: "Validation loss"
+      x: [1, 2, 3, 4, 5, 6, 7, 8]
+      x_label: "epoch"
+      y_label: "loss"
+      series:
+        baseline: [2.10, 1.82, 1.66, 1.58, 1.53, 1.50, 1.49, 1.48]
+        sparse: [2.25, 1.90, 1.68, 1.56, 1.49, 1.45, 1.43, 1.41]
+    beats:
+      - text: "Line charts draw one series per beat. Here is the baseline."
+      - text: "And here is the sparse model, which ends lower."
+
+  - id: picture
+    type: image
+    params:
+      path: assets/landscape.png
+      caption: "Images can slowly zoom and pan"
+      fit: cover
+      ken_burns: {start_scale: 1.0, end_scale: 1.2, start_focus: [0.5, 0.5], end_focus: [0.7, 0.35]}
+    beats:
+      - text: "Images come from the project's assets folder."
+      - text: "With a gentle zoom and pan, still pictures feel alive."
+
+  - id: saying
+    type: quote
+    params:
+      text: "Simplicity is prerequisite for reliability."
+      author: "Edsger W. Dijkstra"
+      source: "How do we tell truths that might hurt? (1975)"
+    beats:
+      - text: "Quotes get large typographic marks."
+      - text: "And an attribution underneath."
+
+  - id: math
+    type: equation
+    params:
+      latex:
+        - "(a + b)^2"
+        - "(a + b)(a + b)"
+        - "a^2 + 2ab + b^2"
+      caption: "Each step morphs into the next"
+    beats:
+      - text: "Equations are typeset with LaTeX."
+      - text: "Each step transforms into the next one."
+      - text: "Until we reach the expanded form."
+
+  - id: listing
+    type: code
+    params:
+      title: "Code with highlights"
+      path: assets/moving_average.py
+      highlight: ["1", "3-5", "6-8"]
+    beats:
+      - text: "Code listings are syntax highlighted, and the narration can point at lines."
+      - text: "First we sum the opening window."
+      - text: "Then we slide it along, one value at a time."
+
+  - id: note
+    type: text_card
+    params:
+      text: "Need something else? Add a scene type in extensions/"
+      size: heading
+    beats:
+      - text: "And when a built-in is not enough, a project can add its own scene types."
+
+  - id: outro
+    type: end_card
+    params:
+      title: "Thanks for watching"
+      lines: ["Built-in scenes: docs/CONFIG.md", "Your own scenes: docs/EXTENDING.md"]
+    beats:
+      - text: "Thanks for watching."
+      - text: "The config reference and the extension guide are in the docs folder."

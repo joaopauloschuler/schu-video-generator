@@ -11,6 +11,7 @@ an `extensions/` folder.
 - ffmpeg on PATH (Windows: `winget install ffmpeg`; macOS: `brew install ffmpeg`)
 - An ElevenLabs API key in `ELEVENLABS_API_KEY` for narration
   (Windows: `setx ELEVENLABS_API_KEY your_key`, then open a new terminal)
+- Optional: LaTeX (with `dvisvgm`) for the `equation` scene type — MiKTeX on Windows
 
 ## Quick start
 
@@ -27,6 +28,11 @@ Useful options: `vidgen render --scene ID` re-renders one scene and re-joins the
 `--variant NAME` renders a named variant (e.g. a vertical 1080x1920 version), `--no-audio`
 renders without narration, `--keep-going` continues past a failing scene, `--jobs N` renders
 N scenes in parallel. `vidgen list-scenes` shows the available scene types.
+
+Built-in scene types: `title`, `bullets`, `bar_chart`, `line_chart`, `image`, `quote`,
+`equation`, `code`, `end_card`, `text_card` — all of them work in landscape and vertical
+(9:16) formats. [examples/minimal](examples/minimal) uses every one of them without a line of
+Python: `vidgen render examples/minimal --preview` (add `--variant vertical` for 9:16).
 
 Docs: [DESIGN.md](DESIGN.md) (architecture), [docs/CONFIG.md](docs/CONFIG.md) (config
 reference), [docs/EXTENDING.md](docs/EXTENDING.md) (writing project extensions).

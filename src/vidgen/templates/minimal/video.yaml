@@ -23,12 +23,13 @@ voice:
 narration:
   pad: 0.35                 # seconds of silence after each beat
 
-scenes:
+scenes:                     # scene types: `vidgen list-scenes`; reference: docs/CONFIG.md
   - id: intro
     type: title
     params:
+      kicker: "MADE WITH VIDGEN"
       title: __TITLE__
-      subtitle: "Made with vidgen"
+      subtitle: "A narrated video from a single config file"
     beats:
       - text: "Welcome. This short video was generated from a single config file."
 
@@ -36,10 +37,20 @@ scenes:
     type: bullets
     params:
       heading: "How it works"
+      numbered: true
       items:
         - "Write the narration as beats"
         - "Pick a scene type for each scene"
         - "Run vidgen tts, then vidgen render"
     beats:
-      - text: "Each scene has a type, some parameters, and one or more narrated beats."
-      - text: "Generate the narration once, then render. Only changed beats are re-voiced."
+      - text: "First, write what the narrator says, split into short beats."
+      - text: "Then give each scene a type, such as a title, a list or a chart."
+      - text: "Generate the voice once, then render. Only changed beats are re-voiced."
+
+  - id: outro
+    type: end_card
+    params:
+      title: "Your turn"
+      lines: ["Edit video.yaml and run vidgen render --preview"]
+    beats:
+      - text: "Now edit the config, and make it your own."

@@ -263,7 +263,7 @@ def test_check_project_reports_unknown_types_and_params(ext_project) -> None:
     )
     problems = check_project(project)
     assert problems[0].startswith("scenes[1].type: unknown scene type 'loss_pannel'; did you mean 'loss_panel'?")
-    assert "known types: loss_panel, text_card" in problems[0]
+    assert "known types: bar_chart, " in problems[0] and ", loss_panel, quote, text_card, title)" in problems[0]
     assert any(p.startswith("scenes[2].params.values.x:") for p in problems)
     assert "scenes[2].params.colour: Extra inputs are not permitted" in problems
     assert "scenes[3].params.text: Field required" in problems
@@ -294,7 +294,7 @@ def test_validate_cli_reports_variant_problems(ext_project, capsys: pytest.Captu
     assert main(["validate", str(project.root)]) == 1
     err = capsys.readouterr().err
     assert err.startswith("error: video.yaml: invalid project\n")
-    assert "  [variant short] scenes[0].type: unknown scene type 'text_cart'; did you mean 'text_card'?" in err
+    assert "  [variant short] scenes[0].type: unknown scene type 'text_cart'; did you mean 'text_card'" in err
     assert "[variant short] scenes[1].type: unknown scene type 'unknown_thing'" in err
 
 
@@ -319,9 +319,10 @@ def test_list_scenes_with_project(ext_project, capsys: pytest.CaptureFixture[str
     captured = capsys.readouterr()
     assert "warning: extensions/card.py: scene type 'text_card' overrides the built-in" in captured.err
     lines = captured.out.splitlines()
-    assert lines[0].split() == ["free_form", "extensions/free.py"]
-    assert lines[1] == "    params: free-form (no Params model)"
-    assert lines[2].split() == ["loss_panel", "extensions/panel.py"]
+    free = next(i for i, line in enumerate(lines) if line.startswith("free_form"))
+    assert lines[free].split() == ["free_form", "extensions/free.py"]
+    assert lines[free + 1] == "    params: free-form (no Params model)"
+    assert any(line.split() == ["loss_panel", "extensions/panel.py"] for line in lines)
     assert "    values: dict[str, float]" in lines
     assert "    best: str | None = None" in lines
     assert any(line.startswith("text_card") and line.endswith("extensions/card.py  (overrides builtin)") for line in lines)
@@ -332,8 +333,9 @@ def test_list_scenes_builtins_only(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     monkeypatch.chdir(tmp_path)
     assert main(["list-scenes"]) == 0
     out = capsys.readouterr().out
-    assert out.startswith("text_card  builtin\n")
-    assert "    text: str\n" in out and "    size: str | float = 'title'\n" in out
+    assert out.startswith("bar_chart   builtin\n")
+    assert "\ntext_card   builtin\n    text: str\n    size: size = 'title'\n    color: color = 'text'\n" in out
+    assert "\ntitle       builtin\n" in out
 
 
 def test_list_scenes_explicit_missing_project(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

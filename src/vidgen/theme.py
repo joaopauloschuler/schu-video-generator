@@ -19,6 +19,7 @@ DEFAULT_COLORS: dict[str, str] = {
     "primary": "#58C4DD",
     "secondary": "#F2A541",
     "tertiary": "#83C167",
+    "surface": "#161B24",
 }
 DEFAULT_PALETTE: list[str] = ["#58C4DD", "#F2A541", "#C792EA", "#83C167"]
 DEFAULT_SIZES: dict[str, int | float] = {

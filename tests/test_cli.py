@@ -70,11 +70,11 @@ def test_init_scaffold(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> No
     data = yaml.safe_load((target / "video.yaml").read_text(encoding="utf-8"))
     cfg = parse_config(data)
     assert cfg.title == "My New Video"
-    assert [s.type for s in cfg.scenes] == ["title", "bullets"]
+    assert [s.type for s in cfg.scenes] == ["title", "bullets", "end_card"]
+    assert cfg.scenes[0].params["title"] == "My New Video"
     capsys.readouterr()
 
 
-@pytest.mark.xfail(reason="built-in scene types 'title' and 'bullets' arrive in Step 5", strict=True)
 def test_init_scaffold_validates(tmp_path: Path) -> None:
     target = tmp_path / "scaffold"
     assert main(["init", str(target)]) == 0

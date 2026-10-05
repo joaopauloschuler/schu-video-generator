@@ -258,3 +258,87 @@ Known gaps
 How to test: `/home/claude/venv/bin/python -m pytest -q` (181 passed + 1 xfail, ~14 s; renders
 ~11 s). Skip renders with `-m "not render"`. Manual: a project with `text_card` scenes, then
 `vidgen render --preview` and `vidgen render --scene ID`.
+
+## Step 5 — Built-in scene library
+What was built
+- Nine new built-in scene types in `src/vidgen/scenes/` (one module each, registered in
+  `scenes/__init__.py`): `title`, `bullets`, `bar_chart`, `line_chart`, `image`, `quote`,
+  `equation`, `code`, `end_card`; `text_card` now wraps with `fit_text` (timing unchanged, no
+  fade-out). Every module's only vidgen import is `from vidgen.api import *` (pinned by
+  `test_builtins_use_only_the_public_api`); `end_card` reuses `check_image`/`load_image` from
+  `.image` by relative import, like extension modules do.
+- `vidgen/layout.py` (exported via `vidgen.api`): `fit_text`, `shrink_to_fit`, `wrap_lines`,
+  `normalize_text`, `distribute`, `nice_ticks`, `auto_format`, `format_value`, `check_format`,
+  `latex_available`, `require_latex`.
+- `examples/minimal/` — config-only, every built-in once, variant `vertical`, tiny generated
+  assets (`landscape.png` 10 KB, `moving_average.py`), no audio (word-count timing).
+- `init` template: 3-scene demo (`title`, `bullets`, `end_card`); the `xfail` on
+  `test_init_scaffold_validates` is gone.
+- Docs: docs/CONFIG.md "Built-in scenes" (conventions + params table + YAML per type; every YAML
+  example validated), docs/EXTENDING.md new §2 "Building blocks" (example run end to end),
+  README (built-ins, example, LaTeX note), DESIGN §2, §4 (`surface` color), §5.2/§5.3, §6.4, §6.5.
+
+Public API added (DESIGN §5.3)
+- `NarratedScene`: `validate_params(params, theme=None)` / `parse_params(..., theme=None)`
+  (theme in validator context), classmethod `validate_project(params, project) -> list[str]`
+  (called by `vidgen validate`; reported as `scenes[i].params.<msg>`), `outro` + `finish()`,
+  `timeline()`, `play_steps(d, steps, fraction, cap)`, `reveal(steps, fraction, cap)`,
+  `safe_width`/`safe_height` (+ `margin_x`/`margin_y`).
+- `ThemeColor` / `ThemeSize` param types (`vidgen.scene.ThemeToken` marker → `list-scenes`
+  prints `color`/`size`; unions/literals now print as `a | b`).
+- `vidgen.api` also re-exports pydantic `Field`, `field_validator`, `model_validator`.
+- New default theme color `surface: #161B24` (panels, code window).
+
+Decisions / deviations
+- Reveal model shared by all built-ins: content is a list of steps; `distribute()` maps steps to
+  beats (step i → beat i; more steps → contiguous runs differing by ≤1; fewer → later beats
+  hold). Animations take `min(cap, fraction × slot)`; a beat never lasts longer than `d + pad`
+  (tests assert every built-in scene's duration = Σ(d + pad) + outro, including a 12-item list in
+  a 0.25 s beat, which led to merging steps when there are fewer frames than steps).
+- Built-ins fade out after the last beat (`outro` 0.5 s, `end_card` 1 s) → scene length = beats
+  + outro. `text_card` keeps outro 0 so Step 2–4 timing tests and behaviour are unchanged.
+- Charts draw axes/ticks with `Text` (no `Axes` number labels, which need LaTeX). `bar_chart`
+  `horizontal` defaults to auto (horizontal in portrait with > 5 bars); value labels share one
+  scale fitted to the bar slot. `line_chart` moves series names into a legend when end labels
+  would exceed a third of the width (typical in portrait).
+- `image` loads files through PIL → RGBA (palette PNGs were resampled without smoothing); Ken
+  Burns runs over the whole scene from scene time; in `contain` mode the image box is sized
+  for the largest scale so the move never overlaps the caption.
+- `equation`: missing LaTeX → `vidgen validate` logs a warning (not an error: the config is
+  valid), rendering raises a `VidgenError` naming the scene and MiKTeX; compile errors name the
+  formula. **Environment note:** `dvisvgm` was missing in the cloud workspace (latex alone is
+  not enough for Manim); I installed it with `apt-get install dvisvgm`. The equation render test
+  skips when `dvisvgm` is absent.
+- `code` uses Manim 0.21 `Code(code_string=..., formatter_style=..., background="window",
+  paragraph_config=...)`; highlights dim other lines and add a band between the window
+  background and the text (z-index), the first highlight is applied before the fade-in.
+- Bug fix in the Step 4 worker: per-scene `text_dir`/`tex_dir` (parallel workers sharing Manim's
+  SVG cache read half-written files; reproduced with `--jobs 5` on two variants at once).
+
+Visual QA done (preview renders of `examples/minimal`, 854x480 and `--variant vertical` 480x854,
+frames at the end of each scene's last beat and mid-animation, viewed one by one)
+- Fixed along the way: tight line spacing of wrapped text (Paragraph default), quote mark
+  cramped/ditto-like (now serif fallback list, more space), equation too small (size 96), code
+  listing too small (scales up to 1.5x) and invisible highlight band (z-order), bars growing in
+  both dimensions (now one-axis stretch), uneven bullet spacing (rows now spaced by baseline),
+  overlapping value labels with 12 bars in portrait, line-chart end labels colliding/shrinking,
+  last x label colliding, end-card links squeezed to different sizes, stair-stepped image edges.
+- Stress project (scratch, not committed): 3-line title + long subtitle + 3 authors, 10-item
+  list in 3 beats, horizontal bars with negatives, 12 bars with `baseline`, 14-point categorical
+  line chart with 3 series, contain + Ken Burns, long quote, inline code without line numbers,
+  integral, end card with logo + long URL; silent scenes; both orientations — all clean.
+- Known cosmetic limits: code with long lines gets small in 9:16 (documented: keep lines short);
+  a URL without spaces is shrunk rather than wrapped; the `quote` mark font falls back to the
+  system serif (Georgia on Windows, DejaVu Serif on Linux).
+
+Known gaps / for later steps
+- Manim emits a Pillow `DeprecationWarning` (`mode` parameter, camera.py) for image renders —
+  upstream, harmless; 54 such warnings in the test run.
+- `fit_text` estimates line breaks from word ink widths (cached); a final width check re-wraps
+  if needed, so text never overflows, but breaks can differ slightly from Pango's.
+- Steps merged in very short beats play together (e.g. a `dim_previous` fade and a fade-in on
+  the same row); only happens when a beat has fewer frames than steps.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (323 passed, ~24 s; 28 tiny renders of
+all built-ins at 160x90 and 90x160 @ 5 fps ≈ 10 s). Manual: `vidgen list-scenes`,
+`vidgen validate examples/minimal`, `vidgen render examples/minimal --preview [--variant vertical] --jobs 4`.

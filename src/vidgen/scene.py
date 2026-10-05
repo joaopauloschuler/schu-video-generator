@@ -12,16 +12,18 @@ Params validation does not need Manim to be configured: ``SceneClass.validate_pa
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterator, Mapping
+import re
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import Annotated, Any, NamedTuple, Union
 
 import av
-from manim import NORMAL, FadeOut, MarkupText, Scene, Text, config
-from pydantic import BaseModel, ConfigDict, ValidationError
+from manim import NORMAL, Animation, FadeOut, MarkupText, Scene, Text, config
+from pydantic import AfterValidator, BaseModel, ConfigDict, ValidationError, ValidationInfo
 
 from vidgen import helpers, runtime
+from vidgen.layout import distribute
 from vidgen.config import BeatConfig, SceneConfig, validation_error_lines
 from vidgen.errors import VidgenError
 from vidgen.project import Project
@@ -34,6 +36,43 @@ class SceneParams(BaseModel):
     """Base class for a scene type's ``Params`` model; unknown keys are an error."""
 
     model_config = ConfigDict(extra="forbid")
+
+
+_HEX = re.compile(r"^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$")
+
+
+def _check_theme_color(value: str, info: ValidationInfo) -> str:
+    if value.startswith("#"):
+        if not _HEX.match(value):
+            raise ValueError(f"invalid hex color {value!r} (use #RGB, #RRGGBB or #RRGGBBAA)")
+        return value
+    theme = (info.context or {}).get("theme")
+    if theme is not None and value not in theme.colors:
+        raise ValueError(f"unknown theme color '{value}'; known colors: {', '.join(sorted(theme.colors))}")
+    return value
+
+
+def _check_theme_size(value: str | float, info: ValidationInfo) -> str | float:
+    if isinstance(value, str):
+        theme = (info.context or {}).get("theme")
+        if theme is not None and value not in theme.sizes:
+            raise ValueError(f"unknown theme size '{value}'; known sizes: {', '.join(sorted(theme.sizes))}")
+    elif value <= 0:
+        raise ValueError("size must be positive")
+    return value
+
+
+class ThemeToken(NamedTuple):
+    """Marker in ``ThemeColor``/``ThemeSize`` annotations (``kind`` is ``"color"`` or ``"size"``)."""
+
+    kind: str
+
+
+#: A ``Params`` field holding a color: a theme token (``"primary"``) or ``#hex``. Tokens are
+#: checked against the project's theme by ``vidgen validate`` and when the scene is built.
+ThemeColor = Annotated[str, AfterValidator(_check_theme_color), ThemeToken("color")]
+#: A ``Params`` field holding a font size: a theme token (``"body"``) or a number of points.
+ThemeSize = Annotated[Union[str, float], AfterValidator(_check_theme_size), ThemeToken("size")]
 
 
 class BeatTiming(NamedTuple):
@@ -88,7 +127,7 @@ class NarratedScene(Scene):
             active = runtime.has_context() and runtime.current_project() is self.project
             theme = runtime.current_theme() if active else Theme(self.project.config.theme)
         self.theme = theme
-        self.params = type(self).parse_params(spec.params, scene_id=spec.id)
+        self.params = type(self).parse_params(spec.params, scene_id=spec.id, theme=self.theme)
         self.beats: list[BeatConfig] = list(spec.beats)
         self.audio_enabled = audio
         self.beat_log: list[BeatTiming] = []
@@ -104,21 +143,39 @@ class NarratedScene(Scene):
         return model if isinstance(model, type) and issubclass(model, SceneParams) else None
 
     @classmethod
-    def validate_params(cls, params: Mapping[str, Any]) -> SceneParams | dict[str, Any]:
-        """Validate raw params; raises ``pydantic.ValidationError``. No Manim setup needed."""
+    def validate_params(cls, params: Mapping[str, Any], theme: Theme | None = None) -> SceneParams | dict[str, Any]:
+        """Validate raw params; raises ``pydantic.ValidationError``. No Manim setup needed.
+
+        With ``theme``, :data:`ThemeColor` / :data:`ThemeSize` fields must name tokens that exist
+        in it (it is passed to validators as ``info.context["theme"]``).
+        """
         model = cls.params_model()
         if model is None:
             return dict(params)
-        return model.model_validate(dict(params))
+        return model.model_validate(dict(params), context={"theme": theme})
 
     @classmethod
-    def parse_params(cls, params: Mapping[str, Any], scene_id: str = "?") -> SceneParams | dict[str, Any]:
+    def parse_params(
+        cls, params: Mapping[str, Any], scene_id: str = "?", theme: Theme | None = None
+    ) -> SceneParams | dict[str, Any]:
         """Like :meth:`validate_params` but raises a readable :class:`VidgenError`."""
         try:
-            return cls.validate_params(params)
+            return cls.validate_params(params, theme)
         except ValidationError as exc:
             lines = validation_error_lines(exc, ("params",))
             raise VidgenError("\n".join([f"scene '{scene_id}': invalid params", *(f"  {x}" for x in lines)])) from None
+
+    @classmethod
+    def validate_project(cls, params: Any, project: Project) -> list[str]:
+        """Project-aware checks run by ``vidgen validate`` after params validated (no Manim setup).
+
+        Override to check things a ``Params`` model cannot see, e.g. that an asset file exists.
+        ``params`` is the validated ``Params`` instance (or dict). Return one message per
+        problem, starting with the param name (``"path: file not found: assets/x.png"``); an
+        empty list means no problems. Use the logger for warnings. Call ``super()`` to keep the
+        checks of a parent class.
+        """
+        return []
 
     # ----- beats and timing ------------------------------------------------------------------
 
@@ -184,6 +241,81 @@ class NarratedScene(Scene):
         for i, beat in enumerate(self.beats):
             with self.narrate(i) as d:
                 yield beat, d
+
+    #: Seconds of fade-out added by :meth:`finish` (built-in scenes use 0.5).
+    outro: float = 0.0
+
+    def timeline(self) -> Iterator[tuple[int, float]]:
+        """Like :meth:`narrate_all` but yields ``(index, d)`` and also works for silent scenes.
+
+        A silent scene yields one step ``(0, duration - outro)`` and holds until that time has
+        passed, so the same ``construct`` code serves narrated and silent scenes; call
+        :meth:`finish` afterwards to fade out within the scene's duration.
+        """
+        if self.beats:
+            for i in range(len(self.beats)):
+                with self.narrate(i) as d:
+                    yield i, d
+            return
+        start = float(self.renderer.time)
+        d = max((self.spec.duration or 0.0) - self.outro, 1 / config.frame_rate)
+        yield 0, d
+        self.wait_seconds(d - (self.renderer.time - start))
+
+    def reveal(
+        self,
+        steps: Sequence[Animation | Sequence[Animation] | Callable[[], Any]],
+        fraction: float = 0.7,
+        cap: float = 1.2,
+    ) -> None:
+        """Narrate the whole scene, revealing ``steps`` beat by beat.
+
+        Steps are assigned to beats with :func:`~vidgen.layout.distribute` (step ``i`` at beat
+        ``i``; more steps than beats are spread evenly; extra beats hold) and each beat's steps
+        are played with :meth:`play_steps`. Works for silent scenes (one step slot). Does not
+        fade out: call :meth:`finish` afterwards.
+        """
+        plan = distribute(len(steps), len(self.beats))
+        for i, d in self.timeline():
+            self.play_steps(d, [steps[k] for k in plan[i]], fraction=fraction, cap=cap)
+
+    def finish(self) -> None:
+        """Fade out everything over :attr:`outro` seconds (no-op when ``outro`` is 0)."""
+        if self.outro > 0:
+            self.clear_all(run_time=self.outro)
+
+    def play_steps(
+        self,
+        d: float,
+        steps: Sequence[Animation | Sequence[Animation] | Callable[[], Any]],
+        fraction: float = 0.7,
+        cap: float = 1.2,
+    ) -> None:
+        """Spread ``steps`` evenly over ``d`` seconds (typically a beat's duration).
+
+        Each step gets a slot of ``d / len(steps)`` seconds; its animations run for
+        ``min(cap, fraction * slot)`` and the rest of the slot is waited, so the whole call never
+        takes longer than ``d``. A step is an animation, a list of animations played together,
+        or a callable returning either (built lazily, after the previous steps ran); a step
+        that is an empty list just waits its slot. When ``d`` is too short for one frame per
+        step, consecutive steps are merged and played together.
+        """
+        if not steps:
+            return
+        frame = 1 / config.frame_rate
+        groups = distribute(len(steps), min(len(steps), max(1, int(d / frame + 1e-9))))
+        slot = d / len(groups)
+        run_time = max(min(cap, fraction * slot), frame)
+        for group in groups:
+            start = float(self.renderer.time)
+            anims: list[Animation] = []
+            for k in group:
+                step = steps[k]
+                built = step() if callable(step) and not isinstance(step, Animation) else step
+                anims += [built] if isinstance(built, Animation) else list(built or [])
+            if anims:
+                self.play(*anims, run_time=run_time)
+            self.wait_seconds(slot - (self.renderer.time - start))
 
     def wait_seconds(self, seconds: float) -> None:
         """Wait ``seconds`` rounded to whole frames (no-op if that is zero frames).
@@ -255,6 +387,20 @@ class NarratedScene(Scene):
     def is_portrait(self) -> bool:
         """True when the frame is taller than wide (e.g. a 1080x1920 vertical variant)."""
         return config.pixel_height > config.pixel_width
+
+    #: Margins (Manim units) between the frame edge and the safe area used by built-in layouts.
+    margin_x: float = 0.6
+    margin_y: float = 0.5
+
+    @property
+    def safe_width(self) -> float:
+        """Frame width minus the side margins: the width content should stay within."""
+        return self.frame_width - 2 * self.margin_x
+
+    @property
+    def safe_height(self) -> float:
+        """Frame height minus the top/bottom margins."""
+        return self.frame_height - 2 * self.margin_y
 
     # ----- drawing ---------------------------------------------------------------------------
 

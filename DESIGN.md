@@ -45,6 +45,7 @@ src/vidgen/
   runtime.py              # "current project/theme" context used by helpers and extensions
   scene.py                # NarratedScene base class + narrate()
   helpers.py              # theme-aware text helpers and generic drawing utilities
+  layout.py               # fit/wrap text, beat distribution, chart numbers, LaTeX detection
   tts/__init__.py         # provider seam: get_provider(cfg)
   tts/elevenlabs.py       # ElevenLabs provider (stdlib urllib), cache by hash
   render/                 # worker.py (one scene per process), pipeline.py, ffmpeg.py
@@ -114,6 +115,7 @@ theme:
     primary: "#58C4DD"
     secondary: "#F2A541"
     tertiary: "#83C167"
+    surface: "#161B24"                           # panels / code background (Step 5)
     # projects may add any name, e.g. k2: "#F2A541"
   palette: ["#58C4DD", "#F2A541", "#C792EA", "#83C167"]   # ordered series colors (charts, groups)
   sizes: {title: 56, subtitle: 42, heading: 36, body: 32, caption: 24, small: 20}
@@ -277,6 +279,41 @@ Refinements (Step 4):
   logged as a warning recommending `vidgen tts`; ffmpeg missing is a `VidgenError` with install
   hints (`winget install ffmpeg` on Windows).
 
+Refinements (Step 5):
+- **Worker caches**: `config.text_dir = media/texts/<scene_id>` and `config.tex_dir =
+  media/Tex/<scene_id>`. Manim caches Text/Tex SVGs by content hash in one folder; with
+  `--jobs N` two workers writing the same SVG at once made the other parse a half-written file
+  (`xml.etree.ElementTree.ParseError`). Per-scene folders cost cache reuse across scenes only.
+
+### 5.3 Scene-building API (Step 5)
+
+Added to `NarratedScene` so built-ins and extensions share it:
+- `validate_params(params, theme=None)` / `parse_params(params, scene_id, theme=None)`: the theme
+  is passed to validators as `info.context["theme"]`; the constructor passes `self.theme`.
+- `ThemeColor` (`Annotated[str, ...]`) and `ThemeSize` (`Annotated[str | float, ...]`) for
+  `Params` fields: hex syntax is always checked, token names when a theme is given (validate and
+  render). Both carry a `ThemeToken(kind)` marker; `list-scenes` prints them as `color` / `size`.
+- classmethod `validate_project(params, project) -> list[str]`: project-aware checks run by
+  `vidgen validate` (inside the project session, after params validated); each message is
+  reported as `scenes[i].params.<message>` (convention: start with the param name). Default `[]`.
+- `outro: float = 0.0` (class attribute) and `finish()` (fade out everything over `outro`).
+- `timeline()`: yields `(index, d)` per narrated beat; a silent scene yields one
+  `(0, duration - outro)` step and then holds to that time.
+- `play_steps(d, steps, fraction=0.7, cap=1.2)`: spreads steps (animation | list | callable
+  returning either) over `d` seconds, each run for `min(cap, fraction * slot)`; never longer
+  than `d` (if `d` has fewer frames than steps, consecutive steps are merged).
+- `reveal(steps, fraction, cap)`: `distribute(len(steps), len(beats))` + `timeline()` +
+  `play_steps()` per beat.
+- `safe_width` / `safe_height` (frame minus `margin_x = 0.6`, `margin_y = 0.5` units).
+
+`vidgen.layout` (exported by `vidgen.api`): `fit_text`, `shrink_to_fit`, `wrap_lines`,
+`normalize_text`, `distribute`, `nice_ticks`, `auto_format`, `format_value`, `check_format`,
+`latex_available`, `require_latex` (+ `missing_latex_tools`, not exported). `fit_text` measures
+each word once (cached per font/weight) and searches the font size arithmetically, building the
+`Paragraph` once; `Paragraph` `line_spacing` defaults to 0.7 (Manim's -1 sets lines nearly
+touching). Highlights are applied with `t2c` index ranges (wrapping only turns spaces into line
+breaks, so indices into the normalized text stay valid).
+
 ## 6. Extension system (the core requirement)
 
 ### 6.1 Discovery
@@ -338,6 +375,8 @@ so module-level code in an extension may read theme values
 ### 6.4 `vidgen.api` exports (stable surface)
 `NarratedScene, SceneParams, scene, hook, HookContext, register_theme_defaults, current_theme,
 current_project, T, MT`, generic helpers from `helpers.py`, and `from manim import *`.
+Step 5 adds `ThemeColor, ThemeSize`, the `vidgen.layout` helpers (§5.3) and pydantic's
+`Field, field_validator, model_validator`.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -380,7 +419,11 @@ Anything not exported from `vidgen.api` is internal and may change.
   line per `Params` field (`name: type [= default]`), or `params: free-form`. Without a PROJECT
   argument and no config file in the current directory it lists the built-ins only.
 - **Built-in library**: `vidgen/scenes/__init__.py` imports each scene module explicitly
-  (Step 2 ships `text_card`: params `text`, `size="title"`, `color="text"`).
+  (Step 2 ships `text_card`: params `text`, `size="title"`, `color="text"`). Step 5 adds
+  `title, bullets, bar_chart, line_chart, image, quote, equation, code, end_card` (reference:
+  docs/CONFIG.md "Built-in scenes"). Their only vidgen import is `from vidgen.api import *`
+  (a test pins this); shared code between built-ins uses relative imports (`end_card` imports
+  `check_image`/`load_image` from `.image`), exactly like extension modules.
 
 ## 7. TTS (ElevenLabs)
 

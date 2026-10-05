@@ -82,6 +82,10 @@ def configure_manim(
     config.media_dir = str(media_dir)
     config.video_dir = str(media_dir / "videos" / scene_id)
     config.partial_movie_dir = str(media_dir / "videos" / scene_id / "partial")
+    # Manim caches Text/Tex SVGs by content hash; parallel workers writing the same file at once
+    # can read each other's half-written SVG, so every scene gets its own cache folders.
+    config.text_dir = str(media_dir / "texts" / scene_id)
+    config.tex_dir = str(media_dir / "Tex" / scene_id)
     config.output_file = scene_id
     config.progress_bar = "display" if progress else "none"
     config.verbosity = "WARNING"

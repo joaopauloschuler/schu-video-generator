@@ -5,4 +5,15 @@ and ``@scene``); a module here is registered as "builtin" because it lives insid
 Importing this package imports every scene module (add new modules to the import list below).
 """
 
-from vidgen.scenes import text_card  # noqa: F401
+from vidgen.scenes import (  # noqa: F401
+    bar_chart,
+    bullets,
+    code,
+    end_card,
+    equation,
+    image,
+    line_chart,
+    quote,
+    text_card,
+    title,
+)
