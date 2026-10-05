@@ -17,7 +17,7 @@ class TextCard(NarratedScene):
 
     def construct(self) -> None:
         card = self.text(self.params.text, size=self.params.size, color=self.params.color)
-        max_width = config.frame_width * 0.9
+        max_width = self.frame_width * 0.9
         if card.width > max_width:
             card.scale_to_fit_width(max_width)
         if not self.beats:

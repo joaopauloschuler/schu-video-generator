@@ -47,7 +47,7 @@ src/vidgen/
   helpers.py              # theme-aware text helpers and generic drawing utilities
   tts/__init__.py         # provider seam: get_provider(cfg)
   tts/elevenlabs.py       # ElevenLabs provider (stdlib urllib), cache by hash
-  render/                 # per-scene render, audio padding, concat, timings
+  render/                 # worker.py (one scene per process), pipeline.py, ffmpeg.py
   subtitles.py            # SRT from beat timings
   scenes/                 # built-in scene library (registered like extensions)
 tests/                    # pytest; no network; slow renders marked `render`
@@ -73,6 +73,12 @@ my_video/
   <output>.mp4            # final video   (<output>_preview.mp4 for previews,
   <output>.srt            #               <output>_<variant>.mp4 for variants)
 ```
+
+`build/<final|preview>[_<variant>]/` (Step 4) holds: `scenes/<id>.mp4` (the scene as rendered,
+with Manim's own audio) and `scenes/<id>.wav` (Manim's uncompressed sound mix, only if the scene
+has sound), `timings/<id>.json` (beat timings + the render settings), `media/` (Manim's
+intermediate files), `padded/<id>.wav` (each scene's audio padded to its exact video length) with
+`padded/video_concat.txt` / `audio_concat.txt`, and `timings.json` (the whole video).
 
 ## 4. Config schema (`video.yaml`)
 
@@ -225,6 +231,52 @@ Refinements (Step 2): the worker does steps 1–2 with `vidgen.extensions.activa
 advances its clock by the unquantized duration, which would desynchronise `beat_log` from the
 frames.
 
+Refinements (Step 4):
+- **Worker** (`vidgen/render/worker.py`, extra flag `--progress` shows Manim's progress bars):
+  sets `pixel_width/height`, `frame_rate`, `background_color = theme.background`,
+  `disable_caching`, `media_dir = <render_dir>/media`, `video_dir`/`partial_movie_dir` per scene
+  id (so parallel workers never share a folder) and `output_file = <scene_id>`; after rendering
+  it moves `renderer.file_writer.movie_file_path` (and Manim's `.wav` beside it, if any) to
+  `scenes/<id>.mp4|.wav` and writes `timings/<id>.json` = `scene.timings()` (rounded to µs) plus
+  `"render": {width, height, fps, audio, vidgen}`. Old files of the scene are deleted first, so
+  a failed render leaves none. Manim cannot handle `'`, `{` or `}` in its paths (it formats them
+  with `str.format` and writes unescaped concat lists); for such project paths Manim's media
+  folder is a temporary directory instead. Exit codes: 0 ok, 1 `VidgenError` (`error: ...` on
+  stderr), 2 other exceptions (full traceback). The worker runs with `PYTHONUTF8=1`.
+- **Frame size**: Manim does not recompute `frame_width` when pixel sizes are set from code (a
+  portrait render would be squashed), so the worker sets it: the **shorter side is 8 units**
+  with square pixels (16:9 → 14.22 x 8, Manim's default; 9:16 → 8 x 14.22; 1:1 → 8 x 8). Scenes
+  read `config.frame_width/height`, or `NarratedScene.frame_width`, `.frame_height`,
+  `.is_portrait` (new read-only properties).
+- **Audio/no drift**: concatenating AAC segments drifts (every segment carries ~21 ms of encoder
+  priming that the concat demuxer does not remove — measured: +50 ms after two scene
+  boundaries). So the parent pads Manim's **PCM WAV** of each scene (silence for silent scenes
+  and `--no-audio`) to exactly the video's length (48 kHz stereo; the sample count of scene *i*
+  is `round(end_i*48000) - round(start_i*48000)`, so rounding never accumulates), concatenates
+  the videos (stream copy) and the WAVs (PCM) with two concat-demuxer lists, and encodes the
+  audio once to AAC 192k in the final mux. Measured beat onsets in the output match
+  `timings.json` within 1 ms. Scene durations are measured from the rendered videos with PyAV
+  (frames / fps). The final MP4 is written to `<name>.partial.mp4` and renamed.
+- **Timings**: `build/<q>[_<variant>]/timings.json` = `{title, variant, preview, format: {width,
+  height, fps}, audio, duration, vidgen, scenes: [{id, type, start, duration, beats: [{id,
+  start, end, text}]}]}`, all times absolute seconds. SRT cues come from it (`subtitles.py`):
+  1-based, `HH:MM:SS,mmm`, UTF-8; beat text wrapped to 42-character lines, at most 2 lines per
+  cue, the beat's time (start → narration end, pad excluded) shared in proportion to characters.
+- **Scene selection**: no automatic up-to-date detection. Without `--scene` every scene is
+  rendered. With `--scene` those are rendered, and others are reused if their render exists and
+  was made at the current format (and with audio, unless `--no-audio`); otherwise they are
+  rendered too. Reused renders are not checked against config/extension changes.
+- **Failures**: without `--keep-going` the first failing scene stops the command (message: scene
+  id, exit code, last 60 lines of worker output — the user's traceback for exceptions in scene
+  code). With it, the remaining scenes are rendered, failures are printed as they happen, the
+  video is **not** joined, and the command fails listing the failed scenes.
+- **Parallelism**: `render_project(..., jobs=N)` / `vidgen render --jobs N` runs N workers at
+  once (default 1). Live Manim progress is shown only for `jobs == 1` on a terminal; otherwise
+  worker output is captured and its `warning:` lines are re-printed.
+- **Audio check**: before rendering, missing/stale narration audio (`tts.audio_status`) is
+  logged as a warning recommending `vidgen tts`; ffmpeg missing is a `VidgenError` with install
+  hints (`winget install ffmpeg` on Windows).
+
 ## 6. Extension system (the core requirement)
 
 ### 6.1 Discovery
@@ -266,6 +318,14 @@ register_theme_defaults({"k2": "#F2A541"})   # extra theme tokens; video.yaml va
   `dry_run: bool`; dispatched on dry runs too. `post_tts` — `generated: list[str]` (ids written,
   in order), `audio_dir: Path`; not dispatched on dry runs or when the command fails. The API key
   is never part of hook data.
+- **Hook data** (Step 4, render; hooks run in the parent `vidgen render` process): `pre_render` —
+  `scenes: list[str]` (ids about to be rendered, config order; a hook may remove ids to reuse
+  their existing render), `preview: bool`, `variant: str | None`, `no_audio: bool`,
+  `render_dir: Path`. `post_scene` — once per scene rendered in this run (not for reused ones):
+  `scene_id`, `video: Path` (`scenes/<id>.mp4`, before padding), `timings: dict` (the scene's
+  timings file content), `preview`, `variant`. `post_render` — after the MP4, SRT and
+  `timings.json` are written: `output: Path`, `srt: Path`, `timings: dict` (combined),
+  `timings_file: Path`, `preview`, `variant`. Not dispatched when the command fails.
 - **Promotion**: an extension module copied into `src/vidgen/scenes/` works unchanged, because
   built-ins use exactly the same `@scene` API.
 
@@ -394,9 +454,11 @@ vidgen validate [PROJECT]               # load config + extensions, report all e
 vidgen list-scenes [PROJECT]            # built-ins + extensions (+ which overrides)
 vidgen tts [PROJECT] [--force] [--dry-run] [--beat ID ...] [--variant NAME]
 vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going]
+              [--jobs N]
 ```
 PROJECT defaults to the current directory. `--scene` re-renders only those scenes and re-joins
 using the existing renders of the others (missing ones are rendered). Exit code non-zero on error.
+`render` prints one line per scene, then the output paths and the total duration.
 
 ## 9. Testing
 

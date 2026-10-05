@@ -234,6 +234,28 @@ class NarratedScene(Scene):
             ],
         }
 
+    # ----- frame -----------------------------------------------------------------------------
+
+    @property
+    def frame_width(self) -> float:
+        """Width of the visible frame in Manim units (``config.frame_width``).
+
+        vidgen sets the shorter side to 8 units with square pixels: 16:9 gives 14.22 x 8,
+        9:16 (vertical variants) gives 8 x 14.22. Lay out relative to these values rather than
+        assuming Manim's landscape defaults.
+        """
+        return float(config.frame_width)
+
+    @property
+    def frame_height(self) -> float:
+        """Height of the visible frame in Manim units (``config.frame_height``)."""
+        return float(config.frame_height)
+
+    @property
+    def is_portrait(self) -> bool:
+        """True when the frame is taller than wide (e.g. a 1080x1920 vertical variant)."""
+        return config.pixel_height > config.pixel_width
+
     # ----- drawing ---------------------------------------------------------------------------
 
     def text(self, s: str, size: str | float = "body", color: Any = "text", weight: str = NORMAL, **kwargs: Any) -> Text:

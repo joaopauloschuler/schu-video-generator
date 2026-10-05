@@ -187,3 +187,74 @@ Known gaps
 
 How to test: `/home/claude/venv/bin/python -m pytest -q` (161 passed + 1 xfail). Manual without a key:
 `vidgen init /tmp/x && vidgen tts /tmp/x --dry-run`.
+
+## Step 4 — Render pipeline
+What was built
+- `vidgen/render/worker.py` — `python -m vidgen.render.worker <project> <scene_id> --quality
+  final|preview [--variant NAME] [--no-audio] [--progress]` (the Step 2 sequence + explicit Manim
+  config; exit 0 / 1 `VidgenError` / 2 traceback). Helpers: `scene_video_path`,
+  `scene_audio_path`, `scene_timings_path`, `frame_size(w, h)`, `write_json`, `render_scene`.
+- `vidgen/render/pipeline.py` — `render_project(project, preview=False, scenes=None,
+  no_audio=False, keep_going=False, jobs=1) -> RenderResult(output, srt, timings_file, duration,
+  rendered, reused)`; `join_scenes`, `warn_audio`. Activates the project's extensions itself
+  (`project_session`), so hooks fire when called directly.
+- `vidgen/render/ffmpeg.py` — `find_ffmpeg`, `run_ffmpeg`, `probe -> VideoInfo(width, height, fps,
+  duration)`, `pad_audio`, `concat_quote`, `write_concat_list`, `join`.
+- `vidgen/subtitles.py` — `Cue`, `split_text`, `beat_cues`, `cues_from_timings`, `format_time`,
+  `format_srt`, `write_srt(path, timings)`.
+- `NarratedScene.frame_width / frame_height / is_portrait` (read-only); `text_card` uses
+  `self.frame_width`.
+- CLI `vidgen render ... [--jobs N]` (prints one line per scene, then video/subtitles paths and
+  duration); removed the `_not_implemented` helper and its test.
+- Docs: DESIGN §2/§3 (build layout), §5.2 "Refinements (Step 4)", §6.2 render hook data, §8;
+  EXTENDING.md (frame size / vertical, render hook table); new short README.md quick start.
+- Tests: `tests/test_render.py` (17 tests, 9 render: one 3-scene project in
+  `my vídeo's dir/proj ç` rendered once per module + small projects), `tests/test_subtitles.py`.
+
+Layout under `build/<final|preview>[_<variant>]/`
+`scenes/<id>.mp4` (+ `<id>.wav` if the scene has sound), `timings/<id>.json` (scene timings +
+`render: {width, height, fps, audio, vidgen}`), `media/` (Manim), `padded/<id>.wav`,
+`padded/video_concat.txt`, `padded/audio_concat.txt`, `timings.json` (whole video, absolute
+times). Final `<output>[_<variant>][_preview].mp4/.srt` in the project root.
+
+Decisions / deviations
+- **No AAC-segment concat** (unlike kphi3's render.py): measured +21–25 ms of drift per scene
+  boundary from AAC priming. Instead Manim's PCM `.wav` per scene is padded to the exact video
+  length (cumulative sample rounding), WAVs and videos are concatenated separately (concat
+  demuxer; video stream-copied), audio encoded once (AAC 192k, 48 kHz stereo). Beat onsets in
+  the output match `timings.json` within 1 ms (smoke test with two real kphi3 MP3s; test
+  `test_no_drift_beats_start_where_timings_say`).
+- **Frame size**: Manim keeps 14.22 x 8 units when pixel sizes are set from code (portrait
+  would be squashed). The worker sets the shorter side to 8 units: 9:16 → 8 x 14.22.
+- `post_scene` is dispatched in the parent (after each successful worker), so hooks see the
+  parent's state and run once per rendered scene; data is paths/dicts, not the Manim scene.
+- `pre_render` hooks may remove scene ids (their existing renders are then reused; missing ones
+  fail at the join with a clear error).
+- No up-to-date detection: all scenes render unless `--scene`. With `--scene`, others are
+  reused if rendered at the current format (and with audio unless `--no-audio`).
+- `--keep-going` failures → the video is not joined; non-zero exit listing failed scenes.
+- Manim breaks on `'`, `{`, `}` in paths (str.format templates, unescaped concat lists) → its
+  media dir goes to a temp folder for such projects. Our own concat lists use paths relative to
+  the list file (scene ids are `[A-Za-z0-9_]+`) and quote with `'\''` otherwise.
+- Workers get `PYTHONUTF8=1`/`PYTHONIOENCODING=utf-8`; output is decoded as UTF-8.
+- Added `--jobs N` (thread pool of worker processes; live Manim progress only for jobs=1 on a TTY).
+
+For Step 5 (built-in scenes)
+- Lay out with `self.frame_width`, `self.frame_height`, `self.is_portrait` (or
+  `config.frame_width/height`); never assume 14.22 x 8. Theme sizes are font points, so
+  portrait needs wrapping/stacking/scaling of wide content.
+- The init template's `title`/`bullets` scene types are still missing, so the README quick start
+  only works end to end once Step 5 adds them.
+For Step 6 (kphi3)
+- Old kphi3 scene code using hard-coded coordinates works unchanged at 16:9 (frame 14.22 x 8).
+- Compare with the old video knowing the old pipeline had ~20 ms/scene audio drift; the new
+  output is sample-accurate, so small A/V differences vs `kphi3_video.mp4` are expected.
+
+Known gaps
+- Reused renders (`--scene`) are not checked against config/extension/audio changes.
+- A Manim progress bar is only shown live with `--jobs 1` in a terminal.
+- `build/` grows (media, wavs); no `clean` command.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (181 passed + 1 xfail, ~14 s; renders
+~11 s). Skip renders with `-m "not render"`. Manual: a project with `text_card` scenes, then
+`vidgen render --preview` and `vidgen render --scene ID`.

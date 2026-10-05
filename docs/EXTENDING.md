@@ -72,6 +72,20 @@ Timing rules:
   automatically; `self.hold()` holds earlier.
 - If you override `tear_down`, call `super().tear_down()`.
 
+Frame size and vertical videos: vidgen makes the **shorter side of the frame 8 Manim units**
+(square pixels). A 16:9 render is 14.22 x 8 units (Manim's default); a 9:16 variant such as
+`format: {width: 1080, height: 1920}` is 8 x 14.22. Lay out with `self.frame_width`,
+`self.frame_height` (same as Manim's `config.frame_width` / `config.frame_height`) and
+`self.is_portrait` instead of hard-coded coordinates, e.g.
+
+```python
+row = VGroup(*items).arrange(DOWN if self.is_portrait else RIGHT, buff=0.5)
+row.scale_to_fit_width(min(row.width, self.frame_width * 0.9))
+```
+
+Theme sizes are in Manim font points, so text has the same size relative to the short side in
+both orientations; wide content needs to wrap, stack or scale in portrait.
+
 Params errors are reported with their config path, e.g.
 `scenes[2].params.values.x: Input should be a valid number`. Unknown keys are errors.
 
@@ -128,12 +142,18 @@ def announce(ctx):            # ctx.project, ctx.event, ctx.data (dict; may be m
 Hooks run in registration order. If a hook raises, the command stops with an error naming the
 hook and its file.
 
-Event data (render events are added by the render step; see DESIGN.md §6.2):
+Event data (see DESIGN.md §6.2):
 
-| event      | `ctx.data` keys |
-|------------|-----------------|
-| `pre_tts`  | `beats` (list of beat ids about to be generated; remove ids to skip them), `audio_dir`, `force`, `dry_run` |
-| `post_tts` | `generated` (beat ids written, in order), `audio_dir` |
+| event         | `ctx.data` keys |
+|---------------|-----------------|
+| `pre_tts`     | `beats` (list of beat ids about to be generated; remove ids to skip them), `audio_dir`, `force`, `dry_run` |
+| `post_tts`    | `generated` (beat ids written, in order), `audio_dir` |
+| `pre_render`  | `scenes` (scene ids about to be rendered, config order; remove ids to reuse their existing render), `preview`, `variant`, `no_audio`, `render_dir` |
+| `post_scene`  | `scene_id`, `video` (the scene's MP4, before audio padding), `timings` (the scene's timings dict), `preview`, `variant` |
+| `post_render` | `output` (final MP4), `srt`, `timings` (combined timings dict), `timings_file`, `preview`, `variant` |
+
+Render hooks run in the `vidgen render` process (not in the per-scene worker processes);
+`post_scene` runs once per scene rendered in this run (not for reused renders).
 
 ```python
 @hook("pre_tts")

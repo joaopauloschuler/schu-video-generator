@@ -7,7 +7,7 @@ import json
 import logging
 import shutil
 import sys
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -129,6 +129,29 @@ def cmd_tts(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_render(args: argparse.Namespace) -> int:
+    """Render every scene (or only ``--scene`` ones), join them and write the MP4 and SRT."""
+    from vidgen.render.pipeline import render_project
+
+    if args.jobs < 1:
+        raise VidgenError("--jobs must be at least 1")
+    project = Project.load(args.project, variant=args.variant)
+    result = render_project(
+        project,
+        preview=args.preview,
+        scenes=args.scene or None,
+        no_audio=args.no_audio,
+        keep_going=args.keep_going,
+        jobs=args.jobs,
+    )
+    reused = f", {len(result.reused)} reused" if result.reused else ""
+    print(f"rendered {len(result.rendered)} scene(s){reused}")
+    print(f"video:     {result.output}")
+    print(f"subtitles: {result.srt}")
+    print(f"duration:  {_format_seconds(result.duration)} ({result.duration:.2f} s)")
+    return 0
+
+
 def _type_name(annotation: Any) -> str:
     if isinstance(annotation, type) and not getattr(annotation, "__args__", None):
         return annotation.__name__
@@ -179,13 +202,6 @@ def cmd_list_scenes(args: argparse.Namespace) -> int:
     return 0
 
 
-def _not_implemented(step: int) -> Callable[[argparse.Namespace], int]:
-    def run(args: argparse.Namespace) -> int:
-        raise VidgenError(f"'vidgen {args.command}' is not implemented yet (step {step})")
-
-    return run
-
-
 def build_parser() -> argparse.ArgumentParser:
     """The argparse parser for all subcommands."""
     parser = argparse.ArgumentParser(
@@ -226,7 +242,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--variant", metavar="NAME", help="apply a named variant")
     p.add_argument("--no-audio", action="store_true", help="render without narration audio")
     p.add_argument("--keep-going", action="store_true", help="continue after a scene fails")
-    p.set_defaults(func=_not_implemented(4))
+    p.add_argument("--jobs", "-j", type=int, default=1, metavar="N", help="render N scenes in parallel (default: 1)")
+    p.set_defaults(func=cmd_render)
     return parser
 
 

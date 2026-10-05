@@ -52,12 +52,6 @@ def test_missing_project(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> 
     assert capsys.readouterr().err.startswith("error: project not found")
 
 
-@pytest.mark.parametrize(("argv", "step"), [(["render", "--preview"], 4)])
-def test_not_implemented_commands(argv: list[str], step: int, capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(argv) == 1
-    assert f"not implemented yet (step {step})" in capsys.readouterr().err
-
-
 def test_version(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit) as info:
         main(["--version"])

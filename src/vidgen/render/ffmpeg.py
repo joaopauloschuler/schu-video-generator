@@ -1,0 +1,153 @@
+"""ffmpeg and media helpers for the render pipeline: discovery, audio padding, concatenation and
+reading stream information with PyAV.
+
+Every ffmpeg call uses a list of arguments (no shell), so paths with spaces, quotes or non-ASCII
+characters are passed through unchanged.
+"""
+
+from __future__ import annotations
+
+import shutil
+import subprocess
+import sys
+from dataclasses import dataclass
+from fractions import Fraction
+from pathlib import Path
+
+import av
+
+from vidgen.errors import VidgenError
+
+#: Audio of every padded scene (and so of the final video): AAC, 48 kHz, stereo.
+AUDIO_RATE = 48000
+AUDIO_BITRATE = "192k"
+
+
+def find_ffmpeg() -> str:
+    """Path of the ``ffmpeg`` executable on PATH; :class:`VidgenError` with install hints if absent."""
+    exe = shutil.which("ffmpeg")
+    if exe is None:
+        if sys.platform == "win32":
+            hint = "install it with `winget install ffmpeg` (then open a new terminal)"
+        elif sys.platform == "darwin":
+            hint = "install it with `brew install ffmpeg`"
+        else:
+            hint = "install it with your package manager, e.g. `sudo apt install ffmpeg`"
+        raise VidgenError(f"ffmpeg not found on PATH; {hint}. See https://ffmpeg.org/download.html")
+    return exe
+
+
+def run_ffmpeg(ffmpeg: str, args: list[str], what: str) -> None:
+    """Run ``ffmpeg -y -v error <args>``; a failure becomes a :class:`VidgenError` with stderr."""
+    result = subprocess.run(
+        [ffmpeg, "-y", "-hide_banner", "-nostdin", "-v", "error", *args],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if result.returncode != 0:
+        details = result.stderr.strip()[-2000:] or f"exit code {result.returncode}"
+        raise VidgenError(f"ffmpeg failed while {what}:\n{details}")
+
+
+@dataclass(frozen=True)
+class VideoInfo:
+    """What the pipeline needs to know about a rendered scene file."""
+
+    width: int
+    height: int
+    fps: Fraction
+    duration: float  # of the video stream, in seconds
+
+
+def probe(path: Path) -> VideoInfo:
+    """Read the resolution, frame rate and video-stream duration of ``path``."""
+    try:
+        with av.open(str(path)) as container:
+            video = container.streams.video[0]
+            fps = Fraction(video.average_rate or video.guessed_rate or 0)
+            if video.frames and fps:
+                duration = float(video.frames / fps)
+            elif video.duration is not None and video.time_base is not None:
+                duration = float(video.duration * video.time_base)
+            elif container.duration is not None:
+                duration = container.duration / av.time_base
+            else:
+                raise ValueError("no duration information")
+            return VideoInfo(
+                width=video.codec_context.width,
+                height=video.codec_context.height,
+                fps=fps,
+                duration=duration,
+            )
+    except (OSError, ValueError, IndexError, av.error.FFmpegError) as exc:
+        raise VidgenError(f"cannot read video file {path}: {exc}") from None
+
+
+def pad_audio(ffmpeg: str, src: Path | None, dst: Path, samples: int) -> None:
+    """Write ``dst``: a 48 kHz stereo PCM WAV of exactly ``samples`` samples.
+
+    It holds ``src`` (Manim's uncompressed mix of the scene's sounds) padded with silence or
+    trimmed to that length, or pure silence when ``src`` is ``None``. PCM keeps every sample, so
+    concatenating these files cannot drift (AAC segments would each add encoder priming).
+    """
+    fmt = f"aformat=sample_fmts=s16:sample_rates={AUDIO_RATE}:channel_layouts=stereo"
+    trim = f"apad=whole_len={samples},atrim=end_sample={samples}"
+    if src is not None:
+        inputs = ["-i", str(src)]
+        graph = f"aresample={AUDIO_RATE},{fmt},{trim}"
+    else:
+        inputs = ["-f", "lavfi", "-i", f"anullsrc=r={AUDIO_RATE}:cl=stereo"]
+        graph = f"{fmt},{trim}"
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    run_ffmpeg(ffmpeg, [*inputs, "-af", graph, "-c:a", "pcm_s16le", str(dst)], f"padding the audio for {dst.name}")
+
+
+def concat_quote(path: str) -> str:
+    """Quote a path for an ffmpeg concat list: ``'...'`` with each ``'`` written as ``'\\''``."""
+    return "'" + path.replace("'", "'\\''") + "'"
+
+
+def write_concat_list(files: list[Path], list_file: Path) -> None:
+    """Write an ffmpeg concat list (UTF-8). Paths are relative to the list's folder when
+    possible (ffmpeg resolves them that way), otherwise absolute; both are quoted."""
+    lines = []
+    for f in files:
+        try:
+            entry = f.relative_to(list_file.parent).as_posix()
+        except ValueError:
+            entry = f.resolve().as_posix()
+        lines.append(f"file {concat_quote(entry)}\n")
+    list_file.parent.mkdir(parents=True, exist_ok=True)
+    list_file.write_text("".join(lines), encoding="utf-8")
+
+
+def join(ffmpeg: str, videos: list[Path], audios: list[Path], dst: Path, work_dir: Path) -> None:
+    """Concatenate ``videos`` (stream copy, video only) and ``audios`` (PCM, encoded once to AAC)
+    into ``dst`` with the concat demuxer.
+
+    ``dst`` is written via a temporary file next to it and replaced at the end, so a failed join
+    never leaves a truncated output.
+    """
+    video_list = work_dir / "video_concat.txt"
+    audio_list = work_dir / "audio_concat.txt"
+    write_concat_list(videos, video_list)
+    write_concat_list(audios, audio_list)
+    tmp = dst.with_name(f"{dst.stem}.partial{dst.suffix}")
+    try:
+        run_ffmpeg(
+            ffmpeg,
+            [
+                "-f", "concat", "-safe", "0", "-i", str(video_list),
+                "-f", "concat", "-safe", "0", "-i", str(audio_list),
+                "-map", "0:v:0", "-map", "1:a:0",
+                "-c:v", "copy", "-c:a", "aac", "-b:a", AUDIO_BITRATE, "-ar", str(AUDIO_RATE),
+                "-movflags", "+faststart",
+                str(tmp),
+            ],
+            f"joining the scenes into {dst.name}",
+        )
+        tmp.replace(dst)
+    finally:
+        tmp.unlink(missing_ok=True)
