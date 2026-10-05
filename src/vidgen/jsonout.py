@@ -168,6 +168,33 @@ def list_scenes_document(project: Project | None, warnings: Iterable[Mapping[str
     )
 
 
+# ----- list-themes -------------------------------------------------------------------------------
+
+
+def list_themes_document(
+    project: Project | None,
+    orientation: str,
+    current: Mapping[str, Any],
+    presets: list[dict[str, Any]],
+    scales: Mapping[str, Any],
+    swatches: Path | None,
+    warnings: Iterable[Mapping[str, Any]] = (),
+) -> dict[str, Any]:
+    """The ``vidgen list-themes --json`` document: the project's theme choice, every preset
+    (``vidgen.themelist.preset_entry``) and the type scales."""
+    return envelope(
+        "list-themes",
+        True,
+        warnings,
+        project=None if project is None else _path(project.root),
+        orientation=orientation,
+        current=dict(current),
+        presets=presets,
+        type_scales=dict(scales),
+        swatches=None if swatches is None else _path(swatches),
+    )
+
+
 # ----- render ------------------------------------------------------------------------------------
 
 

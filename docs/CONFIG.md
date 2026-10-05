@@ -102,6 +102,7 @@ theme:
     surface: "#161B24"      # panels, code window
     # brand: "#7C3AED"      # your own tokens work in every color param
   palette: ["#58C4DD", "#F2A541", "#C792EA", "#83C167"]   # series colors (charts), in order
+  scale: auto               # type scale: compact, standard, large or auto (see below)
   sizes: {title: 56, subtitle: 42, heading: 36, body: 32, caption: 24, small: 20}  # font points
 ```
 
@@ -115,7 +116,34 @@ digits and `_`. Sizes are positive numbers. `code_style` is any installed Pygmen
 the preset (and its base preset) > defaults registered by extensions
 (`register_theme_defaults`, docs/EXTENDING.md) > the built-in defaults shown above (the
 `dark_tech` look). Without `preset` the preset level is simply empty, so an existing project
-looks exactly as before.
+looks exactly as before. `vidgen list-themes` shows every preset with its values (below), and
+`vidgen validate` warns (without failing) when the project's own theme has a colour pair below
+WCAG AA (`warning: theme contrast: colors.dim #6B7280 on background #0E1116: 3.91:1 (needs
+4.5:1, too low)`; same check as the presets' tests, see below).
+
+### Type scales
+
+`scale` sets the six built-in sizes at once (font points):
+
+| scale | `title` | `subtitle` | `heading` | `body` | `caption` | `small` | for |
+|---|---|---|---|---|---|---|---|
+| `compact` | 48 | 36 | 32 | 28 | 22 | 20 | dense slides, long lists |
+| `standard` | 56 | 42 | 36 | 32 | 24 | 20 | 16:9 video (the defaults) |
+| `large` | 66 | 50 | 44 | 38 | 30 | 26 | vertical/mobile video, accessibility |
+| `auto` | | | | | | | `large` when the video (`format`) is portrait (taller than 1:1.2), else `standard` |
+
+A scale is shorthand for those six `sizes` at the level where it is chosen: `theme.sizes`
+still override single sizes (`{scale: large, sizes: {title: 60}}`), a `scale` written under
+`theme:` replaces the preset's scale (and its `sizes` for those six tokens), and a preset's own
+`sizes` sit above its scale. Without any `scale` (in the config or the preset) the default is
+`auto`, so a `vertical` variant (`format: {width: 1080, height: 1920}`) automatically gets the
+larger text a phone needs, while 16:9 output is unchanged; write `scale: standard` to keep
+the old sizes in portrait. `auto` follows the variant's final `format` (a `--preview` render
+uses the same sizes, so previews show the final layout). Text never overflows because of a
+scale: built-in scenes fit text into their regions (wrapping, then shrinking).
+
+Changed in Step 17: portrait projects without a scale get `large` sizes (`auto`), and
+`high_contrast` uses `large` (was `caption: 26`, `small: 24`).
 
 ### Theme presets
 
@@ -126,21 +154,50 @@ Mind that values written in the base `theme:` also override the variant's preset
 `background: "#0E1116"` would keep a light variant dark): write in the base only what every
 variant shares, or select the default look with `preset: dark_tech` there instead.
 
-| preset | background | text / dim | accents (`accent`, `highlight`, `primary`, `secondary`, `tertiary`) | `surface` | palette | `code_style` | sizes |
+| preset | background | text / dim | accents (`accent`, `highlight`, `primary`, `secondary`, `tertiary`) | `surface` | palette | `code_style` | scale |
 |---|---|---|---|---|---|---|---|
-| `dark_tech` (the default look) | `#0E1116` | `#E8EAED` / `#838B98` | `#FF6B6B`, `#FFD166`, `#58C4DD`, `#F2A541`, `#83C167` | `#161B24` | `#58C4DD`, `#F2A541`, `#C792EA`, `#83C167` | `github-dark` | defaults |
-| `light_academic` | `#F8F7F3` (off-white) | `#1F2328` / `#59606B` | `#B42318`, `#A64B00`, `#1D4ED8`, `#C2410C`, `#15803D` | `#FFFFFF` | `#1D4ED8`, `#C2410C`, `#7E22CE`, `#15803D` | `xcode` | defaults |
-| `high_contrast` | `#000000` | `#FFFFFF` / `#C9CED6` | `#FF7A7A`, `#FFE14D`, `#4DD2FF`, `#FFAA4D`, `#7EE787` | `#141414` | `#4DD2FF`, `#FFAA4D`, `#D7A8FF`, `#7EE787` | `github-dark` | `caption: 26`, `small: 24` |
+| `dark_tech` (the default look) | `#0E1116` | `#E8EAED` / `#838B98` | `#FF6B6B`, `#FFD166`, `#58C4DD`, `#F2A541`, `#83C167` | `#161B24` | `#58C4DD`, `#F2A541`, `#C792EA`, `#83C167` | `github-dark` | `auto` |
+| `light_academic` | `#F8F7F3` (off-white) | `#1F2328` / `#59606B` | `#B42318`, `#A64B00`, `#1D4ED8`, `#C2410C`, `#15803D` | `#FFFFFF` | `#1D4ED8`, `#C2410C`, `#9D2F8F`, `#15803D` | `xcode` | `auto` |
+| `high_contrast` | `#000000` | `#FFFFFF` / `#C9CED6` | `#FF7A7A`, `#FFE14D`, `#4DD2FF`, `#FFAA4D`, `#7EE787` | `#141414` | `#4DD2FF`, `#FFAA4D`, `#FF8FD8`, `#7EE787` | `github-dark` | `large` |
+| `warm_editorial` | `#F6F0E4` (cream paper) | `#2B2118` / `#6A5A4A` | `#9B1D3A`, `#8F5700`, `#1F5E6E`, `#B4441B`, `#37704F` | `#FFFBF4` | `#1F5E6E`, `#B04A16`, `#8D4AAB`, `#1A7C4D`, `#8C2024` | `default` | `auto` |
+| `brand_neutral` | `#F4F5F7` (light grey) | `#15181D` / `#596270` | `#C42B3B`, `#A35200`, `#0B57C2`, `#4A5565`, `#0E7C66` | `#FFFFFF` | `#0B57C2`, `#C2410C`, `#08775A`, `#A04A8A`, `#5B6068` | `xcode` | `auto` |
+| `soft_pastel` | `#252238` (dusky plum) | `#F3EEFA` / `#B0A8C4` | `#F7879F`, `#FCE38A`, `#86BDFF`, `#FFC27F`, `#9BEBC9` | `#2C2843` | `#86BDFF`, `#FFC27F`, `#9E8BEF`, `#9BEBC9`, `#F7879F` | `zenburn` | `auto` |
+| `bold_neon` | `#0B0614` (violet-black) | `#F7F4FF` / `#A59CC2` | `#FF2E8B`, `#F4FF3A`, `#00C8FF`, `#FF8A1F`, `#39FF9C` | `#170F27` | `#00C8FF`, `#FF2E8B`, `#F4FF3A`, `#8C5BFF`, `#39FF9C` | `monokai` | `large` |
 
-All presets use the font Inter. Every built-in preset passes WCAG AA (tested): `text` and
-`dim` at least 4.5:1 on the background and on `surface`, the accent tokens and the palette at
-least 3:1 on the background (`high_contrast`: 7:1 for all of them). Projects can add their own
+What they are for: `dark_tech` technical explainers; `light_academic` papers and lectures;
+`high_contrast` accessibility; `warm_editorial` essays and storytelling; `brand_neutral` a quiet
+base for a company colour (`{preset: brand_neutral, colors: {primary: "#..."}}` or a project
+preset based on it); `soft_pastel` friendly tutorials; `bold_neon` short social clips.
+
+All presets use the font Inter for now (presets can already name fonts per role, see
+docs/EXTENDING.md; serif and mono families arrive with bundled fonts). Every built-in preset
+passes WCAG AA (tested): `text` and `dim` at least 4.5:1 on the background and on `surface`,
+the accent tokens at least 3:1 on the background and the palette at least 4.5:1 (charts label
+series in palette colours; `high_contrast`: 7:1 for all of them). The palettes are ordered and
+stay distinguishable for colour-blind viewers: every pair of colours differs by at least 7.5
+CIEDE2000 under normal vision and simulated protanopia, deuteranopia and tritanopia (except
+`dark_tech`, which keeps the historical default palette; its blue and purple are close for
+deuteranopes, so put them apart or use another preset when that matters). Projects can add their own
 presets (e.g. a brand look based on `light_academic`) with `register_theme_preset` in an
 extension (docs/EXTENDING.md); `vidgen validate` reports an unknown preset name, and
 `vidgen schema` lists the built-in and the project's presets.
 
+Changed in Step 17: the third palette colour of `light_academic` (`#7E22CE` → `#9D2F8F`) and
+`high_contrast` (`#D7A8FF` → `#FF8FD8`): the old purples were nearly identical to the blue for
+deuteranopes.
+
 Changed in Step 16: the default `dim` is `#838B98` (was `#6B7280`, 3.9:1 on the default
 background, below WCAG AA); dim captions, axis labels and sources are a little lighter.
+
+### `vidgen list-themes`
+
+`vidgen list-themes [PROJECT] [--json] [--swatches PNG]` lists every preset (built-in, then the
+project's own) with its resolved values in this project (background, colours, palette, font,
+`code_style`, scale and the sizes it gives here), the contrast check (minimum ratios, any
+failing pair), the palette's smallest colour difference and for which vision, and the type
+scales. `--swatches PNG` also writes a picture of all presets (one row each: name and
+description in its text colours, accent chips, a `surface` panel, the palette as bars), so an
+AI author can compare them by opening one image. JSON shape: [below](#vidgen-list-themes---json).
 
 ## Voice (`voice:`)
 
@@ -815,7 +872,7 @@ video; `vidgen render` does. It dispatches `post_scene` for the scenes it render
 
 ## JSON output (`--json`)
 
-`vidgen validate`, `vidgen list-scenes`, `vidgen render`, `vidgen schema`, `vidgen storyboard` and `vidgen lint` accept `--json`: stdout then holds
+`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen render`, `vidgen schema`, `vidgen storyboard` and `vidgen lint` accept `--json`: stdout then holds
 exactly one JSON document (ASCII-only, non-ASCII characters escaped), and everything else
 (progress, `warning:` lines, Manim output) goes to stderr. These shapes are meant for programs
 and AI agents driving vidgen. Without `--json` the human output is unchanged.
@@ -830,7 +887,7 @@ it. Times are seconds (floats), paths are absolute strings, absent values are `n
 |---|---|---|
 | `version` | int | schema version of the document (1) |
 | `vidgen` | str | vidgen package version |
-| `command` | str \| null | `validate`, `list-scenes`, `render`, `schema`, `storyboard`, `lint` (`null` if the command line could not be parsed) |
+| `command` | str \| null | `validate`, `list-scenes`, `list-themes`, `render`, `schema`, `storyboard`, `lint` (`null` if the command line could not be parsed) |
 | `ok` | bool | `true` on success; the exit code is 0 exactly when `ok` is true |
 | `warnings` | list | `{scene, message}`: vidgen warnings of the run (`scene` is `null`, or the scene whose render printed it) |
 | `error` | object | only when `ok` is false: `{kind, message, problems, details}` |
@@ -865,8 +922,10 @@ problems (with its `variant`) and the other variants are still checked.
 | `problems` | list | `{location, message, variant}` (as in `error.problems`); empty when the project is valid |
 | `audio` | list | one per audio folder (the base config's, plus each variant with its own, see [variant audio](#narration-audio-elevenlabs)): `{variant, dir, ok, stale, missing, orphaned, beats}`; `ok`/`stale`/`missing` are counts, `orphaned` the paths of MP3s no beat uses, `beats` lists `{scene, beat, state}` in video order with `state` `ok`, `stale` or `missing` |
 
-When there are problems, `error` is `{"kind": "error", "message": "video.yaml: invalid
-project ...", "problems": [same list], "details": {}}`. Problem `message`s are the text after
+`warnings` include the theme contrast warnings (`theme contrast: ...`, prefixed `[variant] `
+for a variant's own; they do not make `ok` false). When there are problems, `error` is
+`{"kind": "error", "message": "video.yaml: invalid project ...", "problems": [same list],
+"details": {}}`. Problem `message`s are the text after
 the location in the human output (`scenes[1].type: unknown scene type 'titel'; did you mean
 'title'? ...` → `location` `scenes[1].type`).
 
@@ -886,6 +945,25 @@ Each field: `name`; `type` (readable type as in the human listing: `str`, `list[
 `color`, `size`, `'all' | 'per_beat'`, ...); `required` (bool); `default` (JSON value, `null`
 when required); `doc` (the docstring under the field or its `Field(description=...)`, or
 `null`); `nested` (fields of `SceneParams` models used in the type, as `{model, fields}`).
+
+### `vidgen list-themes --json`
+
+| key | type | |
+|---|---|---|
+| `project` | str \| null | the project whose presets and registered defaults were used (`null`: built-ins only) |
+| `orientation` | str | `landscape`, `portrait` or `square`: the project's `format` (decides `auto`) |
+| `current` | object | the project's choice: `{preset, scale, scale_resolved}` (`preset` `null` without one) |
+| `presets` | list | every preset, built-in first, as below |
+| `type_scales` | object | `{scales: {name: {title, subtitle, heading, body, caption, small}}, auto: {orientation: scale}}` |
+| `swatches` | str \| null | the PNG written with `--swatches` |
+
+Each preset: `name`, `origin` (`builtin` or the extension file), `base`, `description`,
+`selected` (bool: the project's preset), and what selecting it gives in this project:
+`background`, `font`, `fonts` (role → family), `code_style`, `scale` (as set, e.g. `auto`),
+`scale_resolved`, `colors`, `palette`, `sizes`; `contrast` `{ok, min_text_ratio,
+min_graphic_ratio, failures}` (`failures`: messages like the validate warnings) and
+`palette_distinctness` `{normal, protanopia, deuteranopia, tritanopia}` (smallest CIEDE2000
+difference between two palette colours).
 
 ### `vidgen schema --json`
 

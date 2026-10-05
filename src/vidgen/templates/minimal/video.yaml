@@ -11,7 +11,8 @@ preview: {width: 854, height: 480, fps: 15}
 #     preview: {width: 480, height: 854}
 
 theme:
-  preset: dark_tech               # or light_academic, high_contrast (docs/CONFIG.md "Theme presets")
+  preset: dark_tech               # `vidgen list-themes` shows all (light_academic, warm_editorial, ...)
+  # scale: auto                   # type sizes: compact, standard, large; auto = large in vertical video
   font: Inter
   # colors: {accent: "#FF6B6B"}   # override or add color tokens
 

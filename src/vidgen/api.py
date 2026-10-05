@@ -67,11 +67,16 @@ def register_theme_preset(
     sizes: dict[str, float] | None = None,
     code_style: str | None = None,
     description: str = "",
+    scale: str | None = None,
+    fonts: dict[str, str] | None = None,
 ) -> None:
-    """Add a project theme preset, selectable with ``theme: {preset: NAME}`` (DESIGN.md §19).
+    """Add a project theme preset, selectable with ``theme: {preset: NAME}`` (DESIGN.md §19-20).
 
     Values left out come from ``base`` (a built-in or earlier registered preset), else from the
-    defaults; ``video.yaml`` values still win. Call at module level in an extension, e.g.
+    defaults; ``video.yaml`` values still win. ``scale`` is a type scale (``compact``,
+    ``standard``, ``large``, ``auto``) applied below ``sizes``; ``fonts`` names font families per
+    role (``heading``, ``mono``, ...), read by ``current_theme().font_for(role)``. Call at module
+    level in an extension, e.g.
     ``register_theme_preset("acme", base="light_academic", colors={"primary": "#0B5FFF"})``.
     """
     import sys
@@ -89,6 +94,8 @@ def register_theme_preset(
         colors=colors,
         palette=palette,
         sizes=sizes,
+        scale=scale,
+        fonts=fonts,
         origin=origin_of(sys._getframe(1).f_globals.get("__name__", "")),
     )
     current_theme().add_preset(preset)

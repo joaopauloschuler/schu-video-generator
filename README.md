@@ -8,8 +8,11 @@ subtitles.
 
 - **Config-only videos** with ten built-in scene types (title, bullets, charts, image, quote,
   equation, code, end card...), in landscape and vertical formats.
-- **Theme presets** (`theme: {preset: light_academic}`; also `dark_tech`, the default look, and
-  `high_contrast`), all WCAG AA; projects can register their own (e.g. a brand look).
+- **Theme presets** (`theme: {preset: warm_editorial}`; seven built in: `dark_tech`, the default
+  look, `light_academic`, `high_contrast`, `warm_editorial`, `brand_neutral`, `soft_pastel`,
+  `bold_neon`), all WCAG AA with colour-blind-safe palettes, and **type scales** (`compact`,
+  `standard`, `large`; vertical video gets `large` automatically); `vidgen list-themes
+  --swatches themes.png` shows them; projects can register their own (e.g. a brand look).
 - **Extensible per video**: a project can add its own scene types, helpers, theme tokens and
   pipeline hooks in its `extensions/` folder, without touching vidgen.
 - **Cheap to iterate**: only new or edited beats are sent to ElevenLabs; fast low-resolution
@@ -77,6 +80,7 @@ narration.
 | `vidgen init DIR [--example minimal]` | create a new project (DIR must not exist or be empty) |
 | `vidgen validate [PROJECT] [--json]` | load config and extensions, report every problem (also in every variant), estimated length, audio status |
 | `vidgen list-scenes [PROJECT] [--json]` | scene types (built-in and the project's) with their params |
+| `vidgen list-themes [PROJECT] [--swatches PNG] [--json]` | theme presets (built-in and the project's) with colours, type scale, contrast check; `--swatches` draws them all in one PNG |
 | `vidgen schema [PROJECT] [--scene TYPE \| --all] [--json]` | JSON Schema of `video.yaml` (params checked per scene type, the project's extension types included), for editors and AI agents |
 | `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--variant NAME]` | generate missing/stale narration into `audio/`; `--dry-run` needs no key |
 | `vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going] [--jobs N] [--frames] [--frames-per-beat N] [--json]` | render and join the video |

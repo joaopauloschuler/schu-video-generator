@@ -73,7 +73,7 @@ class ThemeConfig(_Strict):
     """
 
     preset: Identifier | None = None
-    """Theme preset (dark_tech, light_academic, high_contrast or a project preset); values set here win over it."""
+    """Theme preset (built-in: see `vidgen list-themes`, or a project preset); values set here win over it."""
     background: HexColor | None = None
     """Background color (hex); default: the preset's, else #0E1116."""
     font: str | None = Field(default=None, min_length=1)
@@ -86,6 +86,8 @@ class ThemeConfig(_Strict):
     """Ordered series colors (charts, groups); replaces the default palette."""
     sizes: dict[Identifier, Size] = Field(default_factory=dict)
     """Font size tokens (name: points) merged over the defaults; projects may add any name."""
+    scale: Literal["compact", "standard", "large", "auto"] | None = None
+    """Type scale (the six built-in sizes); default: the preset's, else auto (large in portrait video, else standard)."""
 
     @field_validator("code_style")
     @classmethod

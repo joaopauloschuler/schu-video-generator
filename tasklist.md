@@ -75,9 +75,9 @@ Rules that apply to every step:
 - [x] Test: every preset passes WCAG AA for text/dim/palette vs background
 
 ### Step 17 — Theme presets (4 more + type scales)
-- [ ] Presets: `warm_editorial`, `brand_neutral`, `soft_pastel`, `bold_neon`
-- [ ] Named type scales (`compact`, `standard`, `large`) selectable per theme
-- [ ] `vidgen list-themes [--json]`; storyboard of `examples/minimal` per preset checked in the step
+- [x] Presets: `warm_editorial`, `brand_neutral`, `soft_pastel`, `bold_neon`
+- [x] Named type scales (`compact`, `standard`, `large`) selectable per theme
+- [x] `vidgen list-themes [--json]`; storyboard of `examples/minimal` per preset checked in the step
 
 ### Step 18 — Bundled fonts
 - [ ] Ship three open-licensed families as package data with licences: Inter (sans), a serif (e.g. Source Serif 4), a mono (e.g. JetBrains Mono)

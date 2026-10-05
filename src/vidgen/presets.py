@@ -15,6 +15,7 @@ from types import MappingProxyType
 
 from vidgen.config import HEX_COLOR_PATTERN, ID_PATTERN
 from vidgen.errors import VidgenError
+from vidgen.scales import SCALE_CHOICES, TYPE_SCALES
 
 DEFAULT_BACKGROUND = "#0E1116"
 DEFAULT_FONT = "Inter"
@@ -30,14 +31,7 @@ DEFAULT_COLORS: dict[str, str] = {
     "surface": "#161B24",
 }
 DEFAULT_PALETTE: list[str] = ["#58C4DD", "#F2A541", "#C792EA", "#83C167"]
-DEFAULT_SIZES: dict[str, int | float] = {
-    "title": 56,
-    "subtitle": 42,
-    "heading": 36,
-    "body": 32,
-    "caption": 24,
-    "small": 20,
-}
+DEFAULT_SIZES: dict[str, int | float] = dict(TYPE_SCALES["standard"])
 
 
 @dataclass(frozen=True)
@@ -45,6 +39,8 @@ class ThemePreset:
     """A named set of theme values; ``None``/empty means "not set by this preset".
 
     Values not set fall through to ``base`` (another preset, if given), then to the defaults.
+    ``scale`` names a type scale (``vidgen.scales``) applied below ``sizes``; ``fonts`` maps font
+    roles (``heading``, ``mono``, ...) to families, read with ``Theme.font_for`` (DESIGN.md §20).
     Build one with :func:`make_preset`, which validates the values.
     """
 
@@ -57,6 +53,8 @@ class ThemePreset:
     colors: Mapping[str, str] = field(default_factory=dict)
     palette: tuple[str, ...] | None = None
     sizes: Mapping[str, int | float] = field(default_factory=dict)
+    scale: str | None = None
+    fonts: Mapping[str, str] = field(default_factory=dict)
     origin: str = "builtin"
 
 
@@ -89,6 +87,8 @@ def make_preset(
     colors: Mapping[str, str] | None = None,
     palette: Sequence[str] | None = None,
     sizes: Mapping[str, int | float] | None = None,
+    scale: str | None = None,
+    fonts: Mapping[str, str] | None = None,
     origin: str = "builtin",
 ) -> ThemePreset:
     """A validated :class:`ThemePreset`; bad values raise :class:`VidgenError`."""
@@ -110,6 +110,13 @@ def make_preset(
         raise VidgenError(f"{where}: palette must have at least one color")
     if font is not None and (not isinstance(font, str) or not font.strip()):
         raise VidgenError(f"{where}: font must be a font family name, got {font!r}")
+    for role, family in (fonts or {}).items():
+        if not isinstance(role, str) or not re.match(ID_PATTERN, role):
+            raise VidgenError(f"{where}: font role {role!r} must use only letters, digits and _")
+        if not isinstance(family, str) or not family.strip():
+            raise VidgenError(f"{where}: fonts.{role} must be a font family name, got {family!r}")
+    if scale is not None and scale not in SCALE_CHOICES:
+        raise VidgenError(f"{where}: unknown type scale {scale!r}; available: {', '.join(SCALE_CHOICES)}")
     if code_style is not None:
         try:
             check_code_style(code_style)
@@ -125,29 +132,39 @@ def make_preset(
         colors=MappingProxyType(dict(colors or {})),
         palette=tuple(palette) if palette is not None else None,
         sizes=MappingProxyType(dict(sizes or {})),
+        scale=scale,
+        fonts=MappingProxyType(dict(fonts or {})),
         origin=origin,
     )
 
 
+
+def _builtin(name: str, description: str, *, palette: Sequence[str], **values: object) -> ThemePreset:
+    """A built-in preset (validated like a project preset)."""
+    return make_preset(name, description=description, palette=palette, **values)  # type: ignore[arg-type]
+
+
 BUILTIN_PRESETS: Mapping[str, ThemePreset] = MappingProxyType(
     {
-        "dark_tech": ThemePreset(
-            name="dark_tech",
-            description="The default look: near-black background, light text, bright accents.",
-            background=DEFAULT_BACKGROUND,
-            font=DEFAULT_FONT,
-            code_style=DEFAULT_CODE_STYLE,
-            colors=MappingProxyType(dict(DEFAULT_COLORS)),
-            palette=tuple(DEFAULT_PALETTE),
-        ),
-        "light_academic": ThemePreset(
-            name="light_academic",
-            description="Paper-like off-white background, near-black text, deep ink accents.",
-            background="#F8F7F3",
-            font=DEFAULT_FONT,
-            code_style="xcode",
-            colors=MappingProxyType(
-                {
+        preset.name: preset
+        for preset in (
+            _builtin(
+                "dark_tech",
+                "The default look: near-black background, light text, bright accents.",
+                background=DEFAULT_BACKGROUND,
+                font=DEFAULT_FONT,
+                code_style=DEFAULT_CODE_STYLE,
+                colors=DEFAULT_COLORS,
+                palette=DEFAULT_PALETTE,
+                scale="auto",
+            ),
+            _builtin(
+                "light_academic",
+                "Paper-like off-white background, near-black text, deep ink accents.",
+                background="#F8F7F3",
+                font=DEFAULT_FONT,
+                code_style="xcode",
+                colors={
                     "text": "#1F2328",
                     "dim": "#59606B",
                     "accent": "#B42318",
@@ -156,18 +173,17 @@ BUILTIN_PRESETS: Mapping[str, ThemePreset] = MappingProxyType(
                     "secondary": "#C2410C",
                     "tertiary": "#15803D",
                     "surface": "#FFFFFF",
-                }
+                },
+                palette=("#1D4ED8", "#C2410C", "#9D2F8F", "#15803D"),
+                scale="auto",
             ),
-            palette=("#1D4ED8", "#C2410C", "#7E22CE", "#15803D"),
-        ),
-        "high_contrast": ThemePreset(
-            name="high_contrast",
-            description="Black background, white text, saturated accents (WCAG AAA 7:1) and larger small text.",
-            background="#000000",
-            font=DEFAULT_FONT,
-            code_style=DEFAULT_CODE_STYLE,
-            colors=MappingProxyType(
-                {
+            _builtin(
+                "high_contrast",
+                "Black background, white text, saturated accents (WCAG AAA 7:1) and the large type scale.",
+                background="#000000",
+                font=DEFAULT_FONT,
+                code_style=DEFAULT_CODE_STYLE,
+                colors={
                     "text": "#FFFFFF",
                     "dim": "#C9CED6",
                     "accent": "#FF7A7A",
@@ -176,10 +192,86 @@ BUILTIN_PRESETS: Mapping[str, ThemePreset] = MappingProxyType(
                     "secondary": "#FFAA4D",
                     "tertiary": "#7EE787",
                     "surface": "#141414",
-                }
+                },
+                palette=("#4DD2FF", "#FFAA4D", "#FF8FD8", "#7EE787"),
+                scale="large",
             ),
-            palette=("#4DD2FF", "#FFAA4D", "#D7A8FF", "#7EE787"),
-            sizes=MappingProxyType({"caption": 26, "small": 24}),
-        ),
+            _builtin(
+                "warm_editorial",
+                "Warm cream paper, espresso text, petrol and terracotta accents: a magazine feel.",
+                background="#F6F0E4",
+                font=DEFAULT_FONT,
+                code_style="default",
+                colors={
+                    "text": "#2B2118",
+                    "dim": "#6A5A4A",
+                    "accent": "#9B1D3A",
+                    "highlight": "#8F5700",
+                    "primary": "#1F5E6E",
+                    "secondary": "#B4441B",
+                    "tertiary": "#37704F",
+                    "surface": "#FFFBF4",
+                },
+                palette=("#1F5E6E", "#B04A16", "#8D4AAB", "#1A7C4D", "#8C2024"),
+                scale="auto",
+            ),
+            _builtin(
+                "brand_neutral",
+                "Light grey and white, graphite text, one blue: a neutral base for a brand colour.",
+                background="#F4F5F7",
+                font=DEFAULT_FONT,
+                code_style="xcode",
+                colors={
+                    "text": "#15181D",
+                    "dim": "#596270",
+                    "accent": "#C42B3B",
+                    "highlight": "#A35200",
+                    "primary": "#0B57C2",
+                    "secondary": "#4A5565",
+                    "tertiary": "#0E7C66",
+                    "surface": "#FFFFFF",
+                },
+                palette=("#0B57C2", "#C2410C", "#08775A", "#A04A8A", "#5B6068"),
+                scale="auto",
+            ),
+            _builtin(
+                "soft_pastel",
+                "Dusky plum background with soft pastel accents: calm and friendly.",
+                background="#252238",
+                font=DEFAULT_FONT,
+                code_style="zenburn",
+                colors={
+                    "text": "#F3EEFA",
+                    "dim": "#B0A8C4",
+                    "accent": "#F7879F",
+                    "highlight": "#FCE38A",
+                    "primary": "#86BDFF",
+                    "secondary": "#FFC27F",
+                    "tertiary": "#9BEBC9",
+                    "surface": "#2C2843",
+                },
+                palette=("#86BDFF", "#FFC27F", "#9E8BEF", "#9BEBC9", "#F7879F"),
+                scale="auto",
+            ),
+            _builtin(
+                "bold_neon",
+                "Violet-black background, electric cyan, magenta and yellow, large type: for social video.",
+                background="#0B0614",
+                font=DEFAULT_FONT,
+                code_style="monokai",
+                colors={
+                    "text": "#F7F4FF",
+                    "dim": "#A59CC2",
+                    "accent": "#FF2E8B",
+                    "highlight": "#F4FF3A",
+                    "primary": "#00C8FF",
+                    "secondary": "#FF8A1F",
+                    "tertiary": "#39FF9C",
+                    "surface": "#170F27",
+                },
+                palette=("#00C8FF", "#FF2E8B", "#F4FF3A", "#8C5BFF", "#39FF9C"),
+                scale="large",
+            ),
+        )
     }
 )

@@ -24,6 +24,7 @@ from manim import DOWN, LEFT, ORIGIN, RIGHT, UP, Mobject, Paragraph, Rectangle, 
 
 from vidgen.errors import VidgenError
 from vidgen.runtime import current_theme, has_context
+from vidgen.scales import Orientation, frame_orientation
 from vidgen.theme import Theme
 
 log = logging.getLogger(__name__)
@@ -35,7 +36,6 @@ MARGIN_Y = 0.5
 #: Default gap (Manim units) between neighbouring regions and grid cells.
 GAP = 0.3
 
-Orientation = Literal["landscape", "portrait", "square"]
 Fit = Literal["contain", "width", "height", "none"]
 
 #: Names accepted by :func:`region`.
@@ -70,11 +70,7 @@ def orientation(width: float | None = None, height: float | None = None) -> Orie
     """
     w = float(config.frame_width if width is None else width)
     h = float(config.frame_height if height is None else height)
-    if w > 1.2 * h:
-        return "landscape"
-    if h > 1.2 * w:
-        return "portrait"
-    return "square"
+    return frame_orientation(w, h)
 
 
 @dataclass(frozen=True)

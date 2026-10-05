@@ -181,7 +181,7 @@ class NarratedScene(Scene):
         self.project = project if project is not None else runtime.current_project()
         if theme is None:
             active = runtime.has_context() and runtime.current_project() is self.project
-            theme = runtime.current_theme() if active else Theme(self.project.config.theme)
+            theme = runtime.current_theme() if active else Theme.for_format(self.project.config.theme, self.project.config.format)
         self.theme = theme
         self.params = type(self).parse_params(spec.params, scene_id=spec.id, theme=self.theme)
         problem = type(self).check_beat_count(len(spec.beats))

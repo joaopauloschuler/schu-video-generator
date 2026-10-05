@@ -30,7 +30,7 @@ TEMPLATES_DIR = Path(__file__).parent / "templates"
 #: Template files copied as ``.<name>`` by ``vidgen init``.
 TEMPLATE_DOTFILES: tuple[str, ...] = ("gitignore",)
 #: Subcommands that accept ``--json``.
-JSON_COMMANDS: tuple[str, ...] = ("validate", "list-scenes", "render", "schema", "storyboard", "lint")
+JSON_COMMANDS: tuple[str, ...] = ("validate", "list-scenes", "list-themes", "render", "schema", "storyboard", "lint")
 
 #: What a command function returns: an exit code, or (with ``--json``) the JSON document.
 CommandResult = int | dict[str, Any]
@@ -162,6 +162,34 @@ def validate_all(
     return problems, variants
 
 
+def theme_warnings(project: Project) -> list[str]:
+    """The project theme's colour pairs below WCAG AA (``theme_contrast``), as messages; empty
+    when the theme cannot be resolved (an unknown preset is a problem, reported elsewhere)."""
+    from vidgen import extensions
+    from vidgen.lint.color import theme_contrast
+
+    try:
+        with extensions.project_session(project) as theme:
+            checks = theme_contrast(theme)
+    except VidgenError:
+        return []
+    return [f"theme contrast: {check}" for check in checks if not check.ok]
+
+
+def log_theme_warnings(project: Project, variants: dict[str, Project | None]) -> None:
+    """Log :func:`theme_warnings` of ``project`` and of every loaded variant (a variant's
+    warning that equals the base config's is not repeated)."""
+    log = logging.getLogger("vidgen")
+    base = theme_warnings(project)
+    for message in base:
+        log.warning(message)
+    for name, variant in variants.items():
+        if variant is not None:
+            for message in theme_warnings(variant):
+                if message not in base:
+                    log.warning("[%s] %s", name, message)
+
+
 def _invalid_project(project: Project, problems: list[Problem]) -> VidgenError:
     lines = [f"{project.config_file.name}: invalid project"]
     for problem in problems:
@@ -174,7 +202,8 @@ def cmd_validate(args: argparse.Namespace) -> CommandResult:
     if args.json:
         return _validate_json(args.project)
     project = Project.load(args.project)
-    problems, _ = validate_all(project)
+    problems, variants = validate_all(project)
+    log_theme_warnings(project, variants)
     if problems:
         raise _invalid_project(project, problems)
 
@@ -200,6 +229,7 @@ def _validate_json(path: str) -> dict[str, Any]:
     except VidgenError as exc:
         return jsonout.validate_document(None, exc.problems or [Problem("", str(exc))], {}, exc)
     problems, variants = validate_all(project, keep_going=True)
+    log_theme_warnings(project, variants)
     error = _invalid_project(project, problems) if problems else None
     return jsonout.validate_document(project, problems, variants, error)
 
@@ -359,6 +389,24 @@ def cmd_list_scenes(args: argparse.Namespace) -> CommandResult:
     return 0
 
 
+def cmd_list_themes(args: argparse.Namespace) -> CommandResult:
+    """Print every theme preset (built-in and the project's) with its values and checks."""
+    from vidgen import themelist
+
+    with redirect_stdout(sys.stderr), scene_types_session(args.project) as (project, theme):
+        entries = themelist.list_presets(theme)
+        orientation = theme.orientation
+        current = {"preset": theme.preset, "scale": theme.scale_setting, "scale_resolved": theme.scale}
+    swatches = themelist.render_swatches(entries, Path(args.swatches)) if args.swatches else None
+    if args.json:
+        return jsonout.list_themes_document(project, orientation, current, entries, themelist.scales_json(), swatches)
+    for line in themelist.summary_lines(entries, orientation):
+        print(line)
+    if swatches is not None:
+        print(f"swatches: {swatches}")
+    return 0
+
+
 def cmd_schema(args: argparse.Namespace) -> CommandResult:
     """Print the JSON Schema of video.yaml (or of one scene type's params, or of a scene)."""
     from vidgen import registry, schema
@@ -424,6 +472,11 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("list-scenes", help="list available scene types")
     project_arg(p)
     p.set_defaults(func=cmd_list_scenes)
+
+    p = sub.add_parser("list-themes", help="list theme presets (built-in and the project's) and type scales")
+    project_arg(p)
+    p.add_argument("--swatches", metavar="PNG", help="also write a swatch sheet of every preset to this PNG file")
+    p.set_defaults(func=cmd_list_themes)
 
     p = sub.add_parser("tts", help="generate narration audio")
     project_arg(p)

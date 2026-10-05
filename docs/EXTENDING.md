@@ -352,21 +352,30 @@ register_theme_preset(
     "acme",
     base="light_academic",                  # optional: values not given here come from it
     colors={"primary": "#0B5FFF", "accent": "#E4002B", "brand": "#0B5FFF"},
-    palette=["#0B5FFF", "#E4002B", "#7E22CE", "#15803D"],
+    palette=["#0B5FFF", "#E4002B", "#9D2F8F", "#15803D"],
+    scale="auto",                           # optional type scale: compact, standard, large, auto
     description="ACME corporate look",
 )
 ```
 
 Arguments (all optional except the name): `base`, `background`, `font`, `colors`, `palette`,
-`sizes`, `code_style` (a Pygments style), `description`. Names must not clash with a built-in
+`sizes`, `code_style` (a Pygments style), `scale` (type scale, docs/CONFIG.md "Type scales";
+applied below the preset's own `sizes`), `fonts` (font family per role, e.g. `{"heading":
+"Source Serif 4", "mono": "JetBrains Mono"}`), `description`. Font roles are a hook for scenes:
+`current_theme().font_for("heading")` returns the preset's family for the role, else the
+theme `font` (a `font` written in `video.yaml` wins over every role); built-in scenes do not
+read roles yet (planned with bundled fonts). Names must not clash with a built-in
 or another project preset. Full precedence, highest first: `video.yaml` `theme:` values > the
 selected preset (then its `base`) > `register_theme_defaults` > built-in defaults. So a preset
 chosen in the config overrides tokens an extension registered as defaults, but never what the
 config writes itself. Presets are resolved whenever a theme value is read, so register a preset
 before any module reads the theme at import time (extensions are imported in sorted file
 order) — otherwise that read fails with "unknown theme preset". Check a preset's contrast with
-`vidgen lint` on a render, or in a test: `vidgen.lint.color.theme_contrast(theme)` lists every
-text/dim/accent/palette pair with its WCAG ratio (`[c for c in ... if not c.ok]`).
+`vidgen list-themes` (contrast and colour-blind distinctness of every preset, `--swatches` for a
+picture), `vidgen lint` on a render, or in a test: `vidgen.lint.color.theme_contrast(theme)`
+lists every text/dim/accent/palette pair with its WCAG ratio (`[c for c in ... if not c.ok]`)
+and `vidgen.lint.color.palette_distinctness(palette)` the smallest CIEDE2000 difference per
+vision (normal, protanopia, deuteranopia, tritanopia; aim for 7.5 or more).
 
 ## 5. Hooks
 

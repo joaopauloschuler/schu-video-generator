@@ -71,7 +71,7 @@ def project_themes(project: Project | None, theme: Theme) -> list[Theme]:
             variant = Project.load(project.config_file, variant=name)
         except VidgenError:
             continue  # `vidgen validate` reports it
-        themes.append(theme.derive(variant.config.theme))
+        themes.append(theme.derive(variant.config.theme, variant.config.format))
     return themes
 
 

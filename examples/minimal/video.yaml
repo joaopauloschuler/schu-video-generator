@@ -7,6 +7,7 @@
 #   vidgen storyboard examples/minimal [--variant vertical]      # contact sheets of every beat (PNG)
 #   vidgen lint examples/minimal [--variant vertical]            # layout + timing checks (dead air, ...)
 #   vidgen storyboard examples/minimal --variant light           # same video with the light_academic preset
+#   vidgen list-themes examples/minimal --swatches build/themes.png  # every theme preset at a glance
 # There is no narration audio in this example, so beats are timed from their word count
 # (narration.words_per_second); run `vidgen tts` with an ElevenLabs key to voice it.
 title: "vidgen: the built-in scenes"
@@ -22,7 +23,15 @@ variants:
   light:                          # a theme preset per variant (docs/CONFIG.md "Theme presets")
     theme: {preset: light_academic}
   contrast:
-    theme: {preset: high_contrast}
+    theme: {preset: high_contrast}  # also the large type scale
+  editorial:
+    theme: {preset: warm_editorial}
+  neutral:
+    theme: {preset: brand_neutral, scale: compact}   # any preset with another type scale
+  pastel:
+    theme: {preset: soft_pastel}
+  neon:
+    theme: {preset: bold_neon}
 
 theme:
   preset: dark_tech   # the default look; values written here would override every variant's preset

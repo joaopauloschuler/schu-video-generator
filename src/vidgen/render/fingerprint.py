@@ -33,7 +33,7 @@ _PACKAGE_DIR = Path(__file__).resolve().parent.parent
 NOT_RENDER_INPUTS: frozenset[str] = frozenset(
     {
         "__main__.py", "cli.py", "describe.py", "jsonout.py", "lint", "schema.py", "sheets.py", "storyboard.py",
-        "render/fingerprint.py", "render/pipeline.py", "render/ffmpeg.py", "subtitles.py", "tts",
+        "render/fingerprint.py", "render/pipeline.py", "render/ffmpeg.py", "subtitles.py", "themelist.py", "tts",
     }
 )
 

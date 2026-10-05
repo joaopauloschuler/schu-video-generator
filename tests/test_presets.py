@@ -16,8 +16,19 @@ from vidgen.cli import main, project_problems
 from vidgen.config import ThemeConfig, parse_config
 from vidgen.errors import VidgenError
 from vidgen.lint import lint_project
-from vidgen.lint.color import ACCENT_TOKENS, GRAPHIC_RATIO, TEXT_RATIO, TEXT_TOKENS, theme_contrast
-from vidgen.presets import BUILTIN_PRESETS, DEFAULT_COLORS, make_preset
+from vidgen.lint.color import (
+    ACCENT_TOKENS,
+    GRAPHIC_RATIO,
+    TEXT_RATIO,
+    TEXT_TOKENS,
+    VISIONS,
+    contrast_ratio,
+    hex_rgb,
+    palette_distinctness,
+    theme_contrast,
+)
+from vidgen.presets import BUILTIN_PRESETS, DEFAULT_COLORS, DEFAULT_SIZES, make_preset
+from vidgen.scales import TYPE_SCALES
 from vidgen.project import Project
 from vidgen.theme import DEFAULT_PALETTE, Theme
 
@@ -32,7 +43,36 @@ def preset_theme(name: str | None, **config: object) -> Theme:
 
 
 def test_builtin_presets() -> None:
-    assert PRESETS == ["dark_tech", "high_contrast", "light_academic"]
+    assert PRESETS == [
+        "bold_neon", "brand_neutral", "dark_tech", "high_contrast", "light_academic", "soft_pastel", "warm_editorial",
+    ]
+
+
+def test_presets_are_visually_distinct() -> None:
+    """No two presets share a background, and their text/primary pairs differ."""
+    backgrounds = [BUILTIN_PRESETS[n].background for n in PRESETS]
+    assert len(set(backgrounds)) == len(PRESETS)
+    looks = {(p.colors["text"], p.colors["primary"], p.palette) for p in BUILTIN_PRESETS.values()}
+    assert len(looks) == len(PRESETS)
+
+
+@pytest.mark.parametrize("name", PRESETS)
+def test_palette_is_readable_as_text_and_ordered(name: str) -> None:
+    """Chart labels are drawn in palette colours, so every palette colour is text-grade (4.5:1)."""
+    preset = BUILTIN_PRESETS[name]
+    assert preset.palette is not None and 4 <= len(preset.palette) <= 6
+    background = hex_rgb(preset.background)
+    assert min(contrast_ratio(hex_rgb(c), background) for c in preset.palette) >= TEXT_RATIO
+    assert len(set(preset.palette)) == len(preset.palette)
+
+
+@pytest.mark.parametrize("name", [n for n in PRESETS if n != "dark_tech"])
+def test_palette_stays_distinct_for_colour_blind_viewers(name: str) -> None:
+    """Every pair of palette colours differs by CIEDE2000 >= 7.5 under normal vision and simulated
+    protanopia, deuteranopia and tritanopia (dark_tech keeps the historical default palette)."""
+    distinct = palette_distinctness(list(BUILTIN_PRESETS[name].palette or ()))
+    assert set(distinct) == set(VISIONS)
+    assert min(distinct.values()) >= 7.5, distinct
 
 
 @pytest.mark.parametrize("name", PRESETS)
@@ -55,10 +95,12 @@ def test_high_contrast_reaches_aaa() -> None:
 def test_preset_values_are_valid(name: str) -> None:
     p = BUILTIN_PRESETS[name]
     again = make_preset(p.name, description=p.description, base=p.base, background=p.background, font=p.font,
-                        code_style=p.code_style, colors=p.colors, palette=p.palette, sizes=p.sizes)
+                        code_style=p.code_style, colors=p.colors, palette=p.palette, sizes=p.sizes, scale=p.scale,
+                        fonts=p.fonts)
     assert again == p
     assert set(p.colors) == set(DEFAULT_COLORS), "built-in presets define every built-in color token"
-    assert p.background and p.font and p.code_style and p.palette
+    assert p.background and p.font and p.code_style and p.palette and p.scale and p.description
+    assert not p.sizes, "built-in presets size text with a type scale"
 
 
 def test_default_dim_passes_and_dark_tech_is_the_default_look() -> None:
@@ -105,14 +147,15 @@ def test_without_preset_registered_defaults_still_override_builtins() -> None:
     assert theme.preset is None and theme.preset_chain() == []
 
 
-def test_high_contrast_raises_small_sizes() -> None:
-    theme = preset_theme("high_contrast")
-    assert theme.size("small") == 24 and theme.size("caption") == 26 and theme.size("body") == 32
+def test_large_scale_presets() -> None:
+    for name in ("high_contrast", "bold_neon"):
+        theme = preset_theme(name)
+        assert theme.scale == "large" and theme.sizes == {**DEFAULT_SIZES, **TYPE_SCALES["large"]}
 
 
 def test_unknown_preset() -> None:
     theme = preset_theme("nope")
-    with pytest.raises(VidgenError, match="unknown theme preset 'nope'; known presets: dark_tech, high_contrast, light_academic"):
+    with pytest.raises(VidgenError, match="unknown theme preset 'nope'; known presets: bold_neon, brand_neutral, dark_tech, high_contrast"):
         theme.color("text")
     with pytest.raises(VidgenError, match="unknown theme preset"):
         _ = theme.background
@@ -153,6 +196,9 @@ def test_project_preset_without_base_falls_back_to_defaults() -> None:
         ({"name": "x", "sizes": {"body": 0}}, "size 'body' must be a positive number"),
         ({"name": "x", "code_style": "nope"}, "unknown code style 'nope'"),
         ({"name": "x", "font": ""}, "font must be a font family name"),
+        ({"name": "x", "scale": "huge"}, "unknown type scale 'huge'"),
+        ({"name": "x", "fonts": {"bad-role": "Inter"}}, "font role 'bad-role'"),
+        ({"name": "x", "fonts": {"heading": ""}}, r"fonts\.heading must be a font family name"),
     ],
 )
 def test_make_preset_rejects_bad_values(kwargs: dict, message: str) -> None:
@@ -230,7 +276,7 @@ def test_validate_reports_unknown_preset(make_project: Callable[..., Path], caps
     root = make_project(minimal_config(theme={"preset": "acme"}, variants={"v": {"theme": {"preset": "nope"}}}))
     problems = project_problems(Project.load(root))
     assert [p.location for p in problems] == ["theme.preset"]
-    assert "unknown theme preset 'acme'; known presets: dark_tech, high_contrast, light_academic" in problems[0].message
+    assert "unknown theme preset 'acme'; known presets: bold_neon, brand_neutral, dark_tech" in problems[0].message
     assert main(["validate", str(root), "--json"]) == 1
     doc = json.loads(capsys.readouterr().out)
     assert {(p["location"], p["variant"]) for p in doc["problems"]} == {("theme.preset", None), ("theme.preset", "v")}

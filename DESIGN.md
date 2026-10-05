@@ -47,7 +47,9 @@ src/vidgen/
   config.py               # pydantic v2 models for video.yaml (see §4)
   project.py              # Project: locate/load config, resolve paths, variants
   theme.py                # Theme object (colors, font, sizes, background, code style; precedence §19)
-  presets.py              # theme presets: built-in dark_tech / light_academic / high_contrast (§19)
+  presets.py              # theme presets: seven built-in presets (§19, §20)
+  scales.py               # type scales compact / standard / large / auto, frame orientation (§20)
+  themelist.py            # `vidgen list-themes`: preset listing, JSON entries, swatch PNG (§20)
   registry.py             # scene-type registry
   extensions.py           # discovery + import of project extensions
   hooks.py                # hook registry + dispatch
@@ -131,6 +133,7 @@ theme:
   background: "#0E1116"
   font: Inter
   code_style: github-dark                        # Pygments style of `code` listings (Step 16)
+  scale: auto                                    # type scale (Step 17, §20): compact/standard/large/auto
   colors:                                        # open dict; these names are the defaults
     text: "#E8EAED"
     dim: "#838B98"                               # Step 16 (was #6B7280, below WCAG AA)
@@ -419,7 +422,8 @@ current_project, T, MT`, generic helpers from `helpers.py`, and `from manim impo
 Step 5 adds `ThemeColor, ThemeSize`, the `vidgen.layout` helpers (§5.3) and pydantic's
 `Field, field_validator, model_validator`.
 Step 15 adds the layout regions (§18): `Region, frame_region, safe_area, region, grid, place,
-orientation, readable_size, readable_text`. Step 16 adds `register_theme_preset` (§19).
+orientation, readable_size, readable_text`. Step 16 adds `register_theme_preset` (§19); Step 17
+gives it the keyword arguments `scale` and `fonts` (§20).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -538,6 +542,7 @@ Refinements (Step 3):
 vidgen init <dir> [--example minimal]   # scaffold a project
 vidgen validate [PROJECT] [--json]      # load config + extensions, report all errors
 vidgen list-scenes [PROJECT] [--json]   # built-ins + extensions (+ which overrides)
+vidgen list-themes [PROJECT] [--swatches PNG] [--json]   # theme presets + type scales (§20)
 vidgen schema [PROJECT] [--scene TYPE | --all] [--json]   # JSON Schema of video.yaml (§12)
 vidgen tts [PROJECT] [--force] [--dry-run] [--beat ID ...] [--variant NAME]
 vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going]
@@ -1072,3 +1077,60 @@ using the existing renders of the others (missing ones are rendered). Exit code 
   `bullets` dims earlier items to `dimmed_opacity = 0.45` (was 0.4: a dimmed `primary` marker
   on `light_academic` was 1.9:1, under lint's 2:1 for de-emphasised text).
 
+## 20. Refinements (Step 17, more presets and type scales)
+
+- **Type scales** (`vidgen/scales.py`, manim-free): `TYPE_SCALES` `compact` (48/36/32/28/22/20
+  for title/subtitle/heading/body/caption/small), `standard` (56/42/36/32/24/20 = the built-in
+  `DEFAULT_SIZES`), `large` (66/50/44/38/30/26); `auto` = `AUTO_SCALES[orientation]` (`large`
+  for portrait, `standard` for landscape/square). `frame_orientation(w, h)` is the classifier
+  (`regions.orientation` now delegates to it). No scale goes below `small` 20 (the lint
+  `min_font` floor is ≈ 19.8 pt).
+- **Config**: `ThemeConfig.scale: Literal["compact", "standard", "large", "auto"] | None`;
+  presets gain `scale` and `fonts` (`ThemePreset`, `make_preset`, `register_theme_preset`).
+- **Theme orientation**: `Theme(config, *, orientation="landscape")`, `Theme.for_format(config,
+  fmt)` (used by `runtime.set_context` and `NarratedScene` with the project's **final**
+  `format`, so preview and final render share sizes), `derive(config, fmt=None)` (variants:
+  `schema.project_themes` passes the variant's format). `Theme.scale_setting` (as chosen),
+  `Theme.scale` (resolved).
+- **Size precedence**: a scale is shorthand for the six sizes at the level where it is chosen.
+  `Theme.sizes` = base, then registered extension sizes, then per preset in the chain (lowest
+  first) its scale's sizes then its `sizes`, then the config's scale's sizes, then the config's
+  `sizes`. The base is `DEFAULT_SIZES` when any level chooses a scale, else the `auto` scale for
+  the orientation — so with no scale anywhere, extension defaults still override the built-in
+  sizes (as in Step 16), while a chosen scale overrides them for the six scale tokens (like a
+  preset's colours override extension colour defaults). **Visible change**: portrait projects
+  that choose no scale get `large` sizes (was standard); landscape output is unchanged.
+  Built-in scenes fit text into regions, so larger sizes wrap/shrink rather than overflow
+  (checked: storyboard + lint of examples/minimal `--variant vertical`, render test at 9:16).
+- **Font roles hook**: `ThemePreset.fonts` (role → family, roles are identifiers);
+  `Theme.fonts` merges the chain, `Theme.font_for(role)` = `video.yaml` `font` if written, else
+  the chain's family for the role, else `Theme.font`. No built-in preset sets roles and no
+  built-in scene reads them yet (Step 18 bundles serif/mono fonts and wires them).
+- **Presets**: `BUILTIN_PRESETS` (built through `make_preset`, so validated at import) adds
+  `warm_editorial` (cream `#F6F0E4`, espresso text, petrol/terracotta, Pygments `default`),
+  `brand_neutral` (grey `#F4F5F7` with white `surface`, graphite text, one blue, `xcode`),
+  `soft_pastel` (dusky plum `#252238`, pastel accents, `zenburn`) and `bold_neon`
+  (violet-black `#0B0614`, cyan/magenta/yellow, `monokai`, scale `large`). Every built-in preset
+  sets a `scale` (`auto`, `high_contrast` and `bold_neon` `large`) and no `sizes`;
+  `high_contrast` dropped its `caption: 26, small: 24` for `large`. Values: docs/CONFIG.md table
+  (test keeps it in sync). Code styles were chosen so every Python token colour reaches 4.5:1
+  on the preset's `surface`.
+- **Palettes**: 4–6 ordered colours; every built-in palette colour reaches 4.5:1 on its
+  background (charts draw series labels in palette colours; the first draft of the light
+  presets got lint `contrast` warnings on line-chart labels at 3.9:1). Colour-blind check
+  `vidgen.lint.color.palette_distinctness(palette) -> {vision: min CIEDE2000}` for `normal` and
+  simulated `protanopia`/`deuteranopia`/`tritanopia` (Machado et al. 2009 full-severity
+  matrices on linear RGB; `simulate_cvd`, `lab`, `delta_e` = CIEDE2000). Built-in presets
+  except `dark_tech` reach ≥ 7.5 under all four (tested); `light_academic` and `high_contrast`
+  changed their third colour to reach it (deuteranopia 2.5 → 11.9 and 0.4 → 8.8); `dark_tech`
+  keeps the historical default palette (deuteranopia 4.7) so default output does not change.
+- **`vidgen list-themes [PROJECT] [--swatches PNG] [--json]`** (`themelist.py`, not a render
+  input): per preset (built-in then project) `preset_entry`: values resolved in the project
+  (`Theme.derive(ThemeConfig(preset=name))`, so registered defaults and the project's
+  orientation apply), `theme_contrast` summary and `palette_distinctness`; plus the type scales.
+  JSON: Step 8 envelope, command `list-themes`, documented in docs/CONFIG.md. `--swatches`
+  draws one 1280x190 row per preset with Pillow (name/description in its text colours, accent
+  chips, `surface` panel, palette bars).
+- **`vidgen validate`** logs `theme_contrast` failures of the project's theme (and of each
+  variant's, prefixed `[variant]`, unless equal to the base's) as warnings: stderr
+  `warning: theme contrast: ...`, JSON `warnings`; they never fail validation.

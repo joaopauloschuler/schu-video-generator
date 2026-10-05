@@ -1323,3 +1323,112 @@ Known gaps / TODOs (Step 17+)
 How to test: `/home/claude/venv/bin/python -m pytest -q` (618 passed, 1 skipped). Presets only:
 `pytest tests/test_presets.py`. Manual: `vidgen storyboard examples/minimal --variant light`,
 `vidgen lint examples/minimal --variant contrast`, `vidgen schema examples/minimal`.
+
+## Step 17 — Theme presets (4 more + type scales)
+What was built
+- Four built-in presets (`src/vidgen/presets.py`): `warm_editorial` (cream paper `#F6F0E4`,
+  espresso text, petrol/terracotta/oxblood, Pygments `default`), `brand_neutral` (grey
+  `#F4F5F7`, white `surface`, graphite text, one blue — a base for a brand colour, `xcode`),
+  `soft_pastel` (dusky plum `#252238`, pastel accents, `zenburn`), `bold_neon` (violet-black
+  `#0B0614`, cyan/magenta/yellow, `monokai`, `large` scale). Each defines all 8 colour tokens,
+  an ordered 5-colour palette, `code_style`, `scale` and a description. Code styles were picked
+  by measuring every Python token colour against the preset's `surface` (≥ 4.5:1).
+- Type scales (`src/vidgen/scales.py`): `compact` 48/36/32/28/22/20, `standard` 56/42/36/32/24/20
+  (= the old defaults), `large` 66/50/44/38/30/26, and `auto` (= `large` when the final `format`
+  is portrait, else `standard`). `theme: {scale: NAME}` in the config, `scale` on presets
+  (`ThemePreset`, `make_preset`, `register_theme_preset`); `sizes` still override single sizes.
+  With no scale anywhere the default is `auto`, so vertical variants get larger text by default.
+- `Theme` knows its orientation: `Theme(config, orientation=...)`, `Theme.for_format(config,
+  fmt)` (runtime context + `NarratedScene`), `derive(config, fmt)`; `scale_setting`, `scale`.
+- Font-role hook: `ThemePreset.fonts` / `register_theme_preset(fonts=...)`, `Theme.fonts`,
+  `Theme.font_for(role)` (config `font` > preset role > `font`). Not read by scenes yet.
+- Colour-vision check (`src/vidgen/lint/color.py`): `simulate_cvd` (Machado 2009 matrices),
+  `lab`, `delta_e` (CIEDE2000), `palette_distinctness(palette)` → min ΔE per vision. All
+  built-in palettes except `dark_tech` ≥ 7.5 under normal/protan/deutan/tritan (tested; new
+  presets 8.7–10.9 min). `light_academic` and `high_contrast` third palette colour changed (their
+  purples matched the blue for deuteranopes: 2.5 → 11.9 and 0.4 → 8.8).
+- `vidgen list-themes [PROJECT] [--swatches PNG] [--json]` (`src/vidgen/themelist.py`): every
+  preset (built-in + project) with resolved colours/palette/sizes/scale in this project, contrast
+  summary, palette distinctness, and the scale table; `--swatches` writes a 1280 px PNG, one row
+  per preset (looked at during the step: all seven read clearly and look distinct).
+- `vidgen validate` warns (stderr `warning: theme contrast: ...`, JSON `warnings`; never fails)
+  when the project's theme or a variant's own theme has a pair below WCAG AA.
+- `examples/minimal`: variants `editorial`, `neutral` (`brand_neutral` + `scale: compact`),
+  `pastel`, `neon` and a `list-themes --swatches` usage line; init template mentions
+  `list-themes` and `scale`.
+
+Verification (examples/minimal, preview, every preset storyboarded and the sheets opened)
+| variant (preset, scale) | lint findings | notes |
+|---|---|---|
+| default (`dark_tech`, auto=standard) | 2 warnings | pre-existing: `bar_chart` caption `min_font`, `image` caption `safe_area` |
+| `light` (`light_academic`) | 2 warnings | same two |
+| `contrast` (`high_contrast`, large) | 1 warning | `safe_area` only (large caption clears `min_font`) |
+| `editorial` (`warm_editorial`) | 2 warnings | same two; first draft had +1 `contrast` (line-chart label in palette `#D24A1E`, 3.9:1) → palettes of light presets made text-grade |
+| `neutral` (`brand_neutral`, compact) | 2 warnings | same two (first draft +1 `contrast` like editorial) |
+| `pastel` (`soft_pastel`) | 2 warnings | same two |
+| `neon` (`bold_neon`, large) | 1 warning | `safe_area` only |
+| `vertical` (`dark_tech`, auto=large) | 1 warning | `safe_area` only (was 2; `min_font` gone). Title, bullets, quote, end card visibly larger, nothing overflows |
+`examples/custom_scene`: 0 findings in 16:9 and 9:16 (vertical now `large`; checked its sheet).
+`examples/kphi3` validate now prints two `theme contrast` warnings (its own `dim: "#6B7280"`,
+kept for fidelity to the original video, as in Step 16).
+
+Files
+- New: `src/vidgen/scales.py`, `src/vidgen/themelist.py`, `tests/test_scales.py` (15 tests, one
+  9:16 render with `bold_neon`/large linted for off-frame/safe-area/overlap).
+- Changed: `presets.py` (4 presets, `scale`/`fonts`, built-ins via `make_preset`,
+  `DEFAULT_SIZES` from the standard scale, 2 palette fixes), `theme.py` (orientation, scale
+  layering, fonts), `config.py` (`ThemeConfig.scale`), `runtime.py`, `scene.py`, `schema.py`
+  (themes per format), `regions.py` (`orientation` delegates to `scales.frame_orientation`),
+  `lint/color.py` (CVD helpers), `cli.py` (`list-themes`, theme warnings in `validate`),
+  `jsonout.py` (`list_themes_document`), `api.py` (`register_theme_preset(scale=, fonts=)`),
+  `render/fingerprint.py` (`themelist.py` not a render input), `templates/minimal/video.yaml`,
+  `examples/minimal/video.yaml`, `tests/test_presets.py`, DESIGN.md (§2, §4, §6.4, §8, new §20),
+  docs/CONFIG.md (Theme: `scale`, "Type scales", presets table + what each is for, colour-blind
+  note, `vidgen list-themes`, JSON shape), docs/EXTENDING.md (preset `scale`/`fonts`, checks),
+  README, tasklist.md.
+
+Public interfaces added/changed
+- Config: `theme.scale` (`compact|standard|large|auto`, additive). CLI: `vidgen list-themes`
+  (JSON command `list-themes`, envelope v1). `vidgen validate` may print `warning:` lines.
+- `vidgen.api.register_theme_preset(..., scale=None, fonts=None)` (keyword additions).
+- `vidgen.theme.Theme`: `orientation`, `for_format`, `derive(config, fmt=None)`, `scale`,
+  `scale_setting`, `fonts`, `font_for`. `vidgen.presets.ThemePreset.scale/.fonts`.
+  `vidgen.scales`: `TYPE_SCALES`, `SCALE_TOKENS`, `SCALE_CHOICES`, `AUTO_SCALES`,
+  `DEFAULT_SCALE`, `frame_orientation`, `resolve_scale`, `scale_sizes`, `Orientation`.
+  `vidgen.lint.color`: `simulate_cvd`, `lab`, `delta_e`, `palette_distinctness`, `VISIONS`,
+  `CVD_MATRICES`. `vidgen.cli.theme_warnings`, `log_theme_warnings`.
+
+Decisions / deviations
+- **`auto` is the default scale (visible change in portrait)**: the task asked for scale-aware
+  defaults for vertical variants; vertical stills before this step had 19–22 px text on a 480 px
+  wide preview. Landscape/square output is unchanged; `scale: standard` restores the old portrait
+  sizes. `auto` follows the final `format`, so preview and final match.
+- **Scale = shorthand at its level** (see DESIGN §20): a scale chosen anywhere overrides
+  extension size defaults for the six scale tokens (consistent with preset colours overriding
+  extension colour defaults); with no scale chosen, extension defaults still win as in Step 16.
+- `high_contrast` now uses `large` instead of `caption 26 / small 24` (bigger everywhere).
+- Built-in palettes are text-grade (≥ 4.5:1), stricter than the 3:1 `theme_contrast` checks,
+  because charts write series labels in palette colours (lint caught it). Tested.
+- `dark_tech` palette left as is (deuteranopia min ΔE 4.7) to keep default output stable;
+  documented in CONFIG.md.
+- Font roles are a hook only: no preset sets them and no scene reads them until Step 18.
+- Theme warnings in `validate` are warnings, not problems: a project may choose colours
+  deliberately (kphi3).
+
+Known gaps / TODOs
+- Step 18: bundle serif/mono, give `warm_editorial`/`light_academic` a serif heading role and
+  `code` a mono role via `font_for`.
+- `code` listings in portrait wrap more with `large` (`caption` 30 → ~25 columns in the example);
+  readable but more broken lines. A code-specific size cap for portrait could be considered in
+  Step 22 or Step 32 (`code_walkthrough`).
+- Chart axis labels / tick labels use fixed fractions rather than size tokens in places, so they
+  grow less than titles with `large`; Step 30 (chart helpers) can route them through the scale.
+- `vidgen lint` still does not run `theme_contrast` (validate does).
+- `list-themes` shows presets with the project's orientation; a variant with another orientation
+  is not listed separately (`--json` `current` is the base config's).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (662 passed, 1 skipped). Step only:
+`pytest tests/test_scales.py tests/test_presets.py`. Manual: `vidgen list-themes examples/minimal
+--swatches build/themes.png`, `vidgen storyboard examples/minimal --variant neon`, `vidgen lint
+examples/minimal --variant vertical`, `vidgen validate examples/kphi3` (theme warnings).
+
