@@ -9,8 +9,8 @@ AI agent can check a config before running ``vidgen validate``:
   beat count (``beat_count``) becomes ``minItems``/``maxItems`` of ``beats``;
 - theme color/size params (``ThemeColor``/``ThemeSize``, marked ``x-vidgen-theme``) accept a
   hex color / positive number or one of the theme's token names (base config and variants);
-  icon params (``IconName``, ``x-vidgen-theme: icon``) one of the icon names (built-in and the
-  project's ``assets/icons``);
+  icon params (``IconName``, ``x-vidgen-theme: icon``) one of the icon names or aliases
+  (built-in and the project's ``assets/icons``);
 - the silent-scene rule (``duration`` iff no beats), even ``width``/``height``, optional beat
   ids and the bodies of ``variants`` (partial configs) are expressed too.
 
@@ -47,7 +47,7 @@ _REF_PREFIX = "#/$defs/"
 def theme_tokens(themes: Iterable[Theme]) -> dict[str, list[str]]:
     """``{"color": [...], "size": [...], "icon": [...]}``: the token names defined in any of
     ``themes`` and the icons of the active project (built-ins without one)."""
-    from vidgen.icons import active_icons, builtin_icons
+    from vidgen.icons import active_icons, builtin_icons, icon_names
 
     colors: set[str] = set()
     sizes: set[str] = set()
@@ -58,9 +58,9 @@ def theme_tokens(themes: Iterable[Theme]) -> dict[str, list[str]]:
         except VidgenError:  # unknown preset: `vidgen validate` reports it
             continue
     try:
-        icons = sorted(active_icons())
+        icons = icon_names(active_icons())
     except VidgenError:  # a broken project icon folder: `vidgen validate` reports it
-        icons = sorted(builtin_icons())
+        icons = icon_names(builtin_icons())
     return {"color": sorted(colors), "size": sorted(sizes), "icon": icons}
 
 

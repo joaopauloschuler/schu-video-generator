@@ -15,7 +15,8 @@ subtitles.
   --swatches themes.png` shows them; projects can register their own (e.g. a brand look).
 - **Bundled fonts**: Inter, Source Serif 4 and JetBrains Mono NL ship with vidgen (no install);
   presets pick them per role (serif headings in `light_academic` and `warm_editorial`).
-- **Icons**: a built-in set of line icons (Lucide, ISC) in eight categories, recoloured by the
+- **Icons**: 200 built-in line icons (Lucide, ISC) in eight categories
+  ([catalogue](docs/ICONS.md)), searchable by concept, recoloured by the
   theme and crisp at any size; `vidgen list-icons --search chart --sheet icons.png` finds and
   shows them; a project adds or replaces icons with SVGs in `assets/icons/`.
 - **Extensible per video**: a project can add its own scene types, helpers, theme tokens and

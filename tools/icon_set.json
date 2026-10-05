@@ -7,64 +7,223 @@
       "server",
       "cloud",
       "code",
-      "smartphone"
+      "smartphone",
+      "laptop",
+      "monitor",
+      "terminal",
+      "wifi",
+      "lock",
+      "shield-check",
+      "key-round",
+      "bug",
+      "git-branch",
+      "hard-drive",
+      "memory-stick",
+      "router",
+      "network",
+      "globe",
+      "bot",
+      "brain-circuit",
+      "binary",
+      "keyboard",
+      "battery-full",
+      "plug"
     ],
     "data": [
       "database",
       "chart-column",
       "chart-line",
       "chart-pie",
-      "chart-scatter"
+      "chart-scatter",
+      "chart-area",
+      "chart-bar",
+      "chart-spline",
+      "chart-column-stacked",
+      "chart-candlestick",
+      "chart-network",
+      "chart-gantt",
+      "table",
+      "file-spreadsheet",
+      "funnel",
+      "sigma",
+      "percent",
+      "gauge",
+      "activity",
+      "layers",
+      "folder",
+      "calculator",
+      "variable",
+      "workflow",
+      "grid-3x3"
     ],
     "science": [
       "atom",
       "flask-conical",
+      "flask-round",
+      "test-tube",
       "microscope",
       "dna",
-      "zap"
+      "zap",
+      "magnet",
+      "telescope",
+      "orbit",
+      "rocket",
+      "satellite",
+      "thermometer",
+      "radiation",
+      "biohazard",
+      "flame",
+      "pill",
+      "syringe",
+      "stethoscope",
+      "pi",
+      "infinity",
+      "radical",
+      "square-function",
+      "axis-3d",
+      "virus"
     ],
     "business": [
       "briefcase",
       "trending-up",
+      "trending-down",
       "target",
       "handshake",
-      "dollar-sign"
+      "dollar-sign",
+      "coins",
+      "wallet",
+      "credit-card",
+      "piggy-bank",
+      "banknote",
+      "receipt",
+      "shopping-cart",
+      "store",
+      "building-complex",
+      "factory",
+      "landmark",
+      "award",
+      "trophy",
+      "megaphone",
+      "scale",
+      "package",
+      "truck",
+      "flag",
+      "clipboard-list"
     ],
     "people": [
       "user",
       "users",
       "user-check",
+      "user-plus",
+      "user-x",
       "message-circle",
-      "brain"
+      "messages-square",
+      "brain",
+      "baby",
+      "person-standing",
+      "accessibility",
+      "heart",
+      "heart-pulse",
+      "hand",
+      "hand-heart",
+      "thumbs-up",
+      "thumbs-down",
+      "face-slightly-smiling",
+      "face-slightly-frowning",
+      "eye",
+      "ear",
+      "mail",
+      "phone",
+      "id-card",
+      "footprints"
     ],
     "ui": [
       "arrow-right",
+      "arrow-left",
+      "arrow-up",
+      "arrow-down",
+      "arrow-up-right",
+      "arrow-left-right",
       "refresh-cw",
       "check",
       "x",
-      "search"
+      "plus",
+      "search",
+      "settings",
+      "play",
+      "pause",
+      "circle-check",
+      "triangle-alert",
+      "info",
+      "circle-question-mark",
+      "bell",
+      "calendar",
+      "clock",
+      "house",
+      "star",
+      "download",
+      "link"
     ],
     "nature": [
       "leaf",
       "sun",
       "droplet",
       "mountain",
-      "tree-pine"
+      "tree-pine",
+      "tree-deciduous",
+      "moon",
+      "cloud-rain",
+      "cloud-lightning",
+      "cloud-sun",
+      "snowflake",
+      "wind",
+      "rainbow",
+      "sprout",
+      "flower",
+      "earth",
+      "waves-horizontal",
+      "sunrise",
+      "tornado",
+      "bird",
+      "fish",
+      "paw-print",
+      "rabbit",
+      "shell",
+      "recycle"
     ],
     "education": [
       "book-open",
+      "book",
+      "book-bookmark",
+      "library",
       "graduation-cap",
       "lightbulb",
       "pencil",
-      "presentation"
+      "notebook-pen",
+      "presentation",
+      "school",
+      "backpack",
+      "ruler",
+      "eraser",
+      "highlighter",
+      "file-text",
+      "clipboard-check",
+      "list-checks",
+      "puzzle",
+      "languages",
+      "palette",
+      "music",
+      "shapes",
+      "scroll",
+      "hourglass",
+      "quote"
     ]
   },
   "extra_tags": {
-    "cloud": [
-      "computing",
-      "internet",
-      "hosting",
-      "online"
+    "cpu": [
+      "hardware",
+      "processing",
+      "compute"
     ],
     "server": [
       "computer",
@@ -72,54 +231,1012 @@
       "hardware",
       "data center"
     ],
+    "cloud": [
+      "computing",
+      "internet",
+      "hosting",
+      "online"
+    ],
     "code": [
       "software",
       "developer",
       "coding"
     ],
+    "smartphone": [
+      "app"
+    ],
+    "laptop": [
+      "device",
+      "work"
+    ],
+    "monitor": [
+      "computer screen"
+    ],
+    "terminal": [
+      "console",
+      "cli",
+      "script"
+    ],
+    "wifi": [
+      "internet",
+      "network",
+      "online",
+      "connectivity"
+    ],
+    "lock": [
+      "privacy",
+      "encryption",
+      "protected"
+    ],
+    "shield-check": [
+      "security",
+      "safe",
+      "trust"
+    ],
+    "key-round": [
+      "access",
+      "credentials",
+      "encryption"
+    ],
+    "bug": [
+      "glitch",
+      "failure"
+    ],
+    "git-branch": [
+      "branch",
+      "fork",
+      "version"
+    ],
+    "hard-drive": [
+      "disk drive"
+    ],
+    "memory-stick": [
+      "hardware"
+    ],
+    "router": [
+      "network",
+      "internet",
+      "connectivity"
+    ],
+    "network": [
+      "topology",
+      "connections",
+      "nodes",
+      "hierarchy",
+      "structure"
+    ],
+    "globe": [
+      "internet",
+      "web",
+      "global",
+      "international",
+      "worldwide"
+    ],
+    "bot": [
+      "automation",
+      "chatbot",
+      "artificial intelligence"
+    ],
+    "brain-circuit": [
+      "neural network",
+      "model",
+      "intelligence"
+    ],
+    "binary": [
+      "bits",
+      "digital",
+      "data"
+    ],
+    "keyboard": [
+      "typing",
+      "input",
+      "computer"
+    ],
+    "battery-full": [
+      "battery",
+      "full"
+    ],
+    "plug": [
+      "connect",
+      "integration"
+    ],
+    "database": [
+      "data",
+      "records",
+      "sql",
+      "table"
+    ],
+    "chart-column": [
+      "bar chart",
+      "column chart",
+      "compare",
+      "comparison"
+    ],
+    "chart-line": [
+      "line chart",
+      "trend",
+      "time series",
+      "over time"
+    ],
+    "chart-pie": [
+      "pie chart",
+      "share",
+      "proportion",
+      "breakdown",
+      "percentage"
+    ],
+    "chart-scatter": [
+      "scatter plot",
+      "correlation",
+      "points",
+      "data points"
+    ],
+    "chart-area": [
+      "area chart",
+      "volume",
+      "cumulative"
+    ],
+    "chart-bar": [
+      "horizontal bar chart",
+      "ranking",
+      "compare"
+    ],
+    "chart-spline": [
+      "smooth curve",
+      "fit",
+      "regression"
+    ],
+    "chart-column-stacked": [
+      "stacked bar chart",
+      "composition",
+      "breakdown"
+    ],
+    "chart-candlestick": [
+      "stock market",
+      "finance"
+    ],
+    "chart-network": [
+      "graph theory",
+      "relationships",
+      "network"
+    ],
+    "chart-gantt": [
+      "schedule",
+      "project plan",
+      "roadmap"
+    ],
+    "table": [
+      "data",
+      "rows",
+      "columns"
+    ],
+    "file-spreadsheet": [
+      "excel",
+      "csv",
+      "data"
+    ],
+    "funnel": [
+      "conversion",
+      "narrowing",
+      "pipeline"
+    ],
+    "sigma": [
+      "summation",
+      "total",
+      "statistics"
+    ],
+    "percent": [
+      "rate",
+      "ratio",
+      "proportion"
+    ],
+    "gauge": [
+      "performance",
+      "kpi",
+      "metric"
+    ],
+    "activity": [
+      "signal",
+      "monitoring",
+      "metrics",
+      "heartbeat"
+    ],
+    "layers": [
+      "levels",
+      "abstraction",
+      "architecture",
+      "tiers"
+    ],
+    "folder": [
+      "files",
+      "organize"
+    ],
+    "calculator": [
+      "math",
+      "arithmetic",
+      "compute"
+    ],
+    "variable": [
+      "function",
+      "math"
+    ],
+    "workflow": [
+      "process",
+      "pipeline",
+      "flowchart",
+      "steps"
+    ],
+    "grid-3x3": [
+      "matrix",
+      "grid",
+      "cells"
+    ],
+    "atom": [
+      "science",
+      "quantum"
+    ],
+    "flask-conical": [
+      "science",
+      "laboratory",
+      "research"
+    ],
+    "flask-round": [
+      "science",
+      "laboratory",
+      "potion"
+    ],
+    "test-tube": [
+      "science",
+      "laboratory",
+      "sample"
+    ],
+    "microscope": [
+      "laboratory",
+      "biology",
+      "small"
+    ],
+    "dna": [
+      "genetics",
+      "biology",
+      "genome",
+      "life"
+    ],
+    "zap": [
+      "fast",
+      "speed",
+      "instant",
+      "electric"
+    ],
+    "magnet": [
+      "attraction",
+      "attract",
+      "magnetism",
+      "physics"
+    ],
+    "telescope": [
+      "science",
+      "observation"
+    ],
+    "orbit": [
+      "astronomy",
+      "solar system",
+      "gravity"
+    ],
+    "rocket": [
+      "startup",
+      "growth",
+      "fast",
+      "space travel"
+    ],
+    "satellite": [
+      "space",
+      "communication",
+      "gps"
+    ],
+    "thermometer": [
+      "heat",
+      "climate",
+      "measure"
+    ],
+    "radiation": [
+      "danger",
+      "energy"
+    ],
+    "biohazard": [
+      "danger",
+      "hazard",
+      "toxic"
+    ],
+    "flame": [
+      "energy",
+      "hot",
+      "combustion"
+    ],
+    "pill": [
+      "health",
+      "treatment",
+      "pharmaceutical"
+    ],
+    "syringe": [
+      "vaccine",
+      "injection",
+      "health"
+    ],
+    "stethoscope": [
+      "doctor",
+      "health",
+      "diagnosis"
+    ],
+    "pi": [
+      "math",
+      "mathematics",
+      "circle"
+    ],
+    "infinity": [
+      "endless",
+      "limitless",
+      "eternal"
+    ],
+    "radical": [
+      "square root",
+      "mathematics"
+    ],
+    "square-function": [
+      "function",
+      "formula"
+    ],
+    "axis-3d": [
+      "3d",
+      "space",
+      "dimensions",
+      "geometry",
+      "vectors"
+    ],
+    "virus": [
+      "health"
+    ],
+    "briefcase": [
+      "business",
+      "job",
+      "career",
+      "office"
+    ],
     "trending-up": [
       "growth",
       "increase",
       "rise",
-      "progress"
+      "progress",
+      "profit",
+      "gain"
     ],
-    "brain": [
-      "thinking",
-      "ai",
-      "learning"
-    ],
-    "zap": [
-      "fast",
-      "speed"
+    "trending-down": [
+      "decline",
+      "decrease",
+      "fall",
+      "loss",
+      "drop"
     ],
     "target": [
       "goal",
       "aim",
-      "focus"
+      "focus",
+      "objective"
+    ],
+    "handshake": [
+      "collaboration",
+      "trust",
+      "partner"
+    ],
+    "dollar-sign": [
+      "dollar",
+      "price",
+      "cost",
+      "finance"
+    ],
+    "coins": [
+      "payment",
+      "savings",
+      "cost"
+    ],
+    "wallet": [
+      "payment",
+      "savings",
+      "budget"
+    ],
+    "credit-card": [
+      "card",
+      "money"
+    ],
+    "piggy-bank": [
+      "saving",
+      "budget",
+      "finance",
+      "investment"
+    ],
+    "banknote": [
+      "cash",
+      "bill",
+      "finance"
+    ],
+    "receipt": [
+      "invoice",
+      "purchase",
+      "payment",
+      "expense"
+    ],
+    "shopping-cart": [
+      "shopping",
+      "buy",
+      "retail",
+      "commerce"
+    ],
+    "store": [
+      "retail",
+      "commerce",
+      "business"
+    ],
+    "building-complex": [
+      "office",
+      "corporate",
+      "headquarters",
+      "buildings"
+    ],
+    "factory": [
+      "production",
+      "manufacturing",
+      "industrial"
+    ],
+    "landmark": [
+      "public"
+    ],
+    "award": [
+      "certificate",
+      "recognition",
+      "quality",
+      "excellence"
+    ],
+    "trophy": [
+      "win",
+      "best"
+    ],
+    "megaphone": [
+      "marketing",
+      "campaign",
+      "promotion",
+      "broadcast"
+    ],
+    "scale": [
+      "tradeoff",
+      "trade-off",
+      "fairness",
+      "weigh"
+    ],
+    "package": [
+      "product",
+      "shipment",
+      "parcel"
+    ],
+    "truck": [
+      "logistics",
+      "transport",
+      "supply chain"
+    ],
+    "flag": [
+      "finish",
+      "checkpoint",
+      "start"
+    ],
+    "clipboard-list": [
+      "checklist",
+      "plan",
+      "todo",
+      "agenda"
+    ],
+    "user": [
+      "profile",
+      "individual",
+      "customer"
     ],
     "users": [
       "team",
-      "community"
+      "community",
+      "audience",
+      "customers"
+    ],
+    "user-check": [
+      "approved",
+      "verified",
+      "member"
+    ],
+    "user-plus": [
+      "join",
+      "signup",
+      "register",
+      "hire"
+    ],
+    "user-x": [
+      "blocked",
+      "leave",
+      "rejected"
+    ],
+    "message-circle": [
+      "talk",
+      "message",
+      "communication"
+    ],
+    "messages-square": [
+      "communication"
+    ],
+    "brain": [
+      "thinking",
+      "learning",
+      "intelligence",
+      "cognition"
+    ],
+    "baby": [
+      "infant",
+      "newborn",
+      "beginning"
+    ],
+    "person-standing": [
+      "person",
+      "individual",
+      "body"
+    ],
+    "accessibility": [
+      "inclusion",
+      "inclusive",
+      "a11y"
+    ],
+    "heart": [
+      "care",
+      "favorite",
+      "health"
+    ],
+    "heart-pulse": [
+      "medicine",
+      "vital",
+      "wellbeing"
+    ],
+    "hand": [
+      "stop",
+      "hello",
+      "help"
+    ],
+    "hand-heart": [
+      "care",
+      "charity",
+      "support",
+      "donation",
+      "volunteer"
+    ],
+    "thumbs-up": [
+      "approve",
+      "approval",
+      "positive",
+      "yes",
+      "agree"
+    ],
+    "thumbs-down": [
+      "disapprove",
+      "negative",
+      "no",
+      "disagree"
+    ],
+    "face-slightly-smiling": [
+      "satisfaction"
+    ],
+    "face-slightly-frowning": [
+      "frown",
+      "sad",
+      "unhappy",
+      "dissatisfaction"
+    ],
+    "eye": [
+      "observe",
+      "attention",
+      "look"
+    ],
+    "ear": [
+      "listen"
+    ],
+    "mail": [
+      "newsletter",
+      "contact"
+    ],
+    "phone": [
+      "telephone",
+      "contact",
+      "support"
+    ],
+    "id-card": [
+      "id",
+      "profile",
+      "credentials"
+    ],
+    "footprints": [
+      "journey",
+      "progress",
+      "path",
+      "step by step"
+    ],
+    "arrow-right": [
+      "then",
+      "result"
+    ],
+    "arrow-left": [
+      "return"
+    ],
+    "arrow-up": [
+      "up",
+      "increase",
+      "rise"
+    ],
+    "arrow-down": [
+      "down",
+      "decrease",
+      "lower"
+    ],
+    "arrow-up-right": [
+      "growth",
+      "external",
+      "outward"
+    ],
+    "arrow-left-right": [
+      "exchange",
+      "trade",
+      "both ways"
+    ],
+    "refresh-cw": [
+      "update",
+      "repeat",
+      "loop",
+      "iteration"
     ],
     "check": [
       "yes",
       "correct",
-      "ok"
+      "ok",
+      "success",
+      "approved"
     ],
     "x": [
       "no",
       "wrong",
-      "error"
+      "error",
+      "fail"
     ],
-    "lightbulb": [
-      "insight",
-      "tip",
-      "innovation"
+    "plus": [
+      "more",
+      "sum"
+    ],
+    "search": [
+      "look up",
+      "query"
+    ],
+    "settings": [
+      "configuration",
+      "options",
+      "setup"
+    ],
+    "play": [
+      "begin"
+    ],
+    "pause": [
+      "wait",
+      "hold"
+    ],
+    "circle-check": [
+      "success",
+      "correct",
+      "verified",
+      "approved"
+    ],
+    "triangle-alert": [
+      "caution",
+      "risk",
+      "attention",
+      "problem"
+    ],
+    "info": [
+      "note",
+      "explanation"
+    ],
+    "circle-question-mark": [
+      "question",
+      "help",
+      "unknown",
+      "faq"
+    ],
+    "bell": [
+      "alert",
+      "notify",
+      "remind"
+    ],
+    "calendar": [
+      "schedule",
+      "plan",
+      "deadline",
+      "day"
+    ],
+    "clock": [
+      "duration",
+      "hours",
+      "deadline",
+      "schedule"
+    ],
+    "house": [
+      "residential"
+    ],
+    "star": [
+      "favourite",
+      "highlight",
+      "quality"
+    ],
+    "download": [
+      "get",
+      "receive",
+      "install"
+    ],
+    "link": [
+      "connection",
+      "hyperlink",
+      "relation"
     ],
     "leaf": [
       "green",
       "ecology",
+      "environment",
+      "organic"
+    ],
+    "sun": [
+      "sunny",
+      "solar",
+      "day",
+      "energy"
+    ],
+    "droplet": [
+      "rain",
+      "drop"
+    ],
+    "mountain": [
+      "landscape",
+      "peak",
+      "challenge",
+      "obstacle"
+    ],
+    "tree-pine": [
+      "conifer"
+    ],
+    "tree-deciduous": [
+      "plant",
       "environment"
+    ],
+    "moon": [
+      "sleep",
+      "lunar"
+    ],
+    "cloud-rain": [
+      "rain",
+      "storm",
+      "wet"
+    ],
+    "cloud-lightning": [
+      "storm",
+      "thunder",
+      "thunderstorm"
+    ],
+    "cloud-sun": [
+      "partly cloudy",
+      "forecast"
+    ],
+    "snowflake": [
+      "ice",
+      "frozen",
+      "cool"
+    ],
+    "wind": [
+      "breeze",
+      "wind energy",
+      "air flow"
+    ],
+    "rainbow": [
+      "hope",
+      "diversity",
+      "color"
+    ],
+    "sprout": [
+      "grow",
+      "seedling",
+      "new",
+      "start"
+    ],
+    "flower": [
+      "bloom",
+      "garden",
+      "blossom"
+    ],
+    "earth": [
+      "planet",
+      "global",
+      "climate"
+    ],
+    "waves-horizontal": [
+      "waves",
+      "sound wave",
+      "signal"
+    ],
+    "sunrise": [
+      "dawn",
+      "beginning",
+      "new day"
+    ],
+    "tornado": [
+      "disaster",
+      "chaos"
+    ],
+    "bird": [
+      "animal",
+      "wildlife"
+    ],
+    "fish": [
+      "animal",
+      "wildlife",
+      "ocean"
+    ],
+    "paw-print": [
+      "animal",
+      "pet",
+      "wildlife"
+    ],
+    "rabbit": [
+      "wildlife",
+      "quick"
+    ],
+    "shell": [
+      "sea",
+      "nature"
+    ],
+    "recycle": [
+      "recycling",
+      "reuse",
+      "circular economy",
+      "environment",
+      "green"
+    ],
+    "book-open": [
+      "read",
+      "book"
+    ],
+    "book": [
+      "read",
+      "textbook"
+    ],
+    "book-bookmark": [
+      "bookmark",
+      "chapter"
+    ],
+    "library": [
+      "shelf",
+      "archive"
+    ],
+    "graduation-cap": [
+      "graduation",
+      "degree",
+      "student"
+    ],
+    "lightbulb": [
+      "insight",
+      "tip",
+      "innovation",
+      "creativity",
+      "solution"
+    ],
+    "pencil": [
+      "write"
+    ],
+    "notebook-pen": [
+      "notebook",
+      "note-taking"
+    ],
+    "presentation": [
+      "lecture",
+      "teaching",
+      "slides",
+      "talk",
+      "board"
+    ],
+    "backpack": [
+      "student",
+      "school bag"
+    ],
+    "ruler": [
+      "measure",
+      "geometry"
+    ],
+    "eraser": [
+      "correction",
+      "mistake",
+      "erase"
+    ],
+    "highlighter": [
+      "highlight",
+      "emphasis",
+      "marker"
+    ],
+    "file-text": [
+      "text",
+      "report",
+      "paper",
+      "article"
+    ],
+    "clipboard-check": [
+      "checklist",
+      "verified",
+      "assignment"
+    ],
+    "list-checks": [
+      "checklist",
+      "steps",
+      "to-do",
+      "requirements"
+    ],
+    "puzzle": [
+      "problem solving",
+      "fit",
+      "integration"
+    ],
+    "languages": [
+      "language",
+      "translation",
+      "multilingual",
+      "foreign"
+    ],
+    "palette": [
+      "art",
+      "design",
+      "creativity",
+      "color"
+    ],
+    "music": [
+      "song",
+      "sound",
+      "audio",
+      "melody"
+    ],
+    "shapes": [
+      "geometry",
+      "forms"
+    ],
+    "scroll": [
+      "history",
+      "ancient",
+      "diploma"
+    ],
+    "hourglass": [
+      "waiting",
+      "duration",
+      "sand"
+    ],
+    "quote": [
+      "citation",
+      "saying",
+      "testimonial",
+      "speech"
     ]
+  },
+  "aliases": {
+    "bar-chart": "chart-column",
+    "dollar": "dollar-sign",
+    "warning": "triangle-alert",
+    "idea": "lightbulb",
+    "gear": "settings",
+    "question": "circle-question-mark",
+    "person": "user",
+    "team": "users",
+    "growth": "trending-up",
+    "ai": "brain-circuit",
+    "money": "banknote",
+    "document": "file-text"
   }
 }

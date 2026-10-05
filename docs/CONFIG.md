@@ -244,11 +244,18 @@ AI author can compare them by opening one image. JSON shape: [below](#vidgen-lis
 
 ## Icons
 
-vidgen ships a set of line icons (from [Lucide](https://lucide.dev), ISC licence; the seed set
-has 40, five per category `tech`, `data`, `science`, `business`, `people`, `ui` (arrows and
-interface), `nature`, `education`). Scenes draw them with `icon(name, ...)` (see
+vidgen ships 200 line icons (from [Lucide](https://lucide.dev), ISC licence), 25 in each
+category `tech`, `data`, `science`, `business`, `people`, `ui` (arrows and interface),
+`nature`, `education`, chosen for what explainer videos show; the full list with aliases and
+tags is the [icon catalogue](ICONS.md). Scenes draw them with `icon(name, ...)` (see
 docs/EXTENDING.md "Icons"); scene params that take an icon name are typed `icon` in
 `vidgen list-scenes` and checked by `vidgen validate` (an unknown name gets suggestions).
+
+**Aliases.** Some icons have other names that work everywhere a name does: Lucide's old names
+of renamed icons (`home` → `house`, `pie-chart` → `chart-pie`, `smile` →
+`face-slightly-smiling`, `filter` → `funnel`) and a few synonyms (`idea` → `lightbulb`, `ai`
+→ `brain-circuit`, `warning` → `triangle-alert`, `bar-chart` → `chart-column`, `money` →
+`banknote`). A project icon with an alias's name replaces the alias.
 
 **Project icons.** Put SVG files in `assets/icons/`: `assets/icons/<name>.svg` adds the icon
 `<name>` or replaces the built-in icon of that name (letters, digits, `-` and `_`). Draw them on
@@ -269,8 +276,10 @@ Problems (bad file names, a broken `icons.json`) are reported by `vidgen validat
 `vidgen list-icons [PROJECT] [--search TEXT] [--category NAME] [--sheet PNG] [--json]` lists
 the icons available in the project (built-in and `assets/icons`; without a PROJECT and no
 config in the current folder: built-ins only), one line each: name, category, `[project]` for
-project icons, tags. `--search` keeps icons whose name, tags or category contain every word of
-TEXT (case-insensitive; name matches first): `--search "chart"`, `--search computer`.
+project icons, `(alias: ...)`, tags. `--search` keeps icons whose name, aliases, tags or
+category contain every word of TEXT (case-insensitive; name, then alias, then tag matches
+first): `--search "chart"`, `--search computer`. Tags include the concepts an icon stands for
+in a script, so search by idea: `money`, `growth`, `security`, `speed`, `AI`, `team`.
 `--category` keeps one category (unknown → error listing them). `--sheet PNG` also draws the
 listed icons, labelled with name and category, on a 1280 px wide contact sheet (8 per row; a
 long list continues in `<stem>-2.png`, ... ), drawn by the same code as a render: open it to
@@ -1056,7 +1065,7 @@ difference between two palette colours).
 | `sources` | object | the built-in set: `{lucide: {package, version, license, license_file, homepage}}` |
 | `categories` | list | `{name, description, count}` for every category (built-in ones first, then project categories); `count` over all icons, not only the listed ones |
 | `count` | int | number of listed icons |
-| `icons` | list | the listed icons, best matches first: `{name, category, tags, source, origin, overrides, path}` (`origin` `builtin` or `project`; `overrides`: a project icon replacing a built-in; `path` the SVG) |
+| `icons` | list | the listed icons, best matches first: `{name, category, tags, aliases, source, origin, overrides, path}` (`origin` `builtin` or `project`; `overrides`: a project icon replacing a built-in; `path` the SVG) |
 | `sheets` | list | the PNG files written with `--sheet` |
 
 ### `vidgen schema --json`

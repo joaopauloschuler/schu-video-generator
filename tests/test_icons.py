@@ -1,5 +1,6 @@
-"""Icons (Step 19): vendored set + manifest, project icons, search, the `icon()` mobject, the
-`IconName` param type, `vidgen list-icons`, layout dump and lint, the vendoring tool."""
+"""Icons (Steps 19-20): vendored set + manifest, aliases, project icons, search, the `icon()`
+mobject, the `IconName` param type, `vidgen list-icons`, layout dump and lint, the vendoring tool
+and the generated catalogue docs/ICONS.md."""
 
 from __future__ import annotations
 
@@ -28,9 +29,12 @@ from vidgen.icons import (
     CATEGORIES,
     ICONS_DIR,
     available_icons,
+    builtin_aliases,
     builtin_icons,
     builtin_sources,
     find_icon,
+    icon_names,
+    resolve_icon,
     search_icons,
     unknown_icon_message,
 )
@@ -58,19 +62,109 @@ def project_with_icons(make_project: Any, files: dict[str, str], **config: Any) 
 # ----- vendored set ----------------------------------------------------------------------------------
 
 
-def test_seed_set_matches_the_icon_list() -> None:
+def test_vendored_set_matches_the_icon_list() -> None:
     icons = builtin_icons()
     listed = {name: cat for cat, names in ICON_SET["categories"].items() for name in names}
-    assert len(icons) == 40 == len(listed)
+    assert len(icons) == 200 == len(listed)
     assert {name: info.category for name, info in icons.items()} == listed
-    assert list(ICON_SET["categories"]) == list(CATEGORIES)  # every category seeded, 5 each
-    assert all(len(names) == 5 for names in ICON_SET["categories"].values())
+    assert list(ICON_SET["categories"]) == list(CATEGORIES)  # every category, 25 each
+    assert all(len(names) == 25 for names in ICON_SET["categories"].values())
     for info in icons.values():
         assert info.path.is_file() and info.path.parent == ICONS_DIR / "lucide"
-        assert info.tags and info.source == "lucide" and info.origin == "builtin"
+        assert len(info.tags) >= 3 and info.source == "lucide" and info.origin == "builtin"
+        assert len(set(info.tags)) == len(info.tags)
     assert sorted(p.stem for p in (ICONS_DIR / "lucide").glob("*.svg")) == sorted(listed)
     for name, extra in ICON_SET["extra_tags"].items():
         assert set(extra) <= set(icons[name].tags)
+
+
+def test_explainer_concepts_are_searchable() -> None:
+    """Words a script uses for a concept find a fitting icon among the first few results."""
+    icons = builtin_icons()
+    expected = {
+        "money": "banknote", "AI": "brain-circuit", "growth": "trending-up", "security": "shield-check",
+        "speed": "gauge", "idea": "lightbulb", "team": "users", "time": "clock", "electricity": "zap",
+        "health": "heart-pulse", "environment": "recycle", "warning": "triangle-alert", "goal": "target",
+        "process": "workflow", "question": "circle-question-mark", "global": "globe", "learning": "brain",
+        "decision": "scale", "success": "trophy", "sum": "sigma", "planet": "earth", "launch": "rocket",
+    }
+    for word, name in expected.items():
+        found = [i.name for i in search_icons(icons, word)]
+        assert name in found[:6], (word, found[:6])
+
+
+def test_aliases() -> None:
+    icons = builtin_icons()
+    aliases = builtin_aliases()
+    assert aliases["home"] == "house" and aliases["pie-chart"] == "chart-pie" and aliases["smile"] == "face-slightly-smiling"
+    assert aliases["bar-chart"] == "chart-column" and aliases["idea"] == "lightbulb"  # curated
+    assert icons["house"].aliases == ("home",)
+    assert set(aliases).isdisjoint(icons)  # an alias is never also an icon name
+    assert set(ICON_SET["aliases"].items()) <= set(aliases.items())
+    for alias, name in aliases.items():
+        assert resolve_icon(alias, icons) is icons[name] and find_icon(alias, icons).name == name
+    assert resolve_icon("nope", icons) is None
+    assert icon_names(icons) == sorted([*icons, *aliases])
+    assert icon("home", theme=Theme()).icon_name == "house"
+    assert search_icons(icons, "home")[0].name == "house"  # exact alias ranks like a name
+    assert unknown_icon_message("hom", icons).startswith("unknown icon 'hom'; did you mean 'house'?")
+
+
+def test_project_icon_named_like_an_alias_takes_it_over(make_project: Any) -> None:
+    root = project_with_icons(make_project, {"assets/icons/home.svg": PROJECT_SVG, "assets/icons/house.svg": PROJECT_SVG})
+    icons = available_icons(root)
+    assert resolve_icon("home", icons) is icons["home"] and icons["home"].origin == "project"
+    assert icons["house"].origin == "project" and icons["house"].aliases == ()
+    assert resolve_icon("pie-chart", icons) is icons["chart-pie"]
+    root2 = project_with_icons(make_project, {"assets/icons/chart-pie.svg": PROJECT_SVG})
+    pie = available_icons(root2)["chart-pie"]
+    assert pie.overrides and pie.aliases == ("pie-chart",)  # replacing a built-in keeps its aliases
+    assert builtin_icons()["house"].aliases == ("home",)  # the cached built-ins are untouched
+
+
+def test_every_icon_loads() -> None:
+    """Every vendored icon builds: box = viewBox, something drawn inside it, every visible part
+    stroked or filled in the icon colour."""
+    for name, info in builtin_icons().items():
+        mob = build_icon(info, 1.0, "#FF8800")
+        assert mob.height == pytest.approx(1.0) and mob.width == pytest.approx(1.0), name
+        assert mob.parts, name
+        for part in mob.parts:
+            assert part.get_fill_opacity() == 0 or part.get_fill_color().to_hex() == "#FF8800", name
+            assert part.get_stroke_width() == 0 or part.get_stroke_color().to_hex() == "#FF8800", name
+        drawn = mob.parts
+        left = min(p.get_left()[0] for p in drawn)
+        right = max(p.get_right()[0] for p in drawn)
+        assert -0.5 - 1e-6 <= left < right <= 0.5 + 1e-6, name
+
+
+@pytest.mark.render
+@pytest.mark.parametrize("name", ["chart-pie", "dna", "rainbow", "shell", "chart-scatter", "gauge"])
+def test_icons_render_like_their_svg(name: str) -> None:
+    """Icons with arcs, spirals and filled dots render as strokes (a plausible ink share: no shape
+    filled where Lucide draws only an outline) and use only SVG elements Manim parses."""
+    from xml.etree import ElementTree
+
+    info = builtin_icons()[name]
+    with tempconfig({"pixel_width": 96, "pixel_height": 96, "frame_width": 1.0, "frame_height": 1.0, "background_color": "#000000"}):
+        camera = Camera()
+        camera.capture_mobjects([build_icon(info, 1.0, "#FFFFFF")])
+        ink = np.asarray(camera.get_image().convert("L")) > 128
+    assert 0.08 < ink.mean() < 0.4, ink.mean()  # strokes of 2/24, no filled blobs
+    tags = {el.tag.split("}")[-1] for el in ElementTree.parse(info.path).getroot().iter()}
+    assert tags <= {"svg", "path", "circle", "rect", "line", "polyline", "polygon", "ellipse"}
+
+
+def test_icons_doc_is_generated_from_the_manifest() -> None:
+    """docs/ICONS.md is what `tools/vendor_icons.py` writes for the shipped manifest."""
+    from vidgen.iconlist import catalogue_markdown
+
+    manifest = json.loads((ICONS_DIR / "manifest.json").read_text(encoding="utf-8"))
+    text = (REPO / "docs" / "ICONS.md").read_text(encoding="utf-8")
+    assert text == catalogue_markdown(manifest), "regenerate docs/ICONS.md: python tools/vendor_icons.py"
+    for category in CATEGORIES:
+        assert f"## {category} (25)" in text
+    assert "| `house` | `home` |" in text
 
 
 def test_licence_and_sources() -> None:
@@ -97,16 +191,16 @@ def test_project_icons_extend_and_override(make_project: Any) -> None:
         {
             "assets/icons/logo.svg": PROJECT_SVG,
             "assets/icons/cpu.svg": PROJECT_SVG,
-            "assets/icons/icons.json": '{"icons": [{"name": "logo", "category": "brand", "tags": ["company"]}]}',
+            "assets/icons/icons.json": '{"icons": [{"name": "logo", "category": "brand", "tags": ["acme"]}]}',
         },
     )
     icons = available_icons(root)
-    assert len(icons) == 41 and list(icons) == sorted(icons)
+    assert len(icons) == 201 and list(icons) == sorted(icons)
     logo, cpu = icons["logo"], icons["cpu"]
-    assert (logo.origin, logo.category, logo.tags, logo.overrides) == ("project", "brand", ("company",), False)
+    assert (logo.origin, logo.category, logo.tags, logo.overrides) == ("project", "brand", ("acme",), False)
     assert (cpu.origin, cpu.category, cpu.overrides, cpu.path) == ("project", "project", True, (root / "assets/icons/cpu.svg").resolve())
     assert available_icons(None)["cpu"].origin == "builtin"
-    assert [i.name for i in search_icons(icons, "company")] == ["logo"]
+    assert [i.name for i in search_icons(icons, "acme")] == ["logo"]
 
 
 @pytest.mark.parametrize(
@@ -137,21 +231,21 @@ def test_project_icon_cache_sees_new_files(make_project: Any) -> None:
 
 def test_search_matches_names_tags_and_categories() -> None:
     icons = builtin_icons()
-    assert [i.name for i in search_icons(icons, "chart")][:4] == ["chart-column", "chart-line", "chart-pie", "chart-scatter"]
+    assert [i.name for i in search_icons(icons, "chart")][:4] == ["chart-area", "chart-bar", "chart-candlestick", "chart-column"]
     assert [i.name for i in search_icons(icons, "chart pie")] == ["chart-pie"]
-    assert [i.name for i in search_icons(icons, "COMPUTER")] == ["cpu", "server"]  # tags, case-insensitive
+    assert [i.name for i in search_icons(icons, "COMPUTER", "tech")][:2] == ["binary", "cpu"]  # tags, any case
     assert search_icons(icons, "user")[0].name == "user"  # exact name first
     assert {i.name for i in search_icons(icons, "nature")} >= {"leaf", "sun", "droplet", "mountain", "tree-pine"}
-    assert [i.name for i in search_icons(icons, None, "data")] == ["chart-column", "chart-line", "chart-pie", "chart-scatter", "database"]
+    assert len(search_icons(icons, None, "data")) == 25 and search_icons(icons, None, "data")[0].name == "activity"
     assert search_icons(icons, "chart", "people") == [] and search_icons(icons, "zzz") == []
-    assert len(search_icons(icons)) == 40
+    assert len(search_icons(icons)) == 200
 
 
 def test_unknown_icon_suggestions() -> None:
     icons = builtin_icons()
     message = unknown_icon_message("cpus", icons)
-    assert message.startswith("unknown icon 'cpus'; did you mean 'cpu'?")
-    assert "matching tags: cpu, server" in unknown_icon_message("computer", icons)
+    assert message.startswith("unknown icon 'cpus'; did you mean 'cpu',")
+    assert "matching tags: binary, cpu, hard-drive" in unknown_icon_message("computer", icons)
     assert unknown_icon_message("qqqq", icons) == "unknown icon 'qqqq' (see `vidgen list-icons --search TEXT`)"
     with pytest.raises(VidgenError, match="did you mean 'database'"):
         find_icon("databse", icons)
@@ -288,11 +382,12 @@ def test_icon_params_in_validate_schema_and_list_scenes(make_project: Any, capsy
     root = make_project(data)
     write_files(root, {"extensions/badge.py": extension, "assets/icons/wide.svg": PROJECT_SVG})
     problems = check_project(Project.load(root))
-    assert len(problems) == 1 and problems[0].startswith("scenes[1].params.symbol: unknown icon 'databse'; did you mean 'database'?")
+    assert len(problems) == 1 and problems[0].startswith("scenes[1].params.symbol: unknown icon 'databse'; did you mean 'database'")
     assert main(["schema", str(root), "--scene", "badge"]) == 0
     doc = json.loads(capsys.readouterr().out)
     names = doc["properties"]["symbol"]["enum"]
-    assert "wide" in names and "cpu" in names and len(names) == 41
+    assert "wide" in names and "cpu" in names and "home" in names  # names and aliases
+    assert len(names) == 201 + len(builtin_aliases())
     assert main(["list-scenes", str(root)]) == 0
     assert "    symbol: icon = 'cpu'" in capsys.readouterr().out
 
@@ -304,11 +399,14 @@ def test_list_icons_text(capsys: pytest.CaptureFixture[str], monkeypatch: pytest
     monkeypatch.chdir(tmp_path)  # no config here: built-ins only
     assert main(["list-icons"]) == 0
     lines = capsys.readouterr().out.splitlines()
-    assert len(lines) == 41 and lines[-1] == "40 icons; built-in set: Lucide (lucide-static 1.52.0, ISC)"
-    assert lines[0].split()[:2] == ["arrow-right", "ui"]
-    assert main(["list-icons", "--search", "computer", "--category", "tech"]) == 0
+    assert len(lines) == 201 and lines[-1] == "200 icons; built-in set: Lucide (lucide-static 1.52.0, ISC)"
+    assert lines[0].split()[:2] == ["accessibility", "people"]
+    assert any(line.startswith("house ") and "(alias: home)" in line for line in lines)
+    assert main(["list-icons", "--search", "server", "--category", "tech"]) == 0
     out = capsys.readouterr().out.splitlines()
-    assert [line.split()[0] for line in out[:-1]] == ["cpu", "server"] and out[-1].startswith("2 of 40 icons")
+    assert [line.split()[0] for line in out[:-1]] == ["server", "hard-drive", "router"] and out[-1].startswith("3 of 200 icons")
+    assert main(["list-icons", "--search", "pie-chart"]) == 0
+    assert capsys.readouterr().out.splitlines()[0].startswith("chart-pie ")
     assert main(["list-icons", "--category", "food"]) == 1
     assert "unknown icon category 'food'; categories: tech, data, science" in capsys.readouterr().err
 
@@ -324,12 +422,12 @@ def test_list_icons_json_with_project(make_project: Any, capsys: pytest.CaptureF
     assert doc["project"] == str(root.resolve()) and doc["category"] == "brand" and doc["search"] is None
     assert doc["sources"]["lucide"]["version"] == "1.52.0" and doc["sheets"] == [] and doc["count"] == 1
     assert doc["icons"] == [
-        {"name": "wide", "category": "brand", "tags": [], "source": "project", "origin": "project", "overrides": False,
+        {"name": "wide", "category": "brand", "tags": [], "aliases": [], "source": "project", "origin": "project", "overrides": False,
          "path": str((root / "assets/icons/wide.svg").resolve())}
     ]
     cats = {c["name"]: c for c in doc["categories"]}
     assert list(cats)[:8] == list(CATEGORIES) and cats["brand"] == {"name": "brand", "description": "", "count": 1}
-    assert cats["tech"]["count"] == 5 and cats["tech"]["description"]
+    assert cats["tech"]["count"] == 25 and cats["tech"]["description"]
     assert main(["list-icons", str(root), "--json", "--category", "food"]) == 1
     assert json.loads(capsys.readouterr().out)["error"]["message"].startswith("unknown icon category")
 
@@ -340,20 +438,20 @@ def test_list_icons_sheet(tmp_path: Path, capsys: pytest.CaptureFixture[str], mo
 
     monkeypatch.chdir(tmp_path)
     png = tmp_path / "out" / "icons.png"
-    assert main(["list-icons", "--search", "chart", "--sheet", str(png)]) == 0
+    assert main(["list-icons", "--search", "user", "--sheet", str(png)]) == 0
     assert capsys.readouterr().out.splitlines()[-1] == f"sheet: {png}"
     image = np.asarray(Image.open(png).convert("L"))
     assert image.shape[1] == iconlist.SHEET_WIDTH and image.shape[0] == iconlist.HEADER_HEIGHT + iconlist.CELL_HEIGHT
     cell = image[iconlist.HEADER_HEIGHT : iconlist.HEADER_HEIGHT + 14 + iconlist.ICON_PX + 6, : iconlist.SHEET_WIDTH // 8]
     assert (cell < 100).mean() > 0.03  # the first icon is drawn (dark strokes on white)
-    blank = image[iconlist.HEADER_HEIGHT : iconlist.HEADER_HEIGHT + 90, 4 * iconlist.SHEET_WIDTH // 8 :]
-    assert (blank < 250).mean() == 0  # only 4 icons: the rest of the row is empty
+    blank = image[iconlist.HEADER_HEIGHT : iconlist.HEADER_HEIGHT + 90, 5 * iconlist.SHEET_WIDTH // 8 :]
+    assert (blank < 250).mean() == 0  # only 5 icons: the rest of the row is empty
     # several pages: <stem>-2.png ...; pages of an earlier, longer listing are removed
     monkeypatch.setattr(iconlist, "CELL_HEIGHT", 800)
-    assert main(["list-icons", "--json", "--sheet", str(png)]) == 0
+    assert main(["list-icons", "--json", "--category", "data", "--sheet", str(png)]) == 0
     sheets = json.loads(capsys.readouterr().out)["sheets"]
-    assert sheets == [str(png)] + [str(png.with_name(f"icons-{n}.png")) for n in range(2, 6)]
-    assert main(["list-icons", "--category", "ui", "--sheet", str(png)]) == 0
+    assert sheets == [str(png)] + [str(png.with_name(f"icons-{n}.png")) for n in range(2, 5)]
+    assert main(["list-icons", "--search", "face", "--sheet", str(png)]) == 0
     assert sorted(p.name for p in png.parent.iterdir()) == ["icons.png"]
     assert main(["list-icons", "--search", "zzz", "--sheet", str(png)]) == 1
     assert "no icons to draw" in capsys.readouterr().err
@@ -456,43 +554,64 @@ def _tool() -> Any:
     return module
 
 
+def _fake_svg(name: str, length: int) -> str:
+    """A Lucide-like file: the comment and class differ between an icon and its alias copies."""
+    return f'<!-- v9 -->\n<svg class="lucide lucide-{name}" viewBox="0 0 24 24"><path d="M2 12h{length}" /></svg>\n'
+
+
 def _fake_package(root: Path, names: list[str], version: str = "9.9.9") -> Path:
+    """Icons ``names`` (``c`` draws like ``b``: two current names with one drawing) plus Lucide-style
+    alias copies ``old-a`` (of ``a``) and ``old-b`` (ambiguous: ``b`` or ``c``)."""
     package = root / "package"
     (package / "icons").mkdir(parents=True)
+    lengths = {"a": 4, "b": 8, "c": 8}
     for name in names:
-        (package / "icons" / f"{name}.svg").write_text(PROJECT_SVG, encoding="utf-8")
+        (package / "icons" / f"{name}.svg").write_text(_fake_svg(name, lengths.get(name, 12)), encoding="utf-8")
+    (package / "icons" / "old-a.svg").write_text(_fake_svg("old-a", 4), encoding="utf-8")
+    (package / "icons" / "old-b.svg").write_text(_fake_svg("old-b", 8), encoding="utf-8")
     (package / "package.json").write_text(json.dumps({"version": version, "license": "ISC", "homepage": "h"}), encoding="utf-8")
-    (package / "tags.json").write_text(json.dumps({"a": ["one", "two"]}), encoding="utf-8")
+    (package / "tags.json").write_text(json.dumps({"a": ["one", "two"], **{n: [] for n in names if n != "a"}}), encoding="utf-8")
     (package / "LICENSE").write_text("ISC License\n", encoding="utf-8")
     return package
 
 
 def test_vendor_tool(tmp_path: Path) -> None:
     tool = _tool()
-    package = _fake_package(tmp_path, ["a", "b"])
+    package = _fake_package(tmp_path, ["a", "b", "c"])
     out = tmp_path / "out"
     (out / "lucide").mkdir(parents=True)
     (out / "lucide" / "stale.svg").write_text("x", encoding="utf-8")
-    icon_set = {"package": "lucide-static", "version": "9.9.9", "categories": {"tech": ["a"], "data": ["b"]},
-                "extra_tags": {"a": ["two", "three"]}}
+    icon_set = {"package": "lucide-static", "version": "9.9.9", "categories": {"tech": ["a"], "data": ["b", "c"]},
+                "extra_tags": {"a": ["two", "three"]}, "aliases": {"first": "a"}}
     manifest = tool.vendor(package, icon_set, out, CATEGORIES)
-    assert sorted(p.name for p in (out / "lucide").iterdir()) == ["LICENSE", "a.svg", "b.svg"]
+    assert sorted(p.name for p in (out / "lucide").iterdir()) == ["LICENSE", "a.svg", "b.svg", "c.svg"]
     assert json.loads((out / "manifest.json").read_text(encoding="utf-8")) == manifest
-    assert manifest["icons"] == [
-        {"name": "a", "category": "tech", "tags": ["one", "two", "three"], "source": "lucide"},
-        {"name": "b", "category": "data", "tags": [], "source": "lucide"},
+    assert manifest["icons"] == [  # old-b draws like b and c: ambiguous, not an alias
+        {"name": "a", "category": "tech", "tags": ["one", "two", "three"], "aliases": ["first", "old-a"], "source": "lucide"},
+        {"name": "b", "category": "data", "tags": [], "aliases": [], "source": "lucide"},
+        {"name": "c", "category": "data", "tags": [], "aliases": [], "source": "lucide"},
     ]
     assert manifest["sources"]["lucide"] == {"package": "lucide-static", "version": "9.9.9", "license": "ISC",
                                              "license_file": "lucide/LICENSE", "homepage": "h"}
+    only_b = tool.build_manifest(package, {**icon_set, "categories": {"tech": ["a"], "data": ["b"]}}, CATEGORIES)
+    assert only_b["icons"][1]["aliases"] == ["old-b"]  # c not vendored: old-b is b's old name
     for broken, message in [
         ({**icon_set, "version": "1.0"}, "differs"),
         ({**icon_set, "categories": {"food": ["a"]}}, "unknown category"),
         ({**icon_set, "categories": {"tech": ["a", "zz"]}}, "not in lucide-static"),
         ({**icon_set, "categories": {"tech": ["a"], "data": ["a"]}}, "listed twice"),
         ({**icon_set, "categories": {"tech": ["b"]}}, "extra_tags for icons not listed: a"),
+        ({**icon_set, "categories": {"tech": ["a", "old-a"]}}, "'old-a' is an old name"),
+        ({**icon_set, "aliases": {"b": "a"}}, "aliases name existing icons: b"),
+        ({**icon_set, "aliases": {"x": "zz"}}, "alias 'x' names an icon not listed"),
+        ({**icon_set, "aliases": {"old-a": "b"}}, "already Lucide's old name of 'a'"),
     ]:
         with pytest.raises(SystemExit, match=message):
             tool.build_manifest(package, broken, CATEGORIES)
+    set_file, docs = tmp_path / "set.json", tmp_path / "ICONS.md"
+    set_file.write_text(json.dumps(icon_set), encoding="utf-8")
+    assert tool.main(["--set", str(set_file), "--package-dir", str(package), "--out", str(out), "--docs", str(docs)]) == 0
+    assert "| `a` | `first`, `old-a` | one, two, three |" in docs.read_text(encoding="utf-8")
 
 
 def test_vendored_manifest_is_what_the_tool_writes() -> None:

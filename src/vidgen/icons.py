@@ -2,7 +2,8 @@
 
 Built-in icons are package data (``vidgen/data/icons``): SVG files of one open-licensed set
 (Lucide, ISC) with a ``manifest.json`` giving each icon's name, category, search tags and
-source. A project adds or replaces icons by name with ``assets/icons/<name>.svg``; an optional
+source, plus ``aliases``: other names that resolve to the icon (Lucide's old names of renamed
+icons such as ``home`` for ``house``, and a few curated synonyms). A project adds or replaces icons by name with ``assets/icons/<name>.svg``; an optional
 ``assets/icons/icons.json`` (``{"icons": [{"name", "category", "tags"}]}``) gives them a
 category and tags for ``vidgen list-icons``.
 
@@ -15,7 +16,7 @@ import difflib
 import json
 import re
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -51,7 +52,8 @@ NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
 @dataclass(frozen=True)
 class IconInfo:
     """One available icon. ``origin`` is ``builtin`` or ``project``; ``overrides`` is true for a
-    project icon that replaces a built-in of the same name."""
+    project icon that replaces a built-in of the same name. ``aliases`` are other names that
+    resolve to it (built-in aliases; a project icon replacing a built-in keeps them)."""
 
     name: str
     path: Path
@@ -60,6 +62,7 @@ class IconInfo:
     source: str
     origin: str
     overrides: bool = False
+    aliases: tuple[str, ...] = ()
 
     def to_json(self) -> dict[str, Any]:
         """The icon as a ``vidgen list-icons --json`` entry."""
@@ -67,6 +70,7 @@ class IconInfo:
             "name": self.name,
             "category": self.category,
             "tags": list(self.tags),
+            "aliases": list(self.aliases),
             "source": self.source,
             "origin": self.origin,
             "overrides": self.overrides,
@@ -103,8 +107,15 @@ def builtin_icons() -> dict[str, IconInfo]:
             tags=tuple(entry["tags"]),
             source=source,
             origin="builtin",
+            aliases=tuple(entry.get("aliases", ())),
         )
     return icons
+
+
+@lru_cache(maxsize=1)
+def builtin_aliases() -> dict[str, str]:
+    """``{alias: icon name}`` of the built-in set (e.g. ``home`` -> ``house``)."""
+    return {alias: info.name for info in builtin_icons().values() for alias in info.aliases}
 
 
 def _project_manifest(folder: Path) -> dict[str, dict[str, Any]]:
@@ -159,6 +170,7 @@ def _project_icons(folder: Path, signature: tuple[tuple[str, int, int], ...]) ->
             source="project",
             origin="project",
             overrides=name in builtins,
+            aliases=builtins[name].aliases if name in builtins else (),
         )
     return icons
 
@@ -175,10 +187,15 @@ def project_icons(root: Path) -> dict[str, IconInfo]:
 
 def available_icons(root: Path | None = None) -> dict[str, IconInfo]:
     """Built-in icons merged with those of the project at ``root`` (a project icon replaces a
-    built-in of its name), sorted by name."""
+    built-in of its name, and a project icon named like a built-in alias takes that name over),
+    sorted by name."""
     icons = dict(builtin_icons())
     if root is not None:
-        icons.update(project_icons(root))
+        own = project_icons(root)
+        icons.update(own)
+        for name, info in icons.items():
+            if not set(info.aliases).isdisjoint(own):
+                icons[name] = replace(info, aliases=tuple(a for a in info.aliases if a not in own))
     return dict(sorted(icons.items()))
 
 
@@ -190,15 +207,16 @@ def active_icons() -> dict[str, IconInfo]:
 
 
 def _score(icon: IconInfo, term: str) -> int | None:
-    """How well ``term`` (lower case) matches: 0 exact name ... 4 part of a tag, 5 the category;
-    ``None``: no match."""
+    """How well ``term`` (lower case) matches: 0 exact name, 1 name prefix or exact alias, 2 part
+    of the name or an alias, 3 a tag, 4 part of a tag, 5 the category; ``None``: no match."""
     name = icon.name.lower()
+    aliases = [a.lower() for a in icon.aliases]
     tags = [t.lower() for t in icon.tags]
     if term == name:
         return 0
-    if name.startswith(term):
+    if name.startswith(term) or term in aliases:
         return 1
-    if term in name:
+    if term in name or any(term in a for a in aliases):
         return 2
     if term in tags:
         return 3
@@ -212,8 +230,9 @@ def _score(icon: IconInfo, term: str) -> int | None:
 def search_icons(
     icons: Mapping[str, IconInfo], text: str | None = None, category: str | None = None
 ) -> list[IconInfo]:
-    """Icons whose name or tags contain (or category is) every word of ``text`` (case-insensitive),
-    optionally only one ``category``; best matches first (name before tag matches), then by name."""
+    """Icons whose name, aliases or tags contain (or category is) every word of ``text``
+    (case-insensitive), optionally only one ``category``; best matches first (name, then alias,
+    then tag matches), then by name."""
     terms = (text or "").lower().replace("-", " ").split()
     found: list[tuple[int, str, IconInfo]] = []
     for icon in icons.values():
@@ -232,10 +251,32 @@ def categories(icons: Iterable[IconInfo]) -> list[str]:
     return [*CATEGORIES, *extra]
 
 
+def _alias_targets(icons: Mapping[str, IconInfo]) -> dict[str, str]:
+    """``{alias: icon name}`` over ``icons`` (an alias never shadows an icon's own name)."""
+    return {alias: info.name for info in icons.values() for alias in info.aliases if alias not in icons}
+
+
+def resolve_icon(name: str, icons: Mapping[str, IconInfo]) -> IconInfo | None:
+    """The icon called ``name`` (or that has the alias ``name``) among ``icons``; ``None`` if none."""
+    info = icons.get(name)
+    if info is None:
+        target = _alias_targets(icons).get(name)
+        info = icons.get(target) if target is not None else None
+    return info
+
+
+def icon_names(icons: Mapping[str, IconInfo]) -> list[str]:
+    """Every name that :func:`resolve_icon` accepts (icon names and aliases), sorted."""
+    return sorted({*icons, *_alias_targets(icons)})
+
+
 def unknown_icon_message(name: str, icons: Mapping[str, IconInfo]) -> str:
-    """``unknown icon 'x'; did you mean ...`` with close names and icons tagged like ``name``."""
+    """``unknown icon 'x'; did you mean ...`` with close names (or aliases, given as the icon they
+    stand for) and icons tagged like ``name``."""
     message = f"unknown icon '{name}'"
-    close = difflib.get_close_matches(name, list(icons), n=4, cutoff=0.6)
+    targets = _alias_targets(icons)
+    matches = difflib.get_close_matches(name, icon_names(icons), n=4, cutoff=0.6)
+    close = list(dict.fromkeys(targets.get(m, m) for m in matches))
     tagged = [icon.name for icon in search_icons(icons, name) if icon.name not in close][:6]
     hints = []
     if close:
@@ -248,10 +289,10 @@ def unknown_icon_message(name: str, icons: Mapping[str, IconInfo]) -> str:
 
 
 def find_icon(name: str, icons: Mapping[str, IconInfo] | None = None) -> IconInfo:
-    """The icon ``name`` among ``icons`` (default: :func:`active_icons`); unknown names raise
-    :class:`VidgenError` with suggestions."""
+    """The icon ``name`` (or alias) among ``icons`` (default: :func:`active_icons`); unknown names
+    raise :class:`VidgenError` with suggestions."""
     icons = active_icons() if icons is None else icons
-    info = icons.get(name)
+    info = resolve_icon(name, icons)
     if info is None:
         raise VidgenError(unknown_icon_message(name, icons))
     return info

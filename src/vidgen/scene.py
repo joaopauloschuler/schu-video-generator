@@ -68,13 +68,13 @@ def _check_theme_size(value: str | float, info: ValidationInfo) -> str | float:
 
 
 def _check_icon_name(value: str, info: ValidationInfo) -> str:
-    from vidgen.icons import NAME_PATTERN, active_icons, unknown_icon_message
+    from vidgen.icons import NAME_PATTERN, active_icons, resolve_icon, unknown_icon_message
 
     if not NAME_PATTERN.match(value):
         raise ValueError(f"invalid icon name {value!r} (letters, digits, '-' and '_')")
     if (info.context or {}).get("theme") is not None:
         icons = active_icons()
-        if value not in icons:
+        if resolve_icon(value, icons) is None:
             raise ValueError(unknown_icon_message(value, icons))
     return value
 

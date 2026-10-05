@@ -223,7 +223,8 @@ def validate_project(cls, params, project):
 
 **Icons.** `icon(name, size="body", color="text", stroke_width=None, *, height=None)` returns
 an `Icon` (a `VGroup`) drawn from the built-in set or the project's `assets/icons/<name>.svg`
-(docs/CONFIG.md "Icons"; `vidgen list-icons --search TEXT --sheet icons.png` to choose one).
+(docs/CONFIG.md "Icons", the catalogue docs/ICONS.md; `vidgen list-icons --search TEXT
+--sheet icons.png` to choose one). `name` may be an alias (`icon("home")` draws `house`).
 - `size` is a theme size token or a number of points, like text: the icon suits text of that
   size (its box is 1.5 em high: `ICON_UNITS_PER_POINT` = 0.0208 units per point, a `body` icon
   is 0.67 units). `height=` gives the box height in Manim units instead (a hero icon:

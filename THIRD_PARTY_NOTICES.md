@@ -23,7 +23,8 @@ vidgen bundles icons from **Lucide** (https://lucide.dev) as package data in
 obtained from the npm package `lucide-static` 1.52.0. Lucide is under the **ISC License**,
 © Lucide Icons and Contributors; the icons Lucide derived from Feather are also under the
 **MIT License**, © 2013-present Cole Bemis. Both licence texts, and the list of the
-Feather-derived icons, are in `src/vidgen/data/icons/lucide/LICENSE`. The icon names, categories
-and search tags are in `src/vidgen/data/icons/manifest.json` (tags from Lucide's `tags.json`,
-plus a few added by vidgen); `tools/vendor_icons.py` re-creates the folder from
-`tools/icon_set.json`.
+Feather-derived icons, are in `src/vidgen/data/icons/lucide/LICENSE`. The icon names, categories,
+search tags and aliases are in `src/vidgen/data/icons/manifest.json` (tags from Lucide's
+`tags.json` plus some added by vidgen; aliases are Lucide's old names of renamed icons plus a few
+vidgen synonyms); `tools/vendor_icons.py` re-creates the folder (200 icons) and the catalogue
+`docs/ICONS.md` from `tools/icon_set.json`.

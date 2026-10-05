@@ -91,8 +91,8 @@ Rules that apply to every step:
 - [x] `vidgen list-icons [--search TEXT] [--json]` (also `--category`, `--sheet PNG`; `IconName` param type; `tools/vendor_icons.py` for Step 20)
 
 ### Step 20 — Icons: curated expansion
-- [ ] Expand to ~200 icons, ~25 per category: tech, data, science, business, people, arrows/UI, nature, education
-- [ ] Tags in the manifest for search; test that every manifest entry loads and renders
+- [x] Expand to ~200 icons, ~25 per category: tech, data, science, business, people, arrows/UI, nature, education (200, 25 each; aliases for Lucide's old names + synonyms)
+- [x] Tags in the manifest for search; test that every manifest entry loads and renders (catalogue `docs/ICONS.md` generated + kept in sync)
 
 ### Step 21 — Icons in built-in scenes
 - [ ] `icon:` accepted by bullets items, title, end_card (and documented)

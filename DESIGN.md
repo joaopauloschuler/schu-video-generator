@@ -53,7 +53,7 @@ src/vidgen/
   themelist.py            # `vidgen list-themes`: preset listing, JSON entries, swatch PNG (§20)
   icons.py                # icon registry: vendored set + project assets/icons, search (§22; no manim)
   icon_mobject.py         # icon() / Icon: SVG -> recoloured VGroup with scaling strokes (§22)
-  iconlist.py             # `vidgen list-icons`: listing, JSON entries, labelled contact sheet (§22)
+  iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type registry
   extensions.py           # discovery + import of project extensions
   hooks.py                # hook registry + dispatch
@@ -78,7 +78,7 @@ src/vidgen/
   scenes/                 # built-in scene library (registered like extensions)
   data/fonts/             # Inter, Source Serif 4, JetBrains Mono NL (.ttf + OFL.txt; package data)
   data/icons/             # manifest.json + lucide/*.svg + lucide/LICENSE (ISC; package data, §22)
-tools/                    # maintainer scripts, not shipped: vendor_icons.py + icon_set.json (§22)
+tools/                    # maintainer scripts, not shipped: vendor_icons.py + icon_set.json (§22, §23)
 tests/                    # pytest; no network; slow renders marked `render`
 examples/
   minimal/                # config-only example using built-ins
@@ -87,6 +87,7 @@ examples/
 docs/
   CONFIG.md               # config reference
   EXTENDING.md            # how to write project extensions
+  ICONS.md                # icon catalogue, generated from the manifest by tools/vendor_icons.py (§23)
 DESIGN.md  CLAUDE.md  HANDOFF.md  README.md  THIRD_PARTY_NOTICES.md (bundled fonts, §21)
 ```
 
@@ -1209,8 +1210,8 @@ using the existing renders of the others (missing ones are rendered). Exit code 
   5 in each of the 8 categories `icons.CATEGORIES` (`tech, data, science, business, people,
   ui, nature, education`; `ui` = arrows and interface), listed in `tools/icon_set.json`.
   `tools/vendor_icons.py` (not shipped) re-creates the folder from that list (`npm pack`, or
-  `--package-dir`), checks names/categories/version, removes unlisted SVGs; Step 20 extends the
-  list and re-runs it. `THIRD_PARTY_NOTICES.md` records the source.
+  `--package-dir`), checks names/categories/version, removes unlisted SVGs; Step 20 extended the
+  list to 200 (§23). `THIRD_PARTY_NOTICES.md` records the source.
 - **Registry** (`vidgen/icons.py`, manim-free): `IconInfo(name, path, category, tags, source,
   origin, overrides)`; `builtin_icons()`, `builtin_sources()`, `project_icons(root)` (every
   `<root>/assets/icons/*.svg`, names `[A-Za-z0-9][A-Za-z0-9_-]*`, optional `icons.json` `{icons:
@@ -1262,3 +1263,43 @@ using the existing renders of the others (missing ones are rendered). Exit code 
 - **Fingerprint**: `icons.py`/`icon_mobject.py` count as vidgen source; the vendored SVGs and
   manifest are part of `vidgen_source_digest`; project icons are under `assets/` (already
   tracked by size+mtime).
+
+## 23. Refinements (Step 20, icons: curated expansion)
+
+- **Set**: 200 Lucide icons, 25 per category, chosen for explainer videos (concepts scripts name:
+  hardware/networks/security/AI, chart types/tables/statistics, lab/space/medicine/maths,
+  money/growth/commerce/industry, persons/communication/emotions/health, arrows and status
+  symbols, weather/plants/animals/landscape, books/school/writing/arts); near-duplicates and
+  brand marks left out. Lucide 1.52's current names are listed (e.g. `building-complex`,
+  `face-slightly-smiling`, `book-bookmark`, `waves-horizontal`); the old ones are aliases.
+- **Tags**: Lucide's `tags.json` + `extra_tags` with the words an explainer script uses for the
+  concept (`banknote`: cash, bill, finance; `trending-up`: growth, profit; `shield-check`:
+  security, trust; `gauge`: performance, speed, kpi). Every icon has >= 3 distinct tags.
+- **Aliases** (manifest entry key `aliases: [str]`, sorted; always present): (1) Lucide keeps
+  renamed icons' old names as copies of the new file, so the tool makes every package file that
+  has no `tags.json` entry and draws exactly like one vendored icon (comment and `class`
+  ignored) an alias of it (`home` → `house`, `pie-chart` → `chart-pie`; an old name drawing like
+  two vendored icons is skipped); (2) curated `aliases` in `tools/icon_set.json`
+  (`{alias: icon}`): synonyms (`idea`, `ai`, `warning`, `money`, ...) and `bar-chart` →
+  `chart-column` (Lucide's `bar-chart` is the axis-less `chart-no-axes-column-increasing`,
+  which is not vendored). The tool rejects: a curated alias that is a current Lucide name or
+  conflicts with an upstream alias of a vendored icon, an alias of an unlisted icon, and an old
+  (alias) name listed as an icon.
+- **Resolution** (`vidgen/icons.py`): `IconInfo.aliases`; `builtin_aliases()` (`{alias: name}`);
+  `resolve_icon(name, icons)` (name first, then an alias of an icon in `icons`; an alias never
+  shadows an icon name); `icon_names(icons)` (names + aliases, sorted). `find_icon` (so `icon()`),
+  the `IconName` validator and the schema `enum` accept aliases; `Icon.icon_name` (layout dump,
+  lint) is the resolved icon's name. A project icon replacing a built-in keeps its aliases; a
+  project icon named like an alias takes the name over (`available_icons` drops it from the
+  built-in's aliases). Search: an exact alias scores like a name prefix (1), part of an alias
+  like part of a name (2). `unknown_icon_message` also matches aliases, suggesting the icon
+  they stand for.
+- **Listing**: `list-icons` text lines show `(alias: ...)`; JSON icon entries gain `aliases`
+  (additive, envelope version 1).
+- **Catalogue**: `docs/ICONS.md` = `iconlist.catalogue_markdown(manifest)` (per category: name,
+  aliases, first 8 tags), written by `tools/vendor_icons.py` (`--docs`); a test keeps it equal to
+  the shipped manifest.
+- **Rendering check**: every icon was compared with a reference rasteriser (cairosvg, not a
+  dependency) at 192 px: overlap of inked pixels >= 0.97 for all 200 (arcs, spirals, filled
+  dots), so the loader needed no change; tests build all 200 (box, colours, extent) and render
+  six with arcs/fills at 96 px.
