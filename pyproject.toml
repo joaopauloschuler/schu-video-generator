@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vidgen"
+version = "0.1.0"
+description = "Configurable generator for narrated animated videos (Manim + ElevenLabs + ffmpeg)"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+dependencies = [
+    "manim>=0.18",
+    "pydantic>=2",
+    "pyyaml",
+    "av",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+vidgen = "vidgen.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+vidgen = ["templates/**/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "render: invokes Manim rendering (slow; deselect with -m \"not render\")",
+]

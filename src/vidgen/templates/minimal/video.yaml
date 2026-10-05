@@ -1,0 +1,45 @@
+# vidgen project config. Reference: docs/CONFIG.md
+title: __TITLE__
+# output: my_video          # basename of the output files; default: the folder name
+
+format: {width: 1920, height: 1080, fps: 30}
+preview: {width: 854, height: 480, fps: 15}
+
+# variants:                 # named overrides, deep-merged onto this config
+#   vertical:
+#     format: {width: 1080, height: 1920}
+#     preview: {width: 480, height: 854}
+
+theme:
+  background: "#0E1116"
+  font: Inter
+  # colors: {accent: "#FF6B6B"}   # override or add color tokens
+
+voice:
+  provider: elevenlabs
+  voice_id: nPczCjzI2devNBz1zQrb
+  model_id: eleven_multilingual_v2
+
+narration:
+  pad: 0.35                 # seconds of silence after each beat
+
+scenes:
+  - id: intro
+    type: title
+    params:
+      title: __TITLE__
+      subtitle: "Made with vidgen"
+    beats:
+      - text: "Welcome. This short video was generated from a single config file."
+
+  - id: points
+    type: bullets
+    params:
+      heading: "How it works"
+      items:
+        - "Write the narration as beats"
+        - "Pick a scene type for each scene"
+        - "Run vidgen tts, then vidgen render"
+    beats:
+      - text: "Each scene has a type, some parameters, and one or more narrated beats."
+      - text: "Generate the narration once, then render. Only changed beats are re-voiced."

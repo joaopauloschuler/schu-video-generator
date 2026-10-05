@@ -141,6 +141,23 @@ Validation rules: beat ids unique across the whole video; scene ids unique; `typ
 registered after extensions load (`vidgen validate` reports unknown types with the list of known
 ones); `params` validated against the scene class's `Params` model when it defines one.
 
+Refinements (Step 1):
+- Unknown keys are rejected in every structural model (not only top level): `format`, `preview`,
+  `theme`, `voice`, `voice.settings`, `narration`, scenes and beats. Open: `params`,
+  `theme.colors`, `theme.sizes`, and the bodies of `variants` (validated after merging).
+- `theme.colors` / `theme.sizes` / `theme.palette` in the config hold only what the user wrote;
+  `Theme` merges them over the built-in defaults shown above. Color values must be hex
+  (`#RGB`, `#RRGGBB` or `#RRGGBBAA`); token names follow the id pattern.
+- **Silent scenes**: a scene may have no beats (`beats: []` or omitted) if it sets
+  `duration: <seconds>`; `duration` is an error on a scene that has beats (narrated scenes are
+  timed by their audio).
+- Variants: the variant mapping is deep-merged onto the raw config (mappings merge recursively,
+  lists such as `scenes` and scalars replace), then the result is validated. A variant may not
+  contain `variants`. `vidgen validate` checks the base config and every variant.
+- `output` defaults to the project folder name and must be a plain file name (no path separators).
+- `extensions` entries are directories relative to the project root; `Project.asset(rel)` also
+  resolves relative to the project root (e.g. `assets/logo.png`).
+
 ## 5. Scene runtime
 
 ### 5.1 `NarratedScene` (in `scene.py`, subclass of `manim.Scene`)

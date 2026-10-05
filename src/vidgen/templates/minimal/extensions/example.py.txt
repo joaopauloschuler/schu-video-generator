@@ -1,0 +1,22 @@
+# Example project extension. vidgen imports every *.py file in extensions/ (this file ends in
+# .txt, so it is NOT imported). Rename it to example.py to use it, then reference the scene
+# from video.yaml with `type: big_number`. See docs/EXTENDING.md.
+#
+# from vidgen.api import *
+#
+#
+# @scene("big_number")
+# class BigNumber(NarratedScene):
+#     class Params(SceneParams):
+#         value: str
+#         label: str = ""
+#
+#     def construct(self):
+#         number = self.text(self.params.value, size=96, color="highlight")
+#         label = self.text(self.params.label, size="caption", color="dim")
+#         label.next_to(number, DOWN)
+#         with self.narrate(0):
+#             self.play(FadeIn(number), FadeIn(label))
+#         for i in range(1, len(self.beats)):
+#             with self.narrate(i):
+#                 pass
