@@ -13,8 +13,11 @@ class TextCard(NarratedScene):
 
     class Params(SceneParams):
         text: str
+        """The text, wrapped to fit the frame."""
         size: ThemeSize = "title"
+        """Text size."""
         color: ThemeColor = "text"
+        """Text color."""
 
     def construct(self) -> None:
         p = self.params

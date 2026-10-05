@@ -22,7 +22,7 @@ from pydantic import (
     model_validator,
 )
 
-from vidgen.errors import VidgenError
+from vidgen.errors import Problem, VidgenError
 
 ID_PATTERN = r"^[A-Za-z0-9_]+$"
 HEX_COLOR_PATTERN = r"^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$"
@@ -209,16 +209,19 @@ def format_location(loc: tuple[str | int, ...]) -> str:
     return out
 
 
+def validation_problems(error: ValidationError, prefix: tuple[str | int, ...] = ()) -> list[Problem]:
+    """One :class:`~vidgen.errors.Problem` per error; ``prefix`` is prepended to every location
+    (e.g. ``("scenes", 2, "params")`` gives ``scenes[2].params.values``)."""
+    # Model validators raise from the model itself; drop pydantic's "Value error, " prefix.
+    return [
+        Problem(format_location((*prefix, *item["loc"])), item["msg"].removeprefix("Value error, "))
+        for item in error.errors()
+    ]
+
+
 def validation_error_lines(error: ValidationError, prefix: tuple[str | int, ...] = ()) -> list[str]:
-    """One ``path: message`` line per error; ``prefix`` is prepended to every path
-    (e.g. ``("scenes", 2, "params")`` gives ``scenes[2].params.values: ...``)."""
-    lines = []
-    for item in error.errors():
-        # Model validators raise from the model itself; drop pydantic's "Value error, " prefix.
-        message = item["msg"].removeprefix("Value error, ")
-        path = format_location((*prefix, *item["loc"]))
-        lines.append(f"{path}: {message}" if path else message)
-    return lines
+    """One ``path: message`` line per error (see :func:`validation_problems`)."""
+    return [str(problem) for problem in validation_problems(error, prefix)]
 
 
 def format_validation_error(error: ValidationError, source: str) -> str:
@@ -232,11 +235,12 @@ def parse_config(data: Any, source: str = "video.yaml") -> VideoConfig:
     """Validate a raw mapping into a :class:`VideoConfig`.
 
     ``source`` (usually the file name) is included in error messages.
-    Raises :class:`VidgenError` on any validation error.
+    Raises :class:`VidgenError` on any validation error; its ``problems`` give each error's
+    config location.
     """
     if not isinstance(data, dict):
         raise VidgenError(f"{source}: the top level must be a mapping (key: value pairs)")
     try:
         return VideoConfig.model_validate(data)
     except ValidationError as exc:
-        raise VidgenError(format_validation_error(exc, source)) from None
+        raise VidgenError(format_validation_error(exc, source), problems=validation_problems(exc)) from None

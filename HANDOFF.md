@@ -529,3 +529,71 @@ Remaining known limitations / suggested next steps
 
 How to test: `/home/claude/venv/bin/python -m pytest -q` (382 passed, ~35 s; same on Python
 3.10). Manual: see the commands in each example's `video.yaml` header.
+
+## Step 8 — JSON output for commands
+What was built
+- `--json` on `vidgen validate`, `vidgen list-scenes` and `vidgen render`. stdout then holds
+  exactly one JSON document (indented, ASCII-only so a cp1252 console cannot corrupt it);
+  everything the command prints meanwhile (progress, Manim output) is redirected to stderr;
+  vidgen log warnings still go to stderr and are also collected into the document. Exit code
+  0 iff `ok`, 1 for errors, 2 for usage errors. Errors (usage, `VidgenError`, unexpected
+  exceptions) are JSON documents too. Human output without `--json` is unchanged.
+- Envelope `{version: 1, vidgen, command, ok, warnings: [{scene, message}], ..., error?: {kind
+  (usage|error|internal), message, problems, details}}`. Per command:
+  - validate: `project, config_file, title, scenes, beats, estimated_duration, variants: [{name,
+    loaded, estimated_duration, problems}], problems: [{location, message, variant}], audio:
+    [{variant, dir, ok, stale, missing, orphaned, beats: [{scene, beat, state}]}]` (always this
+    shape; summary fields `null` when the config does not load).
+  - list-scenes: `project, scene_types: [{name, origin, builtin, overrides_builtin, doc, beats:
+    null|{min, max, text}, params: null|[{name, type, required, default, doc, nested: [{model,
+    fields}]}]}]`.
+  - render: `project, variant, preview, audio, format, outputs: {video, subtitles, timings},
+    duration, elapsed, scenes: [{id, type, status (rendered|reused), start, duration,
+    render_seconds, beats: [{id, start, end}]}]`; worker warnings carry their scene id; failures
+    put `{failed: [{scene, exit_code, output_tail}], rendered}` in `error.details`.
+- Reference: docs/CONFIG.md "JSON output (`--json`)"; README command table; DESIGN §2, §8 and
+  new §11; EXTENDING.md (field docstrings, problem locations); usage line in
+  `examples/minimal/video.yaml`.
+- Every built-in param now has a one-line docstring (shown as `doc`).
+
+Files
+- New: `src/vidgen/jsonout.py` (document builders, `SCHEMA_VERSION`), `src/vidgen/describe.py`
+  (type/params description, moved out of `cli.py` + JSON form), `tests/test_json_output.py`
+  (23 tests, 2 of them renders).
+- Changed: `cli.py`, `errors.py`, `config.py`, `project.py`, `render/pipeline.py`, `scene.py`,
+  all `scenes/*.py` (field docstrings only), `pyproject.toml` (`pydantic>=2.7`), docs above.
+
+Public interfaces added/changed (internal modules; `vidgen.api` unchanged)
+- `vidgen.errors.Problem(location, message, variant=None)` with `str()`, `in_variant()`,
+  `to_json()`; `VidgenError(message, *, problems=(), details=None)` → `.problems`, `.details`.
+- `config.validation_problems(err, prefix)`; `parse_config`/`Project.load` errors carry
+  `problems` (variant ones tagged with the variant).
+- `cli.project_problems(project) -> list[Problem]` (`check_project` unchanged, returns
+  strings), `cli.validate_all(project, keep_going=False)`, `cli.JSON_COMMANDS`,
+  `cli.UsageError`; command functions return `int`, or the document `dict` with `--json`.
+- `RenderResult.timings`, `.render_seconds`, `.warnings`; render failures have `details`.
+- `SceneParams` uses pydantic `use_attribute_docstrings=True`.
+
+Decisions / deviations
+- `version` in the documents is the schema version (1), `vidgen` the package version. Keys may
+  be added within a version; removals/renames/type changes bump it (documented).
+- `validate --json` reports a variant whose config does not load as problems and keeps checking
+  the others (closes, for JSON, the Step 7 gap "validate aborts on the first variant that fails
+  to load"); the human command still stops there, to keep its output unchanged.
+- Tiny human-output change: a `validate_project` message not following the `"<param>: ..."`
+  convention now prints as `scenes[i].params: <msg>` instead of `scenes[i].params.<msg>`.
+- argparse errors no longer `SystemExit(2)` out of `main()`; `main()` prints the same usage text
+  and returns 2 (the console script's exit code is the same).
+- The scene type `doc` is the class docstring, else the module docstring (built-in classes
+  describe their reveal behaviour; the module line has the one-line summary).
+
+Known gaps / TODOs
+- `tts` has no `--json` (not in this step; `vidgen tts --json` is a usage error in JSON).
+- Problems from YAML/JSON syntax errors have no location (only the message with the line).
+- Worker warnings are recognised by the `warning: ` line prefix in worker output (the format
+  the worker's logging uses); prints from scene code are not collected.
+- Step 9 (JSON Schema) can reuse `describe.py` and the field docstrings (`description`).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (404 passed, 1 skipped; also passes on
+Python 3.10 / Manim 0.19). Manual: `vidgen validate examples/minimal --json`,
+`vidgen list-scenes --json`, `vidgen render examples/minimal --preview --json 2>/dev/null`.

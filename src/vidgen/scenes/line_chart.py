@@ -14,8 +14,11 @@ class Series(SceneParams):
     """One line: ``name``, ``values`` (one per x) and an optional ``color``."""
 
     name: str
+    """Series name (end label / legend)."""
     values: list[float]
+    """One value per x."""
     color: ThemeColor | None = None
+    """Line color; default: the theme.palette color at the series' position."""
 
 
 @scene("line_chart")
@@ -29,19 +32,33 @@ class LineChart(NarratedScene):
 
     class Params(SceneParams):
         title: str = ""
+        """Chart title."""
         x: list[float] | list[str] = Field(min_length=2)
+        """X values: increasing numbers, or category names."""
         series: dict[str, list[float]] | list[Series] = Field(min_length=1)
+        """{name: [values]} or a list of {name, values, color}; one value per x."""
         x_label: str = ""
+        """X axis label."""
         y_label: str = ""
+        """Y axis label."""
         y_min: float | None = None
+        """Lower end of the y axis; default: from the data."""
         y_max: float | None = None
+        """Upper end of the y axis; default: from the data."""
         value_format: str | None = None
+        """Python format for y ticks and end labels; default: automatic."""
         x_format: str = "{:g}"
+        """Python format for numeric x tick labels."""
         unit: str = ""
+        """Appended to y values."""
         reveal: Literal["per_beat", "all"] = "per_beat"
+        """per_beat: series i is drawn at beat i; all: every series in beat 1."""
         annotate: bool = True
+        """Label the end of each line with its name and value."""
         dots: bool | None = None
+        """Markers at the data points; default: when there are at most 12 points."""
         caption: str = ""
+        """Small note under the chart."""
 
         @field_validator("value_format", "x_format")
         @classmethod

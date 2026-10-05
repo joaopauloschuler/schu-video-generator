@@ -14,15 +14,25 @@ class Title(NarratedScene):
 
     class Params(SceneParams):
         title: str
+        """Main title; wrapped to fit, may contain line breaks."""
         subtitle: str = ""
+        """Line under the title."""
         kicker: str = ""
+        """Small label above the title."""
         authors: list[str] = []
+        """One line each, revealed in beat 2."""
         highlight: str = ""
+        """Part of the title drawn in highlight_color."""
         color: ThemeColor = "text"
+        """Title color."""
         highlight_color: ThemeColor = "highlight"
+        """Color of the highlighted part of the title."""
         subtitle_color: ThemeColor = "text"
+        """Subtitle color."""
         kicker_color: ThemeColor = "primary"
+        """Kicker color."""
         authors_color: ThemeColor = "dim"
+        """Authors color."""
 
         @model_validator(mode="after")
         def _highlight_in_title(self) -> SceneParams:

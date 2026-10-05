@@ -6,7 +6,8 @@ the bodies of `variants`, so typos are caught by `vidgen validate`. Paths are re
 project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-and-beats),
 [format](#format-and-preview), [variants](#variants), [theme](#theme), [voice](#voice-voice),
 [narration](#narration-narration), [narration audio](#narration-audio-elevenlabs),
-[built-in scene types](#built-in-scenes).
+[built-in scene types](#built-in-scenes),
+[JSON output of commands](#json-output---json).
 
 ## Top level
 
@@ -458,3 +459,97 @@ One block of text, wrapped to fit, faded in at the first beat and held (no fade-
   params: {text: "Over-parameterized?", color: accent}
   duration: 2
 ```
+
+## JSON output (`--json`)
+
+`vidgen validate`, `vidgen list-scenes` and `vidgen render` accept `--json`: stdout then holds
+exactly one JSON document (ASCII-only, non-ASCII characters escaped), and everything else
+(progress, `warning:` lines, Manim output) goes to stderr. These shapes are meant for programs
+and AI agents driving vidgen. Without `--json` the human output is unchanged.
+
+**Stability.** `version` is the version of these shapes (currently **1**), not of vidgen. Keys
+are only added within a version; removing or renaming a key or changing a value's type bumps
+it. Times are seconds (floats), paths are absolute strings, absent values are `null`.
+
+**Envelope** (every document, success or failure):
+
+| key | type | |
+|---|---|---|
+| `version` | int | schema version of the document (1) |
+| `vidgen` | str | vidgen package version |
+| `command` | str \| null | `validate`, `list-scenes`, `render` (`null` if the command line could not be parsed) |
+| `ok` | bool | `true` on success; the exit code is 0 exactly when `ok` is true |
+| `warnings` | list | `{scene, message}`: vidgen warnings of the run (`scene` is `null`, or the scene whose render printed it) |
+| `error` | object | only when `ok` is false: `{kind, message, problems, details}` |
+
+**Errors.** `error.kind` is `usage` (bad command line; exit code 2), `error` (something the user
+can fix: config, missing file, unknown scene, failed scene...; exit code 1) or `internal` (an
+unexpected exception; exit code 1, `details.traceback` holds the traceback). `message` is the
+text the human output prints after `error: `. `problems` lists config problems as
+`{location, message, variant}` (`location` is a config path such as `scenes[2].params.title`,
+or `null` when the problem is not about one value, e.g. an extension that fails to import;
+`variant` is the variant whose merged config has the problem, `null` for the base config).
+`details` is an object, empty unless stated below.
+
+```json
+{"version": 1, "vidgen": "0.1.0", "command": "render", "ok": false, "warnings": [],
+ "error": {"kind": "usage", "message": "unrecognized arguments: --bogus", "problems": [], "details": {}}}
+```
+
+### `vidgen validate --json`
+
+Always a validate document (also when the project cannot be loaded); exit code 1 if there is
+any problem. Unlike the human output, a variant whose config does not load is reported as
+problems (with its `variant`) and the other variants are still checked.
+
+| key | type | |
+|---|---|---|
+| `project`, `config_file` | str \| null | project folder and config file (`null`: the project could not be loaded) |
+| `title` | str \| null | |
+| `scenes`, `beats` | int \| null | counts in the base config |
+| `estimated_duration` | float \| null | seconds, from word counts + `narration.pad` + silent scenes' `duration` |
+| `variants` | list | every variant checked: `{name, loaded, estimated_duration, problems}` (`problems`: how many are this variant's own) |
+| `problems` | list | `{location, message, variant}` (as in `error.problems`); empty when the project is valid |
+| `audio` | list | one per audio folder (the base config's, plus each variant with its own, see [variant audio](#narration-audio-elevenlabs)): `{variant, dir, ok, stale, missing, orphaned, beats}`; `ok`/`stale`/`missing` are counts, `orphaned` the paths of MP3s no beat uses, `beats` lists `{scene, beat, state}` in video order with `state` `ok`, `stale` or `missing` |
+
+When there are problems, `error` is `{"kind": "error", "message": "video.yaml: invalid
+project ...", "problems": [same list], "details": {}}`. Problem `message`s are the text after
+the location in the human output (`scenes[1].type: unknown scene type 'titel'; did you mean
+'title'? ...` → `location` `scenes[1].type`).
+
+### `vidgen list-scenes --json`
+
+| key | type | |
+|---|---|---|
+| `project` | str \| null | the project whose extensions were loaded (`null`: built-ins only) |
+| `scene_types` | list | sorted by name, as below |
+
+Each scene type: `name`; `origin` (`builtin`, or the extension file relative to the project);
+`builtin` (bool); `overrides_builtin` (bool, an extension registered with `override=True`);
+`doc` (the class docstring, else its module's, or `null`); `beats` (`null` = any number, else
+`{min, max, text}` with `max` `null` for no upper limit, e.g. `{"min": 2, "max": 2, "text":
+"exactly 2 beats"}`); `params` (`null` = free-form params, else a list of fields).
+Each field: `name`; `type` (readable type as in the human listing: `str`, `list[str]`,
+`color`, `size`, `'all' | 'per_beat'`, ...); `required` (bool); `default` (JSON value, `null`
+when required); `doc` (the docstring under the field or its `Field(description=...)`, or
+`null`); `nested` (fields of `SceneParams` models used in the type, as `{model, fields}`).
+
+### `vidgen render --json`
+
+| key | type | |
+|---|---|---|
+| `project` | str | |
+| `variant` | str \| null | |
+| `preview` | bool | |
+| `audio` | bool | `false` with `--no-audio` |
+| `format` | object | `{width, height, fps}` of this render |
+| `outputs` | object | `{video, subtitles, timings}`: the MP4, the SRT and `build/.../timings.json` |
+| `duration` | float | length of the video |
+| `elapsed` | float | wall time of the command |
+| `scenes` | list | config order: `{id, type, status, start, duration, render_seconds, beats}`; `status` is `rendered` or `reused` (an existing render was joined, see `--scene`), `render_seconds` the worker's wall time (`null` when reused), `start`/`duration` in the video, `beats` lists `{id, start, end}` (absolute; `end` excludes `narration.pad`) |
+
+`warnings` includes those printed by scene code during rendering (e.g. beats a scene never
+narrated), with their `scene`. On failure, `error.details` is `{failed, rendered}`: `failed`
+lists `{scene, exit_code, output_tail}` (the last 60 lines of the worker's output; exit code 1
+for a vidgen error, 2 for an exception in scene code), `rendered` the scene ids rendered before
+(or, with `--keep-going`, besides) the failures.

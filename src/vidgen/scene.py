@@ -33,9 +33,13 @@ log = logging.getLogger("vidgen.scene")
 
 
 class SceneParams(BaseModel):
-    """Base class for a scene type's ``Params`` model; unknown keys are an error."""
+    """Base class for a scene type's ``Params`` model; unknown keys are an error.
 
-    model_config = ConfigDict(extra="forbid")
+    A docstring under a field (or ``Field(description=...)``) documents it; ``vidgen
+    list-scenes --json`` shows it as the field's ``doc``.
+    """
+
+    model_config = ConfigDict(extra="forbid", use_attribute_docstrings=True)
 
 
 _HEX = re.compile(r"^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$")

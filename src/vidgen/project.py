@@ -99,7 +99,10 @@ class Project:
                 known = ", ".join(sorted(base.variants)) or "(none defined)"
                 raise VidgenError(f"{source}: unknown variant '{variant}'; available variants: {known}")
             data = deep_merge(data, base.variants[variant])
-            config = parse_config(data, f"{source} (variant '{variant}')")
+            try:
+                config = parse_config(data, f"{source} (variant '{variant}')")
+            except VidgenError as exc:
+                raise VidgenError(str(exc), problems=[p.in_variant(variant) for p in exc.problems]) from None
         return cls(config_file.parent, config_file, config, variant, base)
 
     # ----- names and paths -------------------------------------------------------------------

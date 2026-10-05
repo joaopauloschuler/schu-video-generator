@@ -6,7 +6,7 @@ It generalises the one-off `kphi3_paper_video` project: the pipeline is shared, 
 scene types, helpers, theme tokens and pipeline hooks.
 
 Status of this document: describes the implemented system (version 0.1, after the Step 7
-review). Sections 1–9 give the original contract; the "Refinements (Step N)" lists record how
+review, plus the roadmap steps in tasklist.md recorded in §11 onwards). Sections 1–9 give the original contract; the "Refinements (Step N)" lists record how
 each step made it precise, and where a refinement differs from the text above it, the
 refinement is what the code does. Changing a public interface requires updating this file in
 the same commit and noting it in HANDOFF.md. User documentation: README.md, docs/CONFIG.md
@@ -40,6 +40,9 @@ src/vidgen/
   __main__.py             # `python -m vidgen` -> cli.main()
   api.py                  # THE public surface for project extensions (see §6)
   cli.py                  # argparse CLI (see §8)
+  jsonout.py              # --json documents of the CLI (see §11)
+  describe.py             # scene-type/params descriptions for list-scenes
+  errors.py               # VidgenError, Problem
   config.py               # pydantic v2 models for video.yaml (see §4)
   project.py              # Project: locate/load config, resolve paths, variants
   theme.py                # Theme object (colors, font, sizes, background)
@@ -509,11 +512,11 @@ Refinements (Step 3):
 
 ```
 vidgen init <dir> [--example minimal]   # scaffold a project
-vidgen validate [PROJECT]               # load config + extensions, report all errors
-vidgen list-scenes [PROJECT]            # built-ins + extensions (+ which overrides)
+vidgen validate [PROJECT] [--json]      # load config + extensions, report all errors
+vidgen list-scenes [PROJECT] [--json]   # built-ins + extensions (+ which overrides)
 vidgen tts [PROJECT] [--force] [--dry-run] [--beat ID ...] [--variant NAME]
 vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going]
-              [--jobs N]
+              [--jobs N] [--json]
 ```
 PROJECT defaults to the current directory. `--scene` re-renders only those scenes and re-joins
 using the existing renders of the others (missing ones are rendered). Exit code non-zero on error.
@@ -559,3 +562,43 @@ using the existing renders of the others (missing ones are rendered). Exit code 
   (template files cannot start with a dot, because setuptools does not package dot files: the
   template stores `gitignore` and `init` renames it).
 
+## 11. Refinements (Step 8, JSON output)
+
+- **`--json`** on `validate`, `list-scenes` and `render` (`vidgen.cli.JSON_COMMANDS`): stdout
+  holds exactly one JSON document (`vidgen.jsonout.dumps`: indented, `ensure_ascii=True`, so a
+  legacy console code page cannot corrupt it); everything the command prints meanwhile is
+  redirected to stderr (`contextlib.redirect_stdout`), and vidgen log warnings are both printed
+  on stderr and collected into the document. Exit code 0 iff `ok`; 1 for errors; 2 for usage
+  errors. Without `--json` the human output is unchanged.
+- **Shapes** (`vidgen/jsonout.py`, reference: docs/CONFIG.md "JSON output"): envelope `{version,
+  vidgen, command, ok, warnings: [{scene, message}], ..., error?: {kind, message, problems,
+  details}}`. `version` is `jsonout.SCHEMA_VERSION` (1): keys may be added within a version;
+  removing/renaming a key or changing a value's type bumps it. `error.kind`: `usage` (argparse
+  error, `command` may be `null`), `error` (`VidgenError`), `internal` (any other exception;
+  `details.traceback`). Paths are absolute, times are seconds.
+- **Structured problems**: `vidgen.errors.Problem(location, message, variant=None)`
+  (`str()` = the human line, `to_json()`), and `VidgenError(message, *, problems=(),
+  details=None)` (both optional; existing calls unchanged). `config.validation_problems(err,
+  prefix)` (`validation_error_lines` now derives from it); `parse_config` and
+  `Project.load` (variant problems carry the variant) attach problems to their error.
+  `cli.project_problems(project) -> list[Problem]`; `cli.check_project` keeps returning the
+  same strings. A `validate_project` message `"<param>: <text>"` gets location
+  `scenes[i].params.<param>`; other messages get `scenes[i].params`, and their human line is now
+  `scenes[i].params: <message>` (was `scenes[i].params.<message>`, which read like a param
+  name). `cli.validate_all(project, keep_going=False)`; with `--json`, a variant whose config
+  does not load is reported as problems and the other variants are still checked (the human
+  command still stops at it).
+- **Render**: `RenderResult` gained `timings` (the combined timings), `render_seconds`
+  (`{scene_id: wall seconds}` for scenes rendered in this run) and `warnings`
+  (`[(scene_id, message)]` printed by workers, also collected when progress is shown live).
+  Render failures raise `VidgenError(..., details={"failed": [{scene, exit_code,
+  output_tail}], "rendered": [ids]})`.
+- **Param docs**: `SceneParams` sets pydantic's `use_attribute_docstrings=True` (requires
+  `pydantic>=2.7`), so a docstring under a field becomes its `description`, shown as `doc` by
+  `list-scenes --json`; every built-in param has one. The scene type's `doc` is its class
+  docstring, else its module's. The listing helpers moved from `cli.py` to
+  `vidgen/describe.py` (`type_name`, `nested_models`, `describe_params`, `params_json`,
+  `scene_type_json`).
+- **Usage errors**: the CLI parser raises `cli.UsageError` instead of exiting; `main` prints
+  argparse's usual `usage:` + `prog: error:` lines and returns 2 (so `main()` returns 2 rather
+  than raising `SystemExit(2)`); `--help`/`--version` still exit through argparse.

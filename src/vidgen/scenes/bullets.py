@@ -19,16 +19,27 @@ class Bullets(NarratedScene):
 
     class Params(SceneParams):
         heading: str = ""
+        """Optional heading, shown with the first item."""
         items: list[str] = Field(min_length=1)
+        """The list items (at least one); item i appears at beat i."""
         reveal: Literal["per_beat", "all"] = "per_beat"
+        """per_beat: one item per beat; all: every item in beat 1."""
         numbered: bool = False
+        """Number the items (1. 2. ...) instead of using marker."""
         dim_previous: bool = False
+        """Fade earlier items when a new one appears."""
         marker: str = "•"
+        """Bullet character."""
         size: ThemeSize = "body"
+        """Item text size (shrunk automatically for long lists)."""
         heading_size: ThemeSize = "heading"
+        """Heading text size."""
         color: ThemeColor = "text"
+        """Item text color."""
         heading_color: ThemeColor = "text"
+        """Heading color."""
         marker_color: ThemeColor = "primary"
+        """Bullet/number color."""
 
     def construct(self) -> None:
         p = self.params

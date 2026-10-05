@@ -16,12 +16,19 @@ class EndCard(NarratedScene):
 
     class Params(SceneParams):
         title: str = ""
+        """Closing message; at least one of title, lines, logo."""
         lines: list[str] = []
+        """Links, credits; short lines shrink together instead of wrapping."""
         logo: str | None = None
+        """Image file in the project."""
         title_color: ThemeColor = "highlight"
+        """Title color."""
         color: ThemeColor = "text"
+        """Lines color."""
         title_size: ThemeSize = "title"
+        """Title text size."""
         size: ThemeSize = "body"
+        """Lines text size."""
 
         @model_validator(mode="after")
         def _something(self) -> SceneParams:

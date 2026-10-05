@@ -10,7 +10,7 @@ license = { file = "LICENSE" }
 requires-python = ">=3.10"
 dependencies = [
     "manim>=0.19",
-    "pydantic>=2",
+    "pydantic>=2.7",
     "pyyaml",
     "av",
 ]

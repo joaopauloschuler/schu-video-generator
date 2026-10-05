@@ -71,10 +71,10 @@ narration.
 | command | |
 |---|---|
 | `vidgen init DIR [--example minimal]` | create a new project (DIR must not exist or be empty) |
-| `vidgen validate [PROJECT]` | load config and extensions, report every problem (also in every variant), estimated length, audio status |
-| `vidgen list-scenes [PROJECT]` | scene types (built-in and the project's) with their params |
+| `vidgen validate [PROJECT] [--json]` | load config and extensions, report every problem (also in every variant), estimated length, audio status |
+| `vidgen list-scenes [PROJECT] [--json]` | scene types (built-in and the project's) with their params |
 | `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--variant NAME]` | generate missing/stale narration into `audio/`; `--dry-run` needs no key |
-| `vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going] [--jobs N]` | render and join the video |
+| `vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going] [--jobs N] [--json]` | render and join the video |
 
 `PROJECT` is a project folder or its config file (default: the current folder).
 `render` options: `--preview` uses the `preview` resolution; `--scene ID` re-renders only those
@@ -82,6 +82,10 @@ scenes and re-joins with the existing renders of the others; `--variant NAME` ap
 variant (e.g. vertical 1080x1920); `--no-audio` leaves the narration out (timing is unchanged);
 `--keep-going` renders the remaining scenes after a failure; `--jobs N` renders N scenes in
 parallel. Errors are printed as `error: ...` with exit code 1.
+`--json` prints one machine-readable JSON document on stdout instead (problems with their
+config location, scene types with params/defaults/docs, output paths and per-scene durations;
+errors too, with a non-zero exit code) — for scripts and AI agents. The shapes are documented
+in [docs/CONFIG.md](docs/CONFIG.md#json-output---json).
 
 ## Project layout
 

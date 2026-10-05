@@ -52,15 +52,25 @@ class CodeListing(NarratedScene):
 
     class Params(SceneParams):
         code: str | None = None
+        """Inline code; give exactly one of code / path."""
         path: str | None = None
+        """Code file in the project; give exactly one of code / path."""
         language: str | None = None
+        """Pygments lexer name; default: from the file name, else python."""
         title: str = ""
+        """Window title."""
         highlight: list[LineSpec] = []
+        """Entry i applies at beat i: 3, '2-4', '1, 5-6' or [1, 4] (1-based lines)."""
         line_numbers: bool = True
+        """Show line numbers."""
         style: str = "github-dark"
+        """Pygments style (monokai, dracula, one-dark, ...)."""
         font: str = "Monospace"
+        """Monospace font family (e.g. Consolas on Windows)."""
         size: ThemeSize = "caption"
+        """Starting font size (scaled to fill the frame, up to 1.5x)."""
         highlight_color: ThemeColor = "highlight"
+        """Color of the highlight band."""
 
         @model_validator(mode="after")
         def _check(self) -> SceneParams:

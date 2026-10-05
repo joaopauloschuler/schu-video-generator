@@ -19,17 +19,29 @@ class BarChart(NarratedScene):
 
     class Params(SceneParams):
         title: str = ""
+        """Chart title."""
         labels: list[str] = Field(min_length=1)
+        """Bar labels."""
         values: list[float] = Field(min_length=1)
+        """One value per label; negatives allowed."""
         unit: str = ""
+        """Appended to every value label, e.g. '%' or ' ms'."""
         value_format: str | None = None
+        """Python format for value labels, e.g. '{:.1f}'; default: the decimals the values need."""
         colors: Literal["palette"] | ThemeColor | list[ThemeColor] = "primary"
+        """One color, one color per bar, or 'palette' (theme.palette)."""
         highlight: int | str | None = None
+        """Bar to highlight: 0-based index or label."""
         highlight_color: ThemeColor = "highlight"
+        """Color of the highlighted bar's value label."""
         horizontal: bool | None = None
+        """Horizontal bars; default: vertical, horizontal in a portrait frame with more than 5 bars."""
         reveal: Literal["all", "per_beat"] = "all"
+        """all: every bar grows in beat 1; per_beat: bar i grows at beat i."""
         baseline: float = 0.0
+        """Value the bars start from (e.g. 1.0 for losses)."""
         caption: str = ""
+        """Small note under the chart."""
 
         @field_validator("value_format")
         @classmethod

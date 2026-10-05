@@ -6,24 +6,35 @@ import argparse
 import json
 import logging
 import os
+import re
 import shutil
 import sys
+import time
 import traceback
-from collections.abc import Iterator, Sequence
-from contextlib import contextmanager
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager, redirect_stdout
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
-from vidgen import __version__
-from vidgen.config import validation_error_lines
-from vidgen.errors import VidgenError
+from vidgen import __version__, jsonout
+from vidgen.config import validation_problems
+from vidgen.describe import describe_params
+from vidgen.errors import Problem, VidgenError
 from vidgen.project import CONFIG_NAMES, Project
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 #: Template files copied as ``.<name>`` by ``vidgen init``.
 TEMPLATE_DOTFILES: tuple[str, ...] = ("gitignore",)
+#: Subcommands that accept ``--json``.
+JSON_COMMANDS: tuple[str, ...] = ("validate", "list-scenes", "render")
+
+#: What a command function returns: an exit code, or (with ``--json``) the JSON document.
+CommandResult = int | dict[str, Any]
+
+#: ``validate_project`` messages start with the param they are about: ``"path: file not found"``.
+_PARAM_MESSAGE = re.compile(r"^([A-Za-z_][\w.\[\]]*): (.*)$", re.DOTALL)
 
 
 def _format_seconds(seconds: float) -> str:
@@ -54,8 +65,8 @@ def cmd_init(args: argparse.Namespace) -> int:
     return 0
 
 
-def check_project(project: Project) -> list[str]:
-    """Checks beyond config structure; returns problems found (empty if none).
+def project_problems(project: Project) -> list[Problem]:
+    """Checks beyond config structure; returns the problems found (empty if none).
 
     Loads built-ins and the project's extensions in isolation (nothing leaks into the caller's
     registry), checks that every scene ``type`` is registered, validates each scene's
@@ -64,29 +75,42 @@ def check_project(project: Project) -> list[str]:
     """
     from vidgen import extensions, registry
 
-    problems: list[str] = []
+    problems: list[Problem] = []
     try:
         with extensions.project_session(project) as theme:
             for i, scene in enumerate(project.config.scenes):
                 entry = registry.find(scene.type)
                 if entry is None:
-                    problems.append(f"scenes[{i}].type: {registry.unknown_type_message(scene.type)}")
+                    problems.append(Problem(f"scenes[{i}].type", registry.unknown_type_message(scene.type)))
                     continue
                 beat_problem = entry.cls.check_beat_count(len(scene.beats))
                 if beat_problem is not None:
-                    problems.append(f"scenes[{i}].beats: type '{scene.type}' {beat_problem}")
+                    problems.append(Problem(f"scenes[{i}].beats", f"type '{scene.type}' {beat_problem}"))
                 try:
                     params = entry.cls.validate_params(scene.params, theme)
                 except ValidationError as exc:
-                    problems.extend(validation_error_lines(exc, ("scenes", i, "params")))
+                    problems.extend(validation_problems(exc, ("scenes", i, "params")))
                     continue
                 try:
-                    problems.extend(f"scenes[{i}].params.{p}" for p in _project_checks(entry, params, project))
+                    problems.extend(_param_problem(i, p) for p in _project_checks(entry, params, project))
                 except VidgenError as exc:
-                    problems.append(f"scenes[{i}]: {exc}")
+                    problems.append(Problem(f"scenes[{i}]", str(exc)))
     except VidgenError as exc:
-        problems.append(str(exc))
+        problems.extend(exc.problems or [Problem("", str(exc))])
     return problems
+
+
+def check_project(project: Project) -> list[str]:
+    """:func:`project_problems` as the lines ``vidgen validate`` prints."""
+    return [str(p) for p in project_problems(project)]
+
+
+def _param_problem(index: int, message: str) -> Problem:
+    """A ``validate_project`` message (``"<param>: <text>"`` by convention) as a Problem."""
+    match = _PARAM_MESSAGE.match(message)
+    if match is None:
+        return Problem(f"scenes[{index}].params", message)
+    return Problem(f"scenes[{index}].params.{match[1]}", match[2])
 
 
 def _project_checks(entry: Any, params: Any, project: Project) -> list[str]:
@@ -106,20 +130,47 @@ def _project_checks(entry: Any, params: Any, project: Project) -> list[str]:
     return result
 
 
-def cmd_validate(args: argparse.Namespace) -> int:
-    """Load the project (and every variant), check it and print a short summary."""
-    project = Project.load(args.project)
-    base = check_project(project)
+def validate_all(
+    project: Project, keep_going: bool = False
+) -> tuple[list[Problem], dict[str, Project | None]]:
+    """Check ``project`` and every variant; returns the problems and the loaded variants.
+
+    Problems of a variant that equal the base config's are not repeated. A variant whose
+    config does not load raises its :class:`VidgenError`, or with ``keep_going`` adds its
+    problems and maps the variant to ``None``.
+    """
+    base = project_problems(project)
     problems = list(base)
+    variants: dict[str, Project | None] = {}
     for name in project.config.variants:
-        problems.extend(
-            f"[variant {name}] {p}" for p in check_project(Project.load(args.project, variant=name)) if p not in base
-        )
+        try:
+            variant = Project.load(project.config_file, variant=name)
+        except VidgenError as exc:
+            if not keep_going:
+                raise
+            variants[name] = None
+            problems.extend(exc.problems or [Problem("", str(exc), name)])
+            continue
+        variants[name] = variant
+        problems.extend(p.in_variant(name) for p in project_problems(variant) if p not in base)
+    return problems, variants
+
+
+def _invalid_project(project: Project, problems: list[Problem]) -> VidgenError:
+    lines = [f"{project.config_file.name}: invalid project"]
+    for problem in problems:
+        lines.extend(f"  {line}" for line in str(problem).splitlines())
+    return VidgenError("\n".join(lines), problems=problems)
+
+
+def cmd_validate(args: argparse.Namespace) -> CommandResult:
+    """Load the project (and every variant), check it and print a short summary."""
+    if args.json:
+        return _validate_json(args.project)
+    project = Project.load(args.project)
+    problems, _ = validate_all(project)
     if problems:
-        lines = [f"{project.config_file.name}: invalid project"]
-        for problem in problems:
-            lines.extend(f"  {line}" for line in problem.splitlines())
-        raise VidgenError("\n".join(lines))
+        raise _invalid_project(project, problems)
 
     config = project.config
     n_beats = sum(1 for _ in project.beats())
@@ -133,6 +184,18 @@ def cmd_validate(args: argparse.Namespace) -> int:
         print(line)
     print("ok")
     return 0
+
+
+def _validate_json(path: str) -> dict[str, Any]:
+    """``vidgen validate --json``: like the human command, but every problem is reported in the
+    document (a variant that does not load is a problem, not the end of the command)."""
+    try:
+        project = Project.load(path)
+    except VidgenError as exc:
+        return jsonout.validate_document(None, exc.problems or [Problem("", str(exc))], {}, exc)
+    problems, variants = validate_all(project, keep_going=True)
+    error = _invalid_project(project, problems) if problems else None
+    return jsonout.validate_document(project, problems, variants, error)
 
 
 def audio_summary_lines(project: Project) -> list[str]:
@@ -165,12 +228,13 @@ def cmd_tts(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_render(args: argparse.Namespace) -> int:
+def cmd_render(args: argparse.Namespace) -> CommandResult:
     """Render every scene (or only ``--scene`` ones), join them and write the MP4 and SRT."""
     from vidgen.render.pipeline import render_project
 
     if args.jobs < 1:
         raise VidgenError("--jobs must be at least 1")
+    started = time.monotonic()
     project = Project.load(args.project, variant=args.variant)
     result = render_project(
         project,
@@ -180,69 +244,14 @@ def cmd_render(args: argparse.Namespace) -> int:
         keep_going=args.keep_going,
         jobs=args.jobs,
     )
+    if args.json:
+        return jsonout.render_document(project, result, args.preview, time.monotonic() - started)
     reused = f", {len(result.reused)} reused" if result.reused else ""
     print(f"rendered {len(result.rendered)} scene(s){reused}")
     print(f"video:     {result.output}")
     print(f"subtitles: {result.srt}")
     print(f"duration:  {_format_seconds(result.duration)} ({result.duration:.2f} s)")
     return 0
-
-
-def _type_name(annotation: Any, metadata: Sequence[Any] = ()) -> str:
-    """Readable type: ``color`` / ``size`` for theme tokens, ``a | b`` for unions and literals."""
-    import types
-    import typing
-
-    from vidgen.scene import ThemeToken
-
-    for meta in metadata:
-        if isinstance(meta, ThemeToken):
-            return meta.kind
-    origin, args = typing.get_origin(annotation), typing.get_args(annotation)
-    if origin is typing.Annotated:
-        return _type_name(args[0], annotation.__metadata__)
-    if origin in (typing.Union, types.UnionType):
-        return " | ".join(_type_name(a) for a in args)
-    if origin is typing.Literal:
-        return " | ".join(repr(a) for a in args)
-    if origin is not None and args:
-        name = getattr(origin, "__name__", str(origin))
-        return f"{name}[{', '.join(_type_name(a) for a in args)}]"
-    if annotation is type(None):
-        return "None"
-    if isinstance(annotation, type):
-        return annotation.__name__
-    return str(annotation).replace("typing.", "")
-
-
-def _nested_models(annotation: Any) -> list[type[BaseModel]]:
-    """Pydantic models used inside a field type (``Ring``, ``list[Ring]``, ``Ring | None``...)."""
-    import typing
-
-    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
-        return [annotation]
-    found: list[type[BaseModel]] = []
-    for arg in typing.get_args(annotation):
-        found += [m for m in _nested_models(arg) if m not in found]
-    return found
-
-
-def describe_params(model: type[BaseModel] | None, indent: str = "", _seen: tuple[type, ...] = ()) -> list[str]:
-    """``name: type [= default]`` for each field of a ``Params`` model (empty for plain dicts);
-    the fields of nested models follow their field, indented."""
-    if model is None:
-        return []
-    lines = []
-    for name, field in model.model_fields.items():
-        line = f"{indent}{name}: {_type_name(field.annotation, field.metadata)}"
-        if not field.is_required():
-            default = field.get_default(call_default_factory=True)
-            line += f" = {default!r}"
-        lines.append(line)
-        for nested in _nested_models(field.annotation):
-            if nested not in _seen:
-                lines += describe_params(nested, indent + "    ", (*_seen, model, nested))
-    return lines
 
 
 def _print_scene_types() -> None:
@@ -262,7 +271,7 @@ def _print_scene_types() -> None:
             print(f"    {line}")
 
 
-def cmd_list_scenes(args: argparse.Namespace) -> int:
+def cmd_list_scenes(args: argparse.Namespace) -> CommandResult:
     """Print every scene type (built-ins and the project's extensions) with its params."""
     from vidgen import extensions, registry
 
@@ -270,17 +279,37 @@ def cmd_list_scenes(args: argparse.Namespace) -> int:
         # No project here: list the built-ins only.
         with registry.isolated():
             extensions.load_builtins()
+            if args.json:
+                return jsonout.list_scenes_document(None)
             _print_scene_types()
         return 0
     project = Project.load(args.project)
     with extensions.project_session(project):
+        if args.json:
+            return jsonout.list_scenes_document(project)
         _print_scene_types()
     return 0
 
 
+class UsageError(Exception):
+    """A command-line usage error (raised instead of argparse's print-and-exit)."""
+
+    def __init__(self, parser: argparse.ArgumentParser, message: str) -> None:
+        super().__init__(message)
+        self.parser = parser
+        self.message = message
+
+
+class _Parser(argparse.ArgumentParser):
+    """An ArgumentParser whose errors raise :class:`UsageError`, so ``--json`` can report them."""
+
+    def error(self, message: str) -> NoReturn:
+        raise UsageError(self, message)
+
+
 def build_parser() -> argparse.ArgumentParser:
     """The argparse parser for all subcommands."""
-    parser = argparse.ArgumentParser(
+    parser = _Parser(
         prog="vidgen", description="Generate narrated, animated videos from a project folder."
     )
     parser.add_argument("--version", action="version", version=f"vidgen {__version__}")
@@ -288,6 +317,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     def project_arg(p: argparse.ArgumentParser) -> None:
         p.add_argument("project", nargs="?", default=".", help="project dir or config file (default: .)")
+
+    def json_arg(p: argparse.ArgumentParser) -> None:
+        p.add_argument("--json", action="store_true", help="print one JSON document on stdout (see docs/CONFIG.md)")
 
     p = sub.add_parser("init", help="scaffold a new project")
     p.add_argument("dir", help="directory to create (must not exist or be empty)")
@@ -320,6 +352,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--keep-going", action="store_true", help="continue after a scene fails")
     p.add_argument("--jobs", "-j", type=int, default=1, metavar="N", help="render N scenes in parallel (default: 1)")
     p.set_defaults(func=cmd_render)
+
+    for name in JSON_COMMANDS:
+        json_arg(sub.choices[name])
     return parser
 
 
@@ -328,22 +363,73 @@ class _LevelFormatter(logging.Formatter):
         return f"{record.levelname.lower()}: {record.getMessage()}"
 
 
+class _CollectHandler(logging.Handler):
+    """Collects log records as ``--json`` ``warnings`` entries."""
+
+    def __init__(self, into: list[dict[str, Any]]) -> None:
+        super().__init__(logging.WARNING)
+        self.into = into
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.into.append(jsonout.warning(record.getMessage()))
+
+
 @contextmanager
-def _cli_logging() -> Iterator[None]:
-    """Print vidgen's log warnings as ``warning: <message>`` on stderr while a command runs."""
+def _cli_logging(collect: list[dict[str, Any]] | None = None) -> Iterator[None]:
+    """Print vidgen's log warnings as ``warning: <message>`` on stderr while a command runs
+    (and, if ``collect`` is given, also append them to it as JSON ``warnings`` entries)."""
     logger = logging.getLogger("vidgen")
     handler = logging.StreamHandler(sys.stderr)
     handler.setFormatter(_LevelFormatter())
+    handlers: list[logging.Handler] = [handler] if collect is None else [handler, _CollectHandler(collect)]
     saved = (logger.level, logger.propagate)
-    logger.addHandler(handler)
+    for h in handlers:
+        logger.addHandler(h)
     logger.setLevel(logging.WARNING)
     logger.propagate = False
     try:
         yield
     finally:
-        logger.removeHandler(handler)
+        for h in handlers:
+            logger.removeHandler(h)
         logger.setLevel(saved[0])
         logger.propagate = saved[1]
+
+
+def _print_json(doc: dict[str, Any]) -> None:
+    print(jsonout.dumps(doc), flush=True)
+
+
+def _usage_error(exc: UsageError, argv: Sequence[str], json_mode: bool) -> int:
+    """Report a command-line error like argparse does, or as a JSON document; exit code 2."""
+    if json_mode:
+        command = next((a for a in argv if not a.startswith("-")), None)
+        _print_json(jsonout.envelope(command, False, error=jsonout.error_json("usage", exc.message)))
+    else:
+        exc.parser.print_usage(sys.stderr)
+        print(f"{exc.parser.prog}: error: {exc.message}", file=sys.stderr)
+    return 2
+
+
+def _run_json(func: Callable[[argparse.Namespace], CommandResult], args: argparse.Namespace) -> int:
+    """Run a command with ``--json``: everything it prints goes to stderr, then its document (or
+    the error document) is printed on stdout; exit code 0 if ``ok``, else 1."""
+    warnings: list[dict[str, Any]] = []
+    try:
+        with _cli_logging(warnings), redirect_stdout(sys.stderr):
+            doc = func(args)
+    except VidgenError as exc:
+        doc = jsonout.error_document(args.command, exc)
+    except BrokenPipeError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - an agent needs a JSON answer even for a bug
+        details = {"traceback": traceback.format_exc()}
+        error = jsonout.error_json("internal", f"{type(exc).__name__}: {exc}", details=details)
+        doc = jsonout.envelope(args.command, False, error=error)
+    assert isinstance(doc, dict)
+    doc["warnings"] = warnings + doc["warnings"]
+    _print_json(doc)
+    return 0 if doc["ok"] else 1
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -354,13 +440,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         reconfigure = getattr(stream, "reconfigure", None)
         if reconfigure is not None:
             reconfigure(errors="backslashreplace")
-    args = build_parser().parse_args(argv)
+    argv = list(sys.argv[1:] if argv is None else argv)
     try:
-        with _cli_logging():
-            return args.func(args)
-    except VidgenError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 1
+        try:
+            args = build_parser().parse_args(argv)
+        except UsageError as exc:
+            return _usage_error(exc, argv, "--json" in argv)
+        if getattr(args, "json", False):
+            return _run_json(args.func, args)
+        try:
+            with _cli_logging():
+                result = args.func(args)
+        except VidgenError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        assert isinstance(result, int)
+        return result
     except BrokenPipeError:  # output piped into e.g. `head` or `more`, which stopped reading
         try:
             sys.stdout = open(os.devnull, "w", encoding="utf-8")  # noqa: SIM115 - silence the flush at exit

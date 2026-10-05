@@ -15,9 +15,13 @@ class KenBurns(SceneParams):
     (0..1, origin top-left): the point the view is centered on."""
 
     start_scale: float = Field(1.0, ge=1.0, le=4.0)
+    """Zoom at the start of the scene (1-4)."""
     end_scale: float = Field(1.15, ge=1.0, le=4.0)
+    """Zoom at the end of the scene (1-4)."""
     start_focus: tuple[float, float] = (0.5, 0.5)
+    """[x, y] in 0-1 (0,0 = top left) centered at the start."""
     end_focus: tuple[float, float] = (0.5, 0.5)
+    """[x, y] in 0-1 (0,0 = top left) centered at the end."""
 
     @field_validator("start_focus", "end_focus")
     @classmethod
@@ -57,11 +61,17 @@ class Image(NarratedScene):
 
     class Params(SceneParams):
         path: str
+        """Image file relative to the project folder, e.g. assets/photo.jpg."""
         caption: str = ""
+        """Caption text."""
         fit: Literal["contain", "cover"] = "contain"
+        """contain: whole image, caption below; cover: fills the frame (cropped), caption on a band."""
         ken_burns: KenBurns | bool = False
+        """Slow zoom/pan over the whole scene; true = zoom 1.0 -> 1.15 on the center."""
         caption_color: ThemeColor = "text"
+        """Caption color."""
         caption_size: ThemeSize = "caption"
+        """Caption text size."""
 
         def motion(self) -> KenBurns | None:
             """The Ken Burns settings, or ``None`` when disabled."""

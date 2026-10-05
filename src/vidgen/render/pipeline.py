@@ -43,7 +43,12 @@ TAIL_LINES = 60
 
 @dataclass
 class RenderResult:
-    """What :func:`render_project` produced."""
+    """What :func:`render_project` produced.
+
+    ``timings`` is the content of ``timings_file``; ``render_seconds`` the wall time of each
+    scene rendered in this run; ``warnings`` the ``(scene_id, message)`` warnings printed by
+    the workers of this run, in config order.
+    """
 
     output: Path
     srt: Path
@@ -51,6 +56,19 @@ class RenderResult:
     duration: float
     rendered: list[str] = field(default_factory=list)
     reused: list[str] = field(default_factory=list)
+    timings: dict[str, Any] = field(default_factory=dict)
+    render_seconds: dict[str, float] = field(default_factory=dict)
+    warnings: list[tuple[str, str]] = field(default_factory=list)
+
+
+@dataclass
+class _SceneRuns:
+    """What :func:`_render_scenes` did, in config order."""
+
+    rendered: list[str] = field(default_factory=list)
+    failed: list[dict[str, Any]] = field(default_factory=list)
+    seconds: dict[str, float] = field(default_factory=dict)
+    warnings: list[tuple[str, str]] = field(default_factory=list)
 
 
 @dataclass
@@ -147,6 +165,11 @@ def _run_worker(project: Project, preview: bool, scene_id: str, no_audio: bool, 
     return _WorkerRun(scene_id, returncode, output, time.monotonic() - started)
 
 
+def _failure_details(run: _WorkerRun) -> dict[str, Any]:
+    """A failed worker as JSON data: ``{scene, exit_code, output_tail}``."""
+    return {"scene": run.scene_id, "exit_code": run.returncode, "output_tail": _tail(run.output)}
+
+
 def _failure_message(run: _WorkerRun, live: bool) -> str:
     head = f"scene '{run.scene_id}' failed (worker exit code {run.returncode})"
     if live:
@@ -176,8 +199,8 @@ def _runs(task: Callable[[int, str], _WorkerRun], scene_ids: list[str], jobs: in
 
 def _render_scenes(
     project: Project, preview: bool, scene_ids: list[str], no_audio: bool, keep_going: bool, jobs: int
-) -> tuple[list[str], list[str]]:
-    """Render ``scene_ids`` with up to ``jobs`` workers; returns (rendered, failed) in config order.
+) -> _SceneRuns:
+    """Render ``scene_ids`` with up to ``jobs`` workers.
 
     Without ``keep_going`` the first failure raises (with ``jobs > 1``, scenes already running
     finish first). ``post_scene`` is dispatched here, in the parent, after each success.
@@ -185,8 +208,7 @@ def _render_scenes(
     live = jobs == 1 and sys.stderr.isatty()
     total = len(scene_ids)
     order = {sid: i for i, sid in enumerate(scene_ids)}
-    rendered: list[str] = []
-    failed: list[str] = []
+    runs = _SceneRuns()
     print_lock = threading.Lock()
 
     def say(message: str, err: bool = False) -> None:
@@ -199,15 +221,17 @@ def _render_scenes(
 
     for run in _runs(task, scene_ids, jobs):
         if run.returncode != 0:
-            failed.append(run.scene_id)
+            runs.failed.append(_failure_details(run))
             message = _failure_message(run, live)
             if not keep_going:
-                raise VidgenError(message)
+                rendered = sorted(runs.rendered, key=order.__getitem__)
+                raise VidgenError(message, details={"failed": runs.failed, "rendered": rendered})
             say(f"error: {message}", err=True)
             continue
-        if not live:  # re-print the worker's warnings (live output has shown them already)
-            for line in run.output.splitlines():
-                if line.startswith("warning: "):
+        for line in run.output.splitlines():
+            if line.startswith("warning: "):
+                runs.warnings.append((run.scene_id, line.removeprefix("warning: ")))
+                if not live:  # re-print the worker's warnings (live output has shown them already)
                     say(line, err=True)
         timings = json.loads(scene_timings_path(project, preview, run.scene_id).read_text(encoding="utf-8"))
         say(
@@ -223,8 +247,12 @@ def _render_scenes(
             preview=preview,
             variant=project.variant,
         )
-        rendered.append(run.scene_id)
-    return sorted(rendered, key=order.__getitem__), sorted(failed, key=order.__getitem__)
+        runs.rendered.append(run.scene_id)
+        runs.seconds[run.scene_id] = round(run.seconds, 3)
+    runs.rendered.sort(key=order.__getitem__)
+    runs.failed.sort(key=lambda f: order[f["scene"]])
+    runs.warnings.sort(key=lambda w: order[w[0]])  # stable: a scene's warnings keep their order
+    return runs
 
 
 def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) -> tuple[Path, dict[str, Any]]:
@@ -323,11 +351,12 @@ def render_project(
             render_dir=project.render_dir(preview),
         )
         to_render = [sid for sid in known if sid in ctx.data["scenes"]]
-        rendered, failed = _render_scenes(project, preview, to_render, no_audio, keep_going, jobs)
-        if failed:
+        runs = _render_scenes(project, preview, to_render, no_audio, keep_going, jobs)
+        if runs.failed:
             raise VidgenError(
-                f"{len(failed)} scene(s) failed: {', '.join(failed)}; the video was not joined "
-                f"({len(rendered)} scene(s) rendered)"
+                f"{len(runs.failed)} scene(s) failed: {', '.join(f['scene'] for f in runs.failed)}; "
+                f"the video was not joined ({len(runs.rendered)} scene(s) rendered)",
+                details={"failed": runs.failed, "rendered": runs.rendered},
             )
         print("joining scenes", flush=True)
         output, timings = join_scenes(project, preview, no_audio, ffmpeg)
@@ -350,6 +379,9 @@ def render_project(
             srt=srt,
             timings_file=timings_file,
             duration=timings["duration"],
-            rendered=rendered,
-            reused=[sid for sid in known if sid not in rendered],
+            rendered=runs.rendered,
+            reused=[sid for sid in known if sid not in runs.rendered],
+            timings=timings,
+            render_seconds=runs.seconds,
+            warnings=runs.warnings,
         )

@@ -16,14 +16,23 @@ class Quote(NarratedScene):
 
     class Params(SceneParams):
         text: str = Field(min_length=1)
+        """The quote."""
         author: str = ""
+        """Shown as '- author'."""
         source: str = ""
+        """Shown smaller under the author."""
         size: ThemeSize = "subtitle"
+        """Quote text size (shrunk if long)."""
         color: ThemeColor = "text"
+        """Quote text color."""
         mark_color: ThemeColor = "primary"
+        """Color of the large quote mark."""
         mark_font: str = "Georgia,DejaVu Serif,serif"
+        """Font list for the quote mark."""
         author_color: ThemeColor = "text"
+        """Author color."""
         source_color: ThemeColor = "dim"
+        """Source color."""
 
     def construct(self) -> None:
         p = self.params

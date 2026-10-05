@@ -24,10 +24,10 @@ Rules that apply to every step:
 ## Phase A — Feedback loop (let the AI see what it made)
 
 ### Step 8 — JSON output for commands
-- [ ] `vidgen validate --json`: problems (with location), variants checked, estimated length, audio status
-- [ ] `vidgen list-scenes --json`: types, origin (built-in/project), params with types/defaults/docs
-- [ ] `vidgen render --json`: output paths, per-scene durations, warnings, elapsed time
-- [ ] Stable, documented JSON shapes (version field); tests for each
+- [x] `vidgen validate --json`: problems (with location), variants checked, estimated length, audio status
+- [x] `vidgen list-scenes --json`: types, origin (built-in/project), params with types/defaults/docs
+- [x] `vidgen render --json`: output paths, per-scene durations, warnings, elapsed time
+- [x] Stable, documented JSON shapes (version field); tests for each
 
 ### Step 9 — JSON Schema export
 - [ ] `vidgen schema` prints the JSON Schema of `video.yaml`

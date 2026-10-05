@@ -118,9 +118,13 @@ Use `ThemeColor` / `ThemeSize` for colors and sizes: they accept a theme token o
 (`#hex` / points) and `vidgen validate` reports unknown tokens (it checks them against the
 project's theme, including your `register_theme_defaults` and `theme.colors`).
 
+A docstring under a field documents it: `vidgen list-scenes --json` shows it as the field's
+`doc` (so does `Field(description=...)`).
+
 ```python
 class Params(SceneParams):
     items: list[str] = Field(min_length=1)
+    """The list items; item i appears at beat i."""
     color: ThemeColor = "text"
     size: ThemeSize = "body"
 
@@ -154,7 +158,8 @@ params:
 **Project-aware checks.** Override the classmethod `validate_project(params, project)` for
 checks a `Params` model cannot do (a file exists, a data file parses...). It runs in `vidgen
 validate` after the params validated; return one message per problem, starting with the param
-name. Messages are reported as `scenes[i].params.<message>`. Log warnings with `logging` (they
+name. Messages are reported as `scenes[i].params.<message>` (in `vidgen validate --json`, the
+part before the first `: ` becomes the problem's `location`, e.g. `scenes[2].params.data`). Log warnings with `logging` (they
 are printed as `warning: ...`). Repeat the check in `construct()` if rendering cannot work
 without it.
 
