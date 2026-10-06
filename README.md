@@ -21,9 +21,9 @@ subtitles.
   `icon_grid` scene; `vidgen list-icons --search chart --sheet icons.png` finds and shows them;
   a project adds or replaces icons with SVGs in `assets/icons/`.
 - **Beat actions**: a beat can point at parts of its scene while it is spoken —
-  `- highlight: "bar:4K"`, `- dim: item1`, `- reveal: item4` (with `until:` a later beat to undo)
-  — on `bullets` and `bar_chart`, timed inside the beat
-  ([reference](docs/CONFIG.md#beat-actions)).
+  `- highlight: "bar:4K"`, `- dim: item1`, `- reveal: item4` (with `until:` a later beat to undo),
+  `- zoom: "term:2ab"` (camera in and back out), `- transform: step1` + `into: step3` — on every
+  built-in scene type, timed inside the beat ([reference](docs/CONFIG.md#beat-actions)).
 - **Extensible per video**: a project can add its own scene types, beat actions, helpers, theme
   tokens and pipeline hooks in its `extensions/` folder, without touching vidgen.
 - **Cheap to iterate**: only new or edited beats are sent to ElevenLabs; fast low-resolution

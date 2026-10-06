@@ -112,8 +112,8 @@ Rules that apply to every step:
 - [x] Unknown target/action → clear validation error (with suggestions and the scene's targets)
 
 ### Step 24 — Per-beat actions (zoom, transform, coverage)
-- [ ] `zoom` (camera to target and back) and `transform` (target A → B) (framework: DESIGN §26; `zoom` needs a `MovingCamera` scene base or a frame-scaling animation; `transform` likely `needs_target` with a second target option)
-- [ ] Actions supported by every built-in scene where they make sense; documented table
+- [x] `zoom` (camera to target and back) and `transform` (target A → B) (`NarratedScene` is a `MovingCameraScene`; zoom returns by the beat's end or before its `until` beat; `transform` `into:` another target, styles auto/replace/shapes/tex/fade; Step 23 gaps fixed: images dim/tint, dimming never compounds, a colour highlight undims, bar box stands on the axis)
+- [x] Actions supported by every built-in scene where they make sense; documented table (targets on all 11 built-ins, equation `terms`; table in CONFIG.md "Beat actions" kept in sync by a test)
 
 ### Step 25 — Scenes: `stat` and `chapter`
 - [ ] `stat`: big number counting up, label, context line, optional comparison value

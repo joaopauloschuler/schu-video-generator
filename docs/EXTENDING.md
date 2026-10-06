@@ -499,7 +499,8 @@ It is now listed as `builtin` by `vidgen list-scenes`.
 
 A beat's `actions:` (docs/CONFIG.md "Beat actions") act on named **targets** of the scene. A
 scene type opts in by naming its parts; an action type is a small class. Both use the same API
-as the built-ins (`bullets`/`bar_chart` and `src/vidgen/scenes/actions.py`).
+as the built-ins (every built-in scene type, e.g. `bullets`/`bar_chart`, and
+`src/vidgen/scenes/actions.py`).
 
 **Targets in your scene type.**
 - `target_patterns = ("item<N>", ...)` (class attribute): the forms of your names, shown by
@@ -507,11 +508,14 @@ as the built-ins (`bullets`/`bar_chart` and `src/vidgen/scenes/actions.py`).
 - classmethod `target_names(params) -> list[str]`: every name the scene will register for these
   params. `vidgen validate` checks each action's `target` against it (no rendering needed), so
   it must match what `construct()` registers.
-- `self.target(names, mobject, entrance=None) -> Target` in `construct()`, before the beat whose
-  actions use it: `names` is one name or a list (`["item3", "item:Render it"]`; a name is
-  `word`, `word3` or `kind:any label`); `mobject` may be a group that is never added itself
-  (e.g. a bar plus its labels); `entrance` returns the animations that bring it on screen
-  (default `FadeIn`).
+- `self.target(names, mobject, entrance=None, outline=None) -> Target` in `construct()`, before
+  the beat whose actions use it and while it has its full look (`dim`/`highlight` take its
+  opacity at that moment as "full"): `names` is one name or a list (`["item3", "item:Render
+  it"]`; a name is `word`, `word3` or `kind:any label`; several targets may share a name: a
+  plain name then selects the ones on screen); `mobject` may be a group that is never added
+  itself (e.g. a bar plus its labels); `entrance` returns the animations that bring it on
+  screen (default `FadeIn`; `lambda: []` for a part that cannot appear alone); `outline` is
+  what a `highlight` box surrounds (default `mobject`).
 - Build your own reveal steps with `self.entrance(target)`: it returns `[]` when the target is
   already on screen, so an item a `reveal` action showed early is not revealed twice. Also:
   `self.is_shown(t)`, `self.find_targets("bar:*")`, `self.on_screen_parts(t)` (the target's
@@ -590,7 +594,16 @@ class Checklist(NarratedScene):
 ```
 
 `needs_visible = True` (default) first reveals targets that are not on screen yet;
-`needs_target = False` allows an action without `target`. Animate the parts that are in the
+`needs_target = False` allows an action without `target`. `temporary = True` (with
+`reversible`) has the runner play `revert` so that it ends with the beat (or, with `until:`,
+with the beat before that one), like `zoom`; `moves_camera = True` keeps two such actions from
+playing at once; `target_options = ("into",)` names options whose values are target names
+(checked by `vidgen validate` like `target`; look them up with `scene.find_targets(name)`).
+
+**The camera.** `NarratedScene` is a Manim `MovingCameraScene`: `self.camera.frame` can be
+moved and scaled (`self.camera.frame.animate.set_width(4).move_to(dot)`). Every scene starts
+with it on the whole frame; the layout dump and `vidgen lint` take a moved camera into account
+(`camera.zoom` in the layout dump). The `zoom` action uses it. Animate the parts that are in the
 scene (`scene.on_screen_parts(t)`), not a group of them that was never added: Manim would add
 that group and draw its parts twice. New mobjects (like the marks above) are simply added by
 their animation. `vidgen list-scenes` lists your action with its options; `vidgen schema`

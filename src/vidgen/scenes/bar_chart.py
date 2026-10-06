@@ -157,7 +157,12 @@ class BarChart(NarratedScene):
             return [ReplacementTransform(seed, bar_rects[i]), UpdateFromAlphaFunc(label, count), FadeIn(cats[i])]
 
         bars = [
-            self.target([f"bar{i + 1}", f"bar:{lab}"], VGroup(bar_rects[i], start_labels[i], cats[i]), entrance=lambda i=i: grow(i))
+            self.target(
+                [f"bar{i + 1}", f"bar:{lab}"],
+                VGroup(bar_rects[i], start_labels[i], cats[i]),
+                entrance=lambda i=i: grow(i),
+                outline=self._outline(bar_rects[i], place(finals[i].copy(), i, p.values[i]), p.values[i] >= p.baseline, horizontal),
+            )
             for i, lab in enumerate(p.labels)
         ]
 
@@ -178,7 +183,7 @@ class BarChart(NarratedScene):
         if hi_index is not None:
 
             def focus() -> list[Animation]:
-                others = [m for i in range(n) if i != hi_index for m in (bar_rects[i], start_labels[i])]
+                others = [m for i in range(n) if i != hi_index and self.is_shown(bars[i]) for m in (bar_rects[i], start_labels[i])]
                 return [m.animate.set_opacity(0.4) for m in others] + [
                     Indicate(start_labels[hi_index], color=self.theme.color(p.highlight_color), scale_factor=1.15)
                 ]
@@ -186,6 +191,23 @@ class BarChart(NarratedScene):
             steps.append(focus)
         self.reveal(steps, fraction=0.75, cap=1.6)
         self.finish()
+
+    #: Space between the axis and a highlight box around a bar (box buff 0.12 + a little).
+    outline_gap = 0.15
+
+    def _outline(self, bar: Mobject, label: Mobject, up: bool, horizontal: bool) -> Rectangle:
+        """What a highlight box surrounds: the bar and its final value label, stopping short of the
+        axis, so the box sits on the axis instead of crossing it (category labels stay outside)."""
+        group = VGroup(bar, label)
+        x0, y0 = group.get_corner(DL)[:2]
+        x1, y1 = group.get_corner(UR)[:2]
+        gap = self.outline_gap
+        if horizontal:
+            x0, x1 = (bar.get_left()[0] + gap, x1) if up else (x0, bar.get_right()[0] - gap)
+        else:
+            y0, y1 = (bar.get_bottom()[1] + gap, y1) if up else (y0, bar.get_top()[1] - gap)
+        width, height = max(x1 - x0, 0.05), max(y1 - y0, 0.05)
+        return Rectangle(width=width, height=height, stroke_width=0).move_to([(x0 + x1) / 2, (y0 + y1) / 2, 0])
 
     # ----- layouts ---------------------------------------------------------------------------
 

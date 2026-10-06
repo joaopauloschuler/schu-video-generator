@@ -3,7 +3,7 @@
 Axes, ticks and labels are plain ``Text`` (Manim's ``Axes`` number labels need LaTeX).
 """
 
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 
@@ -26,9 +26,31 @@ class LineChart(NarratedScene):
     """``reveal: per_beat`` (default): series *i* is drawn at beat *i* (the axes appear with the
     first one; spread evenly when there are more series than beats). ``all``: every series is
     drawn in the first beat. Each series ends with a ``name value`` label.
+
+    Action targets: ``title``, ``axes``, ``series<N>`` (1-based), ``series:<name>`` (a line with
+    its markers and end label) and ``point:<name>@<x>`` (one data point, e.g. ``point:sparse@8``;
+    ``x`` as its tick label reads).
     """
 
     outro = 0.5
+    target_patterns = ("title", "axes", "series<N>", "series:<name>", "point:<name>@<x>")
+
+    @classmethod
+    def target_names(cls, params: Any) -> list[str]:
+        """``title`` (if any), ``axes``, then per series ``series<N>``, ``series:<name>`` and its
+        ``point:<name>@<x>``."""
+        names = (["title"] if params.title else []) + ["axes"]
+        xs = cls.x_texts(params)
+        for i, s in enumerate(params.series_list(), start=1):
+            names += [f"series{i}", f"series:{s.name}"] + [f"point:{s.name}@{x}" for x in xs]
+        return names
+
+    @staticmethod
+    def x_texts(params: Any) -> list[str]:
+        """The x values as their tick labels read."""
+        if all(isinstance(v, str) for v in params.x):
+            return [str(v) for v in params.x]
+        return [format_value(float(v), params.x_format) for v in params.x]
 
     class Params(SceneParams):
         title: str = ""
@@ -98,6 +120,7 @@ class LineChart(NarratedScene):
         dim = self.theme.color("dim")
 
         frame = VGroup()
+        title = None
         if p.title:
             title = fit_text(p.title, self.safe_width, self.safe_height * 0.18, size="heading", weight=BOLD, font=self.theme.font_for("heading"))
             frame.add(title.move_to([0, top - title.height / 2, 0]))
@@ -150,7 +173,7 @@ class LineChart(NarratedScene):
 
         x_cats = all(isinstance(v, str) for v in p.x)
         xs = list(range(len(p.x))) if x_cats else [float(v) for v in p.x]
-        x_texts = [str(v) if x_cats else format_value(float(v), p.x_format) for v in p.x]
+        x_texts = self.x_texts(p)
         probe = [self.text(t, size="small", color="dim") for t in x_texts]
         xlab_h = max(m.height for m in probe)
 
@@ -178,12 +201,13 @@ class LineChart(NarratedScene):
             axes.add(probe[i].move_to(pt(xs[i], y0) + DOWN * (0.18 + probe[i].height / 2)))
 
         show_dots = p.dots if p.dots is not None else len(xs) <= 12
-        lines, ends = [], []
+        lines, ends, marks = [], [], []
         for s, c in zip(series, colors):
             points = [pt(xv, yv) for xv, yv in zip(xs, s.values)]
             line = VMobject(stroke_color=c, stroke_width=4).set_points_as_corners(points)
-            extra = VGroup(*[Dot(q, radius=0.05, color=c) for q in points]) if show_dots else VGroup()
-            lines.append(VGroup(line, extra))
+            # without dots, a point target is a dot of its own that appears when acted on
+            marks.append([Dot(q, radius=0.05 if show_dots else 0.08, color=c) for q in points])
+            lines.append(VGroup(line, VGroup(*marks[-1]) if show_dots else VGroup()))
             ends.append(points[-1])
         self._place_notes(notes, ends, plot_b, plot_t)
 
@@ -195,11 +219,32 @@ class LineChart(NarratedScene):
                 parts.append(FadeIn(notes[i], shift=RIGHT * 0.15))
             return AnimationGroup(*parts, lag_ratio=0.45)
 
-        intro = [FadeIn(frame), FadeIn(axes)] if len(frame) else [FadeIn(axes)]
+        def intro() -> list[Animation]:
+            return ([FadeIn(frame)] if len(frame) and not self.on_screen_parts(frame) else []) + ([FadeIn(axes)] if not self.on_screen_parts(axes) else [])
+
+        chart = self.target("axes", axes, entrance=intro)
+        if title is not None:
+            self.target("title", title, entrance=intro)
+        drawn = []
+        for i, s in enumerate(series):
+            group = VGroup(lines[i], notes[i]) if notes else lines[i]
+            drawn.append(self.target([f"series{i + 1}", f"series:{s.name}"], group, entrance=lambda i=i: self.entrance(chart) + [draw(i)]))
+            for j, x in enumerate(x_texts):
+                dot = marks[i][j]
+                appear = (lambda i=i: self.entrance(drawn[i])) if show_dots else (lambda i=i, dot=dot: self.entrance(drawn[i]) + [FadeIn(dot, scale=0.5)])
+                self.target(f"point:{s.name}@{x}", dot, entrance=appear)
+
+        def series_steps(indices: list[int]) -> list[Animation]:  # entrance(): never drawn twice
+            hidden = [i for i in indices if not self.is_shown(drawn[i])]
+            anims = [draw(i) for i in hidden]
+            if len(anims) > 1:
+                anims = [LaggedStart(*anims, lag_ratio=0.2)]
+            return self.entrance(chart) + anims
+
         if p.reveal == "all":
-            steps: list = [lambda: intro + [LaggedStart(*[draw(i) for i in range(len(series))], lag_ratio=0.2)]]
+            steps: list = [lambda: series_steps(list(range(len(series))))]
         else:
-            steps = [lambda: intro + [draw(0)]] + [(lambda i=i: draw(i)) for i in range(1, len(series))]
+            steps = [(lambda i=i: series_steps([i])) for i in range(len(series))]
         self.reveal(steps, fraction=0.8, cap=2.5)
         self.finish()
 

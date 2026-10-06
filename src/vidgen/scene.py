@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Annotated, Any, ClassVar, NamedTuple, Union
 
 import av
-from manim import DEFAULT_WAIT_TIME, NORMAL, Animation, FadeIn, FadeOut, MarkupText, Mobject, Scene, Text, Wait, config
+from manim import DEFAULT_WAIT_TIME, NORMAL, Animation, FadeIn, FadeOut, MarkupText, Mobject, MovingCameraScene, Text, Wait, config
 from pydantic import AfterValidator, BaseModel, ConfigDict, GetJsonSchemaHandler, ValidationError, ValidationInfo
 
 from vidgen import helpers, regions, runtime
@@ -170,8 +170,12 @@ def _beats(k: int) -> str:
     return f"{k} beat" if k == 1 else f"{k} beats"
 
 
-class NarratedScene(Scene):
+class NarratedScene(MovingCameraScene):
     """A Manim scene timed by narration.
+
+    The camera can move (``self.camera.frame``, Manim's ``MovingCameraScene``; the ``zoom`` beat
+    action uses it); it starts on the whole frame, so scenes that never move it render as with a
+    static camera.
 
     Inside ``construct()``: ``self.spec`` (``SceneConfig``), ``self.params`` (validated
     ``Params`` instance, or a dict), ``self.beats``, ``self.theme``, ``self.project``.
@@ -210,6 +214,7 @@ class NarratedScene(Scene):
             raise VidgenError(f"scene '{spec.id}': {problem}")
         self.beats: list[BeatConfig] = list(spec.beats)
         self._targets: list[Target] = []
+        self._rest: dict[int, tuple[float, float]] = {}  # full opacity of target parts (shared)
         uses = plan_actions(spec.type, type(self), spec, self.params, self.theme)
         self._actions = ActionRunner(self, uses) if uses else None
         self.audio_enabled = audio
@@ -470,6 +475,9 @@ class NarratedScene(Scene):
         """Manim's ``play``, also recorded in :attr:`play_log` (scene times, beat, names)."""
         start = float(self.renderer.time)
         super().play(*args, **kwargs)
+        frame = getattr(self.camera, "frame", None)
+        if frame is not None and frame in self.mobjects and not frame.updaters:  # added by a camera move; never drawn
+            self.remove(frame)
         waiting = bool(args) and all(isinstance(a, Wait) for a in args)
         self.play_log.append(
             PlayRecord(
@@ -609,13 +617,20 @@ class NarratedScene(Scene):
         return []
 
     def target(
-        self, names: str | Sequence[str], mobject: Mobject, *, entrance: Callable[[], Sequence[Animation]] | None = None
+        self,
+        names: str | Sequence[str],
+        mobject: Mobject,
+        *,
+        entrance: Callable[[], Sequence[Animation]] | None = None,
+        outline: Mobject | None = None,
     ) -> Target:
         """Register ``mobject`` as an action target under ``names`` (the first is its main name).
 
-        Register targets before the beat whose actions use them (normally while building the
-        layout). ``entrance`` builds the scene's own animations that bring it on screen (used by
-        the ``reveal`` action and :meth:`entrance`; default ``FadeIn``).
+        Register targets before the beat whose actions use them, while the mobject has its full
+        look (normally right after building the layout: ``dim`` and ``highlight`` measure "full
+        opacity" from that moment). ``entrance`` builds the scene's own animations that bring it
+        on screen (used by the ``reveal`` action and :meth:`entrance`; default ``FadeIn``);
+        ``outline`` is what a ``highlight`` box surrounds (default: ``mobject``).
         """
         names = (names,) if isinstance(names, str) else tuple(names)
         if not names:
@@ -623,7 +638,7 @@ class NarratedScene(Scene):
         for name in names:
             if not isinstance(name, str) or not TARGET_NAME.match(name):
                 raise VidgenError(f"scene '{self.spec.id}': invalid target name {name!r} (use name, name3 or kind:label)")
-        target = Target(names, mobject, entrance)
+        target = Target(names, mobject, entrance, outline, self._rest)
         self._targets.append(target)
         return target
 

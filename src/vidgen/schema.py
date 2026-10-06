@@ -316,19 +316,18 @@ def _action_defs(actions: list[ActionType], tokens: dict[str, list[str]]) -> dic
         defs[name] = options
         defs.update(nested)
         option_props = options.get("properties", {})
+        required = list(options.get("required", []))  # options without a default (transform's into)
         keys = {key: {} for key in ACTION_KEYS}
-        rules.append(
-            {
-                "if": {"required": ["action"], "properties": {"action": {"const": entry.name}}},
-                "then": {"properties": {**keys, **option_props}, "additionalProperties": False},
-            }
-        )
+        then: dict[str, Any] = {"properties": {**keys, **option_props}, "additionalProperties": False}
+        if required:
+            then["required"] = required
+        rules.append({"if": {"required": ["action"], "properties": {"action": {"const": entry.name}}}, "then": then})
         rest = {key: copy.deepcopy(common[key]) for key in ACTION_KEYS if key not in ("action", "target")}
         shorthands.append(
             {
                 "title": f"{entry.name} (shorthand)",
                 "type": "object",
-                "required": [entry.name],
+                "required": [entry.name, *required],
                 "properties": {entry.name: copy.deepcopy(common["target"]), **rest, **option_props},
                 "additionalProperties": False,
             }

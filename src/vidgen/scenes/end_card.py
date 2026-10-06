@@ -10,9 +10,18 @@ from .image import check_image, load_image
 class EndCard(NarratedScene):
     """Beat 1 reveals the logo, icon and title, beat 2 the lines (both in beat 1 if there is only
     one); further beats hold. The scene ends with a slower fade-out.
+
+    Action targets: ``logo``, ``icon``, ``title``, ``line<N>`` (1-based; those present).
     """
 
     outro = 1.0
+    target_patterns = ("logo", "icon", "title", "line<N>")
+
+    @classmethod
+    def target_names(cls, params: Any) -> list[str]:
+        """The parts the card has: ``logo``, ``icon``, ``title``, ``line<N>``."""
+        names = [n for n, there in (("logo", params.logo), ("icon", params.icon), ("title", params.title)) if there]
+        return names + [f"line{k}" for k in range(1, len(params.lines) + 1)]
     #: Height of the icon in Manim units (the frame's shorter side is 8).
     icon_height = 1.1
 
@@ -51,6 +60,7 @@ class EndCard(NarratedScene):
         p = self.params
         width = self.safe_width * (1.0 if self.is_portrait else 0.86)
         head = Group()
+        names: list[str] = []
         if p.logo:
             problems = check_image(self.project, p.logo, "logo")
             if problems:
@@ -58,9 +68,12 @@ class EndCard(NarratedScene):
             logo = load_image(self.project.asset(p.logo))
             shrink_to_fit(logo.scale_to_fit_height(self.safe_height * 0.2), width, None)
             head.add(logo)
+            names.append("logo")
         if p.icon:
             head.add(icon(p.icon, color=p.icon_color, height=self.icon_height, theme=self.theme))
+            names.append("icon")
         if p.title:
+            names.append("title")
             head.add(fit_text(p.title, width, self.safe_height * 0.35, size=p.title_size, color=p.title_color, weight=BOLD, font=self.theme.font_for("heading")))
         head.arrange(DOWN, buff=0.45)
         rows = self._lines(width)
@@ -68,11 +81,18 @@ class EndCard(NarratedScene):
         card = Group(*[g for g in (head, rows) if len(g)]).arrange(DOWN, buff=0.85)
         shrink_to_fit(card, self.safe_width, self.safe_height).move_to(ORIGIN)
 
+        heads = [self.target(name, m, entrance=lambda m=m: [FadeIn(m, shift=UP * 0.15)]) for name, m in zip(names, head)]
+        lines = [self.target(f"line{k}", m, entrance=lambda m=m: [FadeIn(m, shift=UP * 0.15)]) for k, m in enumerate(rows, start=1)]
+
+        def lagged(targets: list[Target], lag: float) -> list[Animation]:  # entrance(): never twice
+            anims = [AnimationGroup(*self.entrance(t)) for t in targets if not self.is_shown(t)]
+            return [LaggedStart(*anims, lag_ratio=lag)] if anims else []
+
         steps: list = []
-        if len(head):
-            steps.append(LaggedStart(*[FadeIn(m, shift=UP * 0.15) for m in head], lag_ratio=0.3))
-        if len(rows):
-            steps.append(FadeIn(rows, shift=UP * 0.15, lag_ratio=0.3))
+        if heads:
+            steps.append(lambda: lagged(heads, 0.3))
+        if lines:
+            steps.append(lambda: lagged(lines, 0.3))
         self.reveal(steps, fraction=0.65, cap=1.4)
         self.finish()
 

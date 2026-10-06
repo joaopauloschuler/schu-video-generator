@@ -77,7 +77,7 @@ src/vidgen/
   subtitles.py            # SRT from beat timings
   fileio.py               # atomic writes; replacing files that Windows programs keep open
   scenes/                 # built-in scene library (registered like extensions; actions.py:
-                          # the built-in beat actions reveal/dim/highlight, §26)
+                          # the built-in beat actions reveal/dim/highlight/zoom/transform, §26-27)
   data/fonts/             # Inter, Source Serif 4, JetBrains Mono NL (.ttf + OFL.txt; package data)
   data/icons/             # manifest.json + lucide/*.svg + lucide/LICENSE (ISC; package data, §22)
 tools/                    # maintainer scripts, not shipped: vendor_icons.py + icon_set.json (§22, §23)
@@ -443,7 +443,9 @@ gives it the keyword arguments `scale` and `fonts` (§20). Step 19 adds `icon`, 
 area)` also takes a region name as `area`; `SceneParams.also_accepts`. Step 23 (§26) adds
 `action`, `Action`, `ActionOptions`, `Target` and, on `NarratedScene`, `target_patterns`,
 `target_names()`, `target()`, `targets`, `find_targets()`, `on_screen_parts()`, `is_shown()`,
-`entrance()`.
+`entrance()`. Step 24 (§27) adds, compatibly: `NarratedScene` is a `MovingCameraScene`;
+`target(..., outline=)`; `Target.outline`, `Target.rest`, `Target.rest_opacity()`; `Action`
+class attributes `temporary`, `moves_camera`, `target_options`.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -1494,3 +1496,85 @@ using the existing renders of the others (missing ones are rendered). Exit code 
   own dimming (`bullets` `dim_previous`); `highlight` keeps the target's current opacity (a
   dimmed item is highlighted dimmed). Step 24 adds `zoom`/`transform` and targets for the
   other built-ins on this framework.
+
+## 27. Refinements (Step 24, zoom, transform, targets everywhere)
+
+- **Camera.** `NarratedScene` subclasses Manim's `MovingCameraScene` (was `Scene`). The camera
+  frame starts on the whole frame (`config.frame_width` x `frame_height`, aspect kept for 9:16),
+  so scenes that never move it render pixel-identically (whole suite and every example
+  unchanged). `NarratedScene.play` removes the frame from `self.mobjects` after a play that
+  added it (Manim adds the animated mobject; the frame is never drawn), unless it has updaters
+  (an extension's follow-cam). The layout dump already measured with the scene's camera
+  (`camera.center/width/height`, §15); it gains `camera.zoom` (= `config.frame_width /
+  camera.frame_width`, added within layout version 1). `lint.StillContext.zoomed` (zoom >
+  1.001): `off_frame` and `safe_area` skip zoomed stills (cutting the scene off is the point).
+  **For Step 38 (overlays):** anything drawn as a mobject in the scene moves with the camera; a
+  screen-fixed overlay must either follow `camera.frame` (an updater scaling/moving it with
+  the frame) or be composited outside Manim (ffmpeg), which also keeps it out of scene renders.
+- **Framework additions** (`vidgen.actions`): `Action.temporary` (requires `reversible`): the
+  runner schedules `revert` itself, due `run_time` before the end of the *return beat* — the
+  use's own beat, or with `until: B` the beat before `B` — so the effect is over when the next
+  beat (resp. `B`) starts; at `until` beats it is not undone again. `Action.moves_camera`: two
+  such uses never share a batch (the camera frame counts as a shared mobject).
+  `Action.target_options`: option names whose values are target names (str or list):
+  `scene_actions` checks them like `target` (problems at `...actions[k].<option>`);
+  `check_action_class` requires them to be `Options` fields. Ordering on one frame: `until`
+  undoings, then the beat's actions, then temporary undoings (`_rank`). Budget: when actions
+  run, the time of temporary undoings still pending in the beat is reserved, and both are
+  shortened by one factor when the beat is short (`factor = remaining / (phases + reserved)`).
+  An undo of a use that was never applied is skipped. `resolve_targets(scene, pattern)`: a
+  plain name shared by several targets selects the ones on screen, else the first (patterns
+  select all) — used for equation terms registered once per step.
+- **Full opacity** (`Target.rest`, a dict `id(member) -> (fill, stroke)` filled at
+  registration, shared by a scene's targets via `NarratedScene._rest`; `rest_opacity(member)`
+  falls back to 1/0 for members created later, e.g. a value label rebuilt by `become`). Scenes
+  register targets right after layout, before any opacity changes of their own.
+- **`dim`** now means "at most `opacity` x full opacity": each member's alpha array is scaled
+  so its maximum is `<= full x opacity` (ratios kept, so gradients and transparent pixels
+  survive); nothing that is already dimmer changes, so dimming never compounds. Exposed to
+  built-ins as `scenes.actions.dim_to(target, part, factor)`; `bullets` `dim_previous` and
+  `icon_grid`'s highlight step use it (same values as their former relative `fade`).
+- **`highlight`**: `style: color` also raises alpha to full (a dimmed target is highlighted at
+  full opacity); revert restores RGB and sets alpha to min(current, saved) (undoes the raise,
+  keeps dimming that happened since). Box around `Target.outline` (default the mobject);
+  `bar_chart` gives each bar an outline = bar + final value label, stopping `outline_gap`
+  (0.15) short of the axis, so the box (buff 0.12) stands on the axis instead of crossing it.
+- **Images**: `Repaint` also animates the `pixel_array` of `ImageMobject` members
+  (`paint_image(member, rgba float array)`): `dim` scales the alpha channel, `highlight` tints
+  RGB 30% towards the colour (`image_tint`); `_Memory` saves pixel arrays for undo.
+- **`zoom`** (`run_time` 1.0, reversible, temporary, moves_camera; options `scale` (> 1, <= 8)
+  and `padding` (0.15, share of the view on each side)). The view: the union box of the
+  targets' on-screen parts; magnification `min(max_scale=3, (1-2p) x frame/box)` per axis, or
+  `scale`; centre clamped so the view stays inside the frame. Magnification <= 1.01 → no move
+  and a warning (the targets fill the frame). Revert: back to the whole frame (no-op when home).
+  Animation `MoveCamera(scene, width, center)` (a `Transform` of the frame; its name shows in
+  the play log / activity file).
+- **`transform`** (`run_time` 1.0, not reversible; options `into` (required; `target_options`)
+  and `style` `auto|replace|shapes|tex|fade`). The source's on-screen parts are removed and a
+  copy added (so the originals stay intact, and a group target never added whole is not drawn
+  twice), then morphed into `into` (its hidden matches); `auto` = `TransformMatchingShapes` when
+  both sides are text/formulas only, else `ReplacementTransform`; non-vector sides use
+  `FadeTransform`; `tex` without two `MathTex` falls back to shapes (warning). `into` already on
+  screen: the sources fade out towards it (warning). **Decision: `into` must be a target**, not a
+  text literal: a literal has no place, size or style in the scene's layout; scenes that need
+  alternatives provide them as targets (equation steps). Scene steps that would animate a
+  transformed-away target skip it (`bar_chart`/`icon_grid` highlight steps, `bullets`
+  `dim_previous` via `on_screen_parts`).
+- **Targets of every built-in** (table in docs/CONFIG.md "Beat actions", kept in sync with
+  `target_patterns` by `tests/test_actions_coverage.py`): `title` (`icon`, `kicker`, `title`,
+  `subtitle`, `authors`), `text_card` (`text`), `quote` (`mark`, `quote`, `author`, `source`),
+  `equation` (`step<N>`, `caption`, `term:<tex>`; new param `terms`: substrings isolated with
+  `MathTex(substrings_to_isolate=...)`, each must occur in a step; a term target per step that
+  contains it (`get_part_by_tex`, first occurrence; works with Manim 0.19 and 0.21), entrance
+  `[]`), `code` (`title`, `listing`, `line<N>` = physical lines + numbers of original line N,
+  `lines:<a-b>` for every a < b; `target_names` counts a `path` file's lines through
+  `current_project()`, none without a project context), `image` (`image`, `caption` = the text,
+  entrance fades the caption group), `line_chart` (`title`, `axes`, `series<N>`,
+  `series:<name>`, `point:<name>@<x>` with `x` as its tick label; without dots a point is a
+  separate dot that its entrance fades in), `end_card` (`logo`, `icon`, `title`, `line<N>`),
+  `icon_grid` (`heading`, `item<N>`, `item:<label>`). Every built-in builds its steps from
+  `self.entrance()`; `equation` steps morph from whichever step is on screen, and a step is
+  skipped once a later one is shown.
+- **Listing**: `list-scenes` shows `, undone by the beat's end` for temporary actions;
+  `--json` actions gain `temporary` and `target_options` (within version 1). `vidgen schema`
+  adds required options (`into`) to both action forms.

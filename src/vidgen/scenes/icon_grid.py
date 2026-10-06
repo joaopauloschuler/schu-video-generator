@@ -2,11 +2,13 @@
 
 import math
 from collections.abc import Callable
-from typing import Literal, NamedTuple
+from typing import Any, Literal, NamedTuple
 
 import numpy as np
 
 from vidgen.api import *
+
+from .actions import dim_to
 
 
 class _Plan(NamedTuple):
@@ -43,9 +45,21 @@ class IconGrid(NarratedScene):
     with more items than beats they are spread evenly. ``groups`` reveals several items per
     step instead; ``reveal: all`` shows every item in beat 1. A ``highlight`` adds a last step
     that dims the other items and enlarges the highlighted one.
+
+    Action targets: ``heading``, ``item<N>`` (1-based) and ``item:<label>`` (icon, label and
+    sublabel).
     """
 
     outro = 0.5
+    target_patterns = ("heading", "item<N>", "item:<label>")
+
+    @classmethod
+    def target_names(cls, params: Any) -> list[str]:
+        """``heading`` (if any), then ``item<N>`` and ``item:<label>`` per item."""
+        names = ["heading"] if params.heading else []
+        for i, item in enumerate(params.items, start=1):
+            names += [f"item{i}", f"item:{item.label}"]
+        return names
 
     class Params(SceneParams):
         items: list[GridItem] = Field(min_length=1, max_length=16)
@@ -146,14 +160,24 @@ class IconGrid(NarratedScene):
         plan = max((self._plan(body, rows, cols) for rows, cols in sorted(shapes)), key=lambda pl: pl.score)
         cells = self._layout(body, plan)
 
+        def arrive(cell: VGroup) -> list[Animation]:
+            # a cell joins the scene whole (an animation of a part would add the part alone,
+            # dissolving its cell); every part starts invisible, so nothing flashes
+            self.add(cell)
+            return [self._entrance(cell)]
+
+        top = self.target("heading", heading, entrance=lambda: [FadeIn(heading, shift=DOWN * 0.15)]) if heading is not None else None
+        items = [
+            self.target([f"item{i + 1}", f"item:{item.label}"], cell, entrance=lambda cell=cell: arrive(cell))
+            for i, (item, cell) in enumerate(zip(p.items, cells))
+        ]
+
         def reveal_items(indices: list[int], first: bool) -> Callable[[], list[Animation]]:
-            def build() -> list[Animation]:
-                # cells join the scene whole (an animation of a part would add the part alone,
-                # dissolving its cell); every part starts invisible, so nothing flashes
-                self.add(*[cells[i] for i in indices])
-                anims: list[Animation] = [LaggedStart(*[self._entrance(cells[i]) for i in indices], lag_ratio=0.25)]
-                if first and heading is not None:
-                    anims.insert(0, FadeIn(heading, shift=DOWN * 0.15))
+            def build() -> list[Animation]:  # entrance(): an item an action revealed is not revealed again
+                entrances = [a for i in indices for a in self.entrance(items[i])]
+                anims: list[Animation] = [LaggedStart(*entrances, lag_ratio=0.25)] if entrances else []
+                if first and top is not None:
+                    anims = self.entrance(top) + anims
                 return anims
 
             return build
@@ -166,7 +190,7 @@ class IconGrid(NarratedScene):
             order = [[i] for i in range(n)]
         steps: list = [reveal_items(group, k == 0) for k, group in enumerate(order)]
         if p.highlight is not None:
-            steps.append(self._focus(cells, p.item_index(p.highlight)))
+            steps.append(self._focus(items, p.item_index(p.highlight)))
         self.reveal(steps, fraction=0.7, cap=1.2)
         self.finish()
 
@@ -283,15 +307,18 @@ class IconGrid(NarratedScene):
         parts += [FadeIn(t, shift=UP * 0.15) for t in texts]
         return LaggedStart(*parts, lag_ratio=0.2)
 
-    def _focus(self, cells: list[VGroup], chosen: int) -> Callable[[], list[Animation]]:
+    def _focus(self, items: list[Target], chosen: int) -> Callable[[], list[Animation]]:
         """The highlight step: other items fade to :attr:`dimmed_opacity`, the chosen icon (and
         disc) turns ``highlight_color`` and grows a little."""
         p = self.params
         color = self.theme.color(p.highlight_color)
 
         def build() -> list[Animation]:
-            anims: list[Animation] = [cell.animate.fade(1 - self.dimmed_opacity) for i, cell in enumerate(cells) if i != chosen]
-            visual = cells[chosen][0]
+            # never dimmer than a dim action already made them; items transformed away are skipped
+            anims: list[Animation] = [
+                dim_to(t, part, self.dimmed_opacity) for i, t in enumerate(items) if i != chosen for part in self.on_screen_parts(t)
+            ]
+            visual = items[chosen].mobject[0]
             center = visual.get_center()
             target = visual.copy()
             for part in target:

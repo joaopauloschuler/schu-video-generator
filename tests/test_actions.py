@@ -95,7 +95,7 @@ def test_until_must_be_a_later_beat_of_the_scene() -> None:
 
 def test_builtin_actions_are_registered() -> None:
     extensions.load_builtins()
-    assert registry.action_names() == ["dim", "highlight", "reveal"]
+    assert registry.action_names() == ["dim", "highlight", "reveal", "transform", "zoom"]
     assert all(a.builtin for a in registry.all_actions())
     assert registry.find_action("dim").cls.reversible and not registry.find_action("reveal").cls.reversible
     assert "did you mean 'highlight'" in registry.unknown_action_message("higlight")
@@ -195,17 +195,17 @@ def test_validate_reports_bad_actions(make_project) -> None:
     assert re.search(r"unknown target 'item9' for scene type 'bullets'; did you mean 'item\d'", by_location[f"{at}[0].target"][0])
     assert "targets: heading, item1, item:Write the beats" in by_location[f"{at}[0].target"][0]
     assert "forms: heading, item<N>, item:<text>" in by_location[f"{at}[0].target"][0]
-    assert by_location[f"{at}[1].action"] == ["unknown action 'higlight'; did you mean 'highlight'? (known actions: dim, highlight, reveal)"]
+    assert by_location[f"{at}[1].action"] == [
+        "unknown action 'higlight'; did you mean 'highlight'? (known actions: dim, highlight, reveal, transform, zoom)"
+    ]
     assert "less than or equal to 1" in by_location[f"{at}[2].opacity"][0]
     assert "Extra inputs" in by_location[f"{at}[2].colour"][0]
-    assert by_location[f"{at}[3].until"] == ["action 'reveal' cannot be undone; until works with: dim, highlight"]
+    assert by_location[f"{at}[3].until"] == ["action 'reveal' cannot be undone; until works with: dim, highlight, zoom"]
     assert "unknown theme color 'nope'" in by_location[f"{at}[4].color"][0]
     assert "unknown target 'item*x'" in by_location[f"{at}[5].target"][0]
     assert by_location[f"{at}[6].target"] == ["action 'dim' needs a target"]
     assert "did you mean 'bar:Preview 480p'" in by_location["scenes[1].beats[0].actions[0].target"][0]
-    assert by_location["scenes[2].beats[0].actions[0].target"] == [
-        "scene type 'quote' has no action targets (types with targets: bar_chart, bullets)"
-    ]
+    assert "unknown target 'text' for scene type 'quote' (targets: mark, quote;" in by_location["scenes[2].beats[0].actions[0].target"][0]
 
 
 def test_action_names_are_checked_even_when_params_are_invalid(make_project) -> None:
@@ -240,7 +240,7 @@ def test_schema_describes_both_forms_and_options() -> None:
         doc = schema.config_schema(registry.all(), [Theme()])
     validator = jsonschema.Draft202012Validator(doc)
     defs = doc["$defs"]
-    assert defs["ActionConfig"]["properties"]["action"]["enum"] == ["dim", "highlight", "reveal"]
+    assert defs["ActionConfig"]["properties"]["action"]["enum"] == ["dim", "highlight", "reveal", "transform", "zoom"]
     assert {"action.dim", "action.highlight", "action.reveal", "ActionShorthand"} <= set(defs)
 
     def ok(*acts: dict[str, Any]) -> bool:
@@ -251,7 +251,10 @@ def test_schema_describes_both_forms_and_options() -> None:
     assert ok({"action": "reveal", "target": "item3", "at": 0.5, "run_time": 1})
     assert not ok({"highlight": "item1", "colour": "accent"})
     assert not ok({"action": "dim", "target": "item1", "color": "accent"})  # highlight's option on dim
-    assert not ok({"action": "zoom", "target": "item1"})
+    assert ok({"zoom": "item1", "scale": 2}, {"transform": "item1", "into": "item2", "style": "fade"})
+    assert not ok({"action": "spin", "target": "item1"})
+    assert not ok({"transform": "item1"})                      # into is required
+    assert not ok({"zoom": "item1", "scale": 0.5})
     assert not ok({"dim": "item1", "target": "item2"})
     assert not ok({"highlight": "item1", "color": "nope"})
     assert not ok({"action": "dim", "target": "item1", "at": 1.5})
@@ -266,7 +269,8 @@ def test_list_scenes_shows_targets_and_actions(tmp_path: Path, monkeypatch: pyte
     assert main(["list-scenes", "--json"]) == 0
     doc = json.loads(capsys.readouterr().out)
     types = {t["name"]: t for t in doc["scene_types"]}
-    assert types["bullets"]["targets"] == ["heading", "item<N>", "item:<text>"] and types["quote"]["targets"] == []
+    assert types["bullets"]["targets"] == ["heading", "item<N>", "item:<text>"]
+    assert types["quote"]["targets"] == ["mark", "quote", "author", "source"]
     acts = {a["name"]: a for a in doc["actions"]}
     assert (acts["dim"]["reversible"], acts["dim"]["run_time"], acts["reveal"]["needs_target"]) == (True, 0.6, True)
     assert [o["name"] for o in acts["highlight"]["options"]] == ["color", "style"] and acts["highlight"]["doc"]
@@ -364,8 +368,9 @@ def test_bar_chart_actions_and_mid_beat_state(make_project, media: Path) -> None
     scene = render(project, "c", media, size=(90, 160))
     assert float(scene.renderer.time) == pytest.approx(beat_total(scene), abs=1.5 / FPS)
     bars = {t.name: t.mobject for t in scene.targets}
-    # dim and highlight of bar1 in the same beat: played one after the other, both applied
-    assert alpha(bars["bar1"][0]) == pytest.approx(0.92 * 0.5, abs=0.01)
+    # dim and highlight of bar1 in the same beat: played one after the other; a colour highlight
+    # brings the dimmed bar back to its full opacity
+    assert alpha(bars["bar1"][0]) == pytest.approx(0.92, abs=0.01)
     assert rgb(bars["bar1"][0]) == color_of(scene.theme, "highlight")
     assert alpha(bars["bar2"][0]) == pytest.approx(0.92 * 0.5, abs=0.01) and rgb(bars["bar2"][0]) == color_of(scene.theme, "primary")
     assert any(type(m).__name__ == "Underline" for m in scene.mobjects)

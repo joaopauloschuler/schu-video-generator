@@ -106,6 +106,8 @@ class LayoutRecorder:
         self._ids: dict[int, tuple[Mobject, str]] = {}
 
     def __call__(self, scene: NarratedScene, captured: CapturedFrame) -> None:
+        from manim import config
+
         camera = scene.camera
         self.frames.append(
             {
@@ -119,6 +121,7 @@ class LayoutRecorder:
                     "center": [_r(c, 4) for c in np.asarray(camera.frame_center)[:2]],
                     "width": _r(camera.frame_width, 4),
                     "height": _r(camera.frame_height, 4),
+                    "zoom": _r(config.frame_width / camera.frame_width, 4),
                 },
                 "objects": self.objects(scene, captured.pixels),
             }

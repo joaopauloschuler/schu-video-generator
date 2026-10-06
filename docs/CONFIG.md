@@ -379,6 +379,7 @@ its params. Conventions shared by all built-ins:
 ### `title`
 
 Steps: (1) icon, kicker, title and subtitle, (2) authors.
+[Action targets](#beat-actions): `icon`, `kicker`, `title`, `subtitle`, `authors` (those the card has).
 
 | param | type | default | |
 |---|---|---|---|
@@ -455,6 +456,7 @@ Icons with a label (and an optional smaller sublabel) in a grid. Steps: one per 
 heading comes with the first), or one per entry of `groups`; `reveal: all` shows every item in
 beat 1; with `highlight`, a last step dims the other items and enlarges the highlighted one in
 `highlight_color`. Each item fades in with its icon growing from its centre.
+[Action targets](#beat-actions): `heading`, `item<N>` (1-based), `item:<label>` (icon, label and sublabel).
 
 Layout: the heading sits in the `header` region and the grid fills the space below it. Without
 `columns`, the shape (rows x columns) is chosen for the frame with `grid_shape` (see
@@ -543,6 +545,9 @@ Steps: one per series (`reveal: per_beat`, default; the axes come with the first
 series in beat 1 (`all`). Each line ends with a `name value` label; when those labels would be
 too wide (e.g. in portrait) the names move to a legend above the plot. Axis labels are plain
 text (no LaTeX).
+[Action targets](#beat-actions): `title`, `axes`, `series<N>` (1-based), `series:<name>` (a line with its markers
+and end label), `point:<name>@<x>` (one data point, `x` as its tick label reads:
+`point:sparse@8`; without `dots` the point appears as a dot when an action uses it).
 
 | param | type | default | |
 |---|---|---|---|
@@ -578,6 +583,7 @@ text (no LaTeX).
 
 Steps: (1) the image, (2) the caption. `vidgen validate` reports a missing or unsupported file
 (png, jpg, jpeg, gif, bmp, webp, tif).
+[Action targets](#beat-actions): `image`, `caption` (`dim` fades the picture, `highlight` tints it).
 
 | param | type | default | |
 |---|---|---|---|
@@ -605,6 +611,7 @@ Steps: (1) the image, (2) the caption. `vidgen validate` reports a missing or un
 
 Steps: (1) quote mark and text, (2) attribution. Quote characters around `text` are removed;
 the scene draws a large typographic mark.
+[Action targets](#beat-actions): `mark`, `quote`, `author`, `source` (those present).
 
 | param | type | default | |
 |---|---|---|---|
@@ -630,6 +637,9 @@ Steps: one per formula; each morphs into the next. The caption comes with the fi
 LaTeX** (`latex` and `dvisvgm` on PATH — on Windows install MiKTeX). `vidgen validate` warns
 when it is missing; rendering then fails with installation hints. A formula that does not
 compile is reported with the scene id and the formula.
+[Action targets](#beat-actions): `step<N>` (1-based), `caption`, `term:<tex>` for each of `terms` (in the step on
+screen). A step that a `transform` or `reveal` action brought in early is not shown again, and
+earlier steps are skipped once a later one is on screen.
 
 | param | type | default | |
 |---|---|---|---|
@@ -638,6 +648,7 @@ compile is reported with the scene id and the formula.
 | `size` | size | `96` | formula size (1.25x in a vertical frame; shrunk to fit the width) |
 | `caption_size` | size | `caption` | |
 | `color`, `caption_color` | color | `text`, `dim` | |
+| `terms` | list[str] | `[]` | TeX substrings beat actions can target as `term:<tex>` (e.g. `2ab`); each must occur in a step and be a complete TeX group there (not half of a `\frac{..}{..}`); its first occurrence in a step counts |
 
 ```yaml
 - id: square
@@ -660,6 +671,10 @@ Manim's `Code` (Pygments highlighting); the listing is scaled to fill the space 
 title. When its width would make it smaller than `size` (typical for long lines in a vertical
 video), long lines are wrapped with a hanging indent (`wrap`); wrapped lines keep their line
 number and highlights still count original lines.
+[Action targets](#beat-actions): `title`, `listing` (the window), `line<N>` (an original line,
+1-based, with its number; all its pieces when wrapped) and `lines:<a-b>` (lines a to b,
+`lines:3-5`). The scene's own `highlight` steps set line opacities, overriding a `dim` action on
+those lines.
 
 | param | type | default | |
 |---|---|---|---|
@@ -690,6 +705,7 @@ number and highlights still count original lines.
 ### `end_card`
 
 Steps: (1) logo, icon and title, (2) lines. Fades out over 1 s.
+[Action targets](#beat-actions): `logo`, `icon`, `title`, `line<N>` (1-based; those present).
 
 | param | type | default | |
 |---|---|---|---|
@@ -715,6 +731,7 @@ Steps: (1) logo, icon and title, (2) lines. Fades out over 1 s.
 ### `text_card`
 
 One block of text, wrapped to fit, faded in at the first beat and held (no fade-out).
+[Action targets](#beat-actions): `text`.
 
 | param | type | default | |
 |---|---|---|---|
@@ -732,7 +749,8 @@ One block of text, wrapped to fit, faded in at the first beat and held (no fade-
 ## Beat actions
 
 A beat can act on named parts of its scene — **targets** such as `item3` or `bar:4K` — while it
-is spoken: reveal one early, dim it, highlight it. Actions are listed under the beat:
+is spoken: reveal one early, dim it, highlight it, zoom in on it, or morph it into another.
+Actions are listed under the beat:
 
 ```yaml
 - id: sizes
@@ -750,6 +768,22 @@ is spoken: reveal one early, dim it, highlight it. Actions are listed under the 
           color: accent                            # an option, in the shorthand too
 ```
 
+```yaml
+- id: square
+  type: equation
+  params:
+    latex: ["(a + b)^2", "(a + b)(a + b)", "a^2 + 2ab + b^2"]
+    terms: ["2ab"]                                 # parts of a formula actions can target
+  beats:
+    - text: "Take a plus b, squared, and jump straight to the result."
+      actions:
+        - {transform: step1, into: step3, at: 0.5} # step 2's own turn is then skipped
+    - text: "The middle term, two a b, comes from the two cross products."
+      actions:
+        - zoom: "term:2ab"                         # the camera moves in, and is back by the beat's end
+    - text: "That is the whole expansion."
+```
+
 **Syntax.** The canonical form is a mapping with `action` and the keys below, plus the
 action's options. The shorthand `{ACTION: TARGET, ...options}` (as `- dim: item2`) is the
 same thing; write the action name as the first key (if a tool sorted the keys, vidgen finds
@@ -757,43 +791,65 @@ the one key that names an action).
 
 | key | default | |
 |---|---|---|
-| `action` | required | `reveal`, `dim`, `highlight`, or a project action (`vidgen list-scenes` lists them) |
+| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `transform`, or a project action (`vidgen list-scenes` lists them) |
 | `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one |
 | `at` | `0` | when, as a fraction of the beat's narration (`0` ≤ at < `1`) |
-| `until` | none | a later beat of the same scene: the action is undone when it starts (`dim`, `highlight`) |
-| `run_time` | the action's | seconds the animation takes (`reveal` 0.8, `dim` / `highlight` 0.6) |
+| `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`: undone when it starts; `zoom`: the camera is back when it starts) |
+| `run_time` | the action's | seconds the animation takes (`reveal` 0.8, `dim` / `highlight` 0.6, `zoom` / `transform` 1.0; a zoom takes as long again to come back) |
 
-**Targets** depend on the scene type (`vidgen list-scenes` prints them as `targets:`):
+**Targets** depend on the scene type (`vidgen list-scenes` prints them as `targets:`). Every
+built-in type has some; `<N>` counts from 1 (`item1`, `item2`...), `<text>`/`<label>`/`<name>`
+are written out in full (`item:Pick scene types`, or with a pattern: `item:Pick*`). The last
+column lists the actions that make sense on them (the others work, but rarely help: a `zoom` on
+a title card, a `transform` of a bar).
 
-| scene type | targets |
-|---|---|
-| `bullets` | `heading`, `item<N>` (1-based: `item1`, `item2`...), `item:<text>` (the item's full text; `item:Pick*`) |
-| `bar_chart` | `title`, `bar<N>` (1-based), `bar:<label>` — a bar with its value and category labels |
+<!-- targets-table: kept in sync with the scene types by tests/test_actions.py -->
+| scene type | targets | useful actions | notes |
+|---|---|---|---|
+| `title` | `icon`, `kicker`, `title`, `subtitle`, `authors` | reveal, dim, highlight | those the card has |
+| `text_card` | `text` | highlight, zoom | |
+| `bullets` | `heading`, `item<N>`, `item:<text>` | reveal, dim, highlight, zoom, transform | an item is its row (marker, icon, text) |
+| `icon_grid` | `heading`, `item<N>`, `item:<label>` | reveal, dim, highlight, zoom, transform | an item is its icon, label and sublabel |
+| `bar_chart` | `title`, `bar<N>`, `bar:<label>` | reveal, dim, highlight, zoom | a bar with its value and category labels; a `box` sits on the axis |
+| `line_chart` | `title`, `axes`, `series<N>`, `series:<name>`, `point:<name>@<x>` | reveal, dim, highlight, zoom | a series is its line, markers and end label; `point:sparse@8` |
+| `image` | `image`, `caption` | dim, highlight, zoom | `dim` fades the picture, `highlight` tints it |
+| `quote` | `mark`, `quote`, `author`, `source` | reveal, dim, highlight, zoom | |
+| `equation` | `step<N>`, `caption`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each of the `terms` param, in the step on screen; `transform: step1` + `into: step3` jumps ahead |
+| `code` | `title`, `listing`, `line<N>`, `lines:<a-b>` | dim, highlight, zoom | a line with its number; `lines:3-5`; a wide line leaves little to zoom |
+| `end_card` | `logo`, `icon`, `title`, `line<N>` | reveal, dim, highlight | those present |
 
-Other built-in types have no targets yet (an action on them is a `vidgen validate` error);
-[project scene types](EXTENDING.md#8-per-beat-actions-targets-and-custom-actions) can declare
-their own.
+[Project scene types](EXTENDING.md#8-per-beat-actions-targets-and-custom-actions) can declare
+their own targets; a type without any rejects actions in `vidgen validate`.
 
 **Actions**
 
 | action | options | |
 |---|---|---|
 | `reveal` | — | brings the target on screen with the scene's own entrance animation (e.g. item 4 before its turn). A target already on screen is left alone, and the scene does not reveal it again at its own step. |
-| `dim` | `opacity` (`0.45`, 0–1, relative to the current opacity) | fades the target; `until:` restores the opacity |
-| `highlight` | `color` (`highlight`, a theme token or hex), `style` (`color` default, `box`, `underline`, `flash`, or a list such as `[color, box]`) | `color` recolours the target; `box` draws a rounded frame around it, `underline` a line under it; `flash` flashes the colour there and back (leaves no trace; not with `color`). `until:` restores the colours and removes box / underline. |
+| `dim` | `opacity` (`0.45`, 0–1, of the target's full opacity) | fades the target; one that is already dimmer (e.g. by `bullets`' `dim_previous`) stays as it is, so dimming never compounds; `until:` restores the opacity |
+| `highlight` | `color` (`highlight`, a theme token or hex), `style` (`color` default, `box`, `underline`, `flash`, or a list such as `[color, box]`) | `color` recolours the target and brings a dimmed one back to full opacity while highlighted; `box` draws a rounded frame around it, `underline` a line under it; `flash` flashes the colour there and back (leaves no trace; not with `color`). `until:` restores the colours (and the dimming) and removes box / underline. |
+| `zoom` | `scale` (magnification > 1, up to 8; default: as close as the targets fit), `padding` (`0.15`: share of the view kept free on each side of the targets) | moves the camera in on the targets and back out: the zoom-out ends with the beat (with `until: <beat>`, when that beat starts). Without `scale` the view is at most 3x; a target that already fills the frame is not zoomed (a warning says so). The view never leaves the frame. |
+| `transform` | `into` (required: a target not on screen yet), `style` (`auto` default, `replace`, `shapes`, `tex`, `fade`) | morphs the target into `into`, which then stays on screen in its own place (the target is gone). `shapes` moves matching glyphs (what `auto` uses for text and formulas), `replace` morphs point by point (`auto` for other shapes), `tex` matches the TeX parts of two formulas, `fade` cross-fades. `into` must be a target of the scene; text that is not part of the scene cannot be morphed into (give the scene that content, e.g. as a later equation step). If `into` is already on screen, the target fades out into its place (warning). |
 
-`dim` and `highlight` act on targets on screen; a target not shown yet is first revealed (as by
-`reveal`). They change only opacity resp. colour, so both can apply to one target and each is
-undone separately.
+`dim`, `highlight`, `zoom` and `transform` act on targets on screen; a target not shown yet is
+first revealed (as by `reveal`). `dim` and `highlight` change only opacity resp. colour, so
+both can apply to one target and each is undone separately. Images are dimmed and tinted too
+(their pixels). A highlight `box` surrounds what the scene marks as the target's outline (a bar
+and its value, standing on the axis; else the whole target).
 
 **Timing.** Actions never make a beat longer. An action is due `at` x the beat's narration
 after the beat starts and runs at the first moment from then on when the scene's own animation
 is not playing (the scene's reveal of that beat's step comes first, then the action), for its
 `run_time`, shortened to end within the beat (narration + `narration.pad`; `vidgen lint`
 reports run times shortened below 0.5 s as `rushed_animation`). Actions due together play
-together (ones on the same target one after the other). Undoing (`until`) happens at the
-start of that beat, with its actions. If a scene leaves no time at all, the action is applied
-without animation and a warning is logged. Silent scenes have no beats, so no actions.
+together (ones on the same target, and two camera moves, one after the other). Undoing
+(`until`) happens at the start of that beat, with its actions. A `zoom` is undone so that the
+camera is back when the next beat (or its `until` beat) starts: its zoom-out starts `run_time`
+before that beat's end, and a zoom-in late in a short beat is shortened together with its
+zoom-out. If a scene leaves no time at all, the action is applied without animation and a
+warning is logged. Silent scenes have no beats, so no actions. While the camera is zoomed in,
+`vidgen lint` does not report text cut off by the frame or in the margins (`off_frame`,
+`safe_area`): that is what a zoom does.
 
 **Checks.** `vidgen validate` reports unknown actions (with suggestions), unknown options,
 invalid option values, `until` on an action that cannot be undone or on a beat that is not a
@@ -904,7 +960,8 @@ File `build/<final|preview>[_<variant>]/layout/<scene>.json`:
  safe_area: [x0, y0, x1, y1],  # frame minus the scene's margins (margin_x/margin_y), in px
  frames: [{beat, k, n, frame, time,     # the same keys as the stills index
            still: "../frames/<scene>/<file>.png",
-           camera: {center: [x, y], width, height},   # the camera frame in Manim units
+           camera: {center: [x, y], width, height,    # the camera frame in Manim units
+                    zoom},                    # frame width / camera width: > 1 while zoomed in
            objects: [...]}]}
 ```
 
@@ -1027,8 +1084,8 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 
 | rule | default severity | finds |
 |---|---|---|
-| `off_frame` | error for text, warning for other objects | an object cut off by the frame edge by more than `tolerance`. Not reported: objects wholly outside (not visible), and non-text objects running from edge to edge on the side they cross (a full-frame image with `fit: cover` or Ken Burns, a background, a band or divider): those bleeds are intentional |
-| `safe_area` | warning | text inside the frame but in its margins (the scene's `margin_x`/`margin_y`, `safe_area` in the layout dump) by more than `tolerance` |
+| `off_frame` | error for text, warning for other objects | an object cut off by the frame edge by more than `tolerance`. Not reported: objects wholly outside (not visible), and non-text objects running from edge to edge on the side they cross (a full-frame image with `fit: cover` or Ken Burns, a background, a band or divider): those bleeds are intentional; nothing while the camera is zoomed in (a `zoom` action) |
+| `safe_area` | warning | text inside the frame but in its margins (the scene's `margin_x`/`margin_y`, `safe_area` in the layout dump) by more than `tolerance`; not checked while the camera is zoomed in |
 | `text_overlap` | error | two texts whose boxes overlap by at least `min_overlap` of the smaller box (the same text drawn twice in the same place is not reported) |
 | `covered_text` | warning | a shape or image drawn **after** (on top of) a text whose colour shows in at least `min_covered` of the middle of the text's box, measured on the still's pixels. Not reported: shapes drawn before the text (plates, highlight bands, a code window), the text's own parent group, shapes fainter than 0.3, and shapes in the text's own colour (a strike-through) |
 | `min_font` | warning; error below `error_size` | text whose cap height is below `min_size` of the shorter side. The cap height is the layout's `font_px` corrected for the text's letters (`font_px` of all-lowercase text is about its x-height); a lone symbol (`+`, `·`) is not checked |
@@ -1202,8 +1259,9 @@ Each field: `name`; `type` (readable type as in the human listing: `str`, `list[
 when required); `doc` (the docstring under the field or its `Field(description=...)`, or
 `null`); `nested` (fields of `SceneParams` models used in the type, as `{model, fields}`).
 Each action: `name`, `origin`, `builtin`, `overrides_builtin`, `doc` (as for scene types);
-`run_time` (default seconds); `reversible` (bool: `until` allowed); `needs_target` (bool);
-`options` (fields like `params`; `[]` = none).
+`run_time` (default seconds); `reversible` (bool: `until` allowed); `temporary` (bool: undone
+by the end of its beat, like `zoom`); `needs_target` (bool); `target_options` (options whose
+values are target names, e.g. `["into"]`); `options` (fields like `params`; `[]` = none).
 
 ### `vidgen list-themes --json`
 

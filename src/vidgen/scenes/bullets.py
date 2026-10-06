@@ -7,6 +7,8 @@ import numpy as np
 
 from vidgen.api import *
 
+from .actions import dim_to
+
 
 class BulletItem(SceneParams):
     """A list item: its text, or ``{text, icon}`` (a plain string is read as ``{text: ...}``)."""
@@ -110,8 +112,10 @@ class Bullets(NarratedScene):
                 anims = self.entrance(items[i])
                 if i == 0 and head is not None:
                     anims = self.entrance(head) + anims
-                if p.dim_previous:  # fade() scales each part's opacity: an icon's invisible box stays so
-                    anims += [rows[j].animate.fade(1 - self.dimmed_opacity) for j in range(i) if j not in dimmed]
+                if p.dim_previous:  # never below what a dim action already did; an icon's invisible box stays so
+                    for j in range(i):
+                        if j not in dimmed:
+                            anims += [dim_to(items[j], part, self.dimmed_opacity) for part in self.on_screen_parts(items[j])]
                     dimmed.update(range(i))
                 return anims
 

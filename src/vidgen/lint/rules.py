@@ -95,6 +95,12 @@ class StillContext:
         return int(self.layout["height"])
 
     @property
+    def zoomed(self) -> bool:
+        """Whether the camera is zoomed in (``zoom`` action): parts of the scene are cut off by
+        the frame on purpose."""
+        return float(self.frame.get("camera", {}).get("zoom", 1.0)) > 1.001
+
+    @property
     def short_side(self) -> int:
         """The frame's shorter side in px (the height of landscape video): sizes are measured
         against it, so a 480p preview and the 1080p video (and 16:9 and 9:16) agree."""

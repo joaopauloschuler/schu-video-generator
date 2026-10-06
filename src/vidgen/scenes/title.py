@@ -1,6 +1,6 @@
 """``title``: opening card with optional icon, kicker, highlighted words, subtitle and authors."""
 
-from typing import Literal
+from typing import Any, Literal
 
 from vidgen.api import *
 
@@ -10,9 +10,18 @@ class Title(NarratedScene):
     """Beat 1 reveals the icon, kicker, title and subtitle; beat 2 reveals the authors (if any).
 
     With a single beat everything appears in it; further beats hold the card.
+
+    Action targets: ``icon``, ``kicker``, ``title``, ``subtitle``, ``authors`` (those present).
     """
 
     outro = 0.5
+    target_patterns = ("icon", "kicker", "title", "subtitle", "authors")
+
+    @classmethod
+    def target_names(cls, params: Any) -> list[str]:
+        """The parts the card has, in reading order."""
+        present = {"icon": params.icon, "kicker": params.kicker, "title": True, "subtitle": params.subtitle, "authors": params.authors}
+        return [name for name, there in present.items() if there]
 
     class Params(SceneParams):
         title: str
@@ -94,18 +103,22 @@ class Title(NarratedScene):
         card.arrange(DOWN, buff=0.75)
         shrink_to_fit(card, self.safe_width, self.safe_height).move_to(ORIGIN)
 
-        def reveal_head() -> Animation:
-            parts = [Write(title)]
-            if p.kicker:
-                parts.insert(0, FadeIn(head[0], shift=DOWN * 0.15))
-            if mark is not None:
-                parts.insert(0, FadeIn(mark, scale=0.6))
-            if p.subtitle:
-                parts.append(FadeIn(head[-1], shift=UP * 0.15))
-            return LaggedStart(*parts, lag_ratio=0.35)
+        parts: list[Target] = []
+        if mark is not None:
+            parts.append(self.target("icon", mark, entrance=lambda: [FadeIn(mark, scale=0.6)]))
+        if p.kicker:
+            parts.append(self.target("kicker", head[0], entrance=lambda: [FadeIn(head[0], shift=DOWN * 0.15)]))
+        parts.append(self.target("title", title, entrance=lambda: [Write(title)]))
+        if p.subtitle:
+            parts.append(self.target("subtitle", head[-1], entrance=lambda: [FadeIn(head[-1], shift=UP * 0.15)]))
+        byline = self.target("authors", authors, entrance=lambda: [FadeIn(authors, shift=UP * 0.15, lag_ratio=0.3)]) if p.authors else None
+
+        def reveal_head() -> list[Animation]:  # entrance() skips what an action revealed already
+            anims = [AnimationGroup(*self.entrance(t)) for t in parts if not self.is_shown(t)]
+            return [LaggedStart(*anims, lag_ratio=0.35)] if anims else []
 
         steps: list = [reveal_head]
-        if p.authors:
-            steps.append(FadeIn(authors, shift=UP * 0.15, lag_ratio=0.3))
+        if byline is not None:
+            steps.append(lambda: self.entrance(byline))
         self.reveal(steps, fraction=0.75, cap=2.0)
         self.finish()

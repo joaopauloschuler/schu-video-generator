@@ -9,7 +9,8 @@ the names statically in ``target_names(params)`` so ``vidgen validate`` can chec
 Timing: an action is due at ``at`` x the beat's narration after the beat starts. It starts in the
 first wait of the scene at or after that moment (so it never fights the scene's own animation of
 the same objects) and runs for its ``run_time``, shortened so the beat never lasts longer than
-its narration plus ``narration.pad``.
+its narration plus ``narration.pad``. A ``temporary`` action (``zoom``) is undone by the runner so
+that it is over when the next beat (or its ``until`` beat) starts.
 """
 
 from __future__ import annotations
@@ -21,7 +22,9 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from manim import Animation, Mobject, config
+import numpy as np
+from manim import Animation, Mobject, VMobject, config
+from manim.mobject.types.image_mobject import AbstractImageMobject
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from vidgen.config import ACTION_KEYS, ActionConfig, SceneConfig, validation_problems
@@ -52,11 +55,42 @@ class Target:
     names: tuple[str, ...]
     mobject: Mobject
     entrance: Callable[[], Sequence[Animation]] | None = None
+    #: What a ``highlight`` box is drawn around (default: ``mobject``), e.g. a bar and its value
+    #: without the category label below the axis.
+    outline: Mobject | None = None
+    #: Opacity of every part when registered, by ``id`` (may be shared by a scene's targets).
+    rest: dict[int, tuple[float, float]] = field(default_factory=dict, repr=False)
+
+    def __post_init__(self) -> None:
+        for m in self.mobject.get_family():
+            if id(m) not in self.rest:
+                self.rest[id(m)] = _opacity(m)
 
     @property
     def name(self) -> str:
         """The main name."""
         return self.names[0]
+
+    def rest_opacity(self, member: Mobject) -> tuple[float, float]:
+        """``(fill, stroke)`` opacity of a part of the target as it was when the target was
+        registered (its full, undimmed look); a part made later counts as fully opaque where it
+        is visible at all."""
+        if id(member) in self.rest:
+            return self.rest[id(member)]
+        fill, stroke = _opacity(member)
+        return (1.0 if fill > 0 else 0.0, 1.0 if stroke > 0 else 0.0)
+
+
+def _opacity(m: Mobject) -> tuple[float, float]:
+    """Largest fill and stroke opacity of ``m`` itself (an image: its pixels' alpha, twice)."""
+    if isinstance(m, AbstractImageMobject):
+        pixels = m.get_pixel_array()
+        alpha = float(np.max(pixels[:, :, 3])) / 255 if pixels.size else 0.0
+        return alpha, alpha
+    if isinstance(m, VMobject):
+        fill, stroke = m.get_fill_rgbas(), m.get_stroke_rgbas()
+        return (float(np.max(fill[:, 3])) if len(fill) else 0.0, float(np.max(stroke[:, 3])) if len(stroke) else 0.0)
+    return 0.0, 0.0
 
 
 class ActionOptions(BaseModel):
@@ -89,6 +123,14 @@ class Action:
     needs_visible: ClassVar[bool] = True
     #: Whether the action needs a ``target``.
     needs_target: ClassVar[bool] = True
+    #: Undone automatically so that it is over when the next beat starts (with ``until:``, when
+    #: that beat starts): :meth:`revert` is played to end with the beat. Requires ``reversible``.
+    temporary: ClassVar[bool] = False
+    #: Whether it moves the camera (actions that do never play at the same time).
+    moves_camera: ClassVar[bool] = False
+    #: Options whose values are target names (checked like ``target``; e.g. ``into`` of
+    #: ``transform``). Resolve them with :meth:`NarratedScene.find_targets`.
+    target_options: ClassVar[tuple[str, ...]] = ()
 
     def __init__(self, options: ActionOptions, config: ActionConfig) -> None:
         self.options = options
@@ -121,6 +163,11 @@ def check_action_class(name: str, cls: object) -> None:
         raise VidgenError(f"{where}: implement apply(self, scene, targets)")
     if cls.reversible and cls.revert is Action.revert:
         raise VidgenError(f"{where}: reversible actions implement revert(self, scene, targets)")
+    if cls.temporary and not cls.reversible:
+        raise VidgenError(f"{where}: temporary actions must be reversible")
+    unknown = [o for o in cls.target_options if o not in options.model_fields]
+    if unknown:
+        raise VidgenError(f"{where}: target_options {', '.join(unknown)} are not fields of its Options")
 
 
 # ----- target names --------------------------------------------------------------------------------
@@ -215,9 +262,13 @@ def scene_actions(
                 problems.append((f"{where}.until", f"action '{act.action}' cannot be undone; until works with: {reversible}"))
             if kind.cls.needs_target and not act.targets():
                 problems.append((f"{where}.target", f"action '{act.action}' needs a target"))
-            for pattern in act.targets() if names is not None else []:
+            checked = [("target", p) for p in act.targets()]
+            for option in kind.cls.target_options:
+                value = getattr(options, option)
+                checked += [(option, p) for p in ([value] if isinstance(value, str) else value or [])]
+            for key, pattern in checked if names is not None else []:
                 if not match_names(pattern, names):
-                    problems.append((f"{where}.target", unknown_target_message(pattern, scene_type, names, cls.target_patterns)))
+                    problems.append((f"{where}.{key}", unknown_target_message(pattern, scene_type, names, cls.target_patterns)))
             if len(problems) == found:
                 uses.append(ActionUse(beat.id, where, act, kind, kind.cls(options, act)))
     return uses, problems
@@ -235,11 +286,33 @@ def plan_actions(scene_type: str, cls: type[NarratedScene], spec: SceneConfig, p
 # ----- runtime -------------------------------------------------------------------------------------
 
 
+def resolve_targets(scene: NarratedScene, pattern: str, location: str = "") -> list[Target]:
+    """The targets ``pattern`` selects in a running scene. A plain name that several targets
+    share (an equation term in several steps) selects those on screen, else the first one.
+    Raises :class:`VidgenError` when nothing matches."""
+    matches = scene.find_targets(pattern)
+    if not matches:
+        names = [n for t in scene.targets for n in t.names]
+        message = unknown_target_message(pattern, scene.spec.type, names, type(scene).target_patterns)
+        raise VidgenError(f"scene '{scene.spec.id}'{' ' + location if location else ''}: {message}")
+    if len(matches) > 1 and "*" not in pattern and "?" not in pattern:
+        matches = [t for t in matches if scene.is_shown(t)] or matches[:1]
+    return matches
+
+
 @dataclass(eq=False)
 class _Due:
     frame: int
     use: ActionUse
     revert: bool
+
+
+def _rank(due: _Due) -> int:
+    """Order of actions due on one frame: undoing (``until``) first, then the beat's own
+    actions, then the end-of-beat undoing of temporary ones."""
+    if not due.revert:
+        return 1
+    return 2 if due.use.kind.cls.temporary else 0
 
 
 class ActionRunner:
@@ -269,14 +342,27 @@ class ActionRunner:
         return bool(self._pending)
 
     def start_beat(self, beat_id: str, d: float, pad: float) -> None:
-        """Schedule the beat's actions: undoing (``until`` = this beat) first, then its own by ``at``."""
+        """Schedule the beat's actions: undoing (``until`` = this beat) first, then its own by
+        ``at``; temporary actions that must be over by the next beat are undone at its end."""
         fps = config.frame_rate
         now = self._now()
         self._beat = beat_id
         self._end = now + round((d + pad) * fps)
-        due = [_Due(now, u, True) for u in self.uses if u.config.until == beat_id and u.applied]
-        due += [_Due(now + round(u.config.at * d * fps), u, False) for u in self.uses if u.beat == beat_id]
-        self._pending = sorted(due, key=lambda x: x.frame)
+        due = [_Due(now, u, True) for u in self.uses if u.config.until == beat_id and u.applied and not u.kind.cls.temporary]
+        own = {id(u): now + round(u.config.at * d * fps) for u in self.uses if u.beat == beat_id}
+        due += [_Due(frame, u, False) for u in self.uses if (frame := own.get(id(u))) is not None]
+        for u in self.uses:
+            if u.kind.cls.temporary and self._return_beat(u) == beat_id and (u.applied or id(u) in own):
+                back = self._end - round(u.run_time * fps)
+                due.append(_Due(max(back, own.get(id(u), now)), u, True))
+        self._pending = sorted(due, key=lambda x: (x.frame, _rank(x)))
+
+    def _return_beat(self, use: ActionUse) -> str:
+        """The beat at whose end a temporary action is undone: its own, or the one before ``until``."""
+        if use.config.until is None:
+            return use.beat
+        ids = [b.id for b in self.scene.beats]
+        return ids[ids.index(use.config.until) - 1]
 
     def wait(self, frames: int) -> None:
         """Wait ``frames`` frames, playing the actions that fall due meanwhile."""
@@ -308,12 +394,7 @@ class ActionRunner:
         """The registered targets the use's patterns select (in registration order)."""
         found: list[Target] = []
         for pattern in use.config.targets():
-            matches = self.scene.find_targets(pattern)
-            if not matches:
-                names = [n for t in self.scene.targets for n in t.names]
-                message = unknown_target_message(pattern, self.scene.spec.type, names, type(self.scene).target_patterns)
-                raise VidgenError(f"scene '{self.scene.spec.id}' {use.location}: {message}")
-            found += [t for t in matches if t not in found]
+            found += [t for t in resolve_targets(self.scene, pattern, use.location) if t not in found]
         return found
 
     def _phases(self, due: list[_Due]) -> list[tuple[Callable[[], list[Animation]], float]]:
@@ -330,9 +411,12 @@ class ActionRunner:
             phases.append((lambda: [a for t in hidden for a in scene.entrance(t)], self.reveal_time))
         batch: list[_Due] = []
         batches = [batch]
+        camera = id(getattr(scene.camera, "frame", scene.camera))
         for d in due:
             mobs = {id(m) for t in d.use.targets for m in t.mobject.get_family()}
+            mobs |= {camera} if d.use.kind.cls.moves_camera else set()
             taken = {id(m) for b in batch for t in b.use.targets for m in t.mobject.get_family()}
+            taken |= {camera} if any(b.use.kind.cls.moves_camera for b in batch) else set()
             if mobs & taken:
                 batch = []
                 batches.append(batch)
@@ -346,6 +430,8 @@ class ActionRunner:
         anims: list[Animation] = []
         for d in batch:
             act = d.use.action
+            if d.revert and not d.use.applied:
+                continue
             anims += act.revert(self.scene, d.use.targets) if d.revert else act.apply(self.scene, d.use.targets)
             d.use.applied = not d.revert
         return anims
@@ -356,9 +442,12 @@ class ActionRunner:
             return
         fps = config.frame_rate
         phases = self._phases(due)
-        budget = max(self._end - self._now(), 0) / fps
+        # temporary actions still to be undone in this beat need their time too: when the beat
+        # is short, these phases and those undoings are shortened alike
+        reserved = sum(d.use.run_time for d in self._pending if d.revert and d.use.kind.cls.temporary)
+        remaining = max(self._end - self._now(), 0) / fps
         total = sum(p[1] for p in phases)
-        factor = min(1.0, budget / total) if total > 0 else 1.0
+        factor = min(1.0, remaining / (total + reserved)) if total > 0 else 1.0
         for build, natural in phases:
             anims = build()
             if not anims:

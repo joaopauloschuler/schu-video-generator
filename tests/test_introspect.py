@@ -228,7 +228,7 @@ def test_document_header(small_config: None) -> None:
     assert doc["safe_area"] == pytest.approx([0.6 * PX, 0.5 * PX, W - 0.6 * PX, H - 0.5 * PX], abs=0.06)
     assert [(f["beat"], f["frame"], f["still"]) for f in doc["frames"]] == [
         ("b1", 3, "../frames/sc/b1-1.png"), ("b2", 7, "../frames/sc/b2-1.png")]
-    assert doc["frames"][0]["camera"] == {"center": [0.0, 0.0], "width": pytest.approx(8 * W / H, abs=1e-3), "height": 8.0}
+    assert doc["frames"][0]["camera"] == {"center": [0.0, 0.0], "width": pytest.approx(8 * W / H, abs=1e-3), "height": 8.0, "zoom": 1.0}
 
 
 def test_still_name() -> None:
@@ -327,7 +327,7 @@ def test_layout_matches_the_stills(layout_project: Path) -> None:
     assert words["text"] == "Words" and words["font_px"] > 3 and words["backdrop"] == "#203040"
 
     zoomed = read_json(build / "layout" / "z.json")["frames"][-1]
-    assert zoomed["camera"]["width"] == pytest.approx(8 * W / H / 2, abs=0.01)
+    assert zoomed["camera"]["width"] == pytest.approx(8 * W / H / 2, abs=0.01) and zoomed["camera"]["zoom"] == pytest.approx(2.0)
     [square] = zoomed["objects"]
     assert square["bbox"] == pytest.approx([W / 2 - 2 * PX, H / 2 - 2 * PX, W / 2 + 2 * PX, H / 2 + 2 * PX], abs=0.5)
     sx0, sy0, sx1, sy1 = ink_box(build / "layout" / zoomed["still"])

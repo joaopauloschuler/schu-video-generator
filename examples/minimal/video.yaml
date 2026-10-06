@@ -7,6 +7,7 @@
 #   vidgen storyboard examples/minimal [--variant vertical]      # contact sheets of every beat (PNG)
 #   vidgen lint examples/minimal [--variant vertical]            # layout + timing checks (dead air, ...)
 #   vidgen storyboard examples/minimal --scene sizes --per-beat 3   # mid-beat stills: beat actions
+#   vidgen storyboard examples/minimal --scene math --per-beat 3    # transform and zoom actions
 #   vidgen storyboard examples/minimal --variant light           # same video with the light_academic preset
 #   vidgen list-themes examples/minimal --swatches build/themes.png  # every theme preset at a glance
 # There is no narration audio in this example, so beats are timed from their word count
@@ -155,10 +156,15 @@ scenes:
         - "(a + b)(a + b)"
         - "a^2 + 2ab + b^2"
       caption: "Each step morphs into the next"
+      terms: ["2ab"]      # a part of the formulas that beat actions can target: term:2ab
     beats:
       - text: "Equations are typeset with LaTeX."
-      - text: "Each step transforms into the next one."
-      - text: "Until we reach the expanded form."
+      - text: "Each step transforms into the next one, and an action can even jump ahead."
+        actions:          # morph step 2 into step 3 a beat early; beat 3 then keeps it
+          - {transform: step2, into: step3, at: 0.6}
+      - text: "Here is the expanded form, and a closer look at its middle term."
+        actions:          # the camera moves in on the term and is back by the end of the beat
+          - {zoom: "term:2ab", at: 0.3}
 
   - id: listing
     type: code

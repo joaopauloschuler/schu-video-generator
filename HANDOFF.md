@@ -2032,3 +2032,81 @@ How to test: `/home/claude/venv/bin/python -m pytest -q` (821 passed, 1 skipped,
 tests/test_actions.py`. Manual: `vidgen validate examples/minimal`, `vidgen storyboard
 examples/minimal --scene sizes --per-beat 3 [--variant vertical]`, `vidgen lint examples/minimal`,
 `vidgen list-scenes`, `vidgen schema | jq '.["$defs"].ActionShorthand'`.
+
+## Step 24 — Per-beat actions (zoom, transform, coverage)
+What was built
+- **`zoom`** action: the camera moves in on the targets (`scale`, or fitted with `padding`, at
+  most 3x, never leaving the frame) and back. It is *temporary*: the zoom-out ends with the beat
+  (with `until: B`, when `B` starts). A target that already fills the frame is not zoomed
+  (warning). `NarratedScene` is now a `MovingCameraScene` (renders unchanged when the camera
+  does not move; the frame is kept out of `scene.mobjects`).
+- **`transform`** action: `transform: A` + `into: B` (`B` a target not on screen yet; `style`
+  `auto|replace|shapes|tex|fade`). B stays on screen in its place, A is gone; scene steps that
+  would reveal B or animate A skip them. Decision: `into` is a target, not a text literal.
+- **Targets on every built-in** (`title`, `text_card`, `quote`, `equation` incl. new param
+  `terms` → `term:<tex>`, `code` `line<N>`/`lines:<a-b>`, `image`, `line_chart` incl.
+  `point:<name>@<x>`, `end_card`, `icon_grid`); every built-in builds its steps from
+  `self.entrance()` (early reveals are not repeated; equation steps morph from the one on
+  screen and are skipped once a later one is shown). Table scene type x targets x useful
+  actions in docs/CONFIG.md "Beat actions", checked against `target_patterns` by a test.
+- **Step 23 gaps fixed**: `dim`/`highlight` on images (pixel alpha / 30% tint); dimming never
+  compounds (`dim` = at most `opacity` x the target's *full* opacity, captured at
+  registration; `bullets` `dim_previous` and `icon_grid`'s highlight step use the same
+  `dim_to`); a colour highlight brings a dimmed target to full opacity and its undo restores
+  the dimming; a bar's highlight box stands on the axis (`Target.outline`).
+- Framework: `Action.temporary`, `moves_camera`, `target_options`; runner schedules temporary
+  undoings at the end of the return beat, reserves their time and shortens both alike in short
+  beats; repeated plain names select the targets on screen. Layout dump `camera.zoom`; lint's
+  `off_frame`/`safe_area` skip zoomed stills. `list-scenes` (+ JSON `temporary`,
+  `target_options`), schema requires `into`.
+- `examples/minimal` `math`: `terms: ["2ab"]`, beat 2 `transform: step2 → step3` (at 0.6; beat
+  3's own morph is skipped), beat 3 `zoom: "term:2ab"`.
+
+Verification
+- Scratch project with every built-in type and actions (zoom with/without `until`, nested dim
+  + dim_previous + highlight, transform in bullets and equation, image dim/tint, line_chart
+  points without dots, code `lines:3-5` box, title/quote/end_card/text_card targets):
+  `vidgen storyboard --per-beat 3` (16:9 and 9:16) read sheet by sheet; `vidgen lint` 0 errors
+  (only dead-air/rushed warnings of its deliberately short beats).
+- `examples/minimal`: `vidgen lint` 0 findings in all 8 variants; `math` and `sizes` sheets
+  checked (`--per-beat 3`). `examples/custom_scene` 0, `examples/kphi3` 0 (5 ignored, as before).
+
+Files
+- New: `tests/test_actions_coverage.py` (41 tests incl. 30 tiny renders).
+- Changed: `src/vidgen/actions.py`, `scene.py`, `scenes/actions.py` (Repaint images, dim_to,
+  Zoom, MoveCamera, TransformAction), all built-in scene modules in `scenes/`, `introspect.py`,
+  `lint/rules.py`, `lint/layout_rules.py`, `schema.py`, `describe.py`, `cli.py`;
+  `tests/test_actions.py`, `tests/test_introspect.py`; `examples/minimal/video.yaml`;
+  docs/CONFIG.md, docs/EXTENDING.md, README.md, DESIGN.md (§2, §6.4, new §27), tasklist.md.
+
+Public interfaces added/changed
+- Actions `zoom`, `transform`; `equation` param `terms`; targets on all built-ins.
+- `vidgen.api` (compatible): `NarratedScene` base is `MovingCameraScene`;
+  `NarratedScene.target(..., outline=)`; `Target.outline`, `Target.rest`,
+  `Target.rest_opacity()`; `Action.temporary`, `Action.moves_camera`, `Action.target_options`.
+- Behaviour: `dim`'s `opacity` is now relative to the target's full opacity (no compounding);
+  `highlight` `style: color` undims while highlighted. Layout dump `camera.zoom`; JSON
+  `actions[].temporary`, `actions[].target_options`.
+
+Decisions / deviations
+- `zoom` always comes back (no "stay zoomed" option): `until` extends it, and it is over when
+  that beat starts — the same reading of `until` as Step 23 ("lasts until"), but undone *before*
+  the beat rather than in its first wait, so the next beat's entrance is seen in full.
+- `transform` into text literals not supported (no layout/style for a literal); scenes offer
+  alternatives as targets.
+- Lint skips `off_frame`/`safe_area` while zoomed instead of measuring against the zoomed view.
+
+Known gaps / TODOs
+- **Step 38 overlays**: mobjects in the scene move with the camera; a screen-fixed overlay must
+  follow `camera.frame` or be composited outside Manim (DESIGN §27).
+- A `dim` reverted after a scene's own later dimming (`dim_previous`) restores full opacity.
+- `code`'s own highlight steps set absolute opacities (they override a `dim` action on lines);
+  `lines:<a-b>` enumerates every range (fine for listings that fit on screen).
+- Equation `term:` uses the first occurrence per step; terms must be complete TeX groups.
+- Zoom on wide targets (a code line, a full-width title) barely zooms (warning); `scale:`
+  forces it but may crop the target.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (862 passed, 1 skipped). Step only:
+`pytest tests/test_actions_coverage.py tests/test_actions.py`. Manual: `vidgen storyboard
+examples/minimal --scene math --per-beat 3 [--variant vertical]`, `vidgen lint examples/minimal`,
+`vidgen list-scenes`.

@@ -55,9 +55,17 @@ class Image(NarratedScene):
     ``fit: contain`` shows the whole image (caption below it); ``cover`` fills the frame
     (cropping) with the caption on a band at the bottom. ``ken_burns`` zooms/pans slowly over
     the whole scene (in ``contain`` mode the image never outgrows its box).
+
+    Action targets: ``image``, ``caption`` (if any).
     """
 
     outro = 0.5
+    target_patterns = ("image", "caption")
+
+    @classmethod
+    def target_names(cls, params: Any) -> list[str]:
+        """``image`` and, with a caption, ``caption``."""
+        return ["image"] + (["caption"] if params.caption else [])
 
     class Params(SceneParams):
         path: str
@@ -93,9 +101,9 @@ class Image(NarratedScene):
         fw, fh = self.frame_width, self.frame_height
         motion = p.motion()
 
-        caption = None
+        caption = text = None
         if p.caption:
-            caption = fit_text(p.caption, self.safe_width, self.safe_height * 0.18, size=p.caption_size, color=p.caption_color)
+            caption = text = fit_text(p.caption, self.safe_width, self.safe_height * 0.18, size=p.caption_size, color=p.caption_color)
 
         if p.fit == "cover":
             box_w, box_h, box_c = fw, fh, np.zeros(3)
@@ -142,9 +150,11 @@ class Image(NarratedScene):
 
             img.add_updater(drift)
 
-        steps: list = [FadeIn(img)]
-        if caption is not None:
-            steps.append(FadeIn(caption, shift=UP * 0.1))
+        picture = self.target("image", img, entrance=lambda: [FadeIn(img)])
+        steps: list = [lambda: self.entrance(picture)]  # entrance(): not twice after a reveal action
+        if caption is not None:  # the target is the text (a cover caption's band is not recoloured)
+            label = self.target("caption", text, entrance=lambda: [FadeIn(caption, shift=UP * 0.1)])
+            steps.append(lambda: self.entrance(label))
         self.reveal(steps, fraction=0.6, cap=1.0)
         img.clear_updaters()
         self.finish()

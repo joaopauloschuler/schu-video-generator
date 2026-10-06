@@ -103,9 +103,32 @@ class CodeListing(NarratedScene):
     """Beat 1 shows the listing; ``highlight`` entry *i* is applied at beat *i* (entry 1
     together with the listing). More entries than beats are spread evenly; later beats hold.
     Highlighting dims the other lines and marks the selected ones with a soft band.
+
+    Action targets: ``title``, ``listing`` (the window), ``line<N>`` (an original line, 1-based,
+    with its number; all its pieces when wrapped) and ``lines:<a-b>`` (lines a to b).
     """
 
     outro = 0.5
+    target_patterns = ("title", "listing", "line<N>", "lines:<a-b>")
+
+    @classmethod
+    def target_names(cls, params: Any) -> list[str]:
+        """``title`` (if any), ``listing``, ``line<N>`` per line and ``lines:<a-b>`` per range. The
+        lines of a ``path`` file are counted in the active project (none without one)."""
+        n = cls._line_count(params)
+        names = (["title"] if params.title else []) + ["listing"] + [f"line{k}" for k in range(1, n + 1)]
+        return names + [f"lines:{a}-{b}" for a in range(1, n + 1) for b in range(a + 1, n + 1)]
+
+    @staticmethod
+    def _line_count(params: Any) -> int:
+        """Lines of the listing (0 when its file cannot be read here)."""
+        text = params.code
+        if text is None:
+            try:
+                text = current_project().asset(params.path).read_text(encoding="utf-8")
+            except (VidgenError, OSError, UnicodeDecodeError):
+                return 0
+        return len(text.rstrip("\n").split("\n"))
 
     class Params(SceneParams):
         code: str | None = None
@@ -243,16 +266,33 @@ class CodeListing(NarratedScene):
 
             return build
 
+        def physical_lines(k: int) -> VGroup:
+            rows = [lines[j] for j in groups[k - 1]] + ([numbers[j] for j in groups[k - 1]] if numbers is not None else [])
+            return VGroup(*rows)
+
         intro = Group(listing)
+        window = self.target("listing", listing, entrance=lambda: [FadeIn(intro, shift=UP * 0.12)])
+
+        def show() -> list[Animation]:  # a line appears with its listing
+            return self.entrance(window)
+
+        for k in range(1, len(groups) + 1):
+            self.target(f"line{k}", physical_lines(k), entrance=show)
+        for a in range(1, len(groups) + 1):
+            for b in range(a + 1, len(groups) + 1):
+                self.target(f"lines:{a}-{b}", VGroup(*[physical_lines(k) for k in range(a, b + 1)]), entrance=show)
         if p.highlight:  # the first highlight is already applied when the listing fades in
             chosen = physical(p.highlight[0])
             for m, o in opacities(chosen):
                 m.set_opacity(o)
             state["band"] = bands_for(chosen)
             intro.add(state["band"])
-        if title is not None:
-            intro.add(title)
-        plan: list = [FadeIn(intro, shift=UP * 0.12)] + [highlight(spec) for spec in p.highlight[1:]]
+        heading = self.target("title", title, entrance=lambda: [FadeIn(title, shift=UP * 0.12)]) if title is not None else None
+
+        def first() -> list[Animation]:  # entrance(): what an action showed early is not shown again
+            return self.entrance(window) + (self.entrance(heading) if heading is not None else [])
+
+        plan: list = [first] + [highlight(spec) for spec in p.highlight[1:]]
         self.reveal(plan, fraction=0.6, cap=1.0)
         self.finish()
 
