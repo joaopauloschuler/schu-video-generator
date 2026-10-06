@@ -18,6 +18,7 @@
 #   vidgen storyboard examples/minimal --scene cost --scene beats --per-beat 3  # scatter with a trend; histogram
 #   vidgen storyboard examples/minimal --scene share --scene busy --per-beat 3  # a donut sweeping in; a heatmap
 #   vidgen storyboard examples/minimal --scene walkthrough --per-beat 2  # a listing scrolling from step to step
+#   vidgen storyboard examples/minimal --scene app --per-beat 2     # a screenshot with callouts, step by step
 #   vidgen storyboard examples/minimal --variant light           # same video with the light_academic preset
 #   vidgen list-themes examples/minimal --swatches build/themes.png  # every theme preset at a glance
 # There is no narration audio in this example, so beats are timed from their word count
@@ -335,6 +336,28 @@ scenes:
     beats:
       - text: "Images come from the project's assets folder."
       - text: "With a gentle zoom and pan, still pictures feel alive."
+
+  - id: app
+    type: screenshot      # a picture of an app with callouts; areas are [x, y, w, h] fractions from its top left
+    params:
+      title: "Point at what matters"
+      path: assets/app.png          # a made-up app, drawn by tools/make_screenshot.py
+      frame: browser
+      url: "planner.example/overview"
+      steps:              # step i at beat i: one callout, a list of them, or {callouts, focus, previous}
+        - {box: [0.216, 0.038, 0.269, 0.055], label: "Search every task"}
+        - - {arrow: [0.857, 0.065], label: "New task", curved: true}
+          - {circle: [0.736, 0.15, 0.25, 0.17], label: "Overdue"}
+        - {magnifier: [0.675, 0.545, 0.28, 0.085], label: "Done today", zoom: 2.5}
+        - callouts:
+            - {spotlight: [0.205, 0.37, 0.428, 0.58]}
+            - {arrow: [0.425, 0.55], label: "Thursday was the busiest day"}
+          focus: true     # the camera moves in on this step's areas
+    beats:
+      - text: "Screenshots get callouts, one step per beat. A box marks the search field."
+      - text: "An arrow points at the new task button, and a circle at the overdue count."
+      - text: "A magnifier enlarges a detail, cut sharp from the picture itself."
+      - text: "Focus moves the camera in, and a spotlight dims everything else."
 
   - id: saying
     type: quote

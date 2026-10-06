@@ -3023,3 +3023,94 @@ How to test: `/home/claude/venv/bin/python -m pytest -q` (full suite); step only
 tests/test_equation_derivation.py`. Manual: `vidgen storyboard examples/minimal --scene derive
 --per-beat 3 [--variant vertical|light]`, `vidgen lint examples/minimal --scene derive
 [--variant ...]`, `vidgen list-scenes`, `vidgen schema --scene equation_derivation`.
+
+## Step 34 — Scene: `screenshot` with callouts
+What was built
+- **Callout helpers** (`src/vidgen/callouts.py`, public in `vidgen.api`, written for reuse by Step
+  41's callout overlay): `callout_box`, `callout_circle`, `callout_arrow` (straight or `curved`; the
+  label is placed away from the area, inside `bounds`, clear of `avoid`, preferably off
+  `prefer_off`), `callout_magnifier` (an inset cut from the image's own pixels with Pillow at the
+  output resolution, framed, joined to a frame around the area by two hull lines), `callout_spotlight`
+  (shade with a rounded hole), `callout_label` (bold text on a plate in the callout colour, text in
+  the theme colour that reaches 4.5:1, never below the readable size), `callout(kind, ...)`,
+  `callout_area` (an area as a mobject, a `Region`, or `[x, y]` / `[x, y, w, h]` fractions of
+  `within` or pixels of an image) and `label_spot` (the placement search). Each returns a
+  `Callout` (`Group`: `kind`, `area`, `mark`, `tag`, `extent()`, `draw(start)`); `scale` builds
+  one for a zoomed camera.
+- **`screenshot`** scene (`src/vidgen/scenes/screenshot.py`): an image fitted below an optional
+  title, optionally in a `browser` (dots + address field with `url`), `window` or `phone` frame
+  drawn in `surface` / `dim`; **per-beat `steps`** (one callout, a list, or `{callouts, focus,
+  previous}`; callouts `{KIND: area, label, color, side, curved, zoom}` or `{kind, area, ...}`);
+  `units: fraction | px`; earlier callouts `fade` / `dim` / `keep` (scene `previous`, per-step
+  override); `focus` moves the camera onto the step's areas and builds its callouts at
+  1/magnification so labels read normally; targets `title`, `image`, `callout<N>`,
+  `callout:<label>`, `step<N>`.
+- `examples/minimal`: `app` scene (browser frame; box, curved arrow + circle, magnifier, focus +
+  spotlight + arrow) on `assets/app.png` (18 KB, a made-up "Planner" dashboard drawn by the new
+  maintainer script `tools/make_screenshot.py` with the bundled Inter; reproducible byte for byte).
+
+Verification
+- Scratch project (browser / window / phone frames, all five kinds, `px` units, `previous` fade /
+  dim / keep, focus in and back, a silent scene without steps) via `vidgen storyboard` (`--per-beat
+  1` and `2`) in 16:9, vertical and `light_academic`, plus `high_contrast` (large type scale) for
+  the example; sheets read with Read. Fixed along the way: labels over the browser's address text
+  (title bar now in `avoid`; lint `covered_text` from the frame outline drawn over the URL → outline
+  drawn before the bar's parts), arrows with almost no length when the label was pushed back into
+  the frame (distance penalty), labels on the picture when free background was next to it
+  (`prefer_off`), a magnifier in 9:16 that barely enlarged (room measured above / below at full
+  width vs beside at full height), tiny focus-built labels kept after the camera left (callouts
+  built for another camera always leave), `background` is not a colour token (shade uses
+  `theme.background`).
+- `vidgen lint examples/minimal --scene app` in all 8 variants (default, vertical, light,
+  contrast, editorial, neutral, pastel, neon): 0 findings. Other scenes untouched.
+
+Files
+- New: `src/vidgen/callouts.py`, `src/vidgen/scenes/screenshot.py`, `tests/test_screenshot.py` (42
+  tests, 16 tiny renders), `tools/make_screenshot.py`, `examples/minimal/assets/app.png`.
+- Changed: `src/vidgen/api.py` (exports), `src/vidgen/scenes/__init__.py`;
+  `examples/minimal/video.yaml`; tests `test_builtin_scenes.py` (BUILTINS/SAMPLES),
+  `test_actions_coverage.py` (SAMPLES, target names, early `step2` reveal), `test_extensions.py`
+  (known types list); docs/CONFIG.md
+  (`screenshot` section, targets row), docs/EXTENDING.md ("Callouts" building block with an example
+  rendered by a test), README, DESIGN.md (§2, §6.4, new §37), tasklist.md.
+
+Public interfaces added/changed
+- `vidgen.api`: `Callout`, `CalloutArea`, `CALLOUT_KINDS`, `callout`, `callout_area`, `callout_box`,
+  `callout_circle`, `callout_arrow`, `callout_magnifier`, `callout_spotlight`, `callout_label`,
+  `label_spot` (DESIGN §37). Built-in scene type `screenshot`. Internal (module) helpers:
+  `vidgen.callouts.tag_spot`, `connector_lines`, `mobject_region`, `pixel_size`.
+
+Decisions / deviations
+- **Helper names carry a `callout_` prefix** (the roadmap said `arrow`, `box`, `circle`,
+  `magnifier`, `spotlight`): bare names would shadow common local names in `from vidgen.api import
+  *` code and read ambiguously next to Manim's `Arrow` / `Circle`; the prefix matches the Step 30
+  `chart_*` helpers. `callout(kind, ...)` gives the by-name form Step 41 will want.
+- **Areas from the top-left corner, y down** (`[x, y, w, h]`), like image editors and `ken_burns`
+  focus points, so coordinates can be read off a screenshot; `units: px` for pixel values.
+- **Animations without `AnimationGroup`**: `Callout.draw()` returns one animation per part with
+  windowed rate functions (an `AnimationGroup` leaves its own `Group` in `scene.mobjects`).
+- **Spotlight dims the picture only** (`cover` = the image), not the title or frame; it lies under
+  other callouts (z-index 1 vs 2).
+- **Focus = camera + callouts built for the zoom** (as `code_walkthrough`'s focus card), not a
+  bigger crop; callouts built for another view leave when the camera changes, even with `keep`.
+- `dim` keeps marks (box, circle, arrow, a magnifier's source frame) at 0.35 and fades labels,
+  insets and shades: dimmed labels on dimmed plates over a picture would fail lint's contrast.
+
+Known gaps / TODOs
+- Label placement is a scored search over fixed candidates, not a global layout: with many
+  labelled callouts in one step on a small picture, labels may sit over each other's arrows (they
+  avoid each other's labels and areas, not lines). One magnifier inset can cover other parts of
+  the picture when there is no free background (it avoids the step's areas).
+- No rounded corners on the image itself (the frame's corners are rounded; `ImageMobject` cannot
+  be clipped); a phone frame suits portrait screenshots.
+- A `highlight` colour action on a callout repaints its label text in the same colour as its plate
+  (unreadable); use `style: box` / `flash` or `dim` / `zoom` (CONFIG.md lists reveal, dim, zoom).
+- Ken Burns / pan on the screenshot itself is not offered (focus covers "zoom to the callout").
+- Step 41: place callouts by target name with `callout_*(target.mobject, ...)` or frame
+  fractions (`within=None`); for overlays that stay put while a scene's camera moves, build them
+  with `scale` and `bounds` from `camera.frame` (as `screenshot._bounds` does).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1487 passed, 1 skipped, ~14 min); step only:
+`pytest tests/test_screenshot.py`. Manual: `vidgen storyboard examples/minimal --scene app --per-beat 2
+[--variant vertical|light]`, `vidgen lint examples/minimal --scene app [--variant ...]`,
+`vidgen list-scenes`, `vidgen schema --scene screenshot`, `python tools/make_screenshot.py`.

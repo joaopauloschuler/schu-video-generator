@@ -39,6 +39,8 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "bar_chart": BARS,
     "line_chart": {"title": "Loss", "x": [1, 2, 3], "series": {"a": [3, 2, 1], "b": [2, 2.5, 1]}},
     "image": {"path": "assets/pic.png", "caption": "A picture"},
+    "screenshot": {"path": "assets/pic.png", "title": "T", "previous": "keep",
+                   "steps": [{"box": [0.1, 0.1, 0.3, 0.3], "label": "Box"}, [{"arrow": [0.7, 0.7], "label": "Arrow"}, {"circle": [0.5, 0.5]}]]},
     "quote": {"text": "Simple.", "author": "D", "source": "1975"},
     "equation": {"latex": ["(a+b)^2", "a^2 + 2ab + b^2"], "terms": ["2ab"], "caption": "c"},
     "equation_derivation": {"title": "T", "steps": ["{{ a }} + b = c", {"tex": "{{ a }} = c - b", "note": "n"}], "terms": ["c"]},
@@ -132,6 +134,7 @@ def test_target_names_of_every_builtin_type() -> None:
     assert names("line_chart", title="", x=["Q1", "Q2", "Q3"])[:3] == ["axes", "series1", "series:a"]
     assert "point:a@Q2" in names("line_chart", x=["Q1", "Q2", "Q3"])
     assert names("image", caption="") == ["image"]
+    assert names("screenshot") == ["title", "image", "callout1", "callout:Box", "callout2", "callout:Arrow", "callout3", "step1", "step2"]
     assert names("equation") == ["step1", "step2", "caption", "term:2ab"]
     assert names("equation_derivation") == ["title", "step1", "step2", "note2", "result", "term:c", "term:a"]
     assert names("code") == ["title", "listing", "line1", "line2", "line3", "lines:1-2", "lines:1-3", "lines:2-3"]
@@ -200,7 +203,8 @@ def test_builtin_scenes_register_their_target_names(kind: str, make_project, med
      ("line_chart", "series2"), ("image", "caption"), ("code", "line3"), ("code_walkthrough", "note2"), ("text_card", "text"),
      ("chapter", "subtitle"), ("stat", ["comparison", "context"]), ("comparison", "col2"), ("table", "row2"), ("timeline", "event2"),
      ("diagram", "edge:a->b"), ("network", ["layer2", "edges1"]), ("scatter", ["series2", "trend"]), ("histogram", ["mean", "median", "compare"]),
-     ("pie", "slice2"), ("heatmap", "row2"), ("equation_derivation", "note2")],   # process: its token still moves (test_process_network)
+     ("pie", "slice2"), ("heatmap", "row2"), ("equation_derivation", "note2"),
+     ("screenshot", "step2")],   # process: its token still moves (test_process_network)
 )
 def test_early_reveal_is_not_repeated_by_the_scene(kind: str, target: str | list[str], make_project, media: Path) -> None:
     project = load(make_project, [{"id": "s", "type": kind, "params": SAMPLES[kind], "beats": beats([{"reveal": target}], None)}])

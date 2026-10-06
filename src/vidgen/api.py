@@ -17,6 +17,20 @@ del _before
 from pydantic import Field, field_validator, model_validator  # noqa: E402
 
 from vidgen.actions import Action, ActionOptions, Target  # noqa: E402
+from vidgen.callouts import (  # noqa: E402
+    CALLOUT_KINDS,
+    Callout,
+    CalloutArea,
+    callout,
+    callout_area,
+    callout_arrow,
+    callout_box,
+    callout_circle,
+    callout_label,
+    callout_magnifier,
+    callout_spotlight,
+    label_spot,
+)
 from vidgen.charts import (  # noqa: E402
     CHART_MARKERS,
     ChartAxes,
@@ -218,6 +232,18 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "color_bar",
     "mix_colors",
     "text_color_on",
+    "CALLOUT_KINDS",
+    "Callout",
+    "CalloutArea",
+    "callout",
+    "callout_area",
+    "callout_arrow",
+    "callout_box",
+    "callout_circle",
+    "callout_label",
+    "callout_magnifier",
+    "callout_spotlight",
+    "label_spot",
     "Field",
     "field_validator",
     "model_validator",

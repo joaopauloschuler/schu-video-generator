@@ -20,7 +20,7 @@ from vidgen.render.worker import frame_size
 from vidgen.scenes.code import parse_line_spec
 from vidgen.theme import Theme
 
-BUILTINS = ["bar_chart", "bullets", "chapter", "code", "code_walkthrough", "comparison", "diagram", "end_card", "equation", "equation_derivation", "flowchart", "heatmap", "histogram", "icon_grid", "image", "line_chart", "network", "pie", "process", "quote", "scatter", "stat", "table", "text_card", "timeline", "title"]
+BUILTINS = ["bar_chart", "bullets", "chapter", "code", "code_walkthrough", "comparison", "diagram", "end_card", "equation", "equation_derivation", "flowchart", "heatmap", "histogram", "icon_grid", "image", "line_chart", "network", "pie", "process", "quote", "scatter", "screenshot", "stat", "table", "text_card", "timeline", "title"]
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "minimal"
 FPS = 5
 
@@ -31,6 +31,9 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "bar_chart": {"title": "Bars", "labels": ["a", "b", "c"], "values": [1, 2.5, -1], "highlight": "b", "unit": "%"},
     "line_chart": {"title": "Lines", "x": [1, 2, 3], "series": {"s1": [1, 2, 3], "s2": [3, 2, 2.5]}, "x_label": "x", "y_label": "y"},
     "image": {"path": "assets/pic.png", "caption": "Caption", "ken_burns": True},
+    "screenshot": {"path": "assets/pic.png", "title": "Shot", "frame": "browser", "url": "example.org",
+                   "steps": [{"box": [0.1, 0.1, 0.4, 0.3], "label": "Box"}, [{"arrow": [0.7, 0.6], "label": "Arrow", "curved": True}, {"circle": [0.5, 0.5]}],
+                             {"callouts": [{"magnifier": [0.1, 0.5, 0.3, 0.3], "label": "Zoom"}, {"spotlight": [0.1, 0.5, 0.3, 0.3]}], "focus": True}]},
     "quote": {"text": "“To be or not to be.”", "author": "Someone", "source": "Somewhere"},
     "equation": {"latex": ["x^2", "x \\cdot x"], "caption": "Square"},
     "equation_derivation": {"title": "Solve", "colors": {"x": "accent"}, "terms": ["3"],

@@ -28,6 +28,7 @@ from vidgen.scenes import (  # noqa: F401
     process,
     quote,
     scatter,
+    screenshot,
     stat,
     table,
     text_card,

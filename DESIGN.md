@@ -71,6 +71,7 @@ src/vidgen/
   layout.py               # fit/wrap text, beat distribution, chart numbers, LaTeX detection
   regions.py              # layout regions: safe area, named regions, grids, place(), readable text (§18)
   graph.py                # layered layout of directed graphs, pure Python (§31; no manim)
+  callouts.py             # callouts: areas, label placement, box, circle, arrow, magnifier, spotlight (§37)
   charts.py               # chart helpers: ticks, number labels, axes, legend, markers, fit (§33),
                           # colour scales, colour bar, readable text on fills (§34)
   tts/__init__.py         # provider seam: get_provider(cfg)
@@ -459,6 +460,9 @@ Step 30 (§33) adds the chart helpers: `ChartAxis`, `ChartAxes`, `LinearFit`, `C
 `chart_legend`, `auto_legend`, `legend_spot`, `sample_path`, `chart_marker`, `linear_fit`,
 `chart_title`, `chart_caption`.
 Step 31 (§34) adds `ColorScale`, `color_scale`, `color_bar`, `mix_colors`, `text_color_on`.
+Step 34 (§37) adds the callout helpers: `Callout`, `CalloutArea`, `CALLOUT_KINDS`, `callout`,
+`callout_area`, `callout_box`, `callout_circle`, `callout_arrow`, `callout_magnifier`,
+`callout_spotlight`, `callout_label`, `label_spot`.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -2178,3 +2182,68 @@ using the existing renders of the others (missing ones are rendered). Exit code 
 - **Targets**: `title`, `step<N>`, `note<N>` (entrance plays the step), `result` (last step + box;
   entrance: the step, or just the box), `term:<tex>` (parts of `terms`, `colors`, `match`, `{{ }}`).
   A `transform` jump to the last step leaves the result's box to the last step's own beat.
+
+
+## 37. Refinements (Step 34, `screenshot` and callouts)
+
+- **Callout helpers** (`vidgen/callouts.py`, exported by `vidgen.api`; reused by Step 41's callout
+  overlay). An *area* is a mobject (its bounding box), a `Region`, or `[x, y]` / `[x, y, w, h]`
+  (top-left corner + size, y downwards) relative to `within` (mobject or region; default the
+  frame) in fractions or, `units="px"`, pixels of an `ImageMobject`'s `pixel_array` (or of
+  `pixels=(w, h)`); `callout_area` turns any of them into a `Region` (a point has size 0). The
+  helpers `callout_box`, `callout_circle`, `callout_arrow`, `callout_magnifier` (needs `image=`),
+  `callout_spotlight` share the signature `(area, label="", *, within, units, color, label_size,
+  side, bounds, avoid, scale, theme, ...)`; `callout(kind, area, label, **options)` dispatches by
+  name (`CALLOUT_KINDS`). Names carry the `callout_` prefix like the `chart_*` helpers: bare `box`,
+  `circle`, `arrow` would shadow common local names in `from vidgen.api import *` code.
+- **`Callout(Group)`**: `kind`, `area` (Region), `mark`, `tag` (label or `None`), `steps` (parts in
+  drawing order: a magnifier's source frame, connector lines, inset); `extent(pad)` (mark + tag; a
+  spotlight only by its hole and tag) feeds the next callout's `avoid`; `draw(start=0)` returns
+  one animation per part with staggered rate functions inside a single run time (no
+  `AnimationGroup`, which would leave its own `Group` in `scene.mobjects`): mark then tag, an
+  arrow's label before its `GrowArrow`; `start` delays them (while earlier callouts leave).
+- **Labels** (`callout_label`): `readable_text` (bold, `label_size`, never below the readable
+  size; wrapped at 0.3 x frame width, 0.6 in portrait) on a `RoundedRectangle` plate filled with
+  the callout colour; the text colour is `text_color_on(plate)` (≥ 4.5:1, lint's contrast); the
+  plate is drawn first, so lint reads it as the text's backdrop.
+- **Placement** (`label_spot`, `tag_spot`): candidates in eight directions (arrows, insets) at
+  several gaps, or on a mark's edge (tags: above at its left / right end, below, beside; inside
+  its top-left corner as a last resort); each is moved inside `bounds` and scored by overlap with
+  the anchor (x10), with `avoid` (x4), the shift, a preference order, being nearer than 0.7 x the
+  first gap (x6: arrows keep a visible length) and overlap with `prefer_off` (x0.8: the
+  screenshot's picture, so labels and insets go to free background when there is room).
+- **Arrow**: straight `Arrow` (tip 0.22) or `CurvedArrow` (±45°, bulging towards the bounds'
+  centre), from the label plate's edge to where the ray from the area's centre leaves it (a
+  point: the point). **Circle**: an ellipse through the area's corners (x√2 + padding; flat
+  areas get a minimum height). **Spotlight**: `Cutout(rectangle, rounded hole)` filled with the
+  theme background at 0.62 over `cover`/`within`. **Magnifier**: the inset size is `zoom` x the
+  area, limited by the room above / below (full bounds width) or beside (full height) the area,
+  whichever allows more (that axis is then the only one tried); the pixels are cut from the
+  image's `pixel_array` (or `source`) by the area's fractions and resampled (Lanczos) to the
+  output resolution / `scale`; connectors are the convex-hull edges joining a corner of the
+  source frame to a corner of the inset (`connector_lines`).
+- **`screenshot`** (`scenes/screenshot.py`; reference docs/CONFIG.md). Params `path`, `title`,
+  `steps` (`ScreenshotStep {callouts, focus, previous}`, a list of callouts or one callout;
+  `CalloutSpec {kind, area, label, color, side, curved, zoom}` or the shorthand `{KIND: area,
+  ...}`; JSON Schema `anyOf` for both), `frame` (`none | browser | window | phone`), `url`, `units`
+  (`fraction | px`), `color`, `label_size`, `previous` (`fade | dim | keep`), `focus_scale`.
+  Fractions are checked by the params model, pixels by `validate_project` (image size).
+- **Layout**: the picture (and its frame: bar 0.065 x width, 0.4–0.6 units, taller for a
+  readable `url`; phone bezels 5 % / 12 % / 10 % of the width) is fitted into the body (below the
+  title) inset by 0.25 x 0.1 units in landscape, 10 % of the height in portrait. Labels' bounds are
+  the body; the title bar is in every step's `avoid`.
+- **Steps**: per-beat data is the params list aligned with beats, like Steps 32/33. Beat 1 plays
+  the picture's entrance then step 1 (`play_steps` with two slots); `fraction=0.6, cap=1.5`. A
+  step = earlier callouts leave (fade, or `dim`: box / circle / arrow / magnifier source frame to
+  0.35 opacity, the rest fades) + the camera move + its callouts' `draw(start=0.4)`. Callouts are
+  built once, before the first beat, step by step with `avoid` = title bar + kept callouts + the
+  step's areas + the callouts placed so far; spotlights first (z-index 1, other callouts 2).
+- **Focus**: the camera (`MoveCamera`) frames the union of the step's areas so it takes at most
+  half of the view each way (≤ `focus_scale` / the step's number); the step's callouts are built
+  with `scale = 1 / magnification` and `bounds` = the zoomed view's safe area (∩ body), so they
+  read at normal size. Callouts built for another camera always leave when it changes (kept
+  ones would be enlarged or tiny).
+- **Targets**: `title`, `image` (picture + frame), `callout<N>` / `callout:<label>` (numbered in
+  written order; entrance: `draw()`, or the step for a focus step not yet zoomed), `step<N>`
+  (entrance: the step). A step whose callouts are all on screen (an early `reveal`) is skipped.
+

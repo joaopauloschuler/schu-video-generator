@@ -869,6 +869,104 @@ Steps: (1) the image, (2) the caption. `vidgen validate` reports a missing or un
     - text: "Everything ran on this machine."
 ```
 
+### `screenshot`
+
+A picture of an app or a web page with **callouts** pointing at its parts, one step per beat:
+boxes, circles, arrows with labels, magnified insets and a spotlight. Steps: (1) the picture (in
+its frame) and then step 1's callouts, (*i*) step *i*'s callouts. Before a step's callouts are
+drawn, the earlier ones fade out (`previous: fade`, default), dim (`dim`: their boxes, circles
+and arrows stay faint, labels, insets and shades go) or stay (`keep`). With more steps than beats
+they are spread evenly; extra beats hold. `vidgen validate` reports a missing or unsupported
+image file and areas outside the image.
+
+**Areas** are `[x, y, w, h]`: the top-left corner and the size, as fractions of the image (`0`–`1`,
+from its top-left corner, like `ken_burns` focus points) or, with `units: px`, in the image's own
+pixels (as an image editor shows them). A point `[x, y]` is enough for a box, circle or arrow.
+
+**Callouts** are written `{KIND: area, label: ..., ...}` (or `{kind: KIND, area: [...], ...}`):
+
+| kind | draws | options |
+|---|---|---|
+| `box` | a rounded frame around the area, the label as a tag on its edge (above it, else below) | `label`, `color`, `side` |
+| `circle` | an ellipse through the area's corners (a ring around a point), the label beside it | `label`, `color`, `side` |
+| `arrow` | the label away from the area — outside the picture when there is room, never off the frame — and an arrow from it to the area's edge (to the point) | `label`, `color`, `side`, `curved` |
+| `magnifier` | an enlarged inset of the area (`zoom` times, less when there is not that much room beside the area), joined to a frame around the area by two lines; cut from the image's own pixels, so it is sharp | `label`, `color`, `side`, `zoom` (`2`, more than 1, up to 8) |
+| `spotlight` | the rest of the picture dimmed (the theme's background at 62 %), the area clear | `label`, `color`, `side` |
+
+Labels are bold text on a plate in the callout's colour (default the scene's `color`,
+`highlight`), written in whichever theme colour reads best on it (4.5:1 or more), at `label_size`
+and never below the readable size; long labels wrap. Each label is placed clear of the other
+callouts of its step (and of those kept from earlier steps), of their areas and of the frame's
+title bar. `side: top | bottom | left | right` forces where the label (a magnifier: its inset)
+goes. A spotlight lies under the other callouts.
+
+**Per-beat data** lives in `steps`, aligned with the beats: entry *i* is beat *i*. An entry is one
+callout, a list of callouts, or `{callouts, focus, previous}`.
+
+**Focus.** `focus: true` moves the camera in on the step's areas (at most `focus_scale`, so that
+they take about half of the view; a number is the magnification) and builds the step's labels and
+lines for the zoom, so they read at their normal size. Callouts built for another view (the
+whole frame, or another focus) leave when the camera moves; the next step without `focus` moves
+the camera back.
+
+**Frames.** `frame: browser` draws a title bar with three dots and an address field (`url`),
+`window` the title bar alone, `phone` a rounded body with a speaker slot and a home bar (for
+portrait screenshots); all in the theme's `surface` and `dim` colours.
+
+[Action targets](#beat-actions): `title`, `image` (the picture with its frame), `callout<N>`
+(numbered over all steps, in the order written), `callout:<label>`, `step<N>` (a step's callouts;
+revealing it plays the step). Revealing a callout early draws it (one of a focus step brings its
+step, with the camera); a step whose callouts are all on screen already is skipped at its beat.
+
+| param | type | default | |
+|---|---|---|---|
+| `path` | str | required | relative to the project folder, e.g. `assets/app.png` |
+| `title` | str | `""` | heading above the picture |
+| `steps` | list | `[]` | step *i* at beat *i*: a callout, a list of callouts, or `{callouts, focus, previous}` |
+| `steps[].callouts` | list | `[]` | `{KIND: area, label, color, side, curved, zoom}` (see above) |
+| `steps[].callouts[].kind`, `.area` | kind, list | required | the canonical form of `{KIND: area}` |
+| `steps[].callouts[].label` | str | `""` | |
+| `steps[].callouts[].color` | color | the scene's `color` | mark and label plate |
+| `steps[].callouts[].side` | `auto` \| `top` \| `bottom` \| `left` \| `right` | `auto` | where the label / inset goes |
+| `steps[].callouts[].curved` | bool | `false` | arrows only |
+| `steps[].callouts[].zoom` | number | `2` | magnifiers only |
+| `steps[].focus` | bool \| number | `false` | `true`: the camera moves in on the step's areas; a number (1–4): that magnification |
+| `steps[].previous` | `fade` \| `dim` \| `keep` | the scene's | what happens to earlier callouts at this step |
+| `frame` | `none` \| `browser` \| `window` \| `phone` | `none` | drawn around the picture |
+| `url` | str | `""` | text of a `browser` frame's address field |
+| `units` | `fraction` \| `px` | `fraction` | how areas are written |
+| `color` | color | `highlight` | default callout colour |
+| `label_size` | size | `caption` | label text size (never below the readable size) |
+| `previous` | `fade` \| `dim` \| `keep` | `fade` | what happens to a step's callouts when the next starts |
+| `focus_scale` | number (1–4) | `2.0` | largest magnification of `focus: true` |
+
+```yaml
+- id: app
+  type: screenshot
+  params:
+    title: "Point at what matters"
+    path: assets/app.png
+    frame: browser
+    url: "planner.example/overview"
+    steps:
+      - {box: [0.216, 0.038, 0.269, 0.055], label: "Search every task"}
+      - - {arrow: [0.857, 0.065], label: "New task", curved: true}
+        - {circle: [0.736, 0.15, 0.25, 0.17], label: "Overdue"}
+      - {magnifier: [0.675, 0.545, 0.28, 0.085], label: "Done today", zoom: 2.5}
+      - callouts:
+          - {spotlight: [0.205, 0.37, 0.428, 0.58]}
+          - {arrow: [0.425, 0.55], label: "Thursday was the busiest day"}
+        focus: true
+  beats:
+    - text: "A box marks the search field."
+    - text: "An arrow points at the new task button, and a circle at the overdue count."
+    - text: "A magnifier enlarges a detail."
+    - text: "Focus moves the camera in, and a spotlight dims everything else."
+```
+
+Project scenes draw the same callouts with the `callout_*` helpers of `vidgen.api`
+([EXTENDING.md](EXTENDING.md#2-building-blocks-params-layout-timing-validation), "Callouts").
+
 ### `quote`
 
 Steps: (1) quote mark and text, (2) attribution. Quote characters around `text` are removed;
@@ -1797,6 +1895,7 @@ a title card, a `transform` of a bar).
 | `pie` | `title`, `slice<N>`, `slice:<label>`, `center`, `legend` | reveal, dim, highlight, zoom | a slice is its wedge, label and leader line (a `box` frames the wedge); `slice:Other` after grouping; `center` with a donut, `legend` with the names in a legend (revealing it reveals every slice); `dim` fades a slice with its label, so dark text on a bright slice gets faint (lint `contrast`): the `highlight` param dims the others readably |
 | `heatmap` | `title`, `legend`, `row<N>`, `row:<label>`, `col<N>`, `col:<label>`, `cell<R>.<C>` | reveal, dim, highlight, zoom | a row / column is its cells and label (`box` and `fill` cover its cells edge to edge); `cell2.3` is row 2, column 3; use `highlight` with `style: box` (`color` paints the cells and their values alike, `fill` tints them); as for `pie`, `dim` fades values with their cells, the `highlight` param dims readably |
 | `image` | `image`, `caption` | dim, highlight, zoom | `dim` fades the picture, `highlight` tints it |
+| `screenshot` | `title`, `image`, `callout<N>`, `callout:<label>`, `step<N>` | reveal, dim, zoom | a callout is its mark and label; `callout:New task`; `step2` is step 2's callouts (revealing it plays the step); `zoom: callout3` looks closer; `dim: image` fades the picture under the callouts |
 | `quote` | `mark`, `quote`, `author`, `source` | reveal, dim, highlight, zoom | |
 | `equation` | `step<N>`, `caption`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each of the `terms` param, in the step on screen; `transform: step1` + `into: step3` jumps ahead |
 | `equation_derivation` | `title`, `step<N>`, `note<N>`, `result`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each part in `terms`, `colors`, `match` or marked `{{ }}`, in the current step only; `step2` is also its dimmed line; `note2` (revealing it plays step 2); `result` is the last step with its box |

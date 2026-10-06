@@ -367,6 +367,44 @@ class Growth(NarratedScene):
         self.finish()
 ```
 
+**Callouts.** The marks of the `screenshot` scene work on anything: a mobject, a `Region`, or
+coordinates `[x, y]` / `[x, y, w, h]` (top-left corner and size) relative to `within=` (an image or
+any mobject, a region; default: the frame), as fractions 0–1 or, with `units="px"`, pixels of an
+image (`callout_area(area, within, units=)` does the conversion and returns a `Region`):
+- `callout_box(area, label="")`, `callout_circle(area, label="")` — a rounded frame / an ellipse
+  around the area (`padding`), the label as a tag on its edge.
+- `callout_arrow(area, label="", curved=False, prefer_off=None)` — the label placed away from the
+  area (`label_spot`: eight directions, inside `bounds`, clear of `avoid`, preferably off
+  `prefer_off`) and an arrow from it to the area's edge.
+- `callout_magnifier(area, label="", image=img, zoom=2.0, source=None)` — an inset of the image's
+  area, `zoom` times larger (less when there is no room), cut from the image's pixels (or from
+  `source`, a sharper file of the same picture) with Pillow; two lines join it to the area.
+- `callout_spotlight(area, label="", cover=None, opacity=0.62)` — a shade over `cover` (default
+  `within`, else the frame) with a hole at the area.
+- `callout_label(text, color="highlight", size="caption")` — bold text on a plate of `color`,
+  written in the theme colour that reads best on it, never below the readable size.
+- `callout(kind, area, label, **options)` picks the helper by name (`CALLOUT_KINDS`).
+
+All take `color` (theme token), `label_size`, `side` (`auto`, `top`, `bottom`, `left`, `right`),
+`bounds` (default: the safe area), `avoid` (regions to keep labels off: pass the `extent()` of the
+callouts already placed) and `scale` (build smaller for a camera zoomed in by `1 / scale`). Each
+returns a `Callout` (a `Group`: `.mark`, `.tag`, `.area`, `.kind`); `callout.draw()` gives the
+animations that bring it on screen (mark, then label), to play together.
+
+```python
+@scene("annotated")
+class Annotated(NarratedScene):
+    outro = 0.5
+
+    def construct(self):
+        boxes = VGroup(*[Square(1.2).set_fill(self.theme.color("primary"), 0.6) for _ in range(3)]).arrange(RIGHT, buff=0.8)
+        place(boxes, self.region("body"), fit="none")
+        middle = callout_box(boxes[1], "The middle one")
+        corner = callout_arrow([0.85, 0.8], "A point of the frame", avoid=[middle.extent()])
+        self.reveal([FadeIn(boxes), middle.draw(), corner.draw()])
+        self.finish()
+```
+
 **Timing.** Beat-driven reveals without arithmetic:
 - `self.reveal(steps)` narrates the whole scene: step *i* at beat *i*; more steps than beats are
   spread evenly (`distribute(n_steps, n_beats)` gives the plan), extra beats hold. A step is an

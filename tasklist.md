@@ -151,8 +151,8 @@ Rules that apply to every step:
 - [x] Sequence of equations, matching parts transformed step to step, optional per-step note (params `steps: [{tex, note, match, transition}]` aligned with beats; parts marked `{{ }}`, by `match`, `terms` or `colors` move into each other (whole TeX tokens, own dvisvgm groups), the rest by shape; `history` (stacked, dimmed, aligned at `=`, oldest scroll away, `keep`) or `replace`; notes beside (16:9) / below (9:16); `colors` per term; result box / band; long steps broken at relations; TeX errors name the step with TeX's message; targets `title`, `step<N>`, `note<N>`, `result`, `term:<tex>` (current step))
 
 ### Step 34 — Scene: `screenshot` with callouts
-- [ ] Image with callouts: arrow, box, circle, magnifier; per-beat reveal
-- [ ] Callout helpers in `vidgen.api` (reused by Step 41)
+- [x] Image with callouts: arrow, box, circle, magnifier; per-beat reveal (also `spotlight`; `steps` aligned with beats, each one callout, a list or `{callouts, focus, previous}`; shorthand `{box: [x, y, w, h], label}`; areas in fractions or `units: px`; previous callouts `fade` / `dim` / `keep`; `focus` = camera onto the step's areas with labels built for the zoom; optional `browser` / `window` / `phone` frame drawn in theme colours; targets `title`, `image`, `callout<N>`, `callout:<label>`, `step<N>`; example asset drawn by `tools/make_screenshot.py`)
+- [x] Callout helpers in `vidgen.api` (reused by Step 41) (`callout_box`, `callout_circle`, `callout_arrow` (curved, label placed away from the area inside the frame), `callout_magnifier` (Pillow crop at output resolution, connector lines), `callout_spotlight`, `callout_label` (plate + readable text colour), `callout_area` (mobject / region / fractions / pixels), `label_spot`, `callout`, `Callout`)
 
 ### Step 35 — Scene: `video_clip`
 - [ ] Embed an mp4 clip (B-roll / screen recording) with optional trim, speed, caption; timing contract documented
