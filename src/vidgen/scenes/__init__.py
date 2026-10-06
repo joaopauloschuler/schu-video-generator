@@ -17,6 +17,7 @@ from vidgen.scenes import (  # noqa: F401
     diagram,
     end_card,
     equation,
+    equation_derivation,
     heatmap,
     histogram,
     icon_grid,

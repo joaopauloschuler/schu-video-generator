@@ -20,7 +20,7 @@ from vidgen.render.worker import frame_size
 from vidgen.scenes.code import parse_line_spec
 from vidgen.theme import Theme
 
-BUILTINS = ["bar_chart", "bullets", "chapter", "code", "code_walkthrough", "comparison", "diagram", "end_card", "equation", "flowchart", "heatmap", "histogram", "icon_grid", "image", "line_chart", "network", "pie", "process", "quote", "scatter", "stat", "table", "text_card", "timeline", "title"]
+BUILTINS = ["bar_chart", "bullets", "chapter", "code", "code_walkthrough", "comparison", "diagram", "end_card", "equation", "equation_derivation", "flowchart", "heatmap", "histogram", "icon_grid", "image", "line_chart", "network", "pie", "process", "quote", "scatter", "stat", "table", "text_card", "timeline", "title"]
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "minimal"
 FPS = 5
 
@@ -33,6 +33,8 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "image": {"path": "assets/pic.png", "caption": "Caption", "ken_burns": True},
     "quote": {"text": "“To be or not to be.”", "author": "Someone", "source": "Somewhere"},
     "equation": {"latex": ["x^2", "x \\cdot x"], "caption": "Square"},
+    "equation_derivation": {"title": "Solve", "colors": {"x": "accent"}, "terms": ["3"],
+                            "steps": ["{{ 2x }} + 3 = 5", {"tex": "{{ 2x }} = 2", "note": "minus 3", "match": ["2"]}, {"tex": "x = 1", "note": "halve"}]},
     "code": {"code": "a = 1\nb = 2\nprint(a + b)\n", "language": "python", "highlight": ["1-2", 3], "title": "Code"},
     "code_walkthrough": {"code": "\n".join(f"x{k} = {k}" for k in range(1, 13)), "title": "Walk", "visible": 4,
                          "steps": [{"lines": "2-3", "note": "Two lines."}, {"lines": "/x11/", "focus": True}, {"note": "Kept."}]},
@@ -322,7 +324,7 @@ RENDER_IDS = BUILTINS + ["silent_bullets", "crowded", "hbars", "cover"]
 @pytest.mark.parametrize("size", [(160, 90), (90, 160)], ids=["landscape", "portrait"])
 @pytest.mark.parametrize("scene_id", RENDER_IDS)
 def test_builtin_renders(render_project: Project, shared_media: Path, scene_id: str, size: tuple[int, int]) -> None:
-    if scene_id == "equation" and shutil.which("dvisvgm") is None:
+    if scene_id in ("equation", "equation_derivation") and shutil.which("dvisvgm") is None:
         pytest.skip("LaTeX (dvisvgm) not installed")
     scene, duration, portrait = render_scene(render_project, scene_id, shared_media, *size)
     assert portrait == (size[1] > size[0])

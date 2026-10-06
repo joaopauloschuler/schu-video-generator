@@ -376,7 +376,7 @@ its params. Conventions shared by all built-ins:
 - After the last beat the scene fades out (0.5 s; 1 s for `end_card`; `text_card` does not fade).
 - **Any aspect ratio.** Layouts use the frame size, so the same config works for 16:9 and a
   vertical 9:16 variant; long text is wrapped and shrunk to fit.
-- Text-only types need no LaTeX; only `equation` does.
+- Text-only types need no LaTeX; only `equation` and `equation_derivation` do.
 
 ### `title`
 
@@ -924,6 +924,113 @@ earlier steps are skipped once a later one is on screen.
 ```
 
 In YAML, write backslashes in single quotes (`'\frac{1}{3}'`) or double them in double quotes.
+
+For a derivation — notes per step, earlier steps kept above, matching parts that move, a boxed
+result — use [`equation_derivation`](#equation_derivation).
+
+### `equation_derivation`
+
+A derivation: a sequence of equations where each step **morphs into the next** — the parts that
+stay the same move into their new place, the rest fades — with an optional **note** per step
+(the justification: "divide both sides by 2"), earlier steps kept above the current one or
+replaced by it, and a **box** around the result. Steps: one per entry of `steps` (step 1 comes
+with the title); with more steps than beats they are spread evenly; extra beats hold. **Needs
+LaTeX**, like [`equation`](#equation); a step that does not compile stops the render with the
+step's number, its LaTeX and TeX's own message (`step 2 does not compile: Undefined control
+sequence (at: \badcommand {2})`). Unbalanced braces and unclosed `{{` are reported by `vidgen
+validate`.
+
+**Per-beat data** lives in `steps`, aligned with the beats (as in
+[`code_walkthrough`](#code_walkthrough)): entry *i* is beat *i*, written `{tex, note, match,
+transition}` or just the LaTeX string.
+
+**Marking matching parts.** Between two steps, parts written the same way move into each other
+when they are *marked*; everything else moves glyph by glyph when the shapes match (a `+` that
+stays a `+`) and fades otherwise. Three ways to mark a part:
+
+- `{{ ... }}` around it in both steps (Manim's notation: put a space, or the start of the
+  formula, before `{{`): `'{{ 2x }} + 3 = 11'` → `'{{ 2x }} = 8'` moves `2x` as one piece;
+- `match: [...]` on a step: those parts are isolated in that step and the one before
+  (`{tex: '(a+b)(a+b)', match: ['(a+b)']}`);
+- `terms` and the keys of `colors`: isolated in every step.
+
+Parts are compared as TeX tokens, spaces ignored (`2 ab` = `2ab`), and found only as whole tokens
+(`x` is not taken out of `\exp`; a part right after `\left` is left alone). A part must be a
+complete TeX group (not half of a `\frac{..}{..}`). The alignment sign (`align_at`) is always
+isolated, so `=` stays in place from step to step. `transition: shapes` matches glyphs by shape
+only, `fade` cross-fades.
+
+**History or replace.** `mode: history` (default) keeps the earlier steps on screen, stacked
+above the current one, dimmed (`dim_opacity`, raised where a colour would fall below 2.3:1
+contrast) and aligned at the first `align_at` of each step (`=`; a step without it is centred);
+the block stays centred as it grows. When the steps do not fit at a readable size, the oldest
+scroll away (`keep` sets how many stay). `mode: replace` shows one step at a time, each taking the
+place of the previous one (still aligned at `=`, so the sign does not jump).
+
+**Notes** sit beside the equations, level with their step, in 16:9 (earlier notes stay, dimmed,
+with their steps) and in a band just below them in a vertical frame (one at a time);
+`note_position: bottom` uses the band in 16:9 too.
+
+**Sizes.** All steps share one size: `size` at most (1.25x in a vertical frame), smaller to fit
+the widest step and the stacked steps. A step that would be set below 1.5x the readable size
+(lint's `min_font`) is broken into lines before its relations (`a = b \\ = c`, aligned at the
+sign), when that makes it larger; if it still does not fit it is scaled down further and a
+warning says so (shorten the step, or split it in two).
+
+**Colours.** `colors: {x: accent, '\lambda': highlight}` colours those parts in every step (and
+in the dimmed history), so a variable keeps its colour through the derivation.
+
+**Result.** `result: box` (default) draws a frame around the last step as it arrives,
+`highlight` lays a band of `result_color` behind it, `none` leaves it plain.
+
+[Action targets](#beat-actions): `title`, `step<N>` (a step, also as a dimmed earlier line),
+`note<N>` (revealing a note plays its step), `result` (the last step with its box) and
+`term:<tex>` for each part named in `terms`, `colors`, `match` or marked `{{ }}` — in the
+**current** step (earlier, dimmed lines are not included). `transform: step1` + `into: step3`
+jumps ahead; the steps in between are skipped and the result still gets its box.
+
+| param | type | default | |
+|---|---|---|---|
+| `steps` | list (≥ 1) | required | step *i* at beat *i*: `{tex, note, match, transition}` or the LaTeX string |
+| `steps[].tex` | str | required | math-mode LaTeX (no `$`); `{{ ... }}` marks a part that moves into the same part of the next step |
+| `steps[].note` | str | `""` | a short justification shown with the step |
+| `steps[].match` | list[str] | `[]` | parts that move from the previous step into this one (must occur in both) |
+| `steps[].transition` | `auto` \| `shapes` \| `fade` | `auto` | `auto`: marked parts, then glyphs by shape |
+| `title` | str | `""` | heading above the derivation |
+| `mode` | `history` \| `replace` | `history` | keep earlier steps (stacked, dimmed) or replace them |
+| `keep` | int (≥ 1) | as many as fit | `history`: the most steps on screen; older ones scroll away |
+| `align_at` | str | `"="` | steps are aligned at the first occurrence of this TeX (`'\le'`, ...); `""` centres every step |
+| `colors` | map TeX → color | `{}` | parts coloured in every step |
+| `terms` | list[str] | `[]` | more parts to isolate in every step (they move into each other; targets `term:<tex>`) |
+| `result` | `box` \| `highlight` \| `none` | `box` | how the last step is marked |
+| `result_color` | color | `highlight` | |
+| `size` | size | `80` | largest formula size (1.25x in a vertical frame; smaller to fit) |
+| `color` | color | `text` | formula colour |
+| `dim_opacity` | number (0.15–1) | `0.45` | `history`: opacity of earlier steps and their notes |
+| `note_position` | `auto` \| `side` \| `bottom` | `auto` | `auto`: beside in 16:9, below in a vertical frame (always below there) |
+| `note_size` | size | `body` | |
+| `note_color` | color | `dim` | |
+| `note_mark_color` | color | `accent` | the bar beside each note (16:9) |
+
+```yaml
+- id: solve
+  type: equation_derivation
+  params:
+    title: "Solving for x"
+    colors: {x: accent}                    # x keeps its colour in every step
+    steps:
+      - '{{ 2x }} + 3 = 11'                # {{ }} marks a part that moves into the next step
+      - {tex: '{{ 2x }} = 11 - 3', note: "Subtract 3 from both sides"}
+      - {tex: '{{ 2x }} = 8', note: "Simplify"}
+      - {tex: 'x = \frac{8}{2}', note: "Divide both sides by 2"}
+      - {tex: 'x = 4', note: "The result"}
+  beats:
+    - text: "Two x plus three equals eleven."
+    - text: "Subtract three from both sides."
+    - text: "Eleven minus three is eight."
+    - text: "Divide both sides by two."
+    - text: "And x is four."
+```
 
 ### `code`
 
@@ -1692,6 +1799,7 @@ a title card, a `transform` of a bar).
 | `image` | `image`, `caption` | dim, highlight, zoom | `dim` fades the picture, `highlight` tints it |
 | `quote` | `mark`, `quote`, `author`, `source` | reveal, dim, highlight, zoom | |
 | `equation` | `step<N>`, `caption`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each of the `terms` param, in the step on screen; `transform: step1` + `into: step3` jumps ahead |
+| `equation_derivation` | `title`, `step<N>`, `note<N>`, `result`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each part in `terms`, `colors`, `match` or marked `{{ }}`, in the current step only; `step2` is also its dimmed line; `note2` (revealing it plays step 2); `result` is the last step with its box |
 | `code` | `title`, `listing`, `line<N>`, `lines:<a-b>` | dim, highlight, zoom | a line with its number; `lines:3-5`; a wide line leaves little to zoom |
 | `code_walkthrough` | `title`, `listing`, `line<N>`, `lines:<a-b>`, `note<N>` | reveal, dim, highlight | `reveal: line40` scrolls it into view; `lines:<a-b>`: every range up to 40 lines, else the steps' ranges; `note2` is step 2's note (revealing it plays the step); the next step resets line opacities |
 | `end_card` | `logo`, `icon`, `title`, `line<N>` | reveal, dim, highlight | those present |

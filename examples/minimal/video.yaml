@@ -8,6 +8,7 @@
 #   vidgen lint examples/minimal [--variant vertical]            # layout + timing checks (dead air, ...)
 #   vidgen storyboard examples/minimal --scene sizes --per-beat 3   # mid-beat stills: beat actions
 #   vidgen storyboard examples/minimal --scene math --per-beat 3    # transform and zoom actions
+#   vidgen storyboard examples/minimal --scene derive --per-beat 3  # an equation derivation, step by step
 #   vidgen storyboard examples/minimal --scene speedup --per-beat 3 # a stat counting down
 #   vidgen storyboard examples/minimal --scene formats --per-beat 3 # a table row by row
 #   vidgen storyboard examples/minimal --scene schedule --variant vertical  # a vertical timeline
@@ -362,6 +363,24 @@ scenes:
       - text: "Here is the expanded form, and a closer look at its middle term."
         actions:          # the camera moves in on the term and is back by the end of the beat
           - {zoom: "term:2ab", at: 0.3}
+
+  - id: derive
+    type: equation_derivation   # steps morph into each other; earlier ones stay above, dimmed, aligned at "="
+    params:
+      title: "Solving for x"
+      colors: {x: accent}       # x keeps its colour in every step
+      steps:                    # step i at beat i: {tex, note, match}, or just the LaTeX
+        - '{{ 2x }} + 3 = 11'   # {{ }} marks a part that moves into the same part of the next step
+        - {tex: '{{ 2x }} = 11 - 3', note: "Subtract 3 from both sides"}
+        - {tex: '{{ 2x }} = 8', note: "Simplify"}
+        - {tex: 'x = \frac{8}{2}', note: "Divide both sides by 2"}
+        - {tex: 'x = 4', note: "The result, boxed"}
+    beats:
+      - text: "A derivation shows each step of a calculation. We start from two x plus three equals eleven."
+      - text: "Subtract three from both sides; the two x moves down as it is."
+      - text: "Eleven minus three is eight."
+      - text: "Then divide both sides by two."
+      - text: "And x is four, the result, in a box."
 
   - id: net
     type: network         # a layered neural network, built layer by layer; then a pulse runs forward

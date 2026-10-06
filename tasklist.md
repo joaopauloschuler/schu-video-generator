@@ -148,7 +148,7 @@ Rules that apply to every step:
 - [x] (from Steps 17/22) A code size cap for portrait: with the `large` scale 9:16 listings wrap to ~25 columns (`code` and `code_walkthrough` wrap at the size keeping 32 columns, down to the readable size: ~30–32 columns in 9:16; 16:9 unchanged; also fixed: Manim clipped listings longer than the output's pixel height, ~60 lines at 854x480)
 
 ### Step 33 — Scene: `equation_derivation`
-- [ ] Sequence of equations, matching parts transformed step to step, optional per-step note
+- [x] Sequence of equations, matching parts transformed step to step, optional per-step note (params `steps: [{tex, note, match, transition}]` aligned with beats; parts marked `{{ }}`, by `match`, `terms` or `colors` move into each other (whole TeX tokens, own dvisvgm groups), the rest by shape; `history` (stacked, dimmed, aligned at `=`, oldest scroll away, `keep`) or `replace`; notes beside (16:9) / below (9:16); `colors` per term; result box / band; long steps broken at relations; TeX errors name the step with TeX's message; targets `title`, `step<N>`, `note<N>`, `result`, `term:<tex>` (current step))
 
 ### Step 34 — Scene: `screenshot` with callouts
 - [ ] Image with callouts: arrow, box, circle, magnifier; per-beat reveal

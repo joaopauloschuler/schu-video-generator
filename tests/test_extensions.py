@@ -333,7 +333,7 @@ def test_list_scenes_builtins_only(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     monkeypatch.chdir(tmp_path)
     assert main(["list-scenes"]) == 0
     out = capsys.readouterr().out
-    width = len("code_walkthrough") + 2   # the longest built-in name sets the column
+    width = len("equation_derivation") + 2   # the longest built-in name sets the column
     assert out.startswith("bar_chart".ljust(width) + "builtin\n")
     assert "\n" + "text_card".ljust(width) + "builtin\n    text: str\n    size: size = 'title'\n    color: color = 'text'\n" in out
     assert "\n" + "title".ljust(width) + "builtin\n" in out

@@ -2126,3 +2126,55 @@ using the existing renders of the others (missing ones are rendered). Exit code 
   cache key does not include the canvas, so a clipped SVG cached by an earlier failure must be
   deleted with `build/`).
 
+
+## 36. Refinements (Step 33, `equation_derivation`)
+
+- **`equation_derivation`** (`scenes/equation_derivation.py`; reference docs/CONFIG.md). Params
+  `steps` (≥ 1; `DerivationStep {tex, note, match, transition}` or a string, `also_accepts =
+  (str,)`, JSON Schema `anyOf` string | object), `title`, `mode` (`history | replace`), `keep`,
+  `align_at` (`"="`), `colors` (TeX → colour), `terms`, `result` (`box | highlight | none`),
+  `result_color`, `size` (80; 1.25x `portrait_growth`), `color`, `dim_opacity`, `note_position`
+  (`auto | side | bottom`), `note_size`, `note_color`, `note_mark_color`. Per-beat data is the
+  params list aligned with the beats (as `code_walkthrough.steps`); steps go through
+  `reveal(fraction=0.6, cap=1.6)` like `equation`.
+- **Part isolation without Manim's substring splitting.** Manim's `substrings_to_isolate` splits
+  raw substrings (`x` out of `\exp`, breaking the TeX) and `{{ }}` main parts become top-level
+  `MathTexPart`s whose boundaries may cut TeX groups. Instead the scene tokenises the TeX
+  (control words, control symbols, characters), finds parts as whole-token runs (spaces ignored;
+  the key of a part is its tokens joined by spaces) and wraps each occurrence in its own dvisvgm
+  group (`\special{dvisvgm:raw <g id='vgpartNNN'>}` … `</g>`), which Manim's SVG parser exposes in
+  `id_to_vgroup_dict`. `{{ … }}` (split with Manim's own `MathTex._split_double_braces`, so the
+  notation means the same as in Manim) becomes such a group too, parts inside it nest. Braces are
+  added where TeX takes one argument (after `^`, `_`, `\vec`, `\frac`, … : `{\special…x\special…}`);
+  a token after `\left`/`\right`/`\big…` is never wrapped. One compile per step (two more at most
+  when it is broken into lines). `tex_string` is reset to the step as written (lint, layout dump).
+- **Morph** (`morph(source, target, style)`): `auto` pairs parts with the same key (occurrences in
+  order, bigger parts first, glyphs used once) → `Transform` per pair; the remaining glyphs go
+  through `TransformMatchingShapes` (identical shapes move, others fade). `shapes`: one
+  `TransformMatchingShapes`; `fade`: cross-fade. The source is always a *copy* of the step on
+  screen; `_Swap` (an `AnimationGroup`) removes `hide` at setup and, at clean-up, every mobject its
+  animations used, then adds the target formula whole — so the scene holds whole `MathTex`es
+  between beats (targets, lint) and the source step stays intact for later actions.
+- **History.** Each step has an archived copy (dimmed at hand-over: `dim_opacity`, raised by
+  `readable_opacity` until every formula / note colour keeps 2.3:1 with the background — lint's
+  dimmed 2:1 plus margin). When a step arrives, the live previous step hands over to its archived
+  copy (moved up a row), so `term:` targets (registered on the live formula's parts) mean the
+  current step only, while `step<N>` (registered on `VGroup(live, archived)`) is the line either
+  way. The block is re-centred as it grows; the oldest rows fade out upwards beyond `rows`.
+- **Layout** (`_layout`). Notes beside (16:9; column 0.3 × body, 3.0–4.6 units) or in a band below
+  (portrait, or `note_position: bottom`; the band sits right under the tallest block, both centred).
+  All steps share one scale: ≤ 1, fitting the width (aligned steps: left and right reach from the
+  alignment point; others centred) and the tallest run of `rows` rows, where a side note taller
+  than its formula sets its row's height. A step whose width alone would set it below `COMFORT`
+  (1.5) x the readable size is rebuilt with `\\ &` before its top-level relations (`break_lines`:
+  all but the first, then all), kept when it gets larger. `rows` (history, `keep` unset) drops
+  while the height would push the scale below the readable size. Below it anyway: a warning.
+  The readable size for math is lint's: the 75th percentile of glyph heights vs the cap height of
+  `readable_size()`.
+- **Errors.** `brace_problem` / unclosed or empty `{{ }}` / parts not in any step / `match` not in
+  both steps → params errors (`vidgen validate`). LaTeX errors → `VidgenError` "step N does not
+  compile: <TeX message> (at: <context>)" read from the `.log` Manim names
+  (`tex_error_excerpt`, dvisvgm markers removed).
+- **Targets**: `title`, `step<N>`, `note<N>` (entrance plays the step), `result` (last step + box;
+  entrance: the step, or just the box), `term:<tex>` (parts of `terms`, `colors`, `match`, `{{ }}`).
+  A `transform` jump to the last step leaves the result's box to the last step's own beat.

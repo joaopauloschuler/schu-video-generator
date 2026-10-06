@@ -6,11 +6,12 @@ ElevenLabs, animates every scene with [Manim](https://www.manim.community/) (eac
 exactly as long as its narration), and joins everything with ffmpeg into one MP4 plus SRT
 subtitles.
 
-- **Config-only videos** with twenty-four built-in scene types (title, chapter divider, bullets,
+- **Config-only videos** with twenty-five built-in scene types (title, chapter divider, bullets,
   icon grid, comparison, table, timeline, flowchart / diagram, a process with a travelling token,
   a neural network with forward-pass pulses, bar / line / scatter / histogram charts, pie /
   donut charts and heatmaps (colour scales from the theme), a counting stat, image,
-  quote, equation, code listings and code walkthroughs that scroll a long file to the lines each
+  quote, equation, equation derivations (steps morphing into each other, with notes), code
+  listings and code walkthroughs that scroll a long file to the lines each
   beat explains, end card...), in landscape and vertical formats. Diagrams are laid out
   automatically from `edges: ["a -> b: label", ...]` (`layered_layout` is also there for
   project scenes).
@@ -57,7 +58,7 @@ subtitles.
    installed font works too, e.g. `theme: {font: Segoe UI}`.
 5. **ElevenLabs API key** (only for `vidgen tts`): `setx ELEVENLABS_API_KEY your_key`, then open
    a new terminal. vidgen reads the key only from this variable and never writes it anywhere.
-6. Optional, only for the `equation` scene type: **LaTeX** — install
+6. Optional, only for the `equation` and `equation_derivation` scene types: **LaTeX** — install
    [MiKTeX](https://miktex.org/download) (it includes `dvisvgm`; allow it to install missing
    packages on the fly) and open a new terminal.
 

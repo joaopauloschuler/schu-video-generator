@@ -2931,3 +2931,95 @@ How to test: `/home/claude/venv/bin/python -m pytest -q` (full suite); step only
 tests/test_code_walkthrough.py`. Manual: `vidgen storyboard examples/minimal --scene walkthrough
 --per-beat 2 [--variant vertical|light]`, `vidgen lint examples/minimal --scene walkthrough
 --scene listing [--variant ...]`, `vidgen list-scenes`, `vidgen schema --scene code_walkthrough`.
+
+## Step 33 — Scene: `equation_derivation`
+What was built
+- **`equation_derivation`** (`src/vidgen/scenes/equation_derivation.py`): a sequence of equations.
+  **Per-beat data** is `steps` (aligned with the beats like `code_walkthrough.steps`): `{tex, note,
+  match, transition}` or the LaTeX string. Each step morphs out of the previous one: **marked
+  parts** with the same TeX move into each other, the remaining glyphs move when their shapes match
+  (`TransformMatchingShapes`) and fade otherwise. Parts are marked `{{ ... }}` (Manim's notation,
+  space or start before `{{`), with a step's `match: [...]` (isolated in it and the step before),
+  or by `terms` / `colors` keys (every step). `transition: shapes | fade` per step.
+- **History / replace**: `mode: history` (default) keeps earlier steps stacked above the current
+  one, dimmed (`dim_opacity`, raised to keep 2.3:1 contrast — light presets needed it for the `dim`
+  notes) and aligned at the first `align_at` (`=`); the block re-centres as it grows; when the steps
+  do not fit at a readable size the oldest scroll away (`keep` fixes the count). `mode: replace`
+  shows one step at a time (still aligned at `=`, so the sign stays put).
+- **Notes**: a column beside the equations, level with each step, with an accent bar (16:9; earlier
+  notes stay, dimmed); a band right under the block, one note at a time (9:16, or
+  `note_position: bottom`). A side note taller than its formula sets its row's height (no overlaps
+  with the `large` type scale).
+- **Colours** `colors: {x: accent}` in every step (and the dimmed history). **Result**: `box`
+  (default, drawn after the last morph), `highlight` (a band behind it) or `none`.
+- **Sizes**: one scale for all steps (`size` 80 at most, 1.25x in portrait), fitted to the width
+  and the stacked rows; a step that would fall below 1.5x the readable size is rebuilt with
+  breaks before its top-level relations (`a &= b \\ &= c`, then `a \\ &= b ...`) when that makes
+  it larger; still too small → a warning naming the remedy.
+- **Errors**: unbalanced braces, unclosed / empty `{{ }}`, `terms`/`colors` not in any step,
+  `match` not in both steps → params errors in `vidgen validate`; a LaTeX error → `VidgenError`
+  `scene 'd': step 2 does not compile: Undefined control sequence (at: \badcommand {2}); the
+  step is 'x = \badcommand{2}' ...` (message and context read from the TeX log, dvisvgm markers
+  removed).
+- **Targets**: `title`, `step<N>` (also its dimmed line), `note<N>` (revealing it plays the step),
+  `result` (last step + box), `term:<tex>` (parts from `terms`, `colors`, `match`, `{{ }}`) — the
+  **current** step's only. A `transform` jump to the last step still gets the box at its beat.
+- `examples/minimal`: `derive` scene (linear equation, five steps with notes, `x` coloured) + a
+  storyboard usage line.
+
+Verification
+- Scratch project (5-step solve with notes and colours, replace mode with `match`, a long variance
+  derivation, `keep: 2` with highlight/dim/zoom actions and `result: highlight`, a transform jump,
+  bad LaTeX) via `vidgen storyboard` (`--per-beat 3`) in 16:9, vertical and `light_academic`;
+  sheets opened with Read. Fixed along the way: block + notes centred together (notes were far from
+  short formulas), note band moved right under the block in 9:16, formulas too small (default 80
+  + portrait growth; break at relations below 1.5x readable, not just below readable), dimmed `dim`
+  notes at 1.96:1 on light presets, overlapping side notes with the `large` scale, TeX error
+  context full of `\special` markers.
+- `vidgen lint examples/minimal --scene derive` in all 8 variants (default, vertical, light,
+  contrast, editorial, neutral, pastel, neon): 0 findings. Other scenes untouched.
+
+Files
+- New: `src/vidgen/scenes/equation_derivation.py`, `tests/test_equation_derivation.py` (43 tests,
+  10 tiny renders).
+- Changed: `src/vidgen/scenes/__init__.py`; `examples/minimal/video.yaml`; tests
+  `test_builtin_scenes.py` (BUILTINS/SAMPLES, LaTeX skip), `test_actions_coverage.py` (SAMPLES,
+  target names, set comparison: a `term:` name is registered once per step that has the term,
+  early `note2` reveal), `test_extensions.py` and `test_custom_scene_example.py` (list-scenes
+  column now set by `equation_derivation`); docs/CONFIG.md (section, targets row, LaTeX note,
+  link from `equation`), README, DESIGN.md (§36), tasklist.md.
+
+Public interfaces added/changed
+- Built-in scene type `equation_derivation` (params in docs/CONFIG.md). No change to `vidgen.api`.
+- Module helpers (built-in module): `tokens`, `term_key`, `brace_problem`, `split_marked`,
+  `plain`, `marked_terms`, `contains`, `break_lines`, `isolated_source`, `tex_error_excerpt`,
+  `readable_opacity`, `morph`, `DerivationStep`.
+- `vidgen list-scenes` name column is two characters wider (longest built-in name).
+
+Decisions / deviations
+- **Own part isolation instead of `substrings_to_isolate` / `TransformMatchingTex`**: Manim
+  isolates raw substrings (`x` out of `\exp` breaks the TeX) and `TransformMatchingTex` matches
+  only top-level parts, fading everything else. Parts here are whole-token runs wrapped in their
+  own dvisvgm groups (braces added after `^`, `_`, one-argument commands; nothing wrapped right
+  after `\left`/`\big`…), and the morph pairs marked parts first, then hands the rest to
+  `TransformMatchingShapes` — so unmarked digits and signs still move.
+- **The live step hands over to a dimmed copy** in history mode (instead of dimming it in place)
+  so `term:` targets mean the current step, as the roadmap asked, while `step<N>` still finds the
+  line.
+- Notes default to `note_color: dim` with an `accent` bar: the formula is the hero.
+- Line breaking only at top-level relations (the roadmap's "at `=`"); a long right-hand side with
+  no relation to break before is scaled (warning) rather than broken at `+`.
+
+Known gaps / TODOs
+- A step with only one relation breaks as `lhs \\ &= rhs` (the left side right-aligned above);
+  breaking long sums at `+`/`-` is not done.
+- After a `transform` jump in history mode the earlier lines keep their rows (a gap may stay until
+  the next step re-centres the block).
+- A `highlight` colour action on a step is not carried into its dimmed copy (the copy keeps the
+  step's own colours).
+- Each step is one LaTeX compile (+ up to two for line breaks); cached by Manim across renders.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (full suite); step only: `pytest
+tests/test_equation_derivation.py`. Manual: `vidgen storyboard examples/minimal --scene derive
+--per-beat 3 [--variant vertical|light]`, `vidgen lint examples/minimal --scene derive
+[--variant ...]`, `vidgen list-scenes`, `vidgen schema --scene equation_derivation`.

@@ -41,6 +41,7 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "image": {"path": "assets/pic.png", "caption": "A picture"},
     "quote": {"text": "Simple.", "author": "D", "source": "1975"},
     "equation": {"latex": ["(a+b)^2", "a^2 + 2ab + b^2"], "terms": ["2ab"], "caption": "c"},
+    "equation_derivation": {"title": "T", "steps": ["{{ a }} + b = c", {"tex": "{{ a }} = c - b", "note": "n"}], "terms": ["c"]},
     "code": {"code": "a = 1\nb = 2\nc = 3", "title": "T"},
     "code_walkthrough": {"code": "a = 1\nb = 2\nc = 3", "title": "T", "steps": [{"lines": 1}, {"lines": "2-3", "note": "n"}]},
     "end_card": {"title": "Thanks", "lines": ["one", "two"], "icon": "rocket", "logo": "assets/pic.png"},
@@ -132,6 +133,7 @@ def test_target_names_of_every_builtin_type() -> None:
     assert "point:a@Q2" in names("line_chart", x=["Q1", "Q2", "Q3"])
     assert names("image", caption="") == ["image"]
     assert names("equation") == ["step1", "step2", "caption", "term:2ab"]
+    assert names("equation_derivation") == ["title", "step1", "step2", "note2", "result", "term:c", "term:a"]
     assert names("code") == ["title", "listing", "line1", "line2", "line3", "lines:1-2", "lines:1-3", "lines:2-3"]
     assert names("end_card", logo=None) == ["icon", "title", "line1", "line2"]
     assert names("chapter") == ["icon", "number", "title", "subtitle"]
@@ -183,10 +185,12 @@ def test_builtin_scenes_register_their_target_names(kind: str, make_project, med
     on screen (the scene reveals all of them in its steps)."""
     project = load(make_project, [{"id": "s", "type": kind, "params": SAMPLES[kind], "beats": beats(None, None)}])
     scene = render(project, "s", media)
-    registered = sorted(n for t in scene.targets for n in t.names)
+    registered = sorted({n for t in scene.targets for n in t.names})   # a term: name per step that has the term
     assert registered == sorted(type(scene).target_names(scene.params))
     hidden = [t.name for t in scene.targets if not scene.is_shown(t)]
-    assert hidden == (["step1"] if kind == "equation" else [])   # an equation step morphs into the next
+    expected = {"equation": ["step1"],                                  # an equation step morphs into the next
+                "equation_derivation": ["term:c", "term:a"]}            # term: means the current step's part
+    assert hidden == expected.get(kind, [])
 
 
 @pytest.mark.render
@@ -196,7 +200,7 @@ def test_builtin_scenes_register_their_target_names(kind: str, make_project, med
      ("line_chart", "series2"), ("image", "caption"), ("code", "line3"), ("code_walkthrough", "note2"), ("text_card", "text"),
      ("chapter", "subtitle"), ("stat", ["comparison", "context"]), ("comparison", "col2"), ("table", "row2"), ("timeline", "event2"),
      ("diagram", "edge:a->b"), ("network", ["layer2", "edges1"]), ("scatter", ["series2", "trend"]), ("histogram", ["mean", "median", "compare"]),
-     ("pie", "slice2"), ("heatmap", "row2")],   # process: its token still moves (test_process_network)
+     ("pie", "slice2"), ("heatmap", "row2"), ("equation_derivation", "note2")],   # process: its token still moves (test_process_network)
 )
 def test_early_reveal_is_not_repeated_by_the_scene(kind: str, target: str | list[str], make_project, media: Path) -> None:
     project = load(make_project, [{"id": "s", "type": kind, "params": SAMPLES[kind], "beats": beats([{"reveal": target}], None)}])
