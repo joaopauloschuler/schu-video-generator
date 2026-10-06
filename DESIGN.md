@@ -436,7 +436,9 @@ Step 5 adds `ThemeColor, ThemeSize`, the `vidgen.layout` helpers (§5.3) and pyd
 Step 15 adds the layout regions (§18): `Region, frame_region, safe_area, region, grid, place,
 orientation, readable_size, readable_text`. Step 16 adds `register_theme_preset` (§19); Step 17
 gives it the keyword arguments `scale` and `fonts` (§20). Step 19 adds `icon`, `Icon` and
-`IconName` (§22). Step 21 adds `grid_shape` (§24).
+`IconName` (§22). Step 21 adds `grid_shape` (§24). Step 22 (§25) adds keyword arguments only:
+`role=` on `T`, `MT`, `NarratedScene.text`/`markup`, `fit_text` and `readable_text`; `region(name,
+area)` also takes a region name as `area`; `SceneParams.also_accepts`.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -574,7 +576,8 @@ using the existing renders of the others (missing ones are rendered). Exit code 
 
 - `pytest -q` must pass at every step. No network, no API keys.
 - Tests that invoke Manim rendering are marked `@pytest.mark.render` and use tiny resolutions
-  (e.g. 160x90 @ 5 fps); they run by default but can be skipped with `-m "not render"`.
+  (e.g. 160x90 @ 5 fps); they run by default but can be skipped with `-m "not render"`. The
+  slowest of them are also marked `slow` (Step 22): `-m "not slow"` is a quick full-coverage-ish run.
 - ffmpeg is required on PATH for render tests; skip with a clear reason if missing.
 
 ## 10. Refinements (Step 7, independent review)
@@ -1219,7 +1222,8 @@ using the existing renders of the others (missing ones are rendered). Exit code 
   names/sizes/mtimes), `available_icons(root=None)` (built-ins, then project icons replacing by
   name; sorted), `active_icons()` (the runtime project's), `search_icons(icons, text,
   category)` (every word of `text` must be in the name, a tag, or equal the category; ranked
-  exact name < name prefix < in name < exact tag < in tag < category, then by name),
+  exact name < name prefix < in name < exact tag < in tag < category, then by name; Step 22
+  ranks whole words before substrings, §25),
   `find_icon(name)` / `unknown_icon_message` (difflib close names + icons whose tags match,
   pointing at `vidgen list-icons --search`). Project icon problems are `VidgenError`s;
   `vidgen validate` reports them as `assets/icons: ...`.
@@ -1354,4 +1358,45 @@ using the existing renders of the others (missing ones are rendered). Exit code 
   presets, under lint's 2:1 for dimmed text), the chosen visual is transformed into a 1.15x
   copy in `highlight_color`. `groups`/`highlight` items are 0-based indices (as `bar_chart`'s
   `highlight`) or labels; groups must list every item once.
+
+## 25. Refinements (Step 22, review 1)
+
+- **Font roles in the text helpers**: `T`, `MT`, `NarratedScene.text`/`markup`
+  (`helpers.styled`), `fit_text`/`fit_text_sized` and `readable_text` take a keyword `role=None`:
+  the family is `font` if given, else `theme.font_for(role)`, else `theme.font`. Additive;
+  `readable_text` measures its floor with that family.
+- **`region(name, area=None, gap)`**: `area` may also be a region name (`region("left",
+  "body")`), like `grid` and `place`.
+- **`SceneParams.also_accepts: ClassVar[tuple[type, ...]] = ()`**: other input types a nested
+  model is built from (`BulletItem.also_accepts = (str,)`); `describe.type_name` prints them
+  before the model (`list[str | BulletItem]` in `list-scenes` and its JSON `type`).
+- **`register_theme_defaults`** (`Theme.add_defaults`) rejects token names that are not
+  identifiers (`video.yaml` could never override them) and colours that are not `#RGB`,
+  `#RRGGBB`, `#RRGGBBAA` (was: any string starting with `#`).
+- **Icon search** (`icons._score`): 0 exact name, 1 name prefix or exact alias, 2 a whole word of
+  the name or an alias (split at spaces, `-`, `/`, `.`, `_`), 3 exact tag, 4 a whole word of a
+  tag, 5 part of the name or an alias, 6 part of a tag, 7 the category. Whole words now rank
+  above substrings (`ai`: `brain-circuit`, `bot` before `rain`, `mail`).
+- **Lint**: `vidgen lint` logs `theme_contrast` failures of the project's theme like `vidgen
+  validate` (`warning: theme contrast: ...`; JSON `warnings`), unless `--rule` excludes
+  `contrast` or `lint.rules.contrast.severity` is `off`; they are not findings. Findings
+  merging (`run._group_similar`) also merges findings of one still with the same rule,
+  severity and object `text` (a label repeated in copies of a component, e.g. two decoder
+  boxes' "Attention"), besides the parent-path group.
+- **Built-ins on regions / 9:16**: `quote` (`portrait_growth` 1.25 for the text, mark and
+  author; `place(card, safe_area, max_scale=1)`), `equation` (`portrait_growth` 1.25 for the
+  formulas, positions from the safe area; new param `caption_size`), `image` (with `fit: cover`
+  the caption is placed at the bottom of the `caption` region, i.e. on the safe area's bottom
+  edge, and the band runs from the frame's edge to 0.3 above it: it was 12 px into the margin),
+  `bar_chart`/`line_chart` (new params `caption_size` = `caption` (was the fixed `small`, below
+  lint's `min_font`) and `caption_color` = `dim`; caption fitted to 15 % of the safe height).
+  16:9 output is unchanged except the chart captions (24 instead of 20 pt) and the cover-image
+  caption (0.2 units higher). `title`, `end_card`, `text_card` and the chart bodies were left
+  as they are: their 9:16 sheets read well since the Step 17 `auto` scale; charts move to shared
+  helpers in Step 30.
+- **CLI**: `list-themes --sheet PNG` is an alias of `--swatches` (as `list-icons --sheet`).
+  Checked: every command with `--json` (validate, list-scenes, list-themes, list-icons, schema,
+  render, storyboard, lint) answers errors with the envelope, `ok: false`, exit 1 (usage: 2).
+- **Tests**: marker `slow` on the 18 slowest render tests (several seconds each); `pytest -m
+  "not slow"` is the quick run, `-m "not render"` the fastest; the default runs everything.
 

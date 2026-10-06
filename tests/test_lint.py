@@ -388,6 +388,42 @@ def test_cli_human_and_json(faked: Path, capsys: pytest.CaptureFixture[str], mon
     assert code == 2 and doc["error"]["kind"] == "usage"
 
 
+def test_lint_warns_about_the_theme_contrast(faked: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> None:
+    """Like validate, lint reports theme pairs below WCAG AA as warnings (not findings) (Step 22)."""
+    data = yaml.safe_load((faked / "video.yaml").read_text(encoding="utf-8"))
+    data["theme"] = {"colors": {"dim": "#6B7280"}}
+    (faked / "video.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
+    project = Project.load(faked)
+    for scene_id in ("intro", "main"):  # the theme is in the fingerprint: fake current renders again
+        fake_render(project, scene_id, [[]] * max(1, len(project.scene(scene_id).beats)))
+    monkeypatch.chdir(faked)
+    assert main(["lint"]) == 0
+    captured = capsys.readouterr()
+    assert "warning: theme contrast: colors.dim #6B7280 on background #0E1116" in captured.err
+    assert captured.out.splitlines()[-1] == "0 errors, 0 warnings, 0 info"
+    code, doc, _ = run_json(["lint", ".", "--json"], capsys)
+    assert code == 0 and any(w["message"].startswith("theme contrast: colors.dim") for w in doc["warnings"])
+    assert main(["lint", "--rule", "min_font"]) == 0
+    assert "theme contrast" not in capsys.readouterr().err
+    data["lint"] = {"rules": {"contrast": {"severity": "off"}}}
+    (faked / "video.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
+    assert main(["lint"]) == 0
+    assert "theme contrast" not in capsys.readouterr().err
+
+
+def test_same_text_in_copies_of_a_component_is_one_finding(make_project) -> None:
+    """A label repeated in two copies of a component (different parents) is merged (Step 22)."""
+    project = Project.load(make_project(minimal_config(preview={"width": 854, "height": 480, "fps": 15})))
+    labels = [text(f"a{i}", [100, 100 + 80 * i, 200, 112 + 80 * i], "Attention", font=9, path=f"VGroup[{i}]/Text[1]")
+              for i in range(2)]
+    fake_render(project, "intro", [labels, labels])
+    fake_render(project, "main", [[]])
+    result = lint_project(project, rules=["min_font"])
+    assert len(result.findings) == 1
+    finding = result.findings[0]
+    assert [o["id"] for o in finding.similar] == ["a1"] and "also 1 more like it ('Attention')" in finding.message
+
+
 def test_stale_or_partial_stills_are_not_reused(faked: Path) -> None:
     from vidgen.storyboard import stills_current
 

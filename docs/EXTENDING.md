@@ -144,7 +144,10 @@ and icons tagged like it), `vidgen list-scenes` shows its type as `icon`, and `v
 gives it an `enum` of the icon names.
 
 Params can nest: use another `SceneParams` class as a field type (also in lists). Theme tokens
-are checked inside nested models too, and `vidgen list-scenes` prints the nested fields.
+are checked inside nested models too, and `vidgen list-scenes` prints the nested fields. A nested
+model that also takes a shorthand (the built-in `bullets` items are a string or `{text, icon}`:
+a `model_validator(mode="before")` turns the string into `{text: ...}`) sets `also_accepts =
+(str,)` on the class, so `list-scenes` shows `list[str | BulletItem]`.
 
 ```python
 class Ring(SceneParams):
@@ -188,7 +191,8 @@ def validate_project(cls, params, project):
   is the rectangle the layout dump records and `vidgen lint`'s `safe_area` rule checks.
   `self.safe_width` / `self.safe_height` are its size. Without a scene: `safe_area()`;
   `frame_region()` is the whole frame.
-- `self.region(name)` (or `region(name, area=None)`) — named parts of the safe area:
+- `self.region(name)` (or `region(name, area=None)`; `area` is a `Region` or another region's
+  name, e.g. `region("left", "body")`) — named parts of the safe area:
 
   | name | landscape / square | portrait (9:16) |
   |---|---|---|
@@ -271,8 +275,10 @@ part alone (`FadeIn(group[0])`) adds that part by itself and dissolves the group
   align="center", highlights={"77%": "highlight"}, squeeze=1.0, font=None, ...)` — wraps by
   measured width, lowers the font size (down to `min_size`) until the block fits `max_height`,
   then scales down if still needed. Returns a Manim `Paragraph` (one submobject per line).
-  `font` defaults to the theme font; pass `font=self.theme.font_for("heading")` (or any role)
-  so your scene follows the theme's font roles like the built-ins (docs/CONFIG.md "Fonts"). The
+  `font` defaults to the theme font; pass `role="heading"` (or any font role; the same as
+  `font=self.theme.font_for("heading")`) so your scene follows the theme's font roles like the
+  built-ins (docs/CONFIG.md "Fonts"). `self.text`, `self.markup`, `T`, `MT` and
+  `readable_text` take `role=` too; an explicit `font=` wins. The
   bundled families (Inter, Source Serif 4, JetBrains Mono NL) are registered before any scene
   code runs, so `self.text("x", font="Source Serif 4")` works without an installed font.
 - `shrink_to_fit(mobject, max_width, max_height)` — scale down only, never up.
@@ -372,8 +378,9 @@ from .common import network
 Your project folder is not put on `sys.path`; `import common` does not work, `from .common
 import ...` does.
 
-Ready-made helpers in `vidgen.api`: `T(s, size, color, weight)` / `MT(...)` (text / Pango markup
-in the theme font — the function forms of `self.text` / `self.markup`), `column`, `edges`,
+Ready-made helpers in `vidgen.api`: `T(s, size, color, weight, *, role=None)` / `MT(...)` (text /
+Pango markup in the theme font, or the family of a font `role` — the function forms of
+`self.text` / `self.markup`), `column`, `edges`,
 `dense_pairs`, `grouped_pairs`, `counter` (text redrawn from a `ValueTracker`), `resolve_color`,
 and the layout/timing helpers of section 2 (`fit_text`, `distribute`, `nice_ticks`, ...).
 Sizes and colors take theme token names (`"body"`, `"accent"`) or literals (`32`, `"#FF0000"`).

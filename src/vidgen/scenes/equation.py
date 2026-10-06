@@ -19,6 +19,8 @@ class Equation(NarratedScene):
     """
 
     outro = 0.5
+    #: In a vertical frame the formulas grow by this factor (they are still fitted to the width).
+    portrait_growth = 1.25
 
     class Params(SceneParams):
         latex: str | list[str]
@@ -31,6 +33,8 @@ class Equation(NarratedScene):
         """Formula color."""
         caption_color: ThemeColor = "dim"
         """Caption color."""
+        caption_size: ThemeSize = "caption"
+        """Caption text size."""
 
         @field_validator("latex")
         @classmethod
@@ -53,18 +57,20 @@ class Equation(NarratedScene):
     def construct(self) -> None:
         p = self.params
         require_latex(f"scene '{self.spec.id}' (type equation)")
-        size = float(self.theme.size(p.size))
+        area = self.safe_area
+        size = float(self.theme.size(p.size)) * (self.portrait_growth if self.is_portrait else 1.0)
         caption = None
         if p.caption:
-            caption = fit_text(p.caption, self.safe_width, self.safe_height * 0.2, size="caption", color=p.caption_color)
-        room = self.safe_height * 0.6
-        formulas = [shrink_to_fit(self._tex(s, size), self.safe_width, room) for s in p.steps()]
+            caption = fit_text(p.caption, area.width, area.height * 0.2, size=p.caption_size, color=p.caption_color)
+        room = area.height * 0.6
+        formulas = [shrink_to_fit(self._tex(s, size), area.width, room) for s in p.steps()]
         tallest = max(f.height for f in formulas)
-        y = (caption.height + 0.7) / 2 if caption is not None else 0.0
+        # formulas share one centre line; formula box + caption are centred in the safe area
+        y = area.center[1] + ((caption.height + 0.7) / 2 if caption is not None else 0.0)
         for f in formulas:
-            f.move_to([0, y, 0])
+            f.move_to([area.center[0], y, 0])
         if caption is not None:
-            caption.move_to([0, y - tallest / 2 - 0.7 - caption.height / 2, 0])
+            caption.move_to([area.center[0], y - tallest / 2 - 0.7 - caption.height / 2, 0])
 
         def first() -> list[Animation]:
             anims: list[Animation] = [Write(formulas[0])]

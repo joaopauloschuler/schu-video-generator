@@ -114,7 +114,17 @@ class KphiMethod(NarratedScene):
 
         with self.narrate(4) as d:
             diagram = Group(*[m for m in self.mobjects if m is not t1])
-            self.play(FadeOut(t1), diagram.animate.scale(0.55).to_edge(UP, buff=0.35), run_time=1.0)
+            # zoom out to 0.55 (as diagram.animate.scale(0.55).to_edge(UP)); the column labels
+            # keep their 22 pt size (22 pt * 0.55 would be below lint's min_font)
+            factor, center = 0.55, diagram.get_center()
+            lift = (config.frame_height / 2 - 0.35) - (center[1] + (diagram.get_top()[1] - center[1]) * factor)
+            labels = (h_in, h_k, h_i, h_l, h_s, h_o)
+
+            def zoom(m: Mobject) -> Animation:
+                target = m.animate.scale(factor, about_point=center).shift(UP * lift)
+                return target.scale(1 / factor) if m in labels else target
+
+            self.play(FadeOut(t1), *[zoom(m) for m in diagram], run_time=1.0)
             r1 = MT(f'Dense layer:   <span foreground="{base}">C × F</span> weights', 34)
             r2 = MT(f'Subnetwork:   <span foreground="{k3}">2 × C × F / N</span> weights', 34)
             rows = VGroup(r1, r2).arrange(DOWN, buff=0.35, aligned_edge=LEFT).shift(DOWN * 1.3)

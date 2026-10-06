@@ -266,6 +266,7 @@ def boxes_overlap(a: Any, b: Any, eps: float = 1e-3) -> bool:
 @pytest.mark.parametrize("variant", [None, "large"])
 @pytest.mark.parametrize("orient", ["landscape", "portrait"])
 @pytest.mark.parametrize("n", [2, 5, 12])
+@pytest.mark.slow
 def test_icon_grid_fits_without_overlap(icon_project: Project, tmp_path: Path, n: int, orient: str, variant: str | None) -> None:
     project = Project.load(icon_project.root, variant=variant)
     scene = render_unfaded(project, f"grid{n}", tmp_path, SIZES[orient])
@@ -286,6 +287,7 @@ def test_icon_grid_fits_without_overlap(icon_project: Project, tmp_path: Path, n
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_icon_grid_rows_follow_the_frame(icon_project: Project, tmp_path: Path) -> None:
     def rows(scene: Any) -> int:
         return len({round(float(c[0].get_y()), 2) for c in grid_cells(scene)})

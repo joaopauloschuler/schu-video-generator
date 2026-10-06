@@ -121,6 +121,7 @@ def test_region_on_another_area_and_unknown_name(landscape: None) -> None:
     assert region("left", area, gap=0) == Region(0, 0, 2, 2)
     with pytest.raises(VidgenError, match="unknown region 'middle'.*header"):
         region("middle")
+    assert region("left", "body") == region("left", region("body"))  # area by name (Step 22)
 
 
 def test_rows_columns_split_and_grid(landscape: None) -> None:
@@ -229,6 +230,21 @@ def test_readable_text_wraps_instead_of_shrinking(landscape: None, active: Proje
     assert len(block) > 3 and block.width <= narrow.width + 1e-6 and block.height <= narrow.height + 1e-6
 
 
+def test_font_roles_in_text_helpers(landscape: None, make_project) -> None:
+    """``role=`` picks the theme's family for a font role; ``font=`` still wins (Step 22)."""
+    from vidgen.helpers import MT, T
+    from vidgen.layout import fit_text
+
+    project = Project.load(make_project(dict(minimal_config(), theme={"preset": "light_academic"})))
+    with extensions.project_session(project) as theme:
+        serif = theme.font_for("heading")
+        assert serif == "Source Serif 4" != theme.font
+        assert T("Hi", role="heading").font == serif and MT("Hi", role="heading").font == serif
+        assert T("Hi").font == theme.font and T("Hi", role="heading", font="Inter").font == "Inter"
+        assert fit_text("Hello world", 4, role="heading").lines_text.font == serif
+        assert readable_text("Hello world", Region(0, 0, 4, 2), role="code") is not None
+
+
 def test_readable_text_too_long_is_shrunk_with_a_warning(landscape: None, active: Project, caplog: pytest.LogCaptureFixture) -> None:
     tiny = Region(0, 0, 2, 0.5)
     with caplog.at_level(logging.WARNING, logger="vidgen.regions"):
@@ -305,7 +321,17 @@ def layout_project(tmp_path_factory: pytest.TempPathFactory) -> Project:
         {"id": "nowrap", "type": "code", "params": {"code": CODE, "wrap": False}, "beats": beats},
         {"id": "list", "type": "bullets", "params": {"heading": "Steps", "items": ["Write the beats", "Pick scene types", "Render"]}, "beats": beats},
         {"id": "check", "type": "checklist", "params": {"items": ["Fewer parameters", "Same loss"]}, "beats": beats},
+        {"id": "chart", "type": "bar_chart", "params": {"title": "Sizes", "labels": ["a", "b"], "values": [1, 2],
+                                                        "caption": "Illustrative numbers"}, "beats": beats},
+        {"id": "saying", "type": "quote", "params": {"text": "Simplicity is prerequisite for reliability.",
+                                                     "author": "Edsger W. Dijkstra", "source": "1975"}, "beats": beats},
+        {"id": "picture", "type": "image", "params": {"path": "assets/wide.png", "fit": "cover",
+                                                      "caption": "Images can slowly zoom and pan"}, "beats": beats},
     ]
+    (root / "assets").mkdir()
+    from PIL import Image as PILImage
+
+    PILImage.new("RGB", (64, 36), "#3366AA").save(root / "assets" / "wide.png")
     (root / "video.yaml").write_text(yaml.safe_dump(minimal_config(scenes=scenes), sort_keys=False), encoding="utf-8")
     # the example of docs/EXTENDING.md "Layout regions"
     (root / "extensions").mkdir()
@@ -363,7 +389,7 @@ def code_font_size(scene: Any) -> float:
 
 @pytest.mark.render
 @pytest.mark.parametrize("orient", ["landscape", "portrait"])
-@pytest.mark.parametrize("scene_id", ["listing", "nowrap", "list", "check"])
+@pytest.mark.parametrize("scene_id", ["listing", "nowrap", "list", "check", "chart", "saying"])
 def test_scenes_stay_in_the_safe_area(layout_project: Project, tmp_path: Path, scene_id: str, orient: str) -> None:
     scene = render_unfaded(layout_project, scene_id, tmp_path, SIZES[orient])
     assert scene.mobjects
@@ -372,6 +398,28 @@ def test_scenes_stay_in_the_safe_area(layout_project: Project, tmp_path: Path, s
 
 
 @pytest.mark.render
+@pytest.mark.parametrize("orient", ["landscape", "portrait"])
+def test_cover_image_caption_stays_in_the_safe_area(layout_project: Project, tmp_path: Path, orient: str) -> None:
+    """The caption band of ``fit: cover`` reaches the frame edge, its text stays inside (Step 22)."""
+    scene = render_unfaded(layout_project, "picture", tmp_path, SIZES[orient])
+    caption = find(scene, "Paragraph")
+    assert scene.layout_safe.contains(caption, tolerance=0.01)
+    assert caption.get_bottom()[1] == pytest.approx(scene.layout_safe.y0, abs=0.01)
+
+
+@pytest.mark.render
+def test_quote_grows_in_a_vertical_frame(layout_project: Project, tmp_path: Path) -> None:
+    wide = render_unfaded(layout_project, "saying", tmp_path, SIZES["landscape"])
+    tall = render_unfaded(layout_project, "saying", tmp_path, SIZES["portrait"])
+
+    def cap_height(scene: Any) -> float:  # of the 'S' of "Simplicity"
+        return float(find(scene, "Paragraph")[0][0].height)
+
+    assert cap_height(tall) > cap_height(wide) * 1.2
+
+
+@pytest.mark.render
+@pytest.mark.slow
 def test_code_wraps_only_where_it_would_be_too_small(layout_project: Project, tmp_path: Path) -> None:
     n = len(CODE.rstrip("\n").split("\n"))
     wide = render_unfaded(layout_project, "listing", tmp_path, SIZES["landscape"])

@@ -57,6 +57,7 @@ def tiny_copy(tmp_path: Path) -> Path:
 
 @pytest.mark.render
 @pytest.mark.parametrize("scene_id", ["title", "params"])
+@pytest.mark.slow
 def test_kphi_scene_beats_last_audio_plus_pad(tmp_path: Path, scene_id: str) -> None:
     if shutil.which("ffmpeg") is None:
         pytest.skip("ffmpeg not found on PATH")

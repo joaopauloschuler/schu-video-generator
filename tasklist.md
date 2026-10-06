@@ -99,8 +99,8 @@ Rules that apply to every step:
 - [x] `icon_grid` scene: a grid of icons with labels revealed per beat (groups, highlight, palette; `grid_shape` helper in `vidgen.api`)
 
 ### Step 22 — Review 1
-- [ ] Run storyboard + lint on every example (16:9 and vertical); fix what they reveal
-- [ ] Review Steps 8–21 for API consistency, docs accuracy and test gaps; harden `vidgen.api`
+- [x] Run storyboard + lint on every example (16:9 and vertical); fix what they reveal (all 11 example configs lint clean; kphi3 with 5 commented `lint_ignore`s)
+- [x] Review Steps 8–21 for API consistency, docs accuracy and test gaps; harden `vidgen.api` (`role=` on text helpers, `region(name, "body")`, `also_accepts`, theme-default name checks, whole-word icon search, lint theme contrast; `slow` test marker; wheel install checked)
 
 ---
 
@@ -136,6 +136,7 @@ Rules that apply to every step:
 
 ### Step 30 — Chart helpers + `scatter` and `histogram`
 - [ ] Shared axis/ticks/legend helpers extracted from `bar_chart`/`line_chart`
+- [ ] (from Step 22) Chart titles in the `header` region like `bullets`/`code`/`icon_grid`; tick, axis and value labels sized by theme tokens (in 9:16 `bar_chart` value labels are scaled down to fit narrow slots and look small)
 - [ ] `scatter` (series, optional trend line), `histogram` (bins from raw values or given counts)
 
 ### Step 31 — Scenes: `pie`/`donut` and `heatmap`
@@ -144,6 +145,7 @@ Rules that apply to every step:
 
 ### Step 32 — Scene: `code_walkthrough`
 - [ ] Long code scrolls; lines highlighted per beat (`lines: "3-7"`); optional annotation per beat
+- [ ] (from Steps 17/22) A code size cap for portrait: with the `large` scale 9:16 listings wrap to ~25 columns
 
 ### Step 33 — Scene: `equation_derivation`
 - [ ] Sequence of equations, matching parts transformed step to step, optional per-step note
@@ -161,6 +163,8 @@ Rules that apply to every step:
 
 ### Step 37 — Review 2
 - [ ] Storyboard + lint every new scene at 16:9 and 9:16, every theme preset; fix issues
+- [ ] (from Step 22) `icon_grid` in 9:16 leaves the lower third empty with few items (rows spread ≤ 1 unit); `list-icons --sheet` could preview icons in a project's theme colours
+- [ ] (from Step 22) Lint measures rotated text sideways (`min_font`); give the layout dump a text rotation
 - [ ] Update `examples/minimal` (or add `examples/gallery_src`) to use each new scene type once
 
 ---
@@ -246,6 +250,7 @@ Rules that apply to every step:
 
 ### Step 59 — MCP server
 - [ ] Optional `mcp` extra: stdio server exposing validate, schema, list-scenes, render, storyboard, lint, gallery
+- [ ] (from Step 22) `vidgen tts --json` (the only command without it); human `vidgen validate` still stops at the first variant that does not load (`--json` lists them all)
 
 ### Step 60 — Final review
 - [ ] Full review of Steps 8–59; docs and examples consistent; release notes in HANDOFF.md

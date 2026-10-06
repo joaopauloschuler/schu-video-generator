@@ -16,7 +16,7 @@ theme:
   font: Inter
   colors:
     text: "#E8EAED"
-    dim: "#6B7280"
+    dim: "#838B98"         # Step 22: was the original video's #6B7280 (3.9:1, below WCAG AA)
     accent: "#FF6B6B"      # warnings, "memorize", filtered phrases
     highlight: "#FFD166"   # gold: emphasis, best values, flashes
     primary: "#58C4DD"
@@ -79,6 +79,9 @@ scenes:
 
   - id: equivalence
     type: kphi_equivalence
+    lint_ignore:
+      # the rotated label is ~13 px tall; lint measures rotated glyphs sideways (axis-aligned boxes)
+      - {rule: min_font, object: "H = length"}
     beats:
       - id: s3_b1
         text: "In computer vision, a pointwise, or one-by-one, convolution looks at one pixel at a time, and mixes its channels with a learned weight matrix."
@@ -89,6 +92,9 @@ scenes:
 
   - id: method
     type: kphi_method
+    lint_ignore:
+      # the original's pacing: the summary holds while the narrator explains the formulas
+      - {rule: dead_air, beat: s4_b5}
     params:
       result: "Vision models: ~80% fewer parameters, same accuracy"
     beats:
@@ -105,6 +111,10 @@ scenes:
 
   - id: setup
     type: kphi_setup
+    lint_ignore:
+      # the original's pacing: the setup diagram holds while the narrator describes it
+      - {rule: dead_air, beat: s5_b1}
+      - {rule: dead_air, beat: s5_b3}
     params:
       pairs_before: 2.58
       pairs_after: 2.52
@@ -143,6 +153,9 @@ scenes:
 
   - id: loss
     type: kphi_loss
+    lint_ignore:
+      # the original's pacing: the "best 1.57" result holds while the narrator discusses it
+      - {rule: dead_air, beat: s7_b2}
     params:
       models: ["phi-3\n2 layers", "kphi-3\n2 layers", "kphi-3\n3 layers"]
       colors: [base, k2, k3]

@@ -40,7 +40,7 @@ class KphiSetup(NarratedScene):
             self.play(FadeIn(name), FadeIn(sub), run_time=0.8)
 
         # --- data (right)
-        ds = VGroup(T("LaMini dataset", 28, weight=BOLD), T("instruction → response pairs", 20, "dim")
+        ds = VGroup(T("LaMini dataset", 28, weight=BOLD), T("instruction → response pairs", 22, "dim")
                     ).arrange(DOWN, buff=0.08).move_to([3.5, 2.9, 0])
         cnt = ValueTracker(p.pairs_before)
         num = counter(cnt, "{:.2f} M", size=56, weight=BOLD, anchor=[3.5, 1.65, 0])

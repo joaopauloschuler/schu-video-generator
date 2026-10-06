@@ -41,7 +41,11 @@ class BarChart(NarratedScene):
         baseline: float = 0.0
         """Value the bars start from (e.g. 1.0 for losses)."""
         caption: str = ""
-        """Small note under the chart."""
+        """Note under the chart (e.g. the data source)."""
+        caption_size: ThemeSize = "caption"
+        """Caption text size."""
+        caption_color: ThemeColor = "dim"
+        """Caption color."""
 
         @field_validator("value_format")
         @classmethod
@@ -91,7 +95,7 @@ class BarChart(NarratedScene):
             head.add(title.move_to([0, top - title.height / 2, 0]))
             top = title.get_bottom()[1] - 0.45
         if p.caption:
-            cap = fit_text(p.caption, self.safe_width, size="small", color="dim")
+            cap = fit_text(p.caption, self.safe_width, self.safe_height * 0.15, size=p.caption_size, color=p.caption_color)
             head.add(cap.move_to([0, bottom + cap.height / 2, 0]))
             bottom = cap.get_top()[1] + 0.3
 

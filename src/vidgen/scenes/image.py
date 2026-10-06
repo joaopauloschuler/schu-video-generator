@@ -101,10 +101,12 @@ class Image(NarratedScene):
             box_w, box_h, box_c = fw, fh, np.zeros(3)
             base_w = max(fw, fh * aspect)
             if caption is not None:
-                band_h = caption.height + 0.6
+                # the caption sits on the bottom of the safe area (never in the margin); the band
+                # behind it runs from the frame's bottom edge to a little above the caption
+                place(caption, self.region("caption"), fit="none", align="bottom")
+                band_h = caption.get_top()[1] + 0.3 + fh / 2
                 band = Rectangle(width=fw, height=band_h, stroke_width=0)
                 band.set_fill(self.theme.background, opacity=0.72).move_to([0, -fh / 2 + band_h / 2, 0])
-                caption.move_to(band)
                 caption = Group(band, caption)
         else:
             # the image box is the image at its largest scale; box + caption are centered

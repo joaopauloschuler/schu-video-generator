@@ -338,6 +338,7 @@ def preset_projects(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 @pytest.mark.render
 @pytest.mark.parametrize("name", PRESETS)
+@pytest.mark.slow
 def test_builtin_scenes_pass_contrast_lint_with_every_preset(preset_projects: Path, name: str) -> None:
     project = Project.load(preset_projects, variant=name)
     result = lint_project(project, rules=["contrast"], jobs=4)

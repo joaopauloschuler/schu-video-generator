@@ -36,6 +36,7 @@ def test_nested_theme_color_is_checked(tmp_path: Path) -> None:
 
 @pytest.mark.render
 @pytest.mark.parametrize("variant", [None, "vertical"])
+@pytest.mark.slow
 def test_tiny_render_with_hook(tmp_path: Path, variant: str | None) -> None:
     if shutil.which("ffmpeg") is None:
         pytest.skip("ffmpeg not on PATH")

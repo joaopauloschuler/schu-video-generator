@@ -297,6 +297,7 @@ def render(root: Path, **kwargs: Any):
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_layout_matches_the_stills(layout_project: Path) -> None:
     root = layout_project
     build = root / "build" / "final"

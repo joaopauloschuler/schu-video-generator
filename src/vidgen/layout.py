@@ -101,6 +101,7 @@ def fit_text(
     squeeze: float = 1.0,
     theme: Theme | None = None,
     font: str | None = None,
+    role: str | None = None,
 ) -> Paragraph:
     """Text in the theme font, word-wrapped to ``max_width`` and fitted into ``max_height``.
 
@@ -112,13 +113,14 @@ def fit_text(
     ``line_spacing`` is Manim's ``Paragraph`` setting (it scales with the font size; Manim's
     own default -1 sets lines almost touching). With ``squeeze > 1``, text that fits on one line
     at up to ``squeeze * max_width`` is scaled down instead of wrapped (good for links).
-    ``font`` is a family name (default: the theme font), e.g. ``theme.font_for("heading")``.
+    ``font`` is a family name; without it, ``role`` picks the theme's family for a font role
+    (``heading``, ``quote``... as ``theme.font_for(role)``), else the theme font is used.
     Returns a Manim ``Paragraph`` (one submobject per line).
     """
     block, _ = fit_text_sized(
         text, max_width, max_height, size=size, color=color, weight=weight, slant=slant, align=align,
         min_size=min_size, highlights=highlights, line_spacing=line_spacing, squeeze=squeeze, theme=theme,
-        font=font,
+        font=font, role=role,
     )
     return block
 
@@ -139,6 +141,7 @@ def fit_text_sized(
     squeeze: float = 1.0,
     theme: Theme | None = None,
     font: str | None = None,
+    role: str | None = None,
 ) -> tuple[Paragraph, float]:
     """:func:`fit_text` that also returns the font size the text ends up at (points, after
     any final scaling), e.g. to tell whether it was shrunk below ``min_size``."""
@@ -149,7 +152,7 @@ def fit_text_sized(
     if not normalized:
         raise VidgenError("fit_text: text is empty")
     kwargs: dict[str, Any] = {
-        "font": font or theme.font,
+        "font": font or (theme.font_for(role) if role else theme.font),
         "color": resolve_color(color, theme),
         "weight": weight,
         "slant": slant,

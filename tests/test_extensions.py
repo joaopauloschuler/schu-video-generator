@@ -233,7 +233,7 @@ def test_theme_defaults_precedence(ext_project) -> None:
 
 def test_register_theme_defaults_rejects_non_hex(ext_project) -> None:
     project = ext_project({"extensions/t.py": "from vidgen.api import *\nregister_theme_defaults({'x': 'red'})\n"})
-    with pytest.raises(VidgenError, match="must be a hex string"):
+    with pytest.raises(VidgenError, match="must be a hex color"):
         with extensions.project_session(project):
             pass
 

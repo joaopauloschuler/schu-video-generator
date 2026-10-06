@@ -20,7 +20,8 @@ from vidgen.registry import SceneType
 
 
 def type_name(annotation: Any, metadata: Sequence[Any] = ()) -> str:
-    """Readable type: ``color`` / ``size`` for theme tokens, ``a | b`` for unions and literals."""
+    """Readable type: ``color`` / ``size`` / ``icon`` for theme tokens, ``a | b`` for unions and
+    literals (and for a model with ``also_accepts``, e.g. ``str | BulletItem``)."""
     from vidgen.scene import ThemeToken
 
     for meta in metadata:
@@ -39,7 +40,8 @@ def type_name(annotation: Any, metadata: Sequence[Any] = ()) -> str:
     if annotation is type(None):
         return "None"
     if isinstance(annotation, type):
-        return annotation.__name__
+        extra = getattr(annotation, "also_accepts", ()) if issubclass(annotation, BaseModel) else ()
+        return " | ".join([*(type_name(a) for a in extra), annotation.__name__])
     return str(annotation).replace("typing.", "")
 
 

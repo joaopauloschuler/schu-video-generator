@@ -249,6 +249,7 @@ def read_json(path: Path) -> Any:
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_storyboard_json_reuse_and_staleness(board_project: Path, capsys: pytest.CaptureFixture[str]) -> None:
     root = board_project
     build = root / "build" / "preview"
@@ -300,6 +301,7 @@ def test_storyboard_json_reuse_and_staleness(board_project: Path, capsys: pytest
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_storyboard_after_render_and_vertical_variant(board_project: Path, capsys: pytest.CaptureFixture[str]) -> None:
     root = board_project
     config = (root / "video.yaml").read_text(encoding="utf-8")

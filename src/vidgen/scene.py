@@ -16,7 +16,7 @@ import re
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Annotated, Any, NamedTuple, Union
+from typing import Annotated, Any, ClassVar, NamedTuple, Union
 
 import av
 from manim import NORMAL, Animation, FadeOut, MarkupText, Scene, Text, Wait, config
@@ -37,10 +37,14 @@ class SceneParams(BaseModel):
     """Base class for a scene type's ``Params`` model; unknown keys are an error.
 
     A docstring under a field (or ``Field(description=...)``) documents it; ``vidgen
-    list-scenes --json`` shows it as the field's ``doc``.
+    list-scenes --json`` shows it as the field's ``doc``. A nested model that also accepts a
+    shorthand (e.g. a plain string, converted by a ``model_validator(mode="before")``) lists
+    those types in ``also_accepts``, so ``list-scenes`` shows ``str | Item`` instead of ``Item``.
     """
 
     model_config = ConfigDict(extra="forbid", use_attribute_docstrings=True)
+    #: Other input types this model is built from (shown by ``vidgen list-scenes``).
+    also_accepts: ClassVar[tuple[type, ...]] = ()
 
 
 _HEX = re.compile(r"^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$")
@@ -570,15 +574,19 @@ class NarratedScene(Scene):
 
     # ----- drawing ---------------------------------------------------------------------------
 
-    def text(self, s: str, size: str | float = "body", color: Any = "text", weight: str = NORMAL, **kwargs: Any) -> Text:
-        """A ``Text`` in the theme font; ``size``/``color`` accept theme tokens or literal values."""
-        return helpers.styled(Text, self.theme, s, size, color, weight, **kwargs)
+    def text(
+        self, s: str, size: str | float = "body", color: Any = "text", weight: str = NORMAL, *, role: str | None = None, **kwargs: Any
+    ) -> Text:
+        """A ``Text`` in the theme font; ``size``/``color`` accept theme tokens or literal values,
+        ``role`` picks the theme's family for a font role (``heading``, ``quote``, ``code``...)."""
+        return helpers.styled(Text, self.theme, s, size, color, weight, role=role, **kwargs)
 
     def markup(
-        self, s: str, size: str | float = "body", color: Any = "text", weight: str = NORMAL, **kwargs: Any
+        self, s: str, size: str | float = "body", color: Any = "text", weight: str = NORMAL, *, role: str | None = None, **kwargs: Any
     ) -> MarkupText:
-        """A Pango ``MarkupText`` in the theme font (``<b>``, ``<sup>``, ``<span>``...)."""
-        return helpers.styled(MarkupText, self.theme, s, size, color, weight, **kwargs)
+        """A Pango ``MarkupText`` in the theme font (``<b>``, ``<sup>``, ``<span>``...); ``role`` as
+        for :meth:`text`."""
+        return helpers.styled(MarkupText, self.theme, s, size, color, weight, role=role, **kwargs)
 
     def clear_all(self, run_time: float = 0.6) -> None:
         """Fade out every mobject on screen."""

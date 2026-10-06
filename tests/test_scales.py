@@ -193,6 +193,8 @@ def test_list_themes_without_project(tmp_path: Path, monkeypatch: pytest.MonkeyP
     doc = json.loads(capsys.readouterr().out)
     assert doc["project"] is None and doc["current"]["preset"] is None and doc["swatches"] is None
     assert [e["name"] for e in doc["presets"]] == list(BUILTIN_PRESETS)
+    png = tmp_path / "sheet.png"  # --sheet is an alias of --swatches (as in list-icons)
+    assert main(["list-themes", "--sheet", str(png)]) == 0 and png.is_file()
 
 
 # ----- vidgen validate: theme contrast warnings --------------------------------------------------
@@ -241,6 +243,7 @@ VERTICAL_SCENES = [
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_large_scale_in_portrait_keeps_text_on_frame(make_project: Callable[..., Path]) -> None:
     if shutil.which("ffmpeg") is None:
         pytest.skip("ffmpeg not on PATH")

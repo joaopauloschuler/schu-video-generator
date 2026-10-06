@@ -232,6 +232,7 @@ class StillCard(NarratedScene):
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_timing_lint_on_a_render(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     long_text = " ".join(["word"] * 24)  # 8 s at 3 words/s
     root = write_project(

@@ -13,6 +13,8 @@ class Quote(NarratedScene):
     """
 
     outro = 0.5
+    #: In a vertical frame the quote, its mark and the author grow by this factor.
+    portrait_growth = 1.25
 
     class Params(SceneParams):
         text: str = Field(min_length=1)
@@ -36,13 +38,16 @@ class Quote(NarratedScene):
 
     def construct(self) -> None:
         p = self.params
-        width = self.safe_width * (1.0 if self.is_portrait else 0.78)
+        area = self.safe_area
+        grow = self.portrait_growth if self.is_portrait else 1.0
+        width = area.width * (1.0 if self.is_portrait else 0.78)
+        size = float(self.theme.size(p.size)) * grow
         body_text = p.text.strip().strip(QUOTE_CHARS).strip() or p.text
-        mark = self.text("“", size=float(self.theme.size(p.size)) * 4, color=p.mark_color, weight=BOLD, font=p.mark_font or self.theme.font_for("quote_mark"))
-        body = fit_text(body_text, width, self.safe_height * 0.55, size=p.size, color=p.color, font=self.theme.font_for("quote"))
+        mark = self.text("“", size=size * 4, color=p.mark_color, weight=BOLD, font=p.mark_font or self.theme.font_for("quote_mark"))
+        body = fit_text(body_text, width, area.height * 0.55, size=size, color=p.color, role="quote")
         attribution = VGroup()
         if p.author:
-            attribution.add(fit_text(f"— {p.author}", width, size="body", color=p.author_color, weight=BOLD))
+            attribution.add(fit_text(f"— {p.author}", width, size=float(self.theme.size("body")) * grow, color=p.author_color, weight=BOLD))
         if p.source:
             attribution.add(fit_text(p.source, width, size="caption", color=p.source_color))
         attribution.arrange(DOWN, buff=0.14)
@@ -52,7 +57,7 @@ class Quote(NarratedScene):
         if len(attribution):
             attribution.next_to(body, DOWN, buff=0.6)
             card.add(attribution)
-        shrink_to_fit(card, self.safe_width, self.safe_height).move_to(ORIGIN)
+        place(card, area, max_scale=1.0)
 
         steps: list = [[FadeIn(mark, scale=0.85), FadeIn(body, shift=UP * 0.15)]]
         if len(attribution):

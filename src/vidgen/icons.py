@@ -206,9 +206,16 @@ def active_icons() -> dict[str, IconInfo]:
     return available_icons(runtime.current_project().root if runtime.has_context() else None)
 
 
+def _words(text: str) -> set[str]:
+    """The words of a name, alias or tag (split at spaces, hyphens, slashes and dots)."""
+    return set(re.split(r"[\s\-/._]+", text)) - {""}
+
+
 def _score(icon: IconInfo, term: str) -> int | None:
-    """How well ``term`` (lower case) matches: 0 exact name, 1 name prefix or exact alias, 2 part
-    of the name or an alias, 3 a tag, 4 part of a tag, 5 the category; ``None``: no match."""
+    """How well ``term`` (lower case) matches: 0 exact name, 1 name prefix or exact alias, 2 a
+    whole word of the name or an alias, 3 an exact tag, 4 a whole word of a tag, 5 part of the
+    name or an alias, 6 part of a tag, 7 the category; ``None``: no match. Whole words rank
+    above substrings, so ``ai`` finds ``bot`` (tag ``ai``) before ``rain``."""
     name = icon.name.lower()
     aliases = [a.lower() for a in icon.aliases]
     tags = [t.lower() for t in icon.tags]
@@ -216,14 +223,18 @@ def _score(icon: IconInfo, term: str) -> int | None:
         return 0
     if name.startswith(term) or term in aliases:
         return 1
-    if term in name or any(term in a for a in aliases):
+    if any(term in _words(n) for n in (name, *aliases)):
         return 2
     if term in tags:
         return 3
-    if any(term in t for t in tags):
+    if any(term in _words(t) for t in tags):
         return 4
-    if term == icon.category.lower():
+    if term in name or any(term in a for a in aliases):
         return 5
+    if any(term in t for t in tags):
+        return 6
+    if term == icon.category.lower():
+        return 7
     return None
 
 

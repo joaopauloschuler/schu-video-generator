@@ -17,9 +17,10 @@ This module does not import manim.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 
-from vidgen.config import FormatConfig, ThemeConfig
+from vidgen.config import HEX_COLOR_PATTERN, ID_PATTERN, FormatConfig, ThemeConfig
 from vidgen.errors import VidgenError
 from vidgen.fonts import FONT_TOKENS, ROLE_DEFAULTS
 from vidgen.presets import (
@@ -263,10 +264,14 @@ class Theme:
         They override built-in defaults but never a selected preset or values set in
         ``video.yaml``.
         """
+        for name in [*(colors or {}), *(sizes or {})]:
+            if not isinstance(name, str) or not re.match(ID_PATTERN, name):
+                # video.yaml could never override such a token (theme keys are identifiers)
+                raise VidgenError(f"theme default token name {name!r} must use only letters, digits and _")
         if colors:
             for name, value in colors.items():
-                if not isinstance(value, str) or not value.startswith("#"):
-                    raise VidgenError(f"theme default color '{name}' must be a hex string, got {value!r}")
+                if not isinstance(value, str) or not re.match(HEX_COLOR_PATTERN, value):
+                    raise VidgenError(f"theme default color '{name}' must be a hex color like '#F2A541', got {value!r}")
             self._registered_colors.update(colors)
         if sizes:
             for name, value in sizes.items():

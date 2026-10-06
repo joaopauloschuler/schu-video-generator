@@ -238,7 +238,7 @@ background, below WCAG AA); dim captions, axis labels and sources are a little l
 project's own) with its resolved values in this project (background, colours, palette, fonts
 and the family of each built-in role, `code_style`, scale and the sizes it gives here), the contrast check (minimum ratios, any
 failing pair), the palette's smallest colour difference and for which vision, and the type
-scales. `--swatches PNG` also writes a picture of all presets (one row each: name and
+scales. `--swatches PNG` (alias `--sheet`, as in `list-icons`) also writes a picture of all presets (one row each: name and
 description in its text colours, accent chips, a `surface` panel, the palette as bars), so an
 AI author can compare them by opening one image. JSON shape: [below](#vidgen-list-themes---json).
 
@@ -279,8 +279,10 @@ Problems (bad file names, a broken `icons.json`) are reported by `vidgen validat
 the icons available in the project (built-in and `assets/icons`; without a PROJECT and no
 config in the current folder: built-ins only), one line each: name, category, `[project]` for
 project icons, `(alias: ...)`, tags. `--search` keeps icons whose name, aliases, tags or
-category contain every word of TEXT (case-insensitive; name, then alias, then tag matches
-first): `--search "chart"`, `--search computer`. Tags include the concepts an icon stands for
+category contain every word of TEXT (case-insensitive; best first: name, alias, whole words of
+a name or alias, tags, whole words of a tag, then words merely contained in a name or tag, so
+`--search ai` lists `brain-circuit` and `bot` before `rain`): `--search "chart"`,
+`--search computer`. Tags include the concepts an icon stands for
 in a script, so search by idea: `money`, `growth`, `security`, `speed`, `AI`, `team`.
 `--category` keeps one category (unknown → error listing them). `--sheet PNG` also draws the
 listed icons, labelled with name and category, on a 1280 px wide contact sheet (8 per row; a
@@ -503,7 +505,8 @@ set — a focus step that dims the other bars. Bars grow while their value label
 | `labels` | list[str] | required | |
 | `values` | list[float] | required | same length as `labels`; negatives allowed |
 | `title` | str | `""` | |
-| `caption` | str | `""` | small note under the chart |
+| `caption` | str | `""` | note under the chart (e.g. the data source) |
+| `caption_size`, `caption_color` | size, color | `caption`, `dim` | |
 | `unit` | str | `""` | appended to every value label (`"%"`, `" ms"`) |
 | `value_format` | str | automatic | Python format, e.g. `"{:.1f}"`, `"{:,.0f}"`, `"{:.0%}"`; default shows the decimals the values need |
 | `colors` | color \| list[color] \| `palette` | `primary` | one color, one per bar, or `theme.palette` |
@@ -540,6 +543,7 @@ text (no LaTeX).
 | `x` | list[float] \| list[str] | required | numbers (increasing) or category names |
 | `series` | `{name: [values]}` or list of `{name, values, color}` | required | one value per `x` |
 | `title`, `caption` | str | `""` | |
+| `caption_size`, `caption_color` | size, color | `caption`, `dim` | |
 | `x_label`, `y_label` | str | `""` | |
 | `y_min`, `y_max` | float | from the data | |
 | `value_format` | str | automatic | for y ticks and end labels |
@@ -600,7 +604,7 @@ the scene draws a large typographic mark.
 |---|---|---|---|
 | `text` | str | required | |
 | `author`, `source` | str | `""` | shown as `— author` and, smaller, `source` |
-| `size` | size | `subtitle` | of the quote text (shrunk if long) |
+| `size` | size | `subtitle` | of the quote text (shrunk if long; 1.25x in a vertical frame) |
 | `color`, `mark_color`, `author_color`, `source_color` | color | `text`, `primary`, `text`, `dim` | |
 | `mark_font` | str | role `quote_mark` (Source Serif 4) | font of the quote mark |
 
@@ -625,7 +629,8 @@ compile is reported with the scene id and the formula.
 |---|---|---|---|
 | `latex` | str \| list[str] | required | math-mode LaTeX (no `$`); a list is a sequence of steps |
 | `caption` | str | `""` | |
-| `size` | size | `96` | |
+| `size` | size | `96` | formula size (1.25x in a vertical frame; shrunk to fit the width) |
+| `caption_size` | size | `caption` | |
 | `color`, `caption_color` | color | `text`, `dim` | |
 
 ```yaml
@@ -895,19 +900,20 @@ layout rules: mid-beat stills show animations in progress (half-faded or moving 
 which would only add noise.
 
 ```
-$ vidgen lint examples/minimal
-lint: 10 scenes, 23 beat-end stills (preview 854x480)
+$ vidgen lint my_video
+lint: 11 scenes, 28 beat-end stills (preview 854x480)
 picture:
   warning safe_area         picture_b2 @ 7.2s: text 'Images can slowly zoom and pan' is outside the safe area at the bottom (12 px into the bottom margin)
-          still: examples/minimal/build/preview/frames/picture/picture_b2-1.png
-0 errors, 7 warnings, 0 info
+          still: my_video/build/preview/frames/picture/picture_b2-1.png
+0 errors, 1 warning, 0 info
 ```
 
 Each finding names the scene, the beat at whose end it was seen (`+N more beats` when the same
 problem stays on screen), the rule, a message with the measured value and the limit, and the
 **still** to open to see it. Timing findings name the beat concerned and the scene time where
 the problem starts; their still is the end of that beat. The same problem with several objects of one group (an axis' tick
-labels, several texts in the same colour) is reported once (`also N more like it`).
+labels, several texts in the same colour) or with the same text in several places (a label of a
+repeated component) is reported once (`also N more like it`).
 
 Options:
 
@@ -924,6 +930,12 @@ Options:
 
 **Exit code**: 1 when a finding is at least as severe as `fail_on` (default `error`), else 0;
 with `--fail-on never` it is 0 whatever is found (and 1 only if the command itself fails).
+
+**Theme contrast.** Like `vidgen validate`, `vidgen lint` first checks the theme itself (text and
+`dim` on the background and `surface`, accents and palette on the background; see
+[Theme presets](#theme-presets)) and prints pairs below WCAG AA as `warning: theme contrast:
+...` (JSON: `warnings`). They are not findings and never fail the command; they are skipped
+with `--rule` other than `contrast` and when `lint.rules.contrast.severity` is `off`.
 
 **Rules.** Sizes are fractions of the frame's **shorter side** (the height of a landscape
 video, the width of a vertical one), so the same thresholds hold for the 480p preview and the

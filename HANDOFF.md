@@ -1830,3 +1830,111 @@ How to test: `/home/claude/venv/bin/python -m pytest -q` (782 passed, 1 skipped)
 `pytest tests/test_icon_scenes.py`. Manual: `vidgen storyboard examples/minimal --scene
 feedback --scene steps [--variant vertical|light]`, `vidgen lint examples/minimal [--variant
 vertical]`, `vidgen schema --scene icon_grid`.
+
+## Step 22 — Review 1
+Independent review of Steps 8–21: storyboard + lint of every example configuration, the
+"left for Step 22" gaps of earlier handoffs, an API/CLI consistency pass, docs vs behaviour, test
+runtime, and an install check from a wheel.
+
+Lint status (preview; `vidgen lint` + `vidgen storyboard`, every sheet opened)
+| example / variant | before | after |
+|---|---|---|
+| minimal (default `dark_tech`) | 2 warnings (`sizes` caption `min_font`, `picture` caption `safe_area`) | 0 |
+| minimal `vertical` | 1 (`safe_area`) | 0 |
+| minimal `light`, `editorial` | 2 each (same two) | 0 |
+| minimal `contrast`, `neon` | 1 each (`safe_area`) | 0 |
+| minimal `neutral`, `pastel` | 2 each (Step 17/21 numbers) | 0 |
+| custom_scene, `vertical` | 0, 0 | 0, 0 |
+| kphi3 | 1 error + 32 warnings (+2 theme-contrast warnings) | 0 (5 commented `lint_ignore`s) |
+
+Findings and fixes
+1. **Built-in captions** (long-standing): `bar_chart`/`line_chart` captions used the fixed
+   `small` size (below lint's `min_font`) → new params `caption_size` (`caption`) and
+   `caption_color` (`dim`). `image` with `fit: cover` drew its caption 12 px into the bottom
+   margin → the caption sits on the bottom of the `caption` region (safe area), the band runs
+   from the frame edge to just above it.
+2. **9:16 built-ins** (Step 15 regions): `quote` (text, mark and author 1.25x in portrait,
+   placed with `place`) and `equation` (formulas 1.25x in portrait, positioned from the safe
+   area; new `caption_size`) were small blocks in an empty tall frame. 16:9 sheets are
+   unchanged apart from the larger chart captions. Left as they are, because their 9:16 sheets
+   read well since the `auto` scale: `title`, `end_card`, `text_card`, chart bodies (Step 30).
+3. **kphi3** (fixed in its extensions, documented in its README/REGRESSION.md): `dim`
+   `#6B7280` → `#838B98` (decided: 3.9:1 failed WCAG AA on every dim label; 18 contrast warnings
+   and 2 theme warnings; a slightly lighter grey is not a material change); `method` beat 5
+   column labels keep 22 pt when the diagram zooms out (was the only lint **error**, 7.6 px);
+   `loss` ticks/model names 16 → 20 pt, footnote 22 pt inside the safe area, panels 0.2 up;
+   `setup` decoder labels and dataset subtitle 20 → 22 pt; `equivalence` token column 0.1 right
+   and its label clamped to the safe area. `lint_ignore` (with comments in `video.yaml`): four
+   `dead_air` holds (the original pacing) and the rotated `H = length` (lint measures rotated
+   glyphs sideways: a lint limitation, routed to Step 37).
+4. **Lint**: `vidgen lint` now also prints the theme-contrast warnings `vidgen validate` gives
+   (Step 16/17 gap; warnings, not findings; skipped with `--rule` other than `contrast` or
+   `contrast: {severity: off}`). The same text repeated in copies of a component (two decoder
+   boxes' "Attention") was two identical findings → merged like grouped findings.
+5. **API gaps** (Steps 15/18/21): `role=` on `T`, `MT`, `self.text`/`self.markup`, `fit_text`,
+   `readable_text` (`font=` still wins); `region(name, area)` accepts a region name as `area`;
+   `SceneParams.also_accepts` so `list-scenes` shows `items: list[str | BulletItem]`;
+   `register_theme_defaults` rejects non-identifier token names (YAML could never override
+   them; Step 7 gap) and malformed hex colours.
+6. **Icon search** (Step 20 gap): whole words of names/aliases/tags rank above substrings
+   (`ai`: brain-circuit, bot before cloud-rain, mail; `art`: palette before chart-*).
+7. **CLI consistency**: checked every `--json` command (validate, list-scenes, list-themes,
+   list-icons, schema, render, storyboard, lint) for the error envelope / exit codes 1 and 2 —
+   consistent. Added `list-themes --sheet` as an alias of `--swatches` (as in `list-icons`).
+   `tts` still has no `--json` (routed to Step 59).
+8. **API review, no change needed**: every `VIDGEN_NAMES` entry is in `__all__` and has a
+   docstring; size/colour arguments take tokens or literals everywhere (`icon(name, size,
+   color)` mirrors `T(s, size, color)`; Manim units only via `height=`); `place`/`grid`/
+   `grid_shape` take a region name or `Region`. No renames, so no aliases were needed.
+9. **Docs**: CONFIG.md lint example output was stale (10 scenes, 7 warnings) → generic; new
+   lint "Theme contrast" paragraph; search ranking, chart/equation caption params, quote/equation
+   portrait growth, `--sheet` alias; EXTENDING.md `role=`, `region(name, "body")`,
+   `also_accepts`; README "Working on vidgen" (test commands). DESIGN §6.4, §9, §22 note, new
+   §25.
+10. **Tests**: +12 (794 passed, 1 skipped). New marker `slow` on the 18 slowest render tests:
+    full suite 228 s on this 2-CPU box, `-m "not slow"` 65 s, `-m "not render"` 23 s.
+11. **Install check**: `pip wheel . --no-deps` (1.25 MB: 11 font files, 200 SVGs + LICENSE,
+    templates; no `tools/`) → fresh venv, `pip install` from PyPI → `vidgen --version`, `init`
+    (non-ASCII folder), `validate`, `render --preview`, and with a `light_academic` variant
+    `storyboard` + `lint` (0 findings): serif heading (Source Serif 4, not installed
+    system-wide) and the `pencil` icon rendered from `site-packages/vidgen/data`.
+
+Files
+- Code: `helpers.py`, `scene.py`, `layout.py`, `regions.py`, `describe.py`, `theme.py`,
+  `icons.py`, `cli.py`, `lint/run.py`, scenes `quote.py`, `equation.py`, `image.py`,
+  `bar_chart.py`, `line_chart.py`, `bullets.py`.
+- Examples: `examples/kphi3/{video.yaml, extensions/common.py, s3_equivalence.py, s4_method.py,
+  s5_setup.py, s7_loss.py, README.md, REGRESSION.md}`, `examples/custom_scene/extensions/gears.py`
+  (`role="heading"` usage).
+- Tests: `test_regions.py` (roles, region by name, chart/quote in the safe area, cover caption,
+  quote growth), `test_lint.py` (theme warnings, same-text merge), `test_icons.py` (ranking),
+  `test_theme.py`, `test_extensions.py`, `test_scales.py` (`--sheet`), `test_json_output.py`;
+  `slow` markers in 12 test files; `pyproject.toml` (marker).
+- Docs: README, docs/CONFIG.md, docs/EXTENDING.md, DESIGN.md, tasklist.md.
+
+Public interfaces added/changed (all additive)
+- `vidgen.api`: keyword `role=` on `T`, `MT`, `fit_text`, `readable_text`,
+  `NarratedScene.text`/`markup`; `region(name, area: str | Region | None)`;
+  `SceneParams.also_accepts` (ClassVar).
+- Params: `bar_chart`/`line_chart` `caption_size`, `caption_color`; `equation` `caption_size`.
+  `Quote.portrait_growth`, `Equation.portrait_growth` (class attributes, 1.25).
+- `register_theme_defaults` raises for non-identifier names / malformed hex (was accepted).
+- CLI: `list-themes --sheet` (alias). `vidgen lint` may print `warning: theme contrast: ...`.
+- `list-scenes` / `--json` `type` of `bullets.items`: `list[str | BulletItem]` (was
+  `list[BulletItem]`; a value change within JSON version 1, it is a display string).
+
+Remaining issues (routed in tasklist.md)
+- Step 30: chart titles into `header`, chart labels from size tokens (9:16 `bar_chart` value
+  labels are scaled small to fit narrow slots).
+- Step 32: a code size cap for portrait listings.
+- Step 37: `icon_grid` in 9:16 leaves the lower third empty with few items; `list-icons
+  --sheet` in project colours; lint text rotation.
+- Step 59: `vidgen tts --json`; human `validate` stops at the first variant that does not load.
+- Not routed (cosmetic): `minimal`'s `picture` 9:16 starts with the sun half cropped (the
+  example's Ken Burns focus on a landscape image in a cover crop).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (794 passed, 1 skipped, ~4 min);
+quick: `-m "not slow"` (~1 min) or `-m "not render"` (~20 s). Manual: `vidgen lint
+examples/minimal [--variant vertical|light|contrast|editorial|neutral|pastel|neon]`, `vidgen
+lint examples/custom_scene [--variant vertical]`, `vidgen lint examples/kphi3` (all 0
+findings), `vidgen storyboard ...` likewise.

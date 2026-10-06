@@ -207,6 +207,7 @@ def render(root: Path, **kwargs: Any):
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_stills_at_beat_ends_match_the_video(capture_project: Path) -> None:
     root = capture_project
     build = root / "build" / "final"
@@ -268,6 +269,7 @@ def test_stills_at_beat_ends_match_the_video(capture_project: Path) -> None:
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_n_stills_per_beat(capture_project: Path) -> None:
     root = capture_project
     result = render(root, frames=3, scenes=["m"], preview=True)
@@ -292,6 +294,7 @@ def test_n_stills_per_beat(capture_project: Path) -> None:
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_frames_with_variant_scene_and_cli(capture_project: Path, capsys: pytest.CaptureFixture[str]) -> None:
     root = capture_project
     config = (root / "video.yaml").read_text(encoding="utf-8")
@@ -322,6 +325,7 @@ def test_frames_with_variant_scene_and_cli(capture_project: Path, capsys: pytest
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_frames_json_and_hooks(capture_project: Path, capsys: pytest.CaptureFixture[str]) -> None:
     root = capture_project
     hook = """

@@ -11,6 +11,8 @@ from vidgen.api import *
 class BulletItem(SceneParams):
     """A list item: its text, or ``{text, icon}`` (a plain string is read as ``{text: ...}``)."""
 
+    also_accepts = (str,)
+
     text: str = Field(min_length=1)
     """The item's text."""
     icon: IconName | None = None

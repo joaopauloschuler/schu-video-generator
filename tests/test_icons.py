@@ -241,6 +241,15 @@ def test_search_matches_names_tags_and_categories() -> None:
     assert len(search_icons(icons)) == 200
 
 
+def test_search_ranks_whole_words_before_substrings() -> None:
+    """``ai`` is a tag of ``bot`` and inside ``rain``: the whole word ranks first (Step 22)."""
+    found = [i.name for i in search_icons(builtin_icons(), "ai")]
+    assert found[:2] == ["brain-circuit", "bot"]  # exact alias, then exact tag
+    assert found.index("bot") < found.index("cloud-rain") and found.index("bot") < found.index("mail")
+    art = [i.name for i in search_icons(builtin_icons(), "art")]
+    assert art.index("palette") < art.index("chart-area")  # tag word 'art' before 'ch-art'
+
+
 def test_unknown_icon_suggestions() -> None:
     icons = builtin_icons()
     message = unknown_icon_message("cpus", icons)

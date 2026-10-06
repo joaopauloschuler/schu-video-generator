@@ -206,7 +206,7 @@ def test_list_scenes_json_builtins(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     assert bullets["doc"].startswith("``reveal: per_beat`` (default)")
     fields = {f["name"]: f for f in bullets["params"]}
     items = fields["items"]
-    assert (items["type"], items["required"], items["default"]) == ("list[BulletItem]", True, None)
+    assert (items["type"], items["required"], items["default"]) == ("list[str | BulletItem]", True, None)
     assert items["doc"] == "The list items (at least one): text, or {text, icon}; item i appears at beat i."
     assert [(f["name"], f["type"]) for f in items["nested"][0]["fields"]] == [("text", "str"), ("icon", "icon | None")]
     assert (fields["reveal"]["type"], fields["reveal"]["default"]) == ("'per_beat' | 'all'", "per_beat")
@@ -371,6 +371,7 @@ def render_project_dir(tmp_path: Path) -> Callable[[list[dict[str, Any]]], Path]
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_render_json(render_project_dir: Callable[..., Path], capsys: pytest.CaptureFixture[str]) -> None:
     root = render_project_dir(
         [
@@ -409,6 +410,7 @@ def test_render_json(render_project_dir: Callable[..., Path], capsys: pytest.Cap
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_render_json_failure_details(render_project_dir: Callable[..., Path], capsys: pytest.CaptureFixture[str]) -> None:
     root = render_project_dir(
         [

@@ -220,8 +220,9 @@ def safe_area(margin_x: float = MARGIN_X, margin_y: float = MARGIN_Y) -> Region:
     return frame_region().inset(margin_x, margin_y)
 
 
-def region(name: str, area: Region | None = None, gap: float = GAP) -> Region:
-    """A named region of ``area`` (default: :func:`safe_area`), adapted to the frame's orientation.
+def region(name: str, area: str | Region | None = None, gap: float = GAP) -> Region:
+    """A named region of ``area`` (a :class:`Region` or another region's name; default:
+    :func:`safe_area`), adapted to the frame's orientation, e.g. ``region("left", "body")``.
 
     - ``full``: the whole area.
     - ``header``: a band at the top for a title (16 % of the height; 12 % in portrait).
@@ -232,7 +233,7 @@ def region(name: str, area: Region | None = None, gap: float = GAP) -> Region:
       two-column layout becomes two rows (use ``Region.columns(2)`` for literal halves).
     - ``center``: a centered box (72 % x 72 %; full width x 60 % in portrait).
     """
-    a = area if area is not None else safe_area()
+    a = safe_area() if area is None else region(area) if isinstance(area, str) else area
     o = orientation()
     header_h = a.height * _HEADER[o]
     caption_h = a.height * _CAPTION[o]
@@ -400,13 +401,15 @@ def readable_text(
     never reduced below ``max(min_size, readable_size())``: long text wraps onto more lines
     instead. If it still does not fit the region's height at that size, it is scaled down to
     fit and a warning is logged (``vidgen lint`` then reports ``min_font``). Other keyword
-    arguments (``color``, ``weight``, ``align``, ``highlights``...) go to ``fit_text``. The
+    arguments (``color``, ``weight``, ``align``, ``highlights``, ``font``, ``role``...) go to
+    ``fit_text``. The
     result is not moved: use :func:`place` (``fit="none"``) to position it.
     """
     from vidgen.layout import fit_text_sized
 
     theme = theme or current_theme()
-    floor = readable_size(kwargs.get("font") or theme.font)
+    role = kwargs.get("role")
+    floor = readable_size(kwargs.get("font") or (theme.font_for(role) if role else theme.font))
     if min_size is not None:
         floor = max(floor, float(theme.size(min_size)))
     start = max(float(theme.size(size)), floor)

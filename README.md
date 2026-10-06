@@ -153,6 +153,12 @@ my_video/
   layout regions (`region("header")`, `grid`, `place`, `readable_text`) that adapt to 16:9 and 9:16.
 - [DESIGN.md](DESIGN.md) — architecture and internal contracts.
 
+## Working on vidgen
+
+`pip install -e ".[dev]"`, then `python -m pytest -q` runs every test (a few minutes: many
+tests render tiny videos). Quicker: `python -m pytest -q -m "not slow"` skips the slowest
+render tests, `-m "not render"` skips all rendering (seconds). No test needs network or keys.
+
 ## Troubleshooting
 
 - `ffmpeg not found on PATH` — install it and open a new terminal.

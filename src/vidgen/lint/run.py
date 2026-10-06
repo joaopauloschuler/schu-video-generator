@@ -203,20 +203,22 @@ def _timing_findings(
 
 def _group_similar(findings: list[Finding]) -> list[Finding]:
     """Merge findings of the same rule and severity, first seen at the same still, that share a
-    group (:attr:`Finding.group`: by default the object's parent, e.g. an axis' tick labels):
-    one finding, the other objects listed in ``similar``."""
+    group (:attr:`Finding.group`: by default the object's parent, e.g. an axis' tick labels) or
+    are about the same text (a label repeated in several copies of a component): one finding,
+    the other objects listed in ``similar``."""
     from vidgen.lint.layout_rules import describe
 
     groups: dict[tuple[Any, ...], Finding] = {}
     out: list[Finding] = []
     for finding in findings:
-        if finding.group is None:
-            out.append(finding)
-            continue
-        key = (finding.rule, finding.severity, finding.beat, finding.group)
-        first = groups.get(key)
+        keys = []
+        if finding.group is not None:
+            keys.append((finding.rule, finding.severity, finding.beat, "group", finding.group))
+        if len(finding.objects) == 1 and finding.objects[0].get("text"):
+            keys.append((finding.rule, finding.severity, finding.beat, "text", finding.objects[0]["text"]))
+        first = next((groups[k] for k in keys if k in groups), None)
         if first is None:
-            groups[key] = finding
+            groups.update((k, finding) for k in keys)
             out.append(finding)
             continue
         first.similar.append(finding.objects[0])
@@ -224,7 +226,7 @@ def _group_similar(findings: list[Finding]) -> list[Finding]:
         if first.bbox is not None and finding.bbox is not None:
             a, b = first.bbox, finding.bbox
             first.bbox = (min(a[0], b[0]), min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3]))
-    for finding in groups.values():
+    for finding in {id(f): f for f in groups.values()}.values():
         if finding.similar:
             names = ", ".join(describe(o).split(" ", 1)[1] for o in finding.similar[:3])
             more = "…" if len(finding.similar) > 3 else ""

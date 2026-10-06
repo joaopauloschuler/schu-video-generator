@@ -29,20 +29,32 @@ def resolve_color(color: Any, theme: Theme | None = None) -> Any:
     return color
 
 
-def styled(cls: type[M], theme: Theme, s: str, size: str | float, color: Any, weight: str, **kwargs: Any) -> M:
-    """Build ``cls`` (``Text`` or ``MarkupText``) with the theme's font, size and color tokens."""
-    kwargs.setdefault("font", theme.font)
+def styled(
+    cls: type[M], theme: Theme, s: str, size: str | float, color: Any, weight: str, *, role: str | None = None, **kwargs: Any
+) -> M:
+    """Build ``cls`` (``Text`` or ``MarkupText``) with the theme's font, size and color tokens.
+
+    The font is ``font`` if given, else the theme's family for the font ``role`` (``heading``,
+    ``quote``, ``code``...; :meth:`Theme.font_for`), else the theme font."""
+    if not kwargs.get("font"):
+        kwargs["font"] = theme.font_for(role) if role else theme.font
     return cls(s, font_size=theme.size(size), color=resolve_color(color, theme), weight=weight, **kwargs)
 
 
-def T(s: str, size: str | float = "body", color: Any = "text", weight: str = NORMAL, **kwargs: Any) -> Text:
-    """``Text`` in the current theme: ``T("Hello", "title", "accent", weight=BOLD)``."""
-    return styled(Text, current_theme(), s, size, color, weight, **kwargs)
+def T(
+    s: str, size: str | float = "body", color: Any = "text", weight: str = NORMAL, *, role: str | None = None, **kwargs: Any
+) -> Text:
+    """``Text`` in the current theme: ``T("Hello", "title", "accent", weight=BOLD)``;
+    ``role="heading"`` uses the theme's heading family (``font=`` names a family directly)."""
+    return styled(Text, current_theme(), s, size, color, weight, role=role, **kwargs)
 
 
-def MT(s: str, size: str | float = "body", color: Any = "text", weight: str = NORMAL, **kwargs: Any) -> MarkupText:
-    """``MarkupText`` (Pango markup) in the current theme: ``MT("10<sup>22</sup>", 96)``."""
-    return styled(MarkupText, current_theme(), s, size, color, weight, **kwargs)
+def MT(
+    s: str, size: str | float = "body", color: Any = "text", weight: str = NORMAL, *, role: str | None = None, **kwargs: Any
+) -> MarkupText:
+    """``MarkupText`` (Pango markup) in the current theme: ``MT("10<sup>22</sup>", 96)``;
+    ``role`` as for :func:`T`."""
+    return styled(MarkupText, current_theme(), s, size, color, weight, role=role, **kwargs)
 
 
 def column(n: int, x: float, gap: float, y0: float = 0.0, r: float = 0.08, color: Any = "text") -> VGroup:

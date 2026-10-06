@@ -35,8 +35,8 @@ def decoder_layer(groups: int) -> VGroup:
     """A transformer decoder layer box: Attention and MLP, each with a mini network."""
     box = RoundedRectangle(width=4.4, height=1.05, corner_radius=0.15, stroke_color=resolve_color("dim"),
                            fill_color=resolve_color("surface"), fill_opacity=1)
-    att = T("Attention", 20).move_to(box.get_center() + LEFT * 1.35)
-    mlp = T("MLP", 20).move_to(box.get_center() + RIGHT * 0.75)
+    att = T("Attention", 22).move_to(box.get_center() + LEFT * 1.35)
+    mlp = T("MLP", 22).move_to(box.get_center() + RIGHT * 0.75)
     n1 = mini_net(groups).next_to(att, RIGHT, buff=0.15)
     n2 = mini_net(groups).next_to(mlp, RIGHT, buff=0.15)
     return VGroup(box, att, mlp, n1, n2)
@@ -46,14 +46,14 @@ def loss_panel(
     title: str, values: list[float], names: list[str], colors: list[str], xc: float, best: int
 ) -> tuple[VGroup, VGroup, VGroup]:
     """A bar panel of losses on an axis from 1.0 to 1.7; returns ``(frame, bars, value_labels)``."""
-    ymin, ymax, unit, base = 1.0, 1.7, 6.0, -2.4
+    ymin, ymax, unit, base = 1.0, 1.7, 6.0, -2.2
     dim = resolve_color("dim")
     ax = Line([xc - 2.3, base, 0], [xc - 2.3, base + (ymax - ymin) * unit, 0], color=dim, stroke_width=2)
     floor = Line([xc - 2.3, base, 0], [xc + 2.1, base, 0], color=dim, stroke_width=2)
     ticks = VGroup()
     for v in np.arange(1.0, 1.71, 0.1):
         y = base + (v - ymin) * unit
-        ticks.add(T(f"{v:.1f}", 16, "dim").next_to([xc - 2.3, y, 0], LEFT, buff=0.12))
+        ticks.add(T(f"{v:.1f}", 20, "dim").next_to([xc - 2.3, y, 0], LEFT, buff=0.12))
         ticks.add(DashedLine([xc - 2.3, y, 0], [xc + 2.1, y, 0], color=dim, stroke_width=0.8,
                              stroke_opacity=0.35, dash_length=0.08))
     head = T(title, 28, weight=BOLD).move_to([xc, base + (ymax - ymin) * unit + 0.55, 0])
@@ -65,6 +65,6 @@ def loss_panel(
         bars.add(b)
         vals.add(T(f"{v:.2f}", 24, "highlight" if i == best else "text",
                    weight=BOLD if i == best else NORMAL).next_to(b, UP, buff=0.1))
-        labs.add(T(names[i], 16, c, line_spacing=0.8).next_to([x, base, 0], DOWN, buff=0.15))
+        labs.add(T(names[i], 20, c, line_spacing=0.8).next_to([x, base, 0], DOWN, buff=0.15))
     frame = VGroup(ax, floor, ticks, head, labs)
     return frame, bars, vals

@@ -34,7 +34,7 @@ class GearPair(NarratedScene):
         )
         ratio = p.front.teeth / p.rear.teeth
         header = self.region("header")
-        caption = readable_text(p.caption or f"ratio {ratio:.2f} : 1", header, size="body", color="highlight")
+        caption = readable_text(p.caption or f"ratio {ratio:.2f} : 1", header, size="body", color="highlight", role="heading")
         if p.icon:  # assets/icons/bicycle.svg is a project icon; built-ins: `vidgen list-icons`
             caption = VGroup(icon(p.icon, size="body", color="highlight"), caption).arrange(RIGHT, buff=0.25)
         place(caption, header, fit="none", align="top")

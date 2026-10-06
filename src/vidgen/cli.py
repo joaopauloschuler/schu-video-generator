@@ -336,6 +336,9 @@ def cmd_lint(args: argparse.Namespace) -> CommandResult:
 
     started = time.monotonic()
     project = Project.load(args.project, variant=args.variant)
+    if (not args.rule or "contrast" in args.rule) and project.config.lint.rules.contrast.severity != "off":
+        for message in theme_warnings(project):  # the theme itself, as `vidgen validate` does
+            logging.getLogger("vidgen").warning(message)
     result = lint_project(
         project,
         preview=not args.final,
@@ -511,7 +514,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("list-themes", help="list theme presets (built-in and the project's) and type scales")
     project_arg(p)
-    p.add_argument("--swatches", metavar="PNG", help="also write a swatch sheet of every preset to this PNG file")
+    p.add_argument("--swatches", "--sheet", dest="swatches", metavar="PNG", help="also write a swatch sheet of every preset to this PNG file (--sheet: same, as in list-icons)")
     p.set_defaults(func=cmd_list_themes)
 
     p = sub.add_parser("list-icons", help="list icons (built-in and the project's assets/icons)")

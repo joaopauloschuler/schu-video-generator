@@ -150,6 +150,7 @@ def combined_timings(root: Path, sub: str = "final") -> dict[str, Any]:
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_full_render_outputs(main_project: Path) -> None:
     out = main_project / "out.mp4"
     info = streams(out)
