@@ -7,6 +7,7 @@ Used by ``vidgen list-scenes`` for both the human listing (:func:`describe_param
 
 from __future__ import annotations
 
+import difflib
 import inspect
 import sys
 import types
@@ -14,7 +15,7 @@ import typing
 from collections.abc import Sequence
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import AliasChoices, BaseModel
 from pydantic_core import to_jsonable_python
 
 from vidgen.registry import ActionType, SceneType
@@ -56,6 +57,56 @@ def nested_models(annotation: Any) -> list[type[BaseModel]]:
     return found
 
 
+#: How many known names an "unknown parameter" message lists.
+_SHOWN_KEYS = 16
+
+
+def _model_at(model: type[BaseModel], path: Sequence[str | int]) -> type[BaseModel] | None:
+    """The model whose fields the error location ``path`` (below ``model``) refers to: list
+    indexes and pydantic's union-member tags are skipped."""
+    current = [model]
+    for part in path:
+        if isinstance(part, int):
+            continue
+        fields = [f for m in current for n, f in m.model_fields.items() if part in (n, f.alias)]
+        if fields:
+            current = [m for f in fields for m in nested_models(f.annotation)]
+        else:   # a union member's tag ("BulletItem", "function-after[...]"): keep the models it names
+            current = [m for m in current if m.__name__ in part] or current
+        if not current:
+            return None
+    return current[0]
+
+
+def unknown_key_message(model: type[BaseModel], loc: Sequence[str | int], noun: str = "parameter") -> str | None:
+    """A better message for an unknown key at ``loc`` (pydantic's "Extra inputs are not
+    permitted"): did-you-mean, the known names, or that it is another name of a field also
+    given. ``None`` when the location cannot be resolved."""
+    owner = _model_at(model, loc[:-1])
+    key = loc[-1] if loc else None
+    if owner is None or not isinstance(key, str):
+        return None
+    names = [f.alias or n for n, f in owner.model_fields.items()]
+    synonyms = {other: f.alias or n for n, f in owner.model_fields.items() for other in other_names(f)}
+    if key in synonyms:
+        return f"'{key}' is another name for '{synonyms[key]}', which is given too; keep one"
+    message = f"unknown {noun} '{key}'"
+    close = difflib.get_close_matches(key, names + list(synonyms), n=3)
+    if close:
+        message += f"; did you mean {' or '.join(repr(c) for c in close)}?"
+    shown = ", ".join(names[:_SHOWN_KEYS]) + (f", ... ({len(names) - _SHOWN_KEYS} more)" if len(names) > _SHOWN_KEYS else "")
+    return message + f" (known: {shown})"
+
+
+def other_names(field: Any) -> list[str]:
+    """The names a params field also accepts besides its own (``AliasChoices`` after the first,
+    e.g. ``title`` for ``heading``; see ``SceneParams.header_synonyms``)."""
+    alias = getattr(field, "validation_alias", None)
+    if isinstance(alias, AliasChoices):
+        return [c for c in alias.choices[1:] if isinstance(c, str)]
+    return []
+
+
 def describe_params(model: type[BaseModel] | None, indent: str = "", _seen: tuple[type, ...] = ()) -> list[str]:
     """``name: type [= default]`` for each field of a ``Params`` model (empty for plain dicts);
     the fields of nested models follow their field, indented. A field with an alias (``from``)
@@ -68,7 +119,8 @@ def describe_params(model: type[BaseModel] | None, indent: str = "", _seen: tupl
         if not field.is_required():
             default = field.get_default(call_default_factory=True)
             line += f" = {default!r}"
-        lines.append(line)
+        others = other_names(field)
+        lines.append(line + (f"   (also: {', '.join(others)})" if others else ""))
         for nested in nested_models(field.annotation):
             if nested not in _seen:
                 lines += describe_params(nested, indent + "    ", (*_seen, model, nested))
@@ -106,6 +158,7 @@ def params_json(model: type[BaseModel], _seen: tuple[type, ...] = ()) -> list[di
                 "default": None if required else _jsonable(field.get_default(call_default_factory=True)),
                 "doc": field.description,
                 "nested": nested,
+                "aliases": other_names(field),   # other names it accepts (title for heading...)
             }
         )
     return fields

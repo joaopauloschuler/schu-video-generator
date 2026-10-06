@@ -14,13 +14,16 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from PIL import Image, ImageDraw
 
 from vidgen.errors import VidgenError
 from vidgen.icons import CATEGORIES, IconInfo, builtin_sources, categories
 from vidgen.sheets import BACKGROUND, MUTED, PAGE_RATIO, TEXT, fit_line, load_font
+
+if TYPE_CHECKING:
+    from vidgen.theme import Theme
 
 #: Sheet width, columns and cell height in pixels; icon box size inside a cell.
 SHEET_WIDTH = 1280
@@ -70,7 +73,18 @@ def categories_json(icons: Sequence[IconInfo]) -> list[dict[str, Any]]:
     ]
 
 
-def _draw_icons(icons: Sequence[IconInfo], columns: int, cell_w: float, rows: int) -> Image.Image:
+class SheetColors:
+    """Colours of an icon sheet: the default black on white, or a theme's (its background, the
+    icons in ``primary``, names in ``text``, categories in ``dim``)."""
+
+    def __init__(self, theme: Theme | None = None) -> None:
+        self.background: Any = theme.background if theme is not None else "#%02X%02X%02X" % BACKGROUND
+        self.icon = theme.color("primary") if theme is not None else ICON_COLOR
+        self.text: Any = theme.color("text") if theme is not None else TEXT
+        self.muted: Any = theme.color("dim") if theme is not None else MUTED
+
+
+def _draw_icons(icons: Sequence[IconInfo], columns: int, cell_w: float, rows: int, colors: SheetColors) -> Image.Image:
     """The icons drawn by Manim's camera on a ``columns x rows`` grid of ``cell_w x CELL_HEIGHT``
     cells (icon in the upper part of each cell)."""
     from manim import Camera, tempconfig
@@ -84,7 +98,7 @@ def _draw_icons(icons: Sequence[IconInfo], columns: int, cell_w: float, rows: in
         "pixel_height": height,
         "frame_width": width / unit,
         "frame_height": height / unit,
-        "background_color": "#%02X%02X%02X" % BACKGROUND,
+        "background_color": colors.background,
     }
     with tempconfig(settings):
         camera = Camera()
@@ -93,15 +107,16 @@ def _draw_icons(icons: Sequence[IconInfo], columns: int, cell_w: float, rows: in
             row, col = divmod(i, columns)
             x = (col + 0.5) * cell_w / unit - width / unit / 2
             y = height / unit / 2 - (row * CELL_HEIGHT + 14 + ICON_PX / 2) / unit
-            mobs.append(build_icon(info, 1.0, ICON_COLOR).move_to([x, y, 0]))
+            mobs.append(build_icon(info, 1.0, colors.icon).move_to([x, y, 0]))
         camera.capture_mobjects(mobs)
         return camera.get_image().convert("RGB")
 
 
-def render_sheets(icons: Sequence[IconInfo], path: Path, title: str) -> list[Path]:
+def render_sheets(icons: Sequence[IconInfo], path: Path, title: str, theme: Theme | None = None) -> list[Path]:
     """Write labelled contact sheets of ``icons`` (name, then category) to ``path`` and, when
     they need more than one page, ``<stem>-2.png``... (older extra pages are removed); returns
-    the files written."""
+    the files written. With ``theme``, in its colours (see :class:`SheetColors`)."""
+    colors = SheetColors(theme)
     if not icons:
         raise VidgenError("no icons to draw (check --search/--category)")
     cell_w = SHEET_WIDTH / SHEET_COLUMNS
@@ -112,19 +127,19 @@ def render_sheets(icons: Sequence[IconInfo], path: Path, title: str) -> list[Pat
     path.parent.mkdir(parents=True, exist_ok=True)
     for number, page_icons in enumerate(pages, start=1):
         rows = math.ceil(len(page_icons) / SHEET_COLUMNS)
-        image = Image.new("RGB", (SHEET_WIDTH, HEADER_HEIGHT + rows * CELL_HEIGHT), BACKGROUND)
-        image.paste(_draw_icons(page_icons, SHEET_COLUMNS, cell_w, rows), (0, HEADER_HEIGHT))
+        image = Image.new("RGB", (SHEET_WIDTH, HEADER_HEIGHT + rows * CELL_HEIGHT), colors.background)
+        image.paste(_draw_icons(page_icons, SHEET_COLUMNS, cell_w, rows, colors), (0, HEADER_HEIGHT))
         draw = ImageDraw.Draw(image)
         heading = title if len(pages) == 1 else f"{title} (page {number}/{len(pages)})"
-        draw.text((20, 18), fit_line(title_font, heading, SHEET_WIDTH - 40), font=title_font, fill=TEXT)
+        draw.text((20, 18), fit_line(title_font, heading, SHEET_WIDTH - 40), font=title_font, fill=colors.text)
         for i, info in enumerate(page_icons):
             row, col = divmod(i, SHEET_COLUMNS)
             cx = (col + 0.5) * cell_w
             top = HEADER_HEIGHT + row * CELL_HEIGHT + 14 + ICON_PX + 12
             label = fit_line(name_font, info.name, cell_w - 10)
-            draw.text((cx, top), label, font=name_font, fill=TEXT, anchor="ma")
+            draw.text((cx, top), label, font=name_font, fill=colors.text, anchor="ma")
             note = info.category if info.origin == "builtin" else f"{info.category} · project"
-            draw.text((cx, top + 24), fit_line(small_font, note, cell_w - 10), font=small_font, fill=MUTED, anchor="ma")
+            draw.text((cx, top + 24), fit_line(small_font, note, cell_w - 10), font=small_font, fill=colors.muted, anchor="ma")
         target = path if number == 1 else path.with_name(f"{path.stem}-{number}{path.suffix or '.png'}")
         image.save(target, format="PNG")
         written.append(target)

@@ -106,7 +106,9 @@ class Comparison(NarratedScene):
         verdict_size: ThemeSize = "body"
         """Verdict size."""
 
-    #: In a vertical frame the scene heading grows by this factor (as in ``bullets``).
+    #: In a vertical frame the scene heading, the columns and the verdict grow by this factor
+    #: when they fit (as in ``bullets``): the stacked cards would otherwise leave the tall frame
+    #: half empty.
     portrait_growth = 1.3
     #: Space between columns (Manim units); with a ``vs`` badge it is wider.
     column_gap = 0.45
@@ -140,7 +142,8 @@ class Comparison(NarratedScene):
         verdict = None
         if p.verdict:
             width = body.width if self.is_portrait else min(body.width * 0.85, 11.5)
-            verdict = fit_text(p.verdict, width, body.height * 0.2, size=p.verdict_size, color=p.verdict_color, weight=BOLD)
+            size = float(self.theme.size(p.verdict_size)) * (self.portrait_growth if self.is_portrait else 1.0)
+            verdict = fit_text(p.verdict, width, body.height * 0.2, size=size, color=p.verdict_color, weight=BOLD)
             place(verdict, body, fit="none", align="bottom")
             body = body.above(verdict, gap=0.45)
         gap = self.vs_gap if p.vs else self.column_gap
@@ -151,15 +154,16 @@ class Comparison(NarratedScene):
         self._steps(columns, heading, verdict, badges)
 
     def _columns(self, slots: list[Region]) -> list[dict[str, Any]]:
-        """The content of every column at one common text size: the largest up to ``size`` (not
-        below the readable minimum) at which each fits its slot; scaled down as a whole (with a
+        """The content of every column at one common text size: the largest up to ``size`` (x
+        :attr:`portrait_growth` in a vertical frame; not below the readable minimum) at which
+        each fits its slot; scaled down as a whole (with a
         warning) when even that is too tall."""
         p = self.params
         wanted = float(self.theme.size(p.size))
         floor = min(wanted, readable_size())
         inner_w = min(s.width for s in slots) - 2 * self.pad_x
         room = min(s.height for s in slots) - 2 * self.pad_y
-        size = wanted
+        size = wanted * (self.portrait_growth if self.is_portrait else 1.0)
         while True:
             built = self._contents(inner_w, size, wanted)
             tallest = max(-c["content"].get_bottom()[1] for c in built)
@@ -167,7 +171,7 @@ class Comparison(NarratedScene):
                 break
             size = max(floor, size * min(0.95, (room / tallest) ** 0.5))
         if tallest > room:
-            log.warning("scene '%s': the comparison does not fit this frame at the readable size; shorten or remove points", self.spec.id)
+            log.warning("scene '%s': the comparison's %d columns do not fit this frame at the readable size; shorten or remove points", self.spec.id, len(p.columns))
             for c in built:  # about the top-left corner, which _arrange puts in the card's
                 c["content"].scale(room / tallest, about_point=ORIGIN)
             tallest = room

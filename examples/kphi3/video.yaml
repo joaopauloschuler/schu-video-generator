@@ -79,9 +79,6 @@ scenes:
 
   - id: equivalence
     type: kphi_equivalence
-    lint_ignore:
-      # the rotated label is ~13 px tall; lint measures rotated glyphs sideways (axis-aligned boxes)
-      - {rule: min_font, object: "H = length"}
     beats:
       - id: s3_b1
         text: "In computer vision, a pointwise, or one-by-one, convolution looks at one pixel at a time, and mixes its channels with a learned weight matrix."

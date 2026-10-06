@@ -16,7 +16,8 @@ without visible parts is not recorded.
 
 ``font_px`` (text only) is the 75th percentile of the heights, in output pixels, of the
 object's visible glyphs: about the cap height (≈ 0.7 em) for mixed-case text, the x-height for
-text in lowercase letters without ascenders.
+text in lowercase letters without ascenders. A rotated line of text (an axis title turned 90°)
+is measured across its direction; ``rotation`` gives the angle in degrees (0 when level).
 """
 
 from __future__ import annotations
@@ -79,6 +80,7 @@ class _Part:
     stroke: tuple[str, float, float] | None  # colour, opacity, width in px
     z: float
     order: int
+    xy: np.ndarray | None = None  # sampled outline points in pixels
 
     @property
     def area(self) -> float:
@@ -239,11 +241,13 @@ class LayoutRecorder:
         item = self._base(mob, path, name, kind, parts)
         colors = Counter(p.fill[0] if p.fill is not None else p.stroke[0] for p in parts if p.fill or p.stroke)
         ranked = [c for c, _ in colors.most_common()]
-        heights = [p.shape_height for p in parts if p.shape_height > 0]
+        text = _text_of(mob, kind)
+        rotation, heights = _glyph_heights(parts, kind != "math" and "\n" not in text.strip())
         item.update(
             {
-                "text": _text_of(mob, kind),
+                "text": text,
                 "font_px": _r(np.percentile(heights, FONT_PERCENTILE)) if heights else 0.0,
+                "rotation": rotation,
                 "color": ranked[0] if ranked else None,
                 "colors": ranked,
                 "backdrop": _backdrop(walk.pixels, item["bbox"], ranked),
@@ -345,7 +349,36 @@ def _measure(walk: _Walk, mob: Mobject) -> _Part | None:
         stroke=stroke,
         z=float(mob.z_index),
         order=walk.order.get(id(mob), -1),
+        xy=xy,
     )
+
+
+#: Smallest angle (degrees) at which a line of text counts as rotated; and how much longer than
+#: wide the spread of its glyphs must be to tell its direction.
+_MIN_ROTATION = 8.0
+_LINE_ASPECT = 3.0
+
+
+def _glyph_heights(parts: list[_Part], one_line: bool) -> tuple[float, list[float]]:
+    """The rotation of a line of text (degrees, counter-clockwise; 0 when level, or when it
+    cannot be told: several lines, fewer than 4 glyphs) and its glyphs' heights measured across
+    that direction, so a rotated label is not measured sideways."""
+    level = [p.shape_height for p in parts if p.shape_height > 0]
+    glyphs = [p for p in parts if p.xy is not None and len(p.xy)]
+    if not one_line or len(glyphs) < 4:
+        return 0.0, level
+    centers = np.array([[(p.box[0] + p.box[2]) / 2, (p.box[1] + p.box[3]) / 2] for p in glyphs])
+    values, vectors = np.linalg.eigh(np.cov(centers.T))
+    if values[1] <= 0 or values[1] < _LINE_ASPECT**2 * max(values[0], 1e-9):
+        return 0.0, level
+    dx, dy = vectors[:, 1]
+    angle = float(np.degrees(np.arctan2(-dy, dx)))   # pixel y runs down
+    angle = (angle + 90.0) % 180.0 - 90.0            # a direction, not an arrow
+    if abs(angle) < _MIN_ROTATION:
+        return 0.0, level
+    normal = np.array([-dy, dx])
+    heights = [float(np.ptp(p.xy @ normal)) for p in glyphs]
+    return round(angle, 1), [h for h in heights if h > 0]
 
 
 def _backdrop(pixels: np.ndarray, bbox: list[float], text_colors: list[str]) -> str | None:

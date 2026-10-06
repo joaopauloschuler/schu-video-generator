@@ -11,7 +11,7 @@ from collections.abc import Callable, Sequence
 from typing import Any, TypeVar
 
 import numpy as np
-from manim import NORMAL, Dot, Line, MarkupText, Mobject, Text, ValueTracker, VGroup, always_redraw
+from manim import NORMAL, Animation, Dot, Group, Line, MarkupText, Mobject, Text, ValueTracker, VGroup, VMobject, always_redraw
 
 from vidgen.fonts import register_bundled_fonts
 from vidgen.runtime import current_theme
@@ -175,3 +175,58 @@ def counter(
         return m
 
     return always_redraw(make)
+
+
+class Fade(Animation):
+    """``FadeIn`` / ``FadeOut`` (``out=True``) of vector mobjects without copying them: only
+    their colour arrays are animated (and the position, by ``shift``). Manim's fades copy the
+    whole mobject twice when they begin, which takes seconds for big groups (a long code
+    listing: thousands of glyphs). A fade in adds the mobject to the scene; a fade out removes it
+    and leaves its colours as they were (opacity included) for a later entrance."""
+
+    def __init__(self, mobject: Mobject, *, out: bool = False, shift: Any = None, **kwargs: Any) -> None:
+        kwargs.setdefault("introducer", not out)
+        kwargs.setdefault("remover", out)
+        super().__init__(mobject, **kwargs)
+        self.out = out
+        self.offset = np.zeros(3) if shift is None else np.asarray(shift, dtype=float)
+        self._full: list[tuple[VMobject, np.ndarray, np.ndarray]] = []
+        self._moved = 0.0
+
+    def create_starting_mobject(self) -> Mobject:
+        """No copy (the base class copies the mobject; nothing here reads it)."""
+        return Mobject()
+
+    def begin(self) -> None:
+        """Remember the full colours (and, fading in, start transparent and shifted back)."""
+        self._full = [(m, m.fill_rgbas.copy(), m.stroke_rgbas.copy()) for m in self.mobject.get_family() if isinstance(m, VMobject)]
+        if not self.out:
+            self.mobject.shift(-self.offset)
+        super().begin()
+
+    def interpolate_mobject(self, alpha: float) -> None:
+        """Opacity ``a`` (or ``1 - a``) of the full look, moved ``a`` of ``shift``."""
+        a = self.rate_func(alpha)
+        seen = 1.0 - a if self.out else a
+        for m, fill, stroke in self._full:
+            m.fill_rgbas = np.concatenate([fill[:, :3], fill[:, 3:] * seen], axis=1) if len(fill) else fill
+            m.stroke_rgbas = np.concatenate([stroke[:, :3], stroke[:, 3:] * seen], axis=1) if len(stroke) else stroke
+        self.mobject.shift(self.offset * (a - self._moved))
+        self._moved = a
+
+    def clean_up_from_scene(self, scene: Any) -> None:
+        """Remove a faded-out mobject and give it back its colours."""
+        super().clean_up_from_scene(scene)
+        if self.out:
+            for m, fill, stroke in self._full:
+                m.fill_rgbas, m.stroke_rgbas = fill, stroke
+
+
+def fade_out(mobject: Mobject, **kwargs: Any) -> Animation:
+    """A ``FadeOut``: :class:`Fade` for vector mobjects (no copies), Manim's for others
+    (images, clips)."""
+    from manim import FadeOut
+
+    if all(isinstance(m, VMobject) or type(m) in (Group, Mobject) for m in mobject.get_family()):
+        return Fade(mobject, out=True, **kwargs)
+    return FadeOut(mobject, **kwargs)

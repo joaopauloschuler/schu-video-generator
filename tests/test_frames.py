@@ -6,7 +6,6 @@ Rendering tests use 160x90 @ 10 fps (preview 96x54 @ 5 fps) and a few small scen
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any

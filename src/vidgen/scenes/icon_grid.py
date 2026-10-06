@@ -137,7 +137,8 @@ class IconGrid(NarratedScene):
     #: Opacity of the other items when one is highlighted (0.55 keeps a ``dim`` sublabel above
     #: lint's 2:1 for de-emphasised text on every built-in preset; 0.45 did not on light ones).
     dimmed_opacity = 0.55
-    #: In a vertical frame the heading grows by this factor (as in ``bullets``).
+    #: In a vertical frame the heading and the labels grow by this factor (labels only while
+    #: they fit; as in ``bullets``).
     portrait_growth = 1.3
 
     def construct(self) -> None:
@@ -204,12 +205,14 @@ class IconGrid(NarratedScene):
     # ----- layout --------------------------------------------------------------------------------
 
     def _labels(self, width: float, room: float) -> tuple[list[Mobject], list[Mobject | None], float, float, float]:
-        """Labels and sublabels wrapped to ``width``, all at one size, reduced (not below the
+        """Labels and sublabels wrapped to ``width``, all at one size (x :attr:`portrait_growth` in
+        a vertical frame), reduced (not below the
         readable size) until the tallest label block takes at most ``room`` and every word fits
         the width; returns them, that block height and the label and sublabel font sizes."""
         p = self.params
-        size = float(self.theme.size(p.size))
-        sub_size = float(self.theme.size(p.sublabel_size))
+        grow = self.portrait_growth if self.is_portrait else 1.0   # the tall frame has room: as bullets
+        size = float(self.theme.size(p.size)) * grow
+        sub_size = float(self.theme.size(p.sublabel_size)) * grow
         floor = readable_size()
         while True:
             labels = [fit_text(item.label, width, size=size, color=p.color, weight=BOLD) for item in p.items]

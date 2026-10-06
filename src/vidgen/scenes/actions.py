@@ -40,6 +40,10 @@ class Repaint(Animation):
         self._end: list[tuple[np.ndarray, np.ndarray]] = []
         self._images: list[tuple[Mobject, np.ndarray, np.ndarray]] = []
 
+    def create_starting_mobject(self) -> Mobject:
+        """No copy (the base class copies the mobject; colours are read in :meth:`begin`)."""
+        return Mobject()
+
     def begin(self) -> None:
         """Read the start colours and compute the end colours."""
         family = self.mobject.get_family()
@@ -86,29 +90,35 @@ class _Memory:
         self.saved = {id(m): (m.fill_rgbas.copy(), m.stroke_rgbas.copy()) for m in family if isinstance(m, VMobject)}
         self.pixels = {id(m): m.pixel_array.astype(float) for m in family if _is_image(m)}
 
-    def restore(self, rgb: bool, alpha: Literal["saved", "lower", "keep"]) -> list[Animation]:
-        """Animations putting back the saved colours (``rgb``) and opacity: ``saved`` as it was,
-        ``lower`` the lower of saved and current (undo a raise, keep later dimming), ``keep`` as
-        it is now."""
+    def restore(
+        self, rgb: bool | set[int], alpha: Literal["saved", "lower", "keep"], cap: Callable[[Mobject], tuple[float, float] | None] | None = None
+    ) -> list[Animation]:
+        """Animations putting back the saved colours (``rgb``: all, or the members with these
+        ids) and opacity: ``saved`` as it was, ``lower`` the lower of saved and current (undo a
+        raise, keep later dimming), ``keep`` as it is now. ``cap(member)`` may give a highest
+        ``(fill, stroke)`` opacity to keep (a scene's own dimming since)."""
 
-        def mix(old: np.ndarray, new: np.ndarray) -> np.ndarray:
+        def mix(m: Mobject, old: np.ndarray, new: np.ndarray, which: int) -> np.ndarray:
             old = _fit(old, new)
-            if rgb:
+            if rgb is True or (rgb and id(m) in rgb):
                 new[..., :3] = old[..., :3]
             if alpha == "saved":
                 new[..., 3] = old[..., 3]
             elif alpha == "lower":
                 new[..., 3] = np.minimum(new[..., 3], old[..., 3])
+            limit = cap(m) if cap is not None else None
+            if limit is not None:
+                new[..., 3] = np.minimum(new[..., 3], limit[which] * (255 if new.ndim == 3 else 1))
             return new
 
         def paint(m: VMobject, fill: np.ndarray, stroke: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
             if id(m) in self.saved:
                 old_fill, old_stroke = self.saved[id(m)]
-                return mix(old_fill, fill), mix(old_stroke, stroke)
+                return mix(m, old_fill, fill, 0), mix(m, old_stroke, stroke, 1)
             return fill, stroke
 
         def paint_image(m: Mobject, pixels: np.ndarray) -> np.ndarray:
-            return mix(self.pixels[id(m)], pixels) if id(m) in self.pixels else pixels
+            return mix(m, self.pixels[id(m)], pixels, 0) if id(m) in self.pixels else pixels
 
         return [Repaint(part, paint, paint_image) for part in self.parts]
 
@@ -131,15 +141,59 @@ class Reveal(Action):
         return [anim for target in targets for anim in scene.entrance(target)]
 
 
-def dim_to(target: Target, part: Mobject, factor: float, **kwargs: Any) -> Animation:
+#: Opacity (of its full opacity) of text on a dimmed filled shape: it is recoloured for the
+#: dimmed shape, so it may stay stronger than the shape and still look dimmed.
+TEXT_ON_FILL_DIM = 0.7
+
+
+def _fill_of(shape: Mobject) -> tuple[str, float] | None:
+    """The fill colour (hex) and opacity of ``shape``, or ``None`` when it has no fill."""
+    if not isinstance(shape, VMobject) or not len(shape.fill_rgbas):
+        return None
+    opacity = float(np.max(shape.fill_rgbas[:, 3]))
+    return (rgb_to_hex(shape.fill_rgbas[0, :3]), opacity) if opacity > 0.05 else None
+
+
+def _inks(target: Target, part: Mobject, look: Callable[[Mobject, str, float], str]) -> dict[int, np.ndarray]:
+    """For the text of ``target``'s ``on_fill`` pairs inside ``part``: the colour that reads on
+    its shape's new look (``look(shape, fill_hex, fill_opacity)`` -> the colour the shape will
+    show), by member id."""
+    family = {id(m) for m in part.get_family()}
+    inks: dict[int, np.ndarray] = {}
+    for text, shape in target.on_fill:
+        fill = _fill_of(shape)
+        if fill is None or not any(id(m) in family for m in text.get_family()):
+            continue
+        rgb = np.array(ManimColor(text_color_on(look(shape, *fill))).to_rgb())
+        inks.update({id(m): rgb for m in text.get_family()})
+    return inks
+
+
+def dim_to(target: Target, part: Mobject, factor: float, *, own: bool = True, **kwargs: Any) -> Animation:
     """Fade ``part`` (of ``target``) to at most ``factor`` x the target's full opacity; parts
-    already that dim stay as they are (dimming never compounds). Used by ``dim`` and by scenes
-    that dim on their own (``bullets`` ``dim_previous``)."""
+    already that dim stay as they are (dimming never compounds). Text on a filled shape of the
+    target (``Target.on_fill``) is recoloured for the dimmed shape instead and kept at
+    :data:`TEXT_ON_FILL_DIM`. Used by the ``dim`` action (``own=False``) and by scenes that dim
+    on their own (``bullets`` ``dim_previous``), whose dimming is recorded on the target
+    (``Target.scene_dim``) so that undoing a ``dim`` action keeps it."""
+    if own:
+        target.scene_dim = factor if target.scene_dim is None else min(target.scene_dim, factor)
+    background = current_theme().background
+
+    def dimmed(shape: Mobject, fill: str, opacity: float) -> str:
+        return mix_colors(fill, background, min(opacity, factor * target.rest_opacity(shape)[0]))
+
+    inks = _inks(target, part, dimmed)
 
     def paint(m: VMobject, fill: np.ndarray, stroke: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         full_fill, full_stroke = target.rest_opacity(m)
-        _scale_alpha(fill[:, 3], full_fill * factor)
-        _scale_alpha(stroke[:, 3], full_stroke * factor)
+        limit = factor
+        if id(m) in inks:
+            fill[:, :3] = inks[id(m)]
+            stroke[:, :3] = inks[id(m)]
+            limit = max(factor, TEXT_ON_FILL_DIM)
+        _scale_alpha(fill[:, 3], full_fill * limit)
+        _scale_alpha(stroke[:, 3], full_stroke * limit)
         return fill, stroke
 
     def paint_image(m: Mobject, pixels: np.ndarray) -> np.ndarray:
@@ -162,14 +216,27 @@ class Dim(Action):
     reversible = True
 
     def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
-        """Lower the alpha of every part on screen to at most ``opacity`` x its full alpha."""
+        """Lower the alpha of every part on screen to at most ``opacity`` x its full alpha (text
+        on a filled shape is recoloured for the dimmed shape instead)."""
         pairs = _parts(scene, targets)
         self.memory = _Memory([part for _, part in pairs])
-        return [dim_to(target, part, self.options.opacity) for target, part in pairs]
+        self.inked = {id(m) for t in targets for text, _ in t.on_fill for m in text.get_family()}
+        return [dim_to(target, part, self.options.opacity, own=False) for target, part in pairs]
 
     def revert(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
-        """Restore the opacities from before (colours keep what happened since)."""
-        return self.memory.restore(rgb=False, alpha="saved")
+        """Restore the opacities from before (and the colours of recoloured text; other colours
+        keep what happened since). Dimming the scene did meanwhile (``bullets``
+        ``dim_previous``, a highlight step) stays."""
+        owners = {id(m): t for t in targets for m in t.mobject.get_family()}
+
+        def cap(m: Mobject) -> tuple[float, float] | None:
+            t = owners.get(id(m))
+            if t is None or t.scene_dim is None:
+                return None
+            fill, stroke = t.rest_opacity(m)
+            return fill * t.scene_dim, stroke * t.scene_dim
+
+        return self.memory.restore(rgb=self.inked, alpha="saved", cap=cap)
 
 
 HighlightStyle = Literal["color", "box", "underline", "fill", "flash"]
@@ -215,20 +282,31 @@ class Highlight(Action):
         color = scene.theme.color(self.options.color)
         pairs = _parts(scene, targets)
         self.memory = _Memory([part for _, part in pairs])
+        self.inked: set[int] = set()
         self.decorations: list[Mobject] = []
         anims: list[Animation] = []
         if "color" in styles or "flash" in styles:
             rate = there_and_back if "flash" in styles else smooth
-            anims += [self._repaint(target, part, color, undim="color" in styles, rate=rate) for target, part in pairs]
+            # text on a filled shape takes the colour that reads on the recoloured shape
+            for target, part in pairs:
+                inks = _inks(target, part, lambda shape, fill, opacity: mix_colors(color, scene.theme.background, opacity))
+                anims.append(self._repaint(target, part, color, undim="color" in styles, rate=rate, inks=inks))
+        elif "fill" in styles:
+            # the plate tints the shapes under text: recolour that text for the tinted shape
+            for target, part in pairs:
+                inks = _inks(target, part, lambda shape, fill, opacity: mix_colors(color, fill, self.fill_opacity))
+                if inks:
+                    self.inked |= set(inks)
+                    anims.append(Repaint(part, _ink_paint(inks)))
         for target in targets:
+            around = target.outline if target.outline is not None else target.mobject
             if "box" in styles:
-                around = target.outline if target.outline is not None else target.mobject
                 box = SurroundingRectangle(around, color=color, buff=self.box_buff, corner_radius=0.1, stroke_width=self.stroke_width)
-                self.decorations.append(box)
+                self.decorations.append(_follow(scene, box, around))
                 anims.append(Create(box))
             if "underline" in styles:
                 line = Underline(target.mobject, color=color, buff=self.underline_buff, stroke_width=self.stroke_width)
-                self.decorations.append(line)
+                self.decorations.append(_follow(scene, line, target.mobject))
                 anims.append(Create(line))
             if "fill" in styles:
                 anims.append(self._plate(scene, target, [part for t, part in pairs if t is target], color))
@@ -247,15 +325,21 @@ class Highlight(Action):
         # (its backdrop would hide the plate; the plate is faint, so text under it stays readable)
         scene.mobjects.insert(min(tops, default=len(scene.mobjects)) if whole else max(tops, default=len(scene.mobjects) - 1) + 1, plate)
         self.decorations.append(plate)
-        return Transform(plate, plate.copy().set_fill(color, opacity=self.fill_opacity))
+        grown = plate.copy().set_fill(color, opacity=self.fill_opacity)
+        _follow(scene, plate, around, fill=self.fill_opacity)
+        return Transform(plate, grown)
 
-    def _repaint(self, target: Target, part: Mobject, color: str, undim: bool, rate: Callable[[float], float]) -> Animation:
+    def _repaint(
+        self, target: Target, part: Mobject, color: str, undim: bool, rate: Callable[[float], float], inks: dict[int, np.ndarray] | None = None
+    ) -> Animation:
         rgb = np.array(ManimColor(color).to_rgb())
         tint = self.image_tint
+        inks = inks or {}
 
         def paint(m: VMobject, fill: np.ndarray, stroke: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-            fill[:, :3] = rgb
-            stroke[:, :3] = rgb
+            ink = inks.get(id(m), rgb)
+            fill[:, :3] = ink
+            stroke[:, :3] = ink
             if undim:
                 full_fill, full_stroke = target.rest_opacity(m)
                 _scale_alpha(fill[:, 3], full_fill, raise_to=True)
@@ -273,8 +357,57 @@ class Highlight(Action):
     def revert(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
         """Restore the colours and the opacity a ``color`` highlight raised (dimming applied
         since stays), and remove the decorations."""
-        anims = self.memory.restore(rgb=True, alpha="lower") if "color" in self._styles() else []
+        styles = self._styles()
+        anims = self.memory.restore(rgb=True, alpha="lower") if "color" in styles else []
+        if self.inked and "color" not in styles:
+            anims += self.memory.restore(rgb=self.inked, alpha="keep")
+        for d in self.decorations:
+            d.clear_updaters()
         return anims + [FadeOut(d) for d in self.decorations if d in scene.mobjects]
+
+
+def _ink_paint(inks: dict[int, np.ndarray]) -> Paint:
+    """A ``Repaint`` function giving the members in ``inks`` their colour (opacity unchanged)."""
+
+    def paint(m: VMobject, fill: np.ndarray, stroke: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        if id(m) in inks:
+            fill[:, :3] = inks[id(m)]
+            stroke[:, :3] = inks[id(m)]
+        return fill, stroke
+
+    return paint
+
+
+def _alpha(m: Mobject) -> float:
+    """Largest fill / stroke opacity in ``m``'s family (0 when nothing shows)."""
+    best = 0.0
+    for member in m.get_family():
+        if isinstance(member, VMobject):
+            for rgbas in (member.fill_rgbas, member.stroke_rgbas):
+                if len(rgbas):
+                    best = max(best, float(np.max(rgbas[:, 3])))
+    return best
+
+
+def _follow(scene: NarratedScene, decoration: VMobject, anchor: Mobject, fill: float | None = None) -> VMobject:
+    """Keep ``decoration`` (a highlight box, underline or plate) with ``anchor`` when the scene
+    moves it later (a code listing scrolling, a pie slice pulled out), fading it while the
+    anchor fades and hiding it while the anchor is off screen (rows scrolled out of a window).
+    ``fill`` is its fill opacity once drawn (default: as now). Waits stay frozen frames."""
+    offset = decoration.get_center() - anchor.get_center()
+    full = _alpha(anchor)
+    look = (decoration.get_stroke_opacity(), decoration.get_fill_opacity() if fill is None else fill)
+    # a guide shape the scene never draws (a table cell's outline): follow it, never fade
+    guide = full <= 0.01 or not scene.on_screen_parts(anchor)
+
+    def update(m: Mobject) -> None:
+        m.move_to(anchor.get_center() + offset)
+        share = 1.0 if guide else (min(1.0, _alpha(anchor) / full) if scene.on_screen_parts(anchor) else 0.0)
+        m.set_stroke(opacity=look[0] * share)
+        m.set_fill(opacity=look[1] * share)
+
+    decoration.add_updater(update)
+    return decoration
 
 
 @action("zoom")

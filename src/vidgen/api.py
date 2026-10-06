@@ -60,7 +60,7 @@ from vidgen.charts import (  # noqa: E402
 from vidgen.errors import VidgenError  # noqa: E402
 from vidgen.geo import MAP_VIEWS, Country, MapView, equal_earth, find_country, fit_view, view_box, world_countries  # noqa: E402
 from vidgen.graph import EdgeRoute, GraphEdge, GraphLayout, GraphNode, NodePlace, layered_layout  # noqa: E402
-from vidgen.helpers import MT, T, column, counter, dense_pairs, edges, group_bounds, grouped_pairs, resolve_color, sparse_pairs  # noqa: E402
+from vidgen.helpers import MT, Fade, T, column, counter, dense_pairs, edges, fade_out, group_bounds, grouped_pairs, resolve_color, sparse_pairs  # noqa: E402
 from vidgen.hooks import HookContext, hook  # noqa: E402
 from vidgen.icon_mobject import Icon, icon  # noqa: E402
 from vidgen.layout import (  # noqa: E402
@@ -91,7 +91,7 @@ from vidgen.regions import (  # noqa: E402
 )
 from vidgen.registry import action, scene  # noqa: E402
 from vidgen.runtime import current_project, current_theme  # noqa: E402
-from vidgen.scene import IconName, NarratedScene, SceneParams, ThemeColor, ThemeSize  # noqa: E402
+from vidgen.scene import IconName, NarratedScene, SceneParams, ThemeColor, ThemeSize, one_or_many  # noqa: E402
 
 
 def register_theme_defaults(colors: dict[str, str] | None = None, sizes: dict[str, float] | None = None) -> None:
@@ -178,6 +178,8 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "group_bounds",
     "sparse_pairs",
     "counter",
+    "Fade",
+    "fade_out",
     "ThemeColor",
     "ThemeSize",
     "fit_text",
@@ -205,6 +207,7 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "icon",
     "Icon",
     "IconName",
+    "one_or_many",
     "layered_layout",
     "GraphLayout",
     "GraphNode",

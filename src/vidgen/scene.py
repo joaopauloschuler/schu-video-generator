@@ -20,8 +20,8 @@ from pathlib import Path
 from typing import Annotated, Any, ClassVar, NamedTuple, Union
 
 import av
-from manim import DEFAULT_WAIT_TIME, NORMAL, Animation, FadeIn, FadeOut, MarkupText, Mobject, MovingCameraScene, Text, Wait, config
-from pydantic import AfterValidator, BaseModel, ConfigDict, GetJsonSchemaHandler, ValidationError, ValidationInfo
+from manim import DEFAULT_WAIT_TIME, NORMAL, Animation, FadeIn, MarkupText, Mobject, MovingCameraScene, Text, Wait, config
+from pydantic import AfterValidator, AliasChoices, BaseModel, ConfigDict, GetJsonSchemaHandler, ValidationError, ValidationInfo
 
 from vidgen import helpers, regions, runtime
 from vidgen.actions import TARGET_NAME, ActionRunner, Target, match_names, plan_actions
@@ -47,6 +47,32 @@ class SceneParams(BaseModel):
     model_config = ConfigDict(extra="forbid", use_attribute_docstrings=True)
     #: Other input types this model is built from (shown by ``vidgen list-scenes``).
     also_accepts: ClassVar[tuple[type, ...]] = ()
+    #: Whether the text in the frame's header band answers to both names, ``heading`` and
+    #: ``title`` (with ``_size`` / ``_color``): a model with only one of a pair also accepts the
+    #: other (:data:`HEADER_SYNONYMS`). Off for types whose ``title`` is their main text
+    #: (``title``, ``chapter``, ``end_card``).
+    header_synonyms: ClassVar[bool] = True
+
+    @classmethod
+    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
+        super().__pydantic_init_subclass__(**kwargs)
+        if not cls.header_synonyms:
+            return
+        changed = False
+        for a, b in HEADER_SYNONYMS:
+            for name, other in ((a, b), (b, a)):
+                field = cls.model_fields.get(name)
+                if field is not None and other not in cls.model_fields and field.alias is None and field.validation_alias is None:
+                    field.validation_alias = AliasChoices(name, other)
+                    changed = True
+        if changed:
+            cls.model_rebuild(force=True)
+
+
+#: Pairs of param names that mean the same in every scene type with a header band (the scene
+#: types grew up with both: ``bullets`` has a ``heading``, the charts a ``title``).
+HEADER_SYNONYMS: tuple[tuple[str, str], ...] = (("heading", "title"), ("heading_size", "title_size"), ("heading_color", "title_color"))
+
 
 
 _HEX = re.compile(r"^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$")
@@ -106,6 +132,16 @@ ThemeSize = Annotated[Union[str, float], AfterValidator(_check_theme_size), Them
 #: A ``Params`` field holding an icon name (built-in or the project's ``assets/icons``); checked
 #: against the available icons by ``vidgen validate`` and when the scene is built.
 IconName = Annotated[str, AfterValidator(_check_icon_name), ThemeToken("icon")]
+
+
+def _as_list(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else [value]
+
+
+def one_or_many(item: Any) -> Any:
+    """A ``Params`` field type for a list that may also be written as a single item
+    (``highlight: Lint`` means ``[Lint]``); the validated value is always a list."""
+    return Annotated[Union[list[item], item], AfterValidator(_as_list)]
 
 
 class BeatTiming(NamedTuple):
@@ -267,7 +303,7 @@ class NarratedScene(MovingCameraScene):
         try:
             return cls.validate_params(params, theme)
         except ValidationError as exc:
-            lines = validation_error_lines(exc, ("params",))
+            lines = validation_error_lines(exc, ("params",), cls.params_model())
             raise VidgenError("\n".join([f"scene '{scene_id}': invalid params", *(f"  {x}" for x in lines)])) from None
 
     @classmethod
@@ -635,6 +671,7 @@ class NarratedScene(MovingCameraScene):
         *,
         entrance: Callable[[], Sequence[Animation]] | None = None,
         outline: Mobject | None = None,
+        on_fill: Sequence[tuple[Mobject, Mobject]] = (),
     ) -> Target:
         """Register ``mobject`` as an action target under ``names`` (the first is its main name).
 
@@ -642,7 +679,9 @@ class NarratedScene(MovingCameraScene):
         look (normally right after building the layout: ``dim`` and ``highlight`` measure "full
         opacity" from that moment). ``entrance`` builds the scene's own animations that bring it
         on screen (used by the ``reveal`` action and :meth:`entrance`; default ``FadeIn``);
-        ``outline`` is what a ``highlight`` box surrounds (default: ``mobject``).
+        ``outline`` is what a ``highlight`` box surrounds (default: ``mobject``); ``on_fill``
+        lists ``(text, shape)`` pairs of text written on a filled shape of the target, which
+        ``dim`` and ``highlight`` recolour to stay readable on the shape (see ``Target.on_fill``).
         """
         names = (names,) if isinstance(names, str) else tuple(names)
         if not names:
@@ -650,7 +689,7 @@ class NarratedScene(MovingCameraScene):
         for name in names:
             if not isinstance(name, str) or not TARGET_NAME.match(name):
                 raise VidgenError(f"scene '{self.spec.id}': invalid target name {name!r} (use name, name3, name1.part2 or kind:label)")
-        target = Target(names, mobject, entrance, outline, self._rest)
+        target = Target(names, mobject, entrance, outline, self._rest, tuple(on_fill))
         self._targets.append(target)
         return target
 
@@ -660,8 +699,10 @@ class NarratedScene(MovingCameraScene):
         return list(self._targets)
 
     def find_targets(self, pattern: str) -> list[Target]:
-        """The targets a name or ``*``/``?`` pattern selects."""
-        return [t for t in self._targets if match_names(pattern, t.names)]
+        """The targets a name or ``*``/``?`` pattern selects (``title`` / ``heading`` stand for
+        each other when the scene has only one of them)."""
+        wanted = set(match_names(pattern, [n for t in self._targets for n in t.names]))
+        return [t for t in self._targets if wanted.intersection(t.names)]
 
     def on_screen_parts(self, target: Target | Mobject) -> list[Mobject]:
         """The largest parts of the target that are on screen (its mobject itself when it was
@@ -718,6 +759,7 @@ class NarratedScene(MovingCameraScene):
         return helpers.styled(MarkupText, self.theme, s, size, color, weight, role=role, **kwargs)
 
     def clear_all(self, run_time: float = 0.6) -> None:
-        """Fade out every mobject on screen."""
+        """Fade out every mobject on screen (vector mobjects without copying them: see
+        :class:`vidgen.helpers.Fade`)."""
         if self.mobjects:
-            self.play(*[FadeOut(m) for m in self.mobjects], run_time=run_time)
+            self.play(*[helpers.fade_out(m) for m in self.mobjects], run_time=run_time)

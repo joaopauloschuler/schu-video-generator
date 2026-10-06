@@ -122,6 +122,7 @@ def test_project_icon_named_like_an_alias_takes_it_over(make_project: Any) -> No
     assert builtin_icons()["house"].aliases == ("home",)  # the cached built-ins are untouched
 
 
+@pytest.mark.slow
 def test_every_icon_loads() -> None:
     """Every vendored icon builds: box = viewBox, something drawn inside it, every visible part
     stroked or filled in the icon colour."""
@@ -497,6 +498,7 @@ class Icons(NarratedScene):
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_lint_sees_icons_as_objects(make_project: Any) -> None:
     if shutil.which("ffmpeg") is None:
         pytest.skip("ffmpeg not on PATH")

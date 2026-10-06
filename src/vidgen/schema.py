@@ -35,7 +35,7 @@ from pydantic import BaseModel
 
 from vidgen import __version__
 from vidgen.config import ACTION_KEYS, HEX_COLOR_PATTERN, VideoConfig, parse_config
-from vidgen.describe import scene_doc
+from vidgen.describe import other_names, scene_doc
 from vidgen.errors import VidgenError
 from vidgen.presets import code_styles
 from vidgen.project import Project, find_config_file, read_config_file
@@ -202,11 +202,26 @@ def _params(entry: SceneType, tokens: dict[str, list[str]], prefix: str) -> tupl
     schema = model.model_json_schema(ref_template=_REF_PREFIX + prefix + "{model}")
     defs = {prefix + name: value for name, value in schema.pop("$defs", {}).items()}
     schema["title"] = f"{entry.name} params"
+    _add_synonyms(schema, model)
     for part in (schema, defs):
         _apply_theme(part, tokens)
         _fix_dict_keys(part)
         _fix_union_lengths(part)
     return schema, defs
+
+
+def _add_synonyms(schema: dict[str, Any], model: type[BaseModel]) -> None:
+    """Properties for the other names a field accepts (``title`` for ``heading``...), each with
+    the field's schema; giving both is an error (``not`` + ``required``)."""
+    props = schema.get("properties", {})
+    pairs = []
+    for name, field in model.model_fields.items():
+        for other in other_names(field):
+            if name in props and other not in props:
+                props[other] = {**copy.deepcopy(props[name]), "description": f"Another name for {name}."}
+                pairs.append({"required": [name, other]})
+    if pairs:
+        schema["not"] = {"anyOf": pairs}
 
 
 def _beat_limits(entry: SceneType) -> dict[str, Any] | None:

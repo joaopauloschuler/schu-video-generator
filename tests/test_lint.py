@@ -451,6 +451,7 @@ class Crowded(NarratedScene):
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_lint_renders_then_reuses(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     root = write_project(
         tmp_path / "proj",

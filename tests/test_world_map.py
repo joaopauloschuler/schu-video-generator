@@ -281,6 +281,7 @@ def colors(mob: Any) -> str:
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_world_map_steps_highlights_pins_and_arcs(make_project, media: Path) -> None:
     p = {"title": "Offices", "view": "world",
          "steps": [["USA", {"country": "Brazil", "color": "primary"}],

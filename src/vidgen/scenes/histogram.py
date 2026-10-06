@@ -105,7 +105,7 @@ class Histogram(NarratedScene):
         """Mark the mean with a dashed line and its value (in a step of its own)."""
         median: bool = False
         """Mark the median likewise."""
-        highlight: list[int | str] = Field(default_factory=list)
+        highlight: one_or_many(int | str) = Field(default_factory=list)
         """Bins emphasised in a last step: 0-based index or range ('10-20'); the others dim."""
         title: str = ""
         """Chart title (in the header band at the top)."""

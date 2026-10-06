@@ -373,6 +373,7 @@ def test_validate_checks_chart_targets(make_project) -> None:
         ("histogram", {"counts": [2, 5, 9, 14, 11], "edges": [40, 50, 60, 70, 80, 90], "percent": True, "compare": {"name": "2025", "counts": [1, 3, 6, 11, 15]}}, 0),
     ],
 )
+@pytest.mark.slow
 def test_charts_render_within_their_beats_and_the_safe_area(kind: str, p: dict[str, Any], timing: int, size: tuple[int, int], make_project, media: Path) -> None:
     extra = {"beats": n_beats(timing)} if timing else {"duration": 2.5}
     project = load(make_project, [{"id": "s", "type": kind, "params": p, **extra}])
@@ -393,6 +394,7 @@ def test_charts_render_within_their_beats_and_the_safe_area(kind: str, p: dict[s
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_scatter_points_labels_trend_and_highlight(make_project, media: Path) -> None:
     p = {"series": POINTS, "trend": "each", "trend_label": "r2", "highlight": ["ours@small"], "point_radius": 0.12}
     project = load(make_project, [{"id": "s", "type": "scatter", "params": p, "beats": n_beats(4)}])
@@ -418,6 +420,7 @@ def test_scatter_points_labels_trend_and_highlight(make_project, media: Path) ->
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_scatter_reveals_one_series_per_beat(make_project, media: Path) -> None:
     project = load(make_project, [{"id": "s", "type": "scatter", "params": {"series": POINTS}, "beats": beats(None, [{"reveal": "point:ours@small"}])}])
     scene = render(project, "s", media)
@@ -426,6 +429,7 @@ def test_scatter_reveals_one_series_per_beat(make_project, media: Path) -> None:
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_histogram_bars_markers_and_highlight(make_project, media: Path) -> None:
     p = {"values": VALUES, "bin_width": 10, "mean": True, "median": True, "highlight": [2], "compare": {"values": [20, 30, 35, 45, 60]}}
     project = load(make_project, [{"id": "h", "type": "histogram", "params": p, "beats": n_beats(5)}])
@@ -456,6 +460,7 @@ def test_histogram_percent_axis(make_project, media: Path) -> None:
 
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(160, 90), (90, 160)])
+@pytest.mark.slow
 def test_chart_titles_stand_in_the_header(size: tuple[int, int], make_project, media: Path) -> None:
     scenes = [
         {"id": "b", "type": "bar_chart", "params": {"title": "Render time per minute of video", "labels": ["480p", "720p", "1080p", "4K"],
@@ -473,6 +478,7 @@ def test_chart_titles_stand_in_the_header(size: tuple[int, int], make_project, m
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_bar_values_stay_readable_in_portrait(make_project, media: Path) -> None:
     """9:16: value labels keep a theme size (the unit goes under the number) instead of being
     scaled down to the bar's slot (Step 22 finding)."""
@@ -509,6 +515,7 @@ def test_line_chart_labels_and_legend(make_project, media: Path) -> None:
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_extending_charts_example_renders(make_project, media: Path) -> None:
     text = (ROOT / "docs" / "EXTENDING.md").read_text(encoding="utf-8")
     code = re.search(r"\*\*Charts\.\*\*.*?```python\n(.*?)```", text, re.S).group(1)

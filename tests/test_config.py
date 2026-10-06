@@ -55,9 +55,9 @@ def test_params_and_theme_colors_are_open() -> None:
 @pytest.mark.parametrize(
     ("mutate", "expected"),
     [
-        (lambda d: d.update(titel="x"), "titel: Extra inputs are not permitted"),
-        (lambda d: d.update(format={"widht": 3}), "format.widht: Extra inputs are not permitted"),
-        (lambda d: d["scenes"][1]["beats"][0].update(txt="x"), "scenes[1].beats[0].txt: Extra inputs"),
+        (lambda d: d.update(titel="x"), "titel: unknown key 'titel'; did you mean 'title'? (known: title, output, format,"),
+        (lambda d: d.update(format={"widht": 3}), "format.widht: unknown key 'widht'; did you mean 'width'? (known: width, height, fps)"),
+        (lambda d: d["scenes"][1]["beats"][0].update(txt="x"), "scenes[1].beats[0].txt: unknown key 'txt'; did you mean 'text'?"),
         (lambda d: d["scenes"][1]["beats"][0].update(id="bad id"), "scenes[1].beats[0].id: String should match"),
         (lambda d: d["scenes"][0].update(id="a-b"), "scenes[0].id: String should match"),
         (lambda d: d.update(voice={"provider": "openai"}), "voice.provider: Input should be 'elevenlabs'"),

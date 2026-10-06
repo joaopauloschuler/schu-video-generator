@@ -22,6 +22,7 @@ from vidgen.theme import Theme
 
 BUILTINS = ["bar_chart", "bullets", "chapter", "code", "code_walkthrough", "comparison", "diagram", "end_card", "equation", "equation_derivation", "flowchart", "heatmap", "histogram", "icon_grid", "image", "line_chart", "map", "network", "pie", "process", "quote", "scatter", "screenshot", "stat", "table", "text_card", "timeline", "title", "video_clip"]
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "minimal"
+GALLERY = EXAMPLE.parent / "gallery"
 FPS = 5
 
 #: Valid params for every built-in (the image/logo/code files are written by `asset_project`).
@@ -256,12 +257,20 @@ def test_validate_warns_when_latex_missing(asset_project, monkeypatch: pytest.Mo
     assert "need LaTeX" in caplog.text
 
 
-def test_example_minimal_validates(capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["validate", str(EXAMPLE)]) == 0
+@pytest.mark.parametrize("example", [EXAMPLE, GALLERY], ids=lambda p: p.name)
+def test_examples_validate(example: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["validate", str(example)]) == 0
     out = capsys.readouterr().out
-    assert "variants:  vertical" in out and out.endswith("ok\n")
-    used = {s.type for s in Project.load(EXAMPLE).config.scenes}
-    assert used == set(BUILTINS) - {"flowchart"}   # = diagram
+    assert "variants:  vertical, light, contrast, editorial, neutral, pastel, neon" in out and out.endswith("ok\n")
+
+
+def test_examples_use_every_builtin_scene_type() -> None:
+    """examples/minimal shows the core types, examples/gallery each newer one once."""
+    core = [s.type for s in Project.load(EXAMPLE).config.scenes]
+    gallery = [s.type for s in Project.load(GALLERY).config.scenes]
+    assert set(core) | set(gallery) == set(BUILTINS) - {"flowchart"}   # = diagram
+    assert not set(core) & set(gallery) - {"chapter"}
+    assert len(core) == len(set(core)) and gallery.count("chapter") == 3 and len(gallery) - 2 == len(set(gallery))
 
 
 # ----- rendering (tiny, both orientations) ---------------------------------------------------------------
@@ -331,6 +340,7 @@ RENDER_IDS = BUILTINS + ["silent_bullets", "crowded", "hbars", "cover"]
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(160, 90), (90, 160)], ids=["landscape", "portrait"])
 @pytest.mark.parametrize("scene_id", RENDER_IDS)
+@pytest.mark.slow
 def test_builtin_renders(render_project: Project, shared_media: Path, scene_id: str, size: tuple[int, int]) -> None:
     if scene_id in ("equation", "equation_derivation") and shutil.which("dvisvgm") is None:
         pytest.skip("LaTeX (dvisvgm) not installed")

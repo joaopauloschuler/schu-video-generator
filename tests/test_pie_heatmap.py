@@ -10,7 +10,7 @@ from typing import Any
 
 import numpy as np
 import pytest
-from manim import Text, VGroup, tempconfig
+from manim import Text, tempconfig
 
 from conftest import minimal_config
 from test_actions import beat_total, beats, plays, render
@@ -239,6 +239,7 @@ def _floor(project: Project, size: tuple[int, int]) -> float:
                      "value_format": "{:.1f}", "reveal": "rows", "highlight": ["cell3.1", "row2"]}, 4),
     ],
 )
+@pytest.mark.slow
 def test_pie_and_heatmap_render_within_their_beats_and_the_safe_area(kind: str, p: dict[str, Any], timing: int, size: tuple[int, int], make_project, media: Path) -> None:
     extra = {"beats": n_beats(timing)} if timing else {"duration": 2.5}
     project = load(make_project, [{"id": "s", "type": kind, "params": p, **extra}])
@@ -253,6 +254,7 @@ def test_pie_and_heatmap_render_within_their_beats_and_the_safe_area(kind: str, 
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_pie_labels_stack_without_overlaps_and_read_on_their_slices(make_project, media: Path) -> None:
     p = {"labels": ["Big", "s1", "s2", "s3", "s4", "s5"], "values": [80, 5, 5, 4, 3, 3], "highlight": "s2", "legend": False}
     project = load(make_project, [{"id": "p", "type": "pie", "params": p, "beats": n_beats(2)}])
@@ -279,6 +281,7 @@ def test_pie_labels_stack_without_overlaps_and_read_on_their_slices(make_project
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_pie_portrait_puts_labels_that_do_not_fit_in_a_key(make_project, media: Path) -> None:
     p = {"labels": ["Manim frames", "Text layout", "Audio", "ffmpeg join", "Other work"], "values": [62, 18, 9, 7, 4]}
     project = load(make_project, [{"id": "p", "type": "pie", "params": p, "beats": n_beats(1)}], **VERTICAL)
@@ -338,13 +341,14 @@ def test_heatmap_rows_reveal_and_early_row(make_project, media: Path) -> None:
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_heatmap_too_big_for_the_frame_hides_values_and_warns(make_project, media: Path, caplog: pytest.LogCaptureFixture) -> None:
     values = [[r * 24 + c for c in range(24)] for r in range(8)]
     project = load(make_project, [{"id": "h", "type": "heatmap", "params": {"values": values, "show_values": True}, "beats": n_beats(1)}], **VERTICAL)
     with caplog.at_level(logging.WARNING, logger="vidgen.scenes"):
         scene = render(project, "h", media, size=(90, 160))
     assert all(t is None for row in scene._texts for t in row)
-    assert any("too small for this frame" in r.message for r in caplog.records)
+    assert any("do not fit this frame at a readable size" in r.message for r in caplog.records)
     assert any("too small for readable values" in r.message for r in caplog.records)
     bar = scene.find_targets("legend")[0].mobject
     assert bar.get_top()[1] < scene._grid.y0                         # 9:16: the legend is below

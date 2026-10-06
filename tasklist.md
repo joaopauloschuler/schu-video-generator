@@ -162,10 +162,10 @@ Rules that apply to every step:
 - [x] Highlight countries, pins with labels, per-beat reveal (`map` scene: `view` auto / world / regions / box, highlights (colour, `palette`, labels on the country or beside it with a leader), choropleth `values` with the Step 31 colour scales + legend, pins `{lon, lat}` / `{country}`, flight-path arcs `"A -> B"` growing to an arrowhead, labels on plates avoiding each other and pins; `steps` per beat like Steps 32–35 with `focus` camera moves; targets `title`, `map`, `legend`, `country:<code>`, `pin<N>`, `pin:<label>`, `arc<N>`, `step<N>`; no bundled city list: pins take coordinates or a country)
 
 ### Step 37 — Review 2
-- [ ] Storyboard + lint every new scene at 16:9 and 9:16, every theme preset; fix issues
-- [ ] (from Step 22) `icon_grid` in 9:16 leaves the lower third empty with few items (rows spread ≤ 1 unit); `list-icons --sheet` could preview icons in a project's theme colours
-- [ ] (from Step 22) Lint measures rotated text sideways (`min_font`); give the layout dump a text rotation
-- [ ] Update `examples/minimal` (or add `examples/gallery_src`) to use each new scene type once
+- [x] Storyboard + lint every new scene at 16:9 and 9:16, every theme preset; fix issues (both examples in all 8 variants, custom_scene, kphi3: 0 findings; 9:16 growth for `comparison`, `icon_grid` labels, vertical `timeline`, `process` column; header-band titles alike (1.3x in 9:16); a table's caption follows a short table; 9:16 `world` map keeps its items' longitudes; action framework: text on fills stays readable (`on_fill`), boxes / underlines / fills follow their target, `until` keeps a scene's own dimming; `title`/`heading` synonyms for params and targets, did-you-mean for unknown keys, `one_or_many` highlights; copy-free `Fade` (walkthrough render 59 → 27 s), table fitting 85 → 26 s; quick test run rebalanced)
+- [x] (from Step 22) `icon_grid` in 9:16 leaves the lower third empty with few items (rows spread ≤ 1 unit); `list-icons --sheet` could preview icons in a project's theme colours (labels 1.3x in 9:16; `list-icons --sheet PNG --theme [PRESET]`)
+- [x] (from Step 22) Lint measures rotated text sideways (`min_font`); give the layout dump a text rotation (`rotation` key, glyphs measured across the line; kphi3's `lint_ignore` for it removed)
+- [x] Update `examples/minimal` (or add `examples/gallery_src`) to use each new scene type once (`examples/gallery`: every Step 25–36 type once, grouped by three chapters; `examples/minimal` keeps the core types)
 
 ---
 
@@ -184,6 +184,7 @@ Rules that apply to every step:
 
 ### Step 41 — Callout overlay
 - [ ] Callouts (Step 34 helpers) placed on any scene by target name or coordinates, per beat
+- [ ] (from Step 37) `screenshot` has no `caption` param (`video_clip` has one); callout labels could reuse `Target.on_fill` for the overlay's dim / highlight
 
 ### Step 42 — Pronunciation dictionary
 - [ ] Project `pronunciation:` map applied to TTS text only (subtitles keep the original); part of the audio hash
@@ -242,8 +243,9 @@ Rules that apply to every step:
 - [ ] `AGENTS.md` + `vidgen guide`: workflow (write → storyboard → lint → fix), pacing rules, on-screen text limits, scene-type chooser, good vs bad examples
 
 ### Step 57 — Scene gallery
-- [~] `examples/minimal` covers every Step-5 built-in, without rendered clips
+- [~] `examples/minimal` covers every Step-5 built-in, without rendered clips; `examples/gallery` (Step 37) every newer type once — a natural source for the gallery's YAML
 - [ ] `vidgen gallery` renders one still + short clip per scene type (16:9 and 9:16) with its YAML into `docs/gallery/`
+- [ ] (from Step 37) Check the per-type 9:16 stills for label crowding: `map` labels of small countries far apart in a 9:16 world view (a label may stand beside the wrong country with a long leader), `screenshot` / `video_clip` of a 16:9 picture leave wide bands (a portrait default `fit` / `region` could help)
 
 ### Step 58 — `vidgen plan`
 - [ ] Outline/script in, draft `video.yaml` out: sentences → beats, simple cues → scene types (no LLM call)
@@ -254,3 +256,4 @@ Rules that apply to every step:
 
 ### Step 60 — Final review
 - [ ] Full review of Steps 8–59; docs and examples consistent; release notes in HANDOFF.md
+- [ ] (from Step 37) Left as known limits, revisit: a `highlight` colour on an `equation_derivation` step is not carried into its dimmed copy; `code`'s own highlight steps reset line opacities set by a `dim` action; `image` Ken Burns renders ~1.6x real time in preview (Manim's per-frame image transform); `code_walkthrough` builds ~0.1 s per line of the file (Manim glyphs; `excerpt` limits it)

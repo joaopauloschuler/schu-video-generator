@@ -24,6 +24,7 @@ class Title(NarratedScene):
         return [name for name, there in present.items() if there]
 
     class Params(SceneParams):
+        header_synonyms = False   # "title" is the main text here, not a header band
         title: str
         """Main title; wrapped to fit, may contain line breaks."""
         subtitle: str = ""

@@ -132,7 +132,7 @@ class Network(NarratedScene):
         """layers: one layer per step, its incoming edges first; all: the whole network in step 1."""
         passes: int = Field(default=1, ge=0, le=4)
         """Forward passes after the network is built: each is a step in which a pulse runs from the first layer to the last."""
-        highlight: list[str] = Field(default_factory=list)
+        highlight: one_or_many(str) = Field(default_factory=list)
         """Units emphasised in a last step, as 'layer.unit' (1-based, units as drawn): ['1.2', '2.3', '3.1'] marks a path; the rest dims."""
         max_edges: int = Field(default=64, ge=4, le=200)
         """Most edges drawn between two layers (more are thinned evenly, keeping every unit connected)."""

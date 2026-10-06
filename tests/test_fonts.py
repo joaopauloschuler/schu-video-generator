@@ -97,6 +97,7 @@ def _system_has(family: str) -> bool:
     return out.stdout.strip() == "True"
 
 
+@pytest.mark.slow
 def test_fonts_need_no_system_install() -> None:
     if _system_has(SERIF_FAMILY) or _system_has(MONO_FAMILY):
         pytest.skip("Source Serif 4 / JetBrains Mono NL are installed system-wide here")
@@ -245,6 +246,7 @@ def _render(project_dir: Path, scene_id: str, media: Path, monkeypatch: pytest.M
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_scenes_use_font_roles(make_project, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     scenes = [
         {"id": "listing", "type": "code", "params": {"code": "x = 1\n", "title": "Code"}, "duration": 0.4},

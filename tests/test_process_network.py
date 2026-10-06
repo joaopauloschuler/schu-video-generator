@@ -181,6 +181,7 @@ def drawing(scene: Any) -> Any:
         ({"stages": ["a", "b"], "token": False}, 0),
     ],
 )
+@pytest.mark.slow
 def test_process_renders_within_its_beats_and_the_safe_area(p: dict[str, Any], timing: int, size: tuple[int, int], make_project, media: Path) -> None:
     extra = {"beats": n_beats(timing)} if timing else {"duration": 2.0}
     project = load(make_project, [{"id": "s", "type": "process", "params": p, **extra}])
@@ -222,6 +223,7 @@ def test_loop_returns_the_token_to_the_first_stage(make_project, media: Path) ->
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_column_in_portrait_and_layout_override(make_project, media: Path) -> None:
     project = load(make_project, [
         {"id": "v", "type": "process", "params": {"stages": PIPE, "token_label": "x"}, "beats": n_beats(3)},
@@ -272,6 +274,7 @@ def test_overfull_process_is_scaled_into_the_frame_with_a_warning(make_project, 
         ({"layers": [2, 3]}, 0),
     ],
 )
+@pytest.mark.slow
 def test_network_renders_within_its_beats_and_the_safe_area(p: dict[str, Any], timing: int, size: tuple[int, int], make_project, media: Path) -> None:
     extra = {"beats": n_beats(timing)} if timing else {"duration": 2.0}
     project = load(make_project, [{"id": "s", "type": "network", "params": p, **extra}])

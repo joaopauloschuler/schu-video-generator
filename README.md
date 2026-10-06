@@ -6,20 +6,21 @@ ElevenLabs, animates every scene with [Manim](https://www.manim.community/) (eac
 exactly as long as its narration), and joins everything with ffmpeg into one MP4 plus SRT
 subtitles.
 
-- **Config-only videos** with twenty-eight built-in scene types (title, chapter divider, bullets,
-  icon grid, comparison, table, timeline, flowchart / diagram, a process with a travelling token,
-  a neural network with forward-pass pulses, bar / line / scatter / histogram charts, pie /
-  donut charts and heatmaps (colour scales from the theme), world maps (countries highlighted
-  step by step, choropleths, pins and flight-path arcs; Natural Earth data bundled), a counting
-  stat, image,
-  screenshots with callouts (boxes, arrows, magnified insets, a spotlight; in a browser, window
-  or phone frame), video clips (B-roll, screen recordings: trimmed, sped up, looped, full-bleed or
-  framed, their sound under the narration, callouts on the moving picture),
-  quote, equation, equation derivations (steps morphing into each other, with notes), code
-  listings and code walkthroughs that scroll a long file to the lines each
-  beat explains, end card...), in landscape and vertical formats. Diagrams are laid out
-  automatically from `edges: ["a -> b: label", ...]` (`layered_layout` is also there for
-  project scenes).
+- **Config-only videos** with twenty-eight built-in scene types, in landscape and vertical
+  formats (one config renders both):
+  - text and structure: `title`, `chapter` (section divider), `bullets`, `icon_grid`,
+    `comparison` (A vs B), `table`, `timeline`, `quote`, `text_card`, `end_card`;
+  - flows: `diagram` (alias `flowchart`; laid out automatically from `edges: ["a -> b: label"]`,
+    and `layered_layout` is there for project scenes), `process` (a token travelling through a
+    pipeline), `network` (a neural network with forward-pass pulses);
+  - data: `bar_chart`, `line_chart`, `scatter`, `histogram`, `pie` (and donut), `heatmap` (colour
+    scales from the theme), `stat` (a counting number with a comparison), `map` (countries step by
+    step, choropleths, pins and flight-path arcs; Natural Earth data bundled);
+  - pictures and media: `image` (Ken Burns), `screenshot` (callouts: boxes, arrows, magnified
+    insets, a spotlight; in a browser, window or phone frame), `video_clip` (B-roll, screen
+    recordings: trimmed, sped up, looped, full-bleed or framed, their sound under the narration);
+  - maths and code: `equation`, `equation_derivation` (steps morphing into each other, with
+    notes), `code`, `code_walkthrough` (a long file scrolling to the lines each beat explains).
 - **Theme presets** (`theme: {preset: warm_editorial}`; seven built in: `dark_tech`, the default
   look, `light_academic`, `high_contrast`, `warm_editorial`, `brand_neutral`, `soft_pastel`,
   `bold_neon`), all WCAG AA with colour-blind-safe palettes, and **type scales** (`compact`,
@@ -104,7 +105,7 @@ narration.
 | `vidgen validate [PROJECT] [--json]` | load config and extensions, report every problem (also in every variant), estimated length, audio status |
 | `vidgen list-scenes [PROJECT] [--json]` | scene types (built-in and the project's) with their params |
 | `vidgen list-themes [PROJECT] [--swatches PNG] [--json]` | theme presets (built-in and the project's) with colours, type scale, contrast check; `--swatches` draws them all in one PNG |
-| `vidgen list-icons [PROJECT] [--search TEXT] [--category NAME] [--sheet PNG] [--json]` | icons (built-in and the project's `assets/icons`) with category and tags; `--sheet` draws the listed icons, labelled, into a PNG |
+| `vidgen list-icons [PROJECT] [--search TEXT] [--category NAME] [--sheet PNG [--theme [PRESET]]] [--json]` | icons (built-in and the project's `assets/icons`) with category and tags; `--sheet` draws the listed icons, labelled, into a PNG (`--theme`: in the project's or a preset's colours) |
 | `vidgen schema [PROJECT] [--scene TYPE \| --all] [--json]` | JSON Schema of `video.yaml` (params checked per scene type, the project's extension types included), for editors and AI agents |
 | `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--variant NAME]` | generate missing/stale narration into `audio/`; `--dry-run` needs no key |
 | `vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going] [--jobs N] [--frames] [--frames-per-beat N] [--json]` | render and join the video |
@@ -158,8 +159,13 @@ my_video/
 
 ## Examples and docs
 
-- [examples/minimal](examples/minimal) — every built-in scene type, no Python:
+- [examples/minimal](examples/minimal) — the core built-in scene types (title, bullets, icon
+  grid, charts, image, quote, equation, code, cards) and beat actions, no Python:
   `vidgen render examples/minimal --preview [--variant vertical]`.
+- [examples/gallery](examples/gallery) — every other built-in scene type once (stat, chapter,
+  comparison, table, timeline, diagram, process, network, scatter, histogram, pie, heatmap, map,
+  screenshot, video clip, equation derivation, code walkthrough): `vidgen storyboard
+  examples/gallery [--variant vertical]`.
 - [examples/custom_scene](examples/custom_scene) — "How a bicycle gear works": built-ins plus a
   custom scene type with a helper module, a project icon, a vertical variant and a hook.
 - [examples/kphi3](examples/kphi3) — a real 4-minute paper video whose eight bespoke scenes all
@@ -171,9 +177,11 @@ my_video/
 
 ## Working on vidgen
 
-`pip install -e ".[dev]"`, then `python -m pytest -q` runs every test (a few minutes: many
-tests render tiny videos). Quicker: `python -m pytest -q -m "not slow"` skips the slowest
-render tests, `-m "not render"` skips all rendering (seconds). No test needs network or keys.
+`pip install -e ".[dev]"`, then `python -m pytest -q` runs every test (about a quarter of an
+hour: many tests render tiny videos). Quicker: `python -m pytest -q -m "not slow"` (under two
+minutes) skips the render sweeps over every scene type and every test that takes over ~1.5 s,
+`-m "not render"` skips all rendering. Run the full suite before committing. No test needs
+network or keys.
 
 ## Troubleshooting
 

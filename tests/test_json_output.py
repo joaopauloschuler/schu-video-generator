@@ -255,7 +255,7 @@ def test_list_scenes_json_project(tmp_path: Path, capsys: pytest.CaptureFixture[
     pair, free, card = types["pair"], types["free"], types["text_card"]
     assert (pair["origin"], pair["builtin"]) == (str(Path("extensions") / "mine.py"), False)
     assert pair["beats"] == {"min": 2, "max": None, "text": "at least 2 beats"}
-    assert pair["params"] == [{"name": "n", "type": "int", "required": False, "default": 3, "doc": "How many.", "nested": []}]
+    assert pair["params"] == [{"name": "n", "type": "int", "required": False, "default": 3, "doc": "How many.", "nested": [], "aliases": []}]
     assert free["beats"] == {"min": 1, "max": 1, "text": "exactly 1 beat"} and free["params"] is None
     assert free["doc"] is None  # neither the class nor its module has a docstring
     assert (card["overrides_builtin"], card["doc"]) == (True, "My own card.")
@@ -266,7 +266,7 @@ def test_list_scenes_human_output_unchanged(tmp_path: Path, monkeypatch: pytest.
     monkeypatch.chdir(tmp_path)
     assert main(["list-scenes"]) == 0
     out = capsys.readouterr().out
-    assert re.match(r"bar_chart +builtin\n    title: str = ''\n    labels: list\[str\]\n", out)
+    assert re.match(r"bar_chart +builtin\n    title: str = ''   \(also: heading\)\n    labels: list\[str\]\n", out)
     assert "        start_scale: float = 1.0\n" in out and "{" not in out.splitlines()[0]
 
 
@@ -313,6 +313,7 @@ def test_internal_error_json(make_project, monkeypatch: pytest.MonkeyPatch, caps
         main(["validate", str(make_project())])
 
 
+@pytest.mark.slow
 def test_json_is_valid_on_a_legacy_code_page(make_project) -> None:
     root = make_project(minimal_config(title="Ação → 😀"))
     proc = subprocess.run(

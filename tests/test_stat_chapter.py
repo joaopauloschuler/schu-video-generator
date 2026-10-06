@@ -167,6 +167,7 @@ SIZES = [(160, 90), (90, 160)]
 @pytest.mark.parametrize("size", SIZES, ids=["landscape", "portrait"])
 @pytest.mark.parametrize("scene_id", [f"stat_{k}" for k in STATS] + [f"chapter_{k}" for k in CHAPTERS]
                          + ["stat_one", "stat_silent", "stat_many", "chapter_silent", "chapter_one"])
+@pytest.mark.slow
 def test_renders_within_the_frame_and_the_beats(project: Project, media: Path, scene_id: str, size: tuple[int, int]) -> None:
     scene, duration, portrait = render_scene(project, scene_id, media, *size)
     assert portrait == (size[1] > size[0])
@@ -215,6 +216,7 @@ def test_stat_before_comparison_counts_from_the_old_value(project: Project, medi
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_stat_reveal_steps_follow_the_beats(project: Project, media: Path) -> None:
     """Beat 1: icon, value, label; beat 2: comparison and context; one beat: all in beat 1."""
     for scene_id, second in (("stat_full", "stat_full_b2"), ("stat_one", "stat_one_b1")):
@@ -226,6 +228,7 @@ def test_stat_reveal_steps_follow_the_beats(project: Project, media: Path) -> No
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_stat_without_count_or_change_fades_in(project: Project, media: Path) -> None:
     scene, *_ = render_scene(project, "stat_fade", media, 160, 90)
     assert "UpdateFromAlphaFunc" not in " ".join(a for p in scene.play_log for a in p.animations)
@@ -237,6 +240,7 @@ def test_stat_without_count_or_change_fades_in(project: Project, media: Path) ->
 
 @pytest.mark.render
 @pytest.mark.parametrize("size", SIZES, ids=["landscape", "portrait"])
+@pytest.mark.slow
 def test_chapter_layouts(project: Project, media: Path, size: tuple[int, int]) -> None:
     scene, *_ = render_scene(project, "chapter_numbered", media, *size)
     number = scene.find_targets("number")[0].mobject

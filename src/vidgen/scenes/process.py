@@ -187,8 +187,10 @@ class Process(NarratedScene):
     icon_radius = 0.27
     #: Widest stage card in a row (Manim units) and widest in a column.
     max_card_width = (3.4, 6.0)
-    #: Text grows up to this factor over the requested sizes when the pipeline has room.
+    #: Text grows up to this factor over the requested sizes when the pipeline has room (a row
+    #: or snake / a column: a 9:16 column has much more room than short stage labels need).
     growth = 1.2
+    column_growth = 1.5
     #: ``auto`` keeps the frame's preferred layout unless the other's text is this much larger.
     layout_bias = 1.1
     #: Cards in a row are at least this share of their width tall when there is room.
@@ -259,7 +261,8 @@ class Process(NarratedScene):
         return chosen
 
     def _fit(self, body: Region, layout: str) -> _Geometry:
-        """The largest common size factor (up to :attr:`growth`, down to the readable minimum)
+        """The largest common size factor (up to :attr:`growth`, :attr:`column_growth` for a
+        column, down to the readable minimum)
         at which every stage fits ``layout`` in ``body``."""
         p = self.params
         base = {k: float(self.theme.size(getattr(p, k))) for k in ("size", "text_size", "io_size")}
@@ -273,9 +276,11 @@ class Process(NarratedScene):
         factor = 1.0
         geo = attempt(factor)
         if geo.fits:
-            grown = attempt(self.growth)
-            if grown.fits and grown.lines <= geo.lines:
-                return grown
+            top = self.column_growth if layout == "column" else self.growth
+            for g in (top, (top + 1.0) / 2) if top > self.growth else (top,):
+                grown = attempt(g)
+                if grown.fits and grown.lines <= geo.lines:
+                    return grown
             return geo
         while not geo.fits and factor > lowest + 1e-9:
             factor = max(lowest, factor * min(0.93, max(0.75, 1 / geo.over if geo.over > 1 else 0.93)))

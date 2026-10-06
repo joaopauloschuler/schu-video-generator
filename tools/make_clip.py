@@ -1,11 +1,11 @@
-"""Make the short video clip used by ``examples/minimal`` (``assets/clip.webm``) with ffmpeg.
+"""Make the short video clip used by ``examples/gallery`` (``assets/clip.webm``) with ffmpeg.
 
 Not shipped with vidgen; a maintainer tool. The picture is ffmpeg's own ``testsrc2`` test
 pattern (colour bars, a moving gradient band and a frame counter; generated, so free of any
 licence), the sound a quiet two-note chord, encoded as VP9 + Opus in WebM so the file stays
 small (~150 KB). Run from the repository root::
 
-    python tools/make_clip.py [--out examples/minimal/assets/clip.webm]
+    python tools/make_clip.py [--out examples/gallery/assets/clip.webm]
 
 Regions the example's callouts point at (fractions of 480 x 270, ``[x, y, w, h]`` from the top
 left): the time code and frame counter ``[0.0, 0.0, 0.21, 0.14]``, the cyan colour bar
@@ -28,7 +28,7 @@ FPS = 15
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--out", type=Path, default=ROOT / "examples" / "minimal" / "assets" / "clip.webm")
+    parser.add_argument("--out", type=Path, default=ROOT / "examples" / "gallery" / "assets" / "clip.webm")
     args = parser.parse_args()
     ffmpeg = shutil.which("ffmpeg")
     if ffmpeg is None:

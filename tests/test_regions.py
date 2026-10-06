@@ -390,6 +390,7 @@ def code_font_size(scene: Any) -> float:
 @pytest.mark.render
 @pytest.mark.parametrize("orient", ["landscape", "portrait"])
 @pytest.mark.parametrize("scene_id", ["listing", "nowrap", "list", "check", "chart", "saying"])
+@pytest.mark.slow
 def test_scenes_stay_in_the_safe_area(layout_project: Project, tmp_path: Path, scene_id: str, orient: str) -> None:
     scene = render_unfaded(layout_project, scene_id, tmp_path, SIZES[orient])
     assert scene.mobjects

@@ -176,7 +176,7 @@ class Diagram(NarratedScene):
         """nodes: one node per step in layout order (edges into it first); layers: one layer per step; all: everything in one step."""
         steps: list[StepRefs] | None = None
         """Explicit steps instead of reveal: per step a node id or edge 'a->b', or a list of them; edges between shown nodes come along; anything not listed comes in one more step."""
-        highlight: list[str] = Field(default_factory=list)
+        highlight: one_or_many(str) = Field(default_factory=list)
         """A path or set to emphasise in a last step: node ids (with the edges between consecutive ones) and edges 'a->b'; the rest dims."""
         shape: Shape = "round"
         """Default node shape: box, round, pill, circle, diamond or cylinder."""

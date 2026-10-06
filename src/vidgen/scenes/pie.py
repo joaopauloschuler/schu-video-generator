@@ -8,7 +8,7 @@ import numpy as np
 
 from vidgen.api import *
 
-from .actions import Repaint, dim_to
+from .actions import dim_to
 
 log = logging.getLogger("vidgen.scenes")
 
@@ -28,22 +28,6 @@ def window(a: float, b: float, rate: Any = smooth) -> Any:
         return rate(min(max((t - a) / ((b - a) or 1.0), 0.0), 1.0))
 
     return f
-
-
-def recolor(target: Target, label: Mobject, color: str, factor: float) -> Animation:
-    """Recolour ``label`` (part of ``target``) to ``color`` and fade it to ``factor`` x its full
-    opacity: text on a shape that dims switches to a colour readable on the dimmed shape."""
-    rgb = np.array(ManimColor(color).to_rgb())
-
-    def paint(m: VMobject, fill: np.ndarray, stroke: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        full_fill, full_stroke = target.rest_opacity(m)
-        fill[:, :3] = rgb
-        stroke[:, :3] = rgb
-        fill[:, 3] = np.minimum(fill[:, 3], full_fill * factor)
-        stroke[:, 3] = np.minimum(stroke[:, 3], full_stroke * factor)
-        return fill, stroke
-
-    return Repaint(label, paint)
 
 
 class PieSlice(NamedTuple):
@@ -600,7 +584,10 @@ class Pie(NarratedScene):
             return VGroup(*[m for m in (wedges[i], labels[i], leaders[i]) if m is not None])
 
         targets = [
-            self.target([f"slice{i + 1}", f"slice:{s.label}"], parts(i), entrance=lambda i=i: [sweep(i, window(0, 0.65)), *extras(i, window(0.55, 1.0))], outline=wedges[i])
+            self.target(
+                [f"slice{i + 1}", f"slice:{s.label}"], parts(i), entrance=lambda i=i: [sweep(i, window(0, 0.65)), *extras(i, window(0.55, 1.0))],
+                outline=wedges[i], on_fill=[(labels[i], wedges[i])] if i in self._inside else [],
+            )
             for i, s in enumerate(slices)
         ]
         self._slice_targets = targets
@@ -663,18 +650,14 @@ class Pie(NarratedScene):
                 corners = self._corner_points(self._leaders[k])
                 moved = self._leaders[k].copy().set_points_as_corners([corners[0] + d, *corners[1:]])
                 anims.append(Transform(self._leaders[k], moved))
-        bg = self.theme.background
         for i, t in enumerate(targets):
             if i == k or not self.is_shown(t):
                 continue
             anims.append(dim_to(t, self._wedges[i], self.dimmed_opacity))
             if self._leaders[i] is not None:
                 anims.append(dim_to(t, self._leaders[i], 0.45))
-            if self._labels[i] is not None and i not in self._inside:
-                anims.append(dim_to(t, self._labels[i], 0.45))
-            elif self._labels[i] is not None:
-                faded = mix_colors(self._wedges[i].get_fill_color().to_hex(), bg, self.dimmed_opacity)
-                anims.append(recolor(t, self._labels[i], text_color_on(faded), 0.7))
+            if self._labels[i] is not None:   # an inside label is recoloured for its dimmed slice (on_fill)
+                anims.append(dim_to(t, self._labels[i], self.dimmed_opacity if i in self._inside else 0.45))
         return anims
 
     @staticmethod

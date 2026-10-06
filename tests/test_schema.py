@@ -58,6 +58,7 @@ def load_yaml(path: Path) -> Any:
 
 
 @pytest.mark.parametrize("example", EXAMPLES, ids=lambda p: p.name)
+@pytest.mark.slow
 def test_examples_validate_against_their_schema(example: Path, capsys: pytest.CaptureFixture[str]) -> None:
     doc = cli_schema([str(example)], capsys)
     data = load_yaml(example / "video.yaml")
@@ -156,6 +157,7 @@ def schema_for(tmp_path: Path, data: dict[str, Any], capsys: pytest.CaptureFixtu
 
 
 @pytest.mark.parametrize("case", INVALID, ids=str)
+@pytest.mark.slow
 def test_invalid_configs_are_rejected_by_both(case: str, tmp_path: Path) -> None:
     data = INVALID[case]
     assert project_errors(tmp_path, data), "vidgen validate accepts it"
@@ -166,6 +168,7 @@ def test_invalid_configs_are_rejected_by_both(case: str, tmp_path: Path) -> None
 
 
 @pytest.mark.parametrize("case", VALID, ids=str)
+@pytest.mark.slow
 def test_valid_configs_are_accepted_by_both(case: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     data = VALID[case]
     assert project_errors(tmp_path, data) == []
@@ -257,6 +260,7 @@ def test_unknown_scene_type(capsys: pytest.CaptureFixture[str]) -> None:
     assert captured.out == "" and "did you mean 'title'" in captured.err
 
 
+@pytest.mark.slow
 def test_json_envelope(capsys: pytest.CaptureFixture[str]) -> None:
     example = ROOT / "examples" / "minimal"
     assert main(["schema", str(example), "--json"]) == 0

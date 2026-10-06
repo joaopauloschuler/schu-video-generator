@@ -281,6 +281,7 @@ def test_json_schema_accepts_every_form() -> None:
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(160, 90), (90, 160)], ids=["landscape", "portrait"])
 @pytest.mark.parametrize("frame", ["none", "browser", "window", "phone"])
+@pytest.mark.slow
 def test_renders_in_every_frame_and_orientation(make_project, media: Path, size: tuple[int, int], frame: str) -> None:
     project = load(make_project, [shot(STEPS, title="A screenshot", frame=frame, url="example.org/page")])
     scene = render(project, "s", media, size)

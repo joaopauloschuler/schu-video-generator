@@ -303,6 +303,7 @@ def test_a_long_hold_warns(make_project, clip: Path, media: Path, caplog: pytest
     ],
     ids=["framed", "bleed", "phone"],
 )
+@pytest.mark.slow
 def test_layouts_render_with_callouts(changes: dict[str, Any], size: tuple[int, int], make_project, clip: Path, media: Path) -> None:
     steps = [{"box": [0.1, 0.1, 0.3, 0.3], "label": "Box"},
              {"callouts": [{"spotlight": [0.5, 0.5, 0.4, 0.4]}, {"arrow": [0.7, 0.7], "label": "Here"}], "focus": True},

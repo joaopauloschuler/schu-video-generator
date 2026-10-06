@@ -1,10 +1,10 @@
-"""Draw the fake app screenshot used by ``examples/minimal`` (``assets/app.png``) with Pillow.
+"""Draw the fake app screenshot used by ``examples/gallery`` (``assets/app.png``) with Pillow.
 
 Not shipped with vidgen; a maintainer tool. The picture is a generic task-planner dashboard
 (no real product or brand) in flat colours, so the PNG stays small. Run from the repository
 root::
 
-    python tools/make_screenshot.py [--out examples/minimal/assets/app.png]
+    python tools/make_screenshot.py [--out examples/gallery/assets/app.png]
 
 Regions the example's callouts point at (fractions of 1280 x 800, ``[x, y, w, h]`` from the
 top left): search field ``[0.216, 0.038, 0.269, 0.055]``, "New task" button
@@ -113,7 +113,7 @@ def draw() -> Image.Image:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--out", type=Path, default=ROOT / "examples" / "minimal" / "assets" / "app.png")
+    parser.add_argument("--out", type=Path, default=ROOT / "examples" / "gallery" / "assets" / "app.png")
     args = parser.parse_args()
     image = draw().quantize(colors=64, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
     image.save(args.out, optimize=True)

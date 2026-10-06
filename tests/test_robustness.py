@@ -223,6 +223,7 @@ def test_join_keeps_the_new_video_when_the_output_is_locked(tmp_path: Path, monk
     assert (tmp_path / "video.partial.mp4").read_bytes() == b"joined"
 
 
+@pytest.mark.slow
 def test_cli_survives_a_legacy_console_encoding(make_project) -> None:
     root = make_project(minimal_config(title="Gears → speed ✓"))
     env = {**os.environ, "PYTHONIOENCODING": "cp1252"}

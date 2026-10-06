@@ -105,7 +105,7 @@ def project_problems(project: Project) -> list[Problem]:
                 try:
                     params = entry.cls.validate_params(scene.params, theme)
                 except ValidationError as exc:
-                    problems.extend(validation_problems(exc, ("scenes", i, "params")))
+                    problems.extend(validation_problems(exc, ("scenes", i, "params"), entry.cls.params_model()))
                     params = None
                 _, action_problems = scene_actions(scene.type, entry.cls, scene, params, theme)
                 problems.extend(Problem(f"scenes[{i}].{loc}", message) for loc, message in action_problems)
@@ -438,6 +438,19 @@ def cmd_list_themes(args: argparse.Namespace) -> CommandResult:
     return 0
 
 
+def sheet_theme(path: str, preset: str) -> Theme:
+    """The theme an icon sheet is drawn in: the project's (``preset`` is ``project``; the
+    default theme without a project) or the named preset (built-in or the project's)."""
+    from vidgen.config import ThemeConfig
+
+    with redirect_stdout(sys.stderr), scene_types_session(path) as (_, theme):
+        if preset == "project":
+            return theme
+        if preset not in theme.presets:
+            raise VidgenError(f"unknown theme preset '{preset}'; presets: {', '.join(theme.presets)} (or project)")
+        return theme.derive(ThemeConfig(preset=preset))
+
+
 def cmd_list_icons(args: argparse.Namespace) -> CommandResult:
     """Print the available icons (built-in and the project's), optionally filtered, and write a
     contact sheet of them."""
@@ -451,10 +464,15 @@ def cmd_list_icons(args: argparse.Namespace) -> CommandResult:
     iconlist.check_category(args.category, list(icons.values()))
     found = search_icons(icons, args.search, args.category)
     sheets: list[Path] = []
+    if args.theme is not None and not args.sheet:
+        raise VidgenError("--theme draws the --sheet in a theme's colours; add --sheet PNG")
     if args.sheet:
         filters = [f"search '{args.search}'" if args.search else "", f"category {args.category}" if args.category else ""]
         title = f"vidgen icons: {len(found)}" + "".join(f", {f}" for f in filters if f)
-        sheets = iconlist.render_sheets(found, Path(args.sheet), title)
+        theme = sheet_theme(args.project, args.theme) if args.theme is not None else None
+        if theme is not None:
+            title += f", theme {theme.preset or 'project'}"
+        sheets = iconlist.render_sheets(found, Path(args.sheet), title, theme)
     if args.json:
         return jsonout.list_icons_document(
             root, args.search, args.category, found, iconlist.categories_json(list(icons.values())), sheets
@@ -542,6 +560,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--search", metavar="TEXT", help="only icons whose name or tags contain every word of TEXT")
     p.add_argument("--category", metavar="NAME", help="only icons of this category (tech, data, science, ...)")
     p.add_argument("--sheet", metavar="PNG", help="also draw the listed icons, labelled, into this PNG file")
+    p.add_argument("--theme", nargs="?", const="project", metavar="PRESET", help="draw the sheet in a theme's colours: the project's (no value) or a preset's")
     p.set_defaults(func=cmd_list_icons)
 
     p = sub.add_parser("tts", help="generate narration audio")

@@ -223,9 +223,7 @@ class Screenshot(NarratedScene):
         self._body = self.safe_area
         title = None
         if p.title:
-            header = self.region("header")
-            title = fit_text(p.title, header.width, header.height, size="heading", weight=BOLD, font=self.theme.font_for("heading"))
-            place(title, header, fit="none", align="center")
+            title = chart_title(p.title, size="heading")   # header band, 1.3x in a vertical frame
             self._body = self._body.below(title, gap=TITLE_GAP)
         self._img = load_image(self.project.asset(p.path))
         self._picture = self._layout(self._body)
@@ -408,7 +406,9 @@ class Screenshot(NarratedScene):
             for c, m in zip(spec_order, by_spec):
                 self._numbered.append((k, m))
                 names = [f"callout{len(self._numbered)}"] + ([f"callout:{c.label}"] if c.label.strip() else [])
-                self.target(names, m, entrance=lambda k=k, m=m: self._callout_entrance(k, m))
+                label = m.tag if getattr(m.tag, "is_label", False) else None
+                on_fill = [(label.text, label.plate)] if label is not None else []   # dim / highlight keep it readable
+                self.target(names, m, entrance=lambda k=k, m=m: self._callout_entrance(k, m), on_fill=on_fill)
             if made:
                 self.target(f"step{k + 1}", Group(*made), entrance=lambda k=k: self._arrive(k))
 

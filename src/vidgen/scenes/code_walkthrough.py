@@ -397,9 +397,7 @@ class CodeWalkthrough(NarratedScene):
         body = self.safe_area
         title = None
         if p.title:
-            header = self.region("header")
-            title = fit_text(p.title, header.width, header.height, size="heading", weight=BOLD, font=self.theme.font_for("heading"))
-            place(title, header, fit="none", align="center")
+            title = chart_title(p.title, size="heading")   # header band, 1.3x in a vertical frame
             body = body.below(title, gap=0.45)
         notes = [step.note for step in p.steps]
         self._build(source, first, body, notes)
@@ -845,7 +843,8 @@ class CodeWalkthrough(NarratedScene):
         if now is None or not self.is_shown(self._window_target):
             self._apply(view)
             chrome = [self._frame, self._dots] + ([self._track, self._thumb] if self._track is not None else [])
-            anims.append(FadeIn(VGroup(*chrome, self._bands(view.chosen), self._listing), shift=UP * 0.12))
+            # Fade, not FadeIn: FadeIn copies the whole listing (every glyph of the file) twice
+            anims.append(Fade(VGroup(*chrome, self._bands(view.chosen), self._listing), shift=UP * 0.12))
             now = _View(view.offset, view.chosen, None, view.camera)
         elif (view.offset, view.chosen, view.camera is None) != (now.offset, now.chosen, now.camera is None):
             anims.append(_ViewChange(self, now, view))

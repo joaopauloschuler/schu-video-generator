@@ -199,7 +199,7 @@ def test_validate_reports_bad_actions(make_project) -> None:
         "unknown action 'higlight'; did you mean 'highlight'? (known actions: dim, highlight, reveal, transform, zoom)"
     ]
     assert "less than or equal to 1" in by_location[f"{at}[2].opacity"][0]
-    assert "Extra inputs" in by_location[f"{at}[2].colour"][0]
+    assert by_location[f"{at}[2].colour"] == ["unknown option 'colour' (known: opacity)"]
     assert by_location[f"{at}[3].until"] == ["action 'reveal' cannot be undone; until works with: dim, highlight, zoom"]
     assert "unknown theme color 'nope'" in by_location[f"{at}[4].color"][0]
     assert "unknown target 'item*x'" in by_location[f"{at}[5].target"][0]
@@ -468,6 +468,7 @@ def test_extension_targets_waits_and_actions_without_time(make_project, media: P
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_example_minimal_actions_render(media: Path) -> None:
     project = Project.load(ROOT / "examples" / "minimal")
     scene = render(project, "sizes", media, fade=True)

@@ -168,9 +168,7 @@ class Table(NarratedScene):
         area = self.safe_area
         title = None
         if p.title:
-            header = self.region("header")
-            title = fit_text(p.title, header.width, header.height, size=p.title_size, color=p.title_color, weight=BOLD, role="heading")
-            place(title, header, fit="none", align="center")
+            title = chart_title(p.title, size=p.title_size, color=p.title_color)   # header band, 1.3x in a vertical frame
             area = area.below(title, gap=0.45)
         caption = None
         if p.caption:
@@ -178,7 +176,22 @@ class Table(NarratedScene):
             place(caption, area, fit="none", align="bottom")
             area = area.above(caption, gap=0.3)
         table = self._build(area)
+        if caption is not None:
+            self._tuck(table["group"], caption)
         self._steps(table, title, caption)
+
+    #: Largest gap between a table and its caption; a short table takes its caption along.
+    caption_gap = 0.45
+
+    def _tuck(self, group: Mobject, caption: Mobject) -> None:
+        """Lift the caption to just under a table that does not fill its area, and centre the
+        two together in the space they had (a caption at the frame's bottom, far from a short
+        table, reads as a footer of the whole video)."""
+        lift = (group.get_bottom()[1] - caption.get_top()[1]) - self.caption_gap
+        if lift > 0.05:
+            caption.shift(UP * lift)
+            group.shift(DOWN * lift / 2)
+            caption.shift(DOWN * lift / 2)
 
     # ----- fitting ---------------------------------------------------------------------------
 
@@ -219,9 +232,20 @@ class Table(NarratedScene):
             left -= sum(settled.values())
         return _Fit(size, widths, sum(widths) <= width * 1.001)
 
+    #: Font size at which one-line widths are measured once, then scaled (widths are linear in
+    #: the size; building a ``Text`` per cell, size and wrap candidate took over a minute for
+    #: a 24-row table).
+    measure_size = 40.0
+
     def _line_width(self, text: str, size: float, bold: bool = False) -> float:
         """Width of ``text`` on one line at ``size``."""
-        return self.text(text, size=size, weight=BOLD if bold else NORMAL).width if text.strip() else 0.0
+        if not text.strip():
+            return 0.0
+        cache = self.__dict__.setdefault("_widths_at", {})
+        key = (text, bold)
+        if key not in cache:
+            cache[key] = self.text(text, size=self.measure_size, weight=BOLD if bold else NORMAL).width
+        return cache[key] * size / self.measure_size
 
     def _fit(self, area: Region) -> tuple[_Fit, VGroup, dict[str, Any]]:
         """The largest size (from :attr:`shrink_steps`, then the readable minimum) at which the
@@ -259,7 +283,7 @@ class Table(NarratedScene):
             group, parts = self._layout(fit)
             shrink_to_fit(group, area.width, area.height)
         group.move_to(area.center)
-        return parts
+        return {**parts, "group": group}
 
     def _layout(self, fit: _Fit) -> tuple[VGroup, dict[str, Any]]:
         """Cells, stripes and rules at ``fit``; returns everything in one group (to position it)

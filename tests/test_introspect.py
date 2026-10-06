@@ -156,6 +156,7 @@ def test_text_kinds_and_contents(small_config: None) -> None:
 
 
 @pytest.mark.skipif(not latex_available(), reason="needs LaTeX")
+@pytest.mark.slow
 def test_math_and_numbers(small_config: None) -> None:
     from manim import DecimalNumber, MathTex
 
@@ -348,3 +349,15 @@ def test_layout_matches_the_stills(layout_project: Path) -> None:
     render(root, scenes=["z"])
     assert not worker.scene_layout_path(project, False, "z").exists()
     assert not worker.scene_activity_path(project, False, "z").exists()
+
+
+def test_rotated_text_is_measured_across_its_line(small_config: None) -> None:
+    level = Text("Render time", font_size=40)
+    turned = Text("Render time", font_size=40).rotate(np.pi / 2).shift([3, 0, 0])
+    tilted = Text("Render time", font_size=40).rotate(np.radians(30)).shift([-3, 0, 0])
+    stacked = Text("a\nb\nc", font_size=40).shift([0, 2.5, 0])
+    tilted_item, flat, lines, up = sorted(objects(FakeScene(level, turned, tilted, stacked)), key=lambda i: (i["bbox"][0] + i["bbox"][2], i["text"]))
+    assert lines["text"].startswith("a") and lines["rotation"] == 0.0 and flat["rotation"] == 0.0
+    assert abs(up["rotation"]) == pytest.approx(90.0, abs=1.0) and tilted_item["rotation"] == pytest.approx(30.0, abs=2.0)
+    assert up["font_px"] == pytest.approx(flat["font_px"], rel=0.05)
+    assert tilted_item["font_px"] == pytest.approx(flat["font_px"], rel=0.1)

@@ -194,6 +194,7 @@ def three_beats() -> list[dict[str, str]]:
         ("table", {"header": ["x"], "rows": [["only"]]}, "silent"),
     ],
 )
+@pytest.mark.slow
 def test_scenes_render_within_their_beats(kind: str, params: dict[str, Any], beat_list: str, size: tuple[int, int], make_project, media: Path) -> None:
     timing: dict[str, Any] = {"silent": {"duration": 2.0}, "one": {"beats": three_beats()[:1]}, "three": {"beats": three_beats()}}[beat_list]
     project = load(make_project, [{"id": "s", "type": kind, "params": params, **timing}])
@@ -222,6 +223,7 @@ def test_comparison_reveals_one_column_per_beat(make_project, media: Path) -> No
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_comparison_stacks_columns_in_portrait_and_aligns_rows_side_by_side(make_project, media: Path) -> None:
     params = {"columns": COLUMNS, "reveal": "rows"}
     project = load(make_project, [{"id": "s", "type": "comparison", "params": params, "beats": three_beats()}])
@@ -243,6 +245,7 @@ def test_comparison_early_point_reveal_brings_its_column(make_project, media: Pa
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_table_fits_and_aligns_numbers_right(make_project, media: Path) -> None:
     project = load(make_project, [{"id": "s", "type": "table", "params": TABLE, "beats": three_beats()}])
     scene = render(project, "s", media)
@@ -268,6 +271,7 @@ def test_table_wraps_text_columns_in_portrait(make_project, media: Path) -> None
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_table_too_big_for_the_frame_warns(make_project, media: Path, caplog: pytest.LogCaptureFixture) -> None:
     rows = [[f"row {i} with a long description", i * 1000, i / 7, "more words here"] for i in range(1, 25)]
     project = load(make_project, [{"id": "s", "type": "table", "params": {"rows": rows}, "duration": 1.0}])
@@ -279,6 +283,7 @@ def test_table_too_big_for_the_frame_warns(make_project, media: Path, caplog: py
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_fill_highlight_lies_under_the_cells_and_is_removed(make_project, media: Path) -> None:
     acts = beats([{"highlight": "row2", "style": "fill", "until": "s_b2"}], [{"highlight": "col2", "style": ["fill", "box"]}])
     project = load(make_project, [{"id": "s", "type": "table", "params": {**TABLE, "reveal": "all"}, "beats": acts}])

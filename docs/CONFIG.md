@@ -280,7 +280,7 @@ Problems (bad file names, a broken `icons.json`) are reported by `vidgen validat
 
 ### `vidgen list-icons`
 
-`vidgen list-icons [PROJECT] [--search TEXT] [--category NAME] [--sheet PNG] [--json]` lists
+`vidgen list-icons [PROJECT] [--search TEXT] [--category NAME] [--sheet PNG [--theme [PRESET]]] [--json]` lists
 the icons available in the project (built-in and `assets/icons`; without a PROJECT and no
 config in the current folder: built-ins only), one line each: name, category, `[project]` for
 project icons, `(alias: ...)`, tags. `--search` keeps icons whose name, aliases, tags or
@@ -292,7 +292,10 @@ in a script, so search by idea: `money`, `growth`, `security`, `speed`, `AI`, `t
 `--category` keeps one category (unknown → error listing them). `--sheet PNG` also draws the
 listed icons, labelled with name and category, on a 1280 px wide contact sheet (8 per row; a
 long list continues in `<stem>-2.png`, ... ), drawn by the same code as a render: open it to
-choose icons by eye. JSON shape: [below](#vidgen-list-icons---json).
+choose icons by eye. It is black on white; `--theme` draws it in the project's theme (its
+background, icons in `primary`, names in `text`) and `--theme warm_editorial` in a preset's
+(built-in or the project's), to see icons as a video shows them. JSON shape:
+[below](#vidgen-list-icons---json).
 
 ## Voice (`voice:`)
 
@@ -375,7 +378,30 @@ its params. Conventions shared by all built-ins:
   A silent scene shows all steps within its `duration`.
 - After the last beat the scene fades out (0.5 s; 1 s for `end_card`; `text_card` does not fade).
 - **Any aspect ratio.** Layouts use the frame size, so the same config works for 16:9 and a
-  vertical 9:16 variant; long text is wrapped and shrunk to fit.
+  vertical 9:16 variant; long text is wrapped and shrunk to fit. In a vertical frame short
+  content grows into the tall frame: headings and list text 1.3x (`bullets`, `icon_grid`
+  labels, `comparison`), a vertical `timeline` or a `process` column up to 1.5x, while it fits;
+  a `map` with the `world` view keeps only the longitudes of its countries, pins and arcs.
+- **Header band.** The line at the top of the frame is `heading` in `bullets`, `icon_grid`,
+  `comparison`, `timeline`, `diagram`, `process`, `network` and `title` in the charts, `table`,
+  `map`, `code`, `code_walkthrough`, `equation_derivation`, `screenshot`, `video_clip`. Every
+  one of these types accepts **both names** (also `heading_size` / `title_size`,
+  `heading_color` / `title_color`; `vidgen list-scenes` shows `(also: title)`), and the target
+  `title` selects a `heading` and the reverse. Not in `title`, `chapter` and `end_card`, whose
+  `title` is their main text.
+- **Per-beat content** is a `steps` list in `code_walkthrough`, `equation_derivation`,
+  `screenshot`, `video_clip` and `map`: step *i* plays at beat *i*. Elsewhere the scene splits
+  its content into steps itself (`reveal`); `diagram`'s explicit `steps` are such reveal steps.
+  A `highlight` param adds a last step that marks something and dims the rest; where it takes a
+  list, one item may be written alone (`highlight: Lint`).
+- **Too much content.** Types that fit their content (`table`, `timeline`, `diagram`,
+  `process`, `comparison`, `heatmap`, `pie`, `equation_derivation`, `code_walkthrough`) shrink
+  text down to the readable minimum (`vidgen lint`'s `min_font`), then scale the whole drawing
+  and log a warning at render time — `scene 'x': the timeline's 10 events do not fit this frame
+  at the readable size; split it into two timelines (or shorten titles and texts)` — not in
+  `vidgen validate`, because it depends on the variant's frame and type scale.
+- **Unknown keys** are reported with the closest names: `scenes[2].params.dim_prev: unknown
+  parameter 'dim_prev'; did you mean 'dim_previous'? (known: heading, items, ...)`.
 - Text-only types need no LaTeX; only `equation` and `equation_derivation` do.
 
 ### `title`
@@ -464,7 +490,8 @@ Layout: the heading sits in the `header` region and the grid fills the space bel
 `columns`, the shape (rows x columns) is chosen for the frame with `grid_shape` (see
 docs/EXTENDING.md), trying narrow and wide cells and keeping the layout whose labels and icons
 come out largest: 4 items make one row in 16:9 and a 2 x 2 grid in 9:16, 12 items 2 x 6 or (with
-longer labels) 3 x 4 in 16:9. Labels share one size, wrap inside their column and are reduced
+longer labels) 3 x 4 in 16:9. Labels share one size (1.3x in a vertical frame), wrap inside
+their column and are reduced
 (down to the readable minimum that `vidgen lint` accepts) when they need the room; a word wider
 than its column reduces all labels. Icons are as large as the rest of the row allows (at most
 1.9 units, a quarter of the frame's shorter side). A last row with fewer items is centred;
@@ -869,7 +896,9 @@ hold.
   lon_max, lat_max]` in degrees (`lon_max < lon_min` crosses the date line, e.g. `[150, -50,
   -170, 0]`). The view is projected around its middle longitude and grown to the shape of the
   space (more of the map, not empty bands); a regional view is drawn as a framed panel with the
-  sea in `surface`. In 9:16 a `world` view is a narrow strip: prefer a region or `auto`.
+  sea in `surface`. In 9:16 the whole world is a narrow strip, so a `world` (or `auto` → world) view
+  keeps only the longitudes of the map's countries, pins and arcs (12 % added on each side, at
+  least 140°) and all latitudes; items spread round the whole world still give the strip.
 - **Highlights** fill countries with `highlight_color` (`accent`; `palette`: one theme palette
   colour per country, in order) or their own `color`, and write their name (`labels`; a
   country's `label` gives other text, `false` none) on its largest part when it fits, else
@@ -1589,7 +1618,8 @@ all`: every column in step 1, the verdict in step 2.
 
 Layout: heading in the `header` region, verdict at the bottom, the cards share the rest
 (columns in 16:9, rows in 9:16) and are as tall as the tallest column. Point text starts at
-`size` and is reduced together in every column, not below the readable minimum, until the
+`size` (1.3x in a vertical frame, like the column headings and the verdict) and is reduced
+together in every column, not below the readable minimum, until the
 columns fit; a comparison that still does not fit is scaled down with a warning (shorten or
 remove points).
 
@@ -1648,8 +1678,9 @@ with more rows than beats they are spread evenly. `reveal: all`: the whole table
 first cell as shown, e.g. `row:4K`, `cell2.3`). A `highlight` with `style: fill` lays a
 translucent band over a row, column or cell; `box` frames it.
 
-**Fitting.** The title is in the `header` region, the caption at the bottom; the table is
-centred in the space between. Cell text starts at `size`; when the table is too wide, columns
+**Fitting.** The title is in the `header` region (1.3x in a vertical frame, like every header
+band), the caption at the bottom; the table is centred in the space between, and a table
+shorter than that space takes its caption along (just under it, the two centred together). Cell text starts at `size`; when the table is too wide, columns
 share the width (a column that needs less keeps its natural width) and text wraps — headings
 at any space, body cells of more than 16 characters at spaces; numbers and short cells never
 wrap. The size is then reduced until the table fits, not below the readable minimum (lint's
@@ -1718,8 +1749,8 @@ apart.
 tag ("Now") and a ring in `now_color`; later events are drawn as planned (hollow markers, a
 dashed progress line).
 
-**Fitting.** Every event's text shares one size: up to 1.2x the requested sizes when every event
-has room without more wrapping, else reduced together down to the readable minimum (lint's
+**Fitting.** Every event's text shares one size: up to 1.2x the requested sizes (1.5x along a
+vertical axis, which has much more room) when every event has room without more wrapping, else reduced together down to the readable minimum (lint's
 `min_font`); lines are wrapped to even lengths. A timeline that still does not fit is scaled
 down and a warning says so: split it into two timelines or shorten the texts. 10 events with
 detail texts are the limit of a 9:16 frame; 3–6 read best (and stay under lint's `max_words`).
@@ -1875,8 +1906,8 @@ one, on its connector's arrowhead.
 [Action targets](#beat-actions): `heading`, `input`, `stage<N>` (1-based), `stage:<label>`,
 `connector<N>` (from stage N to N+1), `loop`, `output` and `token` (those the pipeline has).
 
-**Fitting.** Stage texts share one size: up to 1.2x the requested sizes when the pipeline has
-room, else reduced together down to the readable minimum (lint's `min_font`); `input`/`output`
+**Fitting.** Stage texts share one size: up to 1.2x the requested sizes (1.5x in a column)
+when the pipeline has room without more wrapping, else reduced together down to the readable minimum (lint's `min_font`); `input`/`output`
 labels stand above their arrows (above and below a column). A pipeline that still does not fit
 is scaled down and a warning says so: shorten the texts or split it into two scenes. Short
 labels with an optional detail line read best; 3–5 stages with details fit a 16:9 row.
@@ -2100,11 +2131,11 @@ a title card, a `transform` of a bar).
 | `line_chart` | `title`, `axes`, `series<N>`, `series:<name>`, `point:<name>@<x>` | reveal, dim, highlight, zoom | a series is its line, markers and end label; `point:sparse@8` |
 | `scatter` | `title`, `axes`, `legend`, `series<N>`, `series:<name>`, `point:<series>@<N>`, `point:<series>@<label>`, `trend`, `trend:<series>` | reveal, dim, highlight, zoom | a point is its marker and label; `point:ours@2` is the 2nd point written; `legend` with several series, `trend:` with `trend: each` |
 | `histogram` | `title`, `axes`, `legend`, `bin<N>`, `bin:<range>`, `compare`, `mean`, `median` | reveal, dim, highlight, zoom | `bin:10-20` names a bin by its edges; `legend` and `compare` with `compare`; `mean` / `median` when set |
-| `pie` | `title`, `slice<N>`, `slice:<label>`, `center`, `legend` | reveal, dim, highlight, zoom | a slice is its wedge, label and leader line (a `box` frames the wedge); `slice:Other` after grouping; `center` with a donut, `legend` with the names in a legend (revealing it reveals every slice); `dim` fades a slice with its label, so dark text on a bright slice gets faint (lint `contrast`): the `highlight` param dims the others readably |
-| `heatmap` | `title`, `legend`, `row<N>`, `row:<label>`, `col<N>`, `col:<label>`, `cell<R>.<C>` | reveal, dim, highlight, zoom | a row / column is its cells and label (`box` and `fill` cover its cells edge to edge); `cell2.3` is row 2, column 3; use `highlight` with `style: box` (`color` paints the cells and their values alike, `fill` tints them); as for `pie`, `dim` fades values with their cells, the `highlight` param dims readably |
+| `pie` | `title`, `slice<N>`, `slice:<label>`, `center`, `legend` | reveal, dim, highlight, zoom | a slice is its wedge, label and leader line (a `box` frames the wedge); `slice:Other` after grouping; `center` with a donut, `legend` with the names in a legend (revealing it reveals every slice); `dim` and `highlight` recolour a label inside its slice so it stays readable on the slice's new look |
+| `heatmap` | `title`, `legend`, `row<N>`, `row:<label>`, `col<N>`, `col:<label>`, `cell<R>.<C>` | reveal, dim, highlight, zoom | a row / column is its cells and label (`box` and `fill` cover its cells edge to edge); `cell2.3` is row 2, column 3; `style: box` keeps the data colours (`color` paints the cells, `fill` tints them); values are recoloured to stay readable on dimmed, painted or tinted cells |
 | `map` | `title`, `map`, `legend`, `country:<code>`, `pin<N>`, `pin:<label>`, `arc<N>`, `step<N>` | reveal, dim, highlight, zoom | `country:` for highlighted and valued countries, by alpha-3, alpha-2 or name (`country:DEU`, `country:DE`, `country:Germany`): a highlight with its label (revealing it plays its highlight), a valued country its shape; a pin is its dot and label; `step2` is step 2's items (revealing it plays the step); `zoom: country:FRA` looks closer; `dim: map` fades the countries under the highlights |
 | `image` | `image`, `caption` | dim, highlight, zoom | `dim` fades the picture, `highlight` tints it |
-| `screenshot` | `title`, `image`, `callout<N>`, `callout:<label>`, `step<N>` | reveal, dim, zoom | a callout is its mark and label; `callout:New task`; `step2` is step 2's callouts (revealing it plays the step); `zoom: callout3` looks closer; `dim: image` fades the picture under the callouts |
+| `screenshot` | `title`, `image`, `callout<N>`, `callout:<label>`, `step<N>` | reveal, dim, highlight, zoom | a callout is its mark and label (`highlight` repaints the mark and the label's plate; its text keeps a readable colour); `callout:New task`; `step2` is step 2's callouts (revealing it plays the step); `zoom: callout3` looks closer; `dim: image` fades the picture under the callouts |
 | `video_clip` | `title`, `clip`, `caption`, `callout<N>`, `callout:<label>`, `step<N>` | reveal, dim, highlight, zoom | as in `screenshot`; `clip` is the moving picture with its frame: `dim` fades it, `highlight` tints it, `zoom` looks closer (it is decoded sharper for that) |
 | `quote` | `mark`, `quote`, `author`, `source` | reveal, dim, highlight, zoom | |
 | `equation` | `step<N>`, `caption`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each of the `terms` param, in the step on screen; `transform: step1` + `into: step3` jumps ahead |
@@ -2121,8 +2152,9 @@ a title card, a `transform` of a bar).
 | `process` | `heading`, `input`, `stage<N>`, `stage:<label>`, `connector<N>`, `loop`, `output`, `token` | reveal, dim, highlight, zoom | a stage is its card (a `box` frames it); `connector2` runs from stage 2 to 3; revealing a stage early shows it without moving the token; `highlight: token` with `style: flash` points at it |
 | `network` | `heading`, `layer<N>`, `layer:<label>`, `edges<N>`, `neuron<L>.<i>` | reveal, dim, highlight, zoom | a layer is its units, ellipsis, label and count; `edges1` joins layers 1 and 2; `neuron2.3` is unit 3 of layer 2 as drawn |
 
-[Project scene types](EXTENDING.md#8-per-beat-actions-targets-and-custom-actions) can declare
-their own targets; a type without any rejects actions in `vidgen validate`.
+`title` and `heading` stand for each other (the header band, see "Built-in scenes"): `highlight:
+title` works on a `bullets` heading. [Project scene types](EXTENDING.md#8-per-beat-actions-targets-and-custom-actions)
+can declare their own targets; a type without any rejects actions in `vidgen validate`.
 
 **Actions**
 
@@ -2137,9 +2169,15 @@ their own targets; a type without any rejects actions in `vidgen validate`.
 `dim`, `highlight`, `zoom` and `transform` act on targets on screen; a target not shown yet is
 first revealed (as by `reveal`). `dim` and `highlight` change only opacity resp. colour, so
 both can apply to one target and each is undone separately. Images are dimmed and tinted too
-(their pixels). A highlight `box` (and `fill`) surrounds what the scene marks as the target's
+(their pixels). Text written on a filled shape of its target (a pie slice's label, a heatmap
+value, a callout's label on its plate) is not faded or painted with the shape: it takes the
+colour that reads on the shape's new look (dimmed: kept at 70 % opacity). Undoing a `dim`
+(`until`) keeps the scene's own dimming since (`bullets`' `dim_previous`, a `highlight` step).
+A highlight `box` (and `fill`) surrounds what the scene marks as the target's
 outline (a bar and its value, standing on the axis; a table row, column or cell edge to edge; a
-comparison column's card; else the whole target).
+comparison column's card; else the whole target). Boxes, underlines and fills move with their
+target when the scene moves it later (a `code_walkthrough` scrolling, a pie slice pulled out)
+and fade while it is off screen (a line scrolled out of the window).
 
 **Timing.** Actions never make a beat longer. An action is due `at` x the beat's narration
 after the beat starts and runs at the first moment from then on when the scene's own animation
@@ -2287,7 +2325,8 @@ Each object:
 | `z`, `order` | Manim `z_index`, and the drawing position (higher is drawn later, i.e. on top) of its top-most part |
 | `parts` | number of visible parts (glyphs, paths) |
 | text kinds only: `text` | the characters (markup tags removed; the LaTeX source for `math`) |
-| `font_px` | the 75th percentile of its visible glyphs' heights in output pixels: about the cap height (≈ 0.7 em) for mixed-case text, the x-height for lowercase text without ascenders |
+| `font_px` | the 75th percentile of its visible glyphs' heights in output pixels: about the cap height (≈ 0.7 em) for mixed-case text, the x-height for lowercase text without ascenders; a rotated line of text is measured across its direction |
+| `rotation` | the angle of a line of text in degrees, counter-clockwise (`90` for an axis title turned upwards); `0` when level, for several lines and for math |
 | `color`, `colors` | the most common glyph colour, and all of them (most common first) |
 | `backdrop` | the most common colour of the frame inside its box, ignoring its own colours: what the text is read against (`null` when off-frame) |
 | other kinds: `fill`, `stroke` | `{color, opacity}` / `{color, opacity, width_px}` of the largest visible part, or `null` |
@@ -2561,7 +2600,8 @@ Each scene type: `name`; `origin` (`builtin`, or the extension file relative to 
 Each field: `name` (as written in `video.yaml`: an alias such as `from` when the field has one); `type` (readable type as in the human listing: `str`, `list[str]`,
 `color`, `size`, `'all' | 'per_beat'`, ...); `required` (bool); `default` (JSON value, `null`
 when required); `doc` (the docstring under the field or its `Field(description=...)`, or
-`null`); `nested` (fields of `SceneParams` models used in the type, as `{model, fields}`).
+`null`); `nested` (fields of `SceneParams` models used in the type, as `{model, fields}`);
+`aliases` (other names the field accepts, e.g. `["title"]` for `heading`; `[]` = none).
 Each action: `name`, `origin`, `builtin`, `overrides_builtin`, `doc` (as for scene types);
 `run_time` (default seconds); `reversible` (bool: `until` allowed); `temporary` (bool: undone
 by the end of its beat, like `zoom`); `needs_target` (bool); `target_options` (options whose

@@ -169,6 +169,7 @@ def rows_shown(scene: Any) -> list[int]:
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_scrolls_to_each_steps_lines_and_keeps_the_view(make_project, media: Path) -> None:
     project = load(make_project, [scroll_scene(steps=["2-3", "/def f/-/return/", {"note": "same view"}])])
     scene = render(project, "w", media)
@@ -186,6 +187,7 @@ def test_scrolls_to_each_steps_lines_and_keeps_the_view(make_project, media: Pat
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_reveal_action_scrolls_a_line_into_view(make_project, media: Path) -> None:
     acts = beats(None, [{"reveal": "line28"}, {"highlight": "line28", "style": "box", "at": 0.5}], None)
     spec = scroll_scene(steps=["1-2"])
@@ -214,6 +216,7 @@ def test_notes_beside_in_landscape_and_below_in_portrait(make_project, media: Pa
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_focus_moves_the_camera_in_and_back(make_project, media: Path) -> None:
     spec = scroll_scene(steps=[{"lines": 2}, {"lines": "12", "note": "The header.", "focus": True}, "20"])
     scene = render(load(make_project, [spec]), "w", media)
@@ -259,6 +262,7 @@ def test_vertical_listing_wraps_with_its_numbers(make_project, media: Path) -> N
 
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(160, 90), (90, 160)], ids=["landscape", "portrait"])
+@pytest.mark.slow
 def test_silent_scene_and_duration(make_project, media: Path, size: tuple[int, int]) -> None:
     project = load(make_project, [{"id": "s", "type": "code_walkthrough", "params": {"code": LONG, "steps": ["3", "25"]}, "duration": 2.0},
                                   scroll_scene(steps=["1", "20-22", "29"])])

@@ -61,6 +61,14 @@ class Target:
     outline: Mobject | None = None
     #: Opacity of every part when registered, by ``id`` (may be shared by a scene's targets).
     rest: dict[int, tuple[float, float]] = field(default_factory=dict, repr=False)
+    #: ``(text, shape)`` pairs: text written on a filled shape of the target (a pie slice's
+    #: label, a heatmap value, a callout's label on its plate). ``dim`` and ``highlight`` give
+    #: such text the colour that reads on the shape's new look instead of fading or painting it
+    #: with the shape.
+    on_fill: tuple[tuple[Mobject, Mobject], ...] = ()
+    #: The scene's own dimming of the target (a factor of its full opacity), recorded by
+    #: ``dim_to``; undoing a ``dim`` action (``until``) keeps it.
+    scene_dim: float | None = None
 
     def __post_init__(self) -> None:
         for m in self.mobject.get_family():
@@ -178,10 +186,19 @@ def _pattern_regex(pattern: str) -> re.Pattern[str]:
     return re.compile("".join(".*" if c == "*" else "." if c == "?" else re.escape(c) for c in pattern), re.S)
 
 
+#: Target names that stand for each other when a scene has only one of them: the text in the
+#: header band is ``heading`` in some scene types and ``title`` in others (as their params).
+TARGET_SYNONYMS = {"heading": "title", "title": "heading"}
+
+
 def match_names(pattern: str, names: Sequence[str]) -> list[str]:
-    """The names ``pattern`` selects: itself, or with ``*``/``?`` wildcards every match."""
+    """The names ``pattern`` selects: itself (or its :data:`TARGET_SYNONYMS` name when only
+    that one exists), or with ``*``/``?`` wildcards every match."""
     if "*" not in pattern and "?" not in pattern:
-        return [pattern] if pattern in names else []
+        if pattern in names:
+            return [pattern]
+        other = TARGET_SYNONYMS.get(pattern)
+        return [other] if other in names else []
     regex = _pattern_regex(pattern)
     return [n for n in names if regex.fullmatch(n)]
 
@@ -255,7 +272,7 @@ def scene_actions(
             try:
                 options = kind.cls.Options.model_validate(act.options, context={"theme": theme})
             except ValidationError as exc:
-                problems += [(f"{where}.{p.location}", p.message) for p in validation_problems(exc)]
+                problems += [(f"{where}.{p.location}", p.message) for p in validation_problems(exc, model=kind.cls.Options, noun="option")]
                 continue
             found = len(problems)
             if act.until is not None and not kind.cls.reversible:

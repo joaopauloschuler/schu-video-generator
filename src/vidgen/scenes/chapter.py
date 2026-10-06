@@ -28,6 +28,7 @@ class Chapter(NarratedScene):
         return [name for name, there in present.items() if there]
 
     class Params(SceneParams):
+        header_synonyms = False   # "title" is the main text here, not a header band
         title: str = Field(min_length=1)
         """The chapter's name (wrapped to fit)."""
         number: int | str | None = None

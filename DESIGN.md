@@ -2377,3 +2377,86 @@ using the existing renders of the others (missing ones are rendered). Exit code 
 - Known limits: arcs are drawn on the flat map, not as great circles, and do not wrap; no
   bundled city list (pins take coordinates or a country); 1:110m drops small states; no
   graticule; a `world` view in 9:16 is a narrow strip (documented).
+
+## 40. Refinements (Step 37, review 2)
+
+- **Examples split**: `examples/minimal` keeps the core built-ins (title, bullets, icon_grid,
+  bar/line charts, image, quote, equation, code, text_card, end_card) and the beat-action
+  examples; `examples/gallery` uses every type added in Steps 25–36 once (three `chapter`
+  dividers group them). Their assets moved with them (`app.png`, `clip.webm`, `train.py`; the
+  maintainer scripts `tools/make_screenshot.py` / `make_clip.py` write there). A test checks
+  that the two examples together use every built-in type (`flowchart` = `diagram`).
+- **Header synonyms** (`SceneParams.header_synonyms`, default on; `HEADER_SYNONYMS` in
+  `vidgen.scene`): a `Params` model with only one of `heading` / `title` (and of the `_size`,
+  `_color` pairs) also accepts the other name, via a pydantic `AliasChoices` set in
+  `__pydantic_init_subclass__` (inherited models keep it). `title`, `chapter`, `end_card` opt out
+  (their `title` is the main text). Giving both names is an error (`'title' is another name for
+  'heading', which is given too; keep one`). `vidgen schema` adds the other name as a property
+  with the field's schema and a `not: {anyOf: [{required: [a, b]}]}`; `list-scenes` prints
+  `(also: title)` and its JSON fields gain `aliases` (list; added within version 1). Target
+  names: `actions.TARGET_SYNONYMS` — `title` selects a `heading` target when the scene has no
+  `title`, and the reverse (`match_names` over a scene's whole name list; `find_targets` uses
+  it too).
+- **Unknown keys**: `config.validation_problems(error, prefix, model=None, noun="parameter")`
+  rewrites pydantic's "Extra inputs are not permitted" with `describe.unknown_key_message`:
+  `unknown parameter 'dim_prev'; did you mean 'dim_previous'? (known: ...)` (16 names shown),
+  resolving nested models along the error location (list indexes and union tags skipped).
+  Used for scene params (`validate`, `parse_params`), action options (`noun="option"`) and the
+  top-level config (`noun="key"`).
+- **`one_or_many(item)`** (`vidgen.api`): `Annotated[list[item] | item, AfterValidator]`, the
+  value always a list. `highlight` of `diagram`, `heatmap`, `histogram`, `network`, `scatter`
+  use it (a single item was an error).
+- **Text on fills** (`Target.on_fill`, `NarratedScene.target(..., on_fill=)`): `(text, shape)`
+  pairs. `dim_to` recolours such text with `text_color_on(shape colour mixed over the background
+  at its dimmed opacity)` and keeps it at `TEXT_ON_FILL_DIM` (0.7) instead of fading it with the
+  shape; `highlight` `color` / `flash` give it `text_color_on(highlight colour)` while the shape
+  is painted; `fill` gives it the colour that reads on the plate-tinted shape. Registered by
+  `pie` (labels inside their slice), `heatmap` (values; rows, columns, cells) and
+  `screenshot` / `video_clip` (callout labels on their plates). `pie` and `heatmap` highlight
+  steps use `dim_to` for their texts too (the module helper `pie.recolor` is gone). Undo:
+  `Dim.revert` restores the colours of the recoloured text; `Highlight.revert` after `fill`
+  likewise.
+- **Scene dimming survives `until`** (`Target.scene_dim`): `dim_to(..., own=True)` (scenes)
+  records the factor; `Dim` (the action) passes `own=False`, and its revert caps the restored
+  opacity at `rest x scene_dim` (`_Memory.restore(cap=)`).
+- **Decorations follow** (`scenes/actions._follow`): highlight boxes, underlines and fill plates
+  get an updater that keeps their offset to the outline (not time-based: waits stay frozen
+  frames) and scales their opacity with the anchor's (0 while it is off screen); an outline the
+  scene never draws (table / comparison guide rectangles) is followed but never faded. Undo
+  clears the updaters before fading them out.
+- **Copy-free fades** (`helpers.Fade`, `helpers.fade_out`, in `vidgen.api`): Manim's
+  `FadeIn`/`FadeOut` and every `Animation.begin` copy the mobject (`create_starting_mobject`);
+  for a 57-line `code_walkthrough` that was 33 of 59 s of a preview render. `Fade` animates fill /
+  stroke arrays (and a shift) of the family's `VMobject`s and returns no starting copy;
+  `clear_all` (every scene's outro) uses `fade_out` (`Fade` for vector-only families, Manim's
+  `FadeOut` with images/clips). `Repaint` (dim / highlight) skips the starting copy too. The
+  walkthrough: 59 → 27 s (profiled, preview).
+- **Portrait growth**: `comparison` points, column headings and verdict x `portrait_growth`
+  (1.3, as `bullets`); `icon_grid` labels x 1.3 in portrait (reduced as before when they do not
+  fit); `timeline.vertical_growth` 1.5 and `process.column_growth` 1.5 (tried, then the halfway
+  factor, then the old 1.2 rule; never more wrapped lines). 16:9 unchanged.
+- **9:16 world map** (`WorldMap._portrait_world`): a `world` (or `auto` → world) view in a
+  portrait frame keeps the longitudes of the items (+12 % each side, at least 140°; unchanged
+  past 300°) and every latitude, so the map is a regional panel instead of a strip.
+- **Layout dump `rotation`** (`introspect._glyph_heights`): for a one-line text (≥ 4 glyphs)
+  the principal axis of the glyph centres gives its angle; ≥ 8° counts as rotated and glyph
+  heights are measured along the normal, so `font_px` (and lint `min_font`) no longer measure a
+  rotated label sideways. New key `rotation` (degrees, 0 when level / several lines / math);
+  `LAYOUT_VERSION` stays 1 (additive). kphi3's `lint_ignore` for its rotated label is gone.
+- **`table` widths**: one-line widths are measured once per text at `measure_size` (40 pt) and
+  scaled (linear in the size): a 24-row table's fitting took 85 s, 26 s now.
+- **`list-icons --sheet PNG --theme [PRESET]`** (`iconlist.SheetColors`): the sheet in the
+  project's theme (no value) or a preset's: background, icons in `primary`, names in `text`,
+  categories in `dim`.
+- **Warnings for too much content** read alike: `the <thing>'s N <items> do(es) not fit this
+  frame at the readable size; <remedy>` (`heatmap` and `comparison` reworded).
+- **Header bands alike**: `table`, `code`, `code_walkthrough`, `equation_derivation`,
+  `screenshot` and `video_clip` (framed) build their title with `chart_title` (1.3x in portrait,
+  balanced lines) like the charts and the `heading` scenes; their 9:16 titles were ~1.3x
+  smaller than the others'. A `table` caption follows a short table (`Table._tuck`: at most
+  `caption_gap` 0.45 under it, both centred in their space) instead of standing at the frame's
+  bottom.
+- **Test markers**: `slow` now also marks the parametrized render sweeps (every scene type x
+  orientation, every target, every preset) and every test function over ~1.5 s, so `pytest -m
+  "not slow"` stays a quick check (~1.7 min on a 2-CPU box, 1257 tests) while the full suite
+  (~14 min) runs everything.

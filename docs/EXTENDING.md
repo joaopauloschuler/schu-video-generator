@@ -138,6 +138,14 @@ class Params(SceneParams):
         return self
 ```
 
+A list param that may also be written as one item (`highlight: Lint` for `[Lint]`) is typed
+`one_or_many(str)` (any item type): the validated value is always a list, and the schema and
+`list-scenes` show both forms. Unknown keys are reported with the closest field names
+(`unknown parameter 'colour'; did you mean 'color'?`). A field named `heading` also accepts
+`title` (and the reverse, with `_size` / `_color`) when the model has only one of them, like
+the built-ins' header band; set `header_synonyms = False` on a `Params` class whose `title` is
+something else.
+
 An icon param is typed `IconName` (`icon: IconName = "cpu"`, or `IconName | None`): `vidgen
 validate` checks the name against the built-in and the project's icons (suggesting close names
 and icons tagged like it), `vidgen list-scenes` shows its type as `icon`, and `vidgen schema`
@@ -475,7 +483,11 @@ class Capital(NarratedScene):
   a silent scene yields one step of its `duration`).
 - `self.finish()` fades everything out over `self.outro` seconds (class attribute, default 0;
   the built-ins use 0.5). Set `outro` on your class and call `finish()` at the end of
-  `construct()`; silent scenes then fade out within their `duration`.
+  `construct()`; silent scenes then fade out within their `duration`. It fades vector
+  mobjects with `Fade` (`Fade(group, shift=UP * 0.1)` in, `Fade(group, out=True)` /
+  `fade_out(m)` out): Manim's `FadeIn` / `FadeOut` copy the whole mobject twice when they
+  begin, which takes seconds for big groups (a long code listing); `Fade` animates only the
+  colours (and `shift`), so prefer it for anything large.
 - Stills (`vidgen render --frames`) are taken on the last frame of each beat, i.e. when the
   `with self.narrate(...)` block has ended (or, for a silent scene, at `duration - outro`), so
   a scene reads best in stills when each beat ends showing what it explained. Capturing only
@@ -690,7 +702,7 @@ as the built-ins (every built-in scene type, e.g. `bullets`/`bar_chart`, and
 - classmethod `target_names(params) -> list[str]`: every name the scene will register for these
   params. `vidgen validate` checks each action's `target` against it (no rendering needed), so
   it must match what `construct()` registers.
-- `self.target(names, mobject, entrance=None, outline=None) -> Target` in `construct()`, before
+- `self.target(names, mobject, entrance=None, outline=None, on_fill=()) -> Target` in `construct()`, before
   the beat whose actions use it and while it has its full look (`dim`/`highlight` take its
   opacity at that moment as "full"): `names` is one name or a list (`["item3", "item:Render
   it"]`; a name is `word`, `word3`, a dotted `word2.part3` (a part of a part, as `col2.item3`)
@@ -698,9 +710,15 @@ as the built-ins (every built-in scene type, e.g. `bullets`/`bar_chart`, and
   plain name then selects the ones on screen); `mobject` may be a group that is never added
   itself (e.g. a bar plus its labels); `entrance` returns the animations that bring it on
   screen (default `FadeIn`; `lambda: []` for a part that cannot appear alone); `outline` is
-  what a `highlight` box or fill surrounds (default `mobject`). Give backdrops (cards,
+  what a `highlight` box or fill surrounds (default `mobject`; boxes follow it when the scene
+  moves it later); `on_fill` lists `(text, shape)` pairs of text written on a filled shape of
+  the target (a value on a cell, a label on a plate): `dim` and `highlight` then give the text
+  the colour that reads on the shape's new look instead of fading or painting it with the
+  shape. Give backdrops (cards,
   stripes) a negative `z_index`, and keep them out of the target's `mobject`, so a `fill`
-  highlight lies between them and the text and a `color` highlight does not paint them.
+  highlight lies between them and the text and a `color` highlight does not paint them. When
+  your scene dims a target on its own (as `bullets`' `dim_previous`), set `target.scene_dim =
+  factor` (its share of full opacity), so undoing a `dim` action (`until`) keeps that dimming.
 - Build your own reveal steps with `self.entrance(target)`: it returns `[]` when the target is
   already on screen, so an item a `reveal` action showed early is not revealed twice. Also:
   `self.is_shown(t)`, `self.find_targets("bar:*")`, `self.on_screen_parts(t)` (the target's

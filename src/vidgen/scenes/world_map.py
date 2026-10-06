@@ -494,6 +494,8 @@ class WorldMap(NarratedScene):
         box = fit_view(p.points()) if p.view == "auto" else view_box(p.view, p.antarctica)
         if p.view == "auto" and box == MAP_VIEWS["world"] and p.antarctica:
             box = view_box("world", True)
+        if self.is_portrait and p.view in ("auto", "world") and box[2] - box[0] >= 359.0:
+            box = self._portrait_world(box)
         below = bar.height + 0.3 if bar is not None else 0.0
         area = Region(body.x0, body.y0 + below, body.x1, body.y1)
         view = MapView(box, area, antarctica=p.antarctica)
@@ -502,6 +504,26 @@ class WorldMap(NarratedScene):
             top = body.center[1] + (h + below) / 2
             view = MapView(box, Region(body.x0, top - h, body.x1, top), antarctica=p.antarctica)
         return view
+
+    #: A world view in a vertical frame keeps only the longitudes of its items (with this share
+    #: of their span added on each side, at least :attr:`portrait_world_min` degrees): the
+    #: whole world is a thin strip across a 9:16 frame.
+    portrait_world_pad = 0.12
+    portrait_world_min = 140.0
+
+    def _portrait_world(self, box: tuple[float, float, float, float]) -> tuple[float, float, float, float]:
+        """``box`` (the world) narrowed to the longitudes of the map's items, all latitudes
+        kept; unchanged when they span (almost) the whole world or there are none."""
+        lons = [lon for lon, _ in self.params.points()]
+        if not lons:
+            return box
+        spans = [(min(lons), max(lons)), (min(x + 360.0 if x < 0 else x for x in lons), max(x + 360.0 if x < 0 else x for x in lons))]
+        lo, hi = min(spans, key=lambda s: s[1] - s[0])
+        width = max((hi - lo) * (1 + 2 * self.portrait_world_pad), self.portrait_world_min)
+        if width >= 300.0:
+            return box
+        middle = (lo + hi) / 2
+        return middle - width / 2, box[1], middle + width / 2, box[3]
 
     def _base(self) -> dict[str, VMobject]:
         """Every country in view as a filled shape (land colour, or its choropleth colour) with

@@ -9,7 +9,7 @@ import numpy as np
 from vidgen.api import *
 
 from .actions import dim_to
-from .pie import recolor, window
+from .pie import window
 
 log = logging.getLogger("vidgen.scenes")
 
@@ -89,7 +89,7 @@ class Heatmap(NarratedScene):
         """Title over the legend bar (what the colour means)."""
         reveal: Literal["all", "rows"] = "all"
         """all: every cell in beat 1 (a wave from the top left); rows: row i at beat i."""
-        highlight: list[str] = Field(default_factory=list)
+        highlight: one_or_many(str) = Field(default_factory=list)
         """Cells, rows or columns outlined in a last step (the rest dims): cell<R>.<C>, row<N>, row:<label>, col<N>, col:<label>."""
         highlight_color: ThemeColor = "highlight"
         """Outline colour of highlighted cells."""
@@ -235,7 +235,7 @@ class Heatmap(NarratedScene):
             col_labels = self._column_labels(cell_w, size, floor)
             col_h = max(m.height for m in col_labels)
         if min(cell_w, cell_h) < MIN_CELL:
-            log.warning("scene '%s': the heatmap's %d x %d cells are too small for this frame (%.2f x %.2f units); split the matrix or show fewer rows / columns", self.spec.id, n_rows, n_cols, cell_w, cell_h)
+            log.warning("scene '%s': the heatmap's %d x %d cells do not fit this frame at a readable size (cells %.2f x %.2f units); split the matrix or show fewer rows / columns", self.spec.id, n_rows, n_cols, cell_w, cell_h)
 
         # centre the block: row labels, grid (with column labels), legend (as long as the grid)
         grid_w, grid_h = cell_w * n_cols, cell_h * n_rows
@@ -328,6 +328,10 @@ class Heatmap(NarratedScene):
         def cell_group(r: int, c: int) -> VGroup:
             return VGroup(cells[r][c], *([texts[r][c]] if texts[r][c] is not None else []))
 
+        def on_fill(pairs: list[tuple[int, int]]) -> list[tuple[Mobject, Mobject]]:
+            """Values written on their cells: dim / highlight recolour them for the cell."""
+            return [(texts[r][c], cells[r][c]) for r, c in pairs if texts[r][c] is not None]
+
         def pop(r: int, c: int, rate: Any = smooth) -> list[Animation]:
             return [FadeIn(cell_group(r, c), scale=0.6, rate_func=rate)]
 
@@ -345,7 +349,8 @@ class Heatmap(NarratedScene):
             names = [f"row{r + 1}"] + ([f"row:{p.rows[r]}"] if p.rows else [])
             parts = ([row_labels[r]] if row_labels else []) + [m for c in range(n_cols) for m in cell_group(r, c)]
             entrance = (lambda r=r: self._row_entrance(r, row_labels, pop, cell_t))
-            rows_t.append(self.target(names, VGroup(*parts), entrance=entrance, outline=band(g.x0, g.y1 - ch * (r + 1), g.x1, g.y1 - ch * r)))
+            outline = band(g.x0, g.y1 - ch * (r + 1), g.x1, g.y1 - ch * r)
+            rows_t.append(self.target(names, VGroup(*parts), entrance=entrance, outline=outline, on_fill=on_fill([(r, c) for c in range(n_cols)])))
         for c in range(n_cols):
             names = [f"col{c + 1}"] + ([f"col:{p.columns[c]}"] if p.columns else [])
             parts = ([col_labels[c]] if col_labels else []) + [m for r in range(n_rows) for m in cell_group(r, c)]
@@ -354,10 +359,13 @@ class Heatmap(NarratedScene):
                 anims = [a for r in range(n_rows) for a in self.entrance(cell_t[(r, c)])]
                 return anims + ([FadeIn(col_labels[c])] if col_labels and not self.on_screen_parts(col_labels[c]) else [])
 
-            self.target(names, VGroup(*parts), entrance=entrance, outline=band(g.x0 + cw * c, g.y0, g.x0 + cw * (c + 1), g.y1))
+            outline = band(g.x0 + cw * c, g.y0, g.x0 + cw * (c + 1), g.y1)
+            self.target(names, VGroup(*parts), entrance=entrance, outline=outline, on_fill=on_fill([(r, c) for r in range(n_rows)]))
         for r in range(n_rows):
             for c in range(n_cols):
-                cell_t[(r, c)] = self.target(f"cell{r + 1}.{c + 1}", cell_group(r, c), entrance=lambda r=r, c=c: pop(r, c), outline=cells[r][c])
+                cell_t[(r, c)] = self.target(
+                    f"cell{r + 1}.{c + 1}", cell_group(r, c), entrance=lambda r=r, c=c: pop(r, c), outline=cells[r][c], on_fill=on_fill([(r, c)])
+                )
         self._cell_t = cell_t
 
         def frame() -> list[Animation]:
@@ -404,16 +412,13 @@ class Heatmap(NarratedScene):
         p = self.params
         chosen = {cell for ref in p.highlight for cell in p.cells_of(ref)}
         color = self.theme.color(p.highlight_color)
-        bg = self.theme.background
         anims: list[Animation] = []
         for (r, c), t in self._cell_t.items():
             if (r, c) in chosen or not self.is_shown(t):
                 continue
             anims.append(dim_to(t, self._cells_[r][c], self.dimmed_opacity))
-            v = p.values[r][c]
-            if self._texts[r][c] is not None and v is not None:
-                faded = mix_colors(self._scale(float(v)), bg, self.dimmed_opacity)
-                anims.append(recolor(t, self._texts[r][c], text_color_on(faded), 0.7))
+            if self._texts[r][c] is not None:   # recoloured for the dimmed cell (on_fill)
+                anims.append(dim_to(t, self._texts[r][c], self.dimmed_opacity))
         g = self._grid
         n_rows, n_cols = p.shape()
         cw, ch = g.width / n_cols, g.height / n_rows

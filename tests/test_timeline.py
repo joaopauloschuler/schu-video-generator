@@ -160,6 +160,7 @@ def parts(scene: Any) -> Any:
         pytest.param({"heading": "Ten", "events": [{"date": f"Step {i}", "title": f"Event {i}", "text": "a short detail"} for i in range(1, 11)]}, "one", marks=pytest.mark.slow),
     ],
 )
+@pytest.mark.slow
 def test_timeline_renders_within_its_beats_and_the_safe_area(p: dict[str, Any], timing: str, size: tuple[int, int], make_project, media: Path) -> None:
     extra = {"silent": {"duration": 2.0}, "one": {"beats": three_beats()[:1]}, "three": {"beats": three_beats()}}[timing]
     project = load(make_project, [{"id": "s", "type": "timeline", "params": p, **extra}])
@@ -191,6 +192,7 @@ def test_events_alternate_sides_without_overlap_and_the_progress_line_grows(make
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_vertical_axis_in_portrait_and_orientation_override(make_project, media: Path) -> None:
     project = load(make_project, [
         {"id": "v", "type": "timeline", "params": {"events": SPACE}, "beats": three_beats()},

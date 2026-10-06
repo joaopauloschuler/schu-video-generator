@@ -3306,3 +3306,136 @@ How to test: `/home/claude/venv/bin/python -m pytest -q` (1621 passed, 1 skipped
 only: `pytest tests/test_world_map.py`. Manual: `vidgen storyboard examples/minimal --scene reach --per-beat 3
 [--variant vertical|light]`, `vidgen lint examples/minimal --scene reach [--variant ...]`, `vidgen
 list-scenes`, `vidgen schema --scene map`, `python tools/make_world_map.py` (needs npm).
+
+## Step 37 — Review 2
+Independent review of Steps 23–36 (beat actions and the fifteen scene types added since): every
+scene of both examples storyboarded and linted in all 8 variants, sheets read one by one as a
+designer would (balance, use of the frame, hierarchy, consistency between types); consistency
+of params / targets / warnings across the new types; the action-framework gaps the step
+handoffs reported; the length of `examples/minimal`; render and test-suite performance; docs.
+
+Lint status (preview; `vidgen lint` + `vidgen storyboard`, sheets read with Read)
+| example / variant | findings |
+|---|---|
+| minimal: default, vertical, light, contrast, editorial, neutral, pastel, neon | 0 in each variant (was 0 before the split too) |
+| gallery (new): default, vertical, light, contrast, editorial, neutral, pastel, neon | 0 in each variant |
+| custom_scene, `vertical` | 0, 0 |
+| kphi3 | 0 (4 commented `lint_ignore`s, was 5: the rotated-label one is gone) |
+
+Findings and fixes
+1. **`examples/minimal` was 30 scenes / ~6 min** → split. `minimal` keeps the core built-ins
+   (title, bullets, icon_grid, bar/line charts, image, quote, equation, code, text_card,
+   end_card; 11 scenes, the beat-action examples `sizes` and `math`); new **`examples/gallery`**
+   uses every type of Steps 25–36 once (19 scenes, three numbered `chapter` dividers: ideas and
+   flows / charts and numbers / pictures, maths and code), same 8 variants. Assets moved with
+   their scenes (`app.png`, `clip.webm`, `train.py`; `tools/make_screenshot.py` and
+   `make_clip.py` write there). A test checks that the two together use every built-in type.
+2. **9:16 layouts that left the tall frame empty**: `comparison` (points, column headings and
+   verdict now 1.3x in portrait, as `bullets`), `icon_grid` labels (1.3x in portrait while they
+   fit), vertical `timeline` (growth up to 1.5x instead of 1.2x) and the `process` column (1.5x).
+   `bullets` checked: its list is centred in the body; the empty lower half of early beats is
+   the items still to come (by design). 9:16 **world map** (a thin strip with labels bigger than
+   the countries): a `world` / `auto`→world view in portrait keeps only its items' longitudes
+   (+12 %, ≥ 140°) — a regional panel 2–3x larger.
+3. **Header bands differed**: `table`, `code`, `code_walkthrough`, `equation_derivation`,
+   `screenshot`, `video_clip` titles were not grown in 9:16 (~1.3x smaller than the charts' and
+   the `heading` scenes'): all use `chart_title` now. A `table` caption stood at the frame's
+   bottom far below a short table: it now follows the table (both centred).
+4. **Action framework** (Steps 24–36 gaps):
+   - text on filled shapes: `dim` faded a pie label / heatmap value with its fill (lint
+     contrast 1.5–1.7:1), `highlight` `color` painted a callout's label the colour of its plate,
+     `fill` tinted cells under light text. New `Target.on_fill` (`(text, shape)` pairs,
+     `self.target(..., on_fill=)`): the text gets the colour that reads on the shape's new look
+     (`pie`, `heatmap`, `screenshot` / `video_clip` callouts register them). `screenshot` lists
+     `highlight` among its useful actions again.
+   - highlight boxes / underlines / fills stayed put when the scene moved the target (a
+     `code_walkthrough` scroll, a pie slice pulled out): they now follow it and fade while it is
+     off screen (non-time-based updater; waits stay frozen; guide outlines are followed, never
+     faded).
+   - `until` undoing a `dim` restored full opacity over a scene's own later dimming
+     (`dim_previous`): `Target.scene_dim` (recorded by `dim_to`) caps the restore.
+   - Left documented: `code`'s own highlight steps reset line opacities set by a `dim`; a colour
+     highlight on an `equation_derivation` step is not carried into its dimmed copy.
+5. **Consistency** (cheap, backward compatible): every scene with a header band accepts both
+   `heading` and `title` (and `_size` / `_color`; `AliasChoices` set by `SceneParams`; opt-out
+   for `title`, `chapter`, `end_card`), the target `title` selects a `heading` and the reverse;
+   `list-scenes` shows `(also: title)` (JSON `aliases`), the schema has both properties. List
+   `highlight` params (`diagram`, `heatmap`, `histogram`, `network`, `scatter`) take one item
+   too (`one_or_many`). Unknown keys everywhere get did-you-mean + the known names (params,
+   action options, the top level) instead of pydantic's "Extra inputs are not permitted". The
+   "too much content" warnings read alike (`heatmap`, `comparison` reworded). Checked, no
+   change: per-beat `steps` (step *i* at beat *i* in code_walkthrough, equation_derivation,
+   screenshot, video_clip, map; `diagram.steps` are reveal steps), `reveal` values,
+   `focus_scale`, `caption*` / `label_size` naming; all documented as conventions in CONFIG.md.
+6. **Performance** (preview, sequential, profiled): `code_walkthrough` 59 s for 15 s of video:
+   Manim's `FadeIn`/`FadeOut` and every `Animation.begin` deep-copy the mobject (33 s of copies
+   of the 57-line listing). New `Fade` / `fade_out` (colour arrays only) for the outro of every
+   scene and the walkthrough's listing, and `Repaint` without its starting copy → 27 s. `table`
+   built a `Text` per cell, size and wrap candidate (a 24-row table: 85 s) → widths measured once
+   and scaled (26 s). Other types render at 0.6–1.4x real time with `-j 2`; `image` Ken Burns
+   ~1.6x (Manim's per-frame image transform; left).
+7. **Lint text rotation** (Step 22): the layout dump has `rotation` and measures a rotated line's
+   glyphs across it; kphi3's `lint_ignore` for its rotated "H = length" is gone.
+8. **`list-icons --sheet PNG --theme [PRESET]`** (Step 22): the sheet in the project's or a
+   preset's colours.
+9. **Tests**: `tests/test_review2.py` (14) + a rotation test; full suite 1639 passed, 1 skipped in 13:18 on this 2-CPU box (was ~15 min); `-m "not slow"` was 7:42 (1594 tests) → 1:40 (1257 tests) after marking the render sweeps and every function over ~1.5 s `slow`.
+
+Files
+- Code: `scene.py` (header synonyms, `one_or_many`, `on_fill`, `find_targets`, `clear_all`),
+  `actions.py` (`Target.on_fill` / `scene_dim`, `TARGET_SYNONYMS`), `scenes/actions.py` (inks,
+  `_follow`, caps, no starting copies), `helpers.py` (`Fade`, `fade_out`), `api.py`, `config.py`,
+  `describe.py` (`other_names`, `unknown_key_message`), `schema.py`, `cli.py` (`--theme`),
+  `iconlist.py`, `introspect.py`; scenes `comparison`, `icon_grid`, `timeline`, `process`,
+  `world_map`, `table`, `pie`, `heatmap`, `screenshot`, `code`, `code_walkthrough`,
+  `equation_derivation`, `video_clip`, `diagram`, `histogram`, `network`, `scatter`, `title`,
+  `chapter`, `end_card`.
+- Examples: `examples/minimal/video.yaml` (core types), new `examples/gallery/` (video.yaml,
+  assets moved from minimal), `examples/kphi3/video.yaml` (one `lint_ignore` fewer);
+  `tools/make_screenshot.py`, `tools/make_clip.py` (output path).
+- Tests: new `test_review2.py`; `test_builtin_scenes.py` (both examples), `test_introspect.py`,
+  `test_config.py`, `test_actions.py`, `test_extensions.py`, `test_registry.py`,
+  `test_json_output.py`, `test_pie_heatmap.py`, `test_frames.py`; `slow` on 71 more test functions.
+- Docs: README (scene types grouped, examples, list-icons), docs/CONFIG.md (built-in
+  conventions: vertical growth, header band, per-beat content, too much content, unknown keys;
+  targets table notes; actions text on fills / following boxes / until; map, comparison,
+  timeline, process, icon_grid, table fitting; layout `rotation`; list-scenes `aliases`;
+  list-icons `--theme`), docs/EXTENDING.md (`one_or_many`, synonyms, `on_fill`, `scene_dim`,
+  `Fade`), DESIGN.md (§40), tasklist.md.
+
+Public interfaces added/changed (all additive)
+- `vidgen.api`: `Fade`, `fade_out`, `one_or_many`; `NarratedScene.target(..., on_fill=)`;
+  `Target.on_fill`, `Target.scene_dim`; `SceneParams.header_synonyms`; `vidgen.scene.HEADER_SYNONYMS`.
+- Params: every header-band type accepts the other name (`title` / `heading`, `_size`,
+  `_color`); `highlight` of diagram/heatmap/histogram/network/scatter takes one item.
+- CLI: `list-icons --theme [PRESET]`. JSON: `list-scenes` fields `aliases`; layout dump objects
+  `rotation` (both within version 1).
+- Messages: unknown keys (`unknown parameter|option|key 'x'; did you mean ...? (known: ...)`),
+  both synonyms given; `heatmap` / `comparison` too-dense warnings reworded.
+- Visible changes: 9:16 output of comparison, icon_grid, timeline, process, world maps and the
+  header bands above; table captions under short tables; dim / highlight on pie, heatmap and
+  callouts keep text readable; boxes follow scrolling code.
+
+Decisions / deviations
+- **`examples/gallery`**, not `gallery_src`: the name a reader looks for; Step 57's `vidgen
+  gallery` can render from it.
+- **Synonyms instead of renames**: renaming either half of the header params would break
+  configs; accepting both costs one `AliasChoices` per field.
+- **`on_fill` is declared by scenes**, not detected: guessing "text on a shape" from geometry
+  would also recolour text on cards (process, comparison) whose look should simply dim.
+- **Portrait world crop**, not a different projection: Equal Earth is kept; the view is
+  narrowed only in portrait and only for `world` / `auto`.
+- Quick test run: `slow` now also covers the parametrized render sweeps and every test function
+  over ~2 s.
+
+Known gaps / TODOs (routed in tasklist.md)
+- Step 41: `screenshot` has no `caption` param (video_clip has one).
+- Step 57: 9:16 crowding of `map` labels for small, far-apart countries; screenshots / clips of
+  16:9 pictures leave bands in 9:16.
+- Step 60: equation_derivation highlight in the dimmed copy; `code` steps vs `dim`; Ken Burns
+  and long-listing render cost.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1639 passed, 1 skipped, ~13 min); quick:
+`-m "not slow"` (~1.7 min), `-m "not render"` (seconds). Step only: `pytest
+tests/test_review2.py`. Manual: `vidgen lint examples/gallery [--variant ...]`, `vidgen
+storyboard examples/gallery --variant vertical`, `vidgen lint examples/minimal [--variant ...]`,
+`vidgen list-icons --search chart --sheet icons.png --theme`.

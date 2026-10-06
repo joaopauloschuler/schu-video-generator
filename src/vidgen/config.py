@@ -574,25 +574,35 @@ def format_location(loc: tuple[str | int, ...]) -> str:
     return out
 
 
-def validation_problems(error: ValidationError, prefix: tuple[str | int, ...] = ()) -> list[Problem]:
+def validation_problems(
+    error: ValidationError, prefix: tuple[str | int, ...] = (), model: type[BaseModel] | None = None, noun: str = "parameter"
+) -> list[Problem]:
     """One :class:`~vidgen.errors.Problem` per error; ``prefix`` is prepended to every location
-    (e.g. ``("scenes", 2, "params")`` gives ``scenes[2].params.values``)."""
-    # Model validators raise from the model itself; drop pydantic's "Value error, " prefix.
-    return [
-        Problem(format_location((*prefix, *item["loc"])), item["msg"].removeprefix("Value error, "))
-        for item in error.errors()
-    ]
+    (e.g. ``("scenes", 2, "params")`` gives ``scenes[2].params.values``). With ``model`` (the
+    model validated), an unknown key gets a did-you-mean message and the known names (``noun``:
+    what a key is called, e.g. ``option``)."""
+    from vidgen.describe import unknown_key_message
+
+    problems = []
+    for item in error.errors():
+        # Model validators raise from the model itself; drop pydantic's "Value error, " prefix.
+        message = item["msg"].removeprefix("Value error, ")
+        if item["type"] == "extra_forbidden" and model is not None:
+            message = unknown_key_message(model, item["loc"], noun) or message
+        problems.append(Problem(format_location((*prefix, *item["loc"])), message))
+    return problems
 
 
-def validation_error_lines(error: ValidationError, prefix: tuple[str | int, ...] = ()) -> list[str]:
+def validation_error_lines(error: ValidationError, prefix: tuple[str | int, ...] = (), model: type[BaseModel] | None = None) -> list[str]:
     """One ``path: message`` line per error (see :func:`validation_problems`)."""
-    return [str(problem) for problem in validation_problems(error, prefix)]
+    return [str(problem) for problem in validation_problems(error, prefix, model)]
 
 
-def format_validation_error(error: ValidationError, source: str) -> str:
-    """A readable multi-line message for a pydantic ``ValidationError``."""
+def format_validation_error(error: ValidationError, source: str, model: type[BaseModel] | None = None) -> str:
+    """A readable multi-line message for a pydantic ``ValidationError`` (of ``model``, which
+    improves unknown-key messages)."""
     lines = [f"{source}: invalid config"]
-    lines.extend(f"  {line}" for line in validation_error_lines(error))
+    lines.extend(f"  {problem}" for problem in validation_problems(error, model=model, noun="key"))
     return "\n".join(lines)
 
 
@@ -608,4 +618,4 @@ def parse_config(data: Any, source: str = "video.yaml") -> VideoConfig:
     try:
         return VideoConfig.model_validate(data)
     except ValidationError as exc:
-        raise VidgenError(format_validation_error(exc, source), problems=validation_problems(exc)) from None
+        raise VidgenError(format_validation_error(exc, source, VideoConfig), problems=validation_problems(exc, model=VideoConfig, noun="key")) from None

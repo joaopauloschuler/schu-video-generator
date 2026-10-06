@@ -156,6 +156,7 @@ def centres(scene: Any) -> dict[str, np.ndarray]:
         ({"nodes": ["a", "b"], "edges": ["a -> b"]}, "silent"),
     ],
 )
+@pytest.mark.slow
 def test_diagram_renders_within_its_beats_and_the_safe_area(p: dict[str, Any], timing: str, size: tuple[int, int], make_project, media: Path) -> None:
     extra = {"silent": {"duration": 2.0}, "one": {"beats": three_beats()[:1]}, "three": {"beats": three_beats()}}[timing]
     project = load(make_project, [{"id": "s", "type": "diagram", "params": p, **extra}])

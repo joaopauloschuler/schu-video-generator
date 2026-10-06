@@ -213,8 +213,10 @@ class Timeline(NarratedScene):
     max_card_width = (5.2, 5.6)
     #: Smallest gap between neighbouring events as a share of the even gap (proportional spacing).
     min_gap_share = 0.45
-    #: Text grows up to this factor over the requested sizes when every event has room.
+    #: Text grows up to this factor over the requested sizes when every event has room
+    #: (horizontal axis / vertical axis: a 9:16 column has much more room than its short texts).
     growth = 1.2
+    vertical_growth = 1.5
     #: Opacity of the other events when one is highlighted (as ``icon_grid``).
     dimmed_opacity = 0.55
 
@@ -328,9 +330,12 @@ class Timeline(NarratedScene):
         factor = 1.0
         scaled, worst, clean, lines = attempt(factor)
         if worst <= 1.0 and clean:  # room to spare: grow, as long as no text wraps more
-            grown = attempt(self.growth)
-            if grown[1] <= 1.0 and grown[2] and grown[3] <= lines:
-                factor, (scaled, worst, clean, lines) = self.growth, grown
+            top = self.growth if self.horizontal else self.vertical_growth
+            for g in (top, (top + 1.0) / 2) if top > self.growth else (top,):
+                grown = attempt(g)
+                if grown[1] <= 1.0 and grown[2] and grown[3] <= lines:
+                    factor, (scaled, worst, clean, lines) = g, grown
+                    break
         while (worst > 1.0 or not clean) and factor > lowest + 1e-9:
             factor = max(lowest, factor * min(0.93, max(0.75, 1 / worst if worst > 1 else 0.93)))
             scaled, worst, clean, lines = attempt(factor)

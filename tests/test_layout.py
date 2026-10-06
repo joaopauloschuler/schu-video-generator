@@ -76,6 +76,7 @@ def test_fit_text_single_short_line_unchanged(text_media: None) -> None:
     assert len(block.submobjects) == 1
 
 
+@pytest.mark.slow
 def test_fit_text_fits_height_by_shrinking(text_media: None) -> None:
     long = "word " * 120
     block = fit_text(long, 6.0, 2.0, theme=Theme())

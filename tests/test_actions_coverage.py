@@ -192,6 +192,7 @@ def test_code_lines_of_a_file_are_counted_in_the_project(make_project) -> None:
 
 @pytest.mark.render
 @pytest.mark.parametrize("kind", sorted(SAMPLES))
+@pytest.mark.slow
 def test_builtin_scenes_register_their_target_names(kind: str, make_project, media: Path) -> None:
     """What ``construct`` registers is what ``target_names`` promised, and every target ends up
     on screen (the scene reveals all of them in its steps)."""
@@ -215,6 +216,7 @@ def test_builtin_scenes_register_their_target_names(kind: str, make_project, med
      ("pie", "slice2"), ("heatmap", "row2"), ("equation_derivation", "note2"),
      ("screenshot", "step2"), ("video_clip", "step2"), ("map", "step2")],   # process: its token still moves (test_process_network)
 )
+@pytest.mark.slow
 def test_early_reveal_is_not_repeated_by_the_scene(kind: str, target: str | list[str], make_project, media: Path) -> None:
     project = load(make_project, [{"id": "s", "type": kind, "params": SAMPLES[kind], "beats": beats([{"reveal": target}], None)}])
     scene = render(project, "s", media)
@@ -248,6 +250,7 @@ def test_zoom_moves_the_camera_in_and_back_by_the_beat_end(make_project, media: 
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_zoom_framing_and_a_short_beat(make_project, media: Path) -> None:
     acts = [{"text": " ".join(["word"] * 16), "actions": [{"zoom": "bar1", "padding": 0.3}]}]
     short = [{"text": "one two three four five six", "actions": [{"zoom": "bar1", "at": 0.5}]}]
@@ -349,6 +352,7 @@ def test_transform_replaces_a_target_with_a_hidden_one(make_project, media: Path
 
 @pytest.mark.render
 @pytest.mark.parametrize(("style", "name"), [("replace", "ReplacementTransform"), ("fade", "FadeTransform"), ("tex", "TransformMatchingShapes")])
+@pytest.mark.slow
 def test_transform_styles(style: str, name: str, make_project, media: Path) -> None:
     acts = beats([{"transform": "bar1", "into": "bar3", "style": style}])
     project = load(make_project, [{"id": "c", "type": "bar_chart", "params": {**BARS, "reveal": "per_beat"}, "beats": acts}])
@@ -370,6 +374,7 @@ def test_transform_into_is_checked(make_project) -> None:
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_example_minimal_math_transform_and_zoom(media: Path) -> None:
     project = Project.load(ROOT / "examples" / "minimal")
     scene = render(project, "math", media)
@@ -384,6 +389,7 @@ def test_example_minimal_math_transform_and_zoom(media: Path) -> None:
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_dimming_never_compounds_and_highlight_undims(make_project, media: Path) -> None:
     params = {**BULLETS, "dim_previous": True}
     project = load(make_project, [

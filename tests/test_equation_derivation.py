@@ -199,6 +199,7 @@ def test_morph_pairs_marked_parts_then_shapes() -> None:
 @LATEX
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(160, 90), (90, 160)], ids=["landscape", "portrait"])
+@pytest.mark.slow
 def test_history_keeps_earlier_steps_aligned_and_dimmed(make_project, media: Path, size: tuple[int, int]) -> None:
     project = load(make_project, [scene_of(SOLVE, colors={"x": "accent"}, title="Solve")])
     scene = render(project, "d", media, size=size)
@@ -233,6 +234,7 @@ def test_history_keeps_earlier_steps_aligned_and_dimmed(make_project, media: Pat
 
 @LATEX
 @pytest.mark.render
+@pytest.mark.slow
 def test_replace_mode_shows_one_step_and_the_terms_of_the_current_step(make_project, media: Path) -> None:
     steps = ["(a+b)^2", {"tex": "(a+b)(a+b)", "match": ["(a+b)"]}, "a^2 + 2ab + b^2"]
     project = load(make_project, [scene_of(steps, mode="replace", terms=["2ab"], result="highlight")])
@@ -245,6 +247,7 @@ def test_replace_mode_shows_one_step_and_the_terms_of_the_current_step(make_proj
 
 @LATEX
 @pytest.mark.render
+@pytest.mark.slow
 def test_keep_scrolls_the_oldest_steps_away(make_project, media: Path) -> None:
     steps = ["a = 1", "b = 2", "c = 3", "d = 4"]
     project = load(make_project, [scene_of(steps, keep=2, result="none")])
@@ -268,6 +271,7 @@ def test_term_target_means_the_current_step(make_project, media: Path) -> None:
 
 @LATEX
 @pytest.mark.render
+@pytest.mark.slow
 def test_transform_jump_skips_the_middle_step_and_still_boxes_the_result(make_project, media: Path) -> None:
     acts = beats(None, [{"transform": "step2", "into": "step3", "at": 0.3}], None)
     project = load(make_project, [{"id": "d", "type": "equation_derivation", "params": {"steps": ["a = b", "a = c", "a = d"]}, "beats": acts}])
@@ -279,6 +283,7 @@ def test_transform_jump_skips_the_middle_step_and_still_boxes_the_result(make_pr
 
 @LATEX
 @pytest.mark.render
+@pytest.mark.slow
 def test_long_steps_break_at_relations_in_portrait(make_project, media: Path) -> None:
     long = r"\mathrm{Var}(X) = \mathbb{E}\left[(X - \mu)^2\right] = \mathbb{E}\left[X^2 - 2\mu X + \mu^2\right]"
     project = load(make_project, [scene_of([long, r"\sigma^2 = \mathbb{E}[X^2] - \mu^2"])])
@@ -291,6 +296,7 @@ def test_long_steps_break_at_relations_in_portrait(make_project, media: Path) ->
 
 @LATEX
 @pytest.mark.render
+@pytest.mark.slow
 def test_too_long_to_read_warns(make_project, media: Path, caplog: pytest.LogCaptureFixture) -> None:
     long = " + ".join(f"x_{{{k}}}" for k in range(40)) + " = y"
     project = load(make_project, [scene_of([long])])
@@ -309,6 +315,7 @@ def test_latex_errors_name_the_step_and_show_tex_s_message(make_project, media: 
 
 @LATEX
 @pytest.mark.render
+@pytest.mark.slow
 def test_silent_scene_and_more_steps_than_beats(make_project, media: Path) -> None:
     steps = ["a = 1", "a = 2", "a = 3", "a = 4"]
     project = load(make_project, [

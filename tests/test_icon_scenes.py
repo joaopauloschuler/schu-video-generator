@@ -300,6 +300,7 @@ def test_icon_grid_rows_follow_the_frame(icon_project: Project, tmp_path: Path) 
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_icon_grid_palette_and_highlight(icon_project: Project, tmp_path: Path) -> None:
     scene = render_unfaded(icon_project, "focus", tmp_path, SIZES["landscape"])
     theme = scene.theme
@@ -317,6 +318,7 @@ def test_icon_grid_palette_and_highlight(icon_project: Project, tmp_path: Path) 
 
 @pytest.mark.render
 @pytest.mark.parametrize("orient", ["landscape", "portrait"])
+@pytest.mark.slow
 def test_bullet_icons_align_with_the_first_line(icon_project: Project, tmp_path: Path, orient: str) -> None:
     scene = render_unfaded(icon_project, "list", tmp_path, SIZES[orient])
     rows = [m for m in scene.mobjects if isinstance(m, VGroup) and not isinstance(m, Icon) and len(m) == 2]

@@ -26,6 +26,7 @@ class EndCard(NarratedScene):
     icon_height = 1.1
 
     class Params(SceneParams):
+        header_synonyms = False   # "title" is the main text here, not a header band
         title: str = ""
         """Closing message; at least one of title, lines, logo, icon."""
         lines: list[str] = []

@@ -135,7 +135,7 @@ class Scatter(NarratedScene):
         """series: one series per beat; groups: the points of each group per beat (points without a group come first); all: everything in beat 1."""
         show_labels: Literal["all", "highlight", "none"] = "all"
         """Which point labels are written: every labelled point, only highlighted ones (in the highlight step), or none."""
-        highlight: list[str] = Field(default_factory=list)
+        highlight: one_or_many(str) = Field(default_factory=list)
         """Points emphasised in a last step: '<series>@<N>' (1-based), '<series>@<label>' or a label; the others dim."""
         highlight_color: ThemeColor = "highlight"
         """Ring color of highlighted points."""

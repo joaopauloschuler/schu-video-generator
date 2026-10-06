@@ -100,5 +100,5 @@ the original:
 - `method` beat 5: when the diagram zooms out to 0.55, its column labels keep their 22 pt size
   (they were scaled to 12 pt, the only lint error).
 - Kept on purpose, with a `lint_ignore` and a comment in `video.yaml`: four `dead_air` holds
-  (the original's pacing: a diagram stays still while the narrator explains it) and the
-  rotated `H = length` label (lint measures rotated glyphs sideways).
+  (the original's pacing: a diagram stays still while the narrator explains it). The rotated
+  `H = length` label needed one too until lint measured rotated text across its line (Step 37).
