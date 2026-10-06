@@ -49,6 +49,8 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "table": {"title": "T", "header": ["Name", "N"], "rows": [["a", 1], ["b", 2]], "caption": "C"},
     "timeline": {"heading": "H", "events": [{"date": 1969, "title": "Moon"}, {"date": "1981", "title": "Shuttle", "icon": "rocket"}]},
     "diagram": {"heading": "H", "nodes": ["a", {"id": "b", "icon": "rocket"}], "edges": ["a -> b: go"]},
+    "process": {"heading": "H", "stages": ["a", {"label": "b", "icon": "rocket"}], "input": "in"},
+    "network": {"heading": "H", "layers": [2, {"size": 2, "label": "Out"}], "passes": 0},
 }
 #: Built-in types registered under a second name (same class, params and targets).
 ALIASES = {"flowchart": "diagram"}
@@ -139,6 +141,9 @@ def test_target_names_of_every_builtin_type() -> None:
     assert names("timeline") == ["heading", "axis", "event1", "event:1969", "event2", "event:1981"]
     assert names("timeline", heading="")[:2] == ["axis", "event1"]
     assert names("diagram") == ["heading", "node1", "node:a", "node2", "node:b", "edge:a->b"]
+    assert names("process") == ["heading", "input", "stage1", "stage:a", "stage2", "stage:b", "connector1", "token"]
+    assert names("process", heading="", input="", token=False, loop=True, output="o") == ["stage1", "stage:a", "stage2", "stage:b", "connector1", "loop", "output"]
+    assert names("network") == ["heading", "layer1", "neuron1.1", "neuron1.2", "layer2", "layer:Out", "neuron2.1", "neuron2.2", "edges1"]
     assert names("table", title="", caption="", header=[]) == ["row1", "row:a", "row2", "row:b", "col1", "col2",
                                                                "cell1.1", "cell1.2", "cell2.1", "cell2.2"]
 
@@ -180,7 +185,7 @@ def test_builtin_scenes_register_their_target_names(kind: str, make_project, med
     [("title", "authors"), ("quote", ["author", "source"]), ("end_card", "line*"), ("icon_grid", "item2"),
      ("line_chart", "series2"), ("image", "caption"), ("code", "line3"), ("text_card", "text"),
      ("chapter", "subtitle"), ("stat", ["comparison", "context"]), ("comparison", "col2"), ("table", "row2"), ("timeline", "event2"),
-     ("diagram", "edge:a->b")],
+     ("diagram", "edge:a->b"), ("network", ["layer2", "edges1"])],   # process: its token still moves (test_process_network)
 )
 def test_early_reveal_is_not_repeated_by_the_scene(kind: str, target: str | list[str], make_project, media: Path) -> None:
     project = load(make_project, [{"id": "s", "type": kind, "params": SAMPLES[kind], "beats": beats([{"reveal": target}], None)}])

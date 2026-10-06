@@ -19,7 +19,7 @@ from pydantic import Field, field_validator, model_validator  # noqa: E402
 from vidgen.actions import Action, ActionOptions, Target  # noqa: E402
 from vidgen.errors import VidgenError  # noqa: E402
 from vidgen.graph import EdgeRoute, GraphEdge, GraphLayout, GraphNode, NodePlace, layered_layout  # noqa: E402
-from vidgen.helpers import MT, T, column, counter, dense_pairs, edges, grouped_pairs, resolve_color  # noqa: E402
+from vidgen.helpers import MT, T, column, counter, dense_pairs, edges, group_bounds, grouped_pairs, resolve_color, sparse_pairs  # noqa: E402
 from vidgen.hooks import HookContext, hook  # noqa: E402
 from vidgen.icon_mobject import Icon, icon  # noqa: E402
 from vidgen.layout import (  # noqa: E402
@@ -134,6 +134,8 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "edges",
     "dense_pairs",
     "grouped_pairs",
+    "group_bounds",
+    "sparse_pairs",
     "counter",
     "ThemeColor",
     "ThemeSize",

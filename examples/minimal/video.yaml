@@ -12,6 +12,8 @@
 #   vidgen storyboard examples/minimal --scene formats --per-beat 3 # a table row by row
 #   vidgen storyboard examples/minimal --scene schedule --variant vertical  # a vertical timeline
 #   vidgen storyboard examples/minimal --scene loop --per-beat 2    # a flowchart, node by node
+#   vidgen storyboard examples/minimal --scene render --per-beat 3  # a token moving through a pipeline
+#   vidgen storyboard examples/minimal --scene net --per-beat 3     # a network and its forward pass
 #   vidgen storyboard examples/minimal --variant light           # same video with the light_academic preset
 #   vidgen list-themes examples/minimal --swatches build/themes.png  # every theme preset at a glance
 # There is no narration audio in this example, so beats are timed from their word count
@@ -119,6 +121,26 @@ scenes:
         actions:
           - {highlight: "edge:good->edit", style: flash}
       - text: "If it does, you render the final video."
+
+  - id: render
+    type: process         # a pipeline; a token travels from stage to stage, one per beat (top to bottom in 9:16)
+    params:
+      heading: "From config to video"
+      input: "video.yaml"
+      output: "MP4 + subtitles"
+      token_label: "scene"
+      stages:             # a label, or {label, icon, text}
+        - {label: "Validate", icon: circle-check}
+        - {label: "Voice", icon: megaphone, text: "cached per beat"}
+        - {label: "Render", icon: play, text: "one process per scene"}
+        - {label: "Join", icon: link}
+    beats:
+      - text: "A render starts by validating the config file."
+      - text: "Then every beat is voiced, and the audio is cached."
+      - text: "Each scene is rendered in a process of its own."
+        actions:
+          - {highlight: token, style: flash, at: 0.6}
+      - text: "Finally the clips are joined into one video with subtitles."
 
   - id: tradeoff
     type: comparison      # two or three columns: A vs B, before / after
@@ -269,6 +291,22 @@ scenes:
       - text: "Here is the expanded form, and a closer look at its middle term."
         actions:          # the camera moves in on the term and is back by the end of the beat
           - {zoom: "term:2ab", at: 0.3}
+
+  - id: net
+    type: network         # a layered neural network, built layer by layer; then a pulse runs forward
+    params:
+      heading: "A tiny classifier"
+      layers:             # a size, or {size, label, show, connect, color}; large layers get an ellipsis
+        - {size: 4, label: "Input"}
+        - {size: 256, label: "Hidden"}
+        - {size: 3, label: "Output"}
+      highlight: ["1.2", "2.4", "3.1"]   # layer.unit, as drawn: a path, in a last step
+    beats:
+      - text: "Networks are built one layer at a time. Four inputs come in."
+      - text: "A hidden layer of two hundred and fifty six units mixes them."
+      - text: "Three outputs give the class scores."
+      - text: "In a forward pass, the signal runs from layer to layer."
+      - text: "And a highlight can follow a single path."
 
   - id: listing
     type: code

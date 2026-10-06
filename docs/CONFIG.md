@@ -253,7 +253,8 @@ category `tech`, `data`, `science`, `business`, `people`, `ui` (arrows and inter
 tags is the [icon catalogue](ICONS.md). Built-in scenes take them as params: `icon` on
 [`title`](#title), [`chapter`](#chapter), [`stat`](#stat) and [`end_card`](#end_card), `{text,
 icon}` items of [`bullets`](#bullets), columns and points of [`comparison`](#comparison),
-events of [`timeline`](#timeline), nodes of [`diagram`](#diagram), and the [`icon_grid`](#icon_grid) scene. Extension scenes draw them with `icon(name, ...)` (see
+events of [`timeline`](#timeline), nodes of [`diagram`](#diagram), stages and the token of
+[`process`](#process), and the [`icon_grid`](#icon_grid) scene. Extension scenes draw them with `icon(name, ...)` (see
 docs/EXTENDING.md "Icons"); scene params that take an icon name are typed `icon` in
 `vidgen list-scenes` and checked by `vidgen validate` (an unknown name gets suggestions).
 
@@ -1084,6 +1085,139 @@ narrow frame; long chains do).
 The same scene type as [`diagram`](#diagram) (same params, steps and targets), under the name a
 flowchart is usually looked up by.
 
+### `process`
+
+A pipeline of 2–8 stages that something passes through — a request, an order, a batch of data —
+with a **token** (a dot, or an icon) that travels from stage to stage. Stages stand in a row in
+16:9 and square frames, in two rows when that keeps the text clearly larger (the second row runs
+back, "snaking"; typical for 6–8 stages), and in a column in 9:16 (`layout` overrides). Each
+stage is a card with its label, an optional icon and an optional detail line; connectors with
+arrowheads join them.
+Steps with `reveal: per_beat` (default): (1) heading, `input` and stage 1 (the token arrives at
+it), (2) the connector to stage 2 grows while the token travels along it and stage 2 appears, ...;
+the `output` comes with the last stage. The stage where the token is is the **active** one: its
+outline and icon turn `active_color`, and the previous stage returns to normal. `loop: true` adds
+an arrow from the last stage back to the first (below a row, beside a column) and a last step in
+which the token follows it. `reveal: all` shows the whole pipeline in step 1; the following steps
+only move the token, one stage per step. With more steps than beats they are spread evenly.
+While travelling, the token passes behind the stage it leaves and waits in front of the next
+one, on its connector's arrowhead.
+[Action targets](#beat-actions): `heading`, `input`, `stage<N>` (1-based), `stage:<label>`,
+`connector<N>` (from stage N to N+1), `loop`, `output` and `token` (those the pipeline has).
+
+**Fitting.** Stage texts share one size: up to 1.2x the requested sizes when the pipeline has
+room, else reduced together down to the readable minimum (lint's `min_font`); `input`/`output`
+labels stand above their arrows (above and below a column). A pipeline that still does not fit
+is scaled down and a warning says so: shorten the texts or split it into two scenes. Short
+labels with an optional detail line read best; 3–5 stages with details fit a 16:9 row.
+
+| param | type | default | |
+|---|---|---|---|
+| `stages` | list (2–8) | required | a label, or `{label, icon, text}` per stage (labels must differ) |
+| `heading` | str | `""` | above the pipeline, with step 1 |
+| `layout` | `auto` \| `row` \| `snake` \| `column` | `auto` | `auto`: a column in portrait frames, else a row (two snaking rows when that keeps the text 10 % larger) |
+| `reveal` | `per_beat` \| `all` | `per_beat` | `all`: the whole pipeline in step 1, then the token moves one stage per step |
+| `loop` | bool | `false` | an arrow from the last stage back to the first; the token follows it in a last step |
+| `loop_label` | str | `""` | text on the loop arrow (`repeat`, `next batch`); needs `loop` |
+| `input`, `output` | str | `""` | what goes in / comes out, with an arrow into the first / from the last stage |
+| `token` | bool | `true` | the travelling token |
+| `token_icon` | icon | none | draw the token as this icon in a small disc instead of a dot |
+| `token_label` | str | `""` | a short tag that travels with the token (`order`, `request`) |
+| `stage_color`, `active_color` | color | `primary`, `highlight` | card outlines and icons; those of the active stage |
+| `label_color`, `text_color` | color | `text`, `dim` | stage labels, detail lines |
+| `connector_color`, `token_color` | color | `dim`, `accent` | connectors and loop arrow; the token and its tag |
+| `io_color`, `heading_color` | color | `dim`, `text` | input, output and loop labels; heading |
+| `size`, `text_size`, `io_size`, `heading_size` | size | `body`, `caption`, `caption`, `heading` | stage labels, detail lines (fitted together), input/output/loop/token labels, heading |
+
+```yaml
+- id: orders
+  type: process
+  params:
+    heading: "What happens to an order"
+    input: "Checkout"
+    output: "At your door"
+    token_label: "order"
+    stages:
+      - {label: "Pay", icon: credit-card, text: "card or invoice"}
+      - {label: "Pack", icon: package}
+      - {label: "Ship", icon: truck, text: "1-2 days"}
+  beats:
+    - text: "At checkout, the order is paid."
+    - text: "The warehouse packs it."
+    - text: "And a courier ships it to your door."
+      actions:
+        - {highlight: token, style: flash}
+```
+
+### `network`
+
+A layered neural network: layers of units (dots) joined by edges, left to right in 16:9 and
+square frames, top to bottom in 9:16 (`direction` overrides). A layer larger than `max_neurons`
+shows `show` units with an ellipsis between them (half before it, half after) and its unit count
+under the label, e.g. 6 dots for a layer of 512. Each layer connects to the previous one
+`dense` (every unit to every unit), `sparse` (a reproducible share `ratio` of the pairs, every
+unit keeping a connection), `grouped` (both layers split into `groups` blocks, block to block,
+coloured by block from the theme palette as in grouped convolutions), `one_to_one` or `none`;
+the scene's `connect` is the default, a layer's `connect` overrides it. Edges are drawn between
+the units shown (at most `max_edges` per pair of layers, thinned evenly beyond that), thinner
+and fainter the more there are, so wide layers do not turn into a hairball.
+Steps with `reveal: layers` (default): (1) heading and layer 1, (2) the edges into layer 2 grow
+from layer 1, then its units appear, ...; `reveal: all`: the whole network in step 1. Then
+`passes` forward passes (default 1), each a step: a pulse in `pulse_color` runs along the edges
+layer by layer and each layer's units flash as it arrives. A `highlight` adds a last step: the
+listed units grow and turn `highlight_color`, so do the edges between consecutive ones in
+neighbouring layers (drawn if the connection had none), and everything else dims.
+[Action targets](#beat-actions): `heading`, `layer<N>` (1-based; units, ellipsis, label and
+count), `layer:<label>`, `edges<N>` (between layer N and N+1, if they have edges) and
+`neuron<L>.<i>` (unit i of layer L as drawn, 1-based from the top or left, the ellipsis not
+counted: `neuron2.3`).
+
+| param | type | default | |
+|---|---|---|---|
+| `layers` | list (2–8) | required | a size, or `{size, label, show, connect, color}` per layer, input first (below) |
+| `heading` | str | `""` | above the network, with step 1 |
+| `connect` | connection | `dense` | how each layer connects to the previous one: `dense`, `sparse`, `grouped`, `one_to_one`, `none`, `"sparse:0.3"`, `"grouped:3"` or `{type, ratio, groups}` |
+| `direction` | `auto` \| `LR` \| `TB` | `auto` | `auto`: `TB` in portrait frames, else `LR` |
+| `max_neurons` | int (2–12) | `8` | layers with more units are drawn with an ellipsis |
+| `show` | int (2–12) | `6` | units drawn for such a layer (a layer's `show` overrides it) |
+| `counts` | `auto` \| `all` \| `none` | `auto` | unit counts under the labels: `auto` only for layers drawn with an ellipsis |
+| `count_format` | str | `"{n:,}"` | Python format of the count with `n` (`"{n:,} units"`) |
+| `reveal` | `layers` \| `all` | `layers` | |
+| `passes` | int (0–4) | `1` | forward-pass steps after the network is built |
+| `highlight` | list[str] | `[]` | units as `"layer.unit"` (1-based, as drawn): `["1.2", "2.3", "3.1"]` marks a path in a last step |
+| `max_edges` | int (4–200) | `64` | most edges drawn between two layers |
+| `neuron_color`, `edge_color` | color | `primary`, `dim` | units (unless a layer sets `color`); edges |
+| `group_colors` | bool | `true` | colour `grouped` edges by block (theme palette) |
+| `edge_opacity` | float | auto | edge opacity; default lower the more edges a pair of layers has |
+| `label_color`, `count_color` | color | `text`, `dim` | layer labels, counts |
+| `pulse_color`, `highlight_color`, `heading_color` | color | `accent`, `highlight`, `text` | |
+| `label_size`, `heading_size` | size | `caption`, `heading` | labels and counts (never below the readable minimum), heading |
+
+A layer is `{size, label, show, connect, color}`: `size` (required; the number of units it
+has), `label`, `show` (units drawn when it is larger than `max_neurons`), `connect` (to the
+previous layer; not on the first layer) and `color` (its units). A connection's long form is
+`{type, ratio, groups}` (`ratio` 0.35 for `sparse`, `groups` 2 for `grouped`).
+
+```yaml
+- id: mlp
+  type: network
+  params:
+    heading: "A small classifier"
+    layers:
+      - {size: 784, label: "Pixels", show: 5}
+      - {size: 128, label: "Hidden"}
+      - {size: 10, label: "Digits", connect: "sparse:0.4"}
+    highlight: ["1.2", "2.3", "3.4"]
+  beats:
+    - text: "Each pixel of the image is an input."
+    - text: "A hidden layer of 128 units combines them."
+    - text: "Ten outputs score the ten digits."
+    - text: "In a forward pass, the signal flows from left to right."
+      actions:
+        - {highlight: "layer:Digits", style: box, at: 0.5}
+    - text: "This path leads to the answer."
+```
+
 ### `end_card`
 
 Steps: (1) logo, icon and title, (2) lines. Fades out over 1 s.
@@ -1205,6 +1339,8 @@ a title card, a `transform` of a bar).
 | `table` | `title`, `header`, `row<N>`, `row:<first cell>`, `col<N>`, `col:<header>`, `cell<R>.<C>`, `caption` | reveal, dim, highlight, zoom | `box` and `fill` cover the whole row / column / cell; `cell2.3` is row 2 (below the header), column 3 |
 | `timeline` | `heading`, `axis`, `event<N>`, `event:<date>` | reveal, dim, highlight, zoom | an event is its marker, stem and text; revealing one grows the progress line to it; `event:1969` |
 | `diagram` | `heading`, `node<N>`, `node:<id>`, `edge:<from>-><to>` | reveal, dim, highlight, zoom | also for `flowchart`; a node is its shape, icon and label (a `box` frames the shape), an edge its line, arrowhead and label; `highlight: [node:a, "edge:a->b", node:b]` marks a path; revealing an edge brings its nodes |
+| `process` | `heading`, `input`, `stage<N>`, `stage:<label>`, `connector<N>`, `loop`, `output`, `token` | reveal, dim, highlight, zoom | a stage is its card (a `box` frames it); `connector2` runs from stage 2 to 3; revealing a stage early shows it without moving the token; `highlight: token` with `style: flash` points at it |
+| `network` | `heading`, `layer<N>`, `layer:<label>`, `edges<N>`, `neuron<L>.<i>` | reveal, dim, highlight, zoom | a layer is its units, ellipsis, label and count; `edges1` joins layers 1 and 2; `neuron2.3` is unit 3 of layer 2 as drawn |
 
 [Project scene types](EXTENDING.md#8-per-beat-actions-targets-and-custom-actions) can declare
 their own targets; a type without any rejects actions in `vidgen validate`.

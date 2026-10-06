@@ -2479,3 +2479,123 @@ How to test: `/home/claude/venv/bin/python -m pytest -q` (1128 passed, 1 skipped
 only: `pytest tests/test_graph.py tests/test_diagram.py`. Manual: `vidgen storyboard
 examples/minimal --scene loop --per-beat 2 [--variant vertical|light]`, `vidgen lint
 examples/minimal [--variant ...]`, `vidgen list-scenes`, `vidgen schema --scene diagram`.
+
+## Step 29 — Scenes: `process` and `network`
+What was built
+- **`process`** (`src/vidgen/scenes/process.py`): a pipeline of 2–8 stages `{label, icon?, text?}`
+  (a string is a label; labels unique) with a **token** that travels from stage to stage. Layout
+  `auto`: a row in 16:9/square, two snaking rows (second row right to left, a turn on the right)
+  when that keeps the text ≥ 1.1x larger (≥ 4 stages; in practice 6–8 with details), a column in
+  9:16; `layout: row | snake | column` overrides. Cards on `surface`, icon above the text (row)
+  or left of it (column). Each step: the previous stage returns to `stage_color`, the token
+  leaves (passing *behind* that card) along the connector, which grows under it if not shown,
+  and the new stage appears already **active** (outline `active_color` at 2x width, icon too).
+  The token waits in front of the stage, on the incoming arrowhead. `token_icon` draws an icon
+  in a disc instead of the dot; `token_label` adds a tag that travels with it (above rows, in a
+  lane left of a column). `input`/`output` labels stand above their arrows (above/below a
+  column); the input comes with step 1 (the token starts at its arrow), the output after the
+  last stage. `loop: true` (+ `loop_label`) draws an arrow from the last stage back to the first
+  (below a row, right of a column, below and round the left of a snake) and adds a last step
+  in which the token follows it. `reveal: all` shows everything in step 1, then only the token
+  moves. Fitting like `timeline`/`diagram` (one factor, up to 1.2x, down to the readable size);
+  not fitting → warning + the drawing and the token's paths are scaled into the body.
+  Targets `heading`, `input`, `stage<N>`, `stage:<label>`, `connector<N>`, `loop`, `output`,
+  `token`.
+- **`network`** (`src/vidgen/scenes/network.py`): layers (an int or `{size, label, show,
+  connect, color}`, 2–8), LR in 16:9, TB in 9:16 (`direction`). Layers larger than `max_neurons`
+  (8) are drawn as `show` (6) units with a three-dot ellipsis in the middle slot and their count
+  under the label (`counts`, `count_format` `{n:,}`). Connections per layer (scene default
+  `connect`): `dense`, `sparse` (`"sparse:0.3"`), `grouped` (`"grouped:3"`, edges in palette
+  colours per block, as kphi3's figures), `one_to_one`, `none`, or `{type, ratio, groups}`.
+  Edges only between drawn units, capped at `max_edges` (64) per pair (thinned reproducibly,
+  every unit kept connected), opacity `clip(2.4/sqrt(count), 0.2, 0.75)`. Steps: layer by layer
+  (incoming edges grow, then the units), then `passes` (default 1) forward passes — a pulse
+  (`ShowPassingFlash` in `pulse_color`) runs along each set of edges and each layer's units flash
+  — then `highlight` (`["1.2", "2.3", "3.1"]`, units as drawn): path units grow in
+  `highlight_color`, edges between consecutive ones recoloured (drawn if the connection lacks
+  them), the rest dims to 0.3. Targets `heading`, `layer<N>`, `layer:<label>`, `edges<N>`,
+  `neuron<L>.<i>`.
+- **Helpers** (`helpers.py`, exported by `vidgen.api`, all compatible — kphi3 renders unchanged,
+  its tests pass): `column(..., *, horizontal=False, skip=None)`, `edges(..., *, colors=None,
+  shorten=0.0)`, `grouped_pairs(n, groups, m=None)` (near-equal blocks, same pairs as before
+  when `groups` divides `n`), new `sparse_pairs(n, m, ratio, seed=0)` and `group_bounds(n,
+  groups)`. The `network` scene draws its layers with `column` and its edges with `edges`.
+- `examples/minimal`: `render` (process: video.yaml → Validate/Voice/Render/Join → MP4, tag
+  "scene", a `flash` on `token`) after `loop`, and `net` (network 4 → 256 → 3 with a highlight
+  path) after `math`; two storyboard usage lines.
+
+Verification (sheets opened with Read)
+- Scratch project (process with io + tag + icons + details; a 4-stage cycle with a loop label and
+  an icon token; 8 stages `reveal: all` + loop + input (snake in 16:9); network 4 → 512(show 4)
+  → sparse → 3 with a highlight path; a grouped / one-to-one 9-9-9 net with 2 passes; an
+  8-layer 784/128.../10 net; stress cases) storyboarded in 16:9 (also `--per-beat 3`: token
+  travel, connector growth, pulses), vertical and `light_academic`. Fixed along the way: labels
+  of inactive cards hidden by their own box (an animated submobject is re-added on top → box z 2,
+  content z 3), io labels beside the arrows ate the row's width (now above the arrows), cards
+  of short labels flat as strips (`card_aspect` 0.5), the shrink loop stopping when the caption
+  sizes hit the floor while the labels could still shrink, words squashed one per line in
+  over-full rows (cards never narrower than the longest word; the whole drawing scaled instead),
+  the output appearing before the token reached the last stage, column io labels wrapped at
+  the row width, dimmed ellipses missing in the highlight step, network centring in 9:16, the
+  token's halo and tag at the start sticking out of the left margin (the row was scaled to 0.98:
+  `min_font` warnings with `high_contrast` and `compact`).
+- Lint of the scratch project: 0 findings in 16:9, vertical, light, high_contrast (large scale),
+  brand_neutral + compact, and bold_neon vertical, apart from the deliberate stress cases (an
+  8-stage process with long details and io in a 16:9 row: warning + `min_font`; short beats:
+  `rushed_animation`).
+- `examples/minimal`: `vidgen lint` 0 findings in all 8 variants (default, vertical, light,
+  contrast, editorial, neutral, pastel, neon) for `render`/`net`, and the whole example in 16:9
+  and vertical; `render`/`net` sheets checked in 16:9 (`--per-beat 3`), vertical and light.
+
+Files
+- New: `src/vidgen/scenes/process.py`, `src/vidgen/scenes/network.py`,
+  `tests/test_process_network.py` (51 tests, 25 tiny renders).
+- Changed: `src/vidgen/helpers.py`, `src/vidgen/api.py`, `src/vidgen/scenes/__init__.py`;
+  `examples/minimal/video.yaml`; tests `test_api.py` (helper extensions),
+  `test_builtin_scenes.py` (BUILTINS/SAMPLES), `test_actions_coverage.py` (SAMPLES, names, early
+  reveal), `test_extensions.py` (type list); docs/CONFIG.md (`process`, `network` sections,
+  targets table, Icons intro), docs/EXTENDING.md (helper arguments), README, DESIGN.md (§6.4,
+  new §32), tasklist.md.
+
+Public interfaces added/changed
+- Built-in scene types `process` and `network` (params in docs/CONFIG.md).
+- `vidgen.api`: `sparse_pairs`, `group_bounds` (new); keyword-only additions `column(horizontal=,
+  skip=)`, `edges(colors=, shorten=)`, `grouped_pairs(..., m=None)`. `grouped_pairs` with a
+  `groups` that does not divide `n` now makes near-equal blocks instead of dropping the remainder.
+- Module helpers (internal): `vidgen.scenes.process.rounded_path`, `ProcessStage`,
+  `Process.plan` (after construct); `vidgen.scenes.network.Connection` (`.pairs()`),
+  `NetLayer`, `Network.Params.drawn()/truncated()/connection()/neuron()`.
+
+Decisions / deviations
+- **Token semantics**: the token waits in front of the active stage (on the arrowhead) and passes
+  behind the card it leaves (z order token < cards), which reads as "processed inside"; its tag
+  follows on the same path shifted by a fixed offset (no updaters, so waits stay frozen frames)
+  and fades during the loop step (it would otherwise cross the cards).
+- **Snake = two rows only**, used in landscape; 9:16 always uses a column (8 stages fit; a
+  2-column snake in a 6.8-unit-wide frame was too narrow to be useful). The task's "vertical or
+  snaking in 9:16" is met by the column.
+- The process `output` is not a token destination (it appears after the last stage): with
+  `loop` the token's last move is back to stage 1.
+- `stage:<label>` needs unique labels (validation error otherwise), like diagram ids.
+- Network units are filled dots (kphi3's `column` look); the pass uses `Indicate` (returns to
+  the look) and `ShowPassingFlash` copies, so a pass leaves no trace and can repeat.
+- `edges<N>` exists only for pairs with edges (`connect: none` has no target).
+- `test_early_reveal_is_not_repeated_by_the_scene` covers `network` with `[layer2, edges1]`;
+  `process` is covered by its own test (its step still moves the token, by design).
+
+Known gaps / TODOs
+- `process` has no per-stage highlight/branching (a pipeline is linear by definition; use
+  `diagram` for forks). The token's tag is hidden after a loop.
+- With few stages and no details the row leaves vertical space unused (cards are at most half as
+  tall as wide); a stage text size larger than `growth` 1.2 is not attempted.
+- `network` passes run inside a 1.8 s cap per step; a slow, beat-long pulse would need its own
+  timing. Units are not labelled individually (no `x1..xn` inputs), no bias units, no
+  per-edge weights/colours by value, no recurrent/skip connections (kphi3-style extras stay
+  project scenes, now easier with `column(skip=)`/`edges(colors=)`).
+- `play_steps` at very low fps rounds each of many steps in a short beat up to whole frames
+  (seen at 5 fps with 9 steps in a 1.75 s beat: 0.05 s over); not specific to these scenes.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1191 passed, 1 skipped, ~11 min). Step
+only: `pytest tests/test_process_network.py tests/test_api.py`. Manual: `vidgen storyboard
+examples/minimal --scene render --scene net --per-beat 3 [--variant vertical|light]`, `vidgen lint
+examples/minimal [--variant ...]`, `vidgen list-scenes`, `vidgen schema --scene network`.

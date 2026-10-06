@@ -57,11 +57,30 @@ def MT(
     return styled(MarkupText, current_theme(), s, size, color, weight, role=role, **kwargs)
 
 
-def column(n: int, x: float, gap: float, y0: float = 0.0, r: float = 0.08, color: Any = "text") -> VGroup:
-    """``n`` dots stacked vertically at ``x``, ``gap`` apart, centered on ``y0`` (a layer of a net)."""
+def column(
+    n: int,
+    x: float,
+    gap: float,
+    y0: float = 0.0,
+    r: float = 0.08,
+    color: Any = "text",
+    *,
+    horizontal: bool = False,
+    skip: int | None = None,
+) -> VGroup:
+    """``n`` dots stacked vertically at ``x``, ``gap`` apart, centered on ``y0`` (a layer of a net).
+
+    With ``horizontal`` the dots run left to right along ``y0``, centered on ``x``. ``skip``
+    leaves an empty slot at that position (``n`` dots over ``n + 1`` slots), e.g. for an
+    ellipsis in a layer that shows only some of its units."""
     c = resolve_color(color)
-    dots = [Dot([x, y0 + ((n - 1) / 2 - i) * gap, 0], radius=r, color=c) for i in range(n)]
-    return VGroup(*dots).set_z_index(3)
+    slots = [k for k in range(n + (skip is not None)) if k != skip]
+    middle = (len(slots) + (skip is not None) - 1) / 2
+    if horizontal:
+        points = [[x + (k - middle) * gap, y0, 0] for k in slots]
+    else:
+        points = [[x, y0 + (middle - k) * gap, 0] for k in slots]
+    return VGroup(*[Dot(point, radius=r, color=c) for point in points]).set_z_index(3)
 
 
 def edges(
@@ -71,15 +90,25 @@ def edges(
     color: Any = "primary",
     width: float = 1.6,
     opacity: float = 0.65,
+    *,
+    colors: Sequence[Any] | None = None,
+    shorten: float = 0.0,
 ) -> VGroup:
-    """Lines from ``a[i]`` to ``b[j]`` for each ``(i, j)`` in ``pairs``."""
-    c = resolve_color(color)
-    return VGroup(
-        *[
-            Line(a[i].get_center(), b[j].get_center(), stroke_width=width, color=c, stroke_opacity=opacity)
-            for i, j in pairs
-        ]
-    )
+    """Lines from ``a[i]`` to ``b[j]`` for each ``(i, j)`` in ``pairs``.
+
+    ``colors`` gives each line its own colour (one per pair; default ``color`` for all);
+    ``shorten`` trims that much off both ends (lines from the rim of dots of that radius)."""
+    lines = []
+    for k, (i, j) in enumerate(pairs):
+        start, end = np.array(a[i].get_center()), np.array(b[j].get_center())
+        if shorten > 0:
+            length = float(np.linalg.norm(end - start))
+            if length > 2 * shorten:
+                step = (end - start) / length * shorten
+                start, end = start + step, end - step
+        c = resolve_color(colors[k] if colors is not None else color)
+        lines.append(Line(start, end, stroke_width=width, color=c, stroke_opacity=opacity))
+    return VGroup(*lines)
 
 
 def dense_pairs(n: int, m: int) -> list[tuple[int, int]]:
@@ -87,10 +116,35 @@ def dense_pairs(n: int, m: int) -> list[tuple[int, int]]:
     return [(i, j) for i in range(n) for j in range(m)]
 
 
-def grouped_pairs(n: int, groups: int) -> list[tuple[int, int]]:
-    """Pairs of a grouped layer: ``n`` units split into ``groups`` fully connected blocks."""
-    s = n // groups
-    return [(g * s + i, g * s + j) for g in range(groups) for i in range(s) for j in range(s)]
+def group_bounds(n: int, groups: int) -> list[int]:
+    """Where each of ``groups`` near-equal blocks of ``n`` units starts, plus ``n`` at the end."""
+    groups = max(1, min(groups, n))
+    return [round(g * n / groups) for g in range(groups + 1)]
+
+
+def grouped_pairs(n: int, groups: int, m: int | None = None) -> list[tuple[int, int]]:
+    """Pairs of a grouped layer: ``n`` units split into ``groups`` fully connected blocks.
+
+    With ``m`` the second layer has ``m`` units (split into as many blocks; block ``g`` of the
+    first layer connects to block ``g`` of the second). Blocks are near-equal when ``groups``
+    does not divide a layer."""
+    a = group_bounds(n, groups)
+    b = group_bounds(n if m is None else m, groups)
+    return [(i, j) for g in range(len(a) - 1) for i in range(a[g], a[g + 1]) for j in range(b[g], b[g + 1])]
+
+
+def sparse_pairs(n: int, m: int, ratio: float, seed: int = 0) -> list[tuple[int, int]]:
+    """About ``ratio`` of all ``n x m`` pairs, chosen pseudo-randomly but reproducibly
+    (``seed``), with every unit of both layers keeping at least one connection. Sorted."""
+    rng = np.random.default_rng(seed)
+    chosen = {(i, j) for i in range(n) for j in range(m) if rng.random() < ratio}
+    for i in range(n):
+        if not any((i, j) in chosen for j in range(m)):
+            chosen.add((i, int(rng.integers(m))))
+    for j in range(m):
+        if not any((i, j) in chosen for i in range(n)):
+            chosen.add((int(rng.integers(n)), j))
+    return sorted(chosen)
 
 
 def counter(

@@ -19,6 +19,8 @@ from vidgen.scenes import (  # noqa: F401
     icon_grid,
     image,
     line_chart,
+    network,
+    process,
     quote,
     stat,
     table,

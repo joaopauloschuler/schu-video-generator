@@ -449,6 +449,9 @@ area)` also takes a region name as `area`; `SceneParams.also_accepts`. Step 23 (
 class attributes `temporary`, `moves_camera`, `target_options`. Step 27 adds `measure_text`.
 Step 28 (§31) adds `layered_layout`, `GraphLayout`, `GraphNode`, `GraphEdge`, `EdgeRoute`,
 `NodePlace`.
+Step 29 (§32) adds `sparse_pairs` and `group_bounds`, and compatible keyword arguments:
+`column(..., horizontal=False, skip=None)`, `edges(..., colors=None, shorten=0.0)`,
+`grouped_pairs(n, groups, m=None)`.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -1809,3 +1812,77 @@ using the existing renders of the others (missing ones are rendered). Exit code 
   `dimmed_opacity` 0.55. `reveal(fraction=0.75, cap=1.6)`, `outro` 0.5.
 - **Targets.** `heading`, `node<N>`/`node:<id>` (outline = the shape, so a `box` frames it),
   `edge:<from>-><to>` (line, tip, label; its entrance as a target brings its hidden ends first).
+
+
+## 32. Refinements (Step 29, `process` and `network`)
+
+- **Network helpers** (`helpers.py`, exported; kphi3 renders unchanged): `column(n, x, gap, y0,
+  r, color, *, horizontal=False, skip=None)` — `horizontal` lays the dots out left to right along
+  `y0` centred on `x`; `skip=k` spreads `n` dots over `n + 1` slots leaving slot `k` empty (an
+  ellipsis). `edges(a, b, pairs, color, width, opacity, *, colors=None, shorten=0.0)` — one
+  colour per pair, lines trimmed by `shorten` at both ends (from the rim of dots).
+  `grouped_pairs(n, groups, m=None)` — blocks from `group_bounds(n, groups)` (near-equal,
+  `round(g * n / groups)`; identical to the old `n // groups` blocks when `groups` divides `n`),
+  block `g` of the first layer to block `g` of the second (`m` units). `sparse_pairs(n, m, ratio,
+  seed=0)` — each pair kept with probability `ratio` (numpy `default_rng(seed)`), then any unit
+  of either layer left without a pair gets one; sorted, reproducible.
+- **`process`** (`scenes/process.py`; reference docs/CONFIG.md): `stages` (2–8 `ProcessStage`:
+  a string is `{label}`; `label` unique, `icon`, `text`), `heading`, `layout: auto | row | snake |
+  column`, `reveal: per_beat | all`, `loop` (+ `loop_label`), `input`, `output`, `token`,
+  `token_icon`, `token_label`, colours (`stage_color`, `active_color`, `token_color`, ...) and
+  sizes (`size`, `text_size`, `io_size`, `heading_size`). `auto`: `column` in portrait; else
+  `row`, or `snake` (two rows, the second right to left, joined by a turn on the right) for ≥ 4
+  stages when its text is `layout_bias` (1.1x) larger — growth never decides; when no layout
+  fits, the one that needs the least scaling down.
+  **Planning** (`_fit`/`_geometry`): one size factor for label/detail/io sizes (up to `growth`
+  1.2 without more lines, down to the factor where every size sits at `readable_size()`),
+  measured with `measure_text`; card width = the room left after the io labels (which stand
+  above their arrows: lead = max(gap, label width + 0.3)) and gaps (`gap` = max(0.7, token
+  diameter + 0.45)), capped at 3.4 (6.0 in a column), never narrower than the longest word;
+  height = the tallest content + padding, at least half the width in rows when there is room
+  (`card_aspect`), +0.5 u of air in a column; room before the first stage for the token's halo
+  (1.7 r) and for its tag centred over the start; bands for the token tag (above rows, a lane left of
+  a column), the loop (below a row, a lane right of a column, below and left of a snake). Not
+  fitting → warning "shorten the labels and texts (or split the process into two scenes)" and
+  the drawing (with the token's paths) is scaled into the body.
+  **Drawing**: cards = surface-filled rounded boxes (z 2; content z 3, so a box animated on its
+  own does not cover its text) with icon above the text (rows) or left of it (column);
+  connectors and the loop are rounded polylines (`rounded_path`, corners as quadratic arcs) with
+  a filled tip; the token (z 1: under the cards, over the connectors) is a dot with a halo or an
+  icon in a disc; it waits in front of a stage on the incoming connector's tip
+  (`rests[i]`); its path to the next stage runs from there through the stage's centre (hidden
+  behind the card) and along the connector (`paths[i]`). The tag (pill, z 4) follows the token
+  on the same path shifted by a fixed offset (no updaters); it fades while the token loops.
+  **Steps** (`_arrive(i)`): previous stage back to `stage_color`, then the token moves while the
+  connector it rides grows (if not shown), then the stage appears already active (or, if shown,
+  turns active: outline `active_color` at 2x width, icon recoloured); `input` and heading come
+  with step 1, `output` after the last stage arrives; `loop` adds step n (token along the loop to
+  below/beside stage 1, which becomes active again). `reveal: all`: everything in step 1, later
+  steps only move the token. `reveal(fraction=0.75, cap=1.6)`.
+  **Targets**: `heading`, `input`, `stage<N>`, `stage:<label>` (outline = the box),
+  `connector<N>`, `loop`, `output`, `token` (token + tag). An early `reveal` of a stage shows the
+  card only; its step still moves the token there.
+- **`network`** (`scenes/network.py`): `layers` (2–8 `NetLayer`: an int is `{size}`; `label`,
+  `show`, `connect`, `color`), `heading`, `connect` (`Connection`: `{type: dense | sparse |
+  grouped | one_to_one | none, ratio, groups}`, or a string `dense`, `sparse:0.3`, `grouped 3`;
+  JSON Schema `anyOf` string | object; default `"dense"`), `direction: auto | LR | TB`,
+  `max_neurons` 8, `show` 6, `counts: auto | all | none`, `count_format` `{n:,}`, `reveal:
+  layers | all`, `passes` 1 (0–4), `highlight` (`"L.i"` refs, 1-based, units as drawn),
+  `max_edges` 64, colours, `group_colors`, `edge_opacity`, sizes. Validation: unique labels, no
+  `connect` on the first layer, `count_format` formats `n`, highlight refs in range.
+  **Layout**: LR — layers `min(3.4, width / n)` apart, captions (bold label, dim count) in a band
+  below; TB (portrait) — rows `min(3.0, height / n)` apart, captions right-aligned in a column
+  left of the rows. Unit gap = `min(0.85, room / slots)` (slots = the most drawn units + 1 for an
+  ellipsis), radius 0.3 x gap within 0.07–0.22; a truncated layer is `column(..., skip=(m+1)//2)`
+  with three small dots in the hole. Edges between drawn units via `Connection.pairs` (sparse
+  seeded by the layer index), thinned to `max_edges` (`_thin`: a reproducible sample plus one
+  pair per unit that lost all), opacity `clip(2.4 / sqrt(count), 0.2, 0.75)`, width from the
+  radius, trimmed to the rims; grouped edges coloured per block with `palette_color`.
+  **Steps**: layer k = its incoming edges grow (`Create`, lag) then its units grow one by one with
+  the ellipsis and caption; a pass = `LaggedStart` (lag 0.62) of: layer 1 `Indicate` in
+  `pulse_color`, then per pair `ShowPassingFlash` copies of the edges and the next layer's
+  `Indicate`; highlight = listed units filled `highlight_color` and ×1.3, edges between
+  consecutive listed units in neighbouring layers recoloured ×2 width (a missing one drawn), the
+  other units, ellipses and edges `dim_to` 0.3. `reveal(fraction=0.75, cap=1.8)`.
+  **Targets**: `heading`, `layer<N>` / `layer:<label>` (units, ellipsis, caption), `edges<N>`
+  (when the pair has edges), `neuron<L>.<i>` (one dot).

@@ -408,8 +408,12 @@ import ...` does.
 
 Ready-made helpers in `vidgen.api`: `T(s, size, color, weight, *, role=None)` / `MT(...)` (text /
 Pango markup in the theme font, or the family of a font `role` — the function forms of
-`self.text` / `self.markup`), `column`, `edges`,
-`dense_pairs`, `grouped_pairs`, `counter` (text redrawn from a `ValueTracker`), `resolve_color`,
+`self.text` / `self.markup`), `column` (a layer of dots; `horizontal=True` for a row,
+`skip=k` leaves slot k empty for an ellipsis), `edges` (lines between two layers; `colors=` one
+colour per pair, `shorten=` starts them at the rim of the dots), `dense_pairs`, `grouped_pairs(n,
+groups, m=None)` (blocks connected block to block, also between layers of different sizes),
+`sparse_pairs(n, m, ratio, seed)` (a reproducible share of the pairs, every unit keeping one),
+`group_bounds`, `counter` (text redrawn from a `ValueTracker`), `resolve_color`,
 and the layout/timing helpers of section 2 (`fit_text`, `distribute`, `nice_ticks`, ...).
 Sizes and colors take theme token names (`"body"`, `"accent"`) or literals (`32`, `"#FF0000"`).
 
