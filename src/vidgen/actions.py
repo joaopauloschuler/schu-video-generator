@@ -333,6 +333,10 @@ class ActionRunner:
         self._pending: list[_Due] = []
         self._end = 0
         self._beat = ""
+        #: Seconds of the beat's remaining time the scene has committed after the current wait
+        #: (:meth:`NarratedScene.play_steps` sets it to its later steps' run time); actions are
+        #: shortened to end that long before the beat's end.
+        self.held = 0.0
 
     def _now(self) -> int:
         return round(float(self.scene.renderer.time) * config.frame_rate)
@@ -446,7 +450,7 @@ class ActionRunner:
         # temporary actions still to be undone in this beat need their time too: when the beat
         # is short, these phases and those undoings are shortened alike
         reserved = sum(d.use.run_time for d in self._pending if d.revert and d.use.kind.cls.temporary)
-        remaining = max(self._end - self._now(), 0) / fps
+        remaining = max(self._end - self._now() - round(self.held * fps), 0) / fps
         total = sum(p[1] for p in phases)
         factor = min(1.0, remaining / (total + reserved)) if total > 0 else 1.0
         for build, natural in phases:

@@ -12,6 +12,7 @@ Params validation does not need Manim to be configured: ``SceneClass.validate_pa
 from __future__ import annotations
 
 import logging
+import math
 import re
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
@@ -445,7 +446,9 @@ class NarratedScene(MovingCameraScene):
         Each step gets a slot of ``d / len(steps)`` seconds; its animations run for
         ``min(cap, fraction * slot)`` and the rest of the slot is waited, so the whole call never
         takes longer than ``d`` (slots end at fixed times from the call's start, so a slot that a
-        beat action lengthened is made up by the following waits). A step is an animation, a list of animations played together,
+        beat action lengthened is made up by the following waits; beat actions played in a wait
+        leave the later steps their run time). A step is an animation, a list of animations
+        played together,
         or a callable returning either (built lazily, after the previous steps ran); a step
         that is an empty list just waits its slot. When ``d`` is too short for one frame per
         step, consecutive steps are merged and played together.
@@ -456,20 +459,29 @@ class NarratedScene(MovingCameraScene):
         groups = distribute(len(steps), min(len(steps), max(1, int(d / frame + 1e-9))))
         slot = d / len(groups)
         run_time = max(min(cap, fraction * slot), frame)
+        # a group that may animate (empty lists only wait); the time the later ones need is held
+        # back from beat actions played in the waits, so the beat still ends on time
+        animates = [any(isinstance(steps[k], Animation) or callable(steps[k]) or len(steps[k]) for k in g) for g in groups]
         begin = float(self.renderer.time)
-        for n, group in enumerate(groups):
-            anims: list[Animation] = []
-            for k in group:
-                step = steps[k]
-                built = step() if callable(step) and not isinstance(step, Animation) else step
-                anims += [built] if isinstance(built, Animation) else list(built or [])
-            if anims:
-                self._requested = cap if run_time < cap - 1e-9 else None
-                try:
-                    self.play(*anims, run_time=run_time)
-                finally:
-                    self._requested = None
-            self.wait_seconds(begin + (n + 1) * slot - self.renderer.time)
+        try:
+            for n, group in enumerate(groups):
+                anims: list[Animation] = []
+                for k in group:
+                    step = steps[k]
+                    built = step() if callable(step) and not isinstance(step, Animation) else step
+                    anims += [built] if isinstance(built, Animation) else list(built or [])
+                if anims:
+                    self._requested = cap if run_time < cap - 1e-9 else None
+                    try:
+                        self.play(*anims, run_time=run_time)
+                    finally:
+                        self._requested = None
+                if self._actions is not None:  # Manim plays a run time as whole frames, rounded up
+                    self._actions.held = math.ceil(run_time / frame - 1e-6) * frame * sum(animates[n + 1 :])
+                self.wait_seconds(begin + (n + 1) * slot - self.renderer.time)
+        finally:
+            if self._actions is not None:
+                self._actions.held = 0.0
 
     def play(self, *args: Any, **kwargs: Any) -> None:
         """Manim's ``play``, also recorded in :attr:`play_log` (scene times, beat, names)."""

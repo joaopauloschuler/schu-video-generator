@@ -2277,6 +2277,9 @@ Known gaps / TODOs
   `run_time`, and the following step then pushes the beat past `d + pad` (e.g. 2 comparison
   columns + verdict in 2 beats with a `reveal` in beat 1: 0.4 s over). `ActionRunner` should
   reserve the remaining steps' time; one step per beat (the common case) is unaffected.
+  **Fixed after Step 26** (follow-up commit): `play_steps` sets `ActionRunner.held` to the run
+  time of the beat's later steps, and actions are shortened to leave it; test
+  `test_actions_leave_time_for_the_beats_remaining_steps`.
 
 How to test: `/home/claude/venv/bin/python -m pytest -q` (993 passed, 1 skipped). Step only: `pytest
 tests/test_comparison_table.py`. Manual: `vidgen storyboard examples/minimal --scene tradeoff

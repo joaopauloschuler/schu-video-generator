@@ -388,6 +388,22 @@ def test_actions_are_shortened_to_fit_the_beat(make_project, media: Path) -> Non
 
 
 @pytest.mark.render
+def test_actions_leave_time_for_the_beats_remaining_steps(make_project, media: Path) -> None:
+    """Several reveal steps in one beat plus an action: the action runs in the wait after the
+    first step and must leave the later steps their time (Step 26 found a 0.4 s overrun)."""
+    items = {"items": ["one", "two", "three", "four"]}
+    acts = beats([{"action": "highlight", "target": "item1", "run_time": 2}], words="a b c d e f g h i j k l")
+    project = project_with(make_project, [{"id": "s", "type": "bullets", "params": items, "beats": acts}], narration={"pad": 0.2, "words_per_second": 4.0})
+    scene = render(project, "s", media)
+    d = scene.beat_duration(0)
+    assert scene.beat_busy["s_b1"] <= d + scene.pad + 1e-6
+    assert float(scene.renderer.time) == pytest.approx(beat_total(scene), abs=1.5 / FPS)
+    assert plays(scene, "s_b1") == [("FadeIn",), ("Repaint",), ("FadeIn",), ("FadeIn",), ("FadeIn",)]
+    (record,) = [p for p in scene.play_log if p.animations == ("Repaint",)]
+    assert record.requested == 2 and record.end - record.start < 2
+
+
+@pytest.mark.render
 def test_extension_targets_waits_and_actions_without_time(make_project, media: Path, caplog: pytest.LogCaptureFixture) -> None:
     root = make_project(minimal_config(
         scenes=[
