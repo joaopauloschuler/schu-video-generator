@@ -2110,3 +2110,79 @@ How to test: `/home/claude/venv/bin/python -m pytest -q` (862 passed, 1 skipped)
 `pytest tests/test_actions_coverage.py tests/test_actions.py`. Manual: `vidgen storyboard
 examples/minimal --scene math --per-beat 3 [--variant vertical]`, `vidgen lint examples/minimal`,
 `vidgen list-scenes`.
+
+## Step 25 — Scenes: `stat` and `chapter`
+What was built
+- **`stat`** (`src/vidgen/scenes/stat.py`): one big number that counts up (eases out, fades and
+  rises into place), with `label`, `context` line, optional `icon` and `comparison`. Number
+  format: `prefix`/`suffix` (number size), `unit` (smaller, on the baseline), `decimals` (auto:
+  what value and comparison need, up to 2), `thousands`, `decimal_mark`, typographic minus;
+  `count: false` fades in instead, `count_from` sets the start. `comparison` is a number or
+  `{value, label, kind: versus|before, word, delta: difference|percent|none, better:
+  higher|lower|neither}`: a chip with an arrow and the signed delta coloured `good_color`
+  (`tertiary`) / `bad_color` (`accent`) / `neutral_color` (`dim`), then "vs 44% in 2023" (or
+  "from ..." with `kind: before`, where the count starts at the old value — a before → after).
+  Steps: (1) icon, number, label; (2) comparison and context. Targets `icon`, `value`, `label`,
+  `comparison`, `context`.
+- **`chapter`** (`src/vidgen/scenes/chapter.py`): section divider with optional `number` (int via
+  `number_format` `{:02d}`, or text "Part II"), `title` (required; the chapter's name), optional
+  `subtitle`, `icon`, accent `rule`. 16:9 with a number/icon: icon over number | vertical rule |
+  left-aligned title block; otherwise (9:16, or title only) stacked and centred with a short rule.
+  Entrance: the rule draws, number and title slide towards it from either side, subtitle rises.
+  Two or more beats: subtitle in beat 2; one beat or silent (`duration`): all together. Targets
+  `icon`, `number`, `title`, `subtitle`.
+- `examples/minimal`: `part2` (silent numbered chapter with icon, before the charts) and
+  `speedup` (stat 0.4 min counting down from 9.8 min in 4K, `delta: percent`, `better: lower`).
+
+Verification (sheets opened with Read)
+- Scratch project (3 chapters: numbered+icon+subtitle narrated, title-only silent, "Part II" with
+  a long title; 3 stats: % with comparison and context, $ with icon and before/percent/lower,
+  `ms` unit with `,` decimal mark and a bare-number comparison) storyboarded in 16:9
+  (`--per-beat 3`), vertical, `light_academic`; lint 0 findings in 16:9, vertical, light, neon
+  after one fix: the chip's tinted fill dropped the green delta to 4.0:1 on `light_academic` →
+  the pill is filled with `surface`, stroked in the colour.
+- `examples/minimal`: `vidgen lint` 0 findings in all 8 variants (default, vertical, light,
+  contrast, editorial, neutral, pastel, neon); `part2`/`speedup` sheets checked in 16:9
+  (`--per-beat 3`), vertical, editorial and contrast (large scale).
+
+Files
+- New: `src/vidgen/scenes/stat.py`, `src/vidgen/scenes/chapter.py`, `tests/test_stat_chapter.py`
+  (58 tests, 36 tiny renders at 160x90 / 90x160).
+- Changed: `src/vidgen/scenes/__init__.py`; `examples/minimal/video.yaml`; tests
+  `test_builtin_scenes.py` (BUILTINS/SAMPLES), `test_actions_coverage.py` (SAMPLES, target
+  names, early reveal), `test_extensions.py`, `test_registry.py` (type lists); docs/CONFIG.md
+  (`stat`, `chapter` sections, targets table, Icons intro), README, DESIGN.md (new §28),
+  tasklist.md.
+
+Public interfaces added/changed
+- Built-in scene types `stat` and `chapter` (params in docs/CONFIG.md). No `vidgen.api` change.
+- Module helpers (internal, built-in module): `vidgen.scenes.stat.format_number`,
+  `needed_decimals`; `Stat.change()`, `Stat.written()`, `Stat.start_value()`;
+  `Chapter.Params.number_text()`.
+
+Decisions / deviations
+- Good/bad colours default to `tertiary`/`accent`: in every built-in preset those are the green
+  and the red (no new semantic tokens; a project can point `good_color` at its own token).
+- The change chip sits on `surface` (not a tint) to keep WCAG AA for the delta text on light
+  presets. A comparison with `delta: none` shows only the words.
+- `kind: before` is the before → after form: the number itself animates from the old value; the
+  row says "from 9.8 min in 4K". `word` makes "vs"/"from" translatable for language variants.
+- Numbers and chapter titles use the `heading` font role (serif in light_academic/editorial).
+- `chapter` puts the subtitle in beat 2 only when there are ≥ 2 beats (a silent card or a single
+  beat shows everything together instead of splitting a short beat into two rushed halves).
+- **For Steps 39/49**: the chapter's name is `params.title` of a `chapter` scene (required,
+  plain text); `params.number_text()` gives the number as shown (or `None`).
+
+Known gaps / TODOs
+- The count rebuilds the number `Text` every frame (fine for one number; same approach as
+  `bar_chart` labels). Digits are proportional (Inter has no tabular figures through Manim's
+  `Text`), so the centred number shifts a little while counting.
+- `stat` has no layout with the icon beside the number, and no sparkline; `chapter` has no
+  "progress" (e.g. 2 / 5) — Step 39's indicator could add it.
+- A silent `chapter` of 3 s lasts 3.07 s at 15 fps (the 0.5 s outro rounds up to whole frames),
+  as for the other built-ins.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (932 passed, 1 skipped). Step only: `pytest
+tests/test_stat_chapter.py`. Manual: `vidgen storyboard examples/minimal --scene part2 --scene
+speedup --per-beat 3 [--variant vertical|light]`, `vidgen lint examples/minimal [--variant ...]`,
+`vidgen list-scenes`, `vidgen schema --scene stat`.

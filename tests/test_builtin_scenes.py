@@ -20,7 +20,7 @@ from vidgen.render.worker import frame_size
 from vidgen.scenes.code import parse_line_spec
 from vidgen.theme import Theme
 
-BUILTINS = ["bar_chart", "bullets", "code", "end_card", "equation", "icon_grid", "image", "line_chart", "quote", "text_card", "title"]
+BUILTINS = ["bar_chart", "bullets", "chapter", "code", "end_card", "equation", "icon_grid", "image", "line_chart", "quote", "stat", "text_card", "title"]
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "minimal"
 FPS = 5
 
@@ -37,6 +37,8 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "end_card": {"title": "Thanks", "lines": ["example.com"], "logo": "assets/pic.png", "icon": "heart"},
     "icon_grid": {"heading": "Grid", "items": [{"icon": "cpu", "label": "CPU", "sublabel": "compute"}, {"icon": "home", "label": "Home"}, {"icon": "cloud", "label": "Cloud"}], "highlight": 1, "icon_color": "palette"},
     "text_card": {"text": "Hello world"},
+    "chapter": {"number": 3, "title": "Results", "subtitle": "What we found", "icon": "chart-line"},
+    "stat": {"value": 1234.5, "prefix": "$", "unit": "k", "label": "Revenue", "context": "2025", "icon": "banknote", "comparison": {"value": 1000, "delta": "percent"}},
 }
 
 

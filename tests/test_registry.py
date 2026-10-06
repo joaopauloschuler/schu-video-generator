@@ -130,7 +130,7 @@ def test_unknown_type_suggests_close_matches(builtins_loaded: None) -> None:
     message = str(info.value)
     assert "unknown scene type 'text_crd'" in message
     assert "did you mean 'text_card'" in message
-    assert "known types: bar_chart, bullets, code, " in message and "text_card, title)" in message
+    assert "known types: bar_chart, bullets, chapter, code, " in message and "text_card, title)" in message
 
 
 def test_snapshot_restore_and_isolated() -> None:

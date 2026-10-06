@@ -10,6 +10,7 @@ from vidgen.scenes import (  # noqa: F401
     actions,
     bar_chart,
     bullets,
+    chapter,
     code,
     end_card,
     equation,
@@ -17,6 +18,7 @@ from vidgen.scenes import (  # noqa: F401
     image,
     line_chart,
     quote,
+    stat,
     text_card,
     title,
 )

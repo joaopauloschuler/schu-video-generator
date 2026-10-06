@@ -1578,3 +1578,44 @@ using the existing renders of the others (missing ones are rendered). Exit code 
 - **Listing**: `list-scenes` shows `, undone by the beat's end` for temporary actions;
   `--json` actions gain `temporary` and `target_options` (within version 1). `vidgen schema`
   adds required options (`into`) to both action forms.
+
+## 28. Refinements (Step 25, `stat` and `chapter`)
+
+- **`stat`** (`scenes/stat.py`; reference docs/CONFIG.md): params `value`, `label`, `context`,
+  `prefix`/`suffix` (number size), `unit` (`unit_ratio` 0.42 of it, on the number's baseline:
+  median glyph bottom), `decimals` (default `needed_decimals([value, comparison.value])`, up to
+  2), `thousands` (`,`), `decimal_mark` (`.`), `count`, `count_from`, `comparison`, `icon`,
+  colours (`color` `primary`; `good_color` `tertiary`, `bad_color` `accent`, `neutral_color`
+  `dim`: in every built-in preset `tertiary` is the green and `accent` the red), sizes (number
+  `value_scale` 3.0 x `title`). `format_number(value, decimals, thousands, decimal_mark)`
+  (module function, typographic minus, no "minus zero"). `StatComparison` (nested, `also_accepts
+  = (float,)`: a plain number is `{value: N}`; JSON Schema `anyOf` number | object like
+  `BulletItem`): `value`, `label`, `kind: versus | before` (`before` = before → after: the count
+  starts at the old value), `word` (default `vs`/`from`, translatable), `delta: difference |
+  percent | none`, `better: higher | lower | neither`. The change chip (`Stat.change() -> (text,
+  colour token, direction)`) is an arrow (a filled `Triangle`, none for no change) + the signed
+  delta in a pill filled with the theme's `surface` and stroked in the colour: a tint of the
+  colour behind the delta cost it contrast on light presets (lint `contrast` 4.0:1 on
+  `light_academic`), the surface keeps every preset's text ≥ 4.5:1.
+- **Count**: the layout is built with the final value (the number's font size is chosen so the
+  wider of start/end fits 92 % of the safe width and 42 % of its height, then the card is
+  `place`d with `max_scale=1` and the size scaled with it, so the count never changes size).
+  Targets are registered at that full look; then the number line shows the start value. Its
+  entrance is one `UpdateFromAlphaFunc` (linear) that rebuilds the line each frame
+  (`ease_out_cubic` value, fade over the first `fade_share` 25 %, rising 0.15 units into place),
+  keeping the final line's top edge and centre x (digits have one height, so nothing jumps);
+  `become` + `original_text` as in `bar_chart` so the layout dump sees the shown string.
+- **`chapter`** (`scenes/chapter.py`): `title` (required; **the chapter's name** — Step 39's
+  indicator and Step 49's chapter list read `params.title` of `chapter` scenes, `number_text()`
+  for the number), `number: int | str` (`number_format` `{:02d}` for ints, checked by formatting
+  7), `subtitle`, `icon`, `rule`, colours, sizes (number 2.4 x `title` for ints, 1.6 x for text).
+  Layout: landscape with a number or icon → `VGroup(left column (icon over number), vertical
+  rule, left-aligned title block)`; else stacked and centred (icon, number, short rule
+  `rule_length` 1.6, title, subtitle). Entrance: rule `Create` (vertical, drawn downwards) /
+  `GrowFromCenter`, number/icon slide in from the left (from above when stacked), title from
+  the right (from below), subtitle rises; lagged 0.25. Steps: with ≥ 2 beats `[head,
+  subtitle]`, else one step (silent or one beat: the subtitle belongs with the title; two
+  steps in one short silent card would rush both).
+- Both: Step 15 regions (`safe_area`, `place`), theme tokens and font roles only (numbers and
+  chapter titles use the `heading` role), targets per Step 23/24 and the table in CONFIG.md,
+  `outro` 0.5, `reveal()` with `fraction` 0.75 (caps 2.0 / 1.6).

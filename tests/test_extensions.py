@@ -263,7 +263,7 @@ def test_check_project_reports_unknown_types_and_params(ext_project) -> None:
     )
     problems = check_project(project)
     assert problems[0].startswith("scenes[1].type: unknown scene type 'loss_pannel'; did you mean 'loss_panel'?")
-    assert "known types: bar_chart, " in problems[0] and ", loss_panel, quote, text_card, title)" in problems[0]
+    assert "known types: bar_chart, " in problems[0] and ", loss_panel, quote, stat, text_card, title)" in problems[0]
     assert any(p.startswith("scenes[2].params.values.x:") for p in problems)
     assert "scenes[2].params.colour: Extra inputs are not permitted" in problems
     assert "scenes[3].params.text: Field required" in problems

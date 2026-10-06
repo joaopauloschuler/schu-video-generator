@@ -6,8 +6,9 @@ ElevenLabs, animates every scene with [Manim](https://www.manim.community/) (eac
 exactly as long as its narration), and joins everything with ffmpeg into one MP4 plus SRT
 subtitles.
 
-- **Config-only videos** with eleven built-in scene types (title, bullets, icon grid, charts,
-  image, quote, equation, code, end card...), in landscape and vertical formats.
+- **Config-only videos** with thirteen built-in scene types (title, chapter divider, bullets,
+  icon grid, charts, a counting stat, image, quote, equation, code, end card...), in landscape
+  and vertical formats.
 - **Theme presets** (`theme: {preset: warm_editorial}`; seven built in: `dark_tech`, the default
   look, `light_academic`, `high_contrast`, `warm_editorial`, `brand_neutral`, `soft_pastel`,
   `bold_neon`), all WCAG AA with colour-blind-safe palettes, and **type scales** (`compact`,
@@ -17,8 +18,8 @@ subtitles.
   presets pick them per role (serif headings in `light_academic` and `warm_editorial`).
 - **Icons**: 200 built-in line icons (Lucide, ISC) in eight categories
   ([catalogue](docs/ICONS.md)), searchable by concept, recoloured by the
-  theme and crisp at any size; used from config by `bullets` items, `title`, `end_card` and the
-  `icon_grid` scene; `vidgen list-icons --search chart --sheet icons.png` finds and shows them;
+  theme and crisp at any size; used from config by `bullets` items, `title`, `chapter`, `stat`,
+  `end_card` and the `icon_grid` scene; `vidgen list-icons --search chart --sheet icons.png` finds and shows them;
   a project adds or replaces icons with SVGs in `assets/icons/`.
 - **Beat actions**: a beat can point at parts of its scene while it is spoken —
   `- highlight: "bar:4K"`, `- dim: item1`, `- reveal: item4` (with `until:` a later beat to undo),

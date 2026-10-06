@@ -8,6 +8,7 @@
 #   vidgen lint examples/minimal [--variant vertical]            # layout + timing checks (dead air, ...)
 #   vidgen storyboard examples/minimal --scene sizes --per-beat 3   # mid-beat stills: beat actions
 #   vidgen storyboard examples/minimal --scene math --per-beat 3    # transform and zoom actions
+#   vidgen storyboard examples/minimal --scene speedup --per-beat 3 # a stat counting down
 #   vidgen storyboard examples/minimal --variant light           # same video with the light_academic preset
 #   vidgen list-themes examples/minimal --swatches build/themes.png  # every theme preset at a glance
 # There is no narration audio in this example, so beats are timed from their word count
@@ -94,6 +95,15 @@ scenes:
       - text: "And a theme preset restyles the whole video."
       - text: "At the end, one item can be highlighted, like lint here."
 
+  - id: part2
+    type: chapter         # a section divider; silent here (duration), or narrated with beats
+    params:
+      number: 2
+      title: "Charts and numbers"
+      subtitle: "Data scenes"
+      icon: chart-column
+    duration: 3
+
   - id: sizes
     type: bar_chart
     params:
@@ -112,6 +122,18 @@ scenes:
         actions:          # shorthand form: {ACTION: TARGET, ...options}
           - dim: [bar2, bar3, bar4]
           - highlight: "bar:Preview 480p"
+
+  - id: speedup
+    type: stat            # one big number that counts, with a label and a comparison
+    params:
+      value: 0.4
+      unit: "min"
+      label: "to render a minute of video as a 480p preview"
+      comparison: {value: 9.8, kind: before, label: "in 4K", delta: percent, better: lower}
+      context: "Illustrative numbers"
+    beats:
+      - text: "A big number counts down from the four K render time to the preview's."
+      - text: "That is ninety six percent less waiting while you iterate."
 
   - id: trend
     type: line_chart

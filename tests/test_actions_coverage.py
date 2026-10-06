@@ -43,6 +43,8 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "equation": {"latex": ["(a+b)^2", "a^2 + 2ab + b^2"], "terms": ["2ab"], "caption": "c"},
     "code": {"code": "a = 1\nb = 2\nc = 3", "title": "T"},
     "end_card": {"title": "Thanks", "lines": ["one", "two"], "icon": "rocket", "logo": "assets/pic.png"},
+    "chapter": {"number": 2, "title": "Results", "subtitle": "Sub", "icon": "rocket"},
+    "stat": {"value": 42, "suffix": "%", "label": "L", "context": "C", "comparison": 30, "icon": "rocket"},
 }
 
 
@@ -118,6 +120,11 @@ def test_target_names_of_every_builtin_type() -> None:
     assert names("equation") == ["step1", "step2", "caption", "term:2ab"]
     assert names("code") == ["title", "listing", "line1", "line2", "line3", "lines:1-2", "lines:1-3", "lines:2-3"]
     assert names("end_card", logo=None) == ["icon", "title", "line1", "line2"]
+    assert names("chapter") == ["icon", "number", "title", "subtitle"]
+    assert names("chapter", number=None, icon=None, subtitle="") == ["title"]
+    assert names("chapter", number="") == ["icon", "title", "subtitle"]
+    assert names("stat") == ["icon", "value", "label", "comparison", "context"]
+    assert names("stat", label="", context="", comparison=None, icon=None) == ["value"]
 
 
 def test_equation_terms_must_occur_in_a_step() -> None:
@@ -155,7 +162,8 @@ def test_builtin_scenes_register_their_target_names(kind: str, make_project, med
 @pytest.mark.parametrize(
     ("kind", "target"),
     [("title", "authors"), ("quote", ["author", "source"]), ("end_card", "line*"), ("icon_grid", "item2"),
-     ("line_chart", "series2"), ("image", "caption"), ("code", "line3"), ("text_card", "text")],
+     ("line_chart", "series2"), ("image", "caption"), ("code", "line3"), ("text_card", "text"),
+     ("chapter", "subtitle"), ("stat", ["comparison", "context"])],
 )
 def test_early_reveal_is_not_repeated_by_the_scene(kind: str, target: str | list[str], make_project, media: Path) -> None:
     project = load(make_project, [{"id": "s", "type": kind, "params": SAMPLES[kind], "beats": beats([{"reveal": target}], None)}])
@@ -422,7 +430,7 @@ def test_a_type_without_targets_rejects_actions(make_project) -> None:
                     pass
     '''})
     (problem,) = project_problems(Project.load(root))
-    assert problem.message.startswith("scene type 'plain' has no action targets (types with targets: bar_chart, bullets, code,")
+    assert problem.message.startswith("scene type 'plain' has no action targets (types with targets: bar_chart, bullets, chapter, code,")
 
 
 def test_config_md_action_examples_validate(make_project) -> None:

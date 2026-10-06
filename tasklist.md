@@ -116,8 +116,8 @@ Rules that apply to every step:
 - [x] Actions supported by every built-in scene where they make sense; documented table (targets on all 11 built-ins, equation `terms`; table in CONFIG.md "Beat actions" kept in sync by a test)
 
 ### Step 25 — Scenes: `stat` and `chapter`
-- [ ] `stat`: big number counting up, label, context line, optional comparison value
-- [ ] `chapter`: section divider with number, title, optional icon
+- [x] `stat`: big number counting up, label, context line, optional comparison value (prefix/suffix/unit, decimals, separators; comparison `versus` or `before` (counts from the old value), change chip with arrow, `difference`/`percent`, `better: higher|lower|neither` → good/bad colours; optional icon)
+- [x] `chapter`: section divider with number, title, optional icon (subtitle; side-by-side in 16:9, stacked in 9:16; silent or narrated; the chapter's name is `params.title` for Steps 39/49)
 
 ### Step 26 — Scenes: `comparison` and `table`
 - [ ] `comparison`: two (or three) columns, before/after or A vs B, per-beat reveal

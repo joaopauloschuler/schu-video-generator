@@ -251,7 +251,8 @@ vidgen ships 200 line icons (from [Lucide](https://lucide.dev), ISC licence), 25
 category `tech`, `data`, `science`, `business`, `people`, `ui` (arrows and interface),
 `nature`, `education`, chosen for what explainer videos show; the full list with aliases and
 tags is the [icon catalogue](ICONS.md). Built-in scenes take them as params: `icon` on
-[`title`](#title) and [`end_card`](#end_card), `{text, icon}` items of [`bullets`](#bullets),
+[`title`](#title), [`chapter`](#chapter), [`stat`](#stat) and [`end_card`](#end_card), `{text,
+icon}` items of [`bullets`](#bullets),
 and the [`icon_grid`](#icon_grid) scene. Extension scenes draw them with `icon(name, ...)` (see
 docs/EXTENDING.md "Icons"); scene params that take an icon name are typed `icon` in
 `vidgen list-scenes` and checked by `vidgen validate` (an unknown name gets suggestions).
@@ -702,6 +703,105 @@ those lines.
     - text: "And train."
 ```
 
+### `stat`
+
+One big number that counts up, with what it means, an optional comparison and a context line.
+Steps: (1) icon, number (counting from `count_from` to `value`, easing out so the last digits
+settle) and label, (2) comparison and context; with one beat both come in it.
+[Action targets](#beat-actions): `icon`, `value`, `label`, `comparison`, `context` (those present).
+
+Layout, centred in the safe area: icon, number, label, comparison, context. The number is
+`size` (default 3x the theme's `title` size) unless that is wider than the frame, then smaller;
+the count never changes its size. In a vertical frame the parts are spaced 1.3x further apart.
+Numbers use the `heading` font role (serif in `light_academic`/`warm_editorial`).
+
+| param | type | default | |
+|---|---|---|---|
+| `value` | float | required | the number shown |
+| `label` | str | `""` | what the number is, under it |
+| `context` | str | `""` | smaller line at the bottom (period, population, source) |
+| `prefix`, `suffix` | str | `""` | before/after the number at its size (`"$"`, `"%"`, `"x"`) |
+| `unit` | str | `""` | after the number, smaller, on its baseline (`"ms"`, `"users"`) |
+| `decimals` | int 0–6 | automatic | decimals of every number shown (also while counting); default: what `value` and the comparison value need, up to 2 |
+| `thousands` | str | `","` | thousands separator: `","`, `"."`, `" "`, `"'"` or `""` |
+| `decimal_mark` | str | `"."` | `"."` or `","` (e.g. `thousands: "."`, `decimal_mark: ","` for German) |
+| `count` | bool | `true` | count up in beat 1; `false`: the number fades in |
+| `count_from` | float | `0` | where the count starts; with a `kind: before` comparison, its value |
+| `comparison` | number \| mapping | none | a value to compare with (below); a plain number is `{value: N}` |
+| `icon` | icon | none | above the number |
+| `icon_color`, `color`, `label_color`, `context_color`, `comparison_color` | color | `primary`, `primary`, `text`, `dim`, `dim` | `color` is the number's (prefix, suffix and unit too) |
+| `good_color`, `bad_color`, `neutral_color` | color | `tertiary`, `accent`, `dim` | the change chip: better, worse, no change / `better: neither` |
+| `size` | size | 3x `title` | number size (shrunk to fit) |
+| `label_size`, `context_size`, `comparison_size` | size | `subtitle`, `caption`, `body` | |
+
+**Comparison** (`comparison: {value, label, kind, word, delta, better}`): a row under the label
+with the change in a chip (an arrow and the delta, coloured by whether the change is good) and
+the words `vs 12% last year`.
+
+| key | default | |
+|---|---|---|
+| `value` | required | the other value, written with the same prefix, suffix, unit and decimals |
+| `label` | `""` | words after it (`"last year"`, `"in 4K"`) |
+| `kind` | `versus` | `versus`: "vs 12%"; `before`: a before → after change, the number counts from this value ("from 12%") |
+| `word` | `vs` / `from` | the word before the other value (`""` for none; translate it in a language variant) |
+| `delta` | `difference` | the chip shows the `difference` (`+19%`, with prefix/suffix/unit), the `percent` change (`+158%`; needs a non-zero value) or `none` (no chip) |
+| `better` | `higher` | which direction is good: `higher`, `lower` (costs, latency), `neither` (always neutral) |
+
+```yaml
+- id: adoption
+  type: stat
+  params:
+    value: 73
+    suffix: "%"
+    label: "of developers use AI coding tools"
+    comparison: {value: 44, label: "in 2023"}     # chip "▲ +29%" in good_color, "vs 44% in 2023"
+    context: "Survey of 12,000 developers, 2025"
+  beats:
+    - text: "Seventy-three percent of developers now use AI coding tools."
+    - text: "Up from forty-four percent two years earlier."
+- id: latency
+  type: stat
+  params:
+    value: 12.5
+    unit: "ms"
+    label: "median latency"
+    comparison: {value: 18, kind: before, better: lower, delta: percent}   # counts down from 18
+  beats:
+    - text: "Median latency fell from eighteen to twelve and a half milliseconds."
+```
+
+### `chapter`
+
+A section divider: an optional number, the chapter's `title`, an optional subtitle and icon.
+An accent rule draws in, the number (with the icon) and the title slide towards it from either
+side, the subtitle rises. In a wide frame with a number or icon, they stand left of a vertical
+rule and the title (left-aligned) right of it; otherwise (vertical frames, or only a title) the
+parts are stacked and centred, the rule a short line between number and title.
+Steps: with two or more beats, (1) rule, icon, number and title, (2) subtitle; with one beat,
+or silent with a `duration`, everything comes in together. Further beats hold.
+[Action targets](#beat-actions): `icon`, `number`, `title`, `subtitle` (those present).
+
+The chapter's name is its `title` param (what a chapter list or indicator should show).
+
+| param | type | default | |
+|---|---|---|---|
+| `title` | str | required | the chapter's name; wrapped to fit |
+| `number` | int \| str | none | an integer is shown with `number_format` (`02`); text as written (`"II"`, `"Part 2"`) |
+| `number_format` | str | `"{:02d}"` | Python format for an integer `number`: `"{}"` gives `2`, `"Part {}"` gives `Part 2` |
+| `subtitle` | str | `""` | |
+| `icon` | icon | none | above the number, or in its place |
+| `rule` | bool | `true` | draw the accent rule |
+| `number_color`, `rule_color`, `icon_color`, `title_color`, `subtitle_color` | color | `primary`, `primary`, `primary`, `text`, `dim` | |
+| `number_size` | size | 2.4x `title` (1.6x for text) | shrunk to fit |
+| `title_size`, `subtitle_size` | size | `title`, `subtitle` | |
+
+```yaml
+- id: part2
+  type: chapter
+  params: {number: 2, title: "Results", subtitle: "What the benchmark shows", icon: chart-line}
+  duration: 3                      # silent divider; or give it beats
+```
+
 ### `end_card`
 
 Steps: (1) logo, icon and title, (2) lines. Fades out over 1 s.
@@ -817,6 +917,8 @@ a title card, a `transform` of a bar).
 | `equation` | `step<N>`, `caption`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each of the `terms` param, in the step on screen; `transform: step1` + `into: step3` jumps ahead |
 | `code` | `title`, `listing`, `line<N>`, `lines:<a-b>` | dim, highlight, zoom | a line with its number; `lines:3-5`; a wide line leaves little to zoom |
 | `end_card` | `logo`, `icon`, `title`, `line<N>` | reveal, dim, highlight | those present |
+| `chapter` | `icon`, `number`, `title`, `subtitle` | reveal, dim, highlight | those present |
+| `stat` | `icon`, `value`, `label`, `comparison`, `context` | reveal, dim, highlight, zoom | `reveal: value` early runs the count; `comparison` is the change chip with its text |
 
 [Project scene types](EXTENDING.md#8-per-beat-actions-targets-and-custom-actions) can declare
 their own targets; a type without any rejects actions in `vidgen validate`.
