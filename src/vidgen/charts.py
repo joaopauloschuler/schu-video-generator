@@ -7,6 +7,9 @@ region (tick labels, axis titles, gridlines, axis lines) and maps data to points
 legend (:func:`chart_legend`, auto-placed with :func:`legend_spot`), point markers
 (:func:`chart_marker`), a least-squares line (:func:`linear_fit`), and the frame of a chart: its
 title in the ``header`` region (:func:`chart_title`) and a caption (:func:`chart_caption`).
+Colour: a :class:`ColorScale` from theme colours (:func:`color_scale`, sequential or diverging,
+interpolated in OKLab), its legend (:func:`color_bar`), :func:`mix_colors` and
+:func:`text_color_on` (text that stays readable on any fill).
 
 Text sizes are theme size tokens (or points) and never go below :func:`chart_label_size`'s
 readable floor, so labels grow with the theme's type scale (``large`` in 9:16) instead of
@@ -21,11 +24,12 @@ from dataclasses import dataclass
 from typing import Any, Literal, NamedTuple
 
 import numpy as np
-from manim import BOLD, DOWN, LEFT, NORMAL, PI, RIGHT, Circle, DashedLine, Line, Paragraph, RoundedRectangle, Square, Text, Triangle, VGroup, VMobject
+from manim import BOLD, DOWN, LEFT, NORMAL, ORIGIN, PI, RIGHT, UP, Circle, DashedLine, Line, Paragraph, Rectangle, RoundedRectangle, Square, Text, Triangle, VGroup, VMobject
 
 from vidgen.errors import VidgenError
 from vidgen.helpers import resolve_color, styled
 from vidgen.layout import auto_format, fit_text, format_value, nice_ticks
+from vidgen.lint.color import TEXT_RATIO, _gamma, _linear, blend, contrast_ratio, hex_rgb, rgb_hex
 from vidgen.regions import Region, orientation, place, readable_size, region
 from vidgen.runtime import current_theme
 from vidgen.theme import Theme
@@ -495,6 +499,194 @@ def sample_path(points: Sequence[np.ndarray], step: float = 0.1) -> np.ndarray:
     return np.array(out).reshape(-1, 3) if out else np.zeros((0, 3))
 
 
+# ----- colour scales ---------------------------------------------------------------------------
+
+
+def _oklab(color: str) -> np.ndarray:
+    """An sRGB hex colour in OKLab (Ottosson 2020): perceptually even lightness and hue."""
+    r, g, b = (_linear(c) for c in hex_rgb(color))
+    lms = np.cbrt(np.array([
+        0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b,
+        0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b,
+        0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b,
+    ]))
+    return np.array([
+        0.2104542553 * lms[0] + 0.7936177850 * lms[1] - 0.0040720468 * lms[2],
+        1.9779984951 * lms[0] - 2.4285922050 * lms[1] + 0.4505937099 * lms[2],
+        0.0259040371 * lms[0] + 0.7827717662 * lms[1] - 0.8086757660 * lms[2],
+    ])
+
+
+def _from_oklab(lab: np.ndarray) -> str:
+    l_, m_, s_ = (
+        lab[0] + 0.3963377774 * lab[1] + 0.2158037573 * lab[2],
+        lab[0] - 0.1055613458 * lab[1] - 0.0638541728 * lab[2],
+        lab[0] - 0.0894841775 * lab[1] - 1.2914855480 * lab[2],
+    )
+    l3, m3, s3 = l_**3, m_**3, s_**3
+    rgb = (
+        4.0767416621 * l3 - 3.3077115913 * m3 + 0.2309699292 * s3,
+        -1.2684380046 * l3 + 2.6097574011 * m3 - 0.3413193965 * s3,
+        -0.0041960863 * l3 - 0.7034186147 * m3 + 1.7076147010 * s3,
+    )
+    return rgb_hex(tuple(_gamma(c) for c in rgb))  # type: ignore[arg-type]
+
+
+def mix_colors(a: Any, b: Any, t: float, *, theme: Theme | None = None) -> str:
+    """``a`` drawn at opacity ``t`` over ``b`` (theme tokens or hex), as the viewer sees it
+    (``#RRGGBB``): e.g. what a cell faded to 30 % looks like on the background."""
+    theme = theme or current_theme()
+    return rgb_hex(blend(hex_rgb(resolve_color(a, theme)), hex_rgb(resolve_color(b, theme)), t))
+
+
+def text_color_on(fill: Any, *, min_ratio: float = TEXT_RATIO, theme: Theme | None = None) -> str:
+    """The colour to write on a ``fill`` (theme token or hex) so the text stays readable: the
+    theme's ``text`` or its background, whichever contrasts more; if neither reaches
+    ``min_ratio`` (WCAG 4.5:1, what ``vidgen lint`` checks), white or black."""
+    theme = theme or current_theme()
+    behind = hex_rgb(resolve_color(fill, theme))
+
+    def ratio(c: str) -> float:
+        return contrast_ratio(hex_rgb(c), behind)
+
+    best = max((theme.color("text"), theme.background), key=ratio)
+    return best if ratio(best) >= min_ratio else max(("#FFFFFF", "#000000"), key=ratio)
+
+
+@dataclass(frozen=True)
+class ColorScale:
+    """Values ``lo..hi`` mapped to colours: ``scale(v)`` gives the ``#RRGGBB`` of a value,
+    interpolated in OKLab between ``stops`` (``(fraction, colour)`` pairs from 0 to 1), so equal
+    steps in value look like equal steps in colour. ``kind`` is ``sequential`` or
+    ``diverging`` (then ``center`` is the neutral middle). Values outside are clamped."""
+
+    lo: float
+    hi: float
+    stops: tuple[tuple[float, str], ...]
+    kind: str = "sequential"
+    center: float | None = None
+
+    def fraction(self, value: float) -> float:
+        """Where ``value`` lies on the scale (0..1, clamped)."""
+        if self.kind == "diverging" and self.center is not None:
+            c = self.center
+            if value >= c:
+                return 0.5 + 0.5 * min((value - c) / ((self.hi - c) or 1.0), 1.0)
+            return 0.5 - 0.5 * min((c - value) / ((c - self.lo) or 1.0), 1.0)
+        return min(max((value - self.lo) / ((self.hi - self.lo) or 1.0), 0.0), 1.0)
+
+    def at(self, fraction: float) -> str:
+        """The colour at a position ``0..1`` of the scale."""
+        f = min(max(fraction, 0.0), 1.0)
+        for (f0, c0), (f1, c1) in zip(self.stops, self.stops[1:]):
+            if f <= f1 or f1 >= 1.0:
+                t = (f - f0) / ((f1 - f0) or 1.0)
+                return _from_oklab(_oklab(c0) * (1 - t) + _oklab(c1) * t)
+        return self.stops[-1][1]
+
+    def __call__(self, value: float) -> str:
+        return self.at(self.fraction(value))
+
+
+def color_scale(
+    values: Sequence[float],
+    *,
+    kind: Literal["sequential", "diverging"] = "sequential",
+    color: Any = "primary",
+    low_color: Any = "primary",
+    high_color: Any = "accent",
+    center: float = 0.0,
+    lo: float | None = None,
+    hi: float | None = None,
+    theme: Theme | None = None,
+) -> ColorScale:
+    """A :class:`ColorScale` for ``values`` made from theme colours. ``sequential``: from a
+    faint tint of ``color`` on the background (low) to ``color`` itself (high), so larger values
+    stand out more on any background (lighter on dark themes, darker on light ones).
+    ``diverging``: ``low_color`` below ``center``, a near-background neutral at it,
+    ``high_color`` above; the domain is symmetric around ``center`` (equal distances look
+    equally strong) unless ``lo``/``hi`` fix an end."""
+    theme = theme or current_theme()
+    data = [float(v) for v in values]
+    if not data and (lo is None or hi is None):
+        raise VidgenError("a colour scale needs values or both ends (lo, hi)")
+    a = lo if lo is not None else min(data)
+    b = hi if hi is not None else max(data)
+    bg = theme.background
+    if kind == "diverging":
+        reach = max(abs(center - a), abs(b - center)) or 1.0
+        a = lo if lo is not None else center - reach
+        b = hi if hi is not None else center + reach
+        if not a < center < b:
+            raise VidgenError(f"a diverging scale needs its center {center:g} inside {a:g}..{b:g}")
+        neutral = mix_colors("text", bg, 0.1, theme=theme)
+        stops = ((0.0, resolve_color(low_color, theme)), (0.5, neutral), (1.0, resolve_color(high_color, theme)))
+        return ColorScale(a, b, stops, "diverging", center)
+    if b <= a:
+        b = a + 1.0
+    full = resolve_color(color, theme)
+    return ColorScale(a, b, ((0.0, mix_colors(full, bg, 0.14, theme=theme)), (1.0, full)))
+
+
+def color_bar(
+    scale: ColorScale,
+    length: float,
+    *,
+    vertical: bool = True,
+    thickness: float = 0.26,
+    size: str | float = "caption",
+    color: Any = "dim",
+    title: str = "",
+    max_ticks: int = 5,
+    fmt: str | None = None,
+    unit: str = "",
+    theme: Theme | None = None,
+) -> VGroup:
+    """A colour-scale legend: a gradient bar ``length`` units long (low at the bottom / left)
+    with round ticks and their labels (right of a vertical bar, below a horizontal one) and an
+    optional ``title`` above. Returns ``VGroup(bar, ticks, labels, title?)``, centred at the
+    origin; labels never go below the readable size."""
+    theme = theme or current_theme()
+    s = chart_label_size(size, theme)
+    steps = 48
+    bar = VGroup()
+    piece = length / steps
+    for k in range(steps):
+        rect = Rectangle(width=thickness, height=piece * 1.02) if vertical else Rectangle(width=piece * 1.02, height=thickness)
+        rect.set_fill(scale.at((k + 0.5) / steps), opacity=1).set_stroke(width=0)
+        offset = -length / 2 + piece * (k + 0.5)
+        bar.add(rect.move_to([0, offset, 0] if vertical else [offset, 0, 0]))
+    frame = Rectangle(width=thickness, height=length) if vertical else Rectangle(width=length, height=thickness)
+    bar.add(frame.set_fill(opacity=0).set_stroke(resolve_color(color, theme), width=1, opacity=0.6))
+    values = [t for t in axis_ticks(scale.lo, scale.hi, max_ticks) if scale.lo - 1e-9 <= t <= scale.hi + 1e-9]
+    texts = tick_texts(values, fmt, unit)
+    ticks, labels = VGroup(), VGroup()
+    dim = resolve_color(color, theme)
+    for v, label in zip(values, texts):
+        pos = -length / 2 + scale.fraction(v) * length
+        text = styled(Text, theme, label, s, "text", NORMAL)
+        if vertical:
+            ticks.add(Line([thickness / 2, pos, 0], [thickness / 2 + 0.1, pos, 0], color=dim, stroke_width=2))
+            labels.add(text.move_to([thickness / 2 + 0.18 + text.width / 2, pos, 0]))
+        else:
+            ticks.add(Line([pos, -thickness / 2, 0], [pos, -thickness / 2 - 0.1, 0], color=dim, stroke_width=2))
+            labels.add(text.move_to([pos, -thickness / 2 - 0.18 - text.height / 2, 0]))
+    if vertical and len(labels) > 1:   # thin labels that would touch
+        keep = _stride([m.get_y() for m in labels], [m.height for m in labels], 0.5 * labels[0].height)
+    else:
+        keep = _stride([m.get_x() for m in labels], [m.width for m in labels], 0.3) if len(labels) > 1 else list(range(len(labels)))
+    ticks = VGroup(*[ticks[i] for i in keep])
+    labels = VGroup(*[labels[i] for i in keep])
+    group = VGroup(bar, ticks, labels)
+    if title:
+        head = fit_text(title, max(length, 1.5) if not vertical else max(2.2, labels.width + thickness + 0.3), size=s, color=color, theme=theme)
+        head.next_to(VGroup(bar, labels) if not vertical else bar, UP, buff=0.2)
+        if vertical:
+            head.align_to(bar, LEFT)
+        group.add(head)
+    return group.move_to(ORIGIN)
+
+
 # ----- title and caption -----------------------------------------------------------------------
 
 
@@ -530,6 +722,7 @@ __all__ = [
     "CHART_MARKERS",
     "ChartAxes",
     "ChartAxis",
+    "ColorScale",
     "LinearFit",
     "axis_ticks",
     "auto_legend",
@@ -539,10 +732,14 @@ __all__ = [
     "chart_legend",
     "chart_marker",
     "chart_title",
+    "color_bar",
+    "color_scale",
     "legend_spot",
     "linear_fit",
+    "mix_colors",
     "sample_path",
     "short_number",
+    "text_color_on",
     "tick_texts",
     "value_axis",
 ]

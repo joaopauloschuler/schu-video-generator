@@ -596,8 +596,9 @@ and end label), `point:<name>@<x>` (one data point, `x` as its tick label reads:
 
 ### Charts: common to all chart types
 
-`bar_chart`, `line_chart`, `scatter` and `histogram` share their frame and axes (the helpers
-are public for project charts, see EXTENDING.md "Charts"):
+`bar_chart`, `line_chart`, `scatter`, `histogram`, `pie` and `heatmap` share their frame (and
+the axis charts their axes; the helpers are public for project charts, see EXTENDING.md
+"Charts"):
 
 - **Title** in the `header` band at the top (bold, the theme's `heading` font role, 1.3x larger
   in a vertical frame), **caption** at the bottom; the plot gets the space between.
@@ -610,6 +611,9 @@ are public for project charts, see EXTENDING.md "Charts"):
   ticks.
 - **Legends** (several series) stand in a corner of the plot that covers no data, on a faint
   framed panel, as one row or stacked; when every corner has data, above the plot.
+- **Colours** are theme tokens: series and slices take the palette, colour scales
+  (`heatmap`) are mixed from theme colours, and text written on a filled shape (a slice, a
+  cell) switches between the theme's text and background colour so it keeps 4.5:1 contrast.
 
 ### `scatter`
 
@@ -715,6 +719,126 @@ multiples (so the axis reads 10, 20, 30), or a `bin_width` — or from `counts` 
     - text: "The slow tail pulls the mean up."
     - text: "The median stays lower."
     - text: "These are the requests to look at."
+```
+
+### `pie`
+
+Shares of a whole as slices of a circle, or of a ring with `donut: true` (the total, or
+`center`, in the hole). Step 1 sweeps every slice round from the top, clockwise, then writes
+the labels (`reveal: all`, default); `per_beat` sweeps slice *i* in at beat *i*. With
+`highlight`, a last step pulls that slice out of the pie and dims the others. Each share is
+its value / the total.
+
+**Labels** stand inside their slice when they fit there (in the slice's colour-contrasting
+text colour), else outside with a leader line, stacked in a column on each side so they never
+overlap; when side columns would leave the pie too small (a 9:16 frame) or cannot hold them,
+those labels go into a key of colour swatches below the pie (beside it in 16:9). With more than
+6 slices (or `legend: true`) every label is in that key, which is then the `legend`. Many small
+slices: group them with `other_below: 3` (slices under 3 % become one `Other` slice, drawn
+last in `other_color`) or `max_slices`. Label text shrinks towards the readable minimum before
+anything is left out (a warning names what did not fit).
+[Action targets](#beat-actions): `title`, `slice<N>` (1-based, as drawn, after grouping),
+`slice:<label>` (a slice with its label and leader), `center` (a donut's centre text),
+`legend` (with the legend).
+
+| param | type | default | |
+|---|---|---|---|
+| `labels`, `values` | list[str], list[float] | required | one value (≥ 0) per unique label |
+| `donut` | bool | `false` | a ring instead of a full pie |
+| `hole` | float | `0.58` | donut hole radius / outer radius (0.3–0.85) |
+| `center` | str | the total | text in the donut hole (`value_format` + `unit`); `""` for none |
+| `center_label` | str | `""` | a smaller line under it (`visits`) |
+| `center_size` | size | `title` | fitted into the hole |
+| `show_values` | `percent` \| `value` \| `both` \| `none` | `percent` | under each name: `42%`, the value, `42% · 1,200` or nothing |
+| `value_format`, `unit` | str | automatic, `""` | format of values and the total |
+| `percent_decimals` | int | auto | 0, or 1 when a slice is under 1 % |
+| `colors` | `palette` \| color \| list[color] | `palette` | the palette in order (lighter shades past its length) |
+| `sort` | bool | `false` | largest slice first |
+| `other_below` | float | none | group slices under this share (%) into one |
+| `max_slices` | int | none | keep the largest `max_slices - 1`, group the rest |
+| `other_label`, `other_color` | str, color | `Other`, `dim` | the grouped slice |
+| `label_position` | `auto` \| `outside` | `auto` | `outside`: never inside a slice |
+| `legend` | bool | auto | names in a legend (default: with more than 6 slices) |
+| `reveal` | `all` \| `per_beat` | `all` | |
+| `highlight` | int \| str | none | slice (0-based index or label, as drawn) pulled out in a last step |
+| `explode` | float | `0.1` | how far it moves out (share of the radius, 0–0.3) |
+| `start_angle`, `clockwise` | float, bool | `90`, `true` | where the first slice starts (degrees; 90 = top) and the direction |
+| `label_size` | size | `caption` | labels and legend |
+| `title`, `caption` | str | `""` | |
+| `caption_size`, `caption_color` | size, color | `caption`, `dim` | |
+| `title_size`, `title_color` | size, color | `heading`, `text` | |
+
+```yaml
+- id: traffic
+  type: pie
+  params:
+    title: "Visits by device"
+    donut: true
+    center_label: "visits"
+    labels: ["Mobile", "Desktop", "Tablet", "TV", "Watch"]
+    values: [5200, 3100, 640, 120, 80]
+    other_below: 2           # TV and Watch become "Other"
+    highlight: Desktop
+  beats:
+    - text: "Most visits come from phones."
+    - text: "Desktop is still a third of them."
+```
+
+### `heatmap`
+
+A matrix of values as coloured cells: row labels on the left, column labels on top, a
+colour-scale legend (a gradient bar with round ticks) right of it (below it in 9:16). Step 1
+brings the labels and legend and the cells in a wave from the top left (`reveal: all`,
+default); `rows` reveals one row per beat. With `highlight`, a last step outlines the chosen
+cells, rows or columns in `highlight_color` and dims the rest.
+
+**Colours** come from theme colours, interpolated perceptually (OKLab, so equal steps in
+value look like equal steps in colour): `sequential` runs from a faint tint of `color` to
+`color` (larger values stand out more on any background); `diverging` runs from `low_color`
+through a near-background neutral at `center` to `high_color`, symmetric around `center`;
+`auto` picks diverging when values lie on both sides of `center`. Each value is written in the
+theme's text or background colour, whichever reads better on its cell (WCAG 4.5:1 or more,
+what `vidgen lint` checks), and the values are hidden when the cells are too small for
+readable text. Cells are at most square-tall and 2.5x as wide as tall; a matrix whose cells
+come out smaller than 0.3 units logs a warning to split it. `null` values are empty cells.
+[Action targets](#beat-actions): `title`, `legend`, `row<N>`, `row:<label>`, `col<N>`,
+`col:<label>` (a row / column with its label), `cell<R>.<C>` (1-based).
+
+| param | type | default | |
+|---|---|---|---|
+| `values` | list[list[float \| null]] | required | the matrix, row by row (up to 40 x 40) |
+| `rows`, `columns` | list[str] | `[]` | unique row / column labels |
+| `scale` | `auto` \| `sequential` \| `diverging` | `auto` | |
+| `color` | color | `primary` | sequential: the highest values |
+| `low_color`, `high_color` | color | `primary`, `accent` | diverging: below / above `center` |
+| `center` | float | `0` | diverging: the neutral value |
+| `scale_min`, `scale_max` | float | from the data | ends of the scale (diverging: symmetric around `center`) |
+| `show_values` | bool | auto | values in the cells (default: when they fit at a readable size) |
+| `value_format`, `unit` | str | automatic, `""` | cell values and legend ticks |
+| `value_size` | size | `caption` | largest value size (shrinks to fit) |
+| `legend` | bool | `true` | the colour-scale bar |
+| `legend_label` | str | `""` | its title (`correlation`) |
+| `reveal` | `all` \| `rows` | `all` | |
+| `highlight` | list[str] | `[]` | `cell<R>.<C>`, `row<N>`, `row:<label>`, `col<N>`, `col:<label>` for a last step |
+| `highlight_color` | color | `highlight` | outline colour |
+| `label_size` | size | `caption` | row / column labels and ticks |
+| `title`, `caption` | str | `""` | |
+| `caption_size`, `caption_color` | size, color | `caption`, `dim` | |
+| `title_size`, `title_color` | size, color | `heading`, `text` | |
+
+```yaml
+- id: busy
+  type: heatmap
+  params:
+    title: "Renders per hour"
+    rows: ["Mon", "Tue", "Wed"]
+    columns: ["9h", "12h", "15h", "18h"]
+    values: [[3, 8, 4, 9], [5, 10, 6, 11], [4, 9, null, 13]]
+    legend_label: "renders"
+    highlight: ["col:18h"]
+  beats:
+    - text: "Each cell counts the renders in one hour."
+    - text: "Evenings are the busiest."
 ```
 
 ### `image`
@@ -1466,6 +1590,8 @@ a title card, a `transform` of a bar).
 | `line_chart` | `title`, `axes`, `series<N>`, `series:<name>`, `point:<name>@<x>` | reveal, dim, highlight, zoom | a series is its line, markers and end label; `point:sparse@8` |
 | `scatter` | `title`, `axes`, `legend`, `series<N>`, `series:<name>`, `point:<series>@<N>`, `point:<series>@<label>`, `trend`, `trend:<series>` | reveal, dim, highlight, zoom | a point is its marker and label; `point:ours@2` is the 2nd point written; `legend` with several series, `trend:` with `trend: each` |
 | `histogram` | `title`, `axes`, `legend`, `bin<N>`, `bin:<range>`, `compare`, `mean`, `median` | reveal, dim, highlight, zoom | `bin:10-20` names a bin by its edges; `legend` and `compare` with `compare`; `mean` / `median` when set |
+| `pie` | `title`, `slice<N>`, `slice:<label>`, `center`, `legend` | reveal, dim, highlight, zoom | a slice is its wedge, label and leader line (a `box` frames the wedge); `slice:Other` after grouping; `center` with a donut, `legend` with the names in a legend (revealing it reveals every slice); `dim` fades a slice with its label, so dark text on a bright slice gets faint (lint `contrast`): the `highlight` param dims the others readably |
+| `heatmap` | `title`, `legend`, `row<N>`, `row:<label>`, `col<N>`, `col:<label>`, `cell<R>.<C>` | reveal, dim, highlight, zoom | a row / column is its cells and label (`box` and `fill` cover its cells edge to edge); `cell2.3` is row 2, column 3; use `highlight` with `style: box` (`color` paints the cells and their values alike, `fill` tints them); as for `pie`, `dim` fades values with their cells, the `highlight` param dims readably |
 | `image` | `image`, `caption` | dim, highlight, zoom | `dim` fades the picture, `highlight` tints it |
 | `quote` | `mark`, `quote`, `author`, `source` | reveal, dim, highlight, zoom | |
 | `equation` | `step<N>`, `caption`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each of the `terms` param, in the step on screen; `transform: step1` + `into: step3` jumps ahead |

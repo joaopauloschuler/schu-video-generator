@@ -2712,3 +2712,113 @@ How to test: `/home/claude/venv/bin/python -m pytest -q` (1279 passed, 1 skipped
 tests/test_charts.py`. Manual: `vidgen storyboard examples/minimal --scene cost --scene beats
 --scene sizes --scene trend --per-beat 3 [--variant vertical|light]`, `vidgen lint
 examples/minimal [--variant ...]`, `vidgen list-scenes`, `vidgen schema --scene scatter`.
+
+## Step 31 — Scenes: `pie`/`donut` and `heatmap`
+What was built
+- **Colour helpers** (`vidgen/charts.py`, exported by `vidgen.api`): `color_scale(values, kind=
+  "sequential"|"diverging", color, low_color, high_color, center, lo, hi)` → `ColorScale`
+  (`scale(v)` → hex, `at(fraction)`, `fraction(v)`), interpolated in OKLab between theme
+  colours: sequential from a 14 % tint of `color` on the background to `color`; diverging
+  `low_color` → a near-background neutral at `center` → `high_color`, symmetric around
+  `center`. `color_bar(scale, length, vertical=True, title=...)` (gradient bar, round ticks,
+  readable labels), `text_color_on(fill)` (theme text or background, whichever reaches 4.5:1,
+  else white/black) and `mix_colors(a, b, t)` (what `a` at opacity `t` over `b` looks like).
+- **`pie`** (`src/vidgen/scenes/pie.py`): `labels` + `values` (shares computed), `donut` (`hole`,
+  `center` = the total by default, `center_label`), `show_values: percent | value | both | none`,
+  palette colours (lighter shades past the palette's length; the last slice never repeats the
+  first's colour), `sort`, `other_below` / `max_slices` → one `Other` slice (`other_color` dim),
+  `start_angle`, `clockwise`, `reveal: all | per_beat`, `highlight` (+ `explode`), `legend`
+  (auto: > 6 slices). **Labels**: inside a slice when the label box fits the annular sector
+  (text colour by `text_color_on`), else outside in a column per side with a leader line
+  (rim → radial elbow → label), stacked without overlaps (`_stack`); when side columns leave
+  the pie under 0.3 x the body's short side or cannot hold the labels (9:16), they go into a
+  swatch key below the pie (beside it in 16:9); with `legend` everything is in the key (then
+  the `legend` target). Sizes from `label_size` down to the readable floor x 1.05; what still
+  does not fit is dropped with a warning naming it. **Animation**: wedges sweep round
+  (`UpdateFromAlphaFunc` rebuilding the sector; one continuous sweep for `all`), labels and
+  leaders follow; the highlight step moves the slice out along its middle (its leader's first
+  corner follows), dims the others to 0.3 and recolours their inside labels for the dimmed
+  slice. Targets `title`, `slice<N>`, `slice:<label>`, `center`, `legend`.
+- **`heatmap`** (`src/vidgen/scenes/heatmap.py`): `values` (rows; `null` = empty `surface` cell;
+  ≤ 40 x 40), `rows` / `columns` labels, `scale: auto | sequential | diverging` (+ `color`,
+  `low_color`, `high_color`, `center`, `scale_min`, `scale_max`), `show_values` (auto: when
+  the values fit at a readable size), `value_format`, `unit`, `value_size`, `legend` +
+  `legend_label` (colour bar right of the grid in 16:9, below it in 9:16, as long as the grid),
+  `reveal: all` (diagonal wave) | `rows`, `highlight` (target-style refs `cell2.3`, `row:Tue`,
+  `col4`...; outlines in `highlight_color`, the rest dims with recoloured values). Cells at most
+  2.2 units, never taller than wide or wider than 2.5x their height; column labels wrap to the
+  cell width at one shared size; cells under 0.3 units → warning "split the matrix". Targets
+  `title`, `legend`, `row<N>`, `row:<label>`, `col<N>`, `col:<label>`, `cell<R>.<C>`.
+- `examples/minimal`: `share` (a donut: render time per scene, total "4.2 s per scene", two
+  small slices grouped by `other_below`, `highlight: Text layout`) and `busy` (a 5 x 5 heatmap
+  of renders per hour with a `box` highlight action on `col:17h`) after `beats`; a storyboard
+  usage line.
+
+Verification (sheets opened with Read)
+- Scratch project (pie with highlight; donut per_beat with grouping and a highlight; 12-slice
+  donut → legend; one big + five tiny slices → stacked side labels; sequential heatmap with a
+  column highlight; diverging correlation matrix with nulls, `reveal: rows` and cell + row
+  highlights; an 8 x 24 matrix; pie / heatmap with reveal, dim, zoom, box and fill actions)
+  storyboarded in 16:9 (also `--per-beat 3`), vertical, `light_academic` and vertical light.
+  Fixed along the way: a 9:16 pie shrunk to a third of the width by side labels (→ the swatch key
+  below the pie), big slices whose label did not fit at 0.62 r (→ several spots and wrap
+  widths), a 12-row legend scaled below `min_font` in 16:9 (→ wrapped rows), the pie off centre
+  with labels on one side only (room reserved per side), lowercase column labels at exactly the
+  floor (`min_font`, → floor x 1.05 as in `diagram`), a legend bar longer than a short grid.
+  Lint of the scratch project: 0 findings in all four looks except the deliberately short beat
+  (`rushed_animation`) and the action cases below.
+- `examples/minimal`: `vidgen lint --scene share --scene busy` 0 findings in all 8 variants
+  (default, vertical, light, contrast, editorial, neutral, pastel, neon); sheets checked in 16:9
+  (`--per-beat 3`), vertical, light and contrast.
+
+Files
+- New: `src/vidgen/scenes/pie.py`, `src/vidgen/scenes/heatmap.py`, `tests/test_pie_heatmap.py`
+  (49 tests, 16 tiny renders).
+- Changed: `src/vidgen/charts.py`, `src/vidgen/api.py`, `src/vidgen/scenes/__init__.py`;
+  `examples/minimal/video.yaml`; tests `test_builtin_scenes.py` (BUILTINS/SAMPLES),
+  `test_actions_coverage.py` (SAMPLES, target names, early reveal), `test_extensions.py` (type
+  list); docs/CONFIG.md (`pie`, `heatmap` sections, "Charts: common" colours, targets table),
+  docs/EXTENDING.md ("Charts": colour helpers), README, DESIGN.md (§2, §6.4, new §34),
+  tasklist.md.
+
+Public interfaces added/changed
+- `vidgen.api`: `ColorScale`, `color_scale`, `color_bar`, `mix_colors`, `text_color_on` (new).
+- Built-in scene types `pie` and `heatmap` (params in docs/CONFIG.md).
+- Module helpers (internal, built-in modules): `vidgen.scenes.pie.window` (a rate function
+  running between two fractions), `recolor` (recolour + fade a text part), `PieSlice`,
+  `Pie.Params.slices()/uses_legend()/highlight_index()/percents()/center_text()`;
+  `Heatmap.Params.shape()/known()/kind()/cells_of()`.
+
+Decisions / deviations
+- **One label place per slice**: inside, beside (leader) or in the key — decided by fitting, not
+  by a param (only `label_position: outside` forces leaders). The key in 9:16 is what keeps the
+  pie large in a narrow frame; it is part of the slices' targets, not a `legend` target (that
+  name must be known from params alone, so `legend` exists only with `legend: true` / > 6
+  slices).
+- "Percent computed, or given": shares are always value / total (values that are percentages
+  give the same numbers); `show_values: value | both` writes the values themselves.
+- Heatmap `highlight` refs use the target names (`row:Tue`, `cell2.3`), so one vocabulary for
+  params and actions. Highlights outline (a `box` look) rather than recolour, because colour is
+  the data.
+- Diverging scales are symmetric around `center` by default (equal distances look equally
+  strong); `scale_min`/`scale_max` override.
+- Text on fills is opaque and chosen per fill (`text_color_on`); faded states are recoloured for
+  the faded fill by the scenes' own highlight steps.
+
+Known gaps / TODOs
+- The generic `dim` action fades a slice / cell together with its text; dark text on a bright
+  fill then drops below lint's 2:1 for dimmed text (seen: 1.5–1.7:1), and a `fill` highlight
+  tints cells under light text (3.5:1). The scenes' own `highlight` params stay readable; the
+  docs point to `style: box`. A per-target "restyle on dim" hook in the action framework would
+  fix it generally.
+- Pie leaders can cross a neighbouring label when a side's stack is pushed far from the slices
+  (many small slices in a row); grouping (`other_below`) is the remedy. No rotated or curved
+  labels, no per-slice `explode` other than the highlight, no pie-to-bar transition.
+- Heatmap: no clustering / reordering, no row or column totals, no rotated column labels (long
+  ones wrap and shrink; a warning asks to shorten them); 9:16 wide matrices are not transposed
+  (warning). A highlight `box` action surrounds the band of cells and may touch the column label.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1340 passed, 1 skipped, ~13 min). Step only:
+`pytest tests/test_pie_heatmap.py`. Manual: `vidgen storyboard examples/minimal --scene share
+--scene busy --per-beat 3 [--variant vertical|light]`, `vidgen lint examples/minimal --scene
+share --scene busy [--variant ...]`, `vidgen list-scenes`, `vidgen schema --scene pie`.

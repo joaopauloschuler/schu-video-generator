@@ -341,6 +341,15 @@ scales like them (docs/CONFIG.md "Charts: common to all chart types"):
   `legend_spot(size, plot, points)` is the corner search alone.
 - `chart_marker(kind, radius, color)` (`CHART_MARKERS`: circle, square, triangle, diamond) and
   `linear_fit(xs, ys)` → `LinearFit(slope, intercept, r2)` (callable; `.equation()`).
+- `color_scale(values, kind="sequential"|"diverging", color="primary", low_color="primary",
+  high_color="accent", center=0, lo=None, hi=None)` → a `ColorScale`: `scale(v)` is the hex
+  colour of a value (interpolated in OKLab between theme colours; sequential from a faint tint
+  of `color` to `color`, diverging symmetric around `center`), `scale.at(fraction)`,
+  `scale.fraction(v)`. `color_bar(scale, length, vertical=True, title="", fmt=None, unit="")`
+  draws it as a legend (gradient, round ticks, labels at a readable size). Write text on a
+  filled shape with `text_color_on(fill)` (the theme's text or background colour, whichever
+  reaches 4.5:1; else white / black) and predict a faded fill with `mix_colors(fill,
+  theme.background, opacity)`.
 
 ```python
 @scene("growth")

@@ -53,6 +53,8 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "network": {"heading": "H", "layers": [2, {"size": 2, "label": "Out"}], "passes": 0},
     "scatter": {"title": "T", "series": {"a": [[1, 2, "p"], [2, 3]], "b": [[1, 1], [3, 2]]}, "trend": "each"},
     "histogram": {"title": "T", "counts": [1, 3, 2], "edges": [0, 10, 20, 30], "compare": {"counts": [2, 2, 1]}, "mean": True, "median": True},
+    "pie": {"title": "T", "labels": ["a", "b"], "values": [3, 1], "donut": True, "legend": True},
+    "heatmap": {"title": "T", "rows": ["a", "b"], "columns": ["x", "y"], "values": [[1, 2], [3, 4]]},
 }
 #: Built-in types registered under a second name (same class, params and targets).
 ALIASES = {"flowchart": "diagram"}
@@ -146,6 +148,11 @@ def test_target_names_of_every_builtin_type() -> None:
     assert names("process") == ["heading", "input", "stage1", "stage:a", "stage2", "stage:b", "connector1", "token"]
     assert names("process", heading="", input="", token=False, loop=True, output="o") == ["stage1", "stage:a", "stage2", "stage:b", "connector1", "loop", "output"]
     assert names("network") == ["heading", "layer1", "neuron1.1", "neuron1.2", "layer2", "layer:Out", "neuron2.1", "neuron2.2", "edges1"]
+    assert names("pie") == ["title", "slice1", "slice:a", "slice2", "slice:b", "center", "legend"]
+    assert names("pie", title="", donut=False, legend=None) == ["slice1", "slice:a", "slice2", "slice:b"]
+    assert names("heatmap") == ["title", "legend", "row1", "row:a", "row2", "row:b", "col1", "col:x", "col2", "col:y",
+                                "cell1.1", "cell1.2", "cell2.1", "cell2.2"]
+    assert names("heatmap", title="", legend=False, rows=[], columns=[]) == ["row1", "row2", "col1", "col2", "cell1.1", "cell1.2", "cell2.1", "cell2.2"]
     assert names("table", title="", caption="", header=[]) == ["row1", "row:a", "row2", "row:b", "col1", "col2",
                                                                "cell1.1", "cell1.2", "cell2.1", "cell2.2"]
 
@@ -187,7 +194,8 @@ def test_builtin_scenes_register_their_target_names(kind: str, make_project, med
     [("title", "authors"), ("quote", ["author", "source"]), ("end_card", "line*"), ("icon_grid", "item2"),
      ("line_chart", "series2"), ("image", "caption"), ("code", "line3"), ("text_card", "text"),
      ("chapter", "subtitle"), ("stat", ["comparison", "context"]), ("comparison", "col2"), ("table", "row2"), ("timeline", "event2"),
-     ("diagram", "edge:a->b"), ("network", ["layer2", "edges1"]), ("scatter", ["series2", "trend"]), ("histogram", ["mean", "median", "compare"])],   # process: its token still moves (test_process_network)
+     ("diagram", "edge:a->b"), ("network", ["layer2", "edges1"]), ("scatter", ["series2", "trend"]), ("histogram", ["mean", "median", "compare"]),
+     ("pie", "slice2"), ("heatmap", "row2")],   # process: its token still moves (test_process_network)
 )
 def test_early_reveal_is_not_repeated_by_the_scene(kind: str, target: str | list[str], make_project, media: Path) -> None:
     project = load(make_project, [{"id": "s", "type": kind, "params": SAMPLES[kind], "beats": beats([{"reveal": target}], None)}])

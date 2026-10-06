@@ -140,8 +140,8 @@ Rules that apply to every step:
 - [x] `scatter` (series, optional trend line), `histogram` (bins from raw values or given counts) (scatter: markers per series, groups, point labels placed clear of points and lines, trend each/all with equation / R², highlight rings, log axes; histogram: count / width / rule bins with round edges, counts + edges, compare overlay, percent, mean / median markers, bin highlight)
 
 ### Step 31 — Scenes: `pie`/`donut` and `heatmap`
-- [ ] `pie` with `donut: true` option, labels, highlight slice
-- [ ] `heatmap` with colour scale legend and cell highlight
+- [x] `pie` with `donut: true` option, labels, highlight slice (labels inside a slice when they fit, else beside it with leader lines stacked without overlaps, or a swatch key below the pie in 9:16; `legend` with > 6 slices; `other_below` / `max_slices` group small slices into "Other"; total + `center_label` in the hole; sweep in all at once or one slice per beat; `highlight` pulls a slice out, the others dim; targets `slice<N>`, `slice:<label>`, `center`, `legend`)
+- [x] `heatmap` with colour scale legend and cell highlight (sequential / diverging scales mixed from theme colours in OKLab — `color_scale`, `color_bar`, `text_color_on`, `mix_colors` in `vidgen.api`; per-cell text colour ≥ 4.5:1; values hidden when cells are too small; wave or row-by-row reveal; `highlight` outlines cells / rows / columns; "too big" warning; targets `cell<R>.<C>`, `row<N>`, `row:<label>`, `col<N>`, `col:<label>`, `legend`)
 
 ### Step 32 — Scene: `code_walkthrough`
 - [ ] Long code scrolls; lines highlighted per beat (`lines: "3-7"`); optional annotation per beat

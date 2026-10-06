@@ -71,7 +71,8 @@ src/vidgen/
   layout.py               # fit/wrap text, beat distribution, chart numbers, LaTeX detection
   regions.py              # layout regions: safe area, named regions, grids, place(), readable text (§18)
   graph.py                # layered layout of directed graphs, pure Python (§31; no manim)
-  charts.py               # chart helpers: ticks, number labels, axes, legend, markers, fit (§33)
+  charts.py               # chart helpers: ticks, number labels, axes, legend, markers, fit (§33),
+                          # colour scales, colour bar, readable text on fills (§34)
   tts/__init__.py         # provider seam: get_provider(cfg)
   tts/elevenlabs.py       # ElevenLabs provider (stdlib urllib), cache by hash
   render/                 # worker.py (one scene per process), pipeline.py, ffmpeg.py,
@@ -457,6 +458,7 @@ Step 30 (§33) adds the chart helpers: `ChartAxis`, `ChartAxes`, `LinearFit`, `C
 `axis_ticks`, `short_number`, `tick_texts`, `value_axis`, `chart_axes`, `chart_label_size`,
 `chart_legend`, `auto_legend`, `legend_spot`, `sample_path`, `chart_marker`, `linear_fit`,
 `chart_title`, `chart_caption`.
+Step 31 (§34) adds `ColorScale`, `color_scale`, `color_bar`, `mix_colors`, `text_color_on`.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -1994,3 +1996,75 @@ using the existing renders of the others (missing ones are rendered). Exit code 
   outlines and verticals through every bar. **Steps**: bars grow (`ReplacementTransform` of a
   flattened copy, `LaggedStart` lag `min(0.15, 2/n)`), compare, mean, median, highlight (chosen
   bars filled `highlight_color`, others `dim_to` 0.35) — each its own step.
+
+
+## 34. Refinements (Step 31, `pie` / donut and `heatmap`)
+
+- **Colour helpers** (`vidgen/charts.py`, exported). `mix_colors(a, b, t)`: `a` at opacity `t`
+  over `b` in sRGB (what alpha blending shows), `#RRGGBB`. `text_color_on(fill, min_ratio=4.5)`:
+  the theme's `text` or `background`, whichever contrasts more with `fill`; below `min_ratio`
+  white or black (the better one; the worst case over all fills is ≈ 4.58:1). `ColorScale(lo,
+  hi, stops, kind, center)` (frozen): `fraction(v)` (clamped; diverging: 0.5 at `center`, each
+  side scaled to its own end), `at(f)` (OKLab interpolation between `(fraction, hex)` stops —
+  Ottosson's matrices, sRGB gamma via `lint.color`), `__call__(v)`. `color_scale(values, kind,
+  color, low_color, high_color, center, lo, hi)`: sequential stops `mix(color, background, 0.14)`
+  → `color` (lightness monotone, "more = more contrast with the background" on light and dark
+  presets); diverging `low_color` → `mix(text, background, 0.1)` → `high_color`, domain `center ±
+  max distance` unless `lo`/`hi` are given (then `center` must lie inside: `VidgenError`).
+  `color_bar(scale, length, vertical, thickness=0.26, size, color, title, max_ticks=5, fmt,
+  unit)`: 48 opaque segments + a faint frame, ticks from `axis_ticks` inside the domain with
+  `tick_texts` labels (right of a vertical bar, below a horizontal one; thinned with `_stride`),
+  optional title above; `VGroup(bar, ticks, labels[, title])` centred at the origin.
+- **`pie`** (`scenes/pie.py`; reference docs/CONFIG.md). `Params.slices()` → `PieSlice(label,
+  value, color, other)` after `sort` and grouping (`other_below` %, `max_slices`; grouping only
+  when ≥ 2 slices qualify; the group is last, `other_color`). Colours: own / one colour / the
+  palette in order, past its length lighter shades (`mix(base, background, max(0.4, 1 - 0.3k))`),
+  the last slice never equal to the first. Angles from `start_angle` (90 = top), clockwise by
+  default; wedges are `AnnularSector`s (inner radius 0 for a pie) with a 2 px background-coloured
+  edge. **Layout** (`_plan`): for label sizes from `label_size` down to the readable floor
+  (x `floor_margin` 1.05), modes `sides` then `keys` (`legend` alone when `uses_legend()`:
+  `legend` or > 6 slices — static, so `target_names` knows it). In each mode up to four rounds:
+  labels that fit inside their slice (box corners and edge midpoints inside the annular sector,
+  6 % margins; spots at 0.6 / 0.5 / 0.68 / 0.4 r for a pie, mid-ring for a donut; wrap widths
+  1.2 / 0.8 / 0.5 r) go inside, the rest outside; `sides`: columns at `r(1 + explode) + ELBOW
+  (0.2) + LEAD (0.5)` left/right, room reserved per side only for the sides that have labels,
+  labels stacked top-down near their elbow height (`_stack`: `gap` 0.12, pushed back up from the
+  bottom; the smallest slices' labels dropped if a side cannot hold them), leader = rim → radial
+  elbow → label; `keys`: `chart_legend` swatches + "name value", wrapped rows below the pie in
+  9:16 (≤ 60 % of the body, else dropped), stacked beside it in 16:9 (wrapped rows if taller
+  than the body), pie and key centred together. The first layout with nothing dropped and
+  radius ≥ 0.3 x the body's shorter side wins; else the one dropping fewest (warning). Inside
+  labels use `text_color_on(slice colour)`. Donut centre: `center_text()` (the total via
+  `value_format`/`unit`) bold in the heading role, fitted to 0.78 x the hole's diameter, plus
+  `center_label` in `dim`. **Steps**: wedges grow by `UpdateFromAlphaFunc` rebuilding the
+  sector (invisible at alpha 0, the original at 1); `all` = one continuous sweep (each wedge's
+  rate is its share of `smooth` over the first 70 %), labels / leaders after 65 %; `per_beat`
+  sweeps over 0–65 % and the label over 55–100 % (`window(a, b)` rate functions). Highlight step:
+  the wedge (and an inside label) shifts by `explode x r` along its middle, an outside leader's
+  first corner follows (`Transform` to the moved polyline), other wedges `dim_to` 0.3, their side
+  labels / leaders / keys 0.45, inside labels recoloured with `recolor` to
+  `text_color_on(mix(colour, background, 0.3))` at 0.7. `reveal(fraction=0.75, cap=2.0)`.
+  **Targets**: `slice<N>` / `slice:<label>` = wedge + label (+ leader), outline the wedge;
+  `center`; `legend` = the key (entrance: every slice's entrance).
+- **`heatmap`** (`scenes/heatmap.py`). Params `values` (rectangular, `null` allowed, ≤ 40 x 40),
+  `rows`/`columns` (unique), `scale` (`auto` = diverging when values lie on both sides of
+  `center`), colours, `scale_min/max`, `show_values`, `legend`, `legend_label`, `reveal: all |
+  rows`, `highlight` refs (the target names `cell<R>.<C>` / `row<N>` / `row:` / `col<N>` /
+  `col:`; `Params.cells_of`). **Layout**: the colour bar (vertical right of the grid in 16:9,
+  horizontal below it in 9:16; rebuilt as long as 0.9 x the grid height, 2.4–4.5 units / 0.8 x
+  the grid width, 3–5 units), row labels right-aligned (≤ 25 % / 30 % of the width), column
+  labels wrapped to the cell width at one size from `label_size` down to the floor (else a
+  warning, scaled), cells `min(width / cols, MAX_CELL 2.2)`, height ≤ width ≤ 2.5 x height, the
+  whole block centred; gap between cells `min(0.05, 0.06 x side)`; cells smaller than `MIN_CELL`
+  (0.3) → warning "split the matrix". Cells are opaque (`surface` + faint outline for null);
+  values at the largest size from `value_size` down to the floor at which the four longest
+  strings fit (`cell - 0.12` wide, `- 0.1` high), else hidden (warning with `show_values:
+  true`), each in `text_color_on(cell colour)`. **Steps**: `all` = labels, legend, and cells
+  popping in (`FadeIn(scale=0.6)`) in a diagonal wave (window by `(r + c)`); `rows` = row k's
+  label and cells left to right (column labels, legend, title with row 1). Highlight step:
+  `highlight_color` outlines (stroke 4, z 2) round each ref's cells; other cells `dim_to` 0.3,
+  their values recoloured for the dimmed cell at 0.7. `reveal(fraction=0.75, cap=1.6)`.
+  **Targets**: `cell<R>.<C>` (rect + value, outline the rect), `row<N>`/`row:<label>` and
+  `col<N>`/`col:<label>` (label + cells; outline a band over the cells; entrance: the hidden
+  cells one by one), `legend`, `title`.
+
