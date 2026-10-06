@@ -20,7 +20,7 @@ from vidgen.render.worker import frame_size
 from vidgen.scenes.code import parse_line_spec
 from vidgen.theme import Theme
 
-BUILTINS = ["bar_chart", "bullets", "chapter", "code", "comparison", "diagram", "end_card", "equation", "flowchart", "icon_grid", "image", "line_chart", "network", "process", "quote", "stat", "table", "text_card", "timeline", "title"]
+BUILTINS = ["bar_chart", "bullets", "chapter", "code", "comparison", "diagram", "end_card", "equation", "flowchart", "histogram", "icon_grid", "image", "line_chart", "network", "process", "quote", "scatter", "stat", "table", "text_card", "timeline", "title"]
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "minimal"
 FPS = 5
 
@@ -46,6 +46,8 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "network": {"heading": "Net", "layers": [3, {"size": 100, "label": "Hidden"}, {"size": 2, "label": "Out", "connect": "sparse:0.5"}], "highlight": ["1.1", "2.1"]},
     "flowchart": {"nodes": ["start", "end"], "edges": ["start -> end"], "routing": "orthogonal", "steps": [["start"], ["end"]]},
     "stat": {"value": 1234.5, "prefix": "$", "unit": "k", "label": "Revenue", "context": "2025", "icon": "banknote", "comparison": {"value": 1000, "delta": "percent"}},
+    "scatter": {"title": "Points", "series": {"a": [[1, 2], [2, 3.5, "two"], [3, 3]], "b": [[1.5, 1], [2.5, 2]]}, "trend": "each", "trend_label": "both", "highlight": ["two"], "x_label": "x"},
+    "histogram": {"title": "Spread", "values": [1, 2, 2, 3, 3, 3, 4, 4, 5, 7], "mean": True, "median": True, "compare": {"name": "b", "values": [2, 3, 4, 4, 5, 6]}, "highlight": [1]},
 }
 
 

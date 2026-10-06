@@ -51,6 +51,8 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "diagram": {"heading": "H", "nodes": ["a", {"id": "b", "icon": "rocket"}], "edges": ["a -> b: go"]},
     "process": {"heading": "H", "stages": ["a", {"label": "b", "icon": "rocket"}], "input": "in"},
     "network": {"heading": "H", "layers": [2, {"size": 2, "label": "Out"}], "passes": 0},
+    "scatter": {"title": "T", "series": {"a": [[1, 2, "p"], [2, 3]], "b": [[1, 1], [3, 2]]}, "trend": "each"},
+    "histogram": {"title": "T", "counts": [1, 3, 2], "edges": [0, 10, 20, 30], "compare": {"counts": [2, 2, 1]}, "mean": True, "median": True},
 }
 #: Built-in types registered under a second name (same class, params and targets).
 ALIASES = {"flowchart": "diagram"}
@@ -185,7 +187,7 @@ def test_builtin_scenes_register_their_target_names(kind: str, make_project, med
     [("title", "authors"), ("quote", ["author", "source"]), ("end_card", "line*"), ("icon_grid", "item2"),
      ("line_chart", "series2"), ("image", "caption"), ("code", "line3"), ("text_card", "text"),
      ("chapter", "subtitle"), ("stat", ["comparison", "context"]), ("comparison", "col2"), ("table", "row2"), ("timeline", "event2"),
-     ("diagram", "edge:a->b"), ("network", ["layer2", "edges1"])],   # process: its token still moves (test_process_network)
+     ("diagram", "edge:a->b"), ("network", ["layer2", "edges1"]), ("scatter", ["series2", "trend"]), ("histogram", ["mean", "median", "compare"])],   # process: its token still moves (test_process_network)
 )
 def test_early_reveal_is_not_repeated_by_the_scene(kind: str, target: str | list[str], make_project, media: Path) -> None:
     project = load(make_project, [{"id": "s", "type": kind, "params": SAMPLES[kind], "beats": beats([{"reveal": target}], None)}])

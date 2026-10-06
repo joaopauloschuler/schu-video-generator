@@ -2599,3 +2599,116 @@ How to test: `/home/claude/venv/bin/python -m pytest -q` (1191 passed, 1 skipped
 only: `pytest tests/test_process_network.py tests/test_api.py`. Manual: `vidgen storyboard
 examples/minimal --scene render --scene net --per-beat 3 [--variant vertical|light]`, `vidgen lint
 examples/minimal [--variant ...]`, `vidgen list-scenes`, `vidgen schema --scene network`.
+
+## Step 30 — Chart helpers + `scatter` and `histogram`
+What was built
+- **`vidgen.charts`** (new module, every name exported by `vidgen.api`): the parts the chart
+  scenes share, public so project charts look and scale the same.
+  - Numbers: `axis_ticks(lo, hi, max_ticks, log=)` (round linear ticks, or powers of ten; 1-2-5
+    within two decades), `short_number` (`1.5k`, `2M`), `tick_texts` (shared decimals, `20k`
+    from 10 000 on, or a format), `linear_fit` → `LinearFit(slope, intercept, r2)` with
+    `.equation()`.
+  - Axes: `ChartAxis` / `value_axis(values, lo, hi, max_ticks, log, fmt, unit, title,
+    include_zero)`, and `chart_axes(area, x, y, size, grid, lines, right, top)` → `ChartAxes`
+    (`plot` region, `point(x, y)`, `group` and its parts): tick labels at a theme size token
+    never below `readable_size()` (`chart_label_size`), axis titles, dashed gridlines, colliding
+    labels thinned to every k-th.
+  - Legend: `chart_legend` (line / box / marker swatches, wrapped or stacked), `auto_legend`
+    (a free corner of the plot on a faint framed panel, else above the plot), `legend_spot`,
+    `sample_path`; markers `chart_marker` (`CHART_MARKERS` circle, square, triangle, diamond).
+  - Frame: `chart_title` (bold, heading role, in the `header` band, 1.3x in portrait) and
+    `chart_caption`.
+- **`bar_chart` and `line_chart` on the helpers** (Step 22 findings fixed): titles in the header
+  band; tick / category / axis / end labels at `label_size` (`caption`, was `small` 20 pt,
+  below lint's floor) with the readable floor; new params `title_size`, `title_color`,
+  `label_size`, and `value_size` (bar). 9:16 bar value labels keep their size: 0.9x, then a word
+  unit (`" min"`) under the number, then smaller; when even the readable size does not fit a
+  vertical slot, portrait charts switch to horizontal bars. `line_chart` ticks show the decimals
+  they need, x labels thin by width, and the legend goes into a free plot corner (above the plot
+  only when every corner has a line). 16:9 sheets look the same (ticks 24 instead of 20 pt,
+  title a little lower); existing configs unchanged.
+- **`scatter`** (`src/vidgen/scenes/scatter.py`): series as `{name: [points]}` or `[{name,
+  points, color, marker}]`, a point `[x, y]`, `[x, y, label]` or `{x, y, label, group}`; markers
+  differ by shape per series; linear or log axes, bounds, formats, units; `reveal: series |
+  groups | all` (points pop in left to right); point labels placed beside their point clear of
+  other points, labels, the legend and trend lines (halo, drawn above lines); `trend: each |
+  all` least-squares lines (own step) with `trend_label: equation | r2 | both`; `highlight`
+  rings chosen points (`"ours@2"`, `"ours@small"`, `"small"`), dims the rest; `show_labels:
+  highlight` writes labels only for those. Targets `title`, `axes`, `legend`, `series<N>`,
+  `series:<name>`, `point:<series>@<N>`, `point:<series>@<label>`, `trend`, `trend:<series>`.
+- **`histogram`** (`src/vidgen/scenes/histogram.py`): `values` binned by `bins` (count, or a rule
+  `auto | sturges | sqrt | fd` whose width is rounded to 1/2/2.5/5 x 10^k with edges on its
+  multiples), `bin_width`, `bin_range`; or `counts` + `edges`. Bars grow left to right; then,
+  each its own step, `compare` (a second distribution as an outline on the same bins, with a
+  legend), `mean`, `median` (dashed line + value above the plot; exact from values, estimated
+  from counts), `highlight` bins. `percent` shows shares. Targets `title`, `axes`, `legend`,
+  `bin<N>`, `bin:<range>` (`bin:10-20`), `compare`, `mean`, `median`.
+- `examples/minimal`: `cost` (scatter: two series, trend with R², a highlighted point) and
+  `beats` (histogram with a median and a `box` highlight on `bin:4-5`) after `trend`; one
+  storyboard usage line.
+
+Verification (sheets opened with Read)
+- Scratch project (scatter with two series, labels, `trend: all` + both labels, highlight;
+  log-x scatter with `reveal: groups`; histogram with mean + median + highlight; counts/edges
+  histogram in percent with a compare overlay) in 16:9, vertical, light and vertical light.
+  Fixed along the way: legend swatches read as data points (now a framed panel), trend text
+  crossing its own line or a point label (placed after point labels, offset along the line's
+  normal), a point label crossed by the trend line (lint `covered_text`; labels now avoid lines
+  and sit above them with a background halo), the line chart legend under its gridlines in 9:16
+  (lint `covered_text`; legend `z_index` 1), histogram marker labels on the y axis title, a
+  late-binding closure that revealed a marker instead of the compare overlay.
+- `vidgen lint`: `examples/minimal` 0 findings in all 8 variants (default, vertical, light,
+  contrast, editorial, neutral, pastel, neon); `examples/custom_scene` 0 (16:9 and vertical); the
+  scratch project 0 in 16:9, vertical, light, vertical light. `sizes`, `trend`, `cost`, `beats`
+  sheets checked in 16:9 (`--per-beat 3`), vertical and light.
+
+Files
+- New: `src/vidgen/charts.py`, `src/vidgen/scenes/scatter.py`, `src/vidgen/scenes/histogram.py`,
+  `tests/test_charts.py`.
+- Changed: `src/vidgen/api.py`, `src/vidgen/scenes/__init__.py`, `scenes/bar_chart.py`,
+  `scenes/line_chart.py`; `examples/minimal/video.yaml`; tests `test_builtin_scenes.py`
+  (BUILTINS/SAMPLES), `test_actions_coverage.py` (SAMPLES, early reveal), `test_extensions.py`
+  (type list); docs/CONFIG.md ("Charts: common to all chart types", `scatter`, `histogram`,
+  bar/line params, targets table), docs/EXTENDING.md ("Charts", tested example), README,
+  DESIGN.md (§2, §6.4, new §33), tasklist.md.
+
+Public interfaces added/changed
+- `vidgen.api`: `ChartAxis`, `ChartAxes`, `LinearFit`, `CHART_MARKERS`, `axis_ticks`,
+  `short_number`, `tick_texts`, `value_axis`, `chart_axes`, `chart_label_size`, `chart_legend`,
+  `auto_legend`, `legend_spot`, `sample_path`, `chart_marker`, `linear_fit`, `chart_title`,
+  `chart_caption`.
+- Built-in scene types `scatter` and `histogram`. Params (additive): `bar_chart` / `line_chart`
+  `title_size`, `title_color`, `label_size`; `bar_chart` `value_size`.
+- Visible changes: chart titles in the header band (1.3x in 9:16); chart labels at `caption`
+  (were `small`); `line_chart` ticks with the decimals the ticks need (`2.4`, was `2.40`) and
+  x labels thinned by width (more labels where they fit); portrait bar charts may turn
+  horizontal when value labels would otherwise be tiny.
+
+Decisions / deviations
+- Charts get no shared base class: the helpers are functions, so a project scene picks what it
+  needs; `Params` were not given a common base (field order shows in `list-scenes`).
+- Scatter points outside explicit `x_min`/... are a validation error, not silently clipped.
+  Trend lines need linear axes (a log-axis "trend" would need a model choice: power or
+  exponential); they cover the fitted points' x range only.
+- Histogram rules round the bin width so edges are readable numbers (the bin count may differ
+  from numpy's by one or two); an int `bins` gives exactly that many equal bins (edges may be
+  unround, then the axis gets round ticks inside). `percent` normalises each distribution by
+  its own total. `bin:<range>` uses an ASCII hyphen (`bin:-10--5` for negatives).
+- Labels that are numbers equal to another point's index do not name a target (the index
+  wins); documented.
+- Legends inside the plot stand on a framed panel; above the plot (no free corner) unframed,
+  as before.
+
+Known gaps / TODOs
+- No per-point value labels on histogram bars; no overlapping-bars style for `compare` (outline
+  only); no density (`count / width`) scale; no box/violin plots.
+- Scatter has no error bars, bubble sizes or point colours by value; label placement is greedy
+  (8 positions) and can leave a label crossing a line when nothing better exists (it then sits
+  on top with a halo).
+- `line_chart` still has no log axis param (the helpers support it); `bar_chart` has no axis /
+  gridlines (values are written on the bars).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1279 passed, 1 skipped, ~13 min). Step only: `pytest
+tests/test_charts.py`. Manual: `vidgen storyboard examples/minimal --scene cost --scene beats
+--scene sizes --scene trend --per-beat 3 [--variant vertical|light]`, `vidgen lint
+examples/minimal [--variant ...]`, `vidgen list-scenes`, `vidgen schema --scene scatter`.

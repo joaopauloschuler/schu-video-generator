@@ -71,6 +71,7 @@ src/vidgen/
   layout.py               # fit/wrap text, beat distribution, chart numbers, LaTeX detection
   regions.py              # layout regions: safe area, named regions, grids, place(), readable text (§18)
   graph.py                # layered layout of directed graphs, pure Python (§31; no manim)
+  charts.py               # chart helpers: ticks, number labels, axes, legend, markers, fit (§33)
   tts/__init__.py         # provider seam: get_provider(cfg)
   tts/elevenlabs.py       # ElevenLabs provider (stdlib urllib), cache by hash
   render/                 # worker.py (one scene per process), pipeline.py, ffmpeg.py,
@@ -452,6 +453,10 @@ Step 28 (§31) adds `layered_layout`, `GraphLayout`, `GraphNode`, `GraphEdge`, `
 Step 29 (§32) adds `sparse_pairs` and `group_bounds`, and compatible keyword arguments:
 `column(..., horizontal=False, skip=None)`, `edges(..., colors=None, shorten=0.0)`,
 `grouped_pairs(n, groups, m=None)`.
+Step 30 (§33) adds the chart helpers: `ChartAxis`, `ChartAxes`, `LinearFit`, `CHART_MARKERS`,
+`axis_ticks`, `short_number`, `tick_texts`, `value_axis`, `chart_axes`, `chart_label_size`,
+`chart_legend`, `auto_legend`, `legend_spot`, `sample_path`, `chart_marker`, `linear_fit`,
+`chart_title`, `chart_caption`.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -1886,3 +1891,106 @@ using the existing renders of the others (missing ones are rendered). Exit code 
   other units, ellipses and edges `dim_to` 0.3. `reveal(fraction=0.75, cap=1.8)`.
   **Targets**: `heading`, `layer<N>` / `layer:<label>` (units, ellipsis, caption), `edges<N>`
   (when the pair has edges), `neuron<L>.<i>` (one dot).
+
+
+## 33. Refinements (Step 30, chart helpers, `scatter` and `histogram`)
+
+- **`vidgen/charts.py`** (exported by `vidgen.api`; reference docs/EXTENDING.md "Charts").
+  Numbers: `axis_ticks(lo, hi, max_ticks=6, *, log=False)` (= `nice_ticks`, or powers of ten:
+  1-2-5 steps within two decades, every k-th decade beyond `max_ticks`; `log` needs `lo > 0`);
+  `short_number(v, decimals=None)` (`k`/`M`/`B`/`T`); `tick_texts(ticks, fmt=None, unit="", *,
+  log=False)` (`fmt` if given; log: `short_number`; else one shared decimals count
+  (`auto_format`), suffixed from 10 000 on, `0` stays `0`). `LinearFit(slope, intercept, r2)`
+  (callable, `equation(digits=3)` with typographic minus) from `linear_fit(xs, ys)` (`np.polyfit`;
+  r² 1 for constant y; < 2 distinct x → `VidgenError`).
+- **Axes.** `ChartAxis(lo, hi, ticks, labels, log=False, title="")` (frozen; `fraction(v)`,
+  `contains(v)`); `value_axis(values, *, lo, hi, max_ticks, log, fmt, unit, title,
+  include_zero)`: domain = data extended to the outer ticks, unless `lo`/`hi` fix an end (then
+  ticks outside are dropped) — the old `line_chart` rule. `chart_axes(area, x, y, *, size,
+  color, axis_color, grid="y"|"x"|"both"|"none", lines="x"|"xy", right, top, theme) ->
+  ChartAxes(plot, x, y, label_size)` with `x_pos`/`y_pos`/`point`/`inside`, `group` and parts
+  `lines`, `grid`, `x_labels`, `y_labels`, `x_title`, `y_title`. Layout: y tick labels right-
+  aligned left of the plot (gap 0.45 cap + 0.05), y title above them left-aligned at the
+  area's top (below `top`), x labels below, x title under them centred (clamped to the area);
+  the plot's right end moves in by half the last x label when a tick sits at the end. Label
+  thinning `_stride`: the smallest k such that every k-th label clears its neighbour (x: 0.35
+  cap + 0.15; y: 0.9 cap), plus the last label when it has room. Gridlines: dashed, stroke 1,
+  opacity 0.4, at the *labelled* ticks (not on the axis line). Sizes: `chart_label_size(size)`
+  = `max(theme.size(size), readable_size())`.
+- **Legend.** `chart_legend(entries, max_width, *, size, color, stack, theme)` (entries `(name,
+  colour, swatch)`, swatch `line` | `box` | a marker; rows wrapped to `max_width`, `stack` one
+  per row; scaled down only if one entry is wider). `legend_spot(size, plot, points, *, pad=0.15,
+  corners=(top_right, top_left, bottom_right, bottom_left))`: the first corner whose box (pad
+  inside the plot, pad of air) contains no frame point. `auto_legend(...)`: one row, else
+  stacked, in a free corner on a framed panel (`RoundedRectangle`, background fill 0.85, `dim`
+  stroke 1 at 0.5; `LEGEND_BUFF` 0.15; `z_index` 1, so gridlines drawn later never cover it —
+  lint `covered_text` found exactly that in 9:16) → `(legend, centre)`; no free corner →
+  `(row legend, None)` and the caller reserves `top` room and puts it above the plot.
+  `sample_path(points, step=0.1)` samples polylines for it. `chart_marker(kind, radius,
+  colour)`: `CHART_MARKERS` circle / square (side 1.7 r) / triangle (height 1.95 r) / diamond
+  (side 1.6 r, rotated), similar visual weight.
+- **Title and caption.** `chart_title(text, *, size="heading", color, growth=None, area)`: bold,
+  `heading` role, `balance=True`, fitted into and centred in `region("header")`, x
+  `PORTRAIT_TITLE_GROWTH` 1.3 in portrait (as `bullets`). `chart_caption(text, area, *, size,
+  color)`: `fit_text` to the area width, ≤ 15 % of its height, at its bottom.
+- **`bar_chart` / `line_chart` refactored** (Step 22 findings): title via `chart_title` (was the
+  top of the safe area, 18 % high: in 16:9 now a few px lower, centred in the header band; in
+  9:16 1.3x larger); caption via `chart_caption`. New params (additive): `title_size`,
+  `title_color`, `label_size` (both), `value_size` (`bar_chart`). `bar_chart`: category labels at
+  `label_size` (`caption`, was `caption`/`small` by count) with the readable floor as `min_size`;
+  value labels: `_value_style` tries the wanted size (`value_size`, default `body`/`caption` as
+  before) and 0.9x on one line, then with a word unit (leading space) under the number
+  (`unit_ratio` 0.8), then 0.8x, then 0.7x/0.6x, then the floor; nothing fits → in portrait with
+  `horizontal` unset the bars turn horizontal (as before also for > 5 bars), else the labels are
+  scaled to the slot as before. Horizontal slots are 1.1 (landscape) / 1.5 (portrait) units, at
+  least the tallest label + 0.3, bars up to 0.9 thick. The count-up rebuilds a one- or two-line
+  label (`become` + `original_text` per `Text`). `line_chart` on `value_axis` + `chart_axes`:
+  ticks label with the decimals the *ticks* need (`2.4` instead of `2.40`; `value_format` still
+  applies to both), x labels thinned by width instead of "at most 7 (4 in portrait)", tick /
+  axis / end labels and legend at `label_size` (`caption`, was `small` for ticks), legend via
+  `auto_legend` (inside the plot when a corner is free, else above, as before). 16:9 output:
+  same structure; ticks and axis titles 24 instead of 20 pt, title ~0.1 unit lower.
+- **`scatter`** (`scenes/scatter.py`; reference docs/CONFIG.md): `ScatterPoint` (`also_accepts
+  = (list,)`: `[x, y]` / `[x, y, label]`; JSON Schema `anyOf` array (prefixItems) | object;
+  `label`, `group`), `ScatterSeries` (`name`, `points`, `color`, `marker` auto → `CHART_MARKERS`
+  by position); `series` dict or list; axes `x_/y_ min/max/log/format/unit/label`; `trend: none |
+  each | all` + `trend_label: none | equation | r2 | both` + `trend_color`; `reveal: series |
+  groups | all`; `show_labels: all | highlight | none`; `highlight` refs (`<series>@<N>`,
+  `<series>@<label>`, a unique label; `Params.point_ref`); `legend` (default > 1 series);
+  `point_radius` (default 0.11 / 0.085 / 0.065 / 0.05 for ≤ 20 / 60 / 150 / more points).
+  Validation: unique series names and labels per series, positive values and bounds on log
+  axes, points inside explicit bounds (no silent clipping), trend only on linear axes with ≥ 2
+  distinct x per fit, `trend_label` needs a trend, `groups` needs a group.
+  **Layout**: x ticks ≤ 7 (4 in portrait), y ≤ 6 (8 in portrait), grid both, both axis lines;
+  legend via `auto_legend` avoiding markers and trend samples. Markers (z 2) get a 1.2 stroke in
+  the background colour (overlaps stay apart); trend lines (z 1) run over the fitted points' x
+  range, cut where they leave the y domain. Point labels (z 3, a background-colour outline as
+  a halo) try right, left, above, below, then diagonals, scored 4·outside the plot + 2·overlap
+  of labels/legend + markers covered + 2·trend lines crossed; trend labels are placed after
+  them: beside the line's end (away from the line), then on the normal at 6 places along it
+  (offset by the label's extent along the normal, so no slope makes them cross), scored 5·lines
+  crossed + points covered + 3·boxes; both clamped to the plot. **Steps**: per group a
+  `LaggedStart` (lag `min(0.25, 2/n)`) of point pops (`GrowFromCenter`, then the label) sorted
+  by x; then the trend (`Create`, linear, then its text); then the highlight (rings 1.9 r in
+  `highlight_color`, labels with `show_labels: highlight`, the rest `dim_to` 0.35).
+  `reveal(fraction=0.8, cap=2.0)`. Targets per the table; a label that is a number another
+  point has as its index names nothing (the index wins).
+- **`histogram`** (`scenes/histogram.py`): `values` with `bins` (int: equal bins via
+  `np.linspace`; rule `auto` | `sturges` | `sqrt` | `fd`: numpy's bin count, width rounded by
+  `nice_width` (nearest of 1, 2, 2.5, 5 x 10^k on a log scale), edges `aligned_edges` on its
+  multiples), `bin_width` (aligned, or from `bin_range[0]`), `bin_range`; or `counts` +
+  `edges`; `MAX_BINS` 60. `compare` (`HistogramCompare`: `name`, `values` | `counts`, `color`
+  `secondary`) binned on the same edges. `percent` (each distribution's own total). `mean` /
+  `median`: exact from values; from counts the mean of bin middles and the median interpolated
+  in its bin. `highlight`: 0-based indices or range labels. Range labels (`bin:<range>`) are
+  `tick_texts(edges, x_format)` joined with `-` (`10-20`, `0-10k`).
+  **Layout**: x ticks at the edges when the bins are round (equal nice widths, edges on their
+  multiples, or `x_format` given), else round ticks inside; y from 0 (`include_zero`), unit `%`
+  with `percent`. Bars inset by `min(0.03, 8 %)` per side. `compare` = a `Polygon` fill at 0.1
+  under its step outline (stroke 4). Marker labels (bold, in the marker colour) stand above the y
+  title, the second one a line higher if they would touch; room for them is reserved with
+  `chart_axes(top=)`; the dashed line runs from the axis up to its label. Legend (with
+  `compare`: `name` or `data` as a box, the compare name as a line) via `auto_legend` avoiding the
+  outlines and verticals through every bar. **Steps**: bars grow (`ReplacementTransform` of a
+  flattened copy, `LaggedStart` lag `min(0.15, 2/n)`), compare, mean, median, highlight (chosen
+  bars filled `highlight_color`, others `dim_to` 0.35) — each its own step.

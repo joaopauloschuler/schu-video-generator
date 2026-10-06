@@ -17,6 +17,26 @@ del _before
 from pydantic import Field, field_validator, model_validator  # noqa: E402
 
 from vidgen.actions import Action, ActionOptions, Target  # noqa: E402
+from vidgen.charts import (  # noqa: E402
+    CHART_MARKERS,
+    ChartAxes,
+    ChartAxis,
+    LinearFit,
+    auto_legend,
+    axis_ticks,
+    chart_axes,
+    chart_caption,
+    chart_label_size,
+    chart_legend,
+    chart_marker,
+    chart_title,
+    legend_spot,
+    linear_fit,
+    sample_path,
+    short_number,
+    tick_texts,
+    value_axis,
+)
 from vidgen.errors import VidgenError  # noqa: E402
 from vidgen.graph import EdgeRoute, GraphEdge, GraphLayout, GraphNode, NodePlace, layered_layout  # noqa: E402
 from vidgen.helpers import MT, T, column, counter, dense_pairs, edges, group_bounds, grouped_pairs, resolve_color, sparse_pairs  # noqa: E402
@@ -170,6 +190,24 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "GraphEdge",
     "EdgeRoute",
     "NodePlace",
+    "CHART_MARKERS",
+    "ChartAxes",
+    "ChartAxis",
+    "LinearFit",
+    "auto_legend",
+    "axis_ticks",
+    "chart_axes",
+    "chart_caption",
+    "chart_label_size",
+    "chart_legend",
+    "chart_marker",
+    "chart_title",
+    "legend_spot",
+    "linear_fit",
+    "sample_path",
+    "short_number",
+    "tick_texts",
+    "value_axis",
     "Field",
     "field_validator",
     "model_validator",

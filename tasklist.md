@@ -135,9 +135,9 @@ Rules that apply to every step:
 - [x] `network`: layered neural-net diagram built on `helpers.column`/`helpers.edges` (helpers extended compatibly: `column(horizontal=, skip=)`, `edges(colors=, shorten=)`, `grouped_pairs(n, groups, m)`, new `sparse_pairs`, `group_bounds`; layers with ellipsis + count, `dense`/`sparse:r`/`grouped:g`/`one_to_one`/`none` per layer, edge cap and opacity, forward-pass pulse steps, highlight path; LR / TB; targets `layer<N>`, `layer:<label>`, `edges<N>`, `neuron<L>.<i>`)
 
 ### Step 30 — Chart helpers + `scatter` and `histogram`
-- [ ] Shared axis/ticks/legend helpers extracted from `bar_chart`/`line_chart`
-- [ ] (from Step 22) Chart titles in the `header` region like `bullets`/`code`/`icon_grid`; tick, axis and value labels sized by theme tokens (in 9:16 `bar_chart` value labels are scaled down to fit narrow slots and look small)
-- [ ] `scatter` (series, optional trend line), `histogram` (bins from raw values or given counts)
+- [x] Shared axis/ticks/legend helpers extracted from `bar_chart`/`line_chart` (`vidgen.charts`, public in `vidgen.api`: `value_axis`/`axis_ticks` (linear or log), `tick_texts`/`short_number`, `chart_axes` (labels thinned, gridlines), `chart_legend`/`auto_legend` (a free plot corner, else above), `chart_marker`, `linear_fit`, `chart_title`, `chart_caption`, `chart_label_size`)
+- [x] (from Step 22) Chart titles in the `header` region like `bullets`/`code`/`icon_grid`; tick, axis and value labels sized by theme tokens (in 9:16 `bar_chart` value labels are scaled down to fit narrow slots and look small) (new params `title_size`, `title_color`, `label_size`, `value_size`; 9:16 value labels keep their size with a word unit under the number, else horizontal bars)
+- [x] `scatter` (series, optional trend line), `histogram` (bins from raw values or given counts) (scatter: markers per series, groups, point labels placed clear of points and lines, trend each/all with equation / R², highlight rings, log axes; histogram: count / width / rule bins with round edges, counts + edges, compare overlay, percent, mean / median markers, bin highlight)
 
 ### Step 31 — Scenes: `pie`/`donut` and `heatmap`
 - [ ] `pie` with `donut: true` option, labels, highlight slice

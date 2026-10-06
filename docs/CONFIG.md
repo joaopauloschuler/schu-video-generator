@@ -510,6 +510,13 @@ set — a focus step that dims the other bars. Bars grow while their value label
 [Action targets](#beat-actions): `title`, `bar<N>` (1-based) and `bar:<label>`, each a bar with
 its value and category labels (beat actions can do more than the one `highlight` step).
 
+Like every chart, the title stands in the `header` band (1.3x in a vertical frame) and label
+sizes are theme size tokens that never go below the readable minimum (see
+[charts](#charts-common-to-all-chart-types)). Value labels keep their size where they can: one
+too wide for its bar shrinks a little, then a word unit (`" min"`) moves under the number, then
+it shrinks further; in a vertical frame the bars turn horizontal when even the readable size
+does not fit (or with more than 5 bars), unless `horizontal` is set.
+
 | param | type | default | |
 |---|---|---|---|
 | `labels` | list[str] | required | |
@@ -517,12 +524,15 @@ its value and category labels (beat actions can do more than the one `highlight`
 | `title` | str | `""` | |
 | `caption` | str | `""` | note under the chart (e.g. the data source) |
 | `caption_size`, `caption_color` | size, color | `caption`, `dim` | |
+| `title_size`, `title_color` | size, color | `heading`, `text` | |
+| `label_size` | size | `caption` | category labels |
+| `value_size` | size | `body` (`caption` with more than 6 bars) | value labels |
 | `unit` | str | `""` | appended to every value label (`"%"`, `" ms"`) |
 | `value_format` | str | automatic | Python format, e.g. `"{:.1f}"`, `"{:,.0f}"`, `"{:.0%}"`; default shows the decimals the values need |
 | `colors` | color \| list[color] \| `palette` | `primary` | one color, one per bar, or `theme.palette` |
 | `highlight` | int \| str | none | bar index (0-based) or label |
 | `highlight_color` | color | `highlight` | highlighted value label |
-| `horizontal` | bool | auto | default: vertical bars; horizontal in a portrait frame with more than 5 bars |
+| `horizontal` | bool | auto | default: vertical bars; horizontal in a portrait frame with more than 5 bars or value labels too wide for vertical ones |
 | `reveal` | `all` \| `per_beat` | `all` | |
 | `baseline` | float | `0` | value the bars start from (e.g. `1.0` for losses; say so in `caption`) |
 
@@ -545,8 +555,9 @@ its value and category labels (beat actions can do more than the one `highlight`
 
 Steps: one per series (`reveal: per_beat`, default; the axes come with the first) or all
 series in beat 1 (`all`). Each line ends with a `name value` label; when those labels would be
-too wide (e.g. in portrait) the names move to a legend above the plot. Axis labels are plain
-text (no LaTeX).
+too wide (e.g. in portrait) the names move to a legend, placed in a corner of the plot that no
+line crosses (else above the plot). Axis labels are plain text (no LaTeX); tick labels that
+would collide are thinned to every second (third...) one.
 [Action targets](#beat-actions): `title`, `axes`, `series<N>` (1-based), `series:<name>` (a line with its markers
 and end label), `point:<name>@<x>` (one data point, `x` as its tick label reads:
 `point:sparse@8`; without `dots` the point appears as a dot when an action uses it).
@@ -557,9 +568,11 @@ and end label), `point:<name>@<x>` (one data point, `x` as its tick label reads:
 | `series` | `{name: [values]}` or list of `{name, values, color}` | required | one value per `x` |
 | `title`, `caption` | str | `""` | |
 | `caption_size`, `caption_color` | size, color | `caption`, `dim` | |
+| `title_size`, `title_color` | size, color | `heading`, `text` | |
+| `label_size` | size | `caption` | tick and axis labels, end labels, legend |
 | `x_label`, `y_label` | str | `""` | |
 | `y_min`, `y_max` | float | from the data | |
-| `value_format` | str | automatic | for y ticks and end labels |
+| `value_format` | str | automatic | for y ticks and end labels (ticks default to the decimals they need) |
 | `x_format` | str | `"{:g}"` | for numeric `x` |
 | `unit` | str | `""` | appended to y values |
 | `reveal` | `per_beat` \| `all` | `per_beat` | |
@@ -579,6 +592,129 @@ and end label), `point:<name>@<x>` (one data point, `x` as its tick label reads:
   beats:
     - text: "Here is the baseline."
     - text: "And the sparse model, which ends lower."
+```
+
+### Charts: common to all chart types
+
+`bar_chart`, `line_chart`, `scatter` and `histogram` share their frame and axes (the helpers
+are public for project charts, see EXTENDING.md "Charts"):
+
+- **Title** in the `header` band at the top (bold, the theme's `heading` font role, 1.3x larger
+  in a vertical frame), **caption** at the bottom; the plot gets the space between.
+- **Label sizes** are theme size tokens (`label_size`, default `caption`), never below the
+  readable minimum that `vidgen lint` checks, so they grow with the type scale (`large` in
+  9:16) instead of staying small.
+- **Ticks** are round numbers (steps of 1, 2, 2.5 or 5 x 10^k; powers of ten on a log axis),
+  written with the decimals they need and `k`/`M`/`B` from 10 000 on (`20k`), unless a format
+  is given. Labels that would collide are thinned. Gridlines are faint dashes at the labelled
+  ticks.
+- **Legends** (several series) stand in a corner of the plot that covers no data, on a faint
+  framed panel, as one row or stacked; when every corner has data, above the plot.
+
+### `scatter`
+
+Points of one or more series on two numeric axes. Steps: one series per beat (`reveal:
+series`, default; the axes come with the first), its points popping in from left to right;
+`groups`: the points of each `group` (in order of first use; points without one come first);
+`all`: everything in beat 1. Then, if set, the `trend` line grows (a step of its own) and the
+`highlight` step rings the chosen points and dims the others. Point labels stand beside their
+point where they cover no other point, label or trend line.
+[Action targets](#beat-actions): `title`, `axes`, `legend`, `series<N>`, `series:<name>`,
+`point:<series>@<N>` (1-based, in the order written) and `point:<series>@<label>`, `trend`
+(every trend line with its text) and `trend:<series>` (with `trend: each`).
+
+| param | type | default | |
+|---|---|---|---|
+| `series` | `{name: [points]}` or list of `{name, points, color, marker}` | required | a point is `[x, y]`, `[x, y, label]` or `{x, y, label, group}`; `marker` `auto` (circle, square, triangle, diamond by position), `circle`, `square`, `triangle`, `diamond` |
+| `title`, `caption` | str | `""` | |
+| `caption_size`, `caption_color` | size, color | `caption`, `dim` | |
+| `title_size`, `title_color` | size, color | `heading`, `text` | |
+| `label_size` | size | `caption` | ticks, axis labels, point labels, legend, trend text |
+| `x_label`, `y_label` | str | `""` | axis titles |
+| `x_min`, `x_max`, `y_min`, `y_max` | float | from the data | axis ends (points outside are an error) |
+| `x_log`, `y_log` | bool | `false` | logarithmic axis (positive values) |
+| `x_format`, `y_format` | str | automatic | Python format of the tick labels |
+| `x_unit`, `y_unit` | str | `""` | appended to tick labels |
+| `trend` | `none` \| `each` \| `all` | `none` | least-squares line per series or through every point (linear axes) |
+| `trend_label` | `none` \| `equation` \| `r2` \| `both` | `none` | `y = 0.52x + 1.3`, `R² = 0.87` beside the line |
+| `trend_color` | color | series color / `text` | |
+| `reveal` | `series` \| `groups` \| `all` | `series` | |
+| `show_labels` | `all` \| `highlight` \| `none` | `all` | which point labels are written (`highlight`: only highlighted points', in the highlight step) |
+| `highlight` | list[str] | `[]` | points for a last step: `"<series>@<N>"`, `"<series>@<label>"` or a label |
+| `highlight_color` | color | `highlight` | ring color |
+| `legend` | bool | auto | default: with more than one series |
+| `point_radius` | float | auto | marker radius in units (0.11 for up to 20 points, down to 0.05) |
+
+```yaml
+- id: sizes
+  type: scatter
+  params:
+    title: "Model size vs accuracy"
+    x_label: "parameters (billions)"
+    y_label: "accuracy (%)"
+    trend: all
+    trend_label: r2
+    highlight: ["ours@2"]
+    series:
+      baselines: [[1.3, 61], [6.7, 70, "7B"], [13, 73], [65, 80, "65B"]]
+      ours: [[1.0, 66], [3.8, 72, "small"], [7.0, 75]]
+  beats:
+    - text: "Baselines improve as they grow."
+    - text: "Our models sit above them."
+    - text: "The trend makes the gap clear."
+    - text: "Especially for the small one."
+```
+
+### `histogram`
+
+A distribution as bars over value bins. Step 1 draws the axes and grows the bars from left to
+right; then, each a step of its own (so one per beat when there are enough beats): the
+`compare` outline, the `mean` marker, the `median` marker, and the `highlight` of chosen bins
+(they turn `highlight_color`, the others dim). Bins come from raw `values` — `bins` as a count
+of equal bins, or a rule whose width is rounded to 1, 2, 2.5 or 5 x 10^k with edges on its
+multiples (so the axis reads 10, 20, 30), or a `bin_width` — or from `counts` with their
+`edges`. Mean and median are exact from values, estimated from counts.
+[Action targets](#beat-actions): `title`, `axes`, `legend` (with `compare`), `bin<N>`
+(1-based), `bin:<range>` (the edges as the axis writes them: `bin:10-20`), `compare`, `mean`,
+`median`.
+
+| param | type | default | |
+|---|---|---|---|
+| `values` | list[float] | — | raw data (or `counts` + `edges`) |
+| `bins` | int \| `auto` \| `sturges` \| `sqrt` \| `fd` | `auto` | equal bins over the range, or a rule (numpy's; `fd` = Freedman-Diaconis) with round widths; at most 60 bins |
+| `bin_width` | float | none | width; edges on its multiples (or from `bin_range`'s start) |
+| `bin_range` | [low, high] | the data's | values outside are left out |
+| `counts`, `edges` | list[float] | — | counts per bin and the `len(counts) + 1` increasing edges, instead of `values` |
+| `name` | str | `""` | legend name (shown with `compare`; default `data`) |
+| `compare` | `{name, values \| counts, color}` | none | a second distribution over the same bins, drawn as an outline (`color` `secondary`) |
+| `percent` | bool | `false` | each bin's share of its total (%) instead of counts |
+| `mean`, `median` | bool | `false` | dashed marker with its value above the plot |
+| `highlight` | list[int \| str] | `[]` | bins (0-based index or range `"10-20"`) for a last step |
+| `title`, `caption` | str | `""` | |
+| `caption_size`, `caption_color` | size, color | `caption`, `dim` | |
+| `title_size`, `title_color` | size, color | `heading`, `text` | |
+| `label_size` | size | `caption` | ticks, axis labels, marker labels, legend |
+| `x_label`, `y_label` | str | `""` | axis titles |
+| `x_format`, `y_format` | str | automatic | Python format of the edges (also in `bin:` names) / y ticks |
+| `x_unit` | str | `""` | appended to x ticks and the mean / median values |
+| `color` | color | `primary` | bars |
+| `mean_color`, `median_color`, `highlight_color` | color | `accent`, `tertiary`, `highlight` | |
+
+```yaml
+- id: latency
+  type: histogram
+  params:
+    title: "Response times"
+    x_label: "milliseconds"
+    values: [12, 15, 17, 18, 21, 22, 23, 25, 26, 28, 30, 31, 33, 35, 38, 41, 45, 52, 61, 75, 97, 120]
+    mean: true
+    median: true
+    highlight: ["40-50"]
+  beats:
+    - text: "Most requests finish quickly."
+    - text: "The slow tail pulls the mean up."
+    - text: "The median stays lower."
+    - text: "These are the requests to look at."
 ```
 
 ### `image`
@@ -1328,6 +1464,8 @@ a title card, a `transform` of a bar).
 | `icon_grid` | `heading`, `item<N>`, `item:<label>` | reveal, dim, highlight, zoom, transform | an item is its icon, label and sublabel |
 | `bar_chart` | `title`, `bar<N>`, `bar:<label>` | reveal, dim, highlight, zoom | a bar with its value and category labels; a `box` sits on the axis |
 | `line_chart` | `title`, `axes`, `series<N>`, `series:<name>`, `point:<name>@<x>` | reveal, dim, highlight, zoom | a series is its line, markers and end label; `point:sparse@8` |
+| `scatter` | `title`, `axes`, `legend`, `series<N>`, `series:<name>`, `point:<series>@<N>`, `point:<series>@<label>`, `trend`, `trend:<series>` | reveal, dim, highlight, zoom | a point is its marker and label; `point:ours@2` is the 2nd point written; `legend` with several series, `trend:` with `trend: each` |
+| `histogram` | `title`, `axes`, `legend`, `bin<N>`, `bin:<range>`, `compare`, `mean`, `median` | reveal, dim, highlight, zoom | `bin:10-20` names a bin by its edges; `legend` and `compare` with `compare`; `mean` / `median` when set |
 | `image` | `image`, `caption` | dim, highlight, zoom | `dim` fades the picture, `highlight` tints it |
 | `quote` | `mark`, `quote`, `author`, `source` | reveal, dim, highlight, zoom | |
 | `equation` | `step<N>`, `caption`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each of the `terms` param, in the step on screen; `transform: step1` + `into: step3` jumps ahead |

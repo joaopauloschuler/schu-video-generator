@@ -14,6 +14,7 @@
 #   vidgen storyboard examples/minimal --scene loop --per-beat 2    # a flowchart, node by node
 #   vidgen storyboard examples/minimal --scene render --per-beat 3  # a token moving through a pipeline
 #   vidgen storyboard examples/minimal --scene net --per-beat 3     # a network and its forward pass
+#   vidgen storyboard examples/minimal --scene cost --scene beats --per-beat 3  # scatter with a trend; histogram
 #   vidgen storyboard examples/minimal --variant light           # same video with the light_academic preset
 #   vidgen list-themes examples/minimal --swatches build/themes.png  # every theme preset at a glance
 # There is no narration audio in this example, so beats are timed from their word count
@@ -252,6 +253,39 @@ scenes:
     beats:
       - text: "Line charts draw one series per beat. Here is the baseline."
       - text: "And here is the sparse model, which ends lower."
+
+  - id: cost
+    type: scatter         # points per series; a least-squares trend line; labels beside a few points
+    params:
+      title: "Render time by scene length"
+      x_label: "narration (s)"
+      y_label: "render (s)"
+      trend: all
+      trend_label: r2
+      highlight: ["chart scenes@diagram"]   # <series>@<N or label>, or a label
+      series:             # {name: [points]}; a point is [x, y], [x, y, label] or {x, y, label, group}
+        text scenes: [[4, 9], [6, 11], [9, 15], [12, 19, "bullets"], [15, 22]]
+        chart scenes: [[5, 14], [8, 19], [11, 26, "diagram"], [14, 30], [16, 35]]
+    beats:
+      - text: "Scatter plots reveal one series per beat. Text scenes render fast."
+      - text: "Chart scenes take a little longer."
+      - text: "A trend line shows how render time grows with length."
+      - text: "And one point can be picked out."
+
+  - id: beats
+    type: histogram       # bars over bins of raw values (or given counts); mean / median markers
+    params:
+      title: "How long is a beat?"
+      x_label: "seconds of narration"
+      y_label: "beats"
+      values: [2.1, 2.8, 3.0, 3.2, 3.4, 3.6, 3.7, 3.9, 4.0, 4.1, 4.3, 4.4, 4.6, 4.8, 4.9, 5.1, 5.3, 5.6, 5.9, 6.2, 6.8, 7.4, 8.1, 9.5]
+      median: true
+      caption: "Illustrative numbers"
+    beats:
+      - text: "Histograms grow their bars from raw values. Most beats last three to six seconds."
+      - text: "The median sits between four and five."
+        actions:
+          - {highlight: "bin:4-5", style: box}
 
   - id: picture
     type: image

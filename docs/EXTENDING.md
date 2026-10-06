@@ -291,7 +291,8 @@ part alone (`FadeIn(group[0])`) adds that part by itself and dissolves the group
 - `shrink_to_fit(mobject, max_width, max_height)` — scale down only, never up.
 - `wrap_lines(text, max_chars)`, `normalize_text(text)` — pure helpers.
 - `nice_ticks(lo, hi, max_ticks)`, `auto_format(values)`, `format_value(v, fmt, unit)`,
-  `check_format(fmt)` — chart axes and labels without LaTeX.
+  `check_format(fmt)` — chart axes and labels without LaTeX (the chart helpers below build on
+  them).
 
 **Graphs.** `layered_layout(nodes, edges, direction="LR", layer_gap=1.0, node_gap=0.5,
 routing="straight")` places a directed graph in layers (what the `diagram` scene draws with):
@@ -312,6 +313,49 @@ for e in layout.edges:
     self.add(Arrow(*[np.array([x, y, 0]) for x, y in (e.points[0], e.points[-1])], buff=0))
 for name, at in layout.nodes.items():
     self.add(RoundedRectangle(width=at.width, height=at.height, corner_radius=0.15).move_to([at.x, at.y, 0]))
+```
+
+**Charts.** The built-in charts are made of public helpers, so a project chart looks and
+scales like them (docs/CONFIG.md "Charts: common to all chart types"):
+- `chart_title(text, size="heading", color="text")` — bold, `heading` font role, fitted and
+  centred in the `header` region (1.3x in portrait); continue with `body =
+  self.safe_area.below(title, gap=0.45)`. `chart_caption(text, area)` sits at the bottom of
+  `area` (then `area.above(caption, gap=0.3)`).
+- `value_axis(values, lo=None, hi=None, max_ticks=6, log=False, fmt=None, unit="", title="",
+  include_zero=False)` → a `ChartAxis(lo, hi, ticks, labels, log, title)` with round ticks
+  (`axis_ticks(lo, hi, max_ticks, log=)`; decades on a log axis) and their labels
+  (`tick_texts(ticks, fmt, unit, log=)`: shared decimals, `20k` / `3.4M` from 10 000 on,
+  `short_number(v)`). Build a `ChartAxis` yourself for other ticks (categories: positions 0..n-1
+  with their names as labels).
+- `chart_axes(area, x, y, size="caption", grid="y"|"x"|"both"|"none", lines="x"|"xy",
+  right=0, top=0)` → `ChartAxes`: tick labels left and below, axis titles, dashed gridlines,
+  axis lines, colliding labels thinned; `axes.plot` (the data `Region`), `axes.point(x, y)`,
+  `x_pos`, `y_pos`, `axes.group` (everything, not yet added) and its parts (`lines`, `grid`,
+  `x_labels`, `y_labels`, `x_title`, `y_title`). `right` / `top` keep room for end labels or a
+  legend.
+- `chart_label_size(size)` — points for a size token, never below `readable_size()`.
+- `chart_legend(entries, max_width, stack=False)` with entries `(name, color, swatch)` (`line`,
+  `box` or a marker shape); `auto_legend(entries, axes.plot, points, max_width)` puts it in a
+  plot corner that covers none of `points` (frame points: markers, `sample_path(polyline)`)
+  and returns `(legend, centre)`, or `(legend, None)` when you must put it above the plot.
+  `legend_spot(size, plot, points)` is the corner search alone.
+- `chart_marker(kind, radius, color)` (`CHART_MARKERS`: circle, square, triangle, diamond) and
+  `linear_fit(xs, ys)` → `LinearFit(slope, intercept, r2)` (callable; `.equation()`).
+
+```python
+@scene("growth")
+class Growth(NarratedScene):
+    outro = 0.5
+
+    def construct(self):
+        title = chart_title("Users per month")
+        body = self.safe_area.below(title, gap=0.45)
+        months, users = [1, 2, 3, 4, 5, 6], [120, 340, 900, 2100, 5200, 12800]
+        axes = chart_axes(body, value_axis(months, title="month"), value_axis(users, log=True, title="users"), grid="both")
+        line = VMobject(stroke_color=self.theme.color("primary"), stroke_width=4)
+        line.set_points_as_corners([axes.point(m, u) for m, u in zip(months, users)])
+        self.reveal([[FadeIn(title), FadeIn(axes.group)], Create(line)])
+        self.finish()
 ```
 
 **Timing.** Beat-driven reveals without arithmetic:
