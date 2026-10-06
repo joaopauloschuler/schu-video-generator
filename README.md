@@ -6,11 +6,12 @@ ElevenLabs, animates every scene with [Manim](https://www.manim.community/) (eac
 exactly as long as its narration), and joins everything with ffmpeg into one MP4 plus SRT
 subtitles.
 
-- **Config-only videos** with twenty-three built-in scene types (title, chapter divider, bullets,
+- **Config-only videos** with twenty-four built-in scene types (title, chapter divider, bullets,
   icon grid, comparison, table, timeline, flowchart / diagram, a process with a travelling token,
   a neural network with forward-pass pulses, bar / line / scatter / histogram charts, pie /
   donut charts and heatmaps (colour scales from the theme), a counting stat, image,
-  quote, equation, code, end card...), in landscape and vertical formats. Diagrams are laid out
+  quote, equation, code listings and code walkthroughs that scroll a long file to the lines each
+  beat explains, end card...), in landscape and vertical formats. Diagrams are laid out
   automatically from `edges: ["a -> b: label", ...]` (`layered_layout` is also there for
   project scenes).
 - **Theme presets** (`theme: {preset: warm_editorial}`; seven built in: `dark_tech`, the default

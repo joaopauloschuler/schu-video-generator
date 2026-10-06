@@ -932,7 +932,10 @@ entry. Highlighting dims the other lines and puts a soft band behind the selecte
 Manim's `Code` (Pygments highlighting); the listing is scaled to fill the space below the
 title. When its width would make it smaller than `size` (typical for long lines in a vertical
 video), long lines are wrapped with a hanging indent (`wrap`); wrapped lines keep their line
-number and highlights still count original lines.
+number and highlights still count original lines. Wrapping aims for at least 32 characters per
+line: where `size` would leave fewer (a vertical frame, especially with the `large` type scale),
+the listing is set smaller instead, down to the readable minimum (`lint` `min_font`), and wraps
+there. For code longer than the frame holds, use [`code_walkthrough`](#code_walkthrough).
 [Action targets](#beat-actions): `title`, `listing` (the window), `line<N>` (an original line,
 1-based, with its number; all its pieces when wrapped) and `lines:<a-b>` (lines a to b,
 `lines:3-5`). The scene's own `highlight` steps set line opacities, overriding a `dim` action on
@@ -963,6 +966,100 @@ those lines.
     - text: "Define the loss."
     - text: "And train."
 ```
+
+### `code_walkthrough`
+
+A long listing in a window of fixed height that scrolls, beat by beat, to the lines the narration
+talks about. Steps: one per entry of `steps` (step 1 comes with the window): the window scrolls
+smoothly so the step's `lines` are in view (centred, or left where they are when they already
+show), the other lines dim and a band marks the selected ones; the step's `note` appears beside
+the lines or below the window, and `focus` moves the camera in on them. A step without `lines`
+keeps the previous lines and view (e.g. a second note on the same lines); `lines: all` removes the
+highlight. With more steps than beats they are spread evenly; extra beats hold.
+
+**Lines** are written as in [`code`](#code) — `12`, `"3-7"`, `"1, 5-6"`, `[3, 4]` — or by content:
+`"/def train/"` is the first line the regular expression matches (Python syntax, searched within
+each line), `"/def train/-/return/"` runs from there to the first match of the second expression
+at or after it, and numbers and expressions mix (`"40-/return/"`). Numbers are the file's own:
+with `excerpt: "40-120"` only those lines are shown and steps count from 40. `vidgen validate`
+reports lines past the end and expressions that match nothing.
+
+**Per-beat data** lives in `steps`, aligned with the beats like `code`'s `highlight` and
+`diagram`'s `steps`: entry *i* is beat *i*. An entry is `{lines, note, focus}` or just a line
+spec (`- "3-7"`).
+
+**Size and wrapping.** The listing keeps `size` while the window's width allows (it is never
+scaled up), else gets smaller down to the readable minimum (or the size that keeps 32 characters
+per line, if larger) and wraps long lines there, with their numbers kept (as in `code`). The
+window is as tall as the space allows (`visible` caps it); in a 16:9 frame that is about 9 lines at
+the `caption` size, with notes below. A scroll indicator on the right shows where the view is.
+Syntax colours that would read poorly on the window or on the highlight band (a Pygments `style`
+that does not suit the theme) are mixed towards the theme's `text` colour, and the band is made
+fainter on themes where it would cost contrast.
+
+**Notes.** `note_position: side` puts each note in a callout beside the window, level with its
+lines and pointing at them; `bottom` puts it in a bar under the window (as tall as the tallest
+note, so the window does not change size). `auto` uses `side` in 16:9 when the code fits beside
+the notes without wrapping (lines up to about 40 characters at `caption`), else `bottom`; a
+vertical frame always uses `bottom`. A note belongs to its step and goes with it.
+
+**Focus.** `focus: true` moves the camera in on the step's lines (as close as they fit, at most
+`focus_scale`; a number sets the magnification) while the other lines fade out, and shows the
+note as a card under them at its normal size. The next step without `focus` moves the camera
+back. The camera never stops halfway through the title. Very wide lines leave little to enlarge
+(the camera stays, with a warning).
+
+[Action targets](#beat-actions): `title`, `listing` (the window), `line<N>` (a line by its number,
+with its number label; all its pieces when wrapped), `lines:<a-b>` (every range in listings of
+up to 40 lines; in longer ones the ranges the steps select, as `lines:12-18`) and `note<N>` (the
+note of step N). Revealing a line that is out of view scrolls to it; revealing a note plays its
+step. The scene's own steps set line opacities, so a `dim` action on lines lasts until the next
+step.
+
+| param | type | default | |
+|---|---|---|---|
+| `code` | str | — | inline code; give exactly one of `code` / `path` |
+| `path` | str | — | file in the project (checked by `vidgen validate`) |
+| `language` | str | from the file name, else `python` | a Pygments lexer name |
+| `excerpt` | str | none | `"a-b"`: show only those lines of the code (they keep their numbers) |
+| `title` | str | `""` | above the window |
+| `steps` | list | `[]` | step *i* at beat *i*: `{lines, note, focus}` or a line spec; none: the listing from the top, no highlight |
+| `steps[].lines` | line spec | none (keep) | `12`, `"3-7"`, `"1, 5-6"`, `[3, 4]`, `"/regex/"`, `"/a/-/b/"`, or `all` (no highlight) |
+| `steps[].note` | str | `""` | short annotation of the step |
+| `steps[].focus` | bool \| number | `false` | `true`: enlarge the lines (camera); a number (1–4): that magnification |
+| `visible` | int (≥ 3) | as many as fit | lines the window shows at once |
+| `line_numbers` | bool | `true` | |
+| `style` | str | theme `code_style` | a Pygments style |
+| `font` | str | role `code` (`font_mono`) | font family of the listing |
+| `size` | size | `caption` | font size of the listing (smaller only to fit the width; never below the readable size) |
+| `wrap` | bool | `true` | wrap long lines instead of shrinking the listing below `size` / the readable size |
+| `highlight_color` | color | `highlight` | band, its edge bar, notes' frame and pointer |
+| `note_position` | `auto` \| `side` \| `bottom` | `auto` | see above |
+| `note_size` | size | `body` | note text size |
+| `note_color` | color | `text` | note text colour |
+| `focus_scale` | number (1–4) | `2.0` | largest magnification of `focus: true` |
+| `scrollbar` | bool | `true` | scroll indicator when the code is longer than the window |
+
+```yaml
+- id: walkthrough
+  type: code_walkthrough
+  params:
+    title: "Walking through a training loop"
+    path: assets/train.py
+    steps:
+      - {lines: "8-12", note: "All settings live in one small dataclass."}
+      - {lines: "/def loss_and_grads/-/loss = gw/", note: "The loss: a mean squared error."}
+      - {lines: "/err = /", note: "The prediction error drives it all.", focus: true}
+      - "/for batch in/-/b -= /"          # just lines: no note
+  beats:
+    - text: "A code walkthrough scrolls through a long file. First, the settings."
+    - text: "Then it scrolls down to the loss function."
+    - text: "Focus enlarges a line: here, the prediction error."
+    - text: "And the update itself is plain gradient descent."
+```
+
+Building a long listing takes about 0.1 s per line (Manim draws every character); `excerpt`
+keeps a big file's walkthrough to the part it talks about.
 
 ### `stat`
 
@@ -1596,6 +1693,7 @@ a title card, a `transform` of a bar).
 | `quote` | `mark`, `quote`, `author`, `source` | reveal, dim, highlight, zoom | |
 | `equation` | `step<N>`, `caption`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each of the `terms` param, in the step on screen; `transform: step1` + `into: step3` jumps ahead |
 | `code` | `title`, `listing`, `line<N>`, `lines:<a-b>` | dim, highlight, zoom | a line with its number; `lines:3-5`; a wide line leaves little to zoom |
+| `code_walkthrough` | `title`, `listing`, `line<N>`, `lines:<a-b>`, `note<N>` | reveal, dim, highlight | `reveal: line40` scrolls it into view; `lines:<a-b>`: every range up to 40 lines, else the steps' ranges; `note2` is step 2's note (revealing it plays the step); the next step resets line opacities |
 | `end_card` | `logo`, `icon`, `title`, `line<N>` | reveal, dim, highlight | those present |
 | `chapter` | `icon`, `number`, `title`, `subtitle` | reveal, dim, highlight | those present |
 | `stat` | `icon`, `value`, `label`, `comparison`, `context` | reveal, dim, highlight, zoom | `reveal: value` early runs the count; `comparison` is the change chip with its text |

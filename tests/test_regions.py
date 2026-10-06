@@ -431,7 +431,8 @@ def test_code_wraps_only_where_it_would_be_too_small(layout_project: Project, tm
 
     assert len(listing(wide).code_lines) == n
     assert len(listing(tall).code_lines) > n and len(listing(shrunk).code_lines) == n
-    assert code_font_size(tall) >= max(24, tall.readable_mono) * 0.97  # size `caption` = 24
+    # Step 32: below `caption` (24) to keep about 32 columns, never below the readable size
+    assert tall.readable_mono * 0.97 <= code_font_size(tall) < 24 * 0.97
     assert code_font_size(shrunk) < shrunk.readable_mono  # what wrapping avoids
     # wrapped lines: one number per original line, highlights cover their continuation lines
     numbers = listing(tall).line_numbers

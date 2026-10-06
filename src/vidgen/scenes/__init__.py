@@ -12,6 +12,7 @@ from vidgen.scenes import (  # noqa: F401
     bullets,
     chapter,
     code,
+    code_walkthrough,
     comparison,
     diagram,
     end_card,

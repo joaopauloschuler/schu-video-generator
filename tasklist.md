@@ -144,8 +144,8 @@ Rules that apply to every step:
 - [x] `heatmap` with colour scale legend and cell highlight (sequential / diverging scales mixed from theme colours in OKLab — `color_scale`, `color_bar`, `text_color_on`, `mix_colors` in `vidgen.api`; per-cell text colour ≥ 4.5:1; values hidden when cells are too small; wave or row-by-row reveal; `highlight` outlines cells / rows / columns; "too big" warning; targets `cell<R>.<C>`, `row<N>`, `row:<label>`, `col<N>`, `col:<label>`, `legend`)
 
 ### Step 32 — Scene: `code_walkthrough`
-- [ ] Long code scrolls; lines highlighted per beat (`lines: "3-7"`); optional annotation per beat
-- [ ] (from Steps 17/22) A code size cap for portrait: with the `large` scale 9:16 listings wrap to ~25 columns
+- [x] Long code scrolls; lines highlighted per beat (`lines: "3-7"`); optional annotation per beat (params `steps: [{lines, note, focus}]` aligned with beats, or a bare line spec; lines by number, range, `/regex/` or `/a/-/b/`, `all`; `excerpt`; fixed-height window with `visible` rows, smooth scroll with edge fades and a scroll indicator; notes beside the lines (16:9) or in a bar below (9:16); `focus` = camera on the lines with the note as a card; targets `line<N>`, `lines:<a-b>`, `note<N>`, `title`, `listing`; revealing a line scrolls to it)
+- [x] (from Steps 17/22) A code size cap for portrait: with the `large` scale 9:16 listings wrap to ~25 columns (`code` and `code_walkthrough` wrap at the size keeping 32 columns, down to the readable size: ~30–32 columns in 9:16; 16:9 unchanged; also fixed: Manim clipped listings longer than the output's pixel height, ~60 lines at 854x480)
 
 ### Step 33 — Scene: `equation_derivation`
 - [ ] Sequence of equations, matching parts transformed step to step, optional per-step note

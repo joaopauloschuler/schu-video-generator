@@ -1,7 +1,9 @@
 """``code``: a syntax-highlighted listing (Manim's ``Code``) with per-beat line highlights."""
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from functools import lru_cache
 from typing import Any
 
 import numpy as np
@@ -39,6 +41,45 @@ def parse_line_spec(spec: LineSpec) -> list[int]:
 MIN_COLUMNS = 20
 #: Extra indent (spaces) of the continuation lines of a wrapped code line.
 HANGING_INDENT = 4
+#: Wrapping aims to keep at least this many characters per line: when the requested size would
+#: leave fewer (a vertical frame), the listing gets smaller instead, down to the readable minimum.
+TARGET_COLUMNS = 32
+#: Space between the line numbers and the code (Manim's ``Code`` layout), in units.
+NUMBER_GAP = 0.25
+#: Padding of Manim's ``Code`` background on each side, in units.
+CODE_PADDING = 0.3
+
+
+@lru_cache(maxsize=8)
+def mono_metrics(font: str) -> tuple[float, float]:
+    """``(advance, pitch)`` of a code listing in ``font`` per point of font size, in units: the
+    width of one character and the distance between two lines (``Code``'s line spacing)."""
+    sample = Paragraph("M" * 10, "M" * 30, font=font, font_size=48, line_spacing=0.5, disable_ligatures=True)
+    advance = (sample[1].width - sample[0].width) / 20 / 48
+    return float(advance), float(abs(sample[0].get_y() - sample[1].get_y()) / 48)
+
+
+@contextmanager
+def text_canvas(lines: list[str], size: float) -> Iterator[None]:
+    """Manim draws text with Pango on a canvas of the output's pixel size and clips what does not
+    fit (its glyph check then fails: about 60 lines of 24 pt code at 854x480, 9 at 160x90). This
+    enlarges the canvas while a listing of ``lines`` at ``size`` points is built."""
+    width, height = config.pixel_width, config.pixel_height
+    longest = max((len(line) for line in lines), default=1)
+    config.pixel_width = max(width, int(60 + 0.15 * size * longest))
+    config.pixel_height = max(height, int(60 + 0.5 * size * (len(lines) + 2)))
+    try:
+        yield
+    finally:
+        config.pixel_width, config.pixel_height = width, height
+
+
+def size_for_columns(font: str, columns: int, width: float, digits: int = 0, padding: float = 0.0) -> float:
+    """The font size (points) at which ``columns`` characters of code (plus a line-number column
+    of ``digits`` digits and :data:`NUMBER_GAP`, plus ``padding`` units) span ``width`` units."""
+    advance = mono_metrics(font)[0]
+    gap = NUMBER_GAP if digits else 0.0
+    return max(width - gap - padding, 0.0) / ((columns + digits) * advance)
 
 
 def wrap_code(lines: list[str], columns: int) -> tuple[list[str], list[list[int]]]:
@@ -92,7 +133,8 @@ def _break_at(text: str, columns: int) -> int:
     return max(space, bracket) or loose or columns
 
 
-def _style_names() -> list[str]:
+def style_names() -> list[str]:
+    """Names of the Pygments styles."""
     from pygments.styles import get_all_styles
 
     return sorted(get_all_styles())
@@ -159,8 +201,8 @@ class CodeListing(NarratedScene):
         def _check(self) -> SceneParams:
             if (self.code is None) == (self.path is None):
                 raise ValueError("give exactly one of 'code' (inline text) or 'path' (a file in the project)")
-            if self.style is not None and self.style not in _style_names():
-                raise ValueError(f"unknown style {self.style!r}; available: {', '.join(_style_names())}")
+            if self.style is not None and self.style not in style_names():
+                raise ValueError(f"unknown style {self.style!r}; available: {', '.join(style_names())}")
             if self.language is not None:
                 from pygments.lexers import get_lexer_by_name
                 from pygments.util import ClassNotFound
@@ -228,7 +270,7 @@ class CodeListing(NarratedScene):
         lines.set_z_index(2)
         if numbers is not None:
             numbers.set_z_index(2)
-        ys = self._line_centers(lines, None if wrapped else numbers)
+        ys = line_centers(lines, None if wrapped else numbers)
         pitch = abs(ys[0] - ys[1]) if len(ys) > 1 else lines.height
         x_left = (numbers.get_left()[0] if numbers is not None else lines.get_left()[0]) - 0.12
         x_right = listing.background.get_right()[0] - 0.15
@@ -239,7 +281,7 @@ class CodeListing(NarratedScene):
 
         def bands_for(chosen: set[int]) -> VGroup:
             bands = VGroup()
-            for run in _runs(sorted(chosen)):
+            for run in line_runs(sorted(chosen)):
                 hi, lo = ys[run[0]] + pitch / 2, ys[run[-1]] - pitch / 2
                 band = RoundedRectangle(width=x_right - x_left, height=hi - lo, corner_radius=0.06, stroke_width=0)
                 band.set_fill(self.theme.color(p.highlight_color), opacity=0.2)
@@ -307,7 +349,13 @@ class CodeListing(NarratedScene):
         (and at least the readable size). Returns it and, per original line, its lines."""
         p = self.params
         size = float(self.theme.size(p.size))
-        floor = max(size, readable_size(self._font))
+        digits = len(str(len(lines))) if p.line_numbers else 0
+        # the listing is scaled as a whole, so its padding scales with it: solve for the font
+        # size that fits TARGET_COLUMNS into the width (in a vertical frame: smaller than size)
+        padding = 2 * CODE_PADDING + (NUMBER_GAP if digits else 0.0)
+        advance = mono_metrics(self._font)[0]
+        narrow = body.width * size / (padding + (TARGET_COLUMNS + digits) * advance * size)
+        floor = max(min(size, narrow), readable_size(self._font))
         columns: int | None = None
         while True:
             shown, groups = wrap_code(lines, columns) if columns else (lines, [[i] for i in range(len(lines))])
@@ -319,10 +367,14 @@ class CodeListing(NarratedScene):
                 break
             columns = max(MIN_COLUMNS, min(longest - 1, int(longest * size * scale / floor)))
         if len(shown) != len(lines) and p.line_numbers:
-            self._renumber(listing, groups, size)
+            renumber(self, listing, groups, size, self._font)
         return listing.scale(scale), groups
 
     def _listing(self, text: str, language: str, size: float) -> Code:
+        with text_canvas(text.split("\n"), size):
+            return self._code(text, language, size)
+
+    def _code(self, text: str, language: str, size: float) -> Code:
         p = self.params
         return Code(
             code_string=text,
@@ -339,33 +391,36 @@ class CodeListing(NarratedScene):
             paragraph_config={"font": self._font, "font_size": size},
         )
 
-    def _renumber(self, listing: Code, groups: list[list[int]], size: float) -> None:
-        """Number the original lines of a wrapped listing: continuation lines get no number."""
-        numbers = listing.line_numbers
-        color = numbers[0][0].get_fill_color() if len(numbers[0]) else self.theme.color("dim")
-        for i, group in enumerate(groups):
-            first, *rest = group
-            old = numbers[first]
-            label = self.text(str(i + 1), size=size, color=color, font=self._font)
-            label.align_to(old, RIGHT).align_to(old, DOWN)
-            numbers.submobjects[first] = label
-            for j in rest:
-                numbers.submobjects[j] = VGroup()
 
-    @staticmethod
-    def _line_centers(lines: VGroup, numbers: VGroup | None) -> list[float]:
-        """Vertical center of every code line (blank lines have no glyphs, so fit a line)."""
-        if numbers is not None and len(numbers) == len(lines):
-            return [float(n.get_center()[1]) for n in numbers]
-        known = [(i, float(line.get_center()[1])) for i, line in enumerate(lines) if len(line.get_family()) > 1]
-        if len(known) < 2:
-            return [float(lines.get_center()[1])] * len(lines)
-        idx, ys = zip(*known)
-        slope, icpt = np.polyfit(idx, ys, 1)
-        return [float(icpt + slope * i) for i in range(len(lines))]
+def renumber(scene: NarratedScene, listing: Code, groups: list[list[int]], size: float, font: str, first: int = 1) -> None:
+    """Number the original lines of a wrapped listing (from ``first``): continuation lines get no
+    number (an empty group in their place)."""
+    numbers = listing.line_numbers
+    color = numbers[0][0].get_fill_color() if len(numbers[0]) else scene.theme.color("dim")
+    for i, group in enumerate(groups):
+        head, *rest = group
+        old = numbers[head]
+        label = scene.text(str(first + i), size=size, color=color, font=font)
+        label.align_to(old, RIGHT).align_to(old, DOWN)
+        numbers.submobjects[head] = label
+        for j in rest:
+            numbers.submobjects[j] = VGroup()
 
 
-def _runs(indices: list[int]) -> list[list[int]]:
+def line_centers(lines: VGroup, numbers: VGroup | None) -> list[float]:
+    """Vertical center of every code line: its number's, or (blank lines have no glyphs, and
+    wrapped listings no number on continuation lines) a straight line fitted to the others."""
+    if numbers is not None and len(numbers) == len(lines):
+        return [float(n.get_center()[1]) for n in numbers]
+    known = [(i, float(line.get_center()[1])) for i, line in enumerate(lines) if len(line.get_family()) > 1]
+    if len(known) < 2:
+        return [float(lines.get_center()[1])] * len(lines)
+    idx, ys = zip(*known)
+    slope, icpt = np.polyfit(idx, ys, 1)
+    return [float(icpt + slope * i) for i in range(len(lines))]
+
+
+def line_runs(indices: list[int]) -> list[list[int]]:
     """Group sorted indices into runs of consecutive numbers."""
     runs: list[list[int]] = []
     for i in indices:

@@ -20,7 +20,7 @@ def test_example_validates(capsys: pytest.CaptureFixture[str]) -> None:
     assert check_project(Project.load(EXAMPLE, variant="vertical")) == []
     assert main(["list-scenes", str(EXAMPLE)]) == 0
     out = capsys.readouterr().out
-    assert "gear_pair   extensions/gears.py" in out
+    assert "gear_pair".ljust(len("code_walkthrough") + 2) + "extensions/gears.py" in out
     assert "    beats: 2 to 3 beats\n    front: Ring\n        teeth: int\n" in out
 
 

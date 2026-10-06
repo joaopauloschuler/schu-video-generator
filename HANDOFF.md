@@ -2822,3 +2822,112 @@ How to test: `/home/claude/venv/bin/python -m pytest -q` (1340 passed, 1 skipped
 `pytest tests/test_pie_heatmap.py`. Manual: `vidgen storyboard examples/minimal --scene share
 --scene busy --per-beat 3 [--variant vertical|light]`, `vidgen lint examples/minimal --scene
 share --scene busy [--variant ...]`, `vidgen list-scenes`, `vidgen schema --scene pie`.
+
+## Step 32 — Scene: `code_walkthrough`
+What was built
+- **`code_walkthrough`** (`src/vidgen/scenes/code_walkthrough.py`): a long listing (`code` or
+  `path`, `language`, optional `excerpt: "a-b"` keeping the file's numbers) in a window of fixed
+  height (`visible` rows, else as many as fit at `size`). **Per-beat data** is `steps` (aligned with
+  the beats like `code.highlight` / `diagram.steps`): `{lines, note, focus}` or a bare line spec.
+  Each step scrolls smoothly so its lines are in view (left alone when they already show with a
+  line of context, else centred; a range longer than the window shows its start), dims the other
+  lines, lays a band (with an edge bar) behind the selection and shows its note; a step without
+  `lines` keeps the view, `lines: all` clears the highlight. Lines: `12`, `"3-7"`, `"1, 5-6"`,
+  `[3, 4]`, `"/regex/"` (first match), `"/def f/-/return/"` (range by content), mixed
+  (`"40-/return/"`), checked by `vidgen validate`. Scroll indicator (track + thumb) when the code
+  is longer than the window; rows fade at the window's edges while scrolling.
+- **Notes**: `note_position: auto | side | bottom` — a callout beside the window level with the
+  lines, with a pointer (16:9 / square, `auto` when the code fits beside without wrapping), or a
+  bar below the window as tall as the tallest note (always in 9:16). **Focus**: `focus: true` (or
+  a magnification 1–4; `focus_scale` 2.0 caps `true`) moves the camera onto the selected code
+  (numbers excluded), fades the other rows out and shows the note as a card under the lines,
+  built at 1/magnification so it reads at its normal size; never stops halfway through the
+  title; the next step without focus moves the camera back.
+- **Targets**: `title`, `listing`, `line<N>`, `lines:<a-b>` (all ranges up to 40 lines, else the
+  ranges the steps select), `note<N>`. Revealing an out-of-view line scrolls to it; revealing a
+  note plays its step. Scene × targets row in CONFIG.md "Beat actions".
+- **Readability**: syntax colours below 4.6:1 on the window or the faintest band (a Pygments
+  style that does not suit the theme, e.g. `default` purple on `warm_editorial`) are mixed
+  towards the theme's `text`; the band's opacity drops from 0.12 to 0.07 while a colour would
+  fall below 4.5:1 on it. Code is read by lint as `code` (the `Code` mobject stays in the scene).
+- **`code` (Step 22 routed issue)**: wrapping now targets `max(readable, min(size, size that keeps
+  TARGET_COLUMNS = 32 columns))`, so a vertical listing at the `large` scale wraps at ~32 columns
+  instead of ~25 (font a little smaller, never below lint's minimum); 16:9 output unchanged.
+- **Manim text canvas fix** (`code.text_canvas`, used by both scenes): Manim renders `Text` on a
+  canvas of the output's pixel size and fails with "rendered fewer glyph(s) than its non-space
+  characters" when text runs off it — ~60 lines of 24 pt code at 854x480 preview, 9 at 160x90.
+  The canvas is enlarged while a listing is built. (This was also the "ligature" error seen with
+  long files in `code`.)
+- `examples/minimal`: `walkthrough` scene on `assets/train.py` (57 lines: number range, regex
+  range, a focus step with a note, a bare `/a/-/b/` step) + a storyboard usage line.
+
+Verification
+- Scratch project (60-line file with wrapped lines, a 9-line function, a short-lined file with
+  `visible: 8` and forced side notes; focus with and without notes; `lines: all`; silent) via
+  `vidgen storyboard` (also `--per-beat 2`) in 16:9, vertical, `light_academic` and vertical light;
+  sheets opened with Read. Fixed along the way: scroll thumb in the middle of the window, focus
+  with a note out of view or the title cut in half (→ note card under the enlarged lines, title
+  rule), focus too weak in 9:16 (→ frame the code ink, not the numbers), side notes squeezing the
+  code in 9:16 (→ always bottom), line numbers / code invisible to lint (rows were loose
+  VGroups → the `Code` stays in the scene and rows are taken out of its paragraphs), lint
+  sizing text by the whole file's characters (→ `lines_text.original_text` = shown rows), band
+  contrast on light / pastel presets (→ adaptive band, readable syntax colours), the Pango canvas
+  clipping above.
+- `vidgen lint examples/minimal --scene walkthrough --scene listing` in all 8 variants (default,
+  vertical, light, contrast, editorial, neutral, pastel, neon): 0 findings. Other scenes of the
+  example are untouched by this step.
+
+Files
+- New: `src/vidgen/scenes/code_walkthrough.py`, `tests/test_code_walkthrough.py` (44 tests, 8
+  tiny renders), `examples/minimal/assets/train.py`.
+- Changed: `src/vidgen/scenes/code.py` (module helpers `mono_metrics`, `size_for_columns`,
+  `text_canvas`, `renumber`, `line_centers`, `line_runs`, `style_names`; constants
+  `TARGET_COLUMNS`, `NUMBER_GAP`, `CODE_PADDING`; the column cap), `src/vidgen/scenes/__init__.py`;
+  `examples/minimal/video.yaml`; tests `test_builtin_scenes.py` (BUILTINS/SAMPLES),
+  `test_actions_coverage.py` (SAMPLES, early reveal of `note2`), `test_extensions.py` and
+  `test_custom_scene_example.py` (list-scenes column width), `test_regions.py` (code font size in 9:16 now below `caption`, above readable);
+  docs/CONFIG.md (`code_walkthrough` section, `code` column note, targets table), README,
+  DESIGN.md (§35), tasklist.md.
+
+Public interfaces added/changed
+- Built-in scene type `code_walkthrough` (params in docs/CONFIG.md). No change to `vidgen.api`.
+- Module helpers (internal, built-in modules): `vidgen.scenes.code_walkthrough.parse_lines`,
+  `resolve_lines`, `WalkStep`, `ALL_RANGES_UP_TO`; `vidgen.scenes.code` helpers above (the former
+  `CodeListing._renumber` / `_line_centers` methods and `_runs` / `_style_names` functions moved
+  or were renamed).
+- `code` output in 9:16 changes (smaller font, wider wrap); in 16:9 unchanged.
+
+Decisions / deviations
+- **Per-beat data as a params list** (`steps`), not beat-level fields: every built-in expresses
+  per-beat content in params aligned with beats (beats only carry narration and actions), it is
+  schema-describable per scene type, and `vidgen validate` can check lines without the beats.
+- **Focus = camera + spotlight**, not a bigger font: re-laying the listing at another size means
+  building it again (slow) and wide lines would overflow; a camera move keeps the layout. The
+  other rows fade out so the note card can sit under the lines without covering text (lint's
+  `covered_text`).
+- **Rows leave the `Code` paragraphs instead of the scene**: `Scene.remove` would split the
+  `Code` into loose parts (lint then no longer sees code, line numbers lose their contrast
+  exemption); a target's `is_shown` still follows what is drawn.
+- `lines:<a-b>` for long files only covers the steps' ranges: all pairs of a 300-line file
+  would be 45 000 targets.
+- The walkthrough's window is drawn by the scene (`Code`'s background is dropped) because its
+  height is the view's, not the listing's.
+
+Known gaps / TODOs
+- A `dim` / `highlight` action on lines lasts until the next step (steps set line opacities, as
+  in `code`); a highlight `box` does not follow a scroll. Side notes point at the rows of their
+  step's planned view; an action that scrolls elsewhere in that beat leaves the pointer behind.
+- Focus with a long selection or very wide lines enlarges little (warning when < 1.05x); in 16:9
+  with bottom notes the card is the only note shown during the focus.
+- Long files cost ~0.1 s per line to build (Manim glyphs); `excerpt` limits it. No horizontal
+  scrolling (long lines wrap). Syntax highlighting of a line wrapped inside a string literal may
+  be off (as in `code`).
+- The readable-colour adjustment is only in `code_walkthrough`; `code` listings with an
+  unsuitable Pygments style may still get a lint `contrast` warning.
+- A clipped text SVG cached by Manim before the canvas fix stays in `build/.../media/texts`
+  (the cache key ignores the canvas): delete `build/` if the glyph error persists.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (full suite); step only: `pytest
+tests/test_code_walkthrough.py`. Manual: `vidgen storyboard examples/minimal --scene walkthrough
+--per-beat 2 [--variant vertical|light]`, `vidgen lint examples/minimal --scene walkthrough
+--scene listing [--variant ...]`, `vidgen list-scenes`, `vidgen schema --scene code_walkthrough`.

@@ -16,6 +16,7 @@
 #   vidgen storyboard examples/minimal --scene net --per-beat 3     # a network and its forward pass
 #   vidgen storyboard examples/minimal --scene cost --scene beats --per-beat 3  # scatter with a trend; histogram
 #   vidgen storyboard examples/minimal --scene share --scene busy --per-beat 3  # a donut sweeping in; a heatmap
+#   vidgen storyboard examples/minimal --scene walkthrough --per-beat 2  # a listing scrolling from step to step
 #   vidgen storyboard examples/minimal --variant light           # same video with the light_academic preset
 #   vidgen list-themes examples/minimal --swatches build/themes.png  # every theme preset at a glance
 # There is no narration audio in this example, so beats are timed from their word count
@@ -388,6 +389,22 @@ scenes:
       - text: "Code listings are syntax highlighted, and the narration can point at lines."
       - text: "First we sum the opening window."
       - text: "Then we slide it along, one value at a time."
+
+  - id: walkthrough
+    type: code_walkthrough   # a long file in a window that scrolls to the lines each beat talks about
+    params:
+      title: "Walking through a training loop"
+      path: assets/train.py
+      steps:              # step i plays at beat i: {lines, note, focus}, or just a line spec
+        - {lines: "8-12", note: "All settings live in one small dataclass."}
+        - {lines: "/def loss_and_grads/-/loss = gw/", note: "The loss: a mean squared error."}
+        - {lines: "/err = /", note: "The prediction error drives it all.", focus: true}
+        - "/for batch in/-/b -= /"      # lines by number ("48-51") or by /regex/, no note
+    beats:
+      - text: "A code walkthrough scrolls through a long file. First, the settings."
+      - text: "Then it scrolls down to the loss function."
+      - text: "Focus enlarges a line: here, the prediction error."
+      - text: "And the update itself is plain gradient descent."
 
   - id: note
     type: text_card

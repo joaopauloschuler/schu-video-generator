@@ -2068,3 +2068,61 @@ using the existing renders of the others (missing ones are rendered). Exit code 
   `col<N>`/`col:<label>` (label + cells; outline a band over the cells; entrance: the hidden
   cells one by one), `legend`, `title`.
 
+## 35. Refinements (Step 32, `code_walkthrough`)
+
+- **`code_walkthrough`** (`scenes/code_walkthrough.py`; reference docs/CONFIG.md). Params `code` |
+  `path`, `language`, `excerpt` (`"a-b"`, numbers kept), `title`, `steps`, `visible`,
+  `line_numbers`, `style`, `font`, `size`, `wrap`, `highlight_color`, `note_position`
+  (`auto | side | bottom`), `note_size`, `note_color`, `focus_scale`, `scrollbar`. **Per-beat
+  data** is a params list aligned with the beats (as `code.highlight`, `diagram.steps`): `steps[i]`
+  = `WalkStep {lines, note, focus}` or a bare line spec (`also_accepts = (str, int, list)`; JSON
+  Schema `anyOf` string | integer | array | object). Steps go through `reveal(fraction=0.6,
+  cap=1.0)` like every built-in.
+- **Line specs** (`parse_lines` syntax, `resolve_lines(spec, source, first)`): items `N`, `N-M`,
+  `/regex/`, and ranges mixing both (`/def f/-/return/`: the end is the first match at or after
+  the start), comma-separated (commas inside `/.../` belong to the expression), or a list; `all`
+  clears the highlight; `None` keeps the view. Checked at params validation for inline code and
+  by `validate_project` for a `path` (problems prefixed `steps[k].lines`).
+- **Sizing** (`_fit`, analytic, no trial builds: a listing costs ~0.1 s per line): `size` if
+  the longest line fits the window width, else smaller down to `max(readable x 1.05, size giving
+  TARGET_COLUMNS)`, else wrapped (`code.wrap_code`) at that size. Notes: `side` (16:9 / square,
+  when the code fits beside a column of `0.3 x body` (3.4–4.8 units) without wrapping) or
+  `bottom` (bar as tall as the tallest note; always in portrait). The window holds `visible` /
+  as many rows as fit; window chrome (title bar with three theme-coloured dots, padding, scroll
+  indicator) is drawn by the scene, not by `Code`.
+- **Scrolling model.** The `Code` (background removed) stays in the scene as one mobject; rows
+  out of view are taken out of its two `Paragraph`s' submobjects (`_include`), so they are not
+  drawn, `is_shown(line<N>)` is false for them, and the layout dump still sees a `Code` (kind
+  `code`, line numbers exempt from contrast); `lines_text.original_text` is set to the shown rows
+  so lint sizes the text by its real characters. `_ViewChange` (an `Animation` without a
+  starting copy) interpolates offset, per-row emphasis (1 / `DIMMED` 0.35 / 0 around a focus) x
+  edge fade (`FADE` 0.75 rows beyond the window), band shapes (cut at the window's edges) and the
+  scroll thumb; rows that can show are positioned lazily (`_place_row`), the others never move.
+  Offsets: a selection already in view (with a line of context) stays; else it is centred (its
+  start when longer than the window). The band's opacity is `BAND` 0.12, lowered (0.1 … 0.05)
+  until every syntax colour keeps `min(4.5, its ratio on the window)` on it (light themes); a bar
+  in the highlight colour marks the band's left edge.
+- **Notes and focus.** Side notes sit level with the step's highlighted rows (pointer line + dot
+  from the window edge); bottom notes in the bar. `focus` moves the camera (`MoveCamera` from
+  `scenes/actions.py`) onto the selected rows' ink (numbers excluded), magnification `min(limit,
+  0.84 fw / w, (0.84 fh - card) / h)`, hides the other rows and shows the note as a card under
+  them built at `1 / magnification` (reads at its normal size); a view top inside the title moves
+  below it (or above it); magnification < 1.05 → no focus, warning. The next view without focus
+  moves the camera home.
+- **Targets**: `title`, `listing` (chrome + `Code`), `line<N>` (file numbers; all wrapped
+  pieces), `lines:<a-b>` (all ranges up to `ALL_RANGES_UP_TO` 40 lines, else the steps' runs),
+  `note<N>` (step N's note or focus card). Entrances: a hidden line scrolls into view (`_bring`;
+  leaves a focus), a note plays its step's view, `listing` the first step.
+- **`code` changes** (Step 22 routed issue): wrapping targets `max(readable, min(size, size giving
+  TARGET_COLUMNS 32 columns))` instead of `max(size, readable)`, so a 9:16 listing at the `large`
+  scale wraps at ~32 columns, not ~25 (16:9 unchanged: `caption` already gives > 32 columns).
+  New module helpers shared with `code_walkthrough`: `mono_metrics(font)` (advance and line pitch
+  per point), `size_for_columns`, `text_canvas` (see below), `renumber`, `line_centers`,
+  `line_runs`, `style_names` (were private methods / functions).
+- **Manim text canvas** (found here, affects any long text): Manim renders `Text` with Pango on a
+  canvas of the *output's pixel size* and fails the glyph check ("rendered fewer glyph(s)...") when
+  text runs off it: ~60 lines of 24 pt code at 854x480, 9 at 160x90. `code.text_canvas(lines,
+  size)` enlarges `config.pixel_width/height` while a listing is built (restored after; the SVG
+  cache key does not include the canvas, so a clipped SVG cached by an earlier failure must be
+  deleted with `build/`).
+
