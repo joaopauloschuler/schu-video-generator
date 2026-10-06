@@ -37,8 +37,9 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("vidgen.actions")
 
-#: A target name: an identifier (``heading``, ``item3``), optionally ``kind:label`` (``bar:4K``).
-TARGET_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?::.+)?$", re.S)
+#: A target name: an identifier (``heading``, ``item3``), optionally with dotted parts
+#: (``col2.item3``, ``cell2.4``) and ``kind:label`` (``bar:4K``).
+TARGET_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)*(?::.+)?$", re.S)
 #: How many target names an "unknown target" message lists.
 _SHOWN_NAMES = 14
 

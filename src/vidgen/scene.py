@@ -637,7 +637,7 @@ class NarratedScene(MovingCameraScene):
             raise VidgenError(f"scene '{self.spec.id}': a target needs at least one name")
         for name in names:
             if not isinstance(name, str) or not TARGET_NAME.match(name):
-                raise VidgenError(f"scene '{self.spec.id}': invalid target name {name!r} (use name, name3 or kind:label)")
+                raise VidgenError(f"scene '{self.spec.id}': invalid target name {name!r} (use name, name3, name1.part2 or kind:label)")
         target = Target(names, mobject, entrance, outline, self._rest)
         self._targets.append(target)
         return target

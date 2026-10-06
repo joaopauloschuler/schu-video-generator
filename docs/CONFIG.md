@@ -252,7 +252,7 @@ category `tech`, `data`, `science`, `business`, `people`, `ui` (arrows and inter
 `nature`, `education`, chosen for what explainer videos show; the full list with aliases and
 tags is the [icon catalogue](ICONS.md). Built-in scenes take them as params: `icon` on
 [`title`](#title), [`chapter`](#chapter), [`stat`](#stat) and [`end_card`](#end_card), `{text,
-icon}` items of [`bullets`](#bullets),
+icon}` items of [`bullets`](#bullets), columns and points of [`comparison`](#comparison),
 and the [`icon_grid`](#icon_grid) scene. Extension scenes draw them with `icon(name, ...)` (see
 docs/EXTENDING.md "Icons"); scene params that take an icon name are typed `icon` in
 `vidgen list-scenes` and checked by `vidgen validate` (an unknown name gets suggestions).
@@ -802,6 +802,126 @@ The chapter's name is its `title` param (what a chapter list or indicator should
   duration: 3                      # silent divider; or give it beats
 ```
 
+### `comparison`
+
+Two or three columns side by side — A vs B, before / after, three options — each on a card
+with a heading, an optional icon and a list of points. A column's `tone` colours it and marks
+its points: `positive` (check marks, `positive_color`), `negative` (crosses, `negative_color`)
+or `neutral` (dots, `neutral_color`; the heading keeps `heading_color`). An optional `verdict`
+line closes the scene. In a vertical frame the columns are stacked.
+Steps with `reveal: columns` (default): (1) column 1 (with the heading), (2) column 2, ...,
+then the verdict; `reveal: rows`: (1) the column headings, then one point of every column per
+step (side by side, the *m*-th points of all columns share a line), then the verdict; `reveal:
+all`: every column in step 1, the verdict in step 2.
+[Action targets](#beat-actions): `heading`, `col<N>`, `col:<heading>`, `col<N>.item<M>`
+(1-based) and `verdict`.
+
+Layout: heading in the `header` region, verdict at the bottom, the cards share the rest
+(columns in 16:9, rows in 9:16) and are as tall as the tallest column. Point text starts at
+`size` and is reduced together in every column, not below the readable minimum, until the
+columns fit; a comparison that still does not fit is scaled down with a warning (shorten or
+remove points).
+
+| param | type | default | |
+|---|---|---|---|
+| `columns` | list (2–3) | required | `{heading, icon, tone, points}` per column (below) |
+| `heading` | str | `""` | above the columns |
+| `verdict` | str | `""` | the conclusion, shown in a last step |
+| `reveal` | `columns` \| `rows` \| `all` | `columns` | |
+| `markers` | bool | `true` | check / cross / dot before each point (a point's own icon always shows) |
+| `cards` | bool | `true` | each column on a card in the theme's `surface` colour, outlined in its tone |
+| `vs` | str | `""` | text in a small badge between the columns (`"vs"`, `"→"`) |
+| `positive_color`, `negative_color`, `neutral_color` | color | `tertiary`, `accent`, `primary` | the tone colours (green and red in every built-in preset) |
+| `color`, `heading_color`, `verdict_color` | color | `text`, `text`, `highlight` | point text; scene heading and neutral column headings; verdict |
+| `size`, `column_size`, `heading_size`, `verdict_size` | size | `body`, `subtitle`, `heading`, `body` | point text, column headings (reduced with the points), scene heading, verdict |
+
+A column is `{heading, icon, tone, points}`: `heading` (required), `icon` (left of the heading,
+in the tone colour), `tone` (`positive`, `negative` or `neutral`, the default) and `points`
+(up to 8; each a string or `{text, icon}`, the icon replacing the marker).
+
+```yaml
+- id: tradeoff
+  type: comparison
+  params:
+    heading: "Monolith or microservices?"
+    vs: "vs"
+    columns:
+      - heading: "Monolith"
+        icon: package
+        tone: positive
+        points: ["One deploy", "Simple local setup", {text: "Easy refactoring", icon: pencil}]
+      - heading: "Microservices"
+        icon: network
+        tone: negative
+        points: ["Many deploys to coordinate", "Network failures between services"]
+    verdict: "Start with a monolith; split when teams grow."
+  beats:
+    - text: "A monolith is one deploy with a simple setup."
+    - text: "Microservices mean many deploys and network failures."
+    - text: "So start with a monolith."
+      actions:
+        - {highlight: col1, style: box}
+```
+
+### `table`
+
+A header and rows of cells (text or numbers), fitted to the frame, revealed row by row.
+Number columns are right-aligned and formatted (`number_format`, default: the decimals the
+column needs, with thousands separators); text columns are left-aligned. Every other row is
+striped in `stripe_color` (the theme's `surface`); a rule in `header_color` runs under the
+header and a thin one under the last row.
+Steps with `reveal: per_beat` (default): (1) title, header, caption and row 1, (2) row 2, ...;
+with more rows than beats they are spread evenly. `reveal: all`: the whole table in beat 1.
+[Action targets](#beat-actions): `title`, `header`, `row<N>`, `row:<first cell>`, `col<N>`,
+`col:<header>`, `cell<R>.<C>` and `caption` (1-based; rows count below the header; a row's
+first cell as shown, e.g. `row:4K`, `cell2.3`). A `highlight` with `style: fill` lays a
+translucent band over a row, column or cell; `box` frames it.
+
+**Fitting.** The title is in the `header` region, the caption at the bottom; the table is
+centred in the space between. Cell text starts at `size`; when the table is too wide, columns
+share the width (a column that needs less keeps its natural width) and text wraps — headings
+at any space, body cells of more than 16 characters at spaces; numbers and short cells never
+wrap. The size is then reduced until the table fits, not below the readable minimum (lint's
+`min_font`). A table that does not fit even then is scaled down and a warning says so: split
+it into smaller tables (or drop columns), which is mostly a vertical (9:16) problem — a 9:16
+frame holds about 3–4 columns and 12 short rows. In 9:16 rows get more vertical padding.
+
+| param | type | default | |
+|---|---|---|---|
+| `rows` | list of lists | required | 1–30 rows of cells: text or numbers (`""` for an empty cell); every row as long as the header |
+| `header` | list[str] | `[]` | column headings; sets the number of columns (at most 8) |
+| `title` | str | `""` | above the table |
+| `caption` | str | `""` | note under the table (e.g. the source) |
+| `align` | str \| list | `auto` | `auto` (numbers right, text left), `left`, `center`, `right`; one for all columns or one per column |
+| `number_format` | str \| list | automatic | Python format for numbers: `"{:,.1f}"`, `"{:.0%}"`, `"${:,.0f}"`, `"{:,.0f}M"`; one for all or one per column (`null` = automatic) |
+| `reveal` | `per_beat` \| `all` | `per_beat` | |
+| `zebra` | bool | `true` | stripe every other row |
+| `color`, `header_color`, `stripe_color`, `rule_color` | color | `text`, `primary`, `surface`, `dim` | cells; header text and its rule; stripes; the rule under the last row |
+| `title_color`, `caption_color` | color | `text`, `dim` | |
+| `size`, `title_size`, `caption_size` | size | `body`, `heading`, `caption` | `size` is the cell text (headings too), reduced to fit |
+
+```yaml
+- id: results
+  type: table
+  params:
+    title: "Benchmark"
+    header: ["Model", "Params", "Accuracy"]
+    rows:
+      - ["Baseline", 110, 0.812]
+      - ["Sparse", 55, 0.809]
+      - ["Tiny", 14, 0.742]
+    number_format: [null, "{:,.0f}M", "{:.1%}"]   # 110M, 81.2%
+    caption: "Illustrative numbers"
+  beats:
+    - text: "The baseline has a hundred and ten million parameters."
+    - text: "The sparse model halves that and loses almost nothing."
+      actions:
+        - {highlight: "row:Sparse", style: fill}
+    - text: "The tiny model pays for its size."
+      actions:
+        - {highlight: "cell3.3", color: accent}
+```
+
 ### `end_card`
 
 Steps: (1) logo, icon and title, (2) lines. Fades out over 1 s.
@@ -919,6 +1039,8 @@ a title card, a `transform` of a bar).
 | `end_card` | `logo`, `icon`, `title`, `line<N>` | reveal, dim, highlight | those present |
 | `chapter` | `icon`, `number`, `title`, `subtitle` | reveal, dim, highlight | those present |
 | `stat` | `icon`, `value`, `label`, `comparison`, `context` | reveal, dim, highlight, zoom | `reveal: value` early runs the count; `comparison` is the change chip with its text |
+| `comparison` | `heading`, `col<N>`, `col:<heading>`, `col<N>.item<M>`, `verdict` | reveal, dim, highlight, zoom | a column is its heading and points (a `box` frames its card); `col2.item1` is a point with its marker; revealing a point brings its column's card |
+| `table` | `title`, `header`, `row<N>`, `row:<first cell>`, `col<N>`, `col:<header>`, `cell<R>.<C>`, `caption` | reveal, dim, highlight, zoom | `box` and `fill` cover the whole row / column / cell; `cell2.3` is row 2 (below the header), column 3 |
 
 [Project scene types](EXTENDING.md#8-per-beat-actions-targets-and-custom-actions) can declare
 their own targets; a type without any rejects actions in `vidgen validate`.
@@ -929,15 +1051,16 @@ their own targets; a type without any rejects actions in `vidgen validate`.
 |---|---|---|
 | `reveal` | — | brings the target on screen with the scene's own entrance animation (e.g. item 4 before its turn). A target already on screen is left alone, and the scene does not reveal it again at its own step. |
 | `dim` | `opacity` (`0.45`, 0–1, of the target's full opacity) | fades the target; one that is already dimmer (e.g. by `bullets`' `dim_previous`) stays as it is, so dimming never compounds; `until:` restores the opacity |
-| `highlight` | `color` (`highlight`, a theme token or hex), `style` (`color` default, `box`, `underline`, `flash`, or a list such as `[color, box]`) | `color` recolours the target and brings a dimmed one back to full opacity while highlighted; `box` draws a rounded frame around it, `underline` a line under it; `flash` flashes the colour there and back (leaves no trace; not with `color`). `until:` restores the colours (and the dimming) and removes box / underline. |
+| `highlight` | `color` (`highlight`, a theme token or hex), `style` (`color` default, `box`, `underline`, `fill`, `flash`, or a list such as `[color, box]`) | `color` recolours the target and brings a dimmed one back to full opacity while highlighted; `box` draws a rounded frame around it, `underline` a line under it, `fill` lays a translucent band of the colour under it (over backdrops such as table stripes and cards); `flash` flashes the colour there and back (leaves no trace; not with `color`). `until:` restores the colours (and the dimming) and removes box / underline / fill. |
 | `zoom` | `scale` (magnification > 1, up to 8; default: as close as the targets fit), `padding` (`0.15`: share of the view kept free on each side of the targets) | moves the camera in on the targets and back out: the zoom-out ends with the beat (with `until: <beat>`, when that beat starts). Without `scale` the view is at most 3x; a target that already fills the frame is not zoomed (a warning says so). The view never leaves the frame. |
 | `transform` | `into` (required: a target not on screen yet), `style` (`auto` default, `replace`, `shapes`, `tex`, `fade`) | morphs the target into `into`, which then stays on screen in its own place (the target is gone). `shapes` moves matching glyphs (what `auto` uses for text and formulas), `replace` morphs point by point (`auto` for other shapes), `tex` matches the TeX parts of two formulas, `fade` cross-fades. `into` must be a target of the scene; text that is not part of the scene cannot be morphed into (give the scene that content, e.g. as a later equation step). If `into` is already on screen, the target fades out into its place (warning). |
 
 `dim`, `highlight`, `zoom` and `transform` act on targets on screen; a target not shown yet is
 first revealed (as by `reveal`). `dim` and `highlight` change only opacity resp. colour, so
 both can apply to one target and each is undone separately. Images are dimmed and tinted too
-(their pixels). A highlight `box` surrounds what the scene marks as the target's outline (a bar
-and its value, standing on the axis; else the whole target).
+(their pixels). A highlight `box` (and `fill`) surrounds what the scene marks as the target's
+outline (a bar and its value, standing on the axis; a table row, column or cell edge to edge; a
+comparison column's card; else the whole target).
 
 **Timing.** Actions never make a beat longer. An action is due `at` x the beat's narration
 after the beat starts and runs at the first moment from then on when the scene's own animation

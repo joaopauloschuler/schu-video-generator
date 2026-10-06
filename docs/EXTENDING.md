@@ -511,11 +511,14 @@ as the built-ins (every built-in scene type, e.g. `bullets`/`bar_chart`, and
 - `self.target(names, mobject, entrance=None, outline=None) -> Target` in `construct()`, before
   the beat whose actions use it and while it has its full look (`dim`/`highlight` take its
   opacity at that moment as "full"): `names` is one name or a list (`["item3", "item:Render
-  it"]`; a name is `word`, `word3` or `kind:any label`; several targets may share a name: a
+  it"]`; a name is `word`, `word3`, a dotted `word2.part3` (a part of a part, as `col2.item3`)
+  or `kind:any label`; several targets may share a name: a
   plain name then selects the ones on screen); `mobject` may be a group that is never added
   itself (e.g. a bar plus its labels); `entrance` returns the animations that bring it on
   screen (default `FadeIn`; `lambda: []` for a part that cannot appear alone); `outline` is
-  what a `highlight` box surrounds (default `mobject`).
+  what a `highlight` box or fill surrounds (default `mobject`). Give backdrops (cards,
+  stripes) a negative `z_index`, and keep them out of the target's `mobject`, so a `fill`
+  highlight lies between them and the text and a `color` highlight does not paint them.
 - Build your own reveal steps with `self.entrance(target)`: it returns `[]` when the target is
   already on screen, so an item a `reveal` action showed early is not revealed twice. Also:
   `self.is_shown(t)`, `self.find_targets("bar:*")`, `self.on_screen_parts(t)` (the target's

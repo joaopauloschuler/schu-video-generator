@@ -172,22 +172,22 @@ class Dim(Action):
         return self.memory.restore(rgb=False, alpha="saved")
 
 
-HighlightStyle = Literal["color", "box", "underline", "flash"]
+HighlightStyle = Literal["color", "box", "underline", "fill", "flash"]
 
 
 @action("highlight")
 class Highlight(Action):
     """Make targets stand out in ``color``: recolour them (``style: color``, default; a dimmed
     target is brought back to full opacity while highlighted; an image is tinted), draw a
-    rounded ``box`` around or a line ``underline`` under them, or ``flash`` the colour once
-    (there and back, leaving no trace). Styles combine as a list; ``until: <beat>`` undoes
-    ``color``/``box``/``underline``."""
+    rounded ``box`` around or a line ``underline`` under them, lay a translucent ``fill`` of the
+    colour behind them, or ``flash`` the colour once (there and back, leaving no trace). Styles
+    combine as a list; ``until: <beat>`` undoes ``color``/``box``/``underline``/``fill``."""
 
     class Options(ActionOptions):
         color: ThemeColor = "highlight"
         """Highlight colour (theme token or hex)."""
         style: HighlightStyle | list[HighlightStyle] = Field(default="color", min_length=1)
-        """color, box, underline or flash, or a list of them."""
+        """color, box, underline, fill or flash, or a list of them."""
 
         @field_validator("style")
         @classmethod
@@ -203,6 +203,8 @@ class Highlight(Action):
     stroke_width = 4.0
     #: How far an image's pixels are tinted towards the colour (0-1).
     image_tint = 0.3
+    #: Opacity of the ``fill`` plate (below lint's 0.3 for shapes that hide text).
+    fill_opacity = 0.22
 
     def _styles(self) -> list[str]:
         return [self.options.style] if isinstance(self.options.style, str) else list(dict.fromkeys(self.options.style))
@@ -228,7 +230,24 @@ class Highlight(Action):
                 line = Underline(target.mobject, color=color, buff=self.underline_buff, stroke_width=self.stroke_width)
                 self.decorations.append(line)
                 anims.append(Create(line))
+            if "fill" in styles:
+                anims.append(self._plate(scene, target, [part for t, part in pairs if t is target], color))
         return anims
+
+    def _plate(self, scene: NarratedScene, target: Target, parts: list[Mobject], color: str) -> Animation:
+        """A translucent rounded plate around the target's outline, drawn just below its parts
+        (fading in), so a backdrop such as a table stripe stays below it."""
+        around = target.outline if target.outline is not None else target.mobject
+        plate = SurroundingRectangle(around, buff=self.box_buff, corner_radius=0.1, stroke_width=0)
+        plate.set_fill(color, opacity=0)
+        plate.set_z_index(min((p.z_index for p in parts), default=0))
+        tops = [next((i for i, m in enumerate(scene.mobjects) if part in m.get_family()), len(scene.mobjects)) for part in parts]
+        whole = bool(parts) and all(scene.mobjects[i] is part for i, part in zip(tops, parts) if i < len(scene.mobjects))
+        # below the parts when they were added on their own; over the group holding them otherwise
+        # (its backdrop would hide the plate; the plate is faint, so text under it stays readable)
+        scene.mobjects.insert(min(tops, default=len(scene.mobjects)) if whole else max(tops, default=len(scene.mobjects) - 1) + 1, plate)
+        self.decorations.append(plate)
+        return Transform(plate, plate.copy().set_fill(color, opacity=self.fill_opacity))
 
     def _repaint(self, target: Target, part: Mobject, color: str, undim: bool, rate: Callable[[float], float]) -> Animation:
         rgb = np.array(ManimColor(color).to_rgb())

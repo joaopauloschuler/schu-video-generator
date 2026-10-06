@@ -120,8 +120,8 @@ Rules that apply to every step:
 - [x] `chapter`: section divider with number, title, optional icon (subtitle; side-by-side in 16:9, stacked in 9:16; silent or narrated; the chapter's name is `params.title` for Steps 39/49)
 
 ### Step 26 — Scenes: `comparison` and `table`
-- [ ] `comparison`: two (or three) columns, before/after or A vs B, per-beat reveal
-- [ ] `table`: header + rows, row/cell highlight actions, auto-fit to region
+- [x] `comparison`: two (or three) columns, before/after or A vs B, per-beat reveal
+- [x] `table`: header + rows, row/cell highlight actions, auto-fit to region
 
 ### Step 27 — Scene: `timeline`
 - [ ] Horizontal (16:9) / vertical (9:16) timeline, events revealed per beat, optional icons

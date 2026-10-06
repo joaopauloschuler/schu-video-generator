@@ -2186,3 +2186,99 @@ How to test: `/home/claude/venv/bin/python -m pytest -q` (932 passed, 1 skipped)
 tests/test_stat_chapter.py`. Manual: `vidgen storyboard examples/minimal --scene part2 --scene
 speedup --per-beat 3 [--variant vertical|light]`, `vidgen lint examples/minimal [--variant ...]`,
 `vidgen list-scenes`, `vidgen schema --scene stat`.
+
+## Step 26 — Scenes: `comparison` and `table`
+What was built
+- **`comparison`** (`src/vidgen/scenes/comparison.py`): 2–3 columns, each `{heading, icon?,
+  tone?, points}` (points: a string or `{text, icon}`, up to 8) on a `surface` card outlined in
+  its tone; `tone: positive | negative | neutral` colours heading/icon/markers
+  (`positive_color` `tertiary`, `negative_color` `accent`, `neutral_color` `primary`) and marks
+  points with check / x icons / dots (`markers: false` hides them; a point's own icon wins).
+  Optional scene `heading` (header region), `verdict` (bottom, `highlight` colour, last step),
+  `vs` badge between the cards, `cards: false`. `reveal: columns` (one column per beat) | `rows`
+  (headings, then the m-th point of every column per beat, rows on shared baselines) | `all`.
+  Columns side by side in 16:9 and square, stacked in 9:16 (`Region.split`). One text size for
+  all columns, reduced to the readable minimum before scaling (warning).
+  Targets `heading`, `col<N>`, `col:<heading>`, `col<N>.item<M>`, `verdict`.
+- **`table`** (`src/vidgen/scenes/table.py`): `header` + `rows` (str/number cells; bool/null
+  rejected), `title`, `caption`, `align` (`auto`: numbers right), `number_format` (one or per
+  column; default per-column decimals with thousands separators), `reveal: per_beat | all`,
+  `zebra` stripes in `surface`, header rule in `header_color`, end rule with the last row.
+  **Auto-fit**: natural widths, else water-filled widths with wrapping (headings at any space,
+  body cells > 16 chars at spaces, numbers/short cells never), sizes from `size` down to the
+  readable minimum (lint `min_font`); beyond that the table is scaled and a warning suggests
+  splitting it. 9:16 rows get 1.4x vertical padding. Targets `title`, `header`, `row<N>`,
+  `row:<first cell>`, `col<N>`, `col:<header>`, `cell<R>.<C>`, `caption`, with outlines spanning
+  the full row / column / cell so `box` and `fill` highlights frame them edge to edge.
+- **Framework**: target names may be dotted (`col2.item3`, `cell2.4`; `actions.TARGET_NAME`).
+  New `highlight` style **`fill`**: a translucent (0.22) plate of the colour under the target
+  (above backdrops at `z_index` -1 such as stripes and cards), undone by `until`.
+- `examples/minimal`: `tradeoff` (comparison, vs badge, verdict, `highlight col1 box`) after
+  `feedback`, `formats` (table with a number column and `highlight row:Preview fill`) before
+  `trend`.
+
+Verification (sheets opened with Read)
+- Scratch project (2-column comparison with heading/verdict/vs/icons, 3-column `reveal: rows`
+  with a `fill` on a point, a 4x4 table with row fill / column box / cell colour, a 6x4 table with
+  wrapping notes, per-column formats and `reveal: all` with dim + highlight): storyboards in 16:9
+  (also `--per-beat 3`), vertical and `light_academic`. Fixed along the way: points of
+  different columns at different heights in `rows` mode (shared baselines), uneven point gaps
+  in `columns` mode (row sharing only for `rows`), a bottom rule under an empty table (now drawn
+  with the last row), 9:16 tables scaled below the readable size although a wrapped layout
+  fit (proper water-filling, header words of number columns wrap, the readable size itself
+  tried), "1920 x / 1080" wrapping (short cells stay whole). Lint of the scratch project: only
+  the deliberate 6x4 stress table (max_words; in 9:16 also min_font, with the split warning).
+- `examples/minimal`: `vidgen lint` 0 findings in all 8 variants (default, vertical, light,
+  contrast, editorial, neutral, pastel, neon); `tradeoff`/`formats` sheets checked in 16:9,
+  vertical and contrast (large scale).
+
+Files
+- New: `src/vidgen/scenes/comparison.py`, `src/vidgen/scenes/table.py`,
+  `tests/test_comparison_table.py` (49 tests, 22 tiny renders at 160x90 / 90x160).
+- Changed: `src/vidgen/actions.py` (`TARGET_NAME`), `src/vidgen/scene.py` (message),
+  `src/vidgen/scenes/actions.py` (`fill` style, `Highlight._plate`), `src/vidgen/scenes/__init__.py`;
+  `examples/minimal/video.yaml`; tests `test_builtin_scenes.py` (BUILTINS/SAMPLES),
+  `test_actions_coverage.py` (SAMPLES, target names, early reveal), `test_extensions.py` (type
+  list); docs/CONFIG.md (`comparison`, `table` sections, targets table, `fill`, Icons intro),
+  docs/EXTENDING.md (dotted names, backdrops and `fill`), README, DESIGN.md (new §29), tasklist.md.
+
+Public interfaces added/changed
+- Built-in scene types `comparison` and `table` (params in docs/CONFIG.md). Highlight option
+  `style` accepts `fill`. Target names may contain dotted parts. No `vidgen.api` change.
+- Module helpers (internal): `vidgen.scenes.table.is_number`, `Table.Params.texts()`,
+  `column_count()`, `numeric()`, `alignment()`; `Comparison.tone_color()`;
+  `Highlight.fill_opacity`.
+
+Decisions / deviations
+- Highlights on table rows/columns/cells: `color` recolours the cell text only (stripes and
+  cards are not part of a target, otherwise they would be painted solid); `fill` is the
+  "band" look. The plate's draw position is found from the target's parts (before them if they
+  were added on their own, else over their group as a faint overlay), so it also works in
+  other scenes (e.g. a bullets item).
+- `table` uses `per_beat | all` like `bullets` (not `rows`); the header, title and caption come
+  with row 1. `title` (not `heading`) as in the charts and `code`.
+- Comparison headings use the tone colour for positive/negative columns (colour-coded A vs B),
+  `heading_color` for neutral ones.
+- The "too big" check happens at render time (a log warning plus lint `min_font`), not in
+  `vidgen validate`: whether a table fits depends on the variant's frame and type scale.
+
+Known gaps / TODOs
+- A 9:16 frame holds about 3–4 columns: wider tables reach the readable minimum quickly (the
+  warning says to split). No automatic split into several tables or transposition.
+- Table rows with very different heights (one long wrapped cell) look uneven; no per-column
+  `width` param yet. Numbers use proportional digits (Inter via `Text` has no tabular figures),
+  so right-aligned decimals line up by their right edge only.
+- `comparison` cards are as tall as the tallest column (by design); with very different
+  column lengths a short column shows empty card space. The `vs` badge has no target.
+- `reveal` of a whole column whose point was revealed early is a no-op (it is "shown"); the
+  column's own step still brings the rest.
+- Found (framework, Step 23, not changed here): an action due in a beat that holds *several*
+  reveal steps (more steps than beats) runs in the wait after the first step for its full
+  `run_time`, and the following step then pushes the beat past `d + pad` (e.g. 2 comparison
+  columns + verdict in 2 beats with a `reveal` in beat 1: 0.4 s over). `ActionRunner` should
+  reserve the remaining steps' time; one step per beat (the common case) is unaffected.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (993 passed, 1 skipped). Step only: `pytest
+tests/test_comparison_table.py`. Manual: `vidgen storyboard examples/minimal --scene tradeoff
+--scene formats --per-beat 3 [--variant vertical|light]`, `vidgen lint examples/minimal
+[--variant ...]`, `vidgen list-scenes`, `vidgen schema --scene table`.

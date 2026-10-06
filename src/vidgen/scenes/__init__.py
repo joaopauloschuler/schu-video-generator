@@ -12,6 +12,7 @@ from vidgen.scenes import (  # noqa: F401
     bullets,
     chapter,
     code,
+    comparison,
     end_card,
     equation,
     icon_grid,
@@ -19,6 +20,7 @@ from vidgen.scenes import (  # noqa: F401
     line_chart,
     quote,
     stat,
+    table,
     text_card,
     title,
 )

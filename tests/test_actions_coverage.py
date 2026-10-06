@@ -45,6 +45,8 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "end_card": {"title": "Thanks", "lines": ["one", "two"], "icon": "rocket", "logo": "assets/pic.png"},
     "chapter": {"number": 2, "title": "Results", "subtitle": "Sub", "icon": "rocket"},
     "stat": {"value": 42, "suffix": "%", "label": "L", "context": "C", "comparison": 30, "icon": "rocket"},
+    "comparison": {"heading": "H", "columns": [{"heading": "A", "points": ["x", "y"]}, {"heading": "B", "points": ["z"]}]},
+    "table": {"title": "T", "header": ["Name", "N"], "rows": [["a", 1], ["b", 2]], "caption": "C"},
 }
 
 
@@ -125,6 +127,12 @@ def test_target_names_of_every_builtin_type() -> None:
     assert names("chapter", number="") == ["icon", "title", "subtitle"]
     assert names("stat") == ["icon", "value", "label", "comparison", "context"]
     assert names("stat", label="", context="", comparison=None, icon=None) == ["value"]
+    assert names("comparison") == ["heading", "col1", "col:A", "col1.item1", "col1.item2", "col2", "col:B", "col2.item1"]
+    assert names("comparison", heading="", verdict="V") == ["col1", "col:A", "col1.item1", "col1.item2", "col2", "col:B", "col2.item1", "verdict"]
+    assert names("table") == ["title", "header", "row1", "row:a", "row2", "row:b", "col1", "col:Name", "col2", "col:N",
+                              "cell1.1", "cell1.2", "cell2.1", "cell2.2", "caption"]
+    assert names("table", title="", caption="", header=[]) == ["row1", "row:a", "row2", "row:b", "col1", "col2",
+                                                               "cell1.1", "cell1.2", "cell2.1", "cell2.2"]
 
 
 def test_equation_terms_must_occur_in_a_step() -> None:
@@ -163,7 +171,7 @@ def test_builtin_scenes_register_their_target_names(kind: str, make_project, med
     ("kind", "target"),
     [("title", "authors"), ("quote", ["author", "source"]), ("end_card", "line*"), ("icon_grid", "item2"),
      ("line_chart", "series2"), ("image", "caption"), ("code", "line3"), ("text_card", "text"),
-     ("chapter", "subtitle"), ("stat", ["comparison", "context"])],
+     ("chapter", "subtitle"), ("stat", ["comparison", "context"]), ("comparison", "col2"), ("table", "row2")],
 )
 def test_early_reveal_is_not_repeated_by_the_scene(kind: str, target: str | list[str], make_project, media: Path) -> None:
     project = load(make_project, [{"id": "s", "type": kind, "params": SAMPLES[kind], "beats": beats([{"reveal": target}], None)}])

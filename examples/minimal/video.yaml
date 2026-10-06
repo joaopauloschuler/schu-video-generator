@@ -9,6 +9,7 @@
 #   vidgen storyboard examples/minimal --scene sizes --per-beat 3   # mid-beat stills: beat actions
 #   vidgen storyboard examples/minimal --scene math --per-beat 3    # transform and zoom actions
 #   vidgen storyboard examples/minimal --scene speedup --per-beat 3 # a stat counting down
+#   vidgen storyboard examples/minimal --scene formats --per-beat 3 # a table row by row
 #   vidgen storyboard examples/minimal --variant light           # same video with the light_academic preset
 #   vidgen list-themes examples/minimal --swatches build/themes.png  # every theme preset at a glance
 # There is no narration audio in this example, so beats are timed from their word count
@@ -95,6 +96,28 @@ scenes:
       - text: "And a theme preset restyles the whole video."
       - text: "At the end, one item can be highlighted, like lint here."
 
+  - id: tradeoff
+    type: comparison      # two or three columns: A vs B, before / after
+    params:
+      heading: "Preview or final render?"
+      vs: "vs"
+      columns:
+        - heading: "Preview"
+          icon: rabbit
+          tone: positive
+          points: ["Renders in seconds", "Lint and storyboard on every edit"]
+        - heading: "Final"
+          icon: hourglass
+          tone: negative
+          points: ["Minutes per scene in 4K", {text: "Wait for the end of the day", icon: moon}]
+      verdict: "Iterate on previews; render the final once."
+    beats:
+      - text: "Comparisons put two options side by side. Previews render in seconds."
+      - text: "The final render takes minutes per scene."
+      - text: "So iterate on previews, and render the final video once."
+        actions:
+          - {highlight: col1, style: box}
+
   - id: part2
     type: chapter         # a section divider; silent here (duration), or narrated with beats
     params:
@@ -134,6 +157,23 @@ scenes:
     beats:
       - text: "A big number counts down from the four K render time to the preview's."
       - text: "That is ninety six percent less waiting while you iterate."
+
+  - id: formats
+    type: table           # header + rows, fitted to the frame, one row per beat
+    params:
+      title: "Output formats"
+      header: ["Variant", "Pixels", "Render (min)"]
+      rows:               # text and numbers; number columns are right-aligned
+        - ["16:9", "1920 x 1080", 2.6]
+        - ["9:16", "1080 x 1920", 2.6]
+        - ["Preview", "854 x 480", 0.4]
+      caption: "Render time per minute of video (illustrative)"
+    beats:
+      - text: "Tables reveal one row per beat. The main video is sixteen by nine."
+      - text: "A vertical variant renders the same scenes for phones, just as fast."
+      - text: "And previews are small and fast."
+        actions:
+          - {highlight: "row:Preview", style: fill}
 
   - id: trend
     type: line_chart

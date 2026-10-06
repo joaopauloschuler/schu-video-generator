@@ -1619,3 +1619,47 @@ using the existing renders of the others (missing ones are rendered). Exit code 
 - Both: Step 15 regions (`safe_area`, `place`), theme tokens and font roles only (numbers and
   chapter titles use the `heading` role), targets per Step 23/24 and the table in CONFIG.md,
   `outro` 0.5, `reveal()` with `fraction` 0.75 (caps 2.0 / 1.6).
+
+## 29. Refinements (Step 26, `comparison` and `table`)
+
+- **Target names may be dotted** (`actions.TARGET_NAME`: `word(.part)*(:label)?`), for parts of
+  parts: `col2.item3`, `cell2.4`. Patterns (`cell1.*`) work as before.
+- **`highlight` style `fill`**: a `SurroundingRectangle` of the target's outline (`box_buff`
+  0.12, corner 0.1, no stroke) filled with the colour at `fill_opacity` 0.22 (below lint's
+  0.3 cover threshold; text over it keeps its contrast), faded in by a `Transform` of its
+  opacity (not `FadeIn`, an introducer that would move it to the top). It is inserted into
+  `scene.mobjects` just before the target's first part when the parts were added on their own,
+  else just after the group holding them (then it is a faint overlay), with the parts' lowest
+  `z_index`; scenes put backdrops (table stripes, comparison cards) at `z_index` -1 so the plate
+  lies between backdrop and text. Undone (`until`) like `box`.
+- **`comparison`** (`scenes/comparison.py`; reference docs/CONFIG.md): `columns` (2–3
+  `ComparisonColumn`: `heading`, `icon`, `tone: positive | negative | neutral`, `points` ≤ 8 of
+  `ComparisonPoint`, a string or `{text, icon}` like `BulletItem`), `heading`, `verdict`,
+  `reveal: columns | rows | all`, `markers` (check / x icons, or a dot for neutral), `cards`,
+  `vs` badge, tone colours `tertiary`/`accent`/`primary` (as `stat`'s good/bad). Layout: heading
+  in `header` (1.3x in portrait), verdict at the bottom of the body, `Region.split(n)` for the
+  card slots (columns in landscape, rows in portrait), cards of one size (tallest column).
+  One text size for every column: from `size` down (x ≤ 0.95 per try) to `readable_size()`;
+  still too tall → scaled about the top-left corner and a warning. Rules line up across
+  columns side by side; with `reveal: rows` the *m*-th points too. Targets: a column is
+  `VGroup(head, rule, points)` (the card is outside, so `color` does not paint it; `outline` =
+  the card inset by the box buff); a point's entrance brings its column's card and heading
+  first. Steps through `_column_entrance` (frame, then points not on screen), so early
+  reveals are never repeated.
+- **`table`** (`scenes/table.py`): `rows` (≤ 30, cells `str | int | float`; bool/null rejected
+  with a hint), `header` (≤ 8 columns), `title`, `caption`, `align` (`auto` = numbers right),
+  `number_format` (str or per column; default `auto_format` of the column, so a column shares
+  its decimals), `reveal: per_beat | all`, `zebra`, colours, sizes. `Params.texts()` gives the
+  cells as shown (also used for `row:<first cell>`). **Fitting** (`_fit`): sizes `size` x
+  (1, .92, .85, .78, .72, .66, .6) and the readable minimum; at each, `_widths` gives natural
+  widths (one line, cell padding 0.75 cap each side) or water-fills the area width (columns
+  needing less than a fair share keep their natural width, columns whose floor — longest
+  header word, body cells > 16 characters by word, shorter cells and numbers whole — exceeds
+  the share get the floor); the first size whose widths fit and whose height fits wins.
+  Nothing fits → built at the readable size, scaled to the area, warning "split it into
+  smaller tables or drop columns" (lint `min_font` reports it too). A narrow landscape table
+  spreads its columns up to 1.25x (at most 80 % of the width). Rows: cells positioned by first
+  baseline; header rule `header_color`, stripes every other row (`z_index` -1), end rule
+  `rule_color` drawn with the last row. Every cell text is added on its own (so a `fill` plate
+  sits just under a row's / column's cells); invisible row/column/cell rectangles (inset by the
+  box buff) are the targets' outlines.
