@@ -35,4 +35,5 @@ from vidgen.scenes import (  # noqa: F401
     timeline,
     title,
     video_clip,
+    world_map,
 )

@@ -73,6 +73,7 @@ src/vidgen/
   graph.py                # layered layout of directed graphs, pure Python (§31; no manim)
   callouts.py             # callouts: areas, label placement, box, circle, arrow, magnifier, spotlight (§37)
   clips.py                # video clips: probe, timing, ClipMobject (frames decoded per frame), clip sound (§38)
+  geo.py                  # world map data, country lookup, Equal Earth projection, MapView (§39; no manim)
   charts.py               # chart helpers: ticks, number labels, axes, legend, markers, fit (§33),
                           # colour scales, colour bar, readable text on fills (§34)
   tts/__init__.py         # provider seam: get_provider(cfg)
@@ -85,8 +86,10 @@ src/vidgen/
                           # the built-in beat actions reveal/dim/highlight/zoom/transform, §26-27)
   data/fonts/             # Inter, Source Serif 4, JetBrains Mono NL (.ttf + OFL.txt; package data)
   data/icons/             # manifest.json + lucide/*.svg + lucide/LICENSE (ISC; package data, §22)
+  data/geo/               # world-110m.json: Natural Earth 1:110m countries (public domain; package data, §39)
 tools/                    # maintainer scripts, not shipped: vendor_icons.py + icon_set.json (§22, §23),
-                          # make_screenshot.py, make_clip.py (example assets, §37, §38)
+                          # make_screenshot.py, make_clip.py (example assets, §37, §38),
+                          # make_world_map.py (builds data/geo/world-110m.json from npm packages, §39)
 tests/                    # pytest; no network; slow renders marked `render`
 examples/
   minimal/                # config-only example using built-ins
@@ -96,7 +99,7 @@ docs/
   CONFIG.md               # config reference
   EXTENDING.md            # how to write project extensions
   ICONS.md                # icon catalogue, generated from the manifest by tools/vendor_icons.py (§23)
-DESIGN.md  CLAUDE.md  HANDOFF.md  README.md  THIRD_PARTY_NOTICES.md (bundled fonts, §21)
+DESIGN.md  CLAUDE.md  HANDOFF.md  README.md  THIRD_PARTY_NOTICES.md (bundled fonts §21, icons §22, world map §39)
 ```
 
 ## 3. Project folder layout
@@ -467,6 +470,8 @@ Step 34 (§37) adds the callout helpers: `Callout`, `CalloutArea`, `CALLOUT_KIND
 `callout_spotlight`, `callout_label`, `label_spot`.
 Step 35 (§38) adds the video clip helpers: `CLIP_SUFFIXES`, `ClipInfo`, `ClipMobject`,
 `ClipTiming`, `clip_audio`, `fit_speed`, `probe_clip`.
+Step 36 (§39) adds the map helpers: `MAP_VIEWS`, `Country`, `MapView`, `equal_earth`,
+`find_country`, `fit_view`, `view_box`, `world_countries`.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -2312,3 +2317,63 @@ using the existing renders of the others (missing ones are rendered). Exit code 
 - Known limits: rotation metadata is ignored; variable-frame-rate files show the frame whose
   time stamp precedes the scene time (correct, but uneven if the file is); a file without a
   stated length is measured from its packets.
+
+## 39. Refinements (Step 36, `map`)
+
+- **Data** (`src/vidgen/data/geo/world-110m.json`, 132 KB, package data). Natural Earth 1:110m
+  Cultural Vectors, Admin 0 – Countries (public domain), via the npm package `world-atlas` 2.0.2
+  (`countries-110m.json`, TopoJSON, ISC) whose ids are ISO 3166-1 numeric codes; alpha-2 /
+  alpha-3 codes and English names / aliases from `i18n-iso-countries` 7.14.0 (MIT).
+  `tools/make_world_map.py` (maintainer script, `npm pack` of both pinned versions, or
+  `--world-atlas DIR --iso DIR`) decodes the topology (delta-encoded quantized arcs), cuts rings
+  that cross the antimeridian at ±180° (d3's spherical topology has jumps there; a ring round
+  the pole — Antarctica — is closed along its edge), orients outer rings counter-clockwise and
+  holes clockwise (so Cairo's non-zero fill leaves Lesotho open in South Africa), rounds to
+  hundredths of a degree (flattened integer rings), and computes per country a label point (pole
+  of inaccessibility of the largest part by a two-pass grid search) and a "main" box (parts within
+  15° of the largest: France without French Guiana). Countries without an ISO code get
+  `XK`/`XKX` (Kosovo) or Natural Earth's ADM0_A3 (`CYN`, `SOL`). ISO countries missing at this
+  scale are listed in `small` for an explicit error. Output is deterministic.
+- **Lookup** (`find_country`): one index of normalised names (NFKD without accents, casefolded,
+  punctuation and a leading "the" dropped; `&` = and), claimed in priority order — codes, display
+  names, then aliases (Natural Earth's short name, a curated list such as `UK`, `Holland`, `DRC`,
+  then i18n-iso-countries' names) — so an ambiguous alias (`Congo`) goes to Natural Earth's
+  meaning. Unknown names get `difflib` suggestions; small countries a "use a pin" message.
+- **Projection**: Equal Earth (Šavrič, Patterson & Jenny 2018; equal-area, pure numpy) centred on
+  the view's middle longitude. `MapView(box, area, antarctica, expand)`: projects the box's
+  sampled edges, grows the projected rectangle to `area`'s aspect ratio (more map, within the
+  world's outline; the world view without Antarctica is cut at 58° S), fits it inside `area`
+  (`region`), and maps points with one scale. Polygons are projected once per centre longitude
+  (`lru_cache`; each polygon moved by ±360° to be nearest the centre, which makes views over the
+  date line work), then clipped to the view rectangle (Sutherland–Hodgman, numpy per edge).
+  World view: ~280 polygons in ~25 ms; cached views ~6 ms. `cropped`: the view cuts the world at
+  its sides (a regional view).
+- **`map`** (`scenes/world_map.py`). Stages: stage 0 = the top-level `countries` / `pins` /
+  `arcs` (with the map), stage *i* = `steps[i-1]`; steps follow `screenshot`: step *i* at beat
+  *i* via `distribute`, beat 1 = intro (title, map sweep, legend, caption, stage 0) + step 1,
+  `play_steps(fraction=0.6, cap=1.6)`. **Layout**: title (`chart_title`), caption
+  (`chart_caption`), legend (`color_bar`, horizontal, ≤ 0.6 x body width) centred under the map,
+  map and legend centred together in the body; a cropped view gets a panel (`surface` fill = sea,
+  thin `dim` frame) under the countries. Countries are one `VMobject` each (rings as closed
+  straight-segment subpaths built with numpy), land = `land_color` mixed 0.3 over the background
+  (0.18 for countries without a value on a choropleth), borders 0.8 wide in the background colour.
+  **Highlights** are copies over the base shape (fill + 1.6x border; on a choropleth an outline
+  of 3.5) so a highlight can be revealed, dimmed or zoomed as its own target. **Labels** are text
+  on background-coloured plates (opacity 0.88; lint reads the plate as the backdrop): a country's
+  goes on its label point when it fits in 90 % of its main box and is free, else beside it via
+  `label_spot` with a leader (z 3.5, under every plate); pins' labels go beside the pin (leader
+  when pushed away), arcs' at the top of the arc; all avoid earlier labels and every pin of the
+  same view. **Arcs**: `ArcBetweenPoints` bending 72° upwards (flipped when its top would leave
+  the map), trimmed 0.13 units at pin ends, arrow tip; `Create` grows them. **Focus**: as
+  `screenshot` — camera on the step's items (country main boxes clipped to the map, pins, arc
+  ends) at most `focus_scale` / 0.6 of the frame, the step's labels, pins and strokes built at
+  1 / magnification; labels built for another camera fade when the camera moves. Animations:
+  the map sweeps west to east (each country's `FadeIn` windowed by its x), highlights fade in,
+  pins drop in, arcs grow, labels follow (`window` rates).
+- **Targets**: `title`, `map` (panel + countries), `legend`, `country:<a3>` / `country:<a2>` /
+  `country:<name>` (one target: a highlight with its label and leader, or a valued country's
+  shape), `pin<N>` / `pin:<label>`, `arc<N>`, `step<N>`. Only countries the params name have
+  targets, so `target_names` stays short and static.
+- Known limits: arcs are drawn on the flat map, not as great circles, and do not wrap; no
+  bundled city list (pins take coordinates or a country); 1:110m drops small states; no
+  graticule; a `world` view in 9:16 is a narrow strip (documented).

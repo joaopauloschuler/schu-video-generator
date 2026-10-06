@@ -61,6 +61,8 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "histogram": {"title": "T", "counts": [1, 3, 2], "edges": [0, 10, 20, 30], "compare": {"counts": [2, 2, 1]}, "mean": True, "median": True},
     "pie": {"title": "T", "labels": ["a", "b"], "values": [3, 1], "donut": True, "legend": True},
     "heatmap": {"title": "T", "rows": ["a", "b"], "columns": ["x", "y"], "values": [[1, 2], [3, 4]]},
+    "map": {"title": "T", "countries": ["France"], "values": {"Spain": 1, "Italy": 2},
+            "steps": [{"pins": [{"lon": 2.35, "lat": 48.86, "label": "Paris"}]}, {"countries": ["Germany"], "arcs": ["Paris -> Germany"]}]},
 }
 #: Built-in types registered under a second name (same class, params and targets).
 ALIASES = {"flowchart": "diagram"}
@@ -163,6 +165,9 @@ def test_target_names_of_every_builtin_type() -> None:
     assert names("heatmap") == ["title", "legend", "row1", "row:a", "row2", "row:b", "col1", "col:x", "col2", "col:y",
                                 "cell1.1", "cell1.2", "cell2.1", "cell2.2"]
     assert names("heatmap", title="", legend=False, rows=[], columns=[]) == ["row1", "row2", "col1", "col2", "cell1.1", "cell1.2", "cell2.1", "cell2.2"]
+    assert names("map") == ["title", "map", "legend", "country:FRA", "country:FR", "country:France", "country:DEU", "country:DE", "country:Germany",
+                            "country:ESP", "country:ES", "country:Spain", "country:ITA", "country:IT", "country:Italy", "pin1", "pin:Paris", "arc1", "step1", "step2"]
+    assert names("map", title="", values={}, countries=[], steps=[["CYN"]]) == ["map", "country:CYN", "country:N. Cyprus", "step1"]
     assert names("table", title="", caption="", header=[]) == ["row1", "row:a", "row2", "row:b", "col1", "col2",
                                                                "cell1.1", "cell1.2", "cell2.1", "cell2.2"]
 
@@ -208,7 +213,7 @@ def test_builtin_scenes_register_their_target_names(kind: str, make_project, med
      ("chapter", "subtitle"), ("stat", ["comparison", "context"]), ("comparison", "col2"), ("table", "row2"), ("timeline", "event2"),
      ("diagram", "edge:a->b"), ("network", ["layer2", "edges1"]), ("scatter", ["series2", "trend"]), ("histogram", ["mean", "median", "compare"]),
      ("pie", "slice2"), ("heatmap", "row2"), ("equation_derivation", "note2"),
-     ("screenshot", "step2"), ("video_clip", "step2")],   # process: its token still moves (test_process_network)
+     ("screenshot", "step2"), ("video_clip", "step2"), ("map", "step2")],   # process: its token still moves (test_process_network)
 )
 def test_early_reveal_is_not_repeated_by_the_scene(kind: str, target: str | list[str], make_project, media: Path) -> None:
     project = load(make_project, [{"id": "s", "type": kind, "params": SAMPLES[kind], "beats": beats([{"reveal": target}], None)}])

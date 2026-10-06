@@ -841,6 +841,118 @@ come out smaller than 0.3 units logs a warning to split it. `null` values are em
     - text: "Evenings are the busiest."
 ```
 
+### `map`
+
+A world map — the 177 countries of Natural Earth's 1:110m admin-0 map (public domain, bundled;
+see THIRD_PARTY_NOTICES.md) in the Equal Earth projection — with highlighted countries, a
+choropleth, pins and flight-path arcs. Borders are Natural Earth's *de facto* representation
+(e.g. Kosovo, N. Cyprus, Somaliland and W. Sahara are shapes of their own); vidgen takes no
+position on disputed boundaries. Countries are named by ISO 3166
+alpha-2 or alpha-3 code (`DE`, `DEU`), English name or a common alias (`USA`, `UK`, `Holland`,
+`Ivory Coast`, `Czech Republic`...); case and accents do not matter, typos get a "did you mean".
+Countries too small for this scale (Singapore, Malta, Bahrain...) are reported by `vidgen
+validate`: mark them with a pin instead.
+
+Beat 1 draws the map (a sweep from west to east; a choropleth's colours with it), the legend,
+the `countries` / `pins` / `arcs` given outside `steps`, and then step 1. **Per-beat data** is
+`steps` (aligned with the beats as in `screenshot` / `code_walkthrough`): step *i* highlights its
+countries (the fill fades to the colour, the label follows), drops its pins and grows its arcs
+at beat *i*. Earlier steps stay. A step with `focus` moves the camera in on its items (labels
+are built for the zoom so they read at their normal size; labels made for another view fade);
+the next step without `focus` moves back. More steps than beats are spread evenly; extra beats
+hold.
+
+- **View**: `auto` (default) fits the highlighted and valued countries, pins and arcs (with a
+  margin; the world when there are none or they span more than 200° of longitude); `world`
+  (without Antarctica unless `antarctica: true`); a region — `europe`, `africa`, `asia`,
+  `middle_east`, `north_america`, `south_america`, `oceania`; or a box `[lon_min, lat_min,
+  lon_max, lat_max]` in degrees (`lon_max < lon_min` crosses the date line, e.g. `[150, -50,
+  -170, 0]`). The view is projected around its middle longitude and grown to the shape of the
+  space (more of the map, not empty bands); a regional view is drawn as a framed panel with the
+  sea in `surface`. In 9:16 a `world` view is a narrow strip: prefer a region or `auto`.
+- **Highlights** fill countries with `highlight_color` (`accent`; `palette`: one theme palette
+  colour per country, in order) or their own `color`, and write their name (`labels`; a
+  country's `label` gives other text, `false` none) on its largest part when it fits, else
+  beside it with a leader line. A country is highlighted once per scene.
+- **Choropleth**: `values` colours countries by a colour scale like `heatmap`'s (`scale`,
+  `color`, `low_color`, `high_color`, `center`, `scale_min`, `scale_max`) with a legend bar below
+  the map (`legend`, `legend_label`, `value_format`, `unit`); countries without a value are
+  fainter land. On a choropleth, highlights are outlines in `highlight_color` (colour is the
+  data).
+- **Pins** `{lon, lat, label}` (degrees, east / north positive) or `{country, label}` (in the
+  middle of the country); **arcs** `{from, to, label}` or `"A -> B"`, where an end is a pin's
+  label, a country or `[lon, lat]`. Arcs bend upwards (downwards near the top of the map), grow
+  from `from` to an arrowhead at `to` and stop short of pins. Arcs are drawn on the flat map,
+  not along great circles, and do not wrap round the date line.
+- **Labels** sit on plates of the background colour (readable on any fill), at `label_size`
+  (never below the readable minimum), placed clear of each other and of pins.
+
+[Action targets](#beat-actions): `title`, `map` (every country), `legend`, `country:<code>` (a
+highlighted or valued country: `country:DEU`, `country:DE` or `country:Germany`), `pin<N>`,
+`pin:<label>`, `arc<N>`, `step<N>` (a step's items).
+
+| param | type | default | |
+|---|---|---|---|
+| `view` | str \| [lon_min, lat_min, lon_max, lat_max] | `auto` | `auto`, `world`, `europe`, `africa`, `asia`, `middle_east`, `north_america`, `south_america`, `oceania`, or a box |
+| `countries` | list[str \| {country, color, label}] | `[]` | highlighted in beat 1 |
+| `pins` | list[{lon, lat, label, color} \| {country, label, color}] | `[]` | shown in beat 1 |
+| `arcs` | list[{from, to, label, color} \| "A -> B"] | `[]` | drawn in beat 1 |
+| `steps` | list[{countries, pins, arcs, focus} \| list of countries \| country] | `[]` | step *i* at beat *i* |
+| `values` | {country: number} | `{}` | choropleth |
+| `labels` | bool | `true` | names on highlighted countries |
+| `highlight_color` | color \| `palette` | `accent` | highlight fill (outline on a choropleth) |
+| `land_color` | color | `dim` | land, shown faint over the background |
+| `pin_color`, `arc_color` | color | `highlight` | defaults for pins / arcs |
+| `antarctica` | bool | `false` | draw Antarctica (the `world` view reaches the pole) |
+| `scale` | `auto` \| `sequential` \| `diverging` | `auto` | choropleth colour scale (as `heatmap`) |
+| `color` | color | `primary` | sequential: the highest values |
+| `low_color`, `high_color` | color | `primary`, `accent` | diverging: below / above `center` |
+| `center` | float | `0` | diverging: the neutral value |
+| `scale_min`, `scale_max` | float | from the data | ends of the scale |
+| `value_format`, `unit` | str | automatic, `""` | legend ticks |
+| `legend` | bool | `true` | the colour bar under a choropleth |
+| `legend_label` | str | `""` | its title (`millions`) |
+| `label_size` | size | `caption` | country, pin and arc labels |
+| `focus_scale` | float | `3` | largest magnification of `focus: true` (up to 4) |
+| `title`, `caption` | str | `""` | |
+| `caption_size`, `caption_color` | size, color | `caption`, `dim` | |
+| `title_size`, `title_color` | size, color | `heading`, `text` | |
+
+A step's `focus` is `true` (as close as fits, up to `focus_scale`) or a magnification (more
+than 1, up to 4).
+
+```yaml
+- id: offices
+  type: map
+  params:
+    title: "Our offices"
+    view: europe
+    steps:
+      - [Germany, France]                                    # beat 1: two countries
+      - pins: [{lon: -0.13, lat: 51.51, label: London}, {lon: 13.4, lat: 52.52, label: Berlin}]
+        arcs: ["London -> Berlin"]                           # beat 2: pins and an arc
+      - countries: [{country: NL, label: "Amsterdam HQ"}]
+        focus: true                                          # beat 3: the camera moves in
+  beats:
+    - text: "We started in Germany and France."
+    - text: "Then London and Berlin, linked by a weekly flight."
+    - text: "Our new head office is in the Netherlands."
+```
+
+```yaml
+- id: people
+  type: map
+  params:
+    title: "Population"
+    view: europe
+    values: {Germany: 83, France: 68, Italy: 59, Spain: 48, Poland: 37, UK: 67}
+    legend_label: "millions"
+    steps: [[], [Germany]]                                   # beat 2 outlines Germany
+  beats:
+    - text: "Europe's largest countries by population."
+    - text: "Germany has the most people."
+```
+
 ### `image`
 
 Steps: (1) the image, (2) the caption. `vidgen validate` reports a missing or unsupported file
@@ -1990,6 +2102,7 @@ a title card, a `transform` of a bar).
 | `histogram` | `title`, `axes`, `legend`, `bin<N>`, `bin:<range>`, `compare`, `mean`, `median` | reveal, dim, highlight, zoom | `bin:10-20` names a bin by its edges; `legend` and `compare` with `compare`; `mean` / `median` when set |
 | `pie` | `title`, `slice<N>`, `slice:<label>`, `center`, `legend` | reveal, dim, highlight, zoom | a slice is its wedge, label and leader line (a `box` frames the wedge); `slice:Other` after grouping; `center` with a donut, `legend` with the names in a legend (revealing it reveals every slice); `dim` fades a slice with its label, so dark text on a bright slice gets faint (lint `contrast`): the `highlight` param dims the others readably |
 | `heatmap` | `title`, `legend`, `row<N>`, `row:<label>`, `col<N>`, `col:<label>`, `cell<R>.<C>` | reveal, dim, highlight, zoom | a row / column is its cells and label (`box` and `fill` cover its cells edge to edge); `cell2.3` is row 2, column 3; use `highlight` with `style: box` (`color` paints the cells and their values alike, `fill` tints them); as for `pie`, `dim` fades values with their cells, the `highlight` param dims readably |
+| `map` | `title`, `map`, `legend`, `country:<code>`, `pin<N>`, `pin:<label>`, `arc<N>`, `step<N>` | reveal, dim, highlight, zoom | `country:` for highlighted and valued countries, by alpha-3, alpha-2 or name (`country:DEU`, `country:DE`, `country:Germany`): a highlight with its label (revealing it plays its highlight), a valued country its shape; a pin is its dot and label; `step2` is step 2's items (revealing it plays the step); `zoom: country:FRA` looks closer; `dim: map` fades the countries under the highlights |
 | `image` | `image`, `caption` | dim, highlight, zoom | `dim` fades the picture, `highlight` tints it |
 | `screenshot` | `title`, `image`, `callout<N>`, `callout:<label>`, `step<N>` | reveal, dim, zoom | a callout is its mark and label; `callout:New task`; `step2` is step 2's callouts (revealing it plays the step); `zoom: callout3` looks closer; `dim: image` fades the picture under the callouts |
 | `video_clip` | `title`, `clip`, `caption`, `callout<N>`, `callout:<label>`, `step<N>` | reveal, dim, highlight, zoom | as in `screenshot`; `clip` is the moving picture with its frame: `dim` fades it, `highlight` tints it, `zoom` looks closer (it is decoded sharper for that) |

@@ -20,7 +20,7 @@ from vidgen.render.worker import frame_size
 from vidgen.scenes.code import parse_line_spec
 from vidgen.theme import Theme
 
-BUILTINS = ["bar_chart", "bullets", "chapter", "code", "code_walkthrough", "comparison", "diagram", "end_card", "equation", "equation_derivation", "flowchart", "heatmap", "histogram", "icon_grid", "image", "line_chart", "network", "pie", "process", "quote", "scatter", "screenshot", "stat", "table", "text_card", "timeline", "title", "video_clip"]
+BUILTINS = ["bar_chart", "bullets", "chapter", "code", "code_walkthrough", "comparison", "diagram", "end_card", "equation", "equation_derivation", "flowchart", "heatmap", "histogram", "icon_grid", "image", "line_chart", "map", "network", "pie", "process", "quote", "scatter", "screenshot", "stat", "table", "text_card", "timeline", "title", "video_clip"]
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "minimal"
 FPS = 5
 
@@ -58,6 +58,8 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "scatter": {"title": "Points", "series": {"a": [[1, 2], [2, 3.5, "two"], [3, 3]], "b": [[1.5, 1], [2.5, 2]]}, "trend": "each", "trend_label": "both", "highlight": ["two"], "x_label": "x"},
     "histogram": {"title": "Spread", "values": [1, 2, 2, 3, 3, 3, 4, 4, 5, 7], "mean": True, "median": True, "compare": {"name": "b", "values": [2, 3, 4, 4, 5, 6]}, "highlight": [1]},
     "pie": {"title": "Shares", "labels": ["a", "b", "c", "d", "e"], "values": [50, 25, 15, 6, 4], "donut": True, "center_label": "total", "other_below": 10, "highlight": "b"},
+    "map": {"title": "World", "view": "world", "countries": ["USA"], "values": {"Brazil": 3, "India": 5}, "legend_label": "v",
+            "steps": [["Germany", "FR"], {"pins": [{"lon": 2.35, "lat": 48.86, "label": "Paris"}], "arcs": ["Paris -> Japan"], "focus": True}]},
     "heatmap": {"title": "Grid", "rows": ["r1", "r2"], "columns": ["c1", "c2", "c3"], "values": [[1, -2, 3], [None, 0.5, -1]], "legend_label": "v", "highlight": ["row:r2"]},
 }
 

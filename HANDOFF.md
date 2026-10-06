@@ -3203,3 +3203,106 @@ How to test: `/home/claude/venv/bin/python -m pytest -q` (1546 passed, 1 skipped
 only: `pytest tests/test_video_clip.py`. Manual: `vidgen storyboard examples/minimal --scene clip --per-beat 2
 [--variant vertical|light]`, `vidgen lint examples/minimal --scene clip [--variant ...]`,
 `vidgen list-scenes`, `vidgen schema --scene video_clip`, `python tools/make_clip.py`.
+
+## Step 36 — Scene: `map`
+What was built
+- **Bundled world map** `src/vidgen/data/geo/world-110m.json` (132 KB, package data `data/geo/*`):
+  Natural Earth 1:110m admin-0 countries (public domain), 177 countries with ISO 3166-1 alpha-2 /
+  alpha-3 codes (Kosovo `XK`/`XKX`; N. Cyprus `CYN` and Somaliland `SOL` from Natural Earth's
+  ADM0_A3, no alpha-2), short English names, aliases, a label point and a "main" box per country,
+  and a `small` list of the 75 ISO countries too small for this scale. Built reproducibly
+  (byte-identical twice) by the maintainer script `tools/make_world_map.py` from npm `world-atlas`
+  2.0.2 (TopoJSON; its ids are ISO numeric codes) and `i18n-iso-countries` 7.14.0 (codes, English
+  names and aliases); details in DESIGN §39, licences in THIRD_PARTY_NOTICES.md.
+- **`vidgen.geo`** (no manim; public in `vidgen.api`): `find_country(name)` → `Country` (codes,
+  names, aliases such as `USA`, `UK`, `Holland`, `Ivory Coast`, `DRC`; accents / case /
+  punctuation ignored; did-you-mean; "too small for the 1:110m map, use a pin"),
+  `world_countries(antarctica=True)`, `equal_earth(lon, lat, lon0)`, `MAP_VIEWS` (world, europe,
+  africa, asia, middle_east, north_america, south_america, oceania), `view_box(view)` (boxes over
+  the date line), `fit_view(points)` (padded box, over the date line when narrower, world when
+  > 200°), `MapView(box, area)` (projected around the middle longitude, grown to the area's
+  aspect within the world, fitted; `region`, `point`, `contains`, `polygons` clipped to the view,
+  `box_region`, `cropped`). Projected polygons are cached per centre longitude: a world view
+  builds ~280 polygons in ~25 ms, again in ~6 ms.
+- **`map` scene** (`src/vidgen/scenes/world_map.py`): `view` (`auto` default: fits highlighted /
+  valued countries, pins and arcs), top-level `countries` / `pins` / `arcs` (shown with the map in
+  beat 1) and per-beat `steps` (`{countries, pins, arcs, focus}`, a list of countries or one
+  country; step *i* at beat *i*, as in `screenshot`). Highlights fill (`highlight_color`, own
+  `color`, or `palette`) with the country's name on it or beside it with a leader (`labels`,
+  per-country `label`); choropleth `values` with `heatmap`'s colour-scale params and a legend bar
+  under the map (highlights become outlines there; countries without a value are fainter);
+  pins `{lon, lat, label}` / `{country, label}`; arcs `{from, to, label}` / `"A -> B"` (ends: pin
+  label, country, `[lon, lat]`) bending upwards, trimmed at pins, growing to an arrowhead; labels on
+  background plates, placed clear of each other and of pins; `focus` moves the camera onto a step
+  (its labels built for the zoom; labels of other views fade). A regional view is a framed panel
+  with the sea in `surface`. The map sweeps in west to east. Targets `title`, `map`, `legend`,
+  `country:<code>` (alpha-3, alpha-2 or name; highlighted and valued countries), `pin<N>`,
+  `pin:<label>`, `arc<N>`, `step<N>`; row in the CONFIG.md targets table.
+- `examples/minimal`: `reach` scene (Europe; Portugal, Germany, Poland; then Lisbon and Warsaw pins
+  with an arc) after `busy`, plus a storyboard usage line.
+
+Verification
+- Scratch project (world view with steps, pins and a London → Tokyo arc; Europe choropleth with a
+  legend, an outline highlight and a focus step on Belgium + Netherlands; an `auto` view of
+  Iberia with pins and a labelled arc) storyboarded in 16:9, `--variant vertical` and
+  `light_academic`; sheets read with Read. Fixed along the way: a world view drawn as a panel
+  (sampled edges missed the equator: `cropped` with a 1 % tolerance), the hard clip edge of
+  regional views (→ framed panel with the sea), pin labels overlapping other labels (the pin's own
+  box was dropped together with labels touching it), a leader line drawn over another label
+  (lint `covered_text` in 9:16: leaders now under all plates), arcs ending under the pin dot
+  (trimmed), no-data land darker than low choropleth values on light presets (fainter mix),
+  merged blobs of neighbouring highlights (thicker borders on highlights).
+- `vidgen lint examples/minimal --scene reach` in all 8 variants (default, vertical, light,
+  contrast, editorial, neutral, pastel, neon): 0 findings; scratch project 0 findings in 16:9 and
+  light, the 9:16 leader finding fixed. Sheets of `reach` read in 16:9 (`--per-beat 3`), vertical,
+  light and contrast. A `slow` test lints a world + choropleth/focus project at 320x180 and 180x320.
+
+Files
+- New: `src/vidgen/geo.py`, `src/vidgen/data/geo/world-110m.json`, `src/vidgen/scenes/world_map.py`,
+  `tools/make_world_map.py`, `tests/test_world_map.py` (69 tests, 8 render incl. one `slow` lint).
+- Changed: `src/vidgen/api.py` (exports), `src/vidgen/scenes/__init__.py`, `pyproject.toml`
+  (package data); `examples/minimal/video.yaml`; tests `test_builtin_scenes.py` (BUILTINS /
+  SAMPLES), `test_actions_coverage.py` (SAMPLES, target names, early `step2` reveal),
+  `test_extensions.py` (known types); docs/CONFIG.md (`map` section, targets row),
+  docs/EXTENDING.md ("Maps" building block with an example rendered by a test), README,
+  THIRD_PARTY_NOTICES.md ("World map"), DESIGN.md (§2, §6.4, new §39), tasklist.md.
+
+Public interfaces added/changed
+- `vidgen.api`: `MAP_VIEWS`, `Country`, `MapView`, `equal_earth`, `find_country`, `fit_view`,
+  `view_box`, `world_countries` (DESIGN §39). Built-in scene type `map` (module `world_map`, not
+  `map`, to keep the builtin name unshadowed). No other change.
+
+Decisions / deviations
+- **Data source**: `world-atlas` lacks alpha codes, so its ISO numeric ids are mapped with
+  `i18n-iso-countries` (also the English aliases) — both on npm; GitHub / naturalearthdata.com were
+  not needed. Our own compact JSON instead of TopoJSON: no decoder at run time, and the antimeridian
+  cuts, orientation and label points are done once.
+- **Equal Earth**, re-centred per view (a Pacific view works); not Robinson (Equal Earth is
+  equal-area and has a closed form). The view grows to the frame's shape (more map, not empty bands);
+  in 9:16 a region therefore shows a lot more land north and south, and a `world` view is a strip.
+- **No city list**: pins take `{lon, lat}` or `{country}` (the roadmap made a city list optional).
+- **Arcs on the flat map**, not great circles: a great circle London → Tokyo leaves a world map at
+  the top and wraps; the flight-path look is the stylised curve.
+- **`country:` targets only for countries the params name** (highlighted or valued): 177 x 3 names
+  would drown the validation message's target list; `map` covers the rest (e.g. `dim: map`).
+- **Highlights are overlays** (copies over the base shape), so `reveal` / `dim` / `zoom` act on them
+  and the base map stays one target.
+- Per-beat data as `steps` aligned with beats (as Steps 32–35); the top-level `countries` / `pins` /
+  `arcs` are the static content of a one-beat map.
+
+Known gaps / TODOs
+- Microstates (Singapore, Malta, Bahrain...) are not in the 1:110m data (error suggests a pin); a
+  1:50m file would be ~750 KB.
+- No graticule, no ocean outline of the Equal Earth "sphere" in the world view, no inset maps
+  (Alaska / Hawaii), no curved country labels; label placement is greedy (label_spot candidates).
+- Arcs do not wrap round the date line (Los Angeles → Tokyo crosses the whole world map; use a
+  Pacific box view).
+- Strokes widen with a `focus` / `zoom` (Manim scales stroke widths with the camera); the focus
+  step's own strokes are built thinner, earlier ones are not.
+- Step 37 (Review 2): storyboard `map` in all presets (done here for the example scene) and decide
+  whether the 9:16 world view should crop the empty Pacific edges to grow.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1621 passed, 1 skipped, ~15 min); step
+only: `pytest tests/test_world_map.py`. Manual: `vidgen storyboard examples/minimal --scene reach --per-beat 3
+[--variant vertical|light]`, `vidgen lint examples/minimal --scene reach [--variant ...]`, `vidgen
+list-scenes`, `vidgen schema --scene map`, `python tools/make_world_map.py` (needs npm).

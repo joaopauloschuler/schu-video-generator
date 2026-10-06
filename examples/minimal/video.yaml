@@ -17,6 +17,7 @@
 #   vidgen storyboard examples/minimal --scene net --per-beat 3     # a network and its forward pass
 #   vidgen storyboard examples/minimal --scene cost --scene beats --per-beat 3  # scatter with a trend; histogram
 #   vidgen storyboard examples/minimal --scene share --scene busy --per-beat 3  # a donut sweeping in; a heatmap
+#   vidgen storyboard examples/minimal --scene reach --per-beat 3   # a map: countries, then pins and an arc
 #   vidgen storyboard examples/minimal --scene walkthrough --per-beat 2  # a listing scrolling from step to step
 #   vidgen storyboard examples/minimal --scene app --per-beat 2     # a screenshot with callouts, step by step
 #   vidgen storyboard examples/minimal --variant light           # same video with the light_academic preset
@@ -325,6 +326,19 @@ scenes:
       - text: "Late afternoon is the busiest time."
         actions:
           - {highlight: "col:17h", style: box}
+
+  - id: reach
+    type: map             # a world map (Natural Earth, bundled): countries step by step, pins, a flight-path arc
+    params:
+      title: "Rendered where you are"
+      view: europe
+      steps:
+        - [Portugal, Germany, Poland]
+        - pins: [{lon: -9.14, lat: 38.72, label: Lisbon}, {lon: 21.01, lat: 52.23, label: Warsaw}]
+          arcs: ["Lisbon -> Warsaw"]
+    beats:
+      - text: "A map highlights countries, one step per beat."
+      - text: "Pins and arcs link places across it."
 
   - id: picture
     type: image

@@ -436,6 +436,34 @@ class ClipAndNote(NarratedScene):
         super().tear_down()
 ```
 
+**Maps.** The bundled world map (Natural Earth 1:110m countries, the data behind the `map`
+scene) is open to project scenes. `find_country(name)` looks a country up by ISO code, name or
+alias and returns a `Country` (`a3`, `a2`, `name`, `label` point and `main` box in lon/lat,
+`polygons`); `world_countries()` lists all 177. `MapView(box, area)` shows a lon/lat box
+(`view_box("europe")`, `view_box([lon_min, lat_min, lon_max, lat_max])`, or `fit_view(points)`
+around some places) in a scene `Region` with the Equal Earth projection (`equal_earth(lon, lat,
+lon0)` is the projection itself): `view.region` is where the map lands, `view.point(lon, lat)` a
+scene point and `view.polygons(country)` the country's polygons in scene points, clipped to the
+view (each a list of rings, the outer ring first). `MAP_VIEWS` holds the named regions.
+
+```python
+@scene("capital")
+class Capital(NarratedScene):
+    outro = 0.5
+
+    def construct(self):
+        view = MapView(view_box("europe"), self.region("body"))
+        land = VGroup(*[
+            Polygon(*rings[0], fill_color=self.theme.color("dim"), fill_opacity=0.35,
+                    stroke_color=self.theme.background, stroke_width=0.8)
+            for country in world_countries(antarctica=False) for rings in view.polygons(country)
+        ])
+        paris = Dot(view.point(2.35, 48.86), radius=0.09, color=self.theme.color("highlight"))
+        name = self.text("Paris", size="caption").next_to(paris, RIGHT, buff=0.12)
+        self.reveal([FadeIn(land), [FadeIn(paris, scale=0.5), FadeIn(name)]])
+        self.finish()
+```
+
 **Timing.** Beat-driven reveals without arithmetic:
 - `self.reveal(steps)` narrates the whole scene: step *i* at beat *i*; more steps than beats are
   spread evenly (`distribute(n_steps, n_beats)` gives the plan), extra beats hold. A step is an

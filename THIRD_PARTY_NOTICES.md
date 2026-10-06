@@ -28,3 +28,43 @@ search tags and aliases are in `src/vidgen/data/icons/manifest.json` (tags from 
 `tags.json` plus some added by vidgen; aliases are Lucide's old names of renamed icons plus a few
 vidgen synonyms); `tools/vendor_icons.py` re-creates the folder (200 icons) and the catalogue
 `docs/ICONS.md` from `tools/icon_set.json`.
+
+## World map
+
+The `map` scene draws countries from `src/vidgen/data/geo/world-110m.json`, made by
+`tools/make_world_map.py` from:
+
+- **Natural Earth** 1:110m Cultural Vectors, Admin 0 – Countries (https://www.naturalearthdata.com).
+  Natural Earth data is in the **public domain**; no permission is needed to use, modify or
+  redistribute it. "Made with Natural Earth" is appreciated. Country borders are Natural Earth's
+  *de facto* representation; vidgen takes no position on disputed boundaries.
+- obtained as TopoJSON from the npm package **`world-atlas`** 2.0.2 (`countries-110m.json`),
+  © 2013-2019 Michael Bostock, **ISC License**:
+
+  > Permission to use, copy, modify, and/or distribute this software for any purpose with or
+  > without fee is hereby granted, provided that the above copyright notice and this permission
+  > notice appear in all copies. THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL
+  > WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
+  > FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR
+  > CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+  > WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
+  > CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+- ISO 3166-1 alpha-2 / alpha-3 codes and English country names and aliases from the npm package
+  **`i18n-iso-countries`** 7.14.0, © 2016 widdix GmbH, **MIT License**:
+
+  > Permission is hereby granted, free of charge, to any person obtaining a copy of this software
+  > and associated documentation files (the "Software"), to deal in the Software without
+  > restriction, including without limitation the rights to use, copy, modify, merge, publish,
+  > distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the
+  > Software is furnished to do so, subject to the following conditions: The above copyright
+  > notice and this permission notice shall be included in all copies or substantial portions of
+  > the Software. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  > IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+  > PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+  > LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+  > OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+  > DEALINGS IN THE SOFTWARE.
+
+The geometry was converted (antimeridian cuts, ring orientation, coordinates rounded to 0.01°)
+and label points and aliases were added; the `source` entry of the file records this.

@@ -58,6 +58,7 @@ from vidgen.charts import (  # noqa: E402
     value_axis,
 )
 from vidgen.errors import VidgenError  # noqa: E402
+from vidgen.geo import MAP_VIEWS, Country, MapView, equal_earth, find_country, fit_view, view_box, world_countries  # noqa: E402
 from vidgen.graph import EdgeRoute, GraphEdge, GraphLayout, GraphNode, NodePlace, layered_layout  # noqa: E402
 from vidgen.helpers import MT, T, column, counter, dense_pairs, edges, group_bounds, grouped_pairs, resolve_color, sparse_pairs  # noqa: E402
 from vidgen.hooks import HookContext, hook  # noqa: E402
@@ -252,6 +253,14 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "clip_audio",
     "fit_speed",
     "probe_clip",
+    "MAP_VIEWS",
+    "Country",
+    "MapView",
+    "equal_earth",
+    "find_country",
+    "fit_view",
+    "view_box",
+    "world_countries",
     "Field",
     "field_validator",
     "model_validator",
