@@ -34,4 +34,5 @@ from vidgen.scenes import (  # noqa: F401
     text_card,
     timeline,
     title,
+    video_clip,
 )

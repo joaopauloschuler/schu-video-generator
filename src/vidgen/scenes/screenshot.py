@@ -9,7 +9,7 @@ The callouts are drawn by the public helpers of ``vidgen.api`` (``callout_box``,
 
 import logging
 from collections.abc import Callable
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 
 import numpy as np
 from PIL import Image as PILImage
@@ -148,6 +148,8 @@ class Screenshot(NarratedScene):
 
     outro = 0.5
     target_patterns = ("title", "image", "callout<N>", "callout:<label>", "step<N>")
+    #: Target name of the picture (with its frame).
+    picture_name: ClassVar[str] = "image"
 
     class Params(SceneParams):
         path: str
@@ -170,6 +172,8 @@ class Screenshot(NarratedScene):
         """What happens to the callouts of a step when the next one starts: fade (go), dim (marks faint, labels gone), keep (stay)."""
         focus_scale: float = Field(default=2.0, gt=1.0, le=4.0)
         """Largest magnification of focus: true."""
+        #: What callout areas are fractions of (in messages).
+        picture_word: ClassVar[str] = "image"
 
         @model_validator(mode="after")
         def _fractions(self) -> SceneParams:
@@ -179,7 +183,7 @@ class Screenshot(NarratedScene):
                 for j, c in enumerate(step.callouts):
                     a = c.area
                     if any(v > 1 for v in a) or (len(a) == 4 and (a[0] + a[2] > 1.0001 or a[1] + a[3] > 1.0001)):
-                        raise ValueError(f"steps[{k}].callouts[{j}].area: {a} is not inside the image (fractions 0-1; use units: px for pixels)")
+                        raise ValueError(f"steps[{k}].callouts[{j}].area: {a} is not inside the {self.picture_word} (fractions 0-1; use units: px for pixels)")
             return self
 
         def callouts(self) -> list[tuple[int, CalloutSpec]]:
@@ -190,7 +194,7 @@ class Screenshot(NarratedScene):
     def target_names(cls, params: Any) -> list[str]:
         """``title`` (if any), ``image``, ``callout<N>`` (+ ``callout:<label>``) per callout and
         ``step<N>`` per step with callouts."""
-        names = (["title"] if params.title else []) + ["image"]
+        names = (["title"] if params.title else []) + [cls.picture_name]
         for n, (_, c) in enumerate(params.callouts(), start=1):
             names += [f"callout{n}"] + ([f"callout:{c.label}"] if c.label.strip() else [])
         return names + [f"step{k + 1}" for k, step in enumerate(params.steps) if step.callouts]
@@ -231,7 +235,7 @@ class Screenshot(NarratedScene):
         self._camera_at: tuple[float, tuple[float, float]] | None = None
 
         def intro() -> list[Animation]:
-            return self.entrance("image") + (self.entrance("title") if title is not None else [])
+            return self.entrance(self.picture_name) + (self.entrance("title") if title is not None else [])
 
         steps: list[Callable[[], list[Animation]]] = [(lambda k=k: self._step(k)) for k in range(len(p.steps))]
         plan = distribute(len(steps), len(self.beats))
@@ -241,9 +245,10 @@ class Screenshot(NarratedScene):
 
     # ----- layout ------------------------------------------------------------------------------
 
-    def _layout(self, body: Region) -> Mobject:
+    def _layout(self, body: Region, fill: bool = False) -> Mobject:
         """Fit the picture (and its frame) into ``body`` with room around it for labels; returns
-        the picture's group (frame behind, image, frame outline, title bar parts)."""
+        the picture's group (frame behind, image, frame outline, title bar parts). ``fill``: the
+        picture takes all the room (its aspect ratio changes; the caller crops it to match)."""
         p = self.params
         img = self._img
         aspect = img.width / img.height
@@ -263,6 +268,9 @@ class Screenshot(NarratedScene):
             side, top, bottom, _ = chrome_sizes(p.frame, width, bar)
             k_side, k_vert = (0.1, 0.22) if p.frame == "phone" else (0.0, 0.0)
             fixed = 0.0 if p.frame == "phone" else top + bottom
+            if fill:
+                widest = room.width / (1 + k_side)
+                aspect = widest / max(room.height - fixed - k_vert * widest, 0.1)
             width = min(room.width / (1 + k_side), (room.height - fixed) / (1 / aspect + k_vert))
         side, top, bottom, radius = chrome_sizes(p.frame, width, bar)
         height = width / aspect
@@ -326,8 +334,13 @@ class Screenshot(NarratedScene):
         y = float(np.clip((y0 + y1) / 2, (h - fh) / 2, (fh - h) / 2))
         return w, (x, y)
 
+    def _spec_area(self, c: CalloutSpec) -> tuple[list[float], str]:
+        """A callout's area as written to the callout helpers, with its units."""
+        return c.area, self.params.units
+
     def _area(self, c: CalloutSpec) -> Region:
-        return callout_area(c.area, self._img, units=self.params.units)
+        area, units = self._spec_area(c)
+        return callout_area(area, self._img, units=units)
 
     def _bounds(self, k: int) -> tuple[Region, float]:
         """Where step ``k``'s labels may go and the scale they are built at (1 / magnification)."""
@@ -359,18 +372,19 @@ class Screenshot(NarratedScene):
             order = sorted(range(len(step.callouts)), key=lambda j: step.callouts[j].kind != "spotlight")
             for j in order:
                 c = step.callouts[j]
+                area, units = self._spec_area(c)
                 options: dict[str, Any] = {
-                    "units": p.units, "color": c.color or p.color, "label_size": p.label_size, "side": c.side,
+                    "units": units, "color": c.color or p.color, "label_size": p.label_size, "side": c.side,
                     "bounds": bounds, "avoid": avoid, "scale": scale, "theme": self.theme,
                 }
                 if c.kind == "magnifier":
-                    made = callout_magnifier(c.area, c.label, image=self._img, zoom=c.zoom, **options)
+                    made = callout_magnifier(area, c.label, image=self._img, zoom=c.zoom, **options)
                 elif c.kind == "arrow":
-                    made = callout_arrow(c.area, c.label, within=self._img, curved=c.curved, prefer_off=self._picture, **options)
+                    made = callout_arrow(area, c.label, within=self._img, curved=c.curved, prefer_off=self._picture, **options)
                 elif c.kind == "spotlight":
-                    made = callout_spotlight(c.area, c.label, within=self._img, **options)
+                    made = callout_spotlight(area, c.label, within=self._img, **options)
                 else:
-                    made = callout(c.kind, c.area, c.label, within=self._img, **options)
+                    made = callout(c.kind, area, c.label, within=self._img, **options)
                 made.set_z_index(1 if c.kind == "spotlight" else 2)  # over the picture; shades under any callout
                 mine[j] = made
                 avoid = avoid + [made.extent()]
@@ -384,8 +398,7 @@ class Screenshot(NarratedScene):
         p = self.params
         if title is not None:
             self.target("title", title, entrance=lambda: [FadeIn(title, shift=DOWN * 0.1)])
-        picture = self._picture
-        self.target("image", picture, entrance=lambda: [FadeIn(picture, scale=0.97)])
+        self.target(self.picture_name, self._picture, entrance=self._picture_entrance)
         self._numbered: list[tuple[int, Callout]] = []
         for k, step in enumerate(p.steps):
             spec_order = list(step.callouts)
@@ -398,6 +411,9 @@ class Screenshot(NarratedScene):
                 self.target(names, m, entrance=lambda k=k, m=m: self._callout_entrance(k, m))
             if made:
                 self.target(f"step{k + 1}", Group(*made), entrance=lambda k=k: self._arrive(k))
+
+    def _picture_entrance(self) -> list[Animation]:
+        return [FadeIn(self._picture, scale=0.97)]
 
     @staticmethod
     def _match(specs: list[CalloutSpec], made: list[Callout]) -> list[Callout]:

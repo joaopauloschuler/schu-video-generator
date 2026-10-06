@@ -967,6 +967,102 @@ step, with the camera); a step whose callouts are all on screen already is skipp
 Project scenes draw the same callouts with the `callout_*` helpers of `vidgen.api`
 ([EXTENDING.md](EXTENDING.md#2-building-blocks-params-layout-timing-validation), "Callouts").
 
+### `video_clip`
+
+A **video file** — B-roll, a screen recording — played inside the scene while the narration
+runs: framed in a layout region (optionally in a `browser` / `window` / `phone` frame as in
+[`screenshot`](#screenshot), with a title above and a caption below) or full-bleed, with
+**callouts** drawn over it step by step exactly as in `screenshot` (same `steps`, kinds, `previous`,
+`focus`; no `magnifier`, which needs a still picture). Steps: (1) the clip (with its title and
+caption) and then step 1's callouts, (*i*) step *i*'s callouts. Files: mp4, mov, m4v, webm, mkv
+(anything FFmpeg decodes); `vidgen validate` reports a missing, unsupported or unreadable file, a
+`trim` past the clip's end and pixel areas outside its picture.
+
+**Timing contract.** The narration sets the scene's length, never the clip: the scene lasts its
+beats (+ `narration.pad` each, as every scene) plus the 0.5 s fade-out, or a silent scene's
+`duration`. The clip starts playing when the scene starts (it fades in while playing) and plays
+`trim: [start, end]` (default: all of it) at `speed` through every beat. One pass takes
+`(end - start) / speed` seconds on screen; when the scene is longer the clip starts again with
+`loop: true`, otherwise its **last frame holds** (a warning names the hold when it is longer than
+2 s, and `vidgen lint`'s `dead_air` reports a hold over 6 s, as it reports any still picture);
+when the scene is shorter the clip is cut by the fade-out. `fit_duration: true` picks the speed
+that makes one pass last exactly as long as the narration, kept within `fit_range` (default
+`[0.5, 2.0]`, so a clip is never sped up or slowed down beyond recognition; outside it the clip
+holds or is cut as above).
+
+**Sound.** The clip's own sound plays as the picture does (trimmed, at its speed with its pitch
+kept, looped, silent while the last frame holds) and is mixed **under the narration** into the
+scene's sound: `volume` 0.25 by default in a narrated scene, 1 in a silent one; `mute: true` (or
+`volume: 0`) leaves it out. It fades out with the picture. There is no ducking: keep `volume` low
+under speech.
+
+**Layout.** `region` is a layout region ([`vidgen.api.region`](EXTENDING.md#2-building-blocks-params-layout-timing-validation)) for the clip below the title: `body`
+(default) or `full` (all the room below the title), `hero`, `left`, `right` (upper / lower half in
+9:16), `top`, `bottom`, `center` — or `bleed`, the whole frame edge to edge, with the title and the
+caption on plates in the theme's `surface` colour over the picture (no `frame` then). `fit:
+contain` shows the whole picture as large as fits; `cover` fills the region (or the frame),
+cutting the picture's excess equally from both sides — a 16:9 clip in a 9:16 frame keeps only its
+middle with `region: bleed, fit: cover`, while `contain` leaves bands above and below.
+
+**Callout areas** are `[x, y, w, h]` (or a point `[x, y]`) from the top-left corner of the clip's
+**whole picture**, as fractions or, with `units: px`, in its pixels — also with `fit: cover`, so a
+callout stays on the same thing whichever part is shown (a warning names callouts outside the part
+`cover` shows). Callouts stay put while the picture moves: point at things that stay there, or
+give the step its own beat.
+
+Decoding: frames are read with PyAV as the render reaches them, scaled once to the size shown
+(sharper when a `focus` step or a `zoom` action will look closer, up to the clip's own pixels) and
+not kept in memory; stills, the layout dump and `vidgen lint` see the clip as an image, and the
+clip's motion counts as activity for `dead_air`. Rotation metadata (phone videos) is not applied.
+
+[Action targets](#beat-actions): `title`, `clip` (the picture with its frame), `caption`,
+`callout<N>`, `callout:<label>`, `step<N>` (as in `screenshot`). `dim: clip` fades the moving
+picture, `highlight: clip` tints it, `zoom: clip` looks closer.
+
+| param | type | default | |
+|---|---|---|---|
+| `path` | str | required | relative to the project folder, e.g. `assets/demo.mp4` |
+| `title` | str | `""` | heading above the clip (on a plate with `region: bleed`) |
+| `caption` | str | `""` | line under the clip (on a plate at the bottom with `region: bleed`) |
+| `caption_size`, `caption_color` | size, color | `caption`, `text` | |
+| `region` | `body` \| `full` \| `hero` \| `left` \| `right` \| `top` \| `bottom` \| `center` \| `bleed` | `body` | where the clip goes (see above) |
+| `fit` | `contain` \| `cover` | `contain` | whole picture, or fill the region / frame (cropped) |
+| `trim` | [start, end] | the whole clip | seconds of the file that play |
+| `speed` | number (0.25–4) | `1.0` | playback speed; the sound keeps its pitch |
+| `fit_duration` | bool | `false` | choose the speed so one pass lasts as long as the narration (not with `speed`) |
+| `fit_range` | [slowest, fastest] | `[0.5, 2.0]` | limits of `fit_duration` (within 0.25–4) |
+| `loop` | bool | `false` | start again when the scene outlasts the clip (else the last frame holds) |
+| `volume` | number (0–2) | 0.25 narrated, 1 silent | the clip's own sound, under the narration |
+| `mute` | bool | `false` | leave the clip's sound out |
+| `steps` | list | `[]` | step *i* at beat *i*: a callout, a list of callouts, or `{callouts, focus, previous}` ([`screenshot`](#screenshot); kinds `box`, `circle`, `arrow`, `spotlight`) |
+| `frame`, `url` | `none` \| `browser` \| `window` \| `phone`, str | `none`, `""` | a frame drawn around the clip (not with `bleed`); `url` for `browser` |
+| `units` | `fraction` \| `px` | `fraction` | how callout areas are written (of the whole picture) |
+| `color`, `label_size` | color, size | `highlight`, `caption` | callout colour and label size |
+| `previous` | `fade` \| `dim` \| `keep` | `fade` | what happens to a step's callouts when the next starts |
+| `focus_scale` | number (1–4) | `2.0` | largest magnification of `focus: true` |
+
+```yaml
+- id: clip
+  type: video_clip
+  params:
+    title: "Clips play under the narration"
+    path: assets/clip.webm
+    frame: window
+    caption: "A generated test pattern, looping"
+    loop: true
+    steps:
+      - {box: [0.0, 0.0, 0.21, 0.14], label: "Time code"}
+      - {arrow: [0.92, 0.45], label: "Colour bars", curved: true}
+  beats:
+    - text: "Video clips play inside a scene, and the narration sets how long they run."
+    - text: "Callouts work on moving pictures too, one step per beat."
+- id: broll
+  type: video_clip
+  params: {path: assets/city.mp4, region: bleed, fit: cover, trim: [12, 20], fit_duration: true, mute: true}
+  beats:
+    - text: "Full-bleed B-roll, trimmed and stretched over the sentence."
+```
+
 ### `quote`
 
 Steps: (1) quote mark and text, (2) attribution. Quote characters around `text` are removed;
@@ -1896,6 +1992,7 @@ a title card, a `transform` of a bar).
 | `heatmap` | `title`, `legend`, `row<N>`, `row:<label>`, `col<N>`, `col:<label>`, `cell<R>.<C>` | reveal, dim, highlight, zoom | a row / column is its cells and label (`box` and `fill` cover its cells edge to edge); `cell2.3` is row 2, column 3; use `highlight` with `style: box` (`color` paints the cells and their values alike, `fill` tints them); as for `pie`, `dim` fades values with their cells, the `highlight` param dims readably |
 | `image` | `image`, `caption` | dim, highlight, zoom | `dim` fades the picture, `highlight` tints it |
 | `screenshot` | `title`, `image`, `callout<N>`, `callout:<label>`, `step<N>` | reveal, dim, zoom | a callout is its mark and label; `callout:New task`; `step2` is step 2's callouts (revealing it plays the step); `zoom: callout3` looks closer; `dim: image` fades the picture under the callouts |
+| `video_clip` | `title`, `clip`, `caption`, `callout<N>`, `callout:<label>`, `step<N>` | reveal, dim, highlight, zoom | as in `screenshot`; `clip` is the moving picture with its frame: `dim` fades it, `highlight` tints it, `zoom` looks closer (it is decoded sharper for that) |
 | `quote` | `mark`, `quote`, `author`, `source` | reveal, dim, highlight, zoom | |
 | `equation` | `step<N>`, `caption`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each of the `terms` param, in the step on screen; `transform: step1` + `into: step3` jumps ahead |
 | `equation_derivation` | `title`, `step<N>`, `note<N>`, `result`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each part in `terms`, `colors`, `match` or marked `{{ }}`, in the current step only; `step2` is also its dimmed line; `note2` (revealing it plays step 2); `result` is the last step with its box |

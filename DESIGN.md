@@ -72,6 +72,7 @@ src/vidgen/
   regions.py              # layout regions: safe area, named regions, grids, place(), readable text (§18)
   graph.py                # layered layout of directed graphs, pure Python (§31; no manim)
   callouts.py             # callouts: areas, label placement, box, circle, arrow, magnifier, spotlight (§37)
+  clips.py                # video clips: probe, timing, ClipMobject (frames decoded per frame), clip sound (§38)
   charts.py               # chart helpers: ticks, number labels, axes, legend, markers, fit (§33),
                           # colour scales, colour bar, readable text on fills (§34)
   tts/__init__.py         # provider seam: get_provider(cfg)
@@ -84,7 +85,8 @@ src/vidgen/
                           # the built-in beat actions reveal/dim/highlight/zoom/transform, §26-27)
   data/fonts/             # Inter, Source Serif 4, JetBrains Mono NL (.ttf + OFL.txt; package data)
   data/icons/             # manifest.json + lucide/*.svg + lucide/LICENSE (ISC; package data, §22)
-tools/                    # maintainer scripts, not shipped: vendor_icons.py + icon_set.json (§22, §23)
+tools/                    # maintainer scripts, not shipped: vendor_icons.py + icon_set.json (§22, §23),
+                          # make_screenshot.py, make_clip.py (example assets, §37, §38)
 tests/                    # pytest; no network; slow renders marked `render`
 examples/
   minimal/                # config-only example using built-ins
@@ -463,6 +465,8 @@ Step 31 (§34) adds `ColorScale`, `color_scale`, `color_bar`, `mix_colors`, `tex
 Step 34 (§37) adds the callout helpers: `Callout`, `CalloutArea`, `CALLOUT_KINDS`, `callout`,
 `callout_area`, `callout_box`, `callout_circle`, `callout_arrow`, `callout_magnifier`,
 `callout_spotlight`, `callout_label`, `label_spot`.
+Step 35 (§38) adds the video clip helpers: `CLIP_SUFFIXES`, `ClipInfo`, `ClipMobject`,
+`ClipTiming`, `clip_audio`, `fit_speed`, `probe_clip`.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -2247,3 +2251,64 @@ using the existing renders of the others (missing ones are rendered). Exit code 
   written order; entrance: `draw()`, or the step for a focus step not yet zoomed), `step<N>`
   (entrance: the step). A step whose callouts are all on screen (an early `reveal`) is skipped.
 
+## 38. Refinements (Step 35, `video_clip`)
+
+- **Approach: frames decoded inside Manim, not composited by ffmpeg afterwards.** Compositing a
+  clip into the rendered scene with ffmpeg would be faster, but stills (§13), the layout dump
+  (§15), lint (§16, §17), callouts, camera moves and beat actions would never see it. Instead the
+  clip is a mobject drawn by the camera on every frame, so everything that works on an image works
+  on a clip. Cost: a full-bleed 854x480 preview renders at ~0.6 s per second of video (Manim's
+  image drawing and encoding dominate; decoding and scaling a frame takes ~2 ms).
+- **`ClipMobject(ImageMobject)`** (`vidgen/clips.py`, exported by `vidgen.api`). Its picture is the
+  frame at the scene's clock: `play(scene, at=None)` ties a shared `_Playback` (reader, timing,
+  crop, decode size, clock) to `scene.renderer.time`; `get_pixel_array()` (what the camera draws)
+  asks the reader for the frame at `timing.source_time(now - start)`. A time-based no-op updater
+  makes Manim treat it as moving (redrawn every frame; waits are not frozen), so it plays through
+  `play` and `wait` alike. `Mobject.copy` (deepcopy) shares the playback (`_Playback.__deepcopy__`
+  returns itself), so the copies `FadeIn` / `Transform` make show the same moving picture.
+- **Modulation.** Manim's animations and vidgen's `dim` / `highlight` actions change an image's
+  `pixel_array`. For a clip that array is a 1 x 2 *modulation* — a black and a white RGBA pixel —
+  and every frame is mapped through it affinely (`out = black + frame * (white - black) / 255`,
+  all four channels). Interpolations (`FadeIn`), alpha scaling (`dim`, `set_opacity`) and tints
+  (`highlight`: `p (1 - t) + c t`) are affine per pixel, so they act on the moving picture exactly
+  as on a still. The composed frame is cached per (reader, frame serial, modulation).
+- **Decoding** (`ClipReader`): PyAV, sequential; the frame showing at `t` is the last whose time
+  is ≤ `t` + 2 ms (container time stamps are rounded, WebM to 1 ms); going back (a loop) or more
+  than 2 s ahead seeks to the key frame before `t`. Only the current frame (and its converted
+  picture) is held. Conversion is FFmpeg's scaler (`VideoFrame.to_ndarray(width, height,
+  format="rgba")`) to the decode size of the whole picture, then the crop is sliced out.
+  `set_resolution(scale)` sets the decode size: the size shown × `scale` (focus / zoom), as far as
+  the clip has pixels inside the crop, and never less than the size shown — so at magnification 1
+  the decoded frame has exactly the on-screen size and the camera copies it pixel for pixel:
+  `resampling_algorithm` is a property returning `NEAREST` then (PIL perspective transform ~3 ms
+  vs ~50 ms bicubic at 854x480), else `BILINEAR`.
+- **Timing** (`ClipTiming(start, end, speed, loop)`): `source_time(played) = start + played ×
+  speed`, modulo the span with `loop` (played time rounded to µs, so frame times summed from
+  1/fps wrap exactly), clamped to `end - 5 ms` (`END_GAP`) otherwise — the frame at `end` is never
+  shown, the last one before it holds. `fit_speed(span, window, low, high)` clamps
+  `span / window`. In the scene the clip starts at scene time 0 (it fades in playing); the window
+  is the narration (Σ beat `d + pad`) or a silent scene's `duration - outro`; `fit_duration`
+  speeds one pass to the window within `fit_range`. The scene's length is never changed by the
+  clip (the §5 contract): a longer clip is cut by the fade-out (log info), a shorter one holds its
+  last frame (warning above 2 s; `dead_air` above 6 s) unless it loops.
+- **Sound** (`clip_audio`): one ffmpeg call writes the clip's sound as it plays — `atrim` to the
+  span, 48 kHz stereo, an `atempo` chain for the speed (each factor 0.5–2; pitch kept), padded /
+  cut to exactly one pass in samples (so loops stay in step with the picture), `volume`, `aloop`
+  when looping, `apad` + `atrim` to the scene's length, `afade` over the outro — into a temporary
+  WAV that `NarratedScene.add_sound` mixes at scene time 0 (Manim's pydub mix: sounds are summed;
+  narration MP3s are added at their beats). The pipeline pads that mix to the video length as for
+  any scene (§5.2, Step 4). Default volume 0.25 under narration, 1 in a silent scene; no ducking
+  (Step 45). `--no-audio` renders skip it.
+- **`video_clip`** (`scenes/video_clip.py`, a subclass of `screenshot`'s scene class: steps,
+  callouts, focus, `previous`, frames and targets are shared; `screenshot` gained `picture_name`,
+  `_spec_area()` (an area and its units), `_layout(body, fill=)` (cover: the picture takes the
+  room's aspect) and `_picture_entrance()` for it). Params add `caption`, `caption_size`,
+  `caption_color`, `region` (`body | full | hero | left | right | top | bottom | center | bleed`),
+  `fit`, `trim`, `speed`, `fit_duration`, `fit_range`, `loop`, `volume`, `mute`; `magnifier`
+  callouts are rejected (a still inset of a moving picture), `frame` with `bleed` too. Callout
+  areas are written on the clip's whole picture and moved into the `cover` crop (warning when
+  outside it). `bleed` puts title and caption on `surface` plates (z-index 3, over callouts).
+- **Targets**: `title`, `clip`, `caption`, `callout<N>`, `callout:<label>`, `step<N>`.
+- Known limits: rotation metadata is ignored; variable-frame-rate files show the frame whose
+  time stamp precedes the scene time (correct, but uneven if the file is); a file without a
+  stated length is measured from its packets.

@@ -3114,3 +3114,92 @@ How to test: `/home/claude/venv/bin/python -m pytest -q` (1487 passed, 1 skipped
 `pytest tests/test_screenshot.py`. Manual: `vidgen storyboard examples/minimal --scene app --per-beat 2
 [--variant vertical|light]`, `vidgen lint examples/minimal --scene app [--variant ...]`,
 `vidgen list-scenes`, `vidgen schema --scene screenshot`, `python tools/make_screenshot.py`.
+
+## Step 35 — Scene: `video_clip`
+What was built
+- **Clip helpers** (`src/vidgen/clips.py`, public in `vidgen.api`): `probe_clip(path) -> ClipInfo`
+  (width, height, fps, duration, audio; PyAV metadata), `ClipTiming(start, end, speed, loop)`
+  (`source_time(played)`, `span`, `length`), `fit_speed(span, window, low, high)`,
+  `ClipMobject(path, timing)` (an `ImageMobject` showing the frame at the scene's clock:
+  `fit_box(w, h, "contain"|"cover")`, `set_resolution(scale)`, `play(scene, at=None)`,
+  `playback_time()`, `crop`, `info`, `timing`, `close()`), `clip_audio(path, wav, timing, length,
+  volume, fade)` (the clip's sound as it plays, for `add_sound`), `CLIP_SUFFIXES`. Internal:
+  `ClipReader` (sequential PyAV decode, seek on loops / far jumps, one frame held), `atempo_chain`,
+  `END_GAP`.
+- **`video_clip`** scene (`src/vidgen/scenes/video_clip.py`, subclass of `screenshot`'s class):
+  `path`, `trim`, `speed`, `fit_duration` + `fit_range`, `loop` (else the last frame holds),
+  `fit: contain | cover`, `region` (body / full / hero / left / right / top / bottom / center, or
+  `bleed` = the whole frame), `title`, `caption` (+ size / colour; on `surface` plates over a bleed
+  clip), the Step 34 `frame` chrome (`browser` / `window` / `phone`, not with bleed), `volume`
+  (default 0.25 narrated, 1 silent) / `mute`, and `screenshot`'s `steps` of callouts (box, circle,
+  arrow, spotlight; `focus`, `previous`, `units`), areas on the clip's whole picture (moved into the
+  `cover` crop). Targets `title`, `clip`, `caption`, `callout<N>`, `callout:<label>`, `step<N>`.
+- `screenshot` refactored for the subclass (no behaviour change): `picture_name`, `_spec_area()`,
+  `_layout(body, fill=)`, `_picture_entrance()`, `Params.picture_word` (message wording).
+- `examples/minimal`: `clip` scene (window frame, caption, `loop`, two callout steps) on
+  `assets/clip.webm` (150 KB, ffmpeg's `testsrc2` + a quiet chord, VP9/Opus), made reproducibly
+  (byte-identical twice) by the new maintainer script `tools/make_clip.py`.
+
+Verification
+- Scratch project (framed window + title + caption + callouts; bleed cover + loop; trim +
+  `fit_duration` + focus/spotlight; `region: left` at speed 2 holding) via `vidgen storyboard
+  --per-beat 3` in 16:9 and `--variant vertical`, sheets read with Read; frames checked against the
+  clip's own frame counter (fade-in while playing, dimming via `set_opacity`, loop wrap). `vidgen
+  lint` reports `dead_air` only for the held clip (6.9 s still); clip motion counts as activity.
+- Fixed along the way: a loop showed the frame at the trim end for one frame (float sums of 1/fps
+  vs WebM's millisecond time stamps: played time rounded to µs, end clamped 5 ms early, reader
+  tolerance 2 ms); a hold re-seeked every frame; rendering was ~3x slower than needed (bicubic
+  perspective transform of every frame: now decoded at the on-screen size, so the camera uses
+  nearest-pixel copying — 17.3 s → 8.5 s for a 9 s bleed scene, incl. start-up); clip sound of a
+  held clip ended after one pass (now padded to the scene's length).
+- `vidgen lint examples/minimal --scene clip` in all 8 variants (default, vertical, light,
+  contrast, editorial, neutral, pastel, neon): 0 findings; `--scene app` (screenshot, refactored)
+  default and vertical: 0 findings.
+
+Files
+- New: `src/vidgen/clips.py`, `src/vidgen/scenes/video_clip.py`, `tests/test_video_clip.py` (53
+  tests, 16 render; one `slow` lint test), `tools/make_clip.py`, `examples/minimal/assets/clip.webm`.
+- Changed: `src/vidgen/api.py` (exports), `src/vidgen/scenes/__init__.py`,
+  `src/vidgen/scenes/screenshot.py` (hooks above); `examples/minimal/video.yaml`; tests
+  `conftest.py` (`write_clip`: a lossless grey-per-frame clip, `clip_frame_index`),
+  `test_builtin_scenes.py` (BUILTINS/SAMPLES, clip asset), `test_actions_coverage.py` (SAMPLES,
+  target names, early `step2` reveal, clip asset), `test_extensions.py`, `test_registry.py` (known types); docs/CONFIG.md
+  (`video_clip` section, targets row), docs/EXTENDING.md ("Video clips" building block with an
+  example rendered by a test), README, DESIGN.md (§2, §6.4, new §38), tasklist.md.
+
+Public interfaces added/changed
+- `vidgen.api`: `CLIP_SUFFIXES`, `ClipInfo`, `ClipMobject`, `ClipTiming`, `clip_audio`,
+  `fit_speed`, `probe_clip` (DESIGN §38). Built-in scene type `video_clip`. `vidgen.clips` is
+  otherwise internal.
+
+Decisions / deviations
+- **Frames decoded inside Manim (option a), not composited by ffmpeg afterwards (b)**: (b) would
+  hide the clip from stills, the layout dump, lint, callouts, camera moves and actions. Speed is
+  acceptable (~0.6 s per second of 854x480 preview for a full-bleed clip).
+- **Modulation pixels**: the `pixel_array` Manim/vidgen animate is a 1 x 2 black/white pair applied
+  affinely to each frame, so `FadeIn`, `dim`, `highlight` (tint), `set_opacity` act on the moving
+  picture without any special casing in the actions. Copies share the playback.
+- **The narration owns the length** (Step 14 contract unchanged): the clip starts at scene time 0
+  and never lengthens or shortens a scene; longer → cut by the fade-out, shorter → hold (warning >
+  2 s, lint `dead_air` > 6 s) unless `loop`; `fit_duration` stretches within `fit_range`.
+- **Clip sound** = one temporary WAV built by ffmpeg (trim, `atempo` chain keeping pitch, exact
+  one-pass length, `aloop`, pad, fade) mixed by Manim's `add_sound` at time 0 under the narration;
+  default volume 0.25 narrated (no ducking; Step 45), skipped by `--no-audio`.
+- Callout areas refer to the whole picture (also with `cover`), so they stay on the same content
+  whichever part shows; `magnifier` is rejected (its inset would be a still of a moving picture).
+- The example clip is WebM, not mp4: `*.mp4` is git-ignored as render output (CLAUDE.md), and
+  VP9/Opus keeps it small; the scene accepts mp4/mov/m4v/webm/mkv alike (tests use H.264 mp4).
+
+Known gaps / TODOs
+- Callouts are static over a moving picture (no tracking); point at things that stay put.
+- Rotation metadata (phone recordings) is not applied; variable frame rate is shown as stamped.
+- No ducking of the clip sound under speech, no fade-in of it (Step 45 music/ducking could reuse
+  `clip_audio`'s graph).
+- In 9:16 a 16:9 clip with `contain` leaves large empty bands (documented: use `bleed` + `cover`).
+- `render/ffmpeg.py` is not a render-fingerprint input, so a change there (clip sound) does not
+  mark storyboard stills stale (they have no sound anyway).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1546 passed, 1 skipped, ~14 min); step
+only: `pytest tests/test_video_clip.py`. Manual: `vidgen storyboard examples/minimal --scene clip --per-beat 2
+[--variant vertical|light]`, `vidgen lint examples/minimal --scene clip [--variant ...]`,
+`vidgen list-scenes`, `vidgen schema --scene video_clip`, `python tools/make_clip.py`.

@@ -15,7 +15,7 @@ import pytest
 import yaml
 from PIL import Image
 
-from conftest import minimal_config, write_files
+from conftest import minimal_config, write_clip, write_files
 from test_actions import BARS, BULLETS, alpha, beat_total, beats, color_of, plays, project_with, render, rgb
 from test_json_output import documented
 from vidgen import actions, extensions, registry, schema
@@ -40,6 +40,8 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "line_chart": {"title": "Loss", "x": [1, 2, 3], "series": {"a": [3, 2, 1], "b": [2, 2.5, 1]}},
     "image": {"path": "assets/pic.png", "caption": "A picture"},
     "screenshot": {"path": "assets/pic.png", "title": "T", "previous": "keep",
+                   "steps": [{"box": [0.1, 0.1, 0.3, 0.3], "label": "Box"}, [{"arrow": [0.7, 0.7], "label": "Arrow"}, {"circle": [0.5, 0.5]}]]},
+    "video_clip": {"path": "assets/clip.mp4", "title": "T", "caption": "C", "previous": "keep",
                    "steps": [{"box": [0.1, 0.1, 0.3, 0.3], "label": "Box"}, [{"arrow": [0.7, 0.7], "label": "Arrow"}, {"circle": [0.5, 0.5]}]]},
     "quote": {"text": "Simple.", "author": "D", "source": "1975"},
     "equation": {"latex": ["(a+b)^2", "a^2 + 2ab + b^2"], "terms": ["2ab"], "caption": "c"},
@@ -70,6 +72,7 @@ def with_picture(root: Path) -> Path:
     pixels = np.zeros((30, 40, 4), dtype=np.uint8)
     pixels[..., 0], pixels[..., 1], pixels[..., 2], pixels[..., 3] = 40, 120, 200, 255
     Image.fromarray(pixels, "RGBA").save(root / "assets" / "pic.png")
+    write_clip(root / "assets" / "clip.mp4", seconds=2)
     return root
 
 
@@ -135,6 +138,7 @@ def test_target_names_of_every_builtin_type() -> None:
     assert "point:a@Q2" in names("line_chart", x=["Q1", "Q2", "Q3"])
     assert names("image", caption="") == ["image"]
     assert names("screenshot") == ["title", "image", "callout1", "callout:Box", "callout2", "callout:Arrow", "callout3", "step1", "step2"]
+    assert names("video_clip") == ["title", "clip", "caption", "callout1", "callout:Box", "callout2", "callout:Arrow", "callout3", "step1", "step2"]
     assert names("equation") == ["step1", "step2", "caption", "term:2ab"]
     assert names("equation_derivation") == ["title", "step1", "step2", "note2", "result", "term:c", "term:a"]
     assert names("code") == ["title", "listing", "line1", "line2", "line3", "lines:1-2", "lines:1-3", "lines:2-3"]
@@ -204,7 +208,7 @@ def test_builtin_scenes_register_their_target_names(kind: str, make_project, med
      ("chapter", "subtitle"), ("stat", ["comparison", "context"]), ("comparison", "col2"), ("table", "row2"), ("timeline", "event2"),
      ("diagram", "edge:a->b"), ("network", ["layer2", "edges1"]), ("scatter", ["series2", "trend"]), ("histogram", ["mean", "median", "compare"]),
      ("pie", "slice2"), ("heatmap", "row2"), ("equation_derivation", "note2"),
-     ("screenshot", "step2")],   # process: its token still moves (test_process_network)
+     ("screenshot", "step2"), ("video_clip", "step2")],   # process: its token still moves (test_process_network)
 )
 def test_early_reveal_is_not_repeated_by_the_scene(kind: str, target: str | list[str], make_project, media: Path) -> None:
     project = load(make_project, [{"id": "s", "type": kind, "params": SAMPLES[kind], "beats": beats([{"reveal": target}], None)}])

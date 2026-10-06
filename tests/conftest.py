@@ -65,3 +65,23 @@ def write_files(root: Path, files: dict[str, str]) -> None:
         path = root / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(textwrap.dedent(text).lstrip("\n"), encoding="utf-8")
+
+
+def write_clip(path: Path, seconds: float = 4.0, size: str = "64x36", fps: int = 5, audio: bool = True) -> Path:
+    """Write a small lossless H.264 test clip with ffmpeg: frame ``n`` is a flat grey (RGB
+    ``11.64 (n + 1)``, so a decoded pixel tells which frame shows), with a 440 Hz tone when
+    ``audio``."""
+    import shutil
+    import subprocess
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    video = f"color=c=black:s={size}:r={fps}:d={seconds},format=yuv420p,geq=lum='26+10*N':cb=128:cr=128"
+    inputs = ["-f", "lavfi", "-i", video] + (["-f", "lavfi", "-i", f"sine=f=440:d={seconds}"] if audio else [])
+    codecs = ["-c:v", "libx264", "-preset", "ultrafast", "-qp", "0", "-pix_fmt", "yuv420p"] + (["-c:a", "aac", "-shortest"] if audio else [])
+    subprocess.run([shutil.which("ffmpeg") or "ffmpeg", "-y", "-v", "error", *inputs, *codecs, str(path)], check=True, capture_output=True)
+    return path
+
+
+def clip_frame_index(grey: float) -> int:
+    """The frame number of a :func:`write_clip` clip from a decoded pixel's grey value (0-255)."""
+    return round(grey * 219 / 2550) - 1

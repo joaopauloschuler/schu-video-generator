@@ -31,6 +31,7 @@ from vidgen.callouts import (  # noqa: E402
     callout_spotlight,
     label_spot,
 )
+from vidgen.clips import CLIP_SUFFIXES, ClipInfo, ClipMobject, ClipTiming, clip_audio, fit_speed, probe_clip  # noqa: E402
 from vidgen.charts import (  # noqa: E402
     CHART_MARKERS,
     ChartAxes,
@@ -244,6 +245,13 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "callout_magnifier",
     "callout_spotlight",
     "label_spot",
+    "CLIP_SUFFIXES",
+    "ClipInfo",
+    "ClipMobject",
+    "ClipTiming",
+    "clip_audio",
+    "fit_speed",
+    "probe_clip",
     "Field",
     "field_validator",
     "model_validator",

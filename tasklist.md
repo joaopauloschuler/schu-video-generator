@@ -155,7 +155,7 @@ Rules that apply to every step:
 - [x] Callout helpers in `vidgen.api` (reused by Step 41) (`callout_box`, `callout_circle`, `callout_arrow` (curved, label placed away from the area inside the frame), `callout_magnifier` (Pillow crop at output resolution, connector lines), `callout_spotlight`, `callout_label` (plate + readable text colour), `callout_area` (mobject / region / fractions / pixels), `label_spot`, `callout`, `Callout`)
 
 ### Step 35 — Scene: `video_clip`
-- [ ] Embed an mp4 clip (B-roll / screen recording) with optional trim, speed, caption; timing contract documented
+- [x] Embed an mp4 clip (B-roll / screen recording) with optional trim, speed, caption; timing contract documented (mp4/mov/m4v/webm/mkv decoded frame by frame with PyAV into a `ClipMobject` (`vidgen.api`) on the scene's clock, so stills, layout dump, lint, actions and callouts see it; `trim`, `speed`, `loop` or hold the last frame, `fit_duration` within `fit_range`; `fit: contain|cover`; `region` (layout region or `bleed`), title / caption (plates over a bleed clip), `frame` chrome from Step 34; clip sound mixed under the narration (`volume`, `mute`); `screenshot` callouts per beat (no magnifier), areas on the whole picture; `dead_air` counts clip motion; example asset by `tools/make_clip.py`)
 
 ### Step 36 — Scene: `map`
 - [ ] Bundled low-res world map (Natural Earth-derived, public domain, e.g. via `world-atlas`)

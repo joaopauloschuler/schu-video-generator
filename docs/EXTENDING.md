@@ -405,6 +405,37 @@ class Annotated(NarratedScene):
         self.finish()
 ```
 
+**Video clips.** `ClipMobject(path, timing)` is an image whose picture is a video file's frame at
+the scene's current time (the `video_clip` scene uses it). `ClipTiming(start, end, speed=1.0,
+loop=False)` says which seconds of the file play and how (`probe_clip(path)` gives a
+`ClipInfo`: size, fps, duration, audio; `fit_speed(span, window)` a speed that fits a span into a
+window). Size it like any mobject — `fit_box(width, height, "contain" | "cover")` fits or fills a
+box (cover crops the picture, `clip.crop`) — call `set_resolution(scale)` when the camera will
+zoom in, then `play(self)` to start it on the scene's clock (it runs through plays and waits; a
+held last frame or the loop follow the timing). Fades, `dim` / `highlight` actions and
+`set_opacity` work on the moving picture. Close it in `tear_down`. `clip_audio(path, wav, timing,
+length=..., volume=...)` writes the clip's sound as it plays, for `self.add_sound(wav)`.
+
+```python
+@scene("clip_and_note")
+class ClipAndNote(NarratedScene):
+    outro = 0.5
+
+    def construct(self):
+        box = self.region("left")
+        self.clip = ClipMobject(self.project.asset("assets/clip.mp4"), ClipTiming(0, 2, loop=True))
+        self.clip.fit_box(box.width, box.height).move_to(box.center)
+        self.clip.set_resolution().play(self)
+        note = fit_text("Two seconds, looping", self.region("right").width, size="heading")
+        place(note, self.region("right"), fit="none")
+        self.reveal([FadeIn(self.clip), Write(note)])
+        self.finish()
+
+    def tear_down(self):
+        self.clip.close()
+        super().tear_down()
+```
+
 **Timing.** Beat-driven reveals without arithmetic:
 - `self.reveal(steps)` narrates the whole scene: step *i* at beat *i*; more steps than beats are
   spread evenly (`distribute(n_steps, n_beats)` gives the plan), extra beats hold. A step is an

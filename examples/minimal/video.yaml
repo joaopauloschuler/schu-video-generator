@@ -359,6 +359,21 @@ scenes:
       - text: "A magnifier enlarges a detail, cut sharp from the picture itself."
       - text: "Focus moves the camera in, and a spotlight dims everything else."
 
+  - id: clip
+    type: video_clip      # a video file (B-roll, a screen recording) played while the narration runs
+    params:
+      title: "Clips play under the narration"
+      path: assets/clip.webm        # ffmpeg's test pattern, made by tools/make_clip.py
+      frame: window
+      caption: "A generated test pattern, looping"
+      loop: true          # starts again when the narration outlasts it (else its last frame holds)
+      steps:              # callouts as in screenshot; areas are fractions of the clip's picture
+        - {box: [0.0, 0.0, 0.21, 0.14], label: "Time code"}
+        - {arrow: [0.92, 0.45], label: "Colour bars", curved: true}
+    beats:
+      - text: "Video clips play inside a scene, and the narration sets how long they run."
+      - text: "Callouts work on moving pictures too, one step per beat."
+
   - id: saying
     type: quote
     params:

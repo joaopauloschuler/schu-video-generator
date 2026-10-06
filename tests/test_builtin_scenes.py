@@ -11,7 +11,7 @@ import pytest
 from manim import tempconfig
 from pydantic import ValidationError
 
-from conftest import minimal_config
+from conftest import minimal_config, write_clip
 from vidgen import extensions, registry
 from vidgen.cli import check_project, main
 from vidgen.errors import VidgenError
@@ -20,7 +20,7 @@ from vidgen.render.worker import frame_size
 from vidgen.scenes.code import parse_line_spec
 from vidgen.theme import Theme
 
-BUILTINS = ["bar_chart", "bullets", "chapter", "code", "code_walkthrough", "comparison", "diagram", "end_card", "equation", "equation_derivation", "flowchart", "heatmap", "histogram", "icon_grid", "image", "line_chart", "network", "pie", "process", "quote", "scatter", "screenshot", "stat", "table", "text_card", "timeline", "title"]
+BUILTINS = ["bar_chart", "bullets", "chapter", "code", "code_walkthrough", "comparison", "diagram", "end_card", "equation", "equation_derivation", "flowchart", "heatmap", "histogram", "icon_grid", "image", "line_chart", "network", "pie", "process", "quote", "scatter", "screenshot", "stat", "table", "text_card", "timeline", "title", "video_clip"]
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "minimal"
 FPS = 5
 
@@ -34,6 +34,8 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "screenshot": {"path": "assets/pic.png", "title": "Shot", "frame": "browser", "url": "example.org",
                    "steps": [{"box": [0.1, 0.1, 0.4, 0.3], "label": "Box"}, [{"arrow": [0.7, 0.6], "label": "Arrow", "curved": True}, {"circle": [0.5, 0.5]}],
                              {"callouts": [{"magnifier": [0.1, 0.5, 0.3, 0.3], "label": "Zoom"}, {"spotlight": [0.1, 0.5, 0.3, 0.3]}], "focus": True}]},
+    "video_clip": {"path": "assets/clip.mp4", "title": "Clip", "caption": "Moving", "frame": "window", "trim": [0.5, 2.5], "loop": True,
+                   "steps": [{"box": [0.1, 0.1, 0.4, 0.3], "label": "Box"}, {"callouts": [{"arrow": [0.7, 0.6], "label": "Arrow"}], "focus": True}]},
     "quote": {"text": "“To be or not to be.”", "author": "Someone", "source": "Somewhere"},
     "equation": {"latex": ["x^2", "x \\cdot x"], "caption": "Square"},
     "equation_derivation": {"title": "Solve", "colors": {"x": "accent"}, "terms": ["3"],
@@ -317,6 +319,7 @@ def render_project(tmp_path_factory: pytest.TempPathFactory) -> Project:
     data = minimal_config(scenes=scenes, narration={"pad": 0.2, "words_per_second": 4.0})
     (root / "video.yaml").write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
     write_png(root / "assets" / "pic.png")
+    write_clip(root / "assets" / "clip.mp4")
     return Project.load(root)
 
 
