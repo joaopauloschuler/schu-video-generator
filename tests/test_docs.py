@@ -82,11 +82,16 @@ def test_every_builtin_scene_and_param_is_documented() -> None:
     with registry.isolated():
         extensions.load_builtins()
         entries = registry.all()
+    first_name: dict[type, str] = {}
     for entry in entries:
         start = CONFIG_MD.find(f"### `{entry.name}`")
         assert start != -1, f"built-in scene type {entry.name} not documented"
         end = CONFIG_MD.find("\n### ", start + 1)
         section = CONFIG_MD[start : end if end != -1 else None]
+        if entry.cls in first_name:   # a second name of a type (flowchart = diagram): points to it
+            assert f"[`{first_name[entry.cls]}`]" in section, entry.name
+            continue
+        first_name[entry.cls] = entry.name
         model = entry.params_model
         for name in model.model_fields if model else []:
             assert f"`{name}`" in section, f"{entry.name}.{name} missing from its CONFIG.md section"

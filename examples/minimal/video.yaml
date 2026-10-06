@@ -11,6 +11,7 @@
 #   vidgen storyboard examples/minimal --scene speedup --per-beat 3 # a stat counting down
 #   vidgen storyboard examples/minimal --scene formats --per-beat 3 # a table row by row
 #   vidgen storyboard examples/minimal --scene schedule --variant vertical  # a vertical timeline
+#   vidgen storyboard examples/minimal --scene loop --per-beat 2    # a flowchart, node by node
 #   vidgen storyboard examples/minimal --variant light           # same video with the light_academic preset
 #   vidgen list-themes examples/minimal --swatches build/themes.png  # every theme preset at a glance
 # There is no narration audio in this example, so beats are timed from their word count
@@ -96,6 +97,28 @@ scenes:
       - text: "Every command can also answer in JSON, for scripts and agents."
       - text: "And a theme preset restyles the whole video."
       - text: "At the end, one item can be highlighted, like lint here."
+
+  - id: loop
+    type: diagram         # a flowchart, laid out automatically (left to right; top to bottom in 9:16)
+    params:
+      heading: "The editing loop"
+      nodes:              # an id, or {id, label, shape, icon, color}
+        - {id: edit, label: "Edit the config", icon: pencil, shape: pill}
+        - {id: check, label: "Preview and lint", icon: presentation}
+        - {id: good, label: "Reads well?", shape: diamond}
+        - {id: final, label: "Final render", icon: play, shape: pill}
+      edges:              # "a -> b", "a -> b: label", "a --> b" (dashed), chains "a -> b -> c"
+        - "edit -> check -> good"
+        - "good -> final: yes"
+        - "good --> edit: no"
+      highlight: [edit, check, good, final]   # a path, in a last step; the rest dims
+    beats:
+      - text: "Diagrams grow one node at a time. You edit the config file."
+      - text: "Then you preview it, and check the storyboard and the lint report."
+      - text: "Does it read well? If not, back to editing."
+        actions:
+          - {highlight: "edge:good->edit", style: flash}
+      - text: "If it does, you render the final video."
 
   - id: tradeoff
     type: comparison      # two or three columns: A vs B, before / after

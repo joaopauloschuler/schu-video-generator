@@ -20,7 +20,7 @@ from vidgen.render.worker import frame_size
 from vidgen.scenes.code import parse_line_spec
 from vidgen.theme import Theme
 
-BUILTINS = ["bar_chart", "bullets", "chapter", "code", "comparison", "end_card", "equation", "icon_grid", "image", "line_chart", "quote", "stat", "table", "text_card", "timeline", "title"]
+BUILTINS = ["bar_chart", "bullets", "chapter", "code", "comparison", "diagram", "end_card", "equation", "flowchart", "icon_grid", "image", "line_chart", "quote", "stat", "table", "text_card", "timeline", "title"]
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "minimal"
 FPS = 5
 
@@ -41,6 +41,8 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "comparison": {"heading": "A vs B", "columns": [{"heading": "A", "tone": "positive", "icon": "cpu", "points": ["fast", {"text": "cheap", "icon": "coins"}]}, {"heading": "B", "tone": "negative", "points": ["slow"]}], "verdict": "Pick A", "vs": "vs"},
     "table": {"title": "T", "header": ["Name", "Value"], "rows": [["a", 1.5], ["b", 1200]], "caption": "c"},
     "timeline": {"heading": "History", "events": [{"date": 1957, "title": "Sputnik", "text": "First satellite", "icon": "satellite"}, {"date": "1969", "title": "Apollo 11"}, {"date": "1981", "title": "Shuttle"}], "spacing": "proportional", "highlight": "Apollo 11", "now": 1},
+    "diagram": {"heading": "Flow", "nodes": ["a", {"id": "b", "label": "Bee", "shape": "diamond", "icon": "cpu"}, {"id": "c", "shape": "cylinder"}], "edges": ["a -> b: go", "b --> c", "c -> a"], "highlight": ["a", "b"]},
+    "flowchart": {"nodes": ["start", "end"], "edges": ["start -> end"], "routing": "orthogonal", "steps": [["start"], ["end"]]},
     "stat": {"value": 1234.5, "prefix": "$", "unit": "k", "label": "Revenue", "context": "2025", "icon": "banknote", "comparison": {"value": 1000, "delta": "percent"}},
 }
 
@@ -242,7 +244,7 @@ def test_example_minimal_validates(capsys: pytest.CaptureFixture[str]) -> None:
     out = capsys.readouterr().out
     assert "variants:  vertical" in out and out.endswith("ok\n")
     used = {s.type for s in Project.load(EXAMPLE).config.scenes}
-    assert used == set(BUILTINS)
+    assert used == set(BUILTINS) - {"flowchart"}   # = diagram
 
 
 # ----- rendering (tiny, both orientations) ---------------------------------------------------------------

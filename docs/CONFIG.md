@@ -253,7 +253,7 @@ category `tech`, `data`, `science`, `business`, `people`, `ui` (arrows and inter
 tags is the [icon catalogue](ICONS.md). Built-in scenes take them as params: `icon` on
 [`title`](#title), [`chapter`](#chapter), [`stat`](#stat) and [`end_card`](#end_card), `{text,
 icon}` items of [`bullets`](#bullets), columns and points of [`comparison`](#comparison),
-events of [`timeline`](#timeline), and the [`icon_grid`](#icon_grid) scene. Extension scenes draw them with `icon(name, ...)` (see
+events of [`timeline`](#timeline), nodes of [`diagram`](#diagram), and the [`icon_grid`](#icon_grid) scene. Extension scenes draw them with `icon(name, ...)` (see
 docs/EXTENDING.md "Icons"); scene params that take an icon name are typed `icon` in
 `vidgen list-scenes` and checked by `vidgen validate` (an unknown name gets suggestions).
 
@@ -993,6 +993,97 @@ marker) and `at` (a number: its position with `spacing: proportional` when the d
         - {highlight: axis, style: flash}
 ```
 
+### `diagram`
+
+A flowchart or any directed graph — a pipeline, an architecture, a decision tree, a state
+machine — laid out automatically: nodes in layers along the edges' direction (left to right in
+16:9 and square frames, top to bottom in 9:16; `direction` overrides), each layer ordered to
+avoid crossing edges, edges routed between the nodes with arrowheads that end on the node's
+outline. A cycle (an edge back to an earlier node) is drawn as one edge running backwards. Also
+available as type **`flowchart`** (the same scene).
+Steps with `reveal: nodes` (default): one node per step in layout order (layer by layer; within
+a layer top to bottom or left to right), each after the edges leading to it from nodes on
+screen have grown in from their source; the heading comes with step 1. `reveal: layers`: one
+layer per step; `all`: everything in step 1. With more steps than beats they are spread evenly.
+**Explicit `steps`** replace that: per step a node id or an edge `"a->b"`, or a list of them.
+An edge appears with its nodes unless a later step names it (then it grows in that step); an
+edge named in a step brings its nodes; nodes no step names come in one more step at the end.
+A `highlight` adds a last step: the listed nodes and edges turn `highlight_color` (outline,
+tint, icon, line; labels keep their colour) and everything else dims — list a path as node ids
+(`[start, check, ship]`: the edges between consecutive ones are highlighted too) and add single
+edges as `"a->b"`.
+[Action targets](#beat-actions): `heading`, `node<N>` (1-based, in the order of `nodes`),
+`node:<id>` and `edge:<from>-><to>` (`edge:check->ship`; patterns such as `edge:check->*`
+select every edge leaving a node). Revealing an edge early brings its nodes too.
+
+**Nodes** are written as their id (`- Load data`: the id is also the label) or as
+`{id, label, shape, icon, color}`: `id` (letters, digits, spaces, `_`, `.`, `-`), `label` (the
+text, wrapped; default the id), `shape` (`box`, `round` (rounded corners), `pill` (start/end),
+`circle`, `diamond` (a decision), `cylinder` (a database); default the scene's `shape`),
+`icon` (above the label in left-to-right layouts, circles and diamonds; else beside it) and `color` (outline, tint and
+icon; default `node_color`).
+
+**Edges** use a shorthand: `"a -> b"`, `"a -> b: label"` (text on the edge, near its start),
+`"a --> b"` (dashed), or a chain `"a -> b -> c"` (one edge per arrow; a label needs a single
+arrow). The long form is `{from, to, label, style: solid | dashed, color}`. Each edge may be
+listed once, a node may not point to itself, and every id must be a node: `vidgen validate`
+reports e.g. `edges[2] (start -> shp): unknown node 'shp'; did you mean 'ship'? (nodes: ...)`.
+
+**Fitting.** Labels share one size: up to 1.3x the requested `size` when the diagram has room,
+else reduced (with the edge labels) down to the readable minimum (lint's `min_font`); per
+direction (with `auto`, the other one is tried too and wins only if it keeps the text 10 %
+larger) and label wrap width the layout with the largest text is used, and spare room widens the
+gaps. A diagram that still does not fit is scaled down and a warning says so: split it or
+shorten the labels. Up to ~12 nodes read well in 16:9, fewer in 9:16 (wide layers do not fit a
+narrow frame; long chains do).
+
+| param | type | default | |
+|---|---|---|---|
+| `nodes` | list (1–30) | required | node ids, or `{id, label, shape, icon, color}` (above) |
+| `edges` | list (≤ 60) | `[]` | `"a -> b"`, `"a -> b: label"`, `"a --> b"`, `"a -> b -> c"`, or `{from, to, label, style, color}` |
+| `heading` | str | `""` | above the diagram, with step 1 |
+| `direction` | `auto` \| `LR` \| `TB` | `auto` | layers left to right or top to bottom; `auto`: `LR` in landscape and square frames, `TB` in portrait |
+| `routing` | `curved` \| `straight` \| `orthogonal` | `curved` | smooth S-curves, straight lines, or right angles (each edge in its own lane) |
+| `reveal` | `nodes` \| `layers` \| `all` | `nodes` | ignored when `steps` is given |
+| `steps` | list | none | per step a node id, an edge `"a->b"`, or a list of them |
+| `highlight` | list[str] | `[]` | node ids (a path: edges between consecutive ones too) and edges `"a->b"`, emphasised in a last step |
+| `shape` | `box` \| `round` \| `pill` \| `circle` \| `diamond` \| `cylinder` | `round` | default node shape |
+| `node_color`, `label_color` | color | `primary`, `text` | node outline / tint / icon; label text |
+| `edge_color`, `edge_label_color` | color | `dim`, `dim` | |
+| `heading_color`, `highlight_color` | color | `text`, `highlight` | |
+| `size`, `edge_label_size`, `heading_size` | size | `body`, `caption`, `heading` | node labels and edge labels are fitted together |
+
+```yaml
+- id: release
+  type: flowchart                    # = diagram
+  params:
+    heading: "How a change ships"
+    nodes:
+      - {id: start, label: "Pull request", shape: pill}
+      - {id: ci, label: "Tests pass?", shape: diamond}
+      - {id: fix, label: "Fix the code"}
+      - {id: ship, label: "Deploy", icon: rocket, shape: circle}
+    edges:
+      - "start -> ci"
+      - "ci -> ship: yes"
+      - "ci -> fix: no"
+      - "fix --> ci"                 # dashed; a cycle is drawn as an edge running back
+    highlight: [start, ci, ship]     # the happy path, in a last step
+  beats:
+    - text: "Every change starts as a pull request."
+    - text: "If the tests fail, we fix the code and try again."
+      actions:
+        - highlight: "edge:fix->ci"
+          style: flash
+    - text: "Otherwise it is deployed."
+    - text: "That is the path most changes take."
+```
+
+### `flowchart`
+
+The same scene type as [`diagram`](#diagram) (same params, steps and targets), under the name a
+flowchart is usually looked up by.
+
 ### `end_card`
 
 Steps: (1) logo, icon and title, (2) lines. Fades out over 1 s.
@@ -1113,6 +1204,7 @@ a title card, a `transform` of a bar).
 | `comparison` | `heading`, `col<N>`, `col:<heading>`, `col<N>.item<M>`, `verdict` | reveal, dim, highlight, zoom | a column is its heading and points (a `box` frames its card); `col2.item1` is a point with its marker; revealing a point brings its column's card |
 | `table` | `title`, `header`, `row<N>`, `row:<first cell>`, `col<N>`, `col:<header>`, `cell<R>.<C>`, `caption` | reveal, dim, highlight, zoom | `box` and `fill` cover the whole row / column / cell; `cell2.3` is row 2 (below the header), column 3 |
 | `timeline` | `heading`, `axis`, `event<N>`, `event:<date>` | reveal, dim, highlight, zoom | an event is its marker, stem and text; revealing one grows the progress line to it; `event:1969` |
+| `diagram` | `heading`, `node<N>`, `node:<id>`, `edge:<from>-><to>` | reveal, dim, highlight, zoom | also for `flowchart`; a node is its shape, icon and label (a `box` frames the shape), an edge its line, arrowhead and label; `highlight: [node:a, "edge:a->b", node:b]` marks a path; revealing an edge brings its nodes |
 
 [Project scene types](EXTENDING.md#8-per-beat-actions-targets-and-custom-actions) can declare
 their own targets; a type without any rejects actions in `vidgen validate`.
@@ -1551,7 +1643,7 @@ Each scene type: `name`; `origin` (`builtin`, or the extension file relative to 
 "exactly 2 beats"}`); `params` (`null` = free-form params, else a list of fields); `targets`
 (the forms of its [action targets](#beat-actions), e.g. `["heading", "item<N>",
 "item:<text>"]`; `[]` = none).
-Each field: `name`; `type` (readable type as in the human listing: `str`, `list[str]`,
+Each field: `name` (as written in `video.yaml`: an alias such as `from` when the field has one); `type` (readable type as in the human listing: `str`, `list[str]`,
 `color`, `size`, `'all' | 'per_beat'`, ...); `required` (bool); `default` (JSON value, `null`
 when required); `doc` (the docstring under the field or its `Field(description=...)`, or
 `null`); `nested` (fields of `SceneParams` models used in the type, as `{model, fields}`).

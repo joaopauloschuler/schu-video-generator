@@ -2373,3 +2373,109 @@ How to test: `/home/claude/venv/bin/python -m pytest -q` (1048 passed, 1 skipped
 tests/test_timeline.py`. Manual: `vidgen storyboard examples/minimal --scene schedule --per-beat 2
 [--variant vertical|light]`, `vidgen lint examples/minimal [--variant ...]`, `vidgen list-scenes`,
 `vidgen schema --scene timeline`.
+
+## Step 28 — Graph layout + `diagram`/`flowchart`
+What was built
+- **`vidgen.graph`** (new, pure Python, no new dependency; exported by `vidgen.api`):
+  `layered_layout(nodes, edges, *, direction="LR"|"TB", layer_gap, node_gap, routing=
+  "straight"|"orthogonal", port_spacing, port_spread, label_margin, sweeps) -> GraphLayout`
+  with `GraphNode(id, width, height, shape)`, `GraphEdge(source, target, label=(w, h))`,
+  `NodePlace`, `EdgeRoute(source, target, points, reversed, label_at)`. Sugiyama phases: DFS
+  back edges reversed (routes reversed again), longest-path layers with sources pulled
+  forward, dummy nodes on long edges, barycenter sweeps + transposition from two starts (best
+  kept), coordinates by weighted isotonic fits towards neighbours (parents end centred over
+  children; long edges straight), ports spread along the facing side and clipped to the shape
+  (box/ellipse/diamond/stadium), straight or orthogonal routes (a lane per run), room and an
+  anchor for edge labels. Deterministic; topology phases cached per graph.
+- **`diagram` scene** (`src/vidgen/scenes/diagram.py`), also registered as **`flowchart`**
+  (same class). Nodes `{id, label, shape: box|round|pill|circle|diamond|cylinder, icon,
+  color}` or a plain id; edges `{from, to, label, style: solid|dashed, color}` or the shorthand
+  `"a -> b"`, `"a -> b: label"`, `"a --> b"` (dashed), chains `"a -> b -> c"`. `direction`
+  auto (LR in 16:9/square, TB in 9:16; the other only if it keeps text ≥ 1.1x larger) | LR |
+  TB; `routing` curved (S-curves, default) | straight | orthogonal. Reveal: `nodes` (one node
+  per step in layout order, the edges into it growing from their source first), `layers`,
+  `all`, or explicit `steps` (node ids / `a->b` per step; unnamed edges come with their ends,
+  unnamed nodes in one more step). `highlight` (a path of node ids + edges) adds a last step:
+  outline/tint/icon/line in `highlight_color`, the rest dims to 0.55. Sizing: label size from
+  1.3x down to the readable floor (x1.05) per direction and wrap width, the largest that fits
+  the body wins, then gaps widen to use spare room; nothing fits → scaled + warning "split it
+  into smaller diagrams (or shorten labels)". Heading in the `header` region (1.3x in 9:16).
+- **Targets**: `heading`, `node<N>`, `node:<id>` (outline = shape), `edge:<from>-><to>` (line,
+  arrowhead, label; its entrance brings hidden ends); row in the CONFIG.md targets table.
+- **Validation**: duplicate node ids, bad ids, unknown nodes in edges with suggestions
+  (`edges[2] (start -> shp): unknown node 'shp'; did you mean 'ship'? (nodes: ...)`), self-loops,
+  duplicate edges, chains with a label, unknown/repeated refs in `steps`, unknown refs in
+  `highlight`.
+- `describe` shows a field's alias (`from`) in `list-scenes` and its JSON.
+- `examples/minimal`: new `loop` scene (the editing loop: pill / box / diamond / pill with
+  icons, a dashed back edge "no", a `flash` on it, the happy path as `highlight`), after
+  `feedback`.
+
+Verification (sheets opened with Read)
+- Scratch project (pipeline with labels, icons, cylinder and dashed edge + a highlight action;
+  decision loop with diamond/circle and highlight path; an org tree with `orthogonal` and
+  `reveal: layers`; a 10-node web architecture with explicit `steps`, `highlight edge:lb->*`,
+  `zoom node:db`, box + dim) storyboarded in 16:9 (also `--per-beat 2`/`4`), vertical and
+  `light_academic`. Fixed along the way: cylinder arcs stretched about their own centre (body
+  misdrawn), a node appearing before the edges leading to it when several edges entered a step
+  (waves), unnamed edges deferred to the last explicit step, lint `min_font` on short lowercase
+  edge labels at exactly the readable size (floor x1.05), a highlighted label at 4.43:1 on
+  `light_academic` (tint 0.14 → 0.1), a dimmed `dim` edge label at 1.96:1 (dim 0.45 → 0.55),
+  narrow LR layouts (icons now above labels in LR; wrap width 1.7 tried), diagrams huddled in
+  the middle (gap spreading). Lint of the scratch project: only the deliberate 10-node
+  architecture in 16:9 (warning + `min_font`).
+- `examples/minimal`: `vidgen lint` 0 findings in all 8 variants (default, vertical, light,
+  contrast, editorial, neutral, pastel, neon); `loop` sheets checked in 16:9 (`--per-beat 2`),
+  vertical and light.
+
+Files
+- New: `src/vidgen/graph.py`, `src/vidgen/scenes/diagram.py`, `tests/test_graph.py` (25
+  tests), `tests/test_diagram.py` (45 tests, 21 tiny renders).
+- Changed: `src/vidgen/api.py`, `src/vidgen/describe.py`, `src/vidgen/scenes/__init__.py`;
+  `examples/minimal/video.yaml`; tests `test_builtin_scenes.py` (BUILTINS/SAMPLES, example uses
+  every type but the alias), `test_actions_coverage.py` (SAMPLES, `ALIASES`, names, early
+  reveal), `test_docs.py` (a second name's section points to the first); docs/CONFIG.md
+  (`diagram`, `flowchart` sections, targets table, Icons intro, list-scenes JSON `name`),
+  docs/EXTENDING.md ("Graphs"), README, DESIGN.md (§2, §6.4, new §31), tasklist.md.
+
+Public interfaces added/changed
+- Built-in scene types `diagram` and `flowchart` (params in docs/CONFIG.md).
+- `vidgen.api`: `layered_layout`, `GraphLayout`, `GraphNode`, `GraphEdge`, `EdgeRoute`,
+  `NodePlace` (new).
+- `vidgen list-scenes` (and `--json` field `name`) shows a params field by its alias when it has
+  one (only `DiagramEdge.from`).
+- Module helpers (internal): `vidgen.scenes.diagram.parse_edges`, `edge_ref`,
+  `Diagram.Params.resolve()`, `.step_refs()`, `Diagram.graph_layout` (after construct).
+
+Decisions / deviations
+- **Alias = the same class registered twice** (`scene("flowchart")(Diagram)`), not a registry
+  alias feature: every tool already handles it as a type; tests treat `flowchart` as an alias
+  (targets table, example coverage, docs section pointing to `diagram`).
+- Node fill is a translucent tint of the node colour (0.1), not `surface`, so the `highlight`
+  action's `color` style (which recolours every member) still leaves the label readable; edge
+  label backdrops (background-colour pills) are outside the edge target for the same reason.
+- The scene's own `highlight` step keeps labels in their colour (outline, tint, icon and
+  lines change); the `highlight` action recolours labels too, as everywhere else.
+- `steps` refs are node ids and `a->b` (not target names): they are the ids written in
+  `nodes`/`edges`. Node ids may contain spaces (a plain string node is its own label).
+- The "too dense" check is a render-time warning (as `table`/`timeline`): it depends on the
+  variant's frame and type scale.
+
+Known gaps / TODOs
+- **Groups / clusters** (boxes around sets of nodes) are not implemented: they need layer
+  ordering that keeps a cluster contiguous; a later step could add `groups: [{label, nodes}]`.
+- Edge labels sit in the gap next to the source, centred on the route; with several labelled
+  edges leaving one node towards close targets they can touch, and lines of other edges may
+  pass under a label's pill. Long edges through many layers in 16:9 make wide layouts (the
+  10-node architecture example needed the warning); there is no edge bundling or
+  node-size-aware dummy compaction (Brandes–Köpf).
+- Self-loops are rejected; 2-cycles (`a -> b`, `b -> a`) are drawn as two parallel curves.
+- Orthogonal routes have sharp corners and their label anchor is the nearest point of the
+  route to the straight anchor.
+- `auto` direction prefers the frame's orientation unless the other is 1.1x better; a tree
+  with many leaves in 16:9 stays LR (set `direction: TB` for an org chart).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1128 passed, 1 skipped, ~10 min). Step
+only: `pytest tests/test_graph.py tests/test_diagram.py`. Manual: `vidgen storyboard
+examples/minimal --scene loop --per-beat 2 [--variant vertical|light]`, `vidgen lint
+examples/minimal [--variant ...]`, `vidgen list-scenes`, `vidgen schema --scene diagram`.

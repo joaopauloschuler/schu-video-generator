@@ -70,6 +70,7 @@ src/vidgen/
   helpers.py              # theme-aware text helpers and generic drawing utilities
   layout.py               # fit/wrap text, beat distribution, chart numbers, LaTeX detection
   regions.py              # layout regions: safe area, named regions, grids, place(), readable text (§18)
+  graph.py                # layered layout of directed graphs, pure Python (§31; no manim)
   tts/__init__.py         # provider seam: get_provider(cfg)
   tts/elevenlabs.py       # ElevenLabs provider (stdlib urllib), cache by hash
   render/                 # worker.py (one scene per process), pipeline.py, ffmpeg.py,
@@ -445,7 +446,9 @@ area)` also takes a region name as `area`; `SceneParams.also_accepts`. Step 23 (
 `target_names()`, `target()`, `targets`, `find_targets()`, `on_screen_parts()`, `is_shown()`,
 `entrance()`. Step 24 (§27) adds, compatibly: `NarratedScene` is a `MovingCameraScene`;
 `target(..., outline=)`; `Target.outline`, `Target.rest`, `Target.rest_opacity()`; `Action`
-class attributes `temporary`, `moves_camera`, `target_options`.
+class attributes `temporary`, `moves_camera`, `target_options`. Step 27 adds `measure_text`.
+Step 28 (§31) adds `layered_layout`, `GraphLayout`, `GraphNode`, `GraphEdge`, `EdgeRoute`,
+`NodePlace`.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -1723,3 +1726,86 @@ using the existing renders of the others (missing ones are rendered). Exit code 
   and the scene's own steps never repeat an entrance. Targets `heading`, `axis` (the track),
   `event<N>` / `event:<date>` (marker + stem + card; segments are not part of a target).
 
+
+## 31. Refinements (Step 28, graph layout and `diagram`)
+
+- **`vidgen.graph`** (manim-free; exported by `vidgen.api`): `layered_layout(nodes, edges, *,
+  direction="LR"|"TB", layer_gap=1.0, node_gap=0.5, routing="straight"|"orthogonal",
+  port_spacing=0.2, port_spread=0.6, label_margin=0.15, sweeps=12) -> GraphLayout(nodes:
+  {id: NodePlace(x, y, width, height, layer, order)}, edges: [EdgeRoute(source, target, points,
+  reversed, label_at)], layers, width, height, direction, crossings, reversed_edges)`. Nodes
+  are ids or `GraphNode(id, width, height, shape)` (`box`/`ellipse`/`diamond`/`stadium`: the
+  outline ports are clipped to); edges `(source, target)` or `GraphEdge(source, target,
+  label=(w, h))`. Result centred on the origin, y up, in the nodes' units. Unknown ids, duplicate
+  ids, self-loops, unknown direction/routing/shape → `VidgenError`.
+- **Phases.** (1) Cycles: depth-first search in input order; back edges are laid out reversed
+  and their routes reversed again (`EdgeRoute.reversed`). (2) Layers: longest path from the
+  sources, then each source with successors moves to just before its nearest successor;
+  edges spanning *k* layers get *k − 1* dummy items. (3) Order: from two starts (input order and
+  its reverse; later layers by first predecessor), barycenter sweeps alternately down and up
+  (ties keep the current order) with adjacent-swap transposition, best order kept; phases 1–3
+  depend on the topology only and are cached (`_topology`, `lru_cache`), because the scene lays
+  out one graph at many sizes. (4) Coordinates: a layer's centre line is spaced by the deepest
+  item of the neighbouring layers plus the gap (`layer_gap`, or label extent + 2 `label_margin`
+  for a labelled edge leaving its source through that gap); across, items are packed with
+  `node_gap` (half next to a dummy), then 10 passes (alternately towards predecessors and
+  successors, ending with successors so parents sit centred over their children) set each
+  layer to the weighted least-squares fit of the neighbours' mean under the separation
+  constraints (pool adjacent violators; dummies weigh 2x so long edges run straight).
+  (5) Routes: ports on the facing sides, ordered by the cross position of the edge's next point
+  and spaced `port_spacing` apart within `port_spread` of the side, clipped to the shape;
+  `straight` = polyline through the dummies; `orthogonal` adds per gap a run in a lane of its
+  own (lanes assigned greedily, downward runs before upward ones, so nested runs do not
+  cross). Label anchor: the first segment from the real source at the middle of its gap (for
+  orthogonal routes the nearest point of the route to it). `crossings` counts crossings of the
+  dummy graph between neighbouring layers.
+- **`diagram`** (`scenes/diagram.py`; reference docs/CONFIG.md; registered again as
+  **`flowchart`**: `scene("flowchart")(Diagram)` — the same class under a second name, so
+  `list-scenes`, the schema and `validate` treat it as a type of its own; the docs test points
+  a second name's CONFIG.md section to the first). Params: `nodes` (1–30 `DiagramNode`: a string
+  is `{id}`; `id` letters/digits/spaces/`_.-`, `label`, `shape` box | round | pill | circle |
+  diamond | cylinder, `icon`, `color`), `edges` (≤ 60 `DiagramEdge`: `{from, to, label, style:
+  solid | dashed, color}`, `from` is the alias of the field `source`; strings `"a -> b"`, `"a ->
+  b: label"`, `"a --> b"` dashed, chains `"a -> b -> c"` expanded by a before-validator of
+  `edges`; JSON Schema `anyOf` string (`pattern: "->"`) | object), `heading`, `direction`
+  auto | LR | TB, `routing` curved | straight | orthogonal, `reveal` nodes | layers | all,
+  `steps` (per step a ref or a list of refs; a ref is a node id or `a->b`, spaces around `->`
+  ignored), `highlight` (refs), `shape`, colours, `size`/`edge_label_size`/`heading_size`.
+  Validation (model validator): duplicate ids, unknown nodes in edges (`difflib` suggestions +
+  the node list), self-loops, duplicate edges, unknown or repeated refs in `steps`, unknown
+  refs in `highlight`. `describe` now shows a field's alias (`from`) in `list-scenes` and its
+  JSON `name` (no other built-in uses aliases).
+- **Fitting.** Per direction option (`auto`: the frame's orientation first; the other one is
+  kept only if its text is `direction_bias` 1.1x larger) and per label wrap width (`wraps` 3.2,
+  2.3, 1.7, 4.4 units at 32 pt, scaled with the size), the size factor goes from `growth` 1.3,
+  1.15, 1, then x0.9 down to where label and edge-label sizes both sit at their floor
+  (`readable_size() x floor_margin` 1.05: lint measures short lowercase labels a little small);
+  the first factor whose `layered_layout` fits the body wins. The plan key is (fits, factor
+  capped at 1 x bias, factor x bias): growth never decides the layout. Then `_spread` widens the
+  gaps (layer factor 1.8 → 1, node factor 1.4x that) while it still fits. Node boxes come
+  from `measure_text` (content + padding 0.32 / 0.2 x size/32 units; circle = diagonal; diamond:
+  half-diagonals `a = x + 1.5 y`, `b = a / 1.5`; pill: + 0.35 h; cylinder: + two rims);
+  icons stand above the label in LR layouts, circles and diamonds, else left of it. Nothing
+  fits at the floor → scaled down whole and the warning "split it into smaller diagrams (or
+  shorten labels)".
+- **Drawing.** A node is `VGroup(shape, icon?, label)` (z 1): the shape filled with its colour
+  at `fill_opacity` 0.1 (a tint: `highlight` style `color` then paints a highlight tint under a
+  highlight-coloured label that keeps 4.5:1 on light presets; 0.14 did not) and stroked at 3.
+  Cylinder: a closed body path (top arc, side, bottom arc, side) + the front rim arc without
+  fill. An edge is `VGroup(line, tip, label?)`; `curved` lines are cubic Béziers between the
+  route points with handles along the main axis (S-curves; the arrowhead points along the
+  axis into the node), `straight`/`orthogonal` polylines; the line stops 0.9 tip-lengths before
+  the route's end and a filled triangle tip ends on the outline; `dashed` = `DashedVMobject`.
+  An edge label sits on a pill of the background colour (z 2, not part of the target, so
+  colour highlights do not paint it) at the route's label anchor.
+- **Steps.** Groups per step: `steps` (+ one step with the nodes no step names), else per
+  `reveal` in layout order (layer, then order). A step plays in waves (`_reveal`): nodes no
+  pending edge leads to, then edges whose source is on screen (`Create`, linear; dashes one
+  after another; then tip and label), then the nodes they reach, … (a cycle inside a step starts
+  at its first node). Edges between nodes on screen come along unless a later step names them;
+  a named edge brings its ends. `highlight` adds a last step: listed nodes (outline stroke
+  1.5x, tint 1.6x, icon in `highlight_color`; labels unchanged) and edges (listed, or between
+  consecutive listed nodes; line 1.6x wider) recoloured, every other node/edge `dim_to`
+  `dimmed_opacity` 0.55. `reveal(fraction=0.75, cap=1.6)`, `outro` 0.5.
+- **Targets.** `heading`, `node<N>`/`node:<id>` (outline = the shape, so a `box` frames it),
+  `edge:<from>-><to>` (line, tip, label; its entrance as a target brings its hidden ends first).

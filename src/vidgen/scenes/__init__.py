@@ -13,6 +13,7 @@ from vidgen.scenes import (  # noqa: F401
     chapter,
     code,
     comparison,
+    diagram,
     end_card,
     equation,
     icon_grid,

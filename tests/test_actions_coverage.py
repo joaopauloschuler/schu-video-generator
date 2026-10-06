@@ -48,7 +48,10 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "comparison": {"heading": "H", "columns": [{"heading": "A", "points": ["x", "y"]}, {"heading": "B", "points": ["z"]}]},
     "table": {"title": "T", "header": ["Name", "N"], "rows": [["a", 1], ["b", 2]], "caption": "C"},
     "timeline": {"heading": "H", "events": [{"date": 1969, "title": "Moon"}, {"date": "1981", "title": "Shuttle", "icon": "rocket"}]},
+    "diagram": {"heading": "H", "nodes": ["a", {"id": "b", "icon": "rocket"}], "edges": ["a -> b: go"]},
 }
+#: Built-in types registered under a second name (same class, params and targets).
+ALIASES = {"flowchart": "diagram"}
 
 
 def with_picture(root: Path) -> Path:
@@ -95,7 +98,8 @@ def targets_table() -> dict[str, tuple[list[str], list[str]]]:
 def test_every_builtin_type_has_targets_and_the_docs_table_matches() -> None:
     extensions.load_builtins()
     table = targets_table()
-    builtin = {e.name: e.cls for e in registry.all() if e.builtin}
+    builtin = {e.name: e.cls for e in registry.all() if e.builtin and e.name not in ALIASES}
+    assert all(registry.get(alias).cls is builtin[name] for alias, name in ALIASES.items())
     assert sorted(table) == sorted(builtin) == sorted(SAMPLES)
     known = set(registry.action_names())
     for name, (targets, useful) in table.items():
@@ -134,6 +138,7 @@ def test_target_names_of_every_builtin_type() -> None:
                               "cell1.1", "cell1.2", "cell2.1", "cell2.2", "caption"]
     assert names("timeline") == ["heading", "axis", "event1", "event:1969", "event2", "event:1981"]
     assert names("timeline", heading="")[:2] == ["axis", "event1"]
+    assert names("diagram") == ["heading", "node1", "node:a", "node2", "node:b", "edge:a->b"]
     assert names("table", title="", caption="", header=[]) == ["row1", "row:a", "row2", "row:b", "col1", "col2",
                                                                "cell1.1", "cell1.2", "cell2.1", "cell2.2"]
 
@@ -174,7 +179,8 @@ def test_builtin_scenes_register_their_target_names(kind: str, make_project, med
     ("kind", "target"),
     [("title", "authors"), ("quote", ["author", "source"]), ("end_card", "line*"), ("icon_grid", "item2"),
      ("line_chart", "series2"), ("image", "caption"), ("code", "line3"), ("text_card", "text"),
-     ("chapter", "subtitle"), ("stat", ["comparison", "context"]), ("comparison", "col2"), ("table", "row2"), ("timeline", "event2")],
+     ("chapter", "subtitle"), ("stat", ["comparison", "context"]), ("comparison", "col2"), ("table", "row2"), ("timeline", "event2"),
+     ("diagram", "edge:a->b")],
 )
 def test_early_reveal_is_not_repeated_by_the_scene(kind: str, target: str | list[str], make_project, media: Path) -> None:
     project = load(make_project, [{"id": "s", "type": kind, "params": SAMPLES[kind], "beats": beats([{"reveal": target}], None)}])

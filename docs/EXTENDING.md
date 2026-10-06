@@ -293,6 +293,27 @@ part alone (`FadeIn(group[0])`) adds that part by itself and dissolves the group
 - `nice_ticks(lo, hi, max_ticks)`, `auto_format(values)`, `format_value(v, fmt, unit)`,
   `check_format(fmt)` — chart axes and labels without LaTeX.
 
+**Graphs.** `layered_layout(nodes, edges, direction="LR", layer_gap=1.0, node_gap=0.5,
+routing="straight")` places a directed graph in layers (what the `diagram` scene draws with):
+`nodes` are ids or `GraphNode(id, width, height, shape)` (`shape` `box`, `ellipse`,
+`diamond` or `stadium`: the outline edges are clipped to), `edges` are `(source, target)` pairs
+or `GraphEdge(source, target, label=(w, h))` (room for a label is kept in the gap next to the
+source). It returns a `GraphLayout`: `nodes[id]` → `NodePlace(x, y, width, height, layer,
+order)` centred on the origin (y up), `edges` → `EdgeRoute(source, target, points, reversed,
+label_at)` in input order (`points` run from the source's outline to the target's; `reversed`
+marks an edge that closes a cycle and runs backwards), `layers`, `width`, `height` and
+`crossings`. `direction="TB"` stacks the layers top to bottom; `routing="orthogonal"` gives
+right-angled routes. Pure Python and deterministic; unknown ids and self-loops raise
+`VidgenError`. Draw the routes however your scene likes:
+
+```python
+layout = layered_layout([GraphNode(n, 1.6, 0.7) for n in ("in", "mid", "out")], [("in", "mid"), ("mid", "out")])
+for e in layout.edges:
+    self.add(Arrow(*[np.array([x, y, 0]) for x, y in (e.points[0], e.points[-1])], buff=0))
+for name, at in layout.nodes.items():
+    self.add(RoundedRectangle(width=at.width, height=at.height, corner_radius=0.15).move_to([at.x, at.y, 0]))
+```
+
 **Timing.** Beat-driven reveals without arithmetic:
 - `self.reveal(steps)` narrates the whole scene: step *i* at beat *i*; more steps than beats are
   spread evenly (`distribute(n_steps, n_beats)` gives the plan), extra beats hold. A step is an

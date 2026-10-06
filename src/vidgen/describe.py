@@ -58,12 +58,13 @@ def nested_models(annotation: Any) -> list[type[BaseModel]]:
 
 def describe_params(model: type[BaseModel] | None, indent: str = "", _seen: tuple[type, ...] = ()) -> list[str]:
     """``name: type [= default]`` for each field of a ``Params`` model (empty for plain dicts);
-    the fields of nested models follow their field, indented."""
+    the fields of nested models follow their field, indented. A field with an alias (``from``)
+    is shown by it, as it is written in video.yaml."""
     if model is None:
         return []
     lines = []
     for name, field in model.model_fields.items():
-        line = f"{indent}{name}: {type_name(field.annotation, field.metadata)}"
+        line = f"{indent}{field.alias or name}: {type_name(field.annotation, field.metadata)}"
         if not field.is_required():
             default = field.get_default(call_default_factory=True)
             line += f" = {default!r}"
@@ -99,7 +100,7 @@ def params_json(model: type[BaseModel], _seen: tuple[type, ...] = ()) -> list[di
         ]
         fields.append(
             {
-                "name": name,
+                "name": field.alias or name,   # as written in video.yaml
                 "type": type_name(field.annotation, field.metadata),
                 "required": required,
                 "default": None if required else _jsonable(field.get_default(call_default_factory=True)),
