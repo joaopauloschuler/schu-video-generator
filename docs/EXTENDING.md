@@ -1,7 +1,7 @@
 # Extending vidgen from your project
 
-Every project can add its own **scene types**, **helpers**, **theme tokens** and **hooks** in its
-`extensions/` folder. Nothing in vidgen has to change, and a finished extension can later be
+Every project can add its own **scene types**, **helpers**, **theme tokens**, **hooks** and
+**per-beat actions** in its `extensions/` folder. Nothing in vidgen has to change, and a finished extension can later be
 promoted into the core library unchanged.
 
 ```
@@ -494,3 +494,104 @@ Built-in scenes use exactly the same API. To promote `extensions/big_number.py`:
 3. add tests; delete the project copy (or keep it with `override=True`).
 
 It is now listed as `builtin` by `vidgen list-scenes`.
+
+## 8. Per-beat actions: targets and custom actions
+
+A beat's `actions:` (docs/CONFIG.md "Beat actions") act on named **targets** of the scene. A
+scene type opts in by naming its parts; an action type is a small class. Both use the same API
+as the built-ins (`bullets`/`bar_chart` and `src/vidgen/scenes/actions.py`).
+
+**Targets in your scene type.**
+- `target_patterns = ("item<N>", ...)` (class attribute): the forms of your names, shown by
+  `vidgen list-scenes` and in error messages.
+- classmethod `target_names(params) -> list[str]`: every name the scene will register for these
+  params. `vidgen validate` checks each action's `target` against it (no rendering needed), so
+  it must match what `construct()` registers.
+- `self.target(names, mobject, entrance=None) -> Target` in `construct()`, before the beat whose
+  actions use it: `names` is one name or a list (`["item3", "item:Render it"]`; a name is
+  `word`, `word3` or `kind:any label`); `mobject` may be a group that is never added itself
+  (e.g. a bar plus its labels); `entrance` returns the animations that bring it on screen
+  (default `FadeIn`).
+- Build your own reveal steps with `self.entrance(target)`: it returns `[]` when the target is
+  already on screen, so an item a `reveal` action showed early is not revealed twice. Also:
+  `self.is_shown(t)`, `self.find_targets("bar:*")`, `self.on_screen_parts(t)` (the target's
+  largest parts that are in the scene), `self.targets`.
+- Actions run inside the scene's **waits** (`self.reveal`, `self.play_steps`, `self.wait`,
+  `self.wait_seconds` and the end of `narrate`): leave time in each beat. A beat that animates
+  until its very end gets its actions applied without animation (and a warning).
+
+**A custom action** subclasses `Action` and is registered with `@action("name")` (a name clash
+with a built-in needs `override=True`, as for scene types). `Options` (an `ActionOptions`
+model: `ThemeColor`, `Field` constraints, docstrings) are the extra keys in the config. `apply`
+returns the animations (played together, in the beat's remaining time); one instance is made
+per use in the config, so it can keep what `revert` (for `until:`) needs.
+
+```python
+# extensions/checklist.py
+from vidgen.api import *
+
+
+@action("tick")
+class Tick(Action):
+    """Put a check mark right of each target; `until:` removes it."""
+
+    class Options(ActionOptions):
+        color: ThemeColor = "tertiary"
+        """Colour of the mark."""
+
+    run_time = 0.5           # default seconds (`run_time:` in the config overrides it)
+    reversible = True        # `until:` allowed: implement revert()
+
+    def apply(self, scene, targets):
+        self.marks = [
+            icon("check", size="heading", color=self.options.color).next_to(t.mobject, RIGHT, buff=0.3)
+            for t in targets
+        ]
+        return [FadeIn(m, scale=0.6) for m in self.marks]
+
+    def revert(self, scene, targets):
+        return [FadeOut(m) for m in self.marks]
+
+
+@scene("checklist")
+class Checklist(NarratedScene):
+    outro = 0.5
+    target_patterns = ("item<N>",)
+
+    class Params(SceneParams):
+        items: list[str] = Field(min_length=1)
+
+    @classmethod
+    def target_names(cls, params):
+        return [f"item{i}" for i in range(1, len(params.items) + 1)]
+
+    def construct(self):
+        body = self.region("body")
+        rows = VGroup(*[readable_text(t, body.inset(0.8, 0), align="left") for t in self.params.items])
+        rows.arrange(DOWN, aligned_edge=LEFT, buff=0.4)
+        place(rows, body.inset(0.8, 0), fit="contain", max_scale=1.0, align="left")
+        items = [self.target(f"item{i}", row) for i, row in enumerate(rows, start=1)]
+        self.reveal([lambda t=t: self.entrance(t) for t in items])
+        self.finish()
+```
+
+```yaml
+- id: plan
+  type: checklist
+  params: {items: ["Write the beats", "Storyboard", "Lint"]}
+  beats:
+    - text: "Three steps."
+    - text: "The first one is done."
+      actions:
+        - tick: item1
+        - {action: highlight, target: item2, until: plan_b3}   # built-in actions work too
+    - text: "And so is the storyboard."
+      actions: [{tick: item2, color: accent}]
+```
+
+`needs_visible = True` (default) first reveals targets that are not on screen yet;
+`needs_target = False` allows an action without `target`. Animate the parts that are in the
+scene (`scene.on_screen_parts(t)`), not a group of them that was never added: Manim would add
+that group and draw its parts twice. New mobjects (like the marks above) are simply added by
+their animation. `vidgen list-scenes` lists your action with its options; `vidgen schema`
+includes them.

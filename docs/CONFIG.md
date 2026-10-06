@@ -6,7 +6,7 @@ the bodies of `variants`, so typos are caught by `vidgen validate`. Paths are re
 project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-and-beats),
 [format](#format-and-preview), [variants](#variants), [theme](#theme), [voice](#voice-voice),
 [narration](#narration-narration), [narration audio](#narration-audio-elevenlabs),
-[built-in scene types](#built-in-scenes),
+[built-in scene types](#built-in-scenes), [beat actions](#beat-actions),
 [JSON Schema](#json-schema-vidgen-schema), [frame stills](#frame-stills-vidgen-render---frames),
 [storyboard](#storyboard-vidgen-storyboard), [lint](#lint-vidgen-lint),
 [JSON output of commands](#json-output---json).
@@ -38,6 +38,7 @@ scenes:
       - text: "Welcome."      # required, non-empty
         id: intro_b1          # optional; default <scene id>_b<n> (1-based); unique in the video
       - text: "Let's start."
+        actions: []           # optional per-beat actions on the scene's targets (see "Beat actions")
   - id: pause
     type: text_card
     params: {text: "Part 2"}
@@ -54,7 +55,9 @@ scenes:
 | `lint_ignore` | `[]` | `vidgen lint` findings to skip in this scene, see [lint](#lint-vidgen-lint) |
 
 Beat `id`s name the audio files: keep them when you edit the text (only that beat is
-re-voiced). A beat `text` is spoken as written; it is also the subtitle.
+re-voiced). A beat `text` is spoken as written; it is also the subtitle. A beat's `actions`
+(default `[]`) point at parts of the scene while it is spoken — reveal, dim, highlight — see
+[beat actions](#beat-actions).
 
 ## Format and preview
 
@@ -407,6 +410,7 @@ Steps: (1) icon, kicker, title and subtitle, (2) authors.
 ### `bullets`
 
 Steps: one per item (the heading comes with the first). `reveal: all` shows every item in beat 1.
+[Action targets](#beat-actions): `heading`, `item<N>` (1-based), `item:<text>`.
 The heading sits in the `header` region, the list is centered in the space below it. In a
 vertical video the heading is 1.3x larger and a short list grows up to 1.3x and spreads out to
 use the taller frame.
@@ -499,6 +503,8 @@ most 16).
 
 Steps: all bars (`reveal: all`, default) or one per bar (`per_beat`), then — if `highlight` is
 set — a focus step that dims the other bars. Bars grow while their value labels count up.
+[Action targets](#beat-actions): `title`, `bar<N>` (1-based) and `bar:<label>`, each a bar with
+its value and category labels (beat actions can do more than the one `highlight` step).
 
 | param | type | default | |
 |---|---|---|---|
@@ -723,6 +729,81 @@ One block of text, wrapped to fit, faded in at the first beat and held (no fade-
   duration: 2
 ```
 
+## Beat actions
+
+A beat can act on named parts of its scene — **targets** such as `item3` or `bar:4K` — while it
+is spoken: reveal one early, dim it, highlight it. Actions are listed under the beat:
+
+```yaml
+- id: sizes
+  type: bar_chart
+  params: {labels: ["Preview 480p", "720p", "1080p", "4K"], values: [0.4, 1.1, 2.6, 9.8]}
+  beats:
+    - text: "Bar charts grow their bars while the values count up."
+    - text: "Four K takes by far the longest."
+      actions:
+        - {action: highlight, target: "bar:4K", style: box, until: sizes_b3}   # canonical form
+    - text: "Previews are the fast way to iterate."
+      actions:
+        - dim: [bar2, bar3, bar4]                  # shorthand: {ACTION: TARGET, ...options}
+        - highlight: "bar:Preview 480p"
+          color: accent                            # an option, in the shorthand too
+```
+
+**Syntax.** The canonical form is a mapping with `action` and the keys below, plus the
+action's options. The shorthand `{ACTION: TARGET, ...options}` (as `- dim: item2`) is the
+same thing; write the action name as the first key (if a tool sorted the keys, vidgen finds
+the one key that names an action).
+
+| key | default | |
+|---|---|---|
+| `action` | required | `reveal`, `dim`, `highlight`, or a project action (`vidgen list-scenes` lists them) |
+| `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one |
+| `at` | `0` | when, as a fraction of the beat's narration (`0` ≤ at < `1`) |
+| `until` | none | a later beat of the same scene: the action is undone when it starts (`dim`, `highlight`) |
+| `run_time` | the action's | seconds the animation takes (`reveal` 0.8, `dim` / `highlight` 0.6) |
+
+**Targets** depend on the scene type (`vidgen list-scenes` prints them as `targets:`):
+
+| scene type | targets |
+|---|---|
+| `bullets` | `heading`, `item<N>` (1-based: `item1`, `item2`...), `item:<text>` (the item's full text; `item:Pick*`) |
+| `bar_chart` | `title`, `bar<N>` (1-based), `bar:<label>` — a bar with its value and category labels |
+
+Other built-in types have no targets yet (an action on them is a `vidgen validate` error);
+[project scene types](EXTENDING.md#8-per-beat-actions-targets-and-custom-actions) can declare
+their own.
+
+**Actions**
+
+| action | options | |
+|---|---|---|
+| `reveal` | — | brings the target on screen with the scene's own entrance animation (e.g. item 4 before its turn). A target already on screen is left alone, and the scene does not reveal it again at its own step. |
+| `dim` | `opacity` (`0.45`, 0–1, relative to the current opacity) | fades the target; `until:` restores the opacity |
+| `highlight` | `color` (`highlight`, a theme token or hex), `style` (`color` default, `box`, `underline`, `flash`, or a list such as `[color, box]`) | `color` recolours the target; `box` draws a rounded frame around it, `underline` a line under it; `flash` flashes the colour there and back (leaves no trace; not with `color`). `until:` restores the colours and removes box / underline. |
+
+`dim` and `highlight` act on targets on screen; a target not shown yet is first revealed (as by
+`reveal`). They change only opacity resp. colour, so both can apply to one target and each is
+undone separately.
+
+**Timing.** Actions never make a beat longer. An action is due `at` x the beat's narration
+after the beat starts and runs at the first moment from then on when the scene's own animation
+is not playing (the scene's reveal of that beat's step comes first, then the action), for its
+`run_time`, shortened to end within the beat (narration + `narration.pad`; `vidgen lint`
+reports run times shortened below 0.5 s as `rushed_animation`). Actions due together play
+together (ones on the same target one after the other). Undoing (`until`) happens at the
+start of that beat, with its actions. If a scene leaves no time at all, the action is applied
+without animation and a warning is logged. Silent scenes have no beats, so no actions.
+
+**Checks.** `vidgen validate` reports unknown actions (with suggestions), unknown options,
+invalid option values, `until` on an action that cannot be undone or on a beat that is not a
+later one of the scene, and unknown targets, listing the scene's targets, e.g.
+`scenes[3].beats[1].actions[0].target: unknown target 'bar:4k' for scene type 'bar_chart'; did
+you mean 'bar:4K'? (targets: title, bar1, bar:Preview 480p, ...; forms: title, bar<N>,
+bar:<label>; * and ? match several)`. The JSON Schema checks action names and options; targets
+depend on the params, so only `vidgen validate` checks them. Use `vidgen storyboard --scene ID
+--per-beat 3` to see actions mid-beat.
+
 ## JSON Schema (`vidgen schema`)
 
 `vidgen schema [PROJECT]` prints a [JSON Schema](https://json-schema.org) (draft 2020-12) of
@@ -741,7 +822,8 @@ What the schema checks: every key and type of this reference (unknown keys are e
 `scenes[].type` is one of the registered types and `scenes[].params` is checked against that
 type's params (`if`/`then` per type: required params, types, `Literal` values, ranges, nested
 models); a type's fixed beat count (`minItems`/`maxItems` of `beats`); the silent-scene rule
-(`duration` exactly when there are no beats); even `width`/`height`; and the bodies of
+(`duration` exactly when there are no beats); beat `actions` in both forms (the action name is
+one of the registered actions and the options are that action's); even `width`/`height`; and the bodies of
 `variants` (partial configs: the same keys, none required). Color and size params accept a
 `#hex` color / a positive number or a token name of the project's theme (defaults, extension
 defaults, `theme.colors`/`theme.sizes` of the base config and of every variant); such
@@ -750,7 +832,8 @@ built-in presets and those the project registers, `theme.code_style` of the inst
 styles. Descriptions come from the field docs (the same text as `doc` in
 `vidgen list-scenes --json`).
 
-What only `vidgen validate` checks: unique scene and beat ids, files referenced by params
+What only `vidgen validate` checks: unique scene and beat ids, action targets and `until`
+beats, files referenced by params
 (images, code, logos), the checks written in Python (`validate_project`, pydantic validators,
 e.g. "values has one entry per label") and loading the extensions. A schema-valid config can
 still fail `vidgen validate`. The reverse happens only for values vidgen converts, such as
@@ -1105,16 +1188,22 @@ the location in the human output (`scenes[1].type: unknown scene type 'titel'; d
 |---|---|---|
 | `project` | str \| null | the project whose extensions were loaded (`null`: built-ins only) |
 | `scene_types` | list | sorted by name, as below |
+| `actions` | list | the [beat actions](#beat-actions) (built-in and the project's), sorted by name, as below |
 
 Each scene type: `name`; `origin` (`builtin`, or the extension file relative to the project);
 `builtin` (bool); `overrides_builtin` (bool, an extension registered with `override=True`);
 `doc` (the class docstring, else its module's, or `null`); `beats` (`null` = any number, else
 `{min, max, text}` with `max` `null` for no upper limit, e.g. `{"min": 2, "max": 2, "text":
-"exactly 2 beats"}`); `params` (`null` = free-form params, else a list of fields).
+"exactly 2 beats"}`); `params` (`null` = free-form params, else a list of fields); `targets`
+(the forms of its [action targets](#beat-actions), e.g. `["heading", "item<N>",
+"item:<text>"]`; `[]` = none).
 Each field: `name`; `type` (readable type as in the human listing: `str`, `list[str]`,
 `color`, `size`, `'all' | 'per_beat'`, ...); `required` (bool); `default` (JSON value, `null`
 when required); `doc` (the docstring under the field or its `Field(description=...)`, or
 `null`); `nested` (fields of `SceneParams` models used in the type, as `{model, fields}`).
+Each action: `name`, `origin`, `builtin`, `overrides_builtin`, `doc` (as for scene types);
+`run_time` (default seconds); `reversible` (bool: `until` allowed); `needs_target` (bool);
+`options` (fields like `params`; `[]` = none).
 
 ### `vidgen list-themes --json`
 

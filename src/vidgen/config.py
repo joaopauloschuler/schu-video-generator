@@ -9,14 +9,17 @@ errors into a readable :class:`~vidgen.errors.VidgenError`.
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from typing import Annotated, Any, Literal
 
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    ModelWrapValidatorHandler,
     PositiveFloat,
     PositiveInt,
+    PrivateAttr,
     ValidationError,
     WithJsonSchema,
     field_validator,
@@ -339,6 +342,89 @@ class LintIgnore(_Strict):
     """Only findings at this beat's end."""
 
 
+#: Keys every action has; any other key of an action is an option of that action type.
+ACTION_KEYS = ("action", "target", "at", "until", "run_time")
+#: A target name or pattern: ``item3``, ``bar:Preview 480p``, ``bar*`` (``*``/``?`` wildcards).
+TargetPattern = Annotated[str, Field(min_length=1)]
+
+
+def _unshorten(data: dict[str, Any], name: str) -> dict[str, Any]:
+    return {"action": name, "target": data[name], **{k: v for k, v in data.items() if k != name}}
+
+
+class ActionConfig(BaseModel):
+    """A per-beat action (DESIGN.md §26): ``{action: NAME, target: TARGET, at, until, run_time,
+    ...options}`` or the shorthand ``{NAME: TARGET, ...options}`` (the action name first).
+
+    Which actions exist, their options and the scene's targets depend on the registered action
+    and scene types, so they are checked by ``vidgen validate`` (``vidgen.actions``), not here.
+    """
+
+    model_config = ConfigDict(extra="allow", use_attribute_docstrings=True)
+
+    action: Identifier
+    """Action type: reveal, dim, highlight, or a project action (`vidgen list-scenes`)."""
+    target: TargetPattern | list[TargetPattern] | None = Field(default=None, min_length=1)
+    """Target name(s) of the scene (item3, bar:<label>, ...); * and ? match several."""
+    at: float = Field(default=0.0, ge=0, lt=1)
+    """When in the beat, as a fraction of its narration (0 = start); the action waits for the
+    scene's own animation running then."""
+    until: Identifier | None = None
+    """A later beat of the scene at whose start the action is undone (dim, highlight)."""
+    run_time: PositiveFloat | None = None
+    """Seconds the action's animation takes (default: the action's own); shortened to fit the beat."""
+
+    _shorthand: dict[str, Any] | None = PrivateAttr(default=None)
+
+    @model_validator(mode="wrap")
+    @classmethod
+    def _from_shorthand(cls, data: Any, handler: ModelWrapValidatorHandler[ActionConfig]) -> ActionConfig:
+        """``{NAME: TARGET, ...options}`` → ``{action: NAME, target: TARGET, ...options}``.
+
+        ``NAME`` is the first key other than the common keys; :meth:`resolved` corrects the
+        choice once the registered actions are known (for configs whose keys a tool sorted).
+        """
+        if not isinstance(data, dict) or "action" in data:
+            return handler(data)
+        names = [k for k in data if not (isinstance(k, str) and k in ACTION_KEYS)]
+        if not names or not isinstance(names[0], str):
+            keys = ", ".join(map(str, data)) or "none"
+            raise ValueError(
+                "an action is {action: NAME, target: TARGET, ...options} or the shorthand "
+                f"{{NAME: TARGET, ...options}} (got keys: {keys}; no action name)"
+            )
+        if "target" in data:
+            raise ValueError(f"the shorthand {{{names[0]}: TARGET}} already gives the target; remove 'target'")
+        model = handler(_unshorten(data, names[0]))
+        model._shorthand = dict(data)
+        return model
+
+    def resolved(self, known: Collection[str]) -> ActionConfig:
+        """This action, or — for a shorthand whose first key is not a known action but exactly
+        one other key is (keys sorted by a tool) — the action that key names."""
+        if self._shorthand is None or self.action in known:
+            return self
+        names = [k for k in self._shorthand if k in known and k not in ACTION_KEYS]
+        if len(names) != 1:
+            return self
+        return ActionConfig.model_validate(_unshorten(self._shorthand, names[0]))
+
+    @property
+    def options(self) -> dict[str, Any]:
+        """The action-specific options (every key other than :data:`ACTION_KEYS`)."""
+        return dict(self.model_extra or {})
+
+    def targets(self) -> list[str]:
+        """``target`` as a list (empty when there is none)."""
+        if self.target is None:
+            return []
+        return [self.target] if isinstance(self.target, str) else list(self.target)
+
+    def describe(self) -> str:
+        """``highlight item3`` (for messages)."""
+        return " ".join([self.action, *self.targets()])
+
+
 class BeatConfig(_Strict):
     """One narrated sentence/paragraph. ``id`` is filled in by :class:`SceneConfig` if omitted."""
 
@@ -346,6 +432,8 @@ class BeatConfig(_Strict):
     """Unique in the whole video (names audio/<id>.mp3); default <scene id>_b<n> (1-based)."""
     text: str = Field(min_length=1)
     """What the narrator says; also the subtitle."""
+    actions: list[ActionConfig] = Field(default_factory=list)
+    """Per-beat actions on the scene's targets (reveal, dim, highlight, ...), run during this beat."""
 
     def estimated_duration(self, words_per_second: float) -> float:
         """Speech duration estimated from the word count (no padding)."""
@@ -397,6 +485,14 @@ class SceneConfig(_Strict):
         if self.beats and self.duration is not None:
             raise ValueError("'duration' is only allowed on silent scenes (scenes without beats)")
         beat_ids = {beat.id for beat in self.beats}
+        order = [beat.id for beat in self.beats]
+        for j, beat in enumerate(self.beats):
+            for action in beat.actions:
+                if action.until is not None and action.until not in order[j + 1 :]:
+                    raise ValueError(
+                        f"beats[{j}] action '{action.describe()}': until '{action.until}' is not a later beat of "
+                        f"scene '{self.id}' (later beats: {', '.join(order[j + 1:]) or 'none'})"
+                    )
         for entry in self.lint_ignore:
             if isinstance(entry, LintIgnore) and entry.beat is not None and entry.beat not in beat_ids:
                 raise ValueError(f"lint_ignore: scene '{self.id}' has no beat '{entry.beat}'")

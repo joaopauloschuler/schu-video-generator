@@ -107,12 +107,12 @@ Rules that apply to every step:
 ## Phase C — Animation vocabulary and new scene types
 
 ### Step 23 — Per-beat actions (framework + 3 actions)
-- [ ] Beat-level `actions:` list in YAML; scenes expose named targets (e.g. `item3`, `bar:Preview 480p`)
-- [ ] Actions `reveal`, `dim`, `highlight`; implemented for `bullets` and `bar_chart`
-- [ ] Unknown target/action → clear validation error
+- [x] Beat-level `actions:` list in YAML; scenes expose named targets (e.g. `item3`, `bar:Preview 480p`) (canonical `{action, target, at, until, run_time, ...options}` + shorthand `{NAME: TARGET, ...options}`; `@action` registry in `vidgen.api`; JSON Schema; `list-scenes` targets/actions)
+- [x] Actions `reveal`, `dim`, `highlight`; implemented for `bullets` and `bar_chart` (`highlight` styles color/box/underline/flash; `until:` undoes dim/highlight; actions run inside the beat's waits, never overrun)
+- [x] Unknown target/action → clear validation error (with suggestions and the scene's targets)
 
 ### Step 24 — Per-beat actions (zoom, transform, coverage)
-- [ ] `zoom` (camera to target and back) and `transform` (target A → B)
+- [ ] `zoom` (camera to target and back) and `transform` (target A → B) (framework: DESIGN §26; `zoom` needs a `MovingCamera` scene base or a frame-scaling animation; `transform` likely `needs_target` with a second target option)
 - [ ] Actions supported by every built-in scene where they make sense; documented table
 
 ### Step 25 — Scenes: `stat` and `chapter`

@@ -54,7 +54,8 @@ src/vidgen/
   icons.py                # icon registry: vendored set + project assets/icons, search (§22; no manim)
   icon_mobject.py         # icon() / Icon: SVG -> recoloured VGroup with scaling strokes (§22)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
-  registry.py             # scene-type registry
+  registry.py             # scene-type and action-type registry
+  actions.py              # per-beat actions: Target, Action, validation, ActionRunner (§26)
   extensions.py           # discovery + import of project extensions
   hooks.py                # hook registry + dispatch
   runtime.py              # "current project/theme" context used by helpers and extensions
@@ -75,7 +76,8 @@ src/vidgen/
                           # fingerprint.py (what a scene's render depends on, §14)
   subtitles.py            # SRT from beat timings
   fileio.py               # atomic writes; replacing files that Windows programs keep open
-  scenes/                 # built-in scene library (registered like extensions)
+  scenes/                 # built-in scene library (registered like extensions; actions.py:
+                          # the built-in beat actions reveal/dim/highlight, §26)
   data/fonts/             # Inter, Source Serif 4, JetBrains Mono NL (.ttf + OFL.txt; package data)
   data/icons/             # manifest.json + lucide/*.svg + lucide/LICENSE (ISC; package data, §22)
 tools/                    # maintainer scripts, not shipped: vendor_icons.py + icon_set.json (§22, §23)
@@ -438,7 +440,10 @@ orientation, readable_size, readable_text`. Step 16 adds `register_theme_preset`
 gives it the keyword arguments `scale` and `fonts` (§20). Step 19 adds `icon`, `Icon` and
 `IconName` (§22). Step 21 adds `grid_shape` (§24). Step 22 (§25) adds keyword arguments only:
 `role=` on `T`, `MT`, `NarratedScene.text`/`markup`, `fit_text` and `readable_text`; `region(name,
-area)` also takes a region name as `area`; `SceneParams.also_accepts`.
+area)` also takes a region name as `area`; `SceneParams.also_accepts`. Step 23 (§26) adds
+`action`, `Action`, `ActionOptions`, `Target` and, on `NarratedScene`, `target_patterns`,
+`target_names()`, `target()`, `targets`, `find_targets()`, `on_screen_parts()`, `is_shown()`,
+`entrance()`.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -1400,3 +1405,92 @@ using the existing renders of the others (missing ones are rendered). Exit code 
 - **Tests**: marker `slow` on the 18 slowest render tests (several seconds each); `pytest -m
   "not slow"` is the quick run, `-m "not render"` the fastest; the default runs everything.
 
+## 26. Refinements (Step 23, per-beat actions)
+
+- **Config** (`config.ActionConfig`, `BeatConfig.actions: list[ActionConfig] = []`; reference:
+  docs/CONFIG.md "Beat actions"). Canonical form `{action: NAME, target, at, until, run_time,
+  ...options}`: `action` an identifier; `target` a name or pattern (`*`/`?`, brackets literal)
+  or a non-empty list of them; `at` in [0, 1) of the beat's narration (default 0); `until` a
+  later beat of the same scene (checked by `SceneConfig`); `run_time` > 0 (default the action
+  type's). Every other key is an option of the action (`extra="allow"`, `ActionConfig.options`;
+  `ACTION_KEYS` are reserved). **One shorthand**: `{NAME: TARGET, ...options}`; `NAME` is the
+  first key that is not one of `ACTION_KEYS` (a wrap validator rewrites it to the canonical
+  form and keeps the raw mapping); `ActionConfig.resolved(known)` re-picks the key when that
+  one is not a registered action but exactly one other key is (keys sorted by a tool such as
+  `yaml.safe_dump`). `target` next to a shorthand is an error. Actions are part of the scene's
+  config entry, so they count in the render fingerprint, not in the TTS hash.
+- **Registry** (`vidgen.registry`): action types live next to scene types, with the same two
+  layers and collision rules (`ActionType(name, cls, origin, overrides)`, `register_action`,
+  decorator `action(name, *, override=False)`, `find_action`, `action_names`, `all_actions`,
+  `unknown_action_message`; both kinds go through `_add`). `reset/snapshot/restore/isolated`
+  cover both layers (`Snapshot` is now a pair). Built-in actions: `src/vidgen/scenes/actions.py`
+  (only `from vidgen.api import *`, imported by `vidgen.scenes`).
+- **Action class** (`vidgen.actions.Action`, exported): `Options` (an `ActionOptions` pydantic
+  model, `extra="forbid"`, theme tokens checked with the theme in the context; field names may
+  not be `ACTION_KEYS`), class attributes `run_time` (0.6), `reversible` (`until` allowed;
+  requires `revert`), `needs_visible` (True: hidden targets are revealed first),
+  `needs_target` (True). One instance per use (`__init__(options, config)`), so `apply(scene,
+  targets) -> list[Animation]` can keep what `revert(scene, targets)` needs.
+  `check_action_class` validates at registration.
+- **Targets** (`vidgen.actions.Target(names, mobject, entrance)`, exported). A scene type
+  declares `target_patterns` (doc forms, e.g. `("heading", "item<N>", "item:<text>")`) and
+  classmethod `target_names(params)` (every concrete name, for validation without rendering);
+  `construct()` registers them with `self.target(names, mobject, entrance=None)` (names match
+  `TARGET_NAME`: `word`, `word3`, `kind:any label`; a name may repeat, a pattern selects every
+  match). `self.on_screen_parts(t)` = the largest parts of the target that are in the scene's
+  family (a group target such as a bar + its labels is never added itself; animating the group
+  would make Manim add it and draw its parts twice); `is_shown` = any such part; `entrance(t)`
+  = the target's entrance animations, or `[]` when shown. Built-ins build their own reveal
+  steps from `entrance()`, which is how **a target revealed early by an action is not revealed
+  again by the scene's step** (decision: `reveal` of a shown target is a no-op, not an error —
+  whether it is shown depends on timing a static check cannot see). `bullets`: `heading`,
+  `item<N>`, `item:<text>` (the row); `bar_chart`: `title`, `bar<N>`, `bar:<label>` (bar +
+  value label + category label; title and caption are no longer one `head` group, visually
+  identical).
+- **Validation** (`actions.scene_actions(type, cls, spec, params, theme) -> (uses, problems)`,
+  locations relative to the scene): unknown action (did-you-mean + known list), options
+  (pydantic problems at `...actions[k].<option>`), `until` on a non-reversible action, missing
+  target, unknown target (difflib suggestions, up to 14 names, the forms, wildcard hint; a type
+  without targets names the types that have some). `vidgen validate` reports them as
+  `scenes[i].beats[j].actions[k].<key>` (action names and options are checked even when the
+  params are invalid; targets need valid params). `plan_actions` raises one `VidgenError`
+  with all problems; it runs in `pipeline._check_scenes` (before any worker) and in
+  `NarratedScene.__init__`.
+- **Timing** (`actions.ActionRunner`, created by the scene when it has actions). `narrate()`
+  calls `start_beat(id, d, pad)`: due frame = beat start + `round(at * d * fps)`; reverts of
+  applied uses with `until == id` are due at the start, before the beat's own actions. Actions
+  run **inside waits only**: `wait_seconds` and an overridden `wait` (plain Manim waits in
+  extension code) hand the wait to `ActionRunner.wait(frames)`, which waits to the due frame,
+  plays the due actions and waits the rest (`_wait_frames` is the old frame-exact wait). So an
+  action never shares a `play` with the scene's own animation of the same mobjects; with `at:
+  0` it follows the beat's entrance step. Run time = the configured/default run time, scaled
+  down so all phases end by the beat's end (`d + pad`), quantised to whole frames; shortened
+  plays carry `requested` (lint `rushed_animation`). Phases: entrances of hidden targets
+  (`reveal_time` 0.6 s) for `needs_visible` actions, then batches of due actions whose target
+  families do not overlap (actions on one target play one after the other). `end_beat()` (after
+  the final wait of `narrate`) applies what found no time without frames (`_apply_now`:
+  begin + finish) and logs a warning. `play_steps` now ends slot *k* at `start + (k+1)·slot`
+  (absolute), so an action that lengthened a slot's wait is absorbed by later waits (no
+  change without actions beyond frame rounding; every built-in's timing test still holds).
+- **Built-in actions**: `reveal` (run time 0.8, `needs_visible` False: the targets' entrances).
+  `dim` (`opacity` 0.45 relative to the current, reversible). `highlight` (`color` =
+  `highlight` token, `style` `color` | `box` | `underline` | `flash` or a list; `flash` and
+  `color` cannot combine; reversible: colours restored, box/underline faded out).
+  Colour/opacity changes use `Repaint`, an animation of the fill/stroke RGBA arrays of every
+  `VMobject` in each on-screen part (points untouched); revert restores only the channels the
+  action changed (RGB for highlight, alpha for dim) from the arrays saved at `apply`, so the two
+  combine and undo independently. Box: `SurroundingRectangle(buff 0.12, corner_radius 0.1,
+  stroke 4)`; underline: `Underline(buff 0.08, stroke 4)`. A first `pulse` style (Indicate-like
+  scaling about the target) was dropped: a bar scaled about its group's centre crossed the axis.
+- **Listing / schema**: `list-scenes` prints `targets:` per type and an `actions` section;
+  `--json` adds `targets` to scene types and a top-level `actions` list (`describe.
+  action_type_json`; keys added within version 1). `vidgen schema`: `BeatConfig.actions.items`
+  = `anyOf` [`ActionConfig` (`action` enum, per-action `if`/`then` with the options and
+  `additionalProperties: false`), `ActionShorthand` (`anyOf` one object per action: `required:
+  [NAME]`, its options, `additionalProperties: false`)]; options under `$defs/action.NAME`
+  (theme tokens as for params). Targets and `until` are left to `vidgen validate`.
+- **Limits / for Step 24**: only `bullets` and `bar_chart` have targets; `dim`/`highlight`
+  recolour vectorized mobjects only (images keep their pixels); `dim` compounds with a scene's
+  own dimming (`bullets` `dim_previous`); `highlight` keeps the target's current opacity (a
+  dimmed item is highlighted dimmed). Step 24 adds `zoom`/`transform` and targets for the
+  other built-ins on this framework.

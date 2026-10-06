@@ -19,10 +19,11 @@ from pathlib import Path
 from typing import Annotated, Any, ClassVar, NamedTuple, Union
 
 import av
-from manim import NORMAL, Animation, FadeOut, MarkupText, Scene, Text, Wait, config
+from manim import DEFAULT_WAIT_TIME, NORMAL, Animation, FadeIn, FadeOut, MarkupText, Mobject, Scene, Text, Wait, config
 from pydantic import AfterValidator, BaseModel, ConfigDict, GetJsonSchemaHandler, ValidationError, ValidationInfo
 
 from vidgen import helpers, regions, runtime
+from vidgen.actions import TARGET_NAME, ActionRunner, Target, match_names, plan_actions
 from vidgen.capture import FrameCapture
 from vidgen.layout import distribute
 from vidgen.config import BeatConfig, SceneConfig, validation_error_lines
@@ -208,6 +209,9 @@ class NarratedScene(Scene):
         if problem is not None:
             raise VidgenError(f"scene '{spec.id}': {problem}")
         self.beats: list[BeatConfig] = list(spec.beats)
+        self._targets: list[Target] = []
+        uses = plan_actions(spec.type, type(self), spec, self.params, self.theme)
+        self._actions = ActionRunner(self, uses) if uses else None
         self.audio_enabled = audio
         self.beat_log: list[BeatTiming] = []
         #: Every ``play``/``wait`` in order (:class:`PlayRecord`); read by ``vidgen lint``.
@@ -362,10 +366,14 @@ class NarratedScene(Scene):
         if self.capture is not None:
             self.capture.begin_segment(b.id, round((d + self.pad) * config.frame_rate), include_end=False)
         self._current_beat = b.id
+        if self._actions is not None:
+            self._actions.start_beat(b.id, d, self.pad)
         try:
             yield d
             self.beat_busy[b.id] = float(self.renderer.time) - start
             self.wait_seconds(d + self.pad - (self.renderer.time - start))
+            if self._actions is not None:
+                self._actions.end_beat()
         finally:
             self._current_beat = None
         self.beat_log.append(BeatTiming(b.id, start, start + d, b.text))
@@ -431,7 +439,8 @@ class NarratedScene(Scene):
 
         Each step gets a slot of ``d / len(steps)`` seconds; its animations run for
         ``min(cap, fraction * slot)`` and the rest of the slot is waited, so the whole call never
-        takes longer than ``d``. A step is an animation, a list of animations played together,
+        takes longer than ``d`` (slots end at fixed times from the call's start, so a slot that a
+        beat action lengthened is made up by the following waits). A step is an animation, a list of animations played together,
         or a callable returning either (built lazily, after the previous steps ran); a step
         that is an empty list just waits its slot. When ``d`` is too short for one frame per
         step, consecutive steps are merged and played together.
@@ -442,8 +451,8 @@ class NarratedScene(Scene):
         groups = distribute(len(steps), min(len(steps), max(1, int(d / frame + 1e-9))))
         slot = d / len(groups)
         run_time = max(min(cap, fraction * slot), frame)
-        for group in groups:
-            start = float(self.renderer.time)
+        begin = float(self.renderer.time)
+        for n, group in enumerate(groups):
             anims: list[Animation] = []
             for k in group:
                 step = steps[k]
@@ -455,7 +464,7 @@ class NarratedScene(Scene):
                     self.play(*anims, run_time=run_time)
                 finally:
                     self._requested = None
-            self.wait_seconds(slot - (self.renderer.time - start))
+            self.wait_seconds(begin + (n + 1) * slot - self.renderer.time)
 
     def play(self, *args: Any, **kwargs: Any) -> None:
         """Manim's ``play``, also recorded in :attr:`play_log` (scene times, beat, names)."""
@@ -476,13 +485,28 @@ class NarratedScene(Scene):
     def wait_seconds(self, seconds: float) -> None:
         """Wait ``seconds`` rounded to whole frames (no-op if that is zero frames).
 
-        Unlike ``self.wait``, the number of frames written is exact, so scene lengths do not
-        drift by a frame per wait.
+        Unlike Manim's ``wait``, the number of frames written is exact, so scene lengths do not
+        drift by a frame per wait. Beat actions due meanwhile are played inside the wait.
         """
-        fps = config.frame_rate
-        frames = round(seconds * fps)
+        frames = round(seconds * config.frame_rate)
         if frames <= 0:
             return
+        if self._actions is not None and self._actions.pending:
+            self._actions.wait(frames)
+        else:
+            self._wait_frames(frames)
+
+    def wait(self, duration: float = DEFAULT_WAIT_TIME, stop_condition: Callable[[], bool] | None = None, frozen_frame: bool | None = None) -> None:
+        """Manim's ``wait``; inside a beat with actions due, they are played within it (rounded to
+        whole frames)."""
+        if stop_condition is None and self._actions is not None and self._actions.pending:
+            self._actions.wait(round(duration * config.frame_rate))
+            return
+        super().wait(duration, stop_condition, frozen_frame)
+
+    def _wait_frames(self, frames: int) -> None:
+        """Write exactly ``frames`` frames of waiting (no actions)."""
+        fps = config.frame_rate
         # Mirror Scene.should_update_mobjects: Manim writes int(t*fps) frames for a frozen wait
         # but ceil(t*fps) frames when it redraws every frame; ask for a time that gives `frames`.
         frozen = not (
@@ -490,7 +514,7 @@ class NarratedScene(Scene):
             or getattr(self, "updaters", None)
             or any(m.has_time_based_updater() for m in self.get_mobject_family_members())
         )
-        self.wait((frames + 0.5) / fps if frozen else (frames - 0.5) / fps, frozen_frame=frozen)
+        super().wait((frames + 0.5) / fps if frozen else (frames - 0.5) / fps, frozen_frame=frozen)
 
     def hold(self, until: float | None = None) -> None:
         """Wait until the scene has lasted ``until`` seconds (default: ``spec.duration``).
@@ -571,6 +595,84 @@ class NarratedScene(Scene):
         """A named region (``header``, ``body``, ``left``...) of this scene's safe area; see
         :func:`vidgen.regions.region`."""
         return regions.region(name, self.safe_area, gap)
+
+    # ----- targets (per-beat actions, DESIGN.md §26) -----------------------------------------
+
+    #: The target names this type registers, as documentation patterns (``item<N>``,
+    #: ``bar:<label>``); shown by ``vidgen list-scenes``. Empty: the type has no targets.
+    target_patterns: ClassVar[tuple[str, ...]] = ()
+
+    @classmethod
+    def target_names(cls, params: Any) -> list[str]:
+        """Every target name the scene registers for these (validated) params; ``vidgen
+        validate`` checks the ``target:`` of beat actions against it. Default: none."""
+        return []
+
+    def target(
+        self, names: str | Sequence[str], mobject: Mobject, *, entrance: Callable[[], Sequence[Animation]] | None = None
+    ) -> Target:
+        """Register ``mobject`` as an action target under ``names`` (the first is its main name).
+
+        Register targets before the beat whose actions use them (normally while building the
+        layout). ``entrance`` builds the scene's own animations that bring it on screen (used by
+        the ``reveal`` action and :meth:`entrance`; default ``FadeIn``).
+        """
+        names = (names,) if isinstance(names, str) else tuple(names)
+        if not names:
+            raise VidgenError(f"scene '{self.spec.id}': a target needs at least one name")
+        for name in names:
+            if not isinstance(name, str) or not TARGET_NAME.match(name):
+                raise VidgenError(f"scene '{self.spec.id}': invalid target name {name!r} (use name, name3 or kind:label)")
+        target = Target(names, mobject, entrance)
+        self._targets.append(target)
+        return target
+
+    @property
+    def targets(self) -> list[Target]:
+        """The registered targets, in registration order."""
+        return list(self._targets)
+
+    def find_targets(self, pattern: str) -> list[Target]:
+        """The targets a name or ``*``/``?`` pattern selects."""
+        return [t for t in self._targets if match_names(pattern, t.names)]
+
+    def on_screen_parts(self, target: Target | Mobject) -> list[Mobject]:
+        """The largest parts of the target that are on screen (its mobject itself when it was
+        added whole; otherwise its submobjects that were, e.g. a bar and its labels)."""
+        mob = target.mobject if isinstance(target, Target) else target
+        present = {id(m) for m in self.get_mobject_family_members()}
+
+        def walk(m: Mobject) -> list[Mobject]:
+            if id(m) in present:
+                return [m]
+            return [part for sub in m.submobjects for part in walk(sub)]
+
+        return walk(mob)
+
+    def is_shown(self, target: Target | str) -> bool:
+        """Whether (a part of) the target is on screen."""
+        found = self.find_targets(target) if isinstance(target, str) else [target]
+        return any(self.on_screen_parts(t) for t in found)
+
+    def entrance(self, target: Target | str) -> list[Animation]:
+        """The animations that bring the target on screen, or ``[]`` when it already is (so a
+        target an action revealed early is not revealed twice by the scene's own steps)."""
+        found = self.find_targets(target) if isinstance(target, str) else [target]
+        anims: list[Animation] = []
+        for t in found:
+            if not self.is_shown(t):
+                anims += list(t.entrance()) if t.entrance is not None else [FadeIn(t.mobject)]
+        return anims
+
+    def _apply_now(self, animations: Sequence[Animation]) -> None:
+        """Jump ``animations`` to their end state without writing frames."""
+        self.add_mobjects_from_animations(list(animations))
+        for anim in animations:
+            anim._setup_scene(self)
+            anim.begin()
+        for anim in animations:
+            anim.finish()
+            anim.clean_up_from_scene(self)
 
     # ----- drawing ---------------------------------------------------------------------------
 

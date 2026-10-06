@@ -1,6 +1,7 @@
-"""Scene-type registry (DESIGN.md §6.2).
+"""Scene-type and action registry (DESIGN.md §6.2, §26).
 
-Two layers:
+Scene types (``@scene``) and per-beat action types (``@action``) are registered the same way, in
+two layers each:
 
 - **built-ins** — scene types defined in modules inside the ``vidgen`` package
   (``vidgen.scenes``). They are registered once per process when those modules are first
@@ -30,6 +31,7 @@ from vidgen.config import ID_PATTERN
 from vidgen.errors import VidgenError
 
 if TYPE_CHECKING:
+    from vidgen.actions import Action
     from vidgen.scene import NarratedScene
 
 log = logging.getLogger("vidgen.registry")
@@ -61,10 +63,28 @@ class SceneType:
         return self.cls.params_model()
 
 
+@dataclass(frozen=True)
+class ActionType:
+    """A registered per-beat action type (``@action``); fields as in :class:`SceneType`."""
+
+    name: str
+    cls: type[Action]
+    origin: str
+    overrides: ActionType | None = None
+
+    @property
+    def builtin(self) -> bool:
+        """True for built-in action types."""
+        return self.origin == BUILTIN
+
+
 _builtins: dict[str, SceneType] = {}
 _extensions: dict[str, SceneType] = {}
+_builtin_actions: dict[str, ActionType] = {}
+_extension_actions: dict[str, ActionType] = {}
 
-Snapshot = dict[str, SceneType]
+#: The extension layer (scene types, action types), saved by :func:`snapshot`.
+Snapshot = tuple[dict[str, SceneType], dict[str, ActionType]]
 
 
 def _check_class(name: str, cls: object) -> None:
@@ -96,41 +116,46 @@ def _valid_beat_count(spec: object) -> bool:
     return hi is None or (count(hi) and hi >= spec[0])  # type: ignore[operator]
 
 
+E = TypeVar("E", SceneType, ActionType)
+
+
+def _add(kind: str, decorator: str, layers: tuple[dict[str, E], dict[str, E]], entry: E, override: bool) -> E:
+    """Put ``entry`` into the built-in or extension layer; collisions as documented on :func:`scene`."""
+    builtins, extensions = layers
+    name, cls, origin = entry.name, entry.cls, entry.origin
+    if is_builtin_module(cls.__module__):
+        if name in builtins:
+            raise VidgenError(
+                f"built-in {kind} '{name}' is defined twice ({builtins[name].cls.__module__} and {cls.__module__})"
+            )
+        builtins[name] = entry
+        return entry
+    if name in extensions:
+        raise VidgenError(
+            f"{kind} '{name}' is defined twice: in {extensions[name].origin} and in {origin}; rename one of them"
+        )
+    builtin = builtins.get(name)
+    if builtin is not None and not override:
+        raise VidgenError(
+            f"{kind} '{name}' in {origin} has the same name as a built-in {kind}; "
+            f"rename it, or use @{decorator}({name!r}, override=True) to replace the built-in"
+        )
+    if builtin is None and override:
+        log.warning("%s: @%s(%r, override=True) but there is no built-in '%s' to override", origin, decorator, name, name)
+    if builtin is not None:
+        log.warning("%s: %s '%s' overrides the built-in %s", origin, kind, name, kind)
+    entry = type(entry)(name, cls, origin, overrides=builtin)  # type: ignore[arg-type]
+    extensions[name] = entry
+    return entry
+
+
 def register(name: str, cls: type[NarratedScene], *, override: bool = False) -> SceneType:
     """Register ``cls`` as scene type ``name`` (the function form of :func:`scene`)."""
     if not isinstance(name, str) or not re.match(ID_PATTERN, name):
         raise VidgenError(f"invalid scene type name {name!r}: use letters, digits and '_' only")
     _check_class(name, cls)
-    origin = origin_of(cls.__module__)
-
-    if is_builtin_module(cls.__module__):
-        if name in _builtins:
-            raise VidgenError(
-                f"built-in scene type '{name}' is defined twice "
-                f"({_builtins[name].cls.__module__} and {cls.__module__})"
-            )
-        entry = SceneType(name, cls, origin)
-        _builtins[name] = entry
-        return entry
-
-    if name in _extensions:
-        raise VidgenError(
-            f"scene type '{name}' is defined twice: in {_extensions[name].origin} and in {origin}; "
-            "rename one of them"
-        )
-    builtin = _builtins.get(name)
-    if builtin is not None and not override:
-        raise VidgenError(
-            f"scene type '{name}' in {origin} has the same name as a built-in scene type; "
-            f"rename it, or use @scene({name!r}, override=True) to replace the built-in"
-        )
-    if builtin is None and override:
-        log.warning("%s: @scene(%r, override=True) but there is no built-in '%s' to override", origin, name, name)
-    if builtin is not None:
-        log.warning("%s: scene type '%s' overrides the built-in scene type", origin, name)
-    entry = SceneType(name, cls, origin, overrides=builtin)
-    _extensions[name] = entry
-    return entry
+    entry = SceneType(name, cls, origin_of(cls.__module__))
+    return _add("scene type", "scene", (_builtins, _extensions), entry, override)
 
 
 def scene(name: str, *, override: bool = False) -> Callable[[S], S]:
@@ -186,23 +211,83 @@ def unknown_type_message(name: str) -> str:
     return message + f" (known types: {', '.join(known) or 'none'})"
 
 
+# ----- actions -----------------------------------------------------------------------------------
+
+
+def register_action(name: str, cls: type[Action], *, override: bool = False) -> ActionType:
+    """Register ``cls`` as action type ``name`` (the function form of :func:`action`)."""
+    from vidgen.actions import check_action_class
+
+    if not isinstance(name, str) or not re.match(ID_PATTERN, name):
+        raise VidgenError(f"invalid action name {name!r}: use letters, digits and '_' only")
+    check_action_class(name, cls)
+    entry = ActionType(name, cls, origin_of(cls.__module__))
+    return _add("action", "action", (_builtin_actions, _extension_actions), entry, override)
+
+
+def action(name: str, *, override: bool = False) -> Callable[[S], S]:
+    """Class decorator: register an :class:`~vidgen.actions.Action` subclass as per-beat action
+    ``name`` (what ``action:`` refers to in a beat's ``actions``). Name collisions are handled
+    as for :func:`scene`."""
+
+    if isinstance(name, type):
+        raise VidgenError(f'use @action("name") with an action name, not bare @action (on {name.__qualname__})')
+
+    def decorate(cls: S) -> S:
+        register_action(name, cls, override=override)  # type: ignore[arg-type]
+        return cls
+
+    return decorate
+
+
+def find_action(name: str) -> ActionType | None:
+    """The action type ``name`` (extensions shadow built-ins they override), or ``None``."""
+    return _extension_actions.get(name) or _builtin_actions.get(name)
+
+
+def action_names() -> list[str]:
+    """All registered action names, sorted."""
+    return sorted({*_builtin_actions, *_extension_actions})
+
+
+def all_actions() -> list[ActionType]:
+    """All effective action types sorted by name."""
+    return [find_action(n) for n in action_names()]  # type: ignore[misc]
+
+
+def unknown_action_message(name: str) -> str:
+    """``unknown action 'x'`` plus close matches and the list of known actions."""
+    import difflib
+
+    known = action_names()
+    message = f"unknown action '{name}'"
+    close = difflib.get_close_matches(name, known, n=3)
+    if close:
+        message += f"; did you mean {' or '.join(repr(c) for c in close)}?"
+    return message + f" (known actions: {', '.join(known) or 'none'})"
+
+
 # ----- isolation -------------------------------------------------------------------------------
 
 
 def reset() -> None:
-    """Forget all extension scene types (built-ins stay)."""
+    """Forget all extension scene types and actions (built-ins stay)."""
     _extensions.clear()
+    _extension_actions.clear()
 
 
 def snapshot() -> Snapshot:
     """A copy of the extension layer, for :func:`restore`."""
-    return dict(_extensions)
+    return dict(_extensions), dict(_extension_actions)
 
 
 def restore(state: Snapshot) -> None:
     """Restore the extension layer saved by :func:`snapshot`."""
+    scenes, actions = state
     _extensions.clear()
-    _extensions.update(state)
+    _extensions.update(scenes)
+    _extension_actions.clear()
+    _extension_actions.update(actions)
 
 
 @contextmanager

@@ -1,6 +1,6 @@
 """``bar_chart``: labelled bars that grow while their value labels count up (no LaTeX)."""
 
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 
@@ -13,9 +13,21 @@ class BarChart(NarratedScene):
     than 5 bars. ``reveal: all`` (default) grows every bar in beat 1; ``per_beat`` grows bar *i* at beat
     *i* (spread evenly when there are more bars than beats). With ``highlight`` set, one more
     step dims the other bars (it gets its own beat when there is one left).
+
+    Action targets: ``title``, ``bar<N>`` (1-based) and ``bar:<label>`` (a bar with its value and
+    category labels).
     """
 
     outro = 0.5
+    target_patterns = ("title", "bar<N>", "bar:<label>")
+
+    @classmethod
+    def target_names(cls, params: Any) -> list[str]:
+        """``title`` (if any), then ``bar<N>`` and ``bar:<label>`` per bar."""
+        names = ["title"] if params.title else []
+        for i, label in enumerate(params.labels, start=1):
+            names += [f"bar{i}", f"bar:{label}"]
+        return names
 
     class Params(SceneParams):
         title: str = ""
@@ -89,14 +101,16 @@ class BarChart(NarratedScene):
         colors = self.bar_colors()
         top = self.frame_height / 2 - self.margin_y
         bottom = -self.frame_height / 2 + self.margin_y
-        head = VGroup()
+        title_target = None
+        cap = None
         if p.title:
             title = fit_text(p.title, self.safe_width, self.safe_height * 0.18, size="heading", weight=BOLD, font=self.theme.font_for("heading"))
-            head.add(title.move_to([0, top - title.height / 2, 0]))
+            title.move_to([0, top - title.height / 2, 0])
+            title_target = self.target("title", title)
             top = title.get_bottom()[1] - 0.45
         if p.caption:
             cap = fit_text(p.caption, self.safe_width, self.safe_height * 0.15, size=p.caption_size, color=p.caption_color)
-            head.add(cap.move_to([0, bottom + cap.height / 2, 0]))
+            cap.move_to([0, bottom + cap.height / 2, 0])
             bottom = cap.get_top()[1] + 0.3
 
         lo, hi = min(p.baseline, *p.values), max(p.baseline, *p.values)
@@ -142,13 +156,25 @@ class BarChart(NarratedScene):
             seed = bar_rects[i].copy().stretch(1e-3, 0 if horizontal else 1, about_edge=edge)
             return [ReplacementTransform(seed, bar_rects[i]), UpdateFromAlphaFunc(label, count), FadeIn(cats[i])]
 
-        frame = [FadeIn(head), Create(base_line)] if len(head) else [Create(base_line)]
+        bars = [
+            self.target([f"bar{i + 1}", f"bar:{lab}"], VGroup(bar_rects[i], start_labels[i], cats[i]), entrance=lambda i=i: grow(i))
+            for i, lab in enumerate(p.labels)
+        ]
+
+        def frame() -> list[Animation]:  # entrance() skips what an action revealed already
+            anims = self.entrance(title_target) if title_target is not None else []
+            return anims + ([FadeIn(cap)] if cap is not None else []) + [Create(base_line)]
+
+        def grow_all() -> list[Animation]:
+            entrances = [AnimationGroup(*self.entrance(b)) for b in bars if not self.is_shown(b)]
+            return [LaggedStart(*entrances, lag_ratio=0.12)] if entrances else []
+
         steps: list = []
         if p.reveal == "all":
-            steps.append(lambda: frame + [LaggedStart(*[AnimationGroup(*grow(i)) for i in range(n)], lag_ratio=0.12)])
+            steps.append(lambda: frame() + grow_all())
         else:
-            steps.append(lambda: frame + grow(0))
-            steps.extend((lambda i=i: grow(i)) for i in range(1, n))
+            steps.append(lambda: frame() + self.entrance(bars[0]))
+            steps.extend((lambda i=i: self.entrance(bars[i])) for i in range(1, n))
         if hi_index is not None:
 
             def focus() -> list[Animation]:

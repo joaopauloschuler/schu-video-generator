@@ -16,6 +16,7 @@ del _before
 
 from pydantic import Field, field_validator, model_validator  # noqa: E402
 
+from vidgen.actions import Action, ActionOptions, Target  # noqa: E402
 from vidgen.errors import VidgenError  # noqa: E402
 from vidgen.helpers import MT, T, column, counter, dense_pairs, edges, grouped_pairs, resolve_color  # noqa: E402
 from vidgen.hooks import HookContext, hook  # noqa: E402
@@ -45,7 +46,7 @@ from vidgen.regions import (  # noqa: E402
     region,
     safe_area,
 )
-from vidgen.registry import scene  # noqa: E402
+from vidgen.registry import action, scene  # noqa: E402
 from vidgen.runtime import current_project, current_theme  # noqa: E402
 from vidgen.scene import IconName, NarratedScene, SceneParams, ThemeColor, ThemeSize  # noqa: E402
 
@@ -113,6 +114,10 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "NarratedScene",
     "SceneParams",
     "scene",
+    "action",
+    "Action",
+    "ActionOptions",
+    "Target",
     "hook",
     "HookContext",
     "register_theme_defaults",

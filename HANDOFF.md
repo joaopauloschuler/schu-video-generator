@@ -1938,3 +1938,97 @@ quick: `-m "not slow"` (~1 min) or `-m "not render"` (~20 s). Manual: `vidgen li
 examples/minimal [--variant vertical|light|contrast|editorial|neutral|pastel|neon]`, `vidgen
 lint examples/custom_scene [--variant vertical]`, `vidgen lint examples/kphi3` (all 0
 findings), `vidgen storyboard ...` likewise.
+
+## Step 23 — Per-beat actions (framework + 3 actions)
+What was built
+- **YAML**: a beat may have `actions:`. Canonical form `{action: NAME, target: T, at: 0..1,
+  until: BEAT, run_time: S, ...options}`; one shorthand `{NAME: TARGET, ...options}` (action name
+  as the first key; `- dim: item2`, `- highlight: "bar:4K"` + `color: accent` on the next line).
+  `target` is a name, a list, or a `*`/`?` pattern. `until` (a later beat of the scene) undoes
+  `dim`/`highlight` when that beat starts. `config.ActionConfig`, `BeatConfig.actions`.
+- **Framework** (`src/vidgen/actions.py`): `Target(names, mobject, entrance)`, `Action` /
+  `ActionOptions` base classes, validation (`scene_actions`, `plan_actions`), and the
+  `ActionRunner` that plays actions inside the beat. Action types are registered like scene
+  types (`@action("name")` in `vidgen.registry`, built-in + extension layers, `override=True`).
+- **Scene runtime** (`NarratedScene`): `target_patterns`, classmethod `target_names(params)`,
+  `self.target(names, mobject, entrance=)`, `targets`, `find_targets`, `on_screen_parts`,
+  `is_shown`, `entrance`; `narrate()` schedules the beat's actions; `wait_seconds` and an
+  overridden `wait` play due actions inside waits; `play_steps` slots end at absolute times.
+- **Built-in actions** (`src/vidgen/scenes/actions.py`, only `vidgen.api`): `reveal`, `dim`
+  (`opacity` 0.45), `highlight` (`color` = `highlight` token; `style` `color` (default) | `box`
+  | `underline` | `flash`, or a list).
+- **Targets**: `bullets` — `heading`, `item<N>`, `item:<text>`; `bar_chart` — `title`,
+  `bar<N>`, `bar:<label>` (bar + value + category label). Their reveal steps go through
+  `self.entrance()`, so a target an action revealed early is not revealed again.
+- **Checks**: `vidgen validate` (and the render pre-check, and the scene constructor) report
+  unknown actions (did-you-mean), bad options (pydantic, theme tokens), `until` on `reveal`,
+  missing/unknown targets with suggestions and the scene's target list, types without targets;
+  `SceneConfig` checks `until` is a later beat. `vidgen schema` describes both forms (action
+  enum, per-action options). `vidgen list-scenes` prints `targets:` per type and an actions
+  section; `--json` gains `scene_types[].targets` and `actions`.
+- `examples/minimal` `sizes` (bar_chart): beat 2 boxes `bar:4K` until beat 3, beat 3 dims the
+  other bars and highlights `bar:Preview 480p` (shorthand); its `highlight` param was dropped
+  for the actions (same story, shown through actions).
+
+Verification
+- Scratch project (bullets with early reveal, dim/highlight with `until`, `at: 0.5`, a pattern
+  target, highlight of a not-yet-shown item; bar_chart per_beat with highlight, dim of a list,
+  `[flash, box]`, underline) — `vidgen storyboard --per-beat 3` sheets read one by one: every
+  action lands after the beat's own entrance, undo at the `until` beat, nothing overruns.
+  `vidgen lint`: 0 findings. The EXTENDING example (custom `tick` action + `checklist` targets)
+  storyboarded and linted (one `rushed_animation` from its short example beats, not actions).
+- `examples/minimal`: `vidgen lint` 0 findings in every variant (default, vertical, light,
+  contrast, editorial, neutral, pastel, neon); `examples/custom_scene` 0. `sizes` sheets checked
+  in 16:9 (`--per-beat 3`), vertical and light.
+
+Files
+- New: `src/vidgen/actions.py`, `src/vidgen/scenes/actions.py`, `tests/test_actions.py` (27
+  tests, 6 tiny renders).
+- Changed: `config.py` (`ActionConfig`, `ACTION_KEYS`, `BeatConfig.actions`, `until` check),
+  `registry.py` (action layer, shared `_add`, pair snapshot), `scene.py`, `api.py`, `cli.py`
+  (validate, list-scenes), `describe.py`, `jsonout.py`, `schema.py`, `render/pipeline.py`,
+  `scenes/__init__.py`, `scenes/bullets.py`, `scenes/bar_chart.py`; `examples/minimal/video.yaml`;
+  docs/CONFIG.md (new "Beat actions", beats, bullets/bar_chart targets, schema, list-scenes
+  JSON), docs/EXTENDING.md (§8 targets and custom actions, tested), README, DESIGN.md (§2, §6.4,
+  new §26), tasklist.md.
+
+Public interfaces added/changed
+- `vidgen.api`: `action`, `Action`, `ActionOptions`, `Target`; `NarratedScene.target_patterns`,
+  `target_names`, `target`, `targets`, `find_targets`, `on_screen_parts`, `is_shown`,
+  `entrance`; `NarratedScene.wait` now also plays due actions (unchanged without actions).
+- Config: `beats[].actions` (additive). `vidgen.registry`: `ActionType`, `register_action`,
+  `action`, `find_action`, `action_names`, `all_actions`, `unknown_action_message`;
+  `snapshot()` returns a pair (opaque before too).
+- JSON: `list-scenes` `scene_types[].targets`, top-level `actions` (added within version 1).
+- `schema.config_schema` / `scene_schema` take `actions=None` (default: registered ones).
+
+Decisions / deviations
+- **Actions run in waits, never in the scene's own `play`**: no two animations fight over one
+  mobject, and "at the start of the beat" means right after the beat's entrance step. Run time
+  is cut to end within `d + pad` (whole frames; `requested` recorded for `rushed_animation`);
+  no time at all → applied without animation + warning.
+- **`reveal` of a shown target is a no-op** (not an error: being shown depends on timing a
+  static check cannot see); the scene's own step then skips it. `dim`/`highlight` on a hidden
+  target reveal it first.
+- **Shorthand with options**: the first-key rule makes `- highlight: x` + options natural; a
+  sorted-keys dump (yaml.safe_dump) would break it, so `ActionConfig.resolved()` re-picks the
+  one key that names a registered action.
+- `dim`/`highlight` animate RGBA arrays (`Repaint`) of the parts on screen, not the target
+  group (animating a group Manim never added would add it and draw its parts twice), and undo
+  only their own channel, so they combine. A first `pulse` style (Indicate-like scaling) pushed
+  bars through the axis; replaced by `flash` (colour there and back).
+- `play_steps` uses absolute slot ends (absorbs an action that lengthened a wait); all existing
+  timing tests unchanged.
+
+Known gaps / TODOs (Step 24)
+- Targets only on `bullets` and `bar_chart`; `zoom`/`transform` not yet. Images are not
+  recoloured/dimmed by `Repaint` (vectorized mobjects only). `dim` compounds with `bullets`'
+  `dim_previous`; `highlight` keeps a dimmed target dimmed. Box/underline sit around the whole
+  target group (for a bar: bar + both labels, crossing the axis line).
+- Validation cannot know whether the scene gives an action time (a custom scene that animates
+  through the whole beat): that shows as the runtime warning.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (821 passed, 1 skipped, ~4 min). Step only: `pytest
+tests/test_actions.py`. Manual: `vidgen validate examples/minimal`, `vidgen storyboard
+examples/minimal --scene sizes --per-beat 3 [--variant vertical]`, `vidgen lint examples/minimal`,
+`vidgen list-scenes`, `vidgen schema | jq '.["$defs"].ActionShorthand'`.

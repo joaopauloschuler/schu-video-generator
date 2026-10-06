@@ -75,10 +75,12 @@ def project_problems(project: Project) -> list[Problem]:
     Loads built-ins and the project's extensions in isolation (nothing leaks into the caller's
     registry), checks that every scene ``type`` is registered, validates each scene's
     ``params`` against the type's ``Params`` model (theme tokens against the project's theme)
-    and runs the type's ``validate_project`` (e.g. missing asset files); also checks the
-    project's ``assets/icons``.
+    and runs the type's ``validate_project`` (e.g. missing asset files); checks the beats'
+    ``actions`` (action names, options, targets of the scene); also checks the project's
+    ``assets/icons``.
     """
     from vidgen import extensions, registry
+    from vidgen.actions import scene_actions
     from vidgen.icons import PROJECT_ICONS_DIR, project_icons
 
     problems: list[Problem] = []
@@ -104,6 +106,10 @@ def project_problems(project: Project) -> list[Problem]:
                     params = entry.cls.validate_params(scene.params, theme)
                 except ValidationError as exc:
                     problems.extend(validation_problems(exc, ("scenes", i, "params")))
+                    params = None
+                _, action_problems = scene_actions(scene.type, entry.cls, scene, params, theme)
+                problems.extend(Problem(f"scenes[{i}].{loc}", message) for loc, message in action_problems)
+                if params is None:
                     continue
                 try:
                     problems.extend(_param_problem(i, p) for p in _project_checks(entry, params, project))
@@ -369,6 +375,19 @@ def _print_scene_types() -> None:
         if entry.params_model is None:
             print("    params: free-form (no Params model)")
         for line in describe_params(entry.params_model):
+            print(f"    {line}")
+        if entry.cls.target_patterns:
+            print(f"    targets: {', '.join(entry.cls.target_patterns)}")
+    actions = registry.all_actions()
+    if actions:
+        print()
+        print("actions (beat `actions:`, docs/CONFIG.md \"Beat actions\"):")
+        width = max(len(a.name) for a in actions)
+    for act in actions:
+        marker = "  (overrides builtin)" if act.overrides is not None else ""
+        undo = ", until" if act.cls.reversible else ""
+        print(f"{act.name:<{width}}  {act.origin}{marker}  (run_time {act.cls.run_time:g} s{undo})")
+        for line in describe_params(act.cls.Options):
             print(f"    {line}")
 
 

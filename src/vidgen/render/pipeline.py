@@ -94,16 +94,18 @@ class _WorkerRun:
 
 
 def _check_scenes(project: Project) -> None:
-    """Every scene's type is registered, its params validate and its beat count fits (fast,
-    before any rendering)."""
-    from vidgen import registry
+    """Every scene's type is registered, its params validate, its beat count fits and its beat
+    actions are valid (fast, before any rendering)."""
+    from vidgen import registry, runtime
+    from vidgen.actions import plan_actions
 
     for spec in project.config.scenes:
         cls = registry.get(spec.type).cls
-        cls.parse_params(spec.params, scene_id=spec.id)
+        params = cls.parse_params(spec.params, scene_id=spec.id)
         problem = cls.check_beat_count(len(spec.beats))
         if problem is not None:
             raise VidgenError(f"scene '{spec.id}' (type {spec.type}): {problem}")
+        plan_actions(spec.type, cls, spec, params, runtime.current_theme())
 
 
 def warn_audio(project: Project) -> None:

@@ -1,7 +1,8 @@
-"""Describe registered scene types: params with their types, defaults and docs.
+"""Describe registered scene types and actions: params/options with their types, defaults and
+docs, and the action targets of each scene type.
 
 Used by ``vidgen list-scenes`` for both the human listing (:func:`describe_params`) and the
-``--json`` output (:func:`scene_type_json`).
+``--json`` output (:func:`scene_type_json`, :func:`action_type_json`).
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ from typing import Any
 from pydantic import BaseModel
 from pydantic_core import to_jsonable_python
 
-from vidgen.registry import SceneType
+from vidgen.registry import ActionType, SceneType
 
 
 def type_name(annotation: Any, metadata: Sequence[Any] = ()) -> str:
@@ -127,10 +128,12 @@ def scene_doc(entry: SceneType) -> str | None:
 
 
 def scene_type_json(entry: SceneType) -> dict[str, Any]:
-    """``{name, origin, builtin, overrides_builtin, doc, beats, params}`` for ``list-scenes --json``.
+    """``{name, origin, builtin, overrides_builtin, doc, beats, params, targets}`` for
+    ``list-scenes --json``.
 
     ``beats`` is ``null`` (any number) or ``{min, max, text}`` (``max`` ``null`` = no limit);
-    ``params`` is ``null`` when the type takes free-form params (no ``Params`` model).
+    ``params`` is ``null`` when the type takes free-form params (no ``Params`` model);
+    ``targets`` lists the forms of its action target names (``item<N>``; empty: no targets).
     """
     model = entry.params_model
     return {
@@ -141,4 +144,28 @@ def scene_type_json(entry: SceneType) -> dict[str, Any]:
         "doc": scene_doc(entry),
         "beats": _beats_json(entry),
         "params": None if model is None else params_json(model),
+        "targets": list(entry.cls.target_patterns),
+    }
+
+
+def action_doc(entry: ActionType) -> str | None:
+    """The action class's own docstring, cleaned, or ``None``."""
+    doc = entry.cls.__dict__.get("__doc__")
+    return inspect.cleandoc(doc) if doc else None
+
+
+def action_type_json(entry: ActionType) -> dict[str, Any]:
+    """``{name, origin, builtin, overrides_builtin, doc, run_time, reversible, needs_target,
+    options}`` for ``list-scenes --json`` (``options`` as ``params`` of scene types)."""
+    cls = entry.cls
+    return {
+        "name": entry.name,
+        "origin": entry.origin,
+        "builtin": entry.builtin,
+        "overrides_builtin": entry.overrides is not None,
+        "doc": action_doc(entry),
+        "run_time": cls.run_time,
+        "reversible": cls.reversible,
+        "needs_target": cls.needs_target,
+        "options": params_json(cls.Options),
     }

@@ -12,15 +12,21 @@ AI agent can check a config before running ``vidgen validate``:
   icon params (``IconName``, ``x-vidgen-theme: icon``) one of the icon names or aliases
   (built-in and the project's ``assets/icons``);
 - the silent-scene rule (``duration`` iff no beats), even ``width``/``height``, optional beat
-  ids and the bodies of ``variants`` (partial configs) are expressed too.
+  ids and the bodies of ``variants`` (partial configs) are expressed too;
+- beat ``actions`` (DESIGN.md §26): the canonical ``{action: NAME, ...}`` form with ``action``
+  an ``enum`` of the registered actions and each action's options (``if``/``then``), and the
+  shorthand ``{NAME: TARGET, ...options}`` (one ``anyOf`` branch per action). Targets depend on
+  the scene's params, so only their shape is checked here.
 
 What JSON Schema cannot say is left to ``vidgen validate``: unique scene/beat ids, asset files,
-``validate_project`` checks and validators written in Python. Dialect: draft 2020-12.
+``validate_project`` checks, action targets and ``until`` beats, and validators written in
+Python. Dialect: draft 2020-12.
 """
 
 from __future__ import annotations
 
 import copy
+import inspect
 import logging
 from collections.abc import Iterable
 from typing import Any
@@ -28,12 +34,12 @@ from typing import Any
 from pydantic import BaseModel
 
 from vidgen import __version__
-from vidgen.config import HEX_COLOR_PATTERN, VideoConfig, parse_config
+from vidgen.config import ACTION_KEYS, HEX_COLOR_PATTERN, VideoConfig, parse_config
 from vidgen.describe import scene_doc
 from vidgen.errors import VidgenError
 from vidgen.presets import code_styles
 from vidgen.project import Project, find_config_file, read_config_file
-from vidgen.registry import SceneType
+from vidgen.registry import ActionType, SceneType
 from vidgen.theme import Theme
 
 log = logging.getLogger("vidgen.schema")
@@ -231,10 +237,13 @@ def _type_description(entry: SceneType) -> str:
     return "\n\n".join(lines)
 
 
-def _scene_schema(entries: list[SceneType], tokens: dict[str, list[str]]) -> tuple[dict[str, Any], dict[str, Any]]:
+def _scene_schema(
+    entries: list[SceneType], tokens: dict[str, list[str]], actions: list[ActionType]
+) -> tuple[dict[str, Any], dict[str, Any]]:
     """The schema of one ``scenes[]`` item and the definitions it refers to."""
     scene = copy.deepcopy(VideoConfig.model_json_schema()["$defs"]["SceneConfig"])
     defs: dict[str, Any] = {"BeatConfig": _beat_schema()}
+    defs.update(_action_defs(actions, tokens))
     props = scene["properties"]
     props["type"] = {
         "description": props["type"].get("description", ""),
@@ -268,7 +277,8 @@ def _scene_schema(entries: list[SceneType], tokens: dict[str, list[str]]) -> tup
 
 
 def _beat_schema() -> dict[str, Any]:
-    """BeatConfig with an optional ``id`` (filled in as ``<scene id>_b<n>`` when omitted)."""
+    """BeatConfig with an optional ``id`` (filled in as ``<scene id>_b<n>`` when omitted) and
+    ``actions`` items in either form (:func:`_action_defs`)."""
     beat = copy.deepcopy(VideoConfig.model_json_schema()["$defs"]["BeatConfig"])
     beat["required"] = [r for r in beat["required"] if r != "id"]
     beat_id = beat["properties"]["id"]
@@ -276,7 +286,60 @@ def _beat_schema() -> dict[str, Any]:
         "description": beat_id.pop("description", ""),
         "anyOf": [beat_id, {"type": "null"}],
     }
+    beat["properties"]["actions"]["items"] = {
+        "anyOf": [{"$ref": _REF_PREFIX + "ActionConfig"}, {"$ref": _REF_PREFIX + "ActionShorthand"}]
+    }
     return beat
+
+
+def _action_defs(actions: list[ActionType], tokens: dict[str, list[str]]) -> dict[str, Any]:
+    """``ActionConfig`` (``{action: NAME, ...}``), ``ActionShorthand`` (``{NAME: TARGET, ...}``)
+    and each action's options model (``action.NAME``) with its nested definitions."""
+    canonical = copy.deepcopy(VideoConfig.model_json_schema()["$defs"]["ActionConfig"])
+    canonical.pop("additionalProperties", None)
+    _fix_union_lengths(canonical)
+    common = canonical["properties"]
+    common["action"] = {"description": common["action"].get("description", ""), "enum": [a.name for a in actions]}
+    defs: dict[str, Any] = {}
+    rules: list[dict[str, Any]] = []
+    shorthands: list[dict[str, Any]] = []
+    for entry in actions:
+        name = f"action.{entry.name}"
+        options = entry.cls.Options.model_json_schema(ref_template=_REF_PREFIX + name + ".{model}")
+        nested = {f"{name}.{key}": value for key, value in options.pop("$defs", {}).items()}
+        for part in (options, nested):
+            _apply_theme(part, tokens)
+            _fix_dict_keys(part)
+            _fix_union_lengths(part)
+        options["title"] = f"{entry.name} options"
+        options["description"] = f"Action '{entry.name}' ({entry.origin}). " + (inspect.cleandoc(entry.cls.__doc__ or ""))
+        defs[name] = options
+        defs.update(nested)
+        option_props = options.get("properties", {})
+        keys = {key: {} for key in ACTION_KEYS}
+        rules.append(
+            {
+                "if": {"required": ["action"], "properties": {"action": {"const": entry.name}}},
+                "then": {"properties": {**keys, **option_props}, "additionalProperties": False},
+            }
+        )
+        rest = {key: copy.deepcopy(common[key]) for key in ACTION_KEYS if key not in ("action", "target")}
+        shorthands.append(
+            {
+                "title": f"{entry.name} (shorthand)",
+                "type": "object",
+                "required": [entry.name],
+                "properties": {entry.name: copy.deepcopy(common["target"]), **rest, **option_props},
+                "additionalProperties": False,
+            }
+        )
+    canonical["allOf"] = rules
+    defs["ActionConfig"] = canonical
+    defs["ActionShorthand"] = {
+        "description": "Shorthand of an action: {NAME: TARGET, ...options}, the action name as the first key.",
+        "anyOf": shorthands,
+    }
+    return defs
 
 
 def _document(title: str, description: str, schema: dict[str, Any], defs: dict[str, Any]) -> dict[str, Any]:
@@ -302,15 +365,23 @@ def params_schema(entry: SceneType, themes: Iterable[Theme]) -> dict[str, Any]:
     return _document(f"{entry.name} params", _type_description(entry), schema, defs)
 
 
-def scene_schema(entries: list[SceneType], themes: Iterable[Theme]) -> dict[str, Any]:
-    """The JSON Schema of one ``scenes[]`` item with every type's params (``vidgen schema --all``)."""
-    scene, defs = _scene_schema(entries, theme_tokens(themes))
+def _actions(actions: list[ActionType] | None) -> list[ActionType]:
+    from vidgen import registry
+
+    return registry.all_actions() if actions is None else actions
+
+
+def scene_schema(entries: list[SceneType], themes: Iterable[Theme], actions: list[ActionType] | None = None) -> dict[str, Any]:
+    """The JSON Schema of one ``scenes[]`` item with every type's params (``vidgen schema --all``);
+    ``actions`` default to the registered ones."""
+    scene, defs = _scene_schema(entries, theme_tokens(themes), _actions(actions))
     description = "One item of `scenes` in video.yaml; `params` are checked against the schema of its `type`."
     return _document("vidgen scene", description, scene, defs)
 
 
-def config_schema(entries: list[SceneType], themes: Iterable[Theme]) -> dict[str, Any]:
-    """The JSON Schema of the whole ``video.yaml`` for the given scene types (``vidgen schema``)."""
+def config_schema(entries: list[SceneType], themes: Iterable[Theme], actions: list[ActionType] | None = None) -> dict[str, Any]:
+    """The JSON Schema of the whole ``video.yaml`` for the given scene types and actions (default:
+    the registered ones) (``vidgen schema``)."""
     schema = VideoConfig.model_json_schema()
     _fix_dict_keys(schema)
     defs = schema.pop("$defs")
@@ -318,7 +389,7 @@ def config_schema(entries: list[SceneType], themes: Iterable[Theme]) -> dict[str
     theme_props = defs["ThemeConfig"]["properties"]
     theme_props["preset"]["anyOf"] = [{"enum": theme_presets(themes)}, {"type": "null"}]
     theme_props["code_style"]["anyOf"] = [{"enum": code_styles()}, {"type": "null"}]
-    scene, scene_defs = _scene_schema(entries, theme_tokens(themes))
+    scene, scene_defs = _scene_schema(entries, theme_tokens(themes), _actions(actions))
     defs.update(scene_defs, SceneConfig=scene)
     props = schema["properties"]
     # A variant is a partial config deep-merged onto this one: the same keys, none required.

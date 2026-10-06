@@ -6,6 +6,7 @@
 #   vidgen render examples/minimal --preview --frames            # + a PNG at the end of each beat
 #   vidgen storyboard examples/minimal [--variant vertical]      # contact sheets of every beat (PNG)
 #   vidgen lint examples/minimal [--variant vertical]            # layout + timing checks (dead air, ...)
+#   vidgen storyboard examples/minimal --scene sizes --per-beat 3   # mid-beat stills: beat actions
 #   vidgen storyboard examples/minimal --variant light           # same video with the light_academic preset
 #   vidgen list-themes examples/minimal --swatches build/themes.png  # every theme preset at a glance
 # There is no narration audio in this example, so beats are timed from their word count
@@ -100,11 +101,16 @@ scenes:
       values: [0.4, 1.1, 2.6, 9.8]
       unit: " min"
       colors: palette
-      highlight: "Preview 480p"
       caption: "Illustrative numbers"
     beats:
       - text: "Bar charts grow their bars while the values count up."
-      - text: "And one bar can be highlighted: previews are the fast way to iterate."
+      - text: "Beats can point at single bars: four K takes by far the longest."
+        actions:          # per-beat actions on the scene's targets (docs/CONFIG.md "Beat actions")
+          - {action: highlight, target: "bar:4K", style: box, until: sizes_b3}
+      - text: "And previews are the fast way to iterate."
+        actions:          # shorthand form: {ACTION: TARGET, ...options}
+          - dim: [bar2, bar3, bar4]
+          - highlight: "bar:Preview 480p"
 
   - id: trend
     type: line_chart

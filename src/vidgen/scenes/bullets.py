@@ -34,6 +34,8 @@ class Bullets(NarratedScene):
     """``reveal: per_beat`` (default): item *i* appears at beat *i* (with the heading at beat 1);
     with more items than beats they are spread evenly, with fewer the remaining beats hold.
     ``reveal: all``: every item appears during the first beat.
+
+    Action targets: ``heading``, ``item<N>`` (1-based) and ``item:<text>``.
     """
 
     outro = 0.5
@@ -70,6 +72,15 @@ class Bullets(NarratedScene):
     dimmed_opacity = 0.45
     #: Icon size relative to the item text size (an icon's box is 1.5 em at 1.0).
     icon_scale = 0.95
+    target_patterns = ("heading", "item<N>", "item:<text>")
+
+    @classmethod
+    def target_names(cls, params: Any) -> list[str]:
+        """``heading`` (if any), then ``item<N>`` and ``item:<text>`` per item."""
+        names = ["heading"] if params.heading else []
+        for i, item in enumerate(params.items, start=1):
+            names += [f"item{i}", f"item:{item.text}"]
+        return names
 
     def construct(self) -> None:
         p = self.params
@@ -85,13 +96,20 @@ class Bullets(NarratedScene):
         width = body.width if self.is_portrait else min(body.width * 0.85, 11.5)
         rows = self._rows(width, body.height - 0.2)
         place(rows, body, fit="none", align="center")
+        head = None
+        if heading is not None:
+            head = self.target("heading", heading, entrance=lambda: [FadeIn(heading, shift=DOWN * 0.15)])
+        items = [
+            self.target([f"item{i + 1}", f"item:{item.text}"], row, entrance=lambda row=row: [FadeIn(row, shift=RIGHT * 0.25)])
+            for i, (item, row) in enumerate(zip(p.items, rows))
+        ]
         dimmed: set[int] = set()
 
         def step(i: int) -> Callable[[], list[Animation]]:
-            def build() -> list[Animation]:
-                anims: list[Animation] = [FadeIn(rows[i], shift=RIGHT * 0.25)]
-                if i == 0 and heading is not None:
-                    anims.insert(0, FadeIn(heading, shift=DOWN * 0.15))
+            def build() -> list[Animation]:  # entrance() skips what an action revealed already
+                anims = self.entrance(items[i])
+                if i == 0 and head is not None:
+                    anims = self.entrance(head) + anims
                 if p.dim_previous:  # fade() scales each part's opacity: an icon's invisible box stays so
                     anims += [rows[j].animate.fade(1 - self.dimmed_opacity) for j in range(i) if j not in dimmed]
                     dimmed.update(range(i))
@@ -101,13 +119,11 @@ class Bullets(NarratedScene):
 
         steps = [step(i) for i in range(len(rows))]
         if p.reveal == "all":
-            everything = [rows[i] for i in range(len(rows))]
 
             def all_at_once() -> list[Animation]:
-                anims: list[Animation] = [LaggedStart(*[FadeIn(r, shift=RIGHT * 0.25) for r in everything], lag_ratio=0.25)]
-                if heading is not None:
-                    anims.insert(0, FadeIn(heading, shift=DOWN * 0.15))
-                return anims
+                entrances = [AnimationGroup(*self.entrance(t)) for t in items if not self.is_shown(t)]
+                anims: list[Animation] = [LaggedStart(*entrances, lag_ratio=0.25)] if entrances else []
+                return (self.entrance(head) if head is not None else []) + anims
 
             steps = [all_at_once]
         self.reveal(steps, fraction=0.7, cap=1.0)

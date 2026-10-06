@@ -158,7 +158,7 @@ def validate_document(
 def list_scenes_document(project: Project | None, warnings: Iterable[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """The ``vidgen list-scenes --json`` document (call with the project's scene types active)."""
     from vidgen import registry
-    from vidgen.describe import scene_type_json
+    from vidgen.describe import action_type_json, scene_type_json
 
     return envelope(
         "list-scenes",
@@ -166,6 +166,7 @@ def list_scenes_document(project: Project | None, warnings: Iterable[Mapping[str
         warnings,
         project=None if project is None else _path(project.root),
         scene_types=[scene_type_json(entry) for entry in registry.all()],
+        actions=[action_type_json(entry) for entry in registry.all_actions()],
     )
 
 
