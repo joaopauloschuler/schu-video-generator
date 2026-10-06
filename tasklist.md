@@ -124,7 +124,7 @@ Rules that apply to every step:
 - [x] `table`: header + rows, row/cell highlight actions, auto-fit to region
 
 ### Step 27 — Scene: `timeline`
-- [ ] Horizontal (16:9) / vertical (9:16) timeline, events revealed per beat, optional icons
+- [x] Horizontal (16:9) / vertical (9:16) timeline, events revealed per beat, optional icons (sides alternate or one column, chosen to keep text largest; even or proportional spacing by date; progress line; `highlight`, `now`; targets `axis`, `event<N>`, `event:<date>`; `measure_text` and `fit_text(balance=)` in `vidgen.api`)
 
 ### Step 28 — Graph layout + `diagram`/`flowchart`
 - [ ] Pure-Python layered layout for directed graphs (no new heavy dependency)

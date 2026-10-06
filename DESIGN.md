@@ -361,7 +361,7 @@ Refinements (Step 6, found while porting kphi3):
   raises `VidgenError("scene 'id': needs ...")`; `vidgen list-scenes` prints `beats: ...`.
   Built-ins leave it `None` (they adapt to any number of beats).
 
-`vidgen.layout` (exported by `vidgen.api`): `fit_text`, `shrink_to_fit`, `wrap_lines`,
+`vidgen.layout` (exported by `vidgen.api`): `fit_text`, `measure_text` (Step 27), `shrink_to_fit`, `wrap_lines`,
 `normalize_text`, `distribute`, `nice_ticks`, `auto_format`, `format_value`, `check_format`,
 `latex_available`, `require_latex` (+ `missing_latex_tools`, not exported). `fit_text` measures
 each word once (cached per font/weight) and searches the font size arithmetically, building the
@@ -1663,3 +1663,63 @@ using the existing renders of the others (missing ones are rendered). Exit code 
   `rule_color` drawn with the last row. Every cell text is added on its own (so a `fill` plate
   sits just under a row's / column's cells); invisible row/column/cell rectangles (inset by the
   box buff) are the targets' outlines.
+
+## 30. Refinements (Step 27, `timeline`)
+
+- **`measure_text(text, max_width, *, size, weight, slant, line_spacing, balance, theme, font,
+  role) -> TextMeasure(lines, width, height, fits)`** (`vidgen.layout`, exported): how
+  `fit_text` would wrap the text, estimated from the cached word widths (`_Metrics`) without
+  building a `Paragraph`; `fits` is false when a word is wider than `max_width` (`fit_text`
+  would scale the block down). Estimates run a few percent short of the built text (Pango
+  kerning; `fit_text` re-wraps narrower when a built line comes out too wide), so planners
+  measure at ~0.97 of the width and check the built result. Reason: building a `Paragraph`
+  costs 0.1–0.3 s for a long text; the timeline's size search over two layouts took 90 s for
+  10 long events when it built every candidate, 5 s with `measure_text`.
+- **`fit_text(..., balance=False)`** (also `fit_text_sized`, `measure_text`): wrapped text is
+  re-wrapped at the narrowest width (down to half of `max_width`, binary search on the
+  metrics) that keeps its number of lines, so a two-line title has no lone last word.
+  Additive; off by default (existing scenes unchanged).
+- **`timeline`** (`scenes/timeline.py`; reference docs/CONFIG.md): `events` (2–10
+  `TimelineEvent`: `date: str | int | float` — a YAML date object becomes its ISO string, bool
+  rejected — `title`, `text`, `icon`, `at`), `heading`, `orientation: auto | horizontal |
+  vertical` (`auto`: horizontal unless the frame is portrait), `sides: auto | alternate | one`,
+  `spacing: even | proportional`, `reveal: per_beat | all`, `highlight` and `now` (event refs:
+  an int in range is a 0-based index, else the date as shown, else the title; ambiguous →
+  error), `now_label`, colours, sizes. `date_position()` parses numbers, years, `YYYY-MM` and
+  `YYYY-MM-DD` (fraction of the year); proportional spacing needs a position for every event in
+  non-decreasing order (validation errors otherwise).
+- **Geometry** in axis coordinates (`along`, `across`; `_point`): events at `pad + q·usable` with
+  `pad` = half an even gap at both ends; proportional `q` is blended towards even (`w` in steps
+  of 0.05) until neighbours keep `min_gap_share` (0.45) of the even gap and the markers do not
+  touch. Each event's text (a "card": date row, title, detail) may use the stretch along the
+  axis up to halfway to the neighbouring events *on the same side* (less `card_gap`) or the
+  body's end; across it, the room from the stem (`stem` 0.3 beyond the marker) to the body's
+  edge. Horizontal: card width = that stretch (≤ `max_card_width` 5.2), centred over the
+  marker and pushed inwards at the ends; vertical: card width = the side's room (≤ 5.6), card
+  height ≤ the stretch, text aligned towards the axis, the date's line level with the marker
+  where there is room. Everything is centred across the axis at the end.
+- **Fitting** (`_plan` per side mode): one factor for all events; date/title/detail sizes are
+  `max(min(size, floor), size·factor)` (floor = `readable_size()`, the heading role's for
+  titles). Factor 1, then 1.2 (`growth`) if that adds no wrapped lines, else reduced (×0.75–0.93
+  per try) to the factor where every size is at its floor. Measured with `measure_text`
+  (balanced, at 0.97 width); the built cards (`fit_text(balance=True)`) are scaled down alike if
+  one is still taller than its room. Not fitting at the floor → `fits` false → the warning
+  "split it into two timelines (or shorten titles and texts)" (lint `min_font` reports it too).
+  `sides: auto` builds both plans and keeps the better by (fits, factor up to 1, fewer lines,
+  factor): growth never decides the layout; typically alternating in 16:9, one column right of
+  the axis in 9:16 for ≤ 6 events, alternating for more.
+- **Drawing**: track (`axis_color`, 0.55 opacity, tip) from half a gap (≤ 0.7) before the first
+  event to as far past the last; markers (`icon_radius` 0.3 disc on the background colour,
+  outlined, with the icon or a small dot, when any event has an icon; else a filled 0.12 dot);
+  stems; one progress segment per event (`progress_color`, from the previous marker's edge or
+  the track start to its marker's edge; `DashedLine` after `now`); `now` → a ring in
+  `now_color` and a tag (pill on `surface`, outlined in `now_color`, as `stat`'s chip for
+  contrast) after the date; events after `now` have hollow markers.
+- **Steps / targets**: steps `[event 1 (with heading and axis), event 2, ...]` (`all`: one
+  step), then the `highlight` step (others `dim_to` 0.55; the chosen marker ×1.2 and its title
+  in `highlight_color`). `_reveal(indices)` builds one `Succession`: the axis if not shown,
+  then per event not shown the missing segments up to it and its marker/stem/card — so an
+  early `reveal` of event 3 grows the line through event 2's position without showing event 2,
+  and the scene's own steps never repeat an entrance. Targets `heading`, `axis` (the track),
+  `event<N>` / `event:<date>` (marker + stem + card; segments are not part of a target).
+

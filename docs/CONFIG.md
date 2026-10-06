@@ -253,7 +253,7 @@ category `tech`, `data`, `science`, `business`, `people`, `ui` (arrows and inter
 tags is the [icon catalogue](ICONS.md). Built-in scenes take them as params: `icon` on
 [`title`](#title), [`chapter`](#chapter), [`stat`](#stat) and [`end_card`](#end_card), `{text,
 icon}` items of [`bullets`](#bullets), columns and points of [`comparison`](#comparison),
-and the [`icon_grid`](#icon_grid) scene. Extension scenes draw them with `icon(name, ...)` (see
+events of [`timeline`](#timeline), and the [`icon_grid`](#icon_grid) scene. Extension scenes draw them with `icon(name, ...)` (see
 docs/EXTENDING.md "Icons"); scene params that take an icon name are typed `icon` in
 `vidgen list-scenes` and checked by `vidgen validate` (an unknown name gets suggestions).
 
@@ -922,6 +922,77 @@ frame holds about 3–4 columns and 12 short rows. In 9:16 rows get more vertica
         - {highlight: "cell3.3", color: accent}
 ```
 
+### `timeline`
+
+Dated events along an axis: a horizontal one in 16:9 and square frames, a vertical one in 9:16
+(`orientation` overrides). Each event is a marker on the axis (a disc with its icon when the
+timeline has icons) and its date, title and optional detail text; events alternate sides of the
+axis so neighbours do not collide (or all stand on one side — `sides: auto` picks whichever
+keeps the text largest, typically alternating in 16:9 and one column right of the axis in 9:16).
+As each event is revealed, a progress line grows along the axis to it.
+Steps with `reveal: per_beat` (default): (1) heading, axis and event 1, (2) event 2, ...; with
+more events than beats they are spread evenly. `reveal: all`: every event in step 1. A
+`highlight` adds a last step: the other events dim, the chosen marker and title turn
+`highlight_color`.
+[Action targets](#beat-actions): `heading`, `axis`, `event<N>` and `event:<date>` (1-based; the
+date as shown, e.g. `event:1969`; an event is its marker, stem and text).
+
+**Spacing.** `even` (default) puts the events at equal gaps. `proportional` places them by date:
+a number (`1969`, `2.5`), a year, `YYYY-MM` or `YYYY-MM-DD` (unquoted `2024-03-15` works too),
+or an event's own `at` for anything else (`"500 BC"` with `at: -500`); events must be in time
+order, and neighbours that are too close are pulled apart just enough to keep their markers
+apart.
+
+**Now.** `now` names the present event (0-based index, date or title): it gets a `now_label`
+tag ("Now") and a ring in `now_color`; later events are drawn as planned (hollow markers, a
+dashed progress line).
+
+**Fitting.** Every event's text shares one size: up to 1.2x the requested sizes when every event
+has room without more wrapping, else reduced together down to the readable minimum (lint's
+`min_font`); lines are wrapped to even lengths. A timeline that still does not fit is scaled
+down and a warning says so: split it into two timelines or shorten the texts. 10 events with
+detail texts are the limit of a 9:16 frame; 3–6 read best (and stay under lint's `max_words`).
+
+| param | type | default | |
+|---|---|---|---|
+| `events` | list (2–10) | required | `{date, title, text, icon, at}` per event, in time order (below) |
+| `heading` | str | `""` | above the timeline, with step 1 |
+| `orientation` | `auto` \| `horizontal` \| `vertical` | `auto` | `auto`: horizontal in landscape and square frames, vertical in portrait |
+| `sides` | `auto` \| `alternate` \| `one` | `auto` | alternate sides of the axis, or all below a horizontal / right of a vertical axis; `auto` picks the layout with the largest text (then the fewest lines) |
+| `spacing` | `even` \| `proportional` | `even` | proportional: gaps follow the dates (or `at`) |
+| `reveal` | `per_beat` \| `all` | `per_beat` | |
+| `highlight` | int \| str | none | event emphasised in a last step: 0-based index (an int in range), or its date or title |
+| `now` | int \| str | none | the present event (as `highlight`): a tag and ring; later events hollow with a dashed progress line |
+| `now_label` | str | `"Now"` | text of the tag |
+| `color`, `date_color`, `text_color` | color | `text`, `primary`, `dim` | event title, date, detail text |
+| `marker_color`, `axis_color`, `progress_color` | color | `primary`, `dim`, `primary` | markers and their icons; the axis (drawn faint); the progress line |
+| `heading_color`, `highlight_color`, `now_color` | color | `text`, `highlight`, `accent` | |
+| `size`, `date_size`, `text_size`, `heading_size` | size | `body`, `caption`, `caption`, `heading` | event title, date, detail text (all fitted together), heading |
+
+An event is `{date, title, text, icon, at}`: `date` (required; text or a number, shown above the
+title), `title` (required), `text` (a detail line, smaller and dimmer), `icon` (in the event's
+marker) and `at` (a number: its position with `spacing: proportional` when the date is not one).
+
+```yaml
+- id: history
+  type: timeline
+  params:
+    heading: "The space race"
+    spacing: proportional            # gaps follow the years
+    events:
+      - {date: 1957, title: "Sputnik", text: "First satellite in orbit", icon: satellite}
+      - {date: 1961, title: "Gagarin", text: "First human in space", icon: user}
+      - {date: 1969, title: "Apollo 11", text: "First crewed Moon landing", icon: moon}
+    highlight: "Apollo 11"           # a last step: the other events dim
+  beats:
+    - text: "In 1957 Sputnik reached orbit."
+    - text: "Four years later, Gagarin flew."
+    - text: "In 1969, Apollo 11 landed on the Moon."
+    - text: "The landing is still the high point."
+      actions:
+        - {highlight: axis, style: flash}
+```
+
 ### `end_card`
 
 Steps: (1) logo, icon and title, (2) lines. Fades out over 1 s.
@@ -1041,6 +1112,7 @@ a title card, a `transform` of a bar).
 | `stat` | `icon`, `value`, `label`, `comparison`, `context` | reveal, dim, highlight, zoom | `reveal: value` early runs the count; `comparison` is the change chip with its text |
 | `comparison` | `heading`, `col<N>`, `col:<heading>`, `col<N>.item<M>`, `verdict` | reveal, dim, highlight, zoom | a column is its heading and points (a `box` frames its card); `col2.item1` is a point with its marker; revealing a point brings its column's card |
 | `table` | `title`, `header`, `row<N>`, `row:<first cell>`, `col<N>`, `col:<header>`, `cell<R>.<C>`, `caption` | reveal, dim, highlight, zoom | `box` and `fill` cover the whole row / column / cell; `cell2.3` is row 2 (below the header), column 3 |
+| `timeline` | `heading`, `axis`, `event<N>`, `event:<date>` | reveal, dim, highlight, zoom | an event is its marker, stem and text; revealing one grows the progress line to it; `event:1969` |
 
 [Project scene types](EXTENDING.md#8-per-beat-actions-targets-and-custom-actions) can declare
 their own targets; a type without any rejects actions in `vidgen validate`.

@@ -10,6 +10,7 @@
 #   vidgen storyboard examples/minimal --scene math --per-beat 3    # transform and zoom actions
 #   vidgen storyboard examples/minimal --scene speedup --per-beat 3 # a stat counting down
 #   vidgen storyboard examples/minimal --scene formats --per-beat 3 # a table row by row
+#   vidgen storyboard examples/minimal --scene schedule --variant vertical  # a vertical timeline
 #   vidgen storyboard examples/minimal --variant light           # same video with the light_academic preset
 #   vidgen list-themes examples/minimal --swatches build/themes.png  # every theme preset at a glance
 # There is no narration audio in this example, so beats are timed from their word count
@@ -117,6 +118,24 @@ scenes:
       - text: "So iterate on previews, and render the final video once."
         actions:
           - {highlight: col1, style: box}
+
+  - id: schedule
+    type: timeline        # events along an axis, one per beat (a vertical axis in 9:16)
+    params:
+      heading: "A video in four days"
+      now: "Day 3"        # a "Now" tag; later events are drawn as planned
+      events:
+        - {date: "Day 1", title: "Draft the script", text: "Short beats", icon: pencil}
+        - {date: "Day 2", title: "Storyboard and lint", icon: presentation}
+        - {date: "Day 3", title: "Voice the narration", icon: megaphone}
+        - {date: "Day 4", title: "Render the final video", icon: play}
+    beats:
+      - text: "Timelines reveal one event per beat. On day one, you draft the script."
+      - text: "On day two, you storyboard and lint until it reads well."
+      - text: "Today, on day three, the narration is voiced."
+      - text: "Tomorrow, the final video renders."
+        actions:
+          - {highlight: "event:Day 4", style: box}
 
   - id: part2
     type: chapter         # a section divider; silent here (duration), or narrated with beats

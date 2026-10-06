@@ -281,6 +281,13 @@ part alone (`FadeIn(group[0])`) adds that part by itself and dissolves the group
   `readable_text` take `role=` too; an explicit `font=` wins. The
   bundled families (Inter, Source Serif 4, JetBrains Mono NL) are registered before any scene
   code runs, so `self.text("x", font="Source Serif 4")` works without an installed font.
+  `balance=True` evens out wrapped lines (the narrowest width with as many lines: no lone last
+  word), as the `timeline` scene's event texts do.
+- `measure_text(text, max_width, size=..., weight=..., role=..., balance=False)` — how
+  `fit_text` would wrap the text, without building it: `TextMeasure(lines, width, height,
+  fits)` (`fits` is false when a word is wider than the width). Cheap, so a layout can try many
+  sizes or widths and build only the one it keeps; estimates are a few percent short, so
+  measure a little narrower (x0.97) and check the built result.
 - `shrink_to_fit(mobject, max_width, max_height)` — scale down only, never up.
 - `wrap_lines(text, max_chars)`, `normalize_text(text)` — pure helpers.
 - `nice_ticks(lo, hi, max_ticks)`, `auto_format(values)`, `format_value(v, fmt, unit)`,

@@ -47,6 +47,7 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "stat": {"value": 42, "suffix": "%", "label": "L", "context": "C", "comparison": 30, "icon": "rocket"},
     "comparison": {"heading": "H", "columns": [{"heading": "A", "points": ["x", "y"]}, {"heading": "B", "points": ["z"]}]},
     "table": {"title": "T", "header": ["Name", "N"], "rows": [["a", 1], ["b", 2]], "caption": "C"},
+    "timeline": {"heading": "H", "events": [{"date": 1969, "title": "Moon"}, {"date": "1981", "title": "Shuttle", "icon": "rocket"}]},
 }
 
 
@@ -131,6 +132,8 @@ def test_target_names_of_every_builtin_type() -> None:
     assert names("comparison", heading="", verdict="V") == ["col1", "col:A", "col1.item1", "col1.item2", "col2", "col:B", "col2.item1", "verdict"]
     assert names("table") == ["title", "header", "row1", "row:a", "row2", "row:b", "col1", "col:Name", "col2", "col:N",
                               "cell1.1", "cell1.2", "cell2.1", "cell2.2", "caption"]
+    assert names("timeline") == ["heading", "axis", "event1", "event:1969", "event2", "event:1981"]
+    assert names("timeline", heading="")[:2] == ["axis", "event1"]
     assert names("table", title="", caption="", header=[]) == ["row1", "row:a", "row2", "row:b", "col1", "col2",
                                                                "cell1.1", "cell1.2", "cell2.1", "cell2.2"]
 
@@ -171,7 +174,7 @@ def test_builtin_scenes_register_their_target_names(kind: str, make_project, med
     ("kind", "target"),
     [("title", "authors"), ("quote", ["author", "source"]), ("end_card", "line*"), ("icon_grid", "item2"),
      ("line_chart", "series2"), ("image", "caption"), ("code", "line3"), ("text_card", "text"),
-     ("chapter", "subtitle"), ("stat", ["comparison", "context"]), ("comparison", "col2"), ("table", "row2")],
+     ("chapter", "subtitle"), ("stat", ["comparison", "context"]), ("comparison", "col2"), ("table", "row2"), ("timeline", "event2")],
 )
 def test_early_reveal_is_not_repeated_by_the_scene(kind: str, target: str | list[str], make_project, media: Path) -> None:
     project = load(make_project, [{"id": "s", "type": kind, "params": SAMPLES[kind], "beats": beats([{"reveal": target}], None)}])

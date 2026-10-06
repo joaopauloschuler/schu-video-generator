@@ -2285,3 +2285,91 @@ How to test: `/home/claude/venv/bin/python -m pytest -q` (993 passed, 1 skipped)
 tests/test_comparison_table.py`. Manual: `vidgen storyboard examples/minimal --scene tradeoff
 --scene formats --per-beat 3 [--variant vertical|light]`, `vidgen lint examples/minimal
 [--variant ...]`, `vidgen list-scenes`, `vidgen schema --scene table`.
+
+## Step 27 — Scene: `timeline`
+What was built
+- **`timeline`** (`src/vidgen/scenes/timeline.py`): 2–10 events `{date, title, text?, icon?,
+  at?}` along an axis — horizontal in 16:9/square, vertical in 9:16 (`orientation: auto |
+  horizontal | vertical`). Each event is a marker on the axis (a disc with its icon when the
+  timeline has icons, else a dot), a short stem and a "card" (date in `date_color`, title in the
+  heading font role, optional dim detail text). Cards alternate sides of the axis or stand in one
+  column (`sides: auto | alternate | one`; `auto` plans both and keeps the one with the larger
+  text, then fewer wrapped lines: alternating in 16:9, one column right of the axis in 9:16 for
+  up to ~6 events). `spacing: even | proportional` (dates that are numbers, years, `YYYY-MM`,
+  `YYYY-MM-DD` — unquoted YAML dates work — or each event's `at`; too-close neighbours are pulled
+  apart). A progress line grows to each event as it is revealed (one segment per event).
+  `highlight` (last step: others dim, marker and title in `highlight_color`), `now` (a "Now"
+  tag + ring on that event, later events hollow with a dashed progress line; `now_label`),
+  optional `heading`, `reveal: per_beat | all`. Event refs (`highlight`, `now`): 0-based index,
+  date as shown, or title.
+- **Fitting**: one text size for all events, up to 1.2x the requested sizes when that adds no
+  wrapped lines, reduced together down to the readable minimum; wrapped lines are evened out.
+  Too many/long events → scaled down + warning "split it into two timelines (or shorten titles
+  and texts)" (and lint `min_font`).
+- **Targets**: `heading`, `axis`, `event<N>`, `event:<date>` (marker + stem + text); an early
+  `reveal` grows the progress line through skipped events without showing them. Row in the
+  CONFIG.md targets table.
+- **`vidgen.api` additions**: `measure_text(text, max_width, *, size, weight, ..., balance,
+  role) -> TextMeasure(lines, width, height, fits)` (how `fit_text` would wrap, without building
+  the text) and `fit_text(..., balance=False)` (even line lengths). Needed for speed: the
+  timeline's size search took 90 s for 10 long events when it built every candidate, 5 s now.
+- `examples/minimal`: new `schedule` scene (4 days with icons, `now: "Day 3"`, a `box`
+  highlight on `event:Day 4`), before `part2`.
+
+Verification (sheets opened with Read)
+- Scratch project (space race with icons + highlight; proportional `YYYY-MM` dates + `now`; 10
+  events in one beat; 2 events silent) storyboarded in 16:9 (also `--per-beat 3`), vertical and
+  `light_academic`. Fixed along the way: a lone last word ("Manual reports every / week") →
+  balanced wrapping; growth that made texts wrap more → growth only without extra lines, and
+  growth never chooses the layout (a one-sided 16:9 layout had won by growing); the now tag
+  went below `min_font` with the `compact` scale → floored at the readable size; a false "word
+  too wide" detection on blocks a hair too wide → measured with `measure_text` instead.
+  Lint of the scratch project: only the deliberate 10-events-in-one-beat stress case
+  (`rushed_animation`, `max_words`).
+- `examples/minimal`: `vidgen lint` 0 findings in all 8 variants (default, vertical, light,
+  contrast, editorial, neutral, pastel, neon); `examples/custom_scene` 0 (16:9 and vertical).
+  `schedule` sheets checked in 16:9, vertical, light and contrast.
+
+Files
+- New: `src/vidgen/scenes/timeline.py`, `tests/test_timeline.py` (46 tests, 17 tiny renders).
+- Changed: `src/vidgen/layout.py` (`measure_text`, `TextMeasure`, `balance`,
+  `_Metrics.width/balanced`), `src/vidgen/api.py`, `src/vidgen/scenes/__init__.py`;
+  `examples/minimal/video.yaml`; tests `test_layout.py` (balance, measure), `test_builtin_scenes.py`
+  (BUILTINS/SAMPLES), `test_actions_coverage.py` (SAMPLES, names, early reveal),
+  `test_extensions.py`, `test_registry.py` (type lists); docs/CONFIG.md (`timeline` section,
+  targets table, Icons intro), docs/EXTENDING.md (`measure_text`, `balance`), README, DESIGN.md
+  (§5 layout list, new §30), tasklist.md.
+
+Public interfaces added/changed
+- Built-in scene type `timeline` (params in docs/CONFIG.md).
+- `vidgen.api`: `measure_text` (new), `fit_text(..., balance=False)` (additive keyword; also
+  `layout.fit_text_sized`). `vidgen.layout.TextMeasure` (returned, not exported by name).
+- Module helpers (internal): `vidgen.scenes.timeline.date_position`, `TimelineEvent.shown()`,
+  `.position()`, `Timeline.Params.event_index()`, `.positions()`.
+
+Decisions / deviations
+- The target for an event by label is `event:<date>` (the date as shown): the date is the
+  event's label on the axis; titles are longer and change more. `highlight`/`now` accept the
+  title too.
+- `now` marks an event (not an arbitrary point between events): a free-floating "today" marker
+  collided with cards and stems in tests of alternating layouts; marking the present event
+  and drawing later ones as planned says the same without collisions.
+- The "too many events" check is a render-time warning (as `table`): whether it fits depends on
+  the variant's frame and type scale; `vidgen validate` caps the list at 10.
+- `stem`, radii and gaps are fixed Manim units; text sizes come from theme tokens and font
+  roles only; colours are theme tokens.
+
+Known gaps / TODOs
+- Proportional spacing is linear (no axis breaks, no tick marks/years along the axis); a
+  `ticks:` option could label the axis itself (Step 30 chart helpers could share code).
+- In 9:16 with one column the axis sits left of the text block, which is centred as a whole;
+  short texts leave the right part of the frame empty (by design, like `bullets`).
+- The vertical layout aligns a card's date with its marker only when there is room; tightly
+  packed events (10 in 9:16) shift cards up/down within their stretch.
+- `measure_text` is an estimate (a few percent short of Pango's layout); scenes using it should
+  check the built text, as `timeline` does.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1048 passed, 1 skipped, ~9 min). Step only: `pytest
+tests/test_timeline.py`. Manual: `vidgen storyboard examples/minimal --scene schedule --per-beat 2
+[--variant vertical|light]`, `vidgen lint examples/minimal [--variant ...]`, `vidgen list-scenes`,
+`vidgen schema --scene timeline`.

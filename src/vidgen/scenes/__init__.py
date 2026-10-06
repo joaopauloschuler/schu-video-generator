@@ -22,5 +22,6 @@ from vidgen.scenes import (  # noqa: F401
     stat,
     table,
     text_card,
+    timeline,
     title,
 )

@@ -13,7 +13,7 @@ import shutil
 import textwrap
 from collections.abc import Mapping, Sequence
 from functools import lru_cache
-from typing import Any
+from typing import Any, NamedTuple
 
 from manim import NORMAL, Mobject, Paragraph, Text, config
 
@@ -102,6 +102,7 @@ def fit_text(
     theme: Theme | None = None,
     font: str | None = None,
     role: str | None = None,
+    balance: bool = False,
 ) -> Paragraph:
     """Text in the theme font, word-wrapped to ``max_width`` and fitted into ``max_height``.
 
@@ -115,12 +116,14 @@ def fit_text(
     at up to ``squeeze * max_width`` is scaled down instead of wrapped (good for links).
     ``font`` is a family name; without it, ``role`` picks the theme's family for a font role
     (``heading``, ``quote``... as ``theme.font_for(role)``), else the theme font is used.
-    Returns a Manim ``Paragraph`` (one submobject per line).
+    With ``balance``, wrapped lines are evened out: the text is wrapped at the narrowest width
+    that keeps its number of lines (no lone last word). Returns a Manim ``Paragraph`` (one
+    submobject per line).
     """
     block, _ = fit_text_sized(
         text, max_width, max_height, size=size, color=color, weight=weight, slant=slant, align=align,
         min_size=min_size, highlights=highlights, line_spacing=line_spacing, squeeze=squeeze, theme=theme,
-        font=font, role=role,
+        font=font, role=role, balance=balance,
     )
     return block
 
@@ -142,6 +145,7 @@ def fit_text_sized(
     theme: Theme | None = None,
     font: str | None = None,
     role: str | None = None,
+    balance: bool = False,
 ) -> tuple[Paragraph, float]:
     """:func:`fit_text` that also returns the font size the text ends up at (points, after
     any final scaling), e.g. to tell whether it was shrunk below ``min_size``."""
@@ -177,6 +181,9 @@ def fit_text_sized(
             break
         font_size = max(floor, font_size * 0.95)
     target = max_width
+    if balance and len(lines) > 1:
+        target = metrics.balanced(font_size, max_width, len(lines))
+        lines = metrics.wrap(font_size, target)
     block = Paragraph(*lines, font_size=font_size, **kwargs)
     for _ in range(3):
         if block.width <= max_width * 1.001 or len(lines) == len(normalized.split()):
@@ -238,6 +245,68 @@ class _Metrics:
     def height(self, n_lines: int, size: float) -> float:
         """Estimated height of ``n_lines`` lines at ``size`` points."""
         return (self.line_h + (n_lines - 1) * self.pitch) * size / _REF_SIZE
+
+    def width(self, line: str, size: float) -> float:
+        """Estimated width of one wrapped ``line`` at ``size`` points."""
+        words = line.split(" ")
+        return (sum(self.widths[w] for w in words) + self.space * (len(words) - 1)) * size / _REF_SIZE
+
+    def balanced(self, size: float, max_width: float, n_lines: int) -> float:
+        """The narrowest width (down to half of ``max_width``) at which the text still wraps
+        into ``n_lines`` lines."""
+        lo, hi = max_width * 0.5, max_width
+        for _ in range(12):
+            mid = (lo + hi) / 2
+            if len(self.wrap(size, mid)) <= n_lines:
+                hi = mid
+            else:
+                lo = mid
+        return hi
+
+
+class TextMeasure(NamedTuple):
+    """What :func:`measure_text` estimates for a wrapped text."""
+
+    lines: list[str]
+    """The text as it wraps, one string per line."""
+    width: float
+    """Width of the widest line (Manim units)."""
+    height: float
+    """Height of the block (Manim units)."""
+    fits: bool
+    """False when a word is wider than the width (``fit_text`` would scale the block down)."""
+
+
+def measure_text(
+    text: str,
+    max_width: float,
+    *,
+    size: str | float = "body",
+    weight: str = NORMAL,
+    slant: str = NORMAL,
+    line_spacing: float = 0.7,
+    balance: bool = False,
+    theme: Theme | None = None,
+    font: str | None = None,
+    role: str | None = None,
+) -> TextMeasure:
+    """How :func:`fit_text` (same arguments, no ``max_height``) would wrap ``text`` at ``size``,
+    estimated from measured word widths without building the text: cheap enough to try many
+    sizes or widths when planning a layout. Estimates are within a few percent of the built
+    ``Paragraph``."""
+    theme = theme or current_theme()
+    font_size = float(theme.size(size))
+    normalized = normalize_text(text)
+    if not normalized:
+        raise VidgenError("measure_text: text is empty")
+    family = font or (theme.font_for(role) if role else theme.font)
+    metrics = _Metrics(normalized, family, weight, slant, line_spacing)
+    lines = metrics.wrap(font_size, max_width)
+    if balance and len(lines) > 1:
+        lines = metrics.wrap(font_size, metrics.balanced(font_size, max_width, len(lines)))
+    widest = max(metrics.width(line, font_size) for line in lines)
+    longest_word = max(metrics.widths.values()) * font_size / _REF_SIZE
+    return TextMeasure(lines, widest, metrics.height(len(lines), font_size), longest_word <= max_width * 1.001)
 
 
 # ----- beats ---------------------------------------------------------------------------------
