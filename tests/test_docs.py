@@ -40,6 +40,8 @@ MODELS: list[type[BaseModel]] = [
     config.ContrastRule,
     config.MaxWordsRule,
     config.OverlayOverlapRule,
+    config.ReadbackRule,
+    config.SttConfig,
     config.OverlayConfig,
     config.SfxConfig,
     config.SfxCue,

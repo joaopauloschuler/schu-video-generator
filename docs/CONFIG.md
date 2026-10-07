@@ -7,6 +7,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 [format](#format-and-preview), [variants](#variants), [theme](#theme), [voice](#voice-voice),
 [narration](#narration-narration), [narration audio](#narration-audio-elevenlabs),
 [multiple voices](#multiple-voices-voices), [pronunciation](#pronunciation-pronunciation),
+[readback (speech to text)](#readback-vidgen-readback),
 [languages and translations](#languages-and-translations),
 [sound effects](#sound-effects-sfx), [background music and loudness](#background-music-music),
 [transitions](#transitions-transition), [thumbnail](#thumbnail-thumbnail-vidgen-thumbnail),
@@ -43,6 +44,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `chapters` | `{metadata: true, youtube: true, intro: Intro}` | what the render writes about the chapters: MP4 chapter entries, the YouTube list `<output>_chapters.txt`, the chapter at 0:00; see [chapters in the outputs](#chapters-in-the-outputs-chapters-metadata) |
 | `metadata` | `{}` (title: the `title`) | tags of the MP4: `title`, `artist`, `album`, `comment`, `description`, `copyright`, `date`, `genre`; see [chapters in the outputs](#chapters-in-the-outputs-chapters-metadata) |
 | `thumbnail` | none | the thumbnail `<output>_thumbnail.png`, written by `vidgen render` and `vidgen thumbnail`: a scene's frame `{scene, beat, at, overlays}` or a designed card `{title, subtitle, icon, image, preset, background}`, + `{jpeg, auto}`; see [thumbnail](#thumbnail-thumbnail-vidgen-thumbnail) |
+| `stt` | `{provider: faster_whisper}` | speech to text for `vidgen readback` (the narration transcribed and compared with the beat texts): `{provider, model, language, device}`; see [readback](#readback-vidgen-readback) |
 | `scenes` | required | the scenes in order, at least one |
 
 ## Scenes and beats
@@ -843,6 +845,100 @@ pronunciation_file: pronunciation.yaml  # optional: more entries in a file (or a
 Failed requests show the HTTP status and ElevenLabs' message; rate limits and server errors are
 retried a few times automatically. Rendering uses whatever audio exists; stale or missing audio
 is reported as a warning.
+
+## Readback (`vidgen readback`)
+
+Does the narration say what the text says? `vidgen readback [PROJECT]` transcribes every beat's
+MP3 with a speech-to-text (STT) provider and compares the transcript with the beat's text. It
+catches what nobody hears without listening: a name or acronym the voice mispronounces, a number
+read wrongly, words the voice dropped or added. An AI author can act on the report without
+listening: each difference names the written words, what was heard, and a suggested fix.
+
+```yaml
+stt:
+  provider: faster_whisper    # faster_whisper (local, free) | elevenlabs (paid, ELEVENLABS_API_KEY)
+  model: null                 # default: small.en for English, small otherwise; elevenlabs: scribe_v1
+  language: null              # default: the video's language (English without one); auto: detected
+  device: auto                # faster_whisper: auto | cpu | cuda
+```
+
+| key | default | |
+|---|---|---|
+| `provider` | `faster_whisper` | `faster_whisper`: OpenAI's Whisper run locally (CTranslate2), free, no key; needs the optional extra `pip install "vidgen[stt]"`, and downloads the model from the Hugging Face Hub on first use. `elevenlabs`: ElevenLabs Speech to Text, billed per audio hour, the same `ELEVENLABS_API_KEY` as `vidgen tts` |
+| `model` | none (the provider's default) | a Whisper size (`tiny`, `base`, `small`, `medium`, `large-v3`, `turbo`; `.en` sizes for English only; bigger = more accurate, slower) or a folder holding a converted model; ElevenLabs: `scribe_v1`. Default `small.en` for English, `small` otherwise; `scribe_v1` |
+| `language` | none (the video's) | the language of the audio (BCP-47, its language subtag is sent: `pt-BR` → `pt`), or `auto` (detected); default the video's [language](#languages-and-translations), English without one |
+| `device` | `auto` | `faster_whisper` only: `cpu`, `cuda` (an NVIDIA GPU), or `auto` (a GPU if there is one) |
+
+```
+$ vidgen readback my_video
+[1/12] transcribed intro_b1 (2.1 s)
+...
+readback: 12 beats (faster_whisper small.en, language en); 12 transcribed, 0 cached; word error rate 2.4%
+flagged (word error rate above 10%): 1
+  setup_b2 (setup): 20% (2/10 words)
+    expected "NVIDIA", heard "and video" @ 3.2s
+    fix: "NVIDIA" is heard as "and video": add a pronunciation entry `NVIDIA: <how to say it>`, then `vidgen tts`
+worst: setup_b2 20%, intro_b1 9%
+terms misheard in several beats:
+  NVIDIA: 2 beats (setup_b2, results_b1), heard "and video", "in video" -> "NVIDIA" is misheard in 2 beats: add a pronunciation entry `NVIDIA: <how to say it>`
+```
+
+| option | |
+|---|---|
+| `--variant NAME` | a variant: its audio folder and its language |
+| `--beat ID` | only this beat (repeatable) |
+| `--max-wer RATE` | flag beats whose word error rate is above this (0-1); default `lint.rules.readback.max_wer` (0.1) |
+| `--force` | transcribe again even when a cached transcript exists |
+| `--json` | the whole report as JSON (below) |
+
+The exit code is 0 when the command ran, whatever it found (`flagged` in the JSON tells); use
+the [`readback` lint rule](#lint-vidgen-lint) to fail a check on it.
+
+**What is compared.** The transcript is compared with the beat's **spoken** text: its text with
+the [pronunciation](#pronunciation-pronunciation) applied, which is what the voice was asked to
+say. Differences are reported in terms of the **written** text (`expected "K-Phi-3" (said "kay
+fye three"), heard "kay five three"`). Both texts are normalised first, so that differences in
+writing are not counted as differences in speech: case and punctuation; accents (`você` =
+`voce`: STT models drop them now and then); hyphens, dashes and slashes split words
+(`one-by-one` = `one by one`); numbers become words in English and Portuguese (`2.58` = `two
+point five eight`, `1,57` in pt = `um vírgula cinquenta e sete`, `77%` = `seventy seven
+percent`, `1st` = `first`, `$5` = `five dollars`; the language's decimal and thousands marks)
+and keep their digits in other languages (`1.000,5` → `1000 5`); `&`, `+`, `=`, `×`, `@` become
+words; spelled acronyms are joined (`G.P.U.` = `G P U` = `GPU`). The normalised words are
+aligned (fewest substitutions, deletions and insertions); differences are grouped into whole
+written words. A difference that disappears when the words are joined (`overparameterized` /
+`over parameterized`, `KPhi3`) or when the STT wrote the term as written (`K-Phi-3` heard in a beat
+that says "kay fye three") is not counted.
+
+**Word error rate** (WER) of a beat = (substitutions + deletions + insertions) / words of its
+spoken text. A beat is **flagged** when its WER is above `max_wer`. STT is not perfect: a WER of
+a few percent on good audio is normal, and a single difference can be the transcriber's, not the
+voice's. Listen to a flagged beat before regenerating it.
+
+**Suggestions** (each difference has one; a flagged beat lists them):
+- a term with a pronunciation entry heard differently: respell the entry's spoken form;
+- a name, acronym, number or other hard term (a digit, two capitals, a letter outside ASCII, a
+  capitalised word inside a sentence) heard differently: add a pronunciation entry
+  `TERM: <how to say it>`, then `vidgen tts`;
+- words missing: listen, and regenerate the beat (`vidgen tts --force --beat ID`) if they are not
+  said; extra words: listen (the voice or the transcriber added them);
+- other words heard differently: probably a transcription slip; listen;
+- the audio is **stale** (its hash does not match the current text or voice): run `vidgen tts`
+  first. Beats without an MP3 are skipped.
+
+The report ends with the **worst** beats and the **terms misheard in several beats** (a term
+heard differently in two or more beats is very likely the voice, not the transcriber: the
+strongest reason to add or fix a pronunciation entry).
+
+**Cache.** Transcripts are stored in `build/readback/<key>.json`, keyed by the MP3's content and
+the STT settings (`provider`, resolved `model` and `language`): a beat is transcribed again only
+when its audio or those settings change (or with `--force`); variants sharing audio share
+transcripts. Each file holds `{version, audio_sha1, stt, beat, transcript: {text, language,
+words: [[text, start, end]]}}`. Deleting the folder is safe.
+
+**Lint.** The [`readback` rule](#lint-vidgen-lint) of `vidgen lint` reports the beats above
+`lint.rules.readback.max_wer` from these cached transcripts only: it never runs STT, so it finds
+nothing until `vidgen readback` has run, and transcripts of older audio are ignored.
 
 ## Languages and translations
 
@@ -3641,7 +3737,8 @@ scenes play over time, and reports problems an author cannot see without watchin
 off by the frame edge or in the margins, overlapping text, shapes drawn over text, text too
 small for the frame, low contrast and too many words at once (**layout rules**); narration too
 fast or too slow, nothing moving for a long time, animations running past their narration or
-squeezed into a too short beat (**timing rules**). It reads the
+squeezed into a too short beat (**timing rules**); narration heard differently from its text
+(`readback`, from the transcripts of [`vidgen readback`](#readback-vidgen-readback)). It reads the
 [layout dump](#layout-dump-buildlayoutscenejson) of the beat-end stills and each scene's
 [activity file](#activity-file-buildactivityscenejson); scenes whose stills are current (from
 `vidgen render --frames` or `vidgen storyboard`, any `--per-beat`) are reused, the others are
@@ -3707,6 +3804,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `dead_air` | warning | nothing on screen changes for more than `max_seconds` (a frame counts as changed when at least `min_change` of it changed, from the activity file's `motion`), narrated or not; the finding names the beat where the still picture starts and the beats it lasts through. Silent scenes are checked the same way: a silent card held longer than `max_seconds` without motion is reported. A still picture ends where a [crossfade](#transitions-transition) into the next scene starts blending it away |
 | `animation_overrun` | warning | a beat whose code (animations and waits inside `narrate`) takes longer than its narration plus `narration.pad` by more than `tolerance` seconds: the next beat (and its audio) starts late, leaving silence. The message lists the animations still running when the narration ends. A silent scene whose animations take longer than its `duration` is reported the same way |
 | `rushed_animation` | warning | animations that `play_steps` (and so `reveal` and most built-in scenes) had to shorten below `min_run_time` seconds because the beat is too short for its steps |
+| `readback` | warning | a beat whose MP3, transcribed by [`vidgen readback`](#readback-vidgen-readback), differs from its spoken text by a word error rate above `max_wer`; the message quotes the first differences and a suggested fix. Reads only the transcripts `vidgen readback` cached for the beats' current MP3s and the `stt:` settings (it never runs speech to text): nothing is reported until that command has run |
 
 **Config** (all optional; the values shown are the defaults):
 
@@ -3727,6 +3825,7 @@ lint:
     dead_air: {max_seconds: 6.0, min_change: 0.0002}   # min_change: fraction of the frame
     animation_overrun: {tolerance: 0.1}     # seconds past narration + pad
     rushed_animation: {min_run_time: 0.5}   # seconds
+    readback: {max_wer: 0.1}                # word error rate; also `vidgen readback`'s threshold
 ```
 
 `severity` on a rule sets the severity of all its findings (`off` disables the rule). The
@@ -3798,7 +3897,7 @@ video; `vidgen render` does. It dispatches `post_scene` for the scenes it render
 
 ## JSON output (`--json`)
 
-`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail`, `vidgen export`, `vidgen slides` and `vidgen translate-template` accept `--json`: stdout then holds
+`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail`, `vidgen export`, `vidgen slides`, `vidgen translate-template` and `vidgen readback` accept `--json`: stdout then holds
 exactly one JSON document (ASCII-only, non-ASCII characters escaped), and everything else
 (progress, `warning:` lines, Manim output) goes to stderr. These shapes are meant for programs
 and AI agents driving vidgen. Without `--json` the human output is unchanged.
@@ -3813,7 +3912,7 @@ it. Times are seconds (floats), paths are absolute strings, absent values are `n
 |---|---|---|
 | `version` | int | schema version of the document (1) |
 | `vidgen` | str | vidgen package version |
-| `command` | str \| null | `validate`, `list-scenes`, `list-themes`, `list-icons`, `render`, `schema`, `storyboard`, `lint`, `thumbnail`, `export`, `slides`, `translate-template` (`null` if the command line could not be parsed) |
+| `command` | str \| null | `validate`, `list-scenes`, `list-themes`, `list-icons`, `render`, `schema`, `storyboard`, `lint`, `thumbnail`, `export`, `slides`, `translate-template`, `readback` (`null` if the command line could not be parsed) |
 | `ok` | bool | `true` on success; the exit code is 0 exactly when `ok` is true |
 | `warnings` | list | `{scene, message}`: vidgen warnings of the run (`scene` is `null`, or the scene whose render printed it) |
 | `error` | object | only when `ok` is false: `{kind, message, problems, details}` |
@@ -4075,6 +4174,39 @@ on a failed scene are as for `vidgen render --json`.
 | `translated` | int | texts with a current translation |
 | `untranslated`, `stale`, `moved`, `obsolete`, `dropped` | list | keys: listed without a translation; translated but the source changed; found again under a new key; translated but gone from the config (kept); untranslated and gone (removed) |
 | `references` | int | places in the file's `references` |
+
+### `vidgen readback --json`
+
+`ok` is true whenever the command ran (flagged beats do not fail it); a missing provider package,
+API key or model, or an unknown `--beat`, is an error.
+
+| key | type | |
+|---|---|---|
+| `project` | str | |
+| `variant` | str \| null | |
+| `audio_dir` | str | the folder of the MP3s compared |
+| `stt` | object | `{provider, model, language}`: the settings the transcripts are of (`language` `null`: detected) |
+| `max_wer` | float | the threshold beats are flagged above |
+| `transcribed`, `cached` | int | beats transcribed by this run / read from `build/readback/` |
+| `elapsed` | float | wall time of the command |
+| `summary` | object | `{beats, flagged, words, errors, wer, worst}`: beats compared, ids of the flagged ones, words of the spoken texts and differences over all of them, their ratio, and the worst beats `[{beat, wer}]` (at most 5, with differences, worst first) |
+| `beats` | list | each compared beat, video order (below) |
+| `skipped` | list | `{beat, reason}`: beats not compared (no MP3) |
+| `terms` | list | `{term, entry, beats, heard, consistent, suggestion}`: written terms heard differently, most beats first; `entry` true when the term has a pronunciation entry, `heard` the different hearings, `consistent` true when heard differently in two or more beats |
+
+Each beat: `scene`, `beat`; `audio` (`ok`, or `stale` when its hash does not match the current
+text and voice); `cached` (the transcript came from the cache); `wer`; `words` (normalised words
+of the spoken text); `errors` = `substitutions` + `deletions` + `insertions`; `flagged`; `text`
+(as written), `spoken` (with the pronunciation applied), `heard` (the transcript); `edits`; and
+`suggestions` (what to do, once each; empty without differences).
+
+Each edit: `kind` (`substitution`, `deletion`: words not heard, `insertion`: extra words heard);
+`expected` and `heard` (the normalised words); `written` (the beat's words concerned, as written;
+empty for words heard where nothing was expected, `after` then names the written word before
+them); `said` (the spoken form when a pronunciation entry changed those words, else `null`);
+`errors`; `at` (when the heard words start in the MP3, seconds; `null` without word times or when
+nothing was heard); `term` (the written term the fix is about: a pronunciation entry's term, or a
+name, acronym or number; else `null`) and `entry`; `suggestion`.
 
 ### `vidgen lint --json`
 

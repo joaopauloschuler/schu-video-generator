@@ -66,7 +66,7 @@ src/vidgen/
   storyboard.py           # `vidgen storyboard`: reuse/render stills, write contact sheets (§14)
   sheets.py               # contact-sheet layout and drawing with Pillow (§14)
   lint/                   # `vidgen lint` (§16, §17): rules.py (framework), layout_rules.py,
-                          # timing_rules.py, color.py, run.py (lint_project), findings.py, report.py
+                          # timing_rules.py, readback_rule.py (§57), color.py, run.py (lint_project), findings.py, report.py
   helpers.py              # theme-aware text helpers and generic drawing utilities
   layout.py               # fit/wrap text, beat distribution, chart numbers, LaTeX detection
   regions.py              # layout regions: safe area, named regions, grids, place(), readable text (§18)
@@ -89,6 +89,10 @@ src/vidgen/
                           # colour scales, colour bar, readable text on fills (§34)
   tts/__init__.py         # provider seam: get_provider(cfg)
   tts/elevenlabs.py       # ElevenLabs provider (stdlib urllib), cache by hash
+  stt/                    # speech-to-text seam (§57): __init__.py (STTProvider, Transcript, stt_settings,
+                          # get_stt_provider), faster_whisper.py (local, extra vidgen[stt]), elevenlabs.py
+  readback.py             # `vidgen readback`: transcripts cached, aligned with the spoken text, WER, edits, suggestions (§57)
+  textnorm.py             # text normaliser for readback: case, accents, hyphens, numbers to words (en, pt) (§57; no manim)
   render/                 # worker.py (one scene per process), pipeline.py, ffmpeg.py,
                           # fingerprint.py (what a scene's render depends on, §14)
   subtitles.py            # SRT from beat timings (cues cut and timed like captions, §43)
@@ -161,7 +165,9 @@ moves, RGBA) and `carry/<id>.json` (the objects the next scene carries out of it
 Step 49 `padded/metadata.txt` (the MP4's tags and chapters, FFMETADATA, §52); Step 50
 `thumbnail/<name>_small.png` (the thumbnail at YouTube's small size, §53) and, for a frame
 thumbnail without overlays, a sibling folder `build/<final|preview>[_<variant>]_bare/` (scene
-renders of the project without overlays, §53). With `--frames` (Step 10, §13) also `frames/<id>/*.png` + `frames/<id>/index.json` and
+renders of the project without overlays, §53). Step 54: `build/readback/<key>.json` (speech-to-text
+transcripts of the beats' MP3s, keyed by audio content + STT settings, shared by qualities and
+variants, §57). With `--frames` (Step 10, §13) also `frames/<id>/*.png` + `frames/<id>/index.json` and
 `frames/index.json`, and `layout/<id>.json` (Step 12, §15).
 
 ## 4. Config schema (`video.yaml`)
@@ -234,6 +240,7 @@ metadata: {artist: "Jane Doe"}                   # Step 49 (§52): MP4 tags (tit
 thumbnail: {title: "Saving 77%", icon: cpu}      # Step 50 (§53): designed card, or {scene, beat, at, overlays}
 language: en                                     # Step 51 (§54): BCP-47; cue rules, speed lint, TTS / MP4 language
 translations: translations/pt.yaml               # Step 51 (§54): usually in a variant; texts replaced at load
+stt: {provider: faster_whisper}                  # Step 54 (§57): speech to text of `vidgen readback`
 
 extensions: [extensions]                         # dirs (relative to project) to auto-import; default shown
 
@@ -692,6 +699,7 @@ vidgen slides [PROJECT] [--format html|pdf] [--variant NAME] [--preview | --fina
               [--audio] [--separate] [--notes] [--title-page] [--paper a4|letter]
               [--output FILE] [--jobs N] [--force] [--json]   # HTML deck (§55), PDF deck (§56)
 vidgen translate-template [PROJECT] [--variant NAME] [--lang TAG] [--output FILE] [--json]   # translation file (§54)
+vidgen readback [PROJECT] [--variant NAME] [--beat ID ...] [--max-wer RATE] [--force] [--json]   # STT check of the audio (§57)
 ```
 PROJECT defaults to the current directory. `--scene` re-renders only those scenes and re-joins
 using the existing renders of the others (missing ones are rendered). Exit code non-zero on error.
@@ -3819,3 +3827,99 @@ the measured loudness, §48).
   speaker notes`) are English, like the HTML deck's; no theme colours on a typeset title page
   (white; the thumbnail gives a themed one); no per-slide `--scene` selection; no fallback font
   for scripts Inter lacks.
+
+## 57. Refinements (Step 54, readback check: speech to text)
+
+- **Purpose**: the AI author cannot listen. `vidgen readback` transcribes each beat's MP3 and
+  compares the transcript with what the beat should say, so mispronounced terms, misread numbers
+  and dropped / added words show up as text an agent can act on (a pronunciation entry, a
+  regenerated beat).
+- **Provider seam** (`vidgen.stt`, like §7's TTS seam): `STTProvider` protocol (`name`,
+  `check_available()`, `transcribe(path) -> Transcript`); `Transcript(text, words:
+  tuple[TranscriptWord(text, start, end)], language)` with `to_json` / `from_json`,
+  `word_texts()` / `word_times()`; `get_stt_provider(project)`; `stt_settings(project) ->
+  {provider, model, language}` (resolved defaults, no provider import: the cache and the lint
+  rule use it). Constructing a provider loads nothing and needs no key.
+  - `faster_whisper` (`stt/faster_whisper.py`, optional extra `vidgen[stt]` =
+    `faster-whisper>=1.0`; not in `dev`: ~70 MB of CTranslate2 / ONNX Runtime and a model
+    download): `WhisperModel(model, device)` loaded on the first transcription, `transcribe(path,
+    language, beam_size=5, word_timestamps=True, condition_on_previous_text=False,
+    vad_filter=False)` (each beat on its own, so one mistake cannot carry over; no VAD so quiet
+    words are not cut). Missing package → `VidgenError('... pip install "vidgen[stt]"')`; a model
+    that cannot load (download refused, bad folder) → `VidgenError` naming the model.
+  - `elevenlabs` (`stt/elevenlabs.py`): `POST /v1/speech-to-text`, multipart (`model_id`
+    `scribe_v1`, `language_code` when known, `timestamps_granularity=word`,
+    `tag_audio_events=false`, `file`), `ELEVENLABS_API_KEY` as for TTS. The TTS provider's
+    retry / error / key-scrubbing loop moved to `tts.elevenlabs.post_with_retries` (shared; TTS
+    behaviour unchanged). Only `type: word` entries of the response are words.
+  - No OpenAI provider (the task's "openai?" was optional; the seam takes one more module).
+- **Config** `stt: {provider: faster_whisper | elevenlabs, model, language, device}`
+  (`SttConfig`): `model` default `small.en` for English / `small` otherwise (faster-whisper),
+  `scribe_v1` (ElevenLabs); `language` default the video's language subtag (`en` without one),
+  `auto` = detected (`None` sent); `device` `auto|cpu|cuda` (faster-whisper; not part of the cache
+  key). `stt` is excluded from the render fingerprint; `stt/`, `readback.py`, `textnorm.py` are
+  not render inputs.
+- **Normaliser** (`vidgen.textnorm`, no manim): `normalize_words(words, language) ->
+  [Token(text, source)]` (source = index of the input word, so differences map back),
+  `normalize_text`, `fold` (casefold + accents removed: `você` = `voce`; STT accent slips are
+  more common than accent-only minimal pairs), `number_words` / `english_number` /
+  `portuguese_number`. Hyphens, dashes, slashes, `_` split words; apostrophes dropped inside
+  words (`let's` → `lets`); numbers by the language's marks (en `1,000.5`, pt `1.000,5`), English
+  decimals digit by digit (`one point zero eight`), Portuguese decimals as a number (`um vírgula
+  cinquenta e sete`; digit by digit after a leading 0 or beyond 3 digits), `%` / currency symbols
+  / English ordinals (`22nd`); other languages keep digits (canonical, group marks removed);
+  `& + = × @` as words; dotted acronyms and runs of ≥ 2 single capitals joined (`G.P.U.`, `G P
+  U` → `gpu`). The same function normalises both sides, so a convention only needs to be
+  consistent, not linguistically perfect.
+- **Comparison** (`vidgen.readback`): reference = the beat's **spoken** text (pronunciation
+  applied, §45); `align(ref, hyp)` Levenshtein with ties broken towards more matches, then
+  substitutions; `word_error_rate`. Ops are assigned to **written** words (spoken word → written
+  word via `Spoken.word_groups()`; an insertion goes with the next word when that one differs
+  too, else the previous one), and consecutive differing written words form one `Edit(kind,
+  expected, heard, written, said, errors, at, after, term, entry, suggestion)`. An edit is dropped
+  when its words are equal once joined (`overparameterized`, `KPhi3`) or when the heard words
+  equal the normalised *written* words (the STT wrote `K-Phi-3` for "kay fye three"): these are
+  writing differences. `errors` = non-equal ops of the block (S + D + I), so WER = Σ errors /
+  normalised spoken words. `at` = start time of the first differing heard word.
+- **Terms and suggestions**: `hard_term` (a digit, two capitals, a non-ASCII letter, or a
+  capitalised word inside a sentence) marks a written word a pronunciation entry can fix; an edit
+  over a replaced term has `entry: true`. Suggestions: entry → respell its spoken form; hard term
+  → `add a pronunciation entry TERM: <how to say it>` (`<the number in words>` for digits);
+  deletion → listen, `vidgen tts --force --beat ID`; insertion → listen; else a probable
+  transcription slip. A stale MP3 (hash mismatch) adds "run `vidgen tts` first". `term_reports`
+  aggregates terms over beats; `consistent` = heard differently in ≥ 2 beats (the strongest
+  signal: one slip may be the transcriber's).
+- **Flagging**: `wer > lint.rules.readback.max_wer` (default 0.1; `--max-wer` overrides). Below
+  it, edits are still reported (JSON) and counted in terms. Exit code 0 whenever the command ran;
+  the lint rule is the failing check.
+- **Cache**: `build/readback/<sha1(json({audio: sha1(mp3), provider, model, language}))>.json`
+  `{version 1, audio_sha1, stt, beat, transcript}`: content-addressed, so variants / qualities
+  sharing audio share transcripts and a regenerated MP3 is transcribed again; `--force`
+  re-transcribes. In `build/` (not `audio/`): derived, cheap to drop, never committed (kphi3's
+  committed `audio/` stays untouched). The provider is created only when something must be
+  transcribed (an all-cached run works without the extra or key).
+- **CLI** `vidgen readback [PROJECT] [--variant] [--beat ID ...] [--max-wer RATE] [--force]
+  [--json]`: progress `[n/N] transcribed <beat> (s)`, then `report_lines` (settings + counts,
+  skipped beats, flagged beats with each edit `describe()` + `@ time` and `fix:` lines, worst
+  beats, terms misheard in several beats). JSON `jsonout.readback_document` (version 1, new
+  document): `project, variant, audio_dir, stt, max_wer, transcribed, cached, elapsed, summary
+  {beats, flagged, words, errors, wer, worst}, beats[], skipped[], terms[]`.
+- **Lint rule** `readback` (scope `scene`, default warning, `ReadbackRule{severity, max_wer}`,
+  last in `LINT_RULES`): `SceneContext.readback` (beat id → `BeatReadback`) is filled by the
+  runner from `readback.cached_readback` only when the rule runs and is not `off`; it never
+  transcribes, so without `vidgen readback` it reports nothing ("off unless transcripts exist").
+  The finding: `value` = WER, `limit` = `max_wer`, time = the beat's start, message quoting up to
+  3 edits and the first suggestion, pointing to `vidgen readback --beat ID`.
+- **Tests** (`tests/test_readback.py`, all mocked): number words (en / pt), digits in other
+  languages, case / punctuation / hyphens / acronyms / pt-BR accents, alignment and WER, writing
+  differences not counted, misheard pronunciation entry, terms without entry, insertions /
+  deletions with times, pt-BR names, `hard_term`, settings defaults and config errors, a fake
+  `faster_whisper` module (options, model loaded once, load error, missing package), ElevenLabs
+  multipart request / response / errors with a mocked `urlopen`, the transcript cache (hits,
+  `--force`, new audio, new settings), skipped / stale / unknown beats, the CLI (human + JSON,
+  documented keys), the lint rule end to end on fake renders and as a unit, the fingerprint.
+- **Known limits**: no real STT run was possible while building it (Hugging Face model downloads
+  were refused by the build environment's proxy; see HANDOFF.md Step 54); number words only for
+  English and Portuguese; English "and" inside spoken numbers ("two hundred and five") and years
+  read in pairs ("twenty twenty-four") are not normalised; STT errors on ordinary words are
+  reported as possible slips, not filtered.

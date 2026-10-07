@@ -78,6 +78,12 @@ subtitles.
   captions keep the written words, timed by the spoken ones. Only beats whose spoken text changes
   are re-voiced, and `vidgen tts --dry-run` shows what they will say
   ([reference](docs/CONFIG.md#pronunciation-pronunciation)).
+- **Readback check**: `vidgen readback` transcribes the narration MP3s with speech to text
+  (faster-whisper locally, extra `vidgen[stt]`, or ElevenLabs) and compares them with the beat
+  texts: a word error rate per beat, the words expected and heard ("K-Phi-3" said "kay fye three",
+  heard "kay five three"), and a suggested fix — a pronunciation entry for a term misheard in
+  several beats, regenerating a beat that lost words. Transcripts are cached; `vidgen lint`'s
+  `readback` rule reports the beats above the threshold ([reference](docs/CONFIG.md#readback-vidgen-readback)).
 - **Other languages**: a variant with `language: pt-BR` and `translations: translations/pt.yaml`
   is the same video in Portuguese. `vidgen translate-template --variant pt` lists every beat text
   and on-screen text (titles, bullets, labels, table cells, chapter titles, the thumbnail...)
@@ -151,6 +157,9 @@ subtitles.
    packages on the fly) and open a new terminal.
 7. Optional, only for PDF slide decks (`vidgen slides --format pdf`): `pip install ".[pdf]"`
    (fpdf2, pure Python).
+8. Optional, only for `vidgen readback` with local speech to text: `pip install ".[stt]"`
+   (faster-whisper; its first run downloads the Whisper model from the Hugging Face Hub, ~500 MB
+   for `small`).
 
 If PowerShell refuses to run `Activate.ps1`, run
 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
@@ -174,6 +183,7 @@ vidgen storyboard               # contact sheets of every beat -> build/preview/
 vidgen lint                     # layout + timing checks: text cut off, too small, low contrast, dead air...
 vidgen tts --dry-run            # what would be sent to ElevenLabs (with the pronunciation applied), how many characters
 vidgen tts                      # generate narration MP3s (only new/changed beats)
+vidgen readback                 # speech to text of the MP3s vs the texts: misheard terms, missing words (vidgen[stt])
 vidgen render                   # final render -> my_video.mp4 + my_video.srt (+ my_video_chapters.txt with chapters)
 vidgen thumbnail                # my_video_thumbnail.png (also written by render with a thumbnail: section)
 vidgen export gif --scene intro # exports/my_video_intro.gif
@@ -198,10 +208,11 @@ narration.
 | `vidgen list-music [PROJECT] [--render-dir DIR] [--json]` | background music beds (built-in, described in words: instruments, key, tempo, chords, mood) and the project's `assets/music` files; `--render-dir` writes one loop of each bed as WAV |
 | `vidgen schema [PROJECT] [--scene TYPE \| --all] [--json]` | JSON Schema of `video.yaml` (params checked per scene type, the project's extension types included), for editors and AI agents |
 | `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--voice NAME ...] [--variant NAME]` | generate missing/stale narration into `audio/`; `--dry-run` needs no key (shows each beat's voice and characters per voice) |
+| `vidgen readback [PROJECT] [--variant NAME] [--beat ID ...] [--max-wer RATE] [--force] [--json]` | transcribe the narration MP3s (speech to text, `stt:`; cached in `build/readback/`) and compare them with the beat texts: word error rate per beat, words expected vs heard, a suggested fix for each (e.g. a pronunciation entry), terms misheard in several beats |
 | `vidgen translate-template [PROJECT] --variant NAME [--lang TAG] [--output FILE] [--json]` | write or update the variant's translation file: every text to translate with its source, keeping existing translations (stale / moved / obsolete marked) |
 | `vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going] [--jobs N] [--frames] [--frames-per-beat N] [--json]` | render and join the video |
 | `vidgen storyboard [PROJECT] [--scene ID ...] [--per-beat N] [--variant NAME] [--preview \| --final] [--width PX] [--jobs N] [--force] [--json]` | contact sheets (PNG) of the video's stills with labels and narration, to review a video without watching it |
-| `vidgen lint [PROJECT] [--scene ID ...] [--rule NAME ...] [--variant NAME] [--preview \| --final] [--fail-on SEVERITY] [--jobs N] [--force] [--json]` | check the layout at the end of every beat (text off the frame or in the margins, overlapping or covered text, text too small, low contrast, too many words) and the timing (narration too fast/slow, dead air, animations overrunning their narration or squeezed into a short beat); exit code 1 on errors |
+| `vidgen lint [PROJECT] [--scene ID ...] [--rule NAME ...] [--variant NAME] [--preview \| --final] [--fail-on SEVERITY] [--jobs N] [--force] [--json]` | check the layout at the end of every beat (text off the frame or in the margins, overlapping or covered text, text too small, low contrast, too many words) and the timing (narration too fast/slow, dead air, animations overrunning their narration or squeezed into a short beat), and the narration heard differently from its text (`readback`, after `vidgen readback`); exit code 1 on errors |
 | `vidgen thumbnail [PROJECT] [--variant NAME] [--preview] [--scene ID [--beat ID\|N] [--at S] [--no-overlays]] [--jpeg] [--jobs N] [--json]` | write `<output>_thumbnail.png` from the `thumbnail:` config (a designed card, or a scene's frame) or the frame `--scene` names, a 320 px copy to look at, and legibility checks |
 | `vidgen export gif\|clip [PROJECT] [--scene ID] [--from S] [--to S] [--variant NAME] [--preview] [--width PX] [--fps F] [--max-mb MB] [--with-audio] [--output FILE] [--json]` | a scene or part of the rendered video as a palette GIF (`--max-mb`: lower frame rate / width until it fits) or an MP4 clip, in `exports/` |
 | `vidgen slides [PROJECT] [--format html\|pdf] [--variant NAME] [--preview \| --final] [--mode beat\|scene] [--per-beat N] [--overlays \| --no-overlays] [--no-dedupe] [--image-format webp\|jpeg\|png] [--quality Q] [--max-width PX] [--audio] [--separate] [--notes] [--title-page] [--paper a4\|letter] [--output FILE] [--jobs N] [--force] [--json]` | one self-contained HTML slide deck in `exports/`: a slide per beat (or scene) from the stills, the narration as speaker notes, keyboard navigation, overview, fullscreen, optional narrated play mode; `--format pdf`: a PDF (slide pages or `--notes` pages, `--title-page`, bookmarks by chapter; needs `vidgen[pdf]`) |

@@ -33,7 +33,7 @@ TEMPLATE_DOTFILES: tuple[str, ...] = ("gitignore",)
 #: Subcommands that accept ``--json``.
 JSON_COMMANDS: tuple[str, ...] = (
     "validate", "list-scenes", "list-themes", "list-icons", "list-sfx", "list-music", "render", "schema", "storyboard", "lint",
-    "thumbnail", "export", "translate-template", "slides",
+    "thumbnail", "export", "translate-template", "slides", "readback",
 )
 
 #: What a command function returns: an exit code, or (with ``--json``) the JSON document.
@@ -347,6 +347,21 @@ def cmd_tts(args: argparse.Namespace) -> int:
     project = Project.load(args.project, variant=args.variant)
     with extensions.project_session(project):
         run_tts(project, beat_ids=args.beat, force=args.force, dry_run=args.dry_run, voices=args.voice)
+    return 0
+
+
+def cmd_readback(args: argparse.Namespace) -> CommandResult:
+    """Transcribe the beats' MP3s (speech to text, cached) and compare them with their texts:
+    word error rate, differing words and suggested fixes per beat (DESIGN.md §57)."""
+    from vidgen.readback import report_lines, run_readback
+
+    started = time.monotonic()
+    project = Project.load(args.project, variant=args.variant)
+    result = run_readback(project, beat_ids=args.beat, force=args.force, max_wer=args.max_wer)
+    if args.json:
+        return jsonout.readback_document(project, result, time.monotonic() - started)
+    for line in report_lines(result):
+        print(line)
     return 0
 
 
@@ -947,6 +962,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--voice", action="append", default=[], metavar="NAME", help="only the beats of this voice (a voices: name or default; repeatable)")
     p.add_argument("--variant", metavar="NAME", help="apply a named variant (may have its own voice)")
     p.set_defaults(func=cmd_tts)
+
+    p = sub.add_parser("readback", help="transcribe the narration (speech to text) and compare it with the beat texts: misheard, missing or extra words")
+    project_arg(p)
+    p.add_argument("--variant", metavar="NAME", help="apply a named variant (its audio folder and language)")
+    p.add_argument("--beat", action="append", default=[], metavar="ID", help="only this beat (repeatable)")
+    p.add_argument("--max-wer", type=float, metavar="RATE", help="flag beats whose word error rate is above this, 0-1 (default: lint.rules.readback.max_wer, 0.1)")
+    p.add_argument("--force", action="store_true", help="transcribe again even when a cached transcript exists")
+    p.set_defaults(func=cmd_readback)
 
     p = sub.add_parser("translate-template", help="write or update a variant's translation file (every text to translate)")
     project_arg(p)

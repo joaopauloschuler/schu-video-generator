@@ -189,43 +189,66 @@ class ElevenLabsProvider:
 
     def _send(self, url: str, payload: dict[str, Any], accept: str) -> bytes:
         """POST ``payload`` to ``url`` with retries; the response body."""
-        key = read_api_key()
         data = json.dumps(payload).encode("utf-8")
-        attempt = 0
-        while True:
-            wait: float | None = None
-            try:
-                return self._request(url, data, key, accept)
-            except urllib.error.HTTPError as exc:
-                body = _scrub(exc.read().decode("utf-8", errors="replace"), key)
-                if exc.code not in TRANSIENT_STATUS or attempt >= self.retries:
-                    if len(body) > MAX_BODY_IN_ERROR:
-                        body = body[:MAX_BODY_IN_ERROR] + "..."
-                    raise VidgenError(f"ElevenLabs returned HTTP {exc.code}: {body.strip() or '(empty body)'}") from None
-                wait = _retry_after(exc.headers)
-            except (TimeoutError, ConnectionError, urllib.error.URLError) as exc:
-                reason = exc.reason if isinstance(exc, urllib.error.URLError) else exc
-                transient = isinstance(reason, (TimeoutError, ConnectionError))
-                if not transient or attempt >= self.retries:
-                    what = f"{type(reason).__name__}: {reason}" if isinstance(reason, BaseException) else str(reason)
-                    raise VidgenError(f"cannot reach ElevenLabs: {_scrub(what, key)}") from None
-            except VidgenError:
-                raise
-            except Exception as exc:  # e.g. http.client rejecting a malformed header value
-                raise VidgenError(f"ElevenLabs request failed: {type(exc).__name__}: {_scrub(str(exc), key)}") from None
-            delay = wait if wait is not None else self.backoff * 2**attempt
-            self._sleep(min(delay, self.max_wait))
-            attempt += 1
-
-    def _request(self, url: str, data: bytes, key: str, accept: str) -> bytes:
-        request = urllib.request.Request(
-            url,
-            data=data,
-            method="POST",
-            headers={"xi-api-key": key, "Content-Type": "application/json", "Accept": accept},
+        return post_with_retries(
+            url, data, content_type="application/json", accept=accept, timeout=self.timeout,
+            retries=self.retries, backoff=self.backoff, max_wait=self.max_wait, sleep=self._sleep,
         )
-        with urllib.request.urlopen(request, timeout=self.timeout) as response:
-            audio = response.read()
-        if not audio:
-            raise VidgenError("ElevenLabs returned an empty response")
-        return audio
+
+
+def post_with_retries(
+    url: str,
+    data: bytes,
+    *,
+    content_type: str,
+    accept: str,
+    timeout: float,
+    retries: int,
+    backoff: float,
+    max_wait: float,
+    sleep: Callable[[float], None],
+) -> bytes:
+    """POST ``data`` to an ElevenLabs ``url`` with the API key from the environment; the
+    response body. Transient failures are retried ``retries`` times (``backoff * 2**attempt``
+    seconds or ``Retry-After``, at most ``max_wait``); every failure becomes a
+    :class:`VidgenError` without the key in it (shared by text to speech and speech to text)."""
+    key = read_api_key()
+    attempt = 0
+    while True:
+        wait: float | None = None
+        try:
+            return _request(url, data, key, content_type, accept, timeout)
+        except urllib.error.HTTPError as exc:
+            body = _scrub(exc.read().decode("utf-8", errors="replace"), key)
+            if exc.code not in TRANSIENT_STATUS or attempt >= retries:
+                if len(body) > MAX_BODY_IN_ERROR:
+                    body = body[:MAX_BODY_IN_ERROR] + "..."
+                raise VidgenError(f"ElevenLabs returned HTTP {exc.code}: {body.strip() or '(empty body)'}") from None
+            wait = _retry_after(exc.headers)
+        except (TimeoutError, ConnectionError, urllib.error.URLError) as exc:
+            reason = exc.reason if isinstance(exc, urllib.error.URLError) else exc
+            transient = isinstance(reason, (TimeoutError, ConnectionError))
+            if not transient or attempt >= retries:
+                what = f"{type(reason).__name__}: {reason}" if isinstance(reason, BaseException) else str(reason)
+                raise VidgenError(f"cannot reach ElevenLabs: {_scrub(what, key)}") from None
+        except VidgenError:
+            raise
+        except Exception as exc:  # e.g. http.client rejecting a malformed header value
+            raise VidgenError(f"ElevenLabs request failed: {type(exc).__name__}: {_scrub(str(exc), key)}") from None
+        delay = wait if wait is not None else backoff * 2**attempt
+        sleep(min(delay, max_wait))
+        attempt += 1
+
+
+def _request(url: str, data: bytes, key: str, content_type: str, accept: str, timeout: float) -> bytes:
+    request = urllib.request.Request(
+        url,
+        data=data,
+        method="POST",
+        headers={"xi-api-key": key, "Content-Type": content_type, "Accept": accept},
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        body = response.read()
+    if not body:
+        raise VidgenError("ElevenLabs returned an empty response")
+    return body

@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from vidgen.translation import TemplateResult
     from vidgen.render.pipeline import RenderResult
     from vidgen.lint import LintResult
+    from vidgen.readback import ReadbackResult
     from vidgen.storyboard import StoryboardResult
 
 #: Version of the JSON document shapes (not of vidgen).
@@ -599,6 +600,39 @@ def storyboard_document(
         reused=result.reused,
         elapsed=round(elapsed, 3),
         sheets=sheets,
+    )
+
+
+# ----- readback ----------------------------------------------------------------------------------
+
+
+def readback_document(project: Project, result: ReadbackResult, elapsed: float, warnings: Iterable[Mapping[str, Any]] = ()) -> dict[str, Any]:
+    """The ``vidgen readback --json`` document: every compared beat with its differences and
+    suggestions, the beats skipped, a summary and the terms heard differently."""
+    beats = result.beats
+    return envelope(
+        "readback",
+        True,
+        warnings,
+        project=_path(project.root),
+        variant=project.variant,
+        audio_dir=_path(project.audio_dir),
+        stt=dict(result.settings),
+        max_wer=result.max_wer,
+        transcribed=result.transcribed,
+        cached=result.cached,
+        elapsed=round(elapsed, 3),
+        summary={
+            "beats": len(beats),
+            "flagged": [b.beat for b in result.flagged],
+            "words": sum(b.words for b in beats),
+            "errors": sum(b.errors for b in beats),
+            "wer": round(result.wer, 4),
+            "worst": [{"beat": b.beat, "wer": round(b.wer, 4)} for b in result.worst()],
+        },
+        beats=[b.to_json() for b in beats],
+        skipped=[{"beat": beat, "reason": reason} for beat, reason in result.skipped],
+        terms=[t.to_json() for t in result.terms()],
     )
 
 

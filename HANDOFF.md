@@ -5016,3 +5016,115 @@ How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2031 passed, 1
 on 2 CPUs); step only: `pytest tests/test_slides_pdf.py` (~5 s). Needs `pip install -e ".[dev]"`
 (fpdf2, pypdf; the tests skip without them). Manual: `vidgen slides examples/gallery --format pdf
 --notes --title-page`, then `pdftoppm -r 60 -png -f 1 -l 3 examples/gallery/exports/gallery_preview_notes.pdf /tmp/p`.
+
+## Step 54 — Readback check (speech-to-text)
+What was built
+- **`vidgen readback [PROJECT] [--variant] [--beat ID ...] [--max-wer RATE] [--force] [--json]`**:
+  transcribes each beat's MP3 with a speech-to-text provider, compares the transcript with the
+  beat's **spoken** text (pronunciation applied: what the TTS was asked to say) and reports in
+  terms of the **written** text: per beat the word error rate, substitutions / deletions /
+  insertions, and `Edit`s (`expected "K-Phi-3" (said "kay fye three"), heard "kay five three" @
+  4.2s`) each with a suggested fix; beats above `max_wer` are flagged; a summary with the worst
+  beats and the **terms misheard in several beats** (the strongest signal for a pronunciation
+  entry). Beats without an MP3 are skipped; a stale MP3 gets "run `vidgen tts` first". Exit code
+  0 whenever it ran.
+- **STT provider seam** `src/vidgen/stt/` (like `tts/`): `STTProvider` protocol (`name`,
+  `check_available`, `transcribe(path) -> Transcript`), `Transcript` / `TranscriptWord`,
+  `stt_settings(project)` (resolved `{provider, model, language}`, no provider import),
+  `get_stt_provider(project)`. Providers: `faster_whisper` (local, free; optional extra
+  `vidgen[stt]` = `faster-whisper>=1.0`; model loaded lazily once, word timestamps, no
+  conditioning on previous text, no VAD) and `elevenlabs` (Speech to Text `scribe_v1`,
+  multipart upload, same `ELEVENLABS_API_KEY`; mocked, never called). No OpenAI provider.
+- **Config** `stt: {provider, model, language, device}` (`SttConfig`; model default `small.en`
+  for English, `small` otherwise, `scribe_v1` for ElevenLabs; language default the video's,
+  `auto` = detect), and lint rule settings `lint.rules.readback: {severity, max_wer: 0.1}`.
+- **Normaliser** `src/vidgen/textnorm.py`: case, punctuation, accents folded (pt-BR), hyphens /
+  slashes split, numbers to words in English and Portuguese (decimal / thousands marks of the
+  language, `%`, currency, English ordinals), digits kept canonically in other languages,
+  symbols as words, dotted / spaced acronyms joined; every token keeps its source word index.
+- **Comparison** `src/vidgen/readback.py`: `align` (Levenshtein, ties → more matches),
+  `word_error_rate`, `compare_beat` (ops grouped into whole written words; writing-only
+  differences such as `overparameterized` / `over parameterized` or the STT writing `K-Phi-3`
+  for "kay fye three" are not errors), `hard_term`, suggestions, `term_reports`, transcript cache
+  `build/readback/<sha1(audio sha1 + settings)>.json`, `run_readback`, `cached_readback`,
+  `report_lines`.
+- **Lint rule `readback`** (`src/vidgen/lint/readback_rule.py`, scope `scene`, default warning,
+  last in `LINT_RULES`): reads only cached transcripts of the current MP3s (`SceneContext.readback`,
+  filled by the runner when the rule runs), so it reports nothing until `vidgen readback` ran;
+  same report / JSON format as every lint finding (value = WER, limit = `max_wer`).
+- `--json`: new `readback` document (`jsonout.readback_document`).
+
+Real STT run: **not possible here.** faster-whisper 1.2.1 installed fine from PyPI into the
+workspace venv (left installed there; it is not in `dev`), but the model download from
+huggingface.co was refused by the build environment's proxy (`403`, policy denial for
+`huggingface.co:443`), so no model could be loaded; per instructions this was not worked
+around. `vidgen readback examples/kphi3 --beat s1_b1` ends with the clean error `cannot load
+the Whisper model 'small.en': ProxyError: 403 Forbidden (a model size is downloaded from the
+Hugging Face Hub on first use; ...)`. Everything is tested with mocks (fake `faster_whisper`
+module, mocked `urlopen`); the ElevenLabs STT API was never called. **First thing to do with
+network access**: `pip install -e ".[stt]"`, `vidgen readback examples/kphi3` (27 real
+ElevenLabs MP3s), read the flagged beats / terms, and tune `max_wer` (0.1 is a guess: clean TTS
++ Whisper small usually lands at a few percent after normalisation) and the normaliser
+(likely candidates: "K-Phi-3" / "Phi-3" spellings, "LaMini", "1.60"-style decimals, names in
+s1_b2).
+
+Files
+- New: `src/vidgen/stt/__init__.py`, `src/vidgen/stt/faster_whisper.py`,
+  `src/vidgen/stt/elevenlabs.py`, `src/vidgen/textnorm.py`, `src/vidgen/readback.py`,
+  `src/vidgen/lint/readback_rule.py`, `tests/test_readback.py` (25 tests, fast, all mocked).
+- Changed: `config.py` (`SttConfig`, `VideoConfig.stt`, `ReadbackRule`, `LintRules.readback`,
+  `LINT_RULES` / `RuleName` + `readback`), `tts/elevenlabs.py` (request / retry loop extracted to
+  `post_with_retries`, shared with STT; behaviour unchanged), `lint/rules.py`
+  (`SceneContext.readback`), `lint/run.py`, `lint/__init__.py`, `cli.py` (`readback` command,
+  `JSON_COMMANDS`), `jsonout.py`, `render/fingerprint.py` (`stt` config and the new modules are
+  not render inputs), `pyproject.toml` (extra `stt`), `tests/test_docs.py` (models),
+  docs/CONFIG.md (top-level `stt`, new "Readback (`vidgen readback`)" section, lint rule row +
+  defaults block, `vidgen readback --json`, command lists), README.md, DESIGN.md (tree, §3, §4,
+  §8, new §57), `examples/kphi3/video.yaml` (usage comment), tasklist.md.
+
+Public interfaces added/changed (compatible; `vidgen.api` unchanged)
+- CLI `vidgen readback` (+ JSON document `readback`, version 1). Config `stt`,
+  `lint.rules.readback`, lint rule / `lint_ignore` name `readback`. Extra `vidgen[stt]`.
+- `vidgen.stt`: `STTProvider`, `Transcript`, `TranscriptWord`, `stt_settings`,
+  `get_stt_provider`, `STT_PROVIDERS`, `DEFAULT_MODELS`; `vidgen.stt.faster_whisper.FasterWhisperProvider`;
+  `vidgen.stt.elevenlabs.ElevenLabsSTTProvider`, `parse_response`, `multipart_body`.
+- `vidgen.readback`: `align`, `Op`, `word_error_rate`, `compare_beat`, `Edit`, `BeatReadback`,
+  `hard_term`, `beat_suggestions`, `TermReport`, `term_reports`, `cache_path`, `read_cached`,
+  `write_cached`, `run_readback`, `ReadbackResult`, `cached_readback`, `report_lines`.
+- `vidgen.textnorm`: `normalize_words`, `normalize_text`, `Token`, `fold`, `number_words`,
+  `english_number`, `portuguese_number`.
+- `vidgen.tts.elevenlabs.post_with_retries`; `SceneContext(..., readback={})`.
+- Fingerprints change once (config.py changed, as every step).
+
+Decisions / deviations
+- **Cache in `build/readback/`, content-addressed** (not `audio/`): transcripts are derived and
+  disposable; `audio/` of kphi3 is committed and must stay clean; keying by the MP3's sha1 +
+  settings makes variants / qualities share entries and a regenerated MP3 invalidate itself.
+- **Reference = spoken text, report = written text**, with an extra rule: if the STT wrote the
+  *written* term ("K-Phi-3"), that is not an error even though the reference says "kay fye
+  three". Edits always cover whole written words (an STT error inside "K-Phi-3" shows the whole
+  term).
+- **Accents folded**: STT accent slips (`voce` for `você`) are more frequent than accent-only
+  minimal pairs (`é` / `e`), which are then not caught.
+- **Threshold in `lint.rules.readback.max_wer`**, shared by the command (`--max-wer` overrides)
+  and the lint rule, rather than in `stt:` (one place for "how strict").
+- **The lint rule never transcribes** (STT is slow / paid): "off unless transcripts exist".
+  `vidgen readback` itself never fails on findings (exit 0); the lint rule is the gate.
+- Flagging is by WER only; terms misheard in ≥ 2 beats are listed in the summary whatever the
+  WER (a single mishearing in a long beat stays below 0.1 but still shows in `edits` / `terms`).
+- `faster-whisper` is not in `dev` (heavy, and its model needs a download the tests must not
+  make); the tests inject a fake module.
+
+Known gaps / TODOs
+- No real STT run yet (see above); `max_wer` default and normaliser coverage are untuned.
+- Number words only for en / pt; English "and" inside numbers ("two hundred and five") and years
+  read in pairs ("twenty twenty-four") are not normalised; no ordinal words in Portuguese.
+- No hint vocabulary / prompt for the STT (Whisper `initial_prompt` / `hotwords` would bias it
+  towards the expected terms and hide real mispronunciations, so it is left out on purpose).
+- No per-beat audio playback position beyond `at`; `vidgen readback` has no `--scene` filter;
+  no OpenAI provider.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2058 passed, 1 skipped, ~11.8 min on 2 CPUs); step only:
+`pytest tests/test_readback.py` (~2 s). Manual (needs network + `pip install -e ".[stt]"`):
+`vidgen readback examples/kphi3`, `vidgen readback examples/kphi3 --json --beat s7_b2`,
+`vidgen lint examples/kphi3 --rule readback`.

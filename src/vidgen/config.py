@@ -239,6 +239,19 @@ class NarrationConfig(_Strict):
     """Speech rate used to estimate a beat's duration when it has no audio yet."""
 
 
+class SttConfig(_Strict):
+    """The optional ``stt:`` section: the speech-to-text provider of ``vidgen readback`` (DESIGN.md §57)."""
+
+    provider: Literal["faster_whisper", "elevenlabs"] = "faster_whisper"
+    """faster_whisper (local and free; pip install "vidgen[stt]") or elevenlabs (ElevenLabs Speech to Text, paid; ELEVENLABS_API_KEY)."""
+    model: str | None = Field(default=None, min_length=1)
+    """Model: a Whisper size (tiny, base, small, medium, large-v3, turbo; .en for English only) or a folder with a converted model; ElevenLabs: scribe_v1. Default: small.en for English, else small; scribe_v1."""
+    language: Literal["auto"] | LanguageTag | None = None
+    """Language of the audio (BCP-47; its language subtag is sent), or auto: detected; default: the video's language (English without one)."""
+    device: Literal["auto", "cpu", "cuda"] = "auto"
+    """faster_whisper: where the model runs (auto: a CUDA GPU if there is one, else the CPU)."""
+
+
 #: ``vidgen lint`` rule names (DESIGN.md §16). :class:`LintRules` has one field per name and
 #: :mod:`vidgen.lint` one rule per name (a test keeps the three in sync).
 LINT_RULES: tuple[str, ...] = (
@@ -254,6 +267,7 @@ LINT_RULES: tuple[str, ...] = (
     "dead_air",
     "animation_overrun",
     "rushed_animation",
+    "readback",
 )
 RuleName = Literal[
     "off_frame",
@@ -268,6 +282,7 @@ RuleName = Literal[
     "dead_air",
     "animation_overrun",
     "rushed_animation",
+    "readback",
 ]
 #: Severity of a lint finding; ``off`` disables a rule.
 Severity = Literal["error", "warning", "info", "off"]
@@ -406,6 +421,13 @@ class RushedAnimationRule(RuleConfig):
     """Shortest acceptable run time (seconds) of an animation `play_steps` had to shorten."""
 
 
+class ReadbackRule(RuleConfig):
+    """``readback``: a beat whose audio, transcribed by `vidgen readback`, differs from its text."""
+
+    max_wer: float = Field(default=0.1, ge=0, lt=1)
+    """Highest acceptable word error rate (differing words / words of the text); also `vidgen readback`'s threshold."""
+
+
 class LintRules(_Strict):
     """Per-rule settings of ``vidgen lint``."""
 
@@ -433,6 +455,8 @@ class LintRules(_Strict):
     """Animations running past the narration (default: warning)."""
     rushed_animation: RushedAnimationRule = Field(default_factory=RushedAnimationRule)
     """Animations shortened to fit a too short beat (default: warning)."""
+    readback: ReadbackRule = Field(default_factory=ReadbackRule)
+    """Audio heard differently from its text, from the transcripts `vidgen readback` stored (default: warning; nothing without them)."""
 
 
 class LintConfig(_Strict):
@@ -1069,6 +1093,8 @@ class VideoConfig(_Strict):
     """Tags of the final MP4 {title, artist, album, comment, description, copyright, date, genre}; title defaults to the top-level title."""
     thumbnail: ThumbnailConfig | None = None
     """The thumbnail <output>_thumbnail.png: a scene's frame {scene, beat, at, overlays} or a designed card {title, subtitle, icon, image, preset, background}, + {jpeg, auto}."""
+    stt: SttConfig = Field(default_factory=SttConfig)
+    """Speech to text for `vidgen readback` (the narration transcribed and compared with the text): {provider, model, language, device}."""
     scenes: list[SceneConfig] = Field(min_length=1)
     """The scenes in order (at least one); scene ids and beat ids must be unique."""
 

@@ -4,6 +4,7 @@
 #   vidgen tts examples/kphi3 --dry-run      # nothing to do: the narration MP3s are committed
 #   vidgen render examples/kphi3 --preview   # 854x480 @ 15 fps
 #   vidgen render examples/kphi3 --jobs 2    # 1920x1080 @ 30 fps -> kphi3_video.mp4
+#   vidgen readback examples/kphi3           # speech to text of the MP3s vs the texts (pip install "vidgen[stt]")
 # Narration text lives in the beats below; the text drawn on screen in each scene's params.
 title: "Saving 77% of the Parameters in Large Language Models"
 output: kphi3_video

@@ -167,6 +167,10 @@ def _timing_findings(
     lint = project.config.lint
     activity = _read(scene_activity_path(project, preview, scene_id), scene_id, "activity file")
     ctx = SceneContext(scene_id, activity, project.audio_dir, project.spoken_texts(), project.config.language)
+    if "readback" in names and lint.rules.readback.severity != "off":
+        from vidgen.readback import cached_readback
+
+        ctx.readback = cached_readback(project, [beat.id for beat in project.scene(scene_id).beats])
     ignores = project.scene(scene_id).lint_ignores()
     findings: list[Finding] = []
     groups: dict[tuple[Any, ...], Finding] = {}

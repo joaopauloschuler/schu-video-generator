@@ -232,8 +232,8 @@ Rules that apply to every step:
 - [x] PDF deck from the same frames, optional notes pages (use `vidgen.deck.deck_frames`: slides, notes, chapters, alt texts) — `vidgen slides --format pdf [--notes] [--title-page] [--paper a4|letter]`, optional extra `vidgen[pdf]` (fpdf2)
 
 ### Step 54 — Readback check (speech-to-text)
-- [ ] STT provider seam; optional `faster-whisper` extra; mocked in tests
-- [ ] Report per beat: word error rate and differing words (catches mispronunciations)
+- [x] STT provider seam; optional `faster-whisper` extra; mocked in tests (`vidgen.stt`: `stt: {provider: faster_whisper | elevenlabs, model, language, device}`, `vidgen[stt]`; ElevenLabs Speech to Text provider too; transcripts cached in `build/readback/` by MP3 content + settings; no real run here: Hugging Face model downloads were refused by the build environment's proxy — see HANDOFF)
+- [x] Report per beat: word error rate and differing words (catches mispronunciations) (`vidgen readback [--beat] [--max-wer] [--force] [--json]`: spoken text (pronunciation applied) vs transcript after a normaliser (case, accents, hyphens, en / pt number words, acronyms), aligned, edits in written words with a suggested fix each, flagged beats, worst beats, terms misheard in several beats; lint rule `readback` from the cached transcripts)
 
 ### Step 55 — Generated images
 - [ ] Image-generation provider seam, cached by prompt hash like TTS; one provider; mocked in tests
