@@ -18,6 +18,7 @@ from vidgen.config import (
     MaxWordsRule,
     MinFontRule,
     OffFrameRule,
+    OverlayOverlapRule,
     SafeAreaRule,
     TextOverlapRule,
 )
@@ -39,6 +40,11 @@ _GLYPH_EM: dict[str, float] = {
     "j": 0.95,
     **dict.fromkeys(".,:;·•-–—_'\"`‘’“”", _SMALL),
 }
+
+
+def is_overlay(obj: dict[str, Any]) -> bool:
+    """True for objects of an overlay (lower third, watermark...; DESIGN.md §41)."""
+    return obj.get("overlay") is not None
 
 
 def is_text(obj: dict[str, Any]) -> bool:
@@ -141,13 +147,14 @@ def off_frame(ctx: StillContext, settings: OffFrameRule) -> Iterator[Issue]:
 @rule("safe_area")
 def safe_area(ctx: StillContext, settings: SafeAreaRule) -> Iterator[Issue]:
     """Text lies outside the safe area (the scene's margins), though inside the frame (not
-    checked while the camera is zoomed in)."""
+    checked while the camera is zoomed in; overlays place themselves, e.g. a watermark in the
+    margin, and are not checked)."""
     if ctx.zoomed:
         return
     sx0, sy0, sx1, sy1 = ctx.layout["safe_area"]
     tolerance = settings.tolerance * ctx.short_side
     for obj in ctx.objects:
-        if not is_text(obj):
+        if not is_text(obj) or is_overlay(obj):
             continue
         x0, y0, x1, y1 = _bbox(obj)
         if x0 < -0.5 or y0 < -0.5 or x1 > ctx.width + 0.5 or y1 > ctx.height + 0.5:
@@ -169,9 +176,11 @@ def safe_area(ctx: StillContext, settings: SafeAreaRule) -> Iterator[Issue]:
 
 @rule("text_overlap", default="error")
 def text_overlap(ctx: StillContext, settings: TextOverlapRule) -> Iterator[Issue]:
-    """Two texts overlap."""
+    """Two texts overlap (an overlay's text over the scene's is ``overlay_overlap``'s finding)."""
     texts = [obj for obj in ctx.objects if is_text(obj)]
     for a, b in combinations(texts, 2):
+        if is_overlay(a) != is_overlay(b):
+            continue
         box = intersection(_bbox(a), _bbox(b))
         if box is None:
             continue
@@ -254,13 +263,16 @@ def _distance(rgb: np.ndarray, colors: list[np.ndarray]) -> np.ndarray:
 
 @rule("covered_text")
 def covered_text(ctx: StillContext, settings: CoveredTextRule) -> Iterator[Issue]:
-    """A shape or image is drawn on top of text."""
+    """A shape or image is drawn on top of text (an overlay's over the scene's text is
+    ``overlay_overlap``'s finding)."""
     texts = [obj for obj in ctx.objects if is_text(obj)]
     others = [obj for obj in ctx.objects if not is_text(obj)]
     for text in texts:
         for shape in others:
             if shape["order"] <= text["order"]:
                 continue  # drawn first: a backdrop, plate or highlight band
+            if is_overlay(shape) and not is_overlay(text):
+                continue
             fraction = _covered(ctx, shape, text)
             if fraction is None or fraction < settings.min_covered:
                 continue
@@ -351,3 +363,35 @@ def max_words(ctx: StillContext, settings: MaxWordsRule) -> Iterator[Issue]:
         value=total,
         limit=settings.max_words,
     )
+
+
+#: Scene objects an overlay must not cover: what the viewer reads.
+_CONTENT_KINDS = TEXT_KINDS | {"icon"}
+
+
+@rule("overlay_overlap")
+def overlay_overlap(ctx: StillContext, settings: OverlayOverlapRule) -> Iterator[Issue]:
+    """An overlay (lower third, watermark...) covers the scene's text or icons."""
+    boxes: dict[str, list[Bbox]] = {}
+    for obj in ctx.objects:
+        if is_overlay(obj):
+            boxes.setdefault(str(obj["overlay"]), []).append(_bbox(obj))
+    content = [obj for obj in ctx.objects if not is_overlay(obj) and obj["kind"] in _CONTENT_KINDS]
+    for overlay, parts in boxes.items():
+        union = (min(b[0] for b in parts), min(b[1] for b in parts), max(b[2] for b in parts), max(b[3] for b in parts))
+        for obj in content:
+            box = intersection(union, _bbox(obj))
+            if box is None:
+                continue
+            fraction = area(box) / max(area(_bbox(obj)), 1e-9)
+            if fraction < settings.min_overlap:
+                continue
+            yield Issue(
+                f"overlay '{overlay}' covers {describe(obj)} ({fraction:.0%} of its box); move the scene's "
+                "content or the overlay, give the overlay `reserve: true`, or time it elsewhere",
+                box,
+                (obj,),
+                value=round(fraction, 3),
+                limit=settings.min_overlap,
+                group=("overlay", overlay),
+            )

@@ -74,6 +74,9 @@ src/vidgen/
   callouts.py             # callouts: areas, label placement, box, circle, arrow, magnifier, spotlight (§37)
   clips.py                # video clips: probe, timing, ClipMobject (frames decoded per frame), clip sound (§38)
   geo.py                  # world map data, country lookup, Equal Earth projection, MapView (§39; no manim)
+  videoplan.py            # the planned timeline: scene / beat positions in the video before rendering (§41)
+  overlays.py             # overlays: Overlay base, OverlayContext, config entries, validation, reserve (§41)
+  overlay_layer.py        # OverlayLayer: overlays composited into every frame a scene writes (§41)
   charts.py               # chart helpers: ticks, number labels, axes, legend, markers, fit (§33),
                           # colour scales, colour bar, readable text on fills (§34)
   tts/__init__.py         # provider seam: get_provider(cfg)
@@ -83,7 +86,8 @@ src/vidgen/
   subtitles.py            # SRT from beat timings
   fileio.py               # atomic writes; replacing files that Windows programs keep open
   scenes/                 # built-in scene library (registered like extensions; actions.py:
-                          # the built-in beat actions reveal/dim/highlight/zoom/transform, §26-27)
+                          # the built-in beat actions reveal/dim/highlight/zoom/transform, §26-27;
+                          # overlays.py: the built-in overlays lower_third/watermark, §41)
   data/fonts/             # Inter, Source Serif 4, JetBrains Mono NL (.ttf + OFL.txt; package data)
   data/icons/             # manifest.json + lucide/*.svg + lucide/LICENSE (ISC; package data, §22)
   data/geo/               # world-110m.json: Natural Earth 1:110m countries (public domain; package data, §39)
@@ -472,6 +476,8 @@ Step 35 (§38) adds the video clip helpers: `CLIP_SUFFIXES`, `ClipInfo`, `ClipMo
 `ClipTiming`, `clip_audio`, `fit_speed`, `probe_clip`.
 Step 36 (§39) adds the map helpers: `MAP_VIEWS`, `Country`, `MapView`, `equal_earth`,
 `find_country`, `fit_view`, `view_box`, `world_countries`.
+Step 38 (§41) adds `overlay`, `Overlay`, `OverlayOptions`, `OverlayContext`, `with_opacity`, and
+`NarratedScene.overlay_layer` (compatible: `NarratedScene.safe_area` shrinks for reserved overlays).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -1537,6 +1543,7 @@ using the existing renders of the others (missing ones are rendered). Exit code 
   **For Step 38 (overlays):** anything drawn as a mobject in the scene moves with the camera; a
   screen-fixed overlay must either follow `camera.frame` (an updater scaling/moving it with
   the frame) or be composited outside Manim (ffmpeg), which also keeps it out of scene renders.
+  (Step 38 composites in the renderer's `add_frame` instead, §41.)
 - **Framework additions** (`vidgen.actions`): `Action.temporary` (requires `reversible`): the
   runner schedules `revert` itself, due `run_time` before the end of the *return beat* — the
   use's own beat, or with `until: B` the beat before `B` — so the effect is over when the next
@@ -2460,3 +2467,110 @@ using the existing renders of the others (missing ones are rendered). Exit code 
   orientation, every target, every preset) and every test function over ~1.5 s, so `pytest -m
   "not slow"` stays a quick check (~1.7 min on a 2-CPU box, 1257 tests) while the full suite
   (~14 min) runs everything.
+
+## 41. Refinements (Step 38, overlays: framework, `lower_third`, `watermark`)
+
+- **Config.** `VideoConfig.overlays: list[OverlayConfig]` (`config.OverlayConfig`, `extra="allow"`
+  like actions): `type`, `id` (default the type; `<type><n>` (1-based) when several id-less entries
+  share a type), `scenes` (`all` | ids), `exclude`, `from` / `to` (field `from_`, alias `from`:
+  seconds in the video, or a scene id = its start / its end), `reserve`; every other key is an
+  option of the type (`OverlayConfig.options`). `SceneConfig.overlays: bool | {id: bool |
+  mapping}` (default `true`): `false` = none on the scene; per id `false`, or a mapping of option
+  overrides (+ `reserve`; the other common keys are an error); a mapping with `type` under an id
+  that is no video-level id = an overlay of that scene only (no `scenes`/`exclude`/`from`/`to`).
+  Reference: docs/CONFIG.md "Overlays".
+- **Registry.** A third kind next to scene types and actions (`registry.OverlayType`,
+  `register_overlay`, decorator `overlay(name, *, override=False)`, `find_overlay`,
+  `overlay_names`, `all_overlays`, `unknown_overlay_message`; same two layers and collision rules;
+  `Snapshot` is now a triple). `overlays.check_overlay_class`: `Options` an `OverlayOptions`, no
+  option named like a common key, `build` implemented, `layer` an int. Built-ins in
+  `scenes/overlays.py` (only `from vidgen.api import *` + `.image` helpers).
+- **`Overlay`** (one instance per scene render): `options`, `config`, `context`, `id`, `scenes`
+  (ids it is drawn on), `span` (`from`/`to` in video seconds, `inf` without an end). Subclass
+  API: `build()` (full look, placed on the whole frame, once per render), `window()` (video
+  seconds or `None`), `state(t)` (hashable or `None`; **a pure function of video time**, so the
+  look is identical on both sides of a cut), `pose(mobject, state)` (a copy), `settled(state)`
+  (full look, for lint), classmethod `validate_project(options, project, scenes)`, class
+  attributes `layer`, `lint_skip`; helpers `interval()`, `transition(t, start, end, enter, exit)`
+  (smooth 0..1), property `timed` (span bounded or a window; a subclass sets `timed = True` when
+  `state` reads the video time otherwise, e.g. Step 39's progress bar). `with_opacity(mob, f)`
+  (exported) scales fill / stroke / image alpha of a copy.
+- **Timeline contract** (`vidgen/videoplan.py`, `VideoPlan(project, fps)`, lazy and cached): each
+  scene renders alone, so its position in the video is planned: a beat lasts `round((d + pad) x
+  fps)` frames, `d` = the MP3's decoded length (`scene.audio_duration`, cached by path + size +
+  mtime) else the word estimate; a narrated scene = its beats + `ceil(outro x fps)` (the type's
+  class attribute `outro`); a silent one `max(round(duration x fps), round((duration - outro) x
+  fps) + ceil(outro x fps))`. `SceneSlot(index, id, type, start, duration, beats: BeatSlot(id,
+  start, end, text), chapter)`, `Chapter(title, number, scene, start)` from `chapter` scenes
+  (Steps 39/49), `scene_start`, `duration`, `resolve(value, end)`. Built-in scenes match it exactly
+  (tested: every frame count equal, half-frame durations aside). Overrunning scenes / extensions
+  with their own timing shift later scenes: the worker records `render.overlays = {ids, timed,
+  start, duration}` in the scene's timings, and `join_scenes` warns when a scene with timed
+  overlays starts more than 1.5 frames away from its planned start. Only timed overlays make the
+  layer read the plan (reading every MP3 before the scene).
+- **Fingerprint.** With any overlay, `_overlay_inputs`: per scene id, type, duration, chapter
+  title, `overlays`, beats' ids, texts and MP3 stats (what the plan reads), so editing another
+  scene's narration re-renders scenes with overlays; projects without overlays are unaffected
+  (the key is `null`).
+- **Drawing: composited in the renderer, not mobjects of the scene.** `OverlayLayer` wraps
+  `renderer.add_frame` *after* `FrameCapture` attached (outermost), so stills, the layout dump and
+  the motion signal see the composited frames, and nothing in `scene.mobjects` changes: the
+  `MovingCamera` (zoom, focus) and `clear_all`/outro fades never touch overlays; they never change
+  timing or frame counts (tested against renders without them). Frame `k` is drawn at video time
+  `start + k / fps`. A frozen wait (one frame written N times) is split into runs of equal states
+  (a lower third sliding in during a silent card is drawn frame by frame; static overlays cost one
+  call). Why not an updater following `camera.frame`: it would make every wait non-frozen (each
+  frame redrawn), add the overlay to `scene.mobjects` (clear_all, scene walks, targets) and have to
+  undo scaling for a zoom; why not ffmpeg afterwards: stills, layout and lint would not see it.
+- **Patches.** Each distinct tuple of states is drawn once (LRU of 64) with two Manim `Camera`s
+  showing the whole frame over black and over white: Cairo draws premultiplied while Manim
+  composites images with PIL in straight alpha, so a single transparent camera gives wrong
+  colours where they mix; the two opaque renders give exact premultiplied colour (`on_black`) and
+  `255 - alpha` (`on_white - on_black`) for both. The patch is cropped to its visible box;
+  compositing a frame is `colour + under x (255 - alpha) / 255` on that box (uint16) — within 2
+  levels of Cairo drawing directly on the frame (tested).
+- **Layout dump.** `LayoutRecorder` appends the overlays shown at the still (`layer.posed(frame)`),
+  measured with the layer's whole-frame camera (`_Walk.camera`), after every scene object (`order`
+  + 1000), paths `overlay:<id>/...`, key `overlay` (the id); frames gain `overlays: [{id, type,
+  settled, skip}]`. `safe_area` is now `scene.safe_area` (equal unless reserved).
+- **Reserved space.** `reserve: true` → `NarratedScene._reserved` (the built mobject's box) and
+  `safe_area` = the margins' safe area cut by `overlays.avoid(area, box, gap=0.2)` (the largest of
+  the four parts above / below / left / right of the box). Static for the whole scene (a layout
+  is built once), so a lower third with `reserve` shrinks the scene also while it is not shown.
+  The global `regions.safe_area()` is unchanged (built-ins lay out in `self.safe_area`).
+- **Lint.** `overlay_overlap` (layout rule after `max_words`, default warning, `min_overlap` 0.05
+  of the scene object's box): an overlay's union box over a scene text/code/math/number/icon.
+  `safe_area` skips overlay objects; `text_overlap` skips overlay-vs-scene pairs; `covered_text`
+  skips an overlay shape over scene text (all `overlay_overlap`'s). The runner drops objects of
+  overlays not `settled` (sliding / fading at a beat end, like mid-beat stills) and, per rule,
+  objects of overlays whose type's `lint_skip` names it (`watermark`: `contrast`).
+- **Validation** (`overlays.overlay_problems`, in `cli.project_problems` and
+  `pipeline._check_scenes` via `check_overlays`): unknown types (did-you-mean), duplicate ids,
+  unknown scene ids in `scenes`/`exclude`/`from`/`to`, numeric `to <= from`, misplaced keys in scene
+  overrides / scene-only overlays, unknown override ids; options as written (at `overlays[i]`)
+  and with each scene's overrides (new problems at `scenes[j].overlays.<id>`), theme tokens
+  checked; the type's `validate_project`. `scene_overlays(project, spec, theme, plan)` builds the
+  scene's instances (sorted by `layer`), skipping timed ones whose interval misses the scene.
+- **Listing / schema.** `list-scenes` prints an `overlays` section; `--json` adds `overlays:
+  [{name, origin, builtin, overrides_builtin, doc, layer, lint_skip, options}]` (within version
+  1). `vidgen schema`: `OverlayConfig.type` an `enum`, per type `if`/`then` with its options and
+  `additionalProperties: false` (`overlay.NAME` defs); scene overrides only by shape.
+- **`lower_third`**: name (bold, heading role) and optional title / icon on a `surface` plate
+  (0.92) with an accent bar, wrapped at the readable size within `max_width` (0.6 of the safe
+  width; 9:16 the whole width), placed with `place(..., align)` in the safe area (9:16: raised by
+  `PORTRAIT_LIFT` 0.12 of the safe height). Window: its scene's planned start + `at` (seconds or a
+  beat's start) for `duration`, cut at that scene's end unless `across_cuts`. State: the eased
+  progress (3 decimals); pose: opacity x p, shifted `SLIDE` 0.5 x (1 - p) from its side (from
+  below / above when centred).
+- **`watermark`**: one of `image` (`image.load_image`, height `size` x the shorter side, at most
+  0.3 of the frame wide), `icon`, `text`; `opacity` applied at build; placed `inset` (0.025 of the
+  shorter side) from the frame's corner; `fade` at a bounded `from` / `to`. `lint_skip =
+  ("contrast",)`.
+- **For Steps 39–41.** A progress bar: `timed = True`, `state` from `t / context.duration`
+  (quantised to a pixel); a chapter indicator: `context.chapters` / `context.scene.chapter`;
+  captions: `context.scene.beats` (planned scene times and texts; karaoke word times can be spread
+  in a beat's `[start, end]`). Callouts on any scene (Step 41) need scene targets, i.e. scene-level
+  actions rather than overlays.
+- Known limits: the plan cannot see what a scene's code does beyond the contract (warning at
+  join); `reserve` is per scene, not per moment; overlays are drawn at the render's resolution
+  from vector / image mobjects (no video overlays).

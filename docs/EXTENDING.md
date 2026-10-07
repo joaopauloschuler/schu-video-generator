@@ -1,7 +1,7 @@
 # Extending vidgen from your project
 
-Every project can add its own **scene types**, **helpers**, **theme tokens**, **hooks** and
-**per-beat actions** in its `extensions/` folder. Nothing in vidgen has to change, and a finished extension can later be
+Every project can add its own **scene types**, **helpers**, **theme tokens**, **hooks**,
+**per-beat actions** and **overlays** in its `extensions/` folder. Nothing in vidgen has to change, and a finished extension can later be
 promoted into the core library unchanged.
 
 ```
@@ -811,3 +811,80 @@ scene (`scene.on_screen_parts(t)`), not a group of them that was never added: Ma
 that group and draw its parts twice. New mobjects (like the marks above) are simply added by
 their animation. `vidgen list-scenes` lists your action with its options; `vidgen schema`
 includes them.
+
+## 9. Overlays: custom overlay types
+
+An overlay (docs/CONFIG.md "Overlays") is drawn on top of every scene it applies to, fixed to
+the screen: the scene's camera and fades never touch it. A project adds overlay types the way it
+adds actions: a class registered with `@overlay("name")`, its `Options` (an `OverlayOptions`
+model) being the extra keys of the `overlays:` entry. The built-ins are in
+`src/vidgen/scenes/overlays.py` (`lower_third`, `watermark`).
+
+```python
+# extensions/badge.py
+from vidgen.api import *
+
+
+@overlay("badge")
+class Badge(Overlay):
+    """A "LIVE" badge in the top left corner that blinks every other second."""
+
+    class Options(OverlayOptions):
+        label: str = "LIVE"
+        """The badge text."""
+        color: ThemeColor = "accent"
+        """Plate colour."""
+
+    def build(self):                       # once per scene render: the full look, in place
+        text = T(self.options.label, "caption", text_color_on(resolve_color(self.options.color)), weight=BOLD)
+        plate = SurroundingRectangle(text, buff=0.12, corner_radius=0.08)
+        plate.set_fill(resolve_color(self.options.color), opacity=1).set_stroke(width=0)
+        badge = VGroup(plate, text)
+        place(badge, safe_area(), fit="none", align="top_left")
+        return badge
+
+    def state(self, t):                    # t: seconds in the video
+        return "on" if int(t) % 2 == 0 else None    # None hides it
+
+    timed = True                           # its look depends on where the scene is in the video
+```
+
+```yaml
+overlays:
+  - {type: badge, label: "ON AIR", scenes: [interview]}
+```
+
+**What an overlay is.**
+- `build()` returns the mobject at its full look, placed on the whole frame (`safe_area()`,
+  `region(...)`, `place(...)`, `frame_region()` work as in scenes; the frame is never moved by the
+  scene's camera). It is called once per scene render.
+- `state(t)` says how it looks at **video** time `t` (inside its `from`/`to` span and its
+  `window()`): any hashable value, `None` to hide it. It must be a pure function of `t`, so the
+  overlay looks the same at the end of one scene and the start of the next. Frames with equal
+  states are drawn once and cached; return a coarse value (`round(p, 3)`) rather than `t` itself.
+- `pose(mobject, state)` returns the mobject to draw for a state (a copy: `with_opacity(mob, p)`
+  fades one, `.shift(...)` moves it); `settled(state)` says whether it is the full look (lint
+  checks only settled overlays).
+- `window()` narrows where it is shown (video seconds `(start, end)`; default the whole span);
+  `self.interval()` is the span and window combined, `self.transition(t, start, end, enter,
+  exit)` an eased 0..1 progress for slides and fades.
+- Set `timed = True` when `state` depends on the video time without a `window()` or `from`/`to`
+  (a progress bar): the scene's position in the video is then computed (it costs reading every
+  beat's MP3 length).
+- `self.context` (`OverlayContext`): `scene` (this scene's planned `SceneSlot`: `id`, `index`,
+  `start` and `duration` in the video, `beats` with `start`/`end` from the scene's start and
+  `text`, `chapter`), `scenes`, `duration` (the whole video), `chapters` (`Chapter(title, number,
+  scene, start)` of the `chapter` scenes), `fps`, `video_time(scene_time)`, `scene_start(id)`,
+  `project`, `theme`, `plan`. Times are *planned* (docs/CONFIG.md "Overlays", Timing).
+  `self.options`, `self.config` (the entry), `self.id`, `self.scenes` (ids of the scenes it is
+  drawn on), `self.span` (`from`/`to` in video seconds, `math.inf` without an end).
+- classmethod `validate_project(options, project, scenes) -> list[str]`: checks `vidgen
+  validate` runs (a file exists, a beat id exists), one `"option: message"` per problem.
+- Class attributes: `layer` (drawing order between overlays, default 0), `lint_skip` (rules not
+  applied to its objects, e.g. `("contrast",)` for something faint on purpose).
+
+Overlays are composited into each frame as the scene renders, so stills, the layout dump
+(objects with `overlay: <id>`) and `vidgen lint` (`overlay_overlap`) see them; a `reserve: true`
+entry shrinks `self.safe_area` of the scenes it is drawn on (and so `self.region(...)`), which
+scene types that lay out in the safe area follow automatically. `vidgen list-scenes` lists your
+overlay type with its options; `vidgen schema` includes them.

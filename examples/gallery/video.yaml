@@ -15,6 +15,7 @@
 #   vidgen storyboard examples/gallery --scene derive --per-beat 3  # an equation derivation, step by step
 #   vidgen storyboard examples/gallery --scene walkthrough --per-beat 2  # a listing scrolling from step to step
 #   vidgen storyboard examples/gallery --scene app --per-beat 2     # a screenshot with callouts, step by step
+#   vidgen storyboard examples/gallery --scene clip --per-beat 3    # a clip with a lower third (overlays)
 # No narration audio: beats are timed from their word count (narration.words_per_second).
 title: "vidgen: a gallery of scene types"
 output: gallery
@@ -49,6 +50,20 @@ narration:
 
 lint:                 # optional; thresholds and severities of `vidgen lint` (docs/CONFIG.md)
   fail_on: error      # warnings are reported, only errors make the command fail
+
+overlays:             # drawn over the scenes, fixed to the screen (docs/CONFIG.md "Overlays")
+  - type: watermark   # in the corner of every scene but the chapter cards
+    text: "vidgen gallery"
+    exclude: [structure, part2, part3]
+    reserve: true     # scenes keep clear of it (a thin band at the bottom of their safe area)
+  - type: lower_third # slides in over the clip for a few seconds; the scene makes room for it
+    scene: clip
+    at: 0.8
+    duration: 5
+    name: "Test pattern"
+    title: "Generated with ffmpeg"
+    icon: play
+    reserve: true
 
 scenes:
   - id: structure

@@ -1,7 +1,7 @@
-"""Scene-type and action registry (DESIGN.md §6.2, §26).
+"""Scene-type, action and overlay registry (DESIGN.md §6.2, §26, §41).
 
-Scene types (``@scene``) and per-beat action types (``@action``) are registered the same way, in
-two layers each:
+Scene types (``@scene``), per-beat action types (``@action``) and overlay types (``@overlay``) are
+registered the same way, in two layers each:
 
 - **built-ins** — scene types defined in modules inside the ``vidgen`` package
   (``vidgen.scenes``). They are registered once per process when those modules are first
@@ -32,6 +32,7 @@ from vidgen.errors import VidgenError
 
 if TYPE_CHECKING:
     from vidgen.actions import Action
+    from vidgen.overlays import Overlay
     from vidgen.scene import NarratedScene
 
 log = logging.getLogger("vidgen.registry")
@@ -78,13 +79,30 @@ class ActionType:
         return self.origin == BUILTIN
 
 
+@dataclass(frozen=True)
+class OverlayType:
+    """A registered overlay type (``@overlay``); fields as in :class:`SceneType`."""
+
+    name: str
+    cls: type[Overlay]
+    origin: str
+    overrides: OverlayType | None = None
+
+    @property
+    def builtin(self) -> bool:
+        """True for built-in overlay types."""
+        return self.origin == BUILTIN
+
+
 _builtins: dict[str, SceneType] = {}
 _extensions: dict[str, SceneType] = {}
 _builtin_actions: dict[str, ActionType] = {}
 _extension_actions: dict[str, ActionType] = {}
+_builtin_overlays: dict[str, OverlayType] = {}
+_extension_overlays: dict[str, OverlayType] = {}
 
-#: The extension layer (scene types, action types), saved by :func:`snapshot`.
-Snapshot = tuple[dict[str, SceneType], dict[str, ActionType]]
+#: The extension layer (scene types, action types, overlay types), saved by :func:`snapshot`.
+Snapshot = tuple[dict[str, SceneType], dict[str, ActionType], dict[str, OverlayType]]
 
 
 def _check_class(name: str, cls: object) -> None:
@@ -116,7 +134,7 @@ def _valid_beat_count(spec: object) -> bool:
     return hi is None or (count(hi) and hi >= spec[0])  # type: ignore[operator]
 
 
-E = TypeVar("E", SceneType, ActionType)
+E = TypeVar("E", SceneType, ActionType, OverlayType)
 
 
 def _add(kind: str, decorator: str, layers: tuple[dict[str, E], dict[str, E]], entry: E, override: bool) -> E:
@@ -267,27 +285,86 @@ def unknown_action_message(name: str) -> str:
     return message + f" (known actions: {', '.join(known) or 'none'})"
 
 
+# ----- overlays ----------------------------------------------------------------------------------
+
+
+def register_overlay(name: str, cls: type[Overlay], *, override: bool = False) -> OverlayType:
+    """Register ``cls`` as overlay type ``name`` (the function form of :func:`overlay`)."""
+    from vidgen.overlays import check_overlay_class
+
+    if not isinstance(name, str) or not re.match(ID_PATTERN, name):
+        raise VidgenError(f"invalid overlay type name {name!r}: use letters, digits and '_' only")
+    check_overlay_class(name, cls)
+    entry = OverlayType(name, cls, origin_of(cls.__module__))
+    return _add("overlay type", "overlay", (_builtin_overlays, _extension_overlays), entry, override)
+
+
+def overlay(name: str, *, override: bool = False) -> Callable[[S], S]:
+    """Class decorator: register an :class:`~vidgen.overlays.Overlay` subclass as overlay type
+    ``name`` (what ``type:`` refers to in the ``overlays:`` list). Name collisions are handled
+    as for :func:`scene`."""
+
+    if isinstance(name, type):
+        raise VidgenError(f'use @overlay("name") with an overlay type name, not bare @overlay (on {name.__qualname__})')
+
+    def decorate(cls: S) -> S:
+        register_overlay(name, cls, override=override)  # type: ignore[arg-type]
+        return cls
+
+    return decorate
+
+
+def find_overlay(name: str) -> OverlayType | None:
+    """The overlay type ``name`` (extensions shadow built-ins they override), or ``None``."""
+    return _extension_overlays.get(name) or _builtin_overlays.get(name)
+
+
+def overlay_names() -> list[str]:
+    """All registered overlay type names, sorted."""
+    return sorted({*_builtin_overlays, *_extension_overlays})
+
+
+def all_overlays() -> list[OverlayType]:
+    """All effective overlay types sorted by name."""
+    return [find_overlay(n) for n in overlay_names()]  # type: ignore[misc]
+
+
+def unknown_overlay_message(name: str) -> str:
+    """``unknown overlay type 'x'`` plus close matches and the list of known overlay types."""
+    import difflib
+
+    known = overlay_names()
+    message = f"unknown overlay type '{name}'"
+    close = difflib.get_close_matches(name, known, n=3)
+    if close:
+        message += f"; did you mean {' or '.join(repr(c) for c in close)}?"
+    return message + f" (known overlay types: {', '.join(known) or 'none'})"
+
+
 # ----- isolation -------------------------------------------------------------------------------
 
 
 def reset() -> None:
-    """Forget all extension scene types and actions (built-ins stay)."""
+    """Forget all extension scene types, actions and overlay types (built-ins stay)."""
     _extensions.clear()
     _extension_actions.clear()
+    _extension_overlays.clear()
 
 
 def snapshot() -> Snapshot:
     """A copy of the extension layer, for :func:`restore`."""
-    return dict(_extensions), dict(_extension_actions)
+    return dict(_extensions), dict(_extension_actions), dict(_extension_overlays)
 
 
 def restore(state: Snapshot) -> None:
     """Restore the extension layer saved by :func:`snapshot`."""
-    scenes, actions = state
+    scenes, actions, overlays = state
     _extensions.clear()
     _extensions.update(scenes)
     _extension_actions.clear()
     _extension_actions.update(actions)
+    _extension_overlays.clear()
+    _extension_overlays.update(overlays)
 
 
 @contextmanager

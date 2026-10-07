@@ -159,6 +159,7 @@ LINT_RULES: tuple[str, ...] = (
     "min_font",
     "contrast",
     "max_words",
+    "overlay_overlap",
     "narration_speed",
     "dead_air",
     "animation_overrun",
@@ -172,6 +173,7 @@ RuleName = Literal[
     "min_font",
     "contrast",
     "max_words",
+    "overlay_overlap",
     "narration_speed",
     "dead_air",
     "animation_overrun",
@@ -253,6 +255,13 @@ class MaxWordsRule(RuleConfig):
     """Most words of visible text (not code or math) in one still."""
 
 
+class OverlayOverlapRule(RuleConfig):
+    """``overlay_overlap``: an overlay (lower third, watermark...) drawn over the scene's text or icons."""
+
+    min_overlap: Fraction = 0.05
+    """Part of a scene object's box an overlay must cover to be reported."""
+
+
 class NarrationSpeedRule(RuleConfig):
     """``narration_speed``: a beat spoken too fast or too slow (spoken words per second)."""
 
@@ -310,6 +319,8 @@ class LintRules(_Strict):
     """Low text contrast (default: warning)."""
     max_words: MaxWordsRule = Field(default_factory=MaxWordsRule)
     """Too many words on screen (default: warning)."""
+    overlay_overlap: OverlayOverlapRule = Field(default_factory=OverlayOverlapRule)
+    """Overlays covering scene text or icons (default: warning)."""
     narration_speed: NarrationSpeedRule = Field(default_factory=NarrationSpeedRule)
     """Narration too fast or too slow (default: warning; info for beats without audio)."""
     dead_air: DeadAirRule = Field(default_factory=DeadAirRule)
@@ -425,6 +436,50 @@ class ActionConfig(BaseModel):
         return " ".join([self.action, *self.targets()])
 
 
+#: Keys every overlay entry has; any other key of an entry is an option of its overlay type.
+OVERLAY_KEYS = ("type", "id", "scenes", "exclude", "from", "to", "reserve")
+#: Keys a scene's override of a video-level overlay may set besides the type's options.
+OVERLAY_OVERRIDE_KEYS = ("reserve",)
+#: Where an overlay starts or ends: seconds in the video, or a scene id (its start / its end).
+OverlayTime = Annotated[float, Field(ge=0)] | Identifier
+
+
+class OverlayConfig(BaseModel):
+    """An entry of the video-level ``overlays:`` list (DESIGN.md §41): ``{type, id, scenes,
+    exclude, from, to, reserve, ...options}``.
+
+    Which overlay types exist and their options depend on the registered overlay types, so they
+    are checked by ``vidgen validate`` (``vidgen.overlays``), not here.
+    """
+
+    model_config = ConfigDict(extra="allow", use_attribute_docstrings=True, populate_by_name=True)
+
+    type: Identifier
+    """Overlay type: lower_third, watermark, or a project overlay (`vidgen list-scenes`)."""
+    id: Identifier | None = None
+    """Name for scene overrides (`overlays: {ID: false}` on a scene); default the type, or <type><n> when several entries share a type."""
+    scenes: Literal["all"] | list[Identifier] = "all"
+    """Scenes it is drawn on: all, or a list of scene ids."""
+    exclude: list[Identifier] = Field(default_factory=list)
+    """Scenes it is not drawn on."""
+    from_: OverlayTime | None = Field(default=None, alias="from")
+    """Where it starts: seconds in the video, or a scene id (that scene's start); default the video's start."""
+    to: OverlayTime | None = None
+    """Where it ends: seconds in the video, or a scene id (that scene's end); default the video's end."""
+    reserve: bool = False
+    """Keep scene layouts clear of it: the safe area of every scene it is drawn on shrinks to avoid its box."""
+
+    @property
+    def options(self) -> dict[str, Any]:
+        """The type-specific options (every key other than :data:`OVERLAY_KEYS`)."""
+        return dict(self.model_extra or {})
+
+
+#: A scene's ``overlays:`` setting: on/off, or per overlay id ``false`` / ``true`` / a mapping
+#: of option overrides (or, with ``type``, an overlay of this scene only).
+SceneOverlays = bool | dict[Identifier, bool | dict[str, Any]]
+
+
 class BeatConfig(_Strict):
     """One narrated sentence/paragraph. ``id`` is filled in by :class:`SceneConfig` if omitted."""
 
@@ -460,6 +515,8 @@ class SceneConfig(_Strict):
     """Seconds; required on a silent scene (no beats), not allowed on a scene with beats."""
     lint_ignore: list[RuleName | Literal["all"] | LintIgnore] = Field(default_factory=list)
     """`vidgen lint` findings to skip in this scene: rule names, or {rule, object, beat} filters."""
+    overlays: SceneOverlays = True
+    """Video overlays on this scene: false for none, or per overlay id false / option overrides (with type: an overlay of this scene only)."""
 
     @model_validator(mode="before")
     @classmethod
@@ -531,6 +588,8 @@ class VideoConfig(_Strict):
     """Folders (relative to the project) whose *.py files and packages are imported."""
     lint: LintConfig = Field(default_factory=LintConfig)
     """Thresholds and severities of `vidgen lint`."""
+    overlays: list[OverlayConfig] = Field(default_factory=list)
+    """Overlays drawn on top of the scenes (lower thirds, watermark, ...), fixed to the screen."""
     scenes: list[SceneConfig] = Field(min_length=1)
     """The scenes in order (at least one); scene ids and beat ids must be unique."""
 

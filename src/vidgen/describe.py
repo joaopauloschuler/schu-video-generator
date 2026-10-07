@@ -18,7 +18,7 @@ from typing import Any
 from pydantic import AliasChoices, BaseModel
 from pydantic_core import to_jsonable_python
 
-from vidgen.registry import ActionType, SceneType
+from vidgen.registry import ActionType, OverlayType, SceneType
 
 
 def type_name(annotation: Any, metadata: Sequence[Any] = ()) -> str:
@@ -225,4 +225,25 @@ def action_type_json(entry: ActionType) -> dict[str, Any]:
         "needs_target": cls.needs_target,
         "target_options": list(cls.target_options),
         "options": params_json(cls.Options),
+    }
+
+
+def overlay_doc(entry: OverlayType) -> str | None:
+    """The overlay class's own docstring, cleaned, or ``None``."""
+    doc = entry.cls.__dict__.get("__doc__")
+    return inspect.cleandoc(doc) if doc else None
+
+
+def overlay_type_json(entry: OverlayType) -> dict[str, Any]:
+    """``{name, origin, builtin, overrides_builtin, doc, layer, lint_skip, options}`` for
+    ``list-scenes --json`` (``options`` as ``params`` of scene types)."""
+    return {
+        "name": entry.name,
+        "origin": entry.origin,
+        "builtin": entry.builtin,
+        "overrides_builtin": entry.overrides is not None,
+        "doc": overlay_doc(entry),
+        "layer": entry.cls.layer,
+        "lint_skip": list(entry.cls.lint_skip),
+        "options": params_json(entry.cls.Options),
     }

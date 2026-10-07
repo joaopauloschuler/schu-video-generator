@@ -270,7 +270,7 @@ def test_scene_safe_area_is_what_the_layout_dump_records(make_project) -> None:
     for w, h in ((160, 90), (90, 160)):
         fw, fh = frame_size(w, h)
         with tempconfig({"pixel_width": w, "pixel_height": h, "frame_width": fw, "frame_height": fh}):
-            fake = SimpleNamespace(margin_x=0.6, margin_y=0.5, spec=SimpleNamespace(id="s", type="t"))
+            fake = SimpleNamespace(safe_area=safe_area(0.6, 0.5), spec=SimpleNamespace(id="s", type="t"))
             doc = LayoutRecorder().document(fake, 1)  # type: ignore[arg-type]
             safe = safe_area()
             px = w / fw

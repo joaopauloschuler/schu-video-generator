@@ -37,8 +37,12 @@ subtitles.
   `- highlight: "bar:4K"`, `- dim: item1`, `- reveal: item4` (with `until:` a later beat to undo),
   `- zoom: "term:2ab"` (camera in and back out), `- transform: step1` + `into: step3` — on every
   built-in scene type, timed inside the beat ([reference](docs/CONFIG.md#beat-actions)).
-- **Extensible per video**: a project can add its own scene types, beat actions, helpers, theme
-  tokens and pipeline hooks in its `extensions/` folder, without touching vidgen.
+- **Overlays**: a video-level `overlays:` list draws lower thirds (`- {type: lower_third, scene:
+  intro, at: 1.5, name: Ada Lovelace}`) and a watermark (logo, icon or text in a corner) over the
+  scenes, fixed to the screen through camera moves and fades and seamless across cuts; per scene
+  on/off or overridden ([reference](docs/CONFIG.md#overlays)).
+- **Extensible per video**: a project can add its own scene types, beat actions, overlays,
+  helpers, theme tokens and pipeline hooks in its `extensions/` folder, without touching vidgen.
 - **Cheap to iterate**: only new or edited beats are sent to ElevenLabs; fast low-resolution
   previews; re-render one scene at a time.
 - Windows, macOS and Linux; Python 3.10–3.13.
@@ -164,14 +168,14 @@ my_video/
   `vidgen render examples/minimal --preview [--variant vertical]`.
 - [examples/gallery](examples/gallery) — every other built-in scene type once (stat, chapter,
   comparison, table, timeline, diagram, process, network, scatter, histogram, pie, heatmap, map,
-  screenshot, video clip, equation derivation, code walkthrough): `vidgen storyboard
-  examples/gallery [--variant vertical]`.
+  screenshot, video clip, equation derivation, code walkthrough) and overlays (a watermark, a
+  lower third): `vidgen storyboard examples/gallery [--variant vertical]`.
 - [examples/custom_scene](examples/custom_scene) — "How a bicycle gear works": built-ins plus a
   custom scene type with a helper module, a project icon, a vertical variant and a hook.
 - [examples/kphi3](examples/kphi3) — a real 4-minute paper video whose eight bespoke scenes all
   live in its `extensions/` folder (narration MP3s included, so it renders without a key).
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.
-- [docs/EXTENDING.md](docs/EXTENDING.md) — writing scene types, helpers, theme tokens and hooks;
+- [docs/EXTENDING.md](docs/EXTENDING.md) — writing scene types, actions, overlays, helpers, theme tokens and hooks;
   layout regions (`region("header")`, `grid`, `place`, `readable_text`) that adapt to 16:9 and 9:16.
 - [DESIGN.md](DESIGN.md) — architecture and internal contracts.
 

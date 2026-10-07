@@ -108,15 +108,19 @@ def _scene_findings(
         if frame["k"] != frame["n"]:
             continue  # mid-beat stills show animations in progress; lint the settled beat ends
         stills += 1
-        objects = [o for o in frame["objects"] if o["opacity"] >= lint.min_opacity]
+        moving = {o["id"] for o in frame.get("overlays", []) if not o.get("settled", True)}  # sliding in or out
+        objects = [o for o in frame["objects"] if o["opacity"] >= lint.min_opacity and o.get("overlay") not in moving]
         still = Path(os.path.normpath(path.parent / frame["still"]))
         beat_stills.setdefault(frame["beat"], still)
-        ctx = StillContext(layout, frame, objects, still=still)
+        skips = {o["id"]: set(o.get("skip", ())) for o in frame.get("overlays", [])}
         for name in still_rules:
             entry = RULES[name]
             settings = entry.settings(lint.rules)
             if settings.severity == "off":
                 continue
+            # an overlay type may exempt its objects from a rule (a faint watermark: contrast)
+            kept = [o for o in objects if name not in skips.get(o.get("overlay"), ())]
+            ctx = StillContext(layout, frame, kept, still=still)
             for issue in entry.check(ctx, settings):
                 finding = Finding(
                     scene=scene_id,

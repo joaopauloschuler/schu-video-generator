@@ -172,8 +172,8 @@ Rules that apply to every step:
 ## Phase D — Overlays, audio, transitions
 
 ### Step 38 — Overlay framework + lower thirds + watermark
-- [ ] Video-level `overlays:` config drawn on top of scenes (per scene on/off)
-- [ ] `lower_third` (name/title, timed) and `watermark` (logo image, corner, opacity)
+- [x] Video-level `overlays:` config drawn on top of scenes (per scene on/off) (`{type, id, scenes, exclude, from, to, reserve, ...options}`; a scene's `overlays:` turns all or single ones off, overrides options, or adds an overlay of that scene only; `@overlay` registry in `vidgen.api` with validated options, JSON Schema, `list-scenes [--json]`; composited into every frame inside the scene's render, fixed to the screen through zoom and fades, a pure function of video time so cuts join seamlessly; planned timeline `vidgen.videoplan` (render warns when a scene drifts from it); layout dump / lint see overlays (`overlay_overlap`, lint skips per type, unsettled overlays skipped); `reserve: true` shrinks the scenes' safe area)
+- [x] `lower_third` (name/title, timed) and `watermark` (logo image, corner, opacity) (lower third: name / title / icon on a plate, `scene` + `at` (seconds or beat) + `duration`, `across_cuts`, `align`, slide in/out, raised in 9:16; watermark: image, icon or text, corner, opacity, size, inset, `fade` at `from`/`to`; `examples/gallery` uses both)
 
 ### Step 39 — Progress / chapter indicator
 - [ ] Progress bar overlay; chapter indicator from `chapter` scenes or a scene-level `chapter:` field

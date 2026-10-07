@@ -35,12 +35,15 @@ MODELS: list[type[BaseModel]] = [
     config.MinFontRule,
     config.ContrastRule,
     config.MaxWordsRule,
+    config.OverlayOverlapRule,
+    config.OverlayConfig,
 ]
 
 
 @pytest.mark.parametrize("model", MODELS, ids=lambda m: m.__name__)
 def test_every_config_key_is_documented(model: type[BaseModel]) -> None:
-    missing = [name for name in model.model_fields if f"`{name}`" not in CONFIG_MD and f"{name}:" not in CONFIG_MD]
+    names = [field.alias or name for name, field in model.model_fields.items()]   # as written in video.yaml
+    missing = [name for name in names if f"`{name}`" not in CONFIG_MD and f"{name}:" not in CONFIG_MD]
     assert not missing, f"{model.__name__} fields missing from docs/CONFIG.md: {missing}"
 
 

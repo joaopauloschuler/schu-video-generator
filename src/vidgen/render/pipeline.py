@@ -94,10 +94,11 @@ class _WorkerRun:
 
 
 def _check_scenes(project: Project) -> None:
-    """Every scene's type is registered, its params validate, its beat count fits and its beat
-    actions are valid (fast, before any rendering)."""
+    """Every scene's type is registered, its params validate, its beat count fits, its beat
+    actions are valid and so are the overlays (fast, before any rendering)."""
     from vidgen import registry, runtime
     from vidgen.actions import plan_actions
+    from vidgen.overlays import check_overlays
 
     for spec in project.config.scenes:
         cls = registry.get(spec.type).cls
@@ -106,6 +107,7 @@ def _check_scenes(project: Project) -> None:
         if problem is not None:
             raise VidgenError(f"scene '{spec.id}' (type {spec.type}): {problem}")
         plan_actions(spec.type, cls, spec, params, runtime.current_theme())
+    check_overlays(project, runtime.current_theme())
 
 
 def warn_audio(project: Project) -> None:
@@ -325,6 +327,7 @@ def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) ->
     videos: list[Path] = []
     audios: list[Path] = []
     scenes: list[dict[str, Any]] = []
+    shifted: list[str] = []
     offset = 0.0
     for spec in project.config.scenes:
         video = scene_video_path(project, preview, spec.id)
@@ -333,6 +336,9 @@ def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) ->
             raise VidgenError(f"scene '{spec.id}' has no render in {render_dir}; render it first")
         timings = json.loads(timings_file.read_text(encoding="utf-8"))
         duration = ff.probe(video).duration
+        drawn = timings.get("render", {}).get("overlays") or {}
+        if drawn.get("timed") and drawn.get("start") is not None and abs(drawn["start"] - offset) > 1.5 / fmt.fps:
+            shifted.append(f"'{spec.id}' starts at {offset:.2f} s, planned {drawn['start']:.2f} s")
         samples = round((offset + duration) * ff.AUDIO_RATE) - round(offset * ff.AUDIO_RATE)
         wav = scene_audio_path(project, preview, spec.id)
         audio = padded_dir / f"{spec.id}.wav"
@@ -352,6 +358,11 @@ def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) ->
         videos.append(video)
         audios.append(audio)
         offset += duration
+    if shifted:
+        log.warning(
+            "overlays timed in the video are off where a scene does not start where it was planned "
+            "(an earlier scene ran longer or shorter than its narration; DESIGN.md §41): %s", "; ".join(shifted)
+        )
     output = project.output_path(preview)
     ff.join(ffmpeg, videos, audios, output, padded_dir)
     combined = {

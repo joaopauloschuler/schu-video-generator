@@ -9,6 +9,7 @@ section except ``scenes``, ``variants`` and ``lint`` (theme, narration, format..
 beats (size and modification time), the source of vidgen itself (with its bundled fonts and
 icons) and of
 the project's extension folders (file contents), and the files under ``<project>/assets`` (size and modification time).
+With overlays, also what the planned timeline reads from every scene (``vidgen.videoplan``).
 Files a scene reads from elsewhere are not tracked (``--force`` renders again).
 """
 
@@ -82,6 +83,25 @@ def _stat(path: Path) -> list[int] | None:
     return [st.st_size, st.st_mtime_ns]
 
 
+def _overlay_inputs(project: Project) -> Any:
+    """What overlays read from the other scenes (their planned timeline: types, durations, beat
+    texts and MP3s, chapter titles; DESIGN.md §41); ``None`` without overlays."""
+    cfg = project.config
+    if not cfg.overlays and not any(isinstance(s.overlays, dict) for s in cfg.scenes):
+        return None
+    return [
+        {
+            "id": s.id,
+            "type": s.type,
+            "duration": s.duration,
+            "title": s.params.get("title") if s.type == "chapter" else None,
+            "overlays": s.overlays,
+            "beats": [[b.id, b.text, _stat(project.audio_dir / f"{b.id}.mp3")] for b in s.beats],
+        }
+        for s in cfg.scenes
+    ]
+
+
 def scene_fingerprint(project: Project, scene_id: str) -> str:
     """A hex digest of everything (that vidgen knows of) the render of ``scene_id`` depends on."""
     spec = project.scene(scene_id)
@@ -99,6 +119,7 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
         "audio": {beat.id: _stat(project.audio_dir / f"{beat.id}.mp3") for beat in spec.beats},
         "extensions": [_contents_digest(_files(folder, ".py"), folder) for folder in project.extension_dirs],
         "assets": {path.relative_to(assets).as_posix(): _stat(path) for path in _files(assets)},
+        "overlays": _overlay_inputs(project),
     }
     text = json.dumps(data, sort_keys=True, ensure_ascii=True)
     return hashlib.sha256(text.encode("utf-8")).hexdigest()

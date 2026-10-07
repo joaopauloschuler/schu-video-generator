@@ -3439,3 +3439,98 @@ How to test: `/home/claude/venv/bin/python -m pytest -q` (1639 passed, 1 skipped
 tests/test_review2.py`. Manual: `vidgen lint examples/gallery [--variant ...]`, `vidgen
 storyboard examples/gallery --variant vertical`, `vidgen lint examples/minimal [--variant ...]`,
 `vidgen list-icons --search chart --sheet icons.png --theme`.
+
+## Step 38 — Overlay framework + lower thirds + watermark
+What was built
+- **`overlays:`** (video level): entries `{type, id, scenes, exclude, from, to, reserve,
+  ...options}` (`config.OverlayConfig`, `from` = field `from_`); a scene's **`overlays:`**
+  (`SceneConfig.overlays`, default `true`): `false` = none, per id `false` / option overrides (+
+  `reserve`), or `{type: ...}` under a new id = an overlay of that scene only. Default ids: the
+  type, `<type><n>` when several id-less entries share it.
+- **Overlay types** registered like scene types and actions (`@overlay`, third registry layer;
+  `register_overlay`, `find_overlay`, `all_overlays`, ...). `Overlay` base class (`build`,
+  `window`, `state(t)` = a pure function of *video* time, `pose`, `settled`,
+  `validate_project`, `layer`, `lint_skip`, `transition`, `interval`, `timed`), `OverlayOptions`,
+  `OverlayContext` (planned `scene` / `scenes` / `duration` / `chapters`, `video_time`, ...),
+  `with_opacity`. Validation in `vidgen validate` and before any render worker (unknown types,
+  ids, scene references, options as written and per scene override, the type's own checks);
+  JSON Schema (`type` enum + per-type options); `vidgen list-scenes [--json]` lists them.
+- **Planned timeline** `vidgen/videoplan.py` (`VideoPlan`, `SceneSlot`, `BeatSlot`, `Chapter`):
+  every scene's start/duration and beat times from MP3 lengths / estimates + pad + the type's
+  `outro`, before rendering; matches all 19 gallery scenes' rendered lengths exactly. The worker
+  records `render.overlays` in the timings; `join_scenes` warns when a scene with timed overlays
+  does not start where planned. The fingerprint includes what the plan reads (only with overlays).
+- **Drawing** `vidgen/overlay_layer.py` (`OverlayLayer`): wraps `renderer.add_frame` outermost
+  (after the frame capture), composites the overlays' states for each frame's video time; frozen
+  waits are split where states change; each state tuple is drawn once over black and white
+  (exact premultiplied colour + alpha for Cairo and PIL-drawn images) and cached as a cropped
+  patch. Overlays are never scene mobjects: zoom/focus camera moves and `clear_all` fades do not
+  touch them, timing and frame counts are unchanged.
+- **Layout dump / lint**: overlay objects (key `overlay`, paths `overlay:<id>/...`, measured with a
+  whole-frame camera), frame `overlays: [{id, type, settled, skip}]`, `safe_area` = the scene's
+  (reserved). New rule **`overlay_overlap`** (warning): an overlay over scene text/icons;
+  `safe_area` skips overlays, `text_overlap` / `covered_text` leave overlay-vs-scene to it; the
+  runner skips unsettled overlays and per-type `lint_skip` rules.
+- **`reserve: true`**: `NarratedScene.safe_area` cut by the overlay's box (`overlays.avoid`, the
+  largest remaining part, 0.2 gap) on every scene it is drawn on.
+- **Built-ins** (`scenes/overlays.py`): `lower_third` (name/title/icon plate with an accent bar,
+  `scene` + `at` seconds or beat + `duration`, `across_cuts`, `align`, slide, readable size, 9:16
+  lift) and `watermark` (image / icon / text, `corner`, `opacity`, `size`, `inset`, `fade`;
+  skips `contrast`).
+- **Example**: `examples/gallery` has a text watermark (not on chapter cards, `reserve`) and a
+  lower third on the `clip` scene (`reserve`).
+
+Files
+- New: `src/vidgen/videoplan.py`, `src/vidgen/overlays.py`, `src/vidgen/overlay_layer.py`,
+  `src/vidgen/scenes/overlays.py`, `tests/test_overlays.py` (26 tests).
+- Changed: `config.py` (OverlayConfig, SceneConfig.overlays, VideoConfig.overlays, lint rule
+  `overlay_overlap`), `registry.py`, `scene.py` (overlay layer, reserved safe area), `api.py`,
+  `scenes/__init__.py`, `introspect.py`, `lint/layout_rules.py`, `lint/run.py`, `render/worker.py`,
+  `render/pipeline.py`, `render/fingerprint.py`, `schema.py`, `describe.py`, `jsonout.py`,
+  `cli.py`; tests `test_docs.py` (aliases, new models), `test_introspect.py` / `test_regions.py`
+  (fakes gain `safe_area` / `overlay_layer`); `examples/gallery/video.yaml`; docs/CONFIG.md
+  ("Overlays", top level, scenes, lint, layout dump, list-scenes JSON, fingerprint),
+  docs/EXTENDING.md (section 9), README.md, DESIGN.md (§2, §6.4, §27 note, new §41), tasklist.md.
+
+Public interfaces added/changed (additive)
+- `vidgen.api`: `overlay`, `Overlay`, `OverlayOptions`, `OverlayContext`, `with_opacity`;
+  `NarratedScene.overlay_layer`; `NarratedScene.safe_area` shrinks for reserved overlays.
+- `registry`: overlay functions; `registry.snapshot()` returns a triple (was a pair).
+- Config: `overlays` (top level and per scene); lint rule `overlay_overlap` (`min_overlap`).
+- JSON: `list-scenes --json` `overlays`; layout dump frame `overlays`, object `overlay`; scene
+  timings `render.overlays` (all within version 1).
+- `config_schema(..., overlays=None)`.
+
+Decisions / deviations
+- **Composited in the renderer's `add_frame`, not mobjects following `camera.frame`** (DESIGN
+  §27's two options): an updater would make every wait non-frozen (all frames redrawn), put the
+  overlay into `scene.mobjects` (clear_all, targets, walks) and fight zoom scaling; ffmpeg after
+  the render would hide overlays from stills/layout/lint. Compositing keeps them out of the scene
+  yet in every frame the capture sees.
+- **State as a pure function of video time + planned timeline**: continuity across cuts comes for
+  free (both scenes compute the same state for the boundary); the price is the plan contract
+  (documented, warned on drift).
+- **Lint**: `overlay_overlap` rather than shrinking layouts by default; `reserve` is opt-in
+  because it is per scene (a lower third shown 4 s shrinks the whole scene). Watermark default
+  `inset` 0.025 (it sits in the margin at the default size in 16:9).
+- Lower thirds end with their scene unless `across_cuts`; `at` is seconds or a beat id (not a
+  fraction like actions' `at`).
+- Listing in `list-scenes` (section + JSON key), no separate `list-overlays` command.
+
+Known gaps / TODOs
+- Step 39: progress bar (`timed = True`, `context.duration`), chapter indicator
+  (`context.chapters`, `scene.chapter`; a scene-level `chapter:` field still to add to the plan).
+- Step 40: captions can read `context.scene.beats` (planned times + texts).
+- Step 41: callouts on any scene need the scene's targets — scene-level, not an overlay.
+- `reserve` is static per scene; overlays are vector / image mobjects only (no video in overlays);
+  the plan cannot see a custom scene's own timing (join warns).
+
+Verification: `vidgen lint` 0 findings for examples/gallery in all 8 variants, minimal in all 8,
+custom_scene (+ vertical) and kphi3 (4 ignored, as before); storyboards of the gallery's `clip`
+(lower third, 16:9 and 9:16) and watermarked scenes read; the plan matched every gallery scene's
+rendered length exactly.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1667 passed, 1 skipped, ~12.5 min);
+step only: `pytest tests/test_overlays.py`. Manual: `vidgen storyboard examples/gallery --scene clip
+--per-beat 3 [--variant vertical]`, `vidgen lint examples/gallery [--variant vertical]`,
+`vidgen list-scenes`, `vidgen schema`.

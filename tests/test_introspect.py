@@ -37,6 +37,7 @@ from vidgen.capture import CapturedFrame, still_name
 from vidgen.introspect import LAYOUT_VERSION, LayoutRecorder, _backdrop
 from vidgen.layout import latex_available
 from vidgen.project import Project
+from vidgen.regions import safe_area
 from vidgen.render import worker
 from vidgen.render.pipeline import _usable_render, render_project
 
@@ -61,10 +62,15 @@ def small_config(tmp_path: Path) -> Iterator[None]:
 
 
 class FakeScene:
-    """What the recorder reads from a scene: camera, mobjects, attributes, margins, spec."""
+    """What the recorder reads from a scene: camera, mobjects, attributes, safe area, spec, overlays."""
 
     margin_x = 0.6
     margin_y = 0.5
+    overlay_layer = None
+
+    @property
+    def safe_area(self) -> Any:
+        return safe_area(self.margin_x, self.margin_y)
 
     def __init__(self, *mobjects: Any, camera: Camera | None = None) -> None:
         self.camera = camera or Camera()

@@ -6,7 +6,7 @@ the bodies of `variants`, so typos are caught by `vidgen validate`. Paths are re
 project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-and-beats),
 [format](#format-and-preview), [variants](#variants), [theme](#theme), [voice](#voice-voice),
 [narration](#narration-narration), [narration audio](#narration-audio-elevenlabs),
-[built-in scene types](#built-in-scenes), [beat actions](#beat-actions),
+[built-in scene types](#built-in-scenes), [beat actions](#beat-actions), [overlays](#overlays),
 [JSON Schema](#json-schema-vidgen-schema), [frame stills](#frame-stills-vidgen-render---frames),
 [storyboard](#storyboard-vidgen-storyboard), [lint](#lint-vidgen-lint),
 [JSON output of commands](#json-output---json).
@@ -25,6 +25,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `narration` | see [narration](#narration-narration) | beat padding, duration estimate |
 | `extensions` | `[extensions]` | folders whose `*.py` files and packages are imported (see docs/EXTENDING.md); the default may be missing, a folder you list must exist |
 | `lint` | see [lint](#lint-vidgen-lint) | thresholds and severities of `vidgen lint` |
+| `overlays` | `[]` | lower thirds, a watermark, ... drawn over the scenes, see [overlays](#overlays) |
 | `scenes` | required | the scenes in order, at least one |
 
 ## Scenes and beats
@@ -53,6 +54,7 @@ scenes:
 | `beats` | `[]` | each beat is narrated into `audio/<beat id>.mp3`; its animation lasts as long as its audio plus `narration.pad` |
 | `duration` | none | seconds; required on a scene without beats and not allowed on a scene with beats |
 | `lint_ignore` | `[]` | `vidgen lint` findings to skip in this scene, see [lint](#lint-vidgen-lint) |
+| `overlays` | `true` | the video's [overlays](#overlays) on this scene: `false` for none, or per overlay id `false` / option overrides, or an overlay of this scene only |
 
 Beat `id`s name the audio files: keep them when you edit the text (only that beat is
 re-voiced). A beat `text` is spoken as written; it is also the subtitle. A beat's `actions`
@@ -2202,6 +2204,138 @@ bar:<label>; * and ? match several)`. The JSON Schema checks action names and op
 depend on the params, so only `vidgen validate` checks them. Use `vidgen storyboard --scene ID
 --per-beat 3` to see actions mid-beat.
 
+## Overlays
+
+Overlays are drawn **on top of the scenes and fixed to the screen**: a lower third introducing a
+speaker, a logo in a corner. They are listed once for the whole video and appear on every scene
+they apply to; the scene's camera moves (a [`zoom`](#beat-actions)) and its fades (the fade-out
+at a scene's end) do not touch them, and they look the same on both sides of a cut. They are
+drawn into each scene's own render, so `vidgen storyboard`, the [layout dump](#layout-dump-buildlayoutscenejson)
+and [`vidgen lint`](#lint-vidgen-lint) see them. `vidgen list-scenes` lists the overlay types
+and their options (`--json`: `overlays`).
+
+```yaml
+overlays:
+  - type: watermark                 # the whole video
+    image: assets/logo.png
+    corner: bottom_right
+    opacity: 0.6
+  - type: lower_third               # in scene "intro", 1.5 s after it starts, for 5 s
+    scene: intro
+    at: 1.5
+    duration: 5
+    name: Ada Lovelace
+    title: Mathematician
+    icon: user
+  - type: watermark
+    id: draft
+    text: DRAFT
+    corner: top_right
+    from: results                   # from the start of scene "results"
+    to: 95                          # to 95 s into the video
+scenes:
+  - id: intro
+    type: title
+    params: {title: "Engines"}
+    beats: [{text: "..."}]
+  - id: end
+    type: end_card
+    params: {title: "Thanks"}
+    beats: [{text: "..."}]
+    overlays: {watermark: false}    # no logo on the end card
+```
+
+Keys every overlay entry has (any other key is an option of its type):
+
+| key | default | |
+|---|---|---|
+| `type` | required | `lower_third`, `watermark`, or a [project overlay type](EXTENDING.md#9-overlays-custom-overlay-types) |
+| `id` | the type | the name a scene's `overlays:` refers to; when several entries share a type and have no `id`, they are `<type>1`, `<type>2`, ... (ids must be unique) |
+| `scenes` | `all` | the scenes it is drawn on: `all` or a list of scene ids |
+| `exclude` | `[]` | scenes it is not drawn on |
+| `from` | the video's start | where it starts: seconds in the video, or a scene id (that scene's start) |
+| `to` | the video's end | where it ends: seconds in the video, or a scene id (that scene's end) |
+| `reserve` | `false` | keep the scenes' layouts clear of it: on every scene it is drawn on, the safe area (docs/EXTENDING.md "Layout regions") shrinks to leave its box free (plus 0.2 units), so built-in scenes lay out around it (the layout dump's `safe_area` too). Off by default: a lower third shows for a few seconds over content laid out for the whole frame, and a watermark sits in the margin |
+
+**On a scene** (`overlays:` of the scene): `false` turns every overlay off there; a mapping
+turns single ones off (`{draft: false}`) or overrides their options and `reserve` for that scene
+(`{watermark: {corner: top_left}}`); an entry with a `type` that is no video-level id adds an
+overlay to **this scene only** (no `scenes`, `exclude`, `from`, `to`):
+
+```yaml
+  - id: interview
+    type: image
+    params: {path: assets/guest.jpg, fit: cover}
+    beats: [{text: "..."}, {text: "..."}]
+    overlays:
+      guest: {type: lower_third, name: Grace Hopper, title: Rear admiral, at: interview_b2}
+```
+
+**Timing.** An overlay's times are times in the video. Each scene is rendered on its own, so its
+position in the video is *planned* before rendering: a narrated beat lasts its MP3's length
+(else the word-count estimate) plus `narration.pad`, a scene its beats plus its fade-out, a
+silent scene its `duration`. Built-in scenes keep to this exactly. A scene whose animations run
+past its narration (lint `animation_overrun`) or an extension scene that times itself
+differently shifts the scenes after it; `vidgen render` then warns that overlays timed in the
+video (`from` / `to` in seconds or a scene, a lower third running over a cut) are off there.
+Render the scenes again after `vidgen tts` so the plan uses the real audio.
+
+**Lint.** Overlays are checked like the scene (text size, contrast, cut off by the frame), and
+the rule `overlay_overlap` reports an overlay covering the scene's text or icons. Their own
+placement is deliberate, so `safe_area` does not apply to them (a watermark sits in the margin),
+and an overlay over the scene's text is `overlay_overlap`'s finding, not `text_overlap`'s or
+`covered_text`'s. Like the scene, an overlay is checked only when settled: a lower third sliding
+in or out at a beat's end is left alone. A type may exempt its objects from rules: the watermark
+is faint on purpose and is not checked for `contrast`. In the layout dump, overlay objects have the key `overlay` (the
+id) and paths starting with `overlay:<id>`, so `lint_ignore` can match them (`{rule:
+overlay_overlap, object: "overlay:lower_third*"}`).
+
+### `lower_third`
+
+A name and a title on a plate in the lower third of the frame, sliding in at a moment of a scene
+and out after `duration` seconds. It belongs to a scene (`scene`, default the first scene the
+entry is drawn on) and starts `at` seconds into it or at one of its beats; it goes by the end of
+that scene unless `across_cuts`. It is placed in the safe area (in 9:16 raised by 12 % of the
+safe height: phone apps put their controls over the bottom), at least at the readable text size,
+and slides in from the side it is aligned to (from below / above when centred).
+
+| param | default | |
+|---|---|---|
+| `name` | required | the main line (a person's or a place's name), bold, font role `heading` |
+| `title` | none | the second line (role, affiliation) |
+| `icon` | none | an icon left of the text |
+| `scene` | first scene drawn on | the scene it belongs to; it must be one the overlay is drawn on |
+| `at` | `0.5` | when it starts: seconds after its scene's start, or a beat id of that scene (the beat's start) |
+| `duration` | `5.0` | seconds shown, slide in and out included |
+| `across_cuts` | `false` | stay on over the following scenes (those the entry is drawn on) until `duration` is over; default: gone by the end of its scene |
+| `align` | `bottom_left` | `bottom_left`, `bottom`, `bottom_right`, `top_left`, `top`, `top_right` (in the safe area) |
+| `max_width` | `0.6` | widest it may be, share of the safe width (9:16: the whole width); longer text wraps |
+| `color` | `primary` | accent bar and icon |
+| `background`, `background_opacity` | `surface`, `0.92` | the plate |
+| `name_color`, `title_color` | `text`, `dim` | |
+| `name_size`, `title_size` | `body`, `caption` | |
+| `enter`, `exit` | `0.5`, `0.4` | seconds of the slide in and out |
+
+### `watermark`
+
+A logo (an image from the project), an icon or a short text in a corner of the frame, faint and
+fixed, over the whole video or the part `scenes` / `from` / `to` give. It sits `inset` from the
+frame's edges (in the margin, outside the safe area, at the default size), so scenes need not
+avoid it; it is not checked for contrast.
+
+| param | default | |
+|---|---|---|
+| `image` | none | image file relative to the project (`assets/logo.png`); exactly one of `image`, `text`, `icon` |
+| `text` | none | a short text instead |
+| `icon` | none | an icon instead |
+| `corner` | `bottom_right` | `top_left`, `top_right`, `bottom_left`, `bottom_right` |
+| `opacity` | `0.6` | of the whole watermark |
+| `size` | `0.06` | height of an image or icon, share of the frame's shorter side (an image is at most 30 % of the frame wide) |
+| `text_size` | `caption` | size of a text watermark |
+| `color` | `text` | colour of a text or icon watermark |
+| `inset` | `0.025` | distance from the frame's edges, share of the shorter side |
+| `fade` | `0` | seconds it fades in and out where a `from` / `to` starts and ends it (`0`: no fade) |
+
 ## JSON Schema (`vidgen schema`)
 
 `vidgen schema [PROJECT]` prints a [JSON Schema](https://json-schema.org) (draft 2020-12) of
@@ -2300,11 +2434,15 @@ File `build/<final|preview>[_<variant>]/layout/<scene>.json`:
  px_per_unit,              # output pixels per Manim unit (camera not zoomed)
  background: "#0E1116",    # the theme background
  safe_area: [x0, y0, x1, y1],  # frame minus the scene's margins (margin_x/margin_y), in px
+                               # (and minus overlays with reserve: true)
  frames: [{beat, k, n, frame, time,     # the same keys as the stills index
            still: "../frames/<scene>/<file>.png",
            camera: {center: [x, y], width, height,    # the camera frame in Manim units
                     zoom},                    # frame width / camera width: > 1 while zoomed in
-           objects: [...]}]}
+           objects: [...],
+           overlays: [{id, type, settled, skip}]}]}   # overlays drawn in this still; settled:
+                                     # false while one slides or fades; skip: lint rules not
+                                     # applied to its objects
 ```
 
 Coordinates are output-frame pixels: origin at the top-left corner, y downwards, the frame
@@ -2331,6 +2469,7 @@ Each object:
 | `backdrop` | the most common colour of the frame inside its box, ignoring its own colours: what the text is read against (`null` when off-frame) |
 | other kinds: `fill`, `stroke` | `{color, opacity}` / `{color, opacity, width_px}` of the largest visible part, or `null` |
 | `icon` only: `icon` | the icon's name (`cpu`); its `bbox` is what it draws, not its padded design box |
+| overlays only: `overlay` | the id of the [overlay](#overlays) it belongs to; overlay objects come after the scene's, their `path` starts with `overlay:<id>` and they are measured as drawn: fixed to the screen whatever the camera does |
 
 An object is one text mobject (not one per glyph), one path, one image, or one group of shapes.
 Parts with opacity 0 are not visible: they do not count in the box, and an object with no
@@ -2428,12 +2567,13 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | rule | default severity | finds |
 |---|---|---|
 | `off_frame` | error for text, warning for other objects | an object cut off by the frame edge by more than `tolerance`. Not reported: objects wholly outside (not visible), and non-text objects running from edge to edge on the side they cross (a full-frame image with `fit: cover` or Ken Burns, a background, a band or divider): those bleeds are intentional; nothing while the camera is zoomed in (a `zoom` action) |
-| `safe_area` | warning | text inside the frame but in its margins (the scene's `margin_x`/`margin_y`, `safe_area` in the layout dump) by more than `tolerance`; not checked while the camera is zoomed in |
+| `safe_area` | warning | text inside the frame but in its margins (the scene's `margin_x`/`margin_y`, `safe_area` in the layout dump, smaller where an overlay has `reserve: true`) by more than `tolerance`; not checked while the camera is zoomed in, nor for [overlays](#overlays) (their place is deliberate) |
 | `text_overlap` | error | two texts whose boxes overlap by at least `min_overlap` of the smaller box (the same text drawn twice in the same place is not reported) |
 | `covered_text` | warning | a shape or image drawn **after** (on top of) a text whose colour shows in at least `min_covered` of the middle of the text's box, measured on the still's pixels. Not reported: shapes drawn before the text (plates, highlight bands, a code window), the text's own parent group, shapes fainter than 0.3, and shapes in the text's own colour (a strike-through) |
 | `min_font` | warning; error below `error_size` | text whose cap height is below `min_size` of the shorter side. The cap height is the layout's `font_px` corrected for the text's letters (`font_px` of all-lowercase text is about its x-height); a lone symbol (`+`, `·`) is not checked |
 | `contrast` | warning | text whose WCAG contrast ratio with its `backdrop` is below `min_ratio` (4.5, WCAG AA), `large_ratio` (3) for text with a cap height of at least `large_size`, or `dimmed_ratio` (2) for text faded on purpose (opacity below 1, e.g. previous bullets); the text colour is blended with the backdrop at the text's opacity, every colour of a multi-coloured text is checked. A code listing's line numbers are not checked |
 | `max_words` | warning | more than `max_words` words (tokens with a letter) of visible `text` objects in one still; code and math do not count |
+| `overlay_overlap` | warning | an [overlay](#overlays) whose box (all its objects) covers at least `min_overlap` of the box of a scene text or icon. `text_overlap` and `covered_text` leave an overlay over scene text to this rule; overlays of a type with a `lint_skip` (the watermark: `contrast`) are not checked by those rules |
 | `narration_speed` | warning; info without audio | a beat (of at least `min_words` spoken words) narrated at fewer than `min_rate` or more than `max_rate` words per second. With an MP3 the time is the speech in it (leading and trailing silence below -40 dB of its peak cut off). Words count as spoken: hyphens, dashes and slashes separate words (`K-Phi-3` is 3), a number counts one word per digit up to 3 per digit run, plus one per decimal point and symbol (`2.58` is 4, `15%` 3), an all-capitals acronym of 2-5 letters half a word per letter (`GPU` 1.5). **Without audio** the beat's length is the word-count estimate (`narration.words_per_second`), so the rate is only off when the text is (many numbers or acronyms) or the configured rate itself is implausible: reported as `info`, one finding per scene listing the beats |
 | `dead_air` | warning | nothing on screen changes for more than `max_seconds` (a frame counts as changed when at least `min_change` of it changed, from the activity file's `motion`), narrated or not; the finding names the beat where the still picture starts and the beats it lasts through. Silent scenes are checked the same way: a silent card held longer than `max_seconds` without motion is reported |
 | `animation_overrun` | warning | a beat whose code (animations and waits inside `narrate`) takes longer than its narration plus `narration.pad` by more than `tolerance` seconds: the next beat (and its audio) starts late, leaving silence. The message lists the animations still running when the narration ends. A silent scene whose animations take longer than its `duration` is reported the same way |
@@ -2453,6 +2593,7 @@ lint:
     min_font: {min_size: 0.025, error_size: 0.018}   # cap height: 12 / 8.6 px at 480p, 27 / 19.4 px at 1080p
     contrast: {min_ratio: 4.5, large_ratio: 3.0, large_size: 0.045, dimmed_ratio: 2.0}
     max_words: {max_words: 40}
+    overlay_overlap: {min_overlap: 0.05}    # fraction of the scene object's box
     narration_speed: {min_rate: 1.8, max_rate: 3.5, min_words: 5}   # spoken words per second
     dead_air: {max_seconds: 6.0, min_change: 0.0002}   # min_change: fraction of the frame
     animation_overrun: {tolerance: 0.1}     # seconds past narration + pad
@@ -2516,8 +2657,9 @@ above). A scene is rendered again (with stills, in worker processes like `vidgen
 if its stills are missing, were taken at another `--per-beat` count or format, or are stale:
 each render records a fingerprint of what the scene depends on (its config entry, the other
 config sections except `scenes`/`variants`/`lint`, its beats' MP3s, the project's extension code,
-the files under `assets/`, and vidgen's own rendering code), and a scene whose fingerprint
-changed is rendered again. So `vidgen storyboard` right after `vidgen render --preview
+the files under `assets/`, and vidgen's own rendering code; with [overlays](#overlays), also
+every scene's beats, MP3s and type, which place the scene in the video), and a scene whose
+fingerprint changed is rendered again. So `vidgen storyboard` right after `vidgen render --preview
 --frames` renders nothing, and after an edit it renders only the edited scenes. Files a scene
 reads from outside `assets/` are not tracked: use `--force`. The storyboard does not join the
 video; `vidgen render` does. It dispatches `post_scene` for the scenes it renders, not
@@ -2589,6 +2731,7 @@ the location in the human output (`scenes[1].type: unknown scene type 'titel'; d
 | `project` | str \| null | the project whose extensions were loaded (`null`: built-ins only) |
 | `scene_types` | list | sorted by name, as below |
 | `actions` | list | the [beat actions](#beat-actions) (built-in and the project's), sorted by name, as below |
+| `overlays` | list | the [overlay types](#overlays) (built-in and the project's), sorted by name, as below |
 
 Each scene type: `name`; `origin` (`builtin`, or the extension file relative to the project);
 `builtin` (bool); `overrides_builtin` (bool, an extension registered with `override=True`);
@@ -2606,6 +2749,9 @@ Each action: `name`, `origin`, `builtin`, `overrides_builtin`, `doc` (as for sce
 `run_time` (default seconds); `reversible` (bool: `until` allowed); `temporary` (bool: undone
 by the end of its beat, like `zoom`); `needs_target` (bool); `target_options` (options whose
 values are target names, e.g. `["into"]`); `options` (fields like `params`; `[]` = none).
+Each overlay type: `name`, `origin`, `builtin`, `overrides_builtin`, `doc` (as above); `layer`
+(drawing order among overlays); `lint_skip` (lint rules not applied to its objects, e.g.
+`["contrast"]`); `options` (fields like `params`).
 
 ### `vidgen list-themes --json`
 

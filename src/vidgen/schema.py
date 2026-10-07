@@ -16,7 +16,9 @@ AI agent can check a config before running ``vidgen validate``:
 - beat ``actions`` (DESIGN.md §26): the canonical ``{action: NAME, ...}`` form with ``action``
   an ``enum`` of the registered actions and each action's options (``if``/``then``), and the
   shorthand ``{NAME: TARGET, ...options}`` (one ``anyOf`` branch per action). Targets depend on
-  the scene's params, so only their shape is checked here.
+  the scene's params, so only their shape is checked here;
+- ``overlays`` (DESIGN.md §41): ``type`` an ``enum`` of the registered overlay types and each
+  type's options (``if``/``then``); a scene's ``overlays`` overrides are only checked for shape.
 
 What JSON Schema cannot say is left to ``vidgen validate``: unique scene/beat ids, asset files,
 ``validate_project`` checks, action targets and ``until`` beats, and validators written in
@@ -34,12 +36,12 @@ from typing import Any
 from pydantic import BaseModel
 
 from vidgen import __version__
-from vidgen.config import ACTION_KEYS, HEX_COLOR_PATTERN, VideoConfig, parse_config
+from vidgen.config import ACTION_KEYS, HEX_COLOR_PATTERN, OVERLAY_KEYS, VideoConfig, parse_config
 from vidgen.describe import other_names, scene_doc
 from vidgen.errors import VidgenError
 from vidgen.presets import code_styles
 from vidgen.project import Project, find_config_file, read_config_file
-from vidgen.registry import ActionType, SceneType
+from vidgen.registry import ActionType, OverlayType, SceneType
 from vidgen.theme import Theme
 
 log = logging.getLogger("vidgen.schema")
@@ -356,6 +358,36 @@ def _action_defs(actions: list[ActionType], tokens: dict[str, list[str]]) -> dic
     return defs
 
 
+def _overlay_defs(overlays: list[OverlayType], tokens: dict[str, list[str]]) -> dict[str, Any]:
+    """``OverlayConfig`` with ``type`` an ``enum`` of the overlay types and, per type, its
+    options (``if``/``then``), and each type's options model (``overlay.NAME``)."""
+    canonical = copy.deepcopy(VideoConfig.model_json_schema()["$defs"]["OverlayConfig"])
+    canonical.pop("additionalProperties", None)
+    common = canonical["properties"]
+    common["type"] = {"description": common["type"].get("description", ""), "enum": [o.name for o in overlays]}
+    defs: dict[str, Any] = {}
+    rules: list[dict[str, Any]] = []
+    for entry in overlays:
+        name = f"overlay.{entry.name}"
+        options = entry.cls.Options.model_json_schema(ref_template=_REF_PREFIX + name + ".{model}")
+        nested = {f"{name}.{key}": value for key, value in options.pop("$defs", {}).items()}
+        for part in (options, nested):
+            _apply_theme(part, tokens)
+            _fix_dict_keys(part)
+            _fix_union_lengths(part)
+        options["title"] = f"{entry.name} options"
+        options["description"] = f"Overlay '{entry.name}' ({entry.origin}). " + inspect.cleandoc(entry.cls.__doc__ or "")
+        defs[name] = options
+        defs.update(nested)
+        then: dict[str, Any] = {"properties": {**{key: {} for key in OVERLAY_KEYS}, **options.get("properties", {})}, "additionalProperties": False}
+        if options.get("required"):
+            then["required"] = list(options["required"])
+        rules.append({"if": {"required": ["type"], "properties": {"type": {"const": entry.name}}}, "then": then})
+    canonical["allOf"] = rules
+    defs["OverlayConfig"] = canonical
+    return defs
+
+
 def _document(title: str, description: str, schema: dict[str, Any], defs: dict[str, Any]) -> dict[str, Any]:
     """A top-level schema: ``$schema``, our title/description, ``schema``'s keywords, ``$defs``."""
     out: dict[str, Any] = {
@@ -393,9 +425,16 @@ def scene_schema(entries: list[SceneType], themes: Iterable[Theme], actions: lis
     return _document("vidgen scene", description, scene, defs)
 
 
-def config_schema(entries: list[SceneType], themes: Iterable[Theme], actions: list[ActionType] | None = None) -> dict[str, Any]:
-    """The JSON Schema of the whole ``video.yaml`` for the given scene types and actions (default:
-    the registered ones) (``vidgen schema``)."""
+def config_schema(
+    entries: list[SceneType],
+    themes: Iterable[Theme],
+    actions: list[ActionType] | None = None,
+    overlays: list[OverlayType] | None = None,
+) -> dict[str, Any]:
+    """The JSON Schema of the whole ``video.yaml`` for the given scene types, actions and overlay
+    types (default: the registered ones) (``vidgen schema``)."""
+    from vidgen import registry
+
     schema = VideoConfig.model_json_schema()
     _fix_dict_keys(schema)
     defs = schema.pop("$defs")
@@ -403,8 +442,10 @@ def config_schema(entries: list[SceneType], themes: Iterable[Theme], actions: li
     theme_props = defs["ThemeConfig"]["properties"]
     theme_props["preset"]["anyOf"] = [{"enum": theme_presets(themes)}, {"type": "null"}]
     theme_props["code_style"]["anyOf"] = [{"enum": code_styles()}, {"type": "null"}]
-    scene, scene_defs = _scene_schema(entries, theme_tokens(themes), _actions(actions))
+    tokens = theme_tokens(themes)
+    scene, scene_defs = _scene_schema(entries, tokens, _actions(actions))
     defs.update(scene_defs, SceneConfig=scene)
+    defs.update(_overlay_defs(registry.all_overlays() if overlays is None else overlays, tokens))
     props = schema["properties"]
     # A variant is a partial config deep-merged onto this one: the same keys, none required.
     variant_props = {key: copy.deepcopy(value) for key, value in props.items() if key != "variants"}

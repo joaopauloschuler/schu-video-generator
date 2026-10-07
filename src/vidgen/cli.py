@@ -76,12 +76,13 @@ def project_problems(project: Project) -> list[Problem]:
     registry), checks that every scene ``type`` is registered, validates each scene's
     ``params`` against the type's ``Params`` model (theme tokens against the project's theme)
     and runs the type's ``validate_project`` (e.g. missing asset files); checks the beats'
-    ``actions`` (action names, options, targets of the scene); also checks the project's
-    ``assets/icons``.
+    ``actions`` (action names, options, targets of the scene) and the ``overlays`` (types,
+    options, scene references; DESIGN.md §41); also checks the project's ``assets/icons``.
     """
     from vidgen import extensions, registry
     from vidgen.actions import scene_actions
     from vidgen.icons import PROJECT_ICONS_DIR, project_icons
+    from vidgen.overlays import overlay_problems
 
     problems: list[Problem] = []
     try:
@@ -115,6 +116,7 @@ def project_problems(project: Project) -> list[Problem]:
                     problems.extend(_param_problem(i, p) for p in _project_checks(entry, params, project))
                 except VidgenError as exc:
                     problems.append(Problem(f"scenes[{i}]", str(exc)))
+            problems.extend(overlay_problems(project, theme))
     except VidgenError as exc:
         problems.extend(exc.problems or [Problem("", str(exc))])
     return problems
@@ -389,6 +391,17 @@ def _print_scene_types() -> None:
         undo += ", undone by the beat's end" if act.cls.temporary else ""
         print(f"{act.name:<{width}}  {act.origin}{marker}  (run_time {act.cls.run_time:g} s{undo})")
         for line in describe_params(act.cls.Options):
+            print(f"    {line}")
+    overlays = registry.all_overlays()
+    if overlays:
+        print()
+        print("overlays (video `overlays:`, docs/CONFIG.md \"Overlays\"):")
+        width = max(len(o.name) for o in overlays)
+    for entry in overlays:
+        marker = "  (overrides builtin)" if entry.overrides is not None else ""
+        skip = f"  (lint skips: {', '.join(entry.cls.lint_skip)})" if entry.cls.lint_skip else ""
+        print(f"{entry.name:<{width}}  {entry.origin}{marker}{skip}")
+        for line in describe_params(entry.cls.Options):
             print(f"    {line}")
 
 

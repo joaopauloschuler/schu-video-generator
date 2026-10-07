@@ -92,12 +92,14 @@ class _Walk:
     """State of one frame's walk over the scene."""
 
     scene: NarratedScene
+    camera: Any  # what measures points: the scene's camera, or the overlays' whole-frame camera
     pixels: np.ndarray
     names: dict[int, str]
     order: dict[int, int]
     px_per_unit: float
     objects: list[dict[str, Any]] = field(default_factory=list)
     seen: set[int] = field(default_factory=set)
+    overlay: str | None = None  # the overlay id while walking an overlay
 
 
 class LayoutRecorder:
@@ -111,6 +113,11 @@ class LayoutRecorder:
         from manim import config
 
         camera = scene.camera
+        objects = self.objects(scene, captured.pixels)
+        layer = scene.overlay_layer
+        shown = layer.posed(captured.frame) if layer is not None else []
+        if shown:
+            objects += self.overlay_objects(scene, captured.pixels, [(o, m) for o, m, _ in shown], len(objects))
         self.frames.append(
             {
                 "beat": captured.beat_id,
@@ -125,7 +132,11 @@ class LayoutRecorder:
                     "height": _r(camera.frame_height, 4),
                     "zoom": _r(config.frame_width / camera.frame_width, 4),
                 },
-                "objects": self.objects(scene, captured.pixels),
+                "objects": objects,
+                "overlays": [
+                    {"id": overlay.id, "type": overlay.config.type, "settled": settled, "skip": list(overlay.lint_skip)}
+                    for overlay, _, settled in shown
+                ],
             }
         )
 
@@ -137,6 +148,7 @@ class LayoutRecorder:
         drawn = extract_mobject_family_members(scene.mobjects, use_z_index=camera.use_z_index, only_those_with_points=True)
         walk = _Walk(
             scene=scene,
+            camera=camera,
             pixels=pixels,
             names=_scene_names(scene),
             order={id(m): i for i, m in enumerate(drawn)},
@@ -146,15 +158,40 @@ class LayoutRecorder:
             self._walk(walk, mob, [], index, in_code=False)
         return walk.objects
 
+    def overlay_objects(self, scene: NarratedScene, pixels: np.ndarray, shown: list[tuple[Any, Mobject]], first: int) -> list[dict[str, Any]]:
+        """The visible objects of the overlays ``shown`` (``(overlay, mobject)`` as drawn), drawn
+        after (over) every scene object: paths start with ``overlay:<id>``, each object has the
+        key ``overlay`` (the id); measured with the overlays' whole-frame camera."""
+        from manim.utils.family import extract_mobject_family_members
+
+        layer = scene.overlay_layer
+        assert layer is not None
+        camera = layer.camera
+        drawn = extract_mobject_family_members([m for _, m in shown], use_z_index=camera.use_z_index, only_those_with_points=True)
+        objects: list[dict[str, Any]] = []
+        for overlay, mob in shown:
+            walk = _Walk(
+                scene=scene,
+                camera=camera,
+                pixels=pixels,
+                names={},
+                order={id(m): first + 1000 + i for i, m in enumerate(drawn)},
+                px_per_unit=camera.pixel_width / camera.frame_width,
+                overlay=overlay.id,
+            )
+            self._walk(walk, mob, [f"overlay:{overlay.id}"], 0, in_code=False)
+            for obj in walk.objects:
+                obj["overlay"] = overlay.id
+            objects += walk.objects
+        return objects
+
     def document(self, scene: NarratedScene, per_beat: int) -> dict[str, Any]:
         """The scene's layout file content (frames in frame order)."""
         from manim import config
 
-        from vidgen.regions import safe_area
-
         width, height = config.pixel_width, config.pixel_height
         sx, sy = width / config.frame_width, height / config.frame_height
-        safe = safe_area(scene.margin_x, scene.margin_y)
+        safe = scene.safe_area
         x0, x1 = (safe.x0 + config.frame_width / 2) * sx, (safe.x1 + config.frame_width / 2) * sx
         y0, y1 = (config.frame_height / 2 - safe.y1) * sy, (config.frame_height / 2 - safe.y0) * sy
         return {
@@ -312,7 +349,7 @@ def _measure(walk: _Walk, mob: Mobject) -> _Part | None:
 
     if not _drawn(mob):
         return None
-    camera = walk.scene.camera
+    camera = walk.camera
     fill: tuple[str, float] | None = None
     stroke: tuple[str, float, float] | None = None
     grow = 0.0

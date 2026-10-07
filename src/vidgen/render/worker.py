@@ -229,6 +229,16 @@ def render_scene(
         "vidgen": __version__,
         "fingerprint": fingerprint,
     }
+    layer = scene.overlay_layer
+    if layer is not None:  # what the overlays were drawn for (the pipeline checks the plan held)
+        timed = any(o.timed for o in layer.overlays)
+        slot = layer.overlays[0].context.scene if timed else None
+        timings["render"]["overlays"] = {
+            "ids": [o.id for o in layer.overlays],
+            "timed": timed,
+            "start": None if slot is None else round(slot.start, 6),
+            "duration": None if slot is None else round(slot.duration, 6),
+        }
     if writer is not None and recorder is not None:
         write_json(frames_dir / "index.json", writer.index(scene_id, frames, fmt.width, fmt.height, fmt.fps))
         write_json(layout_path, recorder.document(scene, frames))

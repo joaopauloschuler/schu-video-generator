@@ -27,10 +27,13 @@ from vidgen import helpers, regions, runtime
 from vidgen.actions import TARGET_NAME, ActionRunner, Target, match_names, plan_actions
 from vidgen.capture import FrameCapture
 from vidgen.layout import distribute
+from vidgen.overlay_layer import OverlayLayer
+from vidgen.overlays import Overlay, avoid, mobject_region, scene_overlays
 from vidgen.config import BeatConfig, SceneConfig, validation_error_lines
 from vidgen.errors import VidgenError
 from vidgen.project import Project
 from vidgen.theme import Theme
+from vidgen.videoplan import VideoPlan
 
 log = logging.getLogger("vidgen.scene")
 
@@ -273,6 +276,24 @@ class NarratedScene(MovingCameraScene):
             if spec.silent:
                 length = max((spec.duration or 0.0) - self.outro, 1 / config.frame_rate)
                 capture.begin_segment(None, round(length * config.frame_rate), include_end=True)
+        #: The video's overlays drawn on this scene (DESIGN.md §41), or ``None`` without any.
+        self.overlay_layer: OverlayLayer | None = None
+        self._reserved: list[regions.Region] = []
+        overlays = self._build_overlays()
+        if overlays:
+            self.overlay_layer = OverlayLayer(self, overlays)
+            self.overlay_layer.attach()  # after the capture: stills and the layout dump see overlays
+            for overlay, mob in zip(self.overlay_layer.overlays, self.overlay_layer.mobjects):
+                box = mobject_region(mob) if overlay.config.reserve and mob is not None else None
+                if box is not None:
+                    self._reserved.append(box)
+
+    def _build_overlays(self) -> list[Overlay]:
+        """The overlays of the project drawn on this scene (none without an ``overlays:``)."""
+        cfg = self.project.config
+        if not cfg.overlays and not any(isinstance(s.overlays, dict) for s in cfg.scenes):
+            return []
+        return scene_overlays(self.project, self.spec, self.theme, VideoPlan(self.project, int(config.frame_rate)))
 
     # ----- params ----------------------------------------------------------------------------
 
@@ -634,8 +655,12 @@ class NarratedScene(MovingCameraScene):
 
     @property
     def safe_area(self) -> regions.Region:
-        """The frame minus this scene's margins, as a :class:`~vidgen.regions.Region`."""
-        return regions.safe_area(self.margin_x, self.margin_y)
+        """The frame minus this scene's margins, as a :class:`~vidgen.regions.Region`, shrunk to
+        stay clear of overlays drawn with ``reserve: true`` (DESIGN.md §41)."""
+        area = regions.safe_area(self.margin_x, self.margin_y)
+        for box in getattr(self, "_reserved", ()):
+            area = avoid(area, box)
+        return area
 
     @property
     def safe_width(self) -> float:

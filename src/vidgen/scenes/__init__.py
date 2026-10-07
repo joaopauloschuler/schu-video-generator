@@ -3,7 +3,8 @@
 Built-in scene types use exactly the same API as project extensions (``from vidgen.api import *``
 and ``@scene``); a module here is registered as "builtin" because it lives inside ``vidgen``.
 Importing this package imports every scene module (add new modules to the import list below)
-and the built-in per-beat actions (``actions``: reveal, dim, highlight).
+the built-in per-beat actions (``actions``: reveal, dim, highlight, zoom, transform) and the
+built-in overlays (``overlays``: lower_third, watermark).
 """
 
 from vidgen.scenes import (  # noqa: F401
@@ -24,6 +25,7 @@ from vidgen.scenes import (  # noqa: F401
     image,
     line_chart,
     network,
+    overlays,
     pie,
     process,
     quote,
