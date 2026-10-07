@@ -25,7 +25,7 @@ vidgen = "vidgen.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-vidgen = ["templates/**/*", "data/fonts/**/*", "data/icons/**/*", "data/geo/*"]
+vidgen = ["templates/**/*", "data/fonts/**/*", "data/icons/**/*", "data/geo/*", "data/slides/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -226,10 +226,10 @@ Rules that apply to every step:
 - [x] `vidgen translate-template --variant NAME` writes a beat-text skeleton to fill in; per-variant subtitles and docs (every beat text and on-screen text — params marked `TranslatableStr` across all built-in scenes, actions and overlays, chapter titles, `title` / `metadata`, thumbnail — keyed by stable paths with source + hash; `translations:` file applied at load (untranslated / stale texts keep the source, validate lists them); re-runs merge (kept / moved / stale / obsolete); `TextRef` params and `kind:<label>` targets follow translations; `examples/minimal` variant `pt`, partly translated into pt-BR)
 
 ### Step 52 — Slides export (HTML)
-- [ ] One slide per scene from key frames, narration as speaker notes, keyboard navigation, self-contained file
+- [x] One slide per scene from key frames, narration as speaker notes, keyboard navigation, self-contained file (`vidgen slides`: a slide per beat by default (its built frame; `--per-beat N`), `--mode scene` one per scene; Step 10 stills reused like the storyboard's, `--no-overlays` from the bare renders; near-identical consecutive slides merged; WebP / JPEG / PNG `data:` URIs or `--separate` files; notes = the beats' (translated) narration; keys, click / swipe, number + Enter, `#N` hash, notes panel, overview by chapter, fullscreen, help, reduced motion, alt text; `--audio` narrated play mode on the video's timing; `--json`; key-frame selection in `vidgen.deck` for Step 53)
 
 ### Step 53 — Slides export (PDF)
-- [ ] PDF deck from the same frames, optional notes pages
+- [ ] PDF deck from the same frames, optional notes pages (use `vidgen.deck.deck_frames`: slides, notes, chapters, alt texts)
 
 ### Step 54 — Readback check (speech-to-text)
 - [ ] STT provider seam; optional `faster-whisper` extra; mocked in tests

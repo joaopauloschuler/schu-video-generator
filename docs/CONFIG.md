@@ -287,6 +287,72 @@ including a transition out of it); without it they are times in the video (defau
   start). `--width` / `--fps` re-encode at that size / rate. Silent unless `--with-audio` (the
   sound is then encoded as AAC, cut at the exact start). No chapters.
 
+## Slides (`vidgen slides`)
+
+```
+vidgen slides [PROJECT] [--variant NAME] [--preview | --final] [--mode beat|scene] [--per-beat N]
+              [--overlays | --no-overlays] [--no-dedupe] [--image-format webp|jpeg|png] [--quality Q]
+              [--max-width PX] [--audio] [--separate] [--output FILE] [--jobs N] [--force] [--json]
+```
+
+Writes the video as a **slide deck**: one HTML file, by default
+`<project>/exports/<output>[_<variant>][_preview]_slides.html`, that opens in any browser
+without network access. Every slide picture is embedded (a `data:` URI, WebP at quality 80 by
+default: about 15–40 KB per 854x480 slide, 60–150 KB at 1920x1080), and so are the page's styles
+and script.
+
+**Which frames.** The slides are the frame stills of
+[`vidgen render --frames`](#frame-stills-vidgen-render---frames), reused like the
+[storyboard](#storyboard-vidgen-storyboard)'s: a scene is rendered (with stills) only when its
+stills are missing, made at another count or format, or stale.
+
+- `--mode beat` (the default): **one slide per beat**, the beat's last frame: for scenes that
+  reveal something per beat (bullets, charts, diagrams...) that is the fully built state of the
+  beat, so the deck builds up like a presentation. A silent scene gives its frame before the
+  fade-out. `--per-beat N`: N slides per beat (evenly spaced, the last at the beat's end).
+- `--mode scene`: **one slide per scene**, the end of its last beat; its notes are all the
+  scene's beats.
+- Consecutive slides of a scene that look the same (a beat that changes nothing on screen: at
+  most 0.05 % of the pixels differ, compared 320 px wide) are **merged** into one slide with both
+  beats' notes; `--no-dedupe` keeps them.
+- `--preview` (the default, fast; often already rendered by `storyboard` / `lint`) or `--final`
+  (full-size, sharp slides for presenting). `--overlays` (the default) shows the video's
+  [overlays](#overlays) as they are in the video; `--no-overlays` takes the slides from renders
+  without them (captions duplicate the notes on a slide), made in `build/<...>_bare` like a
+  [frame thumbnail](#thumbnail-thumbnail-vidgen-thumbnail) without overlays.
+- `--variant`: a language variant gives the deck in that language: its translated pictures and
+  notes, and the page's `lang`.
+
+**Speaker notes** are the narration of the beats on the slide (the text as written, not the
+[pronunciation](#pronunciation-pronunciation)), with the slide's chapter, scene and time in the
+video. Pictures get alt text: the scene type, its title and the start of the narration.
+
+**In the browser:**
+
+| key / gesture | |
+|---|---|
+| `→` `↓` `Space` `PageDown` `Enter`, click on the right two thirds, swipe left | next slide |
+| `←` `↑` `Shift+Space` `PageUp` `Backspace`, click on the left third, swipe right | previous slide |
+| `Home` / `End` | first / last slide |
+| a number, then `Enter` | go to that slide |
+| `S` or `N` | speaker notes beside the slide (below it on a narrow or portrait screen), with the next slide; remembered |
+| `O` | overview: every slide in a grid, grouped by [chapter](#chapters); click one to go there |
+| `F` | fullscreen (the bars hide while the mouse rests) |
+| `P` | play / pause: the slides follow the video's timing (each slide from the frame before it to its own); with `--audio`, the narration plays along |
+| `?` | the keys |
+| `Esc` | close the overview / help, stop playing |
+
+The slide number is in the URL (`deck.html#12` opens slide 12). Slides are scaled to the window
+and letterboxed on a dark backdrop; the slide change is a short fade, none with the system's
+reduced-motion setting. Printing the page prints one slide per page.
+
+**Options:** `--image-format webp|jpeg|png` and `--quality Q` (1–100; PNG is lossless),
+`--max-width PX` scales the pictures down; `--audio` embeds the beats' MP3s (`audio/`, or the
+variant's folder) for a narrated deck (a few MB per minute); `--separate` writes the pictures
+(and MP3s) into `<name>_files/` beside the page instead of embedding them (keep the folder with
+the page); `--output FILE` (`.html`) writes elsewhere; `--jobs`, `--force` as for the
+storyboard. A page over 50 MB gets a warning.
+
 ## Format and preview
 
 `format` and `preview` have the same keys: `width` (default 1920 / 854), `height` (1080 / 480)
@@ -3692,7 +3758,7 @@ video; `vidgen render` does. It dispatches `post_scene` for the scenes it render
 
 ## JSON output (`--json`)
 
-`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail` and `vidgen export` accept `--json`: stdout then holds
+`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail`, `vidgen export`, `vidgen slides` and `vidgen translate-template` accept `--json`: stdout then holds
 exactly one JSON document (ASCII-only, non-ASCII characters escaped), and everything else
 (progress, `warning:` lines, Manim output) goes to stderr. These shapes are meant for programs
 and AI agents driving vidgen. Without `--json` the human output is unchanged.
@@ -3707,7 +3773,7 @@ it. Times are seconds (floats), paths are absolute strings, absent values are `n
 |---|---|---|
 | `version` | int | schema version of the document (1) |
 | `vidgen` | str | vidgen package version |
-| `command` | str \| null | `validate`, `list-scenes`, `list-themes`, `list-icons`, `render`, `schema`, `storyboard`, `lint`, `thumbnail`, `export` (`null` if the command line could not be parsed) |
+| `command` | str \| null | `validate`, `list-scenes`, `list-themes`, `list-icons`, `render`, `schema`, `storyboard`, `lint`, `thumbnail`, `export`, `slides`, `translate-template` (`null` if the command line could not be parsed) |
 | `ok` | bool | `true` on success; the exit code is 0 exactly when `ok` is true |
 | `warnings` | list | `{scene, message}`: vidgen warnings of the run (`scene` is `null`, or the scene whose render printed it) |
 | `error` | object | only when `ok` is false: `{kind, message, problems, details}` |
@@ -3924,6 +3990,31 @@ on a failed scene are as for `vidgen render --json`.
 | `max_mb`, `within_budget` | float \| null, bool \| null | the GIF's budget and whether it was met (`null` without `--max-mb`) |
 | `attempts` | list | with `--max-mb`: every GIF encode `{width, fps, bytes}` in order |
 | `elapsed` | float | wall time of the command |
+
+### `vidgen slides --json`
+
+| key | type | |
+|---|---|---|
+| `project` | str | |
+| `variant`, `language` | str \| null | the variant and its language |
+| `preview` | bool | `false` with `--final` |
+| `mode` | str | `beat` or `scene` |
+| `per_beat` | int | stills per beat |
+| `overlays` | bool | `false` with `--no-overlays` (stills from the `_bare` renders) |
+| `dedupe` | bool | `false` with `--no-dedupe` |
+| `format` | object | `{width, height, fps}` of the stills |
+| `path`, `bytes` | str, int | the HTML page |
+| `files_dir` | str \| null | with `--separate`: the folder of pictures and MP3s |
+| `image_format`, `quality` | str, int | `webp`, `jpeg` or `png` |
+| `width`, `height` | int | of the slide pictures |
+| `audio` | int | MP3s included (`--audio`) |
+| `duration` | float | the deck's play timeline: the scenes back to back |
+| `stills` | int | stills read; `merged`: how many were merged into the slide before |
+| `rendered`, `reused` | list | scene ids rendered for the deck / whose stills were current |
+| `elapsed` | float | wall time of the command |
+| `slides` | list | `{index, scene, type, chapter, beats, notes, k, n, merged, time, scene_time, at, until, still}`: 1-based `index`; `chapter` title or `null`; `beats` ids and `notes` (their texts, a blank line between) carried by the slide; `k` of `n` stills of its beat; `merged` stills shown by it (1: none merged); `time` in the video (`null` when not every scene has a render at this format), `scene_time` from the scene's start; `at` / `until` on the play timeline; `still` the PNG |
+
+`warnings` and `error.details` on a failed scene are as for `vidgen render --json`.
 
 ### `vidgen translate-template --json`
 

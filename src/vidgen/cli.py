@@ -33,7 +33,7 @@ TEMPLATE_DOTFILES: tuple[str, ...] = ("gitignore",)
 #: Subcommands that accept ``--json``.
 JSON_COMMANDS: tuple[str, ...] = (
     "validate", "list-scenes", "list-themes", "list-icons", "list-sfx", "list-music", "render", "schema", "storyboard", "lint",
-    "thumbnail", "export", "translate-template",
+    "thumbnail", "export", "translate-template", "slides",
 )
 
 #: What a command function returns: an exit code, or (with ``--json``) the JSON document.
@@ -507,6 +507,43 @@ def cmd_thumbnail(args: argparse.Namespace) -> CommandResult:
     return 0
 
 
+def cmd_slides(args: argparse.Namespace) -> CommandResult:
+    """Write an HTML slide deck of the video's key frames with the narration as speaker notes."""
+    from vidgen.slides import make_slides
+
+    started = time.monotonic()
+    project = Project.load(args.project, variant=args.variant)
+    result = make_slides(
+        project,
+        preview=not args.final,
+        mode=args.mode,
+        per_beat=args.per_beat,
+        overlays=args.overlays,
+        dedupe=not args.no_dedupe,
+        image_format=args.image_format,
+        quality=args.quality,
+        max_width=args.max_width,
+        audio=args.audio,
+        separate=args.separate,
+        output=Path(args.output).resolve() if args.output else None,
+        jobs=args.jobs,
+        force=args.force,
+    )
+    if args.json:
+        return jsonout.slides_document(project, result, time.monotonic() - started)
+    deck = result.deck
+    reused = f", {len(deck.reused)} reused" if deck.reused else ""
+    print(f"rendered {len(deck.rendered)} scene(s){reused}")
+    note = f", {deck.merged} alike merged" if deck.merged else ""
+    print(f"slides: {result.path}  ({len(deck.slides)} slides from {deck.stills} stills{note}, {result.bytes / 1e6:.1f} MB)")
+    quality = "" if result.image_format == "png" else f" q{result.quality}"
+    sound = f", {result.audio} narration MP3s" if result.audio else ""
+    print(f"pictures: {result.width}x{result.height} {result.image_format}{quality}{sound}")
+    if result.files_dir is not None:
+        print(f"files: {result.files_dir}")
+    return 0
+
+
 def cmd_export(args: argparse.Namespace) -> CommandResult:
     """Export a part of the rendered video (a scene, or ``--from`` / ``--to``) as a GIF or an MP4 clip."""
     from vidgen.export import export_clip, export_gif
@@ -902,6 +939,26 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--jpeg", action="store_true", help="also write <output>_thumbnail.jpg under 2 MB")
     p.add_argument("--jobs", "-j", type=int, default=1, metavar="N", help="render N scenes in parallel when scenes must be rendered (default: 1)")
     p.set_defaults(func=cmd_thumbnail)
+
+    p = sub.add_parser("slides", help="an HTML slide deck of the video's key frames, narration as speaker notes (exports/)")
+    project_arg(p)
+    p.add_argument("--variant", metavar="NAME", help="apply a named variant (a language variant gives translated notes)")
+    quality = p.add_mutually_exclusive_group()
+    quality.add_argument("--preview", action="store_true", help="use the preview format (the default; fast)")
+    quality.add_argument("--final", action="store_true", help="use the final format (sharp slides; renders at full size)")
+    p.add_argument("--mode", choices=["beat", "scene"], default="beat", help="a slide per beat (default) or per scene (its last beat's end)")
+    p.add_argument("--per-beat", type=int, default=1, metavar="N", help="with --mode beat: N slides per beat, the last at its end (default: 1)")
+    p.add_argument("--overlays", action=argparse.BooleanOptionalAction, default=True, help="show the video's overlays (captions, watermark...) on the slides (default: yes)")
+    p.add_argument("--no-dedupe", action="store_true", help="keep consecutive slides that look the same (default: merged, notes joined)")
+    p.add_argument("--image-format", choices=["webp", "jpeg", "png"], default="webp", help="picture format (default: webp)")
+    p.add_argument("--quality", type=int, default=80, metavar="Q", help="webp / jpeg quality 1-100 (default: 80)")
+    p.add_argument("--max-width", type=int, metavar="PX", help="scale the pictures down to this width")
+    p.add_argument("--audio", action="store_true", help="include the beats' MP3s: Play then narrates the deck")
+    p.add_argument("--separate", action="store_true", help="write pictures and MP3s into <name>_files/ beside the page instead of embedding them")
+    p.add_argument("--output", "-o", metavar="FILE", help="write here instead of exports/<output>[_<variant>][_preview]_slides.html")
+    p.add_argument("--jobs", "-j", type=int, default=1, metavar="N", help="render N scenes in parallel (default: 1)")
+    p.add_argument("--force", action="store_true", help="render the scenes again even if their stills are current")
+    p.set_defaults(func=cmd_slides)
 
     p = sub.add_parser("export", help="export a scene or part of the rendered video as a GIF or MP4 clip (exports/)")
     p.add_argument("kind", choices=["gif", "clip"], help="gif (palette GIF) or clip (MP4)")

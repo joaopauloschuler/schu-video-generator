@@ -42,7 +42,7 @@ NOT_RENDER_INPUTS: frozenset[str] = frozenset(
     {
         "__main__.py", "cli.py", "describe.py", "iconlist.py", "jsonout.py", "lint", "schema.py", "sheets.py", "storyboard.py",
         "render/fingerprint.py", "render/pipeline.py", "render/ffmpeg.py", "sfx.py", "subtitles.py", "themelist.py", "tts",
-        "loudness.py", "mix.py", "music.py", "thumbnail.py", "export.py", "translation.py",
+        "loudness.py", "mix.py", "music.py", "thumbnail.py", "export.py", "translation.py", "deck.py", "slides.py",
     }
 )
 

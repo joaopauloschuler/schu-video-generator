@@ -80,6 +80,8 @@ src/vidgen/
   chapter_export.py       # published chapters (intro at 0:00), MP4 FFMETADATA + tags, YouTube list and rules (§52)
   thumbnail.py            # the thumbnail: a scene's frame or a designed card, small copy, legibility checks (§53)
   export.py               # `vidgen export gif|clip`: palette GIF with a size budget, MP4 clip copy / encode (§53)
+  deck.py                 # slide decks' key frames: stills per beat / scene, dedupe, notes, timeline (§55)
+  slides.py               # `vidgen slides`: one self-contained HTML deck (data/slides/deck.css, deck.js) (§55)
   overlays.py             # overlays: Overlay base, OverlayContext, config entries, validation, reserve (§41)
   overlay_layer.py        # OverlayLayer: overlays composited into every frame a scene writes (§41)
   charts.py               # chart helpers: ticks, number labels, axes, legend, markers, fit (§33),
@@ -110,6 +112,7 @@ src/vidgen/
   data/fonts/             # Inter, Source Serif 4, JetBrains Mono NL (.ttf + OFL.txt; package data)
   data/icons/             # manifest.json + lucide/*.svg + lucide/LICENSE (ISC; package data, §22)
   data/geo/               # world-110m.json: Natural Earth 1:110m countries (public domain; package data, §39)
+  data/slides/            # deck.css + deck.js inlined into `vidgen slides` pages (package data, §55)
 tools/                    # maintainer scripts, not shipped: vendor_icons.py + icon_set.json (§22, §23),
                           # make_screenshot.py, make_clip.py (example assets, §37, §38),
                           # make_world_map.py (builds data/geo/world-110m.json from npm packages, §39)
@@ -141,7 +144,7 @@ my_video/
   <output>.srt            #               <output>_<variant>.mp4 for variants)
   <output>_chapters.txt   # YouTube chapter list, when the video has chapters (Step 49, §52)
   <output>_thumbnail.png  # thumbnail (+ .jpg), `vidgen thumbnail` / render with `thumbnail:` (Step 50, §53)
-  exports/                # `vidgen export`: GIFs and MP4 clips of parts of the video (Step 50, §53)
+  exports/                # `vidgen export`: GIFs and MP4 clips of parts of the video (Step 50, §53); `vidgen slides` decks (§55)
 ```
 
 `build/<final|preview>[_<variant>]/` (Step 4) holds: `scenes/<id>.mp4` (the scene as rendered,
@@ -683,6 +686,9 @@ vidgen thumbnail [PROJECT] [--variant NAME] [--preview] [--scene ID [--beat ID|N
               [--jpeg] [--jobs N] [--json]                    # <output>_thumbnail.png (§53)
 vidgen export gif|clip [PROJECT] [--scene ID] [--from S] [--to S] [--variant NAME] [--preview] [--width PX]
               [--fps F] [--max-mb MB] [--with-audio] [--output FILE] [--json]   # exports/ (§53)
+vidgen slides [PROJECT] [--variant NAME] [--preview | --final] [--mode beat|scene] [--per-beat N]
+              [--overlays | --no-overlays] [--no-dedupe] [--image-format F] [--quality Q] [--max-width PX]
+              [--audio] [--separate] [--output FILE] [--jobs N] [--force] [--json]   # HTML deck (§55)
 vidgen translate-template [PROJECT] [--variant NAME] [--lang TAG] [--output FILE] [--json]   # translation file (§54)
 ```
 PROJECT defaults to the current directory. `--scene` re-renders only those scenes and re-joins
@@ -3664,3 +3670,78 @@ the measured loudness, §48).
   translated point label (`point:<series>@<label>`) do not follow translations; languages
   without spaces are cut at punctuation only; the storyboard / lint labels of vidgen itself stay
   English.
+
+## 55. Refinements (Step 52, slides export: HTML)
+
+- **Key frames** (`vidgen/deck.py`, no manim; shared with the PDF deck of Step 53):
+  `deck_frames(project, *, preview=True, mode="beat"|"scene", per_beat=1, overlays=True,
+  dedupe=True, jobs=1, force=False) -> Deck`. The stills are the §13 frame stills, made current
+  the §14 way (`storyboard.stills_current` → `pipeline.render_scenes(..., frames=per_beat)` for
+  the stale or missing scenes only), so a deck after `storyboard` / `lint` / `render --frames`
+  renders nothing. `overlays=False` uses `Project.without_overlays()` (§53: `build/..._bare`).
+  - `beat` (default): every still is a slide — one per beat (its last frame: for reveal-per-beat
+    scenes the fully built state, so the deck "builds" like a presentation), N per beat with
+    `per_beat`, a silent scene's still(s) before its fade-out. `scene`: the scene's last still,
+    all its beats as notes (`per_beat` > 1 is an error there). Decision: **beat by default** —
+    scenes whose content is replaced per beat (walkthroughs, derivations, screenshot steps,
+    maps) lose everything but the last state in scene mode; dedupe keeps beat decks compact.
+  - **Dedupe** (`stills_alike`): consecutive stills of one scene whose pictures (at most 320 px
+    wide, box-filtered) differ in at most 0.05 % of their pixels by more than 24 levels on a
+    channel are one slide: the later still (the more finished one), both beats' notes, the first
+    one's start (`DeckSlide.merged` counts the stills). Never across scenes. Burned-in captions
+    or a moving progress bar make beats differ, so with those overlays nothing merges.
+  - `DeckSlide(index, scene, scene_type, scene_number, scene_title, chapter, still, beats, k, n,
+    time, scene_time, at, until, merged)`; `notes` (the beats' texts, a blank line between: the
+    configured text, translated by the variant's translation file at load, §54 — not the
+    pronunciation); `alt_text()` (`"<type> scene “<title>”: <narration, ≤ 160 chars>"`, the
+    title from `params` `title` / `heading` / `text` / `name` / `quote`). `DeckChapter(title,
+    label, index)` from `chapters.chapter_marks` (no planned timeline needed). `time` = §14
+    `scene_starts` (transition overlaps included) + the still's scene time.
+  - **Deck timeline** (play mode): the scenes' rendered durations back to back (no overlaps,
+    so every slide gets its full time); a slide is on from the still before it in its scene (0 for
+    the first) to its own still, the scene's last slide to the scene's end. `DeckClip(beat, audio,
+    at, duration)` for each beat with an MP3 in `project.audio_dir` (the file the render used; its
+    speech `start` / `end` from the scene timings).
+- **Page** (`vidgen/slides.py`): `make_slides(project, ..., image_format="webp", quality=80,
+  max_width=None, audio=False, separate=False, output=None) -> SlidesResult` and
+  `slides_html(deck, images, size, audio)`. Default path `slides_path` =
+  `exports/<output>[_<variant>][_preview]_slides.html` (the §53 `exports/` folder). One HTML file:
+  pictures as base64 `data:` URIs (Pillow: WebP `method=4`, JPEG optimised progressive, or PNG;
+  Lanczos down to `max_width`), CSS / JS read from package data `data/slides/deck.css` /
+  `deck.js` and inlined, the deck data as `<script type="application/json" id="deck-data">`
+  (`</` escaped), the MP3s as `<audio>` data URIs with `--audio`. `separate`: pictures
+  `slide-NNN.<ext>` and `<beat>.mp3` in `<name>_files/` (earlier `slide-*` / `*.mp3` there
+  removed first), referenced relatively. Pages over 50 MB log a warning. Each picture appears
+  once in the HTML; the overview and the notes' "next" preview copy its `src` at run time.
+  Decision: **WebP q80** default (every current browser; ≈ 3x smaller than PNG for these flat
+  graphics, text stays clean); JPEG for old viewers, PNG for exact pixels.
+- **Behaviour** (`deck.js`, no libraries, ES5-compatible syntax): one `<section class="slide">`
+  visible at a time (others `hidden`), the `<img>` `object-fit: contain` in a black stage
+  (letterboxed at any window shape); keys → / ↓ / Space / PageDown / Enter next, ← / ↑ /
+  Shift+Space / PageUp / Backspace previous, Home / End, digits + Enter jump (a "Go to N" box,
+  Esc / timeout clears), S / N notes, O / G overview, F fullscreen (bars hide after 2.5 s idle),
+  P / K play, ? / H help, Esc closes / stops; clicks on the stage's left third go back, else
+  forward; horizontal swipes (> 50 px). URL hash `#N` (`history.replaceState`, `hashchange`
+  followed). Notes panel: beside the stage (30 %), below it on screens ≤ 760 px or portrait,
+  with the slide's meta line and the next slide; its state kept in `localStorage` (guarded).
+  Overview: a dialog layer, buttons grouped under chapter headings. Accessibility: slides are
+  `role="group"` `aria-roledescription="slide"`, alt text, a polite live region announcing
+  "Slide N of M, <chapter — title>", visible focus rings, icon buttons with labels / titles;
+  `prefers-reduced-motion` drops the 0.22 s fade. Print CSS: one slide per page.
+- **Play mode**: a clock (`performance.now`) runs along the deck timeline; the slide shown is the
+  last one whose `at` ≤ t; the clip whose span contains t plays, re-seeked when it drifts > 0.3 s;
+  navigating while playing seeks to the slide's `at`; it stops at the end. Without `--audio` it is
+  a timed slideshow at the video's pace. Decision: clock-driven rather than chained `ended`
+  events, so silent scenes, beats without MP3s, pads and seeking all follow one rule.
+- **CLI** `vidgen slides` (`cmd_slides`), `--json` (`jsonout.slides_document`: options, page,
+  pictures, `duration`, `stills`, `merged`, `rendered` / `reused`, per slide `{index, scene, type,
+  chapter, beats, notes, k, n, merged, time, scene_time, at, until, still}`). `deck.py` /
+  `slides.py` are not render inputs (fingerprints unchanged).
+- **Tests**: fake stills + stubbed rendering for selection, dedupe, timelines, translated notes,
+  page structure (parsed; pictures decoded with Pillow), separate files, CLI / JSON; one render
+  test; a Playwright (Chromium) smoke test of navigation, notes, overview, hash and play mode
+  with sound (skipped without Playwright; Playwright is not a dependency).
+- Known limits: no per-slide `--scene` selection; titles and help texts of the page are English
+  (the notes and pictures follow the variant's language); the deck shows frames, not motion
+  (animations, clips); a merged slide's notes are joined without saying where the picture
+  changed; slides of a 9:16 video are tall (letterboxed on landscape screens).

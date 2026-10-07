@@ -4862,3 +4862,86 @@ How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2009 passed, 1
 `pytest tests/test_translation.py`. Manual: `vidgen translate-template examples/minimal
 --variant pt`, `vidgen validate examples/minimal`, `vidgen storyboard examples/minimal --variant
 pt --scene trend`, `vidgen tts examples/minimal --variant pt --dry-run`.
+
+## Step 52 — Slides export (HTML)
+What was built
+- **`vidgen slides [PROJECT] [--variant] [--preview | --final] [--mode beat|scene] [--per-beat N]
+  [--overlays | --no-overlays] [--no-dedupe] [--image-format webp|jpeg|png] [--quality Q]
+  [--max-width PX] [--audio] [--separate] [--output FILE] [--jobs N] [--force] [--json]`** writes
+  one self-contained HTML deck, by default `exports/<output>[_<variant>][_preview]_slides.html`.
+- **Key frames** (`src/vidgen/deck.py`, shared with Step 53): `deck_frames(...) -> Deck` reuses
+  the Step 10 stills like the storyboard (renders only stale / missing scenes; `--no-overlays`
+  from `Project.without_overlays()`'s `_bare` renders). Default **one slide per beat** (its
+  beat-end still = the built state of reveal-per-beat scenes), `--per-beat N` N per beat,
+  `--mode scene` one per scene (last still, all beats' notes). Consecutive near-identical stills
+  of a scene are **merged** (≤ 0.05 % of pixels differ at 320 px; notes joined; `--no-dedupe`).
+  Each `DeckSlide` has scene / type / title / chapter (`chapter_marks`), the beats it carries
+  (`notes`: their configured, i.e. translated, text), `alt_text()`, `time` in the video,
+  `at` / `until` on a deck timeline (scenes back to back) and the beats' MP3s (`Deck.clips`).
+- **Page** (`src/vidgen/slides.py` + package data `data/slides/deck.css`, `deck.js`, inlined):
+  pictures as WebP q80 `data:` URIs (or JPEG / PNG; `--max-width`; `--separate` writes
+  `<name>_files/slide-NNN.ext` + MP3s instead); speaker notes per slide; keyboard (arrows, Space /
+  Shift+Space, PageUp/Down, Enter, Backspace, Home/End, number + Enter), click left third / right,
+  swipe; `S`/`N` notes panel (beside, or below on portrait / narrow screens, with the next slide;
+  remembered in localStorage), `O` overview grid grouped by chapter, `F` fullscreen (bars hide when
+  idle), `P` play, `?` help, `Esc`; `#N` URL hash; slide counter; letterboxed on a black stage,
+  dark chrome, 0.22 s fade dropped under `prefers-reduced-motion`; alt text, ARIA slide groups, live
+  region; print CSS (one slide per page). **Play mode**: a clock runs the deck timeline, slides
+  follow the video's pacing, and with `--audio` each beat's MP3 plays at its time (resynced on
+  drift / seek) — a narrated deck; without audio a timed slideshow.
+- `--json` (`jsonout.slides_document`); human output `slides: <path> (N slides from M stills,
+  K alike merged, X MB)` + `pictures:` line.
+- Example: `examples/gallery/video.yaml` usage line; README / CONFIG / DESIGN docs.
+
+Files
+- New: `src/vidgen/deck.py`, `src/vidgen/slides.py`, `src/vidgen/data/slides/deck.css`,
+  `src/vidgen/data/slides/deck.js`, `tests/test_slides.py` (13 tests: 10 fast with fake stills, 1
+  render, 1 Playwright browser test; render + browser marked `slow`).
+- Changed: `cli.py` (`slides` command, `JSON_COMMANDS`), `jsonout.py` (`slides_document`),
+  `render/fingerprint.py` (`deck.py`, `slides.py` not render inputs), `pyproject.toml` (package data
+  `data/slides/*`), docs/CONFIG.md (new "Slides (`vidgen slides`)", `vidgen slides --json`, the
+  JSON command lists now also name `slides` / `translate-template`), README.md, DESIGN.md (tree,
+  §8, new §55), `examples/gallery/video.yaml` (comment), tasklist.md.
+
+Public interfaces added/changed (compatible; `vidgen.api` unchanged)
+- CLI `vidgen slides` (+ `--json`, new `slides` document in JSON version 1).
+- `vidgen.deck`: `deck_frames`, `Deck` (`.merged`), `DeckSlide` (`.notes`, `.alt_text()`),
+  `DeckBeat`, `DeckChapter`, `DeckClip`, `stills_alike`, `scene_title`, `DECK_MODES`.
+- `vidgen.slides`: `make_slides`, `slides_html`, `slides_path`, `encode_still`, `SlidesResult`,
+  `IMAGE_FORMATS`.
+
+Decisions / deviations
+- **Default one slide per beat** (the task list said "one slide per scene"): scenes that replace
+  content per beat (walkthroughs, derivations, screenshot steps, maps, comparisons) would keep only
+  their last state; per-beat slides build up like a presentation and dedupe drops beats that change
+  nothing. `--mode scene` gives the compact deck.
+- **Default `--preview` and `--overlays`**, like `storyboard` / `thumbnail`: reuses the stills
+  agents already made; `--final` for a deck to present, `--no-overlays` for slides without burned-in
+  captions / progress bar (another render into `_bare`).
+- **Output in `exports/`** (as `vidgen export`), not next to the MP4.
+- **Audio opt-in** (`--audio`): MP3s add MB per minute. The play mode works without it.
+- **Clock-driven play mode** rather than chaining `ended` events: silent scenes, beats without an
+  MP3, pads and seeking follow one rule; the deck timeline has no transition overlaps.
+- Playwright is **not** a dependency: the browser test skips without it (installed in this
+  workspace's venv as `playwright==1.56.0` to run it, browsers from `/opt/pw-browsers`; the test
+  sets `PLAYWRIGHT_BROWSERS_PATH` to that when unset).
+
+Verification
+- `vidgen slides examples/minimal` (29 slides from 30 stills, 1 merged, 0.5 MB), `--variant
+  vertical --mode scene` (11 slides, 0.2 MB), `examples/gallery` (55 slides, 1.06 MB, 4 chapter
+  groups in the overview). Looked at Playwright screenshots (Read): slide, notes panel, overview,
+  help, number jump, a 390 px phone view, a 9:16 deck; fixed what they showed (stretched overview
+  thumbnails, empty icon-less buttons on phones, a huge next-slide preview for portrait decks, a
+  focus line on the stage). No console errors.
+
+Known gaps / TODOs
+- Step 53 (PDF): build on `deck_frames` (slides, notes, chapters, alt text, times); the HTML's
+  print CSS already prints one slide per page but without notes.
+- No `--scene` selection; the page's own UI strings (help, buttons) are English; a merged slide's
+  notes do not mark where the picture changed; frames only (no animation / clip playback).
+- The `_bare` renders of `--no-overlays` are not cleaned up (as Step 50).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2022 passed, 1 skipped, ~11.3 min on 2 CPUs); step only:
+`pytest tests/test_slides.py` (~20 s). Manual: `vidgen slides examples/minimal`, open
+`examples/minimal/exports/minimal_preview_slides.html` in a browser (`?` lists the keys);
+`vidgen slides examples/kphi3 --audio` for a narrated deck (real MP3s), press `P`.

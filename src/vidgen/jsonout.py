@@ -24,6 +24,7 @@ from vidgen.project import Project
 if TYPE_CHECKING:
     from vidgen.export import ExportResult
     from vidgen.icons import IconInfo
+    from vidgen.slides import SlidesResult
     from vidgen.thumbnail import ThumbnailResult
     from vidgen.translation import TemplateResult
     from vidgen.render.pipeline import RenderResult
@@ -436,6 +437,61 @@ def export_document(
         within_budget=result.within_budget,
         attempts=result.attempts,
         elapsed=round(elapsed, 3),
+    )
+
+
+def slides_document(project: Project, result: SlidesResult, elapsed: float, warnings: Iterable[Mapping[str, Any]] = ()) -> dict[str, Any]:
+    """The ``vidgen slides --json`` document: the page, how its slides were chosen and each slide."""
+    deck = result.deck
+    worker_warnings = [warning(message, scene) for scene, message in deck.warnings]
+    fmt = deck.format
+    slides = [
+        {
+            "index": s.index,
+            "scene": s.scene,
+            "type": s.scene_type,
+            "chapter": None if s.chapter is None else s.chapter.title,
+            "beats": [b.id for b in s.beats],
+            "notes": s.notes,
+            "k": s.k,
+            "n": s.n,
+            "merged": s.merged,
+            "time": s.time,
+            "scene_time": s.scene_time,
+            "at": s.at,
+            "until": s.until,
+            "still": _path(s.still),
+        }
+        for s in deck.slides
+    ]
+    return envelope(
+        "slides",
+        True,
+        [*warnings, *worker_warnings],
+        project=_path(project.root),
+        variant=project.variant,
+        language=project.config.language,
+        preview=deck.preview,
+        mode=deck.mode,
+        per_beat=deck.per_beat,
+        overlays=deck.overlays,
+        dedupe=deck.dedupe,
+        format={"width": fmt.width, "height": fmt.height, "fps": fmt.fps},
+        path=_path(result.path),
+        bytes=result.bytes,
+        files_dir=None if result.files_dir is None else _path(result.files_dir),
+        image_format=result.image_format,
+        quality=result.quality,
+        width=result.width,
+        height=result.height,
+        audio=result.audio,
+        duration=deck.duration,
+        stills=deck.stills,
+        merged=deck.merged,
+        rendered=deck.rendered,
+        reused=deck.reused,
+        elapsed=round(elapsed, 3),
+        slides=slides,
     )
 
 

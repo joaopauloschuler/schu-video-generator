@@ -26,6 +26,7 @@
 #   vidgen thumbnail examples/gallery --preview --scene speedup --no-overlays  # a frame instead, without overlays
 #   vidgen export gif examples/gallery --preview --scene share --max-mb 2      # exports/gallery_preview_share.gif
 #   vidgen export clip examples/gallery --preview --scene reach --with-audio   # exports/gallery_preview_reach.mp4
+#   vidgen slides examples/gallery [--mode scene] [--no-overlays]  # exports/gallery_preview_slides.html: a deck, O = overview by chapter
 # No narration audio: beats are timed from their word count (narration.words_per_second).
 title: "vidgen: a gallery of scene types"
 output: gallery
