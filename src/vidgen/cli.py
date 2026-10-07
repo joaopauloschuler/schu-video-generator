@@ -83,6 +83,7 @@ def project_problems(project: Project) -> list[Problem]:
     """
     from vidgen import extensions, registry
     from vidgen.actions import scene_actions
+    from vidgen.carry import carry_problems
     from vidgen.icons import PROJECT_ICONS_DIR, project_icons
     from vidgen.music import config_problems as music_problems
     from vidgen.overlays import overlay_problems
@@ -125,6 +126,7 @@ def project_problems(project: Project) -> list[Problem]:
             problems.extend(overlay_problems(project, theme))
             problems.extend(voice_color_problems(project.config, theme))
             problems.extend(transition_color_problems(project.config, theme))
+            problems.extend(carry_problems(project.config))
             problems.extend(Problem(loc, message) for loc, message in sfx_problems(project.config, project.root))
             problems.extend(Problem(loc, message) for loc, message in music_problems(project.config, project.root))
     except VidgenError as exc:
@@ -212,11 +214,19 @@ def pronunciation_warnings(project: Project) -> list[str]:
 def validate_warnings(project: Project) -> list[str]:
     """What ``vidgen validate`` warns about (not problems): :func:`theme_warnings`,
     :func:`pronunciation_warnings`, named voices no beat uses and transitions that hold the
-    scene before them longer (DESIGN.md §49)."""
+    scene before them longer (DESIGN.md §49) and carries through a transition that moves them
+    (§50)."""
+    from vidgen.carry import carry_warnings
     from vidgen.transitions import transition_warnings
     from vidgen.voices import voice_warnings
 
-    return theme_warnings(project) + pronunciation_warnings(project) + voice_warnings(project.config) + transition_warnings(project)
+    return (
+        theme_warnings(project)
+        + pronunciation_warnings(project)
+        + voice_warnings(project.config)
+        + transition_warnings(project)
+        + carry_warnings(project.config)
+    )
 
 
 def log_validate_warnings(project: Project, variants: dict[str, Project | None]) -> None:

@@ -18,7 +18,9 @@
 #   vidgen storyboard examples/gallery --scene clip --per-beat 3    # a clip with a lower third (overlays)
 #   vidgen list-sfx examples/gallery --render-dir build/sfx   # the sound effects (part2: whoosh, speedup: chime, formats: pop) as WAVs
 #   vidgen list-music examples/gallery --render-dir build/music  # the music beds (this video: calm, ducked) as WAVs
-#   vidgen render examples/gallery --preview    # the whole video: scenes crossfade, chapter cards fade through a colour
+#   vidgen render examples/gallery --preview    # the whole video: scenes crossfade, chapter cards fade through a colour,
+#                                               # one push, one wipe, two carried objects (match cuts)
+#   vidgen storyboard examples/gallery --scene structure --scene tradeoff --per-beat 3  # the card's title becomes the heading
 # No narration audio: beats are timed from their word count (narration.words_per_second).
 title: "vidgen: a gallery of scene types"
 output: gallery
@@ -95,6 +97,8 @@ scenes:
 
   - id: tradeoff
     type: comparison      # two or three columns: A vs B, before / after
+    transition: cut       # a match cut: the card's title stays where it was ...
+    carry: ["title -> heading"]   # ... and flows into this scene's heading (docs/CONFIG.md "Continuity")
     params:
       heading: "Preview or final render?"
       vs: "vs"
@@ -117,6 +121,7 @@ scenes:
 
   - id: schedule
     type: timeline        # events along an axis, one per beat (a vertical axis in 9:16)
+    transition: push      # slides in from the right (from below in 9:16), pushing the comparison out
     params:
       heading: "A video in four days"
       now: "Day 3"        # a "Now" tag; later events are drawn as planned
@@ -206,7 +211,10 @@ scenes:
 
   - id: speedup
     type: stat            # one big number that counts, with a label and a comparison
+    transition: cut
+    carry: [icon]         # the card's icon glides from the card into the place of this one's
     params:
+      icon: chart-column
       value: 0.4
       unit: "min"
       label: "to render a minute of video as a 480p preview"
@@ -240,6 +248,7 @@ scenes:
 
   - id: cost
     type: scatter         # points per series; a least-squares trend line; labels beside a few points
+    transition: {type: wipe, direction: right, soft: true}   # a soft edge sweeps across, uncovering it
     params:
       title: "Render time by scene length"
       x_label: "narration (s)"

@@ -4314,3 +4314,114 @@ How to test: `/home/claude/venv/bin/python -m pytest -q` (1880 passed, 1 skipped
 `pytest tests/test_transitions.py`. Manual: `vidgen validate examples/gallery`, `vidgen render
 examples/gallery --preview`, then `ffmpeg -ss 19.7 -i examples/gallery/gallery_preview.mp4
 -frames:v 1 mid.png` (mid-crossfade `tradeoff → schedule`).
+
+## Step 47 — Transitions: push, wipe, continuity
+What was built
+- **`push` and `wipe`** transitions: `transition: push` / `{type: wipe, direction: up, soft:
+  true, duration: 0.8}` (`TransitionConfig.direction` left/right/up/down = where the pictures /
+  the edge move, push and wipe only; `soft` wipe only; default 0.6 s). Default direction per
+  render format: `left` in 16:9 / square, `up` in 9:16 (the next scene comes in from the right /
+  from below), so one video-level push works in both orientations. Timing contract identical to a
+  crossfade (they overlap; silent tail; hold) — `TransitionConfig.overlaps` replaces every
+  `type == "crossfade"` test. Join: `xfade` `slide<dir>` / `wipe<dir>` / `smooth<dir>`
+  (`transitions.xfade_name`), checked frame by frame (`(j + 0.5) / n` of the picture at shared
+  frame `j`, from the right side).
+- **Overlays stay put** during a push / wipe: the outgoing scene draws no overlays after the cut,
+  the incoming scene's first `overlap` frames are rendered bare and their overlays (the incoming
+  scene's, as a pure function of video time) are written by its worker into
+  `scenes/<id>.overlay.mov` (`overlay_layer.RgbaClip`, QuickTime PNG RGBA, straight alpha; plus a
+  transparent end frame, without which FFmpeg's `overlay` drops the last one); the join draws it
+  over the `xfade` result at exactly the shared frames (`ffmpeg.overlay_graph`). Checked by
+  extracting mid-transition frames: watermark, progress bar, chapter indicator and captions are
+  stationary and appear once.
+- **Continuity / match cut**: scene key **`carry:`** — `[icon]`, `["title -> heading"]` (target
+  names of the scene before, optionally `-> ` a target of this scene; `title`/`heading` synonyms).
+  The scene before keeps those targets on screen while the rest of it fades out, and records
+  their final shapes (points, fills, strokes) in `build/.../carry/<id>.json`; the carrying scene
+  shows them from frame 0 (the cut does not show) and, when it brings in the destination target
+  through `entrance()` (all built-ins), moves the copy into it: glyph by glyph / shape by shape
+  when the shape counts match (same text or icon at another size / place / colour), else a
+  stretched cross-fade (different words). Leftovers fade out (warning when the destination does
+  not exist). `self.carry_in(name)` + `vidgen.api.carry_move` for custom scenes.
+- **Render order**: a carrying scene renders after the scene before it (`--jobs`: its worker
+  thread waits for that scene's); `vidgen render --scene X` / storyboard / lint add the scene
+  before when its record is missing or stale (fingerprint) and the carrying scene when the scene
+  before was rendered from other inputs than the ones it started from (`render.carry_from`).
+- **Validation**: carry names checked against both scene types' targets (did-you-mean), first
+  scene cannot push / wipe / carry, `direction` / `soft` only on their types; warning for a carry
+  through a push / wipe / fade_color.
+- **Example**: `examples/gallery`: `structure` card → `tradeoff` (cut, title flows into the
+  heading), `tradeoff` → `schedule` push, `part2` card → `speedup` (cut, the card's icon glides
+  into the stat's new icon), `formats` → `cost` soft wipe to the right.
+
+Files
+- New: `src/vidgen/carry.py`, `tests/test_push_wipe_carry.py` (24 tests: config, graph strings,
+  frame math in four directions with an RGBA clip, `rgba` vs `composite`, carry record round trip
+  pixel-exact, render order with 4 workers, `with_carried`, a rendered video (push, carry, wipe;
+  3 workers) checked frame by frame, `--scene` re-rendering the scene before).
+- Changed: `config.py` (`push`/`wipe`, `direction`, `soft`, `overlaps`, `OVERLAPPING_TRANSITIONS`,
+  `DIRECTED_TRANSITIONS`, `TARGET_NAME_PATTERN`, `CarryEntry`, `CarrySetting`, scene `carry`,
+  first-scene checks), `actions.py` (pattern from config), `transitions.py` (`direction`,
+  `xfade_name`, `moves_pictures`, overlaps generalised), `videoplan.py`, `project.py`,
+  `overlay_layer.py` (`RgbaClip`, `rgba`, `split_head`, `close_head`), `scene.py` (overlays out of
+  pushes, `overlay_head`, carry recording / showing / moving, `clear_all(keep=)`, `setup`,
+  `carry_in`), `render/worker.py` (clip + carry record paths, `_carried_in`, timings
+  `overlays.head`, `carry_from`), `render/pipeline.py` (`with_carried`, `_runs(after=)`, join
+  kinds + clips, carry checks), `render/ffmpeg.py` (`crossfade_graph(kinds)`, `overlay_graph`,
+  `join(kinds=, overlays=)`), `render/fingerprint.py` (`next_carry`, `carry`, `carry_from`;
+  own `carry` out of the scene dump), `cli.py` (validate), `api.py` (`carry_move`);
+  `examples/gallery/video.yaml`; docs/CONFIG.md (transitions table / keys / overlays / encoding,
+  new "Continuity" subsection, scene + top-level rows, storyboard fingerprint), docs/EXTENDING.md,
+  README.md, DESIGN.md (tree, §3 build files, §4, §6.4, new §50), tasklist.md.
+
+Public interfaces added/changed (compatible)
+- Config: transition types `push`, `wipe`, keys `direction`, `soft`; scene key `carry`.
+- `vidgen.api.carry_move`; `NarratedScene.carry_in(name)`, `carry_out`, `carry_state`,
+  `carried_in`, `overlay_head`, `clear_all(run_time, keep=())`; `entrance()` moves carried copies.
+- `OverlayLayer.split_head / close_head / rgba`, `RgbaClip`; `ffmpeg.join(..., kinds=,
+  overlays=)`, `crossfade_graph(..., kinds=None)`, `overlay_graph`; `pipeline.with_carried`.
+- JSON: combined timings `transition.direction` (push / wipe); scene timings
+  `render.overlays.head`, `render.carry_from` (all within version 1). Files
+  `build/.../scenes/<id>.overlay.mov`, `build/.../carry/<id>.json`.
+- Fingerprint: scenes with transitions change once (new `direction` / `soft` keys in the
+  transition dump); projects without transitions or carries keep theirs.
+
+Decisions / deviations
+- **Overlays of a push / wipe come from the incoming scene's render as a separate RGBA clip**
+  (DESIGN §49's first suggestion), both scenes' shared frames bare. Single source: overlay state
+  as a function of video time; the overlays chosen are the incoming scene's (as for a crossfade).
+- **Carry = recorded shapes, not pickles, and B depends on A's render artifact** (not on
+  recomputing A's end): simple, exact, and `--jobs` / `--scene` handled by ordering + staleness.
+- The move into the destination hooks `entrance()` (what every built-in uses for its targets), so
+  no built-in scene needed changes; a scene that brings the destination in otherwise gets a
+  cross-fade instead of a move.
+- `soft` uses FFmpeg's `smooth*` wipes (a wide soft edge; not tunable).
+
+Known gaps / TODOs
+- Carried objects: vector shapes only (images / clips skipped with a warning); scene coordinates
+  (a camera zoomed at A's end is not undone); with `fade_color` / `push` / `wipe` they fade / move
+  with the picture (validate warns).
+- A chapter card's other parts fade over the 0.5 s outro, then the carried object holds; a scene
+  whose entrance plays late (e.g. a stat's icon in a lagged group) leaves the copy waiting a
+  few frames before moving.
+- Stills inside a push / wipe's frames have no overlays (beat-end stills are never there).
+- `vidgen render --scene X` alone still shows no slide / blend (the join makes them).
+- Step 48 (review) could add a lint / storyboard view of transitions and carries (e.g. a sheet of
+  the frames around each cut).
+
+Verification
+- Scratch project (title → push → chapter card → cut + `carry: [title -> heading]` → bullets →
+  wipe up → title; progress bar, watermark, captions; `--jobs 3`): contact sheets of every frame
+  around the three joins read — the card slides in from the right with the watermark and bar
+  fixed, the card's title stays put across the cut and glides into the heading, the wipe uncovers
+  the last scene from below with one caption in place.
+- `examples/gallery` preview rendered with `--jobs 4` (3:49): frames around structure → tradeoff
+  (title → heading), tradeoff → schedule (push, indicator / watermark / bar fixed), part2 →
+  speedup (icon glides into the stat), formats → cost (soft wipe) read; the vertical variant's
+  push goes up (from below) with the indicator and watermark fixed. `vidgen lint
+  examples/gallery` and `--variant vertical`: 0 findings; `vidgen validate`: ok.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1904 passed, 1 skipped, ~20 min); step only: `pytest
+tests/test_push_wipe_carry.py`. Manual: `vidgen render examples/gallery --preview --jobs 4`,
+then a frame from the push: `ffmpeg -ss 20.1 -i examples/gallery/gallery_preview.mp4 -frames:v 1
+push.png`; `vidgen storyboard examples/gallery --scene structure --scene tradeoff --per-beat 3`.

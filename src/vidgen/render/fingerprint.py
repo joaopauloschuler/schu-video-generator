@@ -11,6 +11,8 @@ icons) and of
 the project's extension folders (file contents), and the files under ``<project>/assets`` (size and modification time).
 With overlays, also what the planned timeline reads from every scene (``vidgen.videoplan``).
 With transitions, the one into the next scene (it changes how the scene ends, DESIGN.md §49).
+With ``carry`` (DESIGN.md §50): what the next scene carries out of the scene (kept on screen at
+its end), and for a scene that carries objects in, the fingerprint of the scene before.
 Not the music and the final mix (``music``, ``audio``, a scene's ``music``): they are applied when
 the video is joined.
 Files a scene reads from elsewhere are not tracked (``--force`` renders again).
@@ -25,7 +27,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from vidgen import __version__
+from vidgen import __version__, carry
 from vidgen.project import Project
 
 #: Bumped when the fingerprint's inputs change (old renders then count as stale).
@@ -158,7 +160,7 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
         "config": config,
         "readable": project.config.lint.rules.min_font.min_size,
         # A scene's `chapter:` only matters to overlays (in "overlays" below when there are any).
-        "scene": spec.model_dump(mode="json", exclude={"lint_ignore", "chapter", "music"}),
+        "scene": spec.model_dump(mode="json", exclude={"lint_ignore", "chapter", "music", "carry"}),
         "audio": {beat.id: _stat(project.audio_dir / f"{beat.id}.mp3") for beat in spec.beats},
         "extensions": [_contents_digest(_files(folder, ".py"), folder) for folder in project.extension_dirs],
         "assets": {path.relative_to(assets).as_posix(): _stat(path) for path in _files(assets)},
@@ -167,5 +169,14 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
         # colour, or held longer (DESIGN.md §49)
         "next_transition": _next_transition(project, scene_id),
     }
+    # continuity (DESIGN.md §50): what the next scene carries changes how this one fades out;
+    # what this scene carries in is the end of the scene before (its render's inputs)
+    carried_out = carry.carried_out(project.config, scene_id)
+    if carried_out:
+        data["next_carry"] = [str(e) for e in carried_out]
+    before = carry.carried_from(project.config).get(scene_id)
+    if before is not None:
+        data["carry"] = [str(e) for e in spec.carry]
+        data["carry_from"] = scene_fingerprint(project, before)
     text = json.dumps(data, sort_keys=True, ensure_ascii=True)
     return hashlib.sha256(text.encode("utf-8")).hexdigest()

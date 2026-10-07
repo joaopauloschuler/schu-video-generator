@@ -9,6 +9,7 @@ errors into a readable :class:`~vidgen.errors.VidgenError`.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Collection
 from typing import Annotated, Any, Literal, Union
 
@@ -18,6 +19,7 @@ from pydantic import (
     ConfigDict,
     Field,
     ModelWrapValidatorHandler,
+    PlainSerializer,
     PositiveFloat,
     PositiveInt,
     PrivateAttr,
@@ -31,6 +33,9 @@ from vidgen.errors import Problem, VidgenError
 
 ID_PATTERN = r"^[A-Za-z0-9_]+$"
 HEX_COLOR_PATTERN = r"^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$"
+
+#: An action target name: ``name``, ``name3``, ``name1.part2`` or ``kind:label`` (DESIGN.md §26).
+TARGET_NAME_PATTERN = r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)*(?::.+)?$"
 
 Identifier = Annotated[str, Field(pattern=ID_PATTERN)]
 HexColor = Annotated[str, Field(pattern=HEX_COLOR_PATTERN)]
@@ -686,21 +691,31 @@ class AudioConfig(_Strict):
     """Highest true peak (dBTP) of a mixed track; a limiter keeps every peak under it."""
 
 
-#: Transition types (DESIGN.md §49); Step 47 adds more.
-TRANSITION_TYPES = ("cut", "crossfade", "fade_color")
+#: Transition types (DESIGN.md §49, §50).
+TRANSITION_TYPES = ("cut", "crossfade", "fade_color", "push", "wipe")
+#: Transitions that overlap the two scenes (both pictures are on screen at once).
+OVERLAPPING_TRANSITIONS = ("crossfade", "push", "wipe")
+#: Transitions that move a picture or an edge in a ``direction`` (DESIGN.md §50).
+DIRECTED_TRANSITIONS = ("push", "wipe")
 #: Seconds of a transition when its entry gives no ``duration``.
-TRANSITION_DURATIONS = {"cut": 0.0, "crossfade": 0.5, "fade_color": 1.0}
+TRANSITION_DURATIONS = {"cut": 0.0, "crossfade": 0.5, "fade_color": 1.0, "push": 0.6, "wipe": 0.6}
+#: Directions of a push or wipe: where the pictures (push) or the edge (wipe) move.
+TransitionDirection = Literal["left", "right", "up", "down"]
 
 
 class TransitionConfig(_Strict):
-    """How the video passes into a scene from the one before it (DESIGN.md §49)."""
+    """How the video passes into a scene from the one before it (DESIGN.md §49, §50)."""
 
-    type: Literal["cut", "crossfade", "fade_color"] = "cut"
-    """cut: straight to the next scene (the default: the scene before fades out by itself); crossfade: the two scenes blend; fade_color: the picture fades to a colour and the next scene fades in from it."""
+    type: Literal["cut", "crossfade", "fade_color", "push", "wipe"] = "cut"
+    """cut: straight to the next scene (the default: the scene before fades out by itself); crossfade: the two scenes blend; fade_color: the picture fades to a colour and the next scene fades in from it; push: the next scene slides in and pushes the previous one out; wipe: an edge sweeps across, uncovering the next scene."""
     duration: float | None = Field(default=None, gt=0, le=5)
-    """Seconds of the transition (default: crossfade 0.5, fade_color 1.0, split evenly between fading out and in)."""
+    """Seconds of the transition (default: crossfade 0.5, fade_color 1.0 split evenly between fading out and in, push and wipe 0.6)."""
     color: ColorRef | None = None
     """fade_color only: a theme colour token or hex (default: the theme's background)."""
+    direction: TransitionDirection | None = None
+    """push / wipe only: where the pictures (push) or the edge (wipe) move: left, right, up or down (default: left in a wide or square frame, up in a tall one: the next scene comes in from the right / from below)."""
+    soft: bool | None = None
+    """wipe only: a soft (blurred) edge instead of a hard one (default false)."""
 
     @model_validator(mode="after")
     def _keys_of_type(self) -> TransitionConfig:
@@ -708,7 +723,16 @@ class TransitionConfig(_Strict):
             raise ValueError("a cut has no duration")
         if self.type != "fade_color" and self.color is not None:
             raise ValueError(f"color is only for fade_color, not {self.type}")
+        if self.type not in DIRECTED_TRANSITIONS and self.direction is not None:
+            raise ValueError(f"direction is only for push and wipe, not {self.type}")
+        if self.type != "wipe" and self.soft is not None:
+            raise ValueError(f"soft is only for wipe, not {self.type}")
         return self
+
+    @property
+    def overlaps(self) -> bool:
+        """Whether the scene starts before the one before it ends (crossfade, push, wipe)."""
+        return self.type in OVERLAPPING_TRANSITIONS
 
     @property
     def seconds(self) -> float:
@@ -720,9 +744,54 @@ def _transition(value: str | TransitionConfig) -> TransitionConfig:
     return TransitionConfig(type=value) if isinstance(value, str) else value  # type: ignore[arg-type]
 
 
-#: A ``transition:`` value: a type name, or {type, duration, color}.
+#: A ``transition:`` value: a type name, or {type, duration, color, direction, soft}.
 TransitionSetting = Annotated[
-    Union[Literal["cut", "crossfade", "fade_color"], TransitionConfig], AfterValidator(_transition)
+    Union[Literal["cut", "crossfade", "fade_color", "push", "wipe"], TransitionConfig], AfterValidator(_transition)
+]
+
+#: ``carry:`` entry: ``name`` or ``"name -> other"`` (a target of the scene before -> one of this scene).
+CARRY_ARROW = "->"
+
+
+class CarryEntry(BaseModel):
+    """One object a scene carries over from the scene before it (DESIGN.md §50): the target
+    ``source`` of that scene, shown where it ended, then moved into this scene's target ``dest``."""
+
+    model_config = ConfigDict(frozen=True)
+
+    source: str
+    dest: str
+
+    def __str__(self) -> str:
+        return self.source if self.source == self.dest else f"{self.source} {CARRY_ARROW} {self.dest}"
+
+
+def _carry_entry(value: str) -> CarryEntry:
+    parts = [p.strip() for p in value.split(CARRY_ARROW)]
+    if len(parts) > 2 or not all(parts):
+        raise ValueError(f"invalid carry entry {value!r}: use NAME or 'NAME -> NAME'")
+    for name in parts:
+        if not re.match(TARGET_NAME_PATTERN, name, re.S):
+            raise ValueError(f"invalid target name {name!r} in carry entry {value!r}")
+    return CarryEntry(source=parts[0], dest=parts[-1])
+
+
+def _carry_list(value: str | list[str]) -> list[CarryEntry]:
+    entries = [_carry_entry(v) for v in ([value] if isinstance(value, str) else value)]
+    seen: set[str] = set()
+    for entry in entries:
+        if entry.dest in seen:
+            raise ValueError(f"two entries move into '{entry.dest}'")
+        seen.add(entry.dest)
+    return entries
+
+
+#: A ``carry:`` value: one entry or a list (``title``, ``"title -> heading"``); validated into
+#: :class:`CarryEntry` items, written back as the strings.
+CarrySetting = Annotated[
+    Union[str, list[str]],
+    AfterValidator(_carry_list),
+    PlainSerializer(lambda entries: [str(e) for e in entries], return_type=list[str]),
 ]
 
 
@@ -783,7 +852,9 @@ class SceneConfig(_Strict):
     music: bool | SceneMusic = True
     """Background music during this scene: false for none (it fades out before the scene and back in after it), or {volume: dB} to change its level here."""
     transition: TransitionSetting | None = None
-    """How the video passes into this scene from the one before: cut, crossfade, fade_color or {type, duration, color}; default the video's transition."""
+    """How the video passes into this scene from the one before: cut, crossfade, fade_color, push, wipe or {type, duration, color, direction, soft}; default the video's transition."""
+    carry: CarrySetting = Field(default_factory=list)
+    """Objects of the scene before that this scene starts with, where they were (a match cut): its target names, or 'NAME -> NAME' to move one into a target of this scene (default: the target of the same name)."""
 
     @model_validator(mode="before")
     @classmethod
@@ -875,7 +946,7 @@ class VideoConfig(_Strict):
     audio: AudioConfig = Field(default_factory=AudioConfig)
     """The final mix: loudness normalisation {normalize, target_lufs, true_peak}."""
     transition: TransitionSetting | None = None
-    """Default transition between scenes (cut, crossfade, fade_color or {type, duration, color}); a scene's transition wins."""
+    """Default transition between scenes (cut, crossfade, fade_color, push, wipe or {type, duration, color, direction, soft}); a scene's transition wins."""
     scenes: list[SceneConfig] = Field(min_length=1)
     """The scenes in order (at least one); scene ids and beat ids must be unique."""
 
@@ -944,8 +1015,12 @@ class VideoConfig(_Strict):
 
         problems = chapter_problems(self.scenes) + self._music_problems(scene_seen)
         first = self.scenes[0].transition
-        if first is not None and first.type == "crossfade":
-            problems.append("scenes[0].transition: the first scene has no scene before it to cross-fade from (fade_color fades it in from a colour)")
+        if first is not None and first.overlaps:
+            problems.append(
+                f"scenes[0].transition: the first scene has no scene before it to {first.type} from (fade_color fades it in from a colour)"
+            )
+        if self.scenes[0].carry:
+            problems.append("scenes[0].carry: the first scene has no scene before it to carry objects from")
         if problems:
             raise ValueError("; ".join(problems))
         return self

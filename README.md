@@ -76,11 +76,17 @@ subtitles.
   narration-only videos keep their level unless `normalize: true`); `vidgen render` reports the
   measured loudness and `vidgen list-music` describes the beds in words ([reference](docs/CONFIG.md#background-music-music)).
 - **Transitions**: `transition: crossfade` between all scenes, or per scene (the way into it):
-  `crossfade` (the scenes overlap, the video gets shorter by it) or `fade_color` through a theme
-  colour (`{type: fade_color, color: surface, duration: 1.2}`). A transition never covers
-  narration (the scene before is held a little longer if needed); subtitles, captions,
-  chapters, overlays, effects and music all follow the overlapped timeline, and overlays are not
-  doubled during a crossfade ([reference](docs/CONFIG.md#transitions-transition)).
+  `crossfade` (the scenes overlap, the video gets shorter by it), `fade_color` through a theme
+  colour (`{type: fade_color, color: surface, duration: 1.2}`), `push` (the next scene slides in
+  and pushes the previous one out) or `wipe` (`{type: wipe, direction: up, soft: true}`). A
+  transition never covers narration (the scene before is held a little longer if needed);
+  subtitles, captions, chapters, overlays, effects and music all follow the overlapped timeline,
+  and overlays are neither doubled in a crossfade nor moved by a push or wipe
+  ([reference](docs/CONFIG.md#transitions-transition)).
+- **Continuity (match cuts)**: `carry: ["title -> heading"]` on a scene starts it with the scene
+  before's title exactly where it ended, then glides it into its own heading (also icons and any
+  other target), so the cut between them does not show
+  ([reference](docs/CONFIG.md#continuity-carrying-objects-into-the-next-scene-carry)).
 - **Extensible per video**: a project can add its own scene types, beat actions, overlays,
   helpers, theme tokens and pipeline hooks in its `extensions/` folder, without touching vidgen.
 - **Cheap to iterate**: only new or edited beats are sent to ElevenLabs; fast low-resolution

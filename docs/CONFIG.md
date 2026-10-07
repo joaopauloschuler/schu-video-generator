@@ -35,7 +35,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `sfx` | `{auto: false, gain: 0}` | sound effects of the whole video: automatic sounds for built-in animations, overall level; see [sound effects](#sound-effects-sfx) |
 | `music` | none | background music: a bed name (`calm`, `pulse`, `bright`) or a file, a cue `{source, volume, ...}`, or a list of cues with `from` / `to` scenes; see [background music](#background-music-music) |
 | `audio` | `{normalize: auto, target_lufs: -16, true_peak: -1.5}` | loudness of the final mix; see [loudness](#loudness-of-the-final-mix-audio) |
-| `transition` | none (cuts) | the default transition between scenes: `cut`, `crossfade`, `fade_color` or `{type, duration, color}`; see [transitions](#transitions-transition) |
+| `transition` | none (cuts) | the default transition between scenes: `cut`, `crossfade`, `fade_color`, `push`, `wipe` or `{type, duration, color, direction, soft}`; see [transitions](#transitions-transition) |
 | `scenes` | required | the scenes in order, at least one |
 
 ## Scenes and beats
@@ -70,6 +70,7 @@ scenes:
 | `sfx` | `[]` | sound effects at seconds from the scene's start (silent scenes too), see [sound effects](#sound-effects-sfx) |
 | `music` | `true` | the [background music](#background-music-music) during this scene: `false` for none, `{volume: dB}` to change its level here |
 | `transition` | the video's `transition` | how the video passes into this scene from the one before it, see [transitions](#transitions-transition) |
+| `carry` | `[]` | objects of the scene before that this scene starts with, where they ended (a match cut), then moves into its own targets: target names, or `"NAME -> NAME"`; see [continuity](#continuity-carrying-objects-into-the-next-scene-carry) |
 
 Beat `id`s name the audio files: keep them when you edit the text (only that beat is
 re-voiced). A beat `text` is spoken as written; it is also the subtitle. A beat's `actions`
@@ -779,6 +780,16 @@ scenes:
     params: {items: ["Fast", "Small"]}
     transition: cut                    # this one is a plain cut
     beats: [{text: "In short: fast and small."}]
+  - id: chart
+    type: bar_chart
+    params: {title: "Speed", labels: ["A", "B"], values: [3, 5]}
+    transition: push                   # slides in from the right, pushing the bullets out to the left
+    beats: [{text: "B is faster."}]
+  - id: outro
+    type: end_card
+    params: {title: "Thanks"}
+    transition: {type: wipe, direction: up, soft: true}   # a soft edge sweeps up, uncovering it
+    duration: 3
 ```
 
 | type | what you see | timing |
@@ -786,16 +797,21 @@ scenes:
 | `cut` | the next scene straight after the previous one (which fades out by itself) | unchanged |
 | `crossfade` | the two scenes blend into each other | the scenes **overlap** by `duration`: the next one starts that much earlier, the video gets that much shorter |
 | `fade_color` | the previous scene fades to `color` over the first half of `duration`, the next one fades in from it over the second half | no overlap: the video keeps its length |
+| `push` | the next scene slides in from one side and pushes the previous one out the other side | overlap, like `crossfade` |
+| `wipe` | an edge sweeps across the picture, uncovering the next scene behind it (`soft`: a blurred edge) | overlap, like `crossfade` |
 
 | key | default | |
 |---|---|---|
-| `type` | `cut` | `cut`, `crossfade` or `fade_color` (a plain string is the type with its defaults) |
-| `duration` | `crossfade` 0.5, `fade_color` 1.0 | seconds, at most 5; not allowed on a cut |
+| `type` | `cut` | `cut`, `crossfade`, `fade_color`, `push` or `wipe` (a plain string is the type with its defaults) |
+| `duration` | `crossfade` 0.5, `fade_color` 1.0, `push` / `wipe` 0.6 | seconds, at most 5; not allowed on a cut |
 | `color` | the theme's `background` | `fade_color` only: a theme colour token (`surface`, `accent`, ...), `background`, or hex |
+| `direction` | `left` (16:9, square), `up` (9:16) | `push` / `wipe` only: where the pictures (push) or the edge (wipe) move: `left`, `right`, `up`, `down`. `left` = the next scene comes in from the right; `up` = from below (like scrolling a phone feed) |
+| `soft` | `false` | `wipe` only: a soft, blurred edge (FFmpeg's `smooth*` transitions) instead of a hard one |
 
 A scene's `transition:` is the way **into** that scene; the video's `transition:` is the default
-for every scene but the first (a crossfade on the first scene is an error: nothing comes before
-it; `fade_color` there fades the video in from the colour).
+for every scene but the first (a crossfade, push or wipe on the first scene is an error: nothing
+comes before it; `fade_color` there fades the video in from the colour). A video-level `push`
+with no `direction` follows each variant's frame: left in the 16:9 video, up in a 9:16 variant.
 
 - **Speech never overlaps.** A transition covers only the *silent end* of the scene before it:
   the frames after its narration ends (its pad and fade-out; a whole silent scene). When that is
@@ -807,25 +823,84 @@ it; `fade_color` there fades the video in from the colour).
   a built-in scene (anything ending with `self.finish()`) holds its picture over its 0.5 s outro
   and the transition takes it away.
 - **Every time follows**: scene starts in `timings.json` (scenes with a transition get
-  `transition: {type, duration, overlap}`), the SRT, captions, chapters and the chapter
+  `transition: {type, duration, overlap}`, plus `direction` for a push / wipe), the SRT, captions, chapters and the chapter
   indicator, the progress bar, lower thirds, sound effects, music cues and ducking, storyboard
   times. They all come from the [planned timeline](#overlays), which knows the overlaps.
 - **Overlays stay put.** During a crossfade both scenes draw the *incoming* scene's overlays
   (captions, watermark, progress bar, ...), so the blend shows them once, unchanged — no doubled
   captions or ghosted watermark. A `fade_color` fades the scene's picture only; overlays stay on
-  top of the colour.
+  top of the colour. A `push` or `wipe` moves the pictures, so overlays are kept out of them: both
+  scenes render the frames they share *without* overlays, the incoming scene's render writes
+  those frames' overlays to a separate clip (`build/.../scenes/<id>.overlay.mov`, RGBA), and the
+  join draws it over the moving pictures — the watermark, progress bar and captions stay where
+  they are and appear once. (The overlays switch to the incoming scene's at the transition's
+  start, as in a crossfade.) Stills of a scene taken inside such a transition show no overlays;
+  beat-end stills are never there.
 - **Sound**: in a crossfade the scenes' sound overlaps too: the earlier scene's silent tail fades
   out under the next scene's start (only a clip's sound can be there). Effects and music are
   placed on the video's timeline as always.
-- **Encoding**: with any crossfade the join blends the scenes with FFmpeg (`xfade`) and encodes
-  the video once (H.264, CRF 18, visually lossless next to the scenes' own encoding) instead of
-  copying the scenes' streams, which takes about as long as playing the video; a video with only
-  cuts and colour fades is joined as before. Colour fades are drawn inside the scenes' renders,
-  so storyboards and stills show them.
+- **Encoding**: with any crossfade, push or wipe the join blends the scenes with FFmpeg (`xfade`:
+  `fade`, `slide<direction>`, `wipe<direction>` / `smooth<direction>`) and encodes the video once
+  (H.264, CRF 18, visually lossless next to the scenes' own encoding) instead of copying the
+  scenes' streams, which takes about as long as playing the video; a video with only cuts and
+  colour fades is joined as before. Colour fades are drawn inside the scenes' renders, so
+  storyboards and stills show them; crossfades, pushes and wipes exist only in the joined video
+  (`vidgen render --scene ID` alone shows the outgoing scene held still).
 - A transition changes the renders of the scenes on both sides of it (the storyboard re-renders
   both). `vidgen render --scene ID` reuses the other scenes as they are: render the scene before
   a new transition too, or the join shortens a crossfade to the silence it finds (with a
   warning).
+
+### Continuity: carrying objects into the next scene (`carry`)
+
+A scene can start with objects of the scene before it, exactly where, how big and in which
+colour they were — a *match cut* — and then move them into its own layout:
+
+```yaml
+  - id: part2
+    type: chapter
+    params: {number: 2, title: "Charts and numbers", icon: chart-column}
+    duration: 3
+  - id: speedup
+    type: stat
+    transition: cut                 # a cut: the carried icon does not move at the cut
+    carry: [icon]                   # the card's icon flies into this scene's icon
+    params: {value: 0.4, unit: "min", label: "per minute of video", icon: chart-column}
+    beats: [{text: "Renders take seconds now."}]
+  - id: part3
+    type: chapter
+    params: {number: 3, title: "Results"}
+    duration: 3
+  - id: results
+    type: bullets
+    carry: ["title -> heading"]     # the card's title becomes this scene's heading
+    params: {heading: "Results", items: ["Faster", "Smaller"]}
+    beats: [{text: "Two results stand out."}]
+```
+
+- **Entries** are [target names](#beat-actions) of the scene before (`title`, `icon`, `item2`,
+  `bar:4K`...); `"a -> b"` moves the scene before's target `a` into this scene's target `b`
+  (default: the target of the same name; `title` and `heading` stand for each other as in
+  actions). `vidgen validate` checks both names for built-in types, with suggestions.
+- **The scene before** keeps those targets on screen in its fade-out (only the rest fades) and
+  records their final look (every vector shape: outline, fill, stroke) in
+  `build/.../carry/<scene>.json`.
+- **This scene** shows that record from its first frame, so across the cut nothing changes. When
+  it brings in the destination target (its own entrance animation), the copy **moves** into it
+  instead: shape by shape when both have as many shapes (the same text or icon at another
+  place, size or colour — glyphs glide into place), else a cross-fade stretched between the two
+  boxes (a title flowing into a heading with different words). A destination the scene brings in
+  some other way makes the copy fade out as it appears; a destination the scene does not have
+  fades it out with the scene's first animation (with a warning).
+- **Transitions**: a cut (the natural choice) or a crossfade keep the carried objects in place;
+  `fade_color`, `push` and `wipe` fade or move them with the picture (`vidgen validate` warns).
+- **Rendering**: the carrying scene is rendered after the scene before it (with `--jobs` it waits
+  for it). `vidgen render --scene ID` / `storyboard --scene ID` also render the scene before when
+  its record is missing or out of date, and the carrying scene when the scene before was
+  rendered with other inputs since.
+- Only vector shapes are carried (text, icons, shapes, TeX); pictures and clips are not (a
+  warning names them). Custom scenes can take the copy themselves with `self.carry_in(name)`
+  ([EXTENDING.md](EXTENDING.md)).
 
 ## Built-in scenes
 
@@ -3295,8 +3370,10 @@ if its stills are missing, were taken at another `--per-beat` count or format, o
 each render records a fingerprint of what the scene depends on (its config entry, the other
 config sections except `scenes`/`variants`/`lint`, its beats' MP3s, the project's extension code,
 the files under `assets/`, and vidgen's own rendering code; with [overlays](#overlays), also
-every scene's beats, MP3s and type, which place the scene in the video), and a scene whose
-fingerprint changed is rendered again. So `vidgen storyboard` right after `vidgen render --preview
+every scene's beats, MP3s and type, which place the scene in the video; the transition into the
+next scene; with [`carry`](#continuity-carrying-objects-into-the-next-scene-carry), what the next
+scene carries out of it and, for a carrying scene, the fingerprint of the scene before), and a
+scene whose fingerprint changed is rendered again. So `vidgen storyboard` right after `vidgen render --preview
 --frames` renders nothing, and after an edit it renders only the edited scenes. Files a scene
 reads from outside `assets/` are not tracked: use `--force`. The storyboard does not join the
 video; `vidgen render` does. It dispatches `post_scene` for the scenes it renders, not

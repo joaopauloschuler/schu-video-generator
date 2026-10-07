@@ -1,13 +1,13 @@
-"""Transitions between scenes (DESIGN.md §49): which transition leads into a scene, how many
+"""Transitions between scenes (DESIGN.md §49, §50): which transition leads into a scene, how many
 frames it takes, how much of the scenes it may overlap, and the narration track of a video
 whose scenes overlap. No manim: used by the planned timeline, the render pipeline, validation.
 
-The timing contract: a ``crossfade`` **overlaps** the two scenes (the next one starts while the
-previous one's last frames are still on screen, so the video gets shorter by the overlap); a
-``fade_color`` does not (the previous scene's last frames fade to the colour, the next scene's
-first frames fade in from it). Either one only covers the **silent tail** of the scene before
-(the frames after its last narration ends): when that tail is shorter than the transition, the
-scene before is held longer (``hold``) so no two narrations ever sound at once.
+The timing contract: a ``crossfade``, ``push`` or ``wipe`` **overlaps** the two scenes (the next
+one starts while the previous one's last frames are still on screen, so the video gets shorter by
+the overlap); a ``fade_color`` does not (the previous scene's last frames fade to the colour, the
+next scene's first frames fade in from it). Each one only covers the **silent tail** of the scene
+before (the frames after its last narration ends): when that tail is shorter than the transition,
+the scene before is held longer (``hold``) so no two narrations ever sound at once.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from vidgen.config import TransitionConfig, VideoConfig
+from vidgen.config import DIRECTED_TRANSITIONS, TransitionConfig, VideoConfig
 from vidgen.errors import Problem, VidgenError
 
 if TYPE_CHECKING:
@@ -50,9 +50,9 @@ def has_transitions(config: VideoConfig) -> bool:
 
 
 def requested_frames(transition: TransitionConfig, fps: int) -> int:
-    """Frames a transition asks for: a crossfade's overlap, a fade_color's frames on *each* side
-    (half its duration); 0 for a cut."""
-    if transition.type == "crossfade":
+    """Frames a transition asks for: the overlap of a crossfade / push / wipe, a fade_color's
+    frames on *each* side (half its duration); 0 for a cut."""
+    if transition.overlaps:
         return max(1, round(transition.seconds * fps))
     if transition.type == "fade_color":
         return max(1, round(transition.seconds * fps / 2))
@@ -69,14 +69,14 @@ def silent_tail(frames: int, speech_end: float | None, head: int, fps: int) -> i
 
 def join_overlaps(config: VideoConfig, fps: int, frames: Sequence[int], speech_ends: Sequence[float | None]) -> list[int]:
     """The frames each scene overlaps the one before it when the rendered scenes (``frames``
-    long, narrated until ``speech_ends``) are joined: a crossfade's frames, limited to the silent
-    tail of the scene before and the scene's own length (0 for every other transition and the
-    first scene). The planned hold makes the tail long enough, so this equals the plan unless a
-    render differs from it."""
+    long, narrated until ``speech_ends``) are joined: the frames of a crossfade / push / wipe,
+    limited to the silent tail of the scene before and the scene's own length (0 for every other
+    transition and the first scene). The planned hold makes the tail long enough, so this equals
+    the plan unless a render differs from it."""
     out = [0] * len(frames)
     for i in range(1, len(frames)):
         t = effective(config, i)
-        if t.type != "crossfade":
+        if not t.overlaps:
             continue
         tail = silent_tail(frames[i - 1], speech_ends[i - 1], head_frames(config, i - 1, fps, frames[i - 1], out[i - 1]), fps)
         out[i] = max(0, min(requested_frames(t, fps), tail, frames[i]))
@@ -85,13 +85,40 @@ def join_overlaps(config: VideoConfig, fps: int, frames: Sequence[int], speech_e
 
 def head_frames(config: VideoConfig, index: int, fps: int, frames: int, overlap: int) -> int:
     """Frames at the start of scene ``index`` (``frames`` long) its incoming transition uses: the
-    ``overlap`` of a crossfade, the fade-in of a fade_color."""
+    ``overlap`` of a crossfade / push / wipe, the fade-in of a fade_color."""
     t = effective(config, index)
-    if t.type == "crossfade":
+    if t.overlaps:
         return overlap
     if t.type == "fade_color":
         return min(requested_frames(t, fps), frames)
     return 0
+
+
+def direction(transition: TransitionConfig, portrait: bool) -> str | None:
+    """Where a push / wipe moves: its ``direction``, else ``up`` in a tall frame and ``left``
+    otherwise (the next scene comes in from below / from the right); ``None`` for other types."""
+    if transition.type not in DIRECTED_TRANSITIONS:
+        return None
+    return transition.direction or ("up" if portrait else "left")
+
+
+def xfade_name(transition: TransitionConfig, portrait: bool) -> str:
+    """ffmpeg ``xfade`` transition blending into a scene with ``transition`` (an overlapping
+    one): ``fade`` for a crossfade, ``slide<dir>`` for a push, ``wipe<dir>`` (``smooth<dir>``
+    when ``soft``) for a wipe. ``<dir>`` is the way the pictures / the edge move."""
+    way = direction(transition, portrait)
+    if transition.type == "push":
+        return f"slide{way}"
+    if transition.type == "wipe":
+        return f"{'smooth' if transition.soft else 'wipe'}{way}"
+    return "fade"
+
+
+def moves_pictures(transition: TransitionConfig) -> bool:
+    """Whether the transition moves the pictures or an edge across them (push, wipe): unlike a
+    fade it is not linear per pixel, so overlays are drawn once on top of it at the join instead
+    of in both scenes (DESIGN.md §50)."""
+    return transition.type in DIRECTED_TRANSITIONS
 
 
 def resolve_color(color: str | None, theme: Theme) -> str:

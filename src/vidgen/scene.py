@@ -23,13 +23,13 @@ import av
 from manim import DEFAULT_WAIT_TIME, NORMAL, Animation, FadeIn, MarkupText, Mobject, MovingCameraScene, Text, Wait, config
 from pydantic import AfterValidator, AliasChoices, BaseModel, ConfigDict, GetJsonSchemaHandler, ValidationError, ValidationInfo
 
-from vidgen import helpers, regions, runtime
+from vidgen import carry, helpers, regions, runtime
 from vidgen.actions import TARGET_NAME, ActionRunner, Target, match_names, plan_actions
 from vidgen.capture import FrameCapture
 from vidgen.layout import distribute
 from vidgen.overlay_layer import OverlayLayer
 from vidgen.overlays import Overlay, avoid, mobject_region, scene_overlays
-from vidgen.config import BeatConfig, SceneConfig, SfxCue, validation_error_lines
+from vidgen.config import DIRECTED_TRANSITIONS, BeatConfig, SceneConfig, SfxCue, validation_error_lines
 from vidgen.errors import VidgenError
 from vidgen.project import Project
 from vidgen.sfx import AUTO_ACTION_SFX, SfxEvent, SoundLibrary
@@ -293,9 +293,18 @@ class NarratedScene(MovingCameraScene):
             self.transition_in = self._video_plan.transition(i)
             if i + 1 < len(self.project.config.scenes):
                 self.transition_out = self._video_plan.transition(i + 1)
+        #: Continuity (DESIGN.md §50): what the next scene carries out of this one (kept on
+        #: screen in the fade-out, recorded at the end into :attr:`carry_state`), and the
+        #: record of the scene before for this scene's own ``carry`` (:attr:`carried_in`, set
+        #: by the worker before rendering).
+        self.carry_out: list[str] = [e.source for e in carry.carried_out(self.project.config, spec.id)]
+        self.carry_state: dict[str, list[dict[str, Any]]] | None = None
+        self.carried_in: dict[str, list[dict[str, Any]]] | None = None
+        self._carried: dict[str, Mobject] = {}  # destination name -> copy waiting to move there
         #: The video's overlays drawn on this scene (DESIGN.md §41), or ``None`` without any.
         self.overlay_layer: OverlayLayer | None = None
         self._reserved: list[regions.Region] = []
+        self.overlay_head = 0
         overlays, following = self._build_overlays()
         if overlays or following:
             slot = self._video_plan.scene(spec.id) if self._video_plan is not None else None
@@ -304,6 +313,9 @@ class NarratedScene(MovingCameraScene):
             else:
                 self.overlay_layer = OverlayLayer(self, overlays, following, start=slot.start, cut=slot.cut)
             self.overlay_layer.attach()  # after the capture: stills and the layout dump see overlays
+            #: frames at the start that a push / wipe moves: drawn without overlays when the
+            #: worker asks for them as a separate clip (DESIGN.md §50)
+            self.overlay_head = self.transition_in.overlap if self._moving_in() else 0
             for overlay, mob in zip(self.overlay_layer.overlays, self.overlay_layer.mobjects):
                 box = mobject_region(mob) if overlay.reserves and mob is not None else None
                 if box is not None:
@@ -319,17 +331,25 @@ class NarratedScene(MovingCameraScene):
     def _build_overlays(self) -> tuple[list[Overlay], list[Overlay]]:
         """The overlays of the project drawn on this scene (none without an ``overlays:``) and,
         when a crossfade overlaps its end with the next scene, the next scene's (drawn from that
-        scene's start on, so both scenes show the same overlays while they blend)."""
+        scene's start on, so both scenes show the same overlays while they blend). A push or
+        wipe overlapping its end gets none there: the next scene's render draws them once over
+        the moving pictures (DESIGN.md §50)."""
         cfg = self.project.config
         if not cfg.overlays and not any(isinstance(s.overlays, dict) for s in cfg.scenes):
             return [], []
         plan = self._video_plan or VideoPlan(self.project, int(config.frame_rate))
         own = scene_overlays(self.project, self.spec, self.theme, plan)
         following: list[Overlay] = []
-        if self.transition_out is not None and self.transition_out.overlap:
+        out = self.transition_out
+        if out is not None and out.overlap and out.type not in DIRECTED_TRANSITIONS:
             after = cfg.scenes[plan.index(self.spec.id) + 1]
             following = scene_overlays(self.project, after, self.theme, plan)
         return own, following
+
+    def _moving_in(self) -> bool:
+        """Whether a push or wipe leads into this scene (its first frames move)."""
+        t = self.transition_in
+        return t is not None and t.type in DIRECTED_TRANSITIONS and t.overlap > 0
 
     def _attach_color_fade(self) -> None:
         """Fade the first / last frames from / to a colour for ``fade_color`` transitions (§49)."""
@@ -542,13 +562,14 @@ class NarratedScene(MovingCameraScene):
     def finish(self) -> None:
         """Fade out everything over :attr:`outro` seconds (no-op when ``outro`` is 0). When a
         transition other than a cut leads to the next scene (DESIGN.md §49), the picture is held
-        for those frames instead: the transition takes it away."""
+        for those frames instead: the transition takes it away. Targets the next scene carries
+        (:attr:`carry_out`, DESIGN.md §50) stay on screen."""
         if self.outro <= 0:
             return
         if self.transition_out is not None and not self.transition_out.cut:
             self.wait_seconds(math.ceil(self.outro * config.frame_rate - 1e-9) / config.frame_rate)
             return
-        self.clear_all(run_time=self.outro)
+        self.clear_all(run_time=self.outro, keep=self._carried_parts())
 
     def play_steps(
         self,
@@ -602,6 +623,8 @@ class NarratedScene(MovingCameraScene):
     def play(self, *args: Any, **kwargs: Any) -> None:
         """Manim's ``play``, also recorded in :attr:`play_log` (scene times, beat, names)."""
         start = float(self.renderer.time)
+        if self._carried:
+            args = (*args, *self._carried_leftovers(args))
         super().play(*args, **kwargs)
         frame = getattr(self.camera, "frame", None)
         if frame is not None and frame in self.mobjects and not frame.updaters:  # added by a camera move; never drawn
@@ -670,6 +693,7 @@ class NarratedScene(MovingCameraScene):
             self.hold()
         if self.transition_out is not None and self.transition_out.hold:
             self.wait_seconds(self.transition_out.hold / config.frame_rate)
+        self._record_carry()
         narrated = {entry.beat_id for entry in self.beat_log}
         missing = [b.id for b in self.beats if b.id not in narrated]
         if missing:
@@ -871,12 +895,17 @@ class NarratedScene(MovingCameraScene):
 
     def entrance(self, target: Target | str) -> list[Animation]:
         """The animations that bring the target on screen, or ``[]`` when it already is (so a
-        target an action revealed early is not revealed twice by the scene's own steps)."""
+        target an action revealed early is not revealed twice by the scene's own steps). A copy
+        carried from the scene before into this target (``carry:``) moves into it instead."""
         found = self.find_targets(target) if isinstance(target, str) else [target]
         anims: list[Animation] = []
         for t in found:
             if not self.is_shown(t):
-                anims += list(t.entrance()) if t.entrance is not None else [FadeIn(t.mobject)]
+                moved = self._claim_carried(t) if self._carried else None  # a carried copy moves in (§50)
+                if moved is not None:
+                    anims.append(moved)
+                else:
+                    anims += list(t.entrance()) if t.entrance is not None else [FadeIn(t.mobject)]
         return anims
 
     def _apply_now(self, animations: Sequence[Animation]) -> None:
@@ -905,8 +934,94 @@ class NarratedScene(MovingCameraScene):
         for :meth:`text`."""
         return helpers.styled(MarkupText, self.theme, s, size, color, weight, role=role, **kwargs)
 
-    def clear_all(self, run_time: float = 0.6) -> None:
+    def clear_all(self, run_time: float = 0.6, keep: Sequence[Mobject] = ()) -> None:
         """Fade out every mobject on screen (vector mobjects without copying them: see
-        :class:`vidgen.helpers.Fade`)."""
-        if self.mobjects:
-            self.play(*[helpers.fade_out(m) for m in self.mobjects], run_time=run_time)
+        :class:`vidgen.helpers.Fade`), except ``keep`` (and what they contain): of a group
+        holding one of them, only the other parts fade."""
+        kept = {id(m) for part in keep for m in part.get_family()}
+
+        def fading(m: Mobject) -> list[Mobject]:
+            if id(m) in kept:
+                return []
+            if not kept.intersection(id(x) for x in m.get_family()):
+                return [m]
+            return [p for sub in m.submobjects for p in fading(sub)]
+
+        parts = [p for m in self.mobjects for p in fading(m)]
+        if parts:
+            self.play(*[helpers.fade_out(m) for m in parts], run_time=run_time)
+
+    # ----- continuity: carried objects (DESIGN.md §50) ----------------------------------------
+
+    def _carried_parts(self) -> list[Mobject]:
+        """The on-screen parts of the targets the next scene carries out of this one."""
+        return [part for name in self.carry_out for t in self.find_targets(name) for part in self.on_screen_parts(t)]
+
+    def _record_carry(self) -> None:
+        """Record the look of the targets the next scene carries (:attr:`carry_state`)."""
+        if not self.carry_out:
+            return
+        state: dict[str, list[dict[str, Any]]] = {}
+        for name in self.carry_out:
+            found = self.find_targets(name)
+            parts = [part for t in found for part in self.on_screen_parts(t)]
+            shapes, skipped = carry.parts_state(parts)
+            if not found:
+                log.warning("scene '%s' has no target '%s' for the next scene to carry", self.spec.id, name)
+            elif not shapes:
+                log.warning("scene '%s': target '%s' is not on screen at the end; the next scene carries nothing of it", self.spec.id, name)
+            elif skipped:
+                log.warning("scene '%s': %d picture part(s) of '%s' cannot be carried (only vector shapes)", self.spec.id, skipped, name)
+            state[name] = shapes
+        self.carry_state = state
+
+    def setup(self) -> None:
+        """Manim's setup, then the objects carried from the scene before (:attr:`carried_in`),
+        drawn where they ended there from the first frame on (DESIGN.md §50)."""
+        super().setup()
+        if not self.carried_in or not self.spec.carry:
+            return
+        for entry in self.spec.carry:
+            shapes = self.carried_in.get(entry.source) or []
+            if not shapes:
+                log.warning("scene '%s': nothing of '%s' to carry from the scene before", self.spec.id, entry.source)
+                continue
+            copy = carry.rebuild(shapes)
+            self.add(copy)
+            self._carried[entry.dest] = copy
+
+    def carry_in(self, name: str) -> Mobject | None:
+        """The copy of an object carried from the scene before (``carry:``, by its destination
+        name, else its source name), on screen since the scene's first frame, or ``None``. The
+        scene then owns it: move or transform it, or fade it out; it is no longer moved into a
+        target automatically."""
+        if name not in self._carried:
+            for entry in self.spec.carry:
+                if entry.source == name and entry.dest in self._carried:
+                    name = entry.dest
+                    break
+        return self._carried.pop(name, None)
+
+    def _claim_carried(self, target: Target) -> Animation | None:
+        """The move of a carried copy into ``target`` when one waits for it."""
+        for dest in list(self._carried):
+            if target in self.find_targets(dest):
+                return carry.carry_move(self._carried.pop(dest), target.mobject)
+        return None
+
+    def _carried_leftovers(self, animations: Sequence[Any]) -> list[Animation]:
+        """Fade-outs, played with ``animations``, of carried copies whose destination is not in
+        the scene, or is brought on screen by ``animations`` some other way than its entrance
+        (the copy then cross-fades with it)."""
+        if not self._carried or all(isinstance(a, Wait) for a in animations):
+            return []
+        families = {id(m) for a in animations if getattr(a, "mobject", None) is not None for m in a.mobject.get_family()}
+        out: list[Animation] = []
+        for dest in list(self._carried):
+            found = self.find_targets(dest)
+            if not found:
+                log.warning("scene '%s' has no target '%s' to move the carried object into; it fades out", self.spec.id, dest)
+            elif not any(id(t.mobject) in families for t in found):
+                continue
+            out.append(helpers.fade_out(self._carried.pop(dest)))
+        return out

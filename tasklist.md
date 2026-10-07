@@ -204,8 +204,8 @@ Rules that apply to every step:
 - [x] Scene-level `transition:` applied at the join stage; SRT/timing contract stays correct (`cut | crossfade | fade_color | {type, duration, color}` per scene (the way in) + a video default; a crossfade overlaps the scenes (video shorter), a fade_color dips through a theme colour without overlap; transitions cover only the scene before's silent tail, else it is held longer (validate warns); the plan is the one source of start times (SRT, captions, chapters, overlays, SFX, music, storyboard follow); `xfade` at the join + overlapped voice track; the incoming scene's overlays on both sides of a crossfade (no doubling); colour fades in-render under the overlays; `examples/gallery` crossfades, fade_color into chapter cards)
 
 ### Step 47 — Transitions: push, wipe, continuity
-- [ ] `push` and `wipe`
-- [ ] Continuity helper: a scene can start with named objects of the previous scene in the same place (match-cut)
+- [x] `push` and `wipe` (`{type: push|wipe, direction: left|right|up|down, soft}`, default left in 16:9 / up in 9:16; same overlap / silent-tail / hold contract as a crossfade; xfade `slide*` / `wipe*` / `smooth*` at the join; overlays kept out of the moving pictures: both scenes render the shared frames bare, the incoming scene's worker writes their overlays as an RGBA clip drawn once over the transition, so watermark / progress bar / captions stay put)
+- [x] Continuity helper: a scene can start with named objects of the previous scene in the same place (match-cut) (scene `carry: [icon, "title -> heading"]`: the scene before keeps those targets through its fade-out and records their shapes in `carry/<id>.json`; the next scene shows them from frame 0 and moves them into its own target through `entrance()` (glyph by glyph, or a stretched cross-fade); `carry_in()` / `carry_move` for custom scenes; validated names; render order with `--jobs` / `--scene` handled by the pipeline; `examples/gallery` uses a push, a soft wipe and two carries)
 
 ### Step 48 — Review 3
 - [ ] Review Steps 38–47 end to end on all examples; fix, document, harden

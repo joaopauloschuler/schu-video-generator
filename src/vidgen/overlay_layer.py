@@ -13,6 +13,11 @@ states. Each overlay is drawn once per state (twice, over black and over white, 
 exact colours and alpha for both Cairo's vector drawing and Manim's image drawing) by a camera
 cropped to its pixel box (a thin progress bar costs a thin strip, not a whole frame), and cached
 as a premultiplied RGBA patch; compositing a frame blends the shown overlays' patches in order.
+
+A push or wipe into the scene (DESIGN.md §50) moves the pictures, so overlays must not be in
+them: :meth:`OverlayLayer.split_head` leaves the scene's first frames bare and writes the
+overlays of those frames into a separate RGBA clip, which the join draws over the moving
+pictures.
 """
 
 from __future__ import annotations
@@ -20,8 +25,10 @@ from __future__ import annotations
 import math
 from collections.abc import Hashable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import av
 import numpy as np
 
 from vidgen.overlays import Overlay
@@ -47,6 +54,40 @@ class _Patch:
     keep: np.ndarray | None = None
 
 
+class RgbaClip:
+    """A video of RGBA frames with straight alpha (QuickTime, PNG codec: lossless, small when
+    mostly transparent), for ffmpeg's ``overlay`` filter.
+
+    :meth:`close` appends one fully transparent frame: ``overlay`` stops drawing a clip at its
+    last frame's time, so without it the last real frame would never be shown.
+    """
+
+    def __init__(self, path: Path, width: int, height: int, fps: int) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self.path = path
+        self.width, self.height = width, height
+        self.frames = 0
+        self._box = av.open(str(path), "w", format="mov")
+        self._stream = self._box.add_stream("png", rate=fps)
+        self._stream.width, self._stream.height, self._stream.pix_fmt = width, height, "rgba"
+
+    def write(self, rgba: np.ndarray, count: int = 1) -> None:
+        """Append ``rgba`` (H x W x 4, uint8, straight alpha) ``count`` times."""
+        for _ in range(count):
+            for packet in self._stream.encode(av.VideoFrame.from_ndarray(np.ascontiguousarray(rgba), format="rgba")):
+                self._box.mux(packet)
+        self.frames += count
+
+    def close(self) -> None:
+        """Write the transparent end frame and finish the file."""
+        blank = np.zeros((self.height, self.width, 4), dtype=np.uint8)
+        for packet in self._stream.encode(av.VideoFrame.from_ndarray(blank, format="rgba")):
+            self._box.mux(packet)
+        for packet in self._stream.encode():
+            self._box.mux(packet)
+        self._box.close()
+
+
 class OverlayLayer:
     """The overlays of one scene render, composited into every frame its renderer writes.
 
@@ -54,6 +95,8 @@ class OverlayLayer:
     scene's end with the next scene's start (DESIGN.md §49), the next scene's overlays, drawn
     instead of the scene's own from ``cut`` (the next scene's start) on. Both scenes then show the
     same overlays in every frame they share, so blending them leaves the overlays unchanged.
+    Without ``following`` (a push or wipe out of the scene, DESIGN.md §50) nothing is drawn from
+    ``cut`` on: the next scene's render provides those frames' overlays (:meth:`split_head`).
     ``overlays`` / ``mobjects`` are the scene's own (what it reserves room for and avoids).
     """
 
@@ -79,6 +122,11 @@ class OverlayLayer:
         self._intervals = [o.interval() for o in self._all]
         self._cache: dict[tuple[int, Hashable], _Patch] = {}
         self._camera: Camera | None = None
+        #: Frames at the scene's start written without overlays, their overlays going to
+        #: ``head_path`` instead (:meth:`split_head`).
+        self.head = 0
+        self.head_path: Path | None = None
+        self._clip: RgbaClip | None = None
 
     @property
     def _all(self) -> list[Overlay]:
@@ -217,6 +265,56 @@ class OverlayLayer:
             out[y0:y1, x0:x1, :3] = (patch.color + (under * patch.keep + 127) // 255).clip(0, 255).astype(np.uint8)
         return out
 
+    def rgba(self, states: tuple[Hashable | None, ...], height: int, width: int) -> np.ndarray:
+        """The overlays drawn in ``states`` alone, as an ``height`` x ``width`` RGBA image with
+        straight alpha (transparent where none is drawn): composited over any picture it gives
+        what :meth:`composite` gives over that picture (up to rounding)."""
+        color = np.zeros((height, width, 3), dtype=np.float32)  # premultiplied
+        keep = np.full((height, width, 1), 255.0, dtype=np.float32)  # 255 - alpha
+        for k, state in enumerate(states):
+            if state is None or self._all_mobjects[k] is None:
+                continue
+            patch = self._patch(k, state)
+            if patch.box is None:
+                continue
+            y0, y1, x0, x1 = patch.box
+            assert patch.color is not None and patch.keep is not None
+            factor = patch.keep.astype(np.float32) / 255.0
+            color[y0:y1, x0:x1] = patch.color + color[y0:y1, x0:x1] * factor
+            keep[y0:y1, x0:x1] = keep[y0:y1, x0:x1] * factor
+        alpha = 255.0 - keep
+        out = np.zeros((height, width, 4), dtype=np.uint8)
+        shown = alpha[:, :, 0] > 0
+        out[shown, :3] = np.clip(np.rint(color[shown] * 255.0 / alpha[shown]), 0, 255).astype(np.uint8)
+        out[:, :, 3] = np.clip(np.rint(alpha[:, :, 0]), 0, 255).astype(np.uint8)
+        return out
+
+    # ----- a push / wipe into the scene (DESIGN.md §50) ----------------------------------------
+
+    def split_head(self, frames: int, path: Path) -> None:
+        """Write the scene's first ``frames`` frames without overlays and those frames' overlays
+        to the RGBA clip ``path`` (one frame each, plus a transparent end frame)."""
+        self.head = max(0, frames)
+        self.head_path = path
+
+    def _write_head(self, first: int, count: int, height: int, width: int) -> None:
+        if self.head_path is None:
+            return
+        if self._clip is None:
+            self._clip = RgbaClip(self.head_path, width, height, self.fps)
+        run_start, run_states = first, self.states(first)
+        for k in range(first + 1, first + count + 1):
+            states = self.states(k) if k < first + count else None
+            if states != run_states:
+                self._clip.write(self.rgba(run_states, height, width), k - run_start)
+                run_start, run_states = k, states  # type: ignore[assignment]
+
+    def close_head(self) -> None:
+        """Finish the head clip (when the scene ended before the head did; idempotent)."""
+        if self._clip is not None:
+            self._clip.close()
+            self._clip = None
+
     # ----- renderer hook -----------------------------------------------------------------------
 
     def attach(self) -> None:
@@ -229,6 +327,16 @@ class OverlayLayer:
             if getattr(renderer, "skip_animations", False) or num_frames <= 0:
                 original(frame, num_frames)
                 return
+            if self.written < self.head and self.head_path is not None:  # bare, overlays to the clip
+                bare = min(num_frames, self.head - self.written)
+                self._write_head(self.written, bare, frame.shape[0], frame.shape[1])
+                original(frame, bare)
+                self.written += bare
+                num_frames -= bare
+                if self.written >= self.head:
+                    self.close_head()
+                if num_frames <= 0:
+                    return
             start = self.written
             run_start, run_states = 0, self.states(start)
             for k in range(1, num_frames + 1):

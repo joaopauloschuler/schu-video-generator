@@ -22,13 +22,13 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from vidgen import __version__, hooks, mix, sfx, transitions
+from vidgen import __version__, carry, hooks, mix, sfx, transitions
 from vidgen.errors import VidgenError
 from vidgen.project import Project
 from vidgen.render import ffmpeg as ff
@@ -38,6 +38,7 @@ from vidgen.render.worker import (
     scene_audio_path,
     scene_frames_dir,
     scene_layout_path,
+    scene_overlay_path,
     scene_timings_path,
     scene_video_path,
     write_json,
@@ -108,6 +109,9 @@ def _check_scenes(project: Project) -> None:
             raise VidgenError(f"scene '{spec.id}' (type {spec.type}): {problem}")
         plan_actions(spec.type, cls, spec, params, runtime.current_theme())
     check_overlays(project, runtime.current_theme())
+    carried = carry.carry_problems(project.config)
+    if carried:
+        raise VidgenError("\n".join(["invalid carry", *(f"  {p.location}: {p.message}" for p in carried)]))
     problems = sfx.config_problems(project.config, project.root)
     if problems:
         raise VidgenError("\n".join(["invalid sound effects", *(f"  {loc}: {message}" for loc, message in problems)]))
@@ -218,35 +222,84 @@ def _failure_message(run: _WorkerRun, live: bool) -> str:
     return f"{head}:\n{_tail(run.output) or '(no output)'}"
 
 
-def _runs(task: Callable[[int, str], _WorkerRun], scene_ids: list[str], jobs: int) -> Iterator[_WorkerRun]:
+def _runs(
+    task: Callable[[int, str], _WorkerRun], scene_ids: list[str], jobs: int, after: Mapping[str, str] | None = None
+) -> Iterator[_WorkerRun]:
     """Run ``task(index, scene_id)`` for every scene and yield results as they complete.
 
     ``jobs == 1`` runs them one after the other in this thread. Otherwise a thread pool runs
     ``jobs`` workers at once; if the consumer stops early, queued scenes are cancelled and the
-    running ones are waited for.
+    running ones are waited for. ``after``: ``{scene: scene it must start after}`` (a carry,
+    DESIGN.md §50); the earlier scene must come first in ``scene_ids``, so it has started (the
+    pool starts tasks in order) before the later one waits for it.
     """
     if jobs == 1:
         for i, sid in enumerate(scene_ids, start=1):
             yield task(i, sid)
         return
+    done = {sid: threading.Event() for sid in scene_ids}
+    waits = {sid: done[before] for sid, before in (after or {}).items() if sid in done and before in done}
+
+    def ordered(i: int, sid: str) -> _WorkerRun:
+        try:
+            if sid in waits:
+                waits[sid].wait()
+            return task(i, sid)
+        finally:
+            done[sid].set()
+
     pool = ThreadPoolExecutor(max_workers=jobs)
     try:
-        futures = [pool.submit(task, i, sid) for i, sid in enumerate(scene_ids, start=1)]
+        futures = [pool.submit(ordered, i, sid) for i, sid in enumerate(scene_ids, start=1)]
         for future in as_completed(futures):
             yield future.result()
     finally:
         pool.shutdown(wait=True, cancel_futures=True)
 
 
+def _carry_from_current(project: Project, preview: bool, scene_id: str, before: str) -> bool:
+    """Whether ``scene_id``'s render carried objects from the render ``before`` has now (same
+    fingerprint)."""
+    from vidgen.render.fingerprint import scene_fingerprint
+
+    try:
+        meta = json.loads(scene_timings_path(project, preview, scene_id).read_text(encoding="utf-8")).get("render", {})
+    except (OSError, ValueError):
+        return False
+    return meta.get("carry_from") == scene_fingerprint(project, before)
+
+
+def with_carried(project: Project, preview: bool, scene_ids: list[str]) -> list[str]:
+    """``scene_ids`` (in config order) plus what continuity needs rendered with them (DESIGN.md
+    §50): the scene before a scene that carries objects, when its record of them is missing or
+    was made from other inputs; and a scene carrying objects from a scene in the list, when its
+    render did not start from that scene's current end."""
+    deps = carry.carried_from(project.config)
+    ids = set(scene_ids)
+    changed = bool(deps)
+    while changed:
+        changed = False
+        for after, before in deps.items():
+            if after in ids and before not in ids and not carry.record_current(project, preview, before):
+                ids.add(before)
+                changed = True
+            if before in ids and after not in ids and not _carry_from_current(project, preview, after, before):
+                ids.add(after)
+                changed = True
+    return [s.id for s in project.config.scenes if s.id in ids]
+
+
 def _render_scenes(
     project: Project, preview: bool, scene_ids: list[str], no_audio: bool, keep_going: bool, jobs: int, frames: int = 0
 ) -> SceneRuns:
-    """Render ``scene_ids`` with up to ``jobs`` workers.
+    """Render ``scene_ids`` with up to ``jobs`` workers (and what their carries need,
+    :func:`with_carried`; a scene that carries objects starts after the scene before it).
 
     Without ``keep_going`` the first failure raises (with ``jobs > 1``, scenes already running
     finish first). ``post_scene`` is dispatched here, in the parent, after each success.
     """
     live = jobs == 1 and sys.stderr.isatty()
+    scene_ids = with_carried(project, preview, scene_ids)
     total = len(scene_ids)
     order = {sid: i for i, sid in enumerate(scene_ids)}
     runs = SceneRuns()
@@ -260,7 +313,7 @@ def _render_scenes(
         say(f"[{index}/{total}] {scene_id}: rendering")
         return _run_worker(project, preview, scene_id, no_audio, live, frames)
 
-    for run in _runs(task, scene_ids, jobs):
+    for run in _runs(task, scene_ids, jobs, carry.carried_from(project.config)):
         if run.returncode != 0:
             runs.failed.append(_failure_details(run))
             message = _failure_message(run, live)
@@ -356,6 +409,10 @@ def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) ->
     sample_overlaps: list[int] = []
     offset = 0.0
     end_sample = 0
+    portrait = fmt.height > fmt.width
+    kinds: list[str] = []  # xfade transition into each scene
+    clips: list[tuple[Path, int]] = []  # overlays of frames a push / wipe moves, at output frames
+    start_frame = 0
     for i, (spec, (video, timings, duration)) in enumerate(zip(project.config.scenes, renders)):
         offset -= overlaps[i] / fmt.fps
         sample_overlaps.append(end_sample - round(offset * ff.AUDIO_RATE) if i else 0)
@@ -383,6 +440,14 @@ def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) ->
         transition = transitions.effective(project.config, i)
         if transition.type != "cut":
             entry["transition"] = {"type": transition.type, "duration": transition.seconds, "overlap": round(overlaps[i] / fmt.fps, 6)}
+            way = transitions.direction(transition, portrait)
+            if way is not None:
+                entry["transition"]["direction"] = way
+        kinds.append(transitions.xfade_name(transition, portrait))
+        clip = scene_overlay_path(project, preview, spec.id)
+        if transitions.moves_pictures(transition) and clip.is_file():  # its moving frames' overlays (§50)
+            clips.append((clip, start_frame))
+        start_frame += round(duration * fmt.fps) - (overlaps[i + 1] if i + 1 < len(overlaps) else 0)
         scenes.append(entry)
         videos.append(video)
         audios.append(audio)
@@ -425,6 +490,8 @@ def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) ->
         crossfades=overlaps[1:] if any(overlaps) else None,
         frames=[round(d * fmt.fps) for _, _, d in renders],
         fps=fmt.fps,
+        kinds=kinds[1:],
+        overlays=clips or None,
     )
     return output, combined
 
@@ -443,9 +510,9 @@ def _scene_renders(project: Project, preview: bool) -> list[tuple[Path, dict[str
 
 
 def _overlaps(project: Project, fps: int, renders: list[tuple[Path, dict[str, Any], float]]) -> list[int]:
-    """Frames each scene overlaps the one before (crossfades, DESIGN.md §49), from the renders;
-    warns where a crossfade had to be shortened (a reused render ends with less silence than
-    the plan gave it)."""
+    """Frames each scene overlaps the one before (crossfades, pushes, wipes; DESIGN.md §49), from
+    the renders; warns where one had to be shortened (a reused render ends with less silence
+    than the plan gave it)."""
     config = project.config
     if not transitions.has_transitions(config):
         return [0] * len(renders)
@@ -454,12 +521,12 @@ def _overlaps(project: Project, fps: int, renders: list[tuple[Path, dict[str, An
     overlaps = transitions.join_overlaps(config, fps, frames, speech)
     for i, spec in enumerate(config.scenes):
         t = transitions.effective(config, i)
-        wanted = min(transitions.requested_frames(t, fps), frames[i]) if t.type == "crossfade" else 0
+        wanted = min(transitions.requested_frames(t, fps), frames[i]) if t.overlaps else 0
         if overlaps[i] < wanted:
             log.warning(
-                "the crossfade into '%s' is %.2f s instead of %.2f s: '%s' ends with only that much silence "
+                "the %s into '%s' is %.2f s instead of %.2f s: '%s' ends with only that much silence "
                 "(render it again so it is held for the transition; DESIGN.md §49)",
-                spec.id, overlaps[i] / fps, wanted / fps, config.scenes[i - 1].id,
+                t.type, spec.id, overlaps[i] / fps, wanted / fps, config.scenes[i - 1].id,
             )
     return overlaps
 

@@ -127,18 +127,35 @@ def write_concat_list(files: list[Path], list_file: Path) -> None:
     list_file.write_text("".join(lines), encoding="utf-8")
 
 
-def crossfade_graph(runs: list[int], crossfades: list[int], fps: int) -> tuple[list[str], str]:
+def crossfade_graph(runs: list[int], crossfades: list[int], fps: int, kinds: list[str] | None = None) -> tuple[list[str], str]:
     """The filter graph blending video inputs ``0 .. len(runs) - 1`` (``runs[k]`` frames each)
-    with a crossfade of ``crossfades[k - 1]`` frames between input ``k - 1`` and ``k``: its
-    filters and the output label. Each transition starts half a frame before its first shared
-    frame, so the blend weights are ``(j + 0.5) / n`` (symmetric; the middle frame of an odd
-    transition is 50/50) and the output has exactly ``sum(runs) - sum(crossfades)`` frames."""
+    with a transition of ``crossfades[k - 1]`` frames between input ``k - 1`` and ``k``: its
+    filters and the output label. ``kinds[k - 1]`` is the ``xfade`` transition (default ``fade``;
+    ``slideleft``, ``wipeup``... for a push or wipe, DESIGN.md §50). Each transition starts half
+    a frame before its first shared frame, so the progress at shared frame ``j`` is ``(j + 0.5) /
+    n`` (symmetric; the middle frame of an odd crossfade is 50/50) and the output has exactly
+    ``sum(runs) - sum(crossfades)`` frames."""
     graph = [f"[{k}:v]settb=AVTB,setpts=PTS-STARTPTS[r{k}]" for k in range(len(runs))]
     label, length = "r0", runs[0]
     for k in range(1, len(runs)):
         n = crossfades[k - 1]
-        graph.append(f"[{label}][r{k}]xfade=transition=fade:duration={n / fps:.6f}:offset={(length - n - 0.5) / fps:.6f}[x{k}]")
+        kind = kinds[k - 1] if kinds else "fade"
+        graph.append(f"[{label}][r{k}]xfade=transition={kind}:duration={n / fps:.6f}:offset={(length - n - 0.5) / fps:.6f}[x{k}]")
         label, length = f"x{k}", length + runs[k] - n
+    return graph, label
+
+
+def overlay_graph(label: str, clips: list[tuple[int, int]], fps: int) -> tuple[list[str], str]:
+    """Filters drawing RGBA clips over the video labelled ``label``: ``clips`` are ``(input
+    index, first output frame)``; each clip's frame ``j`` lands exactly on output frame
+    ``start + j`` (shifted half a frame early, so rounding cannot move it), and the video passes
+    unchanged outside the clips (the clips end with a transparent frame,
+    :class:`vidgen.overlay_layer.RgbaClip`)."""
+    graph = []
+    for k, (index, start) in enumerate(clips):
+        graph.append(f"[{index}:v]settb=AVTB,setpts=PTS-STARTPTS+{(start - 0.5) / fps:.6f}/TB[c{k}]")
+        graph.append(f"[{label}][c{k}]overlay=eof_action=pass:format=yuv444[o{k}]")
+        label = f"o{k}"
     return graph, label
 
 
@@ -153,6 +170,8 @@ def join(
     crossfades: list[int] | None = None,
     frames: list[int] | None = None,
     fps: int | None = None,
+    kinds: list[str] | None = None,
+    overlays: list[tuple[Path, int]] | None = None,
 ) -> None:
     """Concatenate ``videos`` (stream copy, video only) and ``audios`` (PCM, encoded once to AAC)
     into ``dst`` with the concat demuxer.
@@ -166,7 +185,9 @@ def join(
     the frames they overlap (0: a cut), with ``frames`` (each video's frame count) and ``fps``.
     With any crossfade, the scenes joined by cuts are concatenated into runs and the runs blended
     with ffmpeg's ``xfade``, so the video is encoded once (H.264, CRF :data:`VIDEO_CRF`) instead
-    of stream-copied.
+    of stream-copied. ``kinds``: the ``xfade`` transition per boundary (default ``fade``; a push
+    / wipe slides or wipes, DESIGN.md §50). ``overlays``: RGBA clips ``(path, first output
+    frame)`` drawn over the joined pictures (the overlays of frames a push / wipe moves).
 
     ``dst`` is written via a temporary file next to it and replaced at the end, so a failed join
     never leaves a truncated output. If ``dst`` cannot be replaced (on Windows: it is open in a
@@ -176,7 +197,8 @@ def join(
     write_concat_list(audios, audio_list)
     tmp = dst.with_name(f"{dst.stem}.partial{dst.suffix}")
     graph: list[str] = []
-    if crossfades and any(crossfades):
+    if (crossfades and any(crossfades)) or overlays:
+        crossfades = crossfades or [0] * (len(videos) - 1)
         if frames is None or fps is None or len(frames) != len(videos) or len(crossfades) != len(videos) - 1:
             raise VidgenError("joining with crossfades needs every video's frame count and the frame rate")
         groups: list[list[int]] = [[0]]
@@ -191,11 +213,18 @@ def join(
             write_concat_list([videos[i] for i in group], run_list)
             inputs += ["-f", "concat", "-safe", "0", "-i", str(run_list)]
         blends, label = crossfade_graph(
-            [sum(frames[i] for i in group) for group in groups], [crossfades[g[0] - 1] for g in groups[1:]], fps
+            [sum(frames[i] for i in group) for group in groups],
+            [crossfades[g[0] - 1] for g in groups[1:]],
+            fps,
+            [kinds[g[0] - 1] for g in groups[1:]] if kinds else None,
         )
         graph += blends
+        for clip, _ in overlays or []:
+            inputs += ["-i", str(clip)]
+        drawn, label = overlay_graph(label, [(len(groups) + k, start) for k, (_, start) in enumerate(overlays or [])], fps)
+        graph += drawn
         video_map, video_codec = f"[{label}]", ["-c:v", "libx264", "-crf", VIDEO_CRF, "-pix_fmt", "yuv420p"]
-        first_audio = len(groups)
+        first_audio = len(groups) + len(overlays or [])
     else:
         video_list = work_dir / "video_concat.txt"
         write_concat_list(videos, video_list)

@@ -56,6 +56,20 @@ def scene_audio_path(project: Project, preview: bool, scene_id: str) -> Path:
     return project.render_dir(preview) / "scenes" / f"{scene_id}.wav"
 
 
+def scene_overlay_path(project: Project, preview: bool, scene_id: str) -> Path:
+    """``<render_dir>/scenes/<scene_id>.overlay.mov``: the overlays of the scene's first frames
+    as an RGBA clip, when a push or wipe moves those frames (DESIGN.md §50)."""
+    return project.render_dir(preview) / "scenes" / f"{scene_id}.overlay.mov"
+
+
+def scene_carry_path(project: Project, preview: bool, scene_id: str) -> Path:
+    """``<render_dir>/carry/<scene_id>.json``: the objects the next scene carries out of this
+    one, as they ended (DESIGN.md §50)."""
+    from vidgen.carry import carry_path
+
+    return carry_path(project.render_dir(preview), scene_id)
+
+
 def scene_frames_dir(project: Project, preview: bool, scene_id: str) -> Path:
     """``<render_dir>/frames/<scene_id>/``: the scene's stills and their ``index.json``."""
     return project.render_dir(preview) / "frames" / scene_id
@@ -155,6 +169,26 @@ def write_json(path: Path, data: Any) -> None:
     write_text_atomic(path, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
 
 
+def _carried_in(project: Project, preview: bool, scene_id: str) -> tuple[dict[str, Any] | None, str | None]:
+    """The objects ``scene_id`` carries from the scene before (its ``carry:``, DESIGN.md §50)
+    as that scene's render recorded them, and the fingerprint of that render; ``(None, None)``
+    when it carries nothing. A missing record is a :class:`VidgenError` (``vidgen render``
+    renders the scene before first; a worker run alone cannot)."""
+    from vidgen.carry import carried_from, read_record
+
+    before = carried_from(project.config).get(scene_id)
+    if before is None:
+        return None, None
+    path = scene_carry_path(project, preview, before)
+    record = read_record(path)
+    if record is None:
+        raise VidgenError(
+            f"scene '{scene_id}' carries objects from '{before}', which has no record of them ({path}); "
+            f"render '{before}' first (vidgen render and storyboard do it when needed)"
+        )
+    return record.get("objects", {}), record.get("fingerprint")
+
+
 def render_scene(
     project_path: str | Path,
     scene_id: str,
@@ -170,7 +204,7 @@ def render_scene(
     their layout in :func:`scene_layout_path` and the activity in :func:`scene_activity_path`.
     Call it only in a fresh process: this is the body of the worker.
     """
-    from vidgen import extensions, registry
+    from vidgen import carry, extensions, registry
     from vidgen.activity import MotionTrack, activity_document
     from vidgen.capture import FrameCapture, StillWriter
     from vidgen.fonts import register_bundled_fonts
@@ -188,8 +222,9 @@ def render_scene(
     fingerprint = scene_fingerprint(project, scene_id)  # the inputs as they are when rendering starts
     render_dir = project.render_dir(preview)
     # A failed render must not leave the previous render behind to be reused by `--scene`.
-    for stale in (scene_video_path, scene_audio_path, scene_timings_path):
+    for stale in (scene_video_path, scene_audio_path, scene_timings_path, scene_overlay_path, scene_carry_path):
         remove_file(stale(project, preview, scene_id))
+    carried_in, carried_from = _carried_in(project, preview, scene_id)
     frames_dir = scene_frames_dir(project, preview, scene_id)
     remove_tree(frames_dir)  # stills (and their layout) always belong to the scene's current render
     layout_path = scene_layout_path(project, preview, scene_id)
@@ -205,7 +240,15 @@ def render_scene(
     try:
         configure_manim(project, preview, theme.background, media_dir, scene_id, progress)
         scene = cls(spec, project, theme, audio=audio, capture=capture)
-        scene.render()
+        scene.carried_in = carried_in
+        layer = scene.overlay_layer
+        if layer is not None and scene.overlay_head:  # a push / wipe moves the first frames (§50)
+            layer.split_head(scene.overlay_head, scene_overlay_path(project, preview, scene_id))
+        try:
+            scene.render()
+        finally:
+            if layer is not None:
+                layer.close_head()
         movie = Path(scene.renderer.file_writer.movie_file_path)
         if not movie.is_file():
             raise VidgenError(f"scene '{scene_id}' produced no video (does construct() animate or wait?)")
@@ -229,7 +272,6 @@ def render_scene(
         "vidgen": __version__,
         "fingerprint": fingerprint,
     }
-    layer = scene.overlay_layer
     if layer is not None:  # what the overlays were drawn for (the pipeline checks the plan held)
         timed = any(o.timed for o in layer.overlays)
         slot = layer.overlays[0].context.scene if timed else None
@@ -239,6 +281,12 @@ def render_scene(
             "start": None if slot is None else round(slot.start, 6),
             "duration": None if slot is None else round(slot.duration, 6),
         }
+        if scene_overlay_path(project, preview, scene_id).is_file():
+            timings["render"]["overlays"]["head"] = layer.head
+    if carried_from is not None:
+        timings["render"]["carry_from"] = carried_from
+    if scene.carry_state is not None:
+        carry.write_record(scene_carry_path(project, preview, scene_id), scene_id, fingerprint, scene.carry_state)
     if writer is not None and recorder is not None:
         write_json(frames_dir / "index.json", writer.index(scene_id, frames, fmt.width, fmt.height, fmt.fps))
         write_json(layout_path, recorder.document(scene, frames))

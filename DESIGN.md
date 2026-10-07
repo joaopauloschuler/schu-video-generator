@@ -94,7 +94,8 @@ src/vidgen/
   music.py                # background music: generated beds, music files as looping sources (§48; no manim)
   mix.py                  # the final mix: music placement, ducking, normalisation, limiter (§48; no manim)
   loudness.py             # BS.1770-4 integrated loudness and true peak, block by block (§48; no manim)
-  transitions.py          # scene transitions: effective transition, frame math, colour fade, voice track (§49; no manim)
+  transitions.py          # scene transitions: effective transition, frame math, colour fade, voice track, xfade names (§49-50; no manim)
+  carry.py                # continuity: carried objects' record, rebuild and move, carry checks (§50; manim imported lazily)
   fileio.py               # atomic writes; replacing files that Windows programs keep open
   scenes/                 # built-in scene library (registered like extensions; actions.py:
                           # the built-in beat actions reveal/dim/highlight/zoom/transform, §26-27;
@@ -141,7 +142,9 @@ intermediate files), `padded/<id>.wav` (each scene's audio padded to its exact v
 `padded/video_concat.txt` / `audio_concat.txt`, and `timings.json` (the whole video). Step 44 /
 45 add `padded/sfx.wav` (the sound effects, §47) and `padded/mix.wav` (the final mix with
 music / normalisation, §48); Step 46 `padded/voice.wav` (the scenes' sound summed where
-crossfades overlap them) and `padded/video_concat_<k>.txt` (runs of cut-joined scenes, §49).
+crossfades overlap them) and `padded/video_concat_<k>.txt` (runs of cut-joined scenes, §49);
+Step 47 `scenes/<id>.overlay.mov` (the overlays of the frames a push / wipe into the scene
+moves, RGBA) and `carry/<id>.json` (the objects the next scene carries out of it, §50).
 With `--frames` (Step 10, §13) also `frames/<id>/*.png` + `frames/<id>/index.json` and
 `frames/index.json`, and `layout/<id>.json` (Step 12, §15).
 
@@ -209,6 +212,7 @@ sfx: {auto: false, gain: 0}                      # Step 44 (§47): + scene `sfx:
 music: calm                                      # Step 45 (§48): bed / file / cue / cues; + scene `music:`
 audio: {normalize: auto, target_lufs: -16, true_peak: -1.5}   # Step 45 (§48): the final mix
 transition: crossfade                            # Step 46 (§49): default between scenes; + scene `transition:`
+                                                 # Step 47 (§50): push / wipe {direction, soft}; scene `carry:`
 
 extensions: [extensions]                         # dirs (relative to project) to auto-import; default shown
 
@@ -519,6 +523,9 @@ the method `cue(scene, time)`.
 Step 46 (§49) adds, compatibly, `NarratedScene.transition_in` / `transition_out` (planned
 `TransitionSlot`s or `None`) and `SceneSlot.overlap_in`, `overlap_out`, `cut` (fields with
 defaults / a property); `finish()` holds instead of fading when a transition follows.
+Step 47 (§50) adds `carry_move`; on `NarratedScene` `carry_in(name)`, `carry_out`, `carry_state`,
+`carried_in`, `overlay_head`, and compatibly `clear_all(run_time, keep=())`; `entrance()` moves
+a carried copy into its target; `finish()` keeps carried targets on screen.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -3207,7 +3214,7 @@ the measured loudness, §48).
   `transition` joins the overlay inputs (crossfades move later scenes).
 - **JSON**: combined `timings.json` scenes with a transition gain `transition: {type, duration,
   overlap}` (within version 1); activity `overlap_out`.
-- **For Step 47 (push, wipe, continuity)**: `type` grows (`push`, `wipe`) with a `direction`
+- **For Step 47 (push, wipe, continuity; done, see §50)**: `type` grows (`push`, `wipe`) with a `direction`
   option; `crossfade_graph` maps them to `xfade`'s `slideleft/right/up/down` and
   `wipeleft/...`. Unlike a fade, a slide or wipe is not linear in the two pictures per pixel, so
   overlays baked into both scenes would slide/wipe with them (a watermark moving). Suggested
@@ -3222,3 +3229,88 @@ the measured loudness, §48).
   scene shorter than the crossfade is shortened to that scene; no transition after the last scene
   (an `end_card` fades out by itself); transitions are not previewed in a single scene's render
   (`vidgen render --scene X` shows the scene's held tail, the blend happens at the join).
+
+## 50. Refinements (Step 47, push, wipe, continuity)
+
+- **Config.** `TransitionConfig.type` adds `push` and `wipe` (default 0.6 s), with `direction`
+  (`left | right | up | down`: where the pictures / the edge move; push / wipe only) and `soft`
+  (wipe only). `config.OVERLAPPING_TRANSITIONS = (crossfade, push, wipe)`,
+  `TransitionConfig.overlaps`; every place that tested `type == "crossfade"` (plan, join
+  overlaps, head frames, estimated duration, first-scene check, join warnings) now tests
+  `overlaps`. Default direction (`transitions.direction(t, portrait)`): `left` in a wide or square
+  frame, `up` in a tall one (the next scene comes in from the right / from below), resolved per
+  render format, so one video-level `push` suits the 16:9 video and its 9:16 variant.
+  `transitions.xfade_name`: `fade`, `slide<dir>`, `wipe<dir>`, soft → `smooth<dir>` (FFmpeg's
+  soft-edged wipes). Checked empirically: `slideleft` moves both pictures left with the next one
+  entering from the right, `wipeup` uncovers the next one from the bottom; with the half-frame
+  early offset the next scene covers `(j + 0.5) / n` of the picture at shared frame `j` (tested
+  with solid colours, all four directions).
+- **Timing**: exactly the crossfade contract (overlap of the silent tail, hold, the plan as the
+  one source of starts, voice track summed over the overlap).
+- **Overlays (decision: rendered once, outside both pictures, composited at the join).** A slide
+  or wipe is not per-pixel linear, so overlays baked into both renders would move (a sliding
+  watermark, two half captions). So: the outgoing scene draws **no** overlays from the planned
+  cut on (`OverlayLayer` without `following`: `_build_overlays` gives `following` only for a
+  crossfade, the own overlays stop at `cut` as before); the incoming scene's worker calls
+  `OverlayLayer.split_head(overlap, path)` (`NarratedScene.overlay_head` = the planned overlap
+  of an incoming push / wipe): its first `overlap` frames are written bare and the overlays of
+  those frames go, per frame and as a pure function of video time like everything else, into an
+  RGBA clip `scenes/<id>.overlay.mov` (`RgbaClip`: QuickTime + PNG, straight alpha;
+  `OverlayLayer.rgba(states, h, w)` blends the cached premultiplied patches over transparency, so
+  it is the same picture `composite` would draw, within 2 levels — tested). The join (`ffmpeg.join
+  (kinds=, overlays=[(clip, first output frame)])`, `overlay_graph`) draws each clip after the
+  `xfade` chain with `overlay=eof_action=pass:format=yuv444`, the clip shifted half a frame early
+  so frame `j` lands exactly on output frame `start + j`; `RgbaClip.close` appends a transparent
+  frame because `overlay` stops showing a clip at its last frame's timestamp (found by test: the
+  last frame was dropped). Which overlays: the incoming scene's, from the transition's start, as
+  for a crossfade (§49). The clip covers the incoming scene's first frames whatever overlap the
+  join ends up using, so a shortened overlap stays correct. Timings `render.overlays.head`
+  records the frames; a clip is used only when the transition into the scene is still a push /
+  wipe. Alternative rejected: compositing in Python at the join (decode + re-encode the overlaps
+  ourselves) — more code, and the join already re-encodes once.
+- **Continuity (`carry`).** `SceneConfig.carry: list[CarryEntry(source, dest)]` from `name` /
+  `"a -> b"` strings (`CarrySetting`: dumped back as the strings; target-name syntax
+  `config.TARGET_NAME_PATTERN`, now shared with `actions.TARGET_NAME`; one destination once; not
+  on the first scene). `carry.carry_problems` (validate + before any render) checks sources
+  against the scene before's `target_names(params)` and destinations against the scene's (types
+  that declare `target_patterns` only; synonyms `title`/`heading` as for actions);
+  `carry_warnings`: a carry through `fade_color` / `push` / `wipe` (they fade or move the
+  carried objects with the picture).
+  - **Recording** (scene A): `NarratedScene.carry_out` = the next scene's sources; `finish()`
+    fades everything but their on-screen parts (`clear_all(keep=)`: a group holding a kept part
+    fades only its other submobjects); `tear_down` records each source's on-screen parts as
+    plain shape data (`carry.parts_state`: per vector family member with points, its points,
+    fill / stroke / background-stroke RGBAs, widths, z, joint / cap style; images are skipped
+    with a warning) into `carry_state`; the worker writes `carry/<A>.json` `{version, scene,
+    fingerprint, objects: {source: [shapes]}}`. Decision: **re-created shapes, not pickled
+    mobjects** (no class identity, updaters or file paths to carry; pixel-identical — tested
+    within 1 level on text, strokes and fills).
+  - **Showing** (scene B): the worker reads A's record (missing → `VidgenError` naming A) into
+    `scene.carried_in` and notes `render.carry_from` = A's fingerprint; `setup()` adds the
+    rebuilt `VGroup` of each entry from frame 0. `entrance(target)` (what built-ins use to bring
+    targets in) returns `carry_move(copy, target.mobject)` for a target a copy waits for:
+    `Transform` of the copy into a flat copy of the target's shapes, then the target itself in
+    its place (so later actions find it) when both have as many shapes (same text / icon:
+    glyphs glide), else Manim's `FadeTransform` (stretched cross-fade between boxes). `play()`
+    fades out a copy whose destination is brought in another way (it is in the play's
+    animations) or does not exist (warning). `carry_in(name)` hands the copy to custom code.
+  - **Order of renders** (decision: B depends on A's artifact, not on recomputing A's end):
+    `pipeline.with_carried` adds to any render list the scene before a carrying scene whose
+    record is missing or has another fingerprint than A's current one, and a carrying scene
+    whose `carry_from` is not A's current fingerprint when A is rendered; `_runs(after=)` makes a
+    carrying scene's task wait for the scene before (thread events; the pool starts tasks in
+    list order, so the awaited one has started: no deadlock). Works for `render` (with
+    `--scene` / `--jobs`), `storyboard` and `lint` (all go through `_render_scenes`).
+  - **Fingerprint**: A gains `next_carry` (what it keeps), B `carry` + `carry_from` (A's
+    fingerprint, recursively), only when there are carries; a scene's own `carry` is left out of
+    its config dump, so projects without carries keep their fingerprints (adding the
+    `direction` / `soft` keys changes those of scenes with transitions once).
+- **Example**: `examples/gallery`: `structure` (chapter) → `tradeoff` cut with `carry: ["title ->
+  heading"]` (different words: a stretched cross-fade into the heading), `part2` → `speedup` cut
+  with `carry: [icon]` (glides into the stat's icon), `schedule` `push`, `cost` `{wipe, right,
+  soft}`.
+- Known limits: carried objects are vector shapes only, in scene coordinates (a camera zoomed at
+  the end of A is not undone); a push / wipe still blends pictures whose overlays were *chosen*
+  per scene (the incoming scene's from the transition's start, like a crossfade); stills taken in
+  a push / wipe's frames show no overlays (beat-end stills never are); `vidgen render --scene X`
+  alone shows neither the slide nor the carry's partner (the join and the scene before do).

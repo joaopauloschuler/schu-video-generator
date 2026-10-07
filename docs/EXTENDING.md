@@ -518,14 +518,27 @@ class Countdown(NarratedScene):
   `fade_out(m)` out): Manim's `FadeIn` / `FadeOut` copy the whole mobject twice when they
   begin, which takes seconds for big groups (a long code listing); `Fade` animates only the
   colours (and `shift`), so prefer it for anything large.
-- Transitions (docs/CONFIG.md "Transitions"): when a crossfade or colour fade leads to the next
-  scene, `finish()` holds the picture for `outro` instead of fading it (the transition takes it
+- Transitions (docs/CONFIG.md "Transitions"): when a crossfade, colour fade, push or wipe leads
+  to the next scene, `finish()` holds the picture for `outro` instead of fading it (the transition takes it
   away), and the scene is held longer at its end when its silent tail is too short; both happen
   for you. `self.transition_in` / `self.transition_out` are the planned transitions
   (`TransitionSlot(type, seconds, color, overlap, fade_out, fade_in, hold)`, frames; `None`
   when the video has none). A scene that fades itself out with `clear_all` still works: the
   crossfade then blends its faded picture. Keep to the timing contract (beats + `outro`) so the
-  overlaps land where planned.
+  overlaps land where planned. A `push` / `wipe` into your scene moves its first
+  `transition_in.overlap` frames: the worker renders them without overlays (they are drawn once
+  over the moving pictures at the join), which needs nothing from your code.
+- Continuity (`carry:`, docs/CONFIG.md "Continuity"): targets you register (`self.target(...)`)
+  are what other scenes carry. When the next scene carries some, `finish()` keeps them on screen
+  while the rest fades (`self.clear_all(run_time, keep=[mobjects])` does the same for your own
+  ending; `self.carry_out` lists the names) and their look is recorded after `tear_down`. When
+  your scene carries objects in, they are on screen from its first frame; `self.entrance(target)`
+  moves a waiting copy into the target instead of its own entrance, so a scene that brings its
+  targets in with `entrance()` needs nothing more. To animate the copy yourself, take it with
+  `copy = self.carry_in("heading")` (by destination or source name; `None` when nothing was
+  carried) and e.g. `self.play(carry_move(copy, my_heading))` (`vidgen.api.carry_move`: shape by
+  shape when the shape counts match, else a stretched cross-fade) or `Fade(copy, out=True)`.
+  Only vector shapes are carried.
 - Stills (`vidgen render --frames`) are taken on the last frame of each beat, i.e. when the
   `with self.narrate(...)` block has ended (or, for a silent scene, at `duration - outro`), so
   a scene reads best in stills when each beat ends showing what it explained. Capturing only
