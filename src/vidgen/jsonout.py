@@ -317,10 +317,12 @@ def render_document(
             "subtitles": _path(result.srt),
             "timings": _path(result.timings_file),
             "frames": None if result.frames_index is None else _path(result.frames_index),
+            "chapters": None if result.chapters is None else _path(result.chapters),
         },
         duration=result.duration,
         elapsed=round(elapsed, 3),
         mix=timings.get("mix"),
+        chapters=timings.get("chapters", []),
         scenes=scenes,
     )
 

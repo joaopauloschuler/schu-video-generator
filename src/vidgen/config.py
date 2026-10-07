@@ -691,6 +691,38 @@ class AudioConfig(_Strict):
     """Highest true peak (dBTP) of a mixed track; a limiter keeps every peak under it."""
 
 
+class ChaptersConfig(_Strict):
+    """What the render writes about the video's chapters (DESIGN.md §52)."""
+
+    metadata: bool = True
+    """Write the chapters into the MP4 (players list them and jump to them)."""
+    youtube: bool = True
+    """Write <output>_chapters.txt, the chapter list to paste into a YouTube description, and warn when YouTube would ignore it."""
+    intro: Annotated[str, Field(min_length=1)] | Literal[False] = "Intro"
+    """Title of the chapter added at 0:00 when the first chapter starts later (YouTube needs one at 0:00); false: the first chapter starts at 0:00 instead."""
+
+
+class MetadataConfig(_Strict):
+    """Tags of the final MP4 (DESIGN.md §52); unset tags are not written."""
+
+    title: str | None = Field(default=None, min_length=1)
+    """The video's title in players and file browsers (default: the top-level title)."""
+    artist: str | None = Field(default=None, min_length=1)
+    """Author / channel."""
+    album: str | None = Field(default=None, min_length=1)
+    """Series or collection."""
+    comment: str | None = Field(default=None, min_length=1)
+    """A free comment."""
+    description: str | None = Field(default=None, min_length=1)
+    """A longer description."""
+    copyright: str | None = Field(default=None, min_length=1)
+    """Copyright notice, e.g. "© 2026 Jane Doe, CC BY 4.0"."""
+    date: str | None = Field(default=None, min_length=1)
+    """Release date or year, e.g. 2026 or 2026-10-07."""
+    genre: str | None = Field(default=None, min_length=1)
+    """Genre, e.g. Education."""
+
+
 #: Transition types (DESIGN.md §49, §50).
 TRANSITION_TYPES = ("cut", "crossfade", "fade_color", "push", "wipe")
 #: Transitions that overlap the two scenes (both pictures are on screen at once).
@@ -947,6 +979,10 @@ class VideoConfig(_Strict):
     """The final mix: loudness normalisation {normalize, target_lufs, true_peak}."""
     transition: TransitionSetting | None = None
     """Default transition between scenes (cut, crossfade, fade_color, push, wipe or {type, duration, color, direction, soft}); a scene's transition wins."""
+    chapters: ChaptersConfig = Field(default_factory=ChaptersConfig)
+    """What the render writes about the chapters: MP4 chapter entries, the YouTube list <output>_chapters.txt, the intro chapter at 0:00 {metadata, youtube, intro}."""
+    metadata: MetadataConfig = Field(default_factory=MetadataConfig)
+    """Tags of the final MP4 {title, artist, album, comment, description, copyright, date, genre}; title defaults to the top-level title."""
     scenes: list[SceneConfig] = Field(min_length=1)
     """The scenes in order (at least one); scene ids and beat ids must be unique."""
 

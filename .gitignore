@@ -226,6 +226,7 @@ __marimo__/
 *.mp4
 *.srt
 *.wav
+*_chapters.txt
 
 # summary written by the examples/custom_scene post_render hook
 examples/custom_scene/*.txt

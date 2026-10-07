@@ -49,6 +49,8 @@ MODELS: list[type[BaseModel]] = [
     config.SceneMusic,
     config.AudioConfig,
     config.TransitionConfig,
+    config.ChaptersConfig,
+    config.MetadataConfig,
 ]
 
 

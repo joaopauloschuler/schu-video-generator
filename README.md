@@ -45,6 +45,13 @@ subtitles.
   moves and fades and seamless across cuts; per scene on/off or overridden
   ([reference](docs/CONFIG.md#overlays)). Chapters come from `chapter` cards or a scene's
   `chapter:` key ([chapters](docs/CONFIG.md#chapters)).
+- **Chapters in the outputs**: `vidgen render` writes the chapters into the MP4 (players list
+  them and jump to them) with tags (`metadata: {artist, comment, ...}`; title from `title`), and
+  `<output>_chapters.txt`, the `0:00 Intro` / `1:05 Results` list for a YouTube description; an
+  "Intro" chapter covers the opening before the first chapter (`chapters: {intro: false}` starts
+  the first chapter at 0:00 instead), and `validate` / `render` warn when YouTube would ignore the
+  list (fewer than 3 chapters, one shorter than 10 s)
+  ([reference](docs/CONFIG.md#chapters-in-the-outputs-chapters-metadata)).
 - **Burned-in captions**: `- {type: captions}` puts the narration into the picture, cut at
   phrase boundaries like the SRT, with the scenes laid out clear of it; `style: karaoke` shows a
   few big words at a time with the spoken one highlighted, for vertical / social videos. Word
@@ -140,7 +147,7 @@ vidgen storyboard               # contact sheets of every beat -> build/preview/
 vidgen lint                     # layout + timing checks: text cut off, too small, low contrast, dead air...
 vidgen tts --dry-run            # what would be sent to ElevenLabs (with the pronunciation applied), how many characters
 vidgen tts                      # generate narration MP3s (only new/changed beats)
-vidgen render                   # final render -> my_video.mp4 + my_video.srt
+vidgen render                   # final render -> my_video.mp4 + my_video.srt (+ my_video_chapters.txt with chapters)
 ```
 
 Edit `video.yaml` (reference: [docs/CONFIG.md](docs/CONFIG.md)) and repeat. Until audio exists,
@@ -206,7 +213,7 @@ my_video/
     icons/            # optional: your own icons <name>.svg (+ icons.json with tags)
   audio/              # generated narration: <beat_id>.mp3 + .hash (keep it; it cost money)
   build/              # intermediate render files, --frames stills + layout, storyboards (safe to delete)
-  my_video.mp4  my_video.srt  my_video_preview.mp4 ...
+  my_video.mp4  my_video.srt  my_video_chapters.txt  my_video_preview.mp4 ...
 ```
 
 ## Examples and docs
@@ -219,7 +226,8 @@ my_video/
   comparison, table, timeline, diagram, process, network, scatter, histogram, pie, heatmap, map,
   screenshot, video clip, equation derivation, code walkthrough), overlays (a watermark, a
   lower third, a progress bar, a chapter indicator), sound effects, a ducked music bed,
-  transitions (crossfades, colour fades, a push, a wipe) and two carried objects:
+  transitions (crossfades, colour fades, a push, a wipe), two carried objects and four chapters
+  (in the MP4 and `gallery_preview_chapters.txt`):
   `vidgen storyboard examples/gallery [--variant vertical]`, `vidgen render examples/gallery --preview`.
 - [examples/custom_scene](examples/custom_scene) — "How a bicycle gear works": built-ins plus a
   custom scene type with a helper module, a project icon, a vertical variant and a hook.

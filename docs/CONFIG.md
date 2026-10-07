@@ -17,8 +17,8 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 
 | key | default | |
 |---|---|---|
-| `title` | required | the video's title (used in `timings.json`; not drawn by itself) |
-| `output` | folder name | base name of the output files: `<output>.mp4`, `<output>.srt`, `<output>_preview.mp4`, `<output>_<variant>.mp4`; no path separators |
+| `title` | required | the video's title (the MP4's title tag and `timings.json`; not drawn by itself) |
+| `output` | folder name | base name of the output files: `<output>.mp4`, `<output>.srt`, `<output>_chapters.txt`, `<output>_preview.mp4`, `<output>_<variant>.mp4`; no path separators |
 | `format` | `{width: 1920, height: 1080, fps: 30}` | final render (`vidgen render`) |
 | `preview` | `{width: 854, height: 480, fps: 15}` | `vidgen render --preview` |
 | `variants` | `{}` | named overrides, see [variants](#variants) |
@@ -36,6 +36,8 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `music` | none | background music: a bed name (`calm`, `pulse`, `bright`) or a file, a cue `{source, volume, ...}`, or a list of cues with `from` / `to` scenes; see [background music](#background-music-music) |
 | `audio` | `{normalize: auto, target_lufs: -16, true_peak: -1.5}` | loudness of the final mix; see [loudness](#loudness-of-the-final-mix-audio) |
 | `transition` | none (cuts) | the default transition between scenes: `cut`, `crossfade`, `fade_color`, `push`, `wipe` or `{type, duration, color, direction, soft}`; see [transitions](#transitions-transition) |
+| `chapters` | `{metadata: true, youtube: true, intro: Intro}` | what the render writes about the chapters: MP4 chapter entries, the YouTube list `<output>_chapters.txt`, the chapter at 0:00; see [chapters in the outputs](#chapters-in-the-outputs-chapters-metadata) |
+| `metadata` | `{}` (title: the `title`) | tags of the MP4: `title`, `artist`, `album`, `comment`, `description`, `copyright`, `date`, `genre`; see [chapters in the outputs](#chapters-in-the-outputs-chapters-metadata) |
 | `scenes` | required | the scenes in order, at least one |
 
 ## Scenes and beats
@@ -118,7 +120,65 @@ need no `chapter:`), integer numbers that do not increase, and a scene with `cha
 after a chapter card (the card would be a chapter of its own; give the card the `chapter:`
 instead). The [`progress_bar`](#progress_bar) marks chapters, the
 [`chapter_indicator`](#chapter_indicator) names the current one; extensions read the list with
-`video_chapters(project)` (docs/EXTENDING.md).
+`video_chapters(project)` (docs/EXTENDING.md). `vidgen render` also writes them into the MP4 and
+a YouTube chapter list (next section).
+
+### Chapters in the outputs (`chapters`, `metadata`)
+
+`vidgen render` writes the chapters into the MP4 (players such as VLC, mpv, QuickTime and most
+video editors list them and jump to them) and next to it a chapter list for a YouTube
+description, `<output>_chapters.txt` (`<output>_<variant>[_preview]_chapters.txt` for variants
+and previews):
+
+```text
+0:00 Intro
+0:12 Setup
+1:05 Results
+```
+
+```yaml
+chapters:              # optional; the defaults
+  metadata: true       # chapter entries in the MP4
+  youtube: true        # <output>_chapters.txt, and warnings when YouTube would ignore it
+  intro: Intro         # the chapter at 0:00 before a later first chapter; false: none
+metadata:              # optional tags of the MP4 (unset ones are not written)
+  artist: "Jane Doe"
+  comment: "Made with vidgen"
+```
+
+| key | default | |
+|---|---|---|
+| `metadata` | `true` | write the chapters into the MP4 (`false`: the MP4 has none; its tags are still written) |
+| `youtube` | `true` | write `<output>_chapters.txt` (`false`: none, an old one is removed) and check YouTube's rules |
+| `intro` | `Intro` | title of the chapter added at 0:00 when the first chapter starts later (the video opens with a title scene); `false`: no intro chapter, the first chapter starts at 0:00 instead |
+
+- **Times** are where the chapter's scene starts in the joined video, with transitions: a
+  crossfade, push or wipe into a chapter card starts the chapter where the transition starts
+  (the plan's times, `video_chapters(project, intro=True)`; equal to the render for built-in
+  scenes). In the MP4 they are milliseconds (FFMETADATA `[CHAPTER]` entries, time base 1/1000);
+  the last chapter ends at the end of the video.
+- **Titles** are the chapter titles on one line (a card title's line breaks become spaces),
+  without their numbers.
+- **The intro chapter.** YouTube needs the first chapter at 0:00, and a player's chapter menu
+  should cover the whole video, so when the first chapter starts later both lists begin with a
+  chapter titled `intro` (only in these outputs: the [`chapter_indicator`](#chapter_indicator)
+  and [`progress_bar`](#progress_bar) still show nothing before the first chapter). For a short
+  opening (a few seconds of title before chapter 1) set `intro: false`: the first chapter then
+  starts at 0:00.
+- **YouTube's rules** (it ignores the whole list otherwise): the first timestamp is 0:00, there
+  are at least 3 chapters, each at least 10 s long. Timestamps are whole seconds rounded down (a
+  click lands at the chapter's first frame or just before it), so a chapter's length is
+  measured between its rounded timestamps. `vidgen validate` (planned times) and `vidgen render`
+  (the joined video) warn about each broken rule, e.g. `chapters: 'Intro' (0:00-0:03) lasts 3.0
+  s; YouTube ignores the whole chapter list when a chapter is shorter than 10 s (...)`; the file
+  is written anyway. Paste the file into the video's description on YouTube.
+- Without chapters no list is written (and an old one is removed) and the MP4 has no chapters.
+- **Tags** (`metadata:`): `title` (default the top-level `title`), `artist`, `album`,
+  `comment`, `description`, `copyright`, `date` (e.g. `2026` or `2026-10-07`) and `genre`, all
+  text; they are written to every render (variants can override them).
+- `timings.json` and `vidgen render --json` list the chapters as published (with the intro
+  chapter), `{title, number, scene, start, end, index, count, card, intro}`, also when
+  `metadata` and `youtube` are off. Changing `chapters:` or `metadata:` re-renders no scene.
 
 ## Format and preview
 
@@ -3552,14 +3612,15 @@ difference between two palette colours).
 | `preview` | bool | |
 | `audio` | bool | `false` with `--no-audio` |
 | `format` | object | `{width, height, fps}` of this render |
-| `outputs` | object | `{video, subtitles, timings, frames}`: the MP4, the SRT, `build/.../timings.json` and `build/.../frames/index.json` (`null` without `--frames`) |
+| `outputs` | object | `{video, subtitles, timings, frames, chapters}`: the MP4, the SRT, `build/.../timings.json`, `build/.../frames/index.json` (`null` without `--frames`) and the YouTube chapter list `<output>_chapters.txt` (`null` without chapters or with `chapters: {youtube: false}`) |
 | `duration` | float | length of the video |
 | `elapsed` | float | wall time of the command |
 | `mix` | object \| null | the measured loudness of the video's audio (`null` with `--no-audio`): `{mixed, normalized, target_lufs, true_peak_limit, gain_db, integrated_lufs, true_peak_dbtp, limited_db, music}` — `mixed`: vidgen wrote the mix (music or normalisation; else FFmpeg joined narration and effects as before), `normalized` / `target_lufs` / `gain_db` the normalisation, `integrated_lufs` (LUFS) and `true_peak_dbtp` (dBTP) measured on the final mix, `limited_db` the limiter's deepest gain reduction (0: never engaged), `music` the cues `{source, kind (bed\|file), from, to, start, end, volume, duck}`; see [loudness](#loudness-of-the-final-mix-audio) |
+| `chapters` | list | the chapters as written into the MP4 and the YouTube list (empty without chapters): `{title, number, scene, start, end, index, count, card, intro}` — `number` as written (`null`: none), `scene` the scene it starts at, `start` / `end` seconds in the video, `index` its position in this list (1-based) of `count`, `card` whether it starts with a `chapter` card, `intro` whether it is the chapter added at 0:00 before the first one; see [chapters in the outputs](#chapters-in-the-outputs-chapters-metadata) |
 | `scenes` | list | config order: `{id, type, status, start, duration, render_seconds, beats}`; `status` is `rendered` or `reused` (an existing render was joined, see `--scene`), `render_seconds` the worker's wall time (`null` when reused), `start`/`duration` in the video, `beats` lists `{id, start, end}` (absolute; `end` excludes `narration.pad`) |
 
 `warnings` includes those printed by scene code during rendering (e.g. beats a scene never
-narrated), with their `scene`. On failure, `error.details` is `{failed, rendered}`: `failed`
+narrated), with their `scene`, and YouTube's chapter rules the list breaks (`chapters: ...`). On failure, `error.details` is `{failed, rendered}`: `failed`
 lists `{scene, exit_code, output_tail}` (the last 60 lines of the worker's output; exit code 1
 for a vidgen error, 2 for an exception in scene code), `rendered` the scene ids rendered before
 (or, with `--keep-going`, besides) the failures.

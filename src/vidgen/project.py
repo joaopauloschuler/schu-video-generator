@@ -218,6 +218,10 @@ class Project:
         """Subtitle path matching :meth:`output_path`."""
         return self.root / f"{self._output_stem(preview)}.srt"
 
+    def chapters_path(self, preview: bool = False) -> Path:
+        """YouTube chapter list matching :meth:`output_path`: ``<output>[_<variant>][_preview]_chapters.txt``."""
+        return self.root / f"{self._output_stem(preview)}_chapters.txt"
+
     def asset(self, rel: str | Path) -> Path:
         """Resolve an asset path relative to the project root; error if it does not exist."""
         path = self.root / rel

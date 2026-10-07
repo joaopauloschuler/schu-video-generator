@@ -215,7 +215,7 @@ Rules that apply to every step:
 ## Phase E — Outputs, extras, guidance
 
 ### Step 49 — Chapters
-- [ ] Chapter metadata in the MP4 and a YouTube chapter list (`<output>_chapters.txt`)
+- [x] Chapter metadata in the MP4 and a YouTube chapter list (`<output>_chapters.txt`) (FFMETADATA `[CHAPTER]` entries at the joined scenes' starts, ms time base, + MP4 tags from `title` / `metadata: {artist, album, comment, description, copyright, date, genre}`; `M:SS Title` list, timestamps rounded down; an `Intro` chapter at 0:00 before a later first chapter (`chapters: {intro: TITLE | false}`) in published lists only, overlays unchanged; YouTube rules (≥ 3 chapters, each ≥ 10 s) warned by `validate` and `render`; `chapters: {metadata, youtube}` switches; `chapters` in `timings.json` / `render --json`, `outputs.chapters`; per-variant files; `video_chapters(..., intro=True)`; `examples/gallery` tags + 4 chapters)
 
 ### Step 50 — Thumbnail and GIF/clip export
 - [ ] Thumbnail from a chosen frame or a `thumbnail:` spec
@@ -256,5 +256,6 @@ Rules that apply to every step:
 
 ### Step 60 — Final review
 - [ ] Full review of Steps 8–59; docs and examples consistent; release notes in HANDOFF.md
+- [ ] (from Step 49) The plan and a silent scene's render can differ by a frame when `(duration - outro) x fps` is a half frame (5 fps, a 1.2 s `chapter` card: planned 7 frames, rendered 6); chapter outputs follow the join, overlays the plan
 - [ ] (from Step 48) Revisit: joins with a crossfade / push / wipe re-encode the whole video (~40 s for the gallery's 3:49 preview; stream-copying between transitions needs SPS-compatible re-encoded pieces); `reserve` is per whole scene (several reserving overlays + captions shrink a scene's content until lint's `min_font` fires); mono clip sound is upmixed −3 dB (narration no longer is); a storyboard / lint view of the frames around each transition and carry (Step 47's suggestion; Step 48 used an ad-hoc contact sheet)
 - [ ] (from Step 37) Left as known limits, revisit: a `highlight` colour on an `equation_derivation` step is not carried into its dimmed copy; `code`'s own highlight steps reset line opacities set by a `dim` action; `image` Ken Burns renders ~1.6x real time in preview (Manim's per-frame image transform); `code_walkthrough` builds ~0.1 s per line of the file (Manim glyphs; `excerpt` limits it)

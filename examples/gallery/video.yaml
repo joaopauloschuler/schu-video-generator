@@ -19,7 +19,8 @@
 #   vidgen list-sfx examples/gallery --render-dir build/sfx   # the sound effects (part2: whoosh, speedup: chime, formats: pop) as WAVs
 #   vidgen list-music examples/gallery --render-dir build/music  # the music beds (this video: calm, ducked) as WAVs
 #   vidgen render examples/gallery --preview    # the whole video: scenes crossfade, chapter cards fade through a colour,
-#                                               # one push, one wipe, two carried objects (match cuts)
+#                                               # one push, one wipe, two carried objects (match cuts);
+#                                               # chapters in the MP4 + gallery_preview_chapters.txt (YouTube)
 #   vidgen storyboard examples/gallery --scene structure --scene tradeoff --per-beat 3  # the card's title becomes the heading
 # No narration audio: beats are timed from their word count (narration.words_per_second).
 title: "vidgen: a gallery of scene types"
@@ -82,6 +83,13 @@ music:                # a generated ambient bed under the whole video (docs/CONF
   volume: -2
   duck: {depth: 12}   # 12 dB down while the narrator speaks (keyed off the narration only)
 # audio: {normalize: auto, target_lufs: -16}   # the default: a video with music is normalised to -16 LUFS
+
+chapters:             # the four chapters go into the MP4 and gallery_preview_chapters.txt, a list for a
+  intro: Intro        # YouTube description (docs/CONFIG.md "Chapters in the outputs"); the video opens with
+                      # chapter 1, so no intro chapter is needed (one is added at 0:00 when it starts later)
+metadata:             # tags of the MP4 (its title is the `title` above)
+  artist: "vidgen"
+  comment: "A gallery of the built-in scene types"
 
 scenes:
   - id: structure

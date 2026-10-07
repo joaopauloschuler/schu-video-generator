@@ -77,6 +77,7 @@ src/vidgen/
   videoplan.py            # the planned timeline: scene / beat positions in the video before rendering (§41),
                           # planned chapters and video_chapters() (§42)
   chapters.py             # chapter marks from `chapter` scenes and scenes' `chapter:` keys; their checks (§42)
+  chapter_export.py       # published chapters (intro at 0:00), MP4 FFMETADATA + tags, YouTube list and rules (§52)
   overlays.py             # overlays: Overlay base, OverlayContext, config entries, validation, reserve (§41)
   overlay_layer.py        # OverlayLayer: overlays composited into every frame a scene writes (§41)
   charts.py               # chart helpers: ticks, number labels, axes, legend, markers, fit (§33),
@@ -133,6 +134,7 @@ my_video/
   build/                  # generated: manim media, per-scene mp4, timings json, concat list
   <output>.mp4            # final video   (<output>_preview.mp4 for previews,
   <output>.srt            #               <output>_<variant>.mp4 for variants)
+  <output>_chapters.txt   # YouTube chapter list, when the video has chapters (Step 49, §52)
 ```
 
 `build/<final|preview>[_<variant>]/` (Step 4) holds: `scenes/<id>.mp4` (the scene as rendered,
@@ -144,8 +146,8 @@ intermediate files), `padded/<id>.wav` (each scene's audio padded to its exact v
 music / normalisation, §48); Step 46 `padded/voice.wav` (the scenes' sound summed where
 crossfades overlap them) and `padded/video_concat_<k>.txt` (runs of cut-joined scenes, §49);
 Step 47 `scenes/<id>.overlay.mov` (the overlays of the frames a push / wipe into the scene
-moves, RGBA) and `carry/<id>.json` (the objects the next scene carries out of it, §50).
-With `--frames` (Step 10, §13) also `frames/<id>/*.png` + `frames/<id>/index.json` and
+moves, RGBA) and `carry/<id>.json` (the objects the next scene carries out of it, §50);
+Step 49 `padded/metadata.txt` (the MP4's tags and chapters, FFMETADATA, §52). With `--frames` (Step 10, §13) also `frames/<id>/*.png` + `frames/<id>/index.json` and
 `frames/index.json`, and `layout/<id>.json` (Step 12, §15).
 
 ## 4. Config schema (`video.yaml`)
@@ -213,6 +215,8 @@ music: calm                                      # Step 45 (§48): bed / file / 
 audio: {normalize: auto, target_lufs: -16, true_peak: -1.5}   # Step 45 (§48): the final mix
 transition: crossfade                            # Step 46 (§49): default between scenes; + scene `transition:`
                                                  # Step 47 (§50): push / wipe {direction, soft}; scene `carry:`
+chapters: {metadata: true, youtube: true, intro: Intro}   # Step 49 (§52): MP4 chapters, <output>_chapters.txt
+metadata: {artist: "Jane Doe"}                   # Step 49 (§52): MP4 tags (title defaults to `title`)
 
 extensions: [extensions]                         # dirs (relative to project) to auto-import; default shown
 
@@ -526,6 +530,8 @@ defaults / a property); `finish()` holds instead of fading when a transition fol
 Step 47 (§50) adds `carry_move`; on `NarratedScene` `carry_in(name)`, `carry_out`, `carry_state`,
 `carried_in`, `overlay_head`, and compatibly `clear_all(run_time, keep=())`; `entrance()` moves
 a carried copy into its target; `finish()` keeps carried targets on screen.
+Step 49 (§52) adds, compatibly, the keyword argument `intro=False` of `video_chapters` and the
+field `Chapter.intro` (default `False`).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -2644,7 +2650,8 @@ the measured loudness, §48).
   stays the title (now also from `chapter:` fields). **Public**: `vidgen.api.video_chapters(project,
   fps=None)` (default the final format's fps) and `Chapter` — what Step 49 (MP4 chapter metadata,
   YouTube list) reads; Step 49 adds the "Intro" chapter at 0:00 YouTube needs when the first
-  chapter starts later. `OverlayContext.chapters` (all), `.chapter` (the scene's).
+  chapter starts later (`video_chapters(..., intro=True)`, published lists only, §52).
+  `OverlayContext.chapters` (all), `.chapter` (the scene's).
 - **Fingerprint**: a scene's own `chapter:` is excluded from its dump (no pixels depend on it
   without overlays); `_overlay_inputs` carries every scene's `chapter` and a card's `number`.
 - **`Overlay.shown_in(start, end)`** (default `True`, asked of timed overlays for the scene's
@@ -3360,3 +3367,61 @@ the measured loudness, §48).
   (SPS/PPS) match Manim's encoder for a concat copy, and Manim's keyframes fall at its
   partial-movie boundaries, not at the transitions — not robust enough for the gain (the
   scenes' own renders take 2–3x longer than the join).
+
+## 52. Refinements (Step 49, chapters in the MP4 and a YouTube chapter list)
+
+- **Config** (`config.py`): top-level `chapters: ChaptersConfig {metadata: true, youtube: true,
+  intro: "Intro" | false}` and `metadata: MetadataConfig {title, artist, album, comment,
+  description, copyright, date, genre}` (all optional text; `title` defaults to the video's
+  `title`). Both are left out of scene fingerprints (they change no pixels and no timing).
+- **Published chapters** (`chapter_export.py`): the list written to the outputs starts at 0:00.
+  When the first chapter starts later (an opening title scene), `published_chapters` adds a
+  chapter titled `chapters.intro` before it (`Chapter.intro = True`, `scene` = the first scene,
+  no number, not a card), or with `intro: false` moves the first chapter's start to 0:00;
+  `index` / `count` are renumbered in that list. A first chapter starting within 1 ms of 0
+  counts as starting at 0. **Decision: the intro exists only in published lists.** Overlays
+  (progress bar gaps, chapter indicator) keep the plain `VideoPlan.chapters` — an indicator saying
+  "Intro" over a title card would be noise, and Step 39's runs, fades and reserves stay as they
+  were. `video_chapters(project, fps, intro=True)` returns the published list from the plan
+  (what `vidgen validate` checks).
+- **Times in the outputs come from the join**, not from the plan: `joined_chapters(config,
+  scenes, duration)` starts each chapter at its scene's start in the combined timings (the
+  overlapped starts of §49: a crossfade / push / wipe into a chapter card starts the chapter where
+  the transition starts) and ends the last at the joined duration. For scenes that keep to the
+  plan (all built-ins; §51) they equal `video_chapters(..., intro=True)` exactly; for a scene
+  that does not, the outputs follow the real video. Found while testing: at 5 fps a silent
+  `chapter` card of 1.2 s plans 7 frames and renders 6 (`(duration - outro) x fps` = 3.5 frames:
+  the plan rounds the tie up, the scene's waits end a frame shorter) — a half-frame tie only;
+  routed to Step 60. The test uses 10 fps.
+- **MP4** (`ffmpeg.join(..., metadata=)`): the pipeline writes `padded/metadata.txt`
+  (FFMETADATA: global tags, then one `[CHAPTER]` per chapter with `TIMEBASE=1/1000`, `START` /
+  `END` rounded to the millisecond, `END > START`, titles on one line; `\ = ; #` and newlines
+  escaped) and the final mux adds it as the last input with `-map_metadata N -map_chapters N`.
+  FFmpeg's MP4 muxer stores the chapters as a QuickTime chapter text track (a `bin_data` data
+  stream in ffprobe) plus a Nero `chpl` list, which is what players read; ffprobe
+  `-show_chapters` reads them back (tested: starts equal the plan within 1 ms). With
+  `chapters.metadata: false` the file has no `[CHAPTER]` entries (tags still). The join now
+  always maps metadata from this file (the concat demuxer's input tags are no longer copied;
+  they were only FFmpeg's `encoder`, which the muxer writes anyway).
+- **YouTube list** (`pipeline.write_chapter_list`): `<output>[_<variant>][_preview]_chapters.txt`
+  (`Project.chapters_path`), one `M:SS Title` line per published chapter (`H:MM:SS` from an hour
+  on), UTF-8. **Timestamps round down** to the second: a click lands at the chapter's first frame
+  or before it, never after (rounding to nearest could skip up to half a second of a card).
+  Rules checked (`youtube_problems`, on the rounded times, since that is what YouTube sees): at
+  least 3 chapters, each ≥ 10 s (the first at 0:00 holds by construction); each broken rule is
+  one warning starting `chapters:` naming the chapter, its span and a remedy (for a short intro:
+  begin with a chapter or `intro: false`). The render logs them (so `render --json` lists them
+  in `warnings`) and writes the file anyway; `vidgen validate` reports the same from the plan
+  (`chapter_warnings`, part of `validate_warnings`). Without chapters, or with `youtube: false`,
+  no file is written and an old one is removed (it would describe another video).
+- **JSON**: combined `timings.json` gains `chapters` (published, `chapter_json`: the `Chapter`
+  fields, times to 1 µs; also when both outputs are off); `render --json` gains top-level
+  `chapters` (the same list) and `outputs.chapters` (the file or `null`); `post_render` hooks get
+  `chapters` (the file or `None`); `RenderResult.chapters`. All within version 1.
+- **Titles**: the chapter's title on one line (whitespace runs → one space), without its number
+  (numbers are part of the on-screen design; "2 · Results" would read oddly in a menu next to
+  the player's own numbering).
+- Known limits: chapter titles are not translated per variant beyond what the variant's config
+  says; a chapter's `number` is not shown in the outputs; YouTube also requires the list in the
+  description to be the video's own (vidgen only writes the file); the MP4 has no chapter
+  thumbnails.

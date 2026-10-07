@@ -176,6 +176,7 @@ def join(
     fps: int | None = None,
     kinds: list[str] | None = None,
     overlays: list[tuple[Path, int]] | None = None,
+    metadata: Path | None = None,
 ) -> None:
     """Concatenate ``videos`` (stream copy, video only) and ``audios`` (PCM, encoded once to AAC)
     into ``dst`` with the concat demuxer.
@@ -192,6 +193,10 @@ def join(
     of stream-copied. ``kinds``: the ``xfade`` transition per boundary (default ``fade``; a push
     / wipe slides or wipes, DESIGN.md §50). ``overlays``: RGBA clips ``(path, first output
     frame)`` drawn over the joined pictures (the overlays of frames a push / wipe moves).
+
+    ``metadata``: an FFMETADATA file whose global tags and chapters become the output's
+    (DESIGN.md §52; the MP4 muxer stores the chapters as a chapter track plus a Nero ``chpl``
+    list); without it the output keeps FFmpeg's defaults.
 
     ``dst`` is written via a temporary file next to it and replaced at the end, so a failed join
     never leaves a truncated output. If ``dst`` cannot be replaced (on Windows: it is open in a
@@ -244,6 +249,11 @@ def join(
         inputs += ["-f", "concat", "-safe", "0", "-i", str(audio_list), "-i", str(sfx)]
         graph.append(f"[{first_audio}:a][{first_audio + 1}:a]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[mix]")
         audio_map = "[mix]"
+    tagging: list[str] = []
+    if metadata is not None:
+        index = inputs.count("-i")
+        inputs += ["-f", "ffmetadata", "-i", str(metadata)]
+        tagging = ["-map_metadata", str(index), "-map_chapters", str(index)]
     filters = ["-filter_complex", ";".join(graph)] if graph else []
     try:
         run_ffmpeg(
@@ -253,6 +263,7 @@ def join(
                 *filters,
                 "-map", video_map, "-map", audio_map,
                 *video_codec, "-c:a", "aac", "-b:a", AUDIO_BITRATE, "-ar", str(AUDIO_RATE),
+                *tagging,
                 "-movflags", "+faststart",
                 str(tmp),
             ],

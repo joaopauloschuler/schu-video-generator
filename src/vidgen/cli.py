@@ -214,9 +214,10 @@ def pronunciation_warnings(project: Project) -> list[str]:
 def validate_warnings(project: Project) -> list[str]:
     """What ``vidgen validate`` warns about (not problems): :func:`theme_warnings`,
     :func:`pronunciation_warnings`, named voices no beat uses and transitions that hold the
-    scene before them longer (DESIGN.md §49) and carries through a transition that moves them
-    (§50)."""
+    scene before them longer (DESIGN.md §49), carries through a transition that moves them
+    (§50) and a YouTube chapter list YouTube would ignore (§52)."""
     from vidgen.carry import carry_warnings
+    from vidgen.chapter_export import chapter_warnings
     from vidgen.transitions import transition_warnings
     from vidgen.voices import voice_warnings
 
@@ -226,6 +227,7 @@ def validate_warnings(project: Project) -> list[str]:
         + voice_warnings(project.config)
         + transition_warnings(project)
         + carry_warnings(project.config)
+        + chapter_warnings(project)
     )
 
 
@@ -346,6 +348,8 @@ def cmd_render(args: argparse.Namespace) -> CommandResult:
     print(f"rendered {len(result.rendered)} scene(s){reused}")
     print(f"video:     {result.output}")
     print(f"subtitles: {result.srt}")
+    if result.chapters is not None:
+        print(f"chapters:  {result.chapters}")
     if result.frames_index is not None:
         print(f"frames:    {result.frames_index}")
     print(f"duration:  {_format_seconds(result.duration)} ({result.duration:.2f} s)")

@@ -4557,3 +4557,88 @@ CPUs); parallel: `python -m pytest -q -n auto` (same result, 10:06); quick: `-m 
 1:58). Step only: `pytest tests/test_review3.py tests/test_callout_action.py`. Manual: `vidgen
 render examples/kphi3 --preview` then `ffmpeg -i examples/kphi3/kphi3_video_preview.mp4 -af
 ebur128=peak=true -f null -` (≈ −21.4 LUFS); `vidgen lint examples/minimal --variant social`.
+
+## Step 49 — Chapters
+What was built
+- **MP4 chapters and tags**: the join writes `build/.../padded/metadata.txt` (FFMETADATA: the
+  tags, then one `[CHAPTER]` per chapter, `TIMEBASE=1/1000`, title on one line, `\ = ; #` and
+  newlines escaped) and the final mux maps it (`-map_metadata` / `-map_chapters`; FFmpeg's MP4
+  muxer adds a chapter text track + Nero `chpl`). Tags: `title` (the video's `title`, or
+  `metadata.title`) and the optional new top-level **`metadata:`** `{artist, album, comment,
+  description, copyright, date, genre}`.
+- **YouTube list** `<output>[_<variant>][_preview]_chapters.txt`: `0:00 Intro` / `1:29 Charts
+  and numbers` lines (`H:MM:SS` from an hour on; timestamps **rounded down** so a click never
+  lands after the chapter's first frame). YouTube's rules — ≥ 3 chapters, each ≥ 10 s measured
+  between the rounded timestamps, first at 0:00 — are checked; each broken rule is a warning
+  `chapters: '<title>' (0:00-0:03) lasts 3.0 s; YouTube ignores the whole chapter list ... (<remedy>)`
+  from `vidgen render` (logged → `render --json` `warnings`) and from `vidgen validate` (planned
+  times). The file is still written. No chapters / `youtube: false` → no file, an old one is removed.
+- **Intro chapter**: when the first chapter starts after 0:00, the published lists (MP4, txt,
+  JSON) start with a chapter titled **`chapters.intro`** (default `Intro`, `Chapter.intro =
+  True`, scene = the first scene); `intro: false` moves the first chapter to 0:00 instead. The
+  overlays (`progress_bar`, `chapter_indicator`) are unchanged: nothing before the first chapter.
+- **Config** `chapters: {metadata: true, youtube: true, intro: Intro | false}`; both new sections
+  are out of scene fingerprints (no re-render when edited).
+- **JSON**: combined `timings.json` `chapters` (published list, `{title, number, scene, start,
+  end, index, count, card, intro}`, always present); `render --json` top-level `chapters` and
+  `outputs.chapters` (path or `null`); `post_render` hook data `chapters`; human `render` prints
+  `chapters: <file>`.
+- **API**: `video_chapters(project, fps=None, intro=False)` — `intro=True` returns the published
+  list from the plan; `Chapter.intro` (default `False`). New internal module
+  `vidgen/chapter_export.py` (`published_chapters`, `joined_chapters`, `chapter_json` /
+  `chapter_from_json`, `video_tags`, `ffmetadata`, `youtube_time`, `youtube_list`,
+  `youtube_problems`, `write_youtube_list`, `chapter_warnings`); `Project.chapters_path`;
+  `ffmpeg.join(..., metadata=)`; `pipeline.write_chapter_list`, `RenderResult.chapters`.
+- **Example**: `examples/gallery` has `chapters: {intro: Intro}` (commented: it opens with chapter
+  1, so no intro is added) and `metadata: {artist, comment}`; its preview render writes
+  `gallery_preview_chapters.txt` (0:00 / 1:29 / 2:39 / 3:33) and 4 MP4 chapters.
+
+Files
+- New: `src/vidgen/chapter_export.py`, `tests/test_chapter_export.py` (11 tests, 1 render).
+- Changed: `config.py` (`ChaptersConfig`, `MetadataConfig`, `VideoConfig.chapters` / `.metadata`),
+  `videoplan.py` (`Chapter.intro`, `video_chapters(intro=)`), `project.py` (`chapters_path`),
+  `render/ffmpeg.py` (`join(metadata=)`), `render/pipeline.py` (metadata file, timings
+  `chapters`, `write_chapter_list`, `RenderResult.chapters`, hook data), `render/fingerprint.py`
+  (excludes `chapters` / `metadata`), `cli.py` (validate warnings, render output line),
+  `jsonout.py`; tests `test_docs.py` (models), `test_json_output.py` (render JSON with a chapter);
+  `.gitignore` (`*_chapters.txt`); `examples/gallery/video.yaml`; docs/CONFIG.md (top-level rows,
+  new "Chapters in the outputs" subsection, render JSON), docs/EXTENDING.md (`video_chapters`,
+  `post_render`), README.md, DESIGN.md (tree, §3, §4, §6.4, §42, new §52), tasklist.md.
+
+Public interfaces added/changed (compatible)
+- Config: top-level `chapters`, `metadata`. `vidgen.api.video_chapters(..., intro=False)`,
+  `Chapter.intro`. JSON (version 1): timings / `render --json` `chapters`, `outputs.chapters`.
+- The final MP4 now always gets its tags from vidgen's FFMETADATA file (title tag always
+  written) and, with chapters, a data stream (`bin_data`, the chapter track) besides video and audio.
+
+Decisions / deviations
+- **Times from the joined video, not the plan**: `joined_chapters` uses the combined timings'
+  scene starts (overlaps included, so a crossfade into a card starts its chapter where the
+  crossfade starts); equal to `video_chapters(..., intro=True)` for scenes that keep to the plan
+  (gallery preview: identical to the ms), and true to the file when one does not.
+- **Intro only in published lists** (MP4, txt, JSON), not in `video_chapters()` by default nor in
+  overlays: an indicator reading "Intro" over a title scene would be noise; Step 39's behaviour is
+  untouched. Configurable title, or `intro: false` to stretch chapter 1 to 0:00.
+- **Rounding down** YouTube timestamps; rule lengths measured on the rounded times (what YouTube sees).
+- **Titles without numbers** in the outputs (players / YouTube number nothing, "2 · Results"
+  reads oddly in a menu); whitespace collapsed to one line.
+- Warnings, not errors: a list YouTube ignores is still a valid MP4 chapter list.
+
+Known gaps / TODOs
+- Found while testing (routed to Step 60 in tasklist.md): a silent scene can render a frame shorter
+  than planned when `(duration - outro) x fps` is a half frame (5 fps, 1.2 s chapter card: plan 7,
+  render 6 frames). Outputs follow the join; overlays follow the plan. The render test uses 10 fps.
+- Chapter `number`s are not in the output titles; no per-chapter thumbnails; YouTube reads the
+  list only from the description (paste the txt), not from the MP4.
+- `metadata` values are plain text; no cover art (could come with Step 50's thumbnail).
+
+Verification
+- `examples/gallery` preview (`--jobs 4`): ffprobe `-show_chapters` = 4 chapters at 0 / 89.667 /
+  159.133 / 213.2 s ending at 228.533 = `video_chapters(project, fps=15, intro=True)` = timings
+  `chapters`; tags title / artist / comment; `gallery_preview_chapters.txt` written; no YouTube
+  warnings; `vidgen validate examples/gallery` ok.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (1923 passed, 1 skipped, ~10.5 min
+on 2 CPUs); step only: `pytest tests/test_chapter_export.py`. Manual: `vidgen render
+examples/gallery --preview --jobs 4`, then `ffprobe -v error -show_chapters
+examples/gallery/gallery_preview.mp4` and `cat examples/gallery/gallery_preview_chapters.txt`.

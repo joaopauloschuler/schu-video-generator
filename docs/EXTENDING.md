@@ -706,7 +706,7 @@ Event data (see DESIGN.md §6.2):
 | `post_tts`    | `generated` (beat ids written, in order), `audio_dir` |
 | `pre_render`  | `scenes` (scene ids about to be rendered, config order; remove ids to reuse their existing render), `preview`, `variant`, `no_audio`, `render_dir` |
 | `post_scene`  | `scene_id`, `video` (the scene's MP4, before audio padding), `timings` (the scene's timings dict), `frames` (folder of the scene's stills with `--frames`, else `None`), `preview`, `variant` |
-| `post_render` | `output` (final MP4), `srt`, `timings` (combined timings dict), `timings_file`, `frames_index` (`frames/index.json` with `--frames`, else `None`), `preview`, `variant` |
+| `post_render` | `output` (final MP4), `srt`, `timings` (combined timings dict), `timings_file`, `frames_index` (`frames/index.json` with `--frames`, else `None`), `chapters` (the YouTube chapter list `<output>_chapters.txt`, `None` without chapters or with `chapters: {youtube: false}`), `preview`, `variant` |
 
 Render hooks run in the `vidgen render` process (not in the per-scene worker processes);
 `post_scene` runs once per scene rendered in this run (not for reused renders).
@@ -968,12 +968,16 @@ scene types that lay out in the safe area follow automatically. `vidgen list-sce
 overlay type with its options; `vidgen schema` includes them. Overlays are drawn with a camera
 cropped to their box, so a thin or small overlay costs little per state.
 
-**Chapters.** `video_chapters(project, fps=None)` returns the video's chapters (docs/CONFIG.md
+**Chapters.** `video_chapters(project, fps=None, intro=False)` returns the video's chapters (docs/CONFIG.md
 "Chapters": `chapter` scenes and scenes with a `chapter:` key) as `Chapter` records: `title`,
 `number` (as written, or `None`), `label` (the number, else the position), `scene` (where it
 starts), `start` / `end` / `duration` in the video (planned, at `fps`, default the final
-format's), `index` (1-based), `count`, `card` (starts with a `chapter` scene). An overlay gets
-the same list as `self.context.chapters`.
+format's), `index` (1-based), `count`, `card` (starts with a `chapter` scene), `intro`. An
+overlay gets the same list as `self.context.chapters`. `intro=True` gives the list as the render
+publishes it in the MP4 and the YouTube list (docs/CONFIG.md "Chapters in the outputs"): it
+starts at 0:00 — with a chapter titled `chapters.intro` (`intro=True` on that record, `scene` the
+first scene) before a later first chapter, or that chapter moved to 0:00 with `intro: false` —
+and `index` / `count` are positions in that list.
 
 **Narration text and word times** (what the `captions` overlay is built from, for an overlay or a
 scene that shows the narration its own way):

@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from vidgen import __version__, carry, hooks, mix, sfx, transitions
+from vidgen import __version__, carry, chapter_export, hooks, mix, sfx, transitions
 from vidgen.errors import VidgenError
 from vidgen.project import Project
 from vidgen.render import ffmpeg as ff
@@ -59,7 +59,9 @@ class RenderResult:
     ``timings`` is the content of ``timings_file``; ``render_seconds`` the wall time of each
     scene rendered in this run; ``warnings`` the ``(scene_id, message)`` warnings printed by
     the workers of this run, in config order. ``frames_index`` is ``build/.../frames/index.json``
-    when stills were requested, else ``None``.
+    when stills were requested, else ``None``; ``chapters`` the YouTube chapter list
+    ``<output>_chapters.txt`` when one was written (the video has chapters and
+    ``chapters.youtube``), else ``None``.
     """
 
     output: Path
@@ -72,6 +74,7 @@ class RenderResult:
     render_seconds: dict[str, float] = field(default_factory=dict)
     warnings: list[tuple[str, str]] = field(default_factory=list)
     frames_index: Path | None = None
+    chapters: Path | None = None
 
 
 @dataclass
@@ -395,6 +398,10 @@ def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) ->
     blended by :func:`vidgen.render.ffmpeg.join` (the video is then encoded once instead of
     stream-copied). Scenes with a transition get ``transition: {type, duration, overlap}`` in the
     combined timings.
+
+    The published chapters (§52: starting at the joined scenes' starts, from 0:00) go into the
+    combined timings' ``chapters`` and, with ``chapters.metadata``, into the MP4 with its tags
+    (``padded/metadata.txt``, FFMETADATA).
     """
     render_dir = project.render_dir(preview)
     padded_dir = render_dir / "padded"
@@ -477,6 +484,14 @@ def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) ->
         "vidgen": __version__,
         "scenes": scenes,
     }
+    chapters = chapter_export.joined_chapters(project.config, scenes, offset)
+    combined["chapters"] = [chapter_export.chapter_json(c) for c in chapters]
+    metadata = padded_dir / "metadata.txt"
+    padded_dir.mkdir(parents=True, exist_ok=True)
+    metadata.write_text(
+        chapter_export.ffmetadata(chapter_export.video_tags(project.config), chapters if project.config.chapters.metadata else ()),
+        encoding="utf-8",
+    )
     mixed = padded_dir / "mix.wav"
     remove_file(mixed)
     if not no_audio:
@@ -492,6 +507,7 @@ def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) ->
         fps=fmt.fps,
         kinds=kinds[1:],
         overlays=clips or None,
+        metadata=metadata,
     )
     return output, combined
 
@@ -529,6 +545,21 @@ def _overlaps(project: Project, fps: int, renders: list[tuple[Path, dict[str, An
                 t.type, spec.id, overlaps[i] / fps, wanted / fps, config.scenes[i - 1].id,
             )
     return overlaps
+
+
+def write_chapter_list(project: Project, preview: bool, timings: dict[str, Any]) -> Path | None:
+    """Write the YouTube chapter list ``<output>_chapters.txt`` from the combined timings'
+    ``chapters`` (DESIGN.md §52) and log why YouTube would ignore it; returns its path, or
+    ``None`` (and removes an old list) when the video has no chapters or ``chapters.youtube`` is
+    false."""
+    path = project.chapters_path(preview)
+    chapters = [chapter_export.chapter_from_json(c) for c in timings.get("chapters", [])]
+    if not chapters or not project.config.chapters.youtube:
+        remove_file(path)
+        return None
+    for problem in chapter_export.write_youtube_list(path, chapters):
+        log.warning("%s", problem)
+    return path
 
 
 def write_frames_index(project: Project, preview: bool, timings: dict[str, Any], frames: int) -> Path:
@@ -642,6 +673,7 @@ def render_project(
         write_json(timings_file, timings)
         srt = project.srt_path(preview)
         write_srt(srt, timings, project.audio_dir, project.pronunciation, project.speaker_tags())
+        chapters_file = write_chapter_list(project, preview, timings)
         index = write_frames_index(project, preview, timings, frames) if frames else None
         hooks.dispatch(
             "post_render",
@@ -651,6 +683,7 @@ def render_project(
             timings=timings,
             timings_file=timings_file,
             frames_index=index,
+            chapters=chapters_file,
             preview=preview,
             variant=project.variant,
         )
@@ -665,4 +698,5 @@ def render_project(
             render_seconds=runs.seconds,
             warnings=runs.warnings,
             frames_index=index,
+            chapters=chapters_file,
         )

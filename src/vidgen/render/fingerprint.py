@@ -150,7 +150,11 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
     # word times (the spoken texts are in "overlays"); editing it must not re-render every scene.
     # Named voices and subtitle settings change only audio and, with overlays, captions (§46).
     # Music and the final mix (§48) are added when the video is joined: no pixels, no timing.
-    excluded = {"scenes", "variants", "lint", "pronunciation", "pronunciation_file", "voices", "subtitles", "music", "audio"}
+    # So are the MP4's chapters and tags and the YouTube chapter list (§52).
+    excluded = {
+        "scenes", "variants", "lint", "pronunciation", "pronunciation_file", "voices", "subtitles", "music", "audio",
+        "chapters", "metadata",
+    }
     config = project.config.model_dump(mode="json", exclude=excluded)
     assets = project.root / "assets"
     data: dict[str, Any] = {

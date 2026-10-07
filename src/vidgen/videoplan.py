@@ -106,7 +106,8 @@ class Chapter:
     not numbered), the ``scene`` it starts at, ``start`` / ``end`` in the video (seconds; a
     chapter ends where the next starts, the last one at the video's end), its position
     ``index`` (1-based), the number of chapters ``count``, and whether it starts with a
-    ``chapter`` card (``card``)."""
+    ``chapter`` card (``card``). ``intro``: the chapter added at 0:00 before the first one in
+    published lists (MP4, YouTube; DESIGN.md §52), which no scene marks."""
 
     title: str
     number: str | None
@@ -116,6 +117,7 @@ class Chapter:
     index: int
     count: int
     card: bool
+    intro: bool = False
 
     @property
     def label(self) -> str:
@@ -338,17 +340,25 @@ class VideoPlan:
         return float(value)
 
 
-def video_chapters(project: Project, fps: int | None = None) -> tuple[Chapter, ...]:
+def video_chapters(project: Project, fps: int | None = None, intro: bool = False) -> tuple[Chapter, ...]:
     """The chapters of ``project``'s video (DESIGN.md §42): ``chapter`` scenes and scenes with a
     ``chapter:`` field, each with its title, number, scene, planned ``start`` / ``end`` in seconds
     (at ``fps``, default the final format's), position and count. Empty without chapters.
 
+    ``intro``: the list as the render publishes it (MP4 chapters, YouTube list; DESIGN.md §52),
+    starting at 0:00: when the first chapter starts later, a chapter titled ``chapters.intro``
+    is added before it (``Chapter.intro``), or with ``intro: false`` the first chapter is moved
+    to 0:00. Without, the list is the one overlays use (nothing before the first chapter).
+
     Scene lengths need the scene types (their fade-out); when one is not registered (called
     outside a render or an extension), the project's types are loaded for the call."""
     from vidgen import extensions, registry
+    from vidgen.chapter_export import published_chapters
 
     fps = fps or project.config.format.fps
     if all(registry.find(spec.type) is not None for spec in project.config.scenes):
-        return VideoPlan(project, fps).chapters
-    with extensions.project_session(project):
-        return VideoPlan(project, fps).chapters
+        chapters = VideoPlan(project, fps).chapters
+    else:
+        with extensions.project_session(project):
+            chapters = VideoPlan(project, fps).chapters
+    return published_chapters(project.config, chapters) if intro else chapters

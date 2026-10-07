@@ -377,7 +377,7 @@ def test_render_json(render_project_dir: Callable[..., Path], capsys: pytest.Cap
     root = render_project_dir(
         [
             {"id": "a", "type": "text_card", "params": {"text": "Hi"}, "beats": [{"text": "Hello there."}]},
-            {"id": "b", "type": "lazy", "beats": [{"text": "One two three."}, {"text": "Never said."}]},
+            {"id": "b", "type": "lazy", "chapter": "Second", "beats": [{"text": "One two three."}, {"text": "Never said."}]},
         ]
     )
     code, doc, err = run_json(["render", str(root), "--preview", "--json", "--no-audio"], capsys)
@@ -390,7 +390,13 @@ def test_render_json(render_project_dir: Callable[..., Path], capsys: pytest.Cap
         "subtitles": str((root / "out_preview.srt").resolve()),
         "timings": str((root / "build" / "preview" / "timings.json").resolve()),
         "frames": None,
+        "chapters": str((root / "out_preview_chapters.txt").resolve()),
     }
+    intro, second = doc["chapters"]  # the intro chapter before the first chapter (DESIGN.md §52)
+    assert (intro["title"], intro["intro"], intro["start"], second["title"], second["scene"]) == ("Intro", True, 0.0, "Second", "b")
+    assert second["start"] == pytest.approx(doc["scenes"][1]["start"]) and second["end"] == pytest.approx(doc["duration"])
+    assert any("at least 3" in w["message"] for w in doc["warnings"])  # YouTube's rules
+    documented(*intro)
     assert all(Path(p).is_file() for p in doc["outputs"].values() if p is not None)
     timings = json.loads((root / "build" / "preview" / "timings.json").read_text(encoding="utf-8"))
     assert doc["duration"] == timings["duration"] and doc["elapsed"] > 0
