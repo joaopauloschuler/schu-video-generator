@@ -299,12 +299,17 @@ def test_server_validate_paths_and_cost_guards(tmp_path: Path) -> None:
     root = tmp_path / "root"
     tiny_project(root / "proj")
     tiny_project(tmp_path / "outside")
+    leaky = minimal_config(scenes=[{"id": "a", "type": "image", "params": {"path": "../../outside/video.yaml"}, "beats": [{"text": "Hi."}]}])
+    (root / "leaky").mkdir(parents=True)
+    (root / "leaky" / "video.yaml").write_text(yaml.safe_dump(leaky), encoding="utf-8")
 
     async def body(client: Any) -> None:
         doc = doc_of(await client.call_tool("validate", {"project": "proj"}))
         assert doc["ok"] and doc["scenes"] == 2 and doc["project"] == str((root / "proj").resolve())
         for bad in ("../outside", str(tmp_path / "outside")):
             assert "outside the folder" in error_text(await client.call_tool("validate", {"project": bad}))
+        # a file the config names is confined too (Step 60)
+        assert "outside the allowed folder" in error_text(await client.call_tool("validate", {"project": "leaky"}))
         assert "outside the folder" in error_text(await client.call_tool("init", {"dir": "../evil"}))
         assert "outside the folder" in error_text(await client.call_tool("export", {"kind": "gif", "project": "proj", "output": "/tmp/x.gif"}))
 

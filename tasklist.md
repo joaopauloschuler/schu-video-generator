@@ -256,13 +256,42 @@ Rules that apply to every step:
 - [x] (from Step 22) `vidgen tts --json` (and, from Step 55, `vidgen imagegen --json`: the commands without it); human `vidgen validate` still stops at the first variant that does not load (`--json` lists them all) (also `vidgen init --json` and `validate --json` `images`; human validate now lists every broken variant)
 
 ### Step 60 — Final review
-- [ ] Full review of Steps 8–59; docs and examples consistent; release notes in HANDOFF.md
-- [ ] (from Step 59) MCP server: files a project's `video.yaml` names (image `path:`, `extensions`, `pronunciation_file`...) are not confined to `--root`; on Windows cancelling a render kills the CLI process but not its render workers (POSIX kills the process group); the whole `schema` (~370 KB, behind `full: true`) and a long `lint` / `storyboard` document can exceed a client's tool-output limit (no trimming of documents); no real client (Claude Desktop / Code) session was tried here, only the SDK's client in tests
-- [ ] (from Step 58) `code` with `highlight`: GitHub-dark keyword red (#FF7B72) on the highlight band is 4.15:1 (lint `contrast`; seen on `examples/plan`); `vidgen plan` heuristics to grow from real outlines: prose-derived bullet items are cut sentences ("Every request that reaches database costs"), stat labels keep the subject ("A cache can make same page faster"), icon search is English-only (other languages fall back to `bullets`), no `network` / `line_chart` / `pie` / `map` cues, an intro of 2+ sentences before a list becomes its own `bullets` scene
-- [ ] (from Step 57) Gallery stills seen and left: `code_walkthrough` in 9:16 has a small listing (a 5-line file wraps a line), `image` with the default `fit: contain` leaves bands in 9:16 (`fit: cover` is the author's choice), a `world` view spanning most longitudes is still a strip in 9:16 (labels now spread into the bands); `vidgen gallery` has no mid-beat stills (the GIF shows the animation) and no project-type render test (unit-tested only); kphi3 / examples only re-linted in default + vertical
-- [ ] (from Step 55) `generate:` for the `screenshot` scene (its `px` callouts / magnifier need the real picture) and a generated picture behind a designed thumbnail; no real image-generation run was made (mocked only)
-- [ ] (from Step 51) Locale details translations cannot reach: number formats (`value_format`, decimal / thousands marks defaulted rather than written in the config), the `map` scene's bundled English country names, `map` arc shorthands `"A -> B"` naming a translated pin label, `lint_ignore` object patterns and `point:<series>@<label>` targets naming translated texts; cue cutting for languages without spaces (only at punctuation)
-- [ ] (from Step 50) A frame thumbnail's text is not measured (no layout dump for a plain render; a `--frames` render or the lint stills could give `min_font` / `contrast` at 320x180); `post_render` hooks run before the thumbnail is written; `build/..._bare` renders are never cleaned up; the MP4 could carry the thumbnail as cover art (Step 49 gap)
-- [ ] (from Step 49) The plan and a silent scene's render can differ by a frame when `(duration - outro) x fps` is a half frame (5 fps, a 1.2 s `chapter` card: planned 7 frames, rendered 6); chapter outputs follow the join, overlays the plan
-- [ ] (from Step 48) Revisit: joins with a crossfade / push / wipe re-encode the whole video (~40 s for the gallery's 3:49 preview; stream-copying between transitions needs SPS-compatible re-encoded pieces); `reserve` is per whole scene (several reserving overlays + captions shrink a scene's content until lint's `min_font` fires); mono clip sound is upmixed −3 dB (narration no longer is); a storyboard / lint view of the frames around each transition and carry (Step 47's suggestion; Step 48 used an ad-hoc contact sheet)
-- [ ] (from Step 37) Left as known limits, revisit: a `highlight` colour on an `equation_derivation` step is not carried into its dimmed copy; `code`'s own highlight steps reset line opacities set by a `dim` action; `image` Ken Burns renders ~1.6x real time in preview (Manim's per-frame image transform); `code_walkthrough` builds ~0.1 s per line of the file (Manim glyphs; `excerpt` limits it)
+- [x] Full review of Steps 8–59; docs and examples consistent; release notes in HANDOFF.md (end-to-end as an agent with the CLI and over MCP, consistency pass, wheel + sdist installed in fresh venvs with and without extras; version 0.2.0; "Release notes: vidgen 0.2.0" in HANDOFF.md, DESIGN §63. Also found and fixed: `vidgen render` re-rendered scenes the storyboard had just rendered → incremental render with `--force`; map data notices missing from the wheel; `translate-template --language`; `init`'s next-step line)
+- [~] (from Step 59) MCP server: files a project's `video.yaml` names are now confined to `--root` (`VIDGEN_CONFINE_ROOT`) and cancelling on Windows kills the process tree (`taskkill /T`, untested here); left: trimming large documents, a real client session — see Backlog
+- [~] (from Step 58) `code` highlight band contrast fixed (adaptive band, examples/plan lints clean); `vidgen plan`: stat labels without the subject, ranges are not stats, bare web addresses are links, placeholder beats say the whole item; left: truncated prose bullets, English-only icon search, more cues — see Backlog
+- [ ] (from Step 57) Gallery 9:16 stills (`code_walkthrough`, `image` `contain`, wide `world`), mid-beat stills, project-type render test — see Backlog
+- [ ] (from Step 55) `generate:` for `screenshot` / thumbnail backgrounds; a real image-generation run — see Backlog
+- [ ] (from Step 51) Locale details translations cannot reach — see Backlog
+- [~] (from Step 50) `post_render` hooks now run after the thumbnail (with `thumbnail` in their data); `_bare` folders kept as caches (documented with `build/`); left: measuring a frame thumbnail's text, MP4 cover art — see Backlog
+- [x] (from Step 49) Plan vs render on a half frame: silent scenes now render exactly the planned frames (`timeline` / `hold` round like the plan; test at 5 fps)
+- [~] (from Step 48) Mono clip sound now at full level on both channels; left: join re-encode, `reserve` per scene, a transitions view — see Backlog
+- [ ] (from Step 37) `equation_derivation` highlight in the dimmed copy, `code` steps vs `dim`, Ken Burns / walkthrough render cost — see Backlog
+
+---
+
+## Backlog (after Step 60)
+
+Not done in the roadmap; each is one line, with where it came from. Bugs first, then quality,
+then nice-to-have.
+
+Bugs / correctness
+- [ ] MCP: large documents (a long video's `lint` / `storyboard` JSON, `schema full=true`) are not trimmed and can exceed a client's tool-output limit (Step 59) — page or summarise them
+- [ ] MCP on Windows: process-tree kill on cancel is untested; no session with a real client (Claude Desktop / Code) was possible here (Step 59)
+- [ ] `equation_derivation`: a `highlight` colour on a step is not carried into its dimmed copy; `code`'s own highlight steps reset opacities a `dim` action set (Step 37)
+- [ ] Not run on real Windows / macOS: font registration, MiKTeX's install prompts, long paths (Step 7 onwards)
+
+Quality (what an agent's video looks like)
+- [ ] `vidgen plan`: prose-derived bullet items are truncated sentences ("Every request that reaches database costs"); a closing sentence can be split between two scenes; icon search is English-only; no cues for `network` / `line_chart` / `pie` / `map` / `screenshot` / `video_clip`; nested list items dropped; an intro of 2+ sentences becomes its own `bullets` scene; TODO texts in English (Step 58)
+- [ ] 9:16 stills: `code_walkthrough` listing small (a 5-line file wraps a line), `image` `fit: contain` leaves bands, a `world` map view spanning most longitudes is a strip (Step 57)
+- [ ] `reserve` is per whole scene: several reserving overlays + captions shrink content until `min_font` fires (Step 48)
+- [ ] A frame thumbnail's text is not measured (`min_font` / `contrast` at 320x180 from a `--frames` render or lint stills) (Step 50)
+- [ ] Locale: number formats, `map` English country names, `"A -> B"` arcs naming translated pins, `lint_ignore` / `point:` targets do not follow translations; no-space languages cut cues only at punctuation (Step 51)
+- [ ] A storyboard / lint view of the frames around each transition and carry (Steps 47–48)
+
+Nice-to-have / performance
+- [ ] `vidgen clean` (or a size report): `build/` and its `_bare` caches only grow (Steps 7, 50)
+- [ ] Joins with a crossfade / push / wipe re-encode the whole video (Step 48); `image` Ken Burns ~1.6x real time in preview, `code_walkthrough` ~0.1 s per line (Step 37)
+- [ ] MP4 cover art from the thumbnail (Steps 49–50); `generate:` for `screenshot` and behind a designed thumbnail (Step 55)
+- [ ] `vidgen gallery`: mid-beat stills, a project-type render test (Step 57)
+- [ ] A real image-generation (OpenAI) and speech-to-text (faster-whisper) run (Steps 54–55: no network for them here)
+- [ ] `vidgen plan` could write an `output:` name from the title (a draft from `outline.md` renders `outline.mp4`); `storyboard --json` lists every still twice (video and scene sheets) — verbose for agents

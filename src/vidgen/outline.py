@@ -327,6 +327,11 @@ _INLINE_IMAGE = re.compile(r"!\[([^\]]*)\]\([^)]*\)")
 _LINK = re.compile(r"\[([^\]]+)\]\(\s*<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\s*\)")
 _AUTOLINK = re.compile(r"<((?:https?://|mailto:)[^>\s]+)>")
 _URL = re.compile(r"\bhttps?://[^\s)>\]]+")
+#: A bare web address without a scheme ("batteryuniversity.com", "www.example.org/docs").
+_DOMAIN = re.compile(
+    r"(?<![\w@./-])(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|org|net|io|dev|ai|edu|gov|app|co)\b(?:/[^\s)>\]]*)?",
+    re.IGNORECASE,
+)
 _CODE_SPAN = re.compile(r"(`+)(.+?)\1")
 _HTML_TAG = re.compile(r"</?[A-Za-z][^>]*>")
 _EMPHASIS = (
@@ -357,6 +362,7 @@ def plain(text: str) -> Inline:
     out = _LINK.sub(link, out)
     out = _AUTOLINK.sub(autolink, out)
     bare = [u.rstrip(".,;:!?") for u in _URL.findall(out)]
+    bare += [d.rstrip(".,;:!?") for d in _DOMAIN.findall(_URL.sub(" ", out))]
     links.extend(u for u in bare if u not in links)
     out = _HTML_TAG.sub("", out)
     for pattern in _EMPHASIS:

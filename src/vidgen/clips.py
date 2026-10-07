@@ -47,13 +47,15 @@ _IDENTITY = np.array([[[0, 0, 0, 255], [255, 255, 255, 255]]], dtype=np.uint8)
 @dataclass(frozen=True)
 class ClipInfo:
     """What a clip file holds: picture size in pixels, frames per second, length in seconds (of
-    its video stream) and whether it has a sound stream."""
+    its video stream), whether it has a sound stream and its channel count (0: no sound or not
+    stated)."""
 
     width: int
     height: int
     fps: float
     duration: float
     audio: bool
+    channels: int = 0
 
     @property
     def aspect(self) -> float:
@@ -84,13 +86,14 @@ def probe_clip(path: Path) -> ClipInfo:
                 duration = last
             width, height = stream.codec_context.width, stream.codec_context.height
             audio = bool(container.streams.audio)
+            channels = int(container.streams.audio[0].channels or 0) if audio else 0
     except av.error.FFmpegError as exc:
         raise VidgenError(f"cannot read video {path.name}: {exc}") from None
     except OSError as exc:
         raise VidgenError(f"cannot read video {path}: {exc}") from None
     if width <= 0 or height <= 0 or duration <= 0:
         raise VidgenError(f"cannot read video {path.name}: no picture size or length")
-    return ClipInfo(int(width), int(height), fps or 25.0, duration, audio)
+    return ClipInfo(int(width), int(height), fps or 25.0, duration, audio, channels)
 
 
 @dataclass(frozen=True)
@@ -149,15 +152,18 @@ def clip_audio(path: Path, out: Path, timing: ClipTiming, *, length: float, volu
     """Write the clip's sound as it plays for ``length`` seconds in a scene to the WAV ``out``
     (48 kHz stereo): ``timing``'s part of the file at its speed (pitch kept), looped when it
     loops (else silence after one pass), at ``volume`` (linear, 1 = as recorded), fading out
-    over the last ``fade`` seconds of ``length``. Returns ``False`` (writing nothing) when the
-    file has no sound."""
-    if not probe_clip(path).audio:
+    over the last ``fade`` seconds of ``length``. Mono sound plays at full level on both channels
+    (like the narration; FFmpeg's own upmix would put it 3 dB down). Returns ``False`` (writing
+    nothing) when the file has no sound."""
+    info = probe_clip(path)
+    if not info.audio:
         return False
     one_pass = max(1, round(timing.length * AUDIO_RATE))
     graph = [
         f"atrim=start={timing.start:.6f}:end={timing.end:.6f}",
         "asetpts=PTS-STARTPTS",
         f"aresample={AUDIO_RATE}",
+        *(["pan=stereo|c0=c0|c1=c0"] if info.channels == 1 else []),
         "aformat=sample_fmts=fltp:channel_layouts=stereo",
         *atempo_chain(timing.speed),
         f"apad=whole_len={one_pass}",  # exactly one pass long, so loops stay in step with the picture

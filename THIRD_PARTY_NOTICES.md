@@ -67,4 +67,5 @@ The `map` scene draws countries from `src/vidgen/data/geo/world-110m.json`, made
   > DEALINGS IN THE SOFTWARE.
 
 The geometry was converted (antimeridian cuts, ring orientation, coordinates rounded to 0.01°)
-and label points and aliases were added; the `source` entry of the file records this.
+and label points and aliases were added; the `source` entry of the file records this. The same
+notices ship with the data as `src/vidgen/data/geo/LICENSE`.

@@ -200,7 +200,8 @@ class VideoPlan:
             outro_frames = math.ceil(outro * self.fps - 1e-9) if outro > 0 else 0
             if spec.silent:
                 duration = spec.duration or 0.0
-                frames = max(self._frames(duration), self._frames(max(duration - outro, 0.0)) + outro_frames)
+                # as NarratedScene.timeline / hold round them (whole frames of each part)
+                frames = max(self._frames(duration), self._frames(max(duration - outro, 1 / self.fps)) + outro_frames)
             else:
                 self._scene_beats(i)
                 frames = self._narrated[i] + outro_frames

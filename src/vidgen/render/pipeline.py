@@ -186,6 +186,20 @@ def _usable_render(project: Project, preview: bool, scene_id: str, no_audio: boo
     )
 
 
+def current_render(project: Project, preview: bool, scene_id: str, no_audio: bool, frames: int = 0) -> bool:
+    """True if the scene's render is usable (:func:`_usable_render`) and was made from the inputs
+    it has now (its recorded render fingerprint matches, DESIGN.md §63)."""
+    from vidgen.render.fingerprint import scene_fingerprint
+
+    if not _usable_render(project, preview, scene_id, no_audio, frames):
+        return False
+    try:
+        meta = json.loads(scene_timings_path(project, preview, scene_id).read_text(encoding="utf-8")).get("render", {})
+    except (OSError, ValueError):
+        return False
+    return meta.get("fingerprint") == scene_fingerprint(project, scene_id)
+
+
 def _has_stills(project: Project, preview: bool, scene_id: str) -> bool:
     return all(
         path.is_file()
@@ -652,17 +666,22 @@ def render_project(
     keep_going: bool = False,
     jobs: int = 1,
     frames: int = 0,
+    force: bool = False,
 ) -> RenderResult:
     """Render ``project`` (already loaded with its variant) and write the final MP4 + SRT.
 
-    ``scenes``: render only these ids and reuse existing renders of the others (scenes without a
-    usable render, e.g. never rendered or rendered at another format, are rendered too).
+    Scenes whose render is current (:func:`current_render`: same format and audio mode, nothing
+    it depends on changed — the render fingerprint, DESIGN.md §63) are reused; ``force`` renders
+    every scene. ``scenes``: render these ids and reuse existing renders of the others, current
+    or not (scenes without a usable render, e.g. never rendered or rendered at another format,
+    are rendered too).
     ``keep_going``: render the remaining scenes after a failure; the video is then not joined and
     a :class:`VidgenError` listing the failed scenes is raised at the end.
     ``frames``: also save that many PNG stills per beat of every scene (1: the end of each beat)
     under ``build/.../frames/``; reused scenes without such stills are rendered again. 0: none.
-    With a ``thumbnail:`` config (and ``auto``), the thumbnail is written last
-    (:func:`vidgen.thumbnail.make_thumbnail`; its warnings are logged).
+    With a ``thumbnail:`` config (and ``auto``), the thumbnail is written after the join
+    (:func:`vidgen.thumbnail.make_thumbnail`; its warnings are logged). ``post_render`` hooks run
+    last, with every output (``thumbnail``: its path, else ``None``).
     """
     from vidgen import extensions
 
@@ -678,10 +697,12 @@ def render_project(
             raise VidgenError(f"unknown scene(s): {', '.join(unknown)}; scenes: {', '.join(known)}")
         warn_audio(project)
         warn_images(project)
-        to_render = [
-            sid for sid in known
-            if not selected or sid in selected or not _usable_render(project, preview, sid, no_audio, frames)
-        ]
+        if selected:  # those, and the scenes without a usable render
+            to_render = [sid for sid in known if sid in selected or not _usable_render(project, preview, sid, no_audio, frames)]
+        elif force:
+            to_render = known
+        else:  # what changed since its render (a storyboard's or lint's renders are reused)
+            to_render = [sid for sid in known if not current_render(project, preview, sid, no_audio, frames)]
         ctx = hooks.dispatch(
             "pre_render",
             project,
@@ -709,18 +730,21 @@ def render_project(
         write_srt(srt, timings, project.audio_dir, project.pronunciation, project.speaker_tags(), project.config.language)
         chapters_file = write_chapter_list(project, preview, timings)
         index = write_frames_index(project, preview, timings, frames) if frames else None
-        hooks.dispatch(
-            "post_render",
-            project,
-            output=output,
-            srt=srt,
-            timings=timings,
-            timings_file=timings_file,
-            frames_index=index,
-            chapters=chapters_file,
-            preview=preview,
-            variant=project.variant,
-        )
+        post: dict[str, Any] = {
+            "output": output,
+            "srt": srt,
+            "timings": timings,
+            "timings_file": timings_file,
+            "frames_index": index,
+            "chapters": chapters_file,
+            "thumbnail": None,
+            "preview": preview,
+            "variant": project.variant,
+        }
+        thumb = project.config.thumbnail
+        wants_thumbnail = thumb is not None and thumb.auto
+        if not wants_thumbnail:
+            hooks.dispatch("post_render", project, **post)
         result = RenderResult(
             output=output,
             srt=srt,
@@ -734,12 +758,13 @@ def render_project(
             frames_index=index,
             chapters=chapters_file,
         )
-    thumb = project.config.thumbnail
-    if thumb is not None and thumb.auto:  # after the session: a frame thumbnail may render a scene
+    if wants_thumbnail:  # after the session: a frame thumbnail may render a scene
         from vidgen.thumbnail import make_thumbnail
 
         result.thumbnail = make_thumbnail(project, preview, jobs=jobs)
         for check in result.thumbnail.checks:
             if check.severity == "warning":
                 log.warning("thumbnail: %s", check.message)
+        with extensions.project_session(project):  # post_render sees the finished outputs
+            hooks.dispatch("post_render", project, **{**post, "thumbnail": result.thumbnail.path})
     return result

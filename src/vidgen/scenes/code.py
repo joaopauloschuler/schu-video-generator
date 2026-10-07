@@ -48,6 +48,42 @@ TARGET_COLUMNS = 32
 NUMBER_GAP = 0.25
 #: Padding of Manim's ``Code`` background on each side, in units.
 CODE_PADDING = 0.3
+#: Opacities tried for the highlight band, strongest first: the strongest one every syntax colour
+#: keeps :data:`INK_RATIO` over is used (a dark theme's red keywords lose contrast over a strong
+#: band); below the last one the syntax colours are mixed towards the theme's text colour.
+BAND_OPACITIES = (0.2, 0.16, 0.12, 0.1)
+#: Contrast every syntax colour keeps with the window and the band (lint's 4.5:1 plus a margin).
+INK_RATIO = 4.6
+
+
+def readable_band(scene: NarratedScene, rows: list[Mobject], band_color: str, opacities: tuple[float, ...] = BAND_OPACITIES) -> float:
+    """The highlight band's opacity for a listing whose glyphs are ``rows`` on the theme's
+    ``surface``: the first of ``opacities`` every syntax colour keeps :data:`INK_RATIO` over
+    (window and band). When none does, the colours that fall short are mixed towards the theme's
+    text colour (in place) and the last opacity is returned."""
+    from vidgen.lint.color import contrast_ratio, hex_rgb
+
+    surface, text = scene.theme.color("surface"), scene.theme.color("text")
+    glyphs = [m for row in rows for m in row.family_members_with_points()]
+    inks = {m.get_fill_color().to_hex() for m in glyphs}
+
+    def readable(ink: str, opacity: float) -> bool:
+        band = mix_colors(band_color, surface, opacity, theme=scene.theme)
+        return all(contrast_ratio(hex_rgb(ink), hex_rgb(b)) >= INK_RATIO for b in (surface, band))
+
+    for opacity in opacities:
+        if all(readable(ink, opacity) for ink in inks):
+            return opacity
+    low = opacities[-1]
+    fixed: dict[str, str] = {}
+    for ink in inks:
+        mixes = (mix_colors(text, ink, t, theme=scene.theme) for t in (0.2, 0.4, 0.6, 0.8))
+        fixed[ink] = ink if readable(ink, low) else next((c for c in mixes if readable(c, low)), text)
+    for m in glyphs:
+        ink = m.get_fill_color().to_hex()
+        if fixed.get(ink, ink) != ink:
+            m.set_fill(fixed[ink])
+    return low
 
 
 @lru_cache(maxsize=8)
@@ -273,6 +309,8 @@ class CodeListing(NarratedScene):
         x_left = (numbers.get_left()[0] if numbers is not None else lines.get_left()[0]) - 0.12
         x_right = listing.background.get_right()[0] - 0.15
         state: dict[str, Any] = {"band": VGroup()}
+        band_color = self.theme.color(p.highlight_color)
+        band_opacity = readable_band(self, list(lines), band_color) if p.highlight else BAND_OPACITIES[0]
 
         def physical(spec: LineSpec) -> set[int]:
             return {j for k in parse_line_spec(spec) for j in groups[k - 1]}
@@ -282,7 +320,7 @@ class CodeListing(NarratedScene):
             for run in line_runs(sorted(chosen)):
                 hi, lo = ys[run[0]] + pitch / 2, ys[run[-1]] - pitch / 2
                 band = RoundedRectangle(width=x_right - x_left, height=hi - lo, corner_radius=0.06, stroke_width=0)
-                band.set_fill(self.theme.color(p.highlight_color), opacity=0.2)
+                band.set_fill(band_color, opacity=band_opacity)
                 bands.add(band.move_to([(x_left + x_right) / 2, (hi + lo) / 2, 0]))
             return bands.set_z_index(1)
 

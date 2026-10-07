@@ -59,7 +59,8 @@ def cmd_init(args: argparse.Namespace) -> CommandResult:
     if args.json:
         return jsonout.init_document(target, args.example)
     print(f"created project in {target}")
-    print("next: edit video.yaml, then run `vidgen validate`, `vidgen tts` and `vidgen render`")
+    print("next: edit video.yaml, then `vidgen validate`, `vidgen storyboard` (look at the PNGs), `vidgen lint`; "
+          "when it reads well, `vidgen tts` and `vidgen render`")
     print("guide: `vidgen guide` (how to make a good video: workflow, pacing, scene types; for AI agents too)")
     return 0
 
@@ -503,7 +504,7 @@ def cmd_translate_template(args: argparse.Namespace) -> CommandResult:
         return jsonout.translate_template_document(project, result)
     s = result.stats
     print(f"translations: {result.path}")
-    print(f"language:     {result.language or 'not set (give --lang, e.g. --lang pt-BR)'}")
+    print(f"language:     {result.language or 'not set (give --language, e.g. --language pt-BR)'}")
     parts = [f"{s.translated} translated", f"{len(s.untranslated)} to translate"]
     for name, keys in (("stale", s.stale), ("moved", s.moved), ("obsolete", s.obsolete), ("dropped", s.dropped)):
         if keys:
@@ -518,7 +519,8 @@ def cmd_translate_template(args: argparse.Namespace) -> CommandResult:
 
 
 def cmd_render(args: argparse.Namespace) -> CommandResult:
-    """Render every scene (or only ``--scene`` ones), join them and write the MP4 and SRT."""
+    """Render what changed (every scene with ``--force``, or the ``--scene`` ones), join the
+    scenes and write the MP4 and SRT."""
     from vidgen.render.pipeline import render_project
 
     if args.jobs < 1:
@@ -536,6 +538,7 @@ def cmd_render(args: argparse.Namespace) -> CommandResult:
         keep_going=args.keep_going,
         jobs=args.jobs,
         frames=frames,
+        force=args.force,
     )
     if args.json:
         return jsonout.render_document(project, result, args.preview, time.monotonic() - started)
@@ -1187,7 +1190,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("translate-template", help="write or update a variant's translation file (every text to translate)")
     project_arg(p)
     p.add_argument("--variant", metavar="NAME", help="the variant to translate (its translations: file, else translations/NAME.yaml)")
-    p.add_argument("--lang", metavar="TAG", help="language of the translation (BCP-47, e.g. pt-BR; default: the variant's language)")
+    p.add_argument("--lang", "--language", dest="lang", metavar="TAG", help="language of the translation (BCP-47, e.g. pt-BR; default: the variant's language)")
     p.add_argument("--output", "-o", metavar="FILE", help="write here instead of the variant's translations: file")
     p.set_defaults(func=cmd_translate_template)
 
@@ -1203,6 +1206,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--frames-per-beat", type=int, metavar="N", help="save N evenly spaced stills per beat, the last at its end (implies --frames)"
     )
+    p.add_argument("--force", action="store_true", help="render every scene again, even those whose render is current")
     p.set_defaults(func=cmd_render)
 
     p = sub.add_parser("storyboard", help="contact sheets (PNG) of the video's frames, for review")

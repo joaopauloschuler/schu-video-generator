@@ -563,7 +563,10 @@ class NarratedScene(MovingCameraScene):
         start = float(self.renderer.time)
         d = max((self.spec.duration or 0.0) - self.outro, 1 / config.frame_rate)
         yield 0, d
-        self.wait_seconds(d - (self.renderer.time - start))
+        # whole frames, rounded as the plan rounds them (rounding the remainder instead can lose
+        # a frame when d is a half frame: DESIGN.md §63)
+        fps = config.frame_rate
+        self.wait_seconds((round(d * fps) - round((self.renderer.time - start) * fps)) / fps)
 
     def reveal(
         self,
@@ -706,7 +709,8 @@ class NarratedScene(MovingCameraScene):
         """
         target = until if until is not None else self.spec.duration
         if target is not None:
-            self.wait_seconds(target - self.renderer.time)
+            fps = config.frame_rate
+            self.wait_seconds((round(target * fps) - round(self.renderer.time * fps)) / fps)
 
     def tear_down(self) -> None:
         """Hold silent scenes to ``spec.duration`` and every scene for the planned ``hold`` of the

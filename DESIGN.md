@@ -5,8 +5,9 @@ It generalises the one-off `kphi3_paper_video` project: the pipeline is shared, 
 **project folder** with a config file, and each project can **extend** the tool with its own
 scene types, helpers, theme tokens and pipeline hooks.
 
-Status of this document: describes the implemented system (version 0.1, after the Step 7
-review, plus the roadmap steps in tasklist.md recorded in §11 onwards). Sections 1–9 give the original contract; the "Refinements (Step N)" lists record how
+Status of this document: describes the implemented system (version 0.2.0: the version 0.1
+contract after the Step 7 review, plus the roadmap steps 8–60 in tasklist.md recorded in §11
+onwards; §63 is the final review and lists what changed for users of 0.1). Sections 1–9 give the original contract; the "Refinements (Step N)" lists record how
 each step made it precise, and where a refinement differs from the text above it, the
 refinement is what the code does. Changing a public interface requires updating this file in
 the same commit and noting it in HANDOFF.md. User documentation: README.md, docs/CONFIG.md
@@ -509,7 +510,9 @@ register_theme_preset("acme", base="light_academic", colors={"primary": "#0B5FFF
   `scene_id`, `video: Path` (`scenes/<id>.mp4`, before padding), `timings: dict` (the scene's
   timings file content), `preview`, `variant`. `post_render` — after the MP4, SRT and
   `timings.json` are written: `output: Path`, `srt: Path`, `timings: dict` (combined),
-  `timings_file: Path`, `preview`, `variant`. Not dispatched when the command fails.
+  `timings_file: Path`, `preview`, `variant` (later steps add `frames_index`, `chapters` and,
+  Step 60, `thumbnail`: the hook runs after the thumbnail is written). Not dispatched when the
+  command fails.
 - **Promotion**: an extension module copied into `src/vidgen/scenes/` works unchanged, because
   built-ins use exactly the same `@scene` API.
 
@@ -710,7 +713,7 @@ vidgen list-music [PROJECT] [--render-dir DIR] [--json]   # music beds with desc
 vidgen schema [PROJECT] [--scene TYPE | --all] [--json]   # JSON Schema of video.yaml (§12)
 vidgen tts [PROJECT] [--force] [--dry-run] [--beat ID ...] [--voice NAME ...] [--variant NAME] [--json]
 vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going]
-              [--jobs N] [--frames] [--frames-per-beat N] [--json]
+              [--jobs N] [--frames] [--frames-per-beat N] [--force] [--json]   # changed scenes only (§63)
 vidgen storyboard [PROJECT] [--scene ID ...] [--per-beat N] [--variant NAME] [--preview | --final]
               [--width PX] [--jobs N] [--force] [--json]      # contact sheets (§14)
 vidgen lint [PROJECT] [--scene ID ...] [--rule NAME ...] [--variant NAME] [--preview | --final]
@@ -723,14 +726,16 @@ vidgen slides [PROJECT] [--format html|pdf] [--variant NAME] [--preview | --fina
               [--overlays | --no-overlays] [--no-dedupe] [--image-format F] [--quality Q] [--max-width PX]
               [--audio] [--separate] [--notes] [--title-page] [--paper a4|letter]
               [--output FILE] [--jobs N] [--force] [--json]   # HTML deck (§55), PDF deck (§56)
-vidgen translate-template [PROJECT] [--variant NAME] [--lang TAG] [--output FILE] [--json]   # translation file (§54)
+vidgen translate-template [PROJECT] [--variant NAME] [--language TAG] [--output FILE] [--json]   # translation file (§54)
 vidgen readback [PROJECT] [--variant NAME] [--beat ID ...] [--max-wer RATE] [--force] [--json]   # STT check of the audio (§57)
 vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME] [--json]   # generated pictures (§58)
 vidgen gallery [PROJECT] [--output DIR] [--types T,T] [--formats 16:9,9:16] [--theme PRESET]
               [--clips | --no-clips] [--jobs N] [--force] [--json]   # every scene type rendered (§60)
 ```
-PROJECT defaults to the current directory. `--scene` re-renders only those scenes and re-joins
-using the existing renders of the others (missing ones are rendered). Exit code non-zero on error.
+PROJECT defaults to the current directory. `render` renders the scenes whose render is missing
+or stale by its fingerprint (§14, §63; `--force`: all); `--scene` re-renders only those scenes
+and re-joins using the existing renders of the others (missing ones are rendered). Exit code
+non-zero on error.
 `render` prints one line per scene, then the output paths and the total duration (Step 45: and
 the measured loudness, §48).
 
@@ -936,8 +941,8 @@ the measured loudness, §48).
   source except `NOT_RENDER_INPUTS` (CLI, JSON, schema, sheets, storyboard, pipeline, ffmpeg,
   subtitles, tts: modules that cannot change pixels or timing; new modules count by default).
   The worker computes it before rendering and stores it as `render.fingerprint` in the scene's
-  timings (key added; older renders have none and count as stale). `vidgen render` does not use
-  it (it re-renders what it is asked to, as before).
+  timings (key added; older renders have none and count as stale). Since Step 60 `vidgen render`
+  uses it too (§63: renders only stale scenes; `--force` all).
 - **Sheet layout** (`vidgen/sheets.py`, `compose_pages(title, subtitle, scenes, frame_size, *,
   width, detail, video_times, max_height) -> list[SheetPage]`): white page, a title line and a
   line saying what stills/times mean; per scene a grey header band `N/M  id · type ·
@@ -3557,8 +3562,8 @@ the measured loudness, §48).
   outside its extension session (a frame thumbnail may run `render_scenes`, which opens its own);
   the scene's render is current then, so nothing is rendered again unless `overlays: false`.
   Warnings are logged (`render --json` `warnings`); `RenderResult.thumbnail` (`ThumbnailResult`),
-  `render --json` `outputs.thumbnail`, human `thumbnail:` line. Not in `post_render` hook data
-  (the hook runs before it).
+  `render --json` `outputs.thumbnail`, human `thumbnail:` line. Since Step 60 `post_render` runs
+  after it (in a second extension session) with `thumbnail` (its path, else `None`) — §63.
 - **`vidgen thumbnail`** (`cmd_thumbnail`): the config's thumbnail, or `--scene` (+ `--beat`
   id or number — a digit string is a number unless the scene has a beat of that id —, `--at`,
   `--no-overlays`) checked like the config; `--preview`, `--jpeg`, `--jobs`, `--json`
@@ -4230,8 +4235,8 @@ the measured loudness, §48).
   starting with `-` is never read as an option; positionals are resolved absolute paths or
   checked names (no leading `-`). Pictures are only returned from inside the root. Files the
   server asks for itself go to `build/mcp/` (icon sheet, swatches, gallery: `build/mcp/gallery`,
-  no GIFs). Not covered: files a project's own `video.yaml` names (an image `path:` outside the
-  root is read by the render as before).
+  no GIFs). Files a project's own `video.yaml` names are confined too since Step 60 (§63:
+  `VIDGEN_CONFINE_ROOT`).
 - **Secrets**: the subprocess inherits the server's environment (API keys are needed by tts /
   imagegen / readback); nothing returned contains environment values (documents hold paths and
   results; provider errors were already scrubbed of keys, §58).
@@ -4265,3 +4270,51 @@ the measured loudness, §48).
   not load (`validate_all(keep_going=True)`), so its error lists them all (`[variant NAME]`
   lines, like the JSON problems).
 - `mcp_server.py` and `mcp_tools.py` are not render inputs (fingerprint).
+
+## 63. Refinements (Step 60, final review; version 0.2.0)
+
+- **Incremental `vidgen render`**: `render_project(..., force=False)` renders only the scenes for
+  which `pipeline.current_render` is false — no usable render (`_usable_render`: format, audio
+  mode, `--frames` stills) or a recorded `render.fingerprint` that differs from
+  `scene_fingerprint` now (§14) — and reuses the others (`RenderResult.reused`, `render --json`
+  scene `status: reused`). `--force` (CLI, MCP `render` `force`) renders every scene; `--scene`
+  keeps its meaning (those scenes, plus the ones without a usable render). Continuity
+  (`with_carried`) and the `pre_render` hook apply as before. A render after a storyboard / lint
+  of the same format joins only, and keeps their stills and layout dumps. Files a scene reads
+  outside `assets/` are not tracked (as for the storyboard): `--force`.
+- **Silent scenes render exactly their planned frames**: `NarratedScene.timeline()` waits to
+  `round(d * fps)` frames from its start and `hold()` to `round(target * fps)` frames, the same
+  rounding as `VideoPlan` (whose silent part is now `max(duration - outro, 1 / fps)`, as the
+  scene's). Before, rounding the remainder after a step could lose a frame on a half frame (5 fps,
+  a 1.2 s `chapter` card: plan 7 frames, render 6).
+- **`code` highlight band**: `scenes.code.readable_band` picks the strongest band opacity of
+  `BAND_OPACITIES` (0.2, 0.16, 0.12, 0.1) at which every syntax colour keeps `INK_RATIO` (4.6:1)
+  over the window and the band; below the last one the colours that fall short are mixed towards
+  the theme's `text` (as `code_walkthrough` does). GitHub-dark's keyword red on dark_tech's band
+  was 4.15:1 (lint `contrast` on `examples/plan`).
+- **Mono clip sound** (`clips.clip_audio`): a mono stream is panned to both channels at full level
+  (`pan=stereo|c0=c0|c1=c0`) instead of FFmpeg's −3 dB upmix, like the narration (§51).
+  `ClipInfo.channels` (0 when unknown) added.
+- **`post_render` after the thumbnail**: with a `thumbnail:` config the hook is dispatched after
+  `make_thumbnail`, in a second extension session (the thumbnail must run outside the first, a
+  frame thumbnail may render); hook data gains `thumbnail` (`Path | None`, also `None` without a
+  thumbnail).
+- **Config files confined under MCP**: `Project.load` checks, when `VIDGEN_CONFINE_ROOT`
+  (`project.CONFINE_ENV`) is set, that every string under a `PATH_KEYS` key anywhere in the raw
+  config (variants included: `path`, `logo`, `image`, `source`, `pronunciation_file`,
+  `translations`, `extensions`) resolves (links followed) inside that folder
+  (`confinement_problems`); else a `VidgenError` "files outside the allowed folder". The MCP
+  server sets it to its root for every command it runs. Non-path values under those keys (a
+  quote's `source`, a music bed name) resolve inside the folder and pass.
+- **MCP cancel on Windows**: `_kill` runs `taskkill /F /T` (the process tree: render workers).
+- **`vidgen plan`**: a stat whose number comes right before one or two words ("40x faster") is
+  labelled "faster with a cache" (the English subject before its verb, not a pronoun); a number
+  ending a range ("between 20 and 80 percent") is not a stat; bare web addresses
+  (`batteryuniversity.com`, `www.x.org/docs`) are links (`outline._DOMAIN`, end card `lines`);
+  placeholder beats of `process` / `bullets` steps say the whole item, not the label cut from it.
+- **CLI consistency**: `translate-template --language` (alias of `--lang`, as `plan --language`;
+  MCP `translate_template` parameter renamed `language`); `init` suggests the storyboard / lint
+  loop.
+- **Packaging**: version 0.2.0; PEP 639 metadata (`license = "MIT"`, `license-files` with
+  `THIRD_PARTY_NOTICES.md`; build needs setuptools ≥ 77); `data/geo/LICENSE` carries the ISC / MIT
+  notices of the map data in the wheel. Wheel ~2.0 MB (fonts 2.0 MB of it), sdist ~2.2 MB.

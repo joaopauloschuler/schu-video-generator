@@ -26,7 +26,7 @@ scenes:
   # TODO: check the stat's value and label; add a `context` line (source, period)
   - id: stat
     type: stat
-    params: {value: 40, suffix: x, label: "A cache can make same page faster"}
+    params: {value: 40, suffix: x, label: "faster with a cache"}
     beats:
       - text: "A cache can make the same page 40x faster."
 

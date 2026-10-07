@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import Any
@@ -66,6 +67,59 @@ def read_config_file(path: Path) -> Any:
         raise VidgenError(f"{path.name}: invalid JSON at line {exc.lineno}: {exc.msg}") from None
     except yaml.YAMLError as exc:
         raise VidgenError(f"{path.name}: invalid YAML: {exc}") from None
+
+
+#: Environment variable naming a folder that every file a config refers to must lie in (set by
+#: ``vidgen mcp`` for the commands it runs: its ``--root``; DESIGN.md §63).
+CONFINE_ENV = "VIDGEN_CONFINE_ROOT"
+#: Config keys (anywhere in the config, variants included) whose string values are files or
+#: folders of the project: scene ``path`` / ``logo``, watermark and thumbnail ``image``, music
+#: ``source``, ``pronunciation_file``, ``translations``, ``extensions``.
+PATH_KEYS = frozenset({"path", "logo", "image", "source", "pronunciation_file", "translations", "extensions"})
+
+
+def confinement_problems(data: Any, root: Path, confine: Path) -> list[str]:
+    """Config locations whose file (a :data:`PATH_KEYS` value, relative to ``root``) resolves
+    outside ``confine`` — through an absolute path, ``..`` or a link. Values that are not paths
+    (a quote's ``source`` text, a music bed's name) resolve inside and pass."""
+    confine = confine.resolve()
+    problems: list[str] = []
+
+    def check(value: str, where: str) -> None:
+        try:
+            resolved = (root / value).resolve()
+        except (OSError, ValueError):
+            return
+        if not resolved.is_relative_to(confine):
+            problems.append(f"{where}: {value!r} is outside the allowed folder {confine}")
+
+    def walk(node: Any, where: str) -> None:
+        if isinstance(node, Mapping):
+            for key, value in node.items():
+                here = f"{where}.{key}" if where else str(key)
+                if key in PATH_KEYS and isinstance(value, str):
+                    check(value, here)
+                elif key in PATH_KEYS and isinstance(value, list) and all(isinstance(v, str) for v in value):
+                    for k, v in enumerate(value):
+                        check(v, f"{here}[{k}]")
+                else:
+                    walk(value, here)
+        elif isinstance(node, list):
+            for k, value in enumerate(node):
+                walk(value, f"{where}[{k}]")
+
+    walk(data, "")
+    return problems
+
+
+def _confine(data: Any, root: Path, source: str) -> None:
+    """Raise when :data:`CONFINE_ENV` is set and the config names a file outside that folder."""
+    confine = os.environ.get(CONFINE_ENV)
+    if not confine:
+        return
+    problems = confinement_problems(data, root, Path(confine))
+    if problems:
+        raise VidgenError(f"{source}: files outside the allowed folder:\n" + "\n".join(f"  {p}" for p in problems))
 
 
 def _dump(config: VideoConfig) -> dict[str, Any]:
@@ -131,6 +185,7 @@ class Project:
         root = config_file.parent
         source = config_file.name
         data = read_config_file(config_file)
+        _confine(data, root, source)
         base, base_source, base_report = _translated(parse_config(data, source), data, root, source)
         if variant is None:
             return cls(root, config_file, base, None, base, base_source, base_report)

@@ -137,9 +137,10 @@ vidgen render
 picture) and `vidgen readback` with `stt: {provider: elevenlabs}` cost money; everything else is
 local and free. Always run `vidgen tts --dry-run` / `vidgen imagegen --dry-run` first, finish the
 layout on the word-count-timed preview, and commit `audio/` and `assets/generated/` (they cannot
-be made again identically). Renders are slow but free: `storyboard` and `lint` re-render only
-the scenes that changed; `vidgen render` renders every scene unless you give `--scene ID`;
-`--jobs N` renders several at once; preview while iterating.
+be made again identically). Renders are slow but free: `storyboard`, `lint` and `render` re-render
+only the scenes that changed (`render` reuses the storyboard's renders of the same format;
+`--force` renders everything, e.g. after editing a file outside `assets/`); `--jobs N` renders
+several at once; preview while iterating.
 
 **JSON everywhere.** Every command but `mcp` takes `--json` (`validate`, `list-scenes`,
 `schema`, `storyboard`, `lint`, `render`, `tts`, `imagegen`, `plan`, `init`, ...): one document on

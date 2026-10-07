@@ -747,7 +747,7 @@ Event data (see DESIGN.md §6.2):
 | `post_tts`    | `generated` (beat ids written, in order), `audio_dir` |
 | `pre_render`  | `scenes` (scene ids about to be rendered, config order; remove ids to reuse their existing render), `preview`, `variant`, `no_audio`, `render_dir` |
 | `post_scene`  | `scene_id`, `video` (the scene's MP4, before audio padding), `timings` (the scene's timings dict), `frames` (folder of the scene's stills with `--frames`, else `None`), `preview`, `variant` |
-| `post_render` | `output` (final MP4), `srt`, `timings` (combined timings dict), `timings_file`, `frames_index` (`frames/index.json` with `--frames`, else `None`), `chapters` (the YouTube chapter list `<output>_chapters.txt`, `None` without chapters or with `chapters: {youtube: false}`), `preview`, `variant` |
+| `post_render` | `output` (final MP4), `srt`, `timings` (combined timings dict), `timings_file`, `frames_index` (`frames/index.json` with `--frames`, else `None`), `chapters` (the YouTube chapter list `<output>_chapters.txt`, `None` without chapters or with `chapters: {youtube: false}`), `thumbnail` (`<output>_thumbnail.png` when a `thumbnail:` config wrote one, else `None`; the hook runs after it), `preview`, `variant` |
 
 Render hooks run in the `vidgen render` process (not in the per-scene worker processes);
 `post_scene` runs once per scene rendered in this run (not for reused renders).

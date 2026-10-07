@@ -5664,3 +5664,201 @@ How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2237 passed, 1
 ".[mcp]"`, add `{"command": "vidgen", "args": ["mcp", "--root", "<folder>"]}` to a client, ask it
 to call `guide` with topic `workflow`, `plan` on an outline, `storyboard` (the sheets come back as
 images), `tts` (dry run; a real run is refused without `confirm_cost`).
+
+## Step 60 — Final review and release notes
+Final review of Steps 8–59, done as an AI author would use vidgen: every item routed to Step 60
+triaged (bug / quality / nice-to-have), the real bugs fixed, a fresh end-to-end run from an
+outline (CLI and MCP), a consistency pass over commands / docs / `vidgen.api`, a packaging check,
+and these release notes. **Version bumped to 0.2.0.**
+
+### What I did end to end (and what it found)
+- **CLI, as `AGENTS.md` says**: wrote a new outline ("Why your phone battery dies") → `vidgen plan
+  --json` → read the draft and its TODOs → refined it (icon_grid of causes, a bar chart with a
+  highlight and caption, a process with icons, a 9:16 `social` variant with karaoke captions, a
+  designed thumbnail) → `validate --json` (ok) → `storyboard` (sheets read: layout clean at 16:9
+  and 9:16) → `lint` and `lint --variant social` (0 findings) → `render --preview` → `thumbnail`
+  (read) → `slides`. Findings: (1) `render` re-rendered every scene the storyboard had just made,
+  and then `slides` re-rendered them all again, because a plain render throws away the stills →
+  **render is now incremental** (below); (2) the plan made a stat of "between 20 and 80 percent",
+  missed the bare link `batteryuniversity.com`, and narrated a step by its cut label ("Steep for
+  four.") → fixed; (3) `init` suggested `validate → tts → render`, skipping the look-and-fix loop
+  → its "next:" line now names storyboard and lint.
+- **MCP, with the SDK's stdio client** (a scratch script calling `guide`, `plan` from
+  `markdown_text`, `validate`, `storyboard` (1 sheet back as an image), `lint` (stills reused),
+  `render` (now 3 s: it joins the storyboard's renders), `thumbnail` (2 images), `tts` (dry run),
+  and `validate` of a project whose `video.yaml` names `../../...` (refused, below)). Also run
+  from the installed wheel with `[mcp,pdf]`.
+- **Install check**: `python -m build` → wheel 1.98 MB (fonts 2.0 MB uncompressed are most of
+  it; 202 icon files, map 136 KB, guide, gallery sample assets, slides assets; no tests, caches or
+  build artefacts) and sdist 2.2 MB (sources, README, LICENSE, THIRD_PARTY_NOTICES, tests).
+  Fresh venv without extras: `vidgen --version` (0.2.0), `init`, `validate`, `render --preview`,
+  `guide --list` / `guide pacing`, `gallery --types title`, `list-icons`, `storyboard`, `lint`
+  (0 findings), package data present. Fresh venv with `[mcp,pdf]`: `slides --format pdf --notes`,
+  `vidgen-mcp --help`, the MCP script above. Found: the map data's ISC / MIT notices were only in
+  the repository's THIRD_PARTY_NOTICES, not in the wheel → `data/geo/LICENSE`; setuptools warned
+  that `license = {file}` is deprecated → PEP 639 `license` / `license-files`.
+
+### Fixes (Step 60)
+1. **`vidgen render` renders only what changed** (behaviour change, DESIGN §63): scenes whose
+   render is current by the Step 11 fingerprint (same format, audio mode, inputs) are reused —
+   also the storyboard's and lint's renders, whose stills then survive. `--force` (CLI and MCP)
+   renders everything; `--scene` unchanged. The biggest saving for an agent's loop (storyboard →
+   lint → render no longer renders twice).
+2. **Plan vs render, one frame** (Step 49 gap): a silent scene whose `(duration - outro) x fps`
+   is a half frame rendered a frame shorter than planned (banker's rounding of the remainder).
+   `timeline()` / `hold()` now wait to whole-frame targets rounded like the plan.
+3. **`code` highlight band contrast** (Step 58 gap): the band's opacity adapts (0.2 → 0.1) so
+   every syntax colour keeps 4.6:1, else colours are mixed towards `text`. `examples/plan` now
+   lints clean (was 1 `contrast` warning).
+4. **Mono clip sound −3 dB** (Step 48 gap): mono clip audio plays at full level on both channels.
+5. **`post_render` hooks before the thumbnail** (Step 50 gap): they now run after it and get
+   `thumbnail` in their data.
+6. **MCP: files named by a project's config** (Step 59 gap): with `VIDGEN_CONFINE_ROOT` (set by
+   the server for every command) `Project.load` refuses a config whose `path` / `logo` / `image` /
+   `source` / `pronunciation_file` / `translations` / `extensions` values resolve outside the root.
+7. **MCP cancel on Windows** (Step 59 gap): kills the process tree (`taskkill /T`), so render
+   workers stop too (not exercised here: no Windows).
+8. **`vidgen plan`** (Step 58 gaps, partly): stat labels without the subject ("faster with a
+   cache" instead of "A cache can make same page faster"), ranges are not stats, bare web
+   addresses are links, placeholder beats use the whole item. Golden `examples/plan/video.yaml`
+   regenerated (one line changed).
+9. **Consistency**: `translate-template --language` (alias of `--lang`), MCP `translate_template`
+   parameter `language`; `init`'s next-step line.
+10. **Packaging**: version 0.2.0, PEP 639 licence metadata (setuptools ≥ 77 to build), map data
+    notices in the wheel.
+
+Checked and left as is: `vidgen.api` (734 names in `__all__`, all present, every vidgen function /
+class documented, no duplicates); `--json` envelopes and exit codes (covered by
+`test_json_output`); option names across the 22 commands (consistent except `--lang`, fixed);
+`--preview` defaults differ on purpose (render / thumbnail / export default to the final format,
+storyboard / lint / slides to the preview; documented); DESIGN.md sections 1–63 numbered in order;
+AGENTS.md copies identical (test). `build/..._bare` folders: kept as caches like every other
+`build/` folder (they make `slides --no-overlays` and frame thumbnails without overlays fast);
+`build/` is documented as safe to delete — a `vidgen clean` is in the backlog.
+
+### Files
+- Code: `scene.py` (`timeline`, `hold`), `videoplan.py`, `scenes/code.py` (`readable_band`,
+  `BAND_OPACITIES`, `INK_RATIO`), `clips.py` (`ClipInfo.channels`, mono pan), `render/pipeline.py`
+  (`current_render`, `force`, post_render after the thumbnail), `project.py` (`CONFINE_ENV`,
+  `PATH_KEYS`, `confinement_problems`), `mcp_server.py` (env, `_kill`, render `force`,
+  translate_template `language`), `cli.py` (`render --force`, `--language`, init line), `plan.py`
+  (`_subject`, `_RANGE_END`, `spoken` placeholders, bare links), `outline.py` (`_DOMAIN`),
+  `__init__.py` (0.2.0), `data/geo/LICENSE` (new), `pyproject.toml`.
+- Tests: new `tests/test_review4.py` (11: band contrast ×2, half-frame silent scenes (render),
+  incremental render (render), mono clip level, confinement ×2, post_render + thumbnail (render),
+  plan stat labels / ranges, placeholder beats, bare links); `test_mcp.py` (config confinement
+  over stdio).
+- Docs: README (feature bullet, MCP "One folder", command table and `render` paragraph,
+  examples/plan line), docs/CONFIG.md (incremental render, MCP confinement and cancel, clip
+  `volume`, `--language`, version in the JSON example), docs/EXTENDING.md (`post_render`
+  `thumbnail`), AGENTS.md (both copies: costs paragraph), DESIGN.md (status line, §2 hook data,
+  §8, §14, §53, §62, new §63), THIRD_PARTY_NOTICES.md, tasklist.md, `examples/plan/video.yaml`.
+
+### Public interfaces added/changed
+- CLI `vidgen render --force`; `render_project(..., force=False)` and `pipeline.current_render`;
+  `translate-template --language`; MCP `render` `force`, `translate_template` `language` (was
+  `lang`). Hook `post_render` data key `thumbnail`. `vidgen.project.CONFINE_ENV`, `PATH_KEYS`,
+  `confinement_problems`; `ClipInfo.channels`; `scenes.code.readable_band`. `vidgen.api`
+  unchanged.
+
+## Release notes: vidgen 0.2.0 (Steps 8–60)
+
+vidgen 0.1 (Steps 0–7) rendered narrated Manim videos from `video.yaml` with eleven built-in
+scene types, ElevenLabs narration and an extension system. 0.2 makes it a tool an AI agent can
+drive alone: it can **see** its video (stills, contact sheets, layout data), **check** it
+(lint), build from **tested parts** (28 scene types, actions, overlays) and **ship** every output.
+
+### New, by area
+- **Feedback loop for agents**: `--json` on every command (stable versioned envelope, Step 8;
+  `tts` / `imagegen` / `init` in 59); `vidgen schema` (JSON Schema, 9); frame stills
+  `render --frames` (10); `vidgen storyboard` contact sheets (11); layout dump (12); `vidgen lint`
+  — layout rules (off frame, safe area, overlap, covered text, min font, contrast, max words,
+  overlay overlap, label spacing) and timing rules (narration speed, dead air, animation
+  overrun, rushed animation, readback) with `lint:` thresholds and `lint_ignore` (13, 14, 56).
+- **Layout and look**: layout regions / `place` / grids that adapt to 9:16 (15); seven theme
+  presets, WCAG AA and colour-blind-safe, type scales `compact` / `standard` / `large` / `auto`
+  (16, 17); bundled Inter, Source Serif 4, JetBrains Mono NL (18); 200 Lucide icons with search,
+  sheets and project icons (19–21).
+- **Scene types** (11 → 28): `icon_grid` (21), `stat`, `chapter` (25), `comparison`, `table`
+  (26), `timeline` (27), `diagram` / `flowchart` with automatic layered layout (28), `process`,
+  `network` (29), `scatter`, `histogram` and shared chart helpers (30), `pie` / donut, `heatmap`
+  (31), `code_walkthrough` (32), `equation_derivation` (33), `screenshot` with callouts (34),
+  `video_clip` (35), `map` with bundled Natural Earth data (36).
+- **Beat actions**: `reveal`, `dim`, `highlight`, `zoom`, `transform`, `callout`, `sfx` on named
+  targets of every built-in type, timed inside the beat (23, 24, 41, 44).
+- **Overlays**: framework + `lower_third`, `watermark` (38), `progress_bar`, `chapter_indicator`
+  and chapters from cards or `chapter:` keys (39), burned-in `captions` incl. karaoke (40).
+- **Audio**: pronunciation dictionary (42), multiple voices / dialogue (43), synthesised sound
+  effects (44), background music beds, ducking, EBU R128 loudness normalisation (45).
+- **Transitions**: crossfade, fade through a colour (46), push, wipe and `carry` match cuts (47).
+- **Outputs**: MP4 chapters + YouTube chapter list + tags (49), thumbnail (designed or a frame) and
+  GIF / clip export (50), multi-language variants and translation files (51), HTML slide deck
+  (52) and PDF deck (53), readback speech-to-text check (54), generated images (OpenAI) (55).
+- **Guidance and automation**: the author guide `AGENTS.md` / `vidgen guide` (56), the scene
+  gallery `vidgen gallery` + `docs/gallery` (57), `vidgen plan` drafts from an outline (58), the
+  MCP server `vidgen mcp` (59), incremental `render` (60).
+- **Reviews**: 22, 37, 48 and 60 fixed what storyboards, lint and measurement found (e.g. A/V
+  sync to the millisecond, true-peak after AAC, 9:16 layouts of every type).
+
+### Behaviour changes users of 0.1 must know
+- **Default `dim` colour** `#6B7280` → `#838B98` (WCAG AA; Step 16). Write the old value in
+  `theme.colors` to keep it.
+- **Vertical videos get larger type**: the default type scale is `auto` = `large` in portrait
+  (17); `code` listings in 9:16 wrap at ~30 columns (32). Set `theme: {scale: standard}` for the
+  old sizes.
+- **Built-in scenes moved to regions** (header band titles, safe area; 15, 22, 37): layouts of
+  existing videos shift a little; `title` / `heading` are synonyms on header-band types.
+- **`dim` action opacity is relative** to the target's full opacity (no compounding; 24).
+- **SRT cues** are cut at phrase boundaries and timed by word, like the captions (40); per
+  language rules (51); the speaker tag with `subtitles: {speakers: ...}` (43).
+- **Chapter validation**: a repeated `chapter` card or numbers out of order are config errors;
+  a `chapter:` right after a card is an error (39); `validate` / `render` warn when YouTube would
+  ignore the chapter list (49).
+- **Narration level +3 dB**: rendered narration now plays at its MP3's level (Manim's mono upmix
+  lost 3 dB; 48); music beds sit 2 dB higher to keep the balance; mono clip sound +3 dB (60).
+  Videos with music are normalised to −16 LUFS (narration-only videos are not, unless
+  `audio: {normalize: true}`; 45).
+- **Transitions**: still cuts by default; a `transition:` other than a cut overlaps scenes (the
+  video gets shorter) or holds the scene before a little longer so narration is never covered
+  (46, 47).
+- **Every `vidgen render` writes more files**: `<output>_chapters.txt` when there are chapters
+  (49), `<output>_thumbnail.png` with a `thumbnail:` config (50); the MP4 carries chapter marks
+  and tags.
+- **`vidgen render` is incremental** (60): unchanged scenes are reused; `--force` for the old
+  behaviour (e.g. after changing a file a scene reads outside `assets/`).
+- **Audio hashes**: computed from the *spoken* text (pronunciation applied, 42) and the voice
+  when a named voice is used (43); beats of the base voice without pronunciation entries keep
+  their hashes (no re-voicing of existing projects).
+- **Python API**: `vidgen.api` grew (regions, charts, callouts, geo, graph, overlays, actions,
+  `ClipMobject`...) but stayed compatible; extension scene classes should use regions
+  (`self.region("body")`, `place`) to work in 9:16.
+- **Human `vidgen validate`** lists every broken variant (59); argparse errors print usage and
+  return 2 instead of raising `SystemExit` (8).
+
+### Known issues and roadmap (also in tasklist.md "Backlog (after Step 60)")
+- **Plan heuristics**: prose-derived bullet items are truncated sentences; icon search is
+  English-only; no cues for `network` / `line_chart` / `pie` / `map` / `screenshot`; nested list
+  items dropped; a recap sentence can be split between two scenes; TODO texts in English.
+- **MCP**: large documents (long `lint` / `storyboard` JSON, `schema full=true`) are not trimmed;
+  no session with a real client (Claude Desktop / Code) was possible here; Windows cancel is
+  untested.
+- **Rendering cost**: joins with a crossfade / push / wipe re-encode the whole video; `image` Ken
+  Burns ~1.6x real time in preview; `code_walkthrough` ~0.1 s per line.
+- **Layout limits**: `reserve` is per whole scene (several reserving overlays shrink content);
+  9:16 stills of `code_walkthrough` (a long line wraps), `image` with `fit: contain` (bands) and a
+  wide `world` map; `equation_derivation` highlight colour not carried into its dimmed copy;
+  `code` highlight steps reset a `dim` action's opacities.
+- **Localisation**: number formats, `map` country names, `"A -> B"` arcs and `lint_ignore` /
+  `point:` targets do not follow translations; languages without spaces cut cues at punctuation
+  only.
+- **Outputs**: a frame thumbnail's text is not measured; no MP4 cover art; `generate:` not on
+  `screenshot` / thumbnail backgrounds; no real image-generation or STT run was possible here.
+- **Housekeeping**: no `vidgen clean` (`build/`, including `_bare` folders, only grows); storyboard
+  / lint have no view of the frames around transitions and carries.
+- **Not run on real Windows / macOS** in this environment (fonts, MiKTeX, long paths, process
+  trees).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2248 passed, 1 skipped, 11:42
+on 2 CPUs); step only: `pytest tests/test_review4.py tests/test_mcp.py`. Manual:
+`vidgen storyboard examples/minimal` then `vidgen render examples/minimal --preview` (joins only:
+"rendered 0 scene(s), N reused"); `vidgen lint examples/plan` (0 findings).

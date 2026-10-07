@@ -1082,7 +1082,7 @@ languages existed. Each variant's outputs are its own (`<output>_<variant>.mp4`,
 `_chapters.txt`, `_thumbnail.png`), so a translated variant's subtitles, chapter titles and
 thumbnail are in its language when their texts are translated.
 
-**Translation files.** `vidgen translate-template --variant pt [--lang pt-BR] [--output FILE]
+**Translation files.** `vidgen translate-template --variant pt [--language pt-BR] [--output FILE]
 [--json]` lists every translatable text of the variant in a YAML file (the variant's
 `translations:` file, else `translations/<variant>.yaml`) with the source text, a hash of it
 and an empty translation:
@@ -1109,7 +1109,7 @@ references:
 | key | | |
 |---|---|---|
 | `version` | `1` | file format |
-| `language` / `source_language` | none | the translation's / the source's language (`--lang`, else the variant's `language`) |
+| `language` / `source_language` | none | the translation's / the source's language (`--language` / `--lang`, else the variant's `language`) |
 | `entries` | `{}` | key → `{source, hash, text, stale, old_source, obsolete}`, or the translation alone (`key: text`, no staleness check) |
 | `references` | `{}` | places that name a translated text (an action target `bar:<label>`, a `highlight` by label) → that text's key; written by the command |
 
@@ -2355,7 +2355,7 @@ picture, `highlight: clip` tints it, `zoom: clip` looks closer.
 | `fit_duration` | bool | `false` | choose the speed so one pass lasts as long as the narration (not with `speed`) |
 | `fit_range` | [slowest, fastest] | `[0.5, 2.0]` | limits of `fit_duration` (within 0.25–4) |
 | `loop` | bool | `false` | start again when the scene outlasts the clip (else the last frame holds) |
-| `volume` | number (0–2) | 0.25 narrated, 1 silent | the clip's own sound, under the narration |
+| `volume` | number (0–2) | 0.25 narrated, 1 silent | the clip's own sound, under the narration (linear; 1 = as recorded, a mono recording at that level on both channels) |
 | `mute` | bool | `false` | leave the clip's sound out |
 | `steps` | list | `[]` | step *i* at beat *i*: a callout, a list of callouts, or `{callouts, focus, previous}` ([`screenshot`](#screenshot); kinds `box`, `circle`, `arrow`, `spotlight`) |
 | `frame`, `url` | `none` \| `browser` \| `window` \| `phone`, str | `none`, `""` | a frame drawn around the clip (not with `bleed`); `url` for `browser` |
@@ -4028,6 +4028,13 @@ reads from outside `assets/` are not tracked: use `--force`. The storyboard does
 video; `vidgen render` does. It dispatches `post_scene` for the scenes it renders, not
 `pre_render`/`post_render`.
 
+**`vidgen render` uses the same fingerprints** (since vidgen 0.2): it renders only the scenes
+whose render is missing, was made at another format or without the narration it now needs, or
+is stale, and joins them with the current renders of the others (`render --json` lists each
+scene's `status`: `rendered` or `reused`). So `vidgen render --preview` after a storyboard or a
+lint of the preview only joins the video, and keeps their stills. `--force` renders every scene
+again; `--scene ID` renders those scenes whatever their state.
+
 ## Scene gallery (`vidgen gallery`)
 
 `vidgen gallery [PROJECT]` renders **every scene type** from one canonical sample, at 16:9 and
@@ -4182,7 +4189,12 @@ for `confirm_cost: true` when the project's `stt.provider` is a paid service (`e
 
 **Folder.** Every path a tool takes (project, outputs, `init`'s folder, `plan`'s input) is relative
 to `--root` (default: the current folder) and must resolve inside it, `..` and symbolic links
-included; other paths are refused. Files the server asks for itself (icon sheet, swatches,
+included; other paths are refused. The files a project's config names (a scene's `path` /
+`logo`, a watermark or thumbnail `image`, a music `source` file, `pronunciation_file`,
+`translations`, `extensions`, in every variant) must be inside the root too: a config naming
+`../other/file.png` or an absolute path elsewhere does not load in the server's commands
+(`files outside the allowed folder`; the commands it runs get `VIDGEN_CONFINE_ROOT`, which you
+can also set yourself). Files the server asks for itself (icon sheet, swatches,
 gallery) go into `build/mcp/` under the root. The server passes its environment (API keys) to the
 commands it runs but never returns it; documents carry only paths and results.
 
@@ -4190,7 +4202,8 @@ commands it runs but never returns it; documents carry only paths and results.
 fresh process: Manim's configuration is process-global and a crashing scene or extension cannot
 take the server down) and turns the command's stderr lines into MCP progress notifications.
 Rendering calls (`storyboard`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
-`thumbnail`, `export`, `gallery`) run one at a time; cancelling a call stops its process.
+`thumbnail`, `export`, `gallery`) run one at a time; cancelling a call stops its process and the
+render workers it started (the process group on macOS / Linux, the process tree on Windows).
 
 **Resources**: `vidgen://guide` (the author guide) and `vidgen://guide/<topic>` (one topic each),
 `vidgen://schema` (the JSON Schema of the root project's `video.yaml`, else of the built-ins) and,
@@ -4229,7 +4242,7 @@ or `null` when the problem is not about one value, e.g. an extension that fails 
 `details` is an object, empty unless stated below.
 
 ```json
-{"version": 1, "vidgen": "0.1.0", "command": "render", "ok": false, "warnings": [],
+{"version": 1, "vidgen": "0.2.0", "command": "render", "ok": false, "warnings": [],
  "error": {"kind": "usage", "message": "unrecognized arguments: --bogus", "problems": [], "details": {}}}
 ```
 

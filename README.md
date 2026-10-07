@@ -148,7 +148,7 @@ subtitles.
 - **Extensible per video**: a project can add its own scene types, beat actions, overlays,
   helpers, theme tokens and pipeline hooks in its `extensions/` folder, without touching vidgen.
 - **Cheap to iterate**: only new or edited beats are sent to ElevenLabs; fast low-resolution
-  previews; re-render one scene at a time.
+  previews; `render`, `storyboard` and `lint` re-render only the scenes whose inputs changed.
 - Windows, macOS and Linux; Python 3.10–3.13.
 
 ## For AI agents
@@ -191,7 +191,8 @@ Claude Code: `claude mcp add vidgen -- vidgen mcp --root /home/me/videos` (or th
 `mcpServers` entry in the project's `.mcp.json`).
 
 - **One folder**: the tools read and write only inside `--root` (default: the folder the server
-  starts in); a path outside it, also through `..` or a link, is refused.
+  starts in); a path outside it, also through `..` or a link, is refused — in tool arguments and
+  in the files a project's `video.yaml` names (pictures, clips, code files, extensions...).
 - **No surprise bills**: `tts` and `imagegen` are dry runs unless called with `dry_run: false`
   **and** `confirm_cost: true` (and `readback` with a paid speech-to-text provider needs
   `confirm_cost: true`); the dry run says what it would cost. API keys come from the server's
@@ -289,8 +290,8 @@ narration.
 | `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--voice NAME ...] [--variant NAME] [--json]` | generate missing/stale narration into `audio/`; `--dry-run` needs no key (shows each beat's voice and characters per voice) |
 | `vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME] [--json]` | generate the missing pictures of `generate:` params into `assets/generated/` (OpenAI Images, `OPENAI_API_KEY`); `--dry-run` needs no key and shows prompts and an estimated cost |
 | `vidgen readback [PROJECT] [--variant NAME] [--beat ID ...] [--max-wer RATE] [--force] [--json]` | transcribe the narration MP3s (speech to text, `stt:`; cached in `build/readback/`) and compare them with the beat texts: word error rate per beat, words expected vs heard, a suggested fix for each (e.g. a pronunciation entry), terms misheard in several beats |
-| `vidgen translate-template [PROJECT] --variant NAME [--lang TAG] [--output FILE] [--json]` | write or update the variant's translation file: every text to translate with its source, keeping existing translations (stale / moved / obsolete marked) |
-| `vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going] [--jobs N] [--frames] [--frames-per-beat N] [--json]` | render and join the video |
+| `vidgen translate-template [PROJECT] --variant NAME [--language TAG] [--output FILE] [--json]` | write or update the variant's translation file: every text to translate with its source, keeping existing translations (stale / moved / obsolete marked) |
+| `vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going] [--jobs N] [--frames] [--frames-per-beat N] [--force] [--json]` | render the scenes that changed (reusing current renders, e.g. the storyboard's) and join the video |
 | `vidgen storyboard [PROJECT] [--scene ID ...] [--per-beat N] [--variant NAME] [--preview \| --final] [--width PX] [--jobs N] [--force] [--json]` | contact sheets (PNG) of the video's stills with labels and narration, to review a video without watching it |
 | `vidgen lint [PROJECT] [--scene ID ...] [--rule NAME ...] [--variant NAME] [--preview \| --final] [--fail-on SEVERITY] [--jobs N] [--force] [--json]` | check the layout at the end of every beat (text off the frame or in the margins, overlapping or covered text, a callout label touching other text, text too small, low contrast, too many words) and the timing (narration too fast/slow, dead air, animations overrunning their narration or squeezed into a short beat), and the narration heard differently from its text (`readback`, after `vidgen readback`); exit code 1 on errors |
 | `vidgen thumbnail [PROJECT] [--variant NAME] [--preview] [--scene ID [--beat ID\|N] [--at S] [--no-overlays]] [--jpeg] [--jobs N] [--json]` | write `<output>_thumbnail.png` from the `thumbnail:` config (a designed card, or a scene's frame) or the frame `--scene` names, a 320 px copy to look at, and legibility checks |
@@ -299,7 +300,10 @@ narration.
 | `vidgen slides [PROJECT] [--format html\|pdf] [--variant NAME] [--preview \| --final] [--mode beat\|scene] [--per-beat N] [--overlays \| --no-overlays] [--no-dedupe] [--image-format webp\|jpeg\|png] [--quality Q] [--max-width PX] [--audio] [--separate] [--notes] [--title-page] [--paper a4\|letter] [--output FILE] [--jobs N] [--force] [--json]` | one self-contained HTML slide deck in `exports/`: a slide per beat (or scene) from the stills, the narration as speaker notes, keyboard navigation, overview, fullscreen, optional narrated play mode; `--format pdf`: a PDF (slide pages or `--notes` pages, `--title-page`, bookmarks by chapter; needs `vidgen[pdf]`) |
 
 `PROJECT` is a project folder or its config file (default: the current folder).
-`render` options: `--preview` uses the `preview` resolution; `--scene ID` re-renders only those
+`render` renders only the scenes whose render is missing or out of date (their config, audio,
+assets, extensions or vidgen changed: the same check as `storyboard`), so a render after a
+storyboard of the same format just joins. Options: `--force` renders every scene again;
+`--preview` uses the `preview` resolution; `--scene ID` re-renders only those
 scenes and re-joins with the existing renders of the others; `--variant NAME` applies a named
 variant (e.g. vertical 1080x1920); `--no-audio` leaves the narration out (timing is unchanged);
 `--keep-going` renders the remaining scenes after a failure; `--jobs N` renders N scenes in
@@ -368,7 +372,8 @@ my_video/
   live in its `extensions/` folder (narration MP3s included, so it renders without a key).
 - [examples/plan](examples/plan) — `outline.md`, a 2½-minute explainer outline, and the draft
   `video.yaml` that `vidgen plan examples/plan/outline.md -o examples/plan/video.yaml --force`
-  writes from it (unedited: 19 scenes with chapters, one `vidgen lint` finding).
+  writes from it (unedited: 19 scenes with chapters, no `vidgen lint` findings; the `# TODO:`s
+  are what an author still has to do).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.

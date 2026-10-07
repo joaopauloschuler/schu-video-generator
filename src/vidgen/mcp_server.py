@@ -98,25 +98,34 @@ class CommandRun:
 
 
 def _kill(process: Any) -> None:
-    """Stop ``process`` and what it started (render workers: its process group on POSIX)."""
+    """Stop ``process`` and what it started (render workers): its process group on POSIX, its
+    process tree on Windows (``taskkill /T``)."""
     try:
         if os.name == "posix":
             os.killpg(process.pid, signal.SIGKILL)
-        else:
-            process.kill()
-    except OSError:  # already gone
+            return
+        subprocess.run(["taskkill", "/F", "/T", "/PID", str(process.pid)], capture_output=True, check=False)
+        process.kill()
+    except OSError:  # already gone (or no taskkill)
         pass
 
 
 async def run_vidgen(args: Sequence[str], cwd: Path, progress: Progress | None = None) -> CommandRun:
     """Run ``python -m vidgen ARGS`` in ``cwd`` and collect its JSON document; every stderr line
-    is passed to ``progress``. Cancelled (the client gave up): the process is killed."""
+    is passed to ``progress``. Cancelled (the client gave up): the process is killed. The files a
+    project's config names must lie inside ``cwd`` (``vidgen.project.CONFINE_ENV``)."""
     import anyio
     from anyio.streams.text import TextReceiveStream
 
+    from vidgen.project import CONFINE_ENV
+
     extra: dict[str, Any] = {"start_new_session": True} if os.name == "posix" else {}
     process = await anyio.open_process(
-        [sys.executable, "-m", "vidgen", *args], stdin=subprocess.DEVNULL, cwd=str(cwd), **extra
+        [sys.executable, "-m", "vidgen", *args],
+        stdin=subprocess.DEVNULL,
+        cwd=str(cwd),
+        env={**os.environ, CONFINE_ENV: str(cwd)},
+        **extra,
     )
     out = bytearray()
     tail: deque[str] = deque(maxlen=TAIL_LINES)
@@ -415,7 +424,8 @@ def build_server(root: Path) -> Any:
     # ----- outputs ---------------------------------------------------------------------------------
 
     @tool("Render the video (MP4 + SRT + timings) and its thumbnail. preview=true (default) is fast and small; "
-          "the final render can take minutes. Reports progress.", writes)
+          "the final render can take minutes. Scenes unchanged since their last render (e.g. by storyboard or "
+          "lint) are reused. Reports progress.", writes)
     async def render(
         ctx: Context,
         project: Project = ".",
@@ -426,8 +436,12 @@ def build_server(root: Path) -> Any:
         keep_going: Annotated[bool, Field(description="continue after a scene fails")] = False,
         jobs: Jobs = 1,
         frames: Annotated[bool, Field(description="also save a still per beat end")] = False,
+        force: Annotated[bool, Field(description="render every scene again, even unchanged ones")] = False,
     ) -> Any:
-        options = {"preview": preview, "scene": scene, "variant": variant, "no-audio": no_audio, "keep-going": keep_going, "jobs": jobs, "frames": frames}
+        options = {
+            "preview": preview, "scene": scene, "variant": variant, "no-audio": no_audio, "keep-going": keep_going,
+            "jobs": jobs, "frames": frames, "force": force,
+        }
         return answer(await call(ctx, args_of(["render"], [str(where(project))], options), heavy=True))
 
     @tool("Narration audio (ElevenLabs) for the beats whose MP3 is missing or stale. dry_run=true (default, free, "
@@ -576,10 +590,10 @@ def build_server(root: Path) -> Any:
         ctx: Context,
         project: Project = ".",
         variant: Variant = None,
-        lang: Annotated[str | None, Field(description="language of the translation, BCP-47")] = None,
+        language: Annotated[str | None, Field(description="language of the translation, BCP-47 (e.g. pt-BR)")] = None,
         output: Annotated[str | None, Field(description="file to write, relative to the root")] = None,
     ) -> Any:
-        options = {"variant": variant, "lang": lang, "output": str(where(output, "output")) if output else None}
+        options = {"variant": variant, "language": language, "output": str(where(output, "output")) if output else None}
         return answer(await call(ctx, args_of(["translate-template"], [str(where(project))], options)))
 
     _add_resources(server, policy)

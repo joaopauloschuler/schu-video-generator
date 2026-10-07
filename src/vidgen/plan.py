@@ -261,6 +261,7 @@ class _Planner:
         sentences: list[str],
         after: Sequence[str] = (),
         filler: list[str] | None = None,
+        spoken: list[str] | None = None,
     ) -> tuple[list[str], list[str], list[str]]:
         """Beats for ``labels`` (one reveal step each) from the scene's prose ``sentences`` (the
         last ones, ``after``, written after the cue) and the steps' own sentences
@@ -269,7 +270,8 @@ class _Planner:
         the ones after the cue for the steps and the ones before as an intro. Then sentences
         matched to the steps by the words they share; the steps' own sentences; the merged beats
         as they are (extra ones hold the last step); placeholders for steps without a beat (the
-        step's ``filler`` sentence, else its label as a sentence)."""
+        step's ``filler`` sentence, else its ``spoken`` text, the item before it was cut into a
+        label, else its label, as a sentence)."""
         k = len(labels)
         for prose, tail in ((sentences, list(after)), (merge_short(sentences), merge_short(list(after)))):
             if len(prose) == k:
@@ -298,7 +300,7 @@ class _Planner:
             if own:
                 beats.append(own)
             else:
-                beats.append(filler[i] if filler else sentence(labels[i]))
+                beats.append(filler[i] if filler else sentence(spoken[i] if spoken else labels[i]))
                 placeholders.append(i + 1)
         if placeholders:
             which = f"beat {placeholders[0]} is a placeholder" if len(placeholders) == 1 else f"beats {_ranges(placeholders)} are placeholders"
@@ -405,6 +407,7 @@ class _Planner:
         if any(item.children for item in block.items):
             todos.append("nested list items were left out: fold them into the narration or a scene of their own")
         step_texts = [_step_sentence(lead, desc, text) for (lead, desc), text in zip(leads, raw)]
+        spoken = [plain(lead or text).text.rstrip(".:;!") for (lead, _), text in zip(leads, raw)]   # a placeholder's words
         dates = [_DATE.match(plain(t).text) for t in raw]
         if 2 <= len(raw) <= 10 and all(d is not None and d[2] for d in dates):
             events = []
@@ -420,7 +423,7 @@ class _Planner:
             params = ({"heading": title} if title else {}) | {"stages": labels}
             reason = f"{len(raw)} numbered steps -> process"
             todos.append("process: consider `input` / `output` labels and stage icons")
-            return self.stepped("process", params, labels, step_texts, prose, heading, reason, todos, cue.after)
+            return self.stepped("process", params, labels, step_texts, prose, heading, reason, todos, cue.after, spoken=spoken)
         nouns = [plain(lead or text).text.rstrip(".:;!") for (lead, _), text in zip(leads, raw)]
         if not block.ordered and 2 <= len(raw) <= 12 and all(0 < words(n) <= NOUN_WORDS for n in nouns):
             icons = self.icons_for(nouns)
@@ -440,7 +443,7 @@ class _Planner:
             todos.append(f"{len(labels)} items: the guide's limit is {MAX_ITEMS} per scene; split the list or cut items")
         kind = "numbered list" if block.ordered else "bullet list"
         reason = f"{kind} of {len(raw)} items -> bullets" + ("" if block.ordered else " (no icon for every item)")
-        return self.stepped("bullets", params, labels, step_texts, prose, heading, reason, todos, cue.after)
+        return self.stepped("bullets", params, labels, step_texts, prose, heading, reason, todos, cue.after, spoken=spoken)
 
     def icons_for(self, nouns: list[str]) -> list[str] | None:
         """A different matching icon for every noun (whole label, then its words, longest
@@ -475,9 +478,10 @@ class _Planner:
         todos: list[str],
         after: Sequence[str] = (),
         filler: list[str] | None = None,
+        spoken: list[str] | None = None,
     ) -> list[PlannedScene]:
         """A scene revealing one step per label, its beats fitted (:meth:`fit`), intro first."""
-        intro, beats, fit_todos = self.fit(labels, step_texts, prose, after, filler)
+        intro, beats, fit_todos = self.fit(labels, step_texts, prose, after, filler, spoken)
         scene = PlannedScene(self.scene_id(heading, labels[0] if labels else kind), kind, params, beats, reason=reason, todos=todos + fit_todos)
         return self.with_intro(intro, scene, heading)
 
@@ -1153,6 +1157,8 @@ _STAT_PATTERNS = (
     (re.compile(rf"([$€£])\s?({_NUM})\s*(k|m|bn|million|billion|thousand|mil|milhões|bilhões)?\b", re.IGNORECASE), "money"),
     (re.compile(rf"(?<![\w.,])({_NUM})\s+(million|billion|thousand|milhões|bilhões|milhão|bilhão)\b", re.IGNORECASE), "big"),
 )
+#: Text ending in the first number of a range ("between 20 and", "20% to", "10–").
+_RANGE_END = re.compile(rf"{_NUM}\s*(?:%|percent|por cento)?\s*(?:and|to|or|e|a|ou|-|–)\s*$", re.IGNORECASE)
 _MAGNITUDE = {"k": "k", "thousand": "k", "mil": "k", "m": "M", "million": "M", "milhão": "M", "milhões": "M", "bn": "B", "billion": "B", "bilhão": "B", "bilhões": "B"}
 
 
@@ -1163,6 +1169,8 @@ def _stat_params(beat: str, language: str | None) -> dict[str, Any] | None:
         match = pattern.search(beat)
         if match is None:
             continue
+        if kind != "change" and _RANGE_END.search(beat[: match.start()]):
+            continue  # "between 20 and 80 percent": a range, not one number
         params: dict[str, Any] = {}
         if kind == "change":
             old, new = _number(match[1], language), _number(match[3], language)
@@ -1193,9 +1201,12 @@ def _stat_params(beat: str, language: str | None) -> dict[str, Any] | None:
             params.pop("suffix", None)
         after = beat[match.end() :].strip(" ,.;:!?")
         before = beat[: match.start()].strip(" ,.;:!?")
+        subject = _subject(before, language)
         if words(after) >= 2:
             label = compress(after, ITEM_WORDS, language)
             label = label[:1].lower() + label[1:]  # it follows the number: "73% of developers..."
+        elif after and subject:  # "A cache can make the same page 40x faster" -> "faster with a cache"
+            label = f"{after.lower()} with {subject[:1].lower()}{subject[1:]}"
         else:
             label = compress(f"{before} {after}", ITEM_WORDS + 1, language)
         if label:
@@ -1205,6 +1216,27 @@ def _stat_params(beat: str, language: str | None) -> dict[str, Any] | None:
             params["thousands"] = "."
         return params
     return None
+
+
+#: English words a sentence's subject ends before ("A cache *can* make...").
+_SUBJECT_ENDS = frozenset(
+    "can could will would may might must should shall makes make made is are was were has have had does do did "
+    "gets get got cuts cut brings bring turns turn".split()
+)
+
+
+def _subject(before: str, language: str | None) -> str:
+    """The short subject (2–4 words) opening an English clause before a stat's number, ``""``
+    when there is none ("A cache can make the same page" -> "A cache")."""
+    if primary_language(language) != "en":
+        return ""
+    tokens = before.split()
+    end = next((k for k, t in enumerate(tokens) if t.lower().strip(",") in _SUBJECT_ENDS), None)
+    if end is None or not 1 <= end <= 4 or any(t.endswith(",") for t in tokens[:end]):
+        return ""
+    if end == 1 and tokens[0].lower() in ("it", "this", "that", "they", "we", "you", "he", "she", "i"):
+        return ""  # "faster with it" says nothing
+    return " ".join(tokens[:end])
 
 
 def _number_text(params: dict[str, Any]) -> str:
@@ -1222,4 +1254,4 @@ def _block_links(block: Block) -> list[str]:
         texts = [i.text for i in block.items] + [c for i in block.items for c in i.children]
     elif isinstance(block, Quote):
         texts = [block.text]
-    return [link for t in texts for link in plain(t).links if re.match(r"^(?:https?://|mailto:)", link)]
+    return [link for t in texts for link in plain(t).links if re.match(r"^(?:https?://|mailto:|www\.|[\w-]+\.)", link)]
