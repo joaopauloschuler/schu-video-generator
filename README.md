@@ -1,13 +1,38 @@
 # schu-video-generator
 
+**A video and presentation generator built for AI agents.** schu-video-generator is a tool that
+an AI agent (Claude, or any LLM-based agent with a shell or an MCP client) uses to produce
+narrated, animated explainer videos and slide decks. Its main users are AI agents, not people
+editing on a timeline: a human describes the video they want, and the agent writes the project,
+checks it and renders it.
+
+Everything is built around what an agent can and cannot do:
+
+- **Text in, video out.** A video is one `video.yaml` file: narration written as short *beats*
+  and a *scene type* per scene. No timeline, no mouse; each beat's animation lasts exactly as long
+  as its narration.
+- **The agent can't watch a video, so vidgen lets it check its work.** `vidgen storyboard`
+  renders contact sheets of every beat as PNGs the agent can open, `vidgen lint` reports text cut
+  off, too small or low-contrast and pacing problems as JSON, and `vidgen readback` checks how the
+  narration was pronounced.
+- **Machine-readable everything.** Every command has `--json`, `vidgen schema` exports a JSON
+  Schema of the config, and `vidgen mcp` serves all commands as MCP tools (storyboards returned as
+  images).
+- **Built-in know-how.** [AGENTS.md](AGENTS.md) (also `vidgen guide`) teaches an agent the
+  workflow, pacing and design rules for a good video, and which of the 28 scene types to use.
+
+Point your agent at [AGENTS.md](AGENTS.md) (or connect it via MCP, see
+[below](#use-from-an-ai-agent-via-mcp)) and ask it for a video. People can of course use the
+`vidgen` command directly too.
+
 The project and pip package are called schu-video-generator;
 the command and the Python package are `vidgen` (`vidgen render`, `from vidgen.api import *`).
 
-Generate narrated, animated explainer videos from a project folder. You write the narration as
-short *beats* and pick a *scene type* for each scene in `video.yaml`; vidgen voices the beats with
-ElevenLabs, animates every scene with [Manim](https://www.manim.community/) (each beat lasts
-exactly as long as its narration), and joins everything with ffmpeg into one MP4 plus SRT
-subtitles.
+Under the hood, vidgen voices the beats with ElevenLabs, animates every scene with
+[Manim](https://www.manim.community/), and joins everything with ffmpeg into one MP4 plus SRT
+subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slide deck).
+
+## Features
 
 - **Config-only videos** with twenty-eight built-in scene types, in landscape and vertical
   formats (one config renders both):
@@ -250,13 +275,43 @@ package, so do not install both in the same environment.
 If PowerShell refuses to run `Activate.ps1`, run
 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
 
-### macOS / Linux
+### Linux (Ubuntu / Debian)
 
-`python3 -m venv .venv && . .venv/bin/activate && pip install .`, ffmpeg from
-`brew install ffmpeg` / `sudo apt install ffmpeg` (fonts are bundled), and
-`export ELEVENLABS_API_KEY=your_key` in your shell profile. Linux may need Manim's system
-libraries first (`sudo apt install libcairo2-dev libpango1.0-dev`). Optional LaTeX: MacTeX, or
-`sudo apt install texlive texlive-latex-extra dvisvgm`.
+```bash
+# 1. System packages: Python, ffmpeg, git, and the Cairo/Pango libraries Manim builds against
+sudo apt update
+sudo apt install python3 python3-venv python3-dev git ffmpeg \
+    build-essential pkg-config libcairo2-dev libpango1.0-dev
+
+# 2. Get the code and install it in a virtual environment (installs the `vidgen` command)
+git clone https://github.com/joaopauloschuler/schu-video-generator.git
+cd schu-video-generator
+python3 -m venv .venv
+source .venv/bin/activate
+pip install .                  # or: pip install ".[mcp,pdf]" for the MCP server and PDF slides
+
+# 3. Check it works: render the bundled example as a quick preview
+vidgen --version
+vidgen render examples/minimal --preview      # -> examples/minimal/minimal_preview.mp4
+
+# 4. Optional: LaTeX, only for the `equation` and `equation_derivation` scene types
+sudo apt install texlive texlive-latex-extra dvisvgm
+
+# 5. Optional: API keys (add to ~/.bashrc to keep them)
+export ELEVENLABS_API_KEY=your_key            # narration (vidgen tts)
+export OPENAI_API_KEY=your_key                # generated pictures (vidgen imagegen)
+```
+
+Fonts are bundled, so there is nothing to install for them. Other distributions need the same
+pieces: Python 3.10–3.13 with venv, ffmpeg, and the Cairo and Pango development packages (Fedora:
+`sudo dnf install python3-devel ffmpeg-free cairo-devel pango-devel pkgconf-pkg-config gcc`). Each new
+terminal needs `source .venv/bin/activate` again before running `vidgen`. The optional extras
+work as on Windows: `pip install ".[pdf]"`, `".[stt]"`, `".[mcp]"`.
+
+### macOS
+
+`brew install python ffmpeg pkg-config cairo pango`, then the same steps 2–5 as Linux (LaTeX:
+[MacTeX](https://www.tug.org/mactex/)).
 
 ## Quick start
 
