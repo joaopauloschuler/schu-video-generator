@@ -9,9 +9,10 @@ own that always shows the whole frame.
 
 A frozen wait reaches the renderer as one frame written N times; when the overlays change during
 it (a lower third sliding in), the layer splits it into runs of frames with equal overlay
-states. Each combination of states is drawn once (twice, over black and over white, which gives
-exact colours and alpha for both Cairo's vector drawing and Manim's image drawing) and cached as
-a premultiplied RGBA patch; compositing a frame is then a numpy blend of that patch's box.
+states. Each overlay is drawn once per state (twice, over black and over white, which gives
+exact colours and alpha for both Cairo's vector drawing and Manim's image drawing) by a camera
+cropped to its pixel box (a thin progress bar costs a thin strip, not a whole frame), and cached
+as a premultiplied RGBA patch; compositing a frame blends the shown overlays' patches in order.
 """
 
 from __future__ import annotations
@@ -29,14 +30,16 @@ if TYPE_CHECKING:
 
     from vidgen.scene import NarratedScene
 
-#: Distinct state combinations kept drawn (a lower third's slide is ~15 frames per edge).
+#: Distinct states kept drawn per overlay (a lower third's slide is ~15 frames per edge).
 CACHE_SIZE = 64
+#: Pixels added around an overlay's box when it is drawn (antialiasing).
+PAD = 3
 
 
 @dataclass
 class _Patch:
-    """Overlays drawn for one combination of states: premultiplied RGB and ``255 - alpha``
-    (uint16) inside ``box`` = (y0, y1, x0, x1); ``None`` box when nothing is visible."""
+    """An overlay drawn in one state: premultiplied RGB and ``255 - alpha`` (uint16) inside
+    ``box`` = (y0, y1, x0, x1) of the frame; ``None`` box when nothing is visible."""
 
     box: tuple[int, int, int, int] | None
     color: np.ndarray | None = None
@@ -56,8 +59,8 @@ class OverlayLayer:
         self.written = 0
         self._offset: float | None = None
         self._intervals = [o.interval() for o in overlays]
-        self._cache: dict[tuple[Hashable | None, ...], _Patch] = {}
-        self._cameras: tuple[Camera, Camera] | None = None
+        self._cache: dict[tuple[int, Hashable], _Patch] = {}
+        self._camera: Camera | None = None
 
     # ----- time ---------------------------------------------------------------------------------
 
@@ -94,59 +97,93 @@ class OverlayLayer:
 
     @property
     def camera(self) -> Camera:
-        """A camera showing the whole frame (what overlays are drawn and measured with)."""
-        return self._camera_pair()[0]
-
-    def _camera_pair(self) -> tuple[Camera, Camera]:
-        if self._cameras is None:
+        """A camera showing the whole frame (what overlays are measured with)."""
+        if self._camera is None:
             from manim import Camera
 
-            self._cameras = (Camera(background_color="#000000"), Camera(background_color="#FFFFFF"))
-        return self._cameras
+            self._camera = Camera()
+        return self._camera
 
-    def _patch(self, states: tuple[Hashable | None, ...]) -> _Patch:
-        patch = self._cache.get(states)
-        if patch is not None:
-            return patch
-        mobs = [overlay.pose(mob, state) for overlay, mob, state in zip(self.overlays, self.mobjects, states) if mob is not None and state is not None]
-        black, white = self._camera_pair()
+    def _pixel_box(self, mobject: Mobject) -> tuple[int, int, int, int] | None:
+        """The frame pixels (y0, y1, x0, x1) ``mobject`` may touch: its points' box, its strokes
+        and :data:`PAD`, inside the frame; ``None`` when that is empty."""
+        from manim import VMobject, config
+
+        family = [m for m in mobject.get_family() if len(m.points)]
+        if not family:
+            return None
+        points = np.concatenate([m.points for m in family])
+        width, height = int(config.pixel_width), int(config.pixel_height)
+        sx, sy = width / config.frame_width, height / config.frame_height
+        stroke = max((float(m.get_stroke_width()) for m in family if isinstance(m, VMobject)), default=0.0)
+        pad = PAD + int(np.ceil(stroke * 0.01 * max(sx, sy) / 2))
+        x0 = max(int(np.floor(width / 2 + points[:, 0].min() * sx)) - pad, 0)
+        x1 = min(int(np.ceil(width / 2 + points[:, 0].max() * sx)) + pad, width)
+        y0 = max(int(np.floor(height / 2 - points[:, 1].max() * sy)) - pad, 0)
+        y1 = min(int(np.ceil(height / 2 - points[:, 1].min() * sy)) + pad, height)
+        return (y0, y1, x0, x1) if x1 > x0 and y1 > y0 else None
+
+    def _draw(self, mobject: Mobject) -> _Patch:
+        """``mobject`` drawn by two cameras (over black, over white) cropped to its pixel box."""
+        from manim import Camera, config
+
+        box = self._pixel_box(mobject)
+        if box is None:
+            return _Patch(None)
+        y0, y1, x0, x1 = box
+        width, height = int(config.pixel_width), int(config.pixel_height)
+        sx, sy = width / config.frame_width, height / config.frame_height
+        pw, ph = x1 - x0, y1 - y0
+        center = np.array([(x0 + pw / 2 - width / 2) / sx, (height / 2 - y0 - ph / 2) / sy, 0.0])
         drawn = []
-        for camera in (black, white):
-            camera.reset()
-            if mobs:
-                camera.capture_mobjects(mobs)
+        for background in ("#000000", "#FFFFFF"):
+            camera = Camera(
+                background_color=background, pixel_width=pw, pixel_height=ph, frame_width=pw / sx, frame_height=ph / sy, frame_center=center
+            )
+            camera.capture_mobjects([mobject])
             drawn.append(np.asarray(camera.pixel_array[:, :, :3], dtype=np.int16))
         on_black, on_white = drawn
         # over black: colour x alpha; over white: that + (255 - alpha)
         keep = np.clip(np.mean(on_white - on_black, axis=2), 0, 255)
         visible = keep < 255
         if not visible.any():
-            patch = _Patch(None)
-        else:
-            rows, cols = np.nonzero(visible.any(axis=1))[0], np.nonzero(visible.any(axis=0))[0]
-            y0, y1, x0, x1 = int(rows[0]), int(rows[-1]) + 1, int(cols[0]), int(cols[-1]) + 1
-            patch = _Patch(
-                (y0, y1, x0, x1),
-                np.clip(on_black[y0:y1, x0:x1], 0, 255).astype(np.uint16),
-                np.rint(keep[y0:y1, x0:x1]).astype(np.uint16)[:, :, None],
-            )
-        if len(self._cache) >= CACHE_SIZE:
-            self._cache.pop(next(iter(self._cache)))
-        self._cache[states] = patch
+            return _Patch(None)
+        rows, cols = np.nonzero(visible.any(axis=1))[0], np.nonzero(visible.any(axis=0))[0]
+        r0, r1, c0, c1 = int(rows[0]), int(rows[-1]) + 1, int(cols[0]), int(cols[-1]) + 1
+        return _Patch(
+            (y0 + r0, y0 + r1, x0 + c0, x0 + c1),
+            np.clip(on_black[r0:r1, c0:c1], 0, 255).astype(np.uint16),
+            np.rint(keep[r0:r1, c0:c1]).astype(np.uint16)[:, :, None],
+        )
+
+    def _patch(self, k: int, state: Hashable) -> _Patch:
+        """Overlay ``k`` drawn in ``state`` (cached)."""
+        key = (k, state)
+        patch = self._cache.get(key)
+        if patch is None:
+            mobject = self.mobjects[k]
+            assert mobject is not None
+            patch = self._draw(self.overlays[k].pose(mobject, state))
+            if len(self._cache) >= CACHE_SIZE * len(self.overlays):
+                self._cache.pop(next(iter(self._cache)))
+            self._cache[key] = patch
         return patch
 
     def composite(self, frame: np.ndarray, states: tuple[Hashable | None, ...]) -> np.ndarray:
-        """``frame`` (H x W x 4 RGBA) with the overlays drawn in ``states`` on top (a copy; the
-        frame itself is returned when nothing is shown)."""
-        if all(s is None for s in states):
-            return frame
-        patch = self._patch(states)
-        if patch.box is None:
-            return frame
-        y0, y1, x0, x1 = patch.box
-        out = np.array(frame, copy=True)
-        under = out[y0:y1, x0:x1, :3].astype(np.uint16)
-        out[y0:y1, x0:x1, :3] = (patch.color + (under * patch.keep + 127) // 255).clip(0, 255).astype(np.uint8)
+        """``frame`` (H x W x 4 RGBA) with the overlays drawn in ``states`` on top, in order (a
+        copy; the frame itself is returned when nothing is shown)."""
+        out = frame
+        for k, state in enumerate(states):
+            if state is None or self.mobjects[k] is None:
+                continue
+            patch = self._patch(k, state)
+            if patch.box is None:
+                continue
+            if out is frame:
+                out = np.array(frame, copy=True)
+            y0, y1, x0, x1 = patch.box
+            under = out[y0:y1, x0:x1, :3].astype(np.uint16)
+            out[y0:y1, x0:x1, :3] = (patch.color + (under * patch.keep + 127) // 255).clip(0, 255).astype(np.uint8)
         return out
 
     # ----- renderer hook -----------------------------------------------------------------------

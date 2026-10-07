@@ -55,11 +55,54 @@ scenes:
 | `duration` | none | seconds; required on a scene without beats and not allowed on a scene with beats |
 | `lint_ignore` | `[]` | `vidgen lint` findings to skip in this scene, see [lint](#lint-vidgen-lint) |
 | `overlays` | `true` | the video's [overlays](#overlays) on this scene: `false` for none, or per overlay id `false` / option overrides, or an overlay of this scene only |
+| `chapter` | none | a new [chapter](#chapters) starts at this scene: its title, or `{title, number}` |
 
 Beat `id`s name the audio files: keep them when you edit the text (only that beat is
 re-voiced). A beat `text` is spoken as written; it is also the subtitle. A beat's `actions`
 (default `[]`) point at parts of the scene while it is spoken — reveal, dim, highlight — see
 [beat actions](#beat-actions).
+
+## Chapters
+
+A video can be divided into chapters. A chapter starts at every [`chapter`](#chapter) scene (its
+`title` and `number` params) and at every scene with a `chapter:` key, which marks a new chapter
+without a divider card:
+
+```yaml
+scenes:
+  - id: intro                 # before the first chapter: no chapter
+    type: title
+    params: {title: "Engines"}
+    beats: [{text: "..."}]
+  - id: part1
+    type: chapter             # a divider card starts chapter 1 "Setup"
+    params: {number: 1, title: "Setup"}
+    duration: 3
+  - id: data                  # still chapter 1
+    type: text_card
+    params: {text: "Data"}
+    beats: [{text: "..."}]
+  - id: results
+    type: bullets
+    chapter: Results          # chapter 2 starts here, no card (long form: {title: Results, number: 2})
+    params: {heading: "Results", items: ["Faster", "Smaller"]}
+    beats: [{text: "..."}]
+```
+
+| key | default | |
+|---|---|---|
+| `title` | required | the chapter's name (the short form `chapter: Results` gives only this) |
+| `number` | none | its number as shown (an integer, or text like `"Part II"`); without one, indicators show its position (1, 2, ...) |
+
+On a `chapter` scene, `chapter:` renames the chapter in lists and indicators (e.g. a shorter
+title than the card's) and keeps the card's number unless it gives one. A chapter lasts until
+the next one starts (the last until the video's end). `vidgen validate` rejects the same
+chapter twice (same title and number; a card starts its chapter by itself, the scenes after it
+need no `chapter:`), integer numbers that do not increase, and a scene with `chapter:` right
+after a chapter card (the card would be a chapter of its own; give the card the `chapter:`
+instead). The [`progress_bar`](#progress_bar) marks chapters, the
+[`chapter_indicator`](#chapter_indicator) names the current one; extensions read the list with
+`video_chapters(project)` (docs/EXTENDING.md).
 
 ## Format and preview
 
@@ -1583,7 +1626,8 @@ Steps: with two or more beats, (1) rule, icon, number and title, (2) subtitle; w
 or silent with a `duration`, everything comes in together. Further beats hold.
 [Action targets](#beat-actions): `icon`, `number`, `title`, `subtitle` (those present).
 
-The chapter's name is its `title` param (what a chapter list or indicator should show).
+The chapter's name is its `title` param (what a chapter list or indicator shows; a
+`chapter:` key on the scene renames it there, see [chapters](#chapters)).
 
 | param | type | default | |
 |---|---|---|---|
@@ -2207,7 +2251,7 @@ depend on the params, so only `vidgen validate` checks them. Use `vidgen storybo
 ## Overlays
 
 Overlays are drawn **on top of the scenes and fixed to the screen**: a lower third introducing a
-speaker, a logo in a corner. They are listed once for the whole video and appear on every scene
+speaker, a logo in a corner, a progress bar, the current chapter. They are listed once for the whole video and appear on every scene
 they apply to; the scene's camera moves (a [`zoom`](#beat-actions)) and its fades (the fade-out
 at a scene's end) do not touch them, and they look the same on both sides of a cut. They are
 drawn into each scene's own render, so `vidgen storyboard`, the [layout dump](#layout-dump-buildlayoutscenejson)
@@ -2249,13 +2293,13 @@ Keys every overlay entry has (any other key is an option of its type):
 
 | key | default | |
 |---|---|---|
-| `type` | required | `lower_third`, `watermark`, or a [project overlay type](EXTENDING.md#9-overlays-custom-overlay-types) |
+| `type` | required | `lower_third`, `watermark`, `progress_bar`, `chapter_indicator`, or a [project overlay type](EXTENDING.md#9-overlays-custom-overlay-types) |
 | `id` | the type | the name a scene's `overlays:` refers to; when several entries share a type and have no `id`, they are `<type>1`, `<type>2`, ... (ids must be unique) |
 | `scenes` | `all` | the scenes it is drawn on: `all` or a list of scene ids |
 | `exclude` | `[]` | scenes it is not drawn on |
 | `from` | the video's start | where it starts: seconds in the video, or a scene id (that scene's start) |
 | `to` | the video's end | where it ends: seconds in the video, or a scene id (that scene's end) |
-| `reserve` | `false` | keep the scenes' layouts clear of it: on every scene it is drawn on, the safe area (docs/EXTENDING.md "Layout regions") shrinks to leave its box free (plus 0.2 units), so built-in scenes lay out around it (the layout dump's `safe_area` too). Off by default: a lower third shows for a few seconds over content laid out for the whole frame, and a watermark sits in the margin |
+| `reserve` | `false` | keep the scenes' layouts clear of it: on every scene it is drawn on, the safe area (docs/EXTENDING.md "Layout regions") shrinks to leave its box free (plus 0.2 units), so built-in scenes lay out around it (the layout dump's `safe_area` too). Off by default: a lower third shows for a few seconds over content laid out for the whole frame, and a watermark sits in the margin. The safe area is cut on every scene the overlay shows on at all, for the whole scene (a layout is built once): a lower third shown 4 s of a scene shrinks it all along (turn it off there with the scene's `overlays: {ID: {reserve: false}}`). An overlay hidden on a whole scene (the `chapter_indicator` on chapter cards, or outside its `from` / `to`) reserves nothing there |
 
 **On a scene** (`overlays:` of the scene): `false` turns every overlay off there; a mapping
 turns single ones off (`{draft: false}`) or overrides their options and `reserve` for that scene
@@ -2335,6 +2379,58 @@ avoid it; it is not checked for contrast.
 | `color` | `text` | colour of a text or icon watermark |
 | `inset` | `0.025` | distance from the frame's edges, share of the shorter side |
 | `fade` | `0` | seconds it fades in and out where a `from` / `to` starts and ends it (`0`: no fade) |
+
+### `progress_bar`
+
+A thin bar along the top or bottom edge of the frame that fills up as the video plays: the
+share of the whole video played so far, continuous across cuts. With `chapters` (default),
+small gaps split it at the [chapters](#chapters)' starts, as video players mark them. It sits
+on the frame's edge, outside the safe area, so scenes need not avoid it. Use `from` / `to`
+or `exclude` to leave it off the title or the end card; it still counts the whole video.
+
+| param | default | |
+|---|---|---|
+| `position` | `top` | `top` or `bottom` edge (in 9:16 phone apps cover the bottom) |
+| `thickness` | `0.006` | height, share of the frame's shorter side (at least 2 pixels) |
+| `color` | `primary` | the played part |
+| `track_color`, `track_opacity` | `dim`, `0.35` | the part still to come (`0`: hidden) |
+| `opacity` | `1` | of the played part |
+| `chapters` | `true` | gaps at chapter starts |
+| `inset` | `0` | distance from the frame's edge, share of the shorter side (`0`: flush) |
+
+### `chapter_indicator`
+
+A small label in a corner naming the current [chapter](#chapters): "2 · Results" (the number in
+`number_color`), or "2/5 · Results" with `total`. When the chapter changes it cross-fades to
+the next; it fades out before a chapter card and in after it. It is hidden before the first
+chapter and on the `chapter` cards themselves (they say it already; `on_chapter_cards: true`
+shows it there too). A title longer than `max_width` is shortened with "…". It sits `inset`
+from the frame's corner; at the default size it reaches a little into the safe area, so give
+it `reserve: true` (scenes keep clear of it) unless the scenes leave that corner free.
+
+| param | default | |
+|---|---|---|
+| `corner` | `top_left` | `top_left`, `top_right`, `bottom_left`, `bottom_right` |
+| `number` | `true` | show the number (as written, else the chapter's position) |
+| `total` | `false` | show the position out of the count ("2/5") instead of the number |
+| `separator` | `" · "` | between number and title |
+| `size` | `caption` | text size (at least the readable size) |
+| `color`, `number_color` | `text`, `primary` | title, number |
+| `opacity` | `0.85` | of the label |
+| `background`, `background_opacity` | none, `0.85` | a plate behind the label (e.g. `surface`) for pictures reaching the corner |
+| `max_width` | `0.4` | widest it may be, share of the frame's width (in 9:16 twice that, at most 0.85) |
+| `inset` | `0.025` | distance from the frame's edges, share of the shorter side |
+| `fade` | `0.4` | seconds of its fades and of the cross-fade at a chapter change (`0`: cut) |
+| `on_chapter_cards` | `false` | also show it on `chapter` scenes |
+
+```yaml
+overlays:
+  - type: progress_bar
+    exclude: [intro]                # not over the title
+  - type: chapter_indicator
+    total: true                     # "2/5 · Results"
+    reserve: true
+```
 
 ## JSON Schema (`vidgen schema`)
 

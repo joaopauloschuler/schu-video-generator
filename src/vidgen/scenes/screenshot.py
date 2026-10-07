@@ -223,7 +223,7 @@ class Screenshot(NarratedScene):
         self._body = self.safe_area
         title = None
         if p.title:
-            title = chart_title(p.title, size="heading")   # header band, 1.3x in a vertical frame
+            title = chart_title(p.title, size="heading", area=self.safe_area)   # header band, 1.3x in a vertical frame
             self._body = self._body.below(title, gap=TITLE_GAP)
         self._img = load_image(self.project.asset(p.path))
         self._picture = self._layout(self._body)

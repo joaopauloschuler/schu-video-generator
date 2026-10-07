@@ -256,7 +256,7 @@ class CodeListing(NarratedScene):
         body = self.safe_area
         title = None
         if p.title:
-            title = chart_title(p.title, size="heading")   # header band, 1.3x in a vertical frame
+            title = chart_title(p.title, size="heading", area=self.safe_area)   # header band, 1.3x in a vertical frame
             body = body.below(title, gap=0.45)
         listing, groups = self._fit_listing(text.expandtabs(4).split("\n"), language or "python", body)
         place(listing, body, fit="none", align="center")

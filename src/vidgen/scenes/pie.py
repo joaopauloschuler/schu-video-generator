@@ -233,7 +233,7 @@ class Pie(NarratedScene):
         body = self.safe_area
         title = None
         if p.title:
-            title = chart_title(p.title, size=p.title_size, color=p.title_color)
+            title = chart_title(p.title, size=p.title_size, color=p.title_color, area=self.safe_area)
             body = body.below(title, gap=0.45)
         cap = None
         if p.caption:

@@ -13,7 +13,7 @@
 #   vidgen storyboard examples/gallery --scene share --scene busy --per-beat 3  # a donut sweeping in; a heatmap
 #   vidgen storyboard examples/gallery --scene reach --per-beat 3   # a map: countries, then pins and an arc
 #   vidgen storyboard examples/gallery --scene derive --per-beat 3  # an equation derivation, step by step
-#   vidgen storyboard examples/gallery --scene walkthrough --per-beat 2  # a listing scrolling from step to step
+#   vidgen storyboard examples/gallery --scene walkthrough --per-beat 2  # a listing scrolling from step to step; chapter 4 starts here
 #   vidgen storyboard examples/gallery --scene app --per-beat 2     # a screenshot with callouts, step by step
 #   vidgen storyboard examples/gallery --scene clip --per-beat 3    # a clip with a lower third (overlays)
 # No narration audio: beats are timed from their word count (narration.words_per_second).
@@ -63,6 +63,10 @@ overlays:             # drawn over the scenes, fixed to the screen (docs/CONFIG.
     name: "Test pattern"
     title: "Generated with ffmpeg"
     icon: play
+    reserve: true
+  - type: progress_bar       # a thin bar along the top edge filling up with the video, split at chapters
+  - type: chapter_indicator  # "2 · Charts and numbers" in the top left corner; hidden on the chapter cards
+                             # (chapters: the `chapter` cards and the `chapter:` key of a scene, see walkthrough)
     reserve: true
 
 scenes:
@@ -298,8 +302,8 @@ scenes:
     type: chapter
     params:
       number: 3
-      title: "Pictures, maths and code"
-      icon: code
+      title: "Pictures and maths"
+      icon: sigma
     duration: 3
 
   - id: app
@@ -359,6 +363,7 @@ scenes:
 
   - id: walkthrough
     type: code_walkthrough   # a long file in a window that scrolls to the lines each beat talks about
+    chapter: {title: "Code", number: 4}   # a new chapter without a divider card (the indicator cross-fades)
     params:
       title: "Walking through a training loop"
       path: assets/train.py

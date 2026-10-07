@@ -55,8 +55,8 @@ class OverlayContext:
 
     Times are planned (:mod:`vidgen.videoplan`): ``scene`` is the scene being rendered (its
     ``start`` in the video, ``duration``, ``beats`` with times from the scene's start,
-    ``chapter``), ``scenes`` all of them, ``duration`` the whole video, ``chapters`` the
-    ``chapter`` scenes. ``fps`` is the render's frame rate.
+    ``chapter``), ``scenes`` all of them, ``duration`` the whole video, ``chapters`` the video's
+    chapters (DESIGN.md §42) and ``chapter`` the scene's. ``fps`` is the render's frame rate.
     """
 
     project: Project
@@ -86,8 +86,13 @@ class OverlayContext:
 
     @property
     def chapters(self) -> tuple[Chapter, ...]:
-        """The video's ``chapter`` scenes, in order."""
+        """The video's chapters, in order (``chapter`` scenes and scenes with a ``chapter:``)."""
         return self.plan.chapters
+
+    @property
+    def chapter(self) -> Chapter | None:
+        """The chapter of the scene being rendered (``None`` before the first chapter)."""
+        return self.plan.chapter_of(self.scene_id)
 
     def video_time(self, scene_time: float) -> float:
         """A time in the scene being rendered as a time in the video."""
@@ -144,6 +149,13 @@ class Overlay:
         is a beat of the scene); ``scenes`` are the ids the entry is drawn on. One message per
         problem, starting with the option name (``"image: file not found: ..."``)."""
         return []
+
+    def shown_in(self, start: float, end: float) -> bool:
+        """Whether it shows at all between video times ``start`` and ``end`` (a scene's slot that
+        its interval reaches). ``False`` leaves it out of that scene's render: nothing drawn and
+        nothing ``reserve``d there (a chapter indicator hidden on chapter cards). Asked only of
+        :attr:`timed` overlays. Default: ``True``."""
+        return True
 
     def window(self) -> tuple[float, float] | None:
         """The video seconds ``(start, end)`` it is shown in (within ``span``), or ``None`` for
@@ -480,8 +492,8 @@ def scene_overlays(project: Project, spec: SceneConfig, theme: Theme, plan: Vide
         if overlay.timed:
             start, end = overlay.interval()
             slot = context.scene
-            if end <= slot.start or start >= slot.end:
-                continue  # its time range does not reach this scene
+            if end <= slot.start or start >= slot.end or not overlay.shown_in(max(start, slot.start), min(end, slot.end)):
+                continue  # its time range does not reach this scene, or it is hidden all along
         out.append(overlay)
     return sorted(out, key=lambda o: o.layer)
 

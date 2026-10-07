@@ -223,7 +223,7 @@ class VideoClip(Screenshot):
         area = self.safe_area
         title = None
         if p.title:
-            title = chart_title(p.title, size="heading")   # header band, 1.3x in a vertical frame
+            title = chart_title(p.title, size="heading", area=self.safe_area)   # header band, 1.3x in a vertical frame
             area = area.below(title, gap=0.45)
         room = area if p.region in ("full", "body") else region(p.region, area)
         caption = None

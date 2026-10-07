@@ -168,7 +168,7 @@ class Table(NarratedScene):
         area = self.safe_area
         title = None
         if p.title:
-            title = chart_title(p.title, size=p.title_size, color=p.title_color)   # header band, 1.3x in a vertical frame
+            title = chart_title(p.title, size=p.title_size, color=p.title_color, area=self.safe_area)   # header band, 1.3x in a vertical frame
             area = area.below(title, gap=0.45)
         caption = None
         if p.caption:

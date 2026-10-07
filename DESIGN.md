@@ -74,7 +74,9 @@ src/vidgen/
   callouts.py             # callouts: areas, label placement, box, circle, arrow, magnifier, spotlight (§37)
   clips.py                # video clips: probe, timing, ClipMobject (frames decoded per frame), clip sound (§38)
   geo.py                  # world map data, country lookup, Equal Earth projection, MapView (§39; no manim)
-  videoplan.py            # the planned timeline: scene / beat positions in the video before rendering (§41)
+  videoplan.py            # the planned timeline: scene / beat positions in the video before rendering (§41),
+                          # planned chapters and video_chapters() (§42)
+  chapters.py             # chapter marks from `chapter` scenes and scenes' `chapter:` keys; their checks (§42)
   overlays.py             # overlays: Overlay base, OverlayContext, config entries, validation, reserve (§41)
   overlay_layer.py        # OverlayLayer: overlays composited into every frame a scene writes (§41)
   charts.py               # chart helpers: ticks, number labels, axes, legend, markers, fit (§33),
@@ -87,7 +89,8 @@ src/vidgen/
   fileio.py               # atomic writes; replacing files that Windows programs keep open
   scenes/                 # built-in scene library (registered like extensions; actions.py:
                           # the built-in beat actions reveal/dim/highlight/zoom/transform, §26-27;
-                          # overlays.py: the built-in overlays lower_third/watermark, §41)
+                          # overlays.py: the built-in overlays lower_third/watermark, §41;
+                          # progress.py: progress_bar/chapter_indicator, §42)
   data/fonts/             # Inter, Source Serif 4, JetBrains Mono NL (.ttf + OFL.txt; package data)
   data/icons/             # manifest.json + lucide/*.svg + lucide/LICENSE (ISC; package data, §22)
   data/geo/               # world-110m.json: Natural Earth 1:110m countries (public domain; package data, §39)
@@ -807,7 +810,7 @@ using the existing renders of the others (missing ones are rendered). Exit code 
   from the per-scene indexes and timings (beat texts); a still's video time uses scene starts
   summed from the per-scene timings' durations (`null` if a scene has no render at the format).
 - **Fingerprint** (`vidgen/render/fingerprint.py`, `scene_fingerprint(project, scene_id)`): a
-  SHA-256 over the scene's config entry, the config minus `scenes`/`variants`/`lint` (Step 13; the entry without `lint_ignore`) (with the variant
+  SHA-256 over the scene's config entry, the config minus `scenes`/`variants`/`lint` (Step 13; the entry without `lint_ignore` and, Step 39, `chapter`) (with the variant
   applied), the beats' MP3 size+mtime, the contents of the `.py` files of the extension folders,
   size+mtime of the files under `<root>/assets`, the vidgen version and a digest of vidgen's own
   source except `NOT_RENDER_INPUTS` (CLI, JSON, schema, sheets, storyboard, pipeline, ffmpeg,
@@ -2574,3 +2577,61 @@ using the existing renders of the others (missing ones are rendered). Exit code 
 - Known limits: the plan cannot see what a scene's code does beyond the contract (warning at
   join); `reserve` is per scene, not per moment; overlays are drawn at the render's resolution
   from vector / image mobjects (no video overlays).
+
+## 42. Refinements (Step 39, chapters, `progress_bar`, `chapter_indicator`)
+
+- **Chapters** (`vidgen/chapters.py`, config only): a chapter starts at a `chapter` scene
+  (`params.title`, `params.number`) and at any scene with **`SceneConfig.chapter`**: a string
+  (the title) or `ChapterConfig {title, number?}` (`number` int or non-empty text). On a
+  `chapter` scene the field renames the chapter in lists/indicators and keeps the card's number
+  unless it gives one. `chapter_marks(scenes) -> [ChapterMark(title, number: str | None, scene,
+  scene_index, card)]`. `chapter_problems(scenes)` runs in `VideoConfig`'s validator (so `parse_config`,
+  `validate` and every command reject them): the same (title casefolded, number) twice; integer
+  numbers not strictly increasing (text numbers and repeated chapters are skipped); a non-card
+  mark right after a chapter card (the card would be a chapter of its own). Two cards in a row
+  are allowed (two chapters).
+- **Planned chapters** (`VideoPlan.chapters`): `Chapter(title, number, scene, start, end, index,
+  count, card)` (+ `label` = number or index, `duration`); a chapter ends where the next starts,
+  the last at the planned video end. `chapter_of(scene_id)`, `chapter_at(t)`; `SceneSlot.chapter`
+  stays the title (now also from `chapter:` fields). **Public**: `vidgen.api.video_chapters(project,
+  fps=None)` (default the final format's fps) and `Chapter` — what Step 49 (MP4 chapter metadata,
+  YouTube list) reads; Step 49 adds the "Intro" chapter at 0:00 YouTube needs when the first
+  chapter starts later. `OverlayContext.chapters` (all), `.chapter` (the scene's).
+- **Fingerprint**: a scene's own `chapter:` is excluded from its dump (no pixels depend on it
+  without overlays); `_overlay_inputs` carries every scene's `chapter` and a card's `number`.
+- **`Overlay.shown_in(start, end)`** (default `True`, asked of timed overlays for the scene's
+  slot ∩ interval): `False` drops the overlay from that scene's render, so it neither draws nor
+  **reserves** there. This is the cheap part of the Step 38 "reserve is per scene" gap; an
+  overlay shown during part of a scene still reserves for the whole scene (a layout is built
+  once; documented in CONFIG.md `reserve`).
+- **Reserved space respected by chart titles**: built-ins called `chart_title(...)` without
+  `area`, i.e. in the global safe area, so a `reserve`d overlay at the top did not move their
+  header (seen in 9:16 with two-line titles); every built-in now passes `area=self.safe_area`.
+- **Drawing per overlay with cropped cameras** (`OverlayLayer`): patches are cached per
+  `(overlay, state)` (LRU 64 per overlay) instead of per combination of states, and each is drawn
+  by two cameras (black / white) cropped to the posed mobject's pixel box (points' box + strokes
+  + 3 px, clamped to the frame; same pixels-per-unit and an integer pixel offset, so Cairo and
+  image drawing match the whole-frame result — tested within 2 levels). A progress bar changing
+  every few frames costs a strip, not two 1080p captures plus a redraw of every other overlay.
+  Compositing blends the shown patches in layer order (the over operator; equal to drawing them
+  together up to rounding).
+- **`progress_bar`** (`scenes/progress.py`, `timed = True`): track segments (`track_color`
+  `dim` at 0.35) and played segments (`color` `primary`) along the top/bottom edge, `thickness`
+  0.006 of the shorter side (≥ 2 px), `inset` 0 (flush; outside the safe area, so no reserve
+  needed); with `chapters`, gaps of max(2 x thickness, 3 px) at every chapter start inside the
+  video. State: the number of played pixel columns, `round(t / duration x width_px)` — a pure
+  function of video time, quantised to a pixel (one patch per column, ≤ width states per video).
+  The fraction is of the whole planned video even with `from` / `to` / `exclude`.
+- **`chapter_indicator`** (`timed = True`): one `MarkupText` label per chapter (number bold in
+  `number_color`, separator and title in `color`; `total` → "index/count"; `number: false` →
+  title only), at least the readable size, shortened word by word with "…" to `max_width` (0.4
+  of the frame width; 9:16 min(2x, 0.85)), optional rounded plate (`background`), `opacity`
+  0.85, placed `inset` from the `corner`. `build()` returns all labels (so `reserve` keeps clear
+  of the widest); `pose` shows one or two. **Runs**: the scenes it is drawn on that have a
+  chapter, minus chapter cards (unless `on_chapter_cards`), consecutive scenes of one chapter
+  merged; runs touching another run (a `chapter:` field change, no card) cross-fade over `fade`
+  centred on the cut; free ends fade in/out over `fade` inside the run. State: `((chapter
+  position, opacity 2 decimals), ...)`; settled = one label at full opacity. `shown_in` is false on
+  cards and before the first chapter, so those scenes get no reserve.
+- **Example**: `examples/gallery` has a top `progress_bar` (3 chapter segments) and a top-left
+  `chapter_indicator` with `reserve: true`; lint 0 findings in all 8 variants.

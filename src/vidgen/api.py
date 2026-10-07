@@ -93,6 +93,7 @@ from vidgen.overlays import Overlay, OverlayContext, OverlayOptions, with_opacit
 from vidgen.registry import action, overlay, scene  # noqa: E402
 from vidgen.runtime import current_project, current_theme  # noqa: E402
 from vidgen.scene import IconName, NarratedScene, SceneParams, ThemeColor, ThemeSize, one_or_many  # noqa: E402
+from vidgen.videoplan import Chapter, video_chapters  # noqa: E402
 
 
 def register_theme_defaults(colors: dict[str, str] | None = None, sizes: dict[str, float] | None = None) -> None:
@@ -167,6 +168,8 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "OverlayOptions",
     "OverlayContext",
     "with_opacity",
+    "Chapter",
+    "video_chapters",
     "hook",
     "HookContext",
     "register_theme_defaults",

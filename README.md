@@ -38,9 +38,11 @@ subtitles.
   `- zoom: "term:2ab"` (camera in and back out), `- transform: step1` + `into: step3` — on every
   built-in scene type, timed inside the beat ([reference](docs/CONFIG.md#beat-actions)).
 - **Overlays**: a video-level `overlays:` list draws lower thirds (`- {type: lower_third, scene:
-  intro, at: 1.5, name: Ada Lovelace}`) and a watermark (logo, icon or text in a corner) over the
-  scenes, fixed to the screen through camera moves and fades and seamless across cuts; per scene
-  on/off or overridden ([reference](docs/CONFIG.md#overlays)).
+  intro, at: 1.5, name: Ada Lovelace}`), a watermark (logo, icon or text in a corner), a progress
+  bar and a chapter indicator ("2 · Results") over the scenes, fixed to the screen through camera
+  moves and fades and seamless across cuts; per scene on/off or overridden
+  ([reference](docs/CONFIG.md#overlays)). Chapters come from `chapter` cards or a scene's
+  `chapter:` key ([chapters](docs/CONFIG.md#chapters)).
 - **Extensible per video**: a project can add its own scene types, beat actions, overlays,
   helpers, theme tokens and pipeline hooks in its `extensions/` folder, without touching vidgen.
 - **Cheap to iterate**: only new or edited beats are sent to ElevenLabs; fast low-resolution
@@ -169,7 +171,7 @@ my_video/
 - [examples/gallery](examples/gallery) — every other built-in scene type once (stat, chapter,
   comparison, table, timeline, diagram, process, network, scatter, histogram, pie, heatmap, map,
   screenshot, video clip, equation derivation, code walkthrough) and overlays (a watermark, a
-  lower third): `vidgen storyboard examples/gallery [--variant vertical]`.
+  lower third, a progress bar, a chapter indicator): `vidgen storyboard examples/gallery [--variant vertical]`.
 - [examples/custom_scene](examples/custom_scene) — "How a bicycle gear works": built-ins plus a
   custom scene type with a helper module, a project icon, a vertical variant and a hook.
 - [examples/kphi3](examples/kphi3) — a real 4-minute paper video whose eight bespoke scenes all

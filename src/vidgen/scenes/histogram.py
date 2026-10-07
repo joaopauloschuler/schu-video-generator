@@ -259,7 +259,7 @@ class Histogram(NarratedScene):
         frame: list[Mobject] = []
         title = None
         if p.title:
-            title = chart_title(p.title, size=p.title_size, color=p.title_color)
+            title = chart_title(p.title, size=p.title_size, color=p.title_color, area=self.safe_area)
             frame.append(title)
             body = body.below(title, gap=0.45)
         if p.caption:

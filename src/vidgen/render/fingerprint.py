@@ -85,7 +85,7 @@ def _stat(path: Path) -> list[int] | None:
 
 def _overlay_inputs(project: Project) -> Any:
     """What overlays read from the other scenes (their planned timeline: types, durations, beat
-    texts and MP3s, chapter titles; DESIGN.md §41); ``None`` without overlays."""
+    texts and MP3s, chapters; DESIGN.md §41-42); ``None`` without overlays."""
     cfg = project.config
     if not cfg.overlays and not any(isinstance(s.overlays, dict) for s in cfg.scenes):
         return None
@@ -95,6 +95,8 @@ def _overlay_inputs(project: Project) -> Any:
             "type": s.type,
             "duration": s.duration,
             "title": s.params.get("title") if s.type == "chapter" else None,
+            "number": s.params.get("number") if s.type == "chapter" else None,
+            "chapter": s.model_dump(mode="json")["chapter"],
             "overlays": s.overlays,
             "beats": [[b.id, b.text, _stat(project.audio_dir / f"{b.id}.mp3")] for b in s.beats],
         }
@@ -115,7 +117,8 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
         "vidgen_source": vidgen_source_digest(),
         "config": config,
         "readable": project.config.lint.rules.min_font.min_size,
-        "scene": spec.model_dump(mode="json", exclude={"lint_ignore"}),
+        # A scene's `chapter:` only matters to overlays (in "overlays" below when there are any).
+        "scene": spec.model_dump(mode="json", exclude={"lint_ignore", "chapter"}),
         "audio": {beat.id: _stat(project.audio_dir / f"{beat.id}.mp3") for beat in spec.beats},
         "extensions": [_contents_digest(_files(folder, ".py"), folder) for folder in project.extension_dirs],
         "assets": {path.relative_to(assets).as_posix(): _stat(path) for path in _files(assets)},

@@ -3534,3 +3534,97 @@ How to test: `/home/claude/venv/bin/python -m pytest -q` (1667 passed, 1 skipped
 step only: `pytest tests/test_overlays.py`. Manual: `vidgen storyboard examples/gallery --scene clip
 --per-beat 3 [--variant vertical]`, `vidgen lint examples/gallery [--variant vertical]`,
 `vidgen list-scenes`, `vidgen schema`.
+
+## Step 39 — Progress / chapter indicator
+What was built
+- **Chapters** (`src/vidgen/chapters.py`): a chapter starts at a `chapter` scene and at any scene
+  with the new **`chapter:`** key (`SceneConfig.chapter`: a title, or `ChapterConfig {title,
+  number}`); on a `chapter` card the key renames the chapter in lists/indicators. Checked in
+  `VideoConfig`'s validator (so `validate`, `parse_config` and every command): the same chapter
+  (title, number) twice, integer numbers that do not increase, a `chapter:` scene right after a
+  card (the card would be a chapter of its own).
+- **One chapter list API**: `VideoPlan.chapters` → `Chapter(title, number, scene, start, end,
+  index, count, card)` (+ `label`, `duration`), `chapter_of(scene_id)`, `chapter_at(t)`;
+  public **`vidgen.api.video_chapters(project, fps=None)`** and `Chapter` (loads the project's
+  scene types for the call when they are not registered: the plan needs their fade-outs).
+  `OverlayContext.chapters` / `.chapter`; `SceneSlot.chapter` also follows `chapter:` keys.
+- **`progress_bar`** overlay (`src/vidgen/scenes/progress.py`): thin bar on the top (default) or
+  bottom edge, flush (`inset` 0), `thickness` 0.006 of the short side (≥ 2 px), played part
+  `primary`, track `dim` at 0.35, gaps at chapter starts (`chapters: true`); state = played pixel
+  columns of the whole planned video, so it is continuous across cuts and drawn once per pixel.
+- **`chapter_indicator`** overlay: "2 · Results" (number bold in `primary`, `total: true` →
+  "2/5", `number: false` → title only) in a `corner` (default top left), `inset` 0.025, caption
+  size (≥ readable), opacity 0.85, optional plate (`background`), title shortened with "…" to
+  `max_width` (0.4 of the width; 9:16 0.8). Cross-fades (`fade` 0.4 s, centred on the cut) when
+  the chapter changes between adjacent scenes; fades out before a chapter card and in after it;
+  hidden before the first chapter and on chapter cards (`on_chapter_cards`).
+- **`Overlay.shown_in(start, end)`** (framework): an overlay hidden for a whole scene is left out of
+  that scene's render, so it also reserves nothing there (the indicator on chapter cards).
+- **Fixes**: built-in scenes laid their header (`chart_title`) out in the *global* safe area, so a
+  `reserve`d overlay at the top did not move them (9:16 two-line titles ran 7–12 px into it): all
+  13 now pass `area=self.safe_area`. **Overlay drawing** per overlay and state with cameras cropped
+  to the overlay's pixel box (was: every combination of states drawn over two whole frames): a
+  1080p progress-bar state costs ~1.4 ms instead of ~60 ms, and a bar change no longer redraws the
+  other overlays.
+- **Example**: `examples/gallery` has a top `progress_bar` and a top-left `chapter_indicator`
+  (`reserve: true`); the third card is now "Pictures and maths" and `walkthrough` starts a
+  cardless chapter 4 "Code" (`chapter: {title: Code, number: 4}`), so the indicator cross-fades.
+
+Files
+- New: `src/vidgen/chapters.py`, `src/vidgen/scenes/progress.py`, `tests/test_chapters_progress.py`
+  (17 tests).
+- Changed: `config.py` (`ChapterConfig`, `SceneConfig.chapter`, chapter checks), `videoplan.py`
+  (`Chapter` fields, `chapters`, `chapter_of`, `chapter_at`, `video_chapters`), `overlays.py`
+  (`OverlayContext.chapter`, `Overlay.shown_in`), `overlay_layer.py` (per-overlay cropped
+  patches), `api.py`, `scenes/__init__.py`, `render/fingerprint.py`, 13 scene modules
+  (`chart_title(..., area=self.safe_area)`), `tests/test_overlays.py` (overlay lists, cache
+  attribute), `tests/test_stat_chapter.py` (its fixture repeated the chapter card "2 · Results"
+  three times, now a config error: the copies are numbered 3 and 4 with their own titles),
+  `examples/gallery/video.yaml`, docs/CONFIG.md ("Chapters", scene key, `reserve`,
+  `progress_bar`, `chapter_indicator`, chapter scene), docs/EXTENDING.md (section 9: `shown_in`,
+  chapters API, cropped drawing), README.md, DESIGN.md (module tree, fingerprint, new §42),
+  tasklist.md.
+
+Public interfaces added/changed (additive)
+- `vidgen.api`: `video_chapters`, `Chapter`; `Overlay.shown_in`; `OverlayContext.chapter`.
+- `Chapter` gained `end`, `index`, `count`, `card` (+ `label`, `duration`); its first four
+  fields are unchanged.
+- Config: scene key `chapter`; overlay types `progress_bar`, `chapter_indicator`.
+- Fingerprint: a scene's own `chapter:` is not part of its render inputs (it only matters to
+  overlays, whose inputs now include every scene's `chapter` and a card's `number`).
+
+Decisions / deviations
+- Chapter checks are config errors (like duplicate ids), not lint: they are about the
+  structure, and a wrong chapter list would also go into Step 49's metadata.
+- The indicator hides on cards by *state* (so it can fade) and drops out of card renders via
+  `shown_in` (so `reserve` does not shrink the card's layout).
+- The progress fraction is always of the whole video, even when `from`/`to`/`exclude` limit
+  where the bar is drawn.
+- `reserve` gap from Step 38: fixed for whole-scene visibility (`shown_in`), documented for partial
+  visibility (a lower third shown 4 s still reserves the whole scene; turn it off per scene).
+
+Known gaps / TODOs
+- Step 49: `video_chapters` has no "Intro" before the first chapter (YouTube wants 0:00); add it
+  there. The list uses *planned* times (like overlays), which match built-in renders exactly.
+- The indicator's label is a `MarkupText`; very long separators or numbers are not shortened.
+- `reserve` for partly visible overlays is still per scene.
+- The chapter checks are new config errors: a project that repeats a `chapter` card (same title
+  and number) or numbers cards out of order no longer validates (the message says which scenes).
+- Cross-fades are eased around the cut: at 15 fps (preview) the old label is still at 0.85 on
+  the last frame before the cut, so in stills the change reads as happening mostly after it.
+- With no `background`, the indicator sits straight on the scene: a `zoom` / focus that pushes a
+  picture up to the corner (gallery `app_b4`) runs under it. Lint does not flag it (no scene
+  text there); a plate (`background: surface`) or another corner is the remedy.
+
+Verification: `vidgen storyboard` + `vidgen lint` 0 findings for examples/gallery in all 8
+variants (vertical had 7 `safe_area` warnings before the `chart_title` fix), examples/minimal
+(default, vertical) and custom_scene; sheets read (bar with 4 chapter segments, indicator absent
+on cards, "4 · Code" on walkthrough through its focus zoom). The derive → walkthrough cut checked
+frame by frame in the preview MP4s: 3 at 1.0 / 0.97 / 0.85 before it, 0.5 / 0.5 on the cut frame,
+then 4 · Code.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1684 passed, 1 skipped, ~13 min); step only: `pytest
+tests/test_chapters_progress.py`. Manual: `vidgen storyboard examples/gallery --scene walkthrough
+--per-beat 2 [--variant vertical]`, `vidgen lint examples/gallery [--variant ...]`, `python -c "from
+vidgen.project import Project; from vidgen.api import video_chapters;
+print(video_chapters(Project.load('examples/gallery')))"`.

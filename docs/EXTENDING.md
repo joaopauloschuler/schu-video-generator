@@ -818,7 +818,8 @@ An overlay (docs/CONFIG.md "Overlays") is drawn on top of every scene it applies
 the screen: the scene's camera and fades never touch it. A project adds overlay types the way it
 adds actions: a class registered with `@overlay("name")`, its `Options` (an `OverlayOptions`
 model) being the extra keys of the `overlays:` entry. The built-ins are in
-`src/vidgen/scenes/overlays.py` (`lower_third`, `watermark`).
+`src/vidgen/scenes/overlays.py` (`lower_third`, `watermark`) and `src/vidgen/scenes/progress.py`
+(`progress_bar`, `chapter_indicator`).
 
 ```python
 # extensions/badge.py
@@ -873,11 +874,14 @@ overlays:
   beat's MP3 length).
 - `self.context` (`OverlayContext`): `scene` (this scene's planned `SceneSlot`: `id`, `index`,
   `start` and `duration` in the video, `beats` with `start`/`end` from the scene's start and
-  `text`, `chapter`), `scenes`, `duration` (the whole video), `chapters` (`Chapter(title, number,
-  scene, start)` of the `chapter` scenes), `fps`, `video_time(scene_time)`, `scene_start(id)`,
-  `project`, `theme`, `plan`. Times are *planned* (docs/CONFIG.md "Overlays", Timing).
+  `text`, `chapter`: the chapter's title), `scenes`, `duration` (the whole video), `chapters`
+  (the video's chapters, see below), `chapter` (this scene's `Chapter`, `None` before the first),
+  `fps`, `video_time(scene_time)`, `scene_start(id)`, `project`, `theme`, `plan`. Times are *planned* (docs/CONFIG.md "Overlays", Timing).
   `self.options`, `self.config` (the entry), `self.id`, `self.scenes` (ids of the scenes it is
   drawn on), `self.span` (`from`/`to` in video seconds, `math.inf` without an end).
+- `shown_in(start, end)` (only asked of timed overlays): `False` when it stays hidden all the
+  way through a scene's slot, which leaves it out of that scene's render: nothing drawn, nothing
+  reserved (the chapter indicator on chapter cards). Default `True`.
 - classmethod `validate_project(options, project, scenes) -> list[str]`: checks `vidgen
   validate` runs (a file exists, a beat id exists), one `"option: message"` per problem.
 - Class attributes: `layer` (drawing order between overlays, default 0), `lint_skip` (rules not
@@ -887,4 +891,12 @@ Overlays are composited into each frame as the scene renders, so stills, the lay
 (objects with `overlay: <id>`) and `vidgen lint` (`overlay_overlap`) see them; a `reserve: true`
 entry shrinks `self.safe_area` of the scenes it is drawn on (and so `self.region(...)`), which
 scene types that lay out in the safe area follow automatically. `vidgen list-scenes` lists your
-overlay type with its options; `vidgen schema` includes them.
+overlay type with its options; `vidgen schema` includes them. Overlays are drawn with a camera
+cropped to their box, so a thin or small overlay costs little per state.
+
+**Chapters.** `video_chapters(project, fps=None)` returns the video's chapters (docs/CONFIG.md
+"Chapters": `chapter` scenes and scenes with a `chapter:` key) as `Chapter` records: `title`,
+`number` (as written, or `None`), `label` (the number, else the position), `scene` (where it
+starts), `start` / `end` / `duration` in the video (planned, at `fps`, default the final
+format's), `index` (1-based), `count`, `card` (starts with a `chapter` scene). An overlay gets
+the same list as `self.context.chapters`.

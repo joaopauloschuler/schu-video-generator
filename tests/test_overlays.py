@@ -235,7 +235,7 @@ def test_project_overlay_type_is_registered_listed_and_validated(make_project, c
     assert check_project(p) == []
     _, doc, _ = run_json(["list-scenes", str(root), "--json"], capsys)
     entries = {o["name"]: o for o in doc["overlays"]}
-    assert set(entries) == {"badge", "lower_third", "watermark"}
+    assert set(entries) == {"badge", "lower_third", "watermark", "progress_bar", "chapter_indicator"}
     badge = entries["badge"]
     assert (badge["origin"], badge["builtin"], badge["layer"], badge["lint_skip"]) == (str(Path("extensions") / "badge.py"), False, 0, [])
     assert badge["doc"].startswith('A "LIVE" badge')
@@ -339,7 +339,7 @@ def test_composite_matches_drawing_over_the_frame() -> None:
                 return square
 
         layer = OverlayLayer.__new__(OverlayLayer)
-        layer.overlays, layer.mobjects, layer._cache, layer._cameras = [Fake.__new__(Fake)], [square], {}, None
+        layer.overlays, layer.mobjects, layer._cache, layer._camera = [Fake.__new__(Fake)], [square], {}, None
         out = layer.composite(frame, ("on",))
         reference = Camera()
         reference.set_pixel_array(frame.copy())
@@ -540,7 +540,7 @@ def test_list_scenes_prints_the_overlay_types(tmp_path: Path, monkeypatch: pytes
     assert main(["list-scenes"]) == 0
     out = capsys.readouterr().out
     section = out[out.index("overlays (video `overlays:`"):]
-    assert "lower_third  builtin" in section and "watermark    builtin  (lint skips: contrast)" in section
+    assert re.search(r"\nlower_third +builtin\n", section) and re.search(r"\nwatermark +builtin  \(lint skips: contrast\)", section)
     assert "    corner: 'top_left' | 'top_right' | 'bottom_left' | 'bottom_right' = 'bottom_right'" in section
 
 

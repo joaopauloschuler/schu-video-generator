@@ -176,7 +176,7 @@ Rules that apply to every step:
 - [x] `lower_third` (name/title, timed) and `watermark` (logo image, corner, opacity) (lower third: name / title / icon on a plate, `scene` + `at` (seconds or beat) + `duration`, `across_cuts`, `align`, slide in/out, raised in 9:16; watermark: image, icon or text, corner, opacity, size, inset, `fade` at `from`/`to`; `examples/gallery` uses both)
 
 ### Step 39 — Progress / chapter indicator
-- [ ] Progress bar overlay; chapter indicator from `chapter` scenes or a scene-level `chapter:` field
+- [x] Progress bar overlay; chapter indicator from `chapter` scenes or a scene-level `chapter:` field (`chapter: TITLE | {title, number}` on any scene, checked for repeats / decreasing numbers / a mark right after a card; public `video_chapters(project)` → `Chapter(title, number, scene, start, end, index, count, card)` for overlays and Step 49; `progress_bar` (top/bottom edge, chapter gaps, pixel-quantised, continuous across cuts) and `chapter_indicator` ("2 · Results" / "2/5", corner, cross-fade at chapter changes, hidden on chapter cards by default); `Overlay.shown_in` so an overlay hidden on a whole scene reserves nothing there; built-in chart titles follow the reserved safe area; overlays drawn per overlay with cropped cameras; `examples/gallery` uses both (and a cardless chapter 4))
 
 ### Step 40 — Burned-in captions
 - [ ] Theme-styled captions burned into the video (optional), safe-area aware

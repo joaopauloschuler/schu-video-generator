@@ -480,6 +480,15 @@ class OverlayConfig(BaseModel):
 SceneOverlays = bool | dict[Identifier, bool | dict[str, Any]]
 
 
+class ChapterConfig(_Strict):
+    """A scene's ``chapter:`` in its long form: a new chapter starts at this scene."""
+
+    title: str = Field(min_length=1)
+    """The chapter's name (in the chapter indicator and chapter lists)."""
+    number: int | Annotated[str, Field(min_length=1)] | None = None
+    """Its number as shown (1, or text such as "Part II"); default its position among the chapters."""
+
+
 class BeatConfig(_Strict):
     """One narrated sentence/paragraph. ``id`` is filled in by :class:`SceneConfig` if omitted."""
 
@@ -517,6 +526,8 @@ class SceneConfig(_Strict):
     """`vidgen lint` findings to skip in this scene: rule names, or {rule, object, beat} filters."""
     overlays: SceneOverlays = True
     """Video overlays on this scene: false for none, or per overlay id false / option overrides (with type: an overlay of this scene only)."""
+    chapter: Annotated[str, Field(min_length=1)] | ChapterConfig | None = None
+    """A new chapter starts at this scene: its title, or {title, number}; a `chapter` scene starts one by itself (this then renames it in chapter lists)."""
 
     @model_validator(mode="before")
     @classmethod
@@ -619,6 +630,11 @@ class VideoConfig(_Strict):
                         "beat ids must be unique across the whole video"
                     )
                 beat_seen[beat.id] = where
+        from vidgen.chapters import chapter_problems
+
+        problems = chapter_problems(self.scenes)
+        if problems:
+            raise ValueError("; ".join(problems))
         return self
 
 

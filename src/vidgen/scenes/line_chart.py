@@ -124,7 +124,7 @@ class LineChart(NarratedScene):
         frame = VGroup()
         title = None
         if p.title:
-            title = chart_title(p.title, size=p.title_size, color=p.title_color)
+            title = chart_title(p.title, size=p.title_size, color=p.title_color, area=self.safe_area)
             frame.add(title)
             body = body.below(title, gap=0.45)
         if p.caption:

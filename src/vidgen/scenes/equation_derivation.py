@@ -483,7 +483,7 @@ class EquationDerivation(NarratedScene):
         body = self.safe_area
         title = None
         if p.title:
-            title = chart_title(p.title, size="heading")   # header band, 1.3x in a vertical frame
+            title = chart_title(p.title, size="heading", area=self.safe_area)   # header band, 1.3x in a vertical frame
             body = body.below(title, gap=0.45)
         self._layout(body)
         self._register(title)
