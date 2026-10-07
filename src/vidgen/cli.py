@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import logging
 import os
@@ -33,7 +34,7 @@ TEMPLATE_DOTFILES: tuple[str, ...] = ("gitignore",)
 #: Subcommands that accept ``--json``.
 JSON_COMMANDS: tuple[str, ...] = (
     "validate", "list-scenes", "list-themes", "list-icons", "list-sfx", "list-music", "render", "schema", "storyboard", "lint",
-    "thumbnail", "export", "translate-template", "slides", "readback", "guide", "gallery",
+    "thumbnail", "export", "translate-template", "slides", "readback", "guide", "gallery", "plan",
 )
 
 #: What a command function returns: an exit code, or (with ``--json``) the JSON document.
@@ -53,7 +54,17 @@ def cmd_init(args: argparse.Namespace) -> int:
     target = Path(args.dir)
     if target.exists() and (not target.is_dir() or any(target.iterdir())):
         raise VidgenError(f"{target} already exists and is not an empty directory")
-    template = TEMPLATES_DIR / args.example
+    scaffold_project(target, args.example)
+    print(f"created project in {target}")
+    print("next: edit video.yaml, then run `vidgen validate`, `vidgen tts` and `vidgen render`")
+    print("guide: `vidgen guide` (how to make a good video: workflow, pacing, scene types; for AI agents too)")
+    return 0
+
+
+def scaffold_project(target: Path, example: str = "minimal") -> None:
+    """Copy the ``example`` template into ``target`` (created if needed): its files with dot files
+    restored, ``assets/`` and ``extensions/``, the title derived from the folder name."""
+    template = TEMPLATES_DIR / example
     shutil.copytree(template, target, dirs_exist_ok=True)
     # Dot files are not packaged in the wheel, so the template stores them without the dot.
     for name in TEMPLATE_DOTFILES:
@@ -66,10 +77,65 @@ def cmd_init(args: argparse.Namespace) -> int:
     config_file.write_text(
         config_file.read_text(encoding="utf-8").replace("__TITLE__", title), encoding="utf-8"
     )
-    print(f"created project in {target}")
-    print("next: edit video.yaml, then run `vidgen validate`, `vidgen tts` and `vidgen render`")
-    print("guide: `vidgen guide` (how to make a good video: workflow, pacing, scene types; for AI agents too)")
-    return 0
+
+
+def cmd_plan(args: argparse.Namespace) -> CommandResult:
+    """Write a draft project from a Markdown outline or a plain-text script (DESIGN.md §61)."""
+    from vidgen.languages import normalize_language
+    from vidgen.outline import parse_outline
+    from vidgen.plan import PlanOptions, make_plan
+    from vidgen.plan_yaml import write_plan
+    from vidgen.presets import BUILTIN_PRESETS
+
+    source = Path(args.input)
+    if not source.is_file():
+        raise VidgenError(f"{source}: no such file (give a Markdown outline or a plain-text script)")
+    try:
+        text = source.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise VidgenError(f"{source}: cannot read it as UTF-8 text: {exc}") from None
+    try:
+        language = normalize_language(args.language) if args.language else None
+    except ValueError as exc:
+        raise VidgenError(f"--language: {exc}") from None
+    if args.preset not in BUILTIN_PRESETS:
+        close = difflib.get_close_matches(args.preset, list(BUILTIN_PRESETS), n=1)
+        hint = f"; did you mean '{close[0]}'?" if close else ""
+        raise VidgenError(f"unknown theme preset '{args.preset}'{hint} (presets: {', '.join(BUILTIN_PRESETS)})")
+    blocks = parse_outline(text, plain=source.suffix.lower() in (".txt", ".text"))
+    if not blocks:
+        raise VidgenError(f"{source}: no text to plan from")
+    options = PlanOptions(
+        title=args.title,
+        default_title=source.stem.replace("_", " ").replace("-", " ").strip().capitalize() or "Untitled",
+        language=language,
+        base=source.resolve().parent,
+    )
+    plan = make_plan(blocks, options)
+    output = Path(args.output) if args.output else Path(source.stem)
+    result = write_plan(plan, output, fmt=args.format, preset=args.preset, source=source.name, force=args.force)
+    project = Project.load(result.config)
+    problems, _ = validate_all(project, keep_going=True)
+    if args.json:
+        return jsonout.plan_document(project, plan, result, problems, args.format)
+    beats = sum(len(s.beats) for s in plan.scenes)
+    print(
+        f"planned {len(plan.scenes)} scenes ({beats} beats), about {_format_seconds(project.estimated_duration())}; "
+        f"{plan.todo_count} TODOs to review (# TODO: in the config)"
+    )
+    id_width = max((len(s.id) for s in plan.scenes), default=0)
+    type_width = max((len(s.type) for s in plan.scenes), default=0)
+    for scene in plan.scenes:
+        count = f"{len(scene.beats)} beat{'s' if len(scene.beats) != 1 else ''}" if scene.beats else f"{scene.duration:g} s"
+        print(f"  {scene.id:<{id_width}}  {scene.type:<{type_width}}  {count:<8}  {scene.reason}")
+    created = "created project in" if result.created else "wrote"
+    print(f"{created} {result.root if result.created else result.config}")
+    for rel in result.assets:
+        print(f"  copied {rel}")
+    for problem in problems:
+        print(f"problem: {problem}", file=sys.stderr)
+    print("next: refine the draft (read its # plan: and # TODO: comments), then `vidgen validate`, `vidgen storyboard`, `vidgen lint`")
+    return 1 if problems else 0
 
 
 def project_problems(project: Project) -> list[Problem]:
@@ -1012,6 +1078,16 @@ def build_parser() -> argparse.ArgumentParser:
     examples = sorted(d.name for d in TEMPLATES_DIR.iterdir() if d.is_dir())
     p.add_argument("--example", choices=examples, default="minimal", help="template (default: minimal)")
     p.set_defaults(func=cmd_init)
+
+    p = sub.add_parser("plan", help="draft a project from a Markdown outline or a plain-text script (scenes, beats, TODOs; no AI)")
+    p.add_argument("input", help="the outline (.md) or script (.txt)")
+    p.add_argument("--output", "-o", metavar="DIR|FILE", help="project folder to create, or a .yaml file to write (default: a folder named after INPUT)")
+    p.add_argument("--title", help="the video's title (default: the outline's top heading, else the file name)")
+    p.add_argument("--format", choices=["16:9", "9:16"], default="16:9", help="frame: 16:9 (default) or 9:16 (vertical)")
+    p.add_argument("--preset", default="dark_tech", metavar="NAME", help="theme preset (default: dark_tech; `vidgen list-themes`)")
+    p.add_argument("--language", metavar="TAG", help="language of the text (BCP-47, e.g. pt-BR): sentence and phrase rules, written as language:")
+    p.add_argument("--force", action="store_true", help="write into a folder that is not empty, or replace an existing config")
+    p.set_defaults(func=cmd_plan)
 
     p = sub.add_parser("guide", help="the author guide for AI agents making videos (workflow, pacing, scene types, ...)")
     p.add_argument("topic", nargs="?", metavar="TOPIC", help="print only this topic (vidgen guide --list shows them)")

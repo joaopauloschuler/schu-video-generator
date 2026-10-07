@@ -256,6 +256,21 @@ def search_icons(
     return [icon for _, _, icon in sorted(found, key=lambda item: (item[0], item[1]))]
 
 
+def match_icon(
+    icons: Mapping[str, IconInfo], term: str, max_score: int = 3, exclude: Iterable[str] = ()
+) -> IconInfo | None:
+    """The best icon for one search ``term`` whose match is at least as good as ``max_score`` (see
+    :func:`search_icons`' ranking: 0 the name, 1 a name prefix or an alias, 2 a whole word of the
+    name or an alias, 3 an exact tag), skipping the names in ``exclude``; ``None`` if none."""
+    term = term.lower().strip()
+    skip = set(exclude)
+    if not term:
+        return None
+    found = [(score, icon.name, icon) for icon in icons.values() if icon.name not in skip and (score := _score(icon, term)) is not None]
+    found = [f for f in found if f[0] <= max_score]
+    return min(found, key=lambda f: (f[0], f[1]))[2] if found else None
+
+
 def categories(icons: Iterable[IconInfo]) -> list[str]:
     """The built-in categories, then any other category used by ``icons``."""
     extra = sorted({icon.category for icon in icons} - set(CATEGORIES))

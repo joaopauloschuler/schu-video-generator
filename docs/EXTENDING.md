@@ -1044,7 +1044,8 @@ scene that shows the narration its own way):
   project.config.language` to `caption_cues`, `segment_cues`, `phrase_break_cost`,
   `beat_word_times`, `estimate_word_times` and `syllables(word, language)` to cut and time a
   text by its language's rules; `language_rules(tag)` gives them (`LanguageRules`: word lists,
-  `words_per_second` range, `iso639_2`, `known`). `None` means the English rules.
+  `abbreviations` whose period does not end a sentence, `words_per_second` range, `iso639_2`,
+  `known`). `None` means the English rules.
 - **Speakers** (docs/CONFIG.md "Multiple voices"): `project.voice_names()` (beat id → voice name,
   `None` for the base voice), `project.beat_voice(beat_id)` (its effective `VoiceConfig`),
   `project.speaker_tags(mode)` (beat id → label where the speaker changes; empty for `off`);

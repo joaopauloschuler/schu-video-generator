@@ -44,6 +44,10 @@ src/vidgen/
   describe.py             # scene-type/params descriptions for list-scenes
   guide.py                # `vidgen guide`: the author guide for AI agents, its topics (§59)
   gallery.py              # `vidgen gallery`: samples from the guide, work project, stills / GIFs, pages (§60)
+  outline.py              # Markdown outline / plain-text script -> blocks; inline Markdown removal (§61; no manim)
+  prose.py                # sentences (language-aware), beats of 6-15 words, on-screen label compression (§61; no manim)
+  plan.py                 # `vidgen plan`: blocks -> planned scenes (cue -> type, beats fitted to steps, TODOs) (§61; no manim)
+  plan_yaml.py            # `vidgen plan` output: commented video.yaml writer, project scaffold, assets (§61; no manim)
   schema.py               # JSON Schema export (see §12)
   errors.py               # VidgenError, Problem
   config.py               # pydantic v2 models for video.yaml (see §4)
@@ -134,6 +138,7 @@ examples/
   minimal/                # config-only example using built-ins
   custom_scene/           # built-ins + one extension scene type, helper module, variant, hook
   kphi3/                  # migrated paper video, custom scenes as extensions
+  plan/                   # outline.md + the unedited draft video.yaml `vidgen plan` writes from it (golden file, §61)
 docs/
   CONFIG.md               # config reference
   EXTENDING.md            # how to write project extensions
@@ -690,6 +695,8 @@ Refinements (Step 3):
 
 ```
 vidgen init <dir> [--example minimal]   # scaffold a project
+vidgen plan INPUT [--output DIR|FILE] [--title TEXT] [--format 16:9|9:16] [--preset NAME] [--language TAG]
+              [--force] [--json]                  # a draft project from an outline / script (§61)
 vidgen guide [TOPIC] [--list] [--json]  # the author guide for AI agents (AGENTS.md, §59)
 vidgen validate [PROJECT] [--json]      # load config + extensions, report all errors
 vidgen list-scenes [PROJECT] [--json]   # built-ins + extensions (+ which overrides)
@@ -4108,3 +4115,77 @@ the measured loudness, §48).
     the callout's own mark). `text_overlap` / `covered_text` missed these (no overlap, no
     cover). A `box` / `circle` tag (`tag_spot`) gets the same soft `clearance` (0.2 units) and
     the same spots one clearance further out.
+
+## 61. Refinements (Step 58, `vidgen plan`)
+
+- **`vidgen plan INPUT [--output DIR|FILE] [--title] [--format 16:9|9:16] [--preset] [--language]
+  [--force] [--json]`**: a draft project from a Markdown outline or a plain-text script. **No LLM
+  and no network**: deterministic heuristics, so the same input gives byte-identical output (no
+  times, no absolute paths in the file). The draft is scaffolding for an agent, which is why every
+  decision is written down as a `# plan:` comment and every doubt as a `# TODO:`.
+- **Pipeline** (all without manim): `outline.parse_outline(text, plain)` → blocks (`Heading`,
+  `Paragraph` (lines kept, joined by newlines), `ListBlock` of `ListItem(text, children)`, `Table`,
+  `Code`, `Math(formulas)`, `Image`, `Quote(text, author, source)`); `outline.plain()` removes
+  inline Markdown and collects links. `plan.make_plan(blocks, PlanOptions)` → `Plan(title, scenes:
+  [PlannedScene(id, type, params, beats, duration, reason, todos)], language, chapters, assets,
+  notes)`. `plan_yaml.plan_yaml(plan, fmt, preset, source)` → the commented text;
+  `plan_yaml.write_plan(...)` → `PlanResult(root, config, assets, created)`; the CLI then loads and
+  validates the draft (`validate_all`) and reports.
+- **Structure**: a single leading H1 is the title; the highest remaining heading level makes
+  sections, the next one units (a unit = heading + blocks → scenes); deeper headings and short
+  `Label:` lines label the next block (comparison columns). Chapters: estimated narration over
+  `CHAPTER_SECONDS` (120) and ≥ 3 sections → a silent `chapter` card (2.5 s) before each
+  section's first scene + `overlays: [{type: progress_bar}]` (the guide's rule). The last unit is
+  the closing one when it (or its section) is called Summary / Conclusion / Recap / Takeaways /
+  Next steps (en, pt, es, de, it, fr words): its last prose beat narrates an `end_card` whose
+  `lines` are the unit's links (scheme stripped).
+- **Prose to beats** (`prose.py`): `split_sentences` (end marks before a capital / digit /
+  opening mark; `LanguageRules.abbreviations` — a new field, per language — and initials never end
+  one; `etc.` / `usw.` / `ecc.` before a capital do); `split_long` (a DP over cut points: break
+  cost `cues.phrase_break_cost` of the language + 0.04 x (piece − 10)²; pieces ≥ 4 words);
+  `merge_short` (a DP grouping consecutive pieces: ≤ 15 words unless already one piece, nearest
+  10, +4 per word under 6). Scenes that reveal steps get one beat per step (`_Planner.fit`):
+  sentences as written first (so "one sentence per item" survives), then merged; the sentences
+  after the block as the steps' when they count right (those before = intro); then a match by
+  shared content-word stems (first 5 letters, in order); then the items' own sentences; then the
+  beats as they are (TODO when more than one extra beat); placeholders last (TODO). An intro of
+  one sentence joins beat 1 when the two stay ≤ 18 words, else becomes prose scenes before.
+- **Compression** (`prose.compress(text, max_words, language)`): parentheses out; `head: tail`
+  keeps the head (or the tail after a generic lead: Step / Tip / Passo...); leading filler
+  phrases and filler words (en, pt lists) out; over the limit: cut at the first comma (the main
+  clause when the head starts with a conjunction / preposition: "On a miss, query the database"),
+  then articles out, then truncate; a cut label never ends on a clinging word, conjunction,
+  preposition, auxiliary or quantifier. Limits: heading 5, item 6, label 3 (stages, chart labels,
+  nodes, comparison headings), title / card 7, comparison points 4.
+- **Cue rules** (first match): dated items (all) → `timeline`; numbered 2–8 → `process`;
+  unordered 2–12 nouns ≤ 3 words with a distinct icon each (`icons.match_icon`, score ≤ 3: name,
+  name prefix / alias, a word of the name / alias, an exact tag; then the label's words, longest
+  first, and their singular) → `icon_grid`; else `bullets` (`numbered`, `dim_previous` over 5).
+  Two-column table with all second cells numeric (`$`, unit, `%`) and 2–12 rows → `bar_chart`
+  (common unit, `value_format` for a currency, `highlight` = the label the last of 2+ beats names,
+  a beat per change from the raw sentences); else `table` (`reveal: all` when the prose has
+  fewer sentences than rows). Code ≤ 15 lines → `code` (highlight per blank-line block per
+  beat), else `code_walkthrough` (2–6 steps from the blocks / beats). Math: 1–2 formulas →
+  `equation`, ≥ 3 → `equation_derivation`. Image → copied into `assets/` (name de-duplicated),
+  else `generate:` its alt text. Quote → `quote` (≤ 2 beats). A paragraph made only of arrow
+  chains → `diagram`. Comparison: an "A vs B" / "A x B" / "A or B?" heading with two lists, or a
+  `Pros:` and a `Cons:` list (tones positive / negative, no `vs` badge), or a vs heading over
+  prose (points from the sentences naming one side only). Prose: a beat with a prominent number
+  (`%`, `x` / times, currency with magnitude, "N million", "from X to Y" → `comparison: {kind:
+  before}`; pt / es / fr / de / it read `3,5` and set `decimal_mark`) → `stat` with one beat (two
+  with a comparison: beat 2 reveals it; a second beat without one was lint `dead_air`); else
+  `bullets` of compressed beats (≤ 5, a lone leftover joins) or a `text_card` for one beat. An
+  opening beat with a number becomes the hook `stat` before the `title`.
+- **YAML writer**: hand-written so comments sit above each scene; flow style for short scalar
+  lists and small mappings (≤ 96 characters), block style for beats (`- text: "..."`), literal
+  blocks for code (`|2-` when the first line is indented); strings plain only when word-like and
+  not a YAML 1.1 keyword, single-quoted when they hold backslashes (LaTeX), else JSON-quoted;
+  floats with a mantissa dot. The text is checked to load back to exactly `plan_config(plan)`.
+- **Decisions**: the example `examples/plan/video.yaml` is committed as a golden file (a test
+  regenerates it), unedited, so the README / guide can point at what a draft looks like; its
+  `vidgen lint` has 1 finding (see Step 58 in HANDOFF). `vidgen init`'s scaffolding is now
+  `cli.scaffold_project(target, example)` (shared). `--output` defaults to a folder named after
+  the input in the current folder (like `vidgen init NAME`). A draft with validate problems is
+  still written (exit code 1, `ok` false) — it should never happen and the agent needs the file
+  to fix it. The new modules are not render inputs (fingerprint); `languages.py` and `icons.py`
+  changed, so render fingerprints change once.

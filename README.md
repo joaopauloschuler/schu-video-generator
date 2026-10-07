@@ -27,6 +27,11 @@ subtitles.
   types).
 - **Made for AI authors**: [AGENTS.md](AGENTS.md), also built in as `vidgen guide`, tells an
   agent how to make a good video with vidgen (see [For AI agents](#for-ai-agents)).
+- **From an outline to a draft**: `vidgen plan outline.md` turns a Markdown outline or a
+  plain-text script into a draft project (no AI involved): headings become scenes and chapters,
+  prose becomes beats of 6–15 words, lists / tables / code / maths / images / quotes / `A -> B`
+  chains / numbers pick their scene types, and every scene says why (`# plan:`) and what to check
+  (`# TODO:`) ([example](examples/plan)).
 - **Theme presets** (`theme: {preset: warm_editorial}`; seven built in: `dark_tech`, the default
   look, `light_academic`, `high_contrast`, `warm_editorial`, `brand_neutral`, `soft_pastel`,
   `bold_neon`), all WCAG AA with colour-blind-safe palettes, and **type scales** (`compact`,
@@ -153,7 +158,8 @@ covers the working loop (write → `validate --json` → `storyboard`, and look 
 --json` → fix → `tts --dry-run` → `tts` → `render`), pacing and on-screen text rules, a scene-type
 chooser with a snippet per type, visual design, beat actions and audio with restraint, good vs bad
 examples, outputs and the fixes for common validate / lint messages. (`CLAUDE.md` is for agents
-working on vidgen's own code.)
+working on vidgen's own code.) Starting from an outline, `vidgen plan outline.md --json` writes a
+draft project to refine: its `# TODO:` comments list what to check first.
 
 ## Install
 
@@ -202,6 +208,7 @@ libraries first (`sudo apt install libcairo2-dev libpango1.0-dev`). Optional LaT
 
 ```
 vidgen init my_video            # scaffold video.yaml, extensions/, assets/, .gitignore
+                                # (or: vidgen plan outline.md -o my_video  -> a draft from your outline)
 cd my_video
 vidgen validate                 # check config, scene types, params, assets and audio status
 vidgen render --preview         # 854x480 check, timed from word counts -> my_video_preview.mp4
@@ -227,6 +234,7 @@ narration.
 | command | |
 |---|---|
 | `vidgen init DIR [--example minimal]` | create a new project (DIR must not exist or be empty) |
+| `vidgen plan INPUT [--output DIR\|FILE] [--title TEXT] [--format 16:9\|9:16] [--preset NAME] [--language TAG] [--force] [--json]` | a draft project from a Markdown outline or a plain-text script (deterministic, no AI): scenes chosen from its headings and cues, narration cut into beats, on-screen texts compressed, a `# plan:` reason and `# TODO:`s per scene; prints scenes, estimated length and TODO count, and validates the draft |
 | `vidgen guide [TOPIC] [--list] [--json]` | the author guide for AI agents ([AGENTS.md](AGENTS.md)): all of it, one topic (`workflow`, `pacing`, `social`, `scenes`, `design`, `actions`, `overlays`, `audio`, `examples`, `outputs`, `troubleshooting`, ...) or the list |
 | `vidgen validate [PROJECT] [--json]` | load config and extensions, report every problem (also in every variant), estimated length, audio status |
 | `vidgen list-scenes [PROJECT] [--json]` | scene types (built-in and the project's) with their params |
@@ -315,6 +323,9 @@ my_video/
   custom scene type with a helper module, a project icon, a vertical variant and a hook.
 - [examples/kphi3](examples/kphi3) — a real 4-minute paper video whose eight bespoke scenes all
   live in its `extensions/` folder (narration MP3s included, so it renders without a key).
+- [examples/plan](examples/plan) — `outline.md`, a 2½-minute explainer outline, and the draft
+  `video.yaml` that `vidgen plan examples/plan/outline.md -o examples/plan/video.yaml --force`
+  writes from it (unedited: 19 scenes with chapters, one `vidgen lint` finding).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.

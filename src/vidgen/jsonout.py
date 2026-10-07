@@ -27,6 +27,8 @@ if TYPE_CHECKING:
     from vidgen.guide import GuideTopic
     from vidgen.icons import IconInfo
     from vidgen.deck import Deck
+    from vidgen.plan import Plan
+    from vidgen.plan_yaml import PlanResult
     from vidgen.slides import SlidesResult
     from vidgen.slides_pdf import PdfResult
     from vidgen.thumbnail import ThumbnailResult
@@ -319,6 +321,50 @@ def gallery_document(project: Project | None, result: GalleryResult, elapsed: fl
         bytes=result.bytes,
         elapsed=round(elapsed, 3),
         types=types,
+    )
+
+
+def plan_document(
+    project: Project, plan: Plan, result: PlanResult, problems: list[Problem], fmt: str, warnings: Iterable[Mapping[str, Any]] = ()
+) -> dict[str, Any]:
+    """The ``vidgen plan --json`` document: where the draft went, its summary (scenes, beats,
+    estimated seconds, TODO count, scene types), every scene with its reason and TODOs, the
+    video's TODOs and the problems ``vidgen validate`` finds in it (``ok`` false when any)."""
+    types: dict[str, int] = {}
+    for scene in plan.scenes:
+        types[scene.type] = types.get(scene.type, 0) + 1
+    scenes = [
+        {
+            "id": s.id,
+            "type": s.type,
+            "beats": len(s.beats),
+            "words": s.words,
+            "estimated_duration": round(s.estimated_duration, 2),
+            "reason": s.reason,
+            "todos": list(s.todos),
+        }
+        for s in plan.scenes
+    ]
+    return envelope(
+        "plan",
+        not problems,
+        warnings,
+        project=_path(result.root),
+        config=_path(result.config),
+        created=result.created,
+        title=plan.title,
+        language=plan.language,
+        format=fmt,
+        chapters=plan.chapters,
+        scene_count=len(plan.scenes),
+        beat_count=sum(len(s.beats) for s in plan.scenes),
+        estimated_duration=round(project.estimated_duration(), 2),
+        todo_count=plan.todo_count,
+        types=types,
+        assets=list(result.assets),
+        notes=list(plan.notes),
+        scenes=scenes,
+        problems=[p.to_json() for p in problems],
     )
 
 

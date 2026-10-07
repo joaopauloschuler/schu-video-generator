@@ -73,8 +73,10 @@ class LanguageRules:
     """What vidgen knows of a language: ``name`` (for messages), the words a phrase starts with
     (``conjunctions``, ``prepositions``: a cue may begin there), the words that lean on the next
     one (``clinging``: a cue should not end there), the narration speed range in words per second
-    (``None``: measured in characters per second), whether a final ``e`` is silent, and the ISO
-    639-2 code of the MP4 audio tag (``None``: none written)."""
+    (``None``: measured in characters per second), whether a final ``e`` is silent, the ISO
+    639-2 code of the MP4 audio tag (``None``: none written) and the ``abbreviations`` whose
+    period does not end a sentence (lower case, without the final period: ``e.g``, ``dr``;
+    used by :func:`vidgen.prose.split_sentences`)."""
 
     code: str
     name: str
@@ -84,6 +86,7 @@ class LanguageRules:
     words_per_second: tuple[float, float] | None = None
     silent_final_e: bool = False
     iso639_2: str | None = None
+    abbreviations: frozenset[str] = frozenset()
 
     @property
     def known(self) -> bool:
@@ -105,6 +108,10 @@ _RULES: dict[str, LanguageRules] = {
         (1.8, 3.5),
         True,
         "eng",
+        _words(
+            "mr mrs ms dr prof sr jr st vs etc e.g i.e cf fig no nos approx dept est inc ltd co corp jan feb mar apr jun "
+            "jul aug sep sept oct nov dec a.m p.m u.s u.k ph.d vol eq al"
+        ),
     ),
     "pt": LanguageRules(
         "pt",
@@ -119,6 +126,7 @@ _RULES: dict[str, LanguageRules] = {
         (1.7, 3.4),
         False,
         "por",
+        _words("sr sra srta dr dra prof profa etc ex p.ex pág págs nº n.º vs av ltda cia aprox obs tel fig cap séc e.g i.e eq al"),
     ),
     "es": LanguageRules(
         "es",
@@ -132,6 +140,7 @@ _RULES: dict[str, LanguageRules] = {
         (1.8, 3.6),
         False,
         "spa",
+        _words("sr sra srta dr dra prof etc ej p.ej pág núm vs av ud uds aprox cía fig"),
     ),
     "fr": LanguageRules(
         "fr",
@@ -145,6 +154,7 @@ _RULES: dict[str, LanguageRules] = {
         (1.8, 3.6),
         True,
         "fra",
+        _words("m mme mlle dr pr etc ex p.ex cf vs av env fig"),
     ),
     "de": LanguageRules(
         "de",
@@ -159,6 +169,7 @@ _RULES: dict[str, LanguageRules] = {
         (1.5, 3.1),
         False,
         "deu",
+        _words("hr fr dr prof bzw ca usw z.b d.h u.a evtl ggf nr vs str abb"),
     ),
     "it": LanguageRules(
         "it",
@@ -172,6 +183,7 @@ _RULES: dict[str, LanguageRules] = {
         (1.8, 3.5),
         False,
         "ita",
+        _words("sig sig.ra dott prof ecc es p.es vs ca pag fig"),
     ),
 }
 

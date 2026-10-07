@@ -19,6 +19,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 [GIF and clip export](#export-gif-and-clip-vidgen-export), [built-in scene types](#built-in-scenes), [beat actions](#beat-actions), [overlays](#overlays),
 [JSON Schema](#json-schema-vidgen-schema), [frame stills](#frame-stills-vidgen-render---frames),
 [storyboard](#storyboard-vidgen-storyboard), [lint](#lint-vidgen-lint),
+[drafting from an outline](#drafting-from-an-outline-vidgen-plan),
 [JSON output of commands](#json-output---json).
 
 ## Top level
@@ -4072,9 +4073,85 @@ The repository's gallery is committed (stills and GIFs, about 4.4 MB; a test kee
 8 MB): run `vidgen gallery -j 2` from the repository root after changing a built-in scene's look
 or a guide snippet, look at the stills, and commit `docs/gallery`.
 
+## Drafting from an outline (`vidgen plan`)
+
+`vidgen plan INPUT` turns a Markdown outline (`.md`) or a plain-text script (`.txt`: short lines
+standing alone are headings) into a **draft project**: a folder scaffolded like `vidgen init`
+(default: named after `INPUT`; `--output DIR`) or just a config file (`--output video.yaml`),
+with the pictures the outline shows copied into `assets/`. Nothing is sent anywhere and no AI is
+involved: the same input and options always give the same draft. It is a starting point for an
+agent (or a person) to refine — it never writes the narration a video deserves — so every scene
+carries a `# plan:` comment (why it got its type) and `# TODO:` comments (what to check), and the
+command prints the scenes, the estimated length and the TODO count, then validates the draft.
+Example: [examples/plan](../examples/plan) (`outline.md` and the unedited `video.yaml`).
+
+**Structure.** A single top-level heading (`#`) at the start is the title; a short first
+paragraph under it (one sentence, at most 14 words) is the `title`'s subtitle, and the first beat
+of the opening prose its narration — unless that beat has a prominent number, which then opens
+the video as a `stat` (the hook) before the title. The highest remaining heading level makes
+sections, the next one the units inside them; each unit becomes one or more scenes, its heading
+their `heading` / `title`. Deeper headings and short lines ending with `:` (`Pros:`) label the
+block that follows. When the narration runs over 2 minutes and there are at least 3 sections,
+every section starts with a silent `chapter` card (2.5 s) and the video gets a `progress_bar`. A
+last section called Summary, Conclusion, Recap, Takeaways, Next steps (or Resumo, Conclusão...)
+ends with an `end_card`: its last beat is the call to action, its links the card's `lines`; a
+list in it becomes the recap scene. Without one, a TODO at the top says to add an ending.
+
+**Cues → scene types.** Each block that shows something gets a scene, narrated by the prose
+written before it (the prose after the last block of a unit joins that block):
+
+| in the outline | scene type |
+|---|---|
+| a bullet list | `bullets`; `icon_grid` when every item is a short noun (≤ 3 words) with a matching icon (name, alias, a word of the name, or an exact tag: `vidgen list-icons --search`) |
+| a numbered list of 2–8 steps | `process` (more steps: numbered `bullets`) |
+| list items starting with a date (`1969:`, `July 1969 —`, `2023-05`) | `timeline` |
+| a table | `table` (one row per beat when the prose has a beat per row, else `reveal: all`); labels + one numeric column (`0.1 ms`, `81%`, `$1,200`) → `bar_chart` with its `unit` / `value_format`, and a `highlight` on the bar the last beat names |
+| a code block | `code` (≤ 15 lines; a `highlight` per beat by blank-line blocks), else `code_walkthrough` (a step per block) |
+| `$$...$$` | `equation` (one formula, or two as steps); `equation_derivation` from 3 formulas (consecutive blocks, `\\` lines or an `aligned` environment) |
+| an image on its own line | `image`: the file copied into `assets/`, or a `generate:` prompt from its alt text when it is missing |
+| a blockquote (a last line `— Author, Source`) | `quote` (two beats at most; the rest of the prose follows as its own scene) |
+| a paragraph of `A -> B -> C` lines | `diagram` (a node per label, an edge per arrow) |
+| "A vs B" (or "A or B?") heading with two lists, or `Pros:` / `Cons:` lists | `comparison` (columns from the lists; from the sentences naming each side when there are no lists) |
+| a sentence with a prominent number (`46%`, `40x`, `$3.5 million`, `from 120 to 15`) | `stat` (value, prefix / suffix, label from the words around it; "from X to Y" gives a `comparison` that counts up from X) |
+| other prose | `bullets` of its compressed sentences, one per beat (≤ 5 per scene), or a `text_card` for a single beat |
+
+**Narration.** Prose is cut into sentences by the rules of `--language` (abbreviations such as
+`e.g.`, `Dr.`, `Sr.`, `p.ex.`, initials and decimals do not end a sentence), sentences over 15
+words are cut at their best phrase boundary (a clause mark, then a conjunction, then a
+preposition; never after an article), and sentences under 6 words join a neighbour — the author
+guide's beats of 6–15 words. Each reveal step gets one beat: one sentence per item when the counts
+match (the sentences after the block for its items, the ones before as an intro), else the
+sentences that share a word with each item, else the items' own text when they are sentences,
+else a placeholder beat with a TODO. An intro of one short sentence joins the first beat; a
+longer one becomes a scene of its own before the block.
+
+**On-screen text** is compressed from the outline: headings ≤ 5 words, list items ≤ 6, labels
+≤ 3, a title or card ≤ 7. Compressing drops parentheses, leading filler ("In this video",
+"So", "Basically"...), filler words ("really", "just"...) and, when still too long, articles;
+keeps the part before a `:` (or after a generic lead such as `Step 2:`) and the main clause after
+a leading "On a miss, ..."; and never ends on a word that leans on the next ("Store result with").
+
+**TODOs** name what a draft cannot know: placeholder beats, narration that repeats the items on
+screen, icon choices, a stat's context and which direction is good, a chart's source caption, a
+picture to provide, notes for code steps, long lists, beats with parentheses / links / inline
+maths, and more beats than a scene has steps (dead air).
+
+| option | |
+|---|---|
+| `--output DIR\|FILE`, `-o` | the project folder to create (default: `INPUT`'s name without the suffix, in the current folder), or a `.yaml` / `.yml` file to write (its folder gets the `assets/`) |
+| `--title TEXT` | the video's title (default: the outline's top heading, else the file name) |
+| `--format 16:9\|9:16` | landscape 1920x1080 (preview 854x480, the default) or vertical 1080x1920 (preview 480x854) |
+| `--preset NAME` | the theme preset (default `dark_tech`; `vidgen list-themes`) |
+| `--language TAG` | the language of the text (BCP-47, e.g. `pt-BR`): sentence, phrase and compression rules, a decimal comma for a `stat`, and `language:` in the config |
+| `--force` | write into a folder that is not empty (its `video.yaml` replaced, other files kept) or over an existing config file |
+| `--json` | print the summary as JSON ([below](#vidgen-plan---json)) |
+
+Then refine the draft like any project: read the comments, rewrite the narration for the ear,
+`vidgen validate`, `vidgen storyboard`, `vidgen lint` (`vidgen guide workflow`).
+
 ## JSON output (`--json`)
 
-`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail`, `vidgen export`, `vidgen slides`, `vidgen translate-template`, `vidgen readback` and `vidgen guide` accept `--json`: stdout then holds
+`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail`, `vidgen export`, `vidgen slides`, `vidgen translate-template`, `vidgen readback`, `vidgen guide`, `vidgen gallery` and `vidgen plan` accept `--json`: stdout then holds
 exactly one JSON document (ASCII-only, non-ASCII characters escaped), and everything else
 (progress, `warning:` lines, Manim output) goes to stderr. These shapes are meant for programs
 and AI agents driving vidgen. Without `--json` the human output is unchanged.
@@ -4089,7 +4166,7 @@ it. Times are seconds (floats), paths are absolute strings, absent values are `n
 |---|---|---|
 | `version` | int | schema version of the document (1) |
 | `vidgen` | str | vidgen package version |
-| `command` | str \| null | `validate`, `list-scenes`, `list-themes`, `list-icons`, `render`, `schema`, `storyboard`, `lint`, `thumbnail`, `export`, `slides`, `translate-template`, `readback`, `guide` (`null` if the command line could not be parsed) |
+| `command` | str \| null | `validate`, `list-scenes`, `list-themes`, `list-icons`, `render`, `schema`, `storyboard`, `lint`, `thumbnail`, `export`, `slides`, `translate-template`, `readback`, `guide`, `gallery`, `plan` (`null` if the command line could not be parsed) |
 | `ok` | bool | `true` on success; the exit code is 0 exactly when `ok` is true |
 | `warnings` | list | `{scene, message}`: vidgen warnings of the run (`scene` is `null`, or the scene whose render printed it) |
 | `error` | object | only when `ok` is false: `{kind, message, problems, details}` |
@@ -4414,6 +4491,26 @@ The [scene gallery](#scene-gallery-vidgen-gallery) written by `vidgen gallery`.
 
 `warnings`: a type with no sample, and the render warnings of the samples (`scene` is then
 `"<type> (<format>)"`). An unknown `--types` name or format is an error (`ok` false).
+
+### `vidgen plan --json`
+
+The [draft](#drafting-from-an-outline-vidgen-plan) written by `vidgen plan`. `ok` is false when
+`vidgen validate` finds problems in the draft (listed in `problems`; the files are written anyway).
+
+| key | type | |
+|---|---|---|
+| `project`, `config` | str | the project folder and the config file written |
+| `created` | bool | `true` when the folder was scaffolded by this run (like `vidgen init`) |
+| `title`, `language`, `format` | str \| null | the video's title, its `language` (`null`: none given) and `16:9` / `9:16` |
+| `chapters` | bool | `true` when the draft got chapter cards and a progress bar |
+| `scene_count`, `beat_count` | int | scenes (chapter cards included) and narrated beats |
+| `estimated_duration` | float | seconds, from the word count (like `vidgen validate`) |
+| `todo_count` | int | the `# TODO:` comments in the config |
+| `types` | object | `{scene type: count}` |
+| `assets` | list | pictures copied into the project (`assets/<name>`) |
+| `notes` | list | TODOs about the whole video (e.g. no closing section) |
+| `scenes` | list | `{id, type, beats, words, estimated_duration, reason, todos}` per scene, in order; `reason` is the scene's `# plan:` comment, `todos` its `# TODO:` comments |
+| `problems` | list | `vidgen validate` problems of the draft, `{location, message, variant}` (normally empty) |
 
 ### `vidgen lint --json`
 

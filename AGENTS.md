@@ -78,7 +78,14 @@ Schema), `vidgen list-icons --search growth`, `vidgen list-themes --swatches the
 
 1. **Plan** (in your head or a scratch file, not in YAML yet): the one-sentence takeaway, the
    audience, the length (60–90 s for social, 2–6 min for an explainer), then a list of scenes,
-   each one idea with its scene type (see `vidgen guide scenes`).
+   each one idea with its scene type (see `vidgen guide scenes`). **Starting from an outline or
+   a script?** Write it as Markdown (headings, short paragraphs, lists, tables, code, `$$maths$$`,
+   images, quotes, `A -> B -> C` lines) and run `vidgen plan outline.md --json` (`--language
+   pt-BR`, `--format 9:16` as needed): it writes a draft project with a scene type per block,
+   the prose cut into beats of 6–15 words, compressed on-screen texts, chapters for long videos,
+   a `# plan:` comment on every scene (why that type) and `# TODO:`s (what to check). It is a
+   draft, not a video: work through every TODO, rewrite the narration for the ear (placeholder
+   beats repeat their labels), make on-screen texts keywords, then go on with step 3.
 2. **Write `video.yaml`**: narration as beats, content as params. Keep beat `id`s stable once
    audio exists (an edited beat keeps its id; only that beat is re-voiced).
 3. **`vidgen validate --json`**: fix every entry of `problems` (`location` is a config path such
@@ -136,7 +143,7 @@ the scenes that changed; `vidgen render` renders every scene unless you give `--
 
 **JSON everywhere.** `validate`, `list-scenes`, `list-themes`, `list-icons`, `list-sfx`,
 `list-music`, `schema`, `render`, `storyboard`, `lint`, `thumbnail`, `export`, `slides`,
-`translate-template`, `readback`, `gallery` and `guide` take `--json`: one document on stdout,
+`translate-template`, `readback`, `gallery`, `plan` and `guide` take `--json`: one document on stdout,
 `{version, ok, warnings, ..., error?}`, exit code 0 exactly when `ok`.
 
 <!-- topic: pacing (also: story, storytelling, text, narration, beats) -->

@@ -5451,3 +5451,111 @@ on 2 CPUs); step only: `pytest tests/test_gallery.py` (11 tests, ~25 s; one rend
 (~6 min the first time, seconds when current), then open `docs/gallery/README.md`;
 `vidgen gallery --types pie,map --output /tmp/g --json`; in a project:
 `vidgen gallery examples/custom_scene --output /tmp/g --types gear_pair`.
+
+## Step 58 — `vidgen plan`
+What was built
+- **`vidgen plan INPUT [--output DIR|FILE] [--title TEXT] [--format 16:9|9:16] [--preset NAME]
+  [--language TAG] [--force] [--json]`**: a Markdown outline (`.md`) or plain-text script
+  (`.txt`) → a draft project, scaffolded like `vidgen init` (default folder: the input's stem) or
+  just a config file (`-o video.yaml`), pictures copied into `assets/`. **No LLM, no network,
+  deterministic.** Prints the scenes (id, type, beats, reason), the estimated length and the
+  TODO count, then validates the draft (`validate_all`; problems → exit 1 / `ok` false).
+- **Reading** (`src/vidgen/outline.py`): ATX + setext headings, paragraphs (lines kept), bullet /
+  numbered lists with nested items and continuation lines, pipe tables, fenced code with its
+  language, `$$` maths (one line or a block; `\\` lines and `aligned` environments → several
+  formulas), images on their own line, blockquotes with a `— Author, Source` line, rules, HTML
+  comments, YAML front matter; `plain()` removes inline Markdown and collects links. Plain-text
+  scripts: short lines standing alone (≤ 8 words, no final punctuation) are headings.
+- **Narration** (`src/vidgen/prose.py`): `split_sentences` with per-language abbreviations
+  (new `LanguageRules.abbreviations` for en / pt / es / fr / de / it), initials, decimals;
+  `split_long` (DP over phrase breaks from `cues.phrase_break_cost`, pieces near 10 words, max
+  15); `merge_short` (DP grouping, ≥ 6 words, ≤ 15); `compress` (on-screen labels: parentheses,
+  filler phrases / words (en, pt), clause heads, the main clause after a subordinate one,
+  articles, a cap, never ending on a leaning word / auxiliary / quantifier).
+- **Planning** (`src/vidgen/plan.py`): title (+ subtitle from a short first paragraph; first
+  opening beat as its narration, or as a hook `stat` before it when it has a number), sections /
+  units from the heading levels, chapter cards + `progress_bar` when the narration is over 2 min
+  with ≥ 3 sections, closing section → recap + `end_card` (last beat, links as `lines`). Cue →
+  type: dated list → `timeline`; numbered 2–8 → `process`; short nouns with distinct icons →
+  `icon_grid` (`icons.match_icon`, new); other lists → `bullets`; numeric 2-column table →
+  `bar_chart` (unit, currency `value_format`, `highlight` on the bar the last beat names) else
+  `table`; code → `code` (per-beat highlights) / `code_walkthrough` (> 15 lines); maths →
+  `equation` / `equation_derivation` (≥ 3); image → `image` (copied or `generate:`); quote →
+  `quote` (≤ 2 beats, the rest follows); arrow-chain paragraph → `diagram`; vs heading with two
+  lists, pros/cons lists or vs over prose → `comparison`; number in prose → `stat`; other prose →
+  `bullets` of compressed beats / `text_card`. Beats are fitted one per reveal step (raw
+  sentences first, then merged; after-block sentences for the items with the earlier ones as an
+  intro; word-stem matching; the items' own sentences; placeholders with a TODO). TODOs:
+  placeholders, narration repeating the screen, icon choice, stat context / `better`, chart
+  source, missing picture, code notes, long lists, > 4 table columns, extra beats (dead air),
+  beats over 20 words / with parentheses / links / inline maths, no closing section.
+- **Writing** (`src/vidgen/plan_yaml.py`): a header comment, `# plan:` / `# TODO:` lines above
+  each scene, flow style for short lists / small mappings, `- text:` beats, code as literal
+  blocks, LaTeX single-quoted; checked to `yaml.safe_load` back to `plan_config(plan)`.
+  `write_plan` refuses a non-empty folder / an existing file without `--force`.
+- **Example** `examples/plan/`: `outline.md` (a 2½-minute caching explainer using most cues) and
+  the unedited draft `video.yaml` (golden file: `tests/test_plan.py` regenerates and compares).
+
+What I looked at
+- Storyboards of the example draft (3 sheets, 19 scenes) and lint at 16:9; a pt-BR outline at
+  9:16 and a plain-text script (validate + lint). Tuned from them: placeholder-free fitting with
+  raw sentences (items lost their one-sentence-each narration when tiny sentences were merged),
+  main clause after "On a miss, ...", no auxiliary / quantifier at a cut label's end ("Account
+  balances must", "Rode testes cada"), quotes and stats capped at the beats that change something
+  (a 2-beat stat without comparison and a 4-beat quote were `dead_air`), an opening number as the
+  hook, `vs` badge only for "A vs B" columns, URLs without trailing periods, block-style beats.
+- Final `vidgen lint examples/plan`: 19 scenes, 38 stills, **1 finding**: `contrast` warning on
+  the `code` scene's highlight band (GitHub-dark keyword red #FF7B72 on the band, 4.15:1 — a
+  `code` scene / theme issue, not the plan's; routed to Step 60). The pt-BR 9:16 draft: 2
+  `rushed_animation` warnings on a timeline whose beats are one-word placeholders (as its TODOs
+  say). Validate: 0 problems on all three.
+
+Files
+- New: `src/vidgen/outline.py`, `src/vidgen/prose.py`, `src/vidgen/plan.py`,
+  `src/vidgen/plan_yaml.py`, `tests/test_plan.py` (68 tests), `examples/plan/outline.md`,
+  `examples/plan/video.yaml`.
+- Changed: `src/vidgen/cli.py` (`cmd_plan`, `scaffold_project` shared with `init`, parser,
+  `JSON_COMMANDS`), `src/vidgen/jsonout.py` (`plan_document`), `src/vidgen/languages.py`
+  (`abbreviations`), `src/vidgen/icons.py` (`match_icon`), `src/vidgen/render/fingerprint.py`
+  (new modules are not render inputs), `AGENTS.md` + `src/vidgen/data/guide/AGENTS.md` (workflow
+  step 1: start from an outline with `vidgen plan`; JSON list), README.md (feature, agents
+  section, quick start, command row, example), docs/CONFIG.md (new "Drafting from an outline"
+  section, `plan --json`, JSON command lists), docs/EXTENDING.md (`abbreviations`), DESIGN.md
+  (tree, §8, new §61), tasklist.md.
+
+Public interfaces added/changed (compatible; `vidgen.api` unchanged except the new
+`LanguageRules.abbreviations` field, defaulted)
+- CLI `vidgen plan` (+ JSON document `plan`, version 1). `vidgen.outline` (`parse_outline`,
+  `plain`, block dataclasses), `vidgen.prose` (`split_sentences`, `split_long`, `merge_short`,
+  `narration_beats`, `compress`, `sentence`, `words`), `vidgen.plan` (`make_plan`, `Plan`,
+  `PlannedScene`, `PlanOptions`), `vidgen.plan_yaml` (`plan_config`, `plan_yaml`, `write_plan`,
+  `PlanResult`, `FORMATS`), `vidgen.icons.match_icon`, `vidgen.cli.scaffold_project`.
+- Render fingerprints change once (`languages.py`, `icons.py` changed).
+
+Decisions / deviations
+- **Golden file committed** (`examples/plan/video.yaml`, unedited): it documents what a draft
+  looks like and pins the heuristics; after changing the planner run `vidgen plan
+  examples/plan/outline.md -o examples/plan/video.yaml --force` and review the diff.
+- **Prose before a block narrates it; prose after the last block of a unit joins that block.**
+  When the counts let it, sentences after a list are the items' and those before an intro.
+- **No intro beats inside a revealing scene**: item *i* must appear at beat *i*, so an intro of
+  more than one short sentence becomes its own scene (often weak `bullets`; a TODO says so).
+- **Stat beats**: one, or two with a comparison (beat 2 reveals it); extra prose moves on.
+- Chapter cards only when the estimate is over 2 minutes with ≥ 3 sections (the guide's rule);
+  the summary section gets none.
+- `--preset` accepts the built-in presets only (a draft has no project presets yet).
+- A draft with validate problems is still written (exit 1): the agent needs the file to fix it.
+
+Known gaps / TODOs (routed to Step 60 in tasklist.md)
+- Heuristic limits: prose-derived bullet items are truncated sentences; stat labels keep their
+  subject; icon matching uses the English tags (other languages get `bullets`); no cues for
+  `network`, `line_chart`, `scatter`, `pie`, `heatmap`, `map`, `screenshot`, `video_clip`;
+  `A -> B` only as whole paragraphs; nested list items are dropped (TODO).
+- The `code` highlight band's contrast with GitHub-dark keywords (lint warning on the example).
+- TODO texts and reasons are English whatever `--language`.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2223 passed, 1 skipped, ~11 min
+on 2 CPUs); step only:
+`pytest tests/test_plan.py` (~3 s). Manual: `vidgen plan examples/plan/outline.md -o
+/tmp/draft`, read `/tmp/draft/video.yaml`, then `vidgen storyboard /tmp/draft` and `vidgen lint
+/tmp/draft`; `vidgen plan outline.md --language pt-BR --format 9:16 --json`.
