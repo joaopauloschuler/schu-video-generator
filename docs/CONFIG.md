@@ -1,5 +1,9 @@
 # vidgen config reference
 
+This is the reference of every key. How to make a *good* video with them (the working loop,
+pacing, which scene type, good vs bad examples) is the author guide: [AGENTS.md](../AGENTS.md),
+also `vidgen guide`.
+
 A project is a folder with one config file: `video.yaml` (or `video.yml` / `video.json`), UTF-8.
 Unknown keys are an error everywhere except inside `params`, `theme.colors`, `theme.sizes` and
 the bodies of `variants`, so typos are caught by `vidgen validate`. Paths are relative to the
@@ -4012,7 +4016,7 @@ video; `vidgen render` does. It dispatches `post_scene` for the scenes it render
 
 ## JSON output (`--json`)
 
-`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail`, `vidgen export`, `vidgen slides`, `vidgen translate-template` and `vidgen readback` accept `--json`: stdout then holds
+`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail`, `vidgen export`, `vidgen slides`, `vidgen translate-template`, `vidgen readback` and `vidgen guide` accept `--json`: stdout then holds
 exactly one JSON document (ASCII-only, non-ASCII characters escaped), and everything else
 (progress, `warning:` lines, Manim output) goes to stderr. These shapes are meant for programs
 and AI agents driving vidgen. Without `--json` the human output is unchanged.
@@ -4027,7 +4031,7 @@ it. Times are seconds (floats), paths are absolute strings, absent values are `n
 |---|---|---|
 | `version` | int | schema version of the document (1) |
 | `vidgen` | str | vidgen package version |
-| `command` | str \| null | `validate`, `list-scenes`, `list-themes`, `list-icons`, `render`, `schema`, `storyboard`, `lint`, `thumbnail`, `export`, `slides`, `translate-template`, `readback` (`null` if the command line could not be parsed) |
+| `command` | str \| null | `validate`, `list-scenes`, `list-themes`, `list-icons`, `render`, `schema`, `storyboard`, `lint`, `thumbnail`, `export`, `slides`, `translate-template`, `readback`, `guide` (`null` if the command line could not be parsed) |
 | `ok` | bool | `true` on success; the exit code is 0 exactly when `ok` is true |
 | `warnings` | list | `{scene, message}`: vidgen warnings of the run (`scene` is `null`, or the scene whose render printed it) |
 | `error` | object | only when `ok` is false: `{kind, message, problems, details}` |
@@ -4322,6 +4326,19 @@ them); `said` (the spoken form when a pronunciation entry changed those words, e
 `errors`; `at` (when the heard words start in the MP3, seconds; `null` without word times or when
 nothing was heard); `term` (the written term the fix is about: a pronunciation entry's term, or a
 name, acronym or number; else `null`) and `entry`; `suggestion`.
+
+### `vidgen guide --json`
+
+The author guide for AI agents (`AGENTS.md`, shipped with vidgen; `vidgen guide [TOPIC] [--list]`).
+
+| key | type | |
+|---|---|---|
+| `topic`, `title` | str \| null | the topic printed and its heading (`null`: the whole guide, or `--list`) |
+| `topics` | list | every topic in order: `{name, title, aliases}` (`vidgen guide NAME` takes the name or an alias) |
+| `text` | str \| null | the Markdown printed: the topic, or the whole guide (`null` with `--list`) |
+| `path` | str | the packaged guide file |
+
+An unknown topic is an error (`ok` false) whose message suggests the closest names.
 
 ### `vidgen lint --json`
 

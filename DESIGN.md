@@ -42,6 +42,7 @@ src/vidgen/
   cli.py                  # argparse CLI (see §8)
   jsonout.py              # --json documents of the CLI (see §11)
   describe.py             # scene-type/params descriptions for list-scenes
+  guide.py                # `vidgen guide`: the author guide for AI agents, its topics (§59)
   schema.py               # JSON Schema export (see §12)
   errors.py               # VidgenError, Problem
   config.py               # pydantic v2 models for video.yaml (see §4)
@@ -121,6 +122,7 @@ src/vidgen/
   data/icons/             # manifest.json + lucide/*.svg + lucide/LICENSE (ISC; package data, §22)
   data/geo/               # world-110m.json: Natural Earth 1:110m countries (public domain; package data, §39)
   data/slides/            # deck.css + deck.js inlined into `vidgen slides` pages (package data, §55)
+  data/guide/             # AGENTS.md: the author guide printed by `vidgen guide` (package data, §59)
 tools/                    # maintainer scripts, not shipped: vendor_icons.py + icon_set.json (§22, §23),
                           # make_screenshot.py, make_clip.py (example assets, §37, §38),
                           # make_world_map.py (builds data/geo/world-110m.json from npm packages, §39)
@@ -133,6 +135,7 @@ docs/
   CONFIG.md               # config reference
   EXTENDING.md            # how to write project extensions
   ICONS.md                # icon catalogue, generated from the manifest by tools/vendor_icons.py (§23)
+AGENTS.md                 # the author guide for agents *using* vidgen (copy of data/guide/AGENTS.md, §59)
 DESIGN.md  CLAUDE.md  HANDOFF.md  README.md  THIRD_PARTY_NOTICES.md (bundled fonts §21, icons §22, world map §39)
 ```
 
@@ -683,6 +686,7 @@ Refinements (Step 3):
 
 ```
 vidgen init <dir> [--example minimal]   # scaffold a project
+vidgen guide [TOPIC] [--list] [--json]  # the author guide for AI agents (AGENTS.md, §59)
 vidgen validate [PROJECT] [--json]      # load config + extensions, report all errors
 vidgen list-scenes [PROJECT] [--json]   # built-ins + extensions (+ which overrides)
 vidgen list-themes [PROJECT] [--swatches PNG] [--json]   # theme presets + type scales (§20)
@@ -3999,3 +4003,30 @@ the measured loudness, §48).
   picture's pixels) and as a thumbnail background (designed thumbnails have no picture behind the
   text yet); no `--json` for `vidgen imagegen`; no image editing / variations endpoints; no second
   provider; prices are a snapshot.
+
+## 59. Refinements (Step 56, the author guide for AI agents)
+
+- **Two agent files, two audiences**: `CLAUDE.md` is for agents developing vidgen; `AGENTS.md`
+  (repository root) is for agents **using** vidgen to make videos and decks. Each says so at its
+  top and points to the other.
+- **One source, shipped**: the guide is package data, `src/vidgen/data/guide/AGENTS.md`
+  (`pyproject` package-data `data/guide/*`), so it is there after `pip install`; the root
+  `AGENTS.md` is a byte-identical copy (a test fails when they differ). Not a render input
+  (`guide.py` is in `NOT_RENDER_INPUTS`; the data folder is outside the source digest).
+- **Topics**: each `##` section is introduced by a marker line `<!-- topic: NAME (also: ALIAS,
+  ...) -->` (invisible when the Markdown is rendered). `vidgen.guide`: `GUIDE_FILE`,
+  `GuideTopic(name, title, aliases, text)`, `guide_text()` (markers removed), `guide_topics()`,
+  `find_topic(name)` (name or alias, case-insensitive; unknown → `VidgenError` with
+  did-you-mean and the topic list), `topic_lines()`. Topics: `start`, `workflow`, `pacing`,
+  `social`, `scenes`, `design`, `actions`, `overlays`, `audio`, `examples`, `outputs`,
+  `troubleshooting`.
+- **CLI** `vidgen guide [TOPIC] [--list] [--json]`: the whole guide, one topic, or the list
+  (`TOPIC` with `--list` is an error). No PROJECT argument (the guide does not depend on one).
+  `--json` (in `JSON_COMMANDS`): `{topic, title, topics: [{name, title, aliases}], text, path}`.
+- **Kept true by tests** (`tests/test_guide.py`): every `vidgen <command>` in a code span or
+  block exists, with every `--option` written after it; the scene chooser table covers every
+  built-in type, its params column names real params (or their `title` / `heading` synonyms);
+  every type has a snippet; the presets, actions and lint-rule tables list exactly the
+  built-in ones; every sound and music bed is named; and every fenced `yaml` block, wrapped
+  into a config (a scene list, a partial config, or top-level keys plus one scene; files under
+  `assets/` copied from the examples), passes `vidgen validate`'s checks (`validate_all`).

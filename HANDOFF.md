@@ -5224,3 +5224,95 @@ How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2094 passed, 1
 `pytest tests/test_imagegen.py` (~6 s). Manual (no key needed): add `generate: "a quiet harbour
 at dawn"` to an `image` scene, `vidgen validate`, `vidgen imagegen --dry-run`, `vidgen storyboard`
 (placeholder card); with `OPENAI_API_KEY`: `vidgen imagegen`, then commit `assets/generated/`.
+
+## Step 56 — AI author guide
+What was built
+- **`AGENTS.md`**: the author guide for AI agents (and people) who **use** vidgen to make videos
+  and decks — distinct from `CLAUDE.md` (agents developing vidgen); each file says so at its top
+  and points to the other. ~1,000 lines (7,300 words) of Markdown, 12 topics:
+  - `start`: 12 rules at a glance (hook in 5 s, one idea per scene, beats of 6–15 words, a visual
+    change every 3–6 s, narration complements the picture, on-screen word limits, progressive
+    reveal, show don't list, restraint, recap + CTA, look before you pay, zero lint findings) and
+    a minimal project;
+  - `workflow`: plan → write → `validate --json` → `storyboard` (open the PNGs; what to ask of
+    each still) → `lint --json` (finding keys) → fix → repeat → `tts --dry-run` → `tts` →
+    `render --preview` → re-lint on real audio → `readback` → final; costs (TTS, imagegen, paid
+    STT), JSON commands;
+  - `pacing` (structure, hook, beats, dead air, on-screen text limits, progressive reveal,
+    endings), `social` (9:16 variant with karaoke captions, type scale, cuts, first frame,
+    thumbnail, phone UI band);
+  - `scenes`: a chooser table "what you want to show → type → key params" for all 28 types and
+    a minimal snippet of each (5 YAML blocks by group), how beats drive steps, when to write a
+    custom scene;
+  - `design` (presets table with what each is for, colour roles, icons, layout consistency,
+    accessibility), `actions` (table with restraint per action + example), `overlays`
+    (overlays, transitions, carry), `audio` (voices, pronunciation, every SFX, music beds);
+  - `examples`: 6 bad → good pairs (wall-of-text bullets → progressive `icon_grid`; narration
+    reading the slide → complementing it; raw number → `stat` with a `before` comparison;
+    unexplained chart → title + highlight + callout + source; one 45-word beat → one stage per
+    beat; slow opening → hook);
+  - `outputs` (video / SRT, chapters, thumbnail, slides HTML / PDF, GIF / clip, translations
+    workflow, generated pictures), `troubleshooting` (validate message → fix table, every lint
+    rule → meaning → usual fix, other pitfalls).
+- **Packaged**: the source is `src/vidgen/data/guide/AGENTS.md` (package data `data/guide/*`), the
+  root `AGENTS.md` a byte-identical copy (test). **`vidgen guide [TOPIC] [--list] [--json]`**
+  prints the guide, one topic (by name or alias: `vidgen guide vertical`, `... chooser`), or the
+  topic list; unknown topics get a did-you-mean. `--json`: `{topic, title, topics: [{name, title,
+  aliases}], text, path}`. Topics are `##` sections introduced by `<!-- topic: NAME (also: ...) -->`
+  marker lines (removed from the printed text).
+- Pointers: README "For AI agents" section + feature line + command-table row; CONFIG.md intro
+  line and "`vidgen guide --json`"; CLAUDE.md header; init template comment and `vidgen init`'s
+  closing line mention `vidgen guide`.
+
+Verification
+- Every YAML snippet was also checked visually: all scene-list snippets of the guide (45 scenes)
+  in one scratch project, `vidgen lint` + `vidgen storyboard` at 16:9 and 9:16, sheets read. The
+  first run flagged three "good" snippets (a two-beat `text_card` = 6.2 s dead air, a screenshot
+  beat too short for its steps, a narration-speed estimate) and showed a hook `stat` whose
+  second beat changed nothing — fixed in the guide. Final: the only findings are the `dead_air`
+  of two **bad** examples (as the guide says they would be), 0 elsewhere, both orientations.
+
+Files
+- New: `AGENTS.md`, `src/vidgen/data/guide/AGENTS.md`, `src/vidgen/guide.py`, `tests/test_guide.py`
+  (42 tests: topics, CLI human / JSON / errors, the copy, and the "everything named exists"
+  checks below; 28 of them are the YAML snippets).
+- Changed: `src/vidgen/cli.py` (`cmd_guide`, parser, `JSON_COMMANDS`, init hint),
+  `src/vidgen/jsonout.py` (`guide_document`), `src/vidgen/render/fingerprint.py` (`guide.py` not a
+  render input), `src/vidgen/templates/minimal/video.yaml` (comment), `pyproject.toml` (package
+  data), `CLAUDE.md`, `README.md`, `docs/CONFIG.md`, `DESIGN.md` (tree, §8, new §59), `tasklist.md`.
+
+Public interfaces added/changed (compatible; `vidgen.api` unchanged)
+- CLI `vidgen guide` (+ JSON document `guide`, version 1). `vidgen.guide`: `GUIDE_FILE`,
+  `GuideTopic`, `guide_text`, `guide_topics`, `find_topic`, `topic_lines`.
+
+Decisions / deviations
+- **One file, sections as topics** (not one file per topic): the root `AGENTS.md` must read as
+  one document; markers keep topics addressable without a second source. Root copy instead of a
+  symlink (Windows checkouts) — `tests/test_guide.py` fails with the fix when they differ.
+- **What the tests pin** (so the guide cannot rot): every `vidgen <command>` in a code span or
+  block is a real command and every `--option` after it is one of its options; the chooser
+  covers every built-in type, its params column names real params (or synonyms) of each type
+  in the row; every type has a snippet; the preset, action and lint-rule tables list exactly
+  the built-in ones; every SFX and music bed is named; every `yaml` block, wrapped into a config
+  (scene list / partial config / top-level fragment + one scene; `assets/...` files copied from
+  the examples by suffix), passes `validate_all` with no problems. Prose claims (thresholds,
+  defaults) were checked by hand against CONFIG.md and the code, not by tests.
+- Guide numbers follow vidgen's own: 2.6 words/s estimate (the task's ≈ 2.5 is quoted as the
+  rule of thumb), `narration_speed` 1.8–3.5 (English), `dead_air` 6 s, `max_words` 40 (the
+  guide recommends ≤ ~20).
+
+Known gaps / TODOs
+- Callout labels on a crowded bar chart: `kind: label` / `side: right|top` put the label against
+  the chart title and `side: left` over a neighbouring bar's value label (lint does not report
+  either: the overlap is small); only the automatic arrow placement was clean, and it is what the
+  guide's example uses. The placement could avoid value labels / the header band better
+  (Step 57 gallery or Step 60).
+- The guide is English only; `docs/CONFIG.md` / `EXTENDING.md` it refers to are not shipped in
+  the wheel (it says "in the vidgen repository"). Step 57's gallery stills could be linked from
+  the chooser; Step 58's `vidgen plan` should follow the guide's pacing rules (beats of 6–15
+  words, one reveal per beat).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2136 passed, 1 skipped, ~10.5 min on 2 CPUs); step only:
+`pytest tests/test_guide.py` (~6 s). Manual: `vidgen guide --list`, `vidgen guide scenes`,
+`vidgen guide vertical --json`; after editing the guide, `cp src/vidgen/data/guide/AGENTS.md
+AGENTS.md`.

@@ -240,7 +240,7 @@ Rules that apply to every step:
 - [x] `generate:` params on the `image` scene (`{prompt, negative, style, aspect, seed}` or the prompt, exclusive with `path`; size from the format's orientation or `aspect`; project `imagegen.style` presets / words for a consistent look; a theme-coloured placeholder card with the prompt until generated; validate warnings for missing pictures and prompts asking for text / charts; `GenerateImage` + `generated_image` in `vidgen.api` for extension types. Not done: `screenshot` / thumbnail backgrounds — see HANDOFF)
 
 ### Step 56 — AI author guide
-- [ ] `AGENTS.md` + `vidgen guide`: workflow (write → storyboard → lint → fix), pacing rules, on-screen text limits, scene-type chooser, good vs bad examples
+- [x] `AGENTS.md` + `vidgen guide`: workflow (write → storyboard → lint → fix), pacing rules, on-screen text limits, scene-type chooser, good vs bad examples (packaged guide `data/guide/AGENTS.md`, root copy kept identical; 12 topics: start, workflow, pacing, social, scenes, design, actions, overlays, audio, examples, outputs, troubleshooting; `vidgen guide [TOPIC] [--list] [--json]`; chooser table for all 28 types + a snippet each; 6 before / after pairs; validate / lint message → fix tables; tests check every command / option, scene type, param, preset, action, lint rule and sound named, and validate all 28 YAML snippets; CLAUDE.md / README say who each file is for)
 
 ### Step 57 — Scene gallery
 - [~] `examples/minimal` covers every Step-5 built-in, without rendered clips; `examples/gallery` (Step 37) every newer type once — a natural source for the gallery's YAML

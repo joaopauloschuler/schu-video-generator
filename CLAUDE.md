@@ -1,5 +1,10 @@
 # Conventions for working on vidgen
 
+> **Who this is for:** agents **developing vidgen itself** (its code, tests and docs). To **make
+> videos with vidgen**, read `AGENTS.md` instead (the author guide; also `vidgen guide`). When you
+> change a command, scene type or param that `AGENTS.md` names, update the guide in
+> `src/vidgen/data/guide/AGENTS.md` and copy it to `AGENTS.md` (`tests/test_guide.py` checks both).
+
 Read `DESIGN.md` (the contract) and `HANDOFF.md` (what previous steps did) before changing code.
 
 ## Environment (cloud workspace)

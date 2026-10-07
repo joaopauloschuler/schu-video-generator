@@ -33,7 +33,7 @@ TEMPLATE_DOTFILES: tuple[str, ...] = ("gitignore",)
 #: Subcommands that accept ``--json``.
 JSON_COMMANDS: tuple[str, ...] = (
     "validate", "list-scenes", "list-themes", "list-icons", "list-sfx", "list-music", "render", "schema", "storyboard", "lint",
-    "thumbnail", "export", "translate-template", "slides", "readback",
+    "thumbnail", "export", "translate-template", "slides", "readback", "guide",
 )
 
 #: What a command function returns: an exit code, or (with ``--json``) the JSON document.
@@ -68,6 +68,7 @@ def cmd_init(args: argparse.Namespace) -> int:
     )
     print(f"created project in {target}")
     print("next: edit video.yaml, then run `vidgen validate`, `vidgen tts` and `vidgen render`")
+    print("guide: `vidgen guide` (how to make a good video: workflow, pacing, scene types; for AI agents too)")
     return 0
 
 
@@ -924,6 +925,25 @@ def cmd_schema(args: argparse.Namespace) -> CommandResult:
     return 0
 
 
+def cmd_guide(args: argparse.Namespace) -> CommandResult:
+    """Print the author guide for AI agents, one topic of it, or the list of topics (DESIGN.md §59)."""
+    from vidgen.guide import find_topic, guide_text, guide_topics, topic_lines
+
+    if args.list and args.topic is not None:
+        raise VidgenError("--list lists every topic; give either a TOPIC or --list")
+    topics = guide_topics()
+    topic = find_topic(args.topic) if args.topic is not None else None
+    text = None if args.list else (topic.text if topic is not None else guide_text())
+    if args.json:
+        return jsonout.guide_document(topic, topics, text)
+    if text is None:
+        for line in topic_lines(topics):
+            print(line)
+    else:
+        print(text, end="")
+    return 0
+
+
 class UsageError(Exception):
     """A command-line usage error (raised instead of argparse's print-and-exit)."""
 
@@ -959,6 +979,11 @@ def build_parser() -> argparse.ArgumentParser:
     examples = sorted(d.name for d in TEMPLATES_DIR.iterdir() if d.is_dir())
     p.add_argument("--example", choices=examples, default="minimal", help="template (default: minimal)")
     p.set_defaults(func=cmd_init)
+
+    p = sub.add_parser("guide", help="the author guide for AI agents making videos (workflow, pacing, scene types, ...)")
+    p.add_argument("topic", nargs="?", metavar="TOPIC", help="print only this topic (vidgen guide --list shows them)")
+    p.add_argument("--list", action="store_true", help="list the topics")
+    p.set_defaults(func=cmd_guide)
 
     p = sub.add_parser("validate", help="check the project config")
     project_arg(p)

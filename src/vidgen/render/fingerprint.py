@@ -44,6 +44,7 @@ NOT_RENDER_INPUTS: frozenset[str] = frozenset(
         "render/fingerprint.py", "render/pipeline.py", "render/ffmpeg.py", "sfx.py", "subtitles.py", "themelist.py", "tts",
         "loudness.py", "mix.py", "music.py", "thumbnail.py", "export.py", "translation.py", "deck.py", "slides.py",
         "slides_pdf.py", "stt", "readback.py", "textnorm.py", "httpapi.py", "imagegen/openai.py", "imagegen/run.py",
+        "guide.py",
     }
 )
 

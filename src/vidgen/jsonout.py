@@ -23,6 +23,7 @@ from vidgen.project import Project
 
 if TYPE_CHECKING:
     from vidgen.export import ExportResult
+    from vidgen.guide import GuideTopic
     from vidgen.icons import IconInfo
     from vidgen.deck import Deck
     from vidgen.slides import SlidesResult
@@ -265,6 +266,26 @@ def list_sfx_document(
         count=len(entries),
         sounds=entries,
         previews=None if previews is None else _path(previews),
+    )
+
+
+def guide_document(
+    topic: GuideTopic | None, topics: Iterable[GuideTopic], text: str | None, warnings: Iterable[Mapping[str, Any]] = ()
+) -> dict[str, Any]:
+    """The ``vidgen guide --json`` document: the topic printed (``null``: the whole guide or the
+    list), every topic ``{name, title, aliases}``, the Markdown ``text`` (``null`` with
+    ``--list``) and the packaged guide file."""
+    from vidgen.guide import GUIDE_FILE
+
+    return envelope(
+        "guide",
+        True,
+        warnings,
+        topic=None if topic is None else topic.name,
+        title=None if topic is None else topic.title,
+        topics=[{"name": t.name, "title": t.title, "aliases": list(t.aliases)} for t in topics],
+        text=text,
+        path=_path(GUIDE_FILE),
     )
 
 

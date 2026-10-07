@@ -21,6 +21,8 @@ subtitles.
     recordings: trimmed, sped up, looped, full-bleed or framed, their sound under the narration);
   - maths and code: `equation`, `equation_derivation` (steps morphing into each other, with
     notes), `code`, `code_walkthrough` (a long file scrolling to the lines each beat explains).
+- **Made for AI authors**: [AGENTS.md](AGENTS.md), also built in as `vidgen guide`, tells an
+  agent how to make a good video with vidgen (see [For AI agents](#for-ai-agents)).
 - **Theme presets** (`theme: {preset: warm_editorial}`; seven built in: `dark_tech`, the default
   look, `light_academic`, `high_contrast`, `warm_editorial`, `brand_neutral`, `soft_pastel`,
   `bold_neon`), all WCAG AA with colour-blind-safe palettes, and **type scales** (`compact`,
@@ -138,6 +140,17 @@ subtitles.
   previews; re-render one scene at a time.
 - Windows, macOS and Linux; Python 3.10–3.13.
 
+## For AI agents
+
+vidgen is meant to be driven by AI agents. An agent making a video should read
+**[AGENTS.md](AGENTS.md)** first — or run `vidgen guide` (the same guide, shipped with vidgen;
+`vidgen guide --list` for its topics, `vidgen guide scenes` for one, `--json` for programs). It
+covers the working loop (write → `validate --json` → `storyboard`, and look at the PNGs → `lint
+--json` → fix → `tts --dry-run` → `tts` → `render`), pacing and on-screen text rules, a scene-type
+chooser with a snippet per type, visual design, beat actions and audio with restraint, good vs bad
+examples, outputs and the fixes for common validate / lint messages. (`CLAUDE.md` is for agents
+working on vidgen's own code.)
+
 ## Install
 
 ### Windows
@@ -210,6 +223,7 @@ narration.
 | command | |
 |---|---|
 | `vidgen init DIR [--example minimal]` | create a new project (DIR must not exist or be empty) |
+| `vidgen guide [TOPIC] [--list] [--json]` | the author guide for AI agents ([AGENTS.md](AGENTS.md)): all of it, one topic (`workflow`, `pacing`, `social`, `scenes`, `design`, `actions`, `overlays`, `audio`, `examples`, `outputs`, `troubleshooting`, ...) or the list |
 | `vidgen validate [PROJECT] [--json]` | load config and extensions, report every problem (also in every variant), estimated length, audio status |
 | `vidgen list-scenes [PROJECT] [--json]` | scene types (built-in and the project's) with their params |
 | `vidgen list-themes [PROJECT] [--swatches PNG] [--json]` | theme presets (built-in and the project's) with colours, type scale, contrast check; `--swatches` draws them all in one PNG |
