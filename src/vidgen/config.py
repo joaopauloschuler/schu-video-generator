@@ -10,9 +10,10 @@ errors into a readable :class:`~vidgen.errors.VidgenError`.
 from __future__ import annotations
 
 from collections.abc import Collection
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, Union
 
 from pydantic import (
+    AfterValidator,
     BaseModel,
     ConfigDict,
     Field,
@@ -553,6 +554,57 @@ class OverlayConfig(BaseModel):
 SceneOverlays = bool | dict[Identifier, bool | dict[str, Any]]
 
 
+#: A sound effect's name: a built-in sound or a file assets/sfx/<name>.wav (DESIGN.md §47).
+SOUND_NAME_PATTERN = r"^[A-Za-z0-9_][A-Za-z0-9_-]*$"
+SoundName = Annotated[str, Field(pattern=SOUND_NAME_PATTERN)]
+
+
+class SfxParams(_Strict):
+    """Parameters of a built-in sound effect (`vidgen list-sfx` describes the sounds)."""
+
+    duration: PositiveFloat | None = None
+    """Seconds; default the sound's own (each sound has a range, see vidgen list-sfx)."""
+    pitch: float | None = Field(default=None, ge=-24, le=24)
+    """Semitones up (positive) or down (negative); default 0."""
+    intensity: float | None = Field(default=None, ge=0, le=1)
+    """0 to 1: brighter and up to 3 dB louder towards 1, softer towards 0; default 0.5."""
+
+
+class SfxCue(_Strict):
+    """A sound effect at a time of the scene (an entry of a scene's ``sfx:`` list; a plain
+    string is the sound at the scene's start)."""
+
+    sound: SoundName
+    """A built-in sound (whoosh, pop, click, ...; vidgen list-sfx) or the project's assets/sfx/<sound>.wav."""
+    at: float = Field(default=0.0, ge=0)
+    """Seconds from the scene's start."""
+    gain: float = Field(default=0.0, ge=-60, le=12)
+    """Level change in dB (0: the sound's own level, about 7 dB under narration)."""
+    pan: float = Field(default=0.0, ge=-1, le=1)
+    """-1 left, 0 centre, 1 right."""
+    align: Literal["start", "end"] = "start"
+    """start: the sound starts at `at`; end: it ends there (a riser landing on a reveal)."""
+    params: SfxParams = Field(default_factory=SfxParams)
+    """duration, pitch, intensity of a built-in sound."""
+
+
+def _cue(value: str | SfxCue) -> SfxCue:
+    return SfxCue(sound=value) if isinstance(value, str) else value
+
+
+#: An entry of a scene's ``sfx:`` list: a cue, or a sound name (that sound at the scene's start).
+SfxEntry = Annotated[Union[SoundName, SfxCue], AfterValidator(_cue)]
+
+
+class SfxConfig(_Strict):
+    """Video-wide sound effect settings (DESIGN.md §47)."""
+
+    auto: bool = False
+    """Add soft sounds to built-in animations: reveal (pop), highlight (tick), callout (click), zoom (whoosh), transform (swoosh) actions and chapter cards (whoosh)."""
+    gain: float = Field(default=0.0, ge=-60, le=12)
+    """Level change in dB of every sound effect of the video."""
+
+
 class ChapterConfig(_Strict):
     """A scene's ``chapter:`` in its long form: a new chapter starts at this scene."""
 
@@ -605,6 +657,8 @@ class SceneConfig(_Strict):
     """A new chapter starts at this scene: its title, or {title, number}; a `chapter` scene starts one by itself (this then renames it in chapter lists)."""
     voice: Identifier | None = None
     """Voice of this scene's beats: a name from voices (or default: the base voice); a beat's own voice wins."""
+    sfx: list[SfxEntry] = Field(default_factory=list)
+    """Sound effects at seconds from the scene's start ({sound, at, gain, pan, align, params}, or a sound name); for silent scenes too."""
 
     @model_validator(mode="before")
     @classmethod
@@ -638,6 +692,9 @@ class SceneConfig(_Strict):
                         f"beats[{j}] action '{action.describe()}': until '{action.until}' is not a later beat of "
                         f"scene '{self.id}' (later beats: {', '.join(order[j + 1:]) or 'none'})"
                     )
+        for k, cue in enumerate(self.sfx):
+            if self.duration is not None and cue.at >= self.duration:
+                raise ValueError(f"sfx[{k}]: at {cue.at:g} s is not within the scene's duration ({self.duration:g} s)")
         for entry in self.lint_ignore:
             if isinstance(entry, LintIgnore) and entry.beat is not None and entry.beat not in beat_ids:
                 raise ValueError(f"lint_ignore: scene '{self.id}' has no beat '{entry.beat}'")
@@ -686,6 +743,8 @@ class VideoConfig(_Strict):
     """Thresholds and severities of `vidgen lint`."""
     overlays: list[OverlayConfig] = Field(default_factory=list)
     """Overlays drawn on top of the scenes (lower thirds, watermark, ...), fixed to the screen."""
+    sfx: SfxConfig = Field(default_factory=SfxConfig)
+    """Sound effects of the whole video: automatic sounds for built-in animations, overall level."""
     scenes: list[SceneConfig] = Field(min_length=1)
     """The scenes in order (at least one); scene ids and beat ids must be unique."""
 

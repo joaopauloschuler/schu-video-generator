@@ -90,10 +90,11 @@ src/vidgen/
   pronunciation.py        # pronunciation dictionary: TTS text of a beat, spoken -> written word map (§45; no manim)
   voices.py               # named voices: effective voice per beat, speaker labels / colours / tags (§46; no manim)
   cues.py                 # caption cues: phrase-boundary cutting and timing, shared by SRT and captions (§43)
+  sfx.py                  # sound effects: synthesised set, loudness, project sounds, the SFX track (§47; no manim)
   fileio.py               # atomic writes; replacing files that Windows programs keep open
   scenes/                 # built-in scene library (registered like extensions; actions.py:
                           # the built-in beat actions reveal/dim/highlight/zoom/transform, §26-27;
-                          # callout_action.py: the callout beat action, §44;
+                          # callout_action.py: the callout beat action, §44; sfx_action.py: sfx, §47;
                           # overlays.py: the built-in overlays lower_third/watermark, §41;
                           # progress.py: progress_bar/chapter_indicator, §42; captions.py: captions, §43)
   data/fonts/             # Inter, Source Serif 4, JetBrains Mono NL (.ttf + OFL.txt; package data)
@@ -197,6 +198,7 @@ narration:
 pronunciation: {K-Phi-3: kay fye three}          # Step 42 (§45): TTS text only; + pronunciation_file
 voices: {ana: {voice_id: 21m00Tcm4TlvDq8ikWAM, label: "Dr. Ana"}}   # Step 43 (§46): + scene / beat `voice: ana`
 subtitles: {speakers: off}                       # Step 43 (§46): `name` tags speakers in the SRT
+sfx: {auto: false, gain: 0}                      # Step 44 (§47): + scene `sfx:` lists, beat action `sfx`
 
 extensions: [extensions]                         # dirs (relative to project) to auto-import; default shown
 
@@ -500,6 +502,10 @@ Step 42 (§45) adds `Pronunciation`, `Spoken`, `map_word_times`, and compatibly 
 argument `spoken` of `beat_word_times`.
 Step 43 (§46) adds `speaker_label`, `speaker_color`, `speaker_prefix`, and compatibly the keyword
 arguments `prefix` / `prefix_width` of `caption_cues` and the field `CaptionCue.prefix`.
+Step 44 (§47) adds `SfxEvent`, `SfxParams`, `SoundLibrary`, `sound_library`, `synthesize`; on
+`NarratedScene` `sfx()`, `sfx_log`, `sounds`, `auto_sfx()` and the class attribute
+`entrance_sfx`; on `Action` (compatibly) the class attributes `scene_targets`, `animates` and
+the method `cue(scene, time)`.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -620,6 +626,7 @@ vidgen validate [PROJECT] [--json]      # load config + extensions, report all e
 vidgen list-scenes [PROJECT] [--json]   # built-ins + extensions (+ which overrides)
 vidgen list-themes [PROJECT] [--swatches PNG] [--json]   # theme presets + type scales (§20)
 vidgen list-icons [PROJECT] [--search TEXT] [--category NAME] [--sheet PNG] [--json]   # icons (§22)
+vidgen list-sfx [PROJECT] [--render-dir DIR] [--json]   # sound effects with descriptions (§47)
 vidgen schema [PROJECT] [--scene TYPE | --all] [--json]   # JSON Schema of video.yaml (§12)
 vidgen tts [PROJECT] [--force] [--dry-run] [--beat ID ...] [--voice NAME ...] [--variant NAME]
 vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going]
@@ -2925,3 +2932,84 @@ using the existing renders of the others (missing ones are rendered). Exit code 
 - Known limits: storyboard labels and `timings.json` do not name speakers; the tag shows only on
   a beat's first cue (karaoke shows it briefly: prefer `color`); no per-voice `narration.pad` or
   `words_per_second`; no ElevenLabs text-to-dialogue.
+
+
+## 47. Refinements (Step 44, sound effects)
+
+- **Sounds** (`vidgen/sfx.py`, no manim): eleven built-in sounds (`BUILTIN_SOUNDS`: whoosh,
+  swoosh, pop, click, tick, typing, riser, chime, success, error, thud), each a deterministic
+  numpy generator (`BuiltinSound(name, generate, duration, duration_range, description, use)`;
+  noise from `default_rng(crc32(name))`; filters as zero-phase magnitude responses in the
+  frequency domain, time-varying band-passes by STFT) taking `Synth(n, ratio, intensity, rng)`:
+  `params` `duration` (within the sound's range), `pitch` (semitones, ±24) and `intensity` (0–1:
+  timbre, and ±3 dB around 0.5). Finishing (`_finish`): high-pass 25 Hz, raised-cosine fades
+  (first and last sample exactly 0), the mean removed by subtracting a scaled Hann window (zero
+  at the ends, so DC is 0 and the ends stay 0), then the level: the loudest 400 ms window
+  (BS.1770 K-weighting at 48 kHz, applied as a magnitude response; `loudness()`) at
+  `LOUDNESS_TARGET` −27 LUFS (one channel), peaks capped at `PEAK_CEILING` −9 dBFS (short clicks
+  and ticks are peak-limited, so they measure quieter). Calibration: the committed kphi3
+  ElevenLabs MP3s measure −18.5 to −21.4 LUFS the same way (peaks −4 to −8 dBFS), so a sound at
+  gain 0 sits ~7 dB under narration (a test keeps it ≥ 5 dB under the quietest beat).
+- **Decision: synthesised when the video is joined, cached per process** (`synthesize`,
+  `lru_cache`), not shipped as package-data WAVs: the params are continuous (pre-rendered files
+  could only give the defaults), every sound takes 5–110 ms, and nothing (~1 MB of WAVs) is
+  added to the wheel. `vidgen list-sfx --render-dir DIR` writes previews for a human.
+- **Project sounds**: `assets/sfx/<name>.<wav|flac|ogg|mp3>` (`project_sounds`; `.wav` first
+  when a name has several; invalid names skipped with a warning) extend or replace built-ins by
+  name (`SoundLibrary`; `list-sfx` marks `overrides_builtin`); decoded with PyAV to 48 kHz
+  (mono or stereo kept); played at their own level, no `params` (a problem when given).
+- **Where sounds come from**: `NarratedScene.sfx(sound, at=None, *, gain, pan, align, **params)`
+  (scene seconds; default `renderer.time`) validates with the config model `SfxCue` and the
+  library and appends an `SfxEvent(time, sound, gain, pan, align, params, beat)` to `sfx_log`;
+  nothing is drawn, no time passes. A scene's `sfx:` list (`SfxCue`: `sound`, `at` seconds,
+  `gain` dB −60..12, `pan` −1..1, `align` `start|end`, `params` `SfxParams`; a plain string =
+  `{sound}`; on a silent scene `at` < `duration`) is recorded in the constructor. The beat action
+  `sfx` (`scenes/sfx_action.py`) — `- sfx: NAME` (or `sound:`), options `gain`, `pan`, `align`,
+  `params` — is cued by the runner. `timings()` gains `sfx` (the events) when there are any.
+- **Framework** (`vidgen.actions`, compatible): `Action.scene_targets` (False: `target` is not
+  checked against / resolved among the scene's targets; the action's `problems()` checks it) and
+  `Action.animates` (False: the runner calls `cue(scene, time)` when the beat starts, with the
+  due frame's time — `at` rounded to a frame like any action — and marks the use applied; it is
+  never queued for a wait; `check_action_class`: such actions implement `cue`, not `apply`, and
+  cannot be reversible). **Decision**: a sound plays exactly at `at`, even while the scene's own
+  animation runs (animating actions wait for it), so `at: 0` lands with the beat's entrance;
+  syncing to a delayed action's start is left to `sfx.auto`.
+- **Auto** (`sfx: {auto: true}`; `SfxConfig.auto`, default off): `ActionRunner._build` calls
+  `scene.auto_sfx(name)` when a *built-in* action's `apply` returns animations (so a no-op
+  `reveal` makes no sound), at the moment it starts playing — `AUTO_ACTION_SFX`: reveal → pop
+  −3 dB, highlight → tick −3, callout → click −2, zoom → whoosh 0.5 s −6, transform → swoosh −6
+  — except in beats that have their own non-animating (`sfx`) actions; and scene types with
+  `entrance_sfx` (`chapter`: whoosh −3 dB) get it at time 0. Scene types' own reveal steps get no
+  automatic sounds (a pop per bullet / bar / node was judged too busy).
+- **Mixing (no Manim sound)**: the worker stores the events in `timings/<id>.json` (always, also
+  with `--no-audio`). `join_scenes` shifts them by each scene's offset (combined `timings.json`
+  scenes gain `sfx`, video times) and, unless `no_audio`, writes **one SFX track for the whole
+  video**, `padded/sfx.wav` (`write_track`: 48 kHz stereo s16, exactly `round(total * 48000)`
+  samples = the sum of the padded scene WAVs; event start sample `round(time * 48000)`, minus
+  its length for `align: end`; parts before 0 / after the end cut; written in 10 s blocks;
+  sums clipped, never wrapped), with `sfx.gain` (master dB) added. Pan: equal-power, centre =
+  full level on both channels (as a mono narration MP3 is duplicated by `pad_audio`), so
+  loudness compares 1:1. `ffmpeg.join(..., sfx=)` adds it to the concatenated narration with
+  `amix=inputs=2:duration=first:dropout_transition=0:normalize=0` (a plain sum) before the one
+  AAC encode. Sounds therefore run across scene cuts (a sound after its scene's end is a warning),
+  are sample-exact in the timeline, and do not resample the narration (Manim's pydub mix would
+  place at 1 ms and resample the MP3 to the sound's rate). Scene renders and storyboards have no
+  effects. Without events (or with `--no-audio`) the join is byte-for-byte the old command.
+- **For Step 45 (music, ducking, loudness)**: the voice track (concatenated `padded/<id>.wav`:
+  narration + clip sound) and the SFX track stay separate until the final mux, so music can be
+  ducked with the voice track alone as the sidechain (`sidechaincompress`), then voice + SFX +
+  ducked music summed and `loudnorm`ed; the SFX levels are relative (−27 LUFS ≈ 7 dB under
+  narration) and survive a normalisation of the sum.
+- **Checks**: `vidgen validate` (`cli.project_problems` + `sfx.config_problems`): unknown sounds
+  with did-you-mean and the list, params on project files, durations outside the range, at
+  `scenes[i].sfx[k].<key>` and `scenes[i].beats[j].actions[k].<target|sound|params.duration|
+  run_time>`; the render pre-check raises them; `NarratedScene.sfx` raises `VidgenError`.
+- **Listing**: `vidgen list-sfx [PROJECT] [--render-dir DIR] [--json]` (`sound_entries`: name,
+  origin, description — precise words for an author who cannot listen — use, duration, range,
+  channels, loudness, peak, preview); `list-scenes` shows `sfx` as "(at its time, does not
+  animate)", JSON actions gain `scene_targets`, `animates` (within version 1). `sfx.py` is not a
+  render-fingerprint input (sounds never change pixels); scene `sfx:` lists and `sfx` actions
+  are part of the scene's config, so editing them re-renders that scene's stills.
+- Known limits: no per-scene switch for `auto` (a variant can turn it off); a sound still
+  playing at the video's end is cut without a fade; project sounds are not loudness-normalised;
+  built-ins are mono (pan places them).

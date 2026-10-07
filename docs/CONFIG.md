@@ -7,7 +7,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 [format](#format-and-preview), [variants](#variants), [theme](#theme), [voice](#voice-voice),
 [narration](#narration-narration), [narration audio](#narration-audio-elevenlabs),
 [multiple voices](#multiple-voices-voices), [pronunciation](#pronunciation-pronunciation),
-[built-in scene types](#built-in-scenes), [beat actions](#beat-actions), [overlays](#overlays),
+[sound effects](#sound-effects-sfx), [built-in scene types](#built-in-scenes), [beat actions](#beat-actions), [overlays](#overlays),
 [JSON Schema](#json-schema-vidgen-schema), [frame stills](#frame-stills-vidgen-render---frames),
 [storyboard](#storyboard-vidgen-storyboard), [lint](#lint-vidgen-lint),
 [JSON output of commands](#json-output---json).
@@ -31,6 +31,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `extensions` | `[extensions]` | folders whose `*.py` files and packages are imported (see docs/EXTENDING.md); the default may be missing, a folder you list must exist |
 | `lint` | see [lint](#lint-vidgen-lint) | thresholds and severities of `vidgen lint` |
 | `overlays` | `[]` | lower thirds, a watermark, ... drawn over the scenes, see [overlays](#overlays) |
+| `sfx` | `{auto: false, gain: 0}` | sound effects of the whole video: automatic sounds for built-in animations, overall level; see [sound effects](#sound-effects-sfx) |
 | `scenes` | required | the scenes in order, at least one |
 
 ## Scenes and beats
@@ -62,6 +63,7 @@ scenes:
 | `overlays` | `true` | the video's [overlays](#overlays) on this scene: `false` for none, or per overlay id `false` / option overrides, or an overlay of this scene only |
 | `chapter` | none | a new [chapter](#chapters) starts at this scene: its title, or `{title, number}` |
 | `voice` | none (the base `voice:`) | who says this scene's beats: a name from [`voices:`](#multiple-voices-voices) or `default` |
+| `sfx` | `[]` | sound effects at seconds from the scene's start (silent scenes too), see [sound effects](#sound-effects-sfx) |
 
 Beat `id`s name the audio files: keep them when you edit the text (only that beat is
 re-voiced). A beat `text` is spoken as written; it is also the subtitle. A beat's `actions`
@@ -545,6 +547,92 @@ pronunciation_file: pronunciation.yaml  # optional: more entries in a file (or a
 Failed requests show the HTTP status and ElevenLabs' message; rate limits and server errors are
 retried a few times automatically. Rendering uses whatever audio exists; stale or missing audio
 is reported as a warning.
+
+## Sound effects (`sfx`)
+
+Short sounds under the narration: a whoosh as a card slides in, a pop per item, a tick per step.
+vidgen synthesises its own set (no recordings, no licences) and mixes them, sample-exact, into the
+video's sound when the scenes are joined. Three ways to place one:
+
+```yaml
+sfx: {auto: false, gain: 0}            # optional, video-wide (below)
+scenes:
+  - id: part2
+    type: chapter
+    params: {title: "Results"}
+    duration: 2.5
+    sfx:                               # at seconds from the scene's start (silent scenes too)
+      - whoosh                         # a plain name: at 0
+      - {sound: chime, at: 1.2, gain: -3}
+  - id: points
+    type: bullets
+    params: {items: [Fast, Cheap, Good]}
+    beats:
+      - text: "Three things matter."
+        actions:                       # a beat action, at a fraction of the beat (like every action)
+          - sfx: pop                   # at 0: when the beat starts
+          - sfx: riser
+            at: 0.6
+            align: end                 # the riser ends (at its loudest) at 0.6 of the beat
+            params: {duration: 1.5}
+```
+
+In scene code (extensions): `self.sfx("pop")` (now) or `self.sfx("chime", at=2.0, gain=-3,
+pitch=2)`; see docs/EXTENDING.md.
+
+**Built-in sounds** (`vidgen list-sfx` prints what each one sounds like, `--render-dir DIR`
+writes them as WAV files to listen to):
+
+| sound | default length | what it sounds like | use it for |
+|---|---|---|---|
+| `whoosh` | 0.6 s (0.2–3) | soft band-passed noise sweeping up ~380 Hz → ~2.7 kHz, swelling to a peak at 55% | a slide, card or element moving in; a camera move |
+| `swoosh` | 0.45 s (0.15–3) | the reverse: the band falls ~2.7 kHz → ~380 Hz, peaking early | something leaving or being swapped out |
+| `pop` | 0.12 s (0.05–0.4) | a round bubble "bloop", ~480 → ~890 Hz in 30 ms | an item, bullet, icon or dot appearing |
+| `click` | 0.03 s (0.01–0.1) | a crisp 3 ms UI click around 3.2 kHz | a selection, a toggle, a cursor click |
+| `tick` | 0.09 s (0.03–0.3) | a soft wooden tick at 1.5 kHz, ~20 ms | counting, timeline marks, steps |
+| `typing` | 1 s (0.2–8) | irregular soft key clicks, 6–14 per second | text or code being typed |
+| `riser` | 2 s (0.5–8) | rising noise band (~250 Hz → ~4.3 kHz) + a faint sine glide, louder to the end | tension before a reveal (`align: end`) |
+| `chime` | 1.6 s (0.4–5) | a clear bell note at A5 with soft overtones, ringing out | a key insight, a result |
+| `success` | 0.9 s (0.4–3) | two soft bell notes, E5 then B5 | a check mark, a goal reached |
+| `error` | 0.5 s (0.3–2) | two muted notes falling G4 → E♭4 | a mistake, a failing case |
+| `thud` | 0.45 s (0.15–1.5) | a soft low impact, 110 → 55 Hz with a muffled knock | something landing, a big number |
+
+| key | default | |
+|---|---|---|
+| `sound` | required | a built-in sound or the project's own (below); in an action written as `- sfx: NAME` (or `sound: NAME`) |
+| `at` | `0` | scene `sfx:` list: seconds from the scene's start; beat action: fraction of the beat's narration, as for every action (rounded to a frame) |
+| `gain` | `0` | dB, -60 to 12; at 0 a sound's loudest 400 ms is −27 LUFS (K-weighted, one channel), about 7 dB under ElevenLabs narration, with peaks at most −9 dBFS |
+| `pan` | `0` | -1 left, 0 centre (full level on both channels), 1 right (equal-power) |
+| `align` | `start` | `start`: the sound starts at `at`; `end`: it ends there |
+| `params` | `{}` | `duration` (seconds, within the sound's range), `pitch` (semitones, -24 to 24, default 0), `intensity` (0 to 1, default 0.5: brighter and up to 3 dB louder towards 1) — built-in sounds only |
+
+Video-wide `sfx:`:
+
+| key | default | |
+|---|---|---|
+| `auto` | `false` | add soft sounds to built-in animations: `reveal` → pop, `highlight` → tick, `callout` → click, `zoom` → whoosh, `transform` → swoosh (when the action starts animating; not in a beat that has its own `sfx` actions), and a whoosh at the start of every `chapter` card |
+| `gain` | `0` | dB added to every sound effect of the video |
+
+- **Project sounds**: `assets/sfx/<name>.wav` (also `.flac`, `.ogg`, `.mp3`; names of letters,
+  digits, `_` and `-`) adds a sound, or replaces the built-in of that name. Played at their own
+  level (no loudness normalisation; `gain` still applies) and without `params`.
+- **Timing.** A beat action's sound plays exactly at its `at` (rounded to a frame), even while the
+  scene animates (other actions wait for the scene's animation). A sound that runs past its
+  scene's end goes on over the next scene (the last scene's is cut at the video's end).
+- **Mixing.** The sounds are not part of the scenes' own renders (`build/.../scenes/*.mp4`, the
+  storyboard): `vidgen render` places every scene's sounds on one track for the whole video
+  (`build/.../padded/sfx.wav`, 48 kHz) and adds it to the narration when it writes the MP4.
+  `--no-audio` renders have none. The sounds are listed per scene in `timings.json` (`sfx`: video
+  times, sound, gain, pan, align, params, beat).
+- **Checks.** `vidgen validate` reports unknown sounds (with a suggestion) and params outside a
+  sound's range; a sound starting after its scene ends is a render warning.
+
+### `vidgen list-sfx`
+
+`vidgen list-sfx [PROJECT] [--render-dir DIR] [--json]` lists the built-in sounds and the project's
+`assets/sfx` with their length, loudness and peak, and for built-ins a precise description of the
+sound and when to use it (an AI author cannot listen); `--render-dir` also writes each sound at
+its defaults as `DIR/<name>.wav`. JSON: see [below](#vidgen-list-sfx---json).
 
 ## Built-in scenes
 
@@ -2316,7 +2404,7 @@ the one key that names an action).
 
 | key | default | |
 |---|---|---|
-| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `transform`, `callout`, or a project action (`vidgen list-scenes` lists them) |
+| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `transform`, `callout`, `sfx`, or a project action (`vidgen list-scenes` lists them) |
 | `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one (`callout` with an `area` needs none) |
 | `at` | `0` | when, as a fraction of the beat's narration (`0` ≤ at < `1`) |
 | `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`, `callout`: undone when it starts; `zoom`: the camera is back when it starts) |
@@ -2374,6 +2462,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `zoom` | `scale` (magnification > 1, up to 8; default: as close as the targets fit), `padding` (`0.15`: share of the view kept free on each side of the targets) | moves the camera in on the targets and back out: the zoom-out ends with the beat (with `until: <beat>`, when that beat starts). Without `scale` the view is at most 3x; a target that already fills the frame is not zoomed (a warning says so). The view never leaves the frame. |
 | `transform` | `into` (required: a target not on screen yet), `style` (`auto` default, `replace`, `shapes`, `tex`, `fade`) | morphs the target into `into`, which then stays on screen in its own place (the target is gone). `shapes` moves matching glyphs (what `auto` uses for text and formulas), `replace` morphs point by point (`auto` for other shapes), `tex` matches the TeX parts of two formulas, `fade` cross-fades. `into` must be a target of the scene; text that is not part of the scene cannot be morphed into (give the scene that content, e.g. as a later equation step). If `into` is already on screen, the target fades out into its place (warning). |
 | `callout` | `kind` (`box` default, `circle`, `arrow`, `label`, `spotlight`, `magnifier`), `label`, `area`, `within` (`frame` \| `safe`), `units` (`fraction` \| `px`), `color` (`highlight`), `label_size` (`caption`), `side` (`auto`, `top`, `bottom`, `left`, `right`), `curved` (arrow), `zoom` (magnifier, `2`), `keep` (`false`), `name` | points at the target — or, without a target, at `area` of the frame — with the [Step 34 callouts](#screenshot): a rounded `box` (label as a tag on its edge), a `circle`, an `arrow` from the label, a `label` beside it (no mark), a `spotlight` (the rest of the view darkened) or a `magnifier` (an enlarged inset of a picture: the target must show one, e.g. `image`). Gone when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: stays to the end of the scene). See "Callouts" below. |
+| `sfx` | `sound` (or as the target: `- sfx: NAME`), `gain` (`0` dB), `pan` (`0`), `align` (`start` \| `end`), `params` (`duration`, `pitch`, `intensity`) | plays a [sound effect](#sound-effects-sfx) at `at` — exactly then, even while the scene animates; draws nothing, works on every scene type. Its "target" is the sound's name, not a target of the scene; no `until`, no `run_time`. |
 
 `dim`, `highlight`, `zoom` and `transform` act on targets on screen; a target not shown yet is
 first revealed (as by `reveal`). `dim` and `highlight` change only opacity resp. colour, so
@@ -3102,7 +3191,9 @@ when required); `doc` (the docstring under the field or its `Field(description=.
 Each action: `name`, `origin`, `builtin`, `overrides_builtin`, `doc` (as for scene types);
 `run_time` (default seconds); `reversible` (bool: `until` allowed); `temporary` (bool: undone
 by the end of its beat, like `zoom`); `until_next_beat` (bool: without `until`, undone when the
-next beat starts, like `callout`); `needs_target` (bool); `target_options` (options whose
+next beat starts, like `callout`); `needs_target` (bool); `scene_targets` (bool: `false` when
+`target` names something else, like `sfx`'s sound); `animates` (bool: `false` for an action that
+draws nothing and happens exactly at `at`, like `sfx`); `target_options` (options whose
 values are target names, e.g. `["into"]`); `options` (fields like `params`; `[]` = none).
 Each overlay type: `name`, `origin`, `builtin`, `overrides_builtin`, `doc` (as above); `layer`
 (drawing order among overlays); `lint_skip` (lint rules not applied to its objects, e.g.
@@ -3140,6 +3231,18 @@ difference between two palette colours).
 | `count` | int | number of listed icons |
 | `icons` | list | the listed icons, best matches first: `{name, category, tags, aliases, source, origin, overrides, path}` (`origin` `builtin` or `project`; `overrides`: a project icon replacing a built-in; `path` the SVG) |
 | `sheets` | list | the PNG files written with `--sheet` |
+
+### `vidgen list-sfx --json`
+
+| key | type | |
+|---|---|---|
+| `project` | str \| null | the project folder whose `assets/sfx` were included (`null`: built-ins only) |
+| `rate` | int | sample rate of every sound (48000) |
+| `loudness_target`, `peak_ceiling` | float | the level built-in sounds are set to at gain 0: loudest 400 ms in LUFS (K-weighted, one channel), highest peak in dBFS |
+| `params` | list | the params of built-in sounds (`duration`, `pitch`, `intensity`), fields as in `list-scenes` |
+| `count` | int | number of sounds |
+| `sounds` | list | `{name, origin, overrides_builtin, description, use, duration, duration_range, channels, loudness, peak_db, preview}`: `origin` `builtin` or the file (`assets/sfx/x.wav`); `description` (what it sounds like), `use` and `duration_range` (`[min, max]` s) for built-ins, else `null`; `duration` (s), `loudness` (LUFS), `peak_db` (dBFS) at the defaults; `preview` the WAV written with `--render-dir`, else `null` |
+| `previews` | str \| null | the `--render-dir` folder |
 
 ### `vidgen schema --json`
 

@@ -96,6 +96,8 @@ from vidgen.registry import action, overlay, scene  # noqa: E402
 from vidgen.runtime import current_project, current_theme  # noqa: E402
 from vidgen.scene import IconName, NarratedScene, SceneParams, ThemeColor, ThemeSize, one_or_many  # noqa: E402
 from vidgen.pronunciation import Pronunciation, Spoken  # noqa: E402
+from vidgen.config import SfxParams  # noqa: E402
+from vidgen.sfx import SfxEvent, SoundLibrary, sound_library, synthesize  # noqa: E402
 from vidgen.speech import WordTime, beat_word_times, estimate_word_times, map_word_times, speech_bounds, spoken_words, syllables  # noqa: E402
 from vidgen.videoplan import Chapter, video_chapters  # noqa: E402
 from vidgen.voices import speaker_color, speaker_label, speaker_prefix  # noqa: E402
@@ -268,6 +270,11 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "speaker_color",
     "speaker_label",
     "speaker_prefix",
+    "SfxEvent",
+    "SfxParams",
+    "SoundLibrary",
+    "sound_library",
+    "synthesize",
     "CALLOUT_KINDS",
     "Callout",
     "CalloutArea",

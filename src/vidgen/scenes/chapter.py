@@ -19,6 +19,7 @@ class Chapter(NarratedScene):
     """
 
     outro = 0.5
+    entrance_sfx = ("whoosh", -3.0)  # with sfx: {auto: true}
     target_patterns = ("icon", "number", "title", "subtitle")
 
     @classmethod

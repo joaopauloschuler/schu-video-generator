@@ -143,6 +143,14 @@ class Action:
     #: Without ``until:``, undone when the next beat starts (``callout``: it points at something
     #: while its beat talks about it); see :meth:`default_until`. Requires ``reversible``.
     until_next_beat: ClassVar[bool] = False
+    #: Whether ``target`` names targets of the scene. ``False``: it names something else (``sfx``:
+    #: a sound), is neither checked against the scene's targets nor resolved; :meth:`problems`
+    #: checks it.
+    scene_targets: ClassVar[bool] = True
+    #: Whether it animates. ``False``: it draws nothing; when its beat starts the runner calls
+    #: :meth:`cue` with the scene time it is due at (``at``), instead of playing :meth:`apply` in
+    #: a wait (``sfx`` records a sound there). Such actions cannot be reversible.
+    animates: ClassVar[bool] = True
 
     def __init__(self, options: ActionOptions, config: ActionConfig) -> None:
         self.options = options
@@ -174,6 +182,11 @@ class Action:
         """The animations that undo :meth:`apply` (for ``until:``)."""
         return []
 
+    def cue(self, scene: NarratedScene, time: float) -> None:
+        """Do a non-animating action (:attr:`animates` ``False``) due at scene ``time`` (s; on a
+        frame, possibly later than now). Called when its beat starts."""
+        raise NotImplementedError
+
 
 def check_action_class(name: str, cls: object) -> None:
     """Raise :class:`VidgenError` unless ``cls`` is a usable action class."""
@@ -188,8 +201,12 @@ def check_action_class(name: str, cls: object) -> None:
         raise VidgenError(f"{where}: option names {', '.join(clash)} are reserved (every action has {', '.join(ACTION_KEYS)})")
     if not (isinstance(cls.run_time, (int, float)) and cls.run_time > 0):
         raise VidgenError(f"{where}: run_time must be a positive number of seconds")
-    if cls.apply is Action.apply:
+    if cls.animates and cls.apply is Action.apply:
         raise VidgenError(f"{where}: implement apply(self, scene, targets)")
+    if not cls.animates and cls.cue is Action.cue:
+        raise VidgenError(f"{where}: actions that do not animate implement cue(self, scene, time)")
+    if not cls.animates and cls.reversible:
+        raise VidgenError(f"{where}: actions that do not animate cannot be reversible")
     if cls.reversible and cls.revert is Action.revert:
         raise VidgenError(f"{where}: reversible actions implement revert(self, scene, targets)")
     if cls.temporary and not cls.reversible:
@@ -308,7 +325,7 @@ def scene_actions(
                 problems.append((f"{where}.target", f"action '{act.action}' needs a target"))
             instance = kind.cls(options, act)
             problems += [(f"{where}.{key}", message) for key, message in instance.problems()]
-            checked = [("target", p) for p in act.targets()]
+            checked = [("target", p) for p in act.targets()] if kind.cls.scene_targets else []
             for option in kind.cls.target_options:
                 value = getattr(options, option)
                 checked += [(option, p) for p in ([value] if isinstance(value, str) else value or [])]
@@ -410,6 +427,10 @@ class ActionRunner:
         self._end = now + round((d + pad) * fps)
         due = [_Due(now, u, True) for u in self.uses if u.until == beat_id and u.applied and not u.kind.cls.temporary]
         own = {id(u): now + round(u.config.at * d * fps) for u in self.uses if u.beat == beat_id}
+        for u in self.uses:
+            if id(u) in own and not u.kind.cls.animates:  # e.g. a sound: at its time, whatever plays then
+                u.action.cue(self.scene, own.pop(id(u)) / fps)
+                u.applied = True
         due += [_Due(frame, u, False) for u in self.uses if (frame := own.get(id(u))) is not None]
         for u in self.uses:
             if u.kind.cls.temporary and self._return_beat(u) == beat_id and (u.applied or id(u) in own):
@@ -492,9 +513,16 @@ class ActionRunner:
             act = d.use.action
             if d.revert and not d.use.applied:
                 continue
-            anims += act.revert(self.scene, d.use.targets) if d.revert else act.apply(self.scene, d.use.targets)
+            made = act.revert(self.scene, d.use.targets) if d.revert else act.apply(self.scene, d.use.targets)
+            if made and not d.revert and d.use.kind.builtin and not self._has_sounds(d.use.beat):
+                self.scene.auto_sfx(d.use.kind.name)  # with sfx: {auto: true}; it plays now
+            anims += made
             d.use.applied = not d.revert
         return anims
+
+    def _has_sounds(self, beat_id: str) -> bool:
+        """Whether the beat has non-animating actions (its own ``sfx``: no automatic sounds)."""
+        return any(u.beat == beat_id and not u.kind.cls.animates for u in self.uses)
 
     def _run(self, due: list[_Due], instant: bool) -> None:
         """Play ``due`` within the beat's remaining time (proportionally shortened if needed)."""

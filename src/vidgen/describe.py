@@ -210,7 +210,8 @@ def action_doc(entry: ActionType) -> str | None:
 
 def action_type_json(entry: ActionType) -> dict[str, Any]:
     """``{name, origin, builtin, overrides_builtin, doc, run_time, reversible, temporary,
-    until_next_beat, needs_target, target_options, options}`` for ``list-scenes --json``
+    until_next_beat, needs_target, scene_targets, animates, target_options, options}`` for
+    ``list-scenes --json``
     (``options`` as ``params`` of scene types)."""
     cls = entry.cls
     return {
@@ -224,6 +225,8 @@ def action_type_json(entry: ActionType) -> dict[str, Any]:
         "temporary": cls.temporary,
         "until_next_beat": cls.until_next_beat,
         "needs_target": cls.needs_target,
+        "scene_targets": cls.scene_targets,
+        "animates": cls.animates,
         "target_options": list(cls.target_options),
         "options": params_json(cls.Options),
     }

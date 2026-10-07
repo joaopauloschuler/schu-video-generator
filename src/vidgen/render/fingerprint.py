@@ -31,11 +31,12 @@ FINGERPRINT_VERSION = 1
 _PACKAGE_DIR = Path(__file__).resolve().parent.parent
 
 #: vidgen modules that cannot change a scene's pixels or timing (commands, output documents,
-#: contact sheets, TTS); every other module, including new ones, is part of the fingerprint.
+#: contact sheets, TTS, sound synthesis); every other module, including new ones, is part of the
+#: fingerprint.
 NOT_RENDER_INPUTS: frozenset[str] = frozenset(
     {
         "__main__.py", "cli.py", "describe.py", "iconlist.py", "jsonout.py", "lint", "schema.py", "sheets.py", "storyboard.py",
-        "render/fingerprint.py", "render/pipeline.py", "render/ffmpeg.py", "subtitles.py", "themelist.py", "tts",
+        "render/fingerprint.py", "render/pipeline.py", "render/ffmpeg.py", "sfx.py", "subtitles.py", "themelist.py", "tts",
     }
 )
 

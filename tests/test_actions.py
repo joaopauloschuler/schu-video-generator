@@ -95,7 +95,7 @@ def test_until_must_be_a_later_beat_of_the_scene() -> None:
 
 def test_builtin_actions_are_registered() -> None:
     extensions.load_builtins()
-    assert registry.action_names() == ["callout", "dim", "highlight", "reveal", "transform", "zoom"]
+    assert registry.action_names() == ["callout", "dim", "highlight", "reveal", "sfx", "transform", "zoom"]
     assert all(a.builtin for a in registry.all_actions())
     assert registry.find_action("dim").cls.reversible and not registry.find_action("reveal").cls.reversible
     assert "did you mean 'highlight'" in registry.unknown_action_message("higlight")
@@ -196,7 +196,7 @@ def test_validate_reports_bad_actions(make_project) -> None:
     assert "targets: heading, item1, item:Write the beats" in by_location[f"{at}[0].target"][0]
     assert "forms: heading, item<N>, item:<text>" in by_location[f"{at}[0].target"][0]
     assert by_location[f"{at}[1].action"] == [
-        "unknown action 'higlight'; did you mean 'highlight'? (known actions: callout, dim, highlight, reveal, transform, zoom)"
+        "unknown action 'higlight'; did you mean 'highlight'? (known actions: callout, dim, highlight, reveal, sfx, transform, zoom)"
     ]
     assert "less than or equal to 1" in by_location[f"{at}[2].opacity"][0]
     assert by_location[f"{at}[2].colour"] == ["unknown option 'colour' (known: opacity)"]
@@ -240,7 +240,7 @@ def test_schema_describes_both_forms_and_options() -> None:
         doc = schema.config_schema(registry.all(), [Theme()])
     validator = jsonschema.Draft202012Validator(doc)
     defs = doc["$defs"]
-    assert defs["ActionConfig"]["properties"]["action"]["enum"] == ["callout", "dim", "highlight", "reveal", "transform", "zoom"]
+    assert defs["ActionConfig"]["properties"]["action"]["enum"] == ["callout", "dim", "highlight", "reveal", "sfx", "transform", "zoom"]
     assert {"action.dim", "action.highlight", "action.reveal", "ActionShorthand"} <= set(defs)
 
     def ok(*acts: dict[str, Any]) -> bool:

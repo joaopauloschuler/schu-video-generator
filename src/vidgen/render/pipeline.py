@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from vidgen import __version__, hooks
+from vidgen import __version__, hooks, sfx
 from vidgen.errors import VidgenError
 from vidgen.project import Project
 from vidgen.render import ffmpeg as ff
@@ -108,6 +108,9 @@ def _check_scenes(project: Project) -> None:
             raise VidgenError(f"scene '{spec.id}' (type {spec.type}): {problem}")
         plan_actions(spec.type, cls, spec, params, runtime.current_theme())
     check_overlays(project, runtime.current_theme())
+    problems = sfx.config_problems(project.config, project.root)
+    if problems:
+        raise VidgenError("\n".join(["invalid sound effects", *(f"  {loc}: {message}" for loc, message in problems)]))
 
 
 def warn_audio(project: Project) -> None:
@@ -320,6 +323,10 @@ def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) ->
     Each scene's audio (Manim's WAV, or silence for silent scenes and ``no_audio``) is padded to
     the exact length of its video. Lengths are measured from the rendered videos; the sample
     count of each scene is taken from the cumulative time, so rounding never accumulates.
+
+    The scenes' sound effects (their timings' ``sfx``, scene times) are placed at video times on
+    one track for the whole video, ``padded/sfx.wav`` (none without effects or with
+    ``no_audio``), which the final mux adds to the narration track (DESIGN.md §47).
     """
     render_dir = project.render_dir(preview)
     padded_dir = render_dir / "padded"
@@ -328,6 +335,7 @@ def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) ->
     audios: list[Path] = []
     scenes: list[dict[str, Any]] = []
     shifted: list[str] = []
+    events: list[sfx.SfxEvent] = []
     offset = 0.0
     for spec in project.config.scenes:
         video = scene_video_path(project, preview, spec.id)
@@ -343,18 +351,21 @@ def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) ->
         wav = scene_audio_path(project, preview, spec.id)
         audio = padded_dir / f"{spec.id}.wav"
         ff.pad_audio(ffmpeg, wav if wav.is_file() and not no_audio else None, audio, samples)
-        scenes.append(
-            {
-                "id": spec.id,
-                "type": spec.type,
-                "start": round(offset, 6),
-                "duration": round(duration, 6),
-                "beats": [
-                    {**beat, "start": round(offset + beat["start"], 6), "end": round(offset + beat["end"], 6)}
-                    for beat in timings["beats"]
-                ],
-            }
-        )
+        scene_sfx = [sfx.SfxEvent.from_json(e).shifted(offset) for e in timings.get("sfx", [])]
+        events += scene_sfx
+        entry: dict[str, Any] = {
+            "id": spec.id,
+            "type": spec.type,
+            "start": round(offset, 6),
+            "duration": round(duration, 6),
+            "beats": [
+                {**beat, "start": round(offset + beat["start"], 6), "end": round(offset + beat["end"], 6)}
+                for beat in timings["beats"]
+            ],
+        }
+        if scene_sfx:
+            entry["sfx"] = [e.to_json() for e in scene_sfx]
+        scenes.append(entry)
         videos.append(video)
         audios.append(audio)
         offset += duration
@@ -363,8 +374,12 @@ def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) ->
             "overlays timed in the video are off where a scene does not start where it was planned "
             "(an earlier scene ran longer or shorter than its narration; DESIGN.md §41): %s", "; ".join(shifted)
         )
+    track = padded_dir / "sfx.wav"
+    remove_file(track)
+    if events and not no_audio:
+        sfx.write_track(track, events, round(offset * ff.AUDIO_RATE), sfx.SoundLibrary(project.root), project.config.sfx.gain)
     output = project.output_path(preview)
-    ff.join(ffmpeg, videos, audios, output, padded_dir)
+    ff.join(ffmpeg, videos, audios, output, padded_dir, sfx=track if track.is_file() else None)
     combined = {
         "title": project.config.title,
         "variant": project.variant,

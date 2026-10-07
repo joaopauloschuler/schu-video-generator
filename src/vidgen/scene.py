@@ -29,9 +29,10 @@ from vidgen.capture import FrameCapture
 from vidgen.layout import distribute
 from vidgen.overlay_layer import OverlayLayer
 from vidgen.overlays import Overlay, avoid, mobject_region, scene_overlays
-from vidgen.config import BeatConfig, SceneConfig, validation_error_lines
+from vidgen.config import BeatConfig, SceneConfig, SfxCue, validation_error_lines
 from vidgen.errors import VidgenError
 from vidgen.project import Project
+from vidgen.sfx import AUTO_ACTION_SFX, SfxEvent, SoundLibrary
 from vidgen.theme import Theme
 from vidgen.videoplan import VideoPlan
 
@@ -269,6 +270,10 @@ class NarratedScene(MovingCameraScene):
         self._durations: dict[str, float] = {}
         self._current_beat: str | None = None
         self._requested: float | None = None
+        #: Sound effects of the scene (:class:`~vidgen.sfx.SfxEvent`, scene times), in the order
+        #: they were added; the worker stores them in the timings, the pipeline mixes them.
+        self.sfx_log: list[SfxEvent] = []
+        self._sounds: SoundLibrary | None = None
         super().__init__(**scene_kwargs)
         self.capture = capture
         if capture is not None:
@@ -287,6 +292,12 @@ class NarratedScene(MovingCameraScene):
                 box = mobject_region(mob) if overlay.reserves and mob is not None else None
                 if box is not None:
                     self._reserved.append(box)
+        if self.entrance_sfx is not None and self.project.config.sfx.auto:
+            sound, gain = self.entrance_sfx
+            self.sfx(sound, 0.0, gain=gain)
+        for k, cue in enumerate(spec.sfx):
+            params = cue.params.model_dump(exclude_none=True)
+            self._add_sfx(cue.sound, cue.at, cue.gain, cue.pan, cue.align, params, f"sfx[{k}]")
 
     def _build_overlays(self) -> list[Overlay]:
         """The overlays of the project drawn on this scene (none without an ``overlays:``)."""
@@ -612,19 +623,79 @@ class NarratedScene(MovingCameraScene):
         missing = [b.id for b in self.beats if b.id not in narrated]
         if missing:
             log.warning("scene '%s' never narrated beats: %s", self.spec.id, ", ".join(missing))
+        late = [f"{e.sound} at {e.time:.2f} s" for e in self.sfx_log if e.align == "start" and e.time >= self.renderer.time]
+        if late:
+            log.warning("scene '%s' lasts %.2f s; sound effects after its end play in the next scene: %s", self.spec.id, self.renderer.time, ", ".join(late))
         if self.capture is not None:
             self.capture.finish()
         super().tear_down()
 
     def timings(self) -> dict[str, Any]:
-        """JSON-ready timings: scene id, total duration and the beat log."""
-        return {
+        """JSON-ready timings: scene id, total duration and the beat log (and ``sfx``, the
+        :attr:`sfx_log`, when the scene has sound effects)."""
+        data: dict[str, Any] = {
             "scene": self.spec.id,
             "duration": float(self.renderer.time),
             "beats": [
                 {"id": t.beat_id, "start": t.start, "end": t.end, "text": t.text} for t in self.beat_log
             ],
         }
+        if self.sfx_log:
+            data["sfx"] = [event.to_json() for event in self.sfx_log]
+        return data
+
+    # ----- sound effects (DESIGN.md §47) -------------------------------------------------------
+
+    #: ``(sound, gain in dB)`` played at the scene's start when the video sets ``sfx: {auto:
+    #: true}`` (``chapter``: a whoosh); ``None``: nothing.
+    entrance_sfx: ClassVar[tuple[str, float] | None] = None
+
+    @property
+    def sounds(self) -> SoundLibrary:
+        """The sounds this scene can play: the built-ins and the project's ``assets/sfx``."""
+        if self._sounds is None:
+            self._sounds = SoundLibrary(self.project.root)
+        return self._sounds
+
+    def sfx(
+        self, sound: str, at: float | None = None, *, gain: float = 0.0, pan: float = 0.0, align: str = "start", **params: float
+    ) -> SfxEvent:
+        """Play the sound effect ``sound`` at scene time ``at`` (seconds; default: now, i.e. with
+        the next ``play``). ``gain`` in dB, ``pan`` -1 (left) to 1 (right), ``align="end"`` ends
+        the sound at ``at`` instead of starting it there; ``params`` (``duration``, ``pitch``,
+        ``intensity``) shape a built-in sound. Unknown sounds and bad values raise
+        :class:`VidgenError`.
+
+        Nothing is drawn and no time passes: the sound is recorded (:attr:`sfx_log`) and mixed
+        into the video's sound by the render pipeline, sample-exact, unless rendering with
+        ``--no-audio``.
+        """
+        time = float(self.renderer.time) if at is None else at
+        return self._add_sfx(sound, time, gain, pan, align, params, "sfx")
+
+    def _add_sfx(
+        self, sound: str, time: float, gain: float, pan: float, align: str, params: Mapping[str, Any], where: str
+    ) -> SfxEvent:
+        try:
+            cue = SfxCue.model_validate({"sound": sound, "at": time, "gain": gain, "pan": pan, "align": align, "params": dict(params)})
+        except ValidationError as exc:
+            lines = validation_error_lines(exc, (), SfxCue)
+            raise VidgenError("\n".join([f"scene '{self.spec.id}' {where} '{sound}': invalid", *(f"  {x}" for x in lines)])) from None
+        given = cue.params.model_dump(exclude_none=True)
+        problems = self.sounds.problems(cue.sound, given)
+        if problems:
+            raise VidgenError(f"scene '{self.spec.id}' {where}: " + "; ".join(f"{key}: {message}" for key, message in problems))
+        event = SfxEvent(round(cue.at, 6), cue.sound, cue.gain, cue.pan, cue.align, given, self._current_beat)
+        self.sfx_log.append(event)
+        return event
+
+    def auto_sfx(self, action: str) -> None:
+        """When the video sets ``sfx: {auto: true}``, play the automatic sound of the built-in
+        action ``action`` now (:data:`vidgen.sfx.AUTO_ACTION_SFX`; none for other names)."""
+        entry = AUTO_ACTION_SFX.get(action)
+        if entry is not None and self.project.config.sfx.auto:
+            sound, gain, params = entry
+            self.sfx(sound, gain=gain, **params)
 
     # ----- frame -----------------------------------------------------------------------------
 

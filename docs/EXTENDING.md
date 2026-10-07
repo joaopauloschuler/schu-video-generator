@@ -472,6 +472,36 @@ class Capital(NarratedScene):
         self.finish()
 ```
 
+**Sound effects** (docs/CONFIG.md "Sound effects"). `self.sfx(sound, at=None, *, gain=0.0,
+pan=0.0, align="start", **params)` plays a built-in sound (`vidgen list-sfx`) or the project's
+`assets/sfx/<sound>.wav` at scene time `at` (seconds; default now, so it lands with the next
+`play`); `params` are `duration`, `pitch` (semitones) and `intensity` (0–1). It takes no time and
+draws nothing: the sound is recorded in `self.sfx_log` (`SfxEvent`s, written to the scene's
+timings) and mixed into the video by `vidgen render`, sample-exact (not with `--no-audio`).
+Unknown sounds and bad values raise `VidgenError`. `self.sounds` is the scene's `SoundLibrary`
+(`names()`, `knows(name)`); `synthesize(name, duration, pitch, intensity)` returns a built-in
+sound's samples (48 kHz mono float32) if you want to analyse or mix one yourself. A scene type
+that should make a sound when it starts with `sfx: {auto: true}` sets the class attribute
+`entrance_sfx = ("whoosh", -3.0)` (sound, gain in dB), as `chapter` does.
+
+```python
+@scene("countdown")
+class Countdown(NarratedScene):
+    outro = 0.5
+
+    def construct(self):
+        dots = VGroup(*[Dot(radius=0.2) for _ in range(4)]).arrange(RIGHT, buff=0.6)
+        for i, d in self.timeline():
+            if i == 0:
+                self.sfx("whoosh", duration=0.5)            # now: with the next play
+                self.play(FadeIn(dots[0], shift=RIGHT), run_time=0.5)
+                for k, dot in enumerate(dots[1:], start=1):
+                    self.sfx("tick", pitch=2 * k)           # rising ticks, one per dot
+                    self.play(FadeIn(dot, scale=0.5), run_time=0.3)
+                self.sfx("success", at=self.renderer.time + 0.2, gain=-3)
+        self.finish()
+```
+
 **Timing.** Beat-driven reveals without arithmetic:
 - `self.reveal(steps)` narrates the whole scene: step *i* at beat *i*; more steps than beats are
   spread evenly (`distribute(n_steps, n_beats)` gives the plan), extra beats hold. A step is an
@@ -809,7 +839,12 @@ beats after the action's own) to choose per use, e.g. by an option. `problems()`
 `provides()` the target names the use registers when applied (`scene.target(name, mob)` in
 `apply`), which later actions of the scene may then use — `vidgen validate` checks both.
 The built-in `callout` action (`src/vidgen/scenes/callout_action.py`) is an example of all
-three, built on the callout helpers below.
+three, built on the callout helpers below. An action that draws nothing sets `animates = False`
+and implements `cue(self, scene, time)` instead of `apply`: the runner calls it when the beat
+starts with the scene time the use is due (`at`, on a frame), whatever the scene animates then;
+with `scene_targets = False` its `target` names something other than a scene target (checked by
+your `problems()`, not against the scene's targets). The built-in `sfx` action
+(`src/vidgen/scenes/sfx_action.py`) is both: `- sfx: pop` cues `scene.sfx("pop", time)`.
 
 **The camera.** `NarratedScene` is a Manim `MovingCameraScene`: `self.camera.frame` can be
 moved and scaled (`self.camera.frame.animate.set_width(4).move_to(dot)`). Every scene starts

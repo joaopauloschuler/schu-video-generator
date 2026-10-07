@@ -3991,3 +3991,106 @@ beat, 34 characters; kphi3 `audio_status`: 27 ok.
 How to test: `/home/claude/venv/bin/python -m pytest -q` (1765 passed, 1 skipped, ~13.5 min); step only: `pytest
 tests/test_voices.py`. Manual: `vidgen validate examples/minimal`, `vidgen tts examples/minimal
 --dry-run [--voice guest]`, `vidgen storyboard examples/minimal --variant subtitled --scene note`.
+
+## Step 44 — Sound effects
+What was built
+- **Synthesised sounds** (`src/vidgen/sfx.py`, numpy only, no manim): whoosh, swoosh, pop, click,
+  tick, typing, riser, chime, success, error, thud. Each is a small deterministic generator
+  (seeded noise, zero-phase frequency-domain filters, STFT band sweeps, struck / bell envelopes)
+  with `duration` (per-sound range), `pitch` (semitones ±24) and `intensity` (0–1: timbre and
+  ±3 dB). Finishing: 25 Hz high-pass, raised-cosine fades (first / last sample exactly 0), mean
+  removed with a Hann-shaped correction (DC exactly 0, ends stay 0), level set by loudness —
+  loudest 400 ms, BS.1770 K-weighted (`loudness()`), at −27 LUFS, peaks ≤ −9 dBFS. Calibrated on
+  the committed kphi3 ElevenLabs MP3s (−18.5 to −21.4 LUFS measured the same way): ~7 dB under
+  narration at gain 0. Every sound has a precise textual description and a "use it for" line.
+- **Project sounds**: `assets/sfx/<name>.wav` (also flac / ogg / mp3, decoded with PyAV) add a
+  sound or replace a built-in by name (`SoundLibrary`); own level, no `params`.
+- **Three ways to place a sound**: beat action `- sfx: whoosh` (`sound:` in the canonical form;
+  options `gain` dB, `pan`, `align: start|end`, `params`) at `at` of the beat — exactly then,
+  even during the scene's own animation; a scene's `sfx:` list (`[whoosh, {sound: chime, at: 1.2,
+  gain: -3}]`, seconds from the scene's start; silent scenes too); in code
+  `self.sfx("pop", at=None, *, gain, pan, align, **params)` (default: now). Video-wide `sfx:
+  {auto: false, gain: 0}`: `auto` adds pop / tick / click / whoosh / swoosh to built-in reveal /
+  highlight / callout / zoom / transform actions when they start animating (not in beats with
+  their own `sfx` actions; no-op reveals stay silent) and a whoosh to `chapter` cards
+  (`NarratedScene.entrance_sfx`); `gain` is a master level.
+- **Mix** (the pipeline, not Manim): scenes record `SfxEvent`s (`sfx_log` → `timings/<id>.json`
+  `sfx`); `join_scenes` shifts them to video times (combined `timings.json` scenes gain `sfx`) and
+  writes one 48 kHz stereo track for the whole video, `build/.../padded/sfx.wav`
+  (`write_track`, sample-exact `round(t * 48000)`, 10 s blocks, clipped sums), which
+  `ffmpeg.join(..., sfx=)` adds to the concatenated narration with `amix ... normalize=0` before
+  the single AAC encode. `--no-audio`: no track. Without effects the join command is unchanged.
+- **Framework** (`vidgen.actions`): `Action.scene_targets` (False: `target` is not a scene
+  target), `Action.animates` (False: `cue(scene, time)` is called at beat start with the due
+  frame's time instead of `apply` in a wait), checks in `check_action_class`; runner hook for auto
+  sounds.
+- **CLI**: `vidgen list-sfx [PROJECT] [--render-dir DIR] [--json]` (descriptions, use, length,
+  range, channels, loudness, peak; WAV previews); `list-scenes` shows `sfx` as "(at its time,
+  does not animate)", JSON actions gain `scene_targets` / `animates`; `validate` reports unknown
+  sounds (did-you-mean), params on project files, durations out of range.
+- **Example**: `examples/gallery`: `part2` chapter `sfx: [whoosh]`, `speedup` beat 2 `- sfx: chime`
+  (`at: 0.15`, `gain: -3`), `formats` beat 3 `{sfx: pop, params: {pitch: 3}}` with the row
+  highlight; header usage line `vidgen list-sfx examples/gallery --render-dir build/sfx`.
+
+Verification
+- Spectrograms (numpy + Pillow PNGs, read as images) of every sound: sweeps, envelopes and partials
+  as described; an STFT wrap-around artefact (faint vertical streaks) fixed by filtering each frame
+  in a buffer twice its size; typing strokes faded (a cut at −43 dB showed as a line).
+- Scratch project (chapter + scene list + auto, bullets with sfx actions, extension calling
+  `self.sfx`): `timings.json` events at the expected frames; the final MP4's decoded audio has the
+  onsets within 3 ms and the hard-left pan on the left channel (now a test).
+- `vidgen lint examples/gallery --scene part2 --scene speedup --scene formats`: 0 findings.
+
+Files
+- New: `src/vidgen/sfx.py`, `src/vidgen/scenes/sfx_action.py`, `tests/test_sfx.py` (56 tests, 5 render).
+- Changed: `config.py` (`SOUND_NAME_PATTERN`, `SoundName`, `SfxParams`, `SfxCue`, `SfxConfig`,
+  `SceneConfig.sfx`, `VideoConfig.sfx`), `actions.py`, `scene.py`, `scenes/__init__.py`,
+  `scenes/chapter.py` (`entrance_sfx`), `api.py`, `cli.py` (`list-sfx`, validate, list-scenes),
+  `jsonout.py` (`list_sfx_document`), `describe.py`, `render/pipeline.py`, `render/ffmpeg.py`,
+  `render/fingerprint.py` (`sfx.py` not a render input); tests `test_actions.py` (action lists),
+  `test_overlays.py` (join stub takes keywords), `test_docs.py` (models);
+  `examples/gallery/video.yaml`; docs/CONFIG.md (new "Sound effects" section + `list-sfx`, top-level
+  and scene rows, `sfx` action row, list-scenes / list-sfx JSON), docs/EXTENDING.md ("Sound
+  effects" building block, tested; non-animating actions in §8), README.md, DESIGN.md (tree, §4,
+  §6.4, §8, new §47), tasklist.md.
+
+Public interfaces added/changed
+- Config: top-level `sfx: {auto, gain}`, scene `sfx:` list, beat action `sfx` (JSON Schema follows).
+- `vidgen.api`: `SfxEvent`, `SfxParams`, `SoundLibrary`, `sound_library`, `synthesize`;
+  `NarratedScene.sfx()`, `sfx_log`, `sounds`, `auto_sfx()`, `entrance_sfx`; `Action.scene_targets`,
+  `Action.animates`, `Action.cue()` (compatible defaults).
+- `ffmpeg.join(..., sfx=None)`; scene timings and combined `timings.json` scenes may carry `sfx`.
+- CLI `vidgen list-sfx`; JSON `list-scenes` `actions[].scene_targets` / `animates` (version 1).
+
+Decisions / deviations
+- **Synthesised at join time, cached per process, not package-data files**: params are
+  continuous, synthesis is 5–110 ms per sound, the wheel stays small; `--render-dir` gives a
+  human the files.
+- **Mixed by the pipeline into a separate whole-video track, not with Manim's `add_sound`**:
+  sample-exact placement (pydub places at 1 ms and resamples the narration to the sound's rate),
+  sounds can ring across cuts, `--no-audio` simply skips the track, reused renders keep their
+  events, and Step 45 gets the voice and SFX tracks apart for sidechain ducking. Cost: scene
+  renders / storyboards carry no effects.
+- **A beat `sfx` plays exactly at `at`** (frame-rounded), not when the runner gets a wait: sounds
+  must land on the entrance at `at: 0`; animating actions may start later than `at` if the scene
+  is mid-animation, which `auto` handles by sounding when the action really starts.
+- **Level**: −27 LUFS loudest-400-ms (one channel) rather than the −18…−24 suggested in the brief,
+  because measured ElevenLabs narration is only −18.5…−21.4 LUFS that way; −24 would sit 3 dB
+  under it. Levels are relative, so Step 45's loudness normalisation keeps the balance.
+- `auto` covers built-in *actions* and `chapter` cards only; a pop per bullet / bar from the
+  scenes' own reveal steps was judged too busy (and would need hooks in every scene type).
+- Extra sounds beyond the six asked: swoosh, typing, success, error, thud (cheap variations).
+
+Known gaps / TODOs
+- **Step 45**: add music on its own track, duck it with the voice track (concatenated
+  `padded/<id>.wav`) as sidechain, then sum voice + SFX (`padded/sfx.wav`) + music and
+  `loudnorm`; `ffmpeg.join` is where the graph lives (DESIGN §47).
+- No per-scene `auto` switch; no automatic sounds for scenes' own reveal steps.
+- Project sounds are played as recorded (no loudness normalisation); built-ins are mono.
+- A sound still playing at the video's end is cut without a fade.
+- The storyboard / `lint` do not show or check sounds (e.g. a sound under a silent dead-air span).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1824 passed, 1 skipped, ~14.5 min); step only: `pytest
+tests/test_sfx.py`. Manual: `vidgen list-sfx --render-dir /tmp/sfx` (listen), `vidgen validate
+examples/gallery`, `vidgen render examples/gallery --preview --scene part2` then check
+`build/preview/padded/sfx.wav`, `vidgen list-scenes | grep sfx`.

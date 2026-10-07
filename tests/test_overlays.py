@@ -560,7 +560,7 @@ def test_join_warns_when_a_scene_does_not_start_where_planned(make_project, monk
         pipeline.write_json(pipeline.scene_timings_path(p, False, sid), {"scene": sid, "duration": length, "beats": [], "render": {"overlays": drawn}})
     monkeypatch.setattr(pipeline.ff, "probe", lambda path: VideoInfo(320, 180, 30, lengths[path.stem]))
     monkeypatch.setattr(pipeline.ff, "pad_audio", lambda *args: None)
-    monkeypatch.setattr(pipeline.ff, "join", lambda *args: None)
+    monkeypatch.setattr(pipeline.ff, "join", lambda *args, **kwargs: None)
     with caplog.at_level("WARNING", logger="vidgen.render"):
         pipeline.join_scenes(p, False, True, "ffmpeg")
     assert "overlays timed in the video are off" in caplog.text and "'b' starts at 3.20 s, planned 2.70 s" in caplog.text

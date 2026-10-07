@@ -60,6 +60,13 @@ subtitles.
   its own beats are re-voiced when it changes, `vidgen tts --dry-run` counts characters per voice
   (`--voice ana` voices one speaker), and `subtitles: {speakers: name}` / captions `speakers:`
   name or colour the speakers ([reference](docs/CONFIG.md#multiple-voices-voices)).
+- **Sound effects**: eleven synthesised sounds (whoosh, swoosh, pop, click, tick, typing, riser,
+  chime, success, error, thud; no licences) or your own `assets/sfx/NAME.wav`, placed as a beat
+  action (`- sfx: whoosh` with `at`, `gain`, `align: end`, `params: {pitch: 3}`), in a scene's
+  `sfx:` list (seconds, silent scenes too) or with `self.sfx("pop")` in scene code; mixed
+  sample-exact about 7 dB under the narration; `sfx: {auto: true}` adds soft sounds to built-in
+  reveals, highlights, callouts, zooms and chapter cards. `vidgen list-sfx` describes every sound
+  in words and `--render-dir` writes them out to listen to ([reference](docs/CONFIG.md#sound-effects-sfx)).
 - **Extensible per video**: a project can add its own scene types, beat actions, overlays,
   helpers, theme tokens and pipeline hooks in its `extensions/` folder, without touching vidgen.
 - **Cheap to iterate**: only new or edited beats are sent to ElevenLabs; fast low-resolution
@@ -129,6 +136,7 @@ narration.
 | `vidgen list-scenes [PROJECT] [--json]` | scene types (built-in and the project's) with their params |
 | `vidgen list-themes [PROJECT] [--swatches PNG] [--json]` | theme presets (built-in and the project's) with colours, type scale, contrast check; `--swatches` draws them all in one PNG |
 | `vidgen list-icons [PROJECT] [--search TEXT] [--category NAME] [--sheet PNG [--theme [PRESET]]] [--json]` | icons (built-in and the project's `assets/icons`) with category and tags; `--sheet` draws the listed icons, labelled, into a PNG (`--theme`: in the project's or a preset's colours) |
+| `vidgen list-sfx [PROJECT] [--render-dir DIR] [--json]` | sound effects (built-in and the project's `assets/sfx`) with a description of each sound, length, loudness; `--render-dir` writes them as WAV files |
 | `vidgen schema [PROJECT] [--scene TYPE \| --all] [--json]` | JSON Schema of `video.yaml` (params checked per scene type, the project's extension types included), for editors and AI agents |
 | `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--voice NAME ...] [--variant NAME]` | generate missing/stale narration into `audio/`; `--dry-run` needs no key (shows each beat's voice and characters per voice) |
 | `vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going] [--jobs N] [--frames] [--frames-per-beat N] [--json]` | render and join the video |

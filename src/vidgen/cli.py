@@ -32,7 +32,7 @@ TEMPLATES_DIR = Path(__file__).parent / "templates"
 TEMPLATE_DOTFILES: tuple[str, ...] = ("gitignore",)
 #: Subcommands that accept ``--json``.
 JSON_COMMANDS: tuple[str, ...] = (
-    "validate", "list-scenes", "list-themes", "list-icons", "render", "schema", "storyboard", "lint",
+    "validate", "list-scenes", "list-themes", "list-icons", "list-sfx", "render", "schema", "storyboard", "lint",
 )
 
 #: What a command function returns: an exit code, or (with ``--json``) the JSON document.
@@ -78,12 +78,14 @@ def project_problems(project: Project) -> list[Problem]:
     ``params`` against the type's ``Params`` model (theme tokens against the project's theme)
     and runs the type's ``validate_project`` (e.g. missing asset files); checks the beats'
     ``actions`` (action names, options, targets of the scene) and the ``overlays`` (types,
-    options, scene references; DESIGN.md §41); also checks the project's ``assets/icons``.
+    options, scene references; DESIGN.md §41); also checks the project's ``assets/icons`` and
+    the sounds of the scenes' ``sfx:`` lists (§47).
     """
     from vidgen import extensions, registry
     from vidgen.actions import scene_actions
     from vidgen.icons import PROJECT_ICONS_DIR, project_icons
     from vidgen.overlays import overlay_problems
+    from vidgen.sfx import config_problems as sfx_problems
     from vidgen.voices import voice_color_problems
 
     problems: list[Problem] = []
@@ -120,6 +122,7 @@ def project_problems(project: Project) -> list[Problem]:
                     problems.append(Problem(f"scenes[{i}]", str(exc)))
             problems.extend(overlay_problems(project, theme))
             problems.extend(voice_color_problems(project.config, theme))
+            problems.extend(Problem(loc, message) for loc, message in sfx_problems(project.config, project.root))
     except VidgenError as exc:
         problems.extend(exc.problems or [Problem("", str(exc))])
     return problems
@@ -411,7 +414,8 @@ def _print_scene_types() -> None:
         undo = ", until" if act.cls.reversible else ""
         undo += ", undone by the beat's end" if act.cls.temporary else ""
         undo += ", undone when the next beat starts" if act.cls.until_next_beat else ""
-        print(f"{act.name:<{width}}  {act.origin}{marker}  (run_time {act.cls.run_time:g} s{undo})")
+        timing = f"run_time {act.cls.run_time:g} s{undo}" if act.cls.animates else "at its time, does not animate"
+        print(f"{act.name:<{width}}  {act.origin}{marker}  ({timing})")
         for line in describe_params(act.cls.Options):
             print(f"    {line}")
     overlays = registry.all_overlays()
@@ -519,6 +523,37 @@ def cmd_list_icons(args: argparse.Namespace) -> CommandResult:
     return 0
 
 
+def cmd_list_sfx(args: argparse.Namespace) -> CommandResult:
+    """Print the sound effects (built-in and the project's ``assets/sfx``) with what they sound
+    like, and write previews."""
+    from vidgen import sfx
+
+    root = None
+    if args.project != "." or any((Path.cwd() / name).is_file() for name in CONFIG_NAMES):
+        root = find_config_file(args.project).resolve().parent
+    preview_dir = Path(args.render_dir).resolve() if args.render_dir else None
+    entries = sfx.sound_entries(sfx.SoundLibrary(root), preview_dir)
+    if args.json:
+        return jsonout.list_sfx_document(root, entries, preview_dir)
+    width = max(len(e["name"]) for e in entries)
+    for e in entries:
+        span = f" ({e['duration_range'][0]:g}-{e['duration_range'][1]:g} s)" if e["duration_range"] else ""
+        level = f"{e['loudness']} LUFS, peak {e['peak_db']} dBFS" if e["loudness"] is not None else "silent"
+        marker = "  (overrides builtin)" if e["overrides_builtin"] else ""
+        print(f"{e['name']:<{width}}  {e['origin']}{marker}  {e['duration']:.2f} s{span}  {level}")
+        for key in ("description", "use"):
+            if e[key]:
+                print(f"    {key}: {e[key]}")
+    print(
+        f"params (built-in sounds): duration (s, in the sound's range), pitch (semitones {sfx.PITCH_RANGE[0]:g} to "
+        f"{sfx.PITCH_RANGE[1]:g}, default 0), intensity (0-1, default 0.5)"
+    )
+    print(f"level at gain 0: {sfx.LOUDNESS_TARGET:g} LUFS (about 7 dB under narration), peaks at most {sfx.PEAK_CEILING:g} dBFS")
+    if preview_dir is not None:
+        print(f"previews: {preview_dir} ({len(entries)} WAV files)")
+    return 0
+
+
 def cmd_schema(args: argparse.Namespace) -> CommandResult:
     """Print the JSON Schema of video.yaml (or of one scene type's params, or of a scene)."""
     from vidgen import registry, schema
@@ -597,6 +632,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--sheet", metavar="PNG", help="also draw the listed icons, labelled, into this PNG file")
     p.add_argument("--theme", nargs="?", const="project", metavar="PRESET", help="draw the sheet in a theme's colours: the project's (no value) or a preset's")
     p.set_defaults(func=cmd_list_icons)
+
+    p = sub.add_parser("list-sfx", help="list sound effects (built-in and the project's assets/sfx) with descriptions")
+    project_arg(p)
+    p.add_argument("--render-dir", metavar="DIR", help="also write every sound at its defaults as DIR/<name>.wav")
+    p.set_defaults(func=cmd_list_sfx)
 
     p = sub.add_parser("tts", help="generate narration audio")
     project_arg(p)

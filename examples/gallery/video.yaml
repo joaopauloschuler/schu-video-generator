@@ -16,6 +16,7 @@
 #   vidgen storyboard examples/gallery --scene walkthrough --per-beat 2  # a listing scrolling from step to step; chapter 4 starts here
 #   vidgen storyboard examples/gallery --scene app --per-beat 2     # a screenshot with callouts, step by step
 #   vidgen storyboard examples/gallery --scene clip --per-beat 3    # a clip with a lower third (overlays)
+#   vidgen list-sfx examples/gallery --render-dir build/sfx   # the sound effects (part2: whoosh, speedup: chime, formats: pop) as WAVs
 # No narration audio: beats are timed from their word count (narration.words_per_second).
 title: "vidgen: a gallery of scene types"
 output: gallery
@@ -189,6 +190,7 @@ scenes:
       subtitle: "Data scenes"
       icon: chart-column
     duration: 3
+    sfx: [whoosh]         # sound effects at seconds of the scene (a name alone: at 0)
 
   - id: speedup
     type: stat            # one big number that counts, with a label and a comparison
@@ -201,6 +203,10 @@ scenes:
     beats:
       - text: "A big number counts down from the four K render time to the preview's."
       - text: "That is ninety six percent less waiting while you iterate."
+        actions:
+          - sfx: chime    # a sound effect at `at` of the beat (vidgen list-sfx describes them)
+            at: 0.15
+            gain: -3
 
   - id: formats
     type: table           # header + rows, fitted to the frame, one row per beat
@@ -218,6 +224,7 @@ scenes:
       - text: "And previews are small and fast."
         actions:
           - {highlight: "row:Preview", style: fill}
+          - {sfx: pop, params: {pitch: 3}}
 
   - id: cost
     type: scatter         # points per series; a least-squares trend line; labels beside a few points

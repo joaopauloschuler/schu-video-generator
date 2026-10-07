@@ -230,6 +230,31 @@ def list_icons_document(
     )
 
 
+def list_sfx_document(
+    root: Path | None, sounds: Iterable[Mapping[str, Any]], previews: Path | None, warnings: Iterable[Mapping[str, Any]] = ()
+) -> dict[str, Any]:
+    """The ``vidgen list-sfx --json`` document: the level every sound is set to, the params of
+    built-in sounds, every sound (``vidgen.sfx.sound_entries``) and the previews folder."""
+    from vidgen import sfx
+    from vidgen.config import SfxParams
+    from vidgen.describe import params_json
+
+    entries = [{**s, "preview": None if s["preview"] is None else _path(s["preview"])} for s in sounds]
+    return envelope(
+        "list-sfx",
+        True,
+        warnings,
+        project=None if root is None else _path(root),
+        rate=sfx.RATE,
+        loudness_target=sfx.LOUDNESS_TARGET,
+        peak_ceiling=sfx.PEAK_CEILING,
+        params=params_json(SfxParams),
+        count=len(entries),
+        sounds=entries,
+        previews=None if previews is None else _path(previews),
+    )
+
+
 # ----- render ------------------------------------------------------------------------------------
 
 
