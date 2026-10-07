@@ -486,6 +486,30 @@ class Capital(NarratedScene):
         self.finish()
 ```
 
+**Generated pictures** (docs/CONFIG.md "Generated images"). A param typed
+`GenerateImage | None` (a top-level field of `Params`) is a `generate:` like the `image` scene's:
+`vidgen imagegen` finds it in any scene type, `vidgen validate` warns about it, and
+`generated_image(self.project, params.generate, self.theme)` returns the file to show — the
+stored picture once it is made, else a placeholder card with the prompt. Rendering never calls
+the provider.
+
+```python
+@scene("backdrop_title")
+class BackdropTitle(NarratedScene):
+    outro = 0.5
+
+    class Params(SceneParams):
+        title: TranslatableStr
+        generate: GenerateImage
+
+    def construct(self):
+        picture = ImageMobject(str(generated_image(self.project, self.params.generate, self.theme)))
+        picture.scale_to_fit_width(self.frame_width).set_opacity(0.45)
+        title = fit_text(self.params.title, self.safe_width, size="title")
+        self.reveal([[FadeIn(picture), Write(title)]])
+        self.finish()
+```
+
 **Sound effects** (docs/CONFIG.md "Sound effects"). `self.sfx(sound, at=None, *, gain=0.0,
 pan=0.0, align="start", **params)` plays a built-in sound (`vidgen list-sfx`) or the project's
 `assets/sfx/<sound>.wav` at scene time `at` (seconds; default now, so it lands with the next

@@ -220,9 +220,11 @@ def validate_warnings(project: Project) -> list[str]:
     :func:`pronunciation_warnings`, named voices no beat uses and transitions that hold the
     scene before them longer (DESIGN.md §49), carries through a transition that moves them
     (§50), a YouTube chapter list YouTube would ignore (§52), texts a translation file leaves in
-    the source language and base pronunciations kept in another language (§54)."""
+    the source language and base pronunciations kept in another language (§54), generated
+    pictures not made yet and prompts asking for words in a picture (§58)."""
     from vidgen.carry import carry_warnings
     from vidgen.chapter_export import chapter_warnings
+    from vidgen.imagegen import imagegen_warnings
     from vidgen.transitions import transition_warnings
     from vidgen.translation import language_warnings, translation_warnings
     from vidgen.voices import voice_warnings
@@ -236,6 +238,7 @@ def validate_warnings(project: Project) -> list[str]:
         + chapter_warnings(project)
         + translation_warnings(project)
         + language_warnings(project)
+        + imagegen_warnings(project)
     )
 
 
@@ -284,6 +287,8 @@ def cmd_validate(args: argparse.Namespace) -> CommandResult:
     for line in language_summary_lines(project, variants):
         print(line)
     for line in audio_summary_lines(project):
+        print(line)
+    for line in images_summary_lines(project, variants):
         print(line)
     print("ok")
     return 0
@@ -337,6 +342,38 @@ def audio_summary_lines(project: Project) -> list[str]:
             summary += f" ({len(orphans)} orphaned mp3)"
         lines.append(f"{label:<10} {summary}" if p.variant is None else f"{label} {summary}")
     return lines
+
+
+def images_summary_lines(project: Project, variants: dict[str, Project | None]) -> list[str]:
+    """``images: 3 generated, 1 missing`` for the base config and each variant whose pictures
+    differ (none without ``generate:`` params)."""
+    from vidgen.imagegen import images_summary, scene_images
+
+    lines = []
+    base_keys: set[str] | None = None
+    for p in [project, *(v for v in variants.values() if v is not None)]:
+        try:
+            images = scene_images(p)
+        except VidgenError:  # extensions that do not load are a problem reported above
+            images = []
+        keys = {i.request.key for i in images}
+        if base_keys is None:
+            base_keys = keys
+        elif keys == base_keys:
+            continue
+        if images:
+            label = "images:" if p.variant is None else f"images [{p.variant}]:"
+            lines.append(f"{label:<10} {images_summary(images)}" if p.variant is None else f"{label} {images_summary(images)}")
+    return lines
+
+
+def cmd_imagegen(args: argparse.Namespace) -> int:
+    """Generate the pictures of ``generate:`` params that are missing (DESIGN.md §58)."""
+    from vidgen.imagegen.run import run_imagegen
+
+    project = Project.load(args.project, variant=args.variant)
+    run_imagegen(project, scene_ids=args.scene, force=args.force, dry_run=args.dry_run)
+    return 0
 
 
 def cmd_tts(args: argparse.Namespace) -> int:
@@ -970,6 +1007,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--max-wer", type=float, metavar="RATE", help="flag beats whose word error rate is above this, 0-1 (default: lint.rules.readback.max_wer, 0.1)")
     p.add_argument("--force", action="store_true", help="transcribe again even when a cached transcript exists")
     p.set_defaults(func=cmd_readback)
+
+    p = sub.add_parser("imagegen", help="generate the pictures of generate: params that are missing (assets/generated/)")
+    project_arg(p)
+    p.add_argument("--dry-run", action="store_true", help="only list what would be generated, with an estimated cost (no API key needed)")
+    p.add_argument("--force", action="store_true", help="generate again even when the picture exists")
+    p.add_argument("--scene", action="append", default=[], metavar="ID", help="only this scene's pictures (repeatable)")
+    p.add_argument("--variant", metavar="NAME", help="apply a named variant (its format, prompts and imagegen settings)")
+    p.set_defaults(func=cmd_imagegen)
 
     p = sub.add_parser("translate-template", help="write or update a variant's translation file (every text to translate)")
     project_arg(p)

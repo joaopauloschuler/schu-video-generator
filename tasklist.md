@@ -236,8 +236,8 @@ Rules that apply to every step:
 - [x] Report per beat: word error rate and differing words (catches mispronunciations) (`vidgen readback [--beat] [--max-wer] [--force] [--json]`: spoken text (pronunciation applied) vs transcript after a normaliser (case, accents, hyphens, en / pt number words, acronyms), aligned, edits in written words with a suggested fix each, flagged beats, worst beats, terms misheard in several beats; lint rule `readback` from the cached transcripts)
 
 ### Step 55 — Generated images
-- [ ] Image-generation provider seam, cached by prompt hash like TTS; one provider; mocked in tests
-- [ ] `generate:` params on the `image` scene
+- [x] Image-generation provider seam, cached by prompt hash like TTS; one provider; mocked in tests (`vidgen.imagegen`: `ImageProvider` protocol, `imagegen: {provider: openai, model: gpt-image-1, size: auto, quality, style, negative}`; OpenAI Images `POST /v1/images/generations` with stdlib urllib, `OPENAI_API_KEY` from the environment only, retries on 429 / 5xx with `Retry-After` but not on an exhausted quota; the retry loop shared with ElevenLabs in `vidgen.httpapi`; `assets/generated/<key>.png` + `<key>.json` (prompt, sent / revised prompt, provider, model, size, date), key = hash of prompt + style + negative, provider, model, size, quality, seed; `vidgen imagegen [--dry-run] [--force] [--scene ID] [--variant]` with an estimated cost; render / validate never call it)
+- [x] `generate:` params on the `image` scene (`{prompt, negative, style, aspect, seed}` or the prompt, exclusive with `path`; size from the format's orientation or `aspect`; project `imagegen.style` presets / words for a consistent look; a theme-coloured placeholder card with the prompt until generated; validate warnings for missing pictures and prompts asking for text / charts; `GenerateImage` + `generated_image` in `vidgen.api` for extension types. Not done: `screenshot` / thumbnail backgrounds — see HANDOFF)
 
 ### Step 56 — AI author guide
 - [ ] `AGENTS.md` + `vidgen guide`: workflow (write → storyboard → lint → fix), pacing rules, on-screen text limits, scene-type chooser, good vs bad examples
@@ -252,10 +252,11 @@ Rules that apply to every step:
 
 ### Step 59 — MCP server
 - [ ] Optional `mcp` extra: stdio server exposing validate, schema, list-scenes, render, storyboard, lint, gallery
-- [ ] (from Step 22) `vidgen tts --json` (the only command without it); human `vidgen validate` still stops at the first variant that does not load (`--json` lists them all)
+- [ ] (from Step 22) `vidgen tts --json` (and, from Step 55, `vidgen imagegen --json`: the commands without it); human `vidgen validate` still stops at the first variant that does not load (`--json` lists them all)
 
 ### Step 60 — Final review
 - [ ] Full review of Steps 8–59; docs and examples consistent; release notes in HANDOFF.md
+- [ ] (from Step 55) `generate:` for the `screenshot` scene (its `px` callouts / magnifier need the real picture) and a generated picture behind a designed thumbnail; no real image-generation run was made (mocked only)
 - [ ] (from Step 51) Locale details translations cannot reach: number formats (`value_format`, decimal / thousands marks defaulted rather than written in the config), the `map` scene's bundled English country names, `map` arc shorthands `"A -> B"` naming a translated pin label, `lint_ignore` object patterns and `point:<series>@<label>` targets naming translated texts; cue cutting for languages without spaces (only at punctuation)
 - [ ] (from Step 50) A frame thumbnail's text is not measured (no layout dump for a plain render; a `--frames` render or the lint stills could give `min_font` / `contrast` at 320x180); `post_render` hooks run before the thumbnail is written; `build/..._bare` renders are never cleaned up; the MP4 could carry the thumbnail as cover art (Step 49 gap)
 - [ ] (from Step 49) The plan and a silent scene's render can differ by a frame when `(duration - outro) x fps` is a half frame (5 fps, a 1.2 s `chapter` card: planned 7 frames, rendered 6); chapter outputs follow the join, overlays the plan

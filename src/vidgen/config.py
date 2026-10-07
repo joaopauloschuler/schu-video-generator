@@ -252,6 +252,28 @@ class SttConfig(_Strict):
     """faster_whisper: where the model runs (auto: a CUDA GPU if there is one, else the CPU)."""
 
 
+#: An image size ``WIDTHxHEIGHT`` in pixels (``1536x1024``).
+ImageSize = Annotated[str, Field(pattern=r"^[1-9][0-9]{1,4}x[1-9][0-9]{1,4}$")]
+
+
+class ImagegenConfig(_Strict):
+    """The optional ``imagegen:`` section: the image-generation provider of ``vidgen imagegen``
+    and of ``generate:`` params (DESIGN.md §58)."""
+
+    provider: Literal["openai"] = "openai"
+    """Image-generation provider: openai (OpenAI Images API, paid; OPENAI_API_KEY)."""
+    model: str = Field(default="gpt-image-1", min_length=1)
+    """Model: gpt-image-1, dall-e-3 or dall-e-2 (another name is sent as is, with gpt-image-1's sizes)."""
+    size: Literal["auto"] | ImageSize = "auto"
+    """Picture size WIDTHxHEIGHT sent to the provider, or auto: the model's landscape, portrait or square size by the video's format (or the generate: aspect)."""
+    quality: str | None = Field(default=None, min_length=1)
+    """Quality sent to the provider (gpt-image-1: low, medium, high; dall-e-3: standard, hd); default: medium for gpt-image models, standard for dall-e-3, none for dall-e-2."""
+    style: str | None = Field(default=None, min_length=1)
+    """Style added to every prompt for a consistent look: a preset (photo, illustration, flat, isometric, watercolor, line_art, render_3d, cinematic) or your own words; a generate: style replaces it."""
+    negative: str | None = Field(default=None, min_length=1)
+    """What every picture should avoid (added to each generate: negative), e.g. "text, watermarks"."""
+
+
 #: ``vidgen lint`` rule names (DESIGN.md §16). :class:`LintRules` has one field per name and
 #: :mod:`vidgen.lint` one rule per name (a test keeps the three in sync).
 LINT_RULES: tuple[str, ...] = (
@@ -1095,6 +1117,8 @@ class VideoConfig(_Strict):
     """The thumbnail <output>_thumbnail.png: a scene's frame {scene, beat, at, overlays} or a designed card {title, subtitle, icon, image, preset, background}, + {jpeg, auto}."""
     stt: SttConfig = Field(default_factory=SttConfig)
     """Speech to text for `vidgen readback` (the narration transcribed and compared with the text): {provider, model, language, device}."""
+    imagegen: ImagegenConfig = Field(default_factory=ImagegenConfig)
+    """Image generation for generate: params and `vidgen imagegen`: {provider, model, size, quality, style, negative}."""
     scenes: list[SceneConfig] = Field(min_length=1)
     """The scenes in order (at least one); scene ids and beat ids must be unique."""
 

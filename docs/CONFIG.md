@@ -8,6 +8,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 [narration](#narration-narration), [narration audio](#narration-audio-elevenlabs),
 [multiple voices](#multiple-voices-voices), [pronunciation](#pronunciation-pronunciation),
 [readback (speech to text)](#readback-vidgen-readback),
+[generated images](#generated-images-imagegen-vidgen-imagegen),
 [languages and translations](#languages-and-translations),
 [sound effects](#sound-effects-sfx), [background music and loudness](#background-music-music),
 [transitions](#transitions-transition), [thumbnail](#thumbnail-thumbnail-vidgen-thumbnail),
@@ -45,6 +46,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `metadata` | `{}` (title: the `title`) | tags of the MP4: `title`, `artist`, `album`, `comment`, `description`, `copyright`, `date`, `genre`; see [chapters in the outputs](#chapters-in-the-outputs-chapters-metadata) |
 | `thumbnail` | none | the thumbnail `<output>_thumbnail.png`, written by `vidgen render` and `vidgen thumbnail`: a scene's frame `{scene, beat, at, overlays}` or a designed card `{title, subtitle, icon, image, preset, background}`, + `{jpeg, auto}`; see [thumbnail](#thumbnail-thumbnail-vidgen-thumbnail) |
 | `stt` | `{provider: faster_whisper}` | speech to text for `vidgen readback` (the narration transcribed and compared with the beat texts): `{provider, model, language, device}`; see [readback](#readback-vidgen-readback) |
+| `imagegen` | `{provider: openai, model: gpt-image-1, size: auto}` | image generation for `generate:` params and `vidgen imagegen`: `{provider, model, size, quality, style, negative}`; see [generated images](#generated-images-imagegen-vidgen-imagegen) |
 | `scenes` | required | the scenes in order, at least one |
 
 ## Scenes and beats
@@ -939,6 +941,109 @@ words: [[text, start, end]]}}`. Deleting the folder is safe.
 **Lint.** The [`readback` rule](#lint-vidgen-lint) of `vidgen lint` reports the beats above
 `lint.rules.readback.max_wer` from these cached transcripts only: it never runs STT, so it finds
 nothing until `vidgen readback` has run, and transcripts of older audio are ignored.
+
+## Generated images (`imagegen`, `vidgen imagegen`)
+
+A picture can be generated from a prompt instead of coming from a file: the
+[`image`](#image) scene's `generate:` param (instead of `path`). Generation costs money, so it
+happens only when you run `vidgen imagegen`; the picture is then stored in the project like the
+narration audio and reused by every render. `vidgen render`, `vidgen validate`, `storyboard` and
+`lint` never call the provider: a picture not generated yet shows as a **placeholder card** (the
+prompt on a soft gradient in the theme's colours, "Image to generate"), so the video can be
+previewed and laid out first; `vidgen validate` and `vidgen render` warn about it.
+
+```yaml
+imagegen:
+  provider: openai          # OpenAI Images API (paid; OPENAI_API_KEY)
+  model: gpt-image-1        # gpt-image-1 | dall-e-3 | dall-e-2
+  size: auto                # auto: by the video's format (or generate.aspect); or WIDTHxHEIGHT
+  quality: null             # default: medium (gpt-image), standard (dall-e-3)
+  style: flat               # added to every prompt: a preset or your own words
+  negative: "text, watermarks"
+scenes:
+  - id: harbour
+    type: image
+    params:
+      generate:
+        prompt: "a quiet harbour at dawn, fishing boats, mist over the water"
+        negative: people
+        aspect: auto        # auto | landscape | portrait | square
+        seed: 1             # another number: another picture of the same prompt
+      ken_burns: true
+    beats:
+      - text: "It started in a small harbour town."
+  - id: door
+    type: image
+    params: {generate: "a red front door in a white brick wall", style: photo}
+    beats:
+      - text: "Behind this door."
+```
+
+| key | default | |
+|---|---|---|
+| `provider` | `openai` | the provider: `openai` (OpenAI Images API, `POST /v1/images/generations`), billed per picture, key in the environment variable `OPENAI_API_KEY` (never stored by vidgen) |
+| `model` | `gpt-image-1` | `gpt-image-1`, `dall-e-3` or `dall-e-2`; another name is sent as is (with gpt-image-1's sizes, no cost estimate) |
+| `size` | `auto` | `WIDTHxHEIGHT` sent to the provider, or `auto`: the model's landscape / portrait / square size for the video's format or the `generate.aspect` (gpt-image-1: `1536x1024`, `1024x1536`, `1024x1024`; dall-e-3: `1792x1024`, `1024x1792`, `1024x1024`; dall-e-2: `1024x1024`) |
+| `quality` | none (by model) | gpt-image-1: `low`, `medium`, `high` (default `medium`); dall-e-3: `standard`, `hd` (default `standard`); none for dall-e-2 |
+| `style` | none | words added to every prompt (`Style: ...`) so the pictures of a video look alike: a preset (below) or your own words; a scene's `generate.style` replaces it |
+| `negative` | none | what no picture should show, added to each prompt's `Avoid: ...` (with the scene's own `negative`) |
+
+`generate:` (a mapping, or just the prompt as a string):
+
+| key | default | |
+|---|---|---|
+| `prompt` | required | what the picture shows; describe the scene, light, mood and composition |
+| `negative` | `""` | what it should not show; the OpenAI API has no negative prompt, so it is sent as `Avoid: ...` |
+| `style` | `imagegen.style` | a preset, your own words, or `none` (no style words, not even the project's) |
+| `aspect` | `auto` | `auto` (landscape for a wide video, portrait for 9:16, square for 1:1), `landscape`, `portrait`, `square` |
+| `seed` | none | a number that is part of the cache key: change it for another picture of the same prompt. OpenAI takes no seed, so it does not make the picture reproducible |
+
+**Style presets**: `photo` (photorealistic photograph, natural light, sharp focus),
+`illustration` (clean digital illustration, soft shading, limited colour palette), `flat` (flat
+vector illustration, simple geometric shapes, solid colours, no outlines), `isometric`,
+`watercolor`, `line_art`, `render_3d`, `cinematic`. The prompt sent is `<prompt>. Style: <style
+words>. Avoid: <negative>.`; `vidgen imagegen --dry-run` prints it.
+
+**Cache.** Each picture is stored as `assets/generated/<key>.png` with `<key>.json` beside it
+(`prompt`, `negative`, `style`, `sent_prompt`, `revised_prompt` — the prompt the model says it
+used —, `provider`, `model`, `size`, `quality`, `seed`, `created` date, `scenes`). The key is a
+hash of the prompt sent (with style and negative), provider, model, size, quality and seed:
+editing any of them asks for a new picture, while scenes sharing a request share one file.
+**Commit `assets/generated/`** like `audio/`: the pictures cost money and cannot be made again
+identically. A variant with another format (9:16) gets portrait pictures of its own. Pictures no
+config uses any more are listed by `vidgen imagegen`, never deleted.
+
+```
+$ vidgen imagegen my_video --dry-run
+would generate 5deed4af8e8001e7.png for harbour (1536x1024, gpt-image-1 medium, ~$0.063)
+    prompt: a quiet harbour at dawn, fishing boats, mist over the water. Style: flat vector illustration, ... Avoid: people; text, watermarks.
+dry run: 2 picture(s) to generate, estimated $0.13 (OpenAI list prices of 2025; check current pricing); 0 up to date
+$ vidgen imagegen my_video
+[1/2] generated 5deed4af8e8001e7.png for harbour (14.2 s)
+...
+```
+
+| option | |
+|---|---|
+| `--dry-run` | list the pictures to generate with their prompts and an estimated cost (OpenAI's list prices when this was written; no key needed) |
+| `--force` | generate again even when the picture exists (a new picture replaces it) |
+| `--scene ID` | only this scene's pictures (repeatable) |
+| `--variant NAME` | a variant: its format, prompts and `imagegen` settings |
+
+Requests are retried on rate limits and server errors (honouring `Retry-After`), not on an
+exhausted quota or a refused prompt; the provider's error message is shown.
+
+**Writing prompts.** Image generators draw letters, numbers, charts and logos poorly (garbled
+words, made-up values): `vidgen validate` warns when a prompt quotes text or asks for a sign,
+label, title, logo, chart or diagram. Put words on screen with vidgen (a caption, a title, a
+callout) and data in its chart scenes; ask the generator for the picture only (`negative: text`
+helps). Use one project `style` so the pictures of a video match.
+
+**Responsible use.** vidgen adds no content filter of its own: the provider's usage policies
+apply and its safety system may refuse a prompt (the error says so). Do not generate pictures
+of real people or brands that could mislead, and say that pictures are generated when that
+matters to the viewer. The `revised_prompt` in the sidecar shows what the model made of the
+prompt.
 
 ## Languages and translations
 
@@ -2035,12 +2140,15 @@ than 1, up to 4).
 ### `image`
 
 Steps: (1) the image, (2) the caption. `vidgen validate` reports a missing or unsupported file
-(png, jpg, jpeg, gif, bmp, webp, tif).
+(png, jpg, jpeg, gif, bmp, webp, tif). Instead of a file, `generate:` asks for a
+[generated picture](#generated-images-imagegen-vidgen-imagegen): `vidgen imagegen` makes it once
+(paid), and until then the scene shows a placeholder card with the prompt in the theme's colours.
 [Action targets](#beat-actions): `image`, `caption` (`dim` fades the picture, `highlight` tints it).
 
 | param | type | default | |
 |---|---|---|---|
-| `path` | str | required | relative to the project folder, e.g. `assets/photo.jpg` |
+| `path` | str | required (or `generate`) | relative to the project folder, e.g. `assets/photo.jpg` |
+| `generate` | str \| mapping | none | a generated picture instead of `path` (not both): the prompt, or `{prompt, negative, style, aspect, seed}`, see [generated images](#generated-images-imagegen-vidgen-imagegen) |
 | `caption` | str | `""` | |
 | `fit` | `contain` \| `cover` | `contain` | `contain`: whole image, caption below; `cover`: fills the frame (cropped), caption on a band |
 | `ken_burns` | bool \| mapping | `false` | slow zoom/pan over the whole scene; `true` = zoom 1.0 → 1.15 on the center |
@@ -2058,6 +2166,13 @@ Steps: (1) the image, (2) the caption. `vidgen validate` reports a missing or un
     ken_burns: {end_scale: 1.25, end_focus: [0.7, 0.35]}
   beats:
     - text: "Everything ran on this machine."
+- id: harbour
+  type: image
+  params:
+    generate: {prompt: "a quiet harbour at dawn, fishing boats, mist over the water", negative: people}
+    fit: cover
+  beats:
+    - text: "It started in a small harbour town."
 ```
 
 ### `screenshot`

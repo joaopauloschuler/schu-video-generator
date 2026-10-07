@@ -173,6 +173,9 @@ scenes:
     type: image
     params:
       path: assets/landscape.png
+      # or a generated picture instead of the file (made once by `vidgen imagegen`, OPENAI_API_KEY;
+      # `vidgen imagegen --dry-run` shows the prompt and cost; a placeholder card until then):
+      # generate: {prompt: "rolling green hills under a wide sky, morning light", negative: "text, people"}
       caption: "Images can slowly zoom and pan"
       fit: cover
       ken_burns: {start_scale: 1.0, end_scale: 1.2, start_focus: [0.5, 0.5], end_focus: [0.7, 0.35]}

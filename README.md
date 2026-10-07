@@ -84,6 +84,13 @@ subtitles.
   heard "kay five three"), and a suggested fix — a pronunciation entry for a term misheard in
   several beats, regenerating a beat that lost words. Transcripts are cached; `vidgen lint`'s
   `readback` rule reports the beats above the threshold ([reference](docs/CONFIG.md#readback-vidgen-readback)).
+- **Generated images**: an `image` scene can take `generate: {prompt, negative, style, aspect,
+  seed}` instead of a file. `vidgen imagegen` makes the missing pictures once with the OpenAI
+  Images API (`OPENAI_API_KEY`; `--dry-run` shows the prompts and an estimated cost) and stores
+  them in `assets/generated/` with a JSON note of how each was made — commit them like audio.
+  Until then renders show a placeholder card with the prompt, so the video can be laid out first;
+  a project `imagegen.style` keeps the pictures alike, and `vidgen validate` warns when a prompt
+  asks for text in the picture ([reference](docs/CONFIG.md#generated-images-imagegen-vidgen-imagegen)).
 - **Other languages**: a variant with `language: pt-BR` and `translations: translations/pt.yaml`
   is the same video in Portuguese. `vidgen translate-template --variant pt` lists every beat text
   and on-screen text (titles, bullets, labels, table cells, chapter titles, the thumbnail...)
@@ -160,6 +167,8 @@ subtitles.
 8. Optional, only for `vidgen readback` with local speech to text: `pip install ".[stt]"`
    (faster-whisper; its first run downloads the Whisper model from the Hugging Face Hub, ~500 MB
    for `small`).
+9. Optional, only for `vidgen imagegen` (generated pictures): an **OpenAI API key**,
+   `setx OPENAI_API_KEY your_key` (read only from this variable, never written anywhere).
 
 If PowerShell refuses to run `Activate.ps1`, run
 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
@@ -184,6 +193,7 @@ vidgen lint                     # layout + timing checks: text cut off, too smal
 vidgen tts --dry-run            # what would be sent to ElevenLabs (with the pronunciation applied), how many characters
 vidgen tts                      # generate narration MP3s (only new/changed beats)
 vidgen readback                 # speech to text of the MP3s vs the texts: misheard terms, missing words (vidgen[stt])
+vidgen imagegen --dry-run       # pictures of generate: params still to make, their prompts and estimated cost
 vidgen render                   # final render -> my_video.mp4 + my_video.srt (+ my_video_chapters.txt with chapters)
 vidgen thumbnail                # my_video_thumbnail.png (also written by render with a thumbnail: section)
 vidgen export gif --scene intro # exports/my_video_intro.gif
@@ -208,6 +218,7 @@ narration.
 | `vidgen list-music [PROJECT] [--render-dir DIR] [--json]` | background music beds (built-in, described in words: instruments, key, tempo, chords, mood) and the project's `assets/music` files; `--render-dir` writes one loop of each bed as WAV |
 | `vidgen schema [PROJECT] [--scene TYPE \| --all] [--json]` | JSON Schema of `video.yaml` (params checked per scene type, the project's extension types included), for editors and AI agents |
 | `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--voice NAME ...] [--variant NAME]` | generate missing/stale narration into `audio/`; `--dry-run` needs no key (shows each beat's voice and characters per voice) |
+| `vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME]` | generate the missing pictures of `generate:` params into `assets/generated/` (OpenAI Images, `OPENAI_API_KEY`); `--dry-run` needs no key and shows prompts and an estimated cost |
 | `vidgen readback [PROJECT] [--variant NAME] [--beat ID ...] [--max-wer RATE] [--force] [--json]` | transcribe the narration MP3s (speech to text, `stt:`; cached in `build/readback/`) and compare them with the beat texts: word error rate per beat, words expected vs heard, a suggested fix for each (e.g. a pronunciation entry), terms misheard in several beats |
 | `vidgen translate-template [PROJECT] --variant NAME [--lang TAG] [--output FILE] [--json]` | write or update the variant's translation file: every text to translate with its source, keeping existing translations (stale / moved / obsolete marked) |
 | `vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going] [--jobs N] [--frames] [--frames-per-beat N] [--json]` | render and join the video |

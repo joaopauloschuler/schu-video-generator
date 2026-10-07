@@ -13,13 +13,11 @@ import hashlib
 import json
 import os
 import time
-import urllib.error
 import urllib.parse
-import urllib.request
 from collections.abc import Callable
-from email.message import Message
 from typing import Any
 
+from vidgen import httpapi
 from vidgen.config import VoiceConfig
 from vidgen.errors import VidgenError
 
@@ -37,10 +35,6 @@ LEGACY_SETTINGS: dict[str, Any] = {
     "use_speaker_boost": True,
 }
 
-TRANSIENT_STATUS = frozenset({429, 500, 502, 503, 504})
-MAX_BODY_IN_ERROR = 500
-
-
 def missing_key_message() -> str:
     """How to set the API key, for the error shown when it is missing."""
     return (
@@ -57,19 +51,6 @@ def read_api_key() -> str:
     if not key:
         raise VidgenError(missing_key_message())
     return key
-
-
-def _scrub(text: str, key: str) -> str:
-    """Remove the API key from ``text`` (defensive: it should never be there)."""
-    return text.replace(key, "***") if key else text
-
-
-def _retry_after(headers: Message | None) -> float | None:
-    value = headers.get("Retry-After") if headers is not None else None
-    try:
-        return max(0.0, float(value)) if value is not None else None
-    except ValueError:
-        return None
 
 
 class ElevenLabsProvider:
@@ -211,44 +192,10 @@ def post_with_retries(
     """POST ``data`` to an ElevenLabs ``url`` with the API key from the environment; the
     response body. Transient failures are retried ``retries`` times (``backoff * 2**attempt``
     seconds or ``Retry-After``, at most ``max_wait``); every failure becomes a
-    :class:`VidgenError` without the key in it (shared by text to speech and speech to text)."""
+    :class:`VidgenError` without the key in it (shared by text to speech and speech to text;
+    the loop itself is :func:`vidgen.httpapi.post_with_retries`)."""
     key = read_api_key()
-    attempt = 0
-    while True:
-        wait: float | None = None
-        try:
-            return _request(url, data, key, content_type, accept, timeout)
-        except urllib.error.HTTPError as exc:
-            body = _scrub(exc.read().decode("utf-8", errors="replace"), key)
-            if exc.code not in TRANSIENT_STATUS or attempt >= retries:
-                if len(body) > MAX_BODY_IN_ERROR:
-                    body = body[:MAX_BODY_IN_ERROR] + "..."
-                raise VidgenError(f"ElevenLabs returned HTTP {exc.code}: {body.strip() or '(empty body)'}") from None
-            wait = _retry_after(exc.headers)
-        except (TimeoutError, ConnectionError, urllib.error.URLError) as exc:
-            reason = exc.reason if isinstance(exc, urllib.error.URLError) else exc
-            transient = isinstance(reason, (TimeoutError, ConnectionError))
-            if not transient or attempt >= retries:
-                what = f"{type(reason).__name__}: {reason}" if isinstance(reason, BaseException) else str(reason)
-                raise VidgenError(f"cannot reach ElevenLabs: {_scrub(what, key)}") from None
-        except VidgenError:
-            raise
-        except Exception as exc:  # e.g. http.client rejecting a malformed header value
-            raise VidgenError(f"ElevenLabs request failed: {type(exc).__name__}: {_scrub(str(exc), key)}") from None
-        delay = wait if wait is not None else backoff * 2**attempt
-        sleep(min(delay, max_wait))
-        attempt += 1
-
-
-def _request(url: str, data: bytes, key: str, content_type: str, accept: str, timeout: float) -> bytes:
-    request = urllib.request.Request(
-        url,
-        data=data,
-        method="POST",
-        headers={"xi-api-key": key, "Content-Type": content_type, "Accept": accept},
+    return httpapi.post_with_retries(
+        url, data, headers={"xi-api-key": key, "Content-Type": content_type, "Accept": accept}, service="ElevenLabs",
+        secret=key, timeout=timeout, retries=retries, backoff=backoff, max_wait=max_wait, sleep=sleep,
     )
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        body = response.read()
-    if not body:
-        raise VidgenError("ElevenLabs returned an empty response")
-    return body

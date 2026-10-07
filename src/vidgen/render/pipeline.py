@@ -154,6 +154,17 @@ def warn_audio(project: Project) -> None:
         )
 
 
+def warn_images(project: Project) -> None:
+    """Log a warning naming scenes whose generated picture is not made yet (a placeholder is
+    rendered; DESIGN.md §58). Needs the project session's registry."""
+    from vidgen.imagegen import find_images
+
+    missing = [i.scene_id for i in find_images(project) if not i.request.exists]
+    if missing:
+        shown = ", ".join(dict.fromkeys(missing))
+        log.warning("generated image not made yet for %s; a placeholder is shown - run `vidgen imagegen` first", shown)
+
+
 def _usable_render(project: Project, preview: bool, scene_id: str, no_audio: bool, frames: int = 0) -> bool:
     """True if a previous render of the scene exists and matches the current format/audio mode
     (and, when ``frames`` stills per beat are requested, was made with them)."""
@@ -386,6 +397,7 @@ def render_scenes(project: Project, preview: bool, scene_ids: list[str], jobs: i
         if not scene_ids:
             return SceneRuns()
         warn_audio(project)
+        warn_images(project)
         remove_file(project.render_dir(preview) / "frames" / "index.json")
         return _render_scenes(project, preview, scene_ids, no_audio=False, keep_going=False, jobs=jobs, frames=frames)
 
@@ -661,6 +673,7 @@ def render_project(
         if unknown:
             raise VidgenError(f"unknown scene(s): {', '.join(unknown)}; scenes: {', '.join(known)}")
         warn_audio(project)
+        warn_images(project)
         to_render = [
             sid for sid in known
             if not selected or sid in selected or not _usable_render(project, preview, sid, no_audio, frames)

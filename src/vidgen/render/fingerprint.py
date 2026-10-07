@@ -43,7 +43,7 @@ NOT_RENDER_INPUTS: frozenset[str] = frozenset(
         "__main__.py", "cli.py", "describe.py", "iconlist.py", "jsonout.py", "lint", "schema.py", "sheets.py", "storyboard.py",
         "render/fingerprint.py", "render/pipeline.py", "render/ffmpeg.py", "sfx.py", "subtitles.py", "themelist.py", "tts",
         "loudness.py", "mix.py", "music.py", "thumbnail.py", "export.py", "translation.py", "deck.py", "slides.py",
-        "slides_pdf.py", "stt", "readback.py", "textnorm.py",
+        "slides_pdf.py", "stt", "readback.py", "textnorm.py", "httpapi.py", "imagegen/openai.py", "imagegen/run.py",
     }
 )
 
@@ -154,6 +154,8 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
     # So are the MP4's chapters and tags and the YouTube chapter list (§52), and the thumbnail (§53).
     # A translation file's texts are already in the config (§54); its path changes nothing.
     # Speech to text (`vidgen readback`, §57) only reads the audio.
+    # `imagegen` stays in: it decides which generated picture (or placeholder) a scene shows (§58);
+    # the pictures themselves are files under assets/.
     excluded = {
         "scenes", "variants", "lint", "pronunciation", "pronunciation_file", "voices", "subtitles", "music", "audio",
         "chapters", "metadata", "thumbnail", "translations", "stt",

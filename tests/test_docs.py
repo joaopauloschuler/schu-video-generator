@@ -42,6 +42,7 @@ MODELS: list[type[BaseModel]] = [
     config.OverlayOverlapRule,
     config.ReadbackRule,
     config.SttConfig,
+    config.ImagegenConfig,
     config.OverlayConfig,
     config.SfxConfig,
     config.SfxCue,

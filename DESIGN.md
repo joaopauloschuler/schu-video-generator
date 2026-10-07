@@ -93,6 +93,9 @@ src/vidgen/
                           # get_stt_provider), faster_whisper.py (local, extra vidgen[stt]), elevenlabs.py
   readback.py             # `vidgen readback`: transcripts cached, aligned with the spoken text, WER, edits, suggestions (§57)
   textnorm.py             # text normaliser for readback: case, accents, hyphens, numbers to words (en, pt) (§57; no manim)
+  imagegen/               # generated images (§58): __init__.py (GenerateImage, ImageRequest, cache keys, prompt
+                          # helpers, warnings), openai.py (OpenAI Images provider), placeholder.py, run.py (`vidgen imagegen`)
+  httpapi.py              # POST with retries / scrubbed errors, shared by the ElevenLabs and OpenAI providers (§58)
   render/                 # worker.py (one scene per process), pipeline.py, ffmpeg.py,
                           # fingerprint.py (what a scene's render depends on, §14)
   subtitles.py            # SRT from beat timings (cues cut and timed like captions, §43)
@@ -141,6 +144,7 @@ my_video/
   extensions/             # optional; every *.py and every package here is auto-imported
   assets/                 # images, data files referenced by scenes (paths relative to project)
     icons/                #   optional project icons <name>.svg (+ icons.json: category, tags) (§22)
+    generated/            #   `vidgen imagegen`: <key>.png + <key>.json per generated picture (committed, §58)
   translations/           # optional: translation files of language variants (`vidgen translate-template`, §54)
   audio/                  # generated: <beat_id>.mp3 + <beat_id>.hash  (kept, cheap to reuse)
     <variant>/            #   only for a variant whose voice or beat texts differ (§7)
@@ -167,7 +171,8 @@ Step 49 `padded/metadata.txt` (the MP4's tags and chapters, FFMETADATA, §52); S
 thumbnail without overlays, a sibling folder `build/<final|preview>[_<variant>]_bare/` (scene
 renders of the project without overlays, §53). Step 54: `build/readback/<key>.json` (speech-to-text
 transcripts of the beats' MP3s, keyed by audio content + STT settings, shared by qualities and
-variants, §57). With `--frames` (Step 10, §13) also `frames/<id>/*.png` + `frames/<id>/index.json` and
+variants, §57). Step 55: `build/imagegen/<key>-<look>.png` (placeholder cards of generated pictures
+not made yet, §58). With `--frames` (Step 10, §13) also `frames/<id>/*.png` + `frames/<id>/index.json` and
 `frames/index.json`, and `layout/<id>.json` (Step 12, §15).
 
 ## 4. Config schema (`video.yaml`)
@@ -241,6 +246,7 @@ thumbnail: {title: "Saving 77%", icon: cpu}      # Step 50 (§53): designed card
 language: en                                     # Step 51 (§54): BCP-47; cue rules, speed lint, TTS / MP4 language
 translations: translations/pt.yaml               # Step 51 (§54): usually in a variant; texts replaced at load
 stt: {provider: faster_whisper}                  # Step 54 (§57): speech to text of `vidgen readback`
+imagegen: {model: gpt-image-1, style: flat}      # Step 55 (§58): generated pictures (`generate:` params)
 
 extensions: [extensions]                         # dirs (relative to project) to auto-import; default shown
 
@@ -560,6 +566,7 @@ Step 51 (§54) adds `TranslatableStr`, `TextRef`, `LanguageRules`, `language_rul
 `SceneParams` the class attributes `text_shorthand` and `text_defaults`; and compatibly the
 keyword argument `language=None` of `caption_cues`, `segment_cues`, `phrase_break_cost`,
 `beat_word_times`, `estimate_word_times` and `syllables`.
+Step 55 (§58) adds `GenerateImage`, `generated_image`.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -700,6 +707,7 @@ vidgen slides [PROJECT] [--format html|pdf] [--variant NAME] [--preview | --fina
               [--output FILE] [--jobs N] [--force] [--json]   # HTML deck (§55), PDF deck (§56)
 vidgen translate-template [PROJECT] [--variant NAME] [--lang TAG] [--output FILE] [--json]   # translation file (§54)
 vidgen readback [PROJECT] [--variant NAME] [--beat ID ...] [--max-wer RATE] [--force] [--json]   # STT check of the audio (§57)
+vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME]   # generated pictures (§58)
 ```
 PROJECT defaults to the current directory. `--scene` re-renders only those scenes and re-joins
 using the existing renders of the others (missing ones are rendered). Exit code non-zero on error.
@@ -3923,3 +3931,71 @@ the measured loudness, §48).
   English and Portuguese; English "and" inside spoken numbers ("two hundred and five") and years
   read in pairs ("twenty twenty-four") are not normalised; STT errors on ordinary words are
   reported as possible slips, not filtered.
+
+## 58. Refinements (Step 55, generated images)
+
+- **Purpose**: pictures for `image` scenes (and extension scene types) from a prompt, made once
+  (they cost money), stored with the project and reused; the video can be previewed, laid out
+  and linted before any picture exists.
+- **Param** `GenerateImage` (`vidgen.imagegen`, exported by `vidgen.api`; a plain pydantic model,
+  extra keys forbidden, a string = the prompt): `prompt` (required), `negative` (`""`), `style`
+  (preset / words / `none`; default `imagegen.style`), `aspect` (`auto|landscape|portrait|square`),
+  `seed` (≥ 0). The `image` scene's `path` became optional with `generate` beside it; exactly one is
+  required (model validator). A scene type opts in by having a top-level field holding a
+  `GenerateImage`; `find_images` discovers it through the registry (built-ins and extensions).
+- **Config** `imagegen: {provider: openai, model: gpt-image-1, size: auto | WxH, quality, style,
+  negative}` (`ImagegenConfig`). Part of the render fingerprint (it decides which picture or
+  placeholder a scene shows); the pictures themselves are files under `assets/` (already tracked).
+- **Request** (`image_request(project, generate) -> ImageRequest`): size = `imagegen.size`, or the
+  model family's size for the aspect (`auto` = the final `format`'s orientation, so a 9:16 variant
+  gets portrait pictures): gpt-image `1536x1024 / 1024x1536 / 1024x1024`, dall-e-3 `1792x1024 /
+  1024x1792 / 1024x1024`, dall-e-2 `1024x1024`; quality default medium / standard / none. Text sent
+  = `<prompt>. Style: <words>. Avoid: <negative; imagegen.negative>.` (OpenAI has no negative
+  prompt). Style presets `photo, illustration, flat, isometric, watercolor, line_art, render_3d,
+  cinematic` (`STYLE_PRESETS`). **Key** = sha1(json{v: 1, provider, model, size, quality, seed,
+  prompt: text})[:16]; files `assets/generated/<key>.png` + `<key>.json` (`prompt, negative, style,
+  sent_prompt, revised_prompt, provider, model, size, quality, seed, created (UTC date), scenes`).
+  Content-addressed: no "stale" state; a changed request is "missing", the old file an orphan
+  (reported, never deleted); equal requests share one file. Meant to be committed (like `audio/`).
+- **Provider seam**: `ImageProvider` protocol (`name`, `check_credentials()`, `generate(request)
+  -> GeneratedPicture(data: PNG bytes, revised_prompt)`), `get_image_provider(project)`. One
+  provider: `OpenAIImageProvider` (`imagegen/openai.py`, stdlib urllib): `POST
+  https://api.openai.com/v1/images/generations`, `Authorization: Bearer $OPENAI_API_KEY` (read at
+  request time, never stored / logged / in errors), body `{model, prompt, n: 1, size, quality}` +
+  `response_format: b64_json` for DALL·E models (gpt-image models always return base64); response
+  `data[0].b64_json` (+ `revised_prompt`), non-PNG data converted with Pillow. Retries: 3 (backoff
+  4 / 8 / 16 s or `Retry-After`, cap 60 s, timeout 240 s) on 429 / 5xx / timeouts — not on a 429
+  for `insufficient_quota` / `billing_hard_limit`. The ElevenLabs loop moved to
+  `vidgen.httpapi.post_with_retries(url, data, headers, service, secret, ..., transient=)`
+  (`tts.elevenlabs.post_with_retries` keeps its signature and messages).
+- **Placeholder** (`imagegen/placeholder.py`, Pillow): the request's aspect at long side 1280 px,
+  surface → surface/primary gradient, rounded outline in dim, a picture glyph in primary, "IMAGE
+  TO GENERATE", the prompt (wrapped, ≤ 6 lines, shrunk then cut) in text, "placeholder · run vidgen
+  imagegen" in dim; the whole block centred so a `cover` fit crops margins, not text. Cached as
+  `build/imagegen/<key>-<sha1(version, colours, font, size, prompt)[:10]>.png`.
+  `generated_image(project, generate, theme)` returns the stored PNG or this placeholder.
+- **Never a provider call outside `vidgen imagegen`**: `validate` warns (`imagegen_warnings`):
+  pictures not made yet, and prompts that quote text or mention text words (text, words, letters,
+  label, title, logo, slogan, says, written, font...) or charts / diagrams / tables, unless negated
+  ("no text", "without lettering"); summary line `images: N generated, M missing` (and per variant
+  whose pictures differ). `render` / `storyboard` log `generated image not made yet for <scenes>`.
+- **CLI** `vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME]`:
+  distinct requests in video order; dry run prints each key, scenes, size, model, quality, cost
+  estimate and the full prompt, then the total (`PRICES`: OpenAI list prices of 2025 per model /
+  quality / square-or-not; unknown → "of unknown price"); a real run checks the key first, writes
+  PNG + JSON atomically per picture, and on an error names the scene and how many were done.
+  Orphans are listed (base config + all variants count as users).
+- **Responsible use**: no content filter beyond the provider's (its refusals surface as errors);
+  CONFIG.md asks not to generate misleading pictures of real people or brands.
+- **Tests** (`tests/test_imagegen.py`, urlopen mocked): prompt composition, style / negative
+  resolution, sizes per format / aspect / model, the cache key's inputs, text-in-prompt detection,
+  `image` params (`path` xor `generate`), validate warnings and summary (+ variant), render
+  warning, provider request / response / conversion / bad responses, 429 retry with Retry-After,
+  timeouts, quota and 400 errors not retried with the key scrubbed, missing key, dry run without a
+  key, generate / skip / force / `--scene`, orphans, an error midway, a stub provider, the
+  placeholder card and its cache, the fingerprint, a render of the placeholder and of a stored
+  picture (16:9 and 9:16).
+- **Not done**: `generate:` on `screenshot` (its `px` callouts and magnifier need the real
+  picture's pixels) and as a thumbnail background (designed thumbnails have no picture behind the
+  text yet); no `--json` for `vidgen imagegen`; no image editing / variations endpoints; no second
+  provider; prices are a snapshot.

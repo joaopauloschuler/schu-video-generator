@@ -1,4 +1,5 @@
-"""``image``: a picture from the project's assets with an optional caption and Ken Burns move."""
+"""``image``: a picture from the project's assets (or a generated one) with an optional caption
+and Ken Burns move."""
 
 from typing import Any, Literal
 
@@ -54,7 +55,8 @@ class Image(NarratedScene):
 
     ``fit: contain`` shows the whole image (caption below it); ``cover`` fills the frame
     (cropping) with the caption on a band at the bottom. ``ken_burns`` zooms/pans slowly over
-    the whole scene (in ``contain`` mode the image never outgrows its box).
+    the whole scene (in ``contain`` mode the image never outgrows its box). ``generate`` shows a
+    generated picture (``vidgen imagegen``) instead of a file, a placeholder card until it exists.
 
     Action targets: ``image``, ``caption`` (if any).
     """
@@ -68,8 +70,10 @@ class Image(NarratedScene):
         return ["image"] + (["caption"] if params.caption else [])
 
     class Params(SceneParams):
-        path: str
-        """Image file relative to the project folder, e.g. assets/photo.jpg."""
+        path: str | None = None
+        """Image file relative to the project folder, e.g. assets/photo.jpg (or generate)."""
+        generate: GenerateImage | None = None
+        """A generated picture instead of a file: {prompt, negative, style, aspect, seed} or the prompt; made by `vidgen imagegen`, a placeholder until then."""
         caption: TranslatableStr = ""
         """Caption text."""
         fit: Literal["contain", "cover"] = "contain"
@@ -81,6 +85,12 @@ class Image(NarratedScene):
         caption_size: ThemeSize = "caption"
         """Caption text size."""
 
+        @model_validator(mode="after")
+        def _one_source(self) -> SceneParams:
+            if (self.path is None) == (self.generate is None):
+                raise ValueError("give either path (an image file) or generate (a picture to generate), not both" if self.path else "path or generate is required: an image file, or a picture to generate")
+            return self
+
         def motion(self) -> KenBurns | None:
             """The Ken Burns settings, or ``None`` when disabled."""
             if self.ken_burns is True:
@@ -89,14 +99,18 @@ class Image(NarratedScene):
 
     @classmethod
     def validate_project(cls, params: Any, project: Any) -> list[str]:
-        return super().validate_project(params, project) + check_image(project, params.path, "path")
+        problems = super().validate_project(params, project)
+        return problems if params.path is None else problems + check_image(project, params.path, "path")
 
     def construct(self) -> None:
         p = self.params
-        problems = check_image(self.project, p.path, "path")
-        if problems:
-            raise VidgenError(f"scene '{self.spec.id}': {problems[0]}")
-        img = load_image(self.project.asset(p.path))
+        if p.generate is not None:  # the stored picture, or a placeholder card until it is made
+            img = load_image(generated_image(self.project, p.generate, self.theme))
+        else:
+            problems = check_image(self.project, p.path, "path")
+            if problems:
+                raise VidgenError(f"scene '{self.spec.id}': {problems[0]}")
+            img = load_image(self.project.asset(p.path))
         aspect = img.width / img.height
         fw, fh = self.frame_width, self.frame_height
         motion = p.motion()

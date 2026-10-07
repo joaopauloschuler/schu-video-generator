@@ -5128,3 +5128,99 @@ How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2058 passed, 1
 `pytest tests/test_readback.py` (~2 s). Manual (needs network + `pip install -e ".[stt]"`):
 `vidgen readback examples/kphi3`, `vidgen readback examples/kphi3 --json --beat s7_b2`,
 `vidgen lint examples/kphi3 --rule readback`.
+
+## Step 55 — Generated images
+What was built
+- **`generate:` on the `image` scene**: `{prompt, negative, style, aspect, seed}` or just the
+  prompt, instead of `path` (exactly one of them; `path` is now optional). The picture is made
+  once by `vidgen imagegen` and stored in the project; until then every render, storyboard and
+  lint shows a **placeholder card** (theme colours: surface→primary gradient, picture glyph,
+  "IMAGE TO GENERATE", the prompt, "placeholder · run vidgen imagegen"; the block is centred so a
+  `cover` fit never crops the text), cached in `build/imagegen/`.
+- **Provider seam** `src/vidgen/imagegen/` (like `tts/` and `stt/`): `GenerateImage` (param
+  model), `ImageRequest` (sent prompt, provider, model, size, quality, seed, key, paths,
+  `estimated_cost`), `image_request(project, generate)`, `generated_image(project, generate,
+  theme)` (stored PNG or placeholder), `find_images` / `scene_images` (every top-level
+  `GenerateImage` param of any scene type, built-in or extension), `ImageProvider` protocol
+  (`check_credentials`, `generate(request) -> GeneratedPicture(data, revised_prompt)`),
+  `get_image_provider`, `imagegen_warnings`, `text_in_prompt`, `orphaned_images`, `STYLE_PRESETS`.
+- **One provider**: OpenAI Images (`imagegen/openai.py`, stdlib urllib, `POST
+  /v1/images/generations`, `Authorization: Bearer $OPENAI_API_KEY` read at request time;
+  gpt-image-1 default, dall-e-3 / dall-e-2 supported (`response_format: b64_json` for those);
+  `data[0].b64_json` + `revised_prompt`; non-PNG converted to PNG). Retries 3x on 429 / 5xx /
+  timeouts (backoff 4/8/16 s or `Retry-After`, cap 60 s) but not on `insufficient_quota`.
+  **Never called here**: everything is mocked.
+- **Shared HTTP helper** `src/vidgen/httpapi.py`: `post_with_retries(url, data, headers, service,
+  secret, ..., transient=)` — the Step 54 ElevenLabs loop generalised (service name in messages,
+  key scrubbed, optional transient predicate). `tts.elevenlabs.post_with_retries` keeps its
+  signature and messages and now delegates to it.
+- **Config** `imagegen: {provider: openai, model: gpt-image-1, size: auto | WxH, quality, style,
+  negative}`. `size: auto` = the model's landscape / portrait / square size by the final format's
+  orientation or `generate.aspect` (a 9:16 variant gets its own portrait pictures). Default
+  quality medium (gpt-image) / standard (dall-e-3). `style` = a preset (photo, illustration,
+  flat, isometric, watercolor, line_art, render_3d, cinematic) or words; a scene's `style`
+  replaces it, `none` drops it. Prompt sent = `<prompt>. Style: <words>. Avoid: <negatives>.`
+- **Cache**: `assets/generated/<key>.png` + `<key>.json` (`prompt, negative, style, sent_prompt,
+  revised_prompt, provider, model, size, quality, seed, created, scenes`); key = sha1 of {v,
+  provider, model, size, quality, seed, sent prompt}[:16]. Committed by users like `audio/`
+  (the init template's `.gitignore` comment says so). Orphans listed, never deleted.
+- **`vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME]`**: dry run
+  (no key) lists key, scenes, size, model, quality, `~$cost` and the full prompt, then the total
+  (OpenAI list prices of 2025 in `PRICES`, "check current pricing"); a run checks the key first,
+  writes PNG + JSON atomically, reports progress, names the scene on an error.
+- **Warnings**: `vidgen validate` — pictures not made yet; prompts that quote text or mention
+  text words (text, letters, label, title, logo, says, font...) or charts / diagrams / tables,
+  unless negated ("no text"); summary line `images: N generated, M missing` (+ per variant whose
+  pictures differ). `vidgen render` / `storyboard`: `generated image not made yet for <scenes>`.
+- **API**: `GenerateImage`, `generated_image` exported by `vidgen.api` (EXTENDING.md example
+  `backdrop_title`, run end to end in a scratch project).
+
+Files
+- New: `src/vidgen/httpapi.py`, `src/vidgen/imagegen/__init__.py`, `imagegen/openai.py`,
+  `imagegen/placeholder.py`, `imagegen/run.py`, `tests/test_imagegen.py` (35 tests, 1 render).
+- Changed: `config.py` (`ImagegenConfig`, `ImageSize`, `VideoConfig.imagegen`),
+  `scenes/image.py` (`path` optional, `generate`, one-of validator, placeholder / picture at
+  render), `tts/elevenlabs.py` (loop moved to `httpapi`), `api.py`, `cli.py` (`imagegen` command,
+  `images_summary_lines`, validate warnings), `render/pipeline.py` (`warn_images`),
+  `render/fingerprint.py` (`httpapi.py`, `imagegen/openai.py`, `imagegen/run.py` not render
+  inputs; `imagegen` config stays in), `templates/minimal/gitignore` (comment),
+  `tests/test_docs.py` (model), `examples/minimal/video.yaml` (commented usage), docs/CONFIG.md
+  (top level, new "Generated images" section, `image` params + example), docs/EXTENDING.md,
+  README.md, DESIGN.md (tree, §3, §4, §6.4, §8, new §58), tasklist.md.
+
+Public interfaces added/changed (compatible)
+- Config `imagegen`; `image` params `generate` (and `path` no longer required by the model; one
+  of the two is). CLI `vidgen imagegen`. `vidgen.api`: `GenerateImage`, `generated_image`.
+- `vidgen.imagegen.*` (above), `vidgen.imagegen.openai.OpenAIImageProvider / parse_response /
+  as_png / API_KEY_ENV`, `vidgen.imagegen.placeholder.draw_placeholder / placeholder_path`,
+  `vidgen.imagegen.run.plan_imagegen / run_imagegen / ImagegenPlan / used_keys`,
+  `vidgen.httpapi.post_with_retries / scrub / retry_after / TRANSIENT_STATUS`.
+- Fingerprints change once (config / scene modules changed).
+
+Decisions / deviations
+- **OpenAI Images** as the one provider: simple documented REST call returning base64 PNG,
+  stdlib-only. No seed and no negative prompt in that API: `negative` becomes "Avoid: ..." in the
+  prompt, `seed` is only part of the cache key ("another picture of the same prompt"), documented.
+- **Content-addressed files, no stale state** (unlike audio's `<beat>.hash`): a picture belongs to
+  a request, not to a scene, so scenes / variants sharing a prompt share a file, and an edited
+  prompt simply needs a new picture (the old one is an orphan the user may delete).
+- **Size from the final format**, not the preview, so preview and final share pictures.
+- **Placeholder files in `build/`** (not an in-memory image): any scene type and Pillow-based
+  helpers get a path; keyed by request + theme look, drawn once.
+- **Warnings, not errors**, for missing pictures and text-like prompts (the config is valid; a
+  render works with placeholders).
+- `generate:` only on `image`: `screenshot` callouts in `px` and the magnifier need the real
+  pixels, and designed thumbnails have no background picture yet ("if cheap" — it was not).
+- No safety filter of our own (per the task): CONFIG.md "Responsible use" paragraph; provider
+  refusals surface as errors.
+
+Known gaps / TODOs (routed in tasklist.md: Step 59, Step 60)
+- No `vidgen imagegen --json`; no `images` key in `validate --json`.
+- No real API run (no network / key here); `PRICES` is a 2025 snapshot.
+- No image edit / variation endpoints, no second provider, no prompt-length check per model
+  (the API's error is shown).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2094 passed, 1 skipped, ~11 min on 2 CPUs); step only:
+`pytest tests/test_imagegen.py` (~6 s). Manual (no key needed): add `generate: "a quiet harbour
+at dawn"` to an `image` scene, `vidgen validate`, `vidgen imagegen --dry-run`, `vidgen storyboard`
+(placeholder card); with `OPENAI_API_KEY`: `vidgen imagegen`, then commit `assets/generated/`.
