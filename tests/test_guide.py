@@ -16,6 +16,7 @@ import yaml
 
 from vidgen import cli, config, extensions, registry
 from vidgen.errors import VidgenError
+from vidgen.gallery import sample_asset
 from vidgen.guide import GUIDE_FILE, find_topic, guide_text, guide_topics
 from vidgen.music import BUILTIN_BEDS as BEDS
 from vidgen.presets import BUILTIN_PRESETS
@@ -25,13 +26,13 @@ from vidgen.sfx import BUILTIN_SOUNDS
 ROOT = Path(__file__).resolve().parents[1]
 GUIDE = GUIDE_FILE.read_text(encoding="utf-8")
 FENCE = re.compile(r"```(\w*)\n(.*?)```", re.S)
-#: Example files copied into a snippet's project for the paths it names, by suffix.
-ASSETS = {
-    ".png": ROOT / "examples" / "gallery" / "assets" / "app.png",
-    ".mp4": ROOT / "examples" / "gallery" / "assets" / "clip.webm",
-    ".webm": ROOT / "examples" / "gallery" / "assets" / "clip.webm",
-    ".py": ROOT / "examples" / "gallery" / "assets" / "train.py",
-}
+def asset_file(rel: str) -> Path:
+    """The file copied into a snippet's project for a path it names: the scene gallery's
+    stand-ins (``vidgen.gallery.sample_asset``, what ``vidgen gallery`` renders them with), a
+    code file from the gallery example."""
+    if rel.endswith(".py"):
+        return ROOT / "examples" / "gallery" / "assets" / "train.py"
+    return sample_asset("", rel)
 
 
 def topic_text(name: str) -> str:
@@ -270,7 +271,7 @@ def test_yaml_snippet_validates(name: str, body: str, tmp_path: Path) -> None:
     for rel in asset_paths(data):
         target = tmp_path / rel
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(ASSETS[Path(rel).suffix], target)
+        shutil.copyfile(asset_file(rel), target)
     (tmp_path / "video.yaml").write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")
     try:
         project = Project.load(tmp_path)

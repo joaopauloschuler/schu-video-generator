@@ -136,7 +136,7 @@ the scenes that changed; `vidgen render` renders every scene unless you give `--
 
 **JSON everywhere.** `validate`, `list-scenes`, `list-themes`, `list-icons`, `list-sfx`,
 `list-music`, `schema`, `render`, `storyboard`, `lint`, `thumbnail`, `export`, `slides`,
-`translate-template`, `readback` and `guide` take `--json`: one document on stdout,
+`translate-template`, `readback`, `gallery` and `guide` take `--json`: one document on stdout,
 `{version, ok, warnings, ..., error?}`, exit code 0 exactly when `ok`.
 
 <!-- topic: pacing (also: story, storytelling, text, narration, beats) -->
@@ -213,14 +213,21 @@ scenes:
   (`stat`, `text_card`), never a silent card, and set a designed `thumbnail:` (the cover).
 - Layouts adapt by themselves (columns stack, timelines turn vertical, diagrams run top to
   bottom), but check `vidgen storyboard --variant social`: wide tables (> 4 columns), long
-  diagrams and 16:9 screenshots get small. Split them or choose another type.
+  diagrams and 16:9 screenshots get small. Split them or choose another type. (A landscape
+  screenshot's callout steps zoom in on their areas by themselves in 9:16, and a landscape
+  `video_clip` without callouts shows a nearly square part from its middle; an `image` keeps its whole
+  picture unless you set `fit: cover`.)
 - Phone apps cover the bottom ~15 % with their buttons: captions and lower thirds lift
   themselves above it; keep the key part of your own pictures and clips out of it.
 
 <!-- topic: scenes (also: chooser, types, scene-types) -->
 ## Choosing the scene type
 
-Pick by **what the viewer should understand**, not by what the data looks like.
+Pick by **what the viewer should understand**, not by what the data looks like. To see what
+each type looks like at 16:9 and 9:16, open the scene gallery (`docs/gallery/README.md` in the
+vidgen repository: a still, a GIF, the YAML, params and targets per type) or make it yourself:
+`vidgen gallery --output gallery --types pie,map` (any folder; in a project it also renders the
+project's own scene types, in its theme).
 
 | you want to show | scene type | key params |
 |---|---|---|
@@ -1000,6 +1007,7 @@ install; `vidgen validate` warns when it is missing.
 | `safe_area` | text in the margin | as above; check reserving overlays |
 | `text_overlap` | two texts on top of each other | fewer or shorter labels; a custom scene's layout |
 | `covered_text` | a shape drawn over text | move the shape or the callout (`side:`) |
+| `label_spacing` | a callout label touches other text (a value, the title) | another `side:`, an `arrow` instead of a `label`, a shorter label |
 | `contrast` | text hard to read on its background | theme tokens instead of custom colours; another preset |
 | `overlay_overlap` | an overlay covers scene text | `reserve: true` on the overlay, or another corner / position |
 | `dead_air` | nothing moved for over 6 s | split the beat, add a reveal or an action, shorten a silent `duration` |

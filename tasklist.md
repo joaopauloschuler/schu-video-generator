@@ -243,9 +243,10 @@ Rules that apply to every step:
 - [x] `AGENTS.md` + `vidgen guide`: workflow (write → storyboard → lint → fix), pacing rules, on-screen text limits, scene-type chooser, good vs bad examples (packaged guide `data/guide/AGENTS.md`, root copy kept identical; 12 topics: start, workflow, pacing, social, scenes, design, actions, overlays, audio, examples, outputs, troubleshooting; `vidgen guide [TOPIC] [--list] [--json]`; chooser table for all 28 types + a snippet each; 6 before / after pairs; validate / lint message → fix tables; tests check every command / option, scene type, param, preset, action, lint rule and sound named, and validate all 28 YAML snippets; CLAUDE.md / README say who each file is for)
 
 ### Step 57 — Scene gallery
-- [~] `examples/minimal` covers every Step-5 built-in, without rendered clips; `examples/gallery` (Step 37) every newer type once — a natural source for the gallery's YAML
-- [ ] `vidgen gallery` renders one still + short clip per scene type (16:9 and 9:16) with its YAML into `docs/gallery/`
-- [ ] (from Step 37) Check the per-type 9:16 stills for label crowding: `map` labels of small countries far apart in a 9:16 world view (a label may stand beside the wrong country with a long leader), `screenshot` / `video_clip` of a 16:9 picture leave wide bands (a portrait default `fit` / `region` could help)
+- [x] `examples/minimal` covers every Step-5 built-in, without rendered clips; `examples/gallery` (Step 37) every newer type once — a natural source for the gallery's YAML (Step 57 took the samples from the author guide's snippets instead: one per type, already validated by `tests/test_guide.py`, and what agents read)
+- [x] `vidgen gallery` renders one still + short clip per scene type (16:9 and 9:16) with its YAML into `docs/gallery/` (committed: pages, stills and GIFs, ~4.4 MB, tested < 8 MB)
+- [x] (from Step 37) Check the per-type 9:16 stills for label crowding: `map` labels of small countries far apart in a 9:16 world view (a label may stand beside the wrong country with a long leader), `screenshot` / `video_clip` of a 16:9 picture leave wide bands (a portrait default `fit` / `region` could help) — map labels keep by their own place without crossing leaders, regional views narrowed in 9:16; screenshot / clip steps focus by themselves in 9:16, `video_clip` `fit: auto`
+- [x] (from Step 56) Callout `label`s on crowded bar charts (against the title, on a neighbour's value or bar): placement fixed (`side` only while clear, rivals, clearance); new lint rule `label_spacing`
 
 ### Step 58 — `vidgen plan`
 - [ ] Outline/script in, draft `video.yaml` out: sentences → beats, simple cues → scene types (no LLM call)
@@ -256,6 +257,7 @@ Rules that apply to every step:
 
 ### Step 60 — Final review
 - [ ] Full review of Steps 8–59; docs and examples consistent; release notes in HANDOFF.md
+- [ ] (from Step 57) Gallery stills seen and left: `code_walkthrough` in 9:16 has a small listing (a 5-line file wraps a line), `image` with the default `fit: contain` leaves bands in 9:16 (`fit: cover` is the author's choice), a `world` view spanning most longitudes is still a strip in 9:16 (labels now spread into the bands); `vidgen gallery` has no mid-beat stills (the GIF shows the animation) and no project-type render test (unit-tested only); kphi3 / examples only re-linted in default + vertical
 - [ ] (from Step 55) `generate:` for the `screenshot` scene (its `px` callouts / magnifier need the real picture) and a generated picture behind a designed thumbnail; no real image-generation run was made (mocked only)
 - [ ] (from Step 51) Locale details translations cannot reach: number formats (`value_format`, decimal / thousands marks defaulted rather than written in the config), the `map` scene's bundled English country names, `map` arc shorthands `"A -> B"` naming a translated pin label, `lint_ignore` object patterns and `point:<series>@<label>` targets naming translated texts; cue cutting for languages without spaces (only at punctuation)
 - [ ] (from Step 50) A frame thumbnail's text is not measured (no layout dump for a plain render; a `--frames` render or the lint stills could give `min_font` / `contrast` at 320x180); `post_render` hooks run before the thumbnail is written; `build/..._bare` renders are never cleaned up; the MP4 could carry the thumbnail as cover art (Step 49 gap)

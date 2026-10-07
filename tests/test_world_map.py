@@ -368,6 +368,44 @@ def test_portrait_map_and_dateline_view(make_project, media: Path) -> None:
 
 
 @pytest.mark.render
+def test_portrait_regional_view_is_narrowed_not_grown(make_project, media: Path) -> None:
+    """Step 57: a regional view in 9:16 keeps its latitudes and loses longitudes around its items
+    (``europe`` used to grow south over Africa, with Europe a small band at the top)."""
+    p = {"view": "europe", "steps": [["France", "Germany"], {"pins": [{"lon": -0.13, "lat": 51.51, "label": "London"}]}]}
+    portrait = render(load(make_project, [map_scene(p)]), "m", media, size=(90, 160))
+    lon_min, lat_min, lon_max, lat_max = portrait._view.box
+    europe = geo.view_box("europe")
+    assert (lat_min, lat_max) == (europe[1], europe[3]) and lon_max - lon_min < 0.6 * (europe[2] - europe[0])
+    assert all(portrait._view.contains(lon, lat) for lon, lat in [(-0.13, 51.51), (2.35, 48.86), (13.4, 52.5)])
+    assert not portrait._view.contains(10.0, 20.0)                                         # no Sahara
+    landscape = render(load(make_project, [map_scene(p)]), "m", media, size=(160, 90))
+    assert landscape._view.box == tuple(float(v) for v in europe)
+
+
+@pytest.mark.render
+def test_country_labels_stand_by_their_own_country(make_project, media: Path) -> None:
+    """Step 57 (from Step 37): small countries far apart in a 9:16 world view got labels beside
+    another country, with leaders running past each other; now every label is nearer its own
+    place than any other labelled place (within 0.1 units: Switzerland and the Netherlands are
+    0.3 units apart here) and no two leaders cross."""
+    from vidgen.scenes.world_map import _nearest, _segments_cross
+
+    p = {"view": "world", "steps": [["Qatar", "Costa Rica", "Belgium"], ["Israel", "Netherlands", "Switzerland", "Japan"]]}
+    scene = render(load(make_project, [map_scene(p)]), "m", media, size=(180, 320))
+    places = {c.a3: scene._view.point(*c.label) for items in scene._items for c, _ in items["countries"]}
+    for items in scene._items:
+        for country, group in items["countries"]:
+            label = api.callout_area(group[1])
+            own = float(np.linalg.norm(_nearest(places[country.a3], label) - places[country.a3]))
+            for a3, q in places.items():
+                if a3 != country.a3:
+                    assert float(np.linalg.norm(_nearest(q, label) - q)) >= own - 0.1, (country.name, a3)
+    for i, (a, b) in enumerate(scene._segments):
+        for c, d in scene._segments[i + 1 :]:
+            assert not _segments_cross(a, b, c, d)
+
+
+@pytest.mark.render
 def test_early_reveal_and_dim_actions(make_project, media: Path) -> None:
     p = {"steps": [["France"], ["Germany"]]}
     acts = {"b1": [{"reveal": "country:Germany"}, {"dim": "map", "at": 0.5}]}

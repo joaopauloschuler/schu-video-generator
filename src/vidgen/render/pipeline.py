@@ -223,6 +223,10 @@ def _run_worker(project: Project, preview: bool, scene_id: str, no_audio: bool, 
     # Scenes never need the ElevenLabs key: keep it out of the processes that run scene code.
     env = {k: v for k, v in os.environ.items() if k != API_KEY_ENV}
     env.update(PYTHONIOENCODING="utf-8", PYTHONUTF8="1")
+    # A fixed hash seed makes renders reproducible: with Python's per-process random seed, the
+    # frames of a camera move differed by a few pixel values between renders (set iteration
+    # order); the scene gallery's committed GIFs must not change on every run (DESIGN.md §60).
+    env.setdefault("PYTHONHASHSEED", "0")
     started = time.monotonic()
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, cwd=project.root)
     assert proc.stdout is not None

@@ -99,8 +99,8 @@ class ScreenshotStep(SceneParams):
 
     callouts: list[CalloutSpec] = []
     """The callouts this step draws (in order; a spotlight is drawn under the others)."""
-    focus: bool | float = False
-    """Move the camera in on this step's callout areas (labels stay readable: they are built for the zoom); a number is the magnification (more than 1, up to 4), true: as close as fits, up to focus_scale."""
+    focus: bool | float | None = None
+    """Move the camera in on this step's callout areas (labels stay readable: they are built for the zoom); a number is the magnification (more than 1, up to 4), true: as close as fits, up to focus_scale. Default: true in a vertical frame for a landscape picture (it would be a thin strip), else false."""
     previous: Literal["fade", "dim", "keep"] | None = None
     """What happens to the callouts of earlier steps when this one starts; default: the scene's previous."""
 
@@ -115,8 +115,8 @@ class ScreenshotStep(SceneParams):
 
     @field_validator("focus")
     @classmethod
-    def _check_focus(cls, value: bool | float) -> bool | float:
-        if not isinstance(value, bool) and not 1 < value <= 4:
+    def _check_focus(cls, value: bool | float | None) -> bool | float | None:
+        if value is not None and not isinstance(value, bool) and not 1 < value <= 4:
             raise ValueError("a focus magnification is more than 1 and at most 4 (or true: as close as fits)")
         return value
 
@@ -338,22 +338,38 @@ class Screenshot(NarratedScene):
         """Camera (width, centre) of step ``k``'s focus, or ``None`` (the whole frame)."""
         p = self.params
         step = p.steps[k]
-        if not step.focus or not step.callouts:
+        focus = step.focus if step.focus is not None else self._auto_focus()
+        if not focus or not step.callouts:
             return None
         areas = [self._area(c) for c in step.callouts]
         x0, x1 = min(a.x0 for a in areas), max(a.x1 for a in areas)
         y0, y1 = min(a.y0 for a in areas), max(a.y1 for a in areas)
         fw, fh = self.frame_width, self.frame_height
-        limit = p.focus_scale if step.focus is True else float(step.focus)
+        limit = p.focus_scale if focus is True else float(focus)
         # room for the labels: the areas take at most half of the view each way
         m = min(limit, 0.5 * fw / max(x1 - x0, 1e-6), 0.5 * fh / max(y1 - y0, 1e-6))
         if m < 1.05:
-            log.warning("scene '%s': step %d: the callouts already fill the frame; no focus", self.spec.id, k + 1)
+            if step.focus is not None:
+                log.warning("scene '%s': step %d: the callouts already fill the frame; no focus", self.spec.id, k + 1)
             return None
         w, h = fw / m, fh / m
         x = float(np.clip((x0 + x1) / 2, (w - fw) / 2, (fw - w) / 2))
         y = float(np.clip((y0 + y1) / 2, (h - fh) / 2, (fh - h) / 2))
+        # a view taller (wider) than the picture is centred on it that way: even bands, not one
+        # wide band (a landscape picture in a vertical frame); a smaller one stays on it
+        pic = self._picture
+        (px, py), (pw, ph) = pic.get_center()[:2], (pic.width, pic.height)
+        y = float(py) if h > ph else float(np.clip(y, py - (ph - h) / 2, py + (ph - h) / 2))
+        x = float(px) if w > pw else float(np.clip(x, px - (pw - w) / 2, px + (pw - w) / 2))
         return w, (x, y)
+
+    #: A picture at least this much wider than tall is a "landscape" one (auto focus in 9:16).
+    landscape_aspect = 1.2
+
+    def _auto_focus(self) -> bool:
+        """The default ``focus`` of a step: in a vertical frame a landscape picture is a thin strip
+        across the middle, so steps move in on their callouts; else no focus."""
+        return bool(self.is_portrait and float(self._img.width) / max(float(self._img.height), 1e-9) >= self.landscape_aspect)
 
     def _spec_area(self, c: CalloutSpec) -> tuple[list[float], str]:
         """A callout's area as written to the callout helpers, with its units."""

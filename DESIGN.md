@@ -43,6 +43,7 @@ src/vidgen/
   jsonout.py              # --json documents of the CLI (see §11)
   describe.py             # scene-type/params descriptions for list-scenes
   guide.py                # `vidgen guide`: the author guide for AI agents, its topics (§59)
+  gallery.py              # `vidgen gallery`: samples from the guide, work project, stills / GIFs, pages (§60)
   schema.py               # JSON Schema export (see §12)
   errors.py               # VidgenError, Problem
   config.py               # pydantic v2 models for video.yaml (see §4)
@@ -123,8 +124,10 @@ src/vidgen/
   data/geo/               # world-110m.json: Natural Earth 1:110m countries (public domain; package data, §39)
   data/slides/            # deck.css + deck.js inlined into `vidgen slides` pages (package data, §55)
   data/guide/             # AGENTS.md: the author guide printed by `vidgen guide` (package data, §59)
+  data/gallery/           # stand-in files for the guide snippets' assets/ paths: picture.png, app.png, clip.webm (§60)
 tools/                    # maintainer scripts, not shipped: vendor_icons.py + icon_set.json (§22, §23),
                           # make_screenshot.py, make_clip.py (example assets, §37, §38),
+                          # make_gallery_clip.py (data/gallery/clip.webm, §60),
                           # make_world_map.py (builds data/geo/world-110m.json from npm packages, §39)
 tests/                    # pytest; no network; slow renders marked `render`
 examples/
@@ -135,6 +138,7 @@ docs/
   CONFIG.md               # config reference
   EXTENDING.md            # how to write project extensions
   ICONS.md                # icon catalogue, generated from the manifest by tools/vendor_icons.py (§23)
+  gallery/                # scene gallery written by `vidgen gallery`: README.md, <type>.md, media/ (§60)
 AGENTS.md                 # the author guide for agents *using* vidgen (copy of data/guide/AGENTS.md, §59)
 DESIGN.md  CLAUDE.md  HANDOFF.md  README.md  THIRD_PARTY_NOTICES.md (bundled fonts §21, icons §22, world map §39)
 ```
@@ -712,6 +716,8 @@ vidgen slides [PROJECT] [--format html|pdf] [--variant NAME] [--preview | --fina
 vidgen translate-template [PROJECT] [--variant NAME] [--lang TAG] [--output FILE] [--json]   # translation file (§54)
 vidgen readback [PROJECT] [--variant NAME] [--beat ID ...] [--max-wer RATE] [--force] [--json]   # STT check of the audio (§57)
 vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME]   # generated pictures (§58)
+vidgen gallery [PROJECT] [--output DIR] [--types T,T] [--formats 16:9,9:16] [--theme PRESET]
+              [--clips | --no-clips] [--jobs N] [--force] [--json]   # every scene type rendered (§60)
 ```
 PROJECT defaults to the current directory. `--scene` re-renders only those scenes and re-joins
 using the existing renders of the others (missing ones are rendered). Exit code non-zero on error.
@@ -4030,3 +4036,75 @@ the measured loudness, §48).
   built-in ones; every sound and music bed is named; and every fenced `yaml` block, wrapped
   into a config (a scene list, a partial config, or top-level keys plus one scene; files under
   `assets/` copied from the examples), passes `vidgen validate`'s checks (`validate_all`).
+
+## 60. Refinements (Step 57, scene gallery)
+
+- **`vidgen gallery [PROJECT] [--output DIR] [--types T,T] [--formats 16:9,9:16] [--theme PRESET]
+  [--clips | --no-clips] [--jobs N] [--force] [--json]`** (`vidgen.gallery.make_gallery`): every
+  registered scene type rendered from one canonical sample at 16:9 and 9:16 into a Markdown
+  gallery, default `docs/gallery` (committed in this repository). `PROJECT` (or a config file in
+  the current folder) adds the project's own types, its theme (unless `--theme`) and extensions.
+- **Samples: one source.** A built-in type's sample is its snippet in the guide's `scenes` topic
+  (`guide_samples()`: the yaml blocks are split into list items, keeping the text as written; the
+  first of a type, a later one replacing a `generate:` snippet that only renders a placeholder);
+  the block's first comment line (`# data`) is the index group, the chooser table's first column
+  the "use it for" line (`chooser_uses()`). A project's type takes its first scene in
+  `video.yaml` (`project_samples()`, YAML dumped). A name whose class is registered under an
+  earlier name (`flowchart` → `diagram`) is an alias: listed, not rendered (`GalleryType.alias_of`).
+  Files under `assets/` in the guide's snippets map to stand-ins shipped in `data/gallery/`
+  (`sample_asset()`: `picture.png` for `image`, `app.png` for other pictures, `clip.webm` for
+  videos — made by `tools/make_gallery_clip.py` from `app.png`).
+- **Work project** `<project or .>/build/gallery/video.yaml`: every sample (id = type name),
+  preview 640x360 @ 12 fps, variant `portrait` 360x640; always all samples and files, so a
+  `--types` run does not make the others' fingerprints stale (they see the config and `assets/`).
+  Rendered with `render_scenes(..., frames=1)`; current stills are reused (`stills_current`). The
+  "audio missing" warning is filtered (samples have no audio by design).
+- **Media**: the last still of each scene saved as an optimised PNG (`media/<type>-16x9.png`,
+  `-9x16.png`; 640x360 / 360x640); a GIF of the scene up to its last beat's end (no fade-out:
+  full-frame changes cost the most bytes), 320 / 180 px wide, 6 fps, 32-colour palette without
+  dithering (flat graphics), last frame held 1.5 s (`export.write_gif(..., colors, dither, hold)`,
+  shared with `vidgen export gif`). Deterministic: no times or paths in the pages, Pillow and
+  FFmpeg outputs are reproducible for the same inputs and versions, and render workers now run
+  with `PYTHONHASHSEED=0` (unless set): with a random per-process seed, frames during a camera
+  move (zoom actions, focus steps) differed by a few pixel values between two renders, so their
+  GIFs changed on every regeneration. Checked: two `--force` regenerations give byte-identical
+  files except `screenshot-9x16.gif` (the picture's sub-pixel edges while the camera moves over
+  an image differ between renders; not tracked down, the frames look the same); a regeneration
+  that reuses the renders is byte-identical.
+- **Pages**: `README.md` (by group: type, stills linked to the page, use; aliases "same type as";
+  types without a sample "no sample", types without a page in the folder "not rendered here
+  yet"; a project type's "use" is the first sentence of its docstring) and `<type>.md` (use, description = first paragraph of
+  the class / module docstring, stills, GIF links, the YAML as written, a params table from the
+  `Params` model with nested fields as `a.b`, targets, beat count). An index after a `--types`
+  run still lists every type, with whatever stills the folder has.
+- **What is committed** (decision): the pages, all stills and all GIFs, about 4.4 MB in total (1.3 MB stills, 3.1 MB GIFs), under
+  a tested 8 MB budget (`tests/test_gallery.py`): humans browsing GitHub and agents reading the
+  docs see every type without rendering; clips are small enough at 320 px / 6 fps / 32 colours (a regenerated GIF adds to the history, so they stay small). A test
+  keeps every page's YAML equal to the guide's current snippet and the index listing every type.
+- **Routed visual fixes** (Steps 37 and 56):
+  - `map`: a regional view in a vertical frame is narrowed to the longitudes that fill the frame
+    at the view's latitudes, around its items (`_portrait_region`; before, the frame was filled
+    by growing the view north and south: `europe` showed mostly Africa, Europe tiny). Country
+    labels that need a leader avoid crossing earlier leaders and labels, and a label must not
+    stand nearer another labelled place (any step) than its own (`_misleading`); when the first
+    spot fails, `_clear_spot` searches eight directions out to 3 units (the empty bands above and
+    below the map in 9:16).
+  - `screenshot` / `video_clip`: `steps[].focus` defaults to auto (`None`): `true` in a vertical
+    frame for a landscape picture (≥ 1.2:1), else `false`; a focus view taller / wider than the
+    picture is centred on it, a smaller one stays on it. `video_clip` `fit: auto` (new default):
+    `contain`, but a landscape clip without callouts in a vertical frame (not `bleed`) is shown
+    as a nearly square part from its middle (`cover` into a square room, less the layout's 10 %
+    vertical inset).
+  - Callout labels (`kind: label`): `label_spot` gained `clearance` (soft distance from `avoid`),
+    `rivals` (a spot clearly nearer — under 0.75x the own distance — another bar, value or the
+    title than its target is penalised and counts as blocked) and `straight` (above / below /
+    beside before the corners); `side` is now honoured only while a spot on that side is clear,
+    else the best clear spot elsewhere is used (also for arrows and magnifiers with `side`).
+  - Lint rule **`label_spacing`** (warning, `min_gap` 0.02 of the shorter side): a label on its
+    own plate (filled rounded shape without an outline — an outlined badge such as the
+    timeline's "Now" tag sits in its line by design —, not the background colour, behind exactly one text, at most
+    2.2x its height and 3 heights wider; the text's backdrop is the plate) closer than `min_gap`
+    to another text (not lone symbols, not the text framed by an outline in the plate's colour:
+    the callout's own mark). `text_overlap` / `covered_text` missed these (no overlap, no
+    cover). A `box` / `circle` tag (`tag_spot`) gets the same soft `clearance` (0.2 units) and
+    the same spots one clearance further out.

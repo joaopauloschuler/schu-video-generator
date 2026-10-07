@@ -195,6 +195,34 @@ def test_max_words() -> None:
     assert not check("max_words", [*texts, text("x", [0, 0, 1, 1], "and more")], max_words=50)
 
 
+def test_label_spacing() -> None:
+    """A label on its own plate (a callout label) touching a bar's value or the title (Step 57)."""
+    plate = {**shape("p", [400, 300, 520, 340], fill="#FFD166", order=10), "class": "RoundedRectangle"}
+    label = text("l", [412, 308, 508, 332], "Slowest", order=11, color=BG, backdrop="#FFD166")
+    value = text("v", [410, 350, 500, 376], "9.8 min")              # 10 px under the plate
+    issues = check("label_spacing", [value, plate, label])
+    assert len(issues) == 1 and RULES["label_spacing"].default == "warning" and issues[0].value == pytest.approx(10 / 1080, abs=1e-4)
+    assert "label text 'Slowest' is 10.0 px from text '9.8 min'" in issues[0].message
+    assert not check("label_spacing", [value, plate, label], min_gap=0.009)
+    far = text("v", [410, 370, 500, 396], "9.8 min")                # 30 px: apart
+    assert not check("label_spacing", [far, plate, label])
+    # the text framed by the callout's own mark (an outline in the plate's colour) is its target
+    mark = shape("m", [400, 344, 520, 384], fill=None, stroke="#FFD166", order=9)
+    assert not check("label_spacing", [value, mark, plate, label])
+    assert check("label_spacing", [value, {**mark, "stroke": {**mark["stroke"], "color": "#FF0000"}}, plate, label])
+    assert not check("label_spacing", [text("b", [410, 350, 420, 376], "•"), plate, label])     # a lone symbol
+    # not labels: a plate in the background colour (map labels), a card holding two texts, a
+    # band much wider than its text (a code line), a plain rectangle
+    assert not check("label_spacing", [value, {**plate, "fill": {"color": BG, "opacity": 0.9}}, {**label, "backdrop": BG}])
+    second = text("s", [412, 300, 430, 306], "x", order=12, backdrop="#FFD166")
+    assert not check("label_spacing", [value, plate, label, second])
+    band = {**plate, "bbox": [0, 300, 1900, 340]}
+    assert not check("label_spacing", [value, band, label])
+    assert not check("label_spacing", [value, {**plate, "class": "Rectangle"}, label])
+    badge = {**plate, "stroke": {"color": "#FF0000", "opacity": 1.0, "width_px": 2.5}}   # an outlined "Now" badge
+    assert not check("label_spacing", [value, badge, label])
+
+
 def test_rules_match_the_config() -> None:
     assert tuple(RULES) == LINT_RULES == tuple(LintRules.model_fields)
     assert set(config_module.RuleName.__args__) == set(LINT_RULES)  # type: ignore[attr-defined]

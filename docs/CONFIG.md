@@ -2217,7 +2217,10 @@ callout, a list of callouts, or `{callouts, focus, previous}`.
 they take about half of the view; a number is the magnification) and builds the step's labels and
 lines for the zoom, so they read at their normal size. Callouts built for another view (the
 whole frame, or another focus) leave when the camera moves; the next step without `focus` moves
-the camera back.
+the camera back. A view taller (wider) than the picture is centred on it that way, a smaller one
+stays on the picture. Without `focus`, a step focuses by itself in a **vertical frame when the
+picture is landscape** (1.2:1 or wider; it would be a thin strip across the middle of a 9:16
+frame), and not otherwise; `focus: false` keeps the whole picture.
 
 **Frames.** `frame: browser` draws a title bar with three dots and an address field (`url`),
 `window` the title bar alone, `phone` a rounded body with a speaker slot and a home bar (for
@@ -2243,7 +2246,7 @@ step, with the camera); a step whose callouts are all on screen already is skipp
 | `steps[].callouts[].side` | `auto` \| `top` \| `bottom` \| `left` \| `right` | `auto` | where the label / inset goes |
 | `steps[].callouts[].curved` | bool | `false` | arrows only |
 | `steps[].callouts[].zoom` | number | `2` | magnifiers only |
-| `steps[].focus` | bool \| number | `false` | `true`: the camera moves in on the step's areas; a number (1–4): that magnification |
+| `steps[].focus` | bool \| number | auto | `true`: the camera moves in on the step's areas; a number (1–4): that magnification; not given: `true` for a landscape picture in a vertical frame, else `false` |
 | `steps[].previous` | `fade` \| `dim` \| `keep` | the scene's | what happens to earlier callouts at this step |
 | `frame` | `none` \| `browser` \| `window` \| `phone` | `none` | drawn around the picture |
 | `url` | str | `""` | text of a `browser` frame's address field |
@@ -2317,7 +2320,11 @@ under speech.
 caption on plates in the theme's `surface` colour over the picture (no `frame` then). `fit:
 contain` shows the whole picture as large as fits; `cover` fills the region (or the frame),
 cutting the picture's excess equally from both sides — a 16:9 clip in a 9:16 frame keeps only its
-middle with `region: bleed, fit: cover`, while `contain` leaves bands above and below.
+middle with `region: bleed, fit: cover`, while `contain` leaves bands above and below. The
+default `fit: auto` is `contain`, except for a landscape clip (1.2:1 or wider) **without
+callouts in a vertical frame** in a region: that shows a nearly square part from the clip's
+middle (`cover` into a square room), not a thin strip; with `region: bleed` `auto` is `contain`. Callout
+steps of a landscape clip in a vertical frame focus by themselves, as in `screenshot`.
 
 **Callout areas** are `[x, y, w, h]` (or a point `[x, y]`) from the top-left corner of the clip's
 **whole picture**, as fractions or, with `units: px`, in its pixels — also with `fit: cover`, so a
@@ -2341,7 +2348,7 @@ picture, `highlight: clip` tints it, `zoom: clip` looks closer.
 | `caption` | str | `""` | line under the clip (on a plate at the bottom with `region: bleed`); fades out while a `focus` step has the camera in |
 | `caption_size`, `caption_color` | size, color | `caption`, `text` | |
 | `region` | `body` \| `full` \| `hero` \| `left` \| `right` \| `top` \| `bottom` \| `center` \| `bleed` | `body` | where the clip goes (see above) |
-| `fit` | `contain` \| `cover` | `contain` | whole picture, or fill the region / frame (cropped) |
+| `fit` | `auto` \| `contain` \| `cover` | `auto` | whole picture, or fill the region / frame (cropped); `auto`: `contain`, a nearly square part from the middle of a landscape clip without callouts in a vertical frame |
 | `trim` | [start, end] | the whole clip | seconds of the file that play |
 | `speed` | number (0.25–4) | `1.0` | playback speed; the sound keeps its pitch |
 | `fit_duration` | bool | `false` | choose the speed so one pass lasts as long as the narration (not with `speed`) |
@@ -3387,8 +3394,12 @@ and fade while it is off screen (a line scrolled out of the window).
 Labels are bold text on a plate in `color` with readable text (as in `screenshot`), never below
 the readable size. They go away from what they point at, inside the safe area (which leaves out
 overlays with `reserve: true`), clear of the text on screen, of other callouts, of the scene's
-other small parts (a node, a bar) and of the overlays; `side` forces a direction. A callout is
-drawn over everything else of the scene. While the camera is zoomed in (a `zoom` earlier in the
+other small parts (a node, a bar) and of the overlays; `side` picks a direction as long as a
+spot there is clear (else the label goes where one is: on a crowded chart a label beside a bar
+would sit on its neighbour). A `label` (no mark) goes straight above, below or beside its
+target before the corners, keeps 0.2 units from other text where it can (lint's
+`label_spacing`) and never stands clearly nearer another bar, value or the title than its own
+target. A callout is drawn over everything else of the scene. While the camera is zoomed in (a `zoom` earlier in the
 beat or due at the same moment — the callout then appears once the camera is in — a `screenshot`
 focus) it is built for the zoomed view, so its label reads at the normal size; one drawn before
 a zoom grows with the scene. `name: peak` makes it a target of later
@@ -3915,6 +3926,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `safe_area` | warning | text inside the frame but in its margins (the scene's `margin_x`/`margin_y`, `safe_area` in the layout dump, smaller where an overlay has `reserve: true`) by more than `tolerance`; not checked while the camera is zoomed in, nor for [overlays](#overlays) (their place is deliberate) |
 | `text_overlap` | error | two texts whose boxes overlap by at least `min_overlap` of the smaller box (the same text drawn twice in the same place is not reported) |
 | `covered_text` | warning | a shape or image drawn **after** (on top of) a text whose colour shows in at least `min_covered` of the middle of the text's box, measured on the still's pixels. Not reported: shapes drawn before the text (plates, highlight bands, a code window), the text's own parent group, shapes fainter than 0.3, and shapes in the text's own colour (a strike-through) |
+| `label_spacing` | warning | a **label on its own plate** — a filled rounded shape without an outline, not in the background colour, drawn just behind one text and hugging it (a callout label, a tag) — closer than `min_gap` of the shorter side to another text (a bar's value, the title, a neighbour's label): it reads as part of that text. The text on the plate itself, texts inside the plate, lone symbols (a bullet) and the text framed by the callout's own mark (an outline in the plate's colour: a `box` tag sits on its edge by design) are not checked; cards, table rows, cells and code bands (several texts, or much larger than their text) are not labels |
 | `min_font` | warning; error below `error_size` | text whose cap height is below `min_size` of the shorter side. The cap height is the layout's `font_px` corrected for the text's letters (`font_px` of all-lowercase text is about its x-height); a lone symbol (`+`, `·`) is not checked |
 | `contrast` | warning | text whose WCAG contrast ratio with its `backdrop` is below `min_ratio` (4.5, WCAG AA), `large_ratio` (3) for text with a cap height of at least `large_size`, or `dimmed_ratio` (2) for text faded on purpose (opacity below 1, e.g. previous bullets); the text colour is blended with the backdrop at the text's opacity, every colour of a multi-coloured text is checked. A code listing's line numbers are not checked |
 | `max_words` | warning | more than `max_words` words (tokens with a letter) of visible `text` objects in one still; code and math do not count |
@@ -3936,6 +3948,7 @@ lint:
     safe_area: {tolerance: 0.01}            # 5 px at 480p
     text_overlap: {min_overlap: 0.1}        # fraction of the smaller box
     covered_text: {min_covered: 0.02}       # fraction of the middle of the text's box
+    label_spacing: {min_gap: 0.02}          # 7 px at 360p, 22 px at 1080p
     min_font: {min_size: 0.025, error_size: 0.018}   # cap height: 12 / 8.6 px at 480p, 27 / 19.4 px at 1080p
     contrast: {min_ratio: 4.5, large_ratio: 3.0, large_size: 0.045, dimmed_ratio: 2.0}
     max_words: {max_words: 40}
@@ -4013,6 +4026,51 @@ scene whose fingerprint changed is rendered again. So `vidgen storyboard` right 
 reads from outside `assets/` are not tracked: use `--force`. The storyboard does not join the
 video; `vidgen render` does. It dispatches `post_scene` for the scenes it renders, not
 `pre_render`/`post_render`.
+
+## Scene gallery (`vidgen gallery`)
+
+`vidgen gallery [PROJECT]` renders **every scene type** from one canonical sample, at 16:9 and
+9:16, and writes a Markdown gallery: the repository's own is [docs/gallery](gallery/README.md).
+
+- **Samples.** A built-in type's sample is its snippet in the author guide's `scenes` topic
+  (`AGENTS.md`, `vidgen guide scenes`; the first of the type, one without `generate:` preferred),
+  so the guide and the gallery show the same YAML and a test keeps the committed pages in step
+  with the guide. Files a snippet names under `assets/` are stand-ins shipped with vidgen (a
+  landscape picture for `image`, an app screenshot for other pictures, a short screen recording
+  for clips). Another name of the same type (`flowchart` for `diagram`) is listed, not rendered
+  again. Run in a project (or given `PROJECT`), the project's own scene types are shown too, each
+  from its first scene in `video.yaml` (with the files it names and the project's
+  `assets/icons`), in the project's theme and with its extensions; a type with no scene is listed
+  as having no sample.
+- **Rendering.** The samples become one work project, `build/gallery/` under the project (or the
+  current folder): 16:9 at 640x360 and 9:16 (its `portrait` variant) at 360x640, 12 fps, timed
+  from the word counts (no audio). Like the storyboard, a sample is rendered again only when its
+  stills are missing or stale; the work project always holds every sample, so a run for a few
+  `--types` keeps the others current.
+- **Output** (default `docs/gallery`; `--output DIR`): `README.md`, the index (every registered
+  type by the guide's groups — text and structure, flows, data, pictures and media, maths and
+  code, then the project's — with both stills and what it is for, from the guide's chooser),
+  `<type>.md` per type (what it is for, the type's description, the stills, links to the GIFs,
+  the YAML, a params table from the `Params` model with types, defaults and docs, the action
+  targets, the beat count) and `media/<type>-16x9.png|gif`, `media/<type>-9x16.png|gif`. The
+  still is the end of the last beat; the GIF plays the scene to that point (320 px / 180 px wide,
+  6 fps, 32 colours, the end held 1.5 s; the fade-out left out). Nothing in the files depends on
+  the time or the machine: the same vidgen writes the same files.
+
+| option | |
+|---|---|
+| `--output DIR`, `-o` | the gallery folder (default `docs/gallery`) |
+| `--types T,T` | only these types (comma-separated, repeatable; another name renders its type); the index still lists every type, with the stills already in the folder (a type with no page there yet: "not rendered here yet") |
+| `--formats 16:9,9:16` | the formats to render (default both) |
+| `--theme PRESET` | render in this theme preset (default: the project's theme, or the default look) |
+| `--clips` / `--no-clips` | also write the GIFs (default yes); without, the pages link the GIFs already there |
+| `--jobs N` | samples rendered in parallel |
+| `--force` | render the samples again even if their stills are current |
+| `--json` | print the gallery's files (below) |
+
+The repository's gallery is committed (stills and GIFs, about 4.4 MB; a test keeps it under
+8 MB): run `vidgen gallery -j 2` from the repository root after changing a built-in scene's look
+or a guide snippet, look at the stills, and commit `docs/gallery`.
 
 ## JSON output (`--json`)
 
@@ -4339,6 +4397,23 @@ The author guide for AI agents (`AGENTS.md`, shipped with vidgen; `vidgen guide 
 | `path` | str | the packaged guide file |
 
 An unknown topic is an error (`ok` false) whose message suggests the closest names.
+
+### `vidgen gallery --json`
+
+The [scene gallery](#scene-gallery-vidgen-gallery) written by `vidgen gallery`.
+
+| key | type | |
+|---|---|---|
+| `project` | str \| null | the project whose own types are shown (`null`: built-ins only) |
+| `output`, `index`, `work` | str | the gallery folder, its `README.md`, the work project rendered in |
+| `formats` | list | the formats rendered (`16:9`, `9:16`) |
+| `rendered`, `reused` | list | samples rendered by this run and current ones reused, as `"<type> (<format>)"` |
+| `bytes` | int | the size of the gallery folder |
+| `elapsed` | float | seconds |
+| `types` | list | every registered type, in index order: `{name, alias_of, sample, page, stills, clips}`; `alias_of` names the type it is another name of (`null` otherwise), `sample` is `guide`, the project's config file name or `null` (none), `page` the type's page written by this run (else `null`), `stills` / `clips` the files written by this run by format |
+
+`warnings`: a type with no sample, and the render warnings of the samples (`scene` is then
+`"<type> (<format>)"`). An unknown `--types` name or format is an error (`ok` false).
 
 ### `vidgen lint --json`
 

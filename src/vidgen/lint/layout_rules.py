@@ -15,6 +15,7 @@ import numpy as np
 from vidgen.config import (
     ContrastRule,
     CoveredTextRule,
+    LabelSpacingRule,
     MaxWordsRule,
     MinFontRule,
     OffFrameRule,
@@ -283,6 +284,85 @@ def covered_text(ctx: StillContext, settings: CoveredTextRule) -> Iterator[Issue
                 (text, shape),
                 value=round(fraction, 3),
                 limit=settings.min_covered,
+            )
+
+
+def _inside(inner: Bbox, outer: Bbox, tolerance: float = 1.0) -> bool:
+    return inner[0] >= outer[0] - tolerance and inner[1] >= outer[1] - tolerance and inner[2] <= outer[2] + tolerance and inner[3] <= outer[3] + tolerance
+
+
+def _gap(a: Bbox, b: Bbox) -> float:
+    """The distance between two boxes (0 when they touch or overlap)."""
+    dx = max(a[0] - b[2], b[0] - a[2], 0.0)
+    dy = max(a[1] - b[3], b[1] - a[3], 0.0)
+    return float(np.hypot(dx, dy))
+
+
+def label_plates(ctx: StillContext) -> list[tuple[dict[str, Any], dict[str, Any]]]:
+    """``(text, plate)`` pairs of labels on their own plate: a filled rounded shape without an
+    outline drawn just behind one text (and no other), hugging it (at most twice its height, a
+    little wider), in a colour that is not the frame's background (callout labels and tags; not
+    cards, cells, bands or outlined badges)."""
+    background = str(ctx.layout.get("background", "")).lower()
+    texts = [obj for obj in ctx.objects if is_text(obj)]
+    pairs = []
+    for shape in ctx.objects:
+        fill = shape.get("fill")
+        if shape["kind"] != "shape" or "Rounded" not in str(shape.get("class")) or not fill or fill["opacity"] < 0.5:
+            continue
+        stroke = shape.get("stroke")
+        if stroke and stroke.get("opacity", 1.0) > 0 and stroke.get("width_px", 1.0) > 0:
+            continue  # an outlined badge (a timeline's "now" tag) sits in its line by design
+        if str(fill["color"]).lower() == background:
+            continue
+        plate = _bbox(shape)
+        inside = [t for t in texts if _inside(_bbox(t), plate) and t["order"] > shape["order"]]
+        if len(inside) != 1:
+            continue
+        text = inside[0]
+        box = _bbox(text)
+        height = box[3] - box[1]
+        if str(text.get("backdrop", "")).lower() != str(fill["color"]).lower():
+            continue
+        if plate[3] - plate[1] > 2.2 * height or plate[2] - plate[0] > box[2] - box[0] + 3 * height:
+            continue
+        pairs.append((text, shape))
+    return pairs
+
+
+@rule("label_spacing")
+def label_spacing(ctx: StillContext, settings: LabelSpacingRule) -> Iterator[Issue]:
+    """A label on its own coloured plate (a callout label, a tag) touches or overlaps other text:
+    it reads as part of it (a value, a title) rather than a label of its own."""
+    limit = settings.min_gap * ctx.short_side
+    texts = [obj for obj in ctx.objects if is_text(obj)]
+    for label, shape in label_plates(ctx):
+        plate = _bbox(shape)
+        color = str(shape["fill"]["color"]).lower()
+        # the callout's own mark: an outline in the plate's colour; the text it frames is the
+        # label's own target (a box's tag sits on its edge, next to it, by design)
+        marks = [
+            _bbox(m) for m in ctx.objects
+            if m["kind"] == "shape" and m.get("stroke") and str(m["stroke"]["color"]).lower() == color
+            and (not m.get("fill") or m["fill"]["opacity"] < 0.1)
+        ]
+        for other in texts:
+            if other is label or is_overlay(other) != is_overlay(label) or _inside(_bbox(other), plate):
+                continue
+            if not has_letters_or_digits(other):  # a bullet, an arrow glyph: no text to confuse it with
+                continue
+            if any(_inside(_bbox(other), mark) for mark in marks):
+                continue
+            gap = _gap(plate, _bbox(other))
+            if gap >= limit:
+                continue
+            yield Issue(
+                f"label {describe(label)} is {gap:.1f} px from {describe(other)} (at least {limit:.1f} px "
+                "apart reads as separate)",
+                plate,
+                (label, other),
+                value=round(gap / ctx.short_side, 4),
+                limit=settings.min_gap,
             )
 
 

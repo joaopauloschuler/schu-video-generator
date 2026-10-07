@@ -33,7 +33,7 @@ TEMPLATE_DOTFILES: tuple[str, ...] = ("gitignore",)
 #: Subcommands that accept ``--json``.
 JSON_COMMANDS: tuple[str, ...] = (
     "validate", "list-scenes", "list-themes", "list-icons", "list-sfx", "list-music", "render", "schema", "storyboard", "lint",
-    "thumbnail", "export", "translate-template", "slides", "readback", "guide",
+    "thumbnail", "export", "translate-template", "slides", "readback", "guide", "gallery",
 )
 
 #: What a command function returns: an exit code, or (with ``--json``) the JSON document.
@@ -944,6 +944,39 @@ def cmd_guide(args: argparse.Namespace) -> CommandResult:
     return 0
 
 
+def cmd_gallery(args: argparse.Namespace) -> CommandResult:
+    """Render every scene type's sample at 16:9 and 9:16 and write the Markdown gallery (DESIGN.md §60)."""
+    from vidgen.gallery import make_gallery
+
+    started = time.monotonic()
+    project = None
+    if args.project is not None or any((Path.cwd() / name).is_file() for name in CONFIG_NAMES):
+        project = Project.load(args.project or ".")
+    types = [t.strip() for value in args.types for t in value.split(",") if t.strip()]
+    formats = [f.strip() for f in args.formats.split(",") if f.strip()]
+    result = make_gallery(
+        project,
+        output=Path(args.output),
+        only=types or None,
+        formats=formats,
+        preset=args.theme,
+        clips=args.clips,
+        jobs=args.jobs,
+        force=args.force,
+    )
+    for message in result.warnings:
+        logging.getLogger("vidgen.gallery").warning(message)
+    if args.json:
+        return jsonout.gallery_document(project, result, time.monotonic() - started)
+    reused = f", {len(result.reused)} reused" if result.reused else ""
+    print(f"rendered {len(result.rendered)} sample(s){reused}")
+    print(f"gallery: {result.index} ({result.bytes / 1e6:.1f} MB in {result.output})")
+    for t in result.types:
+        if t.page is not None:
+            print(f"  {t.name}: {t.page.name}, {len(t.stills)} still(s), {len(t.clips)} clip(s)")
+    return 0
+
+
 class UsageError(Exception):
     """A command-line usage error (raised instead of argparse's print-and-exit)."""
 
@@ -1128,6 +1161,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--with-audio", action="store_true", help="clip: keep the sound")
     p.add_argument("--output", "-o", metavar="FILE", help="write here instead of exports/<output>_<scene>[_<from>-<to>s].gif|mp4")
     p.set_defaults(func=cmd_export)
+
+    p = sub.add_parser("gallery", help="render every scene type's sample (16:9 and 9:16) into a Markdown gallery with stills, GIFs and YAML")
+    p.add_argument("project", nargs="?", default=None, help="also show this project's own scene types, in its theme (default: the project in . if any)")
+    p.add_argument("--output", "-o", default=str(Path("docs") / "gallery"), metavar="DIR", help="gallery folder (default: docs/gallery)")
+    p.add_argument("--types", action="append", default=[], metavar="T,T", help="only these scene types (comma-separated, repeatable)")
+    p.add_argument("--formats", default="16:9,9:16", metavar="F,F", help="formats to render: 16:9, 9:16 (default: both)")
+    p.add_argument("--theme", metavar="PRESET", help="render in this theme preset (default: the project's theme, or the default one)")
+    p.add_argument("--clips", action=argparse.BooleanOptionalAction, default=True, help="also write a GIF of each scene (default: yes)")
+    p.add_argument("--jobs", "-j", type=int, default=1, metavar="N", help="render N scenes in parallel (default: 1)")
+    p.add_argument("--force", action="store_true", help="render the samples again even if their stills are current")
+    p.set_defaults(func=cmd_gallery)
 
     p = sub.add_parser("lint", help="check the layout of the video's stills (text off frame, too small, ...)")
     project_arg(p)

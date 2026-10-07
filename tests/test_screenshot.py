@@ -325,6 +325,25 @@ def test_focus_moves_the_camera_in_and_back(make_project, media: Path) -> None:
 
 
 @pytest.mark.render
+def test_landscape_picture_focuses_by_itself_in_a_vertical_frame(make_project, media: Path) -> None:
+    """Step 57: a 16:10 screenshot in 9:16 was a thin strip; its callout steps now zoom in (the
+    view centred on the picture vertically, kept on it sideways); not in 16:9, not with
+    ``focus: false``."""
+    steps = [{"box": [0.1, 0.1, 0.3, 0.2], "label": "Search"}, {"arrow": [0.9, 0.2], "label": "New"}]
+    portrait = render(load(make_project, [shot(steps)]), "s", media, (90, 160))
+    assert all(cam is not None for cam in portrait._cameras)
+    pic = api.callout_area(portrait._picture)
+    for width, (x, y) in portrait._cameras:
+        height = width * 160 / 90                       # the frame's aspect (Manim's config is restored)
+        assert height > pic.height and y == pytest.approx(pic.center[1])           # even bands
+        assert pic.x0 - 1e-6 <= x - width / 2 and x + width / 2 <= pic.x1 + 1e-6    # on the picture
+    landscape = render(load(make_project, [shot(steps)]), "s", media, (160, 90))
+    assert landscape._cameras == [None, None]
+    kept = render(load(make_project, [shot([{"callouts": steps[:1], "focus": False}])]), "s", media, (90, 160))
+    assert kept._cameras == [None]
+
+
+@pytest.mark.render
 def test_early_reveal_and_actions(make_project, media: Path) -> None:
     project = load(make_project, [{**shot(STEPS), "beats": beats([{"reveal": "step2"}], [{"zoom": "callout:Search"}], [{"dim": "image"}])}])
     scene = render(project, "s", media)

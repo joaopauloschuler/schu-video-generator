@@ -263,8 +263,51 @@ def test_callouts_lint_clean_in_landscape_and_portrait(make_project) -> None:
     ]
     for preview in ({"width": 320, "height": 180, "fps": 5}, {"width": 180, "height": 320, "fps": 5}):
         project = load(make_project, scenes, preview=preview)
-        result = lint_project(project, rules=["off_frame", "safe_area", "text_overlap", "covered_text", "min_font", "contrast"])
+        result = lint_project(project, rules=["off_frame", "safe_area", "text_overlap", "covered_text", "label_spacing", "min_font", "contrast"])
         assert [(f.scene, f.rule, f.message) for f in result.findings] == []
+
+
+def test_label_spot_side_is_kept_only_while_clear() -> None:
+    """Step 57: a ``side`` whose spots are all blocked (a neighbour's bar) gives way; a spot
+    clearly nearer a rival than the anchor is avoided; ``straight`` prefers above / below."""
+    from vidgen.callouts import _misleading, label_spot
+
+    bounds = Region(-7, -4, 7, 4)
+    anchor = Region(0, -2, 1, 0)                 # a bar with its value
+    neighbour = Region(1.2, -4, 2.2, 1)          # the taller bar to its right, down to its axis label
+    spot = label_spot((1.5, 0.4), anchor, bounds=bounds, avoid=[neighbour], gaps=[0.15, 0.35], side="right")
+    assert not overlaps(spot, neighbour) and spot.y0 >= anchor.y1        # moved above, not onto the neighbour
+    free = label_spot((1.5, 0.4), anchor, bounds=bounds, gaps=[0.15, 0.35], side="right")
+    assert free.x0 >= anchor.x1                                           # nothing in the way: the side holds
+    straight = label_spot((1.5, 0.4), anchor, bounds=bounds, gaps=[0.15, 0.35], straight=True)
+    assert straight.center[0] == pytest.approx(anchor.center[0]) and straight.y0 > anchor.y1
+    rival = Region(-1.6, 0.2, -0.2, 0.5)         # a neighbour's value up and left
+    plain = label_spot((1.5, 0.4), anchor, bounds=bounds, gaps=[0.15, 0.35], side="left")
+    assert _misleading(plain, anchor, [rival])                            # up-left: by the rival's value
+    spot = label_spot((1.5, 0.4), anchor, bounds=bounds, gaps=[0.15, 0.35], rivals=[rival], side="left")
+    assert not _misleading(spot, anchor, [rival]) and spot.x1 <= anchor.x0 + 1e-9
+
+
+@pytest.mark.render
+def test_label_callouts_on_a_crowded_bar_chart(make_project, media: Path) -> None:
+    """Step 56's routed case: ``kind: label`` with ``side: right | top | left`` on seven bars sat
+    on a neighbour's bar or against values / the title; now each label is over its own bar and
+    lint's ``label_spacing`` is clean, in 16:9 and 9:16."""
+    params = {"title": "Render time per minute of video", "labels": ["240p", "360p", "480p", "720p", "1080p", "1440p", "4K"],
+              "values": [0.2, 0.3, 0.4, 1.1, 2.6, 5.2, 9.8], "unit": " min"}
+    acts = beats([{"callout": "bar:1080p", "kind": "label", "label": "Default", "side": "right"}],
+                 [{"callout": "bar:4K", "kind": "label", "label": "Slowest", "side": "top"}],
+                 [{"callout": "bar:480p", "kind": "label", "label": "Preview", "side": "left"}])
+    for preview in ({"width": 320, "height": 180, "fps": 5}, {"width": 180, "height": 320, "fps": 5}):
+        project = load(make_project, [{"id": "c", "type": "bar_chart", "params": params, "beats": acts}], preview=preview)
+        result = lint_project(project, rules=["text_overlap", "covered_text", "label_spacing", "off_frame"])
+        assert [(f.rule, f.message) for f in result.findings] == [], preview
+    scene = render(load(make_project, [{"id": "c", "type": "bar_chart", "params": params, "beats": acts}]), "c", media, size=(320, 180))
+    bars = {f"bar:{n}": mobject_region(scene.find_targets(f"bar:{n}")[0].mobject) for n in params["labels"]}
+    for k, name in enumerate(("bar:1080p", "bar:4K", "bar:480p")):
+        label = mobject_region(made(scene, k).mark)
+        nearest = min(bars, key=lambda n: abs(bars[n].center[0] - label.center[0]))
+        assert nearest == name, (name, nearest)
 
 
 # ----- screenshot caption -------------------------------------------------------------------------

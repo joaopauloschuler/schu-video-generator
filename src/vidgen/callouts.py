@@ -77,6 +77,9 @@ STROKE = 4.0
 PAD = 0.08
 #: Distances (units) tried between an arrow's label and its area, shortest first.
 ARROW_GAPS = (0.75, 1.1, 1.5, 2.0)
+#: Room (units) a box's or circle's tag keeps from other text where it can (lint's
+#: ``label_spacing``).
+TAG_CLEARANCE = 0.2
 #: Distances tried between a magnifier's inset and its area.
 INSET_GAPS = (0.35, 0.7, 1.1, 1.6)
 
@@ -154,6 +157,8 @@ def _clamp(r: Region, bounds: Region) -> Region:
 
 #: Directions tried for an arrow's label / a magnifier's inset, in order of preference.
 _AROUND = [(1, 1), (-1, 1), (1, -1), (-1, -1), (1, 0), (-1, 0), (0, 1), (0, -1)]
+#: The same for a label without a mark: straight above, below or beside what it labels first.
+_STRAIGHT = [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (-1, 1), (1, -1), (-1, -1)]
 
 
 def _allowed(direction: tuple[int, int], side: str) -> bool:
@@ -169,6 +174,13 @@ def _distance(a: Region, b: Region) -> float:
     return math.hypot(dx, dy)
 
 
+def _misleading(spot: Region, anchor: Region, rivals: Sequence[Region]) -> bool:
+    """Whether a label at ``spot`` stands clearly nearer one of ``rivals`` (a neighbour's bar or
+    value, a title) than the ``anchor`` it labels: it would read as theirs."""
+    own = _distance(spot, anchor)
+    return any(_distance(spot, r) < 0.75 * own - 1e-6 for r in rivals)
+
+
 def _choose(
     candidates: list[tuple[Region, float]],
     anchor: Region,
@@ -177,10 +189,13 @@ def _choose(
     *,
     near: float = 0.0,
     prefer_off: Region | None = None,
+    clearance: float = 0.0,
+    rivals: Sequence[Region] = (),
 ) -> Region:
     """The best of ``(rect, preference)`` candidates: inside ``bounds`` (moved in when they stick
-    out), off the ``anchor``, clear of ``avoid``, at least ``near`` from the anchor, preferably
-    off ``prefer_off``; ties go to the preferred one."""
+    out), off the ``anchor``, clear of ``avoid`` (and preferably ``clearance`` away from it), at
+    least ``near`` from the anchor, preferably off ``prefer_off`` and not nearer any of
+    ``rivals`` than the anchor; ties go to the preferred one."""
     best, best_score = None, math.inf
     for rect, preference in candidates:
         moved = _clamp(rect, bounds)
@@ -188,6 +203,10 @@ def _choose(
         shift = math.hypot(*(moved.center - rect.center)[:2])
         score = 10 * _overlap(moved, _grow(anchor, 0.04)) / size
         score += 4 * sum(_overlap(moved, a) for a in avoid) / size
+        if clearance > 0:
+            score += 2 * sum(_overlap(moved, _grow(a, clearance)) for a in avoid) / size
+        if _misleading(moved, anchor, rivals):
+            score += 3
         score += 0.6 * shift + preference
         if near > 0:
             score += 6 * max(0.0, near - _distance(moved, anchor))
@@ -208,34 +227,61 @@ def label_spot(
     gaps: Sequence[float] = ARROW_GAPS,
     side: Side = "auto",
     prefer_off: Region | None = None,
+    clearance: float = 0.0,
+    rivals: Sequence[Region] = (),
+    straight: bool = False,
 ) -> Region:
     """Where a box of ``size`` (width, height) goes near ``anchor`` without covering it: one of
-    eight directions around it at one of ``gaps`` (not much closer than the first, even when
-    moved inside ``bounds``, default: the safe area), clear of ``avoid`` and preferably off
-    ``prefer_off``; ``side`` restricts the directions (``top``: above it...)."""
+    eight directions around it (``straight``: above, below and beside it before the corners)
+    at one of ``gaps`` (not much closer than the first, even when
+    moved inside ``bounds``, default: the safe area), clear of ``avoid`` (preferably by
+    ``clearance``), preferably off ``prefer_off`` and not nearer one of ``rivals`` than
+    ``anchor`` (a label without a mark would read as theirs). ``side`` restricts the directions
+    (``top``: above it...) as long as one of them is clear of ``avoid`` (and of ``rivals``);
+    when none is and another side is, that one is used (a label on a neighbour's value or bar
+    would point at the wrong thing)."""
     bounds = bounds or safe_area()
     w, h = size
     cx, cy = anchor.center[:2]
-    candidates = []
-    for n, (dx, dy) in enumerate(d for d in _AROUND if _allowed(d, side)):
-        for k, gap in enumerate(gaps):
-            x = cx + dx * (anchor.width / 2 + gap * (0.75 if dy else 1.0) + w / 2)
-            y = cy + dy * (anchor.height / 2 + gap * (0.75 if dx else 1.0) + h / 2)
-            candidates.append((_box(x, y, w, h), 0.03 * n + 0.08 * k))
-    return _choose(candidates, anchor, bounds, avoid, near=0.7 * min(gaps), prefer_off=prefer_off)
+
+    def best(allowed: str) -> Region:
+        candidates = []
+        for n, (dx, dy) in enumerate(d for d in (_STRAIGHT if straight else _AROUND) if _allowed(d, allowed)):
+            for k, gap in enumerate(gaps):
+                x = cx + dx * (anchor.width / 2 + gap * (0.75 if dy else 1.0) + w / 2)
+                y = cy + dy * (anchor.height / 2 + gap * (0.75 if dx else 1.0) + h / 2)
+                candidates.append((_box(x, y, w, h), 0.03 * n + 0.08 * k))
+        return _choose(candidates, anchor, bounds, avoid, near=0.7 * min(gaps), prefer_off=prefer_off, clearance=clearance, rivals=rivals)
+
+    def blocked(spot: Region) -> bool:
+        return any(_overlap(spot, a) > 1e-9 for a in avoid) or _overlap(spot, anchor) > 1e-9 or _misleading(spot, anchor, rivals)
+
+    spot = best(side)
+    if side != "auto" and blocked(spot):
+        anywhere = best("auto")
+        if not blocked(anywhere):
+            return anywhere
+    return spot
 
 
-def tag_spot(size: tuple[float, float], anchor: Region, *, bounds: Region | None = None, avoid: Sequence[Region] = (), gap: float = 0.08, side: Side = "auto") -> Region:
+def tag_spot(
+    size: tuple[float, float], anchor: Region, *, bounds: Region | None = None, avoid: Sequence[Region] = (), gap: float = 0.08,
+    side: Side = "auto", clearance: float = 0.0,
+) -> Region:
     """Where a label tag of ``size`` goes on the edge of a mark ``anchor`` (a box): just above it
-    at its left or right end, or just below it, else inside its top-left corner."""
+    at its left or right end, or just below it, else inside its top-left corner; preferably
+    ``clearance`` away from ``avoid``."""
     bounds = bounds or safe_area()
     w, h = size
-    above, below = anchor.y1 + gap + h / 2, anchor.y0 - gap - h / 2
     left, right = anchor.x0 + w / 2, anchor.x1 - w / 2
-    options = [((0, 1), left, above), ((0, 1), right, above), ((0, -1), left, below), ((0, -1), right, below),
-               ((-1, 0), anchor.x0 - gap - w / 2, anchor.y1 - h / 2), ((1, 0), anchor.x1 + gap + w / 2, anchor.y1 - h / 2)]
-    candidates = [(_box(x, y, w, h), 0.05 * n) for n, (d, x, y) in enumerate(options) if _allowed(d, side)]
-    best = _choose(candidates, anchor, bounds, avoid)
+    candidates = []
+    # with a clearance, the same spots a little further out too (when text crowds the edge)
+    for k, g in enumerate((gap, gap + clearance) if clearance > 0 else (gap,)):
+        above, below = anchor.y1 + g + h / 2, anchor.y0 - g - h / 2
+        options = [((0, 1), left, above), ((0, 1), right, above), ((0, -1), left, below), ((0, -1), right, below),
+                   ((-1, 0), anchor.x0 - g - w / 2, anchor.y1 - h / 2), ((1, 0), anchor.x1 + g + w / 2, anchor.y1 - h / 2)]
+        candidates += [(_box(x, y, w, h), 0.05 * n + 0.15 * k) for n, (d, x, y) in enumerate(options) if _allowed(d, side)]
+    best = _choose(candidates, anchor, bounds, avoid, clearance=clearance)
     inside = _box(anchor.x0 + gap + w / 2, anchor.y1 - gap - h / 2, w, h)
     covers = _overlap(best, _grow(anchor, 0.04)) + sum(_overlap(best, a) for a in avoid)
     return inside if covers > 0.2 * w * h and anchor.width > w + 2 * gap and anchor.height > h + 2 * gap else best
@@ -334,7 +380,7 @@ def _tag(label: str, color: Any, size: str | float, scale: float, theme: Theme |
 
 def _place_tag(tag: VGroup | None, anchor: Region, bounds: Region | None, avoid: Sequence[Region], side: Side, scale: float) -> None:
     if tag is not None:
-        spot = tag_spot((tag.width, tag.height), anchor, bounds=bounds, avoid=avoid, gap=0.08 * scale, side=side)
+        spot = tag_spot((tag.width, tag.height), anchor, bounds=bounds, avoid=avoid, gap=0.08 * scale, side=side, clearance=TAG_CLEARANCE * scale)
         tag.move_to(spot.center)
 
 

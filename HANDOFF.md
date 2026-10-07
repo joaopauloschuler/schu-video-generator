@@ -5316,3 +5316,138 @@ How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2136 passed, 1
 `pytest tests/test_guide.py` (~6 s). Manual: `vidgen guide --list`, `vidgen guide scenes`,
 `vidgen guide vertical --json`; after editing the guide, `cp src/vidgen/data/guide/AGENTS.md
 AGENTS.md`.
+
+## Step 57 — Scene gallery
+What was built
+- **`vidgen gallery [PROJECT] [--output DIR] [--types T,T] [--formats 16:9,9:16] [--theme PRESET]
+  [--clips | --no-clips] [--jobs N] [--force] [--json]`** (`src/vidgen/gallery.py`): every
+  registered scene type rendered from one canonical sample at 16:9 (640x360) and 9:16 (360x640),
+  12 fps, into a Markdown gallery (default `docs/gallery`):
+  - `README.md`: every type by the guide's groups (text and structure, flows, data, pictures
+    and media, maths and code; then a project's own types), both stills linked to the page and
+    "use it for" from the guide's chooser; `flowchart` listed as "same type as `diagram`";
+  - `<type>.md`: use, description (first paragraph of the class / module docstring), stills
+    (last beat), the GIFs inline, the YAML as written in the guide, a params table from the
+    `Params` model (types, defaults, docs, nested fields as `a.b`, synonyms), targets, beats;
+  - `media/<type>-16x9.png|gif`, `media/<type>-9x16.png|gif`: optimised PNG stills, GIFs of the
+    scene up to its last beat's end (no fade-out), 320 / 180 px wide, 6 fps, 32 colours, no
+    dithering, the end held 1.5 s.
+- **Samples = the author guide's snippets** (single source): `guide_samples()` splits the yaml
+  blocks of `AGENTS.md`'s `scenes` topic into list items (text kept as written; a `generate:`
+  snippet is replaced by a later one of the type, so `image` shows a picture, not the
+  placeholder). Their `assets/...` files map to stand-ins shipped as package data
+  `data/gallery/` (`picture.png` for `image`, `app.png` for other pictures, `clip.webm` for
+  videos; `sample_asset()`), which `tests/test_guide.py` now uses too. `clip.webm` is new: a
+  zoom into the sample app screenshot (`tools/make_gallery_clip.py`; the examples' ffmpeg test
+  pattern looked like a test pattern). In a project (or with `PROJECT`), the project's own types
+  take their first scene in `video.yaml` (+ the files it names and `assets/icons`), and the
+  project's theme and extensions are used.
+- **Rendering** in a work project `build/gallery/` (under the project or the current folder) with
+  every sample (so `--types` runs keep the others current: fingerprints see the whole config and
+  `assets/`), 9:16 as its `portrait` variant; stills reused like the storyboard's
+  (`stills_current`), the "audio missing" warning filtered.
+- **Committed**: `docs/gallery` (29 pages incl. the index, 56 stills, 56 GIFs) = 4.4 MB (1.3 MB
+  stills, 3.1 MB GIFs); `tests/test_gallery.py` keeps it under 8 MB, lists every registered type
+  in the index and checks every page shows the guide's current snippet and both stills (so
+  editing a guide snippet without `vidgen gallery --types T` fails the suite).
+- **Reproducible**: render workers now run with `PYTHONHASHSEED=0` (unless set): with Python's
+  random per-process seed the frames of a camera move differed by a few pixel values between
+  renders. Two `--force` regenerations give byte-identical files except `screenshot-9x16.gif`
+  (sub-pixel edges of the picture while the camera moves over it; not tracked down).
+- **Routed visual fixes** (Steps 37 and 56), each seen on stills before / after:
+  - `map` in 9:16: a regional view (`europe`...) is narrowed to the longitudes that fill the
+    frame around its items instead of grown north and south (Europe was a band above Africa);
+    country labels with leaders no longer cross earlier leaders or labels nor stand nearer
+    another labelled place than their own (Israel / Switzerland swapped-looking labels in a
+    9:16 world view); when the first spot fails, a search out to 3 units uses the empty bands
+    above and below the map.
+  - `screenshot` / `video_clip` in 9:16: steps focus by themselves for a landscape picture
+    (`focus` default now auto); a focus view taller than the picture is centred on it, a
+    smaller one stays on it. `video_clip` `fit: auto` (new default): a landscape clip without
+    callouts in a vertical frame shows a nearly square part of its middle.
+  - callout labels on crowded charts: `label_spot` honours `side` only while a spot there is
+    clear (else the best clear spot elsewhere), avoids "rivals" (a spot clearly nearer another
+    bar, value or the title than its target), keeps a soft clearance from text, and `kind:
+    label` tries straight above / below / beside first; `box` / `circle` tags get the same
+    clearance (and the same spots one clearance further out). New lint rule **`label_spacing`**
+    (warning, `min_gap` 0.02): a label on its own plate (filled, rounded, no outline, hugging
+    one text) closer than that to other text; lone symbols, the text framed by the callout's
+    own mark and outlined badges (the timeline's "Now", which first fired on examples/gallery)
+    are not reported. The three routed cases were 6.7–7 px at 360p; lint reported none of them
+    before.
+- **Examples re-linted** after the changes: examples/gallery and examples/minimal (default and
+  vertical), kphi3, custom_scene: 0 findings each (kphi3: its 4 commented ignores).
+
+Files
+- New: `src/vidgen/gallery.py`, `src/vidgen/data/gallery/{picture.png, app.png, clip.webm}`,
+  `tools/make_gallery_clip.py`, `docs/gallery/` (README.md, 28 type pages, media/),
+  `tests/test_gallery.py`.
+- Changed: `cli.py` (`cmd_gallery`, parser, `JSON_COMMANDS`), `jsonout.py` (`gallery_document`),
+  `export.py` (`write_gif(..., colors, dither, hold)` shared with `export gif`),
+  `render/pipeline.py` (`PYTHONHASHSEED`), `render/fingerprint.py` (`gallery.py` not a render
+  input), `config.py` (`label_spacing`, `LabelSpacingRule`), `lint/layout_rules.py`
+  (`label_plates`, `label_spacing`), `callouts.py` (`label_spot` `clearance` / `rivals` /
+  `straight` / side fallback, `tag_spot` `clearance`, `TAG_CLEARANCE`, `_misleading`),
+  `scenes/callout_action.py` (`LABEL_CLEARANCE`, rivals), `scenes/world_map.py`
+  (`_portrait_region`, `_clear_spot`, `_misleading`, `_crosses`, segments), `scenes/screenshot.py`
+  (`focus` auto, `_auto_focus`, view centring), `scenes/video_clip.py` (`fit: auto`),
+  `pyproject.toml` (package data `data/gallery/*`), `.gitignore` (`!docs/gallery/media/`: the
+  repository ignores every `media/` folder, Manim's output), `AGENTS.md` + `src/vidgen/data/guide/AGENTS.md`
+  (gallery in the chooser intro, JSON list, `label_spacing` row, 9:16 picture behaviour),
+  README.md (feature line, command row, docs list), docs/CONFIG.md (new "Scene gallery" section
+  and `gallery --json`, `label_spacing`, screenshot `focus`, video_clip `fit`, callout `side`),
+  DESIGN.md (tree, §8, new §60), tasklist.md; tests `test_lint.py`, `test_callout_action.py`,
+  `test_world_map.py`, `test_screenshot.py`, `test_video_clip.py`, `test_guide.py`.
+
+Public interfaces added/changed (compatible; `vidgen.api` unchanged except `label_spot` /
+`tag_spot` keyword arguments)
+- CLI `vidgen gallery` (+ JSON document `gallery`, version 1). Lint rule `label_spacing`
+  (`lint.rules.label_spacing.min_gap`, `lint_ignore: [label_spacing]`).
+- Params: `screenshot` / `video_clip` `steps[].focus` default `None` (auto); `video_clip` `fit`
+  gains `auto` (default). Visible changes: 9:16 renders of landscape screenshots / clips with
+  callouts zoom in on their callouts; landscape clips without callouts are cropped nearly square
+  in 9:16; 9:16 regional maps are narrower; `label` callouts and box tags may move.
+- `vidgen.gallery`: `make_gallery`, `gallery_types`, `rendered_names`, `guide_samples`,
+  `project_samples`, `chooser_uses`, `sample_asset`, `work_config`, `write_page`, `write_index`,
+  `media_name`, `Sample`, `GalleryType`, `GalleryResult`, `FORMATS`, `CLIP_*`.
+- `vidgen.export.write_gif`. Fingerprints change once (scene code changed).
+
+Decisions / deviations
+- **Samples from the guide, not `examples/gallery`** (the tasklist's suggestion): the guide has
+  exactly one short, validated snippet per type, written for agents; the examples use some
+  types twice, others with project-specific assets. One source: a test fails when a page no
+  longer shows the guide's snippet.
+- **Committed GIFs too**, kept small (6 fps, 32 colours, 320 / 180 px, no fade-out): the gallery
+  is for people on GitHub and agents reading docs, and a still does not show what a scene
+  animates. Budget 8 MB, used 4.4 MB.
+- **Markdown only** (no HTML page): GitHub renders it, agents read it; `<img>` tags keep the
+  stills small in tables.
+- No mid-beat stills: the GIF shows the animation; the still is the last beat's end.
+- `fit: auto` / auto focus rather than "portrait-only params": a variant cannot easily change
+  one scene's params (variants replace the `scenes` list), so the sensible 9:16 behaviour has
+  to be the default; `focus: false` / `fit: contain` restore the old look.
+
+What I looked at (Read)
+- Every gallery still at 16:9 and 9:16 (contact sheets of all 28 types, twice), the clip frames,
+  and a scratch project reproducing the routed cases (`map` world view with Qatar / Costa Rica /
+  Belgium / Israel / Netherlands / Switzerland / Japan, a seven-bar chart with `label` callouts
+  `side: right | top | left`, a screenshot and a clip) at 640x360 and 360x640, before and after.
+- Left as seen (routed to Step 60): `code_walkthrough` 9:16 listing is small (a line wraps);
+  `image` with the default `fit: contain` leaves bands in 9:16; a world view spanning most
+  longitudes stays a strip in 9:16 (its labels now spread into the bands); the heatmap 9:16
+  block is centred under the title (looks high, is centred).
+
+Known gaps / TODOs
+- `screenshot-9x16.gif` is not byte-stable across forced re-renders (see above).
+- Project-type rendering is unit-tested (samples, config) but not rendered in a test (tried by
+  hand: `vidgen gallery examples/custom_scene --types gear_pair,pie` renders the custom
+  `gear_pair` with its project icon; its "use it for" is the first sentence of its docstring).
+- `vidgen gallery` writes into `docs/gallery` of the current folder by default, also in a
+  project (`--output` to choose).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2154 passed, 1 skipped, ~11 min
+on 2 CPUs); step only: `pytest tests/test_gallery.py` (11 tests, ~25 s; one renders two types at
+160x90). Manual: `vidgen gallery -j 2` from the repository root
+(~6 min the first time, seconds when current), then open `docs/gallery/README.md`;
+`vidgen gallery --types pie,map --output /tmp/g --json`; in a project:
+`vidgen gallery examples/custom_scene --output /tmp/g --types gear_pair`.

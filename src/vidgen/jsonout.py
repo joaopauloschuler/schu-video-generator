@@ -23,6 +23,7 @@ from vidgen.project import Project
 
 if TYPE_CHECKING:
     from vidgen.export import ExportResult
+    from vidgen.gallery import GalleryResult
     from vidgen.guide import GuideTopic
     from vidgen.icons import IconInfo
     from vidgen.deck import Deck
@@ -286,6 +287,38 @@ def guide_document(
         topics=[{"name": t.name, "title": t.title, "aliases": list(t.aliases)} for t in topics],
         text=text,
         path=_path(GUIDE_FILE),
+    )
+
+
+def gallery_document(project: Project | None, result: GalleryResult, elapsed: float, warnings: Iterable[Mapping[str, Any]] = ()) -> dict[str, Any]:
+    """The ``vidgen gallery --json`` document: the folder, its index and every scene type with
+    its page, stills and clips (by format)."""
+    types = [
+        {
+            "name": t.name,
+            "alias_of": t.alias_of,
+            "sample": None if t.sample is None else t.sample.origin,
+            "page": None if t.page is None else _path(t.page),
+            "stills": {fmt: _path(p) for fmt, p in t.stills.items()},
+            "clips": {fmt: _path(p) for fmt, p in t.clips.items()},
+        }
+        for t in result.types
+    ]
+    worker_warnings = [warning(message, sample) for sample, message in result.render_warnings]
+    return envelope(
+        "gallery",
+        True,
+        [*warnings, *worker_warnings],
+        project=None if project is None else _path(project.root),
+        output=_path(result.output),
+        index=_path(result.index),
+        work=_path(result.work),
+        formats=result.formats,
+        rendered=result.rendered,
+        reused=result.reused,
+        bytes=result.bytes,
+        elapsed=round(elapsed, 3),
+        types=types,
     )
 
 

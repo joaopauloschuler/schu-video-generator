@@ -397,7 +397,10 @@ image (`callout_area(area, within, units=)` does the conversion and returns a `R
   around the area (`padding`), the label as a tag on its edge.
 - `callout_arrow(area, label="", curved=False, prefer_off=None)` — the label placed away from the
   area (`label_spot`: eight directions, inside `bounds`, clear of `avoid`, preferably off
-  `prefer_off`) and an arrow from it to the area's edge.
+  `prefer_off`; also `clearance=` (soft room from `avoid`), `rivals=` (boxes it must not stand
+  clearly nearer than the area, e.g. a neighbour's value) and `straight=True` (above / below /
+  beside first); a `side` gives way when no spot on it is clear) and an arrow from it to the
+  area's edge.
 - `callout_magnifier(area, label="", image=img, zoom=2.0, source=None)` — an inset of the image's
   area, `zoom` times larger (less when there is no room), cut from the image's pixels (or from
   `source`, a sharper file of the same picture) with Pillow; two lines join it to the area.

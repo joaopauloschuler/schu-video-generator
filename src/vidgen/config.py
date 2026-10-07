@@ -281,6 +281,7 @@ LINT_RULES: tuple[str, ...] = (
     "safe_area",
     "text_overlap",
     "covered_text",
+    "label_spacing",
     "min_font",
     "contrast",
     "max_words",
@@ -296,6 +297,7 @@ RuleName = Literal[
     "safe_area",
     "text_overlap",
     "covered_text",
+    "label_spacing",
     "min_font",
     "contrast",
     "max_words",
@@ -345,6 +347,14 @@ class CoveredTextRule(RuleConfig):
 
     min_covered: Fraction = 0.02
     """Part of the middle of the text's box that must show the shape's colour to be reported."""
+
+
+class LabelSpacingRule(RuleConfig):
+    """``label_spacing``: a label on its own coloured plate (a callout label, a tag) touching
+    other text."""
+
+    min_gap: Fraction = 0.02
+    """Smallest gap (fraction of the frame's shorter side) between a label's plate and other text (0.02: 7 px at 360p, 22 px at 1080p)."""
 
 
 class MinFontRule(RuleConfig):
@@ -461,6 +471,8 @@ class LintRules(_Strict):
     """Overlapping texts (default: error)."""
     covered_text: CoveredTextRule = Field(default_factory=CoveredTextRule)
     """Shapes or images drawn over text (default: warning)."""
+    label_spacing: LabelSpacingRule = Field(default_factory=LabelSpacingRule)
+    """A label on its own coloured plate touching other text (default: warning)."""
     min_font: MinFontRule = Field(default_factory=MinFontRule)
     """Text too small (default: warning, error below error_size)."""
     contrast: ContrastRule = Field(default_factory=ContrastRule)

@@ -57,8 +57,8 @@ class VideoClip(Screenshot):
         """Caption colour."""
         region: ClipRegion = "body"
         """Where the clip goes: a layout region (body, full, hero, left, right, top, bottom, center; below the title) or bleed (the whole frame, edge to edge)."""
-        fit: Literal["contain", "cover"] = "contain"
-        """contain: the whole picture, as large as fits; cover: fills the region (or the frame), cutting off what does not fit."""
+        fit: Literal["auto", "contain", "cover"] = "auto"
+        """contain: the whole picture, as large as fits; cover: fills the region (or the frame), cutting off what does not fit; auto: contain, except a landscape clip without callouts in a vertical frame, shown as a nearly square part from its middle (cover), not a thin strip."""
         trim: tuple[float, float] | None = None
         """[start, end] in seconds of the file: only this part plays (default: all of it)."""
         speed: float = Field(default=1.0, ge=0.25, le=4.0)
@@ -222,18 +222,32 @@ class VideoClip(Screenshot):
             caption = fit_text(p.caption, room.width, room.height * 0.2, size=p.caption_size, color=p.caption_color)
             room = room.above(room.y0 + caption.height, gap=CAPTION_GAP)
         self._body = area
-        self._picture = self._layout(room, fill=p.fit == "cover")
-        clip.fit_box(clip.width, clip.height, p.fit)
+        fit = p.fit
+        if fit == "auto":
+            fit = self._auto_fit(clip)
+            if fit == "cover":  # a (nearly) square part from the clip's middle, centred in the room
+                side = min(room.width, room.height)
+                cx, cy = room.center[0], room.center[1]
+                room = Region(cx - side / 2, cy - side / 2, cx + side / 2, cy + side / 2)
+        self._picture = self._layout(room, fill=fit == "cover")
+        clip.fit_box(clip.width, clip.height, fit)
         if caption is not None:
             caption.next_to(self._picture, DOWN, buff=CAPTION_GAP).set_x(clip.get_x())
             self._keep_off = self._keep_off + [Region(*caption.get_corner(DL)[:2], *caption.get_corner(UR)[:2]).inset(-0.1)]
         return title, caption
 
+    def _auto_fit(self, clip: ClipMobject) -> str:
+        """``fit: auto`` in a region: ``cover`` (a square crop) for a landscape clip without
+        callouts in a vertical frame, else ``contain``."""
+        info = clip.info
+        landscape = info.width / max(info.height, 1) >= self.landscape_aspect
+        return "cover" if self.is_portrait and landscape and not self.params.callouts() else "contain"
+
     def _place_bleed(self, clip: ClipMobject) -> tuple[Mobject | None, Mobject | None]:
         """The clip fills (``cover``) or fits (``contain``) the whole frame; the title and the
         caption sit on plates over it, inside the safe area."""
         p = self.params
-        clip.fit_box(self.frame_width, self.frame_height, p.fit).move_to(ORIGIN)
+        clip.fit_box(self.frame_width, self.frame_height, "contain" if p.fit == "auto" else p.fit).move_to(ORIGIN)
         self._picture = Group(clip)
         self._keep_off = []
         body = self.safe_area

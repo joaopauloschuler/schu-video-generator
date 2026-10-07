@@ -216,7 +216,7 @@ def test_params_errors(changes: dict[str, Any], message: str) -> None:
 
 def test_params_defaults_and_targets() -> None:
     p = params()
-    assert (p.region, p.fit, p.trim, p.speed, p.loop, p.volume, p.mute, p.fit_range) == ("body", "contain", None, 1.0, False, None, False, (0.5, 2.0))
+    assert (p.region, p.fit, p.trim, p.speed, p.loop, p.volume, p.mute, p.fit_range) == ("body", "auto", None, 1.0, False, None, False, (0.5, 2.0))
     assert params(fit_duration=True, fit_range=[0.25, 4]).fit_duration
     cls = cls_of("video_clip")
     full = params(title="T", caption="C", steps=[{"box": [0.1, 0.1, 0.2, 0.2], "label": "Box"}, [{"arrow": [0.5, 0.5]}, {"spotlight": [0, 0, 0.5, 0.5]}]])
@@ -331,6 +331,23 @@ def test_cover_moves_callout_areas_into_the_shown_crop(make_project, clip: Path,
     x, _, w, _ = scene._img.crop
     assert units == "fraction" and area == pytest.approx([(0.25 - x) / w, 0.25, 0.5 / w, 0.5])
     assert "callout 2 (box) is partly outside the part of the clip that fit: cover shows" in caplog.text
+
+
+@pytest.mark.render
+def test_fit_auto_shows_a_landscape_clip_nearly_square_in_9_16(make_project, clip: Path, media: Path) -> None:
+    """Step 57: ``fit: auto`` (the default) is ``contain``, except a landscape clip without
+    callouts in a vertical frame: a nearly square part from its middle instead of a thin strip.
+    With callouts it keeps the whole picture and the steps focus by themselves."""
+    project = load(make_project, clip, [clip_scene(mute=True)])
+    portrait = render(project, "v", media, size=(90, 160))
+    clip_mob = portrait._img
+    assert clip_mob.width / clip_mob.height < 1.3 and clip_mob.crop[2] < 0.8          # cut at the sides
+    landscape = render(project, "v", media, size=(160, 90))
+    assert landscape._img.width / landscape._img.height == pytest.approx(16 / 9, rel=0.03)
+    project = load(make_project, clip, [clip_scene(mute=True, steps=[{"box": [0.1, 0.1, 0.3, 0.3], "label": "Box"}])])
+    framed = render(project, "v", media, size=(90, 160))
+    assert framed._img.width / framed._img.height == pytest.approx(16 / 9, rel=0.03) and framed._cameras[0] is not None
+    assert params().fit == "auto" and params(fit="contain").fit == "contain"
 
 
 @pytest.mark.render

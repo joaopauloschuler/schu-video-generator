@@ -20,6 +20,9 @@ CalloutActionKind = Literal["box", "circle", "arrow", "label", "spotlight", "mag
 SIZED = ("spotlight", "magnifier")
 #: Distances (units) tried between a ``label`` callout and what it labels, shortest first.
 LABEL_GAPS = (0.15, 0.35, 0.7)
+#: Room (units) a ``label`` callout's plate keeps from other text where it can (lint's
+#: ``label_spacing`` asks for 0.02 of the frame height, 0.16 units).
+LABEL_CLEARANCE = 0.2
 #: Mobjects whose boxes labels keep clear of (text and formulas).
 TEXT_TYPES = (Text, MarkupText, Paragraph, SingleStringMathTex)
 #: Other targets smaller than this share of the view are kept clear of too (a node, a bar; not
@@ -262,12 +265,21 @@ def _avoid(scene: NarratedScene, view: Region, scale: float, targets: list[Targe
     return boxes
 
 
+def _overlaps(a: Region, b: Region) -> bool:
+    return a.x0 < b.x1 and b.x0 < a.x1 and a.y0 < b.y1 and b.y0 < a.y1
+
+
 def _label(
     area: Region, text: str, *, color: Any, label_size: Any, side: Any, bounds: Region, avoid: list[Region], scale: float, theme: Any,
     prefer_off: Region | None = None,
 ) -> Callout:
     """A label beside ``area`` without a mark (``kind: label``)."""
     tag = callout_label(text, color=color, size=label_size, scale=scale, theme=theme)
-    spot = label_spot((tag.width, tag.height), area, bounds=bounds, avoid=avoid, gaps=[g * scale for g in LABEL_GAPS], side=side, prefer_off=prefer_off)
+    # without a mark, a label must not stand nearer another bar, value or title than its own
+    rivals = [a for a in avoid if not _overlaps(a, area)]
+    spot = label_spot(
+        (tag.width, tag.height), area, bounds=bounds, avoid=avoid, gaps=[g * scale for g in LABEL_GAPS], side=side,
+        prefer_off=prefer_off, clearance=LABEL_CLEARANCE * scale, rivals=rivals, straight=True,
+    )
     tag.move_to(spot.center)
     return Callout("label", area, tag)

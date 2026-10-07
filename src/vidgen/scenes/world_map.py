@@ -197,6 +197,21 @@ def _hits(a: Region, b: Region, air: float = 0.04) -> bool:
     return not (a.x1 + air <= b.x0 or b.x1 + air <= a.x0 or a.y1 + air <= b.y0 or b.y1 + air <= a.y0)
 
 
+def _nearest(q: np.ndarray, box: Region) -> np.ndarray:
+    """The point of ``box`` nearest to ``q`` (where a leader line from ``q`` ends)."""
+    return np.array([np.clip(q[0], box.x0, box.x1), np.clip(q[1], box.y0, box.y1), 0.0])
+
+
+def _segments_cross(a: np.ndarray, b: np.ndarray, c: np.ndarray, d: np.ndarray) -> bool:
+    """Whether segments ``ab`` and ``cd`` cross (touching ends do not count)."""
+
+    def turn(p: np.ndarray, q: np.ndarray, r: np.ndarray) -> float:
+        return float((q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]))
+
+    d1, d2, d3, d4 = turn(c, d, a), turn(c, d, b), turn(a, b, c), turn(a, b, d)
+    return d1 * d2 < -1e-12 and d3 * d4 < -1e-12
+
+
 def _shape(polygons: list[list[np.ndarray]]) -> VMobject:
     """A VMobject of polygons (rings of scene points; holes stay open with a non-zero fill
     because they run the other way), each ring a closed subpath of straight segments."""
@@ -494,10 +509,12 @@ class WorldMap(NarratedScene):
         box = fit_view(p.points()) if p.view == "auto" else view_box(p.view, p.antarctica)
         if p.view == "auto" and box == MAP_VIEWS["world"] and p.antarctica:
             box = view_box("world", True)
-        if self.is_portrait and p.view in ("auto", "world") and box[2] - box[0] >= 359.0:
-            box = self._portrait_world(box)
         below = bar.height + 0.3 if bar is not None else 0.0
         area = Region(body.x0, body.y0 + below, body.x1, body.y1)
+        if self.is_portrait and p.view in ("auto", "world") and box[2] - box[0] >= 359.0:
+            box = self._portrait_world(box)
+        elif self.is_portrait:
+            box = self._portrait_region(box, area)
         view = MapView(box, area, antarctica=p.antarctica)
         if below:
             h = view.region.height
@@ -524,6 +541,27 @@ class WorldMap(NarratedScene):
             return box
         middle = (lo + hi) / 2
         return middle - width / 2, box[1], middle + width / 2, box[3]
+
+    def _portrait_region(self, box: tuple[float, float, float, float], area: Region) -> tuple[float, float, float, float]:
+        """A regional view wider than a vertical ``area`` narrowed to the longitudes that fill
+        the area at the view's latitudes, around the map's items (keeping all of them, with
+        :attr:`portrait_world_pad` of their span on each side): without it the frame is filled
+        by growing the view north and south (Europe would show mostly Africa, much smaller)."""
+        lon_min, lat_min, lon_max, lat_max = box
+        if lon_max <= lon_min:  # a view across the date line: kept as it is
+            return box
+        x0, y0, x1, y1 = MapView(box, area, antarctica=self.params.antarctica, expand=False).extent
+        fill = (lon_max - lon_min) * (y1 - y0) * area.width / area.height / max(x1 - x0, 1e-9)
+        lons = [lon + 360.0 if lon < lon_min - 1.0 else lon for lon, _ in self.params.points()]   # a box past 180°
+        if lons and all(lon_min - 1.0 <= lon <= lon_max + 1.0 for lon in lons):
+            lo, hi = min(lons), max(lons)
+        else:  # no items, or items across the edge of the box: keep its middle
+            lo = hi = (lon_min + lon_max) / 2
+        width = max(fill, (hi - lo) * (1 + 2 * self.portrait_world_pad))
+        if width >= 0.95 * (lon_max - lon_min):
+            return box
+        middle = min(max((lo + hi) / 2, lon_min + width / 2), lon_max - width / 2)
+        return middle - width / 2, lat_min, middle + width / 2, lat_max
 
     def _base(self) -> dict[str, VMobject]:
         """Every country in view as a filled shape (land colour, or its choropleth colour) with
@@ -613,10 +651,15 @@ class WorldMap(NarratedScene):
         country_k = 0
         taken: list[Region] = []   # labels of this view
         marks: list[Region] = []   # pins of this view
+        self._segments: list[tuple[np.ndarray, np.ndarray]] = []   # leader lines of this view
+        # every place a label belongs to (all steps): a label must not stand nearer another one
+        self._places = [view.point(*find_country(item.country).label) for st in p.stages() for item in st.countries]
+        self._places += [view.point(*pin.where()) for _, pin in p.all_pins()]
         for k, step in enumerate(p.stages()):
             bounds, s = self._bounds(k)
             if k > 0 and self._cameras[k] != self._cameras[k - 1]:
                 taken, marks = [], []
+                self._segments = []
             items: dict[str, list[tuple[Any, Mobject]]] = {"countries": [], "pins": [], "arcs": []}
             labels: list[Mobject] = []
             pin_at = [view.point(*pin.where()) for pin in step.pins]
@@ -709,20 +752,83 @@ class WorldMap(NarratedScene):
             taken.append(box)
             return None
         anchor = Region(float(q[0]) - 0.04 * s, float(q[1]) - 0.04 * s, float(q[0]) + 0.04 * s, float(q[1]) + 0.04 * s)
-        spot = self._place(label, anchor, bounds, taken + marks, (0.3 * s, 0.6 * s, 1.0 * s))
+        spot = label_spot((label.width, label.height), anchor, bounds=bounds, avoid=taken + marks, gaps=(0.3 * s, 0.6 * s, 1.0 * s))
+        if self._crosses(q, _nearest(q, spot), taken + marks) or self._misleading(q, spot, s):
+            spot = self._clear_spot((label.width, label.height), q, bounds, taken + marks, s) or spot
+        label.move_to(spot.center)
         taken.append(spot)
         lead = self._leader(q, spot, s, 0.0)
         assert lead is not None
         return lead.add(Dot(q, radius=0.035 * s, color=self.theme.color("text")))
 
+    #: Distances (units, at scale 1) tried for a label whose first spot reads wrong: out to the
+    #: empty bands above and below the map in a vertical frame.
+    clear_gaps = (0.3, 0.6, 1.0, 1.5, 2.2, 3.0)
+
+    def _clear_spot(self, size: tuple[float, float], q: np.ndarray, bounds: Region, avoid: list[Region], s: float) -> Region | None:
+        """The best spot around ``q`` (eight directions — above and below also shifted sideways
+        — at :attr:`clear_gaps`) inside ``bounds`` and clear of ``avoid``: the nearest whose
+        leader crosses nothing and that is not nearer another labelled place, else the one with
+        the fewest of those faults; ``None`` when no spot is free."""
+        w, h = size
+        ways = [(0, 1, 0.0), (0, -1, 0.0), (0, 1, 0.35), (0, 1, -0.35), (0, -1, 0.35), (0, -1, -0.35),
+                (1, 1, 0.0), (-1, 1, 0.0), (1, -1, 0.0), (-1, -1, 0.0), (1, 0, 0.0), (-1, 0, 0.0)]
+        best: tuple[float, Region] | None = None
+        for n, (dx, dy, shift) in enumerate(ways):
+            for gap in self.clear_gaps:
+                g = gap * s
+                cx = float(q[0]) + dx * (g * (0.75 if dy else 1.0) + w / 2) + shift * w
+                cy = float(q[1]) + dy * (g * (0.75 if dx else 1.0) + h / 2)
+                box = Region(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
+                if box.x0 < bounds.x0 or box.x1 > bounds.x1 or box.y0 < bounds.y0 or box.y1 > bounds.y1:
+                    continue
+                if any(_hits(box, a, 0.02 * s) for a in avoid):
+                    continue
+                faults = 5.0 * self._misleading(q, box, s) + 3.0 * self._crosses(q, _nearest(q, box), avoid)
+                faults += 2.0 * any(self._crosses(c, d, [box]) for c, d in self._segments)  # over another leader
+                score = faults + g + 0.01 * n
+                if best is None or score < best[0]:
+                    best = (score, box)
+                if not faults:
+                    break  # nearer gaps of this direction come first
+        return best[1] if best is not None else None
+
+    def _misleading(self, q: np.ndarray, spot: Region, s: float) -> bool:
+        """Whether a label at ``spot`` for the place ``q`` is nearer another labelled place of
+        the map (any step) than ``q``, or its leader passes right by one."""
+        own = float(np.linalg.norm(_nearest(q, spot) - q))
+        end = _nearest(q, spot)
+        for r in self._places:
+            if float(np.linalg.norm(r - q)) < 0.05 * s:
+                continue
+            if float(np.linalg.norm(_nearest(r, spot) - r)) < own - 0.05 * s:
+                return True
+            for t in np.linspace(0.1, 0.9, 9):
+                if float(np.linalg.norm(q + (end - q) * t - r)) < 0.12 * s:
+                    return True
+        return False
+
+    def _crosses(self, a: np.ndarray, b: np.ndarray, boxes: list[Region]) -> bool:
+        """Whether a leader from ``a`` to ``b`` would cross an earlier leader of this view or run
+        through one of ``boxes`` (labels, pins)."""
+        for c, d in self._segments:
+            if _segments_cross(a, b, c, d):
+                return True
+        for t in np.linspace(0.15, 0.85, 8):
+            x, y = a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t
+            if any(r.x0 < x < r.x1 and r.y0 < y < r.y1 for r in boxes):
+                return True
+        return False
+
     def _leader(self, q: np.ndarray, spot: Region, s: float, start: float) -> VGroup | None:
         """A thin line from ``q`` (``start`` units out) to the label box ``spot``, or ``None``
         when the label is right beside it."""
-        end = np.array([np.clip(q[0], spot.x0, spot.x1), np.clip(q[1], spot.y0, spot.y1), 0.0])
+        end = _nearest(q, spot)
         gap = float(np.linalg.norm(end - q))
         if gap <= start + 0.12 * s:
             return None
         begin = q + (end - q) * (start / gap)
+        self._segments.append((begin, end))
         line = Line(begin, end, stroke_width=2 * s ** 0.5, color=self.theme.color("text")).set_opacity(0.8)
         return VGroup(line).set_z_index(LEADER_Z)
 
