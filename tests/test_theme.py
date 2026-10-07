@@ -57,8 +57,15 @@ def test_registered_defaults_lose_to_config() -> None:
 
 
 def test_add_defaults_rejects_non_hex() -> None:
-    with pytest.raises(VidgenError, match="must be a hex string"):
+    with pytest.raises(VidgenError, match="must be a hex color"):
         Theme().add_defaults({"x": "red"})
+
+
+def test_add_defaults_rejects_names_yaml_cannot_override() -> None:
+    with pytest.raises(VidgenError, match="letters, digits and _"):
+        Theme().add_defaults({"brand-blue": "#0B5FFF"})
+    with pytest.raises(VidgenError, match="letters, digits and _"):
+        Theme().add_defaults(sizes={"big title": 80})
 
 
 def test_theme_does_not_import_manim() -> None:

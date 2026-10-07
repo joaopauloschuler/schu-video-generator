@@ -109,6 +109,24 @@ def test_drawing_helpers(active: Project) -> None:
     assert lines[0].get_color().to_hex().upper() == "#58C4DD"  # default "primary"
 
 
+def test_drawing_helpers_extensions(active: Project) -> None:
+    row = api.column(3, x=1.0, gap=0.5, y0=-1.0, horizontal=True)
+    assert [round(d.get_x(), 6) for d in row] == [0.5, 1.0, 1.5] and all(d.get_y() == pytest.approx(-1.0) for d in row)
+    holed = api.column(4, x=0, gap=1.0, skip=2)   # 5 slots, the third left empty
+    assert [round(d.get_y(), 6) for d in holed] == [2.0, 1.0, -1.0, -2.0]
+    assert api.grouped_pairs(9, 3) == [(g * 3 + i, g * 3 + j) for g in range(3) for i in range(3) for j in range(3)]
+    assert api.grouped_pairs(5, 2, 4) == [(0, 0), (0, 1), (1, 0), (1, 1), (2, 2), (2, 3), (3, 2), (3, 3), (4, 2), (4, 3)]
+    assert api.group_bounds(5, 2) == [0, 2, 5]
+    sparse = api.sparse_pairs(6, 5, 0.3, seed=1)
+    assert sparse == api.sparse_pairs(6, 5, 0.3, seed=1) and sparse == sorted(sparse)
+    assert {i for i, _ in sparse} == set(range(6)) and {j for _, j in sparse} == set(range(5))
+    assert len(sparse) < 30
+    a, b = api.column(2, x=0, gap=1.0), api.column(2, x=2, gap=1.0)
+    lines = api.edges(a, b, [(0, 0), (1, 1)], colors=["accent", "text"], shorten=0.25)
+    assert lines[0].get_start()[0] == pytest.approx(0.25) and lines[0].get_end()[0] == pytest.approx(1.75)
+    assert lines[0].get_color().to_hex().upper() == "#123456"
+
+
 def test_counter_redraws(active: Project) -> None:
     tracker = api.ValueTracker(100)
     label = api.Dot([0, -2, 0])

@@ -1,0 +1,431 @@
+# A config-only gallery of the newer built-in scene types, each used once (examples/minimal
+# shows the core ones: title, bullets, icon_grid, charts, image, quote, equation, code, cards).
+#   vidgen validate examples/gallery
+#   vidgen storyboard examples/gallery [--variant vertical]      # contact sheets of every beat (PNG)
+#   vidgen lint examples/gallery [--variant vertical]            # layout + timing checks
+#   vidgen storyboard examples/gallery --scene speedup --per-beat 3 # a stat counting down
+#   vidgen storyboard examples/gallery --scene formats --per-beat 3 # a table row by row
+#   vidgen storyboard examples/gallery --scene schedule --variant vertical  # a vertical timeline
+#   vidgen storyboard examples/gallery --scene loop --per-beat 2    # a flowchart, node by node
+#   vidgen storyboard examples/gallery --scene render --per-beat 3  # a token moving through a pipeline
+#   vidgen storyboard examples/gallery --scene net --per-beat 3     # a network and its forward pass
+#   vidgen storyboard examples/gallery --scene cost --scene beats --per-beat 3  # scatter with a trend; histogram
+#   vidgen storyboard examples/gallery --scene share --scene busy --per-beat 3  # a donut sweeping in; a heatmap
+#   vidgen storyboard examples/gallery --scene reach --per-beat 3   # a map: countries, then pins and an arc
+#   vidgen storyboard examples/gallery --scene derive --per-beat 3  # an equation derivation, step by step
+#   vidgen storyboard examples/gallery --scene walkthrough --per-beat 2  # a listing scrolling from step to step; chapter 4 starts here
+#   vidgen storyboard examples/gallery --scene app --per-beat 2     # a screenshot with callouts, step by step
+#   vidgen storyboard examples/gallery --scene clip --per-beat 3    # a clip with a lower third (overlays)
+#   vidgen list-sfx examples/gallery --render-dir build/sfx   # the sound effects (part2: whoosh, speedup: chime, formats: pop) as WAVs
+#   vidgen list-music examples/gallery --render-dir build/music  # the music beds (this video: calm, ducked) as WAVs
+#   vidgen render examples/gallery --preview    # the whole video: scenes crossfade, chapter cards fade through a colour,
+#                                               # one push, one wipe, two carried objects (match cuts);
+#                                               # chapters in the MP4 + gallery_preview_chapters.txt (YouTube)
+#   vidgen storyboard examples/gallery --scene structure --scene tradeoff --per-beat 3  # the card's title becomes the heading
+#   vidgen thumbnail examples/gallery [--variant vertical]  # gallery_thumbnail.png (designed, see thumbnail: below)
+#   vidgen thumbnail examples/gallery --preview --scene speedup --no-overlays  # a frame instead, without overlays
+#   vidgen export gif examples/gallery --preview --scene share --max-mb 2      # exports/gallery_preview_share.gif
+#   vidgen export clip examples/gallery --preview --scene reach --with-audio   # exports/gallery_preview_reach.mp4
+#   vidgen slides examples/gallery [--mode scene] [--no-overlays]  # exports/gallery_preview_slides.html: a deck, O = overview by chapter
+# No narration audio: beats are timed from their word count (narration.words_per_second).
+title: "vidgen: a gallery of scene types"
+output: gallery
+
+format: {width: 1920, height: 1080, fps: 30}
+preview: {width: 854, height: 480, fps: 15}
+
+variants:
+  vertical:
+    format: {width: 1080, height: 1920}
+    preview: {width: 480, height: 854}
+  light:                          # a theme preset per variant (docs/CONFIG.md "Theme presets")
+    theme: {preset: light_academic}
+  contrast:
+    theme: {preset: high_contrast}  # also the large type scale
+  editorial:
+    theme: {preset: warm_editorial}
+  neutral:
+    theme: {preset: brand_neutral, scale: compact}   # any preset with another type scale
+  pastel:
+    theme: {preset: soft_pastel}
+  neon:
+    theme: {preset: bold_neon}
+
+theme:
+  preset: dark_tech   # the default look; values written here would override every variant's preset
+  font: Inter
+
+narration:
+  pad: 0.35
+  words_per_second: 2.6
+
+thumbnail:            # gallery_thumbnail.png (+ .jpg) after every render, 1080x1920 in the vertical variant;
+  title: "Every scene type, one YAML file"   # `vidgen thumbnail examples/gallery` makes it alone
+  subtitle: "a vidgen gallery"                    # (docs/CONFIG.md "Thumbnail")
+  icon: grid-3x3
+  jpeg: true
+
+lint:                 # optional; thresholds and severities of `vidgen lint` (docs/CONFIG.md)
+  fail_on: error      # warnings are reported, only errors make the command fail
+
+overlays:             # drawn over the scenes, fixed to the screen (docs/CONFIG.md "Overlays")
+  - type: watermark   # in the corner of every scene but the chapter cards
+    text: "vidgen gallery"
+    exclude: [structure, part2, part3]
+    reserve: true     # scenes keep clear of it (a thin band at the bottom of their safe area)
+  - type: lower_third # slides in over the clip for a few seconds; the scene makes room for it
+    scene: clip
+    at: 0.8
+    duration: 5
+    name: "Test pattern"
+    title: "Generated with ffmpeg"
+    icon: play
+    reserve: true
+  - type: progress_bar       # a thin bar along the top edge filling up with the video, split at chapters
+  - type: chapter_indicator  # "2 · Charts and numbers" in the top left corner; hidden on the chapter cards
+                             # (chapters: the `chapter` cards and the `chapter:` key of a scene, see walkthrough)
+    reserve: true
+
+transition: crossfade # between scenes (docs/CONFIG.md "Transitions"): each scene blends into the next
+                      # over 0.5 s (the scenes overlap); the chapter cards below fade through a colour
+
+music:                # a generated ambient bed under the whole video (docs/CONFIG.md "Background music")
+  source: calm        # calm | pulse | bright (`vidgen list-music` describes them), or a file
+  volume: -2
+  duck: {depth: 12}   # 12 dB down while the narrator speaks (keyed off the narration only)
+# audio: {normalize: auto, target_lufs: -16}   # the default: a video with music is normalised to -16 LUFS
+
+chapters:             # the four chapters go into the MP4 and gallery_preview_chapters.txt, a list for a
+  intro: Intro        # YouTube description (docs/CONFIG.md "Chapters in the outputs"); the video opens with
+                      # chapter 1, so no intro chapter is needed (one is added at 0:00 when it starts later)
+metadata:             # tags of the MP4 (its title is the `title` above)
+  artist: "vidgen"
+  comment: "A gallery of the built-in scene types"
+
+scenes:
+  - id: structure
+    type: chapter         # a section divider: narrated here (the subtitle comes with beat 2)
+    params:
+      number: 1
+      title: "Ideas and flows"
+      subtitle: "Comparisons, timelines, diagrams"
+      icon: shapes
+    beats:
+      - text: "This gallery shows the newer scene types, one each."
+      - text: "First, scenes for ideas and the way they flow."
+
+  - id: tradeoff
+    type: comparison      # two or three columns: A vs B, before / after
+    transition: cut       # a match cut: the card's title stays where it was ...
+    carry: ["title -> heading"]   # ... and flows into this scene's heading (docs/CONFIG.md "Continuity")
+    params:
+      heading: "Preview or final render?"
+      vs: "vs"
+      columns:
+        - heading: "Preview"
+          icon: rabbit
+          tone: positive
+          points: ["Renders in seconds", "Lint and storyboard on every edit"]
+        - heading: "Final"
+          icon: hourglass
+          tone: negative
+          points: ["Minutes per scene in 4K", {text: "Wait for the end of the day", icon: moon}]
+      verdict: "Iterate on previews; render the final once."
+    beats:
+      - text: "Comparisons put two options side by side. Previews render in seconds."
+      - text: "The final render takes minutes per scene."
+      - text: "So iterate on previews, and render the final video once."
+        actions:
+          - {highlight: col1, style: box}
+
+  - id: schedule
+    type: timeline        # events along an axis, one per beat (a vertical axis in 9:16)
+    transition: push      # slides in from the right (from below in 9:16), pushing the comparison out
+    params:
+      heading: "A video in four days"
+      now: "Day 3"        # a "Now" tag; later events are drawn as planned
+      events:
+        - {date: "Day 1", title: "Draft the script", text: "Short beats", icon: pencil}
+        - {date: "Day 2", title: "Storyboard and lint", icon: presentation}
+        - {date: "Day 3", title: "Voice the narration", icon: megaphone}
+        - {date: "Day 4", title: "Render the final video", icon: play}
+    beats:
+      - text: "Timelines reveal one event per beat. On day one, you draft the script."
+      - text: "On day two, you storyboard and lint until it reads well."
+      - text: "Today, on day three, the narration is voiced."
+      - text: "Tomorrow, the final video renders."
+        actions:
+          - {highlight: "event:Day 4", style: box}
+
+  - id: loop
+    type: diagram         # a flowchart, laid out automatically (left to right; top to bottom in 9:16)
+    params:
+      heading: "The editing loop"
+      nodes:              # an id, or {id, label, shape, icon, color}
+        - {id: edit, label: "Edit the config", icon: pencil, shape: pill}
+        - {id: check, label: "Preview and lint", icon: presentation}
+        - {id: good, label: "Reads well?", shape: diamond}
+        - {id: final, label: "Final render", icon: play, shape: pill}
+      edges:              # "a -> b", "a -> b: label", "a --> b" (dashed), chains "a -> b -> c"
+        - "edit -> check -> good"
+        - "good -> final: yes"
+        - "good --> edit: no"
+      highlight: [edit, check, good, final]   # a path, in a last step; the rest dims
+    beats:
+      - text: "Diagrams grow one node at a time. You edit the config file."
+      - text: "Then you preview it, and check the storyboard and the lint report."
+        actions:          # a callout on any scene, for this beat: box, circle, arrow, label, spotlight
+          - {callout: "node:check", kind: label, label: "storyboard + lint", at: 0.4}
+      - text: "Does it read well? If not, back to editing."
+        actions:
+          - {highlight: "edge:good->edit", style: flash}
+      - text: "If it does, you render the final video."
+
+  - id: render
+    type: process         # a pipeline; a token travels from stage to stage, one per beat (top to bottom in 9:16)
+    params:
+      heading: "From config to video"
+      input: "video.yaml"
+      output: "MP4 + subtitles"
+      token_label: "scene"
+      stages:             # a label, or {label, icon, text}
+        - {label: "Validate", icon: circle-check}
+        - {label: "Voice", icon: megaphone, text: "cached per beat"}
+        - {label: "Render", icon: play, text: "one process per scene"}
+        - {label: "Join", icon: link}
+    beats:
+      - text: "A render starts by validating the config file."
+      - text: "Then every beat is voiced, and the audio is cached."
+      - text: "Each scene is rendered in a process of its own."
+        actions:
+          - {highlight: token, style: flash, at: 0.6}
+      - text: "Finally the clips are joined into one video with subtitles."
+
+  - id: net
+    type: network         # a layered neural network, built layer by layer; then a pulse runs forward
+    params:
+      heading: "A tiny classifier"
+      layers:             # a size, or {size, label, show, connect, color}; large layers get an ellipsis
+        - {size: 4, label: "Input"}
+        - {size: 256, label: "Hidden"}
+        - {size: 3, label: "Output"}
+      highlight: ["1.2", "2.4", "3.1"]   # layer.unit, as drawn: a path, in a last step
+    beats:
+      - text: "Networks are built one layer at a time. Four inputs come in."
+      - text: "A hidden layer of two hundred and fifty six units mixes them."
+      - text: "Three outputs give the class scores."
+      - text: "In a forward pass, the signal runs from layer to layer."
+      - text: "And a highlight can follow a single path."
+
+  - id: part2
+    type: chapter         # a section divider; silent here (duration), or narrated with beats
+    transition: fade_color  # the scene before fades to the background colour, the card fades in from it
+    params:
+      number: 2
+      title: "Charts and numbers"
+      subtitle: "Data scenes"
+      icon: chart-column
+    duration: 3
+    sfx: [whoosh]         # sound effects at seconds of the scene (a name alone: at 0)
+
+  - id: speedup
+    type: stat            # one big number that counts, with a label and a comparison
+    transition: cut
+    carry: [icon]         # the card's icon glides from the card into the place of this one's
+    params:
+      icon: chart-column
+      value: 0.4
+      unit: "min"
+      label: "to render a minute of video as a 480p preview"
+      comparison: {value: 9.8, kind: before, label: "in 4K", delta: percent, better: lower}
+      context: "Illustrative numbers"
+    beats:
+      - text: "A big number counts down from the four K render time to the preview's."
+      - text: "That is ninety six percent less waiting while you iterate."
+        actions:
+          - sfx: chime    # a sound effect at `at` of the beat (vidgen list-sfx describes them)
+            at: 0.15
+            gain: -3
+
+  - id: formats
+    type: table           # header + rows, fitted to the frame, one row per beat
+    params:
+      title: "Output formats"
+      header: ["Variant", "Pixels", "Render (min)"]
+      rows:               # text and numbers; number columns are right-aligned
+        - ["16:9", "1920 x 1080", 2.6]
+        - ["9:16", "1080 x 1920", 2.6]
+        - ["Preview", "854 x 480", 0.4]
+      caption: "Render time per minute of video (illustrative)"
+    beats:
+      - text: "Tables reveal one row per beat. The main video is sixteen by nine."
+      - text: "A vertical variant renders the same scenes for phones, just as fast."
+      - text: "And previews are small and fast."
+        actions:
+          - {highlight: "row:Preview", style: fill}
+          - {sfx: pop, params: {pitch: 3}}
+
+  - id: cost
+    type: scatter         # points per series; a least-squares trend line; labels beside a few points
+    transition: {type: wipe, direction: right, soft: true}   # a soft edge sweeps across, uncovering it
+    params:
+      title: "Render time by scene length"
+      x_label: "narration (s)"
+      y_label: "render (s)"
+      trend: all
+      trend_label: r2
+      highlight: ["chart scenes@diagram"]   # <series>@<N or label>, or a label
+      series:             # {name: [points]}; a point is [x, y], [x, y, label] or {x, y, label, group}
+        text scenes: [[4, 9], [6, 11], [9, 15], [12, 19, "bullets"], [15, 22]]
+        chart scenes: [[5, 14], [8, 19], [11, 26, "diagram"], [14, 30], [16, 35]]
+    beats:
+      - text: "Scatter plots reveal one series per beat. Text scenes render fast."
+      - text: "Chart scenes take a little longer."
+      - text: "A trend line shows how render time grows with length."
+      - text: "And one point can be picked out."
+
+  - id: beats
+    type: histogram       # bars over bins of raw values (or given counts); mean / median markers
+    params:
+      title: "How long is a beat?"
+      x_label: "seconds of narration"
+      y_label: "beats"
+      values: [2.1, 2.8, 3.0, 3.2, 3.4, 3.6, 3.7, 3.9, 4.0, 4.1, 4.3, 4.4, 4.6, 4.8, 4.9, 5.1, 5.3, 5.6, 5.9, 6.2, 6.8, 7.4, 8.1, 9.5]
+      median: true
+      caption: "Illustrative numbers"
+    beats:
+      - text: "Histograms grow their bars from raw values. Most beats last three to six seconds."
+      - text: "The median sits between four and five."
+        actions:
+          - {highlight: "bin:4-5", style: box}
+
+  - id: share
+    type: pie             # slices of a whole (donut: a ring with the total inside); labels inside or beside
+    params:
+      title: "Where a preview render spends its time"
+      donut: true
+      center_label: "per scene"   # under the total (4.2 s)
+      labels: ["Drawing frames", "Text layout", "Voice", "Joining", "Lint", "Storyboard"]
+      values: [2.4, 0.9, 0.4, 0.25, 0.17, 0.08]
+      value_format: "{:.1f}"
+      unit: " s"
+      other_below: 5      # slices under 5 % become one "Other" slice
+      highlight: "Text layout"
+    beats:
+      - text: "Pie and donut charts show shares. Drawing frames takes most of a render."
+      - text: "Text layout comes second."
+
+  - id: busy
+    type: heatmap         # a matrix as coloured cells; a colour-scale legend; values written in readable colours
+    params:
+      title: "Renders per hour"
+      rows: ["Mon", "Tue", "Wed", "Thu", "Fri"]
+      columns: ["9h", "11h", "13h", "15h", "17h"]
+      values:
+        - [3, 8, 4, 9, 12]
+        - [5, 10, 6, 11, 14]
+        - [4, 9, 5, 13, 15]
+        - [6, 12, 7, 10, 18]
+        - [2, 6, 3, 7, 9]
+      legend_label: "renders"
+    beats:
+      - text: "A heatmap colours each cell by its value."
+      - text: "Late afternoon is the busiest time."
+        actions:
+          - {highlight: "col:17h", style: box}
+
+  - id: reach
+    type: map             # a world map (Natural Earth, bundled): countries step by step, pins, a flight-path arc
+    params:
+      title: "Rendered where you are"
+      view: europe
+      steps:
+        - [Portugal, Germany, Poland]
+        - pins: [{lon: -9.14, lat: 38.72, label: Lisbon}, {lon: 21.01, lat: 52.23, label: Warsaw}]
+          arcs: ["Lisbon -> Warsaw"]
+    beats:
+      - text: "A map highlights countries, one step per beat."
+      - text: "Pins and arcs link places across it."
+
+  - id: part3
+    type: chapter
+    transition: {type: fade_color, color: surface, duration: 1.2}   # any theme colour (or hex)
+    params:
+      number: 3
+      title: "Pictures and maths"
+      icon: sigma
+    duration: 3
+
+  - id: app
+    type: screenshot      # a picture of an app with callouts; areas are [x, y, w, h] fractions from its top left
+    params:
+      title: "Point at what matters"
+      path: assets/app.png          # a made-up app, drawn by tools/make_screenshot.py
+      frame: browser
+      url: "planner.example/overview"
+      caption: "A made-up planner app"
+      steps:             # step i at beat i: one callout, a list of them, or {callouts, focus, previous}
+        - {box: [0.216, 0.038, 0.269, 0.055], label: "Search every task"}
+        - - {arrow: [0.857, 0.065], label: "New task", curved: true}
+          - {circle: [0.736, 0.15, 0.25, 0.17], label: "Overdue"}
+        - {magnifier: [0.675, 0.545, 0.28, 0.085], label: "Done today", zoom: 2.5}
+        - callouts:
+            - {spotlight: [0.205, 0.37, 0.428, 0.58]}
+            - {arrow: [0.425, 0.55], label: "Thursday was the busiest day"}
+          focus: true     # the camera moves in on this step's areas
+    beats:
+      - text: "Screenshots get callouts, one step per beat. A box marks the search field."
+      - text: "An arrow points at the new task button, and a circle at the overdue count."
+      - text: "A magnifier enlarges a detail, cut sharp from the picture itself."
+      - text: "Focus moves the camera in, and a spotlight dims everything else."
+
+  - id: clip
+    type: video_clip      # a video file (B-roll, a screen recording) played while the narration runs
+    params:
+      title: "Clips play under the narration"
+      path: assets/clip.webm        # ffmpeg's test pattern, made by tools/make_clip.py
+      frame: window
+      caption: "A generated test pattern, looping"
+      loop: true          # starts again when the narration outlasts it (else its last frame holds)
+      steps:              # callouts as in screenshot; areas are fractions of the clip's picture
+        - {box: [0.0, 0.0, 0.21, 0.14], label: "Time code"}
+        - {arrow: [0.92, 0.45], label: "Colour bars", curved: true}
+    beats:
+      - text: "Video clips play inside a scene, and the narration sets how long they run."
+      - text: "Callouts work on moving pictures too, one step per beat."
+
+  - id: derive
+    type: equation_derivation   # steps morph into each other; earlier ones stay above, dimmed, aligned at "="
+    params:
+      title: "Solving for x"
+      colors: {x: accent}       # x keeps its colour in every step
+      steps:                    # step i at beat i: {tex, note, match}, or just the LaTeX
+        - '{{ 2x }} + 3 = 11'   # {{ }} marks a part that moves into the same part of the next step
+        - {tex: '{{ 2x }} = 11 - 3', note: "Subtract 3 from both sides"}
+        - {tex: '{{ 2x }} = 8', note: "Simplify"}
+        - {tex: 'x = \frac{8}{2}', note: "Divide both sides by 2"}
+        - {tex: 'x = 4', note: "The result, boxed"}
+    beats:
+      - text: "A derivation shows each step of a calculation. We start from two x plus three equals eleven."
+      - text: "Subtract three from both sides; the two x moves down as it is."
+      - text: "Eleven minus three is eight."
+      - text: "Then divide both sides by two."
+      - text: "And x is four, the result, in a box."
+
+  - id: walkthrough
+    type: code_walkthrough   # a long file in a window that scrolls to the lines each beat talks about
+    chapter: {title: "Code", number: 4}   # a new chapter without a divider card (the indicator cross-fades)
+    params:
+      title: "Walking through a training loop"
+      path: assets/train.py
+      steps:              # step i plays at beat i: {lines, note, focus}, or just a line spec
+        - {lines: "8-12", note: "All settings live in one small dataclass."}
+        - {lines: "/def loss_and_grads/-/loss = gw/", note: "The loss: a mean squared error."}
+        - {lines: "/err = /", note: "The prediction error drives it all.", focus: true}
+        - "/for batch in/-/b -= /"      # lines by number ("48-51") or by /regex/, no note
+    beats:
+      - text: "A code walkthrough scrolls through a long file. First, the settings."
+      - text: "Then it scrolls down to the loss function."
+      - text: "Focus enlarges a line: here, the prediction error."
+      - text: "And the update itself is plain gradient descent."
+

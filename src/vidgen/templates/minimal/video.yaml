@@ -1,4 +1,5 @@
 # vidgen project config. Reference: docs/CONFIG.md
+# How to make a good video (workflow, pacing, scene types): `vidgen guide` (AGENTS.md)
 title: __TITLE__
 # output: my_video          # basename of the output files; default: the folder name
 
@@ -11,7 +12,8 @@ preview: {width: 854, height: 480, fps: 15}
 #     preview: {width: 480, height: 854}
 
 theme:
-  background: "#0E1116"
+  preset: dark_tech               # `vidgen list-themes` shows all (light_academic, warm_editorial, ...)
+  # scale: auto                   # type sizes: compact, standard, large; auto = large in vertical video
   font: Inter
   # colors: {accent: "#FF6B6B"}   # override or add color tokens
 

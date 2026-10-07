@@ -16,6 +16,7 @@ from vidgen.layout import (
     distribute,
     fit_text,
     format_value,
+    measure_text,
     nice_ticks,
     normalize_text,
     shrink_to_fit,
@@ -75,6 +76,7 @@ def test_fit_text_single_short_line_unchanged(text_media: None) -> None:
     assert len(block.submobjects) == 1
 
 
+@pytest.mark.slow
 def test_fit_text_fits_height_by_shrinking(text_media: None) -> None:
     long = "word " * 120
     block = fit_text(long, 6.0, 2.0, theme=Theme())
@@ -92,6 +94,29 @@ def test_fit_text_squeeze_prefers_one_line(text_media: None) -> None:
     natural = fit_text(text, 100.0, theme=Theme()).width
     squeezed = fit_text(text, natural / 1.2, squeeze=1.3, theme=Theme())
     assert len(wrapped.submobjects) > 1 and len(squeezed.submobjects) == 1
+
+
+def test_fit_text_balance_evens_out_lines(text_media: None) -> None:
+    text = "Manual reports every single week"
+    greedy = fit_text(text, 5.0, size=32, theme=Theme())
+    even = fit_text(text, 5.0, size=32, theme=Theme(), balance=True)
+    assert len(greedy) == len(even) == 2
+    assert even.width < greedy.width and even[-1].width > greedy[-1].width   # no lone last word
+    assert len(fit_text("Short", 5.0, theme=Theme(), balance=True)) == 1
+
+
+def test_measure_text_estimates_fit_text(text_media: None) -> None:
+    theme = Theme()
+    for text, width in [("the quick brown fox jumps over the lazy dog " * 2, 4.0), ("Apollo 11", 3.0), ("one two three", 1.5)]:
+        for balance in (False, True):
+            m = measure_text(text, width * 0.97, size=32, theme=theme, balance=balance)
+            built = fit_text(text, width, size=32, theme=theme, balance=balance)
+            assert len(built) <= len(m.lines) <= len(built) + 1
+            assert m.height == pytest.approx(built.height, rel=0.15) and m.fits
+    long = measure_text("https://example.com/a/very/long/path", 2.0, theme=theme)
+    assert not long.fits and long.lines == ["https://example.com/a/very/long/path"] and long.width > 2.0
+    with pytest.raises(VidgenError, match="text is empty"):
+        measure_text("  ", 2.0, theme=theme)
 
 
 def test_fit_text_highlight_colors_glyphs(text_media: None) -> None:

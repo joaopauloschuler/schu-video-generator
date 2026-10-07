@@ -130,7 +130,7 @@ def test_unknown_type_suggests_close_matches(builtins_loaded: None) -> None:
     message = str(info.value)
     assert "unknown scene type 'text_crd'" in message
     assert "did you mean 'text_card'" in message
-    assert "known types: bar_chart, bullets, code, " in message and "text_card, title)" in message
+    assert "known types: bar_chart, bullets, chapter, code, " in message and "text_card, timeline, title, video_clip)" in message
 
 
 def test_snapshot_restore_and_isolated() -> None:
@@ -165,7 +165,7 @@ def test_validate_params() -> None:
         WithParams.parse_params({"values": {"a": "x"}, "extra": 1}, scene_id="s1")
     message = str(info.value)
     assert message.startswith("scene 's1': invalid params")
-    assert "params.values.a:" in message and "params.extra: Extra inputs are not permitted" in message
+    assert "params.values.a:" in message and "params.extra: unknown parameter 'extra' (known: values, best)" in message
 
     class Free(NarratedScene):
         pass

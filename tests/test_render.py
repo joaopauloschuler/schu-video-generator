@@ -150,6 +150,7 @@ def combined_timings(root: Path, sub: str = "final") -> dict[str, Any]:
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_full_render_outputs(main_project: Path) -> None:
     out = main_project / "out.mp4"
     info = streams(out)
@@ -178,6 +179,7 @@ def test_full_render_outputs(main_project: Path) -> None:
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_no_drift_beats_start_where_timings_say(main_project: Path) -> None:
     samples = decode_audio(main_project / "out.mp4")
     rate = 48000
@@ -194,7 +196,7 @@ def test_no_drift_beats_start_where_timings_say(main_project: Path) -> None:
         assert np.abs(tail).max() < 0.01, beat["id"]
     quiet = timings["scenes"][1]
     segment = samples[int(quiet["start"] * rate) : int((quiet["start"] + quiet["duration"]) * rate)]
-    assert np.abs(segment).max() < 0.001
+    assert np.abs(segment).max() < 0.002   # silent but for AAC spill of the beats around it (< -54 dBFS)
 
 
 @pytest.mark.render
@@ -228,6 +230,7 @@ def test_hooks_dispatched_with_data(main_project: Path) -> None:
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_scene_option_rerenders_only_that_scene(main_project: Path, capsys: pytest.CaptureFixture[str]) -> None:
     scenes_dir = main_project / "build" / "final" / "scenes"
     before = {p.name: p.stat().st_mtime_ns for p in scenes_dir.glob("*.mp4")}
@@ -262,6 +265,7 @@ def small(tmp_path: Path) -> Callable[..., Path]:
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_no_audio_has_silent_track(small: Callable[..., Path]) -> None:
     root = small()
     result = render_project(Project.load(root), preview=True, no_audio=True)
@@ -288,6 +292,7 @@ class Probe(NarratedScene):
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_variant_naming_resolution_and_frame(small: Callable[..., Path]) -> None:
     root = small(
         scenes=[{"id": "p", "type": "probe", "duration": 0.5}],
@@ -322,6 +327,7 @@ class ClearError(NarratedScene):
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_worker_failure_shows_user_traceback(small: Callable[..., Path]) -> None:
     root = small(scenes=[{"id": "b", "type": "boom", "duration": 1}, {"id": "ok", "type": "text_card", "params": {"text": "x"}, "duration": 0.4}],
                  files={"extensions/bad.py": BOOM_EXT})
@@ -335,6 +341,7 @@ def test_worker_failure_shows_user_traceback(small: Callable[..., Path]) -> None
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_keep_going_reports_failures_at_end(small: Callable[..., Path], capsys: pytest.CaptureFixture[str]) -> None:
     root = small(
         scenes=[

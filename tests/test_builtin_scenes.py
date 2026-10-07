@@ -11,7 +11,7 @@ import pytest
 from manim import tempconfig
 from pydantic import ValidationError
 
-from conftest import minimal_config
+from conftest import minimal_config, write_clip
 from vidgen import extensions, registry
 from vidgen.cli import check_project, main
 from vidgen.errors import VidgenError
@@ -20,22 +20,48 @@ from vidgen.render.worker import frame_size
 from vidgen.scenes.code import parse_line_spec
 from vidgen.theme import Theme
 
-BUILTINS = ["bar_chart", "bullets", "code", "end_card", "equation", "image", "line_chart", "quote", "text_card", "title"]
+BUILTINS = ["bar_chart", "bullets", "chapter", "code", "code_walkthrough", "comparison", "diagram", "end_card", "equation", "equation_derivation", "flowchart", "heatmap", "histogram", "icon_grid", "image", "line_chart", "map", "network", "pie", "process", "quote", "scatter", "screenshot", "stat", "table", "text_card", "timeline", "title", "video_clip"]
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "minimal"
+GALLERY = EXAMPLE.parent / "gallery"
 FPS = 5
 
 #: Valid params for every built-in (the image/logo/code files are written by `asset_project`).
 SAMPLES: dict[str, dict[str, Any]] = {
-    "title": {"title": "A title with highlight", "highlight": "highlight", "subtitle": "Sub", "kicker": "K", "authors": ["A", "B"]},
-    "bullets": {"heading": "Heading", "items": ["one", "two", "three is longer than the others"], "numbered": True, "dim_previous": True},
+    "title": {"title": "A title with highlight", "highlight": "highlight", "subtitle": "Sub", "kicker": "K", "authors": ["A", "B"], "icon": "idea"},
+    "bullets": {"heading": "Heading", "items": ["one", {"text": "two", "icon": "cpu"}, "three is longer than the others"], "numbered": True, "dim_previous": True},
     "bar_chart": {"title": "Bars", "labels": ["a", "b", "c"], "values": [1, 2.5, -1], "highlight": "b", "unit": "%"},
     "line_chart": {"title": "Lines", "x": [1, 2, 3], "series": {"s1": [1, 2, 3], "s2": [3, 2, 2.5]}, "x_label": "x", "y_label": "y"},
     "image": {"path": "assets/pic.png", "caption": "Caption", "ken_burns": True},
+    "screenshot": {"path": "assets/pic.png", "title": "Shot", "frame": "browser", "url": "example.org",
+                   "steps": [{"box": [0.1, 0.1, 0.4, 0.3], "label": "Box"}, [{"arrow": [0.7, 0.6], "label": "Arrow", "curved": True}, {"circle": [0.5, 0.5]}],
+                             {"callouts": [{"magnifier": [0.1, 0.5, 0.3, 0.3], "label": "Zoom"}, {"spotlight": [0.1, 0.5, 0.3, 0.3]}], "focus": True}]},
+    "video_clip": {"path": "assets/clip.mp4", "title": "Clip", "caption": "Moving", "frame": "window", "trim": [0.5, 2.5], "loop": True,
+                   "steps": [{"box": [0.1, 0.1, 0.4, 0.3], "label": "Box"}, {"callouts": [{"arrow": [0.7, 0.6], "label": "Arrow"}], "focus": True}]},
     "quote": {"text": "“To be or not to be.”", "author": "Someone", "source": "Somewhere"},
     "equation": {"latex": ["x^2", "x \\cdot x"], "caption": "Square"},
+    "equation_derivation": {"title": "Solve", "colors": {"x": "accent"}, "terms": ["3"],
+                            "steps": ["{{ 2x }} + 3 = 5", {"tex": "{{ 2x }} = 2", "note": "minus 3", "match": ["2"]}, {"tex": "x = 1", "note": "halve"}]},
     "code": {"code": "a = 1\nb = 2\nprint(a + b)\n", "language": "python", "highlight": ["1-2", 3], "title": "Code"},
-    "end_card": {"title": "Thanks", "lines": ["example.com"], "logo": "assets/pic.png"},
+    "code_walkthrough": {"code": "\n".join(f"x{k} = {k}" for k in range(1, 13)), "title": "Walk", "visible": 4,
+                         "steps": [{"lines": "2-3", "note": "Two lines."}, {"lines": "/x11/", "focus": True}, {"note": "Kept."}]},
+    "end_card": {"title": "Thanks", "lines": ["example.com"], "logo": "assets/pic.png", "icon": "heart"},
+    "icon_grid": {"heading": "Grid", "items": [{"icon": "cpu", "label": "CPU", "sublabel": "compute"}, {"icon": "home", "label": "Home"}, {"icon": "cloud", "label": "Cloud"}], "highlight": 1, "icon_color": "palette"},
     "text_card": {"text": "Hello world"},
+    "chapter": {"number": 3, "title": "Results", "subtitle": "What we found", "icon": "chart-line"},
+    "comparison": {"heading": "A vs B", "columns": [{"heading": "A", "tone": "positive", "icon": "cpu", "points": ["fast", {"text": "cheap", "icon": "coins"}]}, {"heading": "B", "tone": "negative", "points": ["slow"]}], "verdict": "Pick A", "vs": "vs"},
+    "table": {"title": "T", "header": ["Name", "Value"], "rows": [["a", 1.5], ["b", 1200]], "caption": "c"},
+    "timeline": {"heading": "History", "events": [{"date": 1957, "title": "Sputnik", "text": "First satellite", "icon": "satellite"}, {"date": "1969", "title": "Apollo 11"}, {"date": "1981", "title": "Shuttle"}], "spacing": "proportional", "highlight": "Apollo 11", "now": 1},
+    "diagram": {"heading": "Flow", "nodes": ["a", {"id": "b", "label": "Bee", "shape": "diamond", "icon": "cpu"}, {"id": "c", "shape": "cylinder"}], "edges": ["a -> b: go", "b --> c", "c -> a"], "highlight": ["a", "b"]},
+    "process": {"heading": "Flow", "input": "in", "output": "out", "token_label": "job", "loop": True, "stages": ["a", {"label": "b", "icon": "cpu", "text": "detail"}, "c"]},
+    "network": {"heading": "Net", "layers": [3, {"size": 100, "label": "Hidden"}, {"size": 2, "label": "Out", "connect": "sparse:0.5"}], "highlight": ["1.1", "2.1"]},
+    "flowchart": {"nodes": ["start", "end"], "edges": ["start -> end"], "routing": "orthogonal", "steps": [["start"], ["end"]]},
+    "stat": {"value": 1234.5, "prefix": "$", "unit": "k", "label": "Revenue", "context": "2025", "icon": "banknote", "comparison": {"value": 1000, "delta": "percent"}},
+    "scatter": {"title": "Points", "series": {"a": [[1, 2], [2, 3.5, "two"], [3, 3]], "b": [[1.5, 1], [2.5, 2]]}, "trend": "each", "trend_label": "both", "highlight": ["two"], "x_label": "x"},
+    "histogram": {"title": "Spread", "values": [1, 2, 2, 3, 3, 3, 4, 4, 5, 7], "mean": True, "median": True, "compare": {"name": "b", "values": [2, 3, 4, 4, 5, 6]}, "highlight": [1]},
+    "pie": {"title": "Shares", "labels": ["a", "b", "c", "d", "e"], "values": [50, 25, 15, 6, 4], "donut": True, "center_label": "total", "other_below": 10, "highlight": "b"},
+    "map": {"title": "World", "view": "world", "countries": ["USA"], "values": {"Brazil": 3, "India": 5}, "legend_label": "v",
+            "steps": [["Germany", "FR"], {"pins": [{"lon": 2.35, "lat": 48.86, "label": "Paris"}], "arcs": ["Paris -> Japan"], "focus": True}]},
+    "heatmap": {"title": "Grid", "rows": ["r1", "r2"], "columns": ["c1", "c2", "c3"], "values": [[1, -2, 3], [None, 0.5, -1]], "legend_label": "v", "highlight": ["row:r2"]},
 }
 
 
@@ -125,7 +151,7 @@ def test_unknown_keys_are_rejected(name: str) -> None:
         ("code", {"code": "x", "language": "klingon"}, "unknown language"),
         ("code", {"code": "a\nb\n", "highlight": ["2-3"]}, "only 2 lines"),
         ("code", {"code": "a", "highlight": ["x-y"]}, "invalid line spec"),
-        ("end_card", {}, "at least one of title, lines or logo"),
+        ("end_card", {}, "at least one of title, lines, logo or icon"),
         ("text_card", {"text": "x", "color": "#12"}, "invalid hex color"),
     ],
 )
@@ -231,12 +257,20 @@ def test_validate_warns_when_latex_missing(asset_project, monkeypatch: pytest.Mo
     assert "need LaTeX" in caplog.text
 
 
-def test_example_minimal_validates(capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["validate", str(EXAMPLE)]) == 0
+@pytest.mark.parametrize("example", [EXAMPLE, GALLERY], ids=lambda p: p.name)
+def test_examples_validate(example: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["validate", str(example)]) == 0
     out = capsys.readouterr().out
-    assert "variants:  vertical" in out and out.endswith("ok\n")
-    used = {s.type for s in Project.load(EXAMPLE).config.scenes}
-    assert used == set(BUILTINS)
+    assert "variants:  vertical, light, contrast, editorial, neutral, pastel, neon" in out and out.endswith("ok\n")
+
+
+def test_examples_use_every_builtin_scene_type() -> None:
+    """examples/minimal shows the core types, examples/gallery each newer one once."""
+    core = [s.type for s in Project.load(EXAMPLE).config.scenes]
+    gallery = [s.type for s in Project.load(GALLERY).config.scenes]
+    assert set(core) | set(gallery) == set(BUILTINS) - {"flowchart"}   # = diagram
+    assert not set(core) & set(gallery) - {"chapter"}
+    assert len(core) == len(set(core)) and gallery.count("chapter") == 3 and len(gallery) - 2 == len(set(gallery))
 
 
 # ----- rendering (tiny, both orientations) ---------------------------------------------------------------
@@ -296,6 +330,7 @@ def render_project(tmp_path_factory: pytest.TempPathFactory) -> Project:
     data = minimal_config(scenes=scenes, narration={"pad": 0.2, "words_per_second": 4.0})
     (root / "video.yaml").write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
     write_png(root / "assets" / "pic.png")
+    write_clip(root / "assets" / "clip.mp4")
     return Project.load(root)
 
 
@@ -305,8 +340,9 @@ RENDER_IDS = BUILTINS + ["silent_bullets", "crowded", "hbars", "cover"]
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(160, 90), (90, 160)], ids=["landscape", "portrait"])
 @pytest.mark.parametrize("scene_id", RENDER_IDS)
+@pytest.mark.slow
 def test_builtin_renders(render_project: Project, shared_media: Path, scene_id: str, size: tuple[int, int]) -> None:
-    if scene_id == "equation" and shutil.which("dvisvgm") is None:
+    if scene_id in ("equation", "equation_derivation") and shutil.which("dvisvgm") is None:
         pytest.skip("LaTeX (dvisvgm) not installed")
     scene, duration, portrait = render_scene(render_project, scene_id, shared_media, *size)
     assert portrait == (size[1] > size[0])

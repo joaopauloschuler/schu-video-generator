@@ -4,6 +4,7 @@
 #   vidgen tts examples/kphi3 --dry-run      # nothing to do: the narration MP3s are committed
 #   vidgen render examples/kphi3 --preview   # 854x480 @ 15 fps
 #   vidgen render examples/kphi3 --jobs 2    # 1920x1080 @ 30 fps -> kphi3_video.mp4
+#   vidgen readback examples/kphi3           # speech to text of the MP3s vs the texts (pip install "vidgen[stt]")
 # Narration text lives in the beats below; the text drawn on screen in each scene's params.
 title: "Saving 77% of the Parameters in Large Language Models"
 output: kphi3_video
@@ -16,7 +17,7 @@ theme:
   font: Inter
   colors:
     text: "#E8EAED"
-    dim: "#6B7280"
+    dim: "#838B98"         # Step 22: was the original video's #6B7280 (3.9:1, below WCAG AA)
     accent: "#FF6B6B"      # warnings, "memorize", filtered phrases
     highlight: "#FFD166"   # gold: emphasis, best values, flashes
     primary: "#58C4DD"
@@ -89,6 +90,9 @@ scenes:
 
   - id: method
     type: kphi_method
+    lint_ignore:
+      # the original's pacing: the summary holds while the narrator explains the formulas
+      - {rule: dead_air, beat: s4_b5}
     params:
       result: "Vision models: ~80% fewer parameters, same accuracy"
     beats:
@@ -105,6 +109,10 @@ scenes:
 
   - id: setup
     type: kphi_setup
+    lint_ignore:
+      # the original's pacing: the setup diagram holds while the narrator describes it
+      - {rule: dead_air, beat: s5_b1}
+      - {rule: dead_air, beat: s5_b3}
     params:
       pairs_before: 2.58
       pairs_after: 2.52
@@ -143,6 +151,9 @@ scenes:
 
   - id: loss
     type: kphi_loss
+    lint_ignore:
+      # the original's pacing: the "best 1.57" result holds while the narrator discusses it
+      - {rule: dead_air, beat: s7_b2}
     params:
       models: ["phi-3\n2 layers", "kphi-3\n2 layers", "kphi-3\n3 layers"]
       colors: [base, k2, k3]

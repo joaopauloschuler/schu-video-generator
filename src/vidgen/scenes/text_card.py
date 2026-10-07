@@ -1,5 +1,7 @@
 """``text_card``: one centered line (or paragraph) of text for the whole scene."""
 
+from typing import Any
+
 from vidgen.api import *
 
 
@@ -9,12 +11,24 @@ class TextCard(NarratedScene):
     narrated; no fade-out at the end.
 
     Silent scenes (no beats, ``duration`` set) are held for their duration.
+
+    Action target: ``text``.
     """
 
+    target_patterns = ("text",)
+
+    @classmethod
+    def target_names(cls, params: Any) -> list[str]:
+        """``text``."""
+        return ["text"]
+
     class Params(SceneParams):
-        text: str
+        text: TranslatableStr
+        """The text, wrapped to fit the frame."""
         size: ThemeSize = "title"
+        """Text size."""
         color: ThemeColor = "text"
+        """Text color."""
 
     def construct(self) -> None:
         p = self.params
@@ -23,6 +37,8 @@ class TextCard(NarratedScene):
         if not self.beats:
             self.play(FadeIn(card), run_time=min(0.8, self.spec.duration or 0.8))
             return
+        text = self.target("text", card)
         for i, (_, d) in enumerate(self.narrate_all()):
-            if i == 0:
-                self.play(FadeIn(card), run_time=min(0.8, d))
+            entrance = self.entrance(text) if i == 0 else []
+            if entrance:
+                self.play(*entrance, run_time=min(0.8, d))

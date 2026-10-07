@@ -1,4 +1,5 @@
-"""``image``: a picture from the project's assets with an optional caption and Ken Burns move."""
+"""``image``: a picture from the project's assets (or a generated one) with an optional caption
+and Ken Burns move."""
 
 from typing import Any, Literal
 
@@ -15,9 +16,13 @@ class KenBurns(SceneParams):
     (0..1, origin top-left): the point the view is centered on."""
 
     start_scale: float = Field(1.0, ge=1.0, le=4.0)
+    """Zoom at the start of the scene (1-4)."""
     end_scale: float = Field(1.15, ge=1.0, le=4.0)
+    """Zoom at the end of the scene (1-4)."""
     start_focus: tuple[float, float] = (0.5, 0.5)
+    """[x, y] in 0-1 (0,0 = top left) centered at the start."""
     end_focus: tuple[float, float] = (0.5, 0.5)
+    """[x, y] in 0-1 (0,0 = top left) centered at the end."""
 
     @field_validator("start_focus", "end_focus")
     @classmethod
@@ -50,18 +55,41 @@ class Image(NarratedScene):
 
     ``fit: contain`` shows the whole image (caption below it); ``cover`` fills the frame
     (cropping) with the caption on a band at the bottom. ``ken_burns`` zooms/pans slowly over
-    the whole scene (in ``contain`` mode the image never outgrows its box).
+    the whole scene (in ``contain`` mode the image never outgrows its box). ``generate`` shows a
+    generated picture (``vidgen imagegen``) instead of a file, a placeholder card until it exists.
+
+    Action targets: ``image``, ``caption`` (if any).
     """
 
     outro = 0.5
+    target_patterns = ("image", "caption")
+
+    @classmethod
+    def target_names(cls, params: Any) -> list[str]:
+        """``image`` and, with a caption, ``caption``."""
+        return ["image"] + (["caption"] if params.caption else [])
 
     class Params(SceneParams):
-        path: str
-        caption: str = ""
+        path: str | None = None
+        """Image file relative to the project folder, e.g. assets/photo.jpg (or generate)."""
+        generate: GenerateImage | None = None
+        """A generated picture instead of a file: {prompt, negative, style, aspect, seed} or the prompt; made by `vidgen imagegen`, a placeholder until then."""
+        caption: TranslatableStr = ""
+        """Caption text."""
         fit: Literal["contain", "cover"] = "contain"
+        """contain: whole image, caption below; cover: fills the frame (cropped), caption on a band."""
         ken_burns: KenBurns | bool = False
+        """Slow zoom/pan over the whole scene; true = zoom 1.0 -> 1.15 on the center."""
         caption_color: ThemeColor = "text"
+        """Caption color."""
         caption_size: ThemeSize = "caption"
+        """Caption text size."""
+
+        @model_validator(mode="after")
+        def _one_source(self) -> SceneParams:
+            if (self.path is None) == (self.generate is None):
+                raise ValueError("give either path (an image file) or generate (a picture to generate), not both" if self.path else "path or generate is required: an image file, or a picture to generate")
+            return self
 
         def motion(self) -> KenBurns | None:
             """The Ken Burns settings, or ``None`` when disabled."""
@@ -71,30 +99,36 @@ class Image(NarratedScene):
 
     @classmethod
     def validate_project(cls, params: Any, project: Any) -> list[str]:
-        return super().validate_project(params, project) + check_image(project, params.path, "path")
+        problems = super().validate_project(params, project)
+        return problems if params.path is None else problems + check_image(project, params.path, "path")
 
     def construct(self) -> None:
         p = self.params
-        problems = check_image(self.project, p.path, "path")
-        if problems:
-            raise VidgenError(f"scene '{self.spec.id}': {problems[0]}")
-        img = load_image(self.project.asset(p.path))
+        if p.generate is not None:  # the stored picture, or a placeholder card until it is made
+            img = load_image(generated_image(self.project, p.generate, self.theme))
+        else:
+            problems = check_image(self.project, p.path, "path")
+            if problems:
+                raise VidgenError(f"scene '{self.spec.id}': {problems[0]}")
+            img = load_image(self.project.asset(p.path))
         aspect = img.width / img.height
         fw, fh = self.frame_width, self.frame_height
         motion = p.motion()
 
-        caption = None
+        caption = text = None
         if p.caption:
-            caption = fit_text(p.caption, self.safe_width, self.safe_height * 0.18, size=p.caption_size, color=p.caption_color)
+            caption = text = fit_text(p.caption, self.safe_width, self.safe_height * 0.18, size=p.caption_size, color=p.caption_color)
 
         if p.fit == "cover":
             box_w, box_h, box_c = fw, fh, np.zeros(3)
             base_w = max(fw, fh * aspect)
             if caption is not None:
-                band_h = caption.height + 0.6
+                # the caption sits on the bottom of the safe area (never in the margin); the band
+                # behind it runs from the frame's bottom edge to a little above the caption
+                place(caption, self.region("caption"), fit="none", align="bottom")
+                band_h = caption.get_top()[1] + 0.3 + fh / 2
                 band = Rectangle(width=fw, height=band_h, stroke_width=0)
                 band.set_fill(self.theme.background, opacity=0.72).move_to([0, -fh / 2 + band_h / 2, 0])
-                caption.move_to(band)
                 caption = Group(band, caption)
         else:
             # the image box is the image at its largest scale; box + caption are centered
@@ -130,9 +164,11 @@ class Image(NarratedScene):
 
             img.add_updater(drift)
 
-        steps: list = [FadeIn(img)]
-        if caption is not None:
-            steps.append(FadeIn(caption, shift=UP * 0.1))
+        picture = self.target("image", img, entrance=lambda: [FadeIn(img)])
+        steps: list = [lambda: self.entrance(picture)]  # entrance(): not twice after a reveal action
+        if caption is not None:  # the target is the text (a cover caption's band is not recoloured)
+            label = self.target("caption", text, entrance=lambda: [FadeIn(caption, shift=UP * 0.1)])
+            steps.append(lambda: self.entrance(label))
         self.reveal(steps, fraction=0.6, cap=1.0)
         img.clear_updaters()
         self.finish()

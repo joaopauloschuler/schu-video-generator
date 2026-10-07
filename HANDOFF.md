@@ -529,3 +529,5336 @@ Remaining known limitations / suggested next steps
 
 How to test: `/home/claude/venv/bin/python -m pytest -q` (382 passed, ~35 s; same on Python
 3.10). Manual: see the commands in each example's `video.yaml` header.
+
+## Step 8 — JSON output for commands
+What was built
+- `--json` on `vidgen validate`, `vidgen list-scenes` and `vidgen render`. stdout then holds
+  exactly one JSON document (indented, ASCII-only so a cp1252 console cannot corrupt it);
+  everything the command prints meanwhile (progress, Manim output) is redirected to stderr;
+  vidgen log warnings still go to stderr and are also collected into the document. Exit code
+  0 iff `ok`, 1 for errors, 2 for usage errors. Errors (usage, `VidgenError`, unexpected
+  exceptions) are JSON documents too. Human output without `--json` is unchanged.
+- Envelope `{version: 1, vidgen, command, ok, warnings: [{scene, message}], ..., error?: {kind
+  (usage|error|internal), message, problems, details}}`. Per command:
+  - validate: `project, config_file, title, scenes, beats, estimated_duration, variants: [{name,
+    loaded, estimated_duration, problems}], problems: [{location, message, variant}], audio:
+    [{variant, dir, ok, stale, missing, orphaned, beats: [{scene, beat, state}]}]` (always this
+    shape; summary fields `null` when the config does not load).
+  - list-scenes: `project, scene_types: [{name, origin, builtin, overrides_builtin, doc, beats:
+    null|{min, max, text}, params: null|[{name, type, required, default, doc, nested: [{model,
+    fields}]}]}]`.
+  - render: `project, variant, preview, audio, format, outputs: {video, subtitles, timings},
+    duration, elapsed, scenes: [{id, type, status (rendered|reused), start, duration,
+    render_seconds, beats: [{id, start, end}]}]`; worker warnings carry their scene id; failures
+    put `{failed: [{scene, exit_code, output_tail}], rendered}` in `error.details`.
+- Reference: docs/CONFIG.md "JSON output (`--json`)"; README command table; DESIGN §2, §8 and
+  new §11; EXTENDING.md (field docstrings, problem locations); usage line in
+  `examples/minimal/video.yaml`.
+- Every built-in param now has a one-line docstring (shown as `doc`).
+
+Files
+- New: `src/vidgen/jsonout.py` (document builders, `SCHEMA_VERSION`), `src/vidgen/describe.py`
+  (type/params description, moved out of `cli.py` + JSON form), `tests/test_json_output.py`
+  (23 tests, 2 of them renders).
+- Changed: `cli.py`, `errors.py`, `config.py`, `project.py`, `render/pipeline.py`, `scene.py`,
+  all `scenes/*.py` (field docstrings only), `pyproject.toml` (`pydantic>=2.7`), docs above.
+
+Public interfaces added/changed (internal modules; `vidgen.api` unchanged)
+- `vidgen.errors.Problem(location, message, variant=None)` with `str()`, `in_variant()`,
+  `to_json()`; `VidgenError(message, *, problems=(), details=None)` → `.problems`, `.details`.
+- `config.validation_problems(err, prefix)`; `parse_config`/`Project.load` errors carry
+  `problems` (variant ones tagged with the variant).
+- `cli.project_problems(project) -> list[Problem]` (`check_project` unchanged, returns
+  strings), `cli.validate_all(project, keep_going=False)`, `cli.JSON_COMMANDS`,
+  `cli.UsageError`; command functions return `int`, or the document `dict` with `--json`.
+- `RenderResult.timings`, `.render_seconds`, `.warnings`; render failures have `details`.
+- `SceneParams` uses pydantic `use_attribute_docstrings=True`.
+
+Decisions / deviations
+- `version` in the documents is the schema version (1), `vidgen` the package version. Keys may
+  be added within a version; removals/renames/type changes bump it (documented).
+- `validate --json` reports a variant whose config does not load as problems and keeps checking
+  the others (closes, for JSON, the Step 7 gap "validate aborts on the first variant that fails
+  to load"); the human command still stops there, to keep its output unchanged.
+- Tiny human-output change: a `validate_project` message not following the `"<param>: ..."`
+  convention now prints as `scenes[i].params: <msg>` instead of `scenes[i].params.<msg>`.
+- argparse errors no longer `SystemExit(2)` out of `main()`; `main()` prints the same usage text
+  and returns 2 (the console script's exit code is the same).
+- The scene type `doc` is the class docstring, else the module docstring (built-in classes
+  describe their reveal behaviour; the module line has the one-line summary).
+
+Known gaps / TODOs
+- `tts` has no `--json` (not in this step; `vidgen tts --json` is a usage error in JSON).
+- Problems from YAML/JSON syntax errors have no location (only the message with the line).
+- Worker warnings are recognised by the `warning: ` line prefix in worker output (the format
+  the worker's logging uses); prints from scene code are not collected.
+- Step 9 (JSON Schema) can reuse `describe.py` and the field docstrings (`description`).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (404 passed, 1 skipped; also passes on
+Python 3.10 / Manim 0.19). Manual: `vidgen validate examples/minimal --json`,
+`vidgen list-scenes --json`, `vidgen render examples/minimal --preview --json 2>/dev/null`.
+
+## Step 9 — JSON Schema export
+What was built
+- `vidgen schema [PROJECT] [--scene TYPE | --all] [--json]` prints a JSON Schema (draft
+  2020-12) generated from the pydantic models for the project's scene types (built-ins + its
+  extensions; built-ins only without a PROJECT and no config in the current folder):
+  - default: the whole `video.yaml`. `scenes[].type` is an `enum` of the registered types and
+    `scenes[].params` is checked per type (`allOf` of `if type == NAME then params: $ref
+    #/$defs/scene.NAME`, plus `required: [params]` when the type has required params and
+    `beats` min/maxItems from `beat_count`). Also encoded: silent-scene rule, optional/null beat
+    ids, even width/height (`multipleOf: 2`), `variants` bodies as partial configs,
+    `dict[Identifier, X]` keys (`propertyNames`), and `min_length` of union fields moved to
+    each branch as `minItems`/`minProperties` (pydantic emits a `minLength` that validators
+    ignore for arrays, e.g. `line_chart.x`).
+  - `--scene TYPE`: one type's params schema (unknown type: error with did-you-mean).
+  - `--all`: the schema of one `scenes[]` item with every type's params in `$defs`.
+  - Theme color/size params (`ThemeColor`/`ThemeSize`) accept hex / positive number or a
+    token name of the project's theme (defaults + extension defaults + `theme.*` of the base
+    config and every variant); marked `"x-vidgen-theme": "color"|"size"`.
+  - Descriptions: field docstrings (every config field now has one; built-in params already
+    had them) and the scene type's doc + beat count.
+  - Works on an invalid `video.yaml` (that is when an agent needs it): falls back to the
+    file's `extensions`/`theme` as far as they are valid, with a warning.
+  - Output: indented ASCII JSON on stdout (extension prints go to stderr). `--json` wraps it in
+    the Step 8 envelope (`project`, `schema`); errors are JSON documents too.
+- Docs: docs/CONFIG.md new section "JSON Schema (`vidgen schema`)" and "`vidgen schema
+  --json`"; README command table; EXTENDING.md (what the schema takes from `Params`); DESIGN
+  §2, §8 and new §12.
+
+Files
+- New: `src/vidgen/schema.py`, `tests/test_schema.py` (51 tests).
+- Changed: `cli.py` (`cmd_schema`, `scene_types_session`, `JSON_COMMANDS`), `jsonout.py`
+  (`schema_document`), `config.py` (field docstrings, `use_attribute_docstrings`, `multipleOf`
+  hint, `Size` JSON schema), `scene.py` (`ThemeToken.__get_pydantic_json_schema__`),
+  `describe.py` (`_doc` → public `scene_doc`), `pyproject.toml` (dev extra `jsonschema>=4.18`),
+  docs above, tasklist.md.
+
+Public interfaces added/changed (internal modules; `vidgen.api` unchanged)
+- `vidgen.schema`: `config_schema(entries, themes)`, `scene_schema(entries, themes)`,
+  `params_schema(entry, themes)`, `project_themes(project, theme)`, `theme_tokens(themes)`,
+  `lenient_project(path)`, `DIALECT`, `THEME_KEY`.
+- `cli.scene_types_session(path, lenient=False)` (context manager → `(project | None,
+  theme)`; `list-scenes` uses it too), `cli.cmd_schema`; `jsonout.schema_document`.
+- `describe.scene_doc(entry)`.
+- Config model fields have `description`s; validation behaviour and messages unchanged.
+
+Decisions / deviations
+- `--scene` and `--all` are mutually exclusive; `--all` is "one scene item with every type"
+  (a valid schema an agent can apply per scene), not a name → schema map.
+- Without `--json` the raw schema is printed (so `vidgen schema > video.schema.json` works);
+  `--json` adds the envelope, like the other commands.
+- Token enums are the union of base and variant themes (a variant may define a color its own
+  scenes use); slightly permissive for the base config.
+- Per-type nested models are `$defs/scene.<type>.<Model>` to avoid collisions between types.
+
+Known gaps / TODOs
+- Not expressible in the schema (only `vidgen validate`): unique scene/beat ids, referenced
+  files, `validate_project`, pydantic validators written in Python (e.g. "one value per
+  label"). Values pydantic coerces (`"30"` for an int) pass validate but not the schema.
+- The schema is a snapshot: regenerate after adding scene types, theme tokens or variants.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (455 passed, 1 skipped; needs the dev
+extra `jsonschema`: `pip install -e .[dev]`). Manual: `vidgen schema examples/custom_scene`,
+`vidgen schema --scene bar_chart`, `vidgen schema --all --json`.
+
+## Step 10 — Frame capture in the worker
+What was built
+- `vidgen render --frames` saves a PNG still of the **last frame of every beat** (what is on
+  screen when the beat's narration + pad is over); `--frames-per-beat N` saves N evenly spaced
+  stills per beat, the last at its end (implies `--frames`). Off by default. Works with
+  `--preview`, `--variant`, `--scene`, `--jobs`, `--no-audio` and `--json`.
+- Files in `build/<final|preview>[_<variant>]/frames/`: `<scene>/<beat>-<k>.png` (silent scenes:
+  `<scene>-<k>.png`), `<scene>/index.json` (`{scene, per_beat, width, height, fps, frames:
+  [{beat, k, n, frame, time, path}]}`, time from scene start) and `index.json` for the whole
+  video (`time` in the video, `scene_time`, `path` relative to `frames/`; scene `start`/
+  `duration`). Silent scenes are one segment of `duration - outro` (the still is taken before
+  the fade-out).
+- Capture hook (`vidgen/capture.py`): `FrameCapture(per_beat, listeners)` wraps
+  `renderer.add_frame`; `NarratedScene.narrate()` marks beat start/end
+  (`begin_segment`/`end_segment`), silent scenes are planned at construction, `tear_down`
+  calls `finish()`. Listeners `(scene, CapturedFrame)` run at the captured frame with the scene
+  in that frame's state — **Step 12 attaches its layout dump here** (append a listener in the
+  worker next to `StillWriter`, or pass it in `FrameCapture(..., [writer, layout])`).
+- Docs: docs/CONFIG.md "Frame stills (`vidgen render --frames`)" + `outputs.frames` in the
+  render JSON table; README (command table, options, layout); EXTENDING.md (hook keys, where
+  stills are taken, `self.capture`); `examples/minimal/video.yaml` usage line; DESIGN §2, §3,
+  §6.2, §8 and new §13.
+
+Files
+- New: `src/vidgen/capture.py`, `tests/test_frames.py` (16 tests, 4 render tests).
+- Changed: `scene.py` (`capture=` kwarg, `self.capture`, calls in `narrate`/`__init__`/
+  `tear_down`), `render/worker.py` (`--frames N`, `scene_frames_dir`, `remove_tree`, stills
+  folder cleared before every render, `render.frames` in timings), `render/pipeline.py`
+  (`frames=` arg, `write_frames_index`, `_usable_render` checks stills, combined index removed
+  before each render, hook keys), `cli.py` (`--frames`, `--frames-per-beat`, `frames:` line),
+  `jsonout.py` (`outputs.frames`), `tests/test_json_output.py` (outputs now include `frames`),
+  docs above, tasklist.md.
+
+Public interfaces added/changed
+- `NarratedScene(spec, project=None, theme=None, *, audio=True, capture=None, ...)`;
+  attribute `self.capture` (`FrameCapture | None`). `vidgen.api` exports unchanged.
+- `vidgen.capture`: `FrameCapture(per_beat=1, listeners=())` (`.attach(scene)`,
+  `.begin_segment(beat_id, frames, *, include_end)`, `.end_segment(beat_id)`, `.finish()`,
+  `.listeners`, `.frames_written`), `CapturedFrame`, `CaptureListener`, `StillWriter(folder)`
+  (`.entries`, `.index(...)`), `plan_targets(start, frames, n, include_end)`.
+- `render_project(..., frames=0)`, `RenderResult.frames_index`, `pipeline.write_frames_index`;
+  `worker.render_scene(..., frames=0)`, `worker.scene_frames_dir`, `worker.remove_tree`.
+- Hook data: `post_scene.frames`, `post_render.frames_index` (both `None` without frames).
+- `render --json`: `outputs.frames` (added within JSON version 1).
+
+Decisions / deviations
+- Captured from Manim's renderer, not by decoding the MP4: exact pixels and frame index (no
+  H.264 loss or seek rounding), no extra pass, and listeners see the live scene state at that
+  moment, which Step 12 needs. The stills are the uncompressed frames (tests compare them with
+  the decoded video: same frame, small codec difference).
+- "End of beat" = last frame of the beat including `narration.pad` (the frame before the next
+  beat starts), taken when the beat actually ends, so it is right even when a beat's animations
+  overrun. Mid-beat stills are planned from `round((d + pad) * fps)`.
+- CLI: two flags (`--frames`, `--frames-per-beat N`) instead of `--frames [N]`, because an
+  optional value would swallow the PROJECT argument (`vidgen render --frames proj`).
+- Stills are always deleted when a scene is re-rendered (with or without `--frames`), and
+  `frames/index.json` on every render, so nothing stale is ever indexed. Requesting stills makes
+  scenes without matching stills non-reusable (`--scene` renders them again).
+- The listener API is internal (`vidgen.capture`), not in `vidgen.api`; `self.capture` is
+  documented as internal in EXTENDING.md.
+
+Known gaps / TODOs
+- Stills are only taken by narrated beats via `narrate()` (incl. `narrate_all`, `timeline`,
+  `reveal`) and for silent scenes; a scene that never calls `narrate` for its beats gets no
+  stills for them (it already warns about un-narrated beats).
+- Only the Cairo renderer is supported (vidgen never selects OpenGL).
+- No max for N; large N at final quality writes many 1080p PNGs (Step 11 storyboard will
+  normally use preview).
+- Step 11: build contact sheets from `frames/index.json` + `timings.json` (beat texts); default
+  to `--preview`. Step 12: add a layout listener (scene mobjects → pixel bboxes) to the same
+  `FrameCapture` in `worker.render_scene`.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (471 passed, 1 skipped). Manual:
+`vidgen render examples/minimal --preview --frames-per-beat 2 --jobs 4`, then look at
+`examples/minimal/build/preview/frames/`.
+
+## Step 11 — `vidgen storyboard`
+What was built
+- `vidgen storyboard [PROJECT] [--scene ID ...] [--per-beat N] [--variant NAME] [--preview |
+  --final] [--width PX] [--jobs N] [--force] [--json]` writes contact sheets to
+  `build/<preview|final>[_<variant>]/storyboard/`: `video-<p>.png` (the whole video, pages of
+  bounded size) and `scenes/<scene>-<p>.png` (one scene, larger stills). Each still is
+  labelled `beat @ time` (video time `m:ss.s` on video sheets, scene time on scene sheets;
+  `k/n @ time` with several stills per beat), the beat's narration is wrapped (and cut with
+  `…`) under it, every scene has a header band `N/M  id · type · start–end (duration)`.
+  Preview format by default.
+- Reuse: a scene is rendered (with stills, in the usual worker processes, `--jobs`) only when
+  its stills are missing, at another `--per-beat`/format, or stale. Staleness uses a new **scene
+  fingerprint** the worker stores in `timings/<scene>.json` (`render.fingerprint`): scene entry,
+  rest of the config (variant applied), beat MP3 stat, extension `.py` contents, `assets/` stat,
+  vidgen's own rendering source. So `storyboard` after `render --preview --frames` or after an
+  earlier storyboard renders nothing (~2 s for examples/minimal), and after an edit only the
+  edited scenes.
+- Sheet design (iterated by looking at the PNGs): white page, 1280 px wide (640–2000, fonts
+  scale with the width), at most ~1.25 x width high, balanced pages; 16:9 → 4 stills per row
+  (scene sheets 2), 9:16 → 5 (4), N stills per beat → the nearest multiple of N; short scenes
+  share a row; a scene continued on the next page repeats its header `(continued)`.
+- `--json`: Step 8 envelope with `project, variant, preview, per_beat, format, folder, rendered,
+  reused, elapsed, sheets: [{kind, scene, page, pages, path, width, height, frames: [{scene,
+  beat, k, n, time, scene_time, path}]}]`.
+- Docs: docs/CONFIG.md "Storyboard (`vidgen storyboard`)" + "`vidgen storyboard --json`";
+  README (quick start, command table, paragraph); EXTENDING.md (check scenes with storyboard,
+  hooks); `examples/minimal/video.yaml` usage line; DESIGN §2, §8, new §14.
+
+Files
+- New: `src/vidgen/storyboard.py`, `src/vidgen/sheets.py`, `src/vidgen/render/fingerprint.py`,
+  `tests/test_storyboard.py` (21 tests, 2 render tests).
+- Changed: `cli.py` (`cmd_storyboard`, parser, `JSON_COMMANDS`), `jsonout.py`
+  (`storyboard_document`), `render/pipeline.py` (`render_scenes`, `_SceneRuns` → `SceneRuns`),
+  `render/worker.py` (`render.fingerprint`), docs above, `examples/minimal/video.yaml`,
+  tasklist.md.
+
+Public interfaces added/changed (internal modules; `vidgen.api` unchanged)
+- `vidgen.storyboard`: `make_storyboard(project, *, preview=True, scenes=None, per_beat=1,
+  width=1280, jobs=1, force=False) -> StoryboardResult` (`folder, format, preview, per_beat,
+  sheets: [Sheet], rendered, reused, warnings`), `Sheet(kind, scene, page, pages, path, width,
+  height, stills)`, `stills_current(project, preview, scene_id, per_beat)`, `storyboard_dir`.
+- `vidgen.sheets`: `compose_pages(...) -> list[SheetPage]`, `SheetScene`, `SheetStill`,
+  `SheetPage`, `load_font`, `wrap_text`, `fit_line`, `format_time`, `DEFAULT_WIDTH`,
+  `MIN_WIDTH`/`MAX_WIDTH`, `PAGE_RATIO`, `MAX_COLUMNS`.
+- `vidgen.render.fingerprint`: `scene_fingerprint(project, scene_id)`, `vidgen_source_digest()`,
+  `NOT_RENDER_INPUTS`, `FINGERPRINT_VERSION`.
+- `pipeline.render_scenes(project, preview, scene_ids, jobs=1, frames=0) -> SceneRuns`.
+- Per-scene timings `render` block: new key `fingerprint`. JSON: new `storyboard` document.
+
+Decisions / deviations
+- Options beyond the task list: `--final` (the opposite of the default `--preview`), `--width`,
+  `--jobs`, `--force` (files outside `assets/` are not tracked by the fingerprint).
+- With `--scene`, no whole-video sheet is written and old `video-*.png` are deleted (they could
+  show the scene's old stills). Without it, the storyboard folder is cleared first.
+- Storyboard renders scenes but does not join the video (and does not dispatch
+  `pre_render`/`post_render`); `vidgen render` behaviour is unchanged (it does not use the
+  fingerprint). Video times come from the per-scene timings' durations (the joined video probes
+  the MP4s; the difference is below a frame).
+- Default page 1280 px x ≤1600 px rather than 2000 px wide: image tools downscale big images
+  (to ~1.2 MP), and at this size the 19 px labels/narration remained clearly legible when I
+  opened the sheets with the Read tool; a 9:16 video at 5 per row gets 2 rows per page.
+- Light sheet background: dark frames stand out and text has maximum contrast.
+
+What I saw in the storyboards (examples/minimal at 16:9 and `--variant vertical`, kphi3 16:9)
+- Sheets read well: labels, times and narration legible; long kphi3 narration is cut after 4
+  lines with `…`; `--per-beat 3` shows animations in progress (e.g. the title still being
+  written at 1/3 of the first beat).
+- Built-in scene issues for later steps (Step 15 layout regions / Step 21+ reviews / lint):
+  - 9:16 in general: most built-ins keep their 16:9 layout centred in the tall frame, leaving
+    the top and bottom thirds empty. Worst: `code` (the listing is scaled to the frame width,
+    text becomes illegibly small), `bullets` (small items in the middle band), `quote` and
+    `text_card` (small text in a large empty frame), `line_chart` (narrow plot, tiny tick and
+    axis labels). `image` with `fit: cover` + Ken Burns `end_focus [0.7, 0.35]` pushes the sun
+    half out of frame in 9:16.
+  - Small/dim secondary text at 16:9 too: `title` authors line, `quote` source line,
+    `equation` and `bar_chart` captions, `line_chart` tick/axis labels, `image` caption,
+    `end_card` lines — likely below a sensible minimum size for 480p/mobile (Step 13 lint).
+  - `equation`: the formula is small with lots of empty space; `bullets` 16:9 leaves the lower
+    half empty with 4 short items.
+- Generated PNGs were not committed (`build/` is ignored).
+
+Known gaps / TODOs
+- The fingerprint does not see files a scene reads outside `assets/` or the extension folders'
+  `.py` files (`--force`), nor changes in installed libraries (Manim, fonts).
+- `vidgen render` could reuse unchanged scenes via the fingerprint too (not done: it would
+  change its documented behaviour).
+- Pages are capped by height but a single scene with very many stills just gets more pages; no
+  overall cap on page count.
+- Step 12 can add layout boxes to the stills; a later step could overlay lint findings (Step 13)
+  on the sheets.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (492 passed, 1 skipped). Manual:
+`vidgen storyboard examples/minimal -j 4`, `vidgen storyboard examples/minimal --variant
+vertical`, `--per-beat 3`, `--json`; open `examples/minimal/build/preview/storyboard/*.png`.
+
+## Step 12 — Layout introspection
+What was built
+- Whenever stills are captured (`render --frames` / `--frames-per-beat N`, `storyboard`), the
+  worker also writes `build/<final|preview>[_<variant>]/layout/<scene>.json`: for each captured
+  frame (same `beat, k, n, frame, time` as the stills index, plus `still` = the PNG relative to
+  the layout file and the `camera` frame) every **visible** object: `id` (stable per object
+  across the scene's frames), `kind` (`text|code|math|number|shape|group|image`), `class`,
+  `path` (parent chain `Class[i]`, or the scene's name for it), `name` (scene attribute or
+  `Mobject.name`), `bbox` (output px, top-left origin, stroke included, may exceed the frame),
+  `opacity` (fade states included; opacity-0 parts/objects are left out), `z`, `order` (draw
+  position), `parts`; text kinds add `text`, `font_px`, `color`, `colors`, `backdrop`; others
+  `fill`/`stroke` (`width_px`). Header: `version, scene, type, width, height, fps, per_beat,
+  px_per_unit, background, safe_area` (px, from `margin_x/margin_y`).
+- `font_px` = 75th percentile of the visible glyph heights in output px (≈ cap height for mixed
+  case). `backdrop` = most common frame colour inside the text box excluding the text's own
+  colours (sampled from the captured pixels, so it sees plates, images and highlight bands).
+- Grouping: one object per text mobject (not per glyph), `Code` split into its paragraphs
+  (kind `code`, Manim's invisible ` pA<n>` alignment suffix stripped) and background; groups
+  with only shapes collapse into one `group`; MovingCamera zoom/pan handled via the scene's
+  camera transform.
+- Verified by drawing the boxes on stills (scratch script, not committed) for all of
+  examples/minimal (16:9, per-beat 2, and vertical `listing`/`sizes`) and all kphi3 scenes:
+  boxes hug the glyphs/shapes/images; `font_px` values look right (e.g. 9.9 px code text in
+  9:16 preview, 35 px title at 480p).
+
+Files
+- New: `src/vidgen/introspect.py`, `tests/test_introspect.py` (14 tests, 1 render test).
+- Changed: `capture.py` (`still_name`), `render/worker.py` (`scene_layout_path`, recorder
+  listener, layout deleted before every render), `render/pipeline.py` (`_has_stills` requires
+  the layout; `frames/index.json` scenes get `layout`), `scenes/bar_chart.py` (the counting
+  value label keeps `original_text` in sync after `become`), DESIGN (§2, §3, new §15),
+  docs/CONFIG.md (new "Layout dump" section, combined index `layout`), README, EXTENDING.md,
+  tasklist.md.
+
+Public interfaces added/changed (internal modules; `vidgen.api` unchanged)
+- `vidgen.introspect`: `LayoutRecorder()` (capture listener; `.objects(scene, pixels)`,
+  `.document(scene, per_beat)`, `.frames`), `LAYOUT_VERSION = 1`, `FONT_PERCENTILE = 75`.
+- `vidgen.capture.still_name(captured)`; `worker.scene_layout_path(project, preview, scene_id)`.
+- `frames/index.json` scene entries: new key `layout` (within its version).
+
+Decisions / deviations
+- Always on with stills, no flag: ~50 ms per 1080p still (kphi3 `setup`: 224 ms for 4 stills
+  in a 50 s render), and stills/layout can never come from different renders.
+- `font_px` is glyph-height based (works for Text, Paragraph, Tex alike; Manim's `font_size`
+  is not defined for Paragraph and is wrong after transforms); documented as p75 of glyph
+  heights, not em size. Lint thresholds (Step 13) should be set in these units.
+- Contrast input is `backdrop` sampled from pixels instead of searching shapes under the text:
+  exact for images, gradients, translucent plates.
+- Bezier curves are sampled (5 points per cubic) rather than using control points, so round
+  glyph boxes are tight.
+
+Known gaps / TODOs (Step 13 lint)
+- `text` is the construction string: `become()`/`Transform` don't update it (built-ins fixed
+  where it matters); during `TransformMatching*` loose glyphs are `shape`/`group` objects.
+- `order` follows z-index draw order; Manim's Cairo renderer draws moving mobjects over static
+  ones mid-animation regardless of that. Objects covered by an opaque one are still listed.
+- `opacity` is the max over parts (e.g. a code listing with dimmed lines reports 1.0).
+- Image objects are often intentionally larger than the frame (`fit: cover`): lint should not
+  flag images as off-frame. Findings to expect: `image` caption and `bar_chart` caption touch
+  or cross the bottom safe margin; kphi3 `setup` text slightly outside the safe area; 9:16
+  `code` text ≈ 10 px at 854 px height.
+- No CLI to view layouts; Step 13's `vidgen lint` should check `scene_layout_path` exists
+  alongside `storyboard.stills_current` (fingerprint covers `introspect.py`).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (506 passed, 1 skipped). Manual:
+`vidgen render examples/minimal --preview --frames`, then read
+`examples/minimal/build/preview/layout/*.json`.
+
+
+## Step 13 — `vidgen lint` (layout rules)
+What was built
+- `vidgen lint [PROJECT] [--scene ID ...] [--rule NAME ...] [--variant NAME] [--preview |
+  --final] [--fail-on error|warning|info|never] [--jobs N] [--force] [--json]` checks the
+  layout dump (Step 12) of every **beat-end still** and prints one finding per problem:
+  severity, rule, `beat @ scene time (+N more beats)`, a message with the measured value and
+  the limit, and the still to open. Exit code 1 iff a finding is at least as severe as
+  `fail_on` (default `error`). Stills are reused when current (any `--per-beat`, e.g. from a
+  storyboard; ~0.7 s for examples/minimal); otherwise the scene is rendered with one still per
+  beat, like the storyboard does.
+- Rules (`vidgen/lint/layout_rules.py`), sizes as fractions of the frame's shorter side:
+  `off_frame` (error for text, warning for other objects; full-frame bleeds such as cover
+  images/Ken Burns/backgrounds/bands and wholly off-frame objects are not reported),
+  `safe_area` (text in the margins), `text_overlap` (error), `covered_text` (a shape drawn
+  over text, checked on the still's **pixels**), `min_font` (cap height < 2.5 % warning,
+  < 1.8 % error; `font_px` corrected for lowercase letters), `contrast` (WCAG 2 ratio of the
+  text colour blended at its opacity over the sampled backdrop: 4.5 / 3 large / 2 dimmed),
+  `max_words` (> 40 words of `text` on screen).
+- Noise control: only beat-end stills; objects below `lint.min_opacity` (0.1) ignored; the
+  same problem on several beats is one finding (`beats`); same-rule findings of one still
+  sharing a parent group (tick labels) or a colour pair (contrast) are one finding with
+  `similar` objects (`also N more like it (...)`).
+- Config: optional `lint:` section (`fail_on`, `min_opacity`, `rules.<name>.{severity,
+  thresholds}`; `severity: off` disables a rule) and per-scene `lint_ignore` (rule names /
+  `all`, or `{rule, object, beat}` with `*`/`?` wildcards matched against name, path or text).
+  Both are in the JSON Schema (generated) and excluded from the render fingerprint.
+- JSON (`--json`): envelope + `{project, variant, preview, format, fail_on, rules, scenes,
+  stills, rendered, reused, elapsed, counts, ignored, findings}`; each finding `{scene, beat,
+  time, scene_time, rule, severity, object, other, similar, bbox, message, value, limit,
+  beats, still}`; failing → `ok: false`, `error.details {fail_on, counts}`.
+- Docs: docs/CONFIG.md new "Lint (`vidgen lint`)" section + "`vidgen lint --json`", `lint`
+  / `lint_ignore` rows; README (quick start, command table, paragraph); EXTENDING.md (lint new
+  scene types; what lint treats as intentional); DESIGN §2, §8, §14 (fingerprint), new §16;
+  `examples/minimal/video.yaml` usage line and a `lint:` section.
+
+Files
+- New: `src/vidgen/lint/{__init__,rules,layout_rules,color,run,findings,report}.py`,
+  `tests/test_lint.py` (20 tests, 1 render test).
+- Changed: `config.py` (`LINT_RULES`, `RuleName`, `Severity`, `RuleConfig` + one model per
+  rule, `LintRules`, `LintConfig`, `LintIgnore`, `VideoConfig.lint`, `SceneConfig.lint_ignore`
+  + `lint_ignores()`), `cli.py` (`cmd_lint`, parser, `JSON_COMMANDS`), `jsonout.py`
+  (`lint_document`), `storyboard.py` (`stills_current(..., per_beat=None)` accepts any count
+  and requires the layout file; `_scene_starts` → public `scene_starts`),
+  `render/fingerprint.py` (`lint`/`lint_ignore` excluded; `lint` package not a render input),
+  `tests/test_docs.py` (lint models), docs above, tasklist.md.
+
+Public interfaces added/changed (internal modules; `vidgen.api` unchanged)
+- `vidgen.lint`: `lint_project`, `LintResult` (`counts()`, `failed`), `Finding` (`to_json()`),
+  `RULES`, `Rule`, `rule(name, *, scope="still", default=...)`, `Issue`, `StillContext`
+  (`width`, `height`, `short_side`, `region(box)`), `SEVERITIES`, `FAIL_ON`, `report_lines`.
+- Config: `lint` and `scenes[].lint_ignore` (new keys). `storyboard.stills_current` signature
+  (`per_beat: int | None`), `storyboard.scene_starts`.
+
+Decisions / deviations
+- Sizes relative to the **shorter side**, not the height (the task said height): identical for
+  16:9, but for 9:16 the height would make every text count 1.78x smaller than the same text
+  in 16:9, flagging nearly everything in vertical videos.
+- Thresholds were tuned by looking at the flagged stills (Read) of examples/minimal (16:9 and
+  vertical) and kphi3: `min_font` 2.5 % / 1.8 % (theme `small` = 2.46 % is flagged, `caption`
+  3.0 % and chart tick labels ≈ 2.55 % pass; kphi3's 1.6 % zoomed-out labels are errors). A
+  first draft at 2.8 % / 2.0 % flagged many readable kphi3 labels.
+- `font_px` (p75 of glyph heights) measured "sparse" at 11.3 px and "baseline" at 14.6 px at
+  the same font size; `min_font` estimates the cap height from the characters' typical
+  heights so lowercase labels are not penalised.
+- `covered_text` (not in the task list; the "text vs shape" overlap the task called lower
+  severity) uses the still's pixels: group/curve boxes are far larger than what they draw
+  (the kphi3 network's box covered the title text but its lines did not), and a
+  strike-through in the text's colour (kphi3 `setup`) is intentional.
+- Contrast: text faded on purpose (opacity < 0.95: previous bullets, dimmed bars) needs only
+  2:1, and a listing's line numbers are skipped (WCAG "incidental" text); otherwise WCAG AA.
+- Exit code with `--json` follows the Step 8 rule (`ok` ⇔ exit 0): a failing lint is `ok:
+  false` with `error.kind` `error`, findings still in the document.
+
+Real findings (not fixed here: Review 1 / Step 15 should act on them)
+- Theme `dim` (#6B7280) on the default background is 3.91:1, below WCAG AA 4.5:1 for normal
+  text: every dim caption/label is flagged (minimal: `title` authors, `bar_chart` caption,
+  `line_chart` axis/tick labels, `quote` source, `equation` caption; most kphi3 labels). One
+  theme fix (Step 16 presets) removes most warnings.
+- `image` caption sits 12 px into the bottom margin at 480p (both 16:9 and 9:16).
+- `bar_chart` caption uses theme `small` (11.8 px cap at 480p, 2.46 %): too small.
+- 9:16 `code`: the listing is scaled to the frame width, text 9.8 px (2.0 % of the width).
+- kphi3: `method` beat 5 zooms the diagram out to 5.6–7.6 px labels (**error**, the only one);
+  `loss` axis ticks and bar labels 9.8–9.9 px, its footnote 23 px into the bottom margin;
+  `equivalence` left label 23 px into the left margin and the rotated `H = length` 8.9 px;
+  `setup` block labels 11.4 px. Seen but not lintable: in `equivalence`/`title` the dumped
+  `text` is the pre-`Transform` string (messages quote it; the still is right).
+- No off_frame, text_overlap, covered_text or max_words findings in the examples (all three
+  are exercised by tests, including a render test with overlapping and cut-off text).
+
+Known gaps / TODOs
+- Only beat-end stills are checked; problems that exist only mid-beat are not seen.
+- Per-part opacity is not in the layout dump (max over parts), so dimmed lines inside one
+  `Code`/`Paragraph` are invisible to `contrast`; `backdrop` is a single most-common colour
+  (approximate over busy images); boxes are axis-aligned (rotated text).
+- Same-size texts can measure ±5 % apart (`font_px` + letter correction), so a text near a
+  threshold can flip between runs of different content.
+- Step 14 (timing rules): add a scope (e.g. `beat`) in `lint/rules.py`, its context and a
+  branch in `run._scene_findings`; add names to `config.LINT_RULES`/`RuleName` and settings
+  models to `LintRules` (a test keeps them in sync); docs table + defaults block (tested).
+- Storyboard sheets could draw lint findings (bbox) on the stills.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (536 passed, 1 skipped). Manual:
+`vidgen lint examples/minimal`, `vidgen lint examples/minimal --variant vertical`,
+`vidgen lint examples/kphi3` (exit 1: one error), `--json`, `--rule min_font`.
+
+## Step 14 — Timing lint
+What was built
+- Four timing rules in `vidgen lint` (same command, report, JSON, `lint:` config, `lint_ignore`,
+  JSON Schema): `narration_speed` (spoken words per second of speech per beat outside
+  `[min_rate 1.8, max_rate 3.5]`, beats of ≥ `min_words` 5), `dead_air` (nothing on screen
+  changes for > `max_seconds` 6 s; `min_change` 0.0002 of the frame), `animation_overrun` (a
+  beat's code takes longer than its narration + pad by > `tolerance` 0.1 s, so the next beat
+  starts late; lists the animations still running when the narration ends; silent scenes
+  whose animations exceed `duration` too), `rushed_animation` (animations `play_steps` had to
+  shorten below `min_run_time` 0.5 s because the beat is too short for its steps). All
+  default `warning`; `narration_speed` on beats without audio is `info` and grouped.
+- **Activity file** `build/<q>[_<variant>]/activity/<scene>.json`, written by the worker with
+  the stills/layout: beats (`start`, `end`, `busy`, `source`, `text`), every `play`/`wait`
+  (scene times, beat, animation names, `requested` when `play_steps` shortened it), silent
+  `{duration, busy}`, and a per-frame motion signal.
+- `NarratedScene` records `play_log` (it overrides `play`; `wait` goes through it),
+  `beat_busy`, `silent_busy`; `play_steps` marks shortened plays.
+- Docs: docs/CONFIG.md new "Activity file" section, Lint intro/rule table/defaults block/JSON
+  finding text, frames index `activity`; README (quick start, command table, paragraph);
+  EXTENDING.md (how timing lint sees custom scenes); DESIGN §2, §5.1, §16, new §17;
+  `examples/minimal/video.yaml` usage line.
+
+Files
+- New: `src/vidgen/activity.py`, `src/vidgen/lint/timing_rules.py`, `tests/test_timing_lint.py`
+  (10 tests, 1 render test).
+- Changed: `scene.py` (`PlayRecord`, `play`, `play_log`, `beat_busy`, `silent_busy`,
+  `narrate`, `play_steps`, `tear_down`), `capture.py` (`FrameCapture(..., motion=)`),
+  `render/worker.py` (`scene_activity_path`, MotionTrack, activity written/deleted),
+  `render/pipeline.py` (`_has_stills` needs the activity; frames index `activity`),
+  `storyboard.py` (`stills_current` needs it), `config.py` (4 rule names + settings models),
+  `lint/rules.py` (scope `scene`, `SceneContext`, `Issue.beat/time`), `lint/run.py`
+  (`_timing_findings`), `lint/findings.py` (`still` optional), `lint/report.py` (wider rule
+  column, no still line without one), `lint/__init__.py`, tests `test_lint.py` (fake renders
+  write an activity file; report spacing), `test_introspect.py` (activity in index/reuse),
+  docs above, tasklist.md.
+
+Public interfaces added/changed (`vidgen.api` unchanged)
+- `NarratedScene.play_log: list[PlayRecord]`, `.beat_busy: dict[str, float]`,
+  `.silent_busy: float | None`, `PlayRecord` (in `vidgen.scene`), `play` override.
+- `vidgen.activity`: `MotionTrack(samples=180, level=6)` (`observe(frame, index, count)`,
+  `to_json()`), `activity_document(scene, motion, fps)`, `ACTIVITY_VERSION`.
+- `FrameCapture(per_beat, listeners, motion=None)`; `worker.scene_activity_path`.
+- `vidgen.lint`: `SceneContext` exported; `Issue(..., beat=None, time=0.0)`; rule scope
+  `"scene"`; `Finding.still: Path | None` (JSON `still` may be null);
+  `vidgen.lint.timing_rules`: `spoken_words`, `speech_bounds`, `static_runs`.
+- Config: `lint.rules.{narration_speed, dead_air, animation_overrun, rushed_animation}`; the
+  same names in `lint_ignore`. Frames index scene entries: `activity`.
+
+Decisions / deviations
+- **Change signal from the renderer, not by decoding the MP4**: `FrameCapture` already sees
+  every frame written (frozen waits once, with a count), the pixels are exact so a static
+  frame is bit-identical (no codec noise to threshold away), and there is no second decode
+  pass. Frames are sampled on a grid (every 3rd px at 480p, 6th at 1080p, ≤ 180 points on the
+  shorter side) and compared with the previous: measured ~1.3 ms per written frame, i.e. at
+  most ~2 s CPU for the 98 s examples/minimal preview (~55 s CPU render), a few percent.
+  Only recorded when stills are captured (lint/storyboard/`--frames`), when it is needed.
+- `min_change` 0.0002 (≈ 9 sample points): eased animations' first/last frames change only
+  1-5 points and do not matter; a counter digit changes more than that.
+- `narration_speed` uses the **speech** inside the MP3 (leading/trailing silence below -40 dB
+  cut: ElevenLabs adds 0-0.8 s of trailing silence) and **spoken** words. Plain
+  `len(text.split()) / mp3 length` gave kphi3 rates 1.60-3.12 with false "too slow" beats
+  (`s7_b2` 1.72: "1.60", "1.58", "1.57", "K-Phi-3"; `s2_b4` 1.60: a short question plus 0.5 s
+  trailing silence); with both corrections the 27 kphi3 beats are 2.13-3.40 words/s, so the
+  defaults 1.8-3.5 flag none of them. Without audio the beat length is the estimate, so the
+  rate only shows where numbers/acronyms make the estimate wrong (or the configured
+  `words_per_second` is implausible): `info`, one finding per scene.
+- `dead_air` treats narrated and silent time alike (one threshold): a silent card held still
+  for > 6 s is dead air too; 6 s keeps title holds and short end cards quiet (none in the
+  examples is flagged). Static stretches are attributed to the beat where they start, the
+  message lists the beats they span.
+- `animation_overrun` uses `busy` measured in `narrate` (the body's time before the wait to
+  `d + pad`), so user `self.wait()` past the narration counts too. Running into the pad only
+  is not reported (`tolerance` is beyond `d + pad`).
+- `rushed_animation` only sees `play_steps` compression (it knows what was wanted); plays a
+  scene shortens itself (`run_time=d/5`) are invisible. The task's "beat too short for its
+  animations" is covered by `animation_overrun` for custom scenes (they overrun) and by
+  `rushed_animation` for `play_steps`/`reveal`/built-ins (they compress).
+- Timing findings are not merged across beats by object (they have none): one finding per
+  issue, or per `group` (estimates). Rule column of the human report widened to 17 chars.
+
+Findings on the examples (all real; not fixed here: Review 1 / Step 22)
+- `examples/minimal` 16:9 and `--variant vertical`: no timing findings (layout findings as in
+  Step 13). Closest: `note` holds still 5.5 s while narrating (the whole card appears in 0.8 s
+  of a 5.8 s beat), `steps` beat 2 5.0 s still. No audio, all estimates within range.
+- `examples/kphi3` (real MP3s): 4 `dead_air` warnings, checked on frames extracted from the
+  scene MP4s (identical pixels across the interval):
+  - `setup` 3.0-10.4 s (7.4 s, beat `s5_b1`: the Phi-3 setup diagram appears in 3 s of a
+    9.8 s beat), `setup` 22.3-29.2 s (6.9 s, `s5_b3` into `s5_b4`).
+  - `loss` 16.3-23.7 s (7.3 s, `s7_b2`, the 15.7 s beat about validation loss: the "best 1.57"
+    highlight appears early, then nothing moves).
+  - `method` 38.0-44.5 s (6.5 s, `s4_b5`: the zoomed-out diagram holds while narrating).
+  - Near misses: `conclusion` 5.7 s and 5.8 s still stretches.
+  - No `narration_speed`, `animation_overrun` or `rushed_animation` findings: every kphi3 beat
+    finishes its animations 0.7-7 s before its narration ends.
+- The render tests exercise all four rules on a real render (overrun, rushed steps, dead air
+  in a narrated beat and in a silent scene).
+
+Known gaps / TODOs
+- `rushed_animation` cannot see run times a scene computes itself; per-animation intended
+  durations would need an API (e.g. `self.play(..., min_run_time=...)`).
+- The speech-rate count is English-centric (digits read as English words, acronym rule).
+- Dead air does not distinguish meaningful from trivial motion (a slow Ken Burns pan counts as
+  change, which is intended); a tiny blinking element resets the timer.
+- Renders from before Step 14 have no activity file and are re-rendered by lint/storyboard.
+- Storyboard sheets could mark dead-air stretches / overruns on the timeline.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (546 passed, 1 skipped). Manual:
+`vidgen lint examples/kphi3 --rule dead_air --rule narration_speed --rule animation_overrun
+--rule rushed_animation`, `vidgen lint examples/minimal [--variant vertical]`, then read
+`examples/*/build/preview/activity/*.json`.
+
+## Step 15 — Layout regions
+What was built
+- `vidgen/regions.py`, exported by `vidgen.api`: `Region` (rectangle in Manim units with
+  `width/height/center/orientation`, `point(align)`, `contains`, `inset`, `below`/`above`,
+  `rows`/`columns`/`split`, `grid`, `to_rectangle`), `frame_region()`, `safe_area()`,
+  `region(name)` (`full, header, body, hero, caption, top, bottom, left, right, center`),
+  `grid(rows, cols, area)`, `place(mob, area, fit="contain"|"width"|"height"|"none",
+  align=..., max_scale=None, buff=0)`, `orientation()`, `readable_size(font)` and
+  `readable_text(text, area, size, min_size, **fit_text_args)`.
+- `NarratedScene.safe_area` and `NarratedScene.region(name)`; `safe_width`/`safe_height` now
+  derive from `safe_area`.
+- Aspect-aware: `left`/`right` are side by side in landscape/square and the upper/lower half in
+  portrait (`Region.split` likewise; literal halves via `Region.columns(2)`); band and
+  `center` shares differ per orientation (table in docs/EXTENDING.md).
+- Built-ins refactored onto regions (the two worst 9:16 offenders per Steps 11–13):
+  - `code`: title in `header`, listing in the rest; new param `wrap` (default true): when the
+    listing is width-bound and would be smaller than `size` (or the readable minimum), long
+    lines are wrapped with a hanging indent and the listing rebuilt; wrapped listings keep one
+    number per original line and highlights cover the wrapped continuation lines.
+  - `bullets`: heading in `header`, list centered below it; in portrait the heading is 1.3x
+    (`portrait_growth`), a short list grows up to 1.3x and spreads out.
+- `examples/custom_scene/extensions/gears.py` uses `region("center")`, `place` and
+  `readable_text` (usage example); docs/EXTENDING.md's `checklist` example now uses regions
+  and is executed by a test.
+
+Before / after (examples/minimal, preview, `vidgen lint` + `vidgen storyboard`)
+- 16:9: 7 warnings before, 7 after (identical findings; none from `steps`/`listing`). Stills of
+  `steps` and `listing` look the same (heading/title a few px lower: centered in `header`).
+- 9:16: 8 warnings before, 7 after: the `listing` `min_font` warning (code 9.8 px cap height,
+  2.04 %) is gone — code is now 15.6 px font_px (wrapped to ~31 columns, 13 lines for 9 original
+  lines, at the requested `caption` size). `steps` items went from 19.4 to 21.3 px `font_px` (the
+  width limits growth: they wrap) and the heading from 22.0 to 28.5 px; rows are spread out, so
+  the list fills the frame instead of a small block in the middle band.
+- The remaining 7 (both orientations) are outside this step: theme `dim` contrast (5, Step 16
+  presets), `bar_chart` caption at theme `small` (min_font), `image` caption 12 px into the
+  bottom margin. `examples/custom_scene` 16:9 and vertical: 0 findings.
+
+Files
+- New: `src/vidgen/regions.py`, `tests/test_regions.py` (36 tests; 10 tiny renders at 160x90 and
+  90x160).
+- Changed: `api.py` (exports), `scene.py` (`safe_area`, `region`, margins from `regions`),
+  `introspect.py` (layout `safe_area` from `regions.safe_area`), `layout.py`
+  (`fit_text_sized`; `fit_text` delegates), `render/fingerprint.py` (key `readable`),
+  `scenes/bullets.py`, `scenes/code.py`, `examples/custom_scene/extensions/gears.py`,
+  DESIGN.md (§2, §5.3, §6.4, new §18), docs/EXTENDING.md ("Layout regions", checklist
+  example), docs/CONFIG.md (`bullets`, `code` + `wrap`), README, tasklist.md.
+
+Public interfaces added/changed
+- `vidgen.api`: `Region, frame_region, safe_area, region, grid, place, orientation,
+  readable_size, readable_text` (DESIGN §18). `NarratedScene.safe_area`, `.region()`,
+  `Bullets.portrait_growth`. `vidgen.regions`: also `MARGIN_X/MARGIN_Y`, `GAP`,
+  `REGION_NAMES`, `ALIGNMENTS`, `MIN_TEXT_FRACTION`, `min_text_fraction()`.
+- `vidgen.layout.fit_text_sized` (internal, not exported). `vidgen.scenes.code.wrap_code`,
+  `MIN_COLUMNS`, `HANGING_INDENT`.
+- Config: `code` param `wrap: bool = true` (additive; existing configs unchanged). Render
+  fingerprint now includes `lint.rules.min_font.min_size`.
+
+Decisions / deviations
+- **Single source of truth for the safe area**: the margins stay on the scene (`margin_x`,
+  `margin_y`, defaults from `regions`), and the layout dump builds its `safe_area` with
+  `regions.safe_area(scene.margin_x, scene.margin_y)`; lint reads the dump, so scene layout,
+  dump and lint cannot drift. Values unchanged (0.6 / 0.5 units).
+- **`left`/`right` adapt** instead of adding a separate orientation-aware pair: code written
+  for a 16:9 two-column layout gets two rows in 9:16 for free; `Region.columns(2)` remains for
+  literal halves and `Region.split(n)` is the general orientation-aware split.
+- **Readable size from the lint threshold**: `readable_size` uses the project's
+  `lint.rules.min_font.min_size` (5 % margin), so "what layout aims for" and "what lint
+  accepts" are one setting; that value had to join the render fingerprint (other lint
+  settings still do not invalidate renders).
+- `readable_text` shrinks below the floor (with a logged warning) rather than overflowing when
+  text cannot fit even when wrapped: layouts never break, and lint reports `min_font`.
+- `code` wraps to reach the requested `size` (not just the lint minimum): wrapping only to the
+  2.5 % floor left the 9:16 listing barely legible on a phone. Wrapping happens only when the
+  listing is width-bound, so 16:9 output is unchanged.
+- `bullets` grows in portrait only for short lists (≤ 5 items, < 75 % of the space), and the
+  heading grows with it (items larger than the heading looked wrong in the first try).
+
+Known gaps / TODOs
+- Other built-ins (`quote`, `text_card`, `title`, `end_card`, `equation`, charts, `image`)
+  still use `safe_width`/`safe_height` arithmetic; moving them to regions (and fixing the
+  `image` caption margin, `bar_chart` caption size) fits Step 22 (Review 1) or the scene steps.
+- Wrapped code: the layout dump's `text` of the line-number column is Manim's original string
+  (`1..13`), not the shown labels; syntax highlighting of a line wrapped inside a string
+  literal may be off (the wrapper avoids it when it can).
+- `readable_size` measures the capital H of the font; a font with unusual proportions is
+  measured correctly, but lint's cap-height estimate for lowercase-only text differs slightly.
+- No `grid_shape(n)` helper (choose rows x cols for n items per orientation) yet; Step 21
+  (`icon_grid`) may want one.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (582 passed, 1 skipped; regions:
+`pytest tests/test_regions.py`). Manual: `vidgen storyboard examples/minimal --variant vertical
+--scene steps --scene listing`, `vidgen lint examples/minimal [--variant vertical]`.
+
+## Step 16 — Theme presets (mechanism + 3 presets)
+What was built
+- `theme: {preset: NAME, ...}` in `video.yaml`: a preset is a named set of theme values
+  (`background`, `font`, `code_style`, `colors`, `palette`, `sizes`). Precedence, highest
+  first: values written under `theme:` (after merging a variant) > the preset (then its `base`)
+  > `register_theme_defaults` > built-in defaults. No preset → that level is empty, so existing
+  projects render as before (apart from the `dim` fix below). Variants switch presets with
+  `variants: {light: {theme: {preset: light_academic}}}`.
+- Built-in presets (`src/vidgen/presets.py`): `dark_tech` (= the defaults), `light_academic`
+  (off-white `#F8F7F3`, near-black text, ink accents, white `surface`, Pygments `xcode`),
+  `high_contrast` (black, white text, accents ≥ 7:1, `caption` 26 / `small` 24).
+- New theme key `code_style` (Pygments style, validated); the `code` scene's `style` param now
+  defaults to it (was hard-coded `github-dark`, unreadable on a light window).
+- Project presets: `vidgen.api.register_theme_preset(name, *, base, background, font, colors,
+  palette, sizes, code_style, description)`, stored on the active Theme (per project).
+- Reusable contrast check `vidgen.lint.color.theme_contrast(theme, text_ratio=4.5,
+  graphic_ratio=3.0) -> list[ContrastCheck]`: text/dim vs background and surface (4.5:1),
+  accent tokens and palette vs background (3:1).
+- `vidgen validate` reports an unknown preset (`theme.preset: unknown theme preset ...; known
+  presets: ...`); `vidgen schema` has `preset` (built-in + project presets) and `code_style`
+  (installed Pygments styles) enums.
+- Example: `examples/minimal` base theme `preset: dark_tech`, new variants `light`
+  (`light_academic`) and `contrast` (`high_contrast`); the init template uses `preset:
+  dark_tech` instead of an explicit background.
+
+Files
+- New: `src/vidgen/presets.py`, `tests/test_presets.py` (35 tests, 3 render tests: 7 built-in
+  scene types rendered at 640x360 with each preset, lint `contrast` must be clean).
+- Changed: `theme.py` (preset resolution, `preset`, `presets`, `preset_chain()`,
+  `add_preset()`, `derive()`, `code_style`; `DEFAULT_*` now defined in `presets.py` and
+  re-exported), `config.py` (`ThemeConfig.preset`, `code_style`; `background`/`font` default
+  `None`), `api.py` (`register_theme_preset`), `cli.py` (preset check in `project_problems`),
+  `schema.py` (`theme_presets`, enums, `project_themes` uses `Theme.derive`, `theme_tokens`
+  skips themes with an unknown preset), `lint/color.py` (`theme_contrast`, `ContrastCheck`,
+  `hex_rgb` accepts `#RGB`/`#RRGGBBAA`), `scenes/code.py` (`style` default), `scenes/bullets.py`
+  (`dimmed_opacity = 0.45`), `templates/minimal/video.yaml`, `examples/minimal/video.yaml`,
+  tests `test_config.py`, `test_docs.py` (preset table in sync), docs/CONFIG.md (Theme section
+  rewritten: precedence, "Theme presets" table, `code_style`; schema enums; `code.style` row),
+  docs/EXTENDING.md (§4 project presets), README (feature line), DESIGN.md (§2, §4, §6.2, §6.4,
+  new §19), tasklist.md.
+
+Public interfaces added/changed
+- `vidgen.api.register_theme_preset` (new export).
+- Config: `theme.preset`, `theme.code_style` (additive). `ThemeConfig.background`/`.font` are
+  now `None` unless written (read resolved values from `Theme`, never from the config).
+- `vidgen.theme.Theme`: `preset`, `presets`, `preset_chain()`, `add_preset()`, `derive()`,
+  `code_style`. `vidgen.presets`: `ThemePreset`, `make_preset`, `BUILTIN_PRESETS`,
+  `code_styles()`, `check_code_style()`, `DEFAULT_BACKGROUND/FONT/CODE_STYLE/COLORS/PALETTE/SIZES`.
+- `vidgen.lint.color`: `theme_contrast`, `ContrastCheck`, `TEXT_RATIO`, `GRAPHIC_RATIO`,
+  `TEXT_TOKENS`, `ACCENT_TOKENS`. `vidgen.schema.theme_presets`.
+- `code` param `style`: default `None` (= theme `code_style`). `Bullets.dimmed_opacity`.
+
+Decisions / deviations
+- **Preset above extension defaults** (task: "define the precedence"): choosing a preset is an
+  explicit config decision, so it beats defaults an extension registered in code, but never a
+  value written in `video.yaml`. Built-in presets set all 8 built-in colour tokens, so an
+  extension that re-defaults e.g. `dim` is overridden once a preset is chosen; extension-only
+  tokens (`k2`) are unaffected. Brands should use `register_theme_preset(..., base=...)`.
+- **Default `dim` fixed (visible change)**: `#6B7280` → `#838B98` (3.91:1 → 5.5:1 on the
+  background, 5.0:1 on `surface`). Removes the five `contrast` warnings Steps 13–15 reported on
+  examples/minimal. kphi3 writes its own `dim: "#6B7280"` in its config and is unchanged
+  (faithful to the original video).
+- Gotcha documented rather than changed: values written in the base `theme:` also override a
+  variant's preset (deep merge), e.g. a base `background` keeps a light variant dark; the
+  example and init template therefore select `preset: dark_tech` instead of writing
+  `background`.
+- `bullets` `dim_previous` opacity 0.4 → 0.45: the dimmed `primary` marker on `light_academic`
+  was 1.93:1 (< lint's 2:1 for de-emphasised text); 0.45 gives 2.12:1. Dark output changes
+  imperceptibly.
+- Contrast scope of the check: text/dim on background and surface; accents and palette 3:1
+  (WCAG 1.4.11). Accents are also used as text (title highlight, kicker, end-card title, bar
+  value labels), so the built-in presets keep them ≥ 4.5:1 anyway (light) / ≥ 7:1 (high
+  contrast). Code-style token colours are not part of `theme_contrast`; the render test runs
+  lint's `contrast` rule on the code listing instead (xcode on white min 5.07:1, github-dark on
+  `#161B24` 5.6:1).
+- Presets are resolved lazily (on every read), so extensions can register a preset after the
+  runtime context exists; a module reading the theme at import before the preset is registered
+  gets the "unknown theme preset" error (documented: register in a module that sorts first).
+- `light_academic` uses Inter like the others: no serif is guaranteed on every platform until
+  Step 18 bundles fonts.
+- Built-ins checked on light backgrounds: no hard-coded white/black anywhere in
+  `src/vidgen/scenes`; image caption band uses `theme.background` (light band, dark text: fine);
+  chart gridlines are `dim` at 0.4 opacity (light grey on light: fine); code window `surface`
+  + `dim` border. Only `code` (style) and `bullets` (dim opacity) needed changes.
+
+Verification (examples/minimal, preview 854x480, `vidgen storyboard` sheets viewed + `vidgen lint`)
+- Default / `dark_tech` 16:9: 2 warnings (was 7 before this step: the 5 `dim` contrast
+  warnings are gone). Remaining: `bar_chart` caption at theme `small` (`min_font`), `image`
+  caption 12 px into the bottom margin (`safe_area`) — both pre-existing, Step 22.
+- `--variant vertical` (dark): 2 warnings (same two; was 7).
+- `--variant light` (`light_academic`): 2 warnings (same two). Before the bullets fix: +3
+  `contrast` warnings on dimmed numbered markers.
+- `--variant contrast` (`high_contrast`): 1 warning (only `safe_area`; `small` 24 pt clears
+  `min_font`).
+- `examples/custom_scene`: 0 findings. Sheets: every scene reads well on all three presets
+  (light: dark text on off-white, xcode listing in a white window with an amber highlight band,
+  pastel dimmed bars, image band light with dark caption).
+
+Known gaps / TODOs (Step 17+)
+- No `vidgen list-themes` yet (Step 17): it could print each preset with `theme_contrast`
+  results. `vidgen lint`/`validate` do not yet run `theme_contrast` on the project's own theme
+  (a `theme_contrast` lint rule of scope "project" would need a third scope).
+- Type scales (`compact`/`standard`/`large`) are Step 17; `high_contrast` only raises
+  `caption`/`small` for now.
+- `register_theme_defaults` cannot set `background`/`font`/`palette` (unchanged); use a preset.
+- Variant themes in `vidgen schema` share the base project's registered presets (`derive`),
+  but a variant whose extensions differ is not modelled (variants cannot change extensions'
+  code anyway).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (618 passed, 1 skipped). Presets only:
+`pytest tests/test_presets.py`. Manual: `vidgen storyboard examples/minimal --variant light`,
+`vidgen lint examples/minimal --variant contrast`, `vidgen schema examples/minimal`.
+
+## Step 17 — Theme presets (4 more + type scales)
+What was built
+- Four built-in presets (`src/vidgen/presets.py`): `warm_editorial` (cream paper `#F6F0E4`,
+  espresso text, petrol/terracotta/oxblood, Pygments `default`), `brand_neutral` (grey
+  `#F4F5F7`, white `surface`, graphite text, one blue — a base for a brand colour, `xcode`),
+  `soft_pastel` (dusky plum `#252238`, pastel accents, `zenburn`), `bold_neon` (violet-black
+  `#0B0614`, cyan/magenta/yellow, `monokai`, `large` scale). Each defines all 8 colour tokens,
+  an ordered 5-colour palette, `code_style`, `scale` and a description. Code styles were picked
+  by measuring every Python token colour against the preset's `surface` (≥ 4.5:1).
+- Type scales (`src/vidgen/scales.py`): `compact` 48/36/32/28/22/20, `standard` 56/42/36/32/24/20
+  (= the old defaults), `large` 66/50/44/38/30/26, and `auto` (= `large` when the final `format`
+  is portrait, else `standard`). `theme: {scale: NAME}` in the config, `scale` on presets
+  (`ThemePreset`, `make_preset`, `register_theme_preset`); `sizes` still override single sizes.
+  With no scale anywhere the default is `auto`, so vertical variants get larger text by default.
+- `Theme` knows its orientation: `Theme(config, orientation=...)`, `Theme.for_format(config,
+  fmt)` (runtime context + `NarratedScene`), `derive(config, fmt)`; `scale_setting`, `scale`.
+- Font-role hook: `ThemePreset.fonts` / `register_theme_preset(fonts=...)`, `Theme.fonts`,
+  `Theme.font_for(role)` (config `font` > preset role > `font`). Not read by scenes yet.
+- Colour-vision check (`src/vidgen/lint/color.py`): `simulate_cvd` (Machado 2009 matrices),
+  `lab`, `delta_e` (CIEDE2000), `palette_distinctness(palette)` → min ΔE per vision. All
+  built-in palettes except `dark_tech` ≥ 7.5 under normal/protan/deutan/tritan (tested; new
+  presets 8.7–10.9 min). `light_academic` and `high_contrast` third palette colour changed (their
+  purples matched the blue for deuteranopes: 2.5 → 11.9 and 0.4 → 8.8).
+- `vidgen list-themes [PROJECT] [--swatches PNG] [--json]` (`src/vidgen/themelist.py`): every
+  preset (built-in + project) with resolved colours/palette/sizes/scale in this project, contrast
+  summary, palette distinctness, and the scale table; `--swatches` writes a 1280 px PNG, one row
+  per preset (looked at during the step: all seven read clearly and look distinct).
+- `vidgen validate` warns (stderr `warning: theme contrast: ...`, JSON `warnings`; never fails)
+  when the project's theme or a variant's own theme has a pair below WCAG AA.
+- `examples/minimal`: variants `editorial`, `neutral` (`brand_neutral` + `scale: compact`),
+  `pastel`, `neon` and a `list-themes --swatches` usage line; init template mentions
+  `list-themes` and `scale`.
+
+Verification (examples/minimal, preview, every preset storyboarded and the sheets opened)
+| variant (preset, scale) | lint findings | notes |
+|---|---|---|
+| default (`dark_tech`, auto=standard) | 2 warnings | pre-existing: `bar_chart` caption `min_font`, `image` caption `safe_area` |
+| `light` (`light_academic`) | 2 warnings | same two |
+| `contrast` (`high_contrast`, large) | 1 warning | `safe_area` only (large caption clears `min_font`) |
+| `editorial` (`warm_editorial`) | 2 warnings | same two; first draft had +1 `contrast` (line-chart label in palette `#D24A1E`, 3.9:1) → palettes of light presets made text-grade |
+| `neutral` (`brand_neutral`, compact) | 2 warnings | same two (first draft +1 `contrast` like editorial) |
+| `pastel` (`soft_pastel`) | 2 warnings | same two |
+| `neon` (`bold_neon`, large) | 1 warning | `safe_area` only |
+| `vertical` (`dark_tech`, auto=large) | 1 warning | `safe_area` only (was 2; `min_font` gone). Title, bullets, quote, end card visibly larger, nothing overflows |
+`examples/custom_scene`: 0 findings in 16:9 and 9:16 (vertical now `large`; checked its sheet).
+`examples/kphi3` validate now prints two `theme contrast` warnings (its own `dim: "#6B7280"`,
+kept for fidelity to the original video, as in Step 16).
+
+Files
+- New: `src/vidgen/scales.py`, `src/vidgen/themelist.py`, `tests/test_scales.py` (15 tests, one
+  9:16 render with `bold_neon`/large linted for off-frame/safe-area/overlap).
+- Changed: `presets.py` (4 presets, `scale`/`fonts`, built-ins via `make_preset`,
+  `DEFAULT_SIZES` from the standard scale, 2 palette fixes), `theme.py` (orientation, scale
+  layering, fonts), `config.py` (`ThemeConfig.scale`), `runtime.py`, `scene.py`, `schema.py`
+  (themes per format), `regions.py` (`orientation` delegates to `scales.frame_orientation`),
+  `lint/color.py` (CVD helpers), `cli.py` (`list-themes`, theme warnings in `validate`),
+  `jsonout.py` (`list_themes_document`), `api.py` (`register_theme_preset(scale=, fonts=)`),
+  `render/fingerprint.py` (`themelist.py` not a render input), `templates/minimal/video.yaml`,
+  `examples/minimal/video.yaml`, `tests/test_presets.py`, DESIGN.md (§2, §4, §6.4, §8, new §20),
+  docs/CONFIG.md (Theme: `scale`, "Type scales", presets table + what each is for, colour-blind
+  note, `vidgen list-themes`, JSON shape), docs/EXTENDING.md (preset `scale`/`fonts`, checks),
+  README, tasklist.md.
+
+Public interfaces added/changed
+- Config: `theme.scale` (`compact|standard|large|auto`, additive). CLI: `vidgen list-themes`
+  (JSON command `list-themes`, envelope v1). `vidgen validate` may print `warning:` lines.
+- `vidgen.api.register_theme_preset(..., scale=None, fonts=None)` (keyword additions).
+- `vidgen.theme.Theme`: `orientation`, `for_format`, `derive(config, fmt=None)`, `scale`,
+  `scale_setting`, `fonts`, `font_for`. `vidgen.presets.ThemePreset.scale/.fonts`.
+  `vidgen.scales`: `TYPE_SCALES`, `SCALE_TOKENS`, `SCALE_CHOICES`, `AUTO_SCALES`,
+  `DEFAULT_SCALE`, `frame_orientation`, `resolve_scale`, `scale_sizes`, `Orientation`.
+  `vidgen.lint.color`: `simulate_cvd`, `lab`, `delta_e`, `palette_distinctness`, `VISIONS`,
+  `CVD_MATRICES`. `vidgen.cli.theme_warnings`, `log_theme_warnings`.
+
+Decisions / deviations
+- **`auto` is the default scale (visible change in portrait)**: the task asked for scale-aware
+  defaults for vertical variants; vertical stills before this step had 19–22 px text on a 480 px
+  wide preview. Landscape/square output is unchanged; `scale: standard` restores the old portrait
+  sizes. `auto` follows the final `format`, so preview and final match.
+- **Scale = shorthand at its level** (see DESIGN §20): a scale chosen anywhere overrides
+  extension size defaults for the six scale tokens (consistent with preset colours overriding
+  extension colour defaults); with no scale chosen, extension defaults still win as in Step 16.
+- `high_contrast` now uses `large` instead of `caption 26 / small 24` (bigger everywhere).
+- Built-in palettes are text-grade (≥ 4.5:1), stricter than the 3:1 `theme_contrast` checks,
+  because charts write series labels in palette colours (lint caught it). Tested.
+- `dark_tech` palette left as is (deuteranopia min ΔE 4.7) to keep default output stable;
+  documented in CONFIG.md.
+- Font roles are a hook only: no preset sets them and no scene reads them until Step 18.
+- Theme warnings in `validate` are warnings, not problems: a project may choose colours
+  deliberately (kphi3).
+
+Known gaps / TODOs
+- Step 18: bundle serif/mono, give `warm_editorial`/`light_academic` a serif heading role and
+  `code` a mono role via `font_for`.
+- `code` listings in portrait wrap more with `large` (`caption` 30 → ~25 columns in the example);
+  readable but more broken lines. A code-specific size cap for portrait could be considered in
+  Step 22 or Step 32 (`code_walkthrough`).
+- Chart axis labels / tick labels use fixed fractions rather than size tokens in places, so they
+  grow less than titles with `large`; Step 30 (chart helpers) can route them through the scale.
+- `vidgen lint` still does not run `theme_contrast` (validate does).
+- `list-themes` shows presets with the project's orientation; a variant with another orientation
+  is not listed separately (`--json` `current` is the base config's).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (662 passed, 1 skipped). Step only:
+`pytest tests/test_scales.py tests/test_presets.py`. Manual: `vidgen list-themes examples/minimal
+--swatches build/themes.png`, `vidgen storyboard examples/minimal --variant neon`, `vidgen lint
+examples/minimal --variant vertical`, `vidgen validate examples/kphi3` (theme warnings).
+
+## Step 18 — Bundled fonts
+What was built
+- Three SIL OFL families ship as package data in `src/vidgen/data/fonts/<Family>/` with their
+  `OFL.txt`; `THIRD_PARTY_NOTICES.md` (repo root) lists source, version, copyright, files:
+  | family (Pango name) | files | size | source (via npm, the only allowed channel; GitHub is blocked) |
+  |---|---|---|---|
+  | Inter 4.001 (`Inter`) | Regular, Bold, Italic `.ttf` | 985 KB | `inter-ui` 4.1.1 `web/*.woff2` → TTF (fontTools, lossless) |
+  | Source Serif 4 4.005 (`Source Serif 4`) | Regular, Bold, It `.ttf` | 721 KB | Adobe's `source-serif` 4.5.1 `TTF/` (as shipped) |
+  | JetBrains Mono NL 2.242 (`JetBrains Mono NL`) | Regular, Bold `.ttf` | 290 KB | `jetbrains-mono` 1.0.6 `fonts/webfonts/*.woff2` → TTF; OFL text from `@fontsource/jetbrains-mono` |
+  Total 2.0 MB on disk, the wheel grows to ~1.1 MB (checked with a local `pip wheel`: all 11
+  files are in it). `pyproject.toml` package-data `data/fonts/**/*`.
+- `src/vidgen/fonts.py`: `BUNDLED_FAMILIES`, `FONTS_DIR`, `SANS/SERIF/MONO_FAMILY`,
+  `bundled_font_files()`, `bundled_font_file(family, bold, italic)`,
+  `register_bundled_fonts()` (manimpango.register_font per file, idempotent, failures are
+  warnings, clears Manim's cached font list), `FONT_TOKENS`, `ROLE_DEFAULTS`, `BUILTIN_ROLES`.
+  Registration runs at import of `vidgen.helpers` / `vidgen.regions` and first thing in the
+  worker's `render_scene` (Pango only sees fonts registered before its first text layout —
+  verified: registering after a first `Text` has no effect on Linux).
+- Theme tokens `font_serif` (Source Serif 4), `font_mono` (JetBrains Mono NL), `font` stays the
+  sans family (Inter); config `theme.font_serif`, `theme.font_mono`, `theme.fonts` (role →
+  `sans`/`serif`/`mono` or a family); presets/`make_preset`/`register_theme_preset` gain
+  `font_serif`, `font_mono`. `Theme.font_for(role)`: config `fonts` > preset chain > role default
+  (`code` → mono, `quote_mark` → serif, else sans), tokens resolved to the families.
+- Built-in scenes read roles: `heading` (title/bullets/chart/code titles, end-card title),
+  `quote` (quote text), `quote_mark` (`quote.mark_font` default now the role), `code` (`code.font`
+  default now the role = JetBrains Mono NL). `fit_text(..., font=None)`.
+- Presets: `light_academic` serif headings; `warm_editorial` serif headings and quotes.
+- `list-themes`: `font_serif`, `font_mono`, `font_roles` in entries and the text listing; swatch
+  heading drawn in the preset's heading family. Contact sheets prefer the bundled Inter files.
+- Fingerprint includes the bundled font files.
+
+Verification
+- Pango really uses the bundled files: `test_pango_renders_with_the_bundled_faces` compares the
+  ink width of three sample strings laid out by Pango (Manim `Text`) with FreeType's
+  measurement of the same strings from the bundled file (Pillow), for all 3 families × Regular/Bold:
+  the ratio agrees within 2 % per sample across families (a substituted face is off far more).
+  Source Serif 4 and JetBrains Mono NL are *not* installed system-wide here (`fc-list`), and
+  `test_fonts_need_no_system_install` checks that a fresh process without vidgen does not know
+  them while one importing `vidgen.helpers` does. Inter IS installed system-wide here:
+  registration still succeeds for its bundled files (tested).
+- Storyboards of examples/minimal viewed: `editorial` (serif title/headings/chart titles/code
+  window title/end-card title, serif quote with serif mark, JetBrains Mono listing),
+  `light` (serif headings, sans quote), default and `vertical` (all Inter, JetBrains Mono
+  listing; wrapping in portrait unchanged in character). Looks tasteful; the serif headings in
+  bold read well on the paper backgrounds.
+- `vidgen lint`: default 2 warnings, `light` 2, `editorial` 2 (the same pre-existing
+  `bar_chart` caption `min_font` and `image` caption `safe_area`), `vertical` 1 (`safe_area`),
+  `examples/custom_scene` 0. `vidgen validate examples/kphi3` ok (its own `font: Inter`).
+
+Files
+- New: `src/vidgen/fonts.py`, `src/vidgen/data/fonts/**` (8 TTF + 3 OFL.txt),
+  `THIRD_PARTY_NOTICES.md`, `tests/test_fonts.py` (19 tests, 2 render).
+- Changed: `presets.py`, `theme.py`, `config.py`, `api.py`, `helpers.py`, `regions.py`,
+  `layout.py`, `sheets.py`, `themelist.py`, `render/worker.py`, `render/fingerprint.py`,
+  scenes `title.py`, `bullets.py`, `bar_chart.py`, `line_chart.py`, `end_card.py`, `code.py`,
+  `quote.py`; `pyproject.toml`; tests `test_scales.py` (font-role semantics), `test_regions.py`
+  (mono measured with JetBrains Mono NL); README (install: fonts bundled, feature line,
+  troubleshooting), docs/CONFIG.md (theme keys, new "Fonts" section with the role table,
+  presets note, `quote.mark_font`, `code.font`, list-themes JSON), docs/EXTENDING.md
+  (`fit_text(font=)`, theme font attributes, preset font args), DESIGN.md (§2, §4, §15 note,
+  §20 note, new §21), tasklist.md.
+
+Public interfaces added/changed
+- Config: `theme.font_serif`, `theme.font_mono`, `theme.fonts` (additive).
+- `vidgen.api.register_theme_preset(..., font_serif=None, font_mono=None)`; `fit_text(...,
+  font=None)` (also `fit_text_sized`). `Theme.font_serif`, `Theme.font_mono`; `Theme.fonts` now
+  includes config roles; `ThemePreset.font_serif/.font_mono`; `presets.DEFAULT_FONT_SERIF/MONO`.
+- Params: `code.font` default `None` (= role `code`), `quote.mark_font` default `None` (= role
+  `quote_mark`).
+- `vidgen.fonts` module (internal helpers listed above). list-themes JSON entries: `font_serif`,
+  `font_mono`, `font_roles`.
+
+Decisions / deviations
+- **`font_for` precedence changed from Step 17** (DESIGN §21): a `font` written in `video.yaml`
+  is the sans family and no longer overrides every role. With the old rule `examples/minimal`'s
+  base `font: Inter` would have cancelled the serif headings of its light/editorial variants and
+  turned code listings into Inter. No output changed for anyone before this step (no preset set
+  roles). Test in `test_scales.py` updated.
+- Roles may name a token (`sans`, `serif`, `mono`) rather than only a family, so `font_serif:
+  Georgia` in the config also changes a preset's serif headings.
+- **JetBrains Mono NL** (no ligatures) instead of JetBrains Mono: a teaching video should show
+  `!=`, `->`, `>=` as typed. Pango family name is `JetBrains Mono NL`.
+- npm `jetbrains-mono` 1.0.6 has font version 2.242 (current upstream 2.304; GitHub releases are
+  blocked here). Fontsource 5.x only has unicode-range-split WOFF2 subsets, so it was used only
+  for the licence text.
+- Weights: Regular + Bold for all, Italic for Inter and Source Serif 4 (Markup `<i>` in user
+  text); no Medium/SemiBold — built-ins only use NORMAL/BOLD. Pango synthesises other weights
+  from the nearest face (or an installed copy).
+- Registration at import time of `vidgen.helpers`/`vidgen.regions` (a side effect) because
+  Pango freezes its font map at the first layout; in-process users (tests, notebooks) need it
+  before any vidgen text.
+- `Source Serif 4` has an ~8 % smaller cap height per point than Inter; serif headings are a bit
+  smaller at the same size token. Left as is (headings are far above `min_font`).
+
+Known gaps / TODOs
+- Windows/macOS registration (`AddFontResourceEx` private / CoreText process scope via
+  manimpango) is not exercised here (Linux only). If a Windows Pango build ignores private GDI
+  fonts, text falls back to an installed font of that name; worth a check on the user's machine
+  (`vidgen storyboard examples/minimal --variant editorial`: titles must be serif).
+- Manim's text SVG cache (`build/.../media/texts/<scene>`) is keyed by text+font name: an SVG
+  made before a font became available is reused. Not a problem for fresh projects (the bundled
+  families are new names); deleting `build/` fixes any stale case.
+- `T()`/`MT()`/`self.text` take `font=` but no `role=` shortcut; extension authors call
+  `self.theme.font_for(role)`. Could be added in the Step 22 API review.
+- kphi3 scenes are unchanged (own scenes, `font: Inter`).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (681 passed, 1 skipped). Step only:
+`pytest tests/test_fonts.py`. Manual: `vidgen storyboard examples/minimal --variant editorial`,
+`vidgen list-themes examples/minimal --swatches build/themes.png`, `fc-list | grep -i "source
+serif"` (empty: the bundled copy is what renders).
+
+
+## Step 19 — Icons: mechanism + seed set
+What was built
+- **Vendored icons** (package data `src/vidgen/data/icons/`): 40 Lucide SVGs (npm `lucide-static`
+  1.52.0, ISC; files unmodified), `lucide/LICENSE` (ISC + Feather MIT notice) and `manifest.json`
+  (`sources` + `icons: [{name, category, tags, source}]`; tags from Lucide's `tags.json` plus a
+  few `extra_tags`). Seed set, 5 per category:
+  | category | icons |
+  |---|---|
+  | tech | cpu, server, cloud, code, smartphone |
+  | data | database, chart-column, chart-line, chart-pie, chart-scatter |
+  | science | atom, flask-conical, microscope, dna, zap |
+  | business | briefcase, trending-up, target, handshake, dollar-sign |
+  | people | user, users, user-check, message-circle, brain |
+  | ui (arrows/interface) | arrow-right, refresh-cw, check, x, search |
+  | nature | leaf, sun, droplet, mountain, tree-pine |
+  | education | book-open, graduation-cap, lightbulb, pencil, presentation |
+- **`tools/vendor_icons.py` + `tools/icon_set.json`** (not shipped): re-vendors from the list
+  (`npm pack lucide-static@<version>` into a temp dir, or `--package-dir DIR`), validates
+  names/categories/version/`extra_tags`, removes unlisted SVGs, writes the manifest. Step 20:
+  add names to `icon_set.json` (and `extra_tags` where Lucide's tags miss the obvious word), run
+  `python tools/vendor_icons.py`.
+- **Registry** `src/vidgen/icons.py` (no manim): built-ins + project `assets/icons/<name>.svg`
+  (adds or overrides by name) with optional `assets/icons/icons.json` (category, tags);
+  `search_icons` (name > tag > category ranking), `find_icon` with did-you-mean + "matching
+  tags" suggestions. `vidgen validate` reports a broken project icon folder (`assets/icons: ...`).
+- **`icon()` / `Icon`** (`src/vidgen/icon_mobject.py`, exported by `vidgen.api`): `icon(name,
+  size="body", color="text", stroke_width=None, *, height=None, theme=None)`. Box = the SVG
+  viewBox (invisible first submobject), size tokens/points → `points * 0.0208` units (1.5 em),
+  `height=` in units; recoloured by theme token/hex (`color=None` keeps a project SVG's own
+  colours, `currentColor` → `text`); SVG stroke widths converted to Manim units for the size;
+  `Icon.scale()` scales strokes by default; round caps/joins kept.
+- **`IconName`** param type (`vidgen.api`): checked against the project's icons in validate and at
+  scene construction; `list-scenes` type `icon`; `vidgen schema` gives an `enum` of icon names.
+- **`vidgen list-icons [PROJECT] [--search TEXT] [--category NAME] [--sheet PNG] [--json]`**
+  (`src/vidgen/iconlist.py`): text listing, Step 8 JSON envelope, and a labelled 1280 px contact
+  sheet drawn with the same `build_icon` + Manim Cairo camera (paginated like storyboard sheets).
+- **Layout dump / lint**: an icon is one object of kind `icon` with `icon: <name>` (not a pile of
+  paths); lint describes it as `icon 'x'`, finding objects gain `icon`, `lint_ignore` `object`
+  matches icon names.
+- Example: `examples/custom_scene` has a project icon `assets/icons/bicycle.svg` (+ `icons.json`)
+  shown left of the ratio caption by `gear_pair` (new param `icon: IconName | None = "bicycle"`),
+  and a `vidgen list-icons ... --sheet` usage line.
+
+Verification (looked at every image with Read)
+- Rendered all 40 icons through Manim's Cairo camera at 854x480 and 1920x1080 (4 sizes from 0.25
+  to 1.6 units plus one icon scaled 2.5x after creation): identical proportions at both
+  resolutions, strokes 2/24 of the box, round caps, filled dots of `chart-scatter` correct, the
+  scaled icon's strokes thicken with it. Test `test_icon_strokes_are_resolution_independent`
+  pins the ink share at 480x270 and 1920x1080 (equal within 0.3 %).
+- Storyboards of a scratch project (all 40 icons in a grid + a scaled `GrowFromCenter`/`Write`
+  beat) at preview 16:9, final 1080p, `--variant vertical` and `--variant light`
+  (`light_academic`): crisp, theme-coloured on dark and light backgrounds. `vidgen lint` there:
+  no finding involves an icon (only my test labels at theme `small`, and their overlaps in 9:16).
+  The invisible box never shows during `Write`/`DrawBorderThenFill`/`Create`/`FadeIn`/
+  `GrowFromCenter`/`SpinInFromNothing` (checked at 40 % progress).
+- `examples/custom_scene` storyboard (`pair`): bicycle icon in `highlight` next to the caption;
+  layout dump has one `icon` object `bicycle`; `vidgen lint examples/custom_scene`: 0 findings.
+- `vidgen list-icons --sheet` sheet viewed: 5 rows of 8, names and categories legible.
+- Wheel built locally: 40 SVGs + manifest + LICENSE included; `tools/` not shipped.
+
+Files
+- New: `src/vidgen/icons.py`, `src/vidgen/icon_mobject.py`, `src/vidgen/iconlist.py`,
+  `src/vidgen/data/icons/**` (manifest, 40 SVG, LICENSE), `tools/vendor_icons.py`,
+  `tools/icon_set.json`, `tests/test_icons.py` (36 tests, 4 render),
+  `examples/custom_scene/assets/icons/bicycle.svg` + `icons.json`.
+- Changed: `api.py` (exports), `scene.py` (`IconName`, `ThemeToken` kind `icon`), `schema.py`
+  (icon enum), `cli.py` (`list-icons`, icon check in `project_problems`), `jsonout.py`
+  (`list_icons_document`), `introspect.py` (kind `icon`), `lint/layout_rules.py` (`describe`),
+  `lint/findings.py` (`icon` key), `lint/run.py` (ignore matches icon names),
+  `render/fingerprint.py` (vendored icons in the source digest; `iconlist.py` not a render
+  input), `pyproject.toml` (package data), `examples/custom_scene/{video.yaml,extensions/gears.py}`,
+  `tests/test_lint.py` (finding object has `icon`), README, docs/CONFIG.md ("Icons",
+  `vidgen list-icons`, JSON shape, layout dump kind, lint object key), docs/EXTENDING.md
+  (`IconName`, "Icons"), DESIGN.md (§2, §6.4, §8, §15 note, new §22), THIRD_PARTY_NOTICES.md,
+  tasklist.md.
+
+Public interfaces added/changed
+- `vidgen.api`: `icon`, `Icon`, `IconName` (additive). CLI: `vidgen list-icons` (JSON command
+  `list-icons`, envelope v1).
+- Layout dump: kind `icon` + key `icon` (additive). Lint finding objects: key `icon` (added
+  within JSON version 1).
+- `vidgen.icons` (`IconInfo`, `CATEGORIES`, `builtin_icons`, `builtin_sources`, `project_icons`,
+  `available_icons(root)`, `active_icons`, `search_icons`, `find_icon`, `unknown_icon_message`,
+  `categories`), `vidgen.icon_mobject` (`build_icon`, `icon_height`, `ICON_UNITS_PER_POINT`),
+  `vidgen.iconlist` — internal.
+
+Decisions / deviations
+- **Size semantics**: `size` follows text (theme token or points) so an icon next to text of
+  token X uses `size=X`; box = 1.5 em (`0.0208` units/pt), matching the 24 px icon / 16 px text
+  pairing of UI kits (body icon drawing ≈ 1.7x body cap height, tested). Manim units via
+  `height=`. `stroke_width` is in the SVG's own units (Lucide users know "1.5" / "2").
+- **Box includes the viewBox padding** (invisible rect): consistent alignment and sizes across
+  icons for grids/bullets (Step 21); the layout dump/lint ignore it (opacity 0) and measure the
+  drawing.
+- **Prepared SVG copies in a per-process temp dir**: Manim's `SVGMobject` writes `<stem>_.svg`
+  beside the source, which would race between `--jobs` workers and fail for a read-only
+  site-packages; also fixes two Manim parsing quirks (`currentColor` → black, `stroke="none"` →
+  white stroke).
+- **`Icon.scale` scales strokes by default**: otherwise `place()` (which scales) would leave
+  hairlines on big icons and blobs on small ones.
+- `IconName` reuses the `ThemeToken` marker (`x-vidgen-theme: icon`) instead of a new schema
+  key: one mechanism for "names resolved in the project" in describe/schema.
+- `list-icons` finds the project root without validating the config (an agent fixing a broken
+  `video.yaml` still needs the icon list); `--sheet` added (cheap, reuses sheet fonts/helpers).
+- Category ids: `ui` for "arrows/UI". Lucide's own categories are not in the npm package; ours
+  are curated in `tools/icon_set.json`.
+
+Known gaps / TODOs
+- Step 20: expand `tools/icon_set.json` to ~200 (25 per category) and re-run the tool; maybe a
+  manifest `aliases` field (Lucide renamed icons, e.g. `bar-chart` → `chart-column`; search by
+  old names would help).
+- Step 21: `icon:` on bullets/title/end_card and `icon_grid` — use `IconName` params and
+  `icon(name, size=<the text's size token>)`; a `grid_shape(n)` helper is still missing (Step 15
+  note).
+- Project SVGs: only the root's `stroke-linecap`/`-linejoin` are honoured (per-element ones are
+  ignored); gradients/patterns/text in SVGs are whatever Manim's SVG parser does (documented:
+  use simple stroke/fill icons).
+- The contact sheet always draws dark-on-white; a `--theme` option could preview icons in a
+  project's colours.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (717 passed, 1 skipped). Step only:
+`pytest tests/test_icons.py`. Manual: `vidgen list-icons --search chart --sheet build/icons.png`,
+`vidgen list-icons examples/custom_scene --json`, `vidgen storyboard examples/custom_scene --scene
+pair`, `vidgen lint examples/custom_scene`.
+
+## Step 20 — Icons: curated expansion
+What was built
+- **200 vendored icons** (Lucide `lucide-static` 1.52.0, files unmodified), 25 per category:
+  | category | icons |
+  |---|---|
+  | tech | cpu, server, cloud, code, smartphone, laptop, monitor, terminal, wifi, lock, shield-check, key-round, bug, git-branch, hard-drive, memory-stick, router, network, globe, bot, brain-circuit, binary, keyboard, battery-full, plug |
+  | data | database, chart-column, chart-line, chart-pie, chart-scatter, chart-area, chart-bar, chart-spline, chart-column-stacked, chart-candlestick, chart-network, chart-gantt, table, file-spreadsheet, funnel, sigma, percent, gauge, activity, layers, folder, calculator, variable, workflow, grid-3x3 |
+  | science | atom, flask-conical, flask-round, test-tube, microscope, dna, zap, magnet, telescope, orbit, rocket, satellite, thermometer, radiation, biohazard, flame, pill, syringe, stethoscope, pi, infinity, radical, square-function, axis-3d, virus |
+  | business | briefcase, trending-up, trending-down, target, handshake, dollar-sign, coins, wallet, credit-card, piggy-bank, banknote, receipt, shopping-cart, store, building-complex, factory, landmark, award, trophy, megaphone, scale, package, truck, flag, clipboard-list |
+  | people | user, users, user-check, user-plus, user-x, message-circle, messages-square, brain, baby, person-standing, accessibility, heart, heart-pulse, hand, hand-heart, thumbs-up, thumbs-down, face-slightly-smiling, face-slightly-frowning, eye, ear, mail, phone, id-card, footprints |
+  | ui | arrow-right, arrow-left, arrow-up, arrow-down, arrow-up-right, arrow-left-right, refresh-cw, check, x, plus, search, settings, play, pause, circle-check, triangle-alert, info, circle-question-mark, bell, calendar, clock, house, star, download, link |
+  | nature | leaf, sun, droplet, mountain, tree-pine, tree-deciduous, moon, cloud-rain, cloud-lightning, cloud-sun, snowflake, wind, rainbow, sprout, flower, earth, waves-horizontal, sunrise, tornado, bird, fish, paw-print, rabbit, shell, recycle |
+  | education | book-open, book, book-bookmark, library, graduation-cap, lightbulb, pencil, notebook-pen, presentation, school, backpack, ruler, eraser, highlighter, file-text, clipboard-check, list-checks, puzzle, languages, palette, music, shapes, scroll, hourglass, quote |
+- **Tags**: Lucide's tags + explainer-oriented `extra_tags` for every icon (concept words: money,
+  growth, security, speed, AI, team, risk, process, ...). `list-icons --search money` → banknote,
+  coins, credit-card, dollar-sign...; `AI` → brain-circuit, brain; `growth` → trending-up first.
+- **Aliases** (manifest key `aliases`): 36 in all — 24 Lucide old names of renamed icons derived
+  by the tool (`home`→house, `pie-chart`/`line-chart`/`area-chart`/`scatter-chart`,
+  `alert-triangle`, `help-circle`/`circle-help`, `filter`→funnel, `smile`, `frown`,
+  `building-2`, `book-marked`, `waves`, `grid`, ...) plus curated synonyms in
+  `tools/icon_set.json` `aliases` (`bar-chart`→chart-column, `dollar`, `warning`, `idea`,
+  `gear`, `question`, `person`, `team`, `growth`, `ai`, `money`, `document`). `icon()`,
+  `find_icon`, `IconName` validation and the schema `enum` accept them; `list-icons` shows
+  `(alias: ...)` and JSON entries have `aliases`; search ranks an exact alias like a name prefix;
+  did-you-mean considers aliases.
+- **Catalogue** `docs/ICONS.md` generated by `iconlist.catalogue_markdown(manifest)` (written by
+  `tools/vendor_icons.py`, new `--docs`), test keeps it in sync. Linked from README, CONFIG.md.
+- **Vendor tool**: derives upstream aliases (package files without a `tags.json` entry that draw
+  exactly like one vendored icon, ignoring the licence comment and `class`), validates curated
+  aliases, rejects old names listed as icons; writes the catalogue.
+
+Verification (looked at every image with Read)
+- `vidgen list-icons --sheet` (3 pages, 200 icons): all icons crisp and recognisable, no stray
+  fills, arcs/spirals/dots correct.
+- Every icon compared with a reference rasteriser (cairosvg in a scratch folder, not a
+  dependency) at 192 px: inked-pixel overlap >= 0.971 for all 200 (median 0.998); the eight
+  lowest (eye, message-circle, rainbow, phone, gauge, shell, dna, axis-3d) inspected side by
+  side: differences are anti-aliasing only. **No loader change and no icon dropped.** (Lucide
+  1.52's `dna` is a diagonal helix with rungs — upstream design, faithful but less iconic than
+  the old one.)
+
+Files
+- Changed: `tools/icon_set.json`, `tools/vendor_icons.py`, `src/vidgen/data/icons/manifest.json`
+  + 160 new SVGs in `src/vidgen/data/icons/lucide/`, `src/vidgen/icons.py`, `src/vidgen/iconlist.py`,
+  `src/vidgen/scene.py`, `src/vidgen/schema.py`, `tests/test_icons.py` (47 tests: set/categories,
+  concept search, aliases, project alias takeover, all-icons load, 6 renders, docs sync, vendor
+  tool aliases), README, docs/CONFIG.md, docs/EXTENDING.md, DESIGN.md (§22 note, tree, new §23),
+  THIRD_PARTY_NOTICES.md, tasklist.md. New: `docs/ICONS.md`.
+
+Public interfaces added/changed
+- `vidgen.api` unchanged; `icon(name)` and `IconName` now also accept aliases (additive).
+- `vidgen.icons` (internal): `IconInfo.aliases`, `builtin_aliases()`, `resolve_icon()`,
+  `icon_names()`; `vidgen.iconlist.catalogue_markdown()`.
+- Manifest entries gain `aliases`; `list-icons --json` icon entries gain `aliases` (additive,
+  version 1).
+
+Decisions / deviations
+- `bar-chart`: Lucide's own alias points at `chart-no-axes-column-increasing` (not vendored, a
+  near-duplicate of `chart-column`), so a curated alias maps it to `chart-column`.
+- Aliases come from identical drawings, not from a Lucide alias list (none in `lucide-static`);
+  all 264 alias files of 1.52.0 draw exactly like a current icon; `clock` and `clock-4` draw
+  alike, so the tool skips an old name that matches two vendored icons.
+- `Icon.icon_name` is the resolved name (layout dump/lint report `house` for `icon("home")`).
+- No brand icons; `hexagon` (tagged node.js/logo) replaced by `virus`.
+
+Known gaps / TODOs
+- Substring search: short terms match inside words (`ai` also finds `rain`, `email`), ranked
+  after the real matches; a word-boundary match could rank better (Step 22 review).
+- `list-icons --sheet` still draws dark on white (no `--theme`).
+- Step 21: `icon:` on bullets/title/end_card and `icon_grid` (unchanged plan).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (728 passed, 1 skipped). Step only:
+`pytest tests/test_icons.py`. Manual: `vidgen list-icons --sheet build/icons.png` (3 pages),
+`vidgen list-icons --search money`, re-vendor: `python tools/vendor_icons.py` (npm) or
+`--package-dir DIR`.
+
+## Step 21 — Icons in built-in scenes
+What was built
+- **`grid_shape(n, aspect=None, *, cell_aspect=1.0, max_cols=None) -> (rows, cols)`** in
+  `vidgen/regions.py`, exported by `vidgen.api` (the helper Step 15 left out): picks the shape
+  whose cells (at `cell_aspect`) come out largest in an area of `aspect` (number, region name or
+  `Region`; default the safe area); near-ties go to fewer empty cells, then fewer rows.
+- **`bullets`**: items are a string or `{text, icon}` (`BulletItem`; plain strings still work
+  and mix with icon items). Icons form a column next to the text, sized to the item text,
+  centred on the first line's capitals; they replace the bullet, or stand between number and
+  text when `numbered`; a plain item in a list with icons shows its bullet centred in the icon
+  column. Colour `marker_color`; `dim_previous` fades icons with their row.
+- **`title`**: `icon`, `icon_color` (`primary`), `icon_position: above | left` (`left` → `above`
+  in portrait). **`end_card`**: `icon`, `icon_color` (icon between logo and title; an icon alone
+  is a valid card).
+- **`icon_grid`** (new built-in, `src/vidgen/scenes/icon_grid.py`): items `{icon, label,
+  sublabel?}` (1–16), optional `heading`, `columns`, `reveal: per_beat | all`, `groups` (reveal
+  steps by index or label), `highlight` (last step: others dim, the item grows in
+  `highlight_color`), `badge` (soft disc behind each icon), `icon_color: palette | color`,
+  label/sublabel/heading colours and sizes. Shape from `grid_shape` tried at five cell
+  proportions, best resulting layout wins (labels at the requested size, then largest icons);
+  labels share one size, shrink (not below `readable_size()`) for room or a long word; rows
+  spread over spare height, short last row centred, labels on common baselines.
+- **Icons scaled with their group**: `shrink_to_fit` and `place` now also scale the strokes of
+  icons inside the group they scale (`icon_mobject.scale_icon_strokes`).
+- `examples/minimal`: new `feedback` icon_grid scene (palette colours, highlight), icons on the
+  numbered `steps` bullets.
+
+Verification (looked at every sheet with Read)
+- Scratch project (11 scenes: title above/left, bullets with icons/mixed/numbered, icon_grid
+  with 2, 3, 4, 6 (sublabels, highlight), 9 (no badge, groups), 12 (sublabels, palette, reveal
+  all) items, end_card) storyboarded at preview 16:9, `vertical`, `light` (light_academic) and
+  `large` scale. Fixed along the way: labels of different sizes when one long word was scaled
+  alone (now all labels shrink together), sublabels at uneven heights (baseline placement),
+  2 x 6 grids with tiny text at the `large` scale (now several shapes are planned and
+  compared), dimmed `dim` sublabels at 1.96:1 on light presets (dimmed opacity 0.55), and
+  cells dissolved by part animations (cells are added whole before their entrance).
+- `vidgen lint` of that project: no layout finding except the deliberate stress case (12 items
+  with "Thermodynamics" in 9:16: min_font on that label); the rest are timing findings of its
+  two-word beats.
+- `examples/minimal` lint, before → after: 16:9 2 warnings → 2 (same: `sizes` caption
+  min_font, `picture` caption safe_area); vertical 1 → 1; light 2 → 2. `--scene feedback
+  --scene steps` with the contrast, editorial, neutral, pastel and neon variants: 0 findings.
+  Storyboards of `feedback` and `steps` checked in 16:9, vertical and light.
+
+Files
+- New: `src/vidgen/scenes/icon_grid.py`, `tests/test_icon_scenes.py` (50 tests, 19 render).
+- Changed: `src/vidgen/regions.py` (`grid_shape`; `place` scales icon strokes), `api.py`,
+  `icon_mobject.py` (`scale_icon_strokes`), `layout.py` (`shrink_to_fit` scales icon strokes),
+  `scenes/__init__.py`, `scenes/bullets.py`, `scenes/title.py`, `scenes/end_card.py`,
+  `examples/minimal/video.yaml`, `tests/test_builtin_scenes.py` (icon_grid in BUILTINS/SAMPLES,
+  icons in samples), `tests/test_json_output.py` (bullets items type), docs/CONFIG.md (Icons
+  intro, `title`, `bullets`, new `icon_grid`, `end_card`), docs/EXTENDING.md (`grid_shape`,
+  icon strokes in `place`/`shrink_to_fit`, animating icons inside groups), README, DESIGN.md
+  (§6.4, new §24), tasklist.md.
+
+Public interfaces added/changed
+- `vidgen.api.grid_shape` (new). Built-in scene type `icon_grid` (new).
+- `bullets.items`: `list[BulletItem]` (strings still accepted; `list-scenes` shows
+  `list[BulletItem]` with nested `text`, `icon`; JSON Schema `anyOf` string | object).
+  `title`: `icon`, `icon_color`, `icon_position`; `end_card`: `icon`, `icon_color`, and its
+  "at least one of" message now names `icon`.
+- `shrink_to_fit` / `place` scale strokes of icons inside a scaled group (other mobjects
+  unchanged). `vidgen.icon_mobject.scale_icon_strokes` (internal).
+
+Decisions / deviations
+- `groups` and `highlight` refer to items by 0-based index (as `bar_chart.highlight`) or label.
+- `bullets` icon items use one `BulletItem` model with a "string → {text}" pre-validator and a
+  custom JSON Schema instead of `str | BulletItem`: errors read `items.1.icon: unknown icon...`
+  instead of two union-branch errors per item.
+- `dim_previous` uses `fade()` (multiplies opacities) instead of `set_opacity()`, which would
+  have shown an icon's invisible box and filled its open paths; text looks identical.
+- `icon_grid` dims to 0.55 (bullets keep 0.45): its sublabels are `dim` already.
+- No list-wide `icon` on bullets (per-item only), no icon for `text_card`/`quote` (not asked).
+
+Known gaps / TODOs
+- `icon_grid` with 12 items and sublabels in 16:9 draws small icons (~0.6 units): the labels
+  keep their readable size first. Long single words in narrow 9:16 columns can still go below
+  the lint minimum (the stress case above); shorter labels or `columns` fix it.
+- `list-scenes` prints `items: list[BulletItem]` although plain strings are accepted (the
+  field doc says so); a describe hook for "also accepts" could make it exact (Step 22).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (782 passed, 1 skipped). Step only:
+`pytest tests/test_icon_scenes.py`. Manual: `vidgen storyboard examples/minimal --scene
+feedback --scene steps [--variant vertical|light]`, `vidgen lint examples/minimal [--variant
+vertical]`, `vidgen schema --scene icon_grid`.
+
+## Step 22 — Review 1
+Independent review of Steps 8–21: storyboard + lint of every example configuration, the
+"left for Step 22" gaps of earlier handoffs, an API/CLI consistency pass, docs vs behaviour, test
+runtime, and an install check from a wheel.
+
+Lint status (preview; `vidgen lint` + `vidgen storyboard`, every sheet opened)
+| example / variant | before | after |
+|---|---|---|
+| minimal (default `dark_tech`) | 2 warnings (`sizes` caption `min_font`, `picture` caption `safe_area`) | 0 |
+| minimal `vertical` | 1 (`safe_area`) | 0 |
+| minimal `light`, `editorial` | 2 each (same two) | 0 |
+| minimal `contrast`, `neon` | 1 each (`safe_area`) | 0 |
+| minimal `neutral`, `pastel` | 2 each (Step 17/21 numbers) | 0 |
+| custom_scene, `vertical` | 0, 0 | 0, 0 |
+| kphi3 | 1 error + 32 warnings (+2 theme-contrast warnings) | 0 (5 commented `lint_ignore`s) |
+
+Findings and fixes
+1. **Built-in captions** (long-standing): `bar_chart`/`line_chart` captions used the fixed
+   `small` size (below lint's `min_font`) → new params `caption_size` (`caption`) and
+   `caption_color` (`dim`). `image` with `fit: cover` drew its caption 12 px into the bottom
+   margin → the caption sits on the bottom of the `caption` region (safe area), the band runs
+   from the frame edge to just above it.
+2. **9:16 built-ins** (Step 15 regions): `quote` (text, mark and author 1.25x in portrait,
+   placed with `place`) and `equation` (formulas 1.25x in portrait, positioned from the safe
+   area; new `caption_size`) were small blocks in an empty tall frame. 16:9 sheets are
+   unchanged apart from the larger chart captions. Left as they are, because their 9:16 sheets
+   read well since the `auto` scale: `title`, `end_card`, `text_card`, chart bodies (Step 30).
+3. **kphi3** (fixed in its extensions, documented in its README/REGRESSION.md): `dim`
+   `#6B7280` → `#838B98` (decided: 3.9:1 failed WCAG AA on every dim label; 18 contrast warnings
+   and 2 theme warnings; a slightly lighter grey is not a material change); `method` beat 5
+   column labels keep 22 pt when the diagram zooms out (was the only lint **error**, 7.6 px);
+   `loss` ticks/model names 16 → 20 pt, footnote 22 pt inside the safe area, panels 0.2 up;
+   `setup` decoder labels and dataset subtitle 20 → 22 pt; `equivalence` token column 0.1 right
+   and its label clamped to the safe area. `lint_ignore` (with comments in `video.yaml`): four
+   `dead_air` holds (the original pacing) and the rotated `H = length` (lint measures rotated
+   glyphs sideways: a lint limitation, routed to Step 37).
+4. **Lint**: `vidgen lint` now also prints the theme-contrast warnings `vidgen validate` gives
+   (Step 16/17 gap; warnings, not findings; skipped with `--rule` other than `contrast` or
+   `contrast: {severity: off}`). The same text repeated in copies of a component (two decoder
+   boxes' "Attention") was two identical findings → merged like grouped findings.
+5. **API gaps** (Steps 15/18/21): `role=` on `T`, `MT`, `self.text`/`self.markup`, `fit_text`,
+   `readable_text` (`font=` still wins); `region(name, area)` accepts a region name as `area`;
+   `SceneParams.also_accepts` so `list-scenes` shows `items: list[str | BulletItem]`;
+   `register_theme_defaults` rejects non-identifier token names (YAML could never override
+   them; Step 7 gap) and malformed hex colours.
+6. **Icon search** (Step 20 gap): whole words of names/aliases/tags rank above substrings
+   (`ai`: brain-circuit, bot before cloud-rain, mail; `art`: palette before chart-*).
+7. **CLI consistency**: checked every `--json` command (validate, list-scenes, list-themes,
+   list-icons, schema, render, storyboard, lint) for the error envelope / exit codes 1 and 2 —
+   consistent. Added `list-themes --sheet` as an alias of `--swatches` (as in `list-icons`).
+   `tts` still has no `--json` (routed to Step 59).
+8. **API review, no change needed**: every `VIDGEN_NAMES` entry is in `__all__` and has a
+   docstring; size/colour arguments take tokens or literals everywhere (`icon(name, size,
+   color)` mirrors `T(s, size, color)`; Manim units only via `height=`); `place`/`grid`/
+   `grid_shape` take a region name or `Region`. No renames, so no aliases were needed.
+9. **Docs**: CONFIG.md lint example output was stale (10 scenes, 7 warnings) → generic; new
+   lint "Theme contrast" paragraph; search ranking, chart/equation caption params, quote/equation
+   portrait growth, `--sheet` alias; EXTENDING.md `role=`, `region(name, "body")`,
+   `also_accepts`; README "Working on vidgen" (test commands). DESIGN §6.4, §9, §22 note, new
+   §25.
+10. **Tests**: +12 (794 passed, 1 skipped). New marker `slow` on the 18 slowest render tests:
+    full suite 228 s on this 2-CPU box, `-m "not slow"` 65 s, `-m "not render"` 23 s.
+11. **Install check**: `pip wheel . --no-deps` (1.25 MB: 11 font files, 200 SVGs + LICENSE,
+    templates; no `tools/`) → fresh venv, `pip install` from PyPI → `vidgen --version`, `init`
+    (non-ASCII folder), `validate`, `render --preview`, and with a `light_academic` variant
+    `storyboard` + `lint` (0 findings): serif heading (Source Serif 4, not installed
+    system-wide) and the `pencil` icon rendered from `site-packages/vidgen/data`.
+
+Files
+- Code: `helpers.py`, `scene.py`, `layout.py`, `regions.py`, `describe.py`, `theme.py`,
+  `icons.py`, `cli.py`, `lint/run.py`, scenes `quote.py`, `equation.py`, `image.py`,
+  `bar_chart.py`, `line_chart.py`, `bullets.py`.
+- Examples: `examples/kphi3/{video.yaml, extensions/common.py, s3_equivalence.py, s4_method.py,
+  s5_setup.py, s7_loss.py, README.md, REGRESSION.md}`, `examples/custom_scene/extensions/gears.py`
+  (`role="heading"` usage).
+- Tests: `test_regions.py` (roles, region by name, chart/quote in the safe area, cover caption,
+  quote growth), `test_lint.py` (theme warnings, same-text merge), `test_icons.py` (ranking),
+  `test_theme.py`, `test_extensions.py`, `test_scales.py` (`--sheet`), `test_json_output.py`;
+  `slow` markers in 12 test files; `pyproject.toml` (marker).
+- Docs: README, docs/CONFIG.md, docs/EXTENDING.md, DESIGN.md, tasklist.md.
+
+Public interfaces added/changed (all additive)
+- `vidgen.api`: keyword `role=` on `T`, `MT`, `fit_text`, `readable_text`,
+  `NarratedScene.text`/`markup`; `region(name, area: str | Region | None)`;
+  `SceneParams.also_accepts` (ClassVar).
+- Params: `bar_chart`/`line_chart` `caption_size`, `caption_color`; `equation` `caption_size`.
+  `Quote.portrait_growth`, `Equation.portrait_growth` (class attributes, 1.25).
+- `register_theme_defaults` raises for non-identifier names / malformed hex (was accepted).
+- CLI: `list-themes --sheet` (alias). `vidgen lint` may print `warning: theme contrast: ...`.
+- `list-scenes` / `--json` `type` of `bullets.items`: `list[str | BulletItem]` (was
+  `list[BulletItem]`; a value change within JSON version 1, it is a display string).
+
+Remaining issues (routed in tasklist.md)
+- Step 30: chart titles into `header`, chart labels from size tokens (9:16 `bar_chart` value
+  labels are scaled small to fit narrow slots).
+- Step 32: a code size cap for portrait listings.
+- Step 37: `icon_grid` in 9:16 leaves the lower third empty with few items; `list-icons
+  --sheet` in project colours; lint text rotation.
+- Step 59: `vidgen tts --json`; human `validate` stops at the first variant that does not load.
+- Not routed (cosmetic): `minimal`'s `picture` 9:16 starts with the sun half cropped (the
+  example's Ken Burns focus on a landscape image in a cover crop).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (794 passed, 1 skipped, ~4 min);
+quick: `-m "not slow"` (~1 min) or `-m "not render"` (~20 s). Manual: `vidgen lint
+examples/minimal [--variant vertical|light|contrast|editorial|neutral|pastel|neon]`, `vidgen
+lint examples/custom_scene [--variant vertical]`, `vidgen lint examples/kphi3` (all 0
+findings), `vidgen storyboard ...` likewise.
+
+## Step 23 — Per-beat actions (framework + 3 actions)
+What was built
+- **YAML**: a beat may have `actions:`. Canonical form `{action: NAME, target: T, at: 0..1,
+  until: BEAT, run_time: S, ...options}`; one shorthand `{NAME: TARGET, ...options}` (action name
+  as the first key; `- dim: item2`, `- highlight: "bar:4K"` + `color: accent` on the next line).
+  `target` is a name, a list, or a `*`/`?` pattern. `until` (a later beat of the scene) undoes
+  `dim`/`highlight` when that beat starts. `config.ActionConfig`, `BeatConfig.actions`.
+- **Framework** (`src/vidgen/actions.py`): `Target(names, mobject, entrance)`, `Action` /
+  `ActionOptions` base classes, validation (`scene_actions`, `plan_actions`), and the
+  `ActionRunner` that plays actions inside the beat. Action types are registered like scene
+  types (`@action("name")` in `vidgen.registry`, built-in + extension layers, `override=True`).
+- **Scene runtime** (`NarratedScene`): `target_patterns`, classmethod `target_names(params)`,
+  `self.target(names, mobject, entrance=)`, `targets`, `find_targets`, `on_screen_parts`,
+  `is_shown`, `entrance`; `narrate()` schedules the beat's actions; `wait_seconds` and an
+  overridden `wait` play due actions inside waits; `play_steps` slots end at absolute times.
+- **Built-in actions** (`src/vidgen/scenes/actions.py`, only `vidgen.api`): `reveal`, `dim`
+  (`opacity` 0.45), `highlight` (`color` = `highlight` token; `style` `color` (default) | `box`
+  | `underline` | `flash`, or a list).
+- **Targets**: `bullets` — `heading`, `item<N>`, `item:<text>`; `bar_chart` — `title`,
+  `bar<N>`, `bar:<label>` (bar + value + category label). Their reveal steps go through
+  `self.entrance()`, so a target an action revealed early is not revealed again.
+- **Checks**: `vidgen validate` (and the render pre-check, and the scene constructor) report
+  unknown actions (did-you-mean), bad options (pydantic, theme tokens), `until` on `reveal`,
+  missing/unknown targets with suggestions and the scene's target list, types without targets;
+  `SceneConfig` checks `until` is a later beat. `vidgen schema` describes both forms (action
+  enum, per-action options). `vidgen list-scenes` prints `targets:` per type and an actions
+  section; `--json` gains `scene_types[].targets` and `actions`.
+- `examples/minimal` `sizes` (bar_chart): beat 2 boxes `bar:4K` until beat 3, beat 3 dims the
+  other bars and highlights `bar:Preview 480p` (shorthand); its `highlight` param was dropped
+  for the actions (same story, shown through actions).
+
+Verification
+- Scratch project (bullets with early reveal, dim/highlight with `until`, `at: 0.5`, a pattern
+  target, highlight of a not-yet-shown item; bar_chart per_beat with highlight, dim of a list,
+  `[flash, box]`, underline) — `vidgen storyboard --per-beat 3` sheets read one by one: every
+  action lands after the beat's own entrance, undo at the `until` beat, nothing overruns.
+  `vidgen lint`: 0 findings. The EXTENDING example (custom `tick` action + `checklist` targets)
+  storyboarded and linted (one `rushed_animation` from its short example beats, not actions).
+- `examples/minimal`: `vidgen lint` 0 findings in every variant (default, vertical, light,
+  contrast, editorial, neutral, pastel, neon); `examples/custom_scene` 0. `sizes` sheets checked
+  in 16:9 (`--per-beat 3`), vertical and light.
+
+Files
+- New: `src/vidgen/actions.py`, `src/vidgen/scenes/actions.py`, `tests/test_actions.py` (27
+  tests, 6 tiny renders).
+- Changed: `config.py` (`ActionConfig`, `ACTION_KEYS`, `BeatConfig.actions`, `until` check),
+  `registry.py` (action layer, shared `_add`, pair snapshot), `scene.py`, `api.py`, `cli.py`
+  (validate, list-scenes), `describe.py`, `jsonout.py`, `schema.py`, `render/pipeline.py`,
+  `scenes/__init__.py`, `scenes/bullets.py`, `scenes/bar_chart.py`; `examples/minimal/video.yaml`;
+  docs/CONFIG.md (new "Beat actions", beats, bullets/bar_chart targets, schema, list-scenes
+  JSON), docs/EXTENDING.md (§8 targets and custom actions, tested), README, DESIGN.md (§2, §6.4,
+  new §26), tasklist.md.
+
+Public interfaces added/changed
+- `vidgen.api`: `action`, `Action`, `ActionOptions`, `Target`; `NarratedScene.target_patterns`,
+  `target_names`, `target`, `targets`, `find_targets`, `on_screen_parts`, `is_shown`,
+  `entrance`; `NarratedScene.wait` now also plays due actions (unchanged without actions).
+- Config: `beats[].actions` (additive). `vidgen.registry`: `ActionType`, `register_action`,
+  `action`, `find_action`, `action_names`, `all_actions`, `unknown_action_message`;
+  `snapshot()` returns a pair (opaque before too).
+- JSON: `list-scenes` `scene_types[].targets`, top-level `actions` (added within version 1).
+- `schema.config_schema` / `scene_schema` take `actions=None` (default: registered ones).
+
+Decisions / deviations
+- **Actions run in waits, never in the scene's own `play`**: no two animations fight over one
+  mobject, and "at the start of the beat" means right after the beat's entrance step. Run time
+  is cut to end within `d + pad` (whole frames; `requested` recorded for `rushed_animation`);
+  no time at all → applied without animation + warning.
+- **`reveal` of a shown target is a no-op** (not an error: being shown depends on timing a
+  static check cannot see); the scene's own step then skips it. `dim`/`highlight` on a hidden
+  target reveal it first.
+- **Shorthand with options**: the first-key rule makes `- highlight: x` + options natural; a
+  sorted-keys dump (yaml.safe_dump) would break it, so `ActionConfig.resolved()` re-picks the
+  one key that names a registered action.
+- `dim`/`highlight` animate RGBA arrays (`Repaint`) of the parts on screen, not the target
+  group (animating a group Manim never added would add it and draw its parts twice), and undo
+  only their own channel, so they combine. A first `pulse` style (Indicate-like scaling) pushed
+  bars through the axis; replaced by `flash` (colour there and back).
+- `play_steps` uses absolute slot ends (absorbs an action that lengthened a wait); all existing
+  timing tests unchanged.
+
+Known gaps / TODOs (Step 24)
+- Targets only on `bullets` and `bar_chart`; `zoom`/`transform` not yet. Images are not
+  recoloured/dimmed by `Repaint` (vectorized mobjects only). `dim` compounds with `bullets`'
+  `dim_previous`; `highlight` keeps a dimmed target dimmed. Box/underline sit around the whole
+  target group (for a bar: bar + both labels, crossing the axis line).
+- Validation cannot know whether the scene gives an action time (a custom scene that animates
+  through the whole beat): that shows as the runtime warning.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (821 passed, 1 skipped, ~4 min). Step only: `pytest
+tests/test_actions.py`. Manual: `vidgen validate examples/minimal`, `vidgen storyboard
+examples/minimal --scene sizes --per-beat 3 [--variant vertical]`, `vidgen lint examples/minimal`,
+`vidgen list-scenes`, `vidgen schema | jq '.["$defs"].ActionShorthand'`.
+
+## Step 24 — Per-beat actions (zoom, transform, coverage)
+What was built
+- **`zoom`** action: the camera moves in on the targets (`scale`, or fitted with `padding`, at
+  most 3x, never leaving the frame) and back. It is *temporary*: the zoom-out ends with the beat
+  (with `until: B`, when `B` starts). A target that already fills the frame is not zoomed
+  (warning). `NarratedScene` is now a `MovingCameraScene` (renders unchanged when the camera
+  does not move; the frame is kept out of `scene.mobjects`).
+- **`transform`** action: `transform: A` + `into: B` (`B` a target not on screen yet; `style`
+  `auto|replace|shapes|tex|fade`). B stays on screen in its place, A is gone; scene steps that
+  would reveal B or animate A skip them. Decision: `into` is a target, not a text literal.
+- **Targets on every built-in** (`title`, `text_card`, `quote`, `equation` incl. new param
+  `terms` → `term:<tex>`, `code` `line<N>`/`lines:<a-b>`, `image`, `line_chart` incl.
+  `point:<name>@<x>`, `end_card`, `icon_grid`); every built-in builds its steps from
+  `self.entrance()` (early reveals are not repeated; equation steps morph from the one on
+  screen and are skipped once a later one is shown). Table scene type x targets x useful
+  actions in docs/CONFIG.md "Beat actions", checked against `target_patterns` by a test.
+- **Step 23 gaps fixed**: `dim`/`highlight` on images (pixel alpha / 30% tint); dimming never
+  compounds (`dim` = at most `opacity` x the target's *full* opacity, captured at
+  registration; `bullets` `dim_previous` and `icon_grid`'s highlight step use the same
+  `dim_to`); a colour highlight brings a dimmed target to full opacity and its undo restores
+  the dimming; a bar's highlight box stands on the axis (`Target.outline`).
+- Framework: `Action.temporary`, `moves_camera`, `target_options`; runner schedules temporary
+  undoings at the end of the return beat, reserves their time and shortens both alike in short
+  beats; repeated plain names select the targets on screen. Layout dump `camera.zoom`; lint's
+  `off_frame`/`safe_area` skip zoomed stills. `list-scenes` (+ JSON `temporary`,
+  `target_options`), schema requires `into`.
+- `examples/minimal` `math`: `terms: ["2ab"]`, beat 2 `transform: step2 → step3` (at 0.6; beat
+  3's own morph is skipped), beat 3 `zoom: "term:2ab"`.
+
+Verification
+- Scratch project with every built-in type and actions (zoom with/without `until`, nested dim
+  + dim_previous + highlight, transform in bullets and equation, image dim/tint, line_chart
+  points without dots, code `lines:3-5` box, title/quote/end_card/text_card targets):
+  `vidgen storyboard --per-beat 3` (16:9 and 9:16) read sheet by sheet; `vidgen lint` 0 errors
+  (only dead-air/rushed warnings of its deliberately short beats).
+- `examples/minimal`: `vidgen lint` 0 findings in all 8 variants; `math` and `sizes` sheets
+  checked (`--per-beat 3`). `examples/custom_scene` 0, `examples/kphi3` 0 (5 ignored, as before).
+
+Files
+- New: `tests/test_actions_coverage.py` (41 tests incl. 30 tiny renders).
+- Changed: `src/vidgen/actions.py`, `scene.py`, `scenes/actions.py` (Repaint images, dim_to,
+  Zoom, MoveCamera, TransformAction), all built-in scene modules in `scenes/`, `introspect.py`,
+  `lint/rules.py`, `lint/layout_rules.py`, `schema.py`, `describe.py`, `cli.py`;
+  `tests/test_actions.py`, `tests/test_introspect.py`; `examples/minimal/video.yaml`;
+  docs/CONFIG.md, docs/EXTENDING.md, README.md, DESIGN.md (§2, §6.4, new §27), tasklist.md.
+
+Public interfaces added/changed
+- Actions `zoom`, `transform`; `equation` param `terms`; targets on all built-ins.
+- `vidgen.api` (compatible): `NarratedScene` base is `MovingCameraScene`;
+  `NarratedScene.target(..., outline=)`; `Target.outline`, `Target.rest`,
+  `Target.rest_opacity()`; `Action.temporary`, `Action.moves_camera`, `Action.target_options`.
+- Behaviour: `dim`'s `opacity` is now relative to the target's full opacity (no compounding);
+  `highlight` `style: color` undims while highlighted. Layout dump `camera.zoom`; JSON
+  `actions[].temporary`, `actions[].target_options`.
+
+Decisions / deviations
+- `zoom` always comes back (no "stay zoomed" option): `until` extends it, and it is over when
+  that beat starts — the same reading of `until` as Step 23 ("lasts until"), but undone *before*
+  the beat rather than in its first wait, so the next beat's entrance is seen in full.
+- `transform` into text literals not supported (no layout/style for a literal); scenes offer
+  alternatives as targets.
+- Lint skips `off_frame`/`safe_area` while zoomed instead of measuring against the zoomed view.
+
+Known gaps / TODOs
+- **Step 38 overlays**: mobjects in the scene move with the camera; a screen-fixed overlay must
+  follow `camera.frame` or be composited outside Manim (DESIGN §27).
+- A `dim` reverted after a scene's own later dimming (`dim_previous`) restores full opacity.
+- `code`'s own highlight steps set absolute opacities (they override a `dim` action on lines);
+  `lines:<a-b>` enumerates every range (fine for listings that fit on screen).
+- Equation `term:` uses the first occurrence per step; terms must be complete TeX groups.
+- Zoom on wide targets (a code line, a full-width title) barely zooms (warning); `scale:`
+  forces it but may crop the target.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (862 passed, 1 skipped). Step only:
+`pytest tests/test_actions_coverage.py tests/test_actions.py`. Manual: `vidgen storyboard
+examples/minimal --scene math --per-beat 3 [--variant vertical]`, `vidgen lint examples/minimal`,
+`vidgen list-scenes`.
+
+## Step 25 — Scenes: `stat` and `chapter`
+What was built
+- **`stat`** (`src/vidgen/scenes/stat.py`): one big number that counts up (eases out, fades and
+  rises into place), with `label`, `context` line, optional `icon` and `comparison`. Number
+  format: `prefix`/`suffix` (number size), `unit` (smaller, on the baseline), `decimals` (auto:
+  what value and comparison need, up to 2), `thousands`, `decimal_mark`, typographic minus;
+  `count: false` fades in instead, `count_from` sets the start. `comparison` is a number or
+  `{value, label, kind: versus|before, word, delta: difference|percent|none, better:
+  higher|lower|neither}`: a chip with an arrow and the signed delta coloured `good_color`
+  (`tertiary`) / `bad_color` (`accent`) / `neutral_color` (`dim`), then "vs 44% in 2023" (or
+  "from ..." with `kind: before`, where the count starts at the old value — a before → after).
+  Steps: (1) icon, number, label; (2) comparison and context. Targets `icon`, `value`, `label`,
+  `comparison`, `context`.
+- **`chapter`** (`src/vidgen/scenes/chapter.py`): section divider with optional `number` (int via
+  `number_format` `{:02d}`, or text "Part II"), `title` (required; the chapter's name), optional
+  `subtitle`, `icon`, accent `rule`. 16:9 with a number/icon: icon over number | vertical rule |
+  left-aligned title block; otherwise (9:16, or title only) stacked and centred with a short rule.
+  Entrance: the rule draws, number and title slide towards it from either side, subtitle rises.
+  Two or more beats: subtitle in beat 2; one beat or silent (`duration`): all together. Targets
+  `icon`, `number`, `title`, `subtitle`.
+- `examples/minimal`: `part2` (silent numbered chapter with icon, before the charts) and
+  `speedup` (stat 0.4 min counting down from 9.8 min in 4K, `delta: percent`, `better: lower`).
+
+Verification (sheets opened with Read)
+- Scratch project (3 chapters: numbered+icon+subtitle narrated, title-only silent, "Part II" with
+  a long title; 3 stats: % with comparison and context, $ with icon and before/percent/lower,
+  `ms` unit with `,` decimal mark and a bare-number comparison) storyboarded in 16:9
+  (`--per-beat 3`), vertical, `light_academic`; lint 0 findings in 16:9, vertical, light, neon
+  after one fix: the chip's tinted fill dropped the green delta to 4.0:1 on `light_academic` →
+  the pill is filled with `surface`, stroked in the colour.
+- `examples/minimal`: `vidgen lint` 0 findings in all 8 variants (default, vertical, light,
+  contrast, editorial, neutral, pastel, neon); `part2`/`speedup` sheets checked in 16:9
+  (`--per-beat 3`), vertical, editorial and contrast (large scale).
+
+Files
+- New: `src/vidgen/scenes/stat.py`, `src/vidgen/scenes/chapter.py`, `tests/test_stat_chapter.py`
+  (58 tests, 36 tiny renders at 160x90 / 90x160).
+- Changed: `src/vidgen/scenes/__init__.py`; `examples/minimal/video.yaml`; tests
+  `test_builtin_scenes.py` (BUILTINS/SAMPLES), `test_actions_coverage.py` (SAMPLES, target
+  names, early reveal), `test_extensions.py`, `test_registry.py` (type lists); docs/CONFIG.md
+  (`stat`, `chapter` sections, targets table, Icons intro), README, DESIGN.md (new §28),
+  tasklist.md.
+
+Public interfaces added/changed
+- Built-in scene types `stat` and `chapter` (params in docs/CONFIG.md). No `vidgen.api` change.
+- Module helpers (internal, built-in module): `vidgen.scenes.stat.format_number`,
+  `needed_decimals`; `Stat.change()`, `Stat.written()`, `Stat.start_value()`;
+  `Chapter.Params.number_text()`.
+
+Decisions / deviations
+- Good/bad colours default to `tertiary`/`accent`: in every built-in preset those are the green
+  and the red (no new semantic tokens; a project can point `good_color` at its own token).
+- The change chip sits on `surface` (not a tint) to keep WCAG AA for the delta text on light
+  presets. A comparison with `delta: none` shows only the words.
+- `kind: before` is the before → after form: the number itself animates from the old value; the
+  row says "from 9.8 min in 4K". `word` makes "vs"/"from" translatable for language variants.
+- Numbers and chapter titles use the `heading` font role (serif in light_academic/editorial).
+- `chapter` puts the subtitle in beat 2 only when there are ≥ 2 beats (a silent card or a single
+  beat shows everything together instead of splitting a short beat into two rushed halves).
+- **For Steps 39/49**: the chapter's name is `params.title` of a `chapter` scene (required,
+  plain text); `params.number_text()` gives the number as shown (or `None`).
+
+Known gaps / TODOs
+- The count rebuilds the number `Text` every frame (fine for one number; same approach as
+  `bar_chart` labels). Digits are proportional (Inter has no tabular figures through Manim's
+  `Text`), so the centred number shifts a little while counting.
+- `stat` has no layout with the icon beside the number, and no sparkline; `chapter` has no
+  "progress" (e.g. 2 / 5) — Step 39's indicator could add it.
+- A silent `chapter` of 3 s lasts 3.07 s at 15 fps (the 0.5 s outro rounds up to whole frames),
+  as for the other built-ins.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (932 passed, 1 skipped). Step only: `pytest
+tests/test_stat_chapter.py`. Manual: `vidgen storyboard examples/minimal --scene part2 --scene
+speedup --per-beat 3 [--variant vertical|light]`, `vidgen lint examples/minimal [--variant ...]`,
+`vidgen list-scenes`, `vidgen schema --scene stat`.
+
+## Step 26 — Scenes: `comparison` and `table`
+What was built
+- **`comparison`** (`src/vidgen/scenes/comparison.py`): 2–3 columns, each `{heading, icon?,
+  tone?, points}` (points: a string or `{text, icon}`, up to 8) on a `surface` card outlined in
+  its tone; `tone: positive | negative | neutral` colours heading/icon/markers
+  (`positive_color` `tertiary`, `negative_color` `accent`, `neutral_color` `primary`) and marks
+  points with check / x icons / dots (`markers: false` hides them; a point's own icon wins).
+  Optional scene `heading` (header region), `verdict` (bottom, `highlight` colour, last step),
+  `vs` badge between the cards, `cards: false`. `reveal: columns` (one column per beat) | `rows`
+  (headings, then the m-th point of every column per beat, rows on shared baselines) | `all`.
+  Columns side by side in 16:9 and square, stacked in 9:16 (`Region.split`). One text size for
+  all columns, reduced to the readable minimum before scaling (warning).
+  Targets `heading`, `col<N>`, `col:<heading>`, `col<N>.item<M>`, `verdict`.
+- **`table`** (`src/vidgen/scenes/table.py`): `header` + `rows` (str/number cells; bool/null
+  rejected), `title`, `caption`, `align` (`auto`: numbers right), `number_format` (one or per
+  column; default per-column decimals with thousands separators), `reveal: per_beat | all`,
+  `zebra` stripes in `surface`, header rule in `header_color`, end rule with the last row.
+  **Auto-fit**: natural widths, else water-filled widths with wrapping (headings at any space,
+  body cells > 16 chars at spaces, numbers/short cells never), sizes from `size` down to the
+  readable minimum (lint `min_font`); beyond that the table is scaled and a warning suggests
+  splitting it. 9:16 rows get 1.4x vertical padding. Targets `title`, `header`, `row<N>`,
+  `row:<first cell>`, `col<N>`, `col:<header>`, `cell<R>.<C>`, `caption`, with outlines spanning
+  the full row / column / cell so `box` and `fill` highlights frame them edge to edge.
+- **Framework**: target names may be dotted (`col2.item3`, `cell2.4`; `actions.TARGET_NAME`).
+  New `highlight` style **`fill`**: a translucent (0.22) plate of the colour under the target
+  (above backdrops at `z_index` -1 such as stripes and cards), undone by `until`.
+- `examples/minimal`: `tradeoff` (comparison, vs badge, verdict, `highlight col1 box`) after
+  `feedback`, `formats` (table with a number column and `highlight row:Preview fill`) before
+  `trend`.
+
+Verification (sheets opened with Read)
+- Scratch project (2-column comparison with heading/verdict/vs/icons, 3-column `reveal: rows`
+  with a `fill` on a point, a 4x4 table with row fill / column box / cell colour, a 6x4 table with
+  wrapping notes, per-column formats and `reveal: all` with dim + highlight): storyboards in 16:9
+  (also `--per-beat 3`), vertical and `light_academic`. Fixed along the way: points of
+  different columns at different heights in `rows` mode (shared baselines), uneven point gaps
+  in `columns` mode (row sharing only for `rows`), a bottom rule under an empty table (now drawn
+  with the last row), 9:16 tables scaled below the readable size although a wrapped layout
+  fit (proper water-filling, header words of number columns wrap, the readable size itself
+  tried), "1920 x / 1080" wrapping (short cells stay whole). Lint of the scratch project: only
+  the deliberate 6x4 stress table (max_words; in 9:16 also min_font, with the split warning).
+- `examples/minimal`: `vidgen lint` 0 findings in all 8 variants (default, vertical, light,
+  contrast, editorial, neutral, pastel, neon); `tradeoff`/`formats` sheets checked in 16:9,
+  vertical and contrast (large scale).
+
+Files
+- New: `src/vidgen/scenes/comparison.py`, `src/vidgen/scenes/table.py`,
+  `tests/test_comparison_table.py` (49 tests, 22 tiny renders at 160x90 / 90x160).
+- Changed: `src/vidgen/actions.py` (`TARGET_NAME`), `src/vidgen/scene.py` (message),
+  `src/vidgen/scenes/actions.py` (`fill` style, `Highlight._plate`), `src/vidgen/scenes/__init__.py`;
+  `examples/minimal/video.yaml`; tests `test_builtin_scenes.py` (BUILTINS/SAMPLES),
+  `test_actions_coverage.py` (SAMPLES, target names, early reveal), `test_extensions.py` (type
+  list); docs/CONFIG.md (`comparison`, `table` sections, targets table, `fill`, Icons intro),
+  docs/EXTENDING.md (dotted names, backdrops and `fill`), README, DESIGN.md (new §29), tasklist.md.
+
+Public interfaces added/changed
+- Built-in scene types `comparison` and `table` (params in docs/CONFIG.md). Highlight option
+  `style` accepts `fill`. Target names may contain dotted parts. No `vidgen.api` change.
+- Module helpers (internal): `vidgen.scenes.table.is_number`, `Table.Params.texts()`,
+  `column_count()`, `numeric()`, `alignment()`; `Comparison.tone_color()`;
+  `Highlight.fill_opacity`.
+
+Decisions / deviations
+- Highlights on table rows/columns/cells: `color` recolours the cell text only (stripes and
+  cards are not part of a target, otherwise they would be painted solid); `fill` is the
+  "band" look. The plate's draw position is found from the target's parts (before them if they
+  were added on their own, else over their group as a faint overlay), so it also works in
+  other scenes (e.g. a bullets item).
+- `table` uses `per_beat | all` like `bullets` (not `rows`); the header, title and caption come
+  with row 1. `title` (not `heading`) as in the charts and `code`.
+- Comparison headings use the tone colour for positive/negative columns (colour-coded A vs B),
+  `heading_color` for neutral ones.
+- The "too big" check happens at render time (a log warning plus lint `min_font`), not in
+  `vidgen validate`: whether a table fits depends on the variant's frame and type scale.
+
+Known gaps / TODOs
+- A 9:16 frame holds about 3–4 columns: wider tables reach the readable minimum quickly (the
+  warning says to split). No automatic split into several tables or transposition.
+- Table rows with very different heights (one long wrapped cell) look uneven; no per-column
+  `width` param yet. Numbers use proportional digits (Inter via `Text` has no tabular figures),
+  so right-aligned decimals line up by their right edge only.
+- `comparison` cards are as tall as the tallest column (by design); with very different
+  column lengths a short column shows empty card space. The `vs` badge has no target.
+- `reveal` of a whole column whose point was revealed early is a no-op (it is "shown"); the
+  column's own step still brings the rest.
+- Found (framework, Step 23, not changed here): an action due in a beat that holds *several*
+  reveal steps (more steps than beats) runs in the wait after the first step for its full
+  `run_time`, and the following step then pushes the beat past `d + pad` (e.g. 2 comparison
+  columns + verdict in 2 beats with a `reveal` in beat 1: 0.4 s over). `ActionRunner` should
+  reserve the remaining steps' time; one step per beat (the common case) is unaffected.
+  **Fixed after Step 26** (follow-up commit): `play_steps` sets `ActionRunner.held` to the run
+  time of the beat's later steps, and actions are shortened to leave it; test
+  `test_actions_leave_time_for_the_beats_remaining_steps`.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (993 passed, 1 skipped). Step only: `pytest
+tests/test_comparison_table.py`. Manual: `vidgen storyboard examples/minimal --scene tradeoff
+--scene formats --per-beat 3 [--variant vertical|light]`, `vidgen lint examples/minimal
+[--variant ...]`, `vidgen list-scenes`, `vidgen schema --scene table`.
+
+## Step 27 — Scene: `timeline`
+What was built
+- **`timeline`** (`src/vidgen/scenes/timeline.py`): 2–10 events `{date, title, text?, icon?,
+  at?}` along an axis — horizontal in 16:9/square, vertical in 9:16 (`orientation: auto |
+  horizontal | vertical`). Each event is a marker on the axis (a disc with its icon when the
+  timeline has icons, else a dot), a short stem and a "card" (date in `date_color`, title in the
+  heading font role, optional dim detail text). Cards alternate sides of the axis or stand in one
+  column (`sides: auto | alternate | one`; `auto` plans both and keeps the one with the larger
+  text, then fewer wrapped lines: alternating in 16:9, one column right of the axis in 9:16 for
+  up to ~6 events). `spacing: even | proportional` (dates that are numbers, years, `YYYY-MM`,
+  `YYYY-MM-DD` — unquoted YAML dates work — or each event's `at`; too-close neighbours are pulled
+  apart). A progress line grows to each event as it is revealed (one segment per event).
+  `highlight` (last step: others dim, marker and title in `highlight_color`), `now` (a "Now"
+  tag + ring on that event, later events hollow with a dashed progress line; `now_label`),
+  optional `heading`, `reveal: per_beat | all`. Event refs (`highlight`, `now`): 0-based index,
+  date as shown, or title.
+- **Fitting**: one text size for all events, up to 1.2x the requested sizes when that adds no
+  wrapped lines, reduced together down to the readable minimum; wrapped lines are evened out.
+  Too many/long events → scaled down + warning "split it into two timelines (or shorten titles
+  and texts)" (and lint `min_font`).
+- **Targets**: `heading`, `axis`, `event<N>`, `event:<date>` (marker + stem + text); an early
+  `reveal` grows the progress line through skipped events without showing them. Row in the
+  CONFIG.md targets table.
+- **`vidgen.api` additions**: `measure_text(text, max_width, *, size, weight, ..., balance,
+  role) -> TextMeasure(lines, width, height, fits)` (how `fit_text` would wrap, without building
+  the text) and `fit_text(..., balance=False)` (even line lengths). Needed for speed: the
+  timeline's size search took 90 s for 10 long events when it built every candidate, 5 s now.
+- `examples/minimal`: new `schedule` scene (4 days with icons, `now: "Day 3"`, a `box`
+  highlight on `event:Day 4`), before `part2`.
+
+Verification (sheets opened with Read)
+- Scratch project (space race with icons + highlight; proportional `YYYY-MM` dates + `now`; 10
+  events in one beat; 2 events silent) storyboarded in 16:9 (also `--per-beat 3`), vertical and
+  `light_academic`. Fixed along the way: a lone last word ("Manual reports every / week") →
+  balanced wrapping; growth that made texts wrap more → growth only without extra lines, and
+  growth never chooses the layout (a one-sided 16:9 layout had won by growing); the now tag
+  went below `min_font` with the `compact` scale → floored at the readable size; a false "word
+  too wide" detection on blocks a hair too wide → measured with `measure_text` instead.
+  Lint of the scratch project: only the deliberate 10-events-in-one-beat stress case
+  (`rushed_animation`, `max_words`).
+- `examples/minimal`: `vidgen lint` 0 findings in all 8 variants (default, vertical, light,
+  contrast, editorial, neutral, pastel, neon); `examples/custom_scene` 0 (16:9 and vertical).
+  `schedule` sheets checked in 16:9, vertical, light and contrast.
+
+Files
+- New: `src/vidgen/scenes/timeline.py`, `tests/test_timeline.py` (46 tests, 17 tiny renders).
+- Changed: `src/vidgen/layout.py` (`measure_text`, `TextMeasure`, `balance`,
+  `_Metrics.width/balanced`), `src/vidgen/api.py`, `src/vidgen/scenes/__init__.py`;
+  `examples/minimal/video.yaml`; tests `test_layout.py` (balance, measure), `test_builtin_scenes.py`
+  (BUILTINS/SAMPLES), `test_actions_coverage.py` (SAMPLES, names, early reveal),
+  `test_extensions.py`, `test_registry.py` (type lists); docs/CONFIG.md (`timeline` section,
+  targets table, Icons intro), docs/EXTENDING.md (`measure_text`, `balance`), README, DESIGN.md
+  (§5 layout list, new §30), tasklist.md.
+
+Public interfaces added/changed
+- Built-in scene type `timeline` (params in docs/CONFIG.md).
+- `vidgen.api`: `measure_text` (new), `fit_text(..., balance=False)` (additive keyword; also
+  `layout.fit_text_sized`). `vidgen.layout.TextMeasure` (returned, not exported by name).
+- Module helpers (internal): `vidgen.scenes.timeline.date_position`, `TimelineEvent.shown()`,
+  `.position()`, `Timeline.Params.event_index()`, `.positions()`.
+
+Decisions / deviations
+- The target for an event by label is `event:<date>` (the date as shown): the date is the
+  event's label on the axis; titles are longer and change more. `highlight`/`now` accept the
+  title too.
+- `now` marks an event (not an arbitrary point between events): a free-floating "today" marker
+  collided with cards and stems in tests of alternating layouts; marking the present event
+  and drawing later ones as planned says the same without collisions.
+- The "too many events" check is a render-time warning (as `table`): whether it fits depends on
+  the variant's frame and type scale; `vidgen validate` caps the list at 10.
+- `stem`, radii and gaps are fixed Manim units; text sizes come from theme tokens and font
+  roles only; colours are theme tokens.
+
+Known gaps / TODOs
+- Proportional spacing is linear (no axis breaks, no tick marks/years along the axis); a
+  `ticks:` option could label the axis itself (Step 30 chart helpers could share code).
+- In 9:16 with one column the axis sits left of the text block, which is centred as a whole;
+  short texts leave the right part of the frame empty (by design, like `bullets`).
+- The vertical layout aligns a card's date with its marker only when there is room; tightly
+  packed events (10 in 9:16) shift cards up/down within their stretch.
+- `measure_text` is an estimate (a few percent short of Pango's layout); scenes using it should
+  check the built text, as `timeline` does.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1048 passed, 1 skipped, ~9 min). Step only: `pytest
+tests/test_timeline.py`. Manual: `vidgen storyboard examples/minimal --scene schedule --per-beat 2
+[--variant vertical|light]`, `vidgen lint examples/minimal [--variant ...]`, `vidgen list-scenes`,
+`vidgen schema --scene timeline`.
+
+## Step 28 — Graph layout + `diagram`/`flowchart`
+What was built
+- **`vidgen.graph`** (new, pure Python, no new dependency; exported by `vidgen.api`):
+  `layered_layout(nodes, edges, *, direction="LR"|"TB", layer_gap, node_gap, routing=
+  "straight"|"orthogonal", port_spacing, port_spread, label_margin, sweeps) -> GraphLayout`
+  with `GraphNode(id, width, height, shape)`, `GraphEdge(source, target, label=(w, h))`,
+  `NodePlace`, `EdgeRoute(source, target, points, reversed, label_at)`. Sugiyama phases: DFS
+  back edges reversed (routes reversed again), longest-path layers with sources pulled
+  forward, dummy nodes on long edges, barycenter sweeps + transposition from two starts (best
+  kept), coordinates by weighted isotonic fits towards neighbours (parents end centred over
+  children; long edges straight), ports spread along the facing side and clipped to the shape
+  (box/ellipse/diamond/stadium), straight or orthogonal routes (a lane per run), room and an
+  anchor for edge labels. Deterministic; topology phases cached per graph.
+- **`diagram` scene** (`src/vidgen/scenes/diagram.py`), also registered as **`flowchart`**
+  (same class). Nodes `{id, label, shape: box|round|pill|circle|diamond|cylinder, icon,
+  color}` or a plain id; edges `{from, to, label, style: solid|dashed, color}` or the shorthand
+  `"a -> b"`, `"a -> b: label"`, `"a --> b"` (dashed), chains `"a -> b -> c"`. `direction`
+  auto (LR in 16:9/square, TB in 9:16; the other only if it keeps text ≥ 1.1x larger) | LR |
+  TB; `routing` curved (S-curves, default) | straight | orthogonal. Reveal: `nodes` (one node
+  per step in layout order, the edges into it growing from their source first), `layers`,
+  `all`, or explicit `steps` (node ids / `a->b` per step; unnamed edges come with their ends,
+  unnamed nodes in one more step). `highlight` (a path of node ids + edges) adds a last step:
+  outline/tint/icon/line in `highlight_color`, the rest dims to 0.55. Sizing: label size from
+  1.3x down to the readable floor (x1.05) per direction and wrap width, the largest that fits
+  the body wins, then gaps widen to use spare room; nothing fits → scaled + warning "split it
+  into smaller diagrams (or shorten labels)". Heading in the `header` region (1.3x in 9:16).
+- **Targets**: `heading`, `node<N>`, `node:<id>` (outline = shape), `edge:<from>-><to>` (line,
+  arrowhead, label; its entrance brings hidden ends); row in the CONFIG.md targets table.
+- **Validation**: duplicate node ids, bad ids, unknown nodes in edges with suggestions
+  (`edges[2] (start -> shp): unknown node 'shp'; did you mean 'ship'? (nodes: ...)`), self-loops,
+  duplicate edges, chains with a label, unknown/repeated refs in `steps`, unknown refs in
+  `highlight`.
+- `describe` shows a field's alias (`from`) in `list-scenes` and its JSON.
+- `examples/minimal`: new `loop` scene (the editing loop: pill / box / diamond / pill with
+  icons, a dashed back edge "no", a `flash` on it, the happy path as `highlight`), after
+  `feedback`.
+
+Verification (sheets opened with Read)
+- Scratch project (pipeline with labels, icons, cylinder and dashed edge + a highlight action;
+  decision loop with diamond/circle and highlight path; an org tree with `orthogonal` and
+  `reveal: layers`; a 10-node web architecture with explicit `steps`, `highlight edge:lb->*`,
+  `zoom node:db`, box + dim) storyboarded in 16:9 (also `--per-beat 2`/`4`), vertical and
+  `light_academic`. Fixed along the way: cylinder arcs stretched about their own centre (body
+  misdrawn), a node appearing before the edges leading to it when several edges entered a step
+  (waves), unnamed edges deferred to the last explicit step, lint `min_font` on short lowercase
+  edge labels at exactly the readable size (floor x1.05), a highlighted label at 4.43:1 on
+  `light_academic` (tint 0.14 → 0.1), a dimmed `dim` edge label at 1.96:1 (dim 0.45 → 0.55),
+  narrow LR layouts (icons now above labels in LR; wrap width 1.7 tried), diagrams huddled in
+  the middle (gap spreading). Lint of the scratch project: only the deliberate 10-node
+  architecture in 16:9 (warning + `min_font`).
+- `examples/minimal`: `vidgen lint` 0 findings in all 8 variants (default, vertical, light,
+  contrast, editorial, neutral, pastel, neon); `loop` sheets checked in 16:9 (`--per-beat 2`),
+  vertical and light.
+
+Files
+- New: `src/vidgen/graph.py`, `src/vidgen/scenes/diagram.py`, `tests/test_graph.py` (25
+  tests), `tests/test_diagram.py` (45 tests, 21 tiny renders).
+- Changed: `src/vidgen/api.py`, `src/vidgen/describe.py`, `src/vidgen/scenes/__init__.py`;
+  `examples/minimal/video.yaml`; tests `test_builtin_scenes.py` (BUILTINS/SAMPLES, example uses
+  every type but the alias), `test_actions_coverage.py` (SAMPLES, `ALIASES`, names, early
+  reveal), `test_docs.py` (a second name's section points to the first); docs/CONFIG.md
+  (`diagram`, `flowchart` sections, targets table, Icons intro, list-scenes JSON `name`),
+  docs/EXTENDING.md ("Graphs"), README, DESIGN.md (§2, §6.4, new §31), tasklist.md.
+
+Public interfaces added/changed
+- Built-in scene types `diagram` and `flowchart` (params in docs/CONFIG.md).
+- `vidgen.api`: `layered_layout`, `GraphLayout`, `GraphNode`, `GraphEdge`, `EdgeRoute`,
+  `NodePlace` (new).
+- `vidgen list-scenes` (and `--json` field `name`) shows a params field by its alias when it has
+  one (only `DiagramEdge.from`).
+- Module helpers (internal): `vidgen.scenes.diagram.parse_edges`, `edge_ref`,
+  `Diagram.Params.resolve()`, `.step_refs()`, `Diagram.graph_layout` (after construct).
+
+Decisions / deviations
+- **Alias = the same class registered twice** (`scene("flowchart")(Diagram)`), not a registry
+  alias feature: every tool already handles it as a type; tests treat `flowchart` as an alias
+  (targets table, example coverage, docs section pointing to `diagram`).
+- Node fill is a translucent tint of the node colour (0.1), not `surface`, so the `highlight`
+  action's `color` style (which recolours every member) still leaves the label readable; edge
+  label backdrops (background-colour pills) are outside the edge target for the same reason.
+- The scene's own `highlight` step keeps labels in their colour (outline, tint, icon and
+  lines change); the `highlight` action recolours labels too, as everywhere else.
+- `steps` refs are node ids and `a->b` (not target names): they are the ids written in
+  `nodes`/`edges`. Node ids may contain spaces (a plain string node is its own label).
+- The "too dense" check is a render-time warning (as `table`/`timeline`): it depends on the
+  variant's frame and type scale.
+
+Known gaps / TODOs
+- **Groups / clusters** (boxes around sets of nodes) are not implemented: they need layer
+  ordering that keeps a cluster contiguous; a later step could add `groups: [{label, nodes}]`.
+- Edge labels sit in the gap next to the source, centred on the route; with several labelled
+  edges leaving one node towards close targets they can touch, and lines of other edges may
+  pass under a label's pill. Long edges through many layers in 16:9 make wide layouts (the
+  10-node architecture example needed the warning); there is no edge bundling or
+  node-size-aware dummy compaction (Brandes–Köpf).
+- Self-loops are rejected; 2-cycles (`a -> b`, `b -> a`) are drawn as two parallel curves.
+- Orthogonal routes have sharp corners and their label anchor is the nearest point of the
+  route to the straight anchor.
+- `auto` direction prefers the frame's orientation unless the other is 1.1x better; a tree
+  with many leaves in 16:9 stays LR (set `direction: TB` for an org chart).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1128 passed, 1 skipped, ~10 min). Step
+only: `pytest tests/test_graph.py tests/test_diagram.py`. Manual: `vidgen storyboard
+examples/minimal --scene loop --per-beat 2 [--variant vertical|light]`, `vidgen lint
+examples/minimal [--variant ...]`, `vidgen list-scenes`, `vidgen schema --scene diagram`.
+
+## Step 29 — Scenes: `process` and `network`
+What was built
+- **`process`** (`src/vidgen/scenes/process.py`): a pipeline of 2–8 stages `{label, icon?, text?}`
+  (a string is a label; labels unique) with a **token** that travels from stage to stage. Layout
+  `auto`: a row in 16:9/square, two snaking rows (second row right to left, a turn on the right)
+  when that keeps the text ≥ 1.1x larger (≥ 4 stages; in practice 6–8 with details), a column in
+  9:16; `layout: row | snake | column` overrides. Cards on `surface`, icon above the text (row)
+  or left of it (column). Each step: the previous stage returns to `stage_color`, the token
+  leaves (passing *behind* that card) along the connector, which grows under it if not shown,
+  and the new stage appears already **active** (outline `active_color` at 2x width, icon too).
+  The token waits in front of the stage, on the incoming arrowhead. `token_icon` draws an icon
+  in a disc instead of the dot; `token_label` adds a tag that travels with it (above rows, in a
+  lane left of a column). `input`/`output` labels stand above their arrows (above/below a
+  column); the input comes with step 1 (the token starts at its arrow), the output after the
+  last stage. `loop: true` (+ `loop_label`) draws an arrow from the last stage back to the first
+  (below a row, right of a column, below and round the left of a snake) and adds a last step
+  in which the token follows it. `reveal: all` shows everything in step 1, then only the token
+  moves. Fitting like `timeline`/`diagram` (one factor, up to 1.2x, down to the readable size);
+  not fitting → warning + the drawing and the token's paths are scaled into the body.
+  Targets `heading`, `input`, `stage<N>`, `stage:<label>`, `connector<N>`, `loop`, `output`,
+  `token`.
+- **`network`** (`src/vidgen/scenes/network.py`): layers (an int or `{size, label, show,
+  connect, color}`, 2–8), LR in 16:9, TB in 9:16 (`direction`). Layers larger than `max_neurons`
+  (8) are drawn as `show` (6) units with a three-dot ellipsis in the middle slot and their count
+  under the label (`counts`, `count_format` `{n:,}`). Connections per layer (scene default
+  `connect`): `dense`, `sparse` (`"sparse:0.3"`), `grouped` (`"grouped:3"`, edges in palette
+  colours per block, as kphi3's figures), `one_to_one`, `none`, or `{type, ratio, groups}`.
+  Edges only between drawn units, capped at `max_edges` (64) per pair (thinned reproducibly,
+  every unit kept connected), opacity `clip(2.4/sqrt(count), 0.2, 0.75)`. Steps: layer by layer
+  (incoming edges grow, then the units), then `passes` (default 1) forward passes — a pulse
+  (`ShowPassingFlash` in `pulse_color`) runs along each set of edges and each layer's units flash
+  — then `highlight` (`["1.2", "2.3", "3.1"]`, units as drawn): path units grow in
+  `highlight_color`, edges between consecutive ones recoloured (drawn if the connection lacks
+  them), the rest dims to 0.3. Targets `heading`, `layer<N>`, `layer:<label>`, `edges<N>`,
+  `neuron<L>.<i>`.
+- **Helpers** (`helpers.py`, exported by `vidgen.api`, all compatible — kphi3 renders unchanged,
+  its tests pass): `column(..., *, horizontal=False, skip=None)`, `edges(..., *, colors=None,
+  shorten=0.0)`, `grouped_pairs(n, groups, m=None)` (near-equal blocks, same pairs as before
+  when `groups` divides `n`), new `sparse_pairs(n, m, ratio, seed=0)` and `group_bounds(n,
+  groups)`. The `network` scene draws its layers with `column` and its edges with `edges`.
+- `examples/minimal`: `render` (process: video.yaml → Validate/Voice/Render/Join → MP4, tag
+  "scene", a `flash` on `token`) after `loop`, and `net` (network 4 → 256 → 3 with a highlight
+  path) after `math`; two storyboard usage lines.
+
+Verification (sheets opened with Read)
+- Scratch project (process with io + tag + icons + details; a 4-stage cycle with a loop label and
+  an icon token; 8 stages `reveal: all` + loop + input (snake in 16:9); network 4 → 512(show 4)
+  → sparse → 3 with a highlight path; a grouped / one-to-one 9-9-9 net with 2 passes; an
+  8-layer 784/128.../10 net; stress cases) storyboarded in 16:9 (also `--per-beat 3`: token
+  travel, connector growth, pulses), vertical and `light_academic`. Fixed along the way: labels
+  of inactive cards hidden by their own box (an animated submobject is re-added on top → box z 2,
+  content z 3), io labels beside the arrows ate the row's width (now above the arrows), cards
+  of short labels flat as strips (`card_aspect` 0.5), the shrink loop stopping when the caption
+  sizes hit the floor while the labels could still shrink, words squashed one per line in
+  over-full rows (cards never narrower than the longest word; the whole drawing scaled instead),
+  the output appearing before the token reached the last stage, column io labels wrapped at
+  the row width, dimmed ellipses missing in the highlight step, network centring in 9:16, the
+  token's halo and tag at the start sticking out of the left margin (the row was scaled to 0.98:
+  `min_font` warnings with `high_contrast` and `compact`).
+- Lint of the scratch project: 0 findings in 16:9, vertical, light, high_contrast (large scale),
+  brand_neutral + compact, and bold_neon vertical, apart from the deliberate stress cases (an
+  8-stage process with long details and io in a 16:9 row: warning + `min_font`; short beats:
+  `rushed_animation`).
+- `examples/minimal`: `vidgen lint` 0 findings in all 8 variants (default, vertical, light,
+  contrast, editorial, neutral, pastel, neon) for `render`/`net`, and the whole example in 16:9
+  and vertical; `render`/`net` sheets checked in 16:9 (`--per-beat 3`), vertical and light.
+
+Files
+- New: `src/vidgen/scenes/process.py`, `src/vidgen/scenes/network.py`,
+  `tests/test_process_network.py` (51 tests, 25 tiny renders).
+- Changed: `src/vidgen/helpers.py`, `src/vidgen/api.py`, `src/vidgen/scenes/__init__.py`;
+  `examples/minimal/video.yaml`; tests `test_api.py` (helper extensions),
+  `test_builtin_scenes.py` (BUILTINS/SAMPLES), `test_actions_coverage.py` (SAMPLES, names, early
+  reveal), `test_extensions.py` (type list); docs/CONFIG.md (`process`, `network` sections,
+  targets table, Icons intro), docs/EXTENDING.md (helper arguments), README, DESIGN.md (§6.4,
+  new §32), tasklist.md.
+
+Public interfaces added/changed
+- Built-in scene types `process` and `network` (params in docs/CONFIG.md).
+- `vidgen.api`: `sparse_pairs`, `group_bounds` (new); keyword-only additions `column(horizontal=,
+  skip=)`, `edges(colors=, shorten=)`, `grouped_pairs(..., m=None)`. `grouped_pairs` with a
+  `groups` that does not divide `n` now makes near-equal blocks instead of dropping the remainder.
+- Module helpers (internal): `vidgen.scenes.process.rounded_path`, `ProcessStage`,
+  `Process.plan` (after construct); `vidgen.scenes.network.Connection` (`.pairs()`),
+  `NetLayer`, `Network.Params.drawn()/truncated()/connection()/neuron()`.
+
+Decisions / deviations
+- **Token semantics**: the token waits in front of the active stage (on the arrowhead) and passes
+  behind the card it leaves (z order token < cards), which reads as "processed inside"; its tag
+  follows on the same path shifted by a fixed offset (no updaters, so waits stay frozen frames)
+  and fades during the loop step (it would otherwise cross the cards).
+- **Snake = two rows only**, used in landscape; 9:16 always uses a column (8 stages fit; a
+  2-column snake in a 6.8-unit-wide frame was too narrow to be useful). The task's "vertical or
+  snaking in 9:16" is met by the column.
+- The process `output` is not a token destination (it appears after the last stage): with
+  `loop` the token's last move is back to stage 1.
+- `stage:<label>` needs unique labels (validation error otherwise), like diagram ids.
+- Network units are filled dots (kphi3's `column` look); the pass uses `Indicate` (returns to
+  the look) and `ShowPassingFlash` copies, so a pass leaves no trace and can repeat.
+- `edges<N>` exists only for pairs with edges (`connect: none` has no target).
+- `test_early_reveal_is_not_repeated_by_the_scene` covers `network` with `[layer2, edges1]`;
+  `process` is covered by its own test (its step still moves the token, by design).
+
+Known gaps / TODOs
+- `process` has no per-stage highlight/branching (a pipeline is linear by definition; use
+  `diagram` for forks). The token's tag is hidden after a loop.
+- With few stages and no details the row leaves vertical space unused (cards are at most half as
+  tall as wide); a stage text size larger than `growth` 1.2 is not attempted.
+- `network` passes run inside a 1.8 s cap per step; a slow, beat-long pulse would need its own
+  timing. Units are not labelled individually (no `x1..xn` inputs), no bias units, no
+  per-edge weights/colours by value, no recurrent/skip connections (kphi3-style extras stay
+  project scenes, now easier with `column(skip=)`/`edges(colors=)`).
+- `play_steps` at very low fps rounds each of many steps in a short beat up to whole frames
+  (seen at 5 fps with 9 steps in a 1.75 s beat: 0.05 s over); not specific to these scenes.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1191 passed, 1 skipped, ~11 min). Step
+only: `pytest tests/test_process_network.py tests/test_api.py`. Manual: `vidgen storyboard
+examples/minimal --scene render --scene net --per-beat 3 [--variant vertical|light]`, `vidgen lint
+examples/minimal [--variant ...]`, `vidgen list-scenes`, `vidgen schema --scene network`.
+
+## Step 30 — Chart helpers + `scatter` and `histogram`
+What was built
+- **`vidgen.charts`** (new module, every name exported by `vidgen.api`): the parts the chart
+  scenes share, public so project charts look and scale the same.
+  - Numbers: `axis_ticks(lo, hi, max_ticks, log=)` (round linear ticks, or powers of ten; 1-2-5
+    within two decades), `short_number` (`1.5k`, `2M`), `tick_texts` (shared decimals, `20k`
+    from 10 000 on, or a format), `linear_fit` → `LinearFit(slope, intercept, r2)` with
+    `.equation()`.
+  - Axes: `ChartAxis` / `value_axis(values, lo, hi, max_ticks, log, fmt, unit, title,
+    include_zero)`, and `chart_axes(area, x, y, size, grid, lines, right, top)` → `ChartAxes`
+    (`plot` region, `point(x, y)`, `group` and its parts): tick labels at a theme size token
+    never below `readable_size()` (`chart_label_size`), axis titles, dashed gridlines, colliding
+    labels thinned to every k-th.
+  - Legend: `chart_legend` (line / box / marker swatches, wrapped or stacked), `auto_legend`
+    (a free corner of the plot on a faint framed panel, else above the plot), `legend_spot`,
+    `sample_path`; markers `chart_marker` (`CHART_MARKERS` circle, square, triangle, diamond).
+  - Frame: `chart_title` (bold, heading role, in the `header` band, 1.3x in portrait) and
+    `chart_caption`.
+- **`bar_chart` and `line_chart` on the helpers** (Step 22 findings fixed): titles in the header
+  band; tick / category / axis / end labels at `label_size` (`caption`, was `small` 20 pt,
+  below lint's floor) with the readable floor; new params `title_size`, `title_color`,
+  `label_size`, and `value_size` (bar). 9:16 bar value labels keep their size: 0.9x, then a word
+  unit (`" min"`) under the number, then smaller; when even the readable size does not fit a
+  vertical slot, portrait charts switch to horizontal bars. `line_chart` ticks show the decimals
+  they need, x labels thin by width, and the legend goes into a free plot corner (above the plot
+  only when every corner has a line). 16:9 sheets look the same (ticks 24 instead of 20 pt,
+  title a little lower); existing configs unchanged.
+- **`scatter`** (`src/vidgen/scenes/scatter.py`): series as `{name: [points]}` or `[{name,
+  points, color, marker}]`, a point `[x, y]`, `[x, y, label]` or `{x, y, label, group}`; markers
+  differ by shape per series; linear or log axes, bounds, formats, units; `reveal: series |
+  groups | all` (points pop in left to right); point labels placed beside their point clear of
+  other points, labels, the legend and trend lines (halo, drawn above lines); `trend: each |
+  all` least-squares lines (own step) with `trend_label: equation | r2 | both`; `highlight`
+  rings chosen points (`"ours@2"`, `"ours@small"`, `"small"`), dims the rest; `show_labels:
+  highlight` writes labels only for those. Targets `title`, `axes`, `legend`, `series<N>`,
+  `series:<name>`, `point:<series>@<N>`, `point:<series>@<label>`, `trend`, `trend:<series>`.
+- **`histogram`** (`src/vidgen/scenes/histogram.py`): `values` binned by `bins` (count, or a rule
+  `auto | sturges | sqrt | fd` whose width is rounded to 1/2/2.5/5 x 10^k with edges on its
+  multiples), `bin_width`, `bin_range`; or `counts` + `edges`. Bars grow left to right; then,
+  each its own step, `compare` (a second distribution as an outline on the same bins, with a
+  legend), `mean`, `median` (dashed line + value above the plot; exact from values, estimated
+  from counts), `highlight` bins. `percent` shows shares. Targets `title`, `axes`, `legend`,
+  `bin<N>`, `bin:<range>` (`bin:10-20`), `compare`, `mean`, `median`.
+- `examples/minimal`: `cost` (scatter: two series, trend with R², a highlighted point) and
+  `beats` (histogram with a median and a `box` highlight on `bin:4-5`) after `trend`; one
+  storyboard usage line.
+
+Verification (sheets opened with Read)
+- Scratch project (scatter with two series, labels, `trend: all` + both labels, highlight;
+  log-x scatter with `reveal: groups`; histogram with mean + median + highlight; counts/edges
+  histogram in percent with a compare overlay) in 16:9, vertical, light and vertical light.
+  Fixed along the way: legend swatches read as data points (now a framed panel), trend text
+  crossing its own line or a point label (placed after point labels, offset along the line's
+  normal), a point label crossed by the trend line (lint `covered_text`; labels now avoid lines
+  and sit above them with a background halo), the line chart legend under its gridlines in 9:16
+  (lint `covered_text`; legend `z_index` 1), histogram marker labels on the y axis title, a
+  late-binding closure that revealed a marker instead of the compare overlay.
+- `vidgen lint`: `examples/minimal` 0 findings in all 8 variants (default, vertical, light,
+  contrast, editorial, neutral, pastel, neon); `examples/custom_scene` 0 (16:9 and vertical); the
+  scratch project 0 in 16:9, vertical, light, vertical light. `sizes`, `trend`, `cost`, `beats`
+  sheets checked in 16:9 (`--per-beat 3`), vertical and light.
+
+Files
+- New: `src/vidgen/charts.py`, `src/vidgen/scenes/scatter.py`, `src/vidgen/scenes/histogram.py`,
+  `tests/test_charts.py`.
+- Changed: `src/vidgen/api.py`, `src/vidgen/scenes/__init__.py`, `scenes/bar_chart.py`,
+  `scenes/line_chart.py`; `examples/minimal/video.yaml`; tests `test_builtin_scenes.py`
+  (BUILTINS/SAMPLES), `test_actions_coverage.py` (SAMPLES, early reveal), `test_extensions.py`
+  (type list); docs/CONFIG.md ("Charts: common to all chart types", `scatter`, `histogram`,
+  bar/line params, targets table), docs/EXTENDING.md ("Charts", tested example), README,
+  DESIGN.md (§2, §6.4, new §33), tasklist.md.
+
+Public interfaces added/changed
+- `vidgen.api`: `ChartAxis`, `ChartAxes`, `LinearFit`, `CHART_MARKERS`, `axis_ticks`,
+  `short_number`, `tick_texts`, `value_axis`, `chart_axes`, `chart_label_size`, `chart_legend`,
+  `auto_legend`, `legend_spot`, `sample_path`, `chart_marker`, `linear_fit`, `chart_title`,
+  `chart_caption`.
+- Built-in scene types `scatter` and `histogram`. Params (additive): `bar_chart` / `line_chart`
+  `title_size`, `title_color`, `label_size`; `bar_chart` `value_size`.
+- Visible changes: chart titles in the header band (1.3x in 9:16); chart labels at `caption`
+  (were `small`); `line_chart` ticks with the decimals the ticks need (`2.4`, was `2.40`) and
+  x labels thinned by width (more labels where they fit); portrait bar charts may turn
+  horizontal when value labels would otherwise be tiny.
+
+Decisions / deviations
+- Charts get no shared base class: the helpers are functions, so a project scene picks what it
+  needs; `Params` were not given a common base (field order shows in `list-scenes`).
+- Scatter points outside explicit `x_min`/... are a validation error, not silently clipped.
+  Trend lines need linear axes (a log-axis "trend" would need a model choice: power or
+  exponential); they cover the fitted points' x range only.
+- Histogram rules round the bin width so edges are readable numbers (the bin count may differ
+  from numpy's by one or two); an int `bins` gives exactly that many equal bins (edges may be
+  unround, then the axis gets round ticks inside). `percent` normalises each distribution by
+  its own total. `bin:<range>` uses an ASCII hyphen (`bin:-10--5` for negatives).
+- Labels that are numbers equal to another point's index do not name a target (the index
+  wins); documented.
+- Legends inside the plot stand on a framed panel; above the plot (no free corner) unframed,
+  as before.
+
+Known gaps / TODOs
+- No per-point value labels on histogram bars; no overlapping-bars style for `compare` (outline
+  only); no density (`count / width`) scale; no box/violin plots.
+- Scatter has no error bars, bubble sizes or point colours by value; label placement is greedy
+  (8 positions) and can leave a label crossing a line when nothing better exists (it then sits
+  on top with a halo).
+- `line_chart` still has no log axis param (the helpers support it); `bar_chart` has no axis /
+  gridlines (values are written on the bars).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1279 passed, 1 skipped, ~13 min). Step only: `pytest
+tests/test_charts.py`. Manual: `vidgen storyboard examples/minimal --scene cost --scene beats
+--scene sizes --scene trend --per-beat 3 [--variant vertical|light]`, `vidgen lint
+examples/minimal [--variant ...]`, `vidgen list-scenes`, `vidgen schema --scene scatter`.
+
+## Step 31 — Scenes: `pie`/`donut` and `heatmap`
+What was built
+- **Colour helpers** (`vidgen/charts.py`, exported by `vidgen.api`): `color_scale(values, kind=
+  "sequential"|"diverging", color, low_color, high_color, center, lo, hi)` → `ColorScale`
+  (`scale(v)` → hex, `at(fraction)`, `fraction(v)`), interpolated in OKLab between theme
+  colours: sequential from a 14 % tint of `color` on the background to `color`; diverging
+  `low_color` → a near-background neutral at `center` → `high_color`, symmetric around
+  `center`. `color_bar(scale, length, vertical=True, title=...)` (gradient bar, round ticks,
+  readable labels), `text_color_on(fill)` (theme text or background, whichever reaches 4.5:1,
+  else white/black) and `mix_colors(a, b, t)` (what `a` at opacity `t` over `b` looks like).
+- **`pie`** (`src/vidgen/scenes/pie.py`): `labels` + `values` (shares computed), `donut` (`hole`,
+  `center` = the total by default, `center_label`), `show_values: percent | value | both | none`,
+  palette colours (lighter shades past the palette's length; the last slice never repeats the
+  first's colour), `sort`, `other_below` / `max_slices` → one `Other` slice (`other_color` dim),
+  `start_angle`, `clockwise`, `reveal: all | per_beat`, `highlight` (+ `explode`), `legend`
+  (auto: > 6 slices). **Labels**: inside a slice when the label box fits the annular sector
+  (text colour by `text_color_on`), else outside in a column per side with a leader line
+  (rim → radial elbow → label), stacked without overlaps (`_stack`); when side columns leave
+  the pie under 0.3 x the body's short side or cannot hold the labels (9:16), they go into a
+  swatch key below the pie (beside it in 16:9); with `legend` everything is in the key (then
+  the `legend` target). Sizes from `label_size` down to the readable floor x 1.05; what still
+  does not fit is dropped with a warning naming it. **Animation**: wedges sweep round
+  (`UpdateFromAlphaFunc` rebuilding the sector; one continuous sweep for `all`), labels and
+  leaders follow; the highlight step moves the slice out along its middle (its leader's first
+  corner follows), dims the others to 0.3 and recolours their inside labels for the dimmed
+  slice. Targets `title`, `slice<N>`, `slice:<label>`, `center`, `legend`.
+- **`heatmap`** (`src/vidgen/scenes/heatmap.py`): `values` (rows; `null` = empty `surface` cell;
+  ≤ 40 x 40), `rows` / `columns` labels, `scale: auto | sequential | diverging` (+ `color`,
+  `low_color`, `high_color`, `center`, `scale_min`, `scale_max`), `show_values` (auto: when
+  the values fit at a readable size), `value_format`, `unit`, `value_size`, `legend` +
+  `legend_label` (colour bar right of the grid in 16:9, below it in 9:16, as long as the grid),
+  `reveal: all` (diagonal wave) | `rows`, `highlight` (target-style refs `cell2.3`, `row:Tue`,
+  `col4`...; outlines in `highlight_color`, the rest dims with recoloured values). Cells at most
+  2.2 units, never taller than wide or wider than 2.5x their height; column labels wrap to the
+  cell width at one shared size; cells under 0.3 units → warning "split the matrix". Targets
+  `title`, `legend`, `row<N>`, `row:<label>`, `col<N>`, `col:<label>`, `cell<R>.<C>`.
+- `examples/minimal`: `share` (a donut: render time per scene, total "4.2 s per scene", two
+  small slices grouped by `other_below`, `highlight: Text layout`) and `busy` (a 5 x 5 heatmap
+  of renders per hour with a `box` highlight action on `col:17h`) after `beats`; a storyboard
+  usage line.
+
+Verification (sheets opened with Read)
+- Scratch project (pie with highlight; donut per_beat with grouping and a highlight; 12-slice
+  donut → legend; one big + five tiny slices → stacked side labels; sequential heatmap with a
+  column highlight; diverging correlation matrix with nulls, `reveal: rows` and cell + row
+  highlights; an 8 x 24 matrix; pie / heatmap with reveal, dim, zoom, box and fill actions)
+  storyboarded in 16:9 (also `--per-beat 3`), vertical, `light_academic` and vertical light.
+  Fixed along the way: a 9:16 pie shrunk to a third of the width by side labels (→ the swatch key
+  below the pie), big slices whose label did not fit at 0.62 r (→ several spots and wrap
+  widths), a 12-row legend scaled below `min_font` in 16:9 (→ wrapped rows), the pie off centre
+  with labels on one side only (room reserved per side), lowercase column labels at exactly the
+  floor (`min_font`, → floor x 1.05 as in `diagram`), a legend bar longer than a short grid.
+  Lint of the scratch project: 0 findings in all four looks except the deliberately short beat
+  (`rushed_animation`) and the action cases below.
+- `examples/minimal`: `vidgen lint --scene share --scene busy` 0 findings in all 8 variants
+  (default, vertical, light, contrast, editorial, neutral, pastel, neon); sheets checked in 16:9
+  (`--per-beat 3`), vertical, light and contrast.
+
+Files
+- New: `src/vidgen/scenes/pie.py`, `src/vidgen/scenes/heatmap.py`, `tests/test_pie_heatmap.py`
+  (49 tests, 16 tiny renders).
+- Changed: `src/vidgen/charts.py`, `src/vidgen/api.py`, `src/vidgen/scenes/__init__.py`;
+  `examples/minimal/video.yaml`; tests `test_builtin_scenes.py` (BUILTINS/SAMPLES),
+  `test_actions_coverage.py` (SAMPLES, target names, early reveal), `test_extensions.py` (type
+  list); docs/CONFIG.md (`pie`, `heatmap` sections, "Charts: common" colours, targets table),
+  docs/EXTENDING.md ("Charts": colour helpers), README, DESIGN.md (§2, §6.4, new §34),
+  tasklist.md.
+
+Public interfaces added/changed
+- `vidgen.api`: `ColorScale`, `color_scale`, `color_bar`, `mix_colors`, `text_color_on` (new).
+- Built-in scene types `pie` and `heatmap` (params in docs/CONFIG.md).
+- Module helpers (internal, built-in modules): `vidgen.scenes.pie.window` (a rate function
+  running between two fractions), `recolor` (recolour + fade a text part), `PieSlice`,
+  `Pie.Params.slices()/uses_legend()/highlight_index()/percents()/center_text()`;
+  `Heatmap.Params.shape()/known()/kind()/cells_of()`.
+
+Decisions / deviations
+- **One label place per slice**: inside, beside (leader) or in the key — decided by fitting, not
+  by a param (only `label_position: outside` forces leaders). The key in 9:16 is what keeps the
+  pie large in a narrow frame; it is part of the slices' targets, not a `legend` target (that
+  name must be known from params alone, so `legend` exists only with `legend: true` / > 6
+  slices).
+- "Percent computed, or given": shares are always value / total (values that are percentages
+  give the same numbers); `show_values: value | both` writes the values themselves.
+- Heatmap `highlight` refs use the target names (`row:Tue`, `cell2.3`), so one vocabulary for
+  params and actions. Highlights outline (a `box` look) rather than recolour, because colour is
+  the data.
+- Diverging scales are symmetric around `center` by default (equal distances look equally
+  strong); `scale_min`/`scale_max` override.
+- Text on fills is opaque and chosen per fill (`text_color_on`); faded states are recoloured for
+  the faded fill by the scenes' own highlight steps.
+
+Known gaps / TODOs
+- The generic `dim` action fades a slice / cell together with its text; dark text on a bright
+  fill then drops below lint's 2:1 for dimmed text (seen: 1.5–1.7:1), and a `fill` highlight
+  tints cells under light text (3.5:1). The scenes' own `highlight` params stay readable; the
+  docs point to `style: box`. A per-target "restyle on dim" hook in the action framework would
+  fix it generally.
+- Pie leaders can cross a neighbouring label when a side's stack is pushed far from the slices
+  (many small slices in a row); grouping (`other_below`) is the remedy. No rotated or curved
+  labels, no per-slice `explode` other than the highlight, no pie-to-bar transition.
+- Heatmap: no clustering / reordering, no row or column totals, no rotated column labels (long
+  ones wrap and shrink; a warning asks to shorten them); 9:16 wide matrices are not transposed
+  (warning). A highlight `box` action surrounds the band of cells and may touch the column label.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1340 passed, 1 skipped, ~13 min). Step only:
+`pytest tests/test_pie_heatmap.py`. Manual: `vidgen storyboard examples/minimal --scene share
+--scene busy --per-beat 3 [--variant vertical|light]`, `vidgen lint examples/minimal --scene
+share --scene busy [--variant ...]`, `vidgen list-scenes`, `vidgen schema --scene pie`.
+
+## Step 32 — Scene: `code_walkthrough`
+What was built
+- **`code_walkthrough`** (`src/vidgen/scenes/code_walkthrough.py`): a long listing (`code` or
+  `path`, `language`, optional `excerpt: "a-b"` keeping the file's numbers) in a window of fixed
+  height (`visible` rows, else as many as fit at `size`). **Per-beat data** is `steps` (aligned with
+  the beats like `code.highlight` / `diagram.steps`): `{lines, note, focus}` or a bare line spec.
+  Each step scrolls smoothly so its lines are in view (left alone when they already show with a
+  line of context, else centred; a range longer than the window shows its start), dims the other
+  lines, lays a band (with an edge bar) behind the selection and shows its note; a step without
+  `lines` keeps the view, `lines: all` clears the highlight. Lines: `12`, `"3-7"`, `"1, 5-6"`,
+  `[3, 4]`, `"/regex/"` (first match), `"/def f/-/return/"` (range by content), mixed
+  (`"40-/return/"`), checked by `vidgen validate`. Scroll indicator (track + thumb) when the code
+  is longer than the window; rows fade at the window's edges while scrolling.
+- **Notes**: `note_position: auto | side | bottom` — a callout beside the window level with the
+  lines, with a pointer (16:9 / square, `auto` when the code fits beside without wrapping), or a
+  bar below the window as tall as the tallest note (always in 9:16). **Focus**: `focus: true` (or
+  a magnification 1–4; `focus_scale` 2.0 caps `true`) moves the camera onto the selected code
+  (numbers excluded), fades the other rows out and shows the note as a card under the lines,
+  built at 1/magnification so it reads at its normal size; never stops halfway through the
+  title; the next step without focus moves the camera back.
+- **Targets**: `title`, `listing`, `line<N>`, `lines:<a-b>` (all ranges up to 40 lines, else the
+  ranges the steps select), `note<N>`. Revealing an out-of-view line scrolls to it; revealing a
+  note plays its step. Scene × targets row in CONFIG.md "Beat actions".
+- **Readability**: syntax colours below 4.6:1 on the window or the faintest band (a Pygments
+  style that does not suit the theme, e.g. `default` purple on `warm_editorial`) are mixed
+  towards the theme's `text`; the band's opacity drops from 0.12 to 0.07 while a colour would
+  fall below 4.5:1 on it. Code is read by lint as `code` (the `Code` mobject stays in the scene).
+- **`code` (Step 22 routed issue)**: wrapping now targets `max(readable, min(size, size that keeps
+  TARGET_COLUMNS = 32 columns))`, so a vertical listing at the `large` scale wraps at ~32 columns
+  instead of ~25 (font a little smaller, never below lint's minimum); 16:9 output unchanged.
+- **Manim text canvas fix** (`code.text_canvas`, used by both scenes): Manim renders `Text` on a
+  canvas of the output's pixel size and fails with "rendered fewer glyph(s) than its non-space
+  characters" when text runs off it — ~60 lines of 24 pt code at 854x480 preview, 9 at 160x90.
+  The canvas is enlarged while a listing is built. (This was also the "ligature" error seen with
+  long files in `code`.)
+- `examples/minimal`: `walkthrough` scene on `assets/train.py` (57 lines: number range, regex
+  range, a focus step with a note, a bare `/a/-/b/` step) + a storyboard usage line.
+
+Verification
+- Scratch project (60-line file with wrapped lines, a 9-line function, a short-lined file with
+  `visible: 8` and forced side notes; focus with and without notes; `lines: all`; silent) via
+  `vidgen storyboard` (also `--per-beat 2`) in 16:9, vertical, `light_academic` and vertical light;
+  sheets opened with Read. Fixed along the way: scroll thumb in the middle of the window, focus
+  with a note out of view or the title cut in half (→ note card under the enlarged lines, title
+  rule), focus too weak in 9:16 (→ frame the code ink, not the numbers), side notes squeezing the
+  code in 9:16 (→ always bottom), line numbers / code invisible to lint (rows were loose
+  VGroups → the `Code` stays in the scene and rows are taken out of its paragraphs), lint
+  sizing text by the whole file's characters (→ `lines_text.original_text` = shown rows), band
+  contrast on light / pastel presets (→ adaptive band, readable syntax colours), the Pango canvas
+  clipping above.
+- `vidgen lint examples/minimal --scene walkthrough --scene listing` in all 8 variants (default,
+  vertical, light, contrast, editorial, neutral, pastel, neon): 0 findings. Other scenes of the
+  example are untouched by this step.
+
+Files
+- New: `src/vidgen/scenes/code_walkthrough.py`, `tests/test_code_walkthrough.py` (44 tests, 8
+  tiny renders), `examples/minimal/assets/train.py`.
+- Changed: `src/vidgen/scenes/code.py` (module helpers `mono_metrics`, `size_for_columns`,
+  `text_canvas`, `renumber`, `line_centers`, `line_runs`, `style_names`; constants
+  `TARGET_COLUMNS`, `NUMBER_GAP`, `CODE_PADDING`; the column cap), `src/vidgen/scenes/__init__.py`;
+  `examples/minimal/video.yaml`; tests `test_builtin_scenes.py` (BUILTINS/SAMPLES),
+  `test_actions_coverage.py` (SAMPLES, early reveal of `note2`), `test_extensions.py` and
+  `test_custom_scene_example.py` (list-scenes column width), `test_regions.py` (code font size in 9:16 now below `caption`, above readable);
+  docs/CONFIG.md (`code_walkthrough` section, `code` column note, targets table), README,
+  DESIGN.md (§35), tasklist.md.
+
+Public interfaces added/changed
+- Built-in scene type `code_walkthrough` (params in docs/CONFIG.md). No change to `vidgen.api`.
+- Module helpers (internal, built-in modules): `vidgen.scenes.code_walkthrough.parse_lines`,
+  `resolve_lines`, `WalkStep`, `ALL_RANGES_UP_TO`; `vidgen.scenes.code` helpers above (the former
+  `CodeListing._renumber` / `_line_centers` methods and `_runs` / `_style_names` functions moved
+  or were renamed).
+- `code` output in 9:16 changes (smaller font, wider wrap); in 16:9 unchanged.
+
+Decisions / deviations
+- **Per-beat data as a params list** (`steps`), not beat-level fields: every built-in expresses
+  per-beat content in params aligned with beats (beats only carry narration and actions), it is
+  schema-describable per scene type, and `vidgen validate` can check lines without the beats.
+- **Focus = camera + spotlight**, not a bigger font: re-laying the listing at another size means
+  building it again (slow) and wide lines would overflow; a camera move keeps the layout. The
+  other rows fade out so the note card can sit under the lines without covering text (lint's
+  `covered_text`).
+- **Rows leave the `Code` paragraphs instead of the scene**: `Scene.remove` would split the
+  `Code` into loose parts (lint then no longer sees code, line numbers lose their contrast
+  exemption); a target's `is_shown` still follows what is drawn.
+- `lines:<a-b>` for long files only covers the steps' ranges: all pairs of a 300-line file
+  would be 45 000 targets.
+- The walkthrough's window is drawn by the scene (`Code`'s background is dropped) because its
+  height is the view's, not the listing's.
+
+Known gaps / TODOs
+- A `dim` / `highlight` action on lines lasts until the next step (steps set line opacities, as
+  in `code`); a highlight `box` does not follow a scroll. Side notes point at the rows of their
+  step's planned view; an action that scrolls elsewhere in that beat leaves the pointer behind.
+- Focus with a long selection or very wide lines enlarges little (warning when < 1.05x); in 16:9
+  with bottom notes the card is the only note shown during the focus.
+- Long files cost ~0.1 s per line to build (Manim glyphs); `excerpt` limits it. No horizontal
+  scrolling (long lines wrap). Syntax highlighting of a line wrapped inside a string literal may
+  be off (as in `code`).
+- The readable-colour adjustment is only in `code_walkthrough`; `code` listings with an
+  unsuitable Pygments style may still get a lint `contrast` warning.
+- A clipped text SVG cached by Manim before the canvas fix stays in `build/.../media/texts`
+  (the cache key ignores the canvas): delete `build/` if the glyph error persists.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (full suite); step only: `pytest
+tests/test_code_walkthrough.py`. Manual: `vidgen storyboard examples/minimal --scene walkthrough
+--per-beat 2 [--variant vertical|light]`, `vidgen lint examples/minimal --scene walkthrough
+--scene listing [--variant ...]`, `vidgen list-scenes`, `vidgen schema --scene code_walkthrough`.
+
+## Step 33 — Scene: `equation_derivation`
+What was built
+- **`equation_derivation`** (`src/vidgen/scenes/equation_derivation.py`): a sequence of equations.
+  **Per-beat data** is `steps` (aligned with the beats like `code_walkthrough.steps`): `{tex, note,
+  match, transition}` or the LaTeX string. Each step morphs out of the previous one: **marked
+  parts** with the same TeX move into each other, the remaining glyphs move when their shapes match
+  (`TransformMatchingShapes`) and fade otherwise. Parts are marked `{{ ... }}` (Manim's notation,
+  space or start before `{{`), with a step's `match: [...]` (isolated in it and the step before),
+  or by `terms` / `colors` keys (every step). `transition: shapes | fade` per step.
+- **History / replace**: `mode: history` (default) keeps earlier steps stacked above the current
+  one, dimmed (`dim_opacity`, raised to keep 2.3:1 contrast — light presets needed it for the `dim`
+  notes) and aligned at the first `align_at` (`=`); the block re-centres as it grows; when the steps
+  do not fit at a readable size the oldest scroll away (`keep` fixes the count). `mode: replace`
+  shows one step at a time (still aligned at `=`, so the sign stays put).
+- **Notes**: a column beside the equations, level with each step, with an accent bar (16:9; earlier
+  notes stay, dimmed); a band right under the block, one note at a time (9:16, or
+  `note_position: bottom`). A side note taller than its formula sets its row's height (no overlaps
+  with the `large` type scale).
+- **Colours** `colors: {x: accent}` in every step (and the dimmed history). **Result**: `box`
+  (default, drawn after the last morph), `highlight` (a band behind it) or `none`.
+- **Sizes**: one scale for all steps (`size` 80 at most, 1.25x in portrait), fitted to the width
+  and the stacked rows; a step that would fall below 1.5x the readable size is rebuilt with
+  breaks before its top-level relations (`a &= b \\ &= c`, then `a \\ &= b ...`) when that makes
+  it larger; still too small → a warning naming the remedy.
+- **Errors**: unbalanced braces, unclosed / empty `{{ }}`, `terms`/`colors` not in any step,
+  `match` not in both steps → params errors in `vidgen validate`; a LaTeX error → `VidgenError`
+  `scene 'd': step 2 does not compile: Undefined control sequence (at: \badcommand {2}); the
+  step is 'x = \badcommand{2}' ...` (message and context read from the TeX log, dvisvgm markers
+  removed).
+- **Targets**: `title`, `step<N>` (also its dimmed line), `note<N>` (revealing it plays the step),
+  `result` (last step + box), `term:<tex>` (parts from `terms`, `colors`, `match`, `{{ }}`) — the
+  **current** step's only. A `transform` jump to the last step still gets the box at its beat.
+- `examples/minimal`: `derive` scene (linear equation, five steps with notes, `x` coloured) + a
+  storyboard usage line.
+
+Verification
+- Scratch project (5-step solve with notes and colours, replace mode with `match`, a long variance
+  derivation, `keep: 2` with highlight/dim/zoom actions and `result: highlight`, a transform jump,
+  bad LaTeX) via `vidgen storyboard` (`--per-beat 3`) in 16:9, vertical and `light_academic`;
+  sheets opened with Read. Fixed along the way: block + notes centred together (notes were far from
+  short formulas), note band moved right under the block in 9:16, formulas too small (default 80
+  + portrait growth; break at relations below 1.5x readable, not just below readable), dimmed `dim`
+  notes at 1.96:1 on light presets, overlapping side notes with the `large` scale, TeX error
+  context full of `\special` markers.
+- `vidgen lint examples/minimal --scene derive` in all 8 variants (default, vertical, light,
+  contrast, editorial, neutral, pastel, neon): 0 findings. Other scenes untouched.
+
+Files
+- New: `src/vidgen/scenes/equation_derivation.py`, `tests/test_equation_derivation.py` (43 tests,
+  10 tiny renders).
+- Changed: `src/vidgen/scenes/__init__.py`; `examples/minimal/video.yaml`; tests
+  `test_builtin_scenes.py` (BUILTINS/SAMPLES, LaTeX skip), `test_actions_coverage.py` (SAMPLES,
+  target names, set comparison: a `term:` name is registered once per step that has the term,
+  early `note2` reveal), `test_extensions.py` and `test_custom_scene_example.py` (list-scenes
+  column now set by `equation_derivation`); docs/CONFIG.md (section, targets row, LaTeX note,
+  link from `equation`), README, DESIGN.md (§36), tasklist.md.
+
+Public interfaces added/changed
+- Built-in scene type `equation_derivation` (params in docs/CONFIG.md). No change to `vidgen.api`.
+- Module helpers (built-in module): `tokens`, `term_key`, `brace_problem`, `split_marked`,
+  `plain`, `marked_terms`, `contains`, `break_lines`, `isolated_source`, `tex_error_excerpt`,
+  `readable_opacity`, `morph`, `DerivationStep`.
+- `vidgen list-scenes` name column is two characters wider (longest built-in name).
+
+Decisions / deviations
+- **Own part isolation instead of `substrings_to_isolate` / `TransformMatchingTex`**: Manim
+  isolates raw substrings (`x` out of `\exp` breaks the TeX) and `TransformMatchingTex` matches
+  only top-level parts, fading everything else. Parts here are whole-token runs wrapped in their
+  own dvisvgm groups (braces added after `^`, `_`, one-argument commands; nothing wrapped right
+  after `\left`/`\big`…), and the morph pairs marked parts first, then hands the rest to
+  `TransformMatchingShapes` — so unmarked digits and signs still move.
+- **The live step hands over to a dimmed copy** in history mode (instead of dimming it in place)
+  so `term:` targets mean the current step, as the roadmap asked, while `step<N>` still finds the
+  line.
+- Notes default to `note_color: dim` with an `accent` bar: the formula is the hero.
+- Line breaking only at top-level relations (the roadmap's "at `=`"); a long right-hand side with
+  no relation to break before is scaled (warning) rather than broken at `+`.
+
+Known gaps / TODOs
+- A step with only one relation breaks as `lhs \\ &= rhs` (the left side right-aligned above);
+  breaking long sums at `+`/`-` is not done.
+- After a `transform` jump in history mode the earlier lines keep their rows (a gap may stay until
+  the next step re-centres the block).
+- A `highlight` colour action on a step is not carried into its dimmed copy (the copy keeps the
+  step's own colours).
+- Each step is one LaTeX compile (+ up to two for line breaks); cached by Manim across renders.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (full suite); step only: `pytest
+tests/test_equation_derivation.py`. Manual: `vidgen storyboard examples/minimal --scene derive
+--per-beat 3 [--variant vertical|light]`, `vidgen lint examples/minimal --scene derive
+[--variant ...]`, `vidgen list-scenes`, `vidgen schema --scene equation_derivation`.
+
+## Step 34 — Scene: `screenshot` with callouts
+What was built
+- **Callout helpers** (`src/vidgen/callouts.py`, public in `vidgen.api`, written for reuse by Step
+  41's callout overlay): `callout_box`, `callout_circle`, `callout_arrow` (straight or `curved`; the
+  label is placed away from the area, inside `bounds`, clear of `avoid`, preferably off
+  `prefer_off`), `callout_magnifier` (an inset cut from the image's own pixels with Pillow at the
+  output resolution, framed, joined to a frame around the area by two hull lines), `callout_spotlight`
+  (shade with a rounded hole), `callout_label` (bold text on a plate in the callout colour, text in
+  the theme colour that reaches 4.5:1, never below the readable size), `callout(kind, ...)`,
+  `callout_area` (an area as a mobject, a `Region`, or `[x, y]` / `[x, y, w, h]` fractions of
+  `within` or pixels of an image) and `label_spot` (the placement search). Each returns a
+  `Callout` (`Group`: `kind`, `area`, `mark`, `tag`, `extent()`, `draw(start)`); `scale` builds
+  one for a zoomed camera.
+- **`screenshot`** scene (`src/vidgen/scenes/screenshot.py`): an image fitted below an optional
+  title, optionally in a `browser` (dots + address field with `url`), `window` or `phone` frame
+  drawn in `surface` / `dim`; **per-beat `steps`** (one callout, a list, or `{callouts, focus,
+  previous}`; callouts `{KIND: area, label, color, side, curved, zoom}` or `{kind, area, ...}`);
+  `units: fraction | px`; earlier callouts `fade` / `dim` / `keep` (scene `previous`, per-step
+  override); `focus` moves the camera onto the step's areas and builds its callouts at
+  1/magnification so labels read normally; targets `title`, `image`, `callout<N>`,
+  `callout:<label>`, `step<N>`.
+- `examples/minimal`: `app` scene (browser frame; box, curved arrow + circle, magnifier, focus +
+  spotlight + arrow) on `assets/app.png` (18 KB, a made-up "Planner" dashboard drawn by the new
+  maintainer script `tools/make_screenshot.py` with the bundled Inter; reproducible byte for byte).
+
+Verification
+- Scratch project (browser / window / phone frames, all five kinds, `px` units, `previous` fade /
+  dim / keep, focus in and back, a silent scene without steps) via `vidgen storyboard` (`--per-beat
+  1` and `2`) in 16:9, vertical and `light_academic`, plus `high_contrast` (large type scale) for
+  the example; sheets read with Read. Fixed along the way: labels over the browser's address text
+  (title bar now in `avoid`; lint `covered_text` from the frame outline drawn over the URL → outline
+  drawn before the bar's parts), arrows with almost no length when the label was pushed back into
+  the frame (distance penalty), labels on the picture when free background was next to it
+  (`prefer_off`), a magnifier in 9:16 that barely enlarged (room measured above / below at full
+  width vs beside at full height), tiny focus-built labels kept after the camera left (callouts
+  built for another camera always leave), `background` is not a colour token (shade uses
+  `theme.background`).
+- `vidgen lint examples/minimal --scene app` in all 8 variants (default, vertical, light,
+  contrast, editorial, neutral, pastel, neon): 0 findings. Other scenes untouched.
+
+Files
+- New: `src/vidgen/callouts.py`, `src/vidgen/scenes/screenshot.py`, `tests/test_screenshot.py` (42
+  tests, 16 tiny renders), `tools/make_screenshot.py`, `examples/minimal/assets/app.png`.
+- Changed: `src/vidgen/api.py` (exports), `src/vidgen/scenes/__init__.py`;
+  `examples/minimal/video.yaml`; tests `test_builtin_scenes.py` (BUILTINS/SAMPLES),
+  `test_actions_coverage.py` (SAMPLES, target names, early `step2` reveal), `test_extensions.py`
+  (known types list); docs/CONFIG.md
+  (`screenshot` section, targets row), docs/EXTENDING.md ("Callouts" building block with an example
+  rendered by a test), README, DESIGN.md (§2, §6.4, new §37), tasklist.md.
+
+Public interfaces added/changed
+- `vidgen.api`: `Callout`, `CalloutArea`, `CALLOUT_KINDS`, `callout`, `callout_area`, `callout_box`,
+  `callout_circle`, `callout_arrow`, `callout_magnifier`, `callout_spotlight`, `callout_label`,
+  `label_spot` (DESIGN §37). Built-in scene type `screenshot`. Internal (module) helpers:
+  `vidgen.callouts.tag_spot`, `connector_lines`, `mobject_region`, `pixel_size`.
+
+Decisions / deviations
+- **Helper names carry a `callout_` prefix** (the roadmap said `arrow`, `box`, `circle`,
+  `magnifier`, `spotlight`): bare names would shadow common local names in `from vidgen.api import
+  *` code and read ambiguously next to Manim's `Arrow` / `Circle`; the prefix matches the Step 30
+  `chart_*` helpers. `callout(kind, ...)` gives the by-name form Step 41 will want.
+- **Areas from the top-left corner, y down** (`[x, y, w, h]`), like image editors and `ken_burns`
+  focus points, so coordinates can be read off a screenshot; `units: px` for pixel values.
+- **Animations without `AnimationGroup`**: `Callout.draw()` returns one animation per part with
+  windowed rate functions (an `AnimationGroup` leaves its own `Group` in `scene.mobjects`).
+- **Spotlight dims the picture only** (`cover` = the image), not the title or frame; it lies under
+  other callouts (z-index 1 vs 2).
+- **Focus = camera + callouts built for the zoom** (as `code_walkthrough`'s focus card), not a
+  bigger crop; callouts built for another view leave when the camera changes, even with `keep`.
+- `dim` keeps marks (box, circle, arrow, a magnifier's source frame) at 0.35 and fades labels,
+  insets and shades: dimmed labels on dimmed plates over a picture would fail lint's contrast.
+
+Known gaps / TODOs
+- Label placement is a scored search over fixed candidates, not a global layout: with many
+  labelled callouts in one step on a small picture, labels may sit over each other's arrows (they
+  avoid each other's labels and areas, not lines). One magnifier inset can cover other parts of
+  the picture when there is no free background (it avoids the step's areas).
+- No rounded corners on the image itself (the frame's corners are rounded; `ImageMobject` cannot
+  be clipped); a phone frame suits portrait screenshots.
+- A `highlight` colour action on a callout repaints its label text in the same colour as its plate
+  (unreadable); use `style: box` / `flash` or `dim` / `zoom` (CONFIG.md lists reveal, dim, zoom).
+- Ken Burns / pan on the screenshot itself is not offered (focus covers "zoom to the callout").
+- Step 41: place callouts by target name with `callout_*(target.mobject, ...)` or frame
+  fractions (`within=None`); for overlays that stay put while a scene's camera moves, build them
+  with `scale` and `bounds` from `camera.frame` (as `screenshot._bounds` does).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1487 passed, 1 skipped, ~14 min); step only:
+`pytest tests/test_screenshot.py`. Manual: `vidgen storyboard examples/minimal --scene app --per-beat 2
+[--variant vertical|light]`, `vidgen lint examples/minimal --scene app [--variant ...]`,
+`vidgen list-scenes`, `vidgen schema --scene screenshot`, `python tools/make_screenshot.py`.
+
+## Step 35 — Scene: `video_clip`
+What was built
+- **Clip helpers** (`src/vidgen/clips.py`, public in `vidgen.api`): `probe_clip(path) -> ClipInfo`
+  (width, height, fps, duration, audio; PyAV metadata), `ClipTiming(start, end, speed, loop)`
+  (`source_time(played)`, `span`, `length`), `fit_speed(span, window, low, high)`,
+  `ClipMobject(path, timing)` (an `ImageMobject` showing the frame at the scene's clock:
+  `fit_box(w, h, "contain"|"cover")`, `set_resolution(scale)`, `play(scene, at=None)`,
+  `playback_time()`, `crop`, `info`, `timing`, `close()`), `clip_audio(path, wav, timing, length,
+  volume, fade)` (the clip's sound as it plays, for `add_sound`), `CLIP_SUFFIXES`. Internal:
+  `ClipReader` (sequential PyAV decode, seek on loops / far jumps, one frame held), `atempo_chain`,
+  `END_GAP`.
+- **`video_clip`** scene (`src/vidgen/scenes/video_clip.py`, subclass of `screenshot`'s class):
+  `path`, `trim`, `speed`, `fit_duration` + `fit_range`, `loop` (else the last frame holds),
+  `fit: contain | cover`, `region` (body / full / hero / left / right / top / bottom / center, or
+  `bleed` = the whole frame), `title`, `caption` (+ size / colour; on `surface` plates over a bleed
+  clip), the Step 34 `frame` chrome (`browser` / `window` / `phone`, not with bleed), `volume`
+  (default 0.25 narrated, 1 silent) / `mute`, and `screenshot`'s `steps` of callouts (box, circle,
+  arrow, spotlight; `focus`, `previous`, `units`), areas on the clip's whole picture (moved into the
+  `cover` crop). Targets `title`, `clip`, `caption`, `callout<N>`, `callout:<label>`, `step<N>`.
+- `screenshot` refactored for the subclass (no behaviour change): `picture_name`, `_spec_area()`,
+  `_layout(body, fill=)`, `_picture_entrance()`, `Params.picture_word` (message wording).
+- `examples/minimal`: `clip` scene (window frame, caption, `loop`, two callout steps) on
+  `assets/clip.webm` (150 KB, ffmpeg's `testsrc2` + a quiet chord, VP9/Opus), made reproducibly
+  (byte-identical twice) by the new maintainer script `tools/make_clip.py`.
+
+Verification
+- Scratch project (framed window + title + caption + callouts; bleed cover + loop; trim +
+  `fit_duration` + focus/spotlight; `region: left` at speed 2 holding) via `vidgen storyboard
+  --per-beat 3` in 16:9 and `--variant vertical`, sheets read with Read; frames checked against the
+  clip's own frame counter (fade-in while playing, dimming via `set_opacity`, loop wrap). `vidgen
+  lint` reports `dead_air` only for the held clip (6.9 s still); clip motion counts as activity.
+- Fixed along the way: a loop showed the frame at the trim end for one frame (float sums of 1/fps
+  vs WebM's millisecond time stamps: played time rounded to µs, end clamped 5 ms early, reader
+  tolerance 2 ms); a hold re-seeked every frame; rendering was ~3x slower than needed (bicubic
+  perspective transform of every frame: now decoded at the on-screen size, so the camera uses
+  nearest-pixel copying — 17.3 s → 8.5 s for a 9 s bleed scene, incl. start-up); clip sound of a
+  held clip ended after one pass (now padded to the scene's length).
+- `vidgen lint examples/minimal --scene clip` in all 8 variants (default, vertical, light,
+  contrast, editorial, neutral, pastel, neon): 0 findings; `--scene app` (screenshot, refactored)
+  default and vertical: 0 findings.
+
+Files
+- New: `src/vidgen/clips.py`, `src/vidgen/scenes/video_clip.py`, `tests/test_video_clip.py` (53
+  tests, 16 render; one `slow` lint test), `tools/make_clip.py`, `examples/minimal/assets/clip.webm`.
+- Changed: `src/vidgen/api.py` (exports), `src/vidgen/scenes/__init__.py`,
+  `src/vidgen/scenes/screenshot.py` (hooks above); `examples/minimal/video.yaml`; tests
+  `conftest.py` (`write_clip`: a lossless grey-per-frame clip, `clip_frame_index`),
+  `test_builtin_scenes.py` (BUILTINS/SAMPLES, clip asset), `test_actions_coverage.py` (SAMPLES,
+  target names, early `step2` reveal, clip asset), `test_extensions.py`, `test_registry.py` (known types); docs/CONFIG.md
+  (`video_clip` section, targets row), docs/EXTENDING.md ("Video clips" building block with an
+  example rendered by a test), README, DESIGN.md (§2, §6.4, new §38), tasklist.md.
+
+Public interfaces added/changed
+- `vidgen.api`: `CLIP_SUFFIXES`, `ClipInfo`, `ClipMobject`, `ClipTiming`, `clip_audio`,
+  `fit_speed`, `probe_clip` (DESIGN §38). Built-in scene type `video_clip`. `vidgen.clips` is
+  otherwise internal.
+
+Decisions / deviations
+- **Frames decoded inside Manim (option a), not composited by ffmpeg afterwards (b)**: (b) would
+  hide the clip from stills, the layout dump, lint, callouts, camera moves and actions. Speed is
+  acceptable (~0.6 s per second of 854x480 preview for a full-bleed clip).
+- **Modulation pixels**: the `pixel_array` Manim/vidgen animate is a 1 x 2 black/white pair applied
+  affinely to each frame, so `FadeIn`, `dim`, `highlight` (tint), `set_opacity` act on the moving
+  picture without any special casing in the actions. Copies share the playback.
+- **The narration owns the length** (Step 14 contract unchanged): the clip starts at scene time 0
+  and never lengthens or shortens a scene; longer → cut by the fade-out, shorter → hold (warning >
+  2 s, lint `dead_air` > 6 s) unless `loop`; `fit_duration` stretches within `fit_range`.
+- **Clip sound** = one temporary WAV built by ffmpeg (trim, `atempo` chain keeping pitch, exact
+  one-pass length, `aloop`, pad, fade) mixed by Manim's `add_sound` at time 0 under the narration;
+  default volume 0.25 narrated (no ducking; Step 45), skipped by `--no-audio`.
+- Callout areas refer to the whole picture (also with `cover`), so they stay on the same content
+  whichever part shows; `magnifier` is rejected (its inset would be a still of a moving picture).
+- The example clip is WebM, not mp4: `*.mp4` is git-ignored as render output (CLAUDE.md), and
+  VP9/Opus keeps it small; the scene accepts mp4/mov/m4v/webm/mkv alike (tests use H.264 mp4).
+
+Known gaps / TODOs
+- Callouts are static over a moving picture (no tracking); point at things that stay put.
+- Rotation metadata (phone recordings) is not applied; variable frame rate is shown as stamped.
+- No ducking of the clip sound under speech, no fade-in of it (Step 45 music/ducking could reuse
+  `clip_audio`'s graph).
+- In 9:16 a 16:9 clip with `contain` leaves large empty bands (documented: use `bleed` + `cover`).
+- `render/ffmpeg.py` is not a render-fingerprint input, so a change there (clip sound) does not
+  mark storyboard stills stale (they have no sound anyway).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1546 passed, 1 skipped, ~14 min); step
+only: `pytest tests/test_video_clip.py`. Manual: `vidgen storyboard examples/minimal --scene clip --per-beat 2
+[--variant vertical|light]`, `vidgen lint examples/minimal --scene clip [--variant ...]`,
+`vidgen list-scenes`, `vidgen schema --scene video_clip`, `python tools/make_clip.py`.
+
+## Step 36 — Scene: `map`
+What was built
+- **Bundled world map** `src/vidgen/data/geo/world-110m.json` (132 KB, package data `data/geo/*`):
+  Natural Earth 1:110m admin-0 countries (public domain), 177 countries with ISO 3166-1 alpha-2 /
+  alpha-3 codes (Kosovo `XK`/`XKX`; N. Cyprus `CYN` and Somaliland `SOL` from Natural Earth's
+  ADM0_A3, no alpha-2), short English names, aliases, a label point and a "main" box per country,
+  and a `small` list of the 75 ISO countries too small for this scale. Built reproducibly
+  (byte-identical twice) by the maintainer script `tools/make_world_map.py` from npm `world-atlas`
+  2.0.2 (TopoJSON; its ids are ISO numeric codes) and `i18n-iso-countries` 7.14.0 (codes, English
+  names and aliases); details in DESIGN §39, licences in THIRD_PARTY_NOTICES.md.
+- **`vidgen.geo`** (no manim; public in `vidgen.api`): `find_country(name)` → `Country` (codes,
+  names, aliases such as `USA`, `UK`, `Holland`, `Ivory Coast`, `DRC`; accents / case /
+  punctuation ignored; did-you-mean; "too small for the 1:110m map, use a pin"),
+  `world_countries(antarctica=True)`, `equal_earth(lon, lat, lon0)`, `MAP_VIEWS` (world, europe,
+  africa, asia, middle_east, north_america, south_america, oceania), `view_box(view)` (boxes over
+  the date line), `fit_view(points)` (padded box, over the date line when narrower, world when
+  > 200°), `MapView(box, area)` (projected around the middle longitude, grown to the area's
+  aspect within the world, fitted; `region`, `point`, `contains`, `polygons` clipped to the view,
+  `box_region`, `cropped`). Projected polygons are cached per centre longitude: a world view
+  builds ~280 polygons in ~25 ms, again in ~6 ms.
+- **`map` scene** (`src/vidgen/scenes/world_map.py`): `view` (`auto` default: fits highlighted /
+  valued countries, pins and arcs), top-level `countries` / `pins` / `arcs` (shown with the map in
+  beat 1) and per-beat `steps` (`{countries, pins, arcs, focus}`, a list of countries or one
+  country; step *i* at beat *i*, as in `screenshot`). Highlights fill (`highlight_color`, own
+  `color`, or `palette`) with the country's name on it or beside it with a leader (`labels`,
+  per-country `label`); choropleth `values` with `heatmap`'s colour-scale params and a legend bar
+  under the map (highlights become outlines there; countries without a value are fainter);
+  pins `{lon, lat, label}` / `{country, label}`; arcs `{from, to, label}` / `"A -> B"` (ends: pin
+  label, country, `[lon, lat]`) bending upwards, trimmed at pins, growing to an arrowhead; labels on
+  background plates, placed clear of each other and of pins; `focus` moves the camera onto a step
+  (its labels built for the zoom; labels of other views fade). A regional view is a framed panel
+  with the sea in `surface`. The map sweeps in west to east. Targets `title`, `map`, `legend`,
+  `country:<code>` (alpha-3, alpha-2 or name; highlighted and valued countries), `pin<N>`,
+  `pin:<label>`, `arc<N>`, `step<N>`; row in the CONFIG.md targets table.
+- `examples/minimal`: `reach` scene (Europe; Portugal, Germany, Poland; then Lisbon and Warsaw pins
+  with an arc) after `busy`, plus a storyboard usage line.
+
+Verification
+- Scratch project (world view with steps, pins and a London → Tokyo arc; Europe choropleth with a
+  legend, an outline highlight and a focus step on Belgium + Netherlands; an `auto` view of
+  Iberia with pins and a labelled arc) storyboarded in 16:9, `--variant vertical` and
+  `light_academic`; sheets read with Read. Fixed along the way: a world view drawn as a panel
+  (sampled edges missed the equator: `cropped` with a 1 % tolerance), the hard clip edge of
+  regional views (→ framed panel with the sea), pin labels overlapping other labels (the pin's own
+  box was dropped together with labels touching it), a leader line drawn over another label
+  (lint `covered_text` in 9:16: leaders now under all plates), arcs ending under the pin dot
+  (trimmed), no-data land darker than low choropleth values on light presets (fainter mix),
+  merged blobs of neighbouring highlights (thicker borders on highlights).
+- `vidgen lint examples/minimal --scene reach` in all 8 variants (default, vertical, light,
+  contrast, editorial, neutral, pastel, neon): 0 findings; scratch project 0 findings in 16:9 and
+  light, the 9:16 leader finding fixed. Sheets of `reach` read in 16:9 (`--per-beat 3`), vertical,
+  light and contrast. A `slow` test lints a world + choropleth/focus project at 320x180 and 180x320.
+
+Files
+- New: `src/vidgen/geo.py`, `src/vidgen/data/geo/world-110m.json`, `src/vidgen/scenes/world_map.py`,
+  `tools/make_world_map.py`, `tests/test_world_map.py` (69 tests, 8 render incl. one `slow` lint).
+- Changed: `src/vidgen/api.py` (exports), `src/vidgen/scenes/__init__.py`, `pyproject.toml`
+  (package data); `examples/minimal/video.yaml`; tests `test_builtin_scenes.py` (BUILTINS /
+  SAMPLES), `test_actions_coverage.py` (SAMPLES, target names, early `step2` reveal),
+  `test_extensions.py` (known types); docs/CONFIG.md (`map` section, targets row),
+  docs/EXTENDING.md ("Maps" building block with an example rendered by a test), README,
+  THIRD_PARTY_NOTICES.md ("World map"), DESIGN.md (§2, §6.4, new §39), tasklist.md.
+
+Public interfaces added/changed
+- `vidgen.api`: `MAP_VIEWS`, `Country`, `MapView`, `equal_earth`, `find_country`, `fit_view`,
+  `view_box`, `world_countries` (DESIGN §39). Built-in scene type `map` (module `world_map`, not
+  `map`, to keep the builtin name unshadowed). No other change.
+
+Decisions / deviations
+- **Data source**: `world-atlas` lacks alpha codes, so its ISO numeric ids are mapped with
+  `i18n-iso-countries` (also the English aliases) — both on npm; GitHub / naturalearthdata.com were
+  not needed. Our own compact JSON instead of TopoJSON: no decoder at run time, and the antimeridian
+  cuts, orientation and label points are done once.
+- **Equal Earth**, re-centred per view (a Pacific view works); not Robinson (Equal Earth is
+  equal-area and has a closed form). The view grows to the frame's shape (more map, not empty bands);
+  in 9:16 a region therefore shows a lot more land north and south, and a `world` view is a strip.
+- **No city list**: pins take `{lon, lat}` or `{country}` (the roadmap made a city list optional).
+- **Arcs on the flat map**, not great circles: a great circle London → Tokyo leaves a world map at
+  the top and wraps; the flight-path look is the stylised curve.
+- **`country:` targets only for countries the params name** (highlighted or valued): 177 x 3 names
+  would drown the validation message's target list; `map` covers the rest (e.g. `dim: map`).
+- **Highlights are overlays** (copies over the base shape), so `reveal` / `dim` / `zoom` act on them
+  and the base map stays one target.
+- Per-beat data as `steps` aligned with beats (as Steps 32–35); the top-level `countries` / `pins` /
+  `arcs` are the static content of a one-beat map.
+
+Known gaps / TODOs
+- Microstates (Singapore, Malta, Bahrain...) are not in the 1:110m data (error suggests a pin); a
+  1:50m file would be ~750 KB.
+- No graticule, no ocean outline of the Equal Earth "sphere" in the world view, no inset maps
+  (Alaska / Hawaii), no curved country labels; label placement is greedy (label_spot candidates).
+- Arcs do not wrap round the date line (Los Angeles → Tokyo crosses the whole world map; use a
+  Pacific box view).
+- Strokes widen with a `focus` / `zoom` (Manim scales stroke widths with the camera); the focus
+  step's own strokes are built thinner, earlier ones are not.
+- Step 37 (Review 2): storyboard `map` in all presets (done here for the example scene) and decide
+  whether the 9:16 world view should crop the empty Pacific edges to grow.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1621 passed, 1 skipped, ~15 min); step
+only: `pytest tests/test_world_map.py`. Manual: `vidgen storyboard examples/minimal --scene reach --per-beat 3
+[--variant vertical|light]`, `vidgen lint examples/minimal --scene reach [--variant ...]`, `vidgen
+list-scenes`, `vidgen schema --scene map`, `python tools/make_world_map.py` (needs npm).
+
+## Step 37 — Review 2
+Independent review of Steps 23–36 (beat actions and the fifteen scene types added since): every
+scene of both examples storyboarded and linted in all 8 variants, sheets read one by one as a
+designer would (balance, use of the frame, hierarchy, consistency between types); consistency
+of params / targets / warnings across the new types; the action-framework gaps the step
+handoffs reported; the length of `examples/minimal`; render and test-suite performance; docs.
+
+Lint status (preview; `vidgen lint` + `vidgen storyboard`, sheets read with Read)
+| example / variant | findings |
+|---|---|
+| minimal: default, vertical, light, contrast, editorial, neutral, pastel, neon | 0 in each variant (was 0 before the split too) |
+| gallery (new): default, vertical, light, contrast, editorial, neutral, pastel, neon | 0 in each variant |
+| custom_scene, `vertical` | 0, 0 |
+| kphi3 | 0 (4 commented `lint_ignore`s, was 5: the rotated-label one is gone) |
+
+Findings and fixes
+1. **`examples/minimal` was 30 scenes / ~6 min** → split. `minimal` keeps the core built-ins
+   (title, bullets, icon_grid, bar/line charts, image, quote, equation, code, text_card,
+   end_card; 11 scenes, the beat-action examples `sizes` and `math`); new **`examples/gallery`**
+   uses every type of Steps 25–36 once (19 scenes, three numbered `chapter` dividers: ideas and
+   flows / charts and numbers / pictures, maths and code), same 8 variants. Assets moved with
+   their scenes (`app.png`, `clip.webm`, `train.py`; `tools/make_screenshot.py` and
+   `make_clip.py` write there). A test checks that the two together use every built-in type.
+2. **9:16 layouts that left the tall frame empty**: `comparison` (points, column headings and
+   verdict now 1.3x in portrait, as `bullets`), `icon_grid` labels (1.3x in portrait while they
+   fit), vertical `timeline` (growth up to 1.5x instead of 1.2x) and the `process` column (1.5x).
+   `bullets` checked: its list is centred in the body; the empty lower half of early beats is
+   the items still to come (by design). 9:16 **world map** (a thin strip with labels bigger than
+   the countries): a `world` / `auto`→world view in portrait keeps only its items' longitudes
+   (+12 %, ≥ 140°) — a regional panel 2–3x larger.
+3. **Header bands differed**: `table`, `code`, `code_walkthrough`, `equation_derivation`,
+   `screenshot`, `video_clip` titles were not grown in 9:16 (~1.3x smaller than the charts' and
+   the `heading` scenes'): all use `chart_title` now. A `table` caption stood at the frame's
+   bottom far below a short table: it now follows the table (both centred).
+4. **Action framework** (Steps 24–36 gaps):
+   - text on filled shapes: `dim` faded a pie label / heatmap value with its fill (lint
+     contrast 1.5–1.7:1), `highlight` `color` painted a callout's label the colour of its plate,
+     `fill` tinted cells under light text. New `Target.on_fill` (`(text, shape)` pairs,
+     `self.target(..., on_fill=)`): the text gets the colour that reads on the shape's new look
+     (`pie`, `heatmap`, `screenshot` / `video_clip` callouts register them). `screenshot` lists
+     `highlight` among its useful actions again.
+   - highlight boxes / underlines / fills stayed put when the scene moved the target (a
+     `code_walkthrough` scroll, a pie slice pulled out): they now follow it and fade while it is
+     off screen (non-time-based updater; waits stay frozen; guide outlines are followed, never
+     faded).
+   - `until` undoing a `dim` restored full opacity over a scene's own later dimming
+     (`dim_previous`): `Target.scene_dim` (recorded by `dim_to`) caps the restore.
+   - Left documented: `code`'s own highlight steps reset line opacities set by a `dim`; a colour
+     highlight on an `equation_derivation` step is not carried into its dimmed copy.
+5. **Consistency** (cheap, backward compatible): every scene with a header band accepts both
+   `heading` and `title` (and `_size` / `_color`; `AliasChoices` set by `SceneParams`; opt-out
+   for `title`, `chapter`, `end_card`), the target `title` selects a `heading` and the reverse;
+   `list-scenes` shows `(also: title)` (JSON `aliases`), the schema has both properties. List
+   `highlight` params (`diagram`, `heatmap`, `histogram`, `network`, `scatter`) take one item
+   too (`one_or_many`). Unknown keys everywhere get did-you-mean + the known names (params,
+   action options, the top level) instead of pydantic's "Extra inputs are not permitted". The
+   "too much content" warnings read alike (`heatmap`, `comparison` reworded). Checked, no
+   change: per-beat `steps` (step *i* at beat *i* in code_walkthrough, equation_derivation,
+   screenshot, video_clip, map; `diagram.steps` are reveal steps), `reveal` values,
+   `focus_scale`, `caption*` / `label_size` naming; all documented as conventions in CONFIG.md.
+6. **Performance** (preview, sequential, profiled): `code_walkthrough` 59 s for 15 s of video:
+   Manim's `FadeIn`/`FadeOut` and every `Animation.begin` deep-copy the mobject (33 s of copies
+   of the 57-line listing). New `Fade` / `fade_out` (colour arrays only) for the outro of every
+   scene and the walkthrough's listing, and `Repaint` without its starting copy → 27 s. `table`
+   built a `Text` per cell, size and wrap candidate (a 24-row table: 85 s) → widths measured once
+   and scaled (26 s). Other types render at 0.6–1.4x real time with `-j 2`; `image` Ken Burns
+   ~1.6x (Manim's per-frame image transform; left).
+7. **Lint text rotation** (Step 22): the layout dump has `rotation` and measures a rotated line's
+   glyphs across it; kphi3's `lint_ignore` for its rotated "H = length" is gone.
+8. **`list-icons --sheet PNG --theme [PRESET]`** (Step 22): the sheet in the project's or a
+   preset's colours.
+9. **Tests**: `tests/test_review2.py` (14) + a rotation test; full suite 1639 passed, 1 skipped in 13:18 on this 2-CPU box (was ~15 min); `-m "not slow"` was 7:42 (1594 tests) → 1:40 (1257 tests) after marking the render sweeps and every function over ~1.5 s `slow`.
+
+Files
+- Code: `scene.py` (header synonyms, `one_or_many`, `on_fill`, `find_targets`, `clear_all`),
+  `actions.py` (`Target.on_fill` / `scene_dim`, `TARGET_SYNONYMS`), `scenes/actions.py` (inks,
+  `_follow`, caps, no starting copies), `helpers.py` (`Fade`, `fade_out`), `api.py`, `config.py`,
+  `describe.py` (`other_names`, `unknown_key_message`), `schema.py`, `cli.py` (`--theme`),
+  `iconlist.py`, `introspect.py`; scenes `comparison`, `icon_grid`, `timeline`, `process`,
+  `world_map`, `table`, `pie`, `heatmap`, `screenshot`, `code`, `code_walkthrough`,
+  `equation_derivation`, `video_clip`, `diagram`, `histogram`, `network`, `scatter`, `title`,
+  `chapter`, `end_card`.
+- Examples: `examples/minimal/video.yaml` (core types), new `examples/gallery/` (video.yaml,
+  assets moved from minimal), `examples/kphi3/video.yaml` (one `lint_ignore` fewer);
+  `tools/make_screenshot.py`, `tools/make_clip.py` (output path).
+- Tests: new `test_review2.py`; `test_builtin_scenes.py` (both examples), `test_introspect.py`,
+  `test_config.py`, `test_actions.py`, `test_extensions.py`, `test_registry.py`,
+  `test_json_output.py`, `test_pie_heatmap.py`, `test_frames.py`; `slow` on 71 more test functions.
+- Docs: README (scene types grouped, examples, list-icons), docs/CONFIG.md (built-in
+  conventions: vertical growth, header band, per-beat content, too much content, unknown keys;
+  targets table notes; actions text on fills / following boxes / until; map, comparison,
+  timeline, process, icon_grid, table fitting; layout `rotation`; list-scenes `aliases`;
+  list-icons `--theme`), docs/EXTENDING.md (`one_or_many`, synonyms, `on_fill`, `scene_dim`,
+  `Fade`), DESIGN.md (§40), tasklist.md.
+
+Public interfaces added/changed (all additive)
+- `vidgen.api`: `Fade`, `fade_out`, `one_or_many`; `NarratedScene.target(..., on_fill=)`;
+  `Target.on_fill`, `Target.scene_dim`; `SceneParams.header_synonyms`; `vidgen.scene.HEADER_SYNONYMS`.
+- Params: every header-band type accepts the other name (`title` / `heading`, `_size`,
+  `_color`); `highlight` of diagram/heatmap/histogram/network/scatter takes one item.
+- CLI: `list-icons --theme [PRESET]`. JSON: `list-scenes` fields `aliases`; layout dump objects
+  `rotation` (both within version 1).
+- Messages: unknown keys (`unknown parameter|option|key 'x'; did you mean ...? (known: ...)`),
+  both synonyms given; `heatmap` / `comparison` too-dense warnings reworded.
+- Visible changes: 9:16 output of comparison, icon_grid, timeline, process, world maps and the
+  header bands above; table captions under short tables; dim / highlight on pie, heatmap and
+  callouts keep text readable; boxes follow scrolling code.
+
+Decisions / deviations
+- **`examples/gallery`**, not `gallery_src`: the name a reader looks for; Step 57's `vidgen
+  gallery` can render from it.
+- **Synonyms instead of renames**: renaming either half of the header params would break
+  configs; accepting both costs one `AliasChoices` per field.
+- **`on_fill` is declared by scenes**, not detected: guessing "text on a shape" from geometry
+  would also recolour text on cards (process, comparison) whose look should simply dim.
+- **Portrait world crop**, not a different projection: Equal Earth is kept; the view is
+  narrowed only in portrait and only for `world` / `auto`.
+- Quick test run: `slow` now also covers the parametrized render sweeps and every test function
+  over ~2 s.
+
+Known gaps / TODOs (routed in tasklist.md)
+- Step 41: `screenshot` has no `caption` param (video_clip has one).
+- Step 57: 9:16 crowding of `map` labels for small, far-apart countries; screenshots / clips of
+  16:9 pictures leave bands in 9:16.
+- Step 60: equation_derivation highlight in the dimmed copy; `code` steps vs `dim`; Ken Burns
+  and long-listing render cost.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1639 passed, 1 skipped, ~13 min); quick:
+`-m "not slow"` (~1.7 min), `-m "not render"` (seconds). Step only: `pytest
+tests/test_review2.py`. Manual: `vidgen lint examples/gallery [--variant ...]`, `vidgen
+storyboard examples/gallery --variant vertical`, `vidgen lint examples/minimal [--variant ...]`,
+`vidgen list-icons --search chart --sheet icons.png --theme`.
+
+## Step 38 — Overlay framework + lower thirds + watermark
+What was built
+- **`overlays:`** (video level): entries `{type, id, scenes, exclude, from, to, reserve,
+  ...options}` (`config.OverlayConfig`, `from` = field `from_`); a scene's **`overlays:`**
+  (`SceneConfig.overlays`, default `true`): `false` = none, per id `false` / option overrides (+
+  `reserve`), or `{type: ...}` under a new id = an overlay of that scene only. Default ids: the
+  type, `<type><n>` when several id-less entries share it.
+- **Overlay types** registered like scene types and actions (`@overlay`, third registry layer;
+  `register_overlay`, `find_overlay`, `all_overlays`, ...). `Overlay` base class (`build`,
+  `window`, `state(t)` = a pure function of *video* time, `pose`, `settled`,
+  `validate_project`, `layer`, `lint_skip`, `transition`, `interval`, `timed`), `OverlayOptions`,
+  `OverlayContext` (planned `scene` / `scenes` / `duration` / `chapters`, `video_time`, ...),
+  `with_opacity`. Validation in `vidgen validate` and before any render worker (unknown types,
+  ids, scene references, options as written and per scene override, the type's own checks);
+  JSON Schema (`type` enum + per-type options); `vidgen list-scenes [--json]` lists them.
+- **Planned timeline** `vidgen/videoplan.py` (`VideoPlan`, `SceneSlot`, `BeatSlot`, `Chapter`):
+  every scene's start/duration and beat times from MP3 lengths / estimates + pad + the type's
+  `outro`, before rendering; matches all 19 gallery scenes' rendered lengths exactly. The worker
+  records `render.overlays` in the timings; `join_scenes` warns when a scene with timed overlays
+  does not start where planned. The fingerprint includes what the plan reads (only with overlays).
+- **Drawing** `vidgen/overlay_layer.py` (`OverlayLayer`): wraps `renderer.add_frame` outermost
+  (after the frame capture), composites the overlays' states for each frame's video time; frozen
+  waits are split where states change; each state tuple is drawn once over black and white
+  (exact premultiplied colour + alpha for Cairo and PIL-drawn images) and cached as a cropped
+  patch. Overlays are never scene mobjects: zoom/focus camera moves and `clear_all` fades do not
+  touch them, timing and frame counts are unchanged.
+- **Layout dump / lint**: overlay objects (key `overlay`, paths `overlay:<id>/...`, measured with a
+  whole-frame camera), frame `overlays: [{id, type, settled, skip}]`, `safe_area` = the scene's
+  (reserved). New rule **`overlay_overlap`** (warning): an overlay over scene text/icons;
+  `safe_area` skips overlays, `text_overlap` / `covered_text` leave overlay-vs-scene to it; the
+  runner skips unsettled overlays and per-type `lint_skip` rules.
+- **`reserve: true`**: `NarratedScene.safe_area` cut by the overlay's box (`overlays.avoid`, the
+  largest remaining part, 0.2 gap) on every scene it is drawn on.
+- **Built-ins** (`scenes/overlays.py`): `lower_third` (name/title/icon plate with an accent bar,
+  `scene` + `at` seconds or beat + `duration`, `across_cuts`, `align`, slide, readable size, 9:16
+  lift) and `watermark` (image / icon / text, `corner`, `opacity`, `size`, `inset`, `fade`;
+  skips `contrast`).
+- **Example**: `examples/gallery` has a text watermark (not on chapter cards, `reserve`) and a
+  lower third on the `clip` scene (`reserve`).
+
+Files
+- New: `src/vidgen/videoplan.py`, `src/vidgen/overlays.py`, `src/vidgen/overlay_layer.py`,
+  `src/vidgen/scenes/overlays.py`, `tests/test_overlays.py` (26 tests).
+- Changed: `config.py` (OverlayConfig, SceneConfig.overlays, VideoConfig.overlays, lint rule
+  `overlay_overlap`), `registry.py`, `scene.py` (overlay layer, reserved safe area), `api.py`,
+  `scenes/__init__.py`, `introspect.py`, `lint/layout_rules.py`, `lint/run.py`, `render/worker.py`,
+  `render/pipeline.py`, `render/fingerprint.py`, `schema.py`, `describe.py`, `jsonout.py`,
+  `cli.py`; tests `test_docs.py` (aliases, new models), `test_introspect.py` / `test_regions.py`
+  (fakes gain `safe_area` / `overlay_layer`); `examples/gallery/video.yaml`; docs/CONFIG.md
+  ("Overlays", top level, scenes, lint, layout dump, list-scenes JSON, fingerprint),
+  docs/EXTENDING.md (section 9), README.md, DESIGN.md (§2, §6.4, §27 note, new §41), tasklist.md.
+
+Public interfaces added/changed (additive)
+- `vidgen.api`: `overlay`, `Overlay`, `OverlayOptions`, `OverlayContext`, `with_opacity`;
+  `NarratedScene.overlay_layer`; `NarratedScene.safe_area` shrinks for reserved overlays.
+- `registry`: overlay functions; `registry.snapshot()` returns a triple (was a pair).
+- Config: `overlays` (top level and per scene); lint rule `overlay_overlap` (`min_overlap`).
+- JSON: `list-scenes --json` `overlays`; layout dump frame `overlays`, object `overlay`; scene
+  timings `render.overlays` (all within version 1).
+- `config_schema(..., overlays=None)`.
+
+Decisions / deviations
+- **Composited in the renderer's `add_frame`, not mobjects following `camera.frame`** (DESIGN
+  §27's two options): an updater would make every wait non-frozen (all frames redrawn), put the
+  overlay into `scene.mobjects` (clear_all, targets, walks) and fight zoom scaling; ffmpeg after
+  the render would hide overlays from stills/layout/lint. Compositing keeps them out of the scene
+  yet in every frame the capture sees.
+- **State as a pure function of video time + planned timeline**: continuity across cuts comes for
+  free (both scenes compute the same state for the boundary); the price is the plan contract
+  (documented, warned on drift).
+- **Lint**: `overlay_overlap` rather than shrinking layouts by default; `reserve` is opt-in
+  because it is per scene (a lower third shown 4 s shrinks the whole scene). Watermark default
+  `inset` 0.025 (it sits in the margin at the default size in 16:9).
+- Lower thirds end with their scene unless `across_cuts`; `at` is seconds or a beat id (not a
+  fraction like actions' `at`).
+- Listing in `list-scenes` (section + JSON key), no separate `list-overlays` command.
+
+Known gaps / TODOs
+- Step 39: progress bar (`timed = True`, `context.duration`), chapter indicator
+  (`context.chapters`, `scene.chapter`; a scene-level `chapter:` field still to add to the plan).
+- Step 40: captions can read `context.scene.beats` (planned times + texts).
+- Step 41: callouts on any scene need the scene's targets — scene-level, not an overlay.
+- `reserve` is static per scene; overlays are vector / image mobjects only (no video in overlays);
+  the plan cannot see a custom scene's own timing (join warns).
+
+Verification: `vidgen lint` 0 findings for examples/gallery in all 8 variants, minimal in all 8,
+custom_scene (+ vertical) and kphi3 (4 ignored, as before); storyboards of the gallery's `clip`
+(lower third, 16:9 and 9:16) and watermarked scenes read; the plan matched every gallery scene's
+rendered length exactly.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1667 passed, 1 skipped, ~12.5 min);
+step only: `pytest tests/test_overlays.py`. Manual: `vidgen storyboard examples/gallery --scene clip
+--per-beat 3 [--variant vertical]`, `vidgen lint examples/gallery [--variant vertical]`,
+`vidgen list-scenes`, `vidgen schema`.
+
+## Step 39 — Progress / chapter indicator
+What was built
+- **Chapters** (`src/vidgen/chapters.py`): a chapter starts at a `chapter` scene and at any scene
+  with the new **`chapter:`** key (`SceneConfig.chapter`: a title, or `ChapterConfig {title,
+  number}`); on a `chapter` card the key renames the chapter in lists/indicators. Checked in
+  `VideoConfig`'s validator (so `validate`, `parse_config` and every command): the same chapter
+  (title, number) twice, integer numbers that do not increase, a `chapter:` scene right after a
+  card (the card would be a chapter of its own).
+- **One chapter list API**: `VideoPlan.chapters` → `Chapter(title, number, scene, start, end,
+  index, count, card)` (+ `label`, `duration`), `chapter_of(scene_id)`, `chapter_at(t)`;
+  public **`vidgen.api.video_chapters(project, fps=None)`** and `Chapter` (loads the project's
+  scene types for the call when they are not registered: the plan needs their fade-outs).
+  `OverlayContext.chapters` / `.chapter`; `SceneSlot.chapter` also follows `chapter:` keys.
+- **`progress_bar`** overlay (`src/vidgen/scenes/progress.py`): thin bar on the top (default) or
+  bottom edge, flush (`inset` 0), `thickness` 0.006 of the short side (≥ 2 px), played part
+  `primary`, track `dim` at 0.35, gaps at chapter starts (`chapters: true`); state = played pixel
+  columns of the whole planned video, so it is continuous across cuts and drawn once per pixel.
+- **`chapter_indicator`** overlay: "2 · Results" (number bold in `primary`, `total: true` →
+  "2/5", `number: false` → title only) in a `corner` (default top left), `inset` 0.025, caption
+  size (≥ readable), opacity 0.85, optional plate (`background`), title shortened with "…" to
+  `max_width` (0.4 of the width; 9:16 0.8). Cross-fades (`fade` 0.4 s, centred on the cut) when
+  the chapter changes between adjacent scenes; fades out before a chapter card and in after it;
+  hidden before the first chapter and on chapter cards (`on_chapter_cards`).
+- **`Overlay.shown_in(start, end)`** (framework): an overlay hidden for a whole scene is left out of
+  that scene's render, so it also reserves nothing there (the indicator on chapter cards).
+- **Fixes**: built-in scenes laid their header (`chart_title`) out in the *global* safe area, so a
+  `reserve`d overlay at the top did not move them (9:16 two-line titles ran 7–12 px into it): all
+  13 now pass `area=self.safe_area`. **Overlay drawing** per overlay and state with cameras cropped
+  to the overlay's pixel box (was: every combination of states drawn over two whole frames): a
+  1080p progress-bar state costs ~1.4 ms instead of ~60 ms, and a bar change no longer redraws the
+  other overlays.
+- **Example**: `examples/gallery` has a top `progress_bar` and a top-left `chapter_indicator`
+  (`reserve: true`); the third card is now "Pictures and maths" and `walkthrough` starts a
+  cardless chapter 4 "Code" (`chapter: {title: Code, number: 4}`), so the indicator cross-fades.
+
+Files
+- New: `src/vidgen/chapters.py`, `src/vidgen/scenes/progress.py`, `tests/test_chapters_progress.py`
+  (17 tests).
+- Changed: `config.py` (`ChapterConfig`, `SceneConfig.chapter`, chapter checks), `videoplan.py`
+  (`Chapter` fields, `chapters`, `chapter_of`, `chapter_at`, `video_chapters`), `overlays.py`
+  (`OverlayContext.chapter`, `Overlay.shown_in`), `overlay_layer.py` (per-overlay cropped
+  patches), `api.py`, `scenes/__init__.py`, `render/fingerprint.py`, 13 scene modules
+  (`chart_title(..., area=self.safe_area)`), `tests/test_overlays.py` (overlay lists, cache
+  attribute), `tests/test_stat_chapter.py` (its fixture repeated the chapter card "2 · Results"
+  three times, now a config error: the copies are numbered 3 and 4 with their own titles),
+  `examples/gallery/video.yaml`, docs/CONFIG.md ("Chapters", scene key, `reserve`,
+  `progress_bar`, `chapter_indicator`, chapter scene), docs/EXTENDING.md (section 9: `shown_in`,
+  chapters API, cropped drawing), README.md, DESIGN.md (module tree, fingerprint, new §42),
+  tasklist.md.
+
+Public interfaces added/changed (additive)
+- `vidgen.api`: `video_chapters`, `Chapter`; `Overlay.shown_in`; `OverlayContext.chapter`.
+- `Chapter` gained `end`, `index`, `count`, `card` (+ `label`, `duration`); its first four
+  fields are unchanged.
+- Config: scene key `chapter`; overlay types `progress_bar`, `chapter_indicator`.
+- Fingerprint: a scene's own `chapter:` is not part of its render inputs (it only matters to
+  overlays, whose inputs now include every scene's `chapter` and a card's `number`).
+
+Decisions / deviations
+- Chapter checks are config errors (like duplicate ids), not lint: they are about the
+  structure, and a wrong chapter list would also go into Step 49's metadata.
+- The indicator hides on cards by *state* (so it can fade) and drops out of card renders via
+  `shown_in` (so `reserve` does not shrink the card's layout).
+- The progress fraction is always of the whole video, even when `from`/`to`/`exclude` limit
+  where the bar is drawn.
+- `reserve` gap from Step 38: fixed for whole-scene visibility (`shown_in`), documented for partial
+  visibility (a lower third shown 4 s still reserves the whole scene; turn it off per scene).
+
+Known gaps / TODOs
+- Step 49: `video_chapters` has no "Intro" before the first chapter (YouTube wants 0:00); add it
+  there. The list uses *planned* times (like overlays), which match built-in renders exactly.
+- The indicator's label is a `MarkupText`; very long separators or numbers are not shortened.
+- `reserve` for partly visible overlays is still per scene.
+- The chapter checks are new config errors: a project that repeats a `chapter` card (same title
+  and number) or numbers cards out of order no longer validates (the message says which scenes).
+- Cross-fades are eased around the cut: at 15 fps (preview) the old label is still at 0.85 on
+  the last frame before the cut, so in stills the change reads as happening mostly after it.
+- With no `background`, the indicator sits straight on the scene: a `zoom` / focus that pushes a
+  picture up to the corner (gallery `app_b4`) runs under it. Lint does not flag it (no scene
+  text there); a plate (`background: surface`) or another corner is the remedy.
+
+Verification: `vidgen storyboard` + `vidgen lint` 0 findings for examples/gallery in all 8
+variants (vertical had 7 `safe_area` warnings before the `chart_title` fix), examples/minimal
+(default, vertical) and custom_scene; sheets read (bar with 4 chapter segments, indicator absent
+on cards, "4 · Code" on walkthrough through its focus zoom). The derive → walkthrough cut checked
+frame by frame in the preview MP4s: 3 at 1.0 / 0.97 / 0.85 before it, 0.5 / 0.5 on the cut frame,
+then 4 · Code.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1684 passed, 1 skipped, ~13 min); step only: `pytest
+tests/test_chapters_progress.py`. Manual: `vidgen storyboard examples/gallery --scene walkthrough
+--per-beat 2 [--variant vertical]`, `vidgen lint examples/gallery [--variant ...]`, `python -c "from
+vidgen.project import Project; from vidgen.api import video_chapters;
+print(video_chapters(Project.load('examples/gallery')))"`.
+
+## Step 40 — Burned-in captions
+What was built
+- **`captions` overlay** (`src/vidgen/scenes/captions.py`, built on the Step 38 framework, so
+  storyboard, layout dump, lint, `list-scenes` and `schema` see it): the narration burned into the
+  video, off unless listed. `style: subtitles` (default; one or two lines on a plate) or
+  `karaoke` (alias `words`; a few big bold words, the spoken one in `highlight` with a scale
+  `pop` capped so it never touches its neighbours). `position` bottom (default; 9:16 raised by
+  `lift` 0.12 of the safe height like the lower third) / top / center of the safe area; `size`,
+  `bold`, `max_lines`, `max_words`, `max_width` with per-style defaults; `color` (auto: the most
+  readable of text / background / white / black), `background` + `background_opacity` (raised
+  automatically until the text reaches `lint.rules.contrast.min_ratio` over anything behind it;
+  `null` → no plate, an outline). Cue shown from its first spoken word until the next cue; a
+  beat's last cue through the pad. `lint_skip = ("max_words",)` (captions are the narration).
+- **Reserve per type**: `OverlayConfig.reserve` is now `bool | None`; `Overlay.default_reserve()`
+  (base `False`) and `Overlay.reserves`. Captions reserve their band at the top / bottom by default
+  (scenes lay out above it), not when centred (lint `overlay_overlap` reports what they cover).
+  Silent scenes: `shown_in` false → no captions, no reserve.
+- **Word times** (`src/vidgen/speech.py`): `spoken_words` / `speech_bounds` moved here from
+  `lint/timing_rules.py` (re-imported there); `syllables`, `pause_after`, `estimate_word_times`
+  (syllable-weighted, pauses after sentence ends and clause marks), `beat_word_times` (stored
+  alignment > estimate within the MP3's speech bounds > estimate over the beat), alignment files
+  `write_alignment` / `read_alignment` / `aligned_word_times` (`<audio>/<beat>.align.json`, valid
+  only for the same text and MP3 sha1).
+- **ElevenLabs seam**: `voice.timestamps: true` → `vidgen tts` calls
+  `ElevenLabsProvider.synthesize_timed` (`/with-timestamps`, JSON `audio_base64` + `alignment`)
+  and stores the alignment; without it a stale alignment is removed; variant copies carry it.
+  Mocked in tests; the real API was never called.
+- **Shared cue cutting** (`src/vidgen/cues.py`): `phrase_break_cost`, `segment_cues` (DP over
+  cue/line breaks: sentence < clause < conjunction < preposition < plain < after an article;
+  fuller cues, balanced lines, new sentences start lines), `split_cues`, `caption_cues`,
+  `CaptionCue`. **The SRT now uses it** (`split_text`, `beat_cues(..., words=)`,
+  `cues_from_timings(timings, audio_dir)`, `write_srt(path, timings, audio_dir)`), with cue times
+  from word times instead of proportional characters.
+- `plate_contrast(color, plate, opacity)` in `vidgen.charts` (worst case over black / white).
+- **Fix**: `title` and `end_card` centred their card on the frame origin instead of the (possibly
+  reserved) safe area; they now centre in `self.safe_area` (no change without reserved overlays).
+- **Example**: `examples/minimal` variants `subtitled` (16:9 captions) and `social` (9:16 karaoke).
+
+Files
+- New: `src/vidgen/speech.py`, `src/vidgen/cues.py`, `src/vidgen/scenes/captions.py`,
+  `tests/test_captions.py` (20 tests).
+- Changed: `config.py` (`VoiceConfig.timestamps`, `OverlayConfig.reserve` optional),
+  `overlays.py` (`default_reserve`, `reserves`), `scene.py` (uses `reserves`), `subtitles.py`,
+  `render/pipeline.py` (SRT gets the audio folder), `render/fingerprint.py` (alignment stats in
+  overlay inputs), `lint/timing_rules.py` (imports from `speech`), `tts/__init__.py` (protocol doc),
+  `tts/elevenlabs.py` (`synthesize_timed`, shared `_send`), `tts/run.py` (alignments), `charts.py`
+  (`plate_contrast`), `api.py`, `scenes/__init__.py`, `scenes/title.py`, `scenes/end_card.py`;
+  tests `test_subtitles.py` (timing by words, phrase-boundary cutting), `test_overlays.py` (overlay
+  list); `examples/minimal/video.yaml`; docs/CONFIG.md (voice `timestamps`, alignment files,
+  `reserve` default, new `captions` section), docs/EXTENDING.md (section 9: `default_reserve`,
+  word-time and cue helpers), README.md, DESIGN.md (module tree, §6.4, new §43), tasklist.md.
+
+Public interfaces added/changed
+- `vidgen.api`: `WordTime`, `beat_word_times`, `estimate_word_times`, `speech_bounds`,
+  `spoken_words`, `syllables`, `CaptionCue`, `caption_cues`, `segment_cues`, `phrase_break_cost`,
+  `plate_contrast`; `Overlay.default_reserve()`, `Overlay.reserves` (additive).
+- Config: `voice.timestamps`; overlay type `captions`; `reserve` default is now "the type's"
+  (`false` for every earlier type, so existing configs behave the same).
+- `vidgen.subtitles`: `beat_cues(..., words=None)`, `cues_from_timings(timings, audio_dir=None)`,
+  `write_srt(path, timings, audio_dir=None)` (compatible signatures; **different cue texts and
+  times**: phrase-boundary cuts, word-timed).
+- Files: `audio/<beat>.align.json` (with `voice.timestamps`).
+
+Decisions / deviations
+- SRT and captions share the cutting *method*; their cues match exactly only when widths agree
+  (SRT: 42 characters; captions: measured text in Manim units). Documented in CONFIG.md / §43.
+- Captions hold the last cue of a beat through the pad, so beat-end stills (what lint checks)
+  show them; the reserved box is the whole band (stable layout), not each scene's cues.
+- Karaoke contrast: an unreadable `highlight` is swapped for the first readable accent with a
+  warning, rather than failing lint; the plate opacity is raised rather than the text recoloured
+  when the user picked a `color`.
+- `timestamps` is not part of the audio hash (same audio); `vidgen tts --force` fetches timings
+  for existing beats.
+
+Known gaps / TODOs
+- Karaoke highlights whole words (no progressive fill), one word at a time.
+- Bottom captions and a `lower_third` are both placed in the global safe area; in 9:16 they can
+  overlap (captions are drawn on top). Step 48 could make overlays avoid reserved overlays.
+- Estimated word times drift on numbers, names and long pauses; `voice.timestamps` fixes that.
+- `examples/gallery` does not use captions (its lower third would meet them in 9:16).
+
+Verification: `vidgen lint examples/minimal --variant subtitled` and `--variant social`: 0
+findings (before: `max_words` counted karaoke words, `title` / `end_card` overlapped the reserved
+band in 9:16 — both fixed); storyboards of both read (cues at phrase boundaries, plates readable,
+karaoke highlight on the spoken word, charts laid out above the band).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1705 passed, 1 skipped, ~13.5 min);
+step only: `pytest tests/test_captions.py tests/test_subtitles.py`. Manual: `vidgen storyboard
+examples/minimal --variant social --scene steps --per-beat 3`, `vidgen lint examples/minimal
+--variant subtitled`.
+
+## Step 41 — Callout overlay
+What was built
+- **`callout` beat action** (`src/vidgen/scenes/callout_action.py`, only `vidgen.api`): callouts
+  on any scene, for one beat, built with the Step 34 helpers. Syntax as every action:
+  ```yaml
+  actions:
+    - callout: "point:sparse@8"     # a target (or a list / pattern: one callout around all)
+      kind: arrow                   # box (default) | circle | arrow | label | spotlight | magnifier
+      label: "Lowest loss"
+      at: 0.4
+    - {action: callout, kind: box, area: [0.1, 0.15, 0.3, 0.3], label: "Start"}   # frame coordinates
+    - {callout: image, kind: magnifier, area: [0.1, 0.1, 0.25, 0.25]}              # part of a picture target
+  ```
+  Options `kind`, `label`, `area` (`[x, y, w, h]` / `[x, y]` from the top left), `within`
+  (`frame` | `safe`, areas without a target), `units` (`fraction` | `px`), `color`, `label_size`,
+  `side`, `curved` (arrow), `zoom` (magnifier), `keep`, `name`. With a target the callout points
+  at its outline (a bar + value) or parts on screen; `area` + target = fractions / pixels of the
+  target's picture (image, screenshot, clip) or else of its box; `area` alone = fractions of the
+  visible view (or its safe area), `px` = output pixels. `kind: label` is a mark-less label beside
+  it. **Lifetime**: gone when the next beat starts; `until: <beat>`; `keep: true` to the scene's
+  end. **Placement**: labels inside `scene.safe_area` (so `reserve`d overlays are respected), clear
+  of every text / TeX mobject on screen, other callouts, the scene's other small targets (< 20 % of
+  the view, not holding the area: nodes, bars) and overlay boxes; drawn above everything (z +2,
+  spotlight +1). With the camera zoomed (a `zoom` earlier in the beat, a screenshot focus) the
+  callout is built for the view (`scale`, bounds in the view) so the label reads normally.
+  **`name: X`** registers it as target `X` with `on_fill` (label text on its plate) so later
+  `dim: X` / `highlight: X` keep it readable (Step 37's routed item).
+- **Framework** (`vidgen.actions.Action`, additive): `until_next_beat` (class attribute; with
+  `reversible`, not `temporary`), `default_until(later)`, `problems()` (use-level checks reported
+  by `vidgen validate` at `...actions[k].<key>`), `provides()` (target names a use registers;
+  later actions of the scene may use them, names checked: valid, not taken). `ActionUse.until`
+  (set by the runner). `list-scenes` shows "undone when the next beat starts", JSON
+  `actions[].until_next_beat`.
+- **`screenshot` `caption`** (+ `caption_size`, `caption_color`; target `caption`), as
+  `video_clip`'s (shared `CAPTION_GAP`, `target_names` moved to `screenshot`). In both types the
+  caption now fades out while a `focus` step has the camera in and comes back with the whole frame
+  (enlarged under the picture it hit the watermark in the gallery's contrast / neon variants).
+- **Examples**: `examples/minimal` `trend` beat 2: an arrow callout "Lowest loss" on
+  `point:sparse@8` (+ storyboard usage line); `examples/gallery` `loop` beat 2: a `label` callout
+  on `node:check`, and `app` got `caption: "A made-up planner app"`.
+
+Verification
+- `vidgen storyboard` (`--per-beat 2/3`) of minimal `trend`, gallery `loop` and `app` in 16:9 and
+  `--variant vertical`, sheets and frames read. Fixed along the way: labels landing on diagram
+  nodes / edges (other small targets are now avoided), the screenshot caption enlarged by focus
+  (now fades). In 9:16 the `loop` label still sits on an edge between two nodes (no free room
+  in that column; lint clean).
+- `vidgen lint`: minimal `trend` in all 10 variants (default, vertical, light, contrast,
+  editorial, neutral, pastel, neon, subtitled, social) and gallery `loop` + `app` + `clip` in all 8
+  variants: 0 findings each. A `slow` test lints bar chart + bullets callouts (arrow, label,
+  spotlight, box) at 320x180 and 180x320: 0 findings.
+
+Files
+- New: `src/vidgen/scenes/callout_action.py`, `tests/test_callout_action.py` (13 tests, 7 render,
+  one `slow` lint).
+- Changed: `src/vidgen/actions.py` (hooks, runner `until`), `describe.py`, `cli.py`,
+  `scenes/__init__.py`, `scenes/screenshot.py`, `scenes/video_clip.py`; tests `test_actions.py`
+  (action lists), `test_actions_coverage.py` (CONFIG example list); `examples/minimal/video.yaml`,
+  `examples/gallery/video.yaml`; docs/CONFIG.md (Beat actions: example, keys, `callout` row,
+  "Callouts" paragraph, timing; screenshot params / targets / video_clip caption; list-scenes JSON),
+  docs/EXTENDING.md (§8 hooks), README.md, DESIGN.md (module tree, §6.4, new §44), tasklist.md.
+
+Public interfaces added/changed (additive)
+- Built-in action `callout`. `vidgen.api` `Action`: `until_next_beat`, `problems()`,
+  `provides()`, `default_until(later)`. JSON: `list-scenes` `actions[].until_next_beat` (within
+  version 1). Params: `screenshot.caption`, `caption_size`, `caption_color`; target `caption`.
+- Behaviour: a `screenshot` / `video_clip` caption fades during focus steps.
+
+Decisions / deviations
+- **A beat action, not an overlay** (roadmap title "Callout overlay"): Step 38 already noted
+  callouts need the scene's targets and should move with its camera; the action framework gives
+  validation, timing, `until`, schema and listing for free, and stills/lint see the callouts.
+  No scene-level `callouts:` list: one place to write them (beats), like screenshot `steps`.
+- **Lasts its beat, removed at the next beat's start** (not by its own beat's end like `zoom`),
+  so beat-end stills — what storyboard and lint check — show it.
+- Several targets → one callout around all (use one action per target for separate marks).
+- Area-only coordinates are fractions of the *visible* view (follow a zoom), top-left origin as
+  in Step 34.
+
+Known gaps / TODOs
+- Placement is the Step 34 scored search: labels avoid text, callouts, small targets and
+  overlays but not lines (an arrow or label may cross a chart line or a diagram edge).
+- A callout drawn before a `zoom` scales with the scene; one due on the same frame as a `zoom` is
+  built for the camera before it (give it a later `at`).
+- Magnifier needs a still picture in the target; checked only when the scene renders.
+- A screenshot whose *first* step is a focus step shows the caption enlarged during it (the
+  caption enters with the picture in the same play).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1717 passed, 1 skipped, ~13.5 min); step only: `pytest
+tests/test_callout_action.py`. Manual: `vidgen storyboard examples/minimal --scene trend --per-beat
+3 [--variant vertical]`, `vidgen storyboard examples/gallery --scene loop --scene app --per-beat 2`,
+`vidgen lint examples/minimal --scene trend [--variant ...]`, `vidgen list-scenes`, `vidgen schema`.
+
+## Step 42 — Pronunciation dictionary
+What was built
+- **Config**: top-level `pronunciation:` map, `term: spoken form` or `term: {say, case_sensitive
+  (true), whole_word (true), regex (false)}`, `term: null` removes an entry (variants deep-merge
+  the map, so a variant can add, change or drop terms); `pronunciation_file: PATH | [PATHS]` (YAML /
+  JSON mappings of the same form, relative to the project; `pronunciation:` wins over them).
+  Errors: one message per mistake (`'GPU': sai: unknown key 'sai'; did you mean 'say'?`), bad
+  regexes / empty-matching regexes / bad group references in `say`; a missing or invalid file is
+  a load error with `pronunciation_file (<file>)` locations (`validate --json` lists them).
+- **`src/vidgen/pronunciation.py`** (no manim): `compile_rule`, `Pronunciation` (`apply(text) ->
+  Spoken`, `say(text)`), `Spoken(text, spoken, replacements, matched, conflicts)` with
+  `word_groups()` (per written word, the spoken words it became), `load_pronunciation(config,
+  root)`, `read_pronunciation_file`, `form_problems`, `entry_problems`, `pronunciation_warnings`.
+  One pass over the written text: all matches, greedily by start, then length, then entry order;
+  a spoken form is never matched again.
+- **TTS + hash**: `Project.pronunciation` (built when the project loads) and
+  `Project.spoken_texts()`; `vidgen tts` sends the spoken text (and spoken neighbours as context),
+  hashes it (`cache_key(spoken)`, §7 formula unchanged), stores alignments of it; `audio_status`
+  compares with it. A beat no entry matches keeps its old hash (kphi3's committed audio: 27 ok,
+  unchanged). `vidgen tts --dry-run` prints `    says: <spoken text>` under each beat to
+  generate whose text changes; character counts are of the spoken text. `has_own_audio` compares
+  spoken texts (cached per `Project`).
+- **Word timings** (Step 40): `beat_word_times(..., spoken=None)` — with a changed `Spoken`, the
+  spoken words are timed (alignment of the spoken text, else the estimate within the MP3's
+  speech, else over the beat) and `speech.map_word_times(spoken, times)` maps them back: a
+  written word spans its first to last spoken word ("K-Phi-3" → "kay fye three": 3 → 1), a word
+  said as nothing gets a zero-length time at the next word, words joined by one replacement share
+  it. Captions (`context.project.pronunciation`) and the SRT (`write_srt(..., pronunciation)`)
+  show the written text.
+- **Lint**: `SceneContext.spoken` (+ `spoken_text(beat)`); `narration_speed` counts spoken words.
+- **Validate warnings** (`cli.validate_warnings` = theme contrast + `pronunciation_warnings`;
+  `log_theme_warnings` renamed `log_validate_warnings`): entry matching no beat; entry always
+  inside a longer one (never applies); two entries matching the same span or crossing spans.
+- **Fingerprint**: `pronunciation` / `pronunciation_file` excluded from the config part; with
+  overlays the beats' spoken texts are overlay inputs (captions' word times).
+- **Example**: `examples/minimal`: `LaTeX: lah-tek`, `JSON: jay-son` (no audio there; kphi3 and
+  gallery untouched).
+
+Files
+- New: `src/vidgen/pronunciation.py`, `tests/test_pronunciation.py` (26 tests).
+- Changed: `config.py` (`PronunciationEntry`, `PronunciationValue`, `PronunciationMap`,
+  `VideoConfig.pronunciation`, `pronunciation_file`, `pronunciation_files`), `project.py`,
+  `speech.py` (`map_word_times`, `beat_word_times(spoken=)`), `subtitles.py`, `scenes/captions.py`,
+  `tts/cache.py`, `tts/run.py` (`TTSPlan.spoken`, `say()`), `lint/rules.py`, `lint/run.py`,
+  `lint/timing_rules.py`, `render/pipeline.py`, `render/fingerprint.py`, `cli.py`, `api.py`;
+  `tests/test_docs.py` (model list); `examples/minimal/video.yaml`; docs/CONFIG.md (new
+  "Pronunciation" section, top-level table, regeneration / variant paragraphs), docs/EXTENDING.md
+  (word times with `spoken`), README.md, DESIGN.md (tree, §4, §6.4, new §45), tasklist.md.
+
+Public interfaces added/changed
+- Config: `pronunciation`, `pronunciation_file` (JSON Schema follows from the models).
+- `vidgen.api`: `Pronunciation`, `Spoken`, `map_word_times`; `beat_word_times(..., spoken=None)`
+  (compatible). `Project.pronunciation`, `Project.spoken_texts()`. `write_srt` /
+  `cues_from_timings` take an optional `pronunciation`. `SceneContext(..., spoken={})`.
+- Behaviour: the audio hash / alignment text is the spoken text (identical to before for beats
+  without entries).
+
+Decisions / deviations
+- **Hash the spoken text** (not text + dictionary): only beats whose spoken text changes are
+  re-voiced, adding a dictionary keeps unmatched beats' audio, and the kphi3 legacy hashes still
+  match (no entries there).
+- `case_sensitive` defaults to **true** (an acronym entry like `US` must not hit "us");
+  `whole_word` true; regex only with `regex: true`.
+- Overlap rule: first, then longest, then written order; no cascading replacements. Contained
+  matches of an entry that applies elsewhere are not warned about (the intended "longest wins").
+- The no-audio duration estimate (`words_per_second`) still counts written words, so adding a
+  dictionary does not move renders; only `narration_speed` and caption word times use the spoken form.
+- Files are read when a `Project` is built (load error, not a lazy failure mid-render).
+
+Known gaps / TODOs
+- No `phoneme:` / SSML IPA entries (ElevenLabs reads `<phoneme>` only on some models, not the
+  default `eleven_multilingual_v2`; tags would also break plain-word alignments) and no
+  ElevenLabs server-side pronunciation dictionaries; write spoken forms in letters.
+- No per-beat `say:` override; terms are matched within a beat only.
+- Step 43 (voices): a per-voice pronunciation could hang off `voices:`; the hash already covers
+  whatever text is sent. Step 54 (readback STT) should compare against the spoken text.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1744 passed, 1 skipped, ~13.5 min); step only:
+`pytest tests/test_pronunciation.py`. Manual: `vidgen validate examples/minimal`, `vidgen tts
+examples/minimal --dry-run --beat math_b1 --beat feedback_b3` (shows `says: ... lah-tek.`),
+`vidgen storyboard examples/minimal --variant social --scene math --per-beat 2` (captions say
+"LaTeX"); `vidgen lint examples/minimal --variant social --scene math --scene feedback`: 0 findings.
+
+## Step 43 — Multiple voices
+What was built
+- **Config**: top-level `voices: {name: {provider, voice_id, model_id, output_format, settings,
+  context, timestamps, label, color}}` (every key optional; the base `voice:` with what is given
+  changed, `settings` merged value by value; `label` / `color` name the speaker and are never
+  inherited); `voice: NAME` on a scene (its beats) and on a beat (that beat; wins over the scene);
+  `default` = the base voice (reserved name). `voice:` gained `label` / `color` (default none).
+  New top-level `subtitles: {speakers: off | name}`.
+- **`src/vidgen/voices.py`** (no manim): `DEFAULT_VOICE`, `voice_names`, `resolve_voice`,
+  `beat_voice_names`, `audio_fields`, `speaker_label`, `speaker_color`, `speaker_tags`,
+  `speaker_prefix`, `voice_reference_problems`, `unknown_voice_message`, `voice_color_problems`,
+  `voice_warnings`. `Project.voice_names()`, `voice(name)`, `beat_voice(beat_id)`,
+  `speaker_tags(mode)`.
+- **TTS**: `tts.beat_providers(project)` (one provider per voice); `audio_status`, `plan_tts`,
+  `run_tts` check / synthesise / hash each beat with its own voice (same §7 formula, so beats of
+  the base voice keep their hashes: kphi3 27 ok, unchanged). Context (`previous_text` /
+  `next_text`) only from neighbours with the same voice (`tts.run.context_texts`). `vidgen tts
+  --voice NAME` (repeatable, `default` allowed, did-you-mean); with `voices:` the dry run shows
+  `, voice <name>` per beat and `  voice <name> (<voice_id>): N beat(s), C characters` per voice.
+  Variant audio folder also when a shared beat's effective voice differs (label / colour do not
+  count); unchanged beats are copied.
+- **Validate**: unknown scene / beat voice names are config errors with locations and a
+  suggestion; `voice.color` / `voices.<n>.color` theme tokens checked; warning for a voice no beat
+  uses; human output line `voices:    default (29 beats), guest (1 beats)`.
+- **Speakers**: `subtitles.speakers: name` → the SRT starts the first cue of each beat whose
+  speaker changed (and that has a label) with `Label: `. `caption_cues(prefix=, prefix_width=)`
+  glues the tag to the first word (never a cue of its own; `CaptionCue.prefix`, not a timed word).
+  `captions` option `speakers: off | name | color | both` (default `subtitles.speakers`): tag in
+  the speaker's colour, words in the speaker's colour, plate opacity raised until every speaker
+  colour reads (else fallback to the text colour + warning); karaoke never highlights the tag.
+- **Fingerprint**: `voices` / `subtitles` out of the config part; with overlays, beat voice names
+  + those sections are overlay inputs (`_overlay_inputs` now returns `{scenes, voices}`).
+- **Example**: `examples/minimal`: `voices.guest` (other voice id, stability, label `Guest`,
+  colour `secondary`), `subtitles.speakers: name`, the `note` scene is a two-beat dialogue (guest
+  asks, narrator answers; was one beat), the `subtitled` variant's captions `speakers: both`;
+  header usage lines for `tts --dry-run --voice guest` and the storyboard.
+
+Files
+- New: `src/vidgen/voices.py`, `tests/test_voices.py` (18 tests, 1 render).
+- Changed: `config.py` (`ColorRef`, `VoiceConfig.label/color`, `VoiceSettingsOverride`,
+  `VoiceEntry`, `SubtitlesConfig`, `SceneConfig.voice`, `BeatConfig.voice`, `VideoConfig.voices`
+  / `subtitles`, reference check in `parse_config`), `project.py`, `tts/__init__.py`,
+  `tts/cache.py`, `tts/run.py` (rewritten around per-beat voices), `cues.py`, `subtitles.py`,
+  `scenes/captions.py`, `render/pipeline.py`, `render/fingerprint.py`, `cli.py`, `api.py`;
+  `tests/test_docs.py` (new models; `None` defaults shown as `null`); `examples/minimal/video.yaml`;
+  docs/CONFIG.md (new "Multiple voices" section, top-level / scene rows, voice `label` / `color`,
+  `--voice`, regeneration and variant paragraphs, captions `speakers`), docs/EXTENDING.md,
+  README.md, DESIGN.md (tree, §4, §6.4, §8, new §46), tasklist.md.
+
+Public interfaces added/changed
+- Config: `voices`, `subtitles`, scene / beat `voice`, `voice.label`, `voice.color` (JSON Schema
+  follows from the models); captions option `speakers`.
+- `vidgen.api`: `speaker_label`, `speaker_color`, `speaker_prefix`; `caption_cues(...,
+  prefix="", prefix_width=None)` and `CaptionCue.prefix` (compatible).
+- `vidgen.subtitles`: `beat_cues(..., speaker=None)`, `cues_from_timings(..., speakers=None)`,
+  `write_srt(..., speakers=None)` (compatible). `vidgen.tts.beat_providers`; `plan_tts(project,
+  provider=None, beat_ids=(), force=False, voices=())` (provider now optional), `run_tts(...,
+  voices=())`, `TTSPlan.voices`, `voice_of`, `characters_by_voice`.
+- CLI: `vidgen tts --voice NAME`.
+
+Decisions / deviations
+- **Context only within a speaker's run of beats.** ElevenLabs treats `previous_text` /
+  `next_text` as the same speaker's surrounding speech (request stitching is per voice); another
+  speaker's line could leak its intonation (a question's rising tone into the answer). A turn by
+  someone else also breaks the run (A, B, A: the second A gets no context). Not hashed.
+- Hash = the old formula with the beat's effective voice (not "voice name + text"): projects
+  without `voices:` are byte-for-byte unchanged, and two names with identical settings share audio
+  semantics.
+- Names are checked in `parse_config` (after the model) to get exact problem locations
+  (`scenes[i].beats[j].voice`), unlike chapters' model-validator messages.
+- Speaker tags appear where the speaker changes (SDH convention), not on every cue; the base voice
+  is tagged only when it has a `label`.
+- `color`-mode default colours for named voices are the palette by position (distinct speakers
+  without configuration).
+- `subtitles:` is a new top-level section (one key now) rather than a key under `narration:`;
+  captions default to it so one switch tags both.
+
+Known gaps / TODOs
+- No per-voice `pronunciation:` (one dictionary for all voices; a variant can carry another).
+- No ElevenLabs text-to-dialogue (v3) endpoint (one file for many lines does not fit the
+  beat-per-MP3 cache); no per-voice `narration.pad` / `words_per_second`.
+- Storyboard labels, `timings.json` and `render --json` do not name speakers; `validate --json`
+  has no voices summary.
+- Karaoke shows the tag only on a beat's first (short) cue; `color` / `both` read better there.
+- Step 51 (multi-language variants) can build on `voices:` deep-merging per variant.
+
+Verification: `vidgen lint examples/minimal --scene note` (default, `vertical`, `subtitled`,
+`social`): 0 findings (the dialogue's second beat was shortened: the two-beat text card hit
+`dead_air`); storyboards of `subtitled` (tag + secondary colour on the guest's cue, narrator cue
+plain) and `social` (karaoke) read. `vidgen tts examples/minimal --dry-run --voice guest`: 1
+beat, 34 characters; kphi3 `audio_status`: 27 ok.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1765 passed, 1 skipped, ~13.5 min); step only: `pytest
+tests/test_voices.py`. Manual: `vidgen validate examples/minimal`, `vidgen tts examples/minimal
+--dry-run [--voice guest]`, `vidgen storyboard examples/minimal --variant subtitled --scene note`.
+
+## Step 44 — Sound effects
+What was built
+- **Synthesised sounds** (`src/vidgen/sfx.py`, numpy only, no manim): whoosh, swoosh, pop, click,
+  tick, typing, riser, chime, success, error, thud. Each is a small deterministic generator
+  (seeded noise, zero-phase frequency-domain filters, STFT band sweeps, struck / bell envelopes)
+  with `duration` (per-sound range), `pitch` (semitones ±24) and `intensity` (0–1: timbre and
+  ±3 dB). Finishing: 25 Hz high-pass, raised-cosine fades (first / last sample exactly 0), mean
+  removed with a Hann-shaped correction (DC exactly 0, ends stay 0), level set by loudness —
+  loudest 400 ms, BS.1770 K-weighted (`loudness()`), at −27 LUFS, peaks ≤ −9 dBFS. Calibrated on
+  the committed kphi3 ElevenLabs MP3s (−18.5 to −21.4 LUFS measured the same way): ~7 dB under
+  narration at gain 0. Every sound has a precise textual description and a "use it for" line.
+- **Project sounds**: `assets/sfx/<name>.wav` (also flac / ogg / mp3, decoded with PyAV) add a
+  sound or replace a built-in by name (`SoundLibrary`); own level, no `params`.
+- **Three ways to place a sound**: beat action `- sfx: whoosh` (`sound:` in the canonical form;
+  options `gain` dB, `pan`, `align: start|end`, `params`) at `at` of the beat — exactly then,
+  even during the scene's own animation; a scene's `sfx:` list (`[whoosh, {sound: chime, at: 1.2,
+  gain: -3}]`, seconds from the scene's start; silent scenes too); in code
+  `self.sfx("pop", at=None, *, gain, pan, align, **params)` (default: now). Video-wide `sfx:
+  {auto: false, gain: 0}`: `auto` adds pop / tick / click / whoosh / swoosh to built-in reveal /
+  highlight / callout / zoom / transform actions when they start animating (not in beats with
+  their own `sfx` actions; no-op reveals stay silent) and a whoosh to `chapter` cards
+  (`NarratedScene.entrance_sfx`); `gain` is a master level.
+- **Mix** (the pipeline, not Manim): scenes record `SfxEvent`s (`sfx_log` → `timings/<id>.json`
+  `sfx`); `join_scenes` shifts them to video times (combined `timings.json` scenes gain `sfx`) and
+  writes one 48 kHz stereo track for the whole video, `build/.../padded/sfx.wav`
+  (`write_track`, sample-exact `round(t * 48000)`, 10 s blocks, clipped sums), which
+  `ffmpeg.join(..., sfx=)` adds to the concatenated narration with `amix ... normalize=0` before
+  the single AAC encode. `--no-audio`: no track. Without effects the join command is unchanged.
+- **Framework** (`vidgen.actions`): `Action.scene_targets` (False: `target` is not a scene
+  target), `Action.animates` (False: `cue(scene, time)` is called at beat start with the due
+  frame's time instead of `apply` in a wait), checks in `check_action_class`; runner hook for auto
+  sounds.
+- **CLI**: `vidgen list-sfx [PROJECT] [--render-dir DIR] [--json]` (descriptions, use, length,
+  range, channels, loudness, peak; WAV previews); `list-scenes` shows `sfx` as "(at its time,
+  does not animate)", JSON actions gain `scene_targets` / `animates`; `validate` reports unknown
+  sounds (did-you-mean), params on project files, durations out of range.
+- **Example**: `examples/gallery`: `part2` chapter `sfx: [whoosh]`, `speedup` beat 2 `- sfx: chime`
+  (`at: 0.15`, `gain: -3`), `formats` beat 3 `{sfx: pop, params: {pitch: 3}}` with the row
+  highlight; header usage line `vidgen list-sfx examples/gallery --render-dir build/sfx`.
+
+Verification
+- Spectrograms (numpy + Pillow PNGs, read as images) of every sound: sweeps, envelopes and partials
+  as described; an STFT wrap-around artefact (faint vertical streaks) fixed by filtering each frame
+  in a buffer twice its size; typing strokes faded (a cut at −43 dB showed as a line).
+- Scratch project (chapter + scene list + auto, bullets with sfx actions, extension calling
+  `self.sfx`): `timings.json` events at the expected frames; the final MP4's decoded audio has the
+  onsets within 3 ms and the hard-left pan on the left channel (now a test).
+- `vidgen lint examples/gallery --scene part2 --scene speedup --scene formats`: 0 findings.
+
+Files
+- New: `src/vidgen/sfx.py`, `src/vidgen/scenes/sfx_action.py`, `tests/test_sfx.py` (56 tests, 5 render).
+- Changed: `config.py` (`SOUND_NAME_PATTERN`, `SoundName`, `SfxParams`, `SfxCue`, `SfxConfig`,
+  `SceneConfig.sfx`, `VideoConfig.sfx`), `actions.py`, `scene.py`, `scenes/__init__.py`,
+  `scenes/chapter.py` (`entrance_sfx`), `api.py`, `cli.py` (`list-sfx`, validate, list-scenes),
+  `jsonout.py` (`list_sfx_document`), `describe.py`, `render/pipeline.py`, `render/ffmpeg.py`,
+  `render/fingerprint.py` (`sfx.py` not a render input); tests `test_actions.py` (action lists),
+  `test_overlays.py` (join stub takes keywords), `test_docs.py` (models);
+  `examples/gallery/video.yaml`; docs/CONFIG.md (new "Sound effects" section + `list-sfx`, top-level
+  and scene rows, `sfx` action row, list-scenes / list-sfx JSON), docs/EXTENDING.md ("Sound
+  effects" building block, tested; non-animating actions in §8), README.md, DESIGN.md (tree, §4,
+  §6.4, §8, new §47), tasklist.md.
+
+Public interfaces added/changed
+- Config: top-level `sfx: {auto, gain}`, scene `sfx:` list, beat action `sfx` (JSON Schema follows).
+- `vidgen.api`: `SfxEvent`, `SfxParams`, `SoundLibrary`, `sound_library`, `synthesize`;
+  `NarratedScene.sfx()`, `sfx_log`, `sounds`, `auto_sfx()`, `entrance_sfx`; `Action.scene_targets`,
+  `Action.animates`, `Action.cue()` (compatible defaults).
+- `ffmpeg.join(..., sfx=None)`; scene timings and combined `timings.json` scenes may carry `sfx`.
+- CLI `vidgen list-sfx`; JSON `list-scenes` `actions[].scene_targets` / `animates` (version 1).
+
+Decisions / deviations
+- **Synthesised at join time, cached per process, not package-data files**: params are
+  continuous, synthesis is 5–110 ms per sound, the wheel stays small; `--render-dir` gives a
+  human the files.
+- **Mixed by the pipeline into a separate whole-video track, not with Manim's `add_sound`**:
+  sample-exact placement (pydub places at 1 ms and resamples the narration to the sound's rate),
+  sounds can ring across cuts, `--no-audio` simply skips the track, reused renders keep their
+  events, and Step 45 gets the voice and SFX tracks apart for sidechain ducking. Cost: scene
+  renders / storyboards carry no effects.
+- **A beat `sfx` plays exactly at `at`** (frame-rounded), not when the runner gets a wait: sounds
+  must land on the entrance at `at: 0`; animating actions may start later than `at` if the scene
+  is mid-animation, which `auto` handles by sounding when the action really starts.
+- **Level**: −27 LUFS loudest-400-ms (one channel) rather than the −18…−24 suggested in the brief,
+  because measured ElevenLabs narration is only −18.5…−21.4 LUFS that way; −24 would sit 3 dB
+  under it. Levels are relative, so Step 45's loudness normalisation keeps the balance.
+- `auto` covers built-in *actions* and `chapter` cards only; a pop per bullet / bar from the
+  scenes' own reveal steps was judged too busy (and would need hooks in every scene type).
+- Extra sounds beyond the six asked: swoosh, typing, success, error, thud (cheap variations).
+
+Known gaps / TODOs
+- **Step 45**: add music on its own track, duck it with the voice track (concatenated
+  `padded/<id>.wav`) as sidechain, then sum voice + SFX (`padded/sfx.wav`) + music and
+  `loudnorm`; `ffmpeg.join` is where the graph lives (DESIGN §47).
+- No per-scene `auto` switch; no automatic sounds for scenes' own reveal steps.
+- Project sounds are played as recorded (no loudness normalisation); built-ins are mono.
+- A sound still playing at the video's end is cut without a fade.
+- The storyboard / `lint` do not show or check sounds (e.g. a sound under a silent dead-air span).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1824 passed, 1 skipped, ~14.5 min); step only: `pytest
+tests/test_sfx.py`. Manual: `vidgen list-sfx --render-dir /tmp/sfx` (listen), `vidgen validate
+examples/gallery`, `vidgen render examples/gallery --preview --scene part2` then check
+`build/preview/padded/sfx.wav`, `vidgen list-scenes | grep sfx`.
+
+## Step 45 — Background music
+What was built
+- **Config**: top-level `music:` — a source name (`music: calm`), one cue `{source, volume, start,
+  loop, crossfade, fade_in, fade_out, duck}` or a list of cues with `from` / `to` scene ids
+  (changing tracks; checked: known scenes, in order, no overlap), `false` / null for none. A
+  source is a built-in bed or any audio file under the project. Scene `music: false` (none: it
+  fades out over the 0.75 s before the scene, back in after) or `{volume: dB}`. Top-level
+  `audio: {normalize: auto|true|false, target_lufs: -16, true_peak: -1.5}`.
+- **Generated beds** (`src/vidgen/music.py`, numpy only, deterministic): `calm` (60 s loop, D
+  major, no beat: warm pad, sub-bass, airy swell), `pulse` (40 s, A minor, 96 BPM: plucked
+  eighth-note arpeggio, muted pad, soft thump per beat), `bright` (48 s, C major, 120 BPM:
+  brighter pad, arpeggio an octave up, sparse bell melody). PADsynth pads (harmonics as Gaussian
+  bumps with random phases → one inverse FFT → a periodic wave), equal-power chord cross-fades,
+  plucks / bells note by note, every partial shaped (HP 40 Hz, LP 3.5–4.5 kHz); all rendered
+  circularly, so the loop tiles without a seam. −30 LUFS integrated (`MUSIC_LEVEL`). ~1–1.5 s
+  to make, cached per process (`bed_loop`). Each bed has a precise description, key, tempo,
+  chords and "use it for".
+- **Files**: decoded with PyAV, loudness-matched to −30 LUFS; `start` skips into the file (loops
+  restart there); looping plays the body once, then a loop whose head is cross-faded (equal
+  power, `crossfade` s) with the tail — seamless repeats; `loop: false` ends (fade-out at the
+  end of the file).
+- **Loudness** (`src/vidgen/loudness.py`): BS.1770-4 gated integrated loudness and 4x true peak,
+  block by block (10 s blocks, 0.5 s margins), `LoudnessMeter`; agrees with FFmpeg `ebur128`.
+- **Mix** (`src/vidgen/mix.py`): `plan_music` places the cues (span = `from` scene start to `to`
+  scene end) with a gain per 10 ms frame = volume × fades × scene levels (`smooth_steps`) ×
+  ducking (`duck_curve`, keyed off the narration's speech spans: beat start + MP3 speech bounds;
+  plus `video_clip` scenes with sound when `duck.clips`); `mix_audio` sums voice (padded scene
+  WAVs) + SFX track + music, normalises (two passes: measure, then gain), limits true peaks
+  (`limit`: smooth look-ahead gain, 10 ms) and writes `padded/mix.wav` (24-bit), which
+  `ffmpeg.join(..., mix=)` encodes. Without music and with `normalize: auto|false` nothing is
+  written: the join is the old command and the loudness is only measured.
+- **Reporting**: combined `timings.json` and `vidgen render --json` gain `mix` `{mixed,
+  normalized, target_lufs, true_peak_limit, gain_db, integrated_lufs, true_peak_dbtp, limited_db,
+  music: [{source, kind, from, to, start, end, volume, duck}]}`; human `render` prints a
+  `loudness:` line. New `vidgen list-music [PROJECT] [--render-dir DIR] [--json]` (beds in words +
+  the project's `assets/music` files; WAV previews).
+- **Example**: `examples/gallery` has `music: {source: calm, volume: -2, duck: {depth: 12}}` and a
+  `vidgen list-music` usage line.
+
+Verification
+- Spectrograms of the three beds (PNG, read as images): chord changes where expected, pads
+  rolled off above ~4 kHz, faint note onsets only; loops measured −30.00 LUFS, peaks ≤ −15 dBFS,
+  seam step within ordinary steps.
+- Scratch project with two real kphi3 MP3s + silent intro / outro, `calm`: gain curve read back
+  (−12 dB from 0.4 s before the speech to 1 s after; the 1 s pause between beats stays ducked
+  once `hold` was raised from 0.6 to 1.5 s — at 0.6 the music swelled 8 dB between every beat);
+  the MP4 measured by FFmpeg `ebur128`: I = −16.1 LUFS, true peak −1.6 dBFS (ours: −16.06 /
+  −1.6 on the WAV).
+- `vidgen render examples/gallery --preview` (no narration MP3s): first version normalised
+  music + effects alone by +25 dB → now a video whose beats have no MP3 yet is not normalised
+  (−41 LUFS preview, music ducked under the estimated beats). `vidgen validate examples/gallery`
+  ok; `vidgen lint examples/gallery`: 0 findings.
+
+Files
+- New: `src/vidgen/music.py`, `src/vidgen/mix.py`, `src/vidgen/loudness.py`, `tests/test_music.py`
+  (31 tests, 4 render).
+- Changed: `config.py` (`DuckConfig`, `MusicCue`, `MusicEntry`, `MusicSetting`, `SceneMusic`,
+  `AudioConfig`, `SceneConfig.music`, `VideoConfig.music` / `.audio` / `.music_cues`,
+  `_music_problems`), `render/pipeline.py` (`join_scenes` mixes, music checks),
+  `render/ffmpeg.py` (`join(..., mix=)`), `render/fingerprint.py` (music / audio excluded; new
+  modules not render inputs), `cli.py` (`list-music`, validate checks, `loudness:` line),
+  `jsonout.py` (`list_music_document`, render `mix`), `tests/test_docs.py` (models);
+  `examples/gallery/video.yaml`; docs/CONFIG.md (new "Background music" + "Loudness of the
+  final mix" + `list-music` sections, rows, JSON), README.md, DESIGN.md (§2, §3, §4, §8, new §48),
+  tasklist.md.
+
+Public interfaces added/changed
+- Config: `music:` (video), `music:` (scene), `audio:` (JSON Schema follows).
+- CLI: `vidgen list-music`; `render --json` `mix` (version 1, a new key); `timings.json` `mix`.
+- `ffmpeg.join(..., mix=None)`. No `vidgen.api` change (music is config only).
+
+Decisions / deviations
+- **Ducking by a computed gain curve, not FFmpeg `sidechaincompress`**: keyed off the
+  narration's timing (beat starts + MP3 speech bounds), because the voice WAVs already contain
+  clip sound (Step 35 mixes it in Manim) — an audio sidechain could not exclude it — and an
+  offline curve can look ahead (the music is down when the first word starts). Deterministic,
+  exact depth (tests measure −12.0 dB).
+- **Normalisation `auto` (default): only with music**, so every existing narration-only video
+  is bit-for-bit unchanged (and its join command identical); `normalize: true` opts in for
+  them. Never while no beat has its MP3 (word-count previews).
+- **Beds are loops (40–60 s) tiled to the length**, not generated per video length: fixed cost,
+  seamless by construction; cached per process, no disk cache (≈1 s).
+- **Level −30 LUFS, not −28 as first planned**: a rendered narration track measures −24.4 LUFS
+  integrated, not the MP3s' −21.4 — Manim's `add_sound` converts mono MP3s through
+  libswresample, whose mono → stereo upmix is −3 dB. So the Step 44 SFX level ("7 dB under
+  narration", calibrated on MP3s) is really ~4 dB under the rendered voice; left as is.
+- 24-bit mix WAV (the normalisation gain and fades on 16 bits would quantise quiet music).
+
+Known gaps / TODOs
+- Cues do not cross-fade into each other (a dip between tracks); no per-cue `from`/`to` times
+  in seconds; beds have no tempo / key / intensity parameters.
+- Music files are decoded whole into memory (~23 MB per stereo minute).
+- The narration's −3 dB mono → stereo upmix (Step 4) might be worth fixing (a review step):
+  it would change every existing video's level.
+- Loudness range / short-term targets are not handled; the limiter is a simple 10 ms one (heavy
+  normalisation of very dynamic narration limits speech peaks by ~4–6 dB).
+- Storyboards and scene renders have no music (as for SFX).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1859 passed, 1 skipped, ~17 min); step only: `pytest
+tests/test_music.py`. Manual: `vidgen list-music --render-dir /tmp/music` (listen),
+`vidgen render examples/gallery --preview` (prints `loudness:`), `ffmpeg -i out.mp4 -af
+ebur128=peak=true -f null -` to cross-check.
+
+## Step 46 — Transitions: crossfade and fade-through-colour
+What was built
+- **Config**: `transition:` at the video level (the default between scenes, never before the
+  first one) and on a scene (the way *into* it): `cut` | `crossfade` | `fade_color`, or
+  `{type, duration, color}` (`config.TransitionConfig`; defaults crossfade 0.5 s, fade_color
+  1.0 s split into fade-out + fade-in; `color` a theme token, `background` (default) or hex, only
+  on fade_color; a cut has no duration; duration ≤ 5 s). A crossfade on the first scene is a
+  config error; `fade_color` there fades the video in.
+- **Timing contract**: a **crossfade overlaps** the two scenes (the next one starts `duration`
+  earlier; the video gets shorter by it); a **fade_color does not** (last frames of the scene
+  before fade to the colour, first frames of the next fade in from it; length unchanged). A
+  transition only ever covers the scene before's **silent tail** (after its last narration ends:
+  pad + outro, or all of a silent scene, minus its own incoming transition's frames); when that
+  is too short the scene before is **held** longer (`hold` frames, in `tear_down`) and `vidgen
+  validate` warns how much. Built-in defaults need no hold (0.35 pad + 0.5 outro ≥ 0.5).
+- **One source of start times**: `VideoPlan` is frame-based now: `transition(i) ->
+  TransitionSlot(type, seconds, color, overlap, fade_out, fade_in, hold)`, scene durations include
+  the hold, starts subtract overlaps; `SceneSlot.overlap_in` / `overlap_out` / `cut` (where the next
+  scene takes over). Chapters, progress bar, chapter indicator runs (end at `cut`), lower thirds
+  (`min(end, slot.cut)`), `from`/`to` scene ends (= `cut`), captions follow it. The join computes
+  the same overlaps from the renders (`transitions.join_overlaps`, warns when a reused render
+  forces a shorter crossfade); `timings.json`, SRT, SFX events, music cues / ducking, frames
+  index and storyboard times all use the overlapped starts.
+- **Scene ends** (`NarratedScene`): `transition_in` / `transition_out` (planned slots, `None`
+  without transitions); `finish()` holds the picture over the outro instead of `clear_all` when a
+  non-cut transition follows; `tear_down` adds the hold; `transitions.ColorFade` wraps
+  `add_frame` outermost for fade_color (scene picture fades, overlays stay on top; stills and
+  storyboards show it).
+- **Join** (`ffmpeg.join(..., crossfades, frames, fps)`): cut-joined scenes form runs (concat
+  lists `video_concat_<k>.txt`), runs are blended with chained `xfade=transition=fade`, offsets
+  half a frame early (symmetric weights `(j+0.5)/n`, exact frame count; `crossfade_graph`), and
+  the video is encoded once (libx264 CRF 18). Audio: `transitions.write_voice_track` sums the
+  padded scene WAVs at their overlapped sample offsets into `padded/voice.wav` (the earlier
+  scene's silent tail fades out, raised cosine), used for the mux and the mix. Without crossfades
+  the join is the old stream copy (byte-for-byte the old command apart from argument order).
+- **Overlays in a crossfade**: `OverlayLayer(scene, overlays, following, start, cut)`: from the
+  next scene's start on, a scene's render draws the *next scene's* overlays (built with
+  `scene_overlays(next)`), so both renders have identical overlay pixels in shared frames and the
+  linear blend shows them exactly once (no doubled captions, no ghosted watermark / progress bar).
+- **Lint**: activity file `overlap_out`; `dead_air`'s still runs end where a crossfade starts.
+- **Validate**: transition colour tokens (`transitions.color_problems`), hold warnings
+  (`transition_warnings`); `estimated_duration` subtracts crossfades.
+- **Example**: `examples/gallery`: `transition: crossfade` (video default), `part2`
+  `transition: fade_color` (background), `part3` `{type: fade_color, color: surface, duration:
+  1.2}`; usage line `vidgen render examples/gallery --preview`.
+
+Files
+- New: `src/vidgen/transitions.py`, `tests/test_transitions.py` (20 tests, 4 render).
+- Changed: `config.py` (`TransitionConfig`, `TransitionSetting`, `TRANSITION_TYPES`,
+  `TRANSITION_DURATIONS`, scene / video `transition`, first-scene check), `videoplan.py`
+  (`TransitionSlot`, frame-based plan, `SceneSlot` fields / `cut`, `resolve`), `scene.py`,
+  `overlay_layer.py` (`following`, `cut`, `start`), `overlays.py` (visibility until `cut`),
+  `scenes/overlays.py` (lower third to `cut`), `scenes/progress.py` (runs to `cut`), `activity.py`,
+  `lint/timing_rules.py`, `render/pipeline.py` (join with overlaps, `_scene_renders`,
+  `_overlaps`), `render/ffmpeg.py` (`crossfade_graph`, `join` crossfades, `VIDEO_CRF`),
+  `render/fingerprint.py` (`next_transition`, transitions in overlay inputs), `storyboard.py`
+  (starts with overlaps), `project.py` (`estimated_duration`), `cli.py` (validate);
+  tests `test_docs.py` (model), `test_overlays.py` / `test_chapters_progress.py` (hand-built
+  layers get `following`); `examples/gallery/video.yaml`; docs/CONFIG.md (new "Transitions"
+  section, top-level / scene rows, activity file, `dead_air`), docs/EXTENDING.md (scene ends,
+  `SceneSlot.cut`), README.md, DESIGN.md (tree, §3, §4, §6.4, new §49), tasklist.md.
+
+Public interfaces added/changed (compatible)
+- Config: `transition` (video and scene); JSON Schema follows from the models.
+- `NarratedScene.transition_in` / `transition_out`; `finish()` holds instead of fading when a
+  transition follows. `SceneSlot.overlap_in`, `overlap_out` (defaults 0), `cut`;
+  `VideoPlan.transition(i)`, `TransitionSlot`. `OverlayLayer(..., following=None, start=None,
+  cut=inf)`. `ffmpeg.join(..., crossfades=None, frames=None, fps=None)`.
+- JSON: combined `timings.json` scenes `transition: {type, duration, overlap}` (only with a
+  transition); activity `overlap_out` (version 1 both).
+- Files: `build/.../padded/voice.wav`, `padded/video_concat_<k>.txt` (with crossfades only).
+- Fingerprint: new `next_transition` key → every existing render counts as stale once.
+
+Decisions / deviations
+- **Crossfade overlaps, fade_color does not** (a dissolve needs both pictures; a dip does not):
+  the honest timing for each, and it keeps fade-only videos the same length.
+- **Extend, not clamp**: a too-long transition holds the scene before instead of shortening the
+  transition or overlapping speech; validate reports the hold. Only the join clamps (reused
+  renders that end with less silence), with a warning.
+- **The outgoing scene holds instead of fading** when a transition follows (no dip through the
+  background in the middle of a crossfade); frame counts unchanged.
+- **Incoming scene's overlays on both sides of a crossfade**, switched at its start: exact by
+  linearity, covers captions (per-scene cues), cards without an indicator, per-scene overrides.
+- **Whole video re-encoded** (CRF 18) when any crossfade exists: re-encoding only the overlaps
+  would need cutting stream-copied H.264 at arbitrary frames. fade_color stays in-render (no
+  re-encode, overlays above it, visible in stills).
+- xfade weights `(j + 0.5)/n` (offset half a frame early): symmetric, exact frame count.
+
+Known gaps / TODOs
+- **Step 47 (push, wipe, continuity)**: add types to `TransitionConfig` (`direction`), map to
+  `xfade` `slide*` / `wipe*` in `crossfade_graph`. Slides and wipes are not per-pixel linear, so
+  overlays baked into both renders would move with the pictures: render the overlap frames'
+  overlays separately (an RGBA clip from the incoming scene's layer, or both scenes without
+  overlays in the overlap) and `overlay` them after the blend (DESIGN §49). The contract (overlap,
+  silent tail, hold) carries over.
+- An extension scene whose real length differs from the plan gets its colour fade / overlap at the
+  planned frames (join warns about drift / shortened crossfades).
+- `vidgen render --scene X` alone shows X's held tail; the blend only exists in the joined video.
+- A watermark / overlay excluded on the next scene switches off at the transition's start (as at a
+  cut); its `fade` only applies at `from` / `to`.
+- No transition after the last scene; audio is not cross-faded beyond the silent tail's fade-out.
+
+Verification
+- Scratch project (title / chapter / title, captions + progress bar + watermark, crossfade
+  default, fade_color `accent`, 1.2 s crossfade): every output frame read as a contact sheet:
+  single caption switching at the incoming scene's start, steady progress bar and watermark,
+  accent dip with the caption plate on top; plan durations = rendered durations; SRT shifted.
+- `examples/gallery` preview: 3:48 (was ~3:56 with cuts: 16 crossfades × 0.53 s at 15 fps);
+  frames around `tradeoff → schedule` (crossfade, indicator / watermark / bar unchanged),
+  `net → part2` (fade to background) and `reach → part3` (surface, 1.2 s) read.
+  `vidgen lint examples/gallery` and `--variant vertical`: 0 findings; `vidgen validate`: ok, no hold warnings.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1880 passed, 1 skipped, ~18 min); step only:
+`pytest tests/test_transitions.py`. Manual: `vidgen validate examples/gallery`, `vidgen render
+examples/gallery --preview`, then `ffmpeg -ss 19.7 -i examples/gallery/gallery_preview.mp4
+-frames:v 1 mid.png` (mid-crossfade `tradeoff → schedule`).
+
+## Step 47 — Transitions: push, wipe, continuity
+What was built
+- **`push` and `wipe`** transitions: `transition: push` / `{type: wipe, direction: up, soft:
+  true, duration: 0.8}` (`TransitionConfig.direction` left/right/up/down = where the pictures /
+  the edge move, push and wipe only; `soft` wipe only; default 0.6 s). Default direction per
+  render format: `left` in 16:9 / square, `up` in 9:16 (the next scene comes in from the right /
+  from below), so one video-level push works in both orientations. Timing contract identical to a
+  crossfade (they overlap; silent tail; hold) — `TransitionConfig.overlaps` replaces every
+  `type == "crossfade"` test. Join: `xfade` `slide<dir>` / `wipe<dir>` / `smooth<dir>`
+  (`transitions.xfade_name`), checked frame by frame (`(j + 0.5) / n` of the picture at shared
+  frame `j`, from the right side).
+- **Overlays stay put** during a push / wipe: the outgoing scene draws no overlays after the cut,
+  the incoming scene's first `overlap` frames are rendered bare and their overlays (the incoming
+  scene's, as a pure function of video time) are written by its worker into
+  `scenes/<id>.overlay.mov` (`overlay_layer.RgbaClip`, QuickTime PNG RGBA, straight alpha; plus a
+  transparent end frame, without which FFmpeg's `overlay` drops the last one); the join draws it
+  over the `xfade` result at exactly the shared frames (`ffmpeg.overlay_graph`). Checked by
+  extracting mid-transition frames: watermark, progress bar, chapter indicator and captions are
+  stationary and appear once.
+- **Continuity / match cut**: scene key **`carry:`** — `[icon]`, `["title -> heading"]` (target
+  names of the scene before, optionally `-> ` a target of this scene; `title`/`heading` synonyms).
+  The scene before keeps those targets on screen while the rest of it fades out, and records
+  their final shapes (points, fills, strokes) in `build/.../carry/<id>.json`; the carrying scene
+  shows them from frame 0 (the cut does not show) and, when it brings in the destination target
+  through `entrance()` (all built-ins), moves the copy into it: glyph by glyph / shape by shape
+  when the shape counts match (same text or icon at another size / place / colour), else a
+  stretched cross-fade (different words). Leftovers fade out (warning when the destination does
+  not exist). `self.carry_in(name)` + `vidgen.api.carry_move` for custom scenes.
+- **Render order**: a carrying scene renders after the scene before it (`--jobs`: its worker
+  thread waits for that scene's); `vidgen render --scene X` / storyboard / lint add the scene
+  before when its record is missing or stale (fingerprint) and the carrying scene when the scene
+  before was rendered from other inputs than the ones it started from (`render.carry_from`).
+- **Validation**: carry names checked against both scene types' targets (did-you-mean), first
+  scene cannot push / wipe / carry, `direction` / `soft` only on their types; warning for a carry
+  through a push / wipe / fade_color.
+- **Example**: `examples/gallery`: `structure` card → `tradeoff` (cut, title flows into the
+  heading), `tradeoff` → `schedule` push, `part2` card → `speedup` (cut, the card's icon glides
+  into the stat's new icon), `formats` → `cost` soft wipe to the right.
+
+Files
+- New: `src/vidgen/carry.py`, `tests/test_push_wipe_carry.py` (24 tests: config, graph strings,
+  frame math in four directions with an RGBA clip, `rgba` vs `composite`, carry record round trip
+  pixel-exact, render order with 4 workers, `with_carried`, a rendered video (push, carry, wipe;
+  3 workers) checked frame by frame, `--scene` re-rendering the scene before).
+- Changed: `config.py` (`push`/`wipe`, `direction`, `soft`, `overlaps`, `OVERLAPPING_TRANSITIONS`,
+  `DIRECTED_TRANSITIONS`, `TARGET_NAME_PATTERN`, `CarryEntry`, `CarrySetting`, scene `carry`,
+  first-scene checks), `actions.py` (pattern from config), `transitions.py` (`direction`,
+  `xfade_name`, `moves_pictures`, overlaps generalised), `videoplan.py`, `project.py`,
+  `overlay_layer.py` (`RgbaClip`, `rgba`, `split_head`, `close_head`), `scene.py` (overlays out of
+  pushes, `overlay_head`, carry recording / showing / moving, `clear_all(keep=)`, `setup`,
+  `carry_in`), `render/worker.py` (clip + carry record paths, `_carried_in`, timings
+  `overlays.head`, `carry_from`), `render/pipeline.py` (`with_carried`, `_runs(after=)`, join
+  kinds + clips, carry checks), `render/ffmpeg.py` (`crossfade_graph(kinds)`, `overlay_graph`,
+  `join(kinds=, overlays=)`), `render/fingerprint.py` (`next_carry`, `carry`, `carry_from`;
+  own `carry` out of the scene dump), `cli.py` (validate), `api.py` (`carry_move`);
+  `examples/gallery/video.yaml`; docs/CONFIG.md (transitions table / keys / overlays / encoding,
+  new "Continuity" subsection, scene + top-level rows, storyboard fingerprint), docs/EXTENDING.md,
+  README.md, DESIGN.md (tree, §3 build files, §4, §6.4, new §50), tasklist.md.
+
+Public interfaces added/changed (compatible)
+- Config: transition types `push`, `wipe`, keys `direction`, `soft`; scene key `carry`.
+- `vidgen.api.carry_move`; `NarratedScene.carry_in(name)`, `carry_out`, `carry_state`,
+  `carried_in`, `overlay_head`, `clear_all(run_time, keep=())`; `entrance()` moves carried copies.
+- `OverlayLayer.split_head / close_head / rgba`, `RgbaClip`; `ffmpeg.join(..., kinds=,
+  overlays=)`, `crossfade_graph(..., kinds=None)`, `overlay_graph`; `pipeline.with_carried`.
+- JSON: combined timings `transition.direction` (push / wipe); scene timings
+  `render.overlays.head`, `render.carry_from` (all within version 1). Files
+  `build/.../scenes/<id>.overlay.mov`, `build/.../carry/<id>.json`.
+- Fingerprint: scenes with transitions change once (new `direction` / `soft` keys in the
+  transition dump); projects without transitions or carries keep theirs.
+
+Decisions / deviations
+- **Overlays of a push / wipe come from the incoming scene's render as a separate RGBA clip**
+  (DESIGN §49's first suggestion), both scenes' shared frames bare. Single source: overlay state
+  as a function of video time; the overlays chosen are the incoming scene's (as for a crossfade).
+- **Carry = recorded shapes, not pickles, and B depends on A's render artifact** (not on
+  recomputing A's end): simple, exact, and `--jobs` / `--scene` handled by ordering + staleness.
+- The move into the destination hooks `entrance()` (what every built-in uses for its targets), so
+  no built-in scene needed changes; a scene that brings the destination in otherwise gets a
+  cross-fade instead of a move.
+- `soft` uses FFmpeg's `smooth*` wipes (a wide soft edge; not tunable).
+
+Known gaps / TODOs
+- Carried objects: vector shapes only (images / clips skipped with a warning); scene coordinates
+  (a camera zoomed at A's end is not undone); with `fade_color` / `push` / `wipe` they fade / move
+  with the picture (validate warns).
+- A chapter card's other parts fade over the 0.5 s outro, then the carried object holds; a scene
+  whose entrance plays late (e.g. a stat's icon in a lagged group) leaves the copy waiting a
+  few frames before moving.
+- Stills inside a push / wipe's frames have no overlays (beat-end stills are never there).
+- `vidgen render --scene X` alone still shows no slide / blend (the join makes them).
+- Step 48 (review) could add a lint / storyboard view of transitions and carries (e.g. a sheet of
+  the frames around each cut).
+
+Verification
+- Scratch project (title → push → chapter card → cut + `carry: [title -> heading]` → bullets →
+  wipe up → title; progress bar, watermark, captions; `--jobs 3`): contact sheets of every frame
+  around the three joins read — the card slides in from the right with the watermark and bar
+  fixed, the card's title stays put across the cut and glides into the heading, the wipe uncovers
+  the last scene from below with one caption in place.
+- `examples/gallery` preview rendered with `--jobs 4` (3:49): frames around structure → tradeoff
+  (title → heading), tradeoff → schedule (push, indicator / watermark / bar fixed), part2 →
+  speedup (icon glides into the stat), formats → cost (soft wipe) read; the vertical variant's
+  push goes up (from below) with the indicator and watermark fixed. `vidgen lint
+  examples/gallery` and `--variant vertical`: 0 findings; `vidgen validate`: ok.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1904 passed, 1 skipped, ~20 min); step only: `pytest
+tests/test_push_wipe_carry.py`. Manual: `vidgen render examples/gallery --preview --jobs 4`,
+then a frame from the push: `ffmpeg -ss 20.1 -i examples/gallery/gallery_preview.mp4 -frames:v 1
+push.png`; `vidgen storyboard examples/gallery --scene structure --scene tradeoff --per-beat 3`.
+
+## Step 48 — Review 3
+Independent end-to-end review of Steps 38–47 (overlays, chapters, captions, callouts,
+pronunciation, voices, SFX, music / mix / loudness, transitions, carry): preview renders through
+the full join path, then measured — not only looked at — with scratch scripts (A/V stream
+lengths, cross-correlation of every beat's MP3 and every SFX against the final AAC track, plan
+vs rendered starts, SRT vs beats vs chapters, our loudness vs FFmpeg `ebur128`, contact sheets
+of the frames around every transition / carry, read as images). Because the gallery has no
+narration, a scratch copy got kphi3's real MP3s round-robin on its 54 beats plus `captions`
+(16:9 and 9:16), so narration, ducking, normalisation, captions and transitions met in one video.
+
+End-to-end status (preview; `vidgen lint` with `--jobs 2`)
+| example / variant | A/V | lint |
+|---|---|---|
+| gallery (default, vertical) | video = audio = timings (after fix 3); SFX at 0.00 ms; −39.7 LUFS (no MP3s: not normalised, as designed) | 0 findings each |
+| gallery voiced copy + captions (16:9, 9:16) | 456.67 s both streams; 54 beats within 1.0 ms of their planned start; whoosh / chime / pop at 0.00 ms; plan = render for all 19 scenes; 58 SRT cues inside their beats, none overlapping; chapters start at their scenes; −16.03 LUFS reported vs −16.1 FFmpeg | only `narration_speed` / `dead_air` (mismatched audio, expected) + 2 `min_font` in 16:9 (see 7) |
+| minimal (default, social, subtitled) | equal lengths, plan = render, SRT consistent | 0 findings (also `vertical`) |
+| custom_scene (+ vertical) | equal, plan = render | 0 findings |
+| kphi3 | 231.464 s both; 27 beats within 1.0 ms; −21.4 LUFS (was −24.4), true peak −2.2 dBTP | 0 findings (4 commented `lint_ignore`s, as before) |
+
+Findings and fixes
+1. **Narration 3 dB quieter than its MP3s** (Step 45's known issue). Root cause, measured: Manim's
+   `add_sound` converts an MP3 with PyAV (`convert_audio`), whose encoder defaults to a stereo
+   layout, so libswresample upmixes mono with its −3.01 dB centre matrix (kphi3 `s1_b1`: −24.42
+   dB RMS in the MP3, −27.43 per channel in the WAV). A bug, not a choice: clip sound mixed in
+   the same scene already came through pydub at full level, and SFX are full-level dual mono.
+   Fix: `scene.add_narration` decodes the MP3 (`sfx.decode_audio`) and hands Manim a 48 kHz
+   stereo WAV (`sfx.stereo`, full level both channels). kphi3 renders at −21.4 LUFS integrated
+   (its MP3s' level), true peak −2.2 dBTP (no clipping: MP3 peaks are −4 to −8 dBFS). Recalibrated:
+   `MUSIC_LEVEL` −30 → **−28 LUFS** (Step 45 had planned −28 and lowered it only to make up for
+   this): music ~6.5 dB under the voice in pauses, ~18.5 dB ducked; the SFX level (−27 LUFS
+   loudest 400 ms) is now really ~7 dB under the voice as Step 44 stated (it was ~4). Docs:
+   CONFIG.md SFX `gain` row unchanged, music `volume` / `depth` rows, loudness paragraph (a
+   narration-only video lifted ~5 dB to −16, not ~8), `list-music` text, DESIGN §47 / §48 / §51.
+2. **True peak over the ceiling after the AAC encode**: −1.6 dBTP on the WAV became −1.4 in the
+   MP4 (ceiling −1.5). `mix.LIMITER_MARGIN_DB` 0.1 → 0.4 (voiced gallery now −1.9 on the WAV,
+   −1.7 in the MP4 by FFmpeg; −16.0 / −16.1 LUFS).
+3. **Scene lengths from the average frame rate**: Manim's joined partial movies have timestamps
+   whose average rate is 15.0003 for 15 fps, so `ffmpeg.probe` gave 21.19967 s for 318 frames:
+   the join's starts drifted from the plan (gallery: 1–3 ms from `clip` on; chapter "Code"
+   started 2.6 ms off its scene) and each padded WAV was a few samples short of its video.
+   `probe` now uses the nominal rate (`guessed_rate`); re-joined gallery: plan = render for
+   every scene, video = audio = 228.533 s.
+4. **Lower third under bottom captions** (Step 40 gap; also 16:9 with `align: bottom`):
+   `Overlay.yields` / `clear_of` / `clear_area` + `overlays.build_overlays` (used by
+   `OverlayLayer`): yielding overlays are built after the others and know the boxes of those
+   that reserve room; `lower_third` yields and moves above such a box only when it would come
+   within the reserve gap (verified in the voiced gallery's `clip` in 9:16 and 16:9; the
+   unvoiced gallery is unchanged).
+5. **Callout due with a zoom** (Step 41 gap: built for the camera before the zoom, then scaled
+   with the scene): `Action.after_camera` (`callout` sets it) — in a frame where a camera move
+   is due, such actions go last in a batch of their own, so the callout is built for the zoomed
+   view. Test fails without the flag.
+6. **Karaoke pop crowding**: in 9:16 the popped word left ~10 % of the space to its neighbour
+   ("are typeset" read as one word). `captions.POP_ROOM` 0.45 → 0.25 of a space per side.
+7. **`reserve` per whole scene** (Steps 38–40 gaps): kept (a scene lays out once; a time-ranged
+   reserve would re-lay out scenes mid-way), documented: reserving overlays add up — in the
+   voiced 16:9 gallery, captions + lower third + chapter indicator + watermark shrink `clip` and
+   push a stat context line / a screenshot's URL bar under the readable size (lint `min_font`
+   reports it, as it should). CONFIG.md `reserve` row says to reserve only what a scene must
+   avoid all along.
+8. Checked, no change: SRT and captions start a beat's first cue at the beat's start, not at the
+   speech onset (~50–90 ms later; by design in `cues.caption_cues`); crossfades show one caption
+   / watermark / progress bar; push and wipe keep overlays fixed (scene content slides under the
+   fixed chapter indicator during a vertical push — inherent); colour fades keep overlays on top
+   and the indicator fades before cards; both carries hold across the cut and move (title →
+   heading cross-fade, icon glide); speaker tag + colour on the guest's caption; pronunciation
+   (`LaTeX` → "lah-tek") keeps the written word highlighted in karaoke; `list-sfx` / `list-music`
+   JSON envelopes and error documents match the other `list-*` commands.
+9. **Performance**: gallery preview with `--jobs 2`: 2:45 (scenes ~2:00, join + mix ~50 s: x264
+   ~30 s, decode / xfade / overlay filters ~10 s, mix numpy ~12 s). `render` re-renders every scene
+   without `--scene` (Step 4 design). Stream-copying the parts between transitions: not done —
+   Manim's keyframes sit at its partial-movie boundaries, so the head / tail pieces would be
+   re-encoded and concat-copied next to Manim's stream, which needs matching SPS/PPS; fragile for
+   a ~25 % saving at preview size (less at final size, where scene renders dominate). Documented
+   (CONFIG.md "Encoding", DESIGN §51); routed to Step 60.
+10. **Tests**: quick run `-m "not slow"` had grown to ~4 min with Steps 38–47's render fixtures →
+   1:58 (1479 tests): `slow` on the functions over ~1.5 s and on every user of the music, SFX,
+   transition and push / wipe render fixtures (a fixture's cost lands on whichever quick test uses
+   it first); the core pipeline render (`test_render`'s `main_project`) stays quick.
+   **`pytest-xdist`** is now in the `dev` extra: `python -m pytest -q -n auto` runs the full suite
+   in parallel (render tests use `tmp_path` and per-test media folders; no shared state);
+   documented in README.
+
+Files
+- Code: `scene.py` (`add_narration`), `music.py` (`MUSIC_LEVEL`), `mix.py` (`LIMITER_MARGIN_DB`),
+  `render/ffmpeg.py` (`probe` rate), `overlays.py` (`yields`, `clear_of`, `clear_area`,
+  `build_overlays`), `overlay_layer.py`, `scenes/overlays.py` (lower third yields), `actions.py`
+  (`after_camera`, `_after_camera`), `scenes/callout_action.py`, `scenes/captions.py`
+  (`POP_ROOM`), `cli.py` (`list-music` text); `pyproject.toml` (`pytest-xdist` in `dev`).
+- Tests: new `tests/test_review3.py` (narration level, probe rate, lower third vs captions in
+  16:9 / 9:16, lower third unmoved without obstacles); `test_callout_action.py` (callout with a
+  zoom); `test_music.py` (levels, gain), `test_render.py` (AAC spill bound); `slow` markers in
+  `test_music`, `test_sfx`, `test_transitions`, `test_push_wipe_carry`, `test_chapters_progress`,
+  `test_voices`, `test_overlays`, `test_schema`, `test_stat_chapter`, `test_comparison_table`.
+- Docs: docs/CONFIG.md (music / ducking / loudness levels, limiter margin, encoding cost,
+  `reserve` adding up, lower third making way, captions placement, callouts with a zoom),
+  docs/EXTENDING.md (`yields` / `clear_area`, `after_camera`), README.md (gallery example,
+  working on vidgen: `-n auto`), DESIGN.md (§44 callout timing, §47 / §48 levels and limiter,
+  karaoke pop in §43, new §51), tasklist.md.
+
+Public interfaces added/changed (compatible)
+- `vidgen.api` `Overlay`: class attribute `yields`, attribute `clear_of`, method
+  `clear_area(area, mobject)`; `vidgen.overlays.build_overlays`. `Action.after_camera`.
+  `vidgen.scene.add_narration(scene, path)`.
+- Behaviour: rendered narration is 3 dB louder (its MP3s' level) — every narrated video's
+  level changes once (scene renders are fingerprinted from the code, so they re-render anyway);
+  music beds / files play 2 dB louder at `volume: 0` (same balance against the corrected voice);
+  normalised mixes peak ≤ −1.9 dBTP on the WAV; a lower third next to bottom captions sits
+  above them; a callout due with a zoom appears once the camera is in; karaoke pops are smaller
+  on long words.
+
+Decisions / deviations
+- Narration converted by vidgen, not by patching Manim's `convert_audio`: one place, no
+  monkeypatching, and the WAV is what Manim's pydub mix reads anyway.
+- Clip sound keeps FFmpeg's standard −3 dB upmix for mono clips (it plays at a chosen `volume`
+  under the narration); routed to Step 60 to revisit with the narration path.
+- "Who gives way" is a property of the overlay type (`yields`), not a config priority.
+
+Known gaps / TODOs (routed in tasklist.md, Step 60)
+- Join re-encode of the whole video with any crossfade / push / wipe (measured, documented).
+- `reserve` per whole scene; many reserving overlays + captions can push text under the
+  readable size (lint reports it).
+- A storyboard / lint view of the frames around each transition and carry (Step 47's
+  suggestion; this review used scratch contact sheets).
+- Mono clip sound −3 dB upmix.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1910 passed, 1 skipped, ~17 min on 2
+CPUs); parallel: `python -m pytest -q -n auto` (same result, 10:06); quick: `-m "not slow"` (1479 passed, 1 skipped,
+1:58). Step only: `pytest tests/test_review3.py tests/test_callout_action.py`. Manual: `vidgen
+render examples/kphi3 --preview` then `ffmpeg -i examples/kphi3/kphi3_video_preview.mp4 -af
+ebur128=peak=true -f null -` (≈ −21.4 LUFS); `vidgen lint examples/minimal --variant social`.
+
+## Step 49 — Chapters
+What was built
+- **MP4 chapters and tags**: the join writes `build/.../padded/metadata.txt` (FFMETADATA: the
+  tags, then one `[CHAPTER]` per chapter, `TIMEBASE=1/1000`, title on one line, `\ = ; #` and
+  newlines escaped) and the final mux maps it (`-map_metadata` / `-map_chapters`; FFmpeg's MP4
+  muxer adds a chapter text track + Nero `chpl`). Tags: `title` (the video's `title`, or
+  `metadata.title`) and the optional new top-level **`metadata:`** `{artist, album, comment,
+  description, copyright, date, genre}`.
+- **YouTube list** `<output>[_<variant>][_preview]_chapters.txt`: `0:00 Intro` / `1:29 Charts
+  and numbers` lines (`H:MM:SS` from an hour on; timestamps **rounded down** so a click never
+  lands after the chapter's first frame). YouTube's rules — ≥ 3 chapters, each ≥ 10 s measured
+  between the rounded timestamps, first at 0:00 — are checked; each broken rule is a warning
+  `chapters: '<title>' (0:00-0:03) lasts 3.0 s; YouTube ignores the whole chapter list ... (<remedy>)`
+  from `vidgen render` (logged → `render --json` `warnings`) and from `vidgen validate` (planned
+  times). The file is still written. No chapters / `youtube: false` → no file, an old one is removed.
+- **Intro chapter**: when the first chapter starts after 0:00, the published lists (MP4, txt,
+  JSON) start with a chapter titled **`chapters.intro`** (default `Intro`, `Chapter.intro =
+  True`, scene = the first scene); `intro: false` moves the first chapter to 0:00 instead. The
+  overlays (`progress_bar`, `chapter_indicator`) are unchanged: nothing before the first chapter.
+- **Config** `chapters: {metadata: true, youtube: true, intro: Intro | false}`; both new sections
+  are out of scene fingerprints (no re-render when edited).
+- **JSON**: combined `timings.json` `chapters` (published list, `{title, number, scene, start,
+  end, index, count, card, intro}`, always present); `render --json` top-level `chapters` and
+  `outputs.chapters` (path or `null`); `post_render` hook data `chapters`; human `render` prints
+  `chapters: <file>`.
+- **API**: `video_chapters(project, fps=None, intro=False)` — `intro=True` returns the published
+  list from the plan; `Chapter.intro` (default `False`). New internal module
+  `vidgen/chapter_export.py` (`published_chapters`, `joined_chapters`, `chapter_json` /
+  `chapter_from_json`, `video_tags`, `ffmetadata`, `youtube_time`, `youtube_list`,
+  `youtube_problems`, `write_youtube_list`, `chapter_warnings`); `Project.chapters_path`;
+  `ffmpeg.join(..., metadata=)`; `pipeline.write_chapter_list`, `RenderResult.chapters`.
+- **Example**: `examples/gallery` has `chapters: {intro: Intro}` (commented: it opens with chapter
+  1, so no intro is added) and `metadata: {artist, comment}`; its preview render writes
+  `gallery_preview_chapters.txt` (0:00 / 1:29 / 2:39 / 3:33) and 4 MP4 chapters.
+
+Files
+- New: `src/vidgen/chapter_export.py`, `tests/test_chapter_export.py` (11 tests, 1 render).
+- Changed: `config.py` (`ChaptersConfig`, `MetadataConfig`, `VideoConfig.chapters` / `.metadata`),
+  `videoplan.py` (`Chapter.intro`, `video_chapters(intro=)`), `project.py` (`chapters_path`),
+  `render/ffmpeg.py` (`join(metadata=)`), `render/pipeline.py` (metadata file, timings
+  `chapters`, `write_chapter_list`, `RenderResult.chapters`, hook data), `render/fingerprint.py`
+  (excludes `chapters` / `metadata`), `cli.py` (validate warnings, render output line),
+  `jsonout.py`; tests `test_docs.py` (models), `test_json_output.py` (render JSON with a chapter);
+  `.gitignore` (`*_chapters.txt`); `examples/gallery/video.yaml`; docs/CONFIG.md (top-level rows,
+  new "Chapters in the outputs" subsection, render JSON), docs/EXTENDING.md (`video_chapters`,
+  `post_render`), README.md, DESIGN.md (tree, §3, §4, §6.4, §42, new §52), tasklist.md.
+
+Public interfaces added/changed (compatible)
+- Config: top-level `chapters`, `metadata`. `vidgen.api.video_chapters(..., intro=False)`,
+  `Chapter.intro`. JSON (version 1): timings / `render --json` `chapters`, `outputs.chapters`.
+- The final MP4 now always gets its tags from vidgen's FFMETADATA file (title tag always
+  written) and, with chapters, a data stream (`bin_data`, the chapter track) besides video and audio.
+
+Decisions / deviations
+- **Times from the joined video, not the plan**: `joined_chapters` uses the combined timings'
+  scene starts (overlaps included, so a crossfade into a card starts its chapter where the
+  crossfade starts); equal to `video_chapters(..., intro=True)` for scenes that keep to the plan
+  (gallery preview: identical to the ms), and true to the file when one does not.
+- **Intro only in published lists** (MP4, txt, JSON), not in `video_chapters()` by default nor in
+  overlays: an indicator reading "Intro" over a title scene would be noise; Step 39's behaviour is
+  untouched. Configurable title, or `intro: false` to stretch chapter 1 to 0:00.
+- **Rounding down** YouTube timestamps; rule lengths measured on the rounded times (what YouTube sees).
+- **Titles without numbers** in the outputs (players / YouTube number nothing, "2 · Results"
+  reads oddly in a menu); whitespace collapsed to one line.
+- Warnings, not errors: a list YouTube ignores is still a valid MP4 chapter list.
+
+Known gaps / TODOs
+- Found while testing (routed to Step 60 in tasklist.md): a silent scene can render a frame shorter
+  than planned when `(duration - outro) x fps` is a half frame (5 fps, 1.2 s chapter card: plan 7,
+  render 6 frames). Outputs follow the join; overlays follow the plan. The render test uses 10 fps.
+- Chapter `number`s are not in the output titles; no per-chapter thumbnails; YouTube reads the
+  list only from the description (paste the txt), not from the MP4.
+- `metadata` values are plain text; no cover art (could come with Step 50's thumbnail).
+
+Verification
+- `examples/gallery` preview (`--jobs 4`): ffprobe `-show_chapters` = 4 chapters at 0 / 89.667 /
+  159.133 / 213.2 s ending at 228.533 = `video_chapters(project, fps=15, intro=True)` = timings
+  `chapters`; tags title / artist / comment; `gallery_preview_chapters.txt` written; no YouTube
+  warnings; `vidgen validate examples/gallery` ok.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (1923 passed, 1 skipped, ~10.5 min
+on 2 CPUs); step only: `pytest tests/test_chapter_export.py`. Manual: `vidgen render
+examples/gallery --preview --jobs 4`, then `ffprobe -v error -show_chapters
+examples/gallery/gallery_preview.mp4` and `cat examples/gallery/gallery_preview_chapters.txt`.
+
+## Step 50 — Thumbnail and GIF/clip export
+What was built
+- **`thumbnail:` config** (`config.ThumbnailConfig`, top level, out of scene fingerprints): a
+  **frame** of a scene `{scene, beat (id or number from 1), at (s), overlays (default true)}` or a
+  **designed card** `{title (default: the video's title), subtitle, icon | image, preset,
+  background}`, plus `jpeg: false` and `auto: true`. Mixing frame / design keys, frame keys without
+  `scene`, icon with image, an unknown scene / beat, a beat on a silent scene: config errors;
+  icon, image file, preset and colour token: `vidgen validate` problems (and `render`'s checks).
+- **Output**: `<output>[_<variant>][_preview]_thumbnail.png` (`Project.thumbnail_path`), 1280x720
+  for 16:9, 1080x1920 for 9:16, 1080x1080 square (by the final format's orientation; pictures are
+  centre-cropped to it); with `jpeg` also `.jpg` at the best quality under 2 MB (else an old JPEG
+  is removed); a copy at YouTube's small size (long side 320 px) in
+  `build/<render dir>/thumbnail/<name>_small.png` to look at.
+- **Frame thumbnails** come from the scene's own render (`scenes/<id>.mp4`), rendered first when
+  missing / stale (format + fingerprint); the frame is the beat's last frame (like the beat-end
+  still), `at` seconds into the beat or scene, or a silent scene's frame before its fade-out;
+  decoded with PyAV. `overlays: false` (`--no-overlays`) renders the scene with
+  `Project.without_overlays()` into `build/<final|preview>[_<variant>]_bare/` (worker `--bare`).
+- **Designed thumbnails** (Pillow; icon drawn by Manim's camera): title (role `heading`, bold) at
+  the largest size that fits in 3 lines (4 in 9:16) with balanced lines, accent bar, subtitle
+  (role `body`, first readable of highlight / primary / accent), icon on a `surface` disc or an
+  image panel on the right (top in 9:16 / square); colours fall back to black / white for 4.5:1.
+- **Checks** (`ThumbnailCheck(rule, severity, message)`): `min_font` (title < 14 px / other text
+  < 10 px at the small size), `contrast` (< 4.5:1), `fit` (title cut), `max_words` (> 6, info),
+  `file_size` (> 2 MB), `resolution` (frame scaled up, info).
+- **`vidgen render`** writes the thumbnail after the join when `thumbnail:` is set and `auto`
+  (logs warning checks); `RenderResult.thumbnail`, `render --json` `outputs.thumbnail`, human
+  `thumbnail:` line. **`vidgen thumbnail [PROJECT] [--variant] [--preview] [--scene ID [--beat
+  ID|N] [--at S] [--no-overlays]] [--jpeg] [--jobs N] [--json]`**.
+- **`vidgen export gif|clip [PROJECT] [--scene ID] [--from S] [--to S] [--variant] [--preview]
+  [--width PX] [--fps F] [--max-mb MB] [--with-audio] [--output FILE] [--json]`** from the joined
+  video + `timings.json` (times from the scene's start with `--scene`, else video times), to
+  `exports/<output>[_<variant>][_preview]_<scene|video>[_<from>-<to>s].gif|mp4`. GIF: one FFmpeg
+  pass with `palettegen` (whole-clip stats) + `paletteuse` (Sierra 2-4A, changed rectangles
+  only), default 480 px (270 for 9:16) / 12 fps, loops; `--max-mb` lowers fps then width
+  (`export.next_try`, ≥ 5 fps, ≥ 160 px, ≤ 6 encodes, warning if still over). Clip: stream copy
+  when it starts on a keyframe and keeps size / rate (`-frames:v` exact count; sound re-cut and
+  AAC-encoded from a second accurate seek), else H.264 CRF 18. Usage errors: `--with-audio` on a
+  GIF, `--max-mb` on a clip, no render.
+- **Example**: `examples/gallery` `thumbnail: {title, subtitle, icon: grid-3x3, jpeg: true}` +
+  usage lines (`thumbnail`, `--scene ... --no-overlays`, `export gif ... --max-mb 2`, `export
+  clip ... --with-audio`).
+
+Files
+- New: `src/vidgen/thumbnail.py`, `src/vidgen/export.py`, `tests/test_thumbnail_export.py` (19
+  tests, 4 render using one module-scoped 160x90 render with a progress bar; 1 slow).
+- Changed: `config.py` (`ThumbnailConfig`, keys, `VideoConfig.thumbnail`, `thumbnail_problems`),
+  `project.py` (`bare`, `without_overlays`, `render_dir` `_bare`, `thumbnail_path`, `export_stem`,
+  `exports_dir`), `render/worker.py` (`--bare`), `render/pipeline.py` (`--bare` to workers,
+  thumbnail checks in `_check_scenes`, thumbnail after the join, `RenderResult.thumbnail`),
+  `render/fingerprint.py` (`thumbnail` excluded; `thumbnail.py`, `export.py` not render inputs),
+  `cli.py` (`thumbnail`, `export`, validate problems, render line, `JSON_COMMANDS`), `jsonout.py`
+  (`thumbnail_document`, `export_document`, `outputs.thumbnail`); `.gitignore` and the init
+  template's (`*_thumbnail.png/.jpg`, `exports/`; the template also `*_chapters.txt`);
+  `tests/test_docs.py` (model), `tests/test_json_output.py` (render outputs);
+  `examples/gallery/video.yaml`; docs/CONFIG.md (top level, new "Thumbnail" and "Export"
+  sections, JSON docs for both commands and `outputs.thumbnail`), README.md, DESIGN.md (tree, §3,
+  §4, §8, new §53), tasklist.md.
+
+Public interfaces added/changed (compatible; `vidgen.api` unchanged)
+- Config: top-level `thumbnail`. Commands `vidgen thumbnail`, `vidgen export` (both `--json`).
+- JSON (version 1): `render --json` `outputs.thumbnail`; new `thumbnail` and `export` documents.
+- `Project.without_overlays()`, `.bare`, `.thumbnail_path()`, `.export_stem()`, `.exports_dir`;
+  worker `--bare` / `render_scene(..., bare=)`; `RenderResult.thumbnail`;
+  `vidgen.thumbnail.make_thumbnail / design_thumbnail / frame_number / render_current /
+  thumbnail_problems / ThumbnailResult / ThumbnailCheck`; `vidgen.export.export_gif /
+  export_clip / resolve_range / next_try / ExportResult`.
+- Fingerprints change once (project.py and the worker are render inputs): every render is stale
+  once, as after any step touching them.
+
+Decisions / deviations
+- **Frames from the scene's render, not the joined video**: same pixels except inside a
+  transition, and it can be (re)made alone; the beat end is computed from the timings, so a plain
+  render is reused (no stills needed).
+- **No overlays = another render in a `_bare` folder**: overlays are composited in-render, and a
+  separate folder never replaces the real renders. The bare scene lays out without the room
+  reserving overlays take.
+- **Designed cards with Pillow, not a Manim scene**: instant (no worker process), exact pixel
+  metrics for the checks; the theme's fonts (bundled files) and icons (Manim camera) keep the
+  video's look. `preset` uses the preset alone (the project's own theme values would win over it).
+- **`exports/` folder** for GIFs / clips (many per video, shareable, ignored by git), not next to
+  the output; `--output` for anything else.
+- **Clip sound is re-encoded even when the picture is copied**: copied AAC packets started a
+  packet (~0.15 s) before the first picture.
+- Thumbnail warnings are warnings, never errors: the video is already written.
+
+Known gaps / TODOs (routed to Step 60 in tasklist.md)
+- A frame thumbnail's text is not measured (plain renders have no layout dump); look at the small
+  copy or lint the scene.
+- `post_render` hooks run before the thumbnail exists (no `thumbnail` in their data).
+- `build/..._bare` folders are never cleaned; no cover art in the MP4 from the thumbnail.
+- One designed layout (title, bar, subtitle, one visual); no image behind the text.
+
+Verification
+- Looked at (Read): `examples/gallery` designed thumbnails in 16:9, 9:16 and the `neon` variant
+  and their 320 px copies (title 108 px → 27 px small, subtitle legible); `examples/minimal`
+  designed default (title only) and frame thumbnails (`--preview --scene intro --beat 2`: the full
+  title card before its fade-out; `--variant subtitled --no-overlays`: no captions, from
+  `build/preview_subtitled_bare`); a frame of an exported GIF (Sierra dithering, clean text).
+- `vidgen export gif examples/minimal --preview --scene steps --max-mb 0.3 --width 640`: 1.09 →
+  0.39 → 0.31 → 0.27 MB (341 px, 6.4 fps); `export clip --scene steps --with-audio`: copy, 312
+  frames = 20.8 s exactly; `--from 1.3 --to 4 --width 640`: encode, 640x360.
+- `vidgen validate examples/gallery`: ok.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (1943 passed, 1 skipped, ~10.5 min on 2 CPUs); step only:
+`pytest tests/test_thumbnail_export.py` (~15 s). Manual: `vidgen thumbnail examples/gallery
+[--variant vertical]` then open `examples/gallery/build/final/thumbnail/gallery_thumbnail_small.png`;
+`vidgen render examples/minimal --preview` then `vidgen export gif examples/minimal --preview
+--scene steps --max-mb 1` and `vidgen export clip examples/minimal --preview --scene steps --json`.
+
+## Step 51 — Multi-language variants
+What was built
+- **`language:`** (top level, so per variant; BCP-47, normalised `pt-br` → `pt-BR`), with
+  `src/vidgen/languages.py` (no manim): `LanguageRules` for en / pt / es / fr / de / it (word
+  lists, words-per-second range, silent final e, ISO 639-2) and a neutral set for any other
+  language. It drives:
+  - **cue cutting** of the SRT and burned-in captions (`phrase_break_cost(..., language)`: the
+    language's conjunctions / prepositions / clinging words, punctuation everywhere incl. `。！？`,
+    `、，`, a break before `¿ ¡ «`); word-time estimates (`syllables(word, language)`);
+  - **`narration_speed`** lint: `unit: auto|words|characters`, `min_rate` / `max_rate` default to
+    the language's range (en 1.8-3.5 unchanged, pt 1.7-3.4, es / fr 1.8-3.6, it 1.8-3.5, de
+    1.5-3.1; characters 8-17/s for other languages);
+  - **ElevenLabs `language_code`** (`voice.language_code` / `voices.<n>.language_code`: a code,
+    `false`, or auto = the video language for `eleven_turbo_v2_5` / `eleven_flash_v2_5`); hashed
+    only when sent, so existing hashes are unchanged;
+  - **pronunciation**: entries may say `language: en` (or a list); a variant in another language
+    keeping base entries unchanged gets a validate warning;
+  - **outputs**: the MP4's audio stream `language` tag (`por`), `timings.json` `language`.
+- **Translation files** (`src/vidgen/translation.py`, no manim): params typed `TranslatableStr`
+  (on-screen text) / `TextRef` (names a text) across every built-in scene, the `callout` action
+  and the `lower_third` / `watermark` overlays; shorthand hooks `SceneParams.text_shorthand` /
+  `text_defaults` (bullets / comparison / process strings, diagram node ids and edge labels,
+  scatter `[x, y, label]`, screenshot step lists / callout dicts). `vidgen translate-template
+  [--variant] [--lang] [--output] [--json]` writes `translations/<variant>.yaml` (or the
+  variant's `translations:`): every text keyed by a stable path (`scenes.<id>.beats.<id>.text`,
+  `scenes.<id>.params.items[0].text`, `series{"baseline"}`, `nodes[0]=id.label`, `edges[1]$:`,
+  `overlays.<id>.name`, `title`, `metadata.*`, `chapters.intro`, `thumbnail.*`, scene `chapter`)
+  with `source`, `hash` (sha1[:10]) and an empty `text`, plus generated `references` (places
+  naming a text: `highlight: "4K"`, targets `bar:4K`, `point:sparse@8`). Re-running merges:
+  kept / moved (same hash elsewhere in the scene) / stale (`stale: true`, `old_source`) /
+  obsolete. `translations:` in a variant applies the file to the raw config at load (untranslated
+  and stale texts keep their source); `vidgen validate` warns with the keys left in the source
+  language, stale ones, unknown keys, outdated references, a language mismatch, a missing file;
+  human `language [pt]: ...` line; `validate --json` `language` / `translations`.
+- **Audio**: a translated beat changes its spoken text, so the variant gets `audio/<variant>/`
+  (untranslated beats are copied from `audio/` by `vidgen tts`); translating only on-screen text
+  keeps the shared folder.
+- **Example**: `examples/minimal` variant `pt` (pt-BR, `translations/pt.yaml`, 54 of 73 texts
+  translated by hand — title, intro, steps, feedback, sizes, trend, outro; five scenes left in
+  English on purpose; Portuguese pronunciation of LaTeX / JSON; captions).
+
+Files
+- New: `src/vidgen/languages.py`, `src/vidgen/translation.py`, `tests/test_translation.py` (64
+  tests, 1 render), `examples/minimal/translations/pt.yaml`.
+- Changed: `config.py` (`LanguageTag`, `LanguageCode`, `language`, `translations`,
+  `VoiceConfig/VoiceEntry.language_code`, `PronunciationEntry.language`, `NarrationSpeedRule`
+  unit / optional rates / `limits()`), `project.py` (translations at load, `source_data`,
+  `source_config`, `translation`, resolved-voice audio comparison), `voices.py`, `tts/elevenlabs.py`,
+  `pronunciation.py` (`applies_to`), `cues.py`, `speech.py` (`spoken_characters`), `subtitles.py`,
+  `scenes/captions.py`, `lint/rules.py`, `lint/run.py`, `lint/timing_rules.py`,
+  `render/pipeline.py`, `render/ffmpeg.py`, `render/fingerprint.py`, `scene.py` (hooks),
+  `api.py`, `cli.py` (`translate-template`, warnings, summary), `jsonout.py`; every built-in scene
+  module with text params + `callout_action.py`, `scenes/overlays.py`; tests `test_docs.py`
+  (models), `test_json_output.py` (validate keys); `examples/minimal/video.yaml`; docs/CONFIG.md
+  (new "Languages and translations", top level, voice, pronunciation, variants, lint, JSON),
+  docs/EXTENDING.md, README.md, DESIGN.md (tree, §3, §4, §6.4, §8, new §54), tasklist.md.
+
+Public interfaces added/changed (compatible)
+- Config: `language`, `translations`, `voice.language_code`, `voices.<n>.language_code`,
+  `pronunciation.<term>.language`, `lint.rules.narration_speed.unit` (its `min_rate` / `max_rate`
+  now default to the language's range: the same 1.8 / 3.5 for English / no language).
+- `vidgen.api`: `TranslatableStr`, `TextRef`, `LanguageRules`, `language_rules`;
+  `SceneParams.text_shorthand` / `text_defaults`; `language=None` keyword on `caption_cues`,
+  `segment_cues`, `phrase_break_cost`, `beat_word_times`, `estimate_word_times`, `syllables`.
+- `vidgen.subtitles` `split_text / beat_cues / cues_from_timings / write_srt(..., language)`;
+  `ffmpeg.join(..., language=)`; `SceneContext.language`; `Project.source_data`,
+  `.source_config`, `.translation`; `Project(..., source=, translation=)`.
+- CLI `vidgen translate-template` (+ `--json`); JSON (version 1, additive): validate
+  `language` / `translations` (top level and per variant), timings `language`.
+- Fingerprints change once (new config keys in the dump).
+
+Decisions / deviations
+- **Translations are applied to the raw config at load**, before validation: every consumer
+  sees one translated config, and applying needs no scene types (keys are paths; which fields
+  are text and which places follow them was decided when the template was written — hence the
+  `references` section).
+- **Stale translations are not used** (gettext's fuzzy rule); the source shows and validate says
+  so. A missing translation file is a warning, not an error (the variant can be declared before
+  the file exists — `translate-template` needs the variant to load).
+- **Only texts present in the config are listed** (defaults are not), so a translation cannot add
+  a param (e.g. a stat's `decimal_mark`).
+- Language-specific word lists for six languages, a punctuation-only neutral fallback otherwise;
+  a video without `language` keeps the English rules exactly (no output changes).
+- `language_code` auto only for the models documented to accept it; others would fail the request.
+- `VideoConfig.language` / `translations` sit after `pronunciation_file` (unknown-key messages list
+  the first keys; the order keeps the common ones first).
+
+Verification
+- `vidgen translate-template examples/minimal --variant pt` (73 texts, 4 references; a second run
+  writes the identical file), `vidgen validate examples/minimal` (lists the 19 English texts of
+  the pt variant), `vidgen lint examples/minimal --variant pt --scene intro --scene steps --scene
+  feedback --scene sizes --scene trend --scene outro`: 0 findings after shortening two texts (the
+  first run found 44 words on the bullets slide and 6.3 s of dead air in a longer Portuguese
+  beat); storyboards read: Portuguese captions break before "e" / after commas, the callout
+  follows the renamed series (`point:esparso@8`), accents render in Inter.
+
+Known gaps / TODOs (routed to Step 60 in tasklist.md)
+- Number formats / decimal marks are not localised unless written in the config; the `map`
+  scene's country names are English (give `label:`); arc shorthands `"A -> B"`, `lint_ignore`
+  patterns and `point:<series>@<label>` targets do not follow translated texts.
+- Languages without spaces (zh, ja) are cut into cues only at punctuation; their speed is
+  measured in characters.
+- No machine translation (the file is for a person or an agent to fill in); the storyboard and
+  lint report texts of vidgen itself stay English.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2009 passed, 1 skipped, ~10.7 min on 2 CPUs); step only:
+`pytest tests/test_translation.py`. Manual: `vidgen translate-template examples/minimal
+--variant pt`, `vidgen validate examples/minimal`, `vidgen storyboard examples/minimal --variant
+pt --scene trend`, `vidgen tts examples/minimal --variant pt --dry-run`.
+
+## Step 52 — Slides export (HTML)
+What was built
+- **`vidgen slides [PROJECT] [--variant] [--preview | --final] [--mode beat|scene] [--per-beat N]
+  [--overlays | --no-overlays] [--no-dedupe] [--image-format webp|jpeg|png] [--quality Q]
+  [--max-width PX] [--audio] [--separate] [--output FILE] [--jobs N] [--force] [--json]`** writes
+  one self-contained HTML deck, by default `exports/<output>[_<variant>][_preview]_slides.html`.
+- **Key frames** (`src/vidgen/deck.py`, shared with Step 53): `deck_frames(...) -> Deck` reuses
+  the Step 10 stills like the storyboard (renders only stale / missing scenes; `--no-overlays`
+  from `Project.without_overlays()`'s `_bare` renders). Default **one slide per beat** (its
+  beat-end still = the built state of reveal-per-beat scenes), `--per-beat N` N per beat,
+  `--mode scene` one per scene (last still, all beats' notes). Consecutive near-identical stills
+  of a scene are **merged** (≤ 0.05 % of pixels differ at 320 px; notes joined; `--no-dedupe`).
+  Each `DeckSlide` has scene / type / title / chapter (`chapter_marks`), the beats it carries
+  (`notes`: their configured, i.e. translated, text), `alt_text()`, `time` in the video,
+  `at` / `until` on a deck timeline (scenes back to back) and the beats' MP3s (`Deck.clips`).
+- **Page** (`src/vidgen/slides.py` + package data `data/slides/deck.css`, `deck.js`, inlined):
+  pictures as WebP q80 `data:` URIs (or JPEG / PNG; `--max-width`; `--separate` writes
+  `<name>_files/slide-NNN.ext` + MP3s instead); speaker notes per slide; keyboard (arrows, Space /
+  Shift+Space, PageUp/Down, Enter, Backspace, Home/End, number + Enter), click left third / right,
+  swipe; `S`/`N` notes panel (beside, or below on portrait / narrow screens, with the next slide;
+  remembered in localStorage), `O` overview grid grouped by chapter, `F` fullscreen (bars hide when
+  idle), `P` play, `?` help, `Esc`; `#N` URL hash; slide counter; letterboxed on a black stage,
+  dark chrome, 0.22 s fade dropped under `prefers-reduced-motion`; alt text, ARIA slide groups, live
+  region; print CSS (one slide per page). **Play mode**: a clock runs the deck timeline, slides
+  follow the video's pacing, and with `--audio` each beat's MP3 plays at its time (resynced on
+  drift / seek) — a narrated deck; without audio a timed slideshow.
+- `--json` (`jsonout.slides_document`); human output `slides: <path> (N slides from M stills,
+  K alike merged, X MB)` + `pictures:` line.
+- Example: `examples/gallery/video.yaml` usage line; README / CONFIG / DESIGN docs.
+
+Files
+- New: `src/vidgen/deck.py`, `src/vidgen/slides.py`, `src/vidgen/data/slides/deck.css`,
+  `src/vidgen/data/slides/deck.js`, `tests/test_slides.py` (13 tests: 10 fast with fake stills, 1
+  render, 1 Playwright browser test; render + browser marked `slow`).
+- Changed: `cli.py` (`slides` command, `JSON_COMMANDS`), `jsonout.py` (`slides_document`),
+  `render/fingerprint.py` (`deck.py`, `slides.py` not render inputs), `pyproject.toml` (package data
+  `data/slides/*`), docs/CONFIG.md (new "Slides (`vidgen slides`)", `vidgen slides --json`, the
+  JSON command lists now also name `slides` / `translate-template`), README.md, DESIGN.md (tree,
+  §8, new §55), `examples/gallery/video.yaml` (comment), tasklist.md.
+
+Public interfaces added/changed (compatible; `vidgen.api` unchanged)
+- CLI `vidgen slides` (+ `--json`, new `slides` document in JSON version 1).
+- `vidgen.deck`: `deck_frames`, `Deck` (`.merged`), `DeckSlide` (`.notes`, `.alt_text()`),
+  `DeckBeat`, `DeckChapter`, `DeckClip`, `stills_alike`, `scene_title`, `DECK_MODES`.
+- `vidgen.slides`: `make_slides`, `slides_html`, `slides_path`, `encode_still`, `SlidesResult`,
+  `IMAGE_FORMATS`.
+
+Decisions / deviations
+- **Default one slide per beat** (the task list said "one slide per scene"): scenes that replace
+  content per beat (walkthroughs, derivations, screenshot steps, maps, comparisons) would keep only
+  their last state; per-beat slides build up like a presentation and dedupe drops beats that change
+  nothing. `--mode scene` gives the compact deck.
+- **Default `--preview` and `--overlays`**, like `storyboard` / `thumbnail`: reuses the stills
+  agents already made; `--final` for a deck to present, `--no-overlays` for slides without burned-in
+  captions / progress bar (another render into `_bare`).
+- **Output in `exports/`** (as `vidgen export`), not next to the MP4.
+- **Audio opt-in** (`--audio`): MP3s add MB per minute. The play mode works without it.
+- **Clock-driven play mode** rather than chaining `ended` events: silent scenes, beats without an
+  MP3, pads and seeking follow one rule; the deck timeline has no transition overlaps.
+- Playwright is **not** a dependency: the browser test skips without it (installed in this
+  workspace's venv as `playwright==1.56.0` to run it, browsers from `/opt/pw-browsers`; the test
+  sets `PLAYWRIGHT_BROWSERS_PATH` to that when unset).
+
+Verification
+- `vidgen slides examples/minimal` (29 slides from 30 stills, 1 merged, 0.5 MB), `--variant
+  vertical --mode scene` (11 slides, 0.2 MB), `examples/gallery` (55 slides, 1.06 MB, 4 chapter
+  groups in the overview). Looked at Playwright screenshots (Read): slide, notes panel, overview,
+  help, number jump, a 390 px phone view, a 9:16 deck; fixed what they showed (stretched overview
+  thumbnails, empty icon-less buttons on phones, a huge next-slide preview for portrait decks, a
+  focus line on the stage). No console errors.
+
+Known gaps / TODOs
+- Step 53 (PDF): build on `deck_frames` (slides, notes, chapters, alt text, times); the HTML's
+  print CSS already prints one slide per page but without notes.
+- No `--scene` selection; the page's own UI strings (help, buttons) are English; a merged slide's
+  notes do not mark where the picture changed; frames only (no animation / clip playback).
+- The `_bare` renders of `--no-overlays` are not cleaned up (as Step 50).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2022 passed, 1 skipped, ~11.3 min on 2 CPUs); step only:
+`pytest tests/test_slides.py` (~20 s). Manual: `vidgen slides examples/minimal`, open
+`examples/minimal/exports/minimal_preview_slides.html` in a browser (`?` lists the keys);
+`vidgen slides examples/kphi3 --audio` for a narrated deck (real MP3s), press `P`.
+
+## Step 53 — Slides export (PDF)
+What was built
+- **`vidgen slides --format pdf [--notes] [--title-page] [--paper a4|letter] [--image-format
+  jpeg|png] [--quality Q] [--max-width PX] [--output FILE]`** + all of Step 52's frame options
+  (`--variant`, `--preview | --final`, `--mode`, `--per-beat`, `--overlays`, `--no-dedupe`,
+  `--jobs`, `--force`, `--json`). Default file `exports/<output>[_<variant>][_preview]_slides.pdf`,
+  `_notes.pdf` with `--notes`. Same slides as the HTML deck (`deck.deck_frames`).
+- `src/vidgen/slides_pdf.py` (fpdf2): **slide pages** at the video's aspect ratio (long side 960 pt:
+  16:9 → 960x540, 9:16 → 540x960), picture filling the page; **notes pages** (A4 / Letter
+  portrait): header (chapter left, video title right, rule), the slide (≤ half the page high for
+  portrait videos), meta line `Slide N / M · title · m:ss.s in the video`, the beats' narration
+  (translated in a language variant) in the bundled Inter 11.5 pt, footer `page / total`; long
+  notes continue on the next page; **title page** (optional): the `vidgen thumbnail` PNG if one
+  exists (full page on slide decks), else title / thumbnail subtitle / `artist · date` typeset;
+  **outline**: title, chapters (level 0) with their slides (level 1), opened with the outline
+  panel; **document info**: title, author (`metadata.artist`), subject (`description` / `comment`),
+  keywords (`album`, `genre`), creator, `/Lang` = `language`; pictures JPEG q85 (embedded as is) or
+  PNG, with alt text.
+- `--json`: the `slides` document with `output_format: "pdf"`, `pages`, `notes`, `title_page`,
+  `thumbnail`, `paper`, `bookmarks` (`jsonout.slides_pdf_document`); the HTML document gains
+  `output_format: "html"`.
+- Example usage line in `examples/minimal/video.yaml` (`--format pdf --notes --variant pt`).
+
+Files
+- New: `src/vidgen/slides_pdf.py`, `tests/test_slides_pdf.py` (9 tests, fast: fake stills from
+  `test_slides`, read back with pypdf).
+- Changed: `cli.py` (`--format`, `--notes`, `--title-page`, `--paper`; `_slides_options`,
+  `cmd_slides_pdf`; `--image-format` / `--quality` defaults per format), `jsonout.py`
+  (`_deck_slides`, `slides_pdf_document`, `output_format`), `render/fingerprint.py`
+  (`slides_pdf.py` not a render input), `pyproject.toml` (extra `pdf = ["fpdf2>=2.7.9"]`; `dev`
+  gains `fpdf2`, `pypdf`), docs/CONFIG.md (new "PDF deck (`--format pdf`)", JSON keys), README.md,
+  DESIGN.md (tree, §8, new §56), `examples/minimal/video.yaml`, tasklist.md.
+
+Public interfaces added/changed (compatible; `vidgen.api` unchanged)
+- CLI `vidgen slides --format html|pdf`, `--notes`, `--title-page`, `--paper`; JSON `slides`
+  document keys `output_format` (both), `pages`, `notes`, `title_page`, `thumbnail`, `paper`,
+  `bookmarks` (PDF).
+- `vidgen.slides_pdf`: `make_slides_pdf`, `write_pdf`, `pdf_path`, `slide_page_size`,
+  `PdfOptions`, `PdfResult`, `PDF_IMAGE_FORMATS`, `PAPER_SIZES`.
+- Extra `vidgen[pdf]`.
+
+Decisions / deviations
+- **`--format pdf` on `vidgen slides`** rather than a `slides-pdf` command: frame and picture
+  options are shared; options of the other format are errors.
+- **fpdf2 as an optional extra**, not a base dependency: pure Python itself (340 KB) and does what
+  is needed (TTF subset embedding with ToUnicode → correct, extractable pt-BR text; outlines;
+  metadata; alt text; JPEG passthrough), but it pulls fontTools (~5 MB) and is LGPL-3.0. Without
+  it the command fails before rendering with `pip install "vidgen[pdf]"`. pycairo's PDF surface
+  (already installed) was rejected: pycairo cannot load a font file, so the bundled Inter would
+  not be guaranteed on Windows. fontTools' INFO logs are lowered to WARNING (they flooded the CLI).
+- Title page uses an existing thumbnail but does not make one (a designed thumbnail needs the theme
+  session, a frame thumbnail a render); the human output says `vidgen thumbnail` adds it.
+- Default JPEG q85 (vs. q80 WebP in HTML): JPEG artefacts on flat dark slides show sooner.
+
+Verification
+- Rendered with `pdftoppm` and looked at (Read): `examples/minimal` notes + title page (thumbnail),
+  `--variant vertical --mode scene --paper letter` (9:16 slide centred, half page), `--variant pt`
+  (accents: "vídeo", "narração", "você"), `examples/gallery` notes (chapter header "1 · Ideas and
+  flows") and slide pages with a typeset title page. Sizes: minimal notes 30 pages 0.7 MB, gallery
+  55 slides 1.6 MB (854x480 q85).
+
+Known gaps / TODOs
+- The PDF's own words ("Slide", "in the video", "No narration", "slides with speaker notes") are
+  English (as the HTML deck's UI); typeset title page is white (no theme colours); no fallback
+  font for scripts Inter lacks (CJK, Arabic...); no `--scene` selection.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2031 passed, 1 skipped, ~11.6 min
+on 2 CPUs); step only: `pytest tests/test_slides_pdf.py` (~5 s). Needs `pip install -e ".[dev]"`
+(fpdf2, pypdf; the tests skip without them). Manual: `vidgen slides examples/gallery --format pdf
+--notes --title-page`, then `pdftoppm -r 60 -png -f 1 -l 3 examples/gallery/exports/gallery_preview_notes.pdf /tmp/p`.
+
+## Step 54 — Readback check (speech-to-text)
+What was built
+- **`vidgen readback [PROJECT] [--variant] [--beat ID ...] [--max-wer RATE] [--force] [--json]`**:
+  transcribes each beat's MP3 with a speech-to-text provider, compares the transcript with the
+  beat's **spoken** text (pronunciation applied: what the TTS was asked to say) and reports in
+  terms of the **written** text: per beat the word error rate, substitutions / deletions /
+  insertions, and `Edit`s (`expected "K-Phi-3" (said "kay fye three"), heard "kay five three" @
+  4.2s`) each with a suggested fix; beats above `max_wer` are flagged; a summary with the worst
+  beats and the **terms misheard in several beats** (the strongest signal for a pronunciation
+  entry). Beats without an MP3 are skipped; a stale MP3 gets "run `vidgen tts` first". Exit code
+  0 whenever it ran.
+- **STT provider seam** `src/vidgen/stt/` (like `tts/`): `STTProvider` protocol (`name`,
+  `check_available`, `transcribe(path) -> Transcript`), `Transcript` / `TranscriptWord`,
+  `stt_settings(project)` (resolved `{provider, model, language}`, no provider import),
+  `get_stt_provider(project)`. Providers: `faster_whisper` (local, free; optional extra
+  `vidgen[stt]` = `faster-whisper>=1.0`; model loaded lazily once, word timestamps, no
+  conditioning on previous text, no VAD) and `elevenlabs` (Speech to Text `scribe_v1`,
+  multipart upload, same `ELEVENLABS_API_KEY`; mocked, never called). No OpenAI provider.
+- **Config** `stt: {provider, model, language, device}` (`SttConfig`; model default `small.en`
+  for English, `small` otherwise, `scribe_v1` for ElevenLabs; language default the video's,
+  `auto` = detect), and lint rule settings `lint.rules.readback: {severity, max_wer: 0.1}`.
+- **Normaliser** `src/vidgen/textnorm.py`: case, punctuation, accents folded (pt-BR), hyphens /
+  slashes split, numbers to words in English and Portuguese (decimal / thousands marks of the
+  language, `%`, currency, English ordinals), digits kept canonically in other languages,
+  symbols as words, dotted / spaced acronyms joined; every token keeps its source word index.
+- **Comparison** `src/vidgen/readback.py`: `align` (Levenshtein, ties → more matches),
+  `word_error_rate`, `compare_beat` (ops grouped into whole written words; writing-only
+  differences such as `overparameterized` / `over parameterized` or the STT writing `K-Phi-3`
+  for "kay fye three" are not errors), `hard_term`, suggestions, `term_reports`, transcript cache
+  `build/readback/<sha1(audio sha1 + settings)>.json`, `run_readback`, `cached_readback`,
+  `report_lines`.
+- **Lint rule `readback`** (`src/vidgen/lint/readback_rule.py`, scope `scene`, default warning,
+  last in `LINT_RULES`): reads only cached transcripts of the current MP3s (`SceneContext.readback`,
+  filled by the runner when the rule runs), so it reports nothing until `vidgen readback` ran;
+  same report / JSON format as every lint finding (value = WER, limit = `max_wer`).
+- `--json`: new `readback` document (`jsonout.readback_document`).
+
+Real STT run: **not possible here.** faster-whisper 1.2.1 installed fine from PyPI into the
+workspace venv (left installed there; it is not in `dev`), but the model download from
+huggingface.co was refused by the build environment's proxy (`403`, policy denial for
+`huggingface.co:443`), so no model could be loaded; per instructions this was not worked
+around. `vidgen readback examples/kphi3 --beat s1_b1` ends with the clean error `cannot load
+the Whisper model 'small.en': ProxyError: 403 Forbidden (a model size is downloaded from the
+Hugging Face Hub on first use; ...)`. Everything is tested with mocks (fake `faster_whisper`
+module, mocked `urlopen`); the ElevenLabs STT API was never called. **First thing to do with
+network access**: `pip install -e ".[stt]"`, `vidgen readback examples/kphi3` (27 real
+ElevenLabs MP3s), read the flagged beats / terms, and tune `max_wer` (0.1 is a guess: clean TTS
++ Whisper small usually lands at a few percent after normalisation) and the normaliser
+(likely candidates: "K-Phi-3" / "Phi-3" spellings, "LaMini", "1.60"-style decimals, names in
+s1_b2).
+
+Files
+- New: `src/vidgen/stt/__init__.py`, `src/vidgen/stt/faster_whisper.py`,
+  `src/vidgen/stt/elevenlabs.py`, `src/vidgen/textnorm.py`, `src/vidgen/readback.py`,
+  `src/vidgen/lint/readback_rule.py`, `tests/test_readback.py` (25 tests, fast, all mocked).
+- Changed: `config.py` (`SttConfig`, `VideoConfig.stt`, `ReadbackRule`, `LintRules.readback`,
+  `LINT_RULES` / `RuleName` + `readback`), `tts/elevenlabs.py` (request / retry loop extracted to
+  `post_with_retries`, shared with STT; behaviour unchanged), `lint/rules.py`
+  (`SceneContext.readback`), `lint/run.py`, `lint/__init__.py`, `cli.py` (`readback` command,
+  `JSON_COMMANDS`), `jsonout.py`, `render/fingerprint.py` (`stt` config and the new modules are
+  not render inputs), `pyproject.toml` (extra `stt`), `tests/test_docs.py` (models),
+  docs/CONFIG.md (top-level `stt`, new "Readback (`vidgen readback`)" section, lint rule row +
+  defaults block, `vidgen readback --json`, command lists), README.md, DESIGN.md (tree, §3, §4,
+  §8, new §57), `examples/kphi3/video.yaml` (usage comment), tasklist.md.
+
+Public interfaces added/changed (compatible; `vidgen.api` unchanged)
+- CLI `vidgen readback` (+ JSON document `readback`, version 1). Config `stt`,
+  `lint.rules.readback`, lint rule / `lint_ignore` name `readback`. Extra `vidgen[stt]`.
+- `vidgen.stt`: `STTProvider`, `Transcript`, `TranscriptWord`, `stt_settings`,
+  `get_stt_provider`, `STT_PROVIDERS`, `DEFAULT_MODELS`; `vidgen.stt.faster_whisper.FasterWhisperProvider`;
+  `vidgen.stt.elevenlabs.ElevenLabsSTTProvider`, `parse_response`, `multipart_body`.
+- `vidgen.readback`: `align`, `Op`, `word_error_rate`, `compare_beat`, `Edit`, `BeatReadback`,
+  `hard_term`, `beat_suggestions`, `TermReport`, `term_reports`, `cache_path`, `read_cached`,
+  `write_cached`, `run_readback`, `ReadbackResult`, `cached_readback`, `report_lines`.
+- `vidgen.textnorm`: `normalize_words`, `normalize_text`, `Token`, `fold`, `number_words`,
+  `english_number`, `portuguese_number`.
+- `vidgen.tts.elevenlabs.post_with_retries`; `SceneContext(..., readback={})`.
+- Fingerprints change once (config.py changed, as every step).
+
+Decisions / deviations
+- **Cache in `build/readback/`, content-addressed** (not `audio/`): transcripts are derived and
+  disposable; `audio/` of kphi3 is committed and must stay clean; keying by the MP3's sha1 +
+  settings makes variants / qualities share entries and a regenerated MP3 invalidate itself.
+- **Reference = spoken text, report = written text**, with an extra rule: if the STT wrote the
+  *written* term ("K-Phi-3"), that is not an error even though the reference says "kay fye
+  three". Edits always cover whole written words (an STT error inside "K-Phi-3" shows the whole
+  term).
+- **Accents folded**: STT accent slips (`voce` for `você`) are more frequent than accent-only
+  minimal pairs (`é` / `e`), which are then not caught.
+- **Threshold in `lint.rules.readback.max_wer`**, shared by the command (`--max-wer` overrides)
+  and the lint rule, rather than in `stt:` (one place for "how strict").
+- **The lint rule never transcribes** (STT is slow / paid): "off unless transcripts exist".
+  `vidgen readback` itself never fails on findings (exit 0); the lint rule is the gate.
+- Flagging is by WER only; terms misheard in ≥ 2 beats are listed in the summary whatever the
+  WER (a single mishearing in a long beat stays below 0.1 but still shows in `edits` / `terms`).
+- `faster-whisper` is not in `dev` (heavy, and its model needs a download the tests must not
+  make); the tests inject a fake module.
+
+Known gaps / TODOs
+- No real STT run yet (see above); `max_wer` default and normaliser coverage are untuned.
+- Number words only for en / pt; English "and" inside numbers ("two hundred and five") and years
+  read in pairs ("twenty twenty-four") are not normalised; no ordinal words in Portuguese.
+- No hint vocabulary / prompt for the STT (Whisper `initial_prompt` / `hotwords` would bias it
+  towards the expected terms and hide real mispronunciations, so it is left out on purpose).
+- No per-beat audio playback position beyond `at`; `vidgen readback` has no `--scene` filter;
+  no OpenAI provider.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2058 passed, 1 skipped, ~11.8 min on 2 CPUs); step only:
+`pytest tests/test_readback.py` (~2 s). Manual (needs network + `pip install -e ".[stt]"`):
+`vidgen readback examples/kphi3`, `vidgen readback examples/kphi3 --json --beat s7_b2`,
+`vidgen lint examples/kphi3 --rule readback`.
+
+## Step 55 — Generated images
+What was built
+- **`generate:` on the `image` scene**: `{prompt, negative, style, aspect, seed}` or just the
+  prompt, instead of `path` (exactly one of them; `path` is now optional). The picture is made
+  once by `vidgen imagegen` and stored in the project; until then every render, storyboard and
+  lint shows a **placeholder card** (theme colours: surface→primary gradient, picture glyph,
+  "IMAGE TO GENERATE", the prompt, "placeholder · run vidgen imagegen"; the block is centred so a
+  `cover` fit never crops the text), cached in `build/imagegen/`.
+- **Provider seam** `src/vidgen/imagegen/` (like `tts/` and `stt/`): `GenerateImage` (param
+  model), `ImageRequest` (sent prompt, provider, model, size, quality, seed, key, paths,
+  `estimated_cost`), `image_request(project, generate)`, `generated_image(project, generate,
+  theme)` (stored PNG or placeholder), `find_images` / `scene_images` (every top-level
+  `GenerateImage` param of any scene type, built-in or extension), `ImageProvider` protocol
+  (`check_credentials`, `generate(request) -> GeneratedPicture(data, revised_prompt)`),
+  `get_image_provider`, `imagegen_warnings`, `text_in_prompt`, `orphaned_images`, `STYLE_PRESETS`.
+- **One provider**: OpenAI Images (`imagegen/openai.py`, stdlib urllib, `POST
+  /v1/images/generations`, `Authorization: Bearer $OPENAI_API_KEY` read at request time;
+  gpt-image-1 default, dall-e-3 / dall-e-2 supported (`response_format: b64_json` for those);
+  `data[0].b64_json` + `revised_prompt`; non-PNG converted to PNG). Retries 3x on 429 / 5xx /
+  timeouts (backoff 4/8/16 s or `Retry-After`, cap 60 s) but not on `insufficient_quota`.
+  **Never called here**: everything is mocked.
+- **Shared HTTP helper** `src/vidgen/httpapi.py`: `post_with_retries(url, data, headers, service,
+  secret, ..., transient=)` — the Step 54 ElevenLabs loop generalised (service name in messages,
+  key scrubbed, optional transient predicate). `tts.elevenlabs.post_with_retries` keeps its
+  signature and messages and now delegates to it.
+- **Config** `imagegen: {provider: openai, model: gpt-image-1, size: auto | WxH, quality, style,
+  negative}`. `size: auto` = the model's landscape / portrait / square size by the final format's
+  orientation or `generate.aspect` (a 9:16 variant gets its own portrait pictures). Default
+  quality medium (gpt-image) / standard (dall-e-3). `style` = a preset (photo, illustration,
+  flat, isometric, watercolor, line_art, render_3d, cinematic) or words; a scene's `style`
+  replaces it, `none` drops it. Prompt sent = `<prompt>. Style: <words>. Avoid: <negatives>.`
+- **Cache**: `assets/generated/<key>.png` + `<key>.json` (`prompt, negative, style, sent_prompt,
+  revised_prompt, provider, model, size, quality, seed, created, scenes`); key = sha1 of {v,
+  provider, model, size, quality, seed, sent prompt}[:16]. Committed by users like `audio/`
+  (the init template's `.gitignore` comment says so). Orphans listed, never deleted.
+- **`vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME]`**: dry run
+  (no key) lists key, scenes, size, model, quality, `~$cost` and the full prompt, then the total
+  (OpenAI list prices of 2025 in `PRICES`, "check current pricing"); a run checks the key first,
+  writes PNG + JSON atomically, reports progress, names the scene on an error.
+- **Warnings**: `vidgen validate` — pictures not made yet; prompts that quote text or mention
+  text words (text, letters, label, title, logo, says, font...) or charts / diagrams / tables,
+  unless negated ("no text"); summary line `images: N generated, M missing` (+ per variant whose
+  pictures differ). `vidgen render` / `storyboard`: `generated image not made yet for <scenes>`.
+- **API**: `GenerateImage`, `generated_image` exported by `vidgen.api` (EXTENDING.md example
+  `backdrop_title`, run end to end in a scratch project).
+
+Files
+- New: `src/vidgen/httpapi.py`, `src/vidgen/imagegen/__init__.py`, `imagegen/openai.py`,
+  `imagegen/placeholder.py`, `imagegen/run.py`, `tests/test_imagegen.py` (35 tests, 1 render).
+- Changed: `config.py` (`ImagegenConfig`, `ImageSize`, `VideoConfig.imagegen`),
+  `scenes/image.py` (`path` optional, `generate`, one-of validator, placeholder / picture at
+  render), `tts/elevenlabs.py` (loop moved to `httpapi`), `api.py`, `cli.py` (`imagegen` command,
+  `images_summary_lines`, validate warnings), `render/pipeline.py` (`warn_images`),
+  `render/fingerprint.py` (`httpapi.py`, `imagegen/openai.py`, `imagegen/run.py` not render
+  inputs; `imagegen` config stays in), `templates/minimal/gitignore` (comment),
+  `tests/test_docs.py` (model), `examples/minimal/video.yaml` (commented usage), docs/CONFIG.md
+  (top level, new "Generated images" section, `image` params + example), docs/EXTENDING.md,
+  README.md, DESIGN.md (tree, §3, §4, §6.4, §8, new §58), tasklist.md.
+
+Public interfaces added/changed (compatible)
+- Config `imagegen`; `image` params `generate` (and `path` no longer required by the model; one
+  of the two is). CLI `vidgen imagegen`. `vidgen.api`: `GenerateImage`, `generated_image`.
+- `vidgen.imagegen.*` (above), `vidgen.imagegen.openai.OpenAIImageProvider / parse_response /
+  as_png / API_KEY_ENV`, `vidgen.imagegen.placeholder.draw_placeholder / placeholder_path`,
+  `vidgen.imagegen.run.plan_imagegen / run_imagegen / ImagegenPlan / used_keys`,
+  `vidgen.httpapi.post_with_retries / scrub / retry_after / TRANSIENT_STATUS`.
+- Fingerprints change once (config / scene modules changed).
+
+Decisions / deviations
+- **OpenAI Images** as the one provider: simple documented REST call returning base64 PNG,
+  stdlib-only. No seed and no negative prompt in that API: `negative` becomes "Avoid: ..." in the
+  prompt, `seed` is only part of the cache key ("another picture of the same prompt"), documented.
+- **Content-addressed files, no stale state** (unlike audio's `<beat>.hash`): a picture belongs to
+  a request, not to a scene, so scenes / variants sharing a prompt share a file, and an edited
+  prompt simply needs a new picture (the old one is an orphan the user may delete).
+- **Size from the final format**, not the preview, so preview and final share pictures.
+- **Placeholder files in `build/`** (not an in-memory image): any scene type and Pillow-based
+  helpers get a path; keyed by request + theme look, drawn once.
+- **Warnings, not errors**, for missing pictures and text-like prompts (the config is valid; a
+  render works with placeholders).
+- `generate:` only on `image`: `screenshot` callouts in `px` and the magnifier need the real
+  pixels, and designed thumbnails have no background picture yet ("if cheap" — it was not).
+- No safety filter of our own (per the task): CONFIG.md "Responsible use" paragraph; provider
+  refusals surface as errors.
+
+Known gaps / TODOs (routed in tasklist.md: Step 59, Step 60)
+- No `vidgen imagegen --json`; no `images` key in `validate --json`.
+- No real API run (no network / key here); `PRICES` is a 2025 snapshot.
+- No image edit / variation endpoints, no second provider, no prompt-length check per model
+  (the API's error is shown).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2094 passed, 1 skipped, ~11 min on 2 CPUs); step only:
+`pytest tests/test_imagegen.py` (~6 s). Manual (no key needed): add `generate: "a quiet harbour
+at dawn"` to an `image` scene, `vidgen validate`, `vidgen imagegen --dry-run`, `vidgen storyboard`
+(placeholder card); with `OPENAI_API_KEY`: `vidgen imagegen`, then commit `assets/generated/`.
+
+## Step 56 — AI author guide
+What was built
+- **`AGENTS.md`**: the author guide for AI agents (and people) who **use** vidgen to make videos
+  and decks — distinct from `CLAUDE.md` (agents developing vidgen); each file says so at its top
+  and points to the other. ~1,000 lines (7,300 words) of Markdown, 12 topics:
+  - `start`: 12 rules at a glance (hook in 5 s, one idea per scene, beats of 6–15 words, a visual
+    change every 3–6 s, narration complements the picture, on-screen word limits, progressive
+    reveal, show don't list, restraint, recap + CTA, look before you pay, zero lint findings) and
+    a minimal project;
+  - `workflow`: plan → write → `validate --json` → `storyboard` (open the PNGs; what to ask of
+    each still) → `lint --json` (finding keys) → fix → repeat → `tts --dry-run` → `tts` →
+    `render --preview` → re-lint on real audio → `readback` → final; costs (TTS, imagegen, paid
+    STT), JSON commands;
+  - `pacing` (structure, hook, beats, dead air, on-screen text limits, progressive reveal,
+    endings), `social` (9:16 variant with karaoke captions, type scale, cuts, first frame,
+    thumbnail, phone UI band);
+  - `scenes`: a chooser table "what you want to show → type → key params" for all 28 types and
+    a minimal snippet of each (5 YAML blocks by group), how beats drive steps, when to write a
+    custom scene;
+  - `design` (presets table with what each is for, colour roles, icons, layout consistency,
+    accessibility), `actions` (table with restraint per action + example), `overlays`
+    (overlays, transitions, carry), `audio` (voices, pronunciation, every SFX, music beds);
+  - `examples`: 6 bad → good pairs (wall-of-text bullets → progressive `icon_grid`; narration
+    reading the slide → complementing it; raw number → `stat` with a `before` comparison;
+    unexplained chart → title + highlight + callout + source; one 45-word beat → one stage per
+    beat; slow opening → hook);
+  - `outputs` (video / SRT, chapters, thumbnail, slides HTML / PDF, GIF / clip, translations
+    workflow, generated pictures), `troubleshooting` (validate message → fix table, every lint
+    rule → meaning → usual fix, other pitfalls).
+- **Packaged**: the source is `src/vidgen/data/guide/AGENTS.md` (package data `data/guide/*`), the
+  root `AGENTS.md` a byte-identical copy (test). **`vidgen guide [TOPIC] [--list] [--json]`**
+  prints the guide, one topic (by name or alias: `vidgen guide vertical`, `... chooser`), or the
+  topic list; unknown topics get a did-you-mean. `--json`: `{topic, title, topics: [{name, title,
+  aliases}], text, path}`. Topics are `##` sections introduced by `<!-- topic: NAME (also: ...) -->`
+  marker lines (removed from the printed text).
+- Pointers: README "For AI agents" section + feature line + command-table row; CONFIG.md intro
+  line and "`vidgen guide --json`"; CLAUDE.md header; init template comment and `vidgen init`'s
+  closing line mention `vidgen guide`.
+
+Verification
+- Every YAML snippet was also checked visually: all scene-list snippets of the guide (45 scenes)
+  in one scratch project, `vidgen lint` + `vidgen storyboard` at 16:9 and 9:16, sheets read. The
+  first run flagged three "good" snippets (a two-beat `text_card` = 6.2 s dead air, a screenshot
+  beat too short for its steps, a narration-speed estimate) and showed a hook `stat` whose
+  second beat changed nothing — fixed in the guide. Final: the only findings are the `dead_air`
+  of two **bad** examples (as the guide says they would be), 0 elsewhere, both orientations.
+
+Files
+- New: `AGENTS.md`, `src/vidgen/data/guide/AGENTS.md`, `src/vidgen/guide.py`, `tests/test_guide.py`
+  (42 tests: topics, CLI human / JSON / errors, the copy, and the "everything named exists"
+  checks below; 28 of them are the YAML snippets).
+- Changed: `src/vidgen/cli.py` (`cmd_guide`, parser, `JSON_COMMANDS`, init hint),
+  `src/vidgen/jsonout.py` (`guide_document`), `src/vidgen/render/fingerprint.py` (`guide.py` not a
+  render input), `src/vidgen/templates/minimal/video.yaml` (comment), `pyproject.toml` (package
+  data), `CLAUDE.md`, `README.md`, `docs/CONFIG.md`, `DESIGN.md` (tree, §8, new §59), `tasklist.md`.
+
+Public interfaces added/changed (compatible; `vidgen.api` unchanged)
+- CLI `vidgen guide` (+ JSON document `guide`, version 1). `vidgen.guide`: `GUIDE_FILE`,
+  `GuideTopic`, `guide_text`, `guide_topics`, `find_topic`, `topic_lines`.
+
+Decisions / deviations
+- **One file, sections as topics** (not one file per topic): the root `AGENTS.md` must read as
+  one document; markers keep topics addressable without a second source. Root copy instead of a
+  symlink (Windows checkouts) — `tests/test_guide.py` fails with the fix when they differ.
+- **What the tests pin** (so the guide cannot rot): every `vidgen <command>` in a code span or
+  block is a real command and every `--option` after it is one of its options; the chooser
+  covers every built-in type, its params column names real params (or synonyms) of each type
+  in the row; every type has a snippet; the preset, action and lint-rule tables list exactly
+  the built-in ones; every SFX and music bed is named; every `yaml` block, wrapped into a config
+  (scene list / partial config / top-level fragment + one scene; `assets/...` files copied from
+  the examples by suffix), passes `validate_all` with no problems. Prose claims (thresholds,
+  defaults) were checked by hand against CONFIG.md and the code, not by tests.
+- Guide numbers follow vidgen's own: 2.6 words/s estimate (the task's ≈ 2.5 is quoted as the
+  rule of thumb), `narration_speed` 1.8–3.5 (English), `dead_air` 6 s, `max_words` 40 (the
+  guide recommends ≤ ~20).
+
+Known gaps / TODOs
+- Callout labels on a crowded bar chart: `kind: label` / `side: right|top` put the label against
+  the chart title and `side: left` over a neighbouring bar's value label (lint does not report
+  either: the overlap is small); only the automatic arrow placement was clean, and it is what the
+  guide's example uses. The placement could avoid value labels / the header band better
+  (Step 57 gallery or Step 60).
+- The guide is English only; `docs/CONFIG.md` / `EXTENDING.md` it refers to are not shipped in
+  the wheel (it says "in the vidgen repository"). Step 57's gallery stills could be linked from
+  the chooser; Step 58's `vidgen plan` should follow the guide's pacing rules (beats of 6–15
+  words, one reveal per beat).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2136 passed, 1 skipped, ~10.5 min on 2 CPUs); step only:
+`pytest tests/test_guide.py` (~6 s). Manual: `vidgen guide --list`, `vidgen guide scenes`,
+`vidgen guide vertical --json`; after editing the guide, `cp src/vidgen/data/guide/AGENTS.md
+AGENTS.md`.
+
+## Step 57 — Scene gallery
+What was built
+- **`vidgen gallery [PROJECT] [--output DIR] [--types T,T] [--formats 16:9,9:16] [--theme PRESET]
+  [--clips | --no-clips] [--jobs N] [--force] [--json]`** (`src/vidgen/gallery.py`): every
+  registered scene type rendered from one canonical sample at 16:9 (640x360) and 9:16 (360x640),
+  12 fps, into a Markdown gallery (default `docs/gallery`):
+  - `README.md`: every type by the guide's groups (text and structure, flows, data, pictures
+    and media, maths and code; then a project's own types), both stills linked to the page and
+    "use it for" from the guide's chooser; `flowchart` listed as "same type as `diagram`";
+  - `<type>.md`: use, description (first paragraph of the class / module docstring), stills
+    (last beat), the GIFs inline, the YAML as written in the guide, a params table from the
+    `Params` model (types, defaults, docs, nested fields as `a.b`, synonyms), targets, beats;
+  - `media/<type>-16x9.png|gif`, `media/<type>-9x16.png|gif`: optimised PNG stills, GIFs of the
+    scene up to its last beat's end (no fade-out), 320 / 180 px wide, 6 fps, 32 colours, no
+    dithering, the end held 1.5 s.
+- **Samples = the author guide's snippets** (single source): `guide_samples()` splits the yaml
+  blocks of `AGENTS.md`'s `scenes` topic into list items (text kept as written; a `generate:`
+  snippet is replaced by a later one of the type, so `image` shows a picture, not the
+  placeholder). Their `assets/...` files map to stand-ins shipped as package data
+  `data/gallery/` (`picture.png` for `image`, `app.png` for other pictures, `clip.webm` for
+  videos; `sample_asset()`), which `tests/test_guide.py` now uses too. `clip.webm` is new: a
+  zoom into the sample app screenshot (`tools/make_gallery_clip.py`; the examples' ffmpeg test
+  pattern looked like a test pattern). In a project (or with `PROJECT`), the project's own types
+  take their first scene in `video.yaml` (+ the files it names and `assets/icons`), and the
+  project's theme and extensions are used.
+- **Rendering** in a work project `build/gallery/` (under the project or the current folder) with
+  every sample (so `--types` runs keep the others current: fingerprints see the whole config and
+  `assets/`), 9:16 as its `portrait` variant; stills reused like the storyboard's
+  (`stills_current`), the "audio missing" warning filtered.
+- **Committed**: `docs/gallery` (29 pages incl. the index, 56 stills, 56 GIFs) = 4.4 MB (1.3 MB
+  stills, 3.1 MB GIFs); `tests/test_gallery.py` keeps it under 8 MB, lists every registered type
+  in the index and checks every page shows the guide's current snippet and both stills (so
+  editing a guide snippet without `vidgen gallery --types T` fails the suite).
+- **Reproducible**: render workers now run with `PYTHONHASHSEED=0` (unless set): with Python's
+  random per-process seed the frames of a camera move differed by a few pixel values between
+  renders. Two `--force` regenerations give byte-identical files except `screenshot-9x16.gif`
+  (sub-pixel edges of the picture while the camera moves over it; not tracked down).
+- **Routed visual fixes** (Steps 37 and 56), each seen on stills before / after:
+  - `map` in 9:16: a regional view (`europe`...) is narrowed to the longitudes that fill the
+    frame around its items instead of grown north and south (Europe was a band above Africa);
+    country labels with leaders no longer cross earlier leaders or labels nor stand nearer
+    another labelled place than their own (Israel / Switzerland swapped-looking labels in a
+    9:16 world view); when the first spot fails, a search out to 3 units uses the empty bands
+    above and below the map.
+  - `screenshot` / `video_clip` in 9:16: steps focus by themselves for a landscape picture
+    (`focus` default now auto); a focus view taller than the picture is centred on it, a
+    smaller one stays on it. `video_clip` `fit: auto` (new default): a landscape clip without
+    callouts in a vertical frame shows a nearly square part of its middle.
+  - callout labels on crowded charts: `label_spot` honours `side` only while a spot there is
+    clear (else the best clear spot elsewhere), avoids "rivals" (a spot clearly nearer another
+    bar, value or the title than its target), keeps a soft clearance from text, and `kind:
+    label` tries straight above / below / beside first; `box` / `circle` tags get the same
+    clearance (and the same spots one clearance further out). New lint rule **`label_spacing`**
+    (warning, `min_gap` 0.02): a label on its own plate (filled, rounded, no outline, hugging
+    one text) closer than that to other text; lone symbols, the text framed by the callout's
+    own mark and outlined badges (the timeline's "Now", which first fired on examples/gallery)
+    are not reported. The three routed cases were 6.7–7 px at 360p; lint reported none of them
+    before.
+- **Examples re-linted** after the changes: examples/gallery and examples/minimal (default and
+  vertical), kphi3, custom_scene: 0 findings each (kphi3: its 4 commented ignores).
+
+Files
+- New: `src/vidgen/gallery.py`, `src/vidgen/data/gallery/{picture.png, app.png, clip.webm}`,
+  `tools/make_gallery_clip.py`, `docs/gallery/` (README.md, 28 type pages, media/),
+  `tests/test_gallery.py`.
+- Changed: `cli.py` (`cmd_gallery`, parser, `JSON_COMMANDS`), `jsonout.py` (`gallery_document`),
+  `export.py` (`write_gif(..., colors, dither, hold)` shared with `export gif`),
+  `render/pipeline.py` (`PYTHONHASHSEED`), `render/fingerprint.py` (`gallery.py` not a render
+  input), `config.py` (`label_spacing`, `LabelSpacingRule`), `lint/layout_rules.py`
+  (`label_plates`, `label_spacing`), `callouts.py` (`label_spot` `clearance` / `rivals` /
+  `straight` / side fallback, `tag_spot` `clearance`, `TAG_CLEARANCE`, `_misleading`),
+  `scenes/callout_action.py` (`LABEL_CLEARANCE`, rivals), `scenes/world_map.py`
+  (`_portrait_region`, `_clear_spot`, `_misleading`, `_crosses`, segments), `scenes/screenshot.py`
+  (`focus` auto, `_auto_focus`, view centring), `scenes/video_clip.py` (`fit: auto`),
+  `pyproject.toml` (package data `data/gallery/*`), `.gitignore` (`!docs/gallery/media/`: the
+  repository ignores every `media/` folder, Manim's output), `AGENTS.md` + `src/vidgen/data/guide/AGENTS.md`
+  (gallery in the chooser intro, JSON list, `label_spacing` row, 9:16 picture behaviour),
+  README.md (feature line, command row, docs list), docs/CONFIG.md (new "Scene gallery" section
+  and `gallery --json`, `label_spacing`, screenshot `focus`, video_clip `fit`, callout `side`),
+  DESIGN.md (tree, §8, new §60), tasklist.md; tests `test_lint.py`, `test_callout_action.py`,
+  `test_world_map.py`, `test_screenshot.py`, `test_video_clip.py`, `test_guide.py`.
+
+Public interfaces added/changed (compatible; `vidgen.api` unchanged except `label_spot` /
+`tag_spot` keyword arguments)
+- CLI `vidgen gallery` (+ JSON document `gallery`, version 1). Lint rule `label_spacing`
+  (`lint.rules.label_spacing.min_gap`, `lint_ignore: [label_spacing]`).
+- Params: `screenshot` / `video_clip` `steps[].focus` default `None` (auto); `video_clip` `fit`
+  gains `auto` (default). Visible changes: 9:16 renders of landscape screenshots / clips with
+  callouts zoom in on their callouts; landscape clips without callouts are cropped nearly square
+  in 9:16; 9:16 regional maps are narrower; `label` callouts and box tags may move.
+- `vidgen.gallery`: `make_gallery`, `gallery_types`, `rendered_names`, `guide_samples`,
+  `project_samples`, `chooser_uses`, `sample_asset`, `work_config`, `write_page`, `write_index`,
+  `media_name`, `Sample`, `GalleryType`, `GalleryResult`, `FORMATS`, `CLIP_*`.
+- `vidgen.export.write_gif`. Fingerprints change once (scene code changed).
+
+Decisions / deviations
+- **Samples from the guide, not `examples/gallery`** (the tasklist's suggestion): the guide has
+  exactly one short, validated snippet per type, written for agents; the examples use some
+  types twice, others with project-specific assets. One source: a test fails when a page no
+  longer shows the guide's snippet.
+- **Committed GIFs too**, kept small (6 fps, 32 colours, 320 / 180 px, no fade-out): the gallery
+  is for people on GitHub and agents reading docs, and a still does not show what a scene
+  animates. Budget 8 MB, used 4.4 MB.
+- **Markdown only** (no HTML page): GitHub renders it, agents read it; `<img>` tags keep the
+  stills small in tables.
+- No mid-beat stills: the GIF shows the animation; the still is the last beat's end.
+- `fit: auto` / auto focus rather than "portrait-only params": a variant cannot easily change
+  one scene's params (variants replace the `scenes` list), so the sensible 9:16 behaviour has
+  to be the default; `focus: false` / `fit: contain` restore the old look.
+
+What I looked at (Read)
+- Every gallery still at 16:9 and 9:16 (contact sheets of all 28 types, twice), the clip frames,
+  and a scratch project reproducing the routed cases (`map` world view with Qatar / Costa Rica /
+  Belgium / Israel / Netherlands / Switzerland / Japan, a seven-bar chart with `label` callouts
+  `side: right | top | left`, a screenshot and a clip) at 640x360 and 360x640, before and after.
+- Left as seen (routed to Step 60): `code_walkthrough` 9:16 listing is small (a line wraps);
+  `image` with the default `fit: contain` leaves bands in 9:16; a world view spanning most
+  longitudes stays a strip in 9:16 (its labels now spread into the bands); the heatmap 9:16
+  block is centred under the title (looks high, is centred).
+
+Known gaps / TODOs
+- `screenshot-9x16.gif` is not byte-stable across forced re-renders (see above).
+- Project-type rendering is unit-tested (samples, config) but not rendered in a test (tried by
+  hand: `vidgen gallery examples/custom_scene --types gear_pair,pie` renders the custom
+  `gear_pair` with its project icon; its "use it for" is the first sentence of its docstring).
+- `vidgen gallery` writes into `docs/gallery` of the current folder by default, also in a
+  project (`--output` to choose).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2154 passed, 1 skipped, ~11 min
+on 2 CPUs); step only: `pytest tests/test_gallery.py` (11 tests, ~25 s; one renders two types at
+160x90). Manual: `vidgen gallery -j 2` from the repository root
+(~6 min the first time, seconds when current), then open `docs/gallery/README.md`;
+`vidgen gallery --types pie,map --output /tmp/g --json`; in a project:
+`vidgen gallery examples/custom_scene --output /tmp/g --types gear_pair`.
+
+## Step 58 — `vidgen plan`
+What was built
+- **`vidgen plan INPUT [--output DIR|FILE] [--title TEXT] [--format 16:9|9:16] [--preset NAME]
+  [--language TAG] [--force] [--json]`**: a Markdown outline (`.md`) or plain-text script
+  (`.txt`) → a draft project, scaffolded like `vidgen init` (default folder: the input's stem) or
+  just a config file (`-o video.yaml`), pictures copied into `assets/`. **No LLM, no network,
+  deterministic.** Prints the scenes (id, type, beats, reason), the estimated length and the
+  TODO count, then validates the draft (`validate_all`; problems → exit 1 / `ok` false).
+- **Reading** (`src/vidgen/outline.py`): ATX + setext headings, paragraphs (lines kept), bullet /
+  numbered lists with nested items and continuation lines, pipe tables, fenced code with its
+  language, `$$` maths (one line or a block; `\\` lines and `aligned` environments → several
+  formulas), images on their own line, blockquotes with a `— Author, Source` line, rules, HTML
+  comments, YAML front matter; `plain()` removes inline Markdown and collects links. Plain-text
+  scripts: short lines standing alone (≤ 8 words, no final punctuation) are headings.
+- **Narration** (`src/vidgen/prose.py`): `split_sentences` with per-language abbreviations
+  (new `LanguageRules.abbreviations` for en / pt / es / fr / de / it), initials, decimals;
+  `split_long` (DP over phrase breaks from `cues.phrase_break_cost`, pieces near 10 words, max
+  15); `merge_short` (DP grouping, ≥ 6 words, ≤ 15); `compress` (on-screen labels: parentheses,
+  filler phrases / words (en, pt), clause heads, the main clause after a subordinate one,
+  articles, a cap, never ending on a leaning word / auxiliary / quantifier).
+- **Planning** (`src/vidgen/plan.py`): title (+ subtitle from a short first paragraph; first
+  opening beat as its narration, or as a hook `stat` before it when it has a number), sections /
+  units from the heading levels, chapter cards + `progress_bar` when the narration is over 2 min
+  with ≥ 3 sections, closing section → recap + `end_card` (last beat, links as `lines`). Cue →
+  type: dated list → `timeline`; numbered 2–8 → `process`; short nouns with distinct icons →
+  `icon_grid` (`icons.match_icon`, new); other lists → `bullets`; numeric 2-column table →
+  `bar_chart` (unit, currency `value_format`, `highlight` on the bar the last beat names) else
+  `table`; code → `code` (per-beat highlights) / `code_walkthrough` (> 15 lines); maths →
+  `equation` / `equation_derivation` (≥ 3); image → `image` (copied or `generate:`); quote →
+  `quote` (≤ 2 beats, the rest follows); arrow-chain paragraph → `diagram`; vs heading with two
+  lists, pros/cons lists or vs over prose → `comparison`; number in prose → `stat`; other prose →
+  `bullets` of compressed beats / `text_card`. Beats are fitted one per reveal step (raw
+  sentences first, then merged; after-block sentences for the items with the earlier ones as an
+  intro; word-stem matching; the items' own sentences; placeholders with a TODO). TODOs:
+  placeholders, narration repeating the screen, icon choice, stat context / `better`, chart
+  source, missing picture, code notes, long lists, > 4 table columns, extra beats (dead air),
+  beats over 20 words / with parentheses / links / inline maths, no closing section.
+- **Writing** (`src/vidgen/plan_yaml.py`): a header comment, `# plan:` / `# TODO:` lines above
+  each scene, flow style for short lists / small mappings, `- text:` beats, code as literal
+  blocks, LaTeX single-quoted; checked to `yaml.safe_load` back to `plan_config(plan)`.
+  `write_plan` refuses a non-empty folder / an existing file without `--force`.
+- **Example** `examples/plan/`: `outline.md` (a 2½-minute caching explainer using most cues) and
+  the unedited draft `video.yaml` (golden file: `tests/test_plan.py` regenerates and compares).
+
+What I looked at
+- Storyboards of the example draft (3 sheets, 19 scenes) and lint at 16:9; a pt-BR outline at
+  9:16 and a plain-text script (validate + lint). Tuned from them: placeholder-free fitting with
+  raw sentences (items lost their one-sentence-each narration when tiny sentences were merged),
+  main clause after "On a miss, ...", no auxiliary / quantifier at a cut label's end ("Account
+  balances must", "Rode testes cada"), quotes and stats capped at the beats that change something
+  (a 2-beat stat without comparison and a 4-beat quote were `dead_air`), an opening number as the
+  hook, `vs` badge only for "A vs B" columns, URLs without trailing periods, block-style beats.
+- Final `vidgen lint examples/plan`: 19 scenes, 38 stills, **1 finding**: `contrast` warning on
+  the `code` scene's highlight band (GitHub-dark keyword red #FF7B72 on the band, 4.15:1 — a
+  `code` scene / theme issue, not the plan's; routed to Step 60). The pt-BR 9:16 draft: 2
+  `rushed_animation` warnings on a timeline whose beats are one-word placeholders (as its TODOs
+  say). Validate: 0 problems on all three.
+
+Files
+- New: `src/vidgen/outline.py`, `src/vidgen/prose.py`, `src/vidgen/plan.py`,
+  `src/vidgen/plan_yaml.py`, `tests/test_plan.py` (68 tests), `examples/plan/outline.md`,
+  `examples/plan/video.yaml`.
+- Changed: `src/vidgen/cli.py` (`cmd_plan`, `scaffold_project` shared with `init`, parser,
+  `JSON_COMMANDS`), `src/vidgen/jsonout.py` (`plan_document`), `src/vidgen/languages.py`
+  (`abbreviations`), `src/vidgen/icons.py` (`match_icon`), `src/vidgen/render/fingerprint.py`
+  (new modules are not render inputs), `AGENTS.md` + `src/vidgen/data/guide/AGENTS.md` (workflow
+  step 1: start from an outline with `vidgen plan`; JSON list), README.md (feature, agents
+  section, quick start, command row, example), docs/CONFIG.md (new "Drafting from an outline"
+  section, `plan --json`, JSON command lists), docs/EXTENDING.md (`abbreviations`), DESIGN.md
+  (tree, §8, new §61), tasklist.md.
+
+Public interfaces added/changed (compatible; `vidgen.api` unchanged except the new
+`LanguageRules.abbreviations` field, defaulted)
+- CLI `vidgen plan` (+ JSON document `plan`, version 1). `vidgen.outline` (`parse_outline`,
+  `plain`, block dataclasses), `vidgen.prose` (`split_sentences`, `split_long`, `merge_short`,
+  `narration_beats`, `compress`, `sentence`, `words`), `vidgen.plan` (`make_plan`, `Plan`,
+  `PlannedScene`, `PlanOptions`), `vidgen.plan_yaml` (`plan_config`, `plan_yaml`, `write_plan`,
+  `PlanResult`, `FORMATS`), `vidgen.icons.match_icon`, `vidgen.cli.scaffold_project`.
+- Render fingerprints change once (`languages.py`, `icons.py` changed).
+
+Decisions / deviations
+- **Golden file committed** (`examples/plan/video.yaml`, unedited): it documents what a draft
+  looks like and pins the heuristics; after changing the planner run `vidgen plan
+  examples/plan/outline.md -o examples/plan/video.yaml --force` and review the diff.
+- **Prose before a block narrates it; prose after the last block of a unit joins that block.**
+  When the counts let it, sentences after a list are the items' and those before an intro.
+- **No intro beats inside a revealing scene**: item *i* must appear at beat *i*, so an intro of
+  more than one short sentence becomes its own scene (often weak `bullets`; a TODO says so).
+- **Stat beats**: one, or two with a comparison (beat 2 reveals it); extra prose moves on.
+- Chapter cards only when the estimate is over 2 minutes with ≥ 3 sections (the guide's rule);
+  the summary section gets none.
+- `--preset` accepts the built-in presets only (a draft has no project presets yet).
+- A draft with validate problems is still written (exit 1): the agent needs the file to fix it.
+
+Known gaps / TODOs (routed to Step 60 in tasklist.md)
+- Heuristic limits: prose-derived bullet items are truncated sentences; stat labels keep their
+  subject; icon matching uses the English tags (other languages get `bullets`); no cues for
+  `network`, `line_chart`, `scatter`, `pie`, `heatmap`, `map`, `screenshot`, `video_clip`;
+  `A -> B` only as whole paragraphs; nested list items are dropped (TODO).
+- The `code` highlight band's contrast with GitHub-dark keywords (lint warning on the example).
+- TODO texts and reasons are English whatever `--language`.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2223 passed, 1 skipped, ~11 min
+on 2 CPUs); step only:
+`pytest tests/test_plan.py` (~3 s). Manual: `vidgen plan examples/plan/outline.md -o
+/tmp/draft`, read `/tmp/draft/video.yaml`, then `vidgen storyboard /tmp/draft` and `vidgen lint
+/tmp/draft`; `vidgen plan outline.md --language pt-BR --format 9:16 --json`.
+
+## Step 59 — MCP server
+What was built
+- **JSON gaps closed first** (every command a tool wraps has a JSON mode): `vidgen tts --json`
+  (dry run and run: each beat to voice with scene, voice, action `generate` / `copy`, characters
+  billed, spoken text when pronunciation changed it; characters per voice; generated / up to date
+  / orphaned), `vidgen imagegen --json` (each picture with prompt, sent prompt, size, model,
+  quality, estimated cost; total, unknown-price count, price note; generated / up to date /
+  orphaned), `vidgen init --json`, `validate --json` key `images` (per config whose pictures
+  differ: `{variant, generated, missing, pictures: [{key, scenes, path, exists, prompt}]}`). The
+  human progress lines of tts / imagegen go to stderr in JSON mode (they become MCP progress).
+  Human `vidgen validate` no longer stops at the first variant that does not load: it reports
+  every one (`[variant NAME] ...` lines, like the JSON problems).
+- **`vidgen mcp [--root DIR]`** (+ console script `vidgen-mcp`), optional extra `vidgen[mcp]`
+  (`mcp>=1.19`, also in `dev`): a stdio MCP server built on the official SDK — 2.x `MCPServer`
+  (what pip installs today: 2.3.0 here), falling back to 1.x `FastMCP` (tested by hand with
+  1.19.0 and 1.30.0 through `PYTHONPATH`; 1.13 does not pass a returned `CallToolResult` through,
+  hence `>=1.19`). 21 tools: `guide`, `init`, `plan` (`input_path` or `markdown_text`),
+  `validate`, `schema`, `list_scenes`, `list_icons`, `list_themes`, `list_sfx`, `list_music`,
+  `storyboard`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`, `thumbnail`,
+  `export`, `gallery`, `translate_template`; parameters = the CLI options in snake_case with
+  descriptions / bounds; tool annotations (read-only / writes / open-world for the paid ones).
+  Each returns the command's JSON document (compact JSON text); `ok: false` → an `isError` result
+  with that JSON.
+- **Pictures**: `storyboard` (sheets, whole-video first), `thumbnail` (picture + 320 px copy),
+  `gallery` (stills), `list_icons sheet=true`, `list_themes swatches=true` return MCP image
+  content, scaled to ≤ 1568 px, PNG or JPEG q85 over 800 KB; `images` (default 3, max 8) and
+  `image_offset` page, the document gets `mcp_images: {total, offset, returned, next_offset}`.
+- **Process model**: a fresh `python -m vidgen <cmd> ... --json` subprocess per call (cwd =
+  root, stdin devnull, list args). Justification: Manim's config / vidgen's registries are
+  process-global and not re-entrant, a long-lived server must survive crashing scenes /
+  extensions, and the CLI's JSON mode already guarantees one document on stdout; ~1 s overhead.
+  stderr lines → `report_progress` (≤ 2 per s); cancel → the process (its process group on POSIX)
+  is killed; rendering tools are serialised by one lock; light tools run concurrently.
+- **Security**: every path argument resolved (`..`, symlinks) and confined to `--root`
+  (`mcp_tools.RootPolicy`; default: the folder the server starts in); option values passed as
+  `--name=value`, positionals never start with `-`; pictures only from inside the root; the
+  environment is inherited by the subprocesses (keys) but never returned. **Cost safety**: `tts`
+  / `imagegen` default `dry_run=True`; `dry_run=False` without `confirm_cost=True` is refused before
+  anything runs; `readback` asks for `confirm_cost` when `stt.provider` is `elevenlabs`. `schema`
+  without `scene` refuses unless `full=true` / `all_types=true` (the whole schema is ~370 KB
+  compact, ~100k tokens).
+- **Resources**: `vidgen://guide`, `vidgen://guide/<topic>`, `vidgen://schema`, and
+  `vidgen://gallery/index|<type>` when `<root>/docs/gallery` exists.
+- Docs: README "Use from an AI agent via MCP" (Claude Desktop JSON with `"command": "vidgen",
+  "args": ["mcp", "--root", ...]`, Claude Code `claude mcp add`), install step, command rows;
+  docs/CONFIG.md new "MCP server (`vidgen mcp`)" section + `init` / `tts` / `imagegen --json`
+  sections + validate `images`; AGENTS.md (both copies) "Through MCP" paragraph in the workflow
+  topic and the JSON list; DESIGN.md tree, §8, new §62; `examples/minimal/video.yaml` usage lines.
+
+Files
+- New: `src/vidgen/mcp_server.py` (SDK binding, subprocess runner, tools, resources),
+  `src/vidgen/mcp_tools.py` (SDK-free: `RootPolicy`, `PathOutsideRoot`, `cli_args`,
+  `cost_refusal`, `prepare_picture`, `page_of`), `tests/test_mcp.py` (14 tests: 6 CLI JSON, 5
+  helpers, 3 over stdio with the SDK client, one of them a render test).
+- Changed: `cli.py` (`cmd_mcp`, `init` / `tts` / `imagegen` JSON, `variant_images`, validate
+  keep-going, `JSON_COMMANDS`), `jsonout.py` (`init_document`, `tts_document`,
+  `imagegen_document`, `images_json`, validate `images`), `render/fingerprint.py` (new modules not
+  render inputs), `pyproject.toml` (extra `mcp`, dev, script `vidgen-mcp`), tests `test_cli.py`
+  (new variant message), `test_json_output.py` (`tts --json` is no longer a usage error), docs above,
+  tasklist.md.
+
+Public interfaces added/changed (compatible; `vidgen.api` unchanged)
+- CLI `vidgen mcp`, `vidgen-mcp`; `--json` on `init`, `tts`, `imagegen` (documents version 1);
+  validate document key `images`. Human `vidgen validate` error text for broken variants is now
+  `[variant NAME] location: message` (was `variant 'NAME': ...` and only the first).
+- `vidgen.mcp_server`: `build_server(root)`, `serve(root)`, `main(argv)`, `run_vidgen(args, cwd,
+  progress)`, `CommandRun`, `compact`, `stt_provider`; `vidgen.mcp_tools` as above;
+  `cli.variant_images`, `cli.cmd_mcp`.
+
+Decisions / deviations
+- **Subprocess per call, not in-process** (above). The CLI is the contract; the server adds no
+  second implementation of any command.
+- **SDK 2.x first, 1.x accepted**: the task named FastMCP, which SDK 2 renamed `MCPServer`;
+  results are built from wire names via `model_validate` so one code path serves both.
+- **Errors**: a failed command returns its JSON document as an error result (not the SDK's
+  "Error executing tool ..." text), so the agent parses the same shape either way. SDK log level
+  WARNING (it logged every failed call's document at INFO).
+- **Defaults for agents**: `render` / `thumbnail` / `export` preview by default; `gallery` writes
+  `build/mcp/gallery` with no GIFs (not `docs/gallery`); `validate` has no `variant` (it checks
+  all variants); progress is a counter without a total (MCP requires increasing values; lines
+  mix kinds).
+- `plan` with `markdown_text` writes a temporary file outside the root (server-owned) and
+  defaults the output to `<root>/outline`; pictures it names are not copied.
+
+What I looked at
+- Through the SDK client by hand (scratch scripts): render of a tiny project (3 progress
+  notifications: the warning and `[1/2]` / `[2/2]` lines), thumbnail (2 PNGs), gallery `stat`
+  16:9 (still), `list_themes swatches=true` (193 KB PNG), `list_icons sheet=true`, `plan` from
+  `markdown_text`, a validate with two broken variants (error result with both).
+
+Known gaps / TODOs (routed to Step 60 in tasklist.md)
+- Files a project's own config names (image `path:`, extensions, `pronunciation_file`) are not
+  confined to the root: the server confines tool arguments only.
+- Windows: cancelling kills the CLI process but not its render workers (no process group).
+- Large documents (a long video's `lint` / `storyboard` JSON, `schema full=true`) are not trimmed
+  and may exceed a client's tool-output limit.
+- No session with a real client (Claude Desktop / Code) was possible here; only the SDK's own
+  client in tests. Cancellation is not covered by a test.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2237 passed, 1 skipped, ~11 min on 2 CPUs); step only:
+`pytest tests/test_mcp.py` (~30 s; the stdio tests skip without `mcp`). Manual: `pip install -e
+".[mcp]"`, add `{"command": "vidgen", "args": ["mcp", "--root", "<folder>"]}` to a client, ask it
+to call `guide` with topic `workflow`, `plan` on an outline, `storyboard` (the sheets come back as
+images), `tts` (dry run; a real run is refused without `confirm_cost`).
+
+## Step 60 — Final review and release notes
+Final review of Steps 8–59, done as an AI author would use vidgen: every item routed to Step 60
+triaged (bug / quality / nice-to-have), the real bugs fixed, a fresh end-to-end run from an
+outline (CLI and MCP), a consistency pass over commands / docs / `vidgen.api`, a packaging check,
+and these release notes. **Version bumped to 0.2.0.**
+
+### What I did end to end (and what it found)
+- **CLI, as `AGENTS.md` says**: wrote a new outline ("Why your phone battery dies") → `vidgen plan
+  --json` → read the draft and its TODOs → refined it (icon_grid of causes, a bar chart with a
+  highlight and caption, a process with icons, a 9:16 `social` variant with karaoke captions, a
+  designed thumbnail) → `validate --json` (ok) → `storyboard` (sheets read: layout clean at 16:9
+  and 9:16) → `lint` and `lint --variant social` (0 findings) → `render --preview` → `thumbnail`
+  (read) → `slides`. Findings: (1) `render` re-rendered every scene the storyboard had just made,
+  and then `slides` re-rendered them all again, because a plain render throws away the stills →
+  **render is now incremental** (below); (2) the plan made a stat of "between 20 and 80 percent",
+  missed the bare link `batteryuniversity.com`, and narrated a step by its cut label ("Steep for
+  four.") → fixed; (3) `init` suggested `validate → tts → render`, skipping the look-and-fix loop
+  → its "next:" line now names storyboard and lint.
+- **MCP, with the SDK's stdio client** (a scratch script calling `guide`, `plan` from
+  `markdown_text`, `validate`, `storyboard` (1 sheet back as an image), `lint` (stills reused),
+  `render` (now 3 s: it joins the storyboard's renders), `thumbnail` (2 images), `tts` (dry run),
+  and `validate` of a project whose `video.yaml` names `../../...` (refused, below)). Also run
+  from the installed wheel with `[mcp,pdf]`.
+- **Install check**: `python -m build` → wheel 1.98 MB (fonts 2.0 MB uncompressed are most of
+  it; 202 icon files, map 136 KB, guide, gallery sample assets, slides assets; no tests, caches or
+  build artefacts) and sdist 2.2 MB (sources, README, LICENSE, THIRD_PARTY_NOTICES, tests).
+  Fresh venv without extras: `vidgen --version` (0.2.0), `init`, `validate`, `render --preview`,
+  `guide --list` / `guide pacing`, `gallery --types title`, `list-icons`, `storyboard`, `lint`
+  (0 findings), package data present. Fresh venv with `[mcp,pdf]`: `slides --format pdf --notes`,
+  `vidgen-mcp --help`, the MCP script above. Found: the map data's ISC / MIT notices were only in
+  the repository's THIRD_PARTY_NOTICES, not in the wheel → `data/geo/LICENSE`; setuptools warned
+  that `license = {file}` is deprecated → PEP 639 `license` / `license-files`.
+
+### Fixes (Step 60)
+1. **`vidgen render` renders only what changed** (behaviour change, DESIGN §63): scenes whose
+   render is current by the Step 11 fingerprint (same format, audio mode, inputs) are reused —
+   also the storyboard's and lint's renders, whose stills then survive. `--force` (CLI and MCP)
+   renders everything; `--scene` unchanged. The biggest saving for an agent's loop (storyboard →
+   lint → render no longer renders twice).
+2. **Plan vs render, one frame** (Step 49 gap): a silent scene whose `(duration - outro) x fps`
+   is a half frame rendered a frame shorter than planned (banker's rounding of the remainder).
+   `timeline()` / `hold()` now wait to whole-frame targets rounded like the plan.
+3. **`code` highlight band contrast** (Step 58 gap): the band's opacity adapts (0.2 → 0.1) so
+   every syntax colour keeps 4.6:1, else colours are mixed towards `text`. `examples/plan` now
+   lints clean (was 1 `contrast` warning).
+4. **Mono clip sound −3 dB** (Step 48 gap): mono clip audio plays at full level on both channels.
+5. **`post_render` hooks before the thumbnail** (Step 50 gap): they now run after it and get
+   `thumbnail` in their data.
+6. **MCP: files named by a project's config** (Step 59 gap): with `VIDGEN_CONFINE_ROOT` (set by
+   the server for every command) `Project.load` refuses a config whose `path` / `logo` / `image` /
+   `source` / `pronunciation_file` / `translations` / `extensions` values resolve outside the root.
+7. **MCP cancel on Windows** (Step 59 gap): kills the process tree (`taskkill /T`), so render
+   workers stop too (not exercised here: no Windows).
+8. **`vidgen plan`** (Step 58 gaps, partly): stat labels without the subject ("faster with a
+   cache" instead of "A cache can make same page faster"), ranges are not stats, bare web
+   addresses are links, placeholder beats use the whole item. Golden `examples/plan/video.yaml`
+   regenerated (one line changed).
+9. **Consistency**: `translate-template --language` (alias of `--lang`), MCP `translate_template`
+   parameter `language`; `init`'s next-step line.
+10. **Packaging**: version 0.2.0, PEP 639 licence metadata (setuptools ≥ 77 to build), map data
+    notices in the wheel.
+
+Checked and left as is: `vidgen.api` (734 names in `__all__`, all present, every vidgen function /
+class documented, no duplicates); `--json` envelopes and exit codes (covered by
+`test_json_output`); option names across the 22 commands (consistent except `--lang`, fixed);
+`--preview` defaults differ on purpose (render / thumbnail / export default to the final format,
+storyboard / lint / slides to the preview; documented); DESIGN.md sections 1–63 numbered in order;
+AGENTS.md copies identical (test). `build/..._bare` folders: kept as caches like every other
+`build/` folder (they make `slides --no-overlays` and frame thumbnails without overlays fast);
+`build/` is documented as safe to delete — a `vidgen clean` is in the backlog.
+
+### Files
+- Code: `scene.py` (`timeline`, `hold`), `videoplan.py`, `scenes/code.py` (`readable_band`,
+  `BAND_OPACITIES`, `INK_RATIO`), `clips.py` (`ClipInfo.channels`, mono pan), `render/pipeline.py`
+  (`current_render`, `force`, post_render after the thumbnail), `project.py` (`CONFINE_ENV`,
+  `PATH_KEYS`, `confinement_problems`), `mcp_server.py` (env, `_kill`, render `force`,
+  translate_template `language`), `cli.py` (`render --force`, `--language`, init line), `plan.py`
+  (`_subject`, `_RANGE_END`, `spoken` placeholders, bare links), `outline.py` (`_DOMAIN`),
+  `__init__.py` (0.2.0), `data/geo/LICENSE` (new), `pyproject.toml`.
+- Tests: new `tests/test_review4.py` (11: band contrast ×2, half-frame silent scenes (render),
+  incremental render (render), mono clip level, confinement ×2, post_render + thumbnail (render),
+  plan stat labels / ranges, placeholder beats, bare links); `test_mcp.py` (config confinement
+  over stdio).
+- Docs: README (feature bullet, MCP "One folder", command table and `render` paragraph,
+  examples/plan line), docs/CONFIG.md (incremental render, MCP confinement and cancel, clip
+  `volume`, `--language`, version in the JSON example), docs/EXTENDING.md (`post_render`
+  `thumbnail`), AGENTS.md (both copies: costs paragraph), DESIGN.md (status line, §2 hook data,
+  §8, §14, §53, §62, new §63), THIRD_PARTY_NOTICES.md, tasklist.md, `examples/plan/video.yaml`.
+
+### Public interfaces added/changed
+- CLI `vidgen render --force`; `render_project(..., force=False)` and `pipeline.current_render`;
+  `translate-template --language`; MCP `render` `force`, `translate_template` `language` (was
+  `lang`). Hook `post_render` data key `thumbnail`. `vidgen.project.CONFINE_ENV`, `PATH_KEYS`,
+  `confinement_problems`; `ClipInfo.channels`; `scenes.code.readable_band`. `vidgen.api`
+  unchanged.
+
+## Release notes: vidgen 0.2.0 (Steps 8–60)
+
+vidgen 0.1 (Steps 0–7) rendered narrated Manim videos from `video.yaml` with eleven built-in
+scene types, ElevenLabs narration and an extension system. 0.2 makes it a tool an AI agent can
+drive alone: it can **see** its video (stills, contact sheets, layout data), **check** it
+(lint), build from **tested parts** (28 scene types, actions, overlays) and **ship** every output.
+
+### New, by area
+- **Feedback loop for agents**: `--json` on every command (stable versioned envelope, Step 8;
+  `tts` / `imagegen` / `init` in 59); `vidgen schema` (JSON Schema, 9); frame stills
+  `render --frames` (10); `vidgen storyboard` contact sheets (11); layout dump (12); `vidgen lint`
+  — layout rules (off frame, safe area, overlap, covered text, min font, contrast, max words,
+  overlay overlap, label spacing) and timing rules (narration speed, dead air, animation
+  overrun, rushed animation, readback) with `lint:` thresholds and `lint_ignore` (13, 14, 56).
+- **Layout and look**: layout regions / `place` / grids that adapt to 9:16 (15); seven theme
+  presets, WCAG AA and colour-blind-safe, type scales `compact` / `standard` / `large` / `auto`
+  (16, 17); bundled Inter, Source Serif 4, JetBrains Mono NL (18); 200 Lucide icons with search,
+  sheets and project icons (19–21).
+- **Scene types** (11 → 28): `icon_grid` (21), `stat`, `chapter` (25), `comparison`, `table`
+  (26), `timeline` (27), `diagram` / `flowchart` with automatic layered layout (28), `process`,
+  `network` (29), `scatter`, `histogram` and shared chart helpers (30), `pie` / donut, `heatmap`
+  (31), `code_walkthrough` (32), `equation_derivation` (33), `screenshot` with callouts (34),
+  `video_clip` (35), `map` with bundled Natural Earth data (36).
+- **Beat actions**: `reveal`, `dim`, `highlight`, `zoom`, `transform`, `callout`, `sfx` on named
+  targets of every built-in type, timed inside the beat (23, 24, 41, 44).
+- **Overlays**: framework + `lower_third`, `watermark` (38), `progress_bar`, `chapter_indicator`
+  and chapters from cards or `chapter:` keys (39), burned-in `captions` incl. karaoke (40).
+- **Audio**: pronunciation dictionary (42), multiple voices / dialogue (43), synthesised sound
+  effects (44), background music beds, ducking, EBU R128 loudness normalisation (45).
+- **Transitions**: crossfade, fade through a colour (46), push, wipe and `carry` match cuts (47).
+- **Outputs**: MP4 chapters + YouTube chapter list + tags (49), thumbnail (designed or a frame) and
+  GIF / clip export (50), multi-language variants and translation files (51), HTML slide deck
+  (52) and PDF deck (53), readback speech-to-text check (54), generated images (OpenAI) (55).
+- **Guidance and automation**: the author guide `AGENTS.md` / `vidgen guide` (56), the scene
+  gallery `vidgen gallery` + `docs/gallery` (57), `vidgen plan` drafts from an outline (58), the
+  MCP server `vidgen mcp` (59), incremental `render` (60).
+- **Reviews**: 22, 37, 48 and 60 fixed what storyboards, lint and measurement found (e.g. A/V
+  sync to the millisecond, true-peak after AAC, 9:16 layouts of every type).
+
+### Behaviour changes users of 0.1 must know
+- **Default `dim` colour** `#6B7280` → `#838B98` (WCAG AA; Step 16). Write the old value in
+  `theme.colors` to keep it.
+- **Vertical videos get larger type**: the default type scale is `auto` = `large` in portrait
+  (17); `code` listings in 9:16 wrap at ~30 columns (32). Set `theme: {scale: standard}` for the
+  old sizes.
+- **Built-in scenes moved to regions** (header band titles, safe area; 15, 22, 37): layouts of
+  existing videos shift a little; `title` / `heading` are synonyms on header-band types.
+- **`dim` action opacity is relative** to the target's full opacity (no compounding; 24).
+- **SRT cues** are cut at phrase boundaries and timed by word, like the captions (40); per
+  language rules (51); the speaker tag with `subtitles: {speakers: ...}` (43).
+- **Chapter validation**: a repeated `chapter` card or numbers out of order are config errors;
+  a `chapter:` right after a card is an error (39); `validate` / `render` warn when YouTube would
+  ignore the chapter list (49).
+- **Narration level +3 dB**: rendered narration now plays at its MP3's level (Manim's mono upmix
+  lost 3 dB; 48); music beds sit 2 dB higher to keep the balance; mono clip sound +3 dB (60).
+  Videos with music are normalised to −16 LUFS (narration-only videos are not, unless
+  `audio: {normalize: true}`; 45).
+- **Transitions**: still cuts by default; a `transition:` other than a cut overlaps scenes (the
+  video gets shorter) or holds the scene before a little longer so narration is never covered
+  (46, 47).
+- **Every `vidgen render` writes more files**: `<output>_chapters.txt` when there are chapters
+  (49), `<output>_thumbnail.png` with a `thumbnail:` config (50); the MP4 carries chapter marks
+  and tags.
+- **`vidgen render` is incremental** (60): unchanged scenes are reused; `--force` for the old
+  behaviour (e.g. after changing a file a scene reads outside `assets/`).
+- **Audio hashes**: computed from the *spoken* text (pronunciation applied, 42) and the voice
+  when a named voice is used (43); beats of the base voice without pronunciation entries keep
+  their hashes (no re-voicing of existing projects).
+- **Python API**: `vidgen.api` grew (regions, charts, callouts, geo, graph, overlays, actions,
+  `ClipMobject`...) but stayed compatible; extension scene classes should use regions
+  (`self.region("body")`, `place`) to work in 9:16.
+- **Human `vidgen validate`** lists every broken variant (59); argparse errors print usage and
+  return 2 instead of raising `SystemExit` (8).
+
+### Known issues and roadmap (also in tasklist.md "Backlog (after Step 60)")
+- **Plan heuristics**: prose-derived bullet items are truncated sentences; icon search is
+  English-only; no cues for `network` / `line_chart` / `pie` / `map` / `screenshot`; nested list
+  items dropped; a recap sentence can be split between two scenes; TODO texts in English.
+- **MCP**: large documents (long `lint` / `storyboard` JSON, `schema full=true`) are not trimmed;
+  no session with a real client (Claude Desktop / Code) was possible here; Windows cancel is
+  untested.
+- **Rendering cost**: joins with a crossfade / push / wipe re-encode the whole video; `image` Ken
+  Burns ~1.6x real time in preview; `code_walkthrough` ~0.1 s per line.
+- **Layout limits**: `reserve` is per whole scene (several reserving overlays shrink content);
+  9:16 stills of `code_walkthrough` (a long line wraps), `image` with `fit: contain` (bands) and a
+  wide `world` map; `equation_derivation` highlight colour not carried into its dimmed copy;
+  `code` highlight steps reset a `dim` action's opacities.
+- **Localisation**: number formats, `map` country names, `"A -> B"` arcs and `lint_ignore` /
+  `point:` targets do not follow translations; languages without spaces cut cues at punctuation
+  only.
+- **Outputs**: a frame thumbnail's text is not measured; no MP4 cover art; `generate:` not on
+  `screenshot` / thumbnail backgrounds; no real image-generation or STT run was possible here.
+- **Housekeeping**: no `vidgen clean` (`build/`, including `_bare` folders, only grows); storyboard
+  / lint have no view of the frames around transitions and carries.
+- **Not run on real Windows / macOS** in this environment (fonts, MiKTeX, long paths, process
+  trees).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2248 passed, 1 skipped, 11:42
+on 2 CPUs); step only: `pytest tests/test_review4.py tests/test_mcp.py`. Manual:
+`vidgen storyboard examples/minimal` then `vidgen render examples/minimal --preview` (joins only:
+"rendered 0 scene(s), N reused"); `vidgen lint examples/plan` (0 findings).

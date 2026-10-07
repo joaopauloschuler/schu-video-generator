@@ -1,26 +1,57 @@
 # vidgen config reference
 
+This is the reference of every key. How to make a *good* video with them (the working loop,
+pacing, which scene type, good vs bad examples) is the author guide: [AGENTS.md](../AGENTS.md),
+also `vidgen guide`.
+
 A project is a folder with one config file: `video.yaml` (or `video.yml` / `video.json`), UTF-8.
 Unknown keys are an error everywhere except inside `params`, `theme.colors`, `theme.sizes` and
 the bodies of `variants`, so typos are caught by `vidgen validate`. Paths are relative to the
 project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-and-beats),
 [format](#format-and-preview), [variants](#variants), [theme](#theme), [voice](#voice-voice),
 [narration](#narration-narration), [narration audio](#narration-audio-elevenlabs),
-[built-in scene types](#built-in-scenes).
+[multiple voices](#multiple-voices-voices), [pronunciation](#pronunciation-pronunciation),
+[readback (speech to text)](#readback-vidgen-readback),
+[generated images](#generated-images-imagegen-vidgen-imagegen),
+[languages and translations](#languages-and-translations),
+[sound effects](#sound-effects-sfx), [background music and loudness](#background-music-music),
+[transitions](#transitions-transition), [thumbnail](#thumbnail-thumbnail-vidgen-thumbnail),
+[GIF and clip export](#export-gif-and-clip-vidgen-export), [built-in scene types](#built-in-scenes), [beat actions](#beat-actions), [overlays](#overlays),
+[JSON Schema](#json-schema-vidgen-schema), [frame stills](#frame-stills-vidgen-render---frames),
+[storyboard](#storyboard-vidgen-storyboard), [lint](#lint-vidgen-lint),
+[drafting from an outline](#drafting-from-an-outline-vidgen-plan),
+[JSON output of commands](#json-output---json).
 
 ## Top level
 
 | key | default | |
 |---|---|---|
-| `title` | required | the video's title (used in `timings.json`; not drawn by itself) |
-| `output` | folder name | base name of the output files: `<output>.mp4`, `<output>.srt`, `<output>_preview.mp4`, `<output>_<variant>.mp4`; no path separators |
+| `title` | required | the video's title (the MP4's title tag and `timings.json`; not drawn by itself) |
+| `output` | folder name | base name of the output files: `<output>.mp4`, `<output>.srt`, `<output>_chapters.txt`, `<output>_thumbnail.png`, `<output>_preview.mp4`, `<output>_<variant>.mp4`; no path separators |
 | `format` | `{width: 1920, height: 1080, fps: 30}` | final render (`vidgen render`) |
 | `preview` | `{width: 854, height: 480, fps: 15}` | `vidgen render --preview` |
 | `variants` | `{}` | named overrides, see [variants](#variants) |
-| `theme` | see [theme](#theme) | colors, sizes, font, background |
+| `theme` | see [theme](#theme) | preset, colors, sizes, font, background, code style |
 | `voice` | see [voice](#voice-voice) | ElevenLabs voice |
+| `voices` | `{}` | named voices for dialogue, picked by scenes and beats with `voice: NAME`, see [multiple voices](#multiple-voices-voices) |
+| `subtitles` | `{speakers: off}` | `speakers: name` puts the speaker's label before their lines in the SRT, see [multiple voices](#multiple-voices-voices) |
 | `narration` | see [narration](#narration-narration) | beat padding, duration estimate |
+| `pronunciation` | `{}` | how the narrator says terms (TTS text only), see [pronunciation](#pronunciation-pronunciation) |
+| `pronunciation_file` | none | YAML/JSON file(s) with more pronunciation entries |
+| `language` | none (English rules) | the video's language, a BCP-47 tag (`en`, `pt-BR`, `es-419`): caption and SRT line breaks, the `narration_speed` lint, ElevenLabs `language_code`, the MP4's audio language; see [languages and translations](#languages-and-translations) |
+| `translations` | none | a translation file (YAML, `vidgen translate-template`) whose texts replace beat texts and on-screen texts, usually in a variant; see [languages and translations](#languages-and-translations) |
 | `extensions` | `[extensions]` | folders whose `*.py` files and packages are imported (see docs/EXTENDING.md); the default may be missing, a folder you list must exist |
+| `lint` | see [lint](#lint-vidgen-lint) | thresholds and severities of `vidgen lint` |
+| `overlays` | `[]` | lower thirds, a watermark, ... drawn over the scenes, see [overlays](#overlays) |
+| `sfx` | `{auto: false, gain: 0}` | sound effects of the whole video: automatic sounds for built-in animations, overall level; see [sound effects](#sound-effects-sfx) |
+| `music` | none | background music: a bed name (`calm`, `pulse`, `bright`) or a file, a cue `{source, volume, ...}`, or a list of cues with `from` / `to` scenes; see [background music](#background-music-music) |
+| `audio` | `{normalize: auto, target_lufs: -16, true_peak: -1.5}` | loudness of the final mix; see [loudness](#loudness-of-the-final-mix-audio) |
+| `transition` | none (cuts) | the default transition between scenes: `cut`, `crossfade`, `fade_color`, `push`, `wipe` or `{type, duration, color, direction, soft}`; see [transitions](#transitions-transition) |
+| `chapters` | `{metadata: true, youtube: true, intro: Intro}` | what the render writes about the chapters: MP4 chapter entries, the YouTube list `<output>_chapters.txt`, the chapter at 0:00; see [chapters in the outputs](#chapters-in-the-outputs-chapters-metadata) |
+| `metadata` | `{}` (title: the `title`) | tags of the MP4: `title`, `artist`, `album`, `comment`, `description`, `copyright`, `date`, `genre`; see [chapters in the outputs](#chapters-in-the-outputs-chapters-metadata) |
+| `thumbnail` | none | the thumbnail `<output>_thumbnail.png`, written by `vidgen render` and `vidgen thumbnail`: a scene's frame `{scene, beat, at, overlays}` or a designed card `{title, subtitle, icon, image, preset, background}`, + `{jpeg, auto}`; see [thumbnail](#thumbnail-thumbnail-vidgen-thumbnail) |
+| `stt` | `{provider: faster_whisper}` | speech to text for `vidgen readback` (the narration transcribed and compared with the beat texts): `{provider, model, language, device}`; see [readback](#readback-vidgen-readback) |
+| `imagegen` | `{provider: openai, model: gpt-image-1, size: auto}` | image generation for `generate:` params and `vidgen imagegen`: `{provider, model, size, quality, style, negative}`; see [generated images](#generated-images-imagegen-vidgen-imagegen) |
 | `scenes` | required | the scenes in order, at least one |
 
 ## Scenes and beats
@@ -34,6 +65,7 @@ scenes:
       - text: "Welcome."      # required, non-empty
         id: intro_b1          # optional; default <scene id>_b<n> (1-based); unique in the video
       - text: "Let's start."
+        actions: []           # optional per-beat actions on the scene's targets (see "Beat actions")
   - id: pause
     type: text_card
     params: {text: "Part 2"}
@@ -47,9 +79,328 @@ scenes:
 | `params` | `{}` | free-form for types without a params model |
 | `beats` | `[]` | each beat is narrated into `audio/<beat id>.mp3`; its animation lasts as long as its audio plus `narration.pad` |
 | `duration` | none | seconds; required on a scene without beats and not allowed on a scene with beats |
+| `lint_ignore` | `[]` | `vidgen lint` findings to skip in this scene, see [lint](#lint-vidgen-lint) |
+| `overlays` | `true` | the video's [overlays](#overlays) on this scene: `false` for none, or per overlay id `false` / option overrides, or an overlay of this scene only |
+| `chapter` | none | a new [chapter](#chapters) starts at this scene: its title, or `{title, number}` |
+| `voice` | none (the base `voice:`) | who says this scene's beats: a name from [`voices:`](#multiple-voices-voices) or `default` |
+| `sfx` | `[]` | sound effects at seconds from the scene's start (silent scenes too), see [sound effects](#sound-effects-sfx) |
+| `music` | `true` | the [background music](#background-music-music) during this scene: `false` for none, `{volume: dB}` to change its level here |
+| `transition` | the video's `transition` | how the video passes into this scene from the one before it, see [transitions](#transitions-transition) |
+| `carry` | `[]` | objects of the scene before that this scene starts with, where they ended (a match cut), then moves into its own targets: target names, or `"NAME -> NAME"`; see [continuity](#continuity-carrying-objects-into-the-next-scene-carry) |
 
 Beat `id`s name the audio files: keep them when you edit the text (only that beat is
-re-voiced). A beat `text` is spoken as written; it is also the subtitle.
+re-voiced). A beat `text` is spoken as written; it is also the subtitle. A beat's `actions`
+(default `[]`) point at parts of the scene while it is spoken — reveal, dim, highlight — see
+[beat actions](#beat-actions). A beat's `voice` (default: its scene's) picks another speaker for
+that beat — a dialogue inside one scene, see [multiple voices](#multiple-voices-voices).
+
+## Chapters
+
+A video can be divided into chapters. A chapter starts at every [`chapter`](#chapter) scene (its
+`title` and `number` params) and at every scene with a `chapter:` key, which marks a new chapter
+without a divider card:
+
+```yaml
+scenes:
+  - id: intro                 # before the first chapter: no chapter
+    type: title
+    params: {title: "Engines"}
+    beats: [{text: "..."}]
+  - id: part1
+    type: chapter             # a divider card starts chapter 1 "Setup"
+    params: {number: 1, title: "Setup"}
+    duration: 3
+  - id: data                  # still chapter 1
+    type: text_card
+    params: {text: "Data"}
+    beats: [{text: "..."}]
+  - id: results
+    type: bullets
+    chapter: Results          # chapter 2 starts here, no card (long form: {title: Results, number: 2})
+    params: {heading: "Results", items: ["Faster", "Smaller"]}
+    beats: [{text: "..."}]
+```
+
+| key | default | |
+|---|---|---|
+| `title` | required | the chapter's name (the short form `chapter: Results` gives only this) |
+| `number` | none | its number as shown (an integer, or text like `"Part II"`); without one, indicators show its position (1, 2, ...) |
+
+On a `chapter` scene, `chapter:` renames the chapter in lists and indicators (e.g. a shorter
+title than the card's) and keeps the card's number unless it gives one. A chapter lasts until
+the next one starts (the last until the video's end). `vidgen validate` rejects the same
+chapter twice (same title and number; a card starts its chapter by itself, the scenes after it
+need no `chapter:`), integer numbers that do not increase, and a scene with `chapter:` right
+after a chapter card (the card would be a chapter of its own; give the card the `chapter:`
+instead). The [`progress_bar`](#progress_bar) marks chapters, the
+[`chapter_indicator`](#chapter_indicator) names the current one; extensions read the list with
+`video_chapters(project)` (docs/EXTENDING.md). `vidgen render` also writes them into the MP4 and
+a YouTube chapter list (next section).
+
+### Chapters in the outputs (`chapters`, `metadata`)
+
+`vidgen render` writes the chapters into the MP4 (players such as VLC, mpv, QuickTime and most
+video editors list them and jump to them) and next to it a chapter list for a YouTube
+description, `<output>_chapters.txt` (`<output>_<variant>[_preview]_chapters.txt` for variants
+and previews):
+
+```text
+0:00 Intro
+0:12 Setup
+1:05 Results
+```
+
+```yaml
+chapters:              # optional; the defaults
+  metadata: true       # chapter entries in the MP4
+  youtube: true        # <output>_chapters.txt, and warnings when YouTube would ignore it
+  intro: Intro         # the chapter at 0:00 before a later first chapter; false: none
+metadata:              # optional tags of the MP4 (unset ones are not written)
+  artist: "Jane Doe"
+  comment: "Made with vidgen"
+```
+
+| key | default | |
+|---|---|---|
+| `metadata` | `true` | write the chapters into the MP4 (`false`: the MP4 has none; its tags are still written) |
+| `youtube` | `true` | write `<output>_chapters.txt` (`false`: none, an old one is removed) and check YouTube's rules |
+| `intro` | `Intro` | title of the chapter added at 0:00 when the first chapter starts later (the video opens with a title scene); `false`: no intro chapter, the first chapter starts at 0:00 instead |
+
+- **Times** are where the chapter's scene starts in the joined video, with transitions: a
+  crossfade, push or wipe into a chapter card starts the chapter where the transition starts
+  (the plan's times, `video_chapters(project, intro=True)`; equal to the render for built-in
+  scenes). In the MP4 they are milliseconds (FFMETADATA `[CHAPTER]` entries, time base 1/1000);
+  the last chapter ends at the end of the video.
+- **Titles** are the chapter titles on one line (a card title's line breaks become spaces),
+  without their numbers.
+- **The intro chapter.** YouTube needs the first chapter at 0:00, and a player's chapter menu
+  should cover the whole video, so when the first chapter starts later both lists begin with a
+  chapter titled `intro` (only in these outputs: the [`chapter_indicator`](#chapter_indicator)
+  and [`progress_bar`](#progress_bar) still show nothing before the first chapter). For a short
+  opening (a few seconds of title before chapter 1) set `intro: false`: the first chapter then
+  starts at 0:00.
+- **YouTube's rules** (it ignores the whole list otherwise): the first timestamp is 0:00, there
+  are at least 3 chapters, each at least 10 s long. Timestamps are whole seconds rounded down (a
+  click lands at the chapter's first frame or just before it), so a chapter's length is
+  measured between its rounded timestamps. `vidgen validate` (planned times) and `vidgen render`
+  (the joined video) warn about each broken rule, e.g. `chapters: 'Intro' (0:00-0:03) lasts 3.0
+  s; YouTube ignores the whole chapter list when a chapter is shorter than 10 s (...)`; the file
+  is written anyway. Paste the file into the video's description on YouTube.
+- Without chapters no list is written (and an old one is removed) and the MP4 has no chapters.
+- **Tags** (`metadata:`): `title` (default the top-level `title`), `artist`, `album`,
+  `comment`, `description`, `copyright`, `date` (e.g. `2026` or `2026-10-07`) and `genre`, all
+  text; they are written to every render (variants can override them).
+- `timings.json` and `vidgen render --json` list the chapters as published (with the intro
+  chapter), `{title, number, scene, start, end, index, count, card, intro}`, also when
+  `metadata` and `youtube` are off. Changing `chapters:` or `metadata:` re-renders no scene.
+
+## Thumbnail (`thumbnail`, `vidgen thumbnail`)
+
+The video's thumbnail, `<output>_thumbnail.png` (`<output>_<variant>[_preview]_thumbnail.png`),
+is either a **frame of a scene** or a **designed title card**. With a `thumbnail:` section,
+`vidgen render` writes it after the video (`auto: false`: only `vidgen thumbnail` does);
+`vidgen thumbnail` writes it alone. Its size follows the video's `format`: **1280x720** for a
+16:9 video (YouTube's recommended size), **1080x1920** for 9:16 (Shorts, Reels, a vertical
+variant), 1080x1080 for a square one; a frame of another shape is cropped to it (centred).
+
+```yaml
+thumbnail:                    # a designed card: big bold title, legible when shown small
+  title: "Saving 77% of the parameters"   # default: the video's title
+  subtitle: "in large language models"
+  icon: cpu                   # or image: assets/cover.jpg (beside the title; above it in 9:16)
+  preset: bold_neon           # optional: this preset's colours and fonts instead of the video's theme
+  background: surface         # optional: a theme colour or hex
+  jpeg: true                  # also <output>_thumbnail.jpg, under 2 MB
+```
+
+```yaml
+thumbnail:                    # a frame of a scene
+  scene: results
+  beat: 2                     # its id or number (from 1); default: the scene's last beat
+  at: 1.5                     # seconds into the beat (into the scene without beat); default: the beat's end
+  overlays: false             # without captions, watermark, ... (default true)
+```
+
+| key | default | |
+|---|---|---|
+| `scene` | none | frame thumbnail: the scene; its frame comes from the scene's render (`build/<final\|preview>[_<variant>]/scenes/<scene>.mp4`), which is rendered first when it is missing or stale (fingerprint, as for `vidgen storyboard`) |
+| `beat` | the scene's last beat | frame thumbnail: a beat of the scene, its id or its number from 1 (not on a silent scene) |
+| `at` | the beat's last frame | frame thumbnail: seconds into the beat, or into the scene without `beat`. Default: the beat's last frame (narration + `narration.pad`, the "end of beat" of [frame stills](#frame-stills-vidgen-render---frames)); a silent scene's frame just before its fade-out |
+| `overlays` | `true` | frame thumbnail: with the video's [overlays](#overlays). `false` renders the scene once more without any overlay into `build/..._bare/` (kept for the next time; the scene lays out without the room overlays `reserve`) |
+| `title` | the video's `title` | designed: the title, bold, as large as fits in 3 lines (4 in 9:16), font role `heading` |
+| `subtitle` | none | designed: a line under the title (font role `body`, the first of the theme's `highlight`, `primary`, `accent` that reaches 4.5:1 on the background, else the title's colour) |
+| `icon` | none | designed: an icon (`vidgen list-icons`) in `primary` on a `surface` disc, right of the text (above it in 9:16 / square) |
+| `image` | none | designed: a picture (path relative to the project) filling the right part (the top part in 9:16 / square); `icon` or `image`, not both |
+| `preset` | the video's theme | designed: a [theme preset](#theme-presets)'s colours and fonts alone (not the video's own theme values) |
+| `background` | the theme's | designed: background colour (theme token or hex); the title is `text`, or black / white when `text` would not reach 4.5:1 on it |
+| `jpeg` | `false` | also write `<output>_thumbnail.jpg`: the best JPEG quality (92 down to 55) under YouTube's 2 MB limit; without it an old JPEG is removed |
+| `auto` | `true` | write the thumbnail at the end of every `vidgen render` (`false`: only `vidgen thumbnail`) |
+
+A thumbnail is either a frame (`scene`, `beat`, `at`, `overlays`) or a designed card (`title`,
+`subtitle`, `icon` / `image`, `preset`, `background`); mixing the two is a config error, and
+`vidgen validate` checks the scene, beat, icon, image, preset and colour. Without a `thumbnail:`
+section `vidgen thumbnail` draws a designed card of the video's title (and `render` writes none).
+Changing `thumbnail:` re-renders no scene.
+
+```
+vidgen thumbnail [PROJECT] [--variant NAME] [--preview] [--scene ID [--beat ID|N] [--at SECONDS]
+                 [--no-overlays]] [--jpeg] [--jobs N] [--json]
+```
+
+`--scene` (with `--beat`, `--at`, `--no-overlays`) takes a frame instead of what the config says;
+`--preview` takes frames from the preview render (fast, but scaled up: an `info` says so) and
+names the files `..._preview_thumbnail.png`; `--jpeg` also writes the JPEG.
+
+**Legibility.** YouTube shows thumbnails at about 320x180 in its grids (and smaller beside a
+video). Every run also writes that size, `build/<final|preview>[_<variant>]/thumbnail/<name>_small.png`:
+look at it (an AI author: open it as an image) before publishing. A designed card is checked like
+[`vidgen lint`](#lint-vidgen-lint) checks a frame, at that small size (long side 320 px):
+
+| rule | severity | |
+|---|---|---|
+| `min_font` | warning | the title is under 14 px (any other text under 10 px) at the small size: shorten it so it can be set larger |
+| `fit` | warning | the title does not fit even at the smallest size (about 14 px small) and was cut with `…` |
+| `contrast` | warning | title or subtitle below 4.5:1 (WCAG AA) on the background |
+| `max_words` | info | more than 6 words in the title (thumbnails read best with a few) |
+| `file_size` | warning | the PNG (or, with `jpeg`, the JPEG) is over YouTube's 2 MB limit |
+| `resolution` | info | a frame thumbnail from a render smaller than the thumbnail (e.g. `--preview`) is scaled up |
+
+`vidgen thumbnail` prints them; `vidgen render` logs the warnings (`render --json`: `warnings`).
+A frame thumbnail's text is not measured: check it at the small size, or check the scene with
+`vidgen lint`.
+
+## Export: GIF and clip (`vidgen export`)
+
+```
+vidgen export gif|clip [PROJECT] [--scene ID] [--from SECONDS] [--to SECONDS] [--variant NAME]
+              [--preview] [--width PX] [--fps F] [--max-mb MB] [--with-audio] [--output FILE] [--json]
+```
+
+Writes a part of the **rendered video** (`<output>[_<variant>][_preview].mp4` and its
+`build/.../timings.json`; render it first) as an animated GIF or an MP4 clip, by default to
+`<project>/exports/<output>[_<variant>][_preview]_<scene>[_<from>-<to>s].gif|mp4` (`video` in
+place of the scene without `--scene`; `--output FILE` writes elsewhere). With `--scene`,
+`--from` / `--to` are seconds from the scene's start (default: the whole scene, kept within it,
+including a transition out of it); without it they are times in the video (default: all of it).
+
+- **GIF**: width `--width` (default 480, 270 for a 9:16 video, never wider than the video),
+  `--fps` (default 12, at most the video's), loops forever. One palette of 256 colours is made
+  for the clip's frames (FFmpeg `palettegen`) and applied with Sierra dithering (`paletteuse`),
+  re-dithering only the changed rectangle of each frame, so still parts do not shimmer.
+  `--max-mb MB` sets a size budget: while the file is bigger, the frame rate is lowered (down to
+  5 fps) and the width with it (down to 160 px), at most 6 encodes; still too big, it keeps the
+  smallest and warns (export a shorter part). The JSON lists every attempt.
+- **Clip** (MP4): **stream-copied** — exact pixels, instant — when it starts on a keyframe of
+  the video (a scene's start, in a video joined without crossfades, pushes or wipes) and keeps
+  the video's size and frame rate; otherwise **re-encoded** (H.264 CRF 18, frame-accurate
+  start). `--width` / `--fps` re-encode at that size / rate. Silent unless `--with-audio` (the
+  sound is then encoded as AAC, cut at the exact start). No chapters.
+
+## Slides (`vidgen slides`)
+
+```
+vidgen slides [PROJECT] [--format html|pdf] [--variant NAME] [--preview | --final] [--mode beat|scene] [--per-beat N]
+              [--overlays | --no-overlays] [--no-dedupe] [--image-format webp|jpeg|png] [--quality Q]
+              [--max-width PX] [--audio] [--separate] [--output FILE] [--jobs N] [--force] [--json]
+```
+
+Writes the video as a **slide deck** (a PDF with `--format pdf`, [below](#pdf-deck---format-pdf)): one HTML file, by default
+`<project>/exports/<output>[_<variant>][_preview]_slides.html`, that opens in any browser
+without network access. Every slide picture is embedded (a `data:` URI, WebP at quality 80 by
+default: about 15–40 KB per 854x480 slide, 60–150 KB at 1920x1080), and so are the page's styles
+and script.
+
+**Which frames.** The slides are the frame stills of
+[`vidgen render --frames`](#frame-stills-vidgen-render---frames), reused like the
+[storyboard](#storyboard-vidgen-storyboard)'s: a scene is rendered (with stills) only when its
+stills are missing, made at another count or format, or stale.
+
+- `--mode beat` (the default): **one slide per beat**, the beat's last frame: for scenes that
+  reveal something per beat (bullets, charts, diagrams...) that is the fully built state of the
+  beat, so the deck builds up like a presentation. A silent scene gives its frame before the
+  fade-out. `--per-beat N`: N slides per beat (evenly spaced, the last at the beat's end).
+- `--mode scene`: **one slide per scene**, the end of its last beat; its notes are all the
+  scene's beats.
+- Consecutive slides of a scene that look the same (a beat that changes nothing on screen: at
+  most 0.05 % of the pixels differ, compared 320 px wide) are **merged** into one slide with both
+  beats' notes; `--no-dedupe` keeps them.
+- `--preview` (the default, fast; often already rendered by `storyboard` / `lint`) or `--final`
+  (full-size, sharp slides for presenting). `--overlays` (the default) shows the video's
+  [overlays](#overlays) as they are in the video; `--no-overlays` takes the slides from renders
+  without them (captions duplicate the notes on a slide), made in `build/<...>_bare` like a
+  [frame thumbnail](#thumbnail-thumbnail-vidgen-thumbnail) without overlays.
+- `--variant`: a language variant gives the deck in that language: its translated pictures and
+  notes, and the page's `lang`.
+
+**Speaker notes** are the narration of the beats on the slide (the text as written, not the
+[pronunciation](#pronunciation-pronunciation)), with the slide's chapter, scene and time in the
+video. Pictures get alt text: the scene type, its title and the start of the narration.
+
+**In the browser:**
+
+| key / gesture | |
+|---|---|
+| `→` `↓` `Space` `PageDown` `Enter`, click on the right two thirds, swipe left | next slide |
+| `←` `↑` `Shift+Space` `PageUp` `Backspace`, click on the left third, swipe right | previous slide |
+| `Home` / `End` | first / last slide |
+| a number, then `Enter` | go to that slide |
+| `S` or `N` | speaker notes beside the slide (below it on a narrow or portrait screen), with the next slide; remembered |
+| `O` | overview: every slide in a grid, grouped by [chapter](#chapters); click one to go there |
+| `F` | fullscreen (the bars hide while the mouse rests) |
+| `P` | play / pause: the slides follow the video's timing (each slide from the frame before it to its own); with `--audio`, the narration plays along |
+| `?` | the keys |
+| `Esc` | close the overview / help, stop playing |
+
+The slide number is in the URL (`deck.html#12` opens slide 12). Slides are scaled to the window
+and letterboxed on a dark backdrop; the slide change is a short fade, none with the system's
+reduced-motion setting. Printing the page prints one slide per page.
+
+**Options:** `--image-format webp|jpeg|png` and `--quality Q` (1–100; PNG is lossless),
+`--max-width PX` scales the pictures down; `--audio` embeds the beats' MP3s (`audio/`, or the
+variant's folder) for a narrated deck (a few MB per minute); `--separate` writes the pictures
+(and MP3s) into `<name>_files/` beside the page instead of embedding them (keep the folder with
+the page); `--output FILE` (`.html`) writes elsewhere; `--jobs`, `--force` as for the
+storyboard. A page over 50 MB gets a warning.
+
+### PDF deck (`--format pdf`)
+
+```
+vidgen slides [PROJECT] --format pdf [--notes] [--title-page] [--paper a4|letter]
+              [--image-format jpeg|png] [--quality Q] [--max-width PX] [--output FILE]
+              (+ the frame options above: --variant, --preview | --final, --mode, --per-beat,
+               --overlays | --no-overlays, --no-dedupe, --jobs, --force, --json)
+```
+
+The same slides as a PDF, by default `exports/<output>[_<variant>][_preview]_slides.pdf`
+(`_notes.pdf` with `--notes`). Needs the optional extra **`pip install "vidgen[pdf]"`**
+([fpdf2](https://py-pdf.github.io/fpdf2/), pure Python); without it the command says so.
+
+- **Slides** (the default): one slide per page, the page in the video's aspect ratio (16:9:
+  960 x 540 pt = 13.33 x 7.5 in, like a widescreen presentation; 9:16: 540 x 960 pt), the
+  picture filling it.
+- **`--notes`**: a notes page per slide on A4 (or `--paper letter`), portrait: a header with
+  the chapter and the video's title, the slide (full width, at most half the page high for
+  portrait videos), a line `Slide N / M · <scene title> · <time> in the video`, the narration
+  of the slide's beats (in a language variant: the translation) wrapped in Inter, a page number
+  `N / total`. Long narration continues on the next page.
+- **`--title-page`**: a first page with the thumbnail made by
+  [`vidgen thumbnail`](#thumbnail-thumbnail-vidgen-thumbnail) (`<output>[_<variant>][_preview]_thumbnail.png`,
+  this quality's or else the other's; run it first) — on a slide page the thumbnail fills it —
+  else the title, the thumbnail's `subtitle`, author and date set in type; on a notes title page
+  also the number of slides and the narration's length.
+- **Bookmarks** (the outline, shown when the PDF opens): the title page, each
+  [chapter](#chapters) with its slides under it (`2. <scene title>`); slides before the first
+  chapter at the top level.
+- **Document properties** from [`metadata:`](#chapters-in-the-outputs-chapters-metadata): title (default the video's
+  `title`), author (`artist`), subject (`description`, else `comment`), keywords (`album`,
+  `genre`); the language (`language:`); creator `vidgen <version>`.
+- **Pictures**: JPEG at quality 85 by default (embedded as is: a 854x480 slide is about
+  30–60 KB, 1920x1080 about 100–250 KB), `--quality Q`, or lossless `--image-format png`
+  (larger); `--max-width PX` scales them down. Pictures carry alt text.
+- Text is set in the bundled Inter (a subset embedded): Latin (accents: pt-BR, es, fr, de...),
+  Greek and Cyrillic; scripts Inter lacks (CJK, Arabic, Hebrew, Devanagari) are not drawn.
+- `--audio` / `--separate` are HTML-only and `--notes` / `--title-page` / `--paper` PDF-only
+  (errors otherwise); the HTML deck always carries the notes. `--output FILE` must end in `.pdf`.
 
 ## Format and preview
 
@@ -71,7 +422,10 @@ variants:
     format: {width: 1080, height: 1920}       #   -> <output>_vertical.mp4
     preview: {width: 480, height: 854}
   spanish:
-    voice: {voice_id: "XXXXXXXXXXXXXXXXXXXX"}   # own audio folder: audio/spanish/
+    language: es                              # see "Languages and translations"
+    translations: translations/spanish.yaml   # beat and on-screen texts: own audio folder audio/spanish/
+    voice: {voice_id: "XXXXXXXXXXXXXXXXXXXX"}
+  short:
     scenes: [...]                             # a list replaces the whole base list
 ```
 
@@ -82,11 +436,16 @@ Renders of a variant go to `build/<final|preview>_<variant>/`. Audio sharing rul
 
 ```yaml
 theme:
+  preset: light_academic    # optional: a named set of theme values (see below)
   background: "#0E1116"     # frame background
-  font: Inter               # font family for all text (must be installed; see README)
+  font: Inter               # sans family: body text and every role not set below (bundled)
+  font_serif: Source Serif 4  # serif family, the `serif` font token (bundled)
+  font_mono: JetBrains Mono NL  # monospace family, the `mono` token: code listings (bundled)
+  fonts: {heading: serif}   # optional: font per role (see "Fonts" below)
+  code_style: github-dark   # Pygments style of `code` listings
   colors:                   # tokens; these are the defaults, add any name you like
     text: "#E8EAED"
-    dim: "#6B7280"
+    dim: "#838B98"
     accent: "#FF6B6B"
     highlight: "#FFD166"
     primary: "#58C4DD"
@@ -95,13 +454,194 @@ theme:
     surface: "#161B24"      # panels, code window
     # brand: "#7C3AED"      # your own tokens work in every color param
   palette: ["#58C4DD", "#F2A541", "#C792EA", "#83C167"]   # series colors (charts), in order
+  scale: auto               # type scale: compact, standard, large or auto (see below)
   sizes: {title: 56, subtitle: 42, heading: 36, body: 32, caption: 24, small: 20}  # font points
 ```
 
-You only write what you change: `colors` and `sizes` are merged over the defaults (and over
-tokens registered by extensions); `palette` replaces the default list. Colors are hex
+You only write what you change: `colors` and `sizes` are merged over the preset and the
+defaults (and over tokens registered by extensions); `palette` replaces the list. Colors are hex
 (`#RGB`, `#RRGGBB` or `#RRGGBBAA`, quoted in YAML because of the `#`); token names use letters,
-digits and `_`. Sizes are positive numbers.
+digits and `_`. Sizes are positive numbers. `code_style` is any installed Pygments style
+(`vidgen schema` lists them); a `code` scene's own `style` param wins over it.
+
+**Precedence** (highest first): the values written under `theme:` (after merging a variant) >
+the preset (and its base preset) > defaults registered by extensions
+(`register_theme_defaults`, docs/EXTENDING.md) > the built-in defaults shown above (the
+`dark_tech` look). Without `preset` the preset level is simply empty, so an existing project
+looks exactly as before. `vidgen list-themes` shows every preset with its values (below), and
+`vidgen validate` warns (without failing) when the project's own theme has a colour pair below
+WCAG AA (`warning: theme contrast: colors.dim #6B7280 on background #0E1116: 3.91:1 (needs
+4.5:1, too low)`; same check as the presets' tests, see below).
+
+### Fonts
+
+vidgen ships three open-licence font families (SIL OFL 1.1; licences in
+`src/vidgen/data/fonts/`, list in `THIRD_PARTY_NOTICES.md`) and registers them for its own
+renders, so they need **no installation** on Windows, macOS or Linux: **Inter** (sans; Regular,
+Bold, Italic), **Source Serif 4** (serif; Regular, Bold, Italic) and **JetBrains Mono NL**
+(monospace without coding ligatures, so code shows the characters as typed; Regular, Bold).
+Any installed font works too: write its family name (`font: Segoe UI`). A bundled family that is
+also installed system-wide is fine (either copy is used; they are the same font).
+
+The theme has three family tokens: `font` (sans; default Inter), `font_serif` (default Source
+Serif 4) and `font_mono` (default JetBrains Mono NL). Built-in scenes ask for a font by
+**role**, and `fonts` maps a role to a token — `sans`, `serif`, `mono` — or directly to a family
+name:
+
+| role | used for | default |
+|---|---|---|
+| `body` | all other text (subtitles, bullets, captions, labels...) | `sans` |
+| `heading` | `title` title, `bullets` heading, chart and `code` titles, `end_card` title | `sans` (`serif` in `light_academic`, `warm_editorial`) |
+| `quote` | `quote` text | `sans` (`serif` in `warm_editorial`) |
+| `quote_mark` | the large mark of `quote` | `serif` |
+| `code` | `code` listings and their line numbers | `mono` |
+
+```yaml
+theme:
+  preset: warm_editorial
+  font_serif: Georgia            # an installed serif instead of the bundled one
+  fonts: {quote: sans, heading: "Playfair Display"}   # roles: token or family name
+```
+
+`fonts` merges over the preset's roles per role; extension scenes can use any role name
+(`current_theme().font_for("kicker")`, unknown roles are `sans`). A scene's own font param
+(`code.font`, `quote.mark_font`) wins over the role.
+
+Changed in Step 18: `font` is the sans family; a `font` written in `video.yaml` no longer
+overrides the roles a preset sets (headings of `light_academic` stay serif; write `fonts:
+{heading: sans}` for all-sans). `code` listings use JetBrains Mono NL (was the system's
+`Monospace`), the quote mark Source Serif 4 (was Georgia / DejaVu Serif).
+
+### Type scales
+
+`scale` sets the six built-in sizes at once (font points):
+
+| scale | `title` | `subtitle` | `heading` | `body` | `caption` | `small` | for |
+|---|---|---|---|---|---|---|---|
+| `compact` | 48 | 36 | 32 | 28 | 22 | 20 | dense slides, long lists |
+| `standard` | 56 | 42 | 36 | 32 | 24 | 20 | 16:9 video (the defaults) |
+| `large` | 66 | 50 | 44 | 38 | 30 | 26 | vertical/mobile video, accessibility |
+| `auto` | | | | | | | `large` when the video (`format`) is portrait (taller than 1:1.2), else `standard` |
+
+A scale is shorthand for those six `sizes` at the level where it is chosen: `theme.sizes`
+still override single sizes (`{scale: large, sizes: {title: 60}}`), a `scale` written under
+`theme:` replaces the preset's scale (and its `sizes` for those six tokens), and a preset's own
+`sizes` sit above its scale. Without any `scale` (in the config or the preset) the default is
+`auto`, so a `vertical` variant (`format: {width: 1080, height: 1920}`) automatically gets the
+larger text a phone needs, while 16:9 output is unchanged; write `scale: standard` to keep
+the old sizes in portrait. `auto` follows the variant's final `format` (a `--preview` render
+uses the same sizes, so previews show the final layout). Text never overflows because of a
+scale: built-in scenes fit text into their regions (wrapping, then shrinking).
+
+Changed in Step 17: portrait projects without a scale get `large` sizes (`auto`), and
+`high_contrast` uses `large` (was `caption: 26`, `small: 24`).
+
+### Theme presets
+
+`theme: {preset: NAME}` selects a named set of values; anything else under `theme:` still
+wins, so `{preset: light_academic, colors: {primary: "#0B5FFF"}}` is the light look with your
+blue. A variant can switch presets: `variants: {light: {theme: {preset: light_academic}}}`.
+Mind that values written in the base `theme:` also override the variant's preset (a base
+`background: "#0E1116"` would keep a light variant dark): write in the base only what every
+variant shares, or select the default look with `preset: dark_tech` there instead.
+
+| preset | background | text / dim | accents (`accent`, `highlight`, `primary`, `secondary`, `tertiary`) | `surface` | palette | `code_style` | scale |
+|---|---|---|---|---|---|---|---|
+| `dark_tech` (the default look) | `#0E1116` | `#E8EAED` / `#838B98` | `#FF6B6B`, `#FFD166`, `#58C4DD`, `#F2A541`, `#83C167` | `#161B24` | `#58C4DD`, `#F2A541`, `#C792EA`, `#83C167` | `github-dark` | `auto` |
+| `light_academic` | `#F8F7F3` (off-white) | `#1F2328` / `#59606B` | `#B42318`, `#A64B00`, `#1D4ED8`, `#C2410C`, `#15803D` | `#FFFFFF` | `#1D4ED8`, `#C2410C`, `#9D2F8F`, `#15803D` | `xcode` | `auto` |
+| `high_contrast` | `#000000` | `#FFFFFF` / `#C9CED6` | `#FF7A7A`, `#FFE14D`, `#4DD2FF`, `#FFAA4D`, `#7EE787` | `#141414` | `#4DD2FF`, `#FFAA4D`, `#FF8FD8`, `#7EE787` | `github-dark` | `large` |
+| `warm_editorial` | `#F6F0E4` (cream paper) | `#2B2118` / `#6A5A4A` | `#9B1D3A`, `#8F5700`, `#1F5E6E`, `#B4441B`, `#37704F` | `#FFFBF4` | `#1F5E6E`, `#B04A16`, `#8D4AAB`, `#1A7C4D`, `#8C2024` | `default` | `auto` |
+| `brand_neutral` | `#F4F5F7` (light grey) | `#15181D` / `#596270` | `#C42B3B`, `#A35200`, `#0B57C2`, `#4A5565`, `#0E7C66` | `#FFFFFF` | `#0B57C2`, `#C2410C`, `#08775A`, `#A04A8A`, `#5B6068` | `xcode` | `auto` |
+| `soft_pastel` | `#252238` (dusky plum) | `#F3EEFA` / `#B0A8C4` | `#F7879F`, `#FCE38A`, `#86BDFF`, `#FFC27F`, `#9BEBC9` | `#2C2843` | `#86BDFF`, `#FFC27F`, `#9E8BEF`, `#9BEBC9`, `#F7879F` | `zenburn` | `auto` |
+| `bold_neon` | `#0B0614` (violet-black) | `#F7F4FF` / `#A59CC2` | `#FF2E8B`, `#F4FF3A`, `#00C8FF`, `#FF8A1F`, `#39FF9C` | `#170F27` | `#00C8FF`, `#FF2E8B`, `#F4FF3A`, `#8C5BFF`, `#39FF9C` | `monokai` | `large` |
+
+What they are for: `dark_tech` technical explainers; `light_academic` papers and lectures;
+`high_contrast` accessibility; `warm_editorial` essays and storytelling; `brand_neutral` a quiet
+base for a company colour (`{preset: brand_neutral, colors: {primary: "#..."}}` or a project
+preset based on it); `soft_pastel` friendly tutorials; `bold_neon` short social clips.
+
+All presets use the bundled families (Inter, Source Serif 4, JetBrains Mono NL);
+`light_academic` sets headings and `warm_editorial` headings and quotes in the serif (see
+[Fonts](#fonts)). Every built-in preset
+passes WCAG AA (tested): `text` and `dim` at least 4.5:1 on the background and on `surface`,
+the accent tokens at least 3:1 on the background and the palette at least 4.5:1 (charts label
+series in palette colours; `high_contrast`: 7:1 for all of them). The palettes are ordered and
+stay distinguishable for colour-blind viewers: every pair of colours differs by at least 7.5
+CIEDE2000 under normal vision and simulated protanopia, deuteranopia and tritanopia (except
+`dark_tech`, which keeps the historical default palette; its blue and purple are close for
+deuteranopes, so put them apart or use another preset when that matters). Projects can add their own
+presets (e.g. a brand look based on `light_academic`) with `register_theme_preset` in an
+extension (docs/EXTENDING.md); `vidgen validate` reports an unknown preset name, and
+`vidgen schema` lists the built-in and the project's presets.
+
+Changed in Step 17: the third palette colour of `light_academic` (`#7E22CE` → `#9D2F8F`) and
+`high_contrast` (`#D7A8FF` → `#FF8FD8`): the old purples were nearly identical to the blue for
+deuteranopes.
+
+Changed in Step 16: the default `dim` is `#838B98` (was `#6B7280`, 3.9:1 on the default
+background, below WCAG AA); dim captions, axis labels and sources are a little lighter.
+
+### `vidgen list-themes`
+
+`vidgen list-themes [PROJECT] [--json] [--swatches PNG]` lists every preset (built-in, then the
+project's own) with its resolved values in this project (background, colours, palette, fonts
+and the family of each built-in role, `code_style`, scale and the sizes it gives here), the contrast check (minimum ratios, any
+failing pair), the palette's smallest colour difference and for which vision, and the type
+scales. `--swatches PNG` (alias `--sheet`, as in `list-icons`) also writes a picture of all presets (one row each: name and
+description in its text colours, accent chips, a `surface` panel, the palette as bars), so an
+AI author can compare them by opening one image. JSON shape: [below](#vidgen-list-themes---json).
+
+## Icons
+
+vidgen ships 200 line icons (from [Lucide](https://lucide.dev), ISC licence), 25 in each
+category `tech`, `data`, `science`, `business`, `people`, `ui` (arrows and interface),
+`nature`, `education`, chosen for what explainer videos show; the full list with aliases and
+tags is the [icon catalogue](ICONS.md). Built-in scenes take them as params: `icon` on
+[`title`](#title), [`chapter`](#chapter), [`stat`](#stat) and [`end_card`](#end_card), `{text,
+icon}` items of [`bullets`](#bullets), columns and points of [`comparison`](#comparison),
+events of [`timeline`](#timeline), nodes of [`diagram`](#diagram), stages and the token of
+[`process`](#process), and the [`icon_grid`](#icon_grid) scene. Extension scenes draw them with `icon(name, ...)` (see
+docs/EXTENDING.md "Icons"); scene params that take an icon name are typed `icon` in
+`vidgen list-scenes` and checked by `vidgen validate` (an unknown name gets suggestions).
+
+**Aliases.** Some icons have other names that work everywhere a name does: Lucide's old names
+of renamed icons (`home` → `house`, `pie-chart` → `chart-pie`, `smile` →
+`face-slightly-smiling`, `filter` → `funnel`) and a few synonyms (`idea` → `lightbulb`, `ai`
+→ `brain-circuit`, `warning` → `triangle-alert`, `bar-chart` → `chart-column`, `money` →
+`banknote`). A project icon with an alias's name replaces the alias.
+
+**Project icons.** Put SVG files in `assets/icons/`: `assets/icons/<name>.svg` adds the icon
+`<name>` or replaces the built-in icon of that name (letters, digits, `-` and `_`). Draw them on
+a square `viewBox` (Lucide's is 24 x 24, with about 2 units of padding) with strokes or fills in
+`currentColor`, so they size and recolour like the built-ins. An optional
+`assets/icons/icons.json` gives them a category and search tags:
+
+```json
+{"icons": [{"name": "bicycle", "category": "transport", "tags": ["bike", "cycling"]}]}
+```
+
+Entries need a `name` whose SVG exists; `category` defaults to `project`, `tags` to none.
+Problems (bad file names, a broken `icons.json`) are reported by `vidgen validate` under
+`assets/icons`.
+
+### `vidgen list-icons`
+
+`vidgen list-icons [PROJECT] [--search TEXT] [--category NAME] [--sheet PNG [--theme [PRESET]]] [--json]` lists
+the icons available in the project (built-in and `assets/icons`; without a PROJECT and no
+config in the current folder: built-ins only), one line each: name, category, `[project]` for
+project icons, `(alias: ...)`, tags. `--search` keeps icons whose name, aliases, tags or
+category contain every word of TEXT (case-insensitive; best first: name, alias, whole words of
+a name or alias, tags, whole words of a tag, then words merely contained in a name or tag, so
+`--search ai` lists `brain-circuit` and `bot` before `rain`): `--search "chart"`,
+`--search computer`. Tags include the concepts an icon stands for
+in a script, so search by idea: `money`, `growth`, `security`, `speed`, `AI`, `team`.
+`--category` keeps one category (unknown → error listing them). `--sheet PNG` also draws the
+listed icons, labelled with name and category, on a 1280 px wide contact sheet (8 per row; a
+long list continues in `<stem>-2.png`, ... ), drawn by the same code as a render: open it to
+choose icons by eye. It is black on white; `--theme` draws it in the project's theme (its
+background, icons in `primary`, names in `text`) and `--theme warm_editorial` in a preset's
+(built-in or the project's), to see icons as a video shows them. JSON shape:
+[below](#vidgen-list-icons---json).
 
 ## Voice (`voice:`)
 
@@ -117,10 +657,97 @@ voice:
     style: 0.0                      # 0..1
     use_speaker_boost: true
   context: true                     # send the neighbouring beats' text for smoother intonation
+  timestamps: false                 # also fetch when each character is spoken (karaoke captions)
+  language_code: null               # ElevenLabs language_code (ISO 639-1) or false; null: auto
+  label: null                       # speaker name in subtitles / captions (none: not tagged)
+  color: null                       # speaker colour in captions (theme token or hex; none: text colour)
 ```
 
 All keys are optional; the values shown are the defaults. Unknown keys are an error. Changing
-`voice_id`, `model_id`, `output_format` or `settings` re-voices every beat on the next `vidgen tts`.
+`voice_id`, `model_id`, `output_format` or `settings` re-voices every beat of this voice on the
+next `vidgen tts`; `label` and `color` only name the speaker (they change no audio). `context`
+sends the neighbouring beats only when they have the same voice (see
+[multiple voices](#multiple-voices-voices)).
+
+`timestamps: true` makes `vidgen tts` use ElevenLabs' *with-timestamps* endpoint (same voice,
+same price): besides `audio/<beat_id>.mp3` it stores `audio/<beat_id>.align.json`, when each
+character is spoken, and burned-in [`captions`](#captions) and the SRT then time every word
+exactly. Without it word times are estimated (see `captions`). It is not part of the audio hash:
+turning it on does not re-voice anything; `vidgen tts --force` fetches the timings for existing
+beats (paid again).
+
+`language_code` is ElevenLabs' language enforcement (an ISO 639-1 code such as `pt`). By default
+(`null`: auto) vidgen sends the video's [`language`](#languages-and-translations) to the models
+that accept one (`eleven_turbo_v2_5`, `eleven_flash_v2_5`; others reject the field, and
+`eleven_multilingual_v2` detects the language from the text). A code sends it with any model,
+`false` never sends one. When a code is sent it is part of the audio hash (re-voicing those
+beats); without one the hash is as before. A named voice may set its own (`voices.<name>.language_code`).
+
+## Multiple voices (`voices:`)
+
+More than one speaker: an interview, a dialogue, a quoted voice. `voices:` names extra voices;
+each is the base `voice:` with the keys it gives changed (`settings` merge value by value). A
+scene's `voice:` picks one for its beats, a beat's `voice:` for itself; `default` is the base
+voice (to hand a line back to the narrator inside a scene of another voice).
+
+```yaml
+voice: {voice_id: nPczCjzI2devNBz1zQrb, label: Host}   # the narrator (label: tag it in subtitles too)
+voices:
+  ana:
+    voice_id: 21m00Tcm4TlvDq8ikWAM   # what is not given comes from voice:
+    settings: {stability: 0.4}       # merged over voice.settings
+    label: "Dr. Ana"                 # default: the name, first letter capital ("Ana")
+    color: secondary                 # theme token or hex; default: the palette colour of its place here
+subtitles:
+  speakers: name                     # SRT: "Dr. Ana: ..." where the speaker changes
+scenes:
+  - id: interview
+    type: quote
+    params: {text: "Small models can be sparse too."}
+    voice: ana                       # every beat of this scene...
+    beats:
+      - text: "We were surprised by the results."
+      - text: "What surprised you most?"
+        voice: default               # ...except this one: the narrator asks
+      - text: "That the small models were sparse too."
+```
+
+| key (`voices.<name>`) | default | |
+|---|---|---|
+| `voice_id`, `model_id`, `output_format`, `provider` | the base voice's | as in [`voice:`](#voice-voice) |
+| `settings` | the base voice's | `stability`, `similarity_boost`, `style`, `use_speaker_boost`; each one not given is the base voice's |
+| `context`, `timestamps` | the base voice's | as in [`voice:`](#voice-voice) |
+| `label` | the name (`dr_ana` → `Dr ana`) | the speaker's name in subtitles and captions; not inherited from `voice.label` |
+| `color` | palette colour by position | the speaker's colour in captions (`speakers: color` / `both` / the `name` tag); not inherited |
+
+- **Names**: letters, digits and `_`; `default` is reserved for the base voice. An unknown name in
+  a scene or beat is a config error with a suggestion (`scenes[2].beats[1].voice: unknown voice
+  'anna'; did you mean 'ana'?`); a voice no beat uses is a `vidgen validate` warning, an unknown
+  colour token an error. `vidgen validate` prints `voices: default (12 beats), ana (4 beats)`.
+- **Audio**: each beat is hashed with its own voice (see [narration audio](#narration-audio-elevenlabs)),
+  so beats of the base voice keep their hash when `voices:` is added, editing one voice re-voices
+  only its beats, and moving a beat to another voice re-voices that beat. `label` / `color` are
+  not part of the audio.
+- **Context**: with `context: true` a beat gets its neighbours' text as `previous_text` /
+  `next_text` only when they are spoken by the **same voice**; at a change of speaker it gets none.
+  ElevenLabs uses the context as this voice's own surrounding speech (to stitch generations of one
+  speaker smoothly), so another speaker's line there could carry its intonation over (an answer
+  read with the question's rising tone). Lines of one speaker separated by another's reply are not
+  joined either: the turn breaks the flow, as in a real conversation.
+- **`vidgen tts --dry-run`** shows the voice of every beat (`would generate s2_b1.mp3 (48 chars,
+  voice ana)`) and the beats and characters per voice; `vidgen tts --voice ana` (repeatable;
+  `default` for the base voice) generates only that speaker's beats.
+- **Variants** deep-merge `voices:` like any mapping (`variants: {fr: {voices: {ana: {voice_id:
+  ...}}}}` changes one speaker); a variant gets its own audio folder as soon as one shared beat's
+  effective voice differs, and copies every unchanged beat from `audio/`.
+- **Subtitles / captions**: `subtitles.speakers: name` writes `Label: ` before the first cue of
+  each beat whose voice differs from the beat before (the first beat included) and that has a
+  label (named voices always do; the base voice only with `voice.label`); `off` (default) writes
+  the text only. Burned-in [`captions`](#captions) follow it, or set their own `speakers` (`name`,
+  `color`, `both`, `off`).
+- **Pronunciation** is one dictionary for all voices (the hash covers each beat's spoken text and
+  its voice); there are no per-voice entries yet: write a variant (`pronunciation:` in it) when a
+  voice of another language needs other spoken forms.
 
 ## Narration (`narration:`)
 
@@ -133,7 +760,9 @@ narration:
 ## Narration audio (ElevenLabs)
 
 Each beat is spoken by ElevenLabs into `audio/<beat_id>.mp3`, with `audio/<beat_id>.hash`
-recording what it was generated from.
+recording what it was generated from (and, with `voice.timestamps`, `audio/<beat_id>.align.json`:
+its character timings, with the text and a hash of the MP3 they belong to, so a stale file is
+ignored).
 
 **API key.** vidgen reads the key only from the environment variable `ELEVENLABS_API_KEY`;
 it never stores it in the config, audio, build files, logs or error messages.
@@ -147,25 +776,750 @@ it never stores it in the config, audio, build files, logs or error messages.
 vidgen tts --dry-run          # list beats that need audio + character count (no key needed)
 vidgen tts                    # generate missing/stale beats only
 vidgen tts --beat s2_b1       # only these beats (still skipped if up to date)
+vidgen tts --voice ana        # only the beats of this voice (voices:; default = the base voice)
 vidgen tts --force            # regenerate (combine with --beat to limit it)
 vidgen tts --variant spanish  # audio for a variant
 vidgen validate               # prints e.g. "audio: 18 ok, 2 stale, 1 missing"
 ```
 
 **What triggers regeneration.** A beat is regenerated when its MP3 is missing or its hash does
-not match the beat's text plus `voice_id`, `model_id`, `output_format` and `settings`. Editing
+not match the beat's spoken text (its text with the [pronunciation](#pronunciation-pronunciation)
+applied) plus `voice_id`, `model_id`, `output_format` and `settings` of the beat's voice (its
+scene's or its own from [`voices:`](#multiple-voices-voices), else `voice:`). Editing
 one beat regenerates only that beat: the neighbours' text is sent for intonation but is not part
 of the hash, and neither is `context`. Hash files written by the original kphi3 script are
 accepted while `output_format` and `settings` keep their defaults.
 
-**Variants.** A variant shares `audio/` unless its voice (after merging) or the text of a beat
-differs from the base config; then its audio goes to `audio/<variant>/`. Beats that are the same
-in both are copied from `audio/` instead of being paid for again.
+**Variants.** A variant shares `audio/` unless its voice (after merging), the voice of a beat
+(`voices:`, a scene's or beat's `voice:`) or the spoken text of a beat (its text, or the
+pronunciation of a word in it) differs from the base config; then its
+audio goes to `audio/<variant>/`. Beats that are the same in both are copied from `audio/`
+instead of being paid for again.
+
+## Pronunciation (`pronunciation:`)
+
+How the narrator says names, acronyms and symbols the voice gets wrong. Each entry replaces a
+term in the text **sent to the TTS only**: the subtitles (SRT), burned-in captions and storyboard
+labels keep the written words.
+
+```yaml
+pronunciation:
+  K-Phi-3: kay fye three                # short form: term: spoken form
+  LaTeX: lah-tek
+  SQL: {say: sequel, case_sensitive: false}     # also "sql", "Sql"
+  "(\\d+)p": {say: "\\1 pee", regex: true}      # 480p -> "480 pee" (regex groups in say)
+  Phi: {say: fye, whole_word: false}            # also inside "Phis", "DelPhi"
+pronunciation_file: pronunciation.yaml  # optional: more entries in a file (or a list of files)
+```
+
+| key | default | |
+|---|---|---|
+| `say` | required | the spoken form sent instead of the term; with `regex: true`, `\1` / `\g<name>` insert a group |
+| `case_sensitive` | `true` | match the term's capitals exactly (`false`: any case) |
+| `whole_word` | `true` | match only where no letter, digit or `_` is right before or after the term (`K-Phi-3's` matches `K-Phi-3`, `GPUs` does not match `GPU`) |
+| `regex` | `false` | the term is a Python regular expression, not plain text |
+| `language` | none (every language) | only in videos of this [language](#languages-and-translations) (or list of languages): `en` matches `en-US` and a video without `language`, `pt` matches `pt-BR` and `pt-PT`, `pt-BR` only `pt-BR` |
+
+- **Matching.** Every entry is matched against the beat's written text in one pass; a spoken form
+  is never matched again by another entry. Where matches overlap, the one starting first wins,
+  then the longest (`K-Phi-3` before `Phi`), then the entry written first.
+- **`pronunciation_file`**: YAML or JSON files (relative to the project) holding the same mapping
+  (`term: spoken form` or `term: {say, ...}`), read in order; entries of `pronunciation:` win over
+  them, and `term: null` removes one (also how a [variant](#variants) drops an entry of the base
+  config: variants deep-merge `pronunciation:` like any mapping).
+- **Audio.** The audio hash covers the spoken text, so adding, changing or removing an entry
+  re-voices only the beats whose spoken text changes; a beat that no entry matches keeps its
+  hash (existing audio stays valid when a dictionary is added). `vidgen tts --dry-run` lists the
+  beats to generate and, under each one whose text changed, `says: <spoken text>`.
+- **Word timings.** The audio says the spoken words, the captions show the written ones: each
+  written word is timed from its first spoken word's start to its last one's end (`K-Phi-3` said
+  "kay fye three" lasts all three words; a term said as nothing gets a zero-length time where the
+  next word starts). This holds for estimated times (the spoken syllables are weighed) and for
+  `voice.timestamps` alignments (stored for the spoken text).
+- **Lint.** `narration_speed` counts the words of the spoken text.
+- **Per language.** A [variant](#variants) in another language overrides entries by term
+  (`LaTeX: látec`), drops them (`LaTeX: null`), or the entries say which languages they are for
+  (`LaTeX: {say: lah-tek, language: en}`). `vidgen validate` warns about base entries a variant in
+  another language keeps unchanged.
+- **`vidgen validate`** warns (it does not fail) about entries that match no beat, entries that
+  never apply because a longer entry always covers them, and entries whose matches collide with
+  another's (the same text, or crossing) in a beat.
+- Not supported (yet): SSML `<phoneme>` / IPA entries (ElevenLabs reads them only with some
+  models, and they would break the word timings) and ElevenLabs' server-side pronunciation
+  dictionaries; write the spoken form as plain letters instead.
 
 **Housekeeping.** MP3s of beats that no longer exist are reported as orphaned but never deleted.
 Failed requests show the HTTP status and ElevenLabs' message; rate limits and server errors are
 retried a few times automatically. Rendering uses whatever audio exists; stale or missing audio
 is reported as a warning.
+
+## Readback (`vidgen readback`)
+
+Does the narration say what the text says? `vidgen readback [PROJECT]` transcribes every beat's
+MP3 with a speech-to-text (STT) provider and compares the transcript with the beat's text. It
+catches what nobody hears without listening: a name or acronym the voice mispronounces, a number
+read wrongly, words the voice dropped or added. An AI author can act on the report without
+listening: each difference names the written words, what was heard, and a suggested fix.
+
+```yaml
+stt:
+  provider: faster_whisper    # faster_whisper (local, free) | elevenlabs (paid, ELEVENLABS_API_KEY)
+  model: null                 # default: small.en for English, small otherwise; elevenlabs: scribe_v1
+  language: null              # default: the video's language (English without one); auto: detected
+  device: auto                # faster_whisper: auto | cpu | cuda
+```
+
+| key | default | |
+|---|---|---|
+| `provider` | `faster_whisper` | `faster_whisper`: OpenAI's Whisper run locally (CTranslate2), free, no key; needs the optional extra `pip install "vidgen[stt]"`, and downloads the model from the Hugging Face Hub on first use. `elevenlabs`: ElevenLabs Speech to Text, billed per audio hour, the same `ELEVENLABS_API_KEY` as `vidgen tts` |
+| `model` | none (the provider's default) | a Whisper size (`tiny`, `base`, `small`, `medium`, `large-v3`, `turbo`; `.en` sizes for English only; bigger = more accurate, slower) or a folder holding a converted model; ElevenLabs: `scribe_v1`. Default `small.en` for English, `small` otherwise; `scribe_v1` |
+| `language` | none (the video's) | the language of the audio (BCP-47, its language subtag is sent: `pt-BR` → `pt`), or `auto` (detected); default the video's [language](#languages-and-translations), English without one |
+| `device` | `auto` | `faster_whisper` only: `cpu`, `cuda` (an NVIDIA GPU), or `auto` (a GPU if there is one) |
+
+```
+$ vidgen readback my_video
+[1/12] transcribed intro_b1 (2.1 s)
+...
+readback: 12 beats (faster_whisper small.en, language en); 12 transcribed, 0 cached; word error rate 2.4%
+flagged (word error rate above 10%): 1
+  setup_b2 (setup): 20% (2/10 words)
+    expected "NVIDIA", heard "and video" @ 3.2s
+    fix: "NVIDIA" is heard as "and video": add a pronunciation entry `NVIDIA: <how to say it>`, then `vidgen tts`
+worst: setup_b2 20%, intro_b1 9%
+terms misheard in several beats:
+  NVIDIA: 2 beats (setup_b2, results_b1), heard "and video", "in video" -> "NVIDIA" is misheard in 2 beats: add a pronunciation entry `NVIDIA: <how to say it>`
+```
+
+| option | |
+|---|---|
+| `--variant NAME` | a variant: its audio folder and its language |
+| `--beat ID` | only this beat (repeatable) |
+| `--max-wer RATE` | flag beats whose word error rate is above this (0-1); default `lint.rules.readback.max_wer` (0.1) |
+| `--force` | transcribe again even when a cached transcript exists |
+| `--json` | the whole report as JSON (below) |
+
+The exit code is 0 when the command ran, whatever it found (`flagged` in the JSON tells); use
+the [`readback` lint rule](#lint-vidgen-lint) to fail a check on it.
+
+**What is compared.** The transcript is compared with the beat's **spoken** text: its text with
+the [pronunciation](#pronunciation-pronunciation) applied, which is what the voice was asked to
+say. Differences are reported in terms of the **written** text (`expected "K-Phi-3" (said "kay
+fye three"), heard "kay five three"`). Both texts are normalised first, so that differences in
+writing are not counted as differences in speech: case and punctuation; accents (`você` =
+`voce`: STT models drop them now and then); hyphens, dashes and slashes split words
+(`one-by-one` = `one by one`); numbers become words in English and Portuguese (`2.58` = `two
+point five eight`, `1,57` in pt = `um vírgula cinquenta e sete`, `77%` = `seventy seven
+percent`, `1st` = `first`, `$5` = `five dollars`; the language's decimal and thousands marks)
+and keep their digits in other languages (`1.000,5` → `1000 5`); `&`, `+`, `=`, `×`, `@` become
+words; spelled acronyms are joined (`G.P.U.` = `G P U` = `GPU`). The normalised words are
+aligned (fewest substitutions, deletions and insertions); differences are grouped into whole
+written words. A difference that disappears when the words are joined (`overparameterized` /
+`over parameterized`, `KPhi3`) or when the STT wrote the term as written (`K-Phi-3` heard in a beat
+that says "kay fye three") is not counted.
+
+**Word error rate** (WER) of a beat = (substitutions + deletions + insertions) / words of its
+spoken text. A beat is **flagged** when its WER is above `max_wer`. STT is not perfect: a WER of
+a few percent on good audio is normal, and a single difference can be the transcriber's, not the
+voice's. Listen to a flagged beat before regenerating it.
+
+**Suggestions** (each difference has one; a flagged beat lists them):
+- a term with a pronunciation entry heard differently: respell the entry's spoken form;
+- a name, acronym, number or other hard term (a digit, two capitals, a letter outside ASCII, a
+  capitalised word inside a sentence) heard differently: add a pronunciation entry
+  `TERM: <how to say it>`, then `vidgen tts`;
+- words missing: listen, and regenerate the beat (`vidgen tts --force --beat ID`) if they are not
+  said; extra words: listen (the voice or the transcriber added them);
+- other words heard differently: probably a transcription slip; listen;
+- the audio is **stale** (its hash does not match the current text or voice): run `vidgen tts`
+  first. Beats without an MP3 are skipped.
+
+The report ends with the **worst** beats and the **terms misheard in several beats** (a term
+heard differently in two or more beats is very likely the voice, not the transcriber: the
+strongest reason to add or fix a pronunciation entry).
+
+**Cache.** Transcripts are stored in `build/readback/<key>.json`, keyed by the MP3's content and
+the STT settings (`provider`, resolved `model` and `language`): a beat is transcribed again only
+when its audio or those settings change (or with `--force`); variants sharing audio share
+transcripts. Each file holds `{version, audio_sha1, stt, beat, transcript: {text, language,
+words: [[text, start, end]]}}`. Deleting the folder is safe.
+
+**Lint.** The [`readback` rule](#lint-vidgen-lint) of `vidgen lint` reports the beats above
+`lint.rules.readback.max_wer` from these cached transcripts only: it never runs STT, so it finds
+nothing until `vidgen readback` has run, and transcripts of older audio are ignored.
+
+## Generated images (`imagegen`, `vidgen imagegen`)
+
+A picture can be generated from a prompt instead of coming from a file: the
+[`image`](#image) scene's `generate:` param (instead of `path`). Generation costs money, so it
+happens only when you run `vidgen imagegen`; the picture is then stored in the project like the
+narration audio and reused by every render. `vidgen render`, `vidgen validate`, `storyboard` and
+`lint` never call the provider: a picture not generated yet shows as a **placeholder card** (the
+prompt on a soft gradient in the theme's colours, "Image to generate"), so the video can be
+previewed and laid out first; `vidgen validate` and `vidgen render` warn about it.
+
+```yaml
+imagegen:
+  provider: openai          # OpenAI Images API (paid; OPENAI_API_KEY)
+  model: gpt-image-1        # gpt-image-1 | dall-e-3 | dall-e-2
+  size: auto                # auto: by the video's format (or generate.aspect); or WIDTHxHEIGHT
+  quality: null             # default: medium (gpt-image), standard (dall-e-3)
+  style: flat               # added to every prompt: a preset or your own words
+  negative: "text, watermarks"
+scenes:
+  - id: harbour
+    type: image
+    params:
+      generate:
+        prompt: "a quiet harbour at dawn, fishing boats, mist over the water"
+        negative: people
+        aspect: auto        # auto | landscape | portrait | square
+        seed: 1             # another number: another picture of the same prompt
+      ken_burns: true
+    beats:
+      - text: "It started in a small harbour town."
+  - id: door
+    type: image
+    params: {generate: "a red front door in a white brick wall", style: photo}
+    beats:
+      - text: "Behind this door."
+```
+
+| key | default | |
+|---|---|---|
+| `provider` | `openai` | the provider: `openai` (OpenAI Images API, `POST /v1/images/generations`), billed per picture, key in the environment variable `OPENAI_API_KEY` (never stored by vidgen) |
+| `model` | `gpt-image-1` | `gpt-image-1`, `dall-e-3` or `dall-e-2`; another name is sent as is (with gpt-image-1's sizes, no cost estimate) |
+| `size` | `auto` | `WIDTHxHEIGHT` sent to the provider, or `auto`: the model's landscape / portrait / square size for the video's format or the `generate.aspect` (gpt-image-1: `1536x1024`, `1024x1536`, `1024x1024`; dall-e-3: `1792x1024`, `1024x1792`, `1024x1024`; dall-e-2: `1024x1024`) |
+| `quality` | none (by model) | gpt-image-1: `low`, `medium`, `high` (default `medium`); dall-e-3: `standard`, `hd` (default `standard`); none for dall-e-2 |
+| `style` | none | words added to every prompt (`Style: ...`) so the pictures of a video look alike: a preset (below) or your own words; a scene's `generate.style` replaces it |
+| `negative` | none | what no picture should show, added to each prompt's `Avoid: ...` (with the scene's own `negative`) |
+
+`generate:` (a mapping, or just the prompt as a string):
+
+| key | default | |
+|---|---|---|
+| `prompt` | required | what the picture shows; describe the scene, light, mood and composition |
+| `negative` | `""` | what it should not show; the OpenAI API has no negative prompt, so it is sent as `Avoid: ...` |
+| `style` | `imagegen.style` | a preset, your own words, or `none` (no style words, not even the project's) |
+| `aspect` | `auto` | `auto` (landscape for a wide video, portrait for 9:16, square for 1:1), `landscape`, `portrait`, `square` |
+| `seed` | none | a number that is part of the cache key: change it for another picture of the same prompt. OpenAI takes no seed, so it does not make the picture reproducible |
+
+**Style presets**: `photo` (photorealistic photograph, natural light, sharp focus),
+`illustration` (clean digital illustration, soft shading, limited colour palette), `flat` (flat
+vector illustration, simple geometric shapes, solid colours, no outlines), `isometric`,
+`watercolor`, `line_art`, `render_3d`, `cinematic`. The prompt sent is `<prompt>. Style: <style
+words>. Avoid: <negative>.`; `vidgen imagegen --dry-run` prints it.
+
+**Cache.** Each picture is stored as `assets/generated/<key>.png` with `<key>.json` beside it
+(`prompt`, `negative`, `style`, `sent_prompt`, `revised_prompt` — the prompt the model says it
+used —, `provider`, `model`, `size`, `quality`, `seed`, `created` date, `scenes`). The key is a
+hash of the prompt sent (with style and negative), provider, model, size, quality and seed:
+editing any of them asks for a new picture, while scenes sharing a request share one file.
+**Commit `assets/generated/`** like `audio/`: the pictures cost money and cannot be made again
+identically. A variant with another format (9:16) gets portrait pictures of its own. Pictures no
+config uses any more are listed by `vidgen imagegen`, never deleted.
+
+```
+$ vidgen imagegen my_video --dry-run
+would generate 5deed4af8e8001e7.png for harbour (1536x1024, gpt-image-1 medium, ~$0.063)
+    prompt: a quiet harbour at dawn, fishing boats, mist over the water. Style: flat vector illustration, ... Avoid: people; text, watermarks.
+dry run: 2 picture(s) to generate, estimated $0.13 (OpenAI list prices of 2025; check current pricing); 0 up to date
+$ vidgen imagegen my_video
+[1/2] generated 5deed4af8e8001e7.png for harbour (14.2 s)
+...
+```
+
+| option | |
+|---|---|
+| `--dry-run` | list the pictures to generate with their prompts and an estimated cost (OpenAI's list prices when this was written; no key needed) |
+| `--force` | generate again even when the picture exists (a new picture replaces it) |
+| `--scene ID` | only this scene's pictures (repeatable) |
+| `--variant NAME` | a variant: its format, prompts and `imagegen` settings |
+
+Requests are retried on rate limits and server errors (honouring `Retry-After`), not on an
+exhausted quota or a refused prompt; the provider's error message is shown.
+
+**Writing prompts.** Image generators draw letters, numbers, charts and logos poorly (garbled
+words, made-up values): `vidgen validate` warns when a prompt quotes text or asks for a sign,
+label, title, logo, chart or diagram. Put words on screen with vidgen (a caption, a title, a
+callout) and data in its chart scenes; ask the generator for the picture only (`negative: text`
+helps). Use one project `style` so the pictures of a video match.
+
+**Responsible use.** vidgen adds no content filter of its own: the provider's usage policies
+apply and its safety system may refuse a prompt (the error says so). Do not generate pictures
+of real people or brands that could mislead, and say that pictures are generated when that
+matters to the viewer. The `revised_prompt` in the sidecar shows what the model made of the
+prompt.
+
+## Languages and translations
+
+A video in another language is usually a [variant](#variants) with a `language:` and a
+translation file:
+
+```yaml
+language: en                      # optional: the base config's language (none: English rules)
+variants:
+  pt:
+    language: pt-BR               # BCP-47 tag
+    translations: translations/pt.yaml   # written by `vidgen translate-template --variant pt`
+    pronunciation: {LaTeX: "látec"}      # the base's entries, said the Portuguese way
+    voice: {voice_id: "XXXXXXXXXXXXXXXXXXXX"}   # optional: another voice (eleven_multilingual_v2 speaks both)
+```
+
+**`language`** (top level or per variant; a BCP-47 tag, written as you like it and normalised:
+`PT-br` is `pt-BR`) changes:
+
+| what | how |
+|---|---|
+| SRT and [`captions`](#captions) cues | punctuation breaks cues in every language (`.!?…` and `。！？`, `,;:` and `، 、，`, dashes, before `¿ ¡ «`); the words a phrase starts with (conjunctions, prepositions) and the words that lean on the next one (articles, prepositions: never at a line end) are listed for English, Portuguese, Spanish, French, German and Italian; other languages break at punctuation only (a neutral rule set). Word times: a silent final `e` only in English and French |
+| `narration_speed` lint | the language's words-per-second range, or characters per second for languages without one (see [lint](#lint-vidgen-lint)) |
+| ElevenLabs | `language_code` for models that accept one (see [voice](#voice-voice)) |
+| the MP4 | the audio stream's `language` tag (ISO 639-2: `por`, `eng`...) |
+| `timings.json` | `language` |
+| [pronunciation](#pronunciation-pronunciation) | entries with a `language` apply only to videos in it |
+
+A video without `language` follows the English rules and sends no language, exactly as before
+languages existed. Each variant's outputs are its own (`<output>_<variant>.mp4`, `.srt`,
+`_chapters.txt`, `_thumbnail.png`), so a translated variant's subtitles, chapter titles and
+thumbnail are in its language when their texts are translated.
+
+**Translation files.** `vidgen translate-template --variant pt [--language pt-BR] [--output FILE]
+[--json]` lists every translatable text of the variant in a YAML file (the variant's
+`translations:` file, else `translations/<variant>.yaml`) with the source text, a hash of it
+and an empty translation:
+
+```yaml
+version: 1
+language: pt-BR
+source_language: en
+entries:
+  title:
+    source: "vidgen: the built-in scenes"
+    hash: e3a65b6320
+    text: "vidgen: as cenas prontas"
+  scenes.intro.beats.intro_b1.text:
+    source: This whole video comes from one config file, with no Python code at all.
+    hash: 08bb27bb38
+    text: Este vídeo inteiro vem de um único arquivo de configuração, sem nenhuma linha de código Python.
+  scenes.sizes.params.labels[0]: {source: Preview 480p, hash: e4a94ea70b, text: Prévia 480p}
+  scenes.picture.params.caption: {source: Images can slowly zoom and pan, hash: 8d3d9f9450, text: null}
+references:
+  scenes.sizes.beats.sizes_b3.actions[1].highlight: scenes.sizes.params.labels[0]
+```
+
+| key | | |
+|---|---|---|
+| `version` | `1` | file format |
+| `language` / `source_language` | none | the translation's / the source's language (`--language` / `--lang`, else the variant's `language`) |
+| `entries` | `{}` | key → `{source, hash, text, stale, old_source, obsolete}`, or the translation alone (`key: text`, no staleness check) |
+| `references` | `{}` | places that name a translated text (an action target `bar:<label>`, a `highlight` by label) → that text's key; written by the command |
+
+| entry key | | |
+|---|---|---|
+| `source` | | the text in the config (for the translator; the `hash` decides) |
+| `hash` | | the first 10 hex digits of the source's SHA-1 when it was translated |
+| `text` | `null` | the translation; empty: the source text is shown |
+| `stale` | `false` | the source changed since the text was translated (set by the command): not used until you check it and delete the flag |
+| `old_source` | | the source the stale translation was made from |
+| `obsolete` | `false` | the key is gone from the config; kept so the text is not lost |
+
+When the project loads, every entry with a translation whose source still matches its `hash` (or
+its `source`, without a hash) replaces the text in the raw config before it is validated, so the
+narration, the TTS, the SRT, the captions, the scenes' on-screen text, chapter titles, MP4 tags
+and the thumbnail all follow. Then each `references` place that still names the source text is
+renamed (`bar:Preview 480p` → `bar:Prévia 480p`, `point:sparse@8` → `point:esparso@8`). A
+translated beat text changes the beat's spoken text, so the variant gets its own audio folder
+`audio/<variant>/` and `vidgen tts --variant pt` voices only the translated beats there (the
+others are copied from `audio/`). A missing file is not an error: every text shows its source.
+
+**Keys** are config paths with ids instead of positions where there are ids: `title`,
+`metadata.title|album|comment|description`, `chapters.intro`, `thumbnail.title|subtitle`,
+`overlays.<id>.<option>` (a lower third's `name`, a watermark's `text`), `scenes.<id>.chapter`
+(or `.chapter.title`), `scenes.<id>.beats.<beat id>.text`, `scenes.<id>.beats.<beat
+id>.actions[<n>].label` (callouts), `scenes.<id>.overlays.<id>.<option>` and
+`scenes.<id>.params.<path>`. In a path, `[3]` is a list item, `["a key"]` a mapping value
+under a key that is not a name, `{"key"}` the mapping key itself (a chart series written as
+`series: {baseline: [...]}`), `=id` a shorthand string standing for `{id: string}` (a
+`diagram` node `Data` is `{id: Data}`; its label defaults to the id) and `$:` the text after the
+first `:` of a shorthand string (a diagram edge `"a -> b: label"`).
+
+**What is translatable** is declared by the scene types: every param that is shown as text
+(`title`, `heading`, `caption`, labels, bullet items, table cells, legend names, axis labels,
+units, notes, callout labels...; JSON Schema `x-vidgen-text: text`), not ids, paths, colours,
+icons, number formats, code or LaTeX. Params that name a text of the scene (`highlight: "4K"` of
+a bar chart, `now` of a timeline; `x-vidgen-text: ref`) and action targets naming one
+(`bar:4K`, `item:<text>`, `point:<series>@N`) follow its translation through `references`.
+Project scene types mark their own params with `TranslatableStr` / `TextRef`
+(docs/EXTENDING.md).
+
+**Updating.** Run the command again after editing the config: it keeps every translation whose
+source is unchanged; a changed source keeps the old text with `stale: true` and `old_source` (not
+used until checked); a text that moved (an item inserted before it) is found again by its hash
+in the same scene; a translated key that is gone is kept with `obsolete: true`, an untranslated
+one dropped. It prints `texts: 73 (54 translated, 19 to translate); 4 references`.
+
+**`vidgen validate`** warns (it does not fail) about texts left in the source language (listed),
+stale translations, entries that name nothing in the config, places that name a translated text
+but are not in `references` (run the command again), a file whose `language` differs from the
+video's, a missing file, and base pronunciation entries a variant in another language keeps. It
+prints `language [pt]: pt-BR (translations/pt.yaml: 54 translated)`; `validate --json` has
+`language` and `translations` (top level and per variant).
+
+Known limits: translations change texts that exist in the config (a default such as a stat's
+`decimal_mark` cannot be added by a translation file; set it in the scene); number formats
+(`value_format`, `x_format`) and the bundled country names of the `map` scene are not
+localised (give a country an explicit `label`); a `map` arc written `"A -> B"` naming a pin's
+label, `lint_ignore` patterns and `point:<series>@<label>` targets naming a translated point
+label are not followed; text in scripts without spaces (Chinese, Japanese) is cut into cues
+only at punctuation.
+
+## Sound effects (`sfx`)
+
+Short sounds under the narration: a whoosh as a card slides in, a pop per item, a tick per step.
+vidgen synthesises its own set (no recordings, no licences) and mixes them, sample-exact, into the
+video's sound when the scenes are joined. Three ways to place one:
+
+```yaml
+sfx: {auto: false, gain: 0}            # optional, video-wide (below)
+scenes:
+  - id: part2
+    type: chapter
+    params: {title: "Results"}
+    duration: 2.5
+    sfx:                               # at seconds from the scene's start (silent scenes too)
+      - whoosh                         # a plain name: at 0
+      - {sound: chime, at: 1.2, gain: -3}
+  - id: points
+    type: bullets
+    params: {items: [Fast, Cheap, Good]}
+    beats:
+      - text: "Three things matter."
+        actions:                       # a beat action, at a fraction of the beat (like every action)
+          - sfx: pop                   # at 0: when the beat starts
+          - sfx: riser
+            at: 0.6
+            align: end                 # the riser ends (at its loudest) at 0.6 of the beat
+            params: {duration: 1.5}
+```
+
+In scene code (extensions): `self.sfx("pop")` (now) or `self.sfx("chime", at=2.0, gain=-3,
+pitch=2)`; see docs/EXTENDING.md.
+
+**Built-in sounds** (`vidgen list-sfx` prints what each one sounds like, `--render-dir DIR`
+writes them as WAV files to listen to):
+
+| sound | default length | what it sounds like | use it for |
+|---|---|---|---|
+| `whoosh` | 0.6 s (0.2–3) | soft band-passed noise sweeping up ~380 Hz → ~2.7 kHz, swelling to a peak at 55% | a slide, card or element moving in; a camera move |
+| `swoosh` | 0.45 s (0.15–3) | the reverse: the band falls ~2.7 kHz → ~380 Hz, peaking early | something leaving or being swapped out |
+| `pop` | 0.12 s (0.05–0.4) | a round bubble "bloop", ~480 → ~890 Hz in 30 ms | an item, bullet, icon or dot appearing |
+| `click` | 0.03 s (0.01–0.1) | a crisp 3 ms UI click around 3.2 kHz | a selection, a toggle, a cursor click |
+| `tick` | 0.09 s (0.03–0.3) | a soft wooden tick at 1.5 kHz, ~20 ms | counting, timeline marks, steps |
+| `typing` | 1 s (0.2–8) | irregular soft key clicks, 6–14 per second | text or code being typed |
+| `riser` | 2 s (0.5–8) | rising noise band (~250 Hz → ~4.3 kHz) + a faint sine glide, louder to the end | tension before a reveal (`align: end`) |
+| `chime` | 1.6 s (0.4–5) | a clear bell note at A5 with soft overtones, ringing out | a key insight, a result |
+| `success` | 0.9 s (0.4–3) | two soft bell notes, E5 then B5 | a check mark, a goal reached |
+| `error` | 0.5 s (0.3–2) | two muted notes falling G4 → E♭4 | a mistake, a failing case |
+| `thud` | 0.45 s (0.15–1.5) | a soft low impact, 110 → 55 Hz with a muffled knock | something landing, a big number |
+
+| key | default | |
+|---|---|---|
+| `sound` | required | a built-in sound or the project's own (below); in an action written as `- sfx: NAME` (or `sound: NAME`) |
+| `at` | `0` | scene `sfx:` list: seconds from the scene's start; beat action: fraction of the beat's narration, as for every action (rounded to a frame) |
+| `gain` | `0` | dB, -60 to 12; at 0 a sound's loudest 400 ms is −27 LUFS (K-weighted, one channel), about 7 dB under ElevenLabs narration, with peaks at most −9 dBFS |
+| `pan` | `0` | -1 left, 0 centre (full level on both channels), 1 right (equal-power) |
+| `align` | `start` | `start`: the sound starts at `at`; `end`: it ends there |
+| `params` | `{}` | `duration` (seconds, within the sound's range), `pitch` (semitones, -24 to 24, default 0), `intensity` (0 to 1, default 0.5: brighter and up to 3 dB louder towards 1) — built-in sounds only |
+
+Video-wide `sfx:`:
+
+| key | default | |
+|---|---|---|
+| `auto` | `false` | add soft sounds to built-in animations: `reveal` → pop, `highlight` → tick, `callout` → click, `zoom` → whoosh, `transform` → swoosh (when the action starts animating; not in a beat that has its own `sfx` actions), and a whoosh at the start of every `chapter` card |
+| `gain` | `0` | dB added to every sound effect of the video |
+
+- **Project sounds**: `assets/sfx/<name>.wav` (also `.flac`, `.ogg`, `.mp3`; names of letters,
+  digits, `_` and `-`) adds a sound, or replaces the built-in of that name. Played at their own
+  level (no loudness normalisation; `gain` still applies) and without `params`.
+- **Timing.** A beat action's sound plays exactly at its `at` (rounded to a frame), even while the
+  scene animates (other actions wait for the scene's animation). A sound that runs past its
+  scene's end goes on over the next scene (the last scene's is cut at the video's end).
+- **Mixing.** The sounds are not part of the scenes' own renders (`build/.../scenes/*.mp4`, the
+  storyboard): `vidgen render` places every scene's sounds on one track for the whole video
+  (`build/.../padded/sfx.wav`, 48 kHz) and adds it to the narration when it writes the MP4 (with
+  [music](#background-music-music), into the final mix; effects never duck the music).
+  `--no-audio` renders have none. The sounds are listed per scene in `timings.json` (`sfx`: video
+  times, sound, gain, pan, align, params, beat).
+- **Checks.** `vidgen validate` reports unknown sounds (with a suggestion) and params outside a
+  sound's range; a sound starting after its scene ends is a render warning.
+
+### `vidgen list-sfx`
+
+`vidgen list-sfx [PROJECT] [--render-dir DIR] [--json]` lists the built-in sounds and the project's
+`assets/sfx` with their length, loudness and peak, and for built-ins a precise description of the
+sound and when to use it (an AI author cannot listen); `--render-dir` also writes each sound at
+its defaults as `DIR/<name>.wav`. JSON: see [below](#vidgen-list-sfx---json).
+
+## Background music (`music`)
+
+A music bed under the whole video (or under parts of it), ducked while the narrator speaks.
+vidgen generates three ambient beds itself (no recordings, no licences); any audio file FFmpeg
+reads works too.
+
+```yaml
+music: calm                            # a bed or a file, with the defaults below
+```
+
+```yaml
+music:                                 # the long form: one cue over the whole video
+  source: assets/music/theme.mp3       # a built-in bed, or a file under the project
+  volume: -2                           # dB
+  start: 12.5                          # seconds into the file (skip its intro); loops restart here
+  loop: true                           # repeat while the video lasts (a file's seam cross-fades)
+  crossfade: 2.0
+  fade_in: 1.5
+  fade_out: 3.0                        # ends with the video
+  duck: {depth: 12, attack: 0.4, release: 1.0, hold: 1.5, clips: true}   # or duck: false
+scenes:
+  - id: interview
+    type: video_clip
+    params: {path: assets/interview.mp4}
+    duration: 20
+    music: false                       # no music here: it fades out before, back in after
+  - id: outro
+    type: end_card
+    params: {title: "Thanks"}
+    duration: 4
+    music: {volume: 4}                 # louder over the end card
+```
+
+```yaml
+music:                                 # a list of cues: changing tracks
+  - {source: calm, to: part2}          # from the first scene to the end of scene part2
+  - {source: bright, from: results}    # from scene results to the end
+```
+
+**Built-in beds** (`vidgen list-music` describes them, `--render-dir DIR` writes one loop of
+each as WAV): seamless loops, generated in about a second when the video is joined.
+
+| bed | loop | what it sounds like | use it for |
+|---|---|---|---|
+| `calm` | 60 s, D major, no beat | a slow, warm synth-string pad, chords held 7.5 s and cross-faded, a quiet sub-bass, an airy upper layer swelling twice a minute; no percussion, no melody | calm explainers, serious topics, long narration |
+| `pulse` | 40 s, A minor, 96 BPM | a soft plucked eighth-note arpeggio over a muted pad, a gentle low thump on every beat; chords every two bars | tech / product explainers, walkthroughs, data stories |
+| `bright` | 48 s, C major, 120 BPM | a brighter pad, a plucked arpeggio an octave up, a sparse soft bell melody; I–V–vi–IV style | launches, tutorials, upbeat social clips |
+
+| key | default | |
+|---|---|---|
+| `source` | required | `calm`, `pulse`, `bright`, or an audio file under the project (`assets/music/x.mp3`; wav, flac, ogg, mp3, m4a, ...) |
+| `volume` | `0` | dB, -60 to 12; at 0 the music is −28 LUFS integrated (beds are made at that level, files are measured and matched to it): about 6.5 dB under ElevenLabs narration (≈ −21.4 LUFS) in its pauses |
+| `start` | `0` | seconds into the source where it starts; a loop restarts there |
+| `loop` | `true` | repeat the source as long as the cue lasts; `false`: it plays once and fades out at its end |
+| `crossfade` | `2.0` | seconds over which a file's end cross-fades (equal power) into its start at every repeat; beds loop seamlessly |
+| `fade_in` | `1.5` | seconds of fade-in at the cue's start |
+| `fade_out` | `3.0` | seconds of fade-out ending at the cue's end (the video's end) |
+| `duck` | see below | ducking under the narration; `false` for none |
+| `from` | the first scene | (in a list of cues) the scene the cue starts with |
+| `to` | the last scene | (in a list of cues) the scene the cue ends with; cues may not overlap |
+
+**Ducking** (`duck:`): the music goes down while the narrator speaks — keyed off the narration
+alone: each beat from its start to the end of its speech (the MP3's trailing silence cut off; the
+whole beat when it has no audio yet). Sound effects never duck it.
+
+| key | default | |
+|---|---|---|
+| `depth` | `12` | dB the music drops under speech (0: no ducking); with the defaults the music is ~18.5 dB under the voice while it speaks |
+| `attack` | `0.4` | seconds the music takes to go down; it is fully down when the speech starts (the mix looks ahead) |
+| `release` | `1.0` | seconds it takes to come back after the speech |
+| `hold` | `1.5` | pauses shorter than this stay ducked (no pumping between beats); longer pauses, silent scenes and the gaps between narrated scenes bring the music up |
+| `clips` | `true` | a `video_clip` scene whose clip plays sound (not `mute`, `volume` above 0) also ducks the music, for the whole scene |
+
+A scene's `music:` — `false` (none: it fades out over the 0.75 s before the scene, back in over
+the 0.75 s after) or `{volume: dB}` (added to the cue's volume during the scene, ramped the same
+way). Between two cues the first fades out at the end of its last scene and the next fades in.
+
+- **Mixing.** Music is applied when the scenes are joined (it is not in the scenes' renders or
+  the storyboard, and changing it re-renders nothing): the narration (with clip sound), the
+  sound effects and the music are summed, 48 kHz, into `build/.../padded/mix.wav` (24-bit),
+  which the final MP4 encodes. `--no-audio` renders have no music.
+- **Checks.** `vidgen validate` reports a source that is neither a bed nor an existing file, and
+  cues naming unknown scenes, out of order or overlapping.
+- `timings.json` gains `mix` (below) with each cue's span (`music: [{source, kind, from, to,
+  start, end, volume, duck}]`).
+
+### Loudness of the final mix (`audio`)
+
+```yaml
+audio: {normalize: auto, target_lufs: -16, true_peak: -1.5}   # the defaults
+```
+
+| key | default | |
+|---|---|---|
+| `normalize` | `auto` | scale the final mix to `target_lufs`: `true`, `false`, or `auto` = only when the video has music (a narration-only video keeps the narration's own level, that of its MP3s). Never while no beat has its narration MP3 yet (a preview timed from word counts would lift the music to the target on its own) |
+| `target_lufs` | `-16` | integrated loudness (EBU R128 / ITU-R BS.1770-4, gated) of a normalised mix: −16 for web and social platforms (−14 for louder streaming targets), −23 / −24 for broadcast |
+| `true_peak` | `-1.5` | dBTP ceiling of a mixed track: a look-ahead limiter (10 ms, smooth) keeps the 4x-oversampled peaks under it, so the louder mix never clips |
+
+When the mix is written (music, or `normalize: true`) vidgen measures the sum, applies one gain to
+reach the target, then the limiter; everything is deterministic numpy. Narration plays at its
+MP3s' level (a mono MP3 at full level on both channels; ElevenLabs voices measure about −21.4
+LUFS), so reaching −16 lifts it ~5 dB and the limiter shaves speech peaks by a few dB. Without music and with `normalize: auto` / `false` the narration and effects are joined as
+before (FFmpeg sums them), and the loudness is only measured. `vidgen render` prints the result
+(`loudness: -16.0 LUFS integrated, true peak -1.9 dBTP (normalised to -16, +5.4 dB; music:
+calm)`), and `timings.json` / `render --json` carry `mix`: `{mixed, normalized, target_lufs,
+true_peak_limit, gain_db, integrated_lufs, true_peak_dbtp, limited_db, music}` (measured on the
+mix before the AAC encode; the limiter aims 0.4 dB under `true_peak` because the encode can
+raise the peak by ~0.2 dB, so the MP4 stays under it).
+
+### `vidgen list-music`
+
+`vidgen list-music [PROJECT] [--render-dir DIR] [--json]` describes the built-in beds in words —
+instruments, key, tempo, chords, mood, frequency range — for an author who cannot listen, and
+lists the project's `assets/music` files (length, measured loudness); `--render-dir` writes one
+loop of every bed as `DIR/<name>.wav`. JSON: see [below](#vidgen-list-music---json).
+
+## Transitions (`transition`)
+
+How the video passes from one scene to the next. Without any, scenes are joined by cuts (every
+built-in scene fades out over its last 0.5 s by itself).
+
+```yaml
+transition: crossfade                  # the default between scenes (not before the first one)
+scenes:
+  - id: intro
+    type: title
+    params: {title: "Hello"}
+    transition: fade_color             # the first scene may fade in from a colour
+    beats: [{text: "Welcome."}]
+  - id: part2
+    type: chapter
+    params: {number: 2, title: "Results"}
+    duration: 3
+    transition: {type: fade_color, color: surface, duration: 1.2}   # into this scene
+  - id: summary
+    type: bullets
+    params: {items: ["Fast", "Small"]}
+    transition: cut                    # this one is a plain cut
+    beats: [{text: "In short: fast and small."}]
+  - id: chart
+    type: bar_chart
+    params: {title: "Speed", labels: ["A", "B"], values: [3, 5]}
+    transition: push                   # slides in from the right, pushing the bullets out to the left
+    beats: [{text: "B is faster."}]
+  - id: outro
+    type: end_card
+    params: {title: "Thanks"}
+    transition: {type: wipe, direction: up, soft: true}   # a soft edge sweeps up, uncovering it
+    duration: 3
+```
+
+| type | what you see | timing |
+|---|---|---|
+| `cut` | the next scene straight after the previous one (which fades out by itself) | unchanged |
+| `crossfade` | the two scenes blend into each other | the scenes **overlap** by `duration`: the next one starts that much earlier, the video gets that much shorter |
+| `fade_color` | the previous scene fades to `color` over the first half of `duration`, the next one fades in from it over the second half | no overlap: the video keeps its length |
+| `push` | the next scene slides in from one side and pushes the previous one out the other side | overlap, like `crossfade` |
+| `wipe` | an edge sweeps across the picture, uncovering the next scene behind it (`soft`: a blurred edge) | overlap, like `crossfade` |
+
+| key | default | |
+|---|---|---|
+| `type` | `cut` | `cut`, `crossfade`, `fade_color`, `push` or `wipe` (a plain string is the type with its defaults) |
+| `duration` | `crossfade` 0.5, `fade_color` 1.0, `push` / `wipe` 0.6 | seconds, at most 5; not allowed on a cut |
+| `color` | the theme's `background` | `fade_color` only: a theme colour token (`surface`, `accent`, ...), `background`, or hex |
+| `direction` | `left` (16:9, square), `up` (9:16) | `push` / `wipe` only: where the pictures (push) or the edge (wipe) move: `left`, `right`, `up`, `down`. `left` = the next scene comes in from the right; `up` = from below (like scrolling a phone feed) |
+| `soft` | `false` | `wipe` only: a soft, blurred edge (FFmpeg's `smooth*` transitions) instead of a hard one |
+
+A scene's `transition:` is the way **into** that scene; the video's `transition:` is the default
+for every scene but the first (a crossfade, push or wipe on the first scene is an error: nothing
+comes before it; `fade_color` there fades the video in from the colour). A video-level `push`
+with no `direction` follows each variant's frame: left in the 16:9 video, up in a 9:16 variant.
+
+- **Speech never overlaps.** A transition covers only the *silent end* of the scene before it:
+  the frames after its narration ends (its pad and fade-out; a whole silent scene). When that is
+  shorter than the transition (a long crossfade, a scene without a fade-out), the scene before is
+  **held** on its last picture that much longer, and `vidgen validate` says so ("'a' is held
+  0.20 s longer..."). The defaults fit the built-in scenes' 0.5 s fade-out plus the 0.35 s pad,
+  so nothing is held. The next scene's narration starts with it, during a crossfade.
+- **The outgoing scene stops fading out by itself**: with a transition other than a cut after it,
+  a built-in scene (anything ending with `self.finish()`) holds its picture over its 0.5 s outro
+  and the transition takes it away.
+- **Every time follows**: scene starts in `timings.json` (scenes with a transition get
+  `transition: {type, duration, overlap}`, plus `direction` for a push / wipe), the SRT, captions, chapters and the chapter
+  indicator, the progress bar, lower thirds, sound effects, music cues and ducking, storyboard
+  times. They all come from the [planned timeline](#overlays), which knows the overlaps.
+- **Overlays stay put.** During a crossfade both scenes draw the *incoming* scene's overlays
+  (captions, watermark, progress bar, ...), so the blend shows them once, unchanged — no doubled
+  captions or ghosted watermark. A `fade_color` fades the scene's picture only; overlays stay on
+  top of the colour. A `push` or `wipe` moves the pictures, so overlays are kept out of them: both
+  scenes render the frames they share *without* overlays, the incoming scene's render writes
+  those frames' overlays to a separate clip (`build/.../scenes/<id>.overlay.mov`, RGBA), and the
+  join draws it over the moving pictures — the watermark, progress bar and captions stay where
+  they are and appear once. (The overlays switch to the incoming scene's at the transition's
+  start, as in a crossfade.) Stills of a scene taken inside such a transition show no overlays;
+  beat-end stills are never there.
+- **Sound**: in a crossfade the scenes' sound overlaps too: the earlier scene's silent tail fades
+  out under the next scene's start (only a clip's sound can be there). Effects and music are
+  placed on the video's timeline as always.
+- **Encoding**: with any crossfade, push or wipe the join blends the scenes with FFmpeg (`xfade`:
+  `fade`, `slide<direction>`, `wipe<direction>` / `smooth<direction>`) and encodes the video once
+  (H.264, CRF 18, visually lossless next to the scenes' own encoding) instead of copying the
+  scenes' streams (the gallery's 3:49 preview: ~40 s on 2 CPUs, most of it the H.264 encode;
+  much less than rendering its scenes); a video with only cuts and
+  colour fades is joined as before. Colour fades are drawn inside the scenes' renders, so
+  storyboards and stills show them; crossfades, pushes and wipes exist only in the joined video
+  (`vidgen render --scene ID` alone shows the outgoing scene held still).
+- A transition changes the renders of the scenes on both sides of it (the storyboard re-renders
+  both). `vidgen render --scene ID` reuses the other scenes as they are: render the scene before
+  a new transition too, or the join shortens a crossfade to the silence it finds (with a
+  warning).
+
+### Continuity: carrying objects into the next scene (`carry`)
+
+A scene can start with objects of the scene before it, exactly where, how big and in which
+colour they were — a *match cut* — and then move them into its own layout:
+
+```yaml
+  - id: part2
+    type: chapter
+    params: {number: 2, title: "Charts and numbers", icon: chart-column}
+    duration: 3
+  - id: speedup
+    type: stat
+    transition: cut                 # a cut: the carried icon does not move at the cut
+    carry: [icon]                   # the card's icon flies into this scene's icon
+    params: {value: 0.4, unit: "min", label: "per minute of video", icon: chart-column}
+    beats: [{text: "Renders take seconds now."}]
+  - id: part3
+    type: chapter
+    params: {number: 3, title: "Results"}
+    duration: 3
+  - id: results
+    type: bullets
+    carry: ["title -> heading"]     # the card's title becomes this scene's heading
+    params: {heading: "Results", items: ["Faster", "Smaller"]}
+    beats: [{text: "Two results stand out."}]
+```
+
+- **Entries** are [target names](#beat-actions) of the scene before (`title`, `icon`, `item2`,
+  `bar:4K`...); `"a -> b"` moves the scene before's target `a` into this scene's target `b`
+  (default: the target of the same name; `title` and `heading` stand for each other as in
+  actions). `vidgen validate` checks both names for built-in types, with suggestions.
+- **The scene before** keeps those targets on screen in its fade-out (only the rest fades) and
+  records their final look (every vector shape: outline, fill, stroke) in
+  `build/.../carry/<scene>.json`.
+- **This scene** shows that record from its first frame, so across the cut nothing changes. When
+  it brings in the destination target (its own entrance animation), the copy **moves** into it
+  instead: shape by shape when both have as many shapes (the same text or icon at another
+  place, size or colour — glyphs glide into place), else a cross-fade stretched between the two
+  boxes (a title flowing into a heading with different words). A destination the scene brings in
+  some other way makes the copy fade out as it appears; a destination the scene does not have
+  fades it out with the scene's first animation (with a warning).
+- **Transitions**: a cut (the natural choice) or a crossfade keep the carried objects in place;
+  `fade_color`, `push` and `wipe` fade or move them with the picture (`vidgen validate` warns).
+- **Rendering**: the carrying scene is rendered after the scene before it (with `--jobs` it waits
+  for it). `vidgen render --scene ID` / `storyboard --scene ID` also render the scene before when
+  its record is missing or out of date, and the carrying scene when the scene before was
+  rendered with other inputs since.
+- Only vector shapes are carried (text, icons, shapes, TeX); pictures and clips are not (a
+  warning names them). Custom scenes can take the copy themselves with `self.carry_in(name)`
+  ([EXTENDING.md](EXTENDING.md)).
 
 ## Built-in scenes
 
@@ -184,12 +1538,36 @@ its params. Conventions shared by all built-ins:
   A silent scene shows all steps within its `duration`.
 - After the last beat the scene fades out (0.5 s; 1 s for `end_card`; `text_card` does not fade).
 - **Any aspect ratio.** Layouts use the frame size, so the same config works for 16:9 and a
-  vertical 9:16 variant; long text is wrapped and shrunk to fit.
-- Text-only types need no LaTeX; only `equation` does.
+  vertical 9:16 variant; long text is wrapped and shrunk to fit. In a vertical frame short
+  content grows into the tall frame: headings and list text 1.3x (`bullets`, `icon_grid`
+  labels, `comparison`), a vertical `timeline` or a `process` column up to 1.5x, while it fits;
+  a `map` with the `world` view keeps only the longitudes of its countries, pins and arcs.
+- **Header band.** The line at the top of the frame is `heading` in `bullets`, `icon_grid`,
+  `comparison`, `timeline`, `diagram`, `process`, `network` and `title` in the charts, `table`,
+  `map`, `code`, `code_walkthrough`, `equation_derivation`, `screenshot`, `video_clip`. Every
+  one of these types accepts **both names** (also `heading_size` / `title_size`,
+  `heading_color` / `title_color`; `vidgen list-scenes` shows `(also: title)`), and the target
+  `title` selects a `heading` and the reverse. Not in `title`, `chapter` and `end_card`, whose
+  `title` is their main text.
+- **Per-beat content** is a `steps` list in `code_walkthrough`, `equation_derivation`,
+  `screenshot`, `video_clip` and `map`: step *i* plays at beat *i*. Elsewhere the scene splits
+  its content into steps itself (`reveal`); `diagram`'s explicit `steps` are such reveal steps.
+  A `highlight` param adds a last step that marks something and dims the rest; where it takes a
+  list, one item may be written alone (`highlight: Lint`).
+- **Too much content.** Types that fit their content (`table`, `timeline`, `diagram`,
+  `process`, `comparison`, `heatmap`, `pie`, `equation_derivation`, `code_walkthrough`) shrink
+  text down to the readable minimum (`vidgen lint`'s `min_font`), then scale the whole drawing
+  and log a warning at render time — `scene 'x': the timeline's 10 events do not fit this frame
+  at the readable size; split it into two timelines (or shorten titles and texts)` — not in
+  `vidgen validate`, because it depends on the variant's frame and type scale.
+- **Unknown keys** are reported with the closest names: `scenes[2].params.dim_prev: unknown
+  parameter 'dim_prev'; did you mean 'dim_previous'? (known: heading, items, ...)`.
+- Text-only types need no LaTeX; only `equation` and `equation_derivation` do.
 
 ### `title`
 
-Steps: (1) kicker, title and subtitle, (2) authors.
+Steps: (1) icon, kicker, title and subtitle, (2) authors.
+[Action targets](#beat-actions): `icon`, `kicker`, `title`, `subtitle`, `authors` (those the card has).
 
 | param | type | default | |
 |---|---|---|---|
@@ -199,12 +1577,16 @@ Steps: (1) kicker, title and subtitle, (2) authors.
 | `authors` | list[str] | `[]` | one line each |
 | `highlight` | str | `""` | part of the title drawn in `highlight_color` |
 | `color`, `highlight_color`, `subtitle_color`, `kicker_color`, `authors_color` | color | `text`, `highlight`, `text`, `primary`, `dim` | |
+| `icon` | icon | none | optional icon (name or alias, see [Icons](#icons)) |
+| `icon_color` | color | `primary` | |
+| `icon_position` | `above` \| `left` | `above` | above the kicker/title, or left of the title block, level with it (`left` falls back to `above` in a vertical frame) |
 
 ```yaml
 - id: intro
   type: title
   params:
     kicker: "TECHNICAL REPORT"
+    icon: brain-circuit
     title: "Saving 77% of the Parameters"
     highlight: "77%"
     subtitle: "in Large Language Models"
@@ -217,24 +1599,38 @@ Steps: (1) kicker, title and subtitle, (2) authors.
 ### `bullets`
 
 Steps: one per item (the heading comes with the first). `reveal: all` shows every item in beat 1.
+[Action targets](#beat-actions): `heading`, `item<N>` (1-based), `item:<text>`.
+The heading sits in the `header` region, the list is centered in the space below it. In a
+vertical video the heading is 1.3x larger and a short list grows up to 1.3x and spreads out to
+use the taller frame.
 
 | param | type | default | |
 |---|---|---|---|
-| `items` | list[str] | required | at least one |
+| `items` | list[str \| item] | required | at least one; each a string or `{text, icon}` (below) |
 | `heading` | str | `""` | |
 | `reveal` | `per_beat` \| `all` | `per_beat` | |
 | `numbered` | bool | `false` | `1.` `2.` ... instead of `marker` |
 | `marker` | str | `"•"` | |
 | `dim_previous` | bool | `false` | fade earlier items when a new one appears |
 | `size`, `heading_size` | size | `body`, `heading` | shrunk automatically for long lists |
-| `color`, `heading_color`, `marker_color` | color | `text`, `text`, `primary` | |
+| `color`, `heading_color`, `marker_color` | color | `text`, `text`, `primary` | `marker_color` also colours icons |
+
+**Icons.** An item can be `{text: "...", icon: NAME}` (`text` required, `icon` optional; plain
+strings keep working, and both forms mix in one list). The icon replaces the bullet; with
+`numbered: true` it stands between the number and the text. Icons form a column of their own,
+sized to the item text and centred on the capitals of its first line; in a list that mixes
+icons and plain items, the plain items' bullets sit centred in that column, so all texts start
+at one edge. Icons take `marker_color` and fade with their item (`dim_previous`).
 
 ```yaml
 - id: points
   type: bullets
   params:
     heading: "Takeaways"
-    items: ["Fewer parameters", "Same validation loss", "One GPU, three days"]
+    items:
+      - {text: "Fewer parameters", icon: layers}
+      - {text: "Same validation loss", icon: chart-line}
+      - "One GPU, three days"
     dim_previous: true
   beats:
     - text: "First, the model is much smaller."
@@ -242,23 +1638,88 @@ Steps: one per item (the heading comes with the first). `reveal: all` shows ever
     - text: "And it trained on a single GPU."
 ```
 
+### `icon_grid`
+
+Icons with a label (and an optional smaller sublabel) in a grid. Steps: one per item (the
+heading comes with the first), or one per entry of `groups`; `reveal: all` shows every item in
+beat 1; with `highlight`, a last step dims the other items and enlarges the highlighted one in
+`highlight_color`. Each item fades in with its icon growing from its centre.
+[Action targets](#beat-actions): `heading`, `item<N>` (1-based), `item:<label>` (icon, label and sublabel).
+
+Layout: the heading sits in the `header` region and the grid fills the space below it. Without
+`columns`, the shape (rows x columns) is chosen for the frame with `grid_shape` (see
+docs/EXTENDING.md), trying narrow and wide cells and keeping the layout whose labels and icons
+come out largest: 4 items make one row in 16:9 and a 2 x 2 grid in 9:16, 12 items 2 x 6 or (with
+longer labels) 3 x 4 in 16:9. Labels share one size (1.3x in a vertical frame), wrap inside
+their column and are reduced
+(down to the readable minimum that `vidgen lint` accepts) when they need the room; a word wider
+than its column reduces all labels. Icons are as large as the rest of the row allows (at most
+1.9 units, a quarter of the frame's shorter side). A last row with fewer items is centred;
+labels and sublabels of a row share their baselines. 2–12 items read well in 16:9 and 9:16 (at
+most 16).
+
+| param | type | default | |
+|---|---|---|---|
+| `items` | list[item] | required | 1–16 items `{icon, label, sublabel}`: `icon` (name or alias), `label` (str, required), `sublabel` (str, `""`) |
+| `heading` | str | `""` | |
+| `columns` | int | auto | fixed number of columns |
+| `reveal` | `per_beat` \| `all` | `per_beat` | ignored when `groups` is given |
+| `groups` | list[list[int \| str]] | none | reveal steps, each a list of items by 0-based index or label; every item exactly once |
+| `highlight` | int \| str | none | item (0-based index or label) emphasised in a last step |
+| `badge` | bool | `true` | draw each icon on a soft disc in its colour |
+| `icon_color` | `palette` \| color | `primary` | one colour for all icons, or `palette`: one `theme.palette` colour per item |
+| `color`, `sublabel_color`, `heading_color`, `highlight_color` | color | `text`, `dim`, `text`, `highlight` | |
+| `size`, `sublabel_size`, `heading_size` | size | `body`, `caption`, `heading` | |
+
+```yaml
+- id: stack
+  type: icon_grid
+  params:
+    heading: "What the platform covers"
+    icon_color: palette
+    highlight: "Security"
+    items:
+      - {icon: cpu, label: "Compute", sublabel: "GPUs and CPUs"}
+      - {icon: database, label: "Storage"}
+      - {icon: network, label: "Networking"}
+      - {icon: shield-check, label: "Security", sublabel: "zero trust"}
+    groups: [[0, 1], [2, 3]]       # two items per beat
+  beats:
+    - text: "Compute and storage come first."
+    - text: "Then networking and security."
+    - text: "And security matters most."
+```
+
 ### `bar_chart`
 
 Steps: all bars (`reveal: all`, default) or one per bar (`per_beat`), then — if `highlight` is
 set — a focus step that dims the other bars. Bars grow while their value labels count up.
+[Action targets](#beat-actions): `title`, `bar<N>` (1-based) and `bar:<label>`, each a bar with
+its value and category labels (beat actions can do more than the one `highlight` step).
+
+Like every chart, the title stands in the `header` band (1.3x in a vertical frame) and label
+sizes are theme size tokens that never go below the readable minimum (see
+[charts](#charts-common-to-all-chart-types)). Value labels keep their size where they can: one
+too wide for its bar shrinks a little, then a word unit (`" min"`) moves under the number, then
+it shrinks further; in a vertical frame the bars turn horizontal when even the readable size
+does not fit (or with more than 5 bars), unless `horizontal` is set.
 
 | param | type | default | |
 |---|---|---|---|
 | `labels` | list[str] | required | |
 | `values` | list[float] | required | same length as `labels`; negatives allowed |
 | `title` | str | `""` | |
-| `caption` | str | `""` | small note under the chart |
+| `caption` | str | `""` | note under the chart (e.g. the data source) |
+| `caption_size`, `caption_color` | size, color | `caption`, `dim` | |
+| `title_size`, `title_color` | size, color | `heading`, `text` | |
+| `label_size` | size | `caption` | category labels |
+| `value_size` | size | `body` (`caption` with more than 6 bars) | value labels |
 | `unit` | str | `""` | appended to every value label (`"%"`, `" ms"`) |
 | `value_format` | str | automatic | Python format, e.g. `"{:.1f}"`, `"{:,.0f}"`, `"{:.0%}"`; default shows the decimals the values need |
 | `colors` | color \| list[color] \| `palette` | `primary` | one color, one per bar, or `theme.palette` |
 | `highlight` | int \| str | none | bar index (0-based) or label |
 | `highlight_color` | color | `highlight` | highlighted value label |
-| `horizontal` | bool | auto | default: vertical bars; horizontal in a portrait frame with more than 5 bars |
+| `horizontal` | bool | auto | default: vertical bars; horizontal in a portrait frame with more than 5 bars or value labels too wide for vertical ones |
 | `reveal` | `all` \| `per_beat` | `all` | |
 | `baseline` | float | `0` | value the bars start from (e.g. `1.0` for losses; say so in `caption`) |
 
@@ -281,17 +1742,24 @@ set — a focus step that dims the other bars. Bars grow while their value label
 
 Steps: one per series (`reveal: per_beat`, default; the axes come with the first) or all
 series in beat 1 (`all`). Each line ends with a `name value` label; when those labels would be
-too wide (e.g. in portrait) the names move to a legend above the plot. Axis labels are plain
-text (no LaTeX).
+too wide (e.g. in portrait) the names move to a legend, placed in a corner of the plot that no
+line crosses (else above the plot). Axis labels are plain text (no LaTeX); tick labels that
+would collide are thinned to every second (third...) one.
+[Action targets](#beat-actions): `title`, `axes`, `series<N>` (1-based), `series:<name>` (a line with its markers
+and end label), `point:<name>@<x>` (one data point, `x` as its tick label reads:
+`point:sparse@8`; without `dots` the point appears as a dot when an action uses it).
 
 | param | type | default | |
 |---|---|---|---|
 | `x` | list[float] \| list[str] | required | numbers (increasing) or category names |
 | `series` | `{name: [values]}` or list of `{name, values, color}` | required | one value per `x` |
 | `title`, `caption` | str | `""` | |
+| `caption_size`, `caption_color` | size, color | `caption`, `dim` | |
+| `title_size`, `title_color` | size, color | `heading`, `text` | |
+| `label_size` | size | `caption` | tick and axis labels, end labels, legend |
 | `x_label`, `y_label` | str | `""` | |
 | `y_min`, `y_max` | float | from the data | |
-| `value_format` | str | automatic | for y ticks and end labels |
+| `value_format` | str | automatic | for y ticks and end labels (ticks default to the decimals they need) |
 | `x_format` | str | `"{:g}"` | for numeric `x` |
 | `unit` | str | `""` | appended to y values |
 | `reveal` | `per_beat` \| `all` | `per_beat` | |
@@ -313,14 +1781,379 @@ text (no LaTeX).
     - text: "And the sparse model, which ends lower."
 ```
 
-### `image`
+### Charts: common to all chart types
 
-Steps: (1) the image, (2) the caption. `vidgen validate` reports a missing or unsupported file
-(png, jpg, jpeg, gif, bmp, webp, tif).
+`bar_chart`, `line_chart`, `scatter`, `histogram`, `pie` and `heatmap` share their frame (and
+the axis charts their axes; the helpers are public for project charts, see EXTENDING.md
+"Charts"):
+
+- **Title** in the `header` band at the top (bold, the theme's `heading` font role, 1.3x larger
+  in a vertical frame), **caption** at the bottom; the plot gets the space between.
+- **Label sizes** are theme size tokens (`label_size`, default `caption`), never below the
+  readable minimum that `vidgen lint` checks, so they grow with the type scale (`large` in
+  9:16) instead of staying small.
+- **Ticks** are round numbers (steps of 1, 2, 2.5 or 5 x 10^k; powers of ten on a log axis),
+  written with the decimals they need and `k`/`M`/`B` from 10 000 on (`20k`), unless a format
+  is given. Labels that would collide are thinned. Gridlines are faint dashes at the labelled
+  ticks.
+- **Legends** (several series) stand in a corner of the plot that covers no data, on a faint
+  framed panel, as one row or stacked; when every corner has data, above the plot.
+- **Colours** are theme tokens: series and slices take the palette, colour scales
+  (`heatmap`) are mixed from theme colours, and text written on a filled shape (a slice, a
+  cell) switches between the theme's text and background colour so it keeps 4.5:1 contrast.
+
+### `scatter`
+
+Points of one or more series on two numeric axes. Steps: one series per beat (`reveal:
+series`, default; the axes come with the first), its points popping in from left to right;
+`groups`: the points of each `group` (in order of first use; points without one come first);
+`all`: everything in beat 1. Then, if set, the `trend` line grows (a step of its own) and the
+`highlight` step rings the chosen points and dims the others. Point labels stand beside their
+point where they cover no other point, label or trend line.
+[Action targets](#beat-actions): `title`, `axes`, `legend`, `series<N>`, `series:<name>`,
+`point:<series>@<N>` (1-based, in the order written) and `point:<series>@<label>`, `trend`
+(every trend line with its text) and `trend:<series>` (with `trend: each`).
 
 | param | type | default | |
 |---|---|---|---|
-| `path` | str | required | relative to the project folder, e.g. `assets/photo.jpg` |
+| `series` | `{name: [points]}` or list of `{name, points, color, marker}` | required | a point is `[x, y]`, `[x, y, label]` or `{x, y, label, group}`; `marker` `auto` (circle, square, triangle, diamond by position), `circle`, `square`, `triangle`, `diamond` |
+| `title`, `caption` | str | `""` | |
+| `caption_size`, `caption_color` | size, color | `caption`, `dim` | |
+| `title_size`, `title_color` | size, color | `heading`, `text` | |
+| `label_size` | size | `caption` | ticks, axis labels, point labels, legend, trend text |
+| `x_label`, `y_label` | str | `""` | axis titles |
+| `x_min`, `x_max`, `y_min`, `y_max` | float | from the data | axis ends (points outside are an error) |
+| `x_log`, `y_log` | bool | `false` | logarithmic axis (positive values) |
+| `x_format`, `y_format` | str | automatic | Python format of the tick labels |
+| `x_unit`, `y_unit` | str | `""` | appended to tick labels |
+| `trend` | `none` \| `each` \| `all` | `none` | least-squares line per series or through every point (linear axes) |
+| `trend_label` | `none` \| `equation` \| `r2` \| `both` | `none` | `y = 0.52x + 1.3`, `R² = 0.87` beside the line |
+| `trend_color` | color | series color / `text` | |
+| `reveal` | `series` \| `groups` \| `all` | `series` | |
+| `show_labels` | `all` \| `highlight` \| `none` | `all` | which point labels are written (`highlight`: only highlighted points', in the highlight step) |
+| `highlight` | list[str] | `[]` | points for a last step: `"<series>@<N>"`, `"<series>@<label>"` or a label |
+| `highlight_color` | color | `highlight` | ring color |
+| `legend` | bool | auto | default: with more than one series |
+| `point_radius` | float | auto | marker radius in units (0.11 for up to 20 points, down to 0.05) |
+
+```yaml
+- id: sizes
+  type: scatter
+  params:
+    title: "Model size vs accuracy"
+    x_label: "parameters (billions)"
+    y_label: "accuracy (%)"
+    trend: all
+    trend_label: r2
+    highlight: ["ours@2"]
+    series:
+      baselines: [[1.3, 61], [6.7, 70, "7B"], [13, 73], [65, 80, "65B"]]
+      ours: [[1.0, 66], [3.8, 72, "small"], [7.0, 75]]
+  beats:
+    - text: "Baselines improve as they grow."
+    - text: "Our models sit above them."
+    - text: "The trend makes the gap clear."
+    - text: "Especially for the small one."
+```
+
+### `histogram`
+
+A distribution as bars over value bins. Step 1 draws the axes and grows the bars from left to
+right; then, each a step of its own (so one per beat when there are enough beats): the
+`compare` outline, the `mean` marker, the `median` marker, and the `highlight` of chosen bins
+(they turn `highlight_color`, the others dim). Bins come from raw `values` — `bins` as a count
+of equal bins, or a rule whose width is rounded to 1, 2, 2.5 or 5 x 10^k with edges on its
+multiples (so the axis reads 10, 20, 30), or a `bin_width` — or from `counts` with their
+`edges`. Mean and median are exact from values, estimated from counts.
+[Action targets](#beat-actions): `title`, `axes`, `legend` (with `compare`), `bin<N>`
+(1-based), `bin:<range>` (the edges as the axis writes them: `bin:10-20`), `compare`, `mean`,
+`median`.
+
+| param | type | default | |
+|---|---|---|---|
+| `values` | list[float] | — | raw data (or `counts` + `edges`) |
+| `bins` | int \| `auto` \| `sturges` \| `sqrt` \| `fd` | `auto` | equal bins over the range, or a rule (numpy's; `fd` = Freedman-Diaconis) with round widths; at most 60 bins |
+| `bin_width` | float | none | width; edges on its multiples (or from `bin_range`'s start) |
+| `bin_range` | [low, high] | the data's | values outside are left out |
+| `counts`, `edges` | list[float] | — | counts per bin and the `len(counts) + 1` increasing edges, instead of `values` |
+| `name` | str | `""` | legend name (shown with `compare`; default `data`) |
+| `compare` | `{name, values \| counts, color}` | none | a second distribution over the same bins, drawn as an outline (`color` `secondary`) |
+| `percent` | bool | `false` | each bin's share of its total (%) instead of counts |
+| `mean`, `median` | bool | `false` | dashed marker with its value above the plot |
+| `highlight` | list[int \| str] | `[]` | bins (0-based index or range `"10-20"`) for a last step |
+| `title`, `caption` | str | `""` | |
+| `caption_size`, `caption_color` | size, color | `caption`, `dim` | |
+| `title_size`, `title_color` | size, color | `heading`, `text` | |
+| `label_size` | size | `caption` | ticks, axis labels, marker labels, legend |
+| `x_label`, `y_label` | str | `""` | axis titles |
+| `x_format`, `y_format` | str | automatic | Python format of the edges (also in `bin:` names) / y ticks |
+| `x_unit` | str | `""` | appended to x ticks and the mean / median values |
+| `color` | color | `primary` | bars |
+| `mean_color`, `median_color`, `highlight_color` | color | `accent`, `tertiary`, `highlight` | |
+
+```yaml
+- id: latency
+  type: histogram
+  params:
+    title: "Response times"
+    x_label: "milliseconds"
+    values: [12, 15, 17, 18, 21, 22, 23, 25, 26, 28, 30, 31, 33, 35, 38, 41, 45, 52, 61, 75, 97, 120]
+    mean: true
+    median: true
+    highlight: ["40-50"]
+  beats:
+    - text: "Most requests finish quickly."
+    - text: "The slow tail pulls the mean up."
+    - text: "The median stays lower."
+    - text: "These are the requests to look at."
+```
+
+### `pie`
+
+Shares of a whole as slices of a circle, or of a ring with `donut: true` (the total, or
+`center`, in the hole). Step 1 sweeps every slice round from the top, clockwise, then writes
+the labels (`reveal: all`, default); `per_beat` sweeps slice *i* in at beat *i*. With
+`highlight`, a last step pulls that slice out of the pie and dims the others. Each share is
+its value / the total.
+
+**Labels** stand inside their slice when they fit there (in the slice's colour-contrasting
+text colour), else outside with a leader line, stacked in a column on each side so they never
+overlap; when side columns would leave the pie too small (a 9:16 frame) or cannot hold them,
+those labels go into a key of colour swatches below the pie (beside it in 16:9). With more than
+6 slices (or `legend: true`) every label is in that key, which is then the `legend`. Many small
+slices: group them with `other_below: 3` (slices under 3 % become one `Other` slice, drawn
+last in `other_color`) or `max_slices`. Label text shrinks towards the readable minimum before
+anything is left out (a warning names what did not fit).
+[Action targets](#beat-actions): `title`, `slice<N>` (1-based, as drawn, after grouping),
+`slice:<label>` (a slice with its label and leader), `center` (a donut's centre text),
+`legend` (with the legend).
+
+| param | type | default | |
+|---|---|---|---|
+| `labels`, `values` | list[str], list[float] | required | one value (≥ 0) per unique label |
+| `donut` | bool | `false` | a ring instead of a full pie |
+| `hole` | float | `0.58` | donut hole radius / outer radius (0.3–0.85) |
+| `center` | str | the total | text in the donut hole (`value_format` + `unit`); `""` for none |
+| `center_label` | str | `""` | a smaller line under it (`visits`) |
+| `center_size` | size | `title` | fitted into the hole |
+| `show_values` | `percent` \| `value` \| `both` \| `none` | `percent` | under each name: `42%`, the value, `42% · 1,200` or nothing |
+| `value_format`, `unit` | str | automatic, `""` | format of values and the total |
+| `percent_decimals` | int | auto | 0, or 1 when a slice is under 1 % |
+| `colors` | `palette` \| color \| list[color] | `palette` | the palette in order (lighter shades past its length) |
+| `sort` | bool | `false` | largest slice first |
+| `other_below` | float | none | group slices under this share (%) into one |
+| `max_slices` | int | none | keep the largest `max_slices - 1`, group the rest |
+| `other_label`, `other_color` | str, color | `Other`, `dim` | the grouped slice |
+| `label_position` | `auto` \| `outside` | `auto` | `outside`: never inside a slice |
+| `legend` | bool | auto | names in a legend (default: with more than 6 slices) |
+| `reveal` | `all` \| `per_beat` | `all` | |
+| `highlight` | int \| str | none | slice (0-based index or label, as drawn) pulled out in a last step |
+| `explode` | float | `0.1` | how far it moves out (share of the radius, 0–0.3) |
+| `start_angle`, `clockwise` | float, bool | `90`, `true` | where the first slice starts (degrees; 90 = top) and the direction |
+| `label_size` | size | `caption` | labels and legend |
+| `title`, `caption` | str | `""` | |
+| `caption_size`, `caption_color` | size, color | `caption`, `dim` | |
+| `title_size`, `title_color` | size, color | `heading`, `text` | |
+
+```yaml
+- id: traffic
+  type: pie
+  params:
+    title: "Visits by device"
+    donut: true
+    center_label: "visits"
+    labels: ["Mobile", "Desktop", "Tablet", "TV", "Watch"]
+    values: [5200, 3100, 640, 120, 80]
+    other_below: 2           # TV and Watch become "Other"
+    highlight: Desktop
+  beats:
+    - text: "Most visits come from phones."
+    - text: "Desktop is still a third of them."
+```
+
+### `heatmap`
+
+A matrix of values as coloured cells: row labels on the left, column labels on top, a
+colour-scale legend (a gradient bar with round ticks) right of it (below it in 9:16). Step 1
+brings the labels and legend and the cells in a wave from the top left (`reveal: all`,
+default); `rows` reveals one row per beat. With `highlight`, a last step outlines the chosen
+cells, rows or columns in `highlight_color` and dims the rest.
+
+**Colours** come from theme colours, interpolated perceptually (OKLab, so equal steps in
+value look like equal steps in colour): `sequential` runs from a faint tint of `color` to
+`color` (larger values stand out more on any background); `diverging` runs from `low_color`
+through a near-background neutral at `center` to `high_color`, symmetric around `center`;
+`auto` picks diverging when values lie on both sides of `center`. Each value is written in the
+theme's text or background colour, whichever reads better on its cell (WCAG 4.5:1 or more,
+what `vidgen lint` checks), and the values are hidden when the cells are too small for
+readable text. Cells are at most square-tall and 2.5x as wide as tall; a matrix whose cells
+come out smaller than 0.3 units logs a warning to split it. `null` values are empty cells.
+[Action targets](#beat-actions): `title`, `legend`, `row<N>`, `row:<label>`, `col<N>`,
+`col:<label>` (a row / column with its label), `cell<R>.<C>` (1-based).
+
+| param | type | default | |
+|---|---|---|---|
+| `values` | list[list[float \| null]] | required | the matrix, row by row (up to 40 x 40) |
+| `rows`, `columns` | list[str] | `[]` | unique row / column labels |
+| `scale` | `auto` \| `sequential` \| `diverging` | `auto` | |
+| `color` | color | `primary` | sequential: the highest values |
+| `low_color`, `high_color` | color | `primary`, `accent` | diverging: below / above `center` |
+| `center` | float | `0` | diverging: the neutral value |
+| `scale_min`, `scale_max` | float | from the data | ends of the scale (diverging: symmetric around `center`) |
+| `show_values` | bool | auto | values in the cells (default: when they fit at a readable size) |
+| `value_format`, `unit` | str | automatic, `""` | cell values and legend ticks |
+| `value_size` | size | `caption` | largest value size (shrinks to fit) |
+| `legend` | bool | `true` | the colour-scale bar |
+| `legend_label` | str | `""` | its title (`correlation`) |
+| `reveal` | `all` \| `rows` | `all` | |
+| `highlight` | list[str] | `[]` | `cell<R>.<C>`, `row<N>`, `row:<label>`, `col<N>`, `col:<label>` for a last step |
+| `highlight_color` | color | `highlight` | outline colour |
+| `label_size` | size | `caption` | row / column labels and ticks |
+| `title`, `caption` | str | `""` | |
+| `caption_size`, `caption_color` | size, color | `caption`, `dim` | |
+| `title_size`, `title_color` | size, color | `heading`, `text` | |
+
+```yaml
+- id: busy
+  type: heatmap
+  params:
+    title: "Renders per hour"
+    rows: ["Mon", "Tue", "Wed"]
+    columns: ["9h", "12h", "15h", "18h"]
+    values: [[3, 8, 4, 9], [5, 10, 6, 11], [4, 9, null, 13]]
+    legend_label: "renders"
+    highlight: ["col:18h"]
+  beats:
+    - text: "Each cell counts the renders in one hour."
+    - text: "Evenings are the busiest."
+```
+
+### `map`
+
+A world map — the 177 countries of Natural Earth's 1:110m admin-0 map (public domain, bundled;
+see THIRD_PARTY_NOTICES.md) in the Equal Earth projection — with highlighted countries, a
+choropleth, pins and flight-path arcs. Borders are Natural Earth's *de facto* representation
+(e.g. Kosovo, N. Cyprus, Somaliland and W. Sahara are shapes of their own); vidgen takes no
+position on disputed boundaries. Countries are named by ISO 3166
+alpha-2 or alpha-3 code (`DE`, `DEU`), English name or a common alias (`USA`, `UK`, `Holland`,
+`Ivory Coast`, `Czech Republic`...); case and accents do not matter, typos get a "did you mean".
+Countries too small for this scale (Singapore, Malta, Bahrain...) are reported by `vidgen
+validate`: mark them with a pin instead.
+
+Beat 1 draws the map (a sweep from west to east; a choropleth's colours with it), the legend,
+the `countries` / `pins` / `arcs` given outside `steps`, and then step 1. **Per-beat data** is
+`steps` (aligned with the beats as in `screenshot` / `code_walkthrough`): step *i* highlights its
+countries (the fill fades to the colour, the label follows), drops its pins and grows its arcs
+at beat *i*. Earlier steps stay. A step with `focus` moves the camera in on its items (labels
+are built for the zoom so they read at their normal size; labels made for another view fade);
+the next step without `focus` moves back. More steps than beats are spread evenly; extra beats
+hold.
+
+- **View**: `auto` (default) fits the highlighted and valued countries, pins and arcs (with a
+  margin; the world when there are none or they span more than 200° of longitude); `world`
+  (without Antarctica unless `antarctica: true`); a region — `europe`, `africa`, `asia`,
+  `middle_east`, `north_america`, `south_america`, `oceania`; or a box `[lon_min, lat_min,
+  lon_max, lat_max]` in degrees (`lon_max < lon_min` crosses the date line, e.g. `[150, -50,
+  -170, 0]`). The view is projected around its middle longitude and grown to the shape of the
+  space (more of the map, not empty bands); a regional view is drawn as a framed panel with the
+  sea in `surface`. In 9:16 the whole world is a narrow strip, so a `world` (or `auto` → world) view
+  keeps only the longitudes of the map's countries, pins and arcs (12 % added on each side, at
+  least 140°) and all latitudes; items spread round the whole world still give the strip.
+- **Highlights** fill countries with `highlight_color` (`accent`; `palette`: one theme palette
+  colour per country, in order) or their own `color`, and write their name (`labels`; a
+  country's `label` gives other text, `false` none) on its largest part when it fits, else
+  beside it with a leader line. A country is highlighted once per scene.
+- **Choropleth**: `values` colours countries by a colour scale like `heatmap`'s (`scale`,
+  `color`, `low_color`, `high_color`, `center`, `scale_min`, `scale_max`) with a legend bar below
+  the map (`legend`, `legend_label`, `value_format`, `unit`); countries without a value are
+  fainter land. On a choropleth, highlights are outlines in `highlight_color` (colour is the
+  data).
+- **Pins** `{lon, lat, label}` (degrees, east / north positive) or `{country, label}` (in the
+  middle of the country); **arcs** `{from, to, label}` or `"A -> B"`, where an end is a pin's
+  label, a country or `[lon, lat]`. Arcs bend upwards (downwards near the top of the map), grow
+  from `from` to an arrowhead at `to` and stop short of pins. Arcs are drawn on the flat map,
+  not along great circles, and do not wrap round the date line.
+- **Labels** sit on plates of the background colour (readable on any fill), at `label_size`
+  (never below the readable minimum), placed clear of each other and of pins.
+
+[Action targets](#beat-actions): `title`, `map` (every country), `legend`, `country:<code>` (a
+highlighted or valued country: `country:DEU`, `country:DE` or `country:Germany`), `pin<N>`,
+`pin:<label>`, `arc<N>`, `step<N>` (a step's items).
+
+| param | type | default | |
+|---|---|---|---|
+| `view` | str \| [lon_min, lat_min, lon_max, lat_max] | `auto` | `auto`, `world`, `europe`, `africa`, `asia`, `middle_east`, `north_america`, `south_america`, `oceania`, or a box |
+| `countries` | list[str \| {country, color, label}] | `[]` | highlighted in beat 1 |
+| `pins` | list[{lon, lat, label, color} \| {country, label, color}] | `[]` | shown in beat 1 |
+| `arcs` | list[{from, to, label, color} \| "A -> B"] | `[]` | drawn in beat 1 |
+| `steps` | list[{countries, pins, arcs, focus} \| list of countries \| country] | `[]` | step *i* at beat *i* |
+| `values` | {country: number} | `{}` | choropleth |
+| `labels` | bool | `true` | names on highlighted countries |
+| `highlight_color` | color \| `palette` | `accent` | highlight fill (outline on a choropleth) |
+| `land_color` | color | `dim` | land, shown faint over the background |
+| `pin_color`, `arc_color` | color | `highlight` | defaults for pins / arcs |
+| `antarctica` | bool | `false` | draw Antarctica (the `world` view reaches the pole) |
+| `scale` | `auto` \| `sequential` \| `diverging` | `auto` | choropleth colour scale (as `heatmap`) |
+| `color` | color | `primary` | sequential: the highest values |
+| `low_color`, `high_color` | color | `primary`, `accent` | diverging: below / above `center` |
+| `center` | float | `0` | diverging: the neutral value |
+| `scale_min`, `scale_max` | float | from the data | ends of the scale |
+| `value_format`, `unit` | str | automatic, `""` | legend ticks |
+| `legend` | bool | `true` | the colour bar under a choropleth |
+| `legend_label` | str | `""` | its title (`millions`) |
+| `label_size` | size | `caption` | country, pin and arc labels |
+| `focus_scale` | float | `3` | largest magnification of `focus: true` (up to 4) |
+| `title`, `caption` | str | `""` | |
+| `caption_size`, `caption_color` | size, color | `caption`, `dim` | |
+| `title_size`, `title_color` | size, color | `heading`, `text` | |
+
+A step's `focus` is `true` (as close as fits, up to `focus_scale`) or a magnification (more
+than 1, up to 4).
+
+```yaml
+- id: offices
+  type: map
+  params:
+    title: "Our offices"
+    view: europe
+    steps:
+      - [Germany, France]                                    # beat 1: two countries
+      - pins: [{lon: -0.13, lat: 51.51, label: London}, {lon: 13.4, lat: 52.52, label: Berlin}]
+        arcs: ["London -> Berlin"]                           # beat 2: pins and an arc
+      - countries: [{country: NL, label: "Amsterdam HQ"}]
+        focus: true                                          # beat 3: the camera moves in
+  beats:
+    - text: "We started in Germany and France."
+    - text: "Then London and Berlin, linked by a weekly flight."
+    - text: "Our new head office is in the Netherlands."
+```
+
+```yaml
+- id: people
+  type: map
+  params:
+    title: "Population"
+    view: europe
+    values: {Germany: 83, France: 68, Italy: 59, Spain: 48, Poland: 37, UK: 67}
+    legend_label: "millions"
+    steps: [[], [Germany]]                                   # beat 2 outlines Germany
+  beats:
+    - text: "Europe's largest countries by population."
+    - text: "Germany has the most people."
+```
+
+### `image`
+
+Steps: (1) the image, (2) the caption. `vidgen validate` reports a missing or unsupported file
+(png, jpg, jpeg, gif, bmp, webp, tif). Instead of a file, `generate:` asks for a
+[generated picture](#generated-images-imagegen-vidgen-imagegen): `vidgen imagegen` makes it once
+(paid), and until then the scene shows a placeholder card with the prompt in the theme's colours.
+[Action targets](#beat-actions): `image`, `caption` (`dim` fades the picture, `highlight` tints it).
+
+| param | type | default | |
+|---|---|---|---|
+| `path` | str | required (or `generate`) | relative to the project folder, e.g. `assets/photo.jpg` |
+| `generate` | str \| mapping | none | a generated picture instead of `path` (not both): the prompt, or `{prompt, negative, style, aspect, seed}`, see [generated images](#generated-images-imagegen-vidgen-imagegen) |
 | `caption` | str | `""` | |
 | `fit` | `contain` \| `cover` | `contain` | `contain`: whole image, caption below; `cover`: fills the frame (cropped), caption on a band |
 | `ken_burns` | bool \| mapping | `false` | slow zoom/pan over the whole scene; `true` = zoom 1.0 → 1.15 on the center |
@@ -338,20 +2171,236 @@ Steps: (1) the image, (2) the caption. `vidgen validate` reports a missing or un
     ken_burns: {end_scale: 1.25, end_focus: [0.7, 0.35]}
   beats:
     - text: "Everything ran on this machine."
+- id: harbour
+  type: image
+  params:
+    generate: {prompt: "a quiet harbour at dawn, fishing boats, mist over the water", negative: people}
+    fit: cover
+  beats:
+    - text: "It started in a small harbour town."
+```
+
+### `screenshot`
+
+A picture of an app or a web page with **callouts** pointing at its parts, one step per beat:
+boxes, circles, arrows with labels, magnified insets and a spotlight. Steps: (1) the picture (in
+its frame) and then step 1's callouts, (*i*) step *i*'s callouts. Before a step's callouts are
+drawn, the earlier ones fade out (`previous: fade`, default), dim (`dim`: their boxes, circles
+and arrows stay faint, labels, insets and shades go) or stay (`keep`). With more steps than beats
+they are spread evenly; extra beats hold. `vidgen validate` reports a missing or unsupported
+image file and areas outside the image.
+
+**Areas** are `[x, y, w, h]`: the top-left corner and the size, as fractions of the image (`0`–`1`,
+from its top-left corner, like `ken_burns` focus points) or, with `units: px`, in the image's own
+pixels (as an image editor shows them). A point `[x, y]` is enough for a box, circle or arrow.
+
+**Callouts** are written `{KIND: area, label: ..., ...}` (or `{kind: KIND, area: [...], ...}`):
+
+| kind | draws | options |
+|---|---|---|
+| `box` | a rounded frame around the area, the label as a tag on its edge (above it, else below) | `label`, `color`, `side` |
+| `circle` | an ellipse through the area's corners (a ring around a point), the label beside it | `label`, `color`, `side` |
+| `arrow` | the label away from the area — outside the picture when there is room, never off the frame — and an arrow from it to the area's edge (to the point) | `label`, `color`, `side`, `curved` |
+| `magnifier` | an enlarged inset of the area (`zoom` times, less when there is not that much room beside the area), joined to a frame around the area by two lines; cut from the image's own pixels, so it is sharp | `label`, `color`, `side`, `zoom` (`2`, more than 1, up to 8) |
+| `spotlight` | the rest of the picture dimmed (the theme's background at 62 %), the area clear | `label`, `color`, `side` |
+
+Labels are bold text on a plate in the callout's colour (default the scene's `color`,
+`highlight`), written in whichever theme colour reads best on it (4.5:1 or more), at `label_size`
+and never below the readable size; long labels wrap. Each label is placed clear of the other
+callouts of its step (and of those kept from earlier steps), of their areas and of the frame's
+title bar. `side: top | bottom | left | right` forces where the label (a magnifier: its inset)
+goes. A spotlight lies under the other callouts.
+
+**Per-beat data** lives in `steps`, aligned with the beats: entry *i* is beat *i*. An entry is one
+callout, a list of callouts, or `{callouts, focus, previous}`.
+
+**Focus.** `focus: true` moves the camera in on the step's areas (at most `focus_scale`, so that
+they take about half of the view; a number is the magnification) and builds the step's labels and
+lines for the zoom, so they read at their normal size. Callouts built for another view (the
+whole frame, or another focus) leave when the camera moves; the next step without `focus` moves
+the camera back. A view taller (wider) than the picture is centred on it that way, a smaller one
+stays on the picture. Without `focus`, a step focuses by itself in a **vertical frame when the
+picture is landscape** (1.2:1 or wider; it would be a thin strip across the middle of a 9:16
+frame), and not otherwise; `focus: false` keeps the whole picture.
+
+**Frames.** `frame: browser` draws a title bar with three dots and an address field (`url`),
+`window` the title bar alone, `phone` a rounded body with a speaker slot and a home bar (for
+portrait screenshots); all in the theme's `surface` and `dim` colours.
+
+[Action targets](#beat-actions): `title`, `image` (the picture with its frame), `caption`, `callout<N>`
+(numbered over all steps, in the order written), `callout:<label>`, `step<N>` (a step's callouts;
+revealing it plays the step). Revealing a callout early draws it (one of a focus step brings its
+step, with the camera); a step whose callouts are all on screen already is skipped at its beat.
+
+| param | type | default | |
+|---|---|---|---|
+| `path` | str | required | relative to the project folder, e.g. `assets/app.png` |
+| `title` | str | `""` | heading above the picture |
+| `caption` | str | `""` | a line under the picture (as in `video_clip`; callout labels keep clear of it; it fades out while a `focus` step has the camera in, and back) |
+| `caption_size` | size | `caption` | |
+| `caption_color` | color | `text` | |
+| `steps` | list | `[]` | step *i* at beat *i*: a callout, a list of callouts, or `{callouts, focus, previous}` |
+| `steps[].callouts` | list | `[]` | `{KIND: area, label, color, side, curved, zoom}` (see above) |
+| `steps[].callouts[].kind`, `.area` | kind, list | required | the canonical form of `{KIND: area}` |
+| `steps[].callouts[].label` | str | `""` | |
+| `steps[].callouts[].color` | color | the scene's `color` | mark and label plate |
+| `steps[].callouts[].side` | `auto` \| `top` \| `bottom` \| `left` \| `right` | `auto` | where the label / inset goes |
+| `steps[].callouts[].curved` | bool | `false` | arrows only |
+| `steps[].callouts[].zoom` | number | `2` | magnifiers only |
+| `steps[].focus` | bool \| number | auto | `true`: the camera moves in on the step's areas; a number (1–4): that magnification; not given: `true` for a landscape picture in a vertical frame, else `false` |
+| `steps[].previous` | `fade` \| `dim` \| `keep` | the scene's | what happens to earlier callouts at this step |
+| `frame` | `none` \| `browser` \| `window` \| `phone` | `none` | drawn around the picture |
+| `url` | str | `""` | text of a `browser` frame's address field |
+| `units` | `fraction` \| `px` | `fraction` | how areas are written |
+| `color` | color | `highlight` | default callout colour |
+| `label_size` | size | `caption` | label text size (never below the readable size) |
+| `previous` | `fade` \| `dim` \| `keep` | `fade` | what happens to a step's callouts when the next starts |
+| `focus_scale` | number (1–4) | `2.0` | largest magnification of `focus: true` |
+
+```yaml
+- id: app
+  type: screenshot
+  params:
+    title: "Point at what matters"
+    path: assets/app.png
+    frame: browser
+    url: "planner.example/overview"
+    steps:
+      - {box: [0.216, 0.038, 0.269, 0.055], label: "Search every task"}
+      - - {arrow: [0.857, 0.065], label: "New task", curved: true}
+        - {circle: [0.736, 0.15, 0.25, 0.17], label: "Overdue"}
+      - {magnifier: [0.675, 0.545, 0.28, 0.085], label: "Done today", zoom: 2.5}
+      - callouts:
+          - {spotlight: [0.205, 0.37, 0.428, 0.58]}
+          - {arrow: [0.425, 0.55], label: "Thursday was the busiest day"}
+        focus: true
+  beats:
+    - text: "A box marks the search field."
+    - text: "An arrow points at the new task button, and a circle at the overdue count."
+    - text: "A magnifier enlarges a detail."
+    - text: "Focus moves the camera in, and a spotlight dims everything else."
+```
+
+Project scenes draw the same callouts with the `callout_*` helpers of `vidgen.api`
+([EXTENDING.md](EXTENDING.md#2-building-blocks-params-layout-timing-validation), "Callouts").
+Callouts on any other scene type (a chart, a diagram) are the [`callout` beat
+action](#beat-actions).
+
+### `video_clip`
+
+A **video file** — B-roll, a screen recording — played inside the scene while the narration
+runs: framed in a layout region (optionally in a `browser` / `window` / `phone` frame as in
+[`screenshot`](#screenshot), with a title above and a caption below) or full-bleed, with
+**callouts** drawn over it step by step exactly as in `screenshot` (same `steps`, kinds, `previous`,
+`focus`; no `magnifier`, which needs a still picture). Steps: (1) the clip (with its title and
+caption) and then step 1's callouts, (*i*) step *i*'s callouts. Files: mp4, mov, m4v, webm, mkv
+(anything FFmpeg decodes); `vidgen validate` reports a missing, unsupported or unreadable file, a
+`trim` past the clip's end and pixel areas outside its picture.
+
+**Timing contract.** The narration sets the scene's length, never the clip: the scene lasts its
+beats (+ `narration.pad` each, as every scene) plus the 0.5 s fade-out, or a silent scene's
+`duration`. The clip starts playing when the scene starts (it fades in while playing) and plays
+`trim: [start, end]` (default: all of it) at `speed` through every beat. One pass takes
+`(end - start) / speed` seconds on screen; when the scene is longer the clip starts again with
+`loop: true`, otherwise its **last frame holds** (a warning names the hold when it is longer than
+2 s, and `vidgen lint`'s `dead_air` reports a hold over 6 s, as it reports any still picture);
+when the scene is shorter the clip is cut by the fade-out. `fit_duration: true` picks the speed
+that makes one pass last exactly as long as the narration, kept within `fit_range` (default
+`[0.5, 2.0]`, so a clip is never sped up or slowed down beyond recognition; outside it the clip
+holds or is cut as above).
+
+**Sound.** The clip's own sound plays as the picture does (trimmed, at its speed with its pitch
+kept, looped, silent while the last frame holds) and is mixed **under the narration** into the
+scene's sound: `volume` 0.25 by default in a narrated scene, 1 in a silent one; `mute: true` (or
+`volume: 0`) leaves it out. It fades out with the picture. There is no ducking: keep `volume` low
+under speech.
+
+**Layout.** `region` is a layout region ([`vidgen.api.region`](EXTENDING.md#2-building-blocks-params-layout-timing-validation)) for the clip below the title: `body`
+(default) or `full` (all the room below the title), `hero`, `left`, `right` (upper / lower half in
+9:16), `top`, `bottom`, `center` — or `bleed`, the whole frame edge to edge, with the title and the
+caption on plates in the theme's `surface` colour over the picture (no `frame` then). `fit:
+contain` shows the whole picture as large as fits; `cover` fills the region (or the frame),
+cutting the picture's excess equally from both sides — a 16:9 clip in a 9:16 frame keeps only its
+middle with `region: bleed, fit: cover`, while `contain` leaves bands above and below. The
+default `fit: auto` is `contain`, except for a landscape clip (1.2:1 or wider) **without
+callouts in a vertical frame** in a region: that shows a nearly square part from the clip's
+middle (`cover` into a square room), not a thin strip; with `region: bleed` `auto` is `contain`. Callout
+steps of a landscape clip in a vertical frame focus by themselves, as in `screenshot`.
+
+**Callout areas** are `[x, y, w, h]` (or a point `[x, y]`) from the top-left corner of the clip's
+**whole picture**, as fractions or, with `units: px`, in its pixels — also with `fit: cover`, so a
+callout stays on the same thing whichever part is shown (a warning names callouts outside the part
+`cover` shows). Callouts stay put while the picture moves: point at things that stay there, or
+give the step its own beat.
+
+Decoding: frames are read with PyAV as the render reaches them, scaled once to the size shown
+(sharper when a `focus` step or a `zoom` action will look closer, up to the clip's own pixels) and
+not kept in memory; stills, the layout dump and `vidgen lint` see the clip as an image, and the
+clip's motion counts as activity for `dead_air`. Rotation metadata (phone videos) is not applied.
+
+[Action targets](#beat-actions): `title`, `clip` (the picture with its frame), `caption`,
+`callout<N>`, `callout:<label>`, `step<N>` (as in `screenshot`). `dim: clip` fades the moving
+picture, `highlight: clip` tints it, `zoom: clip` looks closer.
+
+| param | type | default | |
+|---|---|---|---|
+| `path` | str | required | relative to the project folder, e.g. `assets/demo.mp4` |
+| `title` | str | `""` | heading above the clip (on a plate with `region: bleed`) |
+| `caption` | str | `""` | line under the clip (on a plate at the bottom with `region: bleed`); fades out while a `focus` step has the camera in |
+| `caption_size`, `caption_color` | size, color | `caption`, `text` | |
+| `region` | `body` \| `full` \| `hero` \| `left` \| `right` \| `top` \| `bottom` \| `center` \| `bleed` | `body` | where the clip goes (see above) |
+| `fit` | `auto` \| `contain` \| `cover` | `auto` | whole picture, or fill the region / frame (cropped); `auto`: `contain`, a nearly square part from the middle of a landscape clip without callouts in a vertical frame |
+| `trim` | [start, end] | the whole clip | seconds of the file that play |
+| `speed` | number (0.25–4) | `1.0` | playback speed; the sound keeps its pitch |
+| `fit_duration` | bool | `false` | choose the speed so one pass lasts as long as the narration (not with `speed`) |
+| `fit_range` | [slowest, fastest] | `[0.5, 2.0]` | limits of `fit_duration` (within 0.25–4) |
+| `loop` | bool | `false` | start again when the scene outlasts the clip (else the last frame holds) |
+| `volume` | number (0–2) | 0.25 narrated, 1 silent | the clip's own sound, under the narration (linear; 1 = as recorded, a mono recording at that level on both channels) |
+| `mute` | bool | `false` | leave the clip's sound out |
+| `steps` | list | `[]` | step *i* at beat *i*: a callout, a list of callouts, or `{callouts, focus, previous}` ([`screenshot`](#screenshot); kinds `box`, `circle`, `arrow`, `spotlight`) |
+| `frame`, `url` | `none` \| `browser` \| `window` \| `phone`, str | `none`, `""` | a frame drawn around the clip (not with `bleed`); `url` for `browser` |
+| `units` | `fraction` \| `px` | `fraction` | how callout areas are written (of the whole picture) |
+| `color`, `label_size` | color, size | `highlight`, `caption` | callout colour and label size |
+| `previous` | `fade` \| `dim` \| `keep` | `fade` | what happens to a step's callouts when the next starts |
+| `focus_scale` | number (1–4) | `2.0` | largest magnification of `focus: true` |
+
+```yaml
+- id: clip
+  type: video_clip
+  params:
+    title: "Clips play under the narration"
+    path: assets/clip.webm
+    frame: window
+    caption: "A generated test pattern, looping"
+    loop: true
+    steps:
+      - {box: [0.0, 0.0, 0.21, 0.14], label: "Time code"}
+      - {arrow: [0.92, 0.45], label: "Colour bars", curved: true}
+  beats:
+    - text: "Video clips play inside a scene, and the narration sets how long they run."
+    - text: "Callouts work on moving pictures too, one step per beat."
+- id: broll
+  type: video_clip
+  params: {path: assets/city.mp4, region: bleed, fit: cover, trim: [12, 20], fit_duration: true, mute: true}
+  beats:
+    - text: "Full-bleed B-roll, trimmed and stretched over the sentence."
 ```
 
 ### `quote`
 
 Steps: (1) quote mark and text, (2) attribution. Quote characters around `text` are removed;
 the scene draws a large typographic mark.
+[Action targets](#beat-actions): `mark`, `quote`, `author`, `source` (those present).
 
 | param | type | default | |
 |---|---|---|---|
 | `text` | str | required | |
 | `author`, `source` | str | `""` | shown as `— author` and, smaller, `source` |
-| `size` | size | `subtitle` | of the quote text (shrunk if long) |
+| `size` | size | `subtitle` | of the quote text (shrunk if long; 1.25x in a vertical frame) |
 | `color`, `mark_color`, `author_color`, `source_color` | color | `text`, `primary`, `text`, `dim` | |
-| `mark_font` | str | `"Georgia,DejaVu Serif,serif"` | font list for the quote mark |
+| `mark_font` | str | role `quote_mark` (Source Serif 4) | font of the quote mark |
+
+The quote text uses the font role `quote`, the mark `quote_mark` ([Fonts](#fonts)).
 
 ```yaml
 - id: saying
@@ -367,13 +2416,18 @@ Steps: one per formula; each morphs into the next. The caption comes with the fi
 LaTeX** (`latex` and `dvisvgm` on PATH — on Windows install MiKTeX). `vidgen validate` warns
 when it is missing; rendering then fails with installation hints. A formula that does not
 compile is reported with the scene id and the formula.
+[Action targets](#beat-actions): `step<N>` (1-based), `caption`, `term:<tex>` for each of `terms` (in the step on
+screen). A step that a `transform` or `reveal` action brought in early is not shown again, and
+earlier steps are skipped once a later one is on screen.
 
 | param | type | default | |
 |---|---|---|---|
 | `latex` | str \| list[str] | required | math-mode LaTeX (no `$`); a list is a sequence of steps |
 | `caption` | str | `""` | |
-| `size` | size | `96` | |
+| `size` | size | `96` | formula size (1.25x in a vertical frame; shrunk to fit the width) |
+| `caption_size` | size | `caption` | |
 | `color`, `caption_color` | color | `text`, `dim` | |
+| `terms` | list[str] | `[]` | TeX substrings beat actions can target as `term:<tex>` (e.g. `2ab`); each must occur in a step and be a complete TeX group there (not half of a `\frac{..}{..}`); its first occurrence in a step counts |
 
 ```yaml
 - id: square
@@ -388,12 +2442,128 @@ compile is reported with the scene id and the formula.
 
 In YAML, write backslashes in single quotes (`'\frac{1}{3}'`) or double them in double quotes.
 
+For a derivation — notes per step, earlier steps kept above, matching parts that move, a boxed
+result — use [`equation_derivation`](#equation_derivation).
+
+### `equation_derivation`
+
+A derivation: a sequence of equations where each step **morphs into the next** — the parts that
+stay the same move into their new place, the rest fades — with an optional **note** per step
+(the justification: "divide both sides by 2"), earlier steps kept above the current one or
+replaced by it, and a **box** around the result. Steps: one per entry of `steps` (step 1 comes
+with the title); with more steps than beats they are spread evenly; extra beats hold. **Needs
+LaTeX**, like [`equation`](#equation); a step that does not compile stops the render with the
+step's number, its LaTeX and TeX's own message (`step 2 does not compile: Undefined control
+sequence (at: \badcommand {2})`). Unbalanced braces and unclosed `{{` are reported by `vidgen
+validate`.
+
+**Per-beat data** lives in `steps`, aligned with the beats (as in
+[`code_walkthrough`](#code_walkthrough)): entry *i* is beat *i*, written `{tex, note, match,
+transition}` or just the LaTeX string.
+
+**Marking matching parts.** Between two steps, parts written the same way move into each other
+when they are *marked*; everything else moves glyph by glyph when the shapes match (a `+` that
+stays a `+`) and fades otherwise. Three ways to mark a part:
+
+- `{{ ... }}` around it in both steps (Manim's notation: put a space, or the start of the
+  formula, before `{{`): `'{{ 2x }} + 3 = 11'` → `'{{ 2x }} = 8'` moves `2x` as one piece;
+- `match: [...]` on a step: those parts are isolated in that step and the one before
+  (`{tex: '(a+b)(a+b)', match: ['(a+b)']}`);
+- `terms` and the keys of `colors`: isolated in every step.
+
+Parts are compared as TeX tokens, spaces ignored (`2 ab` = `2ab`), and found only as whole tokens
+(`x` is not taken out of `\exp`; a part right after `\left` is left alone). A part must be a
+complete TeX group (not half of a `\frac{..}{..}`). The alignment sign (`align_at`) is always
+isolated, so `=` stays in place from step to step. `transition: shapes` matches glyphs by shape
+only, `fade` cross-fades.
+
+**History or replace.** `mode: history` (default) keeps the earlier steps on screen, stacked
+above the current one, dimmed (`dim_opacity`, raised where a colour would fall below 2.3:1
+contrast) and aligned at the first `align_at` of each step (`=`; a step without it is centred);
+the block stays centred as it grows. When the steps do not fit at a readable size, the oldest
+scroll away (`keep` sets how many stay). `mode: replace` shows one step at a time, each taking the
+place of the previous one (still aligned at `=`, so the sign does not jump).
+
+**Notes** sit beside the equations, level with their step, in 16:9 (earlier notes stay, dimmed,
+with their steps) and in a band just below them in a vertical frame (one at a time);
+`note_position: bottom` uses the band in 16:9 too.
+
+**Sizes.** All steps share one size: `size` at most (1.25x in a vertical frame), smaller to fit
+the widest step and the stacked steps. A step that would be set below 1.5x the readable size
+(lint's `min_font`) is broken into lines before its relations (`a = b \\ = c`, aligned at the
+sign), when that makes it larger; if it still does not fit it is scaled down further and a
+warning says so (shorten the step, or split it in two).
+
+**Colours.** `colors: {x: accent, '\lambda': highlight}` colours those parts in every step (and
+in the dimmed history), so a variable keeps its colour through the derivation.
+
+**Result.** `result: box` (default) draws a frame around the last step as it arrives,
+`highlight` lays a band of `result_color` behind it, `none` leaves it plain.
+
+[Action targets](#beat-actions): `title`, `step<N>` (a step, also as a dimmed earlier line),
+`note<N>` (revealing a note plays its step), `result` (the last step with its box) and
+`term:<tex>` for each part named in `terms`, `colors`, `match` or marked `{{ }}` — in the
+**current** step (earlier, dimmed lines are not included). `transform: step1` + `into: step3`
+jumps ahead; the steps in between are skipped and the result still gets its box.
+
+| param | type | default | |
+|---|---|---|---|
+| `steps` | list (≥ 1) | required | step *i* at beat *i*: `{tex, note, match, transition}` or the LaTeX string |
+| `steps[].tex` | str | required | math-mode LaTeX (no `$`); `{{ ... }}` marks a part that moves into the same part of the next step |
+| `steps[].note` | str | `""` | a short justification shown with the step |
+| `steps[].match` | list[str] | `[]` | parts that move from the previous step into this one (must occur in both) |
+| `steps[].transition` | `auto` \| `shapes` \| `fade` | `auto` | `auto`: marked parts, then glyphs by shape |
+| `title` | str | `""` | heading above the derivation |
+| `mode` | `history` \| `replace` | `history` | keep earlier steps (stacked, dimmed) or replace them |
+| `keep` | int (≥ 1) | as many as fit | `history`: the most steps on screen; older ones scroll away |
+| `align_at` | str | `"="` | steps are aligned at the first occurrence of this TeX (`'\le'`, ...); `""` centres every step |
+| `colors` | map TeX → color | `{}` | parts coloured in every step |
+| `terms` | list[str] | `[]` | more parts to isolate in every step (they move into each other; targets `term:<tex>`) |
+| `result` | `box` \| `highlight` \| `none` | `box` | how the last step is marked |
+| `result_color` | color | `highlight` | |
+| `size` | size | `80` | largest formula size (1.25x in a vertical frame; smaller to fit) |
+| `color` | color | `text` | formula colour |
+| `dim_opacity` | number (0.15–1) | `0.45` | `history`: opacity of earlier steps and their notes |
+| `note_position` | `auto` \| `side` \| `bottom` | `auto` | `auto`: beside in 16:9, below in a vertical frame (always below there) |
+| `note_size` | size | `body` | |
+| `note_color` | color | `dim` | |
+| `note_mark_color` | color | `accent` | the bar beside each note (16:9) |
+
+```yaml
+- id: solve
+  type: equation_derivation
+  params:
+    title: "Solving for x"
+    colors: {x: accent}                    # x keeps its colour in every step
+    steps:
+      - '{{ 2x }} + 3 = 11'                # {{ }} marks a part that moves into the next step
+      - {tex: '{{ 2x }} = 11 - 3', note: "Subtract 3 from both sides"}
+      - {tex: '{{ 2x }} = 8', note: "Simplify"}
+      - {tex: 'x = \frac{8}{2}', note: "Divide both sides by 2"}
+      - {tex: 'x = 4', note: "The result"}
+  beats:
+    - text: "Two x plus three equals eleven."
+    - text: "Subtract three from both sides."
+    - text: "Eleven minus three is eight."
+    - text: "Divide both sides by two."
+    - text: "And x is four."
+```
+
 ### `code`
 
 Steps: (1) the listing (with the first highlight applied), then one per further `highlight`
 entry. Highlighting dims the other lines and puts a soft band behind the selected ones. Uses
-Manim's `Code` (Pygments highlighting); the listing is scaled to fit, so keep lines short for
-vertical videos.
+Manim's `Code` (Pygments highlighting); the listing is scaled to fill the space below the
+title. When its width would make it smaller than `size` (typical for long lines in a vertical
+video), long lines are wrapped with a hanging indent (`wrap`); wrapped lines keep their line
+number and highlights still count original lines. Wrapping aims for at least 32 characters per
+line: where `size` would leave fewer (a vertical frame, especially with the `large` type scale),
+the listing is set smaller instead, down to the readable minimum (`lint` `min_font`), and wraps
+there. For code longer than the frame holds, use [`code_walkthrough`](#code_walkthrough).
+[Action targets](#beat-actions): `title`, `listing` (the window), `line<N>` (an original line,
+1-based, with its number; all its pieces when wrapped) and `lines:<a-b>` (lines a to b,
+`lines:3-5`). The scene's own `highlight` steps set line opacities, overriding a `dim` action on
+those lines.
 
 | param | type | default | |
 |---|---|---|---|
@@ -403,10 +2573,11 @@ vertical videos.
 | `title` | str | `""` | |
 | `highlight` | list of line specs | `[]` | entry *i* applies at beat *i*: `3`, `"2-4"`, `"1, 5-6"` or `[1, 4]` (1-based) |
 | `line_numbers` | bool | `true` | |
-| `style` | str | `github-dark` | a Pygments style (`monokai`, `dracula`, `one-dark`, ...) |
-| `font` | str | `Monospace` | monospace font family (e.g. `Consolas` on Windows) |
+| `style` | str | theme `code_style` | a Pygments style (`monokai`, `dracula`, `xcode`, ...); default: the theme's `code_style` (`github-dark`, `xcode` in `light_academic`) |
+| `font` | str | role `code` (`font_mono`: JetBrains Mono NL) | font family of the listing |
 | `size` | size | `caption` | starting font size (scaled to fill the frame, up to 1.5x) |
 | `highlight_color` | color | `highlight` | |
+| `wrap` | bool | `true` | wrap long lines instead of shrinking the listing below `size` / the readable minimum |
 
 ```yaml
 - id: listing
@@ -420,15 +2591,629 @@ vertical videos.
     - text: "And train."
 ```
 
-### `end_card`
+### `code_walkthrough`
 
-Steps: (1) logo and title, (2) lines. Fades out over 1 s.
+A long listing in a window of fixed height that scrolls, beat by beat, to the lines the narration
+talks about. Steps: one per entry of `steps` (step 1 comes with the window): the window scrolls
+smoothly so the step's `lines` are in view (centred, or left where they are when they already
+show), the other lines dim and a band marks the selected ones; the step's `note` appears beside
+the lines or below the window, and `focus` moves the camera in on them. A step without `lines`
+keeps the previous lines and view (e.g. a second note on the same lines); `lines: all` removes the
+highlight. With more steps than beats they are spread evenly; extra beats hold.
+
+**Lines** are written as in [`code`](#code) — `12`, `"3-7"`, `"1, 5-6"`, `[3, 4]` — or by content:
+`"/def train/"` is the first line the regular expression matches (Python syntax, searched within
+each line), `"/def train/-/return/"` runs from there to the first match of the second expression
+at or after it, and numbers and expressions mix (`"40-/return/"`). Numbers are the file's own:
+with `excerpt: "40-120"` only those lines are shown and steps count from 40. `vidgen validate`
+reports lines past the end and expressions that match nothing.
+
+**Per-beat data** lives in `steps`, aligned with the beats like `code`'s `highlight` and
+`diagram`'s `steps`: entry *i* is beat *i*. An entry is `{lines, note, focus}` or just a line
+spec (`- "3-7"`).
+
+**Size and wrapping.** The listing keeps `size` while the window's width allows (it is never
+scaled up), else gets smaller down to the readable minimum (or the size that keeps 32 characters
+per line, if larger) and wraps long lines there, with their numbers kept (as in `code`). The
+window is as tall as the space allows (`visible` caps it); in a 16:9 frame that is about 9 lines at
+the `caption` size, with notes below. A scroll indicator on the right shows where the view is.
+Syntax colours that would read poorly on the window or on the highlight band (a Pygments `style`
+that does not suit the theme) are mixed towards the theme's `text` colour, and the band is made
+fainter on themes where it would cost contrast.
+
+**Notes.** `note_position: side` puts each note in a callout beside the window, level with its
+lines and pointing at them; `bottom` puts it in a bar under the window (as tall as the tallest
+note, so the window does not change size). `auto` uses `side` in 16:9 when the code fits beside
+the notes without wrapping (lines up to about 40 characters at `caption`), else `bottom`; a
+vertical frame always uses `bottom`. A note belongs to its step and goes with it.
+
+**Focus.** `focus: true` moves the camera in on the step's lines (as close as they fit, at most
+`focus_scale`; a number sets the magnification) while the other lines fade out, and shows the
+note as a card under them at its normal size. The next step without `focus` moves the camera
+back. The camera never stops halfway through the title. Very wide lines leave little to enlarge
+(the camera stays, with a warning).
+
+[Action targets](#beat-actions): `title`, `listing` (the window), `line<N>` (a line by its number,
+with its number label; all its pieces when wrapped), `lines:<a-b>` (every range in listings of
+up to 40 lines; in longer ones the ranges the steps select, as `lines:12-18`) and `note<N>` (the
+note of step N). Revealing a line that is out of view scrolls to it; revealing a note plays its
+step. The scene's own steps set line opacities, so a `dim` action on lines lasts until the next
+step.
 
 | param | type | default | |
 |---|---|---|---|
-| `title` | str | `""` | at least one of `title`, `lines`, `logo` |
+| `code` | str | — | inline code; give exactly one of `code` / `path` |
+| `path` | str | — | file in the project (checked by `vidgen validate`) |
+| `language` | str | from the file name, else `python` | a Pygments lexer name |
+| `excerpt` | str | none | `"a-b"`: show only those lines of the code (they keep their numbers) |
+| `title` | str | `""` | above the window |
+| `steps` | list | `[]` | step *i* at beat *i*: `{lines, note, focus}` or a line spec; none: the listing from the top, no highlight |
+| `steps[].lines` | line spec | none (keep) | `12`, `"3-7"`, `"1, 5-6"`, `[3, 4]`, `"/regex/"`, `"/a/-/b/"`, or `all` (no highlight) |
+| `steps[].note` | str | `""` | short annotation of the step |
+| `steps[].focus` | bool \| number | `false` | `true`: enlarge the lines (camera); a number (1–4): that magnification |
+| `visible` | int (≥ 3) | as many as fit | lines the window shows at once |
+| `line_numbers` | bool | `true` | |
+| `style` | str | theme `code_style` | a Pygments style |
+| `font` | str | role `code` (`font_mono`) | font family of the listing |
+| `size` | size | `caption` | font size of the listing (smaller only to fit the width; never below the readable size) |
+| `wrap` | bool | `true` | wrap long lines instead of shrinking the listing below `size` / the readable size |
+| `highlight_color` | color | `highlight` | band, its edge bar, notes' frame and pointer |
+| `note_position` | `auto` \| `side` \| `bottom` | `auto` | see above |
+| `note_size` | size | `body` | note text size |
+| `note_color` | color | `text` | note text colour |
+| `focus_scale` | number (1–4) | `2.0` | largest magnification of `focus: true` |
+| `scrollbar` | bool | `true` | scroll indicator when the code is longer than the window |
+
+```yaml
+- id: walkthrough
+  type: code_walkthrough
+  params:
+    title: "Walking through a training loop"
+    path: assets/train.py
+    steps:
+      - {lines: "8-12", note: "All settings live in one small dataclass."}
+      - {lines: "/def loss_and_grads/-/loss = gw/", note: "The loss: a mean squared error."}
+      - {lines: "/err = /", note: "The prediction error drives it all.", focus: true}
+      - "/for batch in/-/b -= /"          # just lines: no note
+  beats:
+    - text: "A code walkthrough scrolls through a long file. First, the settings."
+    - text: "Then it scrolls down to the loss function."
+    - text: "Focus enlarges a line: here, the prediction error."
+    - text: "And the update itself is plain gradient descent."
+```
+
+Building a long listing takes about 0.1 s per line (Manim draws every character); `excerpt`
+keeps a big file's walkthrough to the part it talks about.
+
+### `stat`
+
+One big number that counts up, with what it means, an optional comparison and a context line.
+Steps: (1) icon, number (counting from `count_from` to `value`, easing out so the last digits
+settle) and label, (2) comparison and context; with one beat both come in it.
+[Action targets](#beat-actions): `icon`, `value`, `label`, `comparison`, `context` (those present).
+
+Layout, centred in the safe area: icon, number, label, comparison, context. The number is
+`size` (default 3x the theme's `title` size) unless that is wider than the frame, then smaller;
+the count never changes its size. In a vertical frame the parts are spaced 1.3x further apart.
+Numbers use the `heading` font role (serif in `light_academic`/`warm_editorial`).
+
+| param | type | default | |
+|---|---|---|---|
+| `value` | float | required | the number shown |
+| `label` | str | `""` | what the number is, under it |
+| `context` | str | `""` | smaller line at the bottom (period, population, source) |
+| `prefix`, `suffix` | str | `""` | before/after the number at its size (`"$"`, `"%"`, `"x"`) |
+| `unit` | str | `""` | after the number, smaller, on its baseline (`"ms"`, `"users"`) |
+| `decimals` | int 0–6 | automatic | decimals of every number shown (also while counting); default: what `value` and the comparison value need, up to 2 |
+| `thousands` | str | `","` | thousands separator: `","`, `"."`, `" "`, `"'"` or `""` |
+| `decimal_mark` | str | `"."` | `"."` or `","` (e.g. `thousands: "."`, `decimal_mark: ","` for German) |
+| `count` | bool | `true` | count up in beat 1; `false`: the number fades in |
+| `count_from` | float | `0` | where the count starts; with a `kind: before` comparison, its value |
+| `comparison` | number \| mapping | none | a value to compare with (below); a plain number is `{value: N}` |
+| `icon` | icon | none | above the number |
+| `icon_color`, `color`, `label_color`, `context_color`, `comparison_color` | color | `primary`, `primary`, `text`, `dim`, `dim` | `color` is the number's (prefix, suffix and unit too) |
+| `good_color`, `bad_color`, `neutral_color` | color | `tertiary`, `accent`, `dim` | the change chip: better, worse, no change / `better: neither` |
+| `size` | size | 3x `title` | number size (shrunk to fit) |
+| `label_size`, `context_size`, `comparison_size` | size | `subtitle`, `caption`, `body` | |
+
+**Comparison** (`comparison: {value, label, kind, word, delta, better}`): a row under the label
+with the change in a chip (an arrow and the delta, coloured by whether the change is good) and
+the words `vs 12% last year`.
+
+| key | default | |
+|---|---|---|
+| `value` | required | the other value, written with the same prefix, suffix, unit and decimals |
+| `label` | `""` | words after it (`"last year"`, `"in 4K"`) |
+| `kind` | `versus` | `versus`: "vs 12%"; `before`: a before → after change, the number counts from this value ("from 12%") |
+| `word` | `vs` / `from` | the word before the other value (`""` for none; translate it in a language variant) |
+| `delta` | `difference` | the chip shows the `difference` (`+19%`, with prefix/suffix/unit), the `percent` change (`+158%`; needs a non-zero value) or `none` (no chip) |
+| `better` | `higher` | which direction is good: `higher`, `lower` (costs, latency), `neither` (always neutral) |
+
+```yaml
+- id: adoption
+  type: stat
+  params:
+    value: 73
+    suffix: "%"
+    label: "of developers use AI coding tools"
+    comparison: {value: 44, label: "in 2023"}     # chip "▲ +29%" in good_color, "vs 44% in 2023"
+    context: "Survey of 12,000 developers, 2025"
+  beats:
+    - text: "Seventy-three percent of developers now use AI coding tools."
+    - text: "Up from forty-four percent two years earlier."
+- id: latency
+  type: stat
+  params:
+    value: 12.5
+    unit: "ms"
+    label: "median latency"
+    comparison: {value: 18, kind: before, better: lower, delta: percent}   # counts down from 18
+  beats:
+    - text: "Median latency fell from eighteen to twelve and a half milliseconds."
+```
+
+### `chapter`
+
+A section divider: an optional number, the chapter's `title`, an optional subtitle and icon.
+An accent rule draws in, the number (with the icon) and the title slide towards it from either
+side, the subtitle rises. In a wide frame with a number or icon, they stand left of a vertical
+rule and the title (left-aligned) right of it; otherwise (vertical frames, or only a title) the
+parts are stacked and centred, the rule a short line between number and title.
+Steps: with two or more beats, (1) rule, icon, number and title, (2) subtitle; with one beat,
+or silent with a `duration`, everything comes in together. Further beats hold.
+[Action targets](#beat-actions): `icon`, `number`, `title`, `subtitle` (those present).
+
+The chapter's name is its `title` param (what a chapter list or indicator shows; a
+`chapter:` key on the scene renames it there, see [chapters](#chapters)).
+
+| param | type | default | |
+|---|---|---|---|
+| `title` | str | required | the chapter's name; wrapped to fit |
+| `number` | int \| str | none | an integer is shown with `number_format` (`02`); text as written (`"II"`, `"Part 2"`) |
+| `number_format` | str | `"{:02d}"` | Python format for an integer `number`: `"{}"` gives `2`, `"Part {}"` gives `Part 2` |
+| `subtitle` | str | `""` | |
+| `icon` | icon | none | above the number, or in its place |
+| `rule` | bool | `true` | draw the accent rule |
+| `number_color`, `rule_color`, `icon_color`, `title_color`, `subtitle_color` | color | `primary`, `primary`, `primary`, `text`, `dim` | |
+| `number_size` | size | 2.4x `title` (1.6x for text) | shrunk to fit |
+| `title_size`, `subtitle_size` | size | `title`, `subtitle` | |
+
+```yaml
+- id: part2
+  type: chapter
+  params: {number: 2, title: "Results", subtitle: "What the benchmark shows", icon: chart-line}
+  duration: 3                      # silent divider; or give it beats
+```
+
+### `comparison`
+
+Two or three columns side by side — A vs B, before / after, three options — each on a card
+with a heading, an optional icon and a list of points. A column's `tone` colours it and marks
+its points: `positive` (check marks, `positive_color`), `negative` (crosses, `negative_color`)
+or `neutral` (dots, `neutral_color`; the heading keeps `heading_color`). An optional `verdict`
+line closes the scene. In a vertical frame the columns are stacked.
+Steps with `reveal: columns` (default): (1) column 1 (with the heading), (2) column 2, ...,
+then the verdict; `reveal: rows`: (1) the column headings, then one point of every column per
+step (side by side, the *m*-th points of all columns share a line), then the verdict; `reveal:
+all`: every column in step 1, the verdict in step 2.
+[Action targets](#beat-actions): `heading`, `col<N>`, `col:<heading>`, `col<N>.item<M>`
+(1-based) and `verdict`.
+
+Layout: heading in the `header` region, verdict at the bottom, the cards share the rest
+(columns in 16:9, rows in 9:16) and are as tall as the tallest column. Point text starts at
+`size` (1.3x in a vertical frame, like the column headings and the verdict) and is reduced
+together in every column, not below the readable minimum, until the
+columns fit; a comparison that still does not fit is scaled down with a warning (shorten or
+remove points).
+
+| param | type | default | |
+|---|---|---|---|
+| `columns` | list (2–3) | required | `{heading, icon, tone, points}` per column (below) |
+| `heading` | str | `""` | above the columns |
+| `verdict` | str | `""` | the conclusion, shown in a last step |
+| `reveal` | `columns` \| `rows` \| `all` | `columns` | |
+| `markers` | bool | `true` | check / cross / dot before each point (a point's own icon always shows) |
+| `cards` | bool | `true` | each column on a card in the theme's `surface` colour, outlined in its tone |
+| `vs` | str | `""` | text in a small badge between the columns (`"vs"`, `"→"`) |
+| `positive_color`, `negative_color`, `neutral_color` | color | `tertiary`, `accent`, `primary` | the tone colours (green and red in every built-in preset) |
+| `color`, `heading_color`, `verdict_color` | color | `text`, `text`, `highlight` | point text; scene heading and neutral column headings; verdict |
+| `size`, `column_size`, `heading_size`, `verdict_size` | size | `body`, `subtitle`, `heading`, `body` | point text, column headings (reduced with the points), scene heading, verdict |
+
+A column is `{heading, icon, tone, points}`: `heading` (required), `icon` (left of the heading,
+in the tone colour), `tone` (`positive`, `negative` or `neutral`, the default) and `points`
+(up to 8; each a string or `{text, icon}`, the icon replacing the marker).
+
+```yaml
+- id: tradeoff
+  type: comparison
+  params:
+    heading: "Monolith or microservices?"
+    vs: "vs"
+    columns:
+      - heading: "Monolith"
+        icon: package
+        tone: positive
+        points: ["One deploy", "Simple local setup", {text: "Easy refactoring", icon: pencil}]
+      - heading: "Microservices"
+        icon: network
+        tone: negative
+        points: ["Many deploys to coordinate", "Network failures between services"]
+    verdict: "Start with a monolith; split when teams grow."
+  beats:
+    - text: "A monolith is one deploy with a simple setup."
+    - text: "Microservices mean many deploys and network failures."
+    - text: "So start with a monolith."
+      actions:
+        - {highlight: col1, style: box}
+```
+
+### `table`
+
+A header and rows of cells (text or numbers), fitted to the frame, revealed row by row.
+Number columns are right-aligned and formatted (`number_format`, default: the decimals the
+column needs, with thousands separators); text columns are left-aligned. Every other row is
+striped in `stripe_color` (the theme's `surface`); a rule in `header_color` runs under the
+header and a thin one under the last row.
+Steps with `reveal: per_beat` (default): (1) title, header, caption and row 1, (2) row 2, ...;
+with more rows than beats they are spread evenly. `reveal: all`: the whole table in beat 1.
+[Action targets](#beat-actions): `title`, `header`, `row<N>`, `row:<first cell>`, `col<N>`,
+`col:<header>`, `cell<R>.<C>` and `caption` (1-based; rows count below the header; a row's
+first cell as shown, e.g. `row:4K`, `cell2.3`). A `highlight` with `style: fill` lays a
+translucent band over a row, column or cell; `box` frames it.
+
+**Fitting.** The title is in the `header` region (1.3x in a vertical frame, like every header
+band), the caption at the bottom; the table is centred in the space between, and a table
+shorter than that space takes its caption along (just under it, the two centred together). Cell text starts at `size`; when the table is too wide, columns
+share the width (a column that needs less keeps its natural width) and text wraps — headings
+at any space, body cells of more than 16 characters at spaces; numbers and short cells never
+wrap. The size is then reduced until the table fits, not below the readable minimum (lint's
+`min_font`). A table that does not fit even then is scaled down and a warning says so: split
+it into smaller tables (or drop columns), which is mostly a vertical (9:16) problem — a 9:16
+frame holds about 3–4 columns and 12 short rows. In 9:16 rows get more vertical padding.
+
+| param | type | default | |
+|---|---|---|---|
+| `rows` | list of lists | required | 1–30 rows of cells: text or numbers (`""` for an empty cell); every row as long as the header |
+| `header` | list[str] | `[]` | column headings; sets the number of columns (at most 8) |
+| `title` | str | `""` | above the table |
+| `caption` | str | `""` | note under the table (e.g. the source) |
+| `align` | str \| list | `auto` | `auto` (numbers right, text left), `left`, `center`, `right`; one for all columns or one per column |
+| `number_format` | str \| list | automatic | Python format for numbers: `"{:,.1f}"`, `"{:.0%}"`, `"${:,.0f}"`, `"{:,.0f}M"`; one for all or one per column (`null` = automatic) |
+| `reveal` | `per_beat` \| `all` | `per_beat` | |
+| `zebra` | bool | `true` | stripe every other row |
+| `color`, `header_color`, `stripe_color`, `rule_color` | color | `text`, `primary`, `surface`, `dim` | cells; header text and its rule; stripes; the rule under the last row |
+| `title_color`, `caption_color` | color | `text`, `dim` | |
+| `size`, `title_size`, `caption_size` | size | `body`, `heading`, `caption` | `size` is the cell text (headings too), reduced to fit |
+
+```yaml
+- id: results
+  type: table
+  params:
+    title: "Benchmark"
+    header: ["Model", "Params", "Accuracy"]
+    rows:
+      - ["Baseline", 110, 0.812]
+      - ["Sparse", 55, 0.809]
+      - ["Tiny", 14, 0.742]
+    number_format: [null, "{:,.0f}M", "{:.1%}"]   # 110M, 81.2%
+    caption: "Illustrative numbers"
+  beats:
+    - text: "The baseline has a hundred and ten million parameters."
+    - text: "The sparse model halves that and loses almost nothing."
+      actions:
+        - {highlight: "row:Sparse", style: fill}
+    - text: "The tiny model pays for its size."
+      actions:
+        - {highlight: "cell3.3", color: accent}
+```
+
+### `timeline`
+
+Dated events along an axis: a horizontal one in 16:9 and square frames, a vertical one in 9:16
+(`orientation` overrides). Each event is a marker on the axis (a disc with its icon when the
+timeline has icons) and its date, title and optional detail text; events alternate sides of the
+axis so neighbours do not collide (or all stand on one side — `sides: auto` picks whichever
+keeps the text largest, typically alternating in 16:9 and one column right of the axis in 9:16).
+As each event is revealed, a progress line grows along the axis to it.
+Steps with `reveal: per_beat` (default): (1) heading, axis and event 1, (2) event 2, ...; with
+more events than beats they are spread evenly. `reveal: all`: every event in step 1. A
+`highlight` adds a last step: the other events dim, the chosen marker and title turn
+`highlight_color`.
+[Action targets](#beat-actions): `heading`, `axis`, `event<N>` and `event:<date>` (1-based; the
+date as shown, e.g. `event:1969`; an event is its marker, stem and text).
+
+**Spacing.** `even` (default) puts the events at equal gaps. `proportional` places them by date:
+a number (`1969`, `2.5`), a year, `YYYY-MM` or `YYYY-MM-DD` (unquoted `2024-03-15` works too),
+or an event's own `at` for anything else (`"500 BC"` with `at: -500`); events must be in time
+order, and neighbours that are too close are pulled apart just enough to keep their markers
+apart.
+
+**Now.** `now` names the present event (0-based index, date or title): it gets a `now_label`
+tag ("Now") and a ring in `now_color`; later events are drawn as planned (hollow markers, a
+dashed progress line).
+
+**Fitting.** Every event's text shares one size: up to 1.2x the requested sizes (1.5x along a
+vertical axis, which has much more room) when every event has room without more wrapping, else reduced together down to the readable minimum (lint's
+`min_font`); lines are wrapped to even lengths. A timeline that still does not fit is scaled
+down and a warning says so: split it into two timelines or shorten the texts. 10 events with
+detail texts are the limit of a 9:16 frame; 3–6 read best (and stay under lint's `max_words`).
+
+| param | type | default | |
+|---|---|---|---|
+| `events` | list (2–10) | required | `{date, title, text, icon, at}` per event, in time order (below) |
+| `heading` | str | `""` | above the timeline, with step 1 |
+| `orientation` | `auto` \| `horizontal` \| `vertical` | `auto` | `auto`: horizontal in landscape and square frames, vertical in portrait |
+| `sides` | `auto` \| `alternate` \| `one` | `auto` | alternate sides of the axis, or all below a horizontal / right of a vertical axis; `auto` picks the layout with the largest text (then the fewest lines) |
+| `spacing` | `even` \| `proportional` | `even` | proportional: gaps follow the dates (or `at`) |
+| `reveal` | `per_beat` \| `all` | `per_beat` | |
+| `highlight` | int \| str | none | event emphasised in a last step: 0-based index (an int in range), or its date or title |
+| `now` | int \| str | none | the present event (as `highlight`): a tag and ring; later events hollow with a dashed progress line |
+| `now_label` | str | `"Now"` | text of the tag |
+| `color`, `date_color`, `text_color` | color | `text`, `primary`, `dim` | event title, date, detail text |
+| `marker_color`, `axis_color`, `progress_color` | color | `primary`, `dim`, `primary` | markers and their icons; the axis (drawn faint); the progress line |
+| `heading_color`, `highlight_color`, `now_color` | color | `text`, `highlight`, `accent` | |
+| `size`, `date_size`, `text_size`, `heading_size` | size | `body`, `caption`, `caption`, `heading` | event title, date, detail text (all fitted together), heading |
+
+An event is `{date, title, text, icon, at}`: `date` (required; text or a number, shown above the
+title), `title` (required), `text` (a detail line, smaller and dimmer), `icon` (in the event's
+marker) and `at` (a number: its position with `spacing: proportional` when the date is not one).
+
+```yaml
+- id: history
+  type: timeline
+  params:
+    heading: "The space race"
+    spacing: proportional            # gaps follow the years
+    events:
+      - {date: 1957, title: "Sputnik", text: "First satellite in orbit", icon: satellite}
+      - {date: 1961, title: "Gagarin", text: "First human in space", icon: user}
+      - {date: 1969, title: "Apollo 11", text: "First crewed Moon landing", icon: moon}
+    highlight: "Apollo 11"           # a last step: the other events dim
+  beats:
+    - text: "In 1957 Sputnik reached orbit."
+    - text: "Four years later, Gagarin flew."
+    - text: "In 1969, Apollo 11 landed on the Moon."
+    - text: "The landing is still the high point."
+      actions:
+        - {highlight: axis, style: flash}
+```
+
+### `diagram`
+
+A flowchart or any directed graph — a pipeline, an architecture, a decision tree, a state
+machine — laid out automatically: nodes in layers along the edges' direction (left to right in
+16:9 and square frames, top to bottom in 9:16; `direction` overrides), each layer ordered to
+avoid crossing edges, edges routed between the nodes with arrowheads that end on the node's
+outline. A cycle (an edge back to an earlier node) is drawn as one edge running backwards. Also
+available as type **`flowchart`** (the same scene).
+Steps with `reveal: nodes` (default): one node per step in layout order (layer by layer; within
+a layer top to bottom or left to right), each after the edges leading to it from nodes on
+screen have grown in from their source; the heading comes with step 1. `reveal: layers`: one
+layer per step; `all`: everything in step 1. With more steps than beats they are spread evenly.
+**Explicit `steps`** replace that: per step a node id or an edge `"a->b"`, or a list of them.
+An edge appears with its nodes unless a later step names it (then it grows in that step); an
+edge named in a step brings its nodes; nodes no step names come in one more step at the end.
+A `highlight` adds a last step: the listed nodes and edges turn `highlight_color` (outline,
+tint, icon, line; labels keep their colour) and everything else dims — list a path as node ids
+(`[start, check, ship]`: the edges between consecutive ones are highlighted too) and add single
+edges as `"a->b"`.
+[Action targets](#beat-actions): `heading`, `node<N>` (1-based, in the order of `nodes`),
+`node:<id>` and `edge:<from>-><to>` (`edge:check->ship`; patterns such as `edge:check->*`
+select every edge leaving a node). Revealing an edge early brings its nodes too.
+
+**Nodes** are written as their id (`- Load data`: the id is also the label) or as
+`{id, label, shape, icon, color}`: `id` (letters, digits, spaces, `_`, `.`, `-`), `label` (the
+text, wrapped; default the id), `shape` (`box`, `round` (rounded corners), `pill` (start/end),
+`circle`, `diamond` (a decision), `cylinder` (a database); default the scene's `shape`),
+`icon` (above the label in left-to-right layouts, circles and diamonds; else beside it) and `color` (outline, tint and
+icon; default `node_color`).
+
+**Edges** use a shorthand: `"a -> b"`, `"a -> b: label"` (text on the edge, near its start),
+`"a --> b"` (dashed), or a chain `"a -> b -> c"` (one edge per arrow; a label needs a single
+arrow). The long form is `{from, to, label, style: solid | dashed, color}`. Each edge may be
+listed once, a node may not point to itself, and every id must be a node: `vidgen validate`
+reports e.g. `edges[2] (start -> shp): unknown node 'shp'; did you mean 'ship'? (nodes: ...)`.
+
+**Fitting.** Labels share one size: up to 1.3x the requested `size` when the diagram has room,
+else reduced (with the edge labels) down to the readable minimum (lint's `min_font`); per
+direction (with `auto`, the other one is tried too and wins only if it keeps the text 10 %
+larger) and label wrap width the layout with the largest text is used, and spare room widens the
+gaps. A diagram that still does not fit is scaled down and a warning says so: split it or
+shorten the labels. Up to ~12 nodes read well in 16:9, fewer in 9:16 (wide layers do not fit a
+narrow frame; long chains do).
+
+| param | type | default | |
+|---|---|---|---|
+| `nodes` | list (1–30) | required | node ids, or `{id, label, shape, icon, color}` (above) |
+| `edges` | list (≤ 60) | `[]` | `"a -> b"`, `"a -> b: label"`, `"a --> b"`, `"a -> b -> c"`, or `{from, to, label, style, color}` |
+| `heading` | str | `""` | above the diagram, with step 1 |
+| `direction` | `auto` \| `LR` \| `TB` | `auto` | layers left to right or top to bottom; `auto`: `LR` in landscape and square frames, `TB` in portrait |
+| `routing` | `curved` \| `straight` \| `orthogonal` | `curved` | smooth S-curves, straight lines, or right angles (each edge in its own lane) |
+| `reveal` | `nodes` \| `layers` \| `all` | `nodes` | ignored when `steps` is given |
+| `steps` | list | none | per step a node id, an edge `"a->b"`, or a list of them |
+| `highlight` | list[str] | `[]` | node ids (a path: edges between consecutive ones too) and edges `"a->b"`, emphasised in a last step |
+| `shape` | `box` \| `round` \| `pill` \| `circle` \| `diamond` \| `cylinder` | `round` | default node shape |
+| `node_color`, `label_color` | color | `primary`, `text` | node outline / tint / icon; label text |
+| `edge_color`, `edge_label_color` | color | `dim`, `dim` | |
+| `heading_color`, `highlight_color` | color | `text`, `highlight` | |
+| `size`, `edge_label_size`, `heading_size` | size | `body`, `caption`, `heading` | node labels and edge labels are fitted together |
+
+```yaml
+- id: release
+  type: flowchart                    # = diagram
+  params:
+    heading: "How a change ships"
+    nodes:
+      - {id: start, label: "Pull request", shape: pill}
+      - {id: ci, label: "Tests pass?", shape: diamond}
+      - {id: fix, label: "Fix the code"}
+      - {id: ship, label: "Deploy", icon: rocket, shape: circle}
+    edges:
+      - "start -> ci"
+      - "ci -> ship: yes"
+      - "ci -> fix: no"
+      - "fix --> ci"                 # dashed; a cycle is drawn as an edge running back
+    highlight: [start, ci, ship]     # the happy path, in a last step
+  beats:
+    - text: "Every change starts as a pull request."
+    - text: "If the tests fail, we fix the code and try again."
+      actions:
+        - highlight: "edge:fix->ci"
+          style: flash
+    - text: "Otherwise it is deployed."
+    - text: "That is the path most changes take."
+```
+
+### `flowchart`
+
+The same scene type as [`diagram`](#diagram) (same params, steps and targets), under the name a
+flowchart is usually looked up by.
+
+### `process`
+
+A pipeline of 2–8 stages that something passes through — a request, an order, a batch of data —
+with a **token** (a dot, or an icon) that travels from stage to stage. Stages stand in a row in
+16:9 and square frames, in two rows when that keeps the text clearly larger (the second row runs
+back, "snaking"; typical for 6–8 stages), and in a column in 9:16 (`layout` overrides). Each
+stage is a card with its label, an optional icon and an optional detail line; connectors with
+arrowheads join them.
+Steps with `reveal: per_beat` (default): (1) heading, `input` and stage 1 (the token arrives at
+it), (2) the connector to stage 2 grows while the token travels along it and stage 2 appears, ...;
+the `output` comes with the last stage. The stage where the token is is the **active** one: its
+outline and icon turn `active_color`, and the previous stage returns to normal. `loop: true` adds
+an arrow from the last stage back to the first (below a row, beside a column) and a last step in
+which the token follows it. `reveal: all` shows the whole pipeline in step 1; the following steps
+only move the token, one stage per step. With more steps than beats they are spread evenly.
+While travelling, the token passes behind the stage it leaves and waits in front of the next
+one, on its connector's arrowhead.
+[Action targets](#beat-actions): `heading`, `input`, `stage<N>` (1-based), `stage:<label>`,
+`connector<N>` (from stage N to N+1), `loop`, `output` and `token` (those the pipeline has).
+
+**Fitting.** Stage texts share one size: up to 1.2x the requested sizes (1.5x in a column)
+when the pipeline has room without more wrapping, else reduced together down to the readable minimum (lint's `min_font`); `input`/`output`
+labels stand above their arrows (above and below a column). A pipeline that still does not fit
+is scaled down and a warning says so: shorten the texts or split it into two scenes. Short
+labels with an optional detail line read best; 3–5 stages with details fit a 16:9 row.
+
+| param | type | default | |
+|---|---|---|---|
+| `stages` | list (2–8) | required | a label, or `{label, icon, text}` per stage (labels must differ) |
+| `heading` | str | `""` | above the pipeline, with step 1 |
+| `layout` | `auto` \| `row` \| `snake` \| `column` | `auto` | `auto`: a column in portrait frames, else a row (two snaking rows when that keeps the text 10 % larger) |
+| `reveal` | `per_beat` \| `all` | `per_beat` | `all`: the whole pipeline in step 1, then the token moves one stage per step |
+| `loop` | bool | `false` | an arrow from the last stage back to the first; the token follows it in a last step |
+| `loop_label` | str | `""` | text on the loop arrow (`repeat`, `next batch`); needs `loop` |
+| `input`, `output` | str | `""` | what goes in / comes out, with an arrow into the first / from the last stage |
+| `token` | bool | `true` | the travelling token |
+| `token_icon` | icon | none | draw the token as this icon in a small disc instead of a dot |
+| `token_label` | str | `""` | a short tag that travels with the token (`order`, `request`) |
+| `stage_color`, `active_color` | color | `primary`, `highlight` | card outlines and icons; those of the active stage |
+| `label_color`, `text_color` | color | `text`, `dim` | stage labels, detail lines |
+| `connector_color`, `token_color` | color | `dim`, `accent` | connectors and loop arrow; the token and its tag |
+| `io_color`, `heading_color` | color | `dim`, `text` | input, output and loop labels; heading |
+| `size`, `text_size`, `io_size`, `heading_size` | size | `body`, `caption`, `caption`, `heading` | stage labels, detail lines (fitted together), input/output/loop/token labels, heading |
+
+```yaml
+- id: orders
+  type: process
+  params:
+    heading: "What happens to an order"
+    input: "Checkout"
+    output: "At your door"
+    token_label: "order"
+    stages:
+      - {label: "Pay", icon: credit-card, text: "card or invoice"}
+      - {label: "Pack", icon: package}
+      - {label: "Ship", icon: truck, text: "1-2 days"}
+  beats:
+    - text: "At checkout, the order is paid."
+    - text: "The warehouse packs it."
+    - text: "And a courier ships it to your door."
+      actions:
+        - {highlight: token, style: flash}
+```
+
+### `network`
+
+A layered neural network: layers of units (dots) joined by edges, left to right in 16:9 and
+square frames, top to bottom in 9:16 (`direction` overrides). A layer larger than `max_neurons`
+shows `show` units with an ellipsis between them (half before it, half after) and its unit count
+under the label, e.g. 6 dots for a layer of 512. Each layer connects to the previous one
+`dense` (every unit to every unit), `sparse` (a reproducible share `ratio` of the pairs, every
+unit keeping a connection), `grouped` (both layers split into `groups` blocks, block to block,
+coloured by block from the theme palette as in grouped convolutions), `one_to_one` or `none`;
+the scene's `connect` is the default, a layer's `connect` overrides it. Edges are drawn between
+the units shown (at most `max_edges` per pair of layers, thinned evenly beyond that), thinner
+and fainter the more there are, so wide layers do not turn into a hairball.
+Steps with `reveal: layers` (default): (1) heading and layer 1, (2) the edges into layer 2 grow
+from layer 1, then its units appear, ...; `reveal: all`: the whole network in step 1. Then
+`passes` forward passes (default 1), each a step: a pulse in `pulse_color` runs along the edges
+layer by layer and each layer's units flash as it arrives. A `highlight` adds a last step: the
+listed units grow and turn `highlight_color`, so do the edges between consecutive ones in
+neighbouring layers (drawn if the connection had none), and everything else dims.
+[Action targets](#beat-actions): `heading`, `layer<N>` (1-based; units, ellipsis, label and
+count), `layer:<label>`, `edges<N>` (between layer N and N+1, if they have edges) and
+`neuron<L>.<i>` (unit i of layer L as drawn, 1-based from the top or left, the ellipsis not
+counted: `neuron2.3`).
+
+| param | type | default | |
+|---|---|---|---|
+| `layers` | list (2–8) | required | a size, or `{size, label, show, connect, color}` per layer, input first (below) |
+| `heading` | str | `""` | above the network, with step 1 |
+| `connect` | connection | `dense` | how each layer connects to the previous one: `dense`, `sparse`, `grouped`, `one_to_one`, `none`, `"sparse:0.3"`, `"grouped:3"` or `{type, ratio, groups}` |
+| `direction` | `auto` \| `LR` \| `TB` | `auto` | `auto`: `TB` in portrait frames, else `LR` |
+| `max_neurons` | int (2–12) | `8` | layers with more units are drawn with an ellipsis |
+| `show` | int (2–12) | `6` | units drawn for such a layer (a layer's `show` overrides it) |
+| `counts` | `auto` \| `all` \| `none` | `auto` | unit counts under the labels: `auto` only for layers drawn with an ellipsis |
+| `count_format` | str | `"{n:,}"` | Python format of the count with `n` (`"{n:,} units"`) |
+| `reveal` | `layers` \| `all` | `layers` | |
+| `passes` | int (0–4) | `1` | forward-pass steps after the network is built |
+| `highlight` | list[str] | `[]` | units as `"layer.unit"` (1-based, as drawn): `["1.2", "2.3", "3.1"]` marks a path in a last step |
+| `max_edges` | int (4–200) | `64` | most edges drawn between two layers |
+| `neuron_color`, `edge_color` | color | `primary`, `dim` | units (unless a layer sets `color`); edges |
+| `group_colors` | bool | `true` | colour `grouped` edges by block (theme palette) |
+| `edge_opacity` | float | auto | edge opacity; default lower the more edges a pair of layers has |
+| `label_color`, `count_color` | color | `text`, `dim` | layer labels, counts |
+| `pulse_color`, `highlight_color`, `heading_color` | color | `accent`, `highlight`, `text` | |
+| `label_size`, `heading_size` | size | `caption`, `heading` | labels and counts (never below the readable minimum), heading |
+
+A layer is `{size, label, show, connect, color}`: `size` (required; the number of units it
+has), `label`, `show` (units drawn when it is larger than `max_neurons`), `connect` (to the
+previous layer; not on the first layer) and `color` (its units). A connection's long form is
+`{type, ratio, groups}` (`ratio` 0.35 for `sparse`, `groups` 2 for `grouped`).
+
+```yaml
+- id: mlp
+  type: network
+  params:
+    heading: "A small classifier"
+    layers:
+      - {size: 784, label: "Pixels", show: 5}
+      - {size: 128, label: "Hidden"}
+      - {size: 10, label: "Digits", connect: "sparse:0.4"}
+    highlight: ["1.2", "2.3", "3.4"]
+  beats:
+    - text: "Each pixel of the image is an input."
+    - text: "A hidden layer of 128 units combines them."
+    - text: "Ten outputs score the ten digits."
+    - text: "In a forward pass, the signal flows from left to right."
+      actions:
+        - {highlight: "layer:Digits", style: box, at: 0.5}
+    - text: "This path leads to the answer."
+```
+
+### `end_card`
+
+Steps: (1) logo, icon and title, (2) lines. Fades out over 1 s.
+[Action targets](#beat-actions): `logo`, `icon`, `title`, `line<N>` (1-based; those present).
+
+| param | type | default | |
+|---|---|---|---|
+| `title` | str | `""` | at least one of `title`, `lines`, `logo`, `icon` |
 | `lines` | list[str] | `[]` | links, credits; short lines shrink together instead of wrapping |
 | `logo` | str | none | image file in the project (checked by `vidgen validate`) |
+| `icon` | icon | none | icon above the title (below the logo, if both) |
+| `icon_color` | color | `primary` | |
 | `title_color`, `color` | color | `highlight`, `text` | |
 | `title_size`, `size` | size | `title`, `body` | |
 
@@ -437,6 +3222,7 @@ Steps: (1) logo and title, (2) lines. Fades out over 1 s.
   type: end_card
   params:
     title: "Are LLMs over-parameterized?"
+    icon: link
     lines: ["github.com/me/my-project", "huggingface.co/me"]
   beats:
     - text: "Code and models are online. Thanks for watching."
@@ -445,6 +3231,7 @@ Steps: (1) logo and title, (2) lines. Fades out over 1 s.
 ### `text_card`
 
 One block of text, wrapped to fit, faded in at the first beat and held (no fade-out).
+[Action targets](#beat-actions): `text`.
 
 | param | type | default | |
 |---|---|---|---|
@@ -458,3 +3245,1412 @@ One block of text, wrapped to fit, faded in at the first beat and held (no fade-
   params: {text: "Over-parameterized?", color: accent}
   duration: 2
 ```
+
+## Beat actions
+
+A beat can act on named parts of its scene — **targets** such as `item3` or `bar:4K` — while it
+is spoken: reveal one early, dim it, highlight it, zoom in on it, morph it into another, or
+point at it with a callout (also at any spot of the frame). Actions are listed under the beat:
+
+```yaml
+- id: sizes
+  type: bar_chart
+  params: {labels: ["Preview 480p", "720p", "1080p", "4K"], values: [0.4, 1.1, 2.6, 9.8]}
+  beats:
+    - text: "Bar charts grow their bars while the values count up."
+    - text: "Four K takes by far the longest."
+      actions:
+        - {action: highlight, target: "bar:4K", style: box, until: sizes_b3}   # canonical form
+    - text: "Previews are the fast way to iterate."
+      actions:
+        - dim: [bar2, bar3, bar4]                  # shorthand: {ACTION: TARGET, ...options}
+        - highlight: "bar:Preview 480p"
+          color: accent                            # an option, in the shorthand too
+```
+
+```yaml
+- id: square
+  type: equation
+  params:
+    latex: ["(a + b)^2", "(a + b)(a + b)", "a^2 + 2ab + b^2"]
+    terms: ["2ab"]                                 # parts of a formula actions can target
+  beats:
+    - text: "Take a plus b, squared, and jump straight to the result."
+      actions:
+        - {transform: step1, into: step3, at: 0.5} # step 2's own turn is then skipped
+    - text: "The middle term, two a b, comes from the two cross products."
+      actions:
+        - zoom: "term:2ab"                         # the camera moves in, and is back by the beat's end
+    - text: "That is the whole expansion."
+```
+
+```yaml
+- id: trend
+  type: line_chart
+  params: {title: "Validation loss", x: [1, 2, 3, 4], series: {baseline: [2.1, 1.8, 1.6, 1.5], sparse: [2.2, 1.7, 1.5, 1.4]}}
+  beats:
+    - text: "Here is the baseline."
+    - text: "And here is the sparse model, which ends lower."
+      actions:
+        - callout: "point:sparse@4"                # on a target: an arrow from a label to it
+          kind: arrow
+          label: "Lowest loss"
+          at: 0.4                                  # gone when the next beat starts
+    - text: "Both start from the same loss."
+      actions:
+        - {action: callout, kind: box, area: [0.1, 0.15, 0.3, 0.3], label: "Start"}   # coordinates of the frame
+```
+
+**Syntax.** The canonical form is a mapping with `action` and the keys below, plus the
+action's options. The shorthand `{ACTION: TARGET, ...options}` (as `- dim: item2`) is the
+same thing; write the action name as the first key (if a tool sorted the keys, vidgen finds
+the one key that names an action).
+
+| key | default | |
+|---|---|---|
+| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `transform`, `callout`, `sfx`, or a project action (`vidgen list-scenes` lists them) |
+| `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one (`callout` with an `area` needs none) |
+| `at` | `0` | when, as a fraction of the beat's narration (`0` ≤ at < `1`) |
+| `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`, `callout`: undone when it starts; `zoom`: the camera is back when it starts) |
+| `run_time` | the action's | seconds the animation takes (`reveal` / `callout` 0.8, `dim` / `highlight` 0.6, `zoom` / `transform` 1.0; a zoom takes as long again to come back) |
+
+**Targets** depend on the scene type (`vidgen list-scenes` prints them as `targets:`). Every
+built-in type has some; `<N>` counts from 1 (`item1`, `item2`...), `<text>`/`<label>`/`<name>`
+are written out in full (`item:Pick scene types`, or with a pattern: `item:Pick*`). The last
+column lists the actions that make sense on them (the others work, but rarely help: a `zoom` on
+a title card, a `transform` of a bar).
+
+<!-- targets-table: kept in sync with the scene types by tests/test_actions.py -->
+| scene type | targets | useful actions | notes |
+|---|---|---|---|
+| `title` | `icon`, `kicker`, `title`, `subtitle`, `authors` | reveal, dim, highlight | those the card has |
+| `text_card` | `text` | highlight, zoom | |
+| `bullets` | `heading`, `item<N>`, `item:<text>` | reveal, dim, highlight, zoom, transform | an item is its row (marker, icon, text) |
+| `icon_grid` | `heading`, `item<N>`, `item:<label>` | reveal, dim, highlight, zoom, transform | an item is its icon, label and sublabel |
+| `bar_chart` | `title`, `bar<N>`, `bar:<label>` | reveal, dim, highlight, zoom | a bar with its value and category labels; a `box` sits on the axis |
+| `line_chart` | `title`, `axes`, `series<N>`, `series:<name>`, `point:<name>@<x>` | reveal, dim, highlight, zoom | a series is its line, markers and end label; `point:sparse@8` |
+| `scatter` | `title`, `axes`, `legend`, `series<N>`, `series:<name>`, `point:<series>@<N>`, `point:<series>@<label>`, `trend`, `trend:<series>` | reveal, dim, highlight, zoom | a point is its marker and label; `point:ours@2` is the 2nd point written; `legend` with several series, `trend:` with `trend: each` |
+| `histogram` | `title`, `axes`, `legend`, `bin<N>`, `bin:<range>`, `compare`, `mean`, `median` | reveal, dim, highlight, zoom | `bin:10-20` names a bin by its edges; `legend` and `compare` with `compare`; `mean` / `median` when set |
+| `pie` | `title`, `slice<N>`, `slice:<label>`, `center`, `legend` | reveal, dim, highlight, zoom | a slice is its wedge, label and leader line (a `box` frames the wedge); `slice:Other` after grouping; `center` with a donut, `legend` with the names in a legend (revealing it reveals every slice); `dim` and `highlight` recolour a label inside its slice so it stays readable on the slice's new look |
+| `heatmap` | `title`, `legend`, `row<N>`, `row:<label>`, `col<N>`, `col:<label>`, `cell<R>.<C>` | reveal, dim, highlight, zoom | a row / column is its cells and label (`box` and `fill` cover its cells edge to edge); `cell2.3` is row 2, column 3; `style: box` keeps the data colours (`color` paints the cells, `fill` tints them); values are recoloured to stay readable on dimmed, painted or tinted cells |
+| `map` | `title`, `map`, `legend`, `country:<code>`, `pin<N>`, `pin:<label>`, `arc<N>`, `step<N>` | reveal, dim, highlight, zoom | `country:` for highlighted and valued countries, by alpha-3, alpha-2 or name (`country:DEU`, `country:DE`, `country:Germany`): a highlight with its label (revealing it plays its highlight), a valued country its shape; a pin is its dot and label; `step2` is step 2's items (revealing it plays the step); `zoom: country:FRA` looks closer; `dim: map` fades the countries under the highlights |
+| `image` | `image`, `caption` | dim, highlight, zoom | `dim` fades the picture, `highlight` tints it |
+| `screenshot` | `title`, `image`, `caption`, `callout<N>`, `callout:<label>`, `step<N>` | reveal, dim, highlight, zoom | a callout is its mark and label (`highlight` repaints the mark and the label's plate; its text keeps a readable colour); `callout:New task`; `step2` is step 2's callouts (revealing it plays the step); `zoom: callout3` looks closer; `dim: image` fades the picture under the callouts |
+| `video_clip` | `title`, `clip`, `caption`, `callout<N>`, `callout:<label>`, `step<N>` | reveal, dim, highlight, zoom | as in `screenshot`; `clip` is the moving picture with its frame: `dim` fades it, `highlight` tints it, `zoom` looks closer (it is decoded sharper for that) |
+| `quote` | `mark`, `quote`, `author`, `source` | reveal, dim, highlight, zoom | |
+| `equation` | `step<N>`, `caption`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each of the `terms` param, in the step on screen; `transform: step1` + `into: step3` jumps ahead |
+| `equation_derivation` | `title`, `step<N>`, `note<N>`, `result`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each part in `terms`, `colors`, `match` or marked `{{ }}`, in the current step only; `step2` is also its dimmed line; `note2` (revealing it plays step 2); `result` is the last step with its box |
+| `code` | `title`, `listing`, `line<N>`, `lines:<a-b>` | dim, highlight, zoom | a line with its number; `lines:3-5`; a wide line leaves little to zoom |
+| `code_walkthrough` | `title`, `listing`, `line<N>`, `lines:<a-b>`, `note<N>` | reveal, dim, highlight | `reveal: line40` scrolls it into view; `lines:<a-b>`: every range up to 40 lines, else the steps' ranges; `note2` is step 2's note (revealing it plays the step); the next step resets line opacities |
+| `end_card` | `logo`, `icon`, `title`, `line<N>` | reveal, dim, highlight | those present |
+| `chapter` | `icon`, `number`, `title`, `subtitle` | reveal, dim, highlight | those present |
+| `stat` | `icon`, `value`, `label`, `comparison`, `context` | reveal, dim, highlight, zoom | `reveal: value` early runs the count; `comparison` is the change chip with its text |
+| `comparison` | `heading`, `col<N>`, `col:<heading>`, `col<N>.item<M>`, `verdict` | reveal, dim, highlight, zoom | a column is its heading and points (a `box` frames its card); `col2.item1` is a point with its marker; revealing a point brings its column's card |
+| `table` | `title`, `header`, `row<N>`, `row:<first cell>`, `col<N>`, `col:<header>`, `cell<R>.<C>`, `caption` | reveal, dim, highlight, zoom | `box` and `fill` cover the whole row / column / cell; `cell2.3` is row 2 (below the header), column 3 |
+| `timeline` | `heading`, `axis`, `event<N>`, `event:<date>` | reveal, dim, highlight, zoom | an event is its marker, stem and text; revealing one grows the progress line to it; `event:1969` |
+| `diagram` | `heading`, `node<N>`, `node:<id>`, `edge:<from>-><to>` | reveal, dim, highlight, zoom | also for `flowchart`; a node is its shape, icon and label (a `box` frames the shape), an edge its line, arrowhead and label; `highlight: [node:a, "edge:a->b", node:b]` marks a path; revealing an edge brings its nodes |
+| `process` | `heading`, `input`, `stage<N>`, `stage:<label>`, `connector<N>`, `loop`, `output`, `token` | reveal, dim, highlight, zoom | a stage is its card (a `box` frames it); `connector2` runs from stage 2 to 3; revealing a stage early shows it without moving the token; `highlight: token` with `style: flash` points at it |
+| `network` | `heading`, `layer<N>`, `layer:<label>`, `edges<N>`, `neuron<L>.<i>` | reveal, dim, highlight, zoom | a layer is its units, ellipsis, label and count; `edges1` joins layers 1 and 2; `neuron2.3` is unit 3 of layer 2 as drawn |
+
+`title` and `heading` stand for each other (the header band, see "Built-in scenes"): `highlight:
+title` works on a `bullets` heading. [Project scene types](EXTENDING.md#8-per-beat-actions-targets-and-custom-actions)
+can declare their own targets; a type without any rejects actions in `vidgen validate`.
+
+**Actions**
+
+| action | options | |
+|---|---|---|
+| `reveal` | — | brings the target on screen with the scene's own entrance animation (e.g. item 4 before its turn). A target already on screen is left alone, and the scene does not reveal it again at its own step. |
+| `dim` | `opacity` (`0.45`, 0–1, of the target's full opacity) | fades the target; one that is already dimmer (e.g. by `bullets`' `dim_previous`) stays as it is, so dimming never compounds; `until:` restores the opacity |
+| `highlight` | `color` (`highlight`, a theme token or hex), `style` (`color` default, `box`, `underline`, `fill`, `flash`, or a list such as `[color, box]`) | `color` recolours the target and brings a dimmed one back to full opacity while highlighted; `box` draws a rounded frame around it, `underline` a line under it, `fill` lays a translucent band of the colour under it (over backdrops such as table stripes and cards); `flash` flashes the colour there and back (leaves no trace; not with `color`). `until:` restores the colours (and the dimming) and removes box / underline / fill. |
+| `zoom` | `scale` (magnification > 1, up to 8; default: as close as the targets fit), `padding` (`0.15`: share of the view kept free on each side of the targets) | moves the camera in on the targets and back out: the zoom-out ends with the beat (with `until: <beat>`, when that beat starts). Without `scale` the view is at most 3x; a target that already fills the frame is not zoomed (a warning says so). The view never leaves the frame. |
+| `transform` | `into` (required: a target not on screen yet), `style` (`auto` default, `replace`, `shapes`, `tex`, `fade`) | morphs the target into `into`, which then stays on screen in its own place (the target is gone). `shapes` moves matching glyphs (what `auto` uses for text and formulas), `replace` morphs point by point (`auto` for other shapes), `tex` matches the TeX parts of two formulas, `fade` cross-fades. `into` must be a target of the scene; text that is not part of the scene cannot be morphed into (give the scene that content, e.g. as a later equation step). If `into` is already on screen, the target fades out into its place (warning). |
+| `callout` | `kind` (`box` default, `circle`, `arrow`, `label`, `spotlight`, `magnifier`), `label`, `area`, `within` (`frame` \| `safe`), `units` (`fraction` \| `px`), `color` (`highlight`), `label_size` (`caption`), `side` (`auto`, `top`, `bottom`, `left`, `right`), `curved` (arrow), `zoom` (magnifier, `2`), `keep` (`false`), `name` | points at the target — or, without a target, at `area` of the frame — with the [Step 34 callouts](#screenshot): a rounded `box` (label as a tag on its edge), a `circle`, an `arrow` from the label, a `label` beside it (no mark), a `spotlight` (the rest of the view darkened) or a `magnifier` (an enlarged inset of a picture: the target must show one, e.g. `image`). Gone when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: stays to the end of the scene). See "Callouts" below. |
+| `sfx` | `sound` (or as the target: `- sfx: NAME`), `gain` (`0` dB), `pan` (`0`), `align` (`start` \| `end`), `params` (`duration`, `pitch`, `intensity`) | plays a [sound effect](#sound-effects-sfx) at `at` — exactly then, even while the scene animates; draws nothing, works on every scene type. Its "target" is the sound's name, not a target of the scene; no `until`, no `run_time`. |
+
+`dim`, `highlight`, `zoom` and `transform` act on targets on screen; a target not shown yet is
+first revealed (as by `reveal`). `dim` and `highlight` change only opacity resp. colour, so
+both can apply to one target and each is undone separately. Images are dimmed and tinted too
+(their pixels). Text written on a filled shape of its target (a pie slice's label, a heatmap
+value, a callout's label on its plate) is not faded or painted with the shape: it takes the
+colour that reads on the shape's new look (dimmed: kept at 70 % opacity). Undoing a `dim`
+(`until`) keeps the scene's own dimming since (`bullets`' `dim_previous`, a `highlight` step).
+A highlight `box` (and `fill`) surrounds what the scene marks as the target's
+outline (a bar and its value, standing on the axis; a table row, column or cell edge to edge; a
+comparison column's card; else the whole target). Boxes, underlines and fills move with their
+target when the scene moves it later (a `code_walkthrough` scrolling, a pie slice pulled out)
+and fade while it is off screen (a line scrolled out of the window).
+
+**Callouts** (`callout`) work on every scene type, also project types without targets (with an
+`area`). What they point at:
+- a target (`callout: "bar:4K"`): its outline (a bar with its value; else its parts on screen);
+  a list or a pattern gives one callout around all of them;
+- a target and an `area`: `[x, y, w, h]` (or a point `[x, y]`) from the top-left corner, as
+  fractions of the target's picture when it shows one (`image`, `screenshot`'s `image`,
+  `video_clip`'s `clip`; so the numbers read off the image file, and `units: px` are its pixels),
+  else of the target's box;
+- an `area` alone: fractions of the visible frame (`within: safe`: of its safe area), or with
+  `units: px` pixels of the output frame (1920 x 1080...).
+
+Labels are bold text on a plate in `color` with readable text (as in `screenshot`), never below
+the readable size. They go away from what they point at, inside the safe area (which leaves out
+overlays with `reserve: true`), clear of the text on screen, of other callouts, of the scene's
+other small parts (a node, a bar) and of the overlays; `side` picks a direction as long as a
+spot there is clear (else the label goes where one is: on a crowded chart a label beside a bar
+would sit on its neighbour). A `label` (no mark) goes straight above, below or beside its
+target before the corners, keeps 0.2 units from other text where it can (lint's
+`label_spacing`) and never stands clearly nearer another bar, value or the title than its own
+target. A callout is drawn over everything else of the scene. While the camera is zoomed in (a `zoom` earlier in the
+beat or due at the same moment — the callout then appears once the camera is in — a `screenshot`
+focus) it is built for the zoomed view, so its label reads at the normal size; one drawn before
+a zoom grows with the scene. `name: peak` makes it a target of later
+actions (`dim: peak`, `highlight: peak`; its label stays readable). Validation: a callout needs a
+target or an `area`, a `magnifier` a target and an area; `kind: label` needs a `label`; `curved`
+is for arrows, `zoom` for magnifiers; `keep` and `until` exclude each other; a `name` must be new
+in the scene. A magnifier on a target without a still picture is an error when the scene renders.
+
+**Timing.** Actions never make a beat longer. An action is due `at` x the beat's narration
+after the beat starts and runs at the first moment from then on when the scene's own animation
+is not playing (the scene's reveal of that beat's step comes first, then the action), for its
+`run_time`, shortened to end within the beat (narration + `narration.pad`; `vidgen lint`
+reports run times shortened below 0.5 s as `rushed_animation`). Actions due together play
+together (ones on the same target, and two camera moves, one after the other). Undoing
+(`until`) happens at the start of that beat, with its actions (a `callout` without `until`:
+at the start of the next beat). A `zoom` is undone so that the
+camera is back when the next beat (or its `until` beat) starts: its zoom-out starts `run_time`
+before that beat's end, and a zoom-in late in a short beat is shortened together with its
+zoom-out. If a scene leaves no time at all, the action is applied without animation and a
+warning is logged. Silent scenes have no beats, so no actions. While the camera is zoomed in,
+`vidgen lint` does not report text cut off by the frame or in the margins (`off_frame`,
+`safe_area`): that is what a zoom does.
+
+**Checks.** `vidgen validate` reports unknown actions (with suggestions), unknown options,
+invalid option values, `until` on an action that cannot be undone or on a beat that is not a
+later one of the scene, and unknown targets, listing the scene's targets, e.g.
+`scenes[3].beats[1].actions[0].target: unknown target 'bar:4k' for scene type 'bar_chart'; did
+you mean 'bar:4K'? (targets: title, bar1, bar:Preview 480p, ...; forms: title, bar<N>,
+bar:<label>; * and ? match several)`. The JSON Schema checks action names and options; targets
+depend on the params, so only `vidgen validate` checks them. Use `vidgen storyboard --scene ID
+--per-beat 3` to see actions mid-beat.
+
+## Overlays
+
+Overlays are drawn **on top of the scenes and fixed to the screen**: a lower third introducing a
+speaker, a logo in a corner, a progress bar, the current chapter, captions of the narration. They are listed once for the whole video and appear on every scene
+they apply to; the scene's camera moves (a [`zoom`](#beat-actions)) and its fades (the fade-out
+at a scene's end) do not touch them, and they look the same on both sides of a cut. They are
+drawn into each scene's own render, so `vidgen storyboard`, the [layout dump](#layout-dump-buildlayoutscenejson)
+and [`vidgen lint`](#lint-vidgen-lint) see them. `vidgen list-scenes` lists the overlay types
+and their options (`--json`: `overlays`).
+
+```yaml
+overlays:
+  - type: watermark                 # the whole video
+    image: assets/logo.png
+    corner: bottom_right
+    opacity: 0.6
+  - type: lower_third               # in scene "intro", 1.5 s after it starts, for 5 s
+    scene: intro
+    at: 1.5
+    duration: 5
+    name: Ada Lovelace
+    title: Mathematician
+    icon: user
+  - type: watermark
+    id: draft
+    text: DRAFT
+    corner: top_right
+    from: results                   # from the start of scene "results"
+    to: 95                          # to 95 s into the video
+scenes:
+  - id: intro
+    type: title
+    params: {title: "Engines"}
+    beats: [{text: "..."}]
+  - id: end
+    type: end_card
+    params: {title: "Thanks"}
+    beats: [{text: "..."}]
+    overlays: {watermark: false}    # no logo on the end card
+```
+
+Keys every overlay entry has (any other key is an option of its type):
+
+| key | default | |
+|---|---|---|
+| `type` | required | `lower_third`, `watermark`, `progress_bar`, `chapter_indicator`, `captions`, or a [project overlay type](EXTENDING.md#9-overlays-custom-overlay-types) |
+| `id` | the type | the name a scene's `overlays:` refers to; when several entries share a type and have no `id`, they are `<type>1`, `<type>2`, ... (ids must be unique) |
+| `scenes` | `all` | the scenes it is drawn on: `all` or a list of scene ids |
+| `exclude` | `[]` | scenes it is not drawn on |
+| `from` | the video's start | where it starts: seconds in the video, or a scene id (that scene's start) |
+| `to` | the video's end | where it ends: seconds in the video, or a scene id (that scene's end) |
+| `reserve` | the type's: `false`; `captions` at the top or bottom `true` | keep the scenes' layouts clear of it: on every scene it is drawn on, the safe area (docs/EXTENDING.md "Layout regions") shrinks to leave its box free (plus 0.2 units), so built-in scenes lay out around it (the layout dump's `safe_area` too). Off by default for most types: a lower third shows for a few seconds over content laid out for the whole frame, and a watermark sits in the margin. The safe area is cut on every scene the overlay shows on at all, for the whole scene (a layout is built once): a lower third shown 4 s of a scene shrinks it all along (turn it off there with the scene's `overlays: {ID: {reserve: false}}`). An overlay hidden on a whole scene (the `chapter_indicator` on chapter cards, or outside its `from` / `to`) reserves nothing there. Several reserving overlays on one scene add up (captions + a lower third + a corner indicator leave a picture or clip noticeably smaller): reserve only what the scene must avoid all along |
+
+**On a scene** (`overlays:` of the scene): `false` turns every overlay off there; a mapping
+turns single ones off (`{draft: false}`) or overrides their options and `reserve` for that scene
+(`{watermark: {corner: top_left}}`); an entry with a `type` that is no video-level id adds an
+overlay to **this scene only** (no `scenes`, `exclude`, `from`, `to`):
+
+```yaml
+  - id: interview
+    type: image
+    params: {path: assets/guest.jpg, fit: cover}
+    beats: [{text: "..."}, {text: "..."}]
+    overlays:
+      guest: {type: lower_third, name: Grace Hopper, title: Rear admiral, at: interview_b2}
+```
+
+**Timing.** An overlay's times are times in the video. Each scene is rendered on its own, so its
+position in the video is *planned* before rendering: a narrated beat lasts its MP3's length
+(else the word-count estimate) plus `narration.pad`, a scene its beats plus its fade-out, a
+silent scene its `duration`. Built-in scenes keep to this exactly. A scene whose animations run
+past its narration (lint `animation_overrun`) or an extension scene that times itself
+differently shifts the scenes after it; `vidgen render` then warns that overlays timed in the
+video (`from` / `to` in seconds or a scene, a lower third running over a cut) are off there.
+Render the scenes again after `vidgen tts` so the plan uses the real audio.
+
+**Lint.** Overlays are checked like the scene (text size, contrast, cut off by the frame), and
+the rule `overlay_overlap` reports an overlay covering the scene's text or icons. Their own
+placement is deliberate, so `safe_area` does not apply to them (a watermark sits in the margin),
+and an overlay over the scene's text is `overlay_overlap`'s finding, not `text_overlap`'s or
+`covered_text`'s. Like the scene, an overlay is checked only when settled: a lower third sliding
+in or out at a beat's end is left alone. A type may exempt its objects from rules: the watermark
+is faint on purpose and is not checked for `contrast`. In the layout dump, overlay objects have the key `overlay` (the
+id) and paths starting with `overlay:<id>`, so `lint_ignore` can match them (`{rule:
+overlay_overlap, object: "overlay:lower_third*"}`).
+
+### `lower_third`
+
+A name and a title on a plate in the lower third of the frame, sliding in at a moment of a scene
+and out after `duration` seconds. It belongs to a scene (`scene`, default the first scene the
+entry is drawn on) and starts `at` seconds into it or at one of its beats; it goes by the end of
+that scene unless `across_cuts`. It is placed in the safe area (in 9:16 raised by 12 % of the
+safe height: phone apps put their controls over the bottom), at least at the readable text size,
+and slides in from the side it is aligned to (from below / above when centred). It makes way for
+the scene's other overlays that reserve room: where it would meet bottom `captions` (or another
+overlay with `reserve: true`) it moves above them (with the 0.2 gap), in 16:9 and 9:16 alike.
+
+| param | default | |
+|---|---|---|
+| `name` | required | the main line (a person's or a place's name), bold, font role `heading` |
+| `title` | none | the second line (role, affiliation) |
+| `icon` | none | an icon left of the text |
+| `scene` | first scene drawn on | the scene it belongs to; it must be one the overlay is drawn on |
+| `at` | `0.5` | when it starts: seconds after its scene's start, or a beat id of that scene (the beat's start) |
+| `duration` | `5.0` | seconds shown, slide in and out included |
+| `across_cuts` | `false` | stay on over the following scenes (those the entry is drawn on) until `duration` is over; default: gone by the end of its scene |
+| `align` | `bottom_left` | `bottom_left`, `bottom`, `bottom_right`, `top_left`, `top`, `top_right` (in the safe area) |
+| `max_width` | `0.6` | widest it may be, share of the safe width (9:16: the whole width); longer text wraps |
+| `color` | `primary` | accent bar and icon |
+| `background`, `background_opacity` | `surface`, `0.92` | the plate |
+| `name_color`, `title_color` | `text`, `dim` | |
+| `name_size`, `title_size` | `body`, `caption` | |
+| `enter`, `exit` | `0.5`, `0.4` | seconds of the slide in and out |
+
+### `watermark`
+
+A logo (an image from the project), an icon or a short text in a corner of the frame, faint and
+fixed, over the whole video or the part `scenes` / `from` / `to` give. It sits `inset` from the
+frame's edges (in the margin, outside the safe area, at the default size), so scenes need not
+avoid it; it is not checked for contrast.
+
+| param | default | |
+|---|---|---|
+| `image` | none | image file relative to the project (`assets/logo.png`); exactly one of `image`, `text`, `icon` |
+| `text` | none | a short text instead |
+| `icon` | none | an icon instead |
+| `corner` | `bottom_right` | `top_left`, `top_right`, `bottom_left`, `bottom_right` |
+| `opacity` | `0.6` | of the whole watermark |
+| `size` | `0.06` | height of an image or icon, share of the frame's shorter side (an image is at most 30 % of the frame wide) |
+| `text_size` | `caption` | size of a text watermark |
+| `color` | `text` | colour of a text or icon watermark |
+| `inset` | `0.025` | distance from the frame's edges, share of the shorter side |
+| `fade` | `0` | seconds it fades in and out where a `from` / `to` starts and ends it (`0`: no fade) |
+
+### `progress_bar`
+
+A thin bar along the top or bottom edge of the frame that fills up as the video plays: the
+share of the whole video played so far, continuous across cuts. With `chapters` (default),
+small gaps split it at the [chapters](#chapters)' starts, as video players mark them. It sits
+on the frame's edge, outside the safe area, so scenes need not avoid it. Use `from` / `to`
+or `exclude` to leave it off the title or the end card; it still counts the whole video.
+
+| param | default | |
+|---|---|---|
+| `position` | `top` | `top` or `bottom` edge (in 9:16 phone apps cover the bottom) |
+| `thickness` | `0.006` | height, share of the frame's shorter side (at least 2 pixels) |
+| `color` | `primary` | the played part |
+| `track_color`, `track_opacity` | `dim`, `0.35` | the part still to come (`0`: hidden) |
+| `opacity` | `1` | of the played part |
+| `chapters` | `true` | gaps at chapter starts |
+| `inset` | `0` | distance from the frame's edge, share of the shorter side (`0`: flush) |
+
+### `chapter_indicator`
+
+A small label in a corner naming the current [chapter](#chapters): "2 · Results" (the number in
+`number_color`), or "2/5 · Results" with `total`. When the chapter changes it cross-fades to
+the next; it fades out before a chapter card and in after it. It is hidden before the first
+chapter and on the `chapter` cards themselves (they say it already; `on_chapter_cards: true`
+shows it there too). A title longer than `max_width` is shortened with "…". It sits `inset`
+from the frame's corner; at the default size it reaches a little into the safe area, so give
+it `reserve: true` (scenes keep clear of it) unless the scenes leave that corner free.
+
+| param | default | |
+|---|---|---|
+| `corner` | `top_left` | `top_left`, `top_right`, `bottom_left`, `bottom_right` |
+| `number` | `true` | show the number (as written, else the chapter's position) |
+| `total` | `false` | show the position out of the count ("2/5") instead of the number |
+| `separator` | `" · "` | between number and title |
+| `size` | `caption` | text size (at least the readable size) |
+| `color`, `number_color` | `text`, `primary` | title, number |
+| `opacity` | `0.85` | of the label |
+| `background`, `background_opacity` | none, `0.85` | a plate behind the label (e.g. `surface`) for pictures reaching the corner |
+| `max_width` | `0.4` | widest it may be, share of the frame's width (in 9:16 twice that, at most 0.85) |
+| `inset` | `0.025` | distance from the frame's edges, share of the shorter side |
+| `fade` | `0.4` | seconds of its fades and of the cross-fade at a chapter change (`0`: cut) |
+| `on_chapter_cards` | `false` | also show it on `chapter` scenes |
+
+```yaml
+overlays:
+  - type: progress_bar
+    exclude: [intro]                # not over the title
+  - type: chapter_indicator
+    total: true                     # "2/5 · Results"
+    reserve: true
+```
+
+### `captions`
+
+The narration **burned into the video** as captions, in the theme's font and colours (the
+`<output>.srt` file is written either way; this puts the text into the picture, for videos
+watched without sound). Off unless listed. Two styles:
+
+- `subtitles` (default): one or two lines at a time on a plate, like the SRT.
+- `karaoke` (alias `words`): a few big bold words at a time, the word being spoken in the
+  `highlight` colour with a small scale pop — the look of vertical / social videos.
+
+**Cues.** Each beat's text is cut into cues at natural phrase boundaries, the same way as the SRT
+(which now uses the same cutting, with widths in characters): breaks go after a sentence, then
+after a comma, semicolon, colon or dash, then before a conjunction ("and", "which"...) or a
+preposition, never right after an article or preposition ("the | model"); a new sentence starts
+a line; fuller cues and balanced lines are preferred. A cue appears when its first word is spoken
+and stays until the next one; a beat's last cue stays through the pause after it (until the next
+beat, the scene's last until the scene ends). Silent scenes show none.
+
+**Word times** come from the MP3's character timings when `vidgen tts` stored them
+(`voice.timestamps: true`, `audio/<beat_id>.align.json`); otherwise they are estimated: the
+beat's speech (its MP3 with the leading and trailing silence cut off, or the word-count estimate
+without audio) is shared among the words by syllables (numbers by their spoken words, acronyms
+by letters), with pauses after sentence ends and commas. The SRT uses the same word times.
+
+**Placement.** In the safe area at the `bottom` (in 9:16 raised by 12 % of the safe height:
+phone apps put their controls over the bottom), `top` or `center`, centred, at least the
+readable text size, the text no wider than `max_width`. At the top or bottom it **reserves** its
+band (`max_lines` lines high) by default, so the scenes lay out above / below it; centred it
+does not (lint's `overlay_overlap` reports scene text under it; or set `reserve: false` and
+check with lint). Scenes without narration reserve nothing. A `lower_third` on the same scene
+moves above bottom captions instead of under them. The plate's opacity is raised when
+needed so the text keeps lint's contrast ratio (`lint.rules.contrast.min_ratio`) over anything
+behind it; a highlight that would not read on the plate is replaced by another theme accent (with
+a warning).
+
+| param | default | |
+|---|---|---|
+| `style` | `subtitles` | `subtitles` or `karaoke` (`words`) |
+| `position` | `bottom` | `bottom`, `top` or `center` (of the safe area) |
+| `size` | `body`; karaoke `title` | text size (at least the readable size) |
+| `bold` | `false`; karaoke `true` | |
+| `max_lines` | `2` | lines per caption (1-3) |
+| `max_words` | none; karaoke `3` | words per caption |
+| `max_width` | `0.8`; karaoke `0.9` | widest the text may be, share of the safe width (9:16: `1`) |
+| `color` | auto | text colour; default the theme's `text` or background colour, whichever reads better on the plate |
+| `highlight` | `highlight` | karaoke: the word being spoken |
+| `pop` | `1.12` | karaoke: scale of the word being spoken (`1`: none); limited so it never touches its neighbours |
+| `background`, `background_opacity` | `surface`, `0.8` | the plate; `background: null` for none (the text then gets an outline in the background colour) |
+| `lift` | `0`; 9:16 `0.12` | bottom captions: raised by this share of the safe height |
+| `speakers` | `subtitles.speakers` | who speaks ([multiple voices](#multiple-voices-voices)): `name` (a `Label:` tag in the speaker's colour before a beat whose speaker changed), `color` (each speaker's words in its colour), `both`, or `off` |
+
+**Speakers.** With [named voices](#multiple-voices-voices), `speakers: name` puts the speaker's
+label (`Guest:`) at the start of the first cue of each beat whose voice differs from the beat
+before (the tag is glued to the first word, never a cue of its own, and is not highlighted in
+karaoke); the base voice is tagged only if `voice.label` is set. `color` draws each speaker's
+words in its colour (`voices.<name>.color`; default the palette colour of the voice's place in
+`voices:`; the base voice: `voice.color` or the caption colour); the plate's opacity rises until
+every speaker's colour reads, and a colour that cannot reach the contrast ratio even on an opaque
+plate falls back to the text colour (warning). Karaoke shows only a few words per cue, so the tag
+is brief there: prefer `color` or `both`.
+
+```yaml
+overlays:
+  - type: captions                  # subtitles at the bottom; scenes keep clear of them
+variants:
+  social:                           # 9:16 with karaoke captions
+    format: {width: 1080, height: 1920}
+    overlays: [{type: captions, style: karaoke}]
+voice:
+  timestamps: true                  # exact word times from ElevenLabs (vidgen tts)
+```
+
+## JSON Schema (`vidgen schema`)
+
+`vidgen schema [PROJECT]` prints a [JSON Schema](https://json-schema.org) (draft 2020-12) of
+`video.yaml` for the project's scene types: the built-ins plus its extensions (without a
+PROJECT and no config file in the current folder: the built-ins only). Editors (e.g. the YAML
+language server: `# yaml-language-server: $schema=video.schema.json` on the first line) and AI
+agents can check a config with it before running `vidgen validate`:
+
+```
+vidgen schema > video.schema.json          # the whole config
+vidgen schema --scene bar_chart            # one scene type's params
+vidgen schema --all                        # one item of `scenes`, with every type's params
+```
+
+What the schema checks: every key and type of this reference (unknown keys are errors);
+`scenes[].type` is one of the registered types and `scenes[].params` is checked against that
+type's params (`if`/`then` per type: required params, types, `Literal` values, ranges, nested
+models); a type's fixed beat count (`minItems`/`maxItems` of `beats`); the silent-scene rule
+(`duration` exactly when there are no beats); beat `actions` in both forms (the action name is
+one of the registered actions and the options are that action's); even `width`/`height`; and the bodies of
+`variants` (partial configs: the same keys, none required). Color and size params accept a
+`#hex` color / a positive number or a token name of the project's theme (defaults, extension
+defaults, `theme.colors`/`theme.sizes` of the base config and of every variant); such
+properties carry `"x-vidgen-theme": "color"` or `"size"`. `theme.preset` is an enum of the
+built-in presets and those the project registers, `theme.code_style` of the installed Pygments
+styles. Descriptions come from the field docs (the same text as `doc` in
+`vidgen list-scenes --json`).
+
+What only `vidgen validate` checks: unique scene and beat ids, action targets and `until`
+beats, files referenced by params
+(images, code, logos), the checks written in Python (`validate_project`, pydantic validators,
+e.g. "values has one entry per label") and loading the extensions. A schema-valid config can
+still fail `vidgen validate`. The reverse happens only for values vidgen converts, such as
+the string `"30"` for a number: write values with their real type (tests check both
+directions on the examples and on common mistakes).
+
+The schema is generated for the project as it is now: regenerate it after adding scene types,
+theme tokens or variants. If `video.yaml` is invalid, `vidgen schema` still works (that is
+when it is most useful): it uses the file's `extensions` and `theme` as far as they are valid
+and prints a warning. `--scene` with an unknown type is an error (exit code 1).
+
+## Frame stills (`vidgen render --frames`)
+
+`vidgen render --frames` also saves PNG stills of the render, so you (or an AI agent, which
+cannot watch a video) can check what is on screen without playing it. `--frames` takes one
+still per beat: its **last frame**, i.e. what is on screen when the narration of the beat (and
+its `narration.pad`) is over. `--frames-per-beat N` takes N evenly spaced stills per beat, the
+last one again at the end (N=3: after a third, two thirds and all of the beat). A silent scene
+counts as one beat lasting `duration` minus the scene's fade-out, so its last still is taken
+before the fade. Stills are off by default; they work with `--preview`, `--variant`, `--scene`
+and `--jobs`. They are taken from Manim's renderer while it writes the video (the same pixels
+as the video frame, before compression), so they do not change the video or its timings.
+
+Files, in `build/<final|preview>[_<variant>]/frames/`:
+
+```
+frames/
+  index.json            # every still of the video
+  <scene>/
+    index.json          # the scene's stills
+    <beat>-<k>.png      # still k (1..N) of a beat; <scene>-<k>.png for a silent scene
+```
+
+`<scene>/index.json`: `{scene, per_beat, width, height, fps, frames}`; `frames` lists, in time
+order, `{beat, k, n, frame, time, path}`: the beat id (`null` for a silent scene), the still's
+number within its beat (`k == n` is the end of the beat), `n` = stills per beat, the frame's
+0-based index in the scene's video, its time in seconds from the scene start (`frame / fps`)
+and the PNG file name.
+
+`frames/index.json`: `{title, variant, preview, format, per_beat, vidgen, scenes}`; each scene
+is `{id, start, duration, frames}` (`start` in the video) and each still is as above with
+`time` in the **video** (scene start + time in the scene), `scene_time` (time in the scene)
+and `path` relative to `frames/` (`<scene>/<file>.png`); each scene also has `layout`, its
+layout file relative to `frames/` (`../layout/<scene>.json`, see below) and `activity`, its
+activity file (`../activity/<scene>.json`, see below). The beat texts are in
+`build/.../timings.json`.
+
+Every scene render deletes the scene's old stills, and every `vidgen render` deletes
+`frames/index.json` (it is rewritten when stills are requested), so stills never belong to an
+older render. With `--scene ID --frames`, scenes that would be reused but have no stills at
+this count are rendered again.
+
+## Layout dump (`build/.../layout/<scene>.json`)
+
+Whenever stills are taken (`--frames`, `--frames-per-beat N`, `vidgen storyboard`), the same
+frames are also described as data: for each still, every **visible** object on screen with its
+position in pixels, size, colours and opacity: the input of [`vidgen lint`](#lint-vidgen-lint)
+(text off the frame or outside the safe area, overlapping text, text too small, low contrast,
+too many words); you or an agent can read it directly too. It costs a few milliseconds per still and is deleted
+and rewritten with the stills, so it always describes the current render.
+
+File `build/<final|preview>[_<variant>]/layout/<scene>.json`:
+
+```
+{version: 1, scene, type, width, height, fps, per_beat,
+ px_per_unit,              # output pixels per Manim unit (camera not zoomed)
+ background: "#0E1116",    # the theme background
+ safe_area: [x0, y0, x1, y1],  # frame minus the scene's margins (margin_x/margin_y), in px
+                               # (and minus overlays with reserve: true)
+ frames: [{beat, k, n, frame, time,     # the same keys as the stills index
+           still: "../frames/<scene>/<file>.png",
+           camera: {center: [x, y], width, height,    # the camera frame in Manim units
+                    zoom},                    # frame width / camera width: > 1 while zoomed in
+           objects: [...],
+           overlays: [{id, type, settled, skip}]}]}   # overlays drawn in this still; settled:
+                                     # false while one slides or fades; skip: lint rules not
+                                     # applied to its objects
+```
+
+Coordinates are output-frame pixels: origin at the top-left corner, y downwards, the frame
+spans `[0, width] x [0, height]`; boxes are `[x0, y0, x1, y1]` (1 decimal) and may lie partly or
+wholly outside the frame. A moving or zoomed camera (`MovingCamera`) is taken into account.
+
+Each object:
+
+| key | meaning |
+|---|---|
+| `id` | `m1`, `m2`, ...: the same Python object keeps its id in every frame of the scene |
+| `kind` | `text` (`Text`, `MarkupText`, `Paragraph`), `code` (the text of a `Code` listing), `math` (`Tex`, `MathTex`), `number` (`DecimalNumber`, `Integer`), `shape` (one path), `group` (a group of shapes with no text or image inside, e.g. an axis' ticks), `image`, `icon` (an icon from `icon()`: one object, not one per path) |
+| `class` | the Manim class |
+| `path` | where it sits: parent groups from the top-level mobject down, each `Class[index]` (index among its parent's submobjects; top level: in the scene), or the name the scene gave it |
+| `name` | the scene attribute that holds it (`self.title = ...`) or a `Mobject.name` set by the scene, else `null` |
+| `bbox` | the box of its visible parts, stroke included |
+| `opacity` | the highest opacity of its visible parts (fill, or stroke when it has one); a fade-in in progress shows here |
+| `z`, `order` | Manim `z_index`, and the drawing position (higher is drawn later, i.e. on top) of its top-most part |
+| `parts` | number of visible parts (glyphs, paths) |
+| text kinds only: `text` | the characters (markup tags removed; the LaTeX source for `math`) |
+| `font_px` | the 75th percentile of its visible glyphs' heights in output pixels: about the cap height (≈ 0.7 em) for mixed-case text, the x-height for lowercase text without ascenders; a rotated line of text is measured across its direction |
+| `rotation` | the angle of a line of text in degrees, counter-clockwise (`90` for an axis title turned upwards); `0` when level, for several lines and for math |
+| `color`, `colors` | the most common glyph colour, and all of them (most common first) |
+| `backdrop` | the most common colour of the frame inside its box, ignoring its own colours: what the text is read against (`null` when off-frame) |
+| other kinds: `fill`, `stroke` | `{color, opacity}` / `{color, opacity, width_px}` of the largest visible part, or `null` |
+| `icon` only: `icon` | the icon's name (`cpu`); its `bbox` is what it draws, not its padded design box |
+| overlays only: `overlay` | the id of the [overlay](#overlays) it belongs to; overlay objects come after the scene's, their `path` starts with `overlay:<id>` and they are measured as drawn: fixed to the screen whatever the camera does |
+
+An object is one text mobject (not one per glyph), one path, one image, or one group of shapes.
+Parts with opacity 0 are not visible: they do not count in the box, and an object with no
+visible part is not listed. `text` is the string the mobject was created with; Manim's
+`become()` and `Transform` change the glyphs but not that string, and while
+`TransformMatchingShapes`/`TransformMatchingTex` run, the moving glyphs are shapes.
+
+## Activity file (`build/.../activity/<scene>.json`)
+
+Written with the stills and the layout dump (and deleted with them): what happens in the scene
+over time, the input of `vidgen lint`'s timing rules. Recording it costs about 1.3 ms per
+frame of the render (a sampled comparison with the previous frame).
+
+```
+{version: 1, scene, type, fps,
+ frames, duration,         # frames written, seconds
+ pad,                      # narration.pad
+ silent: {duration, busy} | null,   # silent scene: its duration, and how long its code ran
+ beats: [{id, start, end,  # scene seconds; end = start + narration length d
+          busy,            # seconds the beat's own code (animations, waits) took; more than
+                           # d + pad means the beat ran past its narration
+          source,          # "audio" (d from the MP3) or "estimate" (from the word count)
+          text}],
+ plays: [{start, end, beat, animations: ["Write", ...], wait, requested}],
+ motion: {step, grid: [w, h], level, changes: [[frame, fraction], ...]},
+ overlap_out}              # last frames a crossfade into the next scene covers (0: none)
+```
+
+`plays` lists every `self.play(...)` and `self.wait(...)` (`wait: true`) with the beat being
+narrated (`null` outside `narrate`) and the animations' class names (`animate` for
+`mobject.animate`, groups with their parts); `requested` is the run time `play_steps` wanted
+when it had to shorten an animation to fit the beat, else `null`. `motion.changes` lists the
+frames that differ from the previous frame: `fraction` is the part of the frame's sample points
+(every `step`-th pixel, `grid` points, at most 180 on the shorter side) whose colour changed by
+more than `level` (0-255); frames not listed are identical to the one before.
+
+## Lint (`vidgen lint`)
+
+`vidgen lint [PROJECT]` checks what is on screen at the **end of every beat**, and how the
+scenes play over time, and reports problems an author cannot see without watching: text cut
+off by the frame edge or in the margins, overlapping text, shapes drawn over text, text too
+small for the frame, low contrast and too many words at once (**layout rules**); narration too
+fast or too slow, nothing moving for a long time, animations running past their narration or
+squeezed into a too short beat (**timing rules**); narration heard differently from its text
+(`readback`, from the transcripts of [`vidgen readback`](#readback-vidgen-readback)). It reads the
+[layout dump](#layout-dump-buildlayoutscenejson) of the beat-end stills and each scene's
+[activity file](#activity-file-buildactivityscenejson); scenes whose stills are current (from
+`vidgen render --frames` or `vidgen storyboard`, any `--per-beat`) are reused, the others are
+rendered first with one still per beat (preview format unless `--final`; reuse works as for
+the [storyboard](#storyboard-vidgen-storyboard)). Only beat-end stills are checked by the
+layout rules: mid-beat stills show animations in progress (half-faded or moving objects),
+which would only add noise.
+
+```
+$ vidgen lint my_video
+lint: 11 scenes, 28 beat-end stills (preview 854x480)
+picture:
+  warning safe_area         picture_b2 @ 7.2s: text 'Images can slowly zoom and pan' is outside the safe area at the bottom (12 px into the bottom margin)
+          still: my_video/build/preview/frames/picture/picture_b2-1.png
+0 errors, 1 warning, 0 info
+```
+
+Each finding names the scene, the beat at whose end it was seen (`+N more beats` when the same
+problem stays on screen), the rule, a message with the measured value and the limit, and the
+**still** to open to see it. Timing findings name the beat concerned and the scene time where
+the problem starts; their still is the end of that beat. The same problem with several objects of one group (an axis' tick
+labels, several texts in the same colour) or with the same text in several places (a label of a
+repeated component) is reported once (`also N more like it`).
+
+Options:
+
+| option | |
+|---|---|
+| `--scene ID` | only this scene (repeatable) |
+| `--rule NAME` | only this rule (repeatable) |
+| `--variant NAME` | lint a variant (e.g. the vertical one) |
+| `--preview` / `--final` | preview format (the default) or the final format |
+| `--fail-on SEVERITY` | `error`, `warning`, `info` or `never`; overrides `lint.fail_on` |
+| `--jobs N` | scenes rendered in parallel |
+| `--force` | render the selected scenes again even if their stills are current |
+| `--json` | print every finding as JSON (below) |
+
+**Exit code**: 1 when a finding is at least as severe as `fail_on` (default `error`), else 0;
+with `--fail-on never` it is 0 whatever is found (and 1 only if the command itself fails).
+
+**Theme contrast.** Like `vidgen validate`, `vidgen lint` first checks the theme itself (text and
+`dim` on the background and `surface`, accents and palette on the background; see
+[Theme presets](#theme-presets)) and prints pairs below WCAG AA as `warning: theme contrast:
+...` (JSON: `warnings`). They are not findings and never fail the command; they are skipped
+with `--rule` other than `contrast` and when `lint.rules.contrast.severity` is `off`.
+
+**Rules.** Sizes are fractions of the frame's **shorter side** (the height of a landscape
+video, the width of a vertical one), so the same thresholds hold for the 480p preview and the
+1080p video, and for 16:9 and 9:16 (a phone shows either orientation with its shorter side
+across the screen's width). Objects fainter than `lint.min_opacity` are ignored by every rule.
+
+| rule | default severity | finds |
+|---|---|---|
+| `off_frame` | error for text, warning for other objects | an object cut off by the frame edge by more than `tolerance`. Not reported: objects wholly outside (not visible), and non-text objects running from edge to edge on the side they cross (a full-frame image with `fit: cover` or Ken Burns, a background, a band or divider): those bleeds are intentional; nothing while the camera is zoomed in (a `zoom` action) |
+| `safe_area` | warning | text inside the frame but in its margins (the scene's `margin_x`/`margin_y`, `safe_area` in the layout dump, smaller where an overlay has `reserve: true`) by more than `tolerance`; not checked while the camera is zoomed in, nor for [overlays](#overlays) (their place is deliberate) |
+| `text_overlap` | error | two texts whose boxes overlap by at least `min_overlap` of the smaller box (the same text drawn twice in the same place is not reported) |
+| `covered_text` | warning | a shape or image drawn **after** (on top of) a text whose colour shows in at least `min_covered` of the middle of the text's box, measured on the still's pixels. Not reported: shapes drawn before the text (plates, highlight bands, a code window), the text's own parent group, shapes fainter than 0.3, and shapes in the text's own colour (a strike-through) |
+| `label_spacing` | warning | a **label on its own plate** — a filled rounded shape without an outline, not in the background colour, drawn just behind one text and hugging it (a callout label, a tag) — closer than `min_gap` of the shorter side to another text (a bar's value, the title, a neighbour's label): it reads as part of that text. The text on the plate itself, texts inside the plate, lone symbols (a bullet) and the text framed by the callout's own mark (an outline in the plate's colour: a `box` tag sits on its edge by design) are not checked; cards, table rows, cells and code bands (several texts, or much larger than their text) are not labels |
+| `min_font` | warning; error below `error_size` | text whose cap height is below `min_size` of the shorter side. The cap height is the layout's `font_px` corrected for the text's letters (`font_px` of all-lowercase text is about its x-height); a lone symbol (`+`, `·`) is not checked |
+| `contrast` | warning | text whose WCAG contrast ratio with its `backdrop` is below `min_ratio` (4.5, WCAG AA), `large_ratio` (3) for text with a cap height of at least `large_size`, or `dimmed_ratio` (2) for text faded on purpose (opacity below 1, e.g. previous bullets); the text colour is blended with the backdrop at the text's opacity, every colour of a multi-coloured text is checked. A code listing's line numbers are not checked |
+| `max_words` | warning | more than `max_words` words (tokens with a letter) of visible `text` objects in one still; code and math do not count |
+| `overlay_overlap` | warning | an [overlay](#overlays) whose box (all its objects) covers at least `min_overlap` of the box of a scene text or icon. `text_overlap` and `covered_text` leave an overlay over scene text to this rule; overlays of a type with a `lint_skip` (the watermark: `contrast`) are not checked by those rules |
+| `narration_speed` | warning; info without audio | a beat (of at least `min_words` spoken words) narrated at fewer than `min_rate` or more than `max_rate` words per second (`unit: words`) or characters per second (`unit: characters`: letters and digits). `unit: auto` counts words for the languages vidgen has a word rate for and characters for others; the default range is the video [language](#languages-and-translations)'s: English (also no `language`) 1.8-3.5 words/s, Portuguese 1.7-3.4, Spanish and French 1.8-3.6, Italian 1.8-3.5, German 1.5-3.1, characters 8-17/s; `min_rate` / `max_rate` set override it. With an MP3 the time is the speech in it (leading and trailing silence below -40 dB of its peak cut off). Words count as spoken: hyphens, dashes and slashes separate words (`K-Phi-3` is 3), a number counts one word per digit up to 3 per digit run, plus one per decimal point and symbol (`2.58` is 4, `15%` 3), an all-capitals acronym of 2-5 letters half a word per letter (`GPU` 1.5). **Without audio** the beat's length is the word-count estimate (`narration.words_per_second`), so the rate is only off when the text is (many numbers or acronyms) or the configured rate itself is implausible: reported as `info`, one finding per scene listing the beats |
+| `dead_air` | warning | nothing on screen changes for more than `max_seconds` (a frame counts as changed when at least `min_change` of it changed, from the activity file's `motion`), narrated or not; the finding names the beat where the still picture starts and the beats it lasts through. Silent scenes are checked the same way: a silent card held longer than `max_seconds` without motion is reported. A still picture ends where a [crossfade](#transitions-transition) into the next scene starts blending it away |
+| `animation_overrun` | warning | a beat whose code (animations and waits inside `narrate`) takes longer than its narration plus `narration.pad` by more than `tolerance` seconds: the next beat (and its audio) starts late, leaving silence. The message lists the animations still running when the narration ends. A silent scene whose animations take longer than its `duration` is reported the same way |
+| `rushed_animation` | warning | animations that `play_steps` (and so `reveal` and most built-in scenes) had to shorten below `min_run_time` seconds because the beat is too short for its steps |
+| `readback` | warning | a beat whose MP3, transcribed by [`vidgen readback`](#readback-vidgen-readback), differs from its spoken text by a word error rate above `max_wer`; the message quotes the first differences and a suggested fix. Reads only the transcripts `vidgen readback` cached for the beats' current MP3s and the `stt:` settings (it never runs speech to text): nothing is reported until that command has run |
+
+**Config** (all optional; the values shown are the defaults):
+
+```yaml
+lint:
+  fail_on: error              # error | warning | info | never: lowest severity that fails
+  min_opacity: 0.1            # objects fainter than this are ignored (end of a fade)
+  rules:                      # each rule also takes severity: error | warning | info | off
+    off_frame: {tolerance: 0.004}           # fraction of the shorter side (2 px at 480p)
+    safe_area: {tolerance: 0.01}            # 5 px at 480p
+    text_overlap: {min_overlap: 0.1}        # fraction of the smaller box
+    covered_text: {min_covered: 0.02}       # fraction of the middle of the text's box
+    label_spacing: {min_gap: 0.02}          # 7 px at 360p, 22 px at 1080p
+    min_font: {min_size: 0.025, error_size: 0.018}   # cap height: 12 / 8.6 px at 480p, 27 / 19.4 px at 1080p
+    contrast: {min_ratio: 4.5, large_ratio: 3.0, large_size: 0.045, dimmed_ratio: 2.0}
+    max_words: {max_words: 40}
+    overlay_overlap: {min_overlap: 0.05}    # fraction of the scene object's box
+    narration_speed: {unit: auto, min_words: 5}   # + min_rate / max_rate: default the language's range
+    dead_air: {max_seconds: 6.0, min_change: 0.0002}   # min_change: fraction of the frame
+    animation_overrun: {tolerance: 0.1}     # seconds past narration + pad
+    rushed_animation: {min_run_time: 0.5}   # seconds
+    readback: {max_wer: 0.1}                # word error rate; also `vidgen readback`'s threshold
+```
+
+`severity` on a rule sets the severity of all its findings (`off` disables the rule). The
+`lint` section and `lint_ignore` do not count in a scene's render fingerprint: changing them
+never makes stills stale.
+
+**Ignoring findings in a scene** (`lint_ignore` on the scene): a list of rule names (or `all`),
+or `{rule, object, beat}` filters. `object` is a pattern (`*` and `?` wildcards, case-sensitive)
+matched against the object's `name`, `path`, `text` and icon name (for a pair, either object); `beat`
+limits the entry to the end of that beat (it must be a beat of the scene).
+
+```yaml
+scenes:
+  - id: chart
+    type: line_chart
+    params: {...}
+    lint_ignore:
+      - max_words                                   # every max_words finding of this scene
+      - {rule: min_font, object: "VGroup[2]/*"}     # the small tick labels, by path
+      - {rule: contrast, object: "Illustrative*", beat: chart_b2}
+```
+
+## Storyboard (`vidgen storyboard`)
+
+`vidgen storyboard [PROJECT]` writes **contact sheets**: PNG pages showing the stills of the
+video in a grid, each labelled `beat @ time` with the beat's narration under it and a header
+band per scene (`N/M  id · type · start–end (duration)`). It is the way to *look* at a video
+without watching it, and is made for AI agents that open the PNG with an image viewer: pages
+are 1280 px wide (`--width PX`, 640–2000) and at most about 1.25 times as high, the font sizes
+grow with the width, long narration is wrapped and cut with `…`, and long videos are split into
+several pages instead of one huge image. 16:9 videos get 4 stills per row (2 on a scene's
+sheet), 9:16 videos 5 (4); with `--per-beat N` a beat's stills stay side by side on one row.
+
+Files, in `build/<preview|final>[_<variant>]/storyboard/`:
+
+```
+storyboard/
+  video-1.png, video-2.png ...   # the whole video (times in the video, m:ss.s)
+  scenes/<scene>-1.png ...        # one scene, larger stills (times from the scene start)
+```
+
+Options:
+
+| option | |
+|---|---|
+| `--scene ID` | only this scene's sheet (repeatable); no `video-*.png` is written (old ones are deleted) |
+| `--per-beat N` | N stills per beat, evenly spaced, the last at the beat's end (default 1: the end of each beat) |
+| `--variant NAME` | storyboard a variant (e.g. the vertical one) |
+| `--preview` / `--final` | preview format (the default) or the final format |
+| `--width PX` | page width (default 1280) |
+| `--jobs N` | scenes rendered in parallel |
+| `--force` | render the selected scenes again even if their stills are current |
+| `--json` | print the sheets and the stills on each (below) |
+
+**What gets rendered.** The sheets are built from the stills of `vidgen render --frames` (see
+above). A scene is rendered again (with stills, in worker processes like `vidgen render`) only
+if its stills are missing, were taken at another `--per-beat` count or format, or are stale:
+each render records a fingerprint of what the scene depends on (its config entry, the other
+config sections except `scenes`/`variants`/`lint`, its beats' MP3s, the project's extension code,
+the files under `assets/`, and vidgen's own rendering code; with [overlays](#overlays), also
+every scene's beats, MP3s and type, which place the scene in the video; the transition into the
+next scene; with [`carry`](#continuity-carrying-objects-into-the-next-scene-carry), what the next
+scene carries out of it and, for a carrying scene, the fingerprint of the scene before), and a
+scene whose fingerprint changed is rendered again. So `vidgen storyboard` right after `vidgen render --preview
+--frames` renders nothing, and after an edit it renders only the edited scenes. Files a scene
+reads from outside `assets/` are not tracked: use `--force`. The storyboard does not join the
+video; `vidgen render` does. It dispatches `post_scene` for the scenes it renders, not
+`pre_render`/`post_render`.
+
+**`vidgen render` uses the same fingerprints** (since vidgen 0.2): it renders only the scenes
+whose render is missing, was made at another format or without the narration it now needs, or
+is stale, and joins them with the current renders of the others (`render --json` lists each
+scene's `status`: `rendered` or `reused`). So `vidgen render --preview` after a storyboard or a
+lint of the preview only joins the video, and keeps their stills. `--force` renders every scene
+again; `--scene ID` renders those scenes whatever their state.
+
+## Scene gallery (`vidgen gallery`)
+
+`vidgen gallery [PROJECT]` renders **every scene type** from one canonical sample, at 16:9 and
+9:16, and writes a Markdown gallery: the repository's own is [docs/gallery](gallery/README.md).
+
+- **Samples.** A built-in type's sample is its snippet in the author guide's `scenes` topic
+  (`AGENTS.md`, `vidgen guide scenes`; the first of the type, one without `generate:` preferred),
+  so the guide and the gallery show the same YAML and a test keeps the committed pages in step
+  with the guide. Files a snippet names under `assets/` are stand-ins shipped with vidgen (a
+  landscape picture for `image`, an app screenshot for other pictures, a short screen recording
+  for clips). Another name of the same type (`flowchart` for `diagram`) is listed, not rendered
+  again. Run in a project (or given `PROJECT`), the project's own scene types are shown too, each
+  from its first scene in `video.yaml` (with the files it names and the project's
+  `assets/icons`), in the project's theme and with its extensions; a type with no scene is listed
+  as having no sample.
+- **Rendering.** The samples become one work project, `build/gallery/` under the project (or the
+  current folder): 16:9 at 640x360 and 9:16 (its `portrait` variant) at 360x640, 12 fps, timed
+  from the word counts (no audio). Like the storyboard, a sample is rendered again only when its
+  stills are missing or stale; the work project always holds every sample, so a run for a few
+  `--types` keeps the others current.
+- **Output** (default `docs/gallery`; `--output DIR`): `README.md`, the index (every registered
+  type by the guide's groups — text and structure, flows, data, pictures and media, maths and
+  code, then the project's — with both stills and what it is for, from the guide's chooser),
+  `<type>.md` per type (what it is for, the type's description, the stills, links to the GIFs,
+  the YAML, a params table from the `Params` model with types, defaults and docs, the action
+  targets, the beat count) and `media/<type>-16x9.png|gif`, `media/<type>-9x16.png|gif`. The
+  still is the end of the last beat; the GIF plays the scene to that point (320 px / 180 px wide,
+  6 fps, 32 colours, the end held 1.5 s; the fade-out left out). Nothing in the files depends on
+  the time or the machine: the same vidgen writes the same files.
+
+| option | |
+|---|---|
+| `--output DIR`, `-o` | the gallery folder (default `docs/gallery`) |
+| `--types T,T` | only these types (comma-separated, repeatable; another name renders its type); the index still lists every type, with the stills already in the folder (a type with no page there yet: "not rendered here yet") |
+| `--formats 16:9,9:16` | the formats to render (default both) |
+| `--theme PRESET` | render in this theme preset (default: the project's theme, or the default look) |
+| `--clips` / `--no-clips` | also write the GIFs (default yes); without, the pages link the GIFs already there |
+| `--jobs N` | samples rendered in parallel |
+| `--force` | render the samples again even if their stills are current |
+| `--json` | print the gallery's files (below) |
+
+The repository's gallery is committed (stills and GIFs, about 4.4 MB; a test keeps it under
+8 MB): run `vidgen gallery -j 2` from the repository root after changing a built-in scene's look
+or a guide snippet, look at the stills, and commit `docs/gallery`.
+
+## Drafting from an outline (`vidgen plan`)
+
+`vidgen plan INPUT` turns a Markdown outline (`.md`) or a plain-text script (`.txt`: short lines
+standing alone are headings) into a **draft project**: a folder scaffolded like `vidgen init`
+(default: named after `INPUT`; `--output DIR`) or just a config file (`--output video.yaml`),
+with the pictures the outline shows copied into `assets/`. Nothing is sent anywhere and no AI is
+involved: the same input and options always give the same draft. It is a starting point for an
+agent (or a person) to refine — it never writes the narration a video deserves — so every scene
+carries a `# plan:` comment (why it got its type) and `# TODO:` comments (what to check), and the
+command prints the scenes, the estimated length and the TODO count, then validates the draft.
+Example: [examples/plan](../examples/plan) (`outline.md` and the unedited `video.yaml`).
+
+**Structure.** A single top-level heading (`#`) at the start is the title; a short first
+paragraph under it (one sentence, at most 14 words) is the `title`'s subtitle, and the first beat
+of the opening prose its narration — unless that beat has a prominent number, which then opens
+the video as a `stat` (the hook) before the title. The highest remaining heading level makes
+sections, the next one the units inside them; each unit becomes one or more scenes, its heading
+their `heading` / `title`. Deeper headings and short lines ending with `:` (`Pros:`) label the
+block that follows. When the narration runs over 2 minutes and there are at least 3 sections,
+every section starts with a silent `chapter` card (2.5 s) and the video gets a `progress_bar`. A
+last section called Summary, Conclusion, Recap, Takeaways, Next steps (or Resumo, Conclusão...)
+ends with an `end_card`: its last beat is the call to action, its links the card's `lines`; a
+list in it becomes the recap scene. Without one, a TODO at the top says to add an ending.
+
+**Cues → scene types.** Each block that shows something gets a scene, narrated by the prose
+written before it (the prose after the last block of a unit joins that block):
+
+| in the outline | scene type |
+|---|---|
+| a bullet list | `bullets`; `icon_grid` when every item is a short noun (≤ 3 words) with a matching icon (name, alias, a word of the name, or an exact tag: `vidgen list-icons --search`) |
+| a numbered list of 2–8 steps | `process` (more steps: numbered `bullets`) |
+| list items starting with a date (`1969:`, `July 1969 —`, `2023-05`) | `timeline` |
+| a table | `table` (one row per beat when the prose has a beat per row, else `reveal: all`); labels + one numeric column (`0.1 ms`, `81%`, `$1,200`) → `bar_chart` with its `unit` / `value_format`, and a `highlight` on the bar the last beat names |
+| a code block | `code` (≤ 15 lines; a `highlight` per beat by blank-line blocks), else `code_walkthrough` (a step per block) |
+| `$$...$$` | `equation` (one formula, or two as steps); `equation_derivation` from 3 formulas (consecutive blocks, `\\` lines or an `aligned` environment) |
+| an image on its own line | `image`: the file copied into `assets/`, or a `generate:` prompt from its alt text when it is missing |
+| a blockquote (a last line `— Author, Source`) | `quote` (two beats at most; the rest of the prose follows as its own scene) |
+| a paragraph of `A -> B -> C` lines | `diagram` (a node per label, an edge per arrow) |
+| "A vs B" (or "A or B?") heading with two lists, or `Pros:` / `Cons:` lists | `comparison` (columns from the lists; from the sentences naming each side when there are no lists) |
+| a sentence with a prominent number (`46%`, `40x`, `$3.5 million`, `from 120 to 15`) | `stat` (value, prefix / suffix, label from the words around it; "from X to Y" gives a `comparison` that counts up from X) |
+| other prose | `bullets` of its compressed sentences, one per beat (≤ 5 per scene), or a `text_card` for a single beat |
+
+**Narration.** Prose is cut into sentences by the rules of `--language` (abbreviations such as
+`e.g.`, `Dr.`, `Sr.`, `p.ex.`, initials and decimals do not end a sentence), sentences over 15
+words are cut at their best phrase boundary (a clause mark, then a conjunction, then a
+preposition; never after an article), and sentences under 6 words join a neighbour — the author
+guide's beats of 6–15 words. Each reveal step gets one beat: one sentence per item when the counts
+match (the sentences after the block for its items, the ones before as an intro), else the
+sentences that share a word with each item, else the items' own text when they are sentences,
+else a placeholder beat with a TODO. An intro of one short sentence joins the first beat; a
+longer one becomes a scene of its own before the block.
+
+**On-screen text** is compressed from the outline: headings ≤ 5 words, list items ≤ 6, labels
+≤ 3, a title or card ≤ 7. Compressing drops parentheses, leading filler ("In this video",
+"So", "Basically"...), filler words ("really", "just"...) and, when still too long, articles;
+keeps the part before a `:` (or after a generic lead such as `Step 2:`) and the main clause after
+a leading "On a miss, ..."; and never ends on a word that leans on the next ("Store result with").
+
+**TODOs** name what a draft cannot know: placeholder beats, narration that repeats the items on
+screen, icon choices, a stat's context and which direction is good, a chart's source caption, a
+picture to provide, notes for code steps, long lists, beats with parentheses / links / inline
+maths, and more beats than a scene has steps (dead air).
+
+| option | |
+|---|---|
+| `--output DIR\|FILE`, `-o` | the project folder to create (default: `INPUT`'s name without the suffix, in the current folder), or a `.yaml` / `.yml` file to write (its folder gets the `assets/`) |
+| `--title TEXT` | the video's title (default: the outline's top heading, else the file name) |
+| `--format 16:9\|9:16` | landscape 1920x1080 (preview 854x480, the default) or vertical 1080x1920 (preview 480x854) |
+| `--preset NAME` | the theme preset (default `dark_tech`; `vidgen list-themes`) |
+| `--language TAG` | the language of the text (BCP-47, e.g. `pt-BR`): sentence, phrase and compression rules, a decimal comma for a `stat`, and `language:` in the config |
+| `--force` | write into a folder that is not empty (its `video.yaml` replaced, other files kept) or over an existing config file |
+| `--json` | print the summary as JSON ([below](#vidgen-plan---json)) |
+
+Then refine the draft like any project: read the comments, rewrite the narration for the ear,
+`vidgen validate`, `vidgen storyboard`, `vidgen lint` (`vidgen guide workflow`).
+
+## MCP server (`vidgen mcp`)
+
+`vidgen mcp [--root DIR]` (also the `vidgen-mcp` script) runs a [Model Context
+Protocol](https://modelcontextprotocol.io) server on stdin / stdout, so an AI agent's client
+(Claude Desktop, Claude Code, ...) can call vidgen's commands as **tools**. It needs the optional
+extra: `pip install "vidgen[mcp]"` (the official MCP Python SDK, 1.19 or newer). Configuration
+snippets: README "Use from an AI agent via MCP".
+
+**Tools** (each returns the command's `--json` document below as JSON text; `ok` false comes
+back as a tool error with the same text): `guide`, `init`, `plan` (`input_path`, or the outline as
+`markdown_text`), `validate`, `schema`, `list_scenes`, `list_icons`, `list_themes`, `list_sfx`,
+`list_music`, `storyboard`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
+`thumbnail`, `export`, `gallery`, `translate_template`. Their parameters are the command's
+options in snake_case (`per_beat`, `fail_on`, `no_audio`...); list options take lists. Defaults
+that differ from the CLI, for agents: `render`, `thumbnail` and `export` use the preview (`preview:
+false` for the final format); `gallery` writes into `build/mcp/gallery` without GIFs; `schema`
+wants `scene: TYPE` (a few KB) and gives the whole schema (hundreds of KB) only with `full: true`
+(or `all_types: true`).
+
+**Pictures.** `storyboard` returns its contact sheets (whole-video sheets first), `thumbnail` the
+thumbnail and its small copy, `gallery` the stills, `list_icons` with `sheet: true` an icon
+sheet, `list_themes` with `swatches: true` the swatches, as MCP image content: at most 1568 px on
+the long side, PNG (JPEG when a PNG would exceed 800 KB). `images` (default 3, at most 8) and
+`image_offset` page through more; the document's `mcp_images` says `{total, offset, returned,
+next_offset}`. Stills are reused, so asking for the next page renders nothing.
+
+**Costs.** `tts` and `imagegen` are dry runs by default (free, no key): they list what would be
+made and its size (characters, estimated dollars). A real run needs `dry_run: false` **and**
+`confirm_cost: true`; without the latter the tool refuses before anything starts. `readback` asks
+for `confirm_cost: true` when the project's `stt.provider` is a paid service (`elevenlabs`).
+
+**Folder.** Every path a tool takes (project, outputs, `init`'s folder, `plan`'s input) is relative
+to `--root` (default: the current folder) and must resolve inside it, `..` and symbolic links
+included; other paths are refused. The files a project's config names (a scene's `path` /
+`logo`, a watermark or thumbnail `image`, a music `source` file, `pronunciation_file`,
+`translations`, `extensions`, in every variant) must be inside the root too: a config naming
+`../other/file.png` or an absolute path elsewhere does not load in the server's commands
+(`files outside the allowed folder`; the commands it runs get `VIDGEN_CONFINE_ROOT`, which you
+can also set yourself). Files the server asks for itself (icon sheet, swatches,
+gallery) go into `build/mcp/` under the root. The server passes its environment (API keys) to the
+commands it runs but never returns it; documents carry only paths and results.
+
+**How it runs.** Every call starts `python -m vidgen <command> ... --json` in the root folder (a
+fresh process: Manim's configuration is process-global and a crashing scene or extension cannot
+take the server down) and turns the command's stderr lines into MCP progress notifications.
+Rendering calls (`storyboard`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
+`thumbnail`, `export`, `gallery`) run one at a time; cancelling a call stops its process and the
+render workers it started (the process group on macOS / Linux, the process tree on Windows).
+
+**Resources**: `vidgen://guide` (the author guide) and `vidgen://guide/<topic>` (one topic each),
+`vidgen://schema` (the JSON Schema of the root project's `video.yaml`, else of the built-ins) and,
+when the root has a `docs/gallery` folder (the vidgen repository), `vidgen://gallery/index` and
+`vidgen://gallery/<type>`.
+
+## JSON output (`--json`)
+
+`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail`, `vidgen export`, `vidgen slides`, `vidgen translate-template`, `vidgen readback`, `vidgen guide`, `vidgen gallery`, `vidgen plan`, `vidgen init`, `vidgen tts` and `vidgen imagegen` accept `--json` (every command but `vidgen mcp`, which speaks MCP): stdout then holds
+exactly one JSON document (ASCII-only, non-ASCII characters escaped), and everything else
+(progress, `warning:` lines, Manim output) goes to stderr. These shapes are meant for programs
+and AI agents driving vidgen. Without `--json` the human output is unchanged.
+
+**Stability.** `version` is the version of these shapes (currently **1**), not of vidgen. Keys
+are only added within a version; removing or renaming a key or changing a value's type bumps
+it. Times are seconds (floats), paths are absolute strings, absent values are `null`.
+
+**Envelope** (every document, success or failure):
+
+| key | type | |
+|---|---|---|
+| `version` | int | schema version of the document (1) |
+| `vidgen` | str | vidgen package version |
+| `command` | str \| null | `validate`, `list-scenes`, `list-themes`, `list-icons`, `render`, `schema`, `storyboard`, `lint`, `thumbnail`, `export`, `slides`, `translate-template`, `readback`, `guide`, `gallery`, `plan`, `init`, `tts`, `imagegen` (`null` if the command line could not be parsed) |
+| `ok` | bool | `true` on success; the exit code is 0 exactly when `ok` is true |
+| `warnings` | list | `{scene, message}`: vidgen warnings of the run (`scene` is `null`, or the scene whose render printed it) |
+| `error` | object | only when `ok` is false: `{kind, message, problems, details}` |
+
+**Errors.** `error.kind` is `usage` (bad command line; exit code 2), `error` (something the user
+can fix: config, missing file, unknown scene, failed scene...; exit code 1) or `internal` (an
+unexpected exception; exit code 1, `details.traceback` holds the traceback). `message` is the
+text the human output prints after `error: `. `problems` lists config problems as
+`{location, message, variant}` (`location` is a config path such as `scenes[2].params.title`,
+or `null` when the problem is not about one value, e.g. an extension that fails to import;
+`variant` is the variant whose merged config has the problem, `null` for the base config).
+`details` is an object, empty unless stated below.
+
+```json
+{"version": 1, "vidgen": "0.2.0", "command": "render", "ok": false, "warnings": [],
+ "error": {"kind": "usage", "message": "unrecognized arguments: --bogus", "problems": [], "details": {}}}
+```
+
+### `vidgen validate --json`
+
+Always a validate document (also when the project cannot be loaded); exit code 1 if there is
+any problem. A variant whose config does not load is reported as problems (with its `variant`)
+and the other variants are still checked (the human output does the same since Step 59).
+
+| key | type | |
+|---|---|---|
+| `project`, `config_file` | str \| null | project folder and config file (`null`: the project could not be loaded) |
+| `title` | str \| null | |
+| `language` | str \| null | the base config's `language` |
+| `translations` | object \| null | the base config's translation file: `{file, language, applied, stale, unknown, untranslated}` (`applied` a count, the others key lists; see [languages and translations](#languages-and-translations)); `null` without `translations:` |
+| `scenes`, `beats` | int \| null | counts in the base config |
+| `estimated_duration` | float \| null | seconds, from word counts + `narration.pad` + silent scenes' `duration` |
+| `variants` | list | every variant checked: `{name, loaded, estimated_duration, problems, language, translations}` (`problems`: how many are this variant's own; `language` / `translations` as at the top level, `null` when it does not load) |
+| `problems` | list | `{location, message, variant}` (as in `error.problems`); empty when the project is valid |
+| `audio` | list | one per audio folder (the base config's, plus each variant with its own, see [variant audio](#narration-audio-elevenlabs)): `{variant, dir, ok, stale, missing, orphaned, beats}`; `ok`/`stale`/`missing` are counts, `orphaned` the paths of MP3s no beat uses, `beats` lists `{scene, beat, state}` in video order with `state` `ok`, `stale` or `missing` |
+| `images` | list | the [generated pictures](#generated-images-imagegen-vidgen-imagegen) of the base config, plus each variant whose pictures differ (none without `generate:` params): `{variant, generated, missing, pictures}`, `pictures` listing each distinct request once as `{key, scenes, path, exists, prompt}` |
+
+`warnings` include the theme contrast warnings (`theme contrast: ...`, prefixed `[variant] `
+for a variant's own; they do not make `ok` false). When there are problems, `error` is
+`{"kind": "error", "message": "video.yaml: invalid project ...", "problems": [same list],
+"details": {}}`. Problem `message`s are the text after
+the location in the human output (`scenes[1].type: unknown scene type 'titel'; did you mean
+'title'? ...` → `location` `scenes[1].type`).
+
+### `vidgen list-scenes --json`
+
+| key | type | |
+|---|---|---|
+| `project` | str \| null | the project whose extensions were loaded (`null`: built-ins only) |
+| `scene_types` | list | sorted by name, as below |
+| `actions` | list | the [beat actions](#beat-actions) (built-in and the project's), sorted by name, as below |
+| `overlays` | list | the [overlay types](#overlays) (built-in and the project's), sorted by name, as below |
+
+Each scene type: `name`; `origin` (`builtin`, or the extension file relative to the project);
+`builtin` (bool); `overrides_builtin` (bool, an extension registered with `override=True`);
+`doc` (the class docstring, else its module's, or `null`); `beats` (`null` = any number, else
+`{min, max, text}` with `max` `null` for no upper limit, e.g. `{"min": 2, "max": 2, "text":
+"exactly 2 beats"}`); `params` (`null` = free-form params, else a list of fields); `targets`
+(the forms of its [action targets](#beat-actions), e.g. `["heading", "item<N>",
+"item:<text>"]`; `[]` = none).
+Each field: `name` (as written in `video.yaml`: an alias such as `from` when the field has one); `type` (readable type as in the human listing: `str`, `list[str]`,
+`color`, `size`, `'all' | 'per_beat'`, ...); `required` (bool); `default` (JSON value, `null`
+when required); `doc` (the docstring under the field or its `Field(description=...)`, or
+`null`); `nested` (fields of `SceneParams` models used in the type, as `{model, fields}`);
+`aliases` (other names the field accepts, e.g. `["title"]` for `heading`; `[]` = none).
+Each action: `name`, `origin`, `builtin`, `overrides_builtin`, `doc` (as for scene types);
+`run_time` (default seconds); `reversible` (bool: `until` allowed); `temporary` (bool: undone
+by the end of its beat, like `zoom`); `until_next_beat` (bool: without `until`, undone when the
+next beat starts, like `callout`); `needs_target` (bool); `scene_targets` (bool: `false` when
+`target` names something else, like `sfx`'s sound); `animates` (bool: `false` for an action that
+draws nothing and happens exactly at `at`, like `sfx`); `target_options` (options whose
+values are target names, e.g. `["into"]`); `options` (fields like `params`; `[]` = none).
+Each overlay type: `name`, `origin`, `builtin`, `overrides_builtin`, `doc` (as above); `layer`
+(drawing order among overlays); `lint_skip` (lint rules not applied to its objects, e.g.
+`["contrast"]`); `options` (fields like `params`).
+
+### `vidgen list-themes --json`
+
+| key | type | |
+|---|---|---|
+| `project` | str \| null | the project whose presets and registered defaults were used (`null`: built-ins only) |
+| `orientation` | str | `landscape`, `portrait` or `square`: the project's `format` (decides `auto`) |
+| `current` | object | the project's choice: `{preset, scale, scale_resolved}` (`preset` `null` without one) |
+| `presets` | list | every preset, built-in first, as below |
+| `type_scales` | object | `{scales: {name: {title, subtitle, heading, body, caption, small}}, auto: {orientation: scale}}` |
+| `swatches` | str \| null | the PNG written with `--swatches` |
+
+Each preset: `name`, `origin` (`builtin` or the extension file), `base`, `description`,
+`selected` (bool: the project's preset), and what selecting it gives in this project:
+`background`, `font`, `font_serif`, `font_mono`, `fonts` (the roles the preset and config
+set: role → token or family), `font_roles` (the family of every built-in role: `body`,
+`heading`, `quote`, `quote_mark`, `code`), `code_style`, `scale` (as set, e.g. `auto`),
+`scale_resolved`, `colors`, `palette`, `sizes`; `contrast` `{ok, min_text_ratio,
+min_graphic_ratio, failures}` (`failures`: messages like the validate warnings) and
+`palette_distinctness` `{normal, protanopia, deuteranopia, tritanopia}` (smallest CIEDE2000
+difference between two palette colours).
+
+### `vidgen list-icons --json`
+
+| key | type | |
+|---|---|---|
+| `project` | str \| null | the project folder whose `assets/icons` were included (`null`: built-ins only) |
+| `search`, `category` | str \| null | the filters given |
+| `sources` | object | the built-in set: `{lucide: {package, version, license, license_file, homepage}}` |
+| `categories` | list | `{name, description, count}` for every category (built-in ones first, then project categories); `count` over all icons, not only the listed ones |
+| `count` | int | number of listed icons |
+| `icons` | list | the listed icons, best matches first: `{name, category, tags, aliases, source, origin, overrides, path}` (`origin` `builtin` or `project`; `overrides`: a project icon replacing a built-in; `path` the SVG) |
+| `sheets` | list | the PNG files written with `--sheet` |
+
+### `vidgen list-sfx --json`
+
+| key | type | |
+|---|---|---|
+| `project` | str \| null | the project folder whose `assets/sfx` were included (`null`: built-ins only) |
+| `rate` | int | sample rate of every sound (48000) |
+| `loudness_target`, `peak_ceiling` | float | the level built-in sounds are set to at gain 0: loudest 400 ms in LUFS (K-weighted, one channel), highest peak in dBFS |
+| `params` | list | the params of built-in sounds (`duration`, `pitch`, `intensity`), fields as in `list-scenes` |
+| `count` | int | number of sounds |
+| `sounds` | list | `{name, origin, overrides_builtin, description, use, duration, duration_range, channels, loudness, peak_db, preview}`: `origin` `builtin` or the file (`assets/sfx/x.wav`); `description` (what it sounds like), `use` and `duration_range` (`[min, max]` s) for built-ins, else `null`; `duration` (s), `loudness` (LUFS), `peak_db` (dBFS) at the defaults; `preview` the WAV written with `--render-dir`, else `null` |
+| `previews` | str \| null | the `--render-dir` folder |
+
+### `vidgen list-music --json`
+
+| key | type | |
+|---|---|---|
+| `project` | str \| null | the project folder whose `assets/music` was included (`null`: built-ins only) |
+| `rate` | int | sample rate (48000) |
+| `level` | float | integrated loudness (LUFS) of music at `volume: 0` (−30) |
+| `duck` | object | the default ducking `{depth, attack, release, hold, clips}` |
+| `count` | int | number of entries |
+| `music` | list | `{name, origin, description, use, tempo, key, chords, loop_seconds, duration, channels, loudness, preview}`: built-in beds (`origin` `builtin`; `description` what it sounds like, `use`, `tempo` BPM or `null` without a beat, `key`, `chords` in loop order, `loop_seconds`) then the project's files (`origin` `project`, `name` the path to use as `source`, `duration` s); `loudness` measured (LUFS); `preview` the WAV written with `--render-dir`, else `null` |
+| `previews` | str \| null | the `--render-dir` folder |
+
+### `vidgen schema --json`
+
+| key | type | |
+|---|---|---|
+| `project` | str \| null | the project whose scene types were used (`null`: built-ins only) |
+| `schema` | object | the JSON Schema that `vidgen schema` prints without `--json` |
+
+`warnings` includes the warning about an invalid `video.yaml` (see
+[JSON Schema](#json-schema-vidgen-schema)).
+
+### `vidgen render --json`
+
+| key | type | |
+|---|---|---|
+| `project` | str | |
+| `variant` | str \| null | |
+| `preview` | bool | |
+| `audio` | bool | `false` with `--no-audio` |
+| `format` | object | `{width, height, fps}` of this render |
+| `outputs` | object | `{video, subtitles, timings, frames, chapters, thumbnail}`: the MP4, the SRT, `build/.../timings.json`, `build/.../frames/index.json` (`null` without `--frames`), the YouTube chapter list `<output>_chapters.txt` (`null` without chapters or with `chapters: {youtube: false}`) and the thumbnail `<output>_thumbnail.png` (`null` without `thumbnail:` or with `auto: false`; its warnings are in `warnings`) |
+| `duration` | float | length of the video |
+| `elapsed` | float | wall time of the command |
+| `mix` | object \| null | the measured loudness of the video's audio (`null` with `--no-audio`): `{mixed, normalized, target_lufs, true_peak_limit, gain_db, integrated_lufs, true_peak_dbtp, limited_db, music}` — `mixed`: vidgen wrote the mix (music or normalisation; else FFmpeg joined narration and effects as before), `normalized` / `target_lufs` / `gain_db` the normalisation, `integrated_lufs` (LUFS) and `true_peak_dbtp` (dBTP) measured on the final mix, `limited_db` the limiter's deepest gain reduction (0: never engaged), `music` the cues `{source, kind (bed\|file), from, to, start, end, volume, duck}`; see [loudness](#loudness-of-the-final-mix-audio) |
+| `chapters` | list | the chapters as written into the MP4 and the YouTube list (empty without chapters): `{title, number, scene, start, end, index, count, card, intro}` — `number` as written (`null`: none), `scene` the scene it starts at, `start` / `end` seconds in the video, `index` its position in this list (1-based) of `count`, `card` whether it starts with a `chapter` card, `intro` whether it is the chapter added at 0:00 before the first one; see [chapters in the outputs](#chapters-in-the-outputs-chapters-metadata) |
+| `scenes` | list | config order: `{id, type, status, start, duration, render_seconds, beats}`; `status` is `rendered` or `reused` (an existing render was joined, see `--scene`), `render_seconds` the worker's wall time (`null` when reused), `start`/`duration` in the video, `beats` lists `{id, start, end}` (absolute; `end` excludes `narration.pad`) |
+
+`warnings` includes those printed by scene code during rendering (e.g. beats a scene never
+narrated), with their `scene`, and YouTube's chapter rules the list breaks (`chapters: ...`). On failure, `error.details` is `{failed, rendered}`: `failed`
+lists `{scene, exit_code, output_tail}` (the last 60 lines of the worker's output; exit code 1
+for a vidgen error, 2 for an exception in scene code), `rendered` the scene ids rendered before
+(or, with `--keep-going`, besides) the failures.
+
+### `vidgen storyboard --json`
+
+| key | type | |
+|---|---|---|
+| `project` | str | |
+| `variant` | str \| null | |
+| `preview` | bool | `false` with `--final` |
+| `per_beat` | int | stills per beat |
+| `format` | object | `{width, height, fps}` of the stills |
+| `folder` | str | the `storyboard/` folder |
+| `rendered` | list | ids of the scenes rendered by this command (config order) |
+| `reused` | list | ids of the selected scenes whose current stills were reused |
+| `elapsed` | float | wall time of the command |
+| `sheets` | list | every page written: `{kind, scene, page, pages, path, width, height, frames}`; `kind` is `video` (the whole video, `scene` is `null`) or `scene`; `page` of `pages` (1-based); `width`/`height` in px; `frames` lists the stills on the page in order: `{scene, beat, k, n, time, scene_time, path}` (`beat` `null` for a silent scene, `k` of `n` stills of the beat, `time` in the video or `null` when not every scene has a render at this format, `scene_time` from the scene start, `path` the still's PNG) |
+
+Video sheets come first, then the scene sheets in config order. `warnings` and `error.details`
+on a failed scene are as for `vidgen render --json`.
+
+### `vidgen thumbnail --json`
+
+| key | type | |
+|---|---|---|
+| `project` | str | |
+| `variant` | str \| null | |
+| `preview` | bool | frames from the preview render, files named `..._preview_thumbnail` |
+| `kind` | str | `frame` or `design` |
+| `path`, `width`, `height`, `bytes` | str, int, int, int | the PNG |
+| `jpeg`, `jpeg_bytes` | str \| null, int \| null | the JPEG (`null` without `jpeg` / `--jpeg`) |
+| `small` | str | the copy at YouTube's small size (long side 320 px), to look at |
+| `source` | object | frame: `{scene, beat, at, frame, time, overlays, render, render_size}` (`frame` / `time` in the scene's render, `render` that MP4); design: `{title, subtitle, icon, image, preset, background, title_px, subtitle_px, title_lines}` |
+| `checks` | list | `{rule, severity, message}`, see [thumbnail](#thumbnail-thumbnail-vidgen-thumbnail) |
+| `rendered` | list | scenes rendered for a frame thumbnail (empty when their renders were current) |
+| `elapsed` | float | wall time of the command |
+
+### `vidgen export --json`
+
+| key | type | |
+|---|---|---|
+| `project` | str | |
+| `variant` | str \| null | |
+| `preview` | bool | exported from the preview render |
+| `kind` | str | `gif` or `clip` |
+| `path`, `bytes` | str, int | the file written |
+| `source` | str | the rendered video it comes from |
+| `scene` | str \| null | `--scene` |
+| `start`, `end`, `duration` | float | the part, seconds in the video (a stream-copied clip starts at the keyframe it starts on) |
+| `width`, `height`, `fps` | int, int, float | of the file |
+| `method` | str | `palette` (GIF), `copy` or `encode` (clip) |
+| `audio` | bool | the clip has sound (`--with-audio`) |
+| `max_mb`, `within_budget` | float \| null, bool \| null | the GIF's budget and whether it was met (`null` without `--max-mb`) |
+| `attempts` | list | with `--max-mb`: every GIF encode `{width, fps, bytes}` in order |
+| `elapsed` | float | wall time of the command |
+
+### `vidgen slides --json`
+
+| key | type | |
+|---|---|---|
+| `project` | str | |
+| `variant`, `language` | str \| null | the variant and its language |
+| `output_format` | str | `html`, or `pdf` with `--format pdf` |
+| `preview` | bool | `false` with `--final` |
+| `mode` | str | `beat` or `scene` |
+| `per_beat` | int | stills per beat |
+| `overlays` | bool | `false` with `--no-overlays` (stills from the `_bare` renders) |
+| `dedupe` | bool | `false` with `--no-dedupe` |
+| `format` | object | `{width, height, fps}` of the stills |
+| `path`, `bytes` | str, int | the HTML page (the PDF) |
+| `files_dir` | str \| null | HTML only: with `--separate`, the folder of pictures and MP3s |
+| `image_format`, `quality` | str, int | `webp`, `jpeg` or `png` (PDF: `jpeg` or `png`) |
+| `width`, `height` | int | of the slide pictures |
+| `audio` | int | HTML only: MP3s included (`--audio`) |
+| `pages` | int | PDF only: pages, the title page and continued notes included |
+| `notes`, `title_page` | bool | PDF only: `--notes`, `--title-page` |
+| `thumbnail` | str \| null | PDF only: the thumbnail on the title page (`null`: none or no title page) |
+| `paper` | str | PDF only: `a4` or `letter` (of notes pages) |
+| `bookmarks` | int | PDF only: outline entries (title page, chapters, slides) |
+| `duration` | float | the deck's play timeline: the scenes back to back |
+| `stills` | int | stills read; `merged`: how many were merged into the slide before |
+| `rendered`, `reused` | list | scene ids rendered for the deck / whose stills were current |
+| `elapsed` | float | wall time of the command |
+| `slides` | list | `{index, scene, type, chapter, beats, notes, k, n, merged, time, scene_time, at, until, still}`: 1-based `index`; `chapter` title or `null`; `beats` ids and `notes` (their texts, a blank line between) carried by the slide; `k` of `n` stills of its beat; `merged` stills shown by it (1: none merged); `time` in the video (`null` when not every scene has a render at this format), `scene_time` from the scene's start; `at` / `until` on the play timeline; `still` the PNG |
+
+`warnings` and `error.details` on a failed scene are as for `vidgen render --json`.
+
+### `vidgen translate-template --json`
+
+| key | type | |
+|---|---|---|
+| `project` | str | project folder |
+| `variant` | str \| null | |
+| `path`, `rel` | str | the translation file written, and as the config names it |
+| `language` | str \| null | the file's language |
+| `linked` | bool | the config's `translations:` names this file |
+| `texts` | int | translatable texts listed |
+| `translated` | int | texts with a current translation |
+| `untranslated`, `stale`, `moved`, `obsolete`, `dropped` | list | keys: listed without a translation; translated but the source changed; found again under a new key; translated but gone from the config (kept); untranslated and gone (removed) |
+| `references` | int | places in the file's `references` |
+
+### `vidgen readback --json`
+
+`ok` is true whenever the command ran (flagged beats do not fail it); a missing provider package,
+API key or model, or an unknown `--beat`, is an error.
+
+| key | type | |
+|---|---|---|
+| `project` | str | |
+| `variant` | str \| null | |
+| `audio_dir` | str | the folder of the MP3s compared |
+| `stt` | object | `{provider, model, language}`: the settings the transcripts are of (`language` `null`: detected) |
+| `max_wer` | float | the threshold beats are flagged above |
+| `transcribed`, `cached` | int | beats transcribed by this run / read from `build/readback/` |
+| `elapsed` | float | wall time of the command |
+| `summary` | object | `{beats, flagged, words, errors, wer, worst}`: beats compared, ids of the flagged ones, words of the spoken texts and differences over all of them, their ratio, and the worst beats `[{beat, wer}]` (at most 5, with differences, worst first) |
+| `beats` | list | each compared beat, video order (below) |
+| `skipped` | list | `{beat, reason}`: beats not compared (no MP3) |
+| `terms` | list | `{term, entry, beats, heard, consistent, suggestion}`: written terms heard differently, most beats first; `entry` true when the term has a pronunciation entry, `heard` the different hearings, `consistent` true when heard differently in two or more beats |
+
+Each beat: `scene`, `beat`; `audio` (`ok`, or `stale` when its hash does not match the current
+text and voice); `cached` (the transcript came from the cache); `wer`; `words` (normalised words
+of the spoken text); `errors` = `substitutions` + `deletions` + `insertions`; `flagged`; `text`
+(as written), `spoken` (with the pronunciation applied), `heard` (the transcript); `edits`; and
+`suggestions` (what to do, once each; empty without differences).
+
+Each edit: `kind` (`substitution`, `deletion`: words not heard, `insertion`: extra words heard);
+`expected` and `heard` (the normalised words); `written` (the beat's words concerned, as written;
+empty for words heard where nothing was expected, `after` then names the written word before
+them); `said` (the spoken form when a pronunciation entry changed those words, else `null`);
+`errors`; `at` (when the heard words start in the MP3, seconds; `null` without word times or when
+nothing was heard); `term` (the written term the fix is about: a pronunciation entry's term, or a
+name, acronym or number; else `null`) and `entry`; `suggestion`.
+
+### `vidgen guide --json`
+
+The author guide for AI agents (`AGENTS.md`, shipped with vidgen; `vidgen guide [TOPIC] [--list]`).
+
+| key | type | |
+|---|---|---|
+| `topic`, `title` | str \| null | the topic printed and its heading (`null`: the whole guide, or `--list`) |
+| `topics` | list | every topic in order: `{name, title, aliases}` (`vidgen guide NAME` takes the name or an alias) |
+| `text` | str \| null | the Markdown printed: the topic, or the whole guide (`null` with `--list`) |
+| `path` | str | the packaged guide file |
+
+An unknown topic is an error (`ok` false) whose message suggests the closest names.
+
+### `vidgen gallery --json`
+
+The [scene gallery](#scene-gallery-vidgen-gallery) written by `vidgen gallery`.
+
+| key | type | |
+|---|---|---|
+| `project` | str \| null | the project whose own types are shown (`null`: built-ins only) |
+| `output`, `index`, `work` | str | the gallery folder, its `README.md`, the work project rendered in |
+| `formats` | list | the formats rendered (`16:9`, `9:16`) |
+| `rendered`, `reused` | list | samples rendered by this run and current ones reused, as `"<type> (<format>)"` |
+| `bytes` | int | the size of the gallery folder |
+| `elapsed` | float | seconds |
+| `types` | list | every registered type, in index order: `{name, alias_of, sample, page, stills, clips}`; `alias_of` names the type it is another name of (`null` otherwise), `sample` is `guide`, the project's config file name or `null` (none), `page` the type's page written by this run (else `null`), `stills` / `clips` the files written by this run by format |
+
+`warnings`: a type with no sample, and the render warnings of the samples (`scene` is then
+`"<type> (<format>)"`). An unknown `--types` name or format is an error (`ok` false).
+
+### `vidgen plan --json`
+
+The [draft](#drafting-from-an-outline-vidgen-plan) written by `vidgen plan`. `ok` is false when
+`vidgen validate` finds problems in the draft (listed in `problems`; the files are written anyway).
+
+| key | type | |
+|---|---|---|
+| `project`, `config` | str | the project folder and the config file written |
+| `created` | bool | `true` when the folder was scaffolded by this run (like `vidgen init`) |
+| `title`, `language`, `format` | str \| null | the video's title, its `language` (`null`: none given) and `16:9` / `9:16` |
+| `chapters` | bool | `true` when the draft got chapter cards and a progress bar |
+| `scene_count`, `beat_count` | int | scenes (chapter cards included) and narrated beats |
+| `estimated_duration` | float | seconds, from the word count (like `vidgen validate`) |
+| `todo_count` | int | the `# TODO:` comments in the config |
+| `types` | object | `{scene type: count}` |
+| `assets` | list | pictures copied into the project (`assets/<name>`) |
+| `notes` | list | TODOs about the whole video (e.g. no closing section) |
+| `scenes` | list | `{id, type, beats, words, estimated_duration, reason, todos}` per scene, in order; `reason` is the scene's `# plan:` comment, `todos` its `# TODO:` comments |
+| `problems` | list | `vidgen validate` problems of the draft, `{location, message, variant}` (normally empty) |
+
+### `vidgen init --json`
+
+| key | type | |
+|---|---|---|
+| `project`, `config_file` | str | the new project folder and its `video.yaml` |
+| `example` | str | the template it was made from (`--example`) |
+
+### `vidgen tts --json`
+
+The same document for a dry run (`--dry-run`, nothing sent, no key needed) and a run; the progress
+lines (`[2/5] generated ...`) go to stderr. A run that fails part-way is an error document whose
+message says how many beats were done (their MP3s are kept: run again to continue).
+
+| key | type | |
+|---|---|---|
+| `project`, `variant`, `audio_dir` | str \| null | the project, the variant and the audio folder written |
+| `dry_run`, `force` | bool | the options |
+| `characters` | int | characters sent (or that a run would send) for synthesis: what ElevenLabs bills |
+| `voices` | object | `{voice name: {voice_id, beats, characters}}` of the beats to synthesise (`default` = the base voice) |
+| `beats` | list | the beats to voice, in video order: `{scene, beat, voice, action, characters, says, source}`; `action` `generate` (an API call) or `copy` (the base `audio/` MP3 of a variant beat that did not change; 0 characters, `source` its path), `says` the text sent when [pronunciation](#pronunciation-pronunciation) changed it (else `null`) |
+| `generated` | list | beat ids voiced by this run (`[]` for a dry run) |
+| `up_to_date` | list | beat ids skipped because their MP3 is current |
+| `orphaned` | list | MP3s in the audio folder no beat uses (never deleted) |
+| `elapsed` | float | seconds |
+
+### `vidgen imagegen --json`
+
+The same document for a dry run (`--dry-run`, no key needed) and a run (DESIGN.md §58).
+
+| key | type | |
+|---|---|---|
+| `project`, `variant` | str \| null | |
+| `dry_run`, `force` | bool | the options |
+| `estimated_cost` | float | US dollars of the pictures to generate, by `price_note` |
+| `unknown_cost` | int | pictures to generate with no known price (model / size not in the price list) |
+| `price_note` | str | where the prices come from |
+| `images` | list | the pictures to generate, each distinct request once: `{key, scenes, prompt, sent_prompt, provider, model, size, quality, seed, estimated_cost, path}` (`sent_prompt` = prompt + style + negative as sent; `path` the PNG it is / will be stored as) |
+| `generated` | list | keys generated by this run (`[]` for a dry run) |
+| `up_to_date` | list | keys whose picture exists (skipped) |
+| `orphaned` | list | pictures in `assets/generated/` no config of the project uses (never deleted) |
+| `elapsed` | float | seconds |
+
+### `vidgen lint --json`
+
+`ok` is false (exit code 1) when a finding is at least as severe as `fail_on`; `error` is then
+`{"kind": "error", "message": "lint found 1 error, 3 warning, 0 info (fails on error or worse)",
+"problems": [], "details": {"fail_on", "counts"}}` and the findings are still in the document.
+
+| key | type | |
+|---|---|---|
+| `project` | str | |
+| `variant` | str \| null | |
+| `preview` | bool | `false` with `--final` |
+| `format` | object | `{width, height, fps}` of the stills |
+| `fail_on` | str | `error`, `warning`, `info` or `never` |
+| `rules` | list | names of the rules run |
+| `scenes` | list | ids of the scenes checked (config order) |
+| `stills` | int | beat-end stills checked |
+| `rendered`, `reused` | list | scene ids rendered for this command / whose current stills were reused |
+| `elapsed` | float | wall time of the command |
+| `counts` | object | `{error, warning, info}`: findings per severity |
+| `ignored` | int | findings skipped by `lint_ignore` |
+| `findings` | list | in scene order, then by time and severity, as below |
+
+Each finding: `scene`; `beat` (the beat at whose end it was seen, `null` for a silent scene);
+`time` (in the video, `null` when not every scene has a render at this format) and
+`scene_time` (from the scene start); `rule`; `severity` (`error`, `warning`, `info`);
+`object` (the object concerned, `null` for `max_words` and the timing rules) and `other` (the second object of a
+pair: the other text for `text_overlap`, the shape for `covered_text`; else `null`), each
+`{id, kind, class, name, path, text, icon, bbox}` as in the [layout dump](#layout-dump-buildlayoutscenejson)
+(`text` `null` for shapes, `icon` the icon name for kind `icon`, else `null`); `similar` (further objects with the same problem, reported with
+this one, e.g. the other tick labels); `bbox` (the region to look at in the still, px:
+the object, the overlap of a pair, or all counted texts); `message`; `value` and `limit` (the
+measured number and the threshold it broke: a fraction of the shorter side for sizes, a ratio
+for contrast, px for `off_frame`/`safe_area`, a word count, words per second for
+`narration_speed`, seconds for the other timing rules); `beats` (every beat end where the
+same problem was seen, the first is `beat`); `still` (the PNG at `beat`'s end; `null` if the
+scene has none). Timing findings have `bbox` `null` and `time`/`scene_time` where the problem
+starts (the beat's start, the start of the still stretch, the narration's end, the first
+rushed animation).

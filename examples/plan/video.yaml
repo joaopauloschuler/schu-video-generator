@@ -1,0 +1,229 @@
+# Draft written by `vidgen plan` from outline.md: a deterministic starting point, not a finished video.
+# Every scene says why it got its type (plan) and what to check (TODO). Refine the
+# narration and the on-screen texts, then: vidgen validate, vidgen storyboard, vidgen lint.
+# How to make a good video (pacing, scene types): `vidgen guide` (AGENTS.md)
+title: "Caching in three minutes"
+format: {width: 1920, height: 1080, fps: 30}
+preview: {width: 854, height: 480, fps: 15}
+theme: {preset: dark_tech}
+voice: {provider: elevenlabs, voice_id: nPczCjzI2devNBz1zQrb, model_id: eleven_multilingual_v2}
+narration: {pad: 0.35}
+# plan: narration over 2 minutes -> chapter cards and a progress bar
+overlays:
+  - type: progress_bar
+
+scenes:
+  # plan: the document's title and its first short paragraph -> title
+  - id: opening
+    type: title
+    params:
+      title: "Caching in three minutes"
+      subtitle: "Why the fastest request is the one you never make"
+    beats:
+      - text: "Your app feels slow, and the database is usually why."
+
+  # plan: a sentence with a prominent number (40x) -> stat
+  # TODO: check the stat's value and label; add a `context` line (source, period)
+  - id: stat
+    type: stat
+    params: {value: 40, suffix: x, label: "faster with a cache"}
+    beats:
+      - text: "A cache can make the same page 40x faster."
+
+  # plan: narration over 2 minutes: section 'Why cache at all' starts chapter 1
+  - id: chapter1_why_cache
+    type: chapter
+    params: {number: 1, title: "Why cache at all"}
+    duration: 2.5
+
+  # plan: 2 beats of prose without a visual cue -> bullets (one compressed item per beat)
+  # TODO: items are compressed from the narration: make them keywords, or pick a visual type (vidgen
+  #   guide scenes)
+  - id: why_cache_all_2
+    type: bullets
+    params:
+      heading: "Why cache at all"
+      items: ["Every request that reaches database costs", "A cache keeps recent answers close"]
+    beats:
+      - text: "Every request that reaches the database costs time and money."
+      - text: "A cache keeps recent answers close to the code that needs them."
+
+  # plan: 3 short items, every one with a matching icon -> icon_grid
+  # TODO: check the icon choice: gauge for 'Speed', coins for 'Cost', scale for 'Scale' (vidgen
+  #   list-icons --search WORD)
+  - id: why_cache_all
+    type: icon_grid
+    params:
+      heading: "Why cache at all"
+      items:
+        - {icon: gauge, label: Speed}
+        - {icon: coins, label: Cost}
+        - {icon: scale, label: Scale}
+    beats:
+      - text: "Answers come back in microseconds instead of milliseconds."
+      - text: "Fewer queries mean a smaller database bill."
+      - text: "And the same servers can handle far more users."
+
+  # plan: narration over 2 minutes: section 'How a cache works' starts chapter 2
+  - id: chapter2_how_cache
+    type: chapter
+    params: {number: 2, title: "How a cache works"}
+    duration: 2.5
+
+  # plan: an arrow chain of 3 nodes -> diagram
+  # TODO: check the diagram: node shapes / icons, and whether a `process` tells it better
+  - id: how_cache_works
+    type: diagram
+    params:
+      heading: "How a cache works"
+      nodes:
+        - {id: request, label: Request}
+        - {id: cache, label: Cache}
+        - {id: database, label: Database}
+      edges: ["request -> cache", "cache -> database"]
+    beats:
+      - text: "A request asks the cache first, and only a miss goes on to the database."
+      - text: "On the way back the answer is stored,"
+      - text: "so the next request for it is a hit."
+
+  # plan: 4 numbered steps -> process
+  # TODO: process: consider `input` / `output` labels and stage icons
+  # TODO: the narration repeats the items on screen: say why each one matters instead
+  - id: cache_aside_step
+    type: process
+    params:
+      heading: "Cache-aside, step by step"
+      stages: ["Look up key", "Query the database", "Store result", "Return value"]
+    beats:
+      - text: "Look up the key in the cache."
+      - text: "On a miss, query the database."
+      - text: "Store the result with an expiry time."
+      - text: "Return the value to the caller."
+
+  # plan: a table of labels and numbers (4 rows) -> bar_chart
+  # TODO: bar_chart: add a `caption` with the source of the numbers
+  - id: how_far_away
+    type: bar_chart
+    params:
+      title: "How far away"
+      labels: ["In-process memory", Redis, Database, "Remote API"]
+      values: [0.1, 1, 25, 250]
+      unit: " ms"
+      highlight: "Remote API"
+    beats:
+      - text: "Every hop away from your code makes a read about ten times slower."
+      - text: "A call to a remote API is the slowest of all."
+
+  # plan: display maths -> equation
+  # TODO: check that the LaTeX compiles and say the formula in words in the narration
+  - id: what_hit_rate
+    type: equation
+    params: {latex: 't = h \cdot t_{cache} + (1 - h) \cdot t_{db}', caption: "What hit rate buys you"}
+    beats:
+      - text: "With a hit rate of 90%,"
+      - text: "the average read drops from 25 milliseconds to about 3."
+
+  # plan: a code block of 5 lines -> code
+  # TODO: check the highlighted lines per beat (`highlight`)
+  - id: code
+    type: code
+    params:
+      title: "In code"
+      code: |-
+        from functools import lru_cache
+
+        @lru_cache(maxsize=1024)
+        def get_user(user_id):
+            return db.query("SELECT * FROM users WHERE id = %s", user_id)
+      language: python
+      highlight: ["1", "3-5"]
+    beats:
+      - text: "Python ships a cache in its standard library."
+      - text: "One decorator keeps the last thousand users in memory."
+
+  # plan: narration over 2 minutes: section 'Where to keep the cache' starts chapter 3
+  - id: chapter3_keep_cache
+    type: chapter
+    params: {number: 3, title: "Where to keep the cache"}
+    duration: 2.5
+
+  # plan: 'Local memory vs Redis' with two lists -> comparison
+  - id: local_memory_vs
+    type: comparison
+    params:
+      heading: "Local memory vs Redis"
+      columns:
+        - heading: "Local memory"
+          points: ["Fastest possible reads", "Lost on every restart", "One copy per server"]
+        - heading: Redis
+          points: ["Shared by every server", "Survives restarts", "One network hop away"]
+      vs: vs
+    beats:
+      - text: "Local memory is the fastest place to keep a value, but every server holds its own copy."
+      - text: "Redis is shared by all of them, at the price of one network hop."
+
+  # plan: 4 beats of prose without a visual cue -> bullets (one compressed item per beat)
+  # TODO: items are compressed from the narration: make them keywords, or pick a visual type (vidgen
+  #   guide scenes)
+  - id: cache
+    type: bullets
+    params:
+      heading: "When not to cache"
+      items:
+        - "Some data should never be cached"
+        - "Account balances and stock levels"
+        - "Data that changes on every request"
+        - "A cache you cannot measure"
+    beats:
+      - text: "Some data should never be cached."
+      - text: "Account balances and stock levels must always be exact."
+      - text: "Data that changes on every request gains nothing from a cache."
+      - text: "And a cache you cannot measure is a bug waiting to happen."
+
+  # plan: narration over 2 minutes: section 'The hard part' starts chapter 4
+  - id: chapter4_hard_part
+    type: chapter
+    params: {number: 4, title: "The hard part"}
+    duration: 2.5
+
+  # plan: a blockquote -> quote
+  - id: hard_part
+    type: quote
+    params:
+      text: "There are only two hard things in Computer Science: cache invalidation and naming things."
+      author: "Phil Karlton"
+    beats:
+      - text: "Stale data is the price of speed."
+      - text: "Give every entry an expiry time, and delete it when the source changes."
+
+  # plan: 2 beats of prose without a visual cue -> bullets (one compressed item per beat)
+  # TODO: items are compressed from the narration: make them keywords, or pick a visual type (vidgen
+  #   guide scenes)
+  - id: hard_part_2
+    type: bullets
+    params:
+      heading: "The hard part"
+      items: ["Add a little random jitter", "They do not all hit database"]
+    beats:
+      - text: "When many entries expire at once, add a little random jitter"
+      - text: "so they do not all hit the database together."
+
+  # plan: bullet list of 3 items -> bullets (no icon for every item)
+  # TODO: beat 2 is a placeholder (repeating the label): write what the viewer should hear
+  # TODO: some beats read their item aloud: say why it matters instead
+  - id: summary
+    type: bullets
+    params:
+      heading: Summary
+      items: ["Cache what is read often", "Measure your hit rate", "Always set an expiry time"]
+    beats:
+      - text: "Cache what is read often and changes rarely."
+      - text: "Measure your hit rate."
+      - text: "Always set an expiry time."
+
+  # plan: the closing section ('Summary') -> end_card
+  - id: outro
+    type: end_card
+    params: {title: "Start with one slow endpoint", lines: ["github.com/example/caching-demo"]}
+    beats:
+      - text: "Start with one slow endpoint this week. The full example is on GitHub."

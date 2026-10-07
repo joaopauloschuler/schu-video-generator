@@ -1,0 +1,253 @@
+"""Describe registered scene types and actions: params/options with their types, defaults and
+docs, and the action targets of each scene type.
+
+Used by ``vidgen list-scenes`` for both the human listing (:func:`describe_params`) and the
+``--json`` output (:func:`scene_type_json`, :func:`action_type_json`).
+"""
+
+from __future__ import annotations
+
+import difflib
+import inspect
+import sys
+import types
+import typing
+from collections.abc import Sequence
+from typing import Any
+
+from pydantic import AliasChoices, BaseModel
+from pydantic_core import to_jsonable_python
+
+from vidgen.registry import ActionType, OverlayType, SceneType
+
+
+def type_name(annotation: Any, metadata: Sequence[Any] = ()) -> str:
+    """Readable type: ``color`` / ``size`` / ``icon`` for theme tokens, ``a | b`` for unions and
+    literals (and for a model with ``also_accepts``, e.g. ``str | BulletItem``)."""
+    from vidgen.scene import ThemeToken
+
+    for meta in metadata:
+        if isinstance(meta, ThemeToken):
+            return meta.kind
+    origin, args = typing.get_origin(annotation), typing.get_args(annotation)
+    if origin is typing.Annotated:
+        return type_name(args[0], annotation.__metadata__)
+    if origin in (typing.Union, types.UnionType):
+        return " | ".join(type_name(a) for a in args)
+    if origin is typing.Literal:
+        return " | ".join(repr(a) for a in args)
+    if origin is not None and args:
+        name = getattr(origin, "__name__", str(origin))
+        return f"{name}[{', '.join(type_name(a) for a in args)}]"
+    if annotation is type(None):
+        return "None"
+    if isinstance(annotation, type):
+        extra = getattr(annotation, "also_accepts", ()) if issubclass(annotation, BaseModel) else ()
+        return " | ".join([*(type_name(a) for a in extra), annotation.__name__])
+    return str(annotation).replace("typing.", "")
+
+
+def nested_models(annotation: Any) -> list[type[BaseModel]]:
+    """Pydantic models used inside a field type (``Ring``, ``list[Ring]``, ``Ring | None``...)."""
+    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+        return [annotation]
+    found: list[type[BaseModel]] = []
+    for arg in typing.get_args(annotation):
+        found += [m for m in nested_models(arg) if m not in found]
+    return found
+
+
+#: How many known names an "unknown parameter" message lists.
+_SHOWN_KEYS = 16
+
+
+def _model_at(model: type[BaseModel], path: Sequence[str | int]) -> type[BaseModel] | None:
+    """The model whose fields the error location ``path`` (below ``model``) refers to: list
+    indexes and pydantic's union-member tags are skipped."""
+    current = [model]
+    for part in path:
+        if isinstance(part, int):
+            continue
+        fields = [f for m in current for n, f in m.model_fields.items() if part in (n, f.alias)]
+        if fields:
+            current = [m for f in fields for m in nested_models(f.annotation)]
+        else:   # a union member's tag ("BulletItem", "function-after[...]"): keep the models it names
+            current = [m for m in current if m.__name__ in part] or current
+        if not current:
+            return None
+    return current[0]
+
+
+def unknown_key_message(model: type[BaseModel], loc: Sequence[str | int], noun: str = "parameter") -> str | None:
+    """A better message for an unknown key at ``loc`` (pydantic's "Extra inputs are not
+    permitted"): did-you-mean, the known names, or that it is another name of a field also
+    given. ``None`` when the location cannot be resolved."""
+    owner = _model_at(model, loc[:-1])
+    key = loc[-1] if loc else None
+    if owner is None or not isinstance(key, str):
+        return None
+    names = [f.alias or n for n, f in owner.model_fields.items()]
+    synonyms = {other: f.alias or n for n, f in owner.model_fields.items() for other in other_names(f)}
+    if key in synonyms:
+        return f"'{key}' is another name for '{synonyms[key]}', which is given too; keep one"
+    message = f"unknown {noun} '{key}'"
+    close = difflib.get_close_matches(key, names + list(synonyms), n=3)
+    if close:
+        message += f"; did you mean {' or '.join(repr(c) for c in close)}?"
+    shown = ", ".join(names[:_SHOWN_KEYS]) + (f", ... ({len(names) - _SHOWN_KEYS} more)" if len(names) > _SHOWN_KEYS else "")
+    return message + f" (known: {shown})"
+
+
+def other_names(field: Any) -> list[str]:
+    """The names a params field also accepts besides its own (``AliasChoices`` after the first,
+    e.g. ``title`` for ``heading``; see ``SceneParams.header_synonyms``)."""
+    alias = getattr(field, "validation_alias", None)
+    if isinstance(alias, AliasChoices):
+        return [c for c in alias.choices[1:] if isinstance(c, str)]
+    return []
+
+
+def describe_params(model: type[BaseModel] | None, indent: str = "", _seen: tuple[type, ...] = ()) -> list[str]:
+    """``name: type [= default]`` for each field of a ``Params`` model (empty for plain dicts);
+    the fields of nested models follow their field, indented. A field with an alias (``from``)
+    is shown by it, as it is written in video.yaml."""
+    if model is None:
+        return []
+    lines = []
+    for name, field in model.model_fields.items():
+        line = f"{indent}{field.alias or name}: {type_name(field.annotation, field.metadata)}"
+        if not field.is_required():
+            default = field.get_default(call_default_factory=True)
+            line += f" = {default!r}"
+        others = other_names(field)
+        lines.append(line + (f"   (also: {', '.join(others)})" if others else ""))
+        for nested in nested_models(field.annotation):
+            if nested not in _seen:
+                lines += describe_params(nested, indent + "    ", (*_seen, model, nested))
+    return lines
+
+
+def _jsonable(value: Any) -> Any:
+    """``value`` as JSON data (tuples become lists, models dicts); ``repr`` if not convertible."""
+    try:
+        return to_jsonable_python(value)
+    except Exception:  # noqa: BLE001 - any unconvertible default is shown as its repr
+        return repr(value)
+
+
+def params_json(model: type[BaseModel], _seen: tuple[type, ...] = ()) -> list[dict[str, Any]]:
+    """One object per field of ``model``: ``{name, type, required, default, doc, nested}``.
+
+    ``default`` is ``null`` for required fields; ``doc`` is the field's description (a
+    ``Field(description=...)`` or the docstring under the attribute) or ``null``; ``nested``
+    lists the fields of pydantic models used in the field's type, as ``{model, fields}``.
+    """
+    fields = []
+    for name, field in model.model_fields.items():
+        required = field.is_required()
+        nested = [
+            {"model": m.__name__, "fields": params_json(m, (*_seen, model, m))}
+            for m in nested_models(field.annotation)
+            if m not in _seen
+        ]
+        fields.append(
+            {
+                "name": field.alias or name,   # as written in video.yaml
+                "type": type_name(field.annotation, field.metadata),
+                "required": required,
+                "default": None if required else _jsonable(field.get_default(call_default_factory=True)),
+                "doc": field.description,
+                "nested": nested,
+                "aliases": other_names(field),   # other names it accepts (title for heading...)
+            }
+        )
+    return fields
+
+
+def _beats_json(entry: SceneType) -> dict[str, Any] | None:
+    spec = entry.cls.beat_count
+    if spec is None:
+        return None
+    lo, hi = (spec, spec) if isinstance(spec, int) else spec
+    return {"min": lo, "max": hi, "text": entry.cls.beat_count_text()}
+
+
+def scene_doc(entry: SceneType) -> str | None:
+    """The class's own docstring, else its module's docstring, cleaned; ``None`` if neither."""
+    doc = entry.cls.__dict__.get("__doc__")
+    if not doc:
+        module = sys.modules.get(entry.cls.__module__)
+        doc = getattr(module, "__doc__", None)
+    return inspect.cleandoc(doc) if doc else None
+
+
+def scene_type_json(entry: SceneType) -> dict[str, Any]:
+    """``{name, origin, builtin, overrides_builtin, doc, beats, params, targets}`` for
+    ``list-scenes --json``.
+
+    ``beats`` is ``null`` (any number) or ``{min, max, text}`` (``max`` ``null`` = no limit);
+    ``params`` is ``null`` when the type takes free-form params (no ``Params`` model);
+    ``targets`` lists the forms of its action target names (``item<N>``; empty: no targets).
+    """
+    model = entry.params_model
+    return {
+        "name": entry.name,
+        "origin": entry.origin,
+        "builtin": entry.builtin,
+        "overrides_builtin": entry.overrides is not None,
+        "doc": scene_doc(entry),
+        "beats": _beats_json(entry),
+        "params": None if model is None else params_json(model),
+        "targets": list(entry.cls.target_patterns),
+    }
+
+
+def action_doc(entry: ActionType) -> str | None:
+    """The action class's own docstring, cleaned, or ``None``."""
+    doc = entry.cls.__dict__.get("__doc__")
+    return inspect.cleandoc(doc) if doc else None
+
+
+def action_type_json(entry: ActionType) -> dict[str, Any]:
+    """``{name, origin, builtin, overrides_builtin, doc, run_time, reversible, temporary,
+    until_next_beat, needs_target, scene_targets, animates, target_options, options}`` for
+    ``list-scenes --json``
+    (``options`` as ``params`` of scene types)."""
+    cls = entry.cls
+    return {
+        "name": entry.name,
+        "origin": entry.origin,
+        "builtin": entry.builtin,
+        "overrides_builtin": entry.overrides is not None,
+        "doc": action_doc(entry),
+        "run_time": cls.run_time,
+        "reversible": cls.reversible,
+        "temporary": cls.temporary,
+        "until_next_beat": cls.until_next_beat,
+        "needs_target": cls.needs_target,
+        "scene_targets": cls.scene_targets,
+        "animates": cls.animates,
+        "target_options": list(cls.target_options),
+        "options": params_json(cls.Options),
+    }
+
+
+def overlay_doc(entry: OverlayType) -> str | None:
+    """The overlay class's own docstring, cleaned, or ``None``."""
+    doc = entry.cls.__dict__.get("__doc__")
+    return inspect.cleandoc(doc) if doc else None
+
+
+def overlay_type_json(entry: OverlayType) -> dict[str, Any]:
+    """``{name, origin, builtin, overrides_builtin, doc, layer, lint_skip, options}`` for
+    ``list-scenes --json`` (``options`` as ``params`` of scene types)."""
+    return {
+        "name": entry.name,
+        "origin": entry.origin,
+        "builtin": entry.builtin,
+        "overrides_builtin": entry.overrides is not None,
+        "doc": overlay_doc(entry),
+        "layer": entry.cls.layer,
+        "lint_skip": list(entry.cls.lint_skip),
+        "options": params_json(entry.cls.Options),
+    }

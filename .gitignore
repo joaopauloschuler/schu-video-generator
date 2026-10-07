@@ -223,9 +223,15 @@ __marimo__/
 # MP3s and hashes are committed)
 **/build/
 **/media/
+# ... except the scene gallery's stills and GIFs, which are committed (vidgen gallery, Step 57)
+!docs/gallery/media/
 *.mp4
 *.srt
 *.wav
+*_chapters.txt
+*_thumbnail.png
+*_thumbnail.jpg
+**/exports/
 
 # summary written by the examples/custom_scene post_render hook
 examples/custom_scene/*.txt

@@ -19,20 +19,25 @@ class GearPair(NarratedScene):
         front: Ring
         rear: Ring
         caption: str = ""
+        icon: IconName | None = "bicycle"
+        """Icon left of the ratio caption: built-in or assets/icons (`vidgen list-icons`)."""
 
     def construct(self):
         p = self.params
         front = gear(p.front.teeth, color=p.front.color)
         rear = gear(p.rear.teeth, color=p.rear.color)
         pair = VGroup(front, rear).arrange(DOWN if self.is_portrait else RIGHT, buff=1.0)
-        shrink_to_fit(pair, self.safe_width, self.safe_height * 0.6)
+        place(pair, self.region("center"), max_scale=1.0)  # layout regions adapt to 16:9 and 9:16
         labels = VGroup(
             self.text(p.front.label or f"{p.front.teeth} teeth", size="caption", color=p.front.color).next_to(front, DOWN),
             self.text(p.rear.label or f"{p.rear.teeth} teeth", size="caption", color=p.rear.color).next_to(rear, DOWN),
         )
         ratio = p.front.teeth / p.rear.teeth
-        caption = fit_text(p.caption or f"ratio {ratio:.2f} : 1", self.safe_width, size="body", color="highlight")
-        caption.to_edge(UP, buff=self.margin_y)
+        header = self.region("header")
+        caption = readable_text(p.caption or f"ratio {ratio:.2f} : 1", header, size="body", color="highlight", role="heading")
+        if p.icon:  # assets/icons/bicycle.svg is a project icon; built-ins: `vidgen list-icons`
+            caption = VGroup(icon(p.icon, size="body", color="highlight"), caption).arrange(RIGHT, buff=0.25)
+        place(caption, header, fit="none", align="top")
 
         with self.narrate(0) as d:
             self.play(FadeIn(front), FadeIn(rear), FadeIn(labels), run_time=min(1.0, 0.5 * d))

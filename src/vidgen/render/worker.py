@@ -1,10 +1,14 @@
 """Render one scene in its own process (DESIGN.md §5.2)::
 
     python -m vidgen.render.worker <project_dir> <scene_id> --quality final|preview
-        [--variant NAME] [--no-audio] [--progress]
+        [--variant NAME] [--no-audio] [--progress] [--frames N] [--bare]
 
 Writes ``<render_dir>/scenes/<scene_id>.mp4`` and ``<render_dir>/timings/<scene_id>.json``
-(``render_dir`` = ``build/<final|preview>[_<variant>]``). Exit code 0 on success, 1 for a
+(``render_dir`` = ``build/<final|preview>[_<variant>]``); with ``--frames N``, also N PNG stills
+per beat and an index in ``<render_dir>/frames/<scene_id>/`` (see :mod:`vidgen.capture`), the
+layout of those frames in ``<render_dir>/layout/<scene_id>.json`` (:mod:`vidgen.introspect`) and
+the scene's timing activity in ``<render_dir>/activity/<scene_id>.json`` (:mod:`vidgen.activity`).
+Exit code 0 on success, 1 for a
 :class:`VidgenError` (message on stderr as ``error: ...``), 2 for any other exception (full
 traceback on stderr, so extension authors see where their scene code failed).
 
@@ -26,7 +30,7 @@ from typing import Any
 
 from vidgen import __version__
 from vidgen.errors import VidgenError
-from vidgen.fileio import remove_file, write_text_atomic
+from vidgen.fileio import locked_message, remove_file, write_text_atomic
 from vidgen.project import Project
 
 #: Manim's units on the shorter side of the frame (Manim's default frame height).
@@ -50,6 +54,45 @@ def scene_audio_path(project: Project, preview: bool, scene_id: str) -> Path:
     """``<render_dir>/scenes/<scene_id>.wav``: Manim's uncompressed mix of the scene's sounds
     (only exists if the scene added any sound)."""
     return project.render_dir(preview) / "scenes" / f"{scene_id}.wav"
+
+
+def scene_overlay_path(project: Project, preview: bool, scene_id: str) -> Path:
+    """``<render_dir>/scenes/<scene_id>.overlay.mov``: the overlays of the scene's first frames
+    as an RGBA clip, when a push or wipe moves those frames (DESIGN.md §50)."""
+    return project.render_dir(preview) / "scenes" / f"{scene_id}.overlay.mov"
+
+
+def scene_carry_path(project: Project, preview: bool, scene_id: str) -> Path:
+    """``<render_dir>/carry/<scene_id>.json``: the objects the next scene carries out of this
+    one, as they ended (DESIGN.md §50)."""
+    from vidgen.carry import carry_path
+
+    return carry_path(project.render_dir(preview), scene_id)
+
+
+def scene_frames_dir(project: Project, preview: bool, scene_id: str) -> Path:
+    """``<render_dir>/frames/<scene_id>/``: the scene's stills and their ``index.json``."""
+    return project.render_dir(preview) / "frames" / scene_id
+
+
+def scene_layout_path(project: Project, preview: bool, scene_id: str) -> Path:
+    """``<render_dir>/layout/<scene_id>.json``: what is on screen at each still (see :mod:`vidgen.introspect`)."""
+    return project.render_dir(preview) / "layout" / f"{scene_id}.json"
+
+
+def scene_activity_path(project: Project, preview: bool, scene_id: str) -> Path:
+    """``<render_dir>/activity/<scene_id>.json``: beats, plays and motion over time (see :mod:`vidgen.activity`)."""
+    return project.render_dir(preview) / "activity" / f"{scene_id}.json"
+
+
+def remove_tree(path: Path) -> None:
+    """Delete the folder ``path`` if it exists; a locked file in it becomes a :class:`VidgenError`."""
+    try:
+        shutil.rmtree(path)
+    except FileNotFoundError:
+        return
+    except PermissionError as exc:
+        raise VidgenError(locked_message(Path(exc.filename or path), exc)) from None
 
 
 def frame_size(width: int, height: int) -> tuple[float, float]:
@@ -126,6 +169,26 @@ def write_json(path: Path, data: Any) -> None:
     write_text_atomic(path, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
 
 
+def _carried_in(project: Project, preview: bool, scene_id: str) -> tuple[dict[str, Any] | None, str | None]:
+    """The objects ``scene_id`` carries from the scene before (its ``carry:``, DESIGN.md §50)
+    as that scene's render recorded them, and the fingerprint of that render; ``(None, None)``
+    when it carries nothing. A missing record is a :class:`VidgenError` (``vidgen render``
+    renders the scene before first; a worker run alone cannot)."""
+    from vidgen.carry import carried_from, read_record
+
+    before = carried_from(project.config).get(scene_id)
+    if before is None:
+        return None, None
+    path = scene_carry_path(project, preview, before)
+    record = read_record(path)
+    if record is None:
+        raise VidgenError(
+            f"scene '{scene_id}' carries objects from '{before}', which has no record of them ({path}); "
+            f"render '{before}' first (vidgen render and storyboard do it when needed)"
+        )
+    return record.get("objects", {}), record.get("fingerprint")
+
+
 def render_scene(
     project_path: str | Path,
     scene_id: str,
@@ -133,27 +196,64 @@ def render_scene(
     variant: str | None = None,
     audio: bool = True,
     progress: bool = False,
+    frames: int = 0,
+    bare: bool = False,
 ) -> Path:
     """Render one scene in this process (Manim's global config is modified); returns its video.
 
+    ``frames``: also save that many stills per beat (0: none) in :func:`scene_frames_dir`,
+    their layout in :func:`scene_layout_path` and the activity in :func:`scene_activity_path`.
+    ``bare``: render the project :meth:`~vidgen.project.Project.without_overlays` (into its
+    ``_bare`` folders; a frame thumbnail without overlays, DESIGN.md §53).
     Call it only in a fresh process: this is the body of the worker.
     """
-    from vidgen import extensions, registry
+    from vidgen import carry, extensions, registry
+    from vidgen.activity import MotionTrack, activity_document
+    from vidgen.capture import FrameCapture, StillWriter
+    from vidgen.fonts import register_bundled_fonts
+    from vidgen.introspect import LayoutRecorder
+    from vidgen.render.fingerprint import scene_fingerprint
+
+    if frames < 0:
+        raise VidgenError("frames per beat must not be negative")
+    register_bundled_fonts()  # before extensions or scenes lay out any text
 
     project = Project.load(project_path, variant=variant)
+    if bare:
+        project = project.without_overlays()
     theme = extensions.activate(project)
     spec = project.scene(scene_id)
     cls = registry.get(spec.type).cls
+    fingerprint = scene_fingerprint(project, scene_id)  # the inputs as they are when rendering starts
     render_dir = project.render_dir(preview)
     # A failed render must not leave the previous render behind to be reused by `--scene`.
-    for stale in (scene_video_path, scene_audio_path, scene_timings_path):
+    for stale in (scene_video_path, scene_audio_path, scene_timings_path, scene_overlay_path, scene_carry_path):
         remove_file(stale(project, preview, scene_id))
+    carried_in, carried_from = _carried_in(project, preview, scene_id)
+    frames_dir = scene_frames_dir(project, preview, scene_id)
+    remove_tree(frames_dir)  # stills (and their layout) always belong to the scene's current render
+    layout_path = scene_layout_path(project, preview, scene_id)
+    remove_file(layout_path)
+    activity_path = scene_activity_path(project, preview, scene_id)
+    remove_file(activity_path)
+    writer = StillWriter(frames_dir) if frames else None
+    recorder = LayoutRecorder() if frames else None
+    motion = MotionTrack()
+    capture = FrameCapture(frames, [writer, recorder], motion) if writer is not None and recorder is not None else None
     media_dir, temporary = _manim_media_dir(render_dir)
     shutil.rmtree(media_dir / "videos" / scene_id, ignore_errors=True)  # no stale .wav from a previous run
     try:
         configure_manim(project, preview, theme.background, media_dir, scene_id, progress)
-        scene = cls(spec, project, theme, audio=audio)
-        scene.render()
+        scene = cls(spec, project, theme, audio=audio, capture=capture)
+        scene.carried_in = carried_in
+        layer = scene.overlay_layer
+        if layer is not None and scene.overlay_head:  # a push / wipe moves the first frames (§50)
+            layer.split_head(scene.overlay_head, scene_overlay_path(project, preview, scene_id))
+        try:
+            scene.render()
+        finally:
+            if layer is not None:
+                layer.close_head()
         movie = Path(scene.renderer.file_writer.movie_file_path)
         if not movie.is_file():
             raise VidgenError(f"scene '{scene_id}' produced no video (does construct() animate or wait?)")
@@ -173,8 +273,29 @@ def render_scene(
         "height": fmt.height,
         "fps": fmt.fps,
         "audio": audio,
+        "frames": frames,
         "vidgen": __version__,
+        "fingerprint": fingerprint,
     }
+    if layer is not None:  # what the overlays were drawn for (the pipeline checks the plan held)
+        timed = any(o.timed for o in layer.overlays)
+        slot = layer.overlays[0].context.scene if timed else None
+        timings["render"]["overlays"] = {
+            "ids": [o.id for o in layer.overlays],
+            "timed": timed,
+            "start": None if slot is None else round(slot.start, 6),
+            "duration": None if slot is None else round(slot.duration, 6),
+        }
+        if scene_overlay_path(project, preview, scene_id).is_file():
+            timings["render"]["overlays"]["head"] = layer.head
+    if carried_from is not None:
+        timings["render"]["carry_from"] = carried_from
+    if scene.carry_state is not None:
+        carry.write_record(scene_carry_path(project, preview, scene_id), scene_id, fingerprint, scene.carry_state)
+    if writer is not None and recorder is not None:
+        write_json(frames_dir / "index.json", writer.index(scene_id, frames, fmt.width, fmt.height, fmt.fps))
+        write_json(layout_path, recorder.document(scene, frames))
+        write_json(activity_path, activity_document(scene, motion, fmt.fps))
     write_json(scene_timings_path(project, preview, scene_id), timings)
     return target
 
@@ -195,6 +316,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--variant", metavar="NAME")
     parser.add_argument("--no-audio", action="store_true", help="do not add narration sounds")
     parser.add_argument("--progress", action="store_true", help="show Manim's progress bars")
+    parser.add_argument("--frames", type=int, default=0, metavar="N", help="save N PNG stills per beat (default: 0)")
+    parser.add_argument("--bare", action="store_true", help="render without overlays into build/..._bare")
     return parser
 
 
@@ -208,7 +331,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     logger.setLevel(logging.WARNING)
     logger.propagate = False
     try:
-        render_scene(args.project, args.scene_id, args.quality == "preview", args.variant, not args.no_audio, args.progress)
+        render_scene(
+            args.project, args.scene_id, args.quality == "preview", args.variant, not args.no_audio, args.progress, args.frames,
+            args.bare,
+        )
     except VidgenError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

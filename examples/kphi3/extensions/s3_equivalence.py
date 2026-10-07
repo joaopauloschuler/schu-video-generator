@@ -60,9 +60,10 @@ class KphiEquivalence(NarratedScene):
         words = ["Large", "language", "models", "are", "sparse"]
         col = VGroup(*[Rectangle(width=1.9, height=0.62, stroke_color=dim, stroke_width=1.2,
                                  fill_color=TOKEN_FILL, fill_opacity=1) for _ in words]
-                     ).arrange(DOWN, buff=0).move_to([-4.8, 0, 0])
+                     ).arrange(DOWN, buff=0).move_to([-4.7, 0, 0])
         toks = VGroup(*[T(w, 24).move_to(col[i]) for i, w in enumerate(words)])
         seq_lbl = T("sequence  length × 1 × C", 26, "dim").next_to(col, UP, buff=0.35)
+        seq_lbl.shift(RIGHT * max(0.0, self.safe_area.x0 - seq_lbl.get_left()[0]))  # not in the margin
         h_brace = Brace(col, LEFT, color=dim)
         h_txt = T("H = length", 22, "dim").next_to(h_brace, LEFT, buff=0.1).rotate(PI / 2)
         h_txt.next_to(h_brace, LEFT, buff=0.1)

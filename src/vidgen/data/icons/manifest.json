@@ -1,0 +1,3735 @@
+{
+  "version": 1,
+  "sources": {
+    "lucide": {
+      "package": "lucide-static",
+      "version": "1.52.0",
+      "license": "ISC",
+      "license_file": "lucide/LICENSE",
+      "homepage": "https://lucide.dev"
+    }
+  },
+  "icons": [
+    {
+      "name": "accessibility",
+      "category": "people",
+      "tags": [
+        "disability",
+        "disabled",
+        "dda",
+        "wheelchair",
+        "inclusion",
+        "inclusive",
+        "a11y"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "activity",
+      "category": "data",
+      "tags": [
+        "pulse",
+        "action",
+        "motion",
+        "movement",
+        "exercise",
+        "fitness",
+        "healthcare",
+        "heart rate monitor",
+        "vital signs",
+        "vitals",
+        "emergency room",
+        "er",
+        "intensive care",
+        "hospital",
+        "defibrillator",
+        "earthquake",
+        "seismic",
+        "magnitude",
+        "richter scale",
+        "aftershock",
+        "tremor",
+        "shockwave",
+        "audio",
+        "waveform",
+        "synthesizer",
+        "synthesiser",
+        "music",
+        "signal",
+        "monitoring",
+        "metrics",
+        "heartbeat"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "arrow-down",
+      "category": "ui",
+      "tags": [
+        "backwards",
+        "reverse",
+        "direction",
+        "south",
+        "down",
+        "decrease",
+        "lower"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "arrow-left",
+      "category": "ui",
+      "tags": [
+        "previous",
+        "back",
+        "direction",
+        "west",
+        "<-",
+        "return"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "arrow-left-right",
+      "category": "ui",
+      "tags": [
+        "bidirectional",
+        "two-way",
+        "2-way",
+        "swap",
+        "switch",
+        "transaction",
+        "reorder",
+        "move",
+        "<-",
+        "->",
+        "exchange",
+        "trade",
+        "both ways"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "arrow-right",
+      "category": "ui",
+      "tags": [
+        "forward",
+        "next",
+        "direction",
+        "east",
+        "->",
+        "then",
+        "result"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "arrow-up",
+      "category": "ui",
+      "tags": [
+        "forward",
+        "direction",
+        "north",
+        "up",
+        "increase",
+        "rise"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "arrow-up-right",
+      "category": "ui",
+      "tags": [
+        "direction",
+        "north-east",
+        "diagonal",
+        "growth",
+        "external",
+        "outward"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "atom",
+      "category": "science",
+      "tags": [
+        "atomic",
+        "nuclear",
+        "physics",
+        "particle",
+        "element",
+        "molecule",
+        "electricity",
+        "energy",
+        "chemistry",
+        "science",
+        "quantum"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "award",
+      "category": "business",
+      "tags": [
+        "achievement",
+        "badge",
+        "rosette",
+        "prize",
+        "winner",
+        "certificate",
+        "recognition",
+        "quality",
+        "excellence"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "axis-3d",
+      "category": "science",
+      "tags": [
+        "gizmo",
+        "coordinates",
+        "3d",
+        "space",
+        "dimensions",
+        "geometry",
+        "vectors"
+      ],
+      "aliases": [
+        "axis-3-d"
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "baby",
+      "category": "people",
+      "tags": [
+        "child",
+        "childproof",
+        "children",
+        "infant",
+        "newborn",
+        "beginning"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "backpack",
+      "category": "education",
+      "tags": [
+        "bag",
+        "hiking",
+        "travel",
+        "camping",
+        "school",
+        "childhood",
+        "student",
+        "school bag"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "banknote",
+      "category": "business",
+      "tags": [
+        "currency",
+        "money",
+        "payment",
+        "cash",
+        "bill",
+        "finance"
+      ],
+      "aliases": [
+        "money"
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "battery-full",
+      "category": "tech",
+      "tags": [
+        "power",
+        "electricity",
+        "energy",
+        "accumulator",
+        "charge",
+        "battery",
+        "full"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "bell",
+      "category": "ui",
+      "tags": [
+        "alarm",
+        "notification",
+        "sound",
+        "reminder",
+        "alert",
+        "notify",
+        "remind"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "binary",
+      "category": "tech",
+      "tags": [
+        "code",
+        "digits",
+        "computer",
+        "zero",
+        "one",
+        "boolean",
+        "bits",
+        "digital",
+        "data"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "biohazard",
+      "category": "science",
+      "tags": [
+        "fallout",
+        "waste",
+        "biology",
+        "chemistry",
+        "chemical",
+        "element",
+        "danger",
+        "hazard",
+        "toxic"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "bird",
+      "category": "nature",
+      "tags": [
+        "peace",
+        "freedom",
+        "wing",
+        "avian",
+        "tweet",
+        "animal",
+        "wildlife"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "book",
+      "category": "education",
+      "tags": [
+        "reading",
+        "paperback",
+        "booklet",
+        "magazine",
+        "leaflet",
+        "pamphlet",
+        "tome",
+        "library",
+        "writing",
+        "written",
+        "writer",
+        "author",
+        "story",
+        "script",
+        "fiction",
+        "novel",
+        "information",
+        "knowledge",
+        "education",
+        "high school",
+        "university",
+        "college",
+        "academy",
+        "student",
+        "study",
+        "learning",
+        "homework",
+        "research",
+        "documentation",
+        "read",
+        "textbook"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "book-bookmark",
+      "category": "education",
+      "tags": [
+        "dictionary",
+        "reading",
+        "booklet",
+        "magazine",
+        "leaflet",
+        "pamphlet",
+        "tome",
+        "library",
+        "writing",
+        "written",
+        "writer",
+        "author",
+        "story",
+        "script",
+        "fiction",
+        "novel",
+        "information",
+        "knowledge",
+        "education",
+        "high school",
+        "university",
+        "college",
+        "academy",
+        "student",
+        "study",
+        "learning",
+        "homework",
+        "research",
+        "documentation",
+        "saved",
+        "later",
+        "future",
+        "reference",
+        "index",
+        "code",
+        "coding",
+        "version control",
+        "git",
+        "repository",
+        "bookmark",
+        "chapter"
+      ],
+      "aliases": [
+        "book-marked"
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "book-open",
+      "category": "education",
+      "tags": [
+        "reading",
+        "pages",
+        "booklet",
+        "magazine",
+        "leaflet",
+        "pamphlet",
+        "library",
+        "writing",
+        "written",
+        "writer",
+        "author",
+        "story",
+        "script",
+        "screenplay",
+        "fiction",
+        "novel",
+        "information",
+        "knowledge",
+        "education",
+        "high school",
+        "university",
+        "college",
+        "academy",
+        "student",
+        "study",
+        "learning",
+        "homework",
+        "research",
+        "documentation",
+        "revealed",
+        "blank",
+        "plain",
+        "read",
+        "book"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "bot",
+      "category": "tech",
+      "tags": [
+        "robot",
+        "ai",
+        "chat",
+        "assistant",
+        "automation",
+        "chatbot",
+        "artificial intelligence"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "brain",
+      "category": "people",
+      "tags": [
+        "medical",
+        "mind",
+        "mental",
+        "intellect",
+        "cerebral",
+        "consciousness",
+        "genius",
+        "artificial intelligence",
+        "ai",
+        "think",
+        "thought",
+        "insight",
+        "intelligent",
+        "smart",
+        "thinking",
+        "learning",
+        "intelligence",
+        "cognition"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "brain-circuit",
+      "category": "tech",
+      "tags": [
+        "mind",
+        "intellect",
+        "artificial intelligence",
+        "ai",
+        "deep learning",
+        "machine learning",
+        "computing",
+        "neural network",
+        "model",
+        "intelligence"
+      ],
+      "aliases": [
+        "ai"
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "briefcase",
+      "category": "business",
+      "tags": [
+        "work",
+        "bag",
+        "baggage",
+        "folder",
+        "business",
+        "job",
+        "career",
+        "office"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "bug",
+      "category": "tech",
+      "tags": [
+        "issue",
+        "error",
+        "defect",
+        "testing",
+        "troubleshoot",
+        "problem",
+        "report",
+        "debug",
+        "code",
+        "insect",
+        "beetle",
+        "glitch",
+        "failure"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "building-complex",
+      "category": "business",
+      "tags": [
+        "business",
+        "company",
+        "enterprise",
+        "skyscraper",
+        "organisation",
+        "organization",
+        "city",
+        "office",
+        "corporate",
+        "headquarters",
+        "buildings"
+      ],
+      "aliases": [
+        "building-2"
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "calculator",
+      "category": "data",
+      "tags": [
+        "count",
+        "calculating machine",
+        "math",
+        "arithmetic",
+        "compute"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "calendar",
+      "category": "ui",
+      "tags": [
+        "date",
+        "month",
+        "year",
+        "event",
+        "birthday",
+        "birthdate",
+        "schedule",
+        "plan",
+        "deadline",
+        "day"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "chart-area",
+      "category": "data",
+      "tags": [
+        "statistics",
+        "analytics",
+        "diagram",
+        "graph",
+        "area",
+        "area chart",
+        "volume",
+        "cumulative"
+      ],
+      "aliases": [
+        "area-chart"
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "chart-bar",
+      "category": "data",
+      "tags": [
+        "statistics",
+        "analytics",
+        "diagram",
+        "graph",
+        "horizontal bar chart",
+        "ranking",
+        "compare"
+      ],
+      "aliases": [
+        "bar-chart-horizontal"
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "chart-candlestick",
+      "category": "data",
+      "tags": [
+        "trading",
+        "trader",
+        "financial",
+        "markets",
+        "portfolio",
+        "assets",
+        "prices",
+        "value",
+        "valuation",
+        "commodities",
+        "currencies",
+        "currency",
+        "stocks",
+        "exchange",
+        "hedge fund",
+        "statistics",
+        "analytics",
+        "diagram",
+        "graph",
+        "stock market",
+        "finance"
+      ],
+      "aliases": [
+        "candlestick-chart"
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "chart-column",
+      "category": "data",
+      "tags": [
+        "statistics",
+        "analytics",
+        "diagram",
+        "graph",
+        "bar chart",
+        "column chart",
+        "compare",
+        "comparison"
+      ],
+      "aliases": [
+        "bar-chart",
+        "bar-chart-3"
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "chart-column-stacked",
+      "category": "data",
+      "tags": [
+        "statistics",
+        "analytics",
+        "diagram",
+        "graph",
+        "multivariate",
+        "categorical",
+        "comparison",
+        "stacked bar chart",
+        "composition",
+        "breakdown"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "chart-gantt",
+      "category": "data",
+      "tags": [
+        "diagram",
+        "graph",
+        "timeline",
+        "planning",
+        "schedule",
+        "project plan",
+        "roadmap"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "chart-line",
+      "category": "data",
+      "tags": [
+        "statistics",
+        "analytics",
+        "diagram",
+        "graph",
+        "line chart",
+        "trend",
+        "time series",
+        "over time"
+      ],
+      "aliases": [
+        "line-chart"
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "chart-network",
+      "category": "data",
+      "tags": [
+        "statistics",
+        "analytics",
+        "diagram",
+        "graph",
+        "topology",
+        "cluster",
+        "web",
+        "nodes",
+        "connections",
+        "edges",
+        "graph theory",
+        "relationships",
+        "network"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "chart-pie",
+      "category": "data",
+      "tags": [
+        "statistics",
+        "analytics",
+        "diagram",
+        "presentation",
+        "pie chart",
+        "share",
+        "proportion",
+        "breakdown",
+        "percentage"
+      ],
+      "aliases": [
+        "pie-chart"
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "chart-scatter",
+      "category": "data",
+      "tags": [
+        "statistics",
+        "analytics",
+        "diagram",
+        "graph",
+        "scatter plot",
+        "correlation",
+        "points",
+        "data points"
+      ],
+      "aliases": [
+        "scatter-chart"
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "chart-spline",
+      "category": "data",
+      "tags": [
+        "statistics",
+        "analytics",
+        "diagram",
+        "graph",
+        "curve",
+        "continuous",
+        "smooth",
+        "polynomial",
+        "quadratic",
+        "function",
+        "interpolation",
+        "smooth curve",
+        "fit",
+        "regression"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "check",
+      "category": "ui",
+      "tags": [
+        "done",
+        "todo",
+        "tick",
+        "complete",
+        "task",
+        "yes",
+        "correct",
+        "ok",
+        "success",
+        "approved"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "circle-check",
+      "category": "ui",
+      "tags": [
+        "done",
+        "todo",
+        "tick",
+        "complete",
+        "task",
+        "success",
+        "correct",
+        "verified",
+        "approved"
+      ],
+      "aliases": [
+        "check-circle-2"
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "circle-question-mark",
+      "category": "ui",
+      "tags": [
+        "question mark",
+        "question",
+        "help",
+        "unknown",
+        "faq"
+      ],
+      "aliases": [
+        "circle-help",
+        "help-circle",
+        "question"
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "clipboard-check",
+      "category": "education",
+      "tags": [
+        "copied",
+        "pasted",
+        "done",
+        "todo",
+        "tick",
+        "complete",
+        "task",
+        "checklist",
+        "verified",
+        "assignment"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "clipboard-list",
+      "category": "business",
+      "tags": [
+        "copy",
+        "paste",
+        "tasks",
+        "checklist",
+        "plan",
+        "todo",
+        "agenda"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "clock",
+      "category": "ui",
+      "tags": [
+        "time",
+        "watch",
+        "alarm",
+        "duration",
+        "hours",
+        "deadline",
+        "schedule"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "cloud",
+      "category": "tech",
+      "tags": [
+        "weather",
+        "computing",
+        "internet",
+        "hosting",
+        "online"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "cloud-lightning",
+      "category": "nature",
+      "tags": [
+        "weather",
+        "bolt",
+        "storm",
+        "thunder",
+        "thunderstorm"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "cloud-rain",
+      "category": "nature",
+      "tags": [
+        "weather",
+        "rainfall",
+        "rain",
+        "storm",
+        "wet"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "cloud-sun",
+      "category": "nature",
+      "tags": [
+        "weather",
+        "partly",
+        "partly cloudy",
+        "forecast"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "code",
+      "category": "tech",
+      "tags": [
+        "source",
+        "programming",
+        "html",
+        "xml",
+        "software",
+        "developer",
+        "coding"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "coins",
+      "category": "business",
+      "tags": [
+        "money",
+        "cash",
+        "finance",
+        "gamble",
+        "payment",
+        "savings",
+        "cost"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "cpu",
+      "category": "tech",
+      "tags": [
+        "processor",
+        "cores",
+        "technology",
+        "computer",
+        "chip",
+        "circuit",
+        "memory",
+        "ram",
+        "specs",
+        "gigahertz",
+        "ghz",
+        "hardware",
+        "processing",
+        "compute"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "credit-card",
+      "category": "business",
+      "tags": [
+        "bank",
+        "purchase",
+        "payment",
+        "cc",
+        "card",
+        "money"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "database",
+      "category": "data",
+      "tags": [
+        "storage",
+        "memory",
+        "container",
+        "tin",
+        "pot",
+        "bytes",
+        "servers",
+        "data",
+        "records",
+        "sql",
+        "table"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "dna",
+      "category": "science",
+      "tags": [
+        "gene",
+        "gmo",
+        "helix",
+        "heredity",
+        "chromosome",
+        "nucleic acid",
+        "genetics",
+        "biology",
+        "genome",
+        "life"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "dollar-sign",
+      "category": "business",
+      "tags": [
+        "currency",
+        "money",
+        "payment",
+        "dollar",
+        "price",
+        "cost",
+        "finance"
+      ],
+      "aliases": [
+        "dollar"
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "download",
+      "category": "ui",
+      "tags": [
+        "import",
+        "export",
+        "save",
+        "get",
+        "receive",
+        "install"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "droplet",
+      "category": "nature",
+      "tags": [
+        "water",
+        "weather",
+        "liquid",
+        "fluid",
+        "wet",
+        "moisture",
+        "damp",
+        "bead",
+        "globule",
+        "rain",
+        "drop"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "ear",
+      "category": "people",
+      "tags": [
+        "hearing",
+        "noise",
+        "audio",
+        "accessibility",
+        "listen"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "earth",
+      "category": "nature",
+      "tags": [
+        "world",
+        "browser",
+        "language",
+        "translate",
+        "globe",
+        "planet",
+        "global",
+        "climate"
+      ],
+      "aliases": [
+        "globe-2"
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "eraser",
+      "category": "education",
+      "tags": [
+        "pencil",
+        "drawing",
+        "undo",
+        "delete",
+        "clear",
+        "trash",
+        "remove",
+        "correction",
+        "mistake",
+        "erase"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "eye",
+      "category": "people",
+      "tags": [
+        "view",
+        "watch",
+        "see",
+        "show",
+        "expose",
+        "reveal",
+        "display",
+        "visible",
+        "visibility",
+        "vision",
+        "preview",
+        "read",
+        "observe",
+        "attention",
+        "look"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "face-slightly-frowning",
+      "category": "people",
+      "tags": [
+        "emoji",
+        "bad",
+        "sadness",
+        "emotion",
+        "concern",
+        "disappointment",
+        "frown",
+        "sad",
+        "unhappy",
+        "dissatisfaction"
+      ],
+      "aliases": [
+        "frown"
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "face-slightly-smiling",
+      "category": "people",
+      "tags": [
+        "smile",
+        "happy",
+        "happiness",
+        "good",
+        "positive",
+        "friendly",
+        "patronizing",
+        "passive aggressive",
+        "ironic",
+        "emoji",
+        "emotion",
+        "satisfaction"
+      ],
+      "aliases": [
+        "smile"
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "factory",
+      "category": "business",
+      "tags": [
+        "building",
+        "business",
+        "energy",
+        "industry",
+        "manufacture",
+        "sector",
+        "production",
+        "manufacturing",
+        "industrial"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "file-spreadsheet",
+      "category": "data",
+      "tags": [
+        "spreadsheet",
+        "sheet",
+        "table",
+        "excel",
+        "csv",
+        "data"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "file-text",
+      "category": "education",
+      "tags": [
+        "data",
+        "txt",
+        "pdf",
+        "document",
+        "text",
+        "report",
+        "paper",
+        "article"
+      ],
+      "aliases": [
+        "document"
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "fish",
+      "category": "nature",
+      "tags": [
+        "dish",
+        "restaurant",
+        "course",
+        "meal",
+        "seafood",
+        "pet",
+        "sea",
+        "marine",
+        "animal",
+        "wildlife",
+        "ocean"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "flag",
+      "category": "business",
+      "tags": [
+        "report",
+        "marker",
+        "notification",
+        "warning",
+        "milestone",
+        "goal",
+        "notice",
+        "signal",
+        "attention",
+        "banner",
+        "finish",
+        "checkpoint",
+        "start"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "flame",
+      "category": "science",
+      "tags": [
+        "heat",
+        "burn",
+        "light",
+        "glow",
+        "ignite",
+        "passion",
+        "ember",
+        "fire",
+        "lit",
+        "burning",
+        "spark",
+        "embers",
+        "smoke",
+        "firefighter",
+        "fireman",
+        "department",
+        "brigade",
+        "station",
+        "emergency",
+        "energy",
+        "hot",
+        "combustion"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "flask-conical",
+      "category": "science",
+      "tags": [
+        "beaker",
+        "erlenmeyer",
+        "lab",
+        "chemistry",
+        "experiment",
+        "test",
+        "science",
+        "laboratory",
+        "research"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "flask-round",
+      "category": "science",
+      "tags": [
+        "beaker",
+        "lab",
+        "chemistry",
+        "experiment",
+        "test",
+        "science",
+        "laboratory",
+        "potion"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "flower",
+      "category": "nature",
+      "tags": [
+        "sustainability",
+        "nature",
+        "plant",
+        "spring",
+        "bloom",
+        "garden",
+        "blossom"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "folder",
+      "category": "data",
+      "tags": [
+        "directory",
+        "files",
+        "organize"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "footprints",
+      "category": "people",
+      "tags": [
+        "steps",
+        "walking",
+        "foot",
+        "feet",
+        "trail",
+        "shoe",
+        "journey",
+        "progress",
+        "path",
+        "step by step"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "funnel",
+      "category": "data",
+      "tags": [
+        "filter",
+        "hopper",
+        "conversion",
+        "narrowing",
+        "pipeline"
+      ],
+      "aliases": [
+        "filter"
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "gauge",
+      "category": "data",
+      "tags": [
+        "dashboard",
+        "dial",
+        "meter",
+        "speed",
+        "pressure",
+        "measure",
+        "level",
+        "performance",
+        "kpi",
+        "metric"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "git-branch",
+      "category": "tech",
+      "tags": [
+        "code",
+        "version control",
+        "vcs",
+        "repository",
+        "branch",
+        "fork",
+        "version"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "globe",
+      "category": "tech",
+      "tags": [
+        "world",
+        "browser",
+        "language",
+        "translate",
+        "internet",
+        "web",
+        "global",
+        "international",
+        "worldwide"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "graduation-cap",
+      "category": "education",
+      "tags": [
+        "school",
+        "university",
+        "learn",
+        "study",
+        "mortarboard",
+        "education",
+        "ceremony",
+        "academic",
+        "hat",
+        "diploma",
+        "bachelor's",
+        "master's",
+        "doctorate",
+        "graduation",
+        "degree",
+        "student"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "grid-3x3",
+      "category": "data",
+      "tags": [
+        "table",
+        "rows",
+        "columns",
+        "matrix",
+        "grid",
+        "cells"
+      ],
+      "aliases": [
+        "grid",
+        "grid-3-x-3"
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "hand",
+      "category": "people",
+      "tags": [
+        "wave",
+        "move",
+        "mouse",
+        "grab",
+        "stop",
+        "hello",
+        "help"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "hand-heart",
+      "category": "people",
+      "tags": [
+        "love",
+        "like",
+        "emotion",
+        "care",
+        "charity",
+        "support",
+        "donation",
+        "volunteer"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "handshake",
+      "category": "business",
+      "tags": [
+        "agreement",
+        "partnership",
+        "deal",
+        "business",
+        "assistance",
+        "cooperation",
+        "friendship",
+        "union",
+        "terms",
+        "collaboration",
+        "trust",
+        "partner"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "hard-drive",
+      "category": "tech",
+      "tags": [
+        "computer",
+        "server",
+        "memory",
+        "data",
+        "ssd",
+        "disk",
+        "hard disk",
+        "storage",
+        "hardware",
+        "backup",
+        "media",
+        "disk drive"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "heart",
+      "category": "people",
+      "tags": [
+        "like",
+        "love",
+        "emotion",
+        "suit",
+        "playing",
+        "cards",
+        "care",
+        "favorite",
+        "health"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "heart-pulse",
+      "category": "people",
+      "tags": [
+        "heartbeat",
+        "pulse",
+        "health",
+        "medical",
+        "blood pressure",
+        "cardiac",
+        "systole",
+        "diastole",
+        "medicine",
+        "vital",
+        "wellbeing"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "highlighter",
+      "category": "education",
+      "tags": [
+        "mark",
+        "text",
+        "highlight",
+        "emphasis",
+        "marker"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "hourglass",
+      "category": "education",
+      "tags": [
+        "timer",
+        "time",
+        "sandglass",
+        "waiting",
+        "duration",
+        "sand"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "house",
+      "category": "ui",
+      "tags": [
+        "home",
+        "living",
+        "building",
+        "residence",
+        "architecture",
+        "residential"
+      ],
+      "aliases": [
+        "home"
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "id-card",
+      "category": "people",
+      "tags": [
+        "card",
+        "badge",
+        "identity",
+        "authentication",
+        "secure",
+        "id",
+        "profile",
+        "credentials"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "infinity",
+      "category": "science",
+      "tags": [
+        "unlimited",
+        "forever",
+        "loop",
+        "math",
+        "endless",
+        "limitless",
+        "eternal"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "info",
+      "category": "ui",
+      "tags": [
+        "about",
+        "advice",
+        "clue",
+        "details",
+        "help",
+        "hint",
+        "indicator",
+        "information",
+        "knowledge",
+        "notice",
+        "status",
+        "support",
+        "tooltip",
+        "note",
+        "explanation"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "key-round",
+      "category": "tech",
+      "tags": [
+        "password",
+        "login",
+        "authentication",
+        "secure",
+        "unlock",
+        "access",
+        "credentials",
+        "encryption"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "keyboard",
+      "category": "tech",
+      "tags": [
+        "layout",
+        "spell",
+        "settings",
+        "mouse",
+        "typing",
+        "input",
+        "computer"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "landmark",
+      "category": "business",
+      "tags": [
+        "bank",
+        "building",
+        "capitol",
+        "finance",
+        "money",
+        "museum",
+        "art gallery",
+        "hall",
+        "institute",
+        "pediment",
+        "portico",
+        "doric",
+        "columns",
+        "pillars",
+        "classical",
+        "architecture",
+        "government",
+        "institution",
+        "monument",
+        "site",
+        "history",
+        "historic",
+        "library",
+        "temple",
+        "ancient",
+        "structure",
+        "public"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "languages",
+      "category": "education",
+      "tags": [
+        "translate",
+        "language",
+        "translation",
+        "multilingual",
+        "foreign"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "laptop",
+      "category": "tech",
+      "tags": [
+        "computer",
+        "screen",
+        "remote",
+        "device",
+        "work"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "layers",
+      "category": "data",
+      "tags": [
+        "stack",
+        "pile",
+        "pages",
+        "sheets",
+        "paperwork",
+        "copies",
+        "copy",
+        "levels",
+        "abstraction",
+        "architecture",
+        "tiers"
+      ],
+      "aliases": [
+        "layers-3"
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "leaf",
+      "category": "nature",
+      "tags": [
+        "sustainability",
+        "nature",
+        "energy",
+        "plant",
+        "autumn",
+        "green",
+        "ecology",
+        "environment",
+        "organic"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "library",
+      "category": "education",
+      "tags": [
+        "books",
+        "reading",
+        "written",
+        "authors",
+        "stories",
+        "fiction",
+        "novels",
+        "information",
+        "knowledge",
+        "education",
+        "high school",
+        "university",
+        "college",
+        "academy",
+        "learning",
+        "study",
+        "research",
+        "collection",
+        "vinyl",
+        "records",
+        "albums",
+        "music",
+        "package",
+        "shelf",
+        "archive"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "lightbulb",
+      "category": "education",
+      "tags": [
+        "idea",
+        "bright",
+        "lights",
+        "insight",
+        "tip",
+        "innovation",
+        "creativity",
+        "solution"
+      ],
+      "aliases": [
+        "idea"
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "link",
+      "category": "ui",
+      "tags": [
+        "chain",
+        "url",
+        "connection",
+        "hyperlink",
+        "relation"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "list-checks",
+      "category": "education",
+      "tags": [
+        "todo",
+        "done",
+        "check",
+        "tick",
+        "complete",
+        "tasks",
+        "items",
+        "pending",
+        "checklist",
+        "steps",
+        "to-do",
+        "requirements"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "lock",
+      "category": "tech",
+      "tags": [
+        "security",
+        "password",
+        "secure",
+        "admin",
+        "privacy",
+        "encryption",
+        "protected"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "magnet",
+      "category": "science",
+      "tags": [
+        "horseshoe",
+        "lock",
+        "science",
+        "snap",
+        "attraction",
+        "attract",
+        "magnetism",
+        "physics"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "mail",
+      "category": "people",
+      "tags": [
+        "email",
+        "message",
+        "letter",
+        "unread",
+        "newsletter",
+        "contact"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "megaphone",
+      "category": "business",
+      "tags": [
+        "advertisement",
+        "announcement",
+        "attention",
+        "alert",
+        "loudspeaker",
+        "megaphone",
+        "notification",
+        "marketing",
+        "campaign",
+        "promotion",
+        "broadcast"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "memory-stick",
+      "category": "tech",
+      "tags": [
+        "ram",
+        "random access",
+        "technology",
+        "computer",
+        "chip",
+        "circuit",
+        "specs",
+        "capacity",
+        "gigabytes",
+        "gb",
+        "hardware"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "message-circle",
+      "category": "people",
+      "tags": [
+        "comment",
+        "chat",
+        "conversation",
+        "dialog",
+        "feedback",
+        "speech bubble",
+        "talk",
+        "message",
+        "communication"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "messages-square",
+      "category": "people",
+      "tags": [
+        "comment",
+        "chat",
+        "conversation",
+        "dialog",
+        "feedback",
+        "speech bubbles",
+        "copy",
+        "multiple",
+        "discussion",
+        "interview",
+        "debate",
+        "communication"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "microscope",
+      "category": "science",
+      "tags": [
+        "medical",
+        "education",
+        "science",
+        "imaging",
+        "research",
+        "laboratory",
+        "biology",
+        "small"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "monitor",
+      "category": "tech",
+      "tags": [
+        "tv",
+        "computer",
+        "desktop",
+        "screen",
+        "display",
+        "external display",
+        "screen sharing",
+        "virtual machine",
+        "vm",
+        "computer screen"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "moon",
+      "category": "nature",
+      "tags": [
+        "dark",
+        "night",
+        "sleep",
+        "lunar"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "mountain",
+      "category": "nature",
+      "tags": [
+        "climb",
+        "hike",
+        "rock",
+        "landscape",
+        "peak",
+        "challenge",
+        "obstacle"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "music",
+      "category": "education",
+      "tags": [
+        "note",
+        "quaver",
+        "eighth note",
+        "song",
+        "sound",
+        "audio",
+        "melody"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "network",
+      "category": "tech",
+      "tags": [
+        "tree",
+        "topology",
+        "connections",
+        "nodes",
+        "hierarchy",
+        "structure"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "notebook-pen",
+      "category": "education",
+      "tags": [
+        "pencil",
+        "notepad",
+        "notes",
+        "noted",
+        "stationery",
+        "sketchbook",
+        "organizer",
+        "organiser",
+        "planner",
+        "diary",
+        "journal",
+        "writing",
+        "write",
+        "written",
+        "reading",
+        "high school",
+        "university",
+        "college",
+        "academy",
+        "student",
+        "study",
+        "research",
+        "homework",
+        "eraser",
+        "rubber",
+        "notebook",
+        "note-taking"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "orbit",
+      "category": "science",
+      "tags": [
+        "planet",
+        "space",
+        "physics",
+        "satellites",
+        "moons",
+        "astronomy",
+        "solar system",
+        "gravity"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "package",
+      "category": "business",
+      "tags": [
+        "box",
+        "container",
+        "storage",
+        "sealed",
+        "delivery",
+        "undelivered",
+        "unopened",
+        "packed",
+        "archive",
+        "zip",
+        "module",
+        "product",
+        "shipment",
+        "parcel"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "palette",
+      "category": "education",
+      "tags": [
+        "colors",
+        "colours",
+        "theme",
+        "scheme",
+        "paint",
+        "watercolor",
+        "watercolour",
+        "artist",
+        "art",
+        "design",
+        "creativity",
+        "color"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "pause",
+      "category": "ui",
+      "tags": [
+        "music",
+        "stop",
+        "wait",
+        "hold"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "paw-print",
+      "category": "nature",
+      "tags": [
+        "pets",
+        "vets",
+        "veterinarian",
+        "domesticated",
+        "cat",
+        "dog",
+        "bear",
+        "animal",
+        "pet",
+        "wildlife"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "pencil",
+      "category": "education",
+      "tags": [
+        "rubber",
+        "edit",
+        "create",
+        "draw",
+        "sketch",
+        "draft",
+        "writer",
+        "writing",
+        "stationery",
+        "artist",
+        "write"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "percent",
+      "category": "data",
+      "tags": [
+        "percentage",
+        "modulo",
+        "modulus",
+        "remainder",
+        "%",
+        "sale",
+        "discount",
+        "offer",
+        "marketing",
+        "rate",
+        "ratio",
+        "proportion"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "person-standing",
+      "category": "people",
+      "tags": [
+        "people",
+        "human",
+        "accessibility",
+        "stick figure",
+        "person",
+        "individual",
+        "body"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "phone",
+      "category": "people",
+      "tags": [
+        "call",
+        "telephone",
+        "contact",
+        "support"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "pi",
+      "category": "science",
+      "tags": [
+        "constant",
+        "code",
+        "coding",
+        "programming",
+        "symbol",
+        "trigonometry",
+        "geometry",
+        "formula",
+        "math",
+        "mathematics",
+        "circle"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "piggy-bank",
+      "category": "business",
+      "tags": [
+        "money",
+        "savings",
+        "saving",
+        "budget",
+        "finance",
+        "investment"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "pill",
+      "category": "science",
+      "tags": [
+        "medicine",
+        "medication",
+        "drug",
+        "prescription",
+        "tablet",
+        "pharmacy",
+        "health",
+        "treatment",
+        "pharmaceutical"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "play",
+      "category": "ui",
+      "tags": [
+        "music",
+        "audio",
+        "video",
+        "start",
+        "run",
+        "begin"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "plug",
+      "category": "tech",
+      "tags": [
+        "electricity",
+        "energy",
+        "electronics",
+        "socket",
+        "outlet",
+        "power",
+        "voltage",
+        "current",
+        "charger",
+        "connect",
+        "integration"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "plus",
+      "category": "ui",
+      "tags": [
+        "add",
+        "new",
+        "increase",
+        "increment",
+        "positive",
+        "calculate",
+        "toolbar",
+        "crosshair",
+        "aim",
+        "target",
+        "scope",
+        "sight",
+        "reticule",
+        "maximum",
+        "upgrade",
+        "extra",
+        "+",
+        "more",
+        "sum"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "presentation",
+      "category": "education",
+      "tags": [
+        "screen",
+        "whiteboard",
+        "marker pens",
+        "markers",
+        "blackboard",
+        "chalk",
+        "easel",
+        "school",
+        "learning",
+        "lesson",
+        "office",
+        "meeting",
+        "project",
+        "planning",
+        "lecture",
+        "teaching",
+        "slides",
+        "talk",
+        "board"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "puzzle",
+      "category": "education",
+      "tags": [
+        "component",
+        "module",
+        "part",
+        "piece",
+        "problem solving",
+        "fit",
+        "integration"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "quote",
+      "category": "education",
+      "tags": [
+        "quotation",
+        "citation",
+        "saying",
+        "testimonial",
+        "speech"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "rabbit",
+      "category": "nature",
+      "tags": [
+        "animal",
+        "rodent",
+        "pet",
+        "pest",
+        "bunny",
+        "hare",
+        "fast",
+        "speed",
+        "hop",
+        "wildlife",
+        "quick"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "radiation",
+      "category": "science",
+      "tags": [
+        "radioactive",
+        "nuclear",
+        "fallout",
+        "waste",
+        "atomic",
+        "physics",
+        "particle",
+        "element",
+        "molecule",
+        "danger",
+        "energy"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "radical",
+      "category": "science",
+      "tags": [
+        "calculate",
+        "formula",
+        "math",
+        "operator",
+        "root",
+        "square",
+        "symbol",
+        "square root",
+        "mathematics"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "rainbow",
+      "category": "nature",
+      "tags": [
+        "colors",
+        "colours",
+        "spectrum",
+        "light",
+        "prism",
+        "arc",
+        "clear",
+        "sunshine",
+        "hope",
+        "diversity",
+        "color"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "receipt",
+      "category": "business",
+      "tags": [
+        "bill",
+        "voucher",
+        "slip",
+        "check",
+        "counterfoil",
+        "currency",
+        "dollar",
+        "usd",
+        "$",
+        "invoice",
+        "purchase",
+        "payment",
+        "expense"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "recycle",
+      "category": "nature",
+      "tags": [
+        "sustainability",
+        "salvage",
+        "arrows",
+        "recycling",
+        "reuse",
+        "circular economy",
+        "environment",
+        "green"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "refresh-cw",
+      "category": "ui",
+      "tags": [
+        "rotate",
+        "reload",
+        "rerun",
+        "synchronise",
+        "synchronize",
+        "arrows",
+        "circular",
+        "cycle",
+        "update",
+        "repeat",
+        "loop",
+        "iteration"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "rocket",
+      "category": "science",
+      "tags": [
+        "release",
+        "boost",
+        "launch",
+        "space",
+        "version",
+        "startup",
+        "growth",
+        "fast",
+        "space travel"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "router",
+      "category": "tech",
+      "tags": [
+        "computer",
+        "server",
+        "cloud",
+        "network",
+        "internet",
+        "connectivity"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "ruler",
+      "category": "education",
+      "tags": [
+        "measurements",
+        "centimeters",
+        "cm",
+        "millimeters",
+        "mm",
+        "metre",
+        "foot",
+        "feet",
+        "inches",
+        "units",
+        "size",
+        "length",
+        "width",
+        "height",
+        "dimensions",
+        "depth",
+        "breadth",
+        "extent",
+        "stationery",
+        "measure",
+        "geometry"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "satellite",
+      "category": "science",
+      "tags": [
+        "space station",
+        "orbit",
+        "transmitter",
+        "space",
+        "communication",
+        "gps"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "scale",
+      "category": "business",
+      "tags": [
+        "balance",
+        "legal",
+        "license",
+        "right",
+        "rule",
+        "law",
+        "justice",
+        "weight",
+        "measure",
+        "compare",
+        "judge",
+        "fair",
+        "ethics",
+        "decision",
+        "tradeoff",
+        "trade-off",
+        "fairness",
+        "weigh"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "school",
+      "category": "education",
+      "tags": [
+        "building",
+        "education",
+        "childhood",
+        "university",
+        "learning",
+        "campus",
+        "scholar",
+        "student",
+        "lecture",
+        "degree",
+        "course",
+        "academia",
+        "study",
+        "knowledge",
+        "classroom",
+        "research",
+        "diploma",
+        "graduation",
+        "professor",
+        "tutorial",
+        "homework",
+        "assignment",
+        "exam"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "scroll",
+      "category": "education",
+      "tags": [
+        "paper",
+        "log",
+        "scripture",
+        "document",
+        "notes",
+        "parchment",
+        "list",
+        "long",
+        "script",
+        "story",
+        "code",
+        "coding",
+        "history",
+        "ancient",
+        "diploma"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "search",
+      "category": "ui",
+      "tags": [
+        "find",
+        "scan",
+        "magnifier",
+        "magnifying glass",
+        "lens",
+        "locate",
+        "explore",
+        "discover",
+        "enlarge",
+        "zoom",
+        "look up",
+        "query"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "server",
+      "category": "tech",
+      "tags": [
+        "cloud",
+        "storage",
+        "computer",
+        "backend",
+        "hardware",
+        "data center"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "settings",
+      "category": "ui",
+      "tags": [
+        "cog",
+        "edit",
+        "gear",
+        "preferences",
+        "configuration",
+        "options",
+        "setup"
+      ],
+      "aliases": [
+        "gear"
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "shapes",
+      "category": "education",
+      "tags": [
+        "triangle",
+        "equilateral",
+        "square",
+        "circle",
+        "classification",
+        "different",
+        "collection",
+        "toy",
+        "blocks",
+        "learning",
+        "geometry",
+        "forms"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "shell",
+      "category": "nature",
+      "tags": [
+        "beach",
+        "sand",
+        "holiday",
+        "sealife",
+        "fossil",
+        "ammonite",
+        "biology",
+        "ocean",
+        "terminal",
+        "command line",
+        "session",
+        "bash",
+        "zsh",
+        "roll",
+        "wrap",
+        "chewing gum",
+        "bubble gum",
+        "sweet",
+        "sugar",
+        "hosepipe",
+        "carpet",
+        "string",
+        "spiral",
+        "spinner",
+        "hypnotise",
+        "hypnosis",
+        "sea",
+        "nature"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "shield-check",
+      "category": "tech",
+      "tags": [
+        "cybersecurity",
+        "secured",
+        "safety",
+        "protection",
+        "protected",
+        "guardian",
+        "guarded",
+        "armored",
+        "armoured",
+        "defense",
+        "defence",
+        "defended",
+        "blocked",
+        "threat",
+        "prevention",
+        "prevented",
+        "antivirus",
+        "vigilance",
+        "vigilant",
+        "active",
+        "activated",
+        "enabled",
+        "detection",
+        "scanned",
+        "found",
+        "strength",
+        "strong",
+        "tough",
+        "invincible",
+        "invincibility",
+        "invulnerable",
+        "undamaged",
+        "audited",
+        "admin",
+        "verification",
+        "verified",
+        "certification",
+        "certified",
+        "tested",
+        "passed",
+        "qualified",
+        "cleared",
+        "cleaned",
+        "disinfected",
+        "uninfected",
+        "task",
+        "completed",
+        "todo",
+        "done",
+        "ticked",
+        "checked",
+        "crest",
+        "bravery",
+        "security",
+        "safe",
+        "trust"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "shopping-cart",
+      "category": "business",
+      "tags": [
+        "trolley",
+        "cart",
+        "basket",
+        "e-commerce",
+        "store",
+        "purchase",
+        "products",
+        "items",
+        "ingredients",
+        "shopping",
+        "buy",
+        "retail",
+        "commerce"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "sigma",
+      "category": "data",
+      "tags": [
+        "sum",
+        "calculate",
+        "formula",
+        "math",
+        "enumeration",
+        "enumerate",
+        "summation",
+        "total",
+        "statistics"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "smartphone",
+      "category": "tech",
+      "tags": [
+        "phone",
+        "cellphone",
+        "device",
+        "mobile",
+        "screen",
+        "display",
+        "touchscreen",
+        "portable",
+        "responsive",
+        "app"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "snowflake",
+      "category": "nature",
+      "tags": [
+        "cold",
+        "weather",
+        "freeze",
+        "snow",
+        "winter",
+        "ice",
+        "frozen",
+        "cool"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "sprout",
+      "category": "nature",
+      "tags": [
+        "eco",
+        "green",
+        "growth",
+        "leaf",
+        "nature",
+        "plant",
+        "seed",
+        "spring",
+        "sustainability",
+        "grow",
+        "seedling",
+        "new",
+        "start"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "square-function",
+      "category": "science",
+      "tags": [
+        "programming",
+        "code",
+        "automation",
+        "math",
+        "function",
+        "formula"
+      ],
+      "aliases": [
+        "function-square"
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "star",
+      "category": "ui",
+      "tags": [
+        "bookmark",
+        "favorite",
+        "like",
+        "review",
+        "rating",
+        "favourite",
+        "highlight",
+        "quality"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "stethoscope",
+      "category": "science",
+      "tags": [
+        "phonendoscope",
+        "medical",
+        "heart",
+        "lungs",
+        "sound",
+        "doctor",
+        "health",
+        "diagnosis"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "store",
+      "category": "business",
+      "tags": [
+        "shop",
+        "supermarket",
+        "stand",
+        "boutique",
+        "building",
+        "retail",
+        "commerce",
+        "business"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "sun",
+      "category": "nature",
+      "tags": [
+        "brightness",
+        "weather",
+        "light",
+        "summer",
+        "sunny",
+        "solar",
+        "day",
+        "energy"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "sunrise",
+      "category": "nature",
+      "tags": [
+        "weather",
+        "time",
+        "morning",
+        "day",
+        "dawn",
+        "beginning",
+        "new day"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "syringe",
+      "category": "science",
+      "tags": [
+        "medicine",
+        "medical",
+        "needle",
+        "pump",
+        "plunger",
+        "nozzle",
+        "blood",
+        "vaccine",
+        "injection",
+        "health"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "table",
+      "category": "data",
+      "tags": [
+        "spreadsheet",
+        "grid",
+        "data",
+        "rows",
+        "columns"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "target",
+      "category": "business",
+      "tags": [
+        "logo",
+        "bullseye",
+        "deadline",
+        "projects",
+        "overview",
+        "work",
+        "productivity",
+        "goal",
+        "aim",
+        "focus",
+        "objective"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "telescope",
+      "category": "science",
+      "tags": [
+        "astronomy",
+        "space",
+        "discovery",
+        "exploration",
+        "explore",
+        "vision",
+        "perspective",
+        "focus",
+        "stargazing",
+        "observe",
+        "view",
+        "science",
+        "observation"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "terminal",
+      "category": "tech",
+      "tags": [
+        "code",
+        "command line",
+        "prompt",
+        "shell",
+        "console",
+        "cli",
+        "script"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "test-tube",
+      "category": "science",
+      "tags": [
+        "tube",
+        "vial",
+        "phial",
+        "flask",
+        "ampoule",
+        "ampule",
+        "lab",
+        "chemistry",
+        "experiment",
+        "test",
+        "science",
+        "laboratory",
+        "sample"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "thermometer",
+      "category": "science",
+      "tags": [
+        "temperature",
+        "celsius",
+        "fahrenheit",
+        "weather",
+        "heat",
+        "climate",
+        "measure"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "thumbs-down",
+      "category": "people",
+      "tags": [
+        "dislike",
+        "bad",
+        "emotion",
+        "disapprove",
+        "negative",
+        "no",
+        "disagree"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "thumbs-up",
+      "category": "people",
+      "tags": [
+        "like",
+        "good",
+        "emotion",
+        "approve",
+        "approval",
+        "positive",
+        "yes",
+        "agree"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "tornado",
+      "category": "nature",
+      "tags": [
+        "weather",
+        "wind",
+        "storm",
+        "hurricane",
+        "disaster",
+        "chaos"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "tree-deciduous",
+      "category": "nature",
+      "tags": [
+        "tree",
+        "forest",
+        "park",
+        "nature",
+        "plant",
+        "environment"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "tree-pine",
+      "category": "nature",
+      "tags": [
+        "tree",
+        "pine",
+        "forest",
+        "park",
+        "nature",
+        "conifer"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "trending-down",
+      "category": "business",
+      "tags": [
+        "statistics",
+        "decline",
+        "decrease",
+        "fall",
+        "loss",
+        "drop"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "trending-up",
+      "category": "business",
+      "tags": [
+        "statistics",
+        "growth",
+        "increase",
+        "rise",
+        "progress",
+        "profit",
+        "gain"
+      ],
+      "aliases": [
+        "growth"
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "triangle-alert",
+      "category": "ui",
+      "tags": [
+        "warning",
+        "alert",
+        "danger",
+        "exclamation mark",
+        "linter",
+        "caution",
+        "risk",
+        "attention",
+        "problem"
+      ],
+      "aliases": [
+        "alert-triangle",
+        "warning"
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "trophy",
+      "category": "business",
+      "tags": [
+        "prize",
+        "sports",
+        "winner",
+        "achievement",
+        "award",
+        "champion",
+        "celebration",
+        "victory",
+        "competition",
+        "tournament",
+        "leaderboard",
+        "ranking",
+        "success",
+        "reward",
+        "cup",
+        "first",
+        "gold",
+        "win",
+        "best"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "truck",
+      "category": "business",
+      "tags": [
+        "delivery",
+        "van",
+        "shipping",
+        "haulage",
+        "lorry",
+        "logistics",
+        "transport",
+        "supply chain"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "user",
+      "category": "people",
+      "tags": [
+        "person",
+        "account",
+        "contact",
+        "profile",
+        "individual",
+        "customer"
+      ],
+      "aliases": [
+        "person"
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "user-check",
+      "category": "people",
+      "tags": [
+        "followed",
+        "subscribed",
+        "done",
+        "todo",
+        "tick",
+        "complete",
+        "task",
+        "approved",
+        "verified",
+        "member"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "user-plus",
+      "category": "people",
+      "tags": [
+        "new",
+        "add",
+        "create",
+        "follow",
+        "subscribe",
+        "join",
+        "signup",
+        "register",
+        "hire"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "user-x",
+      "category": "people",
+      "tags": [
+        "delete",
+        "remove",
+        "unfollow",
+        "unsubscribe",
+        "unavailable",
+        "blocked",
+        "leave",
+        "rejected"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "users",
+      "category": "people",
+      "tags": [
+        "group",
+        "people",
+        "team",
+        "community",
+        "audience",
+        "customers"
+      ],
+      "aliases": [
+        "team"
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "variable",
+      "category": "data",
+      "tags": [
+        "code",
+        "coding",
+        "programming",
+        "symbol",
+        "calculate",
+        "algebra",
+        "x",
+        "parentheses",
+        "parenthesis",
+        "brackets",
+        "parameter",
+        "(",
+        ")",
+        "function",
+        "math"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "virus",
+      "category": "science",
+      "tags": [
+        "pathogen",
+        "infection",
+        "disease",
+        "illness",
+        "contagion",
+        "outbreak",
+        "pandemic",
+        "epidemic",
+        "covid",
+        "coronavirus",
+        "germ",
+        "microbe",
+        "microorganism",
+        "biology",
+        "medical",
+        "healthcare",
+        "malware",
+        "cybersecurity",
+        "threat",
+        "health"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "wallet",
+      "category": "business",
+      "tags": [
+        "money",
+        "finance",
+        "pocket",
+        "payment",
+        "savings",
+        "budget"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "waves-horizontal",
+      "category": "nature",
+      "tags": [
+        "water",
+        "sea",
+        "sound",
+        "hertz",
+        "wavelength",
+        "vibrate",
+        "ocean",
+        "swimming",
+        "frequency",
+        "waves",
+        "sound wave",
+        "signal"
+      ],
+      "aliases": [
+        "waves"
+      ],
+      "source": "lucide"
+    },
+    {
+      "name": "wifi",
+      "category": "tech",
+      "tags": [
+        "connection",
+        "signal",
+        "wireless",
+        "internet",
+        "network",
+        "online",
+        "connectivity"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "wind",
+      "category": "nature",
+      "tags": [
+        "weather",
+        "air",
+        "blow",
+        "breeze",
+        "wind energy",
+        "air flow"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "workflow",
+      "category": "data",
+      "tags": [
+        "action",
+        "continuous integration",
+        "ci",
+        "automation",
+        "devops",
+        "network",
+        "node",
+        "connection",
+        "process",
+        "pipeline",
+        "flowchart",
+        "steps"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "x",
+      "category": "ui",
+      "tags": [
+        "cancel",
+        "close",
+        "cross",
+        "delete",
+        "ex",
+        "remove",
+        "times",
+        "clear",
+        "math",
+        "multiply",
+        "multiplication",
+        "no",
+        "wrong",
+        "error",
+        "fail"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    },
+    {
+      "name": "zap",
+      "category": "science",
+      "tags": [
+        "flash",
+        "camera",
+        "lightning",
+        "electricity",
+        "energy",
+        "power",
+        "quick",
+        "fast",
+        "speed",
+        "instant",
+        "electric"
+      ],
+      "aliases": [],
+      "source": "lucide"
+    }
+  ]
+}

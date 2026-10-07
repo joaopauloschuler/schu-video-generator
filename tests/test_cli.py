@@ -39,7 +39,7 @@ def test_validate_bad_config(make_project, capsys: pytest.CaptureFixture[str]) -
 def test_validate_checks_every_variant(make_project, capsys: pytest.CaptureFixture[str]) -> None:
     root = make_project(minimal_config(variants={"broken": {"format": {"fps": -1}}}))
     assert main(["validate", str(root)]) == 1
-    assert "variant 'broken'" in capsys.readouterr().err
+    assert "[variant broken] format.fps: Input should be greater than 0" in capsys.readouterr().err
 
 
 def test_validate_defaults_to_cwd(make_project, monkeypatch: pytest.MonkeyPatch) -> None:

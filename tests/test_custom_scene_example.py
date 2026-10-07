@@ -20,7 +20,7 @@ def test_example_validates(capsys: pytest.CaptureFixture[str]) -> None:
     assert check_project(Project.load(EXAMPLE, variant="vertical")) == []
     assert main(["list-scenes", str(EXAMPLE)]) == 0
     out = capsys.readouterr().out
-    assert "gear_pair   extensions/gears.py" in out
+    assert "gear_pair".ljust(len("equation_derivation") + 2) + "extensions/gears.py" in out
     assert "    beats: 2 to 3 beats\n    front: Ring\n        teeth: int\n" in out
 
 
@@ -36,6 +36,7 @@ def test_nested_theme_color_is_checked(tmp_path: Path) -> None:
 
 @pytest.mark.render
 @pytest.mark.parametrize("variant", [None, "vertical"])
+@pytest.mark.slow
 def test_tiny_render_with_hook(tmp_path: Path, variant: str | None) -> None:
     if shutil.which("ffmpeg") is None:
         pytest.skip("ffmpeg not on PATH")

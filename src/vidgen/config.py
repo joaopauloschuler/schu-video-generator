@@ -9,41 +9,66 @@ errors into a readable :class:`~vidgen.errors.VidgenError`.
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal
+import re
+from collections.abc import Collection
+from typing import Annotated, Any, Literal, Union
 
 from pydantic import (
+    AfterValidator,
     BaseModel,
     ConfigDict,
     Field,
+    ModelWrapValidatorHandler,
+    PlainSerializer,
     PositiveFloat,
     PositiveInt,
+    PrivateAttr,
     ValidationError,
+    WithJsonSchema,
     field_validator,
     model_validator,
 )
 
-from vidgen.errors import VidgenError
+from vidgen.errors import Problem, VidgenError
+from vidgen.languages import LANGUAGE_TAG_PATTERN, normalize_language
 
 ID_PATTERN = r"^[A-Za-z0-9_]+$"
 HEX_COLOR_PATTERN = r"^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$"
 
+#: An action target name: ``name``, ``name3``, ``name1.part2`` or ``kind:label`` (DESIGN.md §26).
+TARGET_NAME_PATTERN = r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)*(?::.+)?$"
+
 Identifier = Annotated[str, Field(pattern=ID_PATTERN)]
 HexColor = Annotated[str, Field(pattern=HEX_COLOR_PATTERN)]
-Size = Annotated[int | float, Field(gt=0)]
+#: A theme colour token (``secondary``) or a hex colour; the token is checked by ``vidgen validate``.
+ColorRef = Annotated[str, Field(pattern=r"^(?:#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})|[A-Za-z0-9_]+)$")]
+#: A positive font size (pydantic would put a non-standard ``gt`` into the JSON Schema of the union).
+Size = Annotated[int | float, Field(gt=0), WithJsonSchema({"type": "number", "exclusiveMinimum": 0})]
+#: A font role's family: a token (``sans``, ``serif``, ``mono``) or a font family name.
+FontChoice = Annotated[str, Field(min_length=1)]
+#: JSON Schema hint for even pixel sizes (the check itself is ``FormatConfig._even``).
+_EVEN = {"multipleOf": 2}
+#: A BCP-47 language tag (``en``, ``pt-BR``), normalised to the usual case (DESIGN.md §54).
+LanguageTag = Annotated[str, Field(pattern=LANGUAGE_TAG_PATTERN), AfterValidator(normalize_language)]
+#: An ElevenLabs ``language_code`` (ISO 639-1, e.g. ``pt``), or ``false``: never send one.
+LanguageCode = Annotated[str, Field(pattern=r"^[A-Za-z]{2,3}$")] | Literal[False]
 
 
 class _Strict(BaseModel):
     """Base for structural models: unknown keys are an error (typo protection)."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", use_attribute_docstrings=True)
 
 
 class FormatConfig(_Strict):
     """Resolution and frame rate of a render."""
 
-    width: PositiveInt = 1920
-    height: PositiveInt = 1080
+    width: PositiveInt = Field(default=1920, json_schema_extra=_EVEN)
+    """Width in pixels (even)."""
+    height: PositiveInt = Field(default=1080, json_schema_extra=_EVEN)
+    """Height in pixels (even)."""
     fps: PositiveInt = 30
+    """Frames per second."""
 
     @field_validator("width", "height")
     @classmethod
@@ -61,49 +86,905 @@ def _preview_format() -> FormatConfig:
 class ThemeConfig(_Strict):
     """Theme values from the config.
 
-    Only the values written in the config are stored here; ``colors``, ``sizes`` and
-    ``palette`` are merged with the built-in defaults by :class:`vidgen.theme.Theme`.
+    Only the values written in the config are stored here (unset values are ``None``/empty);
+    :class:`vidgen.theme.Theme` merges them over the preset and the defaults.
     """
 
-    background: HexColor = "#0E1116"
-    font: str = "Inter"
+    preset: Identifier | None = None
+    """Theme preset (built-in: see `vidgen list-themes`, or a project preset); values set here win over it."""
+    background: HexColor | None = None
+    """Background color (hex); default: the preset's, else #0E1116."""
+    font: str | None = Field(default=None, min_length=1)
+    """Sans font family (body text and roles without their own); default: the preset's, else Inter (bundled)."""
+    font_serif: str | None = Field(default=None, min_length=1)
+    """Serif font family (font role token `serif`); default: the preset's, else Source Serif 4 (bundled)."""
+    font_mono: str | None = Field(default=None, min_length=1)
+    """Monospace font family (token `mono`, code listings); default: the preset's, else JetBrains Mono NL (bundled)."""
+    fonts: dict[Identifier, FontChoice] = Field(default_factory=dict)
+    """Font per role (heading, quote, quote_mark, code, body...): sans, serif, mono or a family name; merged over the preset's."""
+    code_style: str | None = None
+    """Pygments style of code listings; default: the preset's, else github-dark."""
     colors: dict[Identifier, HexColor] = Field(default_factory=dict)
+    """Color tokens (name: hex) merged over the defaults; projects may add any name."""
     palette: list[HexColor] | None = Field(default=None, min_length=1)
+    """Ordered series colors (charts, groups); replaces the default palette."""
     sizes: dict[Identifier, Size] = Field(default_factory=dict)
+    """Font size tokens (name: points) merged over the defaults; projects may add any name."""
+    scale: Literal["compact", "standard", "large", "auto"] | None = None
+    """Type scale (the six built-in sizes); default: the preset's, else auto (large in portrait video, else standard)."""
+
+    @field_validator("code_style")
+    @classmethod
+    def _known_style(cls, value: str | None) -> str | None:
+        if value is not None:
+            from vidgen.presets import check_code_style
+
+            check_code_style(value)
+        return value
 
 
 class VoiceSettings(_Strict):
     """ElevenLabs ``voice_settings``."""
 
     stability: float = Field(default=0.55, ge=0, le=1)
+    """ElevenLabs stability (0-1)."""
     similarity_boost: float = Field(default=0.75, ge=0, le=1)
+    """ElevenLabs similarity boost (0-1)."""
     style: float = Field(default=0.0, ge=0, le=1)
+    """ElevenLabs style exaggeration (0-1)."""
     use_speaker_boost: bool = True
+    """ElevenLabs speaker boost."""
 
 
 class VoiceConfig(_Strict):
     """Text-to-speech voice. Only the ElevenLabs provider exists for now."""
 
     provider: Literal["elevenlabs"] = "elevenlabs"
+    """TTS provider; only elevenlabs."""
     voice_id: str = Field(default="nPczCjzI2devNBz1zQrb", min_length=1)
+    """ElevenLabs voice id."""
     model_id: str = Field(default="eleven_multilingual_v2", min_length=1)
+    """ElevenLabs model id."""
     output_format: str = Field(default="mp3_44100_128", min_length=1)
+    """ElevenLabs output format."""
     settings: VoiceSettings = Field(default_factory=VoiceSettings)
+    """ElevenLabs voice_settings."""
     context: bool = True
+    """Send the neighbouring beats' text for continuous intonation."""
+    timestamps: bool = False
+    """Also fetch when each character is spoken (ElevenLabs with-timestamps), stored as audio/<beat>.align.json for exact karaoke captions."""
+    language_code: LanguageCode | None = None
+    """ElevenLabs language_code (ISO 639-1, e.g. pt) sent with every request, or false: never; default: the video's language for models that accept one (eleven_turbo_v2_5, eleven_flash_v2_5)."""
+    label: str | None = Field(default=None, min_length=1)
+    """Speaker name shown in subtitles / captions when speakers are shown (default: none for this voice)."""
+    color: ColorRef | None = None
+    """Speaker colour (theme token or hex) for captions that colour speakers; default the theme's text colour."""
+
+
+class VoiceSettingsOverride(_Strict):
+    """``voice_settings`` of a named voice: what is not given comes from ``voice.settings``."""
+
+    stability: float | None = Field(default=None, ge=0, le=1)
+    """ElevenLabs stability (0-1); default the base voice's."""
+    similarity_boost: float | None = Field(default=None, ge=0, le=1)
+    """ElevenLabs similarity boost (0-1); default the base voice's."""
+    style: float | None = Field(default=None, ge=0, le=1)
+    """ElevenLabs style exaggeration (0-1); default the base voice's."""
+    use_speaker_boost: bool | None = None
+    """ElevenLabs speaker boost; default the base voice's."""
+
+
+class VoiceEntry(_Strict):
+    """A named voice of ``voices:`` (DESIGN.md §46): the base ``voice:`` with what is given here
+    changed. ``label`` and ``color`` are not inherited (they name this speaker)."""
+
+    provider: Literal["elevenlabs"] | None = None
+    """TTS provider; default the base voice's."""
+    voice_id: str | None = Field(default=None, min_length=1)
+    """ElevenLabs voice id; default the base voice's."""
+    model_id: str | None = Field(default=None, min_length=1)
+    """ElevenLabs model id; default the base voice's."""
+    output_format: str | None = Field(default=None, min_length=1)
+    """ElevenLabs output format; default the base voice's."""
+    settings: VoiceSettingsOverride | None = None
+    """voice_settings; each value not given comes from the base voice's settings."""
+    context: bool | None = None
+    """Send neighbouring beats of the same voice as context; default the base voice's."""
+    timestamps: bool | None = None
+    """Fetch character timings for this voice's beats; default the base voice's."""
+    language_code: LanguageCode | None = None
+    """ElevenLabs language_code for this voice's beats, or false; default the base voice's."""
+    label: str | None = Field(default=None, min_length=1)
+    """Speaker name in subtitles / captions; default the voice's name (underscores as spaces, first letter capital)."""
+    color: ColorRef | None = None
+    """Speaker colour (theme token or hex) for captions; default the theme palette colour of the voice's position in voices."""
+
+
+class SubtitlesConfig(_Strict):
+    """The optional ``subtitles:`` section: what the SRT file shows besides the narration."""
+
+    speakers: Literal["off", "name"] = "off"
+    """name: put the speaker's label before a beat's first cue when the speaker changes ("Ana: ..."); also the captions' default."""
+
+
+class PronunciationEntry(_Strict):
+    """The long form of a ``pronunciation:`` entry (DESIGN.md §45): how the narrator says a
+    term. Applied to the text sent to the TTS only; subtitles and captions keep the term."""
+
+    say: str
+    """Spoken form sent to the TTS instead of the term (with regex: true, \\1 or \\g<name> insert a group)."""
+    case_sensitive: bool = True
+    """Match the term's capitals exactly (false: any case)."""
+    whole_word: bool = True
+    """Match only where the term is not part of a longer word (no letter, digit or _ right before or after it)."""
+    regex: bool = False
+    """The term is a Python regular expression (re module syntax), not plain text."""
+    language: LanguageTag | list[LanguageTag] | None = None
+    """Only in videos of this language (or one of these): pt matches pt-BR and pt-PT; default: every language."""
+
+
+#: A ``pronunciation:`` value: the spoken form, the long form, or ``null`` (removes an entry of
+#: the pronunciation file or of the base config, e.g. in a variant).
+PronunciationValue = str | PronunciationEntry | None
+#: The ``pronunciation:`` mapping (term -> value); also the content of a ``pronunciation_file``.
+PronunciationMap = dict[Annotated[str, Field(min_length=1)], PronunciationValue]
 
 
 class NarrationConfig(_Strict):
     """Timing of narrated beats."""
 
     pad: float = Field(default=0.35, ge=0)
+    """Seconds of silence after each beat."""
     words_per_second: PositiveFloat = 2.6
+    """Speech rate used to estimate a beat's duration when it has no audio yet."""
+
+
+class SttConfig(_Strict):
+    """The optional ``stt:`` section: the speech-to-text provider of ``vidgen readback`` (DESIGN.md §57)."""
+
+    provider: Literal["faster_whisper", "elevenlabs"] = "faster_whisper"
+    """faster_whisper (local and free; pip install "vidgen[stt]") or elevenlabs (ElevenLabs Speech to Text, paid; ELEVENLABS_API_KEY)."""
+    model: str | None = Field(default=None, min_length=1)
+    """Model: a Whisper size (tiny, base, small, medium, large-v3, turbo; .en for English only) or a folder with a converted model; ElevenLabs: scribe_v1. Default: small.en for English, else small; scribe_v1."""
+    language: Literal["auto"] | LanguageTag | None = None
+    """Language of the audio (BCP-47; its language subtag is sent), or auto: detected; default: the video's language (English without one)."""
+    device: Literal["auto", "cpu", "cuda"] = "auto"
+    """faster_whisper: where the model runs (auto: a CUDA GPU if there is one, else the CPU)."""
+
+
+#: An image size ``WIDTHxHEIGHT`` in pixels (``1536x1024``).
+ImageSize = Annotated[str, Field(pattern=r"^[1-9][0-9]{1,4}x[1-9][0-9]{1,4}$")]
+
+
+class ImagegenConfig(_Strict):
+    """The optional ``imagegen:`` section: the image-generation provider of ``vidgen imagegen``
+    and of ``generate:`` params (DESIGN.md §58)."""
+
+    provider: Literal["openai"] = "openai"
+    """Image-generation provider: openai (OpenAI Images API, paid; OPENAI_API_KEY)."""
+    model: str = Field(default="gpt-image-1", min_length=1)
+    """Model: gpt-image-1, dall-e-3 or dall-e-2 (another name is sent as is, with gpt-image-1's sizes)."""
+    size: Literal["auto"] | ImageSize = "auto"
+    """Picture size WIDTHxHEIGHT sent to the provider, or auto: the model's landscape, portrait or square size by the video's format (or the generate: aspect)."""
+    quality: str | None = Field(default=None, min_length=1)
+    """Quality sent to the provider (gpt-image-1: low, medium, high; dall-e-3: standard, hd); default: medium for gpt-image models, standard for dall-e-3, none for dall-e-2."""
+    style: str | None = Field(default=None, min_length=1)
+    """Style added to every prompt for a consistent look: a preset (photo, illustration, flat, isometric, watercolor, line_art, render_3d, cinematic) or your own words; a generate: style replaces it."""
+    negative: str | None = Field(default=None, min_length=1)
+    """What every picture should avoid (added to each generate: negative), e.g. "text, watermarks"."""
+
+
+#: ``vidgen lint`` rule names (DESIGN.md §16). :class:`LintRules` has one field per name and
+#: :mod:`vidgen.lint` one rule per name (a test keeps the three in sync).
+LINT_RULES: tuple[str, ...] = (
+    "off_frame",
+    "safe_area",
+    "text_overlap",
+    "covered_text",
+    "label_spacing",
+    "min_font",
+    "contrast",
+    "max_words",
+    "overlay_overlap",
+    "narration_speed",
+    "dead_air",
+    "animation_overrun",
+    "rushed_animation",
+    "readback",
+)
+RuleName = Literal[
+    "off_frame",
+    "safe_area",
+    "text_overlap",
+    "covered_text",
+    "label_spacing",
+    "min_font",
+    "contrast",
+    "max_words",
+    "overlay_overlap",
+    "narration_speed",
+    "dead_air",
+    "animation_overrun",
+    "rushed_animation",
+    "readback",
+]
+#: Severity of a lint finding; ``off`` disables a rule.
+Severity = Literal["error", "warning", "info", "off"]
+#: A fraction of the frame's shorter side (its height for landscape video).
+Fraction = Annotated[float, Field(gt=0, lt=1)]
+
+
+class RuleConfig(_Strict):
+    """Settings every lint rule has."""
+
+    severity: Severity | None = None
+    """Severity of all this rule's findings (error, warning, info), or off; default: the rule's own."""
+
+
+class OffFrameRule(RuleConfig):
+    """``off_frame``: an object cut off by the frame edge."""
+
+    tolerance: Fraction = 0.004
+    """How far (fraction of the frame's shorter side) an object may cross the edge unflagged."""
+
+
+class SafeAreaRule(RuleConfig):
+    """``safe_area``: text inside the frame but outside the safe area (the scene's margins)."""
+
+    tolerance: Fraction = 0.01
+    """How far (fraction of the frame's shorter side) text may cross the safe area unflagged."""
+
+
+class TextOverlapRule(RuleConfig):
+    """``text_overlap``: two texts whose boxes overlap."""
+
+    min_overlap: Fraction = 0.1
+    """Overlap (fraction of the smaller box's area) from which two texts count as overlapping."""
+
+
+class CoveredTextRule(RuleConfig):
+    """``covered_text``: a shape or image drawn on top of text."""
+
+    min_covered: Fraction = 0.02
+    """Part of the middle of the text's box that must show the shape's colour to be reported."""
+
+
+class LabelSpacingRule(RuleConfig):
+    """``label_spacing``: a label on its own coloured plate (a callout label, a tag) touching
+    other text."""
+
+    min_gap: Fraction = 0.02
+    """Smallest gap (fraction of the frame's shorter side) between a label's plate and other text (0.02: 7 px at 360p, 22 px at 1080p)."""
+
+
+class MinFontRule(RuleConfig):
+    """``min_font``: text too small for the frame (cap height, fraction of the shorter side)."""
+
+    min_size: Fraction = 0.025
+    """Warning below this cap height (0.025: 12 px at 480p, 27 px at 1080p)."""
+    error_size: Fraction = 0.018
+    """Error below this cap height (0.018: 8.6 px at 480p, 19.4 px at 1080p)."""
+
+    @model_validator(mode="after")
+    def _ordered(self) -> MinFontRule:
+        if self.error_size > self.min_size:
+            raise ValueError("error_size must not be larger than min_size")
+        return self
+
+
+class ContrastRule(RuleConfig):
+    """``contrast``: WCAG contrast ratio of text against what is behind it."""
+
+    min_ratio: float = Field(default=4.5, ge=1, le=21)
+    """Minimum ratio for normal text (WCAG AA: 4.5)."""
+    large_ratio: float = Field(default=3.0, ge=1, le=21)
+    """Minimum ratio for large text (WCAG AA: 3)."""
+    large_size: Fraction = 0.045
+    """Cap height (fraction of the shorter side) from which text counts as large."""
+    dimmed_ratio: float = Field(default=2.0, ge=1, le=21)
+    """Minimum ratio for text faded on purpose (opacity below 1, e.g. a previous bullet)."""
+
+
+class MaxWordsRule(RuleConfig):
+    """``max_words``: too many words on screen at once."""
+
+    max_words: PositiveInt = 40
+    """Most words of visible text (not code or math) in one still."""
+
+
+class OverlayOverlapRule(RuleConfig):
+    """``overlay_overlap``: an overlay (lower third, watermark...) drawn over the scene's text or icons."""
+
+    min_overlap: Fraction = 0.05
+    """Part of a scene object's box an overlay must cover to be reported."""
+
+
+class NarrationSpeedRule(RuleConfig):
+    """``narration_speed``: a beat spoken too fast or too slow (spoken words, or characters, per second)."""
+
+    unit: Literal["auto", "words", "characters"] = "auto"
+    """What is counted: words, characters (letters and digits), or auto: words for languages vidgen has a word rate for (en, pt, es, fr, de, it; also a video without language), else characters."""
+    min_rate: PositiveFloat | None = None
+    """Slowest acceptable rate per second in the unit; default the language's (English 1.8 words = 108 a minute; characters 8)."""
+    max_rate: PositiveFloat | None = None
+    """Fastest acceptable rate per second in the unit; default the language's (English 3.5 words = 210 a minute; characters 17)."""
+    min_words: PositiveInt = 5
+    """Beats with fewer spoken words are not checked (their rate is mostly pauses)."""
+
+    @model_validator(mode="after")
+    def _ordered(self) -> NarrationSpeedRule:
+        if self.min_rate is not None and self.max_rate is not None and self.min_rate >= self.max_rate:
+            raise ValueError("min_rate must be smaller than max_rate")
+        return self
+
+    def limits(self, language: str | None) -> tuple[str, float, float]:
+        """``(unit, min_rate, max_rate)`` for a video in ``language``: the configured values, the
+        missing ones from the language's range (DESIGN.md §54)."""
+        from vidgen.languages import CHARACTER_RATE, language_rules
+
+        words = language_rules(language).words_per_second
+        unit = ("words" if words is not None else "characters") if self.unit == "auto" else self.unit
+        default = (words or (1.8, 3.5)) if unit == "words" else CHARACTER_RATE
+        low = self.min_rate if self.min_rate is not None else default[0]
+        high = self.max_rate if self.max_rate is not None else default[1]
+        return unit, low, max(high, low + 1e-6)
+
+
+class DeadAirRule(RuleConfig):
+    """``dead_air``: nothing on screen changes for too long."""
+
+    max_seconds: PositiveFloat = 6.0
+    """Longest acceptable stretch without any visual change, in seconds."""
+    min_change: Fraction = 0.0002
+    """Part of the frame that must change between two frames to count as a change."""
+
+
+class AnimationOverrunRule(RuleConfig):
+    """``animation_overrun``: a beat's animations take longer than its narration (+ pad)."""
+
+    tolerance: float = Field(default=0.1, ge=0)
+    """Seconds a beat may run past its narration and pad unflagged."""
+
+
+class RushedAnimationRule(RuleConfig):
+    """``rushed_animation``: animations squeezed to fit a beat that is too short for them."""
+
+    min_run_time: PositiveFloat = 0.5
+    """Shortest acceptable run time (seconds) of an animation `play_steps` had to shorten."""
+
+
+class ReadbackRule(RuleConfig):
+    """``readback``: a beat whose audio, transcribed by `vidgen readback`, differs from its text."""
+
+    max_wer: float = Field(default=0.1, ge=0, lt=1)
+    """Highest acceptable word error rate (differing words / words of the text); also `vidgen readback`'s threshold."""
+
+
+class LintRules(_Strict):
+    """Per-rule settings of ``vidgen lint``."""
+
+    off_frame: OffFrameRule = Field(default_factory=OffFrameRule)
+    """Objects cut off by the frame edge (default: error for text, warning for other objects)."""
+    safe_area: SafeAreaRule = Field(default_factory=SafeAreaRule)
+    """Text outside the safe area (default: warning)."""
+    text_overlap: TextOverlapRule = Field(default_factory=TextOverlapRule)
+    """Overlapping texts (default: error)."""
+    covered_text: CoveredTextRule = Field(default_factory=CoveredTextRule)
+    """Shapes or images drawn over text (default: warning)."""
+    label_spacing: LabelSpacingRule = Field(default_factory=LabelSpacingRule)
+    """A label on its own coloured plate touching other text (default: warning)."""
+    min_font: MinFontRule = Field(default_factory=MinFontRule)
+    """Text too small (default: warning, error below error_size)."""
+    contrast: ContrastRule = Field(default_factory=ContrastRule)
+    """Low text contrast (default: warning)."""
+    max_words: MaxWordsRule = Field(default_factory=MaxWordsRule)
+    """Too many words on screen (default: warning)."""
+    overlay_overlap: OverlayOverlapRule = Field(default_factory=OverlayOverlapRule)
+    """Overlays covering scene text or icons (default: warning)."""
+    narration_speed: NarrationSpeedRule = Field(default_factory=NarrationSpeedRule)
+    """Narration too fast or too slow (default: warning; info for beats without audio)."""
+    dead_air: DeadAirRule = Field(default_factory=DeadAirRule)
+    """No visual change for too long (default: warning)."""
+    animation_overrun: AnimationOverrunRule = Field(default_factory=AnimationOverrunRule)
+    """Animations running past the narration (default: warning)."""
+    rushed_animation: RushedAnimationRule = Field(default_factory=RushedAnimationRule)
+    """Animations shortened to fit a too short beat (default: warning)."""
+    readback: ReadbackRule = Field(default_factory=ReadbackRule)
+    """Audio heard differently from its text, from the transcripts `vidgen readback` stored (default: warning; nothing without them)."""
+
+
+class LintConfig(_Strict):
+    """The optional ``lint:`` section: thresholds and severities of ``vidgen lint``."""
+
+    fail_on: Literal["error", "warning", "info", "never"] = "error"
+    """Lowest severity that makes `vidgen lint` fail (exit code 1); never: always exit 0."""
+    min_opacity: float = Field(default=0.1, ge=0, le=1)
+    """Objects fainter than this are ignored by every rule (the end of a fade)."""
+    rules: LintRules = Field(default_factory=LintRules)
+    """Per-rule settings (severity and thresholds)."""
+
+
+class LintIgnore(_Strict):
+    """A ``lint_ignore`` entry: skip a rule's findings in this scene, optionally only some."""
+
+    rule: RuleName | Literal["all"]
+    """Rule name, or all."""
+    object: str | None = None
+    """Only findings about objects whose name, path or text matches this pattern (* and ? wildcards)."""
+    beat: Identifier | None = None
+    """Only findings at this beat's end."""
+
+
+#: Keys every action has; any other key of an action is an option of that action type.
+ACTION_KEYS = ("action", "target", "at", "until", "run_time")
+#: A target name or pattern: ``item3``, ``bar:Preview 480p``, ``bar*`` (``*``/``?`` wildcards).
+TargetPattern = Annotated[str, Field(min_length=1)]
+
+
+def _unshorten(data: dict[str, Any], name: str) -> dict[str, Any]:
+    return {"action": name, "target": data[name], **{k: v for k, v in data.items() if k != name}}
+
+
+class ActionConfig(BaseModel):
+    """A per-beat action (DESIGN.md §26): ``{action: NAME, target: TARGET, at, until, run_time,
+    ...options}`` or the shorthand ``{NAME: TARGET, ...options}`` (the action name first).
+
+    Which actions exist, their options and the scene's targets depend on the registered action
+    and scene types, so they are checked by ``vidgen validate`` (``vidgen.actions``), not here.
+    """
+
+    model_config = ConfigDict(extra="allow", use_attribute_docstrings=True)
+
+    action: Identifier
+    """Action type: reveal, dim, highlight, or a project action (`vidgen list-scenes`)."""
+    target: TargetPattern | list[TargetPattern] | None = Field(default=None, min_length=1)
+    """Target name(s) of the scene (item3, bar:<label>, ...); * and ? match several."""
+    at: float = Field(default=0.0, ge=0, lt=1)
+    """When in the beat, as a fraction of its narration (0 = start); the action waits for the
+    scene's own animation running then."""
+    until: Identifier | None = None
+    """A later beat of the scene at whose start the action is undone (dim, highlight)."""
+    run_time: PositiveFloat | None = None
+    """Seconds the action's animation takes (default: the action's own); shortened to fit the beat."""
+
+    _shorthand: dict[str, Any] | None = PrivateAttr(default=None)
+
+    @model_validator(mode="wrap")
+    @classmethod
+    def _from_shorthand(cls, data: Any, handler: ModelWrapValidatorHandler[ActionConfig]) -> ActionConfig:
+        """``{NAME: TARGET, ...options}`` → ``{action: NAME, target: TARGET, ...options}``.
+
+        ``NAME`` is the first key other than the common keys; :meth:`resolved` corrects the
+        choice once the registered actions are known (for configs whose keys a tool sorted).
+        """
+        if not isinstance(data, dict) or "action" in data:
+            return handler(data)
+        names = [k for k in data if not (isinstance(k, str) and k in ACTION_KEYS)]
+        if not names or not isinstance(names[0], str):
+            keys = ", ".join(map(str, data)) or "none"
+            raise ValueError(
+                "an action is {action: NAME, target: TARGET, ...options} or the shorthand "
+                f"{{NAME: TARGET, ...options}} (got keys: {keys}; no action name)"
+            )
+        if "target" in data:
+            raise ValueError(f"the shorthand {{{names[0]}: TARGET}} already gives the target; remove 'target'")
+        model = handler(_unshorten(data, names[0]))
+        model._shorthand = dict(data)
+        return model
+
+    def resolved(self, known: Collection[str]) -> ActionConfig:
+        """This action, or — for a shorthand whose first key is not a known action but exactly
+        one other key is (keys sorted by a tool) — the action that key names."""
+        if self._shorthand is None or self.action in known:
+            return self
+        names = [k for k in self._shorthand if k in known and k not in ACTION_KEYS]
+        if len(names) != 1:
+            return self
+        return ActionConfig.model_validate(_unshorten(self._shorthand, names[0]))
+
+    @property
+    def options(self) -> dict[str, Any]:
+        """The action-specific options (every key other than :data:`ACTION_KEYS`)."""
+        return dict(self.model_extra or {})
+
+    def targets(self) -> list[str]:
+        """``target`` as a list (empty when there is none)."""
+        if self.target is None:
+            return []
+        return [self.target] if isinstance(self.target, str) else list(self.target)
+
+    def describe(self) -> str:
+        """``highlight item3`` (for messages)."""
+        return " ".join([self.action, *self.targets()])
+
+
+#: Keys every overlay entry has; any other key of an entry is an option of its overlay type.
+OVERLAY_KEYS = ("type", "id", "scenes", "exclude", "from", "to", "reserve")
+#: Keys a scene's override of a video-level overlay may set besides the type's options.
+OVERLAY_OVERRIDE_KEYS = ("reserve",)
+#: Where an overlay starts or ends: seconds in the video, or a scene id (its start / its end).
+OverlayTime = Annotated[float, Field(ge=0)] | Identifier
+
+
+class OverlayConfig(BaseModel):
+    """An entry of the video-level ``overlays:`` list (DESIGN.md §41): ``{type, id, scenes,
+    exclude, from, to, reserve, ...options}``.
+
+    Which overlay types exist and their options depend on the registered overlay types, so they
+    are checked by ``vidgen validate`` (``vidgen.overlays``), not here.
+    """
+
+    model_config = ConfigDict(extra="allow", use_attribute_docstrings=True, populate_by_name=True)
+
+    type: Identifier
+    """Overlay type: lower_third, watermark, or a project overlay (`vidgen list-scenes`)."""
+    id: Identifier | None = None
+    """Name for scene overrides (`overlays: {ID: false}` on a scene); default the type, or <type><n> when several entries share a type."""
+    scenes: Literal["all"] | list[Identifier] = "all"
+    """Scenes it is drawn on: all, or a list of scene ids."""
+    exclude: list[Identifier] = Field(default_factory=list)
+    """Scenes it is not drawn on."""
+    from_: OverlayTime | None = Field(default=None, alias="from")
+    """Where it starts: seconds in the video, or a scene id (that scene's start); default the video's start."""
+    to: OverlayTime | None = None
+    """Where it ends: seconds in the video, or a scene id (that scene's end); default the video's end."""
+    reserve: bool | None = None
+    """Keep scene layouts clear of it: the safe area of every scene it is drawn on shrinks to avoid its box (default: the type's choice, false for most; captions at the top or bottom: true)."""
+
+    @property
+    def options(self) -> dict[str, Any]:
+        """The type-specific options (every key other than :data:`OVERLAY_KEYS`)."""
+        return dict(self.model_extra or {})
+
+
+#: A scene's ``overlays:`` setting: on/off, or per overlay id ``false`` / ``true`` / a mapping
+#: of option overrides (or, with ``type``, an overlay of this scene only).
+SceneOverlays = bool | dict[Identifier, bool | dict[str, Any]]
+
+
+#: A sound effect's name: a built-in sound or a file assets/sfx/<name>.wav (DESIGN.md §47).
+SOUND_NAME_PATTERN = r"^[A-Za-z0-9_][A-Za-z0-9_-]*$"
+SoundName = Annotated[str, Field(pattern=SOUND_NAME_PATTERN)]
+
+
+class SfxParams(_Strict):
+    """Parameters of a built-in sound effect (`vidgen list-sfx` describes the sounds)."""
+
+    duration: PositiveFloat | None = None
+    """Seconds; default the sound's own (each sound has a range, see vidgen list-sfx)."""
+    pitch: float | None = Field(default=None, ge=-24, le=24)
+    """Semitones up (positive) or down (negative); default 0."""
+    intensity: float | None = Field(default=None, ge=0, le=1)
+    """0 to 1: brighter and up to 3 dB louder towards 1, softer towards 0; default 0.5."""
+
+
+class SfxCue(_Strict):
+    """A sound effect at a time of the scene (an entry of a scene's ``sfx:`` list; a plain
+    string is the sound at the scene's start)."""
+
+    sound: SoundName
+    """A built-in sound (whoosh, pop, click, ...; vidgen list-sfx) or the project's assets/sfx/<sound>.wav."""
+    at: float = Field(default=0.0, ge=0)
+    """Seconds from the scene's start."""
+    gain: float = Field(default=0.0, ge=-60, le=12)
+    """Level change in dB (0: the sound's own level, about 7 dB under narration)."""
+    pan: float = Field(default=0.0, ge=-1, le=1)
+    """-1 left, 0 centre, 1 right."""
+    align: Literal["start", "end"] = "start"
+    """start: the sound starts at `at`; end: it ends there (a riser landing on a reveal)."""
+    params: SfxParams = Field(default_factory=SfxParams)
+    """duration, pitch, intensity of a built-in sound."""
+
+
+def _cue(value: str | SfxCue) -> SfxCue:
+    return SfxCue(sound=value) if isinstance(value, str) else value
+
+
+#: An entry of a scene's ``sfx:`` list: a cue, or a sound name (that sound at the scene's start).
+SfxEntry = Annotated[Union[SoundName, SfxCue], AfterValidator(_cue)]
+
+
+class SfxConfig(_Strict):
+    """Video-wide sound effect settings (DESIGN.md §47)."""
+
+    auto: bool = False
+    """Add soft sounds to built-in animations: reveal (pop), highlight (tick), callout (click), zoom (whoosh), transform (swoosh) actions and chapter cards (whoosh)."""
+    gain: float = Field(default=0.0, ge=-60, le=12)
+    """Level change in dB of every sound effect of the video."""
+
+
+class DuckConfig(_Strict):
+    """How music ducks under the narration (DESIGN.md §48)."""
+
+    depth: float = Field(default=12.0, ge=0, le=40)
+    """dB the music drops while the narrator speaks (0: no ducking)."""
+    attack: float = Field(default=0.4, ge=0, le=5)
+    """Seconds the music takes to go down; it is down when the speech starts."""
+    release: float = Field(default=1.0, ge=0, le=10)
+    """Seconds the music takes to come back up after the speech ends."""
+    hold: float = Field(default=1.5, ge=0, le=10)
+    """Pauses in the speech shorter than this keep the music down (no pumping between beats and sentences)."""
+    clips: bool = True
+    """A video_clip scene's own sound counts as foreground too (the music ducks under it)."""
+
+
+def _duck(value: bool | DuckConfig) -> DuckConfig:
+    if isinstance(value, DuckConfig):
+        return value
+    return DuckConfig() if value else DuckConfig(depth=0)
+
+
+class MusicCue(_Strict):
+    """Background music (``music:``, or one entry of a list of cues): a built-in bed or a file,
+    over the whole video or from one scene to another."""
+
+    model_config = ConfigDict(extra="forbid", use_attribute_docstrings=True, populate_by_name=True)
+
+    source: str = Field(min_length=1)
+    """A built-in bed (calm, pulse, bright; vidgen list-music) or an audio file under the project (e.g. assets/music/theme.mp3)."""
+    volume: float = Field(default=0.0, ge=-60, le=12)
+    """Level change in dB (0: -28 LUFS, about 7 dB under typical narration before ducking)."""
+    start: float = Field(default=0.0, ge=0)
+    """Seconds into the source where the music starts (a loop restarts there too)."""
+    loop: bool = True
+    """Repeat the source while the cue lasts; false: it plays once and fades out at its end."""
+    crossfade: float = Field(default=2.0, ge=0, le=30)
+    """Seconds over which a file's end cross-fades into its start at each repeat (beds loop seamlessly)."""
+    fade_in: float = Field(default=1.5, ge=0)
+    """Seconds of fade-in at the cue's start."""
+    fade_out: float = Field(default=3.0, ge=0)
+    """Seconds of fade-out ending at the cue's end."""
+    duck: Annotated[DuckConfig | bool, AfterValidator(_duck)] = Field(default_factory=DuckConfig)
+    """Ducking under the narration: {depth, attack, release, hold, clips}; false: none."""
+    from_: Identifier | None = Field(default=None, alias="from")
+    """First scene of the cue (from its start); default the video's first scene."""
+    to: Identifier | None = None
+    """Last scene of the cue (to its end); default the video's last scene."""
+
+
+def _music_cue(value: str | MusicCue) -> MusicCue:
+    return MusicCue(source=value) if isinstance(value, str) else value
+
+
+def _no_music(value: Any) -> Any:
+    return None if value is False else value
+
+
+#: A music cue, or a source name (that source with the defaults).
+MusicEntry = Annotated[Union[Annotated[str, Field(min_length=1)], MusicCue], AfterValidator(_music_cue)]
+#: The video-level ``music:``: a source name, one cue, a list of cues, or ``false`` / null (none).
+MusicSetting = Annotated[Union[MusicEntry, list[MusicEntry], Literal[False], None], AfterValidator(_no_music)]
+
+
+class SceneMusic(_Strict):
+    """A scene's ``music:`` override in its long form."""
+
+    volume: float = Field(default=0.0, ge=-60, le=12)
+    """dB added to the music's volume during this scene."""
+
+
+class AudioConfig(_Strict):
+    """The final mix: loudness normalisation (DESIGN.md §48)."""
+
+    normalize: bool | Literal["auto"] = "auto"
+    """Normalise the final mix to target_lufs: true, false, or auto (only when the video has music; narration-only videos keep their level)."""
+    target_lufs: float = Field(default=-16.0, ge=-40, le=-5)
+    """Integrated loudness (EBU R128 / BS.1770) of a normalised mix: -16 for web and social, -23 / -24 for broadcast."""
+    true_peak: float = Field(default=-1.5, ge=-9, le=0)
+    """Highest true peak (dBTP) of a mixed track; a limiter keeps every peak under it."""
+
+
+class ChaptersConfig(_Strict):
+    """What the render writes about the video's chapters (DESIGN.md §52)."""
+
+    metadata: bool = True
+    """Write the chapters into the MP4 (players list them and jump to them)."""
+    youtube: bool = True
+    """Write <output>_chapters.txt, the chapter list to paste into a YouTube description, and warn when YouTube would ignore it."""
+    intro: Annotated[str, Field(min_length=1)] | Literal[False] = "Intro"
+    """Title of the chapter added at 0:00 when the first chapter starts later (YouTube needs one at 0:00); false: the first chapter starts at 0:00 instead."""
+
+
+class MetadataConfig(_Strict):
+    """Tags of the final MP4 (DESIGN.md §52); unset tags are not written."""
+
+    title: str | None = Field(default=None, min_length=1)
+    """The video's title in players and file browsers (default: the top-level title)."""
+    artist: str | None = Field(default=None, min_length=1)
+    """Author / channel."""
+    album: str | None = Field(default=None, min_length=1)
+    """Series or collection."""
+    comment: str | None = Field(default=None, min_length=1)
+    """A free comment."""
+    description: str | None = Field(default=None, min_length=1)
+    """A longer description."""
+    copyright: str | None = Field(default=None, min_length=1)
+    """Copyright notice, e.g. "© 2026 Jane Doe, CC BY 4.0"."""
+    date: str | None = Field(default=None, min_length=1)
+    """Release date or year, e.g. 2026 or 2026-10-07."""
+    genre: str | None = Field(default=None, min_length=1)
+    """Genre, e.g. Education."""
+
+
+#: Keys of a thumbnail grabbed from a scene's frame, and of a designed one (DESIGN.md §53).
+THUMBNAIL_FRAME_KEYS = ("scene", "beat", "at", "overlays")
+THUMBNAIL_DESIGN_KEYS = ("title", "subtitle", "icon", "image", "preset", "background")
+
+
+class ThumbnailConfig(_Strict):
+    """The video's thumbnail (DESIGN.md §53): a frame of a scene (``scene``, ``beat``, ``at``,
+    ``overlays``) or a designed title card (``title``, ``subtitle``, ``icon`` / ``image``,
+    ``preset`` / ``background``); without either, a designed card of the video's title."""
+
+    scene: Identifier | None = None
+    """Frame thumbnail: the scene whose frame is used."""
+    beat: Identifier | PositiveInt | None = None
+    """Frame thumbnail: a beat of that scene (its id, or its number from 1); default: the scene's last beat."""
+    at: float | None = Field(default=None, ge=0)
+    """Frame thumbnail: seconds into the beat (or into the scene without beat); default: the beat's last frame."""
+    overlays: bool | None = None
+    """Frame thumbnail: draw the video's overlays (captions, watermark...) on the frame; default true (false renders the scene once more without them)."""
+    title: str | None = Field(default=None, min_length=1)
+    """Designed thumbnail: the big title (a few words); default: the video's title."""
+    subtitle: str | None = Field(default=None, min_length=1)
+    """Designed thumbnail: a smaller line under the title."""
+    icon: str | None = Field(default=None, min_length=1)
+    """Designed thumbnail: an icon (vidgen list-icons) beside the title (above it in 9:16)."""
+    image: str | None = Field(default=None, min_length=1)
+    """Designed thumbnail: a picture (path relative to the project) beside the title (above it in 9:16)."""
+    preset: Identifier | None = None
+    """Designed thumbnail: draw it in this theme preset's colours and fonts instead of the video's theme."""
+    background: ColorRef | None = None
+    """Designed thumbnail: background colour (theme token or hex); default: the theme's background."""
+    jpeg: bool = False
+    """Also write <output>_thumbnail.jpg, under YouTube's 2 MB limit."""
+    auto: bool = True
+    """Write the thumbnail at the end of every `vidgen render` (false: only with `vidgen thumbnail`)."""
+
+    @model_validator(mode="after")
+    def _one_kind(self) -> ThumbnailConfig:
+        frame = [k for k in THUMBNAIL_FRAME_KEYS if getattr(self, k) is not None]
+        design = [k for k in THUMBNAIL_DESIGN_KEYS if getattr(self, k) is not None]
+        if frame and design:
+            raise ValueError(
+                f"a thumbnail is either a scene's frame ({', '.join(frame)}) or a designed card ({', '.join(design)}), not both"
+            )
+        if frame and self.scene is None:
+            raise ValueError(f"{', '.join(frame)} need scene: the scene whose frame becomes the thumbnail")
+        if self.icon is not None and self.image is not None:
+            raise ValueError("a designed thumbnail shows an icon or an image, not both")
+        return self
+
+    @property
+    def kind(self) -> Literal["frame", "design"]:
+        """``frame`` (a scene's frame) or ``design`` (a designed title card)."""
+        return "frame" if self.scene is not None else "design"
+
+
+#: Transition types (DESIGN.md §49, §50).
+TRANSITION_TYPES = ("cut", "crossfade", "fade_color", "push", "wipe")
+#: Transitions that overlap the two scenes (both pictures are on screen at once).
+OVERLAPPING_TRANSITIONS = ("crossfade", "push", "wipe")
+#: Transitions that move a picture or an edge in a ``direction`` (DESIGN.md §50).
+DIRECTED_TRANSITIONS = ("push", "wipe")
+#: Seconds of a transition when its entry gives no ``duration``.
+TRANSITION_DURATIONS = {"cut": 0.0, "crossfade": 0.5, "fade_color": 1.0, "push": 0.6, "wipe": 0.6}
+#: Directions of a push or wipe: where the pictures (push) or the edge (wipe) move.
+TransitionDirection = Literal["left", "right", "up", "down"]
+
+
+class TransitionConfig(_Strict):
+    """How the video passes into a scene from the one before it (DESIGN.md §49, §50)."""
+
+    type: Literal["cut", "crossfade", "fade_color", "push", "wipe"] = "cut"
+    """cut: straight to the next scene (the default: the scene before fades out by itself); crossfade: the two scenes blend; fade_color: the picture fades to a colour and the next scene fades in from it; push: the next scene slides in and pushes the previous one out; wipe: an edge sweeps across, uncovering the next scene."""
+    duration: float | None = Field(default=None, gt=0, le=5)
+    """Seconds of the transition (default: crossfade 0.5, fade_color 1.0 split evenly between fading out and in, push and wipe 0.6)."""
+    color: ColorRef | None = None
+    """fade_color only: a theme colour token or hex (default: the theme's background)."""
+    direction: TransitionDirection | None = None
+    """push / wipe only: where the pictures (push) or the edge (wipe) move: left, right, up or down (default: left in a wide or square frame, up in a tall one: the next scene comes in from the right / from below)."""
+    soft: bool | None = None
+    """wipe only: a soft (blurred) edge instead of a hard one (default false)."""
+
+    @model_validator(mode="after")
+    def _keys_of_type(self) -> TransitionConfig:
+        if self.type == "cut" and self.duration is not None:
+            raise ValueError("a cut has no duration")
+        if self.type != "fade_color" and self.color is not None:
+            raise ValueError(f"color is only for fade_color, not {self.type}")
+        if self.type not in DIRECTED_TRANSITIONS and self.direction is not None:
+            raise ValueError(f"direction is only for push and wipe, not {self.type}")
+        if self.type != "wipe" and self.soft is not None:
+            raise ValueError(f"soft is only for wipe, not {self.type}")
+        return self
+
+    @property
+    def overlaps(self) -> bool:
+        """Whether the scene starts before the one before it ends (crossfade, push, wipe)."""
+        return self.type in OVERLAPPING_TRANSITIONS
+
+    @property
+    def seconds(self) -> float:
+        """``duration``, or the type's default."""
+        return self.duration if self.duration is not None else TRANSITION_DURATIONS[self.type]
+
+
+def _transition(value: str | TransitionConfig) -> TransitionConfig:
+    return TransitionConfig(type=value) if isinstance(value, str) else value  # type: ignore[arg-type]
+
+
+#: A ``transition:`` value: a type name, or {type, duration, color, direction, soft}.
+TransitionSetting = Annotated[
+    Union[Literal["cut", "crossfade", "fade_color", "push", "wipe"], TransitionConfig], AfterValidator(_transition)
+]
+
+#: ``carry:`` entry: ``name`` or ``"name -> other"`` (a target of the scene before -> one of this scene).
+CARRY_ARROW = "->"
+
+
+class CarryEntry(BaseModel):
+    """One object a scene carries over from the scene before it (DESIGN.md §50): the target
+    ``source`` of that scene, shown where it ended, then moved into this scene's target ``dest``."""
+
+    model_config = ConfigDict(frozen=True)
+
+    source: str
+    dest: str
+
+    def __str__(self) -> str:
+        return self.source if self.source == self.dest else f"{self.source} {CARRY_ARROW} {self.dest}"
+
+
+def _carry_entry(value: str) -> CarryEntry:
+    parts = [p.strip() for p in value.split(CARRY_ARROW)]
+    if len(parts) > 2 or not all(parts):
+        raise ValueError(f"invalid carry entry {value!r}: use NAME or 'NAME -> NAME'")
+    for name in parts:
+        if not re.match(TARGET_NAME_PATTERN, name, re.S):
+            raise ValueError(f"invalid target name {name!r} in carry entry {value!r}")
+    return CarryEntry(source=parts[0], dest=parts[-1])
+
+
+def _carry_list(value: str | list[str]) -> list[CarryEntry]:
+    entries = [_carry_entry(v) for v in ([value] if isinstance(value, str) else value)]
+    seen: set[str] = set()
+    for entry in entries:
+        if entry.dest in seen:
+            raise ValueError(f"two entries move into '{entry.dest}'")
+        seen.add(entry.dest)
+    return entries
+
+
+#: A ``carry:`` value: one entry or a list (``title``, ``"title -> heading"``); validated into
+#: :class:`CarryEntry` items, written back as the strings.
+CarrySetting = Annotated[
+    Union[str, list[str]],
+    AfterValidator(_carry_list),
+    PlainSerializer(lambda entries: [str(e) for e in entries], return_type=list[str]),
+]
+
+
+class ChapterConfig(_Strict):
+    """A scene's ``chapter:`` in its long form: a new chapter starts at this scene."""
+
+    title: str = Field(min_length=1)
+    """The chapter's name (in the chapter indicator and chapter lists)."""
+    number: int | Annotated[str, Field(min_length=1)] | None = None
+    """Its number as shown (1, or text such as "Part II"); default its position among the chapters."""
 
 
 class BeatConfig(_Strict):
     """One narrated sentence/paragraph. ``id`` is filled in by :class:`SceneConfig` if omitted."""
 
     id: Identifier
+    """Unique in the whole video (names audio/<id>.mp3); default <scene id>_b<n> (1-based)."""
     text: str = Field(min_length=1)
+    """What the narrator says; also the subtitle."""
+    actions: list[ActionConfig] = Field(default_factory=list)
+    """Per-beat actions on the scene's targets (reveal, dim, highlight, ...), run during this beat."""
+    voice: Identifier | None = None
+    """Who says this beat: a name from voices (or default: the base voice); default the scene's voice."""
 
     def estimated_duration(self, words_per_second: float) -> float:
         """Speech duration estimated from the word count (no padding)."""
@@ -119,10 +1000,31 @@ class SceneConfig(_Strict):
     """
 
     id: Identifier
+    """Scene id (letters, digits, _), unique."""
     type: Identifier
+    """Scene type: a built-in or project extension type (`vidgen list-scenes`)."""
     params: dict[str, Any] = Field(default_factory=dict)
+    """Parameters of the scene type."""
     beats: list[BeatConfig] = Field(default_factory=list)
+    """Narrated beats in order; each animation lasts as long as its audio plus narration.pad."""
     duration: PositiveFloat | None = None
+    """Seconds; required on a silent scene (no beats), not allowed on a scene with beats."""
+    lint_ignore: list[RuleName | Literal["all"] | LintIgnore] = Field(default_factory=list)
+    """`vidgen lint` findings to skip in this scene: rule names, or {rule, object, beat} filters."""
+    overlays: SceneOverlays = True
+    """Video overlays on this scene: false for none, or per overlay id false / option overrides (with type: an overlay of this scene only)."""
+    chapter: Annotated[str, Field(min_length=1)] | ChapterConfig | None = None
+    """A new chapter starts at this scene: its title, or {title, number}; a `chapter` scene starts one by itself (this then renames it in chapter lists)."""
+    voice: Identifier | None = None
+    """Voice of this scene's beats: a name from voices (or default: the base voice); a beat's own voice wins."""
+    sfx: list[SfxEntry] = Field(default_factory=list)
+    """Sound effects at seconds from the scene's start ({sound, at, gain, pan, align, params}, or a sound name); for silent scenes too."""
+    music: bool | SceneMusic = True
+    """Background music during this scene: false for none (it fades out before the scene and back in after it), or {volume: dB} to change its level here."""
+    transition: TransitionSetting | None = None
+    """How the video passes into this scene from the one before: cut, crossfade, fade_color, push, wipe or {type, duration, color, direction, soft}; default the video's transition."""
+    carry: CarrySetting = Field(default_factory=list)
+    """Objects of the scene before that this scene starts with, where they were (a match cut): its target names, or 'NAME -> NAME' to move one into a target of this scene (default: the target of the same name)."""
 
     @model_validator(mode="before")
     @classmethod
@@ -147,7 +1049,26 @@ class SceneConfig(_Strict):
             raise ValueError("a scene without beats (silent scene) needs a 'duration' in seconds")
         if self.beats and self.duration is not None:
             raise ValueError("'duration' is only allowed on silent scenes (scenes without beats)")
+        beat_ids = {beat.id for beat in self.beats}
+        order = [beat.id for beat in self.beats]
+        for j, beat in enumerate(self.beats):
+            for action in beat.actions:
+                if action.until is not None and action.until not in order[j + 1 :]:
+                    raise ValueError(
+                        f"beats[{j}] action '{action.describe()}': until '{action.until}' is not a later beat of "
+                        f"scene '{self.id}' (later beats: {', '.join(order[j + 1:]) or 'none'})"
+                    )
+        for k, cue in enumerate(self.sfx):
+            if self.duration is not None and cue.at >= self.duration:
+                raise ValueError(f"sfx[{k}]: at {cue.at:g} s is not within the scene's duration ({self.duration:g} s)")
+        for entry in self.lint_ignore:
+            if isinstance(entry, LintIgnore) and entry.beat is not None and entry.beat not in beat_ids:
+                raise ValueError(f"lint_ignore: scene '{self.id}' has no beat '{entry.beat}'")
         return self
+
+    def lint_ignores(self) -> list[LintIgnore]:
+        """``lint_ignore`` with plain rule names turned into :class:`LintIgnore` entries."""
+        return [LintIgnore(rule=e) if isinstance(e, str) else e for e in self.lint_ignore]
 
     @property
     def silent(self) -> bool:
@@ -159,15 +1080,59 @@ class VideoConfig(_Strict):
     """The whole ``video.yaml``."""
 
     title: str = Field(min_length=1)
+    """The video's title."""
     output: str | None = Field(default=None, pattern=r"^[^/\\:*?\"<>|]+$")
+    """Base name of the output files (no path separators); default: the project folder name."""
     format: FormatConfig = Field(default_factory=FormatConfig)
+    """Final render resolution and frame rate."""
     preview: FormatConfig = Field(default_factory=_preview_format)
+    """Resolution and frame rate of `vidgen render --preview`."""
     variants: dict[Identifier, dict[str, Any]] = Field(default_factory=dict)
+    """Named overrides deep-merged onto this config (mappings merge, lists and scalars replace)."""
     theme: ThemeConfig = Field(default_factory=ThemeConfig)
+    """Colors, sizes, font and background."""
     voice: VoiceConfig = Field(default_factory=VoiceConfig)
+    """Text-to-speech voice."""
+    voices: dict[Identifier, VoiceEntry] = Field(default_factory=dict)
+    """Named voices for dialogue (name: {voice_id, settings, label, color, ...}), each the base voice with what it sets changed; scenes and beats pick one with voice: NAME."""
+    subtitles: SubtitlesConfig = Field(default_factory=SubtitlesConfig)
+    """What the SRT shows besides the narration (speaker names)."""
     narration: NarrationConfig = Field(default_factory=NarrationConfig)
+    """Beat padding and duration estimate."""
+    pronunciation: PronunciationMap = Field(default_factory=dict)
+    """How the narrator says terms (term: spoken form, or {say, case_sensitive, whole_word, regex}); TTS text only, subtitles keep the written words."""
+    pronunciation_file: str | list[str] | None = None
+    """YAML/JSON file(s) (relative to the project) with more pronunciation entries; `pronunciation:` entries win over them."""
+    language: LanguageTag | None = None
+    """Language of the narration and on-screen text (BCP-47: en, pt-BR, es...): caption cutting, narration-speed lint, ElevenLabs language_code, the MP4's audio language; default: English rules, no language sent."""
+    translations: str | None = Field(default=None, min_length=1)
+    """Translation file (YAML, relative to the project; `vidgen translate-template`) whose texts replace the beat texts and on-screen texts, usually set in a variant."""
     extensions: list[str] = Field(default_factory=lambda: ["extensions"])
+    """Folders (relative to the project) whose *.py files and packages are imported."""
+    lint: LintConfig = Field(default_factory=LintConfig)
+    """Thresholds and severities of `vidgen lint`."""
+    overlays: list[OverlayConfig] = Field(default_factory=list)
+    """Overlays drawn on top of the scenes (lower thirds, watermark, ...), fixed to the screen."""
+    sfx: SfxConfig = Field(default_factory=SfxConfig)
+    """Sound effects of the whole video: automatic sounds for built-in animations, overall level."""
+    music: MusicSetting = None
+    """Background music: a bed name or file, {source, volume, start, loop, crossfade, fade_in, fade_out, duck}, or a list of such cues with from / to scene ids."""
+    audio: AudioConfig = Field(default_factory=AudioConfig)
+    """The final mix: loudness normalisation {normalize, target_lufs, true_peak}."""
+    transition: TransitionSetting | None = None
+    """Default transition between scenes (cut, crossfade, fade_color, push, wipe or {type, duration, color, direction, soft}); a scene's transition wins."""
+    chapters: ChaptersConfig = Field(default_factory=ChaptersConfig)
+    """What the render writes about the chapters: MP4 chapter entries, the YouTube list <output>_chapters.txt, the intro chapter at 0:00 {metadata, youtube, intro}."""
+    metadata: MetadataConfig = Field(default_factory=MetadataConfig)
+    """Tags of the final MP4 {title, artist, album, comment, description, copyright, date, genre}; title defaults to the top-level title."""
+    thumbnail: ThumbnailConfig | None = None
+    """The thumbnail <output>_thumbnail.png: a scene's frame {scene, beat, at, overlays} or a designed card {title, subtitle, icon, image, preset, background}, + {jpeg, auto}."""
+    stt: SttConfig = Field(default_factory=SttConfig)
+    """Speech to text for `vidgen readback` (the narration transcribed and compared with the text): {provider, model, language, device}."""
+    imagegen: ImagegenConfig = Field(default_factory=ImagegenConfig)
+    """Image generation for generate: params and `vidgen imagegen`: {provider, model, size, quality, style, negative}."""
     scenes: list[SceneConfig] = Field(min_length=1)
+    """The scenes in order (at least one); scene ids and beat ids must be unique."""
 
     @field_validator("variants")
     @classmethod
@@ -176,6 +1141,41 @@ class VideoConfig(_Strict):
             if "variants" in override:
                 raise ValueError(f"variant '{name}' must not contain 'variants'")
         return value
+
+    @field_validator("voices")
+    @classmethod
+    def _reserved_voice(cls, value: dict[str, VoiceEntry]) -> dict[str, VoiceEntry]:
+        from vidgen.voices import DEFAULT_VOICE
+
+        if DEFAULT_VOICE in value:
+            raise ValueError(f"'{DEFAULT_VOICE}' is the base voice (the voice: section) and cannot be a name in voices")
+        return value
+
+    @field_validator("pronunciation", mode="before")
+    @classmethod
+    def _one_form(cls, value: Any) -> Any:
+        from vidgen.pronunciation import form_problems
+
+        problems = form_problems(value) if isinstance(value, dict) else []
+        if problems:
+            raise ValueError("; ".join(problems))
+        return value
+
+    @field_validator("pronunciation")
+    @classmethod
+    def _compilable(cls, value: dict[str, Any]) -> dict[str, Any]:
+        from vidgen.pronunciation import entry_problems
+
+        problems = entry_problems(value)
+        if problems:
+            raise ValueError("; ".join(problems))
+        return value
+
+    @property
+    def pronunciation_files(self) -> list[str]:
+        """``pronunciation_file`` as a list (empty when unset)."""
+        value = self.pronunciation_file
+        return [] if value is None else [value] if isinstance(value, str) else list(value)
 
     @model_validator(mode="after")
     def _check_unique_ids(self) -> VideoConfig:
@@ -195,7 +1195,69 @@ class VideoConfig(_Strict):
                         "beat ids must be unique across the whole video"
                     )
                 beat_seen[beat.id] = where
+        from vidgen.chapters import chapter_problems
+
+        problems = chapter_problems(self.scenes) + self._music_problems(scene_seen)
+        if self.thumbnail is not None:
+            problems += self.thumbnail_problems(self.thumbnail)
+        first = self.scenes[0].transition
+        if first is not None and first.overlaps:
+            problems.append(
+                f"scenes[0].transition: the first scene has no scene before it to {first.type} from (fade_color fades it in from a colour)"
+            )
+        if self.scenes[0].carry:
+            problems.append("scenes[0].carry: the first scene has no scene before it to carry objects from")
+        if problems:
+            raise ValueError("; ".join(problems))
         return self
+
+    def thumbnail_problems(self, thumb: ThumbnailConfig) -> list[str]:
+        """A frame thumbnail ``thumb`` names a scene of this video and one of its beats."""
+        if thumb.scene is None:
+            return []
+        index = {s.id: i for i, s in enumerate(self.scenes)}
+        if thumb.scene not in index:
+            return [f"thumbnail.scene: unknown scene '{thumb.scene}' (scenes: {', '.join(index)})"]
+        scene = self.scenes[index[thumb.scene]]
+        if thumb.beat is None:
+            return []
+        ids = [b.id for b in scene.beats]
+        if not ids:
+            return [f"thumbnail.beat: scene '{scene.id}' has no beats (it is silent); use at: seconds into the scene"]
+        if isinstance(thumb.beat, int):
+            if thumb.beat > len(ids):
+                return [f"thumbnail.beat: scene '{scene.id}' has {len(ids)} beat(s), not {thumb.beat}"]
+        elif thumb.beat not in ids:
+            return [f"thumbnail.beat: scene '{scene.id}' has no beat '{thumb.beat}' (beats: {', '.join(ids)})"]
+        return []
+
+    def _music_problems(self, index: dict[str, int]) -> list[str]:
+        """Cues name existing scenes, in order (``from`` not after ``to``), without overlapping."""
+        problems: list[str] = []
+        spans: list[tuple[int, int, str]] = []
+        listed = isinstance(self.music, list)
+        for k, cue in enumerate(self.music_cues):
+            where = f"music[{k}]" if listed else "music"
+            bad = [f"{key} '{sid}'" for key, sid in (("from", cue.from_), ("to", cue.to)) if sid is not None and sid not in index]
+            if bad:
+                problems.append(f"{where}: unknown scene {', '.join(bad)} (scenes: {', '.join(index)})")
+                continue
+            first = index[cue.from_] if cue.from_ is not None else 0
+            last = index[cue.to] if cue.to is not None else len(self.scenes) - 1
+            if first > last:
+                problems.append(f"{where}: from '{cue.from_}' comes after to '{cue.to}'")
+                continue
+            for a, b, other in spans:
+                if first <= b and a <= last:
+                    problems.append(f"{where} overlaps {other} (each scene can have one music cue)")
+            spans.append((first, last, where))
+        return problems
+
+    @property
+    def music_cues(self) -> list[MusicCue]:
+        """``music`` as a list of cues (empty without music)."""
+        value = self.music
+        return [] if value is None else list(value) if isinstance(value, list) else [value]
 
 
 def format_location(loc: tuple[str | int, ...]) -> str:
@@ -209,22 +1271,35 @@ def format_location(loc: tuple[str | int, ...]) -> str:
     return out
 
 
-def validation_error_lines(error: ValidationError, prefix: tuple[str | int, ...] = ()) -> list[str]:
-    """One ``path: message`` line per error; ``prefix`` is prepended to every path
-    (e.g. ``("scenes", 2, "params")`` gives ``scenes[2].params.values: ...``)."""
-    lines = []
+def validation_problems(
+    error: ValidationError, prefix: tuple[str | int, ...] = (), model: type[BaseModel] | None = None, noun: str = "parameter"
+) -> list[Problem]:
+    """One :class:`~vidgen.errors.Problem` per error; ``prefix`` is prepended to every location
+    (e.g. ``("scenes", 2, "params")`` gives ``scenes[2].params.values``). With ``model`` (the
+    model validated), an unknown key gets a did-you-mean message and the known names (``noun``:
+    what a key is called, e.g. ``option``)."""
+    from vidgen.describe import unknown_key_message
+
+    problems = []
     for item in error.errors():
         # Model validators raise from the model itself; drop pydantic's "Value error, " prefix.
         message = item["msg"].removeprefix("Value error, ")
-        path = format_location((*prefix, *item["loc"]))
-        lines.append(f"{path}: {message}" if path else message)
-    return lines
+        if item["type"] == "extra_forbidden" and model is not None:
+            message = unknown_key_message(model, item["loc"], noun) or message
+        problems.append(Problem(format_location((*prefix, *item["loc"])), message))
+    return problems
 
 
-def format_validation_error(error: ValidationError, source: str) -> str:
-    """A readable multi-line message for a pydantic ``ValidationError``."""
+def validation_error_lines(error: ValidationError, prefix: tuple[str | int, ...] = (), model: type[BaseModel] | None = None) -> list[str]:
+    """One ``path: message`` line per error (see :func:`validation_problems`)."""
+    return [str(problem) for problem in validation_problems(error, prefix, model)]
+
+
+def format_validation_error(error: ValidationError, source: str, model: type[BaseModel] | None = None) -> str:
+    """A readable multi-line message for a pydantic ``ValidationError`` (of ``model``, which
+    improves unknown-key messages)."""
     lines = [f"{source}: invalid config"]
-    lines.extend(f"  {line}" for line in validation_error_lines(error))
+    lines.extend(f"  {problem}" for problem in validation_problems(error, model=model, noun="key"))
     return "\n".join(lines)
 
 
@@ -232,11 +1307,19 @@ def parse_config(data: Any, source: str = "video.yaml") -> VideoConfig:
     """Validate a raw mapping into a :class:`VideoConfig`.
 
     ``source`` (usually the file name) is included in error messages.
-    Raises :class:`VidgenError` on any validation error.
+    Raises :class:`VidgenError` on any validation error; its ``problems`` give each error's
+    config location.
     """
     if not isinstance(data, dict):
         raise VidgenError(f"{source}: the top level must be a mapping (key: value pairs)")
     try:
-        return VideoConfig.model_validate(data)
+        config = VideoConfig.model_validate(data)
     except ValidationError as exc:
-        raise VidgenError(format_validation_error(exc, source)) from None
+        raise VidgenError(format_validation_error(exc, source, VideoConfig), problems=validation_problems(exc, model=VideoConfig, noun="key")) from None
+    from vidgen.voices import voice_reference_problems
+
+    problems = voice_reference_problems(config)
+    if problems:
+        lines = [f"{source}: invalid config", *(f"  {problem}" for problem in problems)]
+        raise VidgenError("\n".join(lines), problems=problems)
+    return config

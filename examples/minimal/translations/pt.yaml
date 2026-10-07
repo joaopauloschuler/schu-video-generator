@@ -1,0 +1,306 @@
+# Translation of 'vidgen: the built-in scenes' (variant 'pt'), written by `vidgen translate-template`.
+# Fill in each `text:` (the `source:` is the original; an empty text shows the source).
+# `stale: true`: the source changed since it was translated; check the text, then delete the
+# `stale` and `old_source` lines. `obsolete: true`: the key is gone from the config (kept so the
+# text is not lost; delete it when done). Run the command again after editing the config: it
+# keeps your translations. `references` are written by the command (do not edit them).
+version: 1
+language: pt-BR
+entries:
+  title:
+    source: 'vidgen: the built-in scenes'
+    hash: e3a65b6320
+    text: 'vidgen: as cenas prontas'
+  scenes.intro.params.title:
+    source: Narrated videos from a single config file
+    hash: 3fefe63213
+    text: Vídeos narrados a partir de um só arquivo de configuração
+  scenes.intro.params.subtitle:
+    source: A tour of the built-in scene types
+    hash: 4db92cb21d
+    text: Um passeio pelos tipos de cena prontos
+  scenes.intro.params.kicker:
+    source: VIDGEN EXAMPLE
+    hash: 56df8d8e36
+    text: EXEMPLO DO VIDGEN
+  scenes.intro.params.authors[0]:
+    source: Made with Manim, ElevenLabs and ffmpeg
+    hash: 3cd773a62d
+    text: Feito com Manim, ElevenLabs e ffmpeg
+  scenes.intro.params.highlight:
+    source: single config file
+    hash: 8e0b550196
+    text: um só arquivo de configuração
+  scenes.intro.beats.intro_b1.text:
+    source: This whole video comes from one config file, with no Python code at all.
+    hash: 08bb27bb38
+    text: Este vídeo inteiro vem de um único arquivo de configuração, sem nenhuma linha de código Python.
+  scenes.intro.beats.intro_b2.text:
+    source: Every scene you are about to see is a built-in scene type.
+    hash: 944e16ea97
+    text: Cada cena que você vai ver é um tipo de cena pronto.
+  scenes.steps.params.heading:
+    source: How a video is made
+    hash: 3a91029852
+    text: Como um vídeo é feito
+  scenes.steps.params.items[0].text:
+    source: Write the narration as short beats
+    hash: f2133b50f0
+    text: Escreva a narração em trechos curtos
+  scenes.steps.params.items[1].text:
+    source: Pick a scene type and its parameters for each scene
+    hash: eb8cd49cec
+    text: Escolha o tipo e os parâmetros de cada cena
+  scenes.steps.params.items[2].text:
+    source: Generate the voice once; only edited beats are re-voiced
+    hash: 3081e2736a
+    text: Gere a voz uma vez; só trechos editados são regravados
+  scenes.steps.params.items[3].text:
+    source: Render a preview, then the final video with subtitles
+    hash: 0057601b08
+    text: Renderize uma prévia, depois o vídeo final legendado
+  scenes.steps.beats.steps_b1.text:
+    source: First, you write the narration as a list of short beats.
+    hash: 41b1643dbb
+    text: Primeiro, você escreve a narração como uma lista de trechos curtos.
+  scenes.steps.beats.steps_b2.text:
+    source: Each scene gets a type, like a title, a chart or a code listing.
+    hash: 5bab6cd983
+    text: Cada cena ganha um tipo, como um título, um gráfico ou uma listagem de código.
+  scenes.steps.beats.steps_b3.text:
+    source: The voice is generated once, and only edited beats are paid for again.
+    hash: 06b1110f73
+    text: A voz é gerada uma vez, e só os trechos editados são pagos de novo.
+  scenes.steps.beats.steps_b4.text:
+    source: Then you render a quick preview, and finally the full video.
+    hash: cf9e1b6d8e
+    text: Depois você renderiza uma prévia rápida e, por fim, o vídeo completo.
+  scenes.feedback.params.items[0].label:
+    source: Storyboard
+    hash: 7c293d6707
+    text: Storyboard
+  scenes.feedback.params.items[0].sublabel:
+    source: every beat at a glance
+    hash: 908293beb3
+    text: cada trecho num relance
+  scenes.feedback.params.items[1].label:
+    source: Lint
+    hash: fb5fb79636
+    text: Lint
+  scenes.feedback.params.items[1].sublabel:
+    source: layout and timing checks
+    hash: 12227529e7
+    text: confere layout e ritmo
+  scenes.feedback.params.items[2].label:
+    source: JSON output
+    hash: 669f62b85d
+    text: Saída JSON
+  scenes.feedback.params.items[2].sublabel:
+    source: for scripts and agents
+    hash: e36bd43fec
+    text: para scripts e agentes
+  scenes.feedback.params.items[3].label:
+    source: Theme presets
+    hash: 9635a881d0
+    text: Temas prontos
+  scenes.feedback.params.items[3].sublabel:
+    source: one line restyles it all
+    hash: 41cddde47a
+    text: uma linha muda o visual
+  scenes.feedback.params.heading:
+    source: Feedback while you write
+    hash: a3abb1f8ce
+    text: Retorno enquanto você escreve
+  scenes.feedback.beats.feedback_b1.text:
+    source: Icon grids reveal one item per beat. A storyboard shows every beat at a glance.
+    hash: a2e121fb82
+    text: Grades de ícones revelam um item por trecho. Um storyboard mostra cada trecho num relance.
+  scenes.feedback.beats.feedback_b2.text:
+    source: Lint checks the layout and the timing for you.
+    hash: 542ed38125
+    text: O lint confere o layout e o ritmo para você.
+  scenes.feedback.beats.feedback_b3.text:
+    source: Every command can also answer in JSON, for scripts and agents.
+    hash: d6d8c6a4a6
+    text: Todo comando também pode responder em JSON, para scripts e agentes.
+  scenes.feedback.beats.feedback_b4.text:
+    source: And a theme preset restyles the whole video.
+    hash: a22df7970a
+    text: E um tema pronto muda o visual do vídeo inteiro.
+  scenes.feedback.beats.feedback_b5.text:
+    source: At the end, one item can be highlighted, like lint here.
+    hash: 7e40e9055c
+    text: No fim, um item pode ser destacado, como o lint aqui.
+  scenes.sizes.params.title:
+    source: Render time per minute of video
+    hash: c449ce32a6
+    text: Tempo de renderização por minuto de vídeo
+  scenes.sizes.params.labels[0]:
+    source: Preview 480p
+    hash: e4a94ea70b
+    text: Prévia 480p
+  scenes.sizes.params.labels[1]:
+    source: 720p
+    hash: 62bbbdee2d
+    text: 720p
+  scenes.sizes.params.labels[2]:
+    source: 1080p
+    hash: c49ddb4e5d
+    text: 1080p
+  scenes.sizes.params.labels[3]:
+    source: 4K
+    hash: bdcbbfe49c
+    text: 4K
+  scenes.sizes.params.unit:
+    source: ' min'
+    hash: f4e8a8b4ab
+    text: ' min'
+  scenes.sizes.params.caption:
+    source: Illustrative numbers
+    hash: 71ad5c8bef
+    text: Números ilustrativos
+  scenes.sizes.beats.sizes_b1.text:
+    source: Bar charts grow their bars while the values count up.
+    hash: ac96300932
+    text: Nos gráficos de barras, as barras crescem enquanto os valores sobem.
+  scenes.sizes.beats.sizes_b2.text:
+    source: 'Beats can point at single bars: four K takes by far the longest.'
+    hash: 6c50d70d91
+    text: 'Um trecho pode apontar uma barra: o quatro K é o mais demorado.'
+  scenes.sizes.beats.sizes_b3.text:
+    source: And previews are the fast way to iterate.
+    hash: 6272ce8c3d
+    text: E as prévias são o jeito rápido de iterar.
+  scenes.trend.params.title:
+    source: Validation loss
+    hash: 0de03ef0de
+    text: Perda de validação
+  scenes.trend.params.series{"baseline"}:
+    source: baseline
+    hash: 01bada1524
+    text: referência
+  scenes.trend.params.series{"sparse"}:
+    source: sparse
+    hash: bea8411e21
+    text: esparso
+  scenes.trend.params.x_label:
+    source: epoch
+    hash: 8ac1f753a4
+    text: época
+  scenes.trend.params.y_label:
+    source: loss
+    hash: c9279f09f8
+    text: perda
+  scenes.trend.beats.trend_b1.text:
+    source: Line charts draw one series per beat. Here is the baseline.
+    hash: cda43ae681
+    text: Gráficos de linha desenham uma série por trecho. Aqui está a referência.
+  scenes.trend.beats.trend_b2.text:
+    source: And here is the sparse model, which ends lower.
+    hash: e5a4b74f9a
+    text: E aqui está o modelo esparso, que termina mais baixo.
+  scenes.trend.beats.trend_b2.actions[0].label:
+    source: Lowest loss
+    hash: b6ffdfc39c
+    text: Menor perda
+  scenes.picture.params.caption:
+    source: Images can slowly zoom and pan
+    hash: 8d3d9f9450
+    text: null
+  scenes.picture.beats.picture_b1.text:
+    source: Images come from the project's assets folder.
+    hash: 208ec42be7
+    text: null
+  scenes.picture.beats.picture_b2.text:
+    source: With a gentle zoom and pan, still pictures feel alive.
+    hash: 966a8e3c35
+    text: null
+  scenes.saying.params.text:
+    source: Simplicity is prerequisite for reliability.
+    hash: 22b4e2a52c
+    text: null
+  scenes.saying.params.author:
+    source: Edsger W. Dijkstra
+    hash: 6824641a5c
+    text: null
+  scenes.saying.params.source:
+    source: How do we tell truths that might hurt? (1975)
+    hash: 1f4312876d
+    text: null
+  scenes.saying.beats.saying_b1.text:
+    source: Quotes get large typographic marks.
+    hash: e02862c986
+    text: null
+  scenes.saying.beats.saying_b2.text:
+    source: And an attribution underneath.
+    hash: b34b97d518
+    text: null
+  scenes.math.params.caption:
+    source: Each step morphs into the next
+    hash: b815324a59
+    text: null
+  scenes.math.beats.math_b1.text:
+    source: Equations are typeset with LaTeX.
+    hash: 191edb2ac4
+    text: null
+  scenes.math.beats.math_b2.text:
+    source: Each step transforms into the next one, and an action can even jump ahead.
+    hash: 0252f69c49
+    text: null
+  scenes.math.beats.math_b3.text:
+    source: Here is the expanded form, and a closer look at its middle term.
+    hash: 9a9fdff51a
+    text: null
+  scenes.listing.params.title:
+    source: Code with highlights
+    hash: c99dd39eb0
+    text: null
+  scenes.listing.beats.listing_b1.text:
+    source: Code listings are syntax highlighted, and the narration can point at lines.
+    hash: 4a6f7a0c4c
+    text: null
+  scenes.listing.beats.listing_b2.text:
+    source: First we sum the opening window.
+    hash: df66c461a8
+    text: null
+  scenes.listing.beats.listing_b3.text:
+    source: Then we slide it along, one value at a time.
+    hash: 525dfee7d3
+    text: null
+  scenes.note.params.text:
+    source: Need something else? Add a scene type in extensions/
+    hash: 3a37a6c08e
+    text: null
+  scenes.note.beats.note_b1.text:
+    source: And when a built-in is not enough?
+    hash: 86110a3343
+    text: null
+  scenes.note.beats.note_b2.text:
+    source: Then a project adds its own scene types.
+    hash: cd38ccda32
+    text: null
+  scenes.outro.params.title:
+    source: Thanks for watching
+    hash: b28f6fc061
+    text: Obrigado por assistir
+  scenes.outro.params.lines[0]:
+    source: 'Built-in scenes: docs/CONFIG.md'
+    hash: 82193d4db6
+    text: 'Cenas prontas: docs/CONFIG.md'
+  scenes.outro.params.lines[1]:
+    source: 'Your own scenes: docs/EXTENDING.md'
+    hash: b8ce6c78fa
+    text: 'Suas próprias cenas: docs/EXTENDING.md'
+  scenes.outro.beats.outro_b1.text:
+    source: Thanks for watching.
+    hash: d6c9ae4fc5
+    text: Obrigado por assistir.
+  scenes.outro.beats.outro_b2.text:
+    source: The config reference and the extension guide are in the docs folder.
+    hash: 3f0ce48f8a
+    text: A referência da configuração e o guia de extensões estão na pasta docs.
+references:
+  scenes.feedback.params.highlight: scenes.feedback.params.items[1].label
+  scenes.sizes.beats.sizes_b2.actions[0].target: scenes.sizes.params.labels[3]
+  scenes.sizes.beats.sizes_b3.actions[1].highlight: scenes.sizes.params.labels[0]
+  scenes.trend.beats.trend_b2.actions[0].callout: scenes.trend.params.series{"sparse"}

@@ -12,30 +12,81 @@ Params validation does not need Manim to be configured: ``SceneClass.validate_pa
 from __future__ import annotations
 
 import logging
+import math
 import re
+import tempfile
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Annotated, Any, NamedTuple, Union
+from typing import Annotated, Any, ClassVar, NamedTuple, Union
 
 import av
-from manim import NORMAL, Animation, FadeOut, MarkupText, Scene, Text, config
-from pydantic import AfterValidator, BaseModel, ConfigDict, ValidationError, ValidationInfo
+from manim import DEFAULT_WAIT_TIME, NORMAL, Animation, FadeIn, MarkupText, Mobject, MovingCameraScene, Text, Wait, config
+from pydantic import AfterValidator, AliasChoices, BaseModel, ConfigDict, GetJsonSchemaHandler, ValidationError, ValidationInfo
 
-from vidgen import helpers, runtime
+from vidgen import carry, helpers, regions, runtime
+from vidgen.actions import TARGET_NAME, ActionRunner, Target, match_names, plan_actions
+from vidgen.capture import FrameCapture
 from vidgen.layout import distribute
-from vidgen.config import BeatConfig, SceneConfig, validation_error_lines
+from vidgen.overlay_layer import OverlayLayer
+from vidgen.overlays import Overlay, avoid, mobject_region, scene_overlays
+from vidgen.config import DIRECTED_TRANSITIONS, BeatConfig, SceneConfig, SfxCue, validation_error_lines
 from vidgen.errors import VidgenError
 from vidgen.project import Project
+from vidgen.sfx import AUTO_ACTION_SFX, SfxEvent, SoundLibrary, decode_audio, stereo, write_wav
 from vidgen.theme import Theme
+from vidgen.transitions import ColorFade, has_transitions, resolve_color
+from vidgen.videoplan import TransitionSlot, VideoPlan
 
 log = logging.getLogger("vidgen.scene")
 
 
 class SceneParams(BaseModel):
-    """Base class for a scene type's ``Params`` model; unknown keys are an error."""
+    """Base class for a scene type's ``Params`` model; unknown keys are an error.
 
-    model_config = ConfigDict(extra="forbid")
+    A docstring under a field (or ``Field(description=...)``) documents it; ``vidgen
+    list-scenes --json`` shows it as the field's ``doc``. A nested model that also accepts a
+    shorthand (e.g. a plain string, converted by a ``model_validator(mode="before")``) lists
+    those types in ``also_accepts``, so ``list-scenes`` shows ``str | Item`` instead of ``Item``.
+    """
+
+    model_config = ConfigDict(extra="forbid", use_attribute_docstrings=True)
+    #: Other input types this model is built from (shown by ``vidgen list-scenes``).
+    also_accepts: ClassVar[tuple[type, ...]] = ()
+    #: Whether the text in the frame's header band answers to both names, ``heading`` and
+    #: ``title`` (with ``_size`` / ``_color``): a model with only one of a pair also accepts the
+    #: other (:data:`HEADER_SYNONYMS`). Off for types whose ``title`` is their main text
+    #: (``title``, ``chapter``, ``end_card``).
+    header_synonyms: ClassVar[bool] = True
+    #: Where a shorthand written for this model holds text to translate (DESIGN.md §54), by the
+    #: raw value's type: ``"text"`` (the string is the text), ``("field", NAME)`` (the value
+    #: stands for ``{NAME: value}``), ``("after", SEP)`` (the text follows the first SEP of the
+    #: string), ``("fields", (NAME, ...))`` (a list holds those fields by position), and for a
+    #: mapping with none of this model's fields ``("model", OTHER)`` (it is an ``OTHER``).
+    text_shorthand: ClassVar[Mapping[type, Any]] = {}
+    #: Translatable fields whose text, when not given, is another field's (``{"label": "id"}``).
+    text_defaults: ClassVar[Mapping[str, str]] = {}
+
+    @classmethod
+    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
+        super().__pydantic_init_subclass__(**kwargs)
+        if not cls.header_synonyms:
+            return
+        changed = False
+        for a, b in HEADER_SYNONYMS:
+            for name, other in ((a, b), (b, a)):
+                field = cls.model_fields.get(name)
+                if field is not None and other not in cls.model_fields and field.alias is None and field.validation_alias is None:
+                    field.validation_alias = AliasChoices(name, other)
+                    changed = True
+        if changed:
+            cls.model_rebuild(force=True)
+
+
+#: Pairs of param names that mean the same in every scene type with a header band (the scene
+#: types grew up with both: ``bullets`` has a ``heading``, the charts a ``title``).
+HEADER_SYNONYMS: tuple[tuple[str, str], ...] = (("heading", "title"), ("heading_size", "title_size"), ("heading_color", "title_color"))
+
 
 
 _HEX = re.compile(r"^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$")
@@ -62,10 +113,29 @@ def _check_theme_size(value: str | float, info: ValidationInfo) -> str | float:
     return value
 
 
+def _check_icon_name(value: str, info: ValidationInfo) -> str:
+    from vidgen.icons import NAME_PATTERN, active_icons, resolve_icon, unknown_icon_message
+
+    if not NAME_PATTERN.match(value):
+        raise ValueError(f"invalid icon name {value!r} (letters, digits, '-' and '_')")
+    if (info.context or {}).get("theme") is not None:
+        icons = active_icons()
+        if resolve_icon(value, icons) is None:
+            raise ValueError(unknown_icon_message(value, icons))
+    return value
+
+
 class ThemeToken(NamedTuple):
-    """Marker in ``ThemeColor``/``ThemeSize`` annotations (``kind`` is ``"color"`` or ``"size"``)."""
+    """Marker in ``ThemeColor``/``ThemeSize``/``IconName`` annotations: names resolved in the
+    project (``kind`` is ``"color"``, ``"size"`` or ``"icon"``)."""
 
     kind: str
+
+    def __get_pydantic_json_schema__(self, core_schema: Any, handler: GetJsonSchemaHandler) -> dict[str, Any]:
+        """Mark the field's JSON Schema with ``x-vidgen-theme: <kind>`` (see ``vidgen.schema``)."""
+        schema = handler(core_schema)
+        schema["x-vidgen-theme"] = self.kind
+        return schema
 
 
 #: A ``Params`` field holding a color: a theme token (``"primary"``) or ``#hex``. Tokens are
@@ -73,6 +143,19 @@ class ThemeToken(NamedTuple):
 ThemeColor = Annotated[str, AfterValidator(_check_theme_color), ThemeToken("color")]
 #: A ``Params`` field holding a font size: a theme token (``"body"``) or a number of points.
 ThemeSize = Annotated[Union[str, float], AfterValidator(_check_theme_size), ThemeToken("size")]
+#: A ``Params`` field holding an icon name (built-in or the project's ``assets/icons``); checked
+#: against the available icons by ``vidgen validate`` and when the scene is built.
+IconName = Annotated[str, AfterValidator(_check_icon_name), ThemeToken("icon")]
+
+
+def _as_list(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else [value]
+
+
+def one_or_many(item: Any) -> Any:
+    """A ``Params`` field type for a list that may also be written as a single item
+    (``highlight: Lint`` means ``[Lint]``); the validated value is always a list."""
+    return Annotated[Union[list[item], item], AfterValidator(_as_list)]
 
 
 class BeatTiming(NamedTuple):
@@ -82,6 +165,48 @@ class BeatTiming(NamedTuple):
     start: float
     end: float
     text: str
+
+
+class PlayRecord(NamedTuple):
+    """One ``self.play(...)`` (``self.wait`` included) as the scene ran it: scene times
+    ``start``/``end`` (s), the beat being narrated (``None`` outside ``narrate``), the
+    animations' names, whether it only waited, and ``requested``: the run time the caller
+    wanted when :meth:`NarratedScene.play_steps` had to shorten it to fit the beat."""
+
+    start: float
+    end: float
+    beat: str | None
+    animations: tuple[str, ...]
+    wait: bool
+    requested: float | None = None
+
+
+def _animation_name(item: Any) -> str:
+    """``FadeIn``, ``animate`` (``mobject.animate...``) or ``AnimationGroup(Write, FadeIn)``."""
+    if isinstance(item, Animation):
+        inner = getattr(item, "animations", None)
+        name = type(item).__name__
+        if inner:
+            parts = list(dict.fromkeys(_animation_name(a) for a in inner))
+            name += "(" + ", ".join(parts[:3]) + (", …" if len(parts) > 3 else "") + ")"
+        return name
+    if type(item).__name__ == "_AnimationBuilder":
+        return "animate"
+    return type(item).__name__
+
+
+def add_narration(scene: MovingCameraScene, path: Path) -> None:
+    """Add a narration file to ``scene``'s sound at the current time, at the file's own level.
+
+    The file is decoded here and handed to Manim as a 48 kHz stereo WAV: a mono MP3 (what TTS
+    providers return) plays on both channels unchanged, like the sound effects (DESIGN.md §47).
+    Given the MP3 itself, Manim's conversion upmixes it with libswresample's mono → stereo
+    matrix, 3 dB quieter per channel than the file.
+    """
+    with tempfile.TemporaryDirectory(prefix="vidgen_voice_") as folder:
+        wav = Path(folder) / "narration.wav"
+        write_wav(wav, stereo(decode_audio(path)))
+        scene.add_sound(str(wav))
 
 
 def audio_duration(path: Path) -> float:
@@ -110,8 +235,12 @@ def _beats(k: int) -> str:
     return f"{k} beat" if k == 1 else f"{k} beats"
 
 
-class NarratedScene(Scene):
+class NarratedScene(MovingCameraScene):
     """A Manim scene timed by narration.
+
+    The camera can move (``self.camera.frame``, Manim's ``MovingCameraScene``; the ``zoom`` beat
+    action uses it); it starts on the whole frame, so scenes that never move it render as with a
+    static camera.
 
     Inside ``construct()``: ``self.spec`` (``SceneConfig``), ``self.params`` (validated
     ``Params`` instance, or a dict), ``self.beats``, ``self.theme``, ``self.project``.
@@ -119,6 +248,10 @@ class NarratedScene(Scene):
 
     ``audio=False`` renders without adding narration sounds; durations still come from the
     audio files, so timing is identical to a render with audio.
+
+    ``capture`` (a :class:`~vidgen.capture.FrameCapture`, set by the worker for ``vidgen
+    render --frames``) takes stills at the end of / during each beat; it only observes the
+    frames written, so timing is unchanged. ``self.capture`` is ``None`` otherwise.
 
     If you override ``tear_down``, call ``super().tear_down()`` (it pads silent scenes to their
     ``duration``).
@@ -131,23 +264,132 @@ class NarratedScene(Scene):
         theme: Theme | None = None,
         *,
         audio: bool = True,
+        capture: FrameCapture | None = None,
         **scene_kwargs: Any,
     ) -> None:
         self.spec = spec
         self.project = project if project is not None else runtime.current_project()
         if theme is None:
             active = runtime.has_context() and runtime.current_project() is self.project
-            theme = runtime.current_theme() if active else Theme(self.project.config.theme)
+            theme = runtime.current_theme() if active else Theme.for_format(self.project.config.theme, self.project.config.format)
         self.theme = theme
         self.params = type(self).parse_params(spec.params, scene_id=spec.id, theme=self.theme)
         problem = type(self).check_beat_count(len(spec.beats))
         if problem is not None:
             raise VidgenError(f"scene '{spec.id}': {problem}")
         self.beats: list[BeatConfig] = list(spec.beats)
+        self._targets: list[Target] = []
+        self._rest: dict[int, tuple[float, float]] = {}  # full opacity of target parts (shared)
+        uses = plan_actions(spec.type, type(self), spec, self.params, self.theme)
+        self._actions = ActionRunner(self, uses) if uses else None
         self.audio_enabled = audio
         self.beat_log: list[BeatTiming] = []
+        #: Every ``play``/``wait`` in order (:class:`PlayRecord`); read by ``vidgen lint``.
+        self.play_log: list[PlayRecord] = []
+        #: Seconds each narrated beat's body took (before the wait to ``d + pad``); more than
+        #: ``d + pad`` means its animations overran the narration.
+        self.beat_busy: dict[str, float] = {}
+        #: Seconds a silent scene's code took before being held to its ``duration``.
+        self.silent_busy: float | None = None
         self._durations: dict[str, float] = {}
+        self._current_beat: str | None = None
+        self._requested: float | None = None
+        #: Sound effects of the scene (:class:`~vidgen.sfx.SfxEvent`, scene times), in the order
+        #: they were added; the worker stores them in the timings, the pipeline mixes them.
+        self.sfx_log: list[SfxEvent] = []
+        self._sounds: SoundLibrary | None = None
         super().__init__(**scene_kwargs)
+        self.capture = capture
+        if capture is not None:
+            capture.attach(self)
+            if spec.silent:
+                length = max((spec.duration or 0.0) - self.outro, 1 / config.frame_rate)
+                capture.begin_segment(None, round(length * config.frame_rate), include_end=True)
+        #: The planned transitions into and out of this scene (DESIGN.md §49), ``None`` when the
+        #: video has none (the out one also for the last scene).
+        self.transition_in: TransitionSlot | None = None
+        self.transition_out: TransitionSlot | None = None
+        self._video_plan: VideoPlan | None = None
+        if has_transitions(self.project.config):
+            self._video_plan = VideoPlan(self.project, int(config.frame_rate))
+            i = self._video_plan.index(spec.id)
+            self.transition_in = self._video_plan.transition(i)
+            if i + 1 < len(self.project.config.scenes):
+                self.transition_out = self._video_plan.transition(i + 1)
+        #: Continuity (DESIGN.md §50): what the next scene carries out of this one (kept on
+        #: screen in the fade-out, recorded at the end into :attr:`carry_state`), and the
+        #: record of the scene before for this scene's own ``carry`` (:attr:`carried_in`, set
+        #: by the worker before rendering).
+        self.carry_out: list[str] = [e.source for e in carry.carried_out(self.project.config, spec.id)]
+        self.carry_state: dict[str, list[dict[str, Any]]] | None = None
+        self.carried_in: dict[str, list[dict[str, Any]]] | None = None
+        self._carried: dict[str, Mobject] = {}  # destination name -> copy waiting to move there
+        #: The video's overlays drawn on this scene (DESIGN.md §41), or ``None`` without any.
+        self.overlay_layer: OverlayLayer | None = None
+        self._reserved: list[regions.Region] = []
+        self.overlay_head = 0
+        overlays, following = self._build_overlays()
+        if overlays or following:
+            slot = self._video_plan.scene(spec.id) if self._video_plan is not None else None
+            if slot is None:
+                self.overlay_layer = OverlayLayer(self, overlays)
+            else:
+                self.overlay_layer = OverlayLayer(self, overlays, following, start=slot.start, cut=slot.cut)
+            self.overlay_layer.attach()  # after the capture: stills and the layout dump see overlays
+            #: frames at the start that a push / wipe moves: drawn without overlays when the
+            #: worker asks for them as a separate clip (DESIGN.md §50)
+            self.overlay_head = self.transition_in.overlap if self._moving_in() else 0
+            for overlay, mob in zip(self.overlay_layer.overlays, self.overlay_layer.mobjects):
+                box = mobject_region(mob) if overlay.reserves and mob is not None else None
+                if box is not None:
+                    self._reserved.append(box)
+        self._attach_color_fade()
+        if self.entrance_sfx is not None and self.project.config.sfx.auto:
+            sound, gain = self.entrance_sfx
+            self.sfx(sound, 0.0, gain=gain)
+        for k, cue in enumerate(spec.sfx):
+            params = cue.params.model_dump(exclude_none=True)
+            self._add_sfx(cue.sound, cue.at, cue.gain, cue.pan, cue.align, params, f"sfx[{k}]")
+
+    def _build_overlays(self) -> tuple[list[Overlay], list[Overlay]]:
+        """The overlays of the project drawn on this scene (none without an ``overlays:``) and,
+        when a crossfade overlaps its end with the next scene, the next scene's (drawn from that
+        scene's start on, so both scenes show the same overlays while they blend). A push or
+        wipe overlapping its end gets none there: the next scene's render draws them once over
+        the moving pictures (DESIGN.md §50)."""
+        cfg = self.project.config
+        if not cfg.overlays and not any(isinstance(s.overlays, dict) for s in cfg.scenes):
+            return [], []
+        plan = self._video_plan or VideoPlan(self.project, int(config.frame_rate))
+        own = scene_overlays(self.project, self.spec, self.theme, plan)
+        following: list[Overlay] = []
+        out = self.transition_out
+        if out is not None and out.overlap and out.type not in DIRECTED_TRANSITIONS:
+            after = cfg.scenes[plan.index(self.spec.id) + 1]
+            following = scene_overlays(self.project, after, self.theme, plan)
+        return own, following
+
+    def _moving_in(self) -> bool:
+        """Whether a push or wipe leads into this scene (its first frames move)."""
+        t = self.transition_in
+        return t is not None and t.type in DIRECTED_TRANSITIONS and t.overlap > 0
+
+    def _attach_color_fade(self) -> None:
+        """Fade the first / last frames from / to a colour for ``fade_color`` transitions (§49)."""
+        t_in, t_out = self.transition_in, self.transition_out
+        frames_in = t_in.fade_in if t_in is not None else 0
+        frames_out = t_out.fade_out if t_out is not None else 0
+        if not (frames_in or frames_out) or self._video_plan is None:
+            return
+        i = self._video_plan.index(self.spec.id)
+        fade = ColorFade(
+            resolve_color(t_in.color, self.theme) if frames_in and t_in is not None else None,
+            frames_in,
+            resolve_color(t_out.color, self.theme) if frames_out and t_out is not None else None,
+            frames_out,
+            round(self._video_plan.scene_duration(i) * config.frame_rate),
+        )
+        fade.attach(self.renderer)  # outermost: overlays are drawn over the faded picture
 
     # ----- params ----------------------------------------------------------------------------
 
@@ -162,7 +404,8 @@ class NarratedScene(Scene):
         """Validate raw params; raises ``pydantic.ValidationError``. No Manim setup needed.
 
         With ``theme``, :data:`ThemeColor` / :data:`ThemeSize` fields must name tokens that exist
-        in it (it is passed to validators as ``info.context["theme"]``).
+        in it (it is passed to validators as ``info.context["theme"]``) and :data:`IconName`
+        fields icons of the active project (or built-ins).
         """
         model = cls.params_model()
         if model is None:
@@ -177,7 +420,7 @@ class NarratedScene(Scene):
         try:
             return cls.validate_params(params, theme)
         except ValidationError as exc:
-            lines = validation_error_lines(exc, ("params",))
+            lines = validation_error_lines(exc, ("params",), cls.params_model())
             raise VidgenError("\n".join([f"scene '{scene_id}': invalid params", *(f"  {x}" for x in lines)])) from None
 
     @classmethod
@@ -277,11 +520,24 @@ class NarratedScene(Scene):
         d = self.beat_duration(b)
         path = self.beat_audio(b)
         if path is not None and self.audio_enabled:
-            self.add_sound(str(path))
+            add_narration(self, path)
         start = float(self.renderer.time)
-        yield d
-        self.wait_seconds(d + self.pad - (self.renderer.time - start))
+        if self.capture is not None:
+            self.capture.begin_segment(b.id, round((d + self.pad) * config.frame_rate), include_end=False)
+        self._current_beat = b.id
+        if self._actions is not None:
+            self._actions.start_beat(b.id, d, self.pad)
+        try:
+            yield d
+            self.beat_busy[b.id] = float(self.renderer.time) - start
+            self.wait_seconds(d + self.pad - (self.renderer.time - start))
+            if self._actions is not None:
+                self._actions.end_beat()
+        finally:
+            self._current_beat = None
         self.beat_log.append(BeatTiming(b.id, start, start + d, b.text))
+        if self.capture is not None:
+            self.capture.end_segment(b.id)
 
     def narrate_all(self) -> Iterator[tuple[BeatConfig, float]]:
         """Narrate every beat in order: ``for beat, d in self.narrate_all(): ...``."""
@@ -307,7 +563,10 @@ class NarratedScene(Scene):
         start = float(self.renderer.time)
         d = max((self.spec.duration or 0.0) - self.outro, 1 / config.frame_rate)
         yield 0, d
-        self.wait_seconds(d - (self.renderer.time - start))
+        # whole frames, rounded as the plan rounds them (rounding the remainder instead can lose
+        # a frame when d is a half frame: DESIGN.md §63)
+        fps = config.frame_rate
+        self.wait_seconds((round(d * fps) - round((self.renderer.time - start) * fps)) / fps)
 
     def reveal(
         self,
@@ -327,9 +586,16 @@ class NarratedScene(Scene):
             self.play_steps(d, [steps[k] for k in plan[i]], fraction=fraction, cap=cap)
 
     def finish(self) -> None:
-        """Fade out everything over :attr:`outro` seconds (no-op when ``outro`` is 0)."""
-        if self.outro > 0:
-            self.clear_all(run_time=self.outro)
+        """Fade out everything over :attr:`outro` seconds (no-op when ``outro`` is 0). When a
+        transition other than a cut leads to the next scene (DESIGN.md §49), the picture is held
+        for those frames instead: the transition takes it away. Targets the next scene carries
+        (:attr:`carry_out`, DESIGN.md §50) stay on screen."""
+        if self.outro <= 0:
+            return
+        if self.transition_out is not None and not self.transition_out.cut:
+            self.wait_seconds(math.ceil(self.outro * config.frame_rate - 1e-9) / config.frame_rate)
+            return
+        self.clear_all(run_time=self.outro, keep=self._carried_parts())
 
     def play_steps(
         self,
@@ -342,7 +608,10 @@ class NarratedScene(Scene):
 
         Each step gets a slot of ``d / len(steps)`` seconds; its animations run for
         ``min(cap, fraction * slot)`` and the rest of the slot is waited, so the whole call never
-        takes longer than ``d``. A step is an animation, a list of animations played together,
+        takes longer than ``d`` (slots end at fixed times from the call's start, so a slot that a
+        beat action lengthened is made up by the following waits; beat actions played in a wait
+        leave the later steps their run time). A step is an animation, a list of animations
+        played together,
         or a callable returning either (built lazily, after the previous steps ran); a step
         that is an empty list just waits its slot. When ``d`` is too short for one frame per
         step, consecutive steps are merged and played together.
@@ -353,27 +622,76 @@ class NarratedScene(Scene):
         groups = distribute(len(steps), min(len(steps), max(1, int(d / frame + 1e-9))))
         slot = d / len(groups)
         run_time = max(min(cap, fraction * slot), frame)
-        for group in groups:
-            start = float(self.renderer.time)
-            anims: list[Animation] = []
-            for k in group:
-                step = steps[k]
-                built = step() if callable(step) and not isinstance(step, Animation) else step
-                anims += [built] if isinstance(built, Animation) else list(built or [])
-            if anims:
-                self.play(*anims, run_time=run_time)
-            self.wait_seconds(slot - (self.renderer.time - start))
+        # a group that may animate (empty lists only wait); the time the later ones need is held
+        # back from beat actions played in the waits, so the beat still ends on time
+        animates = [any(isinstance(steps[k], Animation) or callable(steps[k]) or len(steps[k]) for k in g) for g in groups]
+        begin = float(self.renderer.time)
+        try:
+            for n, group in enumerate(groups):
+                anims: list[Animation] = []
+                for k in group:
+                    step = steps[k]
+                    built = step() if callable(step) and not isinstance(step, Animation) else step
+                    anims += [built] if isinstance(built, Animation) else list(built or [])
+                if anims:
+                    self._requested = cap if run_time < cap - 1e-9 else None
+                    try:
+                        self.play(*anims, run_time=run_time)
+                    finally:
+                        self._requested = None
+                if self._actions is not None:  # Manim plays a run time as whole frames, rounded up
+                    self._actions.held = math.ceil(run_time / frame - 1e-6) * frame * sum(animates[n + 1 :])
+                self.wait_seconds(begin + (n + 1) * slot - self.renderer.time)
+        finally:
+            if self._actions is not None:
+                self._actions.held = 0.0
+
+    def play(self, *args: Any, **kwargs: Any) -> None:
+        """Manim's ``play``, also recorded in :attr:`play_log` (scene times, beat, names)."""
+        start = float(self.renderer.time)
+        if self._carried:
+            args = (*args, *self._carried_leftovers(args))
+        super().play(*args, **kwargs)
+        frame = getattr(self.camera, "frame", None)
+        if frame is not None and frame in self.mobjects and not frame.updaters:  # added by a camera move; never drawn
+            self.remove(frame)
+        waiting = bool(args) and all(isinstance(a, Wait) for a in args)
+        self.play_log.append(
+            PlayRecord(
+                start,
+                float(self.renderer.time),
+                self._current_beat,
+                tuple(_animation_name(a) for a in args),
+                waiting,
+                self._requested,
+            )
+        )
 
     def wait_seconds(self, seconds: float) -> None:
         """Wait ``seconds`` rounded to whole frames (no-op if that is zero frames).
 
-        Unlike ``self.wait``, the number of frames written is exact, so scene lengths do not
-        drift by a frame per wait.
+        Unlike Manim's ``wait``, the number of frames written is exact, so scene lengths do not
+        drift by a frame per wait. Beat actions due meanwhile are played inside the wait.
         """
-        fps = config.frame_rate
-        frames = round(seconds * fps)
+        frames = round(seconds * config.frame_rate)
         if frames <= 0:
             return
+        if self._actions is not None and self._actions.pending:
+            self._actions.wait(frames)
+        else:
+            self._wait_frames(frames)
+
+    def wait(self, duration: float = DEFAULT_WAIT_TIME, stop_condition: Callable[[], bool] | None = None, frozen_frame: bool | None = None) -> None:
+        """Manim's ``wait``; inside a beat with actions due, they are played within it (rounded to
+        whole frames)."""
+        if stop_condition is None and self._actions is not None and self._actions.pending:
+            self._actions.wait(round(duration * config.frame_rate))
+            return
+        super().wait(duration, stop_condition, frozen_frame)
+
+    def _wait_frames(self, frames: int) -> None:
+        """Write exactly ``frames`` frames of waiting (no actions)."""
+        fps = config.frame_rate
         # Mirror Scene.should_update_mobjects: Manim writes int(t*fps) frames for a frozen wait
         # but ceil(t*fps) frames when it redraws every frame; ask for a time that gives `frames`.
         frozen = not (
@@ -381,7 +699,7 @@ class NarratedScene(Scene):
             or getattr(self, "updaters", None)
             or any(m.has_time_based_updater() for m in self.get_mobject_family_members())
         )
-        self.wait((frames + 0.5) / fps if frozen else (frames - 0.5) / fps, frozen_frame=frozen)
+        super().wait((frames + 0.5) / fps if frozen else (frames - 0.5) / fps, frozen_frame=frozen)
 
     def hold(self, until: float | None = None) -> None:
         """Wait until the scene has lasted ``until`` seconds (default: ``spec.duration``).
@@ -391,27 +709,95 @@ class NarratedScene(Scene):
         """
         target = until if until is not None else self.spec.duration
         if target is not None:
-            self.wait_seconds(target - self.renderer.time)
+            fps = config.frame_rate
+            self.wait_seconds((round(target * fps) - round(self.renderer.time * fps)) / fps)
 
     def tear_down(self) -> None:
-        """Hold silent scenes to ``spec.duration``; warn about beats that were never narrated."""
+        """Hold silent scenes to ``spec.duration`` and every scene for the planned ``hold`` of the
+        transition out of it (§49); warn about beats that were never narrated."""
         if self.spec.silent:
+            self.silent_busy = float(self.renderer.time)
             self.hold()
+        if self.transition_out is not None and self.transition_out.hold:
+            self.wait_seconds(self.transition_out.hold / config.frame_rate)
+        self._record_carry()
         narrated = {entry.beat_id for entry in self.beat_log}
         missing = [b.id for b in self.beats if b.id not in narrated]
         if missing:
             log.warning("scene '%s' never narrated beats: %s", self.spec.id, ", ".join(missing))
+        late = [f"{e.sound} at {e.time:.2f} s" for e in self.sfx_log if e.align == "start" and e.time >= self.renderer.time]
+        if late:
+            log.warning("scene '%s' lasts %.2f s; sound effects after its end play in the next scene: %s", self.spec.id, self.renderer.time, ", ".join(late))
+        if self.capture is not None:
+            self.capture.finish()
         super().tear_down()
 
     def timings(self) -> dict[str, Any]:
-        """JSON-ready timings: scene id, total duration and the beat log."""
-        return {
+        """JSON-ready timings: scene id, total duration and the beat log (and ``sfx``, the
+        :attr:`sfx_log`, when the scene has sound effects)."""
+        data: dict[str, Any] = {
             "scene": self.spec.id,
             "duration": float(self.renderer.time),
             "beats": [
                 {"id": t.beat_id, "start": t.start, "end": t.end, "text": t.text} for t in self.beat_log
             ],
         }
+        if self.sfx_log:
+            data["sfx"] = [event.to_json() for event in self.sfx_log]
+        return data
+
+    # ----- sound effects (DESIGN.md §47) -------------------------------------------------------
+
+    #: ``(sound, gain in dB)`` played at the scene's start when the video sets ``sfx: {auto:
+    #: true}`` (``chapter``: a whoosh); ``None``: nothing.
+    entrance_sfx: ClassVar[tuple[str, float] | None] = None
+
+    @property
+    def sounds(self) -> SoundLibrary:
+        """The sounds this scene can play: the built-ins and the project's ``assets/sfx``."""
+        if self._sounds is None:
+            self._sounds = SoundLibrary(self.project.root)
+        return self._sounds
+
+    def sfx(
+        self, sound: str, at: float | None = None, *, gain: float = 0.0, pan: float = 0.0, align: str = "start", **params: float
+    ) -> SfxEvent:
+        """Play the sound effect ``sound`` at scene time ``at`` (seconds; default: now, i.e. with
+        the next ``play``). ``gain`` in dB, ``pan`` -1 (left) to 1 (right), ``align="end"`` ends
+        the sound at ``at`` instead of starting it there; ``params`` (``duration``, ``pitch``,
+        ``intensity``) shape a built-in sound. Unknown sounds and bad values raise
+        :class:`VidgenError`.
+
+        Nothing is drawn and no time passes: the sound is recorded (:attr:`sfx_log`) and mixed
+        into the video's sound by the render pipeline, sample-exact, unless rendering with
+        ``--no-audio``.
+        """
+        time = float(self.renderer.time) if at is None else at
+        return self._add_sfx(sound, time, gain, pan, align, params, "sfx")
+
+    def _add_sfx(
+        self, sound: str, time: float, gain: float, pan: float, align: str, params: Mapping[str, Any], where: str
+    ) -> SfxEvent:
+        try:
+            cue = SfxCue.model_validate({"sound": sound, "at": time, "gain": gain, "pan": pan, "align": align, "params": dict(params)})
+        except ValidationError as exc:
+            lines = validation_error_lines(exc, (), SfxCue)
+            raise VidgenError("\n".join([f"scene '{self.spec.id}' {where} '{sound}': invalid", *(f"  {x}" for x in lines)])) from None
+        given = cue.params.model_dump(exclude_none=True)
+        problems = self.sounds.problems(cue.sound, given)
+        if problems:
+            raise VidgenError(f"scene '{self.spec.id}' {where}: " + "; ".join(f"{key}: {message}" for key, message in problems))
+        event = SfxEvent(round(cue.at, 6), cue.sound, cue.gain, cue.pan, cue.align, given, self._current_beat)
+        self.sfx_log.append(event)
+        return event
+
+    def auto_sfx(self, action: str) -> None:
+        """When the video sets ``sfx: {auto: true}``, play the automatic sound of the built-in
+        action ``action`` now (:data:`vidgen.sfx.AUTO_ACTION_SFX`; none for other names)."""
+        entry = AUTO_ACTION_SFX.get(action)
+        if entry is not None and self.project.config.sfx.auto:
+            sound, gain, params = entry
+            self.sfx(sound, gain=gain, **params)
 
     # ----- frame -----------------------------------------------------------------------------
 
@@ -435,33 +821,234 @@ class NarratedScene(Scene):
         """True when the frame is taller than wide (e.g. a 1080x1920 vertical variant)."""
         return config.pixel_height > config.pixel_width
 
-    #: Margins (Manim units) between the frame edge and the safe area used by built-in layouts.
-    margin_x: float = 0.6
-    margin_y: float = 0.5
+    #: Margins (Manim units) between the frame edge and the safe area (``vidgen.regions``
+    #: defaults). The layout dump and ``vidgen lint``'s ``safe_area`` rule use the same values.
+    margin_x: float = regions.MARGIN_X
+    margin_y: float = regions.MARGIN_Y
+
+    @property
+    def safe_area(self) -> regions.Region:
+        """The frame minus this scene's margins, as a :class:`~vidgen.regions.Region`, shrunk to
+        stay clear of overlays drawn with ``reserve: true`` (DESIGN.md §41)."""
+        area = regions.safe_area(self.margin_x, self.margin_y)
+        for box in getattr(self, "_reserved", ()):
+            area = avoid(area, box)
+        return area
 
     @property
     def safe_width(self) -> float:
         """Frame width minus the side margins: the width content should stay within."""
-        return self.frame_width - 2 * self.margin_x
+        return self.safe_area.width
 
     @property
     def safe_height(self) -> float:
         """Frame height minus the top/bottom margins."""
-        return self.frame_height - 2 * self.margin_y
+        return self.safe_area.height
+
+    def region(self, name: str, gap: float = regions.GAP) -> regions.Region:
+        """A named region (``header``, ``body``, ``left``...) of this scene's safe area; see
+        :func:`vidgen.regions.region`."""
+        return regions.region(name, self.safe_area, gap)
+
+    # ----- targets (per-beat actions, DESIGN.md §26) -----------------------------------------
+
+    #: The target names this type registers, as documentation patterns (``item<N>``,
+    #: ``bar:<label>``); shown by ``vidgen list-scenes``. Empty: the type has no targets.
+    target_patterns: ClassVar[tuple[str, ...]] = ()
+
+    @classmethod
+    def target_names(cls, params: Any) -> list[str]:
+        """Every target name the scene registers for these (validated) params; ``vidgen
+        validate`` checks the ``target:`` of beat actions against it. Default: none."""
+        return []
+
+    def target(
+        self,
+        names: str | Sequence[str],
+        mobject: Mobject,
+        *,
+        entrance: Callable[[], Sequence[Animation]] | None = None,
+        outline: Mobject | None = None,
+        on_fill: Sequence[tuple[Mobject, Mobject]] = (),
+    ) -> Target:
+        """Register ``mobject`` as an action target under ``names`` (the first is its main name).
+
+        Register targets before the beat whose actions use them, while the mobject has its full
+        look (normally right after building the layout: ``dim`` and ``highlight`` measure "full
+        opacity" from that moment). ``entrance`` builds the scene's own animations that bring it
+        on screen (used by the ``reveal`` action and :meth:`entrance`; default ``FadeIn``);
+        ``outline`` is what a ``highlight`` box surrounds (default: ``mobject``); ``on_fill``
+        lists ``(text, shape)`` pairs of text written on a filled shape of the target, which
+        ``dim`` and ``highlight`` recolour to stay readable on the shape (see ``Target.on_fill``).
+        """
+        names = (names,) if isinstance(names, str) else tuple(names)
+        if not names:
+            raise VidgenError(f"scene '{self.spec.id}': a target needs at least one name")
+        for name in names:
+            if not isinstance(name, str) or not TARGET_NAME.match(name):
+                raise VidgenError(f"scene '{self.spec.id}': invalid target name {name!r} (use name, name3, name1.part2 or kind:label)")
+        target = Target(names, mobject, entrance, outline, self._rest, tuple(on_fill))
+        self._targets.append(target)
+        return target
+
+    @property
+    def targets(self) -> list[Target]:
+        """The registered targets, in registration order."""
+        return list(self._targets)
+
+    def find_targets(self, pattern: str) -> list[Target]:
+        """The targets a name or ``*``/``?`` pattern selects (``title`` / ``heading`` stand for
+        each other when the scene has only one of them)."""
+        wanted = set(match_names(pattern, [n for t in self._targets for n in t.names]))
+        return [t for t in self._targets if wanted.intersection(t.names)]
+
+    def on_screen_parts(self, target: Target | Mobject) -> list[Mobject]:
+        """The largest parts of the target that are on screen (its mobject itself when it was
+        added whole; otherwise its submobjects that were, e.g. a bar and its labels)."""
+        mob = target.mobject if isinstance(target, Target) else target
+        present = {id(m) for m in self.get_mobject_family_members()}
+
+        def walk(m: Mobject) -> list[Mobject]:
+            if id(m) in present:
+                return [m]
+            return [part for sub in m.submobjects for part in walk(sub)]
+
+        return walk(mob)
+
+    def is_shown(self, target: Target | str) -> bool:
+        """Whether (a part of) the target is on screen."""
+        found = self.find_targets(target) if isinstance(target, str) else [target]
+        return any(self.on_screen_parts(t) for t in found)
+
+    def entrance(self, target: Target | str) -> list[Animation]:
+        """The animations that bring the target on screen, or ``[]`` when it already is (so a
+        target an action revealed early is not revealed twice by the scene's own steps). A copy
+        carried from the scene before into this target (``carry:``) moves into it instead."""
+        found = self.find_targets(target) if isinstance(target, str) else [target]
+        anims: list[Animation] = []
+        for t in found:
+            if not self.is_shown(t):
+                moved = self._claim_carried(t) if self._carried else None  # a carried copy moves in (§50)
+                if moved is not None:
+                    anims.append(moved)
+                else:
+                    anims += list(t.entrance()) if t.entrance is not None else [FadeIn(t.mobject)]
+        return anims
+
+    def _apply_now(self, animations: Sequence[Animation]) -> None:
+        """Jump ``animations`` to their end state without writing frames."""
+        self.add_mobjects_from_animations(list(animations))
+        for anim in animations:
+            anim._setup_scene(self)
+            anim.begin()
+        for anim in animations:
+            anim.finish()
+            anim.clean_up_from_scene(self)
 
     # ----- drawing ---------------------------------------------------------------------------
 
-    def text(self, s: str, size: str | float = "body", color: Any = "text", weight: str = NORMAL, **kwargs: Any) -> Text:
-        """A ``Text`` in the theme font; ``size``/``color`` accept theme tokens or literal values."""
-        return helpers.styled(Text, self.theme, s, size, color, weight, **kwargs)
+    def text(
+        self, s: str, size: str | float = "body", color: Any = "text", weight: str = NORMAL, *, role: str | None = None, **kwargs: Any
+    ) -> Text:
+        """A ``Text`` in the theme font; ``size``/``color`` accept theme tokens or literal values,
+        ``role`` picks the theme's family for a font role (``heading``, ``quote``, ``code``...)."""
+        return helpers.styled(Text, self.theme, s, size, color, weight, role=role, **kwargs)
 
     def markup(
-        self, s: str, size: str | float = "body", color: Any = "text", weight: str = NORMAL, **kwargs: Any
+        self, s: str, size: str | float = "body", color: Any = "text", weight: str = NORMAL, *, role: str | None = None, **kwargs: Any
     ) -> MarkupText:
-        """A Pango ``MarkupText`` in the theme font (``<b>``, ``<sup>``, ``<span>``...)."""
-        return helpers.styled(MarkupText, self.theme, s, size, color, weight, **kwargs)
+        """A Pango ``MarkupText`` in the theme font (``<b>``, ``<sup>``, ``<span>``...); ``role`` as
+        for :meth:`text`."""
+        return helpers.styled(MarkupText, self.theme, s, size, color, weight, role=role, **kwargs)
 
-    def clear_all(self, run_time: float = 0.6) -> None:
-        """Fade out every mobject on screen."""
-        if self.mobjects:
-            self.play(*[FadeOut(m) for m in self.mobjects], run_time=run_time)
+    def clear_all(self, run_time: float = 0.6, keep: Sequence[Mobject] = ()) -> None:
+        """Fade out every mobject on screen (vector mobjects without copying them: see
+        :class:`vidgen.helpers.Fade`), except ``keep`` (and what they contain): of a group
+        holding one of them, only the other parts fade."""
+        kept = {id(m) for part in keep for m in part.get_family()}
+
+        def fading(m: Mobject) -> list[Mobject]:
+            if id(m) in kept:
+                return []
+            if not kept.intersection(id(x) for x in m.get_family()):
+                return [m]
+            return [p for sub in m.submobjects for p in fading(sub)]
+
+        parts = [p for m in self.mobjects for p in fading(m)]
+        if parts:
+            self.play(*[helpers.fade_out(m) for m in parts], run_time=run_time)
+
+    # ----- continuity: carried objects (DESIGN.md §50) ----------------------------------------
+
+    def _carried_parts(self) -> list[Mobject]:
+        """The on-screen parts of the targets the next scene carries out of this one."""
+        return [part for name in self.carry_out for t in self.find_targets(name) for part in self.on_screen_parts(t)]
+
+    def _record_carry(self) -> None:
+        """Record the look of the targets the next scene carries (:attr:`carry_state`)."""
+        if not self.carry_out:
+            return
+        state: dict[str, list[dict[str, Any]]] = {}
+        for name in self.carry_out:
+            found = self.find_targets(name)
+            parts = [part for t in found for part in self.on_screen_parts(t)]
+            shapes, skipped = carry.parts_state(parts)
+            if not found:
+                log.warning("scene '%s' has no target '%s' for the next scene to carry", self.spec.id, name)
+            elif not shapes:
+                log.warning("scene '%s': target '%s' is not on screen at the end; the next scene carries nothing of it", self.spec.id, name)
+            elif skipped:
+                log.warning("scene '%s': %d picture part(s) of '%s' cannot be carried (only vector shapes)", self.spec.id, skipped, name)
+            state[name] = shapes
+        self.carry_state = state
+
+    def setup(self) -> None:
+        """Manim's setup, then the objects carried from the scene before (:attr:`carried_in`),
+        drawn where they ended there from the first frame on (DESIGN.md §50)."""
+        super().setup()
+        if not self.carried_in or not self.spec.carry:
+            return
+        for entry in self.spec.carry:
+            shapes = self.carried_in.get(entry.source) or []
+            if not shapes:
+                log.warning("scene '%s': nothing of '%s' to carry from the scene before", self.spec.id, entry.source)
+                continue
+            copy = carry.rebuild(shapes)
+            self.add(copy)
+            self._carried[entry.dest] = copy
+
+    def carry_in(self, name: str) -> Mobject | None:
+        """The copy of an object carried from the scene before (``carry:``, by its destination
+        name, else its source name), on screen since the scene's first frame, or ``None``. The
+        scene then owns it: move or transform it, or fade it out; it is no longer moved into a
+        target automatically."""
+        if name not in self._carried:
+            for entry in self.spec.carry:
+                if entry.source == name and entry.dest in self._carried:
+                    name = entry.dest
+                    break
+        return self._carried.pop(name, None)
+
+    def _claim_carried(self, target: Target) -> Animation | None:
+        """The move of a carried copy into ``target`` when one waits for it."""
+        for dest in list(self._carried):
+            if target in self.find_targets(dest):
+                return carry.carry_move(self._carried.pop(dest), target.mobject)
+        return None
+
+    def _carried_leftovers(self, animations: Sequence[Any]) -> list[Animation]:
+        """Fade-outs, played with ``animations``, of carried copies whose destination is not in
+        the scene, or is brought on screen by ``animations`` some other way than its entrance
+        (the copy then cross-fades with it)."""
+        if not self._carried or all(isinstance(a, Wait) for a in animations):
+            return []
+        families = {id(m) for a in animations if getattr(a, "mobject", None) is not None for m in a.mobject.get_family()}
+        out: list[Animation] = []
+        for dest in list(self._carried):
+            found = self.find_targets(dest)
+            if not found:
+                log.warning("scene '%s' has no target '%s' to move the carried object into; it fades out", self.spec.id, dest)
+            elif not any(id(t.mobject) in families for t in found):
+                continue
+            out.append(helpers.fade_out(self._carried.pop(dest)))
+        return out

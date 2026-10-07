@@ -35,7 +35,7 @@ class KphiLoss(NarratedScene):
         v_best = min(range(3), key=lambda i: p.validation[i])
         tf, tb, tv = loss_panel("Training loss", p.training, p.models, p.colors, -3.4, t_best)
         vf, vb, vv = loss_panel("Validation loss", p.validation, p.models, p.colors, 3.6, v_best)
-        note = T(p.note, 18, "dim").to_edge(DOWN, buff=0.12)
+        note = T(p.note, 22, "dim").to_edge(DOWN, buff=self.margin_y)  # inside the safe area
 
         with self.narrate(0):
             self.play(FadeIn(tf), FadeIn(note), run_time=0.8)

@@ -28,7 +28,7 @@ def set_context(project: Project, theme: Theme | None = None) -> Theme:
     """
     global _project, _theme
     _project = project
-    _theme = theme if theme is not None else Theme(project.config.theme)
+    _theme = theme if theme is not None else Theme.for_format(project.config.theme, project.config.format)
     return _theme
 
 

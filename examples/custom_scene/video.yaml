@@ -1,7 +1,9 @@
 # A small project that extends vidgen from its own folder: built-in scenes plus one custom scene
 # type (`gear_pair`, extensions/gears.py, with a nested Params model and a helper module
-# extensions/geometry.py), a vertical variant and a post_render hook (extensions/report.py).
+# extensions/geometry.py), a project icon (assets/icons/bicycle.svg, tagged in
+# assets/icons/icons.json), a vertical variant and a post_render hook (extensions/report.py).
 #   vidgen validate examples/custom_scene
+#   vidgen list-icons examples/custom_scene --search bike --sheet build/icons.png
 #   vidgen list-scenes examples/custom_scene                         # shows gear_pair + its params
 #   vidgen render examples/custom_scene --preview                    # 16:9, word-count timing
 #   vidgen render examples/custom_scene --preview --variant vertical # 9:16

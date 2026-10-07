@@ -35,7 +35,9 @@ The text uses the Inter font.
 | `tts_elevenlabs.py` | `vidgen tts` (cache by hash, retries, `--dry-run`) |
 
 The animations are unchanged: same layout, colors, text, animation order and `run_time`
-fractions of the beat length `d`. Each scene type declares `beat_count`, so `vidgen validate`
+fractions of the beat length `d` (apart from the small legibility fixes of the Step 22 review,
+listed at the end of [REGRESSION.md](REGRESSION.md), which make `vidgen lint examples/kphi3`
+clean). Each scene type declares `beat_count`, so `vidgen validate`
 reports a missing or extra beat before rendering.
 
 The schematic scenes (`kphi_equivalence`, and `kphi_method` except its closing line) keep

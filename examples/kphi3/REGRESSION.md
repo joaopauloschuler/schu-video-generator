@@ -83,3 +83,22 @@ vidgen's PCM concat avoids (DESIGN §5.2, Step 4). vidgen's narration is in sync
   original truncated. This is deliberate engine behaviour, not special-cased for this video.
 - Audio sync is better than the original (see above); the audio is AAC 192 kbps 48 kHz in both.
 - Subtitles (`kphi3_video.srt`) are new; the original had none.
+
+## Changes after the port (Step 22 review)
+
+The measurements above are of the Step 6 port. The Step 22 review made the example pass
+`vidgen lint` (0 findings) with small visual changes; the frames are no longer bit-identical to
+the original:
+
+- `dim` is `#838B98` (vidgen's default) instead of the original `#6B7280`, which is 3.9:1 on the
+  background, below WCAG AA (4.5:1) for every dim label: dim text is slightly lighter.
+- `loss`: axis ticks and model names 16 → 20 pt, the footnote 18 → 22 pt and inside the safe
+  area, both panels 0.2 units higher to make room.
+- `setup`: "Attention"/"MLP" in the decoder boxes and the dataset subtitle 20 → 22 pt.
+- `equivalence`: the token column 0.1 units further right and its label kept out of the left
+  margin.
+- `method` beat 5: when the diagram zooms out to 0.55, its column labels keep their 22 pt size
+  (they were scaled to 12 pt, the only lint error).
+- Kept on purpose, with a `lint_ignore` and a comment in `video.yaml`: four `dead_air` holds
+  (the original's pacing: a diagram stays still while the narrator explains it). The rotated
+  `H = length` label needed one too until lint measured rotated text across its line (Step 37).

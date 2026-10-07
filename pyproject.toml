@@ -1,34 +1,40 @@
 [build-system]
-requires = ["setuptools>=64"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "vidgen"
-version = "0.1.0"
+version = "0.2.0"
 description = "Configurable generator for narrated animated videos (Manim + ElevenLabs + ffmpeg)"
-license = { file = "LICENSE" }
+license = "MIT"
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 requires-python = ">=3.10"
 dependencies = [
     "manim>=0.19",
-    "pydantic>=2",
+    "pydantic>=2.7",
     "pyyaml",
     "av",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+pdf = ["fpdf2>=2.7.9"]
+stt = ["faster-whisper>=1.0"]
+mcp = ["mcp>=1.19"]
+dev = ["pytest", "jsonschema>=4.18", "pytest-xdist", "fpdf2>=2.7.9", "pypdf>=4", "mcp>=1.19"]
 
 [project.scripts]
 vidgen = "vidgen.cli:main"
+vidgen-mcp = "vidgen.mcp_server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-vidgen = ["templates/**/*"]
+vidgen = ["templates/**/*", "data/fonts/**/*", "data/icons/**/*", "data/geo/*", "data/slides/*", "data/guide/*", "data/gallery/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
     "render: invokes Manim rendering (slow; deselect with -m \"not render\")",
+    "slow: the slowest render tests, several seconds each (quick run: -m \"not slow\")",
 ]
