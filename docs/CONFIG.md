@@ -693,7 +693,7 @@ each as WAV): seamless loops, generated in about a second when the video is join
 | key | default | |
 |---|---|---|
 | `source` | required | `calm`, `pulse`, `bright`, or an audio file under the project (`assets/music/x.mp3`; wav, flac, ogg, mp3, m4a, ...) |
-| `volume` | `0` | dB, -60 to 12; at 0 the music is −30 LUFS integrated (beds are made at that level, files are measured and matched to it): about 6 dB under rendered narration in its pauses |
+| `volume` | `0` | dB, -60 to 12; at 0 the music is −28 LUFS integrated (beds are made at that level, files are measured and matched to it): about 6.5 dB under ElevenLabs narration (≈ −21.4 LUFS) in its pauses |
 | `start` | `0` | seconds into the source where it starts; a loop restarts there |
 | `loop` | `true` | repeat the source as long as the cue lasts; `false`: it plays once and fades out at its end |
 | `crossfade` | `2.0` | seconds over which a file's end cross-fades (equal power) into its start at every repeat; beds loop seamlessly |
@@ -709,7 +709,7 @@ whole beat when it has no audio yet). Sound effects never duck it.
 
 | key | default | |
 |---|---|---|
-| `depth` | `12` | dB the music drops under speech (0: no ducking); with the defaults the music is ~18 dB under the voice while it speaks |
+| `depth` | `12` | dB the music drops under speech (0: no ducking); with the defaults the music is ~18.5 dB under the voice while it speaks |
 | `attack` | `0.4` | seconds the music takes to go down; it is fully down when the speech starts (the mix looks ahead) |
 | `release` | `1.0` | seconds it takes to come back after the speech |
 | `hold` | `1.5` | pauses shorter than this stay ducked (no pumping between beats); longer pauses, silent scenes and the gaps between narrated scenes bring the music up |
@@ -736,19 +736,20 @@ audio: {normalize: auto, target_lufs: -16, true_peak: -1.5}   # the defaults
 
 | key | default | |
 |---|---|---|
-| `normalize` | `auto` | scale the final mix to `target_lufs`: `true`, `false`, or `auto` = only when the video has music (a narration-only video keeps the exact level and sound it always had). Never while no beat has its narration MP3 yet (a preview timed from word counts would lift the music to the target on its own) |
+| `normalize` | `auto` | scale the final mix to `target_lufs`: `true`, `false`, or `auto` = only when the video has music (a narration-only video keeps the narration's own level, that of its MP3s). Never while no beat has its narration MP3 yet (a preview timed from word counts would lift the music to the target on its own) |
 | `target_lufs` | `-16` | integrated loudness (EBU R128 / ITU-R BS.1770-4, gated) of a normalised mix: −16 for web and social platforms (−14 for louder streaming targets), −23 / −24 for broadcast |
 | `true_peak` | `-1.5` | dBTP ceiling of a mixed track: a look-ahead limiter (10 ms, smooth) keeps the 4x-oversampled peaks under it, so the louder mix never clips |
 
 When the mix is written (music, or `normalize: true`) vidgen measures the sum, applies one gain to
-reach the target, then the limiter; everything is deterministic numpy. Narration alone renders
-at about −24 LUFS, so reaching −16 lifts it ~8 dB and the limiter shaves speech peaks by a few
-dB. Without music and with `normalize: auto` / `false` the narration and effects are joined as
+reach the target, then the limiter; everything is deterministic numpy. Narration plays at its
+MP3s' level (a mono MP3 at full level on both channels; ElevenLabs voices measure about −21.4
+LUFS), so reaching −16 lifts it ~5 dB and the limiter shaves speech peaks by a few dB. Without music and with `normalize: auto` / `false` the narration and effects are joined as
 before (FFmpeg sums them), and the loudness is only measured. `vidgen render` prints the result
-(`loudness: -16.0 LUFS integrated, true peak -1.6 dBTP (normalised to -16, +8.2 dB; music:
+(`loudness: -16.0 LUFS integrated, true peak -1.9 dBTP (normalised to -16, +5.4 dB; music:
 calm)`), and `timings.json` / `render --json` carry `mix`: `{mixed, normalized, target_lufs,
 true_peak_limit, gain_db, integrated_lufs, true_peak_dbtp, limited_db, music}` (measured on the
-mix before the AAC encode, which may move the peak by ~0.1 dB).
+mix before the AAC encode; the limiter aims 0.4 dB under `true_peak` because the encode can
+raise the peak by ~0.2 dB, so the MP4 stays under it).
 
 ### `vidgen list-music`
 
@@ -842,7 +843,8 @@ with no `direction` follows each variant's frame: left in the 16:9 video, up in 
 - **Encoding**: with any crossfade, push or wipe the join blends the scenes with FFmpeg (`xfade`:
   `fade`, `slide<direction>`, `wipe<direction>` / `smooth<direction>`) and encodes the video once
   (H.264, CRF 18, visually lossless next to the scenes' own encoding) instead of copying the
-  scenes' streams, which takes about as long as playing the video; a video with only cuts and
+  scenes' streams (the gallery's 3:49 preview: ~40 s on 2 CPUs, most of it the H.264 encode;
+  much less than rendering its scenes); a video with only cuts and
   colour fades is joined as before. Colour fades are drawn inside the scenes' renders, so
   storyboards and stills show them; crossfades, pushes and wipes exist only in the joined video
   (`vidgen render --scene ID` alone shows the outgoing scene held still).
@@ -2761,8 +2763,9 @@ the readable size. They go away from what they point at, inside the safe area (w
 overlays with `reserve: true`), clear of the text on screen, of other callouts, of the scene's
 other small parts (a node, a bar) and of the overlays; `side` forces a direction. A callout is
 drawn over everything else of the scene. While the camera is zoomed in (a `zoom` earlier in the
-beat, a `screenshot` focus) it is built for the zoomed view, so its label reads at the normal
-size; one drawn before a zoom grows with the scene. `name: peak` makes it a target of later
+beat or due at the same moment — the callout then appears once the camera is in — a `screenshot`
+focus) it is built for the zoomed view, so its label reads at the normal size; one drawn before
+a zoom grows with the scene. `name: peak` makes it a target of later
 actions (`dim: peak`, `highlight: peak`; its label stays readable). Validation: a callout needs a
 target or an `area`, a `magnifier` a target and an area; `kind: label` needs a `label`; `curved`
 is for arrows, `zoom` for magnifiers; `keep` and `until` exclude each other; a `name` must be new
@@ -2843,7 +2846,7 @@ Keys every overlay entry has (any other key is an option of its type):
 | `exclude` | `[]` | scenes it is not drawn on |
 | `from` | the video's start | where it starts: seconds in the video, or a scene id (that scene's start) |
 | `to` | the video's end | where it ends: seconds in the video, or a scene id (that scene's end) |
-| `reserve` | the type's: `false`; `captions` at the top or bottom `true` | keep the scenes' layouts clear of it: on every scene it is drawn on, the safe area (docs/EXTENDING.md "Layout regions") shrinks to leave its box free (plus 0.2 units), so built-in scenes lay out around it (the layout dump's `safe_area` too). Off by default for most types: a lower third shows for a few seconds over content laid out for the whole frame, and a watermark sits in the margin. The safe area is cut on every scene the overlay shows on at all, for the whole scene (a layout is built once): a lower third shown 4 s of a scene shrinks it all along (turn it off there with the scene's `overlays: {ID: {reserve: false}}`). An overlay hidden on a whole scene (the `chapter_indicator` on chapter cards, or outside its `from` / `to`) reserves nothing there |
+| `reserve` | the type's: `false`; `captions` at the top or bottom `true` | keep the scenes' layouts clear of it: on every scene it is drawn on, the safe area (docs/EXTENDING.md "Layout regions") shrinks to leave its box free (plus 0.2 units), so built-in scenes lay out around it (the layout dump's `safe_area` too). Off by default for most types: a lower third shows for a few seconds over content laid out for the whole frame, and a watermark sits in the margin. The safe area is cut on every scene the overlay shows on at all, for the whole scene (a layout is built once): a lower third shown 4 s of a scene shrinks it all along (turn it off there with the scene's `overlays: {ID: {reserve: false}}`). An overlay hidden on a whole scene (the `chapter_indicator` on chapter cards, or outside its `from` / `to`) reserves nothing there. Several reserving overlays on one scene add up (captions + a lower third + a corner indicator leave a picture or clip noticeably smaller): reserve only what the scene must avoid all along |
 
 **On a scene** (`overlays:` of the scene): `false` turns every overlay off there; a mapping
 turns single ones off (`{draft: false}`) or overrides their options and `reserve` for that scene
@@ -2885,7 +2888,9 @@ and out after `duration` seconds. It belongs to a scene (`scene`, default the fi
 entry is drawn on) and starts `at` seconds into it or at one of its beats; it goes by the end of
 that scene unless `across_cuts`. It is placed in the safe area (in 9:16 raised by 12 % of the
 safe height: phone apps put their controls over the bottom), at least at the readable text size,
-and slides in from the side it is aligned to (from below / above when centred).
+and slides in from the side it is aligned to (from below / above when centred). It makes way for
+the scene's other overlays that reserve room: where it would meet bottom `captions` (or another
+overlay with `reserve: true`) it moves above them (with the 0.2 gap), in 16:9 and 9:16 alike.
 
 | param | default | |
 |---|---|---|
@@ -3005,7 +3010,8 @@ phone apps put their controls over the bottom), `top` or `center`, centred, at l
 readable text size, the text no wider than `max_width`. At the top or bottom it **reserves** its
 band (`max_lines` lines high) by default, so the scenes lay out above / below it; centred it
 does not (lint's `overlay_overlap` reports scene text under it; or set `reserve: false` and
-check with lint). Scenes without narration reserve nothing. The plate's opacity is raised when
+check with lint). Scenes without narration reserve nothing. A `lower_third` on the same scene
+moves above bottom captions instead of under them. The plate's opacity is raised when
 needed so the text keeps lint's contrast ratio (`lint.rules.contrast.min_ratio`) over anything
 behind it; a highlight that would not read on the plate is replaced by another theme accent (with
 a warning).

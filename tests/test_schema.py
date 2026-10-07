@@ -175,6 +175,7 @@ def test_valid_configs_are_accepted_by_both(case: str, tmp_path: Path, capsys: p
     assert errors(schema_for(tmp_path, data, capsys), data) == []
 
 
+@pytest.mark.slow
 def test_theme_tokens_come_from_the_project(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     data = VALID["project theme color"]
     doc = schema_for(tmp_path, data, capsys)
@@ -185,6 +186,7 @@ def test_theme_tokens_come_from_the_project(tmp_path: Path, capsys: pytest.Captu
     assert errors(schema.config_schema([registry.get("text_card")], [Theme()]), data)
 
 
+@pytest.mark.slow
 def test_extension_theme_defaults_and_beat_counts(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     write_files(
         tmp_path,
@@ -301,6 +303,7 @@ def test_invalid_config_still_gives_a_schema(tmp_path: Path, capsys: pytest.Capt
     assert any("is not valid" in w["message"] for w in doc["warnings"])
 
 
+@pytest.mark.slow
 def test_unreadable_config_falls_back_to_defaults(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     (tmp_path / "video.yaml").write_text("title: [unclosed\n", encoding="utf-8")
     doc = cli_schema([str(tmp_path)], capsys)
@@ -312,6 +315,7 @@ def test_missing_project_is_an_error(tmp_path: Path, capsys: pytest.CaptureFixtu
     assert "project not found" in capsys.readouterr().err
 
 
+@pytest.mark.slow
 def test_registry_is_restored(capsys: pytest.CaptureFixture[str]) -> None:
     before = registry.snapshot()
     cli_schema([str(ROOT / "examples" / "kphi3")], capsys)

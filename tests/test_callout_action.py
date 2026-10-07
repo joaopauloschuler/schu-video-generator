@@ -225,6 +225,18 @@ def test_labels_keep_clear_of_text_and_a_zoomed_camera_gets_smaller_callouts(mak
 
 
 @pytest.mark.render
+def test_a_callout_due_with_a_zoom_is_built_for_the_zoomed_view(make_project, media: Path) -> None:
+    acts = beats(
+        [{"callout": "item2", "label": "Plain"}],
+        [{"callout": "item3", "label": "Zoomed"}, {"zoom": "item3"}],   # same frame, written first
+    )
+    project = load(make_project, [{"id": "z", "type": "bullets", "params": {**BULLETS, "reveal": "all"}, "beats": acts}])
+    scene = render(project, "z", media, size=(320, 180))
+    plain, zoomed = made(scene, 0), made(scene, 1)
+    assert zoomed.tag.height < 0.8 * plain.tag.height   # built after the camera moved in
+
+
+@pytest.mark.render
 def test_magnifier_on_an_image_target_and_on_other_targets(make_project, media: Path) -> None:
     acts = beats([{"callout": "image", "kind": "magnifier", "area": [0.1, 0.1, 0.25, 0.25], "label": "Detail"}])
     project = load(make_project, [{"id": "i", "type": "image", "params": {"path": "assets/app.png"}, "beats": acts},

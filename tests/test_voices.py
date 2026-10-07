@@ -241,6 +241,7 @@ def test_srt_names_speakers_when_asked(make_project) -> None:
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_render_writes_speaker_names_into_the_srt(make_project) -> None:
     from vidgen.render.pipeline import render_project
 

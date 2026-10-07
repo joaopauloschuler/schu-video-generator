@@ -608,7 +608,7 @@ def cmd_list_music(args: argparse.Namespace) -> CommandResult:
             level = f"{e['loudness']} LUFS" if e["loudness"] is not None else "silent"
             print(f"{e['name']}  project file  {e['duration']:.1f} s, {level} (played at {music.MUSIC_LEVEL:g} LUFS)")
     print(
-        f"level at volume 0: {music.MUSIC_LEVEL:g} LUFS integrated (about 7 dB under narration), ducked "
+        f"level at volume 0: {music.MUSIC_LEVEL:g} LUFS integrated (about 6.5 dB under narration), ducked "
         "12 dB under speech by default; a file anywhere under the project works as a source too"
     )
     if preview_dir is not None:

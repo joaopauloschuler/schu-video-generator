@@ -66,11 +66,15 @@ class VideoInfo:
 
 
 def probe(path: Path) -> VideoInfo:
-    """Read the resolution, frame rate and video-stream duration of ``path``."""
+    """Read the resolution, frame rate and video-stream duration of ``path``.
+
+    The rate is the stream's nominal one (``r_frame_rate``): Manim joins a scene from partial
+    movies whose timestamps make the *average* rate drift (15.0003 for 15 fps), which put the
+    duration a fraction of a millisecond off ``frames / fps`` per scene."""
     try:
         with av.open(str(path)) as container:
             video = container.streams.video[0]
-            fps = Fraction(video.average_rate or video.guessed_rate or 0)
+            fps = Fraction(video.guessed_rate or video.average_rate or 0)
             if video.frames and fps:
                 duration = float(video.frames / fps)
             elif video.duration is not None and video.time_base is not None:

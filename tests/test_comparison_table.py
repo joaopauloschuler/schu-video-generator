@@ -261,6 +261,7 @@ def test_table_fits_and_aligns_numbers_right(make_project, media: Path) -> None:
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_table_wraps_text_columns_in_portrait(make_project, media: Path) -> None:
     long = {"header": ["Name", "Notes"], "rows": [["a", "a fairly long note that has to wrap in a narrow frame"], ["b", "short"]]}
     project = load(make_project, [{"id": "s", "type": "table", "params": long, "beats": three_beats()[:1]}])

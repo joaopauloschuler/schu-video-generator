@@ -196,7 +196,7 @@ def test_no_drift_beats_start_where_timings_say(main_project: Path) -> None:
         assert np.abs(tail).max() < 0.01, beat["id"]
     quiet = timings["scenes"][1]
     segment = samples[int(quiet["start"] * rate) : int((quiet["start"] + quiet["duration"]) * rate)]
-    assert np.abs(segment).max() < 0.001
+    assert np.abs(segment).max() < 0.002   # silent but for AAC spill of the beats around it (< -54 dBFS)
 
 
 @pytest.mark.render

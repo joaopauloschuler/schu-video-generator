@@ -50,8 +50,9 @@ FRAME = RATE // 100
 SCENE_RAMP = 0.75
 #: Look-ahead / smoothing of the true-peak limiter (samples).
 LIMITER_WINDOW = RATE // 100
-#: The limiter aims this far (dB) under ``audio.true_peak`` (room for the interpolation).
-LIMITER_MARGIN_DB = 0.1
+#: The limiter aims this far (dB) under ``audio.true_peak``: room for the interpolation and for
+#: the AAC encode, which moved the gallery's true peak up by 0.2 dB (Step 48).
+LIMITER_MARGIN_DB = 0.4
 
 
 # ----- tracks ----------------------------------------------------------------------------------------

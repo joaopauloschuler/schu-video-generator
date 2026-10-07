@@ -360,6 +360,7 @@ def _plan(root: Path) -> VideoPlan:
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_rendered_push_wipe_timings(rendered: tuple[Path, dict[str, Any]]) -> None:
     root, _ = rendered
     plan = _plan(root)
@@ -396,6 +397,7 @@ def _drawn(region: np.ndarray, background: np.ndarray, threshold: int = 40) -> n
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_overlays_stay_put_through_a_push(rendered: tuple[Path, dict[str, Any]]) -> None:
     root, _ = rendered
     plan = _plan(root)
@@ -424,6 +426,7 @@ def test_overlays_stay_put_through_a_push(rendered: tuple[Path, dict[str, Any]])
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_captions_appear_once_through_a_wipe(rendered: tuple[Path, dict[str, Any]]) -> None:
     root, _ = rendered
     plan = _plan(root)
@@ -438,6 +441,7 @@ def test_captions_appear_once_through_a_wipe(rendered: tuple[Path, dict[str, Any
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_carried_title_is_a_match_cut_then_moves(rendered: tuple[Path, dict[str, Any]]) -> None:
     root, _ = rendered
     plan = _plan(root)
@@ -460,6 +464,7 @@ def test_carried_title_is_a_match_cut_then_moves(rendered: tuple[Path, dict[str,
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_render_scene_alone_renders_the_scene_before_when_needed(rendered: tuple[Path, dict[str, Any]], tmp_path: Path) -> None:
     root, _ = rendered
     copy = tmp_path / "proj"

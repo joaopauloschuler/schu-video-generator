@@ -4425,3 +4425,135 @@ How to test: `/home/claude/venv/bin/python -m pytest -q` (1904 passed, 1 skipped
 tests/test_push_wipe_carry.py`. Manual: `vidgen render examples/gallery --preview --jobs 4`,
 then a frame from the push: `ffmpeg -ss 20.1 -i examples/gallery/gallery_preview.mp4 -frames:v 1
 push.png`; `vidgen storyboard examples/gallery --scene structure --scene tradeoff --per-beat 3`.
+
+## Step 48 — Review 3
+Independent end-to-end review of Steps 38–47 (overlays, chapters, captions, callouts,
+pronunciation, voices, SFX, music / mix / loudness, transitions, carry): preview renders through
+the full join path, then measured — not only looked at — with scratch scripts (A/V stream
+lengths, cross-correlation of every beat's MP3 and every SFX against the final AAC track, plan
+vs rendered starts, SRT vs beats vs chapters, our loudness vs FFmpeg `ebur128`, contact sheets
+of the frames around every transition / carry, read as images). Because the gallery has no
+narration, a scratch copy got kphi3's real MP3s round-robin on its 54 beats plus `captions`
+(16:9 and 9:16), so narration, ducking, normalisation, captions and transitions met in one video.
+
+End-to-end status (preview; `vidgen lint` with `--jobs 2`)
+| example / variant | A/V | lint |
+|---|---|---|
+| gallery (default, vertical) | video = audio = timings (after fix 3); SFX at 0.00 ms; −39.7 LUFS (no MP3s: not normalised, as designed) | 0 findings each |
+| gallery voiced copy + captions (16:9, 9:16) | 456.67 s both streams; 54 beats within 1.0 ms of their planned start; whoosh / chime / pop at 0.00 ms; plan = render for all 19 scenes; 58 SRT cues inside their beats, none overlapping; chapters start at their scenes; −16.03 LUFS reported vs −16.1 FFmpeg | only `narration_speed` / `dead_air` (mismatched audio, expected) + 2 `min_font` in 16:9 (see 7) |
+| minimal (default, social, subtitled) | equal lengths, plan = render, SRT consistent | 0 findings (also `vertical`) |
+| custom_scene (+ vertical) | equal, plan = render | 0 findings |
+| kphi3 | 231.464 s both; 27 beats within 1.0 ms; −21.4 LUFS (was −24.4), true peak −2.2 dBTP | 0 findings (4 commented `lint_ignore`s, as before) |
+
+Findings and fixes
+1. **Narration 3 dB quieter than its MP3s** (Step 45's known issue). Root cause, measured: Manim's
+   `add_sound` converts an MP3 with PyAV (`convert_audio`), whose encoder defaults to a stereo
+   layout, so libswresample upmixes mono with its −3.01 dB centre matrix (kphi3 `s1_b1`: −24.42
+   dB RMS in the MP3, −27.43 per channel in the WAV). A bug, not a choice: clip sound mixed in
+   the same scene already came through pydub at full level, and SFX are full-level dual mono.
+   Fix: `scene.add_narration` decodes the MP3 (`sfx.decode_audio`) and hands Manim a 48 kHz
+   stereo WAV (`sfx.stereo`, full level both channels). kphi3 renders at −21.4 LUFS integrated
+   (its MP3s' level), true peak −2.2 dBTP (no clipping: MP3 peaks are −4 to −8 dBFS). Recalibrated:
+   `MUSIC_LEVEL` −30 → **−28 LUFS** (Step 45 had planned −28 and lowered it only to make up for
+   this): music ~6.5 dB under the voice in pauses, ~18.5 dB ducked; the SFX level (−27 LUFS
+   loudest 400 ms) is now really ~7 dB under the voice as Step 44 stated (it was ~4). Docs:
+   CONFIG.md SFX `gain` row unchanged, music `volume` / `depth` rows, loudness paragraph (a
+   narration-only video lifted ~5 dB to −16, not ~8), `list-music` text, DESIGN §47 / §48 / §51.
+2. **True peak over the ceiling after the AAC encode**: −1.6 dBTP on the WAV became −1.4 in the
+   MP4 (ceiling −1.5). `mix.LIMITER_MARGIN_DB` 0.1 → 0.4 (voiced gallery now −1.9 on the WAV,
+   −1.7 in the MP4 by FFmpeg; −16.0 / −16.1 LUFS).
+3. **Scene lengths from the average frame rate**: Manim's joined partial movies have timestamps
+   whose average rate is 15.0003 for 15 fps, so `ffmpeg.probe` gave 21.19967 s for 318 frames:
+   the join's starts drifted from the plan (gallery: 1–3 ms from `clip` on; chapter "Code"
+   started 2.6 ms off its scene) and each padded WAV was a few samples short of its video.
+   `probe` now uses the nominal rate (`guessed_rate`); re-joined gallery: plan = render for
+   every scene, video = audio = 228.533 s.
+4. **Lower third under bottom captions** (Step 40 gap; also 16:9 with `align: bottom`):
+   `Overlay.yields` / `clear_of` / `clear_area` + `overlays.build_overlays` (used by
+   `OverlayLayer`): yielding overlays are built after the others and know the boxes of those
+   that reserve room; `lower_third` yields and moves above such a box only when it would come
+   within the reserve gap (verified in the voiced gallery's `clip` in 9:16 and 16:9; the
+   unvoiced gallery is unchanged).
+5. **Callout due with a zoom** (Step 41 gap: built for the camera before the zoom, then scaled
+   with the scene): `Action.after_camera` (`callout` sets it) — in a frame where a camera move
+   is due, such actions go last in a batch of their own, so the callout is built for the zoomed
+   view. Test fails without the flag.
+6. **Karaoke pop crowding**: in 9:16 the popped word left ~10 % of the space to its neighbour
+   ("are typeset" read as one word). `captions.POP_ROOM` 0.45 → 0.25 of a space per side.
+7. **`reserve` per whole scene** (Steps 38–40 gaps): kept (a scene lays out once; a time-ranged
+   reserve would re-lay out scenes mid-way), documented: reserving overlays add up — in the
+   voiced 16:9 gallery, captions + lower third + chapter indicator + watermark shrink `clip` and
+   push a stat context line / a screenshot's URL bar under the readable size (lint `min_font`
+   reports it, as it should). CONFIG.md `reserve` row says to reserve only what a scene must
+   avoid all along.
+8. Checked, no change: SRT and captions start a beat's first cue at the beat's start, not at the
+   speech onset (~50–90 ms later; by design in `cues.caption_cues`); crossfades show one caption
+   / watermark / progress bar; push and wipe keep overlays fixed (scene content slides under the
+   fixed chapter indicator during a vertical push — inherent); colour fades keep overlays on top
+   and the indicator fades before cards; both carries hold across the cut and move (title →
+   heading cross-fade, icon glide); speaker tag + colour on the guest's caption; pronunciation
+   (`LaTeX` → "lah-tek") keeps the written word highlighted in karaoke; `list-sfx` / `list-music`
+   JSON envelopes and error documents match the other `list-*` commands.
+9. **Performance**: gallery preview with `--jobs 2`: 2:45 (scenes ~2:00, join + mix ~50 s: x264
+   ~30 s, decode / xfade / overlay filters ~10 s, mix numpy ~12 s). `render` re-renders every scene
+   without `--scene` (Step 4 design). Stream-copying the parts between transitions: not done —
+   Manim's keyframes sit at its partial-movie boundaries, so the head / tail pieces would be
+   re-encoded and concat-copied next to Manim's stream, which needs matching SPS/PPS; fragile for
+   a ~25 % saving at preview size (less at final size, where scene renders dominate). Documented
+   (CONFIG.md "Encoding", DESIGN §51); routed to Step 60.
+10. **Tests**: quick run `-m "not slow"` had grown to ~4 min with Steps 38–47's render fixtures →
+   1:58 (1479 tests): `slow` on the functions over ~1.5 s and on every user of the music, SFX,
+   transition and push / wipe render fixtures (a fixture's cost lands on whichever quick test uses
+   it first); the core pipeline render (`test_render`'s `main_project`) stays quick.
+   **`pytest-xdist`** is now in the `dev` extra: `python -m pytest -q -n auto` runs the full suite
+   in parallel (render tests use `tmp_path` and per-test media folders; no shared state);
+   documented in README.
+
+Files
+- Code: `scene.py` (`add_narration`), `music.py` (`MUSIC_LEVEL`), `mix.py` (`LIMITER_MARGIN_DB`),
+  `render/ffmpeg.py` (`probe` rate), `overlays.py` (`yields`, `clear_of`, `clear_area`,
+  `build_overlays`), `overlay_layer.py`, `scenes/overlays.py` (lower third yields), `actions.py`
+  (`after_camera`, `_after_camera`), `scenes/callout_action.py`, `scenes/captions.py`
+  (`POP_ROOM`), `cli.py` (`list-music` text); `pyproject.toml` (`pytest-xdist` in `dev`).
+- Tests: new `tests/test_review3.py` (narration level, probe rate, lower third vs captions in
+  16:9 / 9:16, lower third unmoved without obstacles); `test_callout_action.py` (callout with a
+  zoom); `test_music.py` (levels, gain), `test_render.py` (AAC spill bound); `slow` markers in
+  `test_music`, `test_sfx`, `test_transitions`, `test_push_wipe_carry`, `test_chapters_progress`,
+  `test_voices`, `test_overlays`, `test_schema`, `test_stat_chapter`, `test_comparison_table`.
+- Docs: docs/CONFIG.md (music / ducking / loudness levels, limiter margin, encoding cost,
+  `reserve` adding up, lower third making way, captions placement, callouts with a zoom),
+  docs/EXTENDING.md (`yields` / `clear_area`, `after_camera`), README.md (gallery example,
+  working on vidgen: `-n auto`), DESIGN.md (§44 callout timing, §47 / §48 levels and limiter,
+  karaoke pop in §43, new §51), tasklist.md.
+
+Public interfaces added/changed (compatible)
+- `vidgen.api` `Overlay`: class attribute `yields`, attribute `clear_of`, method
+  `clear_area(area, mobject)`; `vidgen.overlays.build_overlays`. `Action.after_camera`.
+  `vidgen.scene.add_narration(scene, path)`.
+- Behaviour: rendered narration is 3 dB louder (its MP3s' level) — every narrated video's
+  level changes once (scene renders are fingerprinted from the code, so they re-render anyway);
+  music beds / files play 2 dB louder at `volume: 0` (same balance against the corrected voice);
+  normalised mixes peak ≤ −1.9 dBTP on the WAV; a lower third next to bottom captions sits
+  above them; a callout due with a zoom appears once the camera is in; karaoke pops are smaller
+  on long words.
+
+Decisions / deviations
+- Narration converted by vidgen, not by patching Manim's `convert_audio`: one place, no
+  monkeypatching, and the WAV is what Manim's pydub mix reads anyway.
+- Clip sound keeps FFmpeg's standard −3 dB upmix for mono clips (it plays at a chosen `volume`
+  under the narration); routed to Step 60 to revisit with the narration path.
+- "Who gives way" is a property of the overlay type (`yields`), not a config priority.
+
+Known gaps / TODOs (routed in tasklist.md, Step 60)
+- Join re-encode of the whole video with any crossfade / push / wipe (measured, documented).
+- `reserve` per whole scene; many reserving overlays + captions can push text under the
+  readable size (lint reports it).
+- A storyboard / lint view of the frames around each transition and carry (Step 47's
+  suggestion; this review used scratch contact sheets).
+- Mono clip sound −3 dB upmix.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1910 passed, 1 skipped, ~17 min on 2
+CPUs); parallel: `python -m pytest -q -n auto` (same result, 10:06); quick: `-m "not slow"` (1479 passed, 1 skipped,
+1:58). Step only: `pytest tests/test_review3.py tests/test_callout_action.py`. Manual: `vidgen
+render examples/kphi3 --preview` then `ffmpeg -i examples/kphi3/kphi3_video_preview.mp4 -af
+ebur128=peak=true -f null -` (≈ −21.4 LUFS); `vidgen lint examples/minimal --variant social`.

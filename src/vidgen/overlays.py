@@ -125,6 +125,10 @@ class Overlay:
     lint_skip: ClassVar[tuple[str, ...]] = ()
     #: Drawing order between overlays: higher layers are drawn over lower ones.
     layer: ClassVar[int] = 0
+    #: Whether it makes way for the scene's other overlays: built after them, with
+    #: :attr:`clear_of` holding the boxes of those that reserve room (bottom captions), which
+    #: :meth:`clear_area` keeps it clear of (a lower third moves above the captions).
+    yields: ClassVar[bool] = False
 
     def __init__(
         self,
@@ -142,6 +146,8 @@ class Overlay:
         self.id = id
         self.scenes = tuple(scenes)
         self.span = span
+        #: Boxes of the scene's reserving overlays, set before :meth:`build` when it :attr:`yields`.
+        self.clear_of: list[Region] = []
 
     @classmethod
     def validate_project(cls, options: Any, project: Project, scenes: Sequence[str]) -> list[str]:
@@ -194,6 +200,18 @@ class Overlay:
         return True
 
     # ----- helpers for subclasses ------------------------------------------------------------
+
+    def clear_area(self, area: Region, mobject: Mobject) -> Region:
+        """``area`` without the boxes of :attr:`clear_of` that ``mobject`` (placed in ``area``)
+        comes within :data:`RESERVE_GAP` of (each cut away with :func:`avoid`); ``area`` itself
+        when nothing is in the way. Place the mobject again in the result."""
+        mine = mobject_region(mobject)
+        if mine is None:
+            return area
+        for box in self.clear_of:
+            if avoid(mine, box) is not mine:   # it comes near the box
+                area = avoid(area, box)
+        return area
 
     def interval(self) -> tuple[float, float]:
         """Where it is shown in the video: ``span`` intersected with :meth:`window`."""
@@ -508,6 +526,24 @@ def scene_overlays(project: Project, spec: SceneConfig, theme: Theme, plan: Vide
                 continue  # its time range does not reach this scene, or it is hidden all along
         out.append(overlay)
     return sorted(out, key=lambda o: o.layer)
+
+
+def build_overlays(overlays: Sequence[Overlay]) -> list[Mobject | None]:
+    """Each overlay's built mobject (same order as ``overlays``): those that :attr:`~Overlay.yields`
+    are built last, knowing the boxes of the others that reserve room (:attr:`Overlay.clear_of`)."""
+    mobjects: list[Mobject | None] = [None] * len(overlays)
+    boxes: list[Region] = []
+    for k, overlay in enumerate(overlays):
+        if not overlay.yields:
+            mob = mobjects[k] = overlay.build()
+            box = mobject_region(mob) if overlay.reserves and mob is not None else None
+            if box is not None:
+                boxes.append(box)
+    for k, overlay in enumerate(overlays):
+        if overlay.yields:
+            overlay.clear_of = list(boxes)
+            mobjects[k] = overlay.build()
+    return mobjects
 
 
 # ----- reserved space ----------------------------------------------------------------------------

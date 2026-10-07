@@ -31,7 +31,7 @@ from typing import TYPE_CHECKING, Any
 import av
 import numpy as np
 
-from vidgen.overlays import Overlay
+from vidgen.overlays import Overlay, build_overlays
 
 if TYPE_CHECKING:
     from manim import Camera, Mobject
@@ -112,9 +112,9 @@ class OverlayLayer:
 
         self.scene = scene
         self.overlays = overlays
-        self.mobjects: list[Mobject | None] = [overlay.build() for overlay in overlays]
+        self.mobjects: list[Mobject | None] = build_overlays(overlays)
         self.following = following or []
-        self.following_mobjects: list[Mobject | None] = [overlay.build() for overlay in self.following]
+        self.following_mobjects: list[Mobject | None] = build_overlays(self.following)
         self.cut = cut
         self.fps = int(config.frame_rate)
         self.written = 0

@@ -91,6 +91,7 @@ class CalloutAction(Action):
     reversible = True
     needs_target = False
     until_next_beat = True
+    after_camera = True   # due with a zoom: drawn once the camera is in, built for that view
 
     def problems(self) -> list[tuple[str, str]]:
         """A target or an area is needed (a magnifier needs the target showing the picture);

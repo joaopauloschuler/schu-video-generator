@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import math
 import re
+import tempfile
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from pathlib import Path
@@ -32,7 +33,7 @@ from vidgen.overlays import Overlay, avoid, mobject_region, scene_overlays
 from vidgen.config import DIRECTED_TRANSITIONS, BeatConfig, SceneConfig, SfxCue, validation_error_lines
 from vidgen.errors import VidgenError
 from vidgen.project import Project
-from vidgen.sfx import AUTO_ACTION_SFX, SfxEvent, SoundLibrary
+from vidgen.sfx import AUTO_ACTION_SFX, SfxEvent, SoundLibrary, decode_audio, stereo, write_wav
 from vidgen.theme import Theme
 from vidgen.transitions import ColorFade, has_transitions, resolve_color
 from vidgen.videoplan import TransitionSlot, VideoPlan
@@ -184,6 +185,20 @@ def _animation_name(item: Any) -> str:
     if type(item).__name__ == "_AnimationBuilder":
         return "animate"
     return type(item).__name__
+
+
+def add_narration(scene: MovingCameraScene, path: Path) -> None:
+    """Add a narration file to ``scene``'s sound at the current time, at the file's own level.
+
+    The file is decoded here and handed to Manim as a 48 kHz stereo WAV: a mono MP3 (what TTS
+    providers return) plays on both channels unchanged, like the sound effects (DESIGN.md §47).
+    Given the MP3 itself, Manim's conversion upmixes it with libswresample's mono → stereo
+    matrix, 3 dB quieter per channel than the file.
+    """
+    with tempfile.TemporaryDirectory(prefix="vidgen_voice_") as folder:
+        wav = Path(folder) / "narration.wav"
+        write_wav(wav, stereo(decode_audio(path)))
+        scene.add_sound(str(wav))
 
 
 def audio_duration(path: Path) -> float:
@@ -497,7 +512,7 @@ class NarratedScene(MovingCameraScene):
         d = self.beat_duration(b)
         path = self.beat_audio(b)
         if path is not None and self.audio_enabled:
-            self.add_sound(str(path))
+            add_narration(self, path)
         start = float(self.renderer.time)
         if self.capture is not None:
             self.capture.begin_segment(b.id, round((d + self.pad) * config.frame_rate), include_end=False)

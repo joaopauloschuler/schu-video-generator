@@ -357,6 +357,7 @@ def test_with_opacity_scales_a_copy() -> None:
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_overlays_stay_on_screen_through_zoom_and_fade(make_project, media: Path) -> None:
     """A watermark is drawn into every frame at the same place while the scene's camera zooms in
     and while the scene fades out; it never joins the scene's mobjects and changes no timing."""
@@ -453,6 +454,7 @@ def test_reserve_shrinks_the_safe_area_and_the_layout_dump(make_project, media: 
 
 @pytest.mark.render
 @pytest.mark.parametrize("size", [(320, 180), (180, 320)])
+@pytest.mark.slow
 def test_lower_third_and_watermark_placement(size: tuple[int, int], make_project, media: Path) -> None:
     overlays = [
         {"type": "lower_third", "name": "Ada Lovelace", "title": "Mathematician and writer", "icon": "user", "duration": 30},

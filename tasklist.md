@@ -208,7 +208,7 @@ Rules that apply to every step:
 - [x] Continuity helper: a scene can start with named objects of the previous scene in the same place (match-cut) (scene `carry: [icon, "title -> heading"]`: the scene before keeps those targets through its fade-out and records their shapes in `carry/<id>.json`; the next scene shows them from frame 0 and moves them into its own target through `entrance()` (glyph by glyph, or a stretched cross-fade); `carry_in()` / `carry_move` for custom scenes; validated names; render order with `--jobs` / `--scene` handled by the pipeline; `examples/gallery` uses a push, a soft wipe and two carries)
 
 ### Step 48 — Review 3
-- [ ] Review Steps 38–47 end to end on all examples; fix, document, harden
+- [x] Review Steps 38–47 end to end on all examples; fix, document, harden (preview renders of gallery (+ a copy voiced with real MP3s and captions, 16:9 / 9:16), minimal (default / social / subtitled), custom_scene, kphi3: A/V lengths equal, narration within 1 ms of its planned start, SFX sample-exact, plan = render, SRT / chapters consistent, loudness = FFmpeg `ebur128`; transitions / carries / overlays checked frame by frame; lint 0 findings on every example and variant. Fixed: narration 3 dB quieter than its MP3s (Manim's mono → stereo upmix; music recalibrated to −28 LUFS), true peak over the ceiling after AAC (limiter margin 0.4 dB), scene lengths from the average frame rate (starts drifting ms), lower third under bottom captions (`Overlay.yields`), callout due with a zoom built for the old view (`Action.after_camera`), karaoke pop crowding neighbours; quick test run rebalanced, optional `pytest-xdist`)
 
 ---
 
@@ -256,4 +256,5 @@ Rules that apply to every step:
 
 ### Step 60 — Final review
 - [ ] Full review of Steps 8–59; docs and examples consistent; release notes in HANDOFF.md
+- [ ] (from Step 48) Revisit: joins with a crossfade / push / wipe re-encode the whole video (~40 s for the gallery's 3:49 preview; stream-copying between transitions needs SPS-compatible re-encoded pieces); `reserve` is per whole scene (several reserving overlays + captions shrink a scene's content until lint's `min_font` fires); mono clip sound is upmixed −3 dB (narration no longer is); a storyboard / lint view of the frames around each transition and carry (Step 47's suggestion; Step 48 used an ad-hoc contact sheet)
 - [ ] (from Step 37) Left as known limits, revisit: a `highlight` colour on an `equation_derivation` step is not carried into its dimmed copy; `code`'s own highlight steps reset line opacities set by a `dim` action; `image` Ken Burns renders ~1.6x real time in preview (Manim's per-frame image transform); `code_walkthrough` builds ~0.1 s per line of the file (Manim glyphs; `excerpt` limits it)

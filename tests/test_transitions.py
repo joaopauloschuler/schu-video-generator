@@ -279,6 +279,7 @@ def _plan(root: Path) -> VideoPlan:
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_rendered_times_follow_the_plan(rendered: tuple[Path, dict[str, Any]]) -> None:
     root, doc = rendered
     plan = _plan(root)
@@ -303,6 +304,7 @@ def test_rendered_times_follow_the_plan(rendered: tuple[Path, dict[str, Any]]) -
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_audio_lands_where_planned(rendered: tuple[Path, dict[str, Any]]) -> None:
     root, _ = rendered
     plan = _plan(root)
@@ -323,6 +325,7 @@ def test_audio_lands_where_planned(rendered: tuple[Path, dict[str, Any]]) -> Non
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_mid_crossfade_frame_blends_both_scenes(rendered: tuple[Path, dict[str, Any]]) -> None:
     root, _ = rendered
     plan = _plan(root)
@@ -353,6 +356,7 @@ def test_mid_crossfade_frame_blends_both_scenes(rendered: tuple[Path, dict[str, 
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_fade_color_dips_to_the_colour(rendered: tuple[Path, dict[str, Any]]) -> None:
     root, _ = rendered
     plan = _plan(root)

@@ -36,11 +36,10 @@ if TYPE_CHECKING:
 log = logging.getLogger("vidgen.music")
 
 #: Integrated loudness (LUFS) of the music at ``volume: 0``, before ducking: a bed or a file is
-#: set to this level. ElevenLabs narration plays at about -24 LUFS integrated in a rendered
-#: video (its MP3s measure about -21.4; the mono-to-stereo conversion of Manim's sound mix takes
-#: 3 dB), so music sits ~6 dB under the voice in pauses and, ducked by 12 dB, ~18 dB under it
-#: while it speaks.
-MUSIC_LEVEL = -30.0
+#: set to this level. ElevenLabs narration plays at about -21.4 LUFS integrated in a rendered
+#: video (its MP3s' level: mono files play on both channels unchanged), so music sits ~6.5 dB
+#: under the voice in pauses and, ducked by 12 dB, ~18.5 dB under it while it speaks.
+MUSIC_LEVEL = -28.0
 #: Suggested folder of the project's music files (any path under the project works).
 PROJECT_MUSIC_DIR = Path("assets") / "music"
 #: Suffixes listed by ``vidgen list-music`` as the project's music files.

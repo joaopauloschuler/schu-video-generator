@@ -29,8 +29,11 @@ class LowerThird(Overlay):
     It belongs to a scene (``scene``, default the first scene the entry is drawn on) and starts
     ``at`` seconds into it or at one of its beats; it goes by the end of that scene unless
     ``across_cuts`` lets it run on over the next scenes. Placed in the safe area (raised a little
-    in 9:16), at least the readable text size.
+    in 9:16), at least the readable text size, and clear of the scene's other overlays that
+    reserve room (it moves above bottom captions).
     """
+
+    yields = True
 
     class Options(OverlayOptions):
         name: str = Field(min_length=1)
@@ -133,6 +136,9 @@ class LowerThird(Overlay):
         content.move_to(plate).shift((LEFT if right else RIGHT) * bar_w / 2)
         group = VGroup(plate, bar, content)
         place(group, area, fit="none", align=o.align)
+        free = self.clear_area(area, group)   # e.g. above bottom captions
+        if free is not area:
+            place(group, free, fit="none", align=o.align)
         return group
 
     def state(self, t: float) -> Hashable | None:

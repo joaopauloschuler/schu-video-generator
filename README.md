@@ -217,8 +217,10 @@ my_video/
   `--variant subtitled`, 9:16 karaoke captions with `--variant social`.
 - [examples/gallery](examples/gallery) — every other built-in scene type once (stat, chapter,
   comparison, table, timeline, diagram, process, network, scatter, histogram, pie, heatmap, map,
-  screenshot, video clip, equation derivation, code walkthrough) and overlays (a watermark, a
-  lower third, a progress bar, a chapter indicator): `vidgen storyboard examples/gallery [--variant vertical]`.
+  screenshot, video clip, equation derivation, code walkthrough), overlays (a watermark, a
+  lower third, a progress bar, a chapter indicator), sound effects, a ducked music bed,
+  transitions (crossfades, colour fades, a push, a wipe) and two carried objects:
+  `vidgen storyboard examples/gallery [--variant vertical]`, `vidgen render examples/gallery --preview`.
 - [examples/custom_scene](examples/custom_scene) — "How a bicycle gear works": built-ins plus a
   custom scene type with a helper module, a project icon, a vertical variant and a hook.
 - [examples/kphi3](examples/kphi3) — a real 4-minute paper video whose eight bespoke scenes all
@@ -230,11 +232,12 @@ my_video/
 
 ## Working on vidgen
 
-`pip install -e ".[dev]"`, then `python -m pytest -q` runs every test (about a quarter of an
-hour: many tests render tiny videos). Quicker: `python -m pytest -q -m "not slow"` (under two
-minutes) skips the render sweeps over every scene type and every test that takes over ~1.5 s,
-`-m "not render"` skips all rendering. Run the full suite before committing. No test needs
-network or keys.
+`pip install -e ".[dev]"`, then `python -m pytest -q` runs every test (about 17 minutes on two
+CPUs: many tests render tiny videos); `python -m pytest -q -n auto` runs them in parallel on
+every CPU (pytest-xdist, in the `dev` extra). Quicker: `python -m pytest -q -m "not slow"`
+(about two minutes) skips the render sweeps over every scene type, the end-to-end renders of
+sound, music and transitions, and every test that takes over ~1.5 s; `-m "not render"` skips
+all rendering. Run the full suite before committing. No test needs network or keys.
 
 ## Troubleshooting
 

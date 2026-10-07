@@ -214,6 +214,7 @@ def label_texts(overlay: Overlay) -> list[str]:
     return [re.sub(r"<[^>]+>", "", label.original_text) for label in overlay.built.submobjects]  # type: ignore[attr-defined]
 
 
+@pytest.mark.slow
 def test_chapter_indicator_text_and_shortening(make_project) -> None:
     long_title = "A chapter whose title goes on and on far beyond the corner of the frame"
     scenes = [bullets("a", beats=1, chapter="Setup"), bullets("b", beats=1, chapter={"title": long_title, "number": "II"})]
@@ -259,6 +260,7 @@ def test_cropped_drawing_matches_the_whole_frame() -> None:
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_progress_and_indicator_render_across_a_cut(make_project, tmp_path: Path) -> None:
     """Rendered: the bar's played part grows between frames and continues across the cut; the
     layout dump has the indicator's label (settled at beat ends) and the bar."""

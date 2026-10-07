@@ -26,8 +26,9 @@ PAD_X = 0.26
 PAD_Y = 0.14
 #: Gap between lines, as a share of a line's height.
 LINE_GAP = 0.3
-#: Karaoke: the spoken word grows by at most this share of a space on each side.
-POP_ROOM = 0.45
+#: Karaoke: the spoken word grows by at most this share of a space on each side (0.45 left
+#: words nearly touching in 9:16, Step 48; 0.25 keeps half the gap).
+POP_ROOM = 0.25
 #: Characters standing on the baseline (no descender), used to line up baselines.
 BASELINE_CHARS = set("abcdefhiklmnorstuvwxzABCDEFGHIKLMNOPRSTUVWXYZ0123456789")
 

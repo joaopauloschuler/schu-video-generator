@@ -64,6 +64,7 @@ def test_true_peak_sees_intersample_peaks() -> None:
     assert loudness.measure(len(x), lambda a, b: x[a:b]).true_peak == pytest.approx(0.0, abs=0.15)
 
 
+@pytest.mark.slow
 def test_meter_is_block_independent() -> None:
     x = np.random.default_rng(3).standard_normal((RATE * 23 + 123, 2)) * 0.05
     whole = loudness.integrated_loudness(x)
@@ -78,6 +79,7 @@ def test_meter_is_block_independent() -> None:
 
 
 @pytest.mark.parametrize("name", list(music.BUILTIN_BEDS))
+@pytest.mark.slow
 def test_bed_is_deterministic_and_clean(name: str) -> None:
     bed = music.BUILTIN_BEDS[name]
     loop = music.bed_loop(name)
@@ -100,6 +102,7 @@ def test_bed_is_deterministic_and_clean(name: str) -> None:
 
 
 @pytest.mark.parametrize("name", list(music.BUILTIN_BEDS))
+@pytest.mark.slow
 def test_bed_loop_seam_is_continuous(name: str) -> None:
     loop = music.bed_loop(name).astype(np.float64)
     steps = np.abs(np.diff(loop, axis=0))
@@ -246,7 +249,7 @@ def test_music_only_video_is_normalised(tmp_path: Path) -> None:
     out = tmp_path / "mix.wav"
     report = mix.mix_audio(project, timings, wavs, None, out)
     assert report.mixed and report.normalized and report.integrated_lufs == pytest.approx(-14, abs=0.5)
-    assert report.gain_db == pytest.approx(16, abs=1) and report.true_peak_dbtp <= -1.5
+    assert report.gain_db == pytest.approx(14, abs=1) and report.true_peak_dbtp <= -1.5   # from MUSIC_LEVEL -28
     assert report.music == [{"source": "pulse", "kind": "bed", "from": "s0", "to": "s1", "start": 0.0, "end": 9.0, "volume": 0.0, "duck": 12.0}]
     written = _read_24(out)
     assert len(written) == 9 * RATE and written[0].tolist() == [0.0, 0.0]  # the fade starts from silence
@@ -315,6 +318,7 @@ def test_validate_reports_missing_music_file(make_project: Any) -> None:
     assert [p.location for p in project_problems(Project.load(root2))] == ["music[1].source"]
 
 
+@pytest.mark.slow
 def test_list_music(tmp_path: Path, make_project: Any, capsys: pytest.CaptureFixture[str]) -> None:
     root = make_project(_video())
     _tone_file(root / "assets" / "music" / "theme.wav", 2.0, channels=2)
@@ -335,9 +339,10 @@ def test_list_music(tmp_path: Path, make_project: Any, capsys: pytest.CaptureFix
     assert main(["list-music", str(root)]) == 0
     out = capsys.readouterr().out
     assert "calm  builtin  D major, no beat, 60 s loop" in out and "pulse  builtin  A minor, 96 BPM" in out
-    assert "assets/music/theme.wav  project file  2.0 s" in out and "level at volume 0: -30 LUFS" in out
+    assert "assets/music/theme.wav  project file  2.0 s" in out and "level at volume 0: -28 LUFS" in out
 
 
+@pytest.mark.slow
 def test_schema_has_music(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["schema"]) == 0
     schema = json.loads(capsys.readouterr().out)
@@ -417,6 +422,7 @@ def _read_24(path: Path) -> np.ndarray:
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_render_reports_and_reaches_the_target_loudness(music_project: tuple[Path, dict[str, Any]]) -> None:
     root, doc = music_project
     report = doc["mix"]
@@ -436,6 +442,7 @@ def test_render_reports_and_reaches_the_target_loudness(music_project: tuple[Pat
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_music_ducks_under_the_narration(music_project: tuple[Path, dict[str, Any]]) -> None:
     root, _ = music_project
     project = Project.load(root)
@@ -465,6 +472,7 @@ def test_music_ducks_under_the_narration(music_project: tuple[Path, dict[str, An
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_mix_is_the_sum_where_the_limiter_rests(music_project: tuple[Path, dict[str, Any]]) -> None:
     root, doc = music_project
     project = Project.load(root)
@@ -483,6 +491,7 @@ def test_mix_is_the_sum_where_the_limiter_rests(music_project: tuple[Path, dict[
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_narration_only_video_keeps_its_level(tmp_path: Path) -> None:
     root = _write(tmp_path / "plain", {}, [TALK])
     with registry.isolated():
@@ -491,7 +500,7 @@ def test_narration_only_video_keeps_its_level(tmp_path: Path) -> None:
         result = render_project(Project.load(root), preview=True)
     report = result.timings["mix"]
     assert not report["mixed"] and not report["normalized"] and report["music"] == [] and report["gain_db"] == 0
-    assert report["integrated_lufs"] == pytest.approx(-24.4, abs=1.0)  # the narration as rendered (Step 4)
+    assert report["integrated_lufs"] == pytest.approx(-21.4, abs=1.0)  # the MP3's own level (Step 48)
     assert not (root / "build/preview/padded/mix.wav").exists()
     # asked for, normalisation applies without music too
     data = yaml.safe_load((root / "video.yaml").read_text(encoding="utf-8"))

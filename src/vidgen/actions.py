@@ -137,6 +137,9 @@ class Action:
     temporary: ClassVar[bool] = False
     #: Whether it moves the camera (actions that do never play at the same time).
     moves_camera: ClassVar[bool] = False
+    #: Whether it is built for the camera as it will be (``callout``: a label readable in a zoom):
+    #: when it falls due together with a camera move, it plays after that move.
+    after_camera: ClassVar[bool] = False
     #: Options whose values are target names (checked like ``target``; e.g. ``into`` of
     #: ``transform``). Resolve them with :meth:`NarratedScene.find_targets`.
     target_options: ClassVar[tuple[str, ...]] = ()
@@ -384,6 +387,11 @@ def _rank(due: _Due) -> int:
     return 2 if due.use.kind.cls.temporary else 0
 
 
+def _after_camera(due: _Due) -> bool:
+    """An action built for the camera's coming view (not its undoing)."""
+    return not due.revert and due.use.kind.cls.after_camera
+
+
 class ActionRunner:
     """Plays a scene's actions inside its beats (owned by :class:`~vidgen.scene.NarratedScene`).
 
@@ -493,9 +501,11 @@ class ActionRunner:
         batch: list[_Due] = []
         batches = [batch]
         camera = id(getattr(scene.camera, "frame", scene.camera))
+        if any(d.use.kind.cls.moves_camera for d in due):   # camera moves before what is built for the view
+            due = [d for d in due if not _after_camera(d)] + [d for d in due if _after_camera(d)]
         for d in due:
             mobs = {id(m) for t in d.use.targets for m in t.mobject.get_family()}
-            mobs |= {camera} if d.use.kind.cls.moves_camera else set()
+            mobs |= {camera} if d.use.kind.cls.moves_camera or _after_camera(d) else set()
             taken = {id(m) for b in batch for t in b.use.targets for m in t.mobject.get_family()}
             taken |= {camera} if any(b.use.kind.cls.moves_camera for b in batch) else set()
             if mobs & taken:

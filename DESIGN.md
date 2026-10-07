@@ -2732,8 +2732,8 @@ the measured loudness, §48).
   baselines one pitch apart (glyphs standing on the baseline are lined up), shrunk together when
   a word is wider than the line. State: the cue index (subtitles) or `(cue, word)` (karaoke, the
   last word whose start ≤ t; -1 before the first); `pose` returns the cue, karaoke a copy with the
-  word's glyphs in the highlight colour scaled by `pop`, capped so it grows by at most 0.45 of a
-  space per side (the plate is that much wider). Glyph indices: Manim keeps a submobject per
+  word's glyphs in the highlight colour scaled by `pop`, capped so it grows by at most 0.25 of a
+  space per side (0.45 until Step 48: neighbours nearly touched) (the plate is that much wider). Glyph indices: Manim keeps a submobject per
   character with spaces (0.21) or without (0.19); other counts (ligatures) → no highlight.
 - **Colours**: the text colour (default the best of `text`, background, white, black) and the plate
   opacity are chosen so `plate_contrast` (the plate over black and over white: the worst case of
@@ -2812,7 +2812,8 @@ the measured loudness, §48).
 - Known limits: placement is the §37 scored search (labels avoid text and small targets, not
   lines: an arrow or a label may cross a chart line or an edge); a callout added before a `zoom`
   scales with the scene (built for the camera of the moment it appears); a callout with `at` in
-  the same frame as a `zoom` is built for the camera before the zoom (give it a later `at`).
+  the same frame as a `zoom` plays after the zoom-in, built for the zoomed view
+  (`Action.after_camera`, Step 48).
 
 ## 45. Refinements (Step 42, pronunciation dictionary)
 
@@ -3010,8 +3011,8 @@ the measured loudness, §48).
   samples = the sum of the padded scene WAVs; event start sample `round(time * 48000)`, minus
   its length for `align: end`; parts before 0 / after the end cut; written in 10 s blocks;
   sums clipped, never wrapped), with `sfx.gain` (master dB) added. Pan: equal-power, centre =
-  full level on both channels (as a mono narration MP3 is duplicated by `pad_audio`), so
-  loudness compares 1:1. `ffmpeg.join(..., sfx=)` adds it to the concatenated narration with
+  full level on both channels (as a mono narration MP3 is duplicated, since Step 48 by
+  `scene.add_narration`; see §51), so loudness compares 1:1. `ffmpeg.join(..., sfx=)` adds it to the concatenated narration with
   `amix=inputs=2:duration=first:dropout_transition=0:normalize=0` (a plain sum) before the one
   AAC encode. Sounds therefore run across scene cuts (a sound after its scene's end is a warning),
   are sample-exact in the timeline, and do not resample the narration (Manim's pydub mix would
@@ -3060,8 +3061,8 @@ the measured loudness, §48).
   no rumble (tests: < −30 dB of the energy above 5 kHz, < −30 dB below 35 Hz). Everything is
   rendered **circularly** (notes past the loop's end continue at its start; the waves are
   periodic in the loop), so the loop tiles without a seam. Seed `crc32("music:<name>")`;
-  `bed_loop(name)` is cached per process (~1–1.5 s to make). Level: `MUSIC_LEVEL` −30 LUFS
-  integrated. **Decision: a loop tiled to the needed length**, not a piece generated for the
+  `bed_loop(name)` is cached per process (~1–1.5 s to make). Level: `MUSIC_LEVEL` −28 LUFS
+  integrated (−30 until Step 48, §51). **Decision: a loop tiled to the needed length**, not a piece generated for the
   whole video: generation cost is fixed, loops of 40–60 s with chord changes every 4–7.5 s and
   slow LFOs rarely sound repetitive under narration, and a loop is trivially seamless.
 - **Files**: decoded with PyAV (`sfx.decode_audio`), mono duplicated, cached per (path, size,
@@ -3102,19 +3103,18 @@ the measured loudness, §48).
   info level, `normalized: false`). With music or `normalize: true`: pass 1 measures the sum (no true peak),
   gain = target − measured; pass 2 writes `padded/mix.wav` (48 kHz stereo **24-bit**: the gain
   and fades stay clean) through `limit()` — the gain each sample needs for its true-peak
-  envelope to stay 0.1 dB under `true_peak`, a running minimum (±5 ms) then a 10 ms moving
+  envelope to stay `LIMITER_MARGIN_DB` (0.4 dB since Step 48, was 0.1) under `true_peak`, a running minimum (±5 ms) then a 10 ms moving
   average, so the gain never exceeds the need and moves smoothly; block margins make it exact
   across blocks — and measures the output. `ffmpeg.join(..., mix=)` then uses the WAV as the
   audio (one AAC encode). `MixReport` → combined `timings.json` `mix` and `render --json` `mix`:
   `{mixed, normalized, target_lufs, true_peak_limit, gain_db, integrated_lufs, true_peak_dbtp,
   limited_db, music: [{source, kind, from, to, start, end, volume, duck}]}`; the human render
   output adds a `loudness:` line.
-- **Levels measured**: committed kphi3 MP3s are −21.4 LUFS integrated (as stereo), but a
-  rendered narration track is −24.4: Manim's `add_sound` converts the mono MP3 through
-  libswresample, whose mono → stereo upmix is −3 dB per channel (Step 4 behaviour, unchanged
-  here). `MUSIC_LEVEL` −30 is therefore ~6 dB under the voice in pauses and ~18 dB under it
-  when ducked. (The Step 44 SFX level, "−27 LUFS loudest 400 ms ≈ 7 dB under narration", was
-  calibrated on the MP3s, so effects sit ~4 dB closer to the rendered voice than stated.)
+- **Levels measured**: committed kphi3 MP3s are −21.4 LUFS integrated (as stereo). Until Step
+  48 a rendered narration track was −24.4 (Manim's MP3 conversion upmixed mono −3 dB per
+  channel) and `MUSIC_LEVEL` was −30; Step 48 plays narration at the MP3s' level and sets
+  `MUSIC_LEVEL` −28, so music is ~6.5 dB under the voice in pauses and ~18.5 dB under it when
+  ducked, and the Step 44 SFX level (≈ 7 dB under narration) holds as stated (§51).
 - **`vidgen list-music [PROJECT] [--render-dir DIR] [--json]`** (`music.music_entries`,
   `jsonout.list_music_document`): every bed with a precise description, use, tempo, key, chords,
   loop length and measured loudness; the project's `assets/music` files (any path works as a
@@ -3122,7 +3122,7 @@ the measured loudness, §48).
 - Known limits: cues do not cross-fade into each other (the first fades out, the next fades
   in); the beds are fixed (no tempo / key parameters); a file is decoded whole into memory
   (~23 MB per stereo minute); music is not in scene renders or storyboards; the AAC encode may
-  move the true peak by ~0.1 dB; no LRA / short-term loudness targets.
+  raise the true peak by ~0.2 dB (inside the limiter's margin); no LRA / short-term loudness targets.
 
 
 ## 49. Refinements (Step 46, transitions: crossfade and fade through a colour)
@@ -3314,3 +3314,49 @@ the measured loudness, §48).
   per scene (the incoming scene's from the transition's start, like a crossfade); stills taken in
   a push / wipe's frames show no overlays (beat-end stills never are); `vidgen render --scene X`
   alone shows neither the slide nor the carry's partner (the join and the scene before do).
+
+
+## 51. Refinements (Step 48, review 3: overlays, captions, audio, transitions)
+
+- **Narration level**: `NarratedScene.narrate` adds a beat's MP3 through `scene.add_narration`,
+  which decodes it (`sfx.decode_audio`, 48 kHz) and hands Manim a stereo WAV (`sfx.stereo`: a
+  mono file at full level on both channels, as sound effects have always been). Given the MP3,
+  Manim's `convert_audio` encoded it with PyAV's default stereo layout, i.e. libswresample's
+  mono → stereo matrix at −3.01 dB per channel: every rendered video since Step 4 was 3 dB
+  quieter than its MP3s (kphi3: −24.4 → now −21.4 LUFS integrated, true peak −2.2 dBTP). Clip
+  sound (`clips.clip_audio`, FFmpeg `aformat` stereo) keeps the standard −3 dB upmix for mono
+  clips; it is under the narration at a chosen `volume` anyway. Recalibrated: `MUSIC_LEVEL` −28
+  LUFS (Step 45 had planned −28 and set −30 only to make up for the bug): ~6.5 dB under
+  narration in pauses, ~18.5 dB when ducked; the SFX level (−27 LUFS loudest 400 ms) needs no
+  change — it was calibrated on the MP3s and is now ~7 dB under the voice as stated.
+- **Limiter margin** `mix.LIMITER_MARGIN_DB` 0.4 (was 0.1): the AAC encode raised the gallery's
+  true peak 0.2 dB over the WAV's, past the −1.5 dBTP ceiling.
+- **Scene lengths** (`ffmpeg.probe`): duration = frames / the stream's nominal rate
+  (`guessed_rate`, `r_frame_rate`) instead of the average rate, which Manim's joined partial
+  movies put off by a few 1/10000 (15.0003 for 15 fps): the join's starts drifted up to ~3 ms
+  from the plan over the gallery (chapter start ≠ scene start) and each padded WAV was a few
+  samples short of its video.
+- **Overlays making way** (`Overlay.yields`, `clear_of`, `clear_area`; `overlays.build_overlays`
+  used by `OverlayLayer`): yielding overlays are built after the others and know the boxes of
+  those that reserve room; the built-in `lower_third` yields and, where it would come within the
+  reserve gap of such a box (bottom captions in 9:16 *and* 16:9 when `align: bottom`), is placed
+  again in `avoid(area, box)` — above the captions. Nothing moves when nothing is in its way.
+  Decision: a class attribute on the overlay type (which one gives way is a property of the
+  kind of overlay), not a priority number in the config.
+- **Actions due with a camera move** (`Action.after_camera`; `callout` sets it): in a frame
+  where a `moves_camera` action is due, after-camera actions are ordered last and get a batch of
+  their own after it, so a callout written next to a `zoom` (same `at`) is built for the zoomed
+  view (it was built for the camera before the zoom and then scaled with the scene).
+- **Karaoke pop**: `captions.POP_ROOM` 0.25 of a space per side (was 0.45: the popped word
+  nearly touched its neighbour in 9:16).
+- **Not changed, documented**: `reserve` stays per scene (a layout is built once; a time-ranged
+  reserve would mean re-laying out scenes mid-way) — several reserving overlays add up (the
+  gallery's voiced clip in 16:9: captions + lower third + indicator + watermark leave the clip
+  small). The SRT's / captions' first cue of a beat starts at the beat's start (not at the
+  speech onset ~50–90 ms later), by design (`cues.caption_cues`). Joins with a crossfade, push
+  or wipe re-encode the whole video: measured on the gallery preview (3:49, 854x480, 2 CPUs)
+  ~40 s of a ~60 s join+mix, ~10 s of it decoding / filtering, the rest x264; stream-copying the
+  parts between transitions would need re-encoded head / tail pieces whose H.264 parameters
+  (SPS/PPS) match Manim's encoder for a concat copy, and Manim's keyframes fall at its
+  partial-movie boundaries, not at the transitions — not robust enough for the gain (the
+  scenes' own renders take 2–3x longer than the join).

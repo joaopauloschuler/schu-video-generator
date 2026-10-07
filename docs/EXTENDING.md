@@ -851,7 +851,8 @@ class Checklist(NarratedScene):
 `needs_target = False` allows an action without `target`. `temporary = True` (with
 `reversible`) has the runner play `revert` so that it ends with the beat (or, with `until:`,
 with the beat before that one), like `zoom`; `moves_camera = True` keeps two such actions from
-playing at once; `target_options = ("into",)` names options whose values are target names
+playing at once; `after_camera = True` (the built-in `callout`) plays after a camera move due at
+the same moment, so it is built for the new view; `target_options = ("into",)` names options whose values are target names
 (checked by `vidgen validate` like `target`; look them up with `scene.find_targets(name)`).
 `until_next_beat = True` (with `reversible`) undoes the action when the next beat starts unless
 the use gives `until` (the built-in `callout`); override `default_until(later)` (the ids of the
@@ -951,7 +952,11 @@ overlays:
 - classmethod `validate_project(options, project, scenes) -> list[str]`: checks `vidgen
   validate` runs (a file exists, a beat id exists), one `"option: message"` per problem.
 - Class attributes: `layer` (drawing order between overlays, default 0), `lint_skip` (rules not
-  applied to its objects, e.g. `("contrast",)` for something faint on purpose).
+  applied to its objects, e.g. `("contrast",)` for something faint on purpose), `yields`
+  (default `False`; `True`: built after the scene's other overlays, with `self.clear_of` = the
+  boxes of those that reserve room; in `build`, `free = self.clear_area(area, mobject)` gives the
+  area without the boxes the placed mobject comes near — place it again there, as the built-in
+  `lower_third` does to move above bottom captions).
 - `default_reserve()`: whether scenes keep clear of it when the entry gives no `reserve`
   (default `False`; the built-in `captions` say `True` at the top or bottom); `self.reserves` is
   the answer for this entry and scene.

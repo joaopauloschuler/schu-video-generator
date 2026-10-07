@@ -78,6 +78,7 @@ def test_params_change_the_sound() -> None:
         sfx.synthesize("wooosh")
 
 
+@pytest.mark.slow
 def test_sounds_stay_under_narration() -> None:
     """At gain 0 every sound is at least 5 dB under the quietest of real ElevenLabs narration
     beats (the committed kphi3 MP3s), loudest 400 ms against loudest 400 ms; at intensity 1
@@ -420,6 +421,7 @@ def _timings(root: Path) -> dict[str, Any]:
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_events_are_timed_in_frames(sfx_project: Path) -> None:
     timings = _timings(sfx_project)
     card, lst, beep = timings["scenes"]
@@ -444,6 +446,7 @@ def test_events_are_timed_in_frames(sfx_project: Path) -> None:
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_track_and_video_hold_the_sounds(sfx_project: Path) -> None:
     timings = _timings(sfx_project)
     track = sfx.read_wav(sfx_project / "build/preview/padded/sfx.wav")
@@ -470,6 +473,7 @@ def test_track_and_video_hold_the_sounds(sfx_project: Path) -> None:
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_no_audio_render_has_no_effects(sfx_project: Path) -> None:
     with registry.isolated():
         render_project(Project.load(sfx_project), preview=True, scenes=["card"], no_audio=True)
@@ -479,6 +483,7 @@ def test_no_audio_render_has_no_effects(sfx_project: Path) -> None:
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_extending_example(tmp_path: Path) -> None:
     """The "Sound effects" example of docs/EXTENDING.md renders and records its sounds."""
     import re
@@ -494,6 +499,7 @@ def test_extending_example(tmp_path: Path) -> None:
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_scene_sfx_errors(tmp_path: Path) -> None:
     ext = """
     from vidgen.api import *

@@ -205,6 +205,7 @@ def test_stat_counts_to_the_formatted_value(project: Project, media: Path) -> No
 
 
 @pytest.mark.render
+@pytest.mark.slow
 def test_stat_before_comparison_counts_from_the_old_value(project: Project, media: Path) -> None:
     scene, *_ = render_scene(project, "stat_full", media, 160, 90)
     assert scene.start_value() == 2100000
