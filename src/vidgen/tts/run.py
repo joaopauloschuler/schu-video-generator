@@ -9,11 +9,13 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from vidgen import hooks
 from vidgen.config import BeatConfig
 from vidgen.errors import VidgenError
 from vidgen.project import Project
+from vidgen.speech import read_alignment, write_alignment
 from vidgen.tts import TTSProvider, get_provider
 from vidgen.tts.cache import atomic_write, hash_path, is_up_to_date, mp3_path, orphaned_audio
 
@@ -130,21 +132,31 @@ def run_tts(
 
     texts = [beat for _, beat in project.beats()]
     index = {beat.id: i for i, beat in enumerate(texts)}
+    timed = getattr(provider, "synthesize_timed", None) if project.config.voice.timestamps else None
     generated: list[str] = []
     total = len(plan.todo)
     for n, beat in enumerate(plan.todo, start=1):
         try:
             source = plan.reuse.get(beat.id)
+            alignment: dict[str, Any] | None = None
             if source is not None:
                 audio = source.read_bytes()
+                stored = read_alignment(source.parent, beat.id, beat.text)
+                if stored is not None:
+                    keys = ("characters", "character_start_times_seconds", "character_end_times_seconds")
+                    alignment = dict(zip(keys, (stored["characters"], stored["starts"], stored["ends"])))
                 action = f"copied {beat.id}.mp3 from {_relative(source, project.root)}"
             else:
                 i = index[beat.id]
                 previous = texts[i - 1].text if i > 0 else None
                 following = texts[i + 1].text if i + 1 < len(texts) else None
-                audio = provider.synthesize(beat.text, previous, following)
-                action = f"generated {beat.id}.mp3 ({len(beat.text)} chars)"
+                if timed is not None:
+                    audio, alignment = timed(beat.text, previous, following)
+                else:
+                    audio = provider.synthesize(beat.text, previous, following)
+                action = f"generated {beat.id}.mp3 ({len(beat.text)} chars{', with timings' if alignment else ''})"
             atomic_write(mp3_path(plan.audio_dir, beat.id), audio)
+            write_alignment(plan.audio_dir, beat.id, beat.text, audio, alignment)
             atomic_write(hash_path(plan.audio_dir, beat.id), provider.cache_key(beat.text).encode("utf-8"))
         except (VidgenError, OSError) as exc:
             done = f"{len(generated)} of {total} done before the error; run again to continue"

@@ -102,7 +102,7 @@ class Title(NarratedScene):
             authors.arrange(DOWN, buff=0.16)
             card.add(authors)
         card.arrange(DOWN, buff=0.75)
-        shrink_to_fit(card, self.safe_width, self.safe_height).move_to(ORIGIN)
+        shrink_to_fit(card, self.safe_width, self.safe_height).move_to(self.safe_area.center)
 
         parts: list[Target] = []
         if mark is not None:

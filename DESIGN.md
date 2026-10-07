@@ -85,12 +85,14 @@ src/vidgen/
   tts/elevenlabs.py       # ElevenLabs provider (stdlib urllib), cache by hash
   render/                 # worker.py (one scene per process), pipeline.py, ffmpeg.py,
                           # fingerprint.py (what a scene's render depends on, §14)
-  subtitles.py            # SRT from beat timings
+  subtitles.py            # SRT from beat timings (cues cut and timed like captions, §43)
+  speech.py               # spoken words, speech bounds of an MP3, word times: estimate / TTS alignment (§43)
+  cues.py                 # caption cues: phrase-boundary cutting and timing, shared by SRT and captions (§43)
   fileio.py               # atomic writes; replacing files that Windows programs keep open
   scenes/                 # built-in scene library (registered like extensions; actions.py:
                           # the built-in beat actions reveal/dim/highlight/zoom/transform, §26-27;
                           # overlays.py: the built-in overlays lower_third/watermark, §41;
-                          # progress.py: progress_bar/chapter_indicator, §42)
+                          # progress.py: progress_bar/chapter_indicator, §42; captions.py: captions, §43)
   data/fonts/             # Inter, Source Serif 4, JetBrains Mono NL (.ttf + OFL.txt; package data)
   data/icons/             # manifest.json + lucide/*.svg + lucide/LICENSE (ISC; package data, §22)
   data/geo/               # world-110m.json: Natural Earth 1:110m countries (public domain; package data, §39)
@@ -481,6 +483,10 @@ Step 36 (§39) adds the map helpers: `MAP_VIEWS`, `Country`, `MapView`, `equal_e
 `find_country`, `fit_view`, `view_box`, `world_countries`.
 Step 38 (§41) adds `overlay`, `Overlay`, `OverlayOptions`, `OverlayContext`, `with_opacity`, and
 `NarratedScene.overlay_layer` (compatible: `NarratedScene.safe_area` shrinks for reserved overlays).
+Step 39 (§42) adds `video_chapters`, `Chapter`. Step 40 (§43) adds `WordTime`, `beat_word_times`,
+`estimate_word_times`, `speech_bounds`, `spoken_words`, `syllables`, `CaptionCue`,
+`caption_cues`, `segment_cues`, `phrase_break_cost`, `plate_contrast`, and compatibly
+`Overlay.default_reserve()` / `Overlay.reserves`.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -2635,3 +2641,78 @@ using the existing renders of the others (missing ones are rendered). Exit code 
   cards and before the first chapter, so those scenes get no reserve.
 - **Example**: `examples/gallery` has a top `progress_bar` (3 chapter segments) and a top-left
   `chapter_indicator` with `reserve: true`; lint 0 findings in all 8 variants.
+
+## 43. Refinements (Step 40, burned-in captions)
+
+- **Word times** (`vidgen/speech.py`, render input; `spoken_words`, `speech_bounds`,
+  `SILENCE_DB` moved here from `lint/timing_rules.py`, which re-imports them). `WordTime(text,
+  start, end)`. `beat_word_times(audio_dir, beat_id, text, start, end)`: (1) a stored alignment
+  that belongs to the beat's current MP3 and text; (2) else `estimate_word_times` within the MP3's
+  speech (`speech_bounds`: leading / trailing silence below -40 dB of the peak cut, as lint's
+  `narration_speed`); (3) else the estimate over `start..end` (no audio: the word-count `d`). The
+  estimate gives each word `syllables(word) + 0.05 x letters` (vowel groups, a silent final `e`
+  dropped; acronyms a syllable per letter; numbers 2 per spoken word) and a pause after it of 2
+  syllables at a sentence end, 1 at a comma / semicolon / colon / dash, scaled to fill the span.
+- **Alignment seam.** `voice.timestamps` (default `false`, not hashed: the audio is the same)
+  makes `vidgen tts` call `provider.synthesize_timed(text, previous, next) -> (audio,
+  alignment | None)` when the provider has it; ElevenLabs implements it with
+  `POST /v1/text-to-speech/{voice}/with-timestamps` (JSON: `audio_base64`, `alignment {characters,
+  character_start_times_seconds, character_end_times_seconds}`; the non-normalised alignment, whose
+  characters are the text sent). `write_alignment` stores `<audio_dir>/<beat>.align.json`
+  `{version: 1, text, audio_sha1, characters, starts, ends}` after the MP3 and before the hash; a
+  beat generated without timings removes an old one; a variant copying base audio copies its
+  alignment. `read_alignment` accepts it only for the same text and MP3 bytes (sha1), so a stale
+  file is ignored, never wrong. Words map to characters by position (`\S+` runs of the text, or of
+  its whitespace-normalised form). Tests mock urlopen; the real endpoint was never called.
+- **Cue cutting** (`vidgen/cues.py`, shared by SRT and captions). `segment_cues(words, widths,
+  space, max_width, max_lines, max_words)`: dynamic programming over cue ends; a cue's best line
+  split is found by trying every split into ≤ `max_lines` lines that fit. Costs: each break by
+  `phrase_break_cost(before, after)` — sentence end 0, clause mark or dash 1, before a conjunction 2,
+  before a preposition 3, plain 4.5, right after an article / preposition / determiner 9; per cue
+  1; an under-filled cue `3 x (1 - fill)^2` (fill = width share of `max_lines x max_width`, or of
+  `max_words`); unequal lines `4 x (widest - narrowest) / max_width`; a sentence ending inside a
+  line 3. A word wider than a line gets a line of its own. `caption_cues` times them: the first
+  cue at the beat's start, the others at their first word's start, each until the next, the last
+  until `until` (captions: the next beat's start / the scene's end; SRT: the narration end).
+- **SRT change**: `subtitles.split_text` / `beat_cues` now use this cutting (was `textwrap` at
+  42 characters + pairs of lines) and cue times follow word times (was: proportional to
+  characters); `write_srt(path, timings, audio_dir)` (the pipeline passes `project.audio_dir`, so
+  MP3 speech bounds and alignments time the SRT too). SRT and burned-in captions therefore cut at
+  the same kind of boundaries; their cues are identical only when the caption width in characters
+  equals the SRT's 42 (captions measure real text widths).
+- **`captions` overlay** (`scenes/captions.py`, `timed`, `layer` 10, `lint_skip = ("max_words",)`:
+  the captions are the narration, not extra words on screen). Reads `context.scene.beats`
+  (planned scene times) and the project's audio folder; `shown_in` is false on scenes without
+  beats (no reserve there). `build()`: an invisible band (`max_lines` lines + padding, `max_width`
+  + padding) placed at the safe area's bottom (9:16: raised by `lift` 0.12 of the safe height, like
+  the lower third), top or centre, then every cue of the scene as `VGroup(plate, *line Texts)`
+  placed in the band (bottom / top / centre aligned). Lines are `Text`s with ligatures off,
+  baselines one pitch apart (glyphs standing on the baseline are lined up), shrunk together when
+  a word is wider than the line. State: the cue index (subtitles) or `(cue, word)` (karaoke, the
+  last word whose start ≤ t; -1 before the first); `pose` returns the cue, karaoke a copy with the
+  word's glyphs in the highlight colour scaled by `pop`, capped so it grows by at most 0.45 of a
+  space per side (the plate is that much wider). Glyph indices: Manim keeps a submobject per
+  character with spaces (0.21) or without (0.19); other counts (ligatures) → no highlight.
+- **Colours**: the text colour (default the best of `text`, background, white, black) and the plate
+  opacity are chosen so `plate_contrast` (the plate over black and over white: the worst case of
+  whatever is behind) reaches `lint.rules.contrast.min_ratio`, raising the opacity in 0.05 steps;
+  a highlight that does not reach it is replaced by the first accent token that does (warning).
+  `background: null`: no plate; the text gets a background-coloured outline (lint may then report
+  contrast over busy scenes — the user's choice).
+- **Reserve default** (framework): `OverlayConfig.reserve` is `bool | None` (default `None`);
+  `Overlay.reserves` = the entry's / scene override's value, else `default_reserve()` (base
+  `False`). Captions return `position != "center"`: a caption band at the top or bottom shrinks
+  the scenes' safe area; centred karaoke text does not (it would cut the frame in half), so lint's
+  `overlay_overlap` reports scene text under it. The reserved box is the band (stable across
+  scenes), not the scene's own cues.
+- **Fixes found with it**: `title` and `end_card` centred their card on the frame origin, not on
+  `self.safe_area` (with a reserved bottom band their last line ran into it); both now centre on
+  the safe area.
+- **Fingerprint**: `_overlay_inputs` beats also carry the `.align.json` stat.
+- **Example**: `examples/minimal` variants `subtitled` (16:9, `captions`) and `social` (9:16,
+  `captions` `style: karaoke`); `vidgen lint` 0 findings for both.
+- Known limits: cue times between alignment-less words are estimates (good to a few hundred ms on
+  even speech; numbers and pauses vary); karaoke highlights one word at a time (no fill sweep);
+  the caption band is reserved per scene (a scene with only one-line cues still keeps room for
+  `max_lines`); a lower third and bottom captions are both placed in the global safe area and can
+  overlap in 9:16 (move one with `align` / `position` or `lift`).

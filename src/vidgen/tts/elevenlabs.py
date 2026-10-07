@@ -7,6 +7,8 @@ message: it is only sent as the ``xi-api-key`` header to api.elevenlabs.io.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import hashlib
 import json
 import os
@@ -22,6 +24,8 @@ from vidgen.config import VoiceConfig
 from vidgen.errors import VidgenError
 
 API_URL = "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}?output_format={output_format}"
+#: The same speech as JSON with the audio in base64 and character timings (``alignment``).
+TIMESTAMPS_URL = "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/with-timestamps?output_format={output_format}"
 API_KEY_ENV = "ELEVENLABS_API_KEY"
 
 #: Values the kphi3 script used implicitly; its hash files are only valid for these.
@@ -133,9 +137,9 @@ class ElevenLabsProvider:
                 body["next_text"] = next_text
         return body
 
-    def url(self) -> str:
-        """The endpoint for this voice and output format."""
-        return API_URL.format(
+    def url(self, timestamps: bool = False) -> str:
+        """The endpoint for this voice and output format (``timestamps``: the with-timestamps one)."""
+        return (TIMESTAMPS_URL if timestamps else API_URL).format(
             voice_id=urllib.parse.quote(self.voice.voice_id, safe=""),
             output_format=urllib.parse.quote(self.voice.output_format, safe=""),
         )
@@ -146,13 +150,40 @@ class ElevenLabsProvider:
 
     def synthesize(self, text: str, previous_text: str | None = None, next_text: str | None = None) -> bytes:
         """Return the audio bytes for ``text``. Raises :class:`VidgenError` on any failure."""
+        return self._send(self.url(), self.request_body(text, previous_text, next_text), "audio/mpeg")
+
+    def synthesize_timed(
+        self, text: str, previous_text: str | None = None, next_text: str | None = None
+    ) -> tuple[bytes, dict[str, Any] | None]:
+        """The audio bytes for ``text`` and when each character is spoken (the with-timestamps
+        endpoint): ``(audio, {characters, character_start_times_seconds,
+        character_end_times_seconds})``, the timings ``None`` if the response has none. Raises
+        :class:`VidgenError` on any failure."""
+        body = self._send(self.url(timestamps=True), self.request_body(text, previous_text, next_text), "application/json")
+        try:
+            doc = json.loads(body.decode("utf-8"))
+            audio = base64.b64decode(doc["audio_base64"], validate=True)
+        except (ValueError, KeyError, TypeError, binascii.Error):
+            raise VidgenError("ElevenLabs returned an unreadable with-timestamps response (no audio_base64)") from None
+        if not audio:
+            raise VidgenError("ElevenLabs returned an empty response")
+        alignment = doc.get("alignment")
+        keys = ("characters", "character_start_times_seconds", "character_end_times_seconds")
+        if not isinstance(alignment, dict) or not all(isinstance(alignment.get(k), list) for k in keys):
+            alignment = None
+        elif not len(alignment["characters"]) == len(alignment[keys[1]]) == len(alignment[keys[2]]):
+            alignment = None
+        return audio, alignment
+
+    def _send(self, url: str, payload: dict[str, Any], accept: str) -> bytes:
+        """POST ``payload`` to ``url`` with retries; the response body."""
         key = read_api_key()
-        data = json.dumps(self.request_body(text, previous_text, next_text)).encode("utf-8")
+        data = json.dumps(payload).encode("utf-8")
         attempt = 0
         while True:
             wait: float | None = None
             try:
-                return self._request(data, key)
+                return self._request(url, data, key, accept)
             except urllib.error.HTTPError as exc:
                 body = _scrub(exc.read().decode("utf-8", errors="replace"), key)
                 if exc.code not in TRANSIENT_STATUS or attempt >= self.retries:
@@ -174,12 +205,12 @@ class ElevenLabsProvider:
             self._sleep(min(delay, self.max_wait))
             attempt += 1
 
-    def _request(self, data: bytes, key: str) -> bytes:
+    def _request(self, url: str, data: bytes, key: str, accept: str) -> bytes:
         request = urllib.request.Request(
-            self.url(),
+            url,
             data=data,
             method="POST",
-            headers={"xi-api-key": key, "Content-Type": "application/json", "Accept": "audio/mpeg"},
+            headers={"xi-api-key": key, "Content-Type": "application/json", "Accept": accept},
         )
         with urllib.request.urlopen(request, timeout=self.timeout) as response:
             audio = response.read()

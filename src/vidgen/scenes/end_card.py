@@ -80,7 +80,7 @@ class EndCard(NarratedScene):
         rows = self._lines(width)
         rows.arrange(DOWN, buff=0.28)
         card = Group(*[g for g in (head, rows) if len(g)]).arrange(DOWN, buff=0.85)
-        shrink_to_fit(card, self.safe_width, self.safe_height).move_to(ORIGIN)
+        shrink_to_fit(card, self.safe_width, self.safe_height).move_to(self.safe_area.center)
 
         heads = [self.target(name, m, entrance=lambda m=m: [FadeIn(m, shift=UP * 0.15)]) for name, m in zip(names, head)]
         lines = [self.target(f"line{k}", m, entrance=lambda m=m: [FadeIn(m, shift=UP * 0.15)]) for k, m in enumerate(rows, start=1)]

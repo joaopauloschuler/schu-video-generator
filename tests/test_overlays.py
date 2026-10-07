@@ -235,7 +235,7 @@ def test_project_overlay_type_is_registered_listed_and_validated(make_project, c
     assert check_project(p) == []
     _, doc, _ = run_json(["list-scenes", str(root), "--json"], capsys)
     entries = {o["name"]: o for o in doc["overlays"]}
-    assert set(entries) == {"badge", "lower_third", "watermark", "progress_bar", "chapter_indicator"}
+    assert set(entries) == {"badge", "lower_third", "watermark", "progress_bar", "chapter_indicator", "captions"}
     badge = entries["badge"]
     assert (badge["origin"], badge["builtin"], badge["layer"], badge["lint_skip"]) == (str(Path("extensions") / "badge.py"), False, 0, [])
     assert badge["doc"].startswith('A "LIVE" badge')

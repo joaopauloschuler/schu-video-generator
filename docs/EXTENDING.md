@@ -818,8 +818,8 @@ An overlay (docs/CONFIG.md "Overlays") is drawn on top of every scene it applies
 the screen: the scene's camera and fades never touch it. A project adds overlay types the way it
 adds actions: a class registered with `@overlay("name")`, its `Options` (an `OverlayOptions`
 model) being the extra keys of the `overlays:` entry. The built-ins are in
-`src/vidgen/scenes/overlays.py` (`lower_third`, `watermark`) and `src/vidgen/scenes/progress.py`
-(`progress_bar`, `chapter_indicator`).
+`src/vidgen/scenes/overlays.py` (`lower_third`, `watermark`), `src/vidgen/scenes/progress.py`
+(`progress_bar`, `chapter_indicator`) and `src/vidgen/scenes/captions.py` (`captions`).
 
 ```python
 # extensions/badge.py
@@ -886,9 +886,12 @@ overlays:
   validate` runs (a file exists, a beat id exists), one `"option: message"` per problem.
 - Class attributes: `layer` (drawing order between overlays, default 0), `lint_skip` (rules not
   applied to its objects, e.g. `("contrast",)` for something faint on purpose).
+- `default_reserve()`: whether scenes keep clear of it when the entry gives no `reserve`
+  (default `False`; the built-in `captions` say `True` at the top or bottom); `self.reserves` is
+  the answer for this entry and scene.
 
 Overlays are composited into each frame as the scene renders, so stills, the layout dump
-(objects with `overlay: <id>`) and `vidgen lint` (`overlay_overlap`) see them; a `reserve: true`
+(objects with `overlay: <id>`) and `vidgen lint` (`overlay_overlap`) see them; a reserving
 entry shrinks `self.safe_area` of the scenes it is drawn on (and so `self.region(...)`), which
 scene types that lay out in the safe area follow automatically. `vidgen list-scenes` lists your
 overlay type with its options; `vidgen schema` includes them. Overlays are drawn with a camera
@@ -900,3 +903,20 @@ cropped to their box, so a thin or small overlay costs little per state.
 starts), `start` / `end` / `duration` in the video (planned, at `fps`, default the final
 format's), `index` (1-based), `count`, `card` (starts with a `chapter` scene). An overlay gets
 the same list as `self.context.chapters`.
+
+**Narration text and word times** (what the `captions` overlay is built from, for an overlay or a
+scene that shows the narration its own way):
+- `beat_word_times(audio_dir, beat_id, text, start, end) -> [WordTime(text, start, end)]`: when
+  each word of a beat is spoken, `start`..`end` being its narration (e.g. a `BeatSlot`'s, from
+  `self.context.scene.beats`; audio folder `self.context.project.audio_dir`): from the stored
+  ElevenLabs alignment (`voice.timestamps`), else estimated within the MP3's speech, else over the
+  beat. `estimate_word_times(words, start, end)` is the estimate alone (by `syllables(word)`,
+  with pauses after punctuation); `speech_bounds(path)` finds the speech in an audio file;
+  `spoken_words(text)` counts spoken words (numbers, acronyms).
+- `caption_cues(text, start, end, *, words=None, widths=None, space=1, max_width=42,
+  max_lines=2, max_words=None, until=None) -> [CaptionCue(start, end, lines, words)]`: the text
+  cut at phrase boundaries into cues (`segment_cues`, costs by `phrase_break_cost`), each timed
+  from its first word to the next cue — the same cutting as the SRT (widths in characters
+  there, measured with `measure_text` in `captions`).
+- `plate_contrast(color, plate, opacity)`: the contrast text keeps on a translucent plate over
+  anything (the worse of the plate over black and over white).

@@ -85,7 +85,8 @@ def _stat(path: Path) -> list[int] | None:
 
 def _overlay_inputs(project: Project) -> Any:
     """What overlays read from the other scenes (their planned timeline: types, durations, beat
-    texts and MP3s, chapters; DESIGN.md §41-42); ``None`` without overlays."""
+    texts and MP3s, chapters; DESIGN.md §41-42) and the beats' stored alignments (captions,
+    §43); ``None`` without overlays."""
     cfg = project.config
     if not cfg.overlays and not any(isinstance(s.overlays, dict) for s in cfg.scenes):
         return None
@@ -98,7 +99,9 @@ def _overlay_inputs(project: Project) -> Any:
             "number": s.params.get("number") if s.type == "chapter" else None,
             "chapter": s.model_dump(mode="json")["chapter"],
             "overlays": s.overlays,
-            "beats": [[b.id, b.text, _stat(project.audio_dir / f"{b.id}.mp3")] for b in s.beats],
+            "beats": [
+                [b.id, b.text, _stat(project.audio_dir / f"{b.id}.mp3"), _stat(project.audio_dir / f"{b.id}.align.json")] for b in s.beats
+            ],
         }
         for s in cfg.scenes
     ]

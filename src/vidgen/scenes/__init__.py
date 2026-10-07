@@ -5,13 +5,14 @@ and ``@scene``); a module here is registered as "builtin" because it lives insid
 Importing this package imports every scene module (add new modules to the import list below)
 the built-in per-beat actions (``actions``: reveal, dim, highlight, zoom, transform) and the
 built-in overlays (``overlays``: lower_third, watermark; ``progress``: progress_bar,
-chapter_indicator).
+chapter_indicator; ``captions``: captions).
 """
 
 from vidgen.scenes import (  # noqa: F401
     actions,
     bar_chart,
     bullets,
+    captions,
     chapter,
     code,
     code_walkthrough,

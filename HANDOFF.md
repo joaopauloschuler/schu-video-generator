@@ -3628,3 +3628,94 @@ tests/test_chapters_progress.py`. Manual: `vidgen storyboard examples/gallery --
 --per-beat 2 [--variant vertical]`, `vidgen lint examples/gallery [--variant ...]`, `python -c "from
 vidgen.project import Project; from vidgen.api import video_chapters;
 print(video_chapters(Project.load('examples/gallery')))"`.
+
+## Step 40 — Burned-in captions
+What was built
+- **`captions` overlay** (`src/vidgen/scenes/captions.py`, built on the Step 38 framework, so
+  storyboard, layout dump, lint, `list-scenes` and `schema` see it): the narration burned into the
+  video, off unless listed. `style: subtitles` (default; one or two lines on a plate) or
+  `karaoke` (alias `words`; a few big bold words, the spoken one in `highlight` with a scale
+  `pop` capped so it never touches its neighbours). `position` bottom (default; 9:16 raised by
+  `lift` 0.12 of the safe height like the lower third) / top / center of the safe area; `size`,
+  `bold`, `max_lines`, `max_words`, `max_width` with per-style defaults; `color` (auto: the most
+  readable of text / background / white / black), `background` + `background_opacity` (raised
+  automatically until the text reaches `lint.rules.contrast.min_ratio` over anything behind it;
+  `null` → no plate, an outline). Cue shown from its first spoken word until the next cue; a
+  beat's last cue through the pad. `lint_skip = ("max_words",)` (captions are the narration).
+- **Reserve per type**: `OverlayConfig.reserve` is now `bool | None`; `Overlay.default_reserve()`
+  (base `False`) and `Overlay.reserves`. Captions reserve their band at the top / bottom by default
+  (scenes lay out above it), not when centred (lint `overlay_overlap` reports what they cover).
+  Silent scenes: `shown_in` false → no captions, no reserve.
+- **Word times** (`src/vidgen/speech.py`): `spoken_words` / `speech_bounds` moved here from
+  `lint/timing_rules.py` (re-imported there); `syllables`, `pause_after`, `estimate_word_times`
+  (syllable-weighted, pauses after sentence ends and clause marks), `beat_word_times` (stored
+  alignment > estimate within the MP3's speech bounds > estimate over the beat), alignment files
+  `write_alignment` / `read_alignment` / `aligned_word_times` (`<audio>/<beat>.align.json`, valid
+  only for the same text and MP3 sha1).
+- **ElevenLabs seam**: `voice.timestamps: true` → `vidgen tts` calls
+  `ElevenLabsProvider.synthesize_timed` (`/with-timestamps`, JSON `audio_base64` + `alignment`)
+  and stores the alignment; without it a stale alignment is removed; variant copies carry it.
+  Mocked in tests; the real API was never called.
+- **Shared cue cutting** (`src/vidgen/cues.py`): `phrase_break_cost`, `segment_cues` (DP over
+  cue/line breaks: sentence < clause < conjunction < preposition < plain < after an article;
+  fuller cues, balanced lines, new sentences start lines), `split_cues`, `caption_cues`,
+  `CaptionCue`. **The SRT now uses it** (`split_text`, `beat_cues(..., words=)`,
+  `cues_from_timings(timings, audio_dir)`, `write_srt(path, timings, audio_dir)`), with cue times
+  from word times instead of proportional characters.
+- `plate_contrast(color, plate, opacity)` in `vidgen.charts` (worst case over black / white).
+- **Fix**: `title` and `end_card` centred their card on the frame origin instead of the (possibly
+  reserved) safe area; they now centre in `self.safe_area` (no change without reserved overlays).
+- **Example**: `examples/minimal` variants `subtitled` (16:9 captions) and `social` (9:16 karaoke).
+
+Files
+- New: `src/vidgen/speech.py`, `src/vidgen/cues.py`, `src/vidgen/scenes/captions.py`,
+  `tests/test_captions.py` (20 tests).
+- Changed: `config.py` (`VoiceConfig.timestamps`, `OverlayConfig.reserve` optional),
+  `overlays.py` (`default_reserve`, `reserves`), `scene.py` (uses `reserves`), `subtitles.py`,
+  `render/pipeline.py` (SRT gets the audio folder), `render/fingerprint.py` (alignment stats in
+  overlay inputs), `lint/timing_rules.py` (imports from `speech`), `tts/__init__.py` (protocol doc),
+  `tts/elevenlabs.py` (`synthesize_timed`, shared `_send`), `tts/run.py` (alignments), `charts.py`
+  (`plate_contrast`), `api.py`, `scenes/__init__.py`, `scenes/title.py`, `scenes/end_card.py`;
+  tests `test_subtitles.py` (timing by words, phrase-boundary cutting), `test_overlays.py` (overlay
+  list); `examples/minimal/video.yaml`; docs/CONFIG.md (voice `timestamps`, alignment files,
+  `reserve` default, new `captions` section), docs/EXTENDING.md (section 9: `default_reserve`,
+  word-time and cue helpers), README.md, DESIGN.md (module tree, §6.4, new §43), tasklist.md.
+
+Public interfaces added/changed
+- `vidgen.api`: `WordTime`, `beat_word_times`, `estimate_word_times`, `speech_bounds`,
+  `spoken_words`, `syllables`, `CaptionCue`, `caption_cues`, `segment_cues`, `phrase_break_cost`,
+  `plate_contrast`; `Overlay.default_reserve()`, `Overlay.reserves` (additive).
+- Config: `voice.timestamps`; overlay type `captions`; `reserve` default is now "the type's"
+  (`false` for every earlier type, so existing configs behave the same).
+- `vidgen.subtitles`: `beat_cues(..., words=None)`, `cues_from_timings(timings, audio_dir=None)`,
+  `write_srt(path, timings, audio_dir=None)` (compatible signatures; **different cue texts and
+  times**: phrase-boundary cuts, word-timed).
+- Files: `audio/<beat>.align.json` (with `voice.timestamps`).
+
+Decisions / deviations
+- SRT and captions share the cutting *method*; their cues match exactly only when widths agree
+  (SRT: 42 characters; captions: measured text in Manim units). Documented in CONFIG.md / §43.
+- Captions hold the last cue of a beat through the pad, so beat-end stills (what lint checks)
+  show them; the reserved box is the whole band (stable layout), not each scene's cues.
+- Karaoke contrast: an unreadable `highlight` is swapped for the first readable accent with a
+  warning, rather than failing lint; the plate opacity is raised rather than the text recoloured
+  when the user picked a `color`.
+- `timestamps` is not part of the audio hash (same audio); `vidgen tts --force` fetches timings
+  for existing beats.
+
+Known gaps / TODOs
+- Karaoke highlights whole words (no progressive fill), one word at a time.
+- Bottom captions and a `lower_third` are both placed in the global safe area; in 9:16 they can
+  overlap (captions are drawn on top). Step 48 could make overlays avoid reserved overlays.
+- Estimated word times drift on numbers, names and long pauses; `voice.timestamps` fixes that.
+- `examples/gallery` does not use captions (its lower third would meet them in 9:16).
+
+Verification: `vidgen lint examples/minimal --variant subtitled` and `--variant social`: 0
+findings (before: `max_words` counted karaoke words, `title` / `end_card` overlapped the reserved
+band in 9:16 — both fixed); storyboards of both read (cues at phrase boundaries, plates readable,
+karaoke highlight on the spoken word, charts laid out above the band).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1705 passed, 1 skipped, ~13.5 min);
+step only: `pytest tests/test_captions.py tests/test_subtitles.py`. Manual: `vidgen storyboard
+examples/minimal --variant social --scene steps --per-beat 3`, `vidgen lint examples/minimal
+--variant subtitled`.

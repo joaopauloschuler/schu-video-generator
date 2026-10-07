@@ -32,6 +32,7 @@ from vidgen.callouts import (  # noqa: E402
     label_spot,
 )
 from vidgen.clips import CLIP_SUFFIXES, ClipInfo, ClipMobject, ClipTiming, clip_audio, fit_speed, probe_clip  # noqa: E402
+from vidgen.cues import CaptionCue, caption_cues, phrase_break_cost, segment_cues  # noqa: E402
 from vidgen.charts import (  # noqa: E402
     CHART_MARKERS,
     ChartAxes,
@@ -51,6 +52,7 @@ from vidgen.charts import (  # noqa: E402
     legend_spot,
     linear_fit,
     mix_colors,
+    plate_contrast,
     sample_path,
     short_number,
     text_color_on,
@@ -93,6 +95,7 @@ from vidgen.overlays import Overlay, OverlayContext, OverlayOptions, with_opacit
 from vidgen.registry import action, overlay, scene  # noqa: E402
 from vidgen.runtime import current_project, current_theme  # noqa: E402
 from vidgen.scene import IconName, NarratedScene, SceneParams, ThemeColor, ThemeSize, one_or_many  # noqa: E402
+from vidgen.speech import WordTime, beat_word_times, estimate_word_times, speech_bounds, spoken_words, syllables  # noqa: E402
 from vidgen.videoplan import Chapter, video_chapters  # noqa: E402
 
 
@@ -246,6 +249,17 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "color_bar",
     "mix_colors",
     "text_color_on",
+    "plate_contrast",
+    "CaptionCue",
+    "caption_cues",
+    "phrase_break_cost",
+    "segment_cues",
+    "WordTime",
+    "beat_word_times",
+    "estimate_word_times",
+    "speech_bounds",
+    "spoken_words",
+    "syllables",
     "CALLOUT_KINDS",
     "Callout",
     "CalloutArea",

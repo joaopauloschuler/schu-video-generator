@@ -1,19 +1,23 @@
-"""SRT subtitles from beat timings (DESIGN.md §5.2).
+"""SRT subtitles from beat timings (DESIGN.md §5.2, §43).
 
-Each beat becomes one or more cues. Long beat texts are wrapped into lines of at most
-``width`` characters and grouped into cues of at most ``max_lines`` lines; the beat's time is
-shared between its cues in proportion to their number of characters. Cue ends are beat ends
-(the narration), not including the silence pad after a beat.
+Each beat becomes one or more cues, cut at natural phrase boundaries into at most ``max_lines``
+lines of ``width`` characters by :func:`vidgen.cues.segment_cues` — the same cutting the burned-in
+``captions`` overlay uses, so both show the same pieces. A cue starts when its first word is
+spoken (the beat's first cue at the beat's start) and lasts until the next one; word times come
+from :func:`vidgen.speech.beat_word_times` (the TTS alignment, else an estimate within the
+MP3's speech, else over the beat). Cue ends are beat ends (the narration), not including the
+silence pad after a beat.
 """
 
 from __future__ import annotations
 
-import textwrap
 from collections.abc import Iterable
 from pathlib import Path
 from typing import NamedTuple
 
+from vidgen.cues import caption_cues, split_cues
 from vidgen.fileio import write_text_atomic
+from vidgen.speech import WordTime, beat_word_times
 
 LINE_WIDTH = 42
 MAX_LINES = 2
@@ -29,29 +33,26 @@ class Cue(NamedTuple):
 
 def split_text(text: str, width: int = LINE_WIDTH, max_lines: int = MAX_LINES) -> list[str]:
     """Split ``text`` into cue texts of at most ``max_lines`` lines of ``width`` characters."""
-    lines = textwrap.wrap(" ".join(text.split()), width=width, break_on_hyphens=False)
-    return ["\n".join(lines[i : i + max_lines]) for i in range(0, len(lines), max_lines)]
+    return ["\n".join(lines) for lines in split_cues(text, width, max_lines)]
 
 
-def beat_cues(start: float, end: float, text: str, width: int = LINE_WIDTH, max_lines: int = MAX_LINES) -> list[Cue]:
-    """Cues for one beat spanning ``start``..``end``, time shared in proportion to characters."""
-    parts = split_text(text, width, max_lines)
-    total = sum(len(p) for p in parts)
-    cues = []
-    done = 0
-    for part in parts:
-        cue_start = start + (end - start) * done / total
-        done += len(part)
-        cues.append(Cue(cue_start, start + (end - start) * done / total, part))
-    return cues
+def beat_cues(
+    start: float, end: float, text: str, width: int = LINE_WIDTH, max_lines: int = MAX_LINES, words: list[WordTime] | None = None
+) -> list[Cue]:
+    """Cues for one beat spanning ``start``..``end``, timed by its ``words`` (default: estimated
+    over the beat)."""
+    cues = caption_cues(text, start, end, words=words, max_width=float(width), max_lines=max_lines)
+    return [Cue(c.start, c.end, c.text) for c in cues]
 
 
-def cues_from_timings(timings: dict) -> list[Cue]:
-    """All cues of a combined ``timings.json`` mapping (beat times are absolute)."""
+def cues_from_timings(timings: dict, audio_dir: Path | None = None) -> list[Cue]:
+    """All cues of a combined ``timings.json`` mapping (beat times are absolute); with
+    ``audio_dir``, word times come from the beats' MP3s and alignments there."""
     cues: list[Cue] = []
     for scene in timings["scenes"]:
         for beat in scene["beats"]:
-            cues.extend(beat_cues(beat["start"], beat["end"], beat["text"]))
+            words = beat_word_times(audio_dir, beat["id"], beat["text"], beat["start"], beat["end"]) if audio_dir is not None else None
+            cues.extend(beat_cues(beat["start"], beat["end"], beat["text"], words=words))
     return cues
 
 
@@ -73,8 +74,9 @@ def format_srt(cues: Iterable[Cue]) -> str:
     return "\n".join(blocks)
 
 
-def write_srt(path: Path, timings: dict) -> list[Cue]:
-    """Write the SRT for a combined timings mapping as UTF-8; returns the cues."""
-    cues = cues_from_timings(timings)
+def write_srt(path: Path, timings: dict, audio_dir: Path | None = None) -> list[Cue]:
+    """Write the SRT for a combined timings mapping as UTF-8 (word times from ``audio_dir``, see
+    :func:`cues_from_timings`); returns the cues."""
+    cues = cues_from_timings(timings, audio_dir)
     write_text_atomic(path, format_srt(cues))
     return cues

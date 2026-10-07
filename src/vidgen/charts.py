@@ -553,6 +553,16 @@ def text_color_on(fill: Any, *, min_ratio: float = TEXT_RATIO, theme: Theme | No
     return best if ratio(best) >= min_ratio else max(("#FFFFFF", "#000000"), key=ratio)
 
 
+def plate_contrast(color: Any, plate: Any, opacity: float = 1.0, *, theme: Theme | None = None) -> float:
+    """The WCAG contrast ratio text in ``color`` keeps on a ``plate`` (theme tokens or hex)
+    drawn at ``opacity`` over *anything*: the lower of the plate over black and over white
+    (a caption plate over a picture)."""
+    theme = theme or current_theme()
+    text = hex_rgb(resolve_color(color, theme))
+    fill = hex_rgb(resolve_color(plate, theme))
+    return min(contrast_ratio(text, blend(fill, under, opacity)) for under in ((0.0, 0.0, 0.0), (1.0, 1.0, 1.0)))
+
+
 @dataclass(frozen=True)
 class ColorScale:
     """Values ``lo..hi`` mapped to colours: ``scale(v)`` gives the ``#RRGGBB`` of a value,

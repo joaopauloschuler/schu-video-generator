@@ -284,7 +284,7 @@ class NarratedScene(MovingCameraScene):
             self.overlay_layer = OverlayLayer(self, overlays)
             self.overlay_layer.attach()  # after the capture: stills and the layout dump see overlays
             for overlay, mob in zip(self.overlay_layer.overlays, self.overlay_layer.mobjects):
-                box = mobject_region(mob) if overlay.config.reserve and mob is not None else None
+                box = mobject_region(mob) if overlay.reserves and mob is not None else None
                 if box is not None:
                     self._reserved.append(box)
 

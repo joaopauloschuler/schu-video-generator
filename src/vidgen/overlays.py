@@ -162,6 +162,17 @@ class Overlay:
         the whole span (the default)."""
         return None
 
+    def default_reserve(self) -> bool:
+        """Whether scenes keep clear of it when its entry does not say (``reserve`` unset).
+        Default ``False``; captions along the top or bottom edge say ``True``."""
+        return False
+
+    @property
+    def reserves(self) -> bool:
+        """Whether the scenes it is drawn on keep their layouts clear of it: the entry's (or the
+        scene's override's) ``reserve``, else :meth:`default_reserve`."""
+        return self.config.reserve if self.config.reserve is not None else self.default_reserve()
+
     def build(self) -> Mobject | None:
         """The overlay at its full look and place (called once per scene render)."""
         raise NotImplementedError

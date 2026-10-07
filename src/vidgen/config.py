@@ -138,6 +138,8 @@ class VoiceConfig(_Strict):
     """ElevenLabs voice_settings."""
     context: bool = True
     """Send the neighbouring beats' text for continuous intonation."""
+    timestamps: bool = False
+    """Also fetch when each character is spoken (ElevenLabs with-timestamps), stored as audio/<beat>.align.json for exact karaoke captions."""
 
 
 class NarrationConfig(_Strict):
@@ -466,8 +468,8 @@ class OverlayConfig(BaseModel):
     """Where it starts: seconds in the video, or a scene id (that scene's start); default the video's start."""
     to: OverlayTime | None = None
     """Where it ends: seconds in the video, or a scene id (that scene's end); default the video's end."""
-    reserve: bool = False
-    """Keep scene layouts clear of it: the safe area of every scene it is drawn on shrinks to avoid its box."""
+    reserve: bool | None = None
+    """Keep scene layouts clear of it: the safe area of every scene it is drawn on shrinks to avoid its box (default: the type's choice, false for most; captions at the top or bottom: true)."""
 
     @property
     def options(self) -> dict[str, Any]:

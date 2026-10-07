@@ -43,6 +43,11 @@ subtitles.
   moves and fades and seamless across cuts; per scene on/off or overridden
   ([reference](docs/CONFIG.md#overlays)). Chapters come from `chapter` cards or a scene's
   `chapter:` key ([chapters](docs/CONFIG.md#chapters)).
+- **Burned-in captions**: `- {type: captions}` puts the narration into the picture, cut at
+  phrase boundaries like the SRT, with the scenes laid out clear of it; `style: karaoke` shows a
+  few big words at a time with the spoken one highlighted, for vertical / social videos. Word
+  times are estimated from the audio, or exact with `voice: {timestamps: true}` (ElevenLabs
+  character timings) ([reference](docs/CONFIG.md#captions)).
 - **Extensible per video**: a project can add its own scene types, beat actions, overlays,
   helpers, theme tokens and pipeline hooks in its `extensions/` folder, without touching vidgen.
 - **Cheap to iterate**: only new or edited beats are sent to ElevenLabs; fast low-resolution
@@ -167,7 +172,8 @@ my_video/
 
 - [examples/minimal](examples/minimal) — the core built-in scene types (title, bullets, icon
   grid, charts, image, quote, equation, code, cards) and beat actions, no Python:
-  `vidgen render examples/minimal --preview [--variant vertical]`.
+  `vidgen render examples/minimal --preview [--variant vertical]`; burned-in captions with
+  `--variant subtitled`, 9:16 karaoke captions with `--variant social`.
 - [examples/gallery](examples/gallery) — every other built-in scene type once (stat, chapter,
   comparison, table, timeline, diagram, process, network, scatter, histogram, pie, heatmap, map,
   screenshot, video clip, equation derivation, code walkthrough) and overlays (a watermark, a

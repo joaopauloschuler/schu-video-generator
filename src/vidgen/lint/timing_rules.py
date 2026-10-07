@@ -7,94 +7,14 @@ signal. ``narration_speed`` also measures the beats' MP3s.
 
 from __future__ import annotations
 
-import re
 from collections.abc import Iterator
-from functools import lru_cache
-from pathlib import Path
 from typing import Any
 
-import av
 import numpy as np
 
 from vidgen.config import AnimationOverrunRule, DeadAirRule, NarrationSpeedRule, RushedAnimationRule
-from vidgen.errors import VidgenError
 from vidgen.lint.rules import Issue, SceneContext, rule
-
-# ----- spoken words -----------------------------------------------------------------------------
-
-_TOKEN = re.compile(r"[^\s\-–—/]+")  # hyphens, dashes and slashes separate words ("one-by-one": 3)
-_EDGE = ".,;:!?\"'()[]{}…“”‘’«»"
-_ACRONYM = re.compile(r"[A-Z]{2,5}s?")
-_SYMBOLS = re.compile(r"[%$€£+=×&#@]")
-
-
-def spoken_words(text: str) -> float:
-    """How many words a narrator says for ``text`` (an estimate for counting speech rate).
-
-    Words split at spaces, hyphens, dashes and slashes (``K-Phi-3`` is 3, ``one-by-one`` 3). In
-    a token with digits every digit run counts as ``min(len, 3)`` words ("227": "two hundred
-    twenty-seven"), a decimal or thousands separator before a digit as one ("point"), symbols
-    ``% $ € £ + = × & # @`` as one each, and letters next to the digits as one more. An
-    all-capitals acronym of 2-5 letters (``GPU``, ``NVIDIA`` is a word) counts half a word per
-    letter, at least one. Everything else is one word.
-    """
-    total = 0.0
-    for token in _TOKEN.findall(text):
-        core = token.strip(_EDGE)
-        if not core:
-            continue
-        if any(ch.isdigit() for ch in core):
-            total += sum(min(len(run), 3) for run in re.findall(r"\d+", core))
-            total += len(re.findall(r"[.,]\d", core))
-            total += len(_SYMBOLS.findall(core))
-            total += 1 if any(ch.isalpha() for ch in core) else 0
-        elif _ACRONYM.fullmatch(core):
-            total += max(1.0, len(core.rstrip("s")) / 2)
-        elif any(ch.isalnum() for ch in core):
-            total += 1
-        else:
-            total += len(_SYMBOLS.findall(core))
-    return total
-
-
-#: Speech starts/ends where the 10 ms envelope first/last exceeds this level below the peak.
-SILENCE_DB = -40.0
-
-
-@lru_cache(maxsize=256)
-def _speech_bounds(path: Path, mtime_ns: int) -> tuple[float, float]:
-    try:
-        with av.open(str(path)) as container:
-            stream = container.streams.audio[0]
-            rate = stream.rate or 0
-            chunks: list[np.ndarray] = []
-            for frame in container.decode(stream):
-                samples = frame.to_ndarray()
-                if not frame.format.is_planar:
-                    samples = samples.reshape(-1, len(frame.layout.channels)).T
-                chunks.append(np.abs(samples.astype(np.float32)).max(axis=0))
-                rate = frame.sample_rate or rate
-    except (OSError, ValueError, IndexError, av.error.FFmpegError) as exc:
-        raise VidgenError(f"cannot read audio file {path}: {exc}") from None
-    if not chunks or not rate:
-        raise VidgenError(f"cannot read audio file {path}: no audio samples")
-    level = np.concatenate(chunks)
-    window = max(1, int(rate * 0.01))
-    count = len(level) // window
-    if count == 0:
-        return 0.0, len(level) / rate
-    envelope = level[: count * window].reshape(count, window).max(axis=1)
-    loud = np.nonzero(envelope > envelope.max() * 10 ** (SILENCE_DB / 20))[0]
-    if loud.size == 0:
-        return 0.0, len(level) / rate
-    return float(loud[0] * window / rate), float((loud[-1] + 1) * window / rate)
-
-
-def speech_bounds(path: Path) -> tuple[float, float]:
-    """Start and end (seconds) of the speech in an audio file: the leading and trailing
-    silence (below :data:`SILENCE_DB` relative to its loudest 10 ms) cut off."""
-    return _speech_bounds(path, path.stat().st_mtime_ns)
-
+from vidgen.speech import SILENCE_DB, speech_bounds, spoken_words  # noqa: F401  (moved to vidgen.speech in Step 40)
 
 # ----- narration_speed --------------------------------------------------------------------------
 

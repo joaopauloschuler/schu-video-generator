@@ -12,6 +12,8 @@
 #   vidgen storyboard examples/minimal --scene sizes --per-beat 3   # mid-beat stills: beat actions
 #   vidgen storyboard examples/minimal --scene math --per-beat 3    # transform and zoom actions
 #   vidgen storyboard examples/minimal --variant light           # same video with the light_academic preset
+#   vidgen storyboard examples/minimal --variant subtitled       # burned-in captions (SRT-style cues)
+#   vidgen storyboard examples/minimal --variant social --per-beat 3   # 9:16 karaoke captions
 #   vidgen list-themes examples/minimal --swatches build/themes.png  # every theme preset at a glance
 # There is no narration audio in this example, so beats are timed from their word count
 # (narration.words_per_second); run `vidgen tts` with an ElevenLabs key to voice it.
@@ -37,6 +39,12 @@ variants:
     theme: {preset: soft_pastel}
   neon:
     theme: {preset: bold_neon}
+  subtitled:                      # the narration burned in as captions (docs/CONFIG.md "captions")
+    overlays: [{type: captions}]
+  social:                         # 9:16 for social apps: karaoke captions, the spoken word highlighted
+    format: {width: 1080, height: 1920}
+    preview: {width: 480, height: 854}
+    overlays: [{type: captions, style: karaoke}]
 
 theme:
   preset: dark_tech   # the default look; values written here would override every variant's preset

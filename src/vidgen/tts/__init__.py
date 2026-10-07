@@ -15,7 +15,13 @@ from vidgen.errors import VidgenError
 
 
 class TTSProvider(Protocol):
-    """What the TTS command needs from a provider. Constructing one never needs an API key."""
+    """What the TTS command needs from a provider. Constructing one never needs an API key.
+
+    A provider that can say when each character is spoken also has ``synthesize_timed(text,
+    previous_text=None, next_text=None) -> (audio, alignment | None)`` (``alignment``:
+    ``{characters, character_start_times_seconds, character_end_times_seconds}``); ``vidgen
+    tts`` calls it when ``voice.timestamps`` is on and stores the alignment next to the MP3
+    (:func:`vidgen.speech.write_alignment`)."""
 
     name: str
 

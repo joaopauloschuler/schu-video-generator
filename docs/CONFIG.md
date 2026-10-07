@@ -356,10 +356,18 @@ voice:
     style: 0.0                      # 0..1
     use_speaker_boost: true
   context: true                     # send the neighbouring beats' text for smoother intonation
+  timestamps: false                 # also fetch when each character is spoken (karaoke captions)
 ```
 
 All keys are optional; the values shown are the defaults. Unknown keys are an error. Changing
 `voice_id`, `model_id`, `output_format` or `settings` re-voices every beat on the next `vidgen tts`.
+
+`timestamps: true` makes `vidgen tts` use ElevenLabs' *with-timestamps* endpoint (same voice,
+same price): besides `audio/<beat_id>.mp3` it stores `audio/<beat_id>.align.json`, when each
+character is spoken, and burned-in [`captions`](#captions) and the SRT then time every word
+exactly. Without it word times are estimated (see `captions`). It is not part of the audio hash:
+turning it on does not re-voice anything; `vidgen tts --force` fetches the timings for existing
+beats (paid again).
 
 ## Narration (`narration:`)
 
@@ -372,7 +380,9 @@ narration:
 ## Narration audio (ElevenLabs)
 
 Each beat is spoken by ElevenLabs into `audio/<beat_id>.mp3`, with `audio/<beat_id>.hash`
-recording what it was generated from.
+recording what it was generated from (and, with `voice.timestamps`, `audio/<beat_id>.align.json`:
+its character timings, with the text and a hash of the MP3 they belong to, so a stale file is
+ignored).
 
 **API key.** vidgen reads the key only from the environment variable `ELEVENLABS_API_KEY`;
 it never stores it in the config, audio, build files, logs or error messages.
@@ -2251,7 +2261,7 @@ depend on the params, so only `vidgen validate` checks them. Use `vidgen storybo
 ## Overlays
 
 Overlays are drawn **on top of the scenes and fixed to the screen**: a lower third introducing a
-speaker, a logo in a corner, a progress bar, the current chapter. They are listed once for the whole video and appear on every scene
+speaker, a logo in a corner, a progress bar, the current chapter, captions of the narration. They are listed once for the whole video and appear on every scene
 they apply to; the scene's camera moves (a [`zoom`](#beat-actions)) and its fades (the fade-out
 at a scene's end) do not touch them, and they look the same on both sides of a cut. They are
 drawn into each scene's own render, so `vidgen storyboard`, the [layout dump](#layout-dump-buildlayoutscenejson)
@@ -2293,13 +2303,13 @@ Keys every overlay entry has (any other key is an option of its type):
 
 | key | default | |
 |---|---|---|
-| `type` | required | `lower_third`, `watermark`, `progress_bar`, `chapter_indicator`, or a [project overlay type](EXTENDING.md#9-overlays-custom-overlay-types) |
+| `type` | required | `lower_third`, `watermark`, `progress_bar`, `chapter_indicator`, `captions`, or a [project overlay type](EXTENDING.md#9-overlays-custom-overlay-types) |
 | `id` | the type | the name a scene's `overlays:` refers to; when several entries share a type and have no `id`, they are `<type>1`, `<type>2`, ... (ids must be unique) |
 | `scenes` | `all` | the scenes it is drawn on: `all` or a list of scene ids |
 | `exclude` | `[]` | scenes it is not drawn on |
 | `from` | the video's start | where it starts: seconds in the video, or a scene id (that scene's start) |
 | `to` | the video's end | where it ends: seconds in the video, or a scene id (that scene's end) |
-| `reserve` | `false` | keep the scenes' layouts clear of it: on every scene it is drawn on, the safe area (docs/EXTENDING.md "Layout regions") shrinks to leave its box free (plus 0.2 units), so built-in scenes lay out around it (the layout dump's `safe_area` too). Off by default: a lower third shows for a few seconds over content laid out for the whole frame, and a watermark sits in the margin. The safe area is cut on every scene the overlay shows on at all, for the whole scene (a layout is built once): a lower third shown 4 s of a scene shrinks it all along (turn it off there with the scene's `overlays: {ID: {reserve: false}}`). An overlay hidden on a whole scene (the `chapter_indicator` on chapter cards, or outside its `from` / `to`) reserves nothing there |
+| `reserve` | the type's: `false`; `captions` at the top or bottom `true` | keep the scenes' layouts clear of it: on every scene it is drawn on, the safe area (docs/EXTENDING.md "Layout regions") shrinks to leave its box free (plus 0.2 units), so built-in scenes lay out around it (the layout dump's `safe_area` too). Off by default for most types: a lower third shows for a few seconds over content laid out for the whole frame, and a watermark sits in the margin. The safe area is cut on every scene the overlay shows on at all, for the whole scene (a layout is built once): a lower third shown 4 s of a scene shrinks it all along (turn it off there with the scene's `overlays: {ID: {reserve: false}}`). An overlay hidden on a whole scene (the `chapter_indicator` on chapter cards, or outside its `from` / `to`) reserves nothing there |
 
 **On a scene** (`overlays:` of the scene): `false` turns every overlay off there; a mapping
 turns single ones off (`{draft: false}`) or overrides their options and `reserve` for that scene
@@ -2430,6 +2440,66 @@ overlays:
   - type: chapter_indicator
     total: true                     # "2/5 · Results"
     reserve: true
+```
+
+### `captions`
+
+The narration **burned into the video** as captions, in the theme's font and colours (the
+`<output>.srt` file is written either way; this puts the text into the picture, for videos
+watched without sound). Off unless listed. Two styles:
+
+- `subtitles` (default): one or two lines at a time on a plate, like the SRT.
+- `karaoke` (alias `words`): a few big bold words at a time, the word being spoken in the
+  `highlight` colour with a small scale pop — the look of vertical / social videos.
+
+**Cues.** Each beat's text is cut into cues at natural phrase boundaries, the same way as the SRT
+(which now uses the same cutting, with widths in characters): breaks go after a sentence, then
+after a comma, semicolon, colon or dash, then before a conjunction ("and", "which"...) or a
+preposition, never right after an article or preposition ("the | model"); a new sentence starts
+a line; fuller cues and balanced lines are preferred. A cue appears when its first word is spoken
+and stays until the next one; a beat's last cue stays through the pause after it (until the next
+beat, the scene's last until the scene ends). Silent scenes show none.
+
+**Word times** come from the MP3's character timings when `vidgen tts` stored them
+(`voice.timestamps: true`, `audio/<beat_id>.align.json`); otherwise they are estimated: the
+beat's speech (its MP3 with the leading and trailing silence cut off, or the word-count estimate
+without audio) is shared among the words by syllables (numbers by their spoken words, acronyms
+by letters), with pauses after sentence ends and commas. The SRT uses the same word times.
+
+**Placement.** In the safe area at the `bottom` (in 9:16 raised by 12 % of the safe height:
+phone apps put their controls over the bottom), `top` or `center`, centred, at least the
+readable text size, the text no wider than `max_width`. At the top or bottom it **reserves** its
+band (`max_lines` lines high) by default, so the scenes lay out above / below it; centred it
+does not (lint's `overlay_overlap` reports scene text under it; or set `reserve: false` and
+check with lint). Scenes without narration reserve nothing. The plate's opacity is raised when
+needed so the text keeps lint's contrast ratio (`lint.rules.contrast.min_ratio`) over anything
+behind it; a highlight that would not read on the plate is replaced by another theme accent (with
+a warning).
+
+| param | default | |
+|---|---|---|
+| `style` | `subtitles` | `subtitles` or `karaoke` (`words`) |
+| `position` | `bottom` | `bottom`, `top` or `center` (of the safe area) |
+| `size` | `body`; karaoke `title` | text size (at least the readable size) |
+| `bold` | `false`; karaoke `true` | |
+| `max_lines` | `2` | lines per caption (1-3) |
+| `max_words` | none; karaoke `3` | words per caption |
+| `max_width` | `0.8`; karaoke `0.9` | widest the text may be, share of the safe width (9:16: `1`) |
+| `color` | auto | text colour; default the theme's `text` or background colour, whichever reads better on the plate |
+| `highlight` | `highlight` | karaoke: the word being spoken |
+| `pop` | `1.12` | karaoke: scale of the word being spoken (`1`: none); limited so it never touches its neighbours |
+| `background`, `background_opacity` | `surface`, `0.8` | the plate; `background: null` for none (the text then gets an outline in the background colour) |
+| `lift` | `0`; 9:16 `0.12` | bottom captions: raised by this share of the safe height |
+
+```yaml
+overlays:
+  - type: captions                  # subtitles at the bottom; scenes keep clear of them
+variants:
+  social:                           # 9:16 with karaoke captions
+    format: {width: 1080, height: 1920}
+    overlays: [{type: captions, style: karaoke}]
+voice:
+  timestamps: true                  # exact word times from ElevenLabs (vidgen tts)
 ```
 
 ## JSON Schema (`vidgen schema`)
