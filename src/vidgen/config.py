@@ -33,6 +33,8 @@ HEX_COLOR_PATTERN = r"^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$"
 
 Identifier = Annotated[str, Field(pattern=ID_PATTERN)]
 HexColor = Annotated[str, Field(pattern=HEX_COLOR_PATTERN)]
+#: A theme colour token (``secondary``) or a hex colour; the token is checked by ``vidgen validate``.
+ColorRef = Annotated[str, Field(pattern=r"^(?:#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})|[A-Za-z0-9_]+)$")]
 #: A positive font size (pydantic would put a non-standard ``gt`` into the JSON Schema of the union).
 Size = Annotated[int | float, Field(gt=0), WithJsonSchema({"type": "number", "exclusiveMinimum": 0})]
 #: A font role's family: a token (``sans``, ``serif``, ``mono``) or a font family name.
@@ -140,6 +142,54 @@ class VoiceConfig(_Strict):
     """Send the neighbouring beats' text for continuous intonation."""
     timestamps: bool = False
     """Also fetch when each character is spoken (ElevenLabs with-timestamps), stored as audio/<beat>.align.json for exact karaoke captions."""
+    label: str | None = Field(default=None, min_length=1)
+    """Speaker name shown in subtitles / captions when speakers are shown (default: none for this voice)."""
+    color: ColorRef | None = None
+    """Speaker colour (theme token or hex) for captions that colour speakers; default the theme's text colour."""
+
+
+class VoiceSettingsOverride(_Strict):
+    """``voice_settings`` of a named voice: what is not given comes from ``voice.settings``."""
+
+    stability: float | None = Field(default=None, ge=0, le=1)
+    """ElevenLabs stability (0-1); default the base voice's."""
+    similarity_boost: float | None = Field(default=None, ge=0, le=1)
+    """ElevenLabs similarity boost (0-1); default the base voice's."""
+    style: float | None = Field(default=None, ge=0, le=1)
+    """ElevenLabs style exaggeration (0-1); default the base voice's."""
+    use_speaker_boost: bool | None = None
+    """ElevenLabs speaker boost; default the base voice's."""
+
+
+class VoiceEntry(_Strict):
+    """A named voice of ``voices:`` (DESIGN.md §46): the base ``voice:`` with what is given here
+    changed. ``label`` and ``color`` are not inherited (they name this speaker)."""
+
+    provider: Literal["elevenlabs"] | None = None
+    """TTS provider; default the base voice's."""
+    voice_id: str | None = Field(default=None, min_length=1)
+    """ElevenLabs voice id; default the base voice's."""
+    model_id: str | None = Field(default=None, min_length=1)
+    """ElevenLabs model id; default the base voice's."""
+    output_format: str | None = Field(default=None, min_length=1)
+    """ElevenLabs output format; default the base voice's."""
+    settings: VoiceSettingsOverride | None = None
+    """voice_settings; each value not given comes from the base voice's settings."""
+    context: bool | None = None
+    """Send neighbouring beats of the same voice as context; default the base voice's."""
+    timestamps: bool | None = None
+    """Fetch character timings for this voice's beats; default the base voice's."""
+    label: str | None = Field(default=None, min_length=1)
+    """Speaker name in subtitles / captions; default the voice's name (underscores as spaces, first letter capital)."""
+    color: ColorRef | None = None
+    """Speaker colour (theme token or hex) for captions; default the theme palette colour of the voice's position in voices."""
+
+
+class SubtitlesConfig(_Strict):
+    """The optional ``subtitles:`` section: what the SRT file shows besides the narration."""
+
+    speakers: Literal["off", "name"] = "off"
+    """name: put the speaker's label before a beat's first cue when the speaker changes ("Ana: ..."); also the captions' default."""
 
 
 class PronunciationEntry(_Strict):
@@ -521,6 +571,8 @@ class BeatConfig(_Strict):
     """What the narrator says; also the subtitle."""
     actions: list[ActionConfig] = Field(default_factory=list)
     """Per-beat actions on the scene's targets (reveal, dim, highlight, ...), run during this beat."""
+    voice: Identifier | None = None
+    """Who says this beat: a name from voices (or default: the base voice); default the scene's voice."""
 
     def estimated_duration(self, words_per_second: float) -> float:
         """Speech duration estimated from the word count (no padding)."""
@@ -551,6 +603,8 @@ class SceneConfig(_Strict):
     """Video overlays on this scene: false for none, or per overlay id false / option overrides (with type: an overlay of this scene only)."""
     chapter: Annotated[str, Field(min_length=1)] | ChapterConfig | None = None
     """A new chapter starts at this scene: its title, or {title, number}; a `chapter` scene starts one by itself (this then renames it in chapter lists)."""
+    voice: Identifier | None = None
+    """Voice of this scene's beats: a name from voices (or default: the base voice); a beat's own voice wins."""
 
     @model_validator(mode="before")
     @classmethod
@@ -616,6 +670,10 @@ class VideoConfig(_Strict):
     """Colors, sizes, font and background."""
     voice: VoiceConfig = Field(default_factory=VoiceConfig)
     """Text-to-speech voice."""
+    voices: dict[Identifier, VoiceEntry] = Field(default_factory=dict)
+    """Named voices for dialogue (name: {voice_id, settings, label, color, ...}), each the base voice with what it sets changed; scenes and beats pick one with voice: NAME."""
+    subtitles: SubtitlesConfig = Field(default_factory=SubtitlesConfig)
+    """What the SRT shows besides the narration (speaker names)."""
     narration: NarrationConfig = Field(default_factory=NarrationConfig)
     """Beat padding and duration estimate."""
     pronunciation: PronunciationMap = Field(default_factory=dict)
@@ -637,6 +695,15 @@ class VideoConfig(_Strict):
         for name, override in value.items():
             if "variants" in override:
                 raise ValueError(f"variant '{name}' must not contain 'variants'")
+        return value
+
+    @field_validator("voices")
+    @classmethod
+    def _reserved_voice(cls, value: dict[str, VoiceEntry]) -> dict[str, VoiceEntry]:
+        from vidgen.voices import DEFAULT_VOICE
+
+        if DEFAULT_VOICE in value:
+            raise ValueError(f"'{DEFAULT_VOICE}' is the base voice (the voice: section) and cannot be a name in voices")
         return value
 
     @field_validator("pronunciation", mode="before")
@@ -744,6 +811,13 @@ def parse_config(data: Any, source: str = "video.yaml") -> VideoConfig:
     if not isinstance(data, dict):
         raise VidgenError(f"{source}: the top level must be a mapping (key: value pairs)")
     try:
-        return VideoConfig.model_validate(data)
+        config = VideoConfig.model_validate(data)
     except ValidationError as exc:
         raise VidgenError(format_validation_error(exc, source, VideoConfig), problems=validation_problems(exc, model=VideoConfig, noun="key")) from None
+    from vidgen.voices import voice_reference_problems
+
+    problems = voice_reference_problems(config)
+    if problems:
+        lines = [f"{source}: invalid config", *(f"  {problem}" for problem in problems)]
+        raise VidgenError("\n".join(lines), problems=problems)
+    return config

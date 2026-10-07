@@ -10,9 +10,10 @@ from typing import Any
 
 import yaml
 
-from vidgen.config import BeatConfig, FormatConfig, SceneConfig, VideoConfig, parse_config
+from vidgen.config import BeatConfig, FormatConfig, SceneConfig, VideoConfig, VoiceConfig, parse_config
 from vidgen.errors import VidgenError
 from vidgen.pronunciation import Pronunciation, load_pronunciation
+from vidgen.voices import audio_fields, beat_voice_names, resolve_voice, speaker_tags
 
 CONFIG_NAMES: tuple[str, ...] = ("video.yaml", "video.yml", "video.json")
 
@@ -87,6 +88,7 @@ class Project:
         #: loading reads the files, so a missing or invalid one is a :class:`VidgenError` here.
         self.pronunciation: Pronunciation = load_pronunciation(config, root)
         self._own_audio: bool | None = None
+        self._voices: dict[str | None, VoiceConfig] = {}
 
     @classmethod
     def load(cls, path: str | Path = ".", variant: str | None = None) -> Project:
@@ -128,7 +130,8 @@ class Project:
     def has_own_audio(self) -> bool:
         """True for a variant whose audio would differ from the base config's: its effective
         ``voice`` differs, or a beat id present in both configs has a different spoken text (its
-        text, or the pronunciation of a term in it)."""
+        text, or the pronunciation of a term in it) or a different effective voice (``voices:``;
+        a speaker's ``label`` / ``color`` do not count)."""
         if self.variant is None:
             return False
         if self._own_audio is None:
@@ -136,11 +139,42 @@ class Project:
         return self._own_audio
 
     def _audio_differs(self) -> bool:
-        if self.config.voice.model_dump() != self.base_config.voice.model_dump():
+        if audio_fields(self.config.voice) != audio_fields(self.base_config.voice):
             return True
-        base_say = load_pronunciation(self.base_config, self.root).say
-        base_texts = {beat.id: base_say(beat.text) for scene in self.base_config.scenes for beat in scene.beats}
-        return any(base_texts.get(beat_id, spoken) != spoken for beat_id, spoken in self.spoken_texts().items())
+        base = Project(self.root, self.config_file, self.base_config, None)
+        base_spoken = base.spoken_texts()
+        for beat_id, spoken in self.spoken_texts().items():
+            if beat_id not in base_spoken:
+                continue
+            if base_spoken[beat_id] != spoken or audio_fields(base.beat_voice(beat_id)) != audio_fields(self.beat_voice(beat_id)):
+                return True
+        return False
+
+    # ----- voices (DESIGN.md §46) -------------------------------------------------------------
+
+    def voice_names(self) -> dict[str, str | None]:
+        """Beat id -> name of the voice that says it (``None``: the base ``voice:``), video order."""
+        return beat_voice_names(self.config)
+
+    def voice(self, name: str | None = None) -> VoiceConfig:
+        """The effective voice ``name`` (``None`` / ``default``: the base voice), see
+        :func:`vidgen.voices.resolve_voice`."""
+        if name not in self._voices:
+            self._voices[name] = resolve_voice(self.config, name)
+        return self._voices[name]
+
+    def beat_voice(self, beat_id: str) -> VoiceConfig:
+        """The effective voice of a beat."""
+        names = self.voice_names()
+        if beat_id not in names:
+            raise VidgenError(f"unknown beat '{beat_id}'")
+        return self.voice(names[beat_id])
+
+    def speaker_tags(self, mode: str | None = None) -> dict[str, str]:
+        """Beat id -> speaker label shown before it (where the speaker changes) when ``mode``
+        (default ``subtitles.speakers``) shows names; empty when it is ``off``."""
+        mode = self.config.subtitles.speakers if mode is None else mode
+        return {} if mode in ("off", "color") else speaker_tags(self.config)
 
     def spoken_texts(self) -> dict[str, str]:
         """Beat id -> the text the TTS gets for it (``pronunciation`` applied), in video order."""

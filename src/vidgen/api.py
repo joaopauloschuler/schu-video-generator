@@ -98,6 +98,7 @@ from vidgen.scene import IconName, NarratedScene, SceneParams, ThemeColor, Theme
 from vidgen.pronunciation import Pronunciation, Spoken  # noqa: E402
 from vidgen.speech import WordTime, beat_word_times, estimate_word_times, map_word_times, speech_bounds, spoken_words, syllables  # noqa: E402
 from vidgen.videoplan import Chapter, video_chapters  # noqa: E402
+from vidgen.voices import speaker_color, speaker_label, speaker_prefix  # noqa: E402
 
 
 def register_theme_defaults(colors: dict[str, str] | None = None, sizes: dict[str, float] | None = None) -> None:
@@ -264,6 +265,9 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "map_word_times",
     "Pronunciation",
     "Spoken",
+    "speaker_color",
+    "speaker_label",
+    "speaker_prefix",
     "CALLOUT_KINDS",
     "Callout",
     "CalloutArea",

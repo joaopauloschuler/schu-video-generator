@@ -79,7 +79,8 @@ class Captions(Overlay):
     phrase boundaries exactly like the SRT, each cue from its first spoken word to the next
     cue. ``karaoke`` (alias ``words``) shows a few big words at a time and highlights the word
     being spoken. Captions sit at the bottom (default), the top or the centre of the safe area;
-    at the top or bottom the scenes keep clear of them unless ``reserve: false``.
+    at the top or bottom the scenes keep clear of them unless ``reserve: false``. ``speakers``
+    tags or colours the speakers of a dialogue (``voices:``, DESIGN.md §46).
     """
 
     timed = True
@@ -114,6 +115,8 @@ class Captions(Overlay):
         """Plate opacity; raised automatically until the text reaches lint's contrast ratio over anything behind it."""
         lift: float | None = Field(None, ge=0, le=0.6)
         """Bottom captions: raise them by this share of the safe height; default 0, 9:16 0.12 (phone controls)."""
+        speakers: Literal["off", "name", "color", "both"] | None = None
+        """Show who speaks (voices:): name (a "Label:" tag in the speaker's colour where the speaker changes), color (each speaker's words in its colour), both, off; default subtitles.speakers."""
 
         @field_validator("style", mode="before")
         @classmethod
@@ -140,13 +143,47 @@ class Captions(Overlay):
         """Only on scenes with narration (silent scenes have nothing to caption, nor reserve)."""
         return bool(self.context.scene.beats)
 
+    @property
+    def speakers(self) -> str:
+        """How speakers are shown: the option, else the project's ``subtitles.speakers``."""
+        return self.options.speakers or self.context.project.config.subtitles.speakers
+
+    def _scene_speakers(self) -> list[str | None]:
+        """The voices of the scene's beats (``None``: the base voice), first use first."""
+        names = self.context.project.voice_names()
+        return list(dict.fromkeys(names.get(beat.id) for beat in self.context.scene.beats))
+
+    def _speaker_colors(self, default: str, opacity: float, minimum: float) -> tuple[dict[str | None, str], float]:
+        """Each speaker's colour (``speaker_color``; the base voice without a colour: ``default``)
+        and the plate opacity at which they all read; a colour that cannot reach ``minimum``
+        even on an opaque plate is replaced by ``default`` (warning)."""
+        o = self.options
+        config = self.context.project.config
+        out: dict[str | None, str] = {}
+        for name in self._scene_speakers():
+            color = default if name is None and config.voice.color is None else speaker_color(config, name, current_theme())
+            if o.background is not None:
+                need = opacity
+                while plate_contrast(color, o.background, need) < minimum and need < 1:
+                    need = min(1.0, round(need + 0.05, 2))
+                if plate_contrast(color, o.background, need) < minimum:
+                    log.warning(f"captions: the colour of speaker {name or 'default'} ({color}) is hard to read on the plate {o.background}; using {default}")
+                    color = default
+                else:
+                    opacity = need
+            out[name] = resolve_color(color)
+        return out, opacity
+
     def _colors(self) -> tuple[str, str, float]:
-        """Text colour, highlight colour and plate opacity that keep lint's contrast ratio."""
+        """Text colour, highlight colour and plate opacity that keep lint's contrast ratio (and
+        the speakers' colours, ``self._speaker_color``)."""
         o = self.options
         theme = current_theme()
         minimum = self.context.project.config.lint.rules.contrast.min_ratio
         if o.background is None:
-            return resolve_color(o.color or "text"), resolve_color(o.highlight), 0.0
+            color = resolve_color(o.color or "text")
+            self._speaker_color = self._speaker_colors(color, 0.0, minimum)[0] if self.speakers != "off" else {}
+            return color, resolve_color(o.highlight), 0.0
         candidates = [o.color] if o.color else ["text", theme.background, "#FFFFFF", "#000000"]
         opacity = o.background_opacity
         while True:   # the most readable colour; the plate more opaque until it reads over anything
@@ -156,6 +193,9 @@ class Captions(Overlay):
             opacity = min(1.0, round(opacity + 0.05, 2))
         if plate_contrast(color, o.background, opacity) < minimum:
             log.warning(f"captions: {o.color or 'the text'} does not reach a contrast of {minimum:g} on the plate {o.background}")
+        self._speaker_color = {}
+        if self.speakers != "off":
+            self._speaker_color, opacity = self._speaker_colors(color, opacity, minimum)
         highlight = color
         for option in [o.highlight, "highlight", "accent", "primary", "secondary", "tertiary"]:
             if option in theme.colors or option.startswith("#"):
@@ -168,9 +208,10 @@ class Captions(Overlay):
 
     # ----- cues ------------------------------------------------------------------------------
 
-    def _cue_texts(self, size: float, weight: str, max_width: float) -> list[CaptionCue]:
+    def _cue_texts(self, size: float, weight: str, max_width: float) -> list[tuple[CaptionCue, str | None]]:
         """The scene's cues (scene times; each shown until the next starts, the last of a beat
-        until the next beat, the scene's last until the scene ends)."""
+        until the next beat, the scene's last until the scene ends), each with the name of its
+        beat's voice (``None``: the base voice)."""
         scene = self.context.scene
         widths: dict[str, float] = {}
 
@@ -182,17 +223,22 @@ class Captions(Overlay):
         space = width("x x") - width("xx")
         project = self.context.project
         audio = project.audio_dir
+        voices = project.voice_names()
+        tags = project.speaker_tags("name") if self.speakers in ("name", "both") else {}
         out = []
         beats = scene.beats
         for k, beat in enumerate(beats):
             until = beats[k + 1].start if k + 1 < len(beats) else scene.duration
             # The written words, timed by the audio of their spoken form (pronunciation, §45).
             words = beat_word_times(audio, beat.id, beat.text, beat.start, beat.end, project.pronunciation.apply(beat.text))
+            prefix = speaker_prefix(tags[beat.id]) if beat.id in tags else ""
+            tag_width = sum(width(w) for w in prefix.split()) + space * (len(prefix.split()) - 1) if prefix else None
             cues = caption_cues(
                 beat.text, beat.start, beat.end, words=words, widths=[width(w) for w in beat.text.split()], space=space,
                 max_width=max_width, max_lines=self._setting("max_lines"), max_words=self._setting("max_words"), until=until,
+                prefix=prefix, prefix_width=tag_width,
             )
-            out.extend(cues)
+            out.extend((cue, voices.get(beat.id)) for cue in cues)
         return out
 
     # ----- look ------------------------------------------------------------------------------
@@ -244,8 +290,16 @@ class Captions(Overlay):
         slot = Region(*band.get_corner(DL)[:2], *band.get_corner(UR)[:2])
         self._cues: list[_Cue] = []
         group = VGroup(band)
-        for cue in self._cue_texts(size, weight, max_width):
-            lines = self._lines(cue.lines, size, weight, color, max_width, pitch)
+        colored = self.speakers in ("color", "both")
+        for cue, speaker in self._cue_texts(size, weight, max_width):
+            line_color = self._speaker_color.get(speaker, color) if colored else color
+            lines = self._lines(cue.lines, size, weight, line_color, max_width, pitch)
+            tag_words = len(cue.prefix.split())
+            tag_glyphs = _glyph_map(lines[0], cue.lines[0]) if tag_words else None
+            if tag_glyphs is not None:   # the "Label:" tag in the speaker's colour
+                VGroup(*(lines[0].submobjects[i] for g in tag_glyphs[:tag_words] for i in g)).set_fill(
+                    self._speaker_color.get(speaker, color)
+                )
             block = VGroup(*lines)
             mob: Mobject = block
             if o.background is not None:
@@ -256,7 +310,8 @@ class Captions(Overlay):
             glyphs: list[tuple[int, list[int]] | None] = []
             for k, line in enumerate(cue.lines):
                 found = _glyph_map(lines[k], line)
-                glyphs.extend([(k, g) for g in found] if found is not None else [None] * len(line.split(" ")))
+                entries: list[tuple[int, list[int]] | None] = [(k, g) for g in found] if found is not None else [None] * len(line.split(" "))
+                glyphs.extend(entries[tag_words:] if k == 0 else entries)   # the tag is not a spoken word
             self._cues.append(_Cue(cue.start, cue.end, [w.start for w in cue.words], glyphs))
             group.add(mob)
         self._starts = [c.start for c in self._cues]

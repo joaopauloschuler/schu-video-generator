@@ -22,6 +22,9 @@ MODELS: list[type[BaseModel]] = [
     config.ThemeConfig,
     config.VoiceConfig,
     config.VoiceSettings,
+    config.VoiceEntry,
+    config.VoiceSettingsOverride,
+    config.SubtitlesConfig,
     config.NarrationConfig,
     config.PronunciationEntry,
     config.SceneConfig,
@@ -54,7 +57,7 @@ def test_scalar_defaults_match(model: type[BaseModel]) -> None:
         default = field.get_default(call_default_factory=True)
         if isinstance(default, BaseModel):
             continue
-        shown = str(default).lower() if isinstance(default, bool) else str(default)
+        shown = "null" if default is None else str(default).lower() if isinstance(default, bool) else str(default)
         assert re.search(rf"\b{name}: {re.escape(shown)}\b", CONFIG_MD), f"{model.__name__}.{name} default {shown}"
 
 

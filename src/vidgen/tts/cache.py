@@ -65,11 +65,13 @@ def is_up_to_date(provider: TTSProvider, audio_dir: Path, beat_id: str, text: st
 
 
 def audio_status(project: Project, provider: TTSProvider | None = None) -> list[BeatAudioStatus]:
-    """State of every beat's audio in ``project.audio_dir``, in video order. No API key needed."""
-    if provider is None:
-        from vidgen.tts import get_provider
+    """State of every beat's audio in ``project.audio_dir``, in video order. No API key needed.
 
-        provider = get_provider(project.config.voice)
+    Each beat is checked with the provider of its own voice (``voices:``, DESIGN.md §46);
+    ``provider`` replaces them all (tests)."""
+    from vidgen.tts import beat_providers
+
+    providers = beat_providers(project) if provider is None else {beat.id: provider for _, beat in project.beats()}
     audio_dir = project.audio_dir
     spoken = project.spoken_texts()  # the hash covers what the TTS says (pronunciation applied)
     result = []
@@ -77,7 +79,7 @@ def audio_status(project: Project, provider: TTSProvider | None = None) -> list[
         mp3 = mp3_path(audio_dir, beat.id)
         if not mp3.is_file():
             state: AudioState = "missing"
-        elif is_up_to_date(provider, audio_dir, beat.id, spoken[beat.id]):
+        elif is_up_to_date(providers[beat.id], audio_dir, beat.id, spoken[beat.id]):
             state = "ok"
         else:
             state = "stale"

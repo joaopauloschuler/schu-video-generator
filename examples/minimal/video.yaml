@@ -15,6 +15,8 @@
 #   vidgen storyboard examples/minimal --variant light           # same video with the light_academic preset
 #   vidgen storyboard examples/minimal --variant subtitled       # burned-in captions (SRT-style cues)
 #   vidgen storyboard examples/minimal --variant social --per-beat 3   # 9:16 karaoke captions
+#   vidgen tts examples/minimal --dry-run --voice guest          # the guest's beats and characters
+#   vidgen storyboard examples/minimal --variant subtitled --scene note   # a two-speaker dialogue
 #   vidgen list-themes examples/minimal --swatches build/themes.png  # every theme preset at a glance
 # There is no narration audio in this example, so beats are timed from their word count
 # (narration.words_per_second); run `vidgen tts` with an ElevenLabs key to voice it.
@@ -41,7 +43,7 @@ variants:
   neon:
     theme: {preset: bold_neon}
   subtitled:                      # the narration burned in as captions (docs/CONFIG.md "captions")
-    overlays: [{type: captions}]
+    overlays: [{type: captions, speakers: both}]   # the guest's lines tagged and in its colour
   social:                         # 9:16 for social apps: karaoke captions, the spoken word highlighted
     format: {width: 1080, height: 1920}
     preview: {width: 480, height: 854}
@@ -54,6 +56,16 @@ theme:
 narration:
   pad: 0.35
   words_per_second: 2.6
+
+voices:               # more speakers (docs/CONFIG.md "Multiple voices"): each is the base voice with
+  guest:              # what it sets changed; scenes and beats pick one with `voice: guest`
+    voice_id: 21m00Tcm4TlvDq8ikWAM   # another ElevenLabs voice
+    settings: {stability: 0.45}
+    label: Guest      # shown before the guest's lines in the SRT and the captions
+    color: secondary
+
+subtitles:
+  speakers: name      # "Guest: ..." where the speaker changes (`vidgen tts --dry-run` lists voices)
 
 pronunciation:        # how the narrator says terms: only the text sent to the TTS changes,
   LaTeX: lah-tek      # subtitles and captions keep the written words (docs/CONFIG.md "Pronunciation")
@@ -203,8 +215,10 @@ scenes:
     params:
       text: "Need something else? Add a scene type in extensions/"
       size: heading
-    beats:
-      - text: "And when a built-in is not enough, a project can add its own scene types."
+    beats:              # a short dialogue: the guest asks, the narrator answers
+      - text: "And when a built-in is not enough?"
+        voice: guest
+      - text: "Then a project adds its own scene types."
 
   - id: outro
     type: end_card

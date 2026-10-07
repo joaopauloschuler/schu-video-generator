@@ -166,6 +166,8 @@ class CaptionCue:
     end: float
     lines: tuple[str, ...]
     words: tuple[WordTime, ...]
+    #: A speaker tag at the start of the first line (``"Ana:"``; not one of ``words``), or "".
+    prefix: str = ""
 
     @property
     def text(self) -> str:
@@ -185,12 +187,16 @@ def caption_cues(
     max_lines: int = 2,
     max_words: int | None = None,
     until: float | None = None,
+    prefix: str = "",
+    prefix_width: float | None = None,
 ) -> list[CaptionCue]:
     """The cues of one beat whose narration runs ``start``..``end``: :func:`segment_cues` of its
     words (``widths`` default: characters), timed by ``words`` (default: estimated over the
     beat, :func:`~vidgen.speech.estimate_word_times`). The first cue starts at ``start``, each
     other one when its first word is spoken; each lasts until the next starts and the last until
-    ``until`` (default ``end``)."""
+    ``until`` (default ``end``). ``prefix`` (a speaker tag such as ``"Ana:"``, of width
+    ``prefix_width``, default its characters) starts the first line, glued to the first word
+    so a cut never leaves it alone; it is not a timed word (``CaptionCue.prefix``)."""
     tokens = text.split()
     if not tokens:
         return []
@@ -198,6 +204,9 @@ def caption_cues(
     if len(timed) != len(tokens):
         timed = estimate_word_times(tokens, start, end)
     sizes = list(widths) if widths is not None else [float(len(w)) for w in tokens]
+    prefix = " ".join(prefix.split())
+    if prefix:
+        sizes[0] += (float(len(prefix)) if prefix_width is None else prefix_width) + space
     cues = segment_cues(tokens, sizes, space, max_width, max_lines, max_words)
     firsts = [lines[0][0] for lines in cues]
     starts = [start, *(max(timed[k].start, start) for k in firsts[1:])]
@@ -206,5 +215,9 @@ def caption_cues(
     for n, lines in enumerate(cues):
         a, b = lines[0][0], lines[-1][1]
         cue_end = starts[n + 1] if n + 1 < len(cues) else max(stop, starts[n])
-        out.append(CaptionCue(starts[n], cue_end, tuple(" ".join(tokens[i:j]) for i, j in lines), tuple(timed[a:b])))
+        texts = [" ".join(tokens[i:j]) for i, j in lines]
+        tag = prefix if n == 0 else ""
+        if tag:
+            texts[0] = f"{tag} {texts[0]}"
+        out.append(CaptionCue(starts[n], cue_end, tuple(texts), tuple(timed[a:b]), tag))
     return out

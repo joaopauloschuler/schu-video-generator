@@ -11,6 +11,7 @@ import shutil
 import sys
 import time
 import traceback
+from collections import Counter
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager, redirect_stdout
 from pathlib import Path
@@ -83,6 +84,7 @@ def project_problems(project: Project) -> list[Problem]:
     from vidgen.actions import scene_actions
     from vidgen.icons import PROJECT_ICONS_DIR, project_icons
     from vidgen.overlays import overlay_problems
+    from vidgen.voices import voice_color_problems
 
     problems: list[Problem] = []
     try:
@@ -117,6 +119,7 @@ def project_problems(project: Project) -> list[Problem]:
                 except VidgenError as exc:
                     problems.append(Problem(f"scenes[{i}]", str(exc)))
             problems.extend(overlay_problems(project, theme))
+            problems.extend(voice_color_problems(project.config, theme))
     except VidgenError as exc:
         problems.extend(exc.problems or [Problem("", str(exc))])
     return problems
@@ -200,9 +203,11 @@ def pronunciation_warnings(project: Project) -> list[str]:
 
 
 def validate_warnings(project: Project) -> list[str]:
-    """What ``vidgen validate`` warns about (not problems): :func:`theme_warnings` and
-    :func:`pronunciation_warnings`."""
-    return theme_warnings(project) + pronunciation_warnings(project)
+    """What ``vidgen validate`` warns about (not problems): :func:`theme_warnings`,
+    :func:`pronunciation_warnings` and named voices no beat uses."""
+    from vidgen.voices import voice_warnings
+
+    return theme_warnings(project) + pronunciation_warnings(project) + voice_warnings(project.config)
 
 
 def log_validate_warnings(project: Project, variants: dict[str, Project | None]) -> None:
@@ -244,6 +249,9 @@ def cmd_validate(args: argparse.Namespace) -> CommandResult:
     print(f"duration:  ~{_format_seconds(project.estimated_duration())} (estimated from word count)")
     if config.variants:
         print(f"variants:  {', '.join(config.variants)}")
+    if config.voices:
+        counts = Counter(name or "default" for name in project.voice_names().values())
+        print(f"voices:    {', '.join(f'{name} ({n} beats)' for name, n in counts.items())}")
     for line in audio_summary_lines(project):
         print(line)
     print("ok")
@@ -289,7 +297,7 @@ def cmd_tts(args: argparse.Namespace) -> int:
 
     project = Project.load(args.project, variant=args.variant)
     with extensions.project_session(project):
-        run_tts(project, beat_ids=args.beat, force=args.force, dry_run=args.dry_run)
+        run_tts(project, beat_ids=args.beat, force=args.force, dry_run=args.dry_run, voices=args.voice)
     return 0
 
 
@@ -595,6 +603,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--force", action="store_true", help="regenerate even if up to date")
     p.add_argument("--dry-run", action="store_true", help="only list what would be generated")
     p.add_argument("--beat", action="append", default=[], metavar="ID", help="only this beat (repeatable)")
+    p.add_argument("--voice", action="append", default=[], metavar="NAME", help="only the beats of this voice (a voices: name or default; repeatable)")
     p.add_argument("--variant", metavar="NAME", help="apply a named variant (may have its own voice)")
     p.set_defaults(func=cmd_tts)
 

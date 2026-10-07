@@ -6,7 +6,7 @@ the bodies of `variants`, so typos are caught by `vidgen validate`. Paths are re
 project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-and-beats),
 [format](#format-and-preview), [variants](#variants), [theme](#theme), [voice](#voice-voice),
 [narration](#narration-narration), [narration audio](#narration-audio-elevenlabs),
-[pronunciation](#pronunciation-pronunciation),
+[multiple voices](#multiple-voices-voices), [pronunciation](#pronunciation-pronunciation),
 [built-in scene types](#built-in-scenes), [beat actions](#beat-actions), [overlays](#overlays),
 [JSON Schema](#json-schema-vidgen-schema), [frame stills](#frame-stills-vidgen-render---frames),
 [storyboard](#storyboard-vidgen-storyboard), [lint](#lint-vidgen-lint),
@@ -23,6 +23,8 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `variants` | `{}` | named overrides, see [variants](#variants) |
 | `theme` | see [theme](#theme) | preset, colors, sizes, font, background, code style |
 | `voice` | see [voice](#voice-voice) | ElevenLabs voice |
+| `voices` | `{}` | named voices for dialogue, picked by scenes and beats with `voice: NAME`, see [multiple voices](#multiple-voices-voices) |
+| `subtitles` | `{speakers: off}` | `speakers: name` puts the speaker's label before their lines in the SRT, see [multiple voices](#multiple-voices-voices) |
 | `narration` | see [narration](#narration-narration) | beat padding, duration estimate |
 | `pronunciation` | `{}` | how the narrator says terms (TTS text only), see [pronunciation](#pronunciation-pronunciation) |
 | `pronunciation_file` | none | YAML/JSON file(s) with more pronunciation entries |
@@ -59,11 +61,13 @@ scenes:
 | `lint_ignore` | `[]` | `vidgen lint` findings to skip in this scene, see [lint](#lint-vidgen-lint) |
 | `overlays` | `true` | the video's [overlays](#overlays) on this scene: `false` for none, or per overlay id `false` / option overrides, or an overlay of this scene only |
 | `chapter` | none | a new [chapter](#chapters) starts at this scene: its title, or `{title, number}` |
+| `voice` | none (the base `voice:`) | who says this scene's beats: a name from [`voices:`](#multiple-voices-voices) or `default` |
 
 Beat `id`s name the audio files: keep them when you edit the text (only that beat is
 re-voiced). A beat `text` is spoken as written; it is also the subtitle. A beat's `actions`
 (default `[]`) point at parts of the scene while it is spoken — reveal, dim, highlight — see
-[beat actions](#beat-actions).
+[beat actions](#beat-actions). A beat's `voice` (default: its scene's) picks another speaker for
+that beat — a dialogue inside one scene, see [multiple voices](#multiple-voices-voices).
 
 ## Chapters
 
@@ -360,10 +364,15 @@ voice:
     use_speaker_boost: true
   context: true                     # send the neighbouring beats' text for smoother intonation
   timestamps: false                 # also fetch when each character is spoken (karaoke captions)
+  label: null                       # speaker name in subtitles / captions (none: not tagged)
+  color: null                       # speaker colour in captions (theme token or hex; none: text colour)
 ```
 
 All keys are optional; the values shown are the defaults. Unknown keys are an error. Changing
-`voice_id`, `model_id`, `output_format` or `settings` re-voices every beat on the next `vidgen tts`.
+`voice_id`, `model_id`, `output_format` or `settings` re-voices every beat of this voice on the
+next `vidgen tts`; `label` and `color` only name the speaker (they change no audio). `context`
+sends the neighbouring beats only when they have the same voice (see
+[multiple voices](#multiple-voices-voices)).
 
 `timestamps: true` makes `vidgen tts` use ElevenLabs' *with-timestamps* endpoint (same voice,
 same price): besides `audio/<beat_id>.mp3` it stores `audio/<beat_id>.align.json`, when each
@@ -371,6 +380,72 @@ character is spoken, and burned-in [`captions`](#captions) and the SRT then time
 exactly. Without it word times are estimated (see `captions`). It is not part of the audio hash:
 turning it on does not re-voice anything; `vidgen tts --force` fetches the timings for existing
 beats (paid again).
+
+## Multiple voices (`voices:`)
+
+More than one speaker: an interview, a dialogue, a quoted voice. `voices:` names extra voices;
+each is the base `voice:` with the keys it gives changed (`settings` merge value by value). A
+scene's `voice:` picks one for its beats, a beat's `voice:` for itself; `default` is the base
+voice (to hand a line back to the narrator inside a scene of another voice).
+
+```yaml
+voice: {voice_id: nPczCjzI2devNBz1zQrb, label: Host}   # the narrator (label: tag it in subtitles too)
+voices:
+  ana:
+    voice_id: 21m00Tcm4TlvDq8ikWAM   # what is not given comes from voice:
+    settings: {stability: 0.4}       # merged over voice.settings
+    label: "Dr. Ana"                 # default: the name, first letter capital ("Ana")
+    color: secondary                 # theme token or hex; default: the palette colour of its place here
+subtitles:
+  speakers: name                     # SRT: "Dr. Ana: ..." where the speaker changes
+scenes:
+  - id: interview
+    type: quote
+    params: {text: "Small models can be sparse too."}
+    voice: ana                       # every beat of this scene...
+    beats:
+      - text: "We were surprised by the results."
+      - text: "What surprised you most?"
+        voice: default               # ...except this one: the narrator asks
+      - text: "That the small models were sparse too."
+```
+
+| key (`voices.<name>`) | default | |
+|---|---|---|
+| `voice_id`, `model_id`, `output_format`, `provider` | the base voice's | as in [`voice:`](#voice-voice) |
+| `settings` | the base voice's | `stability`, `similarity_boost`, `style`, `use_speaker_boost`; each one not given is the base voice's |
+| `context`, `timestamps` | the base voice's | as in [`voice:`](#voice-voice) |
+| `label` | the name (`dr_ana` → `Dr ana`) | the speaker's name in subtitles and captions; not inherited from `voice.label` |
+| `color` | palette colour by position | the speaker's colour in captions (`speakers: color` / `both` / the `name` tag); not inherited |
+
+- **Names**: letters, digits and `_`; `default` is reserved for the base voice. An unknown name in
+  a scene or beat is a config error with a suggestion (`scenes[2].beats[1].voice: unknown voice
+  'anna'; did you mean 'ana'?`); a voice no beat uses is a `vidgen validate` warning, an unknown
+  colour token an error. `vidgen validate` prints `voices: default (12 beats), ana (4 beats)`.
+- **Audio**: each beat is hashed with its own voice (see [narration audio](#narration-audio-elevenlabs)),
+  so beats of the base voice keep their hash when `voices:` is added, editing one voice re-voices
+  only its beats, and moving a beat to another voice re-voices that beat. `label` / `color` are
+  not part of the audio.
+- **Context**: with `context: true` a beat gets its neighbours' text as `previous_text` /
+  `next_text` only when they are spoken by the **same voice**; at a change of speaker it gets none.
+  ElevenLabs uses the context as this voice's own surrounding speech (to stitch generations of one
+  speaker smoothly), so another speaker's line there could carry its intonation over (an answer
+  read with the question's rising tone). Lines of one speaker separated by another's reply are not
+  joined either: the turn breaks the flow, as in a real conversation.
+- **`vidgen tts --dry-run`** shows the voice of every beat (`would generate s2_b1.mp3 (48 chars,
+  voice ana)`) and the beats and characters per voice; `vidgen tts --voice ana` (repeatable;
+  `default` for the base voice) generates only that speaker's beats.
+- **Variants** deep-merge `voices:` like any mapping (`variants: {fr: {voices: {ana: {voice_id:
+  ...}}}}` changes one speaker); a variant gets its own audio folder as soon as one shared beat's
+  effective voice differs, and copies every unchanged beat from `audio/`.
+- **Subtitles / captions**: `subtitles.speakers: name` writes `Label: ` before the first cue of
+  each beat whose voice differs from the beat before (the first beat included) and that has a
+  label (named voices always do; the base voice only with `voice.label`); `off` (default) writes
+  the text only. Burned-in [`captions`](#captions) follow it, or set their own `speakers` (`name`,
+  `color`, `both`, `off`).
+- **Pronunciation** is one dictionary for all voices (the hash covers each beat's spoken text and
+  its voice); there are no per-voice entries yet: write a variant (`pronunciation:` in it) when a
+  voice of another language needs other spoken forms.
 
 ## Narration (`narration:`)
 
@@ -399,6 +474,7 @@ it never stores it in the config, audio, build files, logs or error messages.
 vidgen tts --dry-run          # list beats that need audio + character count (no key needed)
 vidgen tts                    # generate missing/stale beats only
 vidgen tts --beat s2_b1       # only these beats (still skipped if up to date)
+vidgen tts --voice ana        # only the beats of this voice (voices:; default = the base voice)
 vidgen tts --force            # regenerate (combine with --beat to limit it)
 vidgen tts --variant spanish  # audio for a variant
 vidgen validate               # prints e.g. "audio: 18 ok, 2 stale, 1 missing"
@@ -406,13 +482,15 @@ vidgen validate               # prints e.g. "audio: 18 ok, 2 stale, 1 missing"
 
 **What triggers regeneration.** A beat is regenerated when its MP3 is missing or its hash does
 not match the beat's spoken text (its text with the [pronunciation](#pronunciation-pronunciation)
-applied) plus `voice_id`, `model_id`, `output_format` and `settings`. Editing
+applied) plus `voice_id`, `model_id`, `output_format` and `settings` of the beat's voice (its
+scene's or its own from [`voices:`](#multiple-voices-voices), else `voice:`). Editing
 one beat regenerates only that beat: the neighbours' text is sent for intonation but is not part
 of the hash, and neither is `context`. Hash files written by the original kphi3 script are
 accepted while `output_format` and `settings` keep their defaults.
 
-**Variants.** A variant shares `audio/` unless its voice (after merging) or the spoken text of a
-beat (its text, or the pronunciation of a word in it) differs from the base config; then its
+**Variants.** A variant shares `audio/` unless its voice (after merging), the voice of a beat
+(`voices:`, a scene's or beat's `voice:`) or the spoken text of a beat (its text, or the
+pronunciation of a word in it) differs from the base config; then its
 audio goes to `audio/<variant>/`. Beats that are the same in both are copied from `audio/`
 instead of being paid for again.
 
@@ -2589,6 +2667,17 @@ a warning).
 | `pop` | `1.12` | karaoke: scale of the word being spoken (`1`: none); limited so it never touches its neighbours |
 | `background`, `background_opacity` | `surface`, `0.8` | the plate; `background: null` for none (the text then gets an outline in the background colour) |
 | `lift` | `0`; 9:16 `0.12` | bottom captions: raised by this share of the safe height |
+| `speakers` | `subtitles.speakers` | who speaks ([multiple voices](#multiple-voices-voices)): `name` (a `Label:` tag in the speaker's colour before a beat whose speaker changed), `color` (each speaker's words in its colour), `both`, or `off` |
+
+**Speakers.** With [named voices](#multiple-voices-voices), `speakers: name` puts the speaker's
+label (`Guest:`) at the start of the first cue of each beat whose voice differs from the beat
+before (the tag is glued to the first word, never a cue of its own, and is not highlighted in
+karaoke); the base voice is tagged only if `voice.label` is set. `color` draws each speaker's
+words in its colour (`voices.<name>.color`; default the palette colour of the voice's place in
+`voices:`; the base voice: `voice.color` or the caption colour); the plate's opacity rises until
+every speaker's colour reads, and a colour that cannot reach the contrast ratio even on an opaque
+plate falls back to the text colour (warning). Karaoke shows only a few words per cue, so the tag
+is brief there: prefer `color` or `both`.
 
 ```yaml
 overlays:

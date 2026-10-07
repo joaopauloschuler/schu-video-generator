@@ -927,9 +927,15 @@ scene that shows the narration its own way):
   by their spoken form (`map_word_times(spoken, times)` does that mapping for times of the spoken
   words). `project.pronunciation.say(text)` / `project.spoken_texts()` give what the TTS says.
 - `caption_cues(text, start, end, *, words=None, widths=None, space=1, max_width=42,
-  max_lines=2, max_words=None, until=None) -> [CaptionCue(start, end, lines, words)]`: the text
-  cut at phrase boundaries into cues (`segment_cues`, costs by `phrase_break_cost`), each timed
-  from its first word to the next cue — the same cutting as the SRT (widths in characters
-  there, measured with `measure_text` in `captions`).
+  max_lines=2, max_words=None, until=None, prefix="", prefix_width=None) -> [CaptionCue(start,
+  end, lines, words, prefix)]`: the text cut at phrase boundaries into cues (`segment_cues`, costs
+  by `phrase_break_cost`), each timed from its first word to the next cue — the same cutting as
+  the SRT (widths in characters there, measured with `measure_text` in `captions`). `prefix` (a
+  speaker tag) starts the first cue, glued to the first word, and is not one of its `words`.
+- **Speakers** (docs/CONFIG.md "Multiple voices"): `project.voice_names()` (beat id → voice name,
+  `None` for the base voice), `project.beat_voice(beat_id)` (its effective `VoiceConfig`),
+  `project.speaker_tags(mode)` (beat id → label where the speaker changes; empty for `off`);
+  `speaker_label(config, name)`, `speaker_color(config, name, theme)` (hex) and
+  `speaker_prefix(label)` (`"Ana:"`) are what `captions` uses.
 - `plate_contrast(color, plate, opacity)`: the contrast text keeps on a translucent plate over
   anything (the worse of the plate over black and over white).

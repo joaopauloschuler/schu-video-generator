@@ -3895,3 +3895,99 @@ How to test: `/home/claude/venv/bin/python -m pytest -q` (1744 passed, 1 skipped
 examples/minimal --dry-run --beat math_b1 --beat feedback_b3` (shows `says: ... lah-tek.`),
 `vidgen storyboard examples/minimal --variant social --scene math --per-beat 2` (captions say
 "LaTeX"); `vidgen lint examples/minimal --variant social --scene math --scene feedback`: 0 findings.
+
+## Step 43 — Multiple voices
+What was built
+- **Config**: top-level `voices: {name: {provider, voice_id, model_id, output_format, settings,
+  context, timestamps, label, color}}` (every key optional; the base `voice:` with what is given
+  changed, `settings` merged value by value; `label` / `color` name the speaker and are never
+  inherited); `voice: NAME` on a scene (its beats) and on a beat (that beat; wins over the scene);
+  `default` = the base voice (reserved name). `voice:` gained `label` / `color` (default none).
+  New top-level `subtitles: {speakers: off | name}`.
+- **`src/vidgen/voices.py`** (no manim): `DEFAULT_VOICE`, `voice_names`, `resolve_voice`,
+  `beat_voice_names`, `audio_fields`, `speaker_label`, `speaker_color`, `speaker_tags`,
+  `speaker_prefix`, `voice_reference_problems`, `unknown_voice_message`, `voice_color_problems`,
+  `voice_warnings`. `Project.voice_names()`, `voice(name)`, `beat_voice(beat_id)`,
+  `speaker_tags(mode)`.
+- **TTS**: `tts.beat_providers(project)` (one provider per voice); `audio_status`, `plan_tts`,
+  `run_tts` check / synthesise / hash each beat with its own voice (same §7 formula, so beats of
+  the base voice keep their hashes: kphi3 27 ok, unchanged). Context (`previous_text` /
+  `next_text`) only from neighbours with the same voice (`tts.run.context_texts`). `vidgen tts
+  --voice NAME` (repeatable, `default` allowed, did-you-mean); with `voices:` the dry run shows
+  `, voice <name>` per beat and `  voice <name> (<voice_id>): N beat(s), C characters` per voice.
+  Variant audio folder also when a shared beat's effective voice differs (label / colour do not
+  count); unchanged beats are copied.
+- **Validate**: unknown scene / beat voice names are config errors with locations and a
+  suggestion; `voice.color` / `voices.<n>.color` theme tokens checked; warning for a voice no beat
+  uses; human output line `voices:    default (29 beats), guest (1 beats)`.
+- **Speakers**: `subtitles.speakers: name` → the SRT starts the first cue of each beat whose
+  speaker changed (and that has a label) with `Label: `. `caption_cues(prefix=, prefix_width=)`
+  glues the tag to the first word (never a cue of its own; `CaptionCue.prefix`, not a timed word).
+  `captions` option `speakers: off | name | color | both` (default `subtitles.speakers`): tag in
+  the speaker's colour, words in the speaker's colour, plate opacity raised until every speaker
+  colour reads (else fallback to the text colour + warning); karaoke never highlights the tag.
+- **Fingerprint**: `voices` / `subtitles` out of the config part; with overlays, beat voice names
+  + those sections are overlay inputs (`_overlay_inputs` now returns `{scenes, voices}`).
+- **Example**: `examples/minimal`: `voices.guest` (other voice id, stability, label `Guest`,
+  colour `secondary`), `subtitles.speakers: name`, the `note` scene is a two-beat dialogue (guest
+  asks, narrator answers; was one beat), the `subtitled` variant's captions `speakers: both`;
+  header usage lines for `tts --dry-run --voice guest` and the storyboard.
+
+Files
+- New: `src/vidgen/voices.py`, `tests/test_voices.py` (18 tests, 1 render).
+- Changed: `config.py` (`ColorRef`, `VoiceConfig.label/color`, `VoiceSettingsOverride`,
+  `VoiceEntry`, `SubtitlesConfig`, `SceneConfig.voice`, `BeatConfig.voice`, `VideoConfig.voices`
+  / `subtitles`, reference check in `parse_config`), `project.py`, `tts/__init__.py`,
+  `tts/cache.py`, `tts/run.py` (rewritten around per-beat voices), `cues.py`, `subtitles.py`,
+  `scenes/captions.py`, `render/pipeline.py`, `render/fingerprint.py`, `cli.py`, `api.py`;
+  `tests/test_docs.py` (new models; `None` defaults shown as `null`); `examples/minimal/video.yaml`;
+  docs/CONFIG.md (new "Multiple voices" section, top-level / scene rows, voice `label` / `color`,
+  `--voice`, regeneration and variant paragraphs, captions `speakers`), docs/EXTENDING.md,
+  README.md, DESIGN.md (tree, §4, §6.4, §8, new §46), tasklist.md.
+
+Public interfaces added/changed
+- Config: `voices`, `subtitles`, scene / beat `voice`, `voice.label`, `voice.color` (JSON Schema
+  follows from the models); captions option `speakers`.
+- `vidgen.api`: `speaker_label`, `speaker_color`, `speaker_prefix`; `caption_cues(...,
+  prefix="", prefix_width=None)` and `CaptionCue.prefix` (compatible).
+- `vidgen.subtitles`: `beat_cues(..., speaker=None)`, `cues_from_timings(..., speakers=None)`,
+  `write_srt(..., speakers=None)` (compatible). `vidgen.tts.beat_providers`; `plan_tts(project,
+  provider=None, beat_ids=(), force=False, voices=())` (provider now optional), `run_tts(...,
+  voices=())`, `TTSPlan.voices`, `voice_of`, `characters_by_voice`.
+- CLI: `vidgen tts --voice NAME`.
+
+Decisions / deviations
+- **Context only within a speaker's run of beats.** ElevenLabs treats `previous_text` /
+  `next_text` as the same speaker's surrounding speech (request stitching is per voice); another
+  speaker's line could leak its intonation (a question's rising tone into the answer). A turn by
+  someone else also breaks the run (A, B, A: the second A gets no context). Not hashed.
+- Hash = the old formula with the beat's effective voice (not "voice name + text"): projects
+  without `voices:` are byte-for-byte unchanged, and two names with identical settings share audio
+  semantics.
+- Names are checked in `parse_config` (after the model) to get exact problem locations
+  (`scenes[i].beats[j].voice`), unlike chapters' model-validator messages.
+- Speaker tags appear where the speaker changes (SDH convention), not on every cue; the base voice
+  is tagged only when it has a `label`.
+- `color`-mode default colours for named voices are the palette by position (distinct speakers
+  without configuration).
+- `subtitles:` is a new top-level section (one key now) rather than a key under `narration:`;
+  captions default to it so one switch tags both.
+
+Known gaps / TODOs
+- No per-voice `pronunciation:` (one dictionary for all voices; a variant can carry another).
+- No ElevenLabs text-to-dialogue (v3) endpoint (one file for many lines does not fit the
+  beat-per-MP3 cache); no per-voice `narration.pad` / `words_per_second`.
+- Storyboard labels, `timings.json` and `render --json` do not name speakers; `validate --json`
+  has no voices summary.
+- Karaoke shows the tag only on a beat's first (short) cue; `color` / `both` read better there.
+- Step 51 (multi-language variants) can build on `voices:` deep-merging per variant.
+
+Verification: `vidgen lint examples/minimal --scene note` (default, `vertical`, `subtitled`,
+`social`): 0 findings (the dialogue's second beat was shortened: the two-beat text card hit
+`dead_air`); storyboards of `subtitled` (tag + secondary colour on the guest's cue, narrator cue
+plain) and `social` (karaoke) read. `vidgen tts examples/minimal --dry-run --voice guest`: 1
+beat, 34 characters; kphi3 `audio_status`: 27 ok.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1765 passed, 1 skipped, ~13.5 min); step only: `pytest
+tests/test_voices.py`. Manual: `vidgen validate examples/minimal`, `vidgen tts examples/minimal
+--dry-run [--voice guest]`, `vidgen storyboard examples/minimal --variant subtitled --scene note`.

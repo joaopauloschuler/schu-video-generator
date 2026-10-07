@@ -85,13 +85,15 @@ def _stat(path: Path) -> list[int] | None:
 
 def _overlay_inputs(project: Project) -> Any:
     """What overlays read from the other scenes (their planned timeline: types, durations, beat
-    texts and MP3s, chapters; DESIGN.md §41-42) and the beats' stored alignments (captions,
-    §43); ``None`` without overlays."""
+    texts and MP3s, chapters; DESIGN.md §41-42), the beats' stored alignments (captions, §43),
+    their voices, the named voices and the subtitles settings (captions' speakers, §46);
+    ``None`` without overlays."""
     cfg = project.config
     if not cfg.overlays and not any(isinstance(s.overlays, dict) for s in cfg.scenes):
         return None
     say = project.pronunciation.say  # captions time the written words by their spoken form (§45)
-    return [
+    speakers = project.voice_names()  # captions name / colour speakers (§46)
+    scenes = [
         {
             "id": s.id,
             "type": s.type,
@@ -101,12 +103,16 @@ def _overlay_inputs(project: Project) -> Any:
             "chapter": s.model_dump(mode="json")["chapter"],
             "overlays": s.overlays,
             "beats": [
-                [b.id, b.text, say(b.text), _stat(project.audio_dir / f"{b.id}.mp3"), _stat(project.audio_dir / f"{b.id}.align.json")]
+                [
+                    b.id, b.text, say(b.text), speakers[b.id],
+                    _stat(project.audio_dir / f"{b.id}.mp3"), _stat(project.audio_dir / f"{b.id}.align.json"),
+                ]
                 for b in s.beats
             ],
         }
         for s in cfg.scenes
     ]
+    return {"scenes": scenes, "voices": cfg.model_dump(mode="json", include={"voices", "subtitles"})}
 
 
 def scene_fingerprint(project: Project, scene_id: str) -> str:
@@ -116,7 +122,9 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
     # editing them must not make renders stale.
     # The pronunciation changes only the audio (tracked below) and, with overlays, the captions'
     # word times (the spoken texts are in "overlays"); editing it must not re-render every scene.
-    config = project.config.model_dump(mode="json", exclude={"scenes", "variants", "lint", "pronunciation", "pronunciation_file"})
+    # Named voices and subtitle settings change only audio and, with overlays, captions (§46).
+    excluded = {"scenes", "variants", "lint", "pronunciation", "pronunciation_file", "voices", "subtitles"}
+    config = project.config.model_dump(mode="json", exclude=excluded)
     assets = project.root / "assets"
     data: dict[str, Any] = {
         "fingerprint": FINGERPRINT_VERSION,

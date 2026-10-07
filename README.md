@@ -55,6 +55,11 @@ subtitles.
   captions keep the written words, timed by the spoken ones. Only beats whose spoken text changes
   are re-voiced, and `vidgen tts --dry-run` shows what they will say
   ([reference](docs/CONFIG.md#pronunciation-pronunciation)).
+- **Multiple voices**: `voices: {ana: {voice_id: ..., label: "Dr. Ana"}}` plus `voice: ana` on a
+  scene or a beat for interviews and dialogue; each named voice inherits the base `voice:`, only
+  its own beats are re-voiced when it changes, `vidgen tts --dry-run` counts characters per voice
+  (`--voice ana` voices one speaker), and `subtitles: {speakers: name}` / captions `speakers:`
+  name or colour the speakers ([reference](docs/CONFIG.md#multiple-voices-voices)).
 - **Extensible per video**: a project can add its own scene types, beat actions, overlays,
   helpers, theme tokens and pipeline hooks in its `extensions/` folder, without touching vidgen.
 - **Cheap to iterate**: only new or edited beats are sent to ElevenLabs; fast low-resolution
@@ -125,7 +130,7 @@ narration.
 | `vidgen list-themes [PROJECT] [--swatches PNG] [--json]` | theme presets (built-in and the project's) with colours, type scale, contrast check; `--swatches` draws them all in one PNG |
 | `vidgen list-icons [PROJECT] [--search TEXT] [--category NAME] [--sheet PNG [--theme [PRESET]]] [--json]` | icons (built-in and the project's `assets/icons`) with category and tags; `--sheet` draws the listed icons, labelled, into a PNG (`--theme`: in the project's or a preset's colours) |
 | `vidgen schema [PROJECT] [--scene TYPE \| --all] [--json]` | JSON Schema of `video.yaml` (params checked per scene type, the project's extension types included), for editors and AI agents |
-| `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--variant NAME]` | generate missing/stale narration into `audio/`; `--dry-run` needs no key |
+| `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--voice NAME ...] [--variant NAME]` | generate missing/stale narration into `audio/`; `--dry-run` needs no key (shows each beat's voice and characters per voice) |
 | `vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going] [--jobs N] [--frames] [--frames-per-beat N] [--json]` | render and join the video |
 | `vidgen storyboard [PROJECT] [--scene ID ...] [--per-beat N] [--variant NAME] [--preview \| --final] [--width PX] [--jobs N] [--force] [--json]` | contact sheets (PNG) of the video's stills with labels and narration, to review a video without watching it |
 | `vidgen lint [PROJECT] [--scene ID ...] [--rule NAME ...] [--variant NAME] [--preview \| --final] [--fail-on SEVERITY] [--jobs N] [--force] [--json]` | check the layout at the end of every beat (text off the frame or in the margins, overlapping or covered text, text too small, low contrast, too many words) and the timing (narration too fast/slow, dead air, animations overrunning their narration or squeezed into a short beat); exit code 1 on errors |
