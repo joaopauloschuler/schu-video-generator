@@ -246,6 +246,7 @@ def test_cropped_drawing_matches_the_whole_frame() -> None:
         text = Text("Chapter 2", font_size=30, color="#FFFFFF").move_to([4.2, -3.6, 0])   # partly off the frame
         layer = OverlayLayer.__new__(OverlayLayer)
         layer.overlays, layer.mobjects, layer._cache, layer._camera = [Overlay.__new__(Overlay)] * 2, [mob, text], {}, None
+        layer.following, layer.following_mobjects = [], []
         frame = np.zeros((180, 320, 4), dtype=np.uint8)
         frame[..., :3], frame[..., 3] = (20, 40, 90), 255
         out = layer.composite(frame, ("on", "on"))

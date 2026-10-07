@@ -75,6 +75,12 @@ subtitles.
   (EBU R128) with a −1.5 dBTP true-peak limiter (`audio: {normalize, target_lufs, true_peak}`;
   narration-only videos keep their level unless `normalize: true`); `vidgen render` reports the
   measured loudness and `vidgen list-music` describes the beds in words ([reference](docs/CONFIG.md#background-music-music)).
+- **Transitions**: `transition: crossfade` between all scenes, or per scene (the way into it):
+  `crossfade` (the scenes overlap, the video gets shorter by it) or `fade_color` through a theme
+  colour (`{type: fade_color, color: surface, duration: 1.2}`). A transition never covers
+  narration (the scene before is held a little longer if needed); subtitles, captions,
+  chapters, overlays, effects and music all follow the overlapped timeline, and overlays are not
+  doubled during a crossfade ([reference](docs/CONFIG.md#transitions-transition)).
 - **Extensible per video**: a project can add its own scene types, beat actions, overlays,
   helpers, theme tokens and pipeline hooks in its `extensions/` folder, without touching vidgen.
 - **Cheap to iterate**: only new or edited beats are sent to ElevenLabs; fast low-resolution

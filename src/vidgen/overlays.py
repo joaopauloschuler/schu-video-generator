@@ -503,7 +503,8 @@ def scene_overlays(project: Project, spec: SceneConfig, theme: Theme, plan: Vide
         if overlay.timed:
             start, end = overlay.interval()
             slot = context.scene
-            if end <= slot.start or start >= slot.end or not overlay.shown_in(max(start, slot.start), min(end, slot.end)):
+            # drawn until the cut: the next scene's overlays take over in a crossfade (§49)
+            if end <= slot.start or start >= slot.cut or not overlay.shown_in(max(start, slot.start), min(end, slot.cut)):
                 continue  # its time range does not reach this scene, or it is hidden all along
         out.append(overlay)
     return sorted(out, key=lambda o: o.layer)

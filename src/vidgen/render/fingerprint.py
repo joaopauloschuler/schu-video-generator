@@ -10,6 +10,7 @@ beats (size and modification time), the source of vidgen itself (with its bundle
 icons) and of
 the project's extension folders (file contents), and the files under ``<project>/assets`` (size and modification time).
 With overlays, also what the planned timeline reads from every scene (``vidgen.videoplan``).
+With transitions, the one into the next scene (it changes how the scene ends, DESIGN.md §49).
 Not the music and the final mix (``music``, ``audio``, a scene's ``music``): they are applied when
 the video is joined.
 Files a scene reads from elsewhere are not tracked (``--force`` renders again).
@@ -106,6 +107,7 @@ def _overlay_inputs(project: Project) -> Any:
             "number": s.params.get("number") if s.type == "chapter" else None,
             "chapter": s.model_dump(mode="json")["chapter"],
             "overlays": s.overlays,
+            "transition": s.model_dump(mode="json")["transition"],  # crossfades move later scenes (§49)
             "beats": [
                 [
                     b.id, b.text, say(b.text), speakers[b.id],
@@ -117,6 +119,24 @@ def _overlay_inputs(project: Project) -> Any:
         for s in cfg.scenes
     ]
     return {"scenes": scenes, "voices": cfg.model_dump(mode="json", include={"voices", "subtitles"})}
+
+
+def _next_transition(project: Project, scene_id: str) -> Any:
+    """The transition into the scene after ``scene_id`` with what limits its length (that
+    scene's duration, beats and MP3s); a cut alone, and ``None`` for the last scene."""
+    from vidgen.transitions import effective
+
+    config = project.config
+    ids = [s.id for s in config.scenes]
+    i = ids.index(scene_id)
+    if i + 1 >= len(ids):
+        return None
+    t = effective(config, i + 1)
+    if t.type == "cut":
+        return "cut"
+    after = config.scenes[i + 1]
+    # a crossfade's or fade's length is limited by the next scene's own length (its beats)
+    return [t.model_dump(mode="json"), after.duration, [[b.id, _stat(project.audio_dir / f"{b.id}.mp3"), b.text] for b in after.beats]]
 
 
 def scene_fingerprint(project: Project, scene_id: str) -> str:
@@ -143,6 +163,9 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
         "extensions": [_contents_digest(_files(folder, ".py"), folder) for folder in project.extension_dirs],
         "assets": {path.relative_to(assets).as_posix(): _stat(path) for path in _files(assets)},
         "overlays": _overlay_inputs(project),
+        # the transition out of the scene changes its end: held instead of faded, faded to a
+        # colour, or held longer (DESIGN.md §49)
+        "next_transition": _next_transition(project, scene_id),
     }
     text = json.dumps(data, sort_keys=True, ensure_ascii=True)
     return hashlib.sha256(text.encode("utf-8")).hexdigest()

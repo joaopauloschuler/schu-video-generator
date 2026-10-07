@@ -22,6 +22,9 @@ from vidgen.fileio import replace_file
 #: Audio of every padded scene (and so of the final video): AAC, 48 kHz, stereo.
 AUDIO_RATE = 48000
 AUDIO_BITRATE = "192k"
+#: Quality of the video when the join has to encode it (crossfades, DESIGN.md §49): visually
+#: lossless next to the scenes' own encoding (Manim: CRF 23).
+VIDEO_CRF = "18"
 
 
 def find_ffmpeg() -> str:
@@ -124,8 +127,32 @@ def write_concat_list(files: list[Path], list_file: Path) -> None:
     list_file.write_text("".join(lines), encoding="utf-8")
 
 
+def crossfade_graph(runs: list[int], crossfades: list[int], fps: int) -> tuple[list[str], str]:
+    """The filter graph blending video inputs ``0 .. len(runs) - 1`` (``runs[k]`` frames each)
+    with a crossfade of ``crossfades[k - 1]`` frames between input ``k - 1`` and ``k``: its
+    filters and the output label. Each transition starts half a frame before its first shared
+    frame, so the blend weights are ``(j + 0.5) / n`` (symmetric; the middle frame of an odd
+    transition is 50/50) and the output has exactly ``sum(runs) - sum(crossfades)`` frames."""
+    graph = [f"[{k}:v]settb=AVTB,setpts=PTS-STARTPTS[r{k}]" for k in range(len(runs))]
+    label, length = "r0", runs[0]
+    for k in range(1, len(runs)):
+        n = crossfades[k - 1]
+        graph.append(f"[{label}][r{k}]xfade=transition=fade:duration={n / fps:.6f}:offset={(length - n - 0.5) / fps:.6f}[x{k}]")
+        label, length = f"x{k}", length + runs[k] - n
+    return graph, label
+
+
 def join(
-    ffmpeg: str, videos: list[Path], audios: list[Path], dst: Path, work_dir: Path, sfx: Path | None = None, mix: Path | None = None
+    ffmpeg: str,
+    videos: list[Path],
+    audios: list[Path],
+    dst: Path,
+    work_dir: Path,
+    sfx: Path | None = None,
+    mix: Path | None = None,
+    crossfades: list[int] | None = None,
+    frames: list[int] | None = None,
+    fps: int | None = None,
 ) -> None:
     """Concatenate ``videos`` (stream copy, video only) and ``audios`` (PCM, encoded once to AAC)
     into ``dst`` with the concat demuxer.
@@ -135,33 +162,64 @@ def join(
     levels) before encoding. ``mix``: the finished mix of the whole video (DESIGN.md §48), used
     as the audio instead of ``audios`` and ``sfx``.
 
+    ``crossfades`` (DESIGN.md §49): per boundary between ``videos[i]`` and ``videos[i + 1]``,
+    the frames they overlap (0: a cut), with ``frames`` (each video's frame count) and ``fps``.
+    With any crossfade, the scenes joined by cuts are concatenated into runs and the runs blended
+    with ffmpeg's ``xfade``, so the video is encoded once (H.264, CRF :data:`VIDEO_CRF`) instead
+    of stream-copied.
+
     ``dst`` is written via a temporary file next to it and replaced at the end, so a failed join
     never leaves a truncated output. If ``dst`` cannot be replaced (on Windows: it is open in a
     video player), the joined video is kept as ``<name>.partial.mp4`` and the error says so.
     """
-    video_list = work_dir / "video_concat.txt"
     audio_list = work_dir / "audio_concat.txt"
-    write_concat_list(videos, video_list)
     write_concat_list(audios, audio_list)
     tmp = dst.with_name(f"{dst.stem}.partial{dst.suffix}")
-    if mix is not None:
-        audio = ["-i", str(mix), "-map", "0:v:0", "-map", "1:a:0"]
-    elif sfx is None:
-        audio = ["-f", "concat", "-safe", "0", "-i", str(audio_list), "-map", "0:v:0", "-map", "1:a:0"]
+    graph: list[str] = []
+    if crossfades and any(crossfades):
+        if frames is None or fps is None or len(frames) != len(videos) or len(crossfades) != len(videos) - 1:
+            raise VidgenError("joining with crossfades needs every video's frame count and the frame rate")
+        groups: list[list[int]] = [[0]]
+        for i in range(1, len(videos)):
+            if crossfades[i - 1]:
+                groups.append([i])
+            else:
+                groups[-1].append(i)
+        inputs: list[str] = []
+        for k, group in enumerate(groups):
+            run_list = work_dir / f"video_concat_{k}.txt"
+            write_concat_list([videos[i] for i in group], run_list)
+            inputs += ["-f", "concat", "-safe", "0", "-i", str(run_list)]
+        blends, label = crossfade_graph(
+            [sum(frames[i] for i in group) for group in groups], [crossfades[g[0] - 1] for g in groups[1:]], fps
+        )
+        graph += blends
+        video_map, video_codec = f"[{label}]", ["-c:v", "libx264", "-crf", VIDEO_CRF, "-pix_fmt", "yuv420p"]
+        first_audio = len(groups)
     else:
-        audio = [
-            "-f", "concat", "-safe", "0", "-i", str(audio_list),
-            "-i", str(sfx),
-            "-filter_complex", "[1:a][2:a]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[mix]",
-            "-map", "0:v:0", "-map", "[mix]",
-        ]
+        video_list = work_dir / "video_concat.txt"
+        write_concat_list(videos, video_list)
+        inputs = ["-f", "concat", "-safe", "0", "-i", str(video_list)]
+        video_map, video_codec, first_audio = "0:v:0", ["-c:v", "copy"], 1
+    if mix is not None:
+        inputs += ["-i", str(mix)]
+        audio_map = f"{first_audio}:a:0"
+    elif sfx is None:
+        inputs += ["-f", "concat", "-safe", "0", "-i", str(audio_list)]
+        audio_map = f"{first_audio}:a:0"
+    else:
+        inputs += ["-f", "concat", "-safe", "0", "-i", str(audio_list), "-i", str(sfx)]
+        graph.append(f"[{first_audio}:a][{first_audio + 1}:a]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[mix]")
+        audio_map = "[mix]"
+    filters = ["-filter_complex", ";".join(graph)] if graph else []
     try:
         run_ffmpeg(
             ffmpeg,
             [
-                "-f", "concat", "-safe", "0", "-i", str(video_list),
-                *audio,
-                "-c:v", "copy", "-c:a", "aac", "-b:a", AUDIO_BITRATE, "-ar", str(AUDIO_RATE),
+                *inputs,
+                *filters,
+                "-map", video_map, "-map", audio_map,
+                *video_codec, "-c:a", "aac", "-b:a", AUDIO_BITRATE, "-ar", str(AUDIO_RATE),
                 "-movflags", "+faststart",
                 str(tmp),
             ],

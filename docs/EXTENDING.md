@@ -518,6 +518,14 @@ class Countdown(NarratedScene):
   `fade_out(m)` out): Manim's `FadeIn` / `FadeOut` copy the whole mobject twice when they
   begin, which takes seconds for big groups (a long code listing); `Fade` animates only the
   colours (and `shift`), so prefer it for anything large.
+- Transitions (docs/CONFIG.md "Transitions"): when a crossfade or colour fade leads to the next
+  scene, `finish()` holds the picture for `outro` instead of fading it (the transition takes it
+  away), and the scene is held longer at its end when its silent tail is too short; both happen
+  for you. `self.transition_in` / `self.transition_out` are the planned transitions
+  (`TransitionSlot(type, seconds, color, overlap, fade_out, fade_in, hold)`, frames; `None`
+  when the video has none). A scene that fades itself out with `clear_all` still works: the
+  crossfade then blends its faded picture. Keep to the timing contract (beats + `outro`) so the
+  overlaps land where planned.
 - Stills (`vidgen render --frames`) are taken on the last frame of each beat, i.e. when the
   `with self.narrate(...)` block has ended (or, for a silent scene, at `duration - outro`), so
   a scene reads best in stills when each beat ends showing what it explained. Capturing only
@@ -917,7 +925,9 @@ overlays:
   beat's MP3 length).
 - `self.context` (`OverlayContext`): `scene` (this scene's planned `SceneSlot`: `id`, `index`,
   `start` and `duration` in the video, `beats` with `start`/`end` from the scene's start and
-  `text`, `chapter`: the chapter's title), `scenes`, `duration` (the whole video), `chapters`
+  `text`, `chapter`: the chapter's title; with crossfades `overlap_in` / `overlap_out` in seconds
+  and `cut`, where the next scene starts: the scene's overlays are drawn until `cut`, the next
+  scene's from then on, also inside this scene's render), `scenes`, `duration` (the whole video), `chapters`
   (the video's chapters, see below), `chapter` (this scene's `Chapter`, `None` before the first),
   `fps`, `video_time(scene_time)`, `scene_start(id)`, `project`, `theme`, `plan`. Times are *planned* (docs/CONFIG.md "Overlays", Timing).
   `self.options`, `self.config` (the entry), `self.id`, `self.scenes` (ids of the scenes it is

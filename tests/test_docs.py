@@ -48,6 +48,7 @@ MODELS: list[type[BaseModel]] = [
     config.DuckConfig,
     config.SceneMusic,
     config.AudioConfig,
+    config.TransitionConfig,
 ]
 
 

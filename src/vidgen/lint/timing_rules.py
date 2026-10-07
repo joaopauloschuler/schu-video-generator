@@ -76,9 +76,12 @@ def narration_speed(ctx: SceneContext, settings: NarrationSpeedRule) -> Iterator
 
 def static_runs(activity: dict[str, Any], min_change: float) -> list[tuple[int, int]]:
     """``(first, end)`` frame ranges in which the picture does not change: frame ``first`` (the
-    last change) stays on screen until frame ``end`` (the next change, or the scene's end)."""
-    changes = sorted(frame for frame, fraction in activity["motion"]["changes"] if fraction >= min_change)
-    marks = [0, *(f for f in changes if f > 0), int(activity["frames"])]
+    last change) stays on screen until frame ``end`` (the next change, or the scene's end — or
+    where a crossfade into the next scene starts blending it away, DESIGN.md §49)."""
+    frames = int(activity["frames"])
+    end = frames - int(activity.get("overlap_out", 0))
+    changes = sorted(frame for frame, fraction in activity["motion"]["changes"] if fraction >= min_change and frame < end)
+    marks = [0, *(f for f in changes if f > 0), end]
     return [(a, b) for a, b in zip(marks, marks[1:]) if b > a]
 
 

@@ -87,6 +87,7 @@ def project_problems(project: Project) -> list[Problem]:
     from vidgen.music import config_problems as music_problems
     from vidgen.overlays import overlay_problems
     from vidgen.sfx import config_problems as sfx_problems
+    from vidgen.transitions import color_problems as transition_color_problems
     from vidgen.voices import voice_color_problems
 
     problems: list[Problem] = []
@@ -123,6 +124,7 @@ def project_problems(project: Project) -> list[Problem]:
                     problems.append(Problem(f"scenes[{i}]", str(exc)))
             problems.extend(overlay_problems(project, theme))
             problems.extend(voice_color_problems(project.config, theme))
+            problems.extend(transition_color_problems(project.config, theme))
             problems.extend(Problem(loc, message) for loc, message in sfx_problems(project.config, project.root))
             problems.extend(Problem(loc, message) for loc, message in music_problems(project.config, project.root))
     except VidgenError as exc:
@@ -209,10 +211,12 @@ def pronunciation_warnings(project: Project) -> list[str]:
 
 def validate_warnings(project: Project) -> list[str]:
     """What ``vidgen validate`` warns about (not problems): :func:`theme_warnings`,
-    :func:`pronunciation_warnings` and named voices no beat uses."""
+    :func:`pronunciation_warnings`, named voices no beat uses and transitions that hold the
+    scene before them longer (DESIGN.md §49)."""
+    from vidgen.transitions import transition_warnings
     from vidgen.voices import voice_warnings
 
-    return theme_warnings(project) + pronunciation_warnings(project) + voice_warnings(project.config)
+    return theme_warnings(project) + pronunciation_warnings(project) + voice_warnings(project.config) + transition_warnings(project)
 
 
 def log_validate_warnings(project: Project, variants: dict[str, Project | None]) -> None:

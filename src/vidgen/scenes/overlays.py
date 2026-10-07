@@ -105,7 +105,7 @@ class LowerThird(Overlay):
         at = next((b.start for b in slot.beats if b.id == o.at), 0.0) if isinstance(o.at, str) else float(o.at)
         start = slot.start + at
         end = start + o.duration
-        return start, end if o.across_cuts else min(end, slot.end)
+        return start, end if o.across_cuts else min(end, slot.cut)
 
     def build(self) -> Mobject:
         o = self.options

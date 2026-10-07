@@ -117,4 +117,6 @@ def activity_document(scene: NarratedScene, motion: MotionTrack, fps: int) -> di
         "beats": beats,
         "plays": plays,
         "motion": motion.to_json(),
+        # the last frames a crossfade into the next scene covers (DESIGN.md §49): they blend away
+        "overlap_out": scene.transition_out.overlap if scene.transition_out is not None else 0,
     }

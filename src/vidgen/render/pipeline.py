@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from vidgen import __version__, hooks, mix, sfx
+from vidgen import __version__, hooks, mix, sfx, transitions
 from vidgen.errors import VidgenError
 from vidgen.project import Project
 from vidgen.render import ffmpeg as ff
@@ -335,6 +335,13 @@ def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) ->
     ``no_audio``, :func:`vidgen.mix.mix_audio` then adds the music, ducks and normalises it into
     ``padded/mix.wav`` (with music or ``audio.normalize``; else it only measures the loudness)
     and the combined timings gain ``mix``, its report (§48).
+
+    Crossfades (§49) start a scene before the one before it ends: every later time (beats, SRT,
+    effects, music, chapters) follows the overlapped starts, the scenes' sound is summed into
+    ``padded/voice.wav`` (the earlier scene's silent tail fading out) and the pictures are
+    blended by :func:`vidgen.render.ffmpeg.join` (the video is then encoded once instead of
+    stream-copied). Scenes with a transition get ``transition: {type, duration, overlap}`` in the
+    combined timings.
     """
     render_dir = project.render_dir(preview)
     padded_dir = render_dir / "padded"
@@ -344,14 +351,14 @@ def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) ->
     scenes: list[dict[str, Any]] = []
     shifted: list[str] = []
     events: list[sfx.SfxEvent] = []
+    renders = _scene_renders(project, preview)
+    overlaps = _overlaps(project, fmt.fps, renders)
+    sample_overlaps: list[int] = []
     offset = 0.0
-    for spec in project.config.scenes:
-        video = scene_video_path(project, preview, spec.id)
-        timings_file = scene_timings_path(project, preview, spec.id)
-        if not (video.is_file() and timings_file.is_file()):
-            raise VidgenError(f"scene '{spec.id}' has no render in {render_dir}; render it first")
-        timings = json.loads(timings_file.read_text(encoding="utf-8"))
-        duration = ff.probe(video).duration
+    end_sample = 0
+    for i, (spec, (video, timings, duration)) in enumerate(zip(project.config.scenes, renders)):
+        offset -= overlaps[i] / fmt.fps
+        sample_overlaps.append(end_sample - round(offset * ff.AUDIO_RATE) if i else 0)
         drawn = timings.get("render", {}).get("overlays") or {}
         if drawn.get("timed") and drawn.get("start") is not None and abs(drawn["start"] - offset) > 1.5 / fmt.fps:
             shifted.append(f"'{spec.id}' starts at {offset:.2f} s, planned {drawn['start']:.2f} s")
@@ -373,15 +380,24 @@ def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) ->
         }
         if scene_sfx:
             entry["sfx"] = [e.to_json() for e in scene_sfx]
+        transition = transitions.effective(project.config, i)
+        if transition.type != "cut":
+            entry["transition"] = {"type": transition.type, "duration": transition.seconds, "overlap": round(overlaps[i] / fmt.fps, 6)}
         scenes.append(entry)
         videos.append(video)
         audios.append(audio)
         offset += duration
+        end_sample = round(offset * ff.AUDIO_RATE)
     if shifted:
         log.warning(
             "overlays timed in the video are off where a scene does not start where it was planned "
             "(an earlier scene ran longer or shorter than its narration; DESIGN.md §41): %s", "; ".join(shifted)
         )
+    voice = padded_dir / "voice.wav"
+    remove_file(voice)
+    if any(overlaps):  # crossfades: the scenes' sound overlaps too, summed into one track
+        transitions.write_voice_track(audios, sample_overlaps, voice, ff.AUDIO_RATE)
+        audios = [voice]
     track = padded_dir / "sfx.wav"
     remove_file(track)
     if events and not no_audio:
@@ -402,8 +418,50 @@ def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) ->
         report = mix.mix_audio(project, combined, audios, track if track.is_file() else None, mixed)
         combined["mix"] = report.to_json()
     output = project.output_path(preview)
-    ff.join(ffmpeg, videos, audios, output, padded_dir, sfx=track if track.is_file() else None, mix=mixed if mixed.is_file() else None)
+    ff.join(
+        ffmpeg, videos, audios, output, padded_dir,
+        sfx=track if track.is_file() else None,
+        mix=mixed if mixed.is_file() else None,
+        crossfades=overlaps[1:] if any(overlaps) else None,
+        frames=[round(d * fmt.fps) for _, _, d in renders],
+        fps=fmt.fps,
+    )
     return output, combined
+
+
+def _scene_renders(project: Project, preview: bool) -> list[tuple[Path, dict[str, Any], float]]:
+    """Every scene's rendered video, timings and measured length (config order)."""
+    out = []
+    render_dir = project.render_dir(preview)
+    for spec in project.config.scenes:
+        video = scene_video_path(project, preview, spec.id)
+        timings_file = scene_timings_path(project, preview, spec.id)
+        if not (video.is_file() and timings_file.is_file()):
+            raise VidgenError(f"scene '{spec.id}' has no render in {render_dir}; render it first")
+        out.append((video, json.loads(timings_file.read_text(encoding="utf-8")), ff.probe(video).duration))
+    return out
+
+
+def _overlaps(project: Project, fps: int, renders: list[tuple[Path, dict[str, Any], float]]) -> list[int]:
+    """Frames each scene overlaps the one before (crossfades, DESIGN.md §49), from the renders;
+    warns where a crossfade had to be shortened (a reused render ends with less silence than
+    the plan gave it)."""
+    config = project.config
+    if not transitions.has_transitions(config):
+        return [0] * len(renders)
+    frames = [round(duration * fps) for _, _, duration in renders]
+    speech = [timings["beats"][-1]["end"] if timings["beats"] else None for _, timings, _ in renders]
+    overlaps = transitions.join_overlaps(config, fps, frames, speech)
+    for i, spec in enumerate(config.scenes):
+        t = transitions.effective(config, i)
+        wanted = min(transitions.requested_frames(t, fps), frames[i]) if t.type == "crossfade" else 0
+        if overlaps[i] < wanted:
+            log.warning(
+                "the crossfade into '%s' is %.2f s instead of %.2f s: '%s' ends with only that much silence "
+                "(render it again so it is held for the transition; DESIGN.md §49)",
+                spec.id, overlaps[i] / fps, wanted / fps, config.scenes[i - 1].id,
+            )
+    return overlaps
 
 
 def write_frames_index(project: Project, preview: bool, timings: dict[str, Any], frames: int) -> Path:

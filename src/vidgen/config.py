@@ -686,6 +686,46 @@ class AudioConfig(_Strict):
     """Highest true peak (dBTP) of a mixed track; a limiter keeps every peak under it."""
 
 
+#: Transition types (DESIGN.md §49); Step 47 adds more.
+TRANSITION_TYPES = ("cut", "crossfade", "fade_color")
+#: Seconds of a transition when its entry gives no ``duration``.
+TRANSITION_DURATIONS = {"cut": 0.0, "crossfade": 0.5, "fade_color": 1.0}
+
+
+class TransitionConfig(_Strict):
+    """How the video passes into a scene from the one before it (DESIGN.md §49)."""
+
+    type: Literal["cut", "crossfade", "fade_color"] = "cut"
+    """cut: straight to the next scene (the default: the scene before fades out by itself); crossfade: the two scenes blend; fade_color: the picture fades to a colour and the next scene fades in from it."""
+    duration: float | None = Field(default=None, gt=0, le=5)
+    """Seconds of the transition (default: crossfade 0.5, fade_color 1.0, split evenly between fading out and in)."""
+    color: ColorRef | None = None
+    """fade_color only: a theme colour token or hex (default: the theme's background)."""
+
+    @model_validator(mode="after")
+    def _keys_of_type(self) -> TransitionConfig:
+        if self.type == "cut" and self.duration is not None:
+            raise ValueError("a cut has no duration")
+        if self.type != "fade_color" and self.color is not None:
+            raise ValueError(f"color is only for fade_color, not {self.type}")
+        return self
+
+    @property
+    def seconds(self) -> float:
+        """``duration``, or the type's default."""
+        return self.duration if self.duration is not None else TRANSITION_DURATIONS[self.type]
+
+
+def _transition(value: str | TransitionConfig) -> TransitionConfig:
+    return TransitionConfig(type=value) if isinstance(value, str) else value  # type: ignore[arg-type]
+
+
+#: A ``transition:`` value: a type name, or {type, duration, color}.
+TransitionSetting = Annotated[
+    Union[Literal["cut", "crossfade", "fade_color"], TransitionConfig], AfterValidator(_transition)
+]
+
+
 class ChapterConfig(_Strict):
     """A scene's ``chapter:`` in its long form: a new chapter starts at this scene."""
 
@@ -742,6 +782,8 @@ class SceneConfig(_Strict):
     """Sound effects at seconds from the scene's start ({sound, at, gain, pan, align, params}, or a sound name); for silent scenes too."""
     music: bool | SceneMusic = True
     """Background music during this scene: false for none (it fades out before the scene and back in after it), or {volume: dB} to change its level here."""
+    transition: TransitionSetting | None = None
+    """How the video passes into this scene from the one before: cut, crossfade, fade_color or {type, duration, color}; default the video's transition."""
 
     @model_validator(mode="before")
     @classmethod
@@ -832,6 +874,8 @@ class VideoConfig(_Strict):
     """Background music: a bed name or file, {source, volume, start, loop, crossfade, fade_in, fade_out, duck}, or a list of such cues with from / to scene ids."""
     audio: AudioConfig = Field(default_factory=AudioConfig)
     """The final mix: loudness normalisation {normalize, target_lufs, true_peak}."""
+    transition: TransitionSetting | None = None
+    """Default transition between scenes (cut, crossfade, fade_color or {type, duration, color}); a scene's transition wins."""
     scenes: list[SceneConfig] = Field(min_length=1)
     """The scenes in order (at least one); scene ids and beat ids must be unique."""
 
@@ -899,6 +943,9 @@ class VideoConfig(_Strict):
         from vidgen.chapters import chapter_problems
 
         problems = chapter_problems(self.scenes) + self._music_problems(scene_seen)
+        first = self.scenes[0].transition
+        if first is not None and first.type == "crossfade":
+            problems.append("scenes[0].transition: the first scene has no scene before it to cross-fade from (fade_color fades it in from a colour)")
         if problems:
             raise ValueError("; ".join(problems))
         return self

@@ -34,7 +34,8 @@ from vidgen.errors import VidgenError
 from vidgen.project import Project
 from vidgen.sfx import AUTO_ACTION_SFX, SfxEvent, SoundLibrary
 from vidgen.theme import Theme
-from vidgen.videoplan import VideoPlan
+from vidgen.transitions import ColorFade, has_transitions, resolve_color
+from vidgen.videoplan import TransitionSlot, VideoPlan
 
 log = logging.getLogger("vidgen.scene")
 
@@ -281,17 +282,33 @@ class NarratedScene(MovingCameraScene):
             if spec.silent:
                 length = max((spec.duration or 0.0) - self.outro, 1 / config.frame_rate)
                 capture.begin_segment(None, round(length * config.frame_rate), include_end=True)
+        #: The planned transitions into and out of this scene (DESIGN.md §49), ``None`` when the
+        #: video has none (the out one also for the last scene).
+        self.transition_in: TransitionSlot | None = None
+        self.transition_out: TransitionSlot | None = None
+        self._video_plan: VideoPlan | None = None
+        if has_transitions(self.project.config):
+            self._video_plan = VideoPlan(self.project, int(config.frame_rate))
+            i = self._video_plan.index(spec.id)
+            self.transition_in = self._video_plan.transition(i)
+            if i + 1 < len(self.project.config.scenes):
+                self.transition_out = self._video_plan.transition(i + 1)
         #: The video's overlays drawn on this scene (DESIGN.md §41), or ``None`` without any.
         self.overlay_layer: OverlayLayer | None = None
         self._reserved: list[regions.Region] = []
-        overlays = self._build_overlays()
-        if overlays:
-            self.overlay_layer = OverlayLayer(self, overlays)
+        overlays, following = self._build_overlays()
+        if overlays or following:
+            slot = self._video_plan.scene(spec.id) if self._video_plan is not None else None
+            if slot is None:
+                self.overlay_layer = OverlayLayer(self, overlays)
+            else:
+                self.overlay_layer = OverlayLayer(self, overlays, following, start=slot.start, cut=slot.cut)
             self.overlay_layer.attach()  # after the capture: stills and the layout dump see overlays
             for overlay, mob in zip(self.overlay_layer.overlays, self.overlay_layer.mobjects):
                 box = mobject_region(mob) if overlay.reserves and mob is not None else None
                 if box is not None:
                     self._reserved.append(box)
+        self._attach_color_fade()
         if self.entrance_sfx is not None and self.project.config.sfx.auto:
             sound, gain = self.entrance_sfx
             self.sfx(sound, 0.0, gain=gain)
@@ -299,12 +316,37 @@ class NarratedScene(MovingCameraScene):
             params = cue.params.model_dump(exclude_none=True)
             self._add_sfx(cue.sound, cue.at, cue.gain, cue.pan, cue.align, params, f"sfx[{k}]")
 
-    def _build_overlays(self) -> list[Overlay]:
-        """The overlays of the project drawn on this scene (none without an ``overlays:``)."""
+    def _build_overlays(self) -> tuple[list[Overlay], list[Overlay]]:
+        """The overlays of the project drawn on this scene (none without an ``overlays:``) and,
+        when a crossfade overlaps its end with the next scene, the next scene's (drawn from that
+        scene's start on, so both scenes show the same overlays while they blend)."""
         cfg = self.project.config
         if not cfg.overlays and not any(isinstance(s.overlays, dict) for s in cfg.scenes):
-            return []
-        return scene_overlays(self.project, self.spec, self.theme, VideoPlan(self.project, int(config.frame_rate)))
+            return [], []
+        plan = self._video_plan or VideoPlan(self.project, int(config.frame_rate))
+        own = scene_overlays(self.project, self.spec, self.theme, plan)
+        following: list[Overlay] = []
+        if self.transition_out is not None and self.transition_out.overlap:
+            after = cfg.scenes[plan.index(self.spec.id) + 1]
+            following = scene_overlays(self.project, after, self.theme, plan)
+        return own, following
+
+    def _attach_color_fade(self) -> None:
+        """Fade the first / last frames from / to a colour for ``fade_color`` transitions (§49)."""
+        t_in, t_out = self.transition_in, self.transition_out
+        frames_in = t_in.fade_in if t_in is not None else 0
+        frames_out = t_out.fade_out if t_out is not None else 0
+        if not (frames_in or frames_out) or self._video_plan is None:
+            return
+        i = self._video_plan.index(self.spec.id)
+        fade = ColorFade(
+            resolve_color(t_in.color, self.theme) if frames_in and t_in is not None else None,
+            frames_in,
+            resolve_color(t_out.color, self.theme) if frames_out and t_out is not None else None,
+            frames_out,
+            round(self._video_plan.scene_duration(i) * config.frame_rate),
+        )
+        fade.attach(self.renderer)  # outermost: overlays are drawn over the faded picture
 
     # ----- params ----------------------------------------------------------------------------
 
@@ -498,9 +540,15 @@ class NarratedScene(MovingCameraScene):
             self.play_steps(d, [steps[k] for k in plan[i]], fraction=fraction, cap=cap)
 
     def finish(self) -> None:
-        """Fade out everything over :attr:`outro` seconds (no-op when ``outro`` is 0)."""
-        if self.outro > 0:
-            self.clear_all(run_time=self.outro)
+        """Fade out everything over :attr:`outro` seconds (no-op when ``outro`` is 0). When a
+        transition other than a cut leads to the next scene (DESIGN.md §49), the picture is held
+        for those frames instead: the transition takes it away."""
+        if self.outro <= 0:
+            return
+        if self.transition_out is not None and not self.transition_out.cut:
+            self.wait_seconds(math.ceil(self.outro * config.frame_rate - 1e-9) / config.frame_rate)
+            return
+        self.clear_all(run_time=self.outro)
 
     def play_steps(
         self,
@@ -615,10 +663,13 @@ class NarratedScene(MovingCameraScene):
             self.wait_seconds(target - self.renderer.time)
 
     def tear_down(self) -> None:
-        """Hold silent scenes to ``spec.duration``; warn about beats that were never narrated."""
+        """Hold silent scenes to ``spec.duration`` and every scene for the planned ``hold`` of the
+        transition out of it (§49); warn about beats that were never narrated."""
         if self.spec.silent:
             self.silent_busy = float(self.renderer.time)
             self.hold()
+        if self.transition_out is not None and self.transition_out.hold:
+            self.wait_seconds(self.transition_out.hold / config.frame_rate)
         narrated = {entry.beat_id for entry in self.beat_log}
         missing = [b.id for b in self.beats if b.id not in narrated]
         if missing:

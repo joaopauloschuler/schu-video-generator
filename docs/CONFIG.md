@@ -7,7 +7,8 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 [format](#format-and-preview), [variants](#variants), [theme](#theme), [voice](#voice-voice),
 [narration](#narration-narration), [narration audio](#narration-audio-elevenlabs),
 [multiple voices](#multiple-voices-voices), [pronunciation](#pronunciation-pronunciation),
-[sound effects](#sound-effects-sfx), [background music and loudness](#background-music-music), [built-in scene types](#built-in-scenes), [beat actions](#beat-actions), [overlays](#overlays),
+[sound effects](#sound-effects-sfx), [background music and loudness](#background-music-music),
+[transitions](#transitions-transition), [built-in scene types](#built-in-scenes), [beat actions](#beat-actions), [overlays](#overlays),
 [JSON Schema](#json-schema-vidgen-schema), [frame stills](#frame-stills-vidgen-render---frames),
 [storyboard](#storyboard-vidgen-storyboard), [lint](#lint-vidgen-lint),
 [JSON output of commands](#json-output---json).
@@ -34,6 +35,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `sfx` | `{auto: false, gain: 0}` | sound effects of the whole video: automatic sounds for built-in animations, overall level; see [sound effects](#sound-effects-sfx) |
 | `music` | none | background music: a bed name (`calm`, `pulse`, `bright`) or a file, a cue `{source, volume, ...}`, or a list of cues with `from` / `to` scenes; see [background music](#background-music-music) |
 | `audio` | `{normalize: auto, target_lufs: -16, true_peak: -1.5}` | loudness of the final mix; see [loudness](#loudness-of-the-final-mix-audio) |
+| `transition` | none (cuts) | the default transition between scenes: `cut`, `crossfade`, `fade_color` or `{type, duration, color}`; see [transitions](#transitions-transition) |
 | `scenes` | required | the scenes in order, at least one |
 
 ## Scenes and beats
@@ -67,6 +69,7 @@ scenes:
 | `voice` | none (the base `voice:`) | who says this scene's beats: a name from [`voices:`](#multiple-voices-voices) or `default` |
 | `sfx` | `[]` | sound effects at seconds from the scene's start (silent scenes too), see [sound effects](#sound-effects-sfx) |
 | `music` | `true` | the [background music](#background-music-music) during this scene: `false` for none, `{volume: dB}` to change its level here |
+| `transition` | the video's `transition` | how the video passes into this scene from the one before it, see [transitions](#transitions-transition) |
 
 Beat `id`s name the audio files: keep them when you edit the text (only that beat is
 re-voiced). A beat `text` is spoken as written; it is also the subtitle. A beat's `actions`
@@ -752,6 +755,77 @@ mix before the AAC encode, which may move the peak by ~0.1 dB).
 instruments, key, tempo, chords, mood, frequency range — for an author who cannot listen, and
 lists the project's `assets/music` files (length, measured loudness); `--render-dir` writes one
 loop of every bed as `DIR/<name>.wav`. JSON: see [below](#vidgen-list-music---json).
+
+## Transitions (`transition`)
+
+How the video passes from one scene to the next. Without any, scenes are joined by cuts (every
+built-in scene fades out over its last 0.5 s by itself).
+
+```yaml
+transition: crossfade                  # the default between scenes (not before the first one)
+scenes:
+  - id: intro
+    type: title
+    params: {title: "Hello"}
+    transition: fade_color             # the first scene may fade in from a colour
+    beats: [{text: "Welcome."}]
+  - id: part2
+    type: chapter
+    params: {number: 2, title: "Results"}
+    duration: 3
+    transition: {type: fade_color, color: surface, duration: 1.2}   # into this scene
+  - id: summary
+    type: bullets
+    params: {items: ["Fast", "Small"]}
+    transition: cut                    # this one is a plain cut
+    beats: [{text: "In short: fast and small."}]
+```
+
+| type | what you see | timing |
+|---|---|---|
+| `cut` | the next scene straight after the previous one (which fades out by itself) | unchanged |
+| `crossfade` | the two scenes blend into each other | the scenes **overlap** by `duration`: the next one starts that much earlier, the video gets that much shorter |
+| `fade_color` | the previous scene fades to `color` over the first half of `duration`, the next one fades in from it over the second half | no overlap: the video keeps its length |
+
+| key | default | |
+|---|---|---|
+| `type` | `cut` | `cut`, `crossfade` or `fade_color` (a plain string is the type with its defaults) |
+| `duration` | `crossfade` 0.5, `fade_color` 1.0 | seconds, at most 5; not allowed on a cut |
+| `color` | the theme's `background` | `fade_color` only: a theme colour token (`surface`, `accent`, ...), `background`, or hex |
+
+A scene's `transition:` is the way **into** that scene; the video's `transition:` is the default
+for every scene but the first (a crossfade on the first scene is an error: nothing comes before
+it; `fade_color` there fades the video in from the colour).
+
+- **Speech never overlaps.** A transition covers only the *silent end* of the scene before it:
+  the frames after its narration ends (its pad and fade-out; a whole silent scene). When that is
+  shorter than the transition (a long crossfade, a scene without a fade-out), the scene before is
+  **held** on its last picture that much longer, and `vidgen validate` says so ("'a' is held
+  0.20 s longer..."). The defaults fit the built-in scenes' 0.5 s fade-out plus the 0.35 s pad,
+  so nothing is held. The next scene's narration starts with it, during a crossfade.
+- **The outgoing scene stops fading out by itself**: with a transition other than a cut after it,
+  a built-in scene (anything ending with `self.finish()`) holds its picture over its 0.5 s outro
+  and the transition takes it away.
+- **Every time follows**: scene starts in `timings.json` (scenes with a transition get
+  `transition: {type, duration, overlap}`), the SRT, captions, chapters and the chapter
+  indicator, the progress bar, lower thirds, sound effects, music cues and ducking, storyboard
+  times. They all come from the [planned timeline](#overlays), which knows the overlaps.
+- **Overlays stay put.** During a crossfade both scenes draw the *incoming* scene's overlays
+  (captions, watermark, progress bar, ...), so the blend shows them once, unchanged — no doubled
+  captions or ghosted watermark. A `fade_color` fades the scene's picture only; overlays stay on
+  top of the colour.
+- **Sound**: in a crossfade the scenes' sound overlaps too: the earlier scene's silent tail fades
+  out under the next scene's start (only a clip's sound can be there). Effects and music are
+  placed on the video's timeline as always.
+- **Encoding**: with any crossfade the join blends the scenes with FFmpeg (`xfade`) and encodes
+  the video once (H.264, CRF 18, visually lossless next to the scenes' own encoding) instead of
+  copying the scenes' streams, which takes about as long as playing the video; a video with only
+  cuts and colour fades is joined as before. Colour fades are drawn inside the scenes' renders,
+  so storyboards and stills show them.
+- A transition changes the renders of the scenes on both sides of it (the storyboard re-renders
+  both). `vidgen render --scene ID` reuses the other scenes as they are: render the scene before
+  a new transition too, or the join shortens a crossfade to the silence it finds (with a
+  warning).
 
 ## Built-in scenes
 
@@ -3056,7 +3130,8 @@ frame of the render (a sampled comparison with the previous frame).
           source,          # "audio" (d from the MP3) or "estimate" (from the word count)
           text}],
  plays: [{start, end, beat, animations: ["Write", ...], wait, requested}],
- motion: {step, grid: [w, h], level, changes: [[frame, fraction], ...]}}
+ motion: {step, grid: [w, h], level, changes: [[frame, fraction], ...]},
+ overlap_out}              # last frames a crossfade into the next scene covers (0: none)
 ```
 
 `plays` lists every `self.play(...)` and `self.wait(...)` (`wait: true`) with the beat being
@@ -3137,7 +3212,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `max_words` | warning | more than `max_words` words (tokens with a letter) of visible `text` objects in one still; code and math do not count |
 | `overlay_overlap` | warning | an [overlay](#overlays) whose box (all its objects) covers at least `min_overlap` of the box of a scene text or icon. `text_overlap` and `covered_text` leave an overlay over scene text to this rule; overlays of a type with a `lint_skip` (the watermark: `contrast`) are not checked by those rules |
 | `narration_speed` | warning; info without audio | a beat (of at least `min_words` spoken words) narrated at fewer than `min_rate` or more than `max_rate` words per second. With an MP3 the time is the speech in it (leading and trailing silence below -40 dB of its peak cut off). Words count as spoken: hyphens, dashes and slashes separate words (`K-Phi-3` is 3), a number counts one word per digit up to 3 per digit run, plus one per decimal point and symbol (`2.58` is 4, `15%` 3), an all-capitals acronym of 2-5 letters half a word per letter (`GPU` 1.5). **Without audio** the beat's length is the word-count estimate (`narration.words_per_second`), so the rate is only off when the text is (many numbers or acronyms) or the configured rate itself is implausible: reported as `info`, one finding per scene listing the beats |
-| `dead_air` | warning | nothing on screen changes for more than `max_seconds` (a frame counts as changed when at least `min_change` of it changed, from the activity file's `motion`), narrated or not; the finding names the beat where the still picture starts and the beats it lasts through. Silent scenes are checked the same way: a silent card held longer than `max_seconds` without motion is reported |
+| `dead_air` | warning | nothing on screen changes for more than `max_seconds` (a frame counts as changed when at least `min_change` of it changed, from the activity file's `motion`), narrated or not; the finding names the beat where the still picture starts and the beats it lasts through. Silent scenes are checked the same way: a silent card held longer than `max_seconds` without motion is reported. A still picture ends where a [crossfade](#transitions-transition) into the next scene starts blending it away |
 | `animation_overrun` | warning | a beat whose code (animations and waits inside `narrate`) takes longer than its narration plus `narration.pad` by more than `tolerance` seconds: the next beat (and its audio) starts late, leaving silence. The message lists the animations still running when the narration ends. A silent scene whose animations take longer than its `duration` is reported the same way |
 | `rushed_animation` | warning | animations that `play_steps` (and so `reveal` and most built-in scenes) had to shorten below `min_run_time` seconds because the beat is too short for its steps |
 

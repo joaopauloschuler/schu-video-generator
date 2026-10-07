@@ -4197,3 +4197,120 @@ How to test: `/home/claude/venv/bin/python -m pytest -q` (1859 passed, 1 skipped
 tests/test_music.py`. Manual: `vidgen list-music --render-dir /tmp/music` (listen),
 `vidgen render examples/gallery --preview` (prints `loudness:`), `ffmpeg -i out.mp4 -af
 ebur128=peak=true -f null -` to cross-check.
+
+## Step 46 — Transitions: crossfade and fade-through-colour
+What was built
+- **Config**: `transition:` at the video level (the default between scenes, never before the
+  first one) and on a scene (the way *into* it): `cut` | `crossfade` | `fade_color`, or
+  `{type, duration, color}` (`config.TransitionConfig`; defaults crossfade 0.5 s, fade_color
+  1.0 s split into fade-out + fade-in; `color` a theme token, `background` (default) or hex, only
+  on fade_color; a cut has no duration; duration ≤ 5 s). A crossfade on the first scene is a
+  config error; `fade_color` there fades the video in.
+- **Timing contract**: a **crossfade overlaps** the two scenes (the next one starts `duration`
+  earlier; the video gets shorter by it); a **fade_color does not** (last frames of the scene
+  before fade to the colour, first frames of the next fade in from it; length unchanged). A
+  transition only ever covers the scene before's **silent tail** (after its last narration ends:
+  pad + outro, or all of a silent scene, minus its own incoming transition's frames); when that
+  is too short the scene before is **held** longer (`hold` frames, in `tear_down`) and `vidgen
+  validate` warns how much. Built-in defaults need no hold (0.35 pad + 0.5 outro ≥ 0.5).
+- **One source of start times**: `VideoPlan` is frame-based now: `transition(i) ->
+  TransitionSlot(type, seconds, color, overlap, fade_out, fade_in, hold)`, scene durations include
+  the hold, starts subtract overlaps; `SceneSlot.overlap_in` / `overlap_out` / `cut` (where the next
+  scene takes over). Chapters, progress bar, chapter indicator runs (end at `cut`), lower thirds
+  (`min(end, slot.cut)`), `from`/`to` scene ends (= `cut`), captions follow it. The join computes
+  the same overlaps from the renders (`transitions.join_overlaps`, warns when a reused render
+  forces a shorter crossfade); `timings.json`, SRT, SFX events, music cues / ducking, frames
+  index and storyboard times all use the overlapped starts.
+- **Scene ends** (`NarratedScene`): `transition_in` / `transition_out` (planned slots, `None`
+  without transitions); `finish()` holds the picture over the outro instead of `clear_all` when a
+  non-cut transition follows; `tear_down` adds the hold; `transitions.ColorFade` wraps
+  `add_frame` outermost for fade_color (scene picture fades, overlays stay on top; stills and
+  storyboards show it).
+- **Join** (`ffmpeg.join(..., crossfades, frames, fps)`): cut-joined scenes form runs (concat
+  lists `video_concat_<k>.txt`), runs are blended with chained `xfade=transition=fade`, offsets
+  half a frame early (symmetric weights `(j+0.5)/n`, exact frame count; `crossfade_graph`), and
+  the video is encoded once (libx264 CRF 18). Audio: `transitions.write_voice_track` sums the
+  padded scene WAVs at their overlapped sample offsets into `padded/voice.wav` (the earlier
+  scene's silent tail fades out, raised cosine), used for the mux and the mix. Without crossfades
+  the join is the old stream copy (byte-for-byte the old command apart from argument order).
+- **Overlays in a crossfade**: `OverlayLayer(scene, overlays, following, start, cut)`: from the
+  next scene's start on, a scene's render draws the *next scene's* overlays (built with
+  `scene_overlays(next)`), so both renders have identical overlay pixels in shared frames and the
+  linear blend shows them exactly once (no doubled captions, no ghosted watermark / progress bar).
+- **Lint**: activity file `overlap_out`; `dead_air`'s still runs end where a crossfade starts.
+- **Validate**: transition colour tokens (`transitions.color_problems`), hold warnings
+  (`transition_warnings`); `estimated_duration` subtracts crossfades.
+- **Example**: `examples/gallery`: `transition: crossfade` (video default), `part2`
+  `transition: fade_color` (background), `part3` `{type: fade_color, color: surface, duration:
+  1.2}`; usage line `vidgen render examples/gallery --preview`.
+
+Files
+- New: `src/vidgen/transitions.py`, `tests/test_transitions.py` (20 tests, 4 render).
+- Changed: `config.py` (`TransitionConfig`, `TransitionSetting`, `TRANSITION_TYPES`,
+  `TRANSITION_DURATIONS`, scene / video `transition`, first-scene check), `videoplan.py`
+  (`TransitionSlot`, frame-based plan, `SceneSlot` fields / `cut`, `resolve`), `scene.py`,
+  `overlay_layer.py` (`following`, `cut`, `start`), `overlays.py` (visibility until `cut`),
+  `scenes/overlays.py` (lower third to `cut`), `scenes/progress.py` (runs to `cut`), `activity.py`,
+  `lint/timing_rules.py`, `render/pipeline.py` (join with overlaps, `_scene_renders`,
+  `_overlaps`), `render/ffmpeg.py` (`crossfade_graph`, `join` crossfades, `VIDEO_CRF`),
+  `render/fingerprint.py` (`next_transition`, transitions in overlay inputs), `storyboard.py`
+  (starts with overlaps), `project.py` (`estimated_duration`), `cli.py` (validate);
+  tests `test_docs.py` (model), `test_overlays.py` / `test_chapters_progress.py` (hand-built
+  layers get `following`); `examples/gallery/video.yaml`; docs/CONFIG.md (new "Transitions"
+  section, top-level / scene rows, activity file, `dead_air`), docs/EXTENDING.md (scene ends,
+  `SceneSlot.cut`), README.md, DESIGN.md (tree, §3, §4, §6.4, new §49), tasklist.md.
+
+Public interfaces added/changed (compatible)
+- Config: `transition` (video and scene); JSON Schema follows from the models.
+- `NarratedScene.transition_in` / `transition_out`; `finish()` holds instead of fading when a
+  transition follows. `SceneSlot.overlap_in`, `overlap_out` (defaults 0), `cut`;
+  `VideoPlan.transition(i)`, `TransitionSlot`. `OverlayLayer(..., following=None, start=None,
+  cut=inf)`. `ffmpeg.join(..., crossfades=None, frames=None, fps=None)`.
+- JSON: combined `timings.json` scenes `transition: {type, duration, overlap}` (only with a
+  transition); activity `overlap_out` (version 1 both).
+- Files: `build/.../padded/voice.wav`, `padded/video_concat_<k>.txt` (with crossfades only).
+- Fingerprint: new `next_transition` key → every existing render counts as stale once.
+
+Decisions / deviations
+- **Crossfade overlaps, fade_color does not** (a dissolve needs both pictures; a dip does not):
+  the honest timing for each, and it keeps fade-only videos the same length.
+- **Extend, not clamp**: a too-long transition holds the scene before instead of shortening the
+  transition or overlapping speech; validate reports the hold. Only the join clamps (reused
+  renders that end with less silence), with a warning.
+- **The outgoing scene holds instead of fading** when a transition follows (no dip through the
+  background in the middle of a crossfade); frame counts unchanged.
+- **Incoming scene's overlays on both sides of a crossfade**, switched at its start: exact by
+  linearity, covers captions (per-scene cues), cards without an indicator, per-scene overrides.
+- **Whole video re-encoded** (CRF 18) when any crossfade exists: re-encoding only the overlaps
+  would need cutting stream-copied H.264 at arbitrary frames. fade_color stays in-render (no
+  re-encode, overlays above it, visible in stills).
+- xfade weights `(j + 0.5)/n` (offset half a frame early): symmetric, exact frame count.
+
+Known gaps / TODOs
+- **Step 47 (push, wipe, continuity)**: add types to `TransitionConfig` (`direction`), map to
+  `xfade` `slide*` / `wipe*` in `crossfade_graph`. Slides and wipes are not per-pixel linear, so
+  overlays baked into both renders would move with the pictures: render the overlap frames'
+  overlays separately (an RGBA clip from the incoming scene's layer, or both scenes without
+  overlays in the overlap) and `overlay` them after the blend (DESIGN §49). The contract (overlap,
+  silent tail, hold) carries over.
+- An extension scene whose real length differs from the plan gets its colour fade / overlap at the
+  planned frames (join warns about drift / shortened crossfades).
+- `vidgen render --scene X` alone shows X's held tail; the blend only exists in the joined video.
+- A watermark / overlay excluded on the next scene switches off at the transition's start (as at a
+  cut); its `fade` only applies at `from` / `to`.
+- No transition after the last scene; audio is not cross-faded beyond the silent tail's fade-out.
+
+Verification
+- Scratch project (title / chapter / title, captions + progress bar + watermark, crossfade
+  default, fade_color `accent`, 1.2 s crossfade): every output frame read as a contact sheet:
+  single caption switching at the incoming scene's start, steady progress bar and watermark,
+  accent dip with the caption plate on top; plan durations = rendered durations; SRT shifted.
+- `examples/gallery` preview: 3:48 (was ~3:56 with cuts: 16 crossfades × 0.53 s at 15 fps);
+  frames around `tradeoff → schedule` (crossfade, indicator / watermark / bar unchanged),
+  `net → part2` (fade to background) and `reach → part3` (surface, 1.2 s) read.
+  `vidgen lint examples/gallery` and `--variant vertical`: 0 findings; `vidgen validate`: ok, no hold warnings.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1880 passed, 1 skipped, ~18 min); step only:
+`pytest tests/test_transitions.py`. Manual: `vidgen validate examples/gallery`, `vidgen render
+examples/gallery --preview`, then `ffmpeg -ss 19.7 -i examples/gallery/gallery_preview.mp4
+-frames:v 1 mid.png` (mid-crossfade `tradeoff → schedule`).

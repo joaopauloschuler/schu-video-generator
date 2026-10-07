@@ -18,6 +18,7 @@
 #   vidgen storyboard examples/gallery --scene clip --per-beat 3    # a clip with a lower third (overlays)
 #   vidgen list-sfx examples/gallery --render-dir build/sfx   # the sound effects (part2: whoosh, speedup: chime, formats: pop) as WAVs
 #   vidgen list-music examples/gallery --render-dir build/music  # the music beds (this video: calm, ducked) as WAVs
+#   vidgen render examples/gallery --preview    # the whole video: scenes crossfade, chapter cards fade through a colour
 # No narration audio: beats are timed from their word count (narration.words_per_second).
 title: "vidgen: a gallery of scene types"
 output: gallery
@@ -70,6 +71,9 @@ overlays:             # drawn over the scenes, fixed to the screen (docs/CONFIG.
   - type: chapter_indicator  # "2 · Charts and numbers" in the top left corner; hidden on the chapter cards
                              # (chapters: the `chapter` cards and the `chapter:` key of a scene, see walkthrough)
     reserve: true
+
+transition: crossfade # between scenes (docs/CONFIG.md "Transitions"): each scene blends into the next
+                      # over 0.5 s (the scenes overlap); the chapter cards below fade through a colour
 
 music:                # a generated ambient bed under the whole video (docs/CONFIG.md "Background music")
   source: calm        # calm | pulse | bright (`vidgen list-music` describes them), or a file
@@ -191,6 +195,7 @@ scenes:
 
   - id: part2
     type: chapter         # a section divider; silent here (duration), or narrated with beats
+    transition: fade_color  # the scene before fades to the background colour, the card fades in from it
     params:
       number: 2
       title: "Charts and numbers"
@@ -316,6 +321,7 @@ scenes:
 
   - id: part3
     type: chapter
+    transition: {type: fade_color, color: surface, duration: 1.2}   # any theme colour (or hex)
     params:
       number: 3
       title: "Pictures and maths"

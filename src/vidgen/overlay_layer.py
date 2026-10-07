@@ -17,6 +17,7 @@ as a premultiplied RGBA patch; compositing a frame blends the shown overlays' pa
 
 from __future__ import annotations
 
+import math
 from collections.abc import Hashable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -47,20 +48,46 @@ class _Patch:
 
 
 class OverlayLayer:
-    """The overlays of one scene render, composited into every frame its renderer writes."""
+    """The overlays of one scene render, composited into every frame its renderer writes.
 
-    def __init__(self, scene: NarratedScene, overlays: list[Overlay]) -> None:
+    ``following`` (with ``start`` and ``cut``, video seconds): when a crossfade overlaps the
+    scene's end with the next scene's start (DESIGN.md §49), the next scene's overlays, drawn
+    instead of the scene's own from ``cut`` (the next scene's start) on. Both scenes then show the
+    same overlays in every frame they share, so blending them leaves the overlays unchanged.
+    ``overlays`` / ``mobjects`` are the scene's own (what it reserves room for and avoids).
+    """
+
+    def __init__(
+        self,
+        scene: NarratedScene,
+        overlays: list[Overlay],
+        following: list[Overlay] | None = None,
+        start: float | None = None,
+        cut: float = math.inf,
+    ) -> None:
         from manim import config
 
         self.scene = scene
         self.overlays = overlays
         self.mobjects: list[Mobject | None] = [overlay.build() for overlay in overlays]
+        self.following = following or []
+        self.following_mobjects: list[Mobject | None] = [overlay.build() for overlay in self.following]
+        self.cut = cut
         self.fps = int(config.frame_rate)
         self.written = 0
-        self._offset: float | None = None
-        self._intervals = [o.interval() for o in overlays]
+        self._offset = start
+        self._intervals = [o.interval() for o in self._all]
         self._cache: dict[tuple[int, Hashable], _Patch] = {}
         self._camera: Camera | None = None
+
+    @property
+    def _all(self) -> list[Overlay]:
+        """The scene's own overlays, then the following ones."""
+        return [*self.overlays, *self.following]
+
+    @property
+    def _all_mobjects(self) -> list[Mobject | None]:
+        return [*self.mobjects, *self.following_mobjects]
 
     # ----- time ---------------------------------------------------------------------------------
 
@@ -77,18 +104,22 @@ class OverlayLayer:
         return self.offset + frame / self.fps
 
     def states(self, frame: int) -> tuple[Hashable | None, ...]:
-        """Every overlay's state at the scene's frame ``frame`` (``None``: not shown)."""
+        """Every overlay's state at the scene's frame ``frame`` (``None``: not shown): the scene's
+        own, then the ``following`` ones (each set only on its side of the cut)."""
         t = self.video_time(frame)
+        after = t >= self.cut - 1e-9
+        own = len(self.overlays)
         out: list[Hashable | None] = []
-        for overlay, mob, (start, end) in zip(self.overlays, self.mobjects, self._intervals):
-            out.append(overlay.state(t) if mob is not None and start <= t + 1e-9 and t < end - 1e-9 else None)
+        for k, (overlay, mob, (start, end)) in enumerate(zip(self._all, self._all_mobjects, self._intervals)):
+            shown = mob is not None and start <= t + 1e-9 and t < end - 1e-9 and (k >= own) == after
+            out.append(overlay.state(t) if shown else None)
         return tuple(out)
 
     def posed(self, frame: int) -> list[tuple[Overlay, Mobject, bool]]:
         """The overlays shown at the scene's frame ``frame``: each with its mobject as drawn then
         and whether it is settled (not in a transition)."""
         out = []
-        for overlay, mob, state in zip(self.overlays, self.mobjects, self.states(frame)):
+        for overlay, mob, state in zip(self._all, self._all_mobjects, self.states(frame)):
             if mob is not None and state is not None:
                 out.append((overlay, overlay.pose(mob, state), overlay.settled(state)))
         return out
@@ -161,10 +192,10 @@ class OverlayLayer:
         key = (k, state)
         patch = self._cache.get(key)
         if patch is None:
-            mobject = self.mobjects[k]
+            mobject = self._all_mobjects[k]
             assert mobject is not None
-            patch = self._draw(self.overlays[k].pose(mobject, state))
-            if len(self._cache) >= CACHE_SIZE * len(self.overlays):
+            patch = self._draw(self._all[k].pose(mobject, state))
+            if len(self._cache) >= CACHE_SIZE * len(self._all):
                 self._cache.pop(next(iter(self._cache)))
             self._cache[key] = patch
         return patch
@@ -174,7 +205,7 @@ class OverlayLayer:
         copy; the frame itself is returned when nothing is shown)."""
         out = frame
         for k, state in enumerate(states):
-            if state is None or self.mobjects[k] is None:
+            if state is None or self._all_mobjects[k] is None:
                 continue
             patch = self._patch(k, state)
             if patch.box is None:

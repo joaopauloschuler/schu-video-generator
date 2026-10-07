@@ -32,6 +32,7 @@ from vidgen.render.worker import (
     scene_timings_path,
 )
 from vidgen.sheets import DEFAULT_WIDTH, MAX_WIDTH, MIN_WIDTH, SheetPage, SheetScene, SheetStill, compose_pages
+from vidgen.transitions import join_overlaps
 
 
 @dataclass(frozen=True)
@@ -108,12 +109,19 @@ def scene_starts(project: Project, preview: bool) -> dict[str, float | None]:
     """Each scene's start in the video, from the rendered scenes' durations (all ``None`` if a
     scene has no render at the current format)."""
     fmt = project.render_format(preview)
-    starts: dict[str, float | None] = {}
-    offset = 0.0
+    found = []
     for spec in project.config.scenes:
         timings = _read_json(scene_timings_path(project, preview, spec.id))
         if timings is None or not _matches_format(timings, fmt):
             return {s.id: None for s in project.config.scenes}
+        found.append(timings)
+    frames = [round(float(t["duration"]) * fmt.fps) for t in found]
+    speech = [t["beats"][-1]["end"] if t["beats"] else None for t in found]
+    overlaps = join_overlaps(project.config, fmt.fps, frames, speech)  # crossfades (DESIGN.md §49)
+    starts: dict[str, float | None] = {}
+    offset = 0.0
+    for spec, timings, overlap in zip(project.config.scenes, found, overlaps):
+        offset -= overlap / fmt.fps
         starts[spec.id] = round(offset, 6)
         offset += float(timings["duration"])
     return starts

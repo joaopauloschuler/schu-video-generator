@@ -9,7 +9,12 @@ scene's length is *planned* from what fixes it (DESIGN.md §5):
   length (decoded, as the scene measures it) or, without audio, the word-count estimate;
 - a narrated scene lasts its beats plus its type's ``outro`` (the fade-out of ``finish()``,
   Manim plays ``ceil(outro * fps)`` frames);
-- a silent scene lasts its ``duration``.
+- a silent scene lasts its ``duration``;
+- transitions (DESIGN.md §49, :mod:`vidgen.transitions`): a scene is held longer when the
+  transition out of it needs more silent frames than its end has (``hold``), and a crossfade
+  starts the next scene that many frames before the previous one ends (``overlap``). The plan is
+  the one source of the scenes' start times: overlays, chapters, captions, and the join all
+  follow it.
 
 Built-in scenes keep to this exactly; a scene whose animations overrun its narration (lint
 ``animation_overrun``) or an extension that times itself differently ends later or earlier than
@@ -29,6 +34,7 @@ from typing import Any
 from vidgen.chapters import chapter_marks
 from vidgen.config import SceneConfig
 from vidgen.project import Project
+from vidgen.transitions import effective, has_transitions, requested_frames, silent_tail
 
 
 @dataclass(frozen=True)
@@ -43,10 +49,34 @@ class BeatSlot:
 
 
 @dataclass(frozen=True)
+class TransitionSlot:
+    """The transition into a scene as planned (DESIGN.md §49), in frames of the plan's fps:
+    ``overlap`` frames shared by the end of the scene before and the start of this one
+    (crossfade), ``fade_out`` frames at the end of the scene before faded to ``color`` and
+    ``fade_in`` frames at the start of this one faded in from it (fade_color), ``hold`` frames
+    the scene before is held longer so the transition covers no narration. ``seconds`` is the
+    duration asked for; ``color`` as written (``None``: the theme's background)."""
+
+    type: str
+    seconds: float = 0.0
+    color: str | None = None
+    overlap: int = 0
+    fade_out: int = 0
+    fade_in: int = 0
+    hold: int = 0
+
+    @property
+    def cut(self) -> bool:
+        """A plain cut (nothing to do)."""
+        return self.type == "cut"
+
+
+@dataclass(frozen=True)
 class SceneSlot:
     """A scene as planned: position in the video (``start``, ``duration``, seconds), its beats,
     and the chapter it belongs to (the title of the last chapter starting at or before it: a
-    ``chapter`` scene or a scene's ``chapter:``; ``None`` before the first)."""
+    ``chapter`` scene or a scene's ``chapter:``; ``None`` before the first). ``overlap_in`` /
+    ``overlap_out``: seconds it shares with the scene before / after it (crossfades)."""
 
     index: int
     id: str
@@ -55,11 +85,19 @@ class SceneSlot:
     duration: float
     beats: tuple[BeatSlot, ...]
     chapter: str | None
+    overlap_in: float = 0.0
+    overlap_out: float = 0.0
 
     @property
     def end(self) -> float:
-        """Where the scene ends in the video (seconds)."""
+        """Where the scene's own picture ends in the video (seconds)."""
         return self.start + self.duration
+
+    @property
+    def cut(self) -> float:
+        """Where the video passes to the next scene: its start (``end - overlap_out``). The
+        scene's overlays are drawn until then, the next scene's from then on (DESIGN.md §49)."""
+        return self.end - self.overlap_out
 
 
 @dataclass(frozen=True)
@@ -128,9 +166,12 @@ class VideoPlan:
         self._index = {spec.id: i for i, spec in enumerate(self._specs)}
         self._beats: dict[int, tuple[BeatSlot, ...]] = {}
         self._narrated: dict[int, int] = {}  # frames of a scene's beats (with their pads)
-        self._durations: dict[int, float] = {}
+        self._own: dict[int, int] = {}  # frames of a scene without a transition's hold
+        self._transitions: dict[int, TransitionSlot] = {}
+        self._starts: list[int] = [0]  # start frames of scenes 0..k, extended on demand
         self._marks = chapter_marks(self._specs)
         self._chapters: tuple[Chapter, ...] | None = None
+        self._any_transition = has_transitions(project.config)
 
     def _frames(self, seconds: float) -> int:
         return round(seconds * self.fps)
@@ -149,9 +190,9 @@ class VideoPlan:
             self._narrated[i] = frames
         return self._beats[i]
 
-    def scene_duration(self, i: int) -> float:
-        """Planned length of scene ``i`` (seconds)."""
-        if i not in self._durations:
+    def _own_frames(self, i: int) -> int:
+        """Frames of scene ``i`` from its beats / duration and fade-out (no transition hold)."""
+        if i not in self._own:
             spec = self._specs[i]
             outro = _outro(spec)
             outro_frames = math.ceil(outro * self.fps - 1e-9) if outro > 0 else 0
@@ -161,24 +202,78 @@ class VideoPlan:
             else:
                 self._scene_beats(i)
                 frames = self._narrated[i] + outro_frames
-            self._durations[i] = frames / self.fps
-        return self._durations[i]
+            self._own[i] = frames
+        return self._own[i]
+
+    def _speech_end(self, i: int) -> float | None:
+        """Where scene ``i``'s narration ends (seconds from its start; ``None`` when silent)."""
+        beats = self._scene_beats(i)
+        return beats[-1].end if beats else None
+
+    def transition(self, i: int) -> TransitionSlot:
+        """The planned transition into scene ``i`` (DESIGN.md §49; a cut for most scenes)."""
+        if i not in self._transitions:
+            config = self.project.config
+            t = effective(config, i) if self._any_transition else None
+            if t is None or t.type == "cut":
+                slot = TransitionSlot("cut")
+            else:
+                want = requested_frames(t, self.fps)
+                own = self._own_frames(i)
+                overlap = min(want, own) if t.type == "crossfade" else 0
+                fade_in = min(want, own) if t.type == "fade_color" else 0
+                fade_out = want if t.type == "fade_color" and i > 0 else 0
+                hold = 0
+                need = overlap + fade_out
+                if i > 0 and need:
+                    before = self._own_frames(i - 1)
+                    into = effective(config, i - 1)  # what the scene before uses of its own start
+                    head = min(requested_frames(into, self.fps), before)
+                    tail = silent_tail(before, self._speech_end(i - 1), head, self.fps)
+                    hold = max(0, need - tail)
+                slot = TransitionSlot(t.type, t.seconds, t.color, overlap, fade_out, fade_in, hold)
+            self._transitions[i] = slot
+        return self._transitions[i]
+
+    def _scene_frames(self, i: int) -> int:
+        """Planned frames of scene ``i``: its own and the hold of the transition out of it."""
+        hold = self.transition(i + 1).hold if i + 1 < len(self._specs) else 0
+        return self._own_frames(i) + hold
+
+    def _start_frames(self, i: int) -> int:
+        while len(self._starts) <= i:
+            k = len(self._starts)
+            self._starts.append(self._starts[k - 1] + self._scene_frames(k - 1) - self.transition(k).overlap)
+        return self._starts[i]
+
+    def scene_duration(self, i: int) -> float:
+        """Planned length of scene ``i`` (seconds; with a transition's hold at its end)."""
+        return self._scene_frames(i) / self.fps
 
     def index(self, scene_id: str) -> int:
         """Position of ``scene_id`` in the video (0-based)."""
         return self._index[scene_id]
 
     def scene_start(self, scene_id: str) -> float:
-        """Where ``scene_id`` starts in the video (seconds)."""
-        i = self._index[scene_id]
-        return sum(self.scene_duration(k) for k in range(i))
+        """Where ``scene_id`` starts in the video (seconds; a crossfade starts it before the scene
+        before it ends)."""
+        return self._start_frames(self._index[scene_id]) / self.fps
 
     def scene(self, scene_id: str) -> SceneSlot:
         """The planned :class:`SceneSlot` of ``scene_id``."""
         i = self._index[scene_id]
         spec = self._specs[i]
+        overlap_out = self.transition(i + 1).overlap if i + 1 < len(self._specs) else 0
         return SceneSlot(
-            i, spec.id, spec.type, self.scene_start(scene_id), self.scene_duration(i), self._scene_beats(i), self._chapter_at(i)
+            i,
+            spec.id,
+            spec.type,
+            self.scene_start(scene_id),
+            self.scene_duration(i),
+            self._scene_beats(i),
+            self._chapter_at(i),
+            self.transition(i).overlap / self.fps,
+            overlap_out / self.fps,
         )
 
     @property
@@ -189,7 +284,8 @@ class VideoPlan:
     @property
     def duration(self) -> float:
         """Planned length of the whole video (seconds)."""
-        return sum(self.scene_duration(i) for i in range(len(self._specs)))
+        last = len(self._specs) - 1
+        return (self._start_frames(last) + self._scene_frames(last)) / self.fps
 
     @property
     def chapters(self) -> tuple[Chapter, ...]:
@@ -233,12 +329,12 @@ class VideoPlan:
 
     def resolve(self, value: Any, end: bool) -> float | None:
         """A ``from`` / ``to`` value in video seconds: a number as it is, a scene id as that
-        scene's start (``end``: its end); ``None`` stays ``None``."""
+        scene's start (``end``: its :attr:`SceneSlot.cut`, where the next scene takes over);
+        ``None`` stays ``None``."""
         if value is None:
             return None
         if isinstance(value, str):
-            start = self.scene_start(value)
-            return start + self.scene_duration(self._index[value]) if end else start
+            return self.scene(value).cut if end else self.scene_start(value)
         return float(value)
 
 

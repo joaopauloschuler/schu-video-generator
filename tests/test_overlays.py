@@ -340,6 +340,7 @@ def test_composite_matches_drawing_over_the_frame() -> None:
 
         layer = OverlayLayer.__new__(OverlayLayer)
         layer.overlays, layer.mobjects, layer._cache, layer._camera = [Fake.__new__(Fake)], [square], {}, None
+        layer.following, layer.following_mobjects = [], []
         out = layer.composite(frame, ("on",))
         reference = Camera()
         reference.set_pixel_array(frame.copy())

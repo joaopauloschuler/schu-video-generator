@@ -201,7 +201,7 @@ Rules that apply to every step:
 - [x] Ducking under narration (ffmpeg sidechain) and loudness normalisation of the final mix (not FFmpeg's sidechain: a deterministic gain curve keyed off the narration's speech spans — MP3 speech bounds, never SFX; `duck: {depth 12, attack 0.4, release 1.0, hold 1.5, clips}` with look-ahead; BS.1770-4 integrated loudness + 4x true peak in numpy (`vidgen.loudness`, matches FFmpeg `ebur128`); `audio: {normalize: auto, target_lufs: -16, true_peak: -1.5}` — auto = only with music, so narration-only videos are unchanged; smooth look-ahead true-peak limiter; 24-bit `padded/mix.wav`; `render` / `render --json` / `timings.json` report the measured loudness; `examples/gallery` uses `calm` ducked)
 
 ### Step 46 — Transitions: crossfade and fade-through-colour
-- [ ] Scene-level `transition:` applied at the join stage; SRT/timing contract stays correct
+- [x] Scene-level `transition:` applied at the join stage; SRT/timing contract stays correct (`cut | crossfade | fade_color | {type, duration, color}` per scene (the way in) + a video default; a crossfade overlaps the scenes (video shorter), a fade_color dips through a theme colour without overlap; transitions cover only the scene before's silent tail, else it is held longer (validate warns); the plan is the one source of start times (SRT, captions, chapters, overlays, SFX, music, storyboard follow); `xfade` at the join + overlapped voice track; the incoming scene's overlays on both sides of a crossfade (no doubling); colour fades in-render under the overlays; `examples/gallery` crossfades, fade_color into chapter cards)
 
 ### Step 47 — Transitions: push, wipe, continuity
 - [ ] `push` and `wipe`

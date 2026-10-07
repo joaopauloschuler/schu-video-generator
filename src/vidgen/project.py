@@ -249,12 +249,18 @@ class Project:
         raise VidgenError(f"unknown beat '{beat_id}'")
 
     def estimated_duration(self) -> float:
-        """Rough video length in seconds from word counts, padding and silent-scene durations."""
+        """Rough video length in seconds from word counts, padding and silent-scene durations
+        (less the crossfades, which overlap scenes)."""
+        from vidgen.transitions import effective
+
         narration = self.config.narration
         total = 0.0
-        for scene in self.config.scenes:
+        for i, scene in enumerate(self.config.scenes):
             if scene.silent:
                 total += scene.duration or 0.0
             for beat in scene.beats:
                 total += beat.estimated_duration(narration.words_per_second) + narration.pad
+            transition = effective(self.config, i)
+            if transition.type == "crossfade":
+                total -= transition.seconds
         return total

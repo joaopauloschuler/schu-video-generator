@@ -175,9 +175,9 @@ class ChapterIndicator(Overlay):
             if not self.options.on_chapter_cards and chapters[k].scene == slot.id and chapters[k].card:
                 continue
             if runs and runs[-1].chapter == k and abs(runs[-1].end - slot.start) < 1e-6:
-                runs[-1] = _Run(runs[-1].start, slot.end, k)
+                runs[-1] = _Run(runs[-1].start, slot.cut, k)
             else:
-                runs.append(_Run(slot.start, slot.end, k))
+                runs.append(_Run(slot.start, slot.cut, k))
         joined = [abs(a.end - b.start) < 1e-6 for a, b in zip(runs, runs[1:])]
         return [_Run(r.start, r.end, r.chapter, i > 0 and joined[i - 1], i < len(joined) and joined[i]) for i, r in enumerate(runs)]
 
