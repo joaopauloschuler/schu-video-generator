@@ -12,6 +12,7 @@ import yaml
 
 from vidgen.config import BeatConfig, FormatConfig, SceneConfig, VideoConfig, parse_config
 from vidgen.errors import VidgenError
+from vidgen.pronunciation import Pronunciation, load_pronunciation
 
 CONFIG_NAMES: tuple[str, ...] = ("video.yaml", "video.yml", "video.json")
 
@@ -82,6 +83,10 @@ class Project:
         self.variant = variant
         #: The config without the variant applied (equals ``config`` when there is no variant).
         self.base_config = base_config if base_config is not None else config
+        #: How the narrator says terms (``pronunciation:`` + ``pronunciation_file``, DESIGN.md §45);
+        #: loading reads the files, so a missing or invalid one is a :class:`VidgenError` here.
+        self.pronunciation: Pronunciation = load_pronunciation(config, root)
+        self._own_audio: bool | None = None
 
     @classmethod
     def load(cls, path: str | Path = ".", variant: str | None = None) -> Project:
@@ -122,13 +127,25 @@ class Project:
     @property
     def has_own_audio(self) -> bool:
         """True for a variant whose audio would differ from the base config's: its effective
-        ``voice`` differs, or a beat id present in both configs has a different text."""
+        ``voice`` differs, or a beat id present in both configs has a different spoken text (its
+        text, or the pronunciation of a term in it)."""
         if self.variant is None:
             return False
+        if self._own_audio is None:
+            self._own_audio = self._audio_differs()
+        return self._own_audio
+
+    def _audio_differs(self) -> bool:
         if self.config.voice.model_dump() != self.base_config.voice.model_dump():
             return True
-        base_texts = {beat.id: beat.text for scene in self.base_config.scenes for beat in scene.beats}
-        return any(base_texts.get(beat.id, beat.text) != beat.text for _, beat in self.beats())
+        base_say = load_pronunciation(self.base_config, self.root).say
+        base_texts = {beat.id: base_say(beat.text) for scene in self.base_config.scenes for beat in scene.beats}
+        return any(base_texts.get(beat_id, spoken) != spoken for beat_id, spoken in self.spoken_texts().items())
+
+    def spoken_texts(self) -> dict[str, str]:
+        """Beat id -> the text the TTS gets for it (``pronunciation`` applied), in video order."""
+        say = self.pronunciation.say
+        return {beat.id: say(beat.text) for _, beat in self.beats()}
 
     @property
     def build_dir(self) -> Path:

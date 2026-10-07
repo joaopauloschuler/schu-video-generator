@@ -187,7 +187,7 @@ Rules that apply to every step:
 - [x] (from Step 37) `screenshot` has no `caption` param (`video_clip` has one); callout labels could reuse `Target.on_fill` for the overlay's dim / highlight (`caption`, `caption_size`, `caption_color` + target `caption`, faded out during `focus` in both types; `name: X` registers a callout as a target with `on_fill`, so `dim: X` / `highlight: X` keep its label readable)
 
 ### Step 42 — Pronunciation dictionary
-- [ ] Project `pronunciation:` map applied to TTS text only (subtitles keep the original); part of the audio hash
+- [x] Project `pronunciation:` map applied to TTS text only (subtitles keep the original); part of the audio hash (term: spoken form or `{say, case_sensitive, whole_word, regex}`, `null` removes; `pronunciation_file` YAML/JSON under it; one pass, first-then-longest wins; hash of the spoken text, so unmatched beats keep their hash and an edit re-voices only the beats it changes; `tts --dry-run` shows `says:`; variants get own audio when a beat's spoken text differs; captions / SRT keep the written words timed by the spoken ones (`map_word_times`, alignments of the spoken text); lint `narration_speed` counts spoken words; `validate` warns on unused / shadowed / colliding entries; `examples/minimal` uses it. Not done: SSML `<phoneme>` / IPA entries, ElevenLabs server-side dictionaries — see HANDOFF)
 
 ### Step 43 — Multiple voices
 - [ ] Named `voices:` and per-scene / per-beat `voice:` overrides (dialogue); cache keys include the voice

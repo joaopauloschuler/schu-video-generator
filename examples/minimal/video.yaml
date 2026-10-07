@@ -55,6 +55,10 @@ narration:
   pad: 0.35
   words_per_second: 2.6
 
+pronunciation:        # how the narrator says terms: only the text sent to the TTS changes,
+  LaTeX: lah-tek      # subtitles and captions keep the written words (docs/CONFIG.md "Pronunciation")
+  JSON: jay-son       # `vidgen tts examples/minimal --dry-run` shows what each beat says
+
 lint:                 # optional; thresholds and severities of `vidgen lint` (docs/CONFIG.md)
   fail_on: error      # warnings are reported, only errors make the command fail
 

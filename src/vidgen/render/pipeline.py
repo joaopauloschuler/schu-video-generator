@@ -488,7 +488,7 @@ def render_project(
         timings_file = project.render_dir(preview) / "timings.json"
         write_json(timings_file, timings)
         srt = project.srt_path(preview)
-        write_srt(srt, timings, project.audio_dir)
+        write_srt(srt, timings, project.audio_dir, project.pronunciation)
         index = write_frames_index(project, preview, timings, frames) if frames else None
         hooks.dispatch(
             "post_render",

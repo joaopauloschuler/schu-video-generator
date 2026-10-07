@@ -90,6 +90,7 @@ def _overlay_inputs(project: Project) -> Any:
     cfg = project.config
     if not cfg.overlays and not any(isinstance(s.overlays, dict) for s in cfg.scenes):
         return None
+    say = project.pronunciation.say  # captions time the written words by their spoken form (§45)
     return [
         {
             "id": s.id,
@@ -100,7 +101,8 @@ def _overlay_inputs(project: Project) -> Any:
             "chapter": s.model_dump(mode="json")["chapter"],
             "overlays": s.overlays,
             "beats": [
-                [b.id, b.text, _stat(project.audio_dir / f"{b.id}.mp3"), _stat(project.audio_dir / f"{b.id}.align.json")] for b in s.beats
+                [b.id, b.text, say(b.text), _stat(project.audio_dir / f"{b.id}.mp3"), _stat(project.audio_dir / f"{b.id}.align.json")]
+                for b in s.beats
             ],
         }
         for s in cfg.scenes
@@ -112,7 +114,9 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
     spec = project.scene(scene_id)
     # Lint settings cannot change pixels or timing (except the readable text size scenes use):
     # editing them must not make renders stale.
-    config = project.config.model_dump(mode="json", exclude={"scenes", "variants", "lint"})
+    # The pronunciation changes only the audio (tracked below) and, with overlays, the captions'
+    # word times (the spoken texts are in "overlays"); editing it must not re-render every scene.
+    config = project.config.model_dump(mode="json", exclude={"scenes", "variants", "lint", "pronunciation", "pronunciation_file"})
     assets = project.root / "assets"
     data: dict[str, Any] = {
         "fingerprint": FINGERPRINT_VERSION,

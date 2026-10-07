@@ -166,7 +166,7 @@ def _timing_findings(
         return [], 0
     lint = project.config.lint
     activity = _read(scene_activity_path(project, preview, scene_id), scene_id, "activity file")
-    ctx = SceneContext(scene_id, activity, project.audio_dir)
+    ctx = SceneContext(scene_id, activity, project.audio_dir, project.spoken_texts())
     ignores = project.scene(scene_id).lint_ignores()
     findings: list[Finding] = []
     groups: dict[tuple[Any, ...], Finding] = {}

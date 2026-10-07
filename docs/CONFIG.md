@@ -6,6 +6,7 @@ the bodies of `variants`, so typos are caught by `vidgen validate`. Paths are re
 project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-and-beats),
 [format](#format-and-preview), [variants](#variants), [theme](#theme), [voice](#voice-voice),
 [narration](#narration-narration), [narration audio](#narration-audio-elevenlabs),
+[pronunciation](#pronunciation-pronunciation),
 [built-in scene types](#built-in-scenes), [beat actions](#beat-actions), [overlays](#overlays),
 [JSON Schema](#json-schema-vidgen-schema), [frame stills](#frame-stills-vidgen-render---frames),
 [storyboard](#storyboard-vidgen-storyboard), [lint](#lint-vidgen-lint),
@@ -23,6 +24,8 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `theme` | see [theme](#theme) | preset, colors, sizes, font, background, code style |
 | `voice` | see [voice](#voice-voice) | ElevenLabs voice |
 | `narration` | see [narration](#narration-narration) | beat padding, duration estimate |
+| `pronunciation` | `{}` | how the narrator says terms (TTS text only), see [pronunciation](#pronunciation-pronunciation) |
+| `pronunciation_file` | none | YAML/JSON file(s) with more pronunciation entries |
 | `extensions` | `[extensions]` | folders whose `*.py` files and packages are imported (see docs/EXTENDING.md); the default may be missing, a folder you list must exist |
 | `lint` | see [lint](#lint-vidgen-lint) | thresholds and severities of `vidgen lint` |
 | `overlays` | `[]` | lower thirds, a watermark, ... drawn over the scenes, see [overlays](#overlays) |
@@ -402,14 +405,63 @@ vidgen validate               # prints e.g. "audio: 18 ok, 2 stale, 1 missing"
 ```
 
 **What triggers regeneration.** A beat is regenerated when its MP3 is missing or its hash does
-not match the beat's text plus `voice_id`, `model_id`, `output_format` and `settings`. Editing
+not match the beat's spoken text (its text with the [pronunciation](#pronunciation-pronunciation)
+applied) plus `voice_id`, `model_id`, `output_format` and `settings`. Editing
 one beat regenerates only that beat: the neighbours' text is sent for intonation but is not part
 of the hash, and neither is `context`. Hash files written by the original kphi3 script are
 accepted while `output_format` and `settings` keep their defaults.
 
-**Variants.** A variant shares `audio/` unless its voice (after merging) or the text of a beat
-differs from the base config; then its audio goes to `audio/<variant>/`. Beats that are the same
-in both are copied from `audio/` instead of being paid for again.
+**Variants.** A variant shares `audio/` unless its voice (after merging) or the spoken text of a
+beat (its text, or the pronunciation of a word in it) differs from the base config; then its
+audio goes to `audio/<variant>/`. Beats that are the same in both are copied from `audio/`
+instead of being paid for again.
+
+## Pronunciation (`pronunciation:`)
+
+How the narrator says names, acronyms and symbols the voice gets wrong. Each entry replaces a
+term in the text **sent to the TTS only**: the subtitles (SRT), burned-in captions and storyboard
+labels keep the written words.
+
+```yaml
+pronunciation:
+  K-Phi-3: kay fye three                # short form: term: spoken form
+  LaTeX: lah-tek
+  SQL: {say: sequel, case_sensitive: false}     # also "sql", "Sql"
+  "(\\d+)p": {say: "\\1 pee", regex: true}      # 480p -> "480 pee" (regex groups in say)
+  Phi: {say: fye, whole_word: false}            # also inside "Phis", "DelPhi"
+pronunciation_file: pronunciation.yaml  # optional: more entries in a file (or a list of files)
+```
+
+| key | default | |
+|---|---|---|
+| `say` | required | the spoken form sent instead of the term; with `regex: true`, `\1` / `\g<name>` insert a group |
+| `case_sensitive` | `true` | match the term's capitals exactly (`false`: any case) |
+| `whole_word` | `true` | match only where no letter, digit or `_` is right before or after the term (`K-Phi-3's` matches `K-Phi-3`, `GPUs` does not match `GPU`) |
+| `regex` | `false` | the term is a Python regular expression, not plain text |
+
+- **Matching.** Every entry is matched against the beat's written text in one pass; a spoken form
+  is never matched again by another entry. Where matches overlap, the one starting first wins,
+  then the longest (`K-Phi-3` before `Phi`), then the entry written first.
+- **`pronunciation_file`**: YAML or JSON files (relative to the project) holding the same mapping
+  (`term: spoken form` or `term: {say, ...}`), read in order; entries of `pronunciation:` win over
+  them, and `term: null` removes one (also how a [variant](#variants) drops an entry of the base
+  config: variants deep-merge `pronunciation:` like any mapping).
+- **Audio.** The audio hash covers the spoken text, so adding, changing or removing an entry
+  re-voices only the beats whose spoken text changes; a beat that no entry matches keeps its
+  hash (existing audio stays valid when a dictionary is added). `vidgen tts --dry-run` lists the
+  beats to generate and, under each one whose text changed, `says: <spoken text>`.
+- **Word timings.** The audio says the spoken words, the captions show the written ones: each
+  written word is timed from its first spoken word's start to its last one's end (`K-Phi-3` said
+  "kay fye three" lasts all three words; a term said as nothing gets a zero-length time where the
+  next word starts). This holds for estimated times (the spoken syllables are weighed) and for
+  `voice.timestamps` alignments (stored for the spoken text).
+- **Lint.** `narration_speed` counts the words of the spoken text.
+- **`vidgen validate`** warns (it does not fail) about entries that match no beat, entries that
+  never apply because a longer entry always covers them, and entries whose matches collide with
+  another's (the same text, or crossing) in a beat.
+- Not supported (yet): SSML `<phoneme>` / IPA entries (ElevenLabs reads them only with some
+  models, and they would break the word timings) and ElevenLabs' server-side pronunciation
+  dictionaries; write the spoken form as plain letters instead.
 
 **Housekeeping.** MP3s of beats that no longer exist are reported as orphaned but never deleted.
 Failed requests show the HTTP status and ElevenLabs' message; rate limits and server errors are

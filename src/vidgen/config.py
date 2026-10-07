@@ -142,6 +142,27 @@ class VoiceConfig(_Strict):
     """Also fetch when each character is spoken (ElevenLabs with-timestamps), stored as audio/<beat>.align.json for exact karaoke captions."""
 
 
+class PronunciationEntry(_Strict):
+    """The long form of a ``pronunciation:`` entry (DESIGN.md §45): how the narrator says a
+    term. Applied to the text sent to the TTS only; subtitles and captions keep the term."""
+
+    say: str
+    """Spoken form sent to the TTS instead of the term (with regex: true, \\1 or \\g<name> insert a group)."""
+    case_sensitive: bool = True
+    """Match the term's capitals exactly (false: any case)."""
+    whole_word: bool = True
+    """Match only where the term is not part of a longer word (no letter, digit or _ right before or after it)."""
+    regex: bool = False
+    """The term is a Python regular expression (re module syntax), not plain text."""
+
+
+#: A ``pronunciation:`` value: the spoken form, the long form, or ``null`` (removes an entry of
+#: the pronunciation file or of the base config, e.g. in a variant).
+PronunciationValue = str | PronunciationEntry | None
+#: The ``pronunciation:`` mapping (term -> value); also the content of a ``pronunciation_file``.
+PronunciationMap = dict[Annotated[str, Field(min_length=1)], PronunciationValue]
+
+
 class NarrationConfig(_Strict):
     """Timing of narrated beats."""
 
@@ -597,6 +618,10 @@ class VideoConfig(_Strict):
     """Text-to-speech voice."""
     narration: NarrationConfig = Field(default_factory=NarrationConfig)
     """Beat padding and duration estimate."""
+    pronunciation: PronunciationMap = Field(default_factory=dict)
+    """How the narrator says terms (term: spoken form, or {say, case_sensitive, whole_word, regex}); TTS text only, subtitles keep the written words."""
+    pronunciation_file: str | list[str] | None = None
+    """YAML/JSON file(s) (relative to the project) with more pronunciation entries; `pronunciation:` entries win over them."""
     extensions: list[str] = Field(default_factory=lambda: ["extensions"])
     """Folders (relative to the project) whose *.py files and packages are imported."""
     lint: LintConfig = Field(default_factory=LintConfig)
@@ -613,6 +638,32 @@ class VideoConfig(_Strict):
             if "variants" in override:
                 raise ValueError(f"variant '{name}' must not contain 'variants'")
         return value
+
+    @field_validator("pronunciation", mode="before")
+    @classmethod
+    def _one_form(cls, value: Any) -> Any:
+        from vidgen.pronunciation import form_problems
+
+        problems = form_problems(value) if isinstance(value, dict) else []
+        if problems:
+            raise ValueError("; ".join(problems))
+        return value
+
+    @field_validator("pronunciation")
+    @classmethod
+    def _compilable(cls, value: dict[str, Any]) -> dict[str, Any]:
+        from vidgen.pronunciation import entry_problems
+
+        problems = entry_problems(value)
+        if problems:
+            raise ValueError("; ".join(problems))
+        return value
+
+    @property
+    def pronunciation_files(self) -> list[str]:
+        """``pronunciation_file`` as a list (empty when unset)."""
+        value = self.pronunciation_file
+        return [] if value is None else [value] if isinstance(value, str) else list(value)
 
     @model_validator(mode="after")
     def _check_unique_ids(self) -> VideoConfig:

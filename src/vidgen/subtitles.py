@@ -17,6 +17,7 @@ from typing import NamedTuple
 
 from vidgen.cues import caption_cues, split_cues
 from vidgen.fileio import write_text_atomic
+from vidgen.pronunciation import Pronunciation
 from vidgen.speech import WordTime, beat_word_times
 
 LINE_WIDTH = 42
@@ -45,13 +46,18 @@ def beat_cues(
     return [Cue(c.start, c.end, c.text) for c in cues]
 
 
-def cues_from_timings(timings: dict, audio_dir: Path | None = None) -> list[Cue]:
+def cues_from_timings(timings: dict, audio_dir: Path | None = None, pronunciation: Pronunciation | None = None) -> list[Cue]:
     """All cues of a combined ``timings.json`` mapping (beat times are absolute); with
-    ``audio_dir``, word times come from the beats' MP3s and alignments there."""
+    ``audio_dir``, word times come from the beats' MP3s and alignments there. The cues show the
+    written text; with ``pronunciation`` (the project's) the words are timed by their spoken
+    form, which is what the MP3s say."""
     cues: list[Cue] = []
     for scene in timings["scenes"]:
         for beat in scene["beats"]:
-            words = beat_word_times(audio_dir, beat["id"], beat["text"], beat["start"], beat["end"]) if audio_dir is not None else None
+            words = None
+            if audio_dir is not None:
+                spoken = pronunciation.apply(beat["text"]) if pronunciation is not None else None
+                words = beat_word_times(audio_dir, beat["id"], beat["text"], beat["start"], beat["end"], spoken)
             cues.extend(beat_cues(beat["start"], beat["end"], beat["text"], words=words))
     return cues
 
@@ -74,9 +80,9 @@ def format_srt(cues: Iterable[Cue]) -> str:
     return "\n".join(blocks)
 
 
-def write_srt(path: Path, timings: dict, audio_dir: Path | None = None) -> list[Cue]:
-    """Write the SRT for a combined timings mapping as UTF-8 (word times from ``audio_dir``, see
-    :func:`cues_from_timings`); returns the cues."""
-    cues = cues_from_timings(timings, audio_dir)
+def write_srt(path: Path, timings: dict, audio_dir: Path | None = None, pronunciation: Pronunciation | None = None) -> list[Cue]:
+    """Write the SRT for a combined timings mapping as UTF-8 (word times from ``audio_dir`` and
+    ``pronunciation``, see :func:`cues_from_timings`); returns the cues."""
+    cues = cues_from_timings(timings, audio_dir, pronunciation)
     write_text_atomic(path, format_srt(cues))
     return cues

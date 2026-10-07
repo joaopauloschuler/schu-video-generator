@@ -112,12 +112,19 @@ class SceneContext:
     """One scene as the ``scene`` (timing) rules see it.
 
     ``activity`` is the scene's activity file (:mod:`vidgen.activity`: beats with their
-    narration times and ``busy`` time, plays, motion), ``audio_dir`` where the beats' MP3s are.
+    narration times and ``busy`` time, plays, motion), ``audio_dir`` where the beats' MP3s are,
+    ``spoken`` beat id -> the text the TTS says (pronunciation applied; a beat not in it is said
+    as written).
     """
 
     scene_id: str
     activity: dict[str, Any]
     audio_dir: Path
+    spoken: dict[str, str] = field(default_factory=dict)
+
+    def spoken_text(self, beat: dict[str, Any]) -> str:
+        """What the narrator says for an activity-file beat."""
+        return self.spoken.get(beat["id"], beat["text"])
 
     @property
     def fps(self) -> int:

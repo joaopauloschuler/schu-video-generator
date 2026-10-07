@@ -20,13 +20,16 @@ import re
 from collections.abc import Mapping, Sequence
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 import av
 import numpy as np
 
 from vidgen.errors import VidgenError
 from vidgen.fileio import remove_file, write_text_atomic
+
+if TYPE_CHECKING:
+    from vidgen.pronunciation import Spoken
 
 # ----- spoken words -----------------------------------------------------------------------------
 
@@ -253,11 +256,42 @@ def aligned_word_times(text: str, alignment: Mapping[str, Any], offset: float = 
     return out
 
 
-def beat_word_times(audio_dir: Path | None, beat_id: str, text: str, start: float, end: float) -> list[WordTime]:
+def map_word_times(spoken: Spoken, times: Sequence[WordTime]) -> list[WordTime]:
+    """The written words of ``spoken.text`` timed by ``times``, the times of the words of
+    ``spoken.spoken`` (what the TTS said): a written word lasts from its first spoken word's
+    start to its last one's end (``K-Phi-3`` said "kay fye three": three spoken words, one
+    written word); a word said as nothing gets a zero-length time where the next word starts
+    (the previous one's end at the end)."""
+    groups = spoken.word_groups()
+    out: list[WordTime] = []
+    words = spoken.text.split()
+    for k, (word, group) in enumerate(zip(words, groups)):
+        group = [i for i in group if i < len(times)]
+        if group:
+            out.append(WordTime(word, times[group[0]].start, max(times[group[-1]].end, times[group[0]].start)))
+            continue
+        later = next((g for g in groups[k + 1 :] if g and g[0] < len(times)), None)
+        at = times[later[0]].start if later else (out[-1].end if out else (times[0].start if times else 0.0))
+        out.append(WordTime(word, at, at))
+    return out
+
+
+def beat_word_times(
+    audio_dir: Path | None, beat_id: str, text: str, start: float, end: float, spoken: Spoken | None = None
+) -> list[WordTime]:
     """When each word of a beat is spoken, ``start``..``end`` being the beat's narration (its
     MP3's length or the estimate): from the stored alignment of its MP3 when there is one, else
     estimated (:func:`estimate_word_times`) within the MP3's speech (silence cut off,
-    :func:`speech_bounds`), else over the whole beat."""
+    :func:`speech_bounds`), else over the whole beat.
+
+    ``spoken`` (the beat's text with the project's pronunciation applied,
+    :meth:`vidgen.pronunciation.Pronunciation.apply`): when it differs from ``text``, the
+    spoken words are timed (the alignment and the audio are of the spoken text; an estimate
+    weighs the spoken syllables) and the written words take their times
+    (:func:`map_word_times`)."""
+    if spoken is not None and spoken.changed and spoken.text == text:
+        times = beat_word_times(audio_dir, beat_id, spoken.spoken, start, end)
+        return map_word_times(spoken, times)
     words = text.split()
     mp3 = audio_dir / f"{beat_id}.mp3" if audio_dir is not None else None
     if mp3 is None or not mp3.is_file():

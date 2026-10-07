@@ -26,7 +26,8 @@ STATES: tuple[AudioState, ...] = ("ok", "stale", "missing")
 class BeatAudioStatus:
     """Audio cache state of one beat.
 
-    ``state`` is ``"ok"`` (MP3 exists and its hash matches the current text and voice),
+    ``state`` is ``"ok"`` (MP3 exists and its hash matches the current spoken text — the beat's
+    text with the project's pronunciation applied — and voice),
     ``"stale"`` (MP3 exists but its hash is missing or outdated) or ``"missing"`` (no MP3).
     """
 
@@ -57,7 +58,8 @@ def read_hash(path: Path) -> str | None:
 
 
 def is_up_to_date(provider: TTSProvider, audio_dir: Path, beat_id: str, text: str) -> bool:
-    """True if ``audio_dir`` holds an MP3 for ``beat_id`` whose hash matches ``text``."""
+    """True if ``audio_dir`` holds an MP3 for ``beat_id`` whose hash matches ``text`` (the
+    spoken text, see :meth:`vidgen.project.Project.spoken_texts`)."""
     stored = read_hash(hash_path(audio_dir, beat_id))
     return mp3_path(audio_dir, beat_id).is_file() and stored is not None and provider.matches(text, stored)
 
@@ -69,12 +71,13 @@ def audio_status(project: Project, provider: TTSProvider | None = None) -> list[
 
         provider = get_provider(project.config.voice)
     audio_dir = project.audio_dir
+    spoken = project.spoken_texts()  # the hash covers what the TTS says (pronunciation applied)
     result = []
     for scene, beat in project.beats():
         mp3 = mp3_path(audio_dir, beat.id)
         if not mp3.is_file():
             state: AudioState = "missing"
-        elif is_up_to_date(provider, audio_dir, beat.id, beat.text):
+        elif is_up_to_date(provider, audio_dir, beat.id, spoken[beat.id]):
             state = "ok"
         else:
             state = "stale"

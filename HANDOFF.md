@@ -3812,3 +3812,86 @@ How to test: `/home/claude/venv/bin/python -m pytest -q` (1717 passed, 1 skipped
 tests/test_callout_action.py`. Manual: `vidgen storyboard examples/minimal --scene trend --per-beat
 3 [--variant vertical]`, `vidgen storyboard examples/gallery --scene loop --scene app --per-beat 2`,
 `vidgen lint examples/minimal --scene trend [--variant ...]`, `vidgen list-scenes`, `vidgen schema`.
+
+## Step 42 — Pronunciation dictionary
+What was built
+- **Config**: top-level `pronunciation:` map, `term: spoken form` or `term: {say, case_sensitive
+  (true), whole_word (true), regex (false)}`, `term: null` removes an entry (variants deep-merge
+  the map, so a variant can add, change or drop terms); `pronunciation_file: PATH | [PATHS]` (YAML /
+  JSON mappings of the same form, relative to the project; `pronunciation:` wins over them).
+  Errors: one message per mistake (`'GPU': sai: unknown key 'sai'; did you mean 'say'?`), bad
+  regexes / empty-matching regexes / bad group references in `say`; a missing or invalid file is
+  a load error with `pronunciation_file (<file>)` locations (`validate --json` lists them).
+- **`src/vidgen/pronunciation.py`** (no manim): `compile_rule`, `Pronunciation` (`apply(text) ->
+  Spoken`, `say(text)`), `Spoken(text, spoken, replacements, matched, conflicts)` with
+  `word_groups()` (per written word, the spoken words it became), `load_pronunciation(config,
+  root)`, `read_pronunciation_file`, `form_problems`, `entry_problems`, `pronunciation_warnings`.
+  One pass over the written text: all matches, greedily by start, then length, then entry order;
+  a spoken form is never matched again.
+- **TTS + hash**: `Project.pronunciation` (built when the project loads) and
+  `Project.spoken_texts()`; `vidgen tts` sends the spoken text (and spoken neighbours as context),
+  hashes it (`cache_key(spoken)`, §7 formula unchanged), stores alignments of it; `audio_status`
+  compares with it. A beat no entry matches keeps its old hash (kphi3's committed audio: 27 ok,
+  unchanged). `vidgen tts --dry-run` prints `    says: <spoken text>` under each beat to
+  generate whose text changes; character counts are of the spoken text. `has_own_audio` compares
+  spoken texts (cached per `Project`).
+- **Word timings** (Step 40): `beat_word_times(..., spoken=None)` — with a changed `Spoken`, the
+  spoken words are timed (alignment of the spoken text, else the estimate within the MP3's
+  speech, else over the beat) and `speech.map_word_times(spoken, times)` maps them back: a
+  written word spans its first to last spoken word ("K-Phi-3" → "kay fye three": 3 → 1), a word
+  said as nothing gets a zero-length time at the next word, words joined by one replacement share
+  it. Captions (`context.project.pronunciation`) and the SRT (`write_srt(..., pronunciation)`)
+  show the written text.
+- **Lint**: `SceneContext.spoken` (+ `spoken_text(beat)`); `narration_speed` counts spoken words.
+- **Validate warnings** (`cli.validate_warnings` = theme contrast + `pronunciation_warnings`;
+  `log_theme_warnings` renamed `log_validate_warnings`): entry matching no beat; entry always
+  inside a longer one (never applies); two entries matching the same span or crossing spans.
+- **Fingerprint**: `pronunciation` / `pronunciation_file` excluded from the config part; with
+  overlays the beats' spoken texts are overlay inputs (captions' word times).
+- **Example**: `examples/minimal`: `LaTeX: lah-tek`, `JSON: jay-son` (no audio there; kphi3 and
+  gallery untouched).
+
+Files
+- New: `src/vidgen/pronunciation.py`, `tests/test_pronunciation.py` (26 tests).
+- Changed: `config.py` (`PronunciationEntry`, `PronunciationValue`, `PronunciationMap`,
+  `VideoConfig.pronunciation`, `pronunciation_file`, `pronunciation_files`), `project.py`,
+  `speech.py` (`map_word_times`, `beat_word_times(spoken=)`), `subtitles.py`, `scenes/captions.py`,
+  `tts/cache.py`, `tts/run.py` (`TTSPlan.spoken`, `say()`), `lint/rules.py`, `lint/run.py`,
+  `lint/timing_rules.py`, `render/pipeline.py`, `render/fingerprint.py`, `cli.py`, `api.py`;
+  `tests/test_docs.py` (model list); `examples/minimal/video.yaml`; docs/CONFIG.md (new
+  "Pronunciation" section, top-level table, regeneration / variant paragraphs), docs/EXTENDING.md
+  (word times with `spoken`), README.md, DESIGN.md (tree, §4, §6.4, new §45), tasklist.md.
+
+Public interfaces added/changed
+- Config: `pronunciation`, `pronunciation_file` (JSON Schema follows from the models).
+- `vidgen.api`: `Pronunciation`, `Spoken`, `map_word_times`; `beat_word_times(..., spoken=None)`
+  (compatible). `Project.pronunciation`, `Project.spoken_texts()`. `write_srt` /
+  `cues_from_timings` take an optional `pronunciation`. `SceneContext(..., spoken={})`.
+- Behaviour: the audio hash / alignment text is the spoken text (identical to before for beats
+  without entries).
+
+Decisions / deviations
+- **Hash the spoken text** (not text + dictionary): only beats whose spoken text changes are
+  re-voiced, adding a dictionary keeps unmatched beats' audio, and the kphi3 legacy hashes still
+  match (no entries there).
+- `case_sensitive` defaults to **true** (an acronym entry like `US` must not hit "us");
+  `whole_word` true; regex only with `regex: true`.
+- Overlap rule: first, then longest, then written order; no cascading replacements. Contained
+  matches of an entry that applies elsewhere are not warned about (the intended "longest wins").
+- The no-audio duration estimate (`words_per_second`) still counts written words, so adding a
+  dictionary does not move renders; only `narration_speed` and caption word times use the spoken form.
+- Files are read when a `Project` is built (load error, not a lazy failure mid-render).
+
+Known gaps / TODOs
+- No `phoneme:` / SSML IPA entries (ElevenLabs reads `<phoneme>` only on some models, not the
+  default `eleven_multilingual_v2`; tags would also break plain-word alignments) and no
+  ElevenLabs server-side pronunciation dictionaries; write spoken forms in letters.
+- No per-beat `say:` override; terms are matched within a beat only.
+- Step 43 (voices): a per-voice pronunciation could hang off `voices:`; the hash already covers
+  whatever text is sent. Step 54 (readback STT) should compare against the spoken text.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1744 passed, 1 skipped, ~13.5 min); step only:
+`pytest tests/test_pronunciation.py`. Manual: `vidgen validate examples/minimal`, `vidgen tts
+examples/minimal --dry-run --beat math_b1 --beat feedback_b3` (shows `says: ... lah-tek.`),
+`vidgen storyboard examples/minimal --variant social --scene math --per-beat 2` (captions say
+"LaTeX"); `vidgen lint examples/minimal --variant social --scene math --scene feedback`: 0 findings.

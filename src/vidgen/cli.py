@@ -192,16 +192,29 @@ def theme_warnings(project: Project) -> list[str]:
     return [f"theme contrast: {check}" for check in checks if not check.ok]
 
 
-def log_theme_warnings(project: Project, variants: dict[str, Project | None]) -> None:
-    """Log :func:`theme_warnings` of ``project`` and of every loaded variant (a variant's
+def pronunciation_warnings(project: Project) -> list[str]:
+    """``pronunciation:`` entries that match no beat, never apply or collide (DESIGN.md §45)."""
+    from vidgen.pronunciation import pronunciation_warnings as check
+
+    return check(project.pronunciation, ((beat.id, beat.text) for _, beat in project.beats()))
+
+
+def validate_warnings(project: Project) -> list[str]:
+    """What ``vidgen validate`` warns about (not problems): :func:`theme_warnings` and
+    :func:`pronunciation_warnings`."""
+    return theme_warnings(project) + pronunciation_warnings(project)
+
+
+def log_validate_warnings(project: Project, variants: dict[str, Project | None]) -> None:
+    """Log :func:`validate_warnings` of ``project`` and of every loaded variant (a variant's
     warning that equals the base config's is not repeated)."""
     log = logging.getLogger("vidgen")
-    base = theme_warnings(project)
+    base = validate_warnings(project)
     for message in base:
         log.warning(message)
     for name, variant in variants.items():
         if variant is not None:
-            for message in theme_warnings(variant):
+            for message in validate_warnings(variant):
                 if message not in base:
                     log.warning("[%s] %s", name, message)
 
@@ -219,7 +232,7 @@ def cmd_validate(args: argparse.Namespace) -> CommandResult:
         return _validate_json(args.project)
     project = Project.load(args.project)
     problems, variants = validate_all(project)
-    log_theme_warnings(project, variants)
+    log_validate_warnings(project, variants)
     if problems:
         raise _invalid_project(project, problems)
 
@@ -245,7 +258,7 @@ def _validate_json(path: str) -> dict[str, Any]:
     except VidgenError as exc:
         return jsonout.validate_document(None, exc.problems or [Problem("", str(exc))], {}, exc)
     problems, variants = validate_all(project, keep_going=True)
-    log_theme_warnings(project, variants)
+    log_validate_warnings(project, variants)
     error = _invalid_project(project, problems) if problems else None
     return jsonout.validate_document(project, problems, variants, error)
 

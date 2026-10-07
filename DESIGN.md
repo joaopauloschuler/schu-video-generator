@@ -87,6 +87,7 @@ src/vidgen/
                           # fingerprint.py (what a scene's render depends on, §14)
   subtitles.py            # SRT from beat timings (cues cut and timed like captions, §43)
   speech.py               # spoken words, speech bounds of an MP3, word times: estimate / TTS alignment (§43)
+  pronunciation.py        # pronunciation dictionary: TTS text of a beat, spoken -> written word map (§45; no manim)
   cues.py                 # caption cues: phrase-boundary cutting and timing, shared by SRT and captions (§43)
   fileio.py               # atomic writes; replacing files that Windows programs keep open
   scenes/                 # built-in scene library (registered like extensions; actions.py:
@@ -191,6 +192,8 @@ voice:
 narration:
   pad: 0.35                                      # seconds of silence after each beat
   words_per_second: 2.6                          # duration estimate when a beat has no audio
+
+pronunciation: {K-Phi-3: kay fye three}          # Step 42 (§45): TTS text only; + pronunciation_file
 
 extensions: [extensions]                         # dirs (relative to project) to auto-import; default shown
 
@@ -490,6 +493,8 @@ Step 39 (§42) adds `video_chapters`, `Chapter`. Step 40 (§43) adds `WordTime`,
 `Overlay.default_reserve()` / `Overlay.reserves`.
 Step 41 (§44) adds, compatibly, the `Action` class attribute `until_next_beat` and the methods
 `problems()`, `provides()`, `default_until(later)`.
+Step 42 (§45) adds `Pronunciation`, `Spoken`, `map_word_times`, and compatibly the optional last
+argument `spoken` of `beat_word_times`.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -2774,3 +2779,65 @@ using the existing renders of the others (missing ones are rendered). Exit code 
   lines: an arrow or a label may cross a chart line or an edge); a callout added before a `zoom`
   scales with the scene (built for the camera of the moment it appears); a callout with `at` in
   the same frame as a `zoom` is built for the camera before the zoom (give it a later `at`).
+
+## 45. Refinements (Step 42, pronunciation dictionary)
+
+- **Config** (`config.py`): top-level `pronunciation: {term: value}` with value = the spoken form
+  (text), `PronunciationEntry {say, case_sensitive: true, whole_word: true, regex: false}` or
+  `null` (removes the term: how a variant or the config drops a file's / the base's entry; the map
+  deep-merges in variants like any mapping); `pronunciation_file: PATH | [PATH, ...]` (YAML or
+  JSON mappings of the same form, relative to the project). Effective entries = the files' in
+  order, then `pronunciation:` over them. A value that is neither form is reported once per
+  mistake (a `mode="before"` check, not pydantic's per-branch union errors); a regex that does
+  not compile, matches the empty string or whose `say` refers to a missing group is a config error.
+  The files are read when the `Project` is built (`Project.pronunciation`), so a missing or invalid
+  file is a load error with `pronunciation_file (<file>)` problem locations (`validate --json`
+  lists them).
+- **Matching** (`vidgen/pronunciation.py`, no manim): each entry is a compiled pattern: a plain
+  term is escaped; `whole_word` adds `(?<!\w)` / `(?!\w)` on the sides where the term starts /
+  ends with a word character (so `C++` and `K-Phi-3's` work); a regex gets both lookarounds;
+  `case_sensitive: false` → `re.IGNORECASE`. All matches of all entries in the **written** text
+  are collected and chosen greedily by start, then length, then entry order; replacements are
+  never matched again (no cascades). `Pronunciation.apply(text) -> Spoken(text, spoken,
+  replacements, matched, conflicts)`; `say(text)`; `Project.spoken_texts()` (beat id → spoken).
+- **TTS and hash**: everything sent to the provider is the spoken text (the beat and its
+  `previous_text` / `next_text` context); the cache key is `provider.cache_key(spoken)` (formula
+  of §7 unchanged), so a beat no entry matches keeps the hash of its written text: adding a
+  dictionary does not invalidate existing audio (the committed kphi3 MP3s stay valid; kphi3 has
+  no entries), and changing an entry re-voices only the beats whose spoken text changes.
+  `audio_status` compares with the spoken text. `vidgen tts --dry-run` prints `says: <spoken>`
+  under each beat to generate whose spoken text differs; the character count is of the spoken text.
+  Variant audio rule (§7): "a beat's text differs" now reads "a beat's spoken text differs" (each
+  config with its own pronunciation; `Project.has_own_audio` is cached per project).
+- **Alignment / word timings** (Step 40 interaction): the stored alignment (`voice.timestamps`)
+  is of the spoken text (`write_alignment(..., spoken, ...)`; `read_alignment` needs the spoken
+  text). Subtitles, captions and storyboards keep the written text; their word times come from
+  `beat_word_times(audio_dir, beat_id, text, start, end, spoken)`: when `spoken.changed`, the
+  spoken words are timed (alignment, else the estimate within the MP3's speech — so the spoken
+  syllables are weighed — else over the beat) and `map_word_times(spoken, times)` maps them back.
+  Mapping: `Spoken.word_groups()` gives, per written word (`\S+`), the spoken words (`\S+` of the
+  spoken text) its characters became: unchanged characters shift by the replacements before them,
+  a character inside a replacement maps to the whole replacement; a written word's time runs from
+  its first spoken word's start to its last one's end ("K-Phi-3" → "kay fye three": 3 → 1); a
+  word said as nothing gets a zero-length time at the next spoken word's start (or the previous
+  end); written words joined by one replacement share its words' time. The SRT gets the project's
+  pronunciation (`write_srt(path, timings, audio_dir, pronunciation)`), captions read
+  `context.project.pronunciation`.
+- **Lint**: `SceneContext.spoken` (beat id → spoken text, from `Project.spoken_texts()`);
+  `narration_speed` counts `spoken_words` of the spoken text. The no-audio duration estimate
+  (`words_per_second`) still counts written words (unchanged, so renders do not move).
+- **Render fingerprint**: `pronunciation` / `pronunciation_file` are excluded from the config
+  part (they change only audio, which is tracked); with overlays, each beat's spoken text joins
+  the overlay inputs (captions' word times depend on it).
+- **`vidgen validate` warnings** (not problems; `--json` `warnings`): an entry that matches no
+  beat; an entry that matches but never applies because a longer entry always holds it; two
+  entries matching the same span or crossing spans in a beat (which one is used there). An entry
+  inside a longer one that also applies elsewhere is intended (no warning). `cli.validate_warnings`
+  = theme contrast + pronunciation (`log_theme_warnings` became `log_validate_warnings`).
+- **Example**: `examples/minimal` (no committed audio): `LaTeX: lah-tek`, `JSON: jay-son`.
+- Known limits / not done: no SSML `<phoneme>` (IPA) entries — ElevenLabs reads phoneme tags only
+  with some models (not `eleven_multilingual_v2`), the tags would be billed characters and the
+  alignment would no longer be of plain words; no ElevenLabs server-side pronunciation
+  dictionaries (`pronunciation_dictionary_locators`); no per-beat `say:` override; matching is
+  per beat (a term split across two beats never matches); `whole_word` uses Python's `\w`
+  (Unicode letters and digits).

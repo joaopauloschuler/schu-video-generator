@@ -50,6 +50,11 @@ subtitles.
   few big words at a time with the spoken one highlighted, for vertical / social videos. Word
   times are estimated from the audio, or exact with `voice: {timestamps: true}` (ElevenLabs
   character timings) ([reference](docs/CONFIG.md#captions)).
+- **Pronunciation dictionary**: `pronunciation: {K-Phi-3: kay fye three}` (plain, case-insensitive
+  or regex entries, or a separate file) changes only what the voice is sent; subtitles and
+  captions keep the written words, timed by the spoken ones. Only beats whose spoken text changes
+  are re-voiced, and `vidgen tts --dry-run` shows what they will say
+  ([reference](docs/CONFIG.md#pronunciation-pronunciation)).
 - **Extensible per video**: a project can add its own scene types, beat actions, overlays,
   helpers, theme tokens and pipeline hooks in its `extensions/` folder, without touching vidgen.
 - **Cheap to iterate**: only new or edited beats are sent to ElevenLabs; fast low-resolution
@@ -101,7 +106,7 @@ vidgen validate                 # check config, scene types, params, assets and 
 vidgen render --preview         # 854x480 check, timed from word counts -> my_video_preview.mp4
 vidgen storyboard               # contact sheets of every beat -> build/preview/storyboard/*.png
 vidgen lint                     # layout + timing checks: text cut off, too small, low contrast, dead air...
-vidgen tts --dry-run            # what would be sent to ElevenLabs, and how many characters
+vidgen tts --dry-run            # what would be sent to ElevenLabs (with the pronunciation applied), how many characters
 vidgen tts                      # generate narration MP3s (only new/changed beats)
 vidgen render                   # final render -> my_video.mp4 + my_video.srt
 ```

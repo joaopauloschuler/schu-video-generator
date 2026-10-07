@@ -21,9 +21,10 @@ from vidgen.speech import SILENCE_DB, speech_bounds, spoken_words  # noqa: F401 
 
 @rule("narration_speed", scope="scene")
 def narration_speed(ctx: SceneContext, settings: NarrationSpeedRule) -> Iterator[Issue]:
-    """A beat spoken faster or slower than the configured words per second."""
+    """A beat spoken faster or slower than the configured words per second (words of the
+    spoken text: the pronunciation applied, so "SQL" said "sequel" counts 1, not 1.5)."""
     for beat in ctx.beats:
-        words = spoken_words(beat["text"])
+        words = spoken_words(ctx.spoken_text(beat))
         if words < settings.min_words:
             continue
         audio = ctx.audio_dir / f"{beat['id']}.mp3"

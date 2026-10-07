@@ -180,12 +180,14 @@ class Captions(Overlay):
             return widths[word]
 
         space = width("x x") - width("xx")
-        audio = self.context.project.audio_dir
+        project = self.context.project
+        audio = project.audio_dir
         out = []
         beats = scene.beats
         for k, beat in enumerate(beats):
             until = beats[k + 1].start if k + 1 < len(beats) else scene.duration
-            words = beat_word_times(audio, beat.id, beat.text, beat.start, beat.end)
+            # The written words, timed by the audio of their spoken form (pronunciation, §45).
+            words = beat_word_times(audio, beat.id, beat.text, beat.start, beat.end, project.pronunciation.apply(beat.text))
             cues = caption_cues(
                 beat.text, beat.start, beat.end, words=words, widths=[width(w) for w in beat.text.split()], space=space,
                 max_width=max_width, max_lines=self._setting("max_lines"), max_words=self._setting("max_words"), until=until,
