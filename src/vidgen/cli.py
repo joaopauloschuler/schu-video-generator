@@ -33,6 +33,7 @@ TEMPLATE_DOTFILES: tuple[str, ...] = ("gitignore",)
 #: Subcommands that accept ``--json``.
 JSON_COMMANDS: tuple[str, ...] = (
     "validate", "list-scenes", "list-themes", "list-icons", "list-sfx", "list-music", "render", "schema", "storyboard", "lint",
+    "thumbnail", "export",
 )
 
 #: What a command function returns: an exit code, or (with ``--json``) the JSON document.
@@ -79,7 +80,8 @@ def project_problems(project: Project) -> list[Problem]:
     and runs the type's ``validate_project`` (e.g. missing asset files); checks the beats'
     ``actions`` (action names, options, targets of the scene) and the ``overlays`` (types,
     options, scene references; DESIGN.md §41); also checks the project's ``assets/icons``,
-    the sounds of the scenes' ``sfx:`` lists (§47) and the ``music:`` sources (§48).
+    the sounds of the scenes' ``sfx:`` lists (§47), the ``music:`` sources (§48) and a designed
+    ``thumbnail:``'s icon, image, preset and background (§53).
     """
     from vidgen import extensions, registry
     from vidgen.actions import scene_actions
@@ -88,6 +90,7 @@ def project_problems(project: Project) -> list[Problem]:
     from vidgen.music import config_problems as music_problems
     from vidgen.overlays import overlay_problems
     from vidgen.sfx import config_problems as sfx_problems
+    from vidgen.thumbnail import thumbnail_problems
     from vidgen.transitions import color_problems as transition_color_problems
     from vidgen.voices import voice_color_problems
 
@@ -129,6 +132,7 @@ def project_problems(project: Project) -> list[Problem]:
             problems.extend(carry_problems(project.config))
             problems.extend(Problem(loc, message) for loc, message in sfx_problems(project.config, project.root))
             problems.extend(Problem(loc, message) for loc, message in music_problems(project.config, project.root))
+            problems.extend(thumbnail_problems(project, theme))
     except VidgenError as exc:
         problems.extend(exc.problems or [Problem("", str(exc))])
     return problems
@@ -352,6 +356,8 @@ def cmd_render(args: argparse.Namespace) -> CommandResult:
         print(f"chapters:  {result.chapters}")
     if result.frames_index is not None:
         print(f"frames:    {result.frames_index}")
+    if result.thumbnail is not None:
+        print(f"thumbnail: {result.thumbnail.path}")
     print(f"duration:  {_format_seconds(result.duration)} ({result.duration:.2f} s)")
     mix = result.timings.get("mix")
     if mix is not None:
@@ -394,6 +400,89 @@ def cmd_storyboard(args: argparse.Namespace) -> CommandResult:
     for sheet in result.sheets:
         rel = sheet.path.relative_to(result.folder).as_posix()
         print(f"  {rel}  ({len(sheet.stills)} still{'s' if len(sheet.stills) != 1 else ''}, {sheet.width}x{sheet.height})")
+    return 0
+
+
+def _cli_thumbnail(project: Project, args: argparse.Namespace) -> Any:
+    """The frame thumbnail of ``--scene`` / ``--beat`` / ``--at`` / ``--no-overlays`` (keeping the
+    config's ``jpeg``); ``None`` without ``--scene``."""
+    from vidgen.config import ThumbnailConfig
+
+    if args.scene is None:
+        if args.beat is not None or args.at is not None or args.no_overlays:
+            raise VidgenError("--beat, --at and --no-overlays choose a frame of --scene ID; add --scene")
+        return None
+    beat: str | int | None = args.beat
+    if beat is not None and beat.isdigit() and beat not in {b.id for b in project.scene(args.scene).beats}:
+        beat = int(beat)  # a beat number, unless a beat is called that
+    try:
+        spec = ThumbnailConfig(
+            scene=args.scene, beat=beat, at=args.at, overlays=False if args.no_overlays else None,
+            jpeg=project.config.thumbnail.jpeg if project.config.thumbnail is not None else False,
+        )
+    except ValidationError as exc:
+        raise VidgenError("; ".join(str(p) for p in validation_problems(exc, ("thumbnail",)))) from None
+    problems = project.config.thumbnail_problems(spec)
+    if problems:
+        raise VidgenError("; ".join(problems))
+    return spec
+
+
+def cmd_thumbnail(args: argparse.Namespace) -> CommandResult:
+    """Write the video's thumbnail (the config's ``thumbnail:``, or a frame chosen with ``--scene``)."""
+    from vidgen.thumbnail import make_thumbnail
+
+    if args.jobs < 1:
+        raise VidgenError("--jobs must be at least 1")
+    started = time.monotonic()
+    project = Project.load(args.project, variant=args.variant)
+    spec = _cli_thumbnail(project, args)
+    result = make_thumbnail(project, preview=args.preview, spec=spec, jpeg=True if args.jpeg else None, jobs=args.jobs)
+    if args.json:
+        return jsonout.thumbnail_document(project, result, args.preview, time.monotonic() - started)
+    source = result.source
+    if result.kind == "frame":
+        what = f"frame {source['frame']} of {source['scene']}" + (f" ({source['beat']})" if source["beat"] else "")
+        what += f" @ {source['time']:.2f} s" + ("" if source["overlays"] else ", no overlays")
+    else:
+        what = f"designed, title {source['title_px']} px"
+    print(f"thumbnail: {result.path}  ({result.width}x{result.height}, {what}, {result.bytes / 1e3:.0f} KB)")
+    if result.jpeg is not None and result.jpeg_bytes is not None:
+        print(f"jpeg:      {result.jpeg}  ({result.jpeg_bytes / 1e3:.0f} KB)")
+    print(f"small:     {result.small}  (as YouTube shows it small; look at it)")
+    if result.rendered:
+        print(f"rendered {len(result.rendered)} scene(s) for it: {', '.join(result.rendered)}")
+    for check in result.checks:
+        print(str(check))
+    return 0
+
+
+def cmd_export(args: argparse.Namespace) -> CommandResult:
+    """Export a part of the rendered video (a scene, or ``--from`` / ``--to``) as a GIF or an MP4 clip."""
+    from vidgen.export import export_clip, export_gif
+
+    started = time.monotonic()
+    project = Project.load(args.project, variant=args.variant)
+    output = Path(args.output).resolve() if args.output else None
+    common = {"preview": args.preview, "scene": args.scene, "start": args.from_, "end": args.to, "width": args.width, "fps": args.fps, "output": output}
+    if args.kind == "gif":
+        if args.with_audio:
+            raise VidgenError("--with-audio is for clips: a GIF has no sound")
+        result = export_gif(project, max_mb=args.max_mb, **common)
+    else:
+        if args.max_mb is not None:
+            raise VidgenError("--max-mb is for GIFs (a clip's size follows its length and resolution)")
+        result = export_clip(project, audio=args.with_audio, **common)
+    if args.json:
+        return jsonout.export_document(project, result, args.preview, time.monotonic() - started)
+    part = f"scene {result.scene}, " if result.scene else ""
+    print(f"{result.kind}: {result.path}")
+    print(f"part:  {part}{result.start:.2f}-{result.end:.2f} s of {result.source.name} ({result.end - result.start:.2f} s)")
+    sound = ", with audio" if result.audio else ""
+    print(f"size:  {result.width}x{result.height}, {result.fps:g} fps, {result.bytes / 1e6:.2f} MB ({result.method}{sound})")
+    if len(result.attempts) > 1:
+        tries = ", ".join(f"{a['width']} px {a['fps']:g} fps {a['bytes'] / 1e6:.2f} MB" for a in result.attempts)
+        print(f"budget {result.max_mb:g} MB: {tries}")
     return 0
 
 
@@ -744,6 +833,33 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--jobs", "-j", type=int, default=1, metavar="N", help="render N scenes in parallel (default: 1)")
     p.add_argument("--force", action="store_true", help="render the scenes again even if their stills are current")
     p.set_defaults(func=cmd_storyboard)
+
+    p = sub.add_parser("thumbnail", help="write the video's thumbnail (<output>_thumbnail.png) from the thumbnail: config or a scene's frame")
+    project_arg(p)
+    p.add_argument("--variant", metavar="NAME", help="apply a named variant")
+    p.add_argument("--preview", action="store_true", help="take frames from the preview render (fast; ..._preview_thumbnail.png)")
+    p.add_argument("--scene", metavar="ID", help="a frame of this scene instead of the configured thumbnail")
+    p.add_argument("--beat", metavar="ID|N", help="with --scene: the beat (its id or number from 1; default: the last)")
+    p.add_argument("--at", type=float, metavar="SECONDS", help="with --scene: seconds into the beat (or the scene); default: the beat's end")
+    p.add_argument("--no-overlays", action="store_true", help="with --scene: the frame without captions, watermark... (renders the scene again)")
+    p.add_argument("--jpeg", action="store_true", help="also write <output>_thumbnail.jpg under 2 MB")
+    p.add_argument("--jobs", "-j", type=int, default=1, metavar="N", help="render N scenes in parallel when scenes must be rendered (default: 1)")
+    p.set_defaults(func=cmd_thumbnail)
+
+    p = sub.add_parser("export", help="export a scene or part of the rendered video as a GIF or MP4 clip (exports/)")
+    p.add_argument("kind", choices=["gif", "clip"], help="gif (palette GIF) or clip (MP4)")
+    project_arg(p)
+    p.add_argument("--scene", metavar="ID", help="this scene; --from / --to then count from its start")
+    p.add_argument("--from", dest="from_", type=float, metavar="SECONDS", help="start (default: the scene's start, or 0)")
+    p.add_argument("--to", type=float, metavar="SECONDS", help="end (default: the scene's end, or the video's)")
+    p.add_argument("--variant", metavar="NAME", help="apply a named variant")
+    p.add_argument("--preview", action="store_true", help="export from the preview render")
+    p.add_argument("--width", type=int, metavar="PX", help="width in pixels (GIF default: 480, 270 for 9:16; clip: the video's)")
+    p.add_argument("--fps", type=float, metavar="F", help="frame rate (GIF default: 12; clip: the video's)")
+    p.add_argument("--max-mb", type=float, metavar="MB", help="GIF: lower the frame rate, then the width, until the file is at most this big")
+    p.add_argument("--with-audio", action="store_true", help="clip: keep the sound")
+    p.add_argument("--output", "-o", metavar="FILE", help="write here instead of exports/<output>_<scene>[_<from>-<to>s].gif|mp4")
+    p.set_defaults(func=cmd_export)
 
     p = sub.add_parser("lint", help="check the layout of the video's stills (text off frame, too small, ...)")
     project_arg(p)

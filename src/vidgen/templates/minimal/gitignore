@@ -3,4 +3,8 @@ build/
 *.mp4
 *.srt
 *.wav
+*_chapters.txt
+*_thumbnail.png
+*_thumbnail.jpg
+exports/
 __pycache__/

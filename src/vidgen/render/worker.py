@@ -1,7 +1,7 @@
 """Render one scene in its own process (DESIGN.md §5.2)::
 
     python -m vidgen.render.worker <project_dir> <scene_id> --quality final|preview
-        [--variant NAME] [--no-audio] [--progress] [--frames N]
+        [--variant NAME] [--no-audio] [--progress] [--frames N] [--bare]
 
 Writes ``<render_dir>/scenes/<scene_id>.mp4`` and ``<render_dir>/timings/<scene_id>.json``
 (``render_dir`` = ``build/<final|preview>[_<variant>]``); with ``--frames N``, also N PNG stills
@@ -197,11 +197,14 @@ def render_scene(
     audio: bool = True,
     progress: bool = False,
     frames: int = 0,
+    bare: bool = False,
 ) -> Path:
     """Render one scene in this process (Manim's global config is modified); returns its video.
 
     ``frames``: also save that many stills per beat (0: none) in :func:`scene_frames_dir`,
     their layout in :func:`scene_layout_path` and the activity in :func:`scene_activity_path`.
+    ``bare``: render the project :meth:`~vidgen.project.Project.without_overlays` (into its
+    ``_bare`` folders; a frame thumbnail without overlays, DESIGN.md §53).
     Call it only in a fresh process: this is the body of the worker.
     """
     from vidgen import carry, extensions, registry
@@ -216,6 +219,8 @@ def render_scene(
     register_bundled_fonts()  # before extensions or scenes lay out any text
 
     project = Project.load(project_path, variant=variant)
+    if bare:
+        project = project.without_overlays()
     theme = extensions.activate(project)
     spec = project.scene(scene_id)
     cls = registry.get(spec.type).cls
@@ -312,6 +317,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-audio", action="store_true", help="do not add narration sounds")
     parser.add_argument("--progress", action="store_true", help="show Manim's progress bars")
     parser.add_argument("--frames", type=int, default=0, metavar="N", help="save N PNG stills per beat (default: 0)")
+    parser.add_argument("--bare", action="store_true", help="render without overlays into build/..._bare")
     return parser
 
 
@@ -326,7 +332,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     logger.propagate = False
     try:
         render_scene(
-            args.project, args.scene_id, args.quality == "preview", args.variant, not args.no_audio, args.progress, args.frames
+            args.project, args.scene_id, args.quality == "preview", args.variant, not args.no_audio, args.progress, args.frames,
+            args.bare,
         )
     except VidgenError as exc:
         print(f"error: {exc}", file=sys.stderr)

@@ -78,6 +78,8 @@ src/vidgen/
                           # planned chapters and video_chapters() (§42)
   chapters.py             # chapter marks from `chapter` scenes and scenes' `chapter:` keys; their checks (§42)
   chapter_export.py       # published chapters (intro at 0:00), MP4 FFMETADATA + tags, YouTube list and rules (§52)
+  thumbnail.py            # the thumbnail: a scene's frame or a designed card, small copy, legibility checks (§53)
+  export.py               # `vidgen export gif|clip`: palette GIF with a size budget, MP4 clip copy / encode (§53)
   overlays.py             # overlays: Overlay base, OverlayContext, config entries, validation, reserve (§41)
   overlay_layer.py        # OverlayLayer: overlays composited into every frame a scene writes (§41)
   charts.py               # chart helpers: ticks, number labels, axes, legend, markers, fit (§33),
@@ -135,6 +137,8 @@ my_video/
   <output>.mp4            # final video   (<output>_preview.mp4 for previews,
   <output>.srt            #               <output>_<variant>.mp4 for variants)
   <output>_chapters.txt   # YouTube chapter list, when the video has chapters (Step 49, §52)
+  <output>_thumbnail.png  # thumbnail (+ .jpg), `vidgen thumbnail` / render with `thumbnail:` (Step 50, §53)
+  exports/                # `vidgen export`: GIFs and MP4 clips of parts of the video (Step 50, §53)
 ```
 
 `build/<final|preview>[_<variant>]/` (Step 4) holds: `scenes/<id>.mp4` (the scene as rendered,
@@ -147,7 +151,10 @@ music / normalisation, §48); Step 46 `padded/voice.wav` (the scenes' sound summ
 crossfades overlap them) and `padded/video_concat_<k>.txt` (runs of cut-joined scenes, §49);
 Step 47 `scenes/<id>.overlay.mov` (the overlays of the frames a push / wipe into the scene
 moves, RGBA) and `carry/<id>.json` (the objects the next scene carries out of it, §50);
-Step 49 `padded/metadata.txt` (the MP4's tags and chapters, FFMETADATA, §52). With `--frames` (Step 10, §13) also `frames/<id>/*.png` + `frames/<id>/index.json` and
+Step 49 `padded/metadata.txt` (the MP4's tags and chapters, FFMETADATA, §52); Step 50
+`thumbnail/<name>_small.png` (the thumbnail at YouTube's small size, §53) and, for a frame
+thumbnail without overlays, a sibling folder `build/<final|preview>[_<variant>]_bare/` (scene
+renders of the project without overlays, §53). With `--frames` (Step 10, §13) also `frames/<id>/*.png` + `frames/<id>/index.json` and
 `frames/index.json`, and `layout/<id>.json` (Step 12, §15).
 
 ## 4. Config schema (`video.yaml`)
@@ -217,6 +224,7 @@ transition: crossfade                            # Step 46 (§49): default betwe
                                                  # Step 47 (§50): push / wipe {direction, soft}; scene `carry:`
 chapters: {metadata: true, youtube: true, intro: Intro}   # Step 49 (§52): MP4 chapters, <output>_chapters.txt
 metadata: {artist: "Jane Doe"}                   # Step 49 (§52): MP4 tags (title defaults to `title`)
+thumbnail: {title: "Saving 77%", icon: cpu}      # Step 50 (§53): designed card, or {scene, beat, at, overlays}
 
 extensions: [extensions]                         # dirs (relative to project) to auto-import; default shown
 
@@ -662,6 +670,10 @@ vidgen storyboard [PROJECT] [--scene ID ...] [--per-beat N] [--variant NAME] [--
               [--width PX] [--jobs N] [--force] [--json]      # contact sheets (§14)
 vidgen lint [PROJECT] [--scene ID ...] [--rule NAME ...] [--variant NAME] [--preview | --final]
               [--fail-on SEVERITY] [--jobs N] [--force] [--json]   # layout checks (§16)
+vidgen thumbnail [PROJECT] [--variant NAME] [--preview] [--scene ID [--beat ID|N] [--at S] [--no-overlays]]
+              [--jpeg] [--jobs N] [--json]                    # <output>_thumbnail.png (§53)
+vidgen export gif|clip [PROJECT] [--scene ID] [--from S] [--to S] [--variant NAME] [--preview] [--width PX]
+              [--fps F] [--max-mb MB] [--with-audio] [--output FILE] [--json]   # exports/ (§53)
 ```
 PROJECT defaults to the current directory. `--scene` re-renders only those scenes and re-joins
 using the existing renders of the others (missing ones are rendered). Exit code non-zero on error.
@@ -3425,3 +3437,104 @@ the measured loudness, §48).
   says; a chapter's `number` is not shown in the outputs; YouTube also requires the list in the
   description to be the video's own (vidgen only writes the file); the MP4 has no chapter
   thumbnails.
+
+## 53. Refinements (Step 50, thumbnail and GIF / clip export)
+
+- **Config** (`config.py`): top-level `thumbnail: ThumbnailConfig | None` — a frame of a scene
+  (`scene`, `beat` id or 1-based number, `at` seconds ≥ 0, `overlays` default true) or a designed
+  card (`title` default the video's `title`, `subtitle`, `icon` | `image`, `preset`,
+  `background`), plus `jpeg` (false) and `auto` (true). Frame and design keys together, frame keys
+  without `scene`, `icon` with `image`: config errors; `VideoConfig.thumbnail_problems(thumb)`
+  checks the scene and beat (also a beat on a silent scene); `vidgen validate` checks icon, image
+  file, preset and colour token (`thumbnail.thumbnail_problems`, also run by `render`'s scene
+  checks). `ThumbnailConfig()` (no section) = a designed card of the title. Out of scene
+  fingerprints.
+- **Size** (`thumbnail.thumbnail_size`): from the final `format`'s orientation (`scales.frame_orientation`):
+  landscape 1280x720 (YouTube's recommendation), portrait 1080x1920 (Shorts / Reels covers),
+  square 1080x1080. Every picture is cover-fitted (centre crop) to it with Lanczos.
+- **Files**: `Project.thumbnail_path(preview, suffix)` = `<output>[_<variant>][_preview]_thumbnail.png`
+  (and `.jpg`), the small copy `build/<render dir>/thumbnail/<name>_small.png` (long side
+  `SMALL_LONG_SIDE` 320 px: YouTube's grid size, for the author — an AI agent opens it as an
+  image). JPEG (`jpeg` / `--jpeg`): qualities 92 → 55 until ≤ 2 MB (YouTube's limit); without
+  it an old JPEG is removed. Atomic writes.
+- **Frame thumbnails** (`_frame_thumbnail`): the frame comes from the **scene's own render**
+  (`scenes/<id>.mp4`), not from the joined video: a frame of a scene is the same with or without
+  transitions, and it can be (re)made alone. `render_current` (format + fingerprint, §14) decides
+  whether the scene is rendered first (`pipeline.render_scenes`, no join). Frame number
+  (`frame_number`): a beat without `at` → its last frame, `round(start·fps) + round((end − start
+  + pad)·fps) − 1`, capped by the next beat's first frame (the beat-end still of §13, computed
+  from the timings instead of capturing stills, so a plain render is reused); `at` → `floor((beat
+  start | 0) + at)·fps`; nothing → the last beat's end, or for a silent scene the frame before
+  its fade-out (`duration − outro`, the scene type's `outro`); past the scene's end → error.
+  Decoded with PyAV (exact frame, no seek rounding). From a render smaller than the thumbnail
+  (e.g. `--preview`) an `info` check says it was scaled up.
+- **Without overlays** (`overlays: false` / `--no-overlays`): overlays are composited inside the
+  render (§41), so the picture without them needs another render. `Project.without_overlays()`
+  is the project with `overlays: []` and every scene `overlays: false`, `bare = True`, whose
+  `render_dir` is `build/<final|preview>[_<variant>]_bare`; the pipeline passes worker `--bare`,
+  which does the same in the worker process. Its fingerprints differ (no overlay inputs), so the
+  bare renders are reused while current; carries render the scene before into the bare folder
+  too (`with_carried`). Decision: a separate folder rather than a flag on the normal render, so
+  the normal renders (and the joined video) are never replaced by overlay-less ones. The scene
+  lays out without the room reserving overlays take (the frame shows the scene as designed for
+  a clean frame).
+- **Designed thumbnails** (`design_thumbnail`, Pillow; the icon through Manim's Cairo camera as
+  in `list-icons --sheet`, on the disc colour so no alpha is needed): in 16:9 the text on the
+  left 58 %, the icon (on a `surface` disc, `primary`, ≥ 3:1 on the disc) or the image (a bleed
+  panel) on the right; in 9:16 / square the visual on top (≈ 45 %), text centred below. Text
+  sizes in units of the short side S (720 / 1080 px): margins 0.075 S; the title (font role
+  `heading`, bold) the largest even size from 0.2 S down to 0.078 S whose balanced wrap
+  (narrowest width keeping the line count) fits in 3 lines (4 in portrait) and the box; at the
+  smallest size the rest is cut with `…` (`fit`). Then an accent bar (0.22 S x 0.016 S, theme
+  `accent`), the subtitle (role `body`, 0.068 S, ≤ 2 lines). Colours: background = `background`
+  (token / hex) or the theme's; title `text` unless below 4.5:1 there (then black / white, the
+  stronger); subtitle the first of `highlight`, `primary`, `accent` ≥ 4.5:1, else the title's.
+  `preset` uses `Theme.derive(ThemeConfig(preset=...))`: the preset alone, not the project's
+  overrides (which would otherwise win over the preset). Fonts: the bundled file of the theme's
+  family (`fonts.bundled_font_file`), else an installed font of that name, else
+  `sheets.load_font`.
+- **Checks** (`ThumbnailCheck(rule, severity, message)`, lint names where they mean the same):
+  designed cards are measured at the small size (factor `320 / long side`): `min_font` title
+  < 14 px / subtitle < 10 px (the title's minimum size 0.078 S is exactly 14 px small in both
+  orientations), `contrast` < 4.5:1 (WCAG via `lint.color`), `fit`, `max_words` > 6 (info);
+  all kinds: `file_size` > 2 MB, frame thumbnails `resolution` (info). A frame thumbnail's text
+  is not measured (a plain render has no layout dump; `vidgen lint` checks scenes) — documented.
+- **Render**: with `thumbnail:` and `auto`, `render_project` makes the thumbnail after the join,
+  outside its extension session (a frame thumbnail may run `render_scenes`, which opens its own);
+  the scene's render is current then, so nothing is rendered again unless `overlays: false`.
+  Warnings are logged (`render --json` `warnings`); `RenderResult.thumbnail` (`ThumbnailResult`),
+  `render --json` `outputs.thumbnail`, human `thumbnail:` line. Not in `post_render` hook data
+  (the hook runs before it).
+- **`vidgen thumbnail`** (`cmd_thumbnail`): the config's thumbnail, or `--scene` (+ `--beat`
+  id or number — a digit string is a number unless the scene has a beat of that id —, `--at`,
+  `--no-overlays`) checked like the config; `--preview`, `--jpeg`, `--jobs`, `--json`
+  (`jsonout.thumbnail_document`).
+- **`vidgen export gif|clip`** (`export.py`): source = the joined video + `timings.json` of the
+  render dir (error naming `vidgen render [--preview]` when missing; durations must agree within
+  0.1 s). `resolve_range`: with `--scene` times from its start (default the whole scene, `end`
+  kept within it — `start + duration`, so a transition out of it is included), else video times.
+  Default path `exports/<output>[_<variant>][_preview]_<scene|video>[_<from>-<to|end>s].<gif|mp4>`;
+  `--output` elsewhere. Decision: an `exports/` folder in the project (not next to the output) —
+  shareable artefacts, many per video, easy to ignore in git (`**/exports/`, also in the init
+  template's `.gitignore`).
+  - **GIF**: one FFmpeg pass, `fps, scale=W:-1:flags=lanczos, split, palettegen=stats_mode=full,
+    paletteuse=dither=sierra2_4a:diff_mode=rectangle` (`stats_mode=full`: explainer graphics are
+    mostly still, one palette for all frames avoids colour pumping; `diff_mode=rectangle`: only
+    changed areas are re-dithered, no shimmer, smaller files), `-loop 0`. Defaults: width 480
+    (270 for 9:16), ≤ the video's; 12 fps, ≤ the video's. **Budget** `--max-mb`: `next_try` —
+    size ≈ width² · fps, needed factor × 0.9 split as fps × factor^(1/3) (≥ 5 fps) and the width
+    taking the rest (≥ 160 px); at most `MAX_ATTEMPTS` 6 encodes or until nothing can be lowered;
+    still too big → warning (`within_budget: false`). Attempts listed in the JSON.
+  - **Clip**: stream copy when the start lies within half a frame of a keyframe (PyAV demux,
+    packets only) and neither `--width` nor `--fps` changes the picture: `-ss <keyframe> -i`,
+    `-c:v copy -frames:v N` (`-t` alone let a copy run 2 frames long); with `--with-audio` the
+    sound comes from a second input seeked to the same time and is encoded AAC 192k (copied AAC
+    packets started up to a packet early: the clip opened with 0.15 s of sound before its first
+    picture). Otherwise re-encoded (`libx264 -crf 18 -pix_fmt yuv420p`, accurate input seek,
+    `scale=W:-2`, `fps=F`). Chapters dropped. A joined video without crossfades / pushes / wipes
+    stream-copies the scenes, so scene starts are keyframes and `export clip --scene X` copies.
+- Known limits: frame thumbnails are not checked for text size / contrast; a designed card has
+  one layout (title + bar + subtitle + one visual) and no background image behind the text; the
+  `_bare` render folder is not cleaned up; GIF budgets assume size ∝ width² · fps (static
+  explainer frames compress better, so it can take a few encodes); in a re-encoded join
+  (transitions) keyframes fall where x264 put them, so most clips of it are re-encoded.

@@ -14,7 +14,7 @@ With transitions, the one into the next scene (it changes how the scene ends, DE
 With ``carry`` (DESIGN.md §50): what the next scene carries out of the scene (kept on screen at
 its end), and for a scene that carries objects in, the fingerprint of the scene before.
 Not the music and the final mix (``music``, ``audio``, a scene's ``music``): they are applied when
-the video is joined.
+the video is joined; nor ``chapters``, ``metadata`` and ``thumbnail`` (outputs made after it).
 Files a scene reads from elsewhere are not tracked (``--force`` renders again).
 """
 
@@ -42,7 +42,7 @@ NOT_RENDER_INPUTS: frozenset[str] = frozenset(
     {
         "__main__.py", "cli.py", "describe.py", "iconlist.py", "jsonout.py", "lint", "schema.py", "sheets.py", "storyboard.py",
         "render/fingerprint.py", "render/pipeline.py", "render/ffmpeg.py", "sfx.py", "subtitles.py", "themelist.py", "tts",
-        "loudness.py", "mix.py", "music.py",
+        "loudness.py", "mix.py", "music.py", "thumbnail.py", "export.py",
     }
 )
 
@@ -150,10 +150,10 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
     # word times (the spoken texts are in "overlays"); editing it must not re-render every scene.
     # Named voices and subtitle settings change only audio and, with overlays, captions (§46).
     # Music and the final mix (§48) are added when the video is joined: no pixels, no timing.
-    # So are the MP4's chapters and tags and the YouTube chapter list (§52).
+    # So are the MP4's chapters and tags and the YouTube chapter list (§52), and the thumbnail (§53).
     excluded = {
         "scenes", "variants", "lint", "pronunciation", "pronunciation_file", "voices", "subtitles", "music", "audio",
-        "chapters", "metadata",
+        "chapters", "metadata", "thumbnail",
     }
     config = project.config.model_dump(mode="json", exclude=excluded)
     assets = project.root / "assets"

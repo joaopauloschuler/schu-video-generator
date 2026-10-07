@@ -26,7 +26,7 @@ from collections.abc import Callable, Iterator, Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from vidgen import __version__, carry, chapter_export, hooks, mix, sfx, transitions
 from vidgen.errors import VidgenError
@@ -46,6 +46,9 @@ from vidgen.render.worker import (
 from vidgen.subtitles import write_srt
 from vidgen.tts.elevenlabs import API_KEY_ENV
 
+if TYPE_CHECKING:
+    from vidgen.thumbnail import ThumbnailResult
+
 log = logging.getLogger("vidgen.render")
 
 #: Lines of a failed worker's output shown in the error.
@@ -61,7 +64,8 @@ class RenderResult:
     the workers of this run, in config order. ``frames_index`` is ``build/.../frames/index.json``
     when stills were requested, else ``None``; ``chapters`` the YouTube chapter list
     ``<output>_chapters.txt`` when one was written (the video has chapters and
-    ``chapters.youtube``), else ``None``.
+    ``chapters.youtube``), else ``None``; ``thumbnail`` the thumbnail written after the join
+    (with a ``thumbnail:`` config and ``auto``, DESIGN.md §53), else ``None``.
     """
 
     output: Path
@@ -75,6 +79,7 @@ class RenderResult:
     warnings: list[tuple[str, str]] = field(default_factory=list)
     frames_index: Path | None = None
     chapters: Path | None = None
+    thumbnail: ThumbnailResult | None = None
 
 
 @dataclass
@@ -123,6 +128,11 @@ def _check_scenes(project: Project) -> None:
     problems = music_problems(project.config, project.root)
     if problems:
         raise VidgenError("\n".join(["invalid music", *(f"  {loc}: {message}" for loc, message in problems)]))
+    from vidgen.thumbnail import thumbnail_problems
+
+    thumb = thumbnail_problems(project, runtime.current_theme())
+    if thumb:
+        raise VidgenError("\n".join(["invalid thumbnail", *(f"  {p.location}: {p.message}" for p in thumb)]))
 
 
 def warn_audio(project: Project) -> None:
@@ -196,6 +206,8 @@ def _run_worker(project: Project, preview: bool, scene_id: str, no_audio: bool, 
         cmd.append("--progress")
     if frames:
         cmd += ["--frames", str(frames)]
+    if project.bare:
+        cmd.append("--bare")
     # Scenes never need the ElevenLabs key: keep it out of the processes that run scene code.
     env = {k: v for k, v in os.environ.items() if k != API_KEY_ENV}
     env.update(PYTHONIOENCODING="utf-8", PYTHONUTF8="1")
@@ -630,6 +642,8 @@ def render_project(
     a :class:`VidgenError` listing the failed scenes is raised at the end.
     ``frames``: also save that many PNG stills per beat of every scene (1: the end of each beat)
     under ``build/.../frames/``; reused scenes without such stills are rendered again. 0: none.
+    With a ``thumbnail:`` config (and ``auto``), the thumbnail is written last
+    (:func:`vidgen.thumbnail.make_thumbnail`; its warnings are logged).
     """
     from vidgen import extensions
 
@@ -687,7 +701,7 @@ def render_project(
             preview=preview,
             variant=project.variant,
         )
-        return RenderResult(
+        result = RenderResult(
             output=output,
             srt=srt,
             timings_file=timings_file,
@@ -700,3 +714,12 @@ def render_project(
             frames_index=index,
             chapters=chapters_file,
         )
+    thumb = project.config.thumbnail
+    if thumb is not None and thumb.auto:  # after the session: a frame thumbnail may render a scene
+        from vidgen.thumbnail import make_thumbnail
+
+        result.thumbnail = make_thumbnail(project, preview, jobs=jobs)
+        for check in result.thumbnail.checks:
+            if check.severity == "warning":
+                log.warning("thumbnail: %s", check.message)
+    return result

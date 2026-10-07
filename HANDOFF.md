@@ -4642,3 +4642,113 @@ How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (1923 passed, 1
 on 2 CPUs); step only: `pytest tests/test_chapter_export.py`. Manual: `vidgen render
 examples/gallery --preview --jobs 4`, then `ffprobe -v error -show_chapters
 examples/gallery/gallery_preview.mp4` and `cat examples/gallery/gallery_preview_chapters.txt`.
+
+## Step 50 — Thumbnail and GIF/clip export
+What was built
+- **`thumbnail:` config** (`config.ThumbnailConfig`, top level, out of scene fingerprints): a
+  **frame** of a scene `{scene, beat (id or number from 1), at (s), overlays (default true)}` or a
+  **designed card** `{title (default: the video's title), subtitle, icon | image, preset,
+  background}`, plus `jpeg: false` and `auto: true`. Mixing frame / design keys, frame keys without
+  `scene`, icon with image, an unknown scene / beat, a beat on a silent scene: config errors;
+  icon, image file, preset and colour token: `vidgen validate` problems (and `render`'s checks).
+- **Output**: `<output>[_<variant>][_preview]_thumbnail.png` (`Project.thumbnail_path`), 1280x720
+  for 16:9, 1080x1920 for 9:16, 1080x1080 square (by the final format's orientation; pictures are
+  centre-cropped to it); with `jpeg` also `.jpg` at the best quality under 2 MB (else an old JPEG
+  is removed); a copy at YouTube's small size (long side 320 px) in
+  `build/<render dir>/thumbnail/<name>_small.png` to look at.
+- **Frame thumbnails** come from the scene's own render (`scenes/<id>.mp4`), rendered first when
+  missing / stale (format + fingerprint); the frame is the beat's last frame (like the beat-end
+  still), `at` seconds into the beat or scene, or a silent scene's frame before its fade-out;
+  decoded with PyAV. `overlays: false` (`--no-overlays`) renders the scene with
+  `Project.without_overlays()` into `build/<final|preview>[_<variant>]_bare/` (worker `--bare`).
+- **Designed thumbnails** (Pillow; icon drawn by Manim's camera): title (role `heading`, bold) at
+  the largest size that fits in 3 lines (4 in 9:16) with balanced lines, accent bar, subtitle
+  (role `body`, first readable of highlight / primary / accent), icon on a `surface` disc or an
+  image panel on the right (top in 9:16 / square); colours fall back to black / white for 4.5:1.
+- **Checks** (`ThumbnailCheck(rule, severity, message)`): `min_font` (title < 14 px / other text
+  < 10 px at the small size), `contrast` (< 4.5:1), `fit` (title cut), `max_words` (> 6, info),
+  `file_size` (> 2 MB), `resolution` (frame scaled up, info).
+- **`vidgen render`** writes the thumbnail after the join when `thumbnail:` is set and `auto`
+  (logs warning checks); `RenderResult.thumbnail`, `render --json` `outputs.thumbnail`, human
+  `thumbnail:` line. **`vidgen thumbnail [PROJECT] [--variant] [--preview] [--scene ID [--beat
+  ID|N] [--at S] [--no-overlays]] [--jpeg] [--jobs N] [--json]`**.
+- **`vidgen export gif|clip [PROJECT] [--scene ID] [--from S] [--to S] [--variant] [--preview]
+  [--width PX] [--fps F] [--max-mb MB] [--with-audio] [--output FILE] [--json]`** from the joined
+  video + `timings.json` (times from the scene's start with `--scene`, else video times), to
+  `exports/<output>[_<variant>][_preview]_<scene|video>[_<from>-<to>s].gif|mp4`. GIF: one FFmpeg
+  pass with `palettegen` (whole-clip stats) + `paletteuse` (Sierra 2-4A, changed rectangles
+  only), default 480 px (270 for 9:16) / 12 fps, loops; `--max-mb` lowers fps then width
+  (`export.next_try`, ≥ 5 fps, ≥ 160 px, ≤ 6 encodes, warning if still over). Clip: stream copy
+  when it starts on a keyframe and keeps size / rate (`-frames:v` exact count; sound re-cut and
+  AAC-encoded from a second accurate seek), else H.264 CRF 18. Usage errors: `--with-audio` on a
+  GIF, `--max-mb` on a clip, no render.
+- **Example**: `examples/gallery` `thumbnail: {title, subtitle, icon: grid-3x3, jpeg: true}` +
+  usage lines (`thumbnail`, `--scene ... --no-overlays`, `export gif ... --max-mb 2`, `export
+  clip ... --with-audio`).
+
+Files
+- New: `src/vidgen/thumbnail.py`, `src/vidgen/export.py`, `tests/test_thumbnail_export.py` (19
+  tests, 4 render using one module-scoped 160x90 render with a progress bar; 1 slow).
+- Changed: `config.py` (`ThumbnailConfig`, keys, `VideoConfig.thumbnail`, `thumbnail_problems`),
+  `project.py` (`bare`, `without_overlays`, `render_dir` `_bare`, `thumbnail_path`, `export_stem`,
+  `exports_dir`), `render/worker.py` (`--bare`), `render/pipeline.py` (`--bare` to workers,
+  thumbnail checks in `_check_scenes`, thumbnail after the join, `RenderResult.thumbnail`),
+  `render/fingerprint.py` (`thumbnail` excluded; `thumbnail.py`, `export.py` not render inputs),
+  `cli.py` (`thumbnail`, `export`, validate problems, render line, `JSON_COMMANDS`), `jsonout.py`
+  (`thumbnail_document`, `export_document`, `outputs.thumbnail`); `.gitignore` and the init
+  template's (`*_thumbnail.png/.jpg`, `exports/`; the template also `*_chapters.txt`);
+  `tests/test_docs.py` (model), `tests/test_json_output.py` (render outputs);
+  `examples/gallery/video.yaml`; docs/CONFIG.md (top level, new "Thumbnail" and "Export"
+  sections, JSON docs for both commands and `outputs.thumbnail`), README.md, DESIGN.md (tree, §3,
+  §4, §8, new §53), tasklist.md.
+
+Public interfaces added/changed (compatible; `vidgen.api` unchanged)
+- Config: top-level `thumbnail`. Commands `vidgen thumbnail`, `vidgen export` (both `--json`).
+- JSON (version 1): `render --json` `outputs.thumbnail`; new `thumbnail` and `export` documents.
+- `Project.without_overlays()`, `.bare`, `.thumbnail_path()`, `.export_stem()`, `.exports_dir`;
+  worker `--bare` / `render_scene(..., bare=)`; `RenderResult.thumbnail`;
+  `vidgen.thumbnail.make_thumbnail / design_thumbnail / frame_number / render_current /
+  thumbnail_problems / ThumbnailResult / ThumbnailCheck`; `vidgen.export.export_gif /
+  export_clip / resolve_range / next_try / ExportResult`.
+- Fingerprints change once (project.py and the worker are render inputs): every render is stale
+  once, as after any step touching them.
+
+Decisions / deviations
+- **Frames from the scene's render, not the joined video**: same pixels except inside a
+  transition, and it can be (re)made alone; the beat end is computed from the timings, so a plain
+  render is reused (no stills needed).
+- **No overlays = another render in a `_bare` folder**: overlays are composited in-render, and a
+  separate folder never replaces the real renders. The bare scene lays out without the room
+  reserving overlays take.
+- **Designed cards with Pillow, not a Manim scene**: instant (no worker process), exact pixel
+  metrics for the checks; the theme's fonts (bundled files) and icons (Manim camera) keep the
+  video's look. `preset` uses the preset alone (the project's own theme values would win over it).
+- **`exports/` folder** for GIFs / clips (many per video, shareable, ignored by git), not next to
+  the output; `--output` for anything else.
+- **Clip sound is re-encoded even when the picture is copied**: copied AAC packets started a
+  packet (~0.15 s) before the first picture.
+- Thumbnail warnings are warnings, never errors: the video is already written.
+
+Known gaps / TODOs (routed to Step 60 in tasklist.md)
+- A frame thumbnail's text is not measured (plain renders have no layout dump); look at the small
+  copy or lint the scene.
+- `post_render` hooks run before the thumbnail exists (no `thumbnail` in their data).
+- `build/..._bare` folders are never cleaned; no cover art in the MP4 from the thumbnail.
+- One designed layout (title, bar, subtitle, one visual); no image behind the text.
+
+Verification
+- Looked at (Read): `examples/gallery` designed thumbnails in 16:9, 9:16 and the `neon` variant
+  and their 320 px copies (title 108 px → 27 px small, subtitle legible); `examples/minimal`
+  designed default (title only) and frame thumbnails (`--preview --scene intro --beat 2`: the full
+  title card before its fade-out; `--variant subtitled --no-overlays`: no captions, from
+  `build/preview_subtitled_bare`); a frame of an exported GIF (Sierra dithering, clean text).
+- `vidgen export gif examples/minimal --preview --scene steps --max-mb 0.3 --width 640`: 1.09 →
+  0.39 → 0.31 → 0.27 MB (341 px, 6.4 fps); `export clip --scene steps --with-audio`: copy, 312
+  frames = 20.8 s exactly; `--from 1.3 --to 4 --width 640`: encode, 640x360.
+- `vidgen validate examples/gallery`: ok.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (1943 passed, 1 skipped, ~10.5 min on 2 CPUs); step only:
+`pytest tests/test_thumbnail_export.py` (~15 s). Manual: `vidgen thumbnail examples/gallery
+[--variant vertical]` then open `examples/gallery/build/final/thumbnail/gallery_thumbnail_small.png`;
+`vidgen render examples/minimal --preview` then `vidgen export gif examples/minimal --preview
+--scene steps --max-mb 1` and `vidgen export clip examples/minimal --preview --scene steps --json`.

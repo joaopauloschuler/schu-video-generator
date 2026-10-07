@@ -51,6 +51,7 @@ MODELS: list[type[BaseModel]] = [
     config.TransitionConfig,
     config.ChaptersConfig,
     config.MetadataConfig,
+    config.ThumbnailConfig,
 ]
 
 

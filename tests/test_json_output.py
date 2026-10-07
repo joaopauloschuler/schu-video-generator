@@ -391,6 +391,7 @@ def test_render_json(render_project_dir: Callable[..., Path], capsys: pytest.Cap
         "timings": str((root / "build" / "preview" / "timings.json").resolve()),
         "frames": None,
         "chapters": str((root / "out_preview_chapters.txt").resolve()),
+        "thumbnail": None,
     }
     intro, second = doc["chapters"]  # the intro chapter before the first chapter (DESIGN.md §52)
     assert (intro["title"], intro["intro"], intro["start"], second["title"], second["scene"]) == ("Intro", True, 0.0, "Second", "b")

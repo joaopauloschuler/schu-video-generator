@@ -22,7 +22,9 @@ from vidgen.errors import Problem, VidgenError
 from vidgen.project import Project
 
 if TYPE_CHECKING:
+    from vidgen.export import ExportResult
     from vidgen.icons import IconInfo
+    from vidgen.thumbnail import ThumbnailResult
     from vidgen.render.pipeline import RenderResult
     from vidgen.lint import LintResult
     from vidgen.storyboard import StoryboardResult
@@ -318,12 +320,74 @@ def render_document(
             "timings": _path(result.timings_file),
             "frames": None if result.frames_index is None else _path(result.frames_index),
             "chapters": None if result.chapters is None else _path(result.chapters),
+            "thumbnail": None if result.thumbnail is None else _path(result.thumbnail.path),
         },
         duration=result.duration,
         elapsed=round(elapsed, 3),
         mix=timings.get("mix"),
         chapters=timings.get("chapters", []),
         scenes=scenes,
+    )
+
+
+# ----- thumbnail / export ------------------------------------------------------------------------
+
+
+def thumbnail_document(
+    project: Project, result: ThumbnailResult, preview: bool, elapsed: float, warnings: Iterable[Mapping[str, Any]] = ()
+) -> dict[str, Any]:
+    """The ``vidgen thumbnail --json`` document: the files, what the picture shows (``source``)
+    and the legibility ``checks`` (``{rule, severity, message}``)."""
+    return envelope(
+        "thumbnail",
+        True,
+        warnings,
+        project=_path(project.root),
+        variant=project.variant,
+        preview=preview,
+        kind=result.kind,
+        path=_path(result.path),
+        width=result.width,
+        height=result.height,
+        bytes=result.bytes,
+        jpeg=None if result.jpeg is None else _path(result.jpeg),
+        jpeg_bytes=result.jpeg_bytes,
+        small=_path(result.small),
+        source=result.source,
+        checks=[c.to_json() for c in result.checks],
+        rendered=result.rendered,
+        elapsed=round(elapsed, 3),
+    )
+
+
+def export_document(
+    project: Project, result: ExportResult, preview: bool, elapsed: float, warnings: Iterable[Mapping[str, Any]] = ()
+) -> dict[str, Any]:
+    """The ``vidgen export --json`` document: the file, the part of the video and how it was made."""
+    return envelope(
+        "export",
+        True,
+        warnings,
+        project=_path(project.root),
+        variant=project.variant,
+        preview=preview,
+        kind=result.kind,
+        path=_path(result.path),
+        source=_path(result.source),
+        scene=result.scene,
+        start=result.start,
+        end=result.end,
+        duration=round(result.end - result.start, 6),
+        width=result.width,
+        height=result.height,
+        fps=result.fps,
+        bytes=result.bytes,
+        method=result.method,
+        audio=result.audio,
+        max_mb=result.max_mb,
+        within_budget=result.within_budget,
+        attempts=result.attempts,
+        elapsed=round(elapsed, 3),
     )
 
 

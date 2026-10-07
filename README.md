@@ -52,6 +52,15 @@ subtitles.
   the first chapter at 0:00 instead), and `validate` / `render` warn when YouTube would ignore the
   list (fewer than 3 chapters, one shorter than 10 s)
   ([reference](docs/CONFIG.md#chapters-in-the-outputs-chapters-metadata)).
+- **Thumbnail and shareable parts**: `thumbnail: {title, subtitle, icon}` draws a designed
+  1280x720 card (1080x1920 for a vertical variant) in the theme — one big bold title sized to
+  stay legible at YouTube's 320x180 — or `thumbnail: {scene, beat, at, overlays: false}` takes a
+  frame of a scene; written by every `vidgen render` (or `vidgen thumbnail`) as
+  `<output>_thumbnail.png` (+ a JPEG under 2 MB), with the small size to look at and checks of
+  text size and contrast ([reference](docs/CONFIG.md#thumbnail-thumbnail-vidgen-thumbnail)).
+  `vidgen export gif --scene ID --max-mb 5` turns a scene (or `--from` / `--to`) into a palette
+  GIF within a size budget, `vidgen export clip` into an MP4 (stream-copied when it can be)
+  ([reference](docs/CONFIG.md#export-gif-and-clip-vidgen-export)).
 - **Burned-in captions**: `- {type: captions}` puts the narration into the picture, cut at
   phrase boundaries like the SRT, with the scenes laid out clear of it; `style: karaoke` shows a
   few big words at a time with the spoken one highlighted, for vertical / social videos. Word
@@ -148,6 +157,8 @@ vidgen lint                     # layout + timing checks: text cut off, too smal
 vidgen tts --dry-run            # what would be sent to ElevenLabs (with the pronunciation applied), how many characters
 vidgen tts                      # generate narration MP3s (only new/changed beats)
 vidgen render                   # final render -> my_video.mp4 + my_video.srt (+ my_video_chapters.txt with chapters)
+vidgen thumbnail                # my_video_thumbnail.png (also written by render with a thumbnail: section)
+vidgen export gif --scene intro # exports/my_video_intro.gif
 ```
 
 Edit `video.yaml` (reference: [docs/CONFIG.md](docs/CONFIG.md)) and repeat. Until audio exists,
@@ -170,6 +181,8 @@ narration.
 | `vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going] [--jobs N] [--frames] [--frames-per-beat N] [--json]` | render and join the video |
 | `vidgen storyboard [PROJECT] [--scene ID ...] [--per-beat N] [--variant NAME] [--preview \| --final] [--width PX] [--jobs N] [--force] [--json]` | contact sheets (PNG) of the video's stills with labels and narration, to review a video without watching it |
 | `vidgen lint [PROJECT] [--scene ID ...] [--rule NAME ...] [--variant NAME] [--preview \| --final] [--fail-on SEVERITY] [--jobs N] [--force] [--json]` | check the layout at the end of every beat (text off the frame or in the margins, overlapping or covered text, text too small, low contrast, too many words) and the timing (narration too fast/slow, dead air, animations overrunning their narration or squeezed into a short beat); exit code 1 on errors |
+| `vidgen thumbnail [PROJECT] [--variant NAME] [--preview] [--scene ID [--beat ID\|N] [--at S] [--no-overlays]] [--jpeg] [--jobs N] [--json]` | write `<output>_thumbnail.png` from the `thumbnail:` config (a designed card, or a scene's frame) or the frame `--scene` names, a 320 px copy to look at, and legibility checks |
+| `vidgen export gif\|clip [PROJECT] [--scene ID] [--from S] [--to S] [--variant NAME] [--preview] [--width PX] [--fps F] [--max-mb MB] [--with-audio] [--output FILE] [--json]` | a scene or part of the rendered video as a palette GIF (`--max-mb`: lower frame rate / width until it fits) or an MP4 clip, in `exports/` |
 
 `PROJECT` is a project folder or its config file (default: the current folder).
 `render` options: `--preview` uses the `preview` resolution; `--scene ID` re-renders only those
@@ -213,7 +226,8 @@ my_video/
     icons/            # optional: your own icons <name>.svg (+ icons.json with tags)
   audio/              # generated narration: <beat_id>.mp3 + .hash (keep it; it cost money)
   build/              # intermediate render files, --frames stills + layout, storyboards (safe to delete)
-  my_video.mp4  my_video.srt  my_video_chapters.txt  my_video_preview.mp4 ...
+  exports/            # vidgen export: GIFs and clips
+  my_video.mp4  my_video.srt  my_video_chapters.txt  my_video_thumbnail.png  my_video_preview.mp4 ...
 ```
 
 ## Examples and docs
@@ -226,9 +240,10 @@ my_video/
   comparison, table, timeline, diagram, process, network, scatter, histogram, pie, heatmap, map,
   screenshot, video clip, equation derivation, code walkthrough), overlays (a watermark, a
   lower third, a progress bar, a chapter indicator), sound effects, a ducked music bed,
-  transitions (crossfades, colour fades, a push, a wipe), two carried objects and four chapters
-  (in the MP4 and `gallery_preview_chapters.txt`):
-  `vidgen storyboard examples/gallery [--variant vertical]`, `vidgen render examples/gallery --preview`.
+  transitions (crossfades, colour fades, a push, a wipe), two carried objects, four chapters
+  (in the MP4 and `gallery_preview_chapters.txt`) and a designed thumbnail:
+  `vidgen storyboard examples/gallery [--variant vertical]`, `vidgen render examples/gallery --preview`,
+  `vidgen thumbnail examples/gallery`, `vidgen export gif examples/gallery --preview --scene share`.
 - [examples/custom_scene](examples/custom_scene) — "How a bicycle gear works": built-ins plus a
   custom scene type with a helper module, a project icon, a vertical variant and a hook.
 - [examples/kphi3](examples/kphi3) — a real 4-minute paper video whose eight bespoke scenes all

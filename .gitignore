@@ -227,6 +227,9 @@ __marimo__/
 *.srt
 *.wav
 *_chapters.txt
+*_thumbnail.png
+*_thumbnail.jpg
+**/exports/
 
 # summary written by the examples/custom_scene post_render hook
 examples/custom_scene/*.txt

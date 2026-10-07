@@ -723,6 +723,61 @@ class MetadataConfig(_Strict):
     """Genre, e.g. Education."""
 
 
+#: Keys of a thumbnail grabbed from a scene's frame, and of a designed one (DESIGN.md §53).
+THUMBNAIL_FRAME_KEYS = ("scene", "beat", "at", "overlays")
+THUMBNAIL_DESIGN_KEYS = ("title", "subtitle", "icon", "image", "preset", "background")
+
+
+class ThumbnailConfig(_Strict):
+    """The video's thumbnail (DESIGN.md §53): a frame of a scene (``scene``, ``beat``, ``at``,
+    ``overlays``) or a designed title card (``title``, ``subtitle``, ``icon`` / ``image``,
+    ``preset`` / ``background``); without either, a designed card of the video's title."""
+
+    scene: Identifier | None = None
+    """Frame thumbnail: the scene whose frame is used."""
+    beat: Identifier | PositiveInt | None = None
+    """Frame thumbnail: a beat of that scene (its id, or its number from 1); default: the scene's last beat."""
+    at: float | None = Field(default=None, ge=0)
+    """Frame thumbnail: seconds into the beat (or into the scene without beat); default: the beat's last frame."""
+    overlays: bool | None = None
+    """Frame thumbnail: draw the video's overlays (captions, watermark...) on the frame; default true (false renders the scene once more without them)."""
+    title: str | None = Field(default=None, min_length=1)
+    """Designed thumbnail: the big title (a few words); default: the video's title."""
+    subtitle: str | None = Field(default=None, min_length=1)
+    """Designed thumbnail: a smaller line under the title."""
+    icon: str | None = Field(default=None, min_length=1)
+    """Designed thumbnail: an icon (vidgen list-icons) beside the title (above it in 9:16)."""
+    image: str | None = Field(default=None, min_length=1)
+    """Designed thumbnail: a picture (path relative to the project) beside the title (above it in 9:16)."""
+    preset: Identifier | None = None
+    """Designed thumbnail: draw it in this theme preset's colours and fonts instead of the video's theme."""
+    background: ColorRef | None = None
+    """Designed thumbnail: background colour (theme token or hex); default: the theme's background."""
+    jpeg: bool = False
+    """Also write <output>_thumbnail.jpg, under YouTube's 2 MB limit."""
+    auto: bool = True
+    """Write the thumbnail at the end of every `vidgen render` (false: only with `vidgen thumbnail`)."""
+
+    @model_validator(mode="after")
+    def _one_kind(self) -> ThumbnailConfig:
+        frame = [k for k in THUMBNAIL_FRAME_KEYS if getattr(self, k) is not None]
+        design = [k for k in THUMBNAIL_DESIGN_KEYS if getattr(self, k) is not None]
+        if frame and design:
+            raise ValueError(
+                f"a thumbnail is either a scene's frame ({', '.join(frame)}) or a designed card ({', '.join(design)}), not both"
+            )
+        if frame and self.scene is None:
+            raise ValueError(f"{', '.join(frame)} need scene: the scene whose frame becomes the thumbnail")
+        if self.icon is not None and self.image is not None:
+            raise ValueError("a designed thumbnail shows an icon or an image, not both")
+        return self
+
+    @property
+    def kind(self) -> Literal["frame", "design"]:
+        """``frame`` (a scene's frame) or ``design`` (a designed title card)."""
+        return "frame" if self.scene is not None else "design"
+
+
 #: Transition types (DESIGN.md §49, §50).
 TRANSITION_TYPES = ("cut", "crossfade", "fade_color", "push", "wipe")
 #: Transitions that overlap the two scenes (both pictures are on screen at once).
@@ -983,6 +1038,8 @@ class VideoConfig(_Strict):
     """What the render writes about the chapters: MP4 chapter entries, the YouTube list <output>_chapters.txt, the intro chapter at 0:00 {metadata, youtube, intro}."""
     metadata: MetadataConfig = Field(default_factory=MetadataConfig)
     """Tags of the final MP4 {title, artist, album, comment, description, copyright, date, genre}; title defaults to the top-level title."""
+    thumbnail: ThumbnailConfig | None = None
+    """The thumbnail <output>_thumbnail.png: a scene's frame {scene, beat, at, overlays} or a designed card {title, subtitle, icon, image, preset, background}, + {jpeg, auto}."""
     scenes: list[SceneConfig] = Field(min_length=1)
     """The scenes in order (at least one); scene ids and beat ids must be unique."""
 
@@ -1050,6 +1107,8 @@ class VideoConfig(_Strict):
         from vidgen.chapters import chapter_problems
 
         problems = chapter_problems(self.scenes) + self._music_problems(scene_seen)
+        if self.thumbnail is not None:
+            problems += self.thumbnail_problems(self.thumbnail)
         first = self.scenes[0].transition
         if first is not None and first.overlaps:
             problems.append(
@@ -1060,6 +1119,26 @@ class VideoConfig(_Strict):
         if problems:
             raise ValueError("; ".join(problems))
         return self
+
+    def thumbnail_problems(self, thumb: ThumbnailConfig) -> list[str]:
+        """A frame thumbnail ``thumb`` names a scene of this video and one of its beats."""
+        if thumb.scene is None:
+            return []
+        index = {s.id: i for i, s in enumerate(self.scenes)}
+        if thumb.scene not in index:
+            return [f"thumbnail.scene: unknown scene '{thumb.scene}' (scenes: {', '.join(index)})"]
+        scene = self.scenes[index[thumb.scene]]
+        if thumb.beat is None:
+            return []
+        ids = [b.id for b in scene.beats]
+        if not ids:
+            return [f"thumbnail.beat: scene '{scene.id}' has no beats (it is silent); use at: seconds into the scene"]
+        if isinstance(thumb.beat, int):
+            if thumb.beat > len(ids):
+                return [f"thumbnail.beat: scene '{scene.id}' has {len(ids)} beat(s), not {thumb.beat}"]
+        elif thumb.beat not in ids:
+            return [f"thumbnail.beat: scene '{scene.id}' has no beat '{thumb.beat}' (beats: {', '.join(ids)})"]
+        return []
 
     def _music_problems(self, index: dict[str, int]) -> list[str]:
         """Cues name existing scenes, in order (``from`` not after ``to``), without overlapping."""

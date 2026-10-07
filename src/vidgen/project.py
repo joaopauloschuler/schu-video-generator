@@ -89,6 +89,8 @@ class Project:
         self.pronunciation: Pronunciation = load_pronunciation(config, root)
         self._own_audio: bool | None = None
         self._voices: dict[str | None, VoiceConfig] = {}
+        #: True for :meth:`without_overlays` copies: their renders go to ``build/..._bare``.
+        self.bare = False
 
     @classmethod
     def load(cls, path: str | Path = ".", variant: str | None = None) -> Project:
@@ -111,6 +113,16 @@ class Project:
             except VidgenError as exc:
                 raise VidgenError(str(exc), problems=[p.in_variant(variant) for p in exc.problems]) from None
         return cls(config_file.parent, config_file, config, variant, base)
+
+    def without_overlays(self) -> Project:
+        """This project without any overlay (no video ``overlays``, every scene ``overlays:
+        false``), rendering into its own folders ``build/<final|preview>[_<variant>]_bare`` (a
+        frame thumbnail without overlays, DESIGN.md §53); the render worker's ``--bare``."""
+        scenes = [scene.model_copy(update={"overlays": False}) for scene in self.config.scenes]
+        config = self.config.model_copy(update={"overlays": [], "scenes": scenes})
+        bare = Project(self.root, self.config_file, config, self.variant, self.base_config)
+        bare.bare = True
+        return bare
 
     # ----- names and paths -------------------------------------------------------------------
 
@@ -192,10 +204,13 @@ class Project:
         return [self.root / d for d in self.config.extensions]
 
     def render_dir(self, preview: bool) -> Path:
-        """Per-quality build folder: ``build/<final|preview>[_<variant>]``."""
+        """Per-quality build folder: ``build/<final|preview>[_<variant>]`` (``..._bare`` for a
+        project :meth:`without_overlays`)."""
         name = "preview" if preview else "final"
         if self.variant:
             name += f"_{self.variant}"
+        if self.bare:
+            name += "_bare"
         return self.build_dir / name
 
     def render_format(self, preview: bool) -> FormatConfig:
@@ -221,6 +236,20 @@ class Project:
     def chapters_path(self, preview: bool = False) -> Path:
         """YouTube chapter list matching :meth:`output_path`: ``<output>[_<variant>][_preview]_chapters.txt``."""
         return self.root / f"{self._output_stem(preview)}_chapters.txt"
+
+    def thumbnail_path(self, preview: bool = False, suffix: str = ".png") -> Path:
+        """Thumbnail matching :meth:`output_path`: ``<output>[_<variant>][_preview]_thumbnail.png``
+        (``suffix`` ``.jpg`` for the JPEG copy)."""
+        return self.root / f"{self._output_stem(preview)}_thumbnail{suffix}"
+
+    def export_stem(self, preview: bool = False) -> str:
+        """Start of the names of ``vidgen export`` files: ``<output>[_<variant>][_preview]``."""
+        return self._output_stem(preview)
+
+    @property
+    def exports_dir(self) -> Path:
+        """``<root>/exports``: GIFs and clips written by ``vidgen export`` (DESIGN.md §53)."""
+        return self.root / "exports"
 
     def asset(self, rel: str | Path) -> Path:
         """Resolve an asset path relative to the project root; error if it does not exist."""

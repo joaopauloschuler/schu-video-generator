@@ -22,6 +22,10 @@
 #                                               # one push, one wipe, two carried objects (match cuts);
 #                                               # chapters in the MP4 + gallery_preview_chapters.txt (YouTube)
 #   vidgen storyboard examples/gallery --scene structure --scene tradeoff --per-beat 3  # the card's title becomes the heading
+#   vidgen thumbnail examples/gallery [--variant vertical]  # gallery_thumbnail.png (designed, see thumbnail: below)
+#   vidgen thumbnail examples/gallery --preview --scene speedup --no-overlays  # a frame instead, without overlays
+#   vidgen export gif examples/gallery --preview --scene share --max-mb 2      # exports/gallery_preview_share.gif
+#   vidgen export clip examples/gallery --preview --scene reach --with-audio   # exports/gallery_preview_reach.mp4
 # No narration audio: beats are timed from their word count (narration.words_per_second).
 title: "vidgen: a gallery of scene types"
 output: gallery
@@ -53,6 +57,12 @@ theme:
 narration:
   pad: 0.35
   words_per_second: 2.6
+
+thumbnail:            # gallery_thumbnail.png (+ .jpg) after every render, 1080x1920 in the vertical variant;
+  title: "Every scene type, one YAML file"   # `vidgen thumbnail examples/gallery` makes it alone
+  subtitle: "a vidgen gallery"                    # (docs/CONFIG.md "Thumbnail")
+  icon: grid-3x3
+  jpeg: true
 
 lint:                 # optional; thresholds and severities of `vidgen lint` (docs/CONFIG.md)
   fail_on: error      # warnings are reported, only errors make the command fail

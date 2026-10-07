@@ -8,7 +8,8 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 [narration](#narration-narration), [narration audio](#narration-audio-elevenlabs),
 [multiple voices](#multiple-voices-voices), [pronunciation](#pronunciation-pronunciation),
 [sound effects](#sound-effects-sfx), [background music and loudness](#background-music-music),
-[transitions](#transitions-transition), [built-in scene types](#built-in-scenes), [beat actions](#beat-actions), [overlays](#overlays),
+[transitions](#transitions-transition), [thumbnail](#thumbnail-thumbnail-vidgen-thumbnail),
+[GIF and clip export](#export-gif-and-clip-vidgen-export), [built-in scene types](#built-in-scenes), [beat actions](#beat-actions), [overlays](#overlays),
 [JSON Schema](#json-schema-vidgen-schema), [frame stills](#frame-stills-vidgen-render---frames),
 [storyboard](#storyboard-vidgen-storyboard), [lint](#lint-vidgen-lint),
 [JSON output of commands](#json-output---json).
@@ -18,7 +19,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | key | default | |
 |---|---|---|
 | `title` | required | the video's title (the MP4's title tag and `timings.json`; not drawn by itself) |
-| `output` | folder name | base name of the output files: `<output>.mp4`, `<output>.srt`, `<output>_chapters.txt`, `<output>_preview.mp4`, `<output>_<variant>.mp4`; no path separators |
+| `output` | folder name | base name of the output files: `<output>.mp4`, `<output>.srt`, `<output>_chapters.txt`, `<output>_thumbnail.png`, `<output>_preview.mp4`, `<output>_<variant>.mp4`; no path separators |
 | `format` | `{width: 1920, height: 1080, fps: 30}` | final render (`vidgen render`) |
 | `preview` | `{width: 854, height: 480, fps: 15}` | `vidgen render --preview` |
 | `variants` | `{}` | named overrides, see [variants](#variants) |
@@ -38,6 +39,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `transition` | none (cuts) | the default transition between scenes: `cut`, `crossfade`, `fade_color`, `push`, `wipe` or `{type, duration, color, direction, soft}`; see [transitions](#transitions-transition) |
 | `chapters` | `{metadata: true, youtube: true, intro: Intro}` | what the render writes about the chapters: MP4 chapter entries, the YouTube list `<output>_chapters.txt`, the chapter at 0:00; see [chapters in the outputs](#chapters-in-the-outputs-chapters-metadata) |
 | `metadata` | `{}` (title: the `title`) | tags of the MP4: `title`, `artist`, `album`, `comment`, `description`, `copyright`, `date`, `genre`; see [chapters in the outputs](#chapters-in-the-outputs-chapters-metadata) |
+| `thumbnail` | none | the thumbnail `<output>_thumbnail.png`, written by `vidgen render` and `vidgen thumbnail`: a scene's frame `{scene, beat, at, overlays}` or a designed card `{title, subtitle, icon, image, preset, background}`, + `{jpeg, auto}`; see [thumbnail](#thumbnail-thumbnail-vidgen-thumbnail) |
 | `scenes` | required | the scenes in order, at least one |
 
 ## Scenes and beats
@@ -179,6 +181,108 @@ metadata:              # optional tags of the MP4 (unset ones are not written)
 - `timings.json` and `vidgen render --json` list the chapters as published (with the intro
   chapter), `{title, number, scene, start, end, index, count, card, intro}`, also when
   `metadata` and `youtube` are off. Changing `chapters:` or `metadata:` re-renders no scene.
+
+## Thumbnail (`thumbnail`, `vidgen thumbnail`)
+
+The video's thumbnail, `<output>_thumbnail.png` (`<output>_<variant>[_preview]_thumbnail.png`),
+is either a **frame of a scene** or a **designed title card**. With a `thumbnail:` section,
+`vidgen render` writes it after the video (`auto: false`: only `vidgen thumbnail` does);
+`vidgen thumbnail` writes it alone. Its size follows the video's `format`: **1280x720** for a
+16:9 video (YouTube's recommended size), **1080x1920** for 9:16 (Shorts, Reels, a vertical
+variant), 1080x1080 for a square one; a frame of another shape is cropped to it (centred).
+
+```yaml
+thumbnail:                    # a designed card: big bold title, legible when shown small
+  title: "Saving 77% of the parameters"   # default: the video's title
+  subtitle: "in large language models"
+  icon: cpu                   # or image: assets/cover.jpg (beside the title; above it in 9:16)
+  preset: bold_neon           # optional: this preset's colours and fonts instead of the video's theme
+  background: surface         # optional: a theme colour or hex
+  jpeg: true                  # also <output>_thumbnail.jpg, under 2 MB
+```
+
+```yaml
+thumbnail:                    # a frame of a scene
+  scene: results
+  beat: 2                     # its id or number (from 1); default: the scene's last beat
+  at: 1.5                     # seconds into the beat (into the scene without beat); default: the beat's end
+  overlays: false             # without captions, watermark, ... (default true)
+```
+
+| key | default | |
+|---|---|---|
+| `scene` | none | frame thumbnail: the scene; its frame comes from the scene's render (`build/<final\|preview>[_<variant>]/scenes/<scene>.mp4`), which is rendered first when it is missing or stale (fingerprint, as for `vidgen storyboard`) |
+| `beat` | the scene's last beat | frame thumbnail: a beat of the scene, its id or its number from 1 (not on a silent scene) |
+| `at` | the beat's last frame | frame thumbnail: seconds into the beat, or into the scene without `beat`. Default: the beat's last frame (narration + `narration.pad`, the "end of beat" of [frame stills](#frame-stills-vidgen-render---frames)); a silent scene's frame just before its fade-out |
+| `overlays` | `true` | frame thumbnail: with the video's [overlays](#overlays). `false` renders the scene once more without any overlay into `build/..._bare/` (kept for the next time; the scene lays out without the room overlays `reserve`) |
+| `title` | the video's `title` | designed: the title, bold, as large as fits in 3 lines (4 in 9:16), font role `heading` |
+| `subtitle` | none | designed: a line under the title (font role `body`, the first of the theme's `highlight`, `primary`, `accent` that reaches 4.5:1 on the background, else the title's colour) |
+| `icon` | none | designed: an icon (`vidgen list-icons`) in `primary` on a `surface` disc, right of the text (above it in 9:16 / square) |
+| `image` | none | designed: a picture (path relative to the project) filling the right part (the top part in 9:16 / square); `icon` or `image`, not both |
+| `preset` | the video's theme | designed: a [theme preset](#theme-presets)'s colours and fonts alone (not the video's own theme values) |
+| `background` | the theme's | designed: background colour (theme token or hex); the title is `text`, or black / white when `text` would not reach 4.5:1 on it |
+| `jpeg` | `false` | also write `<output>_thumbnail.jpg`: the best JPEG quality (92 down to 55) under YouTube's 2 MB limit; without it an old JPEG is removed |
+| `auto` | `true` | write the thumbnail at the end of every `vidgen render` (`false`: only `vidgen thumbnail`) |
+
+A thumbnail is either a frame (`scene`, `beat`, `at`, `overlays`) or a designed card (`title`,
+`subtitle`, `icon` / `image`, `preset`, `background`); mixing the two is a config error, and
+`vidgen validate` checks the scene, beat, icon, image, preset and colour. Without a `thumbnail:`
+section `vidgen thumbnail` draws a designed card of the video's title (and `render` writes none).
+Changing `thumbnail:` re-renders no scene.
+
+```
+vidgen thumbnail [PROJECT] [--variant NAME] [--preview] [--scene ID [--beat ID|N] [--at SECONDS]
+                 [--no-overlays]] [--jpeg] [--jobs N] [--json]
+```
+
+`--scene` (with `--beat`, `--at`, `--no-overlays`) takes a frame instead of what the config says;
+`--preview` takes frames from the preview render (fast, but scaled up: an `info` says so) and
+names the files `..._preview_thumbnail.png`; `--jpeg` also writes the JPEG.
+
+**Legibility.** YouTube shows thumbnails at about 320x180 in its grids (and smaller beside a
+video). Every run also writes that size, `build/<final|preview>[_<variant>]/thumbnail/<name>_small.png`:
+look at it (an AI author: open it as an image) before publishing. A designed card is checked like
+[`vidgen lint`](#lint-vidgen-lint) checks a frame, at that small size (long side 320 px):
+
+| rule | severity | |
+|---|---|---|
+| `min_font` | warning | the title is under 14 px (any other text under 10 px) at the small size: shorten it so it can be set larger |
+| `fit` | warning | the title does not fit even at the smallest size (about 14 px small) and was cut with `…` |
+| `contrast` | warning | title or subtitle below 4.5:1 (WCAG AA) on the background |
+| `max_words` | info | more than 6 words in the title (thumbnails read best with a few) |
+| `file_size` | warning | the PNG (or, with `jpeg`, the JPEG) is over YouTube's 2 MB limit |
+| `resolution` | info | a frame thumbnail from a render smaller than the thumbnail (e.g. `--preview`) is scaled up |
+
+`vidgen thumbnail` prints them; `vidgen render` logs the warnings (`render --json`: `warnings`).
+A frame thumbnail's text is not measured: check it at the small size, or check the scene with
+`vidgen lint`.
+
+## Export: GIF and clip (`vidgen export`)
+
+```
+vidgen export gif|clip [PROJECT] [--scene ID] [--from SECONDS] [--to SECONDS] [--variant NAME]
+              [--preview] [--width PX] [--fps F] [--max-mb MB] [--with-audio] [--output FILE] [--json]
+```
+
+Writes a part of the **rendered video** (`<output>[_<variant>][_preview].mp4` and its
+`build/.../timings.json`; render it first) as an animated GIF or an MP4 clip, by default to
+`<project>/exports/<output>[_<variant>][_preview]_<scene>[_<from>-<to>s].gif|mp4` (`video` in
+place of the scene without `--scene`; `--output FILE` writes elsewhere). With `--scene`,
+`--from` / `--to` are seconds from the scene's start (default: the whole scene, kept within it,
+including a transition out of it); without it they are times in the video (default: all of it).
+
+- **GIF**: width `--width` (default 480, 270 for a 9:16 video, never wider than the video),
+  `--fps` (default 12, at most the video's), loops forever. One palette of 256 colours is made
+  for the clip's frames (FFmpeg `palettegen`) and applied with Sierra dithering (`paletteuse`),
+  re-dithering only the changed rectangle of each frame, so still parts do not shimmer.
+  `--max-mb MB` sets a size budget: while the file is bigger, the frame rate is lowered (down to
+  5 fps) and the width with it (down to 160 px), at most 6 encodes; still too big, it keeps the
+  smallest and warns (export a shorter part). The JSON lists every attempt.
+- **Clip** (MP4): **stream-copied** — exact pixels, instant — when it starts on a keyframe of
+  the video (a scene's start, in a video joined without crossfades, pushes or wipes) and keeps
+  the video's size and frame rate; otherwise **re-encoded** (H.264 CRF 18, frame-accurate
+  start). `--width` / `--fps` re-encode at that size / rate. Silent unless `--with-audio` (the
+  sound is then encoded as AAC, cut at the exact start). No chapters.
 
 ## Format and preview
 
@@ -3447,7 +3551,7 @@ video; `vidgen render` does. It dispatches `post_scene` for the scenes it render
 
 ## JSON output (`--json`)
 
-`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard` and `vidgen lint` accept `--json`: stdout then holds
+`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail` and `vidgen export` accept `--json`: stdout then holds
 exactly one JSON document (ASCII-only, non-ASCII characters escaped), and everything else
 (progress, `warning:` lines, Manim output) goes to stderr. These shapes are meant for programs
 and AI agents driving vidgen. Without `--json` the human output is unchanged.
@@ -3462,7 +3566,7 @@ it. Times are seconds (floats), paths are absolute strings, absent values are `n
 |---|---|---|
 | `version` | int | schema version of the document (1) |
 | `vidgen` | str | vidgen package version |
-| `command` | str \| null | `validate`, `list-scenes`, `list-themes`, `list-icons`, `render`, `schema`, `storyboard`, `lint` (`null` if the command line could not be parsed) |
+| `command` | str \| null | `validate`, `list-scenes`, `list-themes`, `list-icons`, `render`, `schema`, `storyboard`, `lint`, `thumbnail`, `export` (`null` if the command line could not be parsed) |
 | `ok` | bool | `true` on success; the exit code is 0 exactly when `ok` is true |
 | `warnings` | list | `{scene, message}`: vidgen warnings of the run (`scene` is `null`, or the scene whose render printed it) |
 | `error` | object | only when `ok` is false: `{kind, message, problems, details}` |
@@ -3612,7 +3716,7 @@ difference between two palette colours).
 | `preview` | bool | |
 | `audio` | bool | `false` with `--no-audio` |
 | `format` | object | `{width, height, fps}` of this render |
-| `outputs` | object | `{video, subtitles, timings, frames, chapters}`: the MP4, the SRT, `build/.../timings.json`, `build/.../frames/index.json` (`null` without `--frames`) and the YouTube chapter list `<output>_chapters.txt` (`null` without chapters or with `chapters: {youtube: false}`) |
+| `outputs` | object | `{video, subtitles, timings, frames, chapters, thumbnail}`: the MP4, the SRT, `build/.../timings.json`, `build/.../frames/index.json` (`null` without `--frames`), the YouTube chapter list `<output>_chapters.txt` (`null` without chapters or with `chapters: {youtube: false}`) and the thumbnail `<output>_thumbnail.png` (`null` without `thumbnail:` or with `auto: false`; its warnings are in `warnings`) |
 | `duration` | float | length of the video |
 | `elapsed` | float | wall time of the command |
 | `mix` | object \| null | the measured loudness of the video's audio (`null` with `--no-audio`): `{mixed, normalized, target_lufs, true_peak_limit, gain_db, integrated_lufs, true_peak_dbtp, limited_db, music}` — `mixed`: vidgen wrote the mix (music or normalisation; else FFmpeg joined narration and effects as before), `normalized` / `target_lufs` / `gain_db` the normalisation, `integrated_lufs` (LUFS) and `true_peak_dbtp` (dBTP) measured on the final mix, `limited_db` the limiter's deepest gain reduction (0: never engaged), `music` the cues `{source, kind (bed\|file), from, to, start, end, volume, duck}`; see [loudness](#loudness-of-the-final-mix-audio) |
@@ -3642,6 +3746,41 @@ for a vidgen error, 2 for an exception in scene code), `rendered` the scene ids 
 
 Video sheets come first, then the scene sheets in config order. `warnings` and `error.details`
 on a failed scene are as for `vidgen render --json`.
+
+### `vidgen thumbnail --json`
+
+| key | type | |
+|---|---|---|
+| `project` | str | |
+| `variant` | str \| null | |
+| `preview` | bool | frames from the preview render, files named `..._preview_thumbnail` |
+| `kind` | str | `frame` or `design` |
+| `path`, `width`, `height`, `bytes` | str, int, int, int | the PNG |
+| `jpeg`, `jpeg_bytes` | str \| null, int \| null | the JPEG (`null` without `jpeg` / `--jpeg`) |
+| `small` | str | the copy at YouTube's small size (long side 320 px), to look at |
+| `source` | object | frame: `{scene, beat, at, frame, time, overlays, render, render_size}` (`frame` / `time` in the scene's render, `render` that MP4); design: `{title, subtitle, icon, image, preset, background, title_px, subtitle_px, title_lines}` |
+| `checks` | list | `{rule, severity, message}`, see [thumbnail](#thumbnail-thumbnail-vidgen-thumbnail) |
+| `rendered` | list | scenes rendered for a frame thumbnail (empty when their renders were current) |
+| `elapsed` | float | wall time of the command |
+
+### `vidgen export --json`
+
+| key | type | |
+|---|---|---|
+| `project` | str | |
+| `variant` | str \| null | |
+| `preview` | bool | exported from the preview render |
+| `kind` | str | `gif` or `clip` |
+| `path`, `bytes` | str, int | the file written |
+| `source` | str | the rendered video it comes from |
+| `scene` | str \| null | `--scene` |
+| `start`, `end`, `duration` | float | the part, seconds in the video (a stream-copied clip starts at the keyframe it starts on) |
+| `width`, `height`, `fps` | int, int, float | of the file |
+| `method` | str | `palette` (GIF), `copy` or `encode` (clip) |
+| `audio` | bool | the clip has sound (`--with-audio`) |
+| `max_mb`, `within_budget` | float \| null, bool \| null | the GIF's budget and whether it was met (`null` without `--max-mb`) |
+| `attempts` | list | with `--max-mb`: every GIF encode `{width, fps, bytes}` in order |
+| `elapsed` | float | wall time of the command |
 
 ### `vidgen lint --json`
 
