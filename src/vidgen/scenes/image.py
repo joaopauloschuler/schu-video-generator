@@ -70,7 +70,7 @@ class Image(NarratedScene):
     class Params(SceneParams):
         path: str
         """Image file relative to the project folder, e.g. assets/photo.jpg."""
-        caption: str = ""
+        caption: TranslatableStr = ""
         """Caption text."""
         fit: Literal["contain", "cover"] = "contain"
         """contain: whole image, caption below; cover: fills the frame (cropped), caption on a band."""

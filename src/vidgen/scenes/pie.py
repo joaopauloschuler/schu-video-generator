@@ -71,25 +71,25 @@ class Pie(NarratedScene):
         return names + (["legend"] if params.uses_legend() else [])
 
     class Params(SceneParams):
-        labels: list[str] = Field(min_length=1)
+        labels: list[TranslatableStr] = Field(min_length=1)
         """Slice names (unique)."""
         values: list[float] = Field(min_length=1)
         """One value per label (0 or more); each slice's share is its value / the total."""
-        title: str = ""
+        title: TranslatableStr = ""
         """Chart title (in the header band at the top)."""
         donut: bool = False
         """Draw a ring instead of a full pie, with the total (or center) in the hole."""
         hole: float = Field(default=0.58, ge=0.3, le=0.85)
         """Donut hole radius as a share of the outer radius."""
-        center: str | None = None
+        center: TranslatableStr | None = None
         """Text in the donut hole; default: the total (value_format and unit); "" leaves it empty."""
-        center_label: str = ""
+        center_label: TranslatableStr = ""
         """A smaller line under the centre text (e.g. 'visits')."""
         show_values: Literal["percent", "value", "both", "none"] = "percent"
         """What each label shows under its name: the share (42%), the value, both (42% · 1,200) or nothing."""
         value_format: str | None = None
         """Python format for values (and the total), e.g. '{:,.0f}'; default: the decimals they need."""
-        unit: str = ""
+        unit: TranslatableStr = ""
         """Appended to values (and the total), e.g. ' GB'."""
         percent_decimals: int | None = Field(default=None, ge=0, le=3)
         """Decimals of the shares; default 0, or 1 when a slice is under 1 %."""
@@ -101,7 +101,7 @@ class Pie(NarratedScene):
         """Group slices smaller than this share (%) into one other_label slice, drawn last."""
         max_slices: int | None = Field(default=None, ge=2, le=MAX_SLICES)
         """Keep the largest max_slices - 1 slices and group the rest into one other_label slice."""
-        other_label: str = "Other"
+        other_label: TranslatableStr = "Other"
         """Name of the grouped slice."""
         other_color: ThemeColor = "dim"
         """Color of the grouped slice."""
@@ -111,7 +111,7 @@ class Pie(NarratedScene):
         """Names in a legend beside the pie (below it in 9:16) instead of at the slices; default: with more than 6 slices."""
         reveal: Literal["all", "per_beat"] = "all"
         """all: every slice sweeps in during beat 1; per_beat: slice i at beat i."""
-        highlight: int | str | None = None
+        highlight: int | TextRef | None = None
         """Slice pulled out in a last step (0-based index or label, as drawn); the others dim."""
         explode: float = Field(default=0.1, ge=0, le=0.3)
         """How far the highlighted slice moves out, as a share of the radius."""
@@ -123,7 +123,7 @@ class Pie(NarratedScene):
         """Size of slice labels and the legend (never below the readable minimum; shrinks towards it when labels do not fit)."""
         center_size: ThemeSize = "title"
         """Size of the donut's centre text (fitted into the hole)."""
-        caption: str = ""
+        caption: TranslatableStr = ""
         """Note under the chart (e.g. the data source)."""
         caption_size: ThemeSize = "caption"
         """Caption text size."""

@@ -226,18 +226,20 @@ class Captions(Overlay):
         audio = project.audio_dir
         voices = project.voice_names()
         tags = project.speaker_tags("name") if self.speakers in ("name", "both") else {}
+        language = project.config.language  # where cues break, how words are timed (§54)
         out = []
         beats = scene.beats
         for k, beat in enumerate(beats):
             until = beats[k + 1].start if k + 1 < len(beats) else scene.duration
             # The written words, timed by the audio of their spoken form (pronunciation, §45).
-            words = beat_word_times(audio, beat.id, beat.text, beat.start, beat.end, project.pronunciation.apply(beat.text))
+            spoken = project.pronunciation.apply(beat.text)
+            words = beat_word_times(audio, beat.id, beat.text, beat.start, beat.end, spoken, language)
             prefix = speaker_prefix(tags[beat.id]) if beat.id in tags else ""
             tag_width = sum(width(w) for w in prefix.split()) + space * (len(prefix.split()) - 1) if prefix else None
             cues = caption_cues(
                 beat.text, beat.start, beat.end, words=words, widths=[width(w) for w in beat.text.split()], space=space,
                 max_width=max_width, max_lines=self._setting("max_lines"), max_words=self._setting("max_words"), until=until,
-                prefix=prefix, prefix_width=tag_width,
+                prefix=prefix, prefix_width=tag_width, language=language,
             )
             out.extend((cue, voices.get(beat.id)) for cue in cues)
         return out

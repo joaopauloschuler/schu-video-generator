@@ -33,9 +33,9 @@ class GridItem(SceneParams):
 
     icon: IconName
     """The icon (name or alias, see `vidgen list-icons`)."""
-    label: str
+    label: TranslatableStr
     """Short label under the icon (wrapped to the cell)."""
-    sublabel: str = ""
+    sublabel: TranslatableStr = ""
     """Optional second line, smaller and dimmer."""
 
 
@@ -64,15 +64,15 @@ class IconGrid(NarratedScene):
     class Params(SceneParams):
         items: list[GridItem] = Field(min_length=1, max_length=16)
         """The cells, {icon, label, sublabel?}, in reading order (2-12 look best)."""
-        heading: str = ""
+        heading: TranslatableStr = ""
         """Optional heading, shown with the first step."""
         columns: int | None = Field(default=None, ge=1, le=16)
         """Number of columns; default: chosen for the frame (grid_shape)."""
         reveal: Literal["per_beat", "all"] = "per_beat"
         """per_beat: one item per beat; all: every item in beat 1."""
-        groups: list[list[int | str]] | None = None
+        groups: list[list[int | TextRef]] | None = None
         """Reveal steps as lists of items (0-based index or label); each item exactly once."""
-        highlight: int | str | None = None
+        highlight: int | TextRef | None = None
         """Item (0-based index or label) emphasised in a last step."""
         badge: bool = True
         """Draw each icon on a soft disc in its color."""

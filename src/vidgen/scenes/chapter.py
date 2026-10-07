@@ -30,13 +30,13 @@ class Chapter(NarratedScene):
 
     class Params(SceneParams):
         header_synonyms = False   # "title" is the main text here, not a header band
-        title: str = Field(min_length=1)
+        title: TranslatableStr = Field(min_length=1)
         """The chapter's name (wrapped to fit)."""
-        number: int | str | None = None
+        number: int | TranslatableStr | None = None
         """Chapter number: an integer (shown with number_format, e.g. 02) or text such as 'II' or 'Part 2'."""
         number_format: str = "{:02d}"
         """Python format for an integer number: '{:02d}' gives 02, '{}' gives 2, 'Part {}' gives Part 2."""
-        subtitle: str = ""
+        subtitle: TranslatableStr = ""
         """Line under the title."""
         icon: IconName | None = None
         """Optional icon (above the number, or in its place)."""

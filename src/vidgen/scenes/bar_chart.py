@@ -30,19 +30,19 @@ class BarChart(NarratedScene):
         return names
 
     class Params(SceneParams):
-        title: str = ""
+        title: TranslatableStr = ""
         """Chart title (in the header band at the top)."""
-        labels: list[str] = Field(min_length=1)
+        labels: list[TranslatableStr] = Field(min_length=1)
         """Bar labels."""
         values: list[float] = Field(min_length=1)
         """One value per label; negatives allowed."""
-        unit: str = ""
+        unit: TranslatableStr = ""
         """Appended to every value label, e.g. '%' or ' ms'."""
         value_format: str | None = None
         """Python format for value labels, e.g. '{:.1f}'; default: the decimals the values need."""
         colors: Literal["palette"] | ThemeColor | list[ThemeColor] = "primary"
         """One color, one color per bar, or 'palette' (theme.palette)."""
-        highlight: int | str | None = None
+        highlight: int | TextRef | None = None
         """Bar to highlight: 0-based index or label."""
         highlight_color: ThemeColor = "highlight"
         """Color of the highlighted bar's value label."""
@@ -52,7 +52,7 @@ class BarChart(NarratedScene):
         """all: every bar grows in beat 1; per_beat: bar i grows at beat i."""
         baseline: float = 0.0
         """Value the bars start from (e.g. 1.0 for losses)."""
-        caption: str = ""
+        caption: TranslatableStr = ""
         """Note under the chart (e.g. the data source)."""
         caption_size: ThemeSize = "caption"
         """Caption text size."""

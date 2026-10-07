@@ -139,7 +139,7 @@ class WalkStep(SceneParams):
     """Lines to highlight and scroll into view: 12, '3-7', '1, 5-6', [3, 4], '/regex/' (the first
     line it matches), '/def fit/-/return/' (a range), or 'all' (no highlight). None: keep the
     previous step's lines and view."""
-    note: str = ""
+    note: TranslatableStr = ""
     """A short annotation shown with this step (beside the lines, or below the window)."""
     focus: bool | float = False
     """Enlarge: the camera moves in on the lines (and the note) during this step; a number is the
@@ -251,7 +251,7 @@ class CodeWalkthrough(NarratedScene):
         """Pygments lexer name; default: from the file name, else python."""
         excerpt: str | None = None
         """Show only lines 'a-b' of the code (they keep their numbers; steps use them too)."""
-        title: str = ""
+        title: TranslatableStr = ""
         """Window title, above it."""
         steps: list[WalkStep] = []
         """Step i plays at beat i: {lines, note, focus}, or just a line spec ('3-7')."""

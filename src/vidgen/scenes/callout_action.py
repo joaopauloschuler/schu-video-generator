@@ -38,7 +38,7 @@ class CalloutAction(Action):
     class Options(ActionOptions):
         kind: CalloutActionKind = "box"
         """box, circle, arrow (a label with an arrow to it), label (a label beside it), spotlight (the rest of the view darkened) or magnifier (an enlarged inset of a picture)."""
-        label: str = ""
+        label: TranslatableStr = ""
         """Short text on a plate in the callout's colour (required for kind: label)."""
         area: list[float] | None = None
         """[x, y, w, h] or a point [x, y] from the top-left corner: fractions 0-1 of the target (of its picture when it shows one), or without a target of the frame (within); default: the whole target."""

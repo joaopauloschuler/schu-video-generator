@@ -71,6 +71,15 @@ subtitles.
   captions keep the written words, timed by the spoken ones. Only beats whose spoken text changes
   are re-voiced, and `vidgen tts --dry-run` shows what they will say
   ([reference](docs/CONFIG.md#pronunciation-pronunciation)).
+- **Other languages**: a variant with `language: pt-BR` and `translations: translations/pt.yaml`
+  is the same video in Portuguese. `vidgen translate-template --variant pt` lists every beat text
+  and on-screen text (titles, bullets, labels, table cells, chapter titles, the thumbnail...)
+  with its source and a hash; fill in the translations, and re-running it keeps them, marks the
+  ones whose source changed and follows texts that moved. Untranslated texts show the source and
+  `vidgen validate` lists them. Captions and the SRT break lines by the language's rules, the
+  speed lint uses its rate, ElevenLabs gets its `language_code` where the model takes one, the
+  MP4 its audio language tag, and translated beats get their own `audio/<variant>/`
+  ([reference](docs/CONFIG.md#languages-and-translations)).
 - **Multiple voices**: `voices: {ana: {voice_id: ..., label: "Dr. Ana"}}` plus `voice: ana` on a
   scene or a beat for interviews and dialogue; each named voice inherits the base `voice:`, only
   its own beats are re-voiced when it changes, `vidgen tts --dry-run` counts characters per voice
@@ -178,6 +187,7 @@ narration.
 | `vidgen list-music [PROJECT] [--render-dir DIR] [--json]` | background music beds (built-in, described in words: instruments, key, tempo, chords, mood) and the project's `assets/music` files; `--render-dir` writes one loop of each bed as WAV |
 | `vidgen schema [PROJECT] [--scene TYPE \| --all] [--json]` | JSON Schema of `video.yaml` (params checked per scene type, the project's extension types included), for editors and AI agents |
 | `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--voice NAME ...] [--variant NAME]` | generate missing/stale narration into `audio/`; `--dry-run` needs no key (shows each beat's voice and characters per voice) |
+| `vidgen translate-template [PROJECT] --variant NAME [--lang TAG] [--output FILE] [--json]` | write or update the variant's translation file: every text to translate with its source, keeping existing translations (stale / moved / obsolete marked) |
 | `vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going] [--jobs N] [--frames] [--frames-per-beat N] [--json]` | render and join the video |
 | `vidgen storyboard [PROJECT] [--scene ID ...] [--per-beat N] [--variant NAME] [--preview \| --final] [--width PX] [--jobs N] [--force] [--json]` | contact sheets (PNG) of the video's stills with labels and narration, to review a video without watching it |
 | `vidgen lint [PROJECT] [--scene ID ...] [--rule NAME ...] [--variant NAME] [--preview \| --final] [--fail-on SEVERITY] [--jobs N] [--force] [--json]` | check the layout at the end of every beat (text off the frame or in the margins, overlapping or covered text, text too small, low contrast, too many words) and the timing (narration too fast/slow, dead air, animations overrunning their narration or squeezed into a short beat); exit code 1 on errors |
@@ -224,6 +234,7 @@ my_video/
   extensions/         # optional: your own scene types, helpers, hooks (*.py)
   assets/             # images, code files, ... referenced from params
     icons/            # optional: your own icons <name>.svg (+ icons.json with tags)
+  translations/       # optional: translation files of language variants (vidgen translate-template)
   audio/              # generated narration: <beat_id>.mp3 + .hash (keep it; it cost money)
   build/              # intermediate render files, --frames stills + layout, storyboards (safe to delete)
   exports/            # vidgen export: GIFs and clips
@@ -235,7 +246,8 @@ my_video/
 - [examples/minimal](examples/minimal) — the core built-in scene types (title, bullets, icon
   grid, charts, image, quote, equation, code, cards) and beat actions, no Python:
   `vidgen render examples/minimal --preview [--variant vertical]`; burned-in captions with
-  `--variant subtitled`, 9:16 karaoke captions with `--variant social`.
+  `--variant subtitled`, 9:16 karaoke captions with `--variant social`, a partly translated
+  Brazilian Portuguese version with `--variant pt` (`examples/minimal/translations/pt.yaml`).
 - [examples/gallery](examples/gallery) — every other built-in scene type once (stat, chapter,
   comparison, table, timeline, diagram, process, network, scatter, histogram, pie, heatmap, map,
   screenshot, video clip, equation derivation, code walkthrough), overlays (a watermark, a

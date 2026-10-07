@@ -17,8 +17,9 @@ class ComparisonPoint(SceneParams):
     """A point of a column: its text, or ``{text, icon}`` (a plain string is ``{text: ...}``)."""
 
     also_accepts = (str,)
+    text_shorthand = {str: "text"}
 
-    text: str = Field(min_length=1)
+    text: TranslatableStr = Field(min_length=1)
     """The point's text."""
     icon: IconName | None = None
     """Icon in place of the column's marker, in the column's tone colour."""
@@ -37,7 +38,7 @@ class ComparisonPoint(SceneParams):
 class ComparisonColumn(SceneParams):
     """One column: ``{heading, icon?, tone?, points}``."""
 
-    heading: str = Field(min_length=1)
+    heading: TranslatableStr = Field(min_length=1)
     """The column's heading ('Before', 'Option A')."""
     icon: IconName | None = None
     """Optional icon left of the heading, in the tone colour."""
@@ -73,9 +74,9 @@ class Comparison(NarratedScene):
     class Params(SceneParams):
         columns: list[ComparisonColumn] = Field(min_length=2, max_length=3)
         """Two or three columns, {heading, icon?, tone?, points}, left to right (top to bottom in 9:16)."""
-        heading: str = ""
+        heading: TranslatableStr = ""
         """Optional heading above the columns."""
-        verdict: str = ""
+        verdict: TranslatableStr = ""
         """Optional conclusion under the columns, shown in a last step."""
         reveal: Literal["columns", "rows", "all"] = "columns"
         """columns: one column per beat; rows: headings, then one point of every column per beat; all: everything in beat 1."""
@@ -83,7 +84,7 @@ class Comparison(NarratedScene):
         """Mark points by tone: check (positive), cross (negative), dot (neutral)."""
         cards: bool = True
         """Draw each column on a card in the theme's surface colour."""
-        vs: str = ""
+        vs: TranslatableStr = ""
         """Text in a badge between the columns, e.g. 'vs'; empty for none."""
         positive_color: ThemeColor = "tertiary"
         """Tone colour of positive columns (heading, icon, markers)."""

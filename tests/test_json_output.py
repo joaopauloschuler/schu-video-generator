@@ -89,7 +89,10 @@ def test_validate_json_ok(make_project, capsys: pytest.CaptureFixture[str]) -> N
     assert doc["project"] == str(root.resolve()) and doc["config_file"] == str((root / "video.yaml").resolve())
     assert (doc["scenes"], doc["beats"], doc["problems"]) == (2, 3, [])
     assert doc["estimated_duration"] == pytest.approx(Project.load(root).estimated_duration(), abs=0.01)
-    assert doc["variants"] == [{"name": "vertical", "loaded": True, "estimated_duration": doc["estimated_duration"], "problems": 0}]
+    assert doc["variants"] == [
+        {"name": "vertical", "loaded": True, "estimated_duration": doc["estimated_duration"], "problems": 0, "language": None, "translations": None}
+    ]
+    assert (doc["language"], doc["translations"]) == (None, None)
     (audio,) = doc["audio"]  # the variant shares audio/
     assert (audio["variant"], audio["ok"], audio["stale"], audio["missing"]) == (None, 0, 1, 2)
     assert audio["dir"] == str((root / "audio").resolve())

@@ -57,10 +57,12 @@ class DiagramNode(SceneParams):
     """A node: ``{id, label?, shape?, icon?, color?}`` (a plain string is its id and label)."""
 
     also_accepts = (str,)
+    text_shorthand = {str: ("field", "id")}
+    text_defaults = {"label": "id"}
 
     id: str
     """Name used by edges, steps and targets (letters, digits, spaces, _ . -)."""
-    label: str = ""
+    label: TranslatableStr = ""
     """Text in the node (default: the id; wrapped to fit)."""
     shape: Shape | None = None
     """box, round, pill, circle, diamond or cylinder (default: the scene's shape)."""
@@ -96,12 +98,13 @@ class DiagramEdge(SceneParams):
     """An edge: ``{from, to, label?, style?, color?}``, or the shorthand ``"a -> b: label"``."""
 
     also_accepts = (str,)
+    text_shorthand = {str: ("after", ":")}
 
     source: str = Field(alias="from")
     """Node id the edge starts at."""
     to: str
     """Node id the arrow points to."""
-    label: str = ""
+    label: TranslatableStr = ""
     """Optional text on the edge, near its start."""
     style: Literal["solid", "dashed"] = "solid"
     """solid or dashed line."""
@@ -166,7 +169,7 @@ class Diagram(NarratedScene):
         """The nodes: an id string, or {id, label?, shape?, icon?, color?} (1-30; up to ~12 read well)."""
         edges: list[DiagramEdge] = Field(default_factory=list, max_length=60)
         """The edges: 'a -> b', 'a -> b: label', 'a --> b' (dashed), chains 'a -> b -> c', or {from, to, label?, style?, color?}."""
-        heading: str = ""
+        heading: TranslatableStr = ""
         """Optional heading above the diagram."""
         direction: Literal["auto", "LR", "TB"] = "auto"
         """LR: layers left to right; TB: top to bottom; auto: LR in landscape and square frames, TB in portrait (the other one if it keeps text much larger)."""

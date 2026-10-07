@@ -13,7 +13,7 @@ from vidgen.api import *
 class Series(SceneParams):
     """One line: ``name``, ``values`` (one per x) and an optional ``color``."""
 
-    name: str
+    name: TranslatableStr
     """Series name (end label / legend)."""
     values: list[float]
     """One value per x."""
@@ -53,15 +53,15 @@ class LineChart(NarratedScene):
         return [format_value(float(v), params.x_format) for v in params.x]
 
     class Params(SceneParams):
-        title: str = ""
+        title: TranslatableStr = ""
         """Chart title (in the header band at the top)."""
-        x: list[float] | list[str] = Field(min_length=2)
+        x: list[float] | list[TranslatableStr] = Field(min_length=2)
         """X values: increasing numbers, or category names."""
-        series: dict[str, list[float]] | list[Series] = Field(min_length=1)
+        series: dict[TranslatableStr, list[float]] | list[Series] = Field(min_length=1)
         """{name: [values]} or a list of {name, values, color}; one value per x."""
-        x_label: str = ""
+        x_label: TranslatableStr = ""
         """X axis label."""
-        y_label: str = ""
+        y_label: TranslatableStr = ""
         """Y axis label."""
         y_min: float | None = None
         """Lower end of the y axis; default: from the data."""
@@ -71,7 +71,7 @@ class LineChart(NarratedScene):
         """Python format for y ticks and end labels; default: automatic."""
         x_format: str = "{:g}"
         """Python format for numeric x tick labels."""
-        unit: str = ""
+        unit: TranslatableStr = ""
         """Appended to y values."""
         reveal: Literal["per_beat", "all"] = "per_beat"
         """per_beat: series i is drawn at beat i; all: every series in beat 1."""
@@ -79,7 +79,7 @@ class LineChart(NarratedScene):
         """Label the end of each line with its name and value."""
         dots: bool | None = None
         """Markers at the data points; default: when there are at most 12 points."""
-        caption: str = ""
+        caption: TranslatableStr = ""
         """Note under the chart (e.g. the data source)."""
         caption_size: ThemeSize = "caption"
         """Caption text size."""

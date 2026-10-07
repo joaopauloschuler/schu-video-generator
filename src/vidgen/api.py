@@ -102,6 +102,8 @@ from vidgen.speech import WordTime, beat_word_times, estimate_word_times, map_wo
 from vidgen.videoplan import Chapter, video_chapters  # noqa: E402
 from vidgen.carry import carry_move  # noqa: E402
 from vidgen.voices import speaker_color, speaker_label, speaker_prefix  # noqa: E402
+from vidgen.translation import TextRef, TranslatableStr  # noqa: E402
+from vidgen.languages import LanguageRules, language_rules  # noqa: E402
 
 
 def register_theme_defaults(colors: dict[str, str] | None = None, sizes: dict[str, float] | None = None) -> None:
@@ -225,6 +227,10 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "icon",
     "Icon",
     "IconName",
+    "TranslatableStr",
+    "TextRef",
+    "LanguageRules",
+    "language_rules",
     "one_or_many",
     "layered_layout",
     "GraphLayout",

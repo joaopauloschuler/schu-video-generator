@@ -41,7 +41,7 @@ class CalloutSpec(SceneParams):
     """box (frame around the area), circle (ellipse around it), arrow (a label pointing at it), magnifier (an enlarged inset of it), spotlight (everything else dimmed)."""
     area: list[float]
     """[x, y, w, h] from the image's top-left corner (fractions 0-1 of the image, or pixels with units: px), or [x, y] for a point (box, circle and arrow)."""
-    label: str = ""
+    label: TranslatableStr = ""
     """Short text on a plate in the callout's colour (beside the mark, or at the arrow's tail)."""
     color: ThemeColor | None = None
     """Colour of the mark and the label plate; default: the scene's color."""
@@ -95,6 +95,7 @@ class ScreenshotStep(SceneParams):
     """A step: ``{callouts, focus, previous}``, or just its callouts (a list), or one callout."""
 
     also_accepts = (list, CalloutSpec)
+    text_shorthand = {list: ("field", "callouts"), dict: ("model", CalloutSpec)}
 
     callouts: list[CalloutSpec] = []
     """The callouts this step draws (in order; a spotlight is drawn under the others)."""
@@ -158,9 +159,9 @@ class Screenshot(NarratedScene):
     class Params(SceneParams):
         path: str
         """Image file relative to the project folder, e.g. assets/app.png."""
-        title: str = ""
+        title: TranslatableStr = ""
         """Heading above the picture."""
-        caption: str = ""
+        caption: TranslatableStr = ""
         """Line under the picture."""
         caption_size: ThemeSize = "caption"
         """Caption text size."""

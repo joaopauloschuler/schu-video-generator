@@ -35,7 +35,7 @@ class Equation(NarratedScene):
     class Params(SceneParams):
         latex: str | list[str]
         """Math-mode LaTeX (no $); a list is a sequence of steps, step i at beat i."""
-        caption: str = ""
+        caption: TranslatableStr = ""
         """Caption under the formula."""
         size: ThemeSize = 96
         """Formula size."""

@@ -92,7 +92,7 @@ def form_problems(data: Mapping[object, object]) -> list[str]:
             except ValidationError as exc:
                 problems.extend(f"'{term}': {p}" for p in validation_problems(exc, model=PronunciationEntry, noun="key"))
         elif value is not None and not isinstance(value, str):
-            problems.append(f"'{term}': must be the spoken form (text) or a mapping {{say, case_sensitive, whole_word, regex}}")
+            problems.append(f"'{term}': must be the spoken form (text) or a mapping {{say, case_sensitive, whole_word, regex, language}}")
     return problems
 
 
@@ -268,13 +268,26 @@ def read_pronunciation_file(path: Path, rel: str) -> dict[str, PronunciationValu
 
 def load_pronunciation(config: VideoConfig, root: Path) -> Pronunciation:
     """The project's entries: those of its ``pronunciation_file``(s) in order, then its
-    ``pronunciation:`` map over them (a ``null`` value removes a term)."""
+    ``pronunciation:`` map over them (a ``null`` value removes a term); entries with a
+    ``language`` other than the video's are left out (DESIGN.md §54)."""
     entries: dict[str, PronunciationValue] = {}
     for rel in config.pronunciation_files:
         entries.update(read_pronunciation_file(root / rel, rel))
     entries.update(config.pronunciation)
-    rules = [compile_rule(term, value, i) for i, (term, value) in enumerate((t, v) for t, v in entries.items() if v is not None)]
+    used = [(t, v) for t, v in entries.items() if v is not None and applies_to(v, config.language)]
+    rules = [compile_rule(term, value, i) for i, (term, value) in enumerate(used)]
     return Pronunciation(rules)
+
+
+def applies_to(value: str | PronunciationEntry, language: str | None) -> bool:
+    """Whether an entry is used in a video in ``language``: an entry without ``language``
+    always; else when one of its languages matches (``pt`` matches ``pt-BR``)."""
+    from vidgen.languages import language_matches
+
+    if isinstance(value, str) or value.language is None:
+        return True
+    wanted = [value.language] if isinstance(value.language, str) else value.language
+    return any(language_matches(tag, language) for tag in wanted)
 
 
 # ----- validate warnings ------------------------------------------------------------------------

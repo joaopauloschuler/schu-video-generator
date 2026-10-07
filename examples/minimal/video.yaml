@@ -18,6 +18,9 @@
 #   vidgen tts examples/minimal --dry-run --voice guest          # the guest's beats and characters
 #   vidgen storyboard examples/minimal --variant subtitled --scene note   # a two-speaker dialogue
 #   vidgen list-themes examples/minimal --swatches build/themes.png  # every theme preset at a glance
+#   vidgen translate-template examples/minimal --variant pt      # list / update the texts to translate
+#   vidgen validate examples/minimal                             # lists the texts pt leaves in English
+#   vidgen storyboard examples/minimal --variant pt              # the Portuguese video
 # There is no narration audio in this example, so beats are timed from their word count
 # (narration.words_per_second); run `vidgen tts` with an ElevenLabs key to voice it.
 title: "vidgen: the built-in scenes"
@@ -48,6 +51,11 @@ variants:
     format: {width: 1080, height: 1920}
     preview: {width: 480, height: 854}
     overlays: [{type: captions, style: karaoke}]
+  pt:                             # Brazilian Portuguese (docs/CONFIG.md "Languages and translations")
+    language: pt-BR               # caption breaks, narration-speed lint, the MP4's audio language
+    translations: translations/pt.yaml   # beat and on-screen texts; partly translated on purpose
+    pronunciation: {LaTeX: "látec", JSON: "djêisson"}   # the base's English spellings, said the Portuguese way
+    overlays: [{type: captions}]  # burned-in captions, cut by the Portuguese rules
 
 theme:
   preset: dark_tech   # the default look; values written here would override every variant's preset

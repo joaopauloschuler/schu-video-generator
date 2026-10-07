@@ -4752,3 +4752,113 @@ How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (1943 passed, 1
 [--variant vertical]` then open `examples/gallery/build/final/thumbnail/gallery_thumbnail_small.png`;
 `vidgen render examples/minimal --preview` then `vidgen export gif examples/minimal --preview
 --scene steps --max-mb 1` and `vidgen export clip examples/minimal --preview --scene steps --json`.
+
+## Step 51 — Multi-language variants
+What was built
+- **`language:`** (top level, so per variant; BCP-47, normalised `pt-br` → `pt-BR`), with
+  `src/vidgen/languages.py` (no manim): `LanguageRules` for en / pt / es / fr / de / it (word
+  lists, words-per-second range, silent final e, ISO 639-2) and a neutral set for any other
+  language. It drives:
+  - **cue cutting** of the SRT and burned-in captions (`phrase_break_cost(..., language)`: the
+    language's conjunctions / prepositions / clinging words, punctuation everywhere incl. `。！？`,
+    `、，`, a break before `¿ ¡ «`); word-time estimates (`syllables(word, language)`);
+  - **`narration_speed`** lint: `unit: auto|words|characters`, `min_rate` / `max_rate` default to
+    the language's range (en 1.8-3.5 unchanged, pt 1.7-3.4, es / fr 1.8-3.6, it 1.8-3.5, de
+    1.5-3.1; characters 8-17/s for other languages);
+  - **ElevenLabs `language_code`** (`voice.language_code` / `voices.<n>.language_code`: a code,
+    `false`, or auto = the video language for `eleven_turbo_v2_5` / `eleven_flash_v2_5`); hashed
+    only when sent, so existing hashes are unchanged;
+  - **pronunciation**: entries may say `language: en` (or a list); a variant in another language
+    keeping base entries unchanged gets a validate warning;
+  - **outputs**: the MP4's audio stream `language` tag (`por`), `timings.json` `language`.
+- **Translation files** (`src/vidgen/translation.py`, no manim): params typed `TranslatableStr`
+  (on-screen text) / `TextRef` (names a text) across every built-in scene, the `callout` action
+  and the `lower_third` / `watermark` overlays; shorthand hooks `SceneParams.text_shorthand` /
+  `text_defaults` (bullets / comparison / process strings, diagram node ids and edge labels,
+  scatter `[x, y, label]`, screenshot step lists / callout dicts). `vidgen translate-template
+  [--variant] [--lang] [--output] [--json]` writes `translations/<variant>.yaml` (or the
+  variant's `translations:`): every text keyed by a stable path (`scenes.<id>.beats.<id>.text`,
+  `scenes.<id>.params.items[0].text`, `series{"baseline"}`, `nodes[0]=id.label`, `edges[1]$:`,
+  `overlays.<id>.name`, `title`, `metadata.*`, `chapters.intro`, `thumbnail.*`, scene `chapter`)
+  with `source`, `hash` (sha1[:10]) and an empty `text`, plus generated `references` (places
+  naming a text: `highlight: "4K"`, targets `bar:4K`, `point:sparse@8`). Re-running merges:
+  kept / moved (same hash elsewhere in the scene) / stale (`stale: true`, `old_source`) /
+  obsolete. `translations:` in a variant applies the file to the raw config at load (untranslated
+  and stale texts keep their source); `vidgen validate` warns with the keys left in the source
+  language, stale ones, unknown keys, outdated references, a language mismatch, a missing file;
+  human `language [pt]: ...` line; `validate --json` `language` / `translations`.
+- **Audio**: a translated beat changes its spoken text, so the variant gets `audio/<variant>/`
+  (untranslated beats are copied from `audio/` by `vidgen tts`); translating only on-screen text
+  keeps the shared folder.
+- **Example**: `examples/minimal` variant `pt` (pt-BR, `translations/pt.yaml`, 54 of 73 texts
+  translated by hand — title, intro, steps, feedback, sizes, trend, outro; five scenes left in
+  English on purpose; Portuguese pronunciation of LaTeX / JSON; captions).
+
+Files
+- New: `src/vidgen/languages.py`, `src/vidgen/translation.py`, `tests/test_translation.py` (64
+  tests, 1 render), `examples/minimal/translations/pt.yaml`.
+- Changed: `config.py` (`LanguageTag`, `LanguageCode`, `language`, `translations`,
+  `VoiceConfig/VoiceEntry.language_code`, `PronunciationEntry.language`, `NarrationSpeedRule`
+  unit / optional rates / `limits()`), `project.py` (translations at load, `source_data`,
+  `source_config`, `translation`, resolved-voice audio comparison), `voices.py`, `tts/elevenlabs.py`,
+  `pronunciation.py` (`applies_to`), `cues.py`, `speech.py` (`spoken_characters`), `subtitles.py`,
+  `scenes/captions.py`, `lint/rules.py`, `lint/run.py`, `lint/timing_rules.py`,
+  `render/pipeline.py`, `render/ffmpeg.py`, `render/fingerprint.py`, `scene.py` (hooks),
+  `api.py`, `cli.py` (`translate-template`, warnings, summary), `jsonout.py`; every built-in scene
+  module with text params + `callout_action.py`, `scenes/overlays.py`; tests `test_docs.py`
+  (models), `test_json_output.py` (validate keys); `examples/minimal/video.yaml`; docs/CONFIG.md
+  (new "Languages and translations", top level, voice, pronunciation, variants, lint, JSON),
+  docs/EXTENDING.md, README.md, DESIGN.md (tree, §3, §4, §6.4, §8, new §54), tasklist.md.
+
+Public interfaces added/changed (compatible)
+- Config: `language`, `translations`, `voice.language_code`, `voices.<n>.language_code`,
+  `pronunciation.<term>.language`, `lint.rules.narration_speed.unit` (its `min_rate` / `max_rate`
+  now default to the language's range: the same 1.8 / 3.5 for English / no language).
+- `vidgen.api`: `TranslatableStr`, `TextRef`, `LanguageRules`, `language_rules`;
+  `SceneParams.text_shorthand` / `text_defaults`; `language=None` keyword on `caption_cues`,
+  `segment_cues`, `phrase_break_cost`, `beat_word_times`, `estimate_word_times`, `syllables`.
+- `vidgen.subtitles` `split_text / beat_cues / cues_from_timings / write_srt(..., language)`;
+  `ffmpeg.join(..., language=)`; `SceneContext.language`; `Project.source_data`,
+  `.source_config`, `.translation`; `Project(..., source=, translation=)`.
+- CLI `vidgen translate-template` (+ `--json`); JSON (version 1, additive): validate
+  `language` / `translations` (top level and per variant), timings `language`.
+- Fingerprints change once (new config keys in the dump).
+
+Decisions / deviations
+- **Translations are applied to the raw config at load**, before validation: every consumer
+  sees one translated config, and applying needs no scene types (keys are paths; which fields
+  are text and which places follow them was decided when the template was written — hence the
+  `references` section).
+- **Stale translations are not used** (gettext's fuzzy rule); the source shows and validate says
+  so. A missing translation file is a warning, not an error (the variant can be declared before
+  the file exists — `translate-template` needs the variant to load).
+- **Only texts present in the config are listed** (defaults are not), so a translation cannot add
+  a param (e.g. a stat's `decimal_mark`).
+- Language-specific word lists for six languages, a punctuation-only neutral fallback otherwise;
+  a video without `language` keeps the English rules exactly (no output changes).
+- `language_code` auto only for the models documented to accept it; others would fail the request.
+- `VideoConfig.language` / `translations` sit after `pronunciation_file` (unknown-key messages list
+  the first keys; the order keeps the common ones first).
+
+Verification
+- `vidgen translate-template examples/minimal --variant pt` (73 texts, 4 references; a second run
+  writes the identical file), `vidgen validate examples/minimal` (lists the 19 English texts of
+  the pt variant), `vidgen lint examples/minimal --variant pt --scene intro --scene steps --scene
+  feedback --scene sizes --scene trend --scene outro`: 0 findings after shortening two texts (the
+  first run found 44 words on the bullets slide and 6.3 s of dead air in a longer Portuguese
+  beat); storyboards read: Portuguese captions break before "e" / after commas, the callout
+  follows the renamed series (`point:esparso@8`), accents render in Inter.
+
+Known gaps / TODOs (routed to Step 60 in tasklist.md)
+- Number formats / decimal marks are not localised unless written in the config; the `map`
+  scene's country names are English (give `label:`); arc shorthands `"A -> B"`, `lint_ignore`
+  patterns and `point:<series>@<label>` targets do not follow translated texts.
+- Languages without spaces (zh, ja) are cut into cues only at punctuation; their speed is
+  measured in characters.
+- No machine translation (the file is for a person or an agent to fill in); the storyboard and
+  lint report texts of vidgen itself stay English.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2009 passed, 1 skipped, ~10.7 min on 2 CPUs); step only:
+`pytest tests/test_translation.py`. Manual: `vidgen translate-template examples/minimal
+--variant pt`, `vidgen validate examples/minimal`, `vidgen storyboard examples/minimal --variant
+pt --scene trend`, `vidgen tts examples/minimal --variant pt --dry-run`.

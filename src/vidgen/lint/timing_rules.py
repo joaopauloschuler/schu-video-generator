@@ -14,7 +14,7 @@ import numpy as np
 
 from vidgen.config import AnimationOverrunRule, DeadAirRule, NarrationSpeedRule, RushedAnimationRule
 from vidgen.lint.rules import Issue, SceneContext, rule
-from vidgen.speech import SILENCE_DB, speech_bounds, spoken_words  # noqa: F401  (moved to vidgen.speech in Step 40)
+from vidgen.speech import SILENCE_DB, speech_bounds, spoken_characters, spoken_words  # noqa: F401  (moved to vidgen.speech in Step 40)
 
 # ----- narration_speed --------------------------------------------------------------------------
 
@@ -22,11 +22,16 @@ from vidgen.speech import SILENCE_DB, speech_bounds, spoken_words  # noqa: F401 
 @rule("narration_speed", scope="scene")
 def narration_speed(ctx: SceneContext, settings: NarrationSpeedRule) -> Iterator[Issue]:
     """A beat spoken faster or slower than the configured words per second (words of the
-    spoken text: the pronunciation applied, so "SQL" said "sequel" counts 1, not 1.5)."""
+    spoken text: the pronunciation applied, so "SQL" said "sequel" counts 1, not 1.5). The range
+    and unit follow the video's language (DESIGN.md §54): words per second for languages with a
+    known word rate, else characters (letters and digits) per second."""
+    unit, min_rate, max_rate = settings.limits(ctx.language)
     for beat in ctx.beats:
-        words = spoken_words(ctx.spoken_text(beat))
+        text = ctx.spoken_text(beat)
+        words = spoken_words(text)
         if words < settings.min_words:
             continue
+        amount = words if unit == "words" else float(spoken_characters(text))
         audio = ctx.audio_dir / f"{beat['id']}.mp3"
         if beat["source"] == "audio" and audio.is_file():
             start, end = speech_bounds(audio)
@@ -37,26 +42,27 @@ def narration_speed(ctx: SceneContext, settings: NarrationSpeedRule) -> Iterator
             seconds, estimated = beat["end"] - beat["start"], True
         if seconds <= 0:
             continue
-        rate = words / seconds
-        if settings.min_rate <= rate <= settings.max_rate:
+        rate = amount / seconds
+        if min_rate <= rate <= max_rate:
             continue
-        fast = rate > settings.max_rate
-        limit = settings.max_rate if fast else settings.min_rate
-        what = f"{words:g} spoken words in {seconds:.1f} s"
+        fast = rate > max_rate
+        limit = max_rate if fast else min_rate
+        noun = "words" if unit == "words" else "characters"
+        what = f"{amount:g} spoken {noun} in {seconds:.1f} s"
         if estimated:
             message = (
-                f"estimated narration speed {rate:.2f} words/s ({what}, no audio yet) is "
+                f"estimated narration speed {rate:.2f} {noun}/s ({what}, no audio yet) is "
                 f"{'above' if fast else 'below'} {limit:g}: the duration estimate is off for this text "
                 "(numbers and acronyms take longer to say; check narration.words_per_second)"
             )
         elif fast:
             message = (
-                f"narration speed {rate:.2f} words/s ({what} of speech) is above {limit:g}: too fast "
+                f"narration speed {rate:.2f} {noun}/s ({what} of speech) is above {limit:g}: too fast "
                 "to follow; shorten the text or split the beat"
             )
         else:
             message = (
-                f"narration speed {rate:.2f} words/s ({what} of speech) is below {limit:g}: slow or "
+                f"narration speed {rate:.2f} {noun}/s ({what} of speech) is below {limit:g}: slow or "
                 "long pauses; check the audio or tighten the text"
             )
         yield Issue(

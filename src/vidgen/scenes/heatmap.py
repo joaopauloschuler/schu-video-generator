@@ -57,11 +57,11 @@ class Heatmap(NarratedScene):
     class Params(SceneParams):
         values: list[list[float | None]] = Field(min_length=1)
         """The matrix, row by row (null: no data, drawn as an empty cell)."""
-        rows: list[str] = Field(default_factory=list)
+        rows: list[TranslatableStr] = Field(default_factory=list)
         """Row labels (left of the rows; unique)."""
-        columns: list[str] = Field(default_factory=list)
+        columns: list[TranslatableStr] = Field(default_factory=list)
         """Column labels (above the columns; unique)."""
-        title: str = ""
+        title: TranslatableStr = ""
         """Chart title (in the header band at the top)."""
         scale: Literal["auto", "sequential", "diverging"] = "auto"
         """Colour scale: sequential (low to high), diverging (two colours either side of center); auto: diverging when the values have both signs around center."""
@@ -81,15 +81,15 @@ class Heatmap(NarratedScene):
         """Write each value in its cell; default: when the cells are large enough for readable text."""
         value_format: str | None = None
         """Python format for cell values and legend ticks, e.g. '{:.2f}'; default: the decimals the values need."""
-        unit: str = ""
+        unit: TranslatableStr = ""
         """Appended to cell values and legend ticks."""
         legend: bool = True
         """Show the colour scale as a bar with ticks (right of the matrix; below it in 9:16)."""
-        legend_label: str = ""
+        legend_label: TranslatableStr = ""
         """Title over the legend bar (what the colour means)."""
         reveal: Literal["all", "rows"] = "all"
         """all: every cell in beat 1 (a wave from the top left); rows: row i at beat i."""
-        highlight: one_or_many(str) = Field(default_factory=list)
+        highlight: one_or_many(TextRef) = Field(default_factory=list)
         """Cells, rows or columns outlined in a last step (the rest dims): cell<R>.<C>, row<N>, row:<label>, col<N>, col:<label>."""
         highlight_color: ThemeColor = "highlight"
         """Outline colour of highlighted cells."""
@@ -97,7 +97,7 @@ class Heatmap(NarratedScene):
         """Size of row / column labels and legend ticks (never below the readable minimum)."""
         value_size: ThemeSize = "caption"
         """Largest size of the values in the cells (they shrink to fit, down to the readable minimum, else they are hidden)."""
-        caption: str = ""
+        caption: TranslatableStr = ""
         """Note under the chart (e.g. the data source)."""
         caption_size: ThemeSize = "caption"
         """Caption text size."""

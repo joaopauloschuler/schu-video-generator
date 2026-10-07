@@ -47,9 +47,9 @@ class VideoClip(Screenshot):
     class Params(Screenshot.Params):
         path: str
         """Video file relative to the project folder, e.g. assets/demo.mp4 (mp4, mov, m4v, webm, mkv)."""
-        title: str = ""
+        title: TranslatableStr = ""
         """Heading above the clip (on a plate over it with region: bleed)."""
-        caption: str = ""
+        caption: TranslatableStr = ""
         """Line under the clip (on a plate over its bottom with region: bleed)."""
         caption_size: ThemeSize = "caption"
         """Caption text size."""

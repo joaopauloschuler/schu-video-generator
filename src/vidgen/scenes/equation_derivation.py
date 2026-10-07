@@ -258,7 +258,7 @@ class DerivationStep(SceneParams):
 
     tex: str
     """Math-mode LaTeX (no $). Mark a part that moves into the same part of the next step as {{ ... }} (with a space or the start before {{)."""
-    note: str = ""
+    note: TranslatableStr = ""
     """A short justification shown with this step ('divide both sides by 2'): beside the equations (16:9) or below them (9:16)."""
     match: list[str] = []
     """TeX parts that move from the previous step into this one (isolated in both steps), as an alternative to marking them {{ }}."""
@@ -393,7 +393,7 @@ class EquationDerivation(NarratedScene):
     class Params(SceneParams):
         steps: list[DerivationStep] = Field(min_length=1)
         """Step i arrives at beat i: {tex, note, match, transition}, or just the LaTeX."""
-        title: str = ""
+        title: TranslatableStr = ""
         """Heading above the derivation."""
         mode: Literal["history", "replace"] = "history"
         """history: earlier steps stay, stacked above the current one and dimmed; replace: each step takes the place of the previous one."""

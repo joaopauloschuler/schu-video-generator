@@ -54,7 +54,7 @@ class MapCountry(SceneParams):
     """Name or ISO 3166 code (alpha-2 or alpha-3): Germany, DE, DEU; aliases such as USA, UK, Holland work."""
     color: ThemeColor | None = None
     """Fill colour; default: the scene's highlight_color."""
-    label: str | bool | None = None
+    label: TranslatableStr | bool | None = None
     """Its label: a text, true (its name) or false (none); default: the scene's labels."""
 
     @model_validator(mode="before")
@@ -82,7 +82,7 @@ class MapPin(SceneParams):
     """Latitude in degrees (north positive)."""
     country: str | None = None
     """Instead of lon / lat: put the pin in the middle of this country."""
-    label: str = ""
+    label: TranslatableStr = ""
     """Text beside the pin (arcs can start or end at a pin by its label)."""
     color: ThemeColor | None = None
     """Pin colour; default: the scene's pin_color."""
@@ -107,7 +107,7 @@ class MapPin(SceneParams):
         return float(self.lon), float(self.lat)  # type: ignore[arg-type]
 
 
-ArcEnd = str | list[float]
+ArcEnd = TextRef | list[float]
 
 
 class MapArc(SceneParams):
@@ -120,7 +120,7 @@ class MapArc(SceneParams):
     """Where it starts: a pin's label, a country (its middle) or [lon, lat]."""
     to: ArcEnd
     """Where it ends (the arrowhead): a pin's label, a country or [lon, lat]."""
-    label: str = ""
+    label: TranslatableStr = ""
     """Text at the top of the arc."""
     color: ThemeColor | None = None
     """Arc colour; default: the scene's arc_color."""
@@ -230,7 +230,7 @@ class WorldMap(NarratedScene):
     target_patterns = ("title", "map", "legend", "country:<code>", "pin<N>", "pin:<label>", "arc<N>", "step<N>")
 
     class Params(SceneParams):
-        title: str = ""
+        title: TranslatableStr = ""
         """Heading above the map."""
         view: str | list[float] = "auto"
         """What the map shows: auto (fits the countries, pins and arcs; the world when there are none), world, europe, africa, asia, middle_east, north_america, south_america, oceania, or [lon_min, lat_min, lon_max, lat_max] (lon_max < lon_min crosses the date line)."""
@@ -272,17 +272,17 @@ class WorldMap(NarratedScene):
         """Value at the high end of the scale; default: the data's maximum."""
         value_format: str | None = None
         """Python format for the legend ticks, e.g. '{:.1f}'; default: the decimals the values need."""
-        unit: str = ""
+        unit: TranslatableStr = ""
         """Appended to the legend ticks."""
         legend: bool = True
         """Show the choropleth's colour scale as a bar below the map."""
-        legend_label: str = ""
+        legend_label: TranslatableStr = ""
         """Title over the legend bar (what the colour means)."""
         label_size: ThemeSize = "caption"
         """Size of country, pin and arc labels (never below the readable size)."""
         focus_scale: float = Field(default=3.0, gt=1.0, le=4.0)
         """Largest magnification of focus: true."""
-        caption: str = ""
+        caption: TranslatableStr = ""
         """Note under the map (e.g. the data source)."""
         caption_size: ThemeSize = "caption"
         """Caption text size."""

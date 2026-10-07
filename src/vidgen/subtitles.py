@@ -33,9 +33,10 @@ class Cue(NamedTuple):
     text: str
 
 
-def split_text(text: str, width: int = LINE_WIDTH, max_lines: int = MAX_LINES) -> list[str]:
-    """Split ``text`` into cue texts of at most ``max_lines`` lines of ``width`` characters."""
-    return ["\n".join(lines) for lines in split_cues(text, width, max_lines)]
+def split_text(text: str, width: int = LINE_WIDTH, max_lines: int = MAX_LINES, language: str | None = None) -> list[str]:
+    """Split ``text`` into cue texts of at most ``max_lines`` lines of ``width`` characters
+    (breaking by the rules of ``language``, DESIGN.md §54)."""
+    return ["\n".join(lines) for lines in split_cues(text, width, max_lines, language=language)]
 
 
 def beat_cues(
@@ -46,11 +47,15 @@ def beat_cues(
     max_lines: int = MAX_LINES,
     words: list[WordTime] | None = None,
     speaker: str | None = None,
+    language: str | None = None,
 ) -> list[Cue]:
     """Cues for one beat spanning ``start``..``end``, timed by its ``words`` (default: estimated
-    over the beat); with ``speaker`` the first cue starts with ``"<speaker>:"``."""
+    over the beat); with ``speaker`` the first cue starts with ``"<speaker>:"``; ``language``
+    (BCP-47, ``None``: English) chooses where cues break."""
     prefix = speaker_prefix(speaker) if speaker else ""
-    cues = caption_cues(text, start, end, words=words, max_width=float(width), max_lines=max_lines, prefix=prefix)
+    cues = caption_cues(
+        text, start, end, words=words, max_width=float(width), max_lines=max_lines, prefix=prefix, language=language
+    )
     return [Cue(c.start, c.end, c.text) for c in cues]
 
 
@@ -59,21 +64,27 @@ def cues_from_timings(
     audio_dir: Path | None = None,
     pronunciation: Pronunciation | None = None,
     speakers: Mapping[str, str] | None = None,
+    language: str | None = None,
 ) -> list[Cue]:
     """All cues of a combined ``timings.json`` mapping (beat times are absolute); with
     ``audio_dir``, word times come from the beats' MP3s and alignments there. The cues show the
     written text; with ``pronunciation`` (the project's) the words are timed by their spoken
     form, which is what the MP3s say. ``speakers`` (beat id -> label, see
-    :meth:`vidgen.project.Project.speaker_tags`) names the speaker before those beats."""
+    :meth:`vidgen.project.Project.speaker_tags`) names the speaker before those beats.
+    ``language`` (default: the timings' ``language``, else English) chooses the break rules."""
     cues: list[Cue] = []
     speakers = speakers or {}
+    if language is None:
+        language = timings.get("language")
     for scene in timings["scenes"]:
         for beat in scene["beats"]:
             words = None
             if audio_dir is not None:
                 spoken = pronunciation.apply(beat["text"]) if pronunciation is not None else None
-                words = beat_word_times(audio_dir, beat["id"], beat["text"], beat["start"], beat["end"], spoken)
-            cues.extend(beat_cues(beat["start"], beat["end"], beat["text"], words=words, speaker=speakers.get(beat["id"])))
+                words = beat_word_times(audio_dir, beat["id"], beat["text"], beat["start"], beat["end"], spoken, language)
+            cues.extend(
+                beat_cues(beat["start"], beat["end"], beat["text"], words=words, speaker=speakers.get(beat["id"]), language=language)
+            )
     return cues
 
 
@@ -101,9 +112,11 @@ def write_srt(
     audio_dir: Path | None = None,
     pronunciation: Pronunciation | None = None,
     speakers: Mapping[str, str] | None = None,
+    language: str | None = None,
 ) -> list[Cue]:
     """Write the SRT for a combined timings mapping as UTF-8 (word times from ``audio_dir`` and
-    ``pronunciation``, speaker names ``speakers``, see :func:`cues_from_timings`); returns the cues."""
-    cues = cues_from_timings(timings, audio_dir, pronunciation, speakers)
+    ``pronunciation``, speaker names ``speakers``, cue breaks for ``language``, see
+    :func:`cues_from_timings`); returns the cues."""
+    cues = cues_from_timings(timings, audio_dir, pronunciation, speakers, language)
     write_text_atomic(path, format_srt(cues))
     return cues

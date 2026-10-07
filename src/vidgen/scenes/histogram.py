@@ -38,7 +38,7 @@ class HistogramCompare(SceneParams):
     """A second distribution drawn as an outline over the same bins: ``{name, values}`` or
     ``{name, counts}``."""
 
-    name: str = ""
+    name: TranslatableStr = ""
     """Its legend name."""
     values: list[float] = Field(default_factory=list)
     """Raw values (binned like the main ones; values outside the bins are left out)."""
@@ -95,7 +95,7 @@ class Histogram(NarratedScene):
         """Counts per bin, instead of values (with edges)."""
         edges: list[float] = Field(default_factory=list)
         """Bin edges for counts: one more than counts, increasing."""
-        name: str = ""
+        name: TranslatableStr = ""
         """Legend name of the distribution (shown with compare)."""
         compare: HistogramCompare | None = None
         """A second distribution over the same bins, drawn as an outline: {name, values or counts, color}."""
@@ -107,15 +107,15 @@ class Histogram(NarratedScene):
         """Mark the median likewise."""
         highlight: one_or_many(int | str) = Field(default_factory=list)
         """Bins emphasised in a last step: 0-based index or range ('10-20'); the others dim."""
-        title: str = ""
+        title: TranslatableStr = ""
         """Chart title (in the header band at the top)."""
-        x_label: str = ""
+        x_label: TranslatableStr = ""
         """X axis label (what was measured)."""
-        y_label: str = ""
+        y_label: TranslatableStr = ""
         """Y axis label (e.g. 'count')."""
         x_format: str | None = None
         """Python format for the bin edges on the axis and in bin:<range> names; default: automatic."""
-        x_unit: str = ""
+        x_unit: TranslatableStr = ""
         """Appended to x tick labels and the mean / median values."""
         y_format: str | None = None
         """Python format for y tick labels; default: automatic."""
@@ -129,7 +129,7 @@ class Histogram(NarratedScene):
         """Fill of highlighted bins."""
         label_size: ThemeSize = "caption"
         """Size of tick labels, axis labels, marker labels and the legend (never below the readable minimum)."""
-        caption: str = ""
+        caption: TranslatableStr = ""
         """Note under the chart (e.g. the data source)."""
         caption_size: ThemeSize = "caption"
         """Caption text size."""

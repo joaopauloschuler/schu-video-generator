@@ -42,7 +42,7 @@ NOT_RENDER_INPUTS: frozenset[str] = frozenset(
     {
         "__main__.py", "cli.py", "describe.py", "iconlist.py", "jsonout.py", "lint", "schema.py", "sheets.py", "storyboard.py",
         "render/fingerprint.py", "render/pipeline.py", "render/ffmpeg.py", "sfx.py", "subtitles.py", "themelist.py", "tts",
-        "loudness.py", "mix.py", "music.py", "thumbnail.py", "export.py",
+        "loudness.py", "mix.py", "music.py", "thumbnail.py", "export.py", "translation.py",
     }
 )
 
@@ -151,9 +151,10 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
     # Named voices and subtitle settings change only audio and, with overlays, captions (§46).
     # Music and the final mix (§48) are added when the video is joined: no pixels, no timing.
     # So are the MP4's chapters and tags and the YouTube chapter list (§52), and the thumbnail (§53).
+    # A translation file's texts are already in the config (§54); its path changes nothing.
     excluded = {
         "scenes", "variants", "lint", "pronunciation", "pronunciation_file", "voices", "subtitles", "music", "audio",
-        "chapters", "metadata", "thumbnail",
+        "chapters", "metadata", "thumbnail", "translations",
     }
     config = project.config.model_dump(mode="json", exclude=excluded)
     assets = project.root / "assets"

@@ -27,11 +27,11 @@ class Quote(NarratedScene):
     portrait_growth = 1.25
 
     class Params(SceneParams):
-        text: str = Field(min_length=1)
+        text: TranslatableStr = Field(min_length=1)
         """The quote."""
-        author: str = ""
+        author: TranslatableStr = ""
         """Shown as '- author'."""
-        source: str = ""
+        source: TranslatableStr = ""
         """Shown smaller under the author."""
         size: ThemeSize = "subtitle"
         """Quote text size (shrunk if long)."""

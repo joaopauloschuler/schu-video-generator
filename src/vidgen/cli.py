@@ -33,7 +33,7 @@ TEMPLATE_DOTFILES: tuple[str, ...] = ("gitignore",)
 #: Subcommands that accept ``--json``.
 JSON_COMMANDS: tuple[str, ...] = (
     "validate", "list-scenes", "list-themes", "list-icons", "list-sfx", "list-music", "render", "schema", "storyboard", "lint",
-    "thumbnail", "export",
+    "thumbnail", "export", "translate-template",
 )
 
 #: What a command function returns: an exit code, or (with ``--json``) the JSON document.
@@ -219,10 +219,12 @@ def validate_warnings(project: Project) -> list[str]:
     """What ``vidgen validate`` warns about (not problems): :func:`theme_warnings`,
     :func:`pronunciation_warnings`, named voices no beat uses and transitions that hold the
     scene before them longer (DESIGN.md §49), carries through a transition that moves them
-    (§50) and a YouTube chapter list YouTube would ignore (§52)."""
+    (§50), a YouTube chapter list YouTube would ignore (§52), texts a translation file leaves in
+    the source language and base pronunciations kept in another language (§54)."""
     from vidgen.carry import carry_warnings
     from vidgen.chapter_export import chapter_warnings
     from vidgen.transitions import transition_warnings
+    from vidgen.translation import language_warnings, translation_warnings
     from vidgen.voices import voice_warnings
 
     return (
@@ -232,6 +234,8 @@ def validate_warnings(project: Project) -> list[str]:
         + transition_warnings(project)
         + carry_warnings(project.config)
         + chapter_warnings(project)
+        + translation_warnings(project)
+        + language_warnings(project)
     )
 
 
@@ -277,6 +281,8 @@ def cmd_validate(args: argparse.Namespace) -> CommandResult:
     if config.voices:
         counts = Counter(name or "default" for name in project.voice_names().values())
         print(f"voices:    {', '.join(f'{name} ({n} beats)' for name, n in counts.items())}")
+    for line in language_summary_lines(project, variants):
+        print(line)
     for line in audio_summary_lines(project):
         print(line)
     print("ok")
@@ -294,6 +300,24 @@ def _validate_json(path: str) -> dict[str, Any]:
     log_validate_warnings(project, variants)
     error = _invalid_project(project, problems) if problems else None
     return jsonout.validate_document(project, problems, variants, error)
+
+
+def language_summary_lines(project: Project, variants: dict[str, Project | None]) -> list[str]:
+    """``language: pt-BR (translations/pt.yaml: 40 translated, 2 stale)`` for the base config
+    and each variant with a language or a translation file (DESIGN.md §54)."""
+    lines = []
+    for p in [project, *(v for v in variants.values() if v is not None)]:
+        report = p.translation
+        if p.config.language is None and report is None:
+            continue
+        if p.variant is not None and p.config.language == project.config.language and report is None:
+            continue
+        what = p.config.language or "not set"
+        if report is not None:
+            what += f" ({report.file}: {len(report.applied)} translated" + (f", {len(report.stale)} stale" if report.stale else "") + ")"
+        label = "language:" if p.variant is None else f"language [{p.variant}]:"
+        lines.append(f"{label:<10} {what}" if p.variant is None else f"{label} {what}")
+    return lines
 
 
 def audio_summary_lines(project: Project) -> list[str]:
@@ -323,6 +347,32 @@ def cmd_tts(args: argparse.Namespace) -> int:
     project = Project.load(args.project, variant=args.variant)
     with extensions.project_session(project):
         run_tts(project, beat_ids=args.beat, force=args.force, dry_run=args.dry_run, voices=args.voice)
+    return 0
+
+
+def cmd_translate_template(args: argparse.Namespace) -> CommandResult:
+    """Write (or update) a variant's translation file: every translatable text with its source,
+    keeping the translations it already holds (DESIGN.md §54)."""
+    from vidgen.translation import write_template
+
+    project = Project.load(args.project, variant=args.variant)
+    output = Path(args.output).resolve() if args.output else None
+    result = write_template(project, language=args.lang, output=output)
+    if args.json:
+        return jsonout.translate_template_document(project, result)
+    s = result.stats
+    print(f"translations: {result.path}")
+    print(f"language:     {result.language or 'not set (give --lang, e.g. --lang pt-BR)'}")
+    parts = [f"{s.translated} translated", f"{len(s.untranslated)} to translate"]
+    for name, keys in (("stale", s.stale), ("moved", s.moved), ("obsolete", s.obsolete), ("dropped", s.dropped)):
+        if keys:
+            parts.append(f"{len(keys)} {name}")
+    print(f"texts:        {result.total} ({', '.join(parts)}); {result.references} references")
+    if not result.linked:
+        where = f"variant '{project.variant}'" if project.variant else "config"
+        print(f"next: add `translations: {result.rel}` to the {where}, fill in the texts, then `vidgen validate`")
+    if result.language is not None and project.config.language != result.language:
+        print(f"note: set `language: {result.language}` in the {'variant' if project.variant else 'config'} too")
     return 0
 
 
@@ -806,6 +856,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--voice", action="append", default=[], metavar="NAME", help="only the beats of this voice (a voices: name or default; repeatable)")
     p.add_argument("--variant", metavar="NAME", help="apply a named variant (may have its own voice)")
     p.set_defaults(func=cmd_tts)
+
+    p = sub.add_parser("translate-template", help="write or update a variant's translation file (every text to translate)")
+    project_arg(p)
+    p.add_argument("--variant", metavar="NAME", help="the variant to translate (its translations: file, else translations/NAME.yaml)")
+    p.add_argument("--lang", metavar="TAG", help="language of the translation (BCP-47, e.g. pt-BR; default: the variant's language)")
+    p.add_argument("--output", "-o", metavar="FILE", help="write here instead of the variant's translations: file")
+    p.set_defaults(func=cmd_translate_template)
 
     p = sub.add_parser("render", help="render the video")
     project_arg(p)

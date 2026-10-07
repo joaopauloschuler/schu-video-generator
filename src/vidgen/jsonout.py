@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from vidgen.export import ExportResult
     from vidgen.icons import IconInfo
     from vidgen.thumbnail import ThumbnailResult
+    from vidgen.translation import TemplateResult
     from vidgen.render.pipeline import RenderResult
     from vidgen.lint import LintResult
     from vidgen.storyboard import StoryboardResult
@@ -119,6 +120,8 @@ def validate_document(
         "project": None,
         "config_file": None,
         "title": None,
+        "language": None,
+        "translations": None,
         "scenes": None,
         "beats": None,
         "estimated_duration": None,
@@ -130,6 +133,8 @@ def validate_document(
             project=_path(project.root),
             config_file=_path(project.config_file),
             title=project.config.title,
+            language=project.config.language,
+            translations=translation_json(project),
             scenes=len(project.config.scenes),
             beats=sum(1 for _ in project.beats()),
             estimated_duration=round(project.estimated_duration(), 2),
@@ -139,6 +144,8 @@ def validate_document(
                     "loaded": variant is not None,
                     "estimated_duration": None if variant is None else round(variant.estimated_duration(), 2),
                     "problems": sum(1 for p in problems if p.variant == name),
+                    "language": None if variant is None else variant.config.language,
+                    "translations": None if variant is None else translation_json(variant),
                 }
                 for name, variant in variants.items()
             ],
@@ -358,6 +365,47 @@ def thumbnail_document(
         rendered=result.rendered,
         elapsed=round(elapsed, 3),
     )
+
+
+def translate_template_document(project: Project, result: TemplateResult, warnings: Iterable[Mapping[str, Any]] = ()) -> dict[str, Any]:
+    """The ``vidgen translate-template --json`` document: the file, its language, how many
+    texts it lists and what the merge with the existing file did (lists of keys)."""
+    s = result.stats
+    return envelope(
+        "translate-template",
+        True,
+        warnings,
+        project=_path(project.root),
+        variant=project.variant,
+        path=_path(result.path),
+        rel=result.rel,
+        language=result.language,
+        linked=result.linked,
+        texts=result.total,
+        translated=s.translated,
+        untranslated=s.untranslated,
+        stale=s.stale,
+        moved=s.moved,
+        obsolete=s.obsolete,
+        dropped=s.dropped,
+        references=result.references,
+    )
+
+
+def translation_json(project: Project) -> dict[str, Any] | None:
+    """``{file, language, applied, stale, unknown, untranslated}`` of the project's translation
+    file (key lists except ``applied``, a count), or ``None`` without one (DESIGN.md §54)."""
+    report = project.translation
+    if report is None:
+        return None
+    return {
+        "file": report.file,
+        "language": report.language,
+        "applied": len(report.applied),
+        "stale": list(report.stale),
+        "unknown": list(report.unknown),
+        "untranslated": list(report.untranslated),
+    }
 
 
 def export_document(

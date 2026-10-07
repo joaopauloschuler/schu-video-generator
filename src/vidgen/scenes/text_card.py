@@ -23,7 +23,7 @@ class TextCard(NarratedScene):
         return ["text"]
 
     class Params(SceneParams):
-        text: str
+        text: TranslatableStr
         """The text, wrapped to fit the frame."""
         size: ThemeSize = "title"
         """Text size."""

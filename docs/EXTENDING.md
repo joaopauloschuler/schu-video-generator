@@ -157,6 +157,20 @@ model that also takes a shorthand (the built-in `bullets` items are a string or 
 a `model_validator(mode="before")` turns the string into `{text: ...}`) sets `also_accepts =
 (str,)` on the class, so `list-scenes` shows `list[str | BulletItem]`.
 
+**Text to translate.** A param shown on screen as text is typed `TranslatableStr` (`title:
+TranslatableStr = ""`, `labels: list[TranslatableStr]`, `TranslatableStr | None`, or as a mapping
+key: `dict[TranslatableStr, list[float]]`): `vidgen translate-template` lists it and a
+translation file replaces it (docs/CONFIG.md "Languages and translations"); ids, paths, colours,
+number formats, code and LaTeX stay `str`. A param that names such a text (a `highlight` by
+label) is typed `TextRef`: it follows the text's translation, as do action targets
+`kind:<text>`. A nested model's shorthand that holds text says so with the class attribute
+`text_shorthand`, keyed by the raw value's type: `{str: "text"}` (the string is the text, like a
+bullet item), `{str: ("field", "id")}` plus `text_defaults = {"label": "id"}` (a diagram node:
+the string is the id and the label defaults to it), `{str: ("after", ":")}` (the text follows
+the first `:`), `{list: ("fields", ("x", "y", "label"))}` (by position), `{list: ("field",
+"callouts")}`, `{dict: ("model", Other)}`. A `Params` model without these markers still works;
+its texts are just not offered for translation. Action and overlay `Options` use the same types.
+
 ```python
 class Ring(SceneParams):
     teeth: int = Field(ge=8, le=60)
@@ -999,6 +1013,11 @@ scene that shows the narration its own way):
   by `phrase_break_cost`), each timed from its first word to the next cue — the same cutting as
   the SRT (widths in characters there, measured with `measure_text` in `captions`). `prefix` (a
   speaker tag) starts the first cue, glued to the first word, and is not one of its `words`.
+- **Language** (docs/CONFIG.md "Languages and translations"): pass `language=
+  project.config.language` to `caption_cues`, `segment_cues`, `phrase_break_cost`,
+  `beat_word_times`, `estimate_word_times` and `syllables(word, language)` to cut and time a
+  text by its language's rules; `language_rules(tag)` gives them (`LanguageRules`: word lists,
+  `words_per_second` range, `iso639_2`, `known`). `None` means the English rules.
 - **Speakers** (docs/CONFIG.md "Multiple voices"): `project.voice_names()` (beat id → voice name,
   `None` for the base voice), `project.beat_voice(beat_id)` (its effective `VoiceConfig`),
   `project.speaker_tags(mode)` (beat id → label where the speaker changes; empty for `off`);

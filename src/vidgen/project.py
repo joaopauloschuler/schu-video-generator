@@ -13,6 +13,7 @@ import yaml
 from vidgen.config import BeatConfig, FormatConfig, SceneConfig, VideoConfig, VoiceConfig, parse_config
 from vidgen.errors import VidgenError
 from vidgen.pronunciation import Pronunciation, load_pronunciation
+from vidgen.translation import TranslationReport, apply_translations, read_translation_file
 from vidgen.voices import audio_fields, beat_voice_names, resolve_voice, speaker_tags
 
 CONFIG_NAMES: tuple[str, ...] = ("video.yaml", "video.yml", "video.json")
@@ -67,6 +68,27 @@ def read_config_file(path: Path) -> Any:
         raise VidgenError(f"{path.name}: invalid YAML: {exc}") from None
 
 
+def _dump(config: VideoConfig) -> dict[str, Any]:
+    """A raw mapping of ``config`` (for a project built from a validated config alone)."""
+    return config.model_dump(mode="json", by_alias=True, exclude_none=True)
+
+
+def _translated(
+    config: VideoConfig, data: dict[str, Any], root: Path, where: str
+) -> tuple[VideoConfig, tuple[dict[str, Any], VideoConfig], TranslationReport | None]:
+    """``config`` (validated from the raw ``data``) with its ``translations:`` file applied
+    (DESIGN.md §54): the translated config, the source ``(data, config)`` and the report."""
+    source = (data, config)
+    if config.translations is None:
+        return config, source, None
+    rel = config.translations
+    if not (root / rel).is_file():  # not written yet: every text shows its source (a validate warning)
+        return config, source, TranslationReport(rel, None, missing=True)
+    doc = read_translation_file(root / rel, rel)
+    translated, report = apply_translations(data, doc, rel)
+    return parse_config(translated, f"{where} with the translations of {rel}"), source, report
+
+
 class Project:
     """A loaded project folder. Create with :meth:`Project.load`."""
 
@@ -77,6 +99,8 @@ class Project:
         config: VideoConfig,
         variant: str | None,
         base_config: VideoConfig | None = None,
+        source: tuple[dict[str, Any], VideoConfig] | None = None,
+        translation: TranslationReport | None = None,
     ) -> None:
         self.root = root
         self.config_file = config_file
@@ -84,6 +108,11 @@ class Project:
         self.variant = variant
         #: The config without the variant applied (equals ``config`` when there is no variant).
         self.base_config = base_config if base_config is not None else config
+        #: The raw config mapping (variant merged) before its ``translations:`` were applied, and
+        #: its validated form (DESIGN.md §54); for a project built from a config alone, its dump.
+        self.source_data, self.source_config = source if source is not None else (_dump(config), config)
+        #: What applying the ``translations:`` file did (``None`` without one).
+        self.translation = translation
         #: How the narrator says terms (``pronunciation:`` + ``pronunciation_file``, DESIGN.md §45);
         #: loading reads the files, so a missing or invalid one is a :class:`VidgenError` here.
         self.pronunciation: Pronunciation = load_pronunciation(config, root)
@@ -99,20 +128,22 @@ class Project:
         The variant's overrides are deep-merged onto the raw config before validation.
         """
         config_file = find_config_file(path).resolve()
+        root = config_file.parent
         source = config_file.name
         data = read_config_file(config_file)
-        base = parse_config(data, source)
-        config = base
-        if variant is not None:
-            if variant not in base.variants:
-                known = ", ".join(sorted(base.variants)) or "(none defined)"
-                raise VidgenError(f"{source}: unknown variant '{variant}'; available variants: {known}")
-            data = deep_merge(data, base.variants[variant])
-            try:
-                config = parse_config(data, f"{source} (variant '{variant}')")
-            except VidgenError as exc:
-                raise VidgenError(str(exc), problems=[p.in_variant(variant) for p in exc.problems]) from None
-        return cls(config_file.parent, config_file, config, variant, base)
+        base, base_source, base_report = _translated(parse_config(data, source), data, root, source)
+        if variant is None:
+            return cls(root, config_file, base, None, base, base_source, base_report)
+        if variant not in base.variants:
+            known = ", ".join(sorted(base.variants)) or "(none defined)"
+            raise VidgenError(f"{source}: unknown variant '{variant}'; available variants: {known}")
+        data = deep_merge(data, base.variants[variant])
+        where = f"{source} (variant '{variant}')"
+        try:
+            config, merged, report = _translated(parse_config(data, where), data, root, where)
+        except VidgenError as exc:
+            raise VidgenError(str(exc), problems=[p.in_variant(variant) for p in exc.problems]) from None
+        return cls(root, config_file, config, variant, base, merged, report)
 
     def without_overlays(self) -> Project:
         """This project without any overlay (no video ``overlays``, every scene ``overlays:
@@ -120,7 +151,7 @@ class Project:
         frame thumbnail without overlays, DESIGN.md §53); the render worker's ``--bare``."""
         scenes = [scene.model_copy(update={"overlays": False}) for scene in self.config.scenes]
         config = self.config.model_copy(update={"overlays": [], "scenes": scenes})
-        bare = Project(self.root, self.config_file, config, self.variant, self.base_config)
+        bare = Project(self.root, self.config_file, config, self.variant, self.base_config, (self.source_data, self.source_config), self.translation)
         bare.bare = True
         return bare
 
@@ -151,9 +182,9 @@ class Project:
         return self._own_audio
 
     def _audio_differs(self) -> bool:
-        if audio_fields(self.config.voice) != audio_fields(self.base_config.voice):
-            return True
         base = Project(self.root, self.config_file, self.base_config, None)
+        if audio_fields(self.voice()) != audio_fields(base.voice()):
+            return True
         base_spoken = base.spoken_texts()
         for beat_id, spoken in self.spoken_texts().items():
             if beat_id not in base_spoken:

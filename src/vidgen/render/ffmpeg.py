@@ -177,9 +177,11 @@ def join(
     kinds: list[str] | None = None,
     overlays: list[tuple[Path, int]] | None = None,
     metadata: Path | None = None,
+    language: str | None = None,
 ) -> None:
     """Concatenate ``videos`` (stream copy, video only) and ``audios`` (PCM, encoded once to AAC)
-    into ``dst`` with the concat demuxer.
+    into ``dst`` with the concat demuxer. ``language``: an ISO 639-2 code (``por``) written as
+    the audio stream's ``language`` tag (DESIGN.md §54).
 
     ``sfx``: a WAV as long as the whole video (the sound effects track, DESIGN.md §47), added
     sample for sample to the concatenated audio (``amix`` without normalising: both keep their
@@ -254,6 +256,8 @@ def join(
         index = inputs.count("-i")
         inputs += ["-f", "ffmetadata", "-i", str(metadata)]
         tagging = ["-map_metadata", str(index), "-map_chapters", str(index)]
+    if language is not None:
+        tagging += ["-metadata:s:a:0", f"language={language}"]
     filters = ["-filter_complex", ";".join(graph)] if graph else []
     try:
         run_ffmpeg(

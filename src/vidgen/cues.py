@@ -6,7 +6,9 @@ use :func:`segment_cues`, so they show the same pieces: words are grouped into c
 sentence, then after a comma / semicolon / dash, then before a conjunction or a preposition, and
 never right after an article or a preposition. Among the ways to cut that fit, the one with
 the cheapest breaks wins, with fuller cues and balanced lines preferred. Widths are in any unit
-(characters for the SRT, Manim units for captions).
+(characters for the SRT, Manim units for captions). The word lists depend on the video's
+language (:mod:`vidgen.languages`; English when it has none, punctuation only for a language
+without lists).
 
 :func:`caption_cues` times the cues from the beat's word times (:mod:`vidgen.speech`): a cue
 starts when its first word is spoken and stays until the next cue starts.
@@ -19,22 +21,21 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from vidgen.languages import language_rules
 from vidgen.speech import WordTime, estimate_word_times
 
-_SENTENCE_END = re.compile(r"[.!?…][\"'”’)\]]*$")
-_CLAUSE_END = re.compile(r"[,;:][\"'”’)\]]*$|[-–—]$")
+_SENTENCE_END = re.compile(r"[.!?…。！？][\"'”’»)\]]*$")
+_CLAUSE_END = re.compile(r"[,;:،、，；：][\"'”’»)\]]*$|[-–—]$")
 _DASH = re.compile(r"^[-–—]+$")
-_CLEAN = re.compile(r"^[\"'“‘(\[]+|[\"'”’)\].,;:!?…]+$")
+_CLEAN = re.compile(r"^[\"'“‘«„¿¡(\[]+|[\"'”’»)\].,;:!?…]+$")
 
-#: Words a phrase starts with: a break before them is fine.
-CONJUNCTIONS = frozenset(
-    "and but or nor so yet because which that who whom whose when where while if then although though unless until since whereas".split()
-)
-PREPOSITIONS = frozenset("of in on at to for with from by into onto over under about than as like after before between through during without".split())
-#: Words that lean on the next one: a break right after them is bad.
-CLINGING = frozenset(
-    "a an the of in on at to for with from by into onto my your his her its our their this that these those is are was were be very not no".split()
-)
+_ENGLISH = language_rules(None)
+#: English words a phrase starts with: a break before them is fine (other languages:
+#: :func:`vidgen.languages.language_rules`).
+CONJUNCTIONS = _ENGLISH.conjunctions
+PREPOSITIONS = _ENGLISH.prepositions
+#: English words that lean on the next one: a break right after them is bad.
+CLINGING = _ENGLISH.clinging
 
 #: Costs of a break (cue or line) by where it falls.
 COST_SENTENCE = 0.0
@@ -52,19 +53,23 @@ BALANCE_WEIGHT = 4.0
 INNER_SENTENCE = 3.0
 
 
-def phrase_break_cost(before: str, after: str) -> float:
-    """How bad a break between the words ``before`` and ``after`` is (0 after a sentence)."""
+def phrase_break_cost(before: str, after: str, language: str | None = None) -> float:
+    """How bad a break between the words ``before`` and ``after`` is (0 after a sentence), in
+    ``language`` (BCP-47; ``None``: English). Punctuation counts in every language; the word
+    lists (conjunctions, prepositions, clinging articles) only where vidgen has them (DESIGN.md
+    §54): another language breaks plainly between any other words."""
     if _SENTENCE_END.search(before):
         return COST_SENTENCE
-    if _CLAUSE_END.search(before) or _DASH.match(after):
+    if _CLAUSE_END.search(before) or _DASH.match(after) or after.startswith(("¿", "¡", "«")):
         return COST_CLAUSE
+    rules = language_rules(language)
     word_before = _CLEAN.sub("", before).lower()
     word_after = _CLEAN.sub("", after).lower()
-    if word_before in CLINGING:
+    if word_before in rules.clinging:
         return COST_CLINGING
-    if word_after in CONJUNCTIONS:
+    if word_after in rules.conjunctions:
         return COST_CONJUNCTION
-    if word_after in PREPOSITIONS:
+    if word_after in rules.prepositions:
         return COST_PREPOSITION
     return COST_PLAIN
 
@@ -79,11 +84,13 @@ def segment_cues(
     max_width: float,
     max_lines: int = 2,
     max_words: int | None = None,
+    language: str | None = None,
 ) -> list[Lines]:
     """``words`` (with their ``widths`` and the width of a ``space``) cut into cues of at most
-    ``max_lines`` lines of ``max_width`` (and ``max_words`` words). Returns the cues, each a
-    list of lines given as word index ranges ``(i, j)`` (``words[i:j]``). A word wider than
-    ``max_width`` gets a line of its own (the caller shrinks it)."""
+    ``max_lines`` lines of ``max_width`` (and ``max_words`` words), breaking by the rules of
+    ``language`` (:func:`phrase_break_cost`). Returns the cues, each a list of lines given as
+    word index ranges ``(i, j)`` (``words[i:j]``). A word wider than ``max_width`` gets a line
+    of its own (the caller shrinks it)."""
     n = len(words)
     if n == 0:
         return []
@@ -92,7 +99,7 @@ def segment_cues(
     prefix = [0.0]
     for w in widths:
         prefix.append(prefix[-1] + float(w))
-    cost_after = [phrase_break_cost(words[k], words[k + 1]) for k in range(n - 1)]
+    cost_after = [phrase_break_cost(words[k], words[k + 1], language) for k in range(n - 1)]
 
     def width(i: int, j: int) -> float:
         return prefix[j] - prefix[i] + space * (j - i - 1)
@@ -149,11 +156,13 @@ def segment_cues(
     return result[1]
 
 
-def split_cues(text: str, width: int, max_lines: int = 2, max_words: int | None = None) -> list[list[str]]:
+def split_cues(
+    text: str, width: int, max_lines: int = 2, max_words: int | None = None, language: str | None = None
+) -> list[list[str]]:
     """``text`` cut by :func:`segment_cues` with widths in characters: the cues, each a list of
     lines."""
     words = text.split()
-    cues = segment_cues(words, [len(w) for w in words], 1.0, float(width), max_lines, max_words)
+    cues = segment_cues(words, [len(w) for w in words], 1.0, float(width), max_lines, max_words, language)
     return [[" ".join(words[a:b]) for a, b in lines] for lines in cues]
 
 
@@ -189,6 +198,7 @@ def caption_cues(
     until: float | None = None,
     prefix: str = "",
     prefix_width: float | None = None,
+    language: str | None = None,
 ) -> list[CaptionCue]:
     """The cues of one beat whose narration runs ``start``..``end``: :func:`segment_cues` of its
     words (``widths`` default: characters), timed by ``words`` (default: estimated over the
@@ -196,18 +206,19 @@ def caption_cues(
     other one when its first word is spoken; each lasts until the next starts and the last until
     ``until`` (default ``end``). ``prefix`` (a speaker tag such as ``"Ana:"``, of width
     ``prefix_width``, default its characters) starts the first line, glued to the first word
-    so a cut never leaves it alone; it is not a timed word (``CaptionCue.prefix``)."""
+    so a cut never leaves it alone; it is not a timed word (``CaptionCue.prefix``). ``language``
+    (BCP-47, ``None``: English) chooses the break rules and the syllable estimate."""
     tokens = text.split()
     if not tokens:
         return []
-    timed = list(words) if words is not None else estimate_word_times(tokens, start, end)
+    timed = list(words) if words is not None else estimate_word_times(tokens, start, end, language)
     if len(timed) != len(tokens):
-        timed = estimate_word_times(tokens, start, end)
+        timed = estimate_word_times(tokens, start, end, language)
     sizes = list(widths) if widths is not None else [float(len(w)) for w in tokens]
     prefix = " ".join(prefix.split())
     if prefix:
         sizes[0] += (float(len(prefix)) if prefix_width is None else prefix_width) + space
-    cues = segment_cues(tokens, sizes, space, max_width, max_lines, max_words)
+    cues = segment_cues(tokens, sizes, space, max_width, max_lines, max_words, language)
     firsts = [lines[0][0] for lines in cues]
     starts = [start, *(max(timed[k].start, start) for k in firsts[1:])]
     stop = end if until is None else until

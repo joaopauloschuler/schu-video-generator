@@ -25,15 +25,15 @@ class Title(NarratedScene):
 
     class Params(SceneParams):
         header_synonyms = False   # "title" is the main text here, not a header band
-        title: str
+        title: TranslatableStr
         """Main title; wrapped to fit, may contain line breaks."""
-        subtitle: str = ""
+        subtitle: TranslatableStr = ""
         """Line under the title."""
-        kicker: str = ""
+        kicker: TranslatableStr = ""
         """Small label above the title."""
-        authors: list[str] = []
+        authors: list[TranslatableStr] = []
         """One line each, revealed in beat 2."""
-        highlight: str = ""
+        highlight: TranslatableStr = ""
         """Part of the title drawn in highlight_color."""
         color: ThemeColor = "text"
         """Title color."""

@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 from vidgen.config import VideoConfig, VoiceConfig
 from vidgen.errors import Problem, VidgenError
+from vidgen.languages import elevenlabs_language_code
 
 if TYPE_CHECKING:
     from vidgen.theme import Theme
@@ -57,9 +58,10 @@ def voice_reference_problems(config: VideoConfig) -> list[Problem]:
 def resolve_voice(config: VideoConfig, name: str | None) -> VoiceConfig:
     """The effective voice called ``name`` (``None`` / ``default``: the base voice): the base
     voice's audio settings with the named voice's given values over them; ``label`` / ``color``
-    only from the named voice."""
+    only from the named voice. Its ``language_code`` is the one actually sent (DESIGN.md §54): the
+    configured code, else the video's ``language`` for a model that accepts one, else ``None``."""
     if name is None or name == DEFAULT_VOICE:
-        return config.voice
+        return _with_language(config.voice, config.language)
     entry = config.voices.get(name)
     if entry is None:
         raise VidgenError(unknown_voice_message(name, voice_names(config)))
@@ -69,7 +71,13 @@ def resolve_voice(config: VideoConfig, name: str | None) -> VoiceConfig:
     data.update(given)
     if settings:
         data["settings"] = {**data["settings"], **settings}
-    return VoiceConfig.model_validate(data)
+    return _with_language(VoiceConfig.model_validate(data), config.language)
+
+
+def _with_language(voice: VoiceConfig, language: str | None) -> VoiceConfig:
+    """``voice`` with ``language_code`` = the code sent to the provider (or ``None``)."""
+    code = elevenlabs_language_code(voice.language_code, voice.model_id, language)
+    return voice if code == voice.language_code else voice.model_copy(update={"language_code": code})
 
 
 def audio_fields(voice: VoiceConfig) -> dict[str, Any]:

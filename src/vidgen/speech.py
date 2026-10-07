@@ -27,6 +27,7 @@ import numpy as np
 
 from vidgen.errors import VidgenError
 from vidgen.fileio import remove_file, write_text_atomic
+from vidgen.languages import language_rules
 
 if TYPE_CHECKING:
     from vidgen.pronunciation import Spoken
@@ -66,6 +67,12 @@ def spoken_words(text: str) -> float:
         else:
             total += len(_SYMBOLS.findall(core))
     return total
+
+
+def spoken_characters(text: str) -> int:
+    """The letters and digits of ``text`` (any script): the length measure of the
+    ``narration_speed`` lint in characters per second, for languages without a word rate."""
+    return sum(1 for ch in text if ch.isalnum())
 
 
 # ----- speech in an audio file ------------------------------------------------------------------
@@ -129,10 +136,10 @@ _SENTENCE_END = re.compile(r"[.!?…][\"'”’)\]]*$")
 _CLAUSE_END = re.compile(r"[,;:][\"'”’)\]]*$|[-–—]$")
 
 
-def syllables(word: str) -> float:
+def syllables(word: str, language: str | None = None) -> float:
     """About how many syllables a narrator says for ``word``: vowel groups of a word (a silent
-    final ``e`` dropped, at least one), one per letter of an all-capitals acronym, two per
-    spoken word of a number (``77%``: "seventy-seven percent")."""
+    final ``e`` dropped in English and French, at least one), one per letter of an all-capitals
+    acronym, two per spoken word of a number (``77%``: "seventy-seven percent")."""
     core = word.strip(_EDGE)
     if not core:
         return 0.0
@@ -140,10 +147,11 @@ def syllables(word: str) -> float:
         return 2.0 * max(spoken_words(core), 1.0)
     if _ACRONYM.fullmatch(core):
         return float(len(core.rstrip("s")))
+    silent_e = language_rules(language).silent_final_e
     total = 0.0
     for part in re.split(r"[-–—/]+", core.lower()):
         groups = len(_VOWELS.findall(part))
-        if groups > 1 and part.endswith("e") and not part.endswith(("le", "ee", "ye")):
+        if silent_e and groups > 1 and part.endswith("e") and not part.endswith(("le", "ee", "ye")):
             groups -= 1
         total += max(groups, 1) if any(ch.isalpha() for ch in part) else len(_SYMBOLS.findall(part))
     return max(total, 1.0)
@@ -159,13 +167,14 @@ def pause_after(word: str) -> float:
     return 0.0
 
 
-def estimate_word_times(words: Sequence[str], start: float, end: float) -> list[WordTime]:
+def estimate_word_times(words: Sequence[str], start: float, end: float, language: str | None = None) -> list[WordTime]:
     """``words`` spread over ``start``..``end`` (the speech): each takes time in proportion to
-    its :func:`syllables` (plus a little per letter), with :func:`pause_after` its punctuation
-    between it and the next word. The first word starts at ``start``, the last ends at ``end``."""
+    its :func:`syllables` in ``language`` (plus a little per letter), with :func:`pause_after`
+    its punctuation between it and the next word. The first word starts at ``start``, the last
+    ends at ``end``."""
     if not words:
         return []
-    weights = [syllables(w) + 0.05 * len(w) for w in words]
+    weights = [syllables(w, language) + 0.05 * len(w) for w in words]
     pauses = [pause_after(w) for w in words[:-1]] + [0.0]
     total = sum(weights) + sum(pauses)
     scale = (end - start) / total if total > 0 else 0.0
@@ -277,7 +286,13 @@ def map_word_times(spoken: Spoken, times: Sequence[WordTime]) -> list[WordTime]:
 
 
 def beat_word_times(
-    audio_dir: Path | None, beat_id: str, text: str, start: float, end: float, spoken: Spoken | None = None
+    audio_dir: Path | None,
+    beat_id: str,
+    text: str,
+    start: float,
+    end: float,
+    spoken: Spoken | None = None,
+    language: str | None = None,
 ) -> list[WordTime]:
     """When each word of a beat is spoken, ``start``..``end`` being the beat's narration (its
     MP3's length or the estimate): from the stored alignment of its MP3 when there is one, else
@@ -288,14 +303,14 @@ def beat_word_times(
     :meth:`vidgen.pronunciation.Pronunciation.apply`): when it differs from ``text``, the
     spoken words are timed (the alignment and the audio are of the spoken text; an estimate
     weighs the spoken syllables) and the written words take their times
-    (:func:`map_word_times`)."""
+    (:func:`map_word_times`). ``language`` (BCP-47, ``None``: English) is the estimate's."""
     if spoken is not None and spoken.changed and spoken.text == text:
-        times = beat_word_times(audio_dir, beat_id, spoken.spoken, start, end)
+        times = beat_word_times(audio_dir, beat_id, spoken.spoken, start, end, language=language)
         return map_word_times(spoken, times)
     words = text.split()
     mp3 = audio_dir / f"{beat_id}.mp3" if audio_dir is not None else None
     if mp3 is None or not mp3.is_file():
-        return estimate_word_times(words, start, end)
+        return estimate_word_times(words, start, end, language)
     alignment = read_alignment(mp3.parent, beat_id, text)
     if alignment is not None:
         timed = aligned_word_times(text, alignment, start)
@@ -304,6 +319,6 @@ def beat_word_times(
     try:
         s0, s1 = speech_bounds(mp3)
     except VidgenError:
-        return estimate_word_times(words, start, end)
+        return estimate_word_times(words, start, end, language)
     lo, hi = min(start + s0, end), min(start + s1, end)
-    return estimate_word_times(words, lo, hi) if hi > lo else estimate_word_times(words, start, end)
+    return estimate_word_times(words, lo, hi, language) if hi > lo else estimate_word_times(words, start, end, language)

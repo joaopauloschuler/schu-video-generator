@@ -179,7 +179,7 @@ class CodeListing(NarratedScene):
         """Code file in the project; give exactly one of code / path."""
         language: str | None = None
         """Pygments lexer name; default: from the file name, else python."""
-        title: str = ""
+        title: TranslatableStr = ""
         """Window title."""
         highlight: list[LineSpec] = []
         """Entry i applies at beat i: 3, '2-4', '1, 5-6' or [1, 4] (1-based lines)."""

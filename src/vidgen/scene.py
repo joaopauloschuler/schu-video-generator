@@ -58,6 +58,14 @@ class SceneParams(BaseModel):
     #: other (:data:`HEADER_SYNONYMS`). Off for types whose ``title`` is their main text
     #: (``title``, ``chapter``, ``end_card``).
     header_synonyms: ClassVar[bool] = True
+    #: Where a shorthand written for this model holds text to translate (DESIGN.md §54), by the
+    #: raw value's type: ``"text"`` (the string is the text), ``("field", NAME)`` (the value
+    #: stands for ``{NAME: value}``), ``("after", SEP)`` (the text follows the first SEP of the
+    #: string), ``("fields", (NAME, ...))`` (a list holds those fields by position), and for a
+    #: mapping with none of this model's fields ``("model", OTHER)`` (it is an ``OTHER``).
+    text_shorthand: ClassVar[Mapping[type, Any]] = {}
+    #: Translatable fields whose text, when not given, is another field's (``{"label": "id"}``).
+    text_defaults: ClassVar[Mapping[str, str]] = {}
 
     @classmethod
     def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:

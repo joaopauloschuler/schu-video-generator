@@ -30,6 +30,7 @@ from pydantic import (
 )
 
 from vidgen.errors import Problem, VidgenError
+from vidgen.languages import LANGUAGE_TAG_PATTERN, normalize_language
 
 ID_PATTERN = r"^[A-Za-z0-9_]+$"
 HEX_COLOR_PATTERN = r"^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$"
@@ -47,6 +48,10 @@ Size = Annotated[int | float, Field(gt=0), WithJsonSchema({"type": "number", "ex
 FontChoice = Annotated[str, Field(min_length=1)]
 #: JSON Schema hint for even pixel sizes (the check itself is ``FormatConfig._even``).
 _EVEN = {"multipleOf": 2}
+#: A BCP-47 language tag (``en``, ``pt-BR``), normalised to the usual case (DESIGN.md §54).
+LanguageTag = Annotated[str, Field(pattern=LANGUAGE_TAG_PATTERN), AfterValidator(normalize_language)]
+#: An ElevenLabs ``language_code`` (ISO 639-1, e.g. ``pt``), or ``false``: never send one.
+LanguageCode = Annotated[str, Field(pattern=r"^[A-Za-z]{2,3}$")] | Literal[False]
 
 
 class _Strict(BaseModel):
@@ -148,6 +153,8 @@ class VoiceConfig(_Strict):
     """Send the neighbouring beats' text for continuous intonation."""
     timestamps: bool = False
     """Also fetch when each character is spoken (ElevenLabs with-timestamps), stored as audio/<beat>.align.json for exact karaoke captions."""
+    language_code: LanguageCode | None = None
+    """ElevenLabs language_code (ISO 639-1, e.g. pt) sent with every request, or false: never; default: the video's language for models that accept one (eleven_turbo_v2_5, eleven_flash_v2_5)."""
     label: str | None = Field(default=None, min_length=1)
     """Speaker name shown in subtitles / captions when speakers are shown (default: none for this voice)."""
     color: ColorRef | None = None
@@ -185,6 +192,8 @@ class VoiceEntry(_Strict):
     """Send neighbouring beats of the same voice as context; default the base voice's."""
     timestamps: bool | None = None
     """Fetch character timings for this voice's beats; default the base voice's."""
+    language_code: LanguageCode | None = None
+    """ElevenLabs language_code for this voice's beats, or false; default the base voice's."""
     label: str | None = Field(default=None, min_length=1)
     """Speaker name in subtitles / captions; default the voice's name (underscores as spaces, first letter capital)."""
     color: ColorRef | None = None
@@ -210,6 +219,8 @@ class PronunciationEntry(_Strict):
     """Match only where the term is not part of a longer word (no letter, digit or _ right before or after it)."""
     regex: bool = False
     """The term is a Python regular expression (re module syntax), not plain text."""
+    language: LanguageTag | list[LanguageTag] | None = None
+    """Only in videos of this language (or one of these): pt matches pt-BR and pt-PT; default: every language."""
 
 
 #: A ``pronunciation:`` value: the spoken form, the long form, or ``null`` (removes an entry of
@@ -342,20 +353,34 @@ class OverlayOverlapRule(RuleConfig):
 
 
 class NarrationSpeedRule(RuleConfig):
-    """``narration_speed``: a beat spoken too fast or too slow (spoken words per second)."""
+    """``narration_speed``: a beat spoken too fast or too slow (spoken words, or characters, per second)."""
 
-    min_rate: PositiveFloat = 1.8
-    """Slowest acceptable rate in words per second (1.8 = 108 words a minute)."""
-    max_rate: PositiveFloat = 3.5
-    """Fastest acceptable rate in words per second (3.5 = 210 words a minute)."""
+    unit: Literal["auto", "words", "characters"] = "auto"
+    """What is counted: words, characters (letters and digits), or auto: words for languages vidgen has a word rate for (en, pt, es, fr, de, it; also a video without language), else characters."""
+    min_rate: PositiveFloat | None = None
+    """Slowest acceptable rate per second in the unit; default the language's (English 1.8 words = 108 a minute; characters 8)."""
+    max_rate: PositiveFloat | None = None
+    """Fastest acceptable rate per second in the unit; default the language's (English 3.5 words = 210 a minute; characters 17)."""
     min_words: PositiveInt = 5
     """Beats with fewer spoken words are not checked (their rate is mostly pauses)."""
 
     @model_validator(mode="after")
     def _ordered(self) -> NarrationSpeedRule:
-        if self.min_rate >= self.max_rate:
+        if self.min_rate is not None and self.max_rate is not None and self.min_rate >= self.max_rate:
             raise ValueError("min_rate must be smaller than max_rate")
         return self
+
+    def limits(self, language: str | None) -> tuple[str, float, float]:
+        """``(unit, min_rate, max_rate)`` for a video in ``language``: the configured values, the
+        missing ones from the language's range (DESIGN.md §54)."""
+        from vidgen.languages import CHARACTER_RATE, language_rules
+
+        words = language_rules(language).words_per_second
+        unit = ("words" if words is not None else "characters") if self.unit == "auto" else self.unit
+        default = (words or (1.8, 3.5)) if unit == "words" else CHARACTER_RATE
+        low = self.min_rate if self.min_rate is not None else default[0]
+        high = self.max_rate if self.max_rate is not None else default[1]
+        return unit, low, max(high, low + 1e-6)
 
 
 class DeadAirRule(RuleConfig):
@@ -1020,6 +1045,10 @@ class VideoConfig(_Strict):
     """How the narrator says terms (term: spoken form, or {say, case_sensitive, whole_word, regex}); TTS text only, subtitles keep the written words."""
     pronunciation_file: str | list[str] | None = None
     """YAML/JSON file(s) (relative to the project) with more pronunciation entries; `pronunciation:` entries win over them."""
+    language: LanguageTag | None = None
+    """Language of the narration and on-screen text (BCP-47: en, pt-BR, es...): caption cutting, narration-speed lint, ElevenLabs language_code, the MP4's audio language; default: English rules, no language sent."""
+    translations: str | None = Field(default=None, min_length=1)
+    """Translation file (YAML, relative to the project; `vidgen translate-template`) whose texts replace the beat texts and on-screen texts, usually set in a variant."""
     extensions: list[str] = Field(default_factory=lambda: ["extensions"])
     """Folders (relative to the project) whose *.py files and packages are imported."""
     lint: LintConfig = Field(default_factory=LintConfig)

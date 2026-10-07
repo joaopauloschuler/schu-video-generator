@@ -36,9 +36,9 @@ class LowerThird(Overlay):
     yields = True
 
     class Options(OverlayOptions):
-        name: str = Field(min_length=1)
+        name: TranslatableStr = Field(min_length=1)
         """The main line (a person's or a place's name)."""
-        title: str | None = None
+        title: TranslatableStr | None = None
         """The second line (role, affiliation, context)."""
         icon: IconName | None = None
         """An icon left of the text."""
@@ -174,7 +174,7 @@ class Watermark(Overlay):
     class Options(OverlayOptions):
         image: str | None = None
         """Image file relative to the project (e.g. assets/logo.png)."""
-        text: str | None = None
+        text: TranslatableStr | None = None
         """A short text instead of an image."""
         icon: IconName | None = None
         """An icon instead of an image."""

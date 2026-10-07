@@ -106,17 +106,27 @@ class ElevenLabsProvider:
         """``voice_settings`` as sent to the API."""
         return self.voice.settings.model_dump()
 
+    @property
+    def language_code(self) -> str | None:
+        """The ``language_code`` sent with every request (``voice.language_code`` when it is a
+        code; resolved from the video's language by :func:`vidgen.voices.resolve_voice`)."""
+        code = self.voice.language_code
+        return code if isinstance(code, str) else None
+
     def cache_key(self, text: str) -> str:
-        """sha1 of ``voice_id|model_id|output_format|json(settings, sort_keys)|text``."""
+        """sha1 of ``voice_id|model_id|output_format|json(settings, sort_keys)|text``; with a
+        language code sent, ``language_code=<code>`` comes before the text (DESIGN.md §54)."""
         v = self.voice
         parts = [v.voice_id, v.model_id, v.output_format, json.dumps(self.settings, sort_keys=True), text]
+        if self.language_code is not None:
+            parts.insert(4, f"language_code={self.language_code}")
         return hashlib.sha1("|".join(parts).encode("utf-8")).hexdigest()
 
     def legacy_cache_key(self, text: str) -> str | None:
         """The kphi3 hash ``sha1(voice_id + model_id + text)``, or ``None`` when the output format
         or settings differ from the values kphi3 used (its hash files say nothing about them)."""
         v = self.voice
-        if v.output_format != LEGACY_OUTPUT_FORMAT or self.settings != LEGACY_SETTINGS:
+        if v.output_format != LEGACY_OUTPUT_FORMAT or self.settings != LEGACY_SETTINGS or self.language_code is not None:
             return None
         return hashlib.sha1((v.voice_id + v.model_id + text).encode("utf-8")).hexdigest()
 
@@ -130,6 +140,8 @@ class ElevenLabsProvider:
     def request_body(self, text: str, previous_text: str | None = None, next_text: str | None = None) -> dict[str, Any]:
         """JSON body for one request; neighbours are sent only when ``voice.context`` is on."""
         body: dict[str, Any] = {"text": text, "model_id": self.voice.model_id, "voice_settings": self.settings}
+        if self.language_code is not None:
+            body["language_code"] = self.language_code
         if self.voice.context:
             if previous_text is not None:
                 body["previous_text"] = previous_text

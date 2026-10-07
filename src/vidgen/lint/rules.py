@@ -114,13 +114,14 @@ class SceneContext:
     ``activity`` is the scene's activity file (:mod:`vidgen.activity`: beats with their
     narration times and ``busy`` time, plays, motion), ``audio_dir`` where the beats' MP3s are,
     ``spoken`` beat id -> the text the TTS says (pronunciation applied; a beat not in it is said
-    as written).
+    as written), ``language`` the video's language (BCP-47; ``None``: English rules).
     """
 
     scene_id: str
     activity: dict[str, Any]
     audio_dir: Path
     spoken: dict[str, str] = field(default_factory=dict)
+    language: str | None = None
 
     def spoken_text(self, beat: dict[str, Any]) -> str:
         """What the narrator says for an activity-file beat."""

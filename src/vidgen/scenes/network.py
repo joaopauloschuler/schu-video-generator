@@ -66,7 +66,7 @@ class NetLayer(SceneParams):
 
     size: int = Field(ge=1, le=10**12)
     """Number of units the layer has (a layer larger than max_neurons is drawn as `show` units and an ellipsis)."""
-    label: str = ""
+    label: TranslatableStr = ""
     """Name under the layer ('Input', 'Hidden', 'Output')."""
     show: int | None = Field(default=None, ge=2, le=12)
     """Units drawn when the layer is larger than max_neurons (default: the scene's show)."""
@@ -114,7 +114,7 @@ class Network(NarratedScene):
     class Params(SceneParams):
         layers: list[NetLayer] = Field(min_length=2, max_length=8)
         """The layers from input to output: a size, or {size, label?, show?, connect?, color?} (2-8)."""
-        heading: str = ""
+        heading: TranslatableStr = ""
         """Optional heading above the network."""
         connect: Connection = Field(default="dense", validate_default=True)  # type: ignore[assignment]
         """How each layer connects to the previous one unless the layer says otherwise: dense, sparse, grouped, one_to_one, none, or 'sparse:0.3' / 'grouped:3' / {type, ratio, groups}."""

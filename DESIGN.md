@@ -92,6 +92,8 @@ src/vidgen/
   speech.py               # spoken words, speech bounds of an MP3, word times: estimate / TTS alignment (§43)
   pronunciation.py        # pronunciation dictionary: TTS text of a beat, spoken -> written word map (§45; no manim)
   voices.py               # named voices: effective voice per beat, speaker labels / colours / tags (§46; no manim)
+  languages.py            # language tags and per-language rules: cue words, speech rate, TTS / MP4 codes (§54; no manim)
+  translation.py          # translation files: text markers, keys, extracting, applying, merging, warnings (§54; no manim)
   cues.py                 # caption cues: phrase-boundary cutting and timing, shared by SRT and captions (§43)
   sfx.py                  # sound effects: synthesised set, loudness, project sounds, the SFX track (§47; no manim)
   music.py                # background music: generated beds, music files as looping sources (§48; no manim)
@@ -131,6 +133,7 @@ my_video/
   extensions/             # optional; every *.py and every package here is auto-imported
   assets/                 # images, data files referenced by scenes (paths relative to project)
     icons/                #   optional project icons <name>.svg (+ icons.json: category, tags) (§22)
+  translations/           # optional: translation files of language variants (`vidgen translate-template`, §54)
   audio/                  # generated: <beat_id>.mp3 + <beat_id>.hash  (kept, cheap to reuse)
     <variant>/            #   only for a variant whose voice or beat texts differ (§7)
   build/                  # generated: manim media, per-scene mp4, timings json, concat list
@@ -225,6 +228,8 @@ transition: crossfade                            # Step 46 (§49): default betwe
 chapters: {metadata: true, youtube: true, intro: Intro}   # Step 49 (§52): MP4 chapters, <output>_chapters.txt
 metadata: {artist: "Jane Doe"}                   # Step 49 (§52): MP4 tags (title defaults to `title`)
 thumbnail: {title: "Saving 77%", icon: cpu}      # Step 50 (§53): designed card, or {scene, beat, at, overlays}
+language: en                                     # Step 51 (§54): BCP-47; cue rules, speed lint, TTS / MP4 language
+translations: translations/pt.yaml               # Step 51 (§54): usually in a variant; texts replaced at load
 
 extensions: [extensions]                         # dirs (relative to project) to auto-import; default shown
 
@@ -540,6 +545,10 @@ Step 47 (§50) adds `carry_move`; on `NarratedScene` `carry_in(name)`, `carry_ou
 a carried copy into its target; `finish()` keeps carried targets on screen.
 Step 49 (§52) adds, compatibly, the keyword argument `intro=False` of `video_chapters` and the
 field `Chapter.intro` (default `False`).
+Step 51 (§54) adds `TranslatableStr`, `TextRef`, `LanguageRules`, `language_rules`; on
+`SceneParams` the class attributes `text_shorthand` and `text_defaults`; and compatibly the
+keyword argument `language=None` of `caption_cues`, `segment_cues`, `phrase_break_cost`,
+`beat_word_times`, `estimate_word_times` and `syllables`.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -674,6 +683,7 @@ vidgen thumbnail [PROJECT] [--variant NAME] [--preview] [--scene ID [--beat ID|N
               [--jpeg] [--jobs N] [--json]                    # <output>_thumbnail.png (§53)
 vidgen export gif|clip [PROJECT] [--scene ID] [--from S] [--to S] [--variant NAME] [--preview] [--width PX]
               [--fps F] [--max-mb MB] [--with-audio] [--output FILE] [--json]   # exports/ (§53)
+vidgen translate-template [PROJECT] [--variant NAME] [--lang TAG] [--output FILE] [--json]   # translation file (§54)
 ```
 PROJECT defaults to the current directory. `--scene` re-renders only those scenes and re-joins
 using the existing renders of the others (missing ones are rendered). Exit code non-zero on error.
@@ -3538,3 +3548,119 @@ the measured loudness, §48).
   `_bare` render folder is not cleaned up; GIF budgets assume size ∝ width² · fps (static
   explainer frames compress better, so it can take a few encodes); in a re-encoded join
   (transitions) keyframes fall where x264 put them, so most clips of it are re-encoded.
+
+## 54. Refinements (Step 51, multi-language variants)
+
+- **`language`** (`config.LanguageTag`, top level, so per variant by deep merge): a BCP-47 tag
+  (`^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$`) normalised (`pt-br` → `pt-BR`, scripts title case,
+  regions upper case). `None` = the English rules and nothing sent: every project without the key
+  behaves exactly as before. `vidgen/languages.py` (no manim): `LanguageRules(code, name,
+  conjunctions, prepositions, clinging, words_per_second, silent_final_e, iso639_2)` for `en`
+  (Step 40's lists), `pt`, `es`, `fr`, `de`, `it`; any other language gets a neutral set (no word
+  lists, no word rate, ISO 639-2 from a small table). `language_matches(entry, video)`: subtag
+  prefix match (`pt` ⊂ `pt-BR`; no language = `en`).
+- **Cues** (`vidgen.cues`): `phrase_break_cost(before, after, language=None)` uses the language's
+  lists; punctuation counts in every language (sentence ends incl. `。！？`, clause marks incl.
+  `،、，；：`, a break before `¿ ¡ «` is a clause break). `segment_cues`, `split_cues`,
+  `caption_cues`, `subtitles.split_text / beat_cues / cues_from_timings / write_srt` take
+  `language` (the SRT uses the combined timings' `language` by default; the pipeline passes the
+  project's); captions read `project.config.language`. `speech.syllables(word, language)`: the
+  silent final `e` only in English and French; `estimate_word_times` / `beat_word_times` pass it.
+- **Lint** `narration_speed`: `unit: auto | words | characters`, `min_rate` / `max_rate` now
+  default `None` = the language's range (`NarrationSpeedRule.limits(language) -> (unit, min,
+  max)`); auto uses words for languages with a word rate, else characters per second
+  (`speech.spoken_characters`: letters and digits; 8-17/s). `SceneContext.language`.
+  Decision: per-language word ranges rather than one character mode for all, so English results
+  are unchanged and the familiar unit stays where it is meaningful.
+- **ElevenLabs `language_code`**: `VoiceConfig.language_code` / `VoiceEntry.language_code` (`str |
+  false | None`). `voices.resolve_voice` stores the code actually sent
+  (`languages.elevenlabs_language_code`): the configured code, `false` → none, `None` (auto) → the
+  video language's ISO 639-1 subtag for `LANGUAGE_CODE_MODELS` (`eleven_turbo_v2_5`,
+  `eleven_flash_v2_5`; other models reject the field). The provider sends it in the body and
+  inserts `language_code=<code>` into the §7 hash parts before the text only when it sends one
+  (hashes without a code are unchanged; no legacy kphi3 hash then). `Project._audio_differs`
+  compares resolved voices, so a variant whose code is sent gets its own audio folder.
+- **MP4 / outputs**: `ffmpeg.join(..., language=<ISO 639-2>)` tags the audio stream
+  (`-metadata:s:a:0 language=por`); the combined `timings.json` gains `language`. Per-variant
+  SRT, chapter list and thumbnail are already separate files (§52, §53); they carry the
+  language through their (translated) texts. No `language` tag in FFMETADATA (the MP4 muxer
+  stores no global language).
+- **Pronunciation**: `PronunciationEntry.language` (tag or list); `load_pronunciation` leaves out
+  entries for other languages (`pronunciation.applies_to`). `translation.language_warnings`: a
+  variant in another primary language that keeps base inline entries unchanged (and matching a
+  beat) gets a validate warning.
+- **Translation files** (`vidgen/translation.py`, no manim):
+  - *Markers*: `TextMarker(kind)` in `Annotated` metadata (JSON Schema `x-vidgen-text: text|ref`);
+    `TranslatableStr = Annotated[str, TRANSLATABLE]`, `TextRef = Annotated[str, TEXT_REF]` (in
+    `vidgen.api`). Every built-in `Params` / action / overlay text field is marked (titles,
+    headings, captions, labels, items, table cells, legend / axis names, units, notes, callout
+    labels, a lower third's name / title, a watermark's text, chapter `number` text, stat
+    separators); refs: `bar_chart` / `pie` / `icon_grid` `highlight` (+ `groups`), `heatmap` /
+    `scatter` `highlight`, `timeline` `highlight` / `now`, `map` arc ends. Shorthands:
+    `SceneParams.text_shorthand` (`{type: "text" | ("field", F) | ("after", SEP) | ("fields",
+    names) | ("model", M)}`) and `text_defaults` (`{"label": "id"}`), read with `getattr` so any
+    pydantic model may set them.
+  - *Keys*: `parse_key` / `format_key` over `Seg(kind, value)`: `.name` (mapping key, or the id of
+    an item of `scenes` / `beats` (default `<scene>_b<n>`) / top-level `overlays` (type /
+    `<type><n>`)), `[n]`, `["key"]`, `{"key"}` (the key itself, last), `=field`, `$sep` (last).
+    Beat texts are `scenes.<id>.beats.<id>.text`. `_Cursor` reads / writes the raw mapping by key;
+    `=field` wraps a string as `{field: string}` (written back only when a field is added) and
+    makes the next field default to it.
+  - *Extraction* (`extract_texts(data, scene_model, action_model, overlay_model)`, needs the
+    models; `project_texts(project)` inside a project session): top-level `title`, `metadata`
+    title / album / comment / description, `chapters.intro`, `thumbnail` title / subtitle,
+    overlay options, then per scene `chapter`, params (walked by the field types: unions pick the
+    member that fits the raw value — marked `str` first; lists by their first item; dicts by the
+    model whose fields cover most keys; aliases and header synonyms), beat texts, action options
+    (canonical or shorthand form, `ActionConfig.resolved`'s rule) and scene overlay overrides.
+    Only values present in the raw config are listed (defaults are not). References: `TextRef`
+    values and action targets naming a params text of the scene (whole, after `kind:`, or before
+    `@`) → that text's key.
+  - *File*: `TranslationFile {version: 1, language, source_language, entries: {key:
+    TranslationEntry {source, hash, text, stale, old_source, obsolete} | text}, references}`
+    (extra keys forbidden, keys parsed); `source_hash` = sha1[:10] of the source. Written with a
+    comment header by `dump_translation_file` (YAML, `allow_unicode`, insertion order).
+  - *Applying* (`apply_translations(data, doc) -> (data, TranslationReport)`; registry-free):
+    `Project.load` merges the variant, validates, and when the merged config has `translations:`
+    applies the file to the **raw** mapping and validates again (`Project.source_data` /
+    `source_config` keep the untranslated form, `Project.translation` the report). Texts first,
+    mapping-key renames last, then references (`_renamed`: whole value, `kind:` suffix, `@`
+    prefix). An entry is applied when it has a text and its `hash` (or `source`) matches the
+    current text and it is not `stale`; else the source stays (`untranslated` / `stale` /
+    `unknown` in the report). Text is used as written (no stripping: `" min"`), a YAML block's
+    final line break dropped. A missing file is not an error (`missing`, a validate warning).
+    Decision: **apply at load on the raw config**, so every consumer (TTS, audio hash and folder,
+    SRT, captions, scenes, chapters, tags, thumbnail, lint, storyboard) sees one translated
+    config with no special cases, and applying needs no scene types (keys are plain paths;
+    what needed the models — which fields are text, which places are references — was resolved
+    when the template was written). Decision: **stale translations are not used** (gettext's
+    fuzzy rule): after a source edit the old text may say something else; validate lists them.
+  - *Merging* (`merge_template`): (1) same key, same hash → kept (a hand-written entry without
+    source / hash is kept and gets them); (2) the same hash under another key of the same scene →
+    moved (an item inserted before it); (3) the key remains, source changed → `stale: true`,
+    `old_source`, text kept; leftovers: translated → `obsolete: true`, untranslated → dropped.
+    References are rewritten from the current config every run.
+  - *Command* `vidgen translate-template [--variant] [--lang] [--output] [--json]`
+    (`write_template` → `TemplateResult`): the file is the variant's `translations:` or
+    `translations/<variant>.yaml`; the language is `--lang`, else the variant's own `language`;
+    prints a hint when the config does not name the file yet. JSON: `translate_template_document`.
+  - *Validate*: `translation_warnings` (texts showing the source, stale, unknown keys, references
+    the file lacks or that broke, file language ≠ video language, missing file) and
+    `language_warnings` join `validate_warnings`; human `language [pt]: pt-BR (file: N
+    translated, M stale)`; `validate --json` `language` / `translations` at the top level and per
+    variant (`jsonout.translation_json`).
+- **Fingerprint**: `translations` excluded from the config part (the texts are in the scenes /
+    config already); `translation.py` is not a render input; `languages.py` is (captions).
+    `language` is in the config part. Renders made before Step 51 are stale once (new config keys
+    in the dump).
+- **Example**: `examples/minimal` variant `pt` (`pt-BR`, `translations/pt.yaml`: 54 of 73 texts
+  translated — title, intro, steps, feedback, sizes, trend, outro; picture, saying, math,
+  listing and note left in English on purpose; the variant's own pronunciation of LaTeX / JSON;
+  captions). `vidgen lint` of the translated scenes: 0 findings (two Portuguese texts were
+  shortened: 44 words on the bullets slide, 6.3 s of dead air in a longer beat).
+- Known limits: a translation file only changes texts present in the config (a stat's default
+  `decimal_mark` cannot be added); number formats and the map's country names are not
+  localised; a map arc shorthand `"A -> B"`, `lint_ignore` object patterns and targets naming a
+  translated point label (`point:<series>@<label>`) do not follow translations; languages
+  without spaces are cut at punctuation only; the storyboard / lint labels of vidgen itself stay
+  English.

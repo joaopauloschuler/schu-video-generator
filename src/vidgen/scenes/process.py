@@ -15,12 +15,13 @@ class ProcessStage(SceneParams):
     """A stage: ``{label, icon?, text?}`` (a plain string is its label)."""
 
     also_accepts = (str,)
+    text_shorthand = {str: "text"}
 
-    label: str = Field(min_length=1)
+    label: TranslatableStr = Field(min_length=1)
     """Name of the stage (short; wrapped to fit the card)."""
     icon: IconName | None = None
     """Optional icon on the stage's card."""
-    text: str = ""
+    text: TranslatableStr = ""
     """Optional detail line under the label, smaller and dimmer."""
 
     @model_validator(mode="before")
@@ -120,7 +121,7 @@ class Process(NarratedScene):
     class Params(SceneParams):
         stages: list[ProcessStage] = Field(min_length=2, max_length=8)
         """The stages in order: a label, or {label, icon?, text?} (2-8; 3-5 read best)."""
-        heading: str = ""
+        heading: TranslatableStr = ""
         """Optional heading above the pipeline."""
         layout: Literal["auto", "row", "snake", "column"] = "auto"
         """row: left to right; snake: two rows, the second running back; column: top to bottom. auto: column in portrait, else a row (snake when that keeps the text clearly larger)."""
@@ -128,17 +129,17 @@ class Process(NarratedScene):
         """per_beat: one stage per step, the token following; all: the whole pipeline in step 1, then the token moves one stage per step."""
         loop: bool = False
         """Draw an arrow from the last stage back to the first (a cycle); the token follows it in a last step."""
-        loop_label: str = ""
+        loop_label: TranslatableStr = ""
         """Optional text on the loop arrow ('repeat', 'next batch')."""
-        input: str = ""
+        input: TranslatableStr = ""
         """Optional label before the first stage (what goes in), with an arrow into it."""
-        output: str = ""
+        output: TranslatableStr = ""
         """Optional label after the last stage (what comes out), with an arrow from it."""
         token: bool = True
         """Show the moving token (a dot) that travels from stage to stage."""
         token_icon: IconName | None = None
         """Draw the token as this icon in a small disc instead of a dot."""
-        token_label: str = ""
+        token_label: TranslatableStr = ""
         """Optional short tag that travels with the token ('order', 'request')."""
         stage_color: ThemeColor = "primary"
         """Stage outlines and icons."""

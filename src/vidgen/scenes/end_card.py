@@ -27,9 +27,9 @@ class EndCard(NarratedScene):
 
     class Params(SceneParams):
         header_synonyms = False   # "title" is the main text here, not a header band
-        title: str = ""
+        title: TranslatableStr = ""
         """Closing message; at least one of title, lines, logo, icon."""
-        lines: list[str] = []
+        lines: list[TranslatableStr] = []
         """Links, credits; short lines shrink together instead of wrapping."""
         logo: str | None = None
         """Image file in the project."""

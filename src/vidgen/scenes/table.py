@@ -11,7 +11,7 @@ from vidgen.api import *
 log = logging.getLogger("vidgen.scenes")
 
 Align = Literal["auto", "left", "center", "right"]
-Cell = str | int | float
+Cell = TranslatableStr | int | float
 
 
 class _Fit(NamedTuple):
@@ -61,11 +61,11 @@ class Table(NarratedScene):
     class Params(SceneParams):
         rows: list[list[Cell]] = Field(min_length=1, max_length=30)
         """The body rows (up to 30), each a list of cells: text or numbers."""
-        header: list[str] = Field(default_factory=list)
+        header: list[TranslatableStr] = Field(default_factory=list)
         """Column headings (optional); sets the number of columns."""
-        title: str = ""
+        title: TranslatableStr = ""
         """Title above the table."""
-        caption: str = ""
+        caption: TranslatableStr = ""
         """Note under the table (e.g. the source)."""
         align: Align | list[Align] = "auto"
         """Alignment of every column or one per column: auto (numbers right, text left), left, center, right."""

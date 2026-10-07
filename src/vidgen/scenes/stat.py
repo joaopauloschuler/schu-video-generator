@@ -36,11 +36,11 @@ class StatComparison(SceneParams):
 
     value: float
     """The other value (same prefix, suffix and unit as the stat)."""
-    label: str = ""
+    label: TranslatableStr = ""
     """Words after the other value, e.g. 'last year'."""
     kind: Literal["versus", "before"] = "versus"
     """versus: 'vs 12%'; before: the stat counts up from this value ('from 12%')."""
-    word: str | None = None
+    word: TranslatableStr | None = None
     """Word before the other value; default 'vs' (versus) or 'from' (before); '' for none."""
     delta: Literal["difference", "percent", "none"] = "difference"
     """The change shown in a coloured chip with an arrow: the difference (+19%), the percent change (+158%), or none."""
@@ -84,21 +84,21 @@ class Stat(NarratedScene):
     class Params(SceneParams):
         value: float
         """The number shown."""
-        label: str = ""
+        label: TranslatableStr = ""
         """What the number is, under it (e.g. 'of developers use AI tools')."""
-        context: str = ""
+        context: TranslatableStr = ""
         """A smaller line at the bottom: period, population, source."""
-        prefix: str = ""
+        prefix: TranslatableStr = ""
         """Before the number, same size (e.g. '$')."""
-        suffix: str = ""
+        suffix: TranslatableStr = ""
         """After the number, same size (e.g. '%', 'x', 'k')."""
-        unit: str = ""
+        unit: TranslatableStr = ""
         """After the number, smaller, on its baseline (e.g. 'ms', 'users')."""
         decimals: int | None = Field(default=None, ge=0, le=6)
         """Decimals shown (also while counting); default: what value and comparison need, up to 2."""
-        thousands: str = Field(default=",", max_length=2)
+        thousands: TranslatableStr = Field(default=",", max_length=2)
         """Thousands separator: ',', '.', ' ', \"'\" or '' for none."""
-        decimal_mark: str = Field(default=".", min_length=1, max_length=1)
+        decimal_mark: TranslatableStr = Field(default=".", min_length=1, max_length=1)
         """Decimal mark: '.' or ','."""
         count: bool = True
         """Count up to the value in beat 1; false: the value fades in."""

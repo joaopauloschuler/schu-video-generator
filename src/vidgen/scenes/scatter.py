@@ -16,12 +16,13 @@ class ScatterPoint(SceneParams):
     """One point: ``[x, y]``, ``[x, y, label]`` or ``{x, y, label?, group?}``."""
 
     also_accepts = (list,)
+    text_shorthand = {list: ("fields", ("x", "y", "label"))}
 
     x: float
     """Horizontal value."""
     y: float
     """Vertical value."""
-    label: str = ""
+    label: TranslatableStr = ""
     """Name written beside the point (see show_labels); also names its target point:<series>@<label>."""
     group: str | int | None = None
     """Reveal group (reveal: groups): points of one group appear together, groups in order of first use."""
@@ -45,7 +46,7 @@ class ScatterPoint(SceneParams):
 class ScatterSeries(SceneParams):
     """One series: ``{name, points, color?, marker?}``."""
 
-    name: str = Field(min_length=1)
+    name: TranslatableStr = Field(min_length=1)
     """Series name (legend, targets series:<name>)."""
     points: list[ScatterPoint] = Field(min_length=1)
     """The points: [x, y], [x, y, label] or {x, y, label, group}."""
@@ -97,13 +98,13 @@ class Scatter(NarratedScene):
         return names
 
     class Params(SceneParams):
-        series: dict[str, list[ScatterPoint]] | list[ScatterSeries] = Field(min_length=1)
+        series: dict[TranslatableStr, list[ScatterPoint]] | list[ScatterSeries] = Field(min_length=1)
         """{name: [points]} or a list of {name, points, color, marker}; a point is [x, y], [x, y, label] or {x, y, label, group}."""
-        title: str = ""
+        title: TranslatableStr = ""
         """Chart title (in the header band at the top)."""
-        x_label: str = ""
+        x_label: TranslatableStr = ""
         """X axis label."""
-        y_label: str = ""
+        y_label: TranslatableStr = ""
         """Y axis label."""
         x_min: float | None = None
         """Left end of the x axis; default: from the data (rounded out to a tick)."""
@@ -121,9 +122,9 @@ class Scatter(NarratedScene):
         """Python format for x tick labels, e.g. '{:.1f}'; default: automatic (12k, 3.4M for large numbers)."""
         y_format: str | None = None
         """Python format for y tick labels; default: automatic."""
-        x_unit: str = ""
+        x_unit: TranslatableStr = ""
         """Appended to x tick labels."""
-        y_unit: str = ""
+        y_unit: TranslatableStr = ""
         """Appended to y tick labels."""
         trend: Literal["none", "each", "all"] = "none"
         """Least-squares trend line: none, one per series (each), or one through every point (all); drawn in a step of its own."""
@@ -135,7 +136,7 @@ class Scatter(NarratedScene):
         """series: one series per beat; groups: the points of each group per beat (points without a group come first); all: everything in beat 1."""
         show_labels: Literal["all", "highlight", "none"] = "all"
         """Which point labels are written: every labelled point, only highlighted ones (in the highlight step), or none."""
-        highlight: one_or_many(str) = Field(default_factory=list)
+        highlight: one_or_many(TextRef) = Field(default_factory=list)
         """Points emphasised in a last step: '<series>@<N>' (1-based), '<series>@<label>' or a label; the others dim."""
         highlight_color: ThemeColor = "highlight"
         """Ring color of highlighted points."""
@@ -145,7 +146,7 @@ class Scatter(NarratedScene):
         """Marker radius in Manim units; default: from the number of points (0.11 to 0.05)."""
         label_size: ThemeSize = "caption"
         """Size of tick labels, axis labels, point labels, the legend and the trend text (never below the readable minimum)."""
-        caption: str = ""
+        caption: TranslatableStr = ""
         """Note under the chart (e.g. the data source)."""
         caption_size: ThemeSize = "caption"
         """Caption text size."""

@@ -10,7 +10,7 @@ import pytest
 import yaml
 from pydantic import BaseModel
 
-from vidgen import config, extensions, registry
+from vidgen import config, extensions, registry, translation
 from vidgen.presets import BUILTIN_PRESETS
 from vidgen.theme import DEFAULT_COLORS, DEFAULT_PALETTE, DEFAULT_SIZES, Theme
 
@@ -52,6 +52,8 @@ MODELS: list[type[BaseModel]] = [
     config.ChaptersConfig,
     config.MetadataConfig,
     config.ThumbnailConfig,
+    translation.TranslationFile,
+    translation.TranslationEntry,
 ]
 
 

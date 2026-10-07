@@ -14,8 +14,9 @@ class BulletItem(SceneParams):
     """A list item: its text, or ``{text, icon}`` (a plain string is read as ``{text: ...}``)."""
 
     also_accepts = (str,)
+    text_shorthand = {str: "text"}
 
-    text: str = Field(min_length=1)
+    text: TranslatableStr = Field(min_length=1)
     """The item's text."""
     icon: IconName | None = None
     """Icon in the marker column (replaces the bullet; beside the number), in marker_color."""
@@ -43,7 +44,7 @@ class Bullets(NarratedScene):
     outro = 0.5
 
     class Params(SceneParams):
-        heading: str = ""
+        heading: TranslatableStr = ""
         """Optional heading, shown with the first item."""
         items: list[BulletItem] = Field(min_length=1)
         """The list items (at least one): text, or {text, icon}; item i appears at beat i."""

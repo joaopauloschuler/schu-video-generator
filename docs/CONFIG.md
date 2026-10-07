@@ -7,6 +7,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 [format](#format-and-preview), [variants](#variants), [theme](#theme), [voice](#voice-voice),
 [narration](#narration-narration), [narration audio](#narration-audio-elevenlabs),
 [multiple voices](#multiple-voices-voices), [pronunciation](#pronunciation-pronunciation),
+[languages and translations](#languages-and-translations),
 [sound effects](#sound-effects-sfx), [background music and loudness](#background-music-music),
 [transitions](#transitions-transition), [thumbnail](#thumbnail-thumbnail-vidgen-thumbnail),
 [GIF and clip export](#export-gif-and-clip-vidgen-export), [built-in scene types](#built-in-scenes), [beat actions](#beat-actions), [overlays](#overlays),
@@ -30,6 +31,8 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `narration` | see [narration](#narration-narration) | beat padding, duration estimate |
 | `pronunciation` | `{}` | how the narrator says terms (TTS text only), see [pronunciation](#pronunciation-pronunciation) |
 | `pronunciation_file` | none | YAML/JSON file(s) with more pronunciation entries |
+| `language` | none (English rules) | the video's language, a BCP-47 tag (`en`, `pt-BR`, `es-419`): caption and SRT line breaks, the `narration_speed` lint, ElevenLabs `language_code`, the MP4's audio language; see [languages and translations](#languages-and-translations) |
+| `translations` | none | a translation file (YAML, `vidgen translate-template`) whose texts replace beat texts and on-screen texts, usually in a variant; see [languages and translations](#languages-and-translations) |
 | `extensions` | `[extensions]` | folders whose `*.py` files and packages are imported (see docs/EXTENDING.md); the default may be missing, a folder you list must exist |
 | `lint` | see [lint](#lint-vidgen-lint) | thresholds and severities of `vidgen lint` |
 | `overlays` | `[]` | lower thirds, a watermark, ... drawn over the scenes, see [overlays](#overlays) |
@@ -304,7 +307,10 @@ variants:
     format: {width: 1080, height: 1920}       #   -> <output>_vertical.mp4
     preview: {width: 480, height: 854}
   spanish:
-    voice: {voice_id: "XXXXXXXXXXXXXXXXXXXX"}   # own audio folder: audio/spanish/
+    language: es                              # see "Languages and translations"
+    translations: translations/spanish.yaml   # beat and on-screen texts: own audio folder audio/spanish/
+    voice: {voice_id: "XXXXXXXXXXXXXXXXXXXX"}
+  short:
     scenes: [...]                             # a list replaces the whole base list
 ```
 
@@ -537,6 +543,7 @@ voice:
     use_speaker_boost: true
   context: true                     # send the neighbouring beats' text for smoother intonation
   timestamps: false                 # also fetch when each character is spoken (karaoke captions)
+  language_code: null               # ElevenLabs language_code (ISO 639-1) or false; null: auto
   label: null                       # speaker name in subtitles / captions (none: not tagged)
   color: null                       # speaker colour in captions (theme token or hex; none: text colour)
 ```
@@ -553,6 +560,13 @@ character is spoken, and burned-in [`captions`](#captions) and the SRT then time
 exactly. Without it word times are estimated (see `captions`). It is not part of the audio hash:
 turning it on does not re-voice anything; `vidgen tts --force` fetches the timings for existing
 beats (paid again).
+
+`language_code` is ElevenLabs' language enforcement (an ISO 639-1 code such as `pt`). By default
+(`null`: auto) vidgen sends the video's [`language`](#languages-and-translations) to the models
+that accept one (`eleven_turbo_v2_5`, `eleven_flash_v2_5`; others reject the field, and
+`eleven_multilingual_v2` detects the language from the text). A code sends it with any model,
+`false` never sends one. When a code is sent it is part of the audio hash (re-voicing those
+beats); without one the hash is as before. A named voice may set its own (`voices.<name>.language_code`).
 
 ## Multiple voices (`voices:`)
 
@@ -689,6 +703,7 @@ pronunciation_file: pronunciation.yaml  # optional: more entries in a file (or a
 | `case_sensitive` | `true` | match the term's capitals exactly (`false`: any case) |
 | `whole_word` | `true` | match only where no letter, digit or `_` is right before or after the term (`K-Phi-3's` matches `K-Phi-3`, `GPUs` does not match `GPU`) |
 | `regex` | `false` | the term is a Python regular expression, not plain text |
+| `language` | none (every language) | only in videos of this [language](#languages-and-translations) (or list of languages): `en` matches `en-US` and a video without `language`, `pt` matches `pt-BR` and `pt-PT`, `pt-BR` only `pt-BR` |
 
 - **Matching.** Every entry is matched against the beat's written text in one pass; a spoken form
   is never matched again by another entry. Where matches overlap, the one starting first wins,
@@ -707,6 +722,10 @@ pronunciation_file: pronunciation.yaml  # optional: more entries in a file (or a
   next word starts). This holds for estimated times (the spoken syllables are weighed) and for
   `voice.timestamps` alignments (stored for the spoken text).
 - **Lint.** `narration_speed` counts the words of the spoken text.
+- **Per language.** A [variant](#variants) in another language overrides entries by term
+  (`LaTeX: látec`), drops them (`LaTeX: null`), or the entries say which languages they are for
+  (`LaTeX: {say: lah-tek, language: en}`). `vidgen validate` warns about base entries a variant in
+  another language keeps unchanged.
 - **`vidgen validate`** warns (it does not fail) about entries that match no beat, entries that
   never apply because a longer entry always covers them, and entries whose matches collide with
   another's (the same text, or crossing) in a beat.
@@ -718,6 +737,128 @@ pronunciation_file: pronunciation.yaml  # optional: more entries in a file (or a
 Failed requests show the HTTP status and ElevenLabs' message; rate limits and server errors are
 retried a few times automatically. Rendering uses whatever audio exists; stale or missing audio
 is reported as a warning.
+
+## Languages and translations
+
+A video in another language is usually a [variant](#variants) with a `language:` and a
+translation file:
+
+```yaml
+language: en                      # optional: the base config's language (none: English rules)
+variants:
+  pt:
+    language: pt-BR               # BCP-47 tag
+    translations: translations/pt.yaml   # written by `vidgen translate-template --variant pt`
+    pronunciation: {LaTeX: "látec"}      # the base's entries, said the Portuguese way
+    voice: {voice_id: "XXXXXXXXXXXXXXXXXXXX"}   # optional: another voice (eleven_multilingual_v2 speaks both)
+```
+
+**`language`** (top level or per variant; a BCP-47 tag, written as you like it and normalised:
+`PT-br` is `pt-BR`) changes:
+
+| what | how |
+|---|---|
+| SRT and [`captions`](#captions) cues | punctuation breaks cues in every language (`.!?…` and `。！？`, `,;:` and `، 、，`, dashes, before `¿ ¡ «`); the words a phrase starts with (conjunctions, prepositions) and the words that lean on the next one (articles, prepositions: never at a line end) are listed for English, Portuguese, Spanish, French, German and Italian; other languages break at punctuation only (a neutral rule set). Word times: a silent final `e` only in English and French |
+| `narration_speed` lint | the language's words-per-second range, or characters per second for languages without one (see [lint](#lint-vidgen-lint)) |
+| ElevenLabs | `language_code` for models that accept one (see [voice](#voice-voice)) |
+| the MP4 | the audio stream's `language` tag (ISO 639-2: `por`, `eng`...) |
+| `timings.json` | `language` |
+| [pronunciation](#pronunciation-pronunciation) | entries with a `language` apply only to videos in it |
+
+A video without `language` follows the English rules and sends no language, exactly as before
+languages existed. Each variant's outputs are its own (`<output>_<variant>.mp4`, `.srt`,
+`_chapters.txt`, `_thumbnail.png`), so a translated variant's subtitles, chapter titles and
+thumbnail are in its language when their texts are translated.
+
+**Translation files.** `vidgen translate-template --variant pt [--lang pt-BR] [--output FILE]
+[--json]` lists every translatable text of the variant in a YAML file (the variant's
+`translations:` file, else `translations/<variant>.yaml`) with the source text, a hash of it
+and an empty translation:
+
+```yaml
+version: 1
+language: pt-BR
+source_language: en
+entries:
+  title:
+    source: "vidgen: the built-in scenes"
+    hash: e3a65b6320
+    text: "vidgen: as cenas prontas"
+  scenes.intro.beats.intro_b1.text:
+    source: This whole video comes from one config file, with no Python code at all.
+    hash: 08bb27bb38
+    text: Este vídeo inteiro vem de um único arquivo de configuração, sem nenhuma linha de código Python.
+  scenes.sizes.params.labels[0]: {source: Preview 480p, hash: e4a94ea70b, text: Prévia 480p}
+  scenes.picture.params.caption: {source: Images can slowly zoom and pan, hash: 8d3d9f9450, text: null}
+references:
+  scenes.sizes.beats.sizes_b3.actions[1].highlight: scenes.sizes.params.labels[0]
+```
+
+| key | | |
+|---|---|---|
+| `version` | `1` | file format |
+| `language` / `source_language` | none | the translation's / the source's language (`--lang`, else the variant's `language`) |
+| `entries` | `{}` | key → `{source, hash, text, stale, old_source, obsolete}`, or the translation alone (`key: text`, no staleness check) |
+| `references` | `{}` | places that name a translated text (an action target `bar:<label>`, a `highlight` by label) → that text's key; written by the command |
+
+| entry key | | |
+|---|---|---|
+| `source` | | the text in the config (for the translator; the `hash` decides) |
+| `hash` | | the first 10 hex digits of the source's SHA-1 when it was translated |
+| `text` | `null` | the translation; empty: the source text is shown |
+| `stale` | `false` | the source changed since the text was translated (set by the command): not used until you check it and delete the flag |
+| `old_source` | | the source the stale translation was made from |
+| `obsolete` | `false` | the key is gone from the config; kept so the text is not lost |
+
+When the project loads, every entry with a translation whose source still matches its `hash` (or
+its `source`, without a hash) replaces the text in the raw config before it is validated, so the
+narration, the TTS, the SRT, the captions, the scenes' on-screen text, chapter titles, MP4 tags
+and the thumbnail all follow. Then each `references` place that still names the source text is
+renamed (`bar:Preview 480p` → `bar:Prévia 480p`, `point:sparse@8` → `point:esparso@8`). A
+translated beat text changes the beat's spoken text, so the variant gets its own audio folder
+`audio/<variant>/` and `vidgen tts --variant pt` voices only the translated beats there (the
+others are copied from `audio/`). A missing file is not an error: every text shows its source.
+
+**Keys** are config paths with ids instead of positions where there are ids: `title`,
+`metadata.title|album|comment|description`, `chapters.intro`, `thumbnail.title|subtitle`,
+`overlays.<id>.<option>` (a lower third's `name`, a watermark's `text`), `scenes.<id>.chapter`
+(or `.chapter.title`), `scenes.<id>.beats.<beat id>.text`, `scenes.<id>.beats.<beat
+id>.actions[<n>].label` (callouts), `scenes.<id>.overlays.<id>.<option>` and
+`scenes.<id>.params.<path>`. In a path, `[3]` is a list item, `["a key"]` a mapping value
+under a key that is not a name, `{"key"}` the mapping key itself (a chart series written as
+`series: {baseline: [...]}`), `=id` a shorthand string standing for `{id: string}` (a
+`diagram` node `Data` is `{id: Data}`; its label defaults to the id) and `$:` the text after the
+first `:` of a shorthand string (a diagram edge `"a -> b: label"`).
+
+**What is translatable** is declared by the scene types: every param that is shown as text
+(`title`, `heading`, `caption`, labels, bullet items, table cells, legend names, axis labels,
+units, notes, callout labels...; JSON Schema `x-vidgen-text: text`), not ids, paths, colours,
+icons, number formats, code or LaTeX. Params that name a text of the scene (`highlight: "4K"` of
+a bar chart, `now` of a timeline; `x-vidgen-text: ref`) and action targets naming one
+(`bar:4K`, `item:<text>`, `point:<series>@N`) follow its translation through `references`.
+Project scene types mark their own params with `TranslatableStr` / `TextRef`
+(docs/EXTENDING.md).
+
+**Updating.** Run the command again after editing the config: it keeps every translation whose
+source is unchanged; a changed source keeps the old text with `stale: true` and `old_source` (not
+used until checked); a text that moved (an item inserted before it) is found again by its hash
+in the same scene; a translated key that is gone is kept with `obsolete: true`, an untranslated
+one dropped. It prints `texts: 73 (54 translated, 19 to translate); 4 references`.
+
+**`vidgen validate`** warns (it does not fail) about texts left in the source language (listed),
+stale translations, entries that name nothing in the config, places that name a translated text
+but are not in `references` (run the command again), a file whose `language` differs from the
+video's, a missing file, and base pronunciation entries a variant in another language keeps. It
+prints `language [pt]: pt-BR (translations/pt.yaml: 54 translated)`; `validate --json` has
+`language` and `translations` (top level and per variant).
+
+Known limits: translations change texts that exist in the config (a default such as a stat's
+`decimal_mark` cannot be added by a translation file; set it in the scene); number formats
+(`value_format`, `x_format`) and the bundled country names of the `map` scene are not
+localised (give a country an explicit `label`); a `map` arc written `"A -> B"` naming a pin's
+label, `lint_ignore` patterns and `point:<series>@<label>` targets naming a translated point
+label are not followed; text in scripts without spaces (Chinese, Japanese) is cut into cues
+only at punctuation.
 
 ## Sound effects (`sfx`)
 
@@ -3456,7 +3597,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `contrast` | warning | text whose WCAG contrast ratio with its `backdrop` is below `min_ratio` (4.5, WCAG AA), `large_ratio` (3) for text with a cap height of at least `large_size`, or `dimmed_ratio` (2) for text faded on purpose (opacity below 1, e.g. previous bullets); the text colour is blended with the backdrop at the text's opacity, every colour of a multi-coloured text is checked. A code listing's line numbers are not checked |
 | `max_words` | warning | more than `max_words` words (tokens with a letter) of visible `text` objects in one still; code and math do not count |
 | `overlay_overlap` | warning | an [overlay](#overlays) whose box (all its objects) covers at least `min_overlap` of the box of a scene text or icon. `text_overlap` and `covered_text` leave an overlay over scene text to this rule; overlays of a type with a `lint_skip` (the watermark: `contrast`) are not checked by those rules |
-| `narration_speed` | warning; info without audio | a beat (of at least `min_words` spoken words) narrated at fewer than `min_rate` or more than `max_rate` words per second. With an MP3 the time is the speech in it (leading and trailing silence below -40 dB of its peak cut off). Words count as spoken: hyphens, dashes and slashes separate words (`K-Phi-3` is 3), a number counts one word per digit up to 3 per digit run, plus one per decimal point and symbol (`2.58` is 4, `15%` 3), an all-capitals acronym of 2-5 letters half a word per letter (`GPU` 1.5). **Without audio** the beat's length is the word-count estimate (`narration.words_per_second`), so the rate is only off when the text is (many numbers or acronyms) or the configured rate itself is implausible: reported as `info`, one finding per scene listing the beats |
+| `narration_speed` | warning; info without audio | a beat (of at least `min_words` spoken words) narrated at fewer than `min_rate` or more than `max_rate` words per second (`unit: words`) or characters per second (`unit: characters`: letters and digits). `unit: auto` counts words for the languages vidgen has a word rate for and characters for others; the default range is the video [language](#languages-and-translations)'s: English (also no `language`) 1.8-3.5 words/s, Portuguese 1.7-3.4, Spanish and French 1.8-3.6, Italian 1.8-3.5, German 1.5-3.1, characters 8-17/s; `min_rate` / `max_rate` set override it. With an MP3 the time is the speech in it (leading and trailing silence below -40 dB of its peak cut off). Words count as spoken: hyphens, dashes and slashes separate words (`K-Phi-3` is 3), a number counts one word per digit up to 3 per digit run, plus one per decimal point and symbol (`2.58` is 4, `15%` 3), an all-capitals acronym of 2-5 letters half a word per letter (`GPU` 1.5). **Without audio** the beat's length is the word-count estimate (`narration.words_per_second`), so the rate is only off when the text is (many numbers or acronyms) or the configured rate itself is implausible: reported as `info`, one finding per scene listing the beats |
 | `dead_air` | warning | nothing on screen changes for more than `max_seconds` (a frame counts as changed when at least `min_change` of it changed, from the activity file's `motion`), narrated or not; the finding names the beat where the still picture starts and the beats it lasts through. Silent scenes are checked the same way: a silent card held longer than `max_seconds` without motion is reported. A still picture ends where a [crossfade](#transitions-transition) into the next scene starts blending it away |
 | `animation_overrun` | warning | a beat whose code (animations and waits inside `narrate`) takes longer than its narration plus `narration.pad` by more than `tolerance` seconds: the next beat (and its audio) starts late, leaving silence. The message lists the animations still running when the narration ends. A silent scene whose animations take longer than its `duration` is reported the same way |
 | `rushed_animation` | warning | animations that `play_steps` (and so `reveal` and most built-in scenes) had to shorten below `min_run_time` seconds because the beat is too short for its steps |
@@ -3476,7 +3617,7 @@ lint:
     contrast: {min_ratio: 4.5, large_ratio: 3.0, large_size: 0.045, dimmed_ratio: 2.0}
     max_words: {max_words: 40}
     overlay_overlap: {min_overlap: 0.05}    # fraction of the scene object's box
-    narration_speed: {min_rate: 1.8, max_rate: 3.5, min_words: 5}   # spoken words per second
+    narration_speed: {unit: auto, min_words: 5}   # + min_rate / max_rate: default the language's range
     dead_air: {max_seconds: 6.0, min_change: 0.0002}   # min_change: fraction of the frame
     animation_overrun: {tolerance: 0.1}     # seconds past narration + pad
     rushed_animation: {min_run_time: 0.5}   # seconds
@@ -3595,9 +3736,11 @@ problems (with its `variant`) and the other variants are still checked.
 |---|---|---|
 | `project`, `config_file` | str \| null | project folder and config file (`null`: the project could not be loaded) |
 | `title` | str \| null | |
+| `language` | str \| null | the base config's `language` |
+| `translations` | object \| null | the base config's translation file: `{file, language, applied, stale, unknown, untranslated}` (`applied` a count, the others key lists; see [languages and translations](#languages-and-translations)); `null` without `translations:` |
 | `scenes`, `beats` | int \| null | counts in the base config |
 | `estimated_duration` | float \| null | seconds, from word counts + `narration.pad` + silent scenes' `duration` |
-| `variants` | list | every variant checked: `{name, loaded, estimated_duration, problems}` (`problems`: how many are this variant's own) |
+| `variants` | list | every variant checked: `{name, loaded, estimated_duration, problems, language, translations}` (`problems`: how many are this variant's own; `language` / `translations` as at the top level, `null` when it does not load) |
 | `problems` | list | `{location, message, variant}` (as in `error.problems`); empty when the project is valid |
 | `audio` | list | one per audio folder (the base config's, plus each variant with its own, see [variant audio](#narration-audio-elevenlabs)): `{variant, dir, ok, stale, missing, orphaned, beats}`; `ok`/`stale`/`missing` are counts, `orphaned` the paths of MP3s no beat uses, `beats` lists `{scene, beat, state}` in video order with `state` `ok`, `stale` or `missing` |
 
@@ -3781,6 +3924,20 @@ on a failed scene are as for `vidgen render --json`.
 | `max_mb`, `within_budget` | float \| null, bool \| null | the GIF's budget and whether it was met (`null` without `--max-mb`) |
 | `attempts` | list | with `--max-mb`: every GIF encode `{width, fps, bytes}` in order |
 | `elapsed` | float | wall time of the command |
+
+### `vidgen translate-template --json`
+
+| key | type | |
+|---|---|---|
+| `project` | str | project folder |
+| `variant` | str \| null | |
+| `path`, `rel` | str | the translation file written, and as the config names it |
+| `language` | str \| null | the file's language |
+| `linked` | bool | the config's `translations:` names this file |
+| `texts` | int | translatable texts listed |
+| `translated` | int | texts with a current translation |
+| `untranslated`, `stale`, `moved`, `obsolete`, `dropped` | list | keys: listed without a translation; translated but the source changed; found again under a new key; translated but gone from the config (kept); untranslated and gone (removed) |
+| `references` | int | places in the file's `references` |
 
 ### `vidgen lint --json`
 

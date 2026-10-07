@@ -41,11 +41,11 @@ def date_position(date: str | int | float) -> float | None:
 class TimelineEvent(SceneParams):
     """One event: ``{date, title, text?, icon?, at?}``."""
 
-    date: str | int | float
+    date: TranslatableStr | int | float
     """The date or label shown above the title ('1969', 'March 2024', 'Phase 1')."""
-    title: str = Field(min_length=1)
+    title: TranslatableStr = Field(min_length=1)
     """What happened (wrapped to fit)."""
-    text: str = ""
+    text: TranslatableStr = ""
     """Optional detail line under the title, smaller and dimmer."""
     icon: IconName | None = None
     """Optional icon in the event's marker on the axis."""
@@ -114,7 +114,7 @@ class Timeline(NarratedScene):
     class Params(SceneParams):
         events: list[TimelineEvent] = Field(min_length=2, max_length=10)
         """The events in time order, {date, title, text?, icon?, at?} (2-10; 3-6 read best)."""
-        heading: str = ""
+        heading: TranslatableStr = ""
         """Optional heading above the timeline."""
         orientation: Literal["auto", "horizontal", "vertical"] = "auto"
         """auto: a horizontal axis in landscape and square frames, a vertical one in portrait."""
@@ -124,11 +124,11 @@ class Timeline(NarratedScene):
         """even: equal gaps; proportional: gaps follow the dates (numbers, years, YYYY-MM(-DD)) or each event's at."""
         reveal: Literal["per_beat", "all"] = "per_beat"
         """per_beat: one event per beat; all: every event in beat 1."""
-        highlight: int | str | None = None
+        highlight: int | TextRef | None = None
         """Event emphasised in a last step (0-based index, or its date or title); the others dim."""
-        now: int | str | None = None
+        now: int | TextRef | None = None
         """The present (0-based index, or date or title): that event gets a now_label tag; later ones are drawn as planned (hollow markers, dashed progress)."""
-        now_label: str = Field(default="Now", min_length=1)
+        now_label: TranslatableStr = Field(default="Now", min_length=1)
         """Text of the tag on the `now` event."""
         color: ThemeColor = "text"
         """Event title colour."""

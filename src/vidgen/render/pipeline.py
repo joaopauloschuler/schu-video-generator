@@ -43,6 +43,7 @@ from vidgen.render.worker import (
     scene_video_path,
     write_json,
 )
+from vidgen.languages import language_rules
 from vidgen.subtitles import write_srt
 from vidgen.tts.elevenlabs import API_KEY_ENV
 
@@ -489,6 +490,7 @@ def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) ->
     combined: dict[str, Any] = {
         "title": project.config.title,
         "variant": project.variant,
+        "language": project.config.language,
         "preview": preview,
         "format": {"width": fmt.width, "height": fmt.height, "fps": fmt.fps},
         "audio": not no_audio,
@@ -520,6 +522,7 @@ def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) ->
         kinds=kinds[1:],
         overlays=clips or None,
         metadata=metadata,
+        language=language_rules(project.config.language).iso639_2 if project.config.language else None,
     )
     return output, combined
 
@@ -686,7 +689,7 @@ def render_project(
         timings_file = project.render_dir(preview) / "timings.json"
         write_json(timings_file, timings)
         srt = project.srt_path(preview)
-        write_srt(srt, timings, project.audio_dir, project.pronunciation, project.speaker_tags())
+        write_srt(srt, timings, project.audio_dir, project.pronunciation, project.speaker_tags(), project.config.language)
         chapters_file = write_chapter_list(project, preview, timings)
         index = write_frames_index(project, preview, timings, frames) if frames else None
         hooks.dispatch(
