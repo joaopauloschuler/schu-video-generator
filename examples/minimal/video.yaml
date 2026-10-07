@@ -16,6 +16,8 @@
 #   vidgen storyboard examples/minimal --variant subtitled       # burned-in captions (SRT-style cues)
 #   vidgen storyboard examples/minimal --variant social --per-beat 3   # 9:16 karaoke captions
 #   vidgen tts examples/minimal --dry-run --voice guest          # the guest's beats and characters
+#   vidgen tts examples/minimal --dry-run --json                 # the same as JSON (what an MCP agent sees)
+#   vidgen mcp --root examples                                   # MCP server for an AI agent's client (vidgen[mcp])
 #   vidgen storyboard examples/minimal --variant subtitled --scene note   # a two-speaker dialogue
 #   vidgen list-themes examples/minimal --swatches build/themes.png  # every theme preset at a glance
 #   vidgen translate-template examples/minimal --variant pt      # list / update the texts to translate

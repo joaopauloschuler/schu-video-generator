@@ -290,9 +290,9 @@ def test_usage_error_human(capsys: pytest.CaptureFixture[str]) -> None:
     assert err.startswith("usage: vidgen render") and "vidgen render: error: argument --jobs/-j: invalid int value: 'x'" in err
 
 
-def test_tts_has_no_json_flag(capsys: pytest.CaptureFixture[str]) -> None:
-    code, doc, _ = run_json(["tts", "--json"], capsys)
-    assert code == 2 and doc["command"] == "tts"
+def test_command_without_json_flag(capsys: pytest.CaptureFixture[str]) -> None:
+    code, doc, _ = run_json(["mcp", "--json"], capsys)
+    assert code == 2 and doc["command"] == "mcp"
 
 
 def test_render_error_json_without_rendering(make_project, capsys: pytest.CaptureFixture[str]) -> None:

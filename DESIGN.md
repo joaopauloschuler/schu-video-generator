@@ -34,7 +34,7 @@ Non-goals (for now)
 ## 2. Repository layout
 
 ```
-pyproject.toml            # package "vidgen", console script `vidgen`, Python >= 3.10
+pyproject.toml            # package "vidgen", console scripts `vidgen` (+ `vidgen-mcp`, §62), Python >= 3.10
 src/vidgen/
   __init__.py             # __version__
   __main__.py             # `python -m vidgen` -> cli.main()
@@ -48,6 +48,8 @@ src/vidgen/
   prose.py                # sentences (language-aware), beats of 6-15 words, on-screen label compression (§61; no manim)
   plan.py                 # `vidgen plan`: blocks -> planned scenes (cue -> type, beats fitted to steps, TODOs) (§61; no manim)
   plan_yaml.py            # `vidgen plan` output: commented video.yaml writer, project scaffold, assets (§61; no manim)
+  mcp_server.py           # `vidgen mcp`: MCP server (optional SDK), tools = CLI subprocesses with --json, resources (§62)
+  mcp_tools.py            # its SDK-free parts: root folder policy, command lines, cost refusal, pictures, paging (§62)
   schema.py               # JSON Schema export (see §12)
   errors.py               # VidgenError, Problem
   config.py               # pydantic v2 models for video.yaml (see §4)
@@ -694,7 +696,8 @@ Refinements (Step 3):
 ## 8. CLI
 
 ```
-vidgen init <dir> [--example minimal]   # scaffold a project
+vidgen init <dir> [--example minimal] [--json]   # scaffold a project
+vidgen mcp [--root DIR]                 # MCP server (stdio) with the commands as tools, inside DIR (§62)
 vidgen plan INPUT [--output DIR|FILE] [--title TEXT] [--format 16:9|9:16] [--preset NAME] [--language TAG]
               [--force] [--json]                  # a draft project from an outline / script (§61)
 vidgen guide [TOPIC] [--list] [--json]  # the author guide for AI agents (AGENTS.md, §59)
@@ -705,7 +708,7 @@ vidgen list-icons [PROJECT] [--search TEXT] [--category NAME] [--sheet PNG] [--j
 vidgen list-sfx [PROJECT] [--render-dir DIR] [--json]   # sound effects with descriptions (§47)
 vidgen list-music [PROJECT] [--render-dir DIR] [--json]   # music beds with descriptions (§48)
 vidgen schema [PROJECT] [--scene TYPE | --all] [--json]   # JSON Schema of video.yaml (§12)
-vidgen tts [PROJECT] [--force] [--dry-run] [--beat ID ...] [--voice NAME ...] [--variant NAME]
+vidgen tts [PROJECT] [--force] [--dry-run] [--beat ID ...] [--voice NAME ...] [--variant NAME] [--json]
 vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going]
               [--jobs N] [--frames] [--frames-per-beat N] [--json]
 vidgen storyboard [PROJECT] [--scene ID ...] [--per-beat N] [--variant NAME] [--preview | --final]
@@ -722,7 +725,7 @@ vidgen slides [PROJECT] [--format html|pdf] [--variant NAME] [--preview | --fina
               [--output FILE] [--jobs N] [--force] [--json]   # HTML deck (§55), PDF deck (§56)
 vidgen translate-template [PROJECT] [--variant NAME] [--lang TAG] [--output FILE] [--json]   # translation file (§54)
 vidgen readback [PROJECT] [--variant NAME] [--beat ID ...] [--max-wer RATE] [--force] [--json]   # STT check of the audio (§57)
-vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME]   # generated pictures (§58)
+vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME] [--json]   # generated pictures (§58)
 vidgen gallery [PROJECT] [--output DIR] [--types T,T] [--formats 16:9,9:16] [--theme PRESET]
               [--clips | --no-clips] [--jobs N] [--force] [--json]   # every scene type rendered (§60)
 ```
@@ -4189,3 +4192,76 @@ the measured loudness, §48).
   still written (exit code 1, `ok` false) — it should never happen and the agent needs the file
   to fix it. The new modules are not render inputs (fingerprint); `languages.py` and `icons.py`
   changed, so render fingerprints change once.
+
+## 62. Refinements (Step 59, MCP server)
+
+- **`vidgen mcp [--root DIR]`** (and the console script `vidgen-mcp`): a Model Context Protocol
+  server on stdio, optional extra `vidgen[mcp]` = the official MCP Python SDK (`mcp>=1.19`).
+  Written against SDK 2.x's `MCPServer` (`mcp.server.mcpserver`); with a 1.x SDK it uses
+  `FastMCP` (the same decorator API; 1.19 is the first that passes a returned `CallToolResult`
+  through). Results are built as `CallToolResult.model_validate({...camelCase wire names...})`,
+  which both generations accept. Without the SDK, `vidgen mcp` is a `VidgenError` naming the
+  extra.
+- **Tools** (`mcp_server.build_server`): `guide`, `init`, `plan`, `validate`, `schema`,
+  `list_scenes`, `list_icons`, `list_themes`, `list_sfx`, `list_music`, `storyboard`, `lint`,
+  `render`, `tts`, `imagegen`, `readback`, `slides`, `thumbnail`, `export`, `gallery`,
+  `translate_template`. Parameters mirror the command's options (snake_case; lists for repeatable
+  options), with pydantic `Field` descriptions and bounds. Result: one text block with the
+  command's `--json` document re-serialised compactly (fewer tokens), then images; a document with
+  `ok` false is an `isError` result holding only the JSON. Argument errors (path outside the root,
+  missing cost confirmation) are SDK `ToolError`s. Tool annotations: read-only for guide / list /
+  schema / validate, open-world for tts / imagegen / readback.
+- **Process model: a fresh subprocess per call** (`run_vidgen`: `sys.executable -m vidgen
+  <command> ... --json`, cwd = root, stdin = devnull, list arguments). Why not in-process: Manim's
+  `config` and vidgen's registries / runtime context are process-global and not re-entrant
+  (render already uses worker processes for that reason); a long-lived server must survive a
+  crashing scene, extension or native library; the CLI's JSON mode already guarantees exactly
+  one document on stdout with everything else on stderr. Cost: ~1 s of interpreter + import per
+  call, negligible next to rendering. stdout is collected whole; stderr is split into lines (on
+  `\n` and `\r`), kept as a 30-line tail (shown when a command prints no JSON) and forwarded as
+  `ctx.report_progress(n, None, line)` at most every 0.5 s (no-op when the client sent no
+  progress token). Cancellation kills the process — its whole process group on POSIX
+  (`start_new_session`), so render workers go too. Rendering tools (storyboard, lint, render,
+  tts, imagegen, readback, slides, thumbnail, export, gallery) hold one `anyio.Lock`: they share
+  build folders and CPUs; listing / checking tools run concurrently.
+- **Root policy** (`mcp_tools.RootPolicy`): every path argument is resolved (`Path.resolve`, so
+  `..` and symbolic links are followed) against the root and must be the root or under it
+  (`PathOutsideRoot`, a `VidgenError`). Option values are passed as `--name=value` so a value
+  starting with `-` is never read as an option; positionals are resolved absolute paths or
+  checked names (no leading `-`). Pictures are only returned from inside the root. Files the
+  server asks for itself go to `build/mcp/` (icon sheet, swatches, gallery: `build/mcp/gallery`,
+  no GIFs). Not covered: files a project's own `video.yaml` names (an image `path:` outside the
+  root is read by the render as before).
+- **Secrets**: the subprocess inherits the server's environment (API keys are needed by tts /
+  imagegen / readback); nothing returned contains environment values (documents hold paths and
+  results; provider errors were already scrubbed of keys, §58).
+- **Cost guard**: `tts` and `imagegen` default to `dry_run=True`; `dry_run=False` without
+  `confirm_cost=True` is refused before any process starts (`mcp_tools.cost_refusal` tells the
+  agent to show the dry run to the user first). `readback` asks for `confirm_cost` when the
+  project's `stt.provider` (loaded in-process with `Project.load`, which imports no Manim) is in
+  `PAID_STT` (`elevenlabs`).
+- **Pictures** (`mcp_tools.prepare_picture`): scaled to ≤ 1568 px on the long side (Claude's
+  vision limit; larger costs tokens and is downscaled by the client anyway), PNG unless over
+  800 KB, then JPEG q85. `page_of`: `images` (default 3, ≤ 8) from `image_offset`; the document
+  gets `mcp_images: {total, offset, returned, next_offset}`. Storyboard sheets are ordered
+  whole-video first, then per scene.
+- **Agent-friendly defaults** that differ from the CLI: `render`, `thumbnail`, `export` preview by
+  default; `gallery` writes `build/mcp/gallery` without clips; `plan` takes `markdown_text` (written
+  to a temporary file outside the root; pictures it names are not copied) as well as
+  `input_path`; `validate` has no `variant` (it checks every variant); `schema` refuses to return
+  the whole schema (~370 KB compact, ~100k tokens: over most clients' tool-output limits) unless
+  `full=true` / `all_types=true` — `scene=TYPE` (~6 KB) is what an agent needs.
+- **Resources**: `vidgen://guide`, `vidgen://guide/<topic>` (static, one per topic, read
+  in-process), `vidgen://schema` (a `vidgen schema --json` subprocess in the root), and
+  `vidgen://gallery/index` / `vidgen://gallery/<type>` for `docs/gallery/*.md` under the root
+  when present (the repository's gallery; not shipped in the wheel).
+- **JSON gaps closed** (every wrapped command has a JSON mode): `vidgen init --json`
+  (`{project, config_file, example}`), `vidgen tts --json` (dry run and run: beats with action
+  generate / copy, voice, characters, spoken text; characters per voice; generated, up to date,
+  orphaned), `vidgen imagegen --json` (pictures with prompt, sent prompt, size, model, estimated
+  cost; totals and price note; generated, up to date, orphaned), `validate --json` `images`
+  (`jsonout.images_json`, per config whose pictures differ, from `cli.variant_images`, which the
+  human summary uses too). Human `vidgen validate` now checks every variant even when one does
+  not load (`validate_all(keep_going=True)`), so its error lists them all (`[variant NAME]`
+  lines, like the JSON problems).
+- `mcp_server.py` and `mcp_tools.py` are not render inputs (fingerprint).

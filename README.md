@@ -26,7 +26,9 @@ subtitles.
   with a GIF, its YAML, params and targets (`vidgen gallery` makes it, also for a project's own
   types).
 - **Made for AI authors**: [AGENTS.md](AGENTS.md), also built in as `vidgen guide`, tells an
-  agent how to make a good video with vidgen (see [For AI agents](#for-ai-agents)).
+  agent how to make a good video with vidgen (see [For AI agents](#for-ai-agents)); `vidgen mcp`
+  gives an agent's client every command as an MCP tool, storyboards returned as images
+  ([Use from an AI agent via MCP](#use-from-an-ai-agent-via-mcp)).
 - **From an outline to a draft**: `vidgen plan outline.md` turns a Markdown outline or a
   plain-text script into a draft project (no AI involved): headings become scenes and chapters,
   prose becomes beats of 6–15 words, lists / tables / code / maths / images / quotes / `A -> B`
@@ -161,6 +163,45 @@ examples, outputs and the fixes for common validate / lint messages. (`CLAUDE.md
 working on vidgen's own code.) Starting from an outline, `vidgen plan outline.md --json` writes a
 draft project to refine: its `# TODO:` comments list what to check first.
 
+### Use from an AI agent via MCP
+
+`vidgen mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server: an agent in
+Claude Desktop, Claude Code or any MCP client calls vidgen's commands as tools — `guide`, `plan`,
+`init`, `validate`, `schema`, `list_scenes`, `list_icons`, `list_themes`, `list_sfx`,
+`list_music`, `storyboard`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
+`thumbnail`, `export`, `gallery`, `translate_template` — and gets each command's JSON document
+back. `storyboard`, `thumbnail` and `gallery` also return their pictures, so the agent **sees** its
+video. Install the extra: `pip install ".[mcp]"` (the official MCP Python SDK).
+
+Claude Desktop (`claude_desktop_config.json`; on Windows give the full path of `vidgen.exe` in
+the venv's `Scripts` folder if `vidgen` is not on the PATH):
+
+```json
+{
+  "mcpServers": {
+    "vidgen": {
+      "command": "vidgen",
+      "args": ["mcp", "--root", "C:\\Users\\me\\videos"]
+    }
+  }
+}
+```
+
+Claude Code: `claude mcp add vidgen -- vidgen mcp --root /home/me/videos` (or the same
+`mcpServers` entry in the project's `.mcp.json`).
+
+- **One folder**: the tools read and write only inside `--root` (default: the folder the server
+  starts in); a path outside it, also through `..` or a link, is refused.
+- **No surprise bills**: `tts` and `imagegen` are dry runs unless called with `dry_run: false`
+  **and** `confirm_cost: true` (and `readback` with a paid speech-to-text provider needs
+  `confirm_cost: true`); the dry run says what it would cost. API keys come from the server's
+  environment (set `ELEVENLABS_API_KEY` / `OPENAI_API_KEY` where the client starts it, e.g. an
+  `"env"` entry) and are never returned.
+- **Robust**: every call runs the CLI in a fresh process (`vidgen <command> --json`), reports its
+  progress lines, and stops it when the call is cancelled; renders run one at a time.
+- Resources: the guide (`vidgen://guide`, `vidgen://guide/<topic>`) and the JSON Schema
+  (`vidgen://schema`). Reference: [docs/CONFIG.md](docs/CONFIG.md#mcp-server-vidgen-mcp).
+
 ## Install
 
 ### Windows
@@ -192,6 +233,7 @@ draft project to refine: its `# TODO:` comments list what to check first.
    for `small`).
 9. Optional, only for `vidgen imagegen` (generated pictures): an **OpenAI API key**,
    `setx OPENAI_API_KEY your_key` (read only from this variable, never written anywhere).
+10. Optional, only for `vidgen mcp` (the MCP server for AI agents): `pip install ".[mcp]"`.
 
 If PowerShell refuses to run `Activate.ps1`, run
 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
@@ -233,18 +275,19 @@ narration.
 
 | command | |
 |---|---|
-| `vidgen init DIR [--example minimal]` | create a new project (DIR must not exist or be empty) |
+| `vidgen init DIR [--example minimal] [--json]` | create a new project (DIR must not exist or be empty) |
+| `vidgen mcp [--root DIR]` | the MCP server (stdio) giving an AI agent's client these commands as tools, inside DIR only (needs `vidgen[mcp]`; also `vidgen-mcp`) |
 | `vidgen plan INPUT [--output DIR\|FILE] [--title TEXT] [--format 16:9\|9:16] [--preset NAME] [--language TAG] [--force] [--json]` | a draft project from a Markdown outline or a plain-text script (deterministic, no AI): scenes chosen from its headings and cues, narration cut into beats, on-screen texts compressed, a `# plan:` reason and `# TODO:`s per scene; prints scenes, estimated length and TODO count, and validates the draft |
 | `vidgen guide [TOPIC] [--list] [--json]` | the author guide for AI agents ([AGENTS.md](AGENTS.md)): all of it, one topic (`workflow`, `pacing`, `social`, `scenes`, `design`, `actions`, `overlays`, `audio`, `examples`, `outputs`, `troubleshooting`, ...) or the list |
-| `vidgen validate [PROJECT] [--json]` | load config and extensions, report every problem (also in every variant), estimated length, audio status |
+| `vidgen validate [PROJECT] [--json]` | load config and extensions, report every problem (also in every variant, including variants that do not load), estimated length, audio status, generated pictures |
 | `vidgen list-scenes [PROJECT] [--json]` | scene types (built-in and the project's) with their params |
 | `vidgen list-themes [PROJECT] [--swatches PNG] [--json]` | theme presets (built-in and the project's) with colours, type scale, contrast check; `--swatches` draws them all in one PNG |
 | `vidgen list-icons [PROJECT] [--search TEXT] [--category NAME] [--sheet PNG [--theme [PRESET]]] [--json]` | icons (built-in and the project's `assets/icons`) with category and tags; `--sheet` draws the listed icons, labelled, into a PNG (`--theme`: in the project's or a preset's colours) |
 | `vidgen list-sfx [PROJECT] [--render-dir DIR] [--json]` | sound effects (built-in and the project's `assets/sfx`) with a description of each sound, length, loudness; `--render-dir` writes them as WAV files |
 | `vidgen list-music [PROJECT] [--render-dir DIR] [--json]` | background music beds (built-in, described in words: instruments, key, tempo, chords, mood) and the project's `assets/music` files; `--render-dir` writes one loop of each bed as WAV |
 | `vidgen schema [PROJECT] [--scene TYPE \| --all] [--json]` | JSON Schema of `video.yaml` (params checked per scene type, the project's extension types included), for editors and AI agents |
-| `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--voice NAME ...] [--variant NAME]` | generate missing/stale narration into `audio/`; `--dry-run` needs no key (shows each beat's voice and characters per voice) |
-| `vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME]` | generate the missing pictures of `generate:` params into `assets/generated/` (OpenAI Images, `OPENAI_API_KEY`); `--dry-run` needs no key and shows prompts and an estimated cost |
+| `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--voice NAME ...] [--variant NAME] [--json]` | generate missing/stale narration into `audio/`; `--dry-run` needs no key (shows each beat's voice and characters per voice) |
+| `vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME] [--json]` | generate the missing pictures of `generate:` params into `assets/generated/` (OpenAI Images, `OPENAI_API_KEY`); `--dry-run` needs no key and shows prompts and an estimated cost |
 | `vidgen readback [PROJECT] [--variant NAME] [--beat ID ...] [--max-wer RATE] [--force] [--json]` | transcribe the narration MP3s (speech to text, `stt:`; cached in `build/readback/`) and compare them with the beat texts: word error rate per beat, words expected vs heard, a suggested fix for each (e.g. a pronunciation entry), terms misheard in several beats |
 | `vidgen translate-template [PROJECT] --variant NAME [--lang TAG] [--output FILE] [--json]` | write or update the variant's translation file: every text to translate with its source, keeping existing translations (stale / moved / obsolete marked) |
 | `vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going] [--jobs N] [--frames] [--frames-per-beat N] [--json]` | render and join the video |

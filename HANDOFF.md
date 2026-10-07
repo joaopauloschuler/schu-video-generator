@@ -5559,3 +5559,108 @@ on 2 CPUs); step only:
 `pytest tests/test_plan.py` (~3 s). Manual: `vidgen plan examples/plan/outline.md -o
 /tmp/draft`, read `/tmp/draft/video.yaml`, then `vidgen storyboard /tmp/draft` and `vidgen lint
 /tmp/draft`; `vidgen plan outline.md --language pt-BR --format 9:16 --json`.
+
+## Step 59 — MCP server
+What was built
+- **JSON gaps closed first** (every command a tool wraps has a JSON mode): `vidgen tts --json`
+  (dry run and run: each beat to voice with scene, voice, action `generate` / `copy`, characters
+  billed, spoken text when pronunciation changed it; characters per voice; generated / up to date
+  / orphaned), `vidgen imagegen --json` (each picture with prompt, sent prompt, size, model,
+  quality, estimated cost; total, unknown-price count, price note; generated / up to date /
+  orphaned), `vidgen init --json`, `validate --json` key `images` (per config whose pictures
+  differ: `{variant, generated, missing, pictures: [{key, scenes, path, exists, prompt}]}`). The
+  human progress lines of tts / imagegen go to stderr in JSON mode (they become MCP progress).
+  Human `vidgen validate` no longer stops at the first variant that does not load: it reports
+  every one (`[variant NAME] ...` lines, like the JSON problems).
+- **`vidgen mcp [--root DIR]`** (+ console script `vidgen-mcp`), optional extra `vidgen[mcp]`
+  (`mcp>=1.19`, also in `dev`): a stdio MCP server built on the official SDK — 2.x `MCPServer`
+  (what pip installs today: 2.3.0 here), falling back to 1.x `FastMCP` (tested by hand with
+  1.19.0 and 1.30.0 through `PYTHONPATH`; 1.13 does not pass a returned `CallToolResult` through,
+  hence `>=1.19`). 21 tools: `guide`, `init`, `plan` (`input_path` or `markdown_text`),
+  `validate`, `schema`, `list_scenes`, `list_icons`, `list_themes`, `list_sfx`, `list_music`,
+  `storyboard`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`, `thumbnail`,
+  `export`, `gallery`, `translate_template`; parameters = the CLI options in snake_case with
+  descriptions / bounds; tool annotations (read-only / writes / open-world for the paid ones).
+  Each returns the command's JSON document (compact JSON text); `ok: false` → an `isError` result
+  with that JSON.
+- **Pictures**: `storyboard` (sheets, whole-video first), `thumbnail` (picture + 320 px copy),
+  `gallery` (stills), `list_icons sheet=true`, `list_themes swatches=true` return MCP image
+  content, scaled to ≤ 1568 px, PNG or JPEG q85 over 800 KB; `images` (default 3, max 8) and
+  `image_offset` page, the document gets `mcp_images: {total, offset, returned, next_offset}`.
+- **Process model**: a fresh `python -m vidgen <cmd> ... --json` subprocess per call (cwd =
+  root, stdin devnull, list args). Justification: Manim's config / vidgen's registries are
+  process-global and not re-entrant, a long-lived server must survive crashing scenes /
+  extensions, and the CLI's JSON mode already guarantees one document on stdout; ~1 s overhead.
+  stderr lines → `report_progress` (≤ 2 per s); cancel → the process (its process group on POSIX)
+  is killed; rendering tools are serialised by one lock; light tools run concurrently.
+- **Security**: every path argument resolved (`..`, symlinks) and confined to `--root`
+  (`mcp_tools.RootPolicy`; default: the folder the server starts in); option values passed as
+  `--name=value`, positionals never start with `-`; pictures only from inside the root; the
+  environment is inherited by the subprocesses (keys) but never returned. **Cost safety**: `tts`
+  / `imagegen` default `dry_run=True`; `dry_run=False` without `confirm_cost=True` is refused before
+  anything runs; `readback` asks for `confirm_cost` when `stt.provider` is `elevenlabs`. `schema`
+  without `scene` refuses unless `full=true` / `all_types=true` (the whole schema is ~370 KB
+  compact, ~100k tokens).
+- **Resources**: `vidgen://guide`, `vidgen://guide/<topic>`, `vidgen://schema`, and
+  `vidgen://gallery/index|<type>` when `<root>/docs/gallery` exists.
+- Docs: README "Use from an AI agent via MCP" (Claude Desktop JSON with `"command": "vidgen",
+  "args": ["mcp", "--root", ...]`, Claude Code `claude mcp add`), install step, command rows;
+  docs/CONFIG.md new "MCP server (`vidgen mcp`)" section + `init` / `tts` / `imagegen --json`
+  sections + validate `images`; AGENTS.md (both copies) "Through MCP" paragraph in the workflow
+  topic and the JSON list; DESIGN.md tree, §8, new §62; `examples/minimal/video.yaml` usage lines.
+
+Files
+- New: `src/vidgen/mcp_server.py` (SDK binding, subprocess runner, tools, resources),
+  `src/vidgen/mcp_tools.py` (SDK-free: `RootPolicy`, `PathOutsideRoot`, `cli_args`,
+  `cost_refusal`, `prepare_picture`, `page_of`), `tests/test_mcp.py` (14 tests: 6 CLI JSON, 5
+  helpers, 3 over stdio with the SDK client, one of them a render test).
+- Changed: `cli.py` (`cmd_mcp`, `init` / `tts` / `imagegen` JSON, `variant_images`, validate
+  keep-going, `JSON_COMMANDS`), `jsonout.py` (`init_document`, `tts_document`,
+  `imagegen_document`, `images_json`, validate `images`), `render/fingerprint.py` (new modules not
+  render inputs), `pyproject.toml` (extra `mcp`, dev, script `vidgen-mcp`), tests `test_cli.py`
+  (new variant message), `test_json_output.py` (`tts --json` is no longer a usage error), docs above,
+  tasklist.md.
+
+Public interfaces added/changed (compatible; `vidgen.api` unchanged)
+- CLI `vidgen mcp`, `vidgen-mcp`; `--json` on `init`, `tts`, `imagegen` (documents version 1);
+  validate document key `images`. Human `vidgen validate` error text for broken variants is now
+  `[variant NAME] location: message` (was `variant 'NAME': ...` and only the first).
+- `vidgen.mcp_server`: `build_server(root)`, `serve(root)`, `main(argv)`, `run_vidgen(args, cwd,
+  progress)`, `CommandRun`, `compact`, `stt_provider`; `vidgen.mcp_tools` as above;
+  `cli.variant_images`, `cli.cmd_mcp`.
+
+Decisions / deviations
+- **Subprocess per call, not in-process** (above). The CLI is the contract; the server adds no
+  second implementation of any command.
+- **SDK 2.x first, 1.x accepted**: the task named FastMCP, which SDK 2 renamed `MCPServer`;
+  results are built from wire names via `model_validate` so one code path serves both.
+- **Errors**: a failed command returns its JSON document as an error result (not the SDK's
+  "Error executing tool ..." text), so the agent parses the same shape either way. SDK log level
+  WARNING (it logged every failed call's document at INFO).
+- **Defaults for agents**: `render` / `thumbnail` / `export` preview by default; `gallery` writes
+  `build/mcp/gallery` with no GIFs (not `docs/gallery`); `validate` has no `variant` (it checks
+  all variants); progress is a counter without a total (MCP requires increasing values; lines
+  mix kinds).
+- `plan` with `markdown_text` writes a temporary file outside the root (server-owned) and
+  defaults the output to `<root>/outline`; pictures it names are not copied.
+
+What I looked at
+- Through the SDK client by hand (scratch scripts): render of a tiny project (3 progress
+  notifications: the warning and `[1/2]` / `[2/2]` lines), thumbnail (2 PNGs), gallery `stat`
+  16:9 (still), `list_themes swatches=true` (193 KB PNG), `list_icons sheet=true`, `plan` from
+  `markdown_text`, a validate with two broken variants (error result with both).
+
+Known gaps / TODOs (routed to Step 60 in tasklist.md)
+- Files a project's own config names (image `path:`, extensions, `pronunciation_file`) are not
+  confined to the root: the server confines tool arguments only.
+- Windows: cancelling kills the CLI process but not its render workers (no process group).
+- Large documents (a long video's `lint` / `storyboard` JSON, `schema full=true`) are not trimmed
+  and may exceed a client's tool-output limit.
+- No session with a real client (Claude Desktop / Code) was possible here; only the SDK's own
+  client in tests. Cancellation is not covered by a test.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2237 passed, 1 skipped, ~11 min on 2 CPUs); step only:
+`pytest tests/test_mcp.py` (~30 s; the stdio tests skip without `mcp`). Manual: `pip install -e
+".[mcp]"`, add `{"command": "vidgen", "args": ["mcp", "--root", "<folder>"]}` to a client, ask it
+to call `guide` with topic `workflow`, `plan` on an outline, `storyboard` (the sheets come back as
+images), `tts` (dry run; a real run is refused without `confirm_cost`).

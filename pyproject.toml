@@ -18,10 +18,12 @@ dependencies = [
 [project.optional-dependencies]
 pdf = ["fpdf2>=2.7.9"]
 stt = ["faster-whisper>=1.0"]
-dev = ["pytest", "jsonschema>=4.18", "pytest-xdist", "fpdf2>=2.7.9", "pypdf>=4"]
+mcp = ["mcp>=1.19"]
+dev = ["pytest", "jsonschema>=4.18", "pytest-xdist", "fpdf2>=2.7.9", "pypdf>=4", "mcp>=1.19"]
 
 [project.scripts]
 vidgen = "vidgen.cli:main"
+vidgen-mcp = "vidgen.mcp_server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

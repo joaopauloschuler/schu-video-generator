@@ -35,6 +35,7 @@ TEMPLATE_DOTFILES: tuple[str, ...] = ("gitignore",)
 JSON_COMMANDS: tuple[str, ...] = (
     "validate", "list-scenes", "list-themes", "list-icons", "list-sfx", "list-music", "render", "schema", "storyboard", "lint",
     "thumbnail", "export", "translate-template", "slides", "readback", "guide", "gallery", "plan",
+    "init", "tts", "imagegen",
 )
 
 #: What a command function returns: an exit code, or (with ``--json``) the JSON document.
@@ -49,12 +50,14 @@ def _format_seconds(seconds: float) -> str:
     return f"{minutes}:{secs:02d}"
 
 
-def cmd_init(args: argparse.Namespace) -> int:
+def cmd_init(args: argparse.Namespace) -> CommandResult:
     """Scaffold a new project from a template."""
     target = Path(args.dir)
     if target.exists() and (not target.is_dir() or any(target.iterdir())):
         raise VidgenError(f"{target} already exists and is not an empty directory")
     scaffold_project(target, args.example)
+    if args.json:
+        return jsonout.init_document(target, args.example)
     print(f"created project in {target}")
     print("next: edit video.yaml, then run `vidgen validate`, `vidgen tts` and `vidgen render`")
     print("guide: `vidgen guide` (how to make a good video: workflow, pacing, scene types; for AI agents too)")
@@ -335,7 +338,8 @@ def cmd_validate(args: argparse.Namespace) -> CommandResult:
     if args.json:
         return _validate_json(args.project)
     project = Project.load(args.project)
-    problems, variants = validate_all(project)
+    # A variant that does not load is reported with the others' problems, not the end of the check.
+    problems, variants = validate_all(project, keep_going=True)
     log_validate_warnings(project, variants)
     if problems:
         raise _invalid_project(project, problems)
@@ -371,7 +375,8 @@ def _validate_json(path: str) -> dict[str, Any]:
     problems, variants = validate_all(project, keep_going=True)
     log_validate_warnings(project, variants)
     error = _invalid_project(project, problems) if problems else None
-    return jsonout.validate_document(project, problems, variants, error)
+    images = [jsonout.images_json(p, found) for p, found in variant_images(project, variants)]
+    return jsonout.validate_document(project, problems, variants, error, images=images)
 
 
 def language_summary_lines(project: Project, variants: dict[str, Project | None]) -> list[str]:
@@ -411,12 +416,12 @@ def audio_summary_lines(project: Project) -> list[str]:
     return lines
 
 
-def images_summary_lines(project: Project, variants: dict[str, Project | None]) -> list[str]:
-    """``images: 3 generated, 1 missing`` for the base config and each variant whose pictures
-    differ (none without ``generate:`` params)."""
-    from vidgen.imagegen import images_summary, scene_images
+def variant_images(project: Project, variants: dict[str, Project | None]) -> list[tuple[Project, list[Any]]]:
+    """The ``generate:`` pictures (``SceneImage``) of the base config and of each loaded variant
+    whose pictures differ from the base's; configs without any are left out."""
+    from vidgen.imagegen import scene_images
 
-    lines = []
+    out: list[tuple[Project, list[Any]]] = []
     base_keys: set[str] | None = None
     for p in [project, *(v for v in variants.values() if v is not None)]:
         try:
@@ -429,28 +434,45 @@ def images_summary_lines(project: Project, variants: dict[str, Project | None]) 
         elif keys == base_keys:
             continue
         if images:
-            label = "images:" if p.variant is None else f"images [{p.variant}]:"
-            lines.append(f"{label:<10} {images_summary(images)}" if p.variant is None else f"{label} {images_summary(images)}")
+            out.append((p, images))
+    return out
+
+
+def images_summary_lines(project: Project, variants: dict[str, Project | None]) -> list[str]:
+    """``images: 3 generated, 1 missing`` for the base config and each variant whose pictures
+    differ (none without ``generate:`` params)."""
+    from vidgen.imagegen import images_summary
+
+    lines = []
+    for p, images in variant_images(project, variants):
+        label = "images:" if p.variant is None else f"images [{p.variant}]:"
+        lines.append(f"{label:<10} {images_summary(images)}" if p.variant is None else f"{label} {images_summary(images)}")
     return lines
 
 
-def cmd_imagegen(args: argparse.Namespace) -> int:
+def cmd_imagegen(args: argparse.Namespace) -> CommandResult:
     """Generate the pictures of ``generate:`` params that are missing (DESIGN.md §58)."""
     from vidgen.imagegen.run import run_imagegen
 
+    started = time.monotonic()
     project = Project.load(args.project, variant=args.variant)
-    run_imagegen(project, scene_ids=args.scene, force=args.force, dry_run=args.dry_run)
+    plan = run_imagegen(project, scene_ids=args.scene, force=args.force, dry_run=args.dry_run)
+    if args.json:
+        return jsonout.imagegen_document(project, plan, args.dry_run, args.force, time.monotonic() - started)
     return 0
 
 
-def cmd_tts(args: argparse.Namespace) -> int:
+def cmd_tts(args: argparse.Namespace) -> CommandResult:
     """Generate narration audio for beats whose MP3 is missing or stale."""
     from vidgen import extensions
     from vidgen.tts.run import run_tts
 
+    started = time.monotonic()
     project = Project.load(args.project, variant=args.variant)
     with extensions.project_session(project):
-        run_tts(project, beat_ids=args.beat, force=args.force, dry_run=args.dry_run, voices=args.voice)
+        plan = run_tts(project, beat_ids=args.beat, force=args.force, dry_run=args.dry_run, voices=args.voice)
+    if args.json:
+        return jsonout.tts_document(project, plan, args.dry_run, args.force, time.monotonic() - started)
     return 0
 
 
@@ -1010,6 +1032,14 @@ def cmd_guide(args: argparse.Namespace) -> CommandResult:
     return 0
 
 
+def cmd_mcp(args: argparse.Namespace) -> int:
+    """Serve vidgen's commands as MCP tools on stdin / stdout until the client disconnects (DESIGN.md §62)."""
+    from vidgen.mcp_server import serve
+
+    serve(Path(args.root))
+    return 0
+
+
 def cmd_gallery(args: argparse.Namespace) -> CommandResult:
     """Render every scene type's sample at 16:9 and 9:16 and write the Markdown gallery (DESIGN.md §60)."""
     from vidgen.gallery import make_gallery
@@ -1093,6 +1123,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("topic", nargs="?", metavar="TOPIC", help="print only this topic (vidgen guide --list shows them)")
     p.add_argument("--list", action="store_true", help="list the topics")
     p.set_defaults(func=cmd_guide)
+
+    p = sub.add_parser("mcp", help="run the MCP server (stdio) that gives AI agents vidgen's commands as tools (needs vidgen[mcp])")
+    p.add_argument("--root", metavar="DIR", default=".", help="the only folder the tools may read and write (default: the current folder)")
+    p.set_defaults(func=cmd_mcp)
 
     p = sub.add_parser("validate", help="check the project config")
     project_arg(p)

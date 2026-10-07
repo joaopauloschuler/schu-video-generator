@@ -4149,9 +4149,57 @@ maths, and more beats than a scene has steps (dead air).
 Then refine the draft like any project: read the comments, rewrite the narration for the ear,
 `vidgen validate`, `vidgen storyboard`, `vidgen lint` (`vidgen guide workflow`).
 
+## MCP server (`vidgen mcp`)
+
+`vidgen mcp [--root DIR]` (also the `vidgen-mcp` script) runs a [Model Context
+Protocol](https://modelcontextprotocol.io) server on stdin / stdout, so an AI agent's client
+(Claude Desktop, Claude Code, ...) can call vidgen's commands as **tools**. It needs the optional
+extra: `pip install "vidgen[mcp]"` (the official MCP Python SDK, 1.19 or newer). Configuration
+snippets: README "Use from an AI agent via MCP".
+
+**Tools** (each returns the command's `--json` document below as JSON text; `ok` false comes
+back as a tool error with the same text): `guide`, `init`, `plan` (`input_path`, or the outline as
+`markdown_text`), `validate`, `schema`, `list_scenes`, `list_icons`, `list_themes`, `list_sfx`,
+`list_music`, `storyboard`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
+`thumbnail`, `export`, `gallery`, `translate_template`. Their parameters are the command's
+options in snake_case (`per_beat`, `fail_on`, `no_audio`...); list options take lists. Defaults
+that differ from the CLI, for agents: `render`, `thumbnail` and `export` use the preview (`preview:
+false` for the final format); `gallery` writes into `build/mcp/gallery` without GIFs; `schema`
+wants `scene: TYPE` (a few KB) and gives the whole schema (hundreds of KB) only with `full: true`
+(or `all_types: true`).
+
+**Pictures.** `storyboard` returns its contact sheets (whole-video sheets first), `thumbnail` the
+thumbnail and its small copy, `gallery` the stills, `list_icons` with `sheet: true` an icon
+sheet, `list_themes` with `swatches: true` the swatches, as MCP image content: at most 1568 px on
+the long side, PNG (JPEG when a PNG would exceed 800 KB). `images` (default 3, at most 8) and
+`image_offset` page through more; the document's `mcp_images` says `{total, offset, returned,
+next_offset}`. Stills are reused, so asking for the next page renders nothing.
+
+**Costs.** `tts` and `imagegen` are dry runs by default (free, no key): they list what would be
+made and its size (characters, estimated dollars). A real run needs `dry_run: false` **and**
+`confirm_cost: true`; without the latter the tool refuses before anything starts. `readback` asks
+for `confirm_cost: true` when the project's `stt.provider` is a paid service (`elevenlabs`).
+
+**Folder.** Every path a tool takes (project, outputs, `init`'s folder, `plan`'s input) is relative
+to `--root` (default: the current folder) and must resolve inside it, `..` and symbolic links
+included; other paths are refused. Files the server asks for itself (icon sheet, swatches,
+gallery) go into `build/mcp/` under the root. The server passes its environment (API keys) to the
+commands it runs but never returns it; documents carry only paths and results.
+
+**How it runs.** Every call starts `python -m vidgen <command> ... --json` in the root folder (a
+fresh process: Manim's configuration is process-global and a crashing scene or extension cannot
+take the server down) and turns the command's stderr lines into MCP progress notifications.
+Rendering calls (`storyboard`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
+`thumbnail`, `export`, `gallery`) run one at a time; cancelling a call stops its process.
+
+**Resources**: `vidgen://guide` (the author guide) and `vidgen://guide/<topic>` (one topic each),
+`vidgen://schema` (the JSON Schema of the root project's `video.yaml`, else of the built-ins) and,
+when the root has a `docs/gallery` folder (the vidgen repository), `vidgen://gallery/index` and
+`vidgen://gallery/<type>`.
+
 ## JSON output (`--json`)
 
-`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail`, `vidgen export`, `vidgen slides`, `vidgen translate-template`, `vidgen readback`, `vidgen guide`, `vidgen gallery` and `vidgen plan` accept `--json`: stdout then holds
+`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail`, `vidgen export`, `vidgen slides`, `vidgen translate-template`, `vidgen readback`, `vidgen guide`, `vidgen gallery`, `vidgen plan`, `vidgen init`, `vidgen tts` and `vidgen imagegen` accept `--json` (every command but `vidgen mcp`, which speaks MCP): stdout then holds
 exactly one JSON document (ASCII-only, non-ASCII characters escaped), and everything else
 (progress, `warning:` lines, Manim output) goes to stderr. These shapes are meant for programs
 and AI agents driving vidgen. Without `--json` the human output is unchanged.
@@ -4166,7 +4214,7 @@ it. Times are seconds (floats), paths are absolute strings, absent values are `n
 |---|---|---|
 | `version` | int | schema version of the document (1) |
 | `vidgen` | str | vidgen package version |
-| `command` | str \| null | `validate`, `list-scenes`, `list-themes`, `list-icons`, `render`, `schema`, `storyboard`, `lint`, `thumbnail`, `export`, `slides`, `translate-template`, `readback`, `guide`, `gallery`, `plan` (`null` if the command line could not be parsed) |
+| `command` | str \| null | `validate`, `list-scenes`, `list-themes`, `list-icons`, `render`, `schema`, `storyboard`, `lint`, `thumbnail`, `export`, `slides`, `translate-template`, `readback`, `guide`, `gallery`, `plan`, `init`, `tts`, `imagegen` (`null` if the command line could not be parsed) |
 | `ok` | bool | `true` on success; the exit code is 0 exactly when `ok` is true |
 | `warnings` | list | `{scene, message}`: vidgen warnings of the run (`scene` is `null`, or the scene whose render printed it) |
 | `error` | object | only when `ok` is false: `{kind, message, problems, details}` |
@@ -4188,8 +4236,8 @@ or `null` when the problem is not about one value, e.g. an extension that fails 
 ### `vidgen validate --json`
 
 Always a validate document (also when the project cannot be loaded); exit code 1 if there is
-any problem. Unlike the human output, a variant whose config does not load is reported as
-problems (with its `variant`) and the other variants are still checked.
+any problem. A variant whose config does not load is reported as problems (with its `variant`)
+and the other variants are still checked (the human output does the same since Step 59).
 
 | key | type | |
 |---|---|---|
@@ -4202,6 +4250,7 @@ problems (with its `variant`) and the other variants are still checked.
 | `variants` | list | every variant checked: `{name, loaded, estimated_duration, problems, language, translations}` (`problems`: how many are this variant's own; `language` / `translations` as at the top level, `null` when it does not load) |
 | `problems` | list | `{location, message, variant}` (as in `error.problems`); empty when the project is valid |
 | `audio` | list | one per audio folder (the base config's, plus each variant with its own, see [variant audio](#narration-audio-elevenlabs)): `{variant, dir, ok, stale, missing, orphaned, beats}`; `ok`/`stale`/`missing` are counts, `orphaned` the paths of MP3s no beat uses, `beats` lists `{scene, beat, state}` in video order with `state` `ok`, `stale` or `missing` |
+| `images` | list | the [generated pictures](#generated-images-imagegen-vidgen-imagegen) of the base config, plus each variant whose pictures differ (none without `generate:` params): `{variant, generated, missing, pictures}`, `pictures` listing each distinct request once as `{key, scenes, path, exists, prompt}` |
 
 `warnings` include the theme contrast warnings (`theme contrast: ...`, prefixed `[variant] `
 for a variant's own; they do not make `ok` false). When there are problems, `error` is
@@ -4511,6 +4560,48 @@ The [draft](#drafting-from-an-outline-vidgen-plan) written by `vidgen plan`. `ok
 | `notes` | list | TODOs about the whole video (e.g. no closing section) |
 | `scenes` | list | `{id, type, beats, words, estimated_duration, reason, todos}` per scene, in order; `reason` is the scene's `# plan:` comment, `todos` its `# TODO:` comments |
 | `problems` | list | `vidgen validate` problems of the draft, `{location, message, variant}` (normally empty) |
+
+### `vidgen init --json`
+
+| key | type | |
+|---|---|---|
+| `project`, `config_file` | str | the new project folder and its `video.yaml` |
+| `example` | str | the template it was made from (`--example`) |
+
+### `vidgen tts --json`
+
+The same document for a dry run (`--dry-run`, nothing sent, no key needed) and a run; the progress
+lines (`[2/5] generated ...`) go to stderr. A run that fails part-way is an error document whose
+message says how many beats were done (their MP3s are kept: run again to continue).
+
+| key | type | |
+|---|---|---|
+| `project`, `variant`, `audio_dir` | str \| null | the project, the variant and the audio folder written |
+| `dry_run`, `force` | bool | the options |
+| `characters` | int | characters sent (or that a run would send) for synthesis: what ElevenLabs bills |
+| `voices` | object | `{voice name: {voice_id, beats, characters}}` of the beats to synthesise (`default` = the base voice) |
+| `beats` | list | the beats to voice, in video order: `{scene, beat, voice, action, characters, says, source}`; `action` `generate` (an API call) or `copy` (the base `audio/` MP3 of a variant beat that did not change; 0 characters, `source` its path), `says` the text sent when [pronunciation](#pronunciation-pronunciation) changed it (else `null`) |
+| `generated` | list | beat ids voiced by this run (`[]` for a dry run) |
+| `up_to_date` | list | beat ids skipped because their MP3 is current |
+| `orphaned` | list | MP3s in the audio folder no beat uses (never deleted) |
+| `elapsed` | float | seconds |
+
+### `vidgen imagegen --json`
+
+The same document for a dry run (`--dry-run`, no key needed) and a run (DESIGN.md §58).
+
+| key | type | |
+|---|---|---|
+| `project`, `variant` | str \| null | |
+| `dry_run`, `force` | bool | the options |
+| `estimated_cost` | float | US dollars of the pictures to generate, by `price_note` |
+| `unknown_cost` | int | pictures to generate with no known price (model / size not in the price list) |
+| `price_note` | str | where the prices come from |
+| `images` | list | the pictures to generate, each distinct request once: `{key, scenes, prompt, sent_prompt, provider, model, size, quality, seed, estimated_cost, path}` (`sent_prompt` = prompt + style + negative as sent; `path` the PNG it is / will be stored as) |
+| `generated` | list | keys generated by this run (`[]` for a dry run) |
+| `up_to_date` | list | keys whose picture exists (skipped) |
+| `orphaned` | list | pictures in `assets/generated/` no config of the project uses (never deleted) |
+| `elapsed` | float | seconds |
 
 ### `vidgen lint --json`
 

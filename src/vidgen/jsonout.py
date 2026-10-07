@@ -26,6 +26,9 @@ if TYPE_CHECKING:
     from vidgen.gallery import GalleryResult
     from vidgen.guide import GuideTopic
     from vidgen.icons import IconInfo
+    from vidgen.imagegen import SceneImage
+    from vidgen.imagegen.run import ImagegenPlan
+    from vidgen.tts.run import TTSPlan
     from vidgen.deck import Deck
     from vidgen.plan import Plan
     from vidgen.plan_yaml import PlanResult
@@ -116,12 +119,15 @@ def validate_document(
     variants: Mapping[str, Project | None],
     error: VidgenError | None,
     warnings: Iterable[Mapping[str, Any]] = (),
+    *,
+    images: Iterable[Mapping[str, Any]] = (),
 ) -> dict[str, Any]:
     """The ``vidgen validate --json`` document.
 
     ``project`` is ``None`` when the base config could not be loaded (then the summary fields
     are ``null``); ``variants`` maps every variant name to its loaded project (``None`` if it
-    could not be loaded). ``error`` is the error to report when there are problems.
+    could not be loaded). ``error`` is the error to report when there are problems. ``images``:
+    :func:`images_json` of the base config and of each variant whose pictures differ.
     """
     ok = not problems and error is None
     summary: dict[str, Any] = {
@@ -163,10 +169,127 @@ def validate_document(
                 if p is not None and (p.variant is None or p.has_own_audio)
             ],
         )
+    summary["images"] = [dict(i) for i in images]
     doc = envelope("validate", ok, warnings, **summary, problems=[p.to_json() for p in problems])
     if error is not None:
         doc["error"] = error_json("error", str(error), problems, error.details)
     return doc
+
+
+def images_json(project: Project, images: Iterable[SceneImage]) -> dict[str, Any]:
+    """The generated pictures of one config (DESIGN.md §58): ``{variant, generated, missing,
+    pictures: [{key, scenes, path, exists, prompt}]}``, each distinct request once."""
+    pictures: dict[str, dict[str, Any]] = {}
+    for image in images:
+        request = image.request
+        entry = pictures.setdefault(
+            request.key,
+            {"key": request.key, "scenes": [], "path": _path(request.path), "exists": request.exists, "prompt": request.prompt},
+        )
+        if image.scene_id not in entry["scenes"]:
+            entry["scenes"].append(image.scene_id)
+    made = sum(1 for p in pictures.values() if p["exists"])
+    return {"variant": project.variant, "generated": made, "missing": len(pictures) - made, "pictures": list(pictures.values())}
+
+
+# ----- init / tts / imagegen ---------------------------------------------------------------------
+
+
+def init_document(target: Path, example: str, warnings: Iterable[Mapping[str, Any]] = ()) -> dict[str, Any]:
+    """The ``vidgen init --json`` document: the new project's folder, config file and template."""
+    return envelope("init", True, warnings, project=_path(target), config_file=_path(target / "video.yaml"), example=example)
+
+
+def tts_document(
+    project: Project, plan: TTSPlan, dry_run: bool, force: bool, elapsed: float, warnings: Iterable[Mapping[str, Any]] = ()
+) -> dict[str, Any]:
+    """The ``vidgen tts --json`` document (a dry run or a run): every beat to voice (``action``
+    ``generate`` or ``copy`` from the base audio folder, its voice, characters billed and the
+    spoken text when pronunciation changed it), the characters per voice, the beats generated
+    (none in a dry run) and up to date, and the orphaned MP3s."""
+    from vidgen.tts.cache import orphaned_audio
+
+    scenes = {beat.id: scene.id for scene, beat in project.beats()}
+    beats = []
+    for beat in plan.todo:
+        source = plan.reuse.get(beat.id)
+        says = plan.say(beat)
+        beats.append(
+            {
+                "scene": scenes.get(beat.id),
+                "beat": beat.id,
+                "voice": plan.voice_of(beat),
+                "action": "copy" if source is not None else "generate",
+                "characters": 0 if source is not None else len(says),
+                "says": says if says != beat.text else None,
+                "source": None if source is None else _path(source),
+            }
+        )
+    voices = {
+        name: {"voice_id": project.voice(name).voice_id, "beats": n, "characters": chars}
+        for name, (n, chars) in plan.characters_by_voice().items()
+    }
+    return envelope(
+        "tts",
+        True,
+        warnings,
+        project=_path(project.root),
+        variant=project.variant,
+        audio_dir=_path(plan.audio_dir),
+        dry_run=dry_run,
+        force=force,
+        characters=plan.characters,
+        voices=voices,
+        beats=beats,
+        generated=[] if dry_run else [b["beat"] for b in beats],
+        up_to_date=list(plan.up_to_date),
+        orphaned=[_path(p) for p in orphaned_audio(project)],
+        elapsed=round(elapsed, 3),
+    )
+
+
+def imagegen_document(
+    project: Project, plan: ImagegenPlan, dry_run: bool, force: bool, elapsed: float, warnings: Iterable[Mapping[str, Any]] = ()
+) -> dict[str, Any]:
+    """The ``vidgen imagegen --json`` document (a dry run or a run): every picture to generate
+    with its scenes, prompt sent, size, model and estimated cost, the total estimate, the
+    pictures generated (none in a dry run) and up to date, and the orphaned pictures."""
+    from vidgen.imagegen.run import PRICE_NOTE
+
+    total, unknown = plan.cost
+    images = [
+        {
+            "key": r.key,
+            "scenes": list(plan.scenes[r.key]),
+            "prompt": r.prompt,
+            "sent_prompt": r.text,
+            "provider": r.provider,
+            "model": r.model,
+            "size": r.size,
+            "quality": r.quality,
+            "seed": r.seed,
+            "estimated_cost": r.estimated_cost,
+            "path": _path(r.path),
+        }
+        for r in plan.todo
+    ]
+    return envelope(
+        "imagegen",
+        True,
+        warnings,
+        project=_path(project.root),
+        variant=project.variant,
+        dry_run=dry_run,
+        force=force,
+        estimated_cost=round(total, 4),
+        unknown_cost=unknown,
+        price_note=PRICE_NOTE,
+        images=images,
+        generated=[] if dry_run else [i["key"] for i in images],
+        up_to_date=list(plan.up_to_date),
+        orphaned=[_path(p) for p in plan.orphans],
+        elapsed=round(elapsed, 3),
+    )
 
 
 # ----- list-scenes -------------------------------------------------------------------------------

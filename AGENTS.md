@@ -141,10 +141,21 @@ be made again identically). Renders are slow but free: `storyboard` and `lint` r
 the scenes that changed; `vidgen render` renders every scene unless you give `--scene ID`;
 `--jobs N` renders several at once; preview while iterating.
 
-**JSON everywhere.** `validate`, `list-scenes`, `list-themes`, `list-icons`, `list-sfx`,
-`list-music`, `schema`, `render`, `storyboard`, `lint`, `thumbnail`, `export`, `slides`,
-`translate-template`, `readback`, `gallery`, `plan` and `guide` take `--json`: one document on stdout,
-`{version, ok, warnings, ..., error?}`, exit code 0 exactly when `ok`.
+**JSON everywhere.** Every command but `mcp` takes `--json` (`validate`, `list-scenes`,
+`schema`, `storyboard`, `lint`, `render`, `tts`, `imagegen`, `plan`, `init`, ...): one document on
+stdout, `{version, ok, warnings, ..., error?}`, exit code 0 exactly when `ok`. `vidgen tts
+--dry-run --json` lists every beat to voice with its characters; `vidgen imagegen --dry-run
+--json` every picture with its prompt and estimated cost.
+
+**Through MCP.** When your client has the vidgen MCP server (`vidgen mcp --root DIR`), the same
+commands are tools with the same JSON documents: `guide`, `plan`, `init`, `validate`, `schema`,
+`list_scenes`, `list_icons`, `list_themes`, `list_sfx`, `list_music`, `storyboard`, `lint`,
+`render`, `tts`, `imagegen`, `readback`, `slides`, `thumbnail`, `export`, `gallery`,
+`translate_template` (options in snake_case: `per_beat`, `fail_on`). Paths are relative to the
+server's root folder. `storyboard` returns the contact sheets as images (look at them; page with
+`image_offset`), `thumbnail` and `gallery` their pictures. `render` previews by default. `tts` and
+`imagegen` are dry runs unless you pass `dry_run: false` and `confirm_cost: true`: run the dry
+run, tell the user what it will cost, and confirm only after they agree.
 
 <!-- topic: pacing (also: story, storytelling, text, narration, beats) -->
 ## Storytelling and pacing
