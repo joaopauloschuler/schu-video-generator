@@ -82,6 +82,7 @@ src/vidgen/
   export.py               # `vidgen export gif|clip`: palette GIF with a size budget, MP4 clip copy / encode (§53)
   deck.py                 # slide decks' key frames: stills per beat / scene, dedupe, notes, timeline (§55)
   slides.py               # `vidgen slides`: one self-contained HTML deck (data/slides/deck.css, deck.js) (§55)
+  slides_pdf.py           # `vidgen slides --format pdf`: slide / notes pages, title page, outline (fpdf2, §56)
   overlays.py             # overlays: Overlay base, OverlayContext, config entries, validation, reserve (§41)
   overlay_layer.py        # OverlayLayer: overlays composited into every frame a scene writes (§41)
   charts.py               # chart helpers: ticks, number labels, axes, legend, markers, fit (§33),
@@ -144,7 +145,7 @@ my_video/
   <output>.srt            #               <output>_<variant>.mp4 for variants)
   <output>_chapters.txt   # YouTube chapter list, when the video has chapters (Step 49, §52)
   <output>_thumbnail.png  # thumbnail (+ .jpg), `vidgen thumbnail` / render with `thumbnail:` (Step 50, §53)
-  exports/                # `vidgen export`: GIFs and MP4 clips of parts of the video (Step 50, §53); `vidgen slides` decks (§55)
+  exports/                # `vidgen export`: GIFs and MP4 clips of parts of the video (Step 50, §53); `vidgen slides` decks (§55, §56)
 ```
 
 `build/<final|preview>[_<variant>]/` (Step 4) holds: `scenes/<id>.mp4` (the scene as rendered,
@@ -686,9 +687,10 @@ vidgen thumbnail [PROJECT] [--variant NAME] [--preview] [--scene ID [--beat ID|N
               [--jpeg] [--jobs N] [--json]                    # <output>_thumbnail.png (§53)
 vidgen export gif|clip [PROJECT] [--scene ID] [--from S] [--to S] [--variant NAME] [--preview] [--width PX]
               [--fps F] [--max-mb MB] [--with-audio] [--output FILE] [--json]   # exports/ (§53)
-vidgen slides [PROJECT] [--variant NAME] [--preview | --final] [--mode beat|scene] [--per-beat N]
+vidgen slides [PROJECT] [--format html|pdf] [--variant NAME] [--preview | --final] [--mode beat|scene] [--per-beat N]
               [--overlays | --no-overlays] [--no-dedupe] [--image-format F] [--quality Q] [--max-width PX]
-              [--audio] [--separate] [--output FILE] [--jobs N] [--force] [--json]   # HTML deck (§55)
+              [--audio] [--separate] [--notes] [--title-page] [--paper a4|letter]
+              [--output FILE] [--jobs N] [--force] [--json]   # HTML deck (§55), PDF deck (§56)
 vidgen translate-template [PROJECT] [--variant NAME] [--lang TAG] [--output FILE] [--json]   # translation file (§54)
 ```
 PROJECT defaults to the current directory. `--scene` re-renders only those scenes and re-joins
@@ -3673,7 +3675,7 @@ the measured loudness, §48).
 
 ## 55. Refinements (Step 52, slides export: HTML)
 
-- **Key frames** (`vidgen/deck.py`, no manim; shared with the PDF deck of Step 53):
+- **Key frames** (`vidgen/deck.py`, no manim; shared with the PDF deck of Step 53, §56):
   `deck_frames(project, *, preview=True, mode="beat"|"scene", per_beat=1, overlays=True,
   dedupe=True, jobs=1, force=False) -> Deck`. The stills are the §13 frame stills, made current
   the §14 way (`storyboard.stills_current` → `pipeline.render_scenes(..., frames=per_beat)` for
@@ -3745,3 +3747,75 @@ the measured loudness, §48).
   (the notes and pictures follow the variant's language); the deck shows frames, not motion
   (animations, clips); a merged slide's notes are joined without saying where the picture
   changed; slides of a 9:16 video are tall (letterboxed on landscape screens).
+
+## 56. Refinements (Step 53, slides export: PDF)
+
+- **Command**: `vidgen slides --format pdf` (one command, two deck formats; `--format html` the
+  default) rather than a separate `slides-pdf`: the frame options (`--variant`, `--preview` /
+  `--final`, `--mode`, `--per-beat`, `--overlays`, `--no-dedupe`, `--jobs`, `--force`) and the
+  picture options (`--image-format`, `--quality`, `--max-width`) are shared. HTML-only `--audio`
+  / `--separate` with a PDF, and PDF-only `--notes` / `--title-page` / `--paper` with HTML, are
+  errors (`cli._slides_options`, before loading). `--image-format` / `--quality` defaults now
+  depend on the format (HTML webp q80, PDF jpeg q85), so the parser's defaults are `None`.
+- **Library** (`vidgen/slides_pdf.py`): **fpdf2** as the optional extra `vidgen[pdf]`
+  (`fpdf2>=2.7.9`; also in `dev`, with `pypdf` for the tests). Decision: fpdf2 is pure Python
+  (≈ 340 KB), embeds subsets of TrueType fonts with a ToUnicode map (extractable, searchable
+  Unicode text — pt-BR accents), writes outlines, page labels, document info / XMP and alt text,
+  and embeds JPEG files as they are (`DCTDecode`, no re-encode). Its dependency fontTools (~5 MB
+  wheel with compiled speed-ups, pure-Python fallback) and LGPL-3.0 licence are why it is an
+  extra, not a base dependency; vidgen does not bundle it. Without it, `make_slides_pdf` raises
+  `VidgenError('... pip install "vidgen[pdf]" ...')` before rendering anything. Alternatives
+  rejected: cairo's PDF surface (already installed with Manim) cannot load a font file through
+  pycairo (fontconfig / Windows system fonts only) — the bundled Inter would not be guaranteed;
+  ReportLab is several times larger for what this needs. fontTools' INFO logging (subsetting steps) is set to
+  WARNING when fpdf2 is imported.
+- **Pages**: `make_slides_pdf(project, *, preview, mode, per_beat, overlays, dedupe, notes=False,
+  title_page=False, paper="a4", image_format="jpeg", quality=85, max_width=None, output=None,
+  jobs, force) -> PdfResult(path, bytes, pages, options: PdfOptions, width, height, bookmarks,
+  thumbnail, deck)`; `write_pdf(deck, options)` builds it from a `Deck`. Default file `pdf_path`
+  = `exports/<output>[_<variant>][_preview]_slides.pdf`, `_notes.pdf` with notes.
+  - **Slide pages**: `slide_page_size` — the video's aspect ratio, the long side 960 pt (13.33 in,
+    a widescreen presentation's page; 16:9 → 960 x 540, 9:16 → 540 x 960); the picture fills it.
+  - **Notes pages** (`notes=True`): A4 595.28 x 841.89 / Letter 612 x 792 pt portrait, margins
+    48 pt; header (chapter `label · title` left, bold; the video's title right; a rule), the
+    picture full width (at most half the page high, centred: 9:16) with a hairline border, a
+    meta line (`Slide N / M · <scene title> · <m:ss.s> in the video`, 9 pt), the narration of
+    the slide's beats (`DeckBeat.text`: the configured, i.e. translated, text) as paragraphs at
+    11.5 / 17 pt in Inter, left-aligned, footer `page / total` (fpdf2's `{nb}` alias). Long
+    notes break onto further pages with the same header (auto page break only on notes pages).
+    A silent scene says "No narration (a silent scene)." in italics.
+  - **Title page** (`title_page=True`): the thumbnail `vidgen thumbnail` wrote
+    (`Project.thumbnail_path`, this quality's, else the other's; not made here — a designed
+    thumbnail would need the theme session and a frame thumbnail a render), full page on a
+    slide-page deck; otherwise / on notes paper: (the thumbnail above) the title (`metadata.title`
+    else `title`) bold, the thumbnail config's `subtitle`, `artist · date`, and on notes paper
+    "N slides with speaker notes · m:ss of narration".
+- **Outline**: the title page (its title), then chapters (`DeckChapter`: `label · title`) at
+  level 0 with their slides (`N. <scene title or id>`) at level 1; slides before the first
+  chapter at level 0. Each entry points at the slide's first page (added right after
+  `add_page`, so a notes page continued over several pages is found at its start).
+  `page_mode = USE_OUTLINES` opens the bookmarks panel.
+- **Document info**: `/Title` (metadata title or title), `/Author` (`metadata.artist`),
+  `/Subject` (`description`, else `comment`), `/Keywords` (`album`, `genre`), `/Creator`
+  `vidgen <version>`, creation date (now, UTC), catalog `/Lang` (the video's `language`).
+- **Pictures**: `slides.encode_still` (JPEG optimised progressive at `quality`, or PNG),
+  scaled down to `max_width`; alt text = `DeckSlide.alt_text()`. Each picture once per PDF.
+- **Fonts**: the bundled Inter Regular / Bold / Italic (§21) via `add_font`, subset-embedded.
+  Characters Inter lacks (CJK, Arabic, Hebrew, Devanagari, emoji) are left out (fpdf2 warns);
+  no fallback fonts (none bundled for those scripts).
+- **JSON**: `jsonout.slides_pdf_document` — the `slides` document with `output_format: "pdf"`,
+  `pages`, `notes`, `title_page`, `thumbnail`, `paper`, `bookmarks` (no `files_dir` / `audio`);
+  the HTML document gains `output_format: "html"`. Per-slide entries are shared
+  (`jsonout._deck_slides`). `slides_pdf.py` is not a render input.
+- **Tests** (`tests/test_slides_pdf.py`, fake stills from `test_slides`, read back with pypdf):
+  page count and sizes (16:9, 9:16, A4, Letter), JPEG embedded as `DCTDecode`, PNG as
+  `FlateDecode`, outline tree and destinations (incl. notes continued over pages), document
+  info and `/Lang`, notes / header / footer text extracted, fonts are Inter, pt-BR text with
+  accents and typographic quotes extracted exactly, quality / max width shrink the file, option
+  errors, missing fpdf2, CLI / JSON. Layout was checked by eye on `pdftoppm` renders of
+  `examples/minimal` (title page with thumbnail, notes pages, the 9:16 variant, pt-BR notes) and
+  `examples/gallery` (chapter headers, typeset title page).
+- Known limits: the page's own words (`Slide`, `in the video`, `No narration`, `slides with
+  speaker notes`) are English, like the HTML deck's; no theme colours on a typeset title page
+  (white; the thumbnail gives a themed one); no per-slide `--scene` selection; no fallback font
+  for scripts Inter lacks.

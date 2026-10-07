@@ -4945,3 +4945,74 @@ How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2022 passed, 1
 `pytest tests/test_slides.py` (~20 s). Manual: `vidgen slides examples/minimal`, open
 `examples/minimal/exports/minimal_preview_slides.html` in a browser (`?` lists the keys);
 `vidgen slides examples/kphi3 --audio` for a narrated deck (real MP3s), press `P`.
+
+## Step 53 — Slides export (PDF)
+What was built
+- **`vidgen slides --format pdf [--notes] [--title-page] [--paper a4|letter] [--image-format
+  jpeg|png] [--quality Q] [--max-width PX] [--output FILE]`** + all of Step 52's frame options
+  (`--variant`, `--preview | --final`, `--mode`, `--per-beat`, `--overlays`, `--no-dedupe`,
+  `--jobs`, `--force`, `--json`). Default file `exports/<output>[_<variant>][_preview]_slides.pdf`,
+  `_notes.pdf` with `--notes`. Same slides as the HTML deck (`deck.deck_frames`).
+- `src/vidgen/slides_pdf.py` (fpdf2): **slide pages** at the video's aspect ratio (long side 960 pt:
+  16:9 → 960x540, 9:16 → 540x960), picture filling the page; **notes pages** (A4 / Letter
+  portrait): header (chapter left, video title right, rule), the slide (≤ half the page high for
+  portrait videos), meta line `Slide N / M · title · m:ss.s in the video`, the beats' narration
+  (translated in a language variant) in the bundled Inter 11.5 pt, footer `page / total`; long
+  notes continue on the next page; **title page** (optional): the `vidgen thumbnail` PNG if one
+  exists (full page on slide decks), else title / thumbnail subtitle / `artist · date` typeset;
+  **outline**: title, chapters (level 0) with their slides (level 1), opened with the outline
+  panel; **document info**: title, author (`metadata.artist`), subject (`description` / `comment`),
+  keywords (`album`, `genre`), creator, `/Lang` = `language`; pictures JPEG q85 (embedded as is) or
+  PNG, with alt text.
+- `--json`: the `slides` document with `output_format: "pdf"`, `pages`, `notes`, `title_page`,
+  `thumbnail`, `paper`, `bookmarks` (`jsonout.slides_pdf_document`); the HTML document gains
+  `output_format: "html"`.
+- Example usage line in `examples/minimal/video.yaml` (`--format pdf --notes --variant pt`).
+
+Files
+- New: `src/vidgen/slides_pdf.py`, `tests/test_slides_pdf.py` (9 tests, fast: fake stills from
+  `test_slides`, read back with pypdf).
+- Changed: `cli.py` (`--format`, `--notes`, `--title-page`, `--paper`; `_slides_options`,
+  `cmd_slides_pdf`; `--image-format` / `--quality` defaults per format), `jsonout.py`
+  (`_deck_slides`, `slides_pdf_document`, `output_format`), `render/fingerprint.py`
+  (`slides_pdf.py` not a render input), `pyproject.toml` (extra `pdf = ["fpdf2>=2.7.9"]`; `dev`
+  gains `fpdf2`, `pypdf`), docs/CONFIG.md (new "PDF deck (`--format pdf`)", JSON keys), README.md,
+  DESIGN.md (tree, §8, new §56), `examples/minimal/video.yaml`, tasklist.md.
+
+Public interfaces added/changed (compatible; `vidgen.api` unchanged)
+- CLI `vidgen slides --format html|pdf`, `--notes`, `--title-page`, `--paper`; JSON `slides`
+  document keys `output_format` (both), `pages`, `notes`, `title_page`, `thumbnail`, `paper`,
+  `bookmarks` (PDF).
+- `vidgen.slides_pdf`: `make_slides_pdf`, `write_pdf`, `pdf_path`, `slide_page_size`,
+  `PdfOptions`, `PdfResult`, `PDF_IMAGE_FORMATS`, `PAPER_SIZES`.
+- Extra `vidgen[pdf]`.
+
+Decisions / deviations
+- **`--format pdf` on `vidgen slides`** rather than a `slides-pdf` command: frame and picture
+  options are shared; options of the other format are errors.
+- **fpdf2 as an optional extra**, not a base dependency: pure Python itself (340 KB) and does what
+  is needed (TTF subset embedding with ToUnicode → correct, extractable pt-BR text; outlines;
+  metadata; alt text; JPEG passthrough), but it pulls fontTools (~5 MB) and is LGPL-3.0. Without
+  it the command fails before rendering with `pip install "vidgen[pdf]"`. pycairo's PDF surface
+  (already installed) was rejected: pycairo cannot load a font file, so the bundled Inter would
+  not be guaranteed on Windows. fontTools' INFO logs are lowered to WARNING (they flooded the CLI).
+- Title page uses an existing thumbnail but does not make one (a designed thumbnail needs the theme
+  session, a frame thumbnail a render); the human output says `vidgen thumbnail` adds it.
+- Default JPEG q85 (vs. q80 WebP in HTML): JPEG artefacts on flat dark slides show sooner.
+
+Verification
+- Rendered with `pdftoppm` and looked at (Read): `examples/minimal` notes + title page (thumbnail),
+  `--variant vertical --mode scene --paper letter` (9:16 slide centred, half page), `--variant pt`
+  (accents: "vídeo", "narração", "você"), `examples/gallery` notes (chapter header "1 · Ideas and
+  flows") and slide pages with a typeset title page. Sizes: minimal notes 30 pages 0.7 MB, gallery
+  55 slides 1.6 MB (854x480 q85).
+
+Known gaps / TODOs
+- The PDF's own words ("Slide", "in the video", "No narration", "slides with speaker notes") are
+  English (as the HTML deck's UI); typeset title page is white (no theme colours); no fallback
+  font for scripts Inter lacks (CJK, Arabic...); no `--scene` selection.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2031 passed, 1 skipped, ~11.6 min
+on 2 CPUs); step only: `pytest tests/test_slides_pdf.py` (~5 s). Needs `pip install -e ".[dev]"`
+(fpdf2, pypdf; the tests skip without them). Manual: `vidgen slides examples/gallery --format pdf
+--notes --title-page`, then `pdftoppm -r 60 -png -f 1 -l 3 examples/gallery/exports/gallery_preview_notes.pdf /tmp/p`.

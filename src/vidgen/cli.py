@@ -507,12 +507,66 @@ def cmd_thumbnail(args: argparse.Namespace) -> CommandResult:
     return 0
 
 
+def _slides_options(args: argparse.Namespace) -> None:
+    """Options of one deck format given with the other are errors (before anything renders)."""
+    if args.format == "pdf":
+        wrong = [name for name, given in (("--audio", args.audio), ("--separate", args.separate)) if given]
+        if wrong:
+            raise VidgenError(f"{', '.join(wrong)}: only for the HTML deck (--format html)")
+    else:
+        wrong = [name for name, given in (("--notes", args.notes), ("--title-page", args.title_page), ("--paper", args.paper)) if given]
+        if wrong:
+            raise VidgenError(f"{', '.join(wrong)}: only for the PDF deck (--format pdf); the HTML deck always has the notes")
+
+
+def cmd_slides_pdf(args: argparse.Namespace, project: Project, started: float) -> CommandResult:
+    """``vidgen slides --format pdf``: the PDF deck."""
+    from vidgen.slides_pdf import DEFAULT_PDF_QUALITY, make_slides_pdf
+
+    result = make_slides_pdf(
+        project,
+        preview=not args.final,
+        mode=args.mode,
+        per_beat=args.per_beat,
+        overlays=args.overlays,
+        dedupe=not args.no_dedupe,
+        notes=args.notes,
+        title_page=args.title_page,
+        paper=args.paper or "a4",
+        image_format=args.image_format or "jpeg",
+        quality=args.quality if args.quality is not None else DEFAULT_PDF_QUALITY,
+        max_width=args.max_width,
+        output=Path(args.output).resolve() if args.output else None,
+        jobs=args.jobs,
+        force=args.force,
+    )
+    if args.json:
+        return jsonout.slides_pdf_document(project, result, time.monotonic() - started)
+    deck = result.deck
+    reused = f", {len(deck.reused)} reused" if deck.reused else ""
+    print(f"rendered {len(deck.rendered)} scene(s){reused}")
+    note = f", {deck.merged} alike merged" if deck.merged else ""
+    print(f"slides: {result.path}  ({len(deck.slides)} slides from {deck.stills} stills{note}, {result.pages} pages, {result.bytes / 1e6:.1f} MB)")
+    options = result.options
+    quality = "" if options.image_format == "png" else f" q{options.quality}"
+    layout = f"notes pages ({options.paper})" if options.notes else "a slide per page"
+    title = ""
+    if options.title_page:
+        title = ", title page" + (f" with {result.thumbnail.name}" if result.thumbnail is not None else " (no thumbnail: `vidgen thumbnail` adds it)")
+    print(f"pictures: {result.width}x{result.height} {options.image_format}{quality}; {layout}{title}; {result.bookmarks} bookmarks")
+    return 0
+
+
 def cmd_slides(args: argparse.Namespace) -> CommandResult:
-    """Write an HTML slide deck of the video's key frames with the narration as speaker notes."""
-    from vidgen.slides import make_slides
+    """Write a slide deck (HTML, or PDF with ``--format pdf``) of the video's key frames with the
+    narration as speaker notes."""
+    from vidgen.slides import DEFAULT_IMAGE_FORMAT, DEFAULT_QUALITY, make_slides
 
     started = time.monotonic()
+    _slides_options(args)
     project = Project.load(args.project, variant=args.variant)
+    if args.format == "pdf":
+        return cmd_slides_pdf(args, project, started)
     result = make_slides(
         project,
         preview=not args.final,
@@ -520,8 +574,8 @@ def cmd_slides(args: argparse.Namespace) -> CommandResult:
         per_beat=args.per_beat,
         overlays=args.overlays,
         dedupe=not args.no_dedupe,
-        image_format=args.image_format,
-        quality=args.quality,
+        image_format=args.image_format or DEFAULT_IMAGE_FORMAT,
+        quality=args.quality if args.quality is not None else DEFAULT_QUALITY,
         max_width=args.max_width,
         audio=args.audio,
         separate=args.separate,
@@ -940,8 +994,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--jobs", "-j", type=int, default=1, metavar="N", help="render N scenes in parallel when scenes must be rendered (default: 1)")
     p.set_defaults(func=cmd_thumbnail)
 
-    p = sub.add_parser("slides", help="an HTML slide deck of the video's key frames, narration as speaker notes (exports/)")
+    p = sub.add_parser("slides", help="an HTML (or PDF) slide deck of the video's key frames, narration as speaker notes (exports/)")
     project_arg(p)
+    p.add_argument("--format", choices=["html", "pdf"], default="html", help="an HTML deck (default) or a PDF (needs vidgen[pdf])")
     p.add_argument("--variant", metavar="NAME", help="apply a named variant (a language variant gives translated notes)")
     quality = p.add_mutually_exclusive_group()
     quality.add_argument("--preview", action="store_true", help="use the preview format (the default; fast)")
@@ -950,12 +1005,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--per-beat", type=int, default=1, metavar="N", help="with --mode beat: N slides per beat, the last at its end (default: 1)")
     p.add_argument("--overlays", action=argparse.BooleanOptionalAction, default=True, help="show the video's overlays (captions, watermark...) on the slides (default: yes)")
     p.add_argument("--no-dedupe", action="store_true", help="keep consecutive slides that look the same (default: merged, notes joined)")
-    p.add_argument("--image-format", choices=["webp", "jpeg", "png"], default="webp", help="picture format (default: webp)")
-    p.add_argument("--quality", type=int, default=80, metavar="Q", help="webp / jpeg quality 1-100 (default: 80)")
+    p.add_argument("--image-format", choices=["webp", "jpeg", "png"], help="picture format (default: webp for HTML, jpeg for PDF; a PDF takes jpeg or png)")
+    p.add_argument("--quality", type=int, metavar="Q", help="webp / jpeg quality 1-100 (default: 80 for HTML, 85 for PDF)")
     p.add_argument("--max-width", type=int, metavar="PX", help="scale the pictures down to this width")
-    p.add_argument("--audio", action="store_true", help="include the beats' MP3s: Play then narrates the deck")
-    p.add_argument("--separate", action="store_true", help="write pictures and MP3s into <name>_files/ beside the page instead of embedding them")
-    p.add_argument("--output", "-o", metavar="FILE", help="write here instead of exports/<output>[_<variant>][_preview]_slides.html")
+    p.add_argument("--audio", action="store_true", help="HTML: include the beats' MP3s: Play then narrates the deck")
+    p.add_argument("--separate", action="store_true", help="HTML: write pictures and MP3s into <name>_files/ beside the page instead of embedding them")
+    p.add_argument("--notes", action="store_true", help="PDF: a notes page per slide (picture, narration, page number) instead of full-page slides")
+    p.add_argument("--title-page", action="store_true", help="PDF: start with a title page (the thumbnail if `vidgen thumbnail` made one, title, author, date)")
+    p.add_argument("--paper", choices=["a4", "letter"], help="PDF: paper of the notes pages (default: a4)")
+    p.add_argument(
+        "--output", "-o", metavar="FILE",
+        help="write here instead of exports/<output>[_<variant>][_preview]_slides.html (PDF: _slides.pdf, _notes.pdf with --notes)",
+    )
     p.add_argument("--jobs", "-j", type=int, default=1, metavar="N", help="render N scenes in parallel (default: 1)")
     p.add_argument("--force", action="store_true", help="render the scenes again even if their stills are current")
     p.set_defaults(func=cmd_slides)

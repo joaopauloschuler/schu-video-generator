@@ -290,12 +290,12 @@ including a transition out of it); without it they are times in the video (defau
 ## Slides (`vidgen slides`)
 
 ```
-vidgen slides [PROJECT] [--variant NAME] [--preview | --final] [--mode beat|scene] [--per-beat N]
+vidgen slides [PROJECT] [--format html|pdf] [--variant NAME] [--preview | --final] [--mode beat|scene] [--per-beat N]
               [--overlays | --no-overlays] [--no-dedupe] [--image-format webp|jpeg|png] [--quality Q]
               [--max-width PX] [--audio] [--separate] [--output FILE] [--jobs N] [--force] [--json]
 ```
 
-Writes the video as a **slide deck**: one HTML file, by default
+Writes the video as a **slide deck** (a PDF with `--format pdf`, [below](#pdf-deck---format-pdf)): one HTML file, by default
 `<project>/exports/<output>[_<variant>][_preview]_slides.html`, that opens in any browser
 without network access. Every slide picture is embedded (a `data:` URI, WebP at quality 80 by
 default: about 15–40 KB per 854x480 slide, 60–150 KB at 1920x1080), and so are the page's styles
@@ -352,6 +352,46 @@ variant's folder) for a narrated deck (a few MB per minute); `--separate` writes
 (and MP3s) into `<name>_files/` beside the page instead of embedding them (keep the folder with
 the page); `--output FILE` (`.html`) writes elsewhere; `--jobs`, `--force` as for the
 storyboard. A page over 50 MB gets a warning.
+
+### PDF deck (`--format pdf`)
+
+```
+vidgen slides [PROJECT] --format pdf [--notes] [--title-page] [--paper a4|letter]
+              [--image-format jpeg|png] [--quality Q] [--max-width PX] [--output FILE]
+              (+ the frame options above: --variant, --preview | --final, --mode, --per-beat,
+               --overlays | --no-overlays, --no-dedupe, --jobs, --force, --json)
+```
+
+The same slides as a PDF, by default `exports/<output>[_<variant>][_preview]_slides.pdf`
+(`_notes.pdf` with `--notes`). Needs the optional extra **`pip install "vidgen[pdf]"`**
+([fpdf2](https://py-pdf.github.io/fpdf2/), pure Python); without it the command says so.
+
+- **Slides** (the default): one slide per page, the page in the video's aspect ratio (16:9:
+  960 x 540 pt = 13.33 x 7.5 in, like a widescreen presentation; 9:16: 540 x 960 pt), the
+  picture filling it.
+- **`--notes`**: a notes page per slide on A4 (or `--paper letter`), portrait: a header with
+  the chapter and the video's title, the slide (full width, at most half the page high for
+  portrait videos), a line `Slide N / M · <scene title> · <time> in the video`, the narration
+  of the slide's beats (in a language variant: the translation) wrapped in Inter, a page number
+  `N / total`. Long narration continues on the next page.
+- **`--title-page`**: a first page with the thumbnail made by
+  [`vidgen thumbnail`](#thumbnail-thumbnail-vidgen-thumbnail) (`<output>[_<variant>][_preview]_thumbnail.png`,
+  this quality's or else the other's; run it first) — on a slide page the thumbnail fills it —
+  else the title, the thumbnail's `subtitle`, author and date set in type; on a notes title page
+  also the number of slides and the narration's length.
+- **Bookmarks** (the outline, shown when the PDF opens): the title page, each
+  [chapter](#chapters) with its slides under it (`2. <scene title>`); slides before the first
+  chapter at the top level.
+- **Document properties** from [`metadata:`](#chapters-in-the-outputs-chapters-metadata): title (default the video's
+  `title`), author (`artist`), subject (`description`, else `comment`), keywords (`album`,
+  `genre`); the language (`language:`); creator `vidgen <version>`.
+- **Pictures**: JPEG at quality 85 by default (embedded as is: a 854x480 slide is about
+  30–60 KB, 1920x1080 about 100–250 KB), `--quality Q`, or lossless `--image-format png`
+  (larger); `--max-width PX` scales them down. Pictures carry alt text.
+- Text is set in the bundled Inter (a subset embedded): Latin (accents: pt-BR, es, fr, de...),
+  Greek and Cyrillic; scripts Inter lacks (CJK, Arabic, Hebrew, Devanagari) are not drawn.
+- `--audio` / `--separate` are HTML-only and `--notes` / `--title-page` / `--paper` PDF-only
+  (errors otherwise); the HTML deck always carries the notes. `--output FILE` must end in `.pdf`.
 
 ## Format and preview
 
@@ -3997,17 +4037,23 @@ on a failed scene are as for `vidgen render --json`.
 |---|---|---|
 | `project` | str | |
 | `variant`, `language` | str \| null | the variant and its language |
+| `output_format` | str | `html`, or `pdf` with `--format pdf` |
 | `preview` | bool | `false` with `--final` |
 | `mode` | str | `beat` or `scene` |
 | `per_beat` | int | stills per beat |
 | `overlays` | bool | `false` with `--no-overlays` (stills from the `_bare` renders) |
 | `dedupe` | bool | `false` with `--no-dedupe` |
 | `format` | object | `{width, height, fps}` of the stills |
-| `path`, `bytes` | str, int | the HTML page |
-| `files_dir` | str \| null | with `--separate`: the folder of pictures and MP3s |
-| `image_format`, `quality` | str, int | `webp`, `jpeg` or `png` |
+| `path`, `bytes` | str, int | the HTML page (the PDF) |
+| `files_dir` | str \| null | HTML only: with `--separate`, the folder of pictures and MP3s |
+| `image_format`, `quality` | str, int | `webp`, `jpeg` or `png` (PDF: `jpeg` or `png`) |
 | `width`, `height` | int | of the slide pictures |
-| `audio` | int | MP3s included (`--audio`) |
+| `audio` | int | HTML only: MP3s included (`--audio`) |
+| `pages` | int | PDF only: pages, the title page and continued notes included |
+| `notes`, `title_page` | bool | PDF only: `--notes`, `--title-page` |
+| `thumbnail` | str \| null | PDF only: the thumbnail on the title page (`null`: none or no title page) |
+| `paper` | str | PDF only: `a4` or `letter` (of notes pages) |
+| `bookmarks` | int | PDF only: outline entries (title page, chapters, slides) |
 | `duration` | float | the deck's play timeline: the scenes back to back |
 | `stills` | int | stills read; `merged`: how many were merged into the slide before |
 | `rendered`, `reused` | list | scene ids rendered for the deck / whose stills were current |

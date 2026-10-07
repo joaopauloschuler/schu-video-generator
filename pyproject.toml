@@ -16,7 +16,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "jsonschema>=4.18", "pytest-xdist"]
+pdf = ["fpdf2>=2.7.9"]
+dev = ["pytest", "jsonschema>=4.18", "pytest-xdist", "fpdf2>=2.7.9", "pypdf>=4"]
 
 [project.scripts]
 vidgen = "vidgen.cli:main"

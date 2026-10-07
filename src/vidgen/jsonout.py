@@ -24,7 +24,9 @@ from vidgen.project import Project
 if TYPE_CHECKING:
     from vidgen.export import ExportResult
     from vidgen.icons import IconInfo
+    from vidgen.deck import Deck
     from vidgen.slides import SlidesResult
+    from vidgen.slides_pdf import PdfResult
     from vidgen.thumbnail import ThumbnailResult
     from vidgen.translation import TemplateResult
     from vidgen.render.pipeline import RenderResult
@@ -440,12 +442,9 @@ def export_document(
     )
 
 
-def slides_document(project: Project, result: SlidesResult, elapsed: float, warnings: Iterable[Mapping[str, Any]] = ()) -> dict[str, Any]:
-    """The ``vidgen slides --json`` document: the page, how its slides were chosen and each slide."""
-    deck = result.deck
-    worker_warnings = [warning(message, scene) for scene, message in deck.warnings]
-    fmt = deck.format
-    slides = [
+def _deck_slides(deck: Deck) -> list[dict[str, Any]]:
+    """The slides of a ``vidgen slides`` document (HTML and PDF)."""
+    return [
         {
             "index": s.index,
             "scene": s.scene,
@@ -464,6 +463,13 @@ def slides_document(project: Project, result: SlidesResult, elapsed: float, warn
         }
         for s in deck.slides
     ]
+
+
+def slides_document(project: Project, result: SlidesResult, elapsed: float, warnings: Iterable[Mapping[str, Any]] = ()) -> dict[str, Any]:
+    """The ``vidgen slides --json`` document: the page, how its slides were chosen and each slide."""
+    deck = result.deck
+    worker_warnings = [warning(message, scene) for scene, message in deck.warnings]
+    fmt = deck.format
     return envelope(
         "slides",
         True,
@@ -471,6 +477,7 @@ def slides_document(project: Project, result: SlidesResult, elapsed: float, warn
         project=_path(project.root),
         variant=project.variant,
         language=project.config.language,
+        output_format="html",
         preview=deck.preview,
         mode=deck.mode,
         per_beat=deck.per_beat,
@@ -491,7 +498,49 @@ def slides_document(project: Project, result: SlidesResult, elapsed: float, warn
         rendered=deck.rendered,
         reused=deck.reused,
         elapsed=round(elapsed, 3),
-        slides=slides,
+        slides=_deck_slides(deck),
+    )
+
+
+def slides_pdf_document(project: Project, result: PdfResult, elapsed: float, warnings: Iterable[Mapping[str, Any]] = ()) -> dict[str, Any]:
+    """The ``vidgen slides --format pdf --json`` document: the PDF, its layout and each slide."""
+    deck = result.deck
+    worker_warnings = [warning(message, scene) for scene, message in deck.warnings]
+    fmt = deck.format
+    options = result.options
+    return envelope(
+        "slides",
+        True,
+        [*warnings, *worker_warnings],
+        project=_path(project.root),
+        variant=project.variant,
+        language=project.config.language,
+        output_format="pdf",
+        preview=deck.preview,
+        mode=deck.mode,
+        per_beat=deck.per_beat,
+        overlays=deck.overlays,
+        dedupe=deck.dedupe,
+        format={"width": fmt.width, "height": fmt.height, "fps": fmt.fps},
+        path=_path(result.path),
+        bytes=result.bytes,
+        pages=result.pages,
+        notes=options.notes,
+        title_page=options.title_page,
+        thumbnail=None if result.thumbnail is None else _path(result.thumbnail),
+        paper=options.paper,
+        bookmarks=result.bookmarks,
+        image_format=options.image_format,
+        quality=options.quality,
+        width=result.width,
+        height=result.height,
+        duration=deck.duration,
+        stills=deck.stills,
+        merged=deck.merged,
+        rendered=deck.rendered,
+        reused=deck.reused,
+        elapsed=round(elapsed, 3),
+        slides=_deck_slides(deck),
     )
 
 
