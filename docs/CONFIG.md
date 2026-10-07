@@ -1,4 +1,4 @@
-# vidgen config reference
+# schu-video-generator config reference
 
 This is the reference of every key. How to make a *good* video with them (the working loop,
 pacing, which scene type, good vs bad examples) is the author guide: [AGENTS.md](../AGENTS.md),
@@ -372,7 +372,7 @@ vidgen slides [PROJECT] --format pdf [--notes] [--title-page] [--paper a4|letter
 ```
 
 The same slides as a PDF, by default `exports/<output>[_<variant>][_preview]_slides.pdf`
-(`_notes.pdf` with `--notes`). Needs the optional extra **`pip install "vidgen[pdf]"`**
+(`_notes.pdf` with `--notes`). Needs the optional extra **`pip install "schu-video-generator[pdf]"`**
 ([fpdf2](https://py-pdf.github.io/fpdf2/), pure Python); without it the command says so.
 
 - **Slides** (the default): one slide per page, the page in the video's aspect ratio (16:9:
@@ -871,7 +871,7 @@ stt:
 
 | key | default | |
 |---|---|---|
-| `provider` | `faster_whisper` | `faster_whisper`: OpenAI's Whisper run locally (CTranslate2), free, no key; needs the optional extra `pip install "vidgen[stt]"`, and downloads the model from the Hugging Face Hub on first use. `elevenlabs`: ElevenLabs Speech to Text, billed per audio hour, the same `ELEVENLABS_API_KEY` as `vidgen tts` |
+| `provider` | `faster_whisper` | `faster_whisper`: OpenAI's Whisper run locally (CTranslate2), free, no key; needs the optional extra `pip install "schu-video-generator[stt]"`, and downloads the model from the Hugging Face Hub on first use. `elevenlabs`: ElevenLabs Speech to Text, billed per audio hour, the same `ELEVENLABS_API_KEY` as `vidgen tts` |
 | `model` | none (the provider's default) | a Whisper size (`tiny`, `base`, `small`, `medium`, `large-v3`, `turbo`; `.en` sizes for English only; bigger = more accurate, slower) or a folder holding a converted model; ElevenLabs: `scribe_v1`. Default `small.en` for English, `small` otherwise; `scribe_v1` |
 | `language` | none (the video's) | the language of the audio (BCP-47, its language subtag is sent: `pt-BR` → `pt`), or `auto` (detected); default the video's [language](#languages-and-translations), English without one |
 | `device` | `auto` | `faster_whisper` only: `cpu`, `cuda` (an NVIDIA GPU), or `auto` (a GPU if there is one) |
@@ -4161,8 +4161,9 @@ Then refine the draft like any project: read the comments, rewrite the narration
 `vidgen mcp [--root DIR]` (also the `vidgen-mcp` script) runs a [Model Context
 Protocol](https://modelcontextprotocol.io) server on stdin / stdout, so an AI agent's client
 (Claude Desktop, Claude Code, ...) can call vidgen's commands as **tools**. It needs the optional
-extra: `pip install "vidgen[mcp]"` (the official MCP Python SDK, 1.19 or newer). Configuration
-snippets: README "Use from an AI agent via MCP".
+extra: `pip install "schu-video-generator[mcp]"` (the official MCP Python SDK, 1.19 or newer).
+The server calls itself `schu-video-generator`; configuration snippets (server key
+`schu-video-generator`, command `vidgen`): README "Use from an AI agent via MCP".
 
 **Tools** (each returns the command's `--json` document below as JSON text; `ok` false comes
 back as a tool error with the same text): `guide`, `init`, `plan` (`input_path`, or the outline as
@@ -4207,7 +4208,7 @@ render workers it started (the process group on macOS / Linux, the process tree 
 
 **Resources**: `vidgen://guide` (the author guide) and `vidgen://guide/<topic>` (one topic each),
 `vidgen://schema` (the JSON Schema of the root project's `video.yaml`, else of the built-ins) and,
-when the root has a `docs/gallery` folder (the vidgen repository), `vidgen://gallery/index` and
+when the root has a `docs/gallery` folder (the schu-video-generator repository), `vidgen://gallery/index` and
 `vidgen://gallery/<type>`.
 
 ## JSON output (`--json`)

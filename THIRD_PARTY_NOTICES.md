@@ -1,10 +1,11 @@
 # Third-party notices
 
-vidgen itself is MIT-licensed (see `LICENSE`). It bundles the following fonts as package data in
+schu-video-generator (the `vidgen` command and Python package) itself is MIT-licensed (see
+`LICENSE`). It bundles the following fonts as package data in
 `src/vidgen/data/fonts/`, each under the **SIL Open Font License 1.1**; the full licence text is
 in the `OFL.txt` next to each family's files. The fonts are distributed unmodified (Inter and
 JetBrains Mono NL were decompressed from WOFF2 to TTF, a lossless format conversion). They may be
-used, embedded in rendered videos and redistributed with vidgen under the OFL's terms; they may
+used, embedded in rendered videos and redistributed with schu-video-generator under the OFL's terms; they may
 not be sold on their own.
 
 | Family (Pango name) | Files | Version | Copyright | Obtained from |

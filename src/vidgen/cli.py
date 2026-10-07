@@ -1127,7 +1127,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--list", action="store_true", help="list the topics")
     p.set_defaults(func=cmd_guide)
 
-    p = sub.add_parser("mcp", help="run the MCP server (stdio) that gives AI agents vidgen's commands as tools (needs vidgen[mcp])")
+    p = sub.add_parser("mcp", help="run the MCP server (stdio) that gives AI agents vidgen's commands as tools (needs schu-video-generator[mcp])")
     p.add_argument("--root", metavar="DIR", default=".", help="the only folder the tools may read and write (default: the current folder)")
     p.set_defaults(func=cmd_mcp)
 
@@ -1236,7 +1236,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("slides", help="an HTML (or PDF) slide deck of the video's key frames, narration as speaker notes (exports/)")
     project_arg(p)
-    p.add_argument("--format", choices=["html", "pdf"], default="html", help="an HTML deck (default) or a PDF (needs vidgen[pdf])")
+    p.add_argument("--format", choices=["html", "pdf"], default="html", help="an HTML deck (default) or a PDF (needs schu-video-generator[pdf])")
     p.add_argument("--variant", metavar="NAME", help="apply a named variant (a language variant gives translated notes)")
     quality = p.add_mutually_exclusive_group()
     quality.add_argument("--preview", action="store_true", help="use the preview format (the default; fast)")

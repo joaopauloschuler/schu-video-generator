@@ -86,7 +86,7 @@ def test_slide_pages(meta_project: Path) -> None:
     assert result.bookmarks == 7
     info = reader.metadata
     assert (info.title, info.author, info.subject) == ("Render test", "Ada Lovelace", "A deck for tests")
-    assert info["/Keywords"] == "Education" and info.creator.startswith("vidgen ")
+    assert info["/Keywords"] == "Education" and info.creator.startswith("schu-video-generator ")
     root = reader.trailer["/Root"]
     assert root["/Lang"] == "en" and root["/PageMode"] == "/UseOutlines"
 
@@ -195,7 +195,7 @@ def test_options_are_checked(meta_project: Path, monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.delitem(sys.modules, "fpdf")
     monkeypatch.setattr(builtins, "__import__", no_fpdf)
-    with pytest.raises(VidgenError, match=re.escape('pip install "vidgen[pdf]"')):
+    with pytest.raises(VidgenError, match=re.escape('pip install "schu-video-generator[pdf]"')):
         make_slides_pdf(project)
 
 

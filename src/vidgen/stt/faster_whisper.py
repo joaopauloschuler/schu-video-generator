@@ -1,5 +1,5 @@
 """The ``faster_whisper`` speech-to-text provider (DESIGN.md §57): OpenAI's Whisper run locally
-with CTranslate2, free, no API key. The optional extra ``vidgen[stt]`` installs it.
+with CTranslate2, free, no API key. The optional extra ``schu-video-generator[stt]`` installs it.
 
 The model (``stt.model``: a size such as ``small`` / ``small.en``, or a folder holding a
 converted model) is loaded on the first :meth:`FasterWhisperProvider.transcribe`; a size is
@@ -11,10 +11,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from vidgen import DIST_NAME
 from vidgen.errors import VidgenError
 from vidgen.stt import Transcript, TranscriptWord
 
-INSTALL_HINT = 'the faster_whisper speech-to-text provider needs the optional extra: pip install "vidgen[stt]"'
+INSTALL_HINT = f'the faster_whisper speech-to-text provider needs the optional extra: pip install "{DIST_NAME}[stt]"'
 
 
 def _module() -> Any:

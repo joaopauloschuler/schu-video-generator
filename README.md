@@ -1,5 +1,8 @@
 # schu-video-generator
 
+The project and pip package are called schu-video-generator;
+the command and the Python package are `vidgen` (`vidgen render`, `from vidgen.api import *`).
+
 Generate narrated, animated explainer videos from a project folder. You write the narration as
 short *beats* and pick a *scene type* for each scene in `video.yaml`; vidgen voices the beats with
 ElevenLabs, animates every scene with [Manim](https://www.manim.community/) (each beat lasts
@@ -80,7 +83,7 @@ subtitles.
   narrated play mode ([reference](docs/CONFIG.md#slides-vidgen-slides)). `--format pdf` writes
   a PDF instead: a slide per page, or with `--notes` notes pages (slide, narration, page
   numbers), an optional title page, bookmarks by chapter and the `metadata:` as document
-  properties (optional extra `vidgen[pdf]`; [reference](docs/CONFIG.md#pdf-deck---format-pdf)).
+  properties (optional extra `schu-video-generator[pdf]`; [reference](docs/CONFIG.md#pdf-deck---format-pdf)).
 - **Burned-in captions**: `- {type: captions}` puts the narration into the picture, cut at
   phrase boundaries like the SRT, with the scenes laid out clear of it; `style: karaoke` shows a
   few big words at a time with the spoken one highlighted, for vertical / social videos. Word
@@ -92,7 +95,7 @@ subtitles.
   are re-voiced, and `vidgen tts --dry-run` shows what they will say
   ([reference](docs/CONFIG.md#pronunciation-pronunciation)).
 - **Readback check**: `vidgen readback` transcribes the narration MP3s with speech to text
-  (faster-whisper locally, extra `vidgen[stt]`, or ElevenLabs) and compares them with the beat
+  (faster-whisper locally, extra `schu-video-generator[stt]`, or ElevenLabs) and compares them with the beat
   texts: a word error rate per beat, the words expected and heard ("K-Phi-3" said "kay fye three",
   heard "kay five three"), and a suggested fix — a pronunciation entry for a term misheard in
   several beats, regenerating a beat that lost words. Transcripts are cached; `vidgen lint`'s
@@ -160,7 +163,7 @@ covers the working loop (write → `validate --json` → `storyboard`, and look 
 --json` → fix → `tts --dry-run` → `tts` → `render`), pacing and on-screen text rules, a scene-type
 chooser with a snippet per type, visual design, beat actions and audio with restraint, good vs bad
 examples, outputs and the fixes for common validate / lint messages. (`CLAUDE.md` is for agents
-working on vidgen's own code.) Starting from an outline, `vidgen plan outline.md --json` writes a
+working on schu-video-generator's own code.) Starting from an outline, `vidgen plan outline.md --json` writes a
 draft project to refine: its `# TODO:` comments list what to check first.
 
 ### Use from an AI agent via MCP
@@ -179,7 +182,7 @@ the venv's `Scripts` folder if `vidgen` is not on the PATH):
 ```json
 {
   "mcpServers": {
-    "vidgen": {
+    "schu-video-generator": {
       "command": "vidgen",
       "args": ["mcp", "--root", "C:\\Users\\me\\videos"]
     }
@@ -187,7 +190,7 @@ the venv's `Scripts` folder if `vidgen` is not on the PATH):
 }
 ```
 
-Claude Code: `claude mcp add vidgen -- vidgen mcp --root /home/me/videos` (or the same
+Claude Code: `claude mcp add schu-video-generator -- vidgen mcp --root /home/me/videos` (or the same
 `mcpServers` entry in the project's `.mcp.json`).
 
 - **One folder**: the tools read and write only inside `--root` (default: the folder the server
@@ -205,17 +208,21 @@ Claude Code: `claude mcp add vidgen -- vidgen mcp --root /home/me/videos` (or th
 
 ## Install
 
+Upgrading an environment that installed this project before it was renamed (as `vidgen`): run
+`pip uninstall vidgen` once, then install as below (the `vidgen` command is unchanged).
+
 ### Windows
 
 1. **Python 3.10–3.13** from [python.org](https://www.python.org/downloads/) (tick "Add
    python.exe to PATH").
 2. **ffmpeg**: `winget install ffmpeg`, then open a new terminal (`ffmpeg -version` must work).
-3. **vidgen** (in PowerShell, from a copy of this repository):
+3. **schu-video-generator** (in PowerShell, from a copy of this repository; it installs the
+   `vidgen` command):
    ```
    cd video-generator
    py -m venv .venv
    .venv\Scripts\Activate.ps1          # cmd.exe: .venv\Scripts\activate.bat
-   pip install .                       # or `pip install -e ".[dev]"` to work on vidgen itself
+   pip install .                       # or `pip install -e ".[dev]"` to work on schu-video-generator itself
    vidgen --version
    ```
    This installs Manim, pydantic, PyYAML and PyAV (pre-built wheels; no compiler needed).
@@ -259,13 +266,13 @@ vidgen storyboard               # contact sheets of every beat -> build/preview/
 vidgen lint                     # layout + timing checks: text cut off, too small, low contrast, dead air...
 vidgen tts --dry-run            # what would be sent to ElevenLabs (with the pronunciation applied), how many characters
 vidgen tts                      # generate narration MP3s (only new/changed beats)
-vidgen readback                 # speech to text of the MP3s vs the texts: misheard terms, missing words (vidgen[stt])
+vidgen readback                 # speech to text of the MP3s vs the texts: misheard terms, missing words (schu-video-generator[stt])
 vidgen imagegen --dry-run       # pictures of generate: params still to make, their prompts and estimated cost
 vidgen render                   # final render -> my_video.mp4 + my_video.srt (+ my_video_chapters.txt with chapters)
 vidgen thumbnail                # my_video_thumbnail.png (also written by render with a thumbnail: section)
 vidgen export gif --scene intro # exports/my_video_intro.gif
 vidgen slides --final --audio   # exports/my_video_slides.html: the video as a narrated slide deck
-vidgen slides --final --format pdf --notes   # exports/my_video_notes.pdf: slides with the narration (vidgen[pdf])
+vidgen slides --final --format pdf --notes   # exports/my_video_notes.pdf: slides with the narration (schu-video-generator[pdf])
 ```
 
 Edit `video.yaml` (reference: [docs/CONFIG.md](docs/CONFIG.md)) and repeat. Until audio exists,
@@ -277,7 +284,7 @@ narration.
 | command | |
 |---|---|
 | `vidgen init DIR [--example minimal] [--json]` | create a new project (DIR must not exist or be empty) |
-| `vidgen mcp [--root DIR]` | the MCP server (stdio) giving an AI agent's client these commands as tools, inside DIR only (needs `vidgen[mcp]`; also `vidgen-mcp`) |
+| `vidgen mcp [--root DIR]` | the MCP server (stdio) giving an AI agent's client these commands as tools, inside DIR only (needs `schu-video-generator[mcp]`; also `vidgen-mcp`) |
 | `vidgen plan INPUT [--output DIR\|FILE] [--title TEXT] [--format 16:9\|9:16] [--preset NAME] [--language TAG] [--force] [--json]` | a draft project from a Markdown outline or a plain-text script (deterministic, no AI): scenes chosen from its headings and cues, narration cut into beats, on-screen texts compressed, a `# plan:` reason and `# TODO:`s per scene; prints scenes, estimated length and TODO count, and validates the draft |
 | `vidgen guide [TOPIC] [--list] [--json]` | the author guide for AI agents ([AGENTS.md](AGENTS.md)): all of it, one topic (`workflow`, `pacing`, `social`, `scenes`, `design`, `actions`, `overlays`, `audio`, `examples`, `outputs`, `troubleshooting`, ...) or the list |
 | `vidgen validate [PROJECT] [--json]` | load config and extensions, report every problem (also in every variant, including variants that do not load), estimated length, audio status, generated pictures |
@@ -297,7 +304,7 @@ narration.
 | `vidgen thumbnail [PROJECT] [--variant NAME] [--preview] [--scene ID [--beat ID\|N] [--at S] [--no-overlays]] [--jpeg] [--jobs N] [--json]` | write `<output>_thumbnail.png` from the `thumbnail:` config (a designed card, or a scene's frame) or the frame `--scene` names, a 320 px copy to look at, and legibility checks |
 | `vidgen export gif\|clip [PROJECT] [--scene ID] [--from S] [--to S] [--variant NAME] [--preview] [--width PX] [--fps F] [--max-mb MB] [--with-audio] [--output FILE] [--json]` | a scene or part of the rendered video as a palette GIF (`--max-mb`: lower frame rate / width until it fits) or an MP4 clip, in `exports/` |
 | `vidgen gallery [PROJECT] [--output DIR] [--types T,T] [--formats 16:9,9:16] [--theme PRESET] [--clips \| --no-clips] [--jobs N] [--force] [--json]` | render every scene type's sample (from the author guide; a project's own types from its `video.yaml`) at 16:9 and 9:16 into a Markdown gallery: an index, a page per type (stills, GIF, YAML, params, targets); default `docs/gallery` ([this repository's](docs/gallery/README.md)) |
-| `vidgen slides [PROJECT] [--format html\|pdf] [--variant NAME] [--preview \| --final] [--mode beat\|scene] [--per-beat N] [--overlays \| --no-overlays] [--no-dedupe] [--image-format webp\|jpeg\|png] [--quality Q] [--max-width PX] [--audio] [--separate] [--notes] [--title-page] [--paper a4\|letter] [--output FILE] [--jobs N] [--force] [--json]` | one self-contained HTML slide deck in `exports/`: a slide per beat (or scene) from the stills, the narration as speaker notes, keyboard navigation, overview, fullscreen, optional narrated play mode; `--format pdf`: a PDF (slide pages or `--notes` pages, `--title-page`, bookmarks by chapter; needs `vidgen[pdf]`) |
+| `vidgen slides [PROJECT] [--format html\|pdf] [--variant NAME] [--preview \| --final] [--mode beat\|scene] [--per-beat N] [--overlays \| --no-overlays] [--no-dedupe] [--image-format webp\|jpeg\|png] [--quality Q] [--max-width PX] [--audio] [--separate] [--notes] [--title-page] [--paper a4\|letter] [--output FILE] [--jobs N] [--force] [--json]` | one self-contained HTML slide deck in `exports/`: a slide per beat (or scene) from the stills, the narration as speaker notes, keyboard navigation, overview, fullscreen, optional narrated play mode; `--format pdf`: a PDF (slide pages or `--notes` pages, `--title-page`, bookmarks by chapter; needs `schu-video-generator[pdf]`) |
 
 `PROJECT` is a project folder or its config file (default: the current folder).
 `render` renders only the scenes whose render is missing or out of date (their config, audio,
@@ -381,7 +388,7 @@ my_video/
   layout regions (`region("header")`, `grid`, `place`, `readable_text`) that adapt to 16:9 and 9:16.
 - [DESIGN.md](DESIGN.md) — architecture and internal contracts.
 
-## Working on vidgen
+## Working on schu-video-generator
 
 `pip install -e ".[dev]"`, then `python -m pytest -q` runs every test (about 17 minutes on two
 CPUs: many tests render tiny videos); `python -m pytest -q -n auto` runs them in parallel on

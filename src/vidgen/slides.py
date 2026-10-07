@@ -22,7 +22,7 @@ from typing import Any
 
 from PIL import Image
 
-from vidgen import __version__
+from vidgen import DIST_NAME, __version__
 from vidgen.deck import Deck, DeckMode, DeckSlide, deck_frames
 from vidgen.errors import VidgenError
 from vidgen.fileio import remove_file, write_bytes_atomic
@@ -184,7 +184,7 @@ def slides_html(deck: Deck, images: list[str], size: tuple[int, int], audio: dic
         )
     clips = [c for c in deck.clips if c.beat in audio]
     data: dict[str, Any] = {
-        "generator": f"vidgen {__version__}",
+        "generator": f"{DIST_NAME} {__version__}",
         "title": title,
         "count": count,
         "mode": deck.mode,
@@ -223,7 +223,7 @@ def slides_html(deck: Deck, images: list[str], size: tuple[int, int], audio: dic
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="generator" content="vidgen {html.escape(__version__)}">
+<meta name="generator" content="{DIST_NAME} {html.escape(__version__)}">
 <title>{html.escape(title)}</title>
 <style>
 {css}.thumb img {{ --ratio: {width} / {height}; }}

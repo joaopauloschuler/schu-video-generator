@@ -1,7 +1,9 @@
-# Conventions for working on vidgen
+# Conventions for working on schu-video-generator
 
-> **Who this is for:** agents **developing vidgen itself** (its code, tests and docs). To **make
-> videos with vidgen**, read `AGENTS.md` instead (the author guide; also `vidgen guide`). When you
+> **Who this is for:** agents **developing schu-video-generator itself** (its code, tests and
+> docs). To **make videos with vidgen**, read `AGENTS.md` instead (the author guide; also
+> `vidgen guide`). The project and pip distribution are `schu-video-generator`; the command and the
+> Python package stay `vidgen` (use `vidgen.DIST_NAME` in install hints). When you
 > change a command, scene type or param that `AGENTS.md` names, update the guide in
 > `src/vidgen/data/guide/AGENTS.md` and copy it to `AGENTS.md` (`tests/test_guide.py` checks both).
 
@@ -31,7 +33,7 @@ Read `DESIGN.md` (the contract) and `HANDOFF.md` (what previous steps did) befor
 - Rendering tests: `@pytest.mark.render`, tiny resolution (e.g. 160x90, 5 fps), use `tmp_path`.
 
 ## Git
-- Work on branch `a1` (the user's current branch). **Never push. Never add remotes.** One commit per step (you may make
+- Work on branch `main` (the user's current branch). **Never push. Never add remotes.** One commit per step (you may make
   more, but the step must end with everything committed and the tree clean).
 - Commit message: `Step N: <summary>` followed by a short body, then exactly these trailer lines:
 

@@ -3,7 +3,7 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "vidgen"
+name = "schu-video-generator"
 version = "0.2.0"
 description = "Configurable generator for narrated animated videos (Manim + ElevenLabs + ffmpeg)"
 license = "MIT"

@@ -2,8 +2,10 @@
 
 > **Who this is for:** AI agents (and people) who **use** vidgen to make videos and slide decks.
 > If you are working **on vidgen itself** (its Python code, tests, docs), read `CLAUDE.md` in the
-> vidgen repository instead. This guide ships with vidgen: `vidgen guide` prints all of it,
-> `vidgen guide TOPIC` one part, `vidgen guide --list` the topics.
+> schu-video-generator repository instead. This guide ships with vidgen: `vidgen guide` prints all
+> of it, `vidgen guide TOPIC` one part, `vidgen guide --list` the topics.
+> The project and pip package are called schu-video-generator;
+> the command and the Python package are `vidgen`.
 
 Topics: `start` (rules at a glance), `workflow` (the loop), `pacing` (storytelling and on-screen
 text), `social` (vertical videos), `scenes` (which scene type), `design` (themes, colour, icons),
@@ -69,7 +71,7 @@ scenes:
       - text: "The code is linked below. Try it on your own model."
 ```
 
-Reference for every key: `docs/CONFIG.md` in the vidgen repository; from the command line:
+Reference for every key: `docs/CONFIG.md` in the schu-video-generator repository; from the command line:
 `vidgen list-scenes` (types, params, targets), `vidgen schema --scene stat` (a type's JSON
 Schema), `vidgen list-icons --search growth`, `vidgen list-themes --swatches themes.png`.
 
@@ -116,7 +118,7 @@ Schema), `vidgen list-icons --search growth`, `vidgen list-themes --swatches the
 9. **`vidgen render`** (`--preview` first): now timed by the real audio. Beats change length,
    so run `vidgen storyboard` and `vidgen lint` again: `narration_speed` and `dead_air` now
    measure the real speech.
-10. **`vidgen readback`** (optional extra `vidgen[stt]`): speech-to-text of the MP3s against
+10. **`vidgen readback`** (optional extra `schu-video-generator[stt]`): speech-to-text of the MP3s against
     your texts; it names misheard terms and suggests a pronunciation entry. Fix, `vidgen tts`,
     and `vidgen lint` again (its `readback` rule reads the cached transcripts).
 11. **Final**: `vidgen render` (the full-size `format`, 1920x1080 by default) and a last
@@ -244,7 +246,7 @@ scenes:
 
 Pick by **what the viewer should understand**, not by what the data looks like. To see what
 each type looks like at 16:9 and 9:16, open the scene gallery (`docs/gallery/README.md` in the
-vidgen repository: a still, a GIF, the YAML, params and targets per type) or make it yourself:
+schu-video-generator repository: a still, a GIF, the YAML, params and targets per type) or make it yourself:
 `vidgen gallery --output gallery --types pie,map` (any folder; in a project it also renders the
 project's own scene types, in its theme).
 
@@ -963,7 +965,7 @@ scenes:
 
 - **Slides**: `vidgen slides --final` writes a self-contained HTML deck to `exports/` (a slide
   per beat, the narration as speaker notes; `--audio` for a narrated deck); `--format pdf
-  --notes` a PDF with notes pages (extra `vidgen[pdf]`). A video built with one reveal per beat
+  --notes` a PDF with notes pages (extra `schu-video-generator[pdf]`). A video built with one reveal per beat
   is a good deck for free; check `--mode scene` for a compact one.
 - **GIFs and clips**: `vidgen export gif --scene ID --max-mb 5` (a palette GIF within a size
   budget, for READMEs and chats), `vidgen export clip --scene ID --with-audio` (an MP4 part).

@@ -8,7 +8,7 @@ long-lived server must survive a crashing scene or extension, and the CLI alread
 one JSON document; the cost (~1 s of start-up) is small next to rendering. The command's stderr
 (its progress lines) becomes MCP progress notifications; cancelling a call kills the process.
 
-Optional extra ``vidgen[mcp]`` (the official MCP Python SDK). Written against its ``MCPServer``
+Optional extra ``schu-video-generator[mcp]`` (the official MCP Python SDK). Written against its ``MCPServer``
 (SDK 2.x; named ``FastMCP`` in 1.x, which is used when that is what is installed).
 
 No ``from __future__ import annotations`` here: the SDK reads the tools' parameter annotations,
@@ -33,7 +33,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import Field
 
-from vidgen import __version__
+from vidgen import DIST_NAME, __version__
 from vidgen.errors import VidgenError
 from vidgen.mcp_tools import (
     DEFAULT_IMAGES,
@@ -55,7 +55,7 @@ PROGRESS_INTERVAL = 0.5
 TAIL_LINES = 30
 
 INSTRUCTIONS = """\
-vidgen makes narrated, animated videos from a project folder (video.yaml + assets). Paths are \
+schu-video-generator (the `vidgen` command) makes narrated, animated videos from a project folder (video.yaml + assets). Paths are \
 relative to the server's root folder; nothing outside it can be read or written.
 Start with `guide` (topic "start" or "workflow"): it is the author guide. Usual loop: `plan` (from \
 an outline) or `init` -> edit video.yaml -> `validate` -> `storyboard` (look at the sheets it \
@@ -79,7 +79,7 @@ def _sdk() -> tuple[Any, Any, Any]:
             from mcp.server.fastmcp.exceptions import ToolError
         except ImportError:
             raise VidgenError(
-                "the MCP server needs the optional MCP SDK: pip install \"vidgen[mcp]\" (or pip install mcp)"
+                f'the MCP server needs the optional MCP SDK: pip install "{DIST_NAME}[mcp]" (or pip install mcp)'
             ) from None
     return MCPServer, Context, ToolError
 
@@ -191,7 +191,7 @@ def build_server(root: Path) -> Any:
 
     policy = RootPolicy.at(root)
     # WARNING: the SDK logs every failed call (with the whole document) at INFO on stderr.
-    server = MCPServer("vidgen", instructions=INSTRUCTIONS, log_level="WARNING")
+    server = MCPServer(DIST_NAME, instructions=INSTRUCTIONS, log_level="WARNING")
     heavy_lock: list[Any] = []  # created in the server's event loop, on first use
 
     read_only = ToolAnnotations.model_validate({"readOnlyHint": True, "openWorldHint": False})
@@ -500,7 +500,7 @@ def build_server(root: Path) -> Any:
         return answer(await call(ctx, args_of(["readback"], [str(path)], options), heavy=True))
 
     @tool("A slide deck of the video's key frames with the narration as speaker notes: one self-contained HTML "
-          "file (or a PDF, needs vidgen[pdf]).", writes)
+          "file (or a PDF, needs the extra schu-video-generator[pdf]).", writes)
     async def slides(
         ctx: Context,
         project: Project = ".",

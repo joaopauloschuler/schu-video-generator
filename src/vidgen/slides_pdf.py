@@ -11,7 +11,7 @@ one and the title, author and date. The PDF has the ``metadata:`` title / author
 video's language, and an outline (bookmarks): chapters, the slides under them.
 
 The PDF is written with `fpdf2 <https://py-pdf.github.io/fpdf2/>`_ (pure Python, embeds subsets
-of TrueType fonts): the optional extra ``vidgen[pdf]``; without it the command says how to add it.
+of TrueType fonts): the optional extra ``schu-video-generator[pdf]``; without it the command says how to add it.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from vidgen import __version__
+from vidgen import DIST_NAME, __version__
 from vidgen.deck import Deck, DeckMode, DeckSlide, deck_frames
 from vidgen.errors import VidgenError
 from vidgen.fileio import write_bytes_atomic
@@ -91,7 +91,7 @@ def _fpdf() -> Any:
         import fpdf
     except ImportError:
         raise VidgenError(
-            'the PDF deck needs fpdf2, an optional dependency: pip install "vidgen[pdf]" (or pip install fpdf2)'
+            f'the PDF deck needs fpdf2, an optional dependency: pip install "{DIST_NAME}[pdf]" (or pip install fpdf2)'
         ) from None
     # fontTools logs every step of the font subsetting at INFO (the CLI shows INFO)
     logging.getLogger("fontTools").setLevel(logging.WARNING)
@@ -170,7 +170,7 @@ class _Writer:
             pdf.set_keywords(", ".join(keywords))
         if config.language:
             pdf.set_lang(config.language)
-        pdf.set_creator(f"vidgen {__version__}")
+        pdf.set_creator(f"{DIST_NAME} {__version__}")
         pdf.set_creation_date(datetime.now(timezone.utc))
         pdf.page_mode = "USE_OUTLINES"
 

@@ -1,6 +1,13 @@
-# vidgen — design spec
+# schu-video-generator — design spec
 
 A configurable generator for narrated, animated explainer videos (Manim + ElevenLabs + ffmpeg).
+The project and pip distribution are called `schu-video-generator`; the command (`vidgen`, also
+`vidgen-mcp`) and the Python package (`vidgen`, `src/vidgen/`) are `vidgen`, and so is every name
+below unless it says otherwise. `vidgen.DIST_NAME` (`"schu-video-generator"`) is used where the
+distribution is meant: install hints of the optional extras (`schu-video-generator[pdf|stt|mcp]`),
+the PDF deck's creator and the HTML deck's `generator`, and the MCP server's advertised name. The
+JSON envelope key `vidgen`, the `vidgen://` MCP resources and `--version` (`vidgen 0.2.0`) keep
+the command's name.
 It generalises the one-off `kphi3_paper_video` project: the pipeline is shared, each video is a
 **project folder** with a config file, and each project can **extend** the tool with its own
 scene types, helpers, theme tokens and pipeline hooks.
@@ -99,7 +106,7 @@ src/vidgen/
   tts/__init__.py         # provider seam: get_provider(cfg)
   tts/elevenlabs.py       # ElevenLabs provider (stdlib urllib), cache by hash
   stt/                    # speech-to-text seam (§57): __init__.py (STTProvider, Transcript, stt_settings,
-                          # get_stt_provider), faster_whisper.py (local, extra vidgen[stt]), elevenlabs.py
+                          # get_stt_provider), faster_whisper.py (local, extra schu-video-generator[stt]), elevenlabs.py
   readback.py             # `vidgen readback`: transcripts cached, aligned with the spoken text, WER, edits, suggestions (§57)
   textnorm.py             # text normaliser for readback: case, accents, hyphens, numbers to words (en, pt) (§57; no manim)
   imagegen/               # generated images (§58): __init__.py (GenerateImage, ImageRequest, cache keys, prompt
@@ -3798,14 +3805,14 @@ the measured loudness, §48).
   / `--separate` with a PDF, and PDF-only `--notes` / `--title-page` / `--paper` with HTML, are
   errors (`cli._slides_options`, before loading). `--image-format` / `--quality` defaults now
   depend on the format (HTML webp q80, PDF jpeg q85), so the parser's defaults are `None`.
-- **Library** (`vidgen/slides_pdf.py`): **fpdf2** as the optional extra `vidgen[pdf]`
+- **Library** (`vidgen/slides_pdf.py`): **fpdf2** as the optional extra `schu-video-generator[pdf]`
   (`fpdf2>=2.7.9`; also in `dev`, with `pypdf` for the tests). Decision: fpdf2 is pure Python
   (≈ 340 KB), embeds subsets of TrueType fonts with a ToUnicode map (extractable, searchable
   Unicode text — pt-BR accents), writes outlines, page labels, document info / XMP and alt text,
   and embeds JPEG files as they are (`DCTDecode`, no re-encode). Its dependency fontTools (~5 MB
   wheel with compiled speed-ups, pure-Python fallback) and LGPL-3.0 licence are why it is an
   extra, not a base dependency; vidgen does not bundle it. Without it, `make_slides_pdf` raises
-  `VidgenError('... pip install "vidgen[pdf]" ...')` before rendering anything. Alternatives
+  `VidgenError('... pip install "schu-video-generator[pdf]" ...')` before rendering anything. Alternatives
   rejected: cairo's PDF surface (already installed with Manim) cannot load a font file through
   pycairo (fontconfig / Windows system fonts only) — the bundled Inter would not be guaranteed;
   ReportLab is several times larger for what this needs. fontTools' INFO logging (subsetting steps) is set to
@@ -3873,12 +3880,12 @@ the measured loudness, §48).
   `word_texts()` / `word_times()`; `get_stt_provider(project)`; `stt_settings(project) ->
   {provider, model, language}` (resolved defaults, no provider import: the cache and the lint
   rule use it). Constructing a provider loads nothing and needs no key.
-  - `faster_whisper` (`stt/faster_whisper.py`, optional extra `vidgen[stt]` =
+  - `faster_whisper` (`stt/faster_whisper.py`, optional extra `schu-video-generator[stt]` =
     `faster-whisper>=1.0`; not in `dev`: ~70 MB of CTranslate2 / ONNX Runtime and a model
     download): `WhisperModel(model, device)` loaded on the first transcription, `transcribe(path,
     language, beam_size=5, word_timestamps=True, condition_on_previous_text=False,
     vad_filter=False)` (each beat on its own, so one mistake cannot carry over; no VAD so quiet
-    words are not cut). Missing package → `VidgenError('... pip install "vidgen[stt]"')`; a model
+    words are not cut). Missing package → `VidgenError('... pip install "schu-video-generator[stt]"')`; a model
     that cannot load (download refused, bad folder) → `VidgenError` naming the model.
   - `elevenlabs` (`stt/elevenlabs.py`): `POST /v1/speech-to-text`, multipart (`model_id`
     `scribe_v1`, `language_code` when known, `timestamps_granularity=word`,
@@ -4201,7 +4208,7 @@ the measured loudness, §48).
 ## 62. Refinements (Step 59, MCP server)
 
 - **`vidgen mcp [--root DIR]`** (and the console script `vidgen-mcp`): a Model Context Protocol
-  server on stdio, optional extra `vidgen[mcp]` = the official MCP Python SDK (`mcp>=1.19`).
+  server on stdio, optional extra `schu-video-generator[mcp]` = the official MCP Python SDK (`mcp>=1.19`).
   Written against SDK 2.x's `MCPServer` (`mcp.server.mcpserver`); with a 1.x SDK it uses
   `FastMCP` (the same decorator API; 1.19 is the first that passes a returned `CallToolResult`
   through). Results are built as `CallToolResult.model_validate({...camelCase wire names...})`,

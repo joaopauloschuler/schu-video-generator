@@ -1,7 +1,7 @@
 """Speech-to-text: the provider seam of ``vidgen readback`` (DESIGN.md §57).
 
 - :func:`get_stt_provider` returns the provider for a project's ``stt:`` section:
-  ``faster_whisper`` (local, free; the optional extra ``vidgen[stt]``) or ``elevenlabs``
+  ``faster_whisper`` (local, free; the optional extra ``schu-video-generator[stt]``) or ``elevenlabs``
   (ElevenLabs Speech to Text, the ``ELEVENLABS_API_KEY`` of ``vidgen tts``).
 - :func:`stt_settings` gives what a transcript depends on (provider, model, language), without
   importing a provider library: the transcript cache (:mod:`vidgen.readback`) and the

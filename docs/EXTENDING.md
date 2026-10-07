@@ -23,7 +23,9 @@ vidgen list-scenes       # every scene type, where it comes from, its params
 ```
 
 Import everything from **`vidgen.api`** only: it re-exports all of `from manim import *` plus the
-vidgen names. Anything else in vidgen is internal.
+vidgen names. Anything else in vidgen is internal. (`vidgen` is the Python package of the
+schu-video-generator distribution; installing it gives both the package and the `vidgen`
+command.)
 
 Two complete examples: [examples/custom_scene](../examples/custom_scene) (a small video with one
 custom scene type, a helper module, a vertical variant and a hook) and

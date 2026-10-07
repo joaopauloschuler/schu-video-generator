@@ -243,7 +243,7 @@ class SttConfig(_Strict):
     """The optional ``stt:`` section: the speech-to-text provider of ``vidgen readback`` (DESIGN.md §57)."""
 
     provider: Literal["faster_whisper", "elevenlabs"] = "faster_whisper"
-    """faster_whisper (local and free; pip install "vidgen[stt]") or elevenlabs (ElevenLabs Speech to Text, paid; ELEVENLABS_API_KEY)."""
+    """faster_whisper (local and free; pip install "schu-video-generator[stt]") or elevenlabs (ElevenLabs Speech to Text, paid; ELEVENLABS_API_KEY)."""
     model: str | None = Field(default=None, min_length=1)
     """Model: a Whisper size (tiny, base, small, medium, large-v3, turbo; .en for English only) or a folder with a converted model; ElevenLabs: scribe_v1. Default: small.en for English, else small; scribe_v1."""
     language: Literal["auto"] | LanguageTag | None = None

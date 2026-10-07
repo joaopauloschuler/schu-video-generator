@@ -225,7 +225,7 @@ def test_faster_whisper_provider(fake_faster_whisper: type[FakeWhisper], tmp_pat
 
 def test_faster_whisper_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(sys.modules, "faster_whisper", None)  # import raises ImportError
-    with pytest.raises(VidgenError, match=r'pip install "vidgen\[stt\]"'):
+    with pytest.raises(VidgenError, match=r'pip install "schu-video-generator\[stt\]"'):
         FasterWhisperProvider("small", "en").check_available()
 
 
@@ -407,7 +407,7 @@ def test_nothing_to_transcribe_needs_no_provider(rb_project: Path, monkeypatch: 
     run_readback(project, provider=FakeSTT(), log=lambda s: None)
     monkeypatch.setitem(sys.modules, "faster_whisper", None)  # not installed: fine while all is cached
     assert run_readback(project, log=lambda s: None).cached == 3
-    with pytest.raises(VidgenError, match="vidgen\\[stt\\]"):
+    with pytest.raises(VidgenError, match="schu-video-generator\\[stt\\]"):
         run_readback(project, force=True, log=lambda s: None)
 
 

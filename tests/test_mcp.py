@@ -133,7 +133,7 @@ def test_mcp_command_without_the_sdk(monkeypatch: pytest.MonkeyPatch, capsys: py
     for name in ("mcp", "mcp.server", "mcp.server.mcpserver", "mcp.server.fastmcp"):
         monkeypatch.setitem(sys.modules, name, None)
     assert main(["mcp"]) == 1
-    assert 'pip install "vidgen[mcp]"' in capsys.readouterr().err
+    assert 'pip install "schu-video-generator[mcp]"' in capsys.readouterr().err
 
 
 # ----- helpers (no SDK) ---------------------------------------------------------------------------
@@ -244,7 +244,8 @@ def run_session(root: Path, body: Callable[[Any], Awaitable[None]]) -> None:
         )
         with open(os.devnull, "w", encoding="utf-8") as errlog:
             async with stdio_client(params, errlog=errlog) as (read, write), ClientSession(read, write) as client:
-                await client.initialize()
+                init = await client.initialize()
+                assert attr(init, "server_info", "serverInfo").name == "schu-video-generator"
                 yield client
 
     async def main_() -> None:

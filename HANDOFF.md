@@ -5862,3 +5862,38 @@ How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2248 passed, 1
 on 2 CPUs); step only: `pytest tests/test_review4.py tests/test_mcp.py`. Manual:
 `vidgen storyboard examples/minimal` then `vidgen render examples/minimal --preview` (joins only:
 "rendered 0 scene(s), N reused"); `vidgen lint examples/plan` (0 findings).
+
+## Rename — schu-video-generator
+
+The project is renamed **schu-video-generator** (a project called "vidgen" already exists).
+
+- **Changed**: the distribution name in `pyproject.toml` (`[project] name`; wheels are
+  `schu_video_generator-0.2.0-py3-none-any.whl`); the extras are spelled
+  `schu-video-generator[pdf|stt|mcp]` in every install hint (errors of `slides --format pdf`,
+  the `faster_whisper` provider and `vidgen mcp`; CLI help; docs; example comments). New
+  `vidgen.DIST_NAME = "schu-video-generator"` is used for those hints, the PDF deck's creator, the
+  HTML deck's `generator` meta / data and the MCP server's advertised name (README / CONFIG.md
+  config snippets use the server key `schu-video-generator`, command `vidgen`). Project-name
+  prose in README (a sentence at the top: the project and pip package are schu-video-generator;
+  the command and the Python package are `vidgen`; an upgrade note: `pip uninstall vidgen` once),
+  AGENTS.md (both copies), CLAUDE.md (branch `main` now), DESIGN.md (intro lists what uses which
+  name), docs/CONFIG.md, docs/EXTENDING.md, THIRD_PARTY_NOTICES.md, tasklist.md's extras and the
+  `vidgen init` template's first comment.
+- **Unchanged**: the commands `vidgen` and `vidgen-mcp`; the import package `vidgen`
+  (`src/vidgen/`, `vidgen.api`, `python -m vidgen`); `vidgen --version` (`vidgen 0.2.0`); the JSON
+  envelope key `vidgen`; the `vidgen://` MCP resources; the docs/gallery pages (they only name
+  commands, not regenerated); version 0.2.0 (no bump: nothing changes for code or projects). No
+  `importlib.metadata` lookup existed (`__version__` is a constant), so none was changed.
+- **Files**: `pyproject.toml`, `src/vidgen/{__init__,cli,config,mcp_server,slides,slides_pdf}.py`,
+  `src/vidgen/stt/{__init__,faster_whisper}.py`, the template `video.yaml`, the docs above,
+  `examples/{minimal,kphi3}/video.yaml` comments; tests `test_mcp.py` (also checks the server
+  name), `test_readback.py`, `test_slides_pdf.py`, new `tests/test_packaging.py` (pyproject name
+  = `DIST_NAME`, version, both scripts; no `vidgen[` / `pip install vidgen` left in the user docs).
+- **Existing environments** that installed the old `vidgen` distribution (editable or not) keep
+  it registered: `pip uninstall vidgen`, then `pip install -e ".[dev]"` (done in
+  `/home/claude/venv`).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2250 passed, 1 skipped, 8:05);
+`pip wheel --no-deps -w DIR .` gives `schu_video_generator-0.2.0-py3-none-any.whl`; in a fresh
+venv with it installed, `vidgen --version`, `vidgen guide --list` and `python -c "import vidgen"`
+work and `importlib.metadata.version("schu-video-generator")` is `0.2.0`.

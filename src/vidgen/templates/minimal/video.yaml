@@ -1,4 +1,4 @@
-# vidgen project config. Reference: docs/CONFIG.md
+# schu-video-generator project config (command: vidgen). Reference: docs/CONFIG.md
 # How to make a good video (workflow, pacing, scene types): `vidgen guide` (AGENTS.md)
 title: __TITLE__
 # output: my_video          # basename of the output files; default: the folder name
