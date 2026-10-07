@@ -29,6 +29,8 @@ NEED_SIZE = ("magnifier", "spotlight")
 DIMMED = 0.35
 #: Gap between the title and the picture.
 TITLE_GAP = 0.45
+#: Gap between the picture and its caption.
+CAPTION_GAP = 0.3
 
 
 class CalloutSpec(SceneParams):
@@ -142,20 +144,28 @@ class Screenshot(NarratedScene):
     with ``focus`` moves the camera in on its callouts' areas (the next step without it moves
     back). More steps than beats are spread evenly; extra beats hold.
 
-    Action targets: ``title``, ``image`` (the picture with its frame), ``callout<N>`` (numbered
-    over all steps), ``callout:<label>``, ``step<N>`` (a step's callouts).
+    Action targets: ``title``, ``image`` (the picture with its frame), ``caption``,
+    ``callout<N>`` (numbered over all steps), ``callout:<label>``, ``step<N>`` (a step's callouts).
     """
 
     outro = 0.5
-    target_patterns = ("title", "image", "callout<N>", "callout:<label>", "step<N>")
+    target_patterns = ("title", "image", "caption", "callout<N>", "callout:<label>", "step<N>")
     #: Target name of the picture (with its frame).
     picture_name: ClassVar[str] = "image"
+    #: The caption under the picture (with its plate in ``video_clip``), set by ``construct``.
+    _caption: Mobject | None = None
 
     class Params(SceneParams):
         path: str
         """Image file relative to the project folder, e.g. assets/app.png."""
         title: str = ""
         """Heading above the picture."""
+        caption: str = ""
+        """Line under the picture."""
+        caption_size: ThemeSize = "caption"
+        """Caption text size."""
+        caption_color: ThemeColor = "text"
+        """Caption colour."""
         steps: list[ScreenshotStep] = []
         """Step i at beat i: {callouts, focus, previous}, a list of callouts, or one callout."""
         frame: Literal["none", "browser", "window", "phone"] = "none"
@@ -192,9 +202,9 @@ class Screenshot(NarratedScene):
 
     @classmethod
     def target_names(cls, params: Any) -> list[str]:
-        """``title`` (if any), ``image``, ``callout<N>`` (+ ``callout:<label>``) per callout and
-        ``step<N>`` per step with callouts."""
-        names = (["title"] if params.title else []) + [cls.picture_name]
+        """``title`` (if any), ``image``, ``caption`` (if any), ``callout<N>`` (+
+        ``callout:<label>``) per callout and ``step<N>`` per step with callouts."""
+        names = (["title"] if params.title else []) + [cls.picture_name] + (["caption"] if params.caption else [])
         for n, (_, c) in enumerate(params.callouts(), start=1):
             names += [f"callout{n}"] + ([f"callout:{c.label}"] if c.label.strip() else [])
         return names + [f"step{k + 1}" for k, step in enumerate(params.steps) if step.callouts]
@@ -225,15 +235,27 @@ class Screenshot(NarratedScene):
         if p.title:
             title = chart_title(p.title, size="heading", area=self.safe_area)   # header band, 1.3x in a vertical frame
             self._body = self._body.below(title, gap=TITLE_GAP)
+        room = self._body
+        caption = None
+        if p.caption:
+            caption = fit_text(p.caption, room.width, room.height * 0.2, size=p.caption_size, color=p.caption_color)
+            room = room.above(room.y0 + caption.height, gap=CAPTION_GAP)
         self._img = load_image(self.project.asset(p.path))
-        self._picture = self._layout(self._body)
+        self._picture = self._layout(room)
+        if caption is not None:  # under the picture; callout labels keep off it
+            caption.next_to(self._picture, DOWN, buff=CAPTION_GAP).set_x(self._img.get_x())
+            self._keep_off = self._keep_off + [callout_area(caption).inset(-0.1)]
+        self._caption = caption
         self._cameras = [self._camera(k) for k in range(len(p.steps))]
         self._callouts = self._build()
         self._register(title)
+        if caption is not None:
+            self.target("caption", caption, entrance=lambda: [FadeIn(caption, shift=UP * 0.1)])
         self._camera_at: tuple[float, tuple[float, float]] | None = None
 
         def intro() -> list[Animation]:
-            return self.entrance(self.picture_name) + (self.entrance("title") if title is not None else [])
+            anims = self.entrance(self.picture_name) + (self.entrance("title") if title is not None else [])
+            return anims + (self.entrance("caption") if caption is not None else [])
 
         steps: list[Callable[[], list[Animation]]] = [(lambda k=k: self._step(k)) for k in range(len(p.steps))]
         plan = distribute(len(steps), len(self.beats))
@@ -450,12 +472,24 @@ class Screenshot(NarratedScene):
         if camera != self._camera_at:
             width, center = camera or (self.frame_width, (0.0, 0.0))
             anims.append(MoveCamera(self, width, np.array([*center, 0.0])))
+            anims += self._caption_moves(camera)
             self._camera_at = camera
         start = 0.4 if anims else 0.0
         for m in self._callouts[k]:
             if not self.on_screen_parts(m):
                 anims += m.draw(start)
         return anims
+
+    def _caption_moves(self, camera: tuple[float, tuple[float, float]] | None) -> list[Animation]:
+        """The caption leaves while the camera is in on a step (it would be enlarged under the
+        picture) and comes back with the whole frame."""
+        caption = self._caption
+        if caption is None:
+            return []
+        shown = self.on_screen_parts(caption)
+        if camera is not None:
+            return [fade_out(part) for part in shown]
+        return [] if shown else [FadeIn(caption, shift=UP * 0.1)]
 
     def _leave(self, made: Callout, mode: str) -> list[Animation]:
         """How an earlier step's callout makes way: fades out, or (``dim``) keeps its mark faint

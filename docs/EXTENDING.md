@@ -802,6 +802,14 @@ class Checklist(NarratedScene):
 with the beat before that one), like `zoom`; `moves_camera = True` keeps two such actions from
 playing at once; `target_options = ("into",)` names options whose values are target names
 (checked by `vidgen validate` like `target`; look them up with `scene.find_targets(name)`).
+`until_next_beat = True` (with `reversible`) undoes the action when the next beat starts unless
+the use gives `until` (the built-in `callout`); override `default_until(later)` (the ids of the
+beats after the action's own) to choose per use, e.g. by an option. `problems()` returns
+`(key, message)` pairs for checks that need more than the options (the target, `until`), and
+`provides()` the target names the use registers when applied (`scene.target(name, mob)` in
+`apply`), which later actions of the scene may then use — `vidgen validate` checks both.
+The built-in `callout` action (`src/vidgen/scenes/callout_action.py`) is an example of all
+three, built on the callout helpers below.
 
 **The camera.** `NarratedScene` is a Manim `MovingCameraScene`: `self.camera.frame` can be
 moved and scaled (`self.camera.frame.animate.set_width(4).move_to(dot)`). Every scene starts

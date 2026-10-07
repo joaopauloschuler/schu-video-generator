@@ -91,6 +91,7 @@ src/vidgen/
   fileio.py               # atomic writes; replacing files that Windows programs keep open
   scenes/                 # built-in scene library (registered like extensions; actions.py:
                           # the built-in beat actions reveal/dim/highlight/zoom/transform, §26-27;
+                          # callout_action.py: the callout beat action, §44;
                           # overlays.py: the built-in overlays lower_third/watermark, §41;
                           # progress.py: progress_bar/chapter_indicator, §42; captions.py: captions, §43)
   data/fonts/             # Inter, Source Serif 4, JetBrains Mono NL (.ttf + OFL.txt; package data)
@@ -487,6 +488,8 @@ Step 39 (§42) adds `video_chapters`, `Chapter`. Step 40 (§43) adds `WordTime`,
 `estimate_word_times`, `speech_bounds`, `spoken_words`, `syllables`, `CaptionCue`,
 `caption_cues`, `segment_cues`, `phrase_break_cost`, `plate_contrast`, and compatibly
 `Overlay.default_reserve()` / `Overlay.reserves`.
+Step 41 (§44) adds, compatibly, the `Action` class attribute `until_next_beat` and the methods
+`problems()`, `provides()`, `default_until(later)`.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -2716,3 +2719,58 @@ using the existing renders of the others (missing ones are rendered). Exit code 
   the caption band is reserved per scene (a scene with only one-line cues still keeps room for
   `max_lines`); a lower third and bottom captions are both placed in the global safe area and can
   overlap in 9:16 (move one with `align` / `position` or `lift`).
+
+## 44. Refinements (Step 41, the `callout` beat action)
+
+- **A beat action, not an overlay** (Step 38's note): a callout points at a scene's targets, which
+  only exist inside the scene's render, and should move with a zoom like the rest of the scene,
+  so it is a per-beat action (`scenes/callout_action.py`, built on the §26 framework and the §37
+  helpers), not a screen-fixed overlay. Syntax as every action: `- callout: "bar:4K"` + options,
+  or `{action: callout, area: [x, y, w, h], ...}` without a target. It reuses the action
+  machinery: target validation and suggestions, `at`, `until`, `run_time`, timing inside waits,
+  the JSON Schema, `list-scenes`.
+- **Options**: `kind` (`box` default | `circle` | `arrow` | `label` | `spotlight` | `magnifier`),
+  `label`, `area` (`[x, y, w, h]` / `[x, y]`, top-left origin as in §37), `within` (`frame` |
+  `safe`, areas without a target), `units` (`fraction` | `px`), `color` (`highlight`),
+  `label_size` (`caption`), `side`, `curved` (arrow), `zoom` (magnifier), `keep`, `name`.
+  Checks in the model (area shape and range, kind-only options, `label` needs text, magnifier
+  needs an area) and in `problems()` (a target or an area; a magnifier needs a target; `within`
+  only without a target; `keep` with `until`).
+- **What it points at**: the targets' outline (`Target.outline`, e.g. a bar with its value),
+  else their parts on screen; several targets → one callout around all of them. With `area`
+  and a target: fractions (or `px`) of the target's largest picture (an `ImageMobject` or clip
+  in its family — so `image` / `screenshot` areas read off the image file), else of its box.
+  Without a target: fractions of the **visible view** (`within: frame`, the camera frame when
+  zoomed) or of its safe area (`within: safe`); `px` are pixels of the output frame.
+- **Where labels go** (`bounds`, `avoid` of the §37 helpers): inside `scene.safe_area` (which
+  already excludes `reserve`d overlays); while the camera is zoomed in, inside the view minus
+  margins x scale, and the callout is built with `scale` = view width / frame width so it reads
+  at its normal size (§37). `avoid`: boxes of every `Text` / `MarkupText` / `Paragraph` / TeX
+  mobject on screen, callouts on screen (targets whose mobject is a `Callout`), the scene's other
+  targets on screen smaller than 20 % of the view that do not hold the area's centre (a node,
+  a bar; not the axes or a map), and the overlays' boxes (mapped into a zoomed view). The arrow
+  and `label` kinds prefer spots off the targets. `label` = a `callout_label` placed by
+  `label_spot` at gaps 0.15 / 0.35 / 0.7 (a mark-less note). Z-index: above everything on
+  screen (+2; a spotlight +1, under other callouts).
+- **Lifetime** (framework): new `Action.until_next_beat` (class attribute; requires reversible,
+  not temporary) and `default_until(later)`; the runner stores `ActionUse.until` = `until` or
+  the default, and undoes at that beat's start as for `until`. The callout goes when the next
+  beat starts (`keep: true`: stays to the scene's fade-out; on the last beat it stays anyway).
+  Decision: not "by the end of its beat" like `zoom`, because beat-end stills — what storyboard
+  and lint look at — would never show it. Undoing fades the parts out (`fade_out`).
+- **Named callouts** (framework): `Action.provides()` lists target names a use registers when
+  applied; `scene_actions` lets later actions (same beat after it, or later beats) name them,
+  checks the name (`TARGET_NAME`, not taken by the scene or an earlier callout). The callout
+  registers itself with `on_fill = (label text, plate)`, so `dim` / `highlight` keep its label
+  readable (Step 37's routed item). `Action.problems()` reports use-level checks (key, message).
+- **Magnifier**: needs a still picture in the target (`image`, `screenshot` `image`); a clip or
+  no picture is a render-time `VidgenError` (static checks cannot see the mobjects).
+- **`screenshot` `caption`** (+ `caption_size`, `caption_color`), as `video_clip`'s: a line
+  under the picture (the picture shrinks to make room), target `caption`, kept clear by callout
+  labels (`_keep_off`); `target_names` moved from `video_clip` to `screenshot`. The caption (of
+  both types) fades out when a `focus` step moves the camera in and back with the whole frame
+  (enlarged under the picture it ran into the watermark in the gallery's `contrast` / `neon`).
+- Known limits: placement is the §37 scored search (labels avoid text and small targets, not
+  lines: an arrow or a label may cross a chart line or an edge); a callout added before a `zoom`
+  scales with the scene (built for the camera of the moment it appears); a callout with `at` in
+  the same frame as a `zoom` is built for the camera before the zoom (give it a later `at`).

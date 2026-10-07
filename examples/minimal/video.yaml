@@ -11,6 +11,7 @@
 #   vidgen lint examples/minimal [--variant vertical]            # layout + timing checks (dead air, ...)
 #   vidgen storyboard examples/minimal --scene sizes --per-beat 3   # mid-beat stills: beat actions
 #   vidgen storyboard examples/minimal --scene math --per-beat 3    # transform and zoom actions
+#   vidgen storyboard examples/minimal --scene trend --per-beat 3   # a callout action
 #   vidgen storyboard examples/minimal --variant light           # same video with the light_academic preset
 #   vidgen storyboard examples/minimal --variant subtitled       # burned-in captions (SRT-style cues)
 #   vidgen storyboard examples/minimal --variant social --per-beat 3   # 9:16 karaoke captions
@@ -137,6 +138,11 @@ scenes:
     beats:
       - text: "Line charts draw one series per beat. Here is the baseline."
       - text: "And here is the sparse model, which ends lower."
+        actions:          # a callout on any scene: a target, or an area of the frame (docs/CONFIG.md)
+          - callout: "point:sparse@8"
+            kind: arrow
+            label: "Lowest loss"
+            at: 0.4
 
   - id: picture
     type: image

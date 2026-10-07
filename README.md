@@ -17,7 +17,7 @@ subtitles.
     scales from the theme), `stat` (a counting number with a comparison), `map` (countries step by
     step, choropleths, pins and flight-path arcs; Natural Earth data bundled);
   - pictures and media: `image` (Ken Burns), `screenshot` (callouts: boxes, arrows, magnified
-    insets, a spotlight; in a browser, window or phone frame), `video_clip` (B-roll, screen
+    insets, a spotlight; in a browser, window or phone frame; a caption), `video_clip` (B-roll, screen
     recordings: trimmed, sped up, looped, full-bleed or framed, their sound under the narration);
   - maths and code: `equation`, `equation_derivation` (steps morphing into each other, with
     notes), `code`, `code_walkthrough` (a long file scrolling to the lines each beat explains).
@@ -35,8 +35,10 @@ subtitles.
   a project adds or replaces icons with SVGs in `assets/icons/`.
 - **Beat actions**: a beat can point at parts of its scene while it is spoken —
   `- highlight: "bar:4K"`, `- dim: item1`, `- reveal: item4` (with `until:` a later beat to undo),
-  `- zoom: "term:2ab"` (camera in and back out), `- transform: step1` + `into: step3` — on every
-  built-in scene type, timed inside the beat ([reference](docs/CONFIG.md#beat-actions)).
+  `- zoom: "term:2ab"` (camera in and back out), `- transform: step1` + `into: step3`,
+  `- callout: "point:sparse@8"` + `kind: arrow`, `label: Lowest loss` (a box, circle, arrow,
+  label, spotlight or magnifier on a target or at coordinates of the frame, for the beat) — on
+  every built-in scene type, timed inside the beat ([reference](docs/CONFIG.md#beat-actions)).
 - **Overlays**: a video-level `overlays:` list draws lower thirds (`- {type: lower_third, scene:
   intro, at: 1.5, name: Ada Lovelace}`), a watermark (logo, icon or text in a corner), a progress
   bar and a chapter indicator ("2 · Results") over the scenes, fixed to the screen through camera

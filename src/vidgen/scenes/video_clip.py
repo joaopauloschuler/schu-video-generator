@@ -15,12 +15,10 @@ from typing import Any, ClassVar, Literal
 
 from vidgen.api import *
 
-from .screenshot import CalloutSpec, Screenshot
+from .screenshot import CAPTION_GAP, CalloutSpec, Screenshot
 
 log = logging.getLogger("vidgen.scenes")
 
-#: Gap between the clip and its caption.
-CAPTION_GAP = 0.3
 #: A held last frame longer than this (seconds) is reported when the scene renders.
 HOLD_WARNING = 2.0
 #: Clip sound volume under narration when ``volume`` is not given (1.0 in a silent scene).
@@ -99,14 +97,6 @@ class VideoClip(Screenshot):
             return self
 
     @classmethod
-    def target_names(cls, params: Any) -> list[str]:
-        """``title`` (if any), ``clip``, ``caption`` (if any), then the callouts and steps."""
-        names = super().target_names(params)
-        if params.caption:
-            names.insert(names.index("clip") + 1, "caption")
-        return names
-
-    @classmethod
     def validate_project(cls, params: Any, project: Any) -> list[str]:
         problems = super(Screenshot, cls).validate_project(params, project) + check_clip(project, params.path, "path")
         if problems:
@@ -136,6 +126,7 @@ class VideoClip(Screenshot):
         timing = self._timing(probe_clip(path), window)
         self._img = clip = ClipMobject(path, timing)
         title, caption = self._place(clip)
+        self._caption = caption
         self._cameras = [self._camera(k) for k in range(len(p.steps))]
         self._warn_cropped()
         self._callouts = self._build()

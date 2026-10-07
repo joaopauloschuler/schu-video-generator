@@ -493,5 +493,5 @@ def test_config_md_action_examples_validate(make_project) -> None:
     text = (ROOT / "docs" / "CONFIG.md").read_text(encoding="utf-8")
     section = text[text.index("## Beat actions") : text.index("**Syntax.**")]
     scenes = [s for block in re.findall(r"```yaml\n(.*?)```", section, flags=re.S) for s in yaml.safe_load(block)]
-    assert [s["type"] for s in scenes] == ["bar_chart", "equation"]
+    assert [s["type"] for s in scenes] == ["bar_chart", "equation", "line_chart"]
     assert check_project(project_with(make_project, scenes)) == []

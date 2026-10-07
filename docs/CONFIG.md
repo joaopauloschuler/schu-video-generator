@@ -1109,7 +1109,7 @@ the camera back.
 `window` the title bar alone, `phone` a rounded body with a speaker slot and a home bar (for
 portrait screenshots); all in the theme's `surface` and `dim` colours.
 
-[Action targets](#beat-actions): `title`, `image` (the picture with its frame), `callout<N>`
+[Action targets](#beat-actions): `title`, `image` (the picture with its frame), `caption`, `callout<N>`
 (numbered over all steps, in the order written), `callout:<label>`, `step<N>` (a step's callouts;
 revealing it plays the step). Revealing a callout early draws it (one of a focus step brings its
 step, with the camera); a step whose callouts are all on screen already is skipped at its beat.
@@ -1118,6 +1118,9 @@ step, with the camera); a step whose callouts are all on screen already is skipp
 |---|---|---|---|
 | `path` | str | required | relative to the project folder, e.g. `assets/app.png` |
 | `title` | str | `""` | heading above the picture |
+| `caption` | str | `""` | a line under the picture (as in `video_clip`; callout labels keep clear of it; it fades out while a `focus` step has the camera in, and back) |
+| `caption_size` | size | `caption` | |
+| `caption_color` | color | `text` | |
 | `steps` | list | `[]` | step *i* at beat *i*: a callout, a list of callouts, or `{callouts, focus, previous}` |
 | `steps[].callouts` | list | `[]` | `{KIND: area, label, color, side, curved, zoom}` (see above) |
 | `steps[].callouts[].kind`, `.area` | kind, list | required | the canonical form of `{KIND: area}` |
@@ -1162,6 +1165,8 @@ step, with the camera); a step whose callouts are all on screen already is skipp
 
 Project scenes draw the same callouts with the `callout_*` helpers of `vidgen.api`
 ([EXTENDING.md](EXTENDING.md#2-building-blocks-params-layout-timing-validation), "Callouts").
+Callouts on any other scene type (a chart, a diagram) are the [`callout` beat
+action](#beat-actions).
 
 ### `video_clip`
 
@@ -1219,7 +1224,7 @@ picture, `highlight: clip` tints it, `zoom: clip` looks closer.
 |---|---|---|---|
 | `path` | str | required | relative to the project folder, e.g. `assets/demo.mp4` |
 | `title` | str | `""` | heading above the clip (on a plate with `region: bleed`) |
-| `caption` | str | `""` | line under the clip (on a plate at the bottom with `region: bleed`) |
+| `caption` | str | `""` | line under the clip (on a plate at the bottom with `region: bleed`); fades out while a `focus` step has the camera in |
 | `caption_size`, `caption_color` | size, color | `caption`, `text` | |
 | `region` | `body` \| `full` \| `hero` \| `left` \| `right` \| `top` \| `bottom` \| `center` \| `bleed` | `body` | where the clip goes (see above) |
 | `fit` | `contain` \| `cover` | `contain` | whole picture, or fill the region / frame (cropped) |
@@ -2122,8 +2127,8 @@ One block of text, wrapped to fit, faded in at the first beat and held (no fade-
 ## Beat actions
 
 A beat can act on named parts of its scene — **targets** such as `item3` or `bar:4K` — while it
-is spoken: reveal one early, dim it, highlight it, zoom in on it, or morph it into another.
-Actions are listed under the beat:
+is spoken: reveal one early, dim it, highlight it, zoom in on it, morph it into another, or
+point at it with a callout (also at any spot of the frame). Actions are listed under the beat:
 
 ```yaml
 - id: sizes
@@ -2157,6 +2162,23 @@ Actions are listed under the beat:
     - text: "That is the whole expansion."
 ```
 
+```yaml
+- id: trend
+  type: line_chart
+  params: {title: "Validation loss", x: [1, 2, 3, 4], series: {baseline: [2.1, 1.8, 1.6, 1.5], sparse: [2.2, 1.7, 1.5, 1.4]}}
+  beats:
+    - text: "Here is the baseline."
+    - text: "And here is the sparse model, which ends lower."
+      actions:
+        - callout: "point:sparse@4"                # on a target: an arrow from a label to it
+          kind: arrow
+          label: "Lowest loss"
+          at: 0.4                                  # gone when the next beat starts
+    - text: "Both start from the same loss."
+      actions:
+        - {action: callout, kind: box, area: [0.1, 0.15, 0.3, 0.3], label: "Start"}   # coordinates of the frame
+```
+
 **Syntax.** The canonical form is a mapping with `action` and the keys below, plus the
 action's options. The shorthand `{ACTION: TARGET, ...options}` (as `- dim: item2`) is the
 same thing; write the action name as the first key (if a tool sorted the keys, vidgen finds
@@ -2164,11 +2186,11 @@ the one key that names an action).
 
 | key | default | |
 |---|---|---|
-| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `transform`, or a project action (`vidgen list-scenes` lists them) |
-| `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one |
+| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `transform`, `callout`, or a project action (`vidgen list-scenes` lists them) |
+| `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one (`callout` with an `area` needs none) |
 | `at` | `0` | when, as a fraction of the beat's narration (`0` ≤ at < `1`) |
-| `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`: undone when it starts; `zoom`: the camera is back when it starts) |
-| `run_time` | the action's | seconds the animation takes (`reveal` 0.8, `dim` / `highlight` 0.6, `zoom` / `transform` 1.0; a zoom takes as long again to come back) |
+| `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`, `callout`: undone when it starts; `zoom`: the camera is back when it starts) |
+| `run_time` | the action's | seconds the animation takes (`reveal` / `callout` 0.8, `dim` / `highlight` 0.6, `zoom` / `transform` 1.0; a zoom takes as long again to come back) |
 
 **Targets** depend on the scene type (`vidgen list-scenes` prints them as `targets:`). Every
 built-in type has some; `<N>` counts from 1 (`item1`, `item2`...), `<text>`/`<label>`/`<name>`
@@ -2191,7 +2213,7 @@ a title card, a `transform` of a bar).
 | `heatmap` | `title`, `legend`, `row<N>`, `row:<label>`, `col<N>`, `col:<label>`, `cell<R>.<C>` | reveal, dim, highlight, zoom | a row / column is its cells and label (`box` and `fill` cover its cells edge to edge); `cell2.3` is row 2, column 3; `style: box` keeps the data colours (`color` paints the cells, `fill` tints them); values are recoloured to stay readable on dimmed, painted or tinted cells |
 | `map` | `title`, `map`, `legend`, `country:<code>`, `pin<N>`, `pin:<label>`, `arc<N>`, `step<N>` | reveal, dim, highlight, zoom | `country:` for highlighted and valued countries, by alpha-3, alpha-2 or name (`country:DEU`, `country:DE`, `country:Germany`): a highlight with its label (revealing it plays its highlight), a valued country its shape; a pin is its dot and label; `step2` is step 2's items (revealing it plays the step); `zoom: country:FRA` looks closer; `dim: map` fades the countries under the highlights |
 | `image` | `image`, `caption` | dim, highlight, zoom | `dim` fades the picture, `highlight` tints it |
-| `screenshot` | `title`, `image`, `callout<N>`, `callout:<label>`, `step<N>` | reveal, dim, highlight, zoom | a callout is its mark and label (`highlight` repaints the mark and the label's plate; its text keeps a readable colour); `callout:New task`; `step2` is step 2's callouts (revealing it plays the step); `zoom: callout3` looks closer; `dim: image` fades the picture under the callouts |
+| `screenshot` | `title`, `image`, `caption`, `callout<N>`, `callout:<label>`, `step<N>` | reveal, dim, highlight, zoom | a callout is its mark and label (`highlight` repaints the mark and the label's plate; its text keeps a readable colour); `callout:New task`; `step2` is step 2's callouts (revealing it plays the step); `zoom: callout3` looks closer; `dim: image` fades the picture under the callouts |
 | `video_clip` | `title`, `clip`, `caption`, `callout<N>`, `callout:<label>`, `step<N>` | reveal, dim, highlight, zoom | as in `screenshot`; `clip` is the moving picture with its frame: `dim` fades it, `highlight` tints it, `zoom` looks closer (it is decoded sharper for that) |
 | `quote` | `mark`, `quote`, `author`, `source` | reveal, dim, highlight, zoom | |
 | `equation` | `step<N>`, `caption`, `term:<tex>` | reveal, dim, highlight, zoom, transform | `term:` for each of the `terms` param, in the step on screen; `transform: step1` + `into: step3` jumps ahead |
@@ -2221,6 +2243,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `highlight` | `color` (`highlight`, a theme token or hex), `style` (`color` default, `box`, `underline`, `fill`, `flash`, or a list such as `[color, box]`) | `color` recolours the target and brings a dimmed one back to full opacity while highlighted; `box` draws a rounded frame around it, `underline` a line under it, `fill` lays a translucent band of the colour under it (over backdrops such as table stripes and cards); `flash` flashes the colour there and back (leaves no trace; not with `color`). `until:` restores the colours (and the dimming) and removes box / underline / fill. |
 | `zoom` | `scale` (magnification > 1, up to 8; default: as close as the targets fit), `padding` (`0.15`: share of the view kept free on each side of the targets) | moves the camera in on the targets and back out: the zoom-out ends with the beat (with `until: <beat>`, when that beat starts). Without `scale` the view is at most 3x; a target that already fills the frame is not zoomed (a warning says so). The view never leaves the frame. |
 | `transform` | `into` (required: a target not on screen yet), `style` (`auto` default, `replace`, `shapes`, `tex`, `fade`) | morphs the target into `into`, which then stays on screen in its own place (the target is gone). `shapes` moves matching glyphs (what `auto` uses for text and formulas), `replace` morphs point by point (`auto` for other shapes), `tex` matches the TeX parts of two formulas, `fade` cross-fades. `into` must be a target of the scene; text that is not part of the scene cannot be morphed into (give the scene that content, e.g. as a later equation step). If `into` is already on screen, the target fades out into its place (warning). |
+| `callout` | `kind` (`box` default, `circle`, `arrow`, `label`, `spotlight`, `magnifier`), `label`, `area`, `within` (`frame` \| `safe`), `units` (`fraction` \| `px`), `color` (`highlight`), `label_size` (`caption`), `side` (`auto`, `top`, `bottom`, `left`, `right`), `curved` (arrow), `zoom` (magnifier, `2`), `keep` (`false`), `name` | points at the target — or, without a target, at `area` of the frame — with the [Step 34 callouts](#screenshot): a rounded `box` (label as a tag on its edge), a `circle`, an `arrow` from the label, a `label` beside it (no mark), a `spotlight` (the rest of the view darkened) or a `magnifier` (an enlarged inset of a picture: the target must show one, e.g. `image`). Gone when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: stays to the end of the scene). See "Callouts" below. |
 
 `dim`, `highlight`, `zoom` and `transform` act on targets on screen; a target not shown yet is
 first revealed (as by `reveal`). `dim` and `highlight` change only opacity resp. colour, so
@@ -2235,13 +2258,37 @@ comparison column's card; else the whole target). Boxes, underlines and fills mo
 target when the scene moves it later (a `code_walkthrough` scrolling, a pie slice pulled out)
 and fade while it is off screen (a line scrolled out of the window).
 
+**Callouts** (`callout`) work on every scene type, also project types without targets (with an
+`area`). What they point at:
+- a target (`callout: "bar:4K"`): its outline (a bar with its value; else its parts on screen);
+  a list or a pattern gives one callout around all of them;
+- a target and an `area`: `[x, y, w, h]` (or a point `[x, y]`) from the top-left corner, as
+  fractions of the target's picture when it shows one (`image`, `screenshot`'s `image`,
+  `video_clip`'s `clip`; so the numbers read off the image file, and `units: px` are its pixels),
+  else of the target's box;
+- an `area` alone: fractions of the visible frame (`within: safe`: of its safe area), or with
+  `units: px` pixels of the output frame (1920 x 1080...).
+
+Labels are bold text on a plate in `color` with readable text (as in `screenshot`), never below
+the readable size. They go away from what they point at, inside the safe area (which leaves out
+overlays with `reserve: true`), clear of the text on screen, of other callouts, of the scene's
+other small parts (a node, a bar) and of the overlays; `side` forces a direction. A callout is
+drawn over everything else of the scene. While the camera is zoomed in (a `zoom` earlier in the
+beat, a `screenshot` focus) it is built for the zoomed view, so its label reads at the normal
+size; one drawn before a zoom grows with the scene. `name: peak` makes it a target of later
+actions (`dim: peak`, `highlight: peak`; its label stays readable). Validation: a callout needs a
+target or an `area`, a `magnifier` a target and an area; `kind: label` needs a `label`; `curved`
+is for arrows, `zoom` for magnifiers; `keep` and `until` exclude each other; a `name` must be new
+in the scene. A magnifier on a target without a still picture is an error when the scene renders.
+
 **Timing.** Actions never make a beat longer. An action is due `at` x the beat's narration
 after the beat starts and runs at the first moment from then on when the scene's own animation
 is not playing (the scene's reveal of that beat's step comes first, then the action), for its
 `run_time`, shortened to end within the beat (narration + `narration.pad`; `vidgen lint`
 reports run times shortened below 0.5 s as `rushed_animation`). Actions due together play
 together (ones on the same target, and two camera moves, one after the other). Undoing
-(`until`) happens at the start of that beat, with its actions. A `zoom` is undone so that the
+(`until`) happens at the start of that beat, with its actions (a `callout` without `until`:
+at the start of the next beat). A `zoom` is undone so that the
 camera is back when the next beat (or its `until` beat) starts: its zoom-out starts `run_time`
 before that beat's end, and a zoom-in late in a short beat is shortened together with its
 zoom-out. If a scene leaves no time at all, the action is applied without animation and a
@@ -2913,7 +2960,8 @@ when required); `doc` (the docstring under the field or its `Field(description=.
 `aliases` (other names the field accepts, e.g. `["title"]` for `heading`; `[]` = none).
 Each action: `name`, `origin`, `builtin`, `overrides_builtin`, `doc` (as for scene types);
 `run_time` (default seconds); `reversible` (bool: `until` allowed); `temporary` (bool: undone
-by the end of its beat, like `zoom`); `needs_target` (bool); `target_options` (options whose
+by the end of its beat, like `zoom`); `until_next_beat` (bool: without `until`, undone when the
+next beat starts, like `callout`); `needs_target` (bool); `target_options` (options whose
 values are target names, e.g. `["into"]`); `options` (fields like `params`; `[]` = none).
 Each overlay type: `name`, `origin`, `builtin`, `overrides_builtin`, `doc` (as above); `layer`
 (drawing order among overlays); `lint_skip` (lint rules not applied to its objects, e.g.

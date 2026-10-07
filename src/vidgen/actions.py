@@ -140,10 +140,30 @@ class Action:
     #: Options whose values are target names (checked like ``target``; e.g. ``into`` of
     #: ``transform``). Resolve them with :meth:`NarratedScene.find_targets`.
     target_options: ClassVar[tuple[str, ...]] = ()
+    #: Without ``until:``, undone when the next beat starts (``callout``: it points at something
+    #: while its beat talks about it); see :meth:`default_until`. Requires ``reversible``.
+    until_next_beat: ClassVar[bool] = False
 
     def __init__(self, options: ActionOptions, config: ActionConfig) -> None:
         self.options = options
         self.config = config
+
+    def problems(self) -> list[tuple[str, str]]:
+        """Problems of this use that its ``Options`` alone cannot see (they involve ``target``,
+        ``until``...), as ``(key, message)``; reported by ``vidgen validate``. Default: none."""
+        return []
+
+    def provides(self) -> list[str]:
+        """Target names this use registers when it is applied (with :meth:`NarratedScene.target
+        <vidgen.scene.NarratedScene.target>`), so that actions after it may name them. Default:
+        none."""
+        return []
+
+    def default_until(self, later: Sequence[str]) -> str | None:
+        """The beat at whose start the action is undone when the config gives no ``until``
+        (``later``: the ids of the scene's beats after the action's own): the next one with
+        :attr:`until_next_beat`, else ``None`` (it lasts)."""
+        return later[0] if self.until_next_beat and later else None
 
     def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
         """The animations that perform the action on ``targets`` (played together; an empty
@@ -174,6 +194,8 @@ def check_action_class(name: str, cls: object) -> None:
         raise VidgenError(f"{where}: reversible actions implement revert(self, scene, targets)")
     if cls.temporary and not cls.reversible:
         raise VidgenError(f"{where}: temporary actions must be reversible")
+    if cls.until_next_beat and (cls.temporary or not cls.reversible):
+        raise VidgenError(f"{where}: until_next_beat actions must be reversible and not temporary")
     unknown = [o for o in cls.target_options if o not in options.model_fields]
     if unknown:
         raise VidgenError(f"{where}: target_options {', '.join(unknown)} are not fields of its Options")
@@ -239,6 +261,9 @@ class ActionUse:
     action: Action
     applied: bool = False
     targets: list[Target] = field(default_factory=list)
+    #: The beat at whose start it is undone: ``until``, else the action's
+    #: :meth:`Action.default_until` (set by the :class:`ActionRunner`).
+    until: str | None = None
 
     @property
     def run_time(self) -> float:
@@ -260,6 +285,7 @@ def scene_actions(
     uses: list[ActionUse] = []
     problems: list[tuple[str, str]] = []
     names = cls.target_names(params) if params is not None else None
+    provided: list[str] = []  # target names registered by earlier actions (a named callout)
     known = registry.action_names()
     for j, beat in enumerate(spec.beats):
         for k, act in enumerate(beat.actions):
@@ -280,15 +306,23 @@ def scene_actions(
                 problems.append((f"{where}.until", f"action '{act.action}' cannot be undone; until works with: {reversible}"))
             if kind.cls.needs_target and not act.targets():
                 problems.append((f"{where}.target", f"action '{act.action}' needs a target"))
+            instance = kind.cls(options, act)
+            problems += [(f"{where}.{key}", message) for key, message in instance.problems()]
             checked = [("target", p) for p in act.targets()]
             for option in kind.cls.target_options:
                 value = getattr(options, option)
                 checked += [(option, p) for p in ([value] if isinstance(value, str) else value or [])]
             for key, pattern in checked if names is not None else []:
-                if not match_names(pattern, names):
-                    problems.append((f"{where}.{key}", unknown_target_message(pattern, scene_type, names, cls.target_patterns)))
+                if not match_names(pattern, names + provided):
+                    problems.append((f"{where}.{key}", unknown_target_message(pattern, scene_type, names + provided, cls.target_patterns)))
+            for name in instance.provides():
+                if not TARGET_NAME.match(name):
+                    problems.append((f"{where}.name", f"invalid target name {name!r} (use name, name3, name1.part2 or kind:label)"))
+                elif names is not None and match_names(name, names + provided):
+                    problems.append((f"{where}.name", f"target name '{name}' is already taken in this scene; pick another"))
             if len(problems) == found:
-                uses.append(ActionUse(beat.id, where, act, kind, kind.cls(options, act)))
+                uses.append(ActionUse(beat.id, where, act, kind, instance))
+                provided += instance.provides()
     return uses, problems
 
 
@@ -347,6 +381,10 @@ class ActionRunner:
     def __init__(self, scene: NarratedScene, uses: list[ActionUse]) -> None:
         self.scene = scene
         self.uses = uses
+        ids = [b.id for b in scene.beats]
+        for u in uses:
+            later = ids[ids.index(u.beat) + 1 :] if u.beat in ids else []
+            u.until = u.config.until or u.action.default_until(later)
         self._pending: list[_Due] = []
         self._end = 0
         self._beat = ""
@@ -370,7 +408,7 @@ class ActionRunner:
         now = self._now()
         self._beat = beat_id
         self._end = now + round((d + pad) * fps)
-        due = [_Due(now, u, True) for u in self.uses if u.config.until == beat_id and u.applied and not u.kind.cls.temporary]
+        due = [_Due(now, u, True) for u in self.uses if u.until == beat_id and u.applied and not u.kind.cls.temporary]
         own = {id(u): now + round(u.config.at * d * fps) for u in self.uses if u.beat == beat_id}
         due += [_Due(frame, u, False) for u in self.uses if (frame := own.get(id(u))) is not None]
         for u in self.uses:

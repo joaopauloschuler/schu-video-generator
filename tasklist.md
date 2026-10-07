@@ -183,8 +183,8 @@ Rules that apply to every step:
 - [x] Word-by-word karaoke style for vertical formats (word timings estimated from text; exact timings if the TTS provides them) (`style: karaoke` / `words`: a few big bold words, the spoken one in `highlight` with a capped scale pop; word times: stored alignment, else syllable-weighted estimate with pauses inside the MP3's speech bounds, else over the beat (`vidgen.speech`); `voice.timestamps: true` → ElevenLabs with-timestamps, `audio/<beat>.align.json` tied to text + MP3 hash; mocked in tests)
 
 ### Step 41 — Callout overlay
-- [ ] Callouts (Step 34 helpers) placed on any scene by target name or coordinates, per beat
-- [ ] (from Step 37) `screenshot` has no `caption` param (`video_clip` has one); callout labels could reuse `Target.on_fill` for the overlay's dim / highlight
+- [x] Callouts (Step 34 helpers) placed on any scene by target name or coordinates, per beat (a `callout` beat action, not an overlay: `- callout: "bar:4K"` + `kind: box|circle|arrow|label|spotlight|magnifier`, `label`, `color`, `side`, `curved`, `zoom`; or `{action: callout, area: [x, y, w, h]}` in fractions of the frame / `within: safe` / `units: px`; `area` with a target = part of its picture or box; gone when the next beat starts, `until: <beat>` or `keep: true`; labels inside the (reserved) safe area, clear of on-screen text, callouts, small targets and overlays; built for a zoomed camera; framework: `Action.until_next_beat`, `default_until`, `problems`, `provides`)
+- [x] (from Step 37) `screenshot` has no `caption` param (`video_clip` has one); callout labels could reuse `Target.on_fill` for the overlay's dim / highlight (`caption`, `caption_size`, `caption_color` + target `caption`, faded out during `focus` in both types; `name: X` registers a callout as a target with `on_fill`, so `dim: X` / `highlight: X` keep its label readable)
 
 ### Step 42 — Pronunciation dictionary
 - [ ] Project `pronunciation:` map applied to TTS text only (subtitles keep the original); part of the audio hash

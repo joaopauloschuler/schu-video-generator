@@ -138,6 +138,8 @@ scenes:
     beats:
       - text: "Diagrams grow one node at a time. You edit the config file."
       - text: "Then you preview it, and check the storyboard and the lint report."
+        actions:          # a callout on any scene, for this beat: box, circle, arrow, label, spotlight
+          - {callout: "node:check", kind: label, label: "storyboard + lint", at: 0.4}
       - text: "Does it read well? If not, back to editing."
         actions:
           - {highlight: "edge:good->edit", style: flash}
@@ -313,7 +315,8 @@ scenes:
       path: assets/app.png          # a made-up app, drawn by tools/make_screenshot.py
       frame: browser
       url: "planner.example/overview"
-      steps:              # step i at beat i: one callout, a list of them, or {callouts, focus, previous}
+      caption: "A made-up planner app"
+      steps:             # step i at beat i: one callout, a list of them, or {callouts, focus, previous}
         - {box: [0.216, 0.038, 0.269, 0.055], label: "Search every task"}
         - - {arrow: [0.857, 0.065], label: "New task", curved: true}
           - {circle: [0.736, 0.15, 0.25, 0.17], label: "Overdue"}

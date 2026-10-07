@@ -3719,3 +3719,96 @@ How to test: `/home/claude/venv/bin/python -m pytest -q` (1705 passed, 1 skipped
 step only: `pytest tests/test_captions.py tests/test_subtitles.py`. Manual: `vidgen storyboard
 examples/minimal --variant social --scene steps --per-beat 3`, `vidgen lint examples/minimal
 --variant subtitled`.
+
+## Step 41 — Callout overlay
+What was built
+- **`callout` beat action** (`src/vidgen/scenes/callout_action.py`, only `vidgen.api`): callouts
+  on any scene, for one beat, built with the Step 34 helpers. Syntax as every action:
+  ```yaml
+  actions:
+    - callout: "point:sparse@8"     # a target (or a list / pattern: one callout around all)
+      kind: arrow                   # box (default) | circle | arrow | label | spotlight | magnifier
+      label: "Lowest loss"
+      at: 0.4
+    - {action: callout, kind: box, area: [0.1, 0.15, 0.3, 0.3], label: "Start"}   # frame coordinates
+    - {callout: image, kind: magnifier, area: [0.1, 0.1, 0.25, 0.25]}              # part of a picture target
+  ```
+  Options `kind`, `label`, `area` (`[x, y, w, h]` / `[x, y]` from the top left), `within`
+  (`frame` | `safe`, areas without a target), `units` (`fraction` | `px`), `color`, `label_size`,
+  `side`, `curved` (arrow), `zoom` (magnifier), `keep`, `name`. With a target the callout points
+  at its outline (a bar + value) or parts on screen; `area` + target = fractions / pixels of the
+  target's picture (image, screenshot, clip) or else of its box; `area` alone = fractions of the
+  visible view (or its safe area), `px` = output pixels. `kind: label` is a mark-less label beside
+  it. **Lifetime**: gone when the next beat starts; `until: <beat>`; `keep: true` to the scene's
+  end. **Placement**: labels inside `scene.safe_area` (so `reserve`d overlays are respected), clear
+  of every text / TeX mobject on screen, other callouts, the scene's other small targets (< 20 % of
+  the view, not holding the area: nodes, bars) and overlay boxes; drawn above everything (z +2,
+  spotlight +1). With the camera zoomed (a `zoom` earlier in the beat, a screenshot focus) the
+  callout is built for the view (`scale`, bounds in the view) so the label reads normally.
+  **`name: X`** registers it as target `X` with `on_fill` (label text on its plate) so later
+  `dim: X` / `highlight: X` keep it readable (Step 37's routed item).
+- **Framework** (`vidgen.actions.Action`, additive): `until_next_beat` (class attribute; with
+  `reversible`, not `temporary`), `default_until(later)`, `problems()` (use-level checks reported
+  by `vidgen validate` at `...actions[k].<key>`), `provides()` (target names a use registers;
+  later actions of the scene may use them, names checked: valid, not taken). `ActionUse.until`
+  (set by the runner). `list-scenes` shows "undone when the next beat starts", JSON
+  `actions[].until_next_beat`.
+- **`screenshot` `caption`** (+ `caption_size`, `caption_color`; target `caption`), as
+  `video_clip`'s (shared `CAPTION_GAP`, `target_names` moved to `screenshot`). In both types the
+  caption now fades out while a `focus` step has the camera in and comes back with the whole frame
+  (enlarged under the picture it hit the watermark in the gallery's contrast / neon variants).
+- **Examples**: `examples/minimal` `trend` beat 2: an arrow callout "Lowest loss" on
+  `point:sparse@8` (+ storyboard usage line); `examples/gallery` `loop` beat 2: a `label` callout
+  on `node:check`, and `app` got `caption: "A made-up planner app"`.
+
+Verification
+- `vidgen storyboard` (`--per-beat 2/3`) of minimal `trend`, gallery `loop` and `app` in 16:9 and
+  `--variant vertical`, sheets and frames read. Fixed along the way: labels landing on diagram
+  nodes / edges (other small targets are now avoided), the screenshot caption enlarged by focus
+  (now fades). In 9:16 the `loop` label still sits on an edge between two nodes (no free room
+  in that column; lint clean).
+- `vidgen lint`: minimal `trend` in all 10 variants (default, vertical, light, contrast,
+  editorial, neutral, pastel, neon, subtitled, social) and gallery `loop` + `app` + `clip` in all 8
+  variants: 0 findings each. A `slow` test lints bar chart + bullets callouts (arrow, label,
+  spotlight, box) at 320x180 and 180x320: 0 findings.
+
+Files
+- New: `src/vidgen/scenes/callout_action.py`, `tests/test_callout_action.py` (13 tests, 7 render,
+  one `slow` lint).
+- Changed: `src/vidgen/actions.py` (hooks, runner `until`), `describe.py`, `cli.py`,
+  `scenes/__init__.py`, `scenes/screenshot.py`, `scenes/video_clip.py`; tests `test_actions.py`
+  (action lists), `test_actions_coverage.py` (CONFIG example list); `examples/minimal/video.yaml`,
+  `examples/gallery/video.yaml`; docs/CONFIG.md (Beat actions: example, keys, `callout` row,
+  "Callouts" paragraph, timing; screenshot params / targets / video_clip caption; list-scenes JSON),
+  docs/EXTENDING.md (§8 hooks), README.md, DESIGN.md (module tree, §6.4, new §44), tasklist.md.
+
+Public interfaces added/changed (additive)
+- Built-in action `callout`. `vidgen.api` `Action`: `until_next_beat`, `problems()`,
+  `provides()`, `default_until(later)`. JSON: `list-scenes` `actions[].until_next_beat` (within
+  version 1). Params: `screenshot.caption`, `caption_size`, `caption_color`; target `caption`.
+- Behaviour: a `screenshot` / `video_clip` caption fades during focus steps.
+
+Decisions / deviations
+- **A beat action, not an overlay** (roadmap title "Callout overlay"): Step 38 already noted
+  callouts need the scene's targets and should move with its camera; the action framework gives
+  validation, timing, `until`, schema and listing for free, and stills/lint see the callouts.
+  No scene-level `callouts:` list: one place to write them (beats), like screenshot `steps`.
+- **Lasts its beat, removed at the next beat's start** (not by its own beat's end like `zoom`),
+  so beat-end stills — what storyboard and lint check — show it.
+- Several targets → one callout around all (use one action per target for separate marks).
+- Area-only coordinates are fractions of the *visible* view (follow a zoom), top-left origin as
+  in Step 34.
+
+Known gaps / TODOs
+- Placement is the Step 34 scored search: labels avoid text, callouts, small targets and
+  overlays but not lines (an arrow or label may cross a chart line or a diagram edge).
+- A callout drawn before a `zoom` scales with the scene; one due on the same frame as a `zoom` is
+  built for the camera before it (give it a later `at`).
+- Magnifier needs a still picture in the target; checked only when the scene renders.
+- A screenshot whose *first* step is a focus step shows the caption enlarged during it (the
+  caption enters with the picture in the same play).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1717 passed, 1 skipped, ~13.5 min); step only: `pytest
+tests/test_callout_action.py`. Manual: `vidgen storyboard examples/minimal --scene trend --per-beat
+3 [--variant vertical]`, `vidgen storyboard examples/gallery --scene loop --scene app --per-beat 2`,
+`vidgen lint examples/minimal --scene trend [--variant ...]`, `vidgen list-scenes`, `vidgen schema`.

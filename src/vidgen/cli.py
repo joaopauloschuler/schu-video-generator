@@ -389,6 +389,7 @@ def _print_scene_types() -> None:
         marker = "  (overrides builtin)" if act.overrides is not None else ""
         undo = ", until" if act.cls.reversible else ""
         undo += ", undone by the beat's end" if act.cls.temporary else ""
+        undo += ", undone when the next beat starts" if act.cls.until_next_beat else ""
         print(f"{act.name:<{width}}  {act.origin}{marker}  (run_time {act.cls.run_time:g} s{undo})")
         for line in describe_params(act.cls.Options):
             print(f"    {line}")
