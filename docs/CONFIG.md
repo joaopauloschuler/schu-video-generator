@@ -1175,7 +1175,8 @@ only at punctuation.
 ## Sound effects (`sfx`)
 
 Short sounds under the narration: a whoosh as a card slides in, a pop per item, a tick per step.
-vidgen synthesises its own set (no recordings, no licences) and mixes them, sample-exact, into the
+vidgen synthesises its own set (no recordings; free to use in your videos, including
+commercially; no attribution needed) and mixes them, sample-exact, into the
 video's sound when the scenes are joined. Three ways to place one:
 
 ```yaml
@@ -1262,7 +1263,8 @@ its defaults as `DIR/<name>.wav`. JSON: see [below](#vidgen-list-sfx---json).
 ## Background music (`music`)
 
 A music bed under the whole video (or under parts of it), ducked while the narrator speaks.
-vidgen generates three ambient beds itself (no recordings, no licences); any audio file FFmpeg
+vidgen generates three ambient beds itself (no recordings; free to use in your videos,
+including commercially; no attribution needed); any audio file FFmpeg
 reads works too.
 
 ```yaml

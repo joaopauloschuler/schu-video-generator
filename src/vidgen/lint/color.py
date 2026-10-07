@@ -153,7 +153,10 @@ def lab(rgb: RGB) -> tuple[float, float, float]:
 
 
 def delta_e(lab1: tuple[float, float, float], lab2: tuple[float, float, float]) -> float:
-    """CIEDE2000 colour difference (about 2.3 is just noticeable; 10+ reads as a different colour)."""
+    """CIEDE2000 colour difference (about 2.3 is just noticeable; 10+ reads as a different colour).
+
+    Reference: Sharma, Wu & Dalal, "The CIEDE2000 color-difference formula: implementation
+    notes, supplementary test data, and mathematical observations", Color Res. Appl. 30 (2005)."""
     l1, a1, b1 = lab1
     l2, a2, b2 = lab2
     c_mean = (math.hypot(a1, b1) + math.hypot(a2, b2)) / 2

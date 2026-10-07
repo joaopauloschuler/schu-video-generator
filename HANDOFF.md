@@ -5897,3 +5897,28 @@ How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2250 passed, 1
 `pip wheel --no-deps -w DIR .` gives `schu_video_generator-0.2.0-py3-none-any.whl`; in a fresh
 venv with it installed, `vidgen --version`, `vidgen guide --list` and `python -c "import vidgen"`
 work and `importlib.metadata.version("schu-video-generator")` is `0.2.0`.
+
+## Licence notices
+
+Documentation-only fixes from a licence audit (no infringement found); no code behaviour changes.
+
+- **kphi3 narration**: `examples/kphi3/README.md` and a new "Repository-only content" section of
+  `THIRD_PARTY_NOTICES.md` state that `examples/kphi3/audio/*.mp3` were generated with ElevenLabs
+  (premade voice "Brian", `nPczCjzI2devNBz1zQrb`, `eleven_multilingual_v2`) under the author's paid
+  plan, are not under the MIT licence, exist only so the example renders, and are not in the pip
+  package. The kphi3 README also cites the paper (title, authors, code/model links). No arXiv/DOI
+  link was found in the repository; add one when available.
+- **Your content and third-party services**: new section in `README.md` and in the guide's
+  `outputs` topic (`src/vidgen/data/guide/AGENTS.md`, copied to `AGENTS.md`; the topic gained the
+  aliases `licence`, `license`, `rights`). "no licences" for built-in SFX/music in README and
+  `docs/CONFIG.md` became "free to use in your videos, including commercially; no attribution
+  needed". README notes the unrelated PyPI project `vidgen` (same top-level package name).
+- **THIRD_PARTY_NOTICES.md**: sections for the synthesised SFX/music, "Dependencies (not bundled)"
+  (PyAV wheels bundle GPL/LGPL FFmpeg components, relevant to frozen/bundled redistribution;
+  fpdf2 is LGPL-3.0) and repository-only content; Inter's copyright corrected to
+  "2016-2018 The Inter Project Authors" as in the shipped `OFL.txt`.
+- Source citations: CIEDE2000 (Sharma, Wu & Dalal 2005) in `src/vidgen/lint/color.py`, PADsynth
+  (Nasca Octavian Paul) in `src/vidgen/music.py`.
+
+How to test: `python -m pytest -q -m "not slow"`; `tests/test_guide.py`, `test_packaging.py`,
+`test_fonts.py`, `test_icons.py` cover the touched docs.

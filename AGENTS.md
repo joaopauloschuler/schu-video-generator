@@ -11,7 +11,7 @@ Topics: `start` (rules at a glance), `workflow` (the loop), `pacing` (storytelli
 text), `social` (vertical videos), `scenes` (which scene type), `design` (themes, colour, icons),
 `actions` (pointing at things), `overlays` (overlays, transitions, continuity), `audio` (voices,
 pronunciation, effects, music), `examples` (good vs bad), `outputs` (slides, chapters,
-thumbnail, GIFs, translations), `troubleshooting` (validate and lint messages).
+thumbnail, GIFs, translations, rights to your content), `troubleshooting` (validate and lint messages).
 
 <!-- topic: start (also: rules, intro, quickstart) -->
 ## Start here: the rules at a glance
@@ -941,7 +941,7 @@ Good: the result first, then the context.
     - text: "Here is how, in three changes."
 ```
 
-<!-- topic: outputs (also: slides, export, gif, thumbnail, chapters, translations, translate, languages) -->
+<!-- topic: outputs (also: slides, export, gif, thumbnail, chapters, translations, translate, languages, licence, license, rights) -->
 ## Outputs: video, chapters, thumbnail, slides, GIFs, translations
 
 - **Video and subtitles**: `vidgen render` writes `<output>.mp4` and `<output>.srt`
@@ -992,6 +992,18 @@ scenes:
   cost; placeholders render until you run `vidgen imagegen`. Describe a scene, never text,
   charts or logos (vidgen draws those better), and set one `imagegen: {style: ...}` for the
   whole video.
+
+### Your content and third-party services
+
+- The MIT licence covers the software, not the videos you make or the files you add.
+- Use only images, clips, screenshots, music and quotes you own or have permission to use
+  (screenshots of other products may also show their trademarks).
+- ElevenLabs narration and OpenAI pictures are subject to those providers' terms (e.g. plan
+  limits on commercial use; cloning a voice requires the speaker's consent).
+- The built-in fonts (SIL OFL), Lucide icons (ISC), Natural Earth map data, sound effects and
+  music beds may be used in your videos, including commercially, with no attribution required
+  in the video (Natural Earth asks for none; the OFL and ISC notices concern redistributing the
+  files themselves).
 
 <!-- topic: troubleshooting (also: errors, fixes, lint, validate, problems) -->
 ## Troubleshooting: messages and fixes

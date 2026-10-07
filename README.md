@@ -122,14 +122,16 @@ subtitles.
   (`--voice ana` voices one speaker), and `subtitles: {speakers: name}` / captions `speakers:`
   name or colour the speakers ([reference](docs/CONFIG.md#multiple-voices-voices)).
 - **Sound effects**: eleven synthesised sounds (whoosh, swoosh, pop, click, tick, typing, riser,
-  chime, success, error, thud; no licences) or your own `assets/sfx/NAME.wav`, placed as a beat
+  chime, success, error, thud; free to use in your videos, including commercially; no
+  attribution needed) or your own `assets/sfx/NAME.wav`, placed as a beat
   action (`- sfx: whoosh` with `at`, `gain`, `align: end`, `params: {pitch: 3}`), in a scene's
   `sfx:` list (seconds, silent scenes too) or with `self.sfx("pop")` in scene code; mixed
   sample-exact about 7 dB under the narration; `sfx: {auto: true}` adds soft sounds to built-in
   reveals, highlights, callouts, zooms and chapter cards. `vidgen list-sfx` describes every sound
   in words and `--render-dir` writes them out to listen to ([reference](docs/CONFIG.md#sound-effects-sfx)).
 - **Background music**: `music: calm` — one of three generated ambient beds (`calm` pad,
-  `pulse` soft arpeggio at 96 BPM, `bright` uplifting at 120 BPM; seamless loops, no licences) or
+  `pulse` soft arpeggio at 96 BPM, `bright` uplifting at 120 BPM; seamless loops; free to use in your videos, including commercially; no attribution
+  needed) or
   your own file, looped with a cross-faded seam, faded in and out, changed per scene range (a
   list of cues with `from` / `to`) or muted per scene (`music: false`); ducked 12 dB under the
   narration only (not under the sound effects). A video with music is normalised to −16 LUFS
@@ -210,6 +212,8 @@ Claude Code: `claude mcp add schu-video-generator -- vidgen mcp --root /home/me/
 
 Upgrading an environment that installed this project before it was renamed (as `vidgen`): run
 `pip uninstall vidgen` once, then install as below (the `vidgen` command is unchanged).
+An unrelated project on PyPI is also named `vidgen` and also installs a top-level `vidgen`
+package, so do not install both in the same environment.
 
 ### Windows
 
@@ -387,6 +391,19 @@ my_video/
 - [docs/EXTENDING.md](docs/EXTENDING.md) — writing scene types, actions, overlays, helpers, theme tokens and hooks;
   layout regions (`region("header")`, `grid`, `place`, `readable_text`) that adapt to 16:9 and 9:16.
 - [DESIGN.md](DESIGN.md) — architecture and internal contracts.
+
+## Your content and third-party services
+
+- The MIT licence covers the software, not the videos you make with it or the files you add.
+- Use only images, clips, screenshots, music and quotes you own or have permission to use
+  (screenshots of other products may also show their trademarks).
+- Narration from ElevenLabs and pictures from OpenAI are subject to those providers' terms (for
+  example, plan limits on commercial use; cloning a voice requires the speaker's consent).
+- The built-in fonts (SIL Open Font License), Lucide icons (ISC), Natural Earth map data (public
+  domain), sound effects and music beds may be used in your videos, including commercially. No
+  attribution is required in a video (the OFL and ISC notices apply to redistributing the files
+  themselves; Natural Earth asks for none, though "Made with Natural Earth" is appreciated).
+  Details: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Working on schu-video-generator
 

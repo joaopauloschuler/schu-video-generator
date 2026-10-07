@@ -5,6 +5,15 @@ a one-off Manim project. All eight scenes are **custom scene types** in `extensi
 with nothing but `vidgen.api`; vidgen itself knows nothing about this video. The narration
 MP3s are committed in `audio/`, so you can render it without an ElevenLabs key.
 
+The paper: João Paulo Schwarz Schuler and Alejandra Rojas Gómez, *Saving 77% of the Parameters
+in Large Language Models* (technical report). Code and trained models:
+github.com/joaopauloschuler/less-parameters-llm and huggingface.co/schuler.
+
+**Narration licence**: the MP3s in `audio/` were generated with ElevenLabs (premade voice
+"Brian", voice id `nPczCjzI2devNBz1zQrb`, model `eleven_multilingual_v2`) under the author's
+paid plan. They are not covered by the repository's MIT licence, are provided only so this
+example can be rendered, and are not part of the pip package (see `THIRD_PARTY_NOTICES.md`).
+
 ## Re-rendering
 
 ```

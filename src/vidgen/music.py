@@ -2,7 +2,8 @@
 own music files, and the sources the mix reads from.
 
 A *bed* is a seamless loop made of a slowly evolving chord progression (numpy only, no
-recordings, deterministic): sustained pads are built with the PADsynth method — each chord's
+recordings, deterministic): sustained pads are built with the PADsynth method (Nasca Octavian
+Paul's algorithm, from ZynAddSubFX) — each chord's
 harmonics as narrow Gaussian bumps of a spectrum with seeded random phases, turned into a
 periodic wave by one inverse FFT — and cross-faded from chord to chord; plucked arpeggios and
 bells are added note by note. Everything is rendered *circularly* (notes running past the loop's
