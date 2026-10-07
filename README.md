@@ -1,4 +1,4 @@
-# schu-vidgen
+# schu-video-generator
 
 Generate narrated, animated explainer videos from a project folder. You write the narration as
 short *beats* and pick a *scene type* for each scene in `video.yaml`; vidgen voices the beats with
