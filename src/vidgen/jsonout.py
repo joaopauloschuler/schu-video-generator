@@ -255,6 +255,29 @@ def list_sfx_document(
     )
 
 
+def list_music_document(
+    root: Path | None, entries: Iterable[Mapping[str, Any]], previews: Path | None, warnings: Iterable[Mapping[str, Any]] = ()
+) -> dict[str, Any]:
+    """The ``vidgen list-music --json`` document: the music level, the default ducking, every bed
+    and project file (``vidgen.music.music_entries``) and the previews folder."""
+    from vidgen import music
+    from vidgen.config import DuckConfig
+
+    items = [{**e, "preview": None if e["preview"] is None else _path(e["preview"])} for e in entries]
+    return envelope(
+        "list-music",
+        True,
+        warnings,
+        project=None if root is None else _path(root),
+        rate=music.RATE,
+        level=music.MUSIC_LEVEL,
+        duck=DuckConfig().model_dump(),
+        count=len(items),
+        music=items,
+        previews=None if previews is None else _path(previews),
+    )
+
+
 # ----- render ------------------------------------------------------------------------------------
 
 
@@ -297,6 +320,7 @@ def render_document(
         },
         duration=result.duration,
         elapsed=round(elapsed, 3),
+        mix=timings.get("mix"),
         scenes=scenes,
     )
 

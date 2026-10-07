@@ -32,7 +32,7 @@ TEMPLATES_DIR = Path(__file__).parent / "templates"
 TEMPLATE_DOTFILES: tuple[str, ...] = ("gitignore",)
 #: Subcommands that accept ``--json``.
 JSON_COMMANDS: tuple[str, ...] = (
-    "validate", "list-scenes", "list-themes", "list-icons", "list-sfx", "render", "schema", "storyboard", "lint",
+    "validate", "list-scenes", "list-themes", "list-icons", "list-sfx", "list-music", "render", "schema", "storyboard", "lint",
 )
 
 #: What a command function returns: an exit code, or (with ``--json``) the JSON document.
@@ -78,12 +78,13 @@ def project_problems(project: Project) -> list[Problem]:
     ``params`` against the type's ``Params`` model (theme tokens against the project's theme)
     and runs the type's ``validate_project`` (e.g. missing asset files); checks the beats'
     ``actions`` (action names, options, targets of the scene) and the ``overlays`` (types,
-    options, scene references; DESIGN.md §41); also checks the project's ``assets/icons`` and
-    the sounds of the scenes' ``sfx:`` lists (§47).
+    options, scene references; DESIGN.md §41); also checks the project's ``assets/icons``,
+    the sounds of the scenes' ``sfx:`` lists (§47) and the ``music:`` sources (§48).
     """
     from vidgen import extensions, registry
     from vidgen.actions import scene_actions
     from vidgen.icons import PROJECT_ICONS_DIR, project_icons
+    from vidgen.music import config_problems as music_problems
     from vidgen.overlays import overlay_problems
     from vidgen.sfx import config_problems as sfx_problems
     from vidgen.voices import voice_color_problems
@@ -123,6 +124,7 @@ def project_problems(project: Project) -> list[Problem]:
             problems.extend(overlay_problems(project, theme))
             problems.extend(voice_color_problems(project.config, theme))
             problems.extend(Problem(loc, message) for loc, message in sfx_problems(project.config, project.root))
+            problems.extend(Problem(loc, message) for loc, message in music_problems(project.config, project.root))
     except VidgenError as exc:
         problems.extend(exc.problems or [Problem("", str(exc))])
     return problems
@@ -333,7 +335,22 @@ def cmd_render(args: argparse.Namespace) -> CommandResult:
     if result.frames_index is not None:
         print(f"frames:    {result.frames_index}")
     print(f"duration:  {_format_seconds(result.duration)} ({result.duration:.2f} s)")
+    mix = result.timings.get("mix")
+    if mix is not None:
+        print(f"loudness:  {_loudness_line(mix)}")
     return 0
+
+
+def _loudness_line(mix: dict[str, Any]) -> str:
+    """``-16.0 LUFS integrated, true peak -1.6 dBTP (normalised to -16, +4.2 dB; music: calm)``."""
+    level = "silent" if mix["integrated_lufs"] is None else f"{mix['integrated_lufs']:.1f} LUFS integrated"
+    peak = "" if mix["true_peak_dbtp"] is None else f", true peak {mix['true_peak_dbtp']:.1f} dBTP"
+    notes = []
+    if mix["normalized"]:
+        notes.append(f"normalised to {mix['target_lufs']:g}, {mix['gain_db']:+.1f} dB")
+    if mix["music"]:
+        notes.append("music: " + ", ".join(m["source"] for m in mix["music"]))
+    return level + peak + (f" ({'; '.join(notes)})" if notes else "")
 
 
 def cmd_storyboard(args: argparse.Namespace) -> CommandResult:
@@ -554,6 +571,37 @@ def cmd_list_sfx(args: argparse.Namespace) -> CommandResult:
     return 0
 
 
+def cmd_list_music(args: argparse.Namespace) -> CommandResult:
+    """Print the built-in music beds (what they sound like) and the project's ``assets/music``
+    files, and write previews."""
+    from vidgen import music
+
+    root = None
+    if args.project != "." or any((Path.cwd() / name).is_file() for name in CONFIG_NAMES):
+        root = find_config_file(args.project).resolve().parent
+    preview_dir = Path(args.render_dir).resolve() if args.render_dir else None
+    entries = music.music_entries(root, preview_dir)
+    if args.json:
+        return jsonout.list_music_document(root, entries, preview_dir)
+    for e in entries:
+        if e["origin"] == "builtin":
+            tempo = f"{e['tempo']} BPM" if e["tempo"] else "no beat"
+            print(f"{e['name']}  builtin  {e['key']}, {tempo}, {e['loop_seconds']:g} s loop")
+            print(f"    description: {e['description']}")
+            print(f"    chords: {' - '.join(e['chords'])}")
+            print(f"    use: {e['use']}")
+        else:
+            level = f"{e['loudness']} LUFS" if e["loudness"] is not None else "silent"
+            print(f"{e['name']}  project file  {e['duration']:.1f} s, {level} (played at {music.MUSIC_LEVEL:g} LUFS)")
+    print(
+        f"level at volume 0: {music.MUSIC_LEVEL:g} LUFS integrated (about 7 dB under narration), ducked "
+        "12 dB under speech by default; a file anywhere under the project works as a source too"
+    )
+    if preview_dir is not None:
+        print(f"previews: {preview_dir} (one loop of each bed as WAV)")
+    return 0
+
+
 def cmd_schema(args: argparse.Namespace) -> CommandResult:
     """Print the JSON Schema of video.yaml (or of one scene type's params, or of a scene)."""
     from vidgen import registry, schema
@@ -637,6 +685,11 @@ def build_parser() -> argparse.ArgumentParser:
     project_arg(p)
     p.add_argument("--render-dir", metavar="DIR", help="also write every sound at its defaults as DIR/<name>.wav")
     p.set_defaults(func=cmd_list_sfx)
+
+    p = sub.add_parser("list-music", help="list background music beds (built-in and the project's assets/music) with descriptions")
+    project_arg(p)
+    p.add_argument("--render-dir", metavar="DIR", help="also write one loop of every bed as DIR/<name>.wav")
+    p.set_defaults(func=cmd_list_music)
 
     p = sub.add_parser("tts", help="generate narration audio")
     project_arg(p)

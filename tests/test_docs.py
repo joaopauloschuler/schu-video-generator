@@ -44,6 +44,10 @@ MODELS: list[type[BaseModel]] = [
     config.SfxConfig,
     config.SfxCue,
     config.SfxParams,
+    config.MusicCue,
+    config.DuckConfig,
+    config.SceneMusic,
+    config.AudioConfig,
 ]
 
 

@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from vidgen import __version__, hooks, sfx
+from vidgen import __version__, hooks, mix, sfx
 from vidgen.errors import VidgenError
 from vidgen.project import Project
 from vidgen.render import ffmpeg as ff
@@ -111,6 +111,11 @@ def _check_scenes(project: Project) -> None:
     problems = sfx.config_problems(project.config, project.root)
     if problems:
         raise VidgenError("\n".join(["invalid sound effects", *(f"  {loc}: {message}" for loc, message in problems)]))
+    from vidgen.music import config_problems as music_problems
+
+    problems = music_problems(project.config, project.root)
+    if problems:
+        raise VidgenError("\n".join(["invalid music", *(f"  {loc}: {message}" for loc, message in problems)]))
 
 
 def warn_audio(project: Project) -> None:
@@ -326,7 +331,10 @@ def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) ->
 
     The scenes' sound effects (their timings' ``sfx``, scene times) are placed at video times on
     one track for the whole video, ``padded/sfx.wav`` (none without effects or with
-    ``no_audio``), which the final mux adds to the narration track (DESIGN.md §47).
+    ``no_audio``), which the final mux adds to the narration track (DESIGN.md §47). Unless
+    ``no_audio``, :func:`vidgen.mix.mix_audio` then adds the music, ducks and normalises it into
+    ``padded/mix.wav`` (with music or ``audio.normalize``; else it only measures the loudness)
+    and the combined timings gain ``mix``, its report (§48).
     """
     render_dir = project.render_dir(preview)
     padded_dir = render_dir / "padded"
@@ -378,9 +386,7 @@ def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) ->
     remove_file(track)
     if events and not no_audio:
         sfx.write_track(track, events, round(offset * ff.AUDIO_RATE), sfx.SoundLibrary(project.root), project.config.sfx.gain)
-    output = project.output_path(preview)
-    ff.join(ffmpeg, videos, audios, output, padded_dir, sfx=track if track.is_file() else None)
-    combined = {
+    combined: dict[str, Any] = {
         "title": project.config.title,
         "variant": project.variant,
         "preview": preview,
@@ -390,6 +396,13 @@ def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) ->
         "vidgen": __version__,
         "scenes": scenes,
     }
+    mixed = padded_dir / "mix.wav"
+    remove_file(mixed)
+    if not no_audio:
+        report = mix.mix_audio(project, combined, audios, track if track.is_file() else None, mixed)
+        combined["mix"] = report.to_json()
+    output = project.output_path(preview)
+    ff.join(ffmpeg, videos, audios, output, padded_dir, sfx=track if track.is_file() else None, mix=mixed if mixed.is_file() else None)
     return output, combined
 
 

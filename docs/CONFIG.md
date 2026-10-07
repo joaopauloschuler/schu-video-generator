@@ -7,7 +7,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 [format](#format-and-preview), [variants](#variants), [theme](#theme), [voice](#voice-voice),
 [narration](#narration-narration), [narration audio](#narration-audio-elevenlabs),
 [multiple voices](#multiple-voices-voices), [pronunciation](#pronunciation-pronunciation),
-[sound effects](#sound-effects-sfx), [built-in scene types](#built-in-scenes), [beat actions](#beat-actions), [overlays](#overlays),
+[sound effects](#sound-effects-sfx), [background music and loudness](#background-music-music), [built-in scene types](#built-in-scenes), [beat actions](#beat-actions), [overlays](#overlays),
 [JSON Schema](#json-schema-vidgen-schema), [frame stills](#frame-stills-vidgen-render---frames),
 [storyboard](#storyboard-vidgen-storyboard), [lint](#lint-vidgen-lint),
 [JSON output of commands](#json-output---json).
@@ -32,6 +32,8 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `lint` | see [lint](#lint-vidgen-lint) | thresholds and severities of `vidgen lint` |
 | `overlays` | `[]` | lower thirds, a watermark, ... drawn over the scenes, see [overlays](#overlays) |
 | `sfx` | `{auto: false, gain: 0}` | sound effects of the whole video: automatic sounds for built-in animations, overall level; see [sound effects](#sound-effects-sfx) |
+| `music` | none | background music: a bed name (`calm`, `pulse`, `bright`) or a file, a cue `{source, volume, ...}`, or a list of cues with `from` / `to` scenes; see [background music](#background-music-music) |
+| `audio` | `{normalize: auto, target_lufs: -16, true_peak: -1.5}` | loudness of the final mix; see [loudness](#loudness-of-the-final-mix-audio) |
 | `scenes` | required | the scenes in order, at least one |
 
 ## Scenes and beats
@@ -64,6 +66,7 @@ scenes:
 | `chapter` | none | a new [chapter](#chapters) starts at this scene: its title, or `{title, number}` |
 | `voice` | none (the base `voice:`) | who says this scene's beats: a name from [`voices:`](#multiple-voices-voices) or `default` |
 | `sfx` | `[]` | sound effects at seconds from the scene's start (silent scenes too), see [sound effects](#sound-effects-sfx) |
+| `music` | `true` | the [background music](#background-music-music) during this scene: `false` for none, `{volume: dB}` to change its level here |
 
 Beat `id`s name the audio files: keep them when you edit the text (only that beat is
 re-voiced). A beat `text` is spoken as written; it is also the subtitle. A beat's `actions`
@@ -621,7 +624,8 @@ Video-wide `sfx:`:
   scene's end goes on over the next scene (the last scene's is cut at the video's end).
 - **Mixing.** The sounds are not part of the scenes' own renders (`build/.../scenes/*.mp4`, the
   storyboard): `vidgen render` places every scene's sounds on one track for the whole video
-  (`build/.../padded/sfx.wav`, 48 kHz) and adds it to the narration when it writes the MP4.
+  (`build/.../padded/sfx.wav`, 48 kHz) and adds it to the narration when it writes the MP4 (with
+  [music](#background-music-music), into the final mix; effects never duck the music).
   `--no-audio` renders have none. The sounds are listed per scene in `timings.json` (`sfx`: video
   times, sound, gain, pan, align, params, beat).
 - **Checks.** `vidgen validate` reports unknown sounds (with a suggestion) and params outside a
@@ -633,6 +637,121 @@ Video-wide `sfx:`:
 `assets/sfx` with their length, loudness and peak, and for built-ins a precise description of the
 sound and when to use it (an AI author cannot listen); `--render-dir` also writes each sound at
 its defaults as `DIR/<name>.wav`. JSON: see [below](#vidgen-list-sfx---json).
+
+## Background music (`music`)
+
+A music bed under the whole video (or under parts of it), ducked while the narrator speaks.
+vidgen generates three ambient beds itself (no recordings, no licences); any audio file FFmpeg
+reads works too.
+
+```yaml
+music: calm                            # a bed or a file, with the defaults below
+```
+
+```yaml
+music:                                 # the long form: one cue over the whole video
+  source: assets/music/theme.mp3       # a built-in bed, or a file under the project
+  volume: -2                           # dB
+  start: 12.5                          # seconds into the file (skip its intro); loops restart here
+  loop: true                           # repeat while the video lasts (a file's seam cross-fades)
+  crossfade: 2.0
+  fade_in: 1.5
+  fade_out: 3.0                        # ends with the video
+  duck: {depth: 12, attack: 0.4, release: 1.0, hold: 1.5, clips: true}   # or duck: false
+scenes:
+  - id: interview
+    type: video_clip
+    params: {path: assets/interview.mp4}
+    duration: 20
+    music: false                       # no music here: it fades out before, back in after
+  - id: outro
+    type: end_card
+    params: {title: "Thanks"}
+    duration: 4
+    music: {volume: 4}                 # louder over the end card
+```
+
+```yaml
+music:                                 # a list of cues: changing tracks
+  - {source: calm, to: part2}          # from the first scene to the end of scene part2
+  - {source: bright, from: results}    # from scene results to the end
+```
+
+**Built-in beds** (`vidgen list-music` describes them, `--render-dir DIR` writes one loop of
+each as WAV): seamless loops, generated in about a second when the video is joined.
+
+| bed | loop | what it sounds like | use it for |
+|---|---|---|---|
+| `calm` | 60 s, D major, no beat | a slow, warm synth-string pad, chords held 7.5 s and cross-faded, a quiet sub-bass, an airy upper layer swelling twice a minute; no percussion, no melody | calm explainers, serious topics, long narration |
+| `pulse` | 40 s, A minor, 96 BPM | a soft plucked eighth-note arpeggio over a muted pad, a gentle low thump on every beat; chords every two bars | tech / product explainers, walkthroughs, data stories |
+| `bright` | 48 s, C major, 120 BPM | a brighter pad, a plucked arpeggio an octave up, a sparse soft bell melody; I–V–vi–IV style | launches, tutorials, upbeat social clips |
+
+| key | default | |
+|---|---|---|
+| `source` | required | `calm`, `pulse`, `bright`, or an audio file under the project (`assets/music/x.mp3`; wav, flac, ogg, mp3, m4a, ...) |
+| `volume` | `0` | dB, -60 to 12; at 0 the music is −30 LUFS integrated (beds are made at that level, files are measured and matched to it): about 6 dB under rendered narration in its pauses |
+| `start` | `0` | seconds into the source where it starts; a loop restarts there |
+| `loop` | `true` | repeat the source as long as the cue lasts; `false`: it plays once and fades out at its end |
+| `crossfade` | `2.0` | seconds over which a file's end cross-fades (equal power) into its start at every repeat; beds loop seamlessly |
+| `fade_in` | `1.5` | seconds of fade-in at the cue's start |
+| `fade_out` | `3.0` | seconds of fade-out ending at the cue's end (the video's end) |
+| `duck` | see below | ducking under the narration; `false` for none |
+| `from` | the first scene | (in a list of cues) the scene the cue starts with |
+| `to` | the last scene | (in a list of cues) the scene the cue ends with; cues may not overlap |
+
+**Ducking** (`duck:`): the music goes down while the narrator speaks — keyed off the narration
+alone: each beat from its start to the end of its speech (the MP3's trailing silence cut off; the
+whole beat when it has no audio yet). Sound effects never duck it.
+
+| key | default | |
+|---|---|---|
+| `depth` | `12` | dB the music drops under speech (0: no ducking); with the defaults the music is ~18 dB under the voice while it speaks |
+| `attack` | `0.4` | seconds the music takes to go down; it is fully down when the speech starts (the mix looks ahead) |
+| `release` | `1.0` | seconds it takes to come back after the speech |
+| `hold` | `1.5` | pauses shorter than this stay ducked (no pumping between beats); longer pauses, silent scenes and the gaps between narrated scenes bring the music up |
+| `clips` | `true` | a `video_clip` scene whose clip plays sound (not `mute`, `volume` above 0) also ducks the music, for the whole scene |
+
+A scene's `music:` — `false` (none: it fades out over the 0.75 s before the scene, back in over
+the 0.75 s after) or `{volume: dB}` (added to the cue's volume during the scene, ramped the same
+way). Between two cues the first fades out at the end of its last scene and the next fades in.
+
+- **Mixing.** Music is applied when the scenes are joined (it is not in the scenes' renders or
+  the storyboard, and changing it re-renders nothing): the narration (with clip sound), the
+  sound effects and the music are summed, 48 kHz, into `build/.../padded/mix.wav` (24-bit),
+  which the final MP4 encodes. `--no-audio` renders have no music.
+- **Checks.** `vidgen validate` reports a source that is neither a bed nor an existing file, and
+  cues naming unknown scenes, out of order or overlapping.
+- `timings.json` gains `mix` (below) with each cue's span (`music: [{source, kind, from, to,
+  start, end, volume, duck}]`).
+
+### Loudness of the final mix (`audio`)
+
+```yaml
+audio: {normalize: auto, target_lufs: -16, true_peak: -1.5}   # the defaults
+```
+
+| key | default | |
+|---|---|---|
+| `normalize` | `auto` | scale the final mix to `target_lufs`: `true`, `false`, or `auto` = only when the video has music (a narration-only video keeps the exact level and sound it always had). Never while no beat has its narration MP3 yet (a preview timed from word counts would lift the music to the target on its own) |
+| `target_lufs` | `-16` | integrated loudness (EBU R128 / ITU-R BS.1770-4, gated) of a normalised mix: −16 for web and social platforms (−14 for louder streaming targets), −23 / −24 for broadcast |
+| `true_peak` | `-1.5` | dBTP ceiling of a mixed track: a look-ahead limiter (10 ms, smooth) keeps the 4x-oversampled peaks under it, so the louder mix never clips |
+
+When the mix is written (music, or `normalize: true`) vidgen measures the sum, applies one gain to
+reach the target, then the limiter; everything is deterministic numpy. Narration alone renders
+at about −24 LUFS, so reaching −16 lifts it ~8 dB and the limiter shaves speech peaks by a few
+dB. Without music and with `normalize: auto` / `false` the narration and effects are joined as
+before (FFmpeg sums them), and the loudness is only measured. `vidgen render` prints the result
+(`loudness: -16.0 LUFS integrated, true peak -1.6 dBTP (normalised to -16, +8.2 dB; music:
+calm)`), and `timings.json` / `render --json` carry `mix`: `{mixed, normalized, target_lufs,
+true_peak_limit, gain_db, integrated_lufs, true_peak_dbtp, limited_db, music}` (measured on the
+mix before the AAC encode, which may move the peak by ~0.1 dB).
+
+### `vidgen list-music`
+
+`vidgen list-music [PROJECT] [--render-dir DIR] [--json]` describes the built-in beds in words —
+instruments, key, tempo, chords, mood, frequency range — for an author who cannot listen, and
+lists the project's `assets/music` files (length, measured loudness); `--render-dir` writes one
+loop of every bed as `DIR/<name>.wav`. JSON: see [below](#vidgen-list-music---json).
 
 ## Built-in scenes
 
@@ -3244,6 +3363,18 @@ difference between two palette colours).
 | `sounds` | list | `{name, origin, overrides_builtin, description, use, duration, duration_range, channels, loudness, peak_db, preview}`: `origin` `builtin` or the file (`assets/sfx/x.wav`); `description` (what it sounds like), `use` and `duration_range` (`[min, max]` s) for built-ins, else `null`; `duration` (s), `loudness` (LUFS), `peak_db` (dBFS) at the defaults; `preview` the WAV written with `--render-dir`, else `null` |
 | `previews` | str \| null | the `--render-dir` folder |
 
+### `vidgen list-music --json`
+
+| key | type | |
+|---|---|---|
+| `project` | str \| null | the project folder whose `assets/music` was included (`null`: built-ins only) |
+| `rate` | int | sample rate (48000) |
+| `level` | float | integrated loudness (LUFS) of music at `volume: 0` (−30) |
+| `duck` | object | the default ducking `{depth, attack, release, hold, clips}` |
+| `count` | int | number of entries |
+| `music` | list | `{name, origin, description, use, tempo, key, chords, loop_seconds, duration, channels, loudness, preview}`: built-in beds (`origin` `builtin`; `description` what it sounds like, `use`, `tempo` BPM or `null` without a beat, `key`, `chords` in loop order, `loop_seconds`) then the project's files (`origin` `project`, `name` the path to use as `source`, `duration` s); `loudness` measured (LUFS); `preview` the WAV written with `--render-dir`, else `null` |
+| `previews` | str \| null | the `--render-dir` folder |
+
 ### `vidgen schema --json`
 
 | key | type | |
@@ -3266,6 +3397,7 @@ difference between two palette colours).
 | `outputs` | object | `{video, subtitles, timings, frames}`: the MP4, the SRT, `build/.../timings.json` and `build/.../frames/index.json` (`null` without `--frames`) |
 | `duration` | float | length of the video |
 | `elapsed` | float | wall time of the command |
+| `mix` | object \| null | the measured loudness of the video's audio (`null` with `--no-audio`): `{mixed, normalized, target_lufs, true_peak_limit, gain_db, integrated_lufs, true_peak_dbtp, limited_db, music}` — `mixed`: vidgen wrote the mix (music or normalisation; else FFmpeg joined narration and effects as before), `normalized` / `target_lufs` / `gain_db` the normalisation, `integrated_lufs` (LUFS) and `true_peak_dbtp` (dBTP) measured on the final mix, `limited_db` the limiter's deepest gain reduction (0: never engaged), `music` the cues `{source, kind (bed\|file), from, to, start, end, volume, duck}`; see [loudness](#loudness-of-the-final-mix-audio) |
 | `scenes` | list | config order: `{id, type, status, start, duration, render_seconds, beats}`; `status` is `rendered` or `reused` (an existing render was joined, see `--scene`), `render_seconds` the worker's wall time (`null` when reused), `start`/`duration` in the video, `beats` lists `{id, start, end}` (absolute; `end` excludes `narration.pad`) |
 
 `warnings` includes those printed by scene code during rendering (e.g. beats a scene never

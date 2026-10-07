@@ -605,6 +605,87 @@ class SfxConfig(_Strict):
     """Level change in dB of every sound effect of the video."""
 
 
+class DuckConfig(_Strict):
+    """How music ducks under the narration (DESIGN.md §48)."""
+
+    depth: float = Field(default=12.0, ge=0, le=40)
+    """dB the music drops while the narrator speaks (0: no ducking)."""
+    attack: float = Field(default=0.4, ge=0, le=5)
+    """Seconds the music takes to go down; it is down when the speech starts."""
+    release: float = Field(default=1.0, ge=0, le=10)
+    """Seconds the music takes to come back up after the speech ends."""
+    hold: float = Field(default=1.5, ge=0, le=10)
+    """Pauses in the speech shorter than this keep the music down (no pumping between beats and sentences)."""
+    clips: bool = True
+    """A video_clip scene's own sound counts as foreground too (the music ducks under it)."""
+
+
+def _duck(value: bool | DuckConfig) -> DuckConfig:
+    if isinstance(value, DuckConfig):
+        return value
+    return DuckConfig() if value else DuckConfig(depth=0)
+
+
+class MusicCue(_Strict):
+    """Background music (``music:``, or one entry of a list of cues): a built-in bed or a file,
+    over the whole video or from one scene to another."""
+
+    model_config = ConfigDict(extra="forbid", use_attribute_docstrings=True, populate_by_name=True)
+
+    source: str = Field(min_length=1)
+    """A built-in bed (calm, pulse, bright; vidgen list-music) or an audio file under the project (e.g. assets/music/theme.mp3)."""
+    volume: float = Field(default=0.0, ge=-60, le=12)
+    """Level change in dB (0: -28 LUFS, about 7 dB under typical narration before ducking)."""
+    start: float = Field(default=0.0, ge=0)
+    """Seconds into the source where the music starts (a loop restarts there too)."""
+    loop: bool = True
+    """Repeat the source while the cue lasts; false: it plays once and fades out at its end."""
+    crossfade: float = Field(default=2.0, ge=0, le=30)
+    """Seconds over which a file's end cross-fades into its start at each repeat (beds loop seamlessly)."""
+    fade_in: float = Field(default=1.5, ge=0)
+    """Seconds of fade-in at the cue's start."""
+    fade_out: float = Field(default=3.0, ge=0)
+    """Seconds of fade-out ending at the cue's end."""
+    duck: Annotated[DuckConfig | bool, AfterValidator(_duck)] = Field(default_factory=DuckConfig)
+    """Ducking under the narration: {depth, attack, release, hold, clips}; false: none."""
+    from_: Identifier | None = Field(default=None, alias="from")
+    """First scene of the cue (from its start); default the video's first scene."""
+    to: Identifier | None = None
+    """Last scene of the cue (to its end); default the video's last scene."""
+
+
+def _music_cue(value: str | MusicCue) -> MusicCue:
+    return MusicCue(source=value) if isinstance(value, str) else value
+
+
+def _no_music(value: Any) -> Any:
+    return None if value is False else value
+
+
+#: A music cue, or a source name (that source with the defaults).
+MusicEntry = Annotated[Union[Annotated[str, Field(min_length=1)], MusicCue], AfterValidator(_music_cue)]
+#: The video-level ``music:``: a source name, one cue, a list of cues, or ``false`` / null (none).
+MusicSetting = Annotated[Union[MusicEntry, list[MusicEntry], Literal[False], None], AfterValidator(_no_music)]
+
+
+class SceneMusic(_Strict):
+    """A scene's ``music:`` override in its long form."""
+
+    volume: float = Field(default=0.0, ge=-60, le=12)
+    """dB added to the music's volume during this scene."""
+
+
+class AudioConfig(_Strict):
+    """The final mix: loudness normalisation (DESIGN.md §48)."""
+
+    normalize: bool | Literal["auto"] = "auto"
+    """Normalise the final mix to target_lufs: true, false, or auto (only when the video has music; narration-only videos keep their level)."""
+    target_lufs: float = Field(default=-16.0, ge=-40, le=-5)
+    """Integrated loudness (EBU R128 / BS.1770) of a normalised mix: -16 for web and social, -23 / -24 for broadcast."""
+    true_peak: float = Field(default=-1.5, ge=-9, le=0)
+    """Highest true peak (dBTP) of a mixed track; a limiter keeps every peak under it."""
+
+
 class ChapterConfig(_Strict):
     """A scene's ``chapter:`` in its long form: a new chapter starts at this scene."""
 
@@ -659,6 +740,8 @@ class SceneConfig(_Strict):
     """Voice of this scene's beats: a name from voices (or default: the base voice); a beat's own voice wins."""
     sfx: list[SfxEntry] = Field(default_factory=list)
     """Sound effects at seconds from the scene's start ({sound, at, gain, pan, align, params}, or a sound name); for silent scenes too."""
+    music: bool | SceneMusic = True
+    """Background music during this scene: false for none (it fades out before the scene and back in after it), or {volume: dB} to change its level here."""
 
     @model_validator(mode="before")
     @classmethod
@@ -745,6 +828,10 @@ class VideoConfig(_Strict):
     """Overlays drawn on top of the scenes (lower thirds, watermark, ...), fixed to the screen."""
     sfx: SfxConfig = Field(default_factory=SfxConfig)
     """Sound effects of the whole video: automatic sounds for built-in animations, overall level."""
+    music: MusicSetting = None
+    """Background music: a bed name or file, {source, volume, start, loop, crossfade, fade_in, fade_out, duck}, or a list of such cues with from / to scene ids."""
+    audio: AudioConfig = Field(default_factory=AudioConfig)
+    """The final mix: loudness normalisation {normalize, target_lufs, true_peak}."""
     scenes: list[SceneConfig] = Field(min_length=1)
     """The scenes in order (at least one); scene ids and beat ids must be unique."""
 
@@ -811,10 +898,38 @@ class VideoConfig(_Strict):
                 beat_seen[beat.id] = where
         from vidgen.chapters import chapter_problems
 
-        problems = chapter_problems(self.scenes)
+        problems = chapter_problems(self.scenes) + self._music_problems(scene_seen)
         if problems:
             raise ValueError("; ".join(problems))
         return self
+
+    def _music_problems(self, index: dict[str, int]) -> list[str]:
+        """Cues name existing scenes, in order (``from`` not after ``to``), without overlapping."""
+        problems: list[str] = []
+        spans: list[tuple[int, int, str]] = []
+        listed = isinstance(self.music, list)
+        for k, cue in enumerate(self.music_cues):
+            where = f"music[{k}]" if listed else "music"
+            bad = [f"{key} '{sid}'" for key, sid in (("from", cue.from_), ("to", cue.to)) if sid is not None and sid not in index]
+            if bad:
+                problems.append(f"{where}: unknown scene {', '.join(bad)} (scenes: {', '.join(index)})")
+                continue
+            first = index[cue.from_] if cue.from_ is not None else 0
+            last = index[cue.to] if cue.to is not None else len(self.scenes) - 1
+            if first > last:
+                problems.append(f"{where}: from '{cue.from_}' comes after to '{cue.to}'")
+                continue
+            for a, b, other in spans:
+                if first <= b and a <= last:
+                    problems.append(f"{where} overlaps {other} (each scene can have one music cue)")
+            spans.append((first, last, where))
+        return problems
+
+    @property
+    def music_cues(self) -> list[MusicCue]:
+        """``music`` as a list of cues (empty without music)."""
+        value = self.music
+        return [] if value is None else list(value) if isinstance(value, list) else [value]
 
 
 def format_location(loc: tuple[str | int, ...]) -> str:

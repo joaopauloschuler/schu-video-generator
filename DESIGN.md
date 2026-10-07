@@ -91,6 +91,9 @@ src/vidgen/
   voices.py               # named voices: effective voice per beat, speaker labels / colours / tags (§46; no manim)
   cues.py                 # caption cues: phrase-boundary cutting and timing, shared by SRT and captions (§43)
   sfx.py                  # sound effects: synthesised set, loudness, project sounds, the SFX track (§47; no manim)
+  music.py                # background music: generated beds, music files as looping sources (§48; no manim)
+  mix.py                  # the final mix: music placement, ducking, normalisation, limiter (§48; no manim)
+  loudness.py             # BS.1770-4 integrated loudness and true peak, block by block (§48; no manim)
   fileio.py               # atomic writes; replacing files that Windows programs keep open
   scenes/                 # built-in scene library (registered like extensions; actions.py:
                           # the built-in beat actions reveal/dim/highlight/zoom/transform, §26-27;
@@ -134,7 +137,9 @@ my_video/
 with Manim's own audio) and `scenes/<id>.wav` (Manim's uncompressed sound mix, only if the scene
 has sound), `timings/<id>.json` (beat timings + the render settings), `media/` (Manim's
 intermediate files), `padded/<id>.wav` (each scene's audio padded to its exact video length) with
-`padded/video_concat.txt` / `audio_concat.txt`, and `timings.json` (the whole video).
+`padded/video_concat.txt` / `audio_concat.txt`, and `timings.json` (the whole video). Step 44 /
+45 add `padded/sfx.wav` (the sound effects, §47) and `padded/mix.wav` (the final mix with
+music / normalisation, §48).
 With `--frames` (Step 10, §13) also `frames/<id>/*.png` + `frames/<id>/index.json` and
 `frames/index.json`, and `layout/<id>.json` (Step 12, §15).
 
@@ -199,6 +204,8 @@ pronunciation: {K-Phi-3: kay fye three}          # Step 42 (§45): TTS text only
 voices: {ana: {voice_id: 21m00Tcm4TlvDq8ikWAM, label: "Dr. Ana"}}   # Step 43 (§46): + scene / beat `voice: ana`
 subtitles: {speakers: off}                       # Step 43 (§46): `name` tags speakers in the SRT
 sfx: {auto: false, gain: 0}                      # Step 44 (§47): + scene `sfx:` lists, beat action `sfx`
+music: calm                                      # Step 45 (§48): bed / file / cue / cues; + scene `music:`
+audio: {normalize: auto, target_lufs: -16, true_peak: -1.5}   # Step 45 (§48): the final mix
 
 extensions: [extensions]                         # dirs (relative to project) to auto-import; default shown
 
@@ -627,6 +634,7 @@ vidgen list-scenes [PROJECT] [--json]   # built-ins + extensions (+ which overri
 vidgen list-themes [PROJECT] [--swatches PNG] [--json]   # theme presets + type scales (§20)
 vidgen list-icons [PROJECT] [--search TEXT] [--category NAME] [--sheet PNG] [--json]   # icons (§22)
 vidgen list-sfx [PROJECT] [--render-dir DIR] [--json]   # sound effects with descriptions (§47)
+vidgen list-music [PROJECT] [--render-dir DIR] [--json]   # music beds with descriptions (§48)
 vidgen schema [PROJECT] [--scene TYPE | --all] [--json]   # JSON Schema of video.yaml (§12)
 vidgen tts [PROJECT] [--force] [--dry-run] [--beat ID ...] [--voice NAME ...] [--variant NAME]
 vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going]
@@ -638,7 +646,8 @@ vidgen lint [PROJECT] [--scene ID ...] [--rule NAME ...] [--variant NAME] [--pre
 ```
 PROJECT defaults to the current directory. `--scene` re-renders only those scenes and re-joins
 using the existing renders of the others (missing ones are rendered). Exit code non-zero on error.
-`render` prints one line per scene, then the output paths and the total duration.
+`render` prints one line per scene, then the output paths and the total duration (Step 45: and
+the measured loudness, §48).
 
 ## 9. Testing
 
@@ -3013,3 +3022,91 @@ using the existing renders of the others (missing ones are rendered). Exit code 
 - Known limits: no per-scene switch for `auto` (a variant can turn it off); a sound still
   playing at the video's end is cut without a fade; project sounds are not loudness-normalised;
   built-ins are mono (pan places them).
+
+## 48. Refinements (Step 45, background music, ducking, loudness)
+
+- **Config** (`config.py`): top-level `music:` (`MusicSetting`): a source name, one `MusicCue`,
+  a list of cues, or `false` / null. `MusicCue`: `source` (a bed name or a path under the
+  project), `volume` dB (−60..12), `start` s, `loop` (true), `crossfade` s (2), `fade_in` (1.5),
+  `fade_out` (3), `duck` (`DuckConfig` or a bool: `false` = depth 0), `from` / `to` scene ids.
+  `VideoConfig._music_problems`: known scenes, `from` not after `to`, no two cues on one scene.
+  `VideoConfig.music_cues` gives the list. Scene `music: true | false | {volume}`
+  (`SceneMusic`). Top-level `audio:` (`AudioConfig`): `normalize: auto | true | false`,
+  `target_lufs` (−16, −40..−5), `true_peak` (−1.5 dBTP, −9..0). `vidgen validate`
+  (`music.config_problems`) reports a source that is neither a bed nor a file; the render
+  pre-check raises it. `music` / `audio` and a scene's `music` are not render-fingerprint
+  inputs, nor are `music.py`, `mix.py`, `loudness.py` (music never changes pixels or timing).
+- **Beds** (`vidgen/music.py`, numpy only): `calm` (60 s, D major, no beat), `pulse` (40 s,
+  A minor, 96 BPM), `bright` (48 s, C major, 120 BPM). Pads by PADsynth: each chord's harmonics
+  as Gaussian bumps (18–30 cents wide) with random phases in one spectrum, one inverse FFT → a
+  periodic wave whose length divides the chord's segment; chords cross-fade with equal-power
+  windows of 1.6 s; an airy layer an octave up swells with an LFO whose period divides the loop;
+  a sub-bass under each chord; `pulse` / `bright` add plucked eighth-note arpeggios (patterns
+  picked per bar), a soft thump per beat (`pulse`) or a sparse bell melody (`bright`). Tone
+  shaping per partial (high-pass 40 Hz, low-pass 3.5–4.5 kHz, both second order): nothing harsh,
+  no rumble (tests: < −30 dB of the energy above 5 kHz, < −30 dB below 35 Hz). Everything is
+  rendered **circularly** (notes past the loop's end continue at its start; the waves are
+  periodic in the loop), so the loop tiles without a seam. Seed `crc32("music:<name>")`;
+  `bed_loop(name)` is cached per process (~1–1.5 s to make). Level: `MUSIC_LEVEL` −30 LUFS
+  integrated. **Decision: a loop tiled to the needed length**, not a piece generated for the
+  whole video: generation cost is fixed, loops of 40–60 s with chord changes every 4–7.5 s and
+  slow LFOs rarely sound repetitive under narration, and a loop is trivially seamless.
+- **Files**: decoded with PyAV (`sfx.decode_audio`), mono duplicated, cached per (path, size,
+  mtime); measured (integrated) and scaled to `MUSIC_LEVEL`. `music.Source(cue, root)`: from
+  `start` on; looping files play `body[:-X]` once, then a loop whose first `X` samples are the
+  head cross-faded (equal power) with the tail, so every repeat continues exactly where the
+  previous pass stopped; `loop: false` → silence after the end (the cue's fade-out ends there).
+- **Loudness** (`vidgen/loudness.py`): BS.1770-4 integrated loudness (400 ms blocks, 100 ms
+  step, absolute gate −70 LUFS, relative gate −10 LU), K-weighting as the filter's magnitude
+  response applied by FFT to 10 s blocks read with 0.5 s margins (circular per block; the margins
+  absorb the edges), `LoudnessMeter` fed in order, true peak by 4x polyphase windowed-sinc
+  interpolation (Kaiser, 12 taps a side). Checked against FFmpeg's `ebur128` on a rendered mix
+  (−16.1 / −1.6 dBTP both). ~0.2 s per 10 s of audio per pass.
+- **Ducking** (`vidgen/mix.py`): **decision: a gain curve computed from the narration's timing,
+  not an audio envelope follower or FFmpeg `sidechaincompress`**. The key is where speech is: each
+  beat from its start to the end of its speech (`speech.speech_bounds` of its MP3; the whole beat
+  without audio), so it is exactly "the narration track only" (clip sound and SFX are mixed into
+  the same WAVs / track and could not be told apart by level), deterministic, and able to look
+  ahead (offline). `duck_curve` at 100 Hz: pauses shorter than `hold` filled; in dB, `-depth`
+  where speech is, raised-cosine ramps of `attack` s ending at a speech start and `release` s
+  after its end (max of both). Defaults 12 dB / 0.4 s / 1.0 s / 1.5 s: ElevenLabs beats are
+  ~1 s apart (lead/trail silence + pad), so with a shorter hold the music pumped up between
+  every beat. With `duck.clips` (default) a `video_clip` scene whose clip has sound (not
+  `mute`, `volume` ≠ 0, the file has an audio stream) is foreground for its whole span.
+- **Per scene and per cue gain** (`plan_music` → `Placement`s, 10 ms frames, interpolated per
+  sample): `10^(volume/20)` × fades (raised cosine; fade-out ends at the cue's end or the
+  source's) × scene levels (`false` → 0, `{volume}` → dB; steps smoothed by `smooth_steps`:
+  a running minimum then a moving average, 0.75 s, so a ramp lies on the louder side — the
+  quieter scene has its level from its first to its last sample) × ducking. A cue spans its
+  `from` scene's start to its `to` scene's end (the last cue to the video's exact end).
+- **The mix** (`mix_audio`, called by `join_scenes` unless `--no-audio`): tracks read block by
+  block — `WavTrack` (the padded scene WAVs, the SFX track) and `MusicTrack`. **Decision:
+  normalisation `auto` by default — on when the video has music, off otherwise** — so every
+  existing narration-only video keeps its exact audio (the join command is byte-for-byte the
+  old one; the mix is only measured), while a video with music, whose level is new anyway, comes
+  out at −16 LUFS. Not while the video has narrated beats but none has its MP3 (a preview timed
+  from word counts: the gallery measured +25 dB of gain on music and effects alone; logged at
+  info level, `normalized: false`). With music or `normalize: true`: pass 1 measures the sum (no true peak),
+  gain = target − measured; pass 2 writes `padded/mix.wav` (48 kHz stereo **24-bit**: the gain
+  and fades stay clean) through `limit()` — the gain each sample needs for its true-peak
+  envelope to stay 0.1 dB under `true_peak`, a running minimum (±5 ms) then a 10 ms moving
+  average, so the gain never exceeds the need and moves smoothly; block margins make it exact
+  across blocks — and measures the output. `ffmpeg.join(..., mix=)` then uses the WAV as the
+  audio (one AAC encode). `MixReport` → combined `timings.json` `mix` and `render --json` `mix`:
+  `{mixed, normalized, target_lufs, true_peak_limit, gain_db, integrated_lufs, true_peak_dbtp,
+  limited_db, music: [{source, kind, from, to, start, end, volume, duck}]}`; the human render
+  output adds a `loudness:` line.
+- **Levels measured**: committed kphi3 MP3s are −21.4 LUFS integrated (as stereo), but a
+  rendered narration track is −24.4: Manim's `add_sound` converts the mono MP3 through
+  libswresample, whose mono → stereo upmix is −3 dB per channel (Step 4 behaviour, unchanged
+  here). `MUSIC_LEVEL` −30 is therefore ~6 dB under the voice in pauses and ~18 dB under it
+  when ducked. (The Step 44 SFX level, "−27 LUFS loudest 400 ms ≈ 7 dB under narration", was
+  calibrated on the MP3s, so effects sit ~4 dB closer to the rendered voice than stated.)
+- **`vidgen list-music [PROJECT] [--render-dir DIR] [--json]`** (`music.music_entries`,
+  `jsonout.list_music_document`): every bed with a precise description, use, tempo, key, chords,
+  loop length and measured loudness; the project's `assets/music` files (any path works as a
+  source; that folder is only what is listed); previews of one loop per bed.
+- Known limits: cues do not cross-fade into each other (the first fades out, the next fades
+  in); the beds are fixed (no tempo / key parameters); a file is decoded whole into memory
+  (~23 MB per stereo minute); music is not in scene renders or storyboards; the AAC encode may
+  move the true peak by ~0.1 dB; no LRA / short-term loudness targets.

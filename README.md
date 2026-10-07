@@ -67,6 +67,14 @@ subtitles.
   sample-exact about 7 dB under the narration; `sfx: {auto: true}` adds soft sounds to built-in
   reveals, highlights, callouts, zooms and chapter cards. `vidgen list-sfx` describes every sound
   in words and `--render-dir` writes them out to listen to ([reference](docs/CONFIG.md#sound-effects-sfx)).
+- **Background music**: `music: calm` — one of three generated ambient beds (`calm` pad,
+  `pulse` soft arpeggio at 96 BPM, `bright` uplifting at 120 BPM; seamless loops, no licences) or
+  your own file, looped with a cross-faded seam, faded in and out, changed per scene range (a
+  list of cues with `from` / `to`) or muted per scene (`music: false`); ducked 12 dB under the
+  narration only (not under the sound effects). A video with music is normalised to −16 LUFS
+  (EBU R128) with a −1.5 dBTP true-peak limiter (`audio: {normalize, target_lufs, true_peak}`;
+  narration-only videos keep their level unless `normalize: true`); `vidgen render` reports the
+  measured loudness and `vidgen list-music` describes the beds in words ([reference](docs/CONFIG.md#background-music-music)).
 - **Extensible per video**: a project can add its own scene types, beat actions, overlays,
   helpers, theme tokens and pipeline hooks in its `extensions/` folder, without touching vidgen.
 - **Cheap to iterate**: only new or edited beats are sent to ElevenLabs; fast low-resolution
@@ -137,6 +145,7 @@ narration.
 | `vidgen list-themes [PROJECT] [--swatches PNG] [--json]` | theme presets (built-in and the project's) with colours, type scale, contrast check; `--swatches` draws them all in one PNG |
 | `vidgen list-icons [PROJECT] [--search TEXT] [--category NAME] [--sheet PNG [--theme [PRESET]]] [--json]` | icons (built-in and the project's `assets/icons`) with category and tags; `--sheet` draws the listed icons, labelled, into a PNG (`--theme`: in the project's or a preset's colours) |
 | `vidgen list-sfx [PROJECT] [--render-dir DIR] [--json]` | sound effects (built-in and the project's `assets/sfx`) with a description of each sound, length, loudness; `--render-dir` writes them as WAV files |
+| `vidgen list-music [PROJECT] [--render-dir DIR] [--json]` | background music beds (built-in, described in words: instruments, key, tempo, chords, mood) and the project's `assets/music` files; `--render-dir` writes one loop of each bed as WAV |
 | `vidgen schema [PROJECT] [--scene TYPE \| --all] [--json]` | JSON Schema of `video.yaml` (params checked per scene type, the project's extension types included), for editors and AI agents |
 | `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--voice NAME ...] [--variant NAME]` | generate missing/stale narration into `audio/`; `--dry-run` needs no key (shows each beat's voice and characters per voice) |
 | `vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going] [--jobs N] [--frames] [--frames-per-beat N] [--json]` | render and join the video |

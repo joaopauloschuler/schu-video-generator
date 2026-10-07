@@ -124,13 +124,16 @@ def write_concat_list(files: list[Path], list_file: Path) -> None:
     list_file.write_text("".join(lines), encoding="utf-8")
 
 
-def join(ffmpeg: str, videos: list[Path], audios: list[Path], dst: Path, work_dir: Path, sfx: Path | None = None) -> None:
+def join(
+    ffmpeg: str, videos: list[Path], audios: list[Path], dst: Path, work_dir: Path, sfx: Path | None = None, mix: Path | None = None
+) -> None:
     """Concatenate ``videos`` (stream copy, video only) and ``audios`` (PCM, encoded once to AAC)
     into ``dst`` with the concat demuxer.
 
     ``sfx``: a WAV as long as the whole video (the sound effects track, DESIGN.md §47), added
     sample for sample to the concatenated audio (``amix`` without normalising: both keep their
-    levels) before encoding.
+    levels) before encoding. ``mix``: the finished mix of the whole video (DESIGN.md §48), used
+    as the audio instead of ``audios`` and ``sfx``.
 
     ``dst`` is written via a temporary file next to it and replaced at the end, so a failed join
     never leaves a truncated output. If ``dst`` cannot be replaced (on Windows: it is open in a
@@ -141,10 +144,13 @@ def join(ffmpeg: str, videos: list[Path], audios: list[Path], dst: Path, work_di
     write_concat_list(videos, video_list)
     write_concat_list(audios, audio_list)
     tmp = dst.with_name(f"{dst.stem}.partial{dst.suffix}")
-    if sfx is None:
-        audio = ["-map", "0:v:0", "-map", "1:a:0"]
+    if mix is not None:
+        audio = ["-i", str(mix), "-map", "0:v:0", "-map", "1:a:0"]
+    elif sfx is None:
+        audio = ["-f", "concat", "-safe", "0", "-i", str(audio_list), "-map", "0:v:0", "-map", "1:a:0"]
     else:
         audio = [
+            "-f", "concat", "-safe", "0", "-i", str(audio_list),
             "-i", str(sfx),
             "-filter_complex", "[1:a][2:a]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[mix]",
             "-map", "0:v:0", "-map", "[mix]",
@@ -154,7 +160,6 @@ def join(ffmpeg: str, videos: list[Path], audios: list[Path], dst: Path, work_di
             ffmpeg,
             [
                 "-f", "concat", "-safe", "0", "-i", str(video_list),
-                "-f", "concat", "-safe", "0", "-i", str(audio_list),
                 *audio,
                 "-c:v", "copy", "-c:a", "aac", "-b:a", AUDIO_BITRATE, "-ar", str(AUDIO_RATE),
                 "-movflags", "+faststart",

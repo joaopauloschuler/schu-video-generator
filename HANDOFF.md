@@ -4094,3 +4094,106 @@ How to test: `/home/claude/venv/bin/python -m pytest -q` (1824 passed, 1 skipped
 tests/test_sfx.py`. Manual: `vidgen list-sfx --render-dir /tmp/sfx` (listen), `vidgen validate
 examples/gallery`, `vidgen render examples/gallery --preview --scene part2` then check
 `build/preview/padded/sfx.wav`, `vidgen list-scenes | grep sfx`.
+
+## Step 45 — Background music
+What was built
+- **Config**: top-level `music:` — a source name (`music: calm`), one cue `{source, volume, start,
+  loop, crossfade, fade_in, fade_out, duck}` or a list of cues with `from` / `to` scene ids
+  (changing tracks; checked: known scenes, in order, no overlap), `false` / null for none. A
+  source is a built-in bed or any audio file under the project. Scene `music: false` (none: it
+  fades out over the 0.75 s before the scene, back in after) or `{volume: dB}`. Top-level
+  `audio: {normalize: auto|true|false, target_lufs: -16, true_peak: -1.5}`.
+- **Generated beds** (`src/vidgen/music.py`, numpy only, deterministic): `calm` (60 s loop, D
+  major, no beat: warm pad, sub-bass, airy swell), `pulse` (40 s, A minor, 96 BPM: plucked
+  eighth-note arpeggio, muted pad, soft thump per beat), `bright` (48 s, C major, 120 BPM:
+  brighter pad, arpeggio an octave up, sparse bell melody). PADsynth pads (harmonics as Gaussian
+  bumps with random phases → one inverse FFT → a periodic wave), equal-power chord cross-fades,
+  plucks / bells note by note, every partial shaped (HP 40 Hz, LP 3.5–4.5 kHz); all rendered
+  circularly, so the loop tiles without a seam. −30 LUFS integrated (`MUSIC_LEVEL`). ~1–1.5 s
+  to make, cached per process (`bed_loop`). Each bed has a precise description, key, tempo,
+  chords and "use it for".
+- **Files**: decoded with PyAV, loudness-matched to −30 LUFS; `start` skips into the file (loops
+  restart there); looping plays the body once, then a loop whose head is cross-faded (equal
+  power, `crossfade` s) with the tail — seamless repeats; `loop: false` ends (fade-out at the
+  end of the file).
+- **Loudness** (`src/vidgen/loudness.py`): BS.1770-4 gated integrated loudness and 4x true peak,
+  block by block (10 s blocks, 0.5 s margins), `LoudnessMeter`; agrees with FFmpeg `ebur128`.
+- **Mix** (`src/vidgen/mix.py`): `plan_music` places the cues (span = `from` scene start to `to`
+  scene end) with a gain per 10 ms frame = volume × fades × scene levels (`smooth_steps`) ×
+  ducking (`duck_curve`, keyed off the narration's speech spans: beat start + MP3 speech bounds;
+  plus `video_clip` scenes with sound when `duck.clips`); `mix_audio` sums voice (padded scene
+  WAVs) + SFX track + music, normalises (two passes: measure, then gain), limits true peaks
+  (`limit`: smooth look-ahead gain, 10 ms) and writes `padded/mix.wav` (24-bit), which
+  `ffmpeg.join(..., mix=)` encodes. Without music and with `normalize: auto|false` nothing is
+  written: the join is the old command and the loudness is only measured.
+- **Reporting**: combined `timings.json` and `vidgen render --json` gain `mix` `{mixed,
+  normalized, target_lufs, true_peak_limit, gain_db, integrated_lufs, true_peak_dbtp, limited_db,
+  music: [{source, kind, from, to, start, end, volume, duck}]}`; human `render` prints a
+  `loudness:` line. New `vidgen list-music [PROJECT] [--render-dir DIR] [--json]` (beds in words +
+  the project's `assets/music` files; WAV previews).
+- **Example**: `examples/gallery` has `music: {source: calm, volume: -2, duck: {depth: 12}}` and a
+  `vidgen list-music` usage line.
+
+Verification
+- Spectrograms of the three beds (PNG, read as images): chord changes where expected, pads
+  rolled off above ~4 kHz, faint note onsets only; loops measured −30.00 LUFS, peaks ≤ −15 dBFS,
+  seam step within ordinary steps.
+- Scratch project with two real kphi3 MP3s + silent intro / outro, `calm`: gain curve read back
+  (−12 dB from 0.4 s before the speech to 1 s after; the 1 s pause between beats stays ducked
+  once `hold` was raised from 0.6 to 1.5 s — at 0.6 the music swelled 8 dB between every beat);
+  the MP4 measured by FFmpeg `ebur128`: I = −16.1 LUFS, true peak −1.6 dBFS (ours: −16.06 /
+  −1.6 on the WAV).
+- `vidgen render examples/gallery --preview` (no narration MP3s): first version normalised
+  music + effects alone by +25 dB → now a video whose beats have no MP3 yet is not normalised
+  (−41 LUFS preview, music ducked under the estimated beats). `vidgen validate examples/gallery`
+  ok; `vidgen lint examples/gallery`: 0 findings.
+
+Files
+- New: `src/vidgen/music.py`, `src/vidgen/mix.py`, `src/vidgen/loudness.py`, `tests/test_music.py`
+  (31 tests, 4 render).
+- Changed: `config.py` (`DuckConfig`, `MusicCue`, `MusicEntry`, `MusicSetting`, `SceneMusic`,
+  `AudioConfig`, `SceneConfig.music`, `VideoConfig.music` / `.audio` / `.music_cues`,
+  `_music_problems`), `render/pipeline.py` (`join_scenes` mixes, music checks),
+  `render/ffmpeg.py` (`join(..., mix=)`), `render/fingerprint.py` (music / audio excluded; new
+  modules not render inputs), `cli.py` (`list-music`, validate checks, `loudness:` line),
+  `jsonout.py` (`list_music_document`, render `mix`), `tests/test_docs.py` (models);
+  `examples/gallery/video.yaml`; docs/CONFIG.md (new "Background music" + "Loudness of the
+  final mix" + `list-music` sections, rows, JSON), README.md, DESIGN.md (§2, §3, §4, §8, new §48),
+  tasklist.md.
+
+Public interfaces added/changed
+- Config: `music:` (video), `music:` (scene), `audio:` (JSON Schema follows).
+- CLI: `vidgen list-music`; `render --json` `mix` (version 1, a new key); `timings.json` `mix`.
+- `ffmpeg.join(..., mix=None)`. No `vidgen.api` change (music is config only).
+
+Decisions / deviations
+- **Ducking by a computed gain curve, not FFmpeg `sidechaincompress`**: keyed off the
+  narration's timing (beat starts + MP3 speech bounds), because the voice WAVs already contain
+  clip sound (Step 35 mixes it in Manim) — an audio sidechain could not exclude it — and an
+  offline curve can look ahead (the music is down when the first word starts). Deterministic,
+  exact depth (tests measure −12.0 dB).
+- **Normalisation `auto` (default): only with music**, so every existing narration-only video
+  is bit-for-bit unchanged (and its join command identical); `normalize: true` opts in for
+  them. Never while no beat has its MP3 (word-count previews).
+- **Beds are loops (40–60 s) tiled to the length**, not generated per video length: fixed cost,
+  seamless by construction; cached per process, no disk cache (≈1 s).
+- **Level −30 LUFS, not −28 as first planned**: a rendered narration track measures −24.4 LUFS
+  integrated, not the MP3s' −21.4 — Manim's `add_sound` converts mono MP3s through
+  libswresample, whose mono → stereo upmix is −3 dB. So the Step 44 SFX level ("7 dB under
+  narration", calibrated on MP3s) is really ~4 dB under the rendered voice; left as is.
+- 24-bit mix WAV (the normalisation gain and fades on 16 bits would quantise quiet music).
+
+Known gaps / TODOs
+- Cues do not cross-fade into each other (a dip between tracks); no per-cue `from`/`to` times
+  in seconds; beds have no tempo / key / intensity parameters.
+- Music files are decoded whole into memory (~23 MB per stereo minute).
+- The narration's −3 dB mono → stereo upmix (Step 4) might be worth fixing (a review step):
+  it would change every existing video's level.
+- Loudness range / short-term targets are not handled; the limiter is a simple 10 ms one (heavy
+  normalisation of very dynamic narration limits speech peaks by ~4–6 dB).
+- Storyboards and scene renders have no music (as for SFX).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q` (1859 passed, 1 skipped, ~17 min); step only: `pytest
+tests/test_music.py`. Manual: `vidgen list-music --render-dir /tmp/music` (listen),
+`vidgen render examples/gallery --preview` (prints `loudness:`), `ffmpeg -i out.mp4 -af
+ebur128=peak=true -f null -` to cross-check.
