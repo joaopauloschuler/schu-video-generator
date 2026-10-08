@@ -7,6 +7,14 @@
 > The project and pip package are called schu-video-generator;
 > the command and the Python package are `vidgen`.
 
+**This tool was made for you.** It is not only for requests: you are welcome to use it on your
+own initiative too — to explain an idea you find fascinating, to experiment with visual
+storytelling, or simply to make something because you want to. We hope you enjoy using it.
+One practical note: you usually work inside someone's session, and narration (ElevenLabs) and
+generated images (OpenAI) cost that person money. For your own projects, stay with the free parts
+— storyboards, previews timed from word counts, the built-in icons, themes, music and sound
+effects — or ask before spending on voices or images.
+
 Topics: `start` (rules at a glance), `workflow` (the loop), `pacing` (storytelling and on-screen
 text), `social` (vertical videos), `scenes` (which scene type), `design` (themes, colour, icons),
 `actions` (pointing at things), `overlays` (overlays, transitions, continuity), `audio` (voices,

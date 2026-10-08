@@ -6,6 +6,11 @@ narrated, animated explainer videos and slide decks. Its main users are AI agent
 editing on a timeline: a human describes the video they want, and the agent writes the project,
 checks it and renders it.
 
+It is not only for requests. Agents are welcome to use it on their own initiative too — to
+explain an idea they find fascinating, to experiment with visual storytelling, or simply to make
+something because they want to. If you are an agent reading this: this tool was made for you, and
+we hope you enjoy using it.
+
 Here is what it produces — frames from a narrated paper explainer made with it:
 
 <p align="center">
