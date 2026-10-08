@@ -6,6 +6,20 @@ narrated, animated explainer videos and slide decks. Its main users are AI agent
 editing on a timeline: a human describes the video they want, and the agent writes the project,
 checks it and renders it.
 
+<p align="center">
+  <img src="docs/images/kphi3-method.gif" width="640"
+       alt="Animated diagram: a dense layer is replaced, step by step, by grouped convolutions, an interleaving layer and a sum">
+</p>
+
+| | |
+|---|---|
+| ![Title card: Saving 77% of the Parameters in Large Language Models](docs/images/kphi3-title.png) | ![A densely connected artificial layer next to sparsely connected cortex neurons](docs/images/kphi3-sparsity.png) |
+| ![Diagram of the grouped subnetwork: input, K, interleave, L, sum, output](docs/images/kphi3-method.png) | ![Bar chart: 227M, 35M and 53M non-embedding parameters, a 77% reduction](docs/images/kphi3-params.png) |
+
+<sub>Frames from a 4-minute narrated paper explainer made with vidgen: a title card, a
+comparison, an animated diagram and a chart, each scene built and timed to its narration. The
+project is in [examples/kphi3](examples/kphi3), so these images can be regenerated.</sub>
+
 Everything is built around what an agent can and cannot do:
 
 - **Text in, video out.** A video is one `video.yaml` file: narration written as short *beats*
