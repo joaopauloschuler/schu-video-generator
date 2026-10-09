@@ -32,7 +32,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `preview` | `{width: 854, height: 480, fps: 15}` | `vidgen render --preview` |
 | `variants` | `{}` | named overrides, see [variants](#variants) |
 | `theme` | see [theme](#theme) | preset, colors, sizes, font, background, code style |
-| `voice` | see [voice](#voice-voice) | the narration voice: ElevenLabs (default) or OpenRouter ([narration providers](#narration-providers)) |
+| `voice` | see [voice](#voice-voice) | the narration voice: ElevenLabs (default), OpenRouter, or Kokoro running locally (free; extra `schu-video-generator[kokoro]`; [Kokoro](#kokoro-on-this-computer-provider-kokoro)) — one provider per video ([narration providers](#narration-providers)) |
 | `voices` | `{}` | named voices for dialogue, picked by scenes and beats with `voice: NAME`, see [multiple voices](#multiple-voices-voices) |
 | `subtitles` | `{speakers: off}` | `speakers: name` puts the speaker's label before their lines in the SRT, see [multiple voices](#multiple-voices-voices) |
 | `narration` | see [narration](#narration-narration) | beat padding, duration estimate |
