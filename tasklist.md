@@ -269,6 +269,47 @@ Rules that apply to every step:
 
 ---
 
+## Phase F — OpenRouter providers (optional; existing defaults unchanged)
+
+Agents build with mocked APIs only. Live checks against OpenRouter (small, a few cents) are run
+by the coordinator at the end of each step with the owner's key; agents never see the key.
+
+### Step 61 — OpenRouter image provider
+- [ ] `imagegen: {provider: openrouter, model: ...}` as an option; `openai` stays the default, existing projects and cached images unchanged
+- [ ] REST via the standard library (no SDK); key only from `OPENROUTER_API_KEY`, never written; shared retry helper for rate limits / server errors
+- [ ] Map `size` / aspect, `seed`, `quality`, `negative` / `style` to OpenRouter's parameters; clear message for unsupported options
+- [ ] Decode the response to PNG in `assets/generated/`; provider and model in the cache key and the sidecar JSON
+- [ ] `vidgen imagegen --dry-run`: real per-model prices from OpenRouter's model list when online, else "price unknown"; MCP real runs still need `confirm_cost`
+- [ ] `vidgen validate`: unknown provider, missing `model`; schema lists the provider
+- [ ] Tests with mocked responses (success, error, retried rate limit, price lookup)
+- [ ] Docs: CONFIG.md, README (key setup on Windows and Linux), AGENTS.md (choosing an image provider), third-party/terms notes
+
+### Step 61b — Vector (SVG) generated images
+- [ ] Find out how OpenRouter's SVG/vectorization models are called (text prompt or input picture); if they only convert pictures, generate a PNG then vectorize it
+- [ ] `generate: {..., format: svg}` on the `image` scene, only with a model that returns SVG (validate says which)
+- [ ] Stored as `assets/generated/<hash>.svg` + sidecar; format in the cache key
+- [ ] Sanitise before loading: drop scripts / filters / embedded rasters, flatten unsupported gradients, cap the path count (clear warning, simplify option)
+- [ ] Loaded as vector shapes; `draw: true` (strokes then fill), `recolor: theme | none`, fit to region
+- [ ] Layout dump / lint treat it as one picture
+- [ ] Tests: mocked SVG response, sanitiser, draw / recolor render test, path cap
+- [ ] Docs: CONFIG.md, AGENTS.md (when SVG is worth it)
+
+### Step 62 — OpenRouter TTS provider (one provider per video)
+- [ ] `voice: {provider: openrouter, model, voice, instructions, speed}`; `elevenlabs` stays the default; existing audio hashes stay valid
+- [ ] One provider per video: named `voices:` may change `voice` / `instructions`, not `provider`; a variant may switch provider (own `audio/<variant>/`); any mix is a validate error
+- [ ] REST via the standard library, MP3 into the existing `audio/` cache; provider, model, voice, instructions, speed in each beat's hash
+- [ ] No neighbouring-beat context, no word timestamps (captions use estimated timings; `voice.timestamps` with this provider warns), no `language_code`
+- [ ] `vidgen tts --dry-run` / `--json`: provider, model, voice, characters per beat and total, estimated cost where listed; MCP real runs still need `confirm_cost`
+- [ ] Pronunciation, multiple voices, readback, lint speed and captions work with it (tested)
+- [ ] Not included: voice cloning from reference audio, multi-speaker input
+- [ ] Tests with mocked responses (MP3 stored, hash changes, provider-mix error, fallback warning)
+- [ ] Docs: CONFIG.md "Narration providers", README, AGENTS.md (choosing a voice provider, writing good `instructions`), an example variant (no audio committed)
+
+### Step 63 — Review of Phase F
+- [ ] End to end with mocks (imagegen → render, tts → render), dry-run JSON over MCP, docs consistency, wheel build, full suite; the coordinator's live checks recorded in HANDOFF.md
+
+---
+
 ## Backlog (after Step 60)
 
 Not done in the roadmap; each is one line, with where it came from. Bugs first, then quality,
