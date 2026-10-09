@@ -93,8 +93,11 @@ their own licences. Notably:
 vidgen bundles no client library or content from these services; it calls their web APIs with
 your key only when you run the paid commands, and what they return is subject to their terms:
 ElevenLabs (narration, speech to text), OpenAI (Images API) and OpenRouter (image models of
-several providers, e.g. Black Forest Labs, ByteDance, Google, OpenAI, Recraft — each model's
-provider terms apply too). Requests to OpenRouter carry vidgen's optional app identification
+several providers, e.g. Black Forest Labs, ByteDance, Google, OpenAI, Recraft, and
+text-to-speech models, e.g. Mistral, Kokoro, Google, ElevenLabs, Microsoft — each model's
+provider terms apply too). The list of OpenRouter's TTS models, voices and prices bundled for
+offline checks (`vidgen/data/openrouter/tts_models.json`) is facts read from its public model
+list on the date it names. Requests to OpenRouter carry vidgen's optional app identification
 (`HTTP-Referer`: the project's repository URL, `X-OpenRouter-Title`: `schu-video-generator`).
 
 ## Repository-only content (not in the pip package)

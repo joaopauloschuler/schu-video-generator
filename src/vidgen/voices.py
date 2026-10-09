@@ -16,7 +16,7 @@ import difflib
 from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
-from vidgen.config import VideoConfig, VoiceConfig
+from vidgen.config import ELEVENLABS_VOICE_KEYS, OPENROUTER_VOICE_KEYS, VideoConfig, VoiceConfig
 from vidgen.errors import Problem, VidgenError
 from vidgen.languages import elevenlabs_language_code
 
@@ -55,6 +55,33 @@ def voice_reference_problems(config: VideoConfig) -> list[Problem]:
     return problems
 
 
+def voice_provider_problems(config: VideoConfig) -> list[Problem]:
+    """One TTS provider per video (DESIGN.md §66): a named voice may not set another
+    ``provider`` than the base voice's, nor keys only the other provider uses (``voice_id`` with
+    openrouter, ``instructions`` with elevenlabs...)."""
+    base = config.voice.provider
+    other_keys = ELEVENLABS_VOICE_KEYS if base == "openrouter" else OPENROUTER_VOICE_KEYS
+    own_keys = OPENROUTER_VOICE_KEYS if base == "openrouter" else ("voice_id", "model_id", "settings")
+    problems = []
+    for name, entry in config.voices.items():
+        if entry.provider is not None and entry.provider != base:
+            problems.append(Problem(
+                f"voices.{name}.provider",
+                f"one TTS provider per video: the base voice uses {base}, so '{name}' cannot use {entry.provider}; a named "
+                f"voice changes {', '.join(own_keys)} only (a variant may switch the provider of the whole video)",
+            ))
+            continue
+        for key in other_keys:
+            if getattr(entry, key) is not None:
+                owner = "an ElevenLabs" if base == "openrouter" else "an OpenRouter"
+                problems.append(Problem(
+                    f"voices.{name}.{key}",
+                    f"{key} is {owner} setting, but this video's voices use {base} (one provider per video): "
+                    f"set {', '.join(own_keys)} instead",
+                ))
+    return problems
+
+
 def resolve_voice(config: VideoConfig, name: str | None) -> VoiceConfig:
     """The effective voice called ``name`` (``None`` / ``default``: the base voice): the base
     voice's audio settings with the named voice's given values over them; ``label`` / ``color``
@@ -75,7 +102,10 @@ def resolve_voice(config: VideoConfig, name: str | None) -> VoiceConfig:
 
 
 def _with_language(voice: VoiceConfig, language: str | None) -> VoiceConfig:
-    """``voice`` with ``language_code`` = the code sent to the provider (or ``None``)."""
+    """``voice`` with ``language_code`` = the code sent to the provider (or ``None``; OpenRouter
+    takes none: the language follows the text, DESIGN.md §66)."""
+    if voice.provider != "elevenlabs":
+        return voice if voice.language_code is None else voice.model_copy(update={"language_code": None})
     code = elevenlabs_language_code(voice.language_code, voice.model_id, language)
     return voice if code == voice.language_code else voice.model_copy(update={"language_code": code})
 

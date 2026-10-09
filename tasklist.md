@@ -296,15 +296,15 @@ by the coordinator at the end of each step with the owner's key; agents never se
 - [x] (from Step 61's live run) OpenRouter's data-policy 404 (account requires ZDR) → a clear error with the settings link and the image models that have a ZDR endpoint; CONFIG.md note; `tools/live_check_openrouter.py --zdr` and `--svg`
 
 ### Step 62 — OpenRouter TTS provider (one provider per video)
-- [ ] `voice: {provider: openrouter, model, voice, instructions, speed}`; `elevenlabs` stays the default; existing audio hashes stay valid
-- [ ] One provider per video: named `voices:` may change `voice` / `instructions`, not `provider`; a variant may switch provider (own `audio/<variant>/`); any mix is a validate error
-- [ ] REST via the standard library, MP3 into the existing `audio/` cache; provider, model, voice, instructions, speed in each beat's hash
-- [ ] No neighbouring-beat context, no word timestamps (captions use estimated timings; `voice.timestamps` with this provider warns), no `language_code`
-- [ ] `vidgen tts --dry-run` / `--json`: provider, model, voice, characters per beat and total, estimated cost where listed; MCP real runs still need `confirm_cost`
-- [ ] Pronunciation, multiple voices, readback, lint speed and captions work with it (tested)
-- [ ] Not included: voice cloning from reference audio, multi-speaker input
-- [ ] Tests with mocked responses (MP3 stored, hash changes, provider-mix error, fallback warning)
-- [ ] Docs: CONFIG.md "Narration providers", README, AGENTS.md (choosing a voice provider, writing good `instructions`), an example variant (no audio committed)
+- [x] `voice: {provider: openrouter, model, voice, instructions, speed}`; `elevenlabs` stays the default; existing audio hashes stay valid (two ElevenLabs keys pinned + kphi3's committed hashes "ok"; keys of the provider not in use are ignored so a variant can switch)
+- [x] One provider per video: named `voices:` may change `voice` / `instructions`, not `provider`; a variant may switch provider (own `audio/<variant>/`); any mix is a validate error (also other-provider keys in a named voice, e.g. `voices.ana.voice_id`; named voices may also change `speed` / `model`)
+- [x] REST via the standard library, MP3 into the existing `audio/` cache; provider, model, voice, instructions, speed in each beat's hash (`POST /api/v1/audio/speech`, `response_format: mp3`; PCM-only models such as Gemini TTS converted with ffmpeg; app headers; ZDR data-policy 404 → the Step 61b message with the TTS models that have a ZDR endpoint)
+- [x] No neighbouring-beat context, no word timestamps (captions use estimated timings; `voice.timestamps` with this provider warns), no `language_code`
+- [x] `vidgen tts --dry-run` / `--json`: provider, model, voice, characters per beat and total, estimated cost where listed; MCP real runs still need `confirm_cost` (price per character = the highest of the model's providers, live public lookup; "price unknown" when audio is billed too or offline; a real run prints the cost OpenRouter reports via `/generation`)
+- [x] Pronunciation, multiple voices, readback, lint speed and captions work with it (tested)
+- [x] Not included: voice cloning from reference audio, multi-speaker input
+- [x] Tests with mocked responses (MP3 stored, hash changes, provider-mix error, fallback warning) (`tests/test_tts_openrouter.py`, fixtures `tests/data/openrouter_tts.json` from the public endpoints; validate warnings from a bundled dated model/voice list; `tools/live_check_openrouter.py --tts [--zdr] [--yes]`)
+- [x] Docs: CONFIG.md "Narration providers", README, AGENTS.md (choosing a voice provider, writing good `instructions`), an example variant (no audio committed) (`examples/minimal` variant `openrouter`; DESIGN §66, THIRD_PARTY_NOTICES)
 
 ### Step 63 — Review of Phase F
 - [ ] End to end with mocks (imagegen → render, tts → render), dry-run JSON over MCP, docs consistency, wheel build, full suite; the coordinator's live checks recorded in HANDOFF.md

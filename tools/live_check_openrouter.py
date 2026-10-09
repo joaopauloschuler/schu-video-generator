@@ -1,4 +1,4 @@
-"""Live check of the OpenRouter image provider (Steps 61, 61b) against the real API.
+"""Live check of the OpenRouter image and text-to-speech providers (Steps 61, 61b, 62) against the real API.
 
 Not shipped with vidgen and never run by the tests; a maintainer tool for a person with an
 OpenRouter key. It
@@ -13,6 +13,12 @@ OpenRouter key. It
    project folder, then prints where the PNG (``--svg``: SVG, with what vidgen's sanitiser makes
    of it) and its sidecar are and the cost OpenRouter reported.
 
+``--tts`` checks narration instead (Step 62): it prices the text-to-speech models whose cost
+per character is listed (``--zdr``: only those with a ZDR endpoint), prints ``vidgen tts
+--dry-run`` of ONE short beat with the cheapest, and with ``--yes`` voices it through vidgen's own
+code path (``vidgen.tts.run.run_tts``) in a temporary project, then prints the MP3's path and
+duration and the cost OpenRouter reported.
+
 The key is read only from the environment variable ``OPENROUTER_API_KEY`` (by vidgen, at the
 moment of the request); this script never prints or stores it. Run from the repository root::
 
@@ -21,6 +27,8 @@ moment of the request); this script never prints or stores it. Run from the repo
     python tools/live_check_openrouter.py --yes --model black-forest-labs/flux.2-klein-4b
     python tools/live_check_openrouter.py --zdr --yes           # only models with a ZDR endpoint
     python tools/live_check_openrouter.py --svg [--zdr] [--yes] # one vector (SVG) picture (~$0.08)
+    python tools/live_check_openrouter.py --tts [--zdr] [--yes] [--model ID] [--voice NAME]
+                                                                # one short beat of narration (< $0.01)
 """
 
 from __future__ import annotations
@@ -114,16 +122,104 @@ def report_svg(path: Path) -> None:
         print(f"  sanitiser: {warning}")
 
 
+#: The one beat ``--tts`` voices (12 words).
+TTS_TEXT = "This is a short live check of OpenRouter narration in vidgen."
+
+
+def pick_voice(voices: tuple[str, ...] | None) -> str | None:
+    """An English-looking voice of the model's list (else its first; ``None`` without a list)."""
+    if not voices:
+        return None
+    english = [v for v in voices if v.lower().startswith(("en", "af_", "am_")) or "-en" in v.lower() or "english" in v.lower()]
+    neutral = [v for v in english if "neutral" in v.lower()]
+    return (neutral or english or list(voices))[0]
+
+
+def write_tts_project(folder: Path, model: str, voice: str | None) -> Project:
+    """A one-beat project voiced by ``model`` (``voice`` when given)."""
+    spec: dict[str, Any] = {"provider": "openrouter", "model": model}
+    if voice is not None:
+        spec["voice"] = voice
+    config = {
+        "title": "OpenRouter TTS live check",
+        "voice": spec,
+        "scenes": [{"id": "check", "type": "text_card", "params": {"text": "Live check"}, "beats": [{"id": "check", "text": TTS_TEXT}]}],
+    }
+    (folder / "video.yaml").write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+    return Project.load(folder)
+
+
+def tts_check(args: argparse.Namespace) -> int:
+    """``--tts``: price the TTS models, dry-run one beat with the cheapest, voice it with --yes."""
+    from vidgen.tts import openrouter as ortts
+    from vidgen.tts.run import run_tts
+
+    listed = ortts.fetch_speech_models(timeout=20)
+    if isinstance(listed, orr.LookupFailure):
+        print(listed.reason)
+        return 1
+    models = sorted(listed)
+    if args.zdr:
+        allowed = ortts.zdr_tts_models(timeout=20)
+        if allowed is None:
+            print("OpenRouter's list of ZDR endpoints could not be reached")
+            return 1
+        models = [m for m in models if m in allowed]
+    kind = "text-to-speech models" + (" with a ZDR endpoint" if args.zdr else "")
+    print(f"{len(models)} {kind} on OpenRouter; pricing each (free lookups)...")
+    found = ortts.lookup_speech_models(models, timeout=20)
+    priced: list[tuple[float, str, str]] = []
+    for model, lookup in found.items():
+        quote = ortts.character_rate(lookup)
+        if quote.cost is not None and quote.cost > 0:  # unknown (audio billed) and $0 listings skipped
+            priced.append((quote.cost, model, quote.basis))
+    priced.sort()
+    print(f"cheapest {args.show} per character ({len(TTS_TEXT)} characters to voice):")
+    for cost, model, basis in priced[: args.show]:
+        print(f"  ${cost * len(TTS_TEXT):.6f}  {model}  {basis}")
+    if not priced and not args.model:
+        print("no TTS model with a known price per character found")
+        return 1
+    model = args.model or priced[0][1]
+    lookup = found.get(model) or ortts.lookup_speech_models([model], timeout=20)[model]
+    voice = args.voice or pick_voice(lookup.voices if isinstance(lookup, ortts.SpeechModel) else None)
+    folder = Path(tempfile.mkdtemp(prefix="vidgen-or-tts-"))
+    project = write_tts_project(folder, model, voice)
+    print(f"\nproject: {folder}")
+    print(f"model: {model}, voice: {voice or '(model default)'}")
+    run_tts(project, dry_run=True)
+    if not args.yes:
+        print("\ndry run only: add --yes to voice this one beat (it costs the price above)")
+        return 0
+    try:
+        plan = run_tts(project)
+    except VidgenError as exc:
+        print(f"error: {exc}")
+        return 1
+    from vidgen.scene import audio_duration
+
+    mp3 = project.audio_dir / "check.mp3"
+    print(f"\nsaved: {mp3}")
+    print(f"duration: {audio_duration(mp3):.2f} s, {mp3.stat().st_size} bytes")
+    print(f"cost reported by OpenRouter: {plan.charged if plan.charged is not None else 'not reported'}")
+    print(f"listen to it, or check it: vidgen readback {folder}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--yes", action="store_true", help="really generate one picture (costs money)")
+    parser.add_argument("--yes", action="store_true", help="really generate one picture / one beat (costs money)")
     parser.add_argument("--model", help="model id to use instead of the cheapest found")
     parser.add_argument("--show", type=int, default=3, help="how many cheap models to list (default 3)")
     parser.add_argument("--svg", action="store_true", help="a vector (SVG) picture with a model that returns SVG")
+    parser.add_argument("--tts", action="store_true", help="text to speech: one short beat with the cheapest TTS model")
+    parser.add_argument("--voice", help="--tts: the model's voice to use (default: an English one of its list)")
     parser.add_argument("--zdr", action="store_true", help="only models with a Zero Data Retention endpoint (accounts requiring ZDR)")
     args = parser.parse_args()
 
     print("key:", "OPENROUTER_API_KEY is set" if os.environ.get(orr.API_KEY_ENV, "").strip() else "OPENROUTER_API_KEY is NOT set")
+    if args.tts:
+        return tts_check(args)
     scratch = Path(tempfile.mkdtemp(prefix="vidgen-or-prices-"))
     kind = "text-to-SVG" if args.svg else "text-to-image"
     models = [m["id"] for m in image_models() if text_to_image(m, args.svg)]

@@ -10,7 +10,7 @@
 **This tool was made for you.** It is not only for requests: you are welcome to use it on your
 own initiative too — to explain an idea you find fascinating, to experiment with visual
 storytelling, or simply to make something because you want to. We hope you enjoy using it.
-One practical note: you usually work inside someone's session, and narration (ElevenLabs) and
+One practical note: you usually work inside someone's session, and narration (ElevenLabs or OpenRouter) and
 generated images (OpenAI or OpenRouter) cost that person money. For your own projects, stay with the free parts
 — storyboards, previews timed from word counts, the built-in icons, themes, music and sound
 effects — or ask before spending on voices or images.
@@ -143,7 +143,7 @@ vidgen lint --fail-on warning
 vidgen render
 ```
 
-**Costs.** `vidgen tts` (ElevenLabs, per character), `vidgen imagegen` (OpenAI Images or
+**Costs.** `vidgen tts` (ElevenLabs or OpenRouter, per character), `vidgen imagegen` (OpenAI Images or
 OpenRouter, per picture) and `vidgen readback` with `stt: {provider: elevenlabs}` cost money; everything else is
 local and free. Always run `vidgen tts --dry-run` / `vidgen imagegen --dry-run` first, finish the
 layout on the word-count-timed preview, and commit `audio/` and `assets/generated/` (they cannot
@@ -739,6 +739,39 @@ once or twice per video, where the two scenes are about the same thing.
 beat's `voice:` for interviews and dialogue; label speakers (`label`) so subtitles and captions
 can name them (`subtitles: {speakers: name}`).
 
+**Choosing a voice provider.** ElevenLabs, the default provider (key `ELEVENLABS_API_KEY`), sounds the most
+natural, sends the neighbouring beats for smooth intonation and can time every word exactly
+(`timestamps: true`, for karaoke captions); it bills characters against a monthly plan. `voice:
+{provider: openrouter, model: author/name, voice: ...}` (`OPENROUTER_API_KEY`) reaches many TTS
+models with one pay-as-you-go key, most of them far cheaper per character (e.g.
+`hexgrad/kokoro-82m`, `mistralai/voxtral-mini-tts-2603`), but with no context between beats, no
+word timings (captions use estimates) and no `language_code`: the language follows the text and
+the voice. Read `vidgen tts --dry-run`: it names provider, model and voice, prints the price per
+character and the estimated cost (or why it is unknown) and `note:` / `problem:` lines — fix them
+before a real run. Then listen to one beat (`vidgen tts --beat ID`, `vidgen readback`) before
+voicing the whole video. One provider per video: named `voices:` change `voice` / `instructions`
+/ `speed`, not `provider`; try another provider in a variant (it gets its own `audio/<variant>/`).
+If the account requires Zero Data Retention, pick a model with a ZDR endpoint (most TTS models
+have one; vidgen's error lists them when a model is refused).
+
+**Writing good `instructions`** (OpenRouter models that read them, e.g. Gemini TTS: the dry run
+notes when a model ignores them). Describe the speaker and the delivery in a few words, not the
+content: who (a warm, unhurried explainer; a curious guest), pace and pauses (slight pause before
+numbers; slow down on definitions), energy (calm, never salesy), and the language or accent when
+it matters (Brazilian Portuguese, neutral accent). Keep one `instructions` for the narrator so
+every beat sounds alike; give each named voice its own. Never put directions into the beat text:
+the model reads it aloud.
+
+```yaml
+voice:
+  provider: openrouter
+  model: google/gemini-3.8-flash-lite-tts
+  voice: Kore
+  instructions: "warm, unhurried explainer; slight pause before numbers"
+voices:
+  guest: {voice: Puck, instructions: "curious guest, a little faster, rising tone on questions", label: Guest}
+```
+
 **Pronunciation.** Write the text as it should be **read** on screen and in subtitles; fix
 how it is **said** with `pronunciation:` (applied to the TTS text only). Run
 `vidgen tts --dry-run` and read every `says:` line; after `vidgen tts`, `vidgen readback` finds
@@ -1025,7 +1058,8 @@ scenes:
   (screenshots of other products may also show their trademarks).
 - ElevenLabs narration and OpenAI pictures are subject to those providers' terms (e.g. plan
   limits on commercial use; cloning a voice requires the speaker's consent). Pictures made
-  through OpenRouter are subject to OpenRouter's terms and to those of the model's provider.
+  through OpenRouter, and narration voiced through it, are subject to OpenRouter's terms and to
+  those of the model's provider.
 - The built-in fonts (SIL OFL), Lucide icons (ISC), Natural Earth map data, sound effects and
   music beds may be used in your videos, including commercially, with no attribution required
   in the video (Natural Earth asks for none; the OFL and ISC notices concern redistributing the

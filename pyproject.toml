@@ -30,7 +30,7 @@ vidgen-mcp = "vidgen.mcp_server:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-vidgen = ["templates/**/*", "data/fonts/**/*", "data/icons/**/*", "data/geo/*", "data/slides/*", "data/guide/*", "data/gallery/*"]
+vidgen = ["templates/**/*", "data/fonts/**/*", "data/icons/**/*", "data/geo/*", "data/slides/*", "data/guide/*", "data/gallery/*", "data/openrouter/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

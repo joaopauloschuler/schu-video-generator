@@ -6147,3 +6147,126 @@ How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2305 passed, 1
 Live (needs network; free without `--yes`): `python tools/live_check_openrouter.py --svg`
 (cheapest SVG model's dry run), `--svg --yes` (one SVG, ~$0.08), `--zdr [--yes]` (ZDR models
 only), `--svg --zdr` (says none exists today).
+
+## Step 62 — OpenRouter TTS provider (one provider per video)
+What was built
+- **`voice: {provider: openrouter, model, voice, instructions, speed}`**: narration through any of
+  OpenRouter's TTS models with `OPENROUTER_API_KEY` (environment only, never stored / printed /
+  in errors). `elevenlabs` stays the default; ElevenLabs cache keys are untouched (two pinned in
+  the new tests; kphi3's 27 committed hashes still "ok"). `model` is required (`author/name`);
+  `speed` 0.25–4 and not sent when absent. Keys of the provider not in use are ignored (so a
+  variant can switch provider while the base voice's keys are merged in).
+- **One provider per video** (`voices.voice_provider_problems`, run in `parse_config`): a named
+  voice with another `provider`, or with a key of the other provider (`voices.ana.voice_id` in
+  an OpenRouter video, `voices.ana.instructions` in an ElevenLabs one), is a config error
+  naming that key. Named voices may change `voice`, `instructions`, `speed` (and `model`). A
+  variant may switch the provider → own `audio/<variant>/` (unchanged §7 rule).
+- **Provider** `src/vidgen/tts/openrouter.py`: `POST /api/v1/audio/speech` via
+  `httpapi.post_with_retries` (new `response_headers=` out-param), app headers, `{model, input,
+  response_format, voice?, instructions?, speed?}`; no context, no `language_code` (resolved
+  voice gets `None` for non-ElevenLabs), no timings. MP3 asked; Gemini (`google/`) and any model
+  that answers 400 "only supports response_format=pcm" get `pcm`, converted to MP3 with ffmpeg
+  (also WAV). Hash: `sha1(json{provider, model, voice, instructions, speed} | spoken text)`.
+  Data-policy 404 → Step 61b's message (shared `policy_intro`) + "Text-to-speech models with a
+  ZDR endpoint now: ...". `X-Generation-Id` kept; `reported_cost()` reads `GET /generation`.
+- **Prices / checks**: `tts.run.price_tts` (dry run and before a paid run): live public lookup
+  (`/models?output_modalities=speech` + each model's `/endpoints`), price per character = the
+  highest provider's `pricing.prompt`; unknown when audio is billed too (`completion` > 0:
+  Gemini TTS, Seed Audio) or offline. A model OpenRouter lacks is a `problem:` (real run refuses
+  before paying); unlisted voice, `instructions` / `speed` on models not documented to use them
+  are `note:`s. `vidgen validate` warns offline (`tts.tts_warnings`) from the bundled dated list
+  `src/vidgen/data/openrouter/tts_models.json`: unknown model (did-you-mean), voice not listed,
+  missing voice, `timestamps: true` (estimated captions).
+- **`vidgen tts`**: dry run adds per-beat `~$cost`, a per-voice line `voice default (openrouter
+  <model>, voice <v>...)`, `price of <model>: <basis>`, notes / problems, `cost: estimated $X
+  (OpenRouter prices of <date>)`; a run ends `(C characters, $X charged by openrouter)`.
+  ElevenLabs text output unchanged. `--json`: `provider, estimated_cost, unknown_cost,
+  price_note, prices, notes, problems, charged`; beats / voices gain `provider, model,
+  provider_voice, instructions, speed` (+ beat `estimated_cost`). MCP `tts` text updated, still
+  `confirm_cost`.
+- **Live check** `tools/live_check_openrouter.py --tts [--zdr] [--yes] [--model ID] [--voice V]`.
+
+API facts (checked 2026-10-08; openapi.yaml, the TTS guide, the SDK page, public endpoints; no key)
+- `POST /api/v1/audio/speech` `{model, input (string | turns: Gemini only), voice?,
+  instructions? (OpenAI gpt-4o-mini-tts, Gemini TTS; others ignore), response_format? mp3 | pcm
+  (default pcm), speed? (OpenAI; others ignore or 400), input_references? (cloning), provider?
+  {zdr, data_collection, options}}` → raw audio; headers `Content-Type` (`audio/mpeg`,
+  `audio/pcm` = s16le mono 24 kHz), `X-Generation-Id`. Cost only via `GET
+  /api/v1/generation?id=` (`data.total_cost`, needs the key). Gemini TTS: pcm only.
+- 32 TTS models (`GET /api/v1/models?output_modalities=speech`, `supported_voices`, `pricing`);
+  per character (`prompt`) for most (list prices unless an endpoint is named): Kokoro 82M $0.000004 (Together; DeepInfra $0.00000062),
+  Sesame CSM 1B $0.000007, Orpheus 3B $0.000015 (highest endpoint), Voxtral Mini TTS $0.0000176
+  (EU; $0.000016 others), MAI-Voice 2.1 flash $0.000015, Fish S1 / S2 $0.000015, ElevenLabs
+  v3 / multilingual v2 $0.00004 (turbo / flash $0.00002), MiniMax speech-2.8-hd $0.0001;
+  Gemini 3.8 flash(-lite) TTS: per text token + per audio token (no estimate); Seed Audio 1.0:
+  per second ($0.0025). Voices e.g. Voxtral `en_paul_neutral`, `gb_oliver_*`; Kokoro `af_heart`,
+  `am_adam`...; Gemini `Kore`, `Puck`...; MAI `en-US-Harper:MAI-Voice-2.1`.
+- ZDR (`GET /api/v1/endpoints/zdr`): 27 of 32 TTS models have one — all but MiniMax
+  speech-2.8-hd / turbo, Qwen audio-3.0 TTS flash / plus, Grok voice TTS. Cheapest ZDR with a
+  per-character price: `hexgrad/kokoro-82m` (live check free part, run here: ~$0.00024 for the
+  12-word beat).
+
+Files
+- New: `src/vidgen/tts/openrouter.py`, `src/vidgen/data/openrouter/tts_models.json` (snapshot),
+  `tests/test_tts_openrouter.py` (28 tests), `tests/data/openrouter_tts.json` (real public
+  records: 6 models, 2 endpoint records, their ZDR rows).
+- Changed: `config.py` (`TTS_PROVIDERS`, `ELEVENLABS_VOICE_KEYS`, `OPENROUTER_VOICE_KEYS`,
+  `VoiceConfig` / `VoiceEntry` fields + validator, `parse_config`), `voices.py`
+  (`voice_provider_problems`, language code only for ElevenLabs), `tts/__init__.py`
+  (`get_provider`, `tts_warnings`), `tts/run.py` (`TTSPlan` fields, `price_tts`,
+  `describe_voice`, `estimate_text`, dry-run lines, pre-pay check, reported cost, `lookup=`),
+  `httpapi.py` (`response_headers`), `imagegen/openrouter.py` (`missing_key_message(command)`,
+  `read_api_key(command)`, `policy_intro`), `jsonout.py`, `cli.py` (warnings, help),
+  `mcp_server.py` (tool text), `pyproject.toml` (package data `data/openrouter/*`),
+  `tools/live_check_openrouter.py` (`--tts`, `--voice`), docs/CONFIG.md ("Narration providers",
+  voice defaults, voices table, `tts --json`), README.md, AGENTS.md (both copies: "Choosing a
+  voice provider", "Writing good `instructions`"), THIRD_PARTY_NOTICES.md, DESIGN.md (tree, §4,
+  new §66), `examples/minimal/video.yaml` (variant `openrouter`), tasklist.md.
+
+Public interfaces added/changed (compatible)
+- Config: `voice.provider: openrouter`, `voice.model / voice / instructions / speed` (also on
+  `voices.<name>`). `tts --json` keys above. `vidgen.api` unchanged.
+- Internal: `vidgen.tts.openrouter.*` (`OpenRouterTTSProvider`, `lookup_speech_models`,
+  `character_rate`, `voice_notes`, `zdr_tts_models`, `policy_message`, `as_mp3`, `snapshot`,
+  `model_warnings`), `vidgen.tts.tts_warnings`, `vidgen.tts.run.price_tts`, `TTSPlan` new fields,
+  `run_tts(..., lookup=)`, `vidgen.voices.voice_provider_problems`,
+  `httpapi.post_with_retries(..., response_headers=)`, `imagegen.openrouter.policy_intro`.
+
+Decisions / deviations
+- **Other-provider keys ignored on `voice:`, errors on `voices.<name>`**: a variant switching the
+  provider deep-merges onto the base voice (whose keys cannot be removed), so the base voice
+  must tolerate them; in a named voice they are almost surely a mistake.
+- **Named voices may also change `model`** (task text: voice / instructions): same provider, so
+  "one provider per video" holds; prices are per model anyway.
+- **Unknown model / voice in `vidgen validate` are warnings** from a bundled dated snapshot
+  (validate stays offline, lists change); the dry run / run use the live list and refuse only a
+  model OpenRouter does not have.
+- **Highest endpoint price** (as Step 61): OpenRouter may route to any provider (Kokoro's list
+  price $0.00000062 vs Together's $0.000004).
+- **Reported cost** via `GET /generation` (the speech response carries none); best effort.
+- `provider.zdr` is not sent: the account setting decides; the policy 404 is handled.
+
+Known gaps / TODOs (Step 63)
+- No real paid request here (no key). The coordinator should run `python
+  tools/live_check_openrouter.py --tts --zdr --yes` and confirm: MP3 bytes returned for
+  `response_format: mp3` (Kokoro), `X-Generation-Id` present, `/generation` reporting
+  `total_cost` (and how soon), the MP3 duration, and that `af_alloy` (the picked voice) sounds
+  right; optionally a Gemini model (`--model google/gemini-3.8-flash-lite-tts --voice Kore`) to
+  exercise the PCM → MP3 path live.
+- No estimate for Gemini TTS / Seed Audio (audio billed); no voice cloning, multi-speaker input,
+  streaming or routing preferences; `instructions` / `speed` support is inferred from the docs
+  by model prefix.
+- The snapshot of models / voices ages: refresh `src/vidgen/data/openrouter/tts_models.json`
+  from the two public endpoints when it warns wrongly.
+
+Verification: `vidgen validate examples/minimal` ok (the new variant: `audio [openrouter]: 0 ok,
+0 stale, 30 missing`), `vidgen lint examples/minimal --variant openrouter`: 0 findings;
+`vidgen tts examples/minimal --dry-run --variant openrouter` (live, free): 30 beats, 1584
+characters, ~$0.028 at Voxtral's $0.0000176 per character.
+
+How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2334 passed, 1 skipped, 7:21); step only:
+`pytest tests/test_tts_openrouter.py tests/test_tts.py tests/test_voices.py` (~10 s). Example:
+`vidgen tts examples/minimal --dry-run --variant openrouter` (live prices; offline "price
+unknown"); `vidgen validate examples/minimal`. Live (needs network; free without `--yes`): `python
+tools/live_check_openrouter.py --tts --zdr` (cheapest ZDR TTS model's dry run of one 12-word
+beat), `--tts --zdr --yes` (voices it: < $0.001; prints MP3 path, duration, reported cost).

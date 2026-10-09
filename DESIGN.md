@@ -105,8 +105,9 @@ src/vidgen/
   overlay_layer.py        # OverlayLayer: overlays composited into every frame a scene writes (§41)
   charts.py               # chart helpers: ticks, number labels, axes, legend, markers, fit (§33),
                           # colour scales, colour bar, readable text on fills (§34)
-  tts/__init__.py         # provider seam: get_provider(cfg)
+  tts/__init__.py         # provider seam: get_provider(cfg), tts_warnings (§66)
   tts/elevenlabs.py       # ElevenLabs provider (stdlib urllib), cache by hash
+  tts/openrouter.py       # OpenRouter TTS provider: /audio/speech, PCM -> MP3, prices, ZDR message (§66)
   stt/                    # speech-to-text seam (§57): __init__.py (STTProvider, Transcript, stt_settings,
                           # get_stt_provider), faster_whisper.py (local, extra schu-video-generator[stt]), elevenlabs.py
   readback.py             # `vidgen readback`: transcripts cached, aligned with the spoken text, WER, edits, suggestions (§57)
@@ -142,6 +143,7 @@ src/vidgen/
   data/slides/            # deck.css + deck.js inlined into `vidgen slides` pages (package data, §55)
   data/guide/             # AGENTS.md: the author guide printed by `vidgen guide` (package data, §59)
   data/gallery/           # stand-in files for the guide snippets' assets/ paths: picture.png, app.png, clip.webm (§60)
+  data/openrouter/        # tts_models.json: OpenRouter's TTS models, voices, list prices, ZDR (dated snapshot, §66)
 tools/                    # maintainer scripts, not shipped: vendor_icons.py + icon_set.json (§22, §23),
                           # make_screenshot.py, make_clip.py (example assets, §37, §38),
                           # make_gallery_clip.py (data/gallery/clip.webm, §60),
@@ -246,7 +248,7 @@ theme:
   sizes: {title: 56, subtitle: 42, heading: 36, body: 32, caption: 24, small: 20}
 
 voice:
-  provider: elevenlabs                           # only allowed value for now
+  provider: elevenlabs                           # or openrouter (Step 62, §66: model, voice, instructions, speed)
   voice_id: nPczCjzI2devNBz1zQrb
   model_id: eleven_multilingual_v2
   output_format: mp3_44100_128
@@ -4535,3 +4537,106 @@ the measured loudness, §48).
 - **Not done**: `fill-rule: evenodd` holes and per-element `stroke-linecap` follow Manim's SVG
   parser; text is removed, not converted to vidgen text; recolor is per colour, not per region;
   no SVG model can be used by an account that requires ZDR (none has a ZDR endpoint).
+
+
+## 66. Refinements (Step 62, OpenRouter TTS provider; one provider per video)
+
+- **API facts** (checked 2026-10-08 from `https://openrouter.ai/openapi.yaml`, the TTS guide
+  `docs/guides/overview/multimodal/tts`, the Python SDK's `tts.create_speech` page and the public
+  endpoints; no key used): `POST /api/v1/audio/speech` (OpenAI-compatible) `{model, input,
+  voice?, instructions?, response_format?: mp3 | pcm (default pcm), speed?, input_references?,
+  provider?: {zdr, data_collection, options}, session_id?, user?}` → **raw audio bytes** (not
+  JSON), headers `Content-Type` (`audio/mpeg` / `audio/pcm`: 16-bit LE mono, 24 kHz) and
+  `X-Generation-Id`. No cost in the response: `GET /api/v1/generation?id=<id>` (with the key)
+  gives `data.total_cost`. `instructions`: OpenAI gpt-4o-mini-tts and Gemini TTS only, others
+  ignore it; `speed`: OpenAI, others ignore it or return 400 for a value other than 1; Gemini TTS
+  returns only `pcm` (`mp3` → 400 "only supports response_format=\"pcm\""); multi-speaker
+  `input` (a list of turns): Gemini only. Errors `{error: {code, message}}`; 402 / 429 / 502 /
+  503 / 524 / 529 as for images. Models: `GET /api/v1/models?output_modalities=speech` (public):
+  32 models with `supported_voices` (null for some: Fish Audio, Seed Audio) and list `pricing
+  {prompt, completion}`; `GET /api/v1/models/{author}/{slug}/endpoints` (public): each
+  provider's `pricing` (they differ: Kokoro $0.00000062 DeepInfra vs $0.000004 Together; Voxtral
+  $0.000016 vs $0.0000176 EU). "Most TTS models are priced per character of input text"
+  (`pricing.prompt`), per-second / per-audio-token models report `pricing.completion` (Gemini
+  TTS: prompt per text token + completion per audio token; Seed Audio: per second). ZDR (`GET
+  /api/v1/endpoints/zdr`, field `model_id`): 27 of the 32 TTS models (all but MiniMax speech-2.8
+  hd / turbo, Qwen TTS flash / plus, Grok voice).
+- **Config**: `VoiceConfig.provider: elevenlabs | openrouter` (`config.TTS_PROVIDERS`), new
+  optional `model`, `voice`, `instructions`, `speed` (0.25–4; not sent when absent); a model
+  validator requires `model` (`author/name`) for openrouter. Keys of the provider not in use are
+  **ignored, not errors** (`ELEVENLABS_VOICE_KEYS` / `OPENROUTER_VOICE_KEYS`): a variant that
+  switches the provider deep-merges onto the base voice, whose other-provider keys stay. The
+  same four keys are optional on `VoiceEntry`.
+- **One provider per video**: `voices.voice_provider_problems(config)` (in `parse_config`, after
+  the model validates, beside the voice-name check): a named voice with another `provider` →
+  `voices.<name>.provider: one TTS provider per video: ...`; a named voice setting a key of the
+  other provider (`voice_id`, `settings`, `context`... in an OpenRouter video; `model`, `voice`,
+  `instructions`, `speed` in an ElevenLabs one) → `voices.<name>.<key>: ...`. Problems with
+  locations; a variant's are attributed to it. A variant may switch the provider: its effective
+  voice differs, so `Project.has_own_audio` gives it `audio/<variant>/` (§7 rule unchanged); a
+  named voice's ElevenLabs keys are cleared in the variant with `null` (`voices: {guest:
+  {voice_id: null, settings: null, voice: ...}}`).
+- **Provider** `tts/openrouter.py` (`OpenRouterTTSProvider`, `name = "openrouter"`, stdlib):
+  `POST /audio/speech` through `httpapi.post_with_retries` (new optional `response_headers`
+  dict; same retries as images: 429 / 5xx / 524 / 529), headers `Authorization: Bearer`, the
+  app identification of §64, `Accept: audio/mpeg, audio/*`. Body `{model, input,
+  response_format}` + `voice` / `instructions` / `speed` when set; **no** `previous_text` /
+  `next_text` (the API has none: the run passes them, the provider ignores them), **no**
+  `language_code` (`voices._with_language` returns `None` for any provider but elevenlabs: the
+  language follows the text and voice), no `input_references`, no multi-speaker input. Format:
+  `mp3` asked for, `pcm` for `google/` models (`PCM_ONLY_PREFIXES`) and after a 400 naming
+  `response_format` and `pcm` (then remembered); `as_mp3`: MP3 kept (ID3 / frame sync, or
+  `audio/mpeg`), WAV and PCM (`s16le`, rate from `Content-Type` `rate=` else 24000, mono)
+  converted with ffmpeg (`libmp3lame`, 128 kb/s) in a temporary folder; anything else (JSON,
+  HTML) → error quoting its start. `X-Generation-Id`s are kept on the provider;
+  `reported_cost()` reads `GET /generation?id=` for each (one retry after 1 s on 404: the
+  record can lag), never raises. Key: `imagegen.openrouter.read_api_key("tts")` (the missing-key
+  message names `vidgen tts --dry-run`).
+- **Hash**: `sha1(json.dumps({provider, model, voice, instructions, speed}, sort_keys=True,
+  ensure_ascii=False) + "|" + spoken_text)` — every key that changes the audio; ElevenLabs keys
+  are untouched (two ElevenLabs keys pinned in `tests/test_tts_openrouter.py`, kphi3's 27
+  committed hashes still "ok").
+- **Data policy**: a 404 recognised by `imagegen.openrouter.is_policy_error` → `policy_message`:
+  the shared first line (`policy_intro`, factored out of §65's message) and "Text-to-speech
+  models with a ZDR endpoint now: ..." (`zdr_tts_models`: the ZDR list ∩ the speech model list;
+  offline: "could not be reached to suggest models"). Not retried.
+- **Prices** (`tts.run.price_tts`, dry run and before a paid run): `lookup_speech_models`
+  reads the speech model list once (5 s timeout) and each used model's endpoint records;
+  `character_rate`: the highest `prompt` over the endpoints (the list price when the records
+  cannot be read), "free" at 0, **unknown** when any endpoint has a non-zero `completion` (the
+  generated audio is billed and its length is not known beforehand), offline or for a missing
+  model. `TTSPlan` gains `beat_voices`, `rates`, `notes`, `problems`, `price_notes`, `charged`,
+  `beat_cost(beat)`, `cost`, `price_note`, `synthesised()`, `engine(beat)`. ElevenLabs is never
+  estimated (`ELEVENLABS_PRICE_NOTE`: plan quota).
+- **Checks**: `vidgen validate` (no network) warns via `tts.tts_warnings(project)` (in
+  `validate_warnings`) from the bundled snapshot `data/openrouter/tts_models.json` (dated; ids,
+  voices, ZDR flag, list prices): a model not listed (did-you-mean), a voice the model does not
+  list, no voice for a model that lists some, `timestamps: true` (no timings; captions estimate).
+  Warnings, not errors: lists may be incomplete and change. `vidgen tts --dry-run` / a real run use
+  the live list: a model OpenRouter does not have is a `problem:` (a real run refuses before any
+  paid request), an unlisted voice or `instructions` / `speed` on a model not documented to use
+  them (`INSTRUCTION_PREFIXES` `openai/`, `google/`; `SPEED_PREFIXES` `openai/`) a `note:`.
+  Offline: nothing refused, "price unknown".
+- **`vidgen tts`**: ElevenLabs output unchanged. With OpenRouter beats the dry run adds `,
+  ~$0.0002` (or `, price unknown`) to each `would generate` line, one `voice <name> (openrouter
+  <model>, voice <v>[, instructions '...'][, speed s]): N beat(s), C characters` line per voice
+  (also without `voices:`), `price of <model>: <basis>`, `note:` / `problem:` lines and `cost:
+  estimated $X (OpenRouter prices of <date>)`. A real run prints `note:` lines first and ends
+  `done: N beat(s) generated (C characters, $X charged by openrouter), ...` (or `cost not
+  reported by openrouter`; `for K of N requests` when only some were). Captions / SRT / lint /
+  readback need nothing new: the MP3s are ordinary, `speech.read_alignment` finds no
+  `.align.json`, so word times are estimated within the MP3's speech bounds.
+- **JSON** (`tts --json`): top level `provider`, `estimated_cost`, `unknown_cost`, `price_note`,
+  `prices {model: {per_character, basis}}`, `notes`, `problems`, `charged`; each beat and voice
+  gains `provider`, `model`, `provider_voice`, `instructions`, `speed` (+ beat `estimated_cost`).
+  MCP `tts` is unchanged in shape (description names OpenRouter); real runs still need
+  `confirm_cost`.
+- **Live check** `tools/live_check_openrouter.py --tts [--zdr] [--yes] [--model ID] [--voice
+  NAME]`: prices every TTS model with a per-character price, picks the cheapest (an English /
+  neutral voice of its list), prints `vidgen tts --dry-run` of one 12-word beat in a temporary
+  project and with `--yes` voices it through `run_tts`, printing the MP3 path, duration and the
+  reported cost. Free part run here: cheapest ZDR model `hexgrad/kokoro-82m` ($0.000004 per
+  character, the highest of 2 providers; ~$0.00024 for the beat).
+- **Not done**: voice cloning (`input_references`), multi-speaker input, provider routing
+  preferences (`provider.zdr` is not sent: the account setting decides), per-token / per-second
+  estimates (Gemini TTS, Seed Audio), streaming; no real paid request was made here (no key).

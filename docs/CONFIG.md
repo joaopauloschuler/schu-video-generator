@@ -32,7 +32,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `preview` | `{width: 854, height: 480, fps: 15}` | `vidgen render --preview` |
 | `variants` | `{}` | named overrides, see [variants](#variants) |
 | `theme` | see [theme](#theme) | preset, colors, sizes, font, background, code style |
-| `voice` | see [voice](#voice-voice) | ElevenLabs voice |
+| `voice` | see [voice](#voice-voice) | the narration voice: ElevenLabs (default) or OpenRouter ([narration providers](#narration-providers)) |
 | `voices` | `{}` | named voices for dialogue, picked by scenes and beats with `voice: NAME`, see [multiple voices](#multiple-voices-voices) |
 | `subtitles` | `{speakers: off}` | `speakers: name` puts the speaker's label before their lines in the SRT, see [multiple voices](#multiple-voices-voices) |
 | `narration` | see [narration](#narration-narration) | beat padding, duration estimate |
@@ -647,7 +647,7 @@ background, icons in `primary`, names in `text`) and `--theme warm_editorial` in
 
 ```yaml
 voice:
-  provider: elevenlabs              # the only provider for now
+  provider: elevenlabs              # elevenlabs (default) or openrouter: see "Narration providers"
   voice_id: nPczCjzI2devNBz1zQrb    # ElevenLabs voice id
   model_id: eleven_multilingual_v2
   output_format: mp3_44100_128      # ElevenLabs output_format query parameter
@@ -659,6 +659,10 @@ voice:
   context: true                     # send the neighbouring beats' text for smoother intonation
   timestamps: false                 # also fetch when each character is spoken (karaoke captions)
   language_code: null               # ElevenLabs language_code (ISO 639-1) or false; null: auto
+  model: null                       # provider openrouter only (required there): the TTS model id
+  voice: null                       # openrouter: the model's voice name
+  instructions: null                # openrouter: how to speak (models that read it)
+  speed: null                       # openrouter: speed multiplier 0.25-4 (not sent when null)
   label: null                       # speaker name in subtitles / captions (none: not tagged)
   color: null                       # speaker colour in captions (theme token or hex; none: text colour)
 ```
@@ -682,6 +686,82 @@ that accept one (`eleven_turbo_v2_5`, `eleven_flash_v2_5`; others reject the fie
 `eleven_multilingual_v2` detects the language from the text). A code sends it with any model,
 `false` never sends one. When a code is sent it is part of the audio hash (re-voicing those
 beats); without one the hash is as before. A named voice may set its own (`voices.<name>.language_code`).
+
+These keys are ElevenLabs'. With `provider: openrouter` the voice is `model`, `voice`,
+`instructions` and `speed` instead (see [narration providers](#narration-providers)); the keys of
+the provider not in use are ignored.
+
+## Narration providers
+
+One TTS provider voices the whole video: **ElevenLabs** (the default; everything above) or
+**OpenRouter**, which reaches many TTS models (Mistral Voxtral, Kokoro, Gemini TTS, MiniMax,
+ElevenLabs' own models, Microsoft MAI-Voice...) with one key.
+
+```yaml
+voice:
+  provider: openrouter
+  model: mistralai/voxtral-mini-tts-2603     # required: an OpenRouter TTS model id
+  voice: en_paul_neutral                     # the model's voice name (each model lists its own)
+  instructions: "warm, unhurried explainer; slight pause before numbers"   # optional
+  speed: 1.0                                 # optional, 0.25-4: not sent when absent
+```
+
+| key | default | |
+|---|---|---|
+| `provider` | `elevenlabs` | `openrouter`: `POST https://openrouter.ai/api/v1/audio/speech`, key in `OPENROUTER_API_KEY` |
+| `model` | (required) | an OpenRouter TTS model id (`author/name`); the list: <https://openrouter.ai/models?output_modalities=speech> |
+| `voice` | the model's default, if it has one | the model's voice name (`en_paul_neutral` for Voxtral, `af_heart` for Kokoro, `Kore` for Gemini, `en-US-Harper:MAI-Voice-2.1` for MAI-Voice...); most models need one |
+| `instructions` | none | how to speak: tone, pace, accent, language. OpenRouter documents it for Gemini TTS and OpenAI TTS models; others ignore it (the dry run notes that) |
+| `speed` | none (not sent) | playback speed multiplier; OpenRouter documents it for OpenAI TTS; other models ignore it or refuse a value other than 1 |
+| `label`, `color`, `timestamps` | | as in [`voice:`](#voice-voice) (`timestamps` has no effect, see below) |
+
+**Choosing.** ElevenLabs gives the most natural narration, word timings for karaoke captions and
+neighbouring-beat context for smooth intonation; it bills characters against a monthly plan.
+OpenRouter pays per use from one balance: per input character for most models (Kokoro
+$0.000004, Voxtral $0.0000176, ElevenLabs v3 through OpenRouter $0.00004 per character on
+2026-10-08, the highest of each model's providers), while Gemini TTS and Seed Audio also bill the
+generated audio (no estimate). `vidgen tts --dry-run` prints the current price per character of
+the model and the estimated cost of the run (from OpenRouter's public model list, a free lookup;
+offline: "price unknown"); a real run prints what OpenRouter reports it charged.
+
+**One provider per video.** A named voice of [`voices:`](#multiple-voices-voices) may change
+`voice`, `instructions`, `speed` (and `model`) but not `provider`: `voices.ana.provider:
+elevenlabs` in an OpenRouter video, or ElevenLabs keys such as `voices.ana.voice_id` (OpenRouter
+keys in an ElevenLabs video), are config errors naming the key. A [variant](#variants) may switch
+the provider of the whole video (`variants: {cheap: {voice: {provider: openrouter, model: ...,
+voice: ...}}}`); its audio then goes to `audio/<variant>/` like any other voice change.
+
+**What differs from ElevenLabs.**
+- No neighbouring-beat context (the API has none): each beat is voiced on its own.
+- No word timings: `voice.timestamps: true` is a `vidgen validate` warning; captions and the SRT
+  use estimated word times within each MP3's speech.
+- No `language_code`: the language follows the text (a model's voice usually belongs to one
+  language; MAI-Voice voices carry their locale). `instructions` can name the language or accent
+  ("Brazilian Portuguese, São Paulo accent") on models that read them.
+- Not supported: voice cloning from reference audio (`input_references`) and multi-speaker input
+  (one request voicing several speakers): vidgen voices one beat per request.
+
+**Audio.** vidgen asks for MP3 (`response_format: mp3`); models that return only raw PCM (Gemini
+TTS: 16-bit mono 24 kHz) are asked for PCM and converted to MP3 with ffmpeg, so `audio/` always
+holds `<beat_id>.mp3` + `<beat_id>.hash`. The hash covers the spoken text (pronunciation applied)
+and `provider`, `model`, `voice`, `instructions` and `speed`: changing any of them re-voices that
+voice's beats. ElevenLabs projects keep their hashes.
+
+**Checks.** `provider: openrouter` without `model`, or a model id without `/`, is a config error.
+`vidgen validate` warns (no network, OpenRouter's list bundled with vidgen, dated) about a model
+not in the list (with a suggestion), a `voice` the model does not list and a missing `voice` for a
+model that lists some; lists may be incomplete, so these are warnings. `vidgen tts --dry-run` and
+a real run check OpenRouter's live list: a model it does not have is refused before any paid
+request (`problem:`), an unlisted voice or an `instructions` / `speed` the model may ignore is a
+`note:`.
+
+**Key and privacy.** The same `OPENROUTER_API_KEY` as the [OpenRouter image
+provider](#openrouter-provider-provider-openrouter), read from the environment only, never stored.
+If your account requires Zero Data Retention (or excludes providers that keep or train on
+prompts), choose a model with a ZDR endpoint: a model without one fails with a clear message that
+links the privacy settings and lists the TTS models with a ZDR endpoint (on 2026-10-08 27 of 32,
+e.g. `hexgrad/kokoro-82m`, `mistralai/voxtral-mini-tts-2603`, the ElevenLabs, Gemini TTS, Deepgram
+and MAI-Voice models; not MiniMax, Qwen or Grok).
 
 ## Multiple voices (`voices:`)
 
@@ -714,7 +794,9 @@ scenes:
 
 | key (`voices.<name>`) | default | |
 |---|---|---|
-| `voice_id`, `model_id`, `output_format`, `provider` | the base voice's | as in [`voice:`](#voice-voice) |
+| `voice_id`, `model_id`, `output_format` | the base voice's | as in [`voice:`](#voice-voice) (ElevenLabs videos) |
+| `model`, `voice`, `instructions`, `speed` | the base voice's | as in [narration providers](#narration-providers) (OpenRouter videos) |
+| `provider` | the base voice's | only the base voice's: one provider per video (another one is an error; a variant may switch it) |
 | `settings` | the base voice's | `stability`, `similarity_boost`, `style`, `use_speaker_boost`; each one not given is the base voice's |
 | `context`, `timestamps` | the base voice's | as in [`voice:`](#voice-voice) |
 | `label` | the name (`dr_ana` → `Dr ana`) | the speaker's name in subtitles and captions; not inherited from `voice.label` |
@@ -759,7 +841,8 @@ narration:
 
 ## Narration audio (ElevenLabs)
 
-Each beat is spoken by ElevenLabs into `audio/<beat_id>.mp3`, with `audio/<beat_id>.hash`
+Each beat is spoken by ElevenLabs (or [OpenRouter](#narration-providers): same files, its own
+key and hash) into `audio/<beat_id>.mp3`, with `audio/<beat_id>.hash`
 recording what it was generated from (and, with `voice.timestamps`, `audio/<beat_id>.align.json`:
 its character timings, with the text and a hash of the MP3 they belong to, so a stale file is
 ignored).
@@ -4706,9 +4789,16 @@ message says how many beats were done (their MP3s are kept: run again to continu
 |---|---|---|
 | `project`, `variant`, `audio_dir` | str \| null | the project, the variant and the audio folder written |
 | `dry_run`, `force` | bool | the options |
-| `characters` | int | characters sent (or that a run would send) for synthesis: what ElevenLabs bills |
-| `voices` | object | `{voice name: {voice_id, beats, characters}}` of the beats to synthesise (`default` = the base voice) |
-| `beats` | list | the beats to voice, in video order: `{scene, beat, voice, action, characters, says, source}`; `action` `generate` (an API call) or `copy` (the base `audio/` MP3 of a variant beat that did not change; 0 characters, `source` its path), `says` the text sent when [pronunciation](#pronunciation-pronunciation) changed it (else `null`) |
+| `provider` | str | the video's TTS provider: `elevenlabs` or `openrouter` (see [narration providers](#narration-providers)) |
+| `characters` | int | characters sent (or that a run would send) for synthesis: what ElevenLabs and most OpenRouter models bill |
+| `estimated_cost` | float | US dollars of the beats to synthesise whose price is known (OpenRouter models priced per character; ElevenLabs bills a plan's quota: never estimated) |
+| `unknown_cost` | int | beats to synthesise with no known price (ElevenLabs, OpenRouter models that bill the generated audio, OpenRouter not reachable) |
+| `price_note` | str \| null | what the estimate is based on (`OpenRouter prices of <date>`, that they could not be read, the ElevenLabs note) |
+| `prices` | object | `{model: {per_character, basis}}` of the OpenRouter models used (`per_character` `null` when unknown; `basis` says why) |
+| `notes`, `problems` | list | OpenRouter: what its live model list says about the voices (a voice it does not list, `instructions` / `speed` a model may ignore) and what a run refuses before paying (a model it does not have) |
+| `charged` | float \| null | US dollars OpenRouter reported for this run's requests; `null` in a dry run, with ElevenLabs, or when not reported |
+| `voices` | object | `{voice name: {voice_id, provider, model, provider_voice, instructions, speed, beats, characters}}` of the beats to synthesise (`default` = the base voice) |
+| `beats` | list | the beats to voice, in video order: `{scene, beat, voice, provider, model, provider_voice, instructions, speed, action, characters, estimated_cost, says, source}`; `model` / `provider_voice` are ElevenLabs' `model_id` / `voice_id` or OpenRouter's `model` / `voice`; `action` `generate` (an API call) or `copy` (the base `audio/` MP3 of a variant beat that did not change; 0 characters, `source` its path), `estimated_cost` `null` when unknown, `says` the text sent when [pronunciation](#pronunciation-pronunciation) changed it (else `null`) |
 | `generated` | list | beat ids voiced by this run (`[]` for a dry run) |
 | `up_to_date` | list | beat ids skipped because their MP3 is current |
 | `orphaned` | list | MP3s in the audio folder no beat uses (never deleted) |

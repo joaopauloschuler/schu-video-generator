@@ -7,14 +7,16 @@ by its own voice (``voices:``, DESIGN.md §46).
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from vidgen import hooks
-from vidgen.config import BeatConfig
+from vidgen.config import BeatConfig, VoiceConfig
 from vidgen.errors import VidgenError
+from vidgen.imagegen import PriceQuote
 from vidgen.project import Project
 from vidgen.speech import read_alignment, write_alignment
 from vidgen.tts import TTSProvider, beat_providers
@@ -39,6 +41,18 @@ class TTSPlan:
     up_to_date: list[str] = field(default_factory=list)
     spoken: dict[str, str] = field(default_factory=dict)
     voices: dict[str, str | None] = field(default_factory=dict)
+    #: Beat id -> its effective voice (provider, model, voice...).
+    beat_voices: dict[str, VoiceConfig] = field(default_factory=dict)
+    #: OpenRouter model -> its price per character (:func:`price_tts`; DESIGN.md §66).
+    rates: dict[str, PriceQuote] = field(default_factory=dict)
+    #: What OpenRouter's live list says about the voices (``notes``) and what a real run refuses
+    #: before paying (``problems``: a model it does not have).
+    notes: list[str] = field(default_factory=list)
+    problems: list[str] = field(default_factory=list)
+    #: What the estimate is based on (shown with the total).
+    price_notes: list[str] = field(default_factory=list)
+    #: US dollars the provider reported charging in a real run (``None``: it did not say).
+    charged: float | None = None
 
     def say(self, beat: BeatConfig) -> str:
         """What the TTS gets for ``beat``."""
@@ -47,6 +61,34 @@ class TTSPlan:
     def voice_of(self, beat: BeatConfig) -> str:
         """The name of ``beat``'s voice (``default`` for the base voice)."""
         return self.voices.get(beat.id) or DEFAULT_VOICE
+
+    def engine(self, beat: BeatConfig) -> VoiceConfig:
+        """``beat``'s effective voice (the default voice config when not planned)."""
+        return self.beat_voices.get(beat.id) or VoiceConfig()
+
+    def synthesised(self) -> list[BeatConfig]:
+        """The beats a real run sends to the provider (copies excluded)."""
+        return [beat for beat in self.todo if beat.id not in self.reuse]
+
+    def beat_cost(self, beat: BeatConfig) -> float | None:
+        """Estimated US dollars of ``beat``: 0 for a copy, OpenRouter's price per character x
+        its characters, ``None`` when unknown (ElevenLabs bills a plan's quota)."""
+        if beat.id in self.reuse:
+            return 0.0
+        voice = self.engine(beat)
+        quote = self.rates.get(voice.model or "") if voice.provider == "openrouter" else None
+        return None if quote is None or quote.cost is None else quote.cost * len(self.say(beat))
+
+    @property
+    def cost(self) -> tuple[float, int]:
+        """Estimated US dollars of the beats to synthesise and how many have no known price."""
+        prices = [self.beat_cost(beat) for beat in self.synthesised()]
+        return sum(p for p in prices if p is not None), sum(1 for p in prices if p is None)
+
+    @property
+    def price_note(self) -> str | None:
+        """What the estimate is based on (``None`` before :func:`price_tts`)."""
+        return "; ".join(self.price_notes) if self.price_notes else None
 
     @property
     def characters(self) -> int:
@@ -89,6 +131,7 @@ def plan_tts(
     _check_voices(project, voices)
     wanted = set(beat_ids) if beat_ids else set(by_id)
     plan = TTSPlan(project.audio_dir, spoken=project.spoken_texts(), voices=project.voice_names())
+    plan.beat_voices = {beat.id: project.beat_voice(beat.id) for beat in known}
     providers = beat_providers(project) if provider is None else dict.fromkeys(by_id, provider)
     base_dir = project.root / "audio"
     for beat in known:
@@ -147,11 +190,96 @@ def context_texts(project: Project, spoken: dict[str, str]) -> dict[str, tuple[s
     return out
 
 
+#: What an ElevenLabs estimate would need (its price depends on the account's plan).
+ELEVENLABS_PRICE_NOTE = "ElevenLabs bills the characters against your plan's quota (no price estimate)"
+
+
+def price_tts(plan: TTSPlan, *, lookup: Callable[[list[str]], dict[str, Any]] | None = None) -> TTSPlan:
+    """Fill ``plan``'s OpenRouter prices, notes, problems and price notes from OpenRouter's live
+    TTS model list (a free lookup with a short timeout; offline: "price unknown", nothing
+    refused). ``lookup`` replaces :func:`vidgen.tts.openrouter.lookup_speech_models` (tests)."""
+    from vidgen.tts import openrouter
+
+    beats = plan.synthesised()
+    routed = [plan.engine(b) for b in beats if plan.engine(b).provider == "openrouter"]
+    notes: list[str] = []
+    if any(plan.engine(b).provider == "elevenlabs" for b in beats):
+        notes.append(ELEVENLABS_PRICE_NOTE)
+    if routed:
+        found = (lookup or openrouter.lookup_speech_models)(list(dict.fromkeys(str(v.model) for v in routed)))
+        for model, result in found.items():
+            plan.rates[model] = openrouter.character_rate(result)
+            if isinstance(result, openrouter.LookupFailure) and result.missing:
+                plan.problems.append(result.reason)
+        for voice in {(v.model, v.voice, v.instructions, v.speed): v for v in routed}.values():
+            for note in openrouter.voice_notes(voice, found[str(voice.model)]):
+                if note not in plan.notes:
+                    plan.notes.append(note)
+        reached = any(not isinstance(v, openrouter.LookupFailure) or v.missing for v in found.values())
+        today = datetime.now(timezone.utc).date().isoformat()
+        notes.append(f"OpenRouter prices of {today}" if reached else "OpenRouter prices unknown (its model list could not be reached)")
+    plan.price_notes = notes
+    return plan
+
+
+def describe_voice(voice: VoiceConfig) -> str:
+    """``openrouter mistralai/voxtral-mini-tts-2603, voice en_paul_neutral`` / an ElevenLabs
+    voice id (as the dry run names it)."""
+    if voice.provider != "openrouter":
+        return voice.voice_id
+    parts = [f"openrouter {voice.model}", f"voice {voice.voice or '(model default)'}"]
+    if voice.instructions:
+        parts.append(f"instructions {voice.instructions!r}")
+    if voice.speed is not None:
+        parts.append(f"speed {voice.speed:g}")
+    return ", ".join(parts)
+
+
+def _money(value: float) -> str:
+    from vidgen.tts.openrouter import money
+
+    return money(value)
+
+
+def estimate_text(plan: TTSPlan) -> str:
+    """``estimated $0.0007 (OpenRouter prices of 2026-10-08)`` (+ beats of unknown price)."""
+    total, unknown = plan.cost
+    known = len(plan.synthesised()) - unknown
+    text = f"estimated {_money(total)}" if known else "price unknown"
+    if unknown and known:
+        text += f" + {unknown} beat(s) of unknown price"
+    return text + (f" ({plan.price_note})" if plan.price_note else "")
+
+
+def _reported_cost(plan: TTSPlan, providers: Iterable[TTSProvider]) -> str:
+    """Ask each provider that can tell (OpenRouter) what its requests cost; sets
+    ``plan.charged`` and returns the ``, $X charged by openrouter`` part of the summary (``, cost
+    not reported by openrouter`` when it could not be read; empty for other providers)."""
+    asked = [p for p in {id(p): p for p in providers}.values() if callable(getattr(p, "reported_cost", None))]
+    asked = [p for p in asked if getattr(p, "generations", None)]
+    if not asked:
+        return ""
+    total, found = 0.0, 0
+    for p in asked:
+        cost, count = p.reported_cost()  # type: ignore[attr-defined]
+        total, found = total + cost, found + count
+    requests = sum(len(p.generations) for p in asked)  # type: ignore[attr-defined]
+    if not found:
+        return ", cost not reported by openrouter"
+    plan.charged = total
+    part = f" for {found} of {requests} requests" if found < requests else ""
+    return f", {_money(total)} charged by openrouter{part}"
+
+
 def _dry_run(project: Project, plan: TTSPlan, out: Callable[[str], None]) -> None:
     named = bool(project.config.voices)
+    routed = any(plan.engine(b).provider == "openrouter" for b in plan.todo)
     for beat in plan.todo:
         source = plan.reuse.get(beat.id)
         note = f"copy from {_relative(source, project.root)}" if source else f"{len(plan.say(beat))} chars"
+        cost = plan.beat_cost(beat)
+        if routed and not source:
+            note += f", ~{_money(cost)}" if cost is not None else ", price unknown"
         if named:
             note += f", voice {plan.voice_of(beat)}"
         out(f"would generate {beat.id}.mp3 ({note})")
@@ -161,9 +289,17 @@ def _dry_run(project: Project, plan: TTSPlan, out: Callable[[str], None]) -> Non
         f"dry run: {len(plan.todo)} beat(s) to generate, {plan.characters} characters; "
         f"{len(plan.up_to_date)} up to date"
     )
-    if named:
+    if named or routed:
         for name, (beats, chars) in plan.characters_by_voice().items():
-            out(f"  voice {name} ({project.voice(name).voice_id}): {beats} beat(s), {chars} characters")
+            out(f"  voice {name} ({describe_voice(project.voice(name))}): {beats} beat(s), {chars} characters")
+    if routed:
+        for model, quote in plan.rates.items():
+            out(f"  price of {model}: {quote.basis}")
+        for note in plan.notes:
+            out(f"  note: {note}")
+        for problem in plan.problems:
+            out(f"  problem: {problem} (a real run refuses)")
+        out(f"  cost: {estimate_text(plan)}")
 
 
 def run_tts(
@@ -175,12 +311,14 @@ def run_tts(
     provider: TTSProvider | None = None,
     voices: Sequence[str] = (),
     out: Callable[[str], None] = print,
+    lookup: Callable[[list[str]], dict[str, Any]] | None = None,
 ) -> TTSPlan:
     """Generate missing/stale narration audio for ``project``; returns the executed plan.
 
-    ``dry_run`` only prints what would be generated (no API key needed). The API key is needed
-    only when at least one beat must be synthesised. ``voices`` restricts it to the beats of
-    those voices; ``provider`` replaces every beat's own voice provider (tests).
+    ``dry_run`` only prints what would be generated (no API key needed; OpenRouter prices are
+    looked up online, see :func:`price_tts`). The API key is needed only when at least one beat
+    must be synthesised. ``voices`` restricts it to the beats of those voices; ``provider``
+    replaces every beat's own voice provider (tests); ``lookup`` the OpenRouter model lookup.
     """
     plan = plan_tts(project, provider, beat_ids, force, voices)
     _apply_pre_tts(project, plan, force, dry_run)
@@ -192,6 +330,7 @@ def run_tts(
         out(f"orphaned audio in {where}/ (no beat with that id; not deleted): {names}")
 
     if dry_run:
+        price_tts(plan, lookup=lookup)
         _dry_run(project, plan, out)
         return plan
 
@@ -199,6 +338,12 @@ def run_tts(
     if plan.characters:
         # fail before the first request if the key is missing
         providers[next(b.id for b in plan.todo if b.id not in plan.reuse)].check_credentials()
+    if provider is None and any(plan.engine(b).provider == "openrouter" for b in plan.synthesised()):
+        price_tts(plan, lookup=lookup)  # a model OpenRouter does not have: refused before paying
+        if plan.problems:
+            raise VidgenError("cannot generate with these settings:\n  " + "\n  ".join(plan.problems))
+        for note in plan.notes:
+            out(f"note: {note}")
 
     context = context_texts(project, {beat.id: plan.say(beat) for _, beat in project.beats()})
     generated: list[str] = []
@@ -235,9 +380,10 @@ def run_tts(
         out(f"[{n}/{total}] {action}")
 
     hooks.dispatch("post_tts", project, generated=list(generated), audio_dir=plan.audio_dir)
+    spent = _reported_cost(plan, providers.values())
     if generated:
         out(
-            f"done: {len(generated)} beat(s) generated ({plan.characters} characters), "
+            f"done: {len(generated)} beat(s) generated ({plan.characters} characters{spent}), "
             f"{len(plan.up_to_date)} up to date, audio in {where}/"
         )
     else:

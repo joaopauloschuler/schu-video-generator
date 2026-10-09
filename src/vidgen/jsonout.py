@@ -205,30 +205,46 @@ def tts_document(
 ) -> dict[str, Any]:
     """The ``vidgen tts --json`` document (a dry run or a run): every beat to voice (``action``
     ``generate`` or ``copy`` from the base audio folder, its voice, characters billed and the
-    spoken text when pronunciation changed it), the characters per voice, the beats generated
-    (none in a dry run) and up to date, and the orphaned MP3s."""
+    spoken text when pronunciation changed it, provider, model and provider voice, estimated
+    cost), the characters per voice, the estimated total with its basis (OpenRouter, DESIGN.md
+    §66), notes and problems, the cost the provider reported in a run, the beats generated (none
+    in a dry run) and up to date, and the orphaned MP3s."""
     from vidgen.tts.cache import orphaned_audio
+
+    def engine(voice: Any) -> dict[str, Any]:
+        routed = voice.provider == "openrouter"
+        return {
+            "provider": voice.provider,
+            "model": voice.model if routed else voice.model_id,
+            "provider_voice": voice.voice if routed else voice.voice_id,
+            "instructions": voice.instructions if routed else None,
+            "speed": voice.speed if routed else None,
+        }
 
     scenes = {beat.id: scene.id for scene, beat in project.beats()}
     beats = []
     for beat in plan.todo:
         source = plan.reuse.get(beat.id)
         says = plan.say(beat)
+        cost = plan.beat_cost(beat)
         beats.append(
             {
                 "scene": scenes.get(beat.id),
                 "beat": beat.id,
                 "voice": plan.voice_of(beat),
+                **engine(plan.engine(beat)),
                 "action": "copy" if source is not None else "generate",
                 "characters": 0 if source is not None else len(says),
+                "estimated_cost": None if cost is None else round(cost, 6),
                 "says": says if says != beat.text else None,
                 "source": None if source is None else _path(source),
             }
         )
     voices = {
-        name: {"voice_id": project.voice(name).voice_id, "beats": n, "characters": chars}
+        name: {"voice_id": project.voice(name).voice_id, **engine(project.voice(name)), "beats": n, "characters": chars}
         for name, (n, chars) in plan.characters_by_voice().items()
     }
+    total, unknown = plan.cost
     return envelope(
         "tts",
         True,
@@ -238,7 +254,15 @@ def tts_document(
         audio_dir=_path(plan.audio_dir),
         dry_run=dry_run,
         force=force,
+        provider=project.voice().provider,
         characters=plan.characters,
+        estimated_cost=round(total, 6),
+        unknown_cost=unknown,
+        price_note=plan.price_note,
+        prices={model: {"per_character": quote.cost, "basis": quote.basis} for model, quote in plan.rates.items()},
+        notes=list(plan.notes),
+        problems=list(plan.problems),
+        charged=None if plan.charged is None else round(plan.charged, 6),
         voices=voices,
         beats=beats,
         generated=[] if dry_run else [b["beat"] for b in beats],

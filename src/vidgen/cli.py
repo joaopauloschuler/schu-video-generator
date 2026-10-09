@@ -294,18 +294,21 @@ def validate_warnings(project: Project) -> list[str]:
     scene before them longer (DESIGN.md §49), carries through a transition that moves them
     (§50), a YouTube chapter list YouTube would ignore (§52), texts a translation file leaves in
     the source language and base pronunciations kept in another language (§54), generated
-    pictures not made yet and prompts asking for words in a picture (§58)."""
+    pictures not made yet and prompts asking for words in a picture (§58), OpenRouter TTS models
+    and voices not in the bundled list and ``timestamps`` it cannot honour (§66)."""
     from vidgen.carry import carry_warnings
     from vidgen.chapter_export import chapter_warnings
     from vidgen.imagegen import imagegen_warnings
     from vidgen.transitions import transition_warnings
     from vidgen.translation import language_warnings, translation_warnings
+    from vidgen.tts import tts_warnings
     from vidgen.voices import voice_warnings
 
     return (
         theme_warnings(project)
         + pronunciation_warnings(project)
         + voice_warnings(project.config)
+        + tts_warnings(project)
         + transition_warnings(project)
         + carry_warnings(project.config)
         + chapter_warnings(project)
@@ -1164,10 +1167,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--render-dir", metavar="DIR", help="also write one loop of every bed as DIR/<name>.wav")
     p.set_defaults(func=cmd_list_music)
 
-    p = sub.add_parser("tts", help="generate narration audio")
+    p = sub.add_parser("tts", help="generate narration audio (ElevenLabs, or OpenRouter with voice.provider: openrouter)")
     project_arg(p)
     p.add_argument("--force", action="store_true", help="regenerate even if up to date")
-    p.add_argument("--dry-run", action="store_true", help="only list what would be generated")
+    p.add_argument("--dry-run", action="store_true", help="only list what would be generated (OpenRouter: with its estimated cost)")
     p.add_argument("--beat", action="append", default=[], metavar="ID", help="only this beat (repeatable)")
     p.add_argument("--voice", action="append", default=[], metavar="NAME", help="only the beats of this voice (a voices: name or default; repeatable)")
     p.add_argument("--variant", metavar="NAME", help="apply a named variant (may have its own voice)")

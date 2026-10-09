@@ -444,9 +444,10 @@ def build_server(root: Path) -> Any:
         }
         return answer(await call(ctx, args_of(["render"], [str(where(project))], options), heavy=True))
 
-    @tool("Narration audio (ElevenLabs) for the beats whose MP3 is missing or stale. dry_run=true (default, free, "
-          "no key needed) lists the beats and the characters that would be billed. A real run COSTS MONEY: only "
-          "with dry_run=false and confirm_cost=true, after the user agreed.", paid)
+    @tool("Narration audio (ElevenLabs, or OpenRouter with voice.provider: openrouter) for the beats whose MP3 is "
+          "missing or stale. dry_run=true (default, free, no key needed) lists the beats, provider, model, voice and "
+          "the characters that would be billed (OpenRouter: the estimated cost with its basis). A real run COSTS "
+          "MONEY: only with dry_run=false and confirm_cost=true, after the user agreed.", paid)
     async def tts(
         ctx: Context,
         project: Project = ".",

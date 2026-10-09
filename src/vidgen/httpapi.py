@@ -48,20 +48,22 @@ def post_with_retries(
     max_wait: float,
     sleep: Callable[[float], None],
     transient: Callable[[int, str], bool] | None = None,
+    response_headers: dict[str, str] | None = None,
 ) -> bytes:
     """POST ``data`` to ``url`` with ``headers``; the response body.
 
     Transient failures (by default HTTP 429 / 5xx; ``transient(status, body)`` decides instead
     when given), timeouts and dropped connections are retried ``retries`` times, waiting
     ``backoff * 2**attempt`` seconds or the server's ``Retry-After``, at most ``max_wait``. Every
-    failure becomes a :class:`VidgenError` naming ``service`` without ``secret`` in it.
+    failure becomes a :class:`VidgenError` naming ``service`` without ``secret`` in it. A
+    ``response_headers`` dict receives the successful response's headers (names lower case).
     """
     is_transient = transient if transient is not None else (lambda status, body: status in TRANSIENT_STATUS)
     attempt = 0
     while True:
         wait: float | None = None
         try:
-            return _request(url, data, headers, timeout, service)
+            return _request(url, data, headers, timeout, service, response_headers)
         except urllib.error.HTTPError as exc:
             body = scrub(exc.read().decode("utf-8", errors="replace"), secret)
             if not is_transient(exc.code, body) or attempt >= retries:
@@ -99,10 +101,15 @@ def get(url: str, *, headers: Mapping[str, str], service: str, timeout: float) -
         raise VidgenError(f"cannot reach {service}: {what}") from None
 
 
-def _request(url: str, data: bytes, headers: Mapping[str, str], timeout: float, service: str) -> bytes:
+def _request(
+    url: str, data: bytes, headers: Mapping[str, str], timeout: float, service: str, got: dict[str, str] | None = None
+) -> bytes:
     request = urllib.request.Request(url, data=data, method="POST", headers=dict(headers))
     with urllib.request.urlopen(request, timeout=timeout) as response:
         body = response.read()
+        received = getattr(response, "headers", None)
+        if got is not None and received is not None:
+            got.update({str(k).lower(): str(v) for k, v in received.items()})
     if not body:
         raise VidgenError(f"{service} returned an empty response")
     return body

@@ -136,11 +136,18 @@ class VoiceSettings(_Strict):
     """ElevenLabs speaker boost."""
 
 
-class VoiceConfig(_Strict):
-    """Text-to-speech voice. Only the ElevenLabs provider exists for now."""
+#: Text-to-speech providers ``voice.provider`` accepts (one per video, DESIGN.md §66).
+TTS_PROVIDERS: tuple[str, ...] = ("elevenlabs", "openrouter")
+#: Keys of ``voice:`` used only by one provider (the other provider ignores them).
+ELEVENLABS_VOICE_KEYS: tuple[str, ...] = ("voice_id", "model_id", "output_format", "settings", "context", "language_code")
+OPENROUTER_VOICE_KEYS: tuple[str, ...] = ("model", "voice", "instructions", "speed")
 
-    provider: Literal["elevenlabs"] = "elevenlabs"
-    """TTS provider; only elevenlabs."""
+
+class VoiceConfig(_Strict):
+    """Text-to-speech voice: ElevenLabs (default) or OpenRouter (DESIGN.md §66)."""
+
+    provider: Literal["elevenlabs", "openrouter"] = "elevenlabs"
+    """TTS provider of the whole video: elevenlabs (ELEVENLABS_API_KEY) or openrouter (many TTS models through OpenRouter; OPENROUTER_API_KEY; needs model)."""
     voice_id: str = Field(default="nPczCjzI2devNBz1zQrb", min_length=1)
     """ElevenLabs voice id."""
     model_id: str = Field(default="eleven_multilingual_v2", min_length=1)
@@ -155,10 +162,32 @@ class VoiceConfig(_Strict):
     """Also fetch when each character is spoken (ElevenLabs with-timestamps), stored as audio/<beat>.align.json for exact karaoke captions."""
     language_code: LanguageCode | None = None
     """ElevenLabs language_code (ISO 639-1, e.g. pt) sent with every request, or false: never; default: the video's language for models that accept one (eleven_turbo_v2_5, eleven_flash_v2_5)."""
+    model: str | None = Field(default=None, min_length=1)
+    """openrouter only (required there): the OpenRouter text-to-speech model id, e.g. mistralai/voxtral-mini-tts-2603 (`vidgen tts --dry-run` shows its price)."""
+    voice: str | None = Field(default=None, min_length=1)
+    """openrouter only: the model's voice name, e.g. en_paul_neutral (each model lists its own; default: the model's own default voice, if it has one)."""
+    instructions: str | None = Field(default=None, min_length=1)
+    """openrouter only: how to speak, e.g. "warm, unhurried explainer; slight pause before numbers" (models that take instructions: Gemini TTS, OpenAI; others ignore it)."""
+    speed: float | None = Field(default=None, ge=0.25, le=4.0)
+    """openrouter only: speaking speed multiplier (0.25-4) for models that have one; default: not sent (the model's own pace)."""
     label: str | None = Field(default=None, min_length=1)
     """Speaker name shown in subtitles / captions when speakers are shown (default: none for this voice)."""
     color: ColorRef | None = None
     """Speaker colour (theme token or hex) for captions that colour speakers; default the theme's text colour."""
+
+    @model_validator(mode="after")
+    def _provider_options(self) -> VoiceConfig:
+        # Keys of the other provider are ignored (a variant may switch the provider while the
+        # base config's keys are merged in); only openrouter's required model is checked here.
+        if self.provider != "openrouter":
+            return self
+        if self.model is None:
+            raise ValueError(
+                "provider openrouter needs a model, e.g. model: mistralai/voxtral-mini-tts-2603 (`vidgen tts --dry-run` shows its price)"
+            )
+        if "/" not in self.model.strip("/"):
+            raise ValueError(f"OpenRouter model ids look like author/name (e.g. mistralai/voxtral-mini-tts-2603), not {self.model!r}")
+        return self
 
 
 class VoiceSettingsOverride(_Strict):
@@ -178,8 +207,8 @@ class VoiceEntry(_Strict):
     """A named voice of ``voices:`` (DESIGN.md §46): the base ``voice:`` with what is given here
     changed. ``label`` and ``color`` are not inherited (they name this speaker)."""
 
-    provider: Literal["elevenlabs"] | None = None
-    """TTS provider; default the base voice's."""
+    provider: Literal["elevenlabs", "openrouter"] | None = None
+    """TTS provider; only the base voice's (one provider per video: a variant may switch it for the whole video)."""
     voice_id: str | None = Field(default=None, min_length=1)
     """ElevenLabs voice id; default the base voice's."""
     model_id: str | None = Field(default=None, min_length=1)
@@ -194,6 +223,14 @@ class VoiceEntry(_Strict):
     """Fetch character timings for this voice's beats; default the base voice's."""
     language_code: LanguageCode | None = None
     """ElevenLabs language_code for this voice's beats, or false; default the base voice's."""
+    model: str | None = Field(default=None, min_length=1)
+    """openrouter: the TTS model of this voice's beats; default the base voice's."""
+    voice: str | None = Field(default=None, min_length=1)
+    """openrouter: the model's voice name for this speaker; default the base voice's."""
+    instructions: str | None = Field(default=None, min_length=1)
+    """openrouter: how this speaker talks; default the base voice's."""
+    speed: float | None = Field(default=None, ge=0.25, le=4.0)
+    """openrouter: speaking speed multiplier (0.25-4); default the base voice's."""
     label: str | None = Field(default=None, min_length=1)
     """Speaker name in subtitles / captions; default the voice's name (underscores as spaces, first letter capital)."""
     color: ColorRef | None = None
@@ -1344,9 +1381,9 @@ def parse_config(data: Any, source: str = "video.yaml") -> VideoConfig:
         config = VideoConfig.model_validate(data)
     except ValidationError as exc:
         raise VidgenError(format_validation_error(exc, source, VideoConfig), problems=validation_problems(exc, model=VideoConfig, noun="key")) from None
-    from vidgen.voices import voice_reference_problems
+    from vidgen.voices import voice_provider_problems, voice_reference_problems
 
-    problems = voice_reference_problems(config)
+    problems = voice_reference_problems(config) + voice_provider_problems(config)
     if problems:
         lines = [f"{source}: invalid config", *(f"  {problem}" for problem in problems)]
         raise VidgenError("\n".join(lines), problems=problems)

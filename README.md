@@ -49,7 +49,7 @@ Point your agent at [AGENTS.md](AGENTS.md) (or connect it via MCP, see
 The project and pip package are called schu-video-generator;
 the command and the Python package are `vidgen` (`vidgen render`, `from vidgen.api import *`).
 
-Under the hood, vidgen voices the beats with ElevenLabs, animates every scene with
+Under the hood, vidgen voices the beats with ElevenLabs (or a TTS model on OpenRouter), animates every scene with
 [Manim](https://www.manim.community/), and joins everything with ffmpeg into one MP4 plus SRT
 subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slide deck).
 
@@ -283,6 +283,8 @@ package, so do not install both in the same environment.
    installed font works too, e.g. `theme: {font: Segoe UI}`.
 5. **ElevenLabs API key** (only for `vidgen tts`): `setx ELEVENLABS_API_KEY your_key`, then open
    a new terminal. vidgen reads the key only from this variable and never writes it anywhere.
+   With `voice: {provider: openrouter, model: ..., voice: ...}` narration goes through OpenRouter
+   instead and needs the **OpenRouter API key** of step 9 (`OPENROUTER_API_KEY`), not this one.
 6. Optional, only for the `equation` and `equation_derivation` scene types: **LaTeX** — install
    [MiKTeX](https://miktex.org/download) (it includes `dvisvgm`; allow it to install missing
    packages on the fly) and open a new terminal.
@@ -294,7 +296,8 @@ package, so do not install both in the same environment.
 9. Optional, only for `vidgen imagegen` (generated pictures): an **OpenAI API key**,
    `setx OPENAI_API_KEY your_key`, or, with `imagegen: {provider: openrouter, model: ...}`, an
    **OpenRouter API key** (from <https://openrouter.ai/keys>), `setx OPENROUTER_API_KEY your_key`;
-   then open a new terminal. Each is read only from its variable, never written anywhere.
+   then open a new terminal. Each is read only from its variable, never written anywhere. The
+   same OpenRouter key voices the narration with `voice: {provider: openrouter, ...}`.
 10. Optional, only for `vidgen mcp` (the MCP server for AI agents): `pip install ".[mcp]"`.
 
 If PowerShell refuses to run `Activate.ps1`, run
@@ -325,7 +328,7 @@ sudo apt install texlive texlive-latex-extra dvisvgm
 # 5. Optional: API keys (add to ~/.bashrc to keep them)
 export ELEVENLABS_API_KEY=your_key            # narration (vidgen tts)
 export OPENAI_API_KEY=your_key                # generated pictures (vidgen imagegen, default provider)
-export OPENROUTER_API_KEY=your_key            # generated pictures with imagegen.provider: openrouter
+export OPENROUTER_API_KEY=your_key            # imagegen.provider: openrouter and/or voice.provider: openrouter
 ```
 
 Fonts are bundled, so there is nothing to install for them. Other distributions need the same
@@ -349,7 +352,7 @@ vidgen validate                 # check config, scene types, params, assets and 
 vidgen render --preview         # 854x480 check, timed from word counts -> my_video_preview.mp4
 vidgen storyboard               # contact sheets of every beat -> build/preview/storyboard/*.png
 vidgen lint                     # layout + timing checks: text cut off, too small, low contrast, dead air...
-vidgen tts --dry-run            # what would be sent to ElevenLabs (with the pronunciation applied), how many characters
+vidgen tts --dry-run            # what would be sent to the TTS (pronunciation applied), how many characters (OpenRouter: est. cost)
 vidgen tts                      # generate narration MP3s (only new/changed beats)
 vidgen readback                 # speech to text of the MP3s vs the texts: misheard terms, missing words (schu-video-generator[stt])
 vidgen imagegen --dry-run       # pictures of generate: params still to make, their prompts and estimated cost
@@ -379,7 +382,7 @@ narration.
 | `vidgen list-sfx [PROJECT] [--render-dir DIR] [--json]` | sound effects (built-in and the project's `assets/sfx`) with a description of each sound, length, loudness; `--render-dir` writes them as WAV files |
 | `vidgen list-music [PROJECT] [--render-dir DIR] [--json]` | background music beds (built-in, described in words: instruments, key, tempo, chords, mood) and the project's `assets/music` files; `--render-dir` writes one loop of each bed as WAV |
 | `vidgen schema [PROJECT] [--scene TYPE \| --all] [--json]` | JSON Schema of `video.yaml` (params checked per scene type, the project's extension types included), for editors and AI agents |
-| `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--voice NAME ...] [--variant NAME] [--json]` | generate missing/stale narration into `audio/`; `--dry-run` needs no key (shows each beat's voice and characters per voice) |
+| `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--voice NAME ...] [--variant NAME] [--json]` | generate missing/stale narration into `audio/` (ElevenLabs, `ELEVENLABS_API_KEY`; or OpenRouter with `voice.provider: openrouter`, `OPENROUTER_API_KEY`); `--dry-run` needs no key (shows each beat's voice and characters per voice; OpenRouter: provider, model, voice and an estimated cost with its basis) |
 | `vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME] [--json]` | generate the missing pictures of `generate:` params into `assets/generated/` (OpenAI Images, `OPENAI_API_KEY`; or OpenRouter, `OPENROUTER_API_KEY`); `--dry-run` needs no key and shows prompts and an estimated cost with its basis |
 | `vidgen readback [PROJECT] [--variant NAME] [--beat ID ...] [--max-wer RATE] [--force] [--json]` | transcribe the narration MP3s (speech to text, `stt:`; cached in `build/readback/`) and compare them with the beat texts: word error rate per beat, words expected vs heard, a suggested fix for each (e.g. a pronunciation entry), terms misheard in several beats |
 | `vidgen translate-template [PROJECT] --variant NAME [--language TAG] [--output FILE] [--json]` | write or update the variant's translation file: every text to translate with its source, keeping existing translations (stale / moved / obsolete marked) |
@@ -447,7 +450,9 @@ my_video/
   grid, charts, image, quote, equation, code, cards) and beat actions, no Python:
   `vidgen render examples/minimal --preview [--variant vertical]`; burned-in captions with
   `--variant subtitled`, 9:16 karaoke captions with `--variant social`, a partly translated
-  Brazilian Portuguese version with `--variant pt` (`examples/minimal/translations/pt.yaml`).
+  Brazilian Portuguese version with `--variant pt` (`examples/minimal/translations/pt.yaml`),
+  narration through OpenRouter with `--variant openrouter` (`vidgen tts examples/minimal
+  --dry-run --variant openrouter` shows the model, voices and estimated cost).
 - [examples/gallery](examples/gallery) — every other built-in scene type once (stat, chapter,
   comparison, table, timeline, diagram, process, network, scatter, histogram, pie, heatmap, map,
   screenshot, video clip, equation derivation, code walkthrough), overlays (a watermark, a
@@ -482,7 +487,8 @@ my_video/
   example, plan limits on commercial use; cloning a voice requires the speaker's consent).
   Pictures made through OpenRouter are subject to OpenRouter's terms and to those of the model's
   provider (Black Forest Labs, ByteDance, Google, OpenAI, Recraft, ...); check the model's page
-  for commercial use.
+  for commercial use. The same holds for narration voiced through OpenRouter (Mistral, Kokoro,
+  Google, ElevenLabs, Microsoft, ...).
 - The built-in fonts (SIL Open Font License), Lucide icons (ISC), Natural Earth map data (public
   domain), sound effects and music beds may be used in your videos, including commercially. No
   attribution is required in a video (the OFL and ISC notices apply to redistributing the files

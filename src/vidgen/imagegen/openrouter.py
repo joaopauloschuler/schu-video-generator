@@ -52,22 +52,23 @@ ZDR_URL = f"{API_BASE}/endpoints/zdr"
 _POLICY_WORDS = ("data policy", "zdr", "guardrail", "settings/privacy")
 
 
-def missing_key_message() -> str:
-    """How to set the API key, for the error shown when it is missing."""
+def missing_key_message(command: str = "imagegen") -> str:
+    """How to set the API key, for the error shown when it is missing (``command``: the vidgen
+    command whose dry run works without it)."""
     return (
         f"the environment variable {API_KEY_ENV} is not set. Set it to your OpenRouter API key "
         "(https://openrouter.ai/keys):\n"
         f"  Windows:      setx {API_KEY_ENV} your_key   (then open a new terminal)\n"
         f"  Linux/macOS:  export {API_KEY_ENV}=your_key\n"
-        "vidgen never stores the key; `vidgen imagegen --dry-run` works without it."
+        f"vidgen never stores the key; `vidgen {command} --dry-run` works without it."
     )
 
 
-def read_api_key() -> str:
+def read_api_key(command: str = "imagegen") -> str:
     """The API key from the environment (stripped). Raises :class:`VidgenError` if unset."""
     key = os.environ.get(API_KEY_ENV, "").strip()
     if not key:
-        raise VidgenError(missing_key_message())
+        raise VidgenError(missing_key_message(command))
     return key
 
 
@@ -388,15 +389,21 @@ def zdr_image_models(*, timeout: float = LOOKUP_TIMEOUT, svg: bool = False) -> l
     return sorted(str(m["id"]) for m in models)
 
 
+def policy_intro(model: str) -> str:
+    """The first line of the data-policy error: why ``model`` cannot be used and where the
+    account's privacy settings are changed (shared with text to speech, DESIGN.md §66)."""
+    return (
+        f"OpenRouter has no provider for {model} that your account's privacy settings allow (e.g. Zero Data "
+        f"Retention required, or providers that may train on or keep prompts excluded). Change them at {PRIVACY_URL}, "
+        "or choose a model with a ZDR endpoint."
+    )
+
+
 def policy_message(model: str, svg: bool = False, zdr: Callable[..., list[str] | None] | None = None) -> str:
     """What to do when the account's data policy excludes every provider of ``model``: the
     settings page and, when OpenRouter can be reached, image models that have a ZDR endpoint."""
     found = (zdr or zdr_image_models)(svg=svg)
-    lines = [
-        f"OpenRouter has no provider for {model} that your account's privacy settings allow (e.g. Zero Data "
-        f"Retention required, or providers that may train on or keep prompts excluded). Change them at {PRIVACY_URL}, "
-        "or choose a model with a ZDR endpoint.",
-    ]
+    lines = [policy_intro(model)]
     if found is None:
         lines.append("(OpenRouter's list of ZDR endpoints could not be reached to suggest models.)")
     elif found:
