@@ -311,6 +311,21 @@ by the coordinator at the end of each step with the owner's key; agents never se
 
 ---
 
+## Phase G — Owner's reports from a real install
+
+### Step 64 — Bug fixes: ffmpeg 7.1 transitions, Manim 0.22 test fake
+- [ ] Push, wipe and crossfade fail on Debian's ffmpeg 7.1.5 ("frame rate 1/0 is invalid") but work on 8.1: reproduce with a 7.1 build, fix the filter graph in `src/vidgen/render/ffmpeg.py` (`crossfade_graph` and the push/wipe paths) so it works on ffmpeg 6.1, 7.1 and 8.x; a test that runs each transition type; README states the supported ffmpeg versions (and a minimum, if one remains)
+- [ ] With Manim 0.22, 6 quick tests fail: Manim now passes `repeat=` to a function whose fake in `tests/test_overlays.py` (~line 77) only accepts `num_frames`; make the fake accept both (and any future keyword) so tests pass on Manim 0.21 and 0.22; check real renders on 0.22
+
+### Step 65 — Local Kokoro TTS (optional extra)
+- [ ] `voice: {provider: kokoro, voice, speed, lang}` running Kokoro-82M (https://huggingface.co/hexgrad/Kokoro-82M) locally, free and offline after the first model download; installed with `pip install ".[kokoro]"`; clear error naming the extra when it is missing
+- [ ] Same rules as the other providers: one provider per video, MP3 into `audio/`, provider/voice/speed/lang in each beat's hash, pronunciation applied, captions with estimated timings (or Kokoro's own word timings if it provides them), dry run shows "free (local)"
+- [ ] Voices and languages listed and validated from Kokoro's own voice list; model download location and size documented; CPU works (GPU optional)
+- [ ] Tests mocked where the model is not installed; one real synthesis test, skipped unless the extra is installed
+- [ ] Docs: README install (Windows and Linux, incl. any system package such as espeak-ng), CONFIG.md "Narration providers", AGENTS.md (a free local voice for agents' own projects), THIRD_PARTY_NOTICES (Kokoro's licence)
+
+---
+
 ## Backlog (after Step 60)
 
 Not done in the roadmap; each is one line, with where it came from. Bugs first, then quality,
