@@ -13,7 +13,9 @@ storytelling, or simply to make something because you want to. We hope you enjoy
 One practical note: you usually work inside someone's session, and narration (ElevenLabs or OpenRouter) and
 generated images (OpenAI or OpenRouter) cost that person money. For your own projects, stay with the free parts
 — storyboards, previews timed from word counts, the built-in icons, themes, music and sound
-effects — or ask before spending on voices or images.
+effects — or ask before spending on voices or images. A real voice can be free too: where the
+optional Kokoro extra is installed (`schu-video-generator[kokoro]`), `voice: {provider: kokoro}`
+narrates on the computer itself at no cost (see `vidgen guide audio`).
 
 Topics: `start` (rules at a glance), `workflow` (the loop), `pacing` (storytelling and on-screen
 text), `social` (vertical videos), `scenes` (which scene type), `design` (themes, colour, icons),
@@ -143,9 +145,9 @@ vidgen lint --fail-on warning
 vidgen render
 ```
 
-**Costs.** `vidgen tts` (ElevenLabs or OpenRouter, per character), `vidgen imagegen` (OpenAI Images or
-OpenRouter, per picture) and `vidgen readback` with `stt: {provider: elevenlabs}` cost money; everything else is
-local and free. Always run `vidgen tts --dry-run` / `vidgen imagegen --dry-run` first, finish the
+**Costs.** `vidgen tts` (ElevenLabs or OpenRouter, per character; `voice.provider: kokoro` is local and
+free), `vidgen imagegen` (OpenAI Images or OpenRouter, per picture) and `vidgen readback` with
+`stt: {provider: elevenlabs}` cost money; everything else is local and free. Always run `vidgen tts --dry-run` / `vidgen imagegen --dry-run` first, finish the
 layout on the word-count-timed preview, and commit `audio/` and `assets/generated/` (they cannot
 be made again identically). Renders are slow but free: `storyboard`, `lint` and `render` re-render
 only the scenes that changed (`render` reuses the storyboard's renders of the same format;
@@ -755,6 +757,29 @@ If the account requires Zero Data Retention, pick a model with a ZDR endpoint (m
 have one; vidgen's error lists them when a model is refused). A real run ends with what
 OpenRouter charged, or `cost not reported by openrouter yet (...)` when its cost records lag:
 the audio is stored all the same.
+
+**A free local voice: Kokoro.** `voice: {provider: kokoro, voice: af_heart}` runs the open
+Kokoro-82M model on the computer itself: no key, no account, nothing to pay, offline after a
+one-time download (~330 MB from Hugging Face; `vidgen tts --dry-run` says when it is still to
+come). It needs the optional extra (`pip install "schu-video-generator[kokoro]"`, Python
+3.10-3.12); without it `vidgen tts` says what to install. This is the voice for your own
+projects: re-voicing after every script change costs nothing, and over MCP a real `tts` run needs
+no `confirm_cost`. English is its strength (`af_heart` and `af_bella` are the best voices, then
+`bf_emma` for British English; males: `am_michael`, `am_fenrir`, `bm_george`), and English beats
+get exact word timings for karaoke captions for free. It also speaks Spanish, French, Hindi,
+Italian, Brazilian Portuguese (`pf_dora`), Japanese and Mandarin, less well. `lang` follows the
+voice's first letter (`p` for `pf_dora`) or the video's `language:`; `vidgen validate` warns about
+an unknown voice or one of another language. Compared with ElevenLabs it is flatter and less
+expressive, has no context between beats, and is weak on very short lines (give a beat at least
+~8 words) — good for drafts, internal videos and your own experiments; suggest ElevenLabs when
+the person wants the most natural narration. It runs at about real time on a laptop CPU (~0.7x on
+a small cloud CPU): voice a long video once the script is settled.
+
+```yaml
+voice: {provider: kokoro, voice: af_heart}       # speed: 1.0, lang: a, device: cpu (defaults)
+voices:
+  guest: {voice: am_michael, label: Guest}         # same provider; another voice
+```
 
 **Writing good `instructions`** (OpenRouter models that read them, e.g. Gemini TTS: the dry run
 notes when a model ignores them). Describe the speaker and the delivery in a few words, not the

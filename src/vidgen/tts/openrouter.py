@@ -329,18 +329,18 @@ def pcm_rate(content_type: str | None) -> int:
     return int(found.group(1)) if found else PCM_RATE
 
 
-def convert_to_mp3(data: bytes, input_args: list[str], ffmpeg: str | None = None) -> bytes:
-    """``data`` (read with ffmpeg's ``input_args``) encoded as MP3."""
+def convert_to_mp3(data: bytes, input_args: list[str], ffmpeg: str | None = None, source: str = "OpenRouter's audio") -> bytes:
+    """``data`` (read with ffmpeg's ``input_args``) encoded as MP3; ``source`` names it in errors."""
     from vidgen.render.ffmpeg import find_ffmpeg, run_ffmpeg
 
     exe = ffmpeg or find_ffmpeg()
     with tempfile.TemporaryDirectory(prefix="vidgen-tts-") as folder:
-        source, target = Path(folder) / "in.audio", Path(folder) / "out.mp3"
-        source.write_bytes(data)
+        given, target = Path(folder) / "in.audio", Path(folder) / "out.mp3"
+        given.write_bytes(data)
         try:
-            run_ffmpeg(exe, [*input_args, "-i", str(source), "-codec:a", "libmp3lame", "-b:a", MP3_BITRATE, str(target)], "converting OpenRouter's audio to MP3")
+            run_ffmpeg(exe, [*input_args, "-i", str(given), "-codec:a", "libmp3lame", "-b:a", MP3_BITRATE, str(target)], f"converting {source} to MP3")
         except (OSError, subprocess.SubprocessError) as exc:
-            raise VidgenError(f"cannot convert OpenRouter's audio to MP3: {exc}") from None
+            raise VidgenError(f"cannot convert {source} to MP3: {exc}") from None
         return target.read_bytes()
 
 

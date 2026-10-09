@@ -136,18 +136,27 @@ class VoiceSettings(_Strict):
     """ElevenLabs speaker boost."""
 
 
-#: Text-to-speech providers ``voice.provider`` accepts (one per video, DESIGN.md §66).
-TTS_PROVIDERS: tuple[str, ...] = ("elevenlabs", "openrouter")
-#: Keys of ``voice:`` used only by one provider (the other provider ignores them).
+#: Text-to-speech providers ``voice.provider`` accepts (one per video, DESIGN.md §66, §68).
+TTS_PROVIDERS: tuple[str, ...] = ("elevenlabs", "openrouter", "kokoro")
+#: Keys of ``voice:`` used only by some providers (the others ignore them).
 ELEVENLABS_VOICE_KEYS: tuple[str, ...] = ("voice_id", "model_id", "output_format", "settings", "context", "language_code")
 OPENROUTER_VOICE_KEYS: tuple[str, ...] = ("model", "voice", "instructions", "speed")
+KOKORO_VOICE_KEYS: tuple[str, ...] = ("voice", "speed", "lang", "device")
+#: Provider -> the keys of ``voice:`` it uses (besides ``provider``, ``timestamps``, ``label``, ``color``).
+PROVIDER_VOICE_KEYS: dict[str, tuple[str, ...]] = {
+    "elevenlabs": ELEVENLABS_VOICE_KEYS,
+    "openrouter": OPENROUTER_VOICE_KEYS,
+    "kokoro": KOKORO_VOICE_KEYS,
+}
+#: Kokoro's language codes (``voice.lang``; the first letter of its voice names).
+KokoroLang = Literal["a", "b", "e", "f", "h", "i", "j", "p", "z"]
 
 
 class VoiceConfig(_Strict):
-    """Text-to-speech voice: ElevenLabs (default) or OpenRouter (DESIGN.md §66)."""
+    """Text-to-speech voice: ElevenLabs (default), OpenRouter (DESIGN.md §66) or local Kokoro (§68)."""
 
-    provider: Literal["elevenlabs", "openrouter"] = "elevenlabs"
-    """TTS provider of the whole video: elevenlabs (ELEVENLABS_API_KEY) or openrouter (many TTS models through OpenRouter; OPENROUTER_API_KEY; needs model)."""
+    provider: Literal["elevenlabs", "openrouter", "kokoro"] = "elevenlabs"
+    """TTS provider of the whole video: elevenlabs (ELEVENLABS_API_KEY), openrouter (many TTS models through OpenRouter; OPENROUTER_API_KEY; needs model) or kokoro (Kokoro-82M on this computer, free; pip install "schu-video-generator[kokoro]")."""
     voice_id: str = Field(default="nPczCjzI2devNBz1zQrb", min_length=1)
     """ElevenLabs voice id."""
     model_id: str = Field(default="eleven_multilingual_v2", min_length=1)
@@ -165,11 +174,15 @@ class VoiceConfig(_Strict):
     model: str | None = Field(default=None, min_length=1)
     """openrouter only (required there): the OpenRouter text-to-speech model id, e.g. mistralai/voxtral-mini-tts-2603 (`vidgen tts --dry-run` shows its price)."""
     voice: str | None = Field(default=None, min_length=1)
-    """openrouter only: the model's voice name, e.g. en_paul_neutral (each model lists its own; default: the model's own default voice, if it has one)."""
+    """openrouter and kokoro: the voice name, e.g. en_paul_neutral (each OpenRouter model lists its own; default: the model's own default voice, if it has one); kokoro: af_heart, bf_emma, pf_dora... (default: a voice of voice.lang)."""
     instructions: str | None = Field(default=None, min_length=1)
     """openrouter only: how to speak, e.g. "warm, unhurried explainer; slight pause before numbers" (models that take instructions: Gemini TTS, OpenAI; others ignore it)."""
     speed: float | None = Field(default=None, ge=0.25, le=4.0)
-    """openrouter only: speaking speed multiplier (0.25-4) for models that have one; default: not sent (the model's own pace)."""
+    """openrouter and kokoro: speaking speed multiplier (0.25-4); openrouter: for models that have one, default not sent (the model's own pace); kokoro: default 1."""
+    lang: KokoroLang | None = None
+    """kokoro only: language of the voice: a American English, b British English, e Spanish, f French, h Hindi, i Italian, j Japanese, p Brazilian Portuguese, z Mandarin Chinese; default: the first letter of voice, else from the video's language (English: a)."""
+    device: Literal["cpu", "cuda", "auto"] = "cpu"
+    """kokoro only: where the model runs: cpu, cuda (an NVIDIA GPU) or auto (a GPU if PyTorch sees one); does not change the audio hash."""
     label: str | None = Field(default=None, min_length=1)
     """Speaker name shown in subtitles / captions when speakers are shown (default: none for this voice)."""
     color: ColorRef | None = None
@@ -207,7 +220,7 @@ class VoiceEntry(_Strict):
     """A named voice of ``voices:`` (DESIGN.md §46): the base ``voice:`` with what is given here
     changed. ``label`` and ``color`` are not inherited (they name this speaker)."""
 
-    provider: Literal["elevenlabs", "openrouter"] | None = None
+    provider: Literal["elevenlabs", "openrouter", "kokoro"] | None = None
     """TTS provider; only the base voice's (one provider per video: a variant may switch it for the whole video)."""
     voice_id: str | None = Field(default=None, min_length=1)
     """ElevenLabs voice id; default the base voice's."""
@@ -226,11 +239,13 @@ class VoiceEntry(_Strict):
     model: str | None = Field(default=None, min_length=1)
     """openrouter: the TTS model of this voice's beats; default the base voice's."""
     voice: str | None = Field(default=None, min_length=1)
-    """openrouter: the model's voice name for this speaker; default the base voice's."""
+    """openrouter / kokoro: the voice name for this speaker; default the base voice's."""
     instructions: str | None = Field(default=None, min_length=1)
     """openrouter: how this speaker talks; default the base voice's."""
     speed: float | None = Field(default=None, ge=0.25, le=4.0)
-    """openrouter: speaking speed multiplier (0.25-4); default the base voice's."""
+    """openrouter / kokoro: speaking speed multiplier (0.25-4); default the base voice's."""
+    lang: KokoroLang | None = None
+    """kokoro: language of this speaker's voice (a, b, e, f, h, i, j, p, z); default the first letter of its voice, else the base voice's."""
     label: str | None = Field(default=None, min_length=1)
     """Speaker name in subtitles / captions; default the voice's name (underscores as spaces, first letter capital)."""
     color: ColorRef | None = None

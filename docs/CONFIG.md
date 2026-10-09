@@ -647,7 +647,7 @@ background, icons in `primary`, names in `text`) and `--theme warm_editorial` in
 
 ```yaml
 voice:
-  provider: elevenlabs              # elevenlabs (default) or openrouter: see "Narration providers"
+  provider: elevenlabs              # elevenlabs (default), openrouter or kokoro: see "Narration providers"
   voice_id: nPczCjzI2devNBz1zQrb    # ElevenLabs voice id
   model_id: eleven_multilingual_v2
   output_format: mp3_44100_128      # ElevenLabs output_format query parameter
@@ -660,9 +660,11 @@ voice:
   timestamps: false                 # also fetch when each character is spoken (karaoke captions)
   language_code: null               # ElevenLabs language_code (ISO 639-1) or false; null: auto
   model: null                       # provider openrouter only (required there): the TTS model id
-  voice: null                       # openrouter: the model's voice name
+  voice: null                       # openrouter / kokoro: the voice name
   instructions: null                # openrouter: how to speak (models that read it)
-  speed: null                       # openrouter: speed multiplier 0.25-4 (not sent when null)
+  speed: null                       # openrouter / kokoro: speed multiplier 0.25-4 (openrouter: not sent when null; kokoro: 1)
+  lang: null                        # kokoro: language letter (a, b, e, f, h, i, j, p, z); null: from voice / language
+  device: cpu                       # kokoro: cpu, cuda or auto
   label: null                       # speaker name in subtitles / captions (none: not tagged)
   color: null                       # speaker colour in captions (theme token or hex; none: text colour)
 ```
@@ -688,16 +690,17 @@ that accept one (`eleven_turbo_v2_5`, `eleven_flash_v2_5`; others reject the fie
 beats); without one the hash is as before. A named voice may set its own (`voices.<name>.language_code`).
 
 These keys are ElevenLabs'. With `provider: openrouter` the voice is `model`, `voice`,
-`instructions` and `speed` instead (see [narration providers](#narration-providers)); the keys of
-the provider not in use are ignored.
+`instructions` and `speed` instead, with `provider: kokoro` `voice`, `speed`, `lang` and `device`
+(see [narration providers](#narration-providers)); the keys of the provider not in use are
+ignored.
 
 ## Narration providers
 
-One TTS provider voices the whole video: **ElevenLabs** (the default; everything above) or,
-optionally, **OpenRouter**, which reaches many TTS models (Mistral Voxtral, Kokoro, Gemini TTS,
-MiniMax, ElevenLabs' own models, Microsoft MAI-Voice...) with one key. Nothing changes for a
-project that does not set `voice.provider: openrouter` (likewise OpenAI stays the default image
-provider).
+One TTS provider voices the whole video: **ElevenLabs** (the default; everything above),
+**OpenRouter**, which reaches many TTS models (Mistral Voxtral, Kokoro, Gemini TTS, MiniMax,
+ElevenLabs' own models, Microsoft MAI-Voice...) with one key, or **Kokoro** run on your own
+computer, free ([below](#kokoro-on-this-computer-provider-kokoro)). Nothing changes for a project
+that does not set `voice.provider` (likewise OpenAI stays the default image provider).
 
 ```yaml
 voice:
@@ -773,6 +776,104 @@ and `google/gemini-3.8-flash-lite-tts` (voice `Kore`) voiced a beat live on 2026
 account requiring ZDR. To check a model: look for its id among the `model_id`s of
 `https://openrouter.ai/api/v1/endpoints/zdr` (public, no key), or, from a source checkout, run
 `python tools/live_check_openrouter.py --tts --zdr`.
+
+### Kokoro on this computer (`provider: kokoro`)
+
+[Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (Apache-2.0) is a small open-weight voice
+model that runs locally: free, no key, no account, offline after the first download. It is an
+optional extra (PyTorch is large), installed with `pip install ".[kokoro]"` from a checkout or
+`pip install "schu-video-generator[kokoro]"` (install steps for Windows and Linux in the README).
+
+```yaml
+voice:
+  provider: kokoro
+  voice: af_heart        # optional: a Kokoro voice (default: the best voice of lang)
+  speed: 1.0             # optional, 0.25-4 (default 1; 0.8-1.2 sounds natural)
+  lang: a                # optional: a b e f h i j p z (default: voice's first letter, else language:)
+  device: cpu            # optional: cpu (default), cuda, auto
+```
+
+| key | default | |
+|---|---|---|
+| `voice` | the language's default (below) | a voice name; a blend `af_bella,af_heart` averages voices (Kokoro's own feature) |
+| `speed` | 1 | speaking speed multiplier |
+| `lang` | the first letter of `voice`, else from the video's `language` | Kokoro's language letter; it decides the pronunciation rules |
+| `device` | `cpu` | `cuda`: an NVIDIA GPU (needs a CUDA build of PyTorch); `auto`: the GPU if PyTorch sees one. Not in the audio hash |
+| `label`, `color`, `timestamps` | | as in [`voice:`](#voice-voice) (`timestamps` is not needed: English timings are always stored) |
+
+**Languages and voices** (Kokoro-82M v1.0, 54 voices, list bundled with vidgen, dated 2026-10-09;
+grades from the model's [VOICES.md](https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md)):
+
+| `lang` | language | from `language:` | default voice | other voices |
+|---|---|---|---|---|
+| `a` | American English | `en` (none set), `en-US`... | `af_heart` (A) | `af_bella` (A-), `af_nicole`, `am_michael`, `am_fenrir`, `am_puck`... (20) |
+| `b` | British English | `en-GB`, `en-IE`, `en-AU`, `en-NZ` | `bf_emma` (B-) | `bm_george`, `bm_fable`, `bf_isabella`... (8) |
+| `e` | Spanish | `es` | `ef_dora` | `em_alex`, `em_santa` |
+| `f` | French | `fr` | `ff_siwis` (B-) | (only one) |
+| `h` | Hindi | `hi` | `hf_alpha` | `hf_beta`, `hm_omega`, `hm_psi` |
+| `i` | Italian | `it` | `if_sara` | `im_nicola` |
+| `j` | Japanese | `ja` | `jf_alpha` | `jf_gongitsune`, `jf_nezumi`, `jf_tebukuro`, `jm_kumo` |
+| `p` | Brazilian Portuguese | `pt` (also `pt-PT`) | `pf_dora` | `pm_alex`, `pm_santa` |
+| `z` | Mandarin Chinese | `zh` | `zf_xiaobei` | 7 more `zf_` / `zm_` |
+
+A video `language:` Kokoro does not speak (German, say) without `lang` / `voice` is a config error.
+`j` needs `pip install "misaki[ja]"`, `z` `pip install "misaki[zh]"` besides the extra. `e`, `f`,
+`h`, `i`, `p` are read through espeak-ng (and English uses it for words missing from its
+dictionary); misaki loads the espeak-ng library bundled in the `espeakng-loader` wheel (Windows,
+Linux, macOS), so no system package is needed normally.
+
+**First run: downloads.** The model is fetched from Hugging Face the first time: `kokoro-v1_0.pth`
+(327 MB, SHA256 `496dba11...`) plus ~0.5 MB per voice used, into the Hugging Face cache
+(`~/.cache/huggingface/hub`, on Windows `%USERPROFILE%\.cache\huggingface\hub`; `HF_HOME` or
+`HF_HUB_CACHE` move it). English voices also make misaki install spaCy's `en_core_web_sm`
+(12.8 MB) with pip on first use. vidgen bundles none of these. After that no network is needed
+(`HF_HUB_OFFLINE=1` makes sure nothing is asked). `vidgen tts --dry-run` says whether the
+download is still to come.
+
+**Speed.** The model loads once per `vidgen tts` run (one pipeline per language, all voices
+sharing it): a few seconds to import PyTorch and ~6-10 s to load the model and the English
+phonemizer. Then, measured on a 2-core cloud CPU, a 12-word sentence (4.8 s of speech) took 3.6 s
+and a 2-word line 1.1 s: about 0.7x real time, so a 5-minute narration takes ~4 minutes. A laptop
+CPU is usually faster, a GPU much faster.
+
+**Python.** The `kokoro` package (0.9.4) declares Python 3.10-3.12. On 3.13 the extra installs
+nothing and `vidgen tts` prints a command that installs it anyway (it worked on 3.13 here): `pip
+install --ignore-requires-python "kokoro>=0.9.4" "misaki[en]>=0.9.4" "spacy>=3.8,<4"
+"spacy-curated-transformers<0.4"`.
+
+**Word timings.** For English (`lang` a / b) Kokoro says when each word is spoken: vidgen stores
+them as `audio/<beat_id>.align.json` for every beat (free, so `timestamps` is not needed) and
+burned-in [`captions`](#captions) and the SRT time every word from them (through the
+pronunciation, as with ElevenLabs). Other languages have no timings: word times are estimated
+within each MP3's speech (`timestamps: true` there is a `vidgen validate` warning).
+
+**Same rules as the other providers.** One provider per video: a named voice may change `voice`,
+`speed` and `lang` (a named voice that sets `voice` gets that voice's language unless it sets
+`lang`); a [variant](#variants) may switch the whole video to Kokoro (`variants: {local: {voice:
+{provider: kokoro}}}`, own `audio/<variant>/`). Audio goes to `audio/<beat_id>.mp3` (Kokoro's 24
+kHz samples encoded with ffmpeg, 128 kb/s) + `.hash`; the hash covers the spoken text
+(pronunciation applied) and `provider`, the model (`hexgrad/Kokoro-82M`, `kokoro-v1_0.pth`),
+`voice`, `lang` and `speed` (not `device`): changing any of them re-voices that voice's beats.
+No neighbouring-beat context. Readback and the narration-speed lint work on its MP3s as on any.
+
+**Cost.** None: the dry run says `cost: free (local): Kokoro-82M runs on this computer`, `tts
+--json` has `estimated_cost: 0`, `unknown_cost: 0`, and each beat / voice `provider: kokoro`,
+`model: hexgrad/Kokoro-82M`, `provider_voice`, `speed`, `lang`, `device`. Over MCP, `tts` with
+`dry_run: false` needs no `confirm_cost` for a Kokoro project (it is still asked for when the
+project does not load, or uses another provider).
+
+**Checks.** `vidgen validate` warns (no network, nothing loaded) about a voice not in the bundled
+list (with a suggestion), a voice of another language than `lang` ("`bf_emma` is a British
+English voice but lang is a"), a `lang` that is not the video's language, `timestamps` with a
+language without timings, and the extra (or `misaki[ja]` / `[zh]`) not installed. `vidgen tts`
+refuses with the install command when the extra is missing, names espeak-ng when it cannot be
+loaded, and says what failed when the first download cannot reach Hugging Face.
+
+**Choosing.** ElevenLabs still sounds the most natural and expressive (and uses neighbouring
+beats for intonation); Kokoro is clear and pleasant in English (`af_heart`, `af_bella`,
+`bf_emma`), thinner in the other languages, weaker on very short lines (under ~10 words) and may
+rush very long ones. It is ideal for drafts, internal videos and projects with no budget, and
+costs nothing to re-voice while a script changes.
 
 ## Multiple voices (`voices:`)
 
@@ -4806,16 +4907,16 @@ message says how many beats were done (their MP3s are kept: run again to continu
 |---|---|---|
 | `project`, `variant`, `audio_dir` | str \| null | the project, the variant and the audio folder written |
 | `dry_run`, `force` | bool | the options |
-| `provider` | str | the video's TTS provider: `elevenlabs` or `openrouter` (see [narration providers](#narration-providers)) |
+| `provider` | str | the video's TTS provider: `elevenlabs`, `openrouter` or `kokoro` (see [narration providers](#narration-providers)) |
 | `characters` | int | characters sent (or that a run would send) for synthesis: what ElevenLabs and most OpenRouter models bill |
-| `estimated_cost` | float | US dollars of the beats to synthesise whose price is known (OpenRouter models priced per character; ElevenLabs bills a plan's quota: never estimated) |
+| `estimated_cost` | float | US dollars of the beats to synthesise whose price is known (OpenRouter models priced per character; Kokoro: 0, it runs locally; ElevenLabs bills a plan's quota: never estimated) |
 | `unknown_cost` | int | beats to synthesise with no known price (ElevenLabs, OpenRouter models that bill the generated audio, OpenRouter not reachable) |
-| `price_note` | str \| null | what the estimate is based on (`OpenRouter prices of <date>`, that they could not be read, the ElevenLabs note) |
+| `price_note` | str \| null | what the estimate is based on (`OpenRouter prices of <date>`, that they could not be read, the ElevenLabs note, `free (local): ...` for Kokoro) |
 | `prices` | object | `{model: {per_character, basis}}` of the OpenRouter models used (`per_character` `null` when unknown; `basis` says why) |
-| `notes`, `problems` | list | OpenRouter: what its live model list says about the voices (a voice it does not list, `instructions` / `speed` a model may ignore) and what a run refuses before paying (a model it does not have) |
+| `notes`, `problems` | list | OpenRouter: what its live model list says about the voices (a voice it does not list, `instructions` / `speed` a model may ignore) and what a run refuses before paying (a model it does not have); Kokoro: free and local, the model download still to come, the extra not installed |
 | `charged` | float \| null | US dollars OpenRouter reported for this run's requests; `null` in a dry run, with ElevenLabs, or when not reported |
-| `voices` | object | `{voice name: {voice_id, provider, model, provider_voice, instructions, speed, beats, characters}}` of the beats to synthesise (`default` = the base voice; `voice_id` `null` in an OpenRouter video) |
-| `beats` | list | the beats to voice, in video order: `{scene, beat, voice, provider, model, provider_voice, instructions, speed, action, characters, estimated_cost, says, source}`; `model` / `provider_voice` are ElevenLabs' `model_id` / `voice_id` or OpenRouter's `model` / `voice`; `action` `generate` (an API call) or `copy` (the base `audio/` MP3 of a variant beat that did not change; 0 characters, `source` its path), `estimated_cost` `null` when unknown, `says` the text sent when [pronunciation](#pronunciation-pronunciation) changed it (else `null`) |
+| `voices` | object | `{voice name: {voice_id, provider, model, provider_voice, instructions, speed, lang, device, beats, characters}}` of the beats to synthesise (`default` = the base voice; `voice_id` `null` in an OpenRouter or Kokoro video; `lang` / `device` Kokoro's, else `null`) |
+| `beats` | list | the beats to voice, in video order: `{scene, beat, voice, provider, model, provider_voice, instructions, speed, lang, device, action, characters, estimated_cost, says, source}`; `model` / `provider_voice` are ElevenLabs' `model_id` / `voice_id`, OpenRouter's `model` / `voice` or `hexgrad/Kokoro-82M` / Kokoro's `voice`; `action` `generate` (an API call) or `copy` (the base `audio/` MP3 of a variant beat that did not change; 0 characters, `source` its path), `estimated_cost` `null` when unknown, `says` the text sent when [pronunciation](#pronunciation-pronunciation) changed it (else `null`) |
 | `generated` | list | beat ids voiced by this run (`[]` for a dry run) |
 | `up_to_date` | list | beat ids skipped because their MP3 is current |
 | `orphaned` | list | MP3s in the audio folder no beat uses (never deleted) |

@@ -205,13 +205,20 @@ def tts_document(
 ) -> dict[str, Any]:
     """The ``vidgen tts --json`` document (a dry run or a run): every beat to voice (``action``
     ``generate`` or ``copy`` from the base audio folder, its voice, characters billed and the
-    spoken text when pronunciation changed it, provider, model and provider voice, estimated
-    cost), the characters per voice, the estimated total with its basis (OpenRouter, DESIGN.md
-    §66), notes and problems, the cost the provider reported in a run, the beats generated (none
+    spoken text when pronunciation changed it, provider, model and provider voice, Kokoro's
+    ``lang`` / ``device``, estimated cost), the characters per voice, the estimated total with
+    its basis (OpenRouter, DESIGN.md §66; Kokoro: 0, "free (local)", §68), notes and problems, the cost the provider reported in a run, the beats generated (none
     in a dry run) and up to date, and the orphaned MP3s."""
     from vidgen.tts.cache import orphaned_audio
 
     def engine(voice: Any) -> dict[str, Any]:
+        if voice.provider == "kokoro":
+            from vidgen.tts.kokoro import REPO_ID
+
+            return {
+                "provider": "kokoro", "model": REPO_ID, "provider_voice": voice.voice, "instructions": None,
+                "speed": voice.speed, "lang": voice.lang, "device": voice.device,
+            }
         routed = voice.provider == "openrouter"
         return {
             "provider": voice.provider,
@@ -219,6 +226,8 @@ def tts_document(
             "provider_voice": voice.voice if routed else voice.voice_id,
             "instructions": voice.instructions if routed else None,
             "speed": voice.speed if routed else None,
+            "lang": None,
+            "device": None,
         }
 
     scenes = {beat.id: scene.id for scene, beat in project.beats()}

@@ -87,6 +87,18 @@ their own licences. Notably:
   bundled application (PyInstaller and the like) that includes these wheels inherits their
   GPL/LGPL obligations.
 - **fpdf2** (optional `pdf` extra, PDF slide decks) is under the **LGPL-3.0**.
+- **Kokoro** (optional `kokoro` extra, local narration): the `kokoro` and `misaki` packages by
+  hexgrad are under the **Apache-2.0** licence; they pull in PyTorch (BSD-style), spaCy (MIT),
+  phonemizer-fork (GPL-3.0) and `espeakng-loader`, whose wheels bundle the espeak-ng library and
+  data (**GPL-3.0**). Using them as installed is unaffected; redistributing a bundled application
+  that includes them inherits those licences.
+- **Kokoro-82M model weights and voices** (`hexgrad/Kokoro-82M` on Hugging Face,
+  `kokoro-v1_0.pth` and `voices/*.pt`): **Apache-2.0**, by hexgrad. They are **not bundled**:
+  the `kokoro` package downloads them from Hugging Face on first use into the user's Hugging Face
+  cache. The model card states that its training data was permissive / non-copyrighted audio
+  (incl. CC BY audio from the Koniwa and SIWIS corpora, credited there); the licence sets no
+  conditions on the audio you generate with it. vidgen's bundled list of its voice names and grades
+  (`vidgen/data/kokoro/voices.json`) is facts read from the model's repository on the date it names.
 
 ## Online services (optional, your own account)
 

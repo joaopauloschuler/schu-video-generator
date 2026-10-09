@@ -1,0 +1,35 @@
+{
+  "date": "2026-10-09",
+  "source": "https://huggingface.co/hexgrad/Kokoro-82M (voices/ folder and VOICES.md; overall grades from VOICES.md, null: not graded)",
+  "repo": "hexgrad/Kokoro-82M",
+  "weights": "kokoro-v1_0.pth",
+  "weights_bytes": 327212226,
+  "voice_bytes": 523435,
+  "langs": {
+    "a": {"name": "American English", "default_voice": "af_heart", "g2p": "misaki[en]", "espeak": "en-us (fallback for words not in the dictionary)"},
+    "b": {"name": "British English", "default_voice": "bf_emma", "g2p": "misaki[en]", "espeak": "en-gb (fallback for words not in the dictionary)"},
+    "e": {"name": "Spanish", "default_voice": "ef_dora", "g2p": "espeak-ng", "espeak": "es"},
+    "f": {"name": "French", "default_voice": "ff_siwis", "g2p": "espeak-ng", "espeak": "fr-fr"},
+    "h": {"name": "Hindi", "default_voice": "hf_alpha", "g2p": "espeak-ng", "espeak": "hi"},
+    "i": {"name": "Italian", "default_voice": "if_sara", "g2p": "espeak-ng", "espeak": "it"},
+    "j": {"name": "Japanese", "default_voice": "jf_alpha", "g2p": "misaki[ja]", "espeak": null},
+    "p": {"name": "Brazilian Portuguese", "default_voice": "pf_dora", "g2p": "espeak-ng", "espeak": "pt-br"},
+    "z": {"name": "Mandarin Chinese", "default_voice": "zf_xiaobei", "g2p": "misaki[zh]", "espeak": null}
+  },
+  "voices": {
+    "af_heart": "A", "af_alloy": "C", "af_aoede": "C+", "af_bella": "A-", "af_jessica": "D", "af_kore": "C+",
+    "af_nicole": "B-", "af_nova": "C", "af_river": "D", "af_sarah": "C+", "af_sky": "C-",
+    "am_adam": "F+", "am_echo": "D", "am_eric": "D", "am_fenrir": "C+", "am_liam": "D", "am_michael": "C+",
+    "am_onyx": "D", "am_puck": "C+", "am_santa": "D-",
+    "bf_alice": "D", "bf_emma": "B-", "bf_isabella": "C", "bf_lily": "D",
+    "bm_daniel": "D", "bm_fable": "C", "bm_george": "C", "bm_lewis": "D+",
+    "jf_alpha": "C+", "jf_gongitsune": "C", "jf_nezumi": "C-", "jf_tebukuro": "C", "jm_kumo": "C-",
+    "zf_xiaobei": "D", "zf_xiaoni": "D", "zf_xiaoxiao": "D", "zf_xiaoyi": "D",
+    "zm_yunjian": "D", "zm_yunxi": "D", "zm_yunxia": "D", "zm_yunyang": "D",
+    "ef_dora": null, "em_alex": null, "em_santa": null,
+    "ff_siwis": "B-",
+    "hf_alpha": "C", "hf_beta": "C", "hm_omega": "C", "hm_psi": "C",
+    "if_sara": "C", "im_nicola": "C",
+    "pf_dora": null, "pm_alex": null, "pm_santa": null
+  }
+}

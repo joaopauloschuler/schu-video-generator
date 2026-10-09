@@ -318,11 +318,11 @@ by the coordinator at the end of each step with the owner's key; agents never se
 - [x] With Manim 0.22, 6 quick tests fail: Manim now passes `repeat=` to a function whose fake in `tests/test_overlays.py` (~line 77) only accepts `num_frames`; make the fake accept both (and any future keyword) so tests pass on Manim 0.21 and 0.22; check real renders on 0.22
 
 ### Step 65 — Local Kokoro TTS (optional extra)
-- [ ] `voice: {provider: kokoro, voice, speed, lang}` running Kokoro-82M (https://huggingface.co/hexgrad/Kokoro-82M) locally, free and offline after the first model download; installed with `pip install ".[kokoro]"`; clear error naming the extra when it is missing
-- [ ] Same rules as the other providers: one provider per video, MP3 into `audio/`, provider/voice/speed/lang in each beat's hash, pronunciation applied, captions with estimated timings (or Kokoro's own word timings if it provides them), dry run shows "free (local)"
-- [ ] Voices and languages listed and validated from Kokoro's own voice list; model download location and size documented; CPU works (GPU optional)
-- [ ] Tests mocked where the model is not installed; one real synthesis test, skipped unless the extra is installed
-- [ ] Docs: README install (Windows and Linux, incl. any system package such as espeak-ng), CONFIG.md "Narration providers", AGENTS.md (a free local voice for agents' own projects), THIRD_PARTY_NOTICES (Kokoro's licence)
+- [x] `voice: {provider: kokoro, voice, speed, lang}` running Kokoro-82M (https://huggingface.co/hexgrad/Kokoro-82M) locally, free and offline after the first model download; installed with `pip install ".[kokoro]"`; clear error naming the extra when it is missing (`src/vidgen/tts/kokoro.py`; extra `kokoro>=0.9.4` for Python < 3.13 — kokoro 0.9.4 declares <3.13; on 3.13 the error prints a forced install that worked here; also `device: cpu|cuda|auto`; `lang` from the voice's first letter or the video's `language:`)
+- [x] Same rules as the other providers: one provider per video, MP3 into `audio/`, provider/voice/speed/lang in each beat's hash, pronunciation applied, captions with estimated timings (or Kokoro's own word timings if it provides them), dry run shows "free (local)" (English word timings stored as `.align.json` for every beat; model + weights file in the hash, not the device; ElevenLabs / OpenRouter hashes pinned unchanged; MCP real `tts` without `confirm_cost` for Kokoro projects)
+- [x] Voices and languages listed and validated from Kokoro's own voice list; model download location and size documented; CPU works (GPU optional) (`src/vidgen/data/kokoro/voices.json`, 54 voices dated 2026-10-09; validate warnings; model loaded once per run, shared across voices and languages; real run here ~0.7x real time on 2 CPU cores)
+- [x] Tests mocked where the model is not installed; one real synthesis test, skipped unless the extra is installed (`tests/test_tts_kokoro.py`; the real test passed in a Python 3.12 venv with the extra)
+- [x] Docs: README install (Windows and Linux, incl. any system package such as espeak-ng), CONFIG.md "Narration providers", AGENTS.md (a free local voice for agents' own projects), THIRD_PARTY_NOTICES (Kokoro's licence) (+ DESIGN §68, `examples/minimal` variant `kokoro`; espeak-ng comes bundled in `espeakng-loader`, system package only a fallback)
 
 ---
 
@@ -355,4 +355,5 @@ Nice-to-have / performance
 - [ ] OpenRouter SVG generation never run live (no SVG model has a ZDR endpoint; the owner's account requires ZDR): `--svg --yes` with an account allowing non-ZDR providers (Step 61b / 63)
 - [ ] OpenRouter estimates use the highest provider's price (Kokoro live: ~6x the charge); optional `provider: {sort: price}` routing or a "from $X to $Y" range (Step 63)
 - [ ] Refresh `src/vidgen/data/openrouter/tts_models.json` (dated 2026-10-08) from the public lists when validate warns wrongly; a small `tools/` script could do it (Step 62)
+- [ ] Kokoro: refresh `src/vidgen/data/kokoro/voices.json` (dated 2026-10-09) when the model repo adds voices; drop the Python < 3.13 marker of the `kokoro` extra once kokoro / misaki declare 3.13; Kokoro v1.1-zh not supported; a custom `.pt` voice file is hashed by path, not content (Step 65)
 - [ ] `vidgen plan` could write an `output:` name from the title (a draft from `outline.md` renders `outline.mp4`); `storyboard --json` lists every still twice (video and scene sheets) — verbose for agents

@@ -6454,3 +6454,129 @@ How to test
   on PATH).
 - Manim 0.22: `python -m venv v22 && v22/bin/pip install -e ".[dev]" manim==0.22.0`, then
   `v22/bin/python -m pytest -q -m "not slow"`.
+
+## Step 65 — Local Kokoro TTS (optional extra)
+What was built
+- **`voice: {provider: kokoro, voice: af_heart, speed: 1.0, lang: a, device: cpu}`**: narration by
+  hexgrad's Kokoro-82M on the user's own computer — free, no key, offline after the first
+  download. Optional extra `pip install ".[kokoro]"` / `"schu-video-generator[kokoro]"` (named
+  with `vidgen.DIST_NAME` in every message). Importing vidgen, `validate`, `render`, `tts
+  --dry-run` and every other command work without it (nothing imports `kokoro` / torch before a
+  beat is voiced; tested via `sys.modules`).
+- **Languages / voices**: `lang` (a American English, b British, e Spanish, f French, h Hindi, i
+  Italian, j Japanese, p Brazilian Portuguese, z Mandarin) = given, else the voice's first
+  letter, else the video's `language:` (`en`→a, `en-GB/IE/AU/NZ`→b, `pt` (also pt-PT)→p, ...;
+  none→a); voice = given, else the language's best voice (af_heart, bf_emma, ef_dora, ff_siwis,
+  hf_alpha, if_sara, jf_alpha, pf_dora, zf_xiaobei); speed default 1. A language Kokoro does not
+  speak without `lang` / voice is a config error. Bundled dated list
+  `src/vidgen/data/kokoro/voices.json` (54 voices with VOICES.md grades, 2026-10-09).
+- **Same rules as the other providers**: one provider per video (Step 62's check generalised to
+  three providers; Kokoro named voices change `voice`, `speed`, `lang`; a named voice setting
+  `voice` gets that voice's language); a variant may switch to Kokoro (own `audio/<variant>/`);
+  MP3 into `audio/` (24 kHz float → 16-bit PCM → ffmpeg MP3 128 kb/s); hash = `sha1(json{provider,
+  model: hexgrad/Kokoro-82M, weights: kokoro-v1_0.pth, voice, lang, speed} | spoken text)` with
+  resolved values, not the device (pinned; ElevenLabs and OpenRouter keys pinned unchanged, kphi3
+  still "ok"); pronunciation applied; English word timings → `.align.json` for every beat (free:
+  `timings_included`), mapped back through pronunciation in captions / SRT; other languages
+  estimated; readback and narration-speed lint tested on its MP3s.
+- **Performance**: one `KokoroEngine` per device per process: one `KPipeline` per language, the
+  first one's `KModel` reused by the next → the model loads once per `vidgen tts`, whatever the
+  number of voices / languages. CPU by default; `device: cuda | auto`.
+- **Dry run / JSON / MCP**: per-voice line `kokoro af_heart (lang a, American English), speed 1,
+  cpu`, notes (free and local; the first-run download with size and cache folder while the weights
+  are not in the HF cache; the extra or `misaki[ja]`/`[zh]` missing), `cost: free (local):
+  Kokoro-82M runs on this computer`; `--json` `estimated_cost 0`, `unknown_cost 0`, beats / voices
+  gain `lang`, `device` (null for other providers). MCP `tts`: a real run of a project whose
+  `voice.provider` is kokoro needs no `confirm_cost` (`FREE_TTS`, `tts_provider`); a project that
+  does not load still asks for it.
+- **Errors** (`VidgenError`, no traceback): extra missing (+ on Python > 3.12 the forced install
+  command), `misaki[ja]`/`[zh]`, espeak-ng (reinstall `espeakng-loader`, or `sudo apt install
+  espeak-ng` / the Windows .msi), CUDA unavailable (`device: cpu`), download failures (Xet / CAS,
+  proxy, offline; `HF_HUB_DISABLE_XET=1` hint), else the library's message. While Kokoro loads and
+  runs, fd 1 goes to stderr (misaki's first-use `pip install en_core_web_sm` prints to stdout and
+  would break `--json`; tested with a child-process-style write).
+
+Kokoro facts (checked 2026-10-09)
+- PyPI `kokoro` 0.9.4 (2025-04-05; latest) and `misaki` 0.9.4: Apache-2.0, `Requires-Python
+  <3.13,>=3.10`; kokoro deps `huggingface-hub, loguru, misaki[en]>=0.9.4, numpy, torch,
+  transformers`; misaki[en] adds spaCy, spacy-curated-transformers, phonemizer-fork, num2words,
+  `espeakng-loader` (wheels bundling espeak-ng for Windows / Linux / macOS, which misaki uses at
+  import: **no system espeak-ng needed**; a Portuguese beat was voiced here without one). Model card:
+  Apache-2.0 weights, v1.0 `kokoro-v1_0.pth` 327 MB (SHA256 496dba11…), 54 voices ~0.5 MB each,
+  English G2P misaki + spaCy `en_core_web_sm` (12.8 MB, pip-installed on first use from GitHub).
+- Word timestamps: yes for `a`/`b` only (`Result.tokens[*].start_ts/end_ts`, per chunk); none for
+  the other languages.
+- Size: Linux PyPI torch pulls nvidia-* (3.2 GB) + triton (0.9 GB) + torch (1.2 GB): the scratch
+  venv was 5.9 GB; README recommends the CPU wheel index first (not reachable here, so untested).
+- Python 3.13: `pip install --ignore-requires-python kokoro misaki[en]` backtracks to a spaCy 4
+  pre-release sdist that fails to build; with `"spacy>=3.8,<4" "spacy-curated-transformers<0.4"`
+  it installs and a real English synthesis with timestamps worked (`kokoro.FORCED_INSTALL`).
+
+Real run (this workspace)
+- Hugging Face's file CDN (`us.aws.cdn.hf.co`) and Xet (`cas-server.xethub.hf.co`) are blocked by
+  the egress proxy (huggingface.co itself and small files are not), so `hf_hub_download` of the
+  weights fails here (both errors are now recognised by `explain`). The weights and voices
+  af_heart / bf_emma / pf_dora were fetched from Kokoro-FastAPI's GitHub release / repository and
+  verified (weights SHA256 = the model card's; voices = VOICES.md's prefixes), laid out as an HF
+  cache in the scratchpad and used with `HF_HUB_OFFLINE=1`, i.e. vidgen's normal code path.
+- Python 3.12 venv, `pip install -e ".[dev,kokoro]"` (torch 2.14.1, transformers 5.19, manim
+  0.22): `vidgen validate` / `tts --dry-run` / `tts` (2 English + 1 Portuguese beats, `.align.json`
+  for the English ones, 51 s in all incl. imports and first-use spaCy install) / `render --preview`
+  (SRT with the written words through the pronunciation) all fine; `tests/test_tts_kokoro.py`
+  there: 34 passed incl. the real synthesis test (MCP test skipped by design where the extra is
+  installed). Timings on 2 CPU cores: load ~10 s; 3.6 s for a 12-word sentence (4.8 s of audio),
+  4.3 s for 6.3 s, 1.1 s for a 2-word line (1.7 s): ~0.7x real time.
+- A sample MP3 was written to the session scratchpad (`sample/kokoro_sample.mp3`, not committed).
+
+Files
+- New: `src/vidgen/tts/kokoro.py`, `src/vidgen/kokoro_voices.py`, `src/vidgen/data/kokoro/voices.json`,
+  `tests/test_tts_kokoro.py` (35 tests; 1 skipped without the extra).
+- Changed: `config.py` (`TTS_PROVIDERS`, `KOKORO_VOICE_KEYS`, `PROVIDER_VOICE_KEYS`, `KokoroLang`,
+  `VoiceConfig.lang` / `device`, `VoiceEntry.lang`, provider literals), `voices.py`
+  (generalised `voice_provider_problems`, Kokoro language problems, resolution in
+  `_with_language`, `RUNTIME_FIELDS`), `tts/__init__.py` (`get_provider`, `tts_warnings`),
+  `tts/run.py` (cost 0, `KOKORO_PRICE_NOTE`, notes, `describe_voice`, `timings_included`),
+  `tts/openrouter.py` (`convert_to_mp3(..., source=)`), `jsonout.py` (`lang`, `device`),
+  `mcp_server.py` (`FREE_TTS`, `tts_provider`, tool text, instructions), `pyproject.toml` (extra,
+  package data), docs/CONFIG.md (voice block, "Narration providers" + new "Kokoro on this
+  computer", `tts --json` table), README.md (feature bullet, Windows step 11, Linux step 6 + notes),
+  AGENTS.md + guide copy (free local voice in the intro, costs, "A free local voice: Kokoro"),
+  THIRD_PARTY_NOTICES.md, DESIGN.md (tree, §4, new §68), `examples/minimal/video.yaml` (variant
+  `kokoro`, no audio committed), tasklist.md.
+
+Public interfaces added/changed (compatible; `vidgen.api` unchanged)
+- Config: `voice.provider: kokoro`, `voice.lang`, `voice.device`, `voices.<name>.lang`; `voice` /
+  `speed` documented for Kokoro too. `tts --json`: `lang`, `device` on beats and voices.
+- Internal: `vidgen.tts.kokoro.*` (`KokoroProvider`, `KokoroEngine`, `shared_engine`,
+  `load_pipeline`, `alignment_from_tokens`, `pcm16`, `pcm_to_mp3`, `check_installed`,
+  `install_message`, `explain`, `hf_cache_dir`, `model_downloaded`, `download_note`, `run_notes`,
+  `voice_warnings`, `install_warnings`, `quiet_stdout`), `vidgen.kokoro_voices.*`,
+  `voices.PROVIDER_NAMES` / `NAMED_VOICE_KEYS` / `RUNTIME_FIELDS`, `tts.run.KOKORO_PRICE_NOTE`,
+  `mcp_server.FREE_TTS` / `tts_provider`; providers may set `timings_included`.
+
+Decisions / deviations
+- `device` default `cpu` (deterministic, works everywhere); not in the hash, not an audio field.
+- The hash names the model repo and weights file but not the package version (an upgrade must not
+  re-voice every project); a new weights file would change `WEIGHTS` and so the hash.
+- English timings are always fetched (they cost nothing) — `timestamps` is irrelevant for Kokoro
+  English and warns for other languages.
+- The extra carries `python_version < '3.13'` so `pip install ".[dev,kokoro]"` never fails on
+  3.13; vidgen then explains and prints the forced install.
+- No `soundfile` dependency: the float samples are converted with numpy and encoded by ffmpeg
+  (already required).
+- MCP: no `confirm_cost` for Kokoro (free); unknown / unloadable projects keep the guard.
+
+Known gaps / TODOs
+- The Hugging Face download itself could not be exercised here (CDN / Xet blocked); the files
+  were the verified same ones placed in the cache. CPU-only torch index not reachable here.
+- Real runs covered English (a) and Portuguese (p) on Linux; Japanese / Chinese extras, CUDA and
+  Windows not run. Kokoro v1.1-zh not supported; `.pt` voice files hashed by path.
+- `voices.json` will age (Backlog line).
+
+How to test
+- Full: `/home/claude/venv/bin/python -m pytest -q -n auto` (2403 passed, 2 skipped (the real Kokoro test without the extra, and the existing one), 10:18 on 2 cores; Step 64 had 2368 — 35 new tests).
+- Step only: `pytest tests/test_tts_kokoro.py tests/test_tts_openrouter.py tests/test_voices.py`.
+- With the extra (Python 3.12 venv): `pip install -e ".[dev,kokoro]"`, then `pytest
+  tests/test_tts_kokoro.py` runs `test_real_kokoro_synthesis` (downloads the model on first use;
+  where Hugging Face's CDN is blocked, place the verified files in `$HF_HOME/hub` and set
+  `HF_HUB_OFFLINE=1`). Example: `vidgen tts examples/minimal --variant kokoro`.

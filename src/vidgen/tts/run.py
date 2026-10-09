@@ -71,11 +71,14 @@ class TTSPlan:
         return [beat for beat in self.todo if beat.id not in self.reuse]
 
     def beat_cost(self, beat: BeatConfig) -> float | None:
-        """Estimated US dollars of ``beat``: 0 for a copy, OpenRouter's price per character x
-        its characters, ``None`` when unknown (ElevenLabs bills a plan's quota)."""
+        """Estimated US dollars of ``beat``: 0 for a copy and for Kokoro (local), OpenRouter's
+        price per character x its characters, ``None`` when unknown (ElevenLabs bills a plan's
+        quota)."""
         if beat.id in self.reuse:
             return 0.0
         voice = self.engine(beat)
+        if voice.provider == "kokoro":
+            return 0.0
         quote = self.rates.get(voice.model or "") if voice.provider == "openrouter" else None
         return None if quote is None or quote.cost is None else quote.cost * len(self.say(beat))
 
@@ -192,19 +195,28 @@ def context_texts(project: Project, spoken: dict[str, str]) -> dict[str, tuple[s
 
 #: What an ElevenLabs estimate would need (its price depends on the account's plan).
 ELEVENLABS_PRICE_NOTE = "ElevenLabs bills the characters against your plan's quota (no price estimate)"
+#: The cost of Kokoro beats (DESIGN.md §68).
+KOKORO_PRICE_NOTE = "free (local): Kokoro-82M runs on this computer"
 
 
 def price_tts(plan: TTSPlan, *, lookup: Callable[[list[str]], dict[str, Any]] | None = None) -> TTSPlan:
     """Fill ``plan``'s OpenRouter prices, notes, problems and price notes from OpenRouter's live
     TTS model list (a free lookup with a short timeout; offline: "price unknown", nothing
-    refused). ``lookup`` replaces :func:`vidgen.tts.openrouter.lookup_speech_models` (tests)."""
+    refused). ``lookup`` replaces :func:`vidgen.tts.openrouter.lookup_speech_models` (tests).
+    Kokoro beats cost nothing; their notes say what the first run downloads (no network)."""
     from vidgen.tts import openrouter
 
     beats = plan.synthesised()
     routed = [plan.engine(b) for b in beats if plan.engine(b).provider == "openrouter"]
+    local = [plan.engine(b) for b in beats if plan.engine(b).provider == "kokoro"]
     notes: list[str] = []
     if any(plan.engine(b).provider == "elevenlabs" for b in beats):
         notes.append(ELEVENLABS_PRICE_NOTE)
+    if local:
+        from vidgen.tts.kokoro import run_notes
+
+        notes.append(KOKORO_PRICE_NOTE)
+        plan.notes.extend(n for n in run_notes(local) if n not in plan.notes)
     if routed:
         found = (lookup or openrouter.lookup_speech_models)(list(dict.fromkeys(str(v.model) for v in routed)))
         for model, result in found.items():
@@ -223,8 +235,13 @@ def price_tts(plan: TTSPlan, *, lookup: Callable[[list[str]], dict[str, Any]] | 
 
 
 def describe_voice(voice: VoiceConfig) -> str:
-    """``openrouter mistralai/voxtral-mini-tts-2603, voice en_paul_neutral`` / an ElevenLabs
-    voice id (as the dry run names it)."""
+    """``openrouter mistralai/voxtral-mini-tts-2603, voice en_paul_neutral`` / ``kokoro af_heart
+    (lang a, American English), speed 1, cpu`` / an ElevenLabs voice id (as the dry run names it)."""
+    if voice.provider == "kokoro":
+        from vidgen.kokoro_voices import lang_name
+
+        speed = 1.0 if voice.speed is None else voice.speed
+        return f"kokoro {voice.voice} (lang {voice.lang}, {lang_name(voice.lang)}), speed {speed:g}, {voice.device}"
     if voice.provider != "openrouter":
         return voice.voice_id
     parts = [f"openrouter {voice.model}", f"voice {voice.voice or '(model default)'}"]
@@ -242,9 +259,13 @@ def _money(value: float) -> str:
 
 
 def estimate_text(plan: TTSPlan) -> str:
-    """``estimated $0.0007 (OpenRouter prices of 2026-10-08)`` (+ beats of unknown price)."""
+    """``estimated $0.0007 (OpenRouter prices of 2026-10-08)`` (+ beats of unknown price);
+    ``free (local): ...`` when only Kokoro voices."""
     total, unknown = plan.cost
-    known = len(plan.synthesised()) - unknown
+    beats = plan.synthesised()
+    if beats and all(plan.engine(b).provider == "kokoro" for b in beats):
+        return KOKORO_PRICE_NOTE
+    known = len(beats) - unknown
     text = f"estimated {_money(total)}" if known else "price unknown"
     if unknown and known:
         text += f" + {unknown} beat(s) of unknown price"
@@ -281,6 +302,7 @@ def _reported_cost(plan: TTSPlan, providers: Iterable[TTSProvider]) -> str:
 def _dry_run(project: Project, plan: TTSPlan, out: Callable[[str], None]) -> None:
     named = bool(project.config.voices)
     routed = any(plan.engine(b).provider == "openrouter" for b in plan.todo)
+    local = any(plan.engine(b).provider == "kokoro" for b in plan.todo)
     for beat in plan.todo:
         source = plan.reuse.get(beat.id)
         note = f"copy from {_relative(source, project.root)}" if source else f"{len(plan.say(beat))} chars"
@@ -296,10 +318,10 @@ def _dry_run(project: Project, plan: TTSPlan, out: Callable[[str], None]) -> Non
         f"dry run: {len(plan.todo)} beat(s) to generate, {plan.characters} characters; "
         f"{len(plan.up_to_date)} up to date"
     )
-    if named or routed:
+    if named or routed or local:
         for name, (beats, chars) in plan.characters_by_voice().items():
             out(f"  voice {name} ({describe_voice(project.voice(name))}): {beats} beat(s), {chars} characters")
-    if routed:
+    if routed or local:
         for model, quote in plan.rates.items():
             out(f"  price of {model}: {quote.basis}")
         for note in plan.notes:
@@ -323,8 +345,8 @@ def run_tts(
     """Generate missing/stale narration audio for ``project``; returns the executed plan.
 
     ``dry_run`` only prints what would be generated (no API key needed; OpenRouter prices are
-    looked up online, see :func:`price_tts`). The API key is needed only when at least one beat
-    must be synthesised. ``voices`` restricts it to the beats of those voices; ``provider``
+    looked up online, see :func:`price_tts`). The API key (Kokoro: the installed extra) is
+    needed only when at least one beat must be synthesised. ``voices`` restricts it to the beats of those voices; ``provider``
     replaces every beat's own voice provider (tests); ``lookup`` the OpenRouter model lookup.
     """
     plan = plan_tts(project, provider, beat_ids, force, voices)
@@ -351,6 +373,12 @@ def run_tts(
             raise VidgenError("cannot generate with these settings:\n  " + "\n  ".join(plan.problems))
         for note in plan.notes:
             out(f"note: {note}")
+    local = [plan.engine(b) for b in plan.synthesised() if plan.engine(b).provider == "kokoro"]
+    if provider is None and local:
+        from vidgen.tts.kokoro import run_notes
+
+        for note in run_notes(local):
+            out(f"note: {note}")
 
     context = context_texts(project, {beat.id: plan.say(beat) for _, beat in project.beats()})
     generated: list[str] = []
@@ -370,7 +398,8 @@ def run_tts(
             else:
                 previous, following = context[beat.id]
                 beat_provider = providers[beat.id]
-                timed = getattr(beat_provider, "synthesize_timed", None) if project.beat_voice(beat.id).timestamps else None
+                wanted = project.beat_voice(beat.id).timestamps or getattr(beat_provider, "timings_included", False)
+                timed = getattr(beat_provider, "synthesize_timed", None) if wanted else None
                 if timed is not None:
                     audio, alignment = timed(text, previous, following)
                 else:

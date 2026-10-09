@@ -108,6 +108,8 @@ src/vidgen/
   tts/__init__.py         # provider seam: get_provider(cfg), tts_warnings (§66)
   tts/elevenlabs.py       # ElevenLabs provider (stdlib urllib), cache by hash
   tts/openrouter.py       # OpenRouter TTS provider: /audio/speech, PCM -> MP3, prices, ZDR message (§66)
+  tts/kokoro.py           # local Kokoro-82M provider (extra schu-video-generator[kokoro]): engine, MP3, timings (§68)
+  kokoro_voices.py        # Kokoro's languages and voices, voice / lang resolution, validate warnings (§68)
   stt/                    # speech-to-text seam (§57): __init__.py (STTProvider, Transcript, stt_settings,
                           # get_stt_provider), faster_whisper.py (local, extra schu-video-generator[stt]), elevenlabs.py
   readback.py             # `vidgen readback`: transcripts cached, aligned with the spoken text, WER, edits, suggestions (§57)
@@ -144,6 +146,7 @@ src/vidgen/
   data/guide/             # AGENTS.md: the author guide printed by `vidgen guide` (package data, §59)
   data/gallery/           # stand-in files for the guide snippets' assets/ paths: picture.png, app.png, clip.webm (§60)
   data/openrouter/        # tts_models.json: OpenRouter's TTS models, voices, list prices, ZDR (dated snapshot, §66)
+  data/kokoro/            # voices.json: Kokoro-82M's languages, voices and grades (dated, §68)
 tools/                    # maintainer scripts, not shipped: vendor_icons.py + icon_set.json (§22, §23),
                           # make_screenshot.py, make_clip.py (example assets, §37, §38),
                           # make_gallery_clip.py (data/gallery/clip.webm, §60),
@@ -249,6 +252,7 @@ theme:
 
 voice:
   provider: elevenlabs                           # or openrouter (Step 62, §66: model, voice, instructions, speed)
+                                                 # or kokoro (Step 65, §68: voice, speed, lang, device)
   voice_id: nPczCjzI2devNBz1zQrb
   model_id: eleven_multilingual_v2
   output_format: mp3_44100_128
@@ -4694,3 +4698,102 @@ the measured loudness, §48).
   MCP dry runs offline with the `confirm_cost` guard; scrubbing; the tool never printing the
   key) and in `tests/test_tts_openrouter.py` (records written late: 404 → no `total_cost` → cost;
   giving up; no id; the run's message) and `tests/test_vector_images.py` (the live ZDR body).
+
+## 68. Refinements (Step 65, local Kokoro TTS; optional extra)
+
+- **Facts** (checked 2026-10-09): model `hexgrad/Kokoro-82M` v1.0 on Hugging Face, Apache-2.0
+  (weights and the `kokoro` / `misaki` packages), 82 M parameters (StyleTTS 2 + ISTFTNet),
+  `kokoro-v1_0.pth` 327,212,226 bytes, SHA256 `496dba118d1a58f5f3db2efc88dbdc216e0483fc89fe6e47ee1f2c53f18ad1e4`;
+  54 voices in `voices/` (~0.5 MB each), 9 languages `a b e f h i j p z`. PyPI `kokoro` 0.9.4
+  (2025-04-05; deps `huggingface-hub, loguru, misaki[en]>=0.9.4, numpy, torch, transformers`) and
+  `misaki` 0.9.4 both declare `Requires-Python <3.13,>=3.10`. `KPipeline(lang_code, repo_id,
+  model=True | KModel, device=None | cpu | cuda)` downloads `config.json` + the weights
+  (`hf_hub_download`) and each voice on first use; calling it with `(text, voice, speed,
+  split_pattern)` yields `Result(graphemes, phonemes, tokens, output)`, `audio` = float32 at 24
+  kHz. For `a` / `b` the tokens are misaki `MToken`s with `start_ts` / `end_ts` (seconds, from
+  the predicted durations, per chunk); other languages yield no tokens. English G2P = misaki +
+  spaCy `en_core_web_sm` (installed with `spacy.cli.download`, i.e. pip, on first use) + espeak-ng
+  fallback; `e f h i p` = espeak-ng; `j` / `z` need `misaki[ja]` / `misaki[zh]`. misaki's
+  `espeak.py` points phonemizer at the library **bundled in the `espeakng-loader` wheel** (Windows,
+  Linux, macOS) at import, so no system espeak-ng is used or needed (a Portuguese beat was voiced
+  here with no espeak-ng installed). Linux PyPI torch pulls ~4.3 GB of CUDA libraries + triton;
+  the CPU wheel index is the small path.
+- **Config** (`config.py`): `provider: kokoro` (`TTS_PROVIDERS`), `KOKORO_VOICE_KEYS = (voice,
+  speed, lang, device)`, `PROVIDER_VOICE_KEYS`; new `VoiceConfig.lang: a|b|e|f|h|i|j|p|z|null`,
+  `VoiceConfig.device: cpu|cuda|auto = cpu`; `VoiceEntry.lang`. `voice` / `speed` are shared with
+  OpenRouter. Keys of other providers are ignored on `voice:` (as §66).
+- **Resolution** (`kokoro_voices.resolve`, applied by `voices._with_language`): `lang` = given,
+  else the voice's first letter (`^[a-z][fm]_`), else the video `language` (`en`→a, `en-GB/IE/AU/NZ`
+  →b, `es` e, `fr` f, `hi` h, `it` i, `ja` j, `pt` p (also pt-PT), `zh` z; none → a); `voice` =
+  given, else the language's `default_voice` (af_heart, bf_emma, ef_dora, ff_siwis, hf_alpha,
+  if_sara, jf_alpha, pf_dora, zf_xiaobei); `speed` = given, else 1. A named voice that sets
+  `voice` without `lang` gets that voice's language (the base `lang` is not inherited then). A
+  language with no Kokoro voice and no `lang` / voice is a config error
+  (`voices._kokoro_language_problems`, inside `voice_provider_problems`, so variants too).
+- **One provider per video** (`voice_provider_problems` generalised): other-provider keys are
+  every key of the other providers not used by the base provider; the message names the owners
+  ("voice is an OpenRouter or Kokoro setting", "lang is a Kokoro setting"); a Kokoro named voice
+  changes `voice, speed, lang`. Existing ElevenLabs / OpenRouter messages unchanged.
+  `voices.audio_fields` now leaves out `device` (`RUNTIME_FIELDS`): a variant changing only the
+  device shares `audio/`.
+- **Provider** `tts/kokoro.py` (`KokoroProvider`, `name = "kokoro"`, `timings_included = True`):
+  nothing imports `kokoro` / torch until the first beat (validate, render, dry run never do; tested
+  via `sys.modules`). `check_credentials` = `check_installed(lang)`: the extra
+  (`find_spec("kokoro")`), `misaki[ja]` / `[zh]` (pyopenjtalk / jieba), `espeakng_loader` for
+  espeak languages → `VidgenError` with the command (`pip install "schu-video-generator[kokoro]"`;
+  on Python > 3.12 also the forced install that worked on 3.13: `--ignore-requires-python` +
+  `spacy>=3.8,<4`, `spacy-curated-transformers<0.4`, without which pip backtracks to a spaCy 4
+  pre-release sdist that fails to build). `KokoroEngine(device)`: one `KPipeline` per language,
+  the first one's `KModel` passed to the next (`model=`), shared by every voice of the process
+  (`shared_engine`, module dict) = loaded once per `vidgen tts`. `synthesize_timed`: pipeline
+  called with `split_pattern=None`, results' float audio → 16-bit PCM (`pcm16`) → MP3 with ffmpeg
+  (`openrouter.convert_to_mp3`, new `source=` for its messages; 128 kb/s, 24 kHz mono); token
+  times shifted by each chunk's offset → `alignment_from_tokens` (each token found in order in the
+  spoken text spreads its time over its characters, other characters take the previous end;
+  `None` when < 80 % of the words are timed) → stored like ElevenLabs' alignment, so captions /
+  SRT time words exactly and pronunciation maps back (`speech.map_word_times`). Non-English: no
+  alignment (estimates). While Kokoro loads / runs, fd 1 goes to stderr (`quiet_stdout`: spaCy's
+  pip install prints to stdout, which would break `--json`) and torch's load warnings are
+  ignored. Library exceptions → `explain()`: espeak-ng (both installs named), misaki extras,
+  CUDA (`device: cpu`), downloads (Xet / CAS, proxy, offline; `HF_HUB_DISABLE_XET=1` hint),
+  else `Kokoro could not voice the text: <type>: <msg>`.
+- **Hash**: `sha1(json.dumps({provider: kokoro, model: hexgrad/Kokoro-82M, weights:
+  kokoro-v1_0.pth, voice, lang, speed}, sort_keys=True, ensure_ascii=False) + "|" + spoken_text)`
+  with the resolved values (pinned in `tests/test_tts_kokoro.py`); not the device nor the package
+  version (an upgrade does not re-voice). ElevenLabs and OpenRouter keys pinned unchanged.
+- **Run** (`tts/run.py`): `run_tts` calls `synthesize_timed` when `voice.timestamps` **or** the
+  provider's `timings_included`; before synthesis prints `note:` lines (`kokoro.run_notes`: free
+  and local on <device>, the download still to come when the weights are not in the HF cache —
+  `hf_cache_dir()`: `HF_HUB_CACHE`, `HF_HOME/hub`, `XDG_CACHE_HOME/huggingface/hub`,
+  `~/.cache/huggingface/hub` — the extra / language packages missing). `TTSPlan.beat_cost` = 0
+  for Kokoro; `price_tts` adds `KOKORO_PRICE_NOTE` ("free (local): Kokoro-82M runs on this
+  computer") and the notes (no network); dry run prints per-voice lines `kokoro <voice> (lang x,
+  <Language>), speed s, <device>`, `note:` lines and `cost: free (local): ...`; the run summary has
+  no cost part.
+- **JSON / MCP**: `tts --json` beats and voices gain `lang` and `device` (Kokoro's; `null` for the
+  others), `model` `hexgrad/Kokoro-82M`, `provider_voice` the voice, `speed` 1.0 by default,
+  `voice_id` `null`; `estimated_cost` 0, `unknown_cost` 0, `price_note` the free note. MCP `tts`:
+  a real run needs `confirm_cost` unless the project (variant applied) loads and its
+  `voice.provider` is in `FREE_TTS = ("kokoro",)` (`mcp_server.tts_provider`); a project that
+  does not load still needs it (conservative). Tool text and server instructions say so.
+- **Validate** (`tts.tts_warnings` → `kokoro.voice_warnings` / `kokoro_voices.voice_warnings`,
+  `kokoro.install_warnings`; no network, nothing loaded): voice not in the bundled
+  `data/kokoro/voices.json` (dated 2026-10-09, did-you-mean, the language's best voices; `.pt`
+  files and blends `a,b` checked per part), voice of another language than `lang`, `lang` not the
+  video language (a / b both English: fine), `timestamps` with a language without timings, the
+  extra or `misaki[ja]` / `[zh]` not installed.
+- **Packaging**: extra `kokoro = ["kokoro>=0.9.4; python_version < '3.13'"]` (on 3.13 the extra
+  installs nothing instead of failing a combined `.[dev,kokoro]`; vidgen explains); package data
+  `data/kokoro/*`. Nothing of Kokoro is bundled (THIRD_PARTY_NOTICES).
+- **Live** (this workspace, 2026-10-09): Hugging Face's file CDN and Xet hosts are blocked by
+  the egress proxy, so the weights and three voices were fetched from Kokoro-FastAPI's GitHub
+  release / repository and verified against the model card's SHA256 (weights) and VOICES.md's
+  hash prefixes (af_heart `0ab5709b`, bf_emma `d0a423de`, pf_dora `07e4ff98`), then laid out as
+  an HF cache and used with `HF_HUB_OFFLINE=1` — vidgen's normal `hf_hub_download` path. Python
+  3.12 venv with `pip install -e ".[dev,kokoro]"` (torch 2.14.1, transformers 5.19, manim 0.22):
+  `vidgen tts` voiced 2 English + 1 Portuguese beats (MP3 24 kHz mono; `.align.json` for the
+  English ones), a preview render's SRT kept the written words through the pronunciation;
+  ~0.7x real time on 2 CPU cores (3.6 s for 4.8 s of speech), ~10 s to load. Python 3.13:
+  the forced install above, then a real synthesis with word timestamps, worked.
+- **Not done**: Kokoro v1.1-zh (`hexgrad/Kokoro-82M-v1.1-zh`), custom `.pt` voice files are not
+  hashed by content, no streaming, no automatic download of `misaki[ja]` / `[zh]`.

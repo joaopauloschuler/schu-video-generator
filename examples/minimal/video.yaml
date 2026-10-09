@@ -18,6 +18,7 @@
 #   vidgen tts examples/minimal --dry-run --voice guest          # the guest's beats and characters
 #   vidgen tts examples/minimal --dry-run --json                 # the same as JSON (what an MCP agent sees)
 #   vidgen tts examples/minimal --dry-run --variant openrouter   # voiced through OpenRouter: model, voice, estimated cost
+#   vidgen tts examples/minimal --variant kokoro                 # voiced locally by Kokoro, free (schu-video-generator[kokoro])
 #   vidgen mcp --root examples                                   # MCP server for an AI agent's client (schu-video-generator[mcp])
 #   vidgen storyboard examples/minimal --variant subtitled --scene note   # a two-speaker dialogue
 #   vidgen list-themes examples/minimal --swatches build/themes.png  # every theme preset at a glance
@@ -27,7 +28,7 @@
 #   vidgen slides examples/minimal --format pdf --notes --variant pt   # PDF deck, Portuguese notes pages (schu-video-generator[pdf])
 # There is no narration audio in this example, so beats are timed from their word count
 # (narration.words_per_second); run `vidgen tts` with an ElevenLabs key to voice it (or
-# `vidgen tts --variant openrouter` with an OpenRouter key).
+# `vidgen tts --variant openrouter` with an OpenRouter key, or `--variant kokoro`: free, local).
 title: "vidgen: the built-in scenes"
 output: minimal
 
@@ -68,6 +69,12 @@ variants:
       voice: en_paul_neutral
     voices:                       # the guest: drop its ElevenLabs keys, pick a Voxtral voice
       guest: {voice_id: null, settings: null, voice: gb_oliver_curious}
+  kokoro:                         # narrated by Kokoro-82M on this computer: free, no key (the kokoro extra);
+    voice:                        # audio in audio/kokoro/ (none committed); English beats get word timings
+      provider: kokoro
+      voice: af_heart
+    voices:                       # the guest: drop its ElevenLabs keys, a British male Kokoro voice
+      guest: {voice_id: null, settings: null, voice: bm_george}
 
 theme:
   preset: dark_tech   # the default look; values written here would override every variant's preset

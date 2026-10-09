@@ -172,8 +172,11 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
 - **Narration providers**: ElevenLabs stays the default; optionally, `voice: {provider:
   openrouter, model: ..., voice: ...}` voices the video with one of OpenRouter's TTS models
   (Kokoro, Voxtral, Gemini TTS, ...; `OPENROUTER_API_KEY`, priced per character, estimated by
-  `vidgen tts --dry-run`). One TTS provider per video — named voices change the voice, not the
-  provider — and a variant may switch the whole video to the other one
+  `vidgen tts --dry-run`), or `voice: {provider: kokoro, voice: af_heart}` voices it on your own
+  computer with [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) — free, offline after a
+  one-time 330 MB download, English word timings for karaoke captions (optional extra
+  `schu-video-generator[kokoro]`, below). One TTS provider per video — named voices change the
+  voice, not the provider — and a variant may switch the whole video to another one
   ([reference](docs/CONFIG.md#narration-providers)).
 - **Sound effects**: eleven synthesised sounds (whoosh, swoosh, pop, click, tick, typing, riser,
   chime, success, error, thud; free to use in your videos, including commercially; no
@@ -312,6 +315,24 @@ ffmpeg.) **Manim**: 0.19 or newer (tested with 0.19, 0.21 and 0.22).
    then open a new terminal. Each is read only from its variable, never written anywhere. The
    same OpenRouter key voices the narration with `voice: {provider: openrouter, ...}`.
 10. Optional, only for `vidgen mcp` (the MCP server for AI agents): `pip install ".[mcp]"`.
+11. Optional, only for free local narration (`voice: {provider: kokoro}`):
+    `pip install ".[kokoro]"` — PyTorch (Windows wheels from PyPI are CPU-only, ~250 MB), the
+    `kokoro` package and its phonemizer. **Python 3.10–3.12**: the `kokoro` package declares no
+    support for 3.13 yet, so make this virtual environment with `py -3.12 -m venv .venv` (on 3.13
+    the extra installs nothing and `vidgen tts` prints the command that installs it anyway, which
+    worked on 3.13: `pip install --ignore-requires-python "kokoro>=0.9.4" "misaki[en]>=0.9.4"
+    "spacy>=3.8,<4" "spacy-curated-transformers<0.4"`). No API key. The first `vidgen tts` downloads
+    the model from Hugging Face (`kokoro-v1_0.pth`, 327 MB, plus ~0.5 MB per voice) into
+    `%USERPROFILE%\.cache\huggingface\hub` (set `HF_HOME` to move it), and for English voices
+    spaCy's small English model (13 MB, installed with pip); after that it works offline.
+    **espeak-ng** (Kokoro's pronunciation for Spanish, French, Hindi, Italian and Portuguese, and
+    for English words missing from its dictionary) comes inside the `espeakng-loader` wheel that
+    the extra installs, and kokoro loads that copy: nothing else to install. If `vidgen tts` says
+    espeak-ng cannot be loaded, run `pip install --force-reinstall espeakng-loader`; installing
+    espeak-ng itself (`espeak-ng.msi` from <https://github.com/espeak-ng/espeak-ng/releases>) only
+    helps older kokoro / misaki versions, which find it through the environment variable
+    `PHONEMIZER_ESPEAK_LIBRARY=C:\Program Files\eSpeak NG\libespeak-ng.dll`. Japanese and Chinese
+    voices also need `pip install "misaki[ja]"` / `"misaki[zh]"`.
 
 If PowerShell refuses to run `Activate.ps1`, run
 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
@@ -342,13 +363,30 @@ sudo apt install texlive texlive-latex-extra dvisvgm
 export ELEVENLABS_API_KEY=your_key            # narration (vidgen tts)
 export OPENAI_API_KEY=your_key                # generated pictures (vidgen imagegen, default provider)
 export OPENROUTER_API_KEY=your_key            # imagegen.provider: openrouter and/or voice.provider: openrouter
+
+# 6. Optional: free local narration with Kokoro (voice.provider: kokoro); Python 3.10-3.12 only
+pip install torch --index-url https://download.pytorch.org/whl/cpu   # CPU-only PyTorch (~200 MB)
+pip install ".[kokoro]"
+sudo apt install espeak-ng                    # optional fallback: kokoro uses the copy bundled in espeakng-loader
 ```
 
 Fonts are bundled, so there is nothing to install for them. Other distributions need the same
 pieces: Python 3.10–3.13 with venv, ffmpeg, and the Cairo and Pango development packages (Fedora:
 `sudo dnf install python3-devel ffmpeg-free cairo-devel pango-devel pkgconf-pkg-config gcc`). Each new
 terminal needs `source .venv/bin/activate` again before running `vidgen`. The optional extras
-work as on Windows: `pip install ".[pdf]"`, `".[stt]"`, `".[mcp]"`.
+work as on Windows: `pip install ".[pdf]"`, `".[stt]"`, `".[mcp]"`, `".[kokoro]"`.
+
+**Kokoro on Linux.** The `kokoro` package declares Python 3.10–3.12 (with 3.13 the extra installs
+nothing: use `python3.12 -m venv .venv`, or the forced install of Windows step 11, which worked on
+3.13 here). Installing CPU-only PyTorch first, as in step 6, keeps
+it small: PyPI's Linux PyTorch brings the CUDA libraries along (about 5 GB with `triton` and the
+`nvidia-*` packages); if you do have an NVIDIA GPU, that is the one to keep, and `voice: {device:
+cuda}` uses it. The first `vidgen tts` downloads the model from Hugging Face (`kokoro-v1_0.pth`,
+327 MB, plus ~0.5 MB per voice) into `~/.cache/huggingface/hub` (`HF_HOME` moves it) and, for
+English, spaCy's `en_core_web_sm` (13 MB, with pip); later runs need no network. espeak-ng comes
+bundled in the `espeakng-loader` wheel; `sudo apt install espeak-ng` does no harm and is the
+fallback named by vidgen's error if the bundled library cannot be loaded. Japanese / Chinese:
+`pip install "misaki[ja]"` / `"misaki[zh]"`.
 
 ### macOS
 
