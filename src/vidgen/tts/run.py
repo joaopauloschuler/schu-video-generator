@@ -254,20 +254,27 @@ def estimate_text(plan: TTSPlan) -> str:
 def _reported_cost(plan: TTSPlan, providers: Iterable[TTSProvider]) -> str:
     """Ask each provider that can tell (OpenRouter) what its requests cost; sets
     ``plan.charged`` and returns the ``, $X charged by openrouter`` part of the summary (``, cost
-    not reported by openrouter`` when it could not be read; empty for other providers)."""
+    not reported by openrouter yet (why; see the activity page)`` when it could not be read;
+    empty for other providers). Waits at most ``openrouter.COST_WAITS`` for the records."""
+    from vidgen.tts.openrouter import ACTIVITY_PAGE
+
     asked = [p for p in {id(p): p for p in providers}.values() if callable(getattr(p, "reported_cost", None))]
-    asked = [p for p in asked if getattr(p, "generations", None)]
+    asked = [p for p in asked if getattr(p, "requests", 0)]
     if not asked:
         return ""
     total, found = 0.0, 0
+    problems: list[str] = []
     for p in asked:
         cost, count = p.reported_cost()  # type: ignore[attr-defined]
         total, found = total + cost, found + count
-    requests = sum(len(p.generations) for p in asked)  # type: ignore[attr-defined]
+        if getattr(p, "cost_problem", None):
+            problems.append(p.cost_problem)  # type: ignore[attr-defined]
+    requests = sum(p.requests for p in asked)  # type: ignore[attr-defined]
+    why = f"{problems[0]}; " if problems else ""
     if not found:
-        return ", cost not reported by openrouter"
+        return f", cost not reported by openrouter yet ({why}see {ACTIVITY_PAGE})"
     plan.charged = total
-    part = f" for {found} of {requests} requests" if found < requests else ""
+    part = f" for {found} of {requests} requests ({why}see {ACTIVITY_PAGE})" if found < requests else ""
     return f", {_money(total)} charged by openrouter{part}"
 
 

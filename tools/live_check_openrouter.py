@@ -17,10 +17,28 @@ OpenRouter key. It
 per character is listed (``--zdr``: only those with a ZDR endpoint), prints ``vidgen tts
 --dry-run`` of ONE short beat with the cheapest, and with ``--yes`` voices it through vidgen's own
 code path (``vidgen.tts.run.run_tts``) in a temporary project, then prints the MP3's path and
-duration and the cost OpenRouter reported.
+duration, the ``X-Generation-Id`` and the cost OpenRouter reported; when no cost came within
+vidgen's own wait (15 s), it says why and keeps asking ``GET /generation`` for ``--wait``
+seconds, printing each answer (to see how late the record comes, or what it lacks).
+
+``--generation ID`` only asks ``GET /api/v1/generation?id=ID`` (needs the key; free) until the
+record has ``total_cost`` or ``--wait`` seconds passed.
+
+Options:
+  --yes            really generate one picture / one beat (costs money; without it all is free)
+  --model ID       use this model instead of the cheapest found
+  --show N         how many of the cheapest models to list (default 3)
+  --zdr            only models with a Zero Data Retention endpoint (accounts that require ZDR)
+  --svg            a vector (SVG) picture with a model that returns SVG
+  --tts            text to speech instead of a picture
+  --voice NAME     --tts: the model's voice (default: an English one of its list)
+  --generation ID  only probe one generation record's cost
+  --wait S         seconds --generation (and --tts --yes without a cost) keep asking (default 60)
 
 The key is read only from the environment variable ``OPENROUTER_API_KEY`` (by vidgen, at the
-moment of the request); this script never prints or stores it. Run from the repository root::
+moment of the request); this script never prints or stores it: it only says whether it is
+set, and the error texts it prints come from vidgen, which removes the key from them (it is
+sent only as the ``Authorization`` header, which no error quotes). Run from the repository root::
 
     python tools/live_check_openrouter.py            # free: model list + dry run
     python tools/live_check_openrouter.py --yes      # one paid picture (a few cents at most)
@@ -29,6 +47,7 @@ moment of the request); this script never prints or stores it. Run from the repo
     python tools/live_check_openrouter.py --svg [--zdr] [--yes] # one vector (SVG) picture (~$0.08)
     python tools/live_check_openrouter.py --tts [--zdr] [--yes] [--model ID] [--voice NAME]
                                                                 # one short beat of narration (< $0.01)
+    python tools/live_check_openrouter.py --generation gen-... [--wait 60]   # free: one cost record
 """
 
 from __future__ import annotations
@@ -191,8 +210,9 @@ def tts_check(args: argparse.Namespace) -> int:
     if not args.yes:
         print("\ndry run only: add --yes to voice this one beat (it costs the price above)")
         return 0
+    provider = ortts.OpenRouterTTSProvider(project.voice())   # the run's own provider, kept to show its generation ids
     try:
-        plan = run_tts(project)
+        plan = run_tts(project, provider=provider)
     except VidgenError as exc:
         print(f"error: {exc}")
         return 1
@@ -201,9 +221,58 @@ def tts_check(args: argparse.Namespace) -> int:
     mp3 = project.audio_dir / "check.mp3"
     print(f"\nsaved: {mp3}")
     print(f"duration: {audio_duration(mp3):.2f} s, {mp3.stat().st_size} bytes")
+    print(f"X-Generation-Id: {', '.join(provider.generations) or '(none: the response had no such header)'}")
     print(f"cost reported by OpenRouter: {plan.charged if plan.charged is not None else 'not reported'}")
+    if plan.charged is None:
+        print(f"why: {provider.cost_problem}")
+        for generation in provider.generations[:1]:
+            probe_generation(generation, args.wait)
     print(f"listen to it, or check it: vidgen readback {folder}")
     return 0
+
+
+#: Fields of a generation record worth showing (never the key: it is not in the record).
+GENERATION_FIELDS = ("id", "model", "provider_name", "api_type", "total_cost", "usage", "created_at", "generation_time")
+
+
+def probe_generation(generation: str, wait: float) -> int:
+    """``--generation ID``: ask ``GET /api/v1/generation?id=ID`` (with the key) now and again
+    after 1, 2, 4, 8... seconds until it has ``total_cost`` or ``wait`` seconds passed,
+    printing each answer (HTTP status, or the record's main fields)."""
+    import time
+    import urllib.error
+    import urllib.parse
+
+    from vidgen.tts import openrouter as ortts
+
+    try:
+        key = orr.read_api_key("tts")
+    except VidgenError as exc:
+        print(f"error: {exc}")
+        return 1
+    url = f"{ortts.GENERATION_URL}?id={urllib.parse.quote(generation, safe='')}"
+    headers = {"Authorization": f"Bearer {key}", "Accept": "application/json", **orr.APP_HEADERS}
+    start, delay = time.monotonic(), 1.0
+    print(f"\nprobing GET /generation?id={generation} for up to {wait:g} s")
+    while True:
+        elapsed = time.monotonic() - start
+        try:
+            doc = json.loads(httpapi.get(url, headers=headers, service="OpenRouter", timeout=10, secret=key).decode("utf-8"))
+            data = doc.get("data") if isinstance(doc, dict) else None
+            shown = {k: data.get(k) for k in GENERATION_FIELDS} if isinstance(data, dict) else doc
+            print(f"  +{elapsed:4.1f} s: HTTP 200 {json.dumps(shown)}")
+            if isinstance(data, dict) and isinstance(data.get("total_cost"), (int, float)):
+                return 0
+        except urllib.error.HTTPError as exc:
+            body = httpapi.scrub(exc.read().decode("utf-8", errors="replace"), key).strip()
+            print(f"  +{elapsed:4.1f} s: HTTP {exc.code} {body[:300]}")
+        except (VidgenError, ValueError) as exc:
+            print(f"  +{elapsed:4.1f} s: {httpapi.scrub(str(exc), key)}")
+        if elapsed + delay > wait:
+            print("  no total_cost within the wait")
+            return 1
+        time.sleep(delay)
+        delay = min(delay * 2, 16.0)
 
 
 def main() -> int:
@@ -215,9 +284,13 @@ def main() -> int:
     parser.add_argument("--tts", action="store_true", help="text to speech: one short beat with the cheapest TTS model")
     parser.add_argument("--voice", help="--tts: the model's voice to use (default: an English one of its list)")
     parser.add_argument("--zdr", action="store_true", help="only models with a Zero Data Retention endpoint (accounts requiring ZDR)")
+    parser.add_argument("--generation", metavar="ID", help="only ask GET /generation?id=ID (with the key) until it reports total_cost")
+    parser.add_argument("--wait", type=float, default=60.0, help="--generation / --tts --yes: seconds to keep asking (default 60)")
     args = parser.parse_args()
 
     print("key:", "OPENROUTER_API_KEY is set" if os.environ.get(orr.API_KEY_ENV, "").strip() else "OPENROUTER_API_KEY is NOT set")
+    if args.generation:
+        return probe_generation(args.generation, args.wait)
     if args.tts:
         return tts_check(args)
     scratch = Path(tempfile.mkdtemp(prefix="vidgen-or-prices-"))

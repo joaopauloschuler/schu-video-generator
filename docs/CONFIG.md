@@ -693,9 +693,11 @@ the provider not in use are ignored.
 
 ## Narration providers
 
-One TTS provider voices the whole video: **ElevenLabs** (the default; everything above) or
-**OpenRouter**, which reaches many TTS models (Mistral Voxtral, Kokoro, Gemini TTS, MiniMax,
-ElevenLabs' own models, Microsoft MAI-Voice...) with one key.
+One TTS provider voices the whole video: **ElevenLabs** (the default; everything above) or,
+optionally, **OpenRouter**, which reaches many TTS models (Mistral Voxtral, Kokoro, Gemini TTS,
+MiniMax, ElevenLabs' own models, Microsoft MAI-Voice...) with one key. Nothing changes for a
+project that does not set `voice.provider: openrouter` (likewise OpenAI stays the default image
+provider).
 
 ```yaml
 voice:
@@ -722,7 +724,12 @@ $0.000004, Voxtral $0.0000176, ElevenLabs v3 through OpenRouter $0.00004 per cha
 2026-10-08, the highest of each model's providers), while Gemini TTS and Seed Audio also bill the
 generated audio (no estimate). `vidgen tts --dry-run` prints the current price per character of
 the model and the estimated cost of the run (from OpenRouter's public model list, a free lookup;
-offline: "price unknown"); a real run prints what OpenRouter reports it charged.
+offline: "price unknown"). The estimate uses the highest price of the model's providers, so the
+real charge can be lower (Kokoro's cheapest provider asks $0.00000062 per character). A real run
+then prints what OpenRouter reports it charged: OpenRouter writes each request's cost record a
+few seconds after the audio, so vidgen asks again for up to 15 s; when the records are still
+missing it says `cost not reported by openrouter yet (why; see https://openrouter.ai/activity)`
+— the audio is stored all the same, and the activity page shows the cost later.
 
 **One provider per video.** A named voice of [`voices:`](#multiple-voices-voices) may change
 `voice`, `instructions`, `speed` (and `model`) but not `provider`: `voices.ana.provider:
@@ -761,7 +768,11 @@ If your account requires Zero Data Retention (or excludes providers that keep or
 prompts), choose a model with a ZDR endpoint: a model without one fails with a clear message that
 links the privacy settings and lists the TTS models with a ZDR endpoint (on 2026-10-08 27 of 32,
 e.g. `hexgrad/kokoro-82m`, `mistralai/voxtral-mini-tts-2603`, the ElevenLabs, Gemini TTS, Deepgram
-and MAI-Voice models; not MiniMax, Qwen or Grok).
+and MAI-Voice models; not MiniMax, Qwen or Grok). Both `hexgrad/kokoro-82m` (voice `af_alloy`)
+and `google/gemini-3.8-flash-lite-tts` (voice `Kore`) voiced a beat live on 2026-10-09 with an
+account requiring ZDR. To check a model: look for its id among the `model_id`s of
+`https://openrouter.ai/api/v1/endpoints/zdr` (public, no key), or, from a source checkout, run
+`python tools/live_check_openrouter.py --tts --zdr`.
 
 ## Multiple voices (`voices:`)
 
@@ -1171,7 +1182,13 @@ openrouter` and their stored pictures are unchanged.
   image models that have a ZDR endpoint (from OpenRouter's public list
   `https://openrouter.ai/api/v1/endpoints/zdr`; on 2026-10-08 e.g.
   `bytedance-seed/seedream-5-0-flash`, `bytedance-seed/seedream-4.5`, the Gemini, Krea and MAI
-  image models — not Recraft or FLUX).
+  image models — not Recraft or FLUX, and no SVG model). Seen live on 2026-10-09 with an account
+  requiring ZDR: `recraft/recraft-v4.1-flash` and `black-forest-labs/flux.2-klein-4b` refused,
+  `bytedance-seed/seedream-5-0-flash` made a 1024x1024 picture in ~10 s for $0.018 (the dry
+  run's estimate). To check a model before choosing it: open
+  `https://openrouter.ai/api/v1/endpoints/zdr` (public, no key) and look for its id among the
+  `model_id`s, or, from a source checkout, `python tools/live_check_openrouter.py --zdr` lists
+  the cheapest image models that have one.
 
 ```
 $ vidgen imagegen my_video --dry-run
@@ -4797,7 +4814,7 @@ message says how many beats were done (their MP3s are kept: run again to continu
 | `prices` | object | `{model: {per_character, basis}}` of the OpenRouter models used (`per_character` `null` when unknown; `basis` says why) |
 | `notes`, `problems` | list | OpenRouter: what its live model list says about the voices (a voice it does not list, `instructions` / `speed` a model may ignore) and what a run refuses before paying (a model it does not have) |
 | `charged` | float \| null | US dollars OpenRouter reported for this run's requests; `null` in a dry run, with ElevenLabs, or when not reported |
-| `voices` | object | `{voice name: {voice_id, provider, model, provider_voice, instructions, speed, beats, characters}}` of the beats to synthesise (`default` = the base voice) |
+| `voices` | object | `{voice name: {voice_id, provider, model, provider_voice, instructions, speed, beats, characters}}` of the beats to synthesise (`default` = the base voice; `voice_id` `null` in an OpenRouter video) |
 | `beats` | list | the beats to voice, in video order: `{scene, beat, voice, provider, model, provider_voice, instructions, speed, action, characters, estimated_cost, says, source}`; `model` / `provider_voice` are ElevenLabs' `model_id` / `voice_id` or OpenRouter's `model` / `voice`; `action` `generate` (an API call) or `copy` (the base `audio/` MP3 of a variant beat that did not change; 0 characters, `source` its path), `estimated_cost` `null` when unknown, `says` the text sent when [pronunciation](#pronunciation-pronunciation) changed it (else `null`) |
 | `generated` | list | beat ids voiced by this run (`[]` for a dry run) |
 | `up_to_date` | list | beat ids skipped because their MP3 is current |

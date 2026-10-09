@@ -752,7 +752,9 @@ before a real run. Then listen to one beat (`vidgen tts --beat ID`, `vidgen read
 voicing the whole video. One provider per video: named `voices:` change `voice` / `instructions`
 / `speed`, not `provider`; try another provider in a variant (it gets its own `audio/<variant>/`).
 If the account requires Zero Data Retention, pick a model with a ZDR endpoint (most TTS models
-have one; vidgen's error lists them when a model is refused).
+have one; vidgen's error lists them when a model is refused). A real run ends with what
+OpenRouter charged, or `cost not reported by openrouter yet (...)` when its cost records lag:
+the audio is stored all the same.
 
 **Writing good `instructions`** (OpenRouter models that read them, e.g. Gemini TTS: the dry run
 notes when a model ignores them). Describe the speaker and the delivery in a few words, not the

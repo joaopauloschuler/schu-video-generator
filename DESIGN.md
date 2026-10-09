@@ -4589,8 +4589,8 @@ the measured loudness, §48).
   `audio/mpeg`), WAV and PCM (`s16le`, rate from `Content-Type` `rate=` else 24000, mono)
   converted with ffmpeg (`libmp3lame`, 128 kb/s) in a temporary folder; anything else (JSON,
   HTML) → error quoting its start. `X-Generation-Id`s are kept on the provider;
-  `reported_cost()` reads `GET /generation?id=` for each (one retry after 1 s on 404: the
-  record can lag), never raises. Key: `imagegen.openrouter.read_api_key("tts")` (the missing-key
+  `reported_cost()` reads `GET /generation?id=` for each, never raises (retries: §67). Key:
+  `imagegen.openrouter.read_api_key("tts")` (the missing-key
   message names `vidgen tts --dry-run`).
 - **Hash**: `sha1(json.dumps({provider, model, voice, instructions, speed}, sort_keys=True,
   ensure_ascii=False) + "|" + spoken_text)` — every key that changes the audio; ElevenLabs keys
@@ -4640,3 +4640,46 @@ the measured loudness, §48).
 - **Not done**: voice cloning (`input_references`), multi-speaker input, provider routing
   preferences (`provider.zdr` is not sent: the account setting decides), per-token / per-second
   estimates (Gemini TTS, Seed Audio), streaming; no real paid request was made here (no key).
+
+## 67. Refinements (Step 63, review of Phase F)
+
+- **Live results** (the coordinator, owner's key, account requiring ZDR, 2026-10-09): image
+  models without a ZDR endpoint (`recraft/recraft-v4.1-flash`, `black-forest-labs/flux.2-klein-4b`)
+  → HTTP 404 `0 endpoints out of 1 requested are available matching your guardrail restrictions
+  and data policy ... ZDR violation (account settings) ...` with `metadata.ineligibility_reasons:
+  [{reason: zdr-violation-by-account, ...}]` (recognised by `is_policy_error`; pinned in
+  `conftest.LIVE_ZDR_404`); `bytedance-seed/seedream-5-0-flash` 1K 1:1 → 1024x1024 PNG, 9.7 s,
+  `usage.cost` $0.018 = the estimate. TTS `hexgrad/kokoro-82m` / `af_alloy` → MP3 (24 kHz mono,
+  4.46 s); `google/gemini-3.8-flash-lite-tts` / `Kore` → PCM converted (4.68 s). Both runs
+  printed "cost not reported": the `X-Generation-Id` header was there (the line is printed only
+  for providers with ids), so `GET /generation` gave no `total_cost` within one 1 s retry. Key
+  usage rose $0.000038 for both beats: Kokoro routed to its cheapest provider (61 × $0.00000062),
+  6x below vidgen's highest-provider estimate (an upper bound, as documented).
+- **Cost lookup** (`OpenRouterTTSProvider.reported_cost(timeout, waits=COST_WAITS)`):
+  OpenRouter writes generation records asynchronously, so every request whose record is not
+  there yet — HTTP 404, 429 / 5xx / 524 / 529, unreachable, a record without a numeric
+  `total_cost` — is asked again after each of `COST_WAITS` = 1, 2, 4, 8 s (all requests in one
+  round per wait: at most 15 s after a run, plus a deadline of `sum(waits) + 2·timeout`); other
+  statuses (400 / 401 / 403) and unreadable JSON are not retried. `cost_problem` (new attribute)
+  says why a request was left out (`GET /generation answered HTTP 404 for gen-...: <body, key
+  scrubbed> (still missing after waiting 15 s)`, `the generation record of ... has no total_cost
+  yet`, `N audio response(s) came without an X-Generation-Id header`); `requests` counts audio
+  responses (with or without an id). `run._reported_cost` asks every provider with `requests`
+  and prints `, cost not reported by openrouter yet (<why>; see https://openrouter.ai/activity)`
+  or `for K of N requests (<why>; see ...)`. Never fails the run.
+- **Key hygiene**: `httpapi.scrub` also removes the key as `repr` escapes it (http.client quotes a
+  rejected header value as bytes); `httpapi.get(..., secret=)` scrubs its errors (used by the
+  key-authenticated `/generation` lookup) and wraps `http.client.HTTPException`;
+  `imagegen.openrouter.read_api_key` refuses a key with spaces, control or non-ASCII characters
+  without quoting it.
+- **JSON**: `tts --json` `voices.<name>.voice_id` is `null` in an OpenRouter video (it showed
+  the ElevenLabs default id).
+- **Live check** `tools/live_check_openrouter.py`: `--generation ID [--wait S]` probes one
+  generation record (status / main fields each time, backoff 1 → 16 s); `--tts --yes` keeps the
+  provider, prints the `X-Generation-Id`s and, without a cost, `cost_problem` and the probe of the
+  first id. Options documented in the docstring.
+- **Tests** `tests/test_phase_f_review.py` (imagegen → render with a PNG and a drawn, recoloured
+  SVG; OpenRouter tts → render with captions; a variant switching provider; one-provider errors;
+  MCP dry runs offline with the `confirm_cost` guard; scrubbing; the tool never printing the
+  key) and in `tests/test_tts_openrouter.py` (records written late: 404 → no `total_cost` → cost;
+  giving up; no id; the run's message) and `tests/test_vector_images.py` (the live ZDR body).

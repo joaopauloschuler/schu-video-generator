@@ -17,7 +17,8 @@ voices and list price) and ``GET /api/v1/models/{author}/{slug}/endpoints`` (eac
 price). Most models are priced per input character (``pricing.prompt``, completion 0); models
 that also bill generated audio (``pricing.completion``: per second or per audio token) have no
 estimate. A real run reads what each request cost from ``GET /api/v1/generation?id=`` (with
-the key; the id comes in the ``X-Generation-Id`` header).
+the key; the id comes in the ``X-Generation-Id`` header); OpenRouter writes those records
+asynchronously, so a record not there yet is asked for again for up to 15 s.
 """
 
 from __future__ import annotations
@@ -31,7 +32,7 @@ import tempfile
 import time
 import urllib.error
 import urllib.parse
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
 from importlib import resources
@@ -44,6 +45,7 @@ from vidgen.errors import VidgenError
 from vidgen.imagegen import PriceQuote
 from vidgen.imagegen.openrouter import (
     API_BASE,
+    API_KEY_ENV,
     APP_HEADERS,
     LOOKUP_TIMEOUT,
     SERVICE,
@@ -60,6 +62,11 @@ API_URL = f"{API_BASE}/audio/speech"
 MODELS_URL = f"{API_BASE}/models?output_modalities=speech"
 #: What one request cost (``data.total_cost``; needs the key).
 GENERATION_URL = f"{API_BASE}/generation"
+#: Seconds to wait before asking ``/generation`` again for records not written yet (OpenRouter
+#: writes them asynchronously after the response): at most 15 s after a paid run.
+COST_WAITS: tuple[float, ...] = (1.0, 2.0, 4.0, 8.0)
+#: Where people see each request's cost when the lookup gives none.
+ACTIVITY_PAGE = "https://openrouter.ai/activity"
 #: Where people browse the TTS models.
 MODELS_PAGE = "https://openrouter.ai/models?output_modalities=speech"
 #: Model id prefixes that return only raw PCM (Gemini TTS answers 400 to ``mp3``).
@@ -369,7 +376,8 @@ class OpenRouterTTSProvider:
     are retried with exponential backoff (``backoff * 2**attempt`` seconds, or ``Retry-After``,
     capped at ``max_wait``). ``sleep``, ``zdr`` (TTS models with a ZDR endpoint, for the
     data-policy message) and ``ffmpeg`` are injectable for tests. ``generations`` collects the
-    ``X-Generation-Id`` of each request (for :meth:`reported_cost`).
+    ``X-Generation-Id`` of each request (for :meth:`reported_cost`; ``sleep`` also paces its
+    waits).
     """
 
     name = "openrouter"
@@ -398,6 +406,10 @@ class OpenRouterTTSProvider:
         self._ffmpeg = ffmpeg
         self._pcm = voice.model.startswith(PCM_ONLY_PREFIXES)
         self.generations: list[str] = []
+        #: Audio responses received (a response without ``X-Generation-Id`` has no cost record).
+        self.requests = 0
+        #: Why :meth:`reported_cost` left a request out (``None``: all reported).
+        self.cost_problem: str | None = None
 
     @property
     def model(self) -> str:
@@ -457,9 +469,10 @@ class OpenRouterTTSProvider:
                 data, headers = self._send(text)
             else:
                 raise
+        self.requests += 1
         generation = headers.get("x-generation-id")
         if generation:
-            self.generations.append(generation)
+            self.generations.append(generation.strip())
         return as_mp3(data, headers.get("content-type"), self.response_format, self._ffmpeg)
 
     def _send(self, text: str) -> tuple[bytes, dict[str, str]]:
@@ -475,31 +488,71 @@ class OpenRouterTTSProvider:
         )
         return data, got
 
-    def reported_cost(self, *, timeout: float = 10.0) -> tuple[float, int]:
+    def reported_cost(self, *, timeout: float = 10.0, waits: Sequence[float] = COST_WAITS) -> tuple[float, int]:
         """US dollars OpenRouter reports for this provider's requests (``GET /generation``, with
-        the key) and how many of them it reported; a request whose record is not there yet is
-        asked once more a second later. Never raises."""
+        the key) and how many of them it reported. OpenRouter writes a generation's record
+        asynchronously, a few seconds after the audio came back, so records not there yet (HTTP
+        404, a record without ``total_cost``, a transient error) are asked again after each of
+        ``waits`` seconds (all requests together: at most ``sum(waits)`` in all); what is still
+        missing then is left out and :attr:`cost_problem` says why. Never raises."""
+        self.cost_problem = None
         try:
             key = read_api_key("tts")
         except VidgenError:
+            self.cost_problem = f"{API_KEY_ENV} is not set or not usable"
             return 0.0, 0
         headers = {"Authorization": f"Bearer {key}", "Accept": "application/json", **APP_HEADERS}
         total, found = 0.0, 0
-        for generation in self.generations:
-            url = f"{GENERATION_URL}?id={urllib.parse.quote(generation, safe='')}"
-            for attempt in range(2):
-                try:
-                    doc = json.loads(httpapi.get(url, headers=headers, service=SERVICE, timeout=timeout).decode("utf-8"))
-                    cost = doc["data"]["total_cost"]
-                except urllib.error.HTTPError as exc:
-                    if exc.code == 404 and attempt == 0:
-                        self._sleep(1.0)
-                        continue
-                    break
-                except (VidgenError, ValueError, KeyError, TypeError):
-                    break
-                if isinstance(cost, (int, float)) and not isinstance(cost, bool):
-                    total += float(cost)
-                    found += 1
+        pending = list(dict.fromkeys(self.generations))
+        asked, last = len(pending), ""
+        deadline = time.monotonic() + sum(waits) + 2 * timeout   # slow answers do not stretch the wait much
+        for wait in (*waits, None):
+            if time.monotonic() > deadline:
                 break
+            retry: list[str] = []
+            for n, generation in enumerate(pending):
+                if time.monotonic() > deadline:
+                    retry.extend(pending[n:])
+                    break
+                cost, problem, again = self._generation_cost(generation, headers, key, timeout)
+                if cost is not None:
+                    total, found = total + cost, found + 1
+                    continue
+                last = problem
+                if again:
+                    retry.append(generation)
+            pending = retry
+            if not pending or wait is None:
+                break
+            self._sleep(wait)
+        if pending:
+            self.cost_problem = f"{last or 'no answer from GET /generation'} (still missing after waiting {sum(waits):g} s)"
+        elif found < asked:
+            self.cost_problem = last
+        elif self.requests > asked:
+            self.cost_problem = f"{self.requests - asked} audio response(s) came without an X-Generation-Id header"
         return total, found
+
+    @staticmethod
+    def _generation_cost(generation: str, headers: dict[str, str], key: str, timeout: float) -> tuple[float | None, str, bool]:
+        """``(cost, problem, ask again)`` for one ``GET /generation?id=`` request."""
+        url = f"{GENERATION_URL}?id={urllib.parse.quote(generation, safe='')}"
+        try:
+            doc = json.loads(httpapi.get(url, headers=headers, service=SERVICE, timeout=timeout, secret=key).decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            again = exc.code == 404 or exc.code in TRANSIENT_STATUS
+            try:
+                said = httpapi.scrub(exc.read().decode("utf-8", errors="replace"), key).strip()
+            except Exception:  # noqa: BLE001 - the body only explains the status
+                said = ""
+            said = f": {said[:160]}" if said else ""
+            return None, f"GET /generation answered HTTP {exc.code} for {generation}{said}", again
+        except VidgenError as exc:
+            return None, str(exc), True
+        except ValueError:
+            return None, f"GET /generation sent an unreadable answer for {generation}", False
+        data = doc.get("data") if isinstance(doc, dict) else None
+        cost = data.get("total_cost") if isinstance(data, dict) else None
+        if isinstance(cost, (int, float)) and not isinstance(cost, bool):
+            return float(cost), "", False
+        return None, f"the generation record of {generation} has no total_cost yet", True

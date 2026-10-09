@@ -15,7 +15,7 @@ import pytest
 from manim import DrawBorderThenFill
 from pydantic import ValidationError
 
-from conftest import minimal_config
+from conftest import LIVE_ZDR_404, minimal_config
 from test_imagegen import PROMPT, FakeResponse, http_error, image_scene
 from test_imagegen_openrouter import KEY, SEEDREAM, VECTOR, FakeRouter, info, router_body
 from test_introspect import FakeScene, objects, small_config  # noqa: F401 - fixture
@@ -295,6 +295,23 @@ def test_policy_error_explains_privacy_settings(router: FakeRouter, svg_project)
     router.responses = [http_error(404, '{"error":{"message":"No endpoints found for x","code":404}}')]
     with pytest.raises(VidgenError, match="OpenRouter returned HTTP 404: .*No endpoints found"):
         provider(zdr=zdr).generate(raster)
+
+
+def test_live_zdr_answer_for_a_raster_model(router: FakeRouter, or_project_flux) -> None:
+    """The body OpenRouter sent the coordinator's ZDR account on 2026-10-09 (Step 63)."""
+    request = image_request(or_project_flux, GenerateImage(prompt=PROMPT))
+    router.responses = [http_error(404, LIVE_ZDR_404)]
+    with pytest.raises(VidgenError) as err:
+        provider(zdr=lambda svg=False: ["bytedance-seed/seedream-5-0-flash"]).generate(request)
+    message = str(err.value)
+    assert message.startswith("OpenRouter has no provider for black-forest-labs/flux.2-klein-4b that your account's privacy settings allow")
+    assert message.endswith("Image models with a ZDR endpoint now: bytedance-seed/seedream-5-0-flash") and len(router.posts) == 1
+
+
+@pytest.fixture
+def or_project_flux(make_project) -> Project:
+    settings = {"provider": "openrouter", "model": "black-forest-labs/flux.2-klein-4b"}
+    return Project.load(make_project(minimal_config(scenes=[image_scene({"prompt": PROMPT})], imagegen=settings)))
 
 
 def test_zdr_image_models_from_the_public_lists(monkeypatch: pytest.MonkeyPatch) -> None:

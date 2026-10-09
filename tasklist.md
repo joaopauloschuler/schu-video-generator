@@ -307,7 +307,7 @@ by the coordinator at the end of each step with the owner's key; agents never se
 - [x] Docs: CONFIG.md "Narration providers", README, AGENTS.md (choosing a voice provider, writing good `instructions`), an example variant (no audio committed) (`examples/minimal` variant `openrouter`; DESIGN §66, THIRD_PARTY_NOTICES)
 
 ### Step 63 — Review of Phase F
-- [ ] End to end with mocks (imagegen → render, tts → render), dry-run JSON over MCP, docs consistency, wheel build, full suite; the coordinator's live checks recorded in HANDOFF.md
+- [x] End to end with mocks (imagegen → render, tts → render), dry-run JSON over MCP, docs consistency, wheel build, full suite; the coordinator's live checks recorded in HANDOFF.md (`tests/test_phase_f_review.py`; live: ZDR 404 for Recraft / FLUX, Seedream 5.0 flash $0.018 as estimated, Kokoro and Gemini TTS MP3s fine; the TTS cost lookup now waits up to 15 s for OpenRouter's late records and says why when none came — to confirm live with `tools/live_check_openrouter.py --tts --zdr --yes`; key scrubbing hardened; `tts --json` `voice_id` null for OpenRouter)
 
 ---
 
@@ -336,4 +336,8 @@ Nice-to-have / performance
 - [ ] MP4 cover art from the thumbnail (Steps 49–50); `generate:` for `screenshot` and behind a designed thumbnail (Step 55)
 - [ ] `vidgen gallery`: mid-beat stills, a project-type render test (Step 57)
 - [ ] A real image-generation (OpenAI) and speech-to-text (faster-whisper) run (Steps 54–55: no network for them here)
+- [ ] OpenRouter TTS cost: confirm live that `GET /generation` reports `total_cost` for `/audio/speech` requests and how late (`tools/live_check_openrouter.py --tts --zdr --yes`, or `--generation ID`); if it never does, read the cost another way (e.g. the key's usage before / after) (Step 63)
+- [ ] OpenRouter SVG generation never run live (no SVG model has a ZDR endpoint; the owner's account requires ZDR): `--svg --yes` with an account allowing non-ZDR providers (Step 61b / 63)
+- [ ] OpenRouter estimates use the highest provider's price (Kokoro live: ~6x the charge); optional `provider: {sort: price}` routing or a "from $X to $Y" range (Step 63)
+- [ ] Refresh `src/vidgen/data/openrouter/tts_models.json` (dated 2026-10-08) from the public lists when validate warns wrongly; a small `tools/` script could do it (Step 62)
 - [ ] `vidgen plan` could write an `output:` name from the title (a draft from `outline.md` renders `outline.mp4`); `storyboard --json` lists every still twice (video and scene sheets) — verbose for agents

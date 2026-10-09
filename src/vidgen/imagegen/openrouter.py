@@ -65,10 +65,14 @@ def missing_key_message(command: str = "imagegen") -> str:
 
 
 def read_api_key(command: str = "imagegen") -> str:
-    """The API key from the environment (stripped). Raises :class:`VidgenError` if unset."""
+    """The API key from the environment (stripped). Raises :class:`VidgenError` if unset or
+    if it holds spaces, control or non-ASCII characters (a paste gone wrong; such a key could
+    not be sent as a header, and the error would quote it)."""
     key = os.environ.get(API_KEY_ENV, "").strip()
     if not key:
         raise VidgenError(missing_key_message(command))
+    if not (key.isascii() and key.isprintable()) or any(c.isspace() for c in key):
+        raise VidgenError(f"{API_KEY_ENV} contains spaces, control or non-ASCII characters; set it again to the key exactly as https://openrouter.ai/keys shows it")
     return key
 
 

@@ -169,6 +169,12 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   its own beats are re-voiced when it changes, `vidgen tts --dry-run` counts characters per voice
   (`--voice ana` voices one speaker), and `subtitles: {speakers: name}` / captions `speakers:`
   name or colour the speakers ([reference](docs/CONFIG.md#multiple-voices-voices)).
+- **Narration providers**: ElevenLabs stays the default; optionally, `voice: {provider:
+  openrouter, model: ..., voice: ...}` voices the video with one of OpenRouter's TTS models
+  (Kokoro, Voxtral, Gemini TTS, ...; `OPENROUTER_API_KEY`, priced per character, estimated by
+  `vidgen tts --dry-run`). One TTS provider per video — named voices change the voice, not the
+  provider — and a variant may switch the whole video to the other one
+  ([reference](docs/CONFIG.md#narration-providers)).
 - **Sound effects**: eleven synthesised sounds (whoosh, swoosh, pop, click, tick, typing, riser,
   chime, success, error, thud; free to use in your videos, including commercially; no
   attribution needed) or your own `assets/sfx/NAME.wav`, placed as a beat

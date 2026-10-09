@@ -6270,3 +6270,100 @@ How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2334 passed, 1
 unknown"); `vidgen validate examples/minimal`. Live (needs network; free without `--yes`): `python
 tools/live_check_openrouter.py --tts --zdr` (cheapest ZDR TTS model's dry run of one 12-word
 beat), `--tts --zdr --yes` (voices it: < $0.001; prints MP3 path, duration, reported cost).
+
+## Step 63 — Review of Phase F
+What was reviewed
+- The OpenRouter image provider (Step 61), vector SVG pictures (61b) and the OpenRouter TTS
+  provider (62) end to end with mocked APIs, the dry-run JSON over MCP, docs consistency
+  (CONFIG / README / both AGENTS.md / DESIGN), the key's hygiene, a wheel build and the full
+  suite. This step was started by one agent (interrupted before committing) and finished by a
+  second, which re-reviewed the uncommitted diff, aligned the live-check dates and wrote this
+  section.
+
+Live checks (the coordinator, owner's key, account requiring Zero Data Retention, 2026-10-09)
+- **Images**: `recraft/recraft-v4.1-flash` and `black-forest-labs/flux.2-klein-4b` → OpenRouter's
+  HTTP 404 data-policy error (`0 endpoints out of 1 requested are available matching your
+  guardrail restrictions and data policy ... ZDR violation (account settings)`); vidgen's
+  message (privacy settings link + image models with a ZDR endpoint) is now pinned against
+  that exact body (`conftest.LIVE_ZDR_404`). `bytedance-seed/seedream-5-0-flash` → a 1024x1024
+  PNG in 9.7 s, $0.018 charged and reported by vidgen (= the dry run's estimate).
+- **TTS**: `hexgrad/kokoro-82m`, voice `af_alloy` → valid MP3 (24 kHz mono, 4.46 s) for a
+  61-character beat; `google/gemini-3.8-flash-lite-tts`, voice `Kore` → PCM converted to MP3
+  (4.68 s). For both the run printed "cost not reported by openrouter" (with Step 62's single
+  1 s retry, i.e. BEFORE this step's wait change).
+- **Usage**: the key's total went from $1.517127 to $1.535165 across all live checks (≈ $0.018
+  image + ≈ $0.00004 for both TTS beats together), so Kokoro's estimate of $0.000244 was ~6x the
+  charge (OpenRouter routed to its cheapest provider; vidgen estimates with the highest one).
+- **SVG generation not run live**: no SVG model has a ZDR endpoint.
+
+Findings and fixes
+1. **TTS cost never reported live** (medium) — OpenRouter writes `GET /generation` records
+   asynchronously; one retry after 1 s was too short. `OpenRouterTTSProvider.reported_cost(timeout,
+   waits=COST_WAITS)` now asks again after 1, 2, 4, 8 s (all pending ids per round; at most 15 s
+   of waiting, hard deadline `sum(waits) + 2·timeout`) for 404, 429/5xx, unreachable, or a record
+   without numeric `total_cost`; 400/401/403 and unreadable JSON are not retried. It never
+   raises. New `cost_problem` (why something is missing) and `requests` (audio responses, with or
+   without an id). The wait only happens after a paid run that made requests (dry runs never
+   synthesise; `run._reported_cost` skips providers with `requests == 0`); tests inject `sleep`.
+   The run now says `, cost not reported by openrouter yet (<why>; see
+   https://openrouter.ai/activity)` or `$X charged by openrouter for K of N requests (<why>; see
+   ...)`. Not yet confirmed live (Backlog).
+2. **Key hygiene** (low, defensive) — `httpapi.scrub` also removes the key in its `repr`-escaped
+   forms (http.client quotes a rejected header value as bytes); `httpapi.get(..., secret=)`
+   scrubs its errors and now also wraps `http.client.HTTPException`; the `/generation` lookup
+   passes the key as `secret` and scrubs error bodies; `imagegen.openrouter.read_api_key`
+   refuses a key with spaces / control / non-ASCII characters without quoting it. The key is
+   only ever sent as the `Authorization` header; it is not in any JSON output, hash, sidecar or
+   SRT (asserted by `test_openrouter_narration_renders_with_captions`), and the live-check tool
+   never prints it (source test).
+3. **`tts --json` `voices.<name>.voice_id`** (low) — showed the ElevenLabs default id in an
+   OpenRouter video; now `null` there (docs/CONFIG.md table updated).
+4. **Live-check tool** — `tools/live_check_openrouter.py --generation ID [--wait S]` probes one
+   generation record (status / main fields, backoff 1 → 16 s, free); `--tts --yes` keeps its
+   provider, prints the `X-Generation-Id`s and, without a cost, `cost_problem` plus a probe of
+   the first id. Options listed in the docstring.
+5. **Docs** — CONFIG.md: OpenRouter optional / defaults unchanged, the estimate is an upper
+   bound (Kokoro's cheapest provider), the 15 s cost wait and its message, how to check a model's
+   ZDR endpoint, the live results; README bullet "Narration providers"; AGENTS.md (both copies)
+   the cost message; DESIGN.md §66 points to new §67 (refinements).
+- Checked and fine: imagegen → render (PNG + drawn, recoloured SVG), OpenRouter tts → render
+  with burned-in captions, a variant switching the narration provider (own `audio/<variant>/`),
+  one-provider-per-video errors, MCP dry runs offline (prices unknown, `confirm_cost` guard,
+  nothing written); wheel (`pip wheel . --no-deps`: 2.0 MB, 369 files, includes
+  `vidgen/data/openrouter/tts_models.json`, both `openrouter.py` modules, the guide).
+
+Files touched
+- `src/vidgen/httpapi.py`, `src/vidgen/imagegen/openrouter.py`, `src/vidgen/tts/openrouter.py`,
+  `src/vidgen/tts/run.py`, `src/vidgen/jsonout.py`, `tools/live_check_openrouter.py`.
+- Tests: new `tests/test_phase_f_review.py` (12); `tests/test_tts_openrouter.py` (live ZDR body,
+  late records, giving up, no id, the run's message), `tests/test_vector_images.py` (live ZDR
+  body for a raster model), `tests/conftest.py` (`LIVE_ZDR_404`).
+- Docs: DESIGN.md (§66 edit, new §67), docs/CONFIG.md, README.md, AGENTS.md + guide copy,
+  tasklist.md (Step 63 ticked, four Backlog lines).
+
+Public interfaces added/changed (compatible; `vidgen.api` unchanged)
+- `OpenRouterTTSProvider.reported_cost(timeout=10.0, waits=COST_WAITS)`, attributes
+  `requests`, `cost_problem`; module constants `COST_WAITS`, `ACTIVITY_PAGE`.
+- `httpapi.get(..., secret="")`; `httpapi.scrub` covers escaped forms.
+- `tts --json`: `voices.<name>.voice_id` `null` for OpenRouter. Run summary text for missing cost.
+
+Remaining issues (all in tasklist.md Backlog)
+- Confirm live that `GET /generation` reports `total_cost` for `/audio/speech` and how late
+  (`python tools/live_check_openrouter.py --tts --zdr --yes`, or `--generation ID`); if it never
+  does, read the cost another way (e.g. the key's usage before / after).
+- SVG generation never run live (needs an account allowing non-ZDR providers: `--svg --yes`).
+- Estimates use the highest provider's price (Kokoro ~6x the charge live): optional
+  `provider: {sort: price}` routing or a price range.
+- Refresh `src/vidgen/data/openrouter/tts_models.json` (dated 2026-10-08) when validate warns
+  wrongly.
+
+How to test
+- Full: `/home/claude/venv/bin/python -m pytest -q -n auto` (2351 passed, 1 skipped, 10:25 on
+  2 cores; Step 62 had 2334 — 17 new tests).
+- Step only: `pytest tests/test_phase_f_review.py tests/test_tts_openrouter.py
+  tests/test_vector_images.py tests/test_imagegen_openrouter.py` (143 passed with
+  `tests/test_guide.py`, ~47 s on 2 cores).
+- Live (owner's key; free without `--yes`): `python tools/live_check_openrouter.py --tts --zdr
+  --yes` (one Kokoro beat, < $0.001; now prints the generation id and the cost or why it is
+  missing), `--generation gen-... --wait 60` (free), `--zdr --yes` (one Seedream picture,
+  $0.018).

@@ -240,8 +240,11 @@ def tts_document(
                 "source": None if source is None else _path(source),
             }
         )
+    def voice_id(voice: Any) -> str | None:   # an ElevenLabs voice id only means something there
+        return voice.voice_id if voice.provider == "elevenlabs" else None
+
     voices = {
-        name: {"voice_id": project.voice(name).voice_id, **engine(project.voice(name)), "beats": n, "characters": chars}
+        name: {"voice_id": voice_id(project.voice(name)), **engine(project.voice(name)), "beats": n, "characters": chars}
         for name, (n, chars) in plan.characters_by_voice().items()
     }
     total, unknown = plan.cost

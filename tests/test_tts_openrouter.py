@@ -20,7 +20,7 @@ from typing import Any
 import pytest
 import yaml
 
-from conftest import minimal_config
+from conftest import LIVE_ZDR_404, minimal_config
 from vidgen import tts
 from vidgen.cli import main, validate_warnings
 from vidgen.config import VoiceConfig
@@ -101,9 +101,12 @@ class FakeOpenRouter:
         if "/generation?" in url:
             gen = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["id"][0]
             cost = self.costs.get(gen, 0.0002)
+            if isinstance(cost, list):   # answers in order (the last one repeats): a record written late
+                cost = cost.pop(0) if len(cost) > 1 else cost[0]
             if isinstance(cost, BaseException):
                 raise cost
-            return FakeResponse(json.dumps({"data": {"id": gen, "api_type": "tts", "total_cost": cost}}).encode())
+            data = {"id": gen, "api_type": "tts"} if cost == "absent" else {"id": gen, "api_type": "tts", "total_cost": cost}
+            return FakeResponse(json.dumps({"data": data}).encode())
         if "output_modalities=speech" in url:
             return FakeResponse(json.dumps(FIXTURES["speech_models"]).encode())
         if url.endswith("/endpoints/zdr"):
@@ -311,6 +314,16 @@ def test_data_policy_error_names_zdr_tts_models(api: FakeOpenRouter) -> None:
         p.synthesize("x")
 
 
+def test_live_zdr_answer_names_zdr_tts_models(api: FakeOpenRouter) -> None:
+    api.speech = [http_error(404, LIVE_ZDR_404)]
+    p = ortts.OpenRouterTTSProvider(VoiceConfig(**{**VOICE, "model": "minimax/speech-2.8-turbo"}), sleep=lambda s: None)
+    with pytest.raises(VidgenError) as info:
+        p.synthesize("x")
+    msg = str(info.value)
+    assert msg.startswith("OpenRouter has no provider for minimax/speech-2.8-turbo that your account's privacy settings allow")
+    assert "Text-to-speech models with a ZDR endpoint now: " in msg and len(api.posts()) == 1 and KEY not in msg
+
+
 def test_missing_key_message(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     with pytest.raises(VidgenError, match="OPENROUTER_API_KEY is not set") as info:
@@ -322,10 +335,58 @@ def test_reported_cost(api: FakeOpenRouter) -> None:
     p = provider()
     p.synthesize("a")
     p.synthesize("b")
-    api.costs = {"gen-tts-2": http_error(404, "not yet")}
-    assert p.reported_cost() == (0.0002, 1)  # the second one is asked twice, then given up
+    api.costs = {"gen-tts-2": http_error(404, '{"error":{"message":"Generation not found","code":404}}')}
+    assert p.reported_cost() == (0.0002, 1)  # the second one is asked again after each wait, then left out
     gets = [r for r in api.requests if "/generation?" in r.full_url]
-    assert len(gets) == 3 and gets[0].get_header("Authorization") == f"Bearer {KEY}"
+    assert len(gets) == 2 + len(ortts.COST_WAITS) and gets[0].get_header("Authorization") == f"Bearer {KEY}"
+    assert p.cost_problem is not None and p.cost_problem.startswith("GET /generation answered HTTP 404 for gen-tts-2")
+    assert "still missing after waiting 15 s" in p.cost_problem and KEY not in p.cost_problem
+
+
+def test_reported_cost_waits_for_records_written_late(api: FakeOpenRouter) -> None:
+    """OpenRouter writes generation records asynchronously: 404 first, then a record without
+    total_cost, then the cost (the live runs of 2026-10-09 got no cost with one 1 s retry)."""
+    waited: list[float] = []
+    p = ortts.OpenRouterTTSProvider(VoiceConfig(**VOICE), sleep=waited.append)
+    for text in "abc":
+        p.synthesize(text)
+    late = http_error(404, '{"error":{"message":"Generation not found","code":404}}')
+    api.costs = {"gen-tts-1": [late, "absent", 0.00012], "gen-tts-2": [http_error(502, "busy"), 0.00003], "gen-tts-3": [None, 0.00001]}
+    total, found = p.reported_cost()
+    assert (round(total, 8), found, p.cost_problem) == (0.00016, 3, None)
+    assert waited == [1.0, 2.0]   # every record asked again together; the waits back off
+    asked = [urllib.parse.parse_qs(urllib.parse.urlparse(r.full_url).query)["id"][0] for r in api.requests if "/generation?" in r.full_url]
+    assert asked == ["gen-tts-1", "gen-tts-2", "gen-tts-3", "gen-tts-1", "gen-tts-2", "gen-tts-3", "gen-tts-1"]
+
+
+def test_reported_cost_gives_up_without_failing(api: FakeOpenRouter, monkeypatch: pytest.MonkeyPatch) -> None:
+    waited: list[float] = []
+    p = ortts.OpenRouterTTSProvider(VoiceConfig(**VOICE), sleep=waited.append)
+    p.synthesize("a")
+    api.costs = {"gen-tts-1": http_error(401, f"bad key {KEY}")}   # not asked again
+    assert p.reported_cost() == (0.0, 0) and waited == []
+    assert p.cost_problem == "GET /generation answered HTTP 401 for gen-tts-1: bad key ***"
+    api.costs = {"gen-tts-1": urllib.error.URLError(OSError("Name or service not known"))}
+    assert p.reported_cost(waits=(1.0, 2.0)) == (0.0, 0) and waited == [1.0, 2.0]
+    assert p.cost_problem is not None and "cannot reach OpenRouter" in p.cost_problem
+    # a response without X-Generation-Id: nothing to look up, and the run says why
+    p2 = ortts.OpenRouterTTSProvider(VoiceConfig(**VOICE), sleep=waited.append)
+    monkeypatch.setattr(p2, "_send", lambda text: (MP3, {"content-type": "audio/mpeg"}))
+    p2.synthesize("a")
+    assert p2.reported_cost() == (0.0, 0) and p2.cost_problem == "1 audio response(s) came without an X-Generation-Id header"
+
+
+def test_run_says_why_the_cost_is_missing(make_project, api: FakeOpenRouter, capsys: pytest.CaptureFixture[str]) -> None:
+    root = make_project(or_config())
+    api.costs = {f"gen-tts-{n}": http_error(404, "Generation not found") for n in (1, 2, 3)}
+    assert run(root) == 0
+    out = capsys.readouterr().out
+    assert "done: 3 beat(s) generated (43 characters, cost not reported by openrouter yet (GET /generation answered HTTP 404 for gen-tts-" in out
+    assert "see https://openrouter.ai/activity)" in out
+    (root / "audio" / "intro_b1.mp3").unlink()
+    api.costs = {"gen-tts-4": [http_error(404, "Generation not found"), 0.00005]}
+    assert run(root) == 0
+    assert "(12 characters, $0.00005 charged by openrouter)" in capsys.readouterr().out
 
 
 # ----- prices and lookups ------------------------------------------------------------------------

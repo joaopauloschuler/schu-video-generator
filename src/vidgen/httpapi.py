@@ -8,6 +8,7 @@ message.
 
 from __future__ import annotations
 
+import http.client
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Mapping
@@ -22,8 +23,14 @@ MAX_BODY_IN_ERROR = 500
 
 
 def scrub(text: str, secret: str) -> str:
-    """``text`` with ``secret`` replaced by ``***`` (defensive: it should never be there)."""
-    return text.replace(secret, "***") if secret else text
+    """``text`` with ``secret`` replaced by ``***`` (defensive: it should never be there), also
+    as Python escapes it in a ``repr`` (http.client quotes a rejected header value that way)."""
+    if not secret:
+        return text
+    forms = {secret, repr(secret)[1:-1], repr(secret.encode("utf-8", "backslashreplace"))[2:-1]}
+    for form in sorted(forms, key=len, reverse=True):
+        text = text.replace(form, "***")
+    return text
 
 
 def retry_after(headers: Message | None) -> float | None:
@@ -85,20 +92,22 @@ def post_with_retries(
         attempt += 1
 
 
-def get(url: str, *, headers: Mapping[str, str], service: str, timeout: float) -> bytes:
+def get(url: str, *, headers: Mapping[str, str], service: str, timeout: float, secret: str = "") -> bytes:
     """GET ``url`` once (no retries: for free lookups that may fail, such as a public price
-    list). Raises ``urllib.error.HTTPError`` for an HTTP error status (the caller decides what
-    a 404 means) and :class:`VidgenError` when ``service`` cannot be reached."""
+    list, or a key-authenticated record such as a generation's cost: pass the key as
+    ``secret``). Raises ``urllib.error.HTTPError`` for an HTTP error status (the caller decides
+    what a 404 means) and :class:`VidgenError` without ``secret`` in it when ``service`` cannot
+    be reached."""
     request = urllib.request.Request(url, method="GET", headers=dict(headers))
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return response.read()
     except urllib.error.HTTPError:
         raise
-    except (TimeoutError, ConnectionError, urllib.error.URLError, OSError, ValueError) as exc:
+    except (TimeoutError, ConnectionError, urllib.error.URLError, OSError, ValueError, http.client.HTTPException) as exc:
         reason = exc.reason if isinstance(exc, urllib.error.URLError) else exc
         what = f"{type(reason).__name__}: {reason}" if isinstance(reason, BaseException) else str(reason)
-        raise VidgenError(f"cannot reach {service}: {what}") from None
+        raise VidgenError(f"cannot reach {service}: {scrub(what, secret)}") from None
 
 
 def _request(
