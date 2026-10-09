@@ -1007,7 +1007,16 @@ scenes:
   megapixel), some better at a style. Read the prices in `vidgen imagegen --dry-run` (its
   `price:` line says the basis; "price unknown" for models billed per token) and fix every
   `problem:` / `note:` it prints before a real run. Keep one provider and model per video so the
-  pictures match; changing them makes every picture "missing" (new pictures, new cost).
+  pictures match; changing them makes every picture "missing" (new pictures, new cost). If the
+  account requires Zero Data Retention, choose a model with a ZDR endpoint (e.g.
+  `bytedance-seed/seedream-5-0-flash`); vidgen's error lists them when a model is refused.
+- **Vector (SVG) pictures** (`generate: {prompt, format: svg}` with `imagegen.svg_model`, e.g.
+  `recraft/recraft-v4.1-vector`, ~$0.08; or an `.svg` file as `path`): drawn as shapes, so
+  `draw: true` traces then fills them and `recolor: theme` paints them in the theme's colours.
+  Worth it for flat illustrations, icons and diagram-like art (few flat colours; ask for
+  "flat illustration, simple shapes, few colours"); not for photos or soft lighting (thousands
+  of shapes, capped and thinned: worse than a PNG). Text in an SVG is removed — keep words in
+  vidgen's captions. No SVG model has a ZDR endpoint (2026-10-08).
 
 ### Your content and third-party services
 

@@ -6027,3 +6027,123 @@ text-to-image models with vidgen's estimates and the dry run of one square pictu
 cheapest; `OPENROUTER_API_KEY=... python tools/live_check_openrouter.py --yes [--model ID]`
 generates that one picture in a temporary project and prints the PNG / sidecar paths and the
 cost OpenRouter reported (the key is never printed).
+
+## Step 61b — Vector (SVG) generated images
+What was built
+- **Data-policy error (from the coordinator's Step 61 live run)**: OpenRouter's HTTP 404 "0
+  endpoints ... matching your guardrail restrictions and data policy ... ZDR violation (account
+  settings)" now becomes a clear `VidgenError`: the account's privacy settings (e.g. Zero Data
+  Retention) exclude every provider of the model, change them at
+  https://openrouter.ai/settings/privacy or choose a model with a ZDR endpoint, followed by the
+  image models that have one now (public `GET /api/v1/endpoints/zdr` ∩ `GET
+  /api/v1/images/models`, 5 s timeout; offline: "could not be reached to suggest models"; for
+  `format: svg` only SVG models). Not retried. CONFIG.md OpenRouter section: "if your account
+  requires Zero Data Retention, choose a model with a ZDR endpoint".
+- **`generate: {prompt, format: svg}`** on the `image` scene: a vector picture from OpenRouter
+  (`output_format: svg`), stored as `assets/generated/<key>.svg` + sidecar (`format: svg`); the
+  format is in the cache key (PNG keys unchanged). New `imagegen.svg_model` (default `model`) so
+  a video can mix raster and vector pictures. Validate: `format: svg` without `provider:
+  openrouter` is an error; a model not known to make SVG warns and lists the SVG models
+  (snapshot `imagegen.SVG_MODELS`); an SVG-only model asked for PNG warns; a stored SVG's
+  sanitiser warnings are listed. Dry run / run: the live model record refuses a model without
+  SVG output (and an SVG-only model for PNG); the dry-run line says `KEY.svg ... (16:9, SVG,
+  openrouter recraft/recraft-v4.1-vector, ~$0.080)`; `--json` images gain `format` (MCP passes it
+  through).
+- **Sanitiser** `src/vidgen/svgclean.py` (no manim): removes scripts, foreignObject, embedded
+  rasters, filters, masks / clip paths, text, animation, links to other files and event
+  attributes; refuses entity declarations, > 20 MB and non-SVGs; flattens gradients / patterns to
+  one colour (mean of the stops); caps 1500 shapes (smallest dropped) and 60 000 curve segments
+  (paths thinned) with warnings; `simplify` drops small shapes on purpose. The icon loader's
+  Manim workarounds (currentColor marker, `stroke="none"`, viewBox box, `view_box`) moved here
+  and `icon_mobject` uses them.
+- **Shapes** `src/vidgen/vector_mobject.py`: `load_vector()` → `VectorPicture` (new `SvgDrawing`
+  base shared with `Icon`: invisible box + parts, strokes scale with it); fill-only parts get a
+  zero-width outline in their fill colour so `DrawBorderThenFill` traces them. `recolor: theme`
+  via `svgclean.theme_color` (greys → nearest-lightness neutral; colours → nearest-hue theme
+  colour keeping their lightness).
+- **`image` scene**: `.svg` files as `path` too; params `draw` (outlines then fill, up to 2.5 s
+  within the beat), `recolor: none | theme`, `simplify: bool | 0–5` (error on a raster picture).
+  Fit / cover / caption / Ken Burns unchanged. Layout dump: one object of kind `vector`.
+- **Live check** `tools/live_check_openrouter.py`: `--zdr` (only models with a ZDR endpoint) and
+  `--svg` (one vector picture through `run_imagegen`, dry run unless `--yes`; prints the
+  sanitiser's report and a storyboard command).
+
+API facts (checked 2026-10-08 from the public model list, endpoint records, openapi.yaml and the
+image generation guide; no key used)
+- `output_format: svg` is documented "for vectorization models (e.g. Quiver)"; SVG comes base64
+  in `b64_json`, `media_type: image/svg+xml`. No Quiver model is listed. SVG models (svg only):
+  `recraft/recraft-v4.1-vector`, `recraft/recraft-v4-vector` ($0.08 / image),
+  `recraft/recraft-v4.1-pro-vector`, `recraft/recraft-v4-pro-vector` ($0.30 / image): **text
+  prompt in, SVG out** in one call (`input_references` optional 0–1), aspect ratios 1:1 4:3 3:4
+  16:9 9:16 auto, no seed / quality / resolution. `recraft/recraft-v4-styles(-pro)-vector` need
+  1–10 style reference pictures (refused). So no PNG-then-vectorise pipeline was built.
+- ZDR: 942 endpoints listed; image models with one: Seedream 4.5 / 5.0 flash / lite / pro,
+  Gemini image models, Krea 2, MAI image 2.5 / 2.6, Tencent HY image 3.5, Ming image design.
+  **No SVG model has a ZDR endpoint** (nor FLUX / Recraft raster), so an account requiring ZDR
+  cannot generate SVGs today (vidgen says so; `.svg` files as `path` still work).
+- `tools/live_check_openrouter.py --zdr` (free part, run here): cheapest ZDR model
+  `bytedance-seed/seedream-5-0-flash` $0.018 — matches the coordinator's working run.
+  `--svg`: cheapest `recraft/recraft-v4-vector` / `-v4.1-vector` $0.08; `--svg --zdr`: none.
+
+Files
+- New: `src/vidgen/svgclean.py`, `src/vidgen/vector_mobject.py`, `tests/test_vector_images.py`
+  (26 tests, 1 render), `tests/data/vector_hills.svg` (hand-written).
+- Changed: `imagegen/__init__.py` (`GenerateImage.format`, `ImageRequest.format`, svg requests /
+  keys / paths, `SVG_MODELS`, `svg_models_hint`, `imagegen_problems`, `vector_warnings`,
+  `SceneImage.params`, orphans incl. `.svg`), `cli.py` (`imagegen_problems` among the project
+  problems, so any scene type's `generate:` is checked), `imagegen/openrouter.py` (svg body / checks /
+  response, `is_policy_error`, `zdr_image_models`, `policy_message`, provider `zdr=`),
+  `imagegen/run.py` (file names, sidecar `format`, svg-with-openai refusal), `config.py`
+  (`svg_model`), `scenes/image.py` (svg path, `draw` / `recolor` / `simplify`, vector loading),
+  `icon_mobject.py` (`SvgDrawing`, `work_copy`, workarounds from `svgclean`), `introspect.py`
+  (kind `vector`), `jsonout.py` (`format`), `api.py` (`VectorPicture`, `load_vector`),
+  `tools/live_check_openrouter.py`, docs/CONFIG.md, docs/EXTENDING.md, AGENTS.md (both copies),
+  DESIGN.md (tree, §64 note, new §65), tasklist.md.
+
+Public interfaces added/changed (compatible)
+- Config `imagegen.svg_model`; `generate.format`; `image` params `draw`, `recolor`, `simplify`,
+  `.svg` paths. Layout dump kind `vector`. `imagegen --json` images `format`.
+- `vidgen.api`: `VectorPicture`, `load_vector`. Internal: `vidgen.svgclean.*`,
+  `vidgen.icon_mobject.SvgDrawing / work_copy`, `vidgen.imagegen.SVG_MODELS / imagegen_problems /
+  vector_warnings / svg_models_hint`, `ImageRequest.format`, `SceneImage.params`,
+  `openrouter.parse_response(body, format)`, `is_policy_error`, `zdr_image_models`,
+  `policy_message`, `PRIVACY_URL`, `ZDR_URL`, `OpenRouterImageProvider(zdr=)`.
+
+Decisions / deviations
+- **One call, not a pipeline**: every listed SVG model takes a text prompt; the "vectorise a PNG"
+  path would need a model that only converts pictures, and none is listed.
+- **`svg_model`** added (not in the task text): with one project-wide `model`, PNG and SVG
+  pictures could not share a video, since SVG models make only SVG.
+- **`.svg` files as `path`** (small, same code path): the only way to show vector art for an
+  account that requires ZDR.
+- **Text is removed, not converted** (generated lettering is poor; captions are vidgen's job);
+  warned with that hint.
+- **Recolor keeps lightness**: nearest-hue theme colour with the picture's own lightness (a
+  halfway blend made hills and sky one flat blue in the check render).
+- **Kind `vector`** (not `image`) in the layout dump: lint's covered-text check measures pixels for
+  it (an SVG is often not an opaque rectangle).
+- Caps 1500 shapes / 60 000 segments: at the caps, loading takes ~6 s and a 1080p frame ~0.25 s
+  here.
+
+Verification (looked at the images)
+- Scratch project: storyboard of a drawn `.svg` (6 stills per beat: thin outlines at 1.1 s, filled
+  by 2.2 s, caption in beat 2) and a `recolor: theme` + `cover` scene (theme blues, shading kept);
+  layout dump `vector VectorPicture` (7 parts) + the caption; `vidgen lint`: 0 findings.
+- Live check free parts run (public endpoints only, no key): see API facts.
+
+Known gaps / TODOs
+- No real SVG generation here (no key): the coordinator should run `python
+  tools/live_check_openrouter.py --svg --yes` (~$0.08) with an account that allows non-ZDR
+  providers (Recraft has no ZDR endpoint; with ZDR required it now fails with the new message)
+  and look at the storyboard it suggests; check that `media_type` is `image/svg+xml`, `usage.cost`
+  is reported, and what the sanitiser reports for a real Recraft SVG (shape count vs the cap).
+- Manim's SVG parser: `fill-rule: evenodd` holes and per-element caps / joins as it does them;
+  `<style>` CSS classes are left to svgelements.
+- Recolor is per colour (not per region); text is dropped, not re-set as vidgen text.
+- `generate:` for `screenshot` / thumbnails still not done (Step 55 gap).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2305 passed, 1 skipped, 7:31); step only:
+`pytest tests/test_vector_images.py tests/test_imagegen_openrouter.py tests/test_imagegen.py`.
+Live (needs network; free without `--yes`): `python tools/live_check_openrouter.py --svg`
+(cheapest SVG model's dry run), `--svg --yes` (one SVG, ~$0.08), `--zdr [--yes]` (ZDR models
+only), `--svg --zdr` (says none exists today).

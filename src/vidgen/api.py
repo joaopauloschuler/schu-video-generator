@@ -105,6 +105,7 @@ from vidgen.voices import speaker_color, speaker_label, speaker_prefix  # noqa: 
 from vidgen.translation import TextRef, TranslatableStr  # noqa: E402
 from vidgen.languages import LanguageRules, language_rules  # noqa: E402
 from vidgen.imagegen import GenerateImage, generated_image  # noqa: E402
+from vidgen.vector_mobject import VectorPicture, load_vector  # noqa: E402
 
 
 def register_theme_defaults(colors: dict[str, str] | None = None, sizes: dict[str, float] | None = None) -> None:
@@ -313,6 +314,8 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "world_countries",
     "GenerateImage",
     "generated_image",
+    "VectorPicture",
+    "load_vector",
     "Field",
     "field_validator",
     "model_validator",

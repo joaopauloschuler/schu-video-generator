@@ -271,6 +271,7 @@ def imagegen_document(
                 "size": r.size,
                 "aspect_ratio": r.aspect_ratio,
                 "resolution": r.resolution,
+                "format": r.format,
                 "quality": r.quality,
                 "seed": r.seed,
                 "estimated_cost": quote.cost,

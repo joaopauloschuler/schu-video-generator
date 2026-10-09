@@ -32,6 +32,8 @@ from vidgen.errors import VidgenError
 from vidgen.helpers import resolve_color
 from vidgen.icons import IconInfo, find_icon
 from vidgen.runtime import current_theme
+from vidgen.svgclean import CURRENT_MARKER as _CURRENT
+from vidgen.svgclean import SVG_NS, fix_manim_quirks, insert_box, serialize, view_box
 from vidgen.theme import Theme
 
 #: Icon box height in Manim units per point of a size token: 1.5 em of the bundled Inter
@@ -40,15 +42,33 @@ ICON_UNITS_PER_POINT = 0.0208
 
 #: Manim's Cairo camera draws ``stroke_width`` as ``stroke_width * 0.01`` frame units.
 _STROKE_UNIT = 0.01
-
-_SVG_NS = "http://www.w3.org/2000/svg"
-#: Stands for ``currentColor`` while Manim parses the SVG (it would read it as black).
-_CURRENT = "#010203"
 _CAPS = {"round": CapStyleType.ROUND, "butt": CapStyleType.BUTT, "square": CapStyleType.SQUARE}
 _JOINS = {"round": LineJointType.ROUND, "bevel": LineJointType.BEVEL, "miter": LineJointType.MITER}
 
 
-class Icon(VGroup):
+class SvgDrawing(VGroup):
+    """A drawing loaded from an SVG: an invisible box (``submobjects[0]``, the ``viewBox``)
+    followed by the drawn parts. Unlike other mobjects, scaling it scales its stroke widths too
+    (``scale_stroke=True`` by default), so ``place()``, ``scale()`` and ``.animate.scale()``
+    keep its proportions. :class:`Icon` and ``vidgen.vector_mobject.VectorPicture`` are ones."""
+
+    def scale(self, scale_factor: float, scale_stroke: bool = True, **kwargs: Any) -> SvgDrawing:
+        """Scale the drawing; strokes scale with it unless ``scale_stroke=False``."""
+        super().scale(scale_factor, scale_stroke=scale_stroke, **kwargs)
+        return self
+
+    @property
+    def box(self) -> VMobject:
+        """The invisible part spanning the drawing's design box."""
+        return self.submobjects[0]
+
+    @property
+    def parts(self) -> list[VMobject]:
+        """The drawn parts."""
+        return self.submobjects[1:]
+
+
+class Icon(SvgDrawing):
     """A named icon: an invisible box (``submobjects[0]``) followed by the drawn parts.
 
     ``icon_name`` and ``icon_origin`` (``builtin`` | ``project``) say which icon it is (the
@@ -67,28 +87,19 @@ class Icon(VGroup):
         super().scale(scale_factor, scale_stroke=scale_stroke, **kwargs)
         return self
 
-    @property
-    def box(self) -> VMobject:
-        """The invisible part spanning the icon's design box."""
-        return self.submobjects[0]
-
-    @property
-    def parts(self) -> list[VMobject]:
-        """The drawn parts."""
-        return self.submobjects[1:]
-
 
 def scale_icon_strokes(mob: Mobject, factor: float) -> None:
-    """After ``mob.scale(factor)`` of a group holding icons: scale the icons' strokes too.
+    """After ``mob.scale(factor)`` of a group holding icons (or other :class:`SvgDrawing`\\ s):
+    scale their strokes too.
 
     A group's ``scale`` leaves stroke widths alone, so an icon shrunk with its group would draw
     relatively heavier lines; the layout helpers (``shrink_to_fit``, ``place``) call this. An
     :class:`Icon` scaled directly already scales its strokes.
     """
-    if isinstance(mob, Icon) or factor == 1.0:
+    if isinstance(mob, SvgDrawing) or factor == 1.0:
         return
     for member in mob.get_family():
-        if isinstance(member, Icon):
+        if isinstance(member, SvgDrawing):
             for part in member.parts:
                 for leaf in part.get_family():
                     if isinstance(leaf, VMobject) and leaf.get_stroke_width() > 0:
@@ -104,28 +115,6 @@ def _work_dir() -> Path:
     return folder
 
 
-def _number(value: str | None, where: str) -> float:
-    try:
-        return float(str(value).strip().removesuffix("px"))
-    except ValueError:
-        raise VidgenError(f"{where}: cannot read the size {value!r} (give the <svg> a viewBox)") from None
-
-
-def _view_box(root: ET.Element, where: str) -> tuple[float, float, float, float]:
-    box = root.get("viewBox")
-    if box is not None:
-        values = box.replace(",", " ").split()
-        if len(values) == 4:
-            x, y, w, h = (_number(v, where) for v in values)
-            if w > 0 and h > 0:
-                return x, y, w, h
-        raise VidgenError(f"{where}: invalid viewBox {box!r}")
-    w, h = _number(root.get("width"), where), _number(root.get("height"), where)
-    if w <= 0 or h <= 0:
-        raise VidgenError(f"{where}: the <svg> needs a viewBox or a positive width and height")
-    return 0.0, 0.0, w, h
-
-
 @lru_cache(maxsize=256)
 def _prepare(path: Path, mtime_ns: int) -> tuple[Path, float, str | None, str | None]:
     """Write a copy of the SVG that Manim can parse faithfully; returns ``(copy, viewBox height,
@@ -139,23 +128,21 @@ def _prepare(path: Path, mtime_ns: int) -> tuple[Path, float, str | None, str | 
     except (OSError, ET.ParseError) as exc:
         raise VidgenError(f"cannot read icon {where}: {exc}") from None
     root = tree.getroot()
-    if root.tag not in ("svg", f"{{{_SVG_NS}}}svg"):
+    if root.tag not in ("svg", f"{{{SVG_NS}}}svg"):
         raise VidgenError(f"{where}: not an SVG file")
-    x, y, w, h = _view_box(root, where)
-    for element in root.iter():
-        for key, value in list(element.attrib.items()):
-            if "currentColor" in value:
-                element.set(key, value.replace("currentColor", _CURRENT))
-        if element.get("stroke") == "none":
-            element.set("stroke-width", "0")
-    box = ET.Element(f"{{{_SVG_NS}}}rect", {"x": str(x), "y": str(y), "width": str(w), "height": str(h)})
-    root.insert(0, box)
-    ET.register_namespace("", _SVG_NS)
-    data = ET.tostring(root, encoding="utf-8")
+    box = view_box(root, where)
+    fix_manim_quirks(root, _CURRENT)
+    insert_box(root, box)
+    return work_copy(serialize(root)), box[3], root.get("stroke-linecap"), root.get("stroke-linejoin")
+
+
+def work_copy(data: bytes) -> Path:
+    """``data`` written once to this process's work folder (named by its hash): a file Manim's
+    ``SVGMobject`` may parse (it writes a temporary file next to it)."""
     copy = _work_dir() / f"{hashlib.sha1(data).hexdigest()}.svg"
     if not copy.exists():
         copy.write_bytes(data)
-    return copy, h, root.get("stroke-linecap"), root.get("stroke-linejoin")
+    return copy
 
 
 def _is_current(color: Any) -> bool:

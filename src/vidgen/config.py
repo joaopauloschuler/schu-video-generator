@@ -274,13 +274,19 @@ class ImagegenConfig(_Strict):
     """Style added to every prompt for a consistent look: a preset (photo, illustration, flat, isometric, watercolor, line_art, render_3d, cinematic) or your own words; a generate: style replaces it."""
     negative: str | None = Field(default=None, min_length=1)
     """What every picture should avoid (added to each generate: negative), e.g. "text, watermarks"."""
+    svg_model: str | None = Field(default=None, min_length=1)
+    """openrouter only: the model of generate: pictures with format: svg (default: model), e.g. recraft/recraft-v4.1-vector, so one video can mix raster and vector pictures."""
 
     @model_validator(mode="after")
     def _provider_options(self) -> ImagegenConfig:
         if self.provider == "openai":
             if self.resolution is not None:
                 raise ValueError("resolution is an openrouter option; with openai set size: WIDTHxHEIGHT (or auto)")
+            if self.svg_model is not None:
+                raise ValueError("svg_model is an openrouter option (OpenAI makes no SVG pictures); set provider: openrouter")
             return self
+        if self.svg_model is not None and "/" not in self.svg_model.strip("/"):
+            raise ValueError(f"OpenRouter model ids look like author/name (e.g. recraft/recraft-v4.1-vector), not svg_model {self.svg_model!r}")
         if "model" not in self.model_fields_set:
             raise ValueError("provider openrouter needs a model, e.g. model: bytedance-seed/seedream-4.5 (`vidgen imagegen --dry-run` shows its price)")
         if "/" not in self.model.strip("/"):

@@ -51,7 +51,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `metadata` | `{}` (title: the `title`) | tags of the MP4: `title`, `artist`, `album`, `comment`, `description`, `copyright`, `date`, `genre`; see [chapters in the outputs](#chapters-in-the-outputs-chapters-metadata) |
 | `thumbnail` | none | the thumbnail `<output>_thumbnail.png`, written by `vidgen render` and `vidgen thumbnail`: a scene's frame `{scene, beat, at, overlays}` or a designed card `{title, subtitle, icon, image, preset, background}`, + `{jpeg, auto}`; see [thumbnail](#thumbnail-thumbnail-vidgen-thumbnail) |
 | `stt` | `{provider: faster_whisper}` | speech to text for `vidgen readback` (the narration transcribed and compared with the beat texts): `{provider, model, language, device}`; see [readback](#readback-vidgen-readback) |
-| `imagegen` | `{provider: openai, model: gpt-image-1, size: auto}` | image generation for `generate:` params and `vidgen imagegen`: `{provider (openai \| openrouter), model, size, quality, resolution, style, negative}`; see [generated images](#generated-images-imagegen-vidgen-imagegen) |
+| `imagegen` | `{provider: openai, model: gpt-image-1, size: auto}` | image generation for `generate:` params and `vidgen imagegen`: `{provider (openai \| openrouter), model, size, quality, resolution, style, negative, svg_model}`; see [generated images](#generated-images-imagegen-vidgen-imagegen) |
 | `scenes` | required | the scenes in order, at least one |
 
 ## Scenes and beats
@@ -993,6 +993,7 @@ scenes:
 | `resolution` | none | openrouter only: `512`, `768`, `1K`, `1.5K`, `2K`, `4K` for models that have it (default: the model's own); not together with a `WIDTHxHEIGHT` size |
 | `style` | none | words added to every prompt (`Style: ...`) so the pictures of a video look alike: a preset (below) or your own words; a scene's `generate.style` replaces it |
 | `negative` | none | what no picture should show, added to each prompt's `Avoid: ...` (with the scene's own `negative`) |
+| `svg_model` | `model` | openrouter only: the model of pictures with `generate.format: svg` (e.g. `recraft/recraft-v4.1-vector`), so one video can mix raster and [vector pictures](#vector-svg-pictures-format-svg) |
 
 `generate:` (a mapping, or just the prompt as a string):
 
@@ -1003,6 +1004,7 @@ scenes:
 | `style` | `imagegen.style` | a preset, your own words, or `none` (no style words, not even the project's) |
 | `aspect` | `auto` | `auto` (landscape for a wide video, portrait for 9:16, square for 1:1), `landscape`, `portrait`, `square` |
 | `seed` | none | a number that is part of the cache key: change it for another picture of the same prompt. OpenAI takes no seed, so it does not make the picture reproducible; on OpenRouter it is sent to models that take one (others: key only) |
+| `format` | `png` | `png` (a raster picture) or `svg`: a [vector picture](#vector-svg-pictures-format-svg) drawn as shapes (provider `openrouter` with an SVG model) |
 
 **Style presets**: `photo` (photorealistic photograph, natural light, sharp focus),
 `illustration` (clean digital illustration, soft shading, limited colour palette), `flat` (flat
@@ -1010,7 +1012,7 @@ vector illustration, simple geometric shapes, solid colours, no outlines), `isom
 `watercolor`, `line_art`, `render_3d`, `cinematic`. The prompt sent is `<prompt>. Style: <style
 words>. Avoid: <negative>.`; `vidgen imagegen --dry-run` prints it.
 
-**Cache.** Each picture is stored as `assets/generated/<key>.png` with `<key>.json` beside it
+**Cache.** Each picture is stored as `assets/generated/<key>.png` (`<key>.svg` for `format: svg`) with `<key>.json` beside it
 (`prompt`, `negative`, `style`, `sent_prompt`, `revised_prompt` — the prompt the model says it
 used —, `provider`, `model`, `size`, `quality`, `seed`, `created` date, `scenes`). The key is a
 hash of the prompt sent (with style and negative), provider, model, size, quality and seed:
@@ -1066,8 +1068,9 @@ openrouter` and their stored pictures are unchanged.
   sent as is instead (OpenRouter fits it to the model).
 - **What each model takes.** Before the first paid request vidgen reads the model's public record
   (free) and refuses, with a message, a model OpenRouter does not have, a `quality` or
-  `resolution` the model does not take, models that only make vector (SVG) pictures and models
-  that only edit an input picture. A `seed` is sent only to models that take one. `negative` and
+  `resolution` the model does not take, a model that makes only vector (SVG) pictures for a
+  `png` picture (and one that makes none for `format: svg`) and models that only edit an input
+  picture. A `seed` is sent only to models that take one. `negative` and
   `style` go into the prompt (`Avoid: ...`, `Style: ...`), as for OpenAI.
 - **Prices.** `vidgen imagegen --dry-run` looks up each model's price on OpenRouter (free, a few
   seconds at most) and prints its basis: `$0.04 per image`, `$0.014 per megapixel x 0.59 MP
@@ -1077,7 +1080,15 @@ openrouter` and their stored pictures are unchanged.
 - **Cost of a run.** OpenRouter reports what each picture cost; `vidgen imagegen` prints it and
   stores it in the sidecar (`cost_usd`), with `aspect_ratio` and `resolution`.
 - **Pictures** come back as PNG, JPEG or WebP and are stored as PNG; the cache key also covers
-  the aspect ratio and resolution.
+  the aspect ratio and resolution. SVG: [below](#vector-svg-pictures-format-svg).
+- **Privacy settings (Zero Data Retention).** If your OpenRouter account requires Zero Data
+  Retention (or excludes providers that may keep or train on prompts), choose a model with a
+  ZDR endpoint: OpenRouter refuses the others (HTTP 404, "no endpoints ... matching your data
+  policy") and vidgen then says so, links <https://openrouter.ai/settings/privacy> and lists the
+  image models that have a ZDR endpoint (from OpenRouter's public list
+  `https://openrouter.ai/api/v1/endpoints/zdr`; on 2026-10-08 e.g.
+  `bytedance-seed/seedream-5-0-flash`, `bytedance-seed/seedream-4.5`, the Gemini, Krea and MAI
+  image models — not Recraft or FLUX).
 
 ```
 $ vidgen imagegen my_video --dry-run
@@ -1090,6 +1101,48 @@ dry run: 1 picture(s) to generate, estimated $0.040 (OpenRouter prices of 2026-1
 vidgen identifies itself to OpenRouter with the optional app headers (`HTTP-Referer`: the
 project's repository URL, `X-OpenRouter-Title`: `schu-video-generator`). OpenRouter's terms and
 each upstream model's provider policies apply to what you generate.
+
+### Vector (SVG) pictures (`format: svg`)
+
+`generate: {prompt: ..., format: svg}` asks for a vector picture: OpenRouter's SVG models turn
+the text prompt into an SVG in one call (no raster picture first). It is stored as
+`assets/generated/<key>.svg` (+ sidecar with `format: svg`) and the [`image`](#image) scene
+draws it as shapes: sharp at any size, and it can be **drawn in** (`draw: true`: outlines are
+traced, then filled) and **painted in the theme's colours** (`recolor: theme`).
+
+```yaml
+imagegen:
+  provider: openrouter
+  model: bytedance-seed/seedream-4.5        # raster pictures
+  svg_model: recraft/recraft-v4.1-vector    # format: svg pictures
+scenes:
+  - id: idea
+    type: image
+    params:
+      generate: {prompt: "a flat illustration of a lightbulb with gears inside", format: svg}
+      draw: true
+      recolor: theme
+```
+
+- **Models** (OpenRouter's public list of 2026-10-08; text prompt in, SVG out, `$` per picture):
+  `recraft/recraft-v4.1-vector` and `recraft/recraft-v4-vector` ($0.08),
+  `recraft/recraft-v4.1-pro-vector` and `recraft/recraft-v4-pro-vector` ($0.30). None has a
+  Zero Data Retention endpoint: an account requiring ZDR cannot use them (vidgen's error says
+  so). `vidgen imagegen --dry-run` shows the live price and refuses a model that makes no SVG;
+  `vidgen validate` warns about a `format: svg` model not known to make SVG.
+- **Requests** send `output_format: svg` and an aspect ratio (no `quality` / `resolution`:
+  vectors have none); the cache key includes the format, so PNG keys are unchanged.
+- **Sanitised before drawing**: scripts, embedded HTML, embedded raster pictures, filters
+  (blur, shadows), masks / clip paths, text (put words on screen with vidgen), animation and
+  links to other files are removed; gradients and patterns become one colour (the average of the
+  stops). At most 1500 shapes are drawn (the smallest beyond it are dropped) and 60 000 curve
+  segments (paths are thinned): each with a warning, so a huge SVG cannot stall a render. The
+  scene's `simplify` drops small details on purpose. `vidgen validate` lists what loading a
+  stored SVG will remove; renders log it.
+- **When it is worth it**: flat illustrations, icons, diagram-like and line art (few flat
+  colours: they scale, draw in and recolour well). Not for photos, textures or soft lighting:
+  those come back as thousands of shapes (dropped or thinned) and look worse than a PNG.
+- An `.svg` file of your own works the same way as the `image` scene's `path`.
 
 **Writing prompts.** Image generators draw letters, numbers, charts and logos poorly (garbled
 words, made-up values): `vidgen validate` warns when a prompt quotes text or asks for a sign,
@@ -2200,15 +2253,21 @@ than 1, up to 4).
 ### `image`
 
 Steps: (1) the image, (2) the caption. `vidgen validate` reports a missing or unsupported file
-(png, jpg, jpeg, gif, bmp, webp, tif). Instead of a file, `generate:` asks for a
+(png, jpg, jpeg, gif, bmp, webp, tif, svg). Instead of a file, `generate:` asks for a
 [generated picture](#generated-images-imagegen-vidgen-imagegen): `vidgen imagegen` makes it once
 (paid), and until then the scene shows a placeholder card with the prompt in the theme's colours.
+An `.svg` file or `generate: {format: svg}` is a [vector picture](#vector-svg-pictures-format-svg):
+sanitised, then drawn as shapes (`draw`, `recolor`, `simplify` below; the layout dump and lint
+see it as one object of kind `vector`).
 [Action targets](#beat-actions): `image`, `caption` (`dim` fades the picture, `highlight` tints it).
 
 | param | type | default | |
 |---|---|---|---|
 | `path` | str | required (or `generate`) | relative to the project folder, e.g. `assets/photo.jpg` |
-| `generate` | str \| mapping | none | a generated picture instead of `path` (not both): the prompt, or `{prompt, negative, style, aspect, seed}`, see [generated images](#generated-images-imagegen-vidgen-imagegen) |
+| `generate` | str \| mapping | none | a generated picture instead of `path` (not both): the prompt, or `{prompt, negative, style, aspect, seed, format}`, see [generated images](#generated-images-imagegen-vidgen-imagegen) |
+| `draw` | bool | `false` | vector pictures only: trace the outlines, then fill them (up to 2.5 s within the beat) instead of fading in |
+| `recolor` | `none` \| `theme` | `none` | vector pictures only: `theme` maps each colour to the theme's — greys to the neutral (`background`, `surface`, `dim`, `text`) of nearest lightness, other colours to the theme colour (`primary`, `secondary`, `tertiary`, `accent`, `highlight`, palette) of nearest hue, keeping their lightness |
+| `simplify` | bool \| number 0–5 | `false` | vector pictures only: drop shapes smaller than this percentage of the picture's area (`true` = 0.05) so busy SVGs draw faster |
 | `caption` | str | `""` | |
 | `fit` | `contain` \| `cover` | `contain` | `contain`: whole image, caption below; `cover`: fills the frame (cropped), caption on a band |
 | `ken_burns` | bool \| mapping | `false` | slow zoom/pan over the whole scene; `true` = zoom 1.0 → 1.15 on the center |
@@ -3864,7 +3923,7 @@ Each object:
 | key | meaning |
 |---|---|
 | `id` | `m1`, `m2`, ...: the same Python object keeps its id in every frame of the scene |
-| `kind` | `text` (`Text`, `MarkupText`, `Paragraph`), `code` (the text of a `Code` listing), `math` (`Tex`, `MathTex`), `number` (`DecimalNumber`, `Integer`), `shape` (one path), `group` (a group of shapes with no text or image inside, e.g. an axis' ticks), `image`, `icon` (an icon from `icon()`: one object, not one per path) |
+| `kind` | `text` (`Text`, `MarkupText`, `Paragraph`), `code` (the text of a `Code` listing), `math` (`Tex`, `MathTex`), `number` (`DecimalNumber`, `Integer`), `shape` (one path), `group` (a group of shapes with no text or image inside, e.g. an axis' ticks), `image`, `icon` (an icon from `icon()`: one object, not one per path), `vector` (a vector picture, an SVG: one object, not one per path) |
 | `class` | the Manim class |
 | `path` | where it sits: parent groups from the top-level mobject down, each `Class[index]` (index among its parent's submobjects; top level: in the scene), or the name the scene gave it |
 | `name` | the scene attribute that holds it (`self.title = ...`) or a `Mobject.name` set by the scene, else `null` |
@@ -4667,7 +4726,7 @@ The same document for a dry run (`--dry-run`, no key needed) and a run (DESIGN.m
 | `unknown_cost` | int | pictures to generate with no known price (model / size not in the price list, priced per token, or OpenRouter not reachable) |
 | `price_note` | str | where the prices come from (OpenAI's 2025 list, OpenRouter's prices of a date, or that they are unknown) |
 | `charged` | float \| null | US dollars the provider reported for this run (OpenRouter); `null` in a dry run or when not reported |
-| `images` | list | the pictures to generate, each distinct request once: `{key, scenes, prompt, sent_prompt, provider, model, size, aspect_ratio, resolution, quality, seed, estimated_cost, price_basis, notes, problems, path}` (`sent_prompt` = prompt + style + negative as sent; `size` the nominal size when an `aspect_ratio` is sent; `price_basis` what `estimated_cost` is based on; `notes` options the model ignores or changes and `problems` what a run would refuse — OpenRouter, from its model records; `path` the PNG it is / will be stored as) |
+| `images` | list | the pictures to generate, each distinct request once: `{key, scenes, prompt, sent_prompt, provider, model, size, aspect_ratio, resolution, format, quality, seed, estimated_cost, price_basis, notes, problems, path}` (`sent_prompt` = prompt + style + negative as sent; `size` the nominal size when an `aspect_ratio` is sent; `format` `png` or `svg`; `price_basis` what `estimated_cost` is based on; `notes` options the model ignores or changes and `problems` what a run would refuse — OpenRouter, from its model records; `path` the PNG / SVG it is / will be stored as) |
 | `generated` | list | keys generated by this run (`[]` for a dry run) |
 | `up_to_date` | list | keys whose picture exists (skipped) |
 | `orphaned` | list | pictures in `assets/generated/` no config of the project uses (never deleted) |

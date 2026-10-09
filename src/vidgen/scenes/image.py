@@ -1,14 +1,16 @@
 """``image``: a picture from the project's assets (or a generated one) with an optional caption
 and Ken Burns move."""
 
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 import numpy as np
 from PIL import Image as PILImage
 
 from vidgen.api import *
 
-IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".tif", ".tiff"}
+IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".tif", ".tiff", ".svg"}
+#: Seconds a ``draw: true`` reveal takes at most (a fade takes 1).
+DRAW_CAP = 2.5
 
 
 class KenBurns(SceneParams):
@@ -39,7 +41,19 @@ def check_image(project: Any, rel: str, field: str) -> list[str]:
         return [f"{field}: file not found: {rel} (looked for {path})"]
     if path.suffix.lower() not in IMAGE_SUFFIXES:
         return [f"{field}: unsupported image type {path.suffix!r} (use {', '.join(sorted(IMAGE_SUFFIXES))})"]
+    if is_vector(path):
+        from vidgen.svgclean import sanitize_svg
+
+        try:
+            sanitize_svg(path.read_bytes(), where=rel)
+        except (VidgenError, OSError) as exc:
+            return [f"{field}: {exc}"]
     return []
+
+
+def is_vector(path: Any) -> bool:
+    """Whether ``path`` is an SVG file (drawn as shapes, not pixels)."""
+    return str(path).lower().endswith(".svg")
 
 
 def load_image(path: Any) -> ImageMobject:
@@ -57,6 +71,10 @@ class Image(NarratedScene):
     (cropping) with the caption on a band at the bottom. ``ken_burns`` zooms/pans slowly over
     the whole scene (in ``contain`` mode the image never outgrows its box). ``generate`` shows a
     generated picture (``vidgen imagegen``) instead of a file, a placeholder card until it exists.
+
+    Vector pictures (an ``.svg`` path or ``generate: {format: svg}``) are drawn as shapes,
+    sanitised first: ``draw: true`` traces their outlines then fills them, ``recolor: theme``
+    paints them in the theme's colours, ``simplify`` drops small details.
 
     Action targets: ``image``, ``caption`` (if any).
     """
@@ -84,12 +102,25 @@ class Image(NarratedScene):
         """Caption color."""
         caption_size: ThemeSize = "caption"
         """Caption text size."""
+        draw: bool = False
+        """Vector pictures (.svg path or generate format: svg): trace the outlines, then fill them (instead of a fade)."""
+        recolor: Literal["none", "theme"] = "none"
+        """Vector pictures: none keeps their colours; theme maps each to the nearest theme colour (greys by lightness, others by hue)."""
+        simplify: bool | Annotated[float, Field(ge=0, le=5)] = False
+        """Vector pictures: drop shapes smaller than this percentage of the picture's area (true = 0.05) so busy SVGs draw faster."""
 
         @model_validator(mode="after")
         def _one_source(self) -> SceneParams:
             if (self.path is None) == (self.generate is None):
                 raise ValueError("give either path (an image file) or generate (a picture to generate), not both" if self.path else "path or generate is required: an image file, or a picture to generate")
+            used = [n for n in ("draw", "recolor", "simplify") if getattr(self, n) not in (False, "none", 0)]
+            if used and not self.vector():
+                raise ValueError(f"{', '.join(used)} work on vector pictures only: an .svg path or generate: {{format: svg}}")
             return self
+
+        def vector(self) -> bool:
+            """Whether the picture is drawn as shapes (an SVG)."""
+            return (self.path is not None and is_vector(self.path)) or (self.generate is not None and self.generate.format == "svg")
 
         def motion(self) -> KenBurns | None:
             """The Ken Burns settings, or ``None`` when disabled."""
@@ -105,12 +136,18 @@ class Image(NarratedScene):
     def construct(self) -> None:
         p = self.params
         if p.generate is not None:  # the stored picture, or a placeholder card until it is made
-            img = load_image(generated_image(self.project, p.generate, self.theme))
+            source = generated_image(self.project, p.generate, self.theme)
         else:
             problems = check_image(self.project, p.path, "path")
             if problems:
                 raise VidgenError(f"scene '{self.spec.id}': {problems[0]}")
-            img = load_image(self.project.asset(p.path))
+            source = self.project.asset(p.path)
+        vector = is_vector(source)
+        if vector:
+            name = f"scene '{self.spec.id}' ({source.name})"
+            img = load_vector(source, recolor=p.recolor, theme=self.theme, simplify=p.simplify, where=name)
+        else:
+            img = load_image(source)
         aspect = img.width / img.height
         fw, fh = self.frame_width, self.frame_height
         motion = p.motion()
@@ -164,12 +201,13 @@ class Image(NarratedScene):
 
             img.add_updater(drift)
 
-        picture = self.target("image", img, entrance=lambda: [FadeIn(img)])
+        draw = vector and p.draw
+        picture = self.target("image", img, entrance=lambda: [DrawBorderThenFill(img) if draw else FadeIn(img)])
         steps: list = [lambda: self.entrance(picture)]  # entrance(): not twice after a reveal action
         if caption is not None:  # the target is the text (a cover caption's band is not recoloured)
             label = self.target("caption", text, entrance=lambda: [FadeIn(caption, shift=UP * 0.1)])
             steps.append(lambda: self.entrance(label))
-        self.reveal(steps, fraction=0.6, cap=1.0)
+        self.reveal(steps, fraction=0.75 if draw else 0.6, cap=DRAW_CAP if draw else 1.0)
         img.clear_updaters()
         self.finish()
 

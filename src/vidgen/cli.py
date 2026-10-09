@@ -158,6 +158,7 @@ def project_problems(project: Project) -> list[Problem]:
     from vidgen.actions import scene_actions
     from vidgen.carry import carry_problems
     from vidgen.icons import PROJECT_ICONS_DIR, project_icons
+    from vidgen.imagegen import imagegen_problems
     from vidgen.music import config_problems as music_problems
     from vidgen.overlays import overlay_problems
     from vidgen.sfx import config_problems as sfx_problems
@@ -204,6 +205,7 @@ def project_problems(project: Project) -> list[Problem]:
             problems.extend(Problem(loc, message) for loc, message in sfx_problems(project.config, project.root))
             problems.extend(Problem(loc, message) for loc, message in music_problems(project.config, project.root))
             problems.extend(thumbnail_problems(project, theme))
+            problems.extend(Problem(loc, message) for loc, message in imagegen_problems(project))
     except VidgenError as exc:
         problems.extend(exc.problems or [Problem("", str(exc))])
     return problems

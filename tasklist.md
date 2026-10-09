@@ -285,14 +285,15 @@ by the coordinator at the end of each step with the owner's key; agents never se
 - [x] Docs: CONFIG.md, README (key setup on Windows and Linux), AGENTS.md (choosing an image provider), third-party/terms notes
 
 ### Step 61b — Vector (SVG) generated images
-- [ ] Find out how OpenRouter's SVG/vectorization models are called (text prompt or input picture); if they only convert pictures, generate a PNG then vectorize it
-- [ ] `generate: {..., format: svg}` on the `image` scene, only with a model that returns SVG (validate says which)
-- [ ] Stored as `assets/generated/<hash>.svg` + sidecar; format in the cache key
-- [ ] Sanitise before loading: drop scripts / filters / embedded rasters, flatten unsupported gradients, cap the path count (clear warning, simplify option)
-- [ ] Loaded as vector shapes; `draw: true` (strokes then fill), `recolor: theme | none`, fit to region
-- [ ] Layout dump / lint treat it as one picture
-- [ ] Tests: mocked SVG response, sanitiser, draw / recolor render test, path cap
-- [ ] Docs: CONFIG.md, AGENTS.md (when SVG is worth it)
+- [x] Find out how OpenRouter's SVG/vectorization models are called (text prompt or input picture); if they only convert pictures, generate a PNG then vectorize it (2026-10-08: the SVG models are Recraft's `*-vector` — text prompt in, SVG out, one call, $0.08 / $0.30 per picture; no vectorise-only model listed, so no two-call pipeline; none has a ZDR endpoint)
+- [x] `generate: {..., format: svg}` on the `image` scene, only with a model that returns SVG (validate says which) (`imagegen.svg_model`; validate: error without `provider: openrouter`, warning for a model not known to make SVG with the SVG models listed; dry run / run check the live record)
+- [x] Stored as `assets/generated/<hash>.svg` + sidecar; format in the cache key (PNG keys unchanged; dry run, `--json` `format`, MCP through the same JSON)
+- [x] Sanitise before loading: drop scripts / filters / embedded rasters, flatten unsupported gradients, cap the path count (clear warning, simplify option) (`vidgen/svgclean.py`: also foreignObject, masks / clip paths, text, animation, links, entities; 1500 shapes / 60 000 segments; `simplify` % of the area)
+- [x] Loaded as vector shapes; `draw: true` (strokes then fill), `recolor: theme | none`, fit to region (`load_vector` / `VectorPicture`; also `.svg` files as `path`)
+- [x] Layout dump / lint treat it as one picture (kind `vector`)
+- [x] Tests: mocked SVG response, sanitiser, draw / recolor render test, path cap (`tests/test_vector_images.py`)
+- [x] Docs: CONFIG.md, AGENTS.md (when SVG is worth it) (+ EXTENDING.md, DESIGN §65)
+- [x] (from Step 61's live run) OpenRouter's data-policy 404 (account requires ZDR) → a clear error with the settings link and the image models that have a ZDR endpoint; CONFIG.md note; `tools/live_check_openrouter.py --zdr` and `--svg`
 
 ### Step 62 — OpenRouter TTS provider (one provider per video)
 - [ ] `voice: {provider: openrouter, model, voice, instructions, speed}`; `elevenlabs` stays the default; existing audio hashes stay valid

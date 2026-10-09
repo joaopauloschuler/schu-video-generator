@@ -515,6 +515,15 @@ class BackdropTitle(NarratedScene):
         self.finish()
 ```
 
+A `generate:` with `format: svg` (a vector picture) is stored as an `.svg`: `generated_image`
+returns that path once it is made (still a PNG placeholder before). Draw it as shapes with
+`load_vector(path, *, height=1.0, recolor="none" | "theme", theme=None, simplify=False)`, which
+sanitises the SVG first (no scripts, filters, rasters or text; gradients flattened; shapes and
+points capped — docs/CONFIG.md "Vector (SVG) pictures") and returns a `VectorPicture` (a
+`VGroup`: an invisible box spanning the `viewBox`, then the parts; strokes scale with it, the
+layout dump reports it as one object of kind `vector`). `DrawBorderThenFill(picture)` traces then
+fills it.
+
 **Sound effects** (docs/CONFIG.md "Sound effects"). `self.sfx(sound, at=None, *, gain=0.0,
 pan=0.0, align="start", **params)` plays a built-in sound (`vidgen list-sfx`) or the project's
 `assets/sfx/<sound>.wav` at scene time `at` (seconds; default now, so it lands with the next

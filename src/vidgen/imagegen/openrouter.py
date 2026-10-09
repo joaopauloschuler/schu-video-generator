@@ -27,7 +27,7 @@ from typing import Any
 
 from vidgen import DIST_NAME, httpapi
 from vidgen.errors import VidgenError
-from vidgen.imagegen import GeneratedPicture, ImageRequest, PriceQuote
+from vidgen.imagegen import SVG_MODELS_DATE, GeneratedPicture, ImageRequest, PriceQuote, svg_models_hint
 from vidgen.imagegen.openai import as_png
 
 API_BASE = "https://openrouter.ai/api/v1"
@@ -42,8 +42,14 @@ APP_HEADERS: dict[str, str] = {"HTTP-Referer": APP_URL, "X-OpenRouter-Title": DI
 LOOKUP_TIMEOUT = 5.0
 #: HTTP statuses retried: rate limit, server errors, edge timeout (524), provider overloaded (529).
 TRANSIENT_STATUS = frozenset({429, 500, 502, 503, 504, 524, 529})
-#: Media types of vector pictures (not supported yet: the pictures are stored as PNG).
+#: Media types of vector pictures (stored as SVG when ``format: svg`` asked for one; §65).
 VECTOR_TYPES = frozenset({"image/svg+xml"})
+#: Where an account's privacy settings (Zero Data Retention, data policy) are changed.
+PRIVACY_URL = "https://openrouter.ai/settings/privacy"
+#: Public list of the endpoints with Zero Data Retention (``data: [{model_id, ...}]``).
+ZDR_URL = f"{API_BASE}/endpoints/zdr"
+#: Words of OpenRouter's answer when no endpoint of a model fits the account's data policy.
+_POLICY_WORDS = ("data policy", "zdr", "guardrail", "settings/privacy")
 
 
 def missing_key_message() -> str:
@@ -245,8 +251,17 @@ def check_request(request: ImageRequest, info: ModelInfo) -> RequestCheck:
         elif values is not None and value not in values:
             check.problems.append(f"{model} takes {name} {', '.join(values)}, not {value} ({where})")
     formats = info.values("output_format")
-    if formats is not None and formats and all(f == "svg" for f in formats):
-        check.problems.append(f"{model} makes vector (SVG) pictures, which vidgen cannot store yet: choose a model that makes PNG/JPEG/WebP pictures")
+    if request.format == "svg":
+        if not formats or "svg" not in formats:
+            check.problems.append(
+                f"{model} makes no SVG pictures (format: svg); OpenRouter's SVG models on {SVG_MODELS_DATE}: {svg_models_hint()} "
+                "- set imagegen.svg_model"
+            )
+    elif formats and all(f == "svg" for f in formats):
+        check.problems.append(
+            f"{model} makes only vector (SVG) pictures: add format: svg to the generate: (or set imagegen.svg_model to it "
+            "and imagegen.model to a raster model)"
+        )
     refs = params.get("input_references")
     if isinstance(refs, dict) and isinstance(refs.get("min"), int) and refs["min"] >= 1:
         check.problems.append(f"{model} edits an input picture (needs {refs['min']}+): choose a text-to-image model")
@@ -265,7 +280,8 @@ def check_request(request: ImageRequest, info: ModelInfo) -> RequestCheck:
 def request_body(request: ImageRequest, info: ModelInfo | None = None) -> dict[str, Any]:
     """JSON body of ``POST /images``: model, prompt, one picture, then either ``size`` (an
     explicit WIDTHxHEIGHT) or ``aspect_ratio`` (+ ``resolution``), ``quality``, ``seed`` (unless
-    the model is known to take none) and ``output_format: png`` when the model lists it."""
+    the model is known to take none) and ``output_format``: ``svg`` for a vector picture, else
+    ``png`` when the model lists it."""
     body: dict[str, Any] = {"model": request.model, "prompt": request.text, "n": 1}
     if request.explicit_size:
         body["size"] = request.size
@@ -280,7 +296,9 @@ def request_body(request: ImageRequest, info: ModelInfo | None = None) -> dict[s
     if request.seed is not None and (params is None or "seed" in params):
         body["seed"] = request.seed
     formats = info.values("output_format") if info is not None else None
-    if formats and "png" in formats:
+    if request.format == "svg":
+        body["output_format"] = "svg"
+    elif formats and "png" in formats:
         body["output_format"] = "png"
     return body
 
@@ -326,12 +344,67 @@ def _is_vector(raw: RawPicture) -> bool:
     return raw.media_type in VECTOR_TYPES or head.startswith((b"<svg", b"<?xml"))
 
 
-def parse_response(body: bytes) -> GeneratedPicture:
-    """The picture of a response as PNG (JPEG / WebP converted), with its cost."""
+def parse_response(body: bytes, format: str = "png") -> GeneratedPicture:
+    """The picture of a response with its cost: for ``format`` ``png`` as PNG (JPEG / WebP
+    converted), for ``svg`` the SVG document as sent (checked to be one)."""
     raw = decode_response(body)
+    if format == "svg":
+        if not _is_vector(raw):
+            raise VidgenError(f"OpenRouter returned a raster picture ({raw.media_type or 'unknown type'}) though SVG was asked for: choose an SVG model")
+        from vidgen.svgclean import sanitize_svg
+
+        sanitize_svg(raw.data, where="the SVG OpenRouter returned")  # raises if it cannot be shown
+        return GeneratedPicture(raw.data, raw.revised_prompt, raw.cost)
     if _is_vector(raw):
-        raise VidgenError("OpenRouter returned a vector (SVG) picture, which vidgen cannot store yet: choose a model that makes PNG/JPEG/WebP pictures")
+        raise VidgenError("OpenRouter returned a vector (SVG) picture: add format: svg to the generate: to store it as one, or choose a raster model")
     return GeneratedPicture(as_png(raw.data, SERVICE), raw.revised_prompt, raw.cost)
+
+
+# ----- an account's data policy ------------------------------------------------------------------
+
+
+def is_policy_error(message: str) -> bool:
+    """Whether an error is OpenRouter's "no endpoint matches your data policy" (HTTP 404 when
+    the account's privacy settings, e.g. Zero Data Retention, exclude every provider of the
+    model)."""
+    text = message.lower()
+    return "http 404" in text and any(word in text for word in _POLICY_WORDS)
+
+
+def zdr_image_models(*, timeout: float = LOOKUP_TIMEOUT, svg: bool = False) -> list[str] | None:
+    """Image models with a Zero Data Retention endpoint (sorted): the public ZDR endpoint list
+    intersected with the image model list (``svg``: only models making SVG). ``None`` when
+    OpenRouter cannot be reached (no key needed; a short timeout)."""
+    headers = {"Accept": "application/json", **APP_HEADERS}
+    try:
+        zdr = json.loads(httpapi.get(ZDR_URL, headers=headers, service=SERVICE, timeout=timeout).decode("utf-8"))
+        images = json.loads(httpapi.get(f"{API_BASE}/images/models", headers=headers, service=SERVICE, timeout=timeout).decode("utf-8"))
+        with_zdr = {str(e.get("model_id")) for e in zdr["data"] if isinstance(e, dict)}
+        models = [m for m in images["data"] if isinstance(m, dict) and m.get("id") in with_zdr]
+    except (VidgenError, urllib.error.HTTPError, ValueError, KeyError, TypeError):
+        return None
+    if svg:
+        models = [m for m in models if "svg" in (((m.get("supported_parameters") or {}).get("output_format") or {}).get("values") or [])]
+    return sorted(str(m["id"]) for m in models)
+
+
+def policy_message(model: str, svg: bool = False, zdr: Callable[..., list[str] | None] | None = None) -> str:
+    """What to do when the account's data policy excludes every provider of ``model``: the
+    settings page and, when OpenRouter can be reached, image models that have a ZDR endpoint."""
+    found = (zdr or zdr_image_models)(svg=svg)
+    lines = [
+        f"OpenRouter has no provider for {model} that your account's privacy settings allow (e.g. Zero Data "
+        f"Retention required, or providers that may train on or keep prompts excluded). Change them at {PRIVACY_URL}, "
+        "or choose a model with a ZDR endpoint.",
+    ]
+    if found is None:
+        lines.append("(OpenRouter's list of ZDR endpoints could not be reached to suggest models.)")
+    elif found:
+        kind = "SVG image models" if svg else "Image models"
+        lines.append(f"{kind} with a ZDR endpoint now: {', '.join(found)}")
+    else:
+        lines.append("No SVG image model has a ZDR endpoint now: allow non-ZDR providers for this one, or use format: png." if svg else "No image model has a ZDR endpoint now.")
+    return "\n".join(lines)
 
 
 # ----- the provider ------------------------------------------------------------------------------
@@ -342,8 +415,8 @@ class OpenRouterImageProvider:
 
     ``retries`` transient failures (HTTP 429 / 5xx / 524 / 529, timeouts, dropped connections)
     are retried with exponential backoff (``backoff * 2**attempt`` seconds, or the server's
-    ``Retry-After``, capped at ``max_wait``). ``sleep`` and ``fetch`` (the model-record lookup)
-    are injectable for tests.
+    ``Retry-After``, capped at ``max_wait``). ``sleep``, ``fetch`` (the model-record lookup) and
+    ``zdr`` (:func:`zdr_image_models`, for the data-policy message) are injectable for tests.
     """
 
     name = "openrouter"
@@ -357,6 +430,7 @@ class OpenRouterImageProvider:
         max_wait: float = 60.0,
         sleep: Callable[[float], None] | None = None,
         fetch: Callable[..., Lookup] | None = None,
+        zdr: Callable[..., list[str] | None] | None = None,
     ) -> None:
         self.timeout = timeout
         self.retries = retries
@@ -364,6 +438,7 @@ class OpenRouterImageProvider:
         self.max_wait = max_wait
         self._sleep = sleep if sleep is not None else time.sleep
         self._fetch = fetch
+        self._zdr = zdr
         self._info: dict[str, Lookup] = {}
 
     def check_credentials(self) -> None:
@@ -398,8 +473,13 @@ class OpenRouterImageProvider:
         info = lookup if isinstance(lookup, ModelInfo) else None
         data = json.dumps(request_body(request, info)).encode("utf-8")
         headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json", "Accept": "application/json", **APP_HEADERS}
-        body = httpapi.post_with_retries(
-            API_URL, data, headers=headers, service=SERVICE, secret=key, timeout=self.timeout, retries=self.retries,
-            backoff=self.backoff, max_wait=self.max_wait, sleep=self._sleep, transient=_transient,
-        )
-        return parse_response(body)
+        try:
+            body = httpapi.post_with_retries(
+                API_URL, data, headers=headers, service=SERVICE, secret=key, timeout=self.timeout, retries=self.retries,
+                backoff=self.backoff, max_wait=self.max_wait, sleep=self._sleep, transient=_transient,
+            )
+        except VidgenError as exc:
+            if is_policy_error(str(exc)):
+                raise VidgenError(policy_message(request.model, request.format == "svg", self._zdr)) from None
+            raise
+        return parse_response(body, request.format)

@@ -1,7 +1,8 @@
 """``vidgen imagegen``: generate the pictures of ``generate:`` params that are missing (DESIGN.md §58).
 
 Each distinct request (same prompt, style, size, model...) is generated once and stored as
-``assets/generated/<key>.png`` + ``<key>.json``; pictures that exist are skipped unless ``force``.
+``assets/generated/<key>.png`` (``.svg`` for ``format: svg``, §65) + ``<key>.json``; pictures that
+exist are skipped unless ``force``.
 """
 
 from __future__ import annotations
@@ -30,6 +31,8 @@ from vidgen.project import Project
 
 #: Where the prices in :data:`vidgen.imagegen.PRICES` come from (shown with estimates).
 PRICE_NOTE = "OpenAI list prices of 2025; check current pricing"
+#: Why a ``format: svg`` picture cannot be made with another provider.
+SVG_PROVIDER = "format: svg needs imagegen.provider: openrouter and an SVG model (e.g. svg_model: recraft/recraft-v4.1-vector)"
 
 
 @dataclass
@@ -77,6 +80,9 @@ def price_plan(plan: ImagegenPlan, *, lookup: Callable[[list[str]], dict[str, An
     unknown"); OpenAI requests from :data:`PRICES`. ``lookup`` replaces the OpenRouter lookup."""
     from vidgen.imagegen import openrouter
 
+    for request in plan.todo:
+        if request.format == "svg" and request.provider != "openrouter":
+            plan.problems[request.key] = [SVG_PROVIDER]
     routed = [r for r in plan.todo if r.provider == "openrouter"]
     notes: list[str] = []
     if any(r.provider == "openai" for r in plan.todo):
@@ -180,6 +186,8 @@ def sidecar_document(
         doc["size"] = request.size if request.explicit_size else None
         doc["aspect_ratio"] = request.aspect_ratio
         doc["resolution"] = request.resolution
+    if request.format != "png":
+        doc["format"] = request.format
     if cost is not None:
         doc["cost_usd"] = cost
     return doc
@@ -207,7 +215,7 @@ def run_imagegen(
         price_plan(plan, lookup=lookup)
         for request in plan.todo:
             quote = plan.quote(request)
-            out(f"would generate {request.key}.png for {', '.join(plan.scenes[request.key])} ({_describe(request, quote)})")
+            out(f"would generate {request.path.name} for {', '.join(plan.scenes[request.key])} ({_describe(request, quote)})")
             if request.provider != "openai":
                 out(f"    price: {quote.basis}")
             for note in plan.notes.get(request.key, []):
@@ -223,6 +231,8 @@ def run_imagegen(
         out(f"nothing to do: {len(plan.up_to_date)} picture(s) up to date in {where}/")
         return plan
 
+    if any(r.format == "svg" and r.provider != "openrouter" for r in plan.todo):
+        raise VidgenError(f"cannot generate with these settings:\n  {SVG_PROVIDER}")
     provider = get_image_provider(project) if provider is None else provider
     provider.check_credentials()  # fail before the first request if the key is missing
     check_requests = getattr(provider, "check_requests", None)
@@ -243,7 +253,7 @@ def run_imagegen(
         if picture.cost is not None:
             charged.append(picture.cost)
         cost = f", {_money(picture.cost)}" if picture.cost is not None else ""
-        out(f"[{n}/{len(plan.todo)}] generated {request.key}.png for {', '.join(scenes)} ({time.monotonic() - started:.1f} s{cost})")
+        out(f"[{n}/{len(plan.todo)}] generated {request.path.name} for {', '.join(scenes)} ({time.monotonic() - started:.1f} s{cost})")
     if charged:
         plan.charged = sum(charged)
         spent = f"{_money(plan.charged)} charged by {provider.name}" + (f" for {len(charged)} of them" if len(charged) < len(plan.todo) else "")
