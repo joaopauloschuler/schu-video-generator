@@ -1,7 +1,7 @@
 """POST requests to a paid web API with retries and scrubbed errors (standard library only).
 
 Shared by the ElevenLabs text-to-speech / speech-to-text providers and the image-generation
-provider. The API key is passed in by the caller (read from an environment variable at the
+providers (OpenAI, OpenRouter). The API key is passed in by the caller (read from an environment variable at the
 moment of the request); it goes only into the request headers and is removed from every error
 message.
 """
@@ -81,6 +81,22 @@ def post_with_retries(
         delay = wait if wait is not None else backoff * 2**attempt
         sleep(min(delay, max_wait))
         attempt += 1
+
+
+def get(url: str, *, headers: Mapping[str, str], service: str, timeout: float) -> bytes:
+    """GET ``url`` once (no retries: for free lookups that may fail, such as a public price
+    list). Raises ``urllib.error.HTTPError`` for an HTTP error status (the caller decides what
+    a 404 means) and :class:`VidgenError` when ``service`` cannot be reached."""
+    request = urllib.request.Request(url, method="GET", headers=dict(headers))
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return response.read()
+    except urllib.error.HTTPError:
+        raise
+    except (TimeoutError, ConnectionError, urllib.error.URLError, OSError, ValueError) as exc:
+        reason = exc.reason if isinstance(exc, urllib.error.URLError) else exc
+        what = f"{type(reason).__name__}: {reason}" if isinstance(reason, BaseException) else str(reason)
+        raise VidgenError(f"cannot reach {service}: {what}") from None
 
 
 def _request(url: str, data: bytes, headers: Mapping[str, str], timeout: float, service: str) -> bytes:

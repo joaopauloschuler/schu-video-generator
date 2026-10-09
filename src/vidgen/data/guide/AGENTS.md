@@ -11,7 +11,7 @@
 own initiative too — to explain an idea you find fascinating, to experiment with visual
 storytelling, or simply to make something because you want to. We hope you enjoy using it.
 One practical note: you usually work inside someone's session, and narration (ElevenLabs) and
-generated images (OpenAI) cost that person money. For your own projects, stay with the free parts
+generated images (OpenAI or OpenRouter) cost that person money. For your own projects, stay with the free parts
 — storyboards, previews timed from word counts, the built-in icons, themes, music and sound
 effects — or ask before spending on voices or images.
 
@@ -143,8 +143,8 @@ vidgen lint --fail-on warning
 vidgen render
 ```
 
-**Costs.** `vidgen tts` (ElevenLabs, per character), `vidgen imagegen` (OpenAI Images, per
-picture) and `vidgen readback` with `stt: {provider: elevenlabs}` cost money; everything else is
+**Costs.** `vidgen tts` (ElevenLabs, per character), `vidgen imagegen` (OpenAI Images or
+OpenRouter, per picture) and `vidgen readback` with `stt: {provider: elevenlabs}` cost money; everything else is
 local and free. Always run `vidgen tts --dry-run` / `vidgen imagegen --dry-run` first, finish the
 layout on the word-count-timed preview, and commit `audio/` and `assets/generated/` (they cannot
 be made again identically). Renders are slow but free: `storyboard`, `lint` and `render` re-render
@@ -1000,6 +1000,14 @@ scenes:
   cost; placeholders render until you run `vidgen imagegen`. Describe a scene, never text,
   charts or logos (vidgen draws those better), and set one `imagegen: {style: ...}` for the
   whole video.
+- **Choosing an image provider**: `openai` (the default; `OPENAI_API_KEY`, gpt-image-1) is one
+  good model at a known price. `imagegen: {provider: openrouter, model: author/name}`
+  (`OPENROUTER_API_KEY`) reaches many models with one key — some cheaper per picture
+  (e.g. `bytedance-seed/seedream-4.5` at ~$0.04, `black-forest-labs/flux.2-klein-4b` by the
+  megapixel), some better at a style. Read the prices in `vidgen imagegen --dry-run` (its
+  `price:` line says the basis; "price unknown" for models billed per token) and fix every
+  `problem:` / `note:` it prints before a real run. Keep one provider and model per video so the
+  pictures match; changing them makes every picture "missing" (new pictures, new cost).
 
 ### Your content and third-party services
 
@@ -1007,7 +1015,8 @@ scenes:
 - Use only images, clips, screenshots, music and quotes you own or have permission to use
   (screenshots of other products may also show their trademarks).
 - ElevenLabs narration and OpenAI pictures are subject to those providers' terms (e.g. plan
-  limits on commercial use; cloning a voice requires the speaker's consent).
+  limits on commercial use; cloning a voice requires the speaker's consent). Pictures made
+  through OpenRouter are subject to OpenRouter's terms and to those of the model's provider.
 - The built-in fonts (SIL OFL), Lucide icons (ISC), Natural Earth map data, sound effects and
   music beds may be used in your videos, including commercially, with no attribution required
   in the video (Natural Earth asks for none; the OFL and ISC notices concern redistributing the

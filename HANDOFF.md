@@ -5922,3 +5922,108 @@ Documentation-only fixes from a licence audit (no infringement found); no code b
 
 How to test: `python -m pytest -q -m "not slow"`; `tests/test_guide.py`, `test_packaging.py`,
 `test_fonts.py`, `test_icons.py` cover the touched docs.
+
+## Step 61 — OpenRouter image provider
+What was built
+- **`imagegen: {provider: openrouter, model: author/name}`**: a second image provider reaching
+  OpenRouter's image models with one key (`OPENROUTER_API_KEY`, read only from the environment
+  at request time, never stored / printed / in errors). `openai` stays the default; every
+  existing OpenAI cache key is unchanged (two keys pinned in a test). New optional
+  `imagegen.resolution` (`512 | 768 | 1K | 1.5K | 2K | 4K`, OpenRouter only).
+- **Provider** `src/vidgen/imagegen/openrouter.py` (stdlib): `POST
+  https://openrouter.ai/api/v1/images` via `httpapi.post_with_retries` (429 / 5xx / 524 / 529
+  retried with `Retry-After` / backoff; 402 "insufficient credits" and other 4xx not retried; key
+  scrubbed); app identification headers `HTTP-Referer:
+  https://github.com/joaopauloschuler/schu-video-generator` and `X-OpenRouter-Title:
+  schu-video-generator`. Body: `model, prompt, n: 1`, then `size` (explicit `WxH`) or
+  `aspect_ratio` (nearest the video's format) + `resolution`, `quality`, `seed` (unless the model
+  lists none), `output_format: png` when listed. `negative` / `style` go into the prompt as for
+  OpenAI. Response `data[0].b64_json` (+ `media_type`, `usage.cost`) → PNG (JPEG / WebP
+  converted); SVG refused with a clear message (Step 61b plugs in at `RawPicture`).
+- **Checks before paying**: the model's public record (`GET
+  /api/v1/images/models/{author}/{slug}/endpoints`, no key) is read once; a run refuses an
+  unknown model, a `quality` / `resolution` the model does not take, SVG-only and input-picture
+  models before any paid request (optional `check_requests` on the provider protocol). Offline:
+  nothing refused, request sent as configured.
+- **Prices**: `vidgen imagegen --dry-run` looks each model up (5 s timeout, stops after the first
+  unreachable answer) and prints `price: <basis>` — `$0.04 per image`, `$0.014 per megapixel x
+  0.59 MP (nominal 1024x576)`, `free`, or `price unknown: ... per output token; the tokens per
+  picture are not listed` / `... could not be reached`; several providers → the highest. Total
+  line: `(OpenRouter prices of <date>)`. `note:` / `problem:` lines say what the model ignores or
+  a run would refuse. A real run prints each picture's reported cost and `$X charged by
+  openrouter`; the sidecar stores `cost_usd`, `aspect_ratio`, `resolution`.
+- **Validate / schema**: `provider: openrouter` without `model`, a model id without `/`, an
+  unknown quality, `size` + `resolution`, `resolution` with openai, unknown providers — config
+  errors with clear messages; the JSON Schema lists `openrouter` and `resolution`.
+- **JSON / MCP**: `imagegen --json` images gain `aspect_ratio, resolution, price_basis, notes,
+  problems`, the document `charged`; `price_note` is the plan's. MCP `imagegen` unchanged in
+  shape (description names OpenRouter; real runs still need `confirm_cost`).
+- **Live check** `tools/live_check_openrouter.py` (not shipped, not run by tests): see below.
+
+API facts relied on (checked 2026-10-08 from `https://openrouter.ai/openapi.yaml`, the image
+generation guide and the public endpoints; samples saved as test fixtures)
+- `POST /api/v1/images` `{model, prompt, n?, aspect_ratio?, resolution?, size?, quality?, seed?,
+  output_format?, background?, output_compression?, input_references?, provider?, stream?}` →
+  `{created, data: [{b64_json, media_type?}], usage?: {..., cost}}` (base64 only; cost in USD).
+  An explicit pixel `size` with a mismatched `resolution` / `aspect_ratio` is a 400. Errors
+  `{error: {code, message}}`; failed generations (502) are not billed.
+- `GET /api/v1/images/models` (public): ids, `architecture`, `supported_parameters` (enum /
+  range / boolean), `endpoints` URL. No prices there.
+- `GET /api/v1/images/models/{author}/{slug}/endpoints` (public): per endpoint
+  `supported_parameters` and `pricing: [{billable, unit: image | megapixel | token | request,
+  cost_usd, variant?}]`; unknown model → 404 `{"error":{"message":"No image model found for
+  \"x\"","code":404}}`.
+- `GET /api/v1/models?output_modalities=image` only has per-token strings; the chat route
+  (`/chat/completions` with `modalities` + `image_config`) exists but is not used.
+- Headers: `HTTP-Referer` (URL; needed for an app page), `X-OpenRouter-Title` (`X-Title` legacy
+  alias), `X-OpenRouter-Categories` — all optional.
+- Prices seen: recraft-v4.1-flash $0.007 / image, flux.2-klein-4b $0.014 / MP, seedream-5-0-flash
+  $0.018 / image, seedream-4.5 $0.04 / image; OpenAI / Gemini image models are per token.
+
+Files
+- New: `src/vidgen/imagegen/openrouter.py`, `tests/test_imagegen_openrouter.py` (29 tests),
+  `tests/data/openrouter_endpoints.json` (7 real records), `tools/live_check_openrouter.py`.
+- Changed: `config.py` (`ImagegenConfig.provider` / `resolution` / validator,
+  `OPENROUTER_QUALITIES`), `imagegen/__init__.py` (`ImageRequest.aspect_ratio / resolution /
+  explicit_size / shape`, `request_key(extra)`, `openrouter_aspect`, `nominal_size`,
+  `OPENROUTER_ASPECTS`, `RESOLUTION_PIXELS`, `PriceQuote`, `GeneratedPicture.cost`, provider
+  dispatch), `imagegen/openai.py` (`as_png(data, service)`), `imagegen/run.py` (`price_plan`,
+  plan quotes / notes / problems / price notes / charged, `check_requests`, output),
+  `httpapi.py` (`get`), `jsonout.py`, `mcp_server.py` (tool text), `render/fingerprint.py`,
+  docs/CONFIG.md (OpenRouter section, tables, JSON keys), README.md, AGENTS.md (both copies),
+  THIRD_PARTY_NOTICES.md ("Online services"), DESIGN.md (tree, §4 line, §58 note, new §64),
+  tasklist.md.
+
+Public interfaces added/changed (compatible)
+- Config `imagegen.provider: openrouter`, `imagegen.resolution`. `vidgen.imagegen`:
+  `PriceQuote`, `OPENROUTER_ASPECTS`, `openrouter_aspect`, `nominal_size`; `ImageRequest` new
+  fields with defaults; `GeneratedPicture.cost` (default `None`); `request_key(..., extra=None)`.
+  `vidgen.imagegen.openrouter.*`; `vidgen.imagegen.run.price_plan`, `run_imagegen(...,
+  lookup=)`; `vidgen.httpapi.get`. `vidgen.api` unchanged.
+
+Decisions / deviations
+- **Dedicated `/images` endpoint**, not chat completions: base64 picture + cost in one documented
+  response.
+- **Prices from per-endpoint records** (unit image / megapixel), not `/models` (per-token strings
+  with no tokens-per-picture): per-token models honestly show "price unknown".
+- **Request independent of the lookup**: the aspect ratio and the cache key come from the config
+  only (online / offline give the same key); the lookup only adds checks, prices and drops an
+  unsupported seed.
+- **Highest price across endpoints**: OpenRouter may route to any provider of a model.
+- **SVG refused**, not stored, until Step 61b; `RawPicture` keeps the media type for it.
+
+Known gaps / TODOs (for Step 61b / 63)
+- No real paid call was made here (no key): the coordinator's live check should confirm that a
+  response really has `usage.cost` and `media_type`, and that `aspect_ratio` alone is accepted by
+  the chosen model.
+- Per-token models (OpenAI, Gemini on OpenRouter) have no estimate; input-text price lines are not
+  counted; no routing preferences (`provider.only` / `sort`), no streaming, no image editing.
+- SVG output: Step 61b (models listing only `output_format: svg`, e.g. `recraft/recraft-v4.1-vector`).
+
+How to test: `/home/claude/venv/bin/python -m pytest -q -n auto` (2279 passed, 1 skipped, 7:55);
+step only: `pytest tests/test_imagegen_openrouter.py tests/test_imagegen.py` (~6 s). Live (needs
+network; free without `--yes`): `python tools/live_check_openrouter.py` lists the 3 cheapest
+text-to-image models with vidgen's estimates and the dry run of one square picture with the
+cheapest; `OPENROUTER_API_KEY=... python tools/live_check_openrouter.py --yes [--model ID]`
+generates that one picture in a temporary project and prints the PNG / sidecar paths and the
+cost OpenRouter reported (the key is never printed).

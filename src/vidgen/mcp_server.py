@@ -462,8 +462,9 @@ def build_server(root: Path) -> Any:
         options = {"dry-run": dry_run, "beat": beat, "voice": voice, "variant": variant, "force": force}
         return answer(await call(ctx, args_of(["tts"], [str(where(project))], options), heavy=True))
 
-    @tool("Pictures for the generate: params of image scenes (OpenAI Images). dry_run=true (default, free) lists "
-          "prompts and the estimated cost. A real run COSTS MONEY: only with dry_run=false and confirm_cost=true.", paid)
+    @tool("Pictures for the generate: params of image scenes (OpenAI Images, or OpenRouter with imagegen.provider: "
+          "openrouter). dry_run=true (default, free) lists prompts and the estimated cost with its basis. A real run "
+          "COSTS MONEY: only with dry_run=false and confirm_cost=true.", paid)
     async def imagegen(
         ctx: Context,
         project: Project = ".",

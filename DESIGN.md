@@ -110,8 +110,9 @@ src/vidgen/
   readback.py             # `vidgen readback`: transcripts cached, aligned with the spoken text, WER, edits, suggestions (§57)
   textnorm.py             # text normaliser for readback: case, accents, hyphens, numbers to words (en, pt) (§57; no manim)
   imagegen/               # generated images (§58): __init__.py (GenerateImage, ImageRequest, cache keys, prompt
-                          # helpers, warnings), openai.py (OpenAI Images provider), placeholder.py, run.py (`vidgen imagegen`)
-  httpapi.py              # POST with retries / scrubbed errors, shared by the ElevenLabs and OpenAI providers (§58)
+                          # helpers, warnings), openai.py (OpenAI Images provider), openrouter.py (OpenRouter
+                          # provider, §64), placeholder.py, run.py (`vidgen imagegen`)
+  httpapi.py              # POST with retries / scrubbed errors (+ a plain GET), shared by the ElevenLabs, OpenAI and OpenRouter providers (§58, §64)
   render/                 # worker.py (one scene per process), pipeline.py, ffmpeg.py,
                           # fingerprint.py (what a scene's render depends on, §14)
   subtitles.py            # SRT from beat timings (cues cut and timed like captions, §43)
@@ -268,7 +269,7 @@ thumbnail: {title: "Saving 77%", icon: cpu}      # Step 50 (§53): designed card
 language: en                                     # Step 51 (§54): BCP-47; cue rules, speed lint, TTS / MP4 language
 translations: translations/pt.yaml               # Step 51 (§54): usually in a variant; texts replaced at load
 stt: {provider: faster_whisper}                  # Step 54 (§57): speech to text of `vidgen readback`
-imagegen: {model: gpt-image-1, style: flat}      # Step 55 (§58): generated pictures (`generate:` params)
+imagegen: {model: gpt-image-1, style: flat}      # Step 55 (§58): generated pictures (`generate:` params); provider: openrouter (§64)
 
 extensions: [extensions]                         # dirs (relative to project) to auto-import; default shown
 
@@ -4030,7 +4031,8 @@ the measured loudness, §48).
 - **Not done**: `generate:` on `screenshot` (its `px` callouts and magnifier need the real
   picture's pixels) and as a thumbnail background (designed thumbnails have no picture behind the
   text yet); no `--json` for `vidgen imagegen`; no image editing / variations endpoints; no second
-  provider; prices are a snapshot.
+  provider; prices are a snapshot. (Step 59 added `--json`; Step 61 the OpenRouter provider with
+  looked-up prices, §64.)
 
 ## 59. Refinements (Step 56, the author guide for AI agents)
 
@@ -4325,3 +4327,114 @@ the measured loudness, §48).
 - **Packaging**: version 0.2.0; PEP 639 metadata (`license = "MIT"`, `license-files` with
   `THIRD_PARTY_NOTICES.md`; build needs setuptools ≥ 77); `data/geo/LICENSE` carries the ISC / MIT
   notices of the map data in the wheel. Wheel ~2.0 MB (fonts 2.0 MB of it), sdist ~2.2 MB.
+
+## 64. Refinements (Step 61, OpenRouter image provider)
+
+- **API facts** (OpenRouter's OpenAPI spec `https://openrouter.ai/openapi.yaml`, its image
+  generation guide and the public endpoints, checked 2026-10-08). Base `https://openrouter.ai/api/v1`.
+  - `POST /images` (`createImages`): body `{model, prompt}` required; optional `n` (1–10),
+    `aspect_ratio` (`1:1 1:2 1:4 1:8 2:1 2:3 2.35:1 3:2 3:4 4:1 4:3 4:5 5:2 5:4 5:7 7:5 8:1 9:16
+    16:9 9:19.5 19.5:9 9:20 20:9 9:21 21:9 auto`; "providers clamp to their supported subset"),
+    `resolution` (`512 768 1K 1.5K 2K 4K`), `size` (a tier or explicit `WxH`; explicit pixels are
+    authoritative and a mismatched `resolution` / `aspect_ratio` is a 400), `quality` (`auto low
+    medium high xhigh max`; ignored by providers without it), `seed`, `output_format` (`png jpeg
+    webp svg`; svg only for vectorisation models, UTF-8 SVG base64 in `b64_json`), `background`,
+    `output_compression`, `input_references` (image to image), `provider` (routing), `stream`
+    (OpenAI-backed models only), `user`, `session_id`, `trace`. Response `{created, data:
+    [{b64_json, media_type?}], usage?: {prompt_tokens, completion_tokens, total_tokens, cost}}` —
+    always base64, never a URL; `cost` in US dollars when available. Errors `{error: {code,
+    message}}` with 400, 401, 402 (insufficient credits), 403, 404, 413, 429, 500, 502 (provider
+    error; a generation that does not complete is a 502 and not billed), 524 (edge timeout), 529
+    (provider overloaded).
+  - `GET /images/models` (public, no key): `{data: [{id, name, description, created, architecture:
+    {input_modalities, output_modalities}, supported_parameters: {name: {type: enum, values} |
+    {type: range, min, max} | {type: boolean}}, supports_streaming, endpoints: "/api/v1/images/
+    models/{id}/endpoints"}]}` (61 image models on 2026-10-08, 50 of them text-to-image raster).
+  - `GET /images/models/{author}/{slug}/endpoints` (public): `{id, endpoints: [{provider_name,
+    provider_slug, provider_tag, supported_parameters, allowed_passthrough_parameters,
+    supports_streaming, pricing: [{billable: output_image | input_image | input_text | ...,
+    unit: image | megapixel | token | request, cost_usd, variant?}]}]}`; 404 `{error: {message:
+    'No image model found for "x"', code: 404}}` for an unknown model. `variant` is a resolution
+    tier (`2k`, `4k`) for tiered prices. Samples: seedream-4.5 $0.04 per image, flux.2-klein-4b
+    $0.014 per megapixel, gpt-image-2 $0.00003 per output token, recraft-v4.1-flash $0.007 per
+    image.
+  - `GET /models?output_modalities=image` (the general catalog) has per-token strings only
+    (`pricing.image_output` etc.), so vidgen uses the image-specific records above.
+  - The older route — `POST /chat/completions` with `modalities: ["image", "text"]` and
+    `image_config` — also exists; vidgen uses the dedicated `/images` endpoint (one picture,
+    base64, a cost in the response).
+  - App identification headers (optional): `HTTP-Referer` (the app's URL; creates the app's page
+    in OpenRouter's rankings), `X-OpenRouter-Title` (display name; `X-Title` is the older alias),
+    `X-OpenRouter-Categories`. vidgen sends `HTTP-Referer:
+    https://github.com/joaopauloschuler/schu-video-generator` and `X-OpenRouter-Title:
+    schu-video-generator` on every request (`openrouter.APP_HEADERS`).
+- **Config** `imagegen.provider: openai | openrouter` (`openai` stays the default; unknown values
+  are a config error), new `imagegen.resolution` (OpenRouter tiers). An `ImagegenConfig` model
+  validator: `provider: openrouter` needs an explicit `model` in `author/name` form, a `quality`
+  from `config.OPENROUTER_QUALITIES`, and not both a `WxH` size and a resolution; `resolution`
+  with `openai` is an error. All surface in `vidgen validate` and the JSON Schema.
+- **Request** (`image_request`): OpenRouter's `size: auto` sends `aspect_ratio` = the listed
+  ratio nearest the final format with the same orientation (`openrouter_aspect`; 16:9 → `16:9`,
+  9:16 → `9:16`, 4:3 → `4:3`), or `16:9` / `9:16` / `1:1` for a `generate.aspect` other than the
+  video's; plus `resolution`. `ImageRequest` gained `aspect_ratio`, `resolution`,
+  `explicit_size` (defaults keep old constructors working) and `shape`; with an aspect ratio,
+  `size` is the nominal `WxH` at the tier's long side (1K = 1024 without a tier;
+  `nominal_size`) — the placeholder's shape and the per-megapixel estimate. Default quality for
+  OpenRouter: none (not sent). `estimated_cost` is OpenAI-only (`PRICES`).
+- **Cache key**: `request_key(..., extra)` adds `{aspect_ratio, resolution}` for OpenRouter only,
+  so every OpenAI key is unchanged (pinned in a test). Sidecar: OpenRouter pictures record
+  `aspect_ratio`, `resolution`, `size` (`null` unless explicit) and, when reported, `cost_usd`.
+- **Provider** `imagegen/openrouter.py` (`OpenRouterImageProvider`, stdlib): `POST /images`
+  through `httpapi.post_with_retries` (retries on 429 / 500 / 502 / 503 / 504 / 524 / 529 with
+  `Retry-After` / backoff 4·2^n s, cap 60 s, timeout 240 s; 402 and other 4xx not retried; key
+  scrubbed). Key only from `OPENROUTER_API_KEY` at request time. Body (`request_body`): `model,
+  prompt, n: 1`, then `size` (explicit) or `aspect_ratio` (+ `resolution`), `quality`, `seed`
+  unless the model's record lists no seed (then it only names another picture, as for OpenAI),
+  `output_format: png` when listed. `negative` / `style` go into the prompt (no negative-prompt
+  parameter). Response (`decode_response` → `RawPicture(data, media_type, cost,
+  revised_prompt)`, then `parse_response`): SVG (`image/svg+xml` or `<svg` / `<?xml` bytes) is
+  refused with a clear message (vector output is Step 61b: it plugs in at `RawPicture`); JPEG /
+  WebP converted to PNG (`openai.as_png(data, service)`). `GeneratedPicture.cost` (new, default
+  `None`).
+- **Checks before paying**: the `ImageProvider` protocol gained an optional
+  `check_requests(requests)`; `run_imagegen` calls it (when present) after `check_credentials`.
+  OpenRouter fetches each model's public record once (`model_info`) and refuses, in one message:
+  a model OpenRouter does not have (404 / no endpoints), a `quality` / `resolution` the model
+  lacks or whose value it does not list, SVG-only models, models needing an input picture
+  (`input_references.min ≥ 1`). Notes (not errors): an aspect ratio the model does not list
+  (the provider clamps), no aspect-ratio parameter, a seed not sent. When the records cannot be
+  reached nothing is refused and the body is sent as configured.
+- **Prices** (`openrouter.quote(request, lookup) -> PriceQuote(cost, basis)`; `PriceQuote` in
+  `vidgen.imagegen`): from the endpoint records' `output_image` lines — `image` / `request` units
+  as is, `megapixel` × the request's (nominal) pixels, `$0` = free, `token` = unknown ("the
+  tokens per picture are not listed"); a `variant` matching the resolution tier, else the
+  untiered line, else the highest; with several endpoints the highest ("the highest of N
+  providers"). `lookup_models` fetches each distinct model once (`LOOKUP_TIMEOUT` 5 s) and stops
+  after the first unreachable answer (offline costs one short wait). `run.price_plan` fills the
+  plan's `quotes`, `notes`, `problems` and `price_notes` (`OpenRouter prices of <UTC date>` or
+  `OpenRouter prices unknown (its model list could not be reached)`; OpenAI keeps its 2025 note).
+  Only the dry run looks prices up.
+- **Output**: dry-run lines for OpenRouter `would generate KEY.png for S (16:9, openrouter MODEL
+  QUALITY, ~$0.040 | price unknown)` then `price: <basis>`, `note:` / `problem:` lines, the
+  prompt; the total line says how many a run would refuse. A run prints each picture's reported
+  cost and ends `done: N picture(s) generated ($X charged by openrouter)` (`cost not reported by
+  openrouter` without usage). OpenAI output is unchanged. `imagegen --json` images gain
+  `aspect_ratio, resolution, price_basis, notes, problems`; the document gains `charged`;
+  `price_note` is the plan's. MCP: same tool (description names OpenRouter); real runs still
+  need `confirm_cost`.
+- **Not render inputs**: `imagegen/openrouter.py` (fingerprint); the `imagegen` config stays in.
+- **Tests** (`tests/test_imagegen_openrouter.py`, urlopen mocked, real endpoint records of
+  2026-10-08 in `tests/data/openrouter_endpoints.json`): config errors, schema, pinned OpenAI
+  keys, aspect ratios / tiers / explicit sizes / keys, the body, headers (app identification,
+  no key on lookups), JPEG / WebP / SVG / bad responses, retried 429 / 529, 402 / 400 not retried
+  with the key scrubbed, missing key, quotes per image / megapixel / token / free / tiers / several
+  endpoints / offline, lookups stopping offline, model checks, dry run human / JSON / offline /
+  refusals, a run with costs and sidecars, refusals before any POST, an unreachable lookup not
+  blocking.
+- **Live check** `tools/live_check_openrouter.py` (not shipped, not tested): lists the cheapest
+  text-to-image models with vidgen's estimates, then one picture's dry run; `--yes` generates
+  that picture through `run_imagegen` in a temporary project and prints the PNG, sidecar and
+  reported cost.
+- **Not done**: SVG output (Step 61b); per-token prices (no tokens-per-picture data); input
+  pictures / editing; provider routing preferences (`provider.only`, `sort`); streaming; the
+  input-text price lines are not added to the estimate (prompts are short).

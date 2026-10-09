@@ -148,7 +148,9 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   `readback` rule reports the beats above the threshold ([reference](docs/CONFIG.md#readback-vidgen-readback)).
 - **Generated images**: an `image` scene can take `generate: {prompt, negative, style, aspect,
   seed}` instead of a file. `vidgen imagegen` makes the missing pictures once with the OpenAI
-  Images API (`OPENAI_API_KEY`; `--dry-run` shows the prompts and an estimated cost) and stores
+  Images API (`OPENAI_API_KEY`, the default) or any image model on OpenRouter
+  (`imagegen: {provider: openrouter, model: ...}`, `OPENROUTER_API_KEY`); `--dry-run` shows the
+  prompts and an estimated cost with its basis (OpenRouter's current prices, looked up), and stores
   them in `assets/generated/` with a JSON note of how each was made — commit them like audio.
   Until then renders show a placeholder card with the prompt, so the video can be laid out first;
   a project `imagegen.style` keeps the pictures alike, and `vidgen validate` warns when a prompt
@@ -247,7 +249,7 @@ Claude Code: `claude mcp add schu-video-generator -- vidgen mcp --root /home/me/
 - **No surprise bills**: `tts` and `imagegen` are dry runs unless called with `dry_run: false`
   **and** `confirm_cost: true` (and `readback` with a paid speech-to-text provider needs
   `confirm_cost: true`); the dry run says what it would cost. API keys come from the server's
-  environment (set `ELEVENLABS_API_KEY` / `OPENAI_API_KEY` where the client starts it, e.g. an
+  environment (set `ELEVENLABS_API_KEY` / `OPENAI_API_KEY` / `OPENROUTER_API_KEY` where the client starts it, e.g. an
   `"env"` entry) and are never returned.
 - **Robust**: every call runs the CLI in a fresh process (`vidgen <command> --json`), reports its
   progress lines, and stops it when the call is cancelled; renders run one at a time.
@@ -290,7 +292,9 @@ package, so do not install both in the same environment.
    (faster-whisper; its first run downloads the Whisper model from the Hugging Face Hub, ~500 MB
    for `small`).
 9. Optional, only for `vidgen imagegen` (generated pictures): an **OpenAI API key**,
-   `setx OPENAI_API_KEY your_key` (read only from this variable, never written anywhere).
+   `setx OPENAI_API_KEY your_key`, or, with `imagegen: {provider: openrouter, model: ...}`, an
+   **OpenRouter API key** (from <https://openrouter.ai/keys>), `setx OPENROUTER_API_KEY your_key`;
+   then open a new terminal. Each is read only from its variable, never written anywhere.
 10. Optional, only for `vidgen mcp` (the MCP server for AI agents): `pip install ".[mcp]"`.
 
 If PowerShell refuses to run `Activate.ps1`, run
@@ -320,7 +324,8 @@ sudo apt install texlive texlive-latex-extra dvisvgm
 
 # 5. Optional: API keys (add to ~/.bashrc to keep them)
 export ELEVENLABS_API_KEY=your_key            # narration (vidgen tts)
-export OPENAI_API_KEY=your_key                # generated pictures (vidgen imagegen)
+export OPENAI_API_KEY=your_key                # generated pictures (vidgen imagegen, default provider)
+export OPENROUTER_API_KEY=your_key            # generated pictures with imagegen.provider: openrouter
 ```
 
 Fonts are bundled, so there is nothing to install for them. Other distributions need the same
@@ -375,7 +380,7 @@ narration.
 | `vidgen list-music [PROJECT] [--render-dir DIR] [--json]` | background music beds (built-in, described in words: instruments, key, tempo, chords, mood) and the project's `assets/music` files; `--render-dir` writes one loop of each bed as WAV |
 | `vidgen schema [PROJECT] [--scene TYPE \| --all] [--json]` | JSON Schema of `video.yaml` (params checked per scene type, the project's extension types included), for editors and AI agents |
 | `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--voice NAME ...] [--variant NAME] [--json]` | generate missing/stale narration into `audio/`; `--dry-run` needs no key (shows each beat's voice and characters per voice) |
-| `vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME] [--json]` | generate the missing pictures of `generate:` params into `assets/generated/` (OpenAI Images, `OPENAI_API_KEY`); `--dry-run` needs no key and shows prompts and an estimated cost |
+| `vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME] [--json]` | generate the missing pictures of `generate:` params into `assets/generated/` (OpenAI Images, `OPENAI_API_KEY`; or OpenRouter, `OPENROUTER_API_KEY`); `--dry-run` needs no key and shows prompts and an estimated cost with its basis |
 | `vidgen readback [PROJECT] [--variant NAME] [--beat ID ...] [--max-wer RATE] [--force] [--json]` | transcribe the narration MP3s (speech to text, `stt:`; cached in `build/readback/`) and compare them with the beat texts: word error rate per beat, words expected vs heard, a suggested fix for each (e.g. a pronunciation entry), terms misheard in several beats |
 | `vidgen translate-template [PROJECT] --variant NAME [--language TAG] [--output FILE] [--json]` | write or update the variant's translation file: every text to translate with its source, keeping existing translations (stale / moved / obsolete marked) |
 | `vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going] [--jobs N] [--frames] [--frames-per-beat N] [--force] [--json]` | render the scenes that changed (reusing current renders, e.g. the storyboard's) and join the video |
@@ -475,6 +480,9 @@ my_video/
   (screenshots of other products may also show their trademarks).
 - Narration from ElevenLabs and pictures from OpenAI are subject to those providers' terms (for
   example, plan limits on commercial use; cloning a voice requires the speaker's consent).
+  Pictures made through OpenRouter are subject to OpenRouter's terms and to those of the model's
+  provider (Black Forest Labs, ByteDance, Google, OpenAI, Recraft, ...); check the model's page
+  for commercial use.
 - The built-in fonts (SIL Open Font License), Lucide icons (ISC), Natural Earth map data (public
   domain), sound effects and music beds may be used in your videos, including commercially. No
   attribution is required in a video (the OFL and ISC notices apply to redistributing the files

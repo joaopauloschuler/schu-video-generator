@@ -51,7 +51,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `metadata` | `{}` (title: the `title`) | tags of the MP4: `title`, `artist`, `album`, `comment`, `description`, `copyright`, `date`, `genre`; see [chapters in the outputs](#chapters-in-the-outputs-chapters-metadata) |
 | `thumbnail` | none | the thumbnail `<output>_thumbnail.png`, written by `vidgen render` and `vidgen thumbnail`: a scene's frame `{scene, beat, at, overlays}` or a designed card `{title, subtitle, icon, image, preset, background}`, + `{jpeg, auto}`; see [thumbnail](#thumbnail-thumbnail-vidgen-thumbnail) |
 | `stt` | `{provider: faster_whisper}` | speech to text for `vidgen readback` (the narration transcribed and compared with the beat texts): `{provider, model, language, device}`; see [readback](#readback-vidgen-readback) |
-| `imagegen` | `{provider: openai, model: gpt-image-1, size: auto}` | image generation for `generate:` params and `vidgen imagegen`: `{provider, model, size, quality, style, negative}`; see [generated images](#generated-images-imagegen-vidgen-imagegen) |
+| `imagegen` | `{provider: openai, model: gpt-image-1, size: auto}` | image generation for `generate:` params and `vidgen imagegen`: `{provider (openai \| openrouter), model, size, quality, resolution, style, negative}`; see [generated images](#generated-images-imagegen-vidgen-imagegen) |
 | `scenes` | required | the scenes in order, at least one |
 
 ## Scenes and beats
@@ -986,10 +986,11 @@ scenes:
 
 | key | default | |
 |---|---|---|
-| `provider` | `openai` | the provider: `openai` (OpenAI Images API, `POST /v1/images/generations`), billed per picture, key in the environment variable `OPENAI_API_KEY` (never stored by vidgen) |
-| `model` | `gpt-image-1` | `gpt-image-1`, `dall-e-3` or `dall-e-2`; another name is sent as is (with gpt-image-1's sizes, no cost estimate) |
-| `size` | `auto` | `WIDTHxHEIGHT` sent to the provider, or `auto`: the model's landscape / portrait / square size for the video's format or the `generate.aspect` (gpt-image-1: `1536x1024`, `1024x1536`, `1024x1024`; dall-e-3: `1792x1024`, `1024x1792`, `1024x1024`; dall-e-2: `1024x1024`) |
-| `quality` | none (by model) | gpt-image-1: `low`, `medium`, `high` (default `medium`); dall-e-3: `standard`, `hd` (default `standard`); none for dall-e-2 |
+| `provider` | `openai` | the provider: `openai` (OpenAI Images API, `POST /v1/images/generations`), billed per picture, key in the environment variable `OPENAI_API_KEY`; or `openrouter` (many image models through [OpenRouter](#openrouter-provider-provider-openrouter), key in `OPENROUTER_API_KEY`). vidgen never stores a key |
+| `model` | `gpt-image-1` | openai: `gpt-image-1`, `dall-e-3` or `dall-e-2`; another name is sent as is (with gpt-image-1's sizes, no cost estimate). openrouter: **required**, an OpenRouter model id `author/name` (e.g. `bytedance-seed/seedream-4.5`) |
+| `size` | `auto` | `WIDTHxHEIGHT` sent to the provider, or `auto`: the model's landscape / portrait / square size for the video's format or the `generate.aspect` (gpt-image-1: `1536x1024`, `1024x1536`, `1024x1024`; dall-e-3: `1792x1024`, `1024x1792`, `1024x1024`; dall-e-2: `1024x1024`). openrouter: `auto` sends an aspect ratio instead (below) |
+| `quality` | none (by model) | gpt-image-1: `low`, `medium`, `high` (default `medium`); dall-e-3: `standard`, `hd` (default `standard`); none for dall-e-2. openrouter: `auto`, `low`, `medium`, `high`, `xhigh`, `max` for models that have it (not sent by default) |
+| `resolution` | none | openrouter only: `512`, `768`, `1K`, `1.5K`, `2K`, `4K` for models that have it (default: the model's own); not together with a `WIDTHxHEIGHT` size |
 | `style` | none | words added to every prompt (`Style: ...`) so the pictures of a video look alike: a preset (below) or your own words; a scene's `generate.style` replaces it |
 | `negative` | none | what no picture should show, added to each prompt's `Avoid: ...` (with the scene's own `negative`) |
 
@@ -1001,7 +1002,7 @@ scenes:
 | `negative` | `""` | what it should not show; the OpenAI API has no negative prompt, so it is sent as `Avoid: ...` |
 | `style` | `imagegen.style` | a preset, your own words, or `none` (no style words, not even the project's) |
 | `aspect` | `auto` | `auto` (landscape for a wide video, portrait for 9:16, square for 1:1), `landscape`, `portrait`, `square` |
-| `seed` | none | a number that is part of the cache key: change it for another picture of the same prompt. OpenAI takes no seed, so it does not make the picture reproducible |
+| `seed` | none | a number that is part of the cache key: change it for another picture of the same prompt. OpenAI takes no seed, so it does not make the picture reproducible; on OpenRouter it is sent to models that take one (others: key only) |
 
 **Style presets**: `photo` (photorealistic photograph, natural light, sharp focus),
 `illustration` (clean digital illustration, soft shading, limited colour palette), `flat` (flat
@@ -1030,13 +1031,65 @@ $ vidgen imagegen my_video
 
 | option | |
 |---|---|
-| `--dry-run` | list the pictures to generate with their prompts and an estimated cost (OpenAI's list prices when this was written; no key needed) |
+| `--dry-run` | list the pictures to generate with their prompts and an estimated cost, saying what it is based on (OpenAI: its list prices when this was written; OpenRouter: its prices of today, looked up online; no key needed) |
 | `--force` | generate again even when the picture exists (a new picture replaces it) |
 | `--scene ID` | only this scene's pictures (repeatable) |
 | `--variant NAME` | a variant: its format, prompts and `imagegen` settings |
 
 Requests are retried on rate limits and server errors (honouring `Retry-After`), not on an
 exhausted quota or a refused prompt; the provider's error message is shown.
+
+### OpenRouter provider (`provider: openrouter`)
+
+[OpenRouter](https://openrouter.ai) sells many image models (Seedream, FLUX, Recraft, Gemini,
+GPT Image, Qwen, ...) behind one key and one API. Choose a model from
+[its image models](https://openrouter.ai/models?output_modalities=image) and name it:
+
+```yaml
+imagegen:
+  provider: openrouter
+  model: bytedance-seed/seedream-4.5   # required: an OpenRouter model id
+  resolution: 1K                       # optional: 512 | 768 | 1K | 1.5K | 2K | 4K (if the model has it)
+  quality: null                        # optional: auto | low | medium | high | xhigh | max (if the model has it)
+  style: flat
+```
+
+Set the key `OPENROUTER_API_KEY` in the environment (from <https://openrouter.ai/keys>;
+Windows: `setx OPENROUTER_API_KEY your_key`, then a new terminal; Linux / macOS: `export
+OPENROUTER_API_KEY=your_key`). `openai` stays the default: projects without `provider:
+openrouter` and their stored pictures are unchanged.
+
+- **Size.** With `size: auto` vidgen sends an `aspect_ratio`: the one nearest the video's format
+  (`16:9`, `9:16`, `1:1`, `4:3`, ...), or `16:9` / `9:16` / `1:1` for a `generate.aspect` that
+  differs from the video's; plus `resolution` when set. A model without that ratio uses its
+  nearest (the dry run says so) and the scene's `fit` crops or pads. `size: WIDTHxHEIGHT` is
+  sent as is instead (OpenRouter fits it to the model).
+- **What each model takes.** Before the first paid request vidgen reads the model's public record
+  (free) and refuses, with a message, a model OpenRouter does not have, a `quality` or
+  `resolution` the model does not take, models that only make vector (SVG) pictures and models
+  that only edit an input picture. A `seed` is sent only to models that take one. `negative` and
+  `style` go into the prompt (`Avoid: ...`, `Style: ...`), as for OpenAI.
+- **Prices.** `vidgen imagegen --dry-run` looks up each model's price on OpenRouter (free, a few
+  seconds at most) and prints its basis: `$0.04 per image`, `$0.014 per megapixel x 0.59 MP
+  (nominal 1024x576)` (the size the provider makes may differ a little), or `price unknown`
+  when the model is billed per output token (the tokens per picture are not listed) or
+  OpenRouter cannot be reached. With several providers serving a model, the highest price.
+- **Cost of a run.** OpenRouter reports what each picture cost; `vidgen imagegen` prints it and
+  stores it in the sidecar (`cost_usd`), with `aspect_ratio` and `resolution`.
+- **Pictures** come back as PNG, JPEG or WebP and are stored as PNG; the cache key also covers
+  the aspect ratio and resolution.
+
+```
+$ vidgen imagegen my_video --dry-run
+would generate 7e9b5bf8aff6f7b2.png for harbour (16:9, openrouter bytedance-seed/seedream-4.5, ~$0.040)
+    price: OpenRouter: $0.04 per image
+    prompt: a quiet harbour at dawn, fishing boats, mist over the water. Style: ...
+dry run: 1 picture(s) to generate, estimated $0.040 (OpenRouter prices of 2026-10-08); 0 up to date
+```
+
+vidgen identifies itself to OpenRouter with the optional app headers (`HTTP-Referer`: the
+project's repository URL, `X-OpenRouter-Title`: `schu-video-generator`). OpenRouter's terms and
+each upstream model's provider policies apply to what you generate.
 
 **Writing prompts.** Image generators draw letters, numbers, charts and logos poorly (garbled
 words, made-up values): `vidgen validate` warns when a prompt quotes text or asks for a sign,
@@ -4604,16 +4657,17 @@ message says how many beats were done (their MP3s are kept: run again to continu
 
 ### `vidgen imagegen --json`
 
-The same document for a dry run (`--dry-run`, no key needed) and a run (DESIGN.md §58).
+The same document for a dry run (`--dry-run`, no key needed) and a run (DESIGN.md §58, §64).
 
 | key | type | |
 |---|---|---|
 | `project`, `variant` | str \| null | |
 | `dry_run`, `force` | bool | the options |
 | `estimated_cost` | float | US dollars of the pictures to generate, by `price_note` |
-| `unknown_cost` | int | pictures to generate with no known price (model / size not in the price list) |
-| `price_note` | str | where the prices come from |
-| `images` | list | the pictures to generate, each distinct request once: `{key, scenes, prompt, sent_prompt, provider, model, size, quality, seed, estimated_cost, path}` (`sent_prompt` = prompt + style + negative as sent; `path` the PNG it is / will be stored as) |
+| `unknown_cost` | int | pictures to generate with no known price (model / size not in the price list, priced per token, or OpenRouter not reachable) |
+| `price_note` | str | where the prices come from (OpenAI's 2025 list, OpenRouter's prices of a date, or that they are unknown) |
+| `charged` | float \| null | US dollars the provider reported for this run (OpenRouter); `null` in a dry run or when not reported |
+| `images` | list | the pictures to generate, each distinct request once: `{key, scenes, prompt, sent_prompt, provider, model, size, aspect_ratio, resolution, quality, seed, estimated_cost, price_basis, notes, problems, path}` (`sent_prompt` = prompt + style + negative as sent; `size` the nominal size when an `aspect_ratio` is sent; `price_basis` what `estimated_cost` is based on; `notes` options the model ignores or changes and `problems` what a run would refuse — OpenRouter, from its model records; `path` the PNG it is / will be stored as) |
 | `generated` | list | keys generated by this run (`[]` for a dry run) |
 | `up_to_date` | list | keys whose picture exists (skipped) |
 | `orphaned` | list | pictures in `assets/generated/` no config of the project uses (never deleted) |

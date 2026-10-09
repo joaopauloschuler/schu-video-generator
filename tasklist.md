@@ -275,14 +275,14 @@ Agents build with mocked APIs only. Live checks against OpenRouter (small, a few
 by the coordinator at the end of each step with the owner's key; agents never see the key.
 
 ### Step 61 — OpenRouter image provider
-- [ ] `imagegen: {provider: openrouter, model: ...}` as an option; `openai` stays the default, existing projects and cached images unchanged
-- [ ] REST via the standard library (no SDK); key only from `OPENROUTER_API_KEY`, never written; shared retry helper for rate limits / server errors
-- [ ] Map `size` / aspect, `seed`, `quality`, `negative` / `style` to OpenRouter's parameters; clear message for unsupported options
-- [ ] Decode the response to PNG in `assets/generated/`; provider and model in the cache key and the sidecar JSON
-- [ ] `vidgen imagegen --dry-run`: real per-model prices from OpenRouter's model list when online, else "price unknown"; MCP real runs still need `confirm_cost`
-- [ ] `vidgen validate`: unknown provider, missing `model`; schema lists the provider
-- [ ] Tests with mocked responses (success, error, retried rate limit, price lookup)
-- [ ] Docs: CONFIG.md, README (key setup on Windows and Linux), AGENTS.md (choosing an image provider), third-party/terms notes
+- [x] `imagegen: {provider: openrouter, model: ...}` as an option; `openai` stays the default, existing projects and cached images unchanged (OpenAI cache keys pinned by a test; new optional `imagegen.resolution`)
+- [x] REST via the standard library (no SDK); key only from `OPENROUTER_API_KEY`, never written; shared retry helper for rate limits / server errors (`POST /api/v1/images`; also 524 / 529 retried; app headers `HTTP-Referer` / `X-OpenRouter-Title`)
+- [x] Map `size` / aspect, `seed`, `quality`, `negative` / `style` to OpenRouter's parameters; clear message for unsupported options (`aspect_ratio` nearest the format, `resolution`, explicit `size`; checked against the model's public record before the first paid request)
+- [x] Decode the response to PNG in `assets/generated/`; provider and model in the cache key and the sidecar JSON (+ aspect ratio, resolution, reported `cost_usd`; SVG refused until Step 61b)
+- [x] `vidgen imagegen --dry-run`: real per-model prices from OpenRouter's model list when online, else "price unknown"; MCP real runs still need `confirm_cost` (per-endpoint records: per image / per megapixel; per-token models are "price unknown"; each estimate states its basis)
+- [x] `vidgen validate`: unknown provider, missing `model`; schema lists the provider
+- [x] Tests with mocked responses (success, error, retried rate limit, price lookup) (`tests/test_imagegen_openrouter.py`, fixtures from real public records; `tools/live_check_openrouter.py` for the coordinator)
+- [x] Docs: CONFIG.md, README (key setup on Windows and Linux), AGENTS.md (choosing an image provider), third-party/terms notes
 
 ### Step 61b — Vector (SVG) generated images
 - [ ] Find out how OpenRouter's SVG/vectorization models are called (text prompt or input picture); if they only convert pictures, generate a PNG then vectorize it

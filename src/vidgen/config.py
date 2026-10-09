@@ -260,18 +260,40 @@ class ImagegenConfig(_Strict):
     """The optional ``imagegen:`` section: the image-generation provider of ``vidgen imagegen``
     and of ``generate:`` params (DESIGN.md §58)."""
 
-    provider: Literal["openai"] = "openai"
-    """Image-generation provider: openai (OpenAI Images API, paid; OPENAI_API_KEY)."""
+    provider: Literal["openai", "openrouter"] = "openai"
+    """Image-generation provider: openai (OpenAI Images API, paid; OPENAI_API_KEY) or openrouter (many models through OpenRouter, paid; OPENROUTER_API_KEY; needs model)."""
     model: str = Field(default="gpt-image-1", min_length=1)
-    """Model: gpt-image-1, dall-e-3 or dall-e-2 (another name is sent as is, with gpt-image-1's sizes)."""
+    """Model: openai: gpt-image-1, dall-e-3 or dall-e-2 (another name is sent as is, with gpt-image-1's sizes); openrouter: required, an OpenRouter model id such as bytedance-seed/seedream-4.5."""
     size: Literal["auto"] | ImageSize = "auto"
-    """Picture size WIDTHxHEIGHT sent to the provider, or auto: the model's landscape, portrait or square size by the video's format (or the generate: aspect)."""
+    """Picture size WIDTHxHEIGHT sent to the provider, or auto: the model's landscape, portrait or square size by the video's format (or the generate: aspect); openrouter: auto sends an aspect ratio (16:9, 9:16, 1:1) instead."""
     quality: str | None = Field(default=None, min_length=1)
-    """Quality sent to the provider (gpt-image-1: low, medium, high; dall-e-3: standard, hd); default: medium for gpt-image models, standard for dall-e-3, none for dall-e-2."""
+    """Quality sent to the provider (gpt-image-1: low, medium, high; dall-e-3: standard, hd; openrouter: auto, low, medium, high, xhigh, max where the model has it); default: medium for gpt-image models, standard for dall-e-3, none for dall-e-2 and openrouter."""
+    resolution: Literal["512", "768", "1K", "1.5K", "2K", "4K"] | None = None
+    """openrouter only: resolution tier (512, 768, 1K, 1.5K, 2K, 4K) where the model has it, with the aspect ratio; default: the model's own; not with a WIDTHxHEIGHT size."""
     style: str | None = Field(default=None, min_length=1)
     """Style added to every prompt for a consistent look: a preset (photo, illustration, flat, isometric, watercolor, line_art, render_3d, cinematic) or your own words; a generate: style replaces it."""
     negative: str | None = Field(default=None, min_length=1)
     """What every picture should avoid (added to each generate: negative), e.g. "text, watermarks"."""
+
+    @model_validator(mode="after")
+    def _provider_options(self) -> ImagegenConfig:
+        if self.provider == "openai":
+            if self.resolution is not None:
+                raise ValueError("resolution is an openrouter option; with openai set size: WIDTHxHEIGHT (or auto)")
+            return self
+        if "model" not in self.model_fields_set:
+            raise ValueError("provider openrouter needs a model, e.g. model: bytedance-seed/seedream-4.5 (`vidgen imagegen --dry-run` shows its price)")
+        if "/" not in self.model.strip("/"):
+            raise ValueError(f"OpenRouter model ids look like author/name (e.g. openai/gpt-image-1), not {self.model!r}")
+        if self.quality is not None and self.quality not in OPENROUTER_QUALITIES:
+            raise ValueError(f"quality {self.quality!r} is not an OpenRouter quality; use one of {', '.join(OPENROUTER_QUALITIES)}")
+        if self.resolution is not None and self.size != "auto":
+            raise ValueError("set size: WIDTHxHEIGHT or resolution, not both (OpenRouter rejects a size that disagrees with the resolution)")
+        return self
+
+
+#: ``quality`` values OpenRouter's image API accepts (a model may take fewer; DESIGN.md §64).
+OPENROUTER_QUALITIES: tuple[str, ...] = ("auto", "low", "medium", "high", "xhigh", "max")
 
 
 #: ``vidgen lint`` rule names (DESIGN.md §16). :class:`LintRules` has one field per name and
@@ -1130,7 +1152,7 @@ class VideoConfig(_Strict):
     stt: SttConfig = Field(default_factory=SttConfig)
     """Speech to text for `vidgen readback` (the narration transcribed and compared with the text): {provider, model, language, device}."""
     imagegen: ImagegenConfig = Field(default_factory=ImagegenConfig)
-    """Image generation for generate: params and `vidgen imagegen`: {provider, model, size, quality, style, negative}."""
+    """Image generation for generate: params and `vidgen imagegen`: {provider (openai or openrouter), model, size, quality, resolution, style, negative}."""
     scenes: list[SceneConfig] = Field(min_length=1)
     """The scenes in order (at least one); scene ids and beat ids must be unique."""
 

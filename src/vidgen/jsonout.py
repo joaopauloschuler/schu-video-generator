@@ -252,27 +252,34 @@ def imagegen_document(
     project: Project, plan: ImagegenPlan, dry_run: bool, force: bool, elapsed: float, warnings: Iterable[Mapping[str, Any]] = ()
 ) -> dict[str, Any]:
     """The ``vidgen imagegen --json`` document (a dry run or a run): every picture to generate
-    with its scenes, prompt sent, size, model and estimated cost, the total estimate, the
-    pictures generated (none in a dry run) and up to date, and the orphaned pictures."""
-    from vidgen.imagegen.run import PRICE_NOTE
-
+    with its scenes, prompt sent, provider, model, size (OpenRouter: aspect ratio and
+    resolution), estimated cost and what it is based on, notes and problems (OpenRouter: options
+    the model ignores or refuses), the total estimate, the cost the provider reported in a run,
+    the pictures generated (none in a dry run) and up to date, and the orphaned pictures."""
     total, unknown = plan.cost
-    images = [
-        {
-            "key": r.key,
-            "scenes": list(plan.scenes[r.key]),
-            "prompt": r.prompt,
-            "sent_prompt": r.text,
-            "provider": r.provider,
-            "model": r.model,
-            "size": r.size,
-            "quality": r.quality,
-            "seed": r.seed,
-            "estimated_cost": r.estimated_cost,
-            "path": _path(r.path),
-        }
-        for r in plan.todo
-    ]
+    images = []
+    for r in plan.todo:
+        quote = plan.quote(r)
+        images.append(
+            {
+                "key": r.key,
+                "scenes": list(plan.scenes[r.key]),
+                "prompt": r.prompt,
+                "sent_prompt": r.text,
+                "provider": r.provider,
+                "model": r.model,
+                "size": r.size,
+                "aspect_ratio": r.aspect_ratio,
+                "resolution": r.resolution,
+                "quality": r.quality,
+                "seed": r.seed,
+                "estimated_cost": quote.cost,
+                "price_basis": quote.basis,
+                "notes": list(plan.notes.get(r.key, [])),
+                "problems": list(plan.problems.get(r.key, [])),
+                "path": _path(r.path),
+            }
+        )
     return envelope(
         "imagegen",
         True,
@@ -283,7 +290,8 @@ def imagegen_document(
         force=force,
         estimated_cost=round(total, 4),
         unknown_cost=unknown,
-        price_note=PRICE_NOTE,
+        price_note=plan.price_note,
+        charged=None if plan.charged is None else round(plan.charged, 6),
         images=images,
         generated=[] if dry_run else [i["key"] for i in images],
         up_to_date=list(plan.up_to_date),

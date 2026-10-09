@@ -88,6 +88,15 @@ their own licences. Notably:
   GPL/LGPL obligations.
 - **fpdf2** (optional `pdf` extra, PDF slide decks) is under the **LGPL-3.0**.
 
+## Online services (optional, your own account)
+
+vidgen bundles no client library or content from these services; it calls their web APIs with
+your key only when you run the paid commands, and what they return is subject to their terms:
+ElevenLabs (narration, speech to text), OpenAI (Images API) and OpenRouter (image models of
+several providers, e.g. Black Forest Labs, ByteDance, Google, OpenAI, Recraft — each model's
+provider terms apply too). Requests to OpenRouter carry vidgen's optional app identification
+(`HTTP-Referer`: the project's repository URL, `X-OpenRouter-Title`: `schu-video-generator`).
+
 ## Repository-only content (not in the pip package)
 
 - **kphi3 narration** (`examples/kphi3/audio/*.mp3`): generated with ElevenLabs (premade voice

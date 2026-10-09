@@ -43,8 +43,8 @@ NOT_RENDER_INPUTS: frozenset[str] = frozenset(
         "__main__.py", "cli.py", "describe.py", "iconlist.py", "jsonout.py", "lint", "schema.py", "sheets.py", "storyboard.py",
         "render/fingerprint.py", "render/pipeline.py", "render/ffmpeg.py", "sfx.py", "subtitles.py", "themelist.py", "tts",
         "loudness.py", "mix.py", "music.py", "thumbnail.py", "export.py", "translation.py", "deck.py", "slides.py",
-        "slides_pdf.py", "stt", "readback.py", "textnorm.py", "httpapi.py", "imagegen/openai.py", "imagegen/run.py",
-        "guide.py", "gallery.py", "outline.py", "prose.py", "plan.py", "plan_yaml.py",
+        "slides_pdf.py", "stt", "readback.py", "textnorm.py", "httpapi.py", "imagegen/openai.py", "imagegen/openrouter.py",
+        "imagegen/run.py", "guide.py", "gallery.py", "outline.py", "prose.py", "plan.py", "plan_yaml.py",
         "mcp_server.py", "mcp_tools.py",
     }
 )

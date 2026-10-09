@@ -10,7 +10,8 @@
 - Rendering and validating never call a provider: :func:`generated_image` gives the stored
   picture, or a placeholder card showing the prompt (:mod:`vidgen.imagegen.placeholder`) when
   ``vidgen imagegen`` has not made it yet.
-- :func:`get_image_provider` returns the provider (OpenAI Images, :mod:`vidgen.imagegen.openai`).
+- :func:`get_image_provider` returns the provider: OpenAI Images (:mod:`vidgen.imagegen.openai`,
+  the default) or OpenRouter (:mod:`vidgen.imagegen.openrouter`).
 
 No manim import.
 """
@@ -33,7 +34,7 @@ if TYPE_CHECKING:
     from vidgen.theme import Theme
 
 #: Providers ``imagegen.provider`` accepts.
-IMAGEGEN_PROVIDERS: tuple[str, ...] = ("openai",)
+IMAGEGEN_PROVIDERS: tuple[str, ...] = ("openai", "openrouter")
 #: Where generated pictures are stored, relative to the project.
 GENERATED_DIR = Path("assets") / "generated"
 #: Version of the cache key's inputs (bumped if they change: every picture would be "missing").
@@ -72,6 +73,15 @@ PRICES: dict[tuple[str, str | None, bool], float] = {
     ("dall-e-3", "hd", True): 0.08, ("dall-e-3", "hd", False): 0.12,
     ("dall-e-2", None, True): 0.02,
 }
+#: Aspect ratios OpenRouter's image API accepts (``aspect_ratio``; a provider clamps to the ones
+#: its model has). ``auto`` sizes send the one nearest the video's format.
+OPENROUTER_ASPECTS: tuple[str, ...] = (
+    "1:1", "1:2", "1:4", "1:8", "2:1", "2:3", "2.35:1", "3:2", "3:4", "4:1", "4:3", "4:5", "5:2", "5:4",
+    "5:7", "7:5", "8:1", "9:16", "16:9", "9:19.5", "19.5:9", "9:20", "20:9", "9:21", "21:9",
+)
+#: Long side in pixels of each OpenRouter ``resolution`` tier (nominal: the provider decides the
+#: exact pixels); without a tier, 1K (what most models make by default).
+RESOLUTION_PIXELS: dict[str, int] = {"512": 512, "768": 768, "1K": 1024, "1.5K": 1536, "2K": 2048, "4K": 4096}
 
 
 class GenerateImage(BaseModel):
@@ -102,7 +112,11 @@ class GenerateImage(BaseModel):
 @dataclass(frozen=True)
 class ImageRequest:
     """One picture to generate: what is sent (``text`` = prompt + style + negative, ``size``,
-    ``quality``) and where it is stored (``path``, ``sidecar``), keyed by ``key``."""
+    ``quality``) and where it is stored (``path``, ``sidecar``), keyed by ``key``.
+
+    OpenRouter requests (§64) also carry ``aspect_ratio`` and ``resolution``: with
+    ``explicit_size`` false they are sent instead of ``size``, which is then only the nominal
+    pixel size (placeholder shape, per-megapixel price estimate)."""
 
     provider: str
     model: str
@@ -116,6 +130,9 @@ class ImageRequest:
     key: str
     path: Path
     sidecar: Path
+    aspect_ratio: str | None = None
+    resolution: str | None = None
+    explicit_size: bool = True
 
     @property
     def exists(self) -> bool:
@@ -129,8 +146,18 @@ class ImageRequest:
         return int(w), int(h)
 
     @property
+    def shape(self) -> str:
+        """What sets the picture's size, for messages: ``1536x1024`` or ``16:9, 2K``."""
+        if self.explicit_size:
+            return self.size
+        return ", ".join(p for p in (self.aspect_ratio, self.resolution) if p)
+
+    @property
     def estimated_cost(self) -> float | None:
-        """US dollars one generation costs by :data:`PRICES`, ``None`` if unknown."""
+        """US dollars one generation costs by OpenAI's :data:`PRICES`, ``None`` if unknown (always
+        for other providers: their prices are looked up by ``vidgen imagegen --dry-run``)."""
+        if self.provider != "openai":
+            return None
         w, h = self.pixels
         return PRICES.get((self.model, self.quality, w == h))
 
@@ -153,15 +180,27 @@ class SceneImage:
 
 @dataclass(frozen=True)
 class GeneratedPicture:
-    """What a provider returns: PNG bytes and the prompt it actually used, if it says."""
+    """What a provider returns: PNG bytes, the prompt it actually used and what it charged in
+    US dollars, if it says."""
 
     data: bytes
     revised_prompt: str | None = None
+    cost: float | None = None
+
+
+@dataclass(frozen=True)
+class PriceQuote:
+    """The estimated price of one picture in US dollars (``None``: unknown) and what it is
+    based on (``basis``, shown with the estimate)."""
+
+    cost: float | None
+    basis: str
 
 
 class ImageProvider(Protocol):
     """What ``vidgen imagegen`` needs from an image-generation provider. Constructing one needs
-    no key."""
+    no key. A provider may also have ``check_requests(requests)``: called once before the first
+    paid request, it raises ``VidgenError`` for options the model does not take."""
 
     name: str
 
@@ -211,32 +250,72 @@ def compose_prompt(prompt: str, style: str = "", negative: str = "") -> str:
     return " ".join(parts)
 
 
-def request_key(provider: str, model: str, size: str, quality: str | None, seed: int | None, text: str) -> str:
-    """16 hex digits of sha1 over everything that changes the picture."""
+def request_key(
+    provider: str, model: str, size: str, quality: str | None, seed: int | None, text: str, extra: dict[str, Any] | None = None
+) -> str:
+    """16 hex digits of sha1 over everything that changes the picture. ``extra`` holds a
+    provider's own inputs (OpenRouter: aspect ratio, resolution); without it the key is the one
+    OpenAI pictures have always had."""
     data = {"v": KEY_VERSION, "provider": provider, "model": model, "size": size, "quality": quality, "seed": seed, "prompt": text}
+    data.update(extra or {})
     return hashlib.sha1(json.dumps(data, sort_keys=True, ensure_ascii=True).encode("utf-8")).hexdigest()[:16]
+
+
+def _ratio(value: str) -> float:
+    a, b = value.split(":")
+    return float(a) / float(b)
+
+
+def openrouter_aspect(project: Project, aspect: str) -> str:
+    """The ``aspect_ratio`` sent to OpenRouter: the listed ratio nearest the video's format when
+    the picture has the video's shape (``auto``), else 16:9, 9:16 or 1:1."""
+    if aspect == "auto" or aspect == video_aspect(project):
+        fmt = project.config.format
+        target = fmt.width / fmt.height
+        shape = video_aspect(project)
+        same = [r for r in OPENROUTER_ASPECTS if (_ratio(r) > 1, _ratio(r) < 1) == (shape == "landscape", shape == "portrait")]
+        return min(same, key=lambda r: abs(_ratio(r) - target))
+    return {"landscape": "16:9", "portrait": "9:16"}.get(aspect, "1:1")
+
+
+def nominal_size(aspect_ratio: str, resolution: str | None) -> str:
+    """``WxH`` of ``aspect_ratio`` at the long side of ``resolution`` (1K without one)."""
+    long_side = RESOLUTION_PIXELS[resolution or "1K"]
+    r = _ratio(aspect_ratio)
+    w, h = (long_side, round(long_side / r)) if r >= 1 else (round(long_side * r), long_side)
+    return f"{w}x{h}"
 
 
 def image_request(project: Project, generate: GenerateImage) -> ImageRequest:
     """``generate`` resolved with the project's ``imagegen:`` settings."""
     cfg = project.config.imagegen
-    family = model_family(cfg.model)
-    if cfg.size != "auto":
-        size = cfg.size
-    else:
-        aspect = video_aspect(project) if generate.aspect == "auto" else generate.aspect
-        size = MODEL_SIZES[family][aspect]
-    quality = cfg.quality if cfg.quality is not None else DEFAULT_QUALITY[family]
     style = style_words(generate.style if generate.style is not None else cfg.style)
     negatives = [n.strip() for n in (generate.negative, cfg.negative or "") if n and n.strip()]
     negative = "; ".join(dict.fromkeys(negatives))
     text = compose_prompt(generate.prompt, style, negative)
-    key = request_key(cfg.provider, cfg.model, size, quality, generate.seed, text)
+    extra: dict[str, Any] | None = None
+    aspect_ratio: str | None = None
+    explicit = cfg.size != "auto"
+    if cfg.provider == "openrouter":
+        quality = cfg.quality
+        aspect_ratio = None if explicit else openrouter_aspect(project, generate.aspect)
+        size = cfg.size if explicit else nominal_size(aspect_ratio or "1:1", cfg.resolution)
+        extra = {"aspect_ratio": aspect_ratio, "resolution": cfg.resolution}
+    else:
+        family = model_family(cfg.model)
+        if explicit:
+            size = cfg.size
+        else:
+            aspect = video_aspect(project) if generate.aspect == "auto" else generate.aspect
+            size = MODEL_SIZES[family][aspect]
+        quality = cfg.quality if cfg.quality is not None else DEFAULT_QUALITY[family]
+    key = request_key(cfg.provider, cfg.model, size, quality, generate.seed, text, extra)
     folder = project.root / GENERATED_DIR
     return ImageRequest(
         provider=cfg.provider, model=cfg.model, size=size, quality=quality, seed=generate.seed,
         prompt=" ".join(generate.prompt.split()), negative=negative, style=style, text=text, key=key,
         path=folder / f"{key}.png", sidecar=folder / f"{key}.json",
+        aspect_ratio=aspect_ratio, resolution=cfg.resolution, explicit_size=explicit or cfg.provider != "openrouter",
     )
 
 
@@ -374,17 +453,23 @@ def get_image_provider(project: Project) -> ImageProvider:
         from vidgen.imagegen.openai import OpenAIImageProvider
 
         return OpenAIImageProvider()
+    if cfg.provider == "openrouter":
+        from vidgen.imagegen.openrouter import OpenRouterImageProvider
+
+        return OpenRouterImageProvider()
     raise VidgenError(f"unknown imagegen provider {cfg.provider!r}; available: {', '.join(IMAGEGEN_PROVIDERS)}")
 
 
 __all__ = [
     "GENERATED_DIR",
     "IMAGEGEN_PROVIDERS",
+    "OPENROUTER_ASPECTS",
     "STYLE_PRESETS",
     "GenerateImage",
     "GeneratedPicture",
     "ImageProvider",
     "ImageRequest",
+    "PriceQuote",
     "SceneImage",
     "compose_prompt",
     "find_images",
@@ -393,6 +478,8 @@ __all__ = [
     "image_request",
     "imagegen_warnings",
     "images_summary",
+    "nominal_size",
+    "openrouter_aspect",
     "orphaned_images",
     "request_key",
     "scene_images",
