@@ -49,7 +49,7 @@ Point your agent at [AGENTS.md](AGENTS.md) (or connect it via MCP, see
 The project and pip package are called schu-video-generator;
 the command and the Python package are `vidgen` (`vidgen render`, `from vidgen.api import *`).
 
-Under the hood, vidgen voices the beats with ElevenLabs, animates every scene with
+Under the hood, vidgen voices the beats with ElevenLabs (or a TTS model on OpenRouter), animates every scene with
 [Manim](https://www.manim.community/), and joins everything with ffmpeg into one MP4 plus SRT
 subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slide deck).
 
@@ -148,7 +148,9 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   `readback` rule reports the beats above the threshold ([reference](docs/CONFIG.md#readback-vidgen-readback)).
 - **Generated images**: an `image` scene can take `generate: {prompt, negative, style, aspect,
   seed}` instead of a file. `vidgen imagegen` makes the missing pictures once with the OpenAI
-  Images API (`OPENAI_API_KEY`; `--dry-run` shows the prompts and an estimated cost) and stores
+  Images API (`OPENAI_API_KEY`, the default) or any image model on OpenRouter
+  (`imagegen: {provider: openrouter, model: ...}`, `OPENROUTER_API_KEY`); `--dry-run` shows the
+  prompts and an estimated cost with its basis (OpenRouter's current prices, looked up), and stores
   them in `assets/generated/` with a JSON note of how each was made — commit them like audio.
   Until then renders show a placeholder card with the prompt, so the video can be laid out first;
   a project `imagegen.style` keeps the pictures alike, and `vidgen validate` warns when a prompt
@@ -167,6 +169,15 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   its own beats are re-voiced when it changes, `vidgen tts --dry-run` counts characters per voice
   (`--voice ana` voices one speaker), and `subtitles: {speakers: name}` / captions `speakers:`
   name or colour the speakers ([reference](docs/CONFIG.md#multiple-voices-voices)).
+- **Narration providers**: ElevenLabs stays the default; optionally, `voice: {provider:
+  openrouter, model: ..., voice: ...}` voices the video with one of OpenRouter's TTS models
+  (Kokoro, Voxtral, Gemini TTS, ...; `OPENROUTER_API_KEY`, priced per character, estimated by
+  `vidgen tts --dry-run`), or `voice: {provider: kokoro, voice: af_heart}` voices it on your own
+  computer with [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) — free, offline after a
+  one-time 330 MB download, English word timings for karaoke captions (optional extra
+  `schu-video-generator[kokoro]`, below). One TTS provider per video — named voices change the
+  voice, not the provider — and a variant may switch the whole video to another one
+  ([reference](docs/CONFIG.md#narration-providers)).
 - **Sound effects**: eleven synthesised sounds (whoosh, swoosh, pop, click, tick, typing, riser,
   chime, success, error, thud; free to use in your videos, including commercially; no
   attribution needed) or your own `assets/sfx/NAME.wav`, placed as a beat
@@ -247,7 +258,7 @@ Claude Code: `claude mcp add schu-video-generator -- vidgen mcp --root /home/me/
 - **No surprise bills**: `tts` and `imagegen` are dry runs unless called with `dry_run: false`
   **and** `confirm_cost: true` (and `readback` with a paid speech-to-text provider needs
   `confirm_cost: true`); the dry run says what it would cost. API keys come from the server's
-  environment (set `ELEVENLABS_API_KEY` / `OPENAI_API_KEY` where the client starts it, e.g. an
+  environment (set `ELEVENLABS_API_KEY` / `OPENAI_API_KEY` / `OPENROUTER_API_KEY` where the client starts it, e.g. an
   `"env"` entry) and are never returned.
 - **Robust**: every call runs the CLI in a fresh process (`vidgen <command> --json`), reports its
   progress lines, and stops it when the call is cancelled; renders run one at a time.
@@ -260,6 +271,13 @@ Upgrading an environment that installed this project before it was renamed (as `
 `pip uninstall vidgen` once, then install as below (the `vidgen` command is unchanged).
 An unrelated project on PyPI is also named `vidgen` and also installs a top-level `vidgen`
 package, so do not install both in the same environment.
+
+**ffmpeg**: version 4.4 or newer (tested with 4.4, 5.1, 6.1, 7.0, 7.1 and 8.1). Older ones lack
+filters the join uses (`xfade` for crossfades, pushes and wipes; `amix=normalize` for sound
+effects); vidgen names the version in its error when an older ffmpeg fails. (Copies of
+schu-video-generator from before the fix failed crossfades, pushes and wipes on ffmpeg 7.0 /
+7.1, e.g. Debian 13's, with "frame rate 1/0 is invalid": update rather than install another
+ffmpeg.) **Manim**: 0.19 or newer (tested with 0.19, 0.21 and 0.22).
 
 ### Windows
 
@@ -281,6 +299,8 @@ package, so do not install both in the same environment.
    installed font works too, e.g. `theme: {font: Segoe UI}`.
 5. **ElevenLabs API key** (only for `vidgen tts`): `setx ELEVENLABS_API_KEY your_key`, then open
    a new terminal. vidgen reads the key only from this variable and never writes it anywhere.
+   With `voice: {provider: openrouter, model: ..., voice: ...}` narration goes through OpenRouter
+   instead and needs the **OpenRouter API key** of step 9 (`OPENROUTER_API_KEY`), not this one.
 6. Optional, only for the `equation` and `equation_derivation` scene types: **LaTeX** — install
    [MiKTeX](https://miktex.org/download) (it includes `dvisvgm`; allow it to install missing
    packages on the fly) and open a new terminal.
@@ -290,8 +310,29 @@ package, so do not install both in the same environment.
    (faster-whisper; its first run downloads the Whisper model from the Hugging Face Hub, ~500 MB
    for `small`).
 9. Optional, only for `vidgen imagegen` (generated pictures): an **OpenAI API key**,
-   `setx OPENAI_API_KEY your_key` (read only from this variable, never written anywhere).
+   `setx OPENAI_API_KEY your_key`, or, with `imagegen: {provider: openrouter, model: ...}`, an
+   **OpenRouter API key** (from <https://openrouter.ai/keys>), `setx OPENROUTER_API_KEY your_key`;
+   then open a new terminal. Each is read only from its variable, never written anywhere. The
+   same OpenRouter key voices the narration with `voice: {provider: openrouter, ...}`.
 10. Optional, only for `vidgen mcp` (the MCP server for AI agents): `pip install ".[mcp]"`.
+11. Optional, only for free local narration (`voice: {provider: kokoro}`):
+    `pip install ".[kokoro]"` — PyTorch (Windows wheels from PyPI are CPU-only, ~250 MB), the
+    `kokoro` package and its phonemizer. **Python 3.10–3.12**: the `kokoro` package declares no
+    support for 3.13 yet, so make this virtual environment with `py -3.12 -m venv .venv` (on 3.13
+    the extra installs nothing and `vidgen tts` prints the command that installs it anyway, which
+    worked on 3.13: `pip install --ignore-requires-python "kokoro>=0.9.4" "misaki[en]>=0.9.4"
+    "spacy>=3.8,<4" "spacy-curated-transformers<0.4"`). No API key. The first `vidgen tts` downloads
+    the model from Hugging Face (`kokoro-v1_0.pth`, 327 MB, plus ~0.5 MB per voice) into
+    `%USERPROFILE%\.cache\huggingface\hub` (set `HF_HOME` to move it), and for English voices
+    spaCy's small English model (13 MB, installed with pip); after that it works offline.
+    **espeak-ng** (Kokoro's pronunciation for Spanish, French, Hindi, Italian and Portuguese, and
+    for English words missing from its dictionary) comes inside the `espeakng-loader` wheel that
+    the extra installs, and kokoro loads that copy: nothing else to install. If `vidgen tts` says
+    espeak-ng cannot be loaded, run `pip install --force-reinstall espeakng-loader`; installing
+    espeak-ng itself (`espeak-ng.msi` from <https://github.com/espeak-ng/espeak-ng/releases>) only
+    helps older kokoro / misaki versions, which find it through the environment variable
+    `PHONEMIZER_ESPEAK_LIBRARY=C:\Program Files\eSpeak NG\libespeak-ng.dll`. Japanese and Chinese
+    voices also need `pip install "misaki[ja]"` / `"misaki[zh]"`.
 
 If PowerShell refuses to run `Activate.ps1`, run
 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
@@ -320,14 +361,32 @@ sudo apt install texlive texlive-latex-extra dvisvgm
 
 # 5. Optional: API keys (add to ~/.bashrc to keep them)
 export ELEVENLABS_API_KEY=your_key            # narration (vidgen tts)
-export OPENAI_API_KEY=your_key                # generated pictures (vidgen imagegen)
+export OPENAI_API_KEY=your_key                # generated pictures (vidgen imagegen, default provider)
+export OPENROUTER_API_KEY=your_key            # imagegen.provider: openrouter and/or voice.provider: openrouter
+
+# 6. Optional: free local narration with Kokoro (voice.provider: kokoro); Python 3.10-3.12 only
+pip install torch --index-url https://download.pytorch.org/whl/cpu   # CPU-only PyTorch (~200 MB)
+pip install ".[kokoro]"
+sudo apt install espeak-ng                    # optional fallback: kokoro uses the copy bundled in espeakng-loader
 ```
 
 Fonts are bundled, so there is nothing to install for them. Other distributions need the same
 pieces: Python 3.10–3.13 with venv, ffmpeg, and the Cairo and Pango development packages (Fedora:
 `sudo dnf install python3-devel ffmpeg-free cairo-devel pango-devel pkgconf-pkg-config gcc`). Each new
 terminal needs `source .venv/bin/activate` again before running `vidgen`. The optional extras
-work as on Windows: `pip install ".[pdf]"`, `".[stt]"`, `".[mcp]"`.
+work as on Windows: `pip install ".[pdf]"`, `".[stt]"`, `".[mcp]"`, `".[kokoro]"`.
+
+**Kokoro on Linux.** The `kokoro` package declares Python 3.10–3.12 (with 3.13 the extra installs
+nothing: use `python3.12 -m venv .venv`, or the forced install of Windows step 11, which worked on
+3.13 here). Installing CPU-only PyTorch first, as in step 6, keeps
+it small: PyPI's Linux PyTorch brings the CUDA libraries along (about 5 GB with `triton` and the
+`nvidia-*` packages); if you do have an NVIDIA GPU, that is the one to keep, and `voice: {device:
+cuda}` uses it. The first `vidgen tts` downloads the model from Hugging Face (`kokoro-v1_0.pth`,
+327 MB, plus ~0.5 MB per voice) into `~/.cache/huggingface/hub` (`HF_HOME` moves it) and, for
+English, spaCy's `en_core_web_sm` (13 MB, with pip); later runs need no network. espeak-ng comes
+bundled in the `espeakng-loader` wheel; `sudo apt install espeak-ng` does no harm and is the
+fallback named by vidgen's error if the bundled library cannot be loaded. Japanese / Chinese:
+`pip install "misaki[ja]"` / `"misaki[zh]"`.
 
 ### macOS
 
@@ -344,7 +403,7 @@ vidgen validate                 # check config, scene types, params, assets and 
 vidgen render --preview         # 854x480 check, timed from word counts -> my_video_preview.mp4
 vidgen storyboard               # contact sheets of every beat -> build/preview/storyboard/*.png
 vidgen lint                     # layout + timing checks: text cut off, too small, low contrast, dead air...
-vidgen tts --dry-run            # what would be sent to ElevenLabs (with the pronunciation applied), how many characters
+vidgen tts --dry-run            # what would be sent to the TTS (pronunciation applied), how many characters (OpenRouter: est. cost)
 vidgen tts                      # generate narration MP3s (only new/changed beats)
 vidgen readback                 # speech to text of the MP3s vs the texts: misheard terms, missing words (schu-video-generator[stt])
 vidgen imagegen --dry-run       # pictures of generate: params still to make, their prompts and estimated cost
@@ -374,8 +433,8 @@ narration.
 | `vidgen list-sfx [PROJECT] [--render-dir DIR] [--json]` | sound effects (built-in and the project's `assets/sfx`) with a description of each sound, length, loudness; `--render-dir` writes them as WAV files |
 | `vidgen list-music [PROJECT] [--render-dir DIR] [--json]` | background music beds (built-in, described in words: instruments, key, tempo, chords, mood) and the project's `assets/music` files; `--render-dir` writes one loop of each bed as WAV |
 | `vidgen schema [PROJECT] [--scene TYPE \| --all] [--json]` | JSON Schema of `video.yaml` (params checked per scene type, the project's extension types included), for editors and AI agents |
-| `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--voice NAME ...] [--variant NAME] [--json]` | generate missing/stale narration into `audio/`; `--dry-run` needs no key (shows each beat's voice and characters per voice) |
-| `vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME] [--json]` | generate the missing pictures of `generate:` params into `assets/generated/` (OpenAI Images, `OPENAI_API_KEY`); `--dry-run` needs no key and shows prompts and an estimated cost |
+| `vidgen tts [PROJECT] [--dry-run] [--force] [--beat ID ...] [--voice NAME ...] [--variant NAME] [--json]` | generate missing/stale narration into `audio/` (ElevenLabs, `ELEVENLABS_API_KEY`; or OpenRouter with `voice.provider: openrouter`, `OPENROUTER_API_KEY`); `--dry-run` needs no key (shows each beat's voice and characters per voice; OpenRouter: provider, model, voice and an estimated cost with its basis) |
+| `vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME] [--json]` | generate the missing pictures of `generate:` params into `assets/generated/` (OpenAI Images, `OPENAI_API_KEY`; or OpenRouter, `OPENROUTER_API_KEY`); `--dry-run` needs no key and shows prompts and an estimated cost with its basis |
 | `vidgen readback [PROJECT] [--variant NAME] [--beat ID ...] [--max-wer RATE] [--force] [--json]` | transcribe the narration MP3s (speech to text, `stt:`; cached in `build/readback/`) and compare them with the beat texts: word error rate per beat, words expected vs heard, a suggested fix for each (e.g. a pronunciation entry), terms misheard in several beats |
 | `vidgen translate-template [PROJECT] --variant NAME [--language TAG] [--output FILE] [--json]` | write or update the variant's translation file: every text to translate with its source, keeping existing translations (stale / moved / obsolete marked) |
 | `vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going] [--jobs N] [--frames] [--frames-per-beat N] [--force] [--json]` | render the scenes that changed (reusing current renders, e.g. the storyboard's) and join the video |
@@ -442,7 +501,9 @@ my_video/
   grid, charts, image, quote, equation, code, cards) and beat actions, no Python:
   `vidgen render examples/minimal --preview [--variant vertical]`; burned-in captions with
   `--variant subtitled`, 9:16 karaoke captions with `--variant social`, a partly translated
-  Brazilian Portuguese version with `--variant pt` (`examples/minimal/translations/pt.yaml`).
+  Brazilian Portuguese version with `--variant pt` (`examples/minimal/translations/pt.yaml`),
+  narration through OpenRouter with `--variant openrouter` (`vidgen tts examples/minimal
+  --dry-run --variant openrouter` shows the model, voices and estimated cost).
 - [examples/gallery](examples/gallery) — every other built-in scene type once (stat, chapter,
   comparison, table, timeline, diagram, process, network, scatter, histogram, pie, heatmap, map,
   screenshot, video clip, equation derivation, code walkthrough), overlays (a watermark, a
@@ -475,6 +536,10 @@ my_video/
   (screenshots of other products may also show their trademarks).
 - Narration from ElevenLabs and pictures from OpenAI are subject to those providers' terms (for
   example, plan limits on commercial use; cloning a voice requires the speaker's consent).
+  Pictures made through OpenRouter are subject to OpenRouter's terms and to those of the model's
+  provider (Black Forest Labs, ByteDance, Google, OpenAI, Recraft, ...); check the model's page
+  for commercial use. The same holds for narration voiced through OpenRouter (Mistral, Kokoro,
+  Google, ElevenLabs, Microsoft, ...).
 - The built-in fonts (SIL Open Font License), Lucide icons (ISC), Natural Earth map data (public
   domain), sound effects and music beds may be used in your videos, including commercially. No
   attribution is required in a video (the OFL and ISC notices apply to redistributing the files
@@ -493,6 +558,8 @@ all rendering. Run the full suite before committing. No test needs network or ke
 ## Troubleshooting
 
 - `ffmpeg not found on PATH` — install it and open a new terminal.
+- `ffmpeg X.Y is too old` (after an ffmpeg error) — install ffmpeg 4.4 or newer (`ffmpeg
+  -version` shows which one is first on PATH).
 - Text in a fallback font — a font named in the theme (other than the bundled Inter, Source
   Serif 4 and JetBrains Mono NL) is not installed (for all users, on Windows).
 - `cannot write ...mp4 ... is it open in another program` — close the video player showing the

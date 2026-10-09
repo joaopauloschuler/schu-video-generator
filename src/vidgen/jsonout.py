@@ -205,30 +205,58 @@ def tts_document(
 ) -> dict[str, Any]:
     """The ``vidgen tts --json`` document (a dry run or a run): every beat to voice (``action``
     ``generate`` or ``copy`` from the base audio folder, its voice, characters billed and the
-    spoken text when pronunciation changed it), the characters per voice, the beats generated
-    (none in a dry run) and up to date, and the orphaned MP3s."""
+    spoken text when pronunciation changed it, provider, model and provider voice, Kokoro's
+    ``lang`` / ``device``, estimated cost), the characters per voice, the estimated total with
+    its basis (OpenRouter, DESIGN.md §66; Kokoro: 0, "free (local)", §68), notes and problems, the cost the provider reported in a run, the beats generated (none
+    in a dry run) and up to date, and the orphaned MP3s."""
     from vidgen.tts.cache import orphaned_audio
+
+    def engine(voice: Any) -> dict[str, Any]:
+        if voice.provider == "kokoro":
+            from vidgen.tts.kokoro import REPO_ID
+
+            return {
+                "provider": "kokoro", "model": REPO_ID, "provider_voice": voice.voice, "instructions": None,
+                "speed": voice.speed, "lang": voice.lang, "device": voice.device,
+            }
+        routed = voice.provider == "openrouter"
+        return {
+            "provider": voice.provider,
+            "model": voice.model if routed else voice.model_id,
+            "provider_voice": voice.voice if routed else voice.voice_id,
+            "instructions": voice.instructions if routed else None,
+            "speed": voice.speed if routed else None,
+            "lang": None,
+            "device": None,
+        }
 
     scenes = {beat.id: scene.id for scene, beat in project.beats()}
     beats = []
     for beat in plan.todo:
         source = plan.reuse.get(beat.id)
         says = plan.say(beat)
+        cost = plan.beat_cost(beat)
         beats.append(
             {
                 "scene": scenes.get(beat.id),
                 "beat": beat.id,
                 "voice": plan.voice_of(beat),
+                **engine(plan.engine(beat)),
                 "action": "copy" if source is not None else "generate",
                 "characters": 0 if source is not None else len(says),
+                "estimated_cost": None if cost is None else round(cost, 6),
                 "says": says if says != beat.text else None,
                 "source": None if source is None else _path(source),
             }
         )
+    def voice_id(voice: Any) -> str | None:   # an ElevenLabs voice id only means something there
+        return voice.voice_id if voice.provider == "elevenlabs" else None
+
     voices = {
-        name: {"voice_id": project.voice(name).voice_id, "beats": n, "characters": chars}
+        name: {"voice_id": voice_id(project.voice(name)), **engine(project.voice(name)), "beats": n, "characters": chars}
         for name, (n, chars) in plan.characters_by_voice().items()
     }
+    total, unknown = plan.cost
     return envelope(
         "tts",
         True,
@@ -238,7 +266,15 @@ def tts_document(
         audio_dir=_path(plan.audio_dir),
         dry_run=dry_run,
         force=force,
+        provider=project.voice().provider,
         characters=plan.characters,
+        estimated_cost=round(total, 6),
+        unknown_cost=unknown,
+        price_note=plan.price_note,
+        prices={model: {"per_character": quote.cost, "basis": quote.basis} for model, quote in plan.rates.items()},
+        notes=list(plan.notes),
+        problems=list(plan.problems),
+        charged=None if plan.charged is None else round(plan.charged, 6),
         voices=voices,
         beats=beats,
         generated=[] if dry_run else [b["beat"] for b in beats],
@@ -252,27 +288,35 @@ def imagegen_document(
     project: Project, plan: ImagegenPlan, dry_run: bool, force: bool, elapsed: float, warnings: Iterable[Mapping[str, Any]] = ()
 ) -> dict[str, Any]:
     """The ``vidgen imagegen --json`` document (a dry run or a run): every picture to generate
-    with its scenes, prompt sent, size, model and estimated cost, the total estimate, the
-    pictures generated (none in a dry run) and up to date, and the orphaned pictures."""
-    from vidgen.imagegen.run import PRICE_NOTE
-
+    with its scenes, prompt sent, provider, model, size (OpenRouter: aspect ratio and
+    resolution), estimated cost and what it is based on, notes and problems (OpenRouter: options
+    the model ignores or refuses), the total estimate, the cost the provider reported in a run,
+    the pictures generated (none in a dry run) and up to date, and the orphaned pictures."""
     total, unknown = plan.cost
-    images = [
-        {
-            "key": r.key,
-            "scenes": list(plan.scenes[r.key]),
-            "prompt": r.prompt,
-            "sent_prompt": r.text,
-            "provider": r.provider,
-            "model": r.model,
-            "size": r.size,
-            "quality": r.quality,
-            "seed": r.seed,
-            "estimated_cost": r.estimated_cost,
-            "path": _path(r.path),
-        }
-        for r in plan.todo
-    ]
+    images = []
+    for r in plan.todo:
+        quote = plan.quote(r)
+        images.append(
+            {
+                "key": r.key,
+                "scenes": list(plan.scenes[r.key]),
+                "prompt": r.prompt,
+                "sent_prompt": r.text,
+                "provider": r.provider,
+                "model": r.model,
+                "size": r.size,
+                "aspect_ratio": r.aspect_ratio,
+                "resolution": r.resolution,
+                "format": r.format,
+                "quality": r.quality,
+                "seed": r.seed,
+                "estimated_cost": quote.cost,
+                "price_basis": quote.basis,
+                "notes": list(plan.notes.get(r.key, [])),
+                "problems": list(plan.problems.get(r.key, [])),
+                "path": _path(r.path),
+            }
+        )
     return envelope(
         "imagegen",
         True,
@@ -283,7 +327,8 @@ def imagegen_document(
         force=force,
         estimated_cost=round(total, 4),
         unknown_cost=unknown,
-        price_note=PRICE_NOTE,
+        price_note=plan.price_note,
+        charged=None if plan.charged is None else round(plan.charged, 6),
         images=images,
         generated=[] if dry_run else [i["key"] for i in images],
         up_to_date=list(plan.up_to_date),

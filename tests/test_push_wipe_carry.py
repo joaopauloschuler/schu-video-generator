@@ -153,6 +153,10 @@ def test_fingerprints_follow_carries(make_project: Any) -> None:
 
 def test_graph_strings() -> None:
     graph, label = ff.crossfade_graph([20, 15], [5], 10, ["slideup"])
+    assert graph[:2] == [
+        "[0:v]tpad=stop=1:stop_mode=clone,setpts=PTS-STARTPTS,fps=10,trim=end_frame=20,settb=AVTB[r0]",
+        "[1:v]tpad=stop=1:stop_mode=clone,setpts=PTS-STARTPTS,fps=10,trim=end_frame=15,settb=AVTB[r1]",
+    ]
     assert graph[2] == "[r0][r1]xfade=transition=slideup:duration=0.500000:offset=1.450000[x1]" and label == "x1"
     drawn, label = ff.overlay_graph("x1", [(2, 15)], 10)
     assert drawn == ["[2:v]settb=AVTB,setpts=PTS-STARTPTS+1.450000/TB[c0]", "[x1][c0]overlay=eof_action=pass:format=yuv444[o0]"]
@@ -216,6 +220,48 @@ def test_push_wipe_frame_math(tmp_path: Path, kind: str, axis: int, new_side: st
     for k in (9, 20, 25):
         assert not (video[k][16:20].min(axis=2) > 200).any(), k  # nothing outside the clip
     assert np.abs(video[9] - [255, 0, 0]).mean() < 3 and np.abs(video[20] - [0, 0, 255]).mean() < 3
+
+
+def test_graph_inputs_keep_a_frame_rate() -> None:
+    """Each xfade input gets its frame rate from ``fps`` with no ``setpts`` after it (FFmpeg 7.0 /
+    7.1's ``setpts`` clears the frame rate xfade needs: "1/0 is invalid"), padded by one frame
+    before and trimmed to its run's frame count after (FFmpeg 4.4 / 5.1's ``fps`` drops the
+    last frame)."""
+    runs = [20, 15, 12]
+    graph, _ = ff.crossfade_graph(runs, [5, 3], 10, ["fade", "wipeleft"])
+    for chain, n in zip(graph[:3], runs):
+        filters = chain.split("]", 1)[1].rsplit("[", 1)[0].split(",")
+        assert filters[0] == "tpad=stop=1:stop_mode=clone" and filters[-3:] == ["fps=10", f"trim=end_frame={n}", "settb=AVTB"], chain
+        assert not any(f.startswith("setpts") for f in filters[filters.index("fps=10"):]), chain
+
+
+@pytest.mark.parametrize("kind", ["fade", "slideleft", "slideup", "wiperight", "wipedown", "smoothleft"])
+def test_every_transition_joins_with_the_ffmpeg_on_path(tmp_path: Path, kind: str) -> None:
+    """Each transition through the real join with whatever ffmpeg is on PATH (Step 64: 7.1 failed
+    with "frame rate 1/0 is invalid"): two scenes joined by a cut, then the transition into a
+    third, with an overlay clip on the shared frames for a push / wipe; the output has the
+    planned frame count at a constant rate."""
+    ffmpeg = ff.find_ffmpeg()
+    videos = [_solid(tmp_path / f"{n}.mp4", color, 10) for n, color in (("a", (255, 0, 0)), ("b", (0, 255, 0)), ("c", (0, 0, 255)))]
+    audios = []
+    for name in ("a", "b", "c"):
+        ff.pad_audio(ffmpeg, None, tmp_path / f"{name}.wav", ff.AUDIO_RATE)
+        audios.append(tmp_path / f"{name}.wav")
+    overlays = None
+    if kind != "fade":
+        clip = RgbaClip(tmp_path / "o.mov", 64, 36, FPS)
+        clip.write(np.full((36, 64, 4), 255, dtype=np.uint8), 4)
+        clip.close()
+        overlays = [(clip.path, 16)]
+    out = tmp_path / "out.mp4"
+    ff.join(ffmpeg, videos, audios, out, tmp_path, crossfades=[0, 4], frames=[10, 10, 10], fps=FPS, kinds=["fade", kind], overlays=overlays)
+    with av.open(str(out)) as c:
+        stream = c.streams.video[0]
+        assert stream.guessed_rate == FPS
+    video = _decode(out)
+    assert len(video) == 26
+    assert np.abs(video[5] - [255, 0, 0]).mean() < 3 and np.abs(video[12] - [0, 255, 0]).mean() < 3
+    assert np.abs(video[25] - [0, 0, 255]).mean() < 3
 
 
 class _FakeLayer(OverlayLayer):

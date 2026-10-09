@@ -32,7 +32,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `preview` | `{width: 854, height: 480, fps: 15}` | `vidgen render --preview` |
 | `variants` | `{}` | named overrides, see [variants](#variants) |
 | `theme` | see [theme](#theme) | preset, colors, sizes, font, background, code style |
-| `voice` | see [voice](#voice-voice) | ElevenLabs voice |
+| `voice` | see [voice](#voice-voice) | the narration voice: ElevenLabs (default) or OpenRouter ([narration providers](#narration-providers)) |
 | `voices` | `{}` | named voices for dialogue, picked by scenes and beats with `voice: NAME`, see [multiple voices](#multiple-voices-voices) |
 | `subtitles` | `{speakers: off}` | `speakers: name` puts the speaker's label before their lines in the SRT, see [multiple voices](#multiple-voices-voices) |
 | `narration` | see [narration](#narration-narration) | beat padding, duration estimate |
@@ -51,7 +51,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `metadata` | `{}` (title: the `title`) | tags of the MP4: `title`, `artist`, `album`, `comment`, `description`, `copyright`, `date`, `genre`; see [chapters in the outputs](#chapters-in-the-outputs-chapters-metadata) |
 | `thumbnail` | none | the thumbnail `<output>_thumbnail.png`, written by `vidgen render` and `vidgen thumbnail`: a scene's frame `{scene, beat, at, overlays}` or a designed card `{title, subtitle, icon, image, preset, background}`, + `{jpeg, auto}`; see [thumbnail](#thumbnail-thumbnail-vidgen-thumbnail) |
 | `stt` | `{provider: faster_whisper}` | speech to text for `vidgen readback` (the narration transcribed and compared with the beat texts): `{provider, model, language, device}`; see [readback](#readback-vidgen-readback) |
-| `imagegen` | `{provider: openai, model: gpt-image-1, size: auto}` | image generation for `generate:` params and `vidgen imagegen`: `{provider, model, size, quality, style, negative}`; see [generated images](#generated-images-imagegen-vidgen-imagegen) |
+| `imagegen` | `{provider: openai, model: gpt-image-1, size: auto}` | image generation for `generate:` params and `vidgen imagegen`: `{provider (openai \| openrouter), model, size, quality, resolution, style, negative, svg_model}`; see [generated images](#generated-images-imagegen-vidgen-imagegen) |
 | `scenes` | required | the scenes in order, at least one |
 
 ## Scenes and beats
@@ -647,7 +647,7 @@ background, icons in `primary`, names in `text`) and `--theme warm_editorial` in
 
 ```yaml
 voice:
-  provider: elevenlabs              # the only provider for now
+  provider: elevenlabs              # elevenlabs (default), openrouter or kokoro: see "Narration providers"
   voice_id: nPczCjzI2devNBz1zQrb    # ElevenLabs voice id
   model_id: eleven_multilingual_v2
   output_format: mp3_44100_128      # ElevenLabs output_format query parameter
@@ -659,6 +659,12 @@ voice:
   context: true                     # send the neighbouring beats' text for smoother intonation
   timestamps: false                 # also fetch when each character is spoken (karaoke captions)
   language_code: null               # ElevenLabs language_code (ISO 639-1) or false; null: auto
+  model: null                       # provider openrouter only (required there): the TTS model id
+  voice: null                       # openrouter / kokoro: the voice name
+  instructions: null                # openrouter: how to speak (models that read it)
+  speed: null                       # openrouter / kokoro: speed multiplier 0.25-4 (openrouter: not sent when null; kokoro: 1)
+  lang: null                        # kokoro: language letter (a, b, e, f, h, i, j, p, z); null: from voice / language
+  device: cpu                       # kokoro: cpu, cuda or auto
   label: null                       # speaker name in subtitles / captions (none: not tagged)
   color: null                       # speaker colour in captions (theme token or hex; none: text colour)
 ```
@@ -682,6 +688,192 @@ that accept one (`eleven_turbo_v2_5`, `eleven_flash_v2_5`; others reject the fie
 `eleven_multilingual_v2` detects the language from the text). A code sends it with any model,
 `false` never sends one. When a code is sent it is part of the audio hash (re-voicing those
 beats); without one the hash is as before. A named voice may set its own (`voices.<name>.language_code`).
+
+These keys are ElevenLabs'. With `provider: openrouter` the voice is `model`, `voice`,
+`instructions` and `speed` instead, with `provider: kokoro` `voice`, `speed`, `lang` and `device`
+(see [narration providers](#narration-providers)); the keys of the provider not in use are
+ignored.
+
+## Narration providers
+
+One TTS provider voices the whole video: **ElevenLabs** (the default; everything above),
+**OpenRouter**, which reaches many TTS models (Mistral Voxtral, Kokoro, Gemini TTS, MiniMax,
+ElevenLabs' own models, Microsoft MAI-Voice...) with one key, or **Kokoro** run on your own
+computer, free ([below](#kokoro-on-this-computer-provider-kokoro)). Nothing changes for a project
+that does not set `voice.provider` (likewise OpenAI stays the default image provider).
+
+```yaml
+voice:
+  provider: openrouter
+  model: mistralai/voxtral-mini-tts-2603     # required: an OpenRouter TTS model id
+  voice: en_paul_neutral                     # the model's voice name (each model lists its own)
+  instructions: "warm, unhurried explainer; slight pause before numbers"   # optional
+  speed: 1.0                                 # optional, 0.25-4: not sent when absent
+```
+
+| key | default | |
+|---|---|---|
+| `provider` | `elevenlabs` | `openrouter`: `POST https://openrouter.ai/api/v1/audio/speech`, key in `OPENROUTER_API_KEY` |
+| `model` | (required) | an OpenRouter TTS model id (`author/name`); the list: <https://openrouter.ai/models?output_modalities=speech> |
+| `voice` | the model's default, if it has one | the model's voice name (`en_paul_neutral` for Voxtral, `af_heart` for Kokoro, `Kore` for Gemini, `en-US-Harper:MAI-Voice-2.1` for MAI-Voice...); most models need one |
+| `instructions` | none | how to speak: tone, pace, accent, language. OpenRouter documents it for Gemini TTS and OpenAI TTS models; others ignore it (the dry run notes that) |
+| `speed` | none (not sent) | playback speed multiplier; OpenRouter documents it for OpenAI TTS; other models ignore it or refuse a value other than 1 |
+| `label`, `color`, `timestamps` | | as in [`voice:`](#voice-voice) (`timestamps` has no effect, see below) |
+
+**Choosing.** ElevenLabs gives the most natural narration, word timings for karaoke captions and
+neighbouring-beat context for smooth intonation; it bills characters against a monthly plan.
+OpenRouter pays per use from one balance: per input character for most models (Kokoro
+$0.000004, Voxtral $0.0000176, ElevenLabs v3 through OpenRouter $0.00004 per character on
+2026-10-08, the highest of each model's providers), while Gemini TTS and Seed Audio also bill the
+generated audio (no estimate). `vidgen tts --dry-run` prints the current price per character of
+the model and the estimated cost of the run (from OpenRouter's public model list, a free lookup;
+offline: "price unknown"). The estimate uses the highest price of the model's providers, so the
+real charge can be lower (Kokoro's cheapest provider asks $0.00000062 per character). A real run
+then prints what OpenRouter reports it charged: OpenRouter writes each request's cost record a
+few seconds after the audio, so vidgen asks again for up to 15 s; when the records are still
+missing it says `cost not reported by openrouter yet (why; see https://openrouter.ai/activity)`
+— the audio is stored all the same, and the activity page shows the cost later.
+
+**One provider per video.** A named voice of [`voices:`](#multiple-voices-voices) may change
+`voice`, `instructions`, `speed` (and `model`) but not `provider`: `voices.ana.provider:
+elevenlabs` in an OpenRouter video, or ElevenLabs keys such as `voices.ana.voice_id` (OpenRouter
+keys in an ElevenLabs video), are config errors naming the key. A [variant](#variants) may switch
+the provider of the whole video (`variants: {cheap: {voice: {provider: openrouter, model: ...,
+voice: ...}}}`); its audio then goes to `audio/<variant>/` like any other voice change.
+
+**What differs from ElevenLabs.**
+- No neighbouring-beat context (the API has none): each beat is voiced on its own.
+- No word timings: `voice.timestamps: true` is a `vidgen validate` warning; captions and the SRT
+  use estimated word times within each MP3's speech.
+- No `language_code`: the language follows the text (a model's voice usually belongs to one
+  language; MAI-Voice voices carry their locale). `instructions` can name the language or accent
+  ("Brazilian Portuguese, São Paulo accent") on models that read them.
+- Not supported: voice cloning from reference audio (`input_references`) and multi-speaker input
+  (one request voicing several speakers): vidgen voices one beat per request.
+
+**Audio.** vidgen asks for MP3 (`response_format: mp3`); models that return only raw PCM (Gemini
+TTS: 16-bit mono 24 kHz) are asked for PCM and converted to MP3 with ffmpeg, so `audio/` always
+holds `<beat_id>.mp3` + `<beat_id>.hash`. The hash covers the spoken text (pronunciation applied)
+and `provider`, `model`, `voice`, `instructions` and `speed`: changing any of them re-voices that
+voice's beats. ElevenLabs projects keep their hashes.
+
+**Checks.** `provider: openrouter` without `model`, or a model id without `/`, is a config error.
+`vidgen validate` warns (no network, OpenRouter's list bundled with vidgen, dated) about a model
+not in the list (with a suggestion), a `voice` the model does not list and a missing `voice` for a
+model that lists some; lists may be incomplete, so these are warnings. `vidgen tts --dry-run` and
+a real run check OpenRouter's live list: a model it does not have is refused before any paid
+request (`problem:`), an unlisted voice or an `instructions` / `speed` the model may ignore is a
+`note:`.
+
+**Key and privacy.** The same `OPENROUTER_API_KEY` as the [OpenRouter image
+provider](#openrouter-provider-provider-openrouter), read from the environment only, never stored.
+If your account requires Zero Data Retention (or excludes providers that keep or train on
+prompts), choose a model with a ZDR endpoint: a model without one fails with a clear message that
+links the privacy settings and lists the TTS models with a ZDR endpoint (on 2026-10-08 27 of 32,
+e.g. `hexgrad/kokoro-82m`, `mistralai/voxtral-mini-tts-2603`, the ElevenLabs, Gemini TTS, Deepgram
+and MAI-Voice models; not MiniMax, Qwen or Grok). Both `hexgrad/kokoro-82m` (voice `af_alloy`)
+and `google/gemini-3.8-flash-lite-tts` (voice `Kore`) voiced a beat live on 2026-10-09 with an
+account requiring ZDR. To check a model: look for its id among the `model_id`s of
+`https://openrouter.ai/api/v1/endpoints/zdr` (public, no key), or, from a source checkout, run
+`python tools/live_check_openrouter.py --tts --zdr`.
+
+### Kokoro on this computer (`provider: kokoro`)
+
+[Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (Apache-2.0) is a small open-weight voice
+model that runs locally: free, no key, no account, offline after the first download. It is an
+optional extra (PyTorch is large), installed with `pip install ".[kokoro]"` from a checkout or
+`pip install "schu-video-generator[kokoro]"` (install steps for Windows and Linux in the README).
+
+```yaml
+voice:
+  provider: kokoro
+  voice: af_heart        # optional: a Kokoro voice (default: the best voice of lang)
+  speed: 1.0             # optional, 0.25-4 (default 1; 0.8-1.2 sounds natural)
+  lang: a                # optional: a b e f h i j p z (default: voice's first letter, else language:)
+  device: cpu            # optional: cpu (default), cuda, auto
+```
+
+| key | default | |
+|---|---|---|
+| `voice` | the language's default (below) | a voice name; a blend `af_bella,af_heart` averages voices (Kokoro's own feature) |
+| `speed` | 1 | speaking speed multiplier |
+| `lang` | the first letter of `voice`, else from the video's `language` | Kokoro's language letter; it decides the pronunciation rules |
+| `device` | `cpu` | `cuda`: an NVIDIA GPU (needs a CUDA build of PyTorch); `auto`: the GPU if PyTorch sees one. Not in the audio hash |
+| `label`, `color`, `timestamps` | | as in [`voice:`](#voice-voice) (`timestamps` is not needed: English timings are always stored) |
+
+**Languages and voices** (Kokoro-82M v1.0, 54 voices, list bundled with vidgen, dated 2026-10-09;
+grades from the model's [VOICES.md](https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md)):
+
+| `lang` | language | from `language:` | default voice | other voices |
+|---|---|---|---|---|
+| `a` | American English | `en` (none set), `en-US`... | `af_heart` (A) | `af_bella` (A-), `af_nicole`, `am_michael`, `am_fenrir`, `am_puck`... (20) |
+| `b` | British English | `en-GB`, `en-IE`, `en-AU`, `en-NZ` | `bf_emma` (B-) | `bm_george`, `bm_fable`, `bf_isabella`... (8) |
+| `e` | Spanish | `es` | `ef_dora` | `em_alex`, `em_santa` |
+| `f` | French | `fr` | `ff_siwis` (B-) | (only one) |
+| `h` | Hindi | `hi` | `hf_alpha` | `hf_beta`, `hm_omega`, `hm_psi` |
+| `i` | Italian | `it` | `if_sara` | `im_nicola` |
+| `j` | Japanese | `ja` | `jf_alpha` | `jf_gongitsune`, `jf_nezumi`, `jf_tebukuro`, `jm_kumo` |
+| `p` | Brazilian Portuguese | `pt` (also `pt-PT`) | `pf_dora` | `pm_alex`, `pm_santa` |
+| `z` | Mandarin Chinese | `zh` | `zf_xiaobei` | 7 more `zf_` / `zm_` |
+
+A video `language:` Kokoro does not speak (German, say) without `lang` / `voice` is a config error.
+`j` needs `pip install "misaki[ja]"`, `z` `pip install "misaki[zh]"` besides the extra. `e`, `f`,
+`h`, `i`, `p` are read through espeak-ng (and English uses it for words missing from its
+dictionary); misaki loads the espeak-ng library bundled in the `espeakng-loader` wheel (Windows,
+Linux, macOS), so no system package is needed normally.
+
+**First run: downloads.** The model is fetched from Hugging Face the first time: `kokoro-v1_0.pth`
+(327 MB, SHA256 `496dba11...`) plus ~0.5 MB per voice used, into the Hugging Face cache
+(`~/.cache/huggingface/hub`, on Windows `%USERPROFILE%\.cache\huggingface\hub`; `HF_HOME` or
+`HF_HUB_CACHE` move it). English voices also make misaki install spaCy's `en_core_web_sm`
+(12.8 MB) with pip on first use. vidgen bundles none of these. After that no network is needed
+(`HF_HUB_OFFLINE=1` makes sure nothing is asked). `vidgen tts --dry-run` says whether the
+download is still to come.
+
+**Speed.** The model loads once per `vidgen tts` run (one pipeline per language, all voices
+sharing it): a few seconds to import PyTorch and ~6-10 s to load the model and the English
+phonemizer. Then, measured on a 2-core cloud CPU, a 12-word sentence (4.8 s of speech) took 3.6 s
+and a 2-word line 1.1 s: about 0.7x real time, so a 5-minute narration takes ~4 minutes. A laptop
+CPU is usually faster, a GPU much faster.
+
+**Python.** The `kokoro` package (0.9.4) declares Python 3.10-3.12. On 3.13 the extra installs
+nothing and `vidgen tts` prints a command that installs it anyway (it worked on 3.13 here): `pip
+install --ignore-requires-python "kokoro>=0.9.4" "misaki[en]>=0.9.4" "spacy>=3.8,<4"
+"spacy-curated-transformers<0.4"`.
+
+**Word timings.** For English (`lang` a / b) Kokoro says when each word is spoken: vidgen stores
+them as `audio/<beat_id>.align.json` for every beat (free, so `timestamps` is not needed) and
+burned-in [`captions`](#captions) and the SRT time every word from them (through the
+pronunciation, as with ElevenLabs). Other languages have no timings: word times are estimated
+within each MP3's speech (`timestamps: true` there is a `vidgen validate` warning).
+
+**Same rules as the other providers.** One provider per video: a named voice may change `voice`,
+`speed` and `lang` (a named voice that sets `voice` gets that voice's language unless it sets
+`lang`); a [variant](#variants) may switch the whole video to Kokoro (`variants: {local: {voice:
+{provider: kokoro}}}`, own `audio/<variant>/`). Audio goes to `audio/<beat_id>.mp3` (Kokoro's 24
+kHz samples encoded with ffmpeg, 128 kb/s) + `.hash`; the hash covers the spoken text
+(pronunciation applied) and `provider`, the model (`hexgrad/Kokoro-82M`, `kokoro-v1_0.pth`),
+`voice`, `lang` and `speed` (not `device`): changing any of them re-voices that voice's beats.
+No neighbouring-beat context. Readback and the narration-speed lint work on its MP3s as on any.
+
+**Cost.** None: the dry run says `cost: free (local): Kokoro-82M runs on this computer`, `tts
+--json` has `estimated_cost: 0`, `unknown_cost: 0`, and each beat / voice `provider: kokoro`,
+`model: hexgrad/Kokoro-82M`, `provider_voice`, `speed`, `lang`, `device`. Over MCP, `tts` with
+`dry_run: false` needs no `confirm_cost` for a Kokoro project (it is still asked for when the
+project does not load, or uses another provider).
+
+**Checks.** `vidgen validate` warns (no network, nothing loaded) about a voice not in the bundled
+list (with a suggestion), a voice of another language than `lang` ("`bf_emma` is a British
+English voice but lang is a"), a `lang` that is not the video's language, `timestamps` with a
+language without timings, and the extra (or `misaki[ja]` / `[zh]`) not installed. `vidgen tts`
+refuses with the install command when the extra is missing, names espeak-ng when it cannot be
+loaded, and says what failed when the first download cannot reach Hugging Face.
+
+**Choosing.** ElevenLabs still sounds the most natural and expressive (and uses neighbouring
+beats for intonation); Kokoro is clear and pleasant in English (`af_heart`, `af_bella`,
+`bf_emma`), thinner in the other languages, weaker on very short lines (under ~10 words) and may
+rush very long ones. It is ideal for drafts, internal videos and projects with no budget, and
+costs nothing to re-voice while a script changes.
 
 ## Multiple voices (`voices:`)
 
@@ -714,7 +906,9 @@ scenes:
 
 | key (`voices.<name>`) | default | |
 |---|---|---|
-| `voice_id`, `model_id`, `output_format`, `provider` | the base voice's | as in [`voice:`](#voice-voice) |
+| `voice_id`, `model_id`, `output_format` | the base voice's | as in [`voice:`](#voice-voice) (ElevenLabs videos) |
+| `model`, `voice`, `instructions`, `speed` | the base voice's | as in [narration providers](#narration-providers) (OpenRouter videos) |
+| `provider` | the base voice's | only the base voice's: one provider per video (another one is an error; a variant may switch it) |
 | `settings` | the base voice's | `stability`, `similarity_boost`, `style`, `use_speaker_boost`; each one not given is the base voice's |
 | `context`, `timestamps` | the base voice's | as in [`voice:`](#voice-voice) |
 | `label` | the name (`dr_ana` → `Dr ana`) | the speaker's name in subtitles and captions; not inherited from `voice.label` |
@@ -759,7 +953,8 @@ narration:
 
 ## Narration audio (ElevenLabs)
 
-Each beat is spoken by ElevenLabs into `audio/<beat_id>.mp3`, with `audio/<beat_id>.hash`
+Each beat is spoken by ElevenLabs (or [OpenRouter](#narration-providers): same files, its own
+key and hash) into `audio/<beat_id>.mp3`, with `audio/<beat_id>.hash`
 recording what it was generated from (and, with `voice.timestamps`, `audio/<beat_id>.align.json`:
 its character timings, with the text and a hash of the MP3 they belong to, so a stale file is
 ignored).
@@ -986,12 +1181,14 @@ scenes:
 
 | key | default | |
 |---|---|---|
-| `provider` | `openai` | the provider: `openai` (OpenAI Images API, `POST /v1/images/generations`), billed per picture, key in the environment variable `OPENAI_API_KEY` (never stored by vidgen) |
-| `model` | `gpt-image-1` | `gpt-image-1`, `dall-e-3` or `dall-e-2`; another name is sent as is (with gpt-image-1's sizes, no cost estimate) |
-| `size` | `auto` | `WIDTHxHEIGHT` sent to the provider, or `auto`: the model's landscape / portrait / square size for the video's format or the `generate.aspect` (gpt-image-1: `1536x1024`, `1024x1536`, `1024x1024`; dall-e-3: `1792x1024`, `1024x1792`, `1024x1024`; dall-e-2: `1024x1024`) |
-| `quality` | none (by model) | gpt-image-1: `low`, `medium`, `high` (default `medium`); dall-e-3: `standard`, `hd` (default `standard`); none for dall-e-2 |
+| `provider` | `openai` | the provider: `openai` (OpenAI Images API, `POST /v1/images/generations`), billed per picture, key in the environment variable `OPENAI_API_KEY`; or `openrouter` (many image models through [OpenRouter](#openrouter-provider-provider-openrouter), key in `OPENROUTER_API_KEY`). vidgen never stores a key |
+| `model` | `gpt-image-1` | openai: `gpt-image-1`, `dall-e-3` or `dall-e-2`; another name is sent as is (with gpt-image-1's sizes, no cost estimate). openrouter: **required**, an OpenRouter model id `author/name` (e.g. `bytedance-seed/seedream-4.5`) |
+| `size` | `auto` | `WIDTHxHEIGHT` sent to the provider, or `auto`: the model's landscape / portrait / square size for the video's format or the `generate.aspect` (gpt-image-1: `1536x1024`, `1024x1536`, `1024x1024`; dall-e-3: `1792x1024`, `1024x1792`, `1024x1024`; dall-e-2: `1024x1024`). openrouter: `auto` sends an aspect ratio instead (below) |
+| `quality` | none (by model) | gpt-image-1: `low`, `medium`, `high` (default `medium`); dall-e-3: `standard`, `hd` (default `standard`); none for dall-e-2. openrouter: `auto`, `low`, `medium`, `high`, `xhigh`, `max` for models that have it (not sent by default) |
+| `resolution` | none | openrouter only: `512`, `768`, `1K`, `1.5K`, `2K`, `4K` for models that have it (default: the model's own); not together with a `WIDTHxHEIGHT` size |
 | `style` | none | words added to every prompt (`Style: ...`) so the pictures of a video look alike: a preset (below) or your own words; a scene's `generate.style` replaces it |
 | `negative` | none | what no picture should show, added to each prompt's `Avoid: ...` (with the scene's own `negative`) |
+| `svg_model` | `model` | openrouter only: the model of pictures with `generate.format: svg` (e.g. `recraft/recraft-v4.1-vector`), so one video can mix raster and [vector pictures](#vector-svg-pictures-format-svg) |
 
 `generate:` (a mapping, or just the prompt as a string):
 
@@ -1001,7 +1198,8 @@ scenes:
 | `negative` | `""` | what it should not show; the OpenAI API has no negative prompt, so it is sent as `Avoid: ...` |
 | `style` | `imagegen.style` | a preset, your own words, or `none` (no style words, not even the project's) |
 | `aspect` | `auto` | `auto` (landscape for a wide video, portrait for 9:16, square for 1:1), `landscape`, `portrait`, `square` |
-| `seed` | none | a number that is part of the cache key: change it for another picture of the same prompt. OpenAI takes no seed, so it does not make the picture reproducible |
+| `seed` | none | a number that is part of the cache key: change it for another picture of the same prompt. OpenAI takes no seed, so it does not make the picture reproducible; on OpenRouter it is sent to models that take one (others: key only) |
+| `format` | `png` | `png` (a raster picture) or `svg`: a [vector picture](#vector-svg-pictures-format-svg) drawn as shapes (provider `openrouter` with an SVG model) |
 
 **Style presets**: `photo` (photorealistic photograph, natural light, sharp focus),
 `illustration` (clean digital illustration, soft shading, limited colour palette), `flat` (flat
@@ -1009,7 +1207,7 @@ vector illustration, simple geometric shapes, solid colours, no outlines), `isom
 `watercolor`, `line_art`, `render_3d`, `cinematic`. The prompt sent is `<prompt>. Style: <style
 words>. Avoid: <negative>.`; `vidgen imagegen --dry-run` prints it.
 
-**Cache.** Each picture is stored as `assets/generated/<key>.png` with `<key>.json` beside it
+**Cache.** Each picture is stored as `assets/generated/<key>.png` (`<key>.svg` for `format: svg`) with `<key>.json` beside it
 (`prompt`, `negative`, `style`, `sent_prompt`, `revised_prompt` — the prompt the model says it
 used —, `provider`, `model`, `size`, `quality`, `seed`, `created` date, `scenes`). The key is a
 hash of the prompt sent (with style and negative), provider, model, size, quality and seed:
@@ -1030,13 +1228,122 @@ $ vidgen imagegen my_video
 
 | option | |
 |---|---|
-| `--dry-run` | list the pictures to generate with their prompts and an estimated cost (OpenAI's list prices when this was written; no key needed) |
+| `--dry-run` | list the pictures to generate with their prompts and an estimated cost, saying what it is based on (OpenAI: its list prices when this was written; OpenRouter: its prices of today, looked up online; no key needed) |
 | `--force` | generate again even when the picture exists (a new picture replaces it) |
 | `--scene ID` | only this scene's pictures (repeatable) |
 | `--variant NAME` | a variant: its format, prompts and `imagegen` settings |
 
 Requests are retried on rate limits and server errors (honouring `Retry-After`), not on an
 exhausted quota or a refused prompt; the provider's error message is shown.
+
+### OpenRouter provider (`provider: openrouter`)
+
+[OpenRouter](https://openrouter.ai) sells many image models (Seedream, FLUX, Recraft, Gemini,
+GPT Image, Qwen, ...) behind one key and one API. Choose a model from
+[its image models](https://openrouter.ai/models?output_modalities=image) and name it:
+
+```yaml
+imagegen:
+  provider: openrouter
+  model: bytedance-seed/seedream-4.5   # required: an OpenRouter model id
+  resolution: 1K                       # optional: 512 | 768 | 1K | 1.5K | 2K | 4K (if the model has it)
+  quality: null                        # optional: auto | low | medium | high | xhigh | max (if the model has it)
+  style: flat
+```
+
+Set the key `OPENROUTER_API_KEY` in the environment (from <https://openrouter.ai/keys>;
+Windows: `setx OPENROUTER_API_KEY your_key`, then a new terminal; Linux / macOS: `export
+OPENROUTER_API_KEY=your_key`). `openai` stays the default: projects without `provider:
+openrouter` and their stored pictures are unchanged.
+
+- **Size.** With `size: auto` vidgen sends an `aspect_ratio`: the one nearest the video's format
+  (`16:9`, `9:16`, `1:1`, `4:3`, ...), or `16:9` / `9:16` / `1:1` for a `generate.aspect` that
+  differs from the video's; plus `resolution` when set. A model without that ratio uses its
+  nearest (the dry run says so) and the scene's `fit` crops or pads. `size: WIDTHxHEIGHT` is
+  sent as is instead (OpenRouter fits it to the model).
+- **What each model takes.** Before the first paid request vidgen reads the model's public record
+  (free) and refuses, with a message, a model OpenRouter does not have, a `quality` or
+  `resolution` the model does not take, a model that makes only vector (SVG) pictures for a
+  `png` picture (and one that makes none for `format: svg`) and models that only edit an input
+  picture. A `seed` is sent only to models that take one. `negative` and
+  `style` go into the prompt (`Avoid: ...`, `Style: ...`), as for OpenAI.
+- **Prices.** `vidgen imagegen --dry-run` looks up each model's price on OpenRouter (free, a few
+  seconds at most) and prints its basis: `$0.04 per image`, `$0.014 per megapixel x 0.59 MP
+  (nominal 1024x576)` (the size the provider makes may differ a little), or `price unknown`
+  when the model is billed per output token (the tokens per picture are not listed) or
+  OpenRouter cannot be reached. With several providers serving a model, the highest price.
+- **Cost of a run.** OpenRouter reports what each picture cost; `vidgen imagegen` prints it and
+  stores it in the sidecar (`cost_usd`), with `aspect_ratio` and `resolution`.
+- **Pictures** come back as PNG, JPEG or WebP and are stored as PNG; the cache key also covers
+  the aspect ratio and resolution. SVG: [below](#vector-svg-pictures-format-svg).
+- **Privacy settings (Zero Data Retention).** If your OpenRouter account requires Zero Data
+  Retention (or excludes providers that may keep or train on prompts), choose a model with a
+  ZDR endpoint: OpenRouter refuses the others (HTTP 404, "no endpoints ... matching your data
+  policy") and vidgen then says so, links <https://openrouter.ai/settings/privacy> and lists the
+  image models that have a ZDR endpoint (from OpenRouter's public list
+  `https://openrouter.ai/api/v1/endpoints/zdr`; on 2026-10-08 e.g.
+  `bytedance-seed/seedream-5-0-flash`, `bytedance-seed/seedream-4.5`, the Gemini, Krea and MAI
+  image models — not Recraft or FLUX, and no SVG model). Seen live on 2026-10-09 with an account
+  requiring ZDR: `recraft/recraft-v4.1-flash` and `black-forest-labs/flux.2-klein-4b` refused,
+  `bytedance-seed/seedream-5-0-flash` made a 1024x1024 picture in ~10 s for $0.018 (the dry
+  run's estimate). To check a model before choosing it: open
+  `https://openrouter.ai/api/v1/endpoints/zdr` (public, no key) and look for its id among the
+  `model_id`s, or, from a source checkout, `python tools/live_check_openrouter.py --zdr` lists
+  the cheapest image models that have one.
+
+```
+$ vidgen imagegen my_video --dry-run
+would generate 7e9b5bf8aff6f7b2.png for harbour (16:9, openrouter bytedance-seed/seedream-4.5, ~$0.040)
+    price: OpenRouter: $0.04 per image
+    prompt: a quiet harbour at dawn, fishing boats, mist over the water. Style: ...
+dry run: 1 picture(s) to generate, estimated $0.040 (OpenRouter prices of 2026-10-08); 0 up to date
+```
+
+vidgen identifies itself to OpenRouter with the optional app headers (`HTTP-Referer`: the
+project's repository URL, `X-OpenRouter-Title`: `schu-video-generator`). OpenRouter's terms and
+each upstream model's provider policies apply to what you generate.
+
+### Vector (SVG) pictures (`format: svg`)
+
+`generate: {prompt: ..., format: svg}` asks for a vector picture: OpenRouter's SVG models turn
+the text prompt into an SVG in one call (no raster picture first). It is stored as
+`assets/generated/<key>.svg` (+ sidecar with `format: svg`) and the [`image`](#image) scene
+draws it as shapes: sharp at any size, and it can be **drawn in** (`draw: true`: outlines are
+traced, then filled) and **painted in the theme's colours** (`recolor: theme`).
+
+```yaml
+imagegen:
+  provider: openrouter
+  model: bytedance-seed/seedream-4.5        # raster pictures
+  svg_model: recraft/recraft-v4.1-vector    # format: svg pictures
+scenes:
+  - id: idea
+    type: image
+    params:
+      generate: {prompt: "a flat illustration of a lightbulb with gears inside", format: svg}
+      draw: true
+      recolor: theme
+```
+
+- **Models** (OpenRouter's public list of 2026-10-08; text prompt in, SVG out, `$` per picture):
+  `recraft/recraft-v4.1-vector` and `recraft/recraft-v4-vector` ($0.08),
+  `recraft/recraft-v4.1-pro-vector` and `recraft/recraft-v4-pro-vector` ($0.30). None has a
+  Zero Data Retention endpoint: an account requiring ZDR cannot use them (vidgen's error says
+  so). `vidgen imagegen --dry-run` shows the live price and refuses a model that makes no SVG;
+  `vidgen validate` warns about a `format: svg` model not known to make SVG.
+- **Requests** send `output_format: svg` and an aspect ratio (no `quality` / `resolution`:
+  vectors have none); the cache key includes the format, so PNG keys are unchanged.
+- **Sanitised before drawing**: scripts, embedded HTML, embedded raster pictures, filters
+  (blur, shadows), masks / clip paths, text (put words on screen with vidgen), animation and
+  links to other files are removed; gradients and patterns become one colour (the average of the
+  stops). At most 1500 shapes are drawn (the smallest beyond it are dropped) and 60 000 curve
+  segments (paths are thinned): each with a warning, so a huge SVG cannot stall a render. The
+  scene's `simplify` drops small details on purpose. `vidgen validate` lists what loading a
+  stored SVG will remove; renders log it.
+- **When it is worth it**: flat illustrations, icons, diagram-like and line art (few flat
+  colours: they scale, draw in and recolour well). Not for photos, textures or soft lighting:
+  those come back as thousands of shapes (dropped or thinned) and look worse than a PNG.
+- An `.svg` file of your own works the same way as the `image` scene's `path`.
 
 **Writing prompts.** Image generators draw letters, numbers, charts and logos poorly (garbled
 words, made-up values): `vidgen validate` warns when a prompt quotes text or asks for a sign,
@@ -2147,15 +2454,21 @@ than 1, up to 4).
 ### `image`
 
 Steps: (1) the image, (2) the caption. `vidgen validate` reports a missing or unsupported file
-(png, jpg, jpeg, gif, bmp, webp, tif). Instead of a file, `generate:` asks for a
+(png, jpg, jpeg, gif, bmp, webp, tif, svg). Instead of a file, `generate:` asks for a
 [generated picture](#generated-images-imagegen-vidgen-imagegen): `vidgen imagegen` makes it once
 (paid), and until then the scene shows a placeholder card with the prompt in the theme's colours.
+An `.svg` file or `generate: {format: svg}` is a [vector picture](#vector-svg-pictures-format-svg):
+sanitised, then drawn as shapes (`draw`, `recolor`, `simplify` below; the layout dump and lint
+see it as one object of kind `vector`).
 [Action targets](#beat-actions): `image`, `caption` (`dim` fades the picture, `highlight` tints it).
 
 | param | type | default | |
 |---|---|---|---|
 | `path` | str | required (or `generate`) | relative to the project folder, e.g. `assets/photo.jpg` |
-| `generate` | str \| mapping | none | a generated picture instead of `path` (not both): the prompt, or `{prompt, negative, style, aspect, seed}`, see [generated images](#generated-images-imagegen-vidgen-imagegen) |
+| `generate` | str \| mapping | none | a generated picture instead of `path` (not both): the prompt, or `{prompt, negative, style, aspect, seed, format}`, see [generated images](#generated-images-imagegen-vidgen-imagegen) |
+| `draw` | bool | `false` | vector pictures only: trace the outlines, then fill them (up to 2.5 s within the beat) instead of fading in |
+| `recolor` | `none` \| `theme` | `none` | vector pictures only: `theme` maps each colour to the theme's — greys to the neutral (`background`, `surface`, `dim`, `text`) of nearest lightness, other colours to the theme colour (`primary`, `secondary`, `tertiary`, `accent`, `highlight`, palette) of nearest hue, keeping their lightness |
+| `simplify` | bool \| number 0–5 | `false` | vector pictures only: drop shapes smaller than this percentage of the picture's area (`true` = 0.05) so busy SVGs draw faster |
 | `caption` | str | `""` | |
 | `fit` | `contain` \| `cover` | `contain` | `contain`: whole image, caption below; `cover`: fills the frame (cropped), caption on a band |
 | `ken_burns` | bool \| mapping | `false` | slow zoom/pan over the whole scene; `true` = zoom 1.0 → 1.15 on the center |
@@ -3811,7 +4124,7 @@ Each object:
 | key | meaning |
 |---|---|
 | `id` | `m1`, `m2`, ...: the same Python object keeps its id in every frame of the scene |
-| `kind` | `text` (`Text`, `MarkupText`, `Paragraph`), `code` (the text of a `Code` listing), `math` (`Tex`, `MathTex`), `number` (`DecimalNumber`, `Integer`), `shape` (one path), `group` (a group of shapes with no text or image inside, e.g. an axis' ticks), `image`, `icon` (an icon from `icon()`: one object, not one per path) |
+| `kind` | `text` (`Text`, `MarkupText`, `Paragraph`), `code` (the text of a `Code` listing), `math` (`Tex`, `MathTex`), `number` (`DecimalNumber`, `Integer`), `shape` (one path), `group` (a group of shapes with no text or image inside, e.g. an axis' ticks), `image`, `icon` (an icon from `icon()`: one object, not one per path), `vector` (a vector picture, an SVG: one object, not one per path) |
 | `class` | the Manim class |
 | `path` | where it sits: parent groups from the top-level mobject down, each `Class[index]` (index among its parent's submobjects; top level: in the scene), or the name the scene gave it |
 | `name` | the scene attribute that holds it (`self.title = ...`) or a `Mobject.name` set by the scene, else `null` |
@@ -4594,9 +4907,16 @@ message says how many beats were done (their MP3s are kept: run again to continu
 |---|---|---|
 | `project`, `variant`, `audio_dir` | str \| null | the project, the variant and the audio folder written |
 | `dry_run`, `force` | bool | the options |
-| `characters` | int | characters sent (or that a run would send) for synthesis: what ElevenLabs bills |
-| `voices` | object | `{voice name: {voice_id, beats, characters}}` of the beats to synthesise (`default` = the base voice) |
-| `beats` | list | the beats to voice, in video order: `{scene, beat, voice, action, characters, says, source}`; `action` `generate` (an API call) or `copy` (the base `audio/` MP3 of a variant beat that did not change; 0 characters, `source` its path), `says` the text sent when [pronunciation](#pronunciation-pronunciation) changed it (else `null`) |
+| `provider` | str | the video's TTS provider: `elevenlabs`, `openrouter` or `kokoro` (see [narration providers](#narration-providers)) |
+| `characters` | int | characters sent (or that a run would send) for synthesis: what ElevenLabs and most OpenRouter models bill |
+| `estimated_cost` | float | US dollars of the beats to synthesise whose price is known (OpenRouter models priced per character; Kokoro: 0, it runs locally; ElevenLabs bills a plan's quota: never estimated) |
+| `unknown_cost` | int | beats to synthesise with no known price (ElevenLabs, OpenRouter models that bill the generated audio, OpenRouter not reachable) |
+| `price_note` | str \| null | what the estimate is based on (`OpenRouter prices of <date>`, that they could not be read, the ElevenLabs note, `free (local): ...` for Kokoro) |
+| `prices` | object | `{model: {per_character, basis}}` of the OpenRouter models used (`per_character` `null` when unknown; `basis` says why) |
+| `notes`, `problems` | list | OpenRouter: what its live model list says about the voices (a voice it does not list, `instructions` / `speed` a model may ignore) and what a run refuses before paying (a model it does not have); Kokoro: free and local, the model download still to come, the extra not installed |
+| `charged` | float \| null | US dollars OpenRouter reported for this run's requests; `null` in a dry run, with ElevenLabs, or when not reported |
+| `voices` | object | `{voice name: {voice_id, provider, model, provider_voice, instructions, speed, lang, device, beats, characters}}` of the beats to synthesise (`default` = the base voice; `voice_id` `null` in an OpenRouter or Kokoro video; `lang` / `device` Kokoro's, else `null`) |
+| `beats` | list | the beats to voice, in video order: `{scene, beat, voice, provider, model, provider_voice, instructions, speed, lang, device, action, characters, estimated_cost, says, source}`; `model` / `provider_voice` are ElevenLabs' `model_id` / `voice_id`, OpenRouter's `model` / `voice` or `hexgrad/Kokoro-82M` / Kokoro's `voice`; `action` `generate` (an API call) or `copy` (the base `audio/` MP3 of a variant beat that did not change; 0 characters, `source` its path), `estimated_cost` `null` when unknown, `says` the text sent when [pronunciation](#pronunciation-pronunciation) changed it (else `null`) |
 | `generated` | list | beat ids voiced by this run (`[]` for a dry run) |
 | `up_to_date` | list | beat ids skipped because their MP3 is current |
 | `orphaned` | list | MP3s in the audio folder no beat uses (never deleted) |
@@ -4604,16 +4924,17 @@ message says how many beats were done (their MP3s are kept: run again to continu
 
 ### `vidgen imagegen --json`
 
-The same document for a dry run (`--dry-run`, no key needed) and a run (DESIGN.md §58).
+The same document for a dry run (`--dry-run`, no key needed) and a run (DESIGN.md §58, §64).
 
 | key | type | |
 |---|---|---|
 | `project`, `variant` | str \| null | |
 | `dry_run`, `force` | bool | the options |
 | `estimated_cost` | float | US dollars of the pictures to generate, by `price_note` |
-| `unknown_cost` | int | pictures to generate with no known price (model / size not in the price list) |
-| `price_note` | str | where the prices come from |
-| `images` | list | the pictures to generate, each distinct request once: `{key, scenes, prompt, sent_prompt, provider, model, size, quality, seed, estimated_cost, path}` (`sent_prompt` = prompt + style + negative as sent; `path` the PNG it is / will be stored as) |
+| `unknown_cost` | int | pictures to generate with no known price (model / size not in the price list, priced per token, or OpenRouter not reachable) |
+| `price_note` | str | where the prices come from (OpenAI's 2025 list, OpenRouter's prices of a date, or that they are unknown) |
+| `charged` | float \| null | US dollars the provider reported for this run (OpenRouter); `null` in a dry run or when not reported |
+| `images` | list | the pictures to generate, each distinct request once: `{key, scenes, prompt, sent_prompt, provider, model, size, aspect_ratio, resolution, format, quality, seed, estimated_cost, price_basis, notes, problems, path}` (`sent_prompt` = prompt + style + negative as sent; `size` the nominal size when an `aspect_ratio` is sent; `format` `png` or `svg`; `price_basis` what `estimated_cost` is based on; `notes` options the model ignores or changes and `problems` what a run would refuse — OpenRouter, from its model records; `path` the PNG / SVG it is / will be stored as) |
 | `generated` | list | keys generated by this run (`[]` for a dry run) |
 | `up_to_date` | list | keys whose picture exists (skipped) |
 | `orphaned` | list | pictures in `assets/generated/` no config of the project uses (never deleted) |

@@ -87,6 +87,30 @@ their own licences. Notably:
   bundled application (PyInstaller and the like) that includes these wheels inherits their
   GPL/LGPL obligations.
 - **fpdf2** (optional `pdf` extra, PDF slide decks) is under the **LGPL-3.0**.
+- **Kokoro** (optional `kokoro` extra, local narration): the `kokoro` and `misaki` packages by
+  hexgrad are under the **Apache-2.0** licence; they pull in PyTorch (BSD-style), spaCy (MIT),
+  phonemizer-fork (GPL-3.0) and `espeakng-loader`, whose wheels bundle the espeak-ng library and
+  data (**GPL-3.0**). Using them as installed is unaffected; redistributing a bundled application
+  that includes them inherits those licences.
+- **Kokoro-82M model weights and voices** (`hexgrad/Kokoro-82M` on Hugging Face,
+  `kokoro-v1_0.pth` and `voices/*.pt`): **Apache-2.0**, by hexgrad. They are **not bundled**:
+  the `kokoro` package downloads them from Hugging Face on first use into the user's Hugging Face
+  cache. The model card states that its training data was permissive / non-copyrighted audio
+  (incl. CC BY audio from the Koniwa and SIWIS corpora, credited there); the licence sets no
+  conditions on the audio you generate with it. vidgen's bundled list of its voice names and grades
+  (`vidgen/data/kokoro/voices.json`) is facts read from the model's repository on the date it names.
+
+## Online services (optional, your own account)
+
+vidgen bundles no client library or content from these services; it calls their web APIs with
+your key only when you run the paid commands, and what they return is subject to their terms:
+ElevenLabs (narration, speech to text), OpenAI (Images API) and OpenRouter (image models of
+several providers, e.g. Black Forest Labs, ByteDance, Google, OpenAI, Recraft, and
+text-to-speech models, e.g. Mistral, Kokoro, Google, ElevenLabs, Microsoft — each model's
+provider terms apply too). The list of OpenRouter's TTS models, voices and prices bundled for
+offline checks (`vidgen/data/openrouter/tts_models.json`) is facts read from its public model
+list on the date it names. Requests to OpenRouter carry vidgen's optional app identification
+(`HTTP-Referer`: the project's repository URL, `X-OpenRouter-Title`: `schu-video-generator`).
 
 ## Repository-only content (not in the pip package)
 

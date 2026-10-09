@@ -20,6 +20,9 @@ dependencies = [
 pdf = ["fpdf2>=2.7.9"]
 stt = ["faster-whisper>=1.0"]
 mcp = ["mcp>=1.19"]
+# kokoro 0.9.4 (and misaki) declare Python < 3.13; on 3.13 the extra installs nothing and
+# `vidgen tts` explains (DESIGN.md §68).
+kokoro = ["kokoro>=0.9.4; python_version < '3.13'"]
 dev = ["pytest", "jsonschema>=4.18", "pytest-xdist", "fpdf2>=2.7.9", "pypdf>=4", "mcp>=1.19"]
 
 [project.scripts]
@@ -30,7 +33,7 @@ vidgen-mcp = "vidgen.mcp_server:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-vidgen = ["templates/**/*", "data/fonts/**/*", "data/icons/**/*", "data/geo/*", "data/slides/*", "data/guide/*", "data/gallery/*"]
+vidgen = ["templates/**/*", "data/fonts/**/*", "data/icons/**/*", "data/geo/*", "data/slides/*", "data/guide/*", "data/gallery/*", "data/openrouter/*", "data/kokoro/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

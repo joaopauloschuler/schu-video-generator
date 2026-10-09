@@ -68,7 +68,9 @@ src/vidgen/
   scales.py               # type scales compact / standard / large / auto, frame orientation (§20)
   themelist.py            # `vidgen list-themes`: preset listing, JSON entries, swatch PNG (§20)
   icons.py                # icon registry: vendored set + project assets/icons, search (§22; no manim)
-  icon_mobject.py         # icon() / Icon: SVG -> recoloured VGroup with scaling strokes (§22)
+  icon_mobject.py         # icon() / Icon: SVG -> recoloured VGroup with scaling strokes (§22); SvgDrawing base
+  svgclean.py             # SVG sanitiser (scripts, filters, rasters, text out; gradients flattened; caps) + theme_color (§65; no manim)
+  vector_mobject.py       # load_vector() / VectorPicture: a sanitised SVG as Manim shapes (§65)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
   actions.py              # per-beat actions: Target, Action, validation, ActionRunner (§26)
@@ -103,15 +105,19 @@ src/vidgen/
   overlay_layer.py        # OverlayLayer: overlays composited into every frame a scene writes (§41)
   charts.py               # chart helpers: ticks, number labels, axes, legend, markers, fit (§33),
                           # colour scales, colour bar, readable text on fills (§34)
-  tts/__init__.py         # provider seam: get_provider(cfg)
+  tts/__init__.py         # provider seam: get_provider(cfg), tts_warnings (§66)
   tts/elevenlabs.py       # ElevenLabs provider (stdlib urllib), cache by hash
+  tts/openrouter.py       # OpenRouter TTS provider: /audio/speech, PCM -> MP3, prices, ZDR message (§66)
+  tts/kokoro.py           # local Kokoro-82M provider (extra schu-video-generator[kokoro]): engine, MP3, timings (§68)
+  kokoro_voices.py        # Kokoro's languages and voices, voice / lang resolution, validate warnings (§68)
   stt/                    # speech-to-text seam (§57): __init__.py (STTProvider, Transcript, stt_settings,
                           # get_stt_provider), faster_whisper.py (local, extra schu-video-generator[stt]), elevenlabs.py
   readback.py             # `vidgen readback`: transcripts cached, aligned with the spoken text, WER, edits, suggestions (§57)
   textnorm.py             # text normaliser for readback: case, accents, hyphens, numbers to words (en, pt) (§57; no manim)
   imagegen/               # generated images (§58): __init__.py (GenerateImage, ImageRequest, cache keys, prompt
-                          # helpers, warnings), openai.py (OpenAI Images provider), placeholder.py, run.py (`vidgen imagegen`)
-  httpapi.py              # POST with retries / scrubbed errors, shared by the ElevenLabs and OpenAI providers (§58)
+                          # helpers, warnings), openai.py (OpenAI Images provider), openrouter.py (OpenRouter
+                          # provider, §64; SVG and data-policy errors, §65), placeholder.py, run.py (`vidgen imagegen`)
+  httpapi.py              # POST with retries / scrubbed errors (+ a plain GET), shared by the ElevenLabs, OpenAI and OpenRouter providers (§58, §64)
   render/                 # worker.py (one scene per process), pipeline.py, ffmpeg.py,
                           # fingerprint.py (what a scene's render depends on, §14)
   subtitles.py            # SRT from beat timings (cues cut and timed like captions, §43)
@@ -139,6 +145,8 @@ src/vidgen/
   data/slides/            # deck.css + deck.js inlined into `vidgen slides` pages (package data, §55)
   data/guide/             # AGENTS.md: the author guide printed by `vidgen guide` (package data, §59)
   data/gallery/           # stand-in files for the guide snippets' assets/ paths: picture.png, app.png, clip.webm (§60)
+  data/openrouter/        # tts_models.json: OpenRouter's TTS models, voices, list prices, ZDR (dated snapshot, §66)
+  data/kokoro/            # voices.json: Kokoro-82M's languages, voices and grades (dated, §68)
 tools/                    # maintainer scripts, not shipped: vendor_icons.py + icon_set.json (§22, §23),
                           # make_screenshot.py, make_clip.py (example assets, §37, §38),
                           # make_gallery_clip.py (data/gallery/clip.webm, §60),
@@ -243,7 +251,8 @@ theme:
   sizes: {title: 56, subtitle: 42, heading: 36, body: 32, caption: 24, small: 20}
 
 voice:
-  provider: elevenlabs                           # only allowed value for now
+  provider: elevenlabs                           # or openrouter (Step 62, §66: model, voice, instructions, speed)
+                                                 # or kokoro (Step 65, §68: voice, speed, lang, device)
   voice_id: nPczCjzI2devNBz1zQrb
   model_id: eleven_multilingual_v2
   output_format: mp3_44100_128
@@ -268,7 +277,7 @@ thumbnail: {title: "Saving 77%", icon: cpu}      # Step 50 (§53): designed card
 language: en                                     # Step 51 (§54): BCP-47; cue rules, speed lint, TTS / MP4 language
 translations: translations/pt.yaml               # Step 51 (§54): usually in a variant; texts replaced at load
 stt: {provider: faster_whisper}                  # Step 54 (§57): speech to text of `vidgen readback`
-imagegen: {model: gpt-image-1, style: flat}      # Step 55 (§58): generated pictures (`generate:` params)
+imagegen: {model: gpt-image-1, style: flat}      # Step 55 (§58): generated pictures (`generate:` params); provider: openrouter (§64)
 
 extensions: [extensions]                         # dirs (relative to project) to auto-import; default shown
 
@@ -761,7 +770,10 @@ the measured loudness, §48).
   Python 3.10 install) includes MP3 encoder padding, ~25–50 ms more per beat than PyAV 14+.
   Decoding gives identical timings everywhere (kphi3: unchanged with PyAV 19).
 - **Dependencies**: `manim>=0.19` (the `code` scene uses the 0.19 `Code` API). Tested with
-  Manim 0.19.1 / PyAV 13 on Python 3.10 and Manim 0.21 / PyAV 19 on Python 3.13.
+  Manim 0.19.1 / PyAV 13 on Python 3.10 and Manim 0.21 / PyAV 19 on Python 3.13; Manim 0.22
+  (Step 64) also passes (its `SceneFileWriter.write_frame` takes the count as keyword-only
+  `repeat` instead of `num_frames`; `renderer.add_frame(frame, num_frames)`, which vidgen
+  wraps, is unchanged).
 - **Config**: `format`/`preview` `width` and `height` must be even (Manim's H.264 writer
   crashed with a segfault on odd sizes). Config files may start with a UTF-8 BOM (Windows
   Notepad) and use CRLF line endings.
@@ -3262,7 +3274,15 @@ the measured loudness, §48).
   `VIDEO_CRF`, yuv420p) — decision: re-encoding only the transitions would need cuts at arbitrary
   frames of stream-copied H.264 (keyframes), and CRF 18 over Manim's CRF 23 sources is visually
   lossless; it costs about real time at 1080p. Without crossfades the join is the old stream copy.
-  `xfade` also has wipes and slides (Step 47).
+  `xfade` also has wipes and slides (Step 47). Each run enters `xfade` through
+  `ffmpeg.constant_rate` (Step 64): `tpad=stop=1:stop_mode=clone,setpts=PTS-STARTPTS,fps=<fps>,
+  trim=end_frame=<run frames>,settb=AVTB`. `xfade` refuses an input without a constant frame
+  rate, and FFmpeg 7.0 / 7.1's `setpts` clears it ("1/0 is invalid"; 6.x keeps it, 8.x clears
+  it only with `strip_fps`), so `fps` sets it after the `setpts`; FFmpeg 4.4 / 5.1's `fps`
+  drops a stream's last frame (their end of stream is at that frame's timestamp), hence the
+  one-frame `tpad` before and the `trim` back to the exact count after. Tested on 4.4, 5.1,
+  6.1, 7.0, 7.1 and 8.1. ffmpeg 4.4 or newer is required (`ffmpeg.MIN_VERSION`; 4.3 lacks
+  `amix=normalize`, 4.2 `xfade`); an ffmpeg error from an older one says so (`version_hint`).
 - **Audio at the join**: the padded scene WAVs keep their exact lengths; with overlaps they are
   summed into `padded/voice.wav` (`transitions.write_voice_track`, sample offsets from the same
   cumulative rounding as before, so nothing drifts), the earlier scene's tail fading out (raised
@@ -4030,7 +4050,8 @@ the measured loudness, §48).
 - **Not done**: `generate:` on `screenshot` (its `px` callouts and magnifier need the real
   picture's pixels) and as a thumbnail background (designed thumbnails have no picture behind the
   text yet); no `--json` for `vidgen imagegen`; no image editing / variations endpoints; no second
-  provider; prices are a snapshot.
+  provider; prices are a snapshot. (Step 59 added `--json`; Step 61 the OpenRouter provider with
+  looked-up prices, §64.)
 
 ## 59. Refinements (Step 56, the author guide for AI agents)
 
@@ -4325,3 +4346,454 @@ the measured loudness, §48).
 - **Packaging**: version 0.2.0; PEP 639 metadata (`license = "MIT"`, `license-files` with
   `THIRD_PARTY_NOTICES.md`; build needs setuptools ≥ 77); `data/geo/LICENSE` carries the ISC / MIT
   notices of the map data in the wheel. Wheel ~2.0 MB (fonts 2.0 MB of it), sdist ~2.2 MB.
+
+## 64. Refinements (Step 61, OpenRouter image provider)
+
+- **API facts** (OpenRouter's OpenAPI spec `https://openrouter.ai/openapi.yaml`, its image
+  generation guide and the public endpoints, checked 2026-10-08). Base `https://openrouter.ai/api/v1`.
+  - `POST /images` (`createImages`): body `{model, prompt}` required; optional `n` (1–10),
+    `aspect_ratio` (`1:1 1:2 1:4 1:8 2:1 2:3 2.35:1 3:2 3:4 4:1 4:3 4:5 5:2 5:4 5:7 7:5 8:1 9:16
+    16:9 9:19.5 19.5:9 9:20 20:9 9:21 21:9 auto`; "providers clamp to their supported subset"),
+    `resolution` (`512 768 1K 1.5K 2K 4K`), `size` (a tier or explicit `WxH`; explicit pixels are
+    authoritative and a mismatched `resolution` / `aspect_ratio` is a 400), `quality` (`auto low
+    medium high xhigh max`; ignored by providers without it), `seed`, `output_format` (`png jpeg
+    webp svg`; svg only for vectorisation models, UTF-8 SVG base64 in `b64_json`), `background`,
+    `output_compression`, `input_references` (image to image), `provider` (routing), `stream`
+    (OpenAI-backed models only), `user`, `session_id`, `trace`. Response `{created, data:
+    [{b64_json, media_type?}], usage?: {prompt_tokens, completion_tokens, total_tokens, cost}}` —
+    always base64, never a URL; `cost` in US dollars when available. Errors `{error: {code,
+    message}}` with 400, 401, 402 (insufficient credits), 403, 404, 413, 429, 500, 502 (provider
+    error; a generation that does not complete is a 502 and not billed), 524 (edge timeout), 529
+    (provider overloaded).
+  - `GET /images/models` (public, no key): `{data: [{id, name, description, created, architecture:
+    {input_modalities, output_modalities}, supported_parameters: {name: {type: enum, values} |
+    {type: range, min, max} | {type: boolean}}, supports_streaming, endpoints: "/api/v1/images/
+    models/{id}/endpoints"}]}` (61 image models on 2026-10-08, 50 of them text-to-image raster).
+  - `GET /images/models/{author}/{slug}/endpoints` (public): `{id, endpoints: [{provider_name,
+    provider_slug, provider_tag, supported_parameters, allowed_passthrough_parameters,
+    supports_streaming, pricing: [{billable: output_image | input_image | input_text | ...,
+    unit: image | megapixel | token | request, cost_usd, variant?}]}]}`; 404 `{error: {message:
+    'No image model found for "x"', code: 404}}` for an unknown model. `variant` is a resolution
+    tier (`2k`, `4k`) for tiered prices. Samples: seedream-4.5 $0.04 per image, flux.2-klein-4b
+    $0.014 per megapixel, gpt-image-2 $0.00003 per output token, recraft-v4.1-flash $0.007 per
+    image.
+  - `GET /models?output_modalities=image` (the general catalog) has per-token strings only
+    (`pricing.image_output` etc.), so vidgen uses the image-specific records above.
+  - The older route — `POST /chat/completions` with `modalities: ["image", "text"]` and
+    `image_config` — also exists; vidgen uses the dedicated `/images` endpoint (one picture,
+    base64, a cost in the response).
+  - App identification headers (optional): `HTTP-Referer` (the app's URL; creates the app's page
+    in OpenRouter's rankings), `X-OpenRouter-Title` (display name; `X-Title` is the older alias),
+    `X-OpenRouter-Categories`. vidgen sends `HTTP-Referer:
+    https://github.com/joaopauloschuler/schu-video-generator` and `X-OpenRouter-Title:
+    schu-video-generator` on every request (`openrouter.APP_HEADERS`).
+- **Config** `imagegen.provider: openai | openrouter` (`openai` stays the default; unknown values
+  are a config error), new `imagegen.resolution` (OpenRouter tiers). An `ImagegenConfig` model
+  validator: `provider: openrouter` needs an explicit `model` in `author/name` form, a `quality`
+  from `config.OPENROUTER_QUALITIES`, and not both a `WxH` size and a resolution; `resolution`
+  with `openai` is an error. All surface in `vidgen validate` and the JSON Schema.
+- **Request** (`image_request`): OpenRouter's `size: auto` sends `aspect_ratio` = the listed
+  ratio nearest the final format with the same orientation (`openrouter_aspect`; 16:9 → `16:9`,
+  9:16 → `9:16`, 4:3 → `4:3`), or `16:9` / `9:16` / `1:1` for a `generate.aspect` other than the
+  video's; plus `resolution`. `ImageRequest` gained `aspect_ratio`, `resolution`,
+  `explicit_size` (defaults keep old constructors working) and `shape`; with an aspect ratio,
+  `size` is the nominal `WxH` at the tier's long side (1K = 1024 without a tier;
+  `nominal_size`) — the placeholder's shape and the per-megapixel estimate. Default quality for
+  OpenRouter: none (not sent). `estimated_cost` is OpenAI-only (`PRICES`).
+- **Cache key**: `request_key(..., extra)` adds `{aspect_ratio, resolution}` for OpenRouter only,
+  so every OpenAI key is unchanged (pinned in a test). Sidecar: OpenRouter pictures record
+  `aspect_ratio`, `resolution`, `size` (`null` unless explicit) and, when reported, `cost_usd`.
+- **Provider** `imagegen/openrouter.py` (`OpenRouterImageProvider`, stdlib): `POST /images`
+  through `httpapi.post_with_retries` (retries on 429 / 500 / 502 / 503 / 504 / 524 / 529 with
+  `Retry-After` / backoff 4·2^n s, cap 60 s, timeout 240 s; 402 and other 4xx not retried; key
+  scrubbed). Key only from `OPENROUTER_API_KEY` at request time. Body (`request_body`): `model,
+  prompt, n: 1`, then `size` (explicit) or `aspect_ratio` (+ `resolution`), `quality`, `seed`
+  unless the model's record lists no seed (then it only names another picture, as for OpenAI),
+  `output_format: png` when listed. `negative` / `style` go into the prompt (no negative-prompt
+  parameter). Response (`decode_response` → `RawPicture(data, media_type, cost,
+  revised_prompt)`, then `parse_response`): SVG (`image/svg+xml` or `<svg` / `<?xml` bytes) is
+  refused with a clear message (vector output is Step 61b: it plugs in at `RawPicture`); JPEG /
+  WebP converted to PNG (`openai.as_png(data, service)`). `GeneratedPicture.cost` (new, default
+  `None`).
+- **Checks before paying**: the `ImageProvider` protocol gained an optional
+  `check_requests(requests)`; `run_imagegen` calls it (when present) after `check_credentials`.
+  OpenRouter fetches each model's public record once (`model_info`) and refuses, in one message:
+  a model OpenRouter does not have (404 / no endpoints), a `quality` / `resolution` the model
+  lacks or whose value it does not list, SVG-only models, models needing an input picture
+  (`input_references.min ≥ 1`). Notes (not errors): an aspect ratio the model does not list
+  (the provider clamps), no aspect-ratio parameter, a seed not sent. When the records cannot be
+  reached nothing is refused and the body is sent as configured.
+- **Prices** (`openrouter.quote(request, lookup) -> PriceQuote(cost, basis)`; `PriceQuote` in
+  `vidgen.imagegen`): from the endpoint records' `output_image` lines — `image` / `request` units
+  as is, `megapixel` × the request's (nominal) pixels, `$0` = free, `token` = unknown ("the
+  tokens per picture are not listed"); a `variant` matching the resolution tier, else the
+  untiered line, else the highest; with several endpoints the highest ("the highest of N
+  providers"). `lookup_models` fetches each distinct model once (`LOOKUP_TIMEOUT` 5 s) and stops
+  after the first unreachable answer (offline costs one short wait). `run.price_plan` fills the
+  plan's `quotes`, `notes`, `problems` and `price_notes` (`OpenRouter prices of <UTC date>` or
+  `OpenRouter prices unknown (its model list could not be reached)`; OpenAI keeps its 2025 note).
+  Only the dry run looks prices up.
+- **Output**: dry-run lines for OpenRouter `would generate KEY.png for S (16:9, openrouter MODEL
+  QUALITY, ~$0.040 | price unknown)` then `price: <basis>`, `note:` / `problem:` lines, the
+  prompt; the total line says how many a run would refuse. A run prints each picture's reported
+  cost and ends `done: N picture(s) generated ($X charged by openrouter)` (`cost not reported by
+  openrouter` without usage). OpenAI output is unchanged. `imagegen --json` images gain
+  `aspect_ratio, resolution, price_basis, notes, problems`; the document gains `charged`;
+  `price_note` is the plan's. MCP: same tool (description names OpenRouter); real runs still
+  need `confirm_cost`.
+- **Not render inputs**: `imagegen/openrouter.py` (fingerprint); the `imagegen` config stays in.
+- **Tests** (`tests/test_imagegen_openrouter.py`, urlopen mocked, real endpoint records of
+  2026-10-08 in `tests/data/openrouter_endpoints.json`): config errors, schema, pinned OpenAI
+  keys, aspect ratios / tiers / explicit sizes / keys, the body, headers (app identification,
+  no key on lookups), JPEG / WebP / SVG / bad responses, retried 429 / 529, 402 / 400 not retried
+  with the key scrubbed, missing key, quotes per image / megapixel / token / free / tiers / several
+  endpoints / offline, lookups stopping offline, model checks, dry run human / JSON / offline /
+  refusals, a run with costs and sidecars, refusals before any POST, an unreachable lookup not
+  blocking.
+- **Live check** `tools/live_check_openrouter.py` (not shipped, not tested): lists the cheapest
+  text-to-image models with vidgen's estimates, then one picture's dry run; `--yes` generates
+  that picture through `run_imagegen` in a temporary project and prints the PNG, sidecar and
+  reported cost.
+- **Not done**: SVG output (Step 61b; done, §65); per-token prices (no tokens-per-picture data); input
+  pictures / editing; provider routing preferences (`provider.only`, `sort`); streaming; the
+  input-text price lines are not added to the estimate (prompts are short).
+
+## 65. Refinements (Step 61b, vector (SVG) generated images; data-policy errors)
+
+- **API facts** (OpenRouter's public `GET /api/v1/images/models`, the per-model endpoint records,
+  `openapi.yaml` and the image generation guide, checked 2026-10-08):
+  - `output_format: svg` exists "for vectorization models (e.g. Quiver)"; the SVG markup comes
+    UTF-8 base64 in `b64_json` with `media_type: image/svg+xml`. No Quiver model is in the image
+    list; the models listing `output_format` `svg` (and only svg) are Recraft's:
+    `recraft/recraft-v4.1-vector`, `recraft/recraft-v4-vector` ($0.08 per image),
+    `recraft/recraft-v4.1-pro-vector`, `recraft/recraft-v4-pro-vector` ($0.30 per image) — **text
+    prompt in, SVG out** (`input_references` 0–1, optional), aspect ratios `1:1 4:3 3:4 16:9
+    9:16 auto`, no seed / quality / resolution, passthrough `style`, `controls`, `text_layout`;
+    and `recraft/recraft-v4-styles-vector` ($0.05 + $0.005 per reference) /
+    `-styles-pro-vector`, which need 1–10 style reference pictures (refused as input-picture
+    models). So no two-call "PNG then vectorise" pipeline is needed (nor possible: no
+    vectorise-only model is listed).
+  - `GET /api/v1/endpoints/zdr` (public) lists every endpoint with Zero Data Retention
+    (`data: [{model_id, provider_name, tag, ...}]`, 942 on 2026-10-08). Image models among them:
+    Seedream 4.5 / 5.0 flash / lite / pro, Gemini image models, Krea 2, MAI image 2.5 / 2.6,
+    Tencent HY image 3.5, Ming image design. **No SVG model** (Recraft has no ZDR endpoint), nor
+    FLUX. An account requiring ZDR gets HTTP 404 `No endpoints available matching your guardrail
+    restrictions and data policy ... ZDR violation (account settings). Configurable at
+    https://openrouter.ai/settings/privacy` (seen live by the coordinator for
+    `recraft/recraft-v4.1-flash` and `black-forest-labs/flux.2-klein-4b`).
+- **Param** `GenerateImage.format: png | svg` (default `png`). **Config** `imagegen.svg_model`
+  (openrouter only, `author/name`; default `model`): the model of `format: svg` pictures, so one
+  video can mix raster and vector pictures. `imagegen_problems(project)` (in `vidgen validate`'s
+  project problems, so any scene type's `generate:`): `format: svg` needs `provider: openrouter`.
+  `vector_warnings` (in `imagegen_warnings`): a `format: svg` model not in the snapshot
+  `SVG_MODELS` (and without "vector" in its id), an SVG-only model asked for `png`, and the
+  sanitiser's warnings for stored SVGs (with the scene's `simplify`; `SceneImage.params` added).
+- **Request** (`image_request`): `format: svg` → model `svg_model or model`, `aspect_ratio` as
+  §64 (`auto` = nearest the video), no quality / resolution, nominal size at 1K, `path
+  <key>.svg`, `ImageRequest.format`; key `extra` gains `format: svg` (PNG keys unchanged,
+  pinned). Body: `output_format: svg`. `check_request`: `format: svg` with a model not listing
+  svg → problem naming the SVG models; `png` with an SVG-only model → "add format: svg".
+  `parse_response(body, format)`: svg must be vector (`media_type` or `<svg` / `<?xml`) and pass
+  the sanitiser, stored as sent; raster when svg was asked (or the reverse) → error. Sidecar
+  `format: svg` (only for svg). `run_imagegen` / `price_plan`: svg with another provider is a
+  problem / refused before paying. Orphans: `.png` and `.svg`. Messages and `--json` use the
+  file name; JSON images gain `format`. Prices as §64 (per image).
+- **Sanitiser** (`vidgen/svgclean.py`, no manim; svgelements from Manim for colours, paths,
+  transforms): refuses > 20 MB, `<!ENTITY` declarations, non-SVG roots, unparsable XML, nothing
+  drawable left. Removes (warning): `script`, `foreignObject`, `image`, `filter` (+ `filter=`),
+  `mask` / `clipPath` (+ attributes; "shapes they hid may show"), `text` (with a hint to use
+  vidgen's captions), `use` / `href` to other files; silently: metadata, title, desc, animation
+  elements, gradients / patterns after flattening, `on*` attributes, other `url()` style
+  properties. Flattens `fill` / `stroke` `url(#id)` (attribute or `style`) to the mean of the
+  gradient's stops (following `href`), a pattern's first shape fill, else `#888888`. Manim
+  quirks shared with icons (`fix_manim_quirks`, `insert_box`, `view_box`; icon_mobject now uses
+  them): `currentColor` → a marker (icons) / black (pictures), `stroke: none` → zero width, the
+  invisible viewBox rectangle first. Caps: `MAX_SHAPES` 1500 (smallest by transformed box area
+  dropped), `MAX_SEGMENTS` 60 000 (paths and polylines keep 1 point in k, as lines); `simplify`
+  (% of the viewBox area; `true` = 0.05) drops smaller shapes first (a note, not a warning).
+  `CleanSvg(data, view_box, shapes, segments, warnings, notes)`. Measured: an SVG at the caps
+  loads in ~6 s and draws a 1080p frame in ~0.25 s.
+- **Shapes** (`vidgen/vector_mobject.py`): `load_vector(path, *, height, recolor, theme,
+  simplify, where) -> VectorPicture` (sanitised copy in the icon work folder, `SVGMobject`,
+  invisible box, SVG stroke widths → Manim units for the height, sanitiser warnings logged).
+  `SvgDrawing` (new base of `Icon` and `VectorPicture` in `icon_mobject.py`): box / parts and
+  `scale(scale_stroke=True)`; `scale_icon_strokes` handles any `SvgDrawing`. Fill-only parts get
+  a zero-width outline in their fill colour at opacity 1, so `DrawBorderThenFill` traces them.
+  `recolor: theme` (`svgclean.theme_color`): saturation < 0.2 or lightness < 0.06 / > 0.96 → the
+  neutral (`background`, `surface`, `dim`, `text`) of nearest lightness; else hue and saturation of
+  the theme colour (`primary`, `secondary`, `tertiary`, `accent`, `highlight`, palette) of
+  nearest hue, the original lightness kept (a halfway lightness was tried: flat-looking).
+  `vidgen.api` exports `VectorPicture`, `load_vector`.
+- **`image` scene**: `.svg` accepted as `path` (validate runs the sanitiser); `draw` (bool),
+  `recolor` (`none | theme`), `simplify` (bool | 0–5) — a config error unless the picture is
+  vector. Vector sources (stored SVG, `.svg` file) load with `load_vector`; the placeholder
+  before generation stays a PNG (faded in). Fit, cover, caption and Ken Burns work unchanged
+  (`scale_to_fit_width` scales strokes). `draw: true`: the entrance is `DrawBorderThenFill`,
+  played with `reveal(fraction=0.75, cap=2.5)` (fades: 0.6 / 1.0).
+- **Layout dump / lint**: a `VectorPicture` is one object, kind `vector`, class `VectorPicture`,
+  `fill` / `stroke` of its largest part; lint's `covered_text` treats it like a shape (pixels),
+  not like an opaque image.
+- **Data-policy errors**: `openrouter.is_policy_error` (an HTTP 404 whose body mentions data
+  policy / ZDR / guardrail / settings/privacy) → `policy_message(model, svg)`: the account's
+  privacy settings exclude every provider of the model, the settings link, and the image models
+  (SVG ones for `format: svg`) with a ZDR endpoint now (`zdr_image_models`: the ZDR list ∩ the
+  image list, 5 s timeout, `None` offline → "could not be reached to suggest models"). Not
+  retried; the provider's `zdr` callable is injectable.
+- **Live check** `tools/live_check_openrouter.py`: `--zdr` restricts the cheapest pick to models
+  with a ZDR endpoint; `--svg` picks the cheapest text-to-SVG model and generates one vector
+  picture (dry run unless `--yes`), printing the sanitiser's report.
+- **Tests** `tests/test_vector_images.py` (urlopen mocked; fixture `tests/data/vector_hills.svg`,
+  hand-written): sanitiser (fixture, removed parts, refusals, caps, simplify, thinning),
+  theme colours, keys / paths / config / params / validate warnings and problems, check and
+  body, SVG responses, dry run + run storing the SVG, OpenAI refusal, policy error with / without
+  suggestions and offline, the ZDR lists, loading (box, strokes, recolor), draw states, the
+  layout object, scene renders (generated SVG drawn, file SVG with cover + Ken Burns) at
+  160x90 / 90x160, validate of an `.svg` path.
+- **Not done**: `fill-rule: evenodd` holes and per-element `stroke-linecap` follow Manim's SVG
+  parser; text is removed, not converted to vidgen text; recolor is per colour, not per region;
+  no SVG model can be used by an account that requires ZDR (none has a ZDR endpoint).
+
+
+## 66. Refinements (Step 62, OpenRouter TTS provider; one provider per video)
+
+- **API facts** (checked 2026-10-08 from `https://openrouter.ai/openapi.yaml`, the TTS guide
+  `docs/guides/overview/multimodal/tts`, the Python SDK's `tts.create_speech` page and the public
+  endpoints; no key used): `POST /api/v1/audio/speech` (OpenAI-compatible) `{model, input,
+  voice?, instructions?, response_format?: mp3 | pcm (default pcm), speed?, input_references?,
+  provider?: {zdr, data_collection, options}, session_id?, user?}` → **raw audio bytes** (not
+  JSON), headers `Content-Type` (`audio/mpeg` / `audio/pcm`: 16-bit LE mono, 24 kHz) and
+  `X-Generation-Id`. No cost in the response: `GET /api/v1/generation?id=<id>` (with the key)
+  gives `data.total_cost`. `instructions`: OpenAI gpt-4o-mini-tts and Gemini TTS only, others
+  ignore it; `speed`: OpenAI, others ignore it or return 400 for a value other than 1; Gemini TTS
+  returns only `pcm` (`mp3` → 400 "only supports response_format=\"pcm\""); multi-speaker
+  `input` (a list of turns): Gemini only. Errors `{error: {code, message}}`; 402 / 429 / 502 /
+  503 / 524 / 529 as for images. Models: `GET /api/v1/models?output_modalities=speech` (public):
+  32 models with `supported_voices` (null for some: Fish Audio, Seed Audio) and list `pricing
+  {prompt, completion}`; `GET /api/v1/models/{author}/{slug}/endpoints` (public): each
+  provider's `pricing` (they differ: Kokoro $0.00000062 DeepInfra vs $0.000004 Together; Voxtral
+  $0.000016 vs $0.0000176 EU). "Most TTS models are priced per character of input text"
+  (`pricing.prompt`), per-second / per-audio-token models report `pricing.completion` (Gemini
+  TTS: prompt per text token + completion per audio token; Seed Audio: per second). ZDR (`GET
+  /api/v1/endpoints/zdr`, field `model_id`): 27 of the 32 TTS models (all but MiniMax speech-2.8
+  hd / turbo, Qwen TTS flash / plus, Grok voice).
+- **Config**: `VoiceConfig.provider: elevenlabs | openrouter` (`config.TTS_PROVIDERS`), new
+  optional `model`, `voice`, `instructions`, `speed` (0.25–4; not sent when absent); a model
+  validator requires `model` (`author/name`) for openrouter. Keys of the provider not in use are
+  **ignored, not errors** (`ELEVENLABS_VOICE_KEYS` / `OPENROUTER_VOICE_KEYS`): a variant that
+  switches the provider deep-merges onto the base voice, whose other-provider keys stay. The
+  same four keys are optional on `VoiceEntry`.
+- **One provider per video**: `voices.voice_provider_problems(config)` (in `parse_config`, after
+  the model validates, beside the voice-name check): a named voice with another `provider` →
+  `voices.<name>.provider: one TTS provider per video: ...`; a named voice setting a key of the
+  other provider (`voice_id`, `settings`, `context`... in an OpenRouter video; `model`, `voice`,
+  `instructions`, `speed` in an ElevenLabs one) → `voices.<name>.<key>: ...`. Problems with
+  locations; a variant's are attributed to it. A variant may switch the provider: its effective
+  voice differs, so `Project.has_own_audio` gives it `audio/<variant>/` (§7 rule unchanged); a
+  named voice's ElevenLabs keys are cleared in the variant with `null` (`voices: {guest:
+  {voice_id: null, settings: null, voice: ...}}`).
+- **Provider** `tts/openrouter.py` (`OpenRouterTTSProvider`, `name = "openrouter"`, stdlib):
+  `POST /audio/speech` through `httpapi.post_with_retries` (new optional `response_headers`
+  dict; same retries as images: 429 / 5xx / 524 / 529), headers `Authorization: Bearer`, the
+  app identification of §64, `Accept: audio/mpeg, audio/*`. Body `{model, input,
+  response_format}` + `voice` / `instructions` / `speed` when set; **no** `previous_text` /
+  `next_text` (the API has none: the run passes them, the provider ignores them), **no**
+  `language_code` (`voices._with_language` returns `None` for any provider but elevenlabs: the
+  language follows the text and voice), no `input_references`, no multi-speaker input. Format:
+  `mp3` asked for, `pcm` for `google/` models (`PCM_ONLY_PREFIXES`) and after a 400 naming
+  `response_format` and `pcm` (then remembered); `as_mp3`: MP3 kept (ID3 / frame sync, or
+  `audio/mpeg`), WAV and PCM (`s16le`, rate from `Content-Type` `rate=` else 24000, mono)
+  converted with ffmpeg (`libmp3lame`, 128 kb/s) in a temporary folder; anything else (JSON,
+  HTML) → error quoting its start. `X-Generation-Id`s are kept on the provider;
+  `reported_cost()` reads `GET /generation?id=` for each, never raises (retries: §67). Key:
+  `imagegen.openrouter.read_api_key("tts")` (the missing-key
+  message names `vidgen tts --dry-run`).
+- **Hash**: `sha1(json.dumps({provider, model, voice, instructions, speed}, sort_keys=True,
+  ensure_ascii=False) + "|" + spoken_text)` — every key that changes the audio; ElevenLabs keys
+  are untouched (two ElevenLabs keys pinned in `tests/test_tts_openrouter.py`, kphi3's 27
+  committed hashes still "ok").
+- **Data policy**: a 404 recognised by `imagegen.openrouter.is_policy_error` → `policy_message`:
+  the shared first line (`policy_intro`, factored out of §65's message) and "Text-to-speech
+  models with a ZDR endpoint now: ..." (`zdr_tts_models`: the ZDR list ∩ the speech model list;
+  offline: "could not be reached to suggest models"). Not retried.
+- **Prices** (`tts.run.price_tts`, dry run and before a paid run): `lookup_speech_models`
+  reads the speech model list once (5 s timeout) and each used model's endpoint records;
+  `character_rate`: the highest `prompt` over the endpoints (the list price when the records
+  cannot be read), "free" at 0, **unknown** when any endpoint has a non-zero `completion` (the
+  generated audio is billed and its length is not known beforehand), offline or for a missing
+  model. `TTSPlan` gains `beat_voices`, `rates`, `notes`, `problems`, `price_notes`, `charged`,
+  `beat_cost(beat)`, `cost`, `price_note`, `synthesised()`, `engine(beat)`. ElevenLabs is never
+  estimated (`ELEVENLABS_PRICE_NOTE`: plan quota).
+- **Checks**: `vidgen validate` (no network) warns via `tts.tts_warnings(project)` (in
+  `validate_warnings`) from the bundled snapshot `data/openrouter/tts_models.json` (dated; ids,
+  voices, ZDR flag, list prices): a model not listed (did-you-mean), a voice the model does not
+  list, no voice for a model that lists some, `timestamps: true` (no timings; captions estimate).
+  Warnings, not errors: lists may be incomplete and change. `vidgen tts --dry-run` / a real run use
+  the live list: a model OpenRouter does not have is a `problem:` (a real run refuses before any
+  paid request), an unlisted voice or `instructions` / `speed` on a model not documented to use
+  them (`INSTRUCTION_PREFIXES` `openai/`, `google/`; `SPEED_PREFIXES` `openai/`) a `note:`.
+  Offline: nothing refused, "price unknown".
+- **`vidgen tts`**: ElevenLabs output unchanged. With OpenRouter beats the dry run adds `,
+  ~$0.0002` (or `, price unknown`) to each `would generate` line, one `voice <name> (openrouter
+  <model>, voice <v>[, instructions '...'][, speed s]): N beat(s), C characters` line per voice
+  (also without `voices:`), `price of <model>: <basis>`, `note:` / `problem:` lines and `cost:
+  estimated $X (OpenRouter prices of <date>)`. A real run prints `note:` lines first and ends
+  `done: N beat(s) generated (C characters, $X charged by openrouter), ...` (or `cost not
+  reported by openrouter`; `for K of N requests` when only some were). Captions / SRT / lint /
+  readback need nothing new: the MP3s are ordinary, `speech.read_alignment` finds no
+  `.align.json`, so word times are estimated within the MP3's speech bounds.
+- **JSON** (`tts --json`): top level `provider`, `estimated_cost`, `unknown_cost`, `price_note`,
+  `prices {model: {per_character, basis}}`, `notes`, `problems`, `charged`; each beat and voice
+  gains `provider`, `model`, `provider_voice`, `instructions`, `speed` (+ beat `estimated_cost`).
+  MCP `tts` is unchanged in shape (description names OpenRouter); real runs still need
+  `confirm_cost`.
+- **Live check** `tools/live_check_openrouter.py --tts [--zdr] [--yes] [--model ID] [--voice
+  NAME]`: prices every TTS model with a per-character price, picks the cheapest (an English /
+  neutral voice of its list), prints `vidgen tts --dry-run` of one 12-word beat in a temporary
+  project and with `--yes` voices it through `run_tts`, printing the MP3 path, duration and the
+  reported cost. Free part run here: cheapest ZDR model `hexgrad/kokoro-82m` ($0.000004 per
+  character, the highest of 2 providers; ~$0.00024 for the beat).
+- **Not done**: voice cloning (`input_references`), multi-speaker input, provider routing
+  preferences (`provider.zdr` is not sent: the account setting decides), per-token / per-second
+  estimates (Gemini TTS, Seed Audio), streaming; no real paid request was made here (no key).
+
+## 67. Refinements (Step 63, review of Phase F)
+
+- **Live results** (the coordinator, owner's key, account requiring ZDR, 2026-10-09): image
+  models without a ZDR endpoint (`recraft/recraft-v4.1-flash`, `black-forest-labs/flux.2-klein-4b`)
+  → HTTP 404 `0 endpoints out of 1 requested are available matching your guardrail restrictions
+  and data policy ... ZDR violation (account settings) ...` with `metadata.ineligibility_reasons:
+  [{reason: zdr-violation-by-account, ...}]` (recognised by `is_policy_error`; pinned in
+  `conftest.LIVE_ZDR_404`); `bytedance-seed/seedream-5-0-flash` 1K 1:1 → 1024x1024 PNG, 9.7 s,
+  `usage.cost` $0.018 = the estimate. TTS `hexgrad/kokoro-82m` / `af_alloy` → MP3 (24 kHz mono,
+  4.46 s); `google/gemini-3.8-flash-lite-tts` / `Kore` → PCM converted (4.68 s). Both runs
+  printed "cost not reported": the `X-Generation-Id` header was there (the line is printed only
+  for providers with ids), so `GET /generation` gave no `total_cost` within one 1 s retry. Key
+  usage rose $0.000038 for both beats: Kokoro routed to its cheapest provider (61 × $0.00000062),
+  6x below vidgen's highest-provider estimate (an upper bound, as documented).
+- **Cost lookup** (`OpenRouterTTSProvider.reported_cost(timeout, waits=COST_WAITS)`):
+  OpenRouter writes generation records asynchronously, so every request whose record is not
+  there yet — HTTP 404, 429 / 5xx / 524 / 529, unreachable, a record without a numeric
+  `total_cost` — is asked again after each of `COST_WAITS` = 1, 2, 4, 8 s (all requests in one
+  round per wait: at most 15 s after a run, plus a deadline of `sum(waits) + 2·timeout`); other
+  statuses (400 / 401 / 403) and unreadable JSON are not retried. `cost_problem` (new attribute)
+  says why a request was left out (`GET /generation answered HTTP 404 for gen-...: <body, key
+  scrubbed> (still missing after waiting 15 s)`, `the generation record of ... has no total_cost
+  yet`, `N audio response(s) came without an X-Generation-Id header`); `requests` counts audio
+  responses (with or without an id). `run._reported_cost` asks every provider with `requests`
+  and prints `, cost not reported by openrouter yet (<why>; see https://openrouter.ai/activity)`
+  or `for K of N requests (<why>; see ...)`. Never fails the run.
+- **Key hygiene**: `httpapi.scrub` also removes the key as `repr` escapes it (http.client quotes a
+  rejected header value as bytes); `httpapi.get(..., secret=)` scrubs its errors (used by the
+  key-authenticated `/generation` lookup) and wraps `http.client.HTTPException`;
+  `imagegen.openrouter.read_api_key` refuses a key with spaces, control or non-ASCII characters
+  without quoting it.
+- **JSON**: `tts --json` `voices.<name>.voice_id` is `null` in an OpenRouter video (it showed
+  the ElevenLabs default id).
+- **Live check** `tools/live_check_openrouter.py`: `--generation ID [--wait S]` probes one
+  generation record (status / main fields each time, backoff 1 → 16 s); `--tts --yes` keeps the
+  provider, prints the `X-Generation-Id`s and, without a cost, `cost_problem` and the probe of the
+  first id. Options documented in the docstring.
+- **Tests** `tests/test_phase_f_review.py` (imagegen → render with a PNG and a drawn, recoloured
+  SVG; OpenRouter tts → render with captions; a variant switching provider; one-provider errors;
+  MCP dry runs offline with the `confirm_cost` guard; scrubbing; the tool never printing the
+  key) and in `tests/test_tts_openrouter.py` (records written late: 404 → no `total_cost` → cost;
+  giving up; no id; the run's message) and `tests/test_vector_images.py` (the live ZDR body).
+
+## 68. Refinements (Step 65, local Kokoro TTS; optional extra)
+
+- **Facts** (checked 2026-10-09): model `hexgrad/Kokoro-82M` v1.0 on Hugging Face, Apache-2.0
+  (weights and the `kokoro` / `misaki` packages), 82 M parameters (StyleTTS 2 + ISTFTNet),
+  `kokoro-v1_0.pth` 327,212,226 bytes, SHA256 `496dba118d1a58f5f3db2efc88dbdc216e0483fc89fe6e47ee1f2c53f18ad1e4`;
+  54 voices in `voices/` (~0.5 MB each), 9 languages `a b e f h i j p z`. PyPI `kokoro` 0.9.4
+  (2025-04-05; deps `huggingface-hub, loguru, misaki[en]>=0.9.4, numpy, torch, transformers`) and
+  `misaki` 0.9.4 both declare `Requires-Python <3.13,>=3.10`. `KPipeline(lang_code, repo_id,
+  model=True | KModel, device=None | cpu | cuda)` downloads `config.json` + the weights
+  (`hf_hub_download`) and each voice on first use; calling it with `(text, voice, speed,
+  split_pattern)` yields `Result(graphemes, phonemes, tokens, output)`, `audio` = float32 at 24
+  kHz. For `a` / `b` the tokens are misaki `MToken`s with `start_ts` / `end_ts` (seconds, from
+  the predicted durations, per chunk); other languages yield no tokens. English G2P = misaki +
+  spaCy `en_core_web_sm` (installed with `spacy.cli.download`, i.e. pip, on first use) + espeak-ng
+  fallback; `e f h i p` = espeak-ng; `j` / `z` need `misaki[ja]` / `misaki[zh]`. misaki's
+  `espeak.py` points phonemizer at the library **bundled in the `espeakng-loader` wheel** (Windows,
+  Linux, macOS) at import, so no system espeak-ng is used or needed (a Portuguese beat was voiced
+  here with no espeak-ng installed). Linux PyPI torch pulls ~4.3 GB of CUDA libraries + triton;
+  the CPU wheel index is the small path.
+- **Config** (`config.py`): `provider: kokoro` (`TTS_PROVIDERS`), `KOKORO_VOICE_KEYS = (voice,
+  speed, lang, device)`, `PROVIDER_VOICE_KEYS`; new `VoiceConfig.lang: a|b|e|f|h|i|j|p|z|null`,
+  `VoiceConfig.device: cpu|cuda|auto = cpu`; `VoiceEntry.lang`. `voice` / `speed` are shared with
+  OpenRouter. Keys of other providers are ignored on `voice:` (as §66).
+- **Resolution** (`kokoro_voices.resolve`, applied by `voices._with_language`): `lang` = given,
+  else the voice's first letter (`^[a-z][fm]_`), else the video `language` (`en`→a, `en-GB/IE/AU/NZ`
+  →b, `es` e, `fr` f, `hi` h, `it` i, `ja` j, `pt` p (also pt-PT), `zh` z; none → a); `voice` =
+  given, else the language's `default_voice` (af_heart, bf_emma, ef_dora, ff_siwis, hf_alpha,
+  if_sara, jf_alpha, pf_dora, zf_xiaobei); `speed` = given, else 1. A named voice that sets
+  `voice` without `lang` gets that voice's language (the base `lang` is not inherited then). A
+  language with no Kokoro voice and no `lang` / voice is a config error
+  (`voices._kokoro_language_problems`, inside `voice_provider_problems`, so variants too).
+- **One provider per video** (`voice_provider_problems` generalised): other-provider keys are
+  every key of the other providers not used by the base provider; the message names the owners
+  ("voice is an OpenRouter or Kokoro setting", "lang is a Kokoro setting"); a Kokoro named voice
+  changes `voice, speed, lang`. Existing ElevenLabs / OpenRouter messages unchanged.
+  `voices.audio_fields` now leaves out `device` (`RUNTIME_FIELDS`): a variant changing only the
+  device shares `audio/`.
+- **Provider** `tts/kokoro.py` (`KokoroProvider`, `name = "kokoro"`, `timings_included = True`):
+  nothing imports `kokoro` / torch until the first beat (validate, render, dry run never do; tested
+  via `sys.modules`). `check_credentials` = `check_installed(lang)`: the extra
+  (`find_spec("kokoro")`), `misaki[ja]` / `[zh]` (pyopenjtalk / jieba), `espeakng_loader` for
+  espeak languages → `VidgenError` with the command (`pip install "schu-video-generator[kokoro]"`;
+  on Python > 3.12 also the forced install that worked on 3.13: `--ignore-requires-python` +
+  `spacy>=3.8,<4`, `spacy-curated-transformers<0.4`, without which pip backtracks to a spaCy 4
+  pre-release sdist that fails to build). `KokoroEngine(device)`: one `KPipeline` per language,
+  the first one's `KModel` passed to the next (`model=`), shared by every voice of the process
+  (`shared_engine`, module dict) = loaded once per `vidgen tts`. `synthesize_timed`: pipeline
+  called with `split_pattern=None`, results' float audio → 16-bit PCM (`pcm16`) → MP3 with ffmpeg
+  (`openrouter.convert_to_mp3`, new `source=` for its messages; 128 kb/s, 24 kHz mono); token
+  times shifted by each chunk's offset → `alignment_from_tokens` (each token found in order in the
+  spoken text spreads its time over its characters, other characters take the previous end;
+  `None` when < 80 % of the words are timed) → stored like ElevenLabs' alignment, so captions /
+  SRT time words exactly and pronunciation maps back (`speech.map_word_times`). Non-English: no
+  alignment (estimates). While Kokoro loads / runs, fd 1 goes to stderr (`quiet_stdout`: spaCy's
+  pip install prints to stdout, which would break `--json`) and torch's load warnings are
+  ignored. Library exceptions → `explain()`: espeak-ng (both installs named), misaki extras,
+  CUDA (`device: cpu`), downloads (Xet / CAS, proxy, offline; `HF_HUB_DISABLE_XET=1` hint),
+  else `Kokoro could not voice the text: <type>: <msg>`.
+- **Hash**: `sha1(json.dumps({provider: kokoro, model: hexgrad/Kokoro-82M, weights:
+  kokoro-v1_0.pth, voice, lang, speed}, sort_keys=True, ensure_ascii=False) + "|" + spoken_text)`
+  with the resolved values (pinned in `tests/test_tts_kokoro.py`); not the device nor the package
+  version (an upgrade does not re-voice). ElevenLabs and OpenRouter keys pinned unchanged.
+- **Run** (`tts/run.py`): `run_tts` calls `synthesize_timed` when `voice.timestamps` **or** the
+  provider's `timings_included`; before synthesis prints `note:` lines (`kokoro.run_notes`: free
+  and local on <device>, the download still to come when the weights are not in the HF cache —
+  `hf_cache_dir()`: `HF_HUB_CACHE`, `HF_HOME/hub`, `XDG_CACHE_HOME/huggingface/hub`,
+  `~/.cache/huggingface/hub` — the extra / language packages missing). `TTSPlan.beat_cost` = 0
+  for Kokoro; `price_tts` adds `KOKORO_PRICE_NOTE` ("free (local): Kokoro-82M runs on this
+  computer") and the notes (no network); dry run prints per-voice lines `kokoro <voice> (lang x,
+  <Language>), speed s, <device>`, `note:` lines and `cost: free (local): ...`; the run summary has
+  no cost part.
+- **JSON / MCP**: `tts --json` beats and voices gain `lang` and `device` (Kokoro's; `null` for the
+  others), `model` `hexgrad/Kokoro-82M`, `provider_voice` the voice, `speed` 1.0 by default,
+  `voice_id` `null`; `estimated_cost` 0, `unknown_cost` 0, `price_note` the free note. MCP `tts`:
+  a real run needs `confirm_cost` unless the project (variant applied) loads and its
+  `voice.provider` is in `FREE_TTS = ("kokoro",)` (`mcp_server.tts_provider`); a project that
+  does not load still needs it (conservative). Tool text and server instructions say so.
+- **Validate** (`tts.tts_warnings` → `kokoro.voice_warnings` / `kokoro_voices.voice_warnings`,
+  `kokoro.install_warnings`; no network, nothing loaded): voice not in the bundled
+  `data/kokoro/voices.json` (dated 2026-10-09, did-you-mean, the language's best voices; `.pt`
+  files and blends `a,b` checked per part), voice of another language than `lang`, `lang` not the
+  video language (a / b both English: fine), `timestamps` with a language without timings, the
+  extra or `misaki[ja]` / `[zh]` not installed.
+- **Packaging**: extra `kokoro = ["kokoro>=0.9.4; python_version < '3.13'"]` (on 3.13 the extra
+  installs nothing instead of failing a combined `.[dev,kokoro]`; vidgen explains); package data
+  `data/kokoro/*`. Nothing of Kokoro is bundled (THIRD_PARTY_NOTICES).
+- **Live** (this workspace, 2026-10-09): Hugging Face's file CDN and Xet hosts are blocked by
+  the egress proxy, so the weights and three voices were fetched from Kokoro-FastAPI's GitHub
+  release / repository and verified against the model card's SHA256 (weights) and VOICES.md's
+  hash prefixes (af_heart `0ab5709b`, bf_emma `d0a423de`, pf_dora `07e4ff98`), then laid out as
+  an HF cache and used with `HF_HUB_OFFLINE=1` — vidgen's normal `hf_hub_download` path. Python
+  3.12 venv with `pip install -e ".[dev,kokoro]"` (torch 2.14.1, transformers 5.19, manim 0.22):
+  `vidgen tts` voiced 2 English + 1 Portuguese beats (MP3 24 kHz mono; `.align.json` for the
+  English ones), a preview render's SRT kept the written words through the pronunciation;
+  ~0.7x real time on 2 CPU cores (3.6 s for 4.8 s of speech), ~10 s to load. Python 3.13:
+  the forced install above, then a real synthesis with word timestamps, worked.
+- **Not done**: Kokoro v1.1-zh (`hexgrad/Kokoro-82M-v1.1-zh`), custom `.pt` voice files are not
+  hashed by content, no streaming, no automatic download of `misaki[ja]` / `[zh]`.

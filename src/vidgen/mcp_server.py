@@ -49,6 +49,8 @@ from vidgen.mcp_tools import (
 WORK_DIR = Path("build") / "mcp"
 #: STT providers that bill per use (``readback`` asks for ``confirm_cost``).
 PAID_STT = ("elevenlabs",)
+#: TTS providers that cost nothing (``tts`` runs without ``confirm_cost``; DESIGN.md §68).
+FREE_TTS = ("kokoro",)
 #: Seconds between progress notifications (at most).
 PROGRESS_INTERVAL = 0.5
 #: stderr lines kept for the message of a command that printed no JSON.
@@ -60,7 +62,8 @@ relative to the server's root folder; nothing outside it can be read or written.
 Start with `guide` (topic "start" or "workflow"): it is the author guide. Usual loop: `plan` (from \
 an outline) or `init` -> edit video.yaml -> `validate` -> `storyboard` (look at the sheets it \
 returns) -> `lint` -> fix -> repeat; then `tts` with dry_run=true (free), and only after the user \
-agreed to the cost `tts` with dry_run=false and confirm_cost=true; then `render`. `schema` with \
+agreed to the cost `tts` with dry_run=false and confirm_cost=true (voice.provider kokoro is local and \
+free: no confirm_cost); then `render`. `schema` with \
 scene=TYPE gives one scene type's params as JSON Schema, `list_scenes` / `list_icons` / \
 `list_themes` / `list_sfx` / `list_music` what exists. Every tool returns the command's JSON \
 document (`ok`, `warnings`, `error`...); a document with ok=false comes back as a tool error."""
@@ -177,6 +180,17 @@ def stt_provider(project: Path, variant: str | None) -> str | None:
 
     try:
         return Project.load(project, variant=variant).config.stt.provider
+    except VidgenError:
+        return None
+
+
+def tts_provider(project: Path, variant: str | None) -> str | None:
+    """The ``voice.provider`` of the project (variant applied; one provider per video), ``None``
+    if it does not load (then ``tts`` still asks for ``confirm_cost``)."""
+    from vidgen.project import Project
+
+    try:
+        return Project.load(project, variant=variant).config.voice.provider
     except VidgenError:
         return None
 
@@ -444,9 +458,12 @@ def build_server(root: Path) -> Any:
         }
         return answer(await call(ctx, args_of(["render"], [str(where(project))], options), heavy=True))
 
-    @tool("Narration audio (ElevenLabs) for the beats whose MP3 is missing or stale. dry_run=true (default, free, "
-          "no key needed) lists the beats and the characters that would be billed. A real run COSTS MONEY: only "
-          "with dry_run=false and confirm_cost=true, after the user agreed.", paid)
+    @tool("Narration audio (ElevenLabs, OpenRouter with voice.provider: openrouter, or Kokoro on this computer with "
+          "voice.provider: kokoro) for the beats whose MP3 is missing or stale. dry_run=true (default, free, no key "
+          "needed) lists the beats, provider, model, voice and the characters that would be billed (OpenRouter: the "
+          "estimated cost with its basis; Kokoro: free (local)). A real run with ElevenLabs or OpenRouter COSTS MONEY: "
+          "only with dry_run=false and confirm_cost=true, after the user agreed; Kokoro is free and needs no "
+          "confirm_cost (its first run downloads the ~330 MB model).", paid)
     async def tts(
         ctx: Context,
         project: Project = ".",
@@ -457,13 +474,14 @@ def build_server(root: Path) -> Any:
         variant: Variant = None,
         force: Annotated[bool, Field(description="regenerate even if up to date (costs money)")] = False,
     ) -> Any:
-        if not dry_run and not confirm_cost:
+        if not dry_run and not confirm_cost and tts_provider(where(project), variant) not in FREE_TTS:
             raise ToolError(cost_refusal("tts", "calls the paid text-to-speech API"))
         options = {"dry-run": dry_run, "beat": beat, "voice": voice, "variant": variant, "force": force}
         return answer(await call(ctx, args_of(["tts"], [str(where(project))], options), heavy=True))
 
-    @tool("Pictures for the generate: params of image scenes (OpenAI Images). dry_run=true (default, free) lists "
-          "prompts and the estimated cost. A real run COSTS MONEY: only with dry_run=false and confirm_cost=true.", paid)
+    @tool("Pictures for the generate: params of image scenes (OpenAI Images, or OpenRouter with imagegen.provider: "
+          "openrouter). dry_run=true (default, free) lists prompts and the estimated cost with its basis. A real run "
+          "COSTS MONEY: only with dry_run=false and confirm_cost=true.", paid)
     async def imagegen(
         ctx: Context,
         project: Project = ".",

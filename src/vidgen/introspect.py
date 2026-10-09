@@ -9,7 +9,8 @@ the stills; ``vidgen lint`` reads it. Format: DESIGN.md §15 and docs/CONFIG.md.
 Grouping: a text mobject (``Text``, ``MarkupText``, ``Paragraph``, ``Tex``/``MathTex``,
 ``DecimalNumber``) is one object, not one per glyph; the paragraphs of a ``Code`` listing are
 objects of kind ``code`` and its background a shape; an icon (``vidgen.icon_mobject.Icon``) is
-one object of kind ``icon`` with its name in ``icon``. A group with no text or image anywhere
+one object of kind ``icon`` with its name in ``icon``, and a vector picture
+(``vidgen.vector_mobject.VectorPicture``, an SVG) one object of kind ``vector``. A group with no text or image anywhere
 inside is one ``group`` object (an axis' ticks, a network's edges); any other group is walked
 into. Parts at opacity 0 are not visible: they are left out of an object's box, and an object
 without visible parts is not recorded.
@@ -223,6 +224,7 @@ class LayoutRecorder:
         from manim.mobject.types.image_mobject import AbstractImageMobject
 
         from vidgen.icon_mobject import Icon
+        from vidgen.vector_mobject import VectorPicture
 
         if id(mob) in walk.seen:
             return
@@ -238,6 +240,9 @@ class LayoutRecorder:
             return
         if isinstance(mob, Icon):
             self._emit_parts(walk, mob, path, name, "icon", [m for m in mob.get_family() if _drawn(m)], icon=mob.icon_name)
+            return
+        if isinstance(mob, VectorPicture):  # one picture, not one object per path
+            self._emit_parts(walk, mob, path, name, "vector", [m for m in mob.get_family() if _drawn(m)])
             return
         own = [mob] if _drawn(mob) else []
         if own and not mob.submobjects:

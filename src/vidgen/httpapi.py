@@ -1,13 +1,14 @@
 """POST requests to a paid web API with retries and scrubbed errors (standard library only).
 
 Shared by the ElevenLabs text-to-speech / speech-to-text providers and the image-generation
-provider. The API key is passed in by the caller (read from an environment variable at the
+providers (OpenAI, OpenRouter). The API key is passed in by the caller (read from an environment variable at the
 moment of the request); it goes only into the request headers and is removed from every error
 message.
 """
 
 from __future__ import annotations
 
+import http.client
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Mapping
@@ -22,8 +23,14 @@ MAX_BODY_IN_ERROR = 500
 
 
 def scrub(text: str, secret: str) -> str:
-    """``text`` with ``secret`` replaced by ``***`` (defensive: it should never be there)."""
-    return text.replace(secret, "***") if secret else text
+    """``text`` with ``secret`` replaced by ``***`` (defensive: it should never be there), also
+    as Python escapes it in a ``repr`` (http.client quotes a rejected header value that way)."""
+    if not secret:
+        return text
+    forms = {secret, repr(secret)[1:-1], repr(secret.encode("utf-8", "backslashreplace"))[2:-1]}
+    for form in sorted(forms, key=len, reverse=True):
+        text = text.replace(form, "***")
+    return text
 
 
 def retry_after(headers: Message | None) -> float | None:
@@ -48,20 +55,22 @@ def post_with_retries(
     max_wait: float,
     sleep: Callable[[float], None],
     transient: Callable[[int, str], bool] | None = None,
+    response_headers: dict[str, str] | None = None,
 ) -> bytes:
     """POST ``data`` to ``url`` with ``headers``; the response body.
 
     Transient failures (by default HTTP 429 / 5xx; ``transient(status, body)`` decides instead
     when given), timeouts and dropped connections are retried ``retries`` times, waiting
     ``backoff * 2**attempt`` seconds or the server's ``Retry-After``, at most ``max_wait``. Every
-    failure becomes a :class:`VidgenError` naming ``service`` without ``secret`` in it.
+    failure becomes a :class:`VidgenError` naming ``service`` without ``secret`` in it. A
+    ``response_headers`` dict receives the successful response's headers (names lower case).
     """
     is_transient = transient if transient is not None else (lambda status, body: status in TRANSIENT_STATUS)
     attempt = 0
     while True:
         wait: float | None = None
         try:
-            return _request(url, data, headers, timeout, service)
+            return _request(url, data, headers, timeout, service, response_headers)
         except urllib.error.HTTPError as exc:
             body = scrub(exc.read().decode("utf-8", errors="replace"), secret)
             if not is_transient(exc.code, body) or attempt >= retries:
@@ -83,10 +92,33 @@ def post_with_retries(
         attempt += 1
 
 
-def _request(url: str, data: bytes, headers: Mapping[str, str], timeout: float, service: str) -> bytes:
+def get(url: str, *, headers: Mapping[str, str], service: str, timeout: float, secret: str = "") -> bytes:
+    """GET ``url`` once (no retries: for free lookups that may fail, such as a public price
+    list, or a key-authenticated record such as a generation's cost: pass the key as
+    ``secret``). Raises ``urllib.error.HTTPError`` for an HTTP error status (the caller decides
+    what a 404 means) and :class:`VidgenError` without ``secret`` in it when ``service`` cannot
+    be reached."""
+    request = urllib.request.Request(url, method="GET", headers=dict(headers))
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return response.read()
+    except urllib.error.HTTPError:
+        raise
+    except (TimeoutError, ConnectionError, urllib.error.URLError, OSError, ValueError, http.client.HTTPException) as exc:
+        reason = exc.reason if isinstance(exc, urllib.error.URLError) else exc
+        what = f"{type(reason).__name__}: {reason}" if isinstance(reason, BaseException) else str(reason)
+        raise VidgenError(f"cannot reach {service}: {scrub(what, secret)}") from None
+
+
+def _request(
+    url: str, data: bytes, headers: Mapping[str, str], timeout: float, service: str, got: dict[str, str] | None = None
+) -> bytes:
     request = urllib.request.Request(url, data=data, method="POST", headers=dict(headers))
     with urllib.request.urlopen(request, timeout=timeout) as response:
         body = response.read()
+        received = getattr(response, "headers", None)
+        if got is not None and received is not None:
+            got.update({str(k).lower(): str(v) for k, v in received.items()})
     if not body:
         raise VidgenError(f"{service} returned an empty response")
     return body

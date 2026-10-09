@@ -16,7 +16,8 @@ import difflib
 from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
-from vidgen.config import VideoConfig, VoiceConfig
+from vidgen import kokoro_voices
+from vidgen.config import OPENROUTER_VOICE_KEYS, PROVIDER_VOICE_KEYS, VideoConfig, VoiceConfig
 from vidgen.errors import Problem, VidgenError
 from vidgen.languages import elevenlabs_language_code
 
@@ -27,6 +28,8 @@ if TYPE_CHECKING:
 DEFAULT_VOICE = "default"
 #: Fields of a voice that name the speaker and do not change its audio.
 DISPLAY_FIELDS = frozenset({"label", "color"})
+#: Fields of a voice that say where it runs, not what it sounds like (not compared for audio).
+RUNTIME_FIELDS = frozenset({"device"})
 
 
 def voice_names(config: VideoConfig) -> list[str]:
@@ -55,6 +58,72 @@ def voice_reference_problems(config: VideoConfig) -> list[Problem]:
     return problems
 
 
+#: How messages name each TTS provider.
+PROVIDER_NAMES: dict[str, str] = {"elevenlabs": "ElevenLabs", "openrouter": "OpenRouter", "kokoro": "Kokoro"}
+#: What a named voice of each provider may change (named in the one-provider message).
+NAMED_VOICE_KEYS: dict[str, tuple[str, ...]] = {
+    "elevenlabs": ("voice_id", "model_id", "settings"),
+    "openrouter": OPENROUTER_VOICE_KEYS,
+    "kokoro": ("voice", "speed", "lang"),
+}
+
+
+def _owners(key: str, base: str) -> str:
+    """``an OpenRouter or Kokoro`` / ``an ElevenLabs``: the other providers using ``key``."""
+    names = [PROVIDER_NAMES[p] for p, keys in PROVIDER_VOICE_KEYS.items() if p != base and key in keys]
+    text = " or ".join(names)
+    return ("an " if text[:1] in "AEIOU" else "a ") + text
+
+
+def voice_provider_problems(config: VideoConfig) -> list[Problem]:
+    """One TTS provider per video (DESIGN.md §66): a named voice may not set another
+    ``provider`` than the base voice's, nor keys only other providers use (``voice_id`` with
+    openrouter or kokoro, ``instructions`` with elevenlabs or kokoro, ``lang`` with elevenlabs
+    or openrouter...). Kokoro videos also need a language Kokoro speaks (§68)."""
+    base = config.voice.provider
+    own = set(PROVIDER_VOICE_KEYS[base])
+    other_keys = [k for p, keys in PROVIDER_VOICE_KEYS.items() if p != base for k in keys if k not in own]
+    own_keys = NAMED_VOICE_KEYS[base]
+    problems = []
+    for name, entry in config.voices.items():
+        if entry.provider is not None and entry.provider != base:
+            problems.append(Problem(
+                f"voices.{name}.provider",
+                f"one TTS provider per video: the base voice uses {base}, so '{name}' cannot use {entry.provider}; a named "
+                f"voice changes {', '.join(own_keys)} only (a variant may switch the provider of the whole video)",
+            ))
+            continue
+        for key in dict.fromkeys(other_keys):
+            if getattr(entry, key, None) is not None:
+                problems.append(Problem(
+                    f"voices.{name}.{key}",
+                    f"{key} is {_owners(key, base)} setting, but this video's voices use {base} (one provider per video): "
+                    f"set {', '.join(own_keys)} instead",
+                ))
+    if base == "kokoro":
+        problems += _kokoro_language_problems(config)
+    return problems
+
+
+def _kokoro_language_problems(config: VideoConfig) -> list[Problem]:
+    """A Kokoro voice whose language cannot be told: no ``lang``, no voice named after a
+    language and a video language Kokoro does not speak."""
+    entries: list[tuple[str, str | None, str | None]] = [("voice", config.voice.voice, config.voice.lang)]
+    for name, entry in config.voices.items():
+        voice = entry.voice if entry.voice is not None else config.voice.voice
+        lang = entry.lang if entry.lang is not None else (None if entry.voice is not None else config.voice.lang)
+        entries.append((f"voices.{name}", voice, lang))
+    problems = []
+    for where, voice, lang in entries:
+        if kokoro_voices.resolve(voice, lang, config.language)[1] is None:
+            problems.append(Problem(
+                f"{where}.lang",
+                f"Kokoro has no voice for the video's language {config.language}: set lang (Kokoro speaks "
+                f"{kokoro_voices.describe_langs()}) and a voice of it, or use another provider",
+            ))
+    return problems
+
+
 def resolve_voice(config: VideoConfig, name: str | None) -> VoiceConfig:
     """The effective voice called ``name`` (``None`` / ``default``: the base voice): the base
     voice's audio settings with the named voice's given values over them; ``label`` / ``color``
@@ -68,6 +137,8 @@ def resolve_voice(config: VideoConfig, name: str | None) -> VoiceConfig:
     data: dict[str, Any] = config.voice.model_dump(exclude=set(DISPLAY_FIELDS))
     given = entry.model_dump(exclude_none=True)
     settings = given.pop("settings", None)
+    if data["provider"] == "kokoro" and "voice" in given and "lang" not in given:
+        data["lang"] = None  # the named voice's own language: its voice's first letter
     data.update(given)
     if settings:
         data["settings"] = {**data["settings"], **settings}
@@ -75,14 +146,23 @@ def resolve_voice(config: VideoConfig, name: str | None) -> VoiceConfig:
 
 
 def _with_language(voice: VoiceConfig, language: str | None) -> VoiceConfig:
-    """``voice`` with ``language_code`` = the code sent to the provider (or ``None``)."""
+    """``voice`` with ``language_code`` = the code sent to the provider (or ``None``; OpenRouter
+    and Kokoro take none: the language follows the text and voice, DESIGN.md §66); a Kokoro
+    voice also gets its effective ``voice``, ``lang`` and ``speed`` (1 when not given, §68)."""
+    if voice.provider == "kokoro":
+        name, lang = kokoro_voices.resolve(voice.voice, voice.lang, language)
+        speed = 1.0 if voice.speed is None else voice.speed
+        return voice.model_copy(update={"voice": name, "lang": lang, "speed": speed, "language_code": None})
+    if voice.provider != "elevenlabs":
+        return voice if voice.language_code is None else voice.model_copy(update={"language_code": None})
     code = elevenlabs_language_code(voice.language_code, voice.model_id, language)
     return voice if code == voice.language_code else voice.model_copy(update={"language_code": code})
 
 
 def audio_fields(voice: VoiceConfig) -> dict[str, Any]:
-    """What of ``voice`` the audio depends on (everything but the speaker's label and colour)."""
-    return voice.model_dump(exclude=set(DISPLAY_FIELDS))
+    """What of ``voice`` the audio depends on (everything but the speaker's label and colour and
+    where the model runs)."""
+    return voice.model_dump(exclude=set(DISPLAY_FIELDS | RUNTIME_FIELDS))
 
 
 def beat_voice_names(config: VideoConfig) -> dict[str, str | None]:

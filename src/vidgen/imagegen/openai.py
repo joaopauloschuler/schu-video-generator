@@ -51,9 +51,9 @@ def _transient(status: int, body: str) -> bool:
     return status in httpapi.TRANSIENT_STATUS
 
 
-def as_png(data: bytes) -> bytes:
+def as_png(data: bytes, service: str = "OpenAI") -> bytes:
     """``data`` as PNG bytes (converted with Pillow when the API returned another format).
-    Raises :class:`VidgenError` if it is not a picture."""
+    Raises :class:`VidgenError` (naming ``service``) if it is not a picture."""
     if data.startswith(PNG_SIGNATURE):
         return data
     from PIL import Image, UnidentifiedImageError
@@ -63,7 +63,7 @@ def as_png(data: bytes) -> bytes:
             out = io.BytesIO()
             im.convert("RGBA" if "A" in im.getbands() else "RGB").save(out, format="PNG")
     except (UnidentifiedImageError, OSError):
-        raise VidgenError("OpenAI returned data that is not a picture") from None
+        raise VidgenError(f"{service} returned data that is not a picture") from None
     return out.getvalue()
 
 

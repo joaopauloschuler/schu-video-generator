@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 90" width="160" height="90">
+  <!-- Hand-written test picture for vidgen (Step 61b): flat sky, sun, two hills, a tree. -->
+  <defs>
+    <linearGradient id="sky">
+      <stop offset="0" stop-color="#2B6CB0"/>
+      <stop offset="1" style="stop-color:#90CDF4"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="160" height="90" fill="url(#sky)"/>
+  <circle cx="122" cy="24" r="12" fill="#F6E05E" stroke="#DD6B20" stroke-width="2"/>
+  <path d="M0 70 C 30 45 60 45 90 70 L 90 90 L 0 90 Z" fill="#38A169"/>
+  <path d="M60 75 C 90 55 130 55 160 72 L 160 90 L 60 90 Z" style="fill:#2F855A;stroke:none"/>
+  <g transform="translate(36 40)">
+    <rect x="-2" y="8" width="4" height="14" fill="#744210"/>
+    <polygon points="0,-8 10,10 -10,10" fill="#22543D"/>
+  </g>
+  <line x1="10" y1="12" x2="40" y2="12" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+</svg>

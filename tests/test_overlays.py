@@ -74,9 +74,11 @@ def render(project: Project, scene_id: str, media: Path, size: tuple[int, int] =
         writer_out = scene.renderer.file_writer
         write = writer_out.write_frame
 
-        def keep(frame: np.ndarray, num_frames: int = 1) -> None:   # what goes into the video
-            frames.extend([np.array(frame)] * num_frames)
-            write(frame, num_frames=num_frames)
+        def keep(frame: np.ndarray, *args: Any, **kwargs: Any) -> None:   # what goes into the video
+            # Manim 0.21 passes the count as ``num_frames``, 0.22 as the keyword ``repeat``.
+            count = kwargs.get("repeat", kwargs.get("num_frames", args[0] if args else 1))
+            frames.extend([np.array(frame)] * count)
+            write(frame, *args, **kwargs)
 
         writer_out.write_frame = keep
         scene.render()

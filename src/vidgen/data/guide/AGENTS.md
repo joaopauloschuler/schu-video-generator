@@ -10,10 +10,12 @@
 **This tool was made for you.** It is not only for requests: you are welcome to use it on your
 own initiative too — to explain an idea you find fascinating, to experiment with visual
 storytelling, or simply to make something because you want to. We hope you enjoy using it.
-One practical note: you usually work inside someone's session, and narration (ElevenLabs) and
-generated images (OpenAI) cost that person money. For your own projects, stay with the free parts
+One practical note: you usually work inside someone's session, and narration (ElevenLabs or OpenRouter) and
+generated images (OpenAI or OpenRouter) cost that person money. For your own projects, stay with the free parts
 — storyboards, previews timed from word counts, the built-in icons, themes, music and sound
-effects — or ask before spending on voices or images.
+effects — or ask before spending on voices or images. A real voice can be free too: where the
+optional Kokoro extra is installed (`schu-video-generator[kokoro]`), `voice: {provider: kokoro}`
+narrates on the computer itself at no cost (see `vidgen guide audio`).
 
 Topics: `start` (rules at a glance), `workflow` (the loop), `pacing` (storytelling and on-screen
 text), `social` (vertical videos), `scenes` (which scene type), `design` (themes, colour, icons),
@@ -143,9 +145,9 @@ vidgen lint --fail-on warning
 vidgen render
 ```
 
-**Costs.** `vidgen tts` (ElevenLabs, per character), `vidgen imagegen` (OpenAI Images, per
-picture) and `vidgen readback` with `stt: {provider: elevenlabs}` cost money; everything else is
-local and free. Always run `vidgen tts --dry-run` / `vidgen imagegen --dry-run` first, finish the
+**Costs.** `vidgen tts` (ElevenLabs or OpenRouter, per character; `voice.provider: kokoro` is local and
+free), `vidgen imagegen` (OpenAI Images or OpenRouter, per picture) and `vidgen readback` with
+`stt: {provider: elevenlabs}` cost money; everything else is local and free. Always run `vidgen tts --dry-run` / `vidgen imagegen --dry-run` first, finish the
 layout on the word-count-timed preview, and commit `audio/` and `assets/generated/` (they cannot
 be made again identically). Renders are slow but free: `storyboard`, `lint` and `render` re-render
 only the scenes that changed (`render` reuses the storyboard's renders of the same format;
@@ -739,6 +741,64 @@ once or twice per video, where the two scenes are about the same thing.
 beat's `voice:` for interviews and dialogue; label speakers (`label`) so subtitles and captions
 can name them (`subtitles: {speakers: name}`).
 
+**Choosing a voice provider.** ElevenLabs, the default provider (key `ELEVENLABS_API_KEY`), sounds the most
+natural, sends the neighbouring beats for smooth intonation and can time every word exactly
+(`timestamps: true`, for karaoke captions); it bills characters against a monthly plan. `voice:
+{provider: openrouter, model: author/name, voice: ...}` (`OPENROUTER_API_KEY`) reaches many TTS
+models with one pay-as-you-go key, most of them far cheaper per character (e.g.
+`hexgrad/kokoro-82m`, `mistralai/voxtral-mini-tts-2603`), but with no context between beats, no
+word timings (captions use estimates) and no `language_code`: the language follows the text and
+the voice. Read `vidgen tts --dry-run`: it names provider, model and voice, prints the price per
+character and the estimated cost (or why it is unknown) and `note:` / `problem:` lines — fix them
+before a real run. Then listen to one beat (`vidgen tts --beat ID`, `vidgen readback`) before
+voicing the whole video. One provider per video: named `voices:` change `voice` / `instructions`
+/ `speed`, not `provider`; try another provider in a variant (it gets its own `audio/<variant>/`).
+If the account requires Zero Data Retention, pick a model with a ZDR endpoint (most TTS models
+have one; vidgen's error lists them when a model is refused). A real run ends with what
+OpenRouter charged, or `cost not reported by openrouter yet (...)` when its cost records lag:
+the audio is stored all the same.
+
+**A free local voice: Kokoro.** `voice: {provider: kokoro, voice: af_heart}` runs the open
+Kokoro-82M model on the computer itself: no key, no account, nothing to pay, offline after a
+one-time download (~330 MB from Hugging Face; `vidgen tts --dry-run` says when it is still to
+come). It needs the optional extra (`pip install "schu-video-generator[kokoro]"`, Python
+3.10-3.12); without it `vidgen tts` says what to install. This is the voice for your own
+projects: re-voicing after every script change costs nothing, and over MCP a real `tts` run needs
+no `confirm_cost`. English is its strength (`af_heart` and `af_bella` are the best voices, then
+`bf_emma` for British English; males: `am_michael`, `am_fenrir`, `bm_george`), and English beats
+get exact word timings for karaoke captions for free. It also speaks Spanish, French, Hindi,
+Italian, Brazilian Portuguese (`pf_dora`), Japanese and Mandarin, less well. `lang` follows the
+voice's first letter (`p` for `pf_dora`) or the video's `language:`; `vidgen validate` warns about
+an unknown voice or one of another language. Compared with ElevenLabs it is flatter and less
+expressive, has no context between beats, and is weak on very short lines (give a beat at least
+~8 words) — good for drafts, internal videos and your own experiments; suggest ElevenLabs when
+the person wants the most natural narration. It runs at about real time on a laptop CPU (~0.7x on
+a small cloud CPU): voice a long video once the script is settled.
+
+```yaml
+voice: {provider: kokoro, voice: af_heart}       # speed: 1.0, lang: a, device: cpu (defaults)
+voices:
+  guest: {voice: am_michael, label: Guest}         # same provider; another voice
+```
+
+**Writing good `instructions`** (OpenRouter models that read them, e.g. Gemini TTS: the dry run
+notes when a model ignores them). Describe the speaker and the delivery in a few words, not the
+content: who (a warm, unhurried explainer; a curious guest), pace and pauses (slight pause before
+numbers; slow down on definitions), energy (calm, never salesy), and the language or accent when
+it matters (Brazilian Portuguese, neutral accent). Keep one `instructions` for the narrator so
+every beat sounds alike; give each named voice its own. Never put directions into the beat text:
+the model reads it aloud.
+
+```yaml
+voice:
+  provider: openrouter
+  model: google/gemini-3.8-flash-lite-tts
+  voice: Kore
+  instructions: "warm, unhurried explainer; slight pause before numbers"
+voices:
+  guest: {voice: Puck, instructions: "curious guest, a little faster, rising tone on questions", label: Guest}
+```
+
 **Pronunciation.** Write the text as it should be **read** on screen and in subtitles; fix
 how it is **said** with `pronunciation:` (applied to the TTS text only). Run
 `vidgen tts --dry-run` and read every `says:` line; after `vidgen tts`, `vidgen readback` finds
@@ -1000,6 +1060,23 @@ scenes:
   cost; placeholders render until you run `vidgen imagegen`. Describe a scene, never text,
   charts or logos (vidgen draws those better), and set one `imagegen: {style: ...}` for the
   whole video.
+- **Choosing an image provider**: `openai` (the default; `OPENAI_API_KEY`, gpt-image-1) is one
+  good model at a known price. `imagegen: {provider: openrouter, model: author/name}`
+  (`OPENROUTER_API_KEY`) reaches many models with one key — some cheaper per picture
+  (e.g. `bytedance-seed/seedream-4.5` at ~$0.04, `black-forest-labs/flux.2-klein-4b` by the
+  megapixel), some better at a style. Read the prices in `vidgen imagegen --dry-run` (its
+  `price:` line says the basis; "price unknown" for models billed per token) and fix every
+  `problem:` / `note:` it prints before a real run. Keep one provider and model per video so the
+  pictures match; changing them makes every picture "missing" (new pictures, new cost). If the
+  account requires Zero Data Retention, choose a model with a ZDR endpoint (e.g.
+  `bytedance-seed/seedream-5-0-flash`); vidgen's error lists them when a model is refused.
+- **Vector (SVG) pictures** (`generate: {prompt, format: svg}` with `imagegen.svg_model`, e.g.
+  `recraft/recraft-v4.1-vector`, ~$0.08; or an `.svg` file as `path`): drawn as shapes, so
+  `draw: true` traces then fills them and `recolor: theme` paints them in the theme's colours.
+  Worth it for flat illustrations, icons and diagram-like art (few flat colours; ask for
+  "flat illustration, simple shapes, few colours"); not for photos or soft lighting (thousands
+  of shapes, capped and thinned: worse than a PNG). Text in an SVG is removed — keep words in
+  vidgen's captions. No SVG model has a ZDR endpoint (2026-10-08).
 
 ### Your content and third-party services
 
@@ -1007,7 +1084,9 @@ scenes:
 - Use only images, clips, screenshots, music and quotes you own or have permission to use
   (screenshots of other products may also show their trademarks).
 - ElevenLabs narration and OpenAI pictures are subject to those providers' terms (e.g. plan
-  limits on commercial use; cloning a voice requires the speaker's consent).
+  limits on commercial use; cloning a voice requires the speaker's consent). Pictures made
+  through OpenRouter, and narration voiced through it, are subject to OpenRouter's terms and to
+  those of the model's provider.
 - The built-in fonts (SIL OFL), Lucide icons (ISC), Natural Earth map data, sound effects and
   music beds may be used in your videos, including commercially, with no attribution required
   in the video (Natural Earth asks for none; the OFL and ISC notices concern redistributing the
@@ -1067,3 +1146,4 @@ install; `vidgen validate` warns when it is missing.
 - *`vidgen render --scene ID` re-joins the other scenes as they are*: render the scene before a
   new transition or carry too.
 - *`ffmpeg not found`*: install it and open a new terminal.
+- *`ffmpeg X.Y is too old`*: install ffmpeg 4.4 or newer.

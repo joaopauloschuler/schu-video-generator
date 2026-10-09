@@ -269,6 +269,63 @@ Rules that apply to every step:
 
 ---
 
+## Phase F — OpenRouter providers (optional; existing defaults unchanged)
+
+Agents build with mocked APIs only. Live checks against OpenRouter (small, a few cents) are run
+by the coordinator at the end of each step with the owner's key; agents never see the key.
+
+### Step 61 — OpenRouter image provider
+- [x] `imagegen: {provider: openrouter, model: ...}` as an option; `openai` stays the default, existing projects and cached images unchanged (OpenAI cache keys pinned by a test; new optional `imagegen.resolution`)
+- [x] REST via the standard library (no SDK); key only from `OPENROUTER_API_KEY`, never written; shared retry helper for rate limits / server errors (`POST /api/v1/images`; also 524 / 529 retried; app headers `HTTP-Referer` / `X-OpenRouter-Title`)
+- [x] Map `size` / aspect, `seed`, `quality`, `negative` / `style` to OpenRouter's parameters; clear message for unsupported options (`aspect_ratio` nearest the format, `resolution`, explicit `size`; checked against the model's public record before the first paid request)
+- [x] Decode the response to PNG in `assets/generated/`; provider and model in the cache key and the sidecar JSON (+ aspect ratio, resolution, reported `cost_usd`; SVG refused until Step 61b)
+- [x] `vidgen imagegen --dry-run`: real per-model prices from OpenRouter's model list when online, else "price unknown"; MCP real runs still need `confirm_cost` (per-endpoint records: per image / per megapixel; per-token models are "price unknown"; each estimate states its basis)
+- [x] `vidgen validate`: unknown provider, missing `model`; schema lists the provider
+- [x] Tests with mocked responses (success, error, retried rate limit, price lookup) (`tests/test_imagegen_openrouter.py`, fixtures from real public records; `tools/live_check_openrouter.py` for the coordinator)
+- [x] Docs: CONFIG.md, README (key setup on Windows and Linux), AGENTS.md (choosing an image provider), third-party/terms notes
+
+### Step 61b — Vector (SVG) generated images
+- [x] Find out how OpenRouter's SVG/vectorization models are called (text prompt or input picture); if they only convert pictures, generate a PNG then vectorize it (2026-10-08: the SVG models are Recraft's `*-vector` — text prompt in, SVG out, one call, $0.08 / $0.30 per picture; no vectorise-only model listed, so no two-call pipeline; none has a ZDR endpoint)
+- [x] `generate: {..., format: svg}` on the `image` scene, only with a model that returns SVG (validate says which) (`imagegen.svg_model`; validate: error without `provider: openrouter`, warning for a model not known to make SVG with the SVG models listed; dry run / run check the live record)
+- [x] Stored as `assets/generated/<hash>.svg` + sidecar; format in the cache key (PNG keys unchanged; dry run, `--json` `format`, MCP through the same JSON)
+- [x] Sanitise before loading: drop scripts / filters / embedded rasters, flatten unsupported gradients, cap the path count (clear warning, simplify option) (`vidgen/svgclean.py`: also foreignObject, masks / clip paths, text, animation, links, entities; 1500 shapes / 60 000 segments; `simplify` % of the area)
+- [x] Loaded as vector shapes; `draw: true` (strokes then fill), `recolor: theme | none`, fit to region (`load_vector` / `VectorPicture`; also `.svg` files as `path`)
+- [x] Layout dump / lint treat it as one picture (kind `vector`)
+- [x] Tests: mocked SVG response, sanitiser, draw / recolor render test, path cap (`tests/test_vector_images.py`)
+- [x] Docs: CONFIG.md, AGENTS.md (when SVG is worth it) (+ EXTENDING.md, DESIGN §65)
+- [x] (from Step 61's live run) OpenRouter's data-policy 404 (account requires ZDR) → a clear error with the settings link and the image models that have a ZDR endpoint; CONFIG.md note; `tools/live_check_openrouter.py --zdr` and `--svg`
+
+### Step 62 — OpenRouter TTS provider (one provider per video)
+- [x] `voice: {provider: openrouter, model, voice, instructions, speed}`; `elevenlabs` stays the default; existing audio hashes stay valid (two ElevenLabs keys pinned + kphi3's committed hashes "ok"; keys of the provider not in use are ignored so a variant can switch)
+- [x] One provider per video: named `voices:` may change `voice` / `instructions`, not `provider`; a variant may switch provider (own `audio/<variant>/`); any mix is a validate error (also other-provider keys in a named voice, e.g. `voices.ana.voice_id`; named voices may also change `speed` / `model`)
+- [x] REST via the standard library, MP3 into the existing `audio/` cache; provider, model, voice, instructions, speed in each beat's hash (`POST /api/v1/audio/speech`, `response_format: mp3`; PCM-only models such as Gemini TTS converted with ffmpeg; app headers; ZDR data-policy 404 → the Step 61b message with the TTS models that have a ZDR endpoint)
+- [x] No neighbouring-beat context, no word timestamps (captions use estimated timings; `voice.timestamps` with this provider warns), no `language_code`
+- [x] `vidgen tts --dry-run` / `--json`: provider, model, voice, characters per beat and total, estimated cost where listed; MCP real runs still need `confirm_cost` (price per character = the highest of the model's providers, live public lookup; "price unknown" when audio is billed too or offline; a real run prints the cost OpenRouter reports via `/generation`)
+- [x] Pronunciation, multiple voices, readback, lint speed and captions work with it (tested)
+- [x] Not included: voice cloning from reference audio, multi-speaker input
+- [x] Tests with mocked responses (MP3 stored, hash changes, provider-mix error, fallback warning) (`tests/test_tts_openrouter.py`, fixtures `tests/data/openrouter_tts.json` from the public endpoints; validate warnings from a bundled dated model/voice list; `tools/live_check_openrouter.py --tts [--zdr] [--yes]`)
+- [x] Docs: CONFIG.md "Narration providers", README, AGENTS.md (choosing a voice provider, writing good `instructions`), an example variant (no audio committed) (`examples/minimal` variant `openrouter`; DESIGN §66, THIRD_PARTY_NOTICES)
+
+### Step 63 — Review of Phase F
+- [x] End to end with mocks (imagegen → render, tts → render), dry-run JSON over MCP, docs consistency, wheel build, full suite; the coordinator's live checks recorded in HANDOFF.md (`tests/test_phase_f_review.py`; live: ZDR 404 for Recraft / FLUX, Seedream 5.0 flash $0.018 as estimated, Kokoro and Gemini TTS MP3s fine; the TTS cost lookup now waits up to 15 s for OpenRouter's late records and says why when none came — to confirm live with `tools/live_check_openrouter.py --tts --zdr --yes`; key scrubbing hardened; `tts --json` `voice_id` null for OpenRouter)
+
+---
+
+## Phase G — Owner's reports from a real install
+
+### Step 64 — Bug fixes: ffmpeg 7.1 transitions, Manim 0.22 test fake
+- [x] Push, wipe and crossfade fail on Debian's ffmpeg 7.1.5 ("frame rate 1/0 is invalid") but work on 8.1: reproduce with a 7.1 build, fix the filter graph in `src/vidgen/render/ffmpeg.py` (`crossfade_graph` and the push/wipe paths) so it works on ffmpeg 6.1, 7.1 and 8.x; a test that runs each transition type; README states the supported ffmpeg versions (and a minimum, if one remains)
+- [x] With Manim 0.22, 6 quick tests fail: Manim now passes `repeat=` to a function whose fake in `tests/test_overlays.py` (~line 77) only accepts `num_frames`; make the fake accept both (and any future keyword) so tests pass on Manim 0.21 and 0.22; check real renders on 0.22
+
+### Step 65 — Local Kokoro TTS (optional extra)
+- [x] `voice: {provider: kokoro, voice, speed, lang}` running Kokoro-82M (https://huggingface.co/hexgrad/Kokoro-82M) locally, free and offline after the first model download; installed with `pip install ".[kokoro]"`; clear error naming the extra when it is missing (`src/vidgen/tts/kokoro.py`; extra `kokoro>=0.9.4` for Python < 3.13 — kokoro 0.9.4 declares <3.13; on 3.13 the error prints a forced install that worked here; also `device: cpu|cuda|auto`; `lang` from the voice's first letter or the video's `language:`)
+- [x] Same rules as the other providers: one provider per video, MP3 into `audio/`, provider/voice/speed/lang in each beat's hash, pronunciation applied, captions with estimated timings (or Kokoro's own word timings if it provides them), dry run shows "free (local)" (English word timings stored as `.align.json` for every beat; model + weights file in the hash, not the device; ElevenLabs / OpenRouter hashes pinned unchanged; MCP real `tts` without `confirm_cost` for Kokoro projects)
+- [x] Voices and languages listed and validated from Kokoro's own voice list; model download location and size documented; CPU works (GPU optional) (`src/vidgen/data/kokoro/voices.json`, 54 voices dated 2026-10-09; validate warnings; model loaded once per run, shared across voices and languages; real run here ~0.7x real time on 2 CPU cores)
+- [x] Tests mocked where the model is not installed; one real synthesis test, skipped unless the extra is installed (`tests/test_tts_kokoro.py`; the real test passed in a Python 3.12 venv with the extra)
+- [x] Docs: README install (Windows and Linux, incl. any system package such as espeak-ng), CONFIG.md "Narration providers", AGENTS.md (a free local voice for agents' own projects), THIRD_PARTY_NOTICES (Kokoro's licence) (+ DESIGN §68, `examples/minimal` variant `kokoro`; espeak-ng comes bundled in `espeakng-loader`, system package only a fallback)
+
+---
+
 ## Backlog (after Step 60)
 
 Not done in the roadmap; each is one line, with where it came from. Bugs first, then quality,
@@ -294,4 +351,9 @@ Nice-to-have / performance
 - [ ] MP4 cover art from the thumbnail (Steps 49–50); `generate:` for `screenshot` and behind a designed thumbnail (Step 55)
 - [ ] `vidgen gallery`: mid-beat stills, a project-type render test (Step 57)
 - [ ] A real image-generation (OpenAI) and speech-to-text (faster-whisper) run (Steps 54–55: no network for them here)
+- [ ] OpenRouter TTS cost: confirm live that `GET /generation` reports `total_cost` for `/audio/speech` requests and how late (`tools/live_check_openrouter.py --tts --zdr --yes`, or `--generation ID`); if it never does, read the cost another way (e.g. the key's usage before / after) (Step 63)
+- [ ] OpenRouter SVG generation never run live (no SVG model has a ZDR endpoint; the owner's account requires ZDR): `--svg --yes` with an account allowing non-ZDR providers (Step 61b / 63)
+- [ ] OpenRouter estimates use the highest provider's price (Kokoro live: ~6x the charge); optional `provider: {sort: price}` routing or a "from $X to $Y" range (Step 63)
+- [ ] Refresh `src/vidgen/data/openrouter/tts_models.json` (dated 2026-10-08) from the public lists when validate warns wrongly; a small `tools/` script could do it (Step 62)
+- [ ] Kokoro: refresh `src/vidgen/data/kokoro/voices.json` (dated 2026-10-09) when the model repo adds voices; drop the Python < 3.13 marker of the `kokoro` extra once kokoro / misaki declare 3.13; Kokoro v1.1-zh not supported; a custom `.pt` voice file is hashed by path, not content (Step 65)
 - [ ] `vidgen plan` could write an `output:` name from the title (a draft from `outline.md` renders `outline.mp4`); `storyboard --json` lists every still twice (video and scene sheets) — verbose for agents

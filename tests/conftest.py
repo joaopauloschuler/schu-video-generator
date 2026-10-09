@@ -12,6 +12,15 @@ from typing import Any
 import pytest
 import yaml
 
+#: OpenRouter's answer seen live on 2026-10-09 for an account requiring Zero Data Retention
+#: (`recraft/recraft-v4.1-flash`, `black-forest-labs/flux.2-klein-4b`; Step 63).
+LIVE_ZDR_404 = (
+    '{"error":{"message":"0 endpoints out of 1 requested are available matching your guardrail restrictions and data policy. '
+    'We removed them for the following reasons ...ZDR violation (account settings): 1 endpoint excluded; configurable at '
+    'https://openrouter.ai/settings/privacy","code":404,"metadata":{"input_endpoint_count":1,"ineligibility_reasons":'
+    '[{"reason":"zdr-violation-by-account","endpoint_count":1,"configure_url":"https://openrouter.ai/settings/privacy"}]}}}'
+)
+
 
 def minimal_config(**overrides: Any) -> dict[str, Any]:
     """A small valid raw config mapping."""

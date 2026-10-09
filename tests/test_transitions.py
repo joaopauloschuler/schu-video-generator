@@ -199,7 +199,8 @@ def test_voice_track_overlaps_and_fades_the_tail(tmp_path: Path) -> None:
 
 def test_crossfade_graph_offsets() -> None:
     graph, label = crossfade_graph([20, 15, 12], [5, 3], 10)
-    assert label == "x2" and graph[0] == "[0:v]settb=AVTB,setpts=PTS-STARTPTS[r0]"
+    # fps after setpts: FFmpeg 7.0/7.1's setpts clears the frame rate, which xfade needs (Step 64)
+    assert label == "x2" and graph[0] == "[0:v]tpad=stop=1:stop_mode=clone,setpts=PTS-STARTPTS,fps=10,trim=end_frame=20,settb=AVTB[r0]"
     assert graph[3] == "[r0][r1]xfade=transition=fade:duration=0.500000:offset=1.450000[x1]"
     assert graph[4] == "[x1][r2]xfade=transition=fade:duration=0.300000:offset=2.650000[x2]"  # 30 frames before it
 

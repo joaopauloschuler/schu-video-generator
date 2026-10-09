@@ -136,11 +136,27 @@ class VoiceSettings(_Strict):
     """ElevenLabs speaker boost."""
 
 
-class VoiceConfig(_Strict):
-    """Text-to-speech voice. Only the ElevenLabs provider exists for now."""
+#: Text-to-speech providers ``voice.provider`` accepts (one per video, DESIGN.md §66, §68).
+TTS_PROVIDERS: tuple[str, ...] = ("elevenlabs", "openrouter", "kokoro")
+#: Keys of ``voice:`` used only by some providers (the others ignore them).
+ELEVENLABS_VOICE_KEYS: tuple[str, ...] = ("voice_id", "model_id", "output_format", "settings", "context", "language_code")
+OPENROUTER_VOICE_KEYS: tuple[str, ...] = ("model", "voice", "instructions", "speed")
+KOKORO_VOICE_KEYS: tuple[str, ...] = ("voice", "speed", "lang", "device")
+#: Provider -> the keys of ``voice:`` it uses (besides ``provider``, ``timestamps``, ``label``, ``color``).
+PROVIDER_VOICE_KEYS: dict[str, tuple[str, ...]] = {
+    "elevenlabs": ELEVENLABS_VOICE_KEYS,
+    "openrouter": OPENROUTER_VOICE_KEYS,
+    "kokoro": KOKORO_VOICE_KEYS,
+}
+#: Kokoro's language codes (``voice.lang``; the first letter of its voice names).
+KokoroLang = Literal["a", "b", "e", "f", "h", "i", "j", "p", "z"]
 
-    provider: Literal["elevenlabs"] = "elevenlabs"
-    """TTS provider; only elevenlabs."""
+
+class VoiceConfig(_Strict):
+    """Text-to-speech voice: ElevenLabs (default), OpenRouter (DESIGN.md §66) or local Kokoro (§68)."""
+
+    provider: Literal["elevenlabs", "openrouter", "kokoro"] = "elevenlabs"
+    """TTS provider of the whole video: elevenlabs (ELEVENLABS_API_KEY), openrouter (many TTS models through OpenRouter; OPENROUTER_API_KEY; needs model) or kokoro (Kokoro-82M on this computer, free; pip install "schu-video-generator[kokoro]")."""
     voice_id: str = Field(default="nPczCjzI2devNBz1zQrb", min_length=1)
     """ElevenLabs voice id."""
     model_id: str = Field(default="eleven_multilingual_v2", min_length=1)
@@ -155,10 +171,36 @@ class VoiceConfig(_Strict):
     """Also fetch when each character is spoken (ElevenLabs with-timestamps), stored as audio/<beat>.align.json for exact karaoke captions."""
     language_code: LanguageCode | None = None
     """ElevenLabs language_code (ISO 639-1, e.g. pt) sent with every request, or false: never; default: the video's language for models that accept one (eleven_turbo_v2_5, eleven_flash_v2_5)."""
+    model: str | None = Field(default=None, min_length=1)
+    """openrouter only (required there): the OpenRouter text-to-speech model id, e.g. mistralai/voxtral-mini-tts-2603 (`vidgen tts --dry-run` shows its price)."""
+    voice: str | None = Field(default=None, min_length=1)
+    """openrouter and kokoro: the voice name, e.g. en_paul_neutral (each OpenRouter model lists its own; default: the model's own default voice, if it has one); kokoro: af_heart, bf_emma, pf_dora... (default: a voice of voice.lang)."""
+    instructions: str | None = Field(default=None, min_length=1)
+    """openrouter only: how to speak, e.g. "warm, unhurried explainer; slight pause before numbers" (models that take instructions: Gemini TTS, OpenAI; others ignore it)."""
+    speed: float | None = Field(default=None, ge=0.25, le=4.0)
+    """openrouter and kokoro: speaking speed multiplier (0.25-4); openrouter: for models that have one, default not sent (the model's own pace); kokoro: default 1."""
+    lang: KokoroLang | None = None
+    """kokoro only: language of the voice: a American English, b British English, e Spanish, f French, h Hindi, i Italian, j Japanese, p Brazilian Portuguese, z Mandarin Chinese; default: the first letter of voice, else from the video's language (English: a)."""
+    device: Literal["cpu", "cuda", "auto"] = "cpu"
+    """kokoro only: where the model runs: cpu, cuda (an NVIDIA GPU) or auto (a GPU if PyTorch sees one); does not change the audio hash."""
     label: str | None = Field(default=None, min_length=1)
     """Speaker name shown in subtitles / captions when speakers are shown (default: none for this voice)."""
     color: ColorRef | None = None
     """Speaker colour (theme token or hex) for captions that colour speakers; default the theme's text colour."""
+
+    @model_validator(mode="after")
+    def _provider_options(self) -> VoiceConfig:
+        # Keys of the other provider are ignored (a variant may switch the provider while the
+        # base config's keys are merged in); only openrouter's required model is checked here.
+        if self.provider != "openrouter":
+            return self
+        if self.model is None:
+            raise ValueError(
+                "provider openrouter needs a model, e.g. model: mistralai/voxtral-mini-tts-2603 (`vidgen tts --dry-run` shows its price)"
+            )
+        if "/" not in self.model.strip("/"):
+            raise ValueError(f"OpenRouter model ids look like author/name (e.g. mistralai/voxtral-mini-tts-2603), not {self.model!r}")
+        return self
 
 
 class VoiceSettingsOverride(_Strict):
@@ -178,8 +220,8 @@ class VoiceEntry(_Strict):
     """A named voice of ``voices:`` (DESIGN.md §46): the base ``voice:`` with what is given here
     changed. ``label`` and ``color`` are not inherited (they name this speaker)."""
 
-    provider: Literal["elevenlabs"] | None = None
-    """TTS provider; default the base voice's."""
+    provider: Literal["elevenlabs", "openrouter", "kokoro"] | None = None
+    """TTS provider; only the base voice's (one provider per video: a variant may switch it for the whole video)."""
     voice_id: str | None = Field(default=None, min_length=1)
     """ElevenLabs voice id; default the base voice's."""
     model_id: str | None = Field(default=None, min_length=1)
@@ -194,6 +236,16 @@ class VoiceEntry(_Strict):
     """Fetch character timings for this voice's beats; default the base voice's."""
     language_code: LanguageCode | None = None
     """ElevenLabs language_code for this voice's beats, or false; default the base voice's."""
+    model: str | None = Field(default=None, min_length=1)
+    """openrouter: the TTS model of this voice's beats; default the base voice's."""
+    voice: str | None = Field(default=None, min_length=1)
+    """openrouter / kokoro: the voice name for this speaker; default the base voice's."""
+    instructions: str | None = Field(default=None, min_length=1)
+    """openrouter: how this speaker talks; default the base voice's."""
+    speed: float | None = Field(default=None, ge=0.25, le=4.0)
+    """openrouter / kokoro: speaking speed multiplier (0.25-4); default the base voice's."""
+    lang: KokoroLang | None = None
+    """kokoro: language of this speaker's voice (a, b, e, f, h, i, j, p, z); default the first letter of its voice, else the base voice's."""
     label: str | None = Field(default=None, min_length=1)
     """Speaker name in subtitles / captions; default the voice's name (underscores as spaces, first letter capital)."""
     color: ColorRef | None = None
@@ -260,18 +312,46 @@ class ImagegenConfig(_Strict):
     """The optional ``imagegen:`` section: the image-generation provider of ``vidgen imagegen``
     and of ``generate:`` params (DESIGN.md §58)."""
 
-    provider: Literal["openai"] = "openai"
-    """Image-generation provider: openai (OpenAI Images API, paid; OPENAI_API_KEY)."""
+    provider: Literal["openai", "openrouter"] = "openai"
+    """Image-generation provider: openai (OpenAI Images API, paid; OPENAI_API_KEY) or openrouter (many models through OpenRouter, paid; OPENROUTER_API_KEY; needs model)."""
     model: str = Field(default="gpt-image-1", min_length=1)
-    """Model: gpt-image-1, dall-e-3 or dall-e-2 (another name is sent as is, with gpt-image-1's sizes)."""
+    """Model: openai: gpt-image-1, dall-e-3 or dall-e-2 (another name is sent as is, with gpt-image-1's sizes); openrouter: required, an OpenRouter model id such as bytedance-seed/seedream-4.5."""
     size: Literal["auto"] | ImageSize = "auto"
-    """Picture size WIDTHxHEIGHT sent to the provider, or auto: the model's landscape, portrait or square size by the video's format (or the generate: aspect)."""
+    """Picture size WIDTHxHEIGHT sent to the provider, or auto: the model's landscape, portrait or square size by the video's format (or the generate: aspect); openrouter: auto sends an aspect ratio (16:9, 9:16, 1:1) instead."""
     quality: str | None = Field(default=None, min_length=1)
-    """Quality sent to the provider (gpt-image-1: low, medium, high; dall-e-3: standard, hd); default: medium for gpt-image models, standard for dall-e-3, none for dall-e-2."""
+    """Quality sent to the provider (gpt-image-1: low, medium, high; dall-e-3: standard, hd; openrouter: auto, low, medium, high, xhigh, max where the model has it); default: medium for gpt-image models, standard for dall-e-3, none for dall-e-2 and openrouter."""
+    resolution: Literal["512", "768", "1K", "1.5K", "2K", "4K"] | None = None
+    """openrouter only: resolution tier (512, 768, 1K, 1.5K, 2K, 4K) where the model has it, with the aspect ratio; default: the model's own; not with a WIDTHxHEIGHT size."""
     style: str | None = Field(default=None, min_length=1)
     """Style added to every prompt for a consistent look: a preset (photo, illustration, flat, isometric, watercolor, line_art, render_3d, cinematic) or your own words; a generate: style replaces it."""
     negative: str | None = Field(default=None, min_length=1)
     """What every picture should avoid (added to each generate: negative), e.g. "text, watermarks"."""
+    svg_model: str | None = Field(default=None, min_length=1)
+    """openrouter only: the model of generate: pictures with format: svg (default: model), e.g. recraft/recraft-v4.1-vector, so one video can mix raster and vector pictures."""
+
+    @model_validator(mode="after")
+    def _provider_options(self) -> ImagegenConfig:
+        if self.provider == "openai":
+            if self.resolution is not None:
+                raise ValueError("resolution is an openrouter option; with openai set size: WIDTHxHEIGHT (or auto)")
+            if self.svg_model is not None:
+                raise ValueError("svg_model is an openrouter option (OpenAI makes no SVG pictures); set provider: openrouter")
+            return self
+        if self.svg_model is not None and "/" not in self.svg_model.strip("/"):
+            raise ValueError(f"OpenRouter model ids look like author/name (e.g. recraft/recraft-v4.1-vector), not svg_model {self.svg_model!r}")
+        if "model" not in self.model_fields_set:
+            raise ValueError("provider openrouter needs a model, e.g. model: bytedance-seed/seedream-4.5 (`vidgen imagegen --dry-run` shows its price)")
+        if "/" not in self.model.strip("/"):
+            raise ValueError(f"OpenRouter model ids look like author/name (e.g. openai/gpt-image-1), not {self.model!r}")
+        if self.quality is not None and self.quality not in OPENROUTER_QUALITIES:
+            raise ValueError(f"quality {self.quality!r} is not an OpenRouter quality; use one of {', '.join(OPENROUTER_QUALITIES)}")
+        if self.resolution is not None and self.size != "auto":
+            raise ValueError("set size: WIDTHxHEIGHT or resolution, not both (OpenRouter rejects a size that disagrees with the resolution)")
+        return self
+
+
+#: ``quality`` values OpenRouter's image API accepts (a model may take fewer; DESIGN.md §64).
+OPENROUTER_QUALITIES: tuple[str, ...] = ("auto", "low", "medium", "high", "xhigh", "max")
 
 
 #: ``vidgen lint`` rule names (DESIGN.md §16). :class:`LintRules` has one field per name and
@@ -1130,7 +1210,7 @@ class VideoConfig(_Strict):
     stt: SttConfig = Field(default_factory=SttConfig)
     """Speech to text for `vidgen readback` (the narration transcribed and compared with the text): {provider, model, language, device}."""
     imagegen: ImagegenConfig = Field(default_factory=ImagegenConfig)
-    """Image generation for generate: params and `vidgen imagegen`: {provider, model, size, quality, style, negative}."""
+    """Image generation for generate: params and `vidgen imagegen`: {provider (openai or openrouter), model, size, quality, resolution, style, negative}."""
     scenes: list[SceneConfig] = Field(min_length=1)
     """The scenes in order (at least one); scene ids and beat ids must be unique."""
 
@@ -1316,9 +1396,9 @@ def parse_config(data: Any, source: str = "video.yaml") -> VideoConfig:
         config = VideoConfig.model_validate(data)
     except ValidationError as exc:
         raise VidgenError(format_validation_error(exc, source, VideoConfig), problems=validation_problems(exc, model=VideoConfig, noun="key")) from None
-    from vidgen.voices import voice_reference_problems
+    from vidgen.voices import voice_provider_problems, voice_reference_problems
 
-    problems = voice_reference_problems(config)
+    problems = voice_reference_problems(config) + voice_provider_problems(config)
     if problems:
         lines = [f"{source}: invalid config", *(f"  {problem}" for problem in problems)]
         raise VidgenError("\n".join(lines), problems=problems)

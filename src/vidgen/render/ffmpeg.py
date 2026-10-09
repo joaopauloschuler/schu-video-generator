@@ -7,6 +7,7 @@ characters are passed through unchanged.
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 import sys
@@ -25,6 +26,9 @@ AUDIO_BITRATE = "192k"
 #: Quality of the video when the join has to encode it (crossfades, DESIGN.md §49): visually
 #: lossless next to the scenes' own encoding (Manim: CRF 23).
 VIDEO_CRF = "18"
+#: Oldest ffmpeg vidgen supports: 4.3 has no ``amix=normalize``, 4.2 no ``xfade`` (tested with
+#: 4.4, 5.1, 6.1, 7.0, 7.1 and 8.1; README "Install").
+MIN_VERSION = (4, 4)
 
 
 def find_ffmpeg() -> str:
@@ -41,8 +45,38 @@ def find_ffmpeg() -> str:
     return exe
 
 
+def parse_version(text: str) -> tuple[int, int] | None:
+    """``(major, minor)`` from the first line of ``ffmpeg -version`` (``ffmpeg version 7.1.5``,
+    ``n7.1``, ``6.1.1-3ubuntu5``, ``7.1-full_build-www.gyan.dev``); ``None`` for a build named by
+    date or git revision (``N-117000-g...``, ``2024-10-10-git-...``)."""
+    match = re.match(r"ffmpeg version n?(\d+)\.(\d+)", text.strip())
+    return (int(match.group(1)), int(match.group(2))) if match else None
+
+
+def ffmpeg_version(ffmpeg: str) -> tuple[int, int] | None:
+    """The ``(major, minor)`` version of the ``ffmpeg`` executable, or ``None`` if unknown."""
+    try:
+        result = subprocess.run([ffmpeg, "-version"], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return parse_version(result.stdout)
+
+
+def version_hint(ffmpeg: str) -> str:
+    """A line for an ffmpeg error when ``ffmpeg`` is older than :data:`MIN_VERSION` (else ``""``)."""
+    version = ffmpeg_version(ffmpeg)
+    if version is None or version >= MIN_VERSION:
+        return ""
+    return (
+        f"\nffmpeg {version[0]}.{version[1]} is too old: vidgen needs ffmpeg {MIN_VERSION[0]}.{MIN_VERSION[1]} "
+        "or newer (crossfades, pushes and wipes use `xfade`, sound effects `amix=normalize`). Install "
+        "a newer ffmpeg, see https://ffmpeg.org/download.html"
+    )
+
+
 def run_ffmpeg(ffmpeg: str, args: list[str], what: str) -> None:
-    """Run ``ffmpeg -y -v error <args>``; a failure becomes a :class:`VidgenError` with stderr."""
+    """Run ``ffmpeg -y -v error <args>``; a failure becomes a :class:`VidgenError` with stderr
+    (and :func:`version_hint` when the ffmpeg is too old)."""
     result = subprocess.run(
         [ffmpeg, "-y", "-hide_banner", "-nostdin", "-v", "error", *args],
         capture_output=True,
@@ -52,7 +86,7 @@ def run_ffmpeg(ffmpeg: str, args: list[str], what: str) -> None:
     )
     if result.returncode != 0:
         details = result.stderr.strip()[-2000:] or f"exit code {result.returncode}"
-        raise VidgenError(f"ffmpeg failed while {what}:\n{details}")
+        raise VidgenError(f"ffmpeg failed while {what}:\n{details}{version_hint(ffmpeg)}")
 
 
 @dataclass(frozen=True)
@@ -131,6 +165,16 @@ def write_concat_list(files: list[Path], list_file: Path) -> None:
     list_file.write_text("".join(lines), encoding="utf-8")
 
 
+def constant_rate(frames: int, fps: int) -> str:
+    """Filters making a video input exactly ``frames`` frames at ``fps``, starting at 0, in the
+    ``AVTB`` time base, with its frame rate set on the link, the same on every FFmpeg (DESIGN.md
+    §49, Step 64). ``xfade`` refuses an input without a frame rate, and FFmpeg 7.0 / 7.1's
+    ``setpts`` clears it ("1/0 is invalid"), so ``fps`` sets it after the ``setpts``. FFmpeg 4.4 /
+    5.1's ``fps`` drops the last frame (their end of stream is at its timestamp), so ``tpad``
+    first adds a copy of it and ``trim`` cuts the count back."""
+    return f"tpad=stop=1:stop_mode=clone,setpts=PTS-STARTPTS,fps={fps},trim=end_frame={frames},settb=AVTB"
+
+
 def crossfade_graph(runs: list[int], crossfades: list[int], fps: int, kinds: list[str] | None = None) -> tuple[list[str], str]:
     """The filter graph blending video inputs ``0 .. len(runs) - 1`` (``runs[k]`` frames each)
     with a transition of ``crossfades[k - 1]`` frames between input ``k - 1`` and ``k``: its
@@ -138,8 +182,10 @@ def crossfade_graph(runs: list[int], crossfades: list[int], fps: int, kinds: lis
     ``slideleft``, ``wipeup``... for a push or wipe, DESIGN.md §50). Each transition starts half
     a frame before its first shared frame, so the progress at shared frame ``j`` is ``(j + 0.5) /
     n`` (symmetric; the middle frame of an odd crossfade is 50/50) and the output has exactly
-    ``sum(runs) - sum(crossfades)`` frames."""
-    graph = [f"[{k}:v]settb=AVTB,setpts=PTS-STARTPTS[r{k}]" for k in range(len(runs))]
+    ``sum(runs) - sum(crossfades)`` frames.
+
+    Each input becomes exactly ``runs[k]`` frames at a constant ``fps`` (:func:`constant_rate`)."""
+    graph = [f"[{k}:v]{constant_rate(n, fps)}[r{k}]" for k, n in enumerate(runs)]
     label, length = "r0", runs[0]
     for k in range(1, len(runs)):
         n = crossfades[k - 1]

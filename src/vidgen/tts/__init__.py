@@ -1,6 +1,9 @@
 """Text-to-speech: the provider seam and the audio cache status (DESIGN.md §7).
 
-- :func:`get_provider` returns the provider for a ``voice`` config (only ElevenLabs exists).
+- :func:`get_provider` returns the provider for a ``voice`` config: ElevenLabs
+  (:mod:`vidgen.tts.elevenlabs`, the default), OpenRouter (:mod:`vidgen.tts.openrouter`) or
+  Kokoro on this computer (:mod:`vidgen.tts.kokoro`, an optional extra); one provider per video
+  (DESIGN.md §66, §68).
 - :func:`audio_status` tells, without an API key, which beats have up-to-date, stale or missing
   audio; ``vidgen render`` uses it to warn and ``vidgen validate`` to summarise.
 - :func:`vidgen.tts.run.run_tts` is the ``vidgen tts`` command.
@@ -10,7 +13,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Protocol
 
-from vidgen.config import VoiceConfig
+from vidgen.config import TTS_PROVIDERS, VoiceConfig
 from vidgen.errors import VidgenError
 
 if TYPE_CHECKING:
@@ -23,8 +26,9 @@ class TTSProvider(Protocol):
     A provider that can say when each character is spoken also has ``synthesize_timed(text,
     previous_text=None, next_text=None) -> (audio, alignment | None)`` (``alignment``:
     ``{characters, character_start_times_seconds, character_end_times_seconds}``); ``vidgen
-    tts`` calls it when ``voice.timestamps`` is on and stores the alignment next to the MP3
-    (:func:`vidgen.speech.write_alignment`)."""
+    tts`` calls it when ``voice.timestamps`` is on, or always when the provider's
+    ``timings_included`` is true (Kokoro: the timings cost nothing), and stores the alignment
+    next to the MP3 (:func:`vidgen.speech.write_alignment`)."""
 
     name: str
 
@@ -42,12 +46,42 @@ class TTSProvider(Protocol):
 
 
 def get_provider(voice: VoiceConfig) -> TTSProvider:
-    """The provider for ``voice.provider``."""
+    """The provider for ``voice.provider`` (ElevenLabs, OpenRouter: DESIGN.md §66, or Kokoro on
+    this computer: §68). Constructing one loads no model and needs no key."""
     if voice.provider == "elevenlabs":
         from vidgen.tts.elevenlabs import ElevenLabsProvider
 
         return ElevenLabsProvider(voice)
-    raise VidgenError(f"unknown voice provider {voice.provider!r}; available: elevenlabs")
+    if voice.provider == "openrouter":
+        from vidgen.tts.openrouter import OpenRouterTTSProvider
+
+        return OpenRouterTTSProvider(voice)
+    if voice.provider == "kokoro":
+        from vidgen.tts.kokoro import KokoroProvider
+
+        return KokoroProvider(voice)
+    raise VidgenError(f"unknown voice provider {voice.provider!r}; available: {', '.join(TTS_PROVIDERS)}")
+
+
+def tts_warnings(project: Project) -> list[str]:
+    """What ``vidgen validate`` warns about the voices (no network): OpenRouter models and voices
+    not in the bundled list, Kokoro voices not in its list or of another language, the Kokoro
+    extra not installed, ``timestamps`` with a provider or language that returns no timings."""
+    from vidgen.tts import kokoro
+    from vidgen.tts.openrouter import model_warnings
+
+    used = set(project.voice_names().values())
+    names = [None, *(n for n in project.config.voices if n in used)]
+    out: list[str] = []
+    seen: set[str] = set()  # a named voice inheriting the base model says the same once
+    for name in names:
+        voice, where = project.voice(name), "voice" if name is None else f"voices.{name}"
+        for warning in [*model_warnings(voice, where), *kokoro.voice_warnings(voice, where, project.config.language)]:
+            said = warning.split(": ", 1)[-1]
+            if said not in seen:
+                seen.add(said)
+                out.append(warning)
+    return out + kokoro.install_warnings(project.voice(n) for n in names)
 
 
 def beat_providers(project: Project) -> dict[str, TTSProvider]:
@@ -77,4 +111,5 @@ __all__ = [
     "format_audio_summary",
     "get_provider",
     "orphaned_audio",
+    "tts_warnings",
 ]
