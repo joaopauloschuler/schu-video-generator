@@ -6367,3 +6367,90 @@ How to test
   --yes` (one Kokoro beat, < $0.001; now prints the generation id and the cost or why it is
   missing), `--generation gen-... --wait 60` (free), `--zdr --yes` (one Seedream picture,
   $0.018).
+
+## Step 64 — Bug fixes: ffmpeg 7.1 transitions, Manim 0.22 test fake
+What was fixed
+1. **Crossfade / push / wipe failed on ffmpeg 7.0 and 7.1** ("The inputs needs to be a constant
+   frame rate; current rate of 1/0 is invalid"). Root cause: FFmpeg 7.0 and 7.1's `setpts`
+   unconditionally sets its output link's frame rate to `1/0` ("unknown"; 6.x passes it through,
+   8.x only clears it with the new `strip_fps` option), and `xfade` refuses an input without a
+   frame rate. Each run entered `xfade` as `settb=AVTB,setpts=PTS-STARTPTS`. Reproduced exactly
+   on a 7.1.5 built from the FFmpeg sources (tag `n7.1.5`, the owner's version) and on 7.0.2
+   (static build from the imageio-ffmpeg wheel). Fix: every run goes through
+   `ffmpeg.constant_rate(frames, fps)` =
+   `tpad=stop=1:stop_mode=clone,setpts=PTS-STARTPTS,fps=<fps>,trim=end_frame=<frames>,settb=AVTB`:
+   `fps` after `setpts` sets the rate on every version. A plain `fps` broke FFmpeg 4.4 / 5.1
+   (found by the new test): their `fps` drops a stream's last frame (end of stream at that
+   frame's timestamp), so xfade ended a frame early and the overlay clip landed one frame off;
+   the one-frame `tpad` before and `trim` back to the exact count after make it identical
+   everywhere. The overlay clip chain (`overlay_graph`) is unchanged (`overlay` does not need a
+   frame rate; tested).
+2. **Minimum ffmpeg**: 4.4 (`ffmpeg.MIN_VERSION`): 4.3 has no `amix=normalize` (sound
+   effects), 4.2 no `xfade` (checked in the sources; 4.2.2 run: "No such filter: 'xfade'").
+   `run_ffmpeg` appends `version_hint(ffmpeg)` to its error when the ffmpeg on PATH is older
+   ("ffmpeg 4.2 is too old: vidgen needs ffmpeg 4.4 or newer (...)"); `ffmpeg -version` is only
+   run after a failure, so nothing slows down and `validate` does not need ffmpeg.
+3. **Manim 0.22 test fake**: Manim 0.22's `CairoRenderer.add_frame` calls
+   `file_writer.write_frame(frame, repeat=num_frames)` (keyword-only `repeat`; 0.21:
+   `num_frames=`). `tests/test_overlays.py`'s `render()` replaced `write_frame` with
+   `keep(frame, num_frames=1)`; it now takes `(frame, *args, **kwargs)`, counts `repeat` /
+   `num_frames` / a positional count and forwards everything unchanged. Production code never
+   wraps `write_frame`: vidgen's three wrappers (`capture.FrameCapture.attach`,
+   `overlay_layer.OverlayLayer.attach`, `transitions.ColorFade.attach`) wrap
+   `renderer.add_frame(frame, num_frames=1)`, whose signature and callers (`render`,
+   `freeze_current_frame(num_frames=...)`) are the same in 0.22, so nothing to change there.
+   Other 0.22 differences seen: `write_frame` now "takes ownership" of the array and encodes
+   asynchronously (the caller must not mutate it afterwards) — vidgen's wrappers always pass
+   fresh arrays (`get_frame()` is a copy; `composite` / `ColorFade.apply` copy), so fine;
+   otherwise no new warnings (the `set_width` deprecation in `scenes/actions.py:466` and
+   Pillow's `mode` warning are the same on 0.21).
+
+Verified on
+- ffmpeg 4.4.8, 5.1.10, 8.1.3 (minimal builds from the FFmpeg git tags, no asm), 6.1.1 (Ubuntu
+  apt), 7.0.2 (the johnvansickle static build inside the imageio-ffmpeg 0.6.0 wheel):
+  `tests/test_push_wipe_carry.py`, `tests/test_transitions.py`, `tests/test_ffmpeg_version.py`
+  incl. the real rendered push / wipe / crossfade videos, 61 passed on each. 7.1.5 (full build
+  from tag `n7.1.5` with libx264 + libmp3lame) first on PATH: the full suite, 2368 passed,
+  1 skipped. Before the fix
+  the new join test failed on 7.0.2 and 7.1.5 with the owner's exact message. Debian's 7.1.5
+  package itself was not available (deb.debian.org and conda-forge blocked; GitHub release
+  binaries not reachable), so the 7.1.5 here is built from the same upstream tag.
+- Manim 0.22.0 in a separate venv (`/home/claude/venv-manim022`, PyAV 19.0.1; the main venv
+  stays on 0.21): quick suite `-m "not slow"` 1929 passed, 1 skipped (before the fake's fix
+  the owner saw 6 failures); with real renders (`test_push_wipe_carry`, `test_transitions`,
+  `test_overlays`, `test_frames`, `test_render`, ffmpeg 6.1) 110 passed.
+
+Files touched
+- `src/vidgen/render/ffmpeg.py` (`constant_rate`, `crossfade_graph`, `MIN_VERSION`,
+  `parse_version`, `ffmpeg_version`, `version_hint`, `run_ffmpeg`).
+- Tests: `tests/test_push_wipe_carry.py` (graph strings; new
+  `test_graph_inputs_keep_a_frame_rate`, `test_every_transition_joins_with_the_ffmpeg_on_path`
+  ×6: fade, slideleft, slideup, wiperight, wipedown, smoothleft, through the real join with a cut
+  run + overlay clip, frame count and constant rate checked), `tests/test_transitions.py` (graph
+  string), new `tests/test_ffmpeg_version.py` (10), `tests/test_overlays.py` (the fake).
+- Docs: README "Install" (supported ffmpeg / Manim versions) and Troubleshooting, DESIGN.md §10
+  (Manim 0.22) and §49 (the input chain, minimum version), AGENTS.md + guide copy (one
+  troubleshooting line), tasklist.md (Step 64 ticked).
+
+Public interfaces added/changed (compatible; `vidgen.api` unchanged)
+- `vidgen.render.ffmpeg`: `MIN_VERSION`, `constant_rate`, `parse_version`, `ffmpeg_version`,
+  `version_hint`; `crossfade_graph`'s input chains changed; `run_ffmpeg` errors may end with the
+  version hint.
+
+Known gaps / TODOs
+- Debian's own 7.1.5 build not run (same upstream source as tested). Windows ffmpeg builds
+  (gyan.dev) not run; their version strings are parsed (tested).
+- With a run shorter than planned the `tpad` clone adds one still frame at its end (before:
+  the run was just shorter); the join's "scene does not start where planned" warning still
+  reports such drift.
+
+How to test
+- Full: `/home/claude/venv/bin/python -m pytest -q -n auto` (2368 passed, 1 skipped, 10:08 on
+  2 cores; Step 63 had 2351 — 17 new tests).
+- Step only: `pytest tests/test_push_wipe_carry.py tests/test_transitions.py
+  tests/test_ffmpeg_version.py tests/test_overlays.py`.
+- Another ffmpeg: put its folder first on PATH, e.g. `PATH=/opt/ffmpeg-7.1/bin:$PATH pytest
+  tests/test_push_wipe_carry.py -k "every_transition or frame_math"` (vidgen uses the ffmpeg
+  on PATH).
+- Manim 0.22: `python -m venv v22 && v22/bin/pip install -e ".[dev]" manim==0.22.0`, then
+  `v22/bin/python -m pytest -q -m "not slow"`.

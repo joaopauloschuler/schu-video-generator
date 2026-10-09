@@ -1121,3 +1121,4 @@ install; `vidgen validate` warns when it is missing.
 - *`vidgen render --scene ID` re-joins the other scenes as they are*: render the scene before a
   new transition or carry too.
 - *`ffmpeg not found`*: install it and open a new terminal.
+- *`ffmpeg X.Y is too old`*: install ffmpeg 4.4 or newer.

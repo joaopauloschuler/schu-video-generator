@@ -269,6 +269,13 @@ Upgrading an environment that installed this project before it was renamed (as `
 An unrelated project on PyPI is also named `vidgen` and also installs a top-level `vidgen`
 package, so do not install both in the same environment.
 
+**ffmpeg**: version 4.4 or newer (tested with 4.4, 5.1, 6.1, 7.0, 7.1 and 8.1). Older ones lack
+filters the join uses (`xfade` for crossfades, pushes and wipes; `amix=normalize` for sound
+effects); vidgen names the version in its error when an older ffmpeg fails. (Copies of
+schu-video-generator from before the fix failed crossfades, pushes and wipes on ffmpeg 7.0 /
+7.1, e.g. Debian 13's, with "frame rate 1/0 is invalid": update rather than install another
+ffmpeg.) **Manim**: 0.19 or newer (tested with 0.19, 0.21 and 0.22).
+
 ### Windows
 
 1. **Python 3.10–3.13** from [python.org](https://www.python.org/downloads/) (tick "Add
@@ -513,6 +520,8 @@ all rendering. Run the full suite before committing. No test needs network or ke
 ## Troubleshooting
 
 - `ffmpeg not found on PATH` — install it and open a new terminal.
+- `ffmpeg X.Y is too old` (after an ffmpeg error) — install ffmpeg 4.4 or newer (`ffmpeg
+  -version` shows which one is first on PATH).
 - Text in a fallback font — a font named in the theme (other than the bundled Inter, Source
   Serif 4 and JetBrains Mono NL) is not installed (for all users, on Windows).
 - `cannot write ...mp4 ... is it open in another program` — close the video player showing the

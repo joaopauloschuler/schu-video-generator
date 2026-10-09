@@ -766,7 +766,10 @@ the measured loudness, §48).
   Python 3.10 install) includes MP3 encoder padding, ~25–50 ms more per beat than PyAV 14+.
   Decoding gives identical timings everywhere (kphi3: unchanged with PyAV 19).
 - **Dependencies**: `manim>=0.19` (the `code` scene uses the 0.19 `Code` API). Tested with
-  Manim 0.19.1 / PyAV 13 on Python 3.10 and Manim 0.21 / PyAV 19 on Python 3.13.
+  Manim 0.19.1 / PyAV 13 on Python 3.10 and Manim 0.21 / PyAV 19 on Python 3.13; Manim 0.22
+  (Step 64) also passes (its `SceneFileWriter.write_frame` takes the count as keyword-only
+  `repeat` instead of `num_frames`; `renderer.add_frame(frame, num_frames)`, which vidgen
+  wraps, is unchanged).
 - **Config**: `format`/`preview` `width` and `height` must be even (Manim's H.264 writer
   crashed with a segfault on odd sizes). Config files may start with a UTF-8 BOM (Windows
   Notepad) and use CRLF line endings.
@@ -3267,7 +3270,15 @@ the measured loudness, §48).
   `VIDEO_CRF`, yuv420p) — decision: re-encoding only the transitions would need cuts at arbitrary
   frames of stream-copied H.264 (keyframes), and CRF 18 over Manim's CRF 23 sources is visually
   lossless; it costs about real time at 1080p. Without crossfades the join is the old stream copy.
-  `xfade` also has wipes and slides (Step 47).
+  `xfade` also has wipes and slides (Step 47). Each run enters `xfade` through
+  `ffmpeg.constant_rate` (Step 64): `tpad=stop=1:stop_mode=clone,setpts=PTS-STARTPTS,fps=<fps>,
+  trim=end_frame=<run frames>,settb=AVTB`. `xfade` refuses an input without a constant frame
+  rate, and FFmpeg 7.0 / 7.1's `setpts` clears it ("1/0 is invalid"; 6.x keeps it, 8.x clears
+  it only with `strip_fps`), so `fps` sets it after the `setpts`; FFmpeg 4.4 / 5.1's `fps`
+  drops a stream's last frame (their end of stream is at that frame's timestamp), hence the
+  one-frame `tpad` before and the `trim` back to the exact count after. Tested on 4.4, 5.1,
+  6.1, 7.0, 7.1 and 8.1. ffmpeg 4.4 or newer is required (`ffmpeg.MIN_VERSION`; 4.3 lacks
+  `amix=normalize`, 4.2 `xfade`); an ffmpeg error from an older one says so (`version_hint`).
 - **Audio at the join**: the padded scene WAVs keep their exact lengths; with overlaps they are
   summed into `padded/voice.wav` (`transitions.write_voice_track`, sample offsets from the same
   cumulative rounding as before, so nothing drifts), the earlier scene's tail fading out (raised
