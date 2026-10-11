@@ -1,0 +1,84 @@
+# Starter config from the video cookbook (docs/COOKBOOK.md).
+# Copy into a project made with `vidgen init`, together with the extension files it uses
+# (cold_open_photo.py + science_helpers.py for the hook below) in extensions/.
+#
+# <Title>. Sources: <every paper / URL the facts come from, and where your local copies live>.
+# Images: <origin + licence of every picture>.
+title: "<Title>"
+output: my_video
+
+format: {width: 1920, height: 1080, fps: 30}
+preview: {width: 854, height: 480, fps: 15}
+
+theme:
+  preset: dark_tech
+  colors: {background: "#0B0F1A", surface: "#121829", primary: "#4CC9F0", secondary: "#A78BFA",
+           highlight: "#FFD166", tertiary: "#5EEAD4", accent: "#FF6B8B"}
+
+# Free and local, good for drafts (needs the kokoro extra: pip install "schu-video-generator[kokoro]"):
+voice: {provider: kokoro, voice: af_heart}
+# Most natural, paid per character (key in the ELEVENLABS_API_KEY environment variable;
+# always check `vidgen tts --dry-run` first):
+# voice: {provider: elevenlabs, voice_id: nPczCjzI2devNBz1zQrb, model_id: eleven_multilingual_v2, timestamps: true}
+
+narration: {pad: 0.25}
+
+pronunciation:            # changes only the spoken text; subtitles keep the original
+  README: "read me"
+  OpenCL: "Open C L"
+  "1.2.0": "one point two point oh"
+  # Kokoro only, inline IPA:          Kyiv: "[Kyiv](/kˈiv/)"
+  # Kokoro, an acronym as one word:   CUDA: "[CUDA](/kˈudə/)"
+
+music: {source: calm, volume: -3}        # calm (documentary), pulse (tech), bright (upbeat)
+sfx: {gain: -2}
+transition: {type: crossfade, duration: 0.35}
+
+# lint:                                   # relax a rule only with a reason (see the cookbook)
+#   rules:
+#     narration_speed: {max_rate: 4.0}    # for a voice that naturally reads 3.5-3.9 words/s
+
+overlays:
+  - {type: progress_bar, exclude: [hook, sources, credits]}
+  # videos over ~4 min: chapter cards plus
+  # - {type: chapter_indicator, total: true, exclude: [hook, sources, credits]}
+
+thumbnail: {title: "<Provocative question?>", subtitle: "<Subject>", icon: brain}
+
+scenes:
+  - id: hook                     # cold open: motion on frame 1, the question by second 3-5
+    type: cold_open              # from cold_open_photo.py (or dataflow_hook from software_scenes.py)
+    transition: cut
+    params:
+      path: assets/hook.jpg      # your photo, relative to the project root
+      title: "<The big claim>"
+      line2: "<The second line>"
+      tag: "THE EVIDENCE, AS REPORTED"
+      credit: "Photo: <author>, <licence>"
+    beats:
+      - {id: hook_b1, text: "Something is already moving on screen while the first line states the stakes."}
+      - {id: hook_b2, text: "Then the title lands, with the surprising claim the video is about."}
+      - {id: hook_b3, text: "A second line adds the detail that makes people want to know more."}
+      - {id: hook_b4, text: "And a question promises the payoff: so what exactly did they find?"}
+
+  - id: ch1
+    type: chapter
+    params: {number: 1, title: "<Chapter>", icon: flame}
+    duration: 1.8
+
+  # ... content scenes: a new visual every 3-6 s, one idea per beat ...
+
+  - id: sources
+    type: end_card
+    params:
+      title: "Sources"
+      icon: book-open
+      lines: ["Author et al. 2013, Journal 21:37, arXiv:1303.2398"]
+    duration: 7
+
+  - id: credits
+    type: end_card
+    params:
+      title: "Image credits"
+      lines: ["Photo: Author, CC BY 4.0", "Diagram: NOAA, public domain"]
+    duration: 5

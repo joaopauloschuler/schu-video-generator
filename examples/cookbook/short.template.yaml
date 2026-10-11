@@ -1,0 +1,54 @@
+# Starter config for a 9:16 short (YouTube Shorts, Reels, TikTok), 15-45 s, from the video cookbook.
+# Copy into a project made with `vidgen init`, with vertical.py and vertical_scenes.py in extensions/.
+# Alternative: keep one landscape project and add `variants: {vertical: {format: {width: 1080,
+# height: 1920}}}`, then `vidgen render --variant vertical` (built-in scenes re-lay out for 9:16).
+title: "<Short title>"
+output: my_short
+
+format: {width: 1080, height: 1920, fps: 30}
+preview: {width: 540, height: 960, fps: 15}
+
+theme:
+  preset: dark_tech
+
+voice: {provider: kokoro, voice: af_heart}      # English Kokoro gives word timings for karaoke
+# voice: {provider: elevenlabs, voice_id: nPczCjzI2devNBz1zQrb, model_id: eleven_multilingual_v2, timestamps: true}
+
+narration: {pad: 0.05}      # shorts: tight gaps between beats
+
+sfx: {gain: -3}
+transition: cut
+music: {source: pulse, volume: -4}
+
+overlays:
+  # word-by-word captions; lift raises them clear of the phone apps' bottom controls
+  # (default lift in 9:16 is 0.12; 0.19 keeps them above the bottom ~20 %)
+  - {type: captions, style: karaoke, lift: 0.19}
+
+thumbnail: {title: "<Hook question?>", subtitle: "<Subject>", icon: play}
+
+scenes:
+  - id: hook                 # the most stunning claim or visual in the first 1-2 s, no title card
+    type: short_hook
+    params:
+      image: assets/hook.jpg
+      tag: "<WHO OR WHAT>"
+      title: "<BIG CLAIM?>"
+      chip: "<the twist>"
+      chip_at: 0.55
+      credit: "Photo: <author>, <licence>"
+    beats:
+      - {id: s_hook, text: "<One spoken sentence that states the stunning claim.>"}
+
+  # ... 3-6 content scenes: one idea, a new visual every 1-3 s, attributed claims ...
+
+  - id: end                  # loopable last line + prompt + small note
+    type: short_end
+    params:
+      image: assets/hook.jpg
+      line1: "<Loopable question>"
+      line2: "<second half?>"
+      prompt: "Full video on my channel"
+      note: "debated claim · sources in description"
+    beats:
+      - {id: s_end, text: "<The loopable question.> The full video is on my channel."}
