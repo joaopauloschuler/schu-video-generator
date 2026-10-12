@@ -1,4 +1,5 @@
-"""``vidgen character NAME --png``: one still of a declared character (DESIGN.md §69.1)."""
+"""Stills: ``vidgen character NAME --png`` (one declared character, DESIGN.md §69.1) and the prop
+gallery (every built-in prop, §69.8)."""
 
 from __future__ import annotations
 
@@ -58,3 +59,43 @@ def write_character_png(
     target.parent.mkdir(parents=True, exist_ok=True)
     image.save(target)
     return CharacterStill(target, width, height)
+
+
+#: Columns of the prop gallery (rows follow from the number of props).
+GALLERY_COLUMNS = 6
+
+
+def write_props_png(theme: Theme, path: Path, *, width: int = 960, height: int = 540) -> Path:
+    """Draw every built-in prop (:data:`~vidgen.cartoon.props.PROP_KINDS`) in ``theme``, each
+    in a cell with its name below, on the theme background, and write a ``width`` x ``height``
+    PNG to ``path`` (folders are created; colours reduced to a 64-colour palette, so the file is
+    small enough for the docs)."""
+    from manim import Camera, Text, VGroup, tempconfig
+
+    from vidgen.cartoon.props import PROP_KINDS, draw_prop
+
+    frame_width, frame_height = frame_size(width, height)
+    rows = -(-len(PROP_KINDS) // GALLERY_COLUMNS)
+    cell_w, cell_h = frame_width / GALLERY_COLUMNS, frame_height / rows
+    settings = {
+        "pixel_width": width, "pixel_height": height, "frame_width": frame_width, "frame_height": frame_height,
+        "background_color": theme.background,
+    }
+    with tempconfig(settings):
+        cells = VGroup()
+        for k, kind in enumerate(PROP_KINDS):
+            row, column = divmod(k, GALLERY_COLUMNS)
+            left, top = -frame_width / 2 + column * cell_w, frame_height / 2 - row * cell_h
+            prop = draw_prop(kind, height=0.6 * cell_h, theme=theme, character_height=1.2 * cell_h)
+            if prop.width > 0.8 * cell_w:
+                prop.scale(0.8 * cell_w / prop.width)
+            prop.shift([left + cell_w / 2, top - 0.75 * cell_h, 0.0] - prop.feet())
+            label = Text(kind, font=theme.font, font_size=0.11 * cell_h * 72, color=theme.color("text"))
+            label.move_to([left + cell_w / 2, top - 0.87 * cell_h, 0.0])
+            cells.add(prop, label)
+        camera = Camera()
+        camera.capture_mobjects([cells])
+        image = camera.get_image().convert("RGB").quantize(colors=64)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    image.save(path, optimize=True)
+    return path

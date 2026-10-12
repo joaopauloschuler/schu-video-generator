@@ -132,7 +132,7 @@ def _check_parts(specs: Mapping[str, CharacterPart], who: str, required: Iterabl
     return parents
 
 
-def _one_pixel_stroke() -> float:
+def one_pixel_stroke() -> float:
     """The Manim stroke width of one pixel in the current Manim config (Cairo draws a stroke
     width ``w`` as ``w * 0.01`` frame units)."""
     from manim import config
@@ -140,7 +140,7 @@ def _one_pixel_stroke() -> float:
     return 100.0 * float(config.frame_height) / float(config.pixel_height)
 
 
-def _scale_strokes(shape: VMobject, factor: float, floor: float) -> None:
+def scale_strokes(shape: VMobject, factor: float, floor: float) -> None:
     """Multiply the stroke widths of ``shape``'s family by ``factor``, keeping drawn strokes at
     least ``floor`` wide."""
     for member in shape.get_family():
@@ -191,10 +191,10 @@ class Character(VGroup):
         self.facing = self._checked_facing(facing)
         self._own_entries: dict[str, PoseTable] = {"pose": dict(poses or {}), "expression": dict(expressions or {})}
         self._shapes = {n: {k: v.copy() for k, v in s.shapes.items()} for n, s in specs.items()}
-        stroke_factor, stroke_floor = height / REFERENCE_HEIGHT, _one_pixel_stroke()
+        stroke_factor, stroke_floor = height / REFERENCE_HEIGHT, one_pixel_stroke()
         for shapes in self._shapes.values():
             for shape in shapes.values():
-                _scale_strokes(shape, stroke_factor, stroke_floor)
+                scale_strokes(shape, stroke_factor, stroke_floor)
         self._pivots = {n: np.array(s.pivot, dtype=float) for n, s in specs.items()}
         self._order = sorted(
             specs,

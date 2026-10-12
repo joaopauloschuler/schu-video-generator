@@ -190,8 +190,12 @@ name)` in `validate_project` reports a pose or expression the character does not
 (`stage_width=` places marks across a stage wider than the frame). For parallax in your own
 scene, `layer_transform(factor, camera_center, zoom)` gives the `(scale, (dx, dy))` that shows a
 layer drawn for the home view moved by `factor` of a camera move, and `layer_half_extent(...)`
-how large to draw it. DESIGN.md §69 has the model, §69.3 the poses, §69.4 lip sync, §69.5 idle
-motion, §69.6 the stage, §69.7 layers and the camera.
+how large to draw it. Props: `draw_prop(kind, height=, theme=, main=, detail=, facing=)` draws one
+of `PROP_KINDS` (`table`, `tree`, `house`, ...) and `svg_prop(path, height=, name=)` an SVG file
+(through `load_vector`), both a `Prop` with `feet()` like a character's, so a `StageItem(name,
+"prop", at, depth, PROP_HEIGHTS[kind], lift)` places it; the layout dump reports it as kind `prop`.
+DESIGN.md §69 has the model, §69.3 the poses, §69.4 lip sync, §69.5 idle motion, §69.6 the
+stage, §69.7 layers and the camera, §69.8 props.
 
 Params can nest: use another `SceneParams` class as a field type (also in lists). Theme tokens
 are checked inside nested models too, and `vidgen list-scenes` prints the nested fields. A nested

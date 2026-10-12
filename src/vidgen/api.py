@@ -110,6 +110,7 @@ from vidgen.cartoon.character import PART_NAMES, Character, CharacterPart, Chara
 from vidgen.cartoon.transition import PoseChange  # noqa: E402
 from vidgen.cartoon.visemes import VISEMES, VisemeCue, VisemeTrack  # noqa: E402
 from vidgen.cartoon.cast import pose_name_problem  # noqa: E402
+from vidgen.cartoon.props import PROP_HEIGHTS, PROP_KINDS, PROP_LIFTS, SVG_PROP_HEIGHT, Prop, draw_prop, svg_prop  # noqa: E402
 from vidgen.cartoon.stage import (  # noqa: E402
     DEFAULT_FACTORS,
     LAYER_PLACES,
@@ -356,6 +357,13 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "LAYER_PLACES",
     "layer_half_extent",
     "layer_transform",
+    "PROP_HEIGHTS",
+    "PROP_KINDS",
+    "PROP_LIFTS",
+    "SVG_PROP_HEIGHT",
+    "Prop",
+    "draw_prop",
+    "svg_prop",
     "view_center_within",
     "Field",
     "field_validator",

@@ -1,6 +1,6 @@
 """Stage geometry: marks, the ground line and depth (DESIGN.md §69.6). No manim.
 
-A stage places things (characters now, props from Step 75) by a *mark* (a named x position) or
+A stage places things (characters and props) by a *mark* (a named x position) or
 an x position, on a ground line, at a *depth*: 0 stands on the ground line at full size, 1 at the
 back of the stage, higher up and smaller. Things further back are drawn first.
 
@@ -39,13 +39,15 @@ MAX_ZOOM = 8.0
 
 @dataclass(frozen=True)
 class StageItem:
-    """One thing to place: its name, kind (``character``), mark or x, depth and own scale."""
+    """One thing to place: its name, kind (``character`` or ``prop``), mark or x, depth, own
+    scale and ``lift`` (how far above the ground line it hangs, a fraction of the frame height)."""
 
     name: str
     kind: str
     at: str | float
     depth: float = 0.0
     scale: float = 1.0
+    lift: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -132,7 +134,7 @@ def stage_layout(
                 index=i,
                 x_fraction=x,
                 depth=item.depth,
-                feet=feet_point(x, item.depth, ground, width, frame_height),
+                feet=feet_point(x, item.depth, ground + item.lift, width, frame_height),
                 height=size * short_side * item.scale * depth_scale(item.depth),
             )
         )

@@ -1,9 +1,11 @@
 """``stage``: a cartoon set (a picture, a generated picture or a colour / gradient) with a ground
-line, named marks and the video's characters standing on them (DESIGN.md §69.6), and parallax
-layers that move by their factor when the camera moves (§69.7)."""
+line, named marks and the video's characters standing on them (DESIGN.md §69.6), parallax
+layers that move by their factor when the camera moves (§69.7) and props (§69.8)."""
 
 import math
+import re
 from dataclasses import dataclass
+from pathlib import PurePosixPath
 from typing import Annotated, Any, ClassVar, Literal
 
 import numpy as np
@@ -44,6 +46,72 @@ class StageCharacter(SceneParams):
     @classmethod
     def _name_only(cls, data: Any) -> Any:
         return {"name": data} if isinstance(data, str) else data
+
+
+class StageProp(SceneParams):
+    """A prop on the stage: a built-in one (``prop``) or an SVG file (``svg``). A plain string is
+    a built-in prop's name."""
+
+    also_accepts: ClassVar[tuple[type, ...]] = (str,)
+
+    prop: Literal[PROP_KINDS] | None = None  # type: ignore[valid-type]
+    """A built-in prop: table, chair, tree, bush, house, door, lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup."""
+    svg: str | None = None
+    """Instead of prop: an SVG file relative to the project folder (sanitised like any SVG), standing on the bottom edge of its viewBox."""
+    name: Identifier | None = None
+    """Its name for actions and the layout dump; default: the prop's name (an SVG: the file name), then _2, _3..."""
+    at: str | float = "centre"
+    """Where it stands: a mark or an x position from 0 (left edge) to 1 (right edge) of the stage."""
+    depth: float = Field(0.0, ge=0.0, le=1.0)
+    """0 = on the ground line at full size; up to 1 = at the back, higher up and smaller; at the same depth characters are drawn in front of props."""
+    scale: float = Field(1.0, gt=0.0, le=5.0)
+    """Its size relative to its usual size next to a character (a tree is 1.7 characters tall, a cup 0.09; an SVG 0.5)."""
+    lift: float | None = Field(None, ge=0.0, le=1.0)
+    """How far above the ground line it hangs, as a fraction of the frame height; default 0.5 for cloud, sun and moon, else 0 (on the ground)."""
+    facing: Literal["right", "left"] = "right"
+    """left: mirrored."""
+    color: ThemeColor | None = None
+    """Its main colour (a theme token or #hex); default per prop (a tree's leaves tertiary, a chair accent...)."""
+    detail: ThemeColor | None = None
+    """Its second colour (a tree's trunk, a house's roof, a laptop's screen...); default per prop."""
+    recolor: Literal["none", "theme"] = "none"
+    """With svg: theme maps the picture's colours to the nearest theme colours; none keeps them."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _kind_only(cls, data: Any) -> Any:
+        return {"prop": data} if isinstance(data, str) else data
+
+    @model_validator(mode="after")
+    def _one_source(self) -> "StageProp":
+        if (self.prop is None) == (self.svg is None):
+            raise ValueError("a prop is either prop (a built-in prop) or svg (a file), one of the two")
+        if self.svg is not None:
+            if not self.svg.lower().endswith(".svg"):
+                raise ValueError(f"svg: {self.svg!r} is not an .svg file")
+            if self.color is not None or self.detail is not None:
+                raise ValueError("color and detail are for built-in props; an SVG keeps its colours (or recolor: theme)")
+        elif self.recolor != "none":
+            raise ValueError("recolor is for svg props; a built-in prop takes color and detail")
+        return self
+
+    def default_name(self) -> str:
+        """The prop's name (``tree``), or the SVG's file name made an identifier (``old_well``)."""
+        if self.prop is not None:
+            return self.prop
+        stem = re.sub(r"[^A-Za-z0-9_]+", "_", PurePosixPath(self.svg or "").stem).strip("_")
+        return stem or "prop"
+
+    def height_factor(self) -> float:
+        """Its height relative to a character's: the prop's usual height times ``scale``."""
+        usual = PROP_HEIGHTS[self.prop] if self.prop is not None else SVG_PROP_HEIGHT
+        return usual * self.scale
+
+    def resolved_lift(self) -> float:
+        """``lift``, else the prop's default (:data:`PROP_LIFTS`, 0 for the others)."""
+        if self.lift is not None:
+            return self.lift
+        return PROP_LIFTS.get(self.prop or "", 0.0)
 
 
 class LayerShape(SceneParams):
@@ -110,17 +178,19 @@ class Stage(NarratedScene):
     smaller, higher up and drawn behind the ones in front. ``layers`` (pictures or shapes) move
     by their parallax factor when the camera moves (the ``zoom``, ``pan`` and ``follow``
     actions); ``width`` makes the stage wider than the frame, for the camera to pan across.
+    ``props`` (a table, a tree, a house... or an SVG file) stand on marks like the characters and
+    sort with them by depth.
 
-    Action targets: each character by its name.
+    Action targets: each character and each prop by its name.
     """
 
     outro = 0.5
-    target_patterns = ("<character>",)
+    target_patterns = ("<character>", "<prop>")
 
     @classmethod
     def target_names(cls, params: Any) -> list[str]:
-        """The names of the characters on the stage."""
-        return [c.name for c in params.characters]
+        """The names of the characters, then of the props, on the stage."""
+        return [c.name for c in params.characters] + params.prop_names()
 
     class Params(SceneParams):
         image: str | None = None
@@ -147,6 +217,8 @@ class Stage(NarratedScene):
         """Where the camera looks at the start, on a stage wider than the frame: a mark or an x from 0 to 1 of the stage."""
         layers: list[StageLayer] = []
         """Parallax layers: {place: background | middle | foreground, factor, image | shapes}."""
+        props: list[StageProp] = []
+        """Props: a built-in prop's name, or {prop | svg, name, at, depth, scale, lift, facing, color, detail, recolor}."""
 
         @model_validator(mode="after")
         def _check(self) -> SceneParams:
@@ -173,7 +245,31 @@ class Stage(NarratedScene):
             for k, name in enumerate(names):
                 if name in names[:k]:
                     raise ValueError(f"layer name '{name}' is used twice (layers[{k}])")
+            prop_names = self.prop_names()
+            for k, (prop, name) in enumerate(zip(self.props, prop_names)):
+                if name in seen:
+                    raise ValueError(f"props[{k}]: '{name}' is also a character on the stage; give the prop another name")
+                if name in prop_names[:k]:
+                    raise ValueError(f"prop name '{name}' is used twice (props[{k}])")
+                try:
+                    mark_x(prop.at, self.marks)
+                except ValueError as exc:
+                    raise ValueError(f"props[{k}].at: {exc}") from None
             return self
+
+        def prop_names(self) -> list[str]:
+            """Each prop's name: its own, else its default name numbered from the second prop of
+            that name on (``tree``, ``tree_2``)."""
+            names: list[str] = []
+            count: dict[str, int] = {}
+            for prop in self.props:
+                if prop.name is not None:
+                    names.append(prop.name)
+                    continue
+                base = prop.default_name()
+                count[base] = count.get(base, 0) + 1
+                names.append(base + (f"_{count[base]}" if count[base] > 1 else ""))
+            return names
 
         def layer_names(self) -> list[str]:
             """Each layer's name: its own, else ``<place>_layer`` numbered from the second
@@ -194,8 +290,14 @@ class Stage(NarratedScene):
             return self.image is not None or self.generate is not None
 
         def items(self) -> list[StageItem]:
-            """The characters as stage items (for :func:`~vidgen.cartoon.stage.stage_layout`)."""
-            return [StageItem(c.name, "character", c.at, c.depth, c.scale) for c in self.characters]
+            """The props, then the characters, as stage items (for
+            :func:`~vidgen.cartoon.stage.stage_layout`; at the same depth a character is drawn in
+            front of a prop)."""
+            props = [
+                StageItem(name, "prop", prop.at, prop.depth, prop.height_factor(), prop.resolved_lift())
+                for prop, name in zip(self.props, self.prop_names())
+            ]
+            return props + [StageItem(c.name, "character", c.at, c.depth, c.scale) for c in self.characters]
 
     @classmethod
     def validate_project(cls, params: Any, project: Any) -> list[str]:
@@ -205,6 +307,9 @@ class Stage(NarratedScene):
         for k, layer in enumerate(params.layers):
             if layer.image is not None:
                 problems += check_image(project, layer.image, f"layers[{k}].image")
+        for k, prop in enumerate(params.props):
+            if prop.svg is not None:
+                problems += check_image(project, prop.svg, f"props[{k}].svg")
         for k, member in enumerate(params.characters):
             for kind in ("pose", "expression"):
                 name = getattr(member, kind)
@@ -249,9 +354,18 @@ class Stage(NarratedScene):
             stage_width=self.stage_width,
         )
         members = {m.name: m for m in p.characters}
-        # the characters on the stage by name, back to front (for actions; DESIGN.md §69.6)
+        props = dict(zip(p.prop_names(), p.props))
+        # the characters and the props on the stage by name, back to front (DESIGN.md §69.6, §69.8)
         self.cast: dict[str, Character] = {}
+        self.props: dict[str, Prop] = {}
+        on_stage: list[tuple[str, Mobject]] = []
         for place_at in placements:
+            if place_at.kind == "prop":
+                item = self._prop(place_at.name, props[place_at.name], place_at.height)
+                item.shift(np.array([*place_at.feet, 0.0]) - item.feet())
+                self.props[place_at.name] = item
+                on_stage.append((place_at.name, item))
+                continue
             member = members[place_at.name]
             facing = facing_towards_centre(place_at.x_fraction) if member.facing == "auto" else member.facing
             figure = character(member.name, height=place_at.height, facing=facing)
@@ -263,14 +377,31 @@ class Stage(NarratedScene):
                 figure.stop_idle()
             figure.shift(np.array([*place_at.feet, 0.0]) - figure.feet())
             self.cast[member.name] = figure
-        # register back to front, so the characters' fade-ins add them (and draw them) in that order
-        targets = [self.target(name, figure) for name, figure in self.cast.items()]
+            on_stage.append((member.name, figure))
+        # register back to front, so the fade-ins add them (and draw them) in that order
+        targets = [self.target(name, mob) for name, mob in on_stage]
 
         def entrance() -> list:
             return [FadeIn(part) for part in backdrop] + [a for t in targets for a in self.entrance(t)] + [FadeIn(m) for m in in_front]
 
         self.reveal([entrance], fraction=0.6, cap=1.0)
         self.finish()
+
+    def _prop(self, name: str, prop: StageProp, height: float) -> Prop:
+        """The prop ``name`` drawn ``height`` units tall, its feet at the origin; outlines as wide
+        as a character's at its depth."""
+        if prop.svg is not None:
+            problems = check_image(self.project, prop.svg, "svg")
+            if problems:
+                raise VidgenError(f"scene '{self.spec.id}': prop '{name}': {problems[0]}")
+            return svg_prop(
+                self.project.asset(prop.svg), height=height, name=name, theme=self.theme, recolor=prop.recolor,
+                facing=prop.facing, where=f"scene '{self.spec.id}' ({prop.svg})",
+            )
+        return draw_prop(
+            prop.prop, height=height, theme=self.theme, name=name, main=prop.color, detail=prop.detail,
+            facing=prop.facing, character_height=height / prop.height_factor(),
+        )
 
     def _backdrop(self, layers: list[Mobject]) -> list[Mobject]:
         """The set behind the characters, back to front: the picture (cover) or the colour /

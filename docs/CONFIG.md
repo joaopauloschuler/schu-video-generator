@@ -3788,7 +3788,8 @@ them still in this scene). The background is a picture (`image`, or a
 [generated picture](#generated-images-imagegen-vidgen-imagegen) via `generate:`, scaled to fill
 the frame and cropped) or, without one, a theme colour or a gradient (`background: [primary,
 highlight]` runs from the first colour at the top to the last at the bottom).
-[Action targets](#beat-actions): each character by its name (`dim: kit`, `highlight: pip`).
+[Action targets](#beat-actions): each character and each [prop](#props) by its name (`dim: kit`,
+`highlight: tree`).
 
 Characters stand on **marks**: `far_left` (x 0.1), `left` (0.25), `centre` (0.5), `right` (0.75),
 `far_right` (0.9), the stage's own `marks`, or an x position from 0 (left edge) to 1 (right edge).
@@ -3824,6 +3825,7 @@ never leaves the stage.
 | `width` | float 1–4 | `1` | width of the stage in frame widths; wider than 1: the camera pans across it (`pan`, `follow`) |
 | `camera_at` | mark \| x | `centre` | where the camera looks at the start (on a stage wider than the frame) |
 | `layers` | list | `[]` | parallax layers (below), in the order given within their place |
+| `props` | list | `[]` | [props](#props): a built-in prop's name (`tree`), or a mapping (below) |
 
 | key (`characters[]`) | default | |
 |---|---|---|
@@ -3852,11 +3854,47 @@ and `height` (`0.2`) as fractions of the frame's shorter side, and `color` (`sec
 foot at `y`, filled down to the bottom. A layer is drawn larger than the frame, so that no
 camera view inside the stage (a zoom up to 8x included) shows its edge.
 
+#### Props
+
+`props` put things on the stage: a built-in prop drawn from simple shapes in the theme's colours,
+or an SVG file of your own. A prop stands on a mark or x position like a character, at a `depth`
+(further back: higher up, smaller, drawn behind), and sorts with the characters by depth; at the
+same depth a character is drawn in front of a prop. Its size follows the stage's `size`: each
+prop has a usual height next to a character (a `tree` is 1.7 characters tall, a `table` 0.42, a
+`cup` 0.09, an SVG prop 0.5), times its own `scale`. `cloud`, `sun` and `moon` hang in the sky
+(`lift: 0.5`); other props stand on the ground unless given a `lift`.
+
+![Every built-in prop in the default theme](gallery/media/props.png)
+
+| key (`props[]`) | default | |
+|---|---|---|
+| `prop` | — | a built-in prop: `table chair tree bush house door lamp sign box ball cloud sun moon rock plant laptop cup` |
+| `svg` | — | instead of `prop`: an SVG file relative to the project folder (sanitised like every SVG: no scripts, filters, embedded pictures or text), standing on the bottom edge of its `viewBox` |
+| `name` | the prop's name | its name for actions and the layout dump; an SVG's default is its file name (`assets/old_well.svg` -> `old_well`); repeats are numbered (`tree`, `tree_2`) |
+| `at` | `centre` | a mark or an x position from 0 to 1 of the stage |
+| `depth` | `0` | 0 (front, on the ground line) to 1 (back) |
+| `scale` | `1` | size relative to the prop's usual size, up to 5 |
+| `lift` | `0.5` for `cloud`, `sun`, `moon`; else `0` | height above the ground line, as a fraction of the frame height |
+| `facing` | `right` | `left` mirrors it |
+| `color` | per prop | its main colour (a theme token or `#hex`): a tree's leaves (`tertiary`), a chair (`accent`)... |
+| `detail` | per prop | its second colour: a tree's trunk, a house's roof, a laptop's screen... |
+| `recolor` | `none` | `svg` only: `theme` maps the picture's colours to the nearest theme colours |
+
+```yaml
+      props:
+        - tree                                   # a built-in prop at centre
+        - {prop: house, at: far_left, depth: 0.8}
+        - {prop: table, at: left, color: tertiary}
+        - sun                                    # hangs in the sky
+        - {svg: assets/old_well.svg, at: far_right, scale: 1.5, recolor: theme}
+```
+
 `vidgen validate` reports an unknown character, mark, pose or expression (with the known names),
-a missing `image` file (also a layer's), a character placed twice, a layer name used twice, and
-`image` with `generate` or with `background`. The layout dump and `vidgen lint` see each character
-as one object of kind `character` named after it, the picture or colour as `background`, the band
-as `ground` and each layer by its name. Speaking, gestures and moving across the stage are beat
+a missing `image` file (also a layer's) or `svg` file of a prop, a character placed twice, a layer
+or prop name used twice (or a prop named like a character), and `image` with `generate` or with
+`background`. The layout dump and `vidgen lint` see each character as one object of kind
+`character` named after it, each prop as one object of kind `prop` named after it, the picture or
+colour as `background`, the band as `ground` and each layer by its name. Speaking, gestures and moving across the stage are beat
 actions of later versions.
 
 ```yaml
@@ -4003,7 +4041,7 @@ a title card, a `transform` of a bar).
 | `diagram` | `heading`, `node<N>`, `node:<id>`, `edge:<from>-><to>` | reveal, dim, highlight, zoom | also for `flowchart`; a node is its shape, icon and label (a `box` frames the shape), an edge its line, arrowhead and label; `highlight: [node:a, "edge:a->b", node:b]` marks a path; revealing an edge brings its nodes |
 | `process` | `heading`, `input`, `stage<N>`, `stage:<label>`, `connector<N>`, `loop`, `output`, `token` | reveal, dim, highlight, zoom | a stage is its card (a `box` frames it); `connector2` runs from stage 2 to 3; revealing a stage early shows it without moving the token; `highlight: token` with `style: flash` points at it |
 | `network` | `heading`, `layer<N>`, `layer:<label>`, `edges<N>`, `neuron<L>.<i>` | reveal, dim, highlight, zoom | a layer is its units, ellipsis, label and count; `edges1` joins layers 1 and 2; `neuron2.3` is unit 3 of layer 2 as drawn |
-| `stage` | `<character>` | dim, highlight, zoom, pan, follow | each character on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`); every character comes in at step 1; `pan` also takes a mark (`to: right`) |
+| `stage` | `<character>`, `<prop>` | dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`); everything comes in at step 1; `pan` also takes a mark (`to: right`) |
 
 `title` and `heading` stand for each other (the header band, see "Built-in scenes"): `highlight:
 title` works on a `bullets` heading. [Project scene types](EXTENDING.md#8-per-beat-actions-targets-and-custom-actions)
@@ -4464,7 +4502,7 @@ Each object:
 | key | meaning |
 |---|---|
 | `id` | `m1`, `m2`, ...: the same Python object keeps its id in every frame of the scene |
-| `kind` | `text` (`Text`, `MarkupText`, `Paragraph`), `code` (the text of a `Code` listing), `math` (`Tex`, `MathTex`), `number` (`DecimalNumber`, `Integer`), `shape` (one path), `group` (a group of shapes with no text or image inside, e.g. an axis' ticks), `image`, `icon` (an icon from `icon()`: one object, not one per path), `vector` (a vector picture, an SVG: one object, not one per path), `character` (a cartoon character: one object named after it, its box covering every part) |
+| `kind` | `text` (`Text`, `MarkupText`, `Paragraph`), `code` (the text of a `Code` listing), `math` (`Tex`, `MathTex`), `number` (`DecimalNumber`, `Integer`), `shape` (one path), `group` (a group of shapes with no text or image inside, e.g. an axis' ticks), `image`, `icon` (an icon from `icon()`: one object, not one per path), `vector` (a vector picture, an SVG: one object, not one per path), `character` (a cartoon character: one object named after it, its box covering every part), `prop` (a prop on a stage, built-in or SVG: one object named after it) |
 | `class` | the Manim class |
 | `path` | where it sits: parent groups from the top-level mobject down, each `Class[index]` (index among its parent's submobjects; top level: in the scene), or the name the scene gave it |
 | `name` | the scene attribute that holds it (`self.title = ...`) or a `Mobject.name` set by the scene, else `null` |

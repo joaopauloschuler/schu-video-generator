@@ -12,7 +12,8 @@ objects of kind ``code`` and its background a shape; an icon (``vidgen.icon_mobj
 one object of kind ``icon`` with its name in ``icon``, a vector picture
 (``vidgen.vector_mobject.VectorPicture``, an SVG) one object of kind ``vector``, and a cartoon
 character (``vidgen.cartoon.character.Character``) one object of kind ``character`` named after
-the character (its box covers every part). A group with no text or image anywhere
+the character (its box covers every part), and a stage prop (``vidgen.cartoon.props.Prop``) one
+object of kind ``prop`` named after the prop. A group with no text or image anywhere
 inside is one ``group`` object (an axis' ticks, a network's edges); any other group is walked
 into. Parts at opacity 0 are not visible: they are left out of an object's box, and an object
 without visible parts is not recorded.
@@ -226,6 +227,7 @@ class LayoutRecorder:
         from manim.mobject.types.image_mobject import AbstractImageMobject
 
         from vidgen.cartoon.character import Character
+        from vidgen.cartoon.props import Prop
         from vidgen.icon_mobject import Icon
         from vidgen.vector_mobject import VectorPicture
 
@@ -246,6 +248,9 @@ class LayoutRecorder:
             return
         if isinstance(mob, Character):  # one figure, not one object per part
             self._emit_parts(walk, mob, path, name or mob.name, "character", [m for m in mob.get_family() if _drawn(m)])
+            return
+        if isinstance(mob, Prop):  # one prop, also an SVG one (not a vector picture inside)
+            self._emit_parts(walk, mob, path, name or mob.name, "prop", [m for m in mob.get_family() if _drawn(m)])
             return
         if isinstance(mob, VectorPicture):  # one picture, not one object per path
             self._emit_parts(walk, mob, path, name, "vector", [m for m in mob.get_family() if _drawn(m)])

@@ -79,7 +79,9 @@ src/vidgen/
                           # visemes.py (lip sync: viseme tracks, .visemes.json, §69.4; no manim),
                           # idle.py (blinking, breathing, head sway: the seeded schedule, §69.5; no manim),
                           # stage.py (marks, ground line, depth, draw order of a stage, §69.6; parallax
-                          # layer offsets and extents, §69.7; no manim)
+                          # layer offsets and extents, §69.7; no manim), props.py (Prop, draw_prop,
+                          # svg_prop: props from primitives or an SVG, §69.8); still.py also draws the
+                          # prop gallery
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
   actions.py              # per-beat actions: Target, Action, validation, ActionRunner (§26)
@@ -5204,10 +5206,10 @@ lint, Step 84) reuse it.
   `depth_scale(d) = 1 - (1 - FAR_SCALE) d` (`FAR_SCALE = 0.55`), the feet `FAR_RISE = 0.12` × the
   frame height higher at depth 1 (`feet_point`). `draw_order(depths)`: deeper first, ties in list
   order. `stage_layout(items, marks=, ground=, size=, frame_width=, frame_height=) ->
-  [StagePlacement]` in draw order: `StageItem(name, kind, at, depth, scale)` in, `StagePlacement(name, kind,
+  [StagePlacement]` in draw order: `StageItem(name, kind, at, depth, scale, lift=0)` in, `StagePlacement(name, kind,
   index, x_fraction, depth, feet, height)` out (`height = size × short side × scale ×
-  depth_scale`). `kind` is `character` now; Step 75's props are items of another kind, so they
-  sort with the characters by depth. `facing_towards_centre(x)`: `right` on the left half and in
+  depth_scale`; `lift`, Step 75, raises the feet by that fraction of the frame height). `kind`
+  is `character` or `prop` (§69.8); both sort together by depth. `facing_towards_centre(x)`: `right` on the left half and in
   the middle, else `left`.
 - **Params** (`Stage.Params`): `image` (a file, checked by `image`'s `check_image`; raster via
   `load_image`, `.svg` via `load_vector`) or `generate` (a top-level `GenerateImage`, so `vidgen
@@ -5326,3 +5328,57 @@ and the new `pan` and `follow`, which are generic (any scene type) and reuse `Mo
   middle. An image layer's bottom stays at `bottom`, so a near layer (factor > 1) zoomed in at the
   bottom of the stage can show a sliver below it. No vertical pan. Layers are not action targets.
   Tests: `tests/test_cartoon_parallax.py`.
+
+### 69.8 Props (Step 75)
+
+Things on a stage that are not characters: built-in props drawn from primitives, or SVG files.
+They are placed by the same `stage_layout` as the characters and sort with them by depth.
+
+- **Built-in props** (`cartoon/props.py`): `PROP_KINDS = table, chair, tree, bush, house, door,
+  lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup`. Each is drawn in *prop
+  units* (feet at the origin, `y` up, top at 1) from rectangles, rounded rectangles, circles,
+  ellipses, polygons (some with rounded corners), lines and `Union`s of circles (a tree's crown,
+  a bush, a cloud: one outline). Colours: two per prop, `main` and `detail` (`PROP_COLORS`, theme
+  tokens, except the cloud's fixed light `#F4F6FA` and the window glass `GLASS`), plus shades of
+  them (`SHADE` 0.25 towards black, `LIGHT` 0.4 towards white) and the characters' outline ink
+  `CHARACTER_INK`, stroke `OUTLINE_WIDTH`. Every shape is original; no option names or imitates
+  a known design.
+- **`Prop(VGroup)`**: `name`, `kind` (a `PROP_KINDS` name or `svg`), `facing`; `feet()` is the
+  middle of its bottom edge. `draw_prop(kind, *, height, theme, name=None, main=None,
+  detail=None, facing="right", character_height=None)` scales the drawing to `height` and its
+  strokes like a character's of `character_height` (`scale_strokes` / `one_pixel_stroke` of
+  `character.py`, made public for this), so a cup and a house next to a character share its
+  outline width; `facing="left"` mirrors it. `svg_prop(path, *, height, name, theme=None,
+  recolor="none", facing="right", where=None)` loads the file with `load_vector` (sanitised by
+  `svgclean`, sanitiser warnings logged; `recolor: theme` maps colours to the theme's) and stands
+  it on the bottom edge of its `viewBox`.
+- **Sizes**: `PROP_HEIGHTS` gives each prop's height relative to a character (the stage's
+  `size`): table 0.42, chair 0.5, tree 1.7, bush 0.35, house 1.6, door 1.0, lamp 1.5, sign 0.75,
+  box 0.3, ball 0.18, cloud 0.35, sun 0.4, moon 0.35, rock 0.22, plant 0.4, laptop 0.14, cup 0.09;
+  an SVG `SVG_PROP_HEIGHT` 0.5. The stage passes `height factor × scale` as the item's `scale`.
+  `PROP_LIFTS`: `cloud`, `sun`, `moon` hang 0.5 of the frame height above the ground line unless
+  `lift` says otherwise.
+- **Stage params**: `props: list[StageProp]`; a string is a built-in prop's name. `StageProp`:
+  `prop` (one of `PROP_KINDS`) or `svg` (a `.svg` file relative to the project; one of the two),
+  `name`, `at` (mark or x), `depth`, `scale` (0, 5], `lift` (0..1 or default), `facing` (`right`
+  | `left`), `color` / `detail` (built-in props only), `recolor` (`none` | `theme`, SVG only).
+  Names default to the prop's name (an SVG: its file stem made an identifier), numbered from the
+  second (`tree`, `tree_2`, `Params.prop_names`). Errors: a name twice, a prop named like a
+  character on the stage, an unknown mark (`props[k].at: ...`), both or neither of `prop` / `svg`.
+  `validate_project` checks SVG files with `image`'s `check_image` (missing, sanitiser refusal).
+- **Construct**: `Params.items()` lists the props first, then the characters (`StageItem(name,
+  "prop", at, depth, height factor, lift)`), so at the same depth a character is drawn in front of
+  a prop (a character behind a table: give it a larger depth). Each placement builds its prop or
+  character; all are registered as targets back to front (they fade in with the set at step 1).
+  `Stage.props` (name -> `Prop`, back to front) next to `Stage.cast`.
+- **Targets**: `target_patterns = ("<character>", "<prop>")`; `target_names` = the characters,
+  then the props. `dim`, `highlight`, `zoom`, `pan` / `follow` (by its centre) work on props.
+- **Layout dump / lint**: `introspect` reports a `Prop` (an SVG one too, not a `vector`) as one
+  object of kind `prop` named after it; `describe` gives `prop 'tree'`.
+- **Gallery still**: `still.write_props_png(theme, path, width=960, height=540)` draws every
+  built-in prop with its name in a 6-column grid (64-colour palette PNG, about 20 KB):
+  `docs/gallery/media/props.png`, shown in CONFIG.md.
+- **Not done here**: putting a prop on another one (`lift` is in frame heights: a laptop on a
+  table needs the table's height worked out by hand); props do not move or animate (Step 79's
+  motion, Step 76's particles). An SVG prop outside `assets/` is not in the scene fingerprint.
+  Tests: `tests/test_cartoon_props.py`.

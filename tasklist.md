@@ -382,9 +382,9 @@ one.
 - [x] Tests: layer offsets for a given camera move (no render), one tiny render (`tests/test_cartoon_parallax.py`)
 
 ### Step 75 — Props
-- [ ] A set of colourful filled props drawn from primitives (table, chair, tree, bush, house, door, lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup), themed colours, placed by mark or position like characters
-- [ ] Imported SVG props (sanitised) with the same placement
-- [ ] Tests: each prop builds; a prop gallery still for the docs
+- [x] A set of colourful filled props drawn from primitives (table, chair, tree, bush, house, door, lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup), themed colours, placed by mark or position like characters (`cartoon/props.py`: `Prop`, `draw_prop`, `PROP_KINDS` / `PROP_HEIGHTS` / `PROP_COLORS` / `PROP_LIFTS`; stage `props:` through `stage_layout` with characters, `StageItem.lift` for sky props; action targets; layout kind `prop`; DESIGN §69.8)
+- [x] Imported SVG props (sanitised) with the same placement (`props: [{svg: FILE}]` via `svg_prop` -> `load_vector` / `svgclean`; `recolor: theme`; validate checks the file)
+- [x] Tests: each prop builds; a prop gallery still for the docs (`tests/test_cartoon_props.py`; `still.write_props_png` -> `docs/gallery/media/props.png`, 20 KB, shown in CONFIG.md "Props")
 
 ### Step 76 — Particles
 - [ ] `particles: rain | snow | sparkles | dust | confetti | smoke | bubbles` for a scene or a beat, with density, area and colour; seeded so renders are repeatable
