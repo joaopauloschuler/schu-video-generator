@@ -179,9 +179,14 @@ inside `with self.narrate(0) as d:`, `self.speak(hero)` makes the mouth follow t
 `VisemeTrack`, timed from the beat's start by the scene's clock (`hero.lip_sync(self.beat_visemes(0),
 clock=self.beat_clock())`), so it stays in step through a `PoseChange`; `stop_lip_sync()` ends it
 (the mouth shows its pose's shape again); `show_viseme("O")` shows one of `VISEMES` at once; a
-character without a mouth is left alone. The built-in acting actions (`say`, `look_at`, `turn`,
-`emote`, `pose`, `react`) work on every target that is a `Character`, so register your characters
-as targets (`self.target(name, hero)`) to let a video's beats act on them.
+character without a mouth is left alone. `Walk(hero, x)` walks it along the ground to `x`
+(`speed=`, units per second; `start_x=` / `park_x=` for an entrance or exit), `Gesture(hero,
+"wave")` (`point`, `wave`, `shrug`, `nod`, `shake_head`) and `Jump(hero, 0.4)` play a motion and
+end in the pose; all three keep lip sync in step, and their timing is the pure functions
+`walk_seconds`, `enter_path`, `exit_path`, `offstage_x` (no manim). The built-in acting and moving
+actions (`say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `enter`, `exit`,
+`gesture`, `jump`) work on every target that is a `Character`, so register your characters as
+targets (`self.target(name, hero)`) to let a video's beats act on them.
 `character(name)` breathes, sways its head and blinks on its own (unless `idle: false`):
 `stop_idle()` / `start_idle(seed=None)` turn that off and on; a blink never shows during a
 `PoseChange`. Before drawing your own scene for characters on a set, check whether the built-in
@@ -971,6 +976,11 @@ beats after the action's own) to choose per use, e.g. by an option. `problems()`
 `character_needs()` names the entry of `vidgen.cartoon.cast.ACTION_NEEDS` (`"say"`, `"look_at"`,
 `"emote"`, ...) the use needs of the characters it targets; `vidgen validate` then warns when one
 lacks those parts (the built-in acting actions in `src/vidgen/scenes/acting.py`).
+`run_time_for(scene, targets)` returns the run time the use needs for its targets as they are
+when it falls due (the built-in `walk_to`: the distance over its speed), or `None` for the class's
+`run_time`; a `run_time:` in the config wins. `alters_targets = False` says the action only reads
+its targets (the built-in `pan` and `follow`), so it plays together with another action on them
+that falls due at the same moment instead of before or after it.
 The built-in `callout` action (`src/vidgen/scenes/callout_action.py`) is an example of all
 three, built on the callout helpers below. An action that draws nothing sets `animates = False`
 and implements `cue(self, scene, time)` instead of `apply`: the runner calls it when the beat

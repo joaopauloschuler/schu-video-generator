@@ -8,6 +8,7 @@ import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from fnmatch import fnmatchcase
 from pathlib import PurePosixPath
 from typing import Annotated, Any, ClassVar, Literal
 
@@ -201,7 +202,9 @@ class Stage(NarratedScene):
 
     A beat is spoken by the characters whose voice says it (their mouths move with it), or by
     the ones its ``say`` action names; the acting actions (``say``, ``look_at``, ``turn``,
-    ``emote``, ``pose``, ``react``) change the characters during the beats.
+    ``emote``, ``pose``, ``react``) change the characters during the beats, and the moving ones
+    (``walk_to``, ``enter``, ``exit``, ``gesture``, ``jump``) move them. A character with an
+    ``enter`` action waits off stage until it enters.
 
     Action targets: each character and each prop by its name.
     """
@@ -400,6 +403,10 @@ class Stage(NarratedScene):
         # the characters and the props on the stage by name, back to front (DESIGN.md §69.6, §69.8)
         self.cast: dict[str, Character] = {}
         self.props: dict[str, Prop] = {}
+        #: each character's mark (its ``at``) as an x in Manim units, where ``enter`` walks it to
+        self.homes: dict[str, float] = {}
+        entering = self._entering()
+        left, right = self.camera_bounds()[:2]
         on_stage: list[tuple[str, Mobject]] = []
         for place_at in placements:
             if place_at.kind == "prop":
@@ -418,6 +425,10 @@ class Stage(NarratedScene):
             if not p.idle:
                 figure.stop_idle()
             figure.shift(np.array([*place_at.feet, 0.0]) - figure.feet())
+            self.homes[member.name] = place_at.feet[0]
+            if member.name in entering:  # waits beyond the stage's edge until its enter (§69.12)
+                side = entering[member.name] or nearer_side(place_at.feet[0], left, right)
+                figure.shift([offstage_x(side, left, right, figure.width / 2) - place_at.feet[0], 0.0, 0.0])
             self.cast[member.name] = figure
             on_stage.append((member.name, figure))
         # register back to front, so the fade-ins add them (and draw them) in that order
@@ -431,6 +442,18 @@ class Stage(NarratedScene):
         self.add(*self.particles)
         self.reveal([entrance], fraction=0.6, cap=1.0)
         self.finish()
+
+    def _entering(self) -> dict[str, str | None]:
+        """The characters an ``enter`` action brings in, with the side of the first one naming
+        each (``None``: the edge nearer its mark)."""
+        names = [c.name for c in self.params.characters]
+        entering: dict[str, str | None] = {}
+        for use in self.action_uses("enter"):
+            for pattern in use.config.targets():
+                for name in names:
+                    if fnmatchcase(name, pattern):
+                        entering.setdefault(name, use.options.side)
+        return entering
 
     def _prop(self, name: str, prop: StageProp, height: float) -> Prop:
         """The prop ``name`` drawn ``height`` units tall, its feet at the origin; outlines as wide

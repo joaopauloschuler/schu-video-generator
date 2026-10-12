@@ -494,10 +494,16 @@ def _sideways(scene: NarratedScene, x: float) -> np.ndarray | None:
 
 def _x_of(mob: Mobject) -> Callable[[], float]:
     """Where the camera points at ``mob``: a character's feet (its arms do not move the camera),
-    else the centre of its box."""
+    else the centre of its box. The function's ``followed`` is ``mob`` (an ``exit`` lets the
+    camera stop following the character that leaves)."""
     if isinstance(mob, Character):
-        return lambda: float(mob.feet()[0])
-    return lambda: float(mob.get_center()[0])
+        def x_of() -> float:
+            return float(mob.feet()[0])
+    else:
+        def x_of() -> float:
+            return float(mob.get_center()[0])
+    x_of.followed = mob  # type: ignore[attr-defined]
+    return x_of
 
 
 @action("pan")
@@ -515,6 +521,7 @@ class Pan(Action):
     reversible = True
     needs_target = False
     moves_camera = True
+    alters_targets = False
 
     def problems(self) -> list[tuple[str, str]]:
         has_target = bool(self.config.targets())
@@ -551,11 +558,21 @@ class Pan(Action):
 
 
 class _MoveThenFollow(MoveCamera):
-    """A :class:`MoveCamera` after which the camera follows ``x_of``."""
+    """A :class:`MoveCamera` to ``x_of()`` after which the camera follows ``x_of``. Its end view
+    is taken again on every frame, so it catches up with a target that moves meanwhile (a
+    character walking) and hands over to following without a jump."""
 
     def __init__(self, scene: NarratedScene, width: float, center: np.ndarray, x_of: Callable[[], float], **kwargs: Any) -> None:
         super().__init__(scene, width, center, **kwargs)
         self.x_of = x_of
+        self.bounds = scene.camera_bounds
+        self.target_y = float(center[1])
+
+    def interpolate_mobject(self, alpha: float) -> None:
+        end = self.target_copy
+        x, y = view_center_within(self.bounds(), (self.x_of(), self.target_y), end.width, end.height)
+        end.move_to([x, y, 0.0])
+        super().interpolate_mobject(alpha)
 
     def clean_up_from_scene(self, scene: Any) -> None:
         super().clean_up_from_scene(scene)
@@ -572,6 +589,7 @@ class Follow(Action):
     run_time = 1.0
     reversible = True
     moves_camera = True
+    alters_targets = False
 
     def problems(self) -> list[tuple[str, str]]:
         if len(self.config.targets()) > 1:

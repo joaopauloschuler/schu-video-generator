@@ -492,6 +492,7 @@ LINT_RULES: tuple[str, ...] = (
     "contrast",
     "max_words",
     "overlay_overlap",
+    "walk_overlap",
     "narration_speed",
     "dead_air",
     "animation_overrun",
@@ -508,6 +509,7 @@ RuleName = Literal[
     "contrast",
     "max_words",
     "overlay_overlap",
+    "walk_overlap",
     "narration_speed",
     "dead_air",
     "animation_overrun",
@@ -605,6 +607,13 @@ class OverlayOverlapRule(RuleConfig):
     """Part of a scene object's box an overlay must cover to be reported."""
 
 
+class WalkOverlapRule(RuleConfig):
+    """``walk_overlap``: a character's walk (``walk_to``, ``enter``) ends on another character."""
+
+    min_overlap: Fraction = 0.25
+    """Share of the narrower character's width the two must share side by side to be reported."""
+
+
 class NarrationSpeedRule(RuleConfig):
     """``narration_speed``: a beat spoken too fast or too slow (spoken words, or characters, per second)."""
 
@@ -687,6 +696,8 @@ class LintRules(_Strict):
     """Too many words on screen (default: warning)."""
     overlay_overlap: OverlayOverlapRule = Field(default_factory=OverlayOverlapRule)
     """Overlays covering scene text or icons (default: warning)."""
+    walk_overlap: WalkOverlapRule = Field(default_factory=WalkOverlapRule)
+    """A character ending its walk on another character (default: warning)."""
     narration_speed: NarrationSpeedRule = Field(default_factory=NarrationSpeedRule)
     """Narration too fast or too slow (default: warning; info for beats without audio)."""
     dead_air: DeadAirRule = Field(default_factory=DeadAirRule)

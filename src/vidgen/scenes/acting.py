@@ -1,6 +1,7 @@
 """Acting beat actions (DESIGN.md §69.11): ``say``, ``look_at``, ``turn``, ``emote``, ``pose`` and
 ``react`` on the characters of a scene (a ``stage``'s, or any scene's targets that are
-:class:`Character` s). Written against ``vidgen.api`` only, like project actions.
+:class:`Character` s); the moving ones are in ``moving.py`` (§69.12). Written against
+``vidgen.api`` only, like project actions.
 
 Each changes a character's state with :class:`PoseChange` (``say``: starts lip sync, and draws
 an optional speech bubble with the callout helpers). A part the character lacks is skipped
@@ -179,7 +180,15 @@ class Say(_Acting):
         )
         top = max((m.z_index for m in scene.get_mobject_family_members()), default=0)
         made.set_z_index(top + 2)
+        follow_speaker(made.mark, speaker)
         return made
+
+
+def follow_speaker(bubble: Mobject, speaker: Character) -> None:
+    """Keep ``bubble`` where it is relative to ``speaker``'s feet, on every frame, so it moves
+    with a character that walks or jumps (an updater on the bubble)."""
+    offset = bubble.get_center() - speaker.feet()
+    bubble.add_updater(lambda m: m.move_to(speaker.feet() + offset))
 
 
 def speech_bubble(

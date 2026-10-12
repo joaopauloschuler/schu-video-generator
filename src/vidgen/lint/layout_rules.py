@@ -22,6 +22,7 @@ from vidgen.config import (
     OverlayOverlapRule,
     SafeAreaRule,
     TextOverlapRule,
+    WalkOverlapRule,
 )
 from vidgen.lint.color import blend, contrast_ratio, hex_rgb, rgb_hex
 from vidgen.lint.rules import Bbox, Issue, StillContext, rule
@@ -479,4 +480,32 @@ def overlay_overlap(ctx: StillContext, settings: OverlayOverlapRule) -> Iterator
                 value=round(fraction, 3),
                 limit=settings.min_overlap,
                 group=("overlay", overlay),
+            )
+
+
+@rule("walk_overlap")
+def walk_overlap(ctx: StillContext, settings: WalkOverlapRule) -> Iterator[Issue]:
+    """A character's walk (``walk_to``, ``enter``) ends on another character."""
+    figures = [obj for obj in ctx.objects if obj["kind"] == "character"]
+    beat = ctx.frame.get("beat")
+    for k, walker in enumerate(figures):
+        if beat is None or walker.get("walked_in") != beat:
+            continue
+        for j, other in enumerate(figures):
+            if other is walker or (j < k and other.get("walked_in") == beat):
+                continue  # a pair that both walked is reported once
+            box = intersection(_bbox(walker), _bbox(other))
+            if box is None:
+                continue
+            a, b = _bbox(walker), _bbox(other)
+            share = (box[2] - box[0]) / max(min(a[2] - a[0], b[2] - b[0]), 1e-9)
+            if share < settings.min_overlap:
+                continue
+            yield Issue(
+                f"{describe(walker)} ends its walk on {describe(other)} ({share:.0%} of the narrower one's width); "
+                "walk it to another mark or x, or move the other character first",
+                box,
+                (walker, other),
+                value=round(share, 3),
+                limit=settings.min_overlap,
             )

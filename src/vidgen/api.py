@@ -107,10 +107,24 @@ from vidgen.languages import LanguageRules, language_rules  # noqa: E402
 from vidgen.imagegen import GenerateImage, generated_image  # noqa: E402
 from vidgen.vector_mobject import VectorPicture, load_vector  # noqa: E402
 from vidgen.cartoon.character import PART_NAMES, Character, CharacterPart, CharacterState, PartPose, character  # noqa: E402
-from vidgen.cartoon.transition import PoseChange  # noqa: E402
+from vidgen.cartoon.transition import Gesture, Jump, PoseChange, Walk  # noqa: E402
 from vidgen.cartoon.visemes import VISEMES, VisemeCue, VisemeTrack  # noqa: E402
 from vidgen.cartoon.cast import beat_voice, pose_name_problem, say_problem, speaking_characters  # noqa: E402
-from vidgen.cartoon.acting import LookPose, camera_look, look_pose  # noqa: E402
+from vidgen.cartoon.acting import (  # noqa: E402
+    GESTURE_SECONDS,
+    GESTURES,
+    JUMP_HEIGHT,
+    JUMP_SECONDS,
+    WALK_SPEED,
+    LookPose,
+    camera_look,
+    enter_path,
+    exit_path,
+    look_pose,
+    nearer_side,
+    offstage_x,
+    walk_seconds,
+)
 from vidgen.cartoon.props import PROP_HEIGHTS, PROP_KINDS, PROP_LIFTS, SVG_PROP_HEIGHT, Prop, draw_prop, svg_prop  # noqa: E402
 from vidgen.cartoon.stage import (  # noqa: E402
     DEFAULT_FACTORS,
@@ -356,6 +370,19 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "LookPose",
     "camera_look",
     "look_pose",
+    "GESTURES",
+    "GESTURE_SECONDS",
+    "JUMP_HEIGHT",
+    "JUMP_SECONDS",
+    "WALK_SPEED",
+    "Gesture",
+    "Jump",
+    "Walk",
+    "enter_path",
+    "exit_path",
+    "nearer_side",
+    "offstage_x",
+    "walk_seconds",
     "MARKS",
     "StageItem",
     "StagePlacement",

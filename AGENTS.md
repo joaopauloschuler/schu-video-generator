@@ -673,6 +673,11 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `emote` | on a `stage`: change a character's expression (`to: happy`) | on the word that causes it (`at`) |
 | `pose` | on a `stage`: change a character's pose (`to: pointing`) | one pose change per beat |
 | `react` | on a `stage`: a listener's `expression` / `pose` for this beat only | the listener, not the speaker |
+| `walk_to` | on a `stage`: a character walks to a mark or x (`to:`; `speed`) | with `follow` on a wide stage; the walk takes its distance's time |
+| `enter` | on a `stage`: a character walks in from an edge (`side:`) to its mark (or `to:`) | it waits off stage until then |
+| `exit` | on a `stage`: a character walks out by an edge (`to: left` / `right`) | an `enter` brings it back |
+| `gesture` | on a `stage`: `to: point`, `wave`, `shrug`, `nod`, `shake_head` | on the word it goes with (`at`) |
+| `jump` | on a `stage`: a character jumps (`height`) | joy or surprise |
 
 ```yaml
 - id: speeds
@@ -696,7 +701,9 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
   make a beat longer.
 - Cartoon dialogue: give each character a `voice` (a name from `voices:`) and each beat the
   `voice` of who says it; that character's mouth moves with the beat. Listeners `react`, and
-  `look_at` the speaker (`docs/CONFIG.md`, "Speaking and acting", has an example).
+  `look_at` the speaker (`docs/CONFIG.md`, "Speaking and acting", has an example). Characters
+  move with `walk_to`, `enter` / `exit`, `gesture` and `jump` ("Moving"); a walk takes the time
+  its distance needs, so give it a beat long enough, and end it on a free mark.
 - `until: <later beat id>` keeps a highlight / dim / callout on screen; without it a callout
   disappears at the next beat and a zoom comes back by the beat's end.
 - A callout without a target points at an `area: [x, y, w, h]` of the frame (fractions).
@@ -1142,7 +1149,7 @@ scenes:
 | `duplicate beat id` | beat ids are unique in the whole video; rename one |
 | `unknown target 'x' ...; did you mean ... (targets: ...)` | pick a name from the list (labels are case-sensitive: `bar:4K`) |
 | `until 'x' is not a later beat of scene 'y'` | `until` names a later beat id of the same scene |
-| `unknown action 'x'` / `unknown option` | actions are `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react` |
+| `unknown action 'x'` / `unknown option` | actions are `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `enter`, `exit`, `gesture`, `jump` |
 | `labels has 2 entries but values has 3` | one value per label |
 | `unknown theme color 'x'` | use a token (`primary`, `highlight`...) or quoted hex `"#0B5FFF"`, or add it to `theme.colors` |
 | `invalid hex color` | `#RGB`, `#RRGGBB` or `#RRGGBBAA`, in quotes (YAML reads `#` as a comment) |
@@ -1166,6 +1173,7 @@ install; `vidgen validate` warns when it is missing.
 | `label_spacing` | a callout label touches other text (a value, the title) | another `side:`, an `arrow` instead of a `label`, a shorter label |
 | `contrast` | text hard to read on its background | theme tokens instead of custom colours; another preset |
 | `overlay_overlap` | an overlay covers scene text | `reserve: true` on the overlay, or another corner / position |
+| `walk_overlap` | a character's walk ends on another character | walk it to another mark or x, or move the other one first |
 | `dead_air` | nothing moved for over 6 s | split the beat, add a reveal or an action, shorten a silent `duration` |
 | `narration_speed` | words per second outside 1.8–3.5 (English) | shorten or lengthen the beat's text; without audio it is only `info` (an estimate) |
 | `animation_overrun` | animations ran past the narration | a custom scene's animations are too long for the beat |

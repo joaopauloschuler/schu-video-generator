@@ -216,6 +216,9 @@ class Character(VGroup):
         self._idle: IdleClock | None = None
         self._lip_sync: _LipSync | None = None  # the running lip sync (:meth:`lip_sync`)
         self._spoken: str | None = None  # the mouth shape lip sync shows over the pose's
+        #: The beat in which the character's last walk ended (set by the walking actions; the
+        #: layout dump records it for the ``walk_overlap`` lint rule), ``None`` before any walk.
+        self.walked_in: str | None = None
         self._anchor = VMobject(fill_opacity=0, stroke_width=0, stroke_opacity=0)
         side = _ANCHOR_SIDE * height
         self._anchor.set_points(np.array([[0, 0, 0], [side, 0, 0], [0, side, 0], [0, side, 0]], dtype=float))
@@ -274,6 +277,13 @@ class Character(VGroup):
                 if part in self._shapes:
                     parts[part] = self._entry_pose(part, entry.get(part))
         return CharacterState(self.facing, parts)
+
+    @property
+    def character_height(self) -> float:
+        """The character's height in Manim units now (one character unit): the ``height`` it was
+        made with, times any Manim ``scale`` since. Its box (``height``) changes with the pose."""
+        p0, _, p2 = (np.asarray(p, dtype=float) for p in self._anchor.points[:3])
+        return float(np.linalg.norm((p2 - p0)[:2])) / _ANCHOR_SIDE
 
     def feet(self) -> np.ndarray:
         """The point between the feet on screen (the character's origin)."""

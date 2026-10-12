@@ -401,9 +401,9 @@ one.
 - [x] Tests: action schedules without rendering; validate (unknown character, `say` by a character with no voice) (`tests/test_cartoon_acting.py`: 12 without rendering, 1 tiny render)
 
 ### Step 79 — Acting actions, part 2: moving
-- [ ] `walk_to: <mark | x>` (walk cycle from leg / body bob, speed in units per second), `enter: left | right`, `exit: left | right`, `gesture: point | shrug | wave | nod | shake_head`, `jump`
-- [ ] Characters in a walk do not overlap others' marks at the end (lint warning otherwise)
-- [ ] Tests: walk duration from distance and speed, enter / exit end positions
+- [x] `walk_to: <mark | x>` (walk cycle from leg / body bob, speed in units per second), `enter: left | right`, `exit: left | right`, `gesture: point | shrug | wave | nod | shake_head`, `jump` (`scenes/moving.py`; the `to:` convention: `- walk_to: pip` + `to: door`, `- enter: kit` + `side: left` (+ `to`, default its mark), `- exit: kit` + `to: right`, `- gesture: kit` + `to: wave`, `- jump: pip` + `height`; pure math in `cartoon/acting.py`, `Walk` / `Gesture` / `Jump` in `cartoon/transition.py`; a walk lasts distance / speed via the new `Action.run_time_for`; characters with an `enter` wait off stage; `follow` plays with a walk and catches up (`Action.alters_targets`); a speech bubble now follows its speaker; DESIGN §69.12)
+- [x] Characters in a walk do not overlap others' marks at the end (lint warning otherwise) (lint rule `walk_overlap` on beat-end stills: the layout dump's `walked_in`, set by `walk_to` / `enter`)
+- [x] Tests: walk duration from distance and speed, enter / exit end positions (`tests/test_cartoon_moving.py`: 15 without rendering, 1 tiny render)
 
 ### Step 80 — Animation principles built in
 - [ ] Anticipation before a move, squash and stretch on jumps and landings, overshoot and settle on stops, follow-through on arms / ears / hair; one `cartoon_motion: lively | calm | none` setting (per video, scene or character)

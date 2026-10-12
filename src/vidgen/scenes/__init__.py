@@ -5,7 +5,8 @@ and ``@scene``); a module here is registered as "builtin" because it lives insid
 Importing this package imports every scene module (add new modules to the import list below)
 the built-in per-beat actions (``actions``: reveal, dim, highlight, zoom, pan, follow,
 transform; ``callout_action``: callout; ``sfx_action``: sfx;
-``particles_action``: particles; ``acting``: say, look_at, turn, emote, pose, react) and the
+``particles_action``: particles; ``acting``: say, look_at, turn, emote, pose, react; ``moving``: walk_to, enter,
+exit, gesture, jump) and the
 built-in overlays (``overlays``: lower_third, watermark; ``progress``: progress_bar,
 chapter_indicator; ``captions``: captions).
 """
@@ -30,6 +31,7 @@ from vidgen.scenes import (  # noqa: F401
     icon_grid,
     image,
     line_chart,
+    moving,
     network,
     overlays,
     particles_action,

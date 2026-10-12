@@ -539,6 +539,12 @@ class NarratedScene(MovingCameraScene):
         b = self.beat(beat)
         return [u.kind.name for u in self._actions.uses if u.beat == b.id] if self._actions is not None else []
 
+    def action_uses(self, name: str) -> list[Any]:
+        """The scene's validated uses of action type ``name``, in beat order: :class:`Action`
+        objects with their ``options`` and ``config`` (e.g. a ``stage`` keeps the characters an
+        ``enter`` brings in off stage until then)."""
+        return [u.action for u in self._actions.uses if u.kind.name == name] if self._actions is not None else []
+
     @contextmanager
     def narrate(self, beat: str | int | BeatConfig) -> Iterator[float]:
         """Narrate one beat: ``with self.narrate(0) as d: ...``.

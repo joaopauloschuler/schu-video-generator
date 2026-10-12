@@ -7474,3 +7474,93 @@ How to test
   `test_cartoon_svg test_cartoon_visemes` (1). A 854x480 preview of a two-character dialogue
   (voices, `say` with bubbles, `react`, `emote`, `look_at: camera`) rendered and `vidgen lint`
   found one `rushed_animation` warning on a two-word beat.
+
+
+## Step 79 — Acting actions, part 2: moving
+
+What was built
+- Five beat actions in `src/vidgen/scenes/moving.py` (against `vidgen.api` only, on Step 78's
+  `_Acting` base, so a prop target is a validate problem): `walk_to` (`to`: a mark or x, `speed`
+  units/s, default 2.5), `enter` (`side`, `to` default the character's own mark, `speed`),
+  `exit` (`to`: left / right, `speed`), `gesture` (`to`: point, wave, shrug, nod, shake_head),
+  `jump` (`height` in character heights, default 0.4). Same `to:` convention as Step 78: the
+  shorthand value is the character.
+- Pure functions (no manim) in `src/vidgen/cartoon/acting.py`: `walk_seconds(distance, speed)`
+  (= |d| / (speed × 0.85): even speed-up and slow-down over 15 % each end, `speed` in between),
+  `walk_progress`, `walk_amplitude`, `walk_cycle(steps, amplitude)` (legs / arms swing, legs
+  narrower and body higher between footfalls; one step per 0.35 character heights walked),
+  `nearer_side`, `offstage_x`, `enter_path` -> (side, start, end), `exit_path` -> (side, end),
+  `gesture_weight`, `gesture_moves(kind, t, arm)` -> part -> `PartMove`, `jump_lift`.
+- Animations in `src/vidgen/cartoon/transition.py`: `Walk(character, x, start_x=, park_x=,
+  speed=)`, `Gesture(character, kind)`, `Jump(character, height)`: redraw from the state at
+  `begin` each frame, end in it, end a blink, keep lip sync in step (`sync_mouth`).
+  `Character.character_height` (height in units from the anchor) and `Character.walked_in`.
+- Runner: `Action.run_time_for(scene, targets)` (natural run time for the targets now; a config
+  `run_time` wins) used by `ActionRunner._phases` via `_natural`; `Action.alters_targets` (False
+  for `pan` / `follow`) so a `follow` due with a `walk_to` plays in the same batch.
+- Camera follow with walking: `_MoveThenFollow` re-aims its end view at the target every frame,
+  so the pan catches up with a walking character and hands over without a jump; `_x_of` functions
+  carry `followed`, and `exit` stops a follow of the leaving character.
+- Stage: `Stage.homes` (mark x per character); characters named by an `enter`
+  (`NarratedScene.action_uses("enter")`, new) start parked beyond the stage edge (side of their
+  first `enter`, else nearer their mark) and fade in there unseen. `exit` parks the character
+  beyond the stage edge after it leaves the view.
+- Step 78 gap fixed: a speech bubble follows its speaker (`follow_speaker` updater in
+  `scenes/acting.py`: keeps its offset from the speaker's feet).
+- Lint rule `walk_overlap` (still rule, warning, `min_overlap` 0.25 of the narrower width): the
+  layout dump's character objects carry `walked_in` (the beat its last walk ended in); a
+  character that walked in the still's beat and overlaps another is reported.
+
+Files touched
+- New: `src/vidgen/scenes/moving.py`, `tests/test_cartoon_moving.py`.
+- `src/vidgen/cartoon/acting.py`, `cartoon/transition.py`, `cartoon/character.py`, `actions.py`,
+  `scene.py` (`action_uses`), `scenes/actions.py` (pan / follow), `scenes/acting.py` (bubble),
+  `scenes/stage.py`, `scenes/__init__.py`, `api.py`, `config.py` (`WalkOverlapRule`,
+  `LINT_RULES`, `RuleName`, `LintRules`), `introspect.py`, `lint/layout_rules.py`,
+  `data/guide/AGENTS.md` (+ copy `AGENTS.md`: action rows, dialogue bullet, troubleshooting
+  lists).
+- Tests updated: `tests/test_actions.py` (action name lists).
+- Docs: `docs/CONFIG.md` (new "Moving" under `stage`, actions / `action` / `run_time` / targets
+  rows, layout `walked_in` row, lint table and defaults), `DESIGN.md` (§2 tree, §6.4, notes in
+  §69.5 / §69.6 / §69.7 / §69.11, new §69.12), `docs/EXTENDING.md`, `tasklist.md`.
+
+Public interfaces
+- `vidgen.api` adds `Walk`, `Gesture`, `Jump`, `WALK_SPEED`, `GESTURES`, `GESTURE_SECONDS`,
+  `JUMP_HEIGHT`, `JUMP_SECONDS`, `walk_seconds`, `enter_path`, `exit_path`, `nearer_side`,
+  `offstage_x`. `Action.run_time_for`, `Action.alters_targets`; `NarratedScene.action_uses`;
+  `Character.character_height`, `Character.walked_in`. New built-in actions `walk_to`, `enter`,
+  `exit`, `gesture`, `jump`; lint rule `walk_overlap`; layout key `walked_in`. All compatible.
+
+Decisions / deviations
+- The overlap check is a lint rule on beat-end stills (as the task list asks), not a validate
+  warning: positions depend on the render (camera view for enter / exit, depth sizes).
+- Enter / exit use the camera's view at the time (not the stage edge), so on a wide stage a
+  character enters where the viewer sees it; after an exit it is parked beyond the stage edge so
+  no later pan shows it.
+- Walks keep the character's depth and facing direction of travel; no `depth` option (not asked).
+- Gestures are one-shot (they return to the pose); `pose: pointing` is the lasting pointing.
+- `shake_head` moves head and eyes sideways (the flat figures have no depth turn).
+- Searched before adding: no walk / gesture / jump code existed; reused `_Acting`,
+  `camera_place`, `view_center_within`, `MoveCamera`, `PoseChange`'s pattern, `ACTION_NEEDS`
+  gesture entries (Step 69), `intersection` / `describe` in lint.
+
+Known gaps / TODOs
+- A walk's run time is estimated when its batch is planned: two walks of one character due on the
+  same frame both use its position then. Several targets of one walk all take the longest's time.
+- A single `legs` part swings as a pair (no leg-by-leg stepping); anticipation / squash are Step
+  80, paths Step 81, footsteps Step 86.
+- `enter` on a character already on screen first jumps it to the edge. The bubble follows its
+  speaker without clamping to the view.
+
+How to test
+- `pytest tests/test_cartoon_moving.py` (15 not-render + 1 render at 160x90, ~2.5 s).
+- Also run (not render): `test_cartoon_acting test_cartoon_parallax test_cartoon_stage
+  test_cartoon_character test_cartoon_poses test_cartoon_idle test_cartoon_visemes
+  test_cartoon_props test_cartoon_svg test_actions test_lint test_api test_introspect
+  test_callout_action` (339 with the new file, 10 s) and `test_guide test_docs
+  test_actions_coverage test_schema test_extensions test_builtin_scenes test_translation
+  test_json_output test_mcp test_cli test_gallery test_voices test_particles
+  test_cartoon_generator test_cartoon_style test_overlays` (515, 86 s); render: the cartoon files
+  (4, 3 s), `test_introspect test_callout_action` (9, 31 s), `test_actions_coverage
+  test_builtin_scenes -k "stage or zoom or follow or pan"` (6, 6 s). A preview `vidgen lint` of a
+  two-character stage where pip walks onto kit's mark reported one `walk_overlap` warning.

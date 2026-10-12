@@ -75,13 +75,15 @@ src/vidgen/
                           # poses, mirroring; character()), cast.py (characters: lookups, checks; no manim),
                           # generator.py (look: parameters -> parts, §69.1), svg_look.py (look: {svg} -> parts by
                           # element ids, §69.2), still.py (`vidgen character --png`), poses.py (pose and
-                          # expression tables, §69.3; no manim), transition.py (PoseChange, §69.3),
+                          # expression tables, §69.3; no manim), transition.py (PoseChange, §69.3;
+                          # Walk, Gesture, Jump, §69.12),
                           # visemes.py (lip sync: viseme tracks, .visemes.json, §69.4; no manim),
                           # idle.py (blinking, breathing, head sway: the seeded schedule, §69.5; no manim),
                           # stage.py (marks, ground line, depth, draw order of a stage, §69.6; parallax
                           # layer offsets and extents, §69.7; no manim), props.py (Prop, draw_prop,
                           # svg_prop: props from primitives or an SVG, §69.8), acting.py (where a
-                          # character looks: look_pose, camera_look, §69.11; no manim); still.py also
+                          # character looks: look_pose, camera_look, §69.11; walk times and cycle,
+                          # entrances and exits, gestures, jumps, §69.12; no manim); still.py also
                           # draws the prop gallery
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
@@ -154,7 +156,8 @@ src/vidgen/
                           # pan/follow, §69.7;
                           # callout_action.py: the callout beat action, §44; sfx_action.py: sfx, §47;
                           # particles_action.py: particles, §69.9; acting.py: say, look_at, turn,
-                          # emote, pose, react and the speech bubble, §69.11;
+                          # emote, pose, react and the speech bubble, §69.11; moving.py: walk_to,
+                          # enter, exit, gesture, jump, §69.12;
                           # overlays.py: the built-in overlays lower_third/watermark, §41;
                           # progress.py: progress_bar/chapter_indicator, §42; captions.py: captions, §43;
                           # stage.py: the stage scene type, §69.6)
@@ -649,6 +652,11 @@ Step 78 (§69.11) adds `beat_voice`, `speaking_characters`, `say_problem`, `Look
 `look_pose`, `camera_look`; `NarratedScene` gains `current_beat`, `beat_clock`, `speak`,
 `beat_action_names`; `Action` gains `character_needs`; `Character.lip_sync` gains the keyword
 `clock=None` and `Character` the methods `sync_mouth`, `lip_sync_track` (all compatible).
+Step 79 (§69.12) adds `Walk`, `Gesture`, `Jump`, `WALK_SPEED`, `GESTURES`, `GESTURE_SECONDS`,
+`JUMP_HEIGHT`, `JUMP_SECONDS`, `walk_seconds`, `enter_path`, `exit_path`, `nearer_side`,
+`offstage_x`; `Action` gains `run_time_for` and the class attribute `alters_targets` (default
+`True`); `NarratedScene` gains `action_uses`; `Character` gains `character_height` and
+`walked_in` (all compatible).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -5206,9 +5214,9 @@ updater, so `PoseChange` (§69.3) and `lip_sync` (§69.4) never fight with it.
   `start_idle()` unless it is false. A `Character` built directly from parts does not idle until
   `start_idle()`.
 - **Per scene**: the `stage` scene's `idle: false` calls `stop_idle()` on its characters (§69.6).
-- **Not done here**: Only `PoseChange` ends a running blink; another animation
-  played on the character (e.g. `.animate.shift`) holds the eyes as they are until it ends (Step
-  79's walking should end the blink or move the character with an updater). Lip sync (§69.4) has
+- **Not done here**: `PoseChange`, `Walk`, `Gesture` and `Jump` (§69.12) end a running blink;
+  another animation played on the character (e.g. `.animate.shift`) holds the eyes as they are
+  until it ends. Lip sync (§69.4) has
   its own clock (the scene's time since Step 78), so it does not fall behind during an animation.
   Tests: `tests/test_cartoon_idle.py`.
 
@@ -5270,8 +5278,8 @@ lint, Step 84) reuse it.
   both block forms.
 - **Hooks for Step 78+**: `Stage.cast` (name -> `Character`, back to front) is set in
   `construct`. Step 78 (§69.11) built speaking (`Stage.narrate`) and the acting actions on it;
-  walking (Step 79) moves the feet along the ground line with `feet_point` at the character's
-  depth and should re-sort the draw order when depths change.
+  walking (Step 79, §69.12) moves the feet along the ground line at the character's depth (it
+  keeps its depth, so the draw order stays).
 - **Not done here**: props (Step 75), speech and acting (Steps 78–79, §69.11), cartoon lint
   rules (Step 84). Parallax layers, a stage wider than the frame and the camera actions are Step 74 (§69.7).
   Tests: `tests/test_cartoon_stage.py`.
@@ -5343,8 +5351,8 @@ and the new `pan` and `follow`, which are generic (any scene type) and reuse `Mo
   a `pan` or on a stage with `camera_at`, the camera no longer jumps home.
 - **Lint**: `StillContext.camera_moved` (zoomed, or the view's centre away from the frame's
   centre); `off_frame` and `safe_area` skip such stills (they skipped zoomed ones).
-- **Not done here**: a followed character that walks (Step 79) is followed by x only (the view's
-  y and zoom stay); `zoom` on another character while following keeps the followed one in the
+- **Not done here**: a followed character that walks (§69.12) is followed by x only (the view's
+  y and zoom stay; a `follow` due with a walk plays with it and catches up, §69.12); `zoom` on another character while following keeps the followed one in the
   middle. An image layer's bottom stays at `bottom`, so a near layer (factor > 1) zoomed in at the
   bottom of the stage can show a sliver below it. No vertical pan. Layers are not action targets.
   Tests: `tests/test_cartoon_parallax.py`.
@@ -5563,9 +5571,85 @@ Characters speak and act during beats: who speaks follows the beat's voice; six 
   an `ACTION_NEEDS` entry, each declared character its targets match (`fnmatch`) whose parts
   (`character_part_shapes`) lack it: `scenes[0].beats[0].actions[1]: character 'blob' cannot
   look_at (needs head); the action does nothing for it`.
-- **Not done here**: gestures, walking, entering and leaving (Step 79); a bubble does not follow a
-  character that moves; a long beat text makes a large bubble (use a short `bubble` text); a
+- **Not done here**: gestures, walking, entering and leaving are §69.12 (which also makes a bubble
+  follow its speaker); a long beat text makes a large bubble (use a short `bubble` text); a
   `say` by a character whose voice differs from the beat's is allowed (its mouth follows the
   beat's audio) and not warned about; a shape swap still resets the mouth's style, so a dimmed
   character's speaking mouth shows at full opacity (Step 67 gap). Tests:
   `tests/test_cartoon_acting.py`.
+
+### 69.12 Acting actions, part 2: moving (Step 79)
+
+Five beat actions (`scenes/moving.py`, against `vidgen.api` only, on the `_Acting` base of §69.11:
+targets must be declared characters, a prop is a problem from `scene_problems`) move characters:
+`walk_to`, `enter`, `exit`, `gesture`, `jump`. As in §69.11 the character is the target and the
+new state an option (`- walk_to: pip` + `to: door`; `- gesture: kit` + `to: wave`).
+
+- **Motion without manim** (`cartoon/acting.py`): `walk_seconds(distance, speed=WALK_SPEED 2.5)`
+  = |distance| / (speed × (1 − `WALK_EASE` 0.15)): the walk speeds up evenly over the first 15 %
+  of its time, goes at `speed` (Manim units per second), slows down evenly over the last 15 %
+  (`walk_progress(t)`, the share of the distance at time share `t`; `walk_amplitude(t)`, the speed
+  as a share of the full one). `walk_cycle(steps, amplitude)` gives the pose change after
+  `steps` steps (one per `STEP_LENGTH` 0.35 character heights walked, so the feet keep pace):
+  legs turned ±`WALK_LEG_DEGREES` 10 and arms ±`WALK_ARM_DEGREES` 16 (the far arm the other way)
+  furthest at a footfall (`sin(π steps)`), the legs `WALK_LEG_SQUEEZE` 0.3 narrower and the body
+  `WALK_BOB` 0.02 higher as the legs pass (`1 − sin²`); scaled by the amplitude, so a walk starts
+  and ends in the pose. Entrances and exits: `nearer_side(x, left, right)`, `offstage_x(side,
+  left, right, half_width)` (wholly beyond that edge, `OFFSTAGE_GAP` 0.25 away), `enter_path(side,
+  to_x, view, half_width)` → (side, start, end), `exit_path(side, from_x, view, half_width)` →
+  (side, end). Gestures (`GESTURES`: point, wave, shrug, nod, shake_head; `GESTURE_SECONDS`
+  1.2 / 1.6 / 1.0 / 0.9 / 1.1): `gesture_moves(kind, t, arm)` → part → `PartMove(angle, weight,
+  turn, shift)` (turn `weight` of the way from the pose's angle to `angle`, plus `turn`, plus
+  `shift`), with `gesture_weight(t)` easing in and out over `GESTURE_EASE` 0.25 (smoothstep): point
+  the near arm to 88°; wave to 145° ± 20° three times; shrug both arms ±45° and 0.02 up; nod the
+  head down 12° twice (`sin²(2πt)`); shake_head the head 0.012 sideways twice and the eyes as far
+  again (a flat figure cannot turn its head in depth). The near arm is `arm_left`, else
+  `arm_right` with mirrored angles. `jump_lift(t, height)` = 4 h t (1 − t), `JUMP_HEIGHT` 0.4
+  character heights, `JUMP_SECONDS` 0.6.
+- **Animations** (`cartoon/transition.py`, exported): `Walk(character, x, *, start_x=None,
+  park_x=None, speed=WALK_SPEED)` (run time `walk_seconds` unless given; `begin` ends a blink,
+  jumps to `start_x`, records the state, the feet and the facing towards `x`; each frame sets
+  `walking_state(base, cycle, facing)`, moves the feet's x (y kept) and calls `sync_mouth`;
+  `clean_up_from_scene` moves it to `park_x`), `Gesture(character, kind)`, `Jump(character,
+  height)`. All redraw from the state they began with and end in it (a walk with the new
+  facing). `Character.character_height` (its height in Manim units, from the anchor) scales steps
+  and jumps.
+- **Actions**: `walk_to` (`to` a mark or x, `speed` (0, 20]; class `run_time` 2.0; faces the way
+  it goes and keeps that facing); `enter` (`side`, `to` (default the character's own mark:
+  `Stage.homes`, name -> x), `speed`; starts just beyond the camera view's edge); `exit` (`to`
+  edge, `speed`; ends just beyond the view's edge, then is parked beyond the stage's edge so a
+  later pan never shows it; a `follow` of that character stops: the follow function's
+  `followed`); `gesture` (`to` one of `GESTURES`; `character_needs` = `"gesture: <kind>"`, the
+  §69.2 entries); `jump` (`height` (0, 2]). None is reversible. Places are checked like `pan`'s
+  (`camera_place`).
+- **Timing**: the new hook `Action.run_time_for(scene, targets) -> float | None` (default `None`)
+  gives a use's natural run time for its targets when it falls due; `ActionRunner._phases` uses
+  it (through `_natural`) unless the config gives `run_time` or the phase undoes something. So a
+  walk lasts its distance over its speed (the longest of several targets; all walk for that
+  time), and is shortened with the other actions when the beat has less time left (as always,
+  `rushed_animation` may report it). The estimate is taken when the batch is planned: two walks of
+  one character due on the same frame use the first one's start for both.
+- **Camera**: `Action.alters_targets` (class attribute, default `True`; `pan` and `follow`
+  `False`): such an action's targets do not count when the runner splits due actions into batches
+  of distinct targets, so a `follow` due with a `walk_to` of the same character plays with it.
+  `_MoveThenFollow` re-aims its end view at `x_of()` on every frame (inside `camera_bounds`), so
+  the pan catches up with a walking character and hands over to following without a jump.
+- **Stage**: `Stage.homes` (each character's mark x); characters an `enter` names
+  (`NarratedScene.action_uses("enter")`, the new method listing a scene's validated uses of an
+  action type) start parked beyond the stage's edge on the side of their first `enter` (else the
+  edge nearer their mark) and fade in there with the set (unseen); `off_frame` ignores objects
+  wholly outside. A walk keeps the character's depth (feet y), so the draw order never changes.
+- **Speech bubble follows its speaker** (fixes §69.11's gap): `follow_speaker(bubble, speaker)`
+  (`scenes/acting.py`) adds an updater keeping the bubble at its offset from the speaker's feet,
+  so it moves with a walk or jump (it is not clamped to the view).
+- **Lint `walk_overlap`** (layout rule after `overlay_overlap`, default warning, `WalkOverlapRule`
+  `min_overlap` 0.25): the walk actions set `Character.walked_in` to the current beat; `introspect`
+  writes it as `walked_in` on the character's object; at a beat-end still, a character whose
+  `walked_in` is that beat and whose box shares at least `min_overlap` of the narrower width with
+  another character's is reported (`character 'pip' ends its walk on character 'kit' (60% ...)`),
+  a pair that both walked once.
+- **Not done here**: changing depth while walking (`walk_to` keeps the depth); a path or curve
+  (Step 81); anticipation, squash and follow-through (Step 80); foley (Step 86); a single `legs`
+  part cannot step leg by leg (the cycle turns and narrows the pair); `enter` teleports a
+  character that is on screen to the edge first; an `exit` with a camera that keeps moving can
+  end in view (it is parked off stage at its end anyway). Tests: `tests/test_cartoon_moving.py`.

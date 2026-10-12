@@ -140,6 +140,10 @@ class Action:
     #: Whether it is built for the camera as it will be (``callout``: a label readable in a zoom):
     #: when it falls due together with a camera move, it plays after that move.
     after_camera: ClassVar[bool] = False
+    #: Whether it changes its targets. ``False`` (``pan``, ``follow``): it only reads where they
+    #: are, so it plays together with an action on the same targets that falls due with it (a
+    #: ``follow`` and a ``walk_to``), instead of before or after it.
+    alters_targets: ClassVar[bool] = True
     #: Options whose values are target names (checked like ``target``; e.g. ``into`` of
     #: ``transform``). Resolve them with :meth:`NarratedScene.find_targets`.
     target_options: ClassVar[tuple[str, ...]] = ()
@@ -174,6 +178,12 @@ class Action:
         """The :data:`~vidgen.cartoon.cast.ACTION_NEEDS` entry (``"say"``, ``"look_at"``...) this
         use needs of each character it targets: ``vidgen validate`` warns when one lacks those
         parts. Default: none."""
+        return None
+
+    def run_time_for(self, scene: NarratedScene, targets: list[Target]) -> float | None:
+        """The run time this use needs for ``targets`` as they are when it falls due (``walk_to``:
+        the distance over the speed), or ``None`` for the class's :attr:`run_time`. A
+        ``run_time:`` in the config wins. Default: ``None``."""
         return None
 
     def provides(self) -> list[str]:
@@ -401,6 +411,14 @@ def _rank(due: _Due) -> int:
     return 2 if due.use.kind.cls.temporary else 0
 
 
+def _changed(due: _Due) -> set[int]:
+    """Ids of the mobjects ``due`` changes: its targets' families (none for an action that only
+    reads them, :attr:`Action.alters_targets`)."""
+    if not due.use.kind.cls.alters_targets:
+        return set()
+    return {id(m) for t in due.use.targets for m in t.mobject.get_family()}
+
+
 def _after_camera(due: _Due) -> bool:
     """An action built for the camera's coming view (not its undoing)."""
     return not due.revert and due.use.kind.cls.after_camera
@@ -521,9 +539,9 @@ class ActionRunner:
         if any(d.use.kind.cls.moves_camera for d in due):   # camera moves before what is built for the view
             due = [d for d in due if not _after_camera(d)] + [d for d in due if _after_camera(d)]
         for d in due:
-            mobs = {id(m) for t in d.use.targets for m in t.mobject.get_family()}
+            mobs = _changed(d)
             mobs |= {camera} if d.use.kind.cls.moves_camera or _after_camera(d) else set()
-            taken = {id(m) for b in batch for t in b.use.targets for m in t.mobject.get_family()}
+            taken = {m for b in batch for m in _changed(b)}
             taken |= {camera} if any(b.use.kind.cls.moves_camera for b in batch) else set()
             if mobs & taken:
                 batch = []
@@ -531,8 +549,16 @@ class ActionRunner:
             batch.append(d)
         for b in batches:
             if b:
-                phases.append((lambda b=b: self._build(b), max(d.use.run_time for d in b)))
+                phases.append((lambda b=b: self._build(b), max(self._natural(d) for d in b)))
         return phases
+
+    def _natural(self, due: _Due) -> float:
+        """The run time ``due`` asks for: the config's, else the action's for its targets now
+        (:meth:`Action.run_time_for`; not when undoing), else its class's."""
+        if due.use.config.run_time or due.revert:
+            return due.use.run_time
+        wanted = due.use.action.run_time_for(self.scene, due.use.targets)
+        return due.use.run_time if wanted is None else float(wanted)
 
     def _build(self, batch: list[_Due]) -> list[Animation]:
         anims: list[Animation] = []
