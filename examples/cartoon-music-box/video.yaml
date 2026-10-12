@@ -1,5 +1,5 @@
-# A cartoon about a music box: built from examples/screenplay, then hand-edited. No audio committed:
-# `vidgen tts` (Kokoro, free and local) makes the narration.
+# A cartoon about a music box (examples/screenplay, hand-edited).
+# No audio committed: run `vidgen tts` (Kokoro, free).
 title: The Humming Box
 format:
   width: 1280
@@ -208,3 +208,4 @@ output: cartoon-music-box
 overlays:
 - type: captions
   speakers: color
+music: {source: bright, volume: -2}

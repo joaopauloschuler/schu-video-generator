@@ -556,7 +556,7 @@ my_video/
   overriding the light, a prop or a character for itself; both validate and lint clean.
 - [examples/cartoon-music-box](examples/cartoon-music-box) — "The Humming Box" after hand editing: automatic
   directing, shots, sitting, a prop picked up and given, sunset to night, wind, a laugh and a
-  gasp, an overlap and an interruption, speaker-coloured captions; about 58 s with `vidgen tts`.
+  gasp, an overlap and an interruption, speaker-coloured captions, background music; about 58 s.
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.
