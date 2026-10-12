@@ -54,7 +54,8 @@ BORDER = (120, 126, 138)
 @dataclass(frozen=True)
 class SheetStill:
     """One still on a sheet. ``time`` is in the video (``None`` if unknown), ``scene_time``
-    from the scene start; ``text`` is the beat's narration (``None`` for a silent scene)."""
+    from the scene start; ``text`` is the beat's narration (``None`` for a silent scene);
+    ``mid`` the actions a mid-action still shows half-way (``walk_to pip``; ``k`` is then 0)."""
 
     scene_id: str
     beat_id: str | None
@@ -64,6 +65,7 @@ class SheetStill:
     time: float | None
     path: Path
     text: str | None
+    mid: str | None = None
 
 
 @dataclass(frozen=True)
@@ -335,8 +337,11 @@ def _header_text(scene: SheetScene, continued: bool, font: Font, width: float) -
 
 def _label(still: SheetStill, video_times: bool) -> str:
     """``beat @ time``; with several stills per beat ``k/n @ time`` (the beat id is then
-    written before the narration under the block)."""
-    name = f"{still.k}/{still.n}" if still.n > 1 else still.beat_id or f"{still.scene_id} (silent)"
+    written before the narration under the block); a mid-action still ``½ walk_to pip @ time``."""
+    if still.mid is not None:
+        name = f"\u00bd {still.mid}"
+    else:
+        name = f"{still.k}/{still.n}" if still.n > 1 else still.beat_id or f"{still.scene_id} (silent)"
     if video_times and still.time is not None:
         return f"{name} @ {format_time(still.time)}"
     return f"{name} @ {still.scene_time:.1f} s"

@@ -1002,6 +1002,10 @@ when it falls due (the built-in `walk_to`: the distance over its speed), or `Non
 `run_time`; a `run_time:` in the config wins. `alters_targets = False` says the action only reads
 its targets (the built-in `pan` and `follow`), so it plays together with another action on them
 that falls due at the same moment instead of before or after it.
+A scene type that lists action type names in its class attribute `mid_still_actions` (the
+built-in `stage`: `walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`) gets a
+still half-way through each use of them whenever stills are taken (`vidgen storyboard`,
+`render --frames`), besides the beat ends (docs/CONFIG.md "Frame stills").
 The built-in `callout` action (`src/vidgen/scenes/callout_action.py`) is an example of all
 three, built on the callout helpers below. An action that draws nothing sets `animates = False`
 and implements `cue(self, scene, time)` instead of `apply`: the runner calls it when the beat

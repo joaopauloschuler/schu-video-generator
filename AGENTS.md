@@ -164,9 +164,9 @@ stdout, `{version, ok, warnings, ..., error?}`, exit code 0 exactly when `ok`. `
 commands are tools with the same JSON documents: `guide`, `plan`, `init`, `validate`, `schema`,
 `list_scenes`, `list_icons`, `list_themes`, `list_sfx`, `list_music`, `storyboard`, `lint`,
 `render`, `tts`, `imagegen`, `readback`, `slides`, `thumbnail`, `export`, `gallery`,
-`translate_template` (options in snake_case: `per_beat`, `fail_on`). Paths are relative to the
-server's root folder. `storyboard` returns the contact sheets as images (look at them; page with
-`image_offset`), `thumbnail` and `gallery` their pictures. `render` previews by default. `tts` and
+`translate_template`, `character_sheet` (options in snake_case: `per_beat`, `fail_on`). Paths are
+relative to the server's root folder. `storyboard` returns the contact sheets as images (look at
+them; page with `image_offset`), `thumbnail`, `gallery` and `character_sheet` their pictures. `render` previews by default. `tts` and
 `imagegen` are dry runs unless you pass `dry_run: false` and `confirm_cost: true`: run the dry
 run, tell the user what it will cost, and confirm only after they agree.
 
@@ -709,7 +709,9 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
   anticipation, squash and stretch, overshoot and follow-through built in; `cartoon_motion:
   calm` (or `none`) at the top level, on a stage or on a character tones them down. For
   anything else, `keyframes` and `move_along` move a character, a prop or one part
-  (`kit.arm_left`) by keys or along a path ("Keyframes and motion paths").
+  (`kit.arm_left`) by keys or along a path ("Keyframes and motion paths"). Before writing the
+  scenes, look at `vidgen character-sheet NAME` (every pose, expression and mouth shape on one
+  PNG); the storyboard of a stage also shows each move half-way (`½ walk_to pip`).
 - `until: <later beat id>` keeps a highlight / dim / callout on screen; without it a callout
   disappears at the next beat and a zoom comes back by the beat's end.
 - A callout without a target points at an `area: [x, y, w, h]` of the frame (fractions).

@@ -161,6 +161,7 @@ class FakeScene:
     """Enough of a stage for the acting actions: targets by name, bounds and marks."""
 
     spec = type("Spec", (), {"id": "park"})()
+    mid_still_actions: frozenset[str] = frozenset()
 
     def __init__(self, **mobs: Any) -> None:
         self.mobs = mobs

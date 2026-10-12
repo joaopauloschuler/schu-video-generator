@@ -419,9 +419,9 @@ one.
 - [x] Tests: settles within a time, no overshoot when critically damped (`tests/test_cartoon_spring.py`: 12 without rendering; `tests/test_cartoon_motion.py`'s follow-through test now checks the spring)
 
 ### Step 83 — Character sheets and mid-action storyboards
-- [ ] `vidgen character-sheet [NAME]`: every pose, expression and mouth shape of a character on one PNG (and over MCP)
-- [ ] Storyboard stills for `stage` scenes include mid-action frames (half-way through a walk or gesture), not only the end of each beat
-- [ ] Tests: sheet grid size per character; storyboard picks mid-action times
+- [x] `vidgen character-sheet [NAME]`: every pose, expression and mouth shape of a character on one PNG (and over MCP) (`cartoon/still.py` `write_character_sheet`: poses whole, expressions and mouth shapes as head close-ups, 64-colour PNG, ~30 KB; `vidgen character-sheet [NAME] [PROJECT] [--all] [--variant] [--output] [--json]`, no NAME = every character; MCP tool `character_sheet` returns the sheets as pictures; DESIGN §69.16)
+- [x] Storyboard stills for `stage` scenes include mid-action frames (half-way through a walk or gesture), not only the end of each beat (`NarratedScene.mid_still_actions`, `stage`: walk_to, enter, exit, gesture, jump, keyframes, move_along; the action runner asks `FrameCapture.add_mid_still` as each plays; `k` 0 + `mid` label, `<beat>-m<frame>.png`, labelled `½ walk_to pip` on the sheets; at most 3 per beat, 0.4 s from other stills; lint and slides skip them)
+- [x] Tests: sheet grid size per character; storyboard picks mid-action times (`tests/test_cartoon_sheet.py`: 7 without rendering, 2 tiny renders; `mid_action_frame(s)` and the capture in `tests/test_frames.py`; the MCP tool in `tests/test_mcp.py`)
 
 ### Step 84 — Cartoon lint rules
 - [ ] Character partly off-stage (unless entering / exiting); speech bubble covering a face or another bubble; characters overlapping at rest; speaker facing away from the listener (the character it last looked at or the nearest one); mouth moving while no voice speaks; a character speaking with no line of sight to the camera (back turned)

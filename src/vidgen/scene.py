@@ -792,6 +792,12 @@ class NarratedScene(MovingCameraScene):
     #: true}`` (``chapter``: a whoosh); ``None``: nothing.
     entrance_sfx: ClassVar[tuple[str, float] | None] = None
 
+    # ----- stills (DESIGN.md §14, §69.16) ----------------------------------------------------------
+
+    #: Action types whose uses also get a still half-way through them when stills are captured
+    #: (``vidgen storyboard``, ``render --frames``; ``stage``: walks, gestures, jumps, keyframes...).
+    mid_still_actions: ClassVar[frozenset[str]] = frozenset()
+
     # ----- generated pictures (DESIGN.md §58, §69.10) ------------------------------------------
 
     #: Whether the video's ``cartoon_style`` is added to this type's ``generate:`` prompts

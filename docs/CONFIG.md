@@ -1035,6 +1035,16 @@ with the colour it resolves to); `--png [FILE]` also writes one still of it on t
 background, in the video's aspect ratio with its shorter side 720 px (default file:
 `exports/character_<name>.png`; `--facing left` mirrors it; `--variant NAME` applies a variant).
 
+**Character sheet**: `vidgen character-sheet [NAME] [PROJECT]` draws every pose (the whole
+figure, rest face), every expression and every mouth shape (close-ups of the head) of a
+character on one labelled PNG, facing right, on the theme background:
+`exports/character_sheet_<name>.png` (`--output FILE` with a NAME). Without NAME it writes one
+sheet per character; `--all PROJECT` does that for a project in another folder. The character's
+own poses and expressions are marked `*`. Rows hold up to 8 cells of 128 px, so a generated
+character's sheet is 1148 x 858 px and about 35 KB (a 64-colour PNG), readable as it is by an AI
+agent's image viewer. `--variant NAME`, `--json` (below); over MCP the `character_sheet` tool
+returns the sheets as pictures. Use it to check a character before writing its scenes.
+
 - **Checks**: two characters with the same name, a `voice` that is not in `voices:` (nor
   `default`) and an unknown key are config errors (`characters[0].voice: unknown voice 'anna';
   did you mean 'ana'?`); `vidgen validate` also reports a colour that is not a theme token or hex
@@ -4055,7 +4065,9 @@ bubble moves with its character. Lip sync stays in step during a walk, gesture o
 `vidgen validate` reports an unknown mark, gesture or edge, and a moving action on a prop; it
 warns when a character lacks the parts a gesture needs (`point` / `wave`: an arm; `shrug`: both
 arms; `nod` / `shake_head`: a head). `vidgen lint` reports a walk that ends on another character
-(`walk_overlap`): pick another mark, or move the other character first.
+(`walk_overlap`): pick another mark, or move the other character first. `vidgen storyboard` shows
+each walk, entrance, exit, gesture and jump (and `keyframes` / `move_along`) half-way as well as
+at the beat's end ([mid-action stills](#frame-stills-vidgen-render---frames)).
 
 ```yaml
 scenes:
@@ -4743,7 +4755,9 @@ still per beat: its **last frame**, i.e. what is on screen when the narration of
 its `narration.pad`) is over. `--frames-per-beat N` takes N evenly spaced stills per beat, the
 last one again at the end (N=3: after a third, two thirds and all of the beat). A silent scene
 counts as one beat lasting `duration` minus the scene's fade-out, so its last still is taken
-before the fade. Stills are off by default; they work with `--preview`, `--variant`, `--scene`
+before the fade. A [`stage`](#stage) scene also gets a **mid-action still** half-way through each
+`walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes` and `move_along` (at most 3 per beat,
+none within 0.4 s of another still of the beat). Stills are off by default; they work with `--preview`, `--variant`, `--scene`
 and `--jobs`. They are taken from Manim's renderer while it writes the video (the same pixels
 as the video frame, before compression), so they do not change the video or its timings.
 
@@ -4755,13 +4769,16 @@ frames/
   <scene>/
     index.json          # the scene's stills
     <beat>-<k>.png      # still k (1..N) of a beat; <scene>-<k>.png for a silent scene
+    <beat>-m<frame>.png # a mid-action still (stage scenes), named by its frame
 ```
 
 `<scene>/index.json`: `{scene, per_beat, width, height, fps, frames}`; `frames` lists, in time
 order, `{beat, k, n, frame, time, path}`: the beat id (`null` for a silent scene), the still's
 number within its beat (`k == n` is the end of the beat), `n` = stills per beat, the frame's
 0-based index in the scene's video, its time in seconds from the scene start (`frame / fps`)
-and the PNG file name.
+and the PNG file name. A mid-action still has `k` 0 and a key `mid` naming the actions it shows
+half-way (`"walk_to pip"`, several joined by `, `); the [layout dump](#layout-dump-buildlayoutscenejson)
+marks it the same way, `vidgen lint` skips it (it checks beat ends) and `vidgen slides` leaves it out.
 
 `frames/index.json`: `{title, variant, preview, format, per_beat, vidgen, scenes}`; each scene
 is `{id, start, duration, frames}` (`start` in the video) and each still is as above with
@@ -4997,6 +5014,8 @@ are 1280 px wide (`--width PX`, 640–2000) and at most about 1.25 times as high
 grow with the width, long narration is wrapped and cut with `…`, and long videos are split into
 several pages instead of one huge image. 16:9 videos get 4 stills per row (2 on a scene's
 sheet), 9:16 videos 5 (4); with `--per-beat N` a beat's stills stay side by side on one row.
+On a [`stage`](#stage), the mid-action stills (above) come before their beat's end still, labelled
+`½ walk_to pip @ time`, so a walk or a gesture can be checked in motion, not only where it ends.
 
 Files, in `build/<preview|final>[_<variant>]/storyboard/`:
 
@@ -5175,7 +5194,7 @@ The server calls itself `schu-video-generator`; configuration snippets (server k
 back as a tool error with the same text): `guide`, `init`, `plan` (`input_path`, or the outline as
 `markdown_text`), `validate`, `schema`, `list_scenes`, `list_icons`, `list_themes`, `list_sfx`,
 `list_music`, `storyboard`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
-`thumbnail`, `export`, `gallery`, `translate_template`. Their parameters are the command's
+`thumbnail`, `export`, `gallery`, `translate_template`, `character_sheet`. Their parameters are the command's
 options in snake_case (`per_beat`, `fail_on`, `no_audio`...); list options take lists. Defaults
 that differ from the CLI, for agents: `render`, `thumbnail` and `export` use the preview (`preview:
 false` for the final format); `gallery` writes into `build/mcp/gallery` without GIFs; `schema`
@@ -5219,7 +5238,7 @@ when the root has a `docs/gallery` folder (the schu-video-generator repository),
 
 ## JSON output (`--json`)
 
-`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail`, `vidgen export`, `vidgen slides`, `vidgen translate-template`, `vidgen readback`, `vidgen guide`, `vidgen gallery`, `vidgen plan`, `vidgen init`, `vidgen tts` and `vidgen imagegen` accept `--json` (every command but `vidgen mcp`, which speaks MCP): stdout then holds
+`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail`, `vidgen export`, `vidgen slides`, `vidgen translate-template`, `vidgen readback`, `vidgen guide`, `vidgen gallery`, `vidgen plan`, `vidgen init`, `vidgen tts`, `vidgen imagegen` and `vidgen character-sheet` accept `--json` (every command but `vidgen mcp`, which speaks MCP): stdout then holds
 exactly one JSON document (ASCII-only, non-ASCII characters escaped), and everything else
 (progress, `warning:` lines, Manim output) goes to stderr. These shapes are meant for programs
 and AI agents driving vidgen. Without `--json` the human output is unchanged.
@@ -5234,7 +5253,7 @@ it. Times are seconds (floats), paths are absolute strings, absent values are `n
 |---|---|---|
 | `version` | int | schema version of the document (1) |
 | `vidgen` | str | vidgen package version |
-| `command` | str \| null | `validate`, `list-scenes`, `list-themes`, `list-icons`, `render`, `schema`, `storyboard`, `lint`, `thumbnail`, `export`, `slides`, `translate-template`, `readback`, `guide`, `gallery`, `plan`, `init`, `tts`, `imagegen` (`null` if the command line could not be parsed) |
+| `command` | str \| null | `validate`, `list-scenes`, `list-themes`, `list-icons`, `render`, `schema`, `storyboard`, `lint`, `thumbnail`, `export`, `slides`, `translate-template`, `readback`, `guide`, `gallery`, `plan`, `init`, `tts`, `imagegen`, `character-sheet` (`null` if the command line could not be parsed) |
 | `ok` | bool | `true` on success; the exit code is 0 exactly when `ok` is true |
 | `warnings` | list | `{scene, message}`: vidgen warnings of the run (`scene` is `null`, or the scene whose render printed it) |
 | `error` | object | only when `ok` is false: `{kind, message, problems, details}` |
@@ -5413,7 +5432,7 @@ for a vidgen error, 2 for an exception in scene code), `rendered` the scene ids 
 | `rendered` | list | ids of the scenes rendered by this command (config order) |
 | `reused` | list | ids of the selected scenes whose current stills were reused |
 | `elapsed` | float | wall time of the command |
-| `sheets` | list | every page written: `{kind, scene, page, pages, path, width, height, frames}`; `kind` is `video` (the whole video, `scene` is `null`) or `scene`; `page` of `pages` (1-based); `width`/`height` in px; `frames` lists the stills on the page in order: `{scene, beat, k, n, time, scene_time, path}` (`beat` `null` for a silent scene, `k` of `n` stills of the beat, `time` in the video or `null` when not every scene has a render at this format, `scene_time` from the scene start, `path` the still's PNG) |
+| `sheets` | list | every page written: `{kind, scene, page, pages, path, width, height, frames}`; `kind` is `video` (the whole video, `scene` is `null`) or `scene`; `page` of `pages` (1-based); `width`/`height` in px; `frames` lists the stills on the page in order: `{scene, beat, k, n, mid, time, scene_time, path}` (`beat` `null` for a silent scene, `k` of `n` stills of the beat, `mid` the actions a mid-action still shows half-way (its `k` is 0) or `null`, `time` in the video or `null` when not every scene has a render at this format, `scene_time` from the scene start, `path` the still's PNG) |
 
 Video sheets come first, then the scene sheets in config order. `warnings` and `error.details`
 on a failed scene are as for `vidgen render --json`.
@@ -5630,6 +5649,14 @@ The same document for a dry run (`--dry-run`, no key needed) and a run (DESIGN.m
 | `up_to_date` | list | keys whose picture exists (skipped) |
 | `orphaned` | list | pictures in `assets/generated/` no config of the project uses (never deleted) |
 | `elapsed` | float | seconds |
+
+### `vidgen character-sheet --json`
+
+| key | type | |
+|---|---|---|
+| `project`, `variant` | str \| null | |
+| `elapsed` | float | seconds |
+| `sheets` | list | one per character drawn, in `characters:` order: `{character, path, width, height, bytes, sections}`; `sections` lists `{kind, names, own}` in sheet order: `kind` `pose`, `expression` or `mouth` (mouth shapes; absent for a character without a mouth), `names` the cells in order, `own` the character's own poses / expressions among them |
 
 ### `vidgen lint --json`
 

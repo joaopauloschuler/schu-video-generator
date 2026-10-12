@@ -35,7 +35,7 @@ TEMPLATE_DOTFILES: tuple[str, ...] = ("gitignore",)
 JSON_COMMANDS: tuple[str, ...] = (
     "validate", "list-scenes", "list-themes", "list-icons", "list-sfx", "list-music", "render", "schema", "storyboard", "lint",
     "thumbnail", "export", "translate-template", "slides", "readback", "guide", "gallery", "plan",
-    "init", "tts", "imagegen",
+    "init", "tts", "imagegen", "character-sheet",
 )
 
 #: What a command function returns: an exit code, or (with ``--json``) the JSON document.
@@ -687,6 +687,39 @@ def cmd_character(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_character_sheet(args: argparse.Namespace) -> CommandResult:
+    """Write a character sheet (every pose, expression and mouth shape on one PNG) of one declared
+    character, or of each with no NAME / ``--all``."""
+    from vidgen import extensions
+    from vidgen.cartoon.cast import find_character
+    from vidgen.cartoon.still import write_character_sheet
+
+    started = time.monotonic()
+    name, where = args.name, args.project
+    if args.all:
+        if name is not None and where != ".":
+            raise VidgenError("--all takes no character name: vidgen character-sheet --all [PROJECT]")
+        name, where = None, name or where
+    project = Project.load(where, variant=args.variant)
+    if name is not None and args.output:
+        targets = [(find_character(project.config, name), Path(args.output))]
+    elif args.output:
+        raise VidgenError("--output needs a character NAME (each character gets its own sheet)")
+    else:
+        entries = [find_character(project.config, name)] if name is not None else list(project.config.characters)
+        if not entries:
+            raise VidgenError("the video declares no characters (characters: in video.yaml)")
+        targets = [(entry, None) for entry in entries]
+    with extensions.project_session(project) as theme:
+        sheets = [write_character_sheet(project, entry, theme, path) for entry, path in targets]
+    if args.json:
+        return jsonout.character_sheet_document(project, sheets, time.monotonic() - started)
+    for sheet in sheets:
+        counts = ", ".join(f"{len(s.names)} {s.title}" for s in sheet.sections)
+        print(f"character sheet: {sheet.path}  ({sheet.width}x{sheet.height}, {counts}, {sheet.bytes / 1e3:.0f} KB)")
+    return 0
+
+
 def _slides_options(args: argparse.Namespace) -> None:
     """Options of one deck format given with the other are errors (before anything renders)."""
     if args.format == "pdf":
@@ -1289,6 +1322,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--facing", choices=["right", "left"], default="right", help="which way the character faces in the still (default: right)")
     p.set_defaults(func=cmd_character)
+
+    p = sub.add_parser(
+        "character-sheet", help="one PNG per character with every pose, expression and mouth shape (exports/character_sheet_<name>.png)"
+    )
+    p.add_argument("name", nargs="?", help="the character's name (from characters:; default: every character)")
+    project_arg(p)
+    p.add_argument("--all", action="store_true", help="every character; the one positional is then the project (vidgen character-sheet --all PROJECT)")
+    p.add_argument("--variant", metavar="NAME", help="apply a named variant")
+    p.add_argument("--output", metavar="FILE", help="with NAME: write the sheet to FILE (default: <project>/exports/character_sheet_<name>.png)")
+    p.set_defaults(func=cmd_character_sheet)
 
     p = sub.add_parser("slides", help="an HTML (or PDF) slide deck of the video's key frames, narration as speaker notes (exports/)")
     project_arg(p)

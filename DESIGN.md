@@ -88,7 +88,7 @@ src/vidgen/
                           # follow-through, cartoon_motion, §69.13; no manim), keyframes.py (keys,
                           # eases, motion paths, §69.14; no manim), spring.py (Spring: a damped
                           # spring for secondary motion, §69.15; no manim); still.py also
-                          # draws the prop gallery
+                          # draws the prop gallery and `vidgen character-sheet` (§69.16)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
   actions.py              # per-beat actions: Target, Action, validation, ActionRunner (§26)
@@ -99,7 +99,7 @@ src/vidgen/
   camera.py               # camera views kept inside bounds (zoom, pan, follow, a wide stage; §69.7; no manim)
   particles.py            # particle kinds, count cap, seeded positions over time (§69.9; no manim)
   particle_field.py       # ParticleField: draws the particles over the camera's view, shared options (§69.9)
-  capture.py              # frame capture: stills at beat ends / N per beat (see §13)
+  capture.py              # frame capture: stills at beat ends / N per beat (see §13); mid-action stills (§69.16)
   introspect.py           # layout dump of the captured frames: objects, px boxes, sizes (§15)
   activity.py             # activity file: beat timings, play log, per-frame motion signal (§17)
   storyboard.py           # `vidgen storyboard`: reuse/render stills, write contact sheets (§14)
@@ -672,6 +672,8 @@ Step 81 (§69.14) adds `KeyedMotion`, `feet_of`, `CHANNELS`, `DEFAULT_EASE`, `EA
 `key_time_problems`, `keyed_values`, `path_length`, `part_target_names`, `feet_point` (all
 compatible); the `stage` scene type gains the target pattern `<character>.<part>`.
 Step 82 (§69.15) adds `Spring` (compatible; follow-through in `Walk` and `Jump` now wobbles).
+Step 83 (§69.16) adds the `NarratedScene` class attribute `mid_still_actions` (default empty;
+compatible).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -820,6 +822,7 @@ vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME
 vidgen gallery [PROJECT] [--output DIR] [--types T,T] [--formats 16:9,9:16] [--theme PRESET]
               [--clips | --no-clips] [--jobs N] [--force] [--json]   # every scene type rendered (§60)
 vidgen character NAME [PROJECT] [--variant NAME] [--png [FILE]] [--facing right|left]   # a character's look, poses; one still (§69.1)
+vidgen character-sheet [NAME] [PROJECT] [--all] [--variant NAME] [--output FILE] [--json]   # every pose, expression, mouth shape on one PNG (§69.16)
 ```
 PROJECT defaults to the current directory. `render` renders the scenes whose render is missing
 or stale by its fingerprint (§14, §63; `--force`: all); `--scene` re-renders only those scenes
@@ -1053,7 +1056,7 @@ the measured loudness, §48).
 - **JSON** (`jsonout.storyboard_document`, `storyboard` in `cli.JSON_COMMANDS`): `project,
   variant, preview, per_beat, format, folder, rendered, reused, elapsed, sheets: [{kind
   (video|scene), scene, page, pages, path, width, height, frames: [{scene, beat, k, n, time,
-  scene_time, path}]}]`.
+  scene_time, path}]}]` (`mid`, Step 83: the actions a mid-action still shows, else null; §69.16).
 
 ## 15. Refinements (Step 12, layout introspection)
 
@@ -4313,7 +4316,7 @@ the measured loudness, §48).
 - **Tools** (`mcp_server.build_server`): `guide`, `init`, `plan`, `validate`, `schema`,
   `list_scenes`, `list_icons`, `list_themes`, `list_sfx`, `list_music`, `storyboard`, `lint`,
   `render`, `tts`, `imagegen`, `readback`, `slides`, `thumbnail`, `export`, `gallery`,
-  `translate_template`. Parameters mirror the command's options (snake_case; lists for repeatable
+  `translate_template`; Step 83 adds `character_sheet` (§69.16). Parameters mirror the command's options (snake_case; lists for repeatable
   options), with pydantic `Field` descriptions and bounds. Result: one text block with the
   command's `--json` document re-serialised compactly (fewer tokens), then images; a document with
   `ok` false is an `isError` result holding only the JSON. Argument errors (path outside the root,
@@ -4995,8 +4998,8 @@ accessory`) to Manim colours.
   resolved hex). `--png` calls `still.write_character_png(project, entry, theme, path,
   facing=)`: Manim's camera draws the character `0.8 × 8` units tall, centred, on the theme
   background, in the final format's aspect ratio with its shorter side 720 px; default file
-  `exports/character_<name>.png` (`default_png_path`). No `--json` yet (Step 83's
-  `character-sheet` is the agent tool, also over MCP).
+  `exports/character_<name>.png` (`default_png_path`). No `--json`: Step 83's
+  `vidgen character-sheet` (§69.16) is the agent tool, with `--json` and over MCP.
 
 ### 69.2 Characters from SVG files (Step 69)
 
@@ -5849,3 +5852,69 @@ pure function of time, so custom scenes and the built-in follow-through (§69.13
   generated hair and ears are drawn in the head); follow-through stays on walks and jumps (not
   pose changes, gestures or keyed moves). Tests: `tests/test_cartoon_spring.py`,
   `tests/test_cartoon_motion.py`.
+
+### 69.16 Character sheets and mid-action storyboard stills (Step 83)
+
+Two ways for an author (or an agent, which cannot watch a video) to look at cartoon work without
+rendering it whole.
+
+- **Character sheet** (`cartoon/still.py`, next to `write_character_png`):
+  `character_sheet_sections(entry, root) -> [SheetSection]` (no manim): `pose` (`merged_table`
+  names: built-in, then the character's own), `expression` (same) and `mouth` (the mouth's shape
+  names from `cast.character_part_shapes`; no section without a mouth); `own` marks the
+  character's own entries. `sheet_layout(sections, columns=SHEET_COLUMNS 8) -> SheetLayout(width,
+  height, columns, section_tops, cells)` (no drawing): a title and a note line, then per section a
+  heading line and its cells in rows of at most `columns` (fewer when no section has that many),
+  each cell `SHEET_CELL_WIDTH` 128 px wide, `SHEET_POSE_CELL_HEIGHT` 160 (whole figure) or
+  `SHEET_HEAD_CELL_HEIGHT` 128 (close-up) high, a label line under it. `write_character_sheet(project,
+  entry, theme, path=None) -> CharacterSheet(character, path, width, height, bytes, sections)`:
+  each section's cells are drawn by Manim's `Camera` at the cell's pixel size (`tempconfig`, so
+  strokes keep their one-pixel floor), facing right, on the theme background, then pasted onto a
+  white Pillow page with the storyboard's fonts and colours (`sheets.load_font`, `TEXT`, `MUTED`,
+  `BORDER`). Poses: one figure, its height chosen from a probe at height 1 so the tallest and the
+  widest pose fit (0.84 of the cell's height, 0.9 of its width), centred on its drawn parts, feet
+  near the bottom; expressions and mouth shapes (`swap("mouth", shape)`, the rest face): a figure
+  built `HEAD_FILL` 0.6 times the cell's size over its head box (`HEAD_PARTS` head, eyes, brows,
+  mouth, accessory; the whole figure if it has none) and shifted so the rest head box is centred,
+  so every close-up has the same scale. Built at the right height (not scaled afterwards), so
+  outlines stay proportional. The page is saved as a `SHEET_COLORS` 64-colour PNG without
+  dithering: a generated character is 1148 x 858 px, about 33 KB (sprout, `examples/svg_character`,
+  1148 x 696, 26 KB), drawn in about 0.5 s.
+- **`vidgen character-sheet [NAME] [PROJECT] [--all] [--variant NAME] [--output FILE] [--json]`**
+  (`cli.cmd_character_sheet`): NAME, else every character (`--all PROJECT` makes the one
+  positional the project, since NAME comes first, as in `vidgen character NAME [PROJECT]`);
+  default file `exports/character_sheet_<name>.png` (`default_sheet_path`); `--output` only with a
+  NAME; no characters is a `VidgenError`. Human output: one line per sheet (path, size, counts,
+  KB). JSON (`jsonout.character_sheet_document`, in `cli.JSON_COMMANDS`): `project, variant,
+  elapsed, sheets: [{character, path, width, height, bytes, sections: [{kind, names, own}]}]`.
+- **MCP** (`mcp_server`): tool `character_sheet(project, name=None, variant=None, images,
+  image_offset)` runs `character-sheet [NAME] PROJECT` (no name: `--all`) and returns the document
+  and the sheets as pictures (paged like `storyboard`); not serialised with the rendering tools
+  (a few seconds).
+- **Mid-action stills** (`capture.py`): `NarratedScene.mid_still_actions` (class attribute, empty
+  by default; `Stage`: `walk_to, enter, exit, gesture, jump, keyframes, move_along`) names the
+  action types whose uses also get a still half-way through them. `ActionRunner._phases` labels
+  each batch with those of its (not undoing) actions (`ActionConfig.describe()`: `walk_to pip`,
+  joined by `, `); `ActionRunner._run`, right before it plays the batch for `frames` frames from
+  frame `now`, calls `FrameCapture.add_mid_still(beat, now, frames, label)` when stills are
+  captured. Which frame is the pure function `mid_action_frame(start, frames, taken, min_gap)`:
+  `start + frames // 2`, `None` for an action under two frames or within `min_gap` frames
+  (`MID_STILL_GAP_SECONDS` 0.4 s) of another still of the beat (`taken`: its planned stills and
+  planned end, and its mid stills so far); at most `MAX_MID_STILLS` 3 per beat.
+  `mid_action_frames(spans, taken, min_gap, limit)` folds it over a beat's actions in play order
+  (what the capture does one call at a time; tested without rendering). Times come from the run
+  as played (after `run_time_for` and any shortening to fit the beat), so a pure function of
+  the played spans; computing them before the render would need every walk's distance there.
+- **Records**: a mid still is a `CapturedFrame` with `k` 0 and `mid` the label; file
+  `<beat>-m<frame>.png` (`still_name`); its `index.json` entry and its layout dump frame carry
+  `mid` (absent on other stills, so their shape is unchanged). `FrameCapture.finish` drops mid
+  stills never reached. Readers: `lint` checks only `k == n` (unchanged: mid stills are skipped),
+  `deck` (slides) leaves entries with `mid` out, `gallery` takes the last still (an end still).
+  `storyboard` passes `mid` to `SheetStill.mid`; `sheets._label` writes `½ walk_to pip @ time`;
+  the subtitle adds `½ = half-way through an action` when a page shows one; the JSON frames gain
+  `mid` (null on others). Existing renders are stale anyway (capture, actions and scene code are
+  in the render fingerprint).
+- **Not done here**: no mid stills for `PoseChange`-based acting actions (`pose`, `emote`,
+  `turn`) or camera moves; the sheet shows no facing left, no blink (`eyes` `closed`) and no
+  gestures in motion (the storyboard does). Tests: `tests/test_cartoon_sheet.py`,
+  `tests/test_frames.py` (mid-action frames, the capture), `tests/test_mcp.py`.

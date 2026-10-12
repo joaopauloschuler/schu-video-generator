@@ -7791,3 +7791,88 @@ How to test
   test_cartoon_stage test_api test_docs test_guide test_actions` (with the two above 311, 6.6 s);
   render: `test_cartoon_motion test_cartoon_moving test_cartoon_keyframes` (3, 2.5 s),
   `test_actions_coverage test_builtin_scenes -k stage` (5, 2.7 s).
+
+
+## Step 83 — Character sheets and mid-action storyboards
+
+What was built
+- `vidgen character-sheet [NAME] [PROJECT] [--all] [--variant NAME] [--output FILE] [--json]`
+  (`cli.cmd_character_sheet`): every pose (whole figure, rest face), expression and mouth shape
+  (head close-ups at one scale) of a declared character on one labelled PNG, facing right, on the
+  theme background; default `exports/character_sheet_<name>.png`. No NAME: one sheet per
+  character; `--all PROJECT` does that for a project elsewhere (NAME is the first positional, as
+  in `vidgen character NAME [PROJECT]`). Own poses / expressions marked `*`.
+- `cartoon/still.py` (reused, next to `write_character_png`): `character_sheet_sections(entry,
+  root)` and `sheet_layout(sections, columns=8)` (no manim, no drawing: the grid and page size),
+  `write_character_sheet(project, entry, theme, path=None) -> CharacterSheet`, `default_sheet_path`.
+  Cells drawn by Manim's `Camera` per cell size (characters built at the cell's height, so outlines
+  stay proportional), pasted on a Pillow page with the storyboard's fonts / colours, saved as a
+  64-colour PNG: generated character 1148x858, ~33 KB; sprout 1148x696, 26 KB; ~0.5 s each.
+- JSON: `jsonout.character_sheet_document` (`character-sheet` in `cli.JSON_COMMANDS`):
+  `{project, variant, elapsed, sheets: [{character, path, width, height, bytes, sections: [{kind,
+  names, own}]}]}`. MCP tool `character_sheet(project, name, variant, images, image_offset)`
+  returns the document and the sheets as pictures (22 tools now).
+- Mid-action stills: `NarratedScene.mid_still_actions` (class attribute, empty; `Stage`:
+  `walk_to enter exit gesture jump keyframes move_along`). `ActionRunner._phases` labels each batch
+  with those actions (`walk_to pip`), and `_run` calls `FrameCapture.add_mid_still(beat, now,
+  frames, label)` right before playing it. The frame is the pure `capture.mid_action_frame(start,
+  frames, taken, min_gap)` (= `start + frames // 2`; none under 2 frames or within 0.4 s of
+  another still of the beat), at most `MAX_MID_STILLS` 3 per beat; `mid_action_frames` folds it
+  over a beat's spans (tested without rendering). A mid still has `k` 0 and `mid` (label), file
+  `<beat>-m<frame>.png`; `index.json` and the layout dump carry `mid` only on those entries.
+  Storyboard: `SheetStill.mid`, label `½ walk_to pip @ time`, subtitle note; JSON frames gain
+  `mid`. `lint` already checks only `k == n` (skips them); `deck` (slides) drops them.
+
+Files touched
+- New: `tests/test_cartoon_sheet.py`.
+- `src/vidgen/cartoon/still.py`, `capture.py`, `actions.py`, `scene.py`, `scenes/stage.py`,
+  `introspect.py`, `sheets.py`, `storyboard.py`, `deck.py`, `jsonout.py`, `cli.py`, `mcp_server.py`,
+  `data/guide/AGENTS.md` (+ copy `AGENTS.md`: MCP tool list, a sentence in the dialogue bullet).
+- Tests updated: `tests/test_frames.py` (mid frames, capture), `tests/test_mcp.py` (tool set, a
+  render-marked stdio test), `tests/test_cartoon_acting.py` (its `FakeScene` gains
+  `mid_still_actions`, read by `_phases`).
+- Docs: `docs/CONFIG.md` (character sheet paragraph, frame stills / storyboard / Moving notes,
+  `### vidgen character-sheet --json`, envelope and MCP lists, storyboard frames `mid`),
+  `docs/EXTENDING.md` (`mid_still_actions`), `DESIGN.md` (§2 tree, §6.4, §8, §14 JSON, §62, §69.1
+  note, new §69.16), `README.md` (command row, MCP list), `tasklist.md`.
+
+Public interfaces
+- `vidgen.api`: unchanged names; `NarratedScene.mid_still_actions` (class attribute) added.
+- CLI `vidgen character-sheet` (+ `--json`), MCP tool `character_sheet`. Stills index / layout
+  dump entries may carry `mid`; storyboard JSON frames gain `mid` (null on others). `_phases`
+  (internal) returns 3-tuples.
+
+Decisions / deviations
+- Mid times are taken from the run as played (after `run_time_for` and any shortening), one action
+  at a time, by a pure function of the played spans; computing them before rendering would need
+  every walk's distance and the beat's shortening. The capture plans the still before the action's
+  frames are written, so the layout dump sees the scene in that frame's state.
+- Mid stills are always taken for stage scenes when stills are captured (no option): they share
+  the stills cache with lint and slides, which skip them; a separate switch would split the cache.
+- Sheet: close-ups for expressions and mouths (the face is too small on a whole figure); the sheet
+  is drawn per cell, not as one Manim frame, so close-ups can crop the body.
+- `--all` instead of a sentinel NAME for "every character of a project elsewhere".
+- Searched first: reused `still.py`'s `tempconfig` + `Camera` pattern, `sheets.load_font` /
+  `fit_line` / colours, `cast.character_part_shapes`, `poses.merged_table`, `plan_targets`'
+  capture planning, `mcp_server.paged`; no mid-action capture existed.
+
+Known gaps / TODOs
+- No mid stills for `pose`, `emote`, `turn`, `look_at` (pose changes) or camera moves; the sheet
+  shows no left-facing view, blink or gesture. Step 84's lint rules should keep reading only
+  `k == n` stills (or opt in to `mid` ones deliberately, e.g. for an off-stage check during walks).
+- `docs/gallery/stage.md` was not regenerated (no param changed).
+
+How to test
+- `pytest tests/test_cartoon_sheet.py` (7 not-render + 2 render, ~3 s),
+  `pytest tests/test_frames.py -m "not render"` (14), `pytest tests/test_mcp.py -k "character_sheet
+  or tools_guide"` (2, ~14 s).
+- Also run (not render): `test_storyboard test_json_output test_docs test_guide test_cli test_mcp
+  test_actions test_cartoon_moving test_cartoon_acting test_cartoon_keyframes test_cartoon_stage
+  test_cartoon_generator test_introspect test_lint test_api` with the two above (342, 26 s) and
+  `test_slides test_slides_pdf test_gallery test_actions_coverage test_builtin_scenes
+  test_cartoon_props test_cartoon_parallax test_cartoon_motion test_cartoon_svg
+  test_cartoon_character test_cartoon_poses test_schema test_extensions` (384, 73 s); render:
+  `test_frames test_storyboard test_cartoon_moving test_cartoon_keyframes test_cartoon_acting
+  test_cartoon_sheet` (11, 68 s), `test_mcp test_actions_coverage test_builtin_scenes -k "stage or
+  character_sheet or storyboard"` (5, 19 s). By hand: a two-beat stage storyboard shows ½ stills
+  for a walk, a gesture and a jump; `vidgen lint` checked 2 stills, `vidgen slides` made 2 slides.

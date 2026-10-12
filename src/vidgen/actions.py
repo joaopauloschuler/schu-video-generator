@@ -521,8 +521,10 @@ class ActionRunner:
             found += [t for t in resolve_targets(self.scene, pattern, use.location) if t not in found]
         return found
 
-    def _phases(self, due: list[_Due]) -> list[tuple[Callable[[], list[Animation]], float]]:
-        """Hidden targets' entrances first, then batches of actions whose targets do not overlap."""
+    def _phases(self, due: list[_Due]) -> list[tuple[Callable[[], list[Animation]], float, str | None]]:
+        """Hidden targets' entrances first, then batches of actions whose targets do not overlap.
+        Each phase: how to build its animations, its natural run time, and the label of its
+        actions that want a mid-action still (:attr:`NarratedScene.mid_still_actions`), if any."""
         scene = self.scene
         for d in due:
             d.use.targets = self._resolve(d.use)
@@ -530,9 +532,9 @@ class ActionRunner:
         for d in due:
             if not d.revert and d.use.kind.cls.needs_visible:
                 hidden += [t for t in d.use.targets if t not in hidden and not scene.is_shown(t)]
-        phases: list[tuple[Callable[[], list[Animation]], float]] = []
+        phases: list[tuple[Callable[[], list[Animation]], float, str | None]] = []
         if hidden:
-            phases.append((lambda: [a for t in hidden for a in scene.entrance(t)], self.reveal_time))
+            phases.append((lambda: [a for t in hidden for a in scene.entrance(t)], self.reveal_time, None))
         batch: list[_Due] = []
         batches = [batch]
         camera = id(getattr(scene.camera, "frame", scene.camera))
@@ -547,9 +549,11 @@ class ActionRunner:
                 batch = []
                 batches.append(batch)
             batch.append(d)
+        wanted = type(scene).mid_still_actions
         for b in batches:
             if b:
-                phases.append((lambda b=b: self._build(b), max(self._natural(d) for d in b)))
+                mid = [d.use.config.describe() for d in b if not d.revert and d.use.kind.name in wanted]
+                phases.append((lambda b=b: self._build(b), max(self._natural(d) for d in b), ", ".join(mid) or None))
         return phases
 
     def _natural(self, due: _Due) -> float:
@@ -589,7 +593,7 @@ class ActionRunner:
         remaining = max(self._end - self._now() - round(self.held * fps), 0) / fps
         total = sum(p[1] for p in phases)
         factor = min(1.0, remaining / (total + reserved)) if total > 0 else 1.0
-        for build, natural in phases:
+        for build, natural, mid in phases:
             anims = build()
             if not anims:
                 continue
@@ -597,6 +601,8 @@ class ActionRunner:
             if instant or frames < 1:
                 self.scene._apply_now(anims)
                 continue
+            if mid is not None and self.scene.capture is not None:
+                self.scene.capture.add_mid_still(self._beat, self._now(), frames, mid)
             self.scene._requested = natural if factor < 1 - 1e-9 else None
             try:
                 self.scene.play(*anims, run_time=frames / fps)

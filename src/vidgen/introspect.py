@@ -130,6 +130,7 @@ class LayoutRecorder:
                 "beat": captured.beat_id,
                 "k": captured.k,
                 "n": captured.n,
+                **({"mid": captured.mid} if captured.mid is not None else {}),
                 "frame": captured.frame,
                 "time": round(captured.time, 6),
                 "still": f"../frames/{captured.scene_id}/{still_name(captured)}",

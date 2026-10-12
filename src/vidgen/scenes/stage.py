@@ -216,6 +216,8 @@ class Stage(NarratedScene):
     outro = 0.5
     target_patterns = ("<character>", "<prop>", "<character>.<part>")
     uses_cartoon_style = True
+    #: Storyboard stills also show these actions half-way through (DESIGN.md §69.16).
+    mid_still_actions = frozenset({"walk_to", "enter", "exit", "gesture", "jump", "keyframes", "move_along"})
 
     @classmethod
     def target_names(cls, params: Any) -> list[str]:

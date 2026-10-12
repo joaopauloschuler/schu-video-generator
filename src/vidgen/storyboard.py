@@ -145,6 +145,7 @@ def _sheet_scene(project: Project, preview: bool, scene_id: str, start: float | 
             time=None if start is None else round(start + still["time"], 6),
             path=folder / still["path"],
             text=texts.get(still["beat"]) if still["beat"] is not None else None,
+            mid=still.get("mid"),
         )
         for still in index["frames"]
     )
@@ -161,7 +162,7 @@ def _sheet_scene(project: Project, preview: bool, scene_id: str, start: float | 
     )
 
 
-def _subtitle(project: Project, preview: bool, per_beat: int, video_times: bool) -> str:
+def _subtitle(project: Project, preview: bool, per_beat: int, video_times: bool, mid: bool = False) -> str:
     fmt = project.render_format(preview)
     parts = [f"{'preview' if preview else 'final'} {fmt.width}x{fmt.height}"]
     if project.variant:
@@ -170,8 +171,15 @@ def _subtitle(project: Project, preview: bool, per_beat: int, video_times: bool)
         parts.append("one still per beat: its last frame")
     else:
         parts.append(f"{per_beat} stills per beat, evenly spaced, the last at the beat's end")
+    if mid:
+        parts.append("\u00bd = half-way through an action")
     parts.append("times in the video" if video_times else "times from the scene start")
     return "  ·  ".join(parts)
+
+
+def _has_mid(sections: list[SheetScene]) -> bool:
+    """Whether a mid-action still is among the stills of ``sections``."""
+    return any(still.mid is not None for section in sections for still in section.stills)
 
 
 def _write_pages(pages: list[SheetPage], folder: Path, stem: str, kind: Literal["video", "scene"], scene: str | None) -> list[Sheet]:
@@ -251,13 +259,13 @@ def make_storyboard(
     _clear_old_sheets(folder, scenes or None)
     if not scenes:
         pages = compose_pages(
-            title, _subtitle(project, preview, per_beat, True), sections, frame_size, width=width
+            title, _subtitle(project, preview, per_beat, True, _has_mid(sections)), sections, frame_size, width=width
         )
         result.sheets.extend(_write_pages(pages, folder, "video", "video", None))
     for section in sections:
         pages = compose_pages(
             title,
-            _subtitle(project, preview, per_beat, False),
+            _subtitle(project, preview, per_beat, False, _has_mid([section])),
             [section],
             frame_size,
             width=width,

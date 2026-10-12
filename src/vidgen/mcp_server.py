@@ -65,7 +65,8 @@ returns) -> `lint` -> fix -> repeat; then `tts` with dry_run=true (free), and on
 agreed to the cost `tts` with dry_run=false and confirm_cost=true (voice.provider kokoro is local and \
 free: no confirm_cost); then `render`. `schema` with \
 scene=TYPE gives one scene type's params as JSON Schema, `list_scenes` / `list_icons` / \
-`list_themes` / `list_sfx` / `list_music` what exists. Every tool returns the command's JSON \
+`list_themes` / `list_sfx` / `list_music` what exists, `character_sheet` a cartoon character's \
+poses, expressions and mouth shapes. Every tool returns the command's JSON \
 document (`ok`, `warnings`, `error`...); a document with ok=false comes back as a tool error."""
 
 Progress = Callable[[str], Awaitable[None]]
@@ -558,6 +559,22 @@ def build_server(root: Path) -> Any:
         options = {"variant": variant, "preview": preview, "scene": scene, "beat": beat, "at": at, "no-overlays": no_overlays, "jpeg": jpeg, "jobs": jobs}
         doc = await call(ctx, args_of(["thumbnail"], [str(where(project))], options), heavy=True)
         return answer(doc, [Path(p) for p in (doc.get("path"), doc.get("small")) if p])
+
+    @tool("Character sheets: every pose, expression and mouth shape of a declared character (characters: in "
+          "video.yaml) on one labelled PNG, to check a character before acting with it; no name: one sheet per "
+          "character. Returns the sheets as images and their paths (exports/character_sheet_<name>.png).", writes)
+    async def character_sheet(
+        ctx: Context,
+        project: Project = ".",
+        name: Annotated[str | None, Field(description="the character's name (default: every character)")] = None,
+        variant: Variant = None,
+        images: Images = DEFAULT_IMAGES,
+        image_offset: Offset = 0,
+    ) -> Any:
+        positionals = [name, str(where(project))] if name else [str(where(project))]
+        options = {"all": name is None, "variant": variant}
+        doc = await call(ctx, args_of(["character-sheet"], positionals, options))
+        return paged(doc, [Path(s["path"]) for s in doc.get("sheets", [])], image_offset, images)
 
     @tool("Export a scene or a time range of the rendered video as a GIF or an MP4 clip (render first).", writes)
     async def export(
