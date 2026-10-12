@@ -8904,3 +8904,95 @@ How to test
   test_cartoon_stage test_actions_coverage` (70, 38 s), `test_phase_h_review test_introspect
   test_storyboard` (4, 50 s), `test_builtin_scenes -k stage test_cartoon_seating
   test_cartoon_holding test_cartoon_acting test_cartoon_moving` (6, 4 s).
+
+## Step 96 — Vertical cartoons follow the speaker
+
+What was built
+- `reframe: speaker | none` on the video (`VideoConfig.reframe`) and as a `stage` param (the
+  stage's wins); not given: `speaker` when the stage's characters, at their start marks, do not
+  fit in one view (`directing.stage_reframes`).
+- While a stage reframes in a frame narrower than 16:9 (9:16, 1:1), it is laid out as wide as the
+  16:9 frame of the same short side (`reframe.stage_base_width`; `Stage.stage_width` and
+  `stage_frame` use it), so the narrow frame crops the landscape stage. 16:9 is unchanged.
+- `src/vidgen/cartoon/reframe.py` (no manim): `reframe_path(beats, frame_width=, bounds=,
+  start_x=) -> [CameraMove(beat, x, seconds)]`, a pure function of `ReframeBeat(id, speakers,
+  seconds, figures, camera, camera_x, bubble)` / `ReframeFigure(name, x, half_width, facing,
+  start_x)`. The camera moves only when the first speaker (line >= `REPLY_HOLD_SECONDS` 1.5 s;
+  a shorter reply holds the view) is not wholly in view: it eases `REFRAME_SECONDS` 1.0 to the
+  nearest view that shows the speaker (both ends of its walk if they fit) with 0.1 look room and
+  cuts no other character; a cut (`seconds` 0) in the first beat and in a beat with a speech
+  bubble. Before the first line, beat 1 cuts to the scene's first speaker. Written `pan` sets the
+  camera, `follow` suspends reframing until a known `pan`, `zoom` / `shot` beats are left alone.
+- `directing.plan_reframe(cast, beats, stage)` builds the inputs with the planner's state
+  (`_start_state`, new, shared with `plan_directions`; `_follow_written`) and writes automatic
+  `pan` actions (`to` 4 decimals, `run_time`, or `cut: true`). `stage_directions(...,
+  reframe=)` puts them first and hands them to `plan_directions` as written; `Stage.auto_actions`
+  passes `stage_reframes`. They show in `vidgen direct` / `--print` and the storyboard's `auto:`
+  line (`auto_label` writes `pan 0.3062 cut`). `directing_used` is true for any stage that may
+  reframe.
+- `pan` gains `cut: true` (moves the frame at once in `apply`, `run_time_for` 0), so a speech
+  bubble due with it is built for the new view.
+- Runner (`actions.ActionRunner._phases`): camera moves due together with other actions now come
+  first in the batch order (they start at their `at`; an automatic pan appended after a walk and
+  a gesture of one character used to wait for the walk).
+
+Checked by hand: a scratch copy of examples/cartoon with a `vertical` variant (1080x1920, preview
+270x480). `vidgen direct --variant vertical`: yard gets 4 pans (cut to dot, ease to moss, ease
+along dot's walk, cut to moss for his bubble; the written zoom of yard_aside wins), hill none
+(both start within one view, so it keeps the squeezed layout). `vidgen storyboard` looked right.
+`vidgen lint --variant vertical`: 1 warning, `off_stage` in hill_count (the written `follow` of the
+kite leaves moss 96 % out); HEAD without this step gives the same warning plus two `off_frame`
+tree warnings. Not lint clean, so the variant is not added to the committed example. The
+committed example (16:9) is unchanged: `vidgen direct` adds nothing, lint 0 findings.
+
+Files touched
+- New: `src/vidgen/cartoon/reframe.py`, `tests/test_cartoon_reframe.py`.
+- `src/vidgen/config.py` (`ReframeSetting`, `VideoConfig.reframe`), `cartoon/directing.py`,
+  `scenes/stage.py` (param, `stage_width`, `auto_actions`, docstring), `scenes/actions.py` (`pan`
+  `cut`), `actions.py` (batch order), `api.py`, guide (`src/vidgen/data/guide/AGENTS.md` + copy
+  `AGENTS.md`: `social` bullet, `cartoons` shot paragraph).
+- Docs: `docs/CONFIG.md` (top-level row, stage param rows, `pan` row, new "Vertical cartoons
+  (`reframe`)"), `DESIGN.md` (§2 tree, §6.4, §69.7 / §69.23 pointers, new §69.30),
+  `docs/EXTENDING.md` (`moves_camera`, camera paragraph), `docs/gallery/stage.md` (the `reframe`
+  and `width` rows as `vidgen gallery` writes them; stills not re-rendered), `tasklist.md`.
+- Tests updated: `tests/test_cartoon_parallax.py` (`pan` with `cut`).
+
+Public interfaces
+- `vidgen.api` adds `ReframeSetting`, `REFRAME_SECONDS`, `REPLY_HOLD_SECONDS`, `CameraMove`,
+  `ReframeBeat`, `ReframeFigure`, `reframe_needed`, `reframe_path`, `stage_base_width`,
+  `plan_reframe`, `stage_reframes`; `stage_directions` keyword `reframe`; `pan` option `cut`;
+  config keys `reframe` (top level, stage param).
+- Behaviour change: a stage whose characters do not fit in one view gets automatic pans (also in
+  16:9 on a wide stage), and in 9:16 / 1:1 such a stage is laid out at 16:9 width. `reframe:
+  none` gives the old behaviour.
+
+Decisions / deviations
+- The 9:16 stage was already squeezed into the frame (marks are fractions of the frame width), so
+  in 9:16 the characters always fit and there was nothing to follow. Reframing therefore lays the
+  stage out at 16:9 width in a narrower frame; the default ("frame narrower than the view needed
+  to show all characters") is measured on that layout.
+- Hold threshold: 1.5 s of narration (about four words); `REFRAME_SECONDS` 1.0 fits in 80 % of
+  any line that moves the camera, so there is no "too short to ease" case.
+- Moves are automatic `pan` actions (not a camera track inside the stage), so validation, the
+  runner, the storyboard, `vidgen direct --print` and "written actions win" reuse the action
+  path; pasting them makes them written.
+- The camera moves only when the speaker is out of view (no re-centring on every line), and
+  never for a narrator beat except to frame the first speaker at the start.
+
+Known gaps / TODOs
+- x only: no zoom on the speaker in a tall frame (characters stay small, 25 % of a 9:16 frame's
+  height); props and non-speaking walkers are not framed; an `enter`'s side is predicted from
+  the written camera; a `follow` with `until` still suspends reframing for the rest of the scene.
+- examples/cartoon's 9:16 variant needs the hill scene's `follow` changed before it lints clean.
+
+How to test
+- `pytest tests/test_cartoon_reframe.py` (11, no render, ~2 s).
+- Also run: not render `test_cartoon_reframe test_cartoon_parallax test_cartoon_directing
+  test_cartoon_shots test_actions test_actions_coverage test_api test_cartoon_stage
+  test_cartoon_lint test_storyboard` (197, 5 s), `test_docs test_guide test_schema test_config
+  test_gallery test_cli test_json_output test_mcp test_screenplay test_phase_h_review
+  test_builtin_scenes test_extensions test_introspect test_cartoon_seating test_cartoon_holding
+  test_cartoon_acting test_cartoon_moving` (456, 91 s); render `test_cartoon_parallax
+  test_cartoon_shots test_cartoon_directing test_cartoon_stage test_actions_coverage
+  test_cartoon_lint` (70, 44 s), `test_cartoon_moving test_cartoon_acting test_cartoon_seating
+  test_cartoon_holding test_phase_h_review test_storyboard test_introspect` (8, 48 s).

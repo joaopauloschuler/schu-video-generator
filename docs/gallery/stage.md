@@ -66,8 +66,9 @@ scenes:
 | `auto_direct.gestures` | `bool` | `True` | The speaker gestures on a line's stressed word (*word*, an all-capitals word, else a long one): at most one per line, from the gestures its parts allow. |
 | `auto_direct.closeups` | `bool` | `True` | A short punchy line right after a long one gets a close-up (a zoom on the speaker, or a closeup shot when the line is too short for the zoom's moves): never two beats in a row, never during a walk, a camera move or a written shot. |
 | `cartoon_motion` | `'lively' \| 'calm' \| 'none' \| None` |  | Animation principles for the characters in this scene (anticipation, squash and stretch, overshoot and settle, follow-through): lively, calm or none; a character's own setting wins; default: the video's (lively). |
-| `width` | `float` | `1.0` | Width of the stage in frame widths (marks and x positions are fractions of it); wider than 1: the camera pans across it (pan, follow). |
+| `width` | `float` | `1.0` | Width of the stage in frame widths (marks and x positions are fractions of it; while it reframes in a frame narrower than 16:9, in 16:9 frame widths); wider than 1: the camera pans across it (pan, follow). |
 | `camera_at` | `str \| float` | `'centre'` | Where the camera looks at the start, on a stage wider than the frame: a mark or an x from 0 to 1 of the stage. |
+| `reframe` | `'speaker' \| 'none' \| None` |  | On a stage wider than the frame: speaker moves the camera to whoever speaks (easing between speakers, holding during short replies; a 9:16 frame then crops the stage laid out as wide as the 16:9 one); none: only the beats' own pan / follow / zoom / shot move it; default: the video's, else speaker when the characters do not fit in one view. |
 | `layers` | `list[StageLayer]` |  | Parallax layers: {place: background \| middle \| foreground, factor, image \| shapes}. |
 | `layers.name` | `str \| None` |  | Its name in the layout dump; default <place>_layer (then _2, _3...). |
 | `layers.place` | `'background' \| 'middle' \| 'foreground'` | `'background'` | background and middle are drawn behind the ground band (in that order), foreground in front of the characters. |

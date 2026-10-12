@@ -523,6 +523,8 @@ class Pan(Action):
     class Options(ActionOptions):
         to: str | Annotated[float, Field(ge=0.0, le=1.0)] | None = None
         """A place instead of a target: a stage's mark (left, centre, right, ...) or an x from 0 (left edge) to 1 (right edge) of the stage."""
+        cut: bool = False
+        """Cut to the place (no move): actions due with it are built for the new view."""
 
     run_time = 1.5
     reversible = True
@@ -559,7 +561,13 @@ class Pan(Action):
             x = left + scene.camera_place(scene.params, self.options.to) * (right - left)
         self.before = camera_view(scene)
         center = _sideways(scene, x)
+        if center is not None and self.options.cut:
+            scene.camera.frame.move_to(center)
+            return []
         return [] if center is None else [MoveCamera(scene, scene.camera.frame.width, center)]
+
+    def run_time_for(self, scene: NarratedScene, targets: list[Target]) -> float | None:
+        return 0.0 if self.options.cut else None
 
     def revert(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
         """Back to the view before the pan."""

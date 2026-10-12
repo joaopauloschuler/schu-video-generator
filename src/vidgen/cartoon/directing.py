@@ -24,17 +24,18 @@ import math
 import random
 import re
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from fnmatch import fnmatchcase
 from typing import TYPE_CHECKING, Any
 
 from vidgen.camera import Bounds, view_center_within
 from vidgen.cartoon.acting import GESTURE_EASE, GESTURE_SECONDS, GESTURES, look_pose, nearer_side
 from vidgen.cartoon.holding import HoldingError, Holdings, put_down_x
+from vidgen.cartoon.reframe import ReframeBeat, ReframeFigure, reframe_needed, reframe_path, stage_base_width
 from vidgen.cartoon.seating import SEAT_BACKS, PostureError, Postures
 from vidgen.cartoon.shots import FIGURE_HALF_WIDTH, Shot, ShotFigure, ShotView, shot_figures, shot_view
 from vidgen.cartoon.stage import mark_x
-from vidgen.config import DIRECTING_KINDS, ActionConfig, AutoDirectSetting, BeatConfig, SceneConfig, directing_kinds
+from vidgen.config import DIRECTING_KINDS, ActionConfig, AutoDirectSetting, BeatConfig, ReframeSetting, SceneConfig, directing_kinds
 
 if TYPE_CHECKING:
     from vidgen.lint.rules import StillContext
@@ -732,15 +733,9 @@ def _follow_written(state: _SceneState, beat: BeatInput, names: Sequence[str]) -
                 state.looking[name] = None
 
 
-def plan_directions(
-    scene_id: str, cast: Sequence[CastMember], beats: Sequence[BeatInput], stage: StageFrame | None = None,
-) -> list[DirectedBeat]:
-    """The actions automatic directing adds to each beat of a stage scene (DESIGN.md §69.23,
-    §69.24): for each beat with kinds on, the passes of those kinds in :data:`DIRECTING_KINDS`
-    order. Pure: the same input gives the same actions. Characters an ``enter`` of the scene
-    brings in are off stage until their first ``enter`` beat; an ``exit`` takes them off. With
-    the ``stage``'s geometry each look, arm gesture and close-up is checked against the lint
-    rules of :data:`CHECKED_RULES`; without it arm gestures and close-ups are not added."""
+def _start_state(cast: Sequence[CastMember], beats: Sequence[BeatInput], stage: StageFrame | None) -> _SceneState:
+    """The state as the scene starts: characters an ``enter`` of the scene brings in are off
+    stage, the others on their places (with the geometry), the camera on its start view."""
     names = [m.name for m in cast]
     entering = {n for b in beats for act in b.actions if act.action == "enter" for n in _named(act.targets(), names)}
     state = _SceneState(cast={m.name: m for m in cast}, present=set(names) - entering, frame=stage)
@@ -751,6 +746,20 @@ def plan_directions(
             state.x[name] = None if place is None or name in entering else place.x
             if place is not None:
                 state.facing[name] = place.facing
+    return state
+
+
+def plan_directions(
+    scene_id: str, cast: Sequence[CastMember], beats: Sequence[BeatInput], stage: StageFrame | None = None,
+) -> list[DirectedBeat]:
+    """The actions automatic directing adds to each beat of a stage scene (DESIGN.md §69.23,
+    §69.24): for each beat with kinds on, the passes of those kinds in :data:`DIRECTING_KINDS`
+    order. Pure: the same input gives the same actions. Characters an ``enter`` of the scene
+    brings in are off stage until their first ``enter`` beat; an ``exit`` takes them off. With
+    the ``stage``'s geometry each look, arm gesture and close-up is checked against the lint
+    rules of :data:`CHECKED_RULES`; without it arm gestures and close-ups are not added."""
+    names = [m.name for m in cast]
+    state = _start_state(cast, beats, stage)
     directed: list[DirectedBeat] = []
     for k, beat in enumerate(beats):
         state.later = [b.speakers for b in beats[k + 1 :]]
@@ -782,6 +791,51 @@ def plan_directions(
     return directed
 
 
+#: Written actions that move the camera: reframing leaves their beat alone (DESIGN.md §69.30).
+CAMERA_ACTIONS = frozenset({"pan", "follow", "zoom", "shot"})
+
+
+def _reframe_beat(state: _SceneState, beat: BeatInput, names: Sequence[str]) -> ReframeBeat:
+    """``beat`` as reframing sees it, with the state as the beat starts; updates the state with
+    the beat's written actions."""
+    before = dict(state.x)
+    _follow_written(state, beat, names)
+    frame = state.frame
+    assert frame is not None
+    figures = []
+    for name in names:
+        x, place = state.x.get(name), frame.places.get(name)
+        if name in state.present and x is not None and place is not None:
+            start = before.get(name)
+            figures.append(ReframeFigure(
+                name, x, FIGURE_HALF_WIDTH * place.height, state.facing.get(name, place.facing),
+                start if start is not None and abs(start - x) > 1e-6 else None,
+            ))
+    written = {a.action for a in beat.actions if a.action in CAMERA_ACTIONS and not (a.action == "shot" and not a.options.get("kind"))}
+    camera = "follow" if "follow" in written else "pan" if "pan" in written else "held" if written else "free"
+    speakers = tuple(s for s in beat.speakers if s in state.present)
+    bubble = any(a.action == "say" and a.options.get("bubble") for a in beat.actions)
+    return ReframeBeat(beat.id, speakers, beat.seconds, tuple(figures), camera, state.camera_x if camera == "pan" else None, bubble)
+
+
+def plan_reframe(cast: Sequence[CastMember], beats: Sequence[BeatInput], stage: StageFrame) -> list[DirectedBeat]:
+    """The ``pan`` actions that keep each speaker of a stage scene in view (``reframe: speaker``;
+    DESIGN.md §69.30): the beats with the characters' places replayed from their written actions
+    (as :func:`plan_directions` does), then :func:`~vidgen.cartoon.reframe.reframe_path`, each move
+    a ``pan`` to an x of the stage from the beat's start (``cut: true`` for a cut). Pure."""
+    names = [m.name for m in cast]
+    state = _start_state(cast, beats, stage)
+    inputs = [_reframe_beat(state, beat, names) for beat in beats]
+    left, right = stage.bounds[:2]
+    moves = reframe_path(inputs, frame_width=stage.frame_width, bounds=(left, right), start_x=stage.camera_x)
+    found = []
+    for move in moves:
+        timing = {"run_time": move.seconds} if move.seconds > 0 else {"cut": True}
+        pan = ActionConfig.automatic({"action": "pan", "to": round((move.x - left) / (right - left), 4), **timing})
+        found.append(DirectedBeat(move.beat, (pan,)))
+    return found
+
+
 def with_auto_actions(spec: SceneConfig, directed: Sequence[DirectedBeat]) -> SceneConfig:
     """``spec`` with each beat's automatic actions appended to its written ones (a copy; ``spec``
     is unchanged)."""
@@ -810,7 +864,7 @@ def stage_frame(project: Project, params: Any) -> StageFrame:
 
     fmt = project.config.format
     frame_width, frame_height = frame_size(fmt.width, fmt.height)
-    stage_width = params.width * frame_width
+    stage_width = params.width * stage_base_width(frame_width, frame_height, stage_reframes(project, params))
     placements = stage_layout(
         params.items(), marks=params.marks, ground=params.ground, size=params.size,
         frame_width=frame_width, frame_height=frame_height, stage_width=stage_width,
@@ -830,6 +884,27 @@ def stage_frame(project: Project, params: Any) -> StageFrame:
     return StageFrame(frame_width, frame_height, stage_width, camera_x, places, props, dict(params.marks), seat_facings)
 
 
+def stage_reframes(project: Project, params: Any) -> bool:
+    """Whether the camera keeps the speaker in view on a ``stage`` scene with validated
+    ``params`` (DESIGN.md §69.30): its ``reframe``, else the video's, else ``speaker`` when its
+    characters, where they start on the stage as wide as :func:`stage_base_width` lays it out
+    while reframing, are wider together than the frame."""
+    from vidgen.cartoon.stage import stage_layout
+    from vidgen.render.worker import frame_size
+
+    setting: ReframeSetting | None = params.reframe if params.reframe is not None else project.config.reframe
+    if setting is not None:
+        return setting == "speaker"
+    fmt = project.config.format
+    frame_width, frame_height = frame_size(fmt.width, fmt.height)
+    placements = stage_layout(
+        params.items(), marks=params.marks, ground=params.ground, size=params.size, frame_width=frame_width,
+        frame_height=frame_height, stage_width=params.width * stage_base_width(frame_width, frame_height, True),
+    )
+    boxes = [(p.feet[0] - FIGURE_HALF_WIDTH * p.height, p.feet[0] + FIGURE_HALF_WIDTH * p.height) for p in placements if p.kind == "character"]
+    return reframe_needed(boxes, frame_width)
+
+
 def _beat_words(project: Project, beat: BeatConfig) -> tuple[float, tuple[WordTime, ...]]:
     """A beat's narration length (its MP3's, else the word-count estimate) and its word times
     from its start (the stored alignment, else estimated: :func:`~vidgen.speech.beat_word_times`),
@@ -847,21 +922,24 @@ def _beat_words(project: Project, beat: BeatConfig) -> tuple[float, tuple[WordTi
 
 def stage_directions(
     project: Project, spec: SceneConfig, characters: Sequence[str], setting: AutoDirectSetting | None, stage: StageFrame | None = None,
+    *, reframe: bool = False,
 ) -> list[DirectedBeat]:
     """The automatic actions of a stage scene ``spec`` with ``characters`` on it (in the stage's
     order), the stage's ``auto_direct`` ``setting`` and its geometry ``stage``
     (:func:`stage_frame`; none: arm gestures and close-ups are not added): reads who speaks each
     beat (its ``say`` actions, else its voice), the beats' word times, the characters' parts (a
     ``look: {svg}`` from the project folder) and the video's setting, then
-    :func:`plan_directions`. Needs the project's registry (a project session) for the action
-    names."""
+    :func:`plan_directions`. With ``reframe`` (:func:`stage_reframes`) and the geometry, the
+    pans of :func:`plan_reframe` come first in their beats, and the directing passes see them as
+    written. Needs the project's registry (a project session) for the action names."""
     from vidgen import registry
     from vidgen.cartoon.cast import beat_voice, character_part_shapes, missing_needs, speaking_characters
     from vidgen.errors import VidgenError
 
     config = project.config
     kinds = [directing_kinds(beat.auto_direct, setting, config.auto_direct) for beat in spec.beats]
-    if not any(kinds):
+    reframe = reframe and stage is not None
+    if not any(kinds) and not reframe:
         return []
     entries = {e.name: e for e in config.characters}
     cast: list[CastMember] = []
@@ -886,9 +964,16 @@ def stage_directions(
             speakers = [n for n in characters if n in _named([p for act in said for p in act.targets()], characters)]
         else:
             speakers = speaking_characters(config, beat_voice(spec, beat), characters)
-        seconds, words = _beat_words(project, beat) if {"gestures", "closeups"} & on and speakers else (0.0, ())
+        seconds, words = _beat_words(project, beat) if ({"gestures", "closeups"} & on or reframe) and speakers else (0.0, ())
         beats.append(BeatInput(beat.id, beat.marked_text, tuple(speakers), written, on, seconds, words))
-    return plan_directions(spec.id, cast, beats, stage)
+    if not reframe or stage is None:
+        return plan_directions(spec.id, cast, beats, stage)
+    pans = {d.beat: d.actions for d in plan_reframe(cast, beats, stage)}
+    beats = [replace(b, actions=(*b.actions, *pans[b.id])) if b.id in pans else b for b in beats]
+    directed = {d.beat: d.actions for d in plan_directions(spec.id, cast, beats, stage)}
+    return [
+        DirectedBeat(b.id, (*pans.get(b.id, ()), *directed.get(b.id, ()))) for b in beats if b.id in pans or b.id in directed
+    ]
 
 
 def project_directions(project: Project, scenes: Sequence[str] | None = None) -> dict[str, list[DirectedBeat]]:
@@ -910,20 +995,25 @@ def project_directions(project: Project, scenes: Sequence[str] | None = None) ->
 
 
 def directing_used(project: Project) -> bool:
-    """Whether ``auto_direct`` is set anywhere (the video, a scene's params, a beat): a cheap
-    check before :func:`project_directions`."""
+    """Whether automatic actions are possible: ``auto_direct`` is set anywhere (the video, a
+    scene's params, a beat), or a ``stage`` scene may reframe (its ``reframe``, else the
+    video's, is not ``none``): a cheap check before :func:`project_directions`."""
     config = project.config
     if config.auto_direct:
+        return True
+    if any(spec.type == "stage" and (spec.params.get("reframe") or config.reframe) != "none" for spec in config.scenes):
         return True
     return any(spec.params.get("auto_direct") or any(b.auto_direct for b in spec.beats) for spec in config.scenes)
 
 
 def auto_label(act: ActionConfig) -> str:
-    """``look_at kit pip`` / ``react pip surprised`` / ``shot closeup kit``: the action, its target
-    and option values (a shot: its kind first, as the ``shot:`` key reads; for the storyboard)."""
+    """``look_at kit pip`` / ``react pip surprised`` / ``shot closeup kit`` / ``pan 0.31 cut``: the
+    action, its target and option values, a true flag by its name (a shot: its kind first, as the
+    ``shot:`` key reads; for the storyboard)."""
     if act.action == "shot":
         return " ".join(["shot", str(act.options.get("kind")), *act.targets()])
-    return " ".join([act.action, *act.targets(), *(str(v) for v in act.options.values())])
+    values = [k if v is True else str(v) for k, v in act.options.items() if v is not False]
+    return " ".join([act.action, *act.targets(), *values])
 
 
 def directions_yaml(directed: Mapping[str, Sequence[DirectedBeat]]) -> str:

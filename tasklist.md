@@ -498,9 +498,9 @@ memory cap, targeted tests, original characters only). Each step updates the gui
 - [x] Tests: framing maths (no render), lint exceptions (`tests/test_cartoon_shots.py`: 13 without rendering, 1 tiny render; scratch copies of examples/cartoon with shots and with `auto_direct` checked by eye, lint clean)
 
 ### Step 96 — Vertical cartoons follow the speaker
-- [ ] In 9:16 (and any format narrower than the stage), the camera keeps the speaker in frame by default (`reframe: speaker | none`), easing between speakers, holding during short replies
-- [ ] Storyboard / lint check the 9:16 variant of examples/cartoon
-- [ ] Tests: the reframe path from a beat list (no render)
+- [x] In 9:16 (and any format narrower than the stage), the camera keeps the speaker in frame by default (`reframe: speaker | none`), easing between speakers, holding during short replies (`cartoon/reframe.py` `reframe_path`, pure; `reframe` top level and stage param, default `speaker` when the characters do not fit in one view; a reframing stage in a frame narrower than 16:9 is laid out as wide as the 16:9 one and cropped; moves are automatic `pan`s (1.0 s ease, `cut: true` in the first beat and for a speech bubble); a line under 1.5 s holds; written pan / follow / zoom / shot win; DESIGN §69.30)
+- [x] Storyboard / lint check the 9:16 variant of examples/cartoon (scratch copy: storyboard right by eye; lint 1 warning, `off_stage` in hill_count from the written `follow`, also without this step, so the variant is not added to the committed example)
+- [x] Tests: the reframe path from a beat list (no render) (`tests/test_cartoon_reframe.py`: 11, no render)
 
 ### Step 97 — Lighting and mood
 - [ ] Stage `light: day | morning | sunset | night | indoor` (or `{tint, strength}`): a colour grade over background, layers, props and characters, keeping theme contrast for text and bubbles; night adds a few stars; `light:` as a beat action to change it over time (fade)

@@ -180,8 +180,18 @@ from vidgen.cartoon.keyframes import (  # noqa: E402
     keyed_values,
     path_length,
 )
-from vidgen.config import ActionConfig, AutoDirect, AutoDirectSetting, MotionSetting, SHOT_NAMES, ShotConfig  # noqa: E402
-from vidgen.cartoon.directing import DirectedBeat, StageFrame, StagePlace, stage_directions, stage_frame  # noqa: E402
+from vidgen.config import ActionConfig, AutoDirect, AutoDirectSetting, MotionSetting, ReframeSetting, SHOT_NAMES, ShotConfig  # noqa: E402
+from vidgen.cartoon.directing import DirectedBeat, StageFrame, StagePlace, plan_reframe, stage_directions, stage_frame, stage_reframes  # noqa: E402
+from vidgen.cartoon.reframe import (  # noqa: E402
+    REFRAME_SECONDS,
+    REPLY_HOLD_SECONDS,
+    CameraMove,
+    ReframeBeat,
+    ReframeFigure,
+    reframe_needed,
+    reframe_path,
+    stage_base_width,
+)
 from vidgen.cartoon.props import PROP_HEIGHTS, PROP_KINDS, PROP_LIFTS, SVG_PROP_HEIGHT, Prop, draw_prop, read_svg_seat_and_lean, svg_prop  # noqa: E402
 from vidgen.cartoon.stage import (  # noqa: E402
     DEFAULT_FACTORS,
@@ -542,6 +552,17 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "frame_shot",
     "shot_figures",
     "shot_view",
+    "REFRAME_SECONDS",
+    "REPLY_HOLD_SECONDS",
+    "CameraMove",
+    "ReframeBeat",
+    "ReframeFigure",
+    "ReframeSetting",
+    "plan_reframe",
+    "reframe_needed",
+    "reframe_path",
+    "stage_base_width",
+    "stage_reframes",
     "PARTICLE_KINDS",
     "MAX_PARTICLES",
     "ParticleField",

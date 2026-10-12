@@ -1105,6 +1105,12 @@ class AutoDirect(_Strict):
 AutoDirectSetting = Union[bool, AutoDirect]
 
 
+#: ``reframe:`` on the video or a stage scene (DESIGN.md §69.30): ``speaker`` (the camera keeps
+#: whoever speaks in view on a stage wider than the frame) or ``none``; not given: ``speaker``
+#: when the stage's characters do not fit in one view.
+ReframeSetting = Literal["speaker", "none"]
+
+
 def directing_kinds(*settings: AutoDirectSetting | None) -> frozenset[str]:
     """The kinds of automatic directing on, from settings nearest first (a beat's, its scene's,
     the video's): the first one given wins; none given: off."""
@@ -1607,6 +1613,8 @@ class VideoConfig(_Strict):
     """Sounds for the characters' actions on stage scenes: footsteps on walks, a whoosh on enter / exit, a boing on jump, a pop on a surprised face; false: none (a stage's foley param wins)."""
     auto_direct: AutoDirectSetting = False
     """Automatic directing on stage scenes: listeners look at whoever speaks and react after lines (true, false or {looks, reactions, gestures, closeups}); a stage's or a beat's setting wins; actions written in a beat always win."""
+    reframe: ReframeSetting | None = None
+    """On stage scenes wider than the frame (a 9:16 variant crops the landscape stage): speaker moves the camera to whoever speaks, easing between speakers and holding during short replies; none: only the beats' own pan / follow / zoom / shot move it; default: speaker when the characters do not fit in one view (a stage's reframe param wins)."""
     cartoon_motion: MotionSetting | None = None
     """Animation principles for every character (anticipation, squash and stretch, overshoot and settle, follow-through): lively, calm or none; a stage's or a character's own setting wins; default lively."""
     scenes: list[SceneConfig] = Field(min_length=1)

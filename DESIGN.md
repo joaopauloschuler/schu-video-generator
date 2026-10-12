@@ -99,7 +99,8 @@ src/vidgen/
                           # replay vidgen validate runs, §69.27; no manim), seating.py (seats,
                           # lean edges, Postures, seated feet and the crouch, §69.28; no
                           # manim), shots.py (the framings of a beat's shot:, §69.29; no
-                          # manim); still.py also
+                          # manim), reframe.py (reframe: the camera keeps the speaker in view,
+                          # the landscape stage a narrow frame crops, §69.30; no manim); still.py also
                           # draws the prop gallery and `vidgen character-sheet` (§69.16)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
@@ -729,6 +730,12 @@ Step 95 (§69.29) adds `ShotConfig`, `SHOT_NAMES`, `SHOT_KINDS`, `SHOT_MOVE_SECO
 `ShotFigure`, `ShotView`, `frame_shot`, `shot_figures` and `shot_view`; `Character` gains
 `standing_height`; `NarratedScene` the attributes `camera_shot` and `shot_home`; `BeatConfig` the
 key `shot`. All compatible.
+Step 96 (§69.30) adds `ReframeSetting`, `REFRAME_SECONDS`, `REPLY_HOLD_SECONDS`, `CameraMove`,
+`ReframeBeat`, `ReframeFigure`, `reframe_needed`, `reframe_path`, `stage_base_width`,
+`plan_reframe` and `stage_reframes`; `stage_directions` gains the keyword `reframe` (default
+`False`); the `pan` action the option `cut`. Compatible, except that a `stage` whose characters
+do not fit in one view now gets automatic pans, and in a frame narrower than 16:9 is laid out as
+wide as the 16:9 frame (set `reframe: none` for the old behaviour).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -5383,7 +5390,8 @@ and the new `pan` and `follow`, which are generic (any scene type) and reuse `Mo
   the frame height. `zoom` now clamps with it (was the frame), so a zoom on a wide stage stays on
   the stage.
 - **Stage params** (§69.6 plus): `width` (1–4 frame widths; marks and x are fractions of the
-  stage, `stage_layout(..., stage_width=)`; sizes still follow the frame's shorter side; the
+  stage, `stage_layout(..., stage_width=)`; a reframing stage in a frame narrower than 16:9
+  counts in 16:9 frame widths, §69.30; sizes still follow the frame's shorter side; the
   picture covers the stage, the colour / gradient and ground band span it), `camera_at` (a mark
   or x: the view's centre at the start, clamped), `layers: [StageLayer]` = `{name, place,
   factor, image | shapes, bottom}` (one of `image` / `shapes`; names default to
@@ -5413,7 +5421,7 @@ and the new `pan` and `follow`, which are generic (any scene type) and reuse `Mo
 - **`pan`** (`scenes/actions.py`; run_time 1.5, reversible, not temporary, `needs_target =
   False`, moves_camera): option `to` (a mark name or an x 0..1 of `camera_bounds`' width) or a
   target (one of the two: `problems`). Ends a `follow`, then a `MoveCamera` keeping the view's
-  size and y. `until` moves back to the view before. Marks: the new classmethod
+  size and y (Step 96: `cut: true` moves the frame at once, §69.30). `until` moves back to the view before. Marks: the new classmethod
   `NarratedScene.camera_place(params, place)` (a number is itself, a name `ValueError`; `Stage`:
   `mark_x` with its own marks), checked at validate time through the new hook
   `Action.scene_problems(scene_cls, params)` (called by `scene_actions` when params are valid).
@@ -6306,7 +6314,8 @@ layout dump and lint treat them like written ones.
 - **Fingerprint**: `auto_direct` is in the config; `cartoon/directing.py` is render code. A
   changed setting or planner makes the scene's render stale.
 - **Visible**: `project_directions(project, scenes)` (scene id -> directed beats; each scene
-  type's `auto_actions`; `directing_used` skips the session when `auto_direct` appears nowhere).
+  type's `auto_actions`; `directing_used` skips the session when `auto_direct` appears nowhere
+  and no `stage` scene may reframe, §69.30).
   `vidgen storyboard`: `SheetStill.auto` (the beat's automatic actions), a wrapped line `auto:
   look_at kit pip · react kit thinking` (`auto_label`, at most `AUTO_LINES` 2) under the beat's
   narration; `--json` frames gain `auto` (the shorthand forms, `[]` for none).
@@ -6799,3 +6808,64 @@ beat without a shot goes back to the view before the shots.
   runtime but from its standing height in the planner; no shots in `vidgen screenplay`'s grammar;
   the near character of an over-the-shoulder shot is not drawn larger (no depth change). Tests:
   `tests/test_cartoon_shots.py`.
+
+### 69.30 Vertical cartoons follow the speaker (Step 96)
+
+On a `stage` wider than the frame the camera keeps whoever speaks in view (`reframe: speaker`),
+so a cartoon written for 16:9 renders in a 9:16 variant without camera directions of its own.
+
+- **Setting** (`config.ReframeSetting` = `speaker | none`): `VideoConfig.reframe` and the stage
+  param `reframe` (the stage's wins), both default none. `directing.stage_reframes(project,
+  params)`: the setting if given, else `speaker` when the characters' boxes (`FIGURE_HALF_WIDTH`
+  heights to each side of their start marks, laid out as while reframing) are wider together
+  than the frame (`reframe_needed`). A video variant can turn it off (`reframe: none` merges into
+  the top level; a variant cannot change one scene's params, §7).
+- **The landscape stage** (`cartoon/reframe.py`, no manim): `stage_base_width(frame_width,
+  frame_height, reframing)` is the width of a `width: 1` stage: the frame's, or while reframing
+  `max(frame width, 16/9 × short side)` (`LANDSCAPE_ASPECT`). In 9:16 (8 × 14.22) a reframing
+  stage is 14.22 units per `width`, as in 16:9, so marks, sizes (the short side, §69.6) and walk
+  lengths match the landscape video and the frame crops it. `Stage.stage_width` and
+  `stage_frame` use it; 16:9 frames are unchanged. Without reframing, a 9:16 stage is squeezed
+  into the frame as before (§69.6).
+- **The path** (`reframe_path(beats, frame_width=, bounds=, start_x=) -> [CameraMove(beat, x,
+  seconds)]`, pure): `ReframeBeat(id, speakers, seconds, figures, camera, camera_x, bubble)` with
+  `ReframeFigure(name, x, half_width, facing, start_x)` (where it ends the beat's written moves,
+  and where it started when it moved). The camera's centre starts at `start_x` (clamped in
+  `bounds`). Per beat: a written `pan` sets it (`camera_x`, `None` when not known: then nothing
+  until a known pan), a `follow` makes it unknown, `held` (a `zoom` or a `shot` with a kind)
+  changes nothing (the view comes back); in a `free` beat the first speaker on stage with a line
+  of at least `REPLY_HOLD_SECONDS` 1.5 s (a shorter reply holds the view) that is not wholly in
+  view (`CUT_TOLERANCE` 0.02 of its width) moves the camera to `_view_for`: the speaker's span
+  (start and end of a walk, else its end box), `REFRAME_LOOK_ROOM` 0.1 of the view in front of
+  its face, then the nearest centre inside the stage that shows it wholly and puts no view edge
+  inside another figure (candidates: that ideal and the centres whose edge sits at a figure's
+  tolerance; none: the ideal kept in range). The move eases `REFRAME_SECONDS` 1.0 (at most 0.8
+  of the shortest line that moves it), or is a cut (`seconds` 0) in the first beat and in a beat
+  whose `say` draws a bubble (built for the view at its start). Before the first line, the first
+  beat cuts to the scene's first speaker (before any written camera move) when the start view
+  does not show it.
+- **Planner** (`cartoon/directing.py`): `plan_reframe(cast, beats, stage)` replays the written
+  actions with the planner's state (`_start_state`, `_follow_written`: enters, exits, walks,
+  pans, follows; `CAMERA_ACTIONS` = pan, follow, zoom, shot) into `ReframeBeat`s and turns each
+  move into an automatic `pan` with `to` (the stage fraction, 4 decimals) and `run_time`, or
+  `cut: true`. `stage_directions(..., reframe=)` reads every speaking beat's length when
+  reframing, puts the pans first in their beats' `DirectedBeat`s and gives them to
+  `plan_directions` as written actions (so automatic close-ups avoid their beats and the lint
+  checks see the camera); `Stage.auto_actions` passes `stage_reframes`. The pans are ordinary
+  automatic actions: `vidgen direct` / `--print`, the storyboard's `auto:` line (`auto_label`
+  writes a true flag by its name: `pan 0.3062 cut`), and pasted they count as written.
+- **`pan` `cut`** (§69.7): `cut: true` moves the camera frame at once in `apply` (no animation,
+  `run_time_for` 0), as a shot's cut does (§69.29). **Runner**: in a batch of actions due
+  together, camera moves now come first (they start at their `at`; before, a camera move listed
+  after two actions on one character joined the second's batch), then the others, then
+  `after_camera` actions.
+- **Checked**: a scratch copy of `examples/cartoon` with a 9:16 variant (`vidgen storyboard` and
+  `vidgen lint --variant vertical`): the yard scene (dot and moss at `left` / `right`, 7.1 units
+  apart in a frame 8 wide) cuts to dot at the start, eases to moss and back, follows dot's walk,
+  cuts to moss for his bubble and leaves the written zoom alone; the hill (both start within one
+  view) does not reframe. Lint: 1 warning, `off_stage` in hill_count, from the written `follow`
+  of the kite (present without this step too), so the variant is not added to the example.
+- **Not done here**: the camera moves only in x (no zoom to the speaker in a tall frame, where
+  the characters stay small); a walk that does not speak is not followed; the entering side of an
+  `enter` is predicted from the written camera only; props are not framed. Tests:
+  `tests/test_cartoon_reframe.py`.

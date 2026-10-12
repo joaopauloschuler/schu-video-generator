@@ -58,6 +58,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `cartoon_motion` | `lively` | how characters move: `lively`, `calm` or `none` ([animation principles](#animation-principles-cartoon_motion)); a stage's or a character's own setting wins |
 | `foley` | `true` | sounds for the characters' actions on `stage` scenes (footsteps, whoosh, boing, pop); `false`: none; a stage's `foley` param wins; see [foley](#foley-and-music-stings) |
 | `auto_direct` | `false` | automatic directing on `stage` scenes: listeners look at whoever speaks and react after lines, speakers gesture on stressed words, short punchy lines get a close-up; `true`, `false` or `{looks, reactions, gestures, closeups}`; a stage's or a beat's `auto_direct` wins; see [automatic directing](#automatic-directing-auto_direct) |
+| `reframe` | none | on `stage` scenes wider than the frame: `speaker` moves the camera to whoever speaks (a 9:16 frame then crops the stage laid out as wide as the 16:9 one), `none` leaves the camera to the beats' own camera actions; none: `speaker` when a stage's characters do not fit in one view; a stage's `reframe` wins; see [vertical cartoons](#vertical-cartoons-reframe) |
 | `scenes` | required | the scenes in order, at least one |
 
 ### Output folder (`output_dir`, `--output-dir`)
@@ -3924,7 +3925,8 @@ never leaves the stage.
 | `cartoon_motion` | `lively` \| `calm` \| `none` | none (the video's) | the [animation principles](#animation-principles-cartoon_motion) of the characters in this scene; a character's own setting wins |
 | `foley` | bool | none (the video's `foley`: on) | sounds for the characters' actions in this scene (footsteps, whoosh, boing, pop; [foley](#foley-and-music-stings)); `false`: none |
 | `auto_direct` | bool \| mapping | none (the video's `auto_direct`: off) | [automatic directing](#automatic-directing-auto_direct) in this scene: `true`, `false` or `{looks, reactions, gestures, closeups}`; a beat's own `auto_direct` wins |
-| `width` | float 1–4 | `1` | width of the stage in frame widths; wider than 1: the camera pans across it (`pan`, `follow`) |
+| `reframe` | `speaker` \| `none` | none (the video's, else `speaker` when the characters do not fit in one view) | [vertical cartoons](#vertical-cartoons-reframe): the camera keeps whoever speaks in view on a stage wider than the frame |
+| `width` | float 1–4 | `1` | width of the stage in frame widths (16:9 frame widths while it [reframes](#vertical-cartoons-reframe) in a narrower frame); wider than 1: the camera pans across it (`pan`, `follow`) |
 | `camera_at` | mark \| x | `centre` | where the camera looks at the start (on a stage wider than the frame) |
 | `layers` | list | `[]` | parallax layers (below), in the order given within their place |
 | `props` | list | `[]` | [props](#props): a built-in prop's name (`tree`), or a mapping (below) |
@@ -4327,6 +4329,42 @@ beats:
     voice: kit_voice
     shot: closeup kit
   - text: "They looked at each other."  # no shot: back to the view before the shots
+```
+
+#### Vertical cartoons (`reframe`)
+
+A cartoon written for 16:9 also renders in a 9:16 [variant](#variants): with `reframe: speaker`
+the camera keeps whoever speaks in view. In a frame narrower than 16:9 (9:16, 1:1) the stage is
+then laid out as wide as the 16:9 frame of the same short side, so the characters keep their
+places and sizes and the narrow frame crops the landscape stage (`width: 2` is two 16:9 frames).
+Without `reframe` (top level, or a stage's param; the stage's wins) a stage reframes when its
+characters, where they start, do not fit in one view; otherwise it is laid out in the frame as
+before. `reframe: none` keeps the frame-wide layout and moves the camera only with the beats'
+own `pan`, `follow`, `zoom` and `shot`.
+
+How the camera moves (`vidgen direct` shows the moves, the storyboard lists them under `auto:`):
+
+- It moves only for a speaker that is not wholly in view, at the start of the beat: it eases
+  (1.0 s `pan`) to a view with the speaker in it, a little room on the side it faces, and no other
+  character cut by the frame's edge (lint `off_stage`). A speaker who walks during its line is
+  framed with both ends of the walk when they fit.
+- A short reply (a line under 1.5 s) does not move it: the reply is heard over the view of the
+  line before.
+- Before the first line, the first beat cuts to the scene's first speaker (the set fades in on
+  it). A beat whose `say` draws a speech bubble cuts instead of easing, so the bubble is placed
+  for the speaker's view.
+- A beat with a written `pan`, `follow`, `zoom` or `shot` is left alone; after a `follow` the
+  camera is the followed one's until a written `pan` places it again, and after a `zoom` or
+  `shot` it is back where reframing left it. [Automatic directing](#automatic-directing-auto_direct)
+  sees these pans as camera moves (no automatic close-up in a beat with one).
+
+```yaml
+variants:
+  vertical:                                  # vidgen render --variant vertical
+    output: box_kite_vertical
+    format: {width: 1080, height: 1920, fps: 30}
+    preview: {width: 270, height: 480, fps: 15}
+    # reframe: none                          # keep the whole stage squeezed into the frame instead
 ```
 
 #### Automatic directing (`auto_direct`)
@@ -4755,7 +4793,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `dim` | `opacity` (`0.45`, 0–1, of the target's full opacity) | fades the target; one that is already dimmer (e.g. by `bullets`' `dim_previous`) stays as it is, so dimming never compounds; `until:` restores the opacity |
 | `highlight` | `color` (`highlight`, a theme token or hex), `style` (`color` default, `box`, `underline`, `fill`, `flash`, or a list such as `[color, box]`) | `color` recolours the target and brings a dimmed one back to full opacity while highlighted; `box` draws a rounded frame around it, `underline` a line under it, `fill` lays a translucent band of the colour under it (over backdrops such as table stripes and cards); `flash` flashes the colour there and back (leaves no trace; not with `color`). `until:` restores the colours (and the dimming) and removes box / underline / fill. |
 | `zoom` | `scale` (magnification > 1, up to 8; default: as close as the targets fit), `padding` (`0.15`: share of the view kept free on each side of the targets) | moves the camera in on the targets and back out: the zoom-out ends with the beat (with `until: <beat>`, when that beat starts). Without `scale` the view is at most 3x; a target that already fills the frame is not zoomed (a warning says so). The view never leaves the frame (on a wide `stage`: the stage). Coming back, the camera returns to the view it had before the zoom. While a `follow` runs, the camera keeps the followed character in the middle. |
-| `pan` | `to` (a `stage`'s mark, or an x from 0 = left to 1 = right of the stage) | moves the camera sideways to the target (on a `stage`: a character) or to `to` — one of the two — keeping its zoom; it stays there (`until: <beat>`: it moves back when that beat starts). Ends a `follow`. The view never leaves the stage, so on a scene as wide as the frame the camera pans only while zoomed in. Other scene types know no marks (`to` is an x). |
+| `pan` | `to` (a `stage`'s mark, or an x from 0 = left to 1 = right of the stage) | moves the camera sideways to the target (on a `stage`: a character) or to `to` — one of the two — keeping its zoom; it stays there (`until: <beat>`: it moves back when that beat starts). Ends a `follow`. The view never leaves the stage, so on a scene as wide as the frame the camera pans only while zoomed in. Other scene types know no marks (`to` is an x). `cut: true` jumps there at once (actions due with it are built for the new view). |
 | `follow` | — | pans to the target (one character) and then keeps the camera on its feet as it moves, inside the stage, at the camera's zoom: to the end of the scene, or until the `until` beat starts (the camera then stays where it is). A `pan` or another `follow` ends it. |
 | `transform` | `into` (required: a target not on screen yet), `style` (`auto` default, `replace`, `shapes`, `tex`, `fade`) | morphs the target into `into`, which then stays on screen in its own place (the target is gone). `shapes` moves matching glyphs (what `auto` uses for text and formulas), `replace` morphs point by point (`auto` for other shapes), `tex` matches the TeX parts of two formulas, `fade` cross-fades. `into` must be a target of the scene; text that is not part of the scene cannot be morphed into (give the scene that content, e.g. as a later equation step). If `into` is already on screen, the target fades out into its place (warning). |
 | `callout` | `kind` (`box` default, `circle`, `arrow`, `label`, `spotlight`, `magnifier`), `label`, `area`, `within` (`frame` \| `safe`), `units` (`fraction` \| `px`), `color` (`highlight`), `label_size` (`caption`), `side` (`auto`, `top`, `bottom`, `left`, `right`), `curved` (arrow), `zoom` (magnifier, `2`), `keep` (`false`), `name` | points at the target — or, without a target, at `area` of the frame — with the [Step 34 callouts](#screenshot): a rounded `box` (label as a tag on its edge), a `circle`, an `arrow` from the label, a `label` beside it (no mark), a `spotlight` (the rest of the view darkened) or a `magnifier` (an enlarged inset of a picture: the target must show one, e.g. `image`). Gone when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: stays to the end of the scene). See "Callouts" below. |

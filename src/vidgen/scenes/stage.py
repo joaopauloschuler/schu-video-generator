@@ -224,7 +224,9 @@ class Stage(NarratedScene):
     surprised face make their own sounds (foley; ``foley: false`` turns them off). With
     ``auto_direct``, listeners look at whoever speaks and react after lines on their own. A
     beat's ``shot:`` frames characters for that beat (``closeup kit``, ``two_shot``,
-    ``over_shoulder kit pip``...): a cut, and back at the next beat without one.
+    ``over_shoulder kit pip``...): a cut, and back at the next beat without one. On a stage wider
+    than the frame (a 9:16 variant crops the landscape stage) the camera keeps whoever speaks
+    in view (``reframe``).
 
     The ``keyframes`` and ``move_along`` actions move a character, a prop or a character's part
     by keys or along a path. Characters handle props with ``pick_up``, ``hold``, ``put_down``,
@@ -278,9 +280,11 @@ class Stage(NarratedScene):
         cartoon_motion: MotionSetting | None = None
         """Animation principles for the characters in this scene (anticipation, squash and stretch, overshoot and settle, follow-through): lively, calm or none; a character's own setting wins; default: the video's (lively)."""
         width: float = Field(1.0, ge=1.0, le=4.0)
-        """Width of the stage in frame widths (marks and x positions are fractions of it); wider than 1: the camera pans across it (pan, follow)."""
+        """Width of the stage in frame widths (marks and x positions are fractions of it; while it reframes in a frame narrower than 16:9, in 16:9 frame widths); wider than 1: the camera pans across it (pan, follow)."""
         camera_at: str | Annotated[float, Field(ge=0.0, le=1.0)] = "centre"
         """Where the camera looks at the start, on a stage wider than the frame: a mark or an x from 0 to 1 of the stage."""
+        reframe: ReframeSetting | None = None
+        """On a stage wider than the frame: speaker moves the camera to whoever speaks (easing between speakers, holding during short replies; a 9:16 frame then crops the stage laid out as wide as the 16:9 one); none: only the beats' own pan / follow / zoom / shot move it; default: the video's, else speaker when the characters do not fit in one view."""
         layers: list[StageLayer] = []
         """Parallax layers: {place: background | middle | foreground, factor, image | shapes}."""
         props: list[StageProp] = []
@@ -391,9 +395,11 @@ class Stage(NarratedScene):
         """With ``auto_direct`` (beat, scene, video; nearest wins): listeners look at whoever
         speaks, the speaker at the one it talks to, listeners react after lines, speakers
         gesture on stressed words and short punchy lines get a close-up, each checked against
-        the stage's geometry (:func:`stage_directions`, DESIGN.md §69.23, §69.24)."""
+        the stage's geometry (:func:`stage_directions`, DESIGN.md §69.23, §69.24). When the stage
+        reframes (:func:`stage_reframes`), pans keep the speaker in view (§69.30)."""
         names = [c.name for c in params.characters]
-        return stage_directions(project, spec, names, params.auto_direct, stage_frame(project, params))
+        frame = stage_frame(project, params)
+        return stage_directions(project, spec, names, params.auto_direct, frame, reframe=stage_reframes(project, params))
 
     @classmethod
     def action_sequence_problems(cls, spec: Any, params: Any, uses: list[Any]) -> list[tuple[str, str]]:
@@ -499,8 +505,11 @@ class Stage(NarratedScene):
 
     @property
     def stage_width(self) -> float:
-        """The stage's width in Manim units."""
-        return self.params.width * self.frame_width
+        """The stage's width in Manim units: ``width`` frames, or, when reframing in a frame
+        narrower than a landscape one, ``width`` 16:9 frames (DESIGN.md §69.30)."""
+        if not hasattr(self, "_reframes"):
+            self._reframes = stage_reframes(self.project, self.params)
+        return self.params.width * stage_base_width(self.frame_width, self.frame_height, self._reframes)
 
     def construct(self) -> None:
         p = self.params

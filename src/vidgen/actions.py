@@ -560,8 +560,9 @@ class ActionRunner:
         batch: list[_Due] = []
         batches = [batch]
         camera = id(getattr(scene.camera, "frame", scene.camera))
-        if any(d.use.kind.cls.moves_camera for d in due):   # camera moves before what is built for the view
-            due = [d for d in due if not _after_camera(d)] + [d for d in due if _after_camera(d)]
+        if any(d.use.kind.cls.moves_camera for d in due):   # camera moves first (they start at their at), and before what is built for the view
+            moves = [d for d in due if d.use.kind.cls.moves_camera]
+            due = moves + [d for d in due if d not in moves and not _after_camera(d)] + [d for d in due if d not in moves and _after_camera(d)]
         for d in due:
             mobs = _changed(d)
             mobs |= {camera} if d.use.kind.cls.moves_camera or _after_camera(d) else set()

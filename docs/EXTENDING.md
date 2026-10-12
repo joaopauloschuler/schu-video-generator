@@ -1025,7 +1025,7 @@ class Checklist(NarratedScene):
 `needs_target = False` allows an action without `target`. `temporary = True` (with
 `reversible`) has the runner play `revert` so that it ends with the beat (or, with `until:`,
 with the beat before that one), like `zoom`; `moves_camera = True` keeps two such actions from
-playing at once; `after_camera = True` (the built-in `callout`) plays after a camera move due at
+playing at once and starts the action before the others due with it; `after_camera = True` (the built-in `callout`) plays after a camera move due at
 the same moment, so it is built for the new view; `target_options = ("into",)` names options whose values are target names
 (checked by `vidgen validate` like `target`; look them up with `scene.find_targets(name)`).
 `until_next_beat = True` (with `reversible`) undoes the action when the next beat starts unless
@@ -1078,7 +1078,8 @@ once into a static image for that animation.
 scene type with a `shot_framing(kind, names)` method returning `(ShotView, Shot)` (the built-in
 `stage`; the framing maths is `frame_shot` / `shot_figures` / `shot_view`); while a shot is on,
 `scene.camera_shot` holds what the layout dump records and `scene.shot_home` the view the next
-beat goes back to. Animate the parts that are in the
+beat goes back to. On a stage wider than the frame the stage adds automatic `pan`s that keep
+the speaker in view (`reframe`, §69.30; `reframe_path` is the pure path). Animate the parts that are in the
 scene (`scene.on_screen_parts(t)`), not a group of them that was never added: Manim would add
 that group and draw its parts twice. New mobjects (like the marks above) are simply added by
 their animation. `vidgen list-scenes` lists your action with its options; `vidgen schema`

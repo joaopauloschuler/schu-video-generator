@@ -251,6 +251,11 @@ scenes:
   picture unless you set `fit: cover`.)
 - Phone apps cover the bottom ~15 % with their buttons: captions and lower thirds lift
   themselves above it; keep the key part of your own pictures and clips out of it.
+- **Cartoons** (`stage` scenes) in 9:16 keep their 16:9 stage: the narrow frame crops it and the
+  camera moves to whoever speaks (`reframe: speaker`, on by itself when the characters do not
+  fit in one view; a short reply holds the view; your own `pan` / `follow` / `zoom` / `shot`
+  win). `reframe: none` (top level or a stage's param) squeezes the whole stage into the frame
+  instead. `vidgen direct --variant social` lists the camera's moves.
 
 <!-- topic: scenes (also: chooser, types, scene-types) -->
 ## Choosing the scene type
@@ -775,6 +780,9 @@ back (`shot: {kind: closeup, of: kit, move: true}` eases instead):
 - **moving**: `pan` to a character or a mark (`- {action: pan, to: right}`) and `follow` a
   character or a flying prop across a wide stage (either ends a shot).
 A shot is framed where the characters stand as the beat starts and does not follow a walk.
+In a 9:16 variant the camera follows the speaker across the landscape stage on its own
+(`reframe`, see the `social` topic): write the dialogue for 16:9 and check `vidgen storyboard
+--variant ...`.
 
 **Reaction shots.** The listener's face is often the joke. While one character speaks, the other
 `react`s (`expression` and / or `pose`, for that beat only) and `look_at`s the speaker; `emote` and
