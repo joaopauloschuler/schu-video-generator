@@ -1,0 +1,17 @@
+# The cast of the series (DESIGN.md §69.35): every episode starts from it with
+#   include: [../shared/cast.yaml, ../shared/sets.yaml]
+# An episode may change a character for itself: a characters: entry of the same name (its keys win).
+# Paths in an included file (an svg: look) are relative to the file that holds them.
+voices:
+  nib_voice: {voice: af_sarah, speed: 0.85, label: Nib}
+  olla_voice: {voice: bm_george, speed: 0.85, label: Olla}
+
+characters:
+  - name: nib                                   # small, round, quick: curly hair, a bag of tools
+    voice: nib_voice
+    look: {body: round, head_size: 1.15, eyes: round, hair: curly, accessories: [bag]}
+    colors: {clothes: primary, hair: "#7A4A2A", accessory: accent}
+  - name: olla                                  # tall bean, slow and certain: floppy ears and a hat
+    voice: olla_voice
+    look: {body: bean, eyes: sleepy, nose: dot, ears: floppy, accessories: [hat]}
+    colors: {skin: "#C9B8E8", clothes: tertiary, accessory: highlight}

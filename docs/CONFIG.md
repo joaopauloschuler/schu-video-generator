@@ -32,6 +32,8 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `format` | `{width: 1920, height: 1080, fps: 30}` | final render (`vidgen render`) |
 | `preview` | `{width: 854, height: 480, fps: 15}` | `vidgen render --preview` |
 | `variants` | `{}` | named overrides, see [variants](#variants) |
+| `include` | `[]` | files (YAML / JSON, relative to this file, e.g. `../shared/cast.yaml`) whose `characters`, `voices` and `sets` this config starts from; this config's own entries win; see [shared casts and sets](#shared-casts-and-sets-include-and-sets) |
+| `sets` | `{}` | named `stage` sets (`name: {background, layers, props, marks, light, wind...}`) a stage scene uses with `set: NAME`; see [shared casts and sets](#shared-casts-and-sets-include-and-sets) |
 | `theme` | see [theme](#theme) | preset, colors, sizes, font, background, code style |
 | `voice` | see [voice](#voice-voice) | the narration voice: ElevenLabs (default), OpenRouter, or Kokoro running locally (free; extra `schu-video-generator[kokoro]`; [Kokoro](#kokoro-on-this-computer-provider-kokoro)) — one provider per video ([narration providers](#narration-providers)) |
 | `voices` | `{}` | named voices for dialogue, picked by scenes and beats with `voice: NAME`, see [multiple voices](#multiple-voices-voices) |
@@ -115,6 +117,7 @@ scenes:
 | `music` | `true` | the [background music](#background-music-music) during this scene: `false` for none, `{volume: dB}` to change its level here |
 | `transition` | the video's `transition` | how the video passes into this scene from the one before it, see [transitions](#transitions-transition) |
 | `carry` | `[]` | objects of the scene before that this scene starts with, where they ended (a match cut), then moves into its own targets: target names, or `"NAME -> NAME"`; see [continuity](#continuity-carrying-objects-into-the-next-scene-carry) |
+| `set` | none | a `stage` scene's set: a name from [`sets:`](#shared-casts-and-sets-include-and-sets) whose params this scene starts from; its own `params` win |
 
 Beat `id`s name the audio files: keep them when you edit the text (only that beat is
 re-voiced). A beat `text` is spoken as written; it is also the subtitle. `*word*` in it marks a
@@ -474,6 +477,84 @@ variants:
 
 Renders of a variant go to `build/<final|preview>_<variant>/`. Audio sharing rules are under
 [narration audio](#narration-audio-elevenlabs).
+
+## Shared casts and sets (`include:` and `sets:`)
+
+A cartoon series keeps its characters, voices and places in shared files, and each episode
+starts from them:
+
+```yaml
+# an episode's video.yaml (like examples/cartoon_series/episode_2, shortened)
+title: "Nib and Olla: The Weather Hat"
+include: [../shared/cast.yaml, ../shared/sets.yaml]   # relative to this file
+characters:                                           # this episode only: olla gets a scarf
+  - name: olla
+    look: {accessories: [hat, scarf]}
+scenes:
+  - id: bench
+    type: stage
+    set: workshop                                     # from sets.yaml
+    params:
+      light: night                                    # the scene's own params win
+      characters: [nib, {name: olla, at: 0.75}]
+    beats: [...]
+```
+
+```yaml
+# shared/cast.yaml
+voices:
+  nib_voice: {voice: af_sarah}
+characters:
+  - name: nib
+    voice: nib_voice
+    look: {body: round, hair: curly}
+```
+
+```yaml
+# shared/sets.yaml
+sets:
+  workshop:
+    background: ["#E9DCC9", "#F6EFE4"]
+    light: indoor
+    marks: {bench: 0.3}
+    props: [{prop: table, name: bench, at: bench}, lamp]
+```
+
+- **`include:`** a file name or a list. An included file holds only `characters`, `voices`,
+  `sets` and its own `include` (relative to it; a file reached twice is merged once). The files
+  merge in order, a file's includes before the file, the project's own config last:
+  mappings (`voices`, `sets`, a character's `look`) merge key by key; a `characters` entry with a
+  name already declared changes that character (its keys win), a new name is added; anything
+  else replaces. File paths in an included file (a character's `look.svg`, a set's `image`,
+  `layers[].image`, `props[].svg`) are relative to that file. A missing or circular include is
+  an error naming the chain (`video.yaml -> ../shared/sets.yaml -> old.yaml: include 'x.yaml' not
+  found`). A variant cannot contain `include` (it may change what the includes gave, as usual).
+- **`sets:`** named [`stage`](#stage) params: `background` / `image` / `generate`, `ground`,
+  `ground_color`, `layers`, `props`, `marks`, `light`, `wind`, `particles`, `width`, even
+  `characters` (a shopkeeper always behind the counter). A stage scene's **`set: NAME`** starts
+  its params from the set, then its own params win:
+  - `image`, `generate` and `background` are one choice: a scene that gives any of them drops
+    all three of the set's;
+  - mappings (`marks`) merge key by key;
+  - `characters`, `props`, `layers` and `particles` add to the set's (the set's first). A scene
+    entry named like a set entry changes that entry (its keys win): a character by its name, a
+    prop or layer by `name:` equal to the set entry's own or default name (`{name: tree, at:
+    0.3}` moves the set's first unnamed `tree`, `tree_2` the second). An unnamed scene prop is
+    always added. An empty list (`props: []`) clears the set's;
+  - anything else (`light: night`, `width`) replaces the set's value.
+- **`vidgen validate`** prints `included:` with the files, and each problem says where its value
+  is written: `characters[0].voice (in ../shared/cast.yaml): unknown voice ...`; a problem in a
+  set's value points at the set (`sets.workshop.props[1].prop (in ../shared/sets.yaml)`), once
+  however many scenes use it; a scene's own entry is named by its place in the scene's params.
+  `--json` problems carry `file` (`null`: the project's config file). No line numbers.
+- Renders, `vidgen tts` and `vidgen imagegen` see the merged config: editing a character, voice
+  or set in an included file re-renders the scenes that use it, makes the audio of a changed
+  voice stale and gives a changed `generate:` prompt a new picture; a set no scene uses changes
+  nothing. SVGs and pictures an included file names outside `assets/` count like assets.
+- **`vidgen screenplay --cast FILE`** reuses a cast (see
+  [cartoons from a screenplay](#cartoons-from-a-screenplay-vidgen-screenplay)).
+
+`examples/cartoon_series/` is a series of two episodes on one shared cast and two sets.
 
 ## Theme
 
@@ -4557,7 +4638,7 @@ scenes:
 
 #### Cartoons from a screenplay (`vidgen screenplay`)
 
-`vidgen screenplay FILE.md [--out DIR|FILE.yaml] [--force] [--json]` (MCP tool `screenplay`)
+`vidgen screenplay FILE.md [--out DIR|FILE.yaml] [--cast FILE] [--force] [--json]` (MCP tool `screenplay`)
 writes a stage project from a screenplay, without AI: one `stage` scene per `# Scene:` heading,
 one beat per line, `auto_direct: true`, and `# TODO:` comments for what it could not map. The
 project is checked like `vidgen validate` (exit code 1 when it finds problems). The format:
@@ -4618,6 +4699,12 @@ GUS (glad): There it is! [jumps] I left my song in that crate.
   A character who speaks or is named by a direction in a scene is on that scene's stage.
 - **Defaults**: 1920x1080 (preview 854x480), `theme: {preset: soft_pastel}`, the Kokoro narrator
   `bf_emma` at speed 0.85, `narration: {pad: 0.7}`, `auto_direct: true`; front matter keys win.
+- **`--cast FILE`**: an [include file](#shared-casts-and-sets-include-and-sets) of a series
+  (`characters`, `voices`, `sets`). The project `include:`s it (its path from the project folder)
+  instead of copying it: its characters count as declared and keep their voices (only other
+  speakers get generated looks and voices), and a `set:` line that starts with one of its set
+  names (`set: meadow; props: ball at 0.4`) writes `set: meadow` on the scene: no default sky, the
+  set's marks, props and character places count for the directions.
 
 A sample is `examples/screenplay/humming_box.md`.
 
@@ -5910,9 +5997,11 @@ it. Times are seconds (floats), paths are absolute strings, absent values are `n
 can fix: config, missing file, unknown scene, failed scene...; exit code 1) or `internal` (an
 unexpected exception; exit code 1, `details.traceback` holds the traceback). `message` is the
 text the human output prints after `error: `. `problems` lists config problems as
-`{location, message, variant}` (`location` is a config path such as `scenes[2].params.title`,
+`{location, message, variant, file}` (`location` is a config path such as `scenes[2].params.title`,
 or `null` when the problem is not about one value, e.g. an extension that fails to import;
-`variant` is the variant whose merged config has the problem, `null` for the base config).
+`variant` is the variant whose merged config has the problem, `null` for the base config;
+`file` is the [`include:` file](#shared-casts-and-sets-include-and-sets) the value is written in,
+relative to the project, `null` for the project's own config file).
 `details` is an object, empty unless stated below.
 
 ```json
@@ -5929,13 +6018,14 @@ and the other variants are still checked (the human output does the same since S
 | key | type | |
 |---|---|---|
 | `project`, `config_file` | str \| null | project folder and config file (`null`: the project could not be loaded) |
+| `included` | list | the [`include:` files](#shared-casts-and-sets-include-and-sets) merged into the config (absolute paths, in merge order); empty without `include:` |
 | `title` | str \| null | |
 | `language` | str \| null | the base config's `language` |
 | `translations` | object \| null | the base config's translation file: `{file, language, applied, stale, unknown, untranslated}` (`applied` a count, the others key lists; see [languages and translations](#languages-and-translations)); `null` without `translations:` |
 | `scenes`, `beats` | int \| null | counts in the base config |
 | `estimated_duration` | float \| null | seconds, from word counts + `narration.pad` + silent scenes' `duration` |
 | `variants` | list | every variant checked: `{name, loaded, estimated_duration, problems, language, translations}` (`problems`: how many are this variant's own; `language` / `translations` as at the top level, `null` when it does not load) |
-| `problems` | list | `{location, message, variant}` (as in `error.problems`); empty when the project is valid |
+| `problems` | list | `{location, message, variant, file}` (as in `error.problems`); empty when the project is valid |
 | `audio` | list | one per audio folder (the base config's, plus each variant with its own, see [variant audio](#narration-audio-elevenlabs)): `{variant, dir, ok, stale, missing, orphaned, beats}`; `ok`/`stale`/`missing` are counts, `orphaned` the paths of MP3s no beat uses, `beats` lists `{scene, beat, state}` in video order with `state` `ok`, `stale` or `missing` |
 | `images` | list | the [generated pictures](#generated-images-imagegen-vidgen-imagegen) of the base config, plus each variant whose pictures differ (none without `generate:` params): `{variant, generated, missing, pictures}`, `pictures` listing each distinct request once as `{key, scenes, path, exists, prompt}` |
 
@@ -6246,7 +6336,7 @@ The [draft](#drafting-from-an-outline-vidgen-plan) written by `vidgen plan`. `ok
 | `assets` | list | pictures copied into the project (`assets/<name>`) |
 | `notes` | list | TODOs about the whole video (e.g. no closing section) |
 | `scenes` | list | `{id, type, beats, words, estimated_duration, reason, todos}` per scene, in order; `reason` is the scene's `# plan:` comment, `todos` its `# TODO:` comments |
-| `problems` | list | `vidgen validate` problems of the draft, `{location, message, variant}` (normally empty) |
+| `problems` | list | `vidgen validate` problems of the draft, `{location, message, variant, file}` (normally empty) |
 
 ### `vidgen init --json`
 
@@ -6330,7 +6420,7 @@ anyway).
 | `todo_count` | int | the `# TODO:` comments in the config |
 | `notes` | list | TODOs about the whole video (e.g. voices to set by hand) |
 | `scenes` | list | `{id, beats, characters, actions, todos}` per scene: the characters on its stage, the actions written from stage directions and manners, its `# TODO:` comments |
-| `problems` | list | `vidgen validate` problems of the project, `{location, message, variant}` (normally empty) |
+| `problems` | list | `vidgen validate` problems of the project, `{location, message, variant, file}` (normally empty) |
 
 ### `vidgen lint --json`
 

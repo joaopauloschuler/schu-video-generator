@@ -1533,6 +1533,8 @@ class SceneConfig(_Strict):
     """How the video passes into this scene from the one before: cut, crossfade, fade_color, push, wipe or {type, duration, color, direction, soft}; default the video's transition."""
     carry: CarrySetting = Field(default_factory=list)
     """Objects of the scene before that this scene starts with, where they were (a match cut): its target names, or 'NAME -> NAME' to move one into a target of this scene (default: the target of the same name)."""
+    set: Identifier | None = None
+    """A stage scene's set: a name from sets: whose params (background, layers, props, marks, light...) this scene starts from; its own params win."""
 
     @model_validator(mode="before")
     @classmethod
@@ -1600,6 +1602,10 @@ class VideoConfig(_Strict):
     """Final render resolution and frame rate."""
     preview: FormatConfig = Field(default_factory=_preview_format)
     """Resolution and frame rate of `vidgen render --preview`."""
+    include: Annotated[str, Field(min_length=1)] | list[Annotated[str, Field(min_length=1)]] = Field(default_factory=list)
+    """YAML / JSON files (relative to this file, e.g. cast.yaml or ../shared/sets.yaml) whose characters, voices and sets this config starts from; this config's own entries win (a character of the same name: its keys win)."""
+    sets: dict[Identifier, dict[str, Any]] = Field(default_factory=dict)
+    """Named stage sets (name: stage params such as background, layers, props, marks, light, wind, ground_color, width) that a stage scene uses with set: NAME and may override."""
     variants: dict[Identifier, dict[str, Any]] = Field(default_factory=dict)
     """Named overrides deep-merged onto this config (mappings merge, lists and scalars replace)."""
     theme: ThemeConfig = Field(default_factory=ThemeConfig)
@@ -1663,8 +1669,9 @@ class VideoConfig(_Strict):
     @classmethod
     def _variants_cannot_nest(cls, value: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
         for name, override in value.items():
-            if "variants" in override:
-                raise ValueError(f"variant '{name}' must not contain 'variants'")
+            for key in ("variants", "include"):
+                if key in override:
+                    raise ValueError(f"variant '{name}' must not contain '{key}'")
         return value
 
     @field_validator("voices")
@@ -1705,6 +1712,11 @@ class VideoConfig(_Strict):
         if problems:
             raise ValueError("; ".join(problems))
         return value
+
+    @property
+    def include_files(self) -> list[str]:
+        """``include`` as a list (empty when unset)."""
+        return [self.include] if isinstance(self.include, str) else list(self.include)
 
     @property
     def pronunciation_files(self) -> list[str]:
@@ -1851,9 +1863,10 @@ def parse_config(data: Any, source: str = "video.yaml") -> VideoConfig:
         config = VideoConfig.model_validate(data)
     except ValidationError as exc:
         raise VidgenError(format_validation_error(exc, source, VideoConfig), problems=validation_problems(exc, model=VideoConfig, noun="key")) from None
+    from vidgen.includes import set_reference_problems
     from vidgen.voices import voice_provider_problems, voice_reference_problems
 
-    problems = voice_reference_problems(config) + voice_provider_problems(config)
+    problems = voice_reference_problems(config) + voice_provider_problems(config) + set_reference_problems(config)
     if problems:
         lines = [f"{source}: invalid config", *(f"  {problem}" for problem in problems)]
         raise VidgenError("\n".join(lines), problems=problems)

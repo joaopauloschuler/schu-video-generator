@@ -341,11 +341,12 @@ def build_server(root: Path) -> Any:
         input_path: Annotated[str | None, Field(description="screenplay (.md or .txt) under the root")] = None,
         screenplay_text: Annotated[str | None, Field(description="the screenplay itself (instead of input_path)")] = None,
         out: Annotated[str | None, Field(description="project folder to create, or a .yaml file (default: named after the input; 'screenplay' for screenplay_text)")] = None,
+        cast: Annotated[str | None, Field(description="an include file under the root (characters, voices, sets) to reuse: the project includes it; set: NAME lines use its sets")] = None,
         force: Annotated[bool, Field(description="write into a non-empty folder / replace a config")] = False,
     ) -> Any:
         if (input_path is None) == (screenplay_text is None):
             raise ToolError("give either input_path or screenplay_text")
-        options = {"out": str(where(out, "out")) if out else None, "force": force}
+        options = {"out": str(where(out, "out")) if out else None, "cast": str(where(cast, "cast")) if cast else None, "force": force}
         if input_path is not None:
             return answer(await call(ctx, args_of(["screenplay"], [str(where(input_path, "input_path"))], options)))
         if options["out"] is None:

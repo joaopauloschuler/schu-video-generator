@@ -9,6 +9,8 @@ section except ``scenes``, ``variants`` and ``lint`` (theme, narration, format..
 beats (size and modification time), the source of vidgen itself (with its bundled fonts and
 icons) and of
 the project's extension folders (file contents), and the files under ``<project>/assets`` (size and modification time).
+The ``include:`` files are part of the config (merged into it), and so are the sets a scene uses
+(in its params); the SVGs and pictures an included file names outside ``assets/`` count like assets.
 With overlays, also what the planned timeline reads from every scene (``vidgen.videoplan``).
 With transitions, the one into the next scene (it changes how the scene ends, DESIGN.md §49).
 With ``carry`` (DESIGN.md §50): what the next scene carries out of the scene (kept on screen at
@@ -29,6 +31,7 @@ from typing import Any
 
 from vidgen import __version__, carry
 from vidgen.config import SceneConfig
+from vidgen.includes import project_relative
 from vidgen.project import Project
 
 #: Bumped when the fingerprint's inputs change (old renders then count as stale).
@@ -172,9 +175,11 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
     # Speech to text (`vidgen readback`, §57) only reads the audio.
     # `imagegen` stays in: it decides which generated picture (or placeholder) a scene shows (§58);
     # the pictures themselves are files under assets/.
+    # `include` files are already merged into the config, and each scene's set into its params
+    # (§69.35): the file names and the unused sets change nothing.
     excluded = {
         "scenes", "variants", "lint", "pronunciation", "pronunciation_file", "voices", "subtitles", "music", "audio",
-        "chapters", "metadata", "thumbnail", "translations", "stt",
+        "chapters", "metadata", "thumbnail", "translations", "stt", "include", "sets",
     }
     config = project.config.model_dump(mode="json", exclude=excluded)
     assets = project.root / "assets"
@@ -185,7 +190,7 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
         "config": config,
         "readable": project.config.lint.rules.min_font.min_size,
         # A scene's `chapter:` only matters to overlays (in "overlays" below when there are any).
-        "scene": spec.model_dump(mode="json", exclude={"lint_ignore": True, "chapter": True, "music": True, "carry": True, "beats": {"__all__": set(JOIN_KEYS)}}),
+        "scene": spec.model_dump(mode="json", exclude={"lint_ignore": True, "chapter": True, "music": True, "carry": True, "set": True, "beats": {"__all__": set(JOIN_KEYS)}}),
         "audio": {beat.id: _stat(project.audio_dir / f"{beat.id}.mp3") for beat in spec.beats},
         "extensions": [_contents_digest(_files(folder, ".py"), folder) for folder in project.extension_dirs],
         "assets": {path.relative_to(assets).as_posix(): _stat(path) for path in _files(assets)},
@@ -194,6 +199,10 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
         # colour, or held longer (DESIGN.md §49)
         "next_transition": _next_transition(project, scene_id),
     }
+    named = [path for path in project.files_named_by_includes if not path.resolve().is_relative_to(assets.resolve())]
+    if named:
+        # SVGs and pictures an include: file names outside assets/, e.g. a shared folder's (§69.35)
+        data["included_files"] = {project_relative(path, project.root): _stat(path) for path in named}
     marked = {beat.id: beat.marked_text for beat in spec.beats if beat.marked_text != beat.text}
     if marked:
         # *word* marks are taken out of the beat's text but steer automatic gestures (§69.24)

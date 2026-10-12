@@ -4,12 +4,10 @@ layers that move by their factor when the camera moves (§69.7), props (§69.8),
 (§69.9), its light and shadows (§69.31) and its wind (§69.32)."""
 
 import math
-import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from fnmatch import fnmatchcase
-from pathlib import PurePosixPath
 from typing import Annotated, Any, ClassVar, Literal
 
 import numpy as np
@@ -112,10 +110,7 @@ class StageProp(SceneParams):
 
     def default_name(self) -> str:
         """The prop's name (``tree``), or the SVG's file name made an identifier (``old_well``)."""
-        if self.prop is not None:
-            return self.prop
-        stem = re.sub(r"[^A-Za-z0-9_]+", "_", PurePosixPath(self.svg or "").stem).strip("_")
-        return stem or "prop"
+        return prop_default_name(self.prop, self.svg)
 
     def height_factor(self) -> float:
         """Its height relative to a character's: the prop's usual height times ``scale``."""
@@ -343,30 +338,12 @@ class Stage(NarratedScene):
         def prop_names(self) -> list[str]:
             """Each prop's name: its own, else its default name numbered from the second prop of
             that name on (``tree``, ``tree_2``)."""
-            names: list[str] = []
-            count: dict[str, int] = {}
-            for prop in self.props:
-                if prop.name is not None:
-                    names.append(prop.name)
-                    continue
-                base = prop.default_name()
-                count[base] = count.get(base, 0) + 1
-                names.append(base + (f"_{count[base]}" if count[base] > 1 else ""))
-            return names
+            return numbered_names([(prop.name, prop.default_name()) for prop in self.props])
 
         def layer_names(self) -> list[str]:
             """Each layer's name: its own, else ``<place>_layer`` numbered from the second
             unnamed layer of a place on (``middle_layer``, ``middle_layer_2``)."""
-            names: list[str] = []
-            count: dict[str, int] = {}
-            for layer in self.layers:
-                if layer.name is not None:
-                    names.append(layer.name)
-                    continue
-                count[layer.place] = count.get(layer.place, 0) + 1
-                n = count[layer.place]
-                names.append(f"{layer.place}_layer" + (f"_{n}" if n > 1 else ""))
-            return names
+            return numbered_names([(layer.name, f"{layer.place}_layer") for layer in self.layers])
 
         def has_picture(self) -> bool:
             """Whether the background is a picture (``image`` or ``generate``)."""

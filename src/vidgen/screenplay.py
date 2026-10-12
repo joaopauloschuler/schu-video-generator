@@ -303,13 +303,22 @@ def parse_screenplay(text: str) -> Screenplay:
 @dataclass
 class SetDesign:
     """A scene's ``set:`` line read: stage ``params`` (background, ground_color, marks, props),
-    the characters placed by it (name -> place), the props' names (name -> kind) and what it did
-    not understand (``todos``)."""
+    the characters placed by it (name -> place), the props' names (name -> kind), what it did
+    not understand (``todos``) and the named set it starts from (``set_name``: a set of
+    ``--cast``, whose params are ``set_params``; DESIGN.md §69.35)."""
 
     params: dict[str, Any]
     placed: dict[str, str | float] = field(default_factory=dict)
     props: dict[str, str] = field(default_factory=dict)
     todos: list[str] = field(default_factory=list)
+    set_name: str | None = None
+    set_params: dict[str, Any] = field(default_factory=dict)
+
+    def stage_params(self) -> dict[str, Any]:
+        """The stage's params with its named set applied (:func:`vidgen.includes.apply_set`)."""
+        from vidgen.includes import apply_set
+
+        return apply_set(self.set_params, self.params).params if self.set_name else self.params
 
 
 def _place(text: str) -> str | float:
@@ -330,19 +339,30 @@ def _item(text: str) -> tuple[str, str | None, str | float | None]:
     return _ARTICLES.sub("", found.group("what").strip()).lower(), (found.group("name") or "").strip() or None, _place(at) if at else None
 
 
-def parse_set(text: str, known_characters: Mapping[str, str]) -> SetDesign:
+def parse_set(text: str, known_characters: Mapping[str, str], sets: Mapping[str, Any] | None = None) -> SetDesign:
     """A ``set:`` text: ``;``-separated ``key: value`` parts (the colon is optional): ``background``
     (a word of :data:`SKIES`, a theme colour / hex or two of them for a gradient, or a picture
     file: ``image``), ``props`` (``kind [(name)] [at place]``, comma separated), ``marks``
     (``name x``) and ``characters`` (``name at place``; names as in ``known_characters``,
-    lower-case written name -> character id)."""
+    lower-case written name -> character id). A first part naming one of ``sets`` (``set: pond;
+    props: ball``) starts from that set: no default sky, its marks and characters' places count."""
     from vidgen.cartoon.props import PROP_KINDS
 
     design = SetDesign({})
     sky = "day"
     used: dict[str, int] = {}
     slot = 0
-    for part in (p.strip() for p in text.split(";")):
+    parts = [p.strip() for p in text.split(";")]
+    named = {name.lower(): name for name in sets or {}}
+    if parts and parts[0].lower() in named:
+        design.set_name = named[parts.pop(0).lower()]
+        design.set_params = dict(sets[design.set_name]) if sets and isinstance(sets[design.set_name], Mapping) else {}
+        sky = ""
+        ids = set(known_characters.values())
+        for entry in map(_as_member, design.set_params.get("characters") or []):
+            if entry and entry["name"] in ids:
+                design.placed[entry["name"]] = entry.get("at", "centre")
+    for part in parts:
         if not part:
             continue
         found = re.match(r"^(\w+)\s*:?\s*(.*)$", part)
@@ -399,16 +419,17 @@ def parse_set(text: str, known_characters: Mapping[str, str]) -> SetDesign:
             design.todos.append(f"set: {part!r} is not background, props, marks or characters")
     if "image" not in design.params and sky:
         design.params["background"] = SKIES[sky]
-    if "image" not in design.params:
+    if "image" not in design.params and design.set_name is None:
         design.params["ground_color"] = GROUNDS.get(sky, "tertiary")
+    marks = design.stage_params().get("marks")
     for name, at in design.placed.items():
         try:
-            mark_x(at, design.params.get("marks"))
+            mark_x(at, marks)
         except ValueError as exc:
             design.todos.append(f"set: {name} at {at}: {exc}")
     for prop in design.params.get("props", []):
         try:
-            mark_x(prop["at"], design.params.get("marks"))
+            mark_x(prop["at"], marks)
         except ValueError as exc:
             design.todos.append(f"set: {prop['prop']} at {prop['at']}: {exc}")
     return design
@@ -727,20 +748,29 @@ def _speakers(play: Screenplay) -> list[str]:
     return list(dict.fromkeys(item.speaker for scene in play.scenes for item in scene.items if isinstance(item, Line) and item.speaker))
 
 
-def screenplay_project(play: Screenplay, default_title: str = "Untitled") -> ScreenplayProject:
-    """The stage project of ``play`` (see the module doc)."""
+def screenplay_project(
+    play: Screenplay, default_title: str = "Untitled", cast: Mapping[str, Any] | None = None, include: str | None = None
+) -> ScreenplayProject:
+    """The stage project of ``play`` (see the module doc). With ``cast`` (an include file read
+    by :func:`vidgen.includes.read_include_file`, ``vidgen screenplay --cast``) its characters
+    count as declared and keep their voices, its sets are what ``set: NAME`` lines name, and the
+    project includes it (``include``: its path from the project folder) instead of copying it."""
     front = dict(play.front)
+    cast = cast or {}
     declared: list[dict[str, Any]] = [dict(c) for c in front.pop("characters", None) or [] if isinstance(c, dict)]
-    declared_ids = {str(c.get("name")) for c in declared}
+    from_cast = [dict(c) for c in cast.get("characters") or [] if isinstance(c, dict) and isinstance(c.get("name"), str)]
+    declared_ids = {str(c.get("name")) for c in [*declared, *from_cast]}
     written = {character_id(s): s for s in _speakers(play)}
     names = {_display(s).lower(): character_id(s) for s in written.values()}
-    for entry in declared:
+    for entry in [*declared, *from_cast]:
         names.setdefault(str(entry.get("name", "")).replace("_", " ").lower(), str(entry.get("name")))
     last_words = [n.split()[-1] for n in names if " " in n]
     for name, cid in list(names.items()):   # "Ash" for OLD ASH, when no one else is called that
         if " " in name and last_words.count(name.split()[-1]) == 1:
             names.setdefault(name.split()[-1], cid)
     config: dict[str, Any] = {"title": front.pop("title", None) or play.title or default_title}
+    if include is not None:
+        config["include"] = [include]
     for key, value in DEFAULTS.items():
         config[key] = front.pop(key, value)
     voices: dict[str, Any] = dict(front.pop("voices", None) or {})
@@ -766,12 +796,14 @@ def screenplay_project(play: Screenplay, default_title: str = "Untitled") -> Scr
         entry["voice"] = name
     if voices:
         config["voices"] = voices
-    config["characters"] = characters
+    if characters or not from_cast:
+        config["characters"] = characters
     config["scenes"] = []
     used: dict[str, int] = {}
-    voice_of = {str(c["name"]): c.get("voice") for c in characters}
+    voice_of = {str(c["name"]): c.get("voice") for c in [*from_cast, *characters]}
+    sets = cast.get("sets") if isinstance(cast.get("sets"), Mapping) else {}
     for scene in play.scenes:
-        _add_scene(project, scene, names, voice_of, used)
+        _add_scene(project, scene, names, voice_of, used, sets)
     return project
 
 
@@ -788,12 +820,17 @@ def _scene_cast(scene: ScriptScene, names: Mapping[str, str], design: SetDesign)
     return list(dict.fromkeys(found))
 
 
-def _add_scene(project: ScreenplayProject, scene: ScriptScene, names: Mapping[str, str], voice_of: Mapping[str, Any], used: dict[str, int]) -> None:
+def _add_scene(
+    project: ScreenplayProject, scene: ScriptScene, names: Mapping[str, str], voice_of: Mapping[str, Any], used: dict[str, int], sets: Mapping[str, Any]
+) -> None:
+    from vidgen.includes import entry_names
+
     base = character_id(scene.name)
     used[base] = used.get(base, 0) + 1
     scene_id = base if used[base] == 1 else f"{base}_{used[base]}"
-    design = parse_set(scene.set_text, names)
-    marks = dict(design.params.get("marks", {}))
+    design = parse_set(scene.set_text, names, sets)
+    stage = design.stage_params()
+    marks = dict(stage.get("marks") or {})
     cast = _scene_cast(scene, names, design)
     taken = [mark_x(at, marks) for at in design.placed.values() if _valid_place(at, marks)]
     free = [m for m in PLACES.get(len(cast), ()) if all(abs(MARKS[m] - x) >= SPACING for x in taken)]
@@ -804,12 +841,16 @@ def _add_scene(project: ScreenplayProject, scene: ScriptScene, names: Mapping[st
             at = free.pop(0) if free else round((k + 1) / (len(cast) + 1), 2)
         placed.append({"name": name, "at": at})
     order = ("image", "background", "ground_color", "marks", "props")
-    params = {**{k: design.params[k] for k in order if k in design.params}, "characters": placed}
-    props = {name: mark_x(p["at"], marks) for name, p in zip(design.props, design.params.get("props", [])) if _valid_place(p["at"], marks)}
+    by_set = {e["name"]: e.get("at", "centre") for e in map(_as_member, design.set_params.get("characters") or []) if e}
+    written = [p for p in placed if by_set.get(p["name"]) != p["at"]]   # the set already places the others
+    params = {**{k: design.params[k] for k in order if k in design.params}, "characters": written}
+    stage_props = [(name, _as_prop(p)) for name, p in zip(entry_names("props", stage.get("props") or []), stage.get("props") or [])]
+    kinds = {str(name): p.get("prop") or "prop" for name, p in stage_props}
+    props = {str(name): mark_x(p.get("at", "centre"), marks) for name, p in stage_props if _valid_place(p.get("at", "centre"), marks)}
     home = {p["name"]: mark_x(p["at"], marks) for p in placed if _valid_place(p["at"], marks)}
     fmt = project.config.get("format") or {}
     width, height = (fmt.get("width", 16), fmt.get("height", 9)) if isinstance(fmt, dict) else (16, 9)
-    state = StageState(dict(home), home, props, design.props, marks, {**names}, FRAME_UNITS * max(width / height, 1.0))
+    state = StageState(dict(home), home, props, kinds, marks, {**names}, FRAME_UNITS * max(width / height, 1.0))
     narration = project.config.get("narration")
     words_per_second = float(narration.get("words_per_second", WORDS_PER_SECOND)) if isinstance(narration, dict) else WORDS_PER_SECOND
     beats: list[dict[str, Any]] = []
@@ -862,9 +903,20 @@ def _add_scene(project: ScreenplayProject, scene: ScriptScene, names: Mapping[st
     cursor = TRAILING_AT * len(beats[-1]["text"].split()) / words_per_second
     for direction, groups, unmatched in pending:
         cursor = attach(beats[-1], todos[-1], groups, unmatched, cursor, f"line {direction.line}")
-    project.config["scenes"].append({"id": scene_id, "type": "stage", "params": params, "beats": beats})
+    project.config["scenes"].append({"id": scene_id, "type": "stage", **({"set": design.set_name} if design.set_name else {}), "params": params, "beats": beats})
     project.scene_todos.append([f"TODO: {t}" for t in design.todos])
     project.beat_todos.append(todos)
+
+
+def _as_member(entry: Any) -> dict[str, Any]:
+    """A stage's character entry as a mapping (``nib`` -> ``{name: nib}``); ``{}`` if malformed."""
+    found = {"name": entry} if isinstance(entry, str) else dict(entry) if isinstance(entry, Mapping) else {}
+    return found if isinstance(found.get("name"), str) else {}
+
+
+def _as_prop(entry: Any) -> dict[str, Any]:
+    """A stage's prop entry as a mapping (``tree`` -> ``{prop: tree}``)."""
+    return {"prop": entry} if isinstance(entry, str) else dict(entry) if isinstance(entry, Mapping) else {}
 
 
 def _valid_place(at: str | float, marks: Mapping[str, float]) -> bool:

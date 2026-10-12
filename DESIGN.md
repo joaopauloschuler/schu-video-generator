@@ -165,6 +165,7 @@ src/vidgen/
   pronunciation.py        # pronunciation dictionary: TTS text of a beat, spoken -> written word map (§45; no manim)
   voicesounds.py          # [gasp] [laugh] ... in a beat's text: markers, what each voice says, sound times (§69.33; no manim)
   overlap.py              # overlap: / interrupt: beats: windows, voice shapes (dip / cut), talked-over words (§69.34; no manim)
+  includes.py             # include: files and named sets: merge rules, set: of a stage, where problems are written (§69.35; no manim)
   voices.py               # named voices: effective voice per beat, speaker labels / colours / tags (§46; no manim)
   languages.py            # language tags and per-language rules: cue words, speech rate, TTS / MP4 codes (§54; no manim)
   translation.py          # translation files: text markers, keys, extracting, applying, merging, warnings (§54; no manim)
@@ -210,6 +211,7 @@ examples/
   kphi3/                  # migrated paper video, custom scenes as extensions
   plan/                   # outline.md + the unedited draft video.yaml `vidgen plan` writes from it (golden file, §61)
   cartoon/                # a two-scene cartoon, two generated characters, Kokoro voices, no audio (§69.18)
+  cartoon_series/         # shared/cast.yaml + shared/sets.yaml included by two short episodes, no audio (§69.35)
 docs/
   CONFIG.md               # config reference
   EXTENDING.md            # how to write project extensions
@@ -767,6 +769,8 @@ Step 100 (§69.34) adds `CueStack`, `stack_cues` and `overlapping_beats`; `Narra
 `overlap` / `interrupt`, `add_narration` the argument `shape`; the `captions` overlay's karaoke
 state becomes `(caption, (word, ...))`. Compatible: beats without the keys keep their timings
 and audio (pinned in `tests/test_overlap_pinned.py`).
+Step 101 (§69.35) adds `numbered_names` and `prop_default_name` (the stage's prop and layer
+names, shared with the set merge); `Problem` gains `file`.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -982,7 +986,7 @@ the measured loudness, §48).
   removing/renaming a key or changing a value's type bumps it. `error.kind`: `usage` (argparse
   error, `command` may be `null`), `error` (`VidgenError`), `internal` (any other exception;
   `details.traceback`). Paths are absolute, times are seconds.
-- **Structured problems**: `vidgen.errors.Problem(location, message, variant=None)`
+- **Structured problems**: `vidgen.errors.Problem(location, message, variant=None, file=None)` (`file`: Step 101, §69.35)
   (`str()` = the human line, `to_json()`), and `VidgenError(message, *, problems=(),
   details=None)` (both optional; existing calls unchanged). `config.validation_problems(err,
   prefix)` (`validation_error_lines` now derives from it); `parse_config` and
@@ -4412,7 +4416,7 @@ the measured loudness, §48).
   `list_scenes`, `list_icons`, `list_themes`, `list_sfx`, `list_music`, `storyboard`, `lint`,
   `render`, `tts`, `imagegen`, `readback`, `slides`, `thumbnail`, `export`, `gallery`,
   `translate_template`; Step 83 adds `character_sheet` (§69.16), Step 90 `direct` (§69.24), Step 91
-  `screenplay` (§69.25; `input_path` or `screenplay_text`, `out`, `force`). Parameters mirror the command's options (snake_case; lists for repeatable
+  `screenplay` (§69.25; `input_path` or `screenplay_text`, `out`, `cast` (§69.35), `force`). Parameters mirror the command's options (snake_case; lists for repeatable
   options), with pydantic `Field` descriptions and bounds. Result: one text block with the
   command's `--json` document re-serialised compactly (fewer tokens), then images; a document with
   `ok` false is an `isError` result holding only the JSON. Argument errors (path outside the root,
@@ -7182,3 +7186,52 @@ A beat's `overlap: S` starts it `S` seconds before the speech of the beat before
   their hashes, the screenplay format (no syntax for overlaps yet).
 - **Not done here**: no screenplay syntax; no per-beat dip or fade settings; no overlap across
   scenes. Tests: `tests/test_overlap.py`, `tests/test_overlap_pinned.py`.
+
+### 69.35 Shared casts and sets (Step 101)
+
+A series keeps its characters, voices and places in files every episode includes
+(CONFIG "Shared casts and sets").
+
+- **Loading** (`includes.py`, no manim): `Project._load` calls `read_project_config(config_file,
+  confine)`, which reads the `include:` tree depth first (paths relative to the including file; a
+  file reached twice merged once, where first reached) and merges the files in that order, then the
+  project's own mapping: `merge_config` merges mappings key by key, `characters` entries by name
+  (a later entry's keys win; new names are added), anything else replaces. Only `include`,
+  `characters`, `voices` and `sets` may be in an included file. File paths in it (`look.svg`, a
+  set's `image`, `layers[].image`, `props[].svg`) are rewritten relative to the project and
+  collected (`ConfigSource.named_files`). Missing, unreadable, circular, non-YAML or (under `vidgen
+  mcp`) outside-the-root includes raise a `VidgenError` naming the chain of files, with a problem
+  at `include[k]` of the file that names it. Variants keep `deep_merge` (lists replace) and may not
+  contain `include`. `VideoConfig.include` / `sets` and `SceneConfig.set` are model fields (schema,
+  docs); `include` is read only by the loader.
+- **Sets**: `expand_sets` applies each scene's `set:` before validation (`apply_set`), so the
+  stage's `Params` never sees it: `image` / `generate` / `background` are one choice (a scene
+  giving one drops the set's three), mappings merge, `characters` / `props` / `layers` /
+  `particles` combine (set first; a scene entry named like a set entry, by explicit name for the
+  scene and own-or-default name for the set, `numbered_names`, changes it; `[]` clears), the rest
+  replaces. Chosen over replacing lists because a set is furniture a scene adds to; the
+  explicit-name rule keeps an unnamed `tree` in a scene a second tree. An unknown set is a config
+  problem (`set_reference_problems`, did-you-mean). Unused sets are not validated on their own.
+- **Where problems are written**: the loader records `Origin(file, location)` for every location
+  an included file, a set or a merge moved (`ConfigSource.origins`, `Project.origins`; empty
+  without includes or sets). `attributed(problems, origins)` takes the longest recorded prefix of
+  a problem's location and rewrites it: a set's value -> `sets.NAME...` in its file (dropping the
+  repeats from other scenes using the set), a character merged by name -> its own index in its
+  file, an appended scene entry -> its index in the scene. `Project._load` applies it to config
+  errors (the message is rebuilt from the problems), `cli.project_problems` to its result.
+  `Problem.file` (JSON `file`) names the included file, `None` for the project's config file;
+  `str()` shows `location (in FILE): message`. YAML line numbers are not kept (`yaml.safe_load`).
+  Warnings (strings) are not attributed.
+- **Caches**: the merged config is what renders, TTS hashes and imagegen keys see. The scene
+  fingerprint leaves `include`, `sets` and the scene's `set` out of its config dumps (the expanded
+  params carry what a set gives, so an unused set changes nothing and old renders stay valid),
+  and adds `included_files` (stats of `named_files` outside `assets/`) when there are any.
+- **`vidgen validate`** prints `included:`; `--json` gains `included` (absolute paths).
+- **`vidgen screenplay --cast FILE`** (MCP `cast`): `read_include_file` reads the cast with its
+  includes; `screenplay_project(play, title, cast, include)` writes `include: [<path from the
+  project>]`, treats the cast's characters as declared (their voices kept, not written into the
+  project), and `parse_set(text, names, sets)` reads a first part naming a cast set as `set:` (no
+  default sky; the set's marks, props and character places count for placing and directions;
+  characters the set already places at the same spot are not written again).
+- **Example**: `examples/cartoon_series/` (`shared/cast.yaml`, `shared/sets.yaml`, `episode_1`,
+  `episode_2`), both episodes validate and lint clean at preview. Tests: `tests/test_includes.py`.

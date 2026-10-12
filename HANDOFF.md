@@ -9377,3 +9377,86 @@ How to test
   test_overlap_pinned test_cartoon_lighting` (20, 26 s), `test_cartoon_lint test_timing_lint
   test_introspect test_cartoon_stage test_cartoon_foley test_subtitles` (5, 16 s). The full suite
   was not run.
+
+
+## Step 101 — Reusable casts and sets
+
+What was built
+- `include:` (top level; a file name or a list): YAML / JSON files, relative to the file that
+  names them, holding only `include`, `characters`, `voices` and `sets`. New module
+  `src/vidgen/includes.py` (no manim): `read_project_config` reads the tree depth first (a file's
+  includes before it; a file reached twice merged once) and merges with `merge_config`: mappings key
+  by key, `characters` entries by name (a later entry's keys win, new names added), anything else
+  replaces; the project's own config last. File paths in an included file (`look.svg`, a set's
+  `image`, `layers[].image`, `props[].svg`) are rewritten relative to the project and collected.
+  Errors name the chain: `video.yaml -> ../shared/sets.yaml -> loop.yaml: include '...' makes a
+  cycle: ...` / `not found (looked for ...)` / not .yaml / other keys / outside the MCP root.
+- `sets:` (top level, name -> stage params) and the scene key `set: NAME`: `expand_sets` /
+  `apply_set` start the scene's params from the set before validation. Rules: `image` /
+  `generate` / `background` are one choice (a scene giving one drops the set's three); mappings
+  (`marks`) merge; `characters`, `props`, `layers`, `particles` add to the set's (set first); a
+  scene entry with an explicit name equal to a set entry's own or default name (`tree`, `tree_2`)
+  changes that entry (its keys win); `[]` clears; anything else replaces. Unknown set: config
+  problem with did-you-mean (`set_reference_problems`, run by `parse_config`).
+- Where problems are written: `Origin(file, location)` per moved location (`Project.origins`);
+  `attributed` rewrites a problem's longest recorded prefix: a set's value -> `sets.NAME...` in its
+  file (repeats from other scenes dropped), a character merged by name -> its index in its file, a
+  scene entry appended after the set's -> its index in the scene. Applied to config errors in
+  `Project._load` (message rebuilt) and in `cli.project_problems`. `Problem.file` (JSON `file`,
+  `null` = the project's config); line `characters[0].voice (in ../shared/cast.yaml): ...`.
+- `vidgen validate` prints `included:`; `--json` adds `included`. Fingerprint: `include`, `sets`
+  and the scene's `set` left out of the dumps (expanded params carry the set; unused sets change
+  nothing; existing renders stay valid), plus `included_files` stats of files the includes name
+  outside `assets/`. TTS hashes and imagegen keys already use the merged config (tested).
+- `vidgen screenplay --cast FILE` (MCP `cast`): `read_include_file`; the project gets `include:
+  [<path from the project folder>]`, the cast's characters count as declared and keep their voices,
+  a `set:` line starting with a cast set name writes `set: NAME` (no default sky; the set's marks,
+  props and character places count for placing and directions).
+- Refactor: `numbered_names` / `prop_default_name` in `cartoon/stage.py` (exported by
+  `vidgen.api`) now name the stage's props and layers and the set merge's entries (one copy).
+- `examples/cartoon_series/`: `shared/cast.yaml` (nib, olla, two Kokoro voices), `shared/sets.yaml`
+  (`workshop`, `meadow`), `episode_1` (2 scenes, 8 beats) and `episode_2` (2 scenes, 7 beats;
+  overrides light, wind, a set prop's place and olla's accessories). Original story and characters.
+
+Files touched
+- New: `src/vidgen/includes.py`, `tests/test_includes.py`, `examples/cartoon_series/**`.
+- `src/vidgen/errors.py` (`Problem.file`), `config.py` (`include`, `sets`, `SceneConfig.set`,
+  `include_files`, variants may not contain `include`), `project.py` (loader, `origins`,
+  `included_files`, `files_named_by_includes`, `included_labels`, `attributed`), `cli.py`
+  (attribution, `included:` line, `--cast`), `jsonout.py` (`included`; screenplay `characters` from
+  the loaded project), `mcp_server.py` (`cast`), `render/fingerprint.py`, `screenplay.py`,
+  `cartoon/stage.py`, `scenes/stage.py`, `api.py`.
+- Docs: `docs/CONFIG.md` (top-level rows, scene `set`, new "Shared casts and sets", screenplay
+  `--cast`, JSON `file` / `included`), `DESIGN.md` (§2, §6.4, §11 problems, MCP, new §69.35),
+  `README.md`, guide `cartoons` (+ `AGENTS.md` copy), `tasklist.md`.
+- Tests updated: `tests/test_json_output.py` (`to_json` has `file`).
+
+Decisions / deviations
+- Paths inside an included file are relative to that file (a shared folder is self-contained);
+  the loader rewrites them, so the rest of vidgen sees project-relative paths.
+- Included files may hold only characters / voices / sets (+ include), as the task names;
+  theme, voice and the rest stay per episode.
+- A problem's location is rewritten to where the value is written instead of carrying the
+  merged location plus a note: an agent can edit it directly. Warnings (strings) are not
+  attributed. No YAML line numbers: the loader uses `yaml.safe_load`.
+- Scene entries match set entries only by an explicit name, so a second unnamed `tree` stays a
+  second tree; set entries match by their own or default (numbered) name, as the stage names them.
+- Searched first: `deep_merge` (variants) kept as is; no include / set code existed; prop and layer
+  naming was in `scenes/stage.py` only and is now shared.
+
+Known gaps / TODOs
+- Unused sets are not validated on their own (only through the scenes that use them).
+- `svg` values are not in `project.PATH_KEYS`, so `vidgen mcp` confinement does not check an SVG
+  path (pre-existing; include files themselves are checked).
+- Generated screenplay voices may repeat a cast voice; no `set:` inheritance (a set based on a set).
+
+How to test
+- `pytest tests/test_includes.py` (24 not-render, 3 s).
+- Also run (not render): `test_project test_config test_json_output test_schema test_docs test_api
+  test_cli test_cartoon_props test_cartoon_parallax test_cartoon_stage test_storyboard test_mcp
+  test_translation test_voices test_imagegen` (450, 90 s), `test_guide test_docs test_includes
+  test_screenplay test_mcp test_cartoon_holding test_cartoon_seating test_cartoon_wind test_tts
+  test_cartoon_directing` (252, 29 s); render: `test_cartoon_props test_cartoon_stage` (3, 3 s).
+- By hand: `vidgen validate` both episodes ok; `vidgen lint` at preview on scratch copies: 0
+  findings each (after moving the meadow's tree to 0.83, lengthening one line and using a tint
+  instead of `night` indoors); stills checked by eye. Full suite not run.

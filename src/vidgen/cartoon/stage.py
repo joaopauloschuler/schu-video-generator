@@ -18,8 +18,10 @@ from __future__ import annotations
 
 import difflib
 import math
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import PurePosixPath
 
 #: The built-in marks: name -> x (0 = left edge, 1 = right edge).
 MARKS: dict[str, float] = {"far_left": 0.1, "left": 0.25, "centre": 0.5, "right": 0.75, "far_right": 0.9}
@@ -87,6 +89,29 @@ def mark_x(at: str | float, marks: Mapping[str, float] | None = None) -> float:
     if not 0.0 <= at <= 1.0:
         raise ValueError(f"x position {at} is outside the frame (use 0 = left edge to 1 = right edge)")
     return float(at)
+
+
+def numbered_names(entries: Sequence[tuple[str | None, str]]) -> list[str]:
+    """Each ``(own name, default name)`` entry's name: its own, else its default numbered from the
+    second use of that default on (``tree``, ``tree_2``): the names of a stage's props and layers."""
+    names: list[str] = []
+    count: dict[str, int] = {}
+    for own, default in entries:
+        if own is not None:
+            names.append(own)
+            continue
+        count[default] = count.get(default, 0) + 1
+        names.append(default + (f"_{count[default]}" if count[default] > 1 else ""))
+    return names
+
+
+def prop_default_name(prop: str | None, svg: str | None) -> str:
+    """A prop's default name: the built-in prop's name (``tree``), or the SVG's file name made an
+    identifier (``old_well``)."""
+    if prop is not None:
+        return prop
+    stem = re.sub(r"[^A-Za-z0-9_]+", "_", PurePosixPath(svg or "").stem).strip("_")
+    return stem or "prop"
 
 
 def depth_scale(depth: float) -> float:

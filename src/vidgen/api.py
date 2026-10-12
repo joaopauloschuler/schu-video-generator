@@ -205,6 +205,8 @@ from vidgen.cartoon.stage import (  # noqa: E402
     layer_half_extent,
     layer_transform,
     mark_x,
+    numbered_names,
+    prop_default_name,
     stage_layout,
 )
 from vidgen.camera import view_center_within  # noqa: E402
@@ -568,6 +570,8 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "StagePlacement",
     "facing_towards_centre",
     "mark_x",
+    "numbered_names",
+    "prop_default_name",
     "stage_layout",
     "DEFAULT_FACTORS",
     "LAYER_PLACES",

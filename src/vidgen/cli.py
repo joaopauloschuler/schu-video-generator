@@ -158,7 +158,18 @@ def cmd_screenplay(args: argparse.Namespace) -> CommandResult:
         play = parse_screenplay(text)
     except VidgenError as exc:
         raise VidgenError(f"{source}: {exc}") from None
-    draft = screenplay_project(play, source.stem.replace("_", " ").replace("-", " ").strip().capitalize() or "Untitled")
+    output = Path(args.out) if args.out else Path(source.stem)
+    cast, include = None, None
+    if args.cast:
+        from vidgen.includes import project_relative, read_include_file
+
+        cast_file = Path(args.cast)
+        if not cast_file.is_file():
+            raise VidgenError(f"--cast {cast_file}: no such file (give an include file with characters, voices and sets)")
+        cast = read_include_file(cast_file)
+        folder = output.parent if output.suffix.lower() in (".yaml", ".yml") else output
+        include = project_relative(cast_file.resolve(), folder.resolve())
+    draft = screenplay_project(play, source.stem.replace("_", " ").replace("-", " ").strip().capitalize() or "Untitled", cast, include)
     header = [
         f"# Written by `vidgen screenplay` from {source.name}: the screenplay's scenes as stage scenes, one",
         "# beat per line. Characters without a declaration got a generated look and a voice; auto_direct adds",
@@ -170,7 +181,6 @@ def cmd_screenplay(args: argparse.Namespace) -> CommandResult:
     if draft.notes:
         key_notes["voices" if "voices" in draft.config else "voice"] = [f"TODO: {n}" for n in draft.notes]
     yaml_text = commented_yaml(draft.config, header, key_notes, scene_notes, draft.beat_todos)
-    output = Path(args.out) if args.out else Path(source.stem)
     result = write_project(yaml_text, output, force=args.force)
     project = Project.load(result.config)
     problems, _ = validate_all(project, keep_going=True)
@@ -178,7 +188,7 @@ def cmd_screenplay(args: argparse.Namespace) -> CommandResult:
         return jsonout.screenplay_document(project, draft, result, problems)
     beats = sum(len(s["beats"]) for s in draft.config["scenes"])
     print(
-        f"wrote {len(draft.config['scenes'])} stage scenes ({beats} beats), {len(draft.config['characters'])} characters, "
+        f"wrote {len(draft.config['scenes'])} stage scenes ({beats} beats), {len(project.config.characters)} characters, "
         f"about {_format_seconds(project.estimated_duration())}; {draft.todo_count} TODOs to review (# TODO: in the config)"
     )
     print(f"{'created project in' if result.created else 'wrote'} {result.root if result.created else result.config}")
@@ -199,7 +209,8 @@ def project_problems(project: Project) -> list[Problem]:
     options, scene references; DESIGN.md §41); also checks the project's ``assets/icons``,
     the sounds of the scenes' ``sfx:`` lists (§47), the ``music:`` sources (§48), a designed
     ``thumbnail:``'s icon, image, preset and background (§53) and the ``characters:`` colours,
-    SVG files (§69) and the shapes of their own poses (§69.3).
+    SVG files (§69) and the shapes of their own poses (§69.3). Each problem points where its
+    value is written: an ``include:`` file, a set (§69.35).
     """
     from vidgen import extensions, registry
     from vidgen.actions import scene_actions
@@ -259,7 +270,7 @@ def project_problems(project: Project) -> list[Problem]:
             problems.extend(Problem(loc, message) for loc, message in imagegen_problems(project))
     except VidgenError as exc:
         problems.extend(exc.problems or [Problem("", str(exc))])
-    return problems
+    return project.attributed(problems)
 
 
 def check_project(project: Project) -> list[str]:
@@ -418,6 +429,8 @@ def cmd_validate(args: argparse.Namespace) -> CommandResult:
     print(f"scenes:    {len(config.scenes)}")
     print(f"beats:     {n_beats}")
     print(f"duration:  ~{_format_seconds(project.estimated_duration())} (estimated from word count)")
+    if project.included_files:
+        print(f"included:  {', '.join(project.included_labels)}")
     if config.variants:
         print(f"variants:  {', '.join(config.variants)}")
     if config.voices:
@@ -1280,6 +1293,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("screenplay", help="a cartoon project from a screenplay: # Scene: headings, NAME: lines, [stage directions] (no AI)")
     p.add_argument("input", help="the screenplay (.md or .txt)")
     p.add_argument("--out", "-o", metavar="DIR|FILE", help="project folder to create, or a .yaml file to write (default: a folder named after INPUT)")
+    p.add_argument("--cast", metavar="FILE", help="reuse a cast: an include file (characters, voices, sets) the project includes; set: NAME lines use its sets")
     p.add_argument("--force", action="store_true", help="write into a folder that is not empty, or replace an existing config")
     p.set_defaults(func=cmd_screenplay)
 

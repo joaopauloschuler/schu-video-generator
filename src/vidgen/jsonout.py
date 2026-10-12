@@ -136,6 +136,7 @@ def validate_document(
     summary: dict[str, Any] = {
         "project": None,
         "config_file": None,
+        "included": [],
         "title": None,
         "language": None,
         "translations": None,
@@ -149,6 +150,7 @@ def validate_document(
         summary.update(
             project=_path(project.root),
             config_file=_path(project.config_file),
+            included=[_path(path) for path in project.included_files],
             title=project.config.title,
             language=project.config.language,
             translations=translation_json(project),
@@ -222,7 +224,7 @@ def screenplay_document(
         config=_path(result.config),
         created=result.created,
         title=draft.config["title"],
-        characters=[{"name": c["name"], "voice": c.get("voice"), "generated": c["name"] in draft.generated} for c in draft.config["characters"]],
+        characters=[{"name": c.name, "voice": c.voice, "generated": c.name in draft.generated} for c in project.config.characters],
         scene_count=len(scenes),
         beat_count=sum(s["beats"] for s in scenes),
         estimated_duration=round(project.estimated_duration(), 2),

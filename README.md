@@ -88,6 +88,9 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
 - **From a screenplay to a cartoon**: `vidgen screenplay story.md` turns `# Scene:` headings,
   `NAME (manner): lines`, narrator paragraphs and `[stage directions]` into `stage` scenes with
   generated characters, a voice each and automatic directing ([example](examples/screenplay)).
+- **Cartoon series**: `include: [../shared/cast.yaml, ../shared/sets.yaml]` shares characters,
+  voices and named stage sets between episodes; a scene's `set: meadow` starts from the set and
+  overrides what it needs ([example](examples/cartoon_series)).
 - **Theme presets** (`theme: {preset: warm_editorial}`; seven built in: `dark_tech`, the default
   look, `light_academic`, `high_contrast`, `warm_editorial`, `brand_neutral`, `soft_pastel`,
   `bold_neon`), all WCAG AA with colour-blind-safe palettes, and **type scales** (`compact`,
@@ -451,7 +454,7 @@ narration.
 | `vidgen character NAME [PROJECT] [--variant NAME] [--png [FILE]] [--facing right\|left]` | print a character of `characters:` (its `look:` and colours); `--png` writes one still of it (default `exports/character_<name>.png`) |
 | `vidgen character-sheet [NAME] [PROJECT] [--all] [--variant NAME] [--output FILE] [--json]` | every pose, expression and mouth shape of a character on one PNG (`exports/character_sheet_<name>.png`); no NAME: one sheet per character |
 | `vidgen direct [PROJECT] [--print] [--scene ID] [--variant NAME] [--json]` | the looks, reactions, gestures and close-ups `auto_direct` adds to the beats of `stage` scenes; `--print` writes them as YAML to paste into `video.yaml` |
-| `vidgen screenplay INPUT [--out DIR\|FILE] [--force] [--json]` | a cartoon project from a screenplay (no AI): one `stage` scene per `# Scene:` heading (`set:` line: background, props, marks), one beat per `NAME (manner): line` or narrator paragraph, `[stage directions]` mapped to walks, entrances, exits, jumps, looks and gestures (others kept as `# TODO:`), generated looks and voices for undeclared characters, `auto_direct: true`; validates the project |
+| `vidgen screenplay INPUT [--out DIR\|FILE] [--cast FILE] [--force] [--json]` | a cartoon project from a screenplay (no AI): one `stage` scene per `# Scene:` heading (`set:` line: background, props, marks), one beat per `NAME (manner): line` or narrator paragraph, `[stage directions]` mapped to walks, entrances, exits, jumps, looks and gestures (others kept as `# TODO:`), generated looks and voices for undeclared characters (`--cast`: include a series' cast and sets), `auto_direct: true`; validates the project |
 | `vidgen slides [PROJECT] [--format html\|pdf] [--variant NAME] [--preview \| --final] [--mode beat\|scene] [--per-beat N] [--overlays \| --no-overlays] [--no-dedupe] [--image-format webp\|jpeg\|png] [--quality Q] [--max-width PX] [--audio] [--separate] [--notes] [--title-page] [--paper a4\|letter] [--output FILE] [--jobs N] [--force] [--output-dir DIR] [--json]` | one self-contained HTML slide deck in `exports/`: a slide per beat (or scene) from the stills, the narration as speaker notes, keyboard navigation, overview, fullscreen, optional narrated play mode; `--format pdf`: a PDF (slide pages or `--notes` pages, `--title-page`, bookmarks by chapter; needs `schu-video-generator[pdf]`) |
 
 `PROJECT` is a project folder or its config file (default: the current folder).
@@ -546,6 +549,9 @@ my_video/
 - [examples/screenplay](examples/screenplay) — "The Humming Box", a screenplay with three original
   characters (`humming_box.md`); `vidgen screenplay examples/screenplay/humming_box.md --out
   humming_box` makes a 53-second, two-scene cartoon project from it that validates and lints clean.
+- [examples/cartoon_series](examples/cartoon_series) — two short episodes of "Nib and Olla" that
+  include one shared cast (`shared/cast.yaml`) and two sets (`shared/sets.yaml`), each episode
+  overriding the light, a prop or a character for itself; both validate and lint clean.
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.

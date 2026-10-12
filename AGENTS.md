@@ -840,6 +840,16 @@ at, point at, wave, nod, shrug and shake head (on its own line: at the next line
 line: at that word), except a voice sound such as `[laugh]` inside a line, which stays in the
 line. `docs/CONFIG.md` "Cartoons from a screenplay" has the whole format.
 
+**A series: one cast, shared sets.** Put the characters and their voices in `shared/cast.yaml`
+and the places in `shared/sets.yaml` (`sets: {meadow: {background, props, marks, light...}}`);
+each episode writes `include: [../shared/cast.yaml, ../shared/sets.yaml]` and a stage scene
+`set: meadow` with only what differs in its `params` (`light: sunset`, its characters). The
+scene's own params win; props, layers and characters add to the set's (`{name: tree, at: 0.3}`
+moves the set's tree); an episode's `characters:` entry of a cast name changes that character
+for the episode. `vidgen validate` names the file a problem is in; `vidgen screenplay story.md
+--cast shared/cast.yaml` writes an episode that includes the cast and turns `set: meadow` lines
+into the set. `examples/cartoon_series/` shows it (CONFIG "Shared casts and sets").
+
 **Comic timing.**
 - **Short lines**: one line per beat, one speaker per beat (the beat's `voice`), 6–12 words.
   Kokoro needs about 8 words to sound natural, and a two-word beat with actions trips

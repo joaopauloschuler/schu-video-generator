@@ -522,10 +522,10 @@ memory cap, targeted tests, original characters only). Each step updates the gui
 - [x] Tests: timeline maths, mix plan, caption layout (no render) (`tests/test_overlap.py`: 14 without rendering, 2 tiny renders; `tests/test_overlap_pinned.py`: plan and rendered timings pinned from HEAD e312f91, every WAV Manim gets equal to the plain decode; also the Step 99 finding: the wind's updater removes itself once nothing can move, tested)
 
 ### Step 101 — Reusable casts and sets
-- [ ] `include: [cast.yaml, sets.yaml]` (paths relative to the project, or a shared folder): `characters:`, `voices:` and named `sets:` (background, layers, props, marks, light) that a stage uses with `set: <name>` and may override
-- [ ] Validate reports which file a problem came from; fingerprints include the included files; `vidgen screenplay --cast cast.yaml` reuses a cast
-- [ ] An `examples/cartoon_series/` with a shared cast and two short episodes (no audio committed)
-- [ ] Tests: merge rules, overrides, error locations
+- [x] `include: [cast.yaml, sets.yaml]` (paths relative to the project, or a shared folder): `characters:`, `voices:` and named `sets:` (background, layers, props, marks, light) that a stage uses with `set: <name>` and may override (`vidgen/includes.py`; paths relative to the including file, nested includes, a file reached twice merged once; characters merge by name; scene key `set:`; the scene's params win: one backdrop choice, marks merge, characters / props / layers / particles add to the set's, a named entry changes the set's entry, `[]` clears; DESIGN §69.35)
+- [x] Validate reports which file a problem came from; fingerprints include the included files; `vidgen screenplay --cast cast.yaml` reuses a cast (`Problem.file`, `(in FILE)` in the line, a set's value at `sets.NAME...`; no YAML line numbers (the loader does not keep them); missing / circular includes name the chain; TTS hashes and imagegen keys follow the merged config; `--cast` also in the MCP `screenplay` tool, `set: NAME` lines use the cast's sets)
+- [x] An `examples/cartoon_series/` with a shared cast and two short episodes (no audio committed) (both validate and lint clean at preview)
+- [x] Tests: merge rules, overrides, error locations (`tests/test_includes.py`: 24, no render)
 
 ### Step 102 — Review of Phase I
 - [ ] End to end: the screenplay example → project → validate, lint, storyboard, sheets, a preview render; examples/cartoon with `auto_direct`; real Kokoro narration on one example rendered at 720p and checked by eye; docs consistency; Phase I gaps moved to the Backlog; full suite only if the owner asks
