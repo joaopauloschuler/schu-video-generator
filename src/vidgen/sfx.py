@@ -29,7 +29,7 @@ import re
 import wave
 import zlib
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -364,6 +364,91 @@ def _thud(s: Synth) -> np.ndarray:
     return body + (0.15 + 0.35 * s.intensity) * knock
 
 
+def _normalized(x: np.ndarray) -> np.ndarray:
+    return x / max(float(np.max(np.abs(x))), 1e-9)
+
+
+def _footstep(s: Synth) -> np.ndarray:
+    t = s.t
+    scale = s.duration / 0.14
+    heel = _normalized(_filtered(s.rng.standard_normal(s.n), lambda f: _band(f, 260 * s.ratio, 0.7))) * _decay(t, 0.0015, 0.018 * scale)
+    thump = np.sin(_tone(95 * s.ratio * (1 + 0.5 * np.exp(-t / 0.01)), s.n)) * _decay(t, 0.002, 0.03 * scale)
+    scuff = _normalized(_filtered(s.rng.standard_normal(s.n), lambda f: _band(f, 1800 * s.ratio * 2 ** (s.intensity - 0.5), 0.8)))
+    scuff_start, scuff_length = 0.035 * scale, 0.07 * scale
+    scuff *= _bump(np.clip((t - scuff_start) / scuff_length, 0.0, 1.0), 0.3)
+    return heel + 0.6 * thump + (0.12 + 0.2 * s.intensity) * scuff
+
+
+def _boing(s: Synth) -> np.ndarray:
+    t = s.t
+    scale = s.duration / 0.5
+    wobble = 1 + 0.07 * np.exp(-t / (0.18 * scale)) * np.sin(2 * np.pi * 12 * t)
+    phase = _tone(140 * s.ratio * (1 + 0.85 * (1 - np.exp(-t / (0.06 * scale)))) * wobble, s.n)
+    tone = np.sin(phase) + (0.3 + 0.3 * s.intensity) * np.sin(2 * phase) + (0.1 + 0.15 * s.intensity) * np.sin(3 * phase)
+    return tone * _decay(t, 0.003, 0.16 * scale)
+
+
+def _harmonic_tone(phase: np.ndarray, brightness: np.ndarray | float, harmonics: int, tilt: float) -> np.ndarray:
+    """A tone of ``harmonics`` partials of ``phase``: partial ``h`` at ``brightness ** (h - 1) /
+    h ** tilt`` (brightness 0..1, constant or per sample: a brass or muted-horn timbre)."""
+    return sum(np.asarray(brightness) ** (h - 1) / h**tilt * np.sin(h * phase) for h in range(1, harmonics + 1))
+
+
+def _sting_reveal(s: Synth) -> np.ndarray:
+    scale = s.duration / 1.4
+    out = np.zeros(s.n)
+    bright = 0.45 + 0.3 * s.intensity
+    for start, freq, amp, tau in ((0.0, 392.0, 0.6, 0.06), *((0.14, f, 0.5, 0.5) for f in (523.25, 659.26, 783.99, 1046.5))):
+        k = int(start * scale * RATE)
+        m = s.n - k
+        t = np.arange(m) / RATE
+        out[k:] += amp * _harmonic_tone(_tone(freq * s.ratio, m), bright, 8, 1.3) * _decay(t, 0.012, tau * scale)
+    k = int(0.14 * scale * RATE)
+    out[k:] += 0.25 * _bell(s.n - k, 2093.0 * s.ratio, s.intensity, 0.5 * scale, _SOFT_BELL)
+    return _filtered(out, lambda f: _lowpass(f, 6000 * s.ratio, 2))
+
+
+def _drum(n: int, high: float, low: float, tau: float) -> np.ndarray:
+    """A tom hit: a sine dropping from ``high`` to ``low`` Hz, decaying with ``tau`` seconds."""
+    t = np.arange(n) / RATE
+    return np.sin(_tone(low + (high - low) * np.exp(-t / 0.04), n)) * _decay(t, 0.001, tau)
+
+
+def _sting_comic(s: Synth) -> np.ndarray:
+    scale = s.duration / 1.1
+    out = np.zeros(s.n)
+    for start, high, low in ((0.0, 200.0, 130.0), (0.15, 150.0, 100.0)):
+        k = int(start * scale * RATE)
+        out[k:] += _drum(s.n - k, high * s.ratio, low * s.ratio, 0.12 * scale)
+    k = int(0.33 * scale * RATE)
+    t = np.arange(s.n - k) / RATE
+    noise = s.rng.standard_normal(s.n - k)
+    cymbal = _normalized(_filtered(noise, lambda f: _band(f, 7500 * s.ratio, 0.5) * _highpass(f, 4000 * s.ratio, 2)))
+    out[k:] += (0.5 + 0.4 * s.intensity) * cymbal * _decay(t, 0.001, 0.25 * scale)
+    return out
+
+
+def _sting_sad(s: Synth) -> np.ndarray:
+    scale = s.duration / 2.2
+    out = np.zeros(s.n)
+    notes = ((0.0, 233.08, 0.38), (0.42, 220.0, 0.38), (0.84, 207.65, 0.38), (1.26, 196.0, 0.94))
+    for k, (start, freq, length) in enumerate(notes):
+        a = int(start * scale * RATE)
+        m = min(int(length * scale * RATE), s.n - a)
+        t = np.arange(m) / RATE
+        u = t / max(t[-1], 1e-9)
+        last = k == len(notes) - 1
+        if last:  # a long falling note with a slow vibrato, the mute opening once
+            freq_curve = freq * s.ratio * (1 - 0.03 * u) * (1 + 0.012 * np.sin(2 * np.pi * 5.5 * t) * np.clip((t - 0.15) / 0.2, 0, 1))
+            opening = _bump(u, 0.3)
+        else:  # "wah": the mute opens and closes over the note
+            freq_curve = np.full(m, freq * s.ratio)
+            opening = np.sin(np.pi * u)
+        bright = 0.2 + (0.3 + 0.25 * s.intensity) * opening
+        out[a : a + m] += _harmonic_tone(_tone(freq_curve, m), bright, 10, 0.5) * _fades(m, 0.025, 0.4 if last else 0.06)
+    return _filtered(out, lambda f: _lowpass(f, 3000 * s.ratio, 2))
+
+
 @dataclass(frozen=True)
 class BuiltinSound:
     """A built-in sound: its generator, default ``duration`` and allowed range (s), and a precise
@@ -447,8 +532,41 @@ BUILTIN_SOUNDS: dict[str, BuiltinSound] = {
             "~320 Hz, decaying in ~0.15 s; felt more than heard on small speakers.",
             "something heavy landing, a big number or a final statement",
         ),
+        BuiltinSound(
+            "footstep", _footstep, 0.14, (0.06, 0.4),
+            "One soft footstep: a muffled heel knock (noise around 260 Hz with a low 95 Hz thump) "
+            "decaying in ~20 ms, then a faint scuff of the sole (noise around 1.8 kHz).",
+            "a character's step; stage walks play one per footfall (foley)",
+        ),
+        BuiltinSound(
+            "boing", _boing, 0.5, (0.2, 1.5),
+            "A cartoon spring: a twangy tone gliding up from ~140 Hz to ~260 Hz with a fast 12 Hz "
+            "wobble that dies away, decaying over about its length.",
+            "a jump, a bounce, something springy (stage jumps play it: foley)",
+        ),
+        BuiltinSound(
+            "sting_reveal", _sting_reveal, 1.4, (0.6, 4.0),
+            "A short 'ta-da' music sting: a brassy pickup note G4, then a bright C major chord "
+            "(C5 E5 G5 C6) with a soft high bell, ringing out over about a second.",
+            "a reveal or a triumphant moment (beat sting: reveal)",
+        ),
+        BuiltinSound(
+            "sting_comic", _sting_comic, 1.1, (0.6, 3.0),
+            "A comedy drum sting, 'ba-dum-tss': two tom hits falling in pitch (~200 then ~150 Hz) "
+            "150 ms apart, then a splashy cymbal (noise around 7.5 kHz) decaying in ~0.3 s.",
+            "right after a punchline (beat sting: comic)",
+        ),
+        BuiltinSound(
+            "sting_sad", _sting_sad, 2.2, (1.2, 5.0),
+            "A 'sad trombone' sting, 'wah wah wah waaah': four muted brass notes falling by "
+            "semitones from B-flat3 to G3, each opening and closing like a wah mute; the last "
+            "one long, sagging and wobbling.",
+            "a failure or a let-down, played for laughs (beat sting: sad)",
+        ),
     )
 }
+#: The music stings of a beat's ``sting:`` (DESIGN.md §69.19): kind -> built-in sound.
+STING_SOUNDS: dict[str, str] = {"reveal": "sting_reveal", "comic": "sting_comic", "sad": "sting_sad"}
 
 
 @lru_cache(maxsize=128)
@@ -650,7 +768,8 @@ def sound_entries(library: SoundLibrary, preview_dir: Path | None = None) -> lis
 class SfxEvent:
     """One sound effect of a scene: when (``time``, seconds), which ``sound``, ``gain`` (dB),
     ``pan`` (-1 left to 1 right), ``align`` (``start``: it starts at ``time``; ``end``: it ends
-    there), the sound's ``params`` and the ``beat`` it belongs to (``None``: none)."""
+    there), the sound's ``params``, the ``beat`` it belongs to (``None``: none) and ``duck``:
+    whether it ducks under the narration (a beat's music sting, DESIGN.md §69.19)."""
 
     time: float
     sound: str
@@ -659,10 +778,11 @@ class SfxEvent:
     align: str = "start"
     params: Mapping[str, Any] = field(default_factory=dict)
     beat: str | None = None
+    duck: bool = False
 
     def to_json(self) -> dict[str, Any]:
-        """``{time, sound, gain, pan, align, params, beat}``."""
-        return {
+        """``{time, sound, gain, pan, align, params, beat}``, plus ``duck: true`` when it ducks."""
+        data = {
             "time": round(self.time, 6),
             "sound": self.sound,
             "gain": self.gain,
@@ -671,18 +791,21 @@ class SfxEvent:
             "params": dict(self.params),
             "beat": self.beat,
         }
+        if self.duck:
+            data["duck"] = True
+        return data
 
     @classmethod
     def from_json(cls, data: Mapping[str, Any]) -> SfxEvent:
         """The event of :meth:`to_json`."""
         return cls(
             float(data["time"]), str(data["sound"]), float(data.get("gain", 0.0)), float(data.get("pan", 0.0)),
-            str(data.get("align", "start")), dict(data.get("params") or {}), data.get("beat"),
+            str(data.get("align", "start")), dict(data.get("params") or {}), data.get("beat"), bool(data.get("duck", False)),
         )
 
     def shifted(self, offset: float) -> SfxEvent:
         """The same event ``offset`` seconds later (scene time → video time)."""
-        return SfxEvent(self.time + offset, self.sound, self.gain, self.pan, self.align, self.params, self.beat)
+        return replace(self, time=self.time + offset)
 
 
 def stereo(samples: np.ndarray, gain_db: float = 0.0, pan: float = 0.0) -> np.ndarray:
@@ -708,11 +831,30 @@ def placed(event: SfxEvent, library: SoundLibrary, master_db: float = 0.0) -> tu
     return start, data
 
 
-def write_track(path: Path, events: Sequence[SfxEvent], samples: int, library: SoundLibrary, master_db: float = 0.0) -> None:
+def ducked(start: int, data: np.ndarray, ducking_db: np.ndarray) -> np.ndarray:
+    """``data`` (``(n, 2)``, from sample ``start`` of the track) times the ducking gain
+    ``ducking_db`` (dB per 10 ms frame of the track, :func:`vidgen.mix.duck_curve`), interpolated
+    per sample."""
+    frames = np.arange(start, start + len(data)) / (RATE // 100)
+    gain_db = np.interp(frames, np.arange(len(ducking_db)), ducking_db)
+    return (data * (10 ** (gain_db / 20))[:, None]).astype(np.float32)
+
+
+def write_track(
+    path: Path,
+    events: Sequence[SfxEvent],
+    samples: int,
+    library: SoundLibrary,
+    master_db: float = 0.0,
+    ducking_db: np.ndarray | None = None,
+) -> None:
     """Write ``path``: a 48 kHz stereo 16-bit WAV of exactly ``samples`` samples holding the
     events (video times) at their sample positions; written in 10 s blocks (a long video's track
-    never sits in memory whole); sums beyond full scale are clipped."""
+    never sits in memory whole); sums beyond full scale are clipped. Events with ``duck`` are
+    scaled by ``ducking_db`` (dB per 10 ms frame; ``None``: not ducked)."""
     sounds = [placed(e, library, master_db) for e in events]
+    if ducking_db is not None:
+        sounds = [(start, ducked(start, data, ducking_db)) if e.duck else (start, data) for e, (start, data) in zip(events, sounds)]
     path.parent.mkdir(parents=True, exist_ok=True)
     with wave.open(str(path), "wb") as out:
         out.setnchannels(2)

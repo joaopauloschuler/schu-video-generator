@@ -614,7 +614,12 @@ Unknown sounds and bad values raise `VidgenError`. `self.sounds` is the scene's 
 (`names()`, `knows(name)`); `synthesize(name, duration, pitch, intensity)` returns a built-in
 sound's samples (48 kHz mono float32) if you want to analyse or mix one yourself. A scene type
 that should make a sound when it starts with `sfx: {auto: true}` sets the class attribute
-`entrance_sfx = ("whoosh", -3.0)` (sound, gain in dB), as `chapter` does.
+`entrance_sfx = ("whoosh", -3.0)` (sound, gain in dB), as `chapter` does. A scene type that
+wants sounds tied to the beat actions overrides `action_foley(self, action, options, animations,
+start, seconds)`: the action runner calls it for each built-in action as it starts playing, with
+its scene start time and the seconds it plays (after any shortening); the base class does
+nothing, `stage` plays its foley through the pure `foley_cues(PlayedAction(...))` (docs/CONFIG.md
+"Foley and music stings").
 
 ```python
 @scene("countdown")

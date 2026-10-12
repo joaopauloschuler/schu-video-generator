@@ -204,7 +204,8 @@ class Stage(NarratedScene):
     the ones its ``say`` action names; the acting actions (``say``, ``look_at``, ``turn``,
     ``emote``, ``pose``, ``react``) change the characters during the beats, and the moving ones
     (``walk_to``, ``enter``, ``exit``, ``gesture``, ``jump``) move them. A character with an
-    ``enter`` action waits off stage until it enters.
+    ``enter`` action waits off stage until it enters. Walks, entrances, exits, jumps and a
+    surprised face make their own sounds (foley; ``foley: false`` turns them off).
 
     The ``keyframes`` and ``move_along`` actions move a character, a prop or a character's part
     by keys or along a path.
@@ -245,6 +246,8 @@ class Stage(NarratedScene):
         """Height of a character at depth 0, as a fraction of the frame's shorter side."""
         idle: bool = True
         """false: the characters do not breathe, sway or blink in this scene."""
+        foley: bool | None = None
+        """Sounds for the characters' actions (footsteps, whoosh on enter / exit, boing on jump, pop on a surprised face): false for none in this scene; default: the video's foley (on)."""
         cartoon_motion: MotionSetting | None = None
         """Animation principles for the characters in this scene (anticipation, squash and stretch, overshoot and settle, follow-through): lively, calm or none; a character's own setting wins; default: the video's (lively)."""
         width: float = Field(1.0, ge=1.0, le=4.0)
@@ -372,6 +375,26 @@ class Stage(NarratedScene):
         for figure, track in speakers:
             if figure.lip_sync_track is track:  # not taken over by a later lip sync
                 figure.stop_lip_sync()
+
+    def action_foley(self, action: str, options: Any, animations: Any, start: float, seconds: float) -> None:
+        """The sounds of a character's action as it plays (DESIGN.md §69.19): footsteps on
+        walks, a whoosh on enter / exit, a boing on jump, a pop on a surprised face
+        (:func:`foley_cues`); none with ``foley: false`` (the stage's, else the video's). A
+        project file with a sound's name plays as it is (without the cue's params)."""
+        on = self.params.foley if self.params.foley is not None else self.project.config.foley
+        if not on:
+            return
+        expression = options.to if action == "emote" else getattr(options, "expression", None) if action == "react" else None
+        for anim in animations:
+            if isinstance(anim, Walk):
+                played = PlayedAction(action, start, seconds, heights=anim.heights, phases=anim.phases)
+            elif isinstance(anim, Jump):
+                played = PlayedAction(action, start, seconds, phases=anim.phases)
+            else:
+                played = PlayedAction(action, start, seconds, expression=expression)
+            for cue in foley_cues(played):
+                params = {} if self.sounds.file(cue.sound) is not None else cue.params
+                self.sfx(cue.sound, max(cue.time, 0.0), gain=cue.gain, align=cue.align, **params)
 
     @classmethod
     def camera_place(cls, params: Any, place: str | float) -> float:

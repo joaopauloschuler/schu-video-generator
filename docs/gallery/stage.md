@@ -59,6 +59,7 @@ scenes:
 | `characters.expression` | `str \| None` |  | The expression it starts with (neutral, happy, sad, angry, surprised, worried, thinking, or its own); none: at rest. |
 | `size` | `float` | `0.45` | Height of a character at depth 0, as a fraction of the frame's shorter side. |
 | `idle` | `bool` | `True` | false: the characters do not breathe, sway or blink in this scene. |
+| `foley` | `bool \| None` |  | Sounds for the characters' actions (footsteps, whoosh on enter / exit, boing on jump, pop on a surprised face): false for none in this scene; default: the video's foley (on). |
 | `cartoon_motion` | `'lively' \| 'calm' \| 'none' \| None` |  | Animation principles for the characters in this scene (anticipation, squash and stretch, overshoot and settle, follow-through): lively, calm or none; a character's own setting wins; default: the video's (lively). |
 | `width` | `float` | `1.0` | Width of the stage in frame widths (marks and x positions are fractions of it); wider than 1: the camera pans across it (pan, follow). |
 | `camera_at` | `str \| float` | `'centre'` | Where the camera looks at the start, on a stage wider than the frame: a mark or an x from 0 to 1 of the stage. |

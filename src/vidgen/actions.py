@@ -443,6 +443,7 @@ class ActionRunner:
             later = ids[ids.index(u.beat) + 1 :] if u.beat in ids else []
             u.until = u.config.until or u.action.default_until(later)
         self._pending: list[_Due] = []
+        self._built: list[tuple[_Due, list[Animation]]] = []  # what the phase being built applied
         self._end = 0
         self._beat = ""
         #: Seconds of the beat's remaining time the scene has committed after the current wait
@@ -565,14 +566,19 @@ class ActionRunner:
         return due.use.run_time if wanted is None else float(wanted)
 
     def _build(self, batch: list[_Due]) -> list[Animation]:
+        """The batch's animations; records in :attr:`_built` each built-in action applied with
+        the animations it made (for :meth:`NarratedScene.action_foley`)."""
         anims: list[Animation] = []
+        self._built = []
         for d in batch:
             act = d.use.action
             if d.revert and not d.use.applied:
                 continue
             made = act.revert(self.scene, d.use.targets) if d.revert else act.apply(self.scene, d.use.targets)
-            if made and not d.revert and d.use.kind.builtin and not self._has_sounds(d.use.beat):
-                self.scene.auto_sfx(d.use.kind.name)  # with sfx: {auto: true}; it plays now
+            if made and not d.revert and d.use.kind.builtin:
+                self._built.append((d, made))
+                if not self._has_sounds(d.use.beat):
+                    self.scene.auto_sfx(d.use.kind.name)  # with sfx: {auto: true}; it plays now
             anims += made
             d.use.applied = not d.revert
         return anims
@@ -594,6 +600,7 @@ class ActionRunner:
         total = sum(p[1] for p in phases)
         factor = min(1.0, remaining / (total + reserved)) if total > 0 else 1.0
         for build, natural, mid in phases:
+            self._built = []
             anims = build()
             if not anims:
                 continue
@@ -603,6 +610,8 @@ class ActionRunner:
                 continue
             if mid is not None and self.scene.capture is not None:
                 self.scene.capture.add_mid_still(self._beat, self._now(), frames, mid)
+            for d, made in self._built:  # sounds tied to the actions, timed as they play (§69.19)
+                self.scene.action_foley(d.use.kind.name, d.use.action.options, made, self._now() / fps, frames / fps)
             self.scene._requested = natural if factor < 1 - 1e-9 else None
             try:
                 self.scene.play(*anims, run_time=frames / fps)

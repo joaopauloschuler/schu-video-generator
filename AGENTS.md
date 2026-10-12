@@ -783,6 +783,11 @@ happens: `at: 0.8` lands it on the end of the line, not on its first word.
   `cartoon_motion: calm` (top level, a stage or a character) tones them down for a quiet story.
   For a move no action has, `keyframes` and `move_along` move a character, a prop or one part
   (`kit.arm_left`); `docs/CONFIG.md` "Keyframes and motion paths".
+- **Sound**: walks, entrances, exits, jumps and a `surprised` face make their own sounds
+  (foley: footsteps, whoosh, boing, pop), timed to the action; `foley: false` (top level or a
+  stage) turns them off. A beat's `sting: reveal | comic | sad` adds a short music sting
+  (`reveal` as the beat starts, `comic` and `sad` in the pause after the line), ducked under the
+  voice. One or two per cartoon, on the real punchline, or they stop being funny.
 
 **The loop for a cartoon.**
 1. `vidgen character-sheet NAME` (or `--all`): every pose, expression and mouth shape on one PNG.
@@ -831,6 +836,7 @@ scenes:
           - {look_at: moss, to: dot}
           - {react: dot, expression: worried, at: 0.8}   # in the pause after the line
       - text: "Moss was not, in fact, an expert on boxes."
+        sting: comic                                     # ba-dum-tss after the line
         actions:                                         # the narrator's aside: a close-up
           - {zoom: moss, scale: 2, at: 0.1}
           - {look_at: moss, to: camera, at: 0.4}
@@ -984,7 +990,8 @@ scenes:
 **Sound effects** (`vidgen list-sfx` describes each in words): `whoosh` (something moves in),
 `pop` (an item appears), `tick` (steps, counting), `click` (a UI click), `chime` (a key
 insight), `success` / `error` (a result), `riser` (tension before a reveal, `align: end`),
-`thud` (a big number lands), `swoosh`, `typing`. Two or three per minute, on the moments that
+`thud` (a big number lands), `swoosh`, `typing`; `footstep`, `boing` and the music stings
+`sting_reveal` / `sting_comic` / `sting_sad` are for cartoons (`vidgen guide cartoons`). Two or three per minute, on the moments that
 matter; `sfx: {auto: true}` adds soft ones to built-in reveals if you want a uniform feel.
 
 ```yaml

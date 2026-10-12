@@ -87,7 +87,8 @@ src/vidgen/
                           # (animation principles: anticipation, squash and stretch, overshoot,
                           # follow-through, cartoon_motion, §69.13; no manim), keyframes.py (keys,
                           # eases, motion paths, §69.14; no manim), spring.py (Spring: a damped
-                          # spring for secondary motion, §69.15; no manim); still.py also
+                          # spring for secondary motion, §69.15; no manim), foley.py (the sounds
+                          # of actions as they played, §69.19; no manim); still.py also
                           # draws the prop gallery and `vidgen character-sheet` (§69.16)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
@@ -678,6 +679,9 @@ Step 83 (§69.16) adds the `NarratedScene` class attribute `mid_still_actions` (
 compatible).
 Step 84 (§69.17) adds to `Character` the attributes `looked_at` and `passage` and the property
 `spoken_viseme` (all compatible).
+Step 86 (§69.19) adds `PlayedAction`, `FoleyCue`, `foley_cues`, the `NarratedScene` hook
+`action_foley(action, options, animations, start, seconds)` (does nothing by default), `Walk.heights`
+and `Walk.phases` / `Jump.phases`, and compatibly the `SfxEvent` field `duck` (default `False`).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -3136,7 +3140,7 @@ the measured loudness, §48).
 
 ## 47. Refinements (Step 44, sound effects)
 
-- **Sounds** (`vidgen/sfx.py`, no manim): eleven built-in sounds (`BUILTIN_SOUNDS`: whoosh,
+- **Sounds** (`vidgen/sfx.py`, no manim): eleven built-in sounds (five more since Step 86, §69.19) (`BUILTIN_SOUNDS`: whoosh,
   swoosh, pop, click, tick, typing, riser, chime, success, error, thud), each a deterministic
   numpy generator (`BuiltinSound(name, generate, duration, duration_range, description, use)`;
   noise from `default_rng(crc32(name))`; filters as zero-phase magnitude responses in the
@@ -5672,7 +5676,7 @@ new state an option (`- walk_to: pip` + `to: door`; `- gesture: kit` + `to: wave
   another character's is reported (`character 'pip' ends its walk on character 'kit' (60% ...)`),
   a pair that both walked once.
 - **Not done here**: changing depth while walking (`walk_to` keeps the depth); a path or curve
-  is `move_along` (§69.14, not a walk); foley (Step 86) (anticipation, squash and follow-through: §69.13); a single `legs`
+  is `move_along` (§69.14, not a walk); foley is §69.19 (anticipation, squash and follow-through: §69.13); a single `legs`
   part cannot step leg by leg (the cycle turns and narrows the pair); `enter` teleports a
   character that is on screen to the edge first; an `exit` with a camera that keeps moving can
   end in view (it is parked off stage at its end anyway). Tests: `tests/test_cartoon_moving.py`.
@@ -5999,3 +6003,75 @@ model each in `config.LintRules`. Like every still rule they read beat-end still
   installed) and `vidgen lint --fail-on warning` on the preview (timed from word counts) pass with
   no findings. The test `test_examples_validate_against_their_schema` (`tests/test_schema.py`)
   picks it up like every example folder.
+
+### 69.19 Foley and music stings (Step 86)
+
+Sounds tied to what the characters do (foley), and short music stings on beats. Both are ordinary
+sound effects (§47): `SfxEvent`s in the scene's `sfx_log`, stored in its timings and placed on the
+video's one SFX track when the scenes are joined. No audio files were added and nothing is
+downloaded: the five new sounds are built-in generators like the other eleven.
+
+- **New built-in sounds** (`sfx.BUILTIN_SOUNDS`, now 16; same finishing and level as §47, so
+  `test_sfx` checks them like the others): `footstep` (0.14 s: a heel knock, band noise at 260 Hz
+  plus a 95 Hz thump, then a faint scuff at 1.8 kHz), `boing` (0.5 s: a three-partial tone gliding
+  140 → 260 Hz with a 12 Hz wobble dying away), and three music stings, `sting_reveal` (1.4 s: a
+  brassy G4 pickup, then a C major chord C5 E5 G5 C6 of eight-partial brass tones with a soft C7
+  bell), `sting_comic` (1.1 s: two tom hits 200 → 130 and 150 → 100 Hz 150 ms apart, a cymbal of
+  noise around 7.5 kHz at 0.33 s) and `sting_sad` (2.2 s: four muted-horn notes B♭3 A3 A♭3 G3, ten
+  partials whose brightness opens and closes per note like a wah mute, the last long, sagging 3 %
+  with a 5.5 Hz vibrato). Searched first: whoosh, swoosh and pop were reused for enter, exit and
+  surprise; nothing could stand in for a step, a spring or a musical phrase.
+- **The schedule, without manim** (`cartoon/foley.py`, exported): `foley_cues(PlayedAction) ->
+  [FoleyCue]`. `PlayedAction(action, start, seconds, expression, heights, phases)` is one
+  character's action *as it played*: its scene start time and the seconds it took (after
+  `run_time_for` and any shortening to fit the beat), the expression an `emote` / `react` put on,
+  the walk's length in character heights and the wind-up / settle shares (`Phases`,
+  `cartoon_motion`). `FoleyCue(time, sound, gain, params, align)`.
+  - `walk_to`, `enter`, `exit`: a `footstep` on each footfall (`footfall_shares(heights, phases)`):
+    the walk cycle of §69.12 has the legs furthest apart at `k + 0.5` steps (`STEP_LENGTH` 0.35
+    heights), so a foot lands there; the share of the walk's time comes from inverting
+    `walk_progress` (its ease-in / ease-out is quadratic, so the inverse is closed-form), mapped
+    into the move between the wind-up and the settle; plus one softer step (`intensity` 0.3) when
+    the walk stops at least `LAST_STEP_MIN` 0.25 steps after the last footfall (the feet come
+    together). Feet alternate `pitch` 0 / −1.5 semitones, `intensity` 0.5 / 0.4; −5 dB.
+    `enter` adds a `whoosh` (−6 dB) at its start, `exit` a `swoosh` (−6 dB) ending (`align: end`)
+    when the walk ends, just beyond the view.
+  - `jump`: a `boing` (−3 dB) at take-off, after the crouch (`phases.before`).
+  - `emote` / `react` putting on `surprised`: a `pop` (−3 dB) at its start.
+  - Other actions: nothing. Gestures were left silent (not asked for; a wave has no natural sound).
+- **Timing from the real run**: as Step 83 found, the times an action plays are only known in
+  `ActionRunner._run` (after `run_time_for`, the batch split and the beat's shortening).
+  `_build` records each built-in action it applied with the animations it made (`_built`);
+  `_run`, right before `scene.play`, calls `scene.action_foley(name, options, animations,
+  start=now, seconds=frames / fps)` for each. Not for actions applied without animation at a
+  beat's end (they make no sound) nor for undoing. `NarratedScene.action_foley` does nothing;
+  `Stage.action_foley` builds one `PlayedAction` per animation (`Walk.heights` / `Walk.phases`,
+  `Jump.phases`, the new public read-outs of what the animations computed) and records each cue
+  with `self.sfx`, without `params` when the project's `assets/sfx` replaces that sound.
+- **Switch**: top-level `foley: true` (`VideoConfig.foley`) and a `stage` param `foley: bool |
+  None` (none: the video's). Part of the config, so of the render fingerprint (the events are
+  recorded by the render, like the `sfx` action's).
+- **Music stings**: a beat's `sting:` (`BeatConfig.sting`, `StingSetting`: a kind `reveal |
+  comic | sad` or `StingCue(kind, at, gain)`; `StingCue.placed_at`: `at`, else `start` for reveal
+  and `end` for comic / sad). `NarratedScene.narrate` records it when the beat starts:
+  `STING_SOUNDS[kind]` at the beat's start, or at start + `d` (the end of its narration, before
+  `narration.pad`), with `duck` set. Any scene type, since every beat is narrated by `narrate`.
+- **Ducking, the existing path**: `SfxEvent.duck` (JSON `duck: true` only when set, so other
+  events keep their shape). `join_scenes`, when any event ducks, computes
+  `mix.sting_ducking(project, {"scenes": ...}, samples)` = `duck_curve(speech_spans(...),
+  frames, STING_DUCK)`: the music's own curve and narration spans (§48) with
+  `STING_DUCK = {depth 6, attack 0.15, release 0.3, hold 0}`, and passes it to
+  `sfx.write_track(..., ducking_db=)`, which scales the ducked events by it (`ducked`, per sample).
+  **Decision**: lighter and quicker than the music's 12 dB / 1.5 s hold, since a sting lasts
+  1–2.5 s and with that hold it would stay down through every pause between lines. The stings stay
+  on the SFX track (not the music track): they are events at beat times, they must sound with or
+  without `music:`, and the SFX track already carries per-event gains.
+- **Docs**: CONFIG.md "Foley and music stings" (under Sound effects), the sounds table, the `foley`
+  top-level and stage rows, the beat `sting` key; guide topic `cartoons` ("Sound" bullet, a
+  `sting` in its example); EXTENDING.md (`action_foley`).
+- **Not done here**: no panning by where the character stands; footsteps do not change with
+  depth, speed or the ground; no landing sound for a jump; gestures, `pose`, `look_at`, keyed moves
+  and particles make no sound; in a preview timed from word counts every beat is "speech", so a
+  `reveal` sting at a beat's start is ducked from its first sample and an `end` sting starts ducked
+  and comes up over the 0.3 s release (checked by hand on a preview: −6.0 and −2.4 dB at the peaks). `examples/cartoon` has no
+  sting yet (its guide excerpt does). Tests: `tests/test_cartoon_foley.py`.

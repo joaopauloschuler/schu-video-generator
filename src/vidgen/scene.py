@@ -32,11 +32,11 @@ from vidgen.cartoon.visemes import VisemeTrack, beat_visemes
 from vidgen.layout import distribute
 from vidgen.overlay_layer import OverlayLayer
 from vidgen.overlays import Overlay, avoid, mobject_region, scene_overlays
-from vidgen.config import DIRECTED_TRANSITIONS, ID_PATTERN, BeatConfig, SceneConfig, SfxCue, validation_error_lines
+from vidgen.config import DIRECTED_TRANSITIONS, ID_PATTERN, BeatConfig, SceneConfig, SfxCue, StingCue, validation_error_lines
 from vidgen.errors import VidgenError
 from vidgen.imagegen import GenerateImage, generated_image
 from vidgen.project import Project
-from vidgen.sfx import AUTO_ACTION_SFX, SfxEvent, SoundLibrary, decode_audio, stereo, write_wav
+from vidgen.sfx import AUTO_ACTION_SFX, STING_SOUNDS, SfxEvent, SoundLibrary, decode_audio, stereo, write_wav
 from vidgen.speech import audio_duration
 from vidgen.theme import Theme
 from vidgen.transitions import ColorFade, has_transitions, resolve_color
@@ -565,6 +565,8 @@ class NarratedScene(MovingCameraScene):
             self.capture.begin_segment(b.id, round((d + self.pad) * config.frame_rate), include_end=False)
         self._current_beat = b.id
         self._beat_start = start
+        if b.sting is not None:
+            self._add_sting(b.sting, start + (d if b.sting.placed_at == "end" else 0.0))
         if self._actions is not None:
             self._actions.start_beat(b.id, d, self.pad)
         try:
@@ -832,8 +834,13 @@ class NarratedScene(MovingCameraScene):
         time = float(self.renderer.time) if at is None else at
         return self._add_sfx(sound, time, gain, pan, align, params, "sfx")
 
+    def _add_sting(self, sting: StingCue, time: float) -> None:
+        """Record the beat's music sting (DESIGN.md §69.19) at scene time ``time``: its built-in
+        sound (or the project's file of that name), ducked under the narration when mixed."""
+        self._add_sfx(STING_SOUNDS[sting.kind], time, sting.gain, 0.0, "start", {}, "sting", duck=True)
+
     def _add_sfx(
-        self, sound: str, time: float, gain: float, pan: float, align: str, params: Mapping[str, Any], where: str
+        self, sound: str, time: float, gain: float, pan: float, align: str, params: Mapping[str, Any], where: str, duck: bool = False
     ) -> SfxEvent:
         try:
             cue = SfxCue.model_validate({"sound": sound, "at": time, "gain": gain, "pan": pan, "align": align, "params": dict(params)})
@@ -844,7 +851,7 @@ class NarratedScene(MovingCameraScene):
         problems = self.sounds.problems(cue.sound, given)
         if problems:
             raise VidgenError(f"scene '{self.spec.id}' {where}: " + "; ".join(f"{key}: {message}" for key, message in problems))
-        event = SfxEvent(round(cue.at, 6), cue.sound, cue.gain, cue.pan, cue.align, given, self._current_beat)
+        event = SfxEvent(round(cue.at, 6), cue.sound, cue.gain, cue.pan, cue.align, given, self._current_beat, duck)
         self.sfx_log.append(event)
         return event
 
@@ -855,6 +862,12 @@ class NarratedScene(MovingCameraScene):
         if entry is not None and self.project.config.sfx.auto:
             sound, gain, params = entry
             self.sfx(sound, gain=gain, **params)
+
+    def action_foley(self, action: str, options: Any, animations: Sequence[Animation], start: float, seconds: float) -> None:
+        """Called by the action runner when the built-in beat action ``action`` (its ``options``)
+        starts playing ``animations`` at scene time ``start`` for ``seconds`` (as played, after
+        any shortening): the place for sounds tied to actions. Does nothing here; ``stage`` plays
+        its foley (DESIGN.md §69.19)."""
 
     # ----- frame -----------------------------------------------------------------------------
 

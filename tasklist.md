@@ -433,9 +433,9 @@ one.
 - [x] Copied to root `AGENTS.md` (test_guide checks it)
 
 ### Step 86 — Foley and music stings
-- [ ] Sound effects tied to actions (footsteps on `walk_to`, a whoosh on `enter` / `exit`, a pop on `emote: surprised`, a boing on `jump`) from the existing sfx library, on by default for `stage` scenes, off with `foley: false`
-- [ ] Short music stings on a beat (`sting: reveal | comic | sad`), mixed under narration with the existing ducking
-- [ ] Tests: the action → sound schedule; mixing uses the existing path
+- [x] Sound effects tied to actions (footsteps on `walk_to`, a whoosh on `enter` / `exit`, a pop on `emote: surprised`, a boing on `jump`) from the existing sfx library, on by default for `stage` scenes, off with `foley: false` (pure schedule `cartoon/foley.py` `foley_cues(PlayedAction)`, timed from the run as played: `ActionRunner._run` calls the new `NarratedScene.action_foley` hook, `Stage` records the cues as sfx events; whoosh / swoosh / pop reused, `footstep` and `boing` added as built-in generators; footsteps also on `enter` / `exit`, a `react` to `surprised` pops too; top-level `foley` and stage param `foley`; DESIGN §69.19)
+- [x] Short music stings on a beat (`sting: reveal | comic | sad`), mixed under narration with the existing ducking (`sting_reveal` / `sting_comic` / `sting_sad` built-in generators; `{kind, at: start | end, gain}`; recorded by `NarratedScene.narrate` as `SfxEvent(duck=True)` on the SFX track, scaled in `sfx.write_track` by `mix.sting_ducking` = `duck_curve(speech_spans, STING_DUCK)`: 6 dB, 0.15 / 0.3 s, no hold)
+- [x] Tests: the action → sound schedule; mixing uses the existing path (`tests/test_cartoon_foley.py`: 6 without rendering, 1 tiny render)
 
 ### Step 87 — Render speed for cartoons
 - [ ] Static background layers rendered once per scene and reused as an image; character part drawings cached by look and part (only transforms change per frame)

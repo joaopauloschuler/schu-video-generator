@@ -967,6 +967,35 @@ def _cue(value: str | SfxCue) -> SfxCue:
 SfxEntry = Annotated[Union[SoundName, SfxCue], AfterValidator(_cue)]
 
 
+#: The kinds of a beat's music sting (``sting:``; DESIGN.md §69.19).
+StingKind = Literal["reveal", "comic", "sad"]
+
+
+class StingCue(_Strict):
+    """A short music sting on a beat (``sting:``): a reveal, a comic drum hit or a sad trombone,
+    ducked under the narration like the music."""
+
+    kind: StingKind
+    """reveal (a "ta-da" chord), comic (ba-dum-tss) or sad (wah wah wah waaah)."""
+    at: Literal["start", "end"] | None = None
+    """start: as the beat starts; end: when its narration ends, in the pause after the line; default start for reveal, end for comic and sad."""
+    gain: float = Field(default=0.0, ge=-60, le=12)
+    """Level change in dB (0: about 7 dB under the narration before ducking)."""
+
+    @property
+    def placed_at(self) -> Literal["start", "end"]:
+        """``at``, or the kind's default (reveal: start; comic, sad: end)."""
+        return self.at or ("start" if self.kind == "reveal" else "end")
+
+
+def _sting(value: str | StingCue) -> StingCue:
+    return StingCue(kind=value) if isinstance(value, str) else value
+
+
+#: A beat's ``sting:``: a kind, or ``{kind, at, gain}``.
+StingSetting = Annotated[Union[StingKind, StingCue], AfterValidator(_sting)]
+
+
 class SfxConfig(_Strict):
     """Video-wide sound effect settings (DESIGN.md §47)."""
 
@@ -1268,6 +1297,8 @@ class BeatConfig(_Strict):
     """Per-beat actions on the scene's targets (reveal, dim, highlight, ...), run during this beat."""
     voice: Identifier | None = None
     """Who says this beat: a name from voices (or default: the base voice); default the scene's voice."""
+    sting: StingSetting | None = None
+    """A short music sting on this beat: reveal, comic or sad, or {kind, at: start | end, gain}; ducked under the narration."""
 
     def estimated_duration(self, words_per_second: float) -> float:
         """Speech duration estimated from the word count (no padding)."""
@@ -1420,6 +1451,8 @@ class VideoConfig(_Strict):
     """Image generation for generate: params and `vidgen imagegen`: {provider (openai or openrouter), model, size, quality, resolution, style, negative}."""
     cartoon_style: str | None = Field(default=None, min_length=1)
     """Style words added to every generate: prompt of stage scenes, so a cartoon's backgrounds look alike, e.g. "flat colours, thick outlines, soft shadows"; part of the picture's cache key."""
+    foley: bool = True
+    """Sounds for the characters' actions on stage scenes: footsteps on walks, a whoosh on enter / exit, a boing on jump, a pop on a surprised face; false: none (a stage's foley param wins)."""
     cartoon_motion: MotionSetting | None = None
     """Animation principles for every character (anticipation, squash and stretch, overshoot and settle, follow-through): lively, calm or none; a stage's or a character's own setting wins; default lively."""
     scenes: list[SceneConfig] = Field(min_length=1)

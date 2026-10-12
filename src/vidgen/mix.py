@@ -6,7 +6,8 @@ WAVs: narration and clip sound, Step 4 / 35), the *SFX* track (Step 44) and, her
 track. Music is ducked under the narration only: the key is where the narrator speaks — each
 beat from its start to the end of its speech (the MP3's trailing silence cut off; the whole beat
 for a beat without audio), pauses shorter than ``duck.hold`` filled — plus, with
-``duck.clips``, the scenes whose ``video_clip`` has sound. Sound effects never duck the music.
+``duck.clips``, the scenes whose ``video_clip`` has sound. Sound effects never duck the music;
+a beat's music sting, on the SFX track, ducks under the narration too (:func:`sting_ducking`).
 The gain curve is computed at 100 Hz (10 ms frames) and interpolated per sample: in dB, the
 music falls by ``depth`` over ``attack`` seconds *ending* where the speech starts (the mix is
 offline, so it can look ahead) and rises over ``release`` seconds after it ends, both with
@@ -50,6 +51,10 @@ FRAME = RATE // 100
 SCENE_RAMP = 0.75
 #: Look-ahead / smoothing of the true-peak limiter (samples).
 LIMITER_WINDOW = RATE // 100
+#: How a beat's music sting (DESIGN.md §69.19) ducks under the narration: by the music's
+#: ducking curve (:func:`duck_curve` over :func:`speech_spans`), lighter and quicker, and with no
+#: hold (a sting lasts 1-2.5 s; the music's 1.5 s hold would keep it down through every pause).
+STING_DUCK = DuckConfig(depth=6.0, attack=0.15, release=0.3, hold=0.0, clips=False)
 #: The limiter aims this far (dB) under ``audio.true_peak``: room for the interpolation and for
 #: the AAC encode, which moved the gallery's true peak up by 0.2 dB (Step 48).
 LIMITER_MARGIN_DB = 0.4
@@ -222,6 +227,12 @@ def speech_spans(project: Project, timings: dict[str, Any]) -> list[tuple[float,
             if end > start:
                 spans.append((start, end))
     return spans
+
+
+def sting_ducking(project: Project, timings: dict[str, Any], total: int) -> np.ndarray:
+    """The ducking gain (dB per 10 ms frame of a video of ``total`` samples) of the SFX track's
+    ducked events (a beat's ``sting``): :data:`STING_DUCK` where the narrator speaks."""
+    return duck_curve(speech_spans(project, timings), total // FRAME + 2, STING_DUCK)
 
 
 def clip_spans(project: Project, timings: dict[str, Any]) -> list[tuple[float, float]]:

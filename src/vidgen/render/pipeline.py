@@ -516,7 +516,10 @@ def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) ->
     track = padded_dir / "sfx.wav"
     remove_file(track)
     if events and not no_audio:
-        sfx.write_track(track, events, round(offset * ff.AUDIO_RATE), sfx.SoundLibrary(project.root), project.config.sfx.gain)
+        samples = round(offset * ff.AUDIO_RATE)
+        # music stings duck under the narration like the music (DESIGN.md §69.19)
+        ducking = mix.sting_ducking(project, {"scenes": scenes}, samples) if any(e.duck for e in events) else None
+        sfx.write_track(track, events, samples, sfx.SoundLibrary(project.root), project.config.sfx.gain, ducking)
     combined: dict[str, Any] = {
         "title": project.config.title,
         "variant": project.variant,

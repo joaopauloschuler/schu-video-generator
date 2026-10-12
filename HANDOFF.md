@@ -8013,3 +8013,76 @@ How to test
   examples/cartoon --jobs 1 --fail-on warning` (preview 854x480 from word counts: 0 findings; a
   first render took ~40 s), `vidgen storyboard examples/cartoon`, `vidgen character-sheet --all
   examples/cartoon` (two sheets, ~30 KB each).
+
+
+## Step 86 — Foley and music stings
+
+What was built
+- Foley on `stage` scenes: a `footstep` on each footfall of `walk_to` / `enter` / `exit`
+  (alternating feet, a softer step when the feet come together at the stop), a `whoosh` as a
+  character enters, a `swoosh` ending as it leaves the view, a `boing` at a jump's take-off (after
+  the crouch), a `pop` when `emote` / `react` puts on `surprised`. Pure schedule in the new
+  `src/vidgen/cartoon/foley.py`: `foley_cues(PlayedAction) -> [FoleyCue]`, `footfall_shares(heights,
+  phases)` (footfalls at k + 0.5 steps of the walk cycle, `walk_progress` inverted in closed form,
+  mapped between the wind-up and settle of `cartoon_motion`).
+- Timed from the real run (Step 83's finding): `ActionRunner._build` records each built-in action
+  it applied with its animations; `_run`, right before `scene.play`, calls the new hook
+  `NarratedScene.action_foley(action, options, animations, start, seconds)` with the played start
+  and seconds (after `run_time_for` and any shortening). The base does nothing; `Stage` builds a
+  `PlayedAction` per animation (`Walk.heights`, `Walk.phases`, `Jump.phases`: new read-outs) and
+  records the cues with `self.sfx` (no params when `assets/sfx` replaces the sound).
+- `foley: true` at the top level, `foley: bool | None` stage param (none: the video's).
+- Beat `sting: reveal | comic | sad` or `{kind, at: start | end, gain}` (`config.StingCue`,
+  `StingSetting`; default `at`: reveal start, comic / sad end = beat start + d, before the pad).
+  `NarratedScene.narrate` records it as an `SfxEvent` with the new field `duck=True` (any scene type).
+- Ducking through the existing path: `join_scenes` passes `mix.sting_ducking(project, {scenes},
+  samples)` = `duck_curve(speech_spans(...), frames, STING_DUCK)` (depth 6, attack 0.15, release
+  0.3, hold 0) to `sfx.write_track(..., ducking_db=)`, which scales only `duck` events (`sfx.ducked`).
+- Five new built-in generated sounds (no files, nothing downloaded): `footstep`, `boing`,
+  `sting_reveal`, `sting_comic`, `sting_sad`; `sfx.STING_SOUNDS` maps kinds to them.
+
+Files touched
+- New: `src/vidgen/cartoon/foley.py`, `tests/test_cartoon_foley.py`.
+- `src/vidgen/sfx.py`, `mix.py`, `render/pipeline.py`, `config.py`, `scene.py`, `actions.py`,
+  `cartoon/transition.py`, `scenes/stage.py`, `api.py`, `data/guide/AGENTS.md` (+ copy `AGENTS.md`:
+  cartoons "Sound" bullet, `sting: comic` in its example, a pointer in the sound topic).
+- Tests updated: `tests/test_docs.py` (`StingCue` in MODELS).
+- Docs: `docs/CONFIG.md` (top-level `foley`, beat `sting`, sounds table, new "Foley and music
+  stings", stage `foley` row, Moving note, timings `duck`), `docs/EXTENDING.md` (`action_foley`),
+  `docs/gallery/stage.md` (the `foley` param row, hand-added, not regenerated), `DESIGN.md` (§2
+  tree, API list, §47 count, §69.12 pointer, new §69.19), `tasklist.md`.
+
+Public interfaces
+- `vidgen.api`: `PlayedAction`, `FoleyCue`, `foley_cues`; `NarratedScene.action_foley` (hook);
+  `Walk.heights`, `Walk.phases`, `Jump.phases`; `SfxEvent.duck` (default False; JSON `duck: true`
+  only when set). Config: top-level `foley`, beat `sting`, stage param `foley`. Sounds listed by
+  `vidgen list-sfx` grow from 11 to 16.
+
+Decisions / deviations
+- Stings live on the SFX track as ducked events, not on the music track: they are beat-timed
+  events, must sound without `music:`, and the SFX track already places events sample-exact.
+  Their ducking reuses `duck_curve` + `speech_spans` with lighter, hold-free settings (the music's
+  1.5 s hold would keep a 1–2.5 s sting down through every pause).
+- Footsteps also on `enter` / `exit` (they are walks); exit uses `swoosh` (the library's "leaving"
+  sound) rather than `whoosh`; `react` to `surprised` pops like `emote`.
+- Searched first: reused whoosh / swoosh / pop, `duck_curve`, `speech_spans`, `write_track`,
+  `NarratedScene.sfx`, the runner's phase loop of Step 83; no footstep, spring or musical sound
+  existed, so they were synthesised like the other built-ins.
+
+Known gaps / TODOs
+- No panning by position, no depth / speed / ground variation, no landing sound, gestures and
+  keyed moves silent. In a word-count preview every beat counts as speech: a `reveal` sting at a
+  beat's start is ducked 6 dB, an `end` sting comes up over 0.3 s (by hand: −6.0 / −2.4 dB peaks).
+  `examples/cartoon` itself has no sting (the guide excerpt has one). Not listened to by a human.
+
+How to test
+- `pytest tests/test_cartoon_foley.py` (6 not-render + 1 render at 160x90, ~3 s).
+- Also run (not render): `test_sfx test_music test_api test_cartoon_moving test_cartoon_acting
+  test_actions test_config` (172, 27 s), `test_guide test_docs test_gallery test_schema
+  test_cartoon_stage test_cartoon_keyframes test_cartoon_motion test_frames test_extensions
+  test_builtin_scenes` (359, 61 s), `test_overlays test_json_output test_cli test_lint
+  test_introspect test_actions_coverage test_cartoon_lint test_cartoon_sheet` (110, 18 s); render:
+  `test_sfx test_cartoon_moving test_cartoon_acting test_cartoon_foley test_cartoon_keyframes`
+  (9, 16 s). By hand: a 96x54 preview of a two-beat `text_card` with `sting: reveal` / `comic`
+  through `render_project`: timings carry `duck: true`, `padded/sfx.wav` peaks 6.0 / 2.4 dB under
+  the raw stings.

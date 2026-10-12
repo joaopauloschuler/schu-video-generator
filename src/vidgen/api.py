@@ -127,6 +127,7 @@ from vidgen.cartoon.acting import (  # noqa: E402
 )
 from vidgen.cartoon.motion import MOTION_LEVELS, jump_motion_seconds, walk_motion_seconds  # noqa: E402
 from vidgen.cartoon.spring import Spring  # noqa: E402
+from vidgen.cartoon.foley import FoleyCue, PlayedAction, foley_cues  # noqa: E402
 from vidgen.cartoon.keyframes import (  # noqa: E402
     CHANNELS,
     DEFAULT_EASE,
@@ -406,6 +407,9 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "jump_motion_seconds",
     "walk_motion_seconds",
     "Spring",
+    "FoleyCue",
+    "PlayedAction",
+    "foley_cues",
     "CHANNELS",
     "DEFAULT_EASE",
     "EASE_NAMES",

@@ -45,6 +45,7 @@ from vidgen.cartoon.acting import (
 )
 from vidgen.cartoon.character import PART_NAMES, Character, CharacterState, PartPose
 from vidgen.cartoon.motion import (
+    Phases,
     end_fade,
     follow_angles,
     follow_through,
@@ -207,9 +208,16 @@ class Walk(Animation):
         from_x = float(character.feet()[0]) if start_x is None else float(start_x)
         walk_time = walk_seconds(self.to_x - from_x, speed)
         self._phases = walk_phases(walk_time, self.strength)
+        #: How far it walks, in its heights (from where it stands now, or ``start_x``).
+        self.heights = abs(self.to_x - from_x) / character.character_height if character.character_height > 0 else 0.0
         kwargs.setdefault("run_time", max(walk_motion_seconds(walk_time, self.strength), 1e-3))
         kwargs.setdefault("rate_func", linear)
         super().__init__(character, **kwargs)
+
+    @property
+    def phases(self) -> Phases:
+        """The shares of its time spent winding up and settling (``cartoon_motion``)."""
+        return self._phases
 
     def begin(self) -> None:
         figure = self.mobject
@@ -301,6 +309,11 @@ class Jump(Animation):
         kwargs.setdefault("run_time", jump_motion_seconds(JUMP_SECONDS, self.strength))
         kwargs.setdefault("rate_func", linear)
         super().__init__(character, **kwargs)
+
+    @property
+    def phases(self) -> Phases:
+        """The shares of its time spent crouching before take-off and landing (``cartoon_motion``)."""
+        return self._phases
 
     def begin(self) -> None:
         self.mobject.end_blink()

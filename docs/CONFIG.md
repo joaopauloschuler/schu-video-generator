@@ -56,6 +56,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `imagegen` | `{provider: openai, model: gpt-image-1, size: auto}` | image generation for `generate:` params and `vidgen imagegen`: `{provider (openai \| openrouter), model, size, quality, resolution, style, negative, svg_model}`; see [generated images](#generated-images-imagegen-vidgen-imagegen) |
 | `cartoon_style` | none | style words added to every `generate:` prompt of [`stage`](#generated-backgrounds-cartoon_style) scenes, so a cartoon's backgrounds look alike (`"flat colours, thick outlines, soft shadows"`); part of those pictures' cache key; a variant may change it |
 | `cartoon_motion` | `lively` | how characters move: `lively`, `calm` or `none` ([animation principles](#animation-principles-cartoon_motion)); a stage's or a character's own setting wins |
+| `foley` | `true` | sounds for the characters' actions on `stage` scenes (footsteps, whoosh, boing, pop); `false`: none; a stage's `foley` param wins; see [foley](#foley-and-music-stings) |
 | `scenes` | required | the scenes in order, at least one |
 
 ### Output folder (`output_dir`, `--output-dir`)
@@ -117,7 +118,9 @@ Beat `id`s name the audio files: keep them when you edit the text (only that bea
 re-voiced). A beat `text` is spoken as written; it is also the subtitle. A beat's `actions`
 (default `[]`) point at parts of the scene while it is spoken — reveal, dim, highlight — see
 [beat actions](#beat-actions). A beat's `voice` (default: its scene's) picks another speaker for
-that beat — a dialogue inside one scene, see [multiple voices](#multiple-voices-voices).
+that beat — a dialogue inside one scene, see [multiple voices](#multiple-voices-voices). A beat's
+`sting` (default none) plays a short music sting on it: `reveal`, `comic` or `sad`, or `{kind, at,
+gain}`, see [music stings](#foley-and-music-stings).
 
 ## Chapters
 
@@ -1763,6 +1766,11 @@ writes them as WAV files to listen to):
 | `success` | 0.9 s (0.4–3) | two soft bell notes, E5 then B5 | a check mark, a goal reached |
 | `error` | 0.5 s (0.3–2) | two muted notes falling G4 → E♭4 | a mistake, a failing case |
 | `thud` | 0.45 s (0.15–1.5) | a soft low impact, 110 → 55 Hz with a muffled knock | something landing, a big number |
+| `footstep` | 0.14 s (0.06–0.4) | one soft step: a muffled heel knock (~260 Hz, a 95 Hz thump), then a faint scuff | a character's step ([foley](#foley-and-music-stings)) |
+| `boing` | 0.5 s (0.2–1.5) | a twangy cartoon spring gliding up ~140 → ~260 Hz with a fast wobble | a jump, a bounce |
+| `sting_reveal` | 1.4 s (0.6–4) | a "ta-da": a brassy pickup note, then a bright C major chord with a soft bell | a reveal ([`sting: reveal`](#foley-and-music-stings)) |
+| `sting_comic` | 1.1 s (0.6–3) | "ba-dum-tss": two falling tom hits and a splashy cymbal | after a punchline (`sting: comic`) |
+| `sting_sad` | 2.2 s (1.2–5) | "wah wah wah waaah": four muted brass notes falling B♭3 → G3, the last long and wobbling | a let-down played for laughs (`sting: sad`) |
 
 | key | default | |
 |---|---|---|
@@ -1791,9 +1799,43 @@ Video-wide `sfx:`:
   (`build/.../padded/sfx.wav`, 48 kHz) and adds it to the narration when it writes the MP4 (with
   [music](#background-music-music), into the final mix; effects never duck the music).
   `--no-audio` renders have none. The sounds are listed per scene in `timings.json` (`sfx`: video
-  times, sound, gain, pan, align, params, beat).
+  times, sound, gain, pan, align, params, beat; `duck: true` on a music sting).
 - **Checks.** `vidgen validate` reports unknown sounds (with a suggestion) and params outside a
   sound's range; a sound starting after its scene ends is a render warning.
+
+### Foley and music stings
+
+**Foley.** On a [`stage`](#stage) the characters' actions make their own sounds, timed to the
+action as it plays (also when its beat speeds it up): a `footstep` on every footfall of a
+`walk_to`, `enter` or `exit` (alternating feet, a softer one when the feet come together), a
+`whoosh` as a character enters and a `swoosh` as it leaves the view, a `boing` as a `jump` takes
+off, and a `pop` when `emote` or `react` puts on the `surprised` expression. Other actions are
+silent. They are ordinary sound effects (listed in `timings.json` `sfx`, mixed like the rest):
+`sfx: {gain}` sets their level with the others, and `assets/sfx/footstep.wav` (or `boing.wav`,
+...) replaces a sound with your own. `foley: false` at the top level turns them off for the
+video, a stage's `foley: false` (or `true`) for that scene.
+
+**Music stings.** A beat's `sting` plays a short musical phrase on it:
+
+```yaml
+beats:
+  - text: "And the winner is... the box!"
+    sting: reveal                     # "ta-da", as the beat starts
+  - text: "It was empty all along."
+    sting: {kind: sad, gain: 2}       # "wah wah wah waaah", when the line ends
+```
+
+| key | default | |
+|---|---|---|
+| `kind` | required | `reveal` (`sting_reveal`: a "ta-da" chord), `comic` (`sting_comic`: ba-dum-tss) or `sad` (`sting_sad`: a sad trombone); a plain string is the kind |
+| `at` | `start` for `reveal`, `end` for `comic` and `sad` | `start`: as the beat starts; `end`: when its narration ends, in the pause after the line (the beat's `narration.pad`) |
+| `gain` | `0` | dB, -60 to 12, like a sound effect's |
+
+Stings go on the sound-effect track (any scene type) and duck under the narration like the
+music: 6 dB down while the narrator speaks, 0.15 s down before the speech starts, 0.3 s back up
+after it ends, no hold (the music's 1.5 s hold would keep a sting down through every pause). A
+sting at a beat's end therefore plays in the clear and ducks when the next line starts. In a
+preview timed from word counts (no MP3s yet) the whole beat counts as speech.
 
 ### `vidgen list-sfx`
 
@@ -3843,6 +3885,7 @@ never leaves the stage.
 | `size` | float | `0.45` | height of a character at depth 0, as a fraction of the frame's shorter side |
 | `idle` | bool | `true` | `false`: no breathing, head sway or blinking in this scene (for every character on it) |
 | `cartoon_motion` | `lively` \| `calm` \| `none` | none (the video's) | the [animation principles](#animation-principles-cartoon_motion) of the characters in this scene; a character's own setting wins |
+| `foley` | bool | none (the video's `foley`: on) | sounds for the characters' actions in this scene (footsteps, whoosh, boing, pop; [foley](#foley-and-music-stings)); `false`: none |
 | `width` | float 1–4 | `1` | width of the stage in frame widths; wider than 1: the camera pans across it (`pan`, `follow`) |
 | `camera_at` | mark \| x | `centre` | where the camera looks at the start (on a stage wider than the frame) |
 | `layers` | list | `[]` | parallax layers (below), in the order given within their place |
@@ -4074,7 +4117,8 @@ warns when a character lacks the parts a gesture needs (`point` / `wave`: an arm
 arms; `nod` / `shake_head`: a head). `vidgen lint` reports a walk that ends on another character
 (`walk_overlap`): pick another mark, or move the other character first. `vidgen storyboard` shows
 each walk, entrance, exit, gesture and jump (and `keyframes` / `move_along`) half-way as well as
-at the beat's end ([mid-action stills](#frame-stills-vidgen-render---frames)).
+at the beat's end ([mid-action stills](#frame-stills-vidgen-render---frames)). Walks, entrances,
+exits and jumps make their own sounds ([foley](#foley-and-music-stings)).
 
 ```yaml
 scenes:
