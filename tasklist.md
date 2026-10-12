@@ -559,6 +559,63 @@ forecast, wind, rain, night), and the few things it needs. Same rules as Phases 
 
 ---
 
+## Phase K — Richer cartoons (effects, rooms, depth, cards, more characters)
+
+Goal: emotions that read at a glance, indoor stories, staging in depth, cartoon-style scene
+changes and a wider range of original characters. Same rules as Phases H–J.
+
+### Step 107 — Effect symbols over characters
+- [ ] Beat action `effect: <character>, to: sweat | anger | idea | question | exclaim | sleep | hearts | stars | sparkle | tear` drawn from primitives at a spot on the head (side, above), popping in with a little bounce, following the character (walks, shots), lasting the beat or `until:`; original simple shapes, theme colours
+- [ ] Optional sound per symbol from the existing sfx library (`pop`, a short `ding` for idea, …), off with `foley: false`
+- [ ] `auto_direct` may add one with a strong expression change (surprised → exclaim, thinking → question, angry → anger), at most one per line
+- [ ] Screenplay: `[Pip has an idea]` and similar map to effects; layout dump / lint know them (no `bubble_overlap` with speech bubbles)
+- [ ] Tests: placement per head size / facing, timing, planner rules
+
+### Step 108 — Motion effects
+- [ ] Dust puffs on running starts / stops and jump landings, speed lines behind fast moves (walk faster than a threshold, throws, blown props), impact stars on a hard landing, a small "whoosh arc" on gestures with `big: true`; added by the motion code automatically (`motion_effects: true` default with `cartoon_motion: lively`), seeded
+- [ ] `run_to` as an action (a walk at running speed with a lean and longer strides)
+- [ ] Tests: when each effect fires (pure), `none` turns them off
+
+### Step 109 — Rooms (indoor sets), part 1
+- [ ] A stage `room:` setting: back wall (colour / wallpaper pattern), floor (colour / boards / tiles), skirting line at the ground line, ceiling optional; windows (sky inside follows `light:`; curtains), doors (closed / open; `enter` / `exit` through a door mark)
+- [ ] Rooms work with depth, shots, reframe, shadows, lighting (`indoor` preset); sets (`sets:`) can hold rooms
+- [ ] Tests: room geometry, window sky colour per light, door marks
+
+### Step 110 — Rooms, part 2: furniture
+- [ ] Built-in props: sofa, armchair, bed, bookshelf, kitchen counter, fridge, picture frame, rug, plant pot, clock, tv, desk with chair; seat / lean points where sensible; props can stand against the wall (`against: wall`) at a depth
+- [ ] Prop gallery still updated (small); screenplay `set:` lines can name a room and furniture
+- [ ] Tests: each builds, seat points, against-wall placement
+
+### Step 111 — Moving in depth
+- [ ] `walk_to` with `depth:` (towards or away from the camera) scaling smoothly, draw order changing mid-walk, shadows following; `to: {mark, depth}`
+- [ ] A front view: `facing: front` (and turning to it) for generated characters — symmetric face, arms at both sides; poses / gestures / lip sync work in it; SVG characters fall back to their side view
+- [ ] Tests: depth paths, draw-order switch time, front-view part layout
+
+### Step 112 — Cartoon transitions and title cards
+- [ ] Transitions `iris_out` / `iris_in` (a circle closing on a character or point, opening on the next scene), `wipe_star` (optional), with the existing transition machinery (ffmpeg paths tested on 6.1 / 7.1 / 8.x like Step 64)
+- [ ] A `card` scene type: episode title cards, "Later that day…" interstitials and an end card, cartoon styled (bold outlined text, a burst / frame), with an optional sting; screenplay `# Card: Later that day…`
+- [ ] Tests: transition filter graphs, card layout
+
+### Step 113 — More characters, part 1: bodies and clothes
+- [ ] More body shapes (pear, triangle, small / tall kid proportions), clothes (dress, overalls, coat, shorts, apron), patterns (stripes, dots), shoes, more hair (ponytail, braids, afro, bald with beard / moustache), accessories (bow, cap, backpack, necklace); all original primitives
+- [ ] Voice kinds still assigned per look; sheets and docs show them
+- [ ] Tests: every combination builds (sampled), the same parameters give the same shapes
+
+### Step 114 — More characters, part 2: original animal characters
+- [ ] `species: human | cat | dog | bird | bear | rabbit | mouse` changing head shape, ears, muzzle / beak, paws, and a tail part (springy follow-through, wind) — simple original designs, not imitating any known character
+- [ ] All actions, poses, lip sync and effects work on them; SVG naming documents `tail`
+- [ ] Tests: each species builds and poses; tail spring
+
+### Step 115 — A random, well-contrasted cast
+- [ ] `vidgen cast --random N [--seed S] [--species ...]` writes a `cast.yaml` of N characters that differ clearly (silhouette, colours, accessories, voice kind and voice); a contrast score and a lint warning when two characters of a video look too alike
+- [ ] `vidgen screenplay` uses it for undeclared characters
+- [ ] Tests: contrast score, seeded output, screenplay integration
+
+### Step 116 — Review of Phase K, with an indoor example
+- [ ] A short original example `examples/cartoon-<name>/` set mostly indoors with an animal character, effect symbols, a title card, an iris-out and moving in depth; validates and lints clean; rendered at 1280x720 with real Kokoro narration (not committed) and checked by eye; docs consistency; Phase K gaps moved to the Backlog
+
+---
+
 ## Backlog (after Step 60)
 
 Not done in the roadmap; each is one line, with where it came from. Bugs first, then quality,
