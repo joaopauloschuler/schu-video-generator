@@ -18,7 +18,7 @@ imported by vidgen itself.
 | [`vertical_scenes.py`](vertical_scenes.py) | `short_hook` and `short_end` (1 beat each) for 9:16 shorts | `vertical.py` |
 | [`video.template.yaml`](video.template.yaml) | a starter 16:9 config: theme, voice, pronunciation, music, SFX, overlays, the cold open, chapter, sources and credits cards | `cold_open_photo.py`, `science_helpers.py` |
 | [`short.template.yaml`](short.template.yaml) | a starter 9:16 short: karaoke captions with `lift`, tight pacing, hook and end scenes | `vertical.py`, `vertical_scenes.py` |
-| [`whisper_check.py`](whisper_check.py) | stand-alone pronunciation check with faster-whisper (an optional fallback for `vidgen readback`) | `pip install faster-whisper` |
+| [`whisper_check.py`](whisper_check.py) | stand-alone pronunciation check with faster-whisper (optional; `vidgen readback` is the built-in check) | `pip install faster-whisper` |
 
 ## Using them in a project
 

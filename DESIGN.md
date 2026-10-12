@@ -3902,10 +3902,12 @@ the measured loudness, §48).
   rule use it). Constructing a provider loads nothing and needs no key.
   - `faster_whisper` (`stt/faster_whisper.py`, optional extra `schu-video-generator[stt]` =
     `faster-whisper>=1.0`; not in `dev`: ~70 MB of CTranslate2 / ONNX Runtime and a model
-    download): `WhisperModel(model, device)` loaded on the first transcription, `transcribe(path,
+    download): `WhisperModel(model, device)` loaded on the first transcription, `transcribe(audio,
     language, beam_size=5, word_timestamps=True, condition_on_previous_text=False,
     vad_filter=False)` (each beat on its own, so one mistake cannot carry over; no VAD so quiet
-    words are not cut). Missing package → `VidgenError('... pip install "schu-video-generator[stt]"')`; a model
+    words are not cut). `audio` is the beat decoded by vidgen (`load_audio`: PyAV via
+    `sfx.decode_audio(path, rate=16000, mono=True)`, 1-D float32), not the path: faster-whisper's
+    own decoder passes `metadata_errors`, which PyAV 19 removed. Missing package → `VidgenError('... pip install "schu-video-generator[stt]"')`; a model
     that cannot load (download refused, bad folder) → `VidgenError` naming the model.
   - `elevenlabs` (`stt/elevenlabs.py`): `POST /v1/speech-to-text`, multipart (`model_id`
     `scribe_v1`, `language_code` when known, `timestamps_granularity=word`,

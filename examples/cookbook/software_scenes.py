@@ -100,21 +100,25 @@ class DataflowHook(NarratedScene):
         credit.move_to([self.safe_area.x1 - credit.width / 2, self.safe_area.y0 + credit.height / 2, 0])
 
         with self.narrate(0) as d:
+            # sized from d (caps = the look of a long beat), so a short first beat does not overrun
+            t_in, t_net, t_up, t_down, t_lit, t_win = (run(d, 0.12, 0.7), run(d, 0.14, 0.8), run(d, 0.04, 0.22, 0.08),
+                                                       run(d, 0.03, 0.18, 0.08), run(d, 0.14, 0.8), run(d, 0.09, 0.5))
+            busy = t_in + t_net + 3 * (t_up + t_down) + t_lit + t_win
             self.play(FadeIn(img, scale=1.15), FadeIn(frame), FadeIn(fglow), FadeIn(credit),
                       LaggedStart(*[FadeIn(s, shift=RIGHT * 0.3) for s in (s1, s2, s3)], lag_ratio=0.25),
-                      run_time=0.7)
+                      run_time=t_in)
             self.add(parts)
             self.sfx("whoosh", gain=-4)
             self.play(LaggedStart(*[Create(e) for e in e1], lag_ratio=0.05), FadeIn(dense, lag_ratio=0.1),
-                      LaggedStart(*[Create(e) for e in e2], lag_ratio=0.03), FadeIn(outs), FadeIn(o_lbls), run_time=0.8)
-            for s, col in ((s1, CYAN), (s2, VIOLET), (s3, PINK)):
-                self.play(*[pl[0].animate.set_fill(col, 0.45) for pl in s], run_time=0.22)
-                self.play(*[pl[0].animate.set_fill(col, 0.12) for pl in s], run_time=0.18)
-            self.play(LaggedStart(*[light(n, MINT) for n in dense], lag_ratio=0.12), run_time=0.8)
-            self.wait(max(0.1, d - 4.1))
+                      LaggedStart(*[Create(e) for e in e2], lag_ratio=0.03), FadeIn(outs), FadeIn(o_lbls), run_time=t_net)
+            for s, col in ((s1, CYAN), (s2, VIOLET), (s3, PINK)):  # one play per pulse: fewer frame roundings
+                self.play(Succession(AnimationGroup(*[pl[0].animate.set_fill(col, 0.45) for pl in s], run_time=t_up),
+                                     AnimationGroup(*[pl[0].animate.set_fill(col, 0.12) for pl in s], run_time=t_down)))
+            self.play(LaggedStart(*[light(n, MINT) for n in dense], lag_ratio=0.12), run_time=t_lit)
+            self.wait(max(0.1, d - busy - 0.4))
             self.sfx("chime", gain=-6)
             self.play(light(outs[0], AMBER), o_lbls[0].animate.set_color(AMBER).scale(1.25, about_edge=LEFT),
-                      Flash(outs[0].get_center(), color=AMBER, flash_radius=0.45), run_time=0.5)
+                      Flash(outs[0].get_center(), color=AMBER, flash_radius=0.45), run_time=t_win)
 
         l1 = self.text(p.line1, size=64, color="text", weight=BOLD).move_to([0, 0.75, 0])
         l2a = self.text(p.line2a, size=64, color="text", weight=BOLD)
@@ -173,12 +177,14 @@ class StackCollapse(NarratedScene):
         if p.note:
             note.move_to([0, self.safe_area.y0 + note.height / 2, 0])
         with self.narrate(0) as d:
-            self.play(FadeIn(head), FadeIn(note), run_time=0.4)
+            # pops share 30% of d and the wobbles 20%, so a short beat or a tall tower does not overrun
+            self.play(FadeIn(head), FadeIn(note), run_time=run(d, 0.1, 0.4, 0.2))
             for k, b in enumerate(tower):
                 self.sfx("pop", gain=-7)
-                self.play(FadeIn(b, shift=DOWN * 0.5), run_time=min(0.35, run(d, 0.07, 0.35, 0.15)))
-            for ang in (0.035, -0.06, 0.04, -0.02):
-                self.play(Rotate(tower, ang, about_point=base_pt), run_time=0.28, rate_func=rate_functions.ease_in_out_sine)
+                self.play(FadeIn(b, shift=DOWN * 0.5), run_time=run(d, 0.3 / len(tower), 0.35, 0.08))
+            t_wob = run(d, 0.05, 0.28, 0.08)
+            self.play(Succession(*[Rotate(tower, ang, about_point=base_pt, run_time=t_wob, rate_func=rate_functions.ease_in_out_sine)
+                                   for ang in (0.035, -0.06, 0.04, -0.02)]))
 
         chip = RoundedRectangle(width=2.4, height=2.4, corner_radius=0.2, stroke_color=CYAN, stroke_width=3).set_fill(PANEL, 1).move_to([3.3, 0.35, 0])
         pins = VGroup()

@@ -1,7 +1,7 @@
 """Transcribe narration clips with faster-whisper, to check how names and terms are pronounced.
 
-An optional fallback for when ``vidgen readback`` is unavailable (see "Known issues" in
-docs/COOKBOOK.md). It is a stand-alone tool: run it from the project folder, do NOT put it in
+An optional standalone check next to ``vidgen readback`` (it pads each clip with silence and
+prints the bare transcript). It is a stand-alone tool: run it from the project folder, do NOT put it in
 extensions/ (vidgen imports every .py file there).
 
     pip install faster-whisper            # once; needs ffmpeg on PATH

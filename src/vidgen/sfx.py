@@ -497,16 +497,16 @@ def project_sounds(root: Path | None) -> dict[str, Path]:
     return dict(sorted(found.items()))
 
 
-def decode_audio(path: Path) -> np.ndarray:
-    """An audio file as float32 samples at :data:`RATE`: ``(n, 1)`` for mono files, ``(n, 2)``
-    otherwise (more channels are mixed down to stereo). Read with PyAV."""
+def decode_audio(path: Path, rate: int = RATE, mono: bool = False) -> np.ndarray:
+    """An audio file as float32 samples at ``rate`` (default :data:`RATE`): ``(n, 1)`` for mono
+    files or with ``mono``, ``(n, 2)`` otherwise (more channels are mixed down). Read with PyAV."""
     import av
 
     try:
         with av.open(str(path)) as container:
             stream = container.streams.audio[0]
-            channels = 1 if (stream.channels or 2) == 1 else 2
-            resampler = av.AudioResampler(format="flt", layout="mono" if channels == 1 else "stereo", rate=RATE)
+            channels = 1 if mono or (stream.channels or 2) == 1 else 2
+            resampler = av.AudioResampler(format="flt", layout="mono" if channels == 1 else "stereo", rate=rate)
             chunks = []
             for frame in container.decode(stream):
                 chunks += [f.to_ndarray().reshape(-1, channels) for f in resampler.resample(frame)]

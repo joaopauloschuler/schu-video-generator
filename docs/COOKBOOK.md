@@ -76,7 +76,7 @@ P
 
 - [ ] Check the thumbnail PNG and the SRT: the subtitles show the *display* text, not the
       pronunciation spellings.
-- [ ] Check the voice (§13): `vidgen readback`, or [`whisper_check.py`](../examples/cookbook/whisper_check.py).
+- [ ] Check the voice (§14): `vidgen readback`, or [`whisper_check.py`](../examples/cookbook/whisper_check.py).
 
 **When it's fine to relax a lint rule or leave a warning**
 - `narration_speed: {max_rate: 4.0}` when a voice naturally reads 3.5–3.9 words/s and sounds
@@ -395,7 +395,7 @@ pronunciation:
 ```
 
 - **Check what was actually said.** `vidgen readback` transcribes the narration and compares it
-  with the beat texts (see the known issue in §16). As a fallback,
+  with the beat texts. As an optional standalone check,
   [`whisper_check.py`](../examples/cookbook/whisper_check.py) prints a transcript per clip; it pads
   the start with silence, because Whisper tends to drop the first words of a clip that starts
   immediately. The English `small.en` model was more reliable than the multilingual `small` for
@@ -464,11 +464,10 @@ Short-form craft:
 
 ## 16. Known issues and version notes
 
-- **`vidgen readback` and PyAV:** with some PyAV releases (seen with PyAV 19), faster-whisper's
-  audio decoding fails and readback reports `TypeError: open() got an unexpected keyword
-  argument 'metadata_errors'`. Until the dependency versions line up, use
-  [`whisper_check.py`](../examples/cookbook/whisper_check.py) (it decodes with ffmpeg instead) as an
-  optional fallback.
+- **`vidgen readback` and PyAV 19:** older vidgen releases let faster-whisper decode the audio,
+  which fails on PyAV 19 (`TypeError: open() got an unexpected keyword argument
+  'metadata_errors'`). Fixed in current vidgen (it decodes the audio itself);
+  [`whisper_check.py`](../examples/cookbook/whisper_check.py) remains an optional standalone check.
 - **Version notes:** older vidgen releases had problems with transitions on ffmpeg 7.0/7.1 and
   with Manim 0.22; both are fixed in current vidgen. Keep vidgen up to date.
 - **The render cache:** a scene's render is reused while its inputs are unchanged. Editing *any*
