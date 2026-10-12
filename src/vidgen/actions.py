@@ -367,6 +367,8 @@ def scene_actions(
             if len(problems) == found:
                 uses.append(ActionUse(beat.id, where, act, kind, instance))
                 provided += instance.provides()
+    if params is not None and not problems:
+        problems += cls.action_sequence_problems(spec, params, uses)
     return uses, problems
 
 

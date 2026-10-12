@@ -94,7 +94,9 @@ src/vidgen/
                           # (auto_direct: the looks, reactions, gestures and close-ups it adds,
                           # checked by the lint rules on predicted stills, `vidgen direct`,
                           # §69.23, §69.24; no manim), limbs.py (arms and legs in two segments: the
-                          # two-bone solver, folded one-piece limbs, §69.26; no manim); still.py also
+                          # two-bone solver, folded one-piece limbs, §69.26; no manim), holding.py
+                          # (props in hands: Holdings, where held / put-down / thrown props go, the
+                          # replay vidgen validate runs, §69.27; no manim); still.py also
                           # draws the prop gallery and `vidgen character-sheet` (§69.16)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
@@ -170,7 +172,8 @@ src/vidgen/
                           # particles_action.py: particles, §69.9; acting.py: say, look_at, turn,
                           # emote, pose, react and the speech bubble, §69.11; moving.py: walk_to,
                           # enter, exit, gesture, jump, §69.12; keyframes_action.py: keyframes,
-                          # move_along, §69.14;
+                          # move_along, §69.14; handling.py: pick_up, hold, put_down, give,
+                          # throw, §69.27;
                           # overlays.py: the built-in overlays lower_third/watermark, §41;
                           # progress.py: progress_bar/chapter_indicator, §42; captions.py: captions, §43;
                           # stage.py: the stage scene type, §69.6)
@@ -702,6 +705,15 @@ Step 92 (§69.26) adds no names; `PART_NAMES` gains `leg_left`, `leg_right` and 
 segments, `CharacterPart` the optional `end`, and `Character` the methods `reach`, `plant`,
 `hand_point`, `foot_point`, `sole_height`, `grounded` (compatible; generated characters have
 single legs instead of `legs`).
+Step 93 (§69.27) adds `ArmMove`, `PropMove`, `Holdings`, `HoldingError`, `HandlingStep`,
+`holding_problems`, `hold_point`, `held_height`, `put_down_x`, `throw_seconds`,
+`throw_release_share`, `HAND_ORDER`, `HANDLING_ACTIONS` and the timing constants
+`PICK_UP_SECONDS`, `PUT_DOWN_SECONDS`, `GIVE_SECONDS`, `HOLD_SECONDS`, `REACH_SHARE`,
+`PUT_DOWN_REACH_SHARE`, `PUT_DOWN_LAND_SHARE`, `THROW_WIND_UP`, `THROW_SWING`, `THROW_HEIGHT`,
+`THROW_SPIN`; `Character` gains `reached_parts`, `shoulder_point` and the attribute `holding`,
+`Prop` the attributes `height_factor`, `held_by` and `hand`, `PlayedAction` the field `lands`, and
+`NarratedScene` the class method `action_sequence_problems(spec, params, uses)` (none by
+default). All compatible.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -5458,7 +5470,7 @@ They are placed by the same `stage_layout` as the characters and sort with them 
   `docs/gallery/media/props.png`, shown in CONFIG.md.
 - **Not done here**: putting a prop on another one (`lift` is in frame heights: a laptop on a
   table needs the table's height worked out by hand); props do not move or animate (Step 79's
-  motion, Step 76's particles). An SVG prop outside `assets/` is not in the scene fingerprint.
+  motion, Step 76's particles; Step 93's characters carry and throw them, §69.27). An SVG prop outside `assets/` is not in the scene fingerprint.
   Tests: `tests/test_cartoon_props.py`.
 
 ### 69.9 Particles (Step 76)
@@ -6520,3 +6532,89 @@ the two-bone solver and the fold of one-piece limbs; `Character` (§69) applies 
   94's sitting use them); a generated `legs` reference (an own pose's `legs:`, a `kit.legs`
   keyframe target) no longer applies to generated characters (validate warns / reports an
   unknown part). Tests: `tests/test_cartoon_limbs.py`.
+
+### 69.27 Props in hands (Step 93)
+
+Five beat actions (`scenes/handling.py`, against `vidgen.api` only, on the `_Acting` base of
+§69.11: the targets are characters) let a stage's characters handle its props: `pick_up`,
+`hold`, `put_down`, `give`, `throw`. Same `to:` convention as §69.11–69.12: the character is the
+target; `to` is the prop (`pick_up`, `hold`), the place (`put_down`, `throw`: a mark or x) or the
+other character (`give`); `prop` picks one of two held props, `hand` a hand (`left`, the near
+one, drawn in front of the body; `right`).
+
+- **State** (`cartoon/holding.py`, no manim): `Holdings` maps prop -> (character, hand).
+  `take(character, prop, hand=None)` (a free hand, `HAND_ORDER` left first), `release(character,
+  prop=None)` (the only prop it holds, else `prop` must say which), `give(giver, receiver, prop,
+  hand)`, `hands(character)`, `holder(prop)`; each refusal is a `HoldingError` whose message says
+  what to do (`'ball' is held by pip; pip can give it (give: pip, to: kit)`, `kit holds no prop
+  then; pick_up one first`, a full hand). The stage keeps one (`Stage.holdings`), `vidgen validate`
+  replays the scene through one, and the directing planner keeps one.
+- **Attached, not added** (§69.22's invariant): a held prop never becomes a part or a submobject
+  of its character (the character's family never changes, and the layout dump's character box is
+  the figure only). It stays its own mobject; `attach` gives it an updater that puts its middle at
+  `Character.hand_point(hand)` on every frame and moves it in `scene.mobjects` to right after its
+  holder (drawn in front of it, behind whatever is drawn after the holder: characters nearer the
+  camera, foreground layers). Manim runs the updaters after the frame's animations, so the prop
+  follows walks, jumps, turns, gestures, pose changes, keyframes and exits of its holder.
+  `Character.holding` (hand -> prop) and `Prop.held_by` / `Prop.hand` record it; the layout dump
+  writes them as `holding` (character) and `held_by` / `hand` (prop).
+- **Geometry** (Manim units, character heights): `hold_point(shoulder, height, facing)`: the
+  hand and the prop's middle `HOLD_FORWARD` 0.12 heights in front of the arm's shoulder
+  (`Character.shoulder_point`) and `HOLD_DROP` 0.13 below it, within reach of the generated
+  arms (0.23 heights long) with the elbow bent. `held_height(factor, holder_height)`: a prop's
+  height next to its holder (`Prop.height_factor`, set by the stage from `StageProp.height_factor()`),
+  at most `HOLD_MAX_HEIGHT` 0.4 of it. A put-down or landed prop stands on the ground at its
+  character's depth (that character's feet y) at `factor` × that character's height.
+  `put_down_x`: `PUT_DOWN_AHEAD` 0.35 heights in front of the feet. Throws: `throw_point(t, start,
+  end, rise)` (x even, y a parabola peaking `rise` above the higher end), `spin_degrees` (whole
+  turns, clockwise flying right), `throw_seconds(distance)` = `THROW_WIND_UP` 0.35 +
+  `THROW_SWING` 0.15 + flight (0.45 s + 0.06 s per unit, at most 1.6 s).
+- **Animations** (`cartoon/transition.py`, exported): `ArmMove(character, keys)` eases the parts
+  named in `(share, part -> PartPose)` keys from their pose at its start (`smooth`, held after the
+  last key; like `PoseChange` it ends a blink and keeps lip sync in step). `PropMove(prop, to=,
+  follow=, leave=, arrive=, height=, rise=, turns=, lands=)`: until `leave` the prop is at
+  `follow()` (a hand) or where it is; from `leave` to `arrive` it goes to `to` (a point, or a
+  function read every frame, such as the receiver's hand), changing to `height`, on an arc with
+  spin when `rise` > 0; each frame is drawn from its points at the start (so it ends upright);
+  `lands_at` is `arrive` for a landing. Arm targets come from `Character.reached_parts(hand,
+  point)` (new: the poses `reach` would set, without setting them; `reach` uses it).
+- **Actions**: `pick_up` (`ArmMove` to the prop's top at `REACH_SHARE` 0.45 then to the hold
+  point; `PropMove` from there into the hand, scaled to its held height; 1.2 s), `hold` (the arm
+  to the hold point while the prop moves into the hand, 0.4 s; no distance check: for a prop the
+  character has from the start), `put_down` (reaches to the spot at 0.5, the prop goes from the
+  hand to the ground by 0.75, the arm back to its pose before the prop was taken; 1.0 s), `give`
+  (both turn to face each other at once, both reach to the middle of their hold points at 0.45,
+  the prop goes from one hand to the other; 1.2 s), `throw` (turns towards the spot, the arm winds
+  up behind and above the shoulder, swings forward and lets go at `throw_release_share`, settles
+  back; the prop flies, spins `spin` turns and lands; `run_time_for` = `throw_seconds`). The
+  arm's pose before the prop was taken is kept with the held prop and put back when it is let
+  go. A character holds at most one prop per hand.
+- **Validate**: each use's `scene_problems` checks names (a prop of the stage, a character on
+  the stage and not the giver, a place); the new class hook `NarratedScene.action_sequence_problems
+  (spec, params, uses)` (default none; `scene_actions` calls it once every use is valid, so
+  `vidgen validate` and the render's `plan_actions` both run it) lets the stage replay the scene's
+  actions in play order (beat, `at`, written order) through `holding_problems` with
+  `stage_frame`'s geometry: characters' x from their marks, `walk_to` / `enter` move them,
+  `move_along` / `keyframes` make them unknown (no distance check), `exit` / `enter` take them off
+  and on; a prop's x is its holder's while held and the spot after `put_down` / `throw`. Reported:
+  a prop someone else holds, a full hand, nothing to put down / give / throw, two props and no
+  `prop`, `pick_up` farther than `PICK_UP_REACH` 0.75 heights, `put_down` farther than
+  `PUT_DOWN_REACH` 0.75, `give` to a character farther than `GIVE_REACH` 1.2 heights or not on
+  stage, a `keyframes` / `move_along` of a held prop. The distance messages end with the
+  `walk_to` that fixes them (`STAND_BESIDE` 0.4 heights from the prop on the character's side,
+  as a 0..1 x).
+- **Foley** (§69.19): `PlayedAction.lands` (share of the action's time); `foley_cues` gives a
+  `thud` (`LANDING_GAIN` −4 dB) there; `Stage.action_foley` passes a `PropMove`'s `lands_at`.
+- **Automatic directing** (§69.23–24): the planner's state follows the written prop actions
+  (`Holdings`, and where a put-down or thrown prop stands, for `look_at` a prop); an arm gesture
+  is not added while a hand it moves holds a prop (`GESTURE_HANDS`: `point` / `wave` the near
+  hand, `CastMember.near_hand`, `shrug` both); prop actions count as moves for close-ups
+  (`MOVING_ACTIONS`). Storyboards show `pick_up`, `put_down`, `give` and `throw` half-way
+  (`mid_still_actions`).
+- **Not done here**: no crouch to the ground (a prop lower than the hand's reach jumps up to the
+  straight arm's end; Step 94's sitting and knees could add one); a held prop is not mirrored when
+  its holder turns, and pose changes and gestures of the holding arm move it (written ones are
+  allowed); `dim` / `highlight` on a held prop pauses its following for that animation (Manim
+  suspends a mobject's updaters while it is animated); no `on: <prop>` to put a prop on a
+  table; the screenplay grammar (§69.25) has no prop verbs yet. Tests:
+  `tests/test_cartoon_holding.py`.

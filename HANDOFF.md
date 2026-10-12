@@ -8614,3 +8614,96 @@ How to test
   test_config test_screenplay` (583, 18 s), `test_schema test_gallery test_builtin_scenes
   test_actions test_lint test_storyboard` (240, 65 s); render `tests/test_cartoon_*.py
   test_phase_h_review` (20, 32 s), `test_builtin_scenes -k stage` (2, 2.5 s).
+
+## Step 93 — Interacting with props
+
+What was built
+- Five beat actions in the new `src/vidgen/scenes/handling.py` (against `vidgen.api` only, on the
+  `_Acting` base: targets are characters): `pick_up` (`to`: a prop, `hand`), `hold` (`to`, `hand`:
+  in the hand from now on without picking up, for a prop it has from the start), `put_down` (`to`:
+  a mark / x, default just in front; `prop`), `give` (`to`: a character; `prop`, `hand` of the
+  receiver), `throw` (`to`: a mark / x; `prop`, `height` 0.5 heights, `spin` 1 turn). Run times
+  1.2 / 0.4 / 1.0 / 1.2 s, a throw 0.5 s + flight by distance (`run_time_for`).
+- Pure module `src/vidgen/cartoon/holding.py` (no manim): `Holdings` (prop -> (character, hand);
+  `take`, `release`, `give`, `hands`, `holder`, `free_hand`, `held_prop`; refusals are
+  `HoldingError` with the fix in the message), geometry (`hold_point` in front of the shoulder,
+  `held_height` ≤ 0.4 holder heights, `put_down_x`, `throw_point` parabola, `spin_degrees`,
+  `throw_seconds`, `throw_release_share`) and `holding_problems(steps, characters=, props=,
+  place_x=, to_fraction=, entering=)`, the replay `vidgen validate` runs.
+- Animations in `cartoon/transition.py`: `ArmMove(character, keys)` (parts eased through
+  `(share, {part: PartPose})` keys) and `PropMove(prop, to=, follow=, leave=, arrive=, height=,
+  rise=, turns=, lands=)` (from a hand to a point or another hand, arc + spin, drawn from its start
+  points so it lands upright; `lands_at` for foley).
+- Attaching (the Step 88 invariant kept): a held prop is never added to its `Character`; an
+  updater puts its middle at `hand_point(hand)` each frame and it is moved in `scene.mobjects` to
+  right after its holder. `Character.reached_parts(hand, point)` (the poses `reach` sets, without
+  setting them; `reach` now uses it via `_limb_poses`), `Character.shoulder_point(hand)`,
+  `Character.holding`; `Prop.height_factor` (set by the stage), `Prop.held_by`, `Prop.hand`.
+- Validate: `scene_problems` checks names (prop of the stage, character on the stage and not the
+  giver, a place). New hook `NarratedScene.action_sequence_problems(spec, params, uses)` (default
+  none), called by `scene_actions` once every use is valid (so `vidgen validate` and the render's
+  `plan_actions`); `Stage` replays its actions in play order with `stage_frame`'s geometry:
+  pick-up / put-down beyond 0.75 heights, give beyond 1.2 heights or to someone off stage (each
+  with the `walk_to: <who>, to: <x>` that fixes it), a prop held by another, a full hand, nothing
+  held, two held and no `prop`, `keyframes` / `move_along` of a held prop.
+- Layout dump: a held prop's object gets `held_by` / `hand`, its holder's `holding` ({hand: prop});
+  the character's box stays the figure only.
+- Foley: `PlayedAction.lands` -> a `thud` (`LANDING_GAIN` −4 dB) where a thrown prop lands
+  (`Stage.action_foley` passes `PropMove.lands_at`).
+- Planner (`cartoon/directing.py`): the state follows written prop actions (`Holdings`, where a
+  put-down / thrown prop stands; `look_at` a held prop aims at its holder); no arm gesture with a
+  holding hand (`GESTURE_HANDS`; `CastMember.near_hand`, from the parts); prop actions count as
+  moves for close-ups. `Stage.mid_still_actions` gains `pick_up`, `put_down`, `give`, `throw`.
+
+Files touched
+- New: `src/vidgen/cartoon/holding.py`, `src/vidgen/scenes/handling.py`, `tests/test_cartoon_holding.py`.
+- `src/vidgen/actions.py` (hook call), `scene.py` (hook), `api.py`, `scenes/__init__.py`,
+  `scenes/stage.py`, `cartoon/character.py`, `cartoon/props.py`, `cartoon/transition.py`,
+  `cartoon/foley.py`, `cartoon/directing.py`, `introspect.py`, guide `cartoons` / actions table /
+  troubleshooting (`src/vidgen/data/guide/AGENTS.md` + `AGENTS.md`).
+- Docs: `docs/CONFIG.md` (new "Props in hands", action / run_time / targets rows, layout keys,
+  foley, auto_direct notes), `DESIGN.md` (§2 tree, §6.4, §69.8 pointer, new §69.27),
+  `docs/EXTENDING.md` (`action_sequence_problems`, prop animations), `tasklist.md`.
+- Tests updated (new action names only): `tests/test_actions.py` (action name lists),
+  `tests/test_cartoon_sheet.py` (`mid_still_actions`).
+
+Public interfaces
+- `vidgen.api` adds `ArmMove`, `PropMove`, `Holdings`, `HoldingError`, `HandlingStep`,
+  `holding_problems`, `hold_point`, `held_height`, `put_down_x`, `throw_seconds`,
+  `throw_release_share`, `HAND_ORDER`, `HANDLING_ACTIONS` and timing constants (DESIGN §6.4).
+  `NarratedScene.action_sequence_problems`; `Character.reached_parts`, `.shoulder_point`,
+  `.holding`; `Prop.height_factor`, `.held_by`, `.hand`; `PlayedAction.lands`;
+  `CastMember.near_hand`. New built-in actions and layout keys. All compatible.
+
+Decisions / deviations
+- "Attached to the character" is an updater, not a submobject: adding the prop to the `Character`
+  would change its family (Step 88's fix) and its box in the layout dump / lint.
+- "Drawn at the right depth": right after the holder in `scene.mobjects`, not a z-index (a
+  z-index would also put it in front of characters nearer the camera).
+- Sequence checks need the beats in order, which `scene_problems` cannot see: hence the new hook
+  rather than a stage-only special case in `cli.py`.
+- `hold` was not specified; it is "holds it from now on without the pick-up motion" (no distance
+  check), the way to start a scene with a prop in hand.
+- No crouch: a prop on the ground is below the generated arms' reach (0.23 heights from a shoulder
+  at 0.56); the arm reaches straight for it and the prop rises into the hand.
+- Searched first: no hand / carry / throw code existed (`grep -rn "pick_up\|hold\|throw\|carry"
+  src/vidgen`: only unrelated words); reused `reach` / `hand_point` (Step 92), `_Acting`,
+  `_place_x`, `stage_frame`, `PlayedAction` / `foley_cues`, the `thud` sound, `blend_poses`,
+  `throw` arc math new.
+
+Known gaps / TODOs
+- A held prop is not mirrored when its holder turns; written gestures / poses of the holding arm
+  move it (allowed); `dim` / `highlight` on a held prop pause its following during that animation;
+  no `on: <prop>`; the screenplay grammar has no prop verbs; give turns both characters at once
+  (no turn animation). Not listened to by a human (the thud timing is checked in the render test).
+
+How to test
+- `pytest tests/test_cartoon_holding.py` (9 not-render + 1 render at 160x90, ~3 s).
+- Also run (not render): `tests/test_cartoon_*.py test_api test_actions test_introspect test_lint
+  test_phase_h_review` (514), `test_docs test_guide test_actions_coverage test_schema` (166, 60 s),
+  `test_builtin_scenes test_gallery test_storyboard test_screenplay test_extensions
+  test_json_output test_cli test_sfx test_config` (300, 14 s); render: `tests/test_cartoon_*.py`
+  (20, 14 s), `test_phase_h_review test_builtin_scenes -k "stage or review"` (3, 20 s). By hand: a
+  four-beat scratch stage (pick up, carry, give, throw, pick up a box and put it down): `vidgen
+  validate` ok, `vidgen storyboard` checked by eye (arm bends to the hold point, ball in hand while
+  walking, mid-throw ball in the air, lands at far_left), `vidgen lint` only author-caused findings.

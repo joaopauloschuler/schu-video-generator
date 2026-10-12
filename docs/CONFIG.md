@@ -1843,7 +1843,8 @@ Video-wide `sfx:`:
 action as it plays (also when its beat speeds it up): a `footstep` on every footfall of a
 `walk_to`, `enter` or `exit` (alternating feet, a softer one when the feet come together), a
 `whoosh` as a character enters and a `swoosh` as it leaves the view, a `boing` as a `jump` takes
-off, and a `pop` when `emote` or `react` puts on the `surprised` expression. Other actions are
+off, a `thud` where a [thrown](#props-in-hands) prop lands, and a `pop` when `emote` or `react`
+puts on the `surprised` expression. Other actions are
 silent. They are ordinary sound effects (listed in `timings.json` `sfx`, mixed like the rest):
 `sfx: {gain}` sets their level with the others, and `assets/sfx/footstep.wav` (or `boing.wav`,
 ...) replaces a sound with your own. `foley: false` at the top level turns them off for the
@@ -4042,8 +4043,9 @@ or prop name used twice (or a prop named like a character), and `image` with `ge
 `character` named after it, each prop as one object of kind `prop` named after it, the picture or
 colour as `background`, the band as `ground`, each layer by its name and each particle field as
 one object of kind `particles` named after its kind. Characters speak and act through beat
-actions ([Speaking and acting](#speaking-and-acting)), and walk, enter, leave, gesture and jump
-through others ([Moving](#moving)).
+actions ([Speaking and acting](#speaking-and-acting)), walk, enter, leave, gesture and jump
+through others ([Moving](#moving)), and pick up, carry, put down, hand over and throw props
+([Props in hands](#props-in-hands)).
 
 ```yaml
 characters:
@@ -4151,7 +4153,7 @@ bubble moves with its character. Lip sync stays in step during a walk, gesture o
 warns when a character lacks the parts a gesture needs (`point` / `wave`: an arm; `shrug`: both
 arms; `nod` / `shake_head`: a head). `vidgen lint` reports a walk that ends on another character
 (`walk_overlap`): pick another mark, or move the other character first. `vidgen storyboard` shows
-each walk, entrance, exit, gesture and jump (and `keyframes` / `move_along`) half-way as well as
+each walk, entrance, exit, gesture and jump (and `keyframes` / `move_along`, and the [prop actions](#props-in-hands) but `hold`) half-way as well as
 at the beat's end ([mid-action stills](#frame-stills-vidgen-render---frames)). Walks, entrances,
 exits and jumps make their own sounds ([foley](#foley-and-music-stings)).
 
@@ -4174,6 +4176,56 @@ scenes:
         actions:
           - {jump: pip}
           - {exit: kit, to: right, at: 0.4}
+```
+
+#### Props in hands
+
+Five actions let the characters of a `stage` handle its [props](#props). The character is the
+target; `to` names the prop, the place or the other character:
+
+| action | options | |
+|---|---|---|
+| `pick_up` | `to` (required: a prop of the stage), `hand` (`left` \| `right`; default: a free one, the near `left` first) | the arm bends and reaches for the prop, then lifts it and holds it in front of the character (the hand in front of the shoulder, the elbow bent). 1.2 s. The character must stand next to the prop (within 0.75 of its heights). |
+| `hold` | `to` (required: a prop), `hand` | the character holds the prop from now on without picking it up: the prop moves into its hand as the arm comes up (0.4 s); for a prop it has from the start (`at: 0` of the scene's first beat). |
+| `put_down` | `to` (a mark or an x 0–1; default: just in front of it), `prop` (which one, when it holds two) | reaches down and puts the prop on the ground there, at the character's depth and at its full size; the arm goes back to how it was. 1.0 s. The spot must be within 0.75 of its heights. |
+| `give` | `to` (required: another character on the stage), `prop`, `hand` (the receiver's) | both turn to face each other and reach to the point between their hands; the prop goes from one hand to the other. 1.2 s. They must stand next to each other (within 1.2 of the giver's heights). |
+| `throw` | `to` (required: a mark or an x 0–1), `prop`, `height` (`0.5`: of the thrower's heights, 0.05–3), `spin` (`1`: whole turns, 0–6) | turns that way, winds the arm up and swings; the prop flies an arc `height` above the higher end, spinning, and lands upright on the ground there (at the thrower's depth, at its full size) with a `thud`. 0.5 s plus 0.45–1.6 s of flight, by the distance. |
+
+A held prop goes along with its hand: walks, jumps, turns, gestures and poses of its holder move it
+too. It is drawn right in front of its holder (behind characters standing in front of it). A
+prop taller than 0.4 of its holder is made smaller while it is held and gets its size back when it
+is put down or lands. A character holds at most one prop per hand; with two, `put_down`, `give`
+and `throw` need `prop:`. The layout dump records `held_by` and `hand` on a held prop and
+`holding` on its holder; with [`auto_direct`](#automatic-directing-auto_direct) a speaker never
+gets an arm gesture (`point`, `wave`, `shrug`) with a hand that holds something. The hand
+reaches as far as the arm goes: a prop on the ground is lifted into the hand from where the
+straight arm points (no crouch).
+
+`vidgen validate` plays the scene's actions in order and reports an unknown prop or character, a
+prop someone else holds (`give` it instead), a full hand, nothing to put down, give or throw, and
+a prop, spot or character too far away, with the `walk_to` that fixes it:
+
+```text
+scenes[0].beats[0].actions[0].to: pip is 1.0 of its heights from 'ball' (it reaches 0.75); walk_to first (- walk_to: pip, to: 0.40)
+```
+
+```yaml
+scenes:
+  - id: park
+    type: stage
+    params:
+      characters: [{name: pip, at: left}, {name: kit, at: right}]
+      props: [{prop: ball, at: 0.5}]
+    beats:
+      - text: "Pip picks up the ball and takes it to Kit."
+        actions:
+          - {walk_to: pip, to: 0.42}
+          - {pick_up: pip, to: ball, at: 0.2}
+          - {walk_to: pip, to: 0.62, at: 0.5}    # the ball goes along
+      - text: "Kit takes it and throws it far away."
+        actions:
+          - {give: pip, to: kit}
+          - {throw: kit, to: far_left, spin: 2, at: 0.4}
 ```
 
 #### Automatic directing (`auto_direct`)
@@ -4213,8 +4265,9 @@ writing each look:
 - **Close-ups.** A line of at most 5 words right after a beat of at least 8 gets a `zoom` on its
   speaker (`scale: 2`): it moves in and back in 0.5 s each when both fit in 80 % of the line, else
   it cuts in and back. Never in two beats in a row (a written `zoom` counts), never in a beat with
-  a walk, `enter`, `exit`, `move_along`, `keyframes`, `pan`, `follow` or `zoom`, nor while the camera
-  follows something, nor in a beat with a speech bubble or an automatic gesture of the speaker.
+  a walk, `enter`, `exit`, `move_along`, `keyframes`, `pan`, `follow`, `zoom`, `pick_up`,
+  `put_down`, `give` or `throw`, nor while the camera follows something, nor in a beat with a
+  speech bubble or an automatic gesture of the speaker.
 - **Lint-safe.** Before adding a look, an arm gesture (`point`, `wave`, `shrug`) or a close-up,
   vidgen predicts the beat's still from the stage's layout (no rendering) with and without it and
   runs the lint rules `off_stage` and `facing_away` on both; an action that would add a finding is
@@ -4223,7 +4276,9 @@ writing each look:
   `bubble_overlap` cannot come from them.
 - **What the parts allow.** No look for a character without a head, no reaction without eyes,
   brows or a mouth, only the gestures its arms and head allow (an SVG character,
-  [above](#characters-from-svg-files)).
+  [above](#characters-from-svg-files)), and no arm gesture with a hand that
+  [holds a prop](#props-in-hands) (`point` and `wave` use the near hand, `shrug` both). A look at
+  a held prop aims at its holder; one at a prop put down or thrown, at where it landed.
 
 `auto_direct: {looks: true, reactions: false}` picks kinds (`looks`, `reactions`, `gestures`,
 `closeups`; a kind not given is on). The added actions are ordinary
@@ -4539,11 +4594,11 @@ the one key that names an action).
 
 | key | default | |
 |---|---|---|
-| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, or a project action (`vidgen list-scenes` lists them) |
+| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, or a project action (`vidgen list-scenes` lists them) |
 | `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one (`callout` with an `area` and `pan` with `to` need none) |
 | `at` | `0` | when, as a fraction of the beat's narration (`0` ≤ at < `1`) |
 | `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`, `callout`, `say`, `react`, `look_at`, `turn`, `emote`, `pose`: undone when it starts; `zoom`: the camera is back when it starts; `pan`: the camera moves back when it starts; `follow`: the camera stops following when it starts; `keyframes`, `move_along`: the target moves back) |
-| `run_time` | the action's | seconds the animation takes (`reveal` / `callout` / `pose` 0.8, `dim` / `highlight` / `react` 0.6, `zoom` / `transform` / `follow` 1.0, `pan` 1.5, `look_at` / `emote` 0.5, `say` (the bubble) / `turn` 0.4, `jump` 0.6, `gesture` per gesture (1.2 for `point`), `walk_to` / `enter` / `exit` as long as the distance needs at their `speed`, `keyframes` until its last key, `move_along` 2.0 or its path's length at its `speed`; a zoom takes as long again to come back) |
+| `run_time` | the action's | seconds the animation takes (`reveal` / `callout` / `pose` 0.8, `dim` / `highlight` / `react` 0.6, `zoom` / `transform` / `follow` 1.0, `pan` 1.5, `look_at` / `emote` 0.5, `say` (the bubble) / `turn` 0.4, `jump` 0.6, `gesture` per gesture (1.2 for `point`), `walk_to` / `enter` / `exit` as long as the distance needs at their `speed`, `keyframes` until its last key, `move_along` 2.0 or its path's length at its `speed`, `pick_up` / `give` 1.2, `put_down` 1.0, `hold` 0.4, `throw` 0.95–2.1 by the distance; a zoom takes as long again to come back) |
 
 **Targets** depend on the scene type (`vidgen list-scenes` prints them as `targets:`). Every
 built-in type has some; `<N>` counts from 1 (`item1`, `item2`...), `<text>`/`<label>`/`<name>`
@@ -4582,7 +4637,7 @@ a title card, a `transform` of a bar).
 | `diagram` | `heading`, `node<N>`, `node:<id>`, `edge:<from>-><to>` | reveal, dim, highlight, zoom | also for `flowchart`; a node is its shape, icon and label (a `box` frames the shape), an edge its line, arrowhead and label; `highlight: [node:a, "edge:a->b", node:b]` marks a path; revealing an edge brings its nodes |
 | `process` | `heading`, `input`, `stage<N>`, `stage:<label>`, `connector<N>`, `loop`, `output`, `token` | reveal, dim, highlight, zoom | a stage is its card (a `box` frames it); `connector2` runs from stage 2 to 3; revealing a stage early shows it without moving the token; `highlight: token` with `style: flash` points at it |
 | `network` | `heading`, `layer<N>`, `layer:<label>`, `edges<N>`, `neuron<L>.<i>` | reveal, dim, highlight, zoom | a layer is its units, ellipsis, label and count; `edges1` joins layers 1 and 2; `neuron2.3` is unit 3 of layer 2 as drawn |
-| `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, walk_to, enter, exit, gesture, jump, keyframes, move_along, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting) and [moving](#moving) actions take whole characters only, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts |
+| `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, walk_to, enter, exit, gesture, jump, keyframes, move_along, pick_up, hold, put_down, give, throw, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting), [moving](#moving) and [prop](#props-in-hands) actions take whole characters only, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts |
 
 `title` and `heading` stand for each other (the header band, see "Built-in scenes"): `highlight:
 title` works on a `bullets` heading. [Project scene types](EXTENDING.md#8-per-beat-actions-targets-and-custom-actions)
@@ -4605,6 +4660,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `say`, `look_at`, `turn`, `emote`, `pose`, `react` | see [Speaking and acting](#speaking-and-acting) | the acting actions on a `stage`'s characters: speak (lip sync and a speech bubble), look at something, turn round, change expression or pose, react to another speaker for one beat |
 | `walk_to`, `enter`, `exit`, `gesture`, `jump` | see [Moving](#moving) | the moving actions on a `stage`'s characters: walk to a mark, walk in or out of view, point / wave / shrug / nod / shake the head, jump |
 | `keyframes`, `move_along` | see [Keyframes and motion paths](#keyframes-and-motion-paths) | move a `stage`'s character, prop or character part (`kit.arm_left`) through keys (`t`, `x`, `y`, `rotate`, `scale`, `ease`) or along a path of points |
+| `pick_up`, `hold`, `put_down`, `give`, `throw` | see [Props in hands](#props-in-hands) | a `stage`'s character takes a prop in its hand, puts it down, hands it to another character or throws it |
 
 `dim`, `highlight`, `zoom` and `transform` act on targets on screen; a target not shown yet is
 first revealed (as by `reveal`). `dim` and `highlight` change only opacity resp. colour, so
@@ -5073,6 +5129,8 @@ Each object:
 | `character` only: `facing`, `speaking` | `left` or `right`; whether its lip sync runs (it speaks this beat) |
 | `character` only: `face` | the box of its head (with hair and ears), absent without a `head` part |
 | `character` only: `viseme`, `looked_at`, `passage` | when they apply: the viseme its lip sync shows (`rest` between words), the `to` of its last `look_at` (a name, a mark or `camera`), and `enter` / `exit` while it walks in or out |
+| `character` only: `holding` | the props in its hands, `{hand: prop}` (`{"left": "ball"}`); absent while it holds nothing ([Props in hands](#props-in-hands)) |
+| `prop` only: `held_by`, `hand` | the character holding it and which hand; absent while it stands somewhere. A held prop is its own object, drawn right after its holder; its box is not part of the character's |
 | speech bubbles only: `bubble` | the name of the character speaking (on the bubble's shape and its text) |
 | overlays only: `overlay` | the id of the [overlay](#overlays) it belongs to; overlay objects come after the scene's, their `path` starts with `overlay:<id>` and they are measured as drawn: fixed to the screen whatever the camera does |
 

@@ -481,10 +481,10 @@ memory cap, targeted tests, original characters only). Each step updates the gui
 - [x] Tests: solver reach / out-of-reach / elbow side, pose tables (`tests/test_cartoon_limbs.py`: 24, no render)
 
 ### Step 93 — Interacting with props
-- [ ] Beat actions `pick_up: <character>, to: <prop>`, `hold`, `put_down` (at a mark), `give` (to another character), `throw` (to a mark, arc with spin, landing sound)
-- [ ] A held prop follows the hand (it becomes attached to the character, scaled to fit) and is drawn at the right depth; walking with it works
-- [ ] Validate: unknown prop, prop too far without a walk (suggest `walk_to` first), giving to a character who is not adjacent
-- [ ] Tests: attach / detach state machine, positions (no render), one tiny render
+- [x] Beat actions `pick_up: <character>, to: <prop>`, `hold`, `put_down` (at a mark), `give` (to another character), `throw` (to a mark, arc with spin, landing sound) (`scenes/handling.py`, pure parts in `cartoon/holding.py`; `hold` = in the hand from now on without picking up; `hand`, `prop`, `spin`, `height` options; landing `thud` via `PlayedAction.lands`; DESIGN §69.27)
+- [x] A held prop follows the hand (it becomes attached to the character, scaled to fit) and is drawn at the right depth; walking with it works (attached by an updater at `hand_point`, not added to the `Character` (§69.22); drawn right after its holder; at most 0.4 holder heights while held; arm bent by `reached_parts`; layout dump `holding` / `held_by` / `hand`; the planner adds no arm gesture with a holding hand)
+- [x] Validate: unknown prop, prop too far without a walk (suggest `walk_to` first), giving to a character who is not adjacent (new hook `NarratedScene.action_sequence_problems`; the stage replays its actions with `holding_problems`; also a prop held by another, a full hand, nothing held, a keyed move of a held prop)
+- [x] Tests: attach / detach state machine, positions (no render), one tiny render (`tests/test_cartoon_holding.py`: 9 without rendering, 1 render)
 
 ### Step 94 — Sitting and leaning
 - [ ] `sit_on: <character>, to: <prop>` (chair, rock, box, any prop with a seat line), `stand_up`, `lean_on` (tree, door, sign); built-in props get seat / lean points; SVG props may give them (`data-seat`)

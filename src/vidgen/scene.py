@@ -25,7 +25,7 @@ from manim.utils.iterables import list_update
 from pydantic import AfterValidator, AliasChoices, BaseModel, ConfigDict, Field, GetJsonSchemaHandler, ValidationError, ValidationInfo
 
 from vidgen import carry, helpers, regions, runtime
-from vidgen.actions import TARGET_NAME, ActionRunner, Target, match_names, plan_actions
+from vidgen.actions import TARGET_NAME, ActionRunner, ActionUse, Target, match_names, plan_actions
 from vidgen.camera import Bounds, view_center_within
 from vidgen.capture import FrameCapture
 from vidgen.cartoon.directing import DirectedBeat, with_auto_actions
@@ -435,6 +435,15 @@ class NarratedScene(MovingCameraScene):
         empty list means no problems. Use the logger for warnings. Call ``super()`` to keep the
         checks of a parent class.
         """
+        return []
+
+    @classmethod
+    def action_sequence_problems(cls, spec: SceneConfig, params: Any, uses: list[ActionUse]) -> list[tuple[str, str]]:
+        """Problems of the scene's valid action ``uses`` taken in order (``stage``: a prop picked
+        up by someone who stands too far from it, a prop given to someone not next to the giver),
+        as ``(location, message)`` relative to the scene (``beats[1].actions[0].to``); reported by
+        ``vidgen validate`` and before a render. ``params`` are validated; the active project, if
+        any, is :func:`~vidgen.runtime.current_project`. Default: none."""
         return []
 
     @classmethod

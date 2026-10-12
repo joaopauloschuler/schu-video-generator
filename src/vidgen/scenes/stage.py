@@ -225,7 +225,8 @@ class Stage(NarratedScene):
     ``auto_direct``, listeners look at whoever speaks and react after lines on their own.
 
     The ``keyframes`` and ``move_along`` actions move a character, a prop or a character's part
-    by keys or along a path.
+    by keys or along a path. Characters handle props with ``pick_up``, ``hold``, ``put_down``,
+    ``give`` and ``throw``: a held prop goes along with its holder's hand.
 
     Action targets: each character and each prop by its name; each part of a character as
     ``<character>.<part>`` (``kit.arm_left``).
@@ -235,7 +236,9 @@ class Stage(NarratedScene):
     target_patterns = ("<character>", "<prop>", "<character>.<part>")
     uses_cartoon_style = True
     #: Storyboard stills also show these actions half-way through (DESIGN.md §69.16).
-    mid_still_actions = frozenset({"walk_to", "enter", "exit", "gesture", "jump", "keyframes", "move_along"})
+    mid_still_actions = frozenset({
+        "walk_to", "enter", "exit", "gesture", "jump", "keyframes", "move_along", "pick_up", "put_down", "give", "throw",
+    })
 
     @classmethod
     def target_names(cls, params: Any) -> list[str]:
@@ -387,6 +390,37 @@ class Stage(NarratedScene):
         names = [c.name for c in params.characters]
         return stage_directions(project, spec, names, params.auto_direct, stage_frame(project, params))
 
+    @classmethod
+    def action_sequence_problems(cls, spec: Any, params: Any, uses: list[Any]) -> list[tuple[str, str]]:
+        """The prop actions replayed in order with the stage's geometry (DESIGN.md §69.27,
+        :func:`holding_problems`): a prop held by someone else, a full hand, nothing to put down,
+        a prop or spot too far without a walk, giving to someone not next to the giver. Needs the
+        active project (the video's frame); none without one."""
+        try:
+            project = current_project()
+        except VidgenError:
+            return []
+        if not any(u.config.action in HANDLING_ACTIONS for u in uses):
+            return []
+        frame = stage_frame(project, params)
+        names = [c.name for c in params.characters] + params.prop_names()
+        beats = [b.id for b in spec.beats]
+
+        def matched(use: Any) -> tuple[str, ...]:
+            return tuple(n for n in names if any(fnmatchcase(n, p) for p in use.config.targets()))
+
+        ordered = [u for _, u in sorted(enumerate(uses), key=lambda iu: (beats.index(iu[1].beat), iu[1].config.at, iu[0]))]
+        steps = [HandlingStep(u.location, u.config.action, matched(u), u.config.options) for u in ordered]
+        left = -frame.stage_width / 2
+        return holding_problems(
+            steps,
+            characters={name: (place.x, place.height) for name, place in frame.places.items()},
+            props=dict(frame.props),
+            place_x=frame.place_x,
+            to_fraction=lambda x: min(max((x - left) / frame.stage_width, 0.0), 1.0),
+            entering=[n for u in uses if u.config.action == "enter" for n in matched(u)],
+        )
+
     @contextmanager
     def narrate(self, beat: Any) -> Iterator[float]:
         """Narrate a beat; the characters on the stage whose voice says it speak (lip sync from
@@ -406,7 +440,8 @@ class Stage(NarratedScene):
 
     def action_foley(self, action: str, options: Any, animations: Any, start: float, seconds: float) -> None:
         """The sounds of a character's action as it plays (DESIGN.md §69.19): footsteps on
-        walks, a whoosh on enter / exit, a boing on jump, a pop on a surprised face
+        walks, a whoosh on enter / exit, a boing on jump, a thud where a thrown prop lands, a pop
+        on a surprised face
         (:func:`foley_cues`); none with ``foley: false`` (the stage's, else the video's). A
         project file with a sound's name plays as it is (without the cue's params)."""
         on = self.params.foley if self.params.foley is not None else self.project.config.foley
@@ -418,6 +453,8 @@ class Stage(NarratedScene):
                 played = PlayedAction(action, start, seconds, heights=anim.heights, phases=anim.phases)
             elif isinstance(anim, Jump):
                 played = PlayedAction(action, start, seconds, phases=anim.phases)
+            elif isinstance(anim, PropMove):
+                played = PlayedAction(action, start, seconds, lands=anim.lands_at)
             else:
                 played = PlayedAction(action, start, seconds, expression=expression)
             for cue in foley_cues(played):
@@ -464,6 +501,8 @@ class Stage(NarratedScene):
         # the characters and the props on the stage by name, back to front (DESIGN.md §69.6, §69.8)
         self.cast: dict[str, Character] = {}
         self.props: dict[str, Prop] = {}
+        #: who holds which prop (the prop actions, DESIGN.md §69.27)
+        self.holdings = Holdings()
         #: each character's mark (its ``at``) as an x in Manim units, where ``enter`` walks it to
         self.homes: dict[str, float] = {}
         #: the y of the ground line at each character's and prop's depth (``keyframes`` y 0, §69.14)
@@ -477,6 +516,7 @@ class Stage(NarratedScene):
             )[1]
             if place_at.kind == "prop":
                 item = self._prop(place_at.name, props[place_at.name], place_at.height)
+                item.height_factor = props[place_at.name].height_factor()
                 item.shift(np.array([*place_at.feet, 0.0]) - item.feet())
                 self.props[place_at.name] = item
                 on_stage.append((place_at.name, item))

@@ -3,7 +3,8 @@ out without manim. :func:`foley_cues` turns one action *as it played* (its scene
 the seconds it took, after any shortening to fit its beat; :class:`PlayedAction`) into sound
 cues of the built-in sound library (:mod:`vidgen.sfx`): footsteps on each footfall of a walk
 (``walk_to``, ``enter``, ``exit``), a whoosh as a character enters and a swoosh as it leaves, a
-boing as a jump takes off and a pop on a surprised face (``emote`` / ``react``).
+boing as a jump takes off, a thud where a thrown prop lands (``throw``) and a pop on a surprised
+face (``emote`` / ``react``).
 
 Footfalls follow the walk cycle of :func:`~vidgen.cartoon.acting.walk_cycle`: a foot lands each
 time the legs are furthest apart (half a step, :data:`~vidgen.cartoon.acting.STEP_LENGTH`
@@ -27,6 +28,7 @@ FOOTSTEP_GAIN = -5.0
 WHOOSH_GAIN = -6.0
 BOING_GAIN = -3.0
 POP_GAIN = -3.0
+LANDING_GAIN = -4.0
 #: The expression that gets a pop when an ``emote`` or ``react`` puts it on a face.
 POP_EXPRESSION = "surprised"
 #: Footsteps alternate between two feet: ``(pitch semitones, intensity)`` of each.
@@ -44,7 +46,7 @@ class PlayedAction:
     """One character's action as it played: its type, the scene time it started (``start``) and
     the seconds it took (``seconds``); ``expression``: the expression an ``emote`` / ``react``
     put on; ``heights``: how far a walk went, in the character's heights; ``phases``: the wind-up
-    and settle shares of a walk or a jump (``cartoon_motion``)."""
+    and settle shares of a walk or a jump (``cartoon_motion``); ``lands``: below."""
 
     action: str
     start: float
@@ -52,6 +54,8 @@ class PlayedAction:
     expression: str | None = None
     heights: float = 0.0
     phases: Phases = field(default_factory=Phases)
+    lands: float | None = None
+    """The share of its time at which a prop it moved lands on the ground (a ``throw``)."""
 
 
 @dataclass(frozen=True)
@@ -110,6 +114,8 @@ def foley_cues(played: PlayedAction) -> list[FoleyCue]:
             cues.append(FoleyCue(moved, "swoosh", WHOOSH_GAIN, align="end"))
     elif played.action == "jump":
         cues.append(FoleyCue(start + played.phases.before * seconds, "boing", BOING_GAIN))
+    elif played.lands is not None:
+        cues.append(FoleyCue(start + played.lands * seconds, "thud", LANDING_GAIN))
     elif played.action in ("emote", "react") and played.expression == POP_EXPRESSION:
         cues.append(FoleyCue(start, "pop", POP_GAIN))
     return sorted(cues, key=lambda cue: cue.time)

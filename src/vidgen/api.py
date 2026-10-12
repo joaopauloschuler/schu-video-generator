@@ -107,7 +107,31 @@ from vidgen.languages import LanguageRules, language_rules  # noqa: E402
 from vidgen.imagegen import GenerateImage, generated_image  # noqa: E402
 from vidgen.vector_mobject import VectorPicture, load_vector  # noqa: E402
 from vidgen.cartoon.character import PART_NAMES, Character, CharacterPart, CharacterState, PartPose, character  # noqa: E402
-from vidgen.cartoon.transition import Gesture, Jump, KeyedMotion, PoseChange, Walk, feet_of  # noqa: E402
+from vidgen.cartoon.transition import ArmMove, Gesture, Jump, KeyedMotion, PoseChange, PropMove, Walk, feet_of  # noqa: E402
+from vidgen.cartoon.holding import (  # noqa: E402
+    GIVE_SECONDS,
+    HAND_ORDER,
+    HANDLING_ACTIONS,
+    HOLD_SECONDS,
+    PICK_UP_SECONDS,
+    PUT_DOWN_LAND_SHARE,
+    PUT_DOWN_REACH_SHARE,
+    PUT_DOWN_SECONDS,
+    REACH_SHARE,
+    THROW_HEIGHT,
+    THROW_SPIN,
+    THROW_SWING,
+    THROW_WIND_UP,
+    HandlingStep,
+    HoldingError,
+    Holdings,
+    held_height,
+    hold_point,
+    holding_problems,
+    put_down_x,
+    throw_release_share,
+    throw_seconds,
+)
 from vidgen.cartoon.visemes import VISEMES, VisemeCue, VisemeTrack  # noqa: E402
 from vidgen.cartoon.cast import beat_voice, part_target_names, pose_name_problem, say_problem, speaking_characters  # noqa: E402
 from vidgen.cartoon.acting import (  # noqa: E402
@@ -399,6 +423,30 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "Gesture",
     "Jump",
     "Walk",
+    "ArmMove",
+    "PropMove",
+    "GIVE_SECONDS",
+    "HAND_ORDER",
+    "HANDLING_ACTIONS",
+    "HOLD_SECONDS",
+    "PICK_UP_SECONDS",
+    "PUT_DOWN_LAND_SHARE",
+    "PUT_DOWN_REACH_SHARE",
+    "PUT_DOWN_SECONDS",
+    "REACH_SHARE",
+    "THROW_HEIGHT",
+    "THROW_SPIN",
+    "THROW_SWING",
+    "THROW_WIND_UP",
+    "HandlingStep",
+    "HoldingError",
+    "Holdings",
+    "held_height",
+    "hold_point",
+    "holding_problems",
+    "put_down_x",
+    "throw_release_share",
+    "throw_seconds",
     "enter_path",
     "exit_path",
     "nearer_side",

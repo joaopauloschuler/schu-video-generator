@@ -15,7 +15,8 @@ character (``vidgen.cartoon.character.Character``) one object of kind ``characte
 the character (its box covers every part; plus ``facing``, ``speaking``, ``face`` and the other
 keys the cartoon lint rules read, :func:`_character_keys`), the objects of a speech bubble carry
 ``bubble`` (the speaker's name), and a stage prop (``vidgen.cartoon.props.Prop``) one
-object of kind ``prop`` named after the prop; a particle field
+object of kind ``prop`` named after the prop (a held one also ``held_by`` and ``hand``; its box
+is not part of its holder's); a particle field
 (``vidgen.particle_field.ParticleField``) is one object of kind ``particles`` named after its
 kind. A group with no text or image anywhere
 inside is one ``group`` object (an axis' ticks, a network's edges); any other group is walked
@@ -268,6 +269,8 @@ class LayoutRecorder:
             return
         if isinstance(mob, Prop):  # one prop, also an SVG one (not a vector picture inside)
             self._emit_parts(walk, mob, path, name or mob.name, "prop", [m for m in mob.get_family() if _drawn(m)])
+            if mob.held_by is not None and walk.objects and walk.objects[-1]["id"] == self._id(mob):
+                walk.objects[-1].update({"held_by": mob.held_by, "hand": mob.hand})
             return
         if isinstance(mob, ParticleField):  # one field of particles, named after its kind
             self._emit_parts(walk, mob, path, name or mob.name, "particles", [m for m in mob.get_family() if _drawn(m)])
@@ -358,13 +361,15 @@ class LayoutRecorder:
 def _character_keys(walk: _Walk, figure: Any) -> dict[str, Any]:
     """What the cartoon lint rules read about a character (DESIGN.md §69.17): ``facing``,
     ``speaking`` and, when they apply, ``face`` (its head's box), ``viseme`` (what its lip sync
-    shows), ``looked_at``, ``passage`` (``enter`` / ``exit`` under way) and ``walked_in``."""
+    shows), ``looked_at``, ``passage`` (``enter`` / ``exit`` under way), ``walked_in`` and
+    ``holding`` (hand -> prop name, §69.27)."""
     keys: dict[str, Any] = {"facing": figure.facing, "speaking": figure.lip_sync_track is not None}
     if figure.has_part("head"):
         boxes = [p.box for p in (_measure(walk, m) for m in figure.parts["head"].get_family()) if p is not None]
         if boxes:
             keys["face"] = [_r(min(b[0] for b in boxes)), _r(min(b[1] for b in boxes)), _r(max(b[2] for b in boxes)), _r(max(b[3] for b in boxes))]
-    optional = {"viseme": figure.spoken_viseme, "looked_at": figure.looked_at, "passage": figure.passage, "walked_in": figure.walked_in}
+    optional = {"viseme": figure.spoken_viseme, "looked_at": figure.looked_at, "passage": figure.passage, "walked_in": figure.walked_in,
+                "holding": dict(figure.holding) or None}
     keys.update({key: value for key, value in optional.items() if value is not None})
     return keys
 

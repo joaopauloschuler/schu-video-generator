@@ -295,6 +295,9 @@ class Character(VGroup):
         #: ``enter`` or ``exit`` while a :class:`~vidgen.cartoon.transition.Walk` brings it in
         #: from off stage or takes it off (lint ``off_stage`` skips it then), else ``None``.
         self.passage: str | None = None
+        #: The props in its hands (hand -> prop name; set by the prop actions, recorded in the
+        #: layout dump as ``holding``), empty while it holds nothing (DESIGN.md §69.27).
+        self.holding: dict[str, str] = {}
         self._anchor = VMobject(fill_opacity=0, stroke_width=0, stroke_opacity=0)
         side = _ANCHOR_SIDE * height
         self._anchor.set_points(np.array([[0, 0, 0], [side, 0, 0], [0, side, 0], [0, side, 0]], dtype=float))
@@ -391,6 +394,10 @@ class Character(VGroup):
         shoulder), with the arm's pose, its parents and the facing (§69.26)."""
         return self._limb_end(self._limb_of(HANDS, hand, "hand"))
 
+    def shoulder_point(self, hand: str) -> np.ndarray:
+        """Where the ``left`` or ``right`` arm turns (its shoulder pivot) on screen now."""
+        return self.pivot(self._limb_of(HANDS, hand, "hand"))
+
     def foot_point(self, foot: str) -> np.ndarray:
         """Where the sole of the ``left`` or ``right`` foot is on screen now (needs ``leg_left`` /
         ``leg_right``; the end of that leg)."""
@@ -470,6 +477,11 @@ class Character(VGroup):
         points at it, straight. Only the upper and lower arm's angles change (their shift and
         scale stay); an arm in one piece turns and shortens (:func:`~vidgen.cartoon.limbs.fold`)."""
         return self._bend_limb(self._limb_of(HANDS, hand, "hand"), point, bend)
+
+    def reached_parts(self, hand: str, point: Sequence[float], *, bend: float = ELBOW_BEND) -> dict[str, PartPose]:
+        """The poses :meth:`reach` would give the ``left`` or ``right`` arm (upper and lower part
+        names -> :class:`PartPose`), without changing the character (for an animation's target)."""
+        return self._limb_poses(self._limb_of(HANDS, hand, "hand"), point, bend)
 
     def plant(self, foot: str, point: Sequence[float], *, bend: float = KNEE_BEND) -> Character:
         """Bend the ``left`` or ``right`` leg so its sole (:meth:`foot_point`) is at ``point``
@@ -696,7 +708,14 @@ class Character(VGroup):
 
     def _bend_limb(self, upper: str, point: Sequence[float], bend: float) -> Character:
         """Set the angles of the limb ``upper`` (and its lower part) that put its end at ``point``
-        (screen) with :func:`~vidgen.cartoon.limbs.solve_two_bone`."""
+        (screen)."""
+        for part, pose in self._limb_poses(upper, point, bend).items():
+            self._store_pose(part, pose)
+        return self.refresh()
+
+    def _limb_poses(self, upper: str, point: Sequence[float], bend: float) -> dict[str, PartPose]:
+        """The poses of the limb ``upper`` and its lower part that put its end at ``point``
+        (screen), from :func:`~vidgen.cartoon.limbs.solve_two_bone`."""
         lower = LIMBS[upper]
         limb = self._limbs[upper]
         parent = self._parents[upper]
@@ -710,9 +729,10 @@ class Character(VGroup):
         )
         upper_dir = math.degrees(math.atan2(upper_rest[1], upper_rest[0]))
         lower_dir = math.degrees(math.atan2(lower_rest[1], lower_rest[0]))
-        self._store_pose(upper, replace(self._poses[upper], angle=wrap_degrees(solution.direction - upper_dir)))
-        self._store_pose(lower, replace(self._poses[lower], angle=wrap_degrees(solution.bend + upper_dir - lower_dir)))
-        return self.refresh()
+        return {
+            upper: replace(self._poses[upper], angle=wrap_degrees(solution.direction - upper_dir)),
+            lower: replace(self._poses[lower], angle=wrap_degrees(solution.bend + upper_dir - lower_dir)),
+        }
 
     def _fold_matrix(self, upper: str, bend: float) -> np.ndarray:
         """A folded lower part's ``bend`` shown on the one-piece ``upper``: turned by half the

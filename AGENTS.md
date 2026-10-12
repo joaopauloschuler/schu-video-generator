@@ -682,7 +682,12 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `gesture` | on a `stage`: `to: point`, `wave`, `shrug`, `nod`, `shake_head` | on the word it goes with (`at`) |
 | `jump` | on a `stage`: a character jumps (`height`) | joy or surprise |
 | `keyframes` | on a `stage`: move a character, prop or part (`kit.arm_left`) through `keys: [{t, x, y, rotate, scale, ease}]` (`t` seconds or `"40%"` of the beat) | motion no other action has; keep it short |
-| `move_along` | on a `stage`: move a character, prop or part along `path: [[x, y], ...]` (smooth curve; `speed`) | flying, floating, a thrown ball |
+| `move_along` | on a `stage`: move a character, prop or part along `path: [[x, y], ...]` (smooth curve; `speed`) | flying, floating |
+| `pick_up` | on a `stage`: a character reaches for a prop and holds it (`to: ball`; `hand`); it goes along with the hand | `walk_to` next to the prop first (`vidgen validate` says where) |
+| `hold` | on a `stage`: a character holds a prop from now on, without picking it up (`to: cup`) | a prop it has from the start (`at: 0`) |
+| `put_down` | on a `stage`: the held prop goes on the ground (`to:` a mark or x, default in front) | within reach |
+| `give` | on a `stage`: the held prop goes to another character (`to: kit`) | the two stand next to each other |
+| `throw` | on a `stage`: the held prop flies to a mark or x (`to:`; `spin`, `height`) and lands with a thud | |
 
 ```yaml
 - id: speeds
@@ -704,7 +709,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 
 - `at` (0–1, a fraction of the beat) times the action to the word it belongs to; actions never
   make a beat longer.
-- The `stage` actions (`say` to `move_along`) take the character as the target and the new
+- The `stage` actions (`say` to `throw`) take the character as the target and the new
   state as `to:` (`- emote: kit` + `to: happy`). How to use them together for a cartoon:
   `vidgen guide cartoons`.
 - `until: <later beat id>` keeps a highlight / dim / callout on screen; without it a callout
@@ -828,8 +833,12 @@ line: at that word). `docs/CONFIG.md` "Cartoons from a screenplay" has the whole
   at the elbows and knees: `arm_left` is the upper arm, `arm_left_lower` the forearm (its angle
   is the elbow's bend), the legs are `leg_left` / `leg_right` (+ `_lower`); own poses can bend
   them too (`docs/CONFIG.md` "Bending arms and legs").
+- **Props in hands**: `walk_to` next to a prop, `pick_up` it, walk with it, then `put_down`,
+  `give` (to a character standing next to it) or `throw` it; `hold` puts a prop in a hand at
+  the start. `vidgen validate` replays the scene and says when a prop is too far, held by
+  someone else or not held (`docs/CONFIG.md` "Props in hands").
 - **Sound**: walks, entrances, exits, jumps and a `surprised` face make their own sounds
-  (foley: footsteps, whoosh, boing, pop), timed to the action; `foley: false` (top level or a
+  (foley: footsteps, whoosh, boing, pop; a thrown prop lands with a thud), timed to the action; `foley: false` (top level or a
   stage) turns them off. A beat's `sting: reveal | comic | sad` adds a short music sting
   (`reveal` as the beat starts, `comic` and `sad` in the pause after the line), ducked under the
   voice. One or two per cartoon, on the real punchline, or they stop being funny.
@@ -1327,7 +1336,7 @@ scenes:
 | `duplicate beat id` | beat ids are unique in the whole video; rename one |
 | `unknown target 'x' ...; did you mean ... (targets: ...)` | pick a name from the list (labels are case-sensitive: `bar:4K`) |
 | `until 'x' is not a later beat of scene 'y'` | `until` names a later beat id of the same scene |
-| `unknown action 'x'` / `unknown option` | actions are `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along` |
+| `unknown action 'x'` / `unknown option` | actions are `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw` |
 | `labels has 2 entries but values has 3` | one value per label |
 | `unknown theme color 'x'` | use a token (`primary`, `highlight`...) or quoted hex `"#0B5FFF"`, or add it to `theme.colors` |
 | `invalid hex color` | `#RGB`, `#RRGGBB` or `#RRGGBBAA`, in quotes (YAML reads `#` as a comment) |

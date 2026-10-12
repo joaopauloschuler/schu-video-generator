@@ -214,6 +214,15 @@ them. The built-in `keyframes` and `move_along` actions (`src/vidgen/scenes/keyf
 act on a `stage`'s characters, props and part targets `<character>.<part>`; a scene of your own
 can register part targets the same way (`self.target("hero.arm_left", hero.parts["arm_left"])`)
 and set `target_patterns` to include `"<character>"` to accept those actions.
+The prop actions (`pick_up`, `hold`, `put_down`, `give`, `throw`; `src/vidgen/scenes/handling.py`)
+need `"<prop>"` in `target_patterns` and `Prop` targets. Their pieces are exported:
+`ArmMove(character, [(share, {part: PartPose}), ...])` eases some parts through keys;
+`PropMove(prop, to=, follow=, leave=, arrive=, height=, rise=, turns=)` carries a prop from a hand
+(`follow`, read every frame) to a point or another hand, on an arc with spin when `rise` > 0;
+`character.reached_parts(hand, point)` gives the arm poses `reach` would set, and
+`hold_point(character.shoulder_point(hand), character.character_height, character.facing)` where
+a held prop sits. To keep a prop in a hand, give it an updater (`prop.add_updater(lambda m:
+m.move_to(hero.hand_point("left")))`); never add it to the `Character` (its parts must not change).
 `character(name)` breathes, sways its head and blinks on its own (unless `idle: false`):
 `stop_idle()` / `start_idle(seed=None)` turn that off and on; a blink never shows during a
 `PoseChange`. Before drawing your own scene for characters on a set, check whether the built-in
@@ -290,6 +299,14 @@ def validate_project(cls, params, project):
         problems.append(f"data: file not found: {params.data}")
     return problems
 ```
+
+Checks that need the beats' actions in order (what happened in an earlier beat) go in the
+classmethod `action_sequence_problems(spec, params, uses)`: `uses` are the scene's valid action
+uses (`use.beat`, `use.location` such as `beats[1].actions[0]`, `use.config`); return
+`(location, message)` pairs (`("beats[1].actions[0].to", "...")`). It runs in `vidgen validate`
+and before a render, once every action is valid; `current_project()` is the active project. The
+built-in `stage` replays its prop actions with `holding_problems` (a prop picked up from too far
+away, given to someone not next to the giver).
 
 **Layout regions.** Lay out in regions rather than raw coordinates, so one scene works at
 16:9, 1:1 and 9:16 (the frame's shorter side is always 8 units; 16:9 is 14.22 x 8, 9:16 is
@@ -1021,7 +1038,8 @@ when it falls due (the built-in `walk_to`: the distance over its speed), or `Non
 its targets (the built-in `pan` and `follow`), so it plays together with another action on them
 that falls due at the same moment instead of before or after it.
 A scene type that lists action type names in its class attribute `mid_still_actions` (the
-built-in `stage`: `walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`) gets a
+built-in `stage`: `walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`,
+`pick_up`, `put_down`, `give`, `throw`) gets a
 still half-way through each use of them whenever stills are taken (`vidgen storyboard`,
 `render --frames`), besides the beat ends (docs/CONFIG.md "Frame stills").
 The built-in `callout` action (`src/vidgen/scenes/callout_action.py`) is an example of all

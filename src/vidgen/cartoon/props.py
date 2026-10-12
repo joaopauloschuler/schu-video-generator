@@ -96,13 +96,18 @@ class _Paint:
 
 class Prop(VGroup):
     """A prop on a stage: its drawn shapes, ``name`` (the layout dump and action targets use it),
-    ``kind`` (a :data:`PROP_KINDS` name or ``svg``) and ``facing``."""
+    ``kind`` (a :data:`PROP_KINDS` name or ``svg``) and ``facing``. ``height_factor``: its
+    height in the heights of a character next to it (the stage sets it; ``None``: not known).
+    ``held_by`` / ``hand``: the character holding it and which hand (DESIGN.md §69.27)."""
 
     def __init__(self, *drawn: VMobject, name: str, kind: str, facing: str = "right") -> None:
         super().__init__(*drawn)
         self.name = name
         self.kind = kind
         self.facing = facing
+        self.height_factor: float | None = None
+        self.held_by: str | None = None
+        self.hand: str | None = None
 
     def feet(self) -> np.ndarray:
         """The middle of the prop's bottom edge (where it stands)."""

@@ -6,7 +6,8 @@ Importing this package imports every scene module (add new modules to the import
 the built-in per-beat actions (``actions``: reveal, dim, highlight, zoom, pan, follow,
 transform; ``callout_action``: callout; ``sfx_action``: sfx;
 ``particles_action``: particles; ``acting``: say, look_at, turn, emote, pose, react; ``moving``: walk_to, enter,
-exit, gesture, jump; ``keyframes_action``: keyframes, move_along) and the
+exit, gesture, jump; ``keyframes_action``: keyframes, move_along; ``handling``: pick_up, hold,
+put_down, give, throw) and the
 built-in overlays (``overlays``: lower_third, watermark; ``progress``: progress_bar,
 chapter_indicator; ``captions``: captions).
 """
@@ -26,6 +27,7 @@ from vidgen.scenes import (  # noqa: F401
     end_card,
     equation,
     equation_derivation,
+    handling,
     heatmap,
     histogram,
     icon_grid,

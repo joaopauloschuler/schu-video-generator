@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING, Any
 
 from vidgen.camera import Bounds, view_center_within
 from vidgen.cartoon.acting import GESTURE_EASE, GESTURE_SECONDS, GESTURES, look_pose, nearer_side
+from vidgen.cartoon.holding import HoldingError, Holdings, put_down_x
 from vidgen.cartoon.stage import mark_x
 from vidgen.config import DIRECTING_KINDS, ActionConfig, AutoDirectSetting, BeatConfig, SceneConfig, directing_kinds
 
@@ -87,7 +88,7 @@ CLOSEUP_SECONDS = 0.5
 CLOSEUP_CUT_SECONDS = 0.03
 #: Written actions during which no close-up is added: walks and other moves of a character, and
 #: the camera's own moves.
-MOVING_ACTIONS = frozenset({"walk_to", "enter", "exit", "move_along", "keyframes", "pan", "follow", "zoom"})
+MOVING_ACTIONS = frozenset({"walk_to", "enter", "exit", "move_along", "keyframes", "pan", "follow", "zoom", "pick_up", "put_down", "give", "throw"})
 #: A generated figure's proportions, in its heights (measured on the generator's looks; an SVG
 #: look is taken to be alike): half its width, the bottom of its face box (above its feet), and
 #: how far an arm gesture reaches from its middle (``point`` and ``wave`` forward, ``shrug`` to
@@ -95,6 +96,9 @@ MOVING_ACTIONS = frozenset({"walk_to", "enter", "exit", "move_along", "keyframes
 FIGURE_HALF_WIDTH = 0.21
 FACE_BOTTOM = 0.5
 GESTURE_REACH: dict[str, float] = {"point": 0.4, "wave": 0.35, "shrug": 0.34}
+#: The hands each arm gesture moves (``near``: the character's near hand, :attr:`CastMember.near_hand`):
+#: none is added while one of them holds a prop (DESIGN.md §69.27).
+GESTURE_HANDS: dict[str, tuple[str, ...]] = {"point": ("near",), "wave": ("near",), "shrug": ("left", "right")}
 #: The lint rules (DESIGN.md §69.17) the planner runs on its predicted stills. ``bubble_overlap``
 #: needs no check: automatic actions draw no bubble and move no face, and no close-up is added
 #: to a beat with a speech bubble (the bubble is placed for the view at its start).
@@ -113,6 +117,8 @@ class CastMember:
     can_emote: bool = True
     gestures: tuple[str, ...] = ()
     """The gestures its parts allow (``gesture: <kind>`` of ``ACTION_NEEDS``)."""
+    near_hand: str = "left"
+    """The hand ``point`` and ``wave`` use (``left``, else ``right`` without a left arm)."""
 
 
 @dataclass(frozen=True)
@@ -214,6 +220,8 @@ class _SceneState:
     gestured_now: set[str] = field(default_factory=set)           # characters given a gesture in this beat
     words_before: int = 0                                         # the words of the beat before
     closeup_at: int = -2                                          # the last beat (index) with a close-up
+    holdings: Holdings = field(default_factory=Holdings)          # who holds which prop
+    prop_x: dict[str, float | None] = field(default_factory=dict)  # prop -> its x where it stands (None: not known)
 
 
 @dataclass(frozen=True)
@@ -310,7 +318,8 @@ def _target_x(state: _SceneState, to: Any) -> float | None:
     if state.frame is None or to == "camera":
         return None
     if isinstance(to, str) and to in state.frame.props:
-        return state.frame.props[to]
+        holder = state.holdings.holder(to)
+        return state.x.get(holder[0]) if holder is not None else state.prop_x.get(to, state.frame.props[to])
     return state.frame.place_x(to)
 
 
@@ -445,12 +454,21 @@ def gesture_choices(word: str, text: str, seed: str, last: str | None = None) ->
     return list(dict.fromkeys(found + rest))
 
 
+def _hands_free(state: _SceneState, name: str, kind: str) -> bool:
+    """Whether the hands gesture ``kind`` moves (:data:`GESTURE_HANDS`) hold no prop."""
+    held = state.holdings.hands(name)
+    near = state.cast[name].near_hand
+    return not any((near if hand == "near" else hand) in held for hand in GESTURE_HANDS.get(kind, ()))
+
+
 def _gesture_is_safe(state: _SceneState, beat: _Beat, name: str, kind: str) -> bool:
-    """A head gesture always is; an arm gesture when the character's arm stays as much in view
-    as before (``off_stage`` on the predicted still with the arm out), known only with the
-    geometry, the character's place and the camera's view."""
+    """A head gesture always is; an arm gesture when its hands hold no prop and the character's
+    arm stays as much in view as before (``off_stage`` on the predicted still with the arm out),
+    known only with the geometry, the character's place and the camera's view."""
     if kind not in GESTURE_REACH:
         return True
+    if not _hands_free(state, name, kind):
+        return False
     if state.frame is None or state.camera_x is None or state.x.get(name) is None:
         return False
     return not _adds_finding(_still(state, beat), _still(state, beat, reach=(name, kind)))
@@ -565,6 +583,26 @@ def _enter(state: _SceneState, name: str, options: Mapping[str, Any]) -> None:
     state.x[name] = to_x
 
 
+def _handle(state: _SceneState, action: str, targets: set[str], options: Mapping[str, Any]) -> None:
+    """A written prop action: who holds what, and where a put-down or thrown prop stands (a
+    change :class:`Holdings` refuses is ignored: ``vidgen validate`` reports it)."""
+    for name in sorted(targets):
+        try:
+            if action in ("pick_up", "hold"):
+                state.holdings.take(name, str(options.get("to")), options.get("hand"))
+            elif action == "give":
+                state.holdings.give(name, str(options.get("to")), options.get("prop"), options.get("hand"))
+            else:
+                prop, _ = state.holdings.release(name, options.get("prop"))
+                here, frame = state.x.get(name), state.frame
+                place = frame.place_x(options["to"]) if frame is not None and options.get("to") is not None else None
+                if place is None and here is not None and action == "put_down" and frame is not None and name in frame.places:
+                    place = put_down_x(here, frame.places[name].height, state.facing.get(name, "right"))
+                state.prop_x[prop] = place
+        except HoldingError:
+            continue
+
+
 def _follow_written(state: _SceneState, beat: BeatInput, names: Sequence[str]) -> None:
     """Update the state with the beat's written actions: entrances and exits, walks and other
     moves, turns, looks and what makes a look unknown, and the camera's pans and follows."""
@@ -593,6 +631,8 @@ def _follow_written(state: _SceneState, beat: BeatInput, names: Sequence[str]) -
             state.camera_x = state.frame.view_x(sum(known) / len(known)) if known and len(known) == len(places) else None
         elif act.action == "follow":
             state.camera_x = None
+        elif act.action in ("pick_up", "hold", "give", "put_down", "throw"):
+            _handle(state, act.action, targets, options)
         if act.action == "look_at":
             to = options.get("to")
             for name in targets:
@@ -735,6 +775,7 @@ def stage_directions(
             can_look=shapes is not None and missing_needs(shapes, "look_at") is None,
             can_emote=shapes is not None and missing_needs(shapes, "emote") is None,
             gestures=() if shapes is None else tuple(g for g in GESTURES if missing_needs(shapes, f"gesture: {g}") is None),
+            near_hand="right" if shapes is not None and "arm_left" not in shapes and "arm_right" in shapes else "left",
         ))
     known = registry.action_names()
     beats: list[BeatInput] = []

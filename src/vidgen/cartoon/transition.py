@@ -18,6 +18,8 @@ a crouch, squash and stretch and follow-through on jumps. ``none`` plays the pla
 
 :class:`KeyedMotion` moves a character, a prop or a character's part through the channel values
 of the ``keyframes`` and ``move_along`` actions (:mod:`vidgen.cartoon.keyframes`, §69.14).
+:class:`ArmMove` and :class:`PropMove` play the prop actions (a hand reaching, carrying,
+throwing; a prop going into a hand, onto the ground or flying, §69.27).
 """
 
 from __future__ import annotations
@@ -44,6 +46,7 @@ from vidgen.cartoon.acting import (
     walk_seconds,
 )
 from vidgen.cartoon.character import PART_NAMES, Character, CharacterState, PartPose
+from vidgen.cartoon.holding import spin_degrees, throw_point
 from vidgen.cartoon.limbs import TIMING_GROUP
 from vidgen.cartoon.motion import (
     Phases,
@@ -357,6 +360,122 @@ class Jump(Animation):
         figure.sync_mouth()
 
 
+class ArmMove(Animation):
+    """Move some of ``character``'s parts through ``keys``: ``(share, part -> PartPose)`` in
+    time order (shares 0..1 of the animation); each part eases (``smooth``) from where it was at
+    the key before (at the start: as it is when the animation begins) to the key's pose, and holds
+    after its last key. Parts no key names keep their pose. For the prop actions' reaches,
+    carries and throws (DESIGN.md §69.27); like :class:`PoseChange` it ends a running blink and
+    keeps lip sync in step."""
+
+    def __init__(self, character: Character, keys: Sequence[tuple[float, Mapping[str, PartPose]]], **kwargs) -> None:
+        self.keys = [(float(share), dict(parts)) for share, parts in keys]
+        kwargs.setdefault("rate_func", linear)
+        super().__init__(character, **kwargs)
+
+    def begin(self) -> None:
+        self.mobject.end_blink()
+        self._base = self.mobject.state()
+        # per part: (share, pose) from its pose now through each key that names it
+        self._tracks: dict[str, list[tuple[float, PartPose]]] = {}
+        for share, parts in self.keys:
+            for part, pose in parts.items():
+                if part in self._base.parts:
+                    self._tracks.setdefault(part, [(0.0, self._base.parts[part])]).append((share, pose))
+        super().begin()
+
+    def interpolate_mobject(self, alpha: float) -> None:
+        t = self.rate_func(alpha)
+        parts = dict(self.mobject.state().parts)
+        for part, track in self._tracks.items():
+            pose = track[-1][1]
+            for (begin, start), (end, target) in zip(track, track[1:]):
+                if t <= end:
+                    local = 1.0 if end <= begin else min(max((t - begin) / (end - begin), 0.0), 1.0)
+                    pose = blend_poses(start, target, smooth(local))
+                    break
+            parts[part] = pose
+        self.mobject.set_state(CharacterState(self.mobject.facing, parts))
+        self.mobject.sync_mouth()
+
+
+class PropMove(Animation):
+    """Move ``prop`` (its middle) between a hand and a place: until ``leave`` (a share of the
+    animation) it stays at ``follow()`` (a hand's point, read every frame) or, without
+    ``follow``, where it is; from ``leave`` to ``arrive`` it goes from there to ``to`` (a point,
+    or a function giving one every frame), growing or shrinking to ``height`` units tall; then it
+    stays there. ``rise`` > 0: it flies an arc peaking that many units above the higher end
+    (:func:`~vidgen.cartoon.holding.throw_point`) and spins ``turns`` whole turns; ``lands``: the
+    move ends on the ground (``lands_at`` is then ``arrive``, for the landing sound). Each frame
+    is drawn from the prop's points when the animation began, so it ends exactly upright."""
+
+    def __init__(
+        self,
+        prop: Mobject,
+        *,
+        to: Sequence[float] | Callable[[], Sequence[float]],
+        follow: Callable[[], Sequence[float]] | None = None,
+        leave: float = 0.0,
+        arrive: float = 1.0,
+        height: float | None = None,
+        rise: float = 0.0,
+        turns: int = 0,
+        lands: bool = False,
+        **kwargs,
+    ) -> None:
+        self.to, self.follow = to, follow
+        self.leave, self.arrive = float(leave), max(float(arrive), float(leave))
+        self.target_height, self.rise, self.turns = height, float(rise), int(turns)
+        self.lands_at: float | None = self.arrive if lands else None
+        kwargs.setdefault("rate_func", linear)
+        super().__init__(prop, **kwargs)
+
+    def begin(self) -> None:
+        prop = self.mobject
+        self._members = [(m, m.points.copy()) for m in prop.get_family() if len(m.points)]
+        self._middle = np.array(prop.get_center(), dtype=float)
+        self._height = max(float(prop.height), 1e-9)
+        self._from: np.ndarray | None = None
+        super().begin()
+
+    def _point(self, where: Sequence[float] | Callable[[], Sequence[float]] | None) -> np.ndarray:
+        if where is None:
+            return self._middle
+        value = where() if callable(where) else where
+        return np.array([float(value[0]), float(value[1]), 0.0])
+
+    def interpolate_mobject(self, alpha: float) -> None:
+        t = self.rate_func(alpha)
+        if t < self.leave or self.leave >= 1.0:
+            self._draw(self._point(self.follow), self._height, 0.0)
+            return
+        if self._from is None:   # where the hand let go (or where it stood)
+            self._from = self._point(self.follow)
+        span = self.arrive - self.leave
+        u = 1.0 if span <= 0 else min((t - self.leave) / span, 1.0)
+        end = self._point(self.to)
+        height = self._height if self.target_height is None else self._height + (self.target_height - self._height) * smooth(u)
+        if self.rise > 0:
+            x, y = throw_point(u, self._from, end, self.rise)
+            middle, angle = np.array([x, y, 0.0]), spin_degrees(u, self.turns, float(end[0] - self._from[0]))
+        else:
+            middle, angle = self._from + (end - self._from) * smooth(u), 0.0
+        self._draw(middle, height, angle)
+
+    def _draw(self, middle: np.ndarray, height: float, angle: float) -> None:
+        """The prop from its points at the start: ``height`` tall, turned ``angle`` degrees about
+        its middle, the middle at ``middle``."""
+        factor = height / self._height
+        cos, sin = math.cos(math.radians(angle)), math.sin(math.radians(angle))
+        turn = np.array([[cos, -sin, 0.0], [sin, cos, 0.0], [0.0, 0.0, 1.0]]) * factor
+        for member, points in self._members:
+            member.points = (points - self._middle) @ turn.T + middle
+
+    def finish(self) -> None:
+        super().finish()
+        self.mobject.keyed_feet = None   # a keyed move's kept feet are stale now (feet_of)
+
+
 def feet_of(mobject: Mobject) -> np.ndarray:
     """Where ``mobject`` stands: a character's :meth:`~Character.feet`, else the point a
     :class:`KeyedMotion` left it at, else its ``feet()`` (a prop), else the middle of its bottom
@@ -441,4 +560,4 @@ class KeyedMotion(Animation):
             mob.keyed_feet = tuple(feet)
 
 
-__all__ = ["Gesture", "Jump", "KeyedMotion", "PoseChange", "Walk", "feet_of", "accented_state", "blend_poses", "part_windows", "walking_state"]
+__all__ = ["ArmMove", "PropMove", "Gesture", "Jump", "KeyedMotion", "PoseChange", "Walk", "feet_of", "accented_state", "blend_poses", "part_windows", "walking_state"]
