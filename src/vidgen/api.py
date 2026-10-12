@@ -109,7 +109,8 @@ from vidgen.vector_mobject import VectorPicture, load_vector  # noqa: E402
 from vidgen.cartoon.character import PART_NAMES, Character, CharacterPart, CharacterState, PartPose, character  # noqa: E402
 from vidgen.cartoon.transition import PoseChange  # noqa: E402
 from vidgen.cartoon.visemes import VISEMES, VisemeCue, VisemeTrack  # noqa: E402
-from vidgen.cartoon.cast import pose_name_problem  # noqa: E402
+from vidgen.cartoon.cast import beat_voice, pose_name_problem, say_problem, speaking_characters  # noqa: E402
+from vidgen.cartoon.acting import LookPose, camera_look, look_pose  # noqa: E402
 from vidgen.cartoon.props import PROP_HEIGHTS, PROP_KINDS, PROP_LIFTS, SVG_PROP_HEIGHT, Prop, draw_prop, svg_prop  # noqa: E402
 from vidgen.cartoon.stage import (  # noqa: E402
     DEFAULT_FACTORS,
@@ -349,6 +350,12 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "VisemeTrack",
     "character",
     "pose_name_problem",
+    "beat_voice",
+    "say_problem",
+    "speaking_characters",
+    "LookPose",
+    "camera_look",
+    "look_pose",
     "MARKS",
     "StageItem",
     "StagePlacement",

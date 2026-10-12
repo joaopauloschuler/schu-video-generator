@@ -170,6 +170,12 @@ class Action:
         Default: none."""
         return []
 
+    def character_needs(self) -> str | None:
+        """The :data:`~vidgen.cartoon.cast.ACTION_NEEDS` entry (``"say"``, ``"look_at"``...) this
+        use needs of each character it targets: ``vidgen validate`` warns when one lacks those
+        parts. Default: none."""
+        return None
+
     def provides(self) -> list[str]:
         """Target names this use registers when it is applied (with :meth:`NarratedScene.target
         <vidgen.scene.NarratedScene.target>`), so that actions after it may name them. Default:

@@ -396,9 +396,9 @@ one.
 - [x] Docs: writing background prompts that leave room for characters (empty middle, ground visible) (CONFIG.md "Generated backgrounds (`cartoon_style`)", a guide bullet; also `docs/gallery/stage.md` regenerated with Step 74–76's params)
 
 ### Step 78 — Acting actions, part 1: speaking and looking
-- [ ] Beat actions `say` (mouth follows the visemes; optional speech bubble with the beat's text or a short version), `look_at: <character | mark | camera>`, `turn` (face left / right), `emote: <expression>`, `pose: <name>`
-- [ ] The beat's `voice:` picks who speaks (via the character's voice); other characters can have `react:` (expression or pose) during that beat
-- [ ] Tests: action schedules without rendering; validate (unknown character, `say` by a character with no voice)
+- [x] Beat actions `say` (mouth follows the visemes; optional speech bubble with the beat's text or a short version), `look_at: <character | mark | camera>`, `turn` (face left / right), `emote: <expression>`, `pose: <name>` (`scenes/acting.py`; the character is the target, the new state is `to:` (`- emote: kit` + `to: happy`), since the shorthand's value is the target; `look_at` also takes a prop or an x; bubbles from `callout_label` / `label_spot` with a tail; geometry in `cartoon/acting.py`; DESIGN §69.11)
+- [x] The beat's `voice:` picks who speaks (via the character's voice); other characters can have `react:` (expression or pose) during that beat (`Stage.narrate`; a `say` in the beat picks the speakers instead; `react` is a beat action undone at the next beat; lip sync now timed by the scene's clock from the beat's start, `NarratedScene.beat_clock` / `speak`, and kept in step through a `PoseChange`, fixing Step 72's known lag; validate warns per action when a character lacks the parts it needs, `Action.character_needs` + `cast.ACTION_NEEDS`)
+- [x] Tests: action schedules without rendering; validate (unknown character, `say` by a character with no voice) (`tests/test_cartoon_acting.py`: 12 without rendering, 1 tiny render)
 
 ### Step 79 — Acting actions, part 2: moving
 - [ ] `walk_to: <mark | x>` (walk cycle from leg / body bob, speed in units per second), `enter: left | right`, `exit: left | right`, `gesture: point | shrug | wave | nod | shake_head`, `jump`

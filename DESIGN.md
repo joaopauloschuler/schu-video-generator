@@ -80,8 +80,9 @@ src/vidgen/
                           # idle.py (blinking, breathing, head sway: the seeded schedule, §69.5; no manim),
                           # stage.py (marks, ground line, depth, draw order of a stage, §69.6; parallax
                           # layer offsets and extents, §69.7; no manim), props.py (Prop, draw_prop,
-                          # svg_prop: props from primitives or an SVG, §69.8); still.py also draws the
-                          # prop gallery
+                          # svg_prop: props from primitives or an SVG, §69.8), acting.py (where a
+                          # character looks: look_pose, camera_look, §69.11; no manim); still.py also
+                          # draws the prop gallery
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
   actions.py              # per-beat actions: Target, Action, validation, ActionRunner (§26)
@@ -152,7 +153,8 @@ src/vidgen/
                           # the built-in beat actions reveal/dim/highlight/zoom/transform, §26-27,
                           # pan/follow, §69.7;
                           # callout_action.py: the callout beat action, §44; sfx_action.py: sfx, §47;
-                          # particles_action.py: particles, §69.9;
+                          # particles_action.py: particles, §69.9; acting.py: say, look_at, turn,
+                          # emote, pose, react and the speech bubble, §69.11;
                           # overlays.py: the built-in overlays lower_third/watermark, §41;
                           # progress.py: progress_bar/chapter_indicator, §42; captions.py: captions, §43;
                           # stage.py: the stage scene type, §69.6)
@@ -643,6 +645,10 @@ compatibly the attribute `NarratedScene.is_preview`.
 Step 77 (§69.10) adds, compatibly, the keyword argument `cartoon=False` of `generated_image`, the
 `NarratedScene` class attribute `uses_cartoon_style` (default `False`) and the method
 `generated_picture(generate)`.
+Step 78 (§69.11) adds `beat_voice`, `speaking_characters`, `say_problem`, `LookPose`,
+`look_pose`, `camera_look`; `NarratedScene` gains `current_beat`, `beat_clock`, `speak`,
+`beat_action_names`; `Action` gains `character_needs`; `Character.lip_sync` gains the keyword
+`clock=None` and `Character` the methods `sync_mouth`, `lip_sync_track` (all compatible).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -5013,10 +5019,11 @@ and `still.write_character_png` pass it) calls `cartoon/svg_look.py`.
   SVG's colours are kept (`colors:` unused). `Character(..., required=SVG_REQUIRED_PARTS)` (only
   `body`).
 - **Actions a character cannot do** (`cast.ACTION_NEEDS`: action → alternatives of parts or
-  `part.shape`; `unavailable_actions(part_shapes)`): `say (lip sync)` mouth, `blink` eyes.closed,
-  `look_at` head, `emote` eyes or brows or mouth, `gesture: point` / `wave` an arm, `shrug` both
-  arms, `nod` / `shake_head` head. Steps 70–79 should consult the table (and `Character.has_part`)
-  and skip what a character lacks.
+  `part.shape`; `unavailable_actions(part_shapes)`, `missing_needs(part_shapes, action)`): `say`
+  mouth (Step 69 called it `say (lip sync)`), `blink` eyes.closed, `look_at` head, `emote` eyes or
+  brows or mouth, `gesture: point` / `wave` an arm, `shrug` both arms, `nod` / `shake_head` head.
+  Actions name their entry with `Action.character_needs()` and skip what a character lacks;
+  `vidgen validate` warns per use (§69.11).
 - **Validate**: `cast.character_look_problems(config, root)` (in `cli.project_problems`:
   `characters[k].look.svg: ...`); `cast.character_look_warnings(config, root)` (in
   `cli.validate_warnings`): the sanitiser's warnings, the split warnings, guessed pivots,
@@ -5137,20 +5144,26 @@ A beat's **viseme track** says which mouth shape shows when; a character's mouth
   stat of every beat's `.visemes.json` and `.align.json` (videos without characters keep their
   fingerprints' shape).
 - **Character** (`cartoon/character.py`): `viseme_shape(viseme)` (the first of `VISEME_SHAPES` it
-  has, or `None`; an unknown viseme is a `VidgenError`), `show_viseme(viseme, rest=None)` (swaps
-  only when the shape changes), `lip_sync(track, *, start=0.0)`: remembers the mouth's shape now
-  (the expression's: `rest`), adds an updater that advances a clock by each frame's `dt` from
-  `start` and shows `track.at(clock)`; it replaces a running one; `stop_lip_sync()` removes it and
-  puts the mouth's pose shape back as it was (scale / angle of the expression are never touched,
-  so a `sad` flipped mouth speaks flipped). No mouth: both do nothing (`ACTION_NEEDS["say (lip
-  sync)"]`). Manim suspends a mobject's updaters while an `Animation` plays on it, so during a
-  `PoseChange` the mouth holds its shape.
+  has, or `None`; an unknown viseme is a `VidgenError`), `show_viseme(viseme, rest=None)` (sets
+  the mouth's pose shape; swaps only when the shape changes), `lip_sync(track, *, start=0.0,
+  clock=None)`: adds the updater `Character._lip_sync_step` (a plain method, like idle's) that
+  shows `track.at(seconds)`; `seconds` is `clock()` when a clock is given (Step 78: the scene's
+  time since the beat started, `NarratedScene.beat_clock`), else `start` plus the frames' `dt`.
+  The viseme's shape is a layer over the mouth's pose (`_spoken`, shown by `_shape_name`), so the
+  pose (the expression's shape, scale and angle: a `sad` flipped mouth speaks flipped) is never
+  changed; `rest`, or a viseme without a shape, shows the pose's shape, also one set while
+  speaking. It replaces a running lip sync; `stop_lip_sync()` removes the layer; `lip_sync_track`
+  is the running track; `sync_mouth()` shows the viseme for the clock now. No mouth: all do
+  nothing (`ACTION_NEEDS["say"]`). Manim suspends a mobject's updaters while an `Animation` plays
+  on it: `PoseChange` calls `sync_mouth()` on every frame, so with a clock the mouth stays in
+  step through a pose change; other animations on the character hold it, and it catches up when
+  they end (Step 72 left this open: the `dt` clock fell behind by every such animation).
 - **API**: `vidgen.api` exports `VISEMES`, `VisemeCue`, `VisemeTrack`; `Character.lip_sync`,
   `stop_lip_sync`, `show_viseme`, `viseme_shape`; `NarratedScene.beat_visemes`.
 - **Also**: `audio_duration` moved from `scene.py` to `speech.py` (no manim; `scene` re-imports
   it), so `vidgen tts` measures MP3s without loading Manim.
-- **Not done here**: no scene type speaks yet (the `say` action, Step 78, calls `lip_sync` on a
-  `stage`'s characters, §69.6); no per-language phoneme tables beyond IPA; no coarticulation (each
+- **Speaking** (Step 78, §69.11): a `stage` makes the characters with the beat's voice speak; the
+  `say` action picks them instead. No per-language phoneme tables beyond IPA; no coarticulation (each
   phoneme is one shape). Tests: `tests/test_cartoon_visemes.py`.
 
 ### 69.5 Automatic life: blinking and idle motion (Step 72)
@@ -5195,9 +5208,9 @@ updater, so `PoseChange` (§69.3) and `lip_sync` (§69.4) never fight with it.
 - **Per scene**: the `stage` scene's `idle: false` calls `stop_idle()` on its characters (§69.6).
 - **Not done here**: Only `PoseChange` ends a running blink; another animation
   played on the character (e.g. `.animate.shift`) holds the eyes as they are until it ends (Step
-  79's walking should end the blink or move the character with an updater). The lip sync clock
-  (§69.4) also stops during an animation on the character, so a long `PoseChange` while speaking
-  shifts the mouth behind the audio (Step 78). Tests: `tests/test_cartoon_idle.py`.
+  79's walking should end the blink or move the character with an updater). Lip sync (§69.4) has
+  its own clock (the scene's time since Step 78), so it does not fall behind during an animation.
+  Tests: `tests/test_cartoon_idle.py`.
 
 ### 69.6 The `stage` scene type (Step 73)
 
@@ -5255,14 +5268,12 @@ lint, Step 84) reuse it.
   reads such a block as one sample per scene, shown whole, with `Sample.characters`;
   `work_config` adds the samples' characters to the work project. `tests/test_guide.py` accepts
   both block forms.
-- **Hooks for Step 78+** (not built here): `Stage.cast` (name -> `Character`, back to front) is
-  set in `construct`; speaking means `cast[name].lip_sync(self.beat_visemes(beat))` inside the
-  beat's `narrate` (and `stop_lip_sync()` after), acting actions resolve their character through
-  the stage's targets (the character's name) and change its state with `PoseChange` / `face`;
+- **Hooks for Step 78+**: `Stage.cast` (name -> `Character`, back to front) is set in
+  `construct`. Step 78 (§69.11) built speaking (`Stage.narrate`) and the acting actions on it;
   walking (Step 79) moves the feet along the ground line with `feet_point` at the character's
   depth and should re-sort the draw order when depths change.
-- **Not done here**: props (Step 75), speech and acting (Steps 78–79), cartoon lint rules (Step
-  84). Parallax layers, a stage wider than the frame and the camera actions are Step 74 (§69.7).
+- **Not done here**: props (Step 75), speech and acting (Steps 78–79, §69.11), cartoon lint
+  rules (Step 84). Parallax layers, a stage wider than the frame and the camera actions are Step 74 (§69.7).
   Tests: `tests/test_cartoon_stage.py`.
 
 ### 69.7 Parallax layers and the camera on a stage (Step 74)
@@ -5484,3 +5495,77 @@ non-empty string, none by default) holds style words added to every `generate:` 
 - **Docs**: CONFIG.md "Generated backgrounds (`cartoon_style`)" under `stage`, with how to write
   a background prompt that leaves room for the characters (an empty middle, the ground visible,
   no people or text, calm detail, wide stages). Tests: `tests/test_cartoon_style.py`.
+
+### 69.11 Acting actions, part 1: speaking and looking (Step 78)
+
+Characters speak and act during beats: who speaks follows the beat's voice; six beat actions
+(`scenes/acting.py`, written against `vidgen.api` only) change a character's state with
+`PoseChange` (§69.3).
+
+- **Who speaks** (`cartoon/cast.py`, no manim): `beat_voice(scene, beat)` = the beat's `voice`,
+  else the scene's, else `default`; `speaking_characters(config, voice, names)` = the characters
+  among `names` whose `voice` is it (none without a voice). `Stage.narrate` (a context manager
+  around `NarratedScene.narrate`) makes those characters on the stage speak for the beat
+  (`self.speak(c)` on entering, `stop_lip_sync()` after the beat's `d + pad`, unless a later lip
+  sync took over: `lip_sync_track` is no longer the one it started), except in a beat with a `say`
+  action (`beat_action_names(beat)`), where the `say` picks the speakers. `shared_voice_warnings`
+  (`vidgen validate`): characters sharing a voice all speak its beats.
+- **Timing**: `NarratedScene.beat_clock()` returns a callable giving `renderer.time` minus the
+  scene time the current beat started (`narrate` records it); `speak(character)` =
+  `character.lip_sync(self.beat_visemes(current_beat), clock=self.beat_clock())`. The mouth is
+  thus a function of the scene time from the audio's start, whatever runs meanwhile (§69.4); a
+  `say` applied at `at: 0.5` or after the stage's entrance starts mid-track, in step.
+  `NarratedScene.current_beat` is the beat being narrated.
+- **Actions** (all target characters; `_Acting` base: a target name of the scene that is not a
+  declared character is a problem from `scene_problems`, `'tree' is not a character; emote acts on
+  characters`; at render time a non-character target is logged and skipped; `_change` records,
+  per character, the parts and facing a `PoseChange` changes and `_undo` puts back just those,
+  so later changes to other parts stay):
+  - `say` (run_time 0.4 = the bubble's fade-in; reversible, `until_next_beat`; needs `say`):
+    options `bubble` (`false`; `true`: the beat's text; a string: that text, `TranslatableStr`;
+    empty is a problem), `color` (`#FFFFFF`), `size` (`caption`). `apply` calls `scene.speak` on
+    each character and draws a bubble; `revert` stops the lip sync it started (not a later one)
+    and fades the bubble out. `scene_problems`: `say_problem` (a character without `voice`).
+    On the scene's last beat nothing reverts it: the mouth rests after the track and the bubble
+    goes with the scene's fade-out.
+  - `look_at` (0.5; reversible; needs `look_at`): `to` = a target name (a character or prop), a
+    mark or x (through `camera_place`, like `pan`), or `camera`; checked in `scene_problems`. The
+    geometry is `cartoon/acting.py` (no manim): `look_pose(dx, dy, facing)` from the looker's head
+    centre to the other's head (a prop's centre; a mark at the looker's head height): faces that
+    way unless `|dx| < SAME_X` (0.05 units), the head angle `atan2(dy, max(|dx|, SAME_X))` capped at
+    `LOOK_MAX_DEGREES` 20 (positive tilts up in both facings: the mirror), the eyes shifted
+    `LOOK_EYES_AHEAD` 0.008 forward and up / down with the angle; `camera_look(facing)`: head
+    straight, eyes `CAMERA_EYES_BACK` 0.025 back (the middle of a generated face). Applied with
+    `looked_state` (head angle and eyes shift set in the pose; missing parts skipped). A later
+    `pose` / `emote` sets the head / eyes again.
+  - `turn` (0.4; reversible): `to` `left` | `right` (default: the other way); a `PoseChange` with
+    the same parts and another facing (the mirror switches halfway).
+  - `emote` (0.5; reversible; needs `emote`): `to` an expression; `pose` (0.8; reversible): `to`
+    a pose. Both checked with `pose_name_problem` (built-in and the character's own names).
+  - `react` (0.6; reversible, `until_next_beat`): `expression` and / or `pose` (neither: a
+    problem); needs `emote` when it has an expression.
+  Several on one character in a beat play one after another (the runner's batches by target).
+- **Speech bubble** (`speech_bubble(text, anchor, *, color, size, bounds, avoid, scale, theme)`):
+  reuses the callout helpers: `callout_label` (text wrapped to a third of the frame, readable size,
+  ink that reads on `color`) and `label_spot` (`side: top`, `straight`, gaps `BUBBLE_GAPS` 0.25 /
+  0.45 / 0.8 × scale) above the speaker's head region, inside `label_bounds` (the safe area, or the
+  zoomed / panned view) clear of `label_avoid` (text, callouts, other small targets such as the
+  other characters, overlays) and earlier bubbles; these three helpers of `callout_action.py`
+  were made public for it (they were `_view`, `_bounds`, `_avoid`). The tail (`bubble_tail`: a
+  triangle from the plate's edge facing the head, `TAIL_HALF_WIDTH` 0.14, at most `TAIL_LENGTH`
+  0.4 or `TAIL_REACH` 0.6 of the way; counterclockwise like the plate, since Manim's `Union` joins
+  only paths turning the same way) and the plate are one `Union` filled with `color` and outlined
+  in the text's ink (`BUBBLE_STROKE` 3). It is a `Callout` of kind `label` (so later callouts and
+  bubbles avoid it), fading in (`callout_fade`), one z-index level above everything like a callout.
+- **Validate**: problems as above, plus the usual unknown target (an unknown character name) and
+  option errors. Warnings (`cast.acting_warnings(project)`, run by `cli.validate_warnings` in a
+  project session so project actions count): for each action use whose `character_needs()` names
+  an `ACTION_NEEDS` entry, each declared character its targets match (`fnmatch`) whose parts
+  (`character_part_shapes`) lack it: `scenes[0].beats[0].actions[1]: character 'blob' cannot
+  look_at (needs head); the action does nothing for it`.
+- **Not done here**: gestures, walking, entering and leaving (Step 79); a bubble does not follow a
+  character that moves; a long beat text makes a large bubble (use a short `bubble` text); a
+  `say` by a character whose voice differs from the beat's is allowed (its mouth follows the
+  beat's audio) and not warned about; a shape swap still resets the mouth's style, so a dimmed
+  character's speaking mouth shows at full opacity (Step 67 gap). Tests:
+  `tests/test_cartoon_acting.py`.

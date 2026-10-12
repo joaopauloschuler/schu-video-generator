@@ -301,10 +301,11 @@ def validate_warnings(project: Project) -> list[str]:
     the source language and base pronunciations kept in another language (§54), generated
     pictures not made yet and prompts asking for words in a picture (§58), OpenRouter TTS models
     and voices not in the bundled list and ``timestamps`` it cannot honour (§66), and SVG
-    characters' unavailable actions and part warnings (§69.2), and parts the characters' own
-    poses name that they do not have (§69.3)."""
+    characters' unavailable actions and part warnings (§69.2), parts the characters' own
+    poses name that they do not have (§69.3), characters sharing a voice and beat actions on a
+    character that lacks the parts they need (§69.11)."""
     from vidgen.carry import carry_warnings
-    from vidgen.cartoon.cast import character_look_warnings, character_pose_warnings
+    from vidgen.cartoon.cast import acting_warnings, character_look_warnings, character_pose_warnings, shared_voice_warnings
     from vidgen.chapter_export import chapter_warnings
     from vidgen.imagegen import imagegen_warnings
     from vidgen.transitions import transition_warnings
@@ -325,6 +326,8 @@ def validate_warnings(project: Project) -> list[str]:
         + imagegen_warnings(project)
         + character_look_warnings(project.config, project.root)
         + character_pose_warnings(project.config, project.root)
+        + shared_voice_warnings(project.config)
+        + acting_warnings(project)
     )
 
 

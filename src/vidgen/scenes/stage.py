@@ -5,6 +5,8 @@ layers that move by their factor when the camera moves (§69.7), props (§69.8) 
 
 import math
 import re
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import Annotated, Any, ClassVar, Literal
@@ -197,6 +199,10 @@ class Stage(NarratedScene):
     sort with them by depth.
     ``particles`` (rain, snow, confetti...) move over the whole scene.
 
+    A beat is spoken by the characters whose voice says it (their mouths move with it), or by
+    the ones its ``say`` action names; the acting actions (``say``, ``look_at``, ``turn``,
+    ``emote``, ``pose``, ``react``) change the characters during the beats.
+
     Action targets: each character and each prop by its name.
     """
 
@@ -336,6 +342,23 @@ class Stage(NarratedScene):
                 if problem is not None:
                     problems.append(f"characters[{k}].{kind}: {problem}")
         return problems
+
+    @contextmanager
+    def narrate(self, beat: Any) -> Iterator[float]:
+        """Narrate a beat; the characters on the stage whose voice says it speak (lip sync from
+        the beat's start to its end), unless the beat has a ``say`` action, which picks who
+        speaks (DESIGN.md §69.11)."""
+        b = self.beat(beat)
+        voiced = [] if "say" in self.beat_action_names(b) else speaking_characters(self.project.config, beat_voice(self.spec, b), self.cast)
+        speakers: list[tuple[Character, Any]] = []
+        with super().narrate(b) as d:
+            for name in voiced:
+                self.speak(self.cast[name])
+                speakers.append((self.cast[name], self.cast[name].lip_sync_track))
+            yield d
+        for figure, track in speakers:
+            if figure.lip_sync_track is track:  # not taken over by a later lip sync
+                figure.stop_lip_sync()
 
     @classmethod
     def camera_place(cls, params: Any, place: str | float) -> float:

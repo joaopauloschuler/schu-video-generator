@@ -16,7 +16,7 @@ so a pose set after a move lands where the character is.
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
@@ -83,6 +83,16 @@ class CharacterState:
 
     facing: str
     parts: dict[str, PartPose] = field(default_factory=dict)
+
+
+@dataclass
+class _LipSync:
+    """A running lip sync: the track, the seconds into it now and the clock giving them (``None``:
+    advanced by each frame's time)."""
+
+    track: VisemeTrack
+    seconds: float
+    clock: Callable[[], float] | None
 
 
 @dataclass(frozen=True)
@@ -204,7 +214,8 @@ class Character(VGroup):
         self._poses = {n: PartPose() for n in specs}
         self._overlays: dict[str, PartPose] = {}  # idle motion on top of the poses (:meth:`start_idle`)
         self._idle: IdleClock | None = None
-        self._lip_sync: Any = None  # the running lip sync updater (:meth:`lip_sync`)
+        self._lip_sync: _LipSync | None = None  # the running lip sync (:meth:`lip_sync`)
+        self._spoken: str | None = None  # the mouth shape lip sync shows over the pose's
         self._anchor = VMobject(fill_opacity=0, stroke_width=0, stroke_opacity=0)
         side = _ANCHOR_SIDE * height
         self._anchor.set_points(np.array([[0, 0, 0], [side, 0, 0], [0, side, 0], [0, side, 0]], dtype=float))
@@ -362,35 +373,59 @@ class Character(VGroup):
         shape = self.viseme_shape(viseme) or rest or self.shape_names("mouth")[0]
         return self if shape == self._shape_name("mouth") else self.set_part("mouth", shape=shape)
 
-    def lip_sync(self, track: VisemeTrack, *, start: float = 0.0) -> Character:
-        """Make the mouth follow ``track`` from now: an updater advances a clock by each frame's
-        time, starting ``start`` seconds into the track (negative: a delay), and shows the viseme
-        at that time. At ``rest`` the mouth shows the shape it has now (the expression's). It
-        replaces a running lip sync; :meth:`stop_lip_sync` ends it. Manim pauses a mobject's
-        updaters while an animation plays on it (e.g. :class:`PoseChange`): the mouth holds then."""
+    def lip_sync(self, track: VisemeTrack, *, start: float = 0.0, clock: Callable[[], float] | None = None) -> Character:
+        """Make the mouth follow ``track`` from now. ``clock`` gives the seconds into the track
+        when called (e.g. the scene time since the beat's audio started:
+        :meth:`NarratedScene.beat_clock <vidgen.scene.NarratedScene.beat_clock>`), so the mouth
+        stays in step with the audio whatever plays meanwhile; without it, a clock starting
+        ``start`` seconds into the track (negative: a delay) advances by each frame's time. The
+        viseme's mouth shape is shown on top of the mouth's pose; at ``rest`` (or for a viseme
+        the character has no shape for) the pose's shape shows (the expression's). It replaces
+        a running lip sync; :meth:`stop_lip_sync` ends it. Manim pauses a mobject's updaters
+        while an animation plays on it: :class:`PoseChange` calls :meth:`sync_mouth` on every
+        frame, other animations hold the mouth until they end."""
         self.stop_lip_sync()
         if not self.has_part("mouth"):
             return self
-        rest, before = self._shape_name("mouth"), self._poses["mouth"].shape
-        clock = [float(start)]
-
-        def follow(mob: Character, dt: float) -> None:
-            clock[0] += dt
-            mob.show_viseme(track.at(clock[0]), rest)
-
-        self._lip_sync = (follow, before)
-        self.add_updater(follow)
-        return self.show_viseme(track.at(clock[0]), rest)
+        self._lip_sync = _LipSync(track, float(start), clock)
+        self.add_updater(Character._lip_sync_step)
+        return self.sync_mouth()
 
     def stop_lip_sync(self) -> Character:
-        """End :meth:`lip_sync` and show the mouth's shape from before it started."""
+        """End :meth:`lip_sync`: the mouth shows its pose's shape."""
         if self._lip_sync is None:
             return self
-        follow, before = self._lip_sync
-        self.remove_updater(follow)
+        self.remove_updater(Character._lip_sync_step)
         self._lip_sync = None
-        self._store_pose("mouth", replace(self._poses["mouth"], shape=before))
+        self._set_spoken(None)
         return self.refresh()
+
+    @property
+    def lip_sync_track(self) -> VisemeTrack | None:
+        """The track the running :meth:`lip_sync` follows (``None`` when none runs)."""
+        return self._lip_sync.track if self._lip_sync is not None else None
+
+    def sync_mouth(self) -> Character:
+        """Show the running lip sync's viseme for its clock now (nothing without one)."""
+        speech = self._lip_sync
+        if speech is None:
+            return self
+        if speech.clock is not None:
+            speech.seconds = float(speech.clock())
+        before = self._shape_name("mouth")
+        self._set_spoken(self.viseme_shape(speech.track.at(speech.seconds)))
+        return self.refresh() if self._shape_name("mouth") != before else self
+
+    def _lip_sync_step(self, dt: float) -> Character:
+        if self._lip_sync is not None and self._lip_sync.clock is None:
+            self._lip_sync.seconds += dt
+        return self.sync_mouth()
+
+    def _set_spoken(self, shape: str | None) -> None:
+        """Show ``shape`` instead of the mouth's pose shape (``None``: the pose's); not redrawn."""
+        before = self._shape_name("mouth")
+        self._spoken = shape
+        self._show_shape("mouth", before)
 
     # ----- idle motion (DESIGN.md §69.5) ----------------------------------------------------
 
@@ -479,7 +514,10 @@ class Character(VGroup):
         return PartPose(float(entry.angle), entry.scale_xy(), shift, chosen_shape(entry, self._shapes[part]))
 
     def _shape_name(self, part: str) -> str:
-        """The shape shown: the idle overlay's (a blink), else the pose's, else the rest shape."""
+        """The shape shown: lip sync's (the mouth), the idle overlay's (a blink), else the pose's,
+        else the rest shape."""
+        if part == "mouth" and self._spoken is not None:
+            return self._spoken
         overlay = self._overlays.get(part)
         if overlay is not None and overlay.shape is not None:
             return overlay.shape

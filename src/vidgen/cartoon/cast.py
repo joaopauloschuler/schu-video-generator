@@ -3,7 +3,8 @@
 Looking a character up by name, the unknown-character message shared by ``vidgen validate`` and
 the build, the theme check of each character's colours, the checks of ``look: {svg: FILE}``
 (§69.2: problems, and warnings naming the actions its parts do not allow), the checks of the
-characters' own poses and expressions (§69.3) and the lines ``vidgen character`` prints.
+characters' own poses and expressions (§69.3), the lines ``vidgen character`` prints, and who
+speaks a beat and what the acting actions need (§69.11).
 """
 
 from __future__ import annotations
@@ -11,11 +12,16 @@ from __future__ import annotations
 import difflib
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from vidgen.cartoon.poses import chosen_shape, merged_table, unknown_name_message
-from vidgen.config import CharacterEntry, PartPoseEntry, VideoConfig
+from vidgen.config import BeatConfig, CharacterEntry, PartPoseEntry, SceneConfig, VideoConfig
 from vidgen.errors import Problem, VidgenError
 from vidgen.theme import Theme
+from vidgen.voices import DEFAULT_VOICE
+
+if TYPE_CHECKING:
+    from vidgen.project import Project
 
 
 def character_names(config: VideoConfig) -> list[str]:
@@ -82,9 +88,11 @@ def character_lines(entry: CharacterEntry, theme: Theme, root: Path | None = Non
 
 
 #: What each acting action needs of a character: one of the alternatives, each a tuple of parts
-#: (``"arm_left"``) or part shapes (``"eyes.closed"``). Steps 70-79 implement the actions.
+#: (``"arm_left"``) or part shapes (``"eyes.closed"``). An action names its entry with
+#: :meth:`Action.character_needs <vidgen.actions.Action.character_needs>`; ``vidgen validate``
+#: warns about each use on a character without those parts (:func:`acting_warnings`).
 ACTION_NEEDS: dict[str, tuple[tuple[str, ...], ...]] = {
-    "say (lip sync)": (("mouth",),),
+    "say": (("mouth",),),
     "blink": (("eyes.closed",),),
     "look_at": (("head",),),
     "emote": (("eyes",), ("brows",), ("mouth",)),
@@ -101,15 +109,19 @@ def _has(part_shapes: Mapping[str, Sequence[str]], need: str) -> bool:
     return part in part_shapes and (not shape or shape in part_shapes[part])
 
 
+def missing_needs(part_shapes: Mapping[str, Sequence[str]], action: str) -> str | None:
+    """What a character with these parts (part -> shape names) lacks for :data:`ACTION_NEEDS`
+    entry ``action`` (``"arm_left or arm_right"``), or ``None`` when it can do it."""
+    alternatives = ACTION_NEEDS[action]
+    if any(all(_has(part_shapes, need) for need in option) for option in alternatives):
+        return None
+    return " or ".join(" and ".join(n.replace(".", "_") for n in option) for option in alternatives)
+
+
 def unavailable_actions(part_shapes: Mapping[str, Sequence[str]]) -> list[tuple[str, str]]:
     """``(action, what it needs)`` for each :data:`ACTION_NEEDS` action a character with these
     parts (part -> shape names) cannot do, e.g. ``("gesture: wave", "arm_left or arm_right")``."""
-    out = []
-    for action, alternatives in ACTION_NEEDS.items():
-        if not any(all(_has(part_shapes, need) for need in option) for option in alternatives):
-            needs = " or ".join(" and ".join(n.replace(".", "_") for n in option) for option in alternatives)
-            out.append((action, needs))
-    return out
+    return [(action, needs) for action in ACTION_NEEDS if (needs := missing_needs(part_shapes, action)) is not None]
 
 
 def _svg_looks(config: VideoConfig) -> Iterable[tuple[int, CharacterEntry, str]]:
@@ -248,3 +260,97 @@ def check_character_name(name: str) -> str:
         if name not in known:
             raise ValueError(unknown_character_message(name, known))
     return name
+
+
+# ----- who speaks (DESIGN.md §69.11) ----------------------------------------------------------------
+
+
+def beat_voice(scene: SceneConfig, beat: BeatConfig) -> str:
+    """The name of the voice that says ``beat``: its ``voice``, else its scene's, else
+    ``default`` (the base voice)."""
+    return beat.voice or scene.voice or DEFAULT_VOICE
+
+
+def speaking_characters(config: VideoConfig, voice: str, names: Iterable[str]) -> list[str]:
+    """The characters among ``names`` whose ``voice`` is ``voice`` (a character without a voice
+    never speaks)."""
+    voices = {entry.name: entry.voice for entry in config.characters}
+    return [name for name in names if voices.get(name) is not None and voices.get(name) == voice]
+
+
+def say_problem(config: VideoConfig, name: str) -> str | None:
+    """Why character ``name`` cannot ``say`` anything (it has no ``voice``), or ``None``; also
+    ``None`` for a name the video does not declare (the target check reports that)."""
+    entry = next((e for e in config.characters if e.name == name), None)
+    if entry is None or entry.voice is not None:
+        return None
+    return f"character '{name}' has no voice, so it cannot say anything (give it voice: in characters:)"
+
+
+def shared_voice_warnings(config: VideoConfig) -> list[str]:
+    """Characters that share a voice: a beat in that voice moves all their mouths on a stage
+    unless a ``say`` action picks who speaks."""
+    owners: dict[str, list[str]] = {}
+    for entry in config.characters:
+        if entry.voice is not None:
+            owners.setdefault(entry.voice, []).append(entry.name)
+    return [
+        f"characters {', '.join(repr(n) for n in names)} have the same voice '{voice}': beats in that voice move all their "
+        "mouths on a stage; add a say action to such beats to pick who speaks"
+        for voice, names in owners.items() if len(names) > 1
+    ]
+
+
+def acting_warnings(project: Project) -> list[str]:
+    """Each beat action that acts on a character lacking the parts it needs
+    (:meth:`Action.character_needs <vidgen.actions.Action.character_needs>`, :data:`ACTION_NEEDS`):
+    for that character the action does nothing (or less). Actions with problems are skipped
+    (``vidgen validate`` reports those)."""
+    from fnmatch import fnmatchcase
+
+    from vidgen import extensions, registry
+
+    config = project.config
+    if not config.characters:
+        return []
+    warnings: list[str] = []
+    shapes: dict[str, dict[str, list[str]] | None] = {}
+
+    def parts_of(entry: CharacterEntry) -> dict[str, list[str]] | None:
+        if entry.name not in shapes:
+            try:
+                shapes[entry.name] = character_part_shapes(entry, project.root)
+            except VidgenError:
+                shapes[entry.name] = None
+        return shapes[entry.name]
+
+    try:
+        with extensions.project_session(project):
+            known = registry.action_names()
+            for i, scene in enumerate(config.scenes):
+                for j, beat in enumerate(scene.beats):
+                    for k, act in enumerate(beat.actions):
+                        act = act.resolved(known)
+                        kind = registry.find_action(act.action)
+                        if kind is None:
+                            continue
+                        try:
+                            options = kind.cls.Options.model_validate(act.options)
+                        except ValueError:
+                            continue
+                        need = kind.cls(options, act).character_needs()
+                        if need is None:
+                            continue
+                        for entry in config.characters:
+                            if not any(fnmatchcase(entry.name, pattern) for pattern in act.targets()):
+                                continue
+                            parts = parts_of(entry)
+                            missing = None if parts is None else missing_needs(parts, need)
+                            if missing is not None:
+                                warnings.append(
+                                    f"scenes[{i}].beats[{j}].actions[{k}]: character '{entry.name}' cannot {need} (needs {missing}); "
+                                    "the action does nothing for it"
+                                )
+    except VidgenError:
+        return warnings
+    return warnings

@@ -369,13 +369,13 @@ def test_lip_sync_updater_follows_the_track_and_stops() -> None:
     seen = []
     for _ in range(10):
         c.update(0.1)
-        seen.append(c.pose_of("mouth").shape or "smile")  # None: the rest shape
+        seen.append(c.shown_shape("mouth"))
     assert seen == ["smile", "O", "O", "O", "M", "smile", "smile", "smile", "smile", "smile"]
-    assert c.pose_of("mouth").scale == sad.scale  # the expression's flip is kept
+    assert c.pose_of("mouth") == sad  # shown over the pose: the expression's flip is kept
     c.lip_sync(track, start=0.3)  # a new lip sync replaces the running one
-    assert len(c.updaters) == 1 and c.pose_of("mouth").shape == "O"
+    assert len(c.updaters) == 1 and c.shown_shape("mouth") == "O"
     c.stop_lip_sync()
-    assert not c.updaters and c.pose_of("mouth") == sad
+    assert not c.updaters and c.pose_of("mouth") == sad and c.shown_shape("mouth") == "smile"
     assert c.stop_lip_sync() is c
 
 

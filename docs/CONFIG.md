@@ -1113,6 +1113,9 @@ mouth shapes shows when, from the sounds of the spoken text (pronunciation appli
   no current track is timed from its text when the scene is drawn.
 - Editing a track (or a beat's alignment) re-renders the scenes of that beat in a video with
   characters.
+- Who speaks a beat on a `stage` (the characters with the beat's voice, or a `say` action) is in
+  [Speaking and acting](#speaking-and-acting). The mouth is timed from the beat's start, so a
+  pose change while speaking does not put it behind the audio.
 
 ### Idle motion
 
@@ -3944,7 +3947,8 @@ or prop name used twice (or a prop named like a character), and `image` with `ge
 `background`. The layout dump and `vidgen lint` see each character as one object of kind
 `character` named after it, each prop as one object of kind `prop` named after it, the picture or
 colour as `background`, the band as `ground`, each layer by its name and each particle field as
-one object of kind `particles` named after its kind. Speaking, gestures and moving across the stage are beat
+one object of kind `particles` named after its kind. Characters speak and act through beat
+actions ([Speaking and acting](#speaking-and-acting)); gestures and moving across the stage are
 actions of later versions.
 
 ```yaml
@@ -3963,6 +3967,66 @@ scenes:
         - {name: kit, at: bench, depth: 0.5, pose: bow}
     beats:
       - text: "Pip spots an old friend by the bench."
+```
+
+#### Speaking and acting
+
+**Who speaks.** A beat is said by its voice (the beat's `voice`, else the scene's, else the base
+voice `default`; see [Multiple voices](#multiple-voices-voices)). On a `stage`, the characters whose `voice` is that voice
+speak it: their mouths follow the beat's [viseme track](#lip-sync) from the beat's start to its
+end. A character without a `voice` never speaks; a beat in the narrator's voice moves no mouth
+unless a character has `voice: default`. A `say` action in the beat picks who speaks instead
+(also a character whose voice is not the beat's: its mouth follows the beat's audio). When two
+characters share a voice, both speak its beats unless a `say` picks one (`vidgen validate`
+warns).
+
+The mouth is timed from the beat's start (the scene's clock), so it stays in step with the audio
+while the character changes pose; during other animations of the character (a fade, a `dim`) it
+holds and then catches up.
+
+**Acting actions** change a character during a beat; all take characters as targets (`- emote:
+kit`), and several may share a beat (each waits for the one before on the same character):
+
+| action | options | |
+|---|---|---|
+| `say` | `bubble` (`false`; `true`: the beat's text, or a short text), `color` (`#FFFFFF`), `size` (`caption`) | the character speaks this beat; `bubble` draws a speech bubble above its head (where there is room, clear of text and other characters) with a tail towards it. Both last until the next beat starts (`until: <beat>`: until that beat starts). |
+| `look_at` | `to` (required: a character or prop of the scene, a mark, an x 0–1, or `camera`) | turns towards it and tilts the head up or down (at most 20°); `camera` turns the eyes to the viewer. Stays so. |
+| `turn` | `to` (`left` \| `right`; default: the other way) | faces the other way (a mirror at half time). Stays so. |
+| `emote` | `to` (required: an expression) | changes the expression (eyes, brows, mouth ease one after another). Stays so. |
+| `pose` | `to` (required: a pose) | takes the pose (body, legs, arms, head ease one after another). Stays so. |
+| `react` | `expression` and / or `pose` | a listener's reaction for this beat: undone when the next beat starts. |
+
+`look_at`, `turn`, `emote` and `pose` last; `until: <beat>` puts back what they changed when that
+beat starts (other changes made since stay). `vidgen validate` reports an unknown character,
+pose or expression (with the known names, the character's own included), a `say` by a character
+without a `voice`, a `look_at` place that is neither a target, a mark nor `camera`, and an acting
+action on a prop; it warns when a character lacks the parts an action needs (a `say` without a
+mouth, a `look_at` without a head, an `emote` without eyes, brows or mouth): the action does
+nothing for that character.
+
+```yaml
+voices:
+  pip_voice: {voice_id: VOICE_ID_1}
+  kit_voice: {voice_id: VOICE_ID_2}
+characters:
+  - {name: pip, voice: pip_voice, look: {body: bean}}
+  - {name: kit, voice: kit_voice, look: {body: tall, hair: spiky}}
+scenes:
+  - id: park
+    type: stage
+    params:
+      characters: [{name: pip, at: left}, {name: kit, at: right}]
+    beats:
+      - text: "Hello! Have you seen my kite?"
+        voice: pip_voice                        # pip speaks
+        actions:
+          - {react: kit, expression: surprised} # kit listens, surprised, for this beat
+      - text: "It is up in the tree."
+        voice: kit_voice
+        actions:
+          - {say: kit, bubble: "Up there!"}     # kit speaks, with a short bubble
+          - {look_at: kit, to: tree, at: 0.3}
+          - {emote: pip, to: worried, at: 0.5}
 ```
 
 #### Particles
@@ -4089,11 +4153,11 @@ the one key that names an action).
 
 | key | default | |
 |---|---|---|
-| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, or a project action (`vidgen list-scenes` lists them) |
+| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, or a project action (`vidgen list-scenes` lists them) |
 | `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one (`callout` with an `area` and `pan` with `to` need none) |
 | `at` | `0` | when, as a fraction of the beat's narration (`0` ≤ at < `1`) |
-| `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`, `callout`: undone when it starts; `zoom`: the camera is back when it starts; `pan`: the camera moves back when it starts; `follow`: the camera stops following when it starts) |
-| `run_time` | the action's | seconds the animation takes (`reveal` / `callout` 0.8, `dim` / `highlight` 0.6, `zoom` / `transform` / `follow` 1.0, `pan` 1.5; a zoom takes as long again to come back) |
+| `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`, `callout`, `say`, `react`, `look_at`, `turn`, `emote`, `pose`: undone when it starts; `zoom`: the camera is back when it starts; `pan`: the camera moves back when it starts; `follow`: the camera stops following when it starts) |
+| `run_time` | the action's | seconds the animation takes (`reveal` / `callout` / `pose` 0.8, `dim` / `highlight` / `react` 0.6, `zoom` / `transform` / `follow` 1.0, `pan` 1.5, `look_at` / `emote` 0.5, `say` (the bubble) / `turn` 0.4; a zoom takes as long again to come back) |
 
 **Targets** depend on the scene type (`vidgen list-scenes` prints them as `targets:`). Every
 built-in type has some; `<N>` counts from 1 (`item1`, `item2`...), `<text>`/`<label>`/`<name>`
@@ -4132,7 +4196,7 @@ a title card, a `transform` of a bar).
 | `diagram` | `heading`, `node<N>`, `node:<id>`, `edge:<from>-><to>` | reveal, dim, highlight, zoom | also for `flowchart`; a node is its shape, icon and label (a `box` frames the shape), an edge its line, arrowhead and label; `highlight: [node:a, "edge:a->b", node:b]` marks a path; revealing an edge brings its nodes |
 | `process` | `heading`, `input`, `stage<N>`, `stage:<label>`, `connector<N>`, `loop`, `output`, `token` | reveal, dim, highlight, zoom | a stage is its card (a `box` frames it); `connector2` runs from stage 2 to 3; revealing a stage early shows it without moving the token; `highlight: token` with `style: flash` points at it |
 | `network` | `heading`, `layer<N>`, `layer:<label>`, `edges<N>`, `neuron<L>.<i>` | reveal, dim, highlight, zoom | a layer is its units, ellipsis, label and count; `edges1` joins layers 1 and 2; `neuron2.3` is unit 3 of layer 2 as drawn |
-| `stage` | `<character>`, `<prop>` | dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`); everything comes in at step 1; `pan` also takes a mark (`to: right`) |
+| `stage` | `<character>`, `<prop>` | say, look_at, turn, emote, pose, react, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`); everything comes in at step 1; `pan` also takes a mark (`to: right`); the [acting actions](#speaking-and-acting) take characters only |
 
 `title` and `heading` stand for each other (the header band, see "Built-in scenes"): `highlight:
 title` works on a `bullets` heading. [Project scene types](EXTENDING.md#8-per-beat-actions-targets-and-custom-actions)
@@ -4152,6 +4216,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `callout` | `kind` (`box` default, `circle`, `arrow`, `label`, `spotlight`, `magnifier`), `label`, `area`, `within` (`frame` \| `safe`), `units` (`fraction` \| `px`), `color` (`highlight`), `label_size` (`caption`), `side` (`auto`, `top`, `bottom`, `left`, `right`), `curved` (arrow), `zoom` (magnifier, `2`), `keep` (`false`), `name` | points at the target — or, without a target, at `area` of the frame — with the [Step 34 callouts](#screenshot): a rounded `box` (label as a tag on its edge), a `circle`, an `arrow` from the label, a `label` beside it (no mark), a `spotlight` (the rest of the view darkened) or a `magnifier` (an enlarged inset of a picture: the target must show one, e.g. `image`). Gone when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: stays to the end of the scene). See "Callouts" below. |
 | `sfx` | `sound` (or as the target: `- sfx: NAME`), `gain` (`0` dB), `pan` (`0`), `align` (`start` \| `end`), `params` (`duration`, `pitch`, `intensity`) | plays a [sound effect](#sound-effects-sfx) at `at` — exactly then, even while the scene animates; draws nothing, works on every scene type. Its "target" is the sound's name, not a target of the scene; no `until`, no `run_time`. |
 | `particles` | `kind` (or as the target: `- particles: snow`), `density` (`1`), `area`, `color`, `seed` (`1`), `keep` (`false`) | [particles](#particles) — `rain`, `snow`, `sparkles`, `dust`, `confetti`, `smoke` or `bubbles` — over the scene from `at`, in front of everything; works on every scene type. They fade in, and fade out (still moving; `run_time`, `0.6` s) when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: at the end of the scene). Its "target" is the kind, not a target of the scene. |
+| `say`, `look_at`, `turn`, `emote`, `pose`, `react` | see [Speaking and acting](#speaking-and-acting) | the acting actions on a `stage`'s characters: speak (lip sync and a speech bubble), look at something, turn round, change expression or pose, react to another speaker for one beat |
 
 `dim`, `highlight`, `zoom` and `transform` act on targets on screen; a target not shown yet is
 first revealed (as by `reveal`). `dim` and `highlight` change only opacity resp. colour, so

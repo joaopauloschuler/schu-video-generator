@@ -45,7 +45,8 @@ class PoseChange(Animation):
     halfway). Every changing part eases with ``part_rate_func`` in its own window; parts start
     ``lag_ratio`` apart, body first, then legs, arms, head and face (:data:`PART_NAMES` order).
     The target is resolved when the animation is created; the start when it begins, which also
-    ends a running blink (the idle clock stops while it plays, §69.5).
+    ends a running blink (the idle clock stops while it plays, §69.5). A running lip sync keeps
+    following its clock on every frame (§69.4).
 
     ``self.play(PoseChange(pip, pose="waving", expression="happy"), run_time=0.8)``
     """
@@ -92,6 +93,7 @@ class PoseChange(Animation):
             parts[part] = blend_poses(self._start.parts[part], self.target.parts[part], self.part_rate_func(local))
         facing = self.target.facing if progress >= 0.5 else self._start.facing
         self.mobject.set_state(CharacterState(facing, parts))
+        self.mobject.sync_mouth()  # Manim pauses the character's updaters: keep lip sync in step
 
 
 __all__ = ["PoseChange", "blend_poses", "part_windows"]

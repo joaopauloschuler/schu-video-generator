@@ -175,9 +175,13 @@ set at once with `set_pose(name)` / `set_expression(name)`, or animated part by 
 about its pivot, body first; `state=` takes any `CharacterState`). For a single part, call
 `set_part` from an updater (`UpdateFromAlphaFunc(hero, lambda m, a: m.set_part("arm_left",
 angle=120 * a))`), not `.animate` (that would move points along straight lines). Lip sync:
-inside `with self.narrate(0) as d:`, `hero.lip_sync(self.beat_visemes(0))` makes the mouth
-follow the beat's `VisemeTrack` (an updater; `stop_lip_sync()` ends it and restores the mouth;
-`show_viseme("O")` shows one of `VISEMES` at once; a character without a mouth is left alone).
+inside `with self.narrate(0) as d:`, `self.speak(hero)` makes the mouth follow the beat's
+`VisemeTrack`, timed from the beat's start by the scene's clock (`hero.lip_sync(self.beat_visemes(0),
+clock=self.beat_clock())`), so it stays in step through a `PoseChange`; `stop_lip_sync()` ends it
+(the mouth shows its pose's shape again); `show_viseme("O")` shows one of `VISEMES` at once; a
+character without a mouth is left alone. The built-in acting actions (`say`, `look_at`, `turn`,
+`emote`, `pose`, `react`) work on every target that is a `Character`, so register your characters
+as targets (`self.target(name, hero)`) to let a video's beats act on them.
 `character(name)` breathes, sways its head and blinks on its own (unless `idle: false`):
 `stop_idle()` / `start_idle(seed=None)` turn that off and on; a blink never shows during a
 `PoseChange`. Before drawing your own scene for characters on a set, check whether the built-in
@@ -964,6 +968,9 @@ beats after the action's own) to choose per use, e.g. by an option. `problems()`
 `apply`), which later actions of the scene may then use — `vidgen validate` checks both.
 `scene_problems(scene_cls, params)` returns the problems that depend on the scene (the built-in
 `pan` checks its `to` with `scene_cls.camera_place(params, to)`).
+`character_needs()` names the entry of `vidgen.cartoon.cast.ACTION_NEEDS` (`"say"`, `"look_at"`,
+`"emote"`, ...) the use needs of the characters it targets; `vidgen validate` then warns when one
+lacks those parts (the built-in acting actions in `src/vidgen/scenes/acting.py`).
 The built-in `callout` action (`src/vidgen/scenes/callout_action.py`) is an example of all
 three, built on the callout helpers below. An action that draws nothing sets `animates = False`
 and implements `cue(self, scene, time)` instead of `apply`: the runner calls it when the beat

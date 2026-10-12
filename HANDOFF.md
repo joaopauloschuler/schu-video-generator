@@ -7384,3 +7384,93 @@ How to test
   preview render of a stage + image project with `cartoon_style` drew placeholders keyed like
   `vidgen imagegen --dry-run`'s requests.
 
+
+
+## Step 78 — Acting actions, part 1: speaking and looking
+
+What was built
+- Six beat actions in `src/vidgen/scenes/acting.py` (against `vidgen.api` only), on targets that
+  are `Character`s: `say` (lip sync for the beat; `bubble: true` = the beat's text, or a short
+  text; `color`, `size`; undone at the next beat), `look_at` (`to`: a character or prop, a mark,
+  an x 0..1, or `camera`), `turn` (`to: left | right`, default the other way), `emote` (`to`: an
+  expression), `pose` (`to`: a pose), `react` (`expression` and / or `pose`, undone at the next
+  beat). The character is the target (`- emote: kit`, `to: happy`): the shorthand's value is
+  always the target, so the new state is the `to` option. `look_at` / `turn` / `emote` / `pose`
+  last; `until` puts back only what they changed (`_Acting._change` / `_undo`).
+- Who speaks: `Stage.narrate` wraps `NarratedScene.narrate`; the stage's characters whose `voice`
+  is the beat's voice (`cast.beat_voice`: beat, else scene, else `default`;
+  `cast.speaking_characters`) speak the beat, unless the beat has a `say` action
+  (`NarratedScene.beat_action_names`), which picks the speakers.
+- Lip sync timed by the scene's clock (Step 72's known issue): `Character.lip_sync(track, *,
+  start=0.0, clock=None)`; with `clock` (`NarratedScene.beat_clock()`: scene time since the beat
+  started) the mouth is a function of the time from the beat's audio start. The viseme shape is
+  now a layer over the mouth's pose (`_spoken`), so expressions set while speaking show at rest;
+  `PoseChange.interpolate_mobject` calls `Character.sync_mouth()` every frame, so the mouth stays
+  in step during a pose change (other animations hold it; it catches up after).
+  `NarratedScene.speak(character)`, `current_beat`, `Character.lip_sync_track`.
+- Speech bubble (`speech_bubble`, `bubble_tail`): `callout_label` + `label_spot(side="top")` above
+  the head, inside the view's label bounds, clear of text / callouts / other characters /
+  overlays / earlier bubbles; plate and tail one `Union` outlined in the text's ink; a `Callout`
+  of kind `label`. The callout action's `_view`, `_bounds`, `_avoid` became public
+  (`view_region`, `label_bounds`, `label_avoid`) for it.
+- Look geometry without manim: `cartoon/acting.py` (`look_pose`, `camera_look`, `LookPose`).
+- Validate: problems — a `say` by a character without a voice (`cast.say_problem`), an unknown
+  pose / expression (`pose_name_problem`), a `look_at.to` that is no target, mark or `camera`, an
+  acting action on a prop, `react` with neither option, an empty bubble text; unknown characters
+  via the usual unknown-target check. Warnings — `cast.acting_warnings` (per use: a character
+  lacking the parts of `Action.character_needs()`'s `ACTION_NEEDS` entry; run in a project
+  session) and `cast.shared_voice_warnings`.
+
+Files touched
+- New: `src/vidgen/scenes/acting.py`, `src/vidgen/cartoon/acting.py`, `tests/test_cartoon_acting.py`.
+- `src/vidgen/cartoon/character.py`, `cartoon/transition.py`, `cartoon/cast.py` (`ACTION_NEEDS`
+  key `say (lip sync)` -> `say`, `missing_needs`, speaker helpers, warnings), `scene.py`,
+  `actions.py` (`Action.character_needs`), `scenes/stage.py`, `scenes/callout_action.py`
+  (renames), `scenes/__init__.py`, `api.py`, `cli.py` (`validate_warnings`),
+  `data/guide/AGENTS.md` (+ copy `AGENTS.md`: actions table rows, dialogue bullet,
+  troubleshooting list).
+- Tests updated: `tests/test_actions.py` (action name lists), `tests/test_cartoon_visemes.py` (lip
+  sync reads `shown_shape`: the pose's shape is no longer changed).
+- Docs: `docs/CONFIG.md` (new "Speaking and acting" under `stage`, actions / `action` / `until` /
+  `run_time` rows, stage targets row, a lip sync note), `DESIGN.md` (§2 tree, §6.4, §69.2,
+  §69.4, §69.5, §69.6, new §69.11), `docs/EXTENDING.md`, `tasklist.md`.
+
+Public interfaces
+- `vidgen.api` adds `beat_voice`, `speaking_characters`, `say_problem`, `LookPose`, `look_pose`,
+  `camera_look`. `NarratedScene`: `current_beat`, `beat_clock()`, `speak()`,
+  `beat_action_names()`. `Action.character_needs()`. `Character.lip_sync(..., clock=None)`,
+  `sync_mouth()`, `lip_sync_track`. New built-in actions `say`, `look_at`, `turn`, `emote`,
+  `pose`, `react`.
+
+Decisions / deviations
+- `react` is a beat action (`- react: kit`), not a new beat key: no `BeatConfig` change, and it
+  composes with `at` / `until` like the others.
+- Lip sync keeps the pose untouched (a layer, like the idle overlays but separate from them, so
+  `stop_idle` does not end it). `show_viseme` still sets the pose's shape (unchanged behaviour).
+- A `say` on the scene's last beat is never reverted (no next beat): the mouth rests after the
+  track and the bubble leaves with the scene's fade-out.
+- A `say` by a character whose voice is not the beat's is allowed (no warning): its mouth follows
+  the beat's audio.
+- Searched before adding: bubbles reuse `callout_label`, `label_spot`, `Callout` and the callout
+  action's placement helpers; pose / expression checks reuse `pose_name_problem`; the look
+  geometry, speaker resolution and acting actions did not exist.
+
+Known gaps / TODOs
+- Gestures, walking, `enter` / `exit`, `jump` are Step 79. A bubble does not follow a moving
+  character. A long beat makes a large bubble (use a short `bubble` text).
+- `look_at` sets the head angle and eye shift in the pose: a later `pose` / `emote` resets them.
+- A mouth shape swap still resets the mouth's style (Step 67 gap): a dimmed speaking character
+  shows its mouth at full opacity.
+
+How to test
+- `pytest tests/test_cartoon_acting.py` (12 not-render + 1 render at 160x90, ~2.5 s).
+- Also run (not render): `test_cartoon_visemes test_cartoon_idle test_cartoon_poses
+  test_cartoon_svg test_cartoon_character test_cartoon_stage test_cartoon_parallax
+  test_cartoon_props test_actions test_callout_action test_api` (276, 6 s) and `test_guide
+  test_docs test_actions_coverage test_schema test_extensions test_builtin_scenes test_translation
+  test_json_output test_mcp test_cli test_gallery test_introspect test_lint test_voices
+  test_particles test_cartoon_generator test_cartoon_style` (535, 80 s); render: the cartoon files
+  and `test_callout_action` (14, 26 s), `test_actions_coverage test_builtin_scenes -k stage` (3),
+  `test_cartoon_svg test_cartoon_visemes` (1). A 854x480 preview of a two-character dialogue
+  (voices, `say` with bubbles, `react`, `emote`, `look_at: camera`) rendered and `vidgen lint`
+  found one `rushed_animation` warning on a two-word beat.

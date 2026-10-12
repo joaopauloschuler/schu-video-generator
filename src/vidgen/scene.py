@@ -286,6 +286,7 @@ class NarratedScene(MovingCameraScene):
         self.silent_busy: float | None = None
         self._durations: dict[str, float] = {}
         self._current_beat: str | None = None
+        self._beat_start = 0.0  # scene time the current beat's narration started
         self._requested: float | None = None
         #: Sound effects of the scene (:class:`~vidgen.sfx.SfxEvent`, scene times), in the order
         #: they were added; the worker stores them in the timings, the pipeline mixes them.
@@ -511,6 +512,33 @@ class NarratedScene(MovingCameraScene):
         b = self.beat(beat)
         return beat_visemes(self.project, b.id, self.beat_duration(b))
 
+    @property
+    def current_beat(self) -> BeatConfig | None:
+        """The beat being narrated now (inside :meth:`narrate`), else ``None``."""
+        return self.beat(self._current_beat) if self._current_beat is not None else None
+
+    def beat_clock(self) -> Callable[[], float]:
+        """A clock for :meth:`Character.lip_sync <vidgen.cartoon.character.Character.lip_sync>`:
+        called, it gives the seconds since the current beat's narration (its audio) started, from
+        the scene's time, so it keeps counting while animations pause the character's updaters.
+        Call it inside :meth:`narrate`."""
+        start = self._beat_start
+        return lambda: float(self.renderer.time) - start
+
+    def speak(self, character: Any) -> None:
+        """Make ``character``'s mouth follow the current beat's viseme track (:meth:`beat_visemes`),
+        timed from the beat's start (:meth:`beat_clock`); ``character.stop_lip_sync()`` ends it
+        (DESIGN.md §69.11). Call it inside :meth:`narrate`."""
+        beat = self.current_beat
+        if beat is None:
+            raise VidgenError(f"scene '{self.spec.id}': speak() is called outside a beat")
+        character.lip_sync(self.beat_visemes(beat), clock=self.beat_clock())
+
+    def beat_action_names(self, beat: str | int | BeatConfig) -> list[str]:
+        """The action types the beat's ``actions`` use (validated), in order."""
+        b = self.beat(beat)
+        return [u.kind.name for u in self._actions.uses if u.beat == b.id] if self._actions is not None else []
+
     @contextmanager
     def narrate(self, beat: str | int | BeatConfig) -> Iterator[float]:
         """Narrate one beat: ``with self.narrate(0) as d: ...``.
@@ -530,6 +558,7 @@ class NarratedScene(MovingCameraScene):
         if self.capture is not None:
             self.capture.begin_segment(b.id, round((d + self.pad) * config.frame_rate), include_end=False)
         self._current_beat = b.id
+        self._beat_start = start
         if self._actions is not None:
             self._actions.start_beat(b.id, d, self.pad)
         try:

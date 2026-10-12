@@ -124,15 +124,15 @@ class CalloutAction(Action):
     def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
         """Build the callout for the current camera view and draw it."""
         o = self.options
-        view, scale = _view(scene)
-        bounds = _bounds(scene, view, scale)
+        view, scale = view_region(scene)
+        bounds = label_bounds(scene, view, scale)
         picture = _picture(targets)
         whole = _region([m for t in targets for m in _parts(scene, t)]) if targets else None
         try:
             area = self._area(view, bounds, whole, picture)
         except VidgenError as exc:
             raise VidgenError(f"scene '{scene.spec.id}' {self.config.describe()}: {exc}") from None
-        avoid = _avoid(scene, view, scale, targets, area)
+        avoid = label_avoid(scene, view, scale, targets, area)
         common: dict[str, Any] = {
             "color": o.color, "label_size": o.label_size, "side": o.side, "bounds": bounds, "avoid": avoid, "scale": scale, "theme": scene.theme,
         }
@@ -178,10 +178,10 @@ class CalloutAction(Action):
         return callout_area(o.area, view if o.within == "frame" else bounds)
 
 
-# ----- helpers -------------------------------------------------------------------------------------
+# ----- helpers (also used by the speech bubbles of ``say``, scenes/acting.py) -------------------------
 
 
-def _view(scene: NarratedScene) -> tuple[Region, float]:
+def view_region(scene: NarratedScene) -> tuple[Region, float]:
     """The part of the scene the camera shows and its size relative to the whole frame (1 =
     not zoomed; 0.5 = zoomed in twice)."""
     frame = getattr(scene.camera, "frame", None)
@@ -192,7 +192,7 @@ def _view(scene: NarratedScene) -> tuple[Region, float]:
     return Region(x - w / 2, y - h / 2, x + w / 2, y + h / 2), w / scene.frame_width
 
 
-def _bounds(scene: NarratedScene, view: Region, scale: float) -> Region:
+def label_bounds(scene: NarratedScene, view: Region, scale: float) -> Region:
     """Where labels may go: the scene's safe area, or the zoomed view minus its margins."""
     if abs(scale - 1) < 1e-6 and abs(view.center[0]) < 1e-6 and abs(view.center[1]) < 1e-6:
         return scene.safe_area
@@ -226,7 +226,7 @@ def _holds(box: Region, area: Region) -> bool:
     return box.x0 <= x <= box.x1 and box.y0 <= y <= box.y1
 
 
-def _avoid(scene: NarratedScene, view: Region, scale: float, targets: list[Target], area: Region) -> list[Region]:
+def label_avoid(scene: NarratedScene, view: Region, scale: float, targets: list[Target], area: Region) -> list[Region]:
     """Boxes labels keep clear of: the text on screen, callouts on screen, the scene's other
     small targets on screen (not those holding ``area``) and the overlays (drawn over the frame;
     mapped into a zoomed view)."""
