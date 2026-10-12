@@ -291,7 +291,8 @@ Accessory = Literal["glasses", "hat", "scarf", "bag"]
 class CharacterLook(_Strict):
     """``look`` of a character: the parameters of the character generator (DESIGN.md §69.1).
     Every value builds an original figure from primitives (circles, ellipses, rounded
-    rectangles, polygons); ``seed`` varies its proportions a little."""
+    rectangles, polygons); ``seed`` varies its proportions a little. ``svg`` draws the character
+    from an SVG file split into parts by element ids instead (§69.2)."""
 
     body: BodyShape = "round"
     """Body shape: round, tall, square or bean."""
@@ -309,6 +310,8 @@ class CharacterLook(_Strict):
     """Any of glasses, hat, scarf, bag (each at most once)."""
     seed: int | None = None
     """A number that varies the proportions a little (same seed, same figure); none: no variation."""
+    svg: str | None = Field(default=None, min_length=1)
+    """An SVG file (relative to the project folder; best under assets/) drawn instead of the generator: parts by id (head, mouth, arm_left, mouth_A, ...), data-pivot="x y"."""
 
     @field_validator("accessories")
     @classmethod
@@ -317,6 +320,15 @@ class CharacterLook(_Strict):
         if repeated:
             raise ValueError(f"accessory listed twice: {', '.join(repeated)}")
         return value
+
+    @model_validator(mode="after")
+    def _svg_alone(self) -> CharacterLook:
+        generator_keys = sorted(self.model_fields_set - {"svg"})
+        if self.svg is not None and generator_keys:
+            raise ValueError(f"svg draws the character from the file; {', '.join(generator_keys)} only apply to the generator (remove them or svg)")
+        if self.svg is not None and not self.svg.lower().endswith(".svg"):
+            raise ValueError(f"svg must name an .svg file, not {self.svg!r}")
+        return self
 
 
 class CharacterEntry(_Strict):
@@ -328,9 +340,9 @@ class CharacterEntry(_Strict):
     voice: Identifier | None = None
     """Who speaks for this character: a name from voices (or default: the base voice); none: the character does not speak."""
     look: CharacterLook = Field(default_factory=CharacterLook)
-    """How the character is drawn: body shape, head size, eyes, nose, hair, ears, accessories, seed."""
+    """How the character is drawn: body shape, head size, eyes, nose, hair, ears, accessories, seed; or svg: a file split into parts."""
     colors: CharacterColors = Field(default_factory=CharacterColors)
-    """Part colours {skin, clothes, outline, features, hair, accessory}: theme tokens or hex."""
+    """Part colours {skin, clothes, outline, features, hair, accessory}: theme tokens or hex (not used by an svg look)."""
 
 
 class PronunciationEntry(_Strict):

@@ -158,8 +158,10 @@ A character param is typed `CharacterName` (`who: CharacterName`, or `CharacterN
 and suggests close names. In `construct`, `character(name, height=..., facing="right")` builds
 that character as a `Character`: a `VGroup` of named parts (`PART_NAMES`: `body`, `legs`,
 `arm_left`, `arm_right`, `head`, `eyes`, `brows`, `mouth`, `accessory`), drawn from its `look:`
-(body shape, hair, accessories...; every look has the same part and shape names), the feet at
-the origin (`feet()`); its outline width follows `height`. `vidgen character NAME --png` shows
+(body shape, hair, accessories...; every generated look has the same part and shape names), the
+feet at the origin (`feet()`). A character drawn from an SVG file (`look: {svg: ...}`, CONFIG.md
+"Characters from SVG files") may lack parts and has its own shape names: check `has_part("arm_left")`
+and `shape_names("mouth")` before posing it; its outline width follows `height`. `vidgen character NAME --png` shows
 one still of it. Pose a part about its pivot with `set_part(part, angle=..., scale=..., shift=...,
 shape=...)` (degrees counterclockwise as drawn facing right; its child parts follow, e.g. the
 head carries the eyes), swap a shape with `swap("mouth", "open")`, mirror the whole character

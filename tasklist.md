@@ -351,9 +351,9 @@ one.
 - [x] Tests: every parameter value builds, the same parameters give the same shapes (`tests/test_cartoon_generator.py`)
 
 ### Step 69 — Imported SVG characters
-- [ ] `look: {svg: path/to/file.svg}`: an SVG (own art, or made with the SVG image models of Step 61b) split into parts by a naming convention (`id="mouth"`, `id="arm_left"`, `data-pivot="x y"`); sanitised with `svgclean`
-- [ ] Missing parts degrade gracefully (no arm → no `wave` gesture; validate warns which actions are unavailable); mouth shapes as named alternatives (`mouth_A`, `mouth_E`, …) when present
-- [ ] Docs: the naming convention with a small example SVG in `examples/`; tests with that SVG
+- [x] `look: {svg: path/to/file.svg}`: an SVG (own art, or made with the SVG image models of Step 61b) split into parts by a naming convention (`id="mouth"`, `id="arm_left"`, `data-pivot="x y"`); sanitised with `svgclean` (`cartoon/svg_look.py`; shapes outside the named parts make the body; DESIGN §69.2)
+- [x] Missing parts degrade gracefully (no arm → no `wave` gesture; validate warns which actions are unavailable); mouth shapes as named alternatives (`mouth_A`, `mouth_E`, …) when present (only `body` is required; `cast.ACTION_NEEDS` is the table later action steps consult)
+- [x] Docs: the naming convention with a small example SVG in `examples/`; tests with that SVG (`examples/svg_character/assets/sprout.svg`, CONFIG.md "Characters from SVG files", `tests/test_cartoon_svg.py`)
 
 ### Step 70 — Poses and expressions
 - [ ] Named poses (`stand`, `pointing`, `waving`, `thinking`, `shrug`, `arms_crossed`, `sitting`) and expressions (`neutral`, `happy`, `sad`, `angry`, `surprised`, `worried`, `thinking`) as part angles / part shapes, in one table

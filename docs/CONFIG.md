@@ -1009,6 +1009,7 @@ rectangles, polygons, lines), so each figure is an original drawing:
 | `ears` | `none` | `none`, `round`, `pointy`, `floppy` (skin colour); with or without hair |
 | `accessories` | `[]` | any of `glasses`, `hat` (worn on the head), `scarf`, `bag` (on the body); each at most once |
 | `seed` | none | a number that varies the proportions (head, body, legs, arms, eye gap and size, mouth) by up to 8 %; the same look and seed always give the same figure; none: no variation |
+| `svg` | none | an SVG file (relative to the project folder) drawn instead of the generator, split into parts by element ids ([below](#characters-from-svg-files)); the other `look` keys and `colors` do not apply |
 
 | key (`colors`) | default | |
 |---|---|---|
@@ -1036,6 +1037,44 @@ background, in the video's aspect ratio with its shorter side 720 px (default fi
 - **Renders**: editing `characters:` renders every scene again (it is part of each scene's
   fingerprint, like the theme).
 - **Variants** replace the whole `characters:` list (lists are not merged).
+
+### Characters from SVG files
+
+`look: {svg: assets/sprout.svg}` draws the character from your own SVG file (or one made with a
+`generate: {format: svg}` model), drawn **facing right**. vidgen sanitises it as it does an SVG
+picture (scripts, filters, raster images and text are removed; gradients become one colour; see
+the `image` scene) and splits it into parts by **element ids**:
+
+| id | meaning |
+|---|---|
+| `body`, `legs`, `arm_left`, `arm_right`, `head`, `eyes`, `brows`, `mouth`, `accessory` | that part at rest (a group or one shape). `arm_left` is the character's own left arm: facing right it is the near arm, so draw `arm_right` behind the body |
+| `<part>_<shape>` (`eyes_closed`, `mouth_A`, `mouth_E`, `mouth_O`, `mouth_M`, `arm_left_up`) | another shape of the part, shown when swapped in; hide it in the file with `display="none"` |
+| `data-pivot="x y"` (on a part's element) | the point the part turns about, in the SVG's `viewBox` coordinates: the neck for `head`, the shoulder for an arm, the hips for `legs` |
+
+- A part's element takes everything inside it, except elements with another part's id (so
+  `eyes` may sit inside the `head` group). An id starting with the part's own name inside its
+  element (`head_outline` inside `head`) is just a piece of it. Shapes outside every named part
+  make the `body` (a file without part ids is a body-only character); shapes hidden there are
+  not drawn.
+- The rest shape of `eyes` is called `open` and that of `mouth` `smile`, as on generated
+  characters; other rest shapes are `rest`. Name the mouth shapes for speech `mouth_A` (also I),
+  `mouth_E`, `mouth_O`, `mouth_U`, `mouth_M` (M, B, P), `mouth_F` (F, V), `mouth_L`, `mouth_W`
+  (W, Q); any subset may be present. Until lip sync is added they are shapes like any other.
+- Parts are drawn in the file's order. The feet are the bottom of the rest shapes, under the
+  middle of `legs` (else of `body`); the top of the rest shapes is the character's height.
+  Without `data-pivot` the pivot is guessed from the part's box (head and body: bottom centre;
+  legs: top centre; an arm: its top corner nearer the body; face parts: the centre).
+- The SVG's own colours and stroke widths are drawn (`colors:` is not used); stroke widths scale
+  with the character's height like a generated character's outline.
+- **Missing parts are allowed**: only a body is needed. `vidgen validate` lists the actions such
+  a character cannot do (no arm: no `gesture: wave` / `point` / `shrug`; no `eyes_closed`: no
+  blink; no head: no `look_at`, `nod`, `shake_head`), ids that look like misspelt part names
+  (`Mouth`, `arm-left`), other shapes the file shows, parts without `data-pivot` that turn, and
+  what the sanitiser removed. A missing file, two elements with the same part id or a bad
+  `data-pivot` are problems.
+- Keep the file under `assets/`: editing it then renders the scenes again.
+- `vidgen character NAME` lists the parts and shapes found; `--png` shows a still.
+  `examples/svg_character` has a small example (`assets/sprout.svg`).
 
 ## Narration (`narration:`)
 

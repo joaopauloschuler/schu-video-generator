@@ -18,6 +18,7 @@ from __future__ import annotations
 import math
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -98,12 +99,13 @@ def _known(names: Iterable[str]) -> str:
     return ", ".join(names)
 
 
-def _check_parts(specs: Mapping[str, CharacterPart], who: str) -> dict[str, str | None]:
-    """The parent of each part; raises :class:`VidgenError` for unknown, missing or badly linked parts."""
+def _check_parts(specs: Mapping[str, CharacterPart], who: str, required: Iterable[str]) -> dict[str, str | None]:
+    """The parent of each part; raises :class:`VidgenError` for unknown, missing (of ``required``)
+    or badly linked parts."""
     unknown = [n for n in specs if n not in PART_NAMES]
     if unknown:
         raise VidgenError(f"character '{who}': unknown part(s) {_known(unknown)} (parts: {_known(PART_NAMES)})")
-    missing = [n for n in REQUIRED_PARTS if n not in specs]
+    missing = [n for n in required if n not in specs]
     if missing:
         raise VidgenError(f"character '{who}': missing part(s) {_known(missing)}")
     parents: dict[str, str | None] = {}
@@ -153,6 +155,8 @@ class Character(VGroup):
     """A rigged cartoon character (see the module docstring). ``height`` is the character's
     height in Manim units (1 character unit); the feet start at the origin. Stroke widths scale
     with ``height`` (as drawn at :data:`REFERENCE_HEIGHT`), at least one pixel wide.
+    ``required`` names the parts it must have (default :data:`REQUIRED_PARTS`; an imported SVG
+    needs only ``body``, §69.2).
 
     ``parts`` maps each part name to its live ``VGroup`` (one child: the shape shown).
     """
@@ -165,6 +169,7 @@ class Character(VGroup):
         height: float = 3.0,
         facing: str = "right",
         voice: str | None = None,
+        required: Iterable[str] = REQUIRED_PARTS,
     ) -> None:
         super().__init__()
         specs: dict[str, CharacterPart] = {}
@@ -172,7 +177,7 @@ class Character(VGroup):
             if spec.name in specs:
                 raise VidgenError(f"character '{name}': part '{spec.name}' given twice")
             specs[spec.name] = spec
-        self._parents = _check_parts(specs, name)
+        self._parents = _check_parts(specs, name, required)
         if height <= 0:
             raise VidgenError(f"character '{name}': height must be positive, got {height}")
         self.name = name
@@ -362,9 +367,26 @@ class Character(VGroup):
 # ----- characters of the config ------------------------------------------------------------
 
 
-def build_character(entry: CharacterEntry, *, theme: Theme | None = None, height: float = 3.0, facing: str = "right") -> Character:
-    """The :class:`Character` of a ``characters:`` entry: its ``look`` drawn by the generator,
-    its colours resolved in ``theme`` (default: the current theme). The feet start at the origin."""
+def build_character(
+    entry: CharacterEntry,
+    *,
+    theme: Theme | None = None,
+    height: float = 3.0,
+    facing: str = "right",
+    root: Path | None = None,
+) -> Character:
+    """The :class:`Character` of a ``characters:`` entry, feet at the origin: its ``look`` drawn
+    by the generator with its colours resolved in ``theme`` (default: the current theme), or
+    ``look.svg`` (relative to ``root``, default: the active project's folder) split into parts."""
+    if entry.look.svg is not None:
+        from vidgen.cartoon.svg_look import SVG_REQUIRED_PARTS, svg_character_parts
+
+        if root is None:
+            from vidgen.runtime import current_project
+
+            root = current_project().root
+        parts = svg_character_parts(root / entry.look.svg, where=f"characters '{entry.name}': {entry.look.svg}")
+        return Character(parts, name=entry.name, height=height, facing=facing, voice=entry.voice, required=SVG_REQUIRED_PARTS)
     from vidgen.cartoon.generator import generate_parts
 
     colors = {part: resolve_color(value, theme) for part, value in entry.colors.model_dump().items()}
@@ -377,8 +399,9 @@ def character(name: str, *, height: float = 3.0, facing: str = "right") -> Chara
     from vidgen.cartoon.cast import find_character
     from vidgen.runtime import current_project, current_theme
 
-    entry = find_character(current_project().config, name)
-    return build_character(entry, theme=current_theme(), height=height, facing=facing)
+    project = current_project()
+    entry = find_character(project.config, name)
+    return build_character(entry, theme=current_theme(), height=height, facing=facing, root=project.root)
 
 
 __all__ = [

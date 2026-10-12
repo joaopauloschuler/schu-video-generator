@@ -49,7 +49,7 @@ def write_character_png(
         "background_color": theme.background,
     }
     with tempconfig(settings):
-        figure = build_character(entry, theme=theme, height=FRAME_SHORT_SIDE * STILL_CHARACTER_HEIGHT, facing=facing)
+        figure = build_character(entry, theme=theme, height=FRAME_SHORT_SIDE * STILL_CHARACTER_HEIGHT, facing=facing, root=project.root)
         figure.move_to([0, 0, 0])
         camera = Camera()
         camera.capture_mobjects([figure])

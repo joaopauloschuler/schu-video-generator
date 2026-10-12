@@ -73,7 +73,8 @@ src/vidgen/
   vector_mobject.py       # load_vector() / VectorPicture: a sanitised SVG as Manim shapes (§65)
   cartoon/                # cartoons (§69): character.py (Character: named vector parts with pivots,
                           # poses, mirroring; character()), cast.py (characters: lookups, checks; no manim),
-                          # generator.py (look: parameters -> parts, §69.1), still.py (`vidgen character --png`)
+                          # generator.py (look: parameters -> parts, §69.1), svg_look.py (look: {svg} -> parts by
+                          # element ids, §69.2), still.py (`vidgen character --png`)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
   actions.py              # per-beat actions: Target, Action, validation, ActionRunner (§26)
@@ -4825,7 +4826,8 @@ shapes; the `stage` scene (Step 73) places characters by `feet()`; acting action
 take `CharacterName` options.
 
 - **Parts** (`cartoon/character.py`): `PART_NAMES = body, legs, arm_left, arm_right, head, eyes,
-  brows, mouth, accessory`; `REQUIRED_PARTS` all but `legs` and `accessory`. A part is a
+  brows, mouth, accessory`; `REQUIRED_PARTS` all but `legs` and `accessory` (`Character(...,
+  required=)` overrides it: an imported SVG needs only `body`, §69.2). A part is a
   `CharacterPart(name, shapes, pivot, parent=None, order=None)`: `shapes` maps shape names to
   `VMobject`s (the first is the rest shape; e.g. eyes `open` / `closed`, mouth `smile` / `open`;
   Step 71 adds viseme shapes the same way), `pivot` an (x, y) point. Parents default to
@@ -4876,8 +4878,7 @@ take `CharacterName` options.
   character afterwards does not scale strokes (as for any `VGroup`).
 - **Config** (`config.py`): `characters: list[CharacterEntry]` at the top level;
   `CharacterEntry(name: Identifier, voice: Identifier | None, look: CharacterLook, colors:
-  CharacterColors)`; `CharacterLook` holds the generator's parameters (§69.1; Step 69 adds
-  `svg:`); `CharacterColors(skin = secondary, clothes = primary, outline = features =
+  CharacterColors)`; `CharacterLook` holds the generator's parameters (§69.1) or `svg:` (§69.2); `CharacterColors(skin = secondary, clothes = primary, outline = features =
   CHARACTER_INK #1F2430, hair = accent, accessory = highlight)` as `ColorRef`s. A list (not a mapping) so that a repeated name is a
   clear error (YAML mappings silently keep the last duplicate key): `VideoConfig` raises
   `duplicate character name 'pip' (characters[0] and characters[1])`.
@@ -4940,3 +4941,65 @@ accessory`) to Manim colours.
   background, in the final format's aspect ratio with its shorter side 720 px; default file
   `exports/character_<name>.png` (`default_png_path`). No `--json` yet (Step 83's
   `character-sheet` is the agent tool, also over MCP).
+
+### 69.2 Characters from SVG files (Step 69)
+
+`look: {svg: FILE}` (`CharacterLook.svg`, a path relative to the project folder ending in `.svg`;
+any other `look` key with it is a config error) draws the character from an SVG instead of the
+generator. `build_character(entry, root=)` (root default: the active project's folder; `character()`
+and `still.write_character_png` pass it) calls `cartoon/svg_look.py`.
+
+- **Splitting** (`split_character_svg(data, where) -> SvgCharacter`, `read_character_svg(path,
+  where)`; no manim): the file goes through `svgclean.sanitize_svg` (§65; `currentColor` black),
+  then every drawn element (`path rect circle ellipse line polyline polygon use`, not inside
+  `defs` / `symbol`) is marked with its owner: the nearest enclosing element whose id names a part
+  (`part_key`: `<part>` → the rest shape, `<part>_<shape>` → another shape; the longest part name
+  wins, so `arm_left_up` is arm_left's `up`). An id of the same part inside its element does not
+  start a new shape (`head_outline` in `head` is a piece of the head). Shapes with no owner belong
+  to `body` (rest), except shapes hidden in the file there (`display: none` / `visibility:
+  hidden`, inherited), which are dropped; hiding is reset inside a part element (alternatives are
+  hidden in the file). Rest names: `REST_SHAPE_NAMES` (`eyes` → `open`, `mouth` → `smile`, as the
+  generator), else `rest`. Each (part, shape) becomes its own document: a copy of the sanitised
+  file with the other owners' shapes removed and its element and ancestors un-hidden, so
+  inherited styles and transforms and the viewBox box stay. Parts keep the order of their first
+  drawn shape in the file; the rest shape first, then the others in file order.
+- **Pivots**: `data-pivot="x y"` (or `x,y`) on a part's element, in viewBox coordinates (the
+  rest element's wins over an alternative's). Without it, `default_pivot` from the rest shape's
+  box in character units: head / body bottom centre, legs top centre, an arm the top corner
+  nearer the body's centre, others the centre. `pivot_warnings` names `TURNING_PARTS` (head, arms,
+  legs) without one.
+- **Problems** (`VidgenError`): a missing / unreadable file, what the sanitiser refuses, two
+  elements naming the same (part, shape), a `data-pivot` that is not two numbers, no body.
+  **Warnings** (`SvgCharacter.warnings`): ids that look like misspelt part names (`_near_miss`:
+  lower case / `-` → `_` names a part, or difflib ≥ 0.8: `Mouth`, `arm-left`, `eye`), a non-rest
+  shape the file shows, a part element that draws nothing.
+- **Shapes** (`svg_character_parts(path, where) -> list[CharacterPart]`, manim): each document
+  is parsed with `vector_mobject.svg_shapes` (factored out of `load_vector`: `SVGMobject` of the
+  work copy, the invisible box first) and moved so its viewBox's top-left corner is the origin
+  (Manim flips y about each drawing's own centre, so documents are aligned by their box). The
+  rest shapes' union box gives the character units: bottom = feet height, x = the middle of the
+  `legs` box (else `body`), top → 1. Stroke widths: `vector_mobject.set_svg_stroke` (also
+  factored out of `load_vector`) with the factor for a character `REFERENCE_HEIGHT` tall, so
+  `Character` scales them with `height` like a generated outline; fill-only shapes get a zero
+  outline in their fill colour. Parent: `DEFAULT_PARENTS`, walking up to a part the file has (no
+  head: the eyes hang from the body). Draw order: the file's order (`order = 10 × index`). The
+  SVG's colours are kept (`colors:` unused). `Character(..., required=SVG_REQUIRED_PARTS)` (only
+  `body`).
+- **Actions a character cannot do** (`cast.ACTION_NEEDS`: action → alternatives of parts or
+  `part.shape`; `unavailable_actions(part_shapes)`): `say (lip sync)` mouth, `blink` eyes.closed,
+  `look_at` head, `emote` eyes or brows or mouth, `gesture: point` / `wave` an arm, `shrug` both
+  arms, `nod` / `shake_head` head. Steps 70–79 should consult the table (and `Character.has_part`)
+  and skip what a character lacks.
+- **Validate**: `cast.character_look_problems(config, root)` (in `cli.project_problems`:
+  `characters[k].look.svg: ...`); `cast.character_look_warnings(config, root)` (in
+  `cli.validate_warnings`): the sanitiser's warnings, the split warnings, guessed pivots,
+  `colors` given (unused), a mouth with one shape (it will not move when speaking), and
+  `character 'x' (FILE): actions unavailable: gesture: wave (needs arm_left or arm_right); ...`.
+- **`vidgen character NAME`**: for an svg look prints `look: svg FILE`, `parts: arm_right, legs,
+  body, ..., eyes (open, closed), mouth (smile, A, E, O, M)` (`character_lines(entry, theme,
+  root)`) and `colors: the SVG's own`; `--png` works unchanged.
+- **Fingerprint**: a file under `assets/` is part of every scene's fingerprint (its stat); a
+  file elsewhere is not (documented: keep it under `assets/`).
+- **Example**: `examples/svg_character` (`assets/sprout.svg`, an original figure: every part,
+  `eyes_closed`, `mouth_A` / `_E` / `_O` / `_M`, pivots), with a generated character beside it.
+  Tests: `tests/test_cartoon_svg.py`.

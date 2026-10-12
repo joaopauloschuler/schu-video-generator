@@ -528,6 +528,8 @@ my_video/
   `video.yaml` that `vidgen plan examples/plan/outline.md -o examples/plan/video.yaml --force`
   writes from it (unedited: 19 scenes with chapters, no `vidgen lint` findings; the `# TODO:`s
   are what an author still has to do).
+- [examples/svg_character](examples/svg_character) — a cartoon character drawn from an SVG file
+  split into parts by element ids (`vidgen character sprout examples/svg_character --png`).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.

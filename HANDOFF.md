@@ -6758,3 +6758,77 @@ How to test
   (59 tests), `pytest -m render` on the same files (2 tests: the Step 67 render, the `--png`
   still). Also run: `tests/test_docs.py tests/test_config.py tests/test_schema.py
   tests/test_api.py tests/test_guide.py tests/test_voices.py` (not render).
+
+
+## Step 69 — Imported SVG characters
+
+What was built
+- `look: {svg: FILE}` (`CharacterLook.svg`; a path relative to the project folder ending in
+  `.svg`; any other `look` key with it is a config error). `build_character` draws such a
+  character from the file via `cartoon/svg_look.py` instead of the generator.
+- `split_character_svg` / `read_character_svg` (no manim): `svgclean.sanitize_svg`, then each
+  drawn element is owned by the nearest enclosing element whose id names a part: `<part>` = rest
+  shape (`eyes` → `open`, `mouth` → `smile`, else `rest`), `<part>_<shape>` = another shape
+  (`mouth_A`, `eyes_closed`). Shapes outside the named parts make `body` (shapes hidden there are
+  dropped); a `<part>_...` id inside that part's own element is a piece of it. Each (part, shape)
+  becomes its own SVG document (the file with other owners' shapes removed, its element un-hidden),
+  so inherited styles / transforms stay. `data-pivot="x y"` in viewBox coordinates.
+- `svg_character_parts` (manim): loads each document with `vector_mobject.svg_shapes`, aligns
+  documents by their viewBox box, converts to character units (feet = bottom of the rest shapes
+  under the middle of `legs`, else `body`; top = 1), strokes via `set_svg_stroke` for
+  `REFERENCE_HEIGHT`, pivots from `data-pivot` or `default_pivot`, parents from `DEFAULT_PARENTS`
+  walking up to a present part, draw order = file order.
+- `Character(..., required=)`: imported characters need only `body` (`SVG_REQUIRED_PARTS`).
+- `cast.ACTION_NEEDS` / `unavailable_actions`: what each acting action needs (say, blink,
+  look_at, emote, gesture point / wave / shrug / nod / shake_head).
+- `vidgen validate`: `character_look_problems` (missing file, sanitiser refusal, repeated part id,
+  bad `data-pivot`, no body) and `character_look_warnings` (sanitiser warnings, misspelt part ids,
+  visible alternatives, empty parts, guessed pivots, unused `colors`, one-shape mouth, unavailable
+  actions). `vidgen character NAME` prints the parts and shapes of an svg look.
+- Example: `examples/svg_character/` (`assets/sprout.svg`, an original figure with every part,
+  `eyes_closed`, `mouth_A/E/O/M` and pivots; plus a generated character).
+
+Files touched
+- New: `src/vidgen/cartoon/svg_look.py`, `tests/test_cartoon_svg.py`,
+  `examples/svg_character/video.yaml`, `examples/svg_character/assets/sprout.svg`.
+- `src/vidgen/config.py` (`CharacterLook.svg` + check), `cartoon/character.py` (`required=`,
+  `build_character(root=)`, `character()` passes the root), `cartoon/still.py` (passes the root),
+  `cartoon/cast.py` (action table, look problems / warnings, `character_lines(root=)`),
+  `cli.py` (validate problems / warnings, `vidgen character` parts), `vector_mobject.py`
+  (`svg_shapes`, `set_svg_stroke` factored out of `load_vector`, behaviour unchanged).
+- Docs: `docs/CONFIG.md` (`svg` row, "Characters from SVG files"), `DESIGN.md` (§2 tree, §69,
+  new §69.2), `docs/EXTENDING.md` (check `has_part` / `shape_names`), `README.md` (example row).
+
+Public interfaces
+- No `vidgen.api` change. `Character.__init__` gains `required=` (default unchanged).
+  Internal: `svg_look.*`, `cast.ACTION_NEEDS`, `unavailable_actions`, `character_look_problems`,
+  `character_look_warnings`, `vector_mobject.svg_shapes`, `set_svg_stroke`.
+
+Decisions / deviations
+- Shapes outside named parts become the body, so any SVG (even one without ids) is a usable,
+  body-only character; only `body` is required.
+- One SVG document per shape (rather than Manim's `id_to_vgroup_dict`): keeps inherited styles
+  and transforms, and lets hidden alternatives (`display="none"`, which svgelements skips) be
+  shown in their own document.
+- Draw order follows the file, not `DEFAULT_DRAW_ORDER` (the artist decided the layering).
+- The plain `mouth` is called `smile` and plain `eyes` `open`, so expressions written for
+  generated characters find the rest shapes. The suggested viseme names (`mouth_A`, `_E`, `_O`,
+  `_U`, `_M`, `_F`, `_L`, `_W`) are documented in CONFIG.md; Step 71 decides the mapping.
+- The SVG's own colours are drawn; `colors:` is ignored (warned). No `recolor: theme` option.
+- Searched before adding: sanitising reuses `svgclean.sanitize_svg`; Manim loading and stroke
+  conversion reuse `load_vector`'s code (factored into `svg_shapes` / `set_svg_stroke`); no
+  existing id-based SVG splitter.
+
+Known gaps / TODOs
+- Actions do not exist yet; Steps 70–79 must consult `ACTION_NEEDS` / `has_part` and skip what
+  a character lacks. `ACTION_NEEDS` names (e.g. `say (lip sync)`) may be renamed by those steps.
+- An SVG outside `assets/` is not in the scene fingerprint (documented).
+- `use` elements referencing shapes inside a part are not followed for ownership.
+
+How to test
+- `pytest tests/test_cartoon_svg.py` (16 tests incl. 1 render at 160x90, ~2 s).
+- Also run: `-m "not render" tests/test_cartoon_generator.py tests/test_cartoon_character.py
+  tests/test_vector_images.py tests/test_docs.py tests/test_config.py tests/test_api.py
+  tests/test_guide.py`; `-m render` on the cartoon and vector test files;
+  `tests/test_schema.py -k svg_character`.
+
