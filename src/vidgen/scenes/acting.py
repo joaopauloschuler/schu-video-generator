@@ -194,10 +194,10 @@ class Say(_Acting):
         return anims
 
     def revert(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
-        """Stop the lip sync it started (not a later one) and fade the bubbles out."""
+        """Stop the lip sync it started (not a later one; once its line ends when the next
+        beat overlaps it) and fade the bubbles out."""
         for character, track in getattr(self, "speakers", []):
-            if character.lip_sync_track is track:
-                character.stop_lip_sync()
+            scene.end_lip_sync(character, track)
         return [fade_out(part) for bubble in getattr(self, "bubbles", []) for part in scene.on_screen_parts(bubble)]
 
     def _bubble(self, scene: NarratedScene, speaker: Character, text: str, targets: list[Target]) -> Callout:

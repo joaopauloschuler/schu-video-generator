@@ -76,6 +76,25 @@ class MotionTrack:
         }
 
 
+def _joined_keys(scene: NarratedScene, beat_id: str) -> dict[str, Any]:
+    """For beats that overlap (DESIGN.md §69.34): ``window`` (seconds until the next beat, which
+    starts before this one ends), ``overlap`` (seconds this one starts before the line before it
+    ends) and ``interrupt``; nothing for other beats."""
+    from vidgen.overlap import SpokenLine
+
+    beat = scene.beat(beat_id)
+    keys: dict[str, Any] = {}
+    window = scene.beat_window(beat)
+    if window.joined:
+        keys["window"] = round(window.window, 6)
+    line = SpokenLine(0.0, 0.0, beat.overlap, beat.interrupt)
+    if line.joins:
+        keys["overlap"] = line.lead
+        if beat.interrupt:
+            keys["interrupt"] = True
+    return keys
+
+
 def activity_document(scene: NarratedScene, motion: MotionTrack, fps: int) -> dict[str, Any]:
     """The scene's activity file content (see the module docstring and DESIGN.md §17)."""
     sources = {}
@@ -89,6 +108,7 @@ def activity_document(scene: NarratedScene, motion: MotionTrack, fps: int) -> di
             "busy": round(scene.beat_busy.get(entry.beat_id, 0.0), 6),
             "source": sources.get(entry.beat_id, "estimate"),
             "text": entry.text,
+            **_joined_keys(scene, entry.beat_id),
         }
         for entry in scene.beat_log
     ]

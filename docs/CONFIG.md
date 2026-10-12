@@ -129,7 +129,9 @@ gain}`, see [music stings](#foley-and-music-stings). A beat's `auto_direct` (def
 else the video's) turns [automatic directing](#automatic-directing-auto_direct) on or off for that
 beat of a `stage`. A beat's `shot` (default none) frames characters of a `stage` for that beat:
 `closeup kit`, `two_shot`, `over_shoulder kit pip`, ... or `{kind, of, move, run_time}`, see
-[shots](#shots-shot).
+[shots](#shots-shot). A beat's `overlap` (seconds, default none) starts it before the line of
+the beat before has ended, and `interrupt: true` (default `false`) cuts that line off, see
+[overlapping lines](#overlapping-lines-overlap-interrupt); not on a scene's first beat.
 
 ## Chapters
 
@@ -1929,6 +1931,54 @@ beats:
   takes its own time between them) and never show the sound. `vidgen readback` compares the
   transcript with the line without its sounds and skips the words a transcript writes for them
   (`ha ha`, `hmm`, `ugh`, `laughs`...) unless the line says them.
+
+### Overlapping lines (`overlap`, `interrupt`)
+
+Two speakers talking at once, or one cutting the other off. Any scene type; on a
+[`stage`](#stage) both mouths move.
+
+```yaml
+beats:
+  - text: "And then the box started to hum, and I thought it would never stop."
+    voice: pip_voice
+  - text: "It hums every night!"
+    voice: kit_voice
+    overlap: 0.6        # starts 0.6 s before pip's line ends: both heard
+  - text: "Wait, wait, listen to me."
+    voice: pip_voice
+  - text: "No, you listen!"
+    voice: kit_voice
+    interrupt: true     # cuts pip off 0.5 s before the end of the line (overlap: S for another point)
+```
+
+- **Timing.** `overlap: S` starts the beat `S` seconds before the speech of the beat before it
+  ends (its MP3's trailing silence cut off; the word-count estimate without audio), in whole
+  frames, with no `narration.pad` between them. The beat before keeps at least 0.2 s. `overlap:
+  0` starts it right as the speech ends (a tight reply without the pause). Only within a scene:
+  a scene's first beat cannot have `overlap` or `interrupt` (a config error), so scenes start and
+  end where they would, and chapters, transitions and `carry` are unchanged.
+- **Sound.** With `overlap` both lines are heard; the earlier one is 3 dB lower from where the
+  later one starts (a 0.1 s ramp), so the new line leads and both stay audible. `interrupt: true`
+  cuts the earlier line where the beat starts with a 0.05 s fade; without `overlap` it starts 0.5
+  s before that line's speech ends (`interrupt: true` with `overlap: 0` is a config error: it
+  would cut nothing). The MP3s are not changed (no re-voicing; `vidgen tts` is unaffected): the
+  scene's sound is shaped when it is rendered. Music ducks under both voices.
+- **What the beat before gets.** Its animations and actions get the time until the next beat
+  starts (what `with self.narrate(i) as d` yields, and what `at:` fractions are of); a beat whose
+  animations take longer makes the next one start late (`animation_overrun` reports it).
+- **Mouths.** On a `stage` the earlier speaker's mouth goes on following its line under the new
+  one (its `say` too) and rests when its audio ends; an interrupted line's mouth stops at the cut.
+  Automatic directing adds no listener reaction after a line that the next beat overlaps (there
+  is no pause), and gestures only on words heard before the next line starts.
+- **Captions and subtitles.** While both lines sound, captions show both, one line each, the
+  earlier one above (in its speaker's colour with `speakers: color`); the SRT has overlapping
+  cues of one line each, which players show one above the other. An interrupted line's captions
+  end at the cut. `timings.json` gives the interrupted beat's `end` at the cut, an overlapped
+  beat's `end` after the next beat's `start`.
+- **Checks.** `vidgen validate` warns when a beat overlaps a line of its own voice. `vidgen lint`
+  warns when an overlap is so long that whole words of the line before are spoken under the new
+  one ([`talked_over`](#lint-vidgen-lint)); an `interrupt` cuts them on purpose and is not
+  reported.
 
 ### `vidgen list-sfx`
 
@@ -5446,7 +5496,10 @@ frame of the render (a sampled comparison with the previous frame).
           busy,            # seconds the beat's own code (animations, waits) took; more than
                            # d + pad means the beat ran past its narration
           source,          # "audio" (d from the MP3) or "estimate" (from the word count)
-          text}],
+          text,
+          window,          # only when the next beat overlaps this one: seconds until it starts
+          overlap,         # only on a beat with overlap / interrupt: seconds it starts early
+          interrupt}],     # only when true
  plays: [{start, end, beat, animations: ["Write", ...], wait, requested}],
  motion: {step, grid: [w, h], level, changes: [[frame, fraction], ...]},
  overlap_out}              # last frames a crossfade into the next scene covers (0: none)
@@ -5540,8 +5593,9 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `mouth_without_voice` | warning | at a beat's end, after its narration (the pad), a character whose lip sync still shows a speech shape: its viseme track is longer than the beat's audio. Fix: `vidgen tts` again (the track and the audio are made together); in a custom scene, lip sync with `clock=self.beat_clock()` |
 | `narration_speed` | warning; info without audio | a beat (of at least `min_words` spoken words) narrated at fewer than `min_rate` or more than `max_rate` words per second (`unit: words`) or characters per second (`unit: characters`: letters and digits). `unit: auto` counts words for the languages vidgen has a word rate for and characters for others; the default range is the video [language](#languages-and-translations)'s: English (also no `language`) 1.8-3.5 words/s, Portuguese 1.7-3.4, Spanish and French 1.8-3.6, Italian 1.8-3.5, German 1.5-3.1, characters 8-17/s; `min_rate` / `max_rate` set override it. With an MP3 the time is the speech in it (leading and trailing silence below -40 dB of its peak cut off). Words count as spoken: hyphens, dashes and slashes separate words (`K-Phi-3` is 3), a number counts one word per digit up to 3 per digit run, plus one per decimal point and symbol (`2.58` is 4, `15%` 3), an all-capitals acronym of 2-5 letters half a word per letter (`GPU` 1.5). **Without audio** the beat's length is the word-count estimate (`narration.words_per_second`), so the rate is only off when the text is (many numbers or acronyms) or the configured rate itself is implausible: reported as `info`, one finding per scene listing the beats |
 | `dead_air` | warning | nothing on screen changes for more than `max_seconds` (a frame counts as changed when at least `min_change` of it changed, from the activity file's `motion`), narrated or not; the finding names the beat where the still picture starts and the beats it lasts through. Silent scenes are checked the same way: a silent card held longer than `max_seconds` without motion is reported. A still picture ends where a [crossfade](#transitions-transition) into the next scene starts blending it away |
-| `animation_overrun` | warning | a beat whose code (animations and waits inside `narrate`) takes longer than its narration plus `narration.pad` by more than `tolerance` seconds: the next beat (and its audio) starts late, leaving silence. The message lists the animations still running when the narration ends. A silent scene whose animations take longer than its `duration` is reported the same way |
+| `animation_overrun` | warning | a beat whose code (animations and waits inside `narrate`) takes longer than its narration plus `narration.pad` (or, when the next beat [overlaps](#overlapping-lines-overlap-interrupt) it, than the time until that beat) by more than `tolerance` seconds: the next beat (and its audio) starts late, leaving silence. The message lists the animations still running when the narration ends. A silent scene whose animations take longer than its `duration` is reported the same way |
 | `rushed_animation` | warning | animations that `play_steps` (and so `reveal` and most built-in scenes) had to shorten below `min_run_time` seconds because the beat is too short for its steps |
+| `talked_over` | warning | a beat with [`overlap`](#overlapping-lines-overlap-interrupt) that starts speaking before whole words of the line before it are said: those words are spoken entirely under the new line (word times from the alignment, else estimated). The message names the words and the largest overlap that keeps them clear. Not reported for `interrupt`, which cuts them on purpose. Fix: a shorter `overlap`, or `interrupt: true` |
 | `readback` | warning | a beat whose MP3, transcribed by [`vidgen readback`](#readback-vidgen-readback), differs from its spoken text by a word error rate above `max_wer`; the message quotes the first differences and a suggested fix. Reads only the transcripts `vidgen readback` cached for the beats' current MP3s and the `stt:` settings (it never runs speech to text): nothing is reported until that command has run |
 
 **Config** (all optional; the values shown are the defaults):
@@ -5571,6 +5625,7 @@ lint:
     dead_air: {max_seconds: 6.0, min_change: 0.0002}   # min_change: fraction of the frame
     animation_overrun: {tolerance: 0.1}     # seconds past narration + pad
     rushed_animation: {min_run_time: 0.5}   # seconds
+    talked_over: {}
     readback: {max_wer: 0.1}                # word error rate; also `vidgen readback`'s threshold
 ```
 

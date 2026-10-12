@@ -32,12 +32,13 @@ from vidgen.cartoon.directing import DirectedBeat, with_auto_actions
 from vidgen.cartoon.visemes import VisemeTrack, beat_visemes
 from vidgen.layout import distribute
 from vidgen.overlay_layer import OverlayLayer
+from vidgen.overlap import BeatWindow, VoiceShape, beat_lines, beat_windows, shape_voice
 from vidgen.overlays import Overlay, avoid, mobject_region, scene_overlays
 from vidgen.config import DIRECTED_TRANSITIONS, ID_PATTERN, BeatConfig, SceneConfig, SfxCue, StingCue, validation_error_lines
 from vidgen.errors import VidgenError
 from vidgen.imagegen import GenerateImage, generated_image
 from vidgen.project import Project
-from vidgen.sfx import AUTO_ACTION_SFX, STING_SOUNDS, SfxEvent, SoundLibrary, decode_audio, stereo, write_wav
+from vidgen.sfx import AUTO_ACTION_SFX, RATE, STING_SOUNDS, SfxEvent, SoundLibrary, decode_audio, stereo, write_wav
 from vidgen.speech import audio_duration
 from vidgen.theme import Theme
 from vidgen.transitions import ColorFade, has_transitions, resolve_color
@@ -212,8 +213,9 @@ def _animation_name(item: Any) -> str:
     return type(item).__name__
 
 
-def add_narration(scene: MovingCameraScene, path: Path) -> None:
-    """Add a narration file to ``scene``'s sound at the current time, at the file's own level.
+def add_narration(scene: MovingCameraScene, path: Path, shape: VoiceShape | None = None) -> None:
+    """Add a narration file to ``scene``'s sound at the current time, at the file's own level
+    (``shape``: dipped under an overlapping line or cut by an interruption, DESIGN.md §69.34).
 
     The file is decoded here and handed to Manim as a 48 kHz stereo WAV: a mono MP3 (what TTS
     providers return) plays on both channels unchanged, like the sound effects (DESIGN.md §47).
@@ -222,7 +224,8 @@ def add_narration(scene: MovingCameraScene, path: Path) -> None:
     """
     with tempfile.TemporaryDirectory(prefix="vidgen_voice_") as folder:
         wav = Path(folder) / "narration.wav"
-        write_wav(wav, stereo(decode_audio(path)))
+        samples = stereo(decode_audio(path))
+        write_wav(wav, samples if shape is None else shape_voice(samples, RATE, shape))
         scene.add_sound(str(wav))
 
 
@@ -289,6 +292,11 @@ class NarratedScene(MovingCameraScene):
         #: Seconds a silent scene's code took before being held to its ``duration``.
         self.silent_busy: float | None = None
         self._durations: dict[str, float] = {}
+        self._windows: dict[str, BeatWindow] | None = None
+        #: Scene time until which the voice of the last beat narrated is heard (it may sound on
+        #: under the next beat, DESIGN.md §69.34), and the lip syncs left running meanwhile.
+        self._voice_until = 0.0
+        self._lingering: list[tuple[Any, Any]] = []
         self._current_beat: str | None = None
         self._beat_start = 0.0  # scene time the current beat's narration started
         self._requested: float | None = None
@@ -532,12 +540,25 @@ class NarratedScene(MovingCameraScene):
                 self._durations[b.id] = b.estimated_duration(self.project.config.narration.words_per_second)
         return self._durations[b.id]
 
+    def beat_window(self, beat: str | int | BeatConfig) -> BeatWindow:
+        """How long the beat lasts on the scene's clock (DESIGN.md §69.34): the seconds its
+        own animations get (``body``, what :meth:`narrate` yields), until the next beat starts
+        (``window``), how long its voice is heard (``heard``) and how it is mixed (``shape``).
+        Without ``overlap`` / ``interrupt`` on the next beat: ``d``, ``d + pad``, ``d``, as is."""
+        b = self.beat(beat)
+        if self._windows is None:
+            lines = beat_lines(self.project, self.beats, self.beat_duration)
+            self._windows = {x.id: w for x, w in zip(self.beats, beat_windows(lines, self.pad, config.frame_rate))}
+        return self._windows[b.id]
+
     def beat_visemes(self, beat: str | int | BeatConfig) -> VisemeTrack:
         """The beat's viseme track over its :meth:`beat_duration`, for
         :meth:`~vidgen.cartoon.character.Character.lip_sync` (stored by ``vidgen tts``, else
-        built from the spoken text; DESIGN.md §69.4)."""
+        built from the spoken text; DESIGN.md §69.4); cut where the next beat interrupts it."""
         b = self.beat(beat)
-        return beat_visemes(self.project, b.id, self.beat_duration(b))
+        track = beat_visemes(self.project, b.id, self.beat_duration(b))
+        cut = self.beat_window(b).shape.cut
+        return track if cut is None else track.until(cut)
 
     @property
     def current_beat(self) -> BeatConfig | None:
@@ -561,6 +582,23 @@ class NarratedScene(MovingCameraScene):
             raise VidgenError(f"scene '{self.spec.id}': speak() is called outside a beat")
         character.lip_sync(self.beat_visemes(beat), clock=self.beat_clock())
 
+    def end_lip_sync(self, character: Any, track: Any) -> None:
+        """End ``character``'s lip sync of ``track`` (the one a beat started; a later one is
+        left alone): now, or, while that beat's voice still sounds under the next beat (an
+        ``overlap``, DESIGN.md §69.34), when the beat narrated now ends."""
+        if character.lip_sync_track is not track:
+            return
+        if float(self.renderer.time) < self._voice_until - 1e-6:
+            self._lingering.append((character, track))
+        else:
+            character.stop_lip_sync()
+
+    def _stop_lingering(self) -> None:
+        for character, track in self._lingering:
+            if character.lip_sync_track is track:
+                character.stop_lip_sync()
+        self._lingering = []
+
     def beat_action_names(self, beat: str | int | BeatConfig) -> list[str]:
         """The action types the beat's ``actions`` use (validated), in order."""
         b = self.beat(beat)
@@ -578,37 +616,43 @@ class NarratedScene(MovingCameraScene):
 
         Starts the beat's audio now (unless ``audio=False``), yields its duration ``d`` and on
         exit waits until ``d + pad`` seconds have passed since entering. Records a
-        :class:`BeatTiming` in ``self.beat_log``.
+        :class:`BeatTiming` in ``self.beat_log``. When the next beat overlaps or interrupts this
+        one (DESIGN.md §69.34) it yields and waits the time until the next beat starts instead
+        (:meth:`beat_window`), and the voice is dipped or cut there.
         """
         b = self.beat(beat)
         if any(entry.beat_id == b.id for entry in self.beat_log):
             raise VidgenError(f"scene '{self.spec.id}': beat '{b.id}' is narrated twice")
         d = self.beat_duration(b)
+        window = self.beat_window(b)
         path = self.beat_audio(b)
         if path is not None and self.audio_enabled:
-            add_narration(self, path)
+            add_narration(self, path, None if window.shape.plain else window.shape)
         start = float(self.renderer.time)
         if self.capture is not None:
-            self.capture.begin_segment(b.id, round((d + self.pad) * config.frame_rate), include_end=False)
+            self.capture.begin_segment(b.id, round(window.window * config.frame_rate), include_end=False)
         self._current_beat = b.id
         self._beat_start = start
         if b.sting is not None:
-            self._add_sting(b.sting, start + (d if b.sting.placed_at == "end" else 0.0))
+            self._add_sting(b.sting, start + (window.heard if b.sting.placed_at == "end" else 0.0))
         for span in beat_sound_spans(self.project, b, d):
-            if span.generated:   # a breath the TTS cannot say, in the silence before / after the line (§69.33)
+            cut = window.shape.cut
+            if span.generated and (cut is None or span.start < cut):   # a breath the TTS cannot say, in the silence before / after the line (§69.33)
                 sound = VOICE_SOUNDS[span.kind].sfx or ""
                 self._add_sfx(sound, max(start + span.start, 0.0), SOUND_GAIN_DB, 0.0, "start", {}, "voice sound")
         if self._actions is not None:
-            self._actions.start_beat(b.id, d, self.pad)
+            self._actions.start_beat(b.id, window.body, window.rest)
         try:
-            yield d
+            yield window.body
             self.beat_busy[b.id] = float(self.renderer.time) - start
-            self.wait_seconds(d + self.pad - (self.renderer.time - start))
+            self.wait_seconds(window.window - (self.renderer.time - start))
             if self._actions is not None:
                 self._actions.end_beat()
         finally:
             self._current_beat = None
-        self.beat_log.append(BeatTiming(b.id, start, start + d, b.text))
+        self._stop_lingering()   # the voice of the beat before has ended by now
+        self._voice_until = start + window.heard
+        self.beat_log.append(BeatTiming(b.id, start, start + window.heard, b.text))
         if self.capture is not None:
             self.capture.end_segment(b.id)
 
@@ -793,6 +837,7 @@ class NarratedScene(MovingCameraScene):
             self.hold()
         if self.transition_out is not None and self.transition_out.hold:
             self.wait_seconds(self.transition_out.hold / config.frame_rate)
+        self._stop_lingering()
         self._record_carry()
         narrated = {entry.beat_id for entry in self.beat_log}
         missing = [b.id for b in self.beats if b.id not in narrated]

@@ -130,6 +130,11 @@ class VisemeTrack:
         k = bisect.bisect_right([c.start for c in self.cues], seconds) - 1
         return self.cues[max(k, 0)].viseme
 
+    def until(self, seconds: float) -> VisemeTrack:
+        """The track cut at ``seconds`` (an interrupted line, DESIGN.md §69.34): ``rest`` from then on."""
+        cues = tuple(c._replace(end=min(c.end, seconds)) for c in self.cues if c.start < seconds)
+        return VisemeTrack(cues, self.source, self.timing)
+
 
 # ----- phonemes and letters -> visemes ------------------------------------------------------------
 

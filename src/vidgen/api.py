@@ -32,7 +32,7 @@ from vidgen.callouts import (  # noqa: E402
     label_spot,
 )
 from vidgen.clips import CLIP_SUFFIXES, ClipInfo, ClipMobject, ClipTiming, clip_audio, fit_speed, probe_clip  # noqa: E402
-from vidgen.cues import CaptionCue, caption_cues, phrase_break_cost, segment_cues  # noqa: E402
+from vidgen.cues import CaptionCue, CueStack, caption_cues, overlapping_beats, phrase_break_cost, segment_cues, stack_cues  # noqa: E402
 from vidgen.charts import (  # noqa: E402
     CHART_MARKERS,
     ChartAxes,
@@ -408,9 +408,12 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "text_color_on",
     "plate_contrast",
     "CaptionCue",
+    "CueStack",
     "caption_cues",
     "phrase_break_cost",
     "segment_cues",
+    "overlapping_beats",
+    "stack_cues",
     "WordTime",
     "beat_word_times",
     "estimate_word_times",

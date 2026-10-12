@@ -220,16 +220,16 @@ def test_karaoke_highlights_the_spoken_word(make_project) -> None:
     assert cap.options.style == "karaoke" and cap.karaoke  # type: ignore[attr-defined]
     states = [cap.state(t) for t in np.arange(0, 3.0, 0.05)]
     pairs = [s for s in states if s is not None]
-    assert all(isinstance(s, tuple) for s in pairs) and pairs == sorted(pairs)
+    assert all(isinstance(s, tuple) and len(s[1]) == 1 for s in pairs) and pairs == sorted(pairs)   # one line at a time
     assert len({k for k, _ in pairs}) >= 3   # a few words at a time
-    k, w = next(s for s in pairs if s[1] >= 1)
+    k, w = next(s for s in pairs if s[1][0] >= 1)
     cue = cap.built.submobjects[1 + k]  # type: ignore[attr-defined]
     posed = cap.pose(cap.built, (k, w))  # type: ignore[attr-defined]
     assert posed is not cue and posed.width >= cue.width - 1e-6
     highlight = ManimColor(current_theme().color("highlight")).to_hex().upper()
     colours = {ManimColor(g.get_fill_color()).to_hex().upper() for line in posed.submobjects[1:] for g in line.submobjects if len(g.points)}
     assert highlight in colours and len(colours) == 2
-    assert cap.pose(cap.built, (k, -1)) is cue  # type: ignore[attr-defined]
+    assert cap.pose(cap.built, (k, (-1,))) is cue  # type: ignore[attr-defined]
     # karaoke is bigger and bold; in 9:16 the bottom band is raised for phone controls
     band = cap.built.submobjects[0]  # type: ignore[attr-defined]
     assert band.get_bottom()[1] > -frame_size(180, 320)[1] / 2 + 0.5 + 0.1

@@ -116,7 +116,7 @@ def scene_starts(project: Project, preview: bool) -> dict[str, float | None]:
             return {s.id: None for s in project.config.scenes}
         found.append(timings)
     frames = [round(float(t["duration"]) * fmt.fps) for t in found]
-    speech = [t["beats"][-1]["end"] if t["beats"] else None for t in found]
+    speech = [max(b["end"] for b in t["beats"]) if t["beats"] else None for t in found]
     overlaps = join_overlaps(project.config, fmt.fps, frames, speech)  # crossfades (DESIGN.md §49)
     starts: dict[str, float | None] = {}
     offset = 0.0

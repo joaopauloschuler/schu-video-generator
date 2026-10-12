@@ -349,11 +349,13 @@ def validate_warnings(project: Project) -> list[str]:
     and voices not in the bundled list and ``timestamps`` it cannot honour (§66), and SVG
     characters' unavailable actions and part warnings (§69.2), parts the characters' own
     poses name that they do not have (§69.3), characters sharing a voice and beat actions on a
-    character that lacks the parts they need (§69.11)."""
+    character that lacks the parts they need (§69.11), and lines that overlap a line of their own voice
+    (§69.34)."""
     from vidgen.carry import carry_warnings
     from vidgen.cartoon.cast import acting_warnings, character_look_warnings, character_pose_warnings, shared_voice_warnings
     from vidgen.chapter_export import chapter_warnings
     from vidgen.imagegen import imagegen_warnings
+    from vidgen.overlap import overlap_warnings
     from vidgen.transitions import transition_warnings
     from vidgen.translation import language_warnings, translation_warnings
     from vidgen.tts import tts_warnings
@@ -374,6 +376,7 @@ def validate_warnings(project: Project) -> list[str]:
         + character_pose_warnings(project.config, project.root)
         + shared_voice_warnings(project.config)
         + acting_warnings(project)
+        + overlap_warnings(project.config)
     )
 
 

@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from vidgen import __version__, carry
+from vidgen.config import SceneConfig
 from vidgen.project import Project
 
 #: Bumped when the fingerprint's inputs change (old renders then count as stale).
@@ -93,6 +94,16 @@ def _stat(path: Path) -> list[int] | None:
     return [st.st_size, st.st_mtime_ns]
 
 
+#: Beat keys left out of a scene's config in the fingerprint while unset (``_joins``), so that
+#: renders made before Step 100 stay valid.
+JOIN_KEYS = ("overlap", "interrupt")
+
+
+def _joins(spec: SceneConfig) -> dict[str, list[Any]]:
+    """Beat id -> ``[overlap, interrupt]`` of the beats that overlap or interrupt the one before."""
+    return {b.id: [b.overlap, b.interrupt] for b in spec.beats if b.overlap is not None or b.interrupt}
+
+
 def _overlay_inputs(project: Project) -> Any:
     """What overlays read from the other scenes (their planned timeline: types, durations, beat
     texts and MP3s, chapters; DESIGN.md §41-42), the beats' stored alignments (captions, §43),
@@ -113,6 +124,7 @@ def _overlay_inputs(project: Project) -> Any:
             "chapter": s.model_dump(mode="json")["chapter"],
             "overlays": s.overlays,
             "transition": s.model_dump(mode="json")["transition"],  # crossfades move later scenes (§49)
+            **({"joins": _joins(s)} if _joins(s) else {}),  # overlapping lines move later beats (§69.34)
             "beats": [
                 [
                     b.id, b.text, say(b.text), speakers[b.id],
@@ -141,7 +153,9 @@ def _next_transition(project: Project, scene_id: str) -> Any:
         return "cut"
     after = config.scenes[i + 1]
     # a crossfade's or fade's length is limited by the next scene's own length (its beats)
-    return [t.model_dump(mode="json"), after.duration, [[b.id, _stat(project.audio_dir / f"{b.id}.mp3"), b.text] for b in after.beats]]
+    beats = [[b.id, _stat(project.audio_dir / f"{b.id}.mp3"), b.text] for b in after.beats]
+    joins = _joins(after)
+    return [t.model_dump(mode="json"), after.duration, beats, joins] if joins else [t.model_dump(mode="json"), after.duration, beats]
 
 
 def scene_fingerprint(project: Project, scene_id: str) -> str:
@@ -171,7 +185,7 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
         "config": config,
         "readable": project.config.lint.rules.min_font.min_size,
         # A scene's `chapter:` only matters to overlays (in "overlays" below when there are any).
-        "scene": spec.model_dump(mode="json", exclude={"lint_ignore", "chapter", "music", "carry"}),
+        "scene": spec.model_dump(mode="json", exclude={"lint_ignore": True, "chapter": True, "music": True, "carry": True, "beats": {"__all__": set(JOIN_KEYS)}}),
         "audio": {beat.id: _stat(project.audio_dir / f"{beat.id}.mp3") for beat in spec.beats},
         "extensions": [_contents_digest(_files(folder, ".py"), folder) for folder in project.extension_dirs],
         "assets": {path.relative_to(assets).as_posix(): _stat(path) for path in _files(assets)},
@@ -184,6 +198,10 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
     if marked:
         # *word* marks are taken out of the beat's text but steer automatic gestures (§69.24)
         data["emphasis"] = marked
+    joins = _joins(spec)
+    if joins:
+        # overlapping and interrupting lines change the beats' times and their voices (§69.34)
+        data["joins"] = joins
     sounds = {beat.id: [list(s) for s in beat.voice_sounds] for beat in spec.beats if beat.voice_sounds}
     if sounds:
         # [laugh] marks are taken out of the text but make sounds, faces and mouths (§69.33)

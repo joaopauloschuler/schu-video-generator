@@ -39,6 +39,7 @@ from vidgen.config import DIRECTING_KINDS, ActionConfig, AutoDirectSetting, Beat
 
 if TYPE_CHECKING:
     from vidgen.lint.rules import StillContext
+    from vidgen.overlap import BeatWindow
     from vidgen.project import Project
     from vidgen.speech import WordTime
 
@@ -130,7 +131,9 @@ class CastMember:
 class BeatInput:
     """One beat for the planner: its id, its line, who says it (characters on the stage), the
     actions written in it (resolved), the kinds of directing on for it, and its narration's
-    length (``seconds``) and word times (from its start; none: no gestures)."""
+    length (``seconds``) and word times (from its start; none: no gestures). ``next_joins``:
+    the next beat overlaps or interrupts it (DESIGN.md §69.34), so ``seconds`` and ``words``
+    are what is heard before that beat starts and no pause follows (no reactions)."""
 
     id: str
     text: str
@@ -139,6 +142,7 @@ class BeatInput:
     kinds: frozenset[str] = frozenset()
     seconds: float = 0.0
     words: tuple[WordTime, ...] = ()
+    next_joins: bool = False
 
 
 @dataclass(frozen=True)
@@ -422,7 +426,7 @@ def _plan_reactions(state: _SceneState, beat: _Beat) -> list[ActionConfig]:
     """Each listener reacts to a line with a cue (:func:`line_cue`) in the pause after it: one
     of the cue's :data:`REACTIONS`, picked by a generator seeded with the scene, beat and
     character, never the expression of its last automatic reaction."""
-    cue = line_cue(beat.input.text) if beat.speakers else None
+    cue = line_cue(beat.input.text) if beat.speakers and not beat.input.next_joins else None
     if cue is None:
         return []
     added: list[ActionConfig] = []
@@ -905,20 +909,38 @@ def stage_reframes(project: Project, params: Any) -> bool:
     return reframe_needed(boxes, frame_width)
 
 
+def _beat_seconds(project: Project, beat: BeatConfig) -> float:
+    """A beat's narration length: its MP3's, else the word-count estimate."""
+    from vidgen.speech import audio_duration
+
+    mp3 = project.audio_dir / f"{beat.id}.mp3"
+    return audio_duration(mp3) if mp3.is_file() else beat.estimated_duration(project.config.narration.words_per_second)
+
+
 def _beat_words(project: Project, beat: BeatConfig) -> tuple[float, tuple[WordTime, ...]]:
     """A beat's narration length (its MP3's, else the word-count estimate) and its word times
     from its start (the stored alignment, else estimated: :func:`~vidgen.speech.beat_word_times`),
     each word as written (:attr:`~vidgen.config.BeatConfig.marked_text`)."""
-    from vidgen.speech import WordTime, audio_duration, beat_word_times
+    from vidgen.speech import WordTime, beat_word_times
 
-    mp3 = project.audio_dir / f"{beat.id}.mp3"
-    seconds = audio_duration(mp3) if mp3.is_file() else beat.estimated_duration(project.config.narration.words_per_second)
+    seconds = _beat_seconds(project, beat)
     spoken = project.spoken(beat) if beat.voice_sounds else None   # the audio also says the sounds (§69.33)
     times = beat_word_times(project.audio_dir, beat.id, beat.text, 0.0, seconds, spoken, project.config.language)
     marked = beat.marked_text.split()   # the words as written, *word* marks included (same count)
     if len(marked) == len(times):
         times = [WordTime(word, t.start, t.end) for word, t in zip(marked, times)]
     return seconds, tuple(times)
+
+
+def _joined_windows(project: Project, spec: SceneConfig) -> dict[str, BeatWindow]:
+    """The beats of ``spec`` that the next beat overlaps or interrupts, with their
+    :class:`~vidgen.overlap.BeatWindow` (DESIGN.md §69.34); empty when none is."""
+    from vidgen.overlap import beat_lines, beat_windows, has_joins
+
+    if not has_joins(spec.beats):
+        return {}
+    lines = beat_lines(project, spec.beats, lambda b: _beat_seconds(project, b))
+    return {b.id: w for b, w in zip(spec.beats, beat_windows(lines, project.config.narration.pad)) if w.joined}
 
 
 def _stage_cast(project: Project, characters: Sequence[str]) -> list[CastMember]:
@@ -972,6 +994,7 @@ def sound_reactions(project: Project, spec: SceneConfig, characters: Sequence[st
         return []
     can_emote = {member.name for member in _stage_cast(project, characters) if member.can_emote}
     known = registry.action_names()
+    joined = _joined_windows(project, spec)
     out: list[DirectedBeat] = []
     for beat in spec.beats:
         if not beat.voice_sounds:
@@ -983,6 +1006,10 @@ def sound_reactions(project: Project, spec: SceneConfig, characters: Sequence[st
             continue
         seconds, _ = _beat_words(project, beat)
         span = beat_sound_spans(project, beat, seconds)[0]
+        if beat.id in joined:   # the next beat starts before this one ends (§69.34)
+            seconds = joined[beat.id].body
+            if span.start >= seconds:
+                continue   # heard only under the next line, or cut by it
         at = round(min(max(span.start / seconds, 0.0), REACTION_AT), 3) if seconds > 0 else 0.0
         expression = VOICE_SOUNDS[span.kind].expression
         out.append(DirectedBeat(beat.id, tuple(
@@ -1026,12 +1053,16 @@ def stage_directions(
         return sounds
     cast = _stage_cast(project, characters)
     known = registry.action_names()
+    joined = _joined_windows(project, spec)
     beats: list[BeatInput] = []
     for beat, on in zip(spec.beats, kinds):
         written = _resolved_actions(beat, known)
         speakers = _beat_speakers(project, spec, beat, written, characters)
         seconds, words = _beat_words(project, beat) if ({"gestures", "closeups"} & on or reframe) and speakers else (0.0, ())
-        beats.append(BeatInput(beat.id, beat.marked_text, tuple(speakers), written, on, seconds, words))
+        window = joined.get(beat.id)
+        if window is not None and seconds:   # only what is heard before the next beat starts (§69.34)
+            seconds, words = window.body, tuple(w for w in words if w.end <= window.body + 1e-6)
+        beats.append(BeatInput(beat.id, beat.marked_text, tuple(speakers), written, on, seconds, words, window is not None))
     if not reframe or stage is None:
         return _merged_directions(spec, sounds, plan_directions(spec.id, cast, beats, stage))
     pans = {d.beat: d.actions for d in plan_reframe(cast, beats, stage)}

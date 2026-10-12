@@ -9266,3 +9266,114 @@ How to test
   test_scene` (205, 50 s); render: `test_voice_sounds test_cartoon_lighting test_cartoon_acting
   test_cartoon_directing test_cartoon_visemes test_cartoon_foley test_cartoon_wind test_captions
   test_sfx` (18, 33 s). The full suite was not run.
+
+## Step 100 — Overlapping speech and interruptions
+
+What was built
+- Beat keys `overlap: S` (seconds the beat starts before the previous beat's speech ends; `>= 0`)
+  and `interrupt: true` (cuts the previous line where the beat starts, 0.05 s fade; without
+  `overlap` it starts `INTERRUPT_LEAD` 0.5 s before that line's speech ends). Config errors: either
+  key on a scene's first beat (lines overlap only within a scene), `interrupt` with `overlap: 0`.
+  `vidgen validate` warns about an overlap of a line of the same voice (`overlap_warnings`).
+- `src/vidgen/overlap.py` (no manim): `SpokenLine`, `BeatWindow(body, rest, heard, shape)`,
+  `beat_windows(lines, pad, fps)`, `VoiceShape` (`cut` / `dip_from`, `gain`), `shape_voice`,
+  `beat_lines` (reads the MP3's speech end only for a beat the next one joins),
+  `beat_speech_end`, `has_joins`, `talked_over`, `overlap_warnings`; constants `INTERRUPT_LEAD`,
+  `INTERRUPT_FADE`, `OVERLAP_DIP_DB` (3 dB), `DIP_RAMP` (0.1 s), `MIN_WINDOW` (0.2 s).
+- Timeline: `NarratedScene.beat_window(beat)` and `VideoPlan._scene_beats` use the same
+  function; `narrate` yields `body` (the time until the next beat when it joins, else `d`), gives
+  the action runner `(body, rest)`, waits to `window`, records `end = start + heard` (an
+  interrupted beat ends at the cut), captures `window` of frames, puts an `end` sting at `heard`,
+  drops a generated voice sound after a cut. A joined window is in whole frames, so the cut is
+  where the next beat really starts.
+- Mix: `add_narration(scene, path, shape=None)` shapes the decoded WAV (dip from where the
+  later line starts, or cut + fade) before Manim adds it; plain beats are not touched.
+- Mouths: `NarratedScene.end_lip_sync(character, track)` stops a lip sync now or, while the
+  beat's voice still sounds under the next beat, when the next beat ends (`_lingering`);
+  `Stage.narrate` and `Say.revert` use it. `beat_visemes` of an interrupted beat is
+  `VisemeTrack.until(cut)`.
+- Captions: `cues.overlapping_beats`, `cues.CueStack`, `cues.stack_cues` (`MAX_STACK` 2). The
+  `captions` overlay draws both lines on one plate while both sound (one-line cues for beats that
+  overlap; earlier line on top; each in its speaker's colour; karaoke highlights the current word
+  of each line, state `(caption, (word, ...))`). SRT: overlapping beats get one-line cues, cues
+  may overlap in time, sorted by start.
+- Directing: `BeatInput.next_joins`; a joined beat gets `seconds = body` and only the words
+  heard before the next beat; no listener reaction after it; a voice-sound face after a cut is
+  left out.
+- Lint: activity beats gain `window` / `overlap` / `interrupt` (only when set);
+  `animation_overrun` measures the window; new rule `talked_over` (`TalkedOverRule`, warning):
+  words of the earlier line spoken entirely after the overlapping beat's speech starts.
+- Fingerprint: the keys are left out of the scene dump while unset and added as `joins` when set
+  (scene, overlay inputs, next transition), so existing renders stay valid.
+- Speech end of a scene (`pipeline._overlaps`, `storyboard`, `VideoPlan._speech_end`) is the latest
+  beat end, not the last beat's.
+- Step 99's finding fixed: `Stage._wind_step` removes the wind's scene updater itself once
+  `blowing.moving(now, inf)` is false (as the light does), not only when the next animation
+  starts; `test_wind_updater_removes_itself_once_calm` (it failed before: the updater stayed).
+
+Evidence
+- Pinned (`tests/test_overlap_pinned.py`, values recorded on HEAD e312f91 before any change):
+  VideoPlan beat slots and scene starts, `scene.timings()` of a rendered 3-beat card, and every
+  WAV Manim receives with tone MP3s equal to the plain `stereo(decode_audio(mp3))` at the beat's
+  start. Passes unchanged after the step.
+- Scratch copy of `examples/cartoon` with `overlap: 0.4` on yard_box, `interrupt: true` on
+  hill_flew and `captions` (speakers: color): `vidgen validate` ok, preview render 35 s, `vidgen
+  lint` 0 findings; the SRT has overlapping one-line cues (8.400 --> 10.989 under 06.260 -->
+  08.779), hill_count ends at 34.6 = hill_flew's start; a frame at 8.6 s shows both lines
+  stacked in Dot's and Moss's colours (checked by eye). No audio (estimates); real Kokoro not run.
+
+Files touched
+- New: `src/vidgen/overlap.py`, `tests/test_overlap.py`, `tests/test_overlap_pinned.py`.
+- `src/vidgen/config.py` (beat keys and checks, `TalkedOverRule`, rule lists), `scene.py`,
+  `videoplan.py`, `cues.py`, `subtitles.py`, `scenes/captions.py`, `scenes/stage.py` (lip sync
+  end, wind fix), `scenes/acting.py`, `cartoon/visemes.py`, `cartoon/directing.py`,
+  `activity.py`, `lint/timing_rules.py`, `render/fingerprint.py`, `render/pipeline.py`,
+  `storyboard.py`, `cli.py`, `api.py`; guide (+ `AGENTS.md` copy: "Talking at once" bullet,
+  `talked_over` row); `docs/CONFIG.md` (beat keys, "Overlapping lines", lint table / defaults,
+  activity keys), `docs/EXTENDING.md`, `DESIGN.md` (§2, §6.4, §17, §69.32 note, new §69.34),
+  `tasklist.md`.
+- Tests updated: `tests/test_captions.py` and `tests/test_voices.py` (karaoke state is now
+  `(caption, (word,))`, `_cues[k].parts[0].glyphs`), `tests/test_cartoon_acting.py` (its
+  `FakeScene` gains `end_lip_sync`).
+
+Public interfaces
+- `vidgen.api` adds `CueStack`, `stack_cues`, `overlapping_beats`. `NarratedScene.beat_window`,
+  `NarratedScene.end_lip_sync`, `VisemeTrack.until`, `add_narration(..., shape=)`,
+  `BeatInput.next_joins`, beat keys `overlap` / `interrupt`, lint rule `talked_over`. Compatible
+  except the captions overlay's karaoke state shape (internal to the overlay).
+
+Decisions / deviations
+- The overlap is measured from the earlier line's speech end (trailing silence cut), not from
+  its MP3's end: with 0.2–0.5 s of trailing silence an `overlap: 0.3` would otherwise overlap
+  nothing. `overlap: 0` therefore means "right as the speech ends, no pad".
+- The voice is shaped for the planned start of the next beat (computed up front), not for where
+  a custom scene actually calls the next `narrate`; built-in scenes call it right away.
+- "Small gain dip": only the earlier voice dips (3 dB); the new line leads at full level.
+- Captions stack at most two lines (one each) so the caption is as tall as a two-line cue; the
+  interrupted line's cue still shows its whole text until the cut.
+- `talked_over` ignores `interrupt` (cutting words is its purpose).
+- Searched first: no overlap / interrupt code existed (`grep -rni "overlap" src/vidgen` only
+  found transitions, layout and lint geometry); reused `speech_bounds`, `beat_word_times`,
+  `caption_cues`, `decode_audio` / `stereo` / `write_wav`, the light updater pattern.
+
+Known gaps / TODOs
+- Found, not fixed: `VideoPlan` and a rendered scene can disagree by a frame on a beat's start
+  when `d + pad` lands on half a frame (pinned test: plan 2.0 s, render 1.8 s for card_b2 at 5
+  fps), because the scene rounds the remaining wait after its animations; pre-existing.
+- No screenplay syntax for overlaps; no per-beat dip / fade settings; the earlier line's
+  captions show its full text even when cut. Real Kokoro / ElevenLabs audio not tried.
+
+How to test
+- `pytest tests/test_overlap.py tests/test_overlap_pinned.py` (15 not-render + 3 render, ~5 s).
+- Also run (not render): `test_captions test_subtitles test_timing_lint test_lint test_config
+  test_api test_cartoon_visemes test_voice_sounds test_cartoon_directing test_cartoon_acting
+  test_cartoon_wind test_scene` (with the new files 223, 9 s), `test_docs test_guide
+  test_schema test_introspect test_storyboard test_transitions test_chapters_progress
+  test_chapter_export test_overlays test_voices test_readback test_thumbnail_export
+  test_push_wipe_carry test_cartoon_foley test_cartoon_lint test_cartoon_stage test_actions`
+  (387, 94 s), `test_render test_cli test_builtin_scenes test_review4 test_translation
+  test_screenplay test_json_output` (238, 8 s); render: `test_cartoon_wind test_cartoon_acting
+  test_captions test_cartoon_directing test_voice_sounds test_scene test_voices test_overlap
+  test_overlap_pinned test_cartoon_lighting` (20, 26 s), `test_cartoon_lint test_timing_lint
+  test_introspect test_cartoon_stage test_cartoon_foley test_subtitles` (5, 16 s). The full suite
+  was not run.

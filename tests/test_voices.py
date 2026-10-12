@@ -287,7 +287,7 @@ def test_captions_name_and_colour_speakers(make_project) -> None:
     secondary = ManimColor(current_theme().color("secondary")).to_hex().upper()
     assert ManimColor(line.submobjects[0].get_fill_color()).to_hex().upper() == secondary
     assert len(_hexes(line)) == 2
-    assert len(cap._cues[0].glyphs) == 2   # type: ignore[attr-defined]   # karaoke word map skips the tag
+    assert len(cap._cues[0].parts[0].glyphs) == 2   # type: ignore[attr-defined]   # karaoke word map skips the tag
 
 
 def test_captions_karaoke_with_a_tag_highlights_spoken_words(make_project) -> None:
@@ -295,7 +295,7 @@ def test_captions_karaoke_with_a_tag_highlights_spoken_words(make_project) -> No
                    voices={"ana": {"voice_id": "a"}})
     (cap,) = built(project, "a", size=(180, 320))
     k, word = 0, 0
-    posed = cap.pose(cap.built, (k, word))  # type: ignore[attr-defined]
+    posed = cap.pose(cap.built, (k, (word,)))  # type: ignore[attr-defined]
     highlight = ManimColor(current_theme().color("highlight")).to_hex().upper()
     first_line = posed.submobjects[1]
     assert first_line.original_text.startswith("Ana: Hello")

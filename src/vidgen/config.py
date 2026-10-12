@@ -514,6 +514,7 @@ LINT_RULES: tuple[str, ...] = (
     "dead_air",
     "animation_overrun",
     "rushed_animation",
+    "talked_over",
     "readback",
 )
 RuleName = Literal[
@@ -537,6 +538,7 @@ RuleName = Literal[
     "dead_air",
     "animation_overrun",
     "rushed_animation",
+    "talked_over",
     "readback",
 ]
 #: Severity of a lint finding; ``off`` disables a rule.
@@ -727,6 +729,10 @@ class RushedAnimationRule(RuleConfig):
     """Shortest acceptable run time (seconds) of an animation `play_steps` had to shorten."""
 
 
+class TalkedOverRule(RuleConfig):
+    """``talked_over``: a beat's ``overlap`` starts so early that whole words of the line before are spoken under it."""
+
+
 class ReadbackRule(RuleConfig):
     """``readback``: a beat whose audio, transcribed by `vidgen readback`, differs from its text."""
 
@@ -777,6 +783,8 @@ class LintRules(_Strict):
     """Animations running past the narration (default: warning)."""
     rushed_animation: RushedAnimationRule = Field(default_factory=RushedAnimationRule)
     """Animations shortened to fit a too short beat (default: warning)."""
+    talked_over: TalkedOverRule = Field(default_factory=TalkedOverRule)
+    """Whole words of a line spoken under the next beat's overlap (default: warning)."""
     readback: ReadbackRule = Field(default_factory=ReadbackRule)
     """Audio heard differently from its text, from the transcripts `vidgen readback` stored (default: warning; nothing without them)."""
 
@@ -1475,6 +1483,16 @@ class BeatConfig(_Strict):
     """On a stage scene: automatic looks and reactions for this beat (true, false or {looks, reactions, gestures, closeups}); default: the scene's, else the video's."""
     shot: ShotConfig | None = None
     """On a stage scene: the camera's framing for this beat (wide, two_shot, medium KIT, over_shoulder KIT [NEAR], closeup KIT, or {kind, of, move, run_time}); a cut as the beat starts, back to the view before at the next beat without one."""
+    overlap: float | None = Field(default=None, ge=0)
+    """Seconds this beat starts before the previous beat's speech ends: both lines are heard (the earlier a little lower) and both mouths move; not on a scene's first beat."""
+    interrupt: bool = False
+    """This beat cuts the previous beat's line where it starts (a short fade; its mouth stops); starts overlap seconds (default 0.5) before that line's speech ends; not on a scene's first beat."""
+
+    @model_validator(mode="after")
+    def _check_interrupt(self) -> BeatConfig:
+        if self.interrupt and self.overlap == 0:
+            raise ValueError("interrupt: true with overlap: 0 cuts nothing; give the seconds it starts before the line ends (or leave overlap out: 0.5)")
+        return self
 
     def estimated_duration(self, words_per_second: float) -> float:
         """Speech duration estimated from the word count (no padding)."""
@@ -1541,6 +1559,9 @@ class SceneConfig(_Strict):
             raise ValueError("'duration' is only allowed on silent scenes (scenes without beats)")
         beat_ids = {beat.id for beat in self.beats}
         order = [beat.id for beat in self.beats]
+        if self.beats and (self.beats[0].overlap is not None or self.beats[0].interrupt):
+            key = "overlap" if self.beats[0].overlap is not None else "interrupt"
+            raise ValueError(f"beats[0] {key}: the first beat of scene '{self.id}' has no beat before it to overlap or interrupt (a scene's lines overlap only within the scene)")
         for j, beat in enumerate(self.beats):
             for action in beat.actions:
                 if action.until is not None and action.until not in order[j + 1 :]:

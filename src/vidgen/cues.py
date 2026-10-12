@@ -232,3 +232,53 @@ def caption_cues(
             texts[0] = f"{tag} {texts[0]}"
         out.append(CaptionCue(starts[n], cue_end, tuple(texts), tuple(timed[a:b]), tag))
     return out
+
+
+# ----- overlapping lines (DESIGN.md §69.34) -------------------------------------------------------
+
+#: Most cues shown at once when lines overlap (the newest ones).
+MAX_STACK = 2
+
+
+def overlapping_beats(spans: Sequence[tuple[float, float]]) -> set[int]:
+    """The indices of the beats (``(start, end)`` of their narration, in order) whose narration
+    overlaps another's: their captions are cut into one-line cues, so two stacked stay as tall
+    as one two-line cue."""
+    found: set[int] = set()
+    for i, (a, b) in enumerate(spans):
+        for j in range(i + 1, len(spans)):
+            c, d = spans[j]
+            if c < b - 1e-9 and a < d - 1e-9:
+                found |= {i, j}
+    return found
+
+
+@dataclass(frozen=True)
+class CueStack:
+    """What captions show from ``start`` to ``end``: the cues sounding then as ``(beat index,
+    cue)``, the earlier beat's first (shown on top); one cue where lines do not overlap."""
+
+    start: float
+    end: float
+    parts: tuple[tuple[int, CaptionCue], ...]
+
+
+def stack_cues(cues: Sequence[tuple[int, CaptionCue]]) -> list[CueStack]:
+    """The captions over time when beats' cues (``(beat index, cue)``) may overlap: cut at every
+    cue's start and end, each piece showing the cues shown then (at most :data:`MAX_STACK`, the
+    newest), earlier beats first; empty pieces left out. Cues that do not overlap give one
+    stack each, with their own start and end."""
+    times = sorted({t for _, cue in cues for t in (cue.start, cue.end)})
+    out: list[CueStack] = []
+    for a, b in zip(times, times[1:]):
+        if b - a <= 1e-9:
+            continue
+        shown = sorted(((k, cue) for k, cue in cues if cue.start <= a + 1e-9 and cue.end >= b - 1e-9), key=lambda kc: kc[0])
+        if not shown:
+            continue
+        parts = tuple(shown[-MAX_STACK:])
+        if out and out[-1].parts == parts and abs(out[-1].end - a) <= 1e-9:
+            out[-1] = CueStack(out[-1].start, b, parts)
+        else:
+            out.append(CueStack(a, b, parts))
+    return out

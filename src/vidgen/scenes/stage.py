@@ -448,8 +448,8 @@ class Stage(NarratedScene):
     @contextmanager
     def narrate(self, beat: Any) -> Iterator[float]:
         """Narrate a beat; the characters on the stage whose voice says it speak (lip sync from
-        the beat's start to its end), unless the beat has a ``say`` action, which picks who
-        speaks (DESIGN.md §69.11)."""
+        the beat's start to its end; on under the next beat while it overlaps this one, DESIGN.md
+        §69.34), unless the beat has a ``say`` action, which picks who speaks (§69.11)."""
         b = self.beat(beat)
         voiced = [] if "say" in self.beat_action_names(b) else speaking_characters(self.project.config, beat_voice(self.spec, b), self.cast)
         said = [p for act in b.actions if act.action == "say" for p in act.targets()]
@@ -462,8 +462,7 @@ class Stage(NarratedScene):
                 speakers.append((self.cast[name], self.cast[name].lip_sync_track))
             yield d
         for figure, track in speakers:
-            if figure.lip_sync_track is track:  # not taken over by a later lip sync
-                figure.stop_lip_sync()
+            self.end_lip_sync(figure, track)
 
     def action_foley(self, action: str, options: Any, animations: Any, start: float, seconds: float) -> None:
         """The sounds of a character's action as it plays (DESIGN.md §69.19): footsteps on
@@ -729,9 +728,14 @@ class Stage(NarratedScene):
             self.add_updater(self._wind_updater)
 
     def _wind_step(self, dt: float) -> None:
-        """Scene updater while the wind may move something: props and trailing pieces for now."""
+        """Scene updater while the wind may move something: props and trailing pieces for now;
+        it removes itself once nothing can move any more (a scene updater makes Manim redraw
+        every frame), also inside a wait."""
+        now = float(self.renderer.time)
         if self.blowing is not None:
-            self.blowing.update(float(self.renderer.time))
+            self.blowing.update(now)
+        if self.blowing is None or not self.blowing.moving(now, math.inf):
+            self.remove_updater(self._wind_updater)
 
     def _shadows(self, placements: list[StagePlacement]) -> tuple[StageShadows | None, StageShadows | None]:
         """The shadows (``shadows: true``): of the props on the ground that stay put (drawn

@@ -184,7 +184,8 @@ too (DESIGN.md §69.26). Lip sync:
 inside `with self.narrate(0) as d:`, `self.speak(hero)` makes the mouth follow the beat's
 `VisemeTrack`, timed from the beat's start by the scene's clock (`hero.lip_sync(self.beat_visemes(0),
 clock=self.beat_clock())`), so it stays in step through a `PoseChange`; `stop_lip_sync()` ends it
-(the mouth shows its pose's shape again); `show_viseme("O")` shows one of `VISEMES` at once; a
+(the mouth shows its pose's shape again; after the beat, `self.end_lip_sync(hero, track)` ends
+it now or, when the next beat `overlap`s this line, once that beat ends, DESIGN.md §69.34); `show_viseme("O")` shows one of `VISEMES` at once; a
 character without a mouth is left alone. `Walk(hero, x)` walks it along the ground to `x`
 (`speed=`, units per second; `start_x=` / `park_x=` for an entrance or exit), `Gesture(hero,
 "wave")` (`point`, `wave`, `shrug`, `nod`, `shake_head`) and `Jump(hero, 0.4)` play a motion and
@@ -699,6 +700,10 @@ class Countdown(NarratedScene):
   animation lasts `min(cap, fraction * slot)`, so a beat is never stretched by its animations.
 - `self.timeline()` is `narrate_all()` that also works for silent scenes (yields `(index, d)`;
   a silent scene yields one step of its `duration`).
+- When the next beat has `overlap` or `interrupt` (DESIGN.md §69.34), `narrate` yields the time
+  until that beat starts instead of `d`, and nothing is waited after it: call the next
+  `narrate` right after the block. `self.beat_window(i)` gives `body` (what is yielded),
+  `window` (until the next beat), `heard` (seconds of the voice) and the voice's `shape`.
 - `self.finish()` fades everything out over `self.outro` seconds (class attribute, default 0;
   the built-ins use 0.5). Set `outro` on your class and call `finish()` at the end of
   `construct()`; silent scenes then fade out within their `duration`. It fades vector

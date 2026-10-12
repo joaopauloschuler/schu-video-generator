@@ -6,7 +6,8 @@ lines of ``width`` characters by :func:`vidgen.cues.segment_cues` — the same c
 spoken (the beat's first cue at the beat's start) and lasts until the next one; word times come
 from :func:`vidgen.speech.beat_word_times` (the TTS alignment, else an estimate within the
 MP3's speech, else over the beat). Cue ends are beat ends (the narration), not including the
-silence pad after a beat.
+silence pad after a beat. Where a beat overlaps the one before (DESIGN.md §69.34) both beats'
+cues have one line each and overlap in time: players show them together, one above the other.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import NamedTuple
 
-from vidgen.cues import caption_cues, split_cues
+from vidgen.cues import caption_cues, overlapping_beats, split_cues
 from vidgen.fileio import write_text_atomic
 from vidgen.pronunciation import Pronunciation, Spoken
 from vidgen.speech import WordTime, beat_word_times
@@ -79,17 +80,22 @@ def cues_from_timings(
     if language is None:
         language = timings.get("language")
     for scene in timings["scenes"]:
-        for beat in scene["beats"]:
+        crowded = overlapping_beats([(beat["start"], beat["end"]) for beat in scene["beats"]])
+        for k, beat in enumerate(scene["beats"]):
             words = None
             if audio_dir is not None:
                 said = spoken.get(beat["id"]) if spoken is not None else None
                 if said is None and pronunciation is not None:
                     said = pronunciation.apply(beat["text"])
                 words = beat_word_times(audio_dir, beat["id"], beat["text"], beat["start"], beat["end"], said, language)
+            lines = 1 if k in crowded else MAX_LINES   # two overlapping lines show one line each (§69.34)
             cues.extend(
-                beat_cues(beat["start"], beat["end"], beat["text"], words=words, speaker=speakers.get(beat["id"]), language=language)
+                beat_cues(
+                    beat["start"], beat["end"], beat["text"], max_lines=lines, words=words, speaker=speakers.get(beat["id"]),
+                    language=language,
+                )
             )
-    return cues
+    return sorted(cues, key=lambda cue: cue.start)
 
 
 def format_time(seconds: float) -> str:

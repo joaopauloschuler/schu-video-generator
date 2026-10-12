@@ -229,6 +229,10 @@ class FakeScene:
         self.spoken.append(character.name)
         character.lip_sync(VisemeTrack((VisemeCue(0.0, 1.0, "A"),)), clock=lambda: 0.5)
 
+    def end_lip_sync(self, character: Character, track: Any) -> None:
+        if character.lip_sync_track is track:   # no overlapping line here: now
+            character.stop_lip_sync()
+
     current_beat = BeatConfig(id="b", text="Hello there.")
 
 

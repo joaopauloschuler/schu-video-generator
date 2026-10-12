@@ -582,7 +582,7 @@ def _overlaps(project: Project, fps: int, renders: list[tuple[Path, dict[str, An
     if not transitions.has_transitions(config):
         return [0] * len(renders)
     frames = [round(duration * fps) for _, _, duration in renders]
-    speech = [timings["beats"][-1]["end"] if timings["beats"] else None for _, timings, _ in renders]
+    speech = [max(b["end"] for b in timings["beats"]) if timings["beats"] else None for _, timings, _ in renders]
     overlaps = transitions.join_overlaps(config, fps, frames, speech)
     for i, spec in enumerate(config.scenes):
         t = transitions.effective(config, i)

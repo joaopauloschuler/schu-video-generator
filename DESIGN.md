@@ -164,6 +164,7 @@ src/vidgen/
   speech.py               # spoken words, speech bounds of an MP3, word times: estimate / TTS alignment (§43)
   pronunciation.py        # pronunciation dictionary: TTS text of a beat, spoken -> written word map (§45; no manim)
   voicesounds.py          # [gasp] [laugh] ... in a beat's text: markers, what each voice says, sound times (§69.33; no manim)
+  overlap.py              # overlap: / interrupt: beats: windows, voice shapes (dip / cut), talked-over words (§69.34; no manim)
   voices.py               # named voices: effective voice per beat, speaker labels / colours / tags (§46; no manim)
   languages.py            # language tags and per-language rules: cue words, speech rate, TTS / MP4 codes (§54; no manim)
   translation.py          # translation files: text markers, keys, extracting, applying, merging, warnings (§54; no manim)
@@ -761,6 +762,11 @@ text. Compatible: a stage without `wind` (or `wind: 0`) renders the same frames 
 Step 99 (§69.33) adds no names: `stage_directions` also returns the speakers' faces for voice
 sounds (any `auto_direct`), `BeatConfig` gains `voice_sounds`, `Project` the method `spoken`,
 `Spoken` the method `inserted`; beats without `[laugh]`-style markers are unchanged.
+Step 100 (§69.34) adds `CueStack`, `stack_cues` and `overlapping_beats`; `NarratedScene` gains
+`beat_window` and `end_lip_sync`, `VisemeTrack` the method `until`, `BeatConfig` the keys
+`overlap` / `interrupt`, `add_narration` the argument `shape`; the `captions` overlay's karaoke
+state becomes `(caption, (word, ...))`. Compatible: beats without the keys keep their timings
+and audio (pinned in `tests/test_overlap_pinned.py`).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -1278,7 +1284,8 @@ the measured loudness, §48).
 ## 17. Refinements (Step 14, timing lint)
 
 - **Rules** (`vidgen/lint/timing_rules.py`, scope `scene`, all default `warning`):
-  `narration_speed`, `dead_air`, `animation_overrun`, `rushed_animation`; settings models
+  `narration_speed`, `dead_air`, `animation_overrun`, `rushed_animation` (Step 100 adds
+  `talked_over`, §69.34); settings models
   `NarrationSpeedRule`, `DeadAirRule`, `AnimationOverrunRule`, `RushedAnimationRule` in
   `config.LintRules` (names added to `LINT_RULES`/`RuleName`); defaults and the rule table in
   docs/CONFIG.md "Lint". Same command, report, JSON, `lint:` config and `lint_ignore` as §16.
@@ -1295,7 +1302,8 @@ the measured loudness, §48).
   `storyboard.stills_current` and `pipeline._usable_render` (with frames) require it, so
   renders from before Step 14 count as stale; `frames/index.json` scenes gain `activity`.
   Content: `{version, scene, type, fps, frames, duration, pad, silent: {duration, busy} |
-  null, beats: [{id, start, end, busy, source: audio|estimate, text}], plays: [{start, end,
+  null, beats: [{id, start, end, busy, source: audio|estimate, text, window?, overlap?,
+  interrupt?}], plays: [{start, end,
   beat, animations, wait, requested}], motion: {step, grid, level, changes: [[frame,
   fraction]]}}` (docs/CONFIG.md "Activity file").
 - **Play log** (`NarratedScene.play` overrides Manim's to append a `PlayRecord`; Manim's `wait`
@@ -7026,7 +7034,8 @@ pieces follow it on a spring, particles drift.
   asked for): `get_moving_mobjects` returns, while `moving(now − spring memory, end)`, the scene's
   family from the first swaying prop or trailing character on (the sky, layers, ground band,
   still shadows and props behind stay static); otherwise Manim's set, and the updater is removed
-  once nothing can move again. Measured (854x480, 15 fps, no audio, 2 runs each, a scratch copy
+  once nothing can move again (since Step 100 also by `_wind_step` itself, on that frame, so a
+  calm that starts inside a long wait does not keep Manim redrawing every frame). Measured (854x480, 15 fps, no audio, 2 runs each, a scratch copy
   of `examples/cartoon`): `yard` 11.5 / 10.9 s → 12.8 / 12.8 s with `wind: windy` (+13 %, the
   tree and everything in front of it redrawn); `hill` 13.2 / 12.9 s → 13.8 / 14.3 s with `gale`
   (+7 %). `trail_degrees` costs about 0.4 ms per character per frame.
@@ -7111,3 +7120,65 @@ an `s` allowed: `[laughs]`): sounds of its speaker at that point (CONFIG "Voice 
   the gasp; ElevenLabs v3 tags and OpenRouter models were not tried against the real services
   (no API calls), and how a given OpenRouter model says `Ha ha ha!` is unknown.
   Tests: `tests/test_voice_sounds.py`.
+
+### 69.34 Overlapping speech and interruptions (Step 100)
+
+A beat's `overlap: S` starts it `S` seconds before the speech of the beat before it ends;
+`interrupt: true` cuts that line where the beat starts (CONFIG "Overlapping lines").
+
+- **Only within a scene**: `SceneConfig` refuses the keys on a scene's first beat, so a scene's
+  start, end and length rules (transitions §49, carry §50, chapters §52) are unchanged; scenes
+  only get shorter. `BeatConfig` refuses `interrupt` with `overlap: 0` (cuts nothing); `overlap`
+  is `>= 0`. `vidgen validate` warns about an overlap of a line of the same voice
+  (`overlap.overlap_warnings`).
+- **The timeline** (`overlap.py`, no manim): `beat_lines` builds a `SpokenLine(seconds,
+  speech_end, overlap, interrupt)` per beat; the speech end (`speech_bounds` of the MP3, the
+  trailing silence cut off; `d` without audio) is read only for a beat the next one joins.
+  `beat_windows(lines, pad, fps)` gives each beat a `BeatWindow(body, rest, heard, shape)`: not
+  joined, `(d, pad, d, plain)`, so `window = d + pad` is the same float expression as before;
+  joined, `body = max(speech_end - lead, MIN_WINDOW)` in whole frames (with `fps`, so the cut
+  lands where the next beat really starts), `rest = 0`, `heard = d` (overlap; `VoiceShape(dip_from
+  = body)`) or `body` (interrupt; `VoiceShape(cut = body)`). `lead` is `overlap`, else
+  `INTERRUPT_LEAD` (0.5 s) for an interrupt. `NarratedScene.beat_window` and `VideoPlan` call the
+  same function, so the plan and the render agree; `narrate` yields `body`, gives the action
+  runner `(body, rest)`, waits to `window`, records `end = start + heard`, captures `window`
+  worth of frames, puts an `end` sting at `heard` and drops a generated voice sound after a cut.
+- **The mix plan**: `VoiceShape.gain(seconds)` (raised-cosine `DIP_RAMP` 0.1 s to
+  `-OVERLAP_DIP_DB` 3 dB; fade to 0 over `INTERRUPT_FADE` 0.05 s from the cut) and
+  `shape_voice(samples, rate, shape)` (also drops what follows the fade). `add_narration` shapes
+  the beat's decoded WAV before Manim adds it, at the beat's start as before; a plain shape is
+  not applied at all (the pinned test compares every WAV Manim gets with the plain decode). The
+  shape is for the planned start of the next beat: a custom scene that plays between two
+  `narrate` blocks starts the next beat later than the cut. Music ducking and sting ducking read
+  the beats' `start` / `end`, so they cover both voices.
+- **Mouths** (§69.11): `NarratedScene.end_lip_sync(character, track)` stops a beat's lip sync
+  now, or, while the voice of the beat just narrated still sounds (`_voice_until`), keeps it in
+  `_lingering` until the next `narrate` ends; `Stage.narrate` and `Say.revert` call it. The track
+  past its end shows `rest`; `beat_visemes` of an interrupted beat is `VisemeTrack.until(cut)`,
+  and as `heard` ends at the cut, the mouth is stopped there.
+- **Captions**: `cues.overlapping_beats(spans)` (beats whose narrations intersect) get
+  one-line cues; `cues.stack_cues([(beat, cue)])` cuts the cues' timeline at every start / end
+  and shows the cues sounding at once (at most `MAX_STACK` 2, earlier beat on top). Without
+  overlaps it gives one stack per cue with its own times (the overlay draws the same mobjects).
+  The `captions` overlay draws a stack as one caption: lines of both cues on one plate, each in
+  its speaker's colour, tags as before; karaoke highlights the current word of each part (state
+  `(caption, (word, ...))`). The last cue of an overlapped beat lasts to its own end (`until =
+  max(next start, end)`). The SRT (`cues_from_timings`) uses one-line cues for overlapping beats
+  and lets their cues overlap in time (sorted by start); players stack them.
+- **Directing** (§69.23-24, §69.33): `BeatInput.next_joins`; `stage_directions` gives a joined
+  beat `seconds = body` and only the words that end before it, and the reactions pass adds no
+  listener reaction after it (no pause). A voice-sound face after the cut is left out.
+- **Lint**: the activity file's beats get `window` (joined) and `overlap` / `interrupt` (the
+  joining beat); `animation_overrun` measures against `window`; the new rule `talked_over` (scene
+  scope, default warning, `TalkedOverRule` without settings) reports words of the earlier line
+  (`beat_word_times`) spoken entirely after the overlapping beat's speech starts (`talked_over`),
+  with the largest overlap that keeps them clear. Interrupts are not reported.
+- **Fingerprint**: the beat keys are left out of the scene's config dump while unset and added
+  as `joins` when set (scene, overlay inputs, the next transition's scene), so renders made
+  before Step 100 stay valid.
+- **Unchanged**: `timings.json` keys (the interrupted beat's `end` is the cut, an overlapped
+  beat's `end` passes the next `start`; consumers that took the last beat's `end` as the scene's
+  speech end now take the latest end), readback (it transcribes the whole MP3), the MP3s and
+  their hashes, the screenplay format (no syntax for overlaps yet).
+- **Not done here**: no screenplay syntax; no per-beat dip or fade settings; no overlap across
+  scenes. Tests: `tests/test_overlap.py`, `tests/test_overlap_pinned.py`.

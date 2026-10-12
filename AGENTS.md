@@ -882,6 +882,12 @@ line. `docs/CONFIG.md` "Cartoons from a screenplay" has the whole format.
   captions; the speaker's mouth follows and its face changes (laugh happy, gasp surprised, sigh
   sad) unless the beat's own `emote` / `react` sets it. A line needs words besides its sounds
   (`docs/CONFIG.md` "Voice sounds").
+- **Talking at once**: `overlap: 0.4` on a beat starts it 0.4 s before the line before it ends
+  (both heard, both mouths move, captions show both lines); `interrupt: true` cuts that line off
+  where the beat starts (0.5 s before its end, or `overlap` seconds). Not on a scene's first beat,
+  and not on a line of the same voice. Keep overlaps short: `vidgen lint` (`talked_over`) warns
+  when whole words of the earlier line are lost under the new one (`docs/CONFIG.md` "Overlapping
+  lines").
 
 **The loop for a cartoon.**
 1. `vidgen character-sheet NAME` (or `--all`): every pose, expression and mouth shape on one PNG.
@@ -1411,6 +1417,7 @@ install; `vidgen validate` warns when it is missing.
 | `narration_speed` | words per second outside 1.8–3.5 (English) | shorten or lengthen the beat's text; without audio it is only `info` (an estimate) |
 | `animation_overrun` | animations ran past the narration | a custom scene's animations are too long for the beat |
 | `rushed_animation` | animations squeezed into a short beat | merge two short beats, or reveal fewer things per beat |
+| `talked_over` | an `overlap` hides whole words of the line before | a shorter `overlap`, or `interrupt: true` to cut the line |
 | `readback` | the audio does not say what the text says | add a `pronunciation:` entry, `vidgen tts`, check again |
 
 **Other things that go wrong**
