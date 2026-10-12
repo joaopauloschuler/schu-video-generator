@@ -160,7 +160,7 @@ def character_look_warnings(config: VideoConfig, root: Path) -> list[str]:
 #: Shape names of a generated character's parts (``cartoon/generator.py``); the first is the rest shape.
 GENERATED_SHAPES: dict[str, list[str]] = {
     "body": ["default"], "legs": ["default"], "arm_left": ["default"], "arm_right": ["default"], "head": ["default"],
-    "eyes": ["open", "closed"], "brows": ["default", "angry", "sad"], "mouth": ["smile", "open"],
+    "eyes": ["open", "closed"], "brows": ["default", "angry", "sad"], "mouth": ["smile", "open", "A", "E", "O", "U", "M", "F", "L", "W"],
 }
 
 

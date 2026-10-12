@@ -331,6 +331,41 @@ def _dry_run(project: Project, plan: TTSPlan, out: Callable[[str], None]) -> Non
         out(f"  cost: {estimate_text(plan)}")
 
 
+def _store_visemes(project: Project, audio_dir: Path, beat_id: str, text: str, audio: bytes, source: Path | None, provider: TTSProvider) -> None:
+    """Store the viseme track of a beat just written to ``audio_dir``: a copied beat's stored
+    track when it has one, else built from Kokoro's phonemes of this synthesis or the text."""
+    from vidgen.cartoon.visemes import read_visemes, write_beat_visemes, write_visemes
+
+    if source is not None:
+        stored = read_visemes(source.parent, beat_id, text)
+        if stored is not None:
+            write_visemes(audio_dir, beat_id, text, audio, stored)
+            return
+    phonemes = getattr(provider, "last_phonemes", None) if source is None else None
+    write_beat_visemes(audio_dir, beat_id, text, audio, project.config.language, phonemes)
+
+
+def _store_missing_visemes(project: Project, plan: TTSPlan, out: Callable[[str], None]) -> None:
+    """Store a viseme track for each up-to-date beat without a current one (audio voiced before
+    the video had characters, or by an older vidgen)."""
+    from vidgen.cartoon.visemes import read_visemes, write_beat_visemes
+
+    written = 0
+    for beat_id in plan.up_to_date:
+        text = plan.spoken.get(beat_id, "")
+        mp3 = mp3_path(plan.audio_dir, beat_id)
+        if read_visemes(plan.audio_dir, beat_id, text) is not None:
+            continue
+        try:
+            write_beat_visemes(plan.audio_dir, beat_id, text, mp3.read_bytes(), project.config.language)
+        except (VidgenError, OSError) as exc:
+            out(f"note: no viseme track for {beat_id}: {exc}")
+            continue
+        written += 1
+    if written:
+        out(f"wrote viseme tracks (lip sync) for {written} beat(s) already voiced")
+
+
 def run_tts(
     project: Project,
     *,
@@ -381,6 +416,7 @@ def run_tts(
             out(f"note: {note}")
 
     context = context_texts(project, {beat.id: plan.say(beat) for _, beat in project.beats()})
+    lip_sync = bool(project.config.characters)  # viseme tracks only for a video with characters (§69.4)
     generated: list[str] = []
     total = len(plan.todo)
     for n, beat in enumerate(plan.todo, start=1):
@@ -408,6 +444,8 @@ def run_tts(
             atomic_write(mp3_path(plan.audio_dir, beat.id), audio)
             # The alignment's text and the hash are the spoken text (what the audio says).
             write_alignment(plan.audio_dir, beat.id, text, audio, alignment)
+            if lip_sync:
+                _store_visemes(project, plan.audio_dir, beat.id, text, audio, source, providers[beat.id])
             atomic_write(hash_path(plan.audio_dir, beat.id), providers[beat.id].cache_key(text).encode("utf-8"))
         except (VidgenError, OSError) as exc:
             done = f"{len(generated)} of {total} done before the error; run again to continue"
@@ -415,6 +453,8 @@ def run_tts(
         generated.append(beat.id)
         out(f"[{n}/{total}] {action}")
 
+    if lip_sync:
+        _store_missing_visemes(project, plan, out)
     hooks.dispatch("post_tts", project, generated=list(generated), audio_dir=plan.audio_dir)
     spent = _reported_cost(plan, providers.values())
     if generated:

@@ -247,7 +247,8 @@ def _open_eye(look: CharacterLook, x: float, f: _Frame, c: Mapping[str, str], w:
 
 
 def _face(look: CharacterLook, f: _Frame, c: Mapping[str, str], w: float) -> list[CharacterPart]:
-    """Eyes (``open`` / ``closed``), brows (``default`` / ``angry`` / ``sad``) and mouth (``smile`` / ``open``)."""
+    """Eyes (``open`` / ``closed``), brows (``default`` / ``angry`` / ``sad``) and mouth (``smile`` /
+    ``open`` and the viseme shapes ``A E O U M F L W``)."""
     r, fx = f.p.head_radius, f.face_x
     width, height = _eye_size(look, f)
     xs = _eye_xs(f)
@@ -265,8 +266,20 @@ def _face(look: CharacterLook, f: _Frame, c: Mapping[str, str], w: float) -> lis
         ))
 
     mouth_r = 0.3 * r * f.p.mouth_width
+    mouth_y = f.head_y - 0.45 * r
     smile = Arc(radius=mouth_r, start_angle=PI * 1.2, angle=PI * 0.6, arc_center=[fx, f.head_y - 0.2 * r, 0]).set_stroke(c["features"], width=w)
-    open_mouth = _filled(Ellipse(width=1.5 * mouth_r, height=0.35 * r).move_to([fx, f.head_y - 0.45 * r, 0]), c["features"])
+
+    def opening(width: float, height: float) -> VMobject:
+        """A filled mouth opening, ``width`` × the mouth radius by ``height`` × the head radius."""
+        return _filled(Ellipse(width=width * mouth_r, height=height * r).move_to([fx, mouth_y, 0]), c["features"])
+
+    closed = Line([fx - 0.75 * mouth_r, mouth_y + 0.03 * r, 0], [fx + 0.75 * mouth_r, mouth_y + 0.03 * r, 0]).set_stroke(c["features"], width=w)
+    # viseme shapes (DESIGN.md §69.4): A open, E wide, O round, U small round, M closed lips,
+    # F a thin line (lip under the teeth), L open, W puckered
+    speech = {
+        "A": opening(1.6, 0.42), "E": opening(1.8, 0.18), "O": opening(0.95, 0.36), "U": opening(0.6, 0.24),
+        "M": closed, "F": opening(1.3, 0.08), "L": opening(1.2, 0.28), "W": opening(0.45, 0.18),
+    }
     return [
         CharacterPart("eyes", {"open": open_eyes, "closed": closed_eyes}, (fx, f.eye_y)),
         # angry: the inner ends (toward the face's middle) low; sad: the inner ends high
@@ -275,7 +288,7 @@ def _face(look: CharacterLook, f: _Frame, c: Mapping[str, str], w: float) -> lis
             "angry": brows(0.05, -0.07, -0.07, 0.05),
             "sad": brows(-0.05, 0.07, 0.07, -0.05),
         }, (fx, brow_y)),
-        CharacterPart("mouth", {"smile": smile, "open": open_mouth}, (fx, f.head_y - 0.4 * r)),
+        CharacterPart("mouth", {"smile": smile, "open": opening(1.5, 0.35), **speech}, (fx, f.head_y - 0.4 * r)),
     ]
 
 

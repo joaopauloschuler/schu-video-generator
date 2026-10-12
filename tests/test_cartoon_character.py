@@ -55,7 +55,7 @@ def test_part_tree_and_draw_order() -> None:
     assert c.draw_order == ["arm_right", "legs", "body", "arm_left", "head", "eyes", "mouth", "brows"]
     assert c.submobjects[1:] == [c.parts[n] for n in c.draw_order]   # submobjects[0] is the anchor
     assert c.parent_of("body") is None and c.parent_of("mouth") == "head" and c.parent_of("arm_left") == "body"
-    assert c.shape_names("mouth") == ["smile", "open"] and c.shape_names("eyes") == ["open", "closed"]
+    assert c.shape_names("mouth")[:2] == ["smile", "open"] and c.shape_names("eyes") == ["open", "closed"]
     assert set(DEFAULT_PARENTS) == set(PART_NAMES)
 
 
@@ -114,7 +114,7 @@ def test_swap_and_reset() -> None:
     c.set_part("head", angle=10)
     c.reset()
     assert np.allclose(points(c.parts["mouth"]), smile) and c.pose_of("head") == PartPose()
-    with pytest.raises(VidgenError, match="no shape 'grin'.*shapes: smile, open"):
+    with pytest.raises(VidgenError, match="no shape 'grin'.*shapes: smile, open, A, E"):
         c.swap("mouth", "grin")
     with pytest.raises(VidgenError, match="no part 'tail'"):
         c.set_part("tail", angle=5)

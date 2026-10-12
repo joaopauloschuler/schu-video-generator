@@ -42,7 +42,7 @@ def test_every_parameter_value_builds(values: dict[str, Any]) -> None:
     c = Character(generate_parts(CharacterLook(**values), COLORS), name="t", height=2.0)
     assert set(REQUIRED_PARTS) <= set(c.parts)
     assert c.get_bottom()[1] == pytest.approx(0) and c.get_top()[1] == pytest.approx(2.0)
-    assert c.shape_names("eyes") == ["open", "closed"] and c.shape_names("mouth") == ["smile", "open"]
+    assert c.shape_names("eyes") == ["open", "closed"] and c.shape_names("mouth") == ["smile", "open", "A", "E", "O", "U", "M", "F", "L", "W"]
     c.set_part("head", angle=20).face("left")   # posing still works on every look
 
 

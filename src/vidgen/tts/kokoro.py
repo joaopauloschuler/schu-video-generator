@@ -319,6 +319,10 @@ class KokoroProvider:
     name = "kokoro"
     #: ``vidgen tts`` asks for the timings with every beat: they cost nothing (English only).
     timings_included = True
+    #: The phonemes of the last :meth:`synthesize_timed` call, ``(phonemes, start, end)`` in
+    #: seconds: per token for English, per chunk otherwise (``vidgen tts`` builds the beat's
+    #: viseme track from them, DESIGN.md §69.4).
+    last_phonemes: list[tuple[str, float, float]]
 
     def __init__(self, voice: VoiceConfig, *, engine: KokoroEngine | None = None, ffmpeg: str | None = None) -> None:
         if voice.provider != "kokoro":
@@ -330,6 +334,7 @@ class KokoroProvider:
         self.speed = 1.0 if voice.speed is None else float(voice.speed)
         self._engine = engine
         self._ffmpeg = ffmpeg
+        self.last_phonemes = []
 
     # ----- cache keys ------------------------------------------------------------------------
 
@@ -371,6 +376,7 @@ class KokoroProvider:
         engine = self.engine()
         chunks: list[bytes] = []
         timed: list[tuple[str, float, float]] = []
+        self.last_phonemes = phonemes = []
         offset = 0.0
         try:
             with quiet_stdout():
@@ -381,11 +387,17 @@ class KokoroProvider:
                 if audio is None:
                     continue
                 pcm = pcm16(audio)
+                seconds = len(pcm) / 2 / SAMPLE_RATE
+                token_phonemes = len(phonemes)
                 for token in getattr(result, "tokens", None) or ():
                     start, end = getattr(token, "start_ts", None), getattr(token, "end_ts", None)
                     if start is not None and end is not None:
                         timed.append((str(token.text), offset + float(start), offset + float(end)))
-                offset += len(pcm) / 2 / SAMPLE_RATE
+                        if getattr(token, "phonemes", None):
+                            phonemes.append((str(token.phonemes), offset + float(start), offset + float(end)))
+                if len(phonemes) == token_phonemes and getattr(result, "phonemes", None):
+                    phonemes.append((str(result.phonemes), offset, offset + seconds))
+                offset += seconds
                 chunks.append(pcm)
         except VidgenError:
             raise

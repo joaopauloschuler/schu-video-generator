@@ -20,13 +20,13 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Annotated, Any, ClassVar, NamedTuple, Union
 
-import av
 from manim import DEFAULT_WAIT_TIME, NORMAL, Animation, FadeIn, MarkupText, Mobject, MovingCameraScene, Text, Wait, config
 from pydantic import AfterValidator, AliasChoices, BaseModel, ConfigDict, Field, GetJsonSchemaHandler, ValidationError, ValidationInfo
 
 from vidgen import carry, helpers, regions, runtime
 from vidgen.actions import TARGET_NAME, ActionRunner, Target, match_names, plan_actions
 from vidgen.capture import FrameCapture
+from vidgen.cartoon.visemes import VisemeTrack, beat_visemes
 from vidgen.layout import distribute
 from vidgen.overlay_layer import OverlayLayer
 from vidgen.overlays import Overlay, avoid, mobject_region, scene_overlays
@@ -34,6 +34,7 @@ from vidgen.config import DIRECTED_TRANSITIONS, ID_PATTERN, BeatConfig, SceneCon
 from vidgen.errors import VidgenError
 from vidgen.project import Project
 from vidgen.sfx import AUTO_ACTION_SFX, SfxEvent, SoundLibrary, decode_audio, stereo, write_wav
+from vidgen.speech import audio_duration
 from vidgen.theme import Theme
 from vidgen.transitions import ColorFade, has_transitions, resolve_color
 from vidgen.videoplan import TransitionSlot, VideoPlan
@@ -218,28 +219,6 @@ def add_narration(scene: MovingCameraScene, path: Path) -> None:
         wav = Path(folder) / "narration.wav"
         write_wav(wav, stereo(decode_audio(path)))
         scene.add_sound(str(wav))
-
-
-def audio_duration(path: Path) -> float:
-    """Length of an audio file in seconds: its decoded samples / sample rate (read with PyAV).
-
-    Decoding (rather than reading the container's duration) gives the same answer with every
-    PyAV/FFmpeg version: older ones (PyAV 13, which Manim 0.19 pins on Python 3.10) include the
-    MP3 encoder padding in the container duration, ~25-50 ms more per file.
-    """
-    try:
-        with av.open(str(path)) as container:
-            stream = container.streams.audio[0]
-            samples = 0
-            rate = stream.rate or 0
-            for frame in container.decode(stream):
-                samples += frame.samples
-                rate = frame.sample_rate or rate
-            if not samples or not rate:
-                raise ValueError("no audio samples")
-            return samples / rate
-    except (OSError, ValueError, IndexError, av.error.FFmpegError) as exc:
-        raise VidgenError(f"cannot read audio file {path}: {exc}") from None
 
 
 def _beats(k: int) -> str:
@@ -516,6 +495,13 @@ class NarratedScene(MovingCameraScene):
             else:
                 self._durations[b.id] = b.estimated_duration(self.project.config.narration.words_per_second)
         return self._durations[b.id]
+
+    def beat_visemes(self, beat: str | int | BeatConfig) -> VisemeTrack:
+        """The beat's viseme track over its :meth:`beat_duration`, for
+        :meth:`~vidgen.cartoon.character.Character.lip_sync` (stored by ``vidgen tts``, else
+        built from the spoken text; DESIGN.md §69.4)."""
+        b = self.beat(beat)
+        return beat_visemes(self.project, b.id, self.beat_duration(b))
 
     @contextmanager
     def narrate(self, beat: str | int | BeatConfig) -> Iterator[float]:

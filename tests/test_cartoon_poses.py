@@ -158,7 +158,7 @@ def test_validate_checks_own_pose_shapes_and_parts(make_project) -> None:
     problems = {p.location: p.message for p in project_problems(project)}
     assert problems == {
         "characters[0].expressions.grin.mouth.shape": "character 'sprout': part 'mouth' has no shape 'wide' (shapes: smile, A, E, O, M)",
-        "characters[1].expressions.grin.mouth.shape": "character 'pip': part 'mouth' has no shape 'wide' (shapes: smile, open)",
+        "characters[1].expressions.grin.mouth.shape": "character 'pip': part 'mouth' has no shape 'wide' (shapes: smile, open, A, E, O, U, M, F, L, W)",
     }
     warnings = validate_warnings(project)
     assert "characters[0].poses.tip.accessory: character 'sprout' has no accessory; this setting does nothing" in warnings

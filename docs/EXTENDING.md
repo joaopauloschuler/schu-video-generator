@@ -174,8 +174,11 @@ set at once with `set_pose(name)` / `set_expression(name)`, or animated part by 
 `self.play(PoseChange(hero, pose="waving", expression="happy"), run_time=0.8)` (each part eases
 about its pivot, body first; `state=` takes any `CharacterState`). For a single part, call
 `set_part` from an updater (`UpdateFromAlphaFunc(hero, lambda m, a: m.set_part("arm_left",
-angle=120 * a))`), not `.animate` (that would move points along straight lines). DESIGN.md §69
-has the model, §69.3 the poses.
+angle=120 * a))`), not `.animate` (that would move points along straight lines). Lip sync:
+inside `with self.narrate(0) as d:`, `hero.lip_sync(self.beat_visemes(0))` makes the mouth
+follow the beat's `VisemeTrack` (an updater; `stop_lip_sync()` ends it and restores the mouth;
+`show_viseme("O")` shows one of `VISEMES` at once; a character without a mouth is left alone).
+DESIGN.md §69 has the model, §69.3 the poses, §69.4 lip sync.
 
 Params can nest: use another `SceneParams` class as a field type (also in lists). Theme tokens
 are checked inside nested models too, and `vidgen list-scenes` prints the nested fields. A nested

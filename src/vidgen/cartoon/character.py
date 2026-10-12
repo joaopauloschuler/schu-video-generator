@@ -25,6 +25,7 @@ import numpy as np
 from manim import VGroup, VMobject
 
 from vidgen.cartoon.poses import KINDS, PoseTable, chosen_shape, find_entry, kind_parts, merged_table
+from vidgen.cartoon.visemes import VISEME_SHAPES, VISEMES, VisemeTrack
 from vidgen.config import CharacterEntry, PartPoseEntry
 from vidgen.errors import VidgenError
 from vidgen.helpers import resolve_color
@@ -200,6 +201,7 @@ class Character(VGroup):
         )
         self._tree_order = sorted(specs, key=self._depth)
         self._poses = {n: PartPose() for n in specs}
+        self._lip_sync: Any = None  # the running lip sync updater (:meth:`lip_sync`)
         self._anchor = VMobject(fill_opacity=0, stroke_width=0, stroke_opacity=0)
         side = _ANCHOR_SIDE * height
         self._anchor.set_points(np.array([[0, 0, 0], [side, 0, 0], [0, side, 0], [0, side, 0]], dtype=float))
@@ -333,6 +335,55 @@ class Character(VGroup):
     def set_expression(self, name: str) -> Character:
         """Show expression ``name`` at once (``neutral``, ``happy``, ...; :meth:`names`)."""
         return self.set_state(self.posed_state(expression=name))
+
+    # ----- lip sync (DESIGN.md §69.4) -------------------------------------------------------
+
+    def viseme_shape(self, viseme: str) -> str | None:
+        """The mouth shape that shows ``viseme``: the first of :data:`VISEME_SHAPES` the
+        character has (``None``: the mouth's rest shape at the time, as for ``rest``)."""
+        if viseme not in VISEMES:
+            raise VidgenError(f"unknown viseme {viseme!r} (visemes: {_known(VISEMES)})")
+        shapes = self._shapes.get("mouth", {})
+        return next((shape for shape in VISEME_SHAPES[viseme] if shape in shapes), None)
+
+    def show_viseme(self, viseme: str, rest: str | None = None) -> Character:
+        """Show ``viseme``'s mouth shape (:meth:`viseme_shape`); ``rest`` names the shape for
+        ``rest`` and for a viseme the character has no shape for (default: the mouth's first
+        shape). A character without a mouth is left as it is."""
+        if not self.has_part("mouth"):
+            return self
+        shape = self.viseme_shape(viseme) or rest or self.shape_names("mouth")[0]
+        return self if shape == self._shape_name("mouth") else self.set_part("mouth", shape=shape)
+
+    def lip_sync(self, track: VisemeTrack, *, start: float = 0.0) -> Character:
+        """Make the mouth follow ``track`` from now: an updater advances a clock by each frame's
+        time, starting ``start`` seconds into the track (negative: a delay), and shows the viseme
+        at that time. At ``rest`` the mouth shows the shape it has now (the expression's). It
+        replaces a running lip sync; :meth:`stop_lip_sync` ends it. Manim pauses a mobject's
+        updaters while an animation plays on it (e.g. :class:`PoseChange`): the mouth holds then."""
+        self.stop_lip_sync()
+        if not self.has_part("mouth"):
+            return self
+        rest, before = self._shape_name("mouth"), self._poses["mouth"].shape
+        clock = [float(start)]
+
+        def follow(mob: Character, dt: float) -> None:
+            clock[0] += dt
+            mob.show_viseme(track.at(clock[0]), rest)
+
+        self._lip_sync = (follow, before)
+        self.add_updater(follow)
+        return self.show_viseme(track.at(clock[0]), rest)
+
+    def stop_lip_sync(self) -> Character:
+        """End :meth:`lip_sync` and show the mouth's shape from before it started."""
+        if self._lip_sync is None:
+            return self
+        follow, before = self._lip_sync
+        self.remove_updater(follow)
+        self._lip_sync = None
+        self._store_pose("mouth", replace(self._poses["mouth"], shape=before))
+        return self.refresh()
 
     def refresh(self) -> Character:
         """Redraw every part's points from its rest shape, pose, parents, facing and placement.

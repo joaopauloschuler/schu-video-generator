@@ -362,10 +362,10 @@ one.
 - [x] Tests: every pose and expression builds on the generator and on the example SVG (`tests/test_cartoon_poses.py`)
 
 ### Step 71 — Lip sync (visemes)
-- [ ] Phonemes per beat: from Kokoro's G2P (misaki) when the provider is Kokoro, else from text (misaki / espeak-ng when installed, a letter-based fallback otherwise), timed with the word timings already stored (ElevenLabs timestamps, Kokoro `.align.json`, estimated timings otherwise)
-- [ ] Map phonemes to 6–9 standard mouth shapes (rest, A/I, E, O, U, M/B/P, F/V, L, W/Q) and store a per-beat viseme track (`.visemes.json` next to the audio, in the beat's hash)
-- [ ] The speaking character's mouth follows the track; short shapes merged to avoid flicker
-- [ ] Tests: the mapping table, the merge rule, a track from a stored alignment (no TTS call)
+- [x] Phonemes per beat: from Kokoro's G2P (misaki) when the provider is Kokoro, else from text (misaki / espeak-ng when installed, a letter-based fallback otherwise), timed with the word timings already stored (ElevenLabs timestamps, Kokoro `.align.json`, estimated timings otherwise) (`cartoon/visemes.py`; Kokoro's token phonemes kept as `KokoroProvider.last_phonemes`; misaki English only with spaCy's model installed; neither is installed here, both mocked)
+- [x] Map phonemes to 6–9 standard mouth shapes (rest, A/I, E, O, U, M/B/P, F/V, L, W/Q) and store a per-beat viseme track (`.visemes.json` next to the audio, in the beat's hash) (9 visemes; the track stores the MP3's sha1 and the spoken text, like `.align.json`, and is in the scene fingerprint; `vidgen tts` writes it for videos with `characters:`; generated characters gain mouth shapes `A E O U M F L W`; DESIGN §69.4)
+- [x] The speaking character's mouth follows the track; short shapes merged to avoid flicker (`Character.lip_sync(track)` updater / `stop_lip_sync` / `show_viseme`, `NarratedScene.beat_visemes(beat)`; no scene speaks until Steps 73 / 78; cues < 0.07 s merged, a short `M` lengthened)
+- [x] Tests: the mapping table, the merge rule, a track from a stored alignment (no TTS call) (`tests/test_cartoon_visemes.py`)
 
 ### Step 72 — Automatic life: blinking and idle motion
 - [ ] Blinks at random but seeded intervals (2–6 s), never during a pose change; idle breathing (small body scale) and a slight head sway; `idle: false` per character or scene to turn them off

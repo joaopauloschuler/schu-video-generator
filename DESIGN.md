@@ -75,7 +75,8 @@ src/vidgen/
                           # poses, mirroring; character()), cast.py (characters: lookups, checks; no manim),
                           # generator.py (look: parameters -> parts, §69.1), svg_look.py (look: {svg} -> parts by
                           # element ids, §69.2), still.py (`vidgen character --png`), poses.py (pose and
-                          # expression tables, §69.3; no manim), transition.py (PoseChange, §69.3)
+                          # expression tables, §69.3; no manim), transition.py (PoseChange, §69.3),
+                          # visemes.py (lip sync: viseme tracks, .visemes.json, §69.4; no manim)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
   actions.py              # per-beat actions: Target, Action, validation, ActionRunner (§26)
@@ -4932,7 +4933,8 @@ accessory`) to Manim colours.
   circle, the hair cap in front, the nose) is drawn inside the `head` part, so it turns with the
   head; `scarf` and `bag` inside `body`; `glasses` and `hat` make the optional `accessory` part
   (parent `head`, drawn on top). Shape names are the same for every look: eyes `open` /
-  `closed`, mouth `smile` / `open`, so Steps 70–72 swap them on any generated character.
+  `closed`, mouth `smile` / `open` (and, since Step 71, the viseme shapes `A E O U M F L W`, §69.4),
+  so Steps 70–72 swap them on any generated character.
 - **Originality**: every shape is a primitive (circle, ellipse, rounded rectangle, polygon, line,
   arc); no option names or imitates a known character.
 - **`vidgen character NAME [PROJECT] [--variant NAME] [--png [FILE]] [--facing right|left]`**
@@ -5035,7 +5037,7 @@ between two of them is the `PoseChange` animation.
   shift, shape}`; a part outside the group, a zero scale or an unknown key is a config error.
   `vidgen validate`: `cast.character_pose_problems` (a `shape` none of whose choices the
   character has: `characters[0].expressions.grin.mouth.shape: character 'pip': part 'mouth' has
-  no shape 'wide' (shapes: smile, open)`) and `character_pose_warnings` (a part the character
+  no shape 'wide' (shapes: smile, open, A, E, O, U, M, F, L, W)`) and `character_pose_warnings` (a part the character
   does not have). Shapes are known without drawing: an svg look's from `read_character_svg`, a
   generated one's from `cast.GENERATED_SHAPES` (a test keeps it equal to the generator's).
   `vidgen character NAME` lists the known names (`cast.pose_lines`; own ones marked `*`).
@@ -5052,3 +5054,77 @@ between two of them is the `PoseChange` animation.
   is a `TypeError`.
 - **Not done here**: no scene type or action uses poses yet (Steps 73, 78); blinking (Step 72)
   must avoid a running `PoseChange`. Tests: `tests/test_cartoon_poses.py`.
+
+### 69.4 Lip sync: viseme tracks (Step 71)
+
+A beat's **viseme track** says which mouth shape shows when; a character's mouth follows it.
+`cartoon/visemes.py` (no manim) builds and stores tracks; `Character.lip_sync` plays one.
+
+- **Visemes** (`VISEMES`): `rest, A (also I), E (and most consonants), O, U, M (M B P), F (F V),
+  L (L, TH), W (W Q)`, the nine Preston Blair groups; their names are the SVG mouth shape names
+  of §69.2. `VISEME_SHAPES` gives each viseme's mouth shapes in order of preference (`U`: `U, O,
+  W, open`; `M`: `M` only; `F`: `F, E, M`; ...); none present (and `rest`) shows the rest shape.
+  Generated characters (§69.1) gain the mouth shapes `A E O U M F L W` (filled ellipses in the
+  `features` ink, `M` a line), so every viseme has its own shape; `cast.GENERATED_SHAPES` follows.
+- **Phonemes -> visemes** (`PHONEME_VISEMES`, one code point each): IPA from espeak-ng / misaki
+  and misaki's diphthong letters (`I` = aɪ -> `A, E`, `O` = oʊ -> `O, U`, `W` = aʊ -> `A, U`, `Y`
+  = ɔɪ -> `O, E`, `A` = eɪ -> `E`). Stress and length marks, `h`, the glottal stop and anything not
+  listed take no time. `phoneme_units` gives (viseme, weight): vowels 2, consonants 1 (a
+  diphthong splits its 2), a space a `rest` of 0.5. **Letter fallback** (`letter_units`): digraphs
+  (`th` L, `ph` F, `sh` / `ch` / `ck` / `ng` E, `wh` / `qu` W, `oo` U, `ee` E, `gh` silent), then
+  letters (`a` A; `e i y` E; `o` O; `u` U; `m b p` M; `f v` F; `l` L; `w q` W; `h` silent; other
+  Latin letters E; digits and other scripts A), a silent final `e` dropped where
+  `language_rules(...).silent_final_e` (checked before accents are removed: a final `é` is said).
+- **Phoneme sources** (`SOURCES`): `kokoro` — `KokoroProvider.last_phonemes`, set by every
+  `synthesize_timed`: `(token.phonemes, start, end)` per timed token (English), else `(result.phonemes,
+  chunk start, chunk end)` per chunk. Otherwise the spoken text, word by word, through
+  `text_g2p(language)`: the first of `G2P_BACKENDS` that loads — `misaki` (English: `en.G2P(trf=False,
+  british=en-GB/IE/AU/NZ, fallback=None)` only when `en_core_web_sm` is importable, since misaki
+  would pip-install it; other languages: `espeak.EspeakG2P` when `espeakng_loader` is importable),
+  then `espeak` (the `espeak-ng` program on `PATH`: `-q --ipa -v <voice> <word>`, voice = the tag
+  lower-cased, `en` -> `en-us`) — else `letters`. A word the G2P fails on or gives nothing for
+  uses its letters. Nothing is installed by vidgen; none is needed (tests mock them).
+- **Timing** (`TIMINGS`): Kokoro's token times (`kokoro`), else the words of
+  `speech.beat_word_times(audio_dir, beat, spoken_text, 0, duration, language)` — the stored
+  alignment (`alignment`: ElevenLabs timestamps or Kokoro's `.align.json`), else the estimate
+  within the MP3's speech (`speech`), else over the beat (`estimate`). Each word's (or token's)
+  units share its time by weight (`cues_from_units`); `rest` fills the time between words and
+  around them, 0 .. the beat's duration (the MP3's length).
+- **Merge rule** (`merge_short_cues`, `MIN_CUE_SECONDS = 0.07`, two frames at 30 fps): neighbours
+  of one viseme join; then, shortest first, a cue shorter than the minimum goes to its longer
+  neighbour (the earlier on a tie), joining again, until none is short or one cue remains. A short
+  `M` is instead lengthened to the minimum from its longer neighbour when that one stays at least
+  the minimum (closed lips that never show read as mumbling). The cues stay contiguous.
+- **Storage** (`.visemes.json` next to the MP3, `write_visemes` / `read_visemes`): `{version: 1,
+  text (spoken), audio_sha1, source, timing, cues: [[start, end, viseme], ...]}` (seconds, 4
+  decimals). Like `.align.json`, it is used only while the MP3's sha1 and the spoken text match
+  (`speech.audio_digest`, made public; reads cached by mtime). `vidgen tts` (`run.py`) writes it
+  for every voiced or copied beat **when the video declares `characters:`** (`_store_visemes`: a
+  copied beat's stored track is copied; else built with Kokoro's phonemes or from the text), and
+  after the run writes the missing tracks of up-to-date beats (`_store_missing_visemes`: "wrote
+  viseme tracks (lip sync) for N beat(s) already voiced"; a beat whose MP3 cannot be read gets a
+  `note:`). The beat's `.hash` is unchanged (the track never re-voices a beat).
+- **Reading** (`beat_visemes(project, beat_id, duration=None) -> VisemeTrack`; scene shortcut
+  `NarratedScene.beat_visemes(beat)` with `beat_duration`): the stored track while current, else
+  built from the spoken text in memory (not written, so rendering never changes the inputs of its
+  own fingerprint). `VisemeTrack(cues, source, timing)`: `duration`, `at(seconds)` (`rest`
+  outside the cues).
+- **Fingerprint**: in a video with `characters:`, each scene's fingerprint has `visemes`: the
+  stat of every beat's `.visemes.json` and `.align.json` (videos without characters keep their
+  fingerprints' shape).
+- **Character** (`cartoon/character.py`): `viseme_shape(viseme)` (the first of `VISEME_SHAPES` it
+  has, or `None`; an unknown viseme is a `VidgenError`), `show_viseme(viseme, rest=None)` (swaps
+  only when the shape changes), `lip_sync(track, *, start=0.0)`: remembers the mouth's shape now
+  (the expression's: `rest`), adds an updater that advances a clock by each frame's `dt` from
+  `start` and shows `track.at(clock)`; it replaces a running one; `stop_lip_sync()` removes it and
+  puts the mouth's pose shape back as it was (scale / angle of the expression are never touched,
+  so a `sad` flipped mouth speaks flipped). No mouth: both do nothing (`ACTION_NEEDS["say (lip
+  sync)"]`). Manim suspends a mobject's updaters while an `Animation` plays on it, so during a
+  `PoseChange` the mouth holds its shape.
+- **API**: `vidgen.api` exports `VISEMES`, `VisemeCue`, `VisemeTrack`; `Character.lip_sync`,
+  `stop_lip_sync`, `show_viseme`, `viseme_shape`; `NarratedScene.beat_visemes`.
+- **Also**: `audio_duration` moved from `scene.py` to `speech.py` (no manim; `scene` re-imports
+  it), so `vidgen tts` measures MP3s without loading Manim.
+- **Not done here**: no scene type speaks yet (the `stage` scene, Step 73, and the `say` action,
+  Step 78+, call `lip_sync`); no per-language phoneme tables beyond IPA; no coarticulation (each
+  phoneme is one shape). Tests: `tests/test_cartoon_visemes.py`.

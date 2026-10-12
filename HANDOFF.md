@@ -6897,3 +6897,76 @@ How to test
   tests/test_cartoon_svg.py tests/test_docs.py tests/test_api.py tests/test_config.py
   tests/test_guide.py tests/test_voices.py`; `-m render` on the four cartoon files;
   `tests/test_schema.py -k "svg_character or example"`.
+
+
+## Step 71 — Lip sync (visemes)
+
+What was built
+- `src/vidgen/cartoon/visemes.py` (no manim): `VISEMES` (`rest A E O U M F L W`, the SVG mouth
+  names of Step 69), `VISEME_SHAPES` (fallback shapes per viseme), `PHONEME_VISEMES` (IPA +
+  misaki's diphthong letters), `LETTER_DIGRAPHS` / `LETTER_VISEMES` (fallback), `phoneme_units`,
+  `letter_units`, `text_g2p` / `text_phonemes` (misaki, then the `espeak-ng` program, then
+  letters; `G2P_BACKENDS`), `cues_from_units`, `merge_short_cues` (`MIN_CUE_SECONDS = 0.07`;
+  short cues go to the longer neighbour, a short `M` is lengthened instead), `VisemeCue`,
+  `VisemeTrack(cues, source, timing)` with `at(t)`, `build_visemes`, `write_visemes` /
+  `read_visemes` (`<audio>/<beat>.visemes.json`, tied to the MP3's sha1 and spoken text),
+  `write_beat_visemes`, `beat_visemes(project, beat_id, duration=None)`.
+- `KokoroProvider.last_phonemes`: each `synthesize_timed` keeps `(phonemes, start, end)` per
+  timed token (English) or per chunk.
+- `vidgen tts` (`run.py`): in a video with `characters:`, writes the track of every voiced or
+  copied beat, and afterwards the missing tracks of up-to-date beats (one summary line).
+- `Character.viseme_shape`, `show_viseme`, `lip_sync(track, start=0.0)` (an updater driven by
+  `dt`), `stop_lip_sync`; `NarratedScene.beat_visemes(beat)`.
+- Generated characters gain mouth shapes `A E O U M F L W` (`cast.GENERATED_SHAPES` too).
+- Scene fingerprint: with `characters:`, each beat's `.visemes.json` and `.align.json` stats.
+
+Files touched
+- New: `src/vidgen/cartoon/visemes.py`, `tests/test_cartoon_visemes.py`.
+- `src/vidgen/cartoon/character.py`, `cartoon/generator.py`, `cartoon/cast.py`, `tts/kokoro.py`,
+  `tts/run.py`, `render/fingerprint.py`, `scene.py` (`beat_visemes`; `audio_duration` moved out),
+  `speech.py` (`audio_duration` moved in; `_audio_digest` -> `audio_digest`), `videoplan.py`
+  (imports `audio_duration` from `speech`), `api.py`.
+- Tests updated for the new generated mouth shapes: `tests/test_cartoon_character.py`,
+  `tests/test_cartoon_generator.py`, `tests/test_cartoon_poses.py`.
+- Docs: `DESIGN.md` (§2 tree, §69.1 shape names, §69.3 example message, new §69.4),
+  `docs/CONFIG.md` (new "Lip sync", generated shape list, SVG mouth note), `docs/EXTENDING.md`.
+
+Public interfaces
+- `vidgen.api`: `VISEMES`, `VisemeCue`, `VisemeTrack`. `Character`: `viseme_shape`,
+  `show_viseme`, `lip_sync`, `stop_lip_sync`. `NarratedScene.beat_visemes`.
+  Internal: everything else in `cartoon/visemes.py`, `speech.audio_digest`,
+  `speech.audio_duration` (still importable from `vidgen.scene`).
+
+Decisions / deviations
+- "In the beat's hash" is read as: the track is tied to the beat's audio like `.align.json`
+  (the MP3's sha1 + the spoken text in the file) and is part of the scene fingerprint. The
+  `.hash` file is unchanged, so lip sync never re-voices (or re-bills) a beat.
+- Tracks are written only by `vidgen tts` (only for videos with characters). At render time a
+  missing track is built in memory and not written, so a render never changes its own
+  fingerprint's inputs.
+- Kokoro's phonemes are passed on as a provider attribute (`last_phonemes`) rather than a new
+  return value, so the `synthesize_timed` contract of every provider is unchanged.
+- misaki's English G2P is used only when spaCy's `en_core_web_sm` is importable: otherwise misaki
+  pip-installs it on first use. The text G2P runs per word (word timings stay exact).
+- Generated characters got viseme mouth shapes (otherwise every vowel would be `open` and every
+  closure the smile); expressions still pick `open` first (`surprised`).
+- Searched before adding: timing reuses `speech.beat_word_times` (alignment / speech bounds /
+  estimate) and the alignment's freshness check pattern; storage `fileio.write_text_atomic`;
+  language rules `languages.language_rules`; no phoneme or viseme code existed.
+
+Known gaps / TODOs
+- No scene speaks yet: Step 73 (`stage`) / Step 78 (`say`) should call
+  `character.lip_sync(self.beat_visemes(beat))` inside `narrate` and `stop_lip_sync()` after.
+- During a `PoseChange` Manim suspends the character's updaters: the mouth holds its shape.
+  Blinks (Step 72) can use the same updater pattern.
+- misaki / espeak-ng paths are tested with mocks only (neither is installed here); per-word
+  espeak-ng calls cost one process each (fine for a beat, slow for very long beats).
+- `vidgen validate` says nothing about tracks (missing tracks are built at render time).
+
+How to test
+- `pytest tests/test_cartoon_visemes.py` (46 tests, ~2 s, no render).
+- Also run: `-m "not render" tests/test_cartoon_character.py tests/test_cartoon_generator.py
+  tests/test_cartoon_svg.py tests/test_cartoon_poses.py tests/test_tts.py tests/test_tts_kokoro.py
+  tests/test_api.py tests/test_scene.py tests/test_robustness.py tests/test_voices.py
+  tests/test_captions.py tests/test_pronunciation.py tests/test_readback.py tests/test_transitions.py
+  tests/test_docs.py tests/test_guide.py tests/test_config.py`; `-m render` on the cartoon files.

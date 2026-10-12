@@ -116,6 +116,28 @@ def speech_bounds(path: Path) -> tuple[float, float]:
     return _speech_bounds(path, path.stat().st_mtime_ns)
 
 
+def audio_duration(path: Path) -> float:
+    """Length of an audio file in seconds: its decoded samples / sample rate (read with PyAV).
+
+    Decoding (rather than reading the container's duration) gives the same answer with every
+    PyAV/FFmpeg version: older ones (PyAV 13, which Manim 0.19 pins on Python 3.10) include the
+    MP3 encoder padding in the container duration, ~25-50 ms more per file.
+    """
+    try:
+        with av.open(str(path)) as container:
+            stream = container.streams.audio[0]
+            samples = 0
+            rate = stream.rate or 0
+            for frame in container.decode(stream):
+                samples += frame.samples
+                rate = frame.sample_rate or rate
+            if not samples or not rate:
+                raise ValueError("no audio samples")
+            return samples / rate
+    except (OSError, ValueError, IndexError, av.error.FFmpegError) as exc:
+        raise VidgenError(f"cannot read audio file {path}: {exc}") from None
+
+
 # ----- estimated word times ---------------------------------------------------------------------
 
 
@@ -197,7 +219,8 @@ def alignment_path(audio_dir: Path, beat_id: str) -> Path:
     return audio_dir / f"{beat_id}.align.json"
 
 
-def _audio_digest(data: bytes) -> str:
+def audio_digest(data: bytes) -> str:
+    """The sha1 (hex) of an MP3's bytes: what ties a stored alignment or viseme track to it."""
     return hashlib.sha1(data).hexdigest()
 
 
@@ -212,7 +235,7 @@ def write_alignment(audio_dir: Path, beat_id: str, text: str, audio: bytes, alig
     doc = {
         "version": ALIGNMENT_VERSION,
         "text": text,
-        "audio_sha1": _audio_digest(audio),
+        "audio_sha1": audio_digest(audio),
         "characters": list(alignment["characters"]),
         "starts": [float(t) for t in alignment["character_start_times_seconds"]],
         "ends": [float(t) for t in alignment["character_end_times_seconds"]],
@@ -225,7 +248,7 @@ def write_alignment(audio_dir: Path, beat_id: str, text: str, audio: bytes, alig
 def _read_alignment(path: Path, mtime_ns: int, mp3: Path, mp3_mtime_ns: int) -> dict[str, Any] | None:
     try:
         doc = json.loads(path.read_text(encoding="utf-8"))
-        digest = _audio_digest(mp3.read_bytes())
+        digest = audio_digest(mp3.read_bytes())
     except (OSError, ValueError):
         return None
     if not isinstance(doc, dict) or doc.get("version") != ALIGNMENT_VERSION or doc.get("audio_sha1") != digest:

@@ -1073,9 +1073,44 @@ characters:
 A pose may name `body`, `legs`, `arm_left`, `arm_right`, `head`, `accessory`; an expression
 `eyes`, `brows`, `mouth` (anything else is a config error). Parts of its group a pose or an
 expression does not name go back to their rest pose. Generated characters have the shapes eyes
-`open` / `closed`, brows `default` / `angry` / `sad`, mouth `smile` / `open`; an SVG character
+`open` / `closed`, brows `default` / `angry` / `sad`, mouth `smile` / `open` and the lip-sync shapes
+`A E O U M F L W` ([below](#lip-sync)); an SVG character
 has the shapes its file names (`vidgen character NAME` lists them). `vidgen validate` reports a
 `shape` the character does not have (none of the choices), and warns about a part it lacks.
+
+### Lip sync
+
+A speaking character's mouth follows its words. For a video with `characters:`, `vidgen tts`
+stores next to each beat's MP3 a **viseme track** (`audio/<beat>.visemes.json`): which of nine
+mouth shapes shows when, from the sounds of the spoken text (pronunciation applied).
+
+| viseme | sounds | generated mouth | SVG shapes tried, in order |
+|---|---|---|---|
+| `rest` | silence | the mouth the expression shows | the mouth's rest shape |
+| `A` | a, i as in "eye", the schwa | wide open | `A`, `open` |
+| `E` | e, ee, i as in "sit", and most consonants (t, d, s, z, k, g, n, r, sh, ch, j) | wide, flat | `E`, `A`, `open` |
+| `O` | o, aw | round | `O`, `A`, `open` |
+| `U` | oo, u | small round | `U`, `O`, `W`, `open` |
+| `M` | m, b, p | closed lips | `M`, else the rest shape |
+| `F` | f, v | a thin line | `F`, `E`, `M`, else the rest shape |
+| `L` | l, th | open | `L`, `E`, `A`, `open` |
+| `W` | w, q | puckered | `W`, `U`, `O`, `open` |
+
+- **Where the sounds come from**: Kokoro's own phonemes when Kokoro voiced the beat; else
+  [misaki](https://github.com/hexgrad/misaki) or the `espeak-ng` program when installed (misaki
+  for English needs spaCy's `en_core_web_sm`; nothing is installed for you); else the letters of
+  the words (`th` -> `L`, `ph` -> `F`, `oo` -> `U`, a silent final `e` dropped in English and
+  French).
+- **When**: the word timings the captions use (ElevenLabs timestamps, Kokoro's `.align.json`,
+  else an estimate within the MP3's speech). Shapes shorter than 0.07 s are merged into the
+  longer neighbour so the mouth does not flicker; a short `M` is lengthened instead, so lips
+  still close.
+- The track belongs to the MP3 and the spoken text it was made for (their hash is stored in it);
+  a re-voiced or edited beat gets a new one with its audio. Audio voiced before the video had
+  characters gets its tracks on the next `vidgen tts` (no new audio, nothing billed). A beat with
+  no current track is timed from its text when the scene is drawn.
+- Editing a track (or a beat's alignment) re-renders the scenes of that beat in a video with
+  characters.
 
 ### Characters from SVG files
 
@@ -1098,7 +1133,7 @@ the `image` scene) and splits it into parts by **element ids**:
 - The rest shape of `eyes` is called `open` and that of `mouth` `smile`, as on generated
   characters; other rest shapes are `rest`. Name the mouth shapes for speech `mouth_A` (also I),
   `mouth_E`, `mouth_O`, `mouth_U`, `mouth_M` (M, B, P), `mouth_F` (F, V), `mouth_L`, `mouth_W`
-  (W, Q); any subset may be present. Until lip sync is added they are shapes like any other.
+  (W, Q); any subset may be present ([lip sync](#lip-sync) uses the closest one a file has).
 - Parts are drawn in the file's order. The feet are the bottom of the rest shapes, under the
   middle of `legs` (else of `body`); the top of the rest shapes is the character's height.
   Without `data-pivot` the pivot is guessed from the part's box (head and body: bottom centre;

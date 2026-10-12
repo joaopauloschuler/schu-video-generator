@@ -108,6 +108,7 @@ from vidgen.imagegen import GenerateImage, generated_image  # noqa: E402
 from vidgen.vector_mobject import VectorPicture, load_vector  # noqa: E402
 from vidgen.cartoon.character import PART_NAMES, Character, CharacterPart, CharacterState, PartPose, character  # noqa: E402
 from vidgen.cartoon.transition import PoseChange  # noqa: E402
+from vidgen.cartoon.visemes import VISEMES, VisemeCue, VisemeTrack  # noqa: E402
 from vidgen.scene import CharacterName  # noqa: E402
 
 
@@ -326,6 +327,9 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "CharacterState",
     "PartPose",
     "PoseChange",
+    "VISEMES",
+    "VisemeCue",
+    "VisemeTrack",
     "character",
     "Field",
     "field_validator",
