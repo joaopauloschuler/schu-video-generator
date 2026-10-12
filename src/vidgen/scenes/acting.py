@@ -206,6 +206,7 @@ class Say(_Acting):
         anchor = callout_area(head)
         avoid = label_avoid(scene, view, scale, targets, anchor)
         avoid += [b.extent() for b in self.bubbles]
+        avoid += [callout_area(m) for m in scene.mobjects if isinstance(m, EffectSymbol) and m.family_members_with_points()]   # §69.40
         made = speech_bubble(
             text, anchor, color=self.options.color, size=self.options.size, bounds=label_bounds(scene, view, scale),
             avoid=avoid, scale=scale, theme=scene.theme,

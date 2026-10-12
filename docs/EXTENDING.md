@@ -203,7 +203,7 @@ the damped spring the built-in follow-through uses: `spring.follow(x_of, seconds
 part on it is while it follows `x_of(seconds)` (pure, the same at any frame rate), so an updater
 can turn the part by `k * (spring.follow(x_of, t) - x_of(t))`; `step_response`, `overshoot()` and
 `settle_seconds()` help tune it (a damping ratio of 1 never overshoots). The built-in acting and moving
-actions (`say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `enter`, `exit`,
+actions (`say`, `look_at`, `turn`, `emote`, `pose`, `react`, `effect`, `walk_to`, `enter`, `exit`,
 `gesture`, `jump`) work on every target that is a `Character`, so register your characters as
 targets (`self.target(name, hero)`) to let a video's beats act on them.
 `KeyedMotion(mob, values_at, part=None)` moves any mobject (feet `x`, `y` on screen, `rotate`
@@ -230,6 +230,12 @@ umbrella's shaft; else its middle), and `PropMove` moves a prop by that point. A
 shapes (`prop.shapes`, an umbrella's `closed` / `open`) switches with `prop.show_shape(name)` or
 the animation `PropReshape(prop, shape, at=, height=, follow=)` (the `open` / `close` actions);
 `overhead_point(feet, height, facing)` is where a hand holds an open umbrella overhead.
+The `effect` action (`src/vidgen/scenes/effect_action.py`) works on every `Character` target. Its
+symbol is an `EffectSymbol(kind, color=, character_height=)` (kinds `EFFECT_KINDS`; the colour of
+`effect_color(kind, None, theme.color)` by default): `symbol.follow(hero, avoid=[boxes])` gives it
+an updater that keeps it on the head (`head_box(hero)`, spot chosen by `effect_spot`, clear of
+`avoid`) and moves it with its own clock (`pop_scale`, `piece_pose`); add it to the scene yourself
+(never to the `Character`), and set `symbol.leaving = symbol.age` to shrink it away.
 The sitting actions (`sit_on`, `lean_on`, `stand_up`; `src/vidgen/scenes/sitting.py`) build on
 `character.seated(state, seat)` (the hips on a seat `seat` character units high, the legs bent
 by the solver), `character.leaning(state)`, `character.lowered(state, drop, stoop=)` (a crouch,

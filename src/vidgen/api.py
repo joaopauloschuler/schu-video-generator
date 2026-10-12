@@ -289,6 +289,17 @@ from vidgen.cartoon.wind import (  # noqa: E402
     wind_seed,
 )
 from vidgen.cartoon.windblown import StageWind, SwayingProp  # noqa: E402
+from vidgen.cartoon.effects import (  # noqa: E402
+    EFFECT_KINDS,
+    EFFECT_SECONDS,
+    EFFECT_STYLES,
+    EXPRESSION_EFFECTS,
+    EffectSpot,
+    effect_spot,
+    piece_pose,
+    pop_scale,
+)
+from vidgen.cartoon.effect_symbols import EffectSymbol, effect_color, head_box  # noqa: E402
 from vidgen.scene import CharacterName  # noqa: E402
 
 
@@ -728,6 +739,17 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "puddle_spots",
     "rain_ground",
     "splash_shapes",
+    "EFFECT_KINDS",
+    "EFFECT_SECONDS",
+    "EFFECT_STYLES",
+    "EXPRESSION_EFFECTS",
+    "EffectSpot",
+    "EffectSymbol",
+    "effect_color",
+    "effect_spot",
+    "head_box",
+    "piece_pose",
+    "pop_scale",
     "Field",
     "field_validator",
     "model_validator",

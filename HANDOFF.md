@@ -9951,3 +9951,109 @@ How to test
   tests/test_cartoon_shots.py tests/test_json_output.py tests/test_docs.py tests/test_guide.py
   tests/test_mcp.py` (all passed: 20, 79 with config, 108 with shots/json/docs/screenplay, 61 with
   mcp/guide). `vidgen validate` / `vidgen lint examples/cartoon-rain-check`. Full suite not run.
+
+## Step 107 — Effect symbols over characters
+
+What was built
+- Beat action `effect` (`src/vidgen/scenes/effect_action.py`, against `vidgen.api`): `- effect:
+  pip` + `to: sweat | anger | idea | question | exclaim | sleep | hearts | stars | sparkle | tear`,
+  options `color` (theme token or hex; default the symbol's token) and `sound` (`true`). Run time
+  0.4 (the pop); reversible, `until_next_beat`; `alters_targets = False` (plays in one batch with
+  the character's other actions). The symbol pops in with a bounce, follows the head every frame,
+  keeps moving, and shrinks away at the next beat (or its `until` beat).
+- Pure geometry in `src/vidgen/cartoon/effects.py`: `EFFECT_KINDS`, `EFFECT_STYLES` (spot, size in
+  head heights, theme token), `effect_pieces` (closed outlines from circles, ellipses, stars, a
+  drop and heart curve, explicit `!` / `Z` polygons and `thick_path` bands), `spot_at` /
+  `effect_spot` (spots `above front back corner ring eye` from the head's box and facing, a hat's
+  top lifting `above` / `ring`, `ALTERNATE_SPOTS` when a bubble is in the way), `pop_scale`
+  (Step 82 `Spring` 3 Hz ζ 0.35 blended with an eased grow by `cartoon_motion`), `exit_scale`,
+  `piece_pose` / `piece_center` (drip, pulse, rock, shake, rising Zs, bobbing hearts, orbiting
+  stars, twinkle, running tear), `EXPRESSION_EFFECTS`.
+- Drawing in `src/vidgen/cartoon/effect_symbols.py`: `EffectSymbol` (a `VGroup` per piece, redrawn
+  from stored points each frame; tiny members get no points), `follow(character, avoid=)` (a dt
+  updater), `head_box`, `crown_top`, `eye_point`, `effect_color`. Never added to the `Character`.
+- Foley (`cartoon/foley.py`): `PlayedAction.effect`, `EFFECT_SOUNDS` (built-in sounds only:
+  `chime` short ding for idea, high `chime` for sparkle, `pop` at four pitches, a short `thud` for
+  anger; sleep, stars, tear silent); `Stage.action_foley` passes the kind unless `sound: false`.
+- Layout dump: kind `effect` with `effect` and `effect_of`; `describe` and `lint_ignore` know it.
+  Lint: `bubble_overlap` also reports a bubble covering a symbol; `hidden_speaker` skips symbols.
+  A symbol placed while a bubble is on screen takes another spot; `Say._bubble` avoids symbols.
+- `auto_direct` kind `effects` (`DIRECTING_KINDS`, `AutoDirect.effects`): `_plan_effects` adds at
+  most one symbol per beat for the first change to surprised / thinking / angry (written `emote` /
+  `react`, a voice sound's face, then the automatic reactions via `_SceneState.faces_now`), none
+  with a written `effect`.
+- Screenplay: `_EFFECT_VERBS` (has an idea, is confused, is startled, sweats, is angry, falls
+  asleep, falls in love, sees stars, sparkles, cries...) map to `effect` actions.
+
+Files touched
+- New: `src/vidgen/cartoon/effects.py`, `src/vidgen/cartoon/effect_symbols.py`,
+  `src/vidgen/scenes/effect_action.py`, `tests/test_cartoon_effects.py`.
+- `src/vidgen/api.py`, `scenes/__init__.py`, `scenes/acting.py` (bubble avoids symbols),
+  `scenes/stage.py` (foley, docstrings), `cartoon/foley.py`, `cartoon/directing.py`, `config.py`
+  (`DIRECTING_KINDS`, `AutoDirect.effects`, docstrings), `introspect.py`, `lint/cartoon_rules.py`,
+  `lint/layout_rules.py` (`describe`), `lint/run.py` (`lint_ignore`), `screenplay.py`.
+- Docs: `docs/CONFIG.md` (new "Effect symbols (`effect`)", actions rows and lists, auto_direct,
+  screenplay grammar, foley, layout keys, lint rows, `lint_ignore`), guide
+  `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md` (actions row, "Effect symbols" paragraph,
+  auto_direct, screenplay, sound, troubleshooting), `DESIGN.md` (§2 tree, §6.4, §69.23 note, new
+  §69.40), `docs/EXTENDING.md`, `docs/gallery/stage.md` (param rows as written by the docstrings),
+  `tasklist.md`.
+- Tests updated: `tests/test_actions.py` (action name lists), `tests/test_cartoon_directing.py`
+  (kinds; the example and the dialogue now get an `effect`), `tests/test_mcp.py` (`direct` on the
+  example gains `effect moss exclaim`).
+
+Public interfaces
+- `vidgen.api` adds `EFFECT_KINDS`, `EFFECT_SECONDS`, `EFFECT_STYLES`, `EXPRESSION_EFFECTS`,
+  `EffectSpot`, `EffectSymbol`, `effect_color`, `effect_spot`, `head_box`, `piece_pose`,
+  `pop_scale`. New built-in action `effect`; `AutoDirect.effects`; `PlayedAction.effect`; layout
+  kind `effect`. Behaviour change: `auto_direct: true` now adds symbols (`{effects: false}` for the
+  old output); `examples/cartoon-rain-check`, `cartoon-music-box` and `cartoon_series/episode_1`
+  get 1-4 automatic symbols each.
+
+Decisions / deviations
+- The effects pass acts on a character a written `emote` / `react` targets (other passes leave
+  such characters alone): the task asks for a symbol "with a strong expression change", which is
+  most often a written one; the symbol changes nothing the action set. A written `effect` in the
+  beat stops it.
+- Shapes are drawn as filled outlines (strokes turned into bands by `thick_path`), not font glyphs
+  or Manim strokes, so they scale with the head and outline like the characters; shapes are never
+  mirrored, only their places and tilts.
+- Water symbols use `primary` (a theme token) rather than a fixed blue, as the task asks for theme
+  colours; with an ink outline they read on any background.
+- The symbol keeps the spot it chose when the effect started (no jumping when a bubble comes
+  later); the bubble avoids it instead.
+- Searched first: reused `Spring` (pop), `smoothstep`, `_Acting` / `_characters`, the foley path
+  (`action_foley`, `foley_cues`), `callout_area`, the bubble placement's `avoid` list, the
+  planner's passes and the screenplay's predicate grammar; no symbol or emote-mark code existed
+  (`grep -rni "sweat\|idea\|symbol" src/vidgen/cartoon src/vidgen/scenes`: none).
+
+Evidence
+- Stills of all ten symbols on `dot` (generated, bun), `moss` (generated, hat and glasses) and the
+  SVG `sprout`, facing right and left (scratch sheets at 3200x1040): fixed on the way the hat
+  covering symbols above the head (`crown_top`), a broken mitred `Z` (now one polygon), thin
+  anger / `!` shapes and small sleep / stars / sparkle sizes.
+- A scratch copy of `examples/cartoon` with six written effects and `auto_direct: true`
+  (preview 854x480): storyboard checked by eye (bulb, sparkle after the walk, exclamation mark
+  following moss's jump, Zs, tear, sweat); `vidgen lint` first gave `bubble_overlap` (anger mark
+  under moss's bubble) and `rushed_animation` (the effect waiting for a `react`); after
+  `ALTERNATE_SPOTS` for `corner` and `alters_targets = False`: 0 findings.
+- Scratch copies linted at preview: `cartoon-rain-check` (4 scenes) 0 findings, `cartoon-music-box`
+  0, `cartoon_series/episode_1` 0 (episode 2 gets no symbol). Stills of storm_b4 and reveal_b4
+  looked right (symbols not graded by the storm's tint).
+
+Known gaps / TODOs
+- A cycling symbol (tear, Zs) can be between cycles at a still; symbols have no depth sort (always
+  in front); no symbols for props; an `effect` and a `surprised` face both pop (two sounds).
+- Not listened to by a person.
+
+How to test
+- `pytest tests/test_cartoon_effects.py` (46 not-render + 1 render at 160x90, ~6 s).
+- Also run (not render): `test_guide test_docs test_gallery test_actions test_cartoon_directing`
+  (163, 4 s), `test_schema test_introspect test_lint test_cartoon_lint test_cartoon_stage
+  test_cartoon_foley test_screenplay test_cartoon_acting test_api test_config test_extensions
+  test_cartoon_lighting test_cartoon_shots test_cartoon_reframe` (255, 70 s), `test_json_output
+  test_cli test_mcp test_builtin_scenes test_phase_h_review test_phase_i_review test_storyboard
+  test_cartoon_sheet test_actions_coverage` (211, 36 s, after the `test_mcp` update); render:
+  `test_cartoon_effects test_cartoon_acting test_cartoon_directing test_cartoon_foley
+  test_cartoon_lint test_cartoon_lighting` (9, 11 s), `test_introspect test_phase_i_review
+  test_screenplay` (2, 12 s). The full suite was not run.

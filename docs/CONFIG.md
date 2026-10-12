@@ -59,7 +59,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `cartoon_style` | none | style words added to every `generate:` prompt of [`stage`](#generated-backgrounds-cartoon_style) scenes, so a cartoon's backgrounds look alike (`"flat colours, thick outlines, soft shadows"`); part of those pictures' cache key; a variant may change it |
 | `cartoon_motion` | `lively` | how characters move: `lively`, `calm` or `none` ([animation principles](#animation-principles-cartoon_motion)); a stage's or a character's own setting wins |
 | `foley` | `true` | sounds for the characters' actions on `stage` scenes (footsteps, whoosh, boing, pop); `false`: none; a stage's `foley` param wins; see [foley](#foley-and-music-stings) |
-| `auto_direct` | `false` | automatic directing on `stage` scenes: listeners look at whoever speaks and react after lines, speakers gesture on stressed words, short punchy lines get a close-up; `true`, `false` or `{looks, reactions, gestures, closeups}`; a stage's or a beat's `auto_direct` wins; see [automatic directing](#automatic-directing-auto_direct) |
+| `auto_direct` | `false` | automatic directing on `stage` scenes: listeners look at whoever speaks and react after lines, speakers gesture on stressed words, short punchy lines get a close-up; `true`, `false` or `{looks, reactions, gestures, closeups, effects}`; a stage's or a beat's `auto_direct` wins; see [automatic directing](#automatic-directing-auto_direct) |
 | `reframe` | none | on `stage` scenes wider than the frame: `speaker` moves the camera to whoever speaks (a 9:16 frame then crops the stage laid out as wide as the 16:9 one), `none` leaves the camera to the beats' own camera actions; none: `speaker` when a stage's characters do not fit in one view; a stage's `reframe` wins; see [vertical cartoons](#vertical-cartoons-reframe) |
 | `scenes` | required | the scenes in order, at least one |
 
@@ -1934,8 +1934,10 @@ Video-wide `sfx:`:
 action as it plays (also when its beat speeds it up): a `footstep` on every footfall of a
 `walk_to`, `enter` or `exit` (alternating feet, a softer one when the feet come together), a
 `whoosh` as a character enters and a `swoosh` as it leaves the view, a `boing` as a `jump` takes
-off, a `thud` where a [thrown](#props-in-hands) prop lands, and a `pop` when `emote` or `react`
-puts on the `surprised` expression. Other actions are
+off, a `thud` where a [thrown](#props-in-hands) prop lands, a `pop` when `emote` or `react`
+puts on the `surprised` expression, and a short sound as most [effect
+symbols](#effect-symbols-effect) pop up (`idea` a short `chime` ding; `sound: false` on the
+`effect` for none). Other actions are
 silent. They are ordinary sound effects (listed in `timings.json` `sfx`, mixed like the rest):
 `sfx: {gain}` sets their level with the others, and `assets/sfx/footstep.wav` (or `boing.wav`,
 ...) replaces a sound with your own. `foley: false` at the top level turns them off for the
@@ -4114,7 +4116,7 @@ never leaves the stage.
 | `idle` | bool | `true` | `false`: no breathing, head sway or blinking in this scene (for every character on it) |
 | `cartoon_motion` | `lively` \| `calm` \| `none` | none (the video's) | the [animation principles](#animation-principles-cartoon_motion) of the characters in this scene; a character's own setting wins |
 | `foley` | bool | none (the video's `foley`: on) | sounds for the characters' actions in this scene (footsteps, whoosh, boing, pop; [foley](#foley-and-music-stings)); `false`: none |
-| `auto_direct` | bool \| mapping | none (the video's `auto_direct`: off) | [automatic directing](#automatic-directing-auto_direct) in this scene: `true`, `false` or `{looks, reactions, gestures, closeups}`; a beat's own `auto_direct` wins |
+| `auto_direct` | bool \| mapping | none (the video's `auto_direct`: off) | [automatic directing](#automatic-directing-auto_direct) in this scene: `true`, `false` or `{looks, reactions, gestures, closeups, effects}`; a beat's own `auto_direct` wins |
 | `reframe` | `speaker` \| `none` | none (the video's, else `speaker` when the characters do not fit in one view) | [vertical cartoons](#vertical-cartoons-reframe): the camera keeps whoever speaks in view on a stage wider than the frame |
 | `width` | float 1–4 | `1` | width of the stage in frame widths (16:9 frame widths while it [reframes](#vertical-cartoons-reframe) in a narrower frame); wider than 1: the camera pans across it (`pan`, `follow`) |
 | `camera_at` | mark \| x | `centre` | where the camera looks at the start (on a stage wider than the frame) |
@@ -4331,6 +4333,52 @@ scenes:
           - {say: kit, bubble: "Up there!"}     # kit speaks, with a short bubble
           - {look_at: kit, to: tree, at: 0.3}
           - {emote: pip, to: worried, at: 0.5}
+```
+
+#### Effect symbols (`effect`)
+
+`- effect: pip` with `to: idea` puts a small symbol over a character's head so a feeling reads at a
+glance. Each is an original shape drawn from circles and polygons in a theme colour with the
+characters' ink outline:
+
+| `to` | the symbol | where | colour |
+|---|---|---|---|
+| `sweat` | a drop sliding down | at the back of the head | `primary` |
+| `anger` | four curved ticks in a cross, pulsing | on the head's top front corner | `accent` |
+| `idea` | a light bulb with pulsing rays | above the head | `highlight` |
+| `question` | a rocking question mark | above the head | `secondary` |
+| `exclaim` | an exclamation mark that shakes and calms | above the head | `accent` |
+| `sleep` | three Zs rising one after another | in front of the head | `primary` |
+| `hearts` | three bobbing hearts | above the head | `accent` |
+| `stars` | three stars circling the head | round the top of the head | `highlight` |
+| `sparkle` | two twinkling four-pointed stars | in front of the head | `highlight` |
+| `tear` | a drop running down from the eye, again and again | under the eye | `primary` |
+
+Options: `color` (a theme token or hex instead of the symbol's own) and `sound` (`true`; `false`:
+silent even with [foley](#foley-and-music-stings)). The symbol pops in with a little bounce (an
+eased grow with `cartoon_motion: none`), follows the head on every frame (walks, jumps, turns,
+shots; a hat lifts the symbols that sit above it), keeps moving, and shrinks away when the next
+beat starts (`until: <beat>`: when that beat starts; `run_time` 0.4 is the pop). It is sized by the
+head (a bigger or nearer character, a bigger symbol), drawn in front of the set and the
+characters, and never graded by the [light](#light-and-shadows-light-shadows) (like speech
+bubbles). Placed while a speech bubble is on screen, a symbol that would sit under the bubble moves
+to the front of the head, else behind it; a bubble drawn later keeps clear of the symbols. With
+foley on, most symbols make a short sound as they pop up (built-in sounds: `idea` a short `chime`
+ding, `exclaim` / `question` / `hearts` / `sweat` a `pop` at different pitches, `anger` a soft
+`thud`, `sparkle` a high `chime`; `sleep`, `stars` and `tear` are silent). The layout dump records
+each as an object of kind `effect` with `effect` (the symbol) and `effect_of` (the character);
+`bubble_overlap` reports a speech bubble over a symbol, and a symbol never counts as hiding a
+speaker's face (`hidden_speaker`). [`auto_direct`](#automatic-directing-auto_direct) adds one for
+a strong change of expression, and a [screenplay](#cartoons-from-a-screenplay-vidgen-screenplay)
+direction such as `[Pip has an idea]` writes one.
+
+```yaml
+beats:
+  - text: "Wait. I know how to get it down!"
+    voice: pip_voice
+    actions:
+      - {effect: pip, to: idea, at: 0.2}          # a bulb over pip, until the next beat
+      - {effect: kit, to: question, sound: false} # a silent question mark over kit
 ```
 
 #### Moving
@@ -4640,6 +4688,12 @@ writing each look:
   a walk, `enter`, `exit`, `move_along`, `keyframes`, `pan`, `follow`, `zoom`, a shot, `pick_up`,
   `put_down`, `give`, `throw`, `sit_on`, `lean_on` or `stand_up`, nor while the camera follows something, nor in a beat with a
   speech bubble or an automatic gesture of the speaker.
+- **Effect symbols.** A strong change of expression gets an [effect symbol](#effect-symbols-effect)
+  over the head as it starts: `surprised` an `exclaim`, `thinking` a `question`, `angry` an
+  `anger` mark. At most one per line: the first such change in the beat (a written `emote` or
+  `react`, a [voice sound](#voice-sounds)'s face, then the automatic reactions), for a character
+  on the stage; none in a beat with a written `effect`. The symbol is added also for a written
+  `emote` / `react` (it adds to the face; the action itself is unchanged).
 - **Lint-safe.** Before adding a look, an arm gesture (`point`, `wave`, `shrug`) or a close-up,
   vidgen predicts the beat's still from the stage's layout (no rendering) with and without it and
   runs the lint rules `off_stage` and `facing_away` on both; an action that would add a finding is
@@ -4653,7 +4707,7 @@ writing each look:
   a held prop aims at its holder; one at a prop put down or thrown, at where it landed.
 
 `auto_direct: {looks: true, reactions: false}` picks kinds (`looks`, `reactions`, `gestures`,
-`closeups`; a kind not given is on). The added actions are ordinary
+`closeups`, `effects`; a kind not given is on). The added actions are ordinary
 actions marked as automatic: `vidgen storyboard` lists them under their beat (`auto: look_at kit
 pip · react kit thinking`; `--json`: each frame's `auto`), and the log names them `look_at kit
 (auto)`. `vidgen direct [PROJECT]` (MCP tool `direct`) prints them per beat without rendering; `vidgen direct
@@ -4733,7 +4787,13 @@ GUS (glad): There it is! [jumps] I left my song in that crate.
   grammar: `X walks / goes / runs to Y` (`walk_to`: a mark, an x, or beside a prop or character,
   on the other side or a little further out when someone already stands there; `runs` twice as fast), `X enters [from the left]`, `X exits / leaves [left]`, `X jumps`,
   `X looks at Y` (a character, prop, mark or the camera; `look at each other`), `X points at Y`
-  (`look_at`, then `gesture: point`), `X waves [at Y]`, `nods`, `shrugs`, `shakes his head`.
+  (`look_at`, then `gesture: point`), `X waves [at Y]`, `nods`, `shrugs`, `shakes his head`, and
+  an [effect symbol](#effect-symbols-effect) over X's head for `X has / gets an idea` or `lights up`
+  (`idea`), `is / looks confused`, `puzzled`, `wonders`, `scratches his head` (`question`), `is
+  startled`, `alarmed`, `shocked` (`exclaim`), `sweats`, `gulps`, `is nervous` (`sweat`), `is
+  angry`, `furious`, `fumes` (`anger`), `falls asleep`, `dozes off`, `nods off`, `snores` (`sleep`),
+  `falls in love [with Y]`, `swoons` (`hearts`), `is dizzy`, `sees stars` (`stars`), `sparkles`,
+  `beams with pride` (`sparkle`), `cries`, `weeps`, `sheds a tear` (`tear`).
   Subjects are character names (`X and Y`) or `he` / `she` / `they` for the last ones; `it` /
   `him` / `her` name the last object. Anything else stays as `# TODO: [text]` above its beat.
 - **Characters**: a character listed in the front matter's `characters:` is kept as written (a
@@ -5148,11 +5208,11 @@ the one key that names an action).
 
 | key | default | |
 |---|---|---|
-| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `sit_on`, `lean_on`, `stand_up`, `light`, `wind`, `blow_away`, or a project action (`vidgen list-scenes` lists them) |
+| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `sit_on`, `lean_on`, `stand_up`, `light`, `wind`, `blow_away`, `effect`, or a project action (`vidgen list-scenes` lists them) |
 | `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one (`callout` with an `area` and `pan` with `to` need none) |
 | `at` | `0` | when, as a fraction of the beat's narration (`0` ≤ at < `1`) |
 | `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`, `callout`, `say`, `react`, `look_at`, `turn`, `emote`, `pose`: undone when it starts; `zoom`: the camera is back when it starts; `pan`: the camera moves back when it starts; `follow`: the camera stops following when it starts; `keyframes`, `move_along`: the target moves back) |
-| `run_time` | the action's | seconds the animation takes (`reveal` / `callout` / `pose` 0.8, `dim` / `highlight` / `react` 0.6, `zoom` / `transform` / `follow` 1.0, `pan` 1.5, `look_at` / `emote` 0.5, `say` (the bubble) / `turn` 0.4, `jump` 0.6, `gesture` per gesture (1.2 for `point`), `walk_to` / `enter` / `exit` as long as the distance needs at their `speed`, `keyframes` until its last key, `move_along` 2.0 or its path's length at its `speed`, `pick_up` / `give` 1.2, `put_down` / `sit_on` 1.0, `lean_on` / `stand_up` 0.8, `hold` 0.4, `open` / `close` 0.6, `throw` 0.95–2.1 by the distance, `light` / `wind` 2.0 (the fade), `blow_away` by the distance and the wind (0.6–6); a zoom takes as long again to come back) |
+| `run_time` | the action's | seconds the animation takes (`reveal` / `callout` / `pose` 0.8, `dim` / `highlight` / `react` 0.6, `zoom` / `transform` / `follow` 1.0, `pan` 1.5, `look_at` / `emote` 0.5, `say` (the bubble) / `turn` / `effect` (the pop) 0.4, `jump` 0.6, `gesture` per gesture (1.2 for `point`), `walk_to` / `enter` / `exit` as long as the distance needs at their `speed`, `keyframes` until its last key, `move_along` 2.0 or its path's length at its `speed`, `pick_up` / `give` 1.2, `put_down` / `sit_on` 1.0, `lean_on` / `stand_up` 0.8, `hold` 0.4, `open` / `close` 0.6, `throw` 0.95–2.1 by the distance, `light` / `wind` 2.0 (the fade), `blow_away` by the distance and the wind (0.6–6); a zoom takes as long again to come back) |
 
 **Targets** depend on the scene type (`vidgen list-scenes` prints them as `targets:`). Every
 built-in type has some; `<N>` counts from 1 (`item1`, `item2`...), `<text>`/`<label>`/`<name>`
@@ -5191,7 +5251,7 @@ a title card, a `transform` of a bar).
 | `diagram` | `heading`, `node<N>`, `node:<id>`, `edge:<from>-><to>` | reveal, dim, highlight, zoom | also for `flowchart`; a node is its shape, icon and label (a `box` frames the shape), an edge its line, arrowhead and label; `highlight: [node:a, "edge:a->b", node:b]` marks a path; revealing an edge brings its nodes |
 | `process` | `heading`, `input`, `stage<N>`, `stage:<label>`, `connector<N>`, `loop`, `output`, `token` | reveal, dim, highlight, zoom | a stage is its card (a `box` frames it); `connector2` runs from stage 2 to 3; revealing a stage early shows it without moving the token; `highlight: token` with `style: flash` points at it |
 | `network` | `heading`, `layer<N>`, `layer:<label>`, `edges<N>`, `neuron<L>.<i>` | reveal, dim, highlight, zoom | a layer is its units, ellipsis, label and count; `edges1` joins layers 1 and 2; `neuron2.3` is unit 3 of layer 2 as drawn |
-| `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, walk_to, enter, exit, gesture, jump, keyframes, move_along, pick_up, hold, put_down, give, throw, open, close, blow_away, sit_on, lean_on, stand_up, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting), [moving](#moving), [prop](#props-in-hands) and [sitting](#sitting-and-leaning) actions take whole characters only, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts, [`open` / `close`](#umbrellas-open-and-close) props |
+| `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, effect, walk_to, enter, exit, gesture, jump, keyframes, move_along, pick_up, hold, put_down, give, throw, open, close, blow_away, sit_on, lean_on, stand_up, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting), [moving](#moving), [prop](#props-in-hands) and [sitting](#sitting-and-leaning) actions take whole characters only, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts, [`open` / `close`](#umbrellas-open-and-close) props |
 
 `title` and `heading` stand for each other (the header band, see "Built-in scenes"): `highlight:
 title` works on a `bullets` heading. [Project scene types](EXTENDING.md#8-per-beat-actions-targets-and-custom-actions)
@@ -5215,6 +5275,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `light` | as the target: `- light: night` (`day`, `morning`, `sunset`, `night`, `indoor`), or `tint` + `strength` (`0.5`) | on a `stage`: fades the [light](#light-and-shadows-light-shadows) from `at` over `run_time` seconds (`2`); it lasts until another `light` action. Its "target" is the light, not a target of the scene; no `until`. |
 | `particles` | `kind` (or as the target: `- particles: snow`), `density` (`1`), `area`, `color`, `seed` (`1`), `keep` (`false`), `puddles` (`false`, rain on a stage) | [particles](#particles) — `rain`, `snow`, `sparkles`, `dust`, `confetti`, `smoke` or `bubbles` — over the scene from `at`, in front of everything; works on every scene type; on a stage, rain ends on the ground and plays a rain sound bed while it lasts ([Rain on the ground](#rain-on-the-ground)). They fade in, and fade out (still moving; `run_time`, `0.6` s) when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: at the end of the scene). Its "target" is the kind, not a target of the scene. |
 | `say`, `look_at`, `turn`, `emote`, `pose`, `react` | see [Speaking and acting](#speaking-and-acting) | the acting actions on a `stage`'s characters: speak (lip sync and a speech bubble), look at something, turn round, change expression or pose, react to another speaker for one beat |
+| `effect` | `to` (required: `sweat`, `anger`, `idea`, `question`, `exclaim`, `sleep`, `hearts`, `stars`, `sparkle`, `tear`), `color`, `sound` (`true`) | on a `stage`'s characters: a symbol over the head that pops in, follows the character and shrinks away when the next beat starts (`until: <beat>`: when that beat starts); see [Effect symbols](#effect-symbols-effect) |
 | `walk_to`, `enter`, `exit`, `gesture`, `jump` | see [Moving](#moving) | the moving actions on a `stage`'s characters: walk to a mark, walk in or out of view, point / wave / shrug / nod / shake the head, jump |
 | `keyframes`, `move_along` | see [Keyframes and motion paths](#keyframes-and-motion-paths) | move a `stage`'s character, prop or character part (`kit.arm_left`) through keys (`t`, `x`, `y`, `rotate`, `scale`, `ease`) or along a path of points |
 | `pick_up`, `hold`, `put_down`, `give`, `throw` | see [Props in hands](#props-in-hands) | a `stage`'s character takes a prop in its hand, puts it down, hands it to another character or throws it |
@@ -5696,6 +5757,7 @@ Each object:
 | `prop` only: `held_by`, `hand` | the character holding it and which hand; absent while it stands somewhere. A held prop is its own object, drawn right after its holder (an open umbrella right before it); its box is not part of the character's |
 | `prop` only: `shape` | the shape a prop with several shows: an umbrella's `closed` or `open`; absent for other props |
 | speech bubbles only: `bubble` | the name of the character speaking (on the bubble's shape and its text) |
+| `effect` only: `effect`, `effect_of` | an [effect symbol](#effect-symbols-effect) over a head (one object of kind `effect` named after the symbol): the symbol (`idea`) and the character it marks |
 | overlays only: `overlay` | the id of the [overlay](#overlays) it belongs to; overlay objects come after the scene's, their `path` starts with `overlay:<id>` and they are measured as drawn: fixed to the screen whatever the camera does |
 
 An object is one text mobject (not one per glyph), one path, one image, or one group of shapes.
@@ -5810,9 +5872,9 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `walk_overlap` | warning | a character whose walk (`walk_to`, `enter`) ended in the still's beat sharing at least `min_overlap` of the narrower character's width with another character: it stopped on the other's place. Only characters that walked in that beat are checked (the layout dump's `walked_in`); see [Moving](#moving) |
 | `off_stage` | warning | a character with at least `min_hidden` of its box outside the view (the frame, or what a `pan` / `follow` shows) and part of it inside. Not reported: characters wholly outside (waiting to enter, gone), while it walks in or out (`enter`, `exit`), and while the camera is zoomed in. In a [shot](#shots-shot) (other than `wide`) only the characters it frames are checked, wholly outside too: their face in a `medium`, `over_shoulder` or `closeup` shot, their whole box in a `two_shot`; the near character of an `over_shoulder` shot and characters the shot does not frame may be cut. Fix: put it on a mark inside the view, or pan to it (in a shot: keep it from walking out, or frame another shot) |
 | `character_overlap` | warning | two characters at rest whose boxes share at least `min_overlap` of the narrower one's width. A character that walked in the still's beat is `walk_overlap`'s. Fix: marks further apart, or walk one away |
-| `bubble_overlap` | warning | a speech bubble (`say` with `bubble`) covering at least `min_overlap` of a character's face box (its speaker's too) or of the smaller of two bubbles. Fix: a shorter `bubble` text, the characters further apart, or the two lines in different beats |
+| `bubble_overlap` | warning | a speech bubble (`say` with `bubble`) covering at least `min_overlap` of a character's face box (its speaker's too), of the smaller of two bubbles, or of an [effect symbol](#effect-symbols-effect)'s box. Fix: a shorter `bubble` text, the characters further apart, or the two lines (or the line and the effect) in different beats |
 | `facing_away` | warning | a speaking character facing away from the one it talks to: the character it last looked at (`look_at`), else the nearest one; not checked after `look_at: camera` (it talks to the viewer). Fix: `turn`, `look_at: <listener>`, or swap their marks |
-| `hidden_speaker` | warning | a speaking character with at least `min_hidden` of its face box covered by things drawn in front of it (a character or prop nearer the camera, a foreground layer, an overlay). The characters are drawn side-on and face left or right, so they never turn their back: this is the case where the viewer cannot see who talks. Fix: move one of them, or a smaller `depth` for the speaker |
+| `hidden_speaker` | warning | a speaking character with at least `min_hidden` of its face box covered by things drawn in front of it (a character or prop nearer the camera, a foreground layer, an overlay; not an effect symbol). The characters are drawn side-on and face left or right, so they never turn their back: this is the case where the viewer cannot see who talks. Fix: move one of them, or a smaller `depth` for the speaker |
 | `mouth_without_voice` | warning | at a beat's end, after its narration (the pad), a character whose lip sync still shows a speech shape: its viseme track is longer than the beat's audio. Fix: `vidgen tts` again (the track and the audio are made together); in a custom scene, lip sync with `clock=self.beat_clock()` |
 | `narration_speed` | warning; info without audio | a beat (of at least `min_words` spoken words) narrated at fewer than `min_rate` or more than `max_rate` words per second (`unit: words`) or characters per second (`unit: characters`: letters and digits). `unit: auto` counts words for the languages vidgen has a word rate for and characters for others; the default range is the video [language](#languages-and-translations)'s: English (also no `language`) 1.8-3.5 words/s, Portuguese 1.7-3.4, Spanish and French 1.8-3.6, Italian 1.8-3.5, German 1.5-3.1, characters 8-17/s; `min_rate` / `max_rate` set override it. With an MP3 the time is the speech in it (leading and trailing silence below -40 dB of its peak cut off). Words count as spoken: hyphens, dashes and slashes separate words (`K-Phi-3` is 3), a number counts one word per digit up to 3 per digit run, plus one per decimal point and symbol (`2.58` is 4, `15%` 3), an all-capitals acronym of 2-5 letters half a word per letter (`GPU` 1.5). **Without audio** the beat's length is the word-count estimate (`narration.words_per_second`), so the rate is only off when the text is (many numbers or acronyms) or the configured rate itself is implausible: reported as `info`, one finding per scene listing the beats |
 | `dead_air` | warning | nothing on screen changes for more than `max_seconds` (a frame counts as changed when at least `min_change` of it changed, from the activity file's `motion`), narrated or not; the finding names the beat where the still picture starts and the beats it lasts through. Silent scenes are checked the same way: a silent card held longer than `max_seconds` without motion is reported. A still picture ends where a [crossfade](#transitions-transition) into the next scene starts blending it away |
@@ -5840,7 +5902,7 @@ lint:
     walk_overlap: {min_overlap: 0.25}       # fraction of the narrower character's width
     off_stage: {min_hidden: 0.05}           # fraction of the character's box outside the view
     character_overlap: {min_overlap: 0.25}  # fraction of the narrower character's width
-    bubble_overlap: {min_overlap: 0.1}      # fraction of the face's (or smaller bubble's) box
+    bubble_overlap: {min_overlap: 0.1}      # fraction of the face's (or smaller bubble's, or symbol's) box
     facing_away: {}
     hidden_speaker: {min_hidden: 0.5}       # fraction of the speaker's face box
     mouth_without_voice: {}
@@ -5859,7 +5921,7 @@ never makes stills stale.
 **Ignoring findings in a scene** (`lint_ignore` on the scene): a list of rule names (or `all`),
 or `{rule, object, beat}` filters. `object` is a pattern (`*` and `?` wildcards, case-sensitive)
 matched against the object's `name`, `path`, `text`, icon name and, for a speech bubble, its
-speaker's name (for a pair, either object); `beat`
+speaker's name, for an effect symbol the character it marks (for a pair, either object); `beat`
 limits the entry to the end of that beat (it must be a beat of the scene).
 
 ```yaml

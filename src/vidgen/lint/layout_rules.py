@@ -86,6 +86,8 @@ def describe(obj: dict[str, Any]) -> str:
         return f"icon '{obj.get('icon')}'"
     if obj["kind"] in ("character", "prop", "particles"):
         return f"{obj['kind']} '{obj.get('name')}'"
+    if obj["kind"] == "effect":
+        return f"effect '{obj.get('effect')}' of character '{obj.get('effect_of')}'"
     return f"{obj['kind']} {obj['class']} '{obj.get('name') or obj['path']}'"
 
 

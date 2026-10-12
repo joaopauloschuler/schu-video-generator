@@ -232,9 +232,10 @@ class Stage(NarratedScene):
     A beat is spoken by the characters whose voice says it (their mouths move with it), or by
     the ones its ``say`` action names; the acting actions (``say``, ``look_at``, ``turn``,
     ``emote``, ``pose``, ``react``) change the characters during the beats, and the moving ones
-    (``walk_to``, ``enter``, ``exit``, ``gesture``, ``jump``) move them. A character with an
-    ``enter`` action waits off stage until it enters. Walks, entrances, exits, jumps and a
-    surprised face make their own sounds (foley; ``foley: false`` turns them off). With
+    (``walk_to``, ``enter``, ``exit``, ``gesture``, ``jump``) move them; ``effect`` puts a symbol
+    over a head (an idea bulb, a sweat drop, a question mark...). A character with an
+    ``enter`` action waits off stage until it enters. Walks, entrances, exits, jumps, a
+    surprised face and most symbols make their own sounds (foley; ``foley: false`` turns them off). With
     ``auto_direct``, listeners look at whoever speaks and react after lines on their own. A
     beat's ``shot:`` frames characters for that beat (``closeup kit``, ``two_shot``,
     ``over_shoulder kit pip``...): a cut, and back at the next beat without one. On a stage wider
@@ -287,9 +288,9 @@ class Stage(NarratedScene):
         idle: bool = True
         """false: the characters do not breathe, sway or blink in this scene."""
         foley: bool | None = None
-        """Sounds for the characters' actions (footsteps, whoosh on enter / exit, boing on jump, pop on a surprised face): false for none in this scene; default: the video's foley (on)."""
+        """Sounds for the characters' actions (footsteps, whoosh on enter / exit, boing on jump, pop on a surprised face, a sound with most effect symbols): false for none in this scene; default: the video's foley (on)."""
         auto_direct: AutoDirectSetting | None = None
-        """Automatic directing in this scene: listeners look at whoever speaks and react after lines, speakers gesture on stressed words, short punchy lines get a close-up (true, false or {looks, reactions, gestures, closeups}); a beat's own setting wins; default: the video's (off). Actions written in a beat always win."""
+        """Automatic directing in this scene: listeners look at whoever speaks and react after lines, speakers gesture on stressed words, short punchy lines get a close-up (true, false or {looks, reactions, gestures, closeups, effects}); a beat's own setting wins; default: the video's (off). Actions written in a beat always win."""
         cartoon_motion: MotionSetting | None = None
         """Animation principles for the characters in this scene (anticipation, squash and stretch, overshoot and settle, follow-through): lively, calm or none; a character's own setting wins; default: the video's (lively)."""
         width: float = Field(1.0, ge=1.0, le=4.0)
@@ -472,12 +473,13 @@ class Stage(NarratedScene):
     def action_foley(self, action: str, options: Any, animations: Any, start: float, seconds: float) -> None:
         """The sounds of a character's action as it plays (DESIGN.md §69.19): footsteps on
         walks, a whoosh on enter / exit, a boing on jump, a thud where a thrown prop lands, a pop
-        on a surprised face
+        on a surprised face, a sound for an effect symbol (unless its ``sound: false``)
         (:func:`foley_cues`); none with ``foley: false`` (the stage's, else the video's). A
         project file with a sound's name plays as it is (without the cue's params)."""
         if not self._foley_on():
             return
         expression = options.to if action == "emote" else getattr(options, "expression", None) if action == "react" else None
+        effect = options.to if action == "effect" and options.sound else None
         for anim in animations:
             if isinstance(anim, Walk):
                 played = PlayedAction(action, start, seconds, heights=anim.heights, phases=anim.phases)
@@ -486,7 +488,7 @@ class Stage(NarratedScene):
             elif isinstance(anim, PropMove):
                 played = PlayedAction(action, start, seconds, lands=anim.lands_at)
             else:
-                played = PlayedAction(action, start, seconds, expression=expression)
+                played = PlayedAction(action, start, seconds, expression=expression, effect=effect)
             for cue in foley_cues(played):
                 params = {} if self.sounds.file(cue.sound) is not None else cue.params
                 self.sfx(cue.sound, max(cue.time, 0.0), gain=cue.gain, align=cue.align, **params)

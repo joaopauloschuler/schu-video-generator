@@ -2,7 +2,8 @@
 
 They read the keys the layout dump gives a ``character`` object (``facing``, ``speaking``,
 ``face``, ``viseme``, ``looked_at``, ``passage``, ``walked_in``), the ``bubble`` key of a speech
-bubble's objects and the frame's ``narrating``. Like every still rule they see beat-end stills
+bubble's objects, the ``effect`` objects (symbols over heads, §69.40) and the frame's
+``narrating``. Like every still rule they see beat-end stills
 only (mid-action stills are skipped by the runner).
 """
 
@@ -182,8 +183,23 @@ def _union(objs: list[dict[str, Any]]) -> Bbox:
 
 @rule("bubble_overlap")
 def bubble_overlap(ctx: StillContext, settings: BubbleOverlapRule) -> Iterator[Issue]:
-    """A speech bubble covers a character's face or another speech bubble."""
+    """A speech bubble covers a character's face, another speech bubble or an effect symbol."""
     bubbles = _bubbles(ctx)
+    for speaker, objs in bubbles.items():
+        box = _union(objs)
+        for symbol in (obj for obj in ctx.objects if obj["kind"] == "effect"):
+            covered = intersection(box, object_box(symbol))
+            share = 0.0 if covered is None else area(covered) / max(area(object_box(symbol)), 1e-9)
+            if covered is None or share < settings.min_overlap:
+                continue
+            yield Issue(
+                f"the speech bubble of character '{speaker}' covers the {describe(symbol)} ({share:.0%} of the symbol); "
+                "put the effect in another beat, give the say a shorter bubble text, or put the characters further apart",
+                covered,
+                (objs[0], symbol),
+                value=round(share, 3),
+                limit=settings.min_overlap,
+            )
     for speaker, objs in bubbles.items():
         box = _union(objs)
         for figure in _figures(ctx):
@@ -263,14 +279,15 @@ def facing_away(ctx: StillContext, settings: FacingAwayRule) -> Iterator[Issue]:
 @rule("hidden_speaker")
 def hidden_speaker(ctx: StillContext, settings: HiddenSpeakerRule) -> Iterator[Issue]:
     """A speaking character's face is hidden by something drawn in front of it (a character or
-    prop nearer the camera, a foreground layer): the viewer cannot see who talks."""
+    prop nearer the camera, a foreground layer; not an effect symbol): the viewer cannot see who
+    talks."""
     for speaker in _figures(ctx):
         if not speaker.get("speaking") or not speaker.get("face"):
             continue
         face = tuple(float(v) for v in speaker["face"])
         fronts = [
             obj for obj in ctx.objects
-            if obj["order"] > speaker["order"] and not is_text(obj) and obj["kind"] != "particles"
+            if obj["order"] > speaker["order"] and not is_text(obj) and obj["kind"] not in ("particles", "effect")
             and obj.get("bubble") is None and intersection(object_box(obj), face) is not None
         ]
         if not fronts:

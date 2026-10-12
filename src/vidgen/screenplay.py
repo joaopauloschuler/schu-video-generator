@@ -20,7 +20,9 @@ The format (Markdown-like, one element per line or paragraph):
 - ``[Wren walks to the box]`` on its own is a stage direction for the next line (the last one
   at the end of a scene): :func:`direction_actions` maps each of its sentences to actions where a
   small grammar matches (walk / run to, enter, exit, jump, look at, point at, wave, nod, shrug,
-  shake head); the others become ``# TODO:`` comments above the beat.
+  shake head; ``has an idea``, ``is confused``, ``falls asleep``, ``cries``... put an effect
+  symbol over the head, :data:`_EFFECT_VERBS`); the others become ``# TODO:`` comments above the
+  beat.
 
 :func:`parse_screenplay` reads the text (pure); :func:`screenplay_project` builds the
 ``video.yaml`` mapping and its comments: every character without a declaration gets a generator
@@ -42,6 +44,7 @@ import yaml
 
 from vidgen.cartoon.acting import GESTURE_SECONDS, JUMP_SECONDS, walk_seconds
 from vidgen.cartoon.directing import LOOK_SECONDS
+from vidgen.cartoon.effects import EFFECT_SECONDS
 from vidgen.cartoon.motion import jump_motion_seconds, walk_motion_seconds
 from vidgen.cartoon.poses import EXPRESSIONS, POSES
 from vidgen.cartoon.stage import MARKS, mark_x
@@ -148,6 +151,21 @@ _VERBS: tuple[tuple[re.Pattern[str], str], ...] = tuple((re.compile(p, re.IGNORE
 ))
 #: Gestures a direction may name (``wave`` / ``nod`` turn to their object first).
 _GESTURE_KINDS = ("wave", "nod", "shrug", "shake_head")
+_MOOD = r"^(?:is|looks|seems|gets|feels|becomes)\s+(?:very\s+|so\s+|a bit\s+|quite\s+|all\s+)?"
+#: Predicates that put an effect symbol over the subject's head (DESIGN.md §69.40): pattern ->
+#: the symbol. Tried before :data:`_VERBS`.
+_EFFECT_VERBS: tuple[tuple[re.Pattern[str], str], ...] = tuple((re.compile(p, re.IGNORECASE), kind) for p, kind in (
+    (r"^(?:has|gets|had|got)\s+(?:an?\s+)?(?:bright\s+|great\s+|sudden\s+|new\s+|good\s+)?idea$|^lights?\s+up$", "idea"),
+    (_MOOD + r"(?:confused|puzzled|baffled|lost)$|^wonders?$|^scratch(?:es)?\s+(?:his|her|their|its)\s+head$", "question"),
+    (_MOOD + r"(?:startled|alarmed|shocked)$|^startles?$|^gets\s+a\s+fright$", "exclaim"),
+    (r"^(?:sweats?|is\s+sweating|breaks?\s+(?:out\s+)?into\s+a\s+sweat|gulps?)$|" + _MOOD + r"nervous$", "sweat"),
+    (_MOOD + r"(?:angry|furious|cross|mad)$|^(?:fumes?|seethes?|is\s+fuming)$", "anger"),
+    (r"^(?:falls?\s+asleep|is\s+asleep|sleeps?|dozes?(?:\s+off)?|nods?\s+off|snores?|naps?)$", "sleep"),
+    (r"^(?:falls?\s+in\s+love|is\s+in\s+love|swoons?|is\s+smitten|is\s+lovestruck)(?:\s+with\s+.+)?$", "hearts"),
+    (_MOOD + r"(?:dizzy|dazed)$|^sees?\s+stars$", "stars"),
+    (r"^(?:sparkles?|shines?|gleams?|glows?|beams?\s+with\s+pride)$", "sparkle"),
+    (r"^(?:cries|cry|weeps?|sheds?\s+a\s+tear|tears?\s+up|sobs?)$", "tear"),
+))
 
 
 # ----- parsing ------------------------------------------------------------------------------------
@@ -614,6 +632,9 @@ def direction_actions(text: str, state: StageState, default: str | None = None) 
 
 def _predicate(text: str, who: list[str], state: StageState) -> list[dict[str, Any]] | None:
     target: str | list[str] = who[0] if len(who) == 1 else list(who)
+    for pattern, symbol in _EFFECT_VERBS:
+        if pattern.match(text):
+            return [{"effect": target, "to": symbol, "_seconds": EFFECT_SECONDS + MARGIN}]
     for pattern, kind in _VERBS:
         found = pattern.match(text)
         if not found:

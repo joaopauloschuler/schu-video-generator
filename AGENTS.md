@@ -685,6 +685,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `emote` | on a `stage`: change a character's expression (`to: happy`) | on the word that causes it (`at`) |
 | `pose` | on a `stage`: change a character's pose (`to: pointing`) | one pose change per beat |
 | `react` | on a `stage`: a listener's `expression` / `pose` for this beat only | the listener, not the speaker |
+| `effect` | on a `stage`: a symbol over a character's head for this beat (`to: idea`, `question`, `exclaim`, `sweat`, `anger`, `sleep`, `hearts`, `stars`, `sparkle`, `tear`) | a feeling that should read at a glance; one per line |
 | `walk_to` | on a `stage`: a character walks to a mark or x (`to:`; `speed`) | with `follow` on a wide stage; the walk takes its distance's time |
 | `enter` | on a `stage`: a character walks in from an edge (`side:`) to its mark (or `to:`) | it waits off stage until then |
 | `exit` | on a `stage`: a character walks out by an edge (`to: left` / `right`) | an `enter` brings it back |
@@ -808,6 +809,12 @@ In a 9:16 variant the camera follows the speaker across the landscape stage on i
 reaction shot. `look_at: camera` turns a character to the viewer for an aside. Put the reaction where it
 happens: `at: 0.8` lands it on the end of the line, not on its first word.
 
+**Effect symbols.** `- {effect: pip, to: idea}` pops a small symbol over a head for the beat: an
+`idea` bulb, a `question` or `exclaim` mark, a `sweat` drop, an `anger` mark, `sleep` Zs, `hearts`,
+dizzy `stars`, a `sparkle`, a `tear`. It follows the character, sounds with foley (`sound: false`
+for none) and goes at the next beat (`until:` keeps it longer). Use one per line at most, on the
+moment the feeling lands (`at`); it says "she has an idea" without a word.
+
 **Automatic directing.** `auto_direct: true` (top level, a stage's param or a beat's key) adds
 the routine looks and reactions for you: listeners `look_at` whoever speaks, the speaker looks at
 the one it answers, and after a line with `?`, a negation or `!` the listeners `react` in the
@@ -815,7 +822,8 @@ pause (`thinking`, `worried`, `surprised`...). The speaker gestures on the line'
 (mark it `*word*`: the asterisks are not spoken or shown; or write it in CAPITALS; else the
 longest word counts; at most one per line), and a short punchy line
 right after a long one gets a close-up on its speaker (a short push-in, or a `shot: closeup` when
-the line is too short for it). Nothing it adds may cause an `off_stage`
+the line is too short for it). A strong change of face gets its symbol (surprised an
+exclamation mark, thinking a question mark, angry an anger mark; one per line). Nothing it adds may cause an `off_stage`
 or `facing_away` lint warning (it checks the stage's layout first). Actions you write win: a
 character with its own action in a beat gets nothing automatic there. So turn it on, then write only the moments that
 matter (the reaction shot, the punchline's look to camera). `vidgen direct` lists what it adds,
@@ -848,7 +856,8 @@ BRAM: Boxes do not hum, Fen. Boxes do not do *anything*.
 `react`, and a pronoun there states the voice kind (`FEN (she):`, `BRAM (he, doubtful):`,
 `GUS (they):`; once per character is enough): the generated look and voice then suit it (without
 one, the voice follows the look's kind); a plain paragraph is the narrator; `[...]` maps walk / run to, enter, exit, jump, look
-at, point at, wave, nod, shrug and shake head (on its own line: at the next line's start; inside a
+at, point at, wave, nod, shrug and shake head, and effect symbols (`[Pip has an idea]`, `is
+confused`, `falls asleep`, `cries`...) (on its own line: at the next line's start; inside a
 line: at that word), except a voice sound such as `[laugh]` inside a line, which stays in the
 line. `docs/CONFIG.md` "Cartoons from a screenplay" has the whole format.
 
@@ -894,8 +903,8 @@ into the set. `examples/cartoon_series/` shows it (CONFIG "Shared casts and sets
   or leans it can talk, gesture, emote and handle props; a look turns only its head. `vidgen
   validate` says when the prop is too far, the seat taken, or a seated character walks
   (`docs/CONFIG.md` "Sitting and leaning").
-- **Sound**: walks, entrances, exits, jumps and a `surprised` face make their own sounds
-  (foley: footsteps, whoosh, boing, pop; a thrown prop lands with a thud), timed to the action,
+- **Sound**: walks, entrances, exits, jumps, a `surprised` face and most effect symbols make their own sounds
+  (foley: footsteps, whoosh, boing, pop, an idea's ding; a thrown prop lands with a thud), timed to the action,
   and rain plays a rain sound bed; `foley: false` (top level or a stage) turns them off. A beat's `sting: reveal | comic | sad` adds a short music sting
   (`reveal` as the beat starts, `comic` and `sad` in the pause after the line), ducked under the
   voice. One or two per cartoon, on the real punchline, or they stop being funny.
@@ -1405,7 +1414,7 @@ scenes:
 | `duplicate beat id` | beat ids are unique in the whole video; rename one |
 | `unknown target 'x' ...; did you mean ... (targets: ...)` | pick a name from the list (labels are case-sensitive: `bar:4K`) |
 | `until 'x' is not a later beat of scene 'y'` | `until` names a later beat id of the same scene |
-| `unknown action 'x'` / `unknown option` | actions are `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `sit_on`, `lean_on`, `stand_up`, `light`, `wind`, `blow_away` |
+| `unknown action 'x'` / `unknown option` | actions are `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `sit_on`, `lean_on`, `stand_up`, `light`, `wind`, `blow_away`, `effect` |
 | `labels has 2 entries but values has 3` | one value per label |
 | `unknown theme color 'x'` | use a token (`primary`, `highlight`...) or quoted hex `"#0B5FFF"`, or add it to `theme.colors` |
 | `invalid hex color` | `#RGB`, `#RRGGBB` or `#RRGGBBAA`, in quotes (YAML reads `#` as a comment) |
@@ -1432,7 +1441,7 @@ install; `vidgen validate` warns when it is missing.
 | `walk_overlap` | a character's walk ends on another character | walk it to another mark or x, or move the other one first |
 | `off_stage` | a character is cut by the edge of the view (in a `shot`: a character it frames is out of it) | another mark or x inside the view, or `pan` to it; in a shot, keep it from walking out or frame another shot |
 | `character_overlap` | two characters stand on each other | marks further apart, or `walk_to` one away |
-| `bubble_overlap` | a speech bubble covers a face or another bubble | a shorter `bubble` text, characters further apart, or the lines in different beats |
+| `bubble_overlap` | a speech bubble covers a face, another bubble or an effect symbol | a shorter `bubble` text, characters further apart, or the lines (or the line and the effect) in different beats |
 | `facing_away` | a speaker faces away from the one it talks to (last looked at, else the nearest) | `turn`, `look_at: <listener>`, or swap their marks |
 | `hidden_speaker` | something in front hides the speaker's face | move one of them, or a smaller `depth` for the speaker |
 | `mouth_without_voice` | a mouth still shows speech after the narration ended | `vidgen tts` again; in a custom scene, lip sync with `clock=self.beat_clock()` |

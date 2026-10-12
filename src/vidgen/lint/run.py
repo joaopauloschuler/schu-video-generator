@@ -59,7 +59,7 @@ def _matches(entry: LintIgnore, finding: Finding) -> bool:
         return True
     pattern = _pattern(entry.object)
     for obj in finding.objects:
-        candidates = [obj.get("name"), obj.get("path"), obj.get("text"), obj.get("icon"), obj.get("bubble")]
+        candidates = [obj.get("name"), obj.get("path"), obj.get("text"), obj.get("icon"), obj.get("bubble"), obj.get("effect_of")]
         if any(isinstance(c, str) and pattern.fullmatch(c) for c in candidates):
             return True
     return False

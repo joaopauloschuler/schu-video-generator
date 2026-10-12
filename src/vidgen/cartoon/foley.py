@@ -3,8 +3,9 @@ out without manim. :func:`foley_cues` turns one action *as it played* (its scene
 the seconds it took, after any shortening to fit its beat; :class:`PlayedAction`) into sound
 cues of the built-in sound library (:mod:`vidgen.sfx`): footsteps on each footfall of a walk
 (``walk_to``, ``enter``, ``exit``), a whoosh as a character enters and a swoosh as it leaves, a
-boing as a jump takes off, a thud where a thrown prop lands (``throw``) and a pop on a surprised
-face (``emote`` / ``react``).
+boing as a jump takes off, a thud where a thrown prop lands (``throw``), a pop on a surprised
+face (``emote`` / ``react``) and a short sound as most effect symbols pop up (``effect``,
+:data:`EFFECT_SOUNDS`).
 
 Footfalls follow the walk cycle of :func:`~vidgen.cartoon.acting.walk_cycle`: a foot lands each
 time the legs are furthest apart (half a step, :data:`~vidgen.cartoon.acting.STEP_LENGTH`
@@ -39,6 +40,17 @@ LAST_STEP_INTENSITY = 0.3
 LAST_STEP_MIN = 0.25
 #: The actions that walk (footsteps).
 WALKING_ACTIONS: frozenset[str] = frozenset({"walk_to", "enter", "exit"})
+#: The sound of each effect symbol as it pops up (DESIGN.md §69.40): built-in sound, gain (dB)
+#: and its params; sleep, stars and a tear are silent. Idea's short ding is the chime cut short.
+EFFECT_SOUNDS: dict[str, tuple[str, float, dict[str, float]]] = {
+    "sweat": ("pop", -8.0, {"pitch": -5.0, "intensity": 0.3}),
+    "anger": ("thud", -6.0, {"duration": 0.3}),
+    "idea": ("chime", -6.0, {"duration": 0.5, "pitch": 3.0}),
+    "question": ("pop", -5.0, {"pitch": -4.0}),
+    "exclaim": ("pop", -4.0, {"pitch": 5.0}),
+    "hearts": ("pop", -6.0, {"pitch": 2.0, "intensity": 0.4}),
+    "sparkle": ("chime", -9.0, {"duration": 0.4, "pitch": 12.0}),
+}
 
 
 @dataclass(frozen=True)
@@ -56,6 +68,8 @@ class PlayedAction:
     phases: Phases = field(default_factory=Phases)
     lands: float | None = None
     """The share of its time at which a prop it moved lands on the ground (a ``throw``)."""
+    effect: str | None = None
+    """The symbol an ``effect`` put up (``None``: none, or its ``sound: false``)."""
 
 
 @dataclass(frozen=True)
@@ -116,6 +130,9 @@ def foley_cues(played: PlayedAction) -> list[FoleyCue]:
         cues.append(FoleyCue(start + played.phases.before * seconds, "boing", BOING_GAIN))
     elif played.lands is not None:
         cues.append(FoleyCue(start + played.lands * seconds, "thud", LANDING_GAIN))
+    elif played.action == "effect" and played.effect in EFFECT_SOUNDS:
+        sound, gain, params = EFFECT_SOUNDS[played.effect]
+        cues.append(FoleyCue(start, sound, gain, params))
     elif played.action in ("emote", "react") and played.expression == POP_EXPRESSION:
         cues.append(FoleyCue(start, "pop", POP_GAIN))
     return sorted(cues, key=lambda cue: cue.time)

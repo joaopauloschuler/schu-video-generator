@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING, Any
 
 from vidgen.camera import Bounds, view_center_within
 from vidgen.cartoon.acting import GESTURE_EASE, GESTURE_SECONDS, GESTURES, look_pose, nearer_side
+from vidgen.cartoon.effects import EXPRESSION_EFFECTS
 from vidgen.cartoon.holding import HoldingError, Holdings, put_down_x
 from vidgen.cartoon.reframe import ReframeBeat, ReframeFigure, reframe_needed, reframe_path, stage_base_width
 from vidgen.cartoon.seating import SEAT_BACKS, PostureError, Postures
@@ -235,6 +236,7 @@ class _SceneState:
     postures: Postures = field(default_factory=Postures)          # who sits or leans on which prop
     prop_x: dict[str, float | None] = field(default_factory=dict)  # prop -> its x where it stands (None: not known)
     shot: tuple[ShotView, Shot] | None = None                      # the beat's shot (written or automatic), if any
+    faces_now: list[tuple[float, str, str]] = field(default_factory=list)  # (at, character, expression) of this beat's automatic reactions
 
 
 @dataclass(frozen=True)
@@ -436,8 +438,37 @@ def _plan_reactions(state: _SceneState, beat: _Beat) -> list[ActionConfig]:
         choices = [e for e in REACTIONS[cue] if e != state.reacted.get(name)]
         expression = random.Random(f"{beat.scene_id}/{beat.input.id}/{name}").choice(choices)
         state.reacted[name] = expression
+        state.faces_now.append((REACTION_AT, name, expression))
         added.append(ActionConfig.automatic({"action": "react", "target": name, "expression": expression, "at": REACTION_AT}))
     return added
+
+
+def _face_changes(state: _SceneState, beat: _Beat) -> list[tuple[float, int, str, str]]:
+    """The beat's changes of expression, ``(at, order, character, expression)``: its written
+    ``emote`` / ``react`` actions (a voice sound's face too), then the automatic reactions."""
+    names = list(state.cast)
+    found: list[tuple[float, int, str, str]] = []
+    for k, act in enumerate(beat.input.actions):
+        expression = act.options.get("to") if act.action == "emote" else act.options.get("expression") if act.action == "react" else None
+        if isinstance(expression, str):
+            found += [(act.at, k, name, expression) for name in sorted(_named(act.targets(), names), key=names.index)]
+    first = len(beat.input.actions)
+    return found + [(at, first + k, name, expression) for k, (at, name, expression) in enumerate(state.faces_now)]
+
+
+def _plan_effects(state: _SceneState, beat: _Beat) -> list[ActionConfig]:
+    """At most one effect symbol per line: over the head of the character whose expression
+    changes first in the beat to one of :data:`~vidgen.cartoon.effects.EXPRESSION_EFFECTS`
+    (surprised: exclaim, thinking: question, angry: anger), as the change starts; none in a beat
+    with a written ``effect``. A written ``emote`` or ``react`` gets one too: the symbol adds to the
+    face and changes nothing the action set."""
+    if any(act.action == "effect" for act in beat.input.actions):
+        return []
+    for at, _, name, expression in sorted(_face_changes(state, beat)):
+        if expression in EXPRESSION_EFFECTS and name in state.present:
+            timing = {"at": at} if at > 0 else {}
+            return [ActionConfig.automatic({"action": "effect", "target": name, "to": EXPRESSION_EFFECTS[expression], **timing})]
+    return []
 
 
 def _letters(word: str) -> str:
@@ -625,6 +656,7 @@ _PASSES: dict[str, Callable[[_SceneState, _Beat], list[ActionConfig]]] = {
     "reactions": _plan_reactions,
     "gestures": _plan_gestures,
     "closeups": _plan_closeups,
+    "effects": _plan_effects,
 }
 
 
@@ -772,7 +804,7 @@ def plan_directions(
     directed: list[DirectedBeat] = []
     for k, beat in enumerate(beats):
         state.later = [b.speakers for b in beats[k + 1 :]]
-        state.index, state.looked_now, state.gestured_now = k, set(), set()
+        state.index, state.looked_now, state.gestured_now, state.faces_now = k, set(), set(), []
         _follow_written(state, beat, names)
         touched = set()
         for act in beat.actions:

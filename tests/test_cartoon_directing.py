@@ -62,10 +62,10 @@ def plan(beats: list[BeatInput], cast: list[CastMember] = TRIO) -> dict[str, lis
 
 def test_the_nearest_auto_direct_setting_wins() -> None:
     assert directing_kinds(None, None, False) == frozenset()   # the video's default: off
-    assert directing_kinds(None, None, True) == {"looks", "reactions", "gestures", "closeups"}
-    assert directing_kinds(None, AutoDirect(reactions=False), True) == {"looks", "gestures", "closeups"}   # the scene's
+    assert directing_kinds(None, None, True) == {"looks", "reactions", "gestures", "closeups", "effects"}
+    assert directing_kinds(None, AutoDirect(reactions=False), True) == {"looks", "gestures", "closeups", "effects"}   # the scene's
     assert directing_kinds(False, True, True) == frozenset()   # the beat's
-    assert directing_kinds(AutoDirect(looks=False, gestures=False, closeups=False), None, None) == {"reactions"}
+    assert directing_kinds(AutoDirect(looks=False, gestures=False, closeups=False, effects=False), None, None) == {"reactions"}
 
 
 def test_line_cues() -> None:
@@ -335,6 +335,7 @@ def test_the_directed_actions_are_valid_and_planned_with_the_written_ones(make_p
     assert problems == []
     assert [(u.beat, u.config.describe()) for u in uses if u.beat == "park_b4"] == [
         ("park_b4", "say kit"), ("park_b4", "look_at rex (auto)"), ("park_b4", "react pip (auto)"), ("park_b4", "react rex (auto)"),
+        ("park_b4", "effect pip (auto)"),   # Step 107: pip's surprised reaction gets an exclamation mark
     ]
 
 
@@ -352,10 +353,11 @@ def test_cartoon_example_with_auto_direct_validates(tmp_path: Path) -> None:
             _, problems = actions.scene_actions(spec.type, cls, with_auto_actions(spec, directed.get(spec.id, [])), params, theme)
             assert problems == [], spec.id
     # every beat of the example acts on both characters (explicit actions win), except one look in hill_told
-    # and a gesture of moss on its longest word in yard_expert (its say only voices it)
+    # and a gesture of moss on its longest word in yard_expert (its say only voices it); since Step 107 an
+    # exclamation mark over moss for its written surprise in hill_flew
     assert {sid: [(d.beat, [auto_label(a) for a in d.actions]) for d in beats] for sid, beats in directed.items()} == {
         "yard": [("yard_expert", ["gesture moss shake_head"])],
-        "hill": [("hill_told", ["look_at moss dot"])],
+        "hill": [("hill_flew", ["effect moss exclaim"]), ("hill_told", ["look_at moss dot"])],
     }
 
 

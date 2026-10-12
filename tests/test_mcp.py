@@ -368,7 +368,10 @@ def test_server_direct_returns_the_automatic_actions(tmp_path: Path) -> None:
 
     async def body(client: Any) -> None:
         doc = doc_of(await client.call_tool("direct", {"project": "toon", "scene": ["hill"]}))
-        assert doc["command"] == "direct" and doc["scenes"] == [{"scene": "hill", "beats": [{"beat": "hill_told", "actions": [{"look_at": "moss", "to": "dot"}]}]}]
+        assert doc["command"] == "direct" and doc["scenes"] == [{"scene": "hill", "beats": [
+            {"beat": "hill_flew", "actions": [{"effect": "moss", "to": "exclaim", "at": 0.2}]},   # Step 107: moss's written surprise
+            {"beat": "hill_told", "actions": [{"look_at": "moss", "to": "dot"}]},
+        ]}]
 
     run_session(tmp_path, body)
 

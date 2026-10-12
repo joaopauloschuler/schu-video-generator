@@ -108,7 +108,9 @@ src/vidgen/
                           # force and a blown prop's path, §69.38; no manim),
                           # windblown.py (SwayingProp, StageWind, §69.32), rain.py (rain on a
                           # stage's ground: landing band, shelter boxes, splashes, puddles,
-                          # §69.39; no manim); still.py also
+                          # §69.39; no manim), effects.py (effect symbols: shapes, spots on
+                          # the head, motion, pop, §69.40; no manim), effect_symbols.py
+                          # (EffectSymbol: drawn and following a head, §69.40); still.py also
                           # draws the prop gallery and `vidgen character-sheet` (§69.16)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
@@ -195,6 +197,7 @@ src/vidgen/
                           # shot_action.py: shot (the beat key shot:), §69.29;
                           # light_action.py: light (a stage's light fades), §69.31;
                           # wind_action.py: wind (a stage's wind fades), §69.32;
+                          # effect_action.py: effect (a symbol over a head), §69.40;
                           # overlays.py: the built-in overlays lower_third/watermark, §41;
                           # progress.py: progress_bar/chapter_indicator, §42; captions.py: captions, §43;
                           # stage.py: the stage scene type, §69.6)
@@ -803,6 +806,13 @@ Step 105 (§69.39) adds `Puddles`, `RainGroundSource`, `RainGround`, `ShelterBox
 `particles_started(field, settings)` (does nothing by default). Changed on purpose: rain on a
 `stage` ends on its ground and shelters (other scene types: unchanged), and plays a rain bed with
 foley on.
+Step 107 (§69.40) adds `EFFECT_KINDS`, `EFFECT_SECONDS`, `EFFECT_STYLES`, `EXPRESSION_EFFECTS`,
+`EffectSpot`, `EffectSymbol`, `effect_color`, `effect_spot`, `head_box`, `piece_pose` and
+`pop_scale`; `PlayedAction` gains `effect`, `DIRECTING_KINDS` and `AutoDirect` the kind
+`effects`. New built-in action `effect`; layout kind `effect` (keys `effect`, `effect_of`).
+Changed on purpose: `auto_direct: true` now also adds effect symbols (a stage with
+`auto_direct` and a surprised, thinking or angry face renders a symbol it did not before;
+`{effects: false}` gives the old actions).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -6336,7 +6346,8 @@ speaks, the speaker at the one it talks to, and listeners react after lines. The
 are ordinary beat actions (`look_at`, `react`), so the action runner, foley, mid stills, the
 layout dump and lint treat them like written ones.
 
-- **Setting** (`config.py`): `AutoDirect(looks, reactions, gestures, closeups)` (each `True` by
+- **Setting** (`config.py`): `AutoDirect(looks, reactions, gestures, closeups)` (Step 107 adds
+  `effects`, §69.40) (each `True` by
   default: a kind not given is on), `AutoDirectSetting = bool | AutoDirect`, on `VideoConfig`
   (`False`), the stage param `auto_direct` and `BeatConfig.auto_direct` (both none: inherit).
   `directing_kinds(beat, scene, video)`: the first setting given wins (`true` every kind of
@@ -7541,3 +7552,88 @@ off; puddles may grow; and a generated rain sound bed plays under it.
   character still crosses it on screen; no rain on other props (a house's roof, a table); puddles
   do not reflect or ripple; the bed has one intensity (no light / heavy rain by density); snow does
   not settle. Tests: `tests/test_cartoon_rain.py`.
+
+### 69.40 Effect symbols over characters (Step 107)
+
+A feeling should read at a glance: the `effect` beat action pops a small symbol over a character's
+head (`- effect: pip` + `to: idea`, the `to:` convention of §69.11).
+
+- **Symbols** (`cartoon/effects.py`, pure): `EFFECT_KINDS` sweat, anger, idea, question, exclaim,
+  sleep, hearts, stars, sparkle, tear. Each is one or more *pieces* (`effect_pieces(kind)`), each a
+  few closed outlines (`EffectShape`: counterclockwise points in *symbol units*, about 1 tall;
+  fill `main` = the symbol's colour, `shine` white, `base` grey; ink outline or none) drawn from
+  circles, ellipses, stars, a parametric drop and heart, explicit polygons (`!`, `Z`) and
+  `thick_path` (a polyline turned into a band, so it fills and outlines like the rest: the `?`
+  hook, the bulb's rays). Original simple shapes only; no font glyphs. `EFFECT_STYLES` gives each
+  a spot, a size in head heights (0.2 tear .. 0.7 sleep / stars) and a theme token (`primary`,
+  `accent`, `highlight`, `secondary`: tokens every preset defines).
+- **Where** (`spot_at(spot, kind, head, facing, eye, crown)`, `effect_spot(..., avoid=)`): from
+  the head's box on screen (`head_box`: the `head` part, else the top 30 % of the figure) and the
+  facing: `above` (0.12 head heights over the head, a little forward), `front` / `back` (beside
+  it near the top; the back one overlapping the head's edge), `corner` (on the head's top front
+  corner), `ring` (round the top), `eye` (under the `eyes` part's middle, else a default eye
+  point). A hat (`crown_top`: the `accessory` part's top when higher) lifts `above` and `ring`; the
+  size always goes by the head. `effect_spot` takes the symbol's own spot unless its box overlaps
+  one of `avoid` (the speech bubbles on screen), then tries `ALTERNATE_SPOTS` (above → front, back;
+  corner → front, back...). The spot is chosen once when the effect starts and worked out again
+  every frame from the head (it moves with walks, jumps, turns and shots).
+- **Motion** (pure, a function of the seconds since it appeared): `pop_scale(t, strength)` blends
+  an eased grow over `POP_SECONDS` 0.25 (strength 0) with the step response of `POP_SPRING`
+  (3 Hz, ζ 0.35: about 30 % overshoot, settled by ~1 s; Step 82's `Spring`) by the character's
+  `cartoon_motion` strength; `exit_scale` shrinks over `EXIT_SECONDS` 0.3. `piece_pose(kind, k, t)`
+  → `PiecePose(dx, dy, scale, angle)`: the drop slides down 0.25 and stays, the anger mark and the
+  bulb's rays pulse, `?` rocks ±10°, `!` shakes and calms, the Zs rise along a diagonal one after
+  another (2.4 s cycle, growing and shrinking), hearts bob, the stars orbit (1.6 s) and spin,
+  sparkles twinkle, the tear forms, runs down and forms again (2 s). Shapes are never mirrored (a
+  `?` reads the same either way); offsets forward and turns follow the facing.
+- **Drawing** (`cartoon/effect_symbols.py`): `EffectSymbol(kind, color=, character_height=)` is a
+  `VGroup` of one `VGroup` per piece, each shape a `VMobject` with corners; strokes 0.8 of a
+  character's outline for its height, at least one pixel. `place(spot, facing, strength)` redraws
+  every member from its stored points (an affine per piece: scale, turn, offset); a member smaller
+  than 3 % of the symbol gets no points (no ink dot at scale 0). `follow(character, avoid=)` adds a
+  time-based updater (`age += dt`, then `place`). The symbol is a mobject of its own, never part
+  of the character (§69.22).
+- **The action** (`scenes/effect_action.py`, against `vidgen.api`): options `to` (required),
+  `color`, `sound`; `run_time` `EFFECT_SECONDS` 0.4 (the pop); reversible, `until_next_beat`;
+  `alters_targets = False`, so it plays in the same batch as the character's other actions due
+  with it instead of after them (a `react` and an `effect` at one `at` do not stretch the beat).
+  `apply` makes a symbol per character, chooses its spot clear of the speech bubbles on screen,
+  puts it above everything drawn (`z_index` top + 1) and returns `EffectAppear` (an `Animation`
+  that only holds time: no starting copy, updating not suspended, `introducer`); `revert` sets
+  `leaving` and returns `EffectAppear(leave=True)` (a `remover`). A `say` bubble placed later
+  avoids the symbols on screen (`Say._bubble`). Not marked lit, so the stage's light never grades
+  it (§69.31). Validate: targets must be characters (`_Acting`), `to` one of the kinds.
+- **Sound** (`cartoon/foley.py`): `PlayedAction.effect`; `EFFECT_SOUNDS`: idea `chime` 0.5 s
+  +3 st (the short ding), sparkle `chime` 0.4 s +12 st, exclaim / question / hearts / sweat a `pop`
+  at +5 / −4 / +2 / −5 st, anger a 0.3 s `thud`; sleep, stars, tear silent; at the pop's start.
+  `Stage.action_foley` passes the kind unless `sound: false`; `foley: false` silences all.
+- **Layout dump and lint**: an `EffectSymbol` is one object of kind `effect` named after the kind,
+  with `effect` and `effect_of`; `describe` says `effect 'idea' of character 'pip'`;
+  `lint_ignore`'s `object` matches `effect_of`. `bubble_overlap` also reports a speech bubble
+  covering at least `min_overlap` of a symbol's box; `hidden_speaker` ignores symbols (a tear sits
+  on the face on purpose).
+- **Automatic directing** (`cartoon/directing.py`, kind `effects`, last in `DIRECTING_KINDS`): at
+  most one symbol per beat, for the first change of expression in it (written `emote` / `react`,
+  a voice sound's face, then this beat's automatic reactions, recorded in `_SceneState.faces_now`)
+  to one of `EXPRESSION_EFFECTS` (surprised → exclaim, thinking → question, angry → anger), at the
+  change's `at`, for a character on the stage; none in a beat with a written `effect`. Unlike the
+  other passes it acts on a character a written `emote` / `react` targets: the symbol adds to that
+  face and changes nothing the action set. Pasting `vidgen direct --print` makes it written, so
+  the planner adds no other one there.
+- **Screenplay** (`screenplay.py`, `_EFFECT_VERBS`, tried before the other verbs): `has / gets an
+  idea`, `lights up` (idea); `is / looks confused`, `puzzled`, `wonders`, `scratches his head`
+  (question); `is startled`, `alarmed`, `shocked` (exclaim); `sweats`, `gulps`, `is nervous`
+  (sweat); `is angry`, `furious`, `fumes` (anger); `falls asleep`, `dozes off`, `nods off`,
+  `snores` (sleep); `falls in love [with X]`, `swoons` (hearts); `is dizzy`, `sees stars` (stars);
+  `sparkles`, `beams with pride` (sparkle); `cries`, `weeps`, `sheds a tear` (tear).
+- **Checked by eye**: every symbol on two generated looks (`dot`, round with a bun; `moss`, tall
+  with a hat and glasses) and the SVG `sprout`, facing right and left, at 1 s (scratch sheets);
+  a scratch copy of `examples/cartoon` with six written effects and `auto_direct: true` at
+  preview: the bulb over Dot, the sparkle after her walk, the exclamation mark following Moss's
+  jump, the anger mark moved in front of Moss's face by his speech bubble, Zs over Moss while
+  Dot enters;
+  `vidgen lint` 0 findings (before the fixes: the anger mark under the bubble, and a
+  `rushed_animation` from the effect waiting for a `react`).
+- **Not done here**: symbols do not scale with a close-up beyond the head's own size; a symbol
+  that cycles (tear, Zs) can be between cycles in a still; no symbol for a prop. Tests:
+  `tests/test_cartoon_effects.py`.

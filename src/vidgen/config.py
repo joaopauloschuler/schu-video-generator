@@ -654,10 +654,10 @@ class CharacterOverlapRule(RuleConfig):
 
 
 class BubbleOverlapRule(RuleConfig):
-    """``bubble_overlap``: a speech bubble covering a character's face or another bubble."""
+    """``bubble_overlap``: a speech bubble covering a character's face, another bubble or an effect symbol."""
 
     min_overlap: Fraction = 0.1
-    """Share of the face's box (or of the smaller bubble's box) the bubble must cover to be reported."""
+    """Share of the face's box (or of the smaller bubble's box, or of the effect symbol's box) the bubble must cover to be reported."""
 
 
 class FacingAwayRule(RuleConfig):
@@ -1113,7 +1113,7 @@ def _shot_words_schema(schema: dict[str, Any]) -> None:
 
 
 #: The kinds of automatic directing (``auto_direct:``; DESIGN.md §69.23), in planning order.
-DIRECTING_KINDS: tuple[str, ...] = ("looks", "reactions", "gestures", "closeups")
+DIRECTING_KINDS: tuple[str, ...] = ("looks", "reactions", "gestures", "closeups", "effects")
 
 
 class AutoDirect(_Strict):
@@ -1128,10 +1128,12 @@ class AutoDirect(_Strict):
     """The speaker gestures on a line's stressed word (*word*, an all-capitals word, else a long one): at most one per line, from the gestures its parts allow."""
     closeups: bool = True
     """A short punchy line right after a long one gets a close-up (a zoom on the speaker, or a closeup shot when the line is too short for the zoom's moves): never two beats in a row, never during a walk, a camera move or a written shot."""
+    effects: bool = True
+    """A strong change of expression gets an effect symbol over the head (surprised: exclaim, thinking: question, angry: anger): at most one per line, none in a beat with a written effect."""
 
 
 #: ``auto_direct:`` on the video, a stage scene or a beat: ``true`` (every kind), ``false``
-#: (none) or ``{looks, reactions, gestures, closeups}``; the nearest one wins.
+#: (none) or ``{looks, reactions, gestures, closeups, effects}``; the nearest one wins.
 AutoDirectSetting = Union[bool, AutoDirect]
 
 
@@ -1495,7 +1497,7 @@ class BeatConfig(_Strict):
     sting: StingSetting | None = None
     """A short music sting on this beat: reveal, comic or sad, or {kind, at: start | end, gain}; ducked under the narration."""
     auto_direct: AutoDirectSetting | None = None
-    """On a stage scene: automatic looks and reactions for this beat (true, false or {looks, reactions, gestures, closeups}); default: the scene's, else the video's."""
+    """On a stage scene: automatic looks and reactions for this beat (true, false or {looks, reactions, gestures, closeups, effects}); default: the scene's, else the video's."""
     shot: ShotConfig | None = Field(default=None, json_schema_extra=_shot_words_schema)
     """On a stage scene: the camera's framing for this beat (wide, two_shot, medium KIT, over_shoulder KIT [NEAR], closeup KIT, or {kind, of, move, run_time}); a cut as the beat starts, back to the view before at the next beat without one."""
     overlap: float | None = Field(default=None, ge=0)
@@ -1670,9 +1672,9 @@ class VideoConfig(_Strict):
     cartoon_style: str | None = Field(default=None, min_length=1)
     """Style words added to every generate: prompt of stage scenes, so a cartoon's backgrounds look alike, e.g. "flat colours, thick outlines, soft shadows"; part of the picture's cache key."""
     foley: bool = True
-    """Sounds for the characters' actions on stage scenes: footsteps on walks, a whoosh on enter / exit, a boing on jump, a pop on a surprised face; false: none (a stage's foley param wins)."""
+    """Sounds for the characters' actions on stage scenes: footsteps on walks, a whoosh on enter / exit, a boing on jump, a pop on a surprised face, a sound with most effect symbols; false: none (a stage's foley param wins)."""
     auto_direct: AutoDirectSetting = False
-    """Automatic directing on stage scenes: listeners look at whoever speaks and react after lines (true, false or {looks, reactions, gestures, closeups}); a stage's or a beat's setting wins; actions written in a beat always win."""
+    """Automatic directing on stage scenes: listeners look at whoever speaks and react after lines (true, false or {looks, reactions, gestures, closeups, effects}); a stage's or a beat's setting wins; actions written in a beat always win."""
     reframe: ReframeSetting | None = None
     """On stage scenes wider than the frame (a 9:16 variant crops the landscape stage): speaker moves the camera to whoever speaks, easing between speakers and holding during short replies; none: only the beats' own pan / follow / zoom / shot move it; default: speaker when the characters do not fit in one view (a stage's reframe param wins)."""
     cartoon_motion: MotionSetting | None = None
