@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from vidgen.deck import Deck
     from vidgen.plan import Plan
     from vidgen.plan_yaml import PlanResult
+    from vidgen.screenplay import ScreenplayProject
     from vidgen.slides import SlidesResult
     from vidgen.slides_pdf import PdfResult
     from vidgen.thumbnail import ThumbnailResult
@@ -195,6 +196,41 @@ def images_json(project: Project, images: Iterable[SceneImage]) -> dict[str, Any
 
 
 # ----- init / tts / imagegen ---------------------------------------------------------------------
+
+
+def screenplay_document(
+    project: Project, draft: ScreenplayProject, result: PlanResult, problems: list[Problem], warnings: Iterable[Mapping[str, Any]] = ()
+) -> dict[str, Any]:
+    """The ``vidgen screenplay --json`` document: where the project went, its characters (which
+    ones were generated, their voices), every scene with its beats and TODOs, the video's notes
+    and the problems ``vidgen validate`` finds in it (``ok`` false when any)."""
+    scenes = [
+        {
+            "id": scene["id"],
+            "beats": len(scene["beats"]),
+            "characters": [c["name"] for c in scene["params"]["characters"]],
+            "actions": sum(len(b.get("actions", [])) for b in scene["beats"]),
+            "todos": [*todos, *(t for beat in beat_todos for t in beat)],
+        }
+        for scene, todos, beat_todos in zip(draft.config["scenes"], draft.scene_todos, draft.beat_todos)
+    ]
+    return envelope(
+        "screenplay",
+        not problems,
+        warnings,
+        project=_path(result.root),
+        config=_path(result.config),
+        created=result.created,
+        title=draft.config["title"],
+        characters=[{"name": c["name"], "voice": c.get("voice"), "generated": c["name"] in draft.generated} for c in draft.config["characters"]],
+        scene_count=len(scenes),
+        beat_count=sum(s["beats"] for s in scenes),
+        estimated_duration=round(project.estimated_duration(), 2),
+        todo_count=draft.todo_count,
+        notes=list(draft.notes),
+        scenes=scenes,
+        problems=[p.to_json() for p in problems],
+    )
 
 
 def init_document(target: Path, example: str, warnings: Iterable[Mapping[str, Any]] = ()) -> dict[str, Any]:

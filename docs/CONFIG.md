@@ -116,7 +116,9 @@ scenes:
 | `carry` | `[]` | objects of the scene before that this scene starts with, where they ended (a match cut), then moves into its own targets: target names, or `"NAME -> NAME"`; see [continuity](#continuity-carrying-objects-into-the-next-scene-carry) |
 
 Beat `id`s name the audio files: keep them when you edit the text (only that beat is
-re-voiced). A beat `text` is spoken as written; it is also the subtitle. A beat's `actions`
+re-voiced). A beat `text` is spoken as written; it is also the subtitle. `*word*` in it marks a
+stressed word for [automatic directing](#automatic-directing-auto_direct): the asterisks are not
+spoken or shown. A beat's `actions`
 (default `[]`) point at parts of the scene while it is spoken — reveal, dim, highlight — see
 [beat actions](#beat-actions). A beat's `voice` (default: its scene's) picks another speaker for
 that beat — a dialogue inside one scene, see [multiple voices](#multiple-voices-voices). A beat's
@@ -4175,8 +4177,10 @@ writing each look:
   negation in the line shakes the head, and otherwise `point`, `nod` or `shrug` (fixed per scene,
   beat and speaker, the speaker's last one tried last). The word times come from the beat's
   alignment, else the estimate (as captions use them); a line too short for the gesture gets
-  none. The asterisks of `*word*` stay in the beat's text (TTS, captions and bubbles get it as
-  written), so prefer capitals where the text is shown.
+  none. The asterisks of `*word*` (one word or a few, `*not now*`) are taken out of the beat's
+  text when the config is read: the TTS, captions, subtitles, speech bubbles, `vidgen readback`
+  and lint see `word`; only the planner sees the mark. `2*3*4`, `a * b` and `**bold**` are left
+  as written.
 - **Close-ups.** A line of at most 5 words right after a beat of at least 8 gets a `zoom` on its
   speaker (`scale: 2`): it moves in and back in 0.5 s each when both fit in 80 % of the line, else
   it cuts in and back. Never in two beats in a row (a written `zoom` counts), never in a beat with
@@ -4216,6 +4220,68 @@ scenes:
       - text: "Kit was not good with birds."
         auto_direct: false    # nothing added in this beat
 ```
+
+#### Cartoons from a screenplay (`vidgen screenplay`)
+
+`vidgen screenplay FILE.md [--out DIR|FILE.yaml] [--force] [--json]` (MCP tool `screenplay`)
+writes a stage project from a screenplay, without AI: one `stage` scene per `# Scene:` heading,
+one beat per line, `auto_direct: true`, and `# TODO:` comments for what it could not map. The
+project is checked like `vidgen validate` (exit code 1 when it finds problems). The format:
+
+```markdown
+---
+title: The Humming Box        # optional front matter: video.yaml keys (not scenes) that win
+voice: {provider: kokoro, voice: bf_emma, speed: 0.85}
+---
+# Scene: yard
+set: background: day; props: house at 0.18, box (crate) at 0.6, tree at 0.84; characters: fen at left, bram at right
+
+On a quiet Sunday, Fen heard a sound that did not belong in the yard.
+
+FEN (surprised): Bram, listen! That box is humming a song.
+
+[Fen walks to the crate and points at it.]
+
+BRAM: Boxes do not hum, Fen. Boxes do not do *anything*.
+
+GUS (glad): There it is! [jumps] I left my song in that crate.
+```
+
+- **Headings**: a first `# Title` (level 1, not `Scene...`) is the title; `# Scene: NAME` (any
+  level; `Scene:` may be left out) starts a scene, its id from the name (`yard`, then `yard_2`).
+- **`set:`** (right under the heading; `;`-separated, the colons optional): `background` a sky
+  (`day`, `night`, `dusk`, `dawn`, `indoors`; default `day`), a colour or `a to b` (a gradient), or
+  a picture file (`image`); `props` built-in props, `kind (name) at place` (a mark or an x;
+  without `at` they go to 0.85, 0.15, 0.65, 0.35; a house or tree goes back, `depth`); `marks`
+  `name x`; `characters` `name at place`. Characters the set does not place stand on the marks
+  in the order they appear (`left`, `right`; three: `left`, `centre`, `right`...).
+- **Lines**: `NAME: text` (the name in capitals, several words allowed: `OLD ASH`); lines run on
+  until a blank line. `NAME (manner): text`: manner words that name an expression or a pose
+  (`happy`, `thinking`, `arms crossed`...) or a word for one (`doubtful` thinking, `glad`
+  happy, `nervous` worried, `cross` angry, `shocked` surprised...) become `react` for that line;
+  other words a `# TODO:`. A plain paragraph, or `NARRATOR:`, is the narrator's line. `*word*`
+  stresses a word (the speaker gestures on it; the asterisks are not spoken).
+- **Stage directions** `[...]`: on their own line they act at the start of the next line (after
+  the last line of a scene: at 0.6 of it), one after the other, each `at` estimated from how long
+  the one before takes (a walk by its distance); inside a line they act at that point of it, with
+  the speaker as subject. Each sentence (or clause after `and`) is matched against a small
+  grammar: `X walks / goes / runs to Y` (`walk_to`: a mark, an x, or beside a prop or character;
+  `runs` twice as fast), `X enters [from the left]`, `X exits / leaves [left]`, `X jumps`,
+  `X looks at Y` (a character, prop, mark or the camera; `look at each other`), `X points at Y`
+  (`look_at`, then `gesture: point`), `X waves [at Y]`, `nods`, `shrugs`, `shakes his head`.
+  Subjects are character names (`X and Y`) or `he` / `she` / `they` for the last ones; `it` /
+  `him` / `her` name the last object. Anything else stays as `# TODO: [text]` above its beat.
+- **Characters**: a character listed in the front matter's `characters:` is kept as written;
+  every other speaker gets a generated look from a set of six that differ in body, hair, eyes,
+  accessories and colours (`# generated:` above `characters:`), and a named voice `NAME_voice`
+  with its `label`: Kokoro voices of another gender, then another accent (American / British),
+  than the ones before, the narrator's kind last; the OpenRouter model's listed voices in turn;
+  with ElevenLabs every character keeps the base `voice_id` and a `# TODO:` says to set one.
+  A character who speaks or is named by a direction in a scene is on that scene's stage.
+- **Defaults**: 1920x1080 (preview 854x480), `theme: {preset: soft_pastel}`, the Kokoro narrator
+  `bf_emma` at speed 0.85, `narration: {pad: 0.7}`, `auto_direct: true`; front matter keys win.
+
+A sample is `examples/screenplay/humming_box.md`.
 
 #### Animation principles (`cartoon_motion`)
 
@@ -5386,7 +5452,7 @@ when the root has a `docs/gallery` folder (the schu-video-generator repository),
 
 ## JSON output (`--json`)
 
-`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail`, `vidgen export`, `vidgen slides`, `vidgen translate-template`, `vidgen readback`, `vidgen guide`, `vidgen gallery`, `vidgen plan`, `vidgen init`, `vidgen tts`, `vidgen imagegen`, `vidgen character-sheet` and `vidgen direct` accept `--json` (every command but `vidgen mcp`, which speaks MCP): stdout then holds
+`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail`, `vidgen export`, `vidgen slides`, `vidgen translate-template`, `vidgen readback`, `vidgen guide`, `vidgen gallery`, `vidgen plan`, `vidgen init`, `vidgen tts`, `vidgen imagegen`, `vidgen character-sheet`, `vidgen direct` and `vidgen screenplay` accept `--json` (every command but `vidgen mcp`, which speaks MCP): stdout then holds
 exactly one JSON document (ASCII-only, non-ASCII characters escaped), and everything else
 (progress, `warning:` lines, Manim output) goes to stderr. These shapes are meant for programs
 and AI agents driving vidgen. Without `--json` the human output is unchanged.
@@ -5812,6 +5878,25 @@ The same document for a dry run (`--dry-run`, no key needed) and a run (DESIGN.m
 |---|---|---|
 | `project`, `variant` | str \| null | |
 | `scenes` | list | each scene with automatic actions (`--scene`: only those), in config order: `{scene, beats}`; `beats` lists the beats with added actions: `{beat, actions}`, each action as written in `video.yaml` (`{look_at: kit, to: pip}`, `{react: kit, expression: thinking, at: 0.95}`) |
+
+### `vidgen screenplay --json`
+
+The project written by [`vidgen screenplay`](#cartoons-from-a-screenplay-vidgen-screenplay). `ok`
+is false when `vidgen validate` finds problems in it (listed in `problems`; the files are written
+anyway).
+
+| key | type | |
+|---|---|---|
+| `project`, `config` | str | the project folder and the config file written |
+| `created` | bool | `true` when the folder was scaffolded by this run (like `vidgen init`) |
+| `title` | str | the video's title |
+| `characters` | list | `{name, voice, generated}` per character (`generated`: it got a generated look) |
+| `scene_count`, `beat_count` | int | stage scenes and beats |
+| `estimated_duration` | float | seconds, from the word count (like `vidgen validate`) |
+| `todo_count` | int | the `# TODO:` comments in the config |
+| `notes` | list | TODOs about the whole video (e.g. voices to set by hand) |
+| `scenes` | list | `{id, beats, characters, actions, todos}` per scene: the characters on its stage, the actions written from stage directions and manners, its `# TODO:` comments |
+| `problems` | list | `vidgen validate` problems of the project, `{location, message, variant}` (normally empty) |
 
 ### `vidgen lint --json`
 

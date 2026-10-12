@@ -473,3 +473,50 @@ def test_gestures_and_a_closeup_render_and_lint_clean(make_project, capsys) -> N
     assert cli.main(["lint", str(project.root), "--json", "--fail-on", "warning", *[x for r in rules for x in ("--rule", r)]]) == 0
     doc = json.loads(capsys.readouterr().out)
     assert doc["findings"] == []
+
+
+# ----- *word* emphasis: taken out of the spoken and shown text, kept for the planner ---------------------
+
+
+def test_emphasis_marks_leave_the_text_but_not_the_marked_text() -> None:
+    from vidgen.config import BeatConfig, strip_emphasis
+
+    beat = BeatConfig(id="b", text="I *never* said *that one*, ok?")
+    assert beat.text == "I never said that one, ok?" and beat.marked_text == "I *never* said *that one*, ok?"
+    plain = BeatConfig(id="b", text="Hello there.")
+    assert plain.text == plain.marked_text == "Hello there."
+    for kept in ("a * b * c", "2*3*4", "**bold** stays", "a lone * star"):
+        assert strip_emphasis(kept) == kept
+    copied = beat.model_copy(update={"actions": []})   # with_auto_actions copies beats
+    assert copied.marked_text == beat.marked_text
+
+
+def test_emphasis_marks_are_not_spoken_and_unmarked_hashes_are_unchanged(make_project) -> None:
+    """The TTS gets the text without asterisks; a beat without marks keeps its cache key (pinned)."""
+    from vidgen import tts
+    from vidgen.config import VoiceConfig
+    from vidgen.render.fingerprint import scene_fingerprint
+
+    scenes = [{"id": "intro", "type": "text_card", "params": {"text": "Hi"},
+               "beats": [{"id": "plain", "text": "Hello there."}, {"id": "marked", "text": "Hello *there*."}]}]
+    project = Project.load(make_project(minimal_config(scenes=scenes)))
+    spoken = project.spoken_texts()
+    assert spoken == {"plain": "Hello there.", "marked": "Hello there."}
+    kokoro = tts.get_provider(VoiceConfig(provider="kokoro"))
+    assert kokoro.cache_key(spoken["plain"]) == kokoro.cache_key(spoken["marked"]) == "05cb88daec48cc27a4841b20f737de3c7cb847c4"
+    assert tts.get_provider(VoiceConfig()).cache_key(spoken["plain"]) == "e07179cc8214a9008a163a96e3ab594f0d3da455"
+    unmarked = Project.load(make_project(minimal_config(scenes=[{**scenes[0], "beats": [{"id": "plain", "text": "Hello there."}]}]), folder="p2"))
+    assert scene_fingerprint(project, "intro") != scene_fingerprint(unmarked, "intro")
+
+
+def test_emphasis_reaches_the_gesture_planner(make_project) -> None:
+    """The planner still sees *word* (on the words of the stripped text), so the marked word
+    picks the gesture: ``*you*`` points (unmarked, the line's negation would shake the head)."""
+    project = directed_project(make_project, [
+        {"text": "Look at this kite, it is the finest kite in town.", "voice": "pip_voice"},
+        {"text": "Boxes never fly, and *you* know that.", "voice": "kit_voice"},
+    ], params={"characters": [{"name": "pip", "at": "left"}, {"name": "kit", "at": "right"}]}, auto_direct={"gestures": True, "looks": False, "reactions": False, "closeups": False})
+    assert project.beat("park_b2").text == "Boxes never fly, and you know that."
+    with extensions.project_session(project):
+        added = {d.beat: [a.shorthand() for a in d.actions] for d in project_directions(project)["park"]}
+    assert [a for a in added["park_b2"] if a.get("gesture") == "kit"][0]["to"] == "point"

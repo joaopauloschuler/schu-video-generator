@@ -692,12 +692,17 @@ def stage_frame(project: Project, params: Any) -> StageFrame:
 
 def _beat_words(project: Project, beat: BeatConfig) -> tuple[float, tuple[WordTime, ...]]:
     """A beat's narration length (its MP3's, else the word-count estimate) and its word times
-    from its start (the stored alignment, else estimated: :func:`~vidgen.speech.beat_word_times`)."""
-    from vidgen.speech import audio_duration, beat_word_times
+    from its start (the stored alignment, else estimated: :func:`~vidgen.speech.beat_word_times`),
+    each word as written (:attr:`~vidgen.config.BeatConfig.marked_text`)."""
+    from vidgen.speech import WordTime, audio_duration, beat_word_times
 
     mp3 = project.audio_dir / f"{beat.id}.mp3"
     seconds = audio_duration(mp3) if mp3.is_file() else beat.estimated_duration(project.config.narration.words_per_second)
-    return seconds, tuple(beat_word_times(project.audio_dir, beat.id, beat.text, 0.0, seconds, language=project.config.language))
+    times = beat_word_times(project.audio_dir, beat.id, beat.text, 0.0, seconds, language=project.config.language)
+    marked = beat.marked_text.split()   # the words as written, *word* marks included (same count)
+    if len(marked) == len(times):
+        times = [WordTime(word, t.start, t.end) for word, t in zip(marked, times)]
+    return seconds, tuple(times)
 
 
 def stage_directions(
@@ -741,7 +746,7 @@ def stage_directions(
         else:
             speakers = speaking_characters(config, beat_voice(spec, beat), characters)
         seconds, words = _beat_words(project, beat) if {"gestures", "closeups"} & on and speakers else (0.0, ())
-        beats.append(BeatInput(beat.id, beat.text, tuple(speakers), written, on, seconds, words))
+        beats.append(BeatInput(beat.id, beat.marked_text, tuple(speakers), written, on, seconds, words))
     return plan_directions(spec.id, cast, beats, stage)
 
 

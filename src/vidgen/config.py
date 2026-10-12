@@ -1347,13 +1347,40 @@ class ChapterConfig(_Strict):
     """Its number as shown (1, or text such as "Part II"); default its position among the chapters."""
 
 
+#: ``*word*`` (or ``*a few words*``) in a beat's text: stressed by its speaker (DESIGN.md §69.24).
+EMPHASIS = re.compile(r"(?<![\w*])\*(?=[^\s*])([^*\n]*?[^\s*])\*(?![\w*])")
+
+
+def strip_emphasis(text: str) -> str:
+    """``text`` without the asterisks of its ``*word*`` emphasis marks (words and spaces kept)."""
+    return EMPHASIS.sub(r"\1", text)
+
+
 class BeatConfig(_Strict):
-    """One narrated sentence/paragraph. ``id`` is filled in by :class:`SceneConfig` if omitted."""
+    """One narrated sentence/paragraph. ``id`` is filled in by :class:`SceneConfig` if omitted.
+    ``text`` is what is spoken and shown: the ``*word*`` emphasis marks of the config are taken
+    out of it here (:func:`strip_emphasis`) and kept in :attr:`marked_text` for automatic
+    directing."""
 
     id: Identifier
     """Unique in the whole video (names audio/<id>.mp3); default <scene id>_b<n> (1-based)."""
     text: str = Field(min_length=1)
-    """What the narrator says; also the subtitle."""
+    """What the narrator says; also the subtitle. *word* stresses a word (its speaker gestures on it with auto_direct); the asterisks are not spoken or shown."""
+
+    _marked_text: str | None = PrivateAttr(default=None)
+
+    @model_validator(mode="after")
+    def _take_out_emphasis(self) -> BeatConfig:
+        plain = strip_emphasis(self.text)
+        if plain != self.text:
+            self._marked_text = self.text
+            self.text = plain
+        return self
+
+    @property
+    def marked_text(self) -> str:
+        """The text as written in the config, ``*word*`` emphasis marks included."""
+        return self._marked_text or self.text
     actions: list[ActionConfig] = Field(default_factory=list)
     """Per-beat actions on the scene's targets (reveal, dim, highlight, ...), run during this beat."""
     voice: Identifier | None = None

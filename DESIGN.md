@@ -55,7 +55,9 @@ src/vidgen/
   outline.py              # Markdown outline / plain-text script -> blocks; inline Markdown removal (§61; no manim)
   prose.py                # sentences (language-aware), beats of 6-15 words, on-screen label compression (§61; no manim)
   plan.py                 # `vidgen plan`: blocks -> planned scenes (cue -> type, beats fitted to steps, TODOs) (§61; no manim)
-  plan_yaml.py            # `vidgen plan` output: commented video.yaml writer, project scaffold, assets (§61; no manim)
+  plan_yaml.py            # `vidgen plan` output: commented video.yaml writer, project scaffold, assets (§61; no manim);
+                          # also writes `vidgen screenplay`'s project (commented_yaml, write_project)
+  screenplay.py           # `vidgen screenplay`: screenplay -> stage scenes, set, direction grammar, looks, voices (§69.25; no manim)
   mcp_server.py           # `vidgen mcp`: MCP server (optional SDK), tools = CLI subprocesses with --json, resources (§62)
   mcp_tools.py            # its SDK-free parts: root folder policy, command lines, cost refusal, pictures, paging (§62)
   schema.py               # JSON Schema export (see §12)
@@ -4337,7 +4339,8 @@ the measured loudness, §48).
 - **Tools** (`mcp_server.build_server`): `guide`, `init`, `plan`, `validate`, `schema`,
   `list_scenes`, `list_icons`, `list_themes`, `list_sfx`, `list_music`, `storyboard`, `lint`,
   `render`, `tts`, `imagegen`, `readback`, `slides`, `thumbnail`, `export`, `gallery`,
-  `translate_template`; Step 83 adds `character_sheet` (§69.16), Step 90 `direct` (§69.24). Parameters mirror the command's options (snake_case; lists for repeatable
+  `translate_template`; Step 83 adds `character_sheet` (§69.16), Step 90 `direct` (§69.24), Step 91
+  `screenplay` (§69.25; `input_path` or `screenplay_text`, `out`, `force`). Parameters mirror the command's options (snake_case; lists for repeatable
   options), with pydantic `Field` descriptions and bounds. Result: one text block with the
   command's `--json` document re-serialised compactly (fewer tokens), then images; a document with
   `ok` false is an `isError` result holding only the JSON. Argument errors (path outside the root,
@@ -6353,10 +6356,85 @@ rendering: `plan_directions(scene_id, cast, beats, stage=None)` stays a pure fun
   flight, pan, jump and confetti kept (and `hill_told` cut to "Told you.") gets 13 automatic
   actions (looks, reactions, two shrugs, a cut close-up); lint clean. The committed example is
   unchanged (its explicit actions are the guide's example of writing them).
-- **Not done here**: the asterisks of `*word*` are not removed from the beat's text (TTS,
-  captions, bubbles get them); English word lists; a close-up waits for changes to its speaker at
+- **Emphasis marks** (Step 91): `BeatConfig` takes the asterisks of `*word*` out of `text` when
+  the config is read (`config.EMPHASIS`, `strip_emphasis`; one word or a few, not `2*3*4`, `a * b`
+  or `**bold**`) and keeps the written text in the private `_marked_text` (`marked_text`). So every
+  reader of `beat.text` (TTS and its hash, captions, SRT, bubbles, readback, lint, slides) gets it
+  without them; a beat without marks is unchanged (its audio hash too). `_beat_words` times the
+  plain text and gives each word its written form (same word count), `stage_directions` passes
+  `marked_text`, so `stressed_word` still finds `*word*`. The scene fingerprint adds `emphasis`
+  (beat id -> marked text) when a scene has marks, since they change the automatic gestures.
+- **Not done here**: English word lists; a close-up waits for changes to its speaker at
   the beat's start (the undoing of the speaker's reaction of the beat before) before it moves;
   depth and props are not in the predicted stills (`hidden_speaker`, `character_overlap` not
   checked: automatic actions move no one); a written `zoom` with `until` is not followed (the
   planner takes the camera as unzoomed); shots are Step 95. Tests:
   `tests/test_cartoon_directing.py` (Step 90 part).
+
+### 69.25 Screenplays (Step 91)
+
+`vidgen screenplay FILE [--out DIR|FILE.yaml] [--force] [--json]` (`cli.cmd_screenplay`, MCP tool
+`screenplay`) makes a stage project from a screenplay without AI. `screenplay.py` (no manim;
+props' kinds imported when a `set:` line is read) has the parser and the builder; the writing is
+`vidgen plan`'s (`plan_yaml.commented_yaml`: a config with comments above top-level keys, scenes
+and, new, beats, checked to load back; `write_project`: scaffold like `vidgen init`, write the
+config; `write_plan` now calls both, its output unchanged).
+
+- **Parsing** (`parse_screenplay(text) -> Screenplay(title, front, scenes)`): optional YAML
+  front matter (a mapping of top-level keys; `scenes` refused); elements by `_paragraphs` (a
+  heading, `set:` or `NAME:` line stands alone; other lines join the element above until a blank
+  line; HTML comments dropped). The first level-1 heading not starting with `Scene` is the title;
+  any other heading starts a `ScriptScene` (`Scene:` stripped; text before any heading: `scene 1`).
+  `set:` lines right under it are joined. `[...]` alone is a `Direction`; `NAME [(manner)]: text`
+  (`_SPEAKER`: words in capitals) a `Line`, its inline `[...]` taken out as directions with `at` =
+  words before / words (≤ 0.9) and the speaker as default subject; `NARRATOR`, `NARRATION`,
+  `VOICE OVER`, `V.O.` and plain paragraphs are the narrator (`speaker None`). Errors
+  (`VidgenError`) name the line.
+- **The set** (`parse_set(text, names) -> SetDesign(params, placed, props, todos)`): `;` parts
+  `background` (`SKIES` gradient + `GROUNDS` colour, else tokens / hex / `a to b`, else an image
+  file), `props` (built-in `PROP_KINDS`, `kind (name) at place`, else the next of `PROP_SLOTS`;
+  `BACKDROP_PROPS` house / tree get `depth`), `marks`, `characters`. Not understood: a scene
+  `# TODO:`. Characters not placed take the marks of `PLACES[count]` at least `SPACING` 0.12 from
+  placed ones, in order of appearance; the scene's cast is the placed, speaking and
+  direction-named characters (`_scene_cast`).
+- **Directions** (`direction_actions(text, state, default) -> (groups, unmatched)`): sentences
+  (`.`, `;`, `!`, `then`) cut at `and` unless a name follows (`_clauses`); leading `then` /
+  `suddenly`..., trailing `-ly` words tried off on a second attempt. Subject: character names
+  (written names and, for a multi-word name, its last word when unique), `he` / `she` / `it` for a
+  single last subject, `they`; else `default`. `_VERBS` (in order): walk / go / run... `to` ->
+  `walk_to` (a mark or x as given; a prop or character: `PROP_GAP` 0.1 / `CHARACTER_GAP` 0.14
+  before it on the walker's side; `runs` `speed: RUN_SPEED` 5), `enter` / `exit` with a side,
+  `jump`, `look at` (characters, props by name or unique kind, marks, `camera` / `us`; `each
+  other`), `point at` (`look_at` + `gesture: point`), `wave` / `nod` (+ a look when they name
+  someone), `shrug`, `shake ... head`. `StageState` follows each character's x (`home`: its
+  starting mark), the last subjects and object (`it`, `him`, `her`). Each action carries its
+  estimated seconds (`walk_motion_seconds(walk_seconds(distance))`, a jump's, `LOOK_SECONDS`,
+  `GESTURE_SECONDS`, + `MARGIN` 0.1); `_add_scene`'s `attach` puts a beat's direction groups one
+  after the other: `at` = start / the line's estimated seconds (words / 2.6, or the front
+  matter's `narration.words_per_second`), rounded down, ≤ `LATEST_AT` 0.95. Directions before a
+  line start at its 0; after a scene's last line at `TRAILING_AT` 0.6 of it; inline ones at
+  their word. A manner (`manner_actions`: built-in expression / pose names, `MANNERS` words) is a
+  `react` first in the beat; unknown words and unmatched sentences are beat `# TODO:`s.
+- **Characters and voices** (`screenplay_project`): front matter `characters` are kept as
+  written (declared); every other speaker (`character_id`: `OLD ASH` -> `old_ash`) gets
+  `LOOKS[k]` (six looks differing in body, hair, eyes, ears, accessories, skin, clothes and hair
+  colours; from the seventh on with `seed: k`) and a `<id>_voice` entry with `label`.
+  `assign_voices(voice, language, count)`: Kokoro: the voices of the narrator's language
+  (`kokoro_voices.resolve`), for English American and British, grouped by accent and gender,
+  each group best grade first without the narrator's voice (and no `santa` voice), groups in
+  turn with the narrator's own kind last; OpenRouter: the model's listed voices
+  (`openrouter.known_voices`) without the narrator's, in turn; ElevenLabs: no list, the entries
+  only get a `label` and a video `# TODO:` asks for `voice_id`s. Defaults (`DEFAULTS`): 1920x1080,
+  preview 854x480, `soft_pastel`, Kokoro `bf_emma` at 0.85, `narration.pad` 0.7, `auto_direct:
+  true`; front matter keys win.
+- **Output**: a header comment, `# generated: ...` above `characters`, the notes above `voices`,
+  scene and beat `# TODO:`s; then `validate_all` (exit 1 on problems). JSON:
+  `jsonout.screenplay_document`.
+- **Sample**: `examples/screenplay/humming_box.md` (three original characters, two scenes): 11
+  beats, 0 TODOs; the project validates, `vidgen lint` (preview) finds nothing, `vidgen direct`
+  adds 18 actions (looks, reactions, a head shake on `*anything*`, a shrug). Tests:
+  `tests/test_screenplay.py`.
+- **Not done here**: English grammar and manner words only; no grammar for props moving, sitting
+  (Step 94), holding (Step 93) or shots (Step 95); a walk to a character goes where it stood at
+  the start of the beat; one set per scene (no set changes inside a scene); ElevenLabs voices are
+  not chosen.

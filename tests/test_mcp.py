@@ -203,7 +203,7 @@ def test_page_of() -> None:
 TOOLS = {
     "guide", "init", "plan", "validate", "schema", "lint", "storyboard", "list_scenes", "list_icons", "list_themes", "list_sfx",
     "list_music", "render", "tts", "imagegen", "readback", "slides", "thumbnail", "export", "gallery", "translate_template",
-    "character_sheet", "direct",
+    "character_sheet", "direct", "screenplay",
 }
 
 
@@ -369,6 +369,18 @@ def test_server_direct_returns_the_automatic_actions(tmp_path: Path) -> None:
     async def body(client: Any) -> None:
         doc = doc_of(await client.call_tool("direct", {"project": "toon", "scene": ["hill"]}))
         assert doc["command"] == "direct" and doc["scenes"] == [{"scene": "hill", "beats": [{"beat": "hill_told", "actions": [{"look_at": "moss", "to": "dot"}]}]}]
+
+    run_session(tmp_path, body)
+
+
+def test_server_screenplay_writes_a_project(tmp_path: Path) -> None:
+    text = "# Scene: yard\nPIP: Is that a kite?\n[Kit jumps.]\nKIT (doubtful): It is a box.\n"
+
+    async def body(client: Any) -> None:
+        doc = doc_of(await client.call_tool("screenplay", {"screenplay_text": text, "out": "toon"}))
+        assert doc["command"] == "screenplay" and doc["scenes"][0]["characters"] == ["pip", "kit"]
+        assert (tmp_path / "toon" / "video.yaml").is_file()
+        assert "give either" in error_text(await client.call_tool("screenplay", {"out": "toon"}))
 
     run_session(tmp_path, body)
 

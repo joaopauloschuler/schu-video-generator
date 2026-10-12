@@ -180,6 +180,10 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
         # colour, or held longer (DESIGN.md §49)
         "next_transition": _next_transition(project, scene_id),
     }
+    marked = {beat.id: beat.marked_text for beat in spec.beats if beat.marked_text != beat.text}
+    if marked:
+        # *word* marks are taken out of the beat's text but steer automatic gestures (§69.24)
+        data["emphasis"] = marked
     if project.config.characters:
         # a character's mouth follows the beat's viseme track, stored or built from its alignment (§69.4)
         data["visemes"] = {

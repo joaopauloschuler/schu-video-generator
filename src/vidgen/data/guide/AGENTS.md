@@ -772,13 +772,41 @@ happens: `at: 0.8` lands it on the end of the line, not on its first word.
 the routine looks and reactions for you: listeners `look_at` whoever speaks, the speaker looks at
 the one it answers, and after a line with `?`, a negation or `!` the listeners `react` in the
 pause (`thinking`, `worried`, `surprised`...). The speaker gestures on the line's stressed word
-(write it in CAPITALS, or the longest word counts; at most one per line), and a short punchy line
+(mark it `*word*`: the asterisks are not spoken or shown; or write it in CAPITALS; else the
+longest word counts; at most one per line), and a short punchy line
 right after a long one gets a close-up on its speaker. Nothing it adds may cause an `off_stage`
 or `facing_away` lint warning (it checks the stage's layout first). Actions you write win: a
 character with its own action in a beat gets nothing automatic there. So turn it on, then write only the moments that
 matter (the reaction shot, the punchline's look to camera). `vidgen direct` lists what it adds,
 `vidgen direct --print` writes it as YAML to paste into the beats and edit; the storyboard shows
 an `auto:` line under each beat.
+
+**From a screenplay.** When the story comes as a script, write it as a screenplay and let
+`vidgen screenplay story.md --out DIR` (MCP tool `screenplay`) make the project: one `stage`
+scene per `# Scene:` heading, one beat per line, a generated look and a voice for each character
+not declared in the front matter, `auto_direct: true`. Then refine the YAML as usual (check the
+`# TODO:` lines: directions and manners it could not map).
+
+```markdown
+---
+title: The Humming Box            # optional: video.yaml keys (voice, theme, characters...)
+---
+# Scene: yard
+set: background: day; props: box (crate) at 0.6, tree at 0.84; characters: fen at left, bram at right
+
+On a quiet Sunday, Fen heard a sound that did not belong in the yard.
+
+FEN (surprised): Bram, listen! That box is humming a song.
+
+[Fen walks to the crate and points at it.]
+
+BRAM: Boxes do not hum, Fen. Boxes do not do *anything*.
+```
+
+`NAME (manner):` turns an expression or pose word (`doubtful`, `glad`, `arms crossed`) into a
+`react`; a plain paragraph is the narrator; `[...]` maps walk / run to, enter, exit, jump, look
+at, point at, wave, nod, shrug and shake head (on its own line: at the next line's start; inside a
+line: at that word). `docs/CONFIG.md` "Cartoons from a screenplay" has the whole format.
 
 **Comic timing.**
 - **Short lines**: one line per beat, one speaker per beat (the beat's `voice`), 6–12 words.

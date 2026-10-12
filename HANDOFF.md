@@ -8445,3 +8445,77 @@ How to test
   test_extensions` (163, 8 s); render `test_cartoon_stage test_cartoon_directing` (4, 6 s),
   `test_phase_h_review test_mcp` (3, 33 s).
 
+
+## Step 91 — Screenplay format
+
+What was built
+- `vidgen screenplay FILE [--out DIR|FILE.yaml] [--force] [--json]` (`cli.cmd_screenplay`) and MCP
+  tool `screenplay` (`input_path` or `screenplay_text`, `out`, `force`): a stage project from a
+  screenplay, no AI. New module `src/vidgen/screenplay.py` (no manim):
+  - `parse_screenplay(text) -> Screenplay(title, front, scenes)`: YAML front matter (top-level
+    keys, not `scenes`), `# Title`, `# Scene: NAME` (any level), `set:` lines, `NAME (manner):
+    line` (capitals; lines run on to a blank line; inline `[...]` become directions at that word
+    with the speaker as subject), narrator paragraphs / `NARRATOR:`, `[...]` directions, HTML
+    comments skipped; errors name the line.
+  - `parse_set`: `background` (sky words `SKIES`, colours / gradient, image file), `props`
+    (`kind (name) at place`, default slots, house / tree get depth), `marks`, `characters`.
+  - `direction_actions` (grammar `_VERBS`): walk / go / run to (mark, x, beside a prop or a
+    character), enter / exit [side], jump, look at (incl. camera, each other), point at, wave,
+    nod, shrug, shake head; subjects by name (multi-word names also by their last word), pronouns;
+    clauses after `and`; unmatched sentences -> beat `# TODO:`. Actions in a beat are timed one
+    after another from estimated lengths (walk distance, gesture / look / jump seconds).
+  - `manner_actions`: built-in expression / pose names and `MANNERS` words -> `react`.
+  - `screenplay_project`: declared (front matter) characters kept; others get `LOOKS[k]` (six
+    looks differing in body, hair, eyes, ears, accessories, colours) and `<id>_voice` with label;
+    `assign_voices`: Kokoro by accent and gender (narrator's kind last), OpenRouter's listed
+    voices, ElevenLabs a TODO. Defaults: soft_pastel, Kokoro `bf_emma` 0.85, pad 0.7,
+    `auto_direct: true`.
+- Writer shared with `vidgen plan`: `plan_yaml.commented_yaml` (comments above keys, scenes and
+  now beats; load-back check) and `write_project` (scaffold + write); `plan_yaml` / `write_plan`
+  use them, output byte-identical (compared on examples/plan/outline.md).
+- Step 90 gap fixed: `BeatConfig` takes `*word*` asterisks out of `text` (`config.EMPHASIS`,
+  `strip_emphasis`) and keeps `marked_text` (private attr). Every reader of `beat.text` (TTS and
+  its hash, captions, SRT, bubbles, readback, lint, slides) gets the plain text; unmarked beats
+  are unchanged. `directing._beat_words` relabels the word times with the written words and
+  `stage_directions` passes `marked_text`, so the planner still sees `*word*`. The scene
+  fingerprint adds `emphasis` when a scene has marks.
+- Sample: `examples/screenplay/humming_box.md` (original story, three original characters).
+
+Files touched
+- New: `src/vidgen/screenplay.py`, `tests/test_screenplay.py`, `examples/screenplay/humming_box.md`.
+- `src/vidgen/cli.py` (`cmd_screenplay`, parser, `JSON_COMMANDS`), `jsonout.py`
+  (`screenplay_document`), `mcp_server.py` (tool, instructions), `plan_yaml.py` (refactor),
+  `config.py` (emphasis), `cartoon/directing.py` (marked words), `render/fingerprint.py`.
+- Docs: `docs/CONFIG.md` (beat text, auto_direct gestures, new "Cartoons from a screenplay",
+  JSON list and `vidgen screenplay --json`), `DESIGN.md` (§2 tree, MCP tools, §69.24 emphasis,
+  new §69.25), `README.md` (feature, command row, example), guide `cartoons` (+ `AGENTS.md` copy),
+  `tasklist.md` (Step 90 box now [x], Step 91 [x]).
+- Tests: `tests/test_cartoon_directing.py` (3 emphasis tests: strip, pinned hashes, planner),
+  `tests/test_mcp.py` (`screenplay` tool).
+
+Public interfaces
+- CLI `vidgen screenplay` (+ `--json`), MCP tool `screenplay`; `BeatConfig.marked_text`,
+  `config.strip_emphasis` / `EMPHASIS`; `plan_yaml.commented_yaml`, `write_project`. Nothing
+  added to `vidgen.api`.
+
+Decisions / deviations
+- One place for the strip: the config model, so nothing downstream changes; audio hashes of
+  beats without asterisks are pinned (Kokoro and ElevenLabs keys in the new test).
+- A manner `react` (or any written action) touches the speaker, so auto_direct adds no gesture
+  for it in that line; the sample leaves the manner off its `*anything*` line.
+- Stage directions on their own line act at the next line's start (after the last line: at 0.6
+  of it), a choice the format note in CONFIG.md states.
+- Front matter instead of CLI options for voice provider, theme, format and declared characters.
+
+Known gaps / TODOs
+- English grammar and manner words only; no sit / hold / prop moves / shots (Steps 93-95);
+  walking to a character aims where it stands at the beat's start; ElevenLabs voices not chosen.
+
+How to test
+- `pytest tests/test_screenplay.py` (15, ~2 s). Also run (not render): `test_plan test_config
+  test_schema test_cartoon_directing test_screenplay` (190, 59 s), `test_tts test_tts_kokoro
+  test_captions test_readback test_translation test_api test_cartoon_acting test_storyboard
+  test_json_output test_cli` (255 + 2 skipped, 17 s), `test_docs test_guide` (99, 2 s), `test_mcp`
+  (15, 25 s); render: `test_cartoon_directing -m render` (3, 7 s). By hand: the sample to a
+  scratch project, `vidgen lint` (preview) 0 findings, `vidgen direct` 18 automatic actions,
+  storyboard checked by eye.

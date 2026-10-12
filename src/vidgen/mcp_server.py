@@ -60,7 +60,7 @@ INSTRUCTIONS = """\
 schu-video-generator (the `vidgen` command) makes narrated, animated videos from a project folder (video.yaml + assets). Paths are \
 relative to the server's root folder; nothing outside it can be read or written.
 Start with `guide` (topic "start" or "workflow"): it is the author guide. Usual loop: `plan` (from \
-an outline) or `init` -> edit video.yaml -> `validate` -> `storyboard` (look at the sheets it \
+an outline), `screenplay` (a cartoon from a screenplay) or `init` -> edit video.yaml -> `validate` -> `storyboard` (look at the sheets it \
 returns) -> `lint` -> fix -> repeat; then `tts` with dry_run=true (free), and only after the user \
 agreed to the cost `tts` with dry_run=false and confirm_cost=true (voice.provider kokoro is local and \
 free: no confirm_cost); then `render`. `schema` with \
@@ -332,6 +332,28 @@ def build_server(root: Path) -> Any:
             source = Path(folder) / ("outline.md" if text_format == "markdown" else "outline.txt")
             source.write_text(markdown_text or "", encoding="utf-8")
             return answer(await call(ctx, args_of(["plan"], [str(source)], options)))
+
+    @tool("Make a cartoon project (stage scenes, characters with generated looks and voices, auto_direct on) "
+          "from a screenplay: # Scene: headings with set: lines, NAME (manner): lines, plain narrator paragraphs, "
+          "[stage directions]. Give input_path (a file under the root) or the text itself.", writes)
+    async def screenplay(
+        ctx: Context,
+        input_path: Annotated[str | None, Field(description="screenplay (.md or .txt) under the root")] = None,
+        screenplay_text: Annotated[str | None, Field(description="the screenplay itself (instead of input_path)")] = None,
+        out: Annotated[str | None, Field(description="project folder to create, or a .yaml file (default: named after the input; 'screenplay' for screenplay_text)")] = None,
+        force: Annotated[bool, Field(description="write into a non-empty folder / replace a config")] = False,
+    ) -> Any:
+        if (input_path is None) == (screenplay_text is None):
+            raise ToolError("give either input_path or screenplay_text")
+        options = {"out": str(where(out, "out")) if out else None, "force": force}
+        if input_path is not None:
+            return answer(await call(ctx, args_of(["screenplay"], [str(where(input_path, "input_path"))], options)))
+        if options["out"] is None:
+            options["out"] = str(policy.root / "screenplay")
+        with tempfile.TemporaryDirectory(prefix="vidgen-screenplay-") as folder:
+            source = Path(folder) / "screenplay.md"
+            source.write_text(screenplay_text or "", encoding="utf-8")
+            return answer(await call(ctx, args_of(["screenplay"], [str(source)], options)))
 
     # ----- checking --------------------------------------------------------------------------------
 

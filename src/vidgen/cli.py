@@ -35,7 +35,7 @@ TEMPLATE_DOTFILES: tuple[str, ...] = ("gitignore",)
 JSON_COMMANDS: tuple[str, ...] = (
     "validate", "list-scenes", "list-themes", "list-icons", "list-sfx", "list-music", "render", "schema", "storyboard", "lint",
     "thumbnail", "export", "translate-template", "slides", "readback", "guide", "gallery", "plan",
-    "init", "tts", "imagegen", "character-sheet", "direct",
+    "init", "tts", "imagegen", "character-sheet", "direct", "screenplay",
 )
 
 #: What a command function returns: an exit code, or (with ``--json``) the JSON document.
@@ -139,6 +139,52 @@ def cmd_plan(args: argparse.Namespace) -> CommandResult:
     for problem in problems:
         print(f"problem: {problem}", file=sys.stderr)
     print("next: refine the draft (read its # plan: and # TODO: comments), then `vidgen validate`, `vidgen storyboard`, `vidgen lint`")
+    return 1 if problems else 0
+
+
+def cmd_screenplay(args: argparse.Namespace) -> CommandResult:
+    """Write a stage project from a screenplay (DESIGN.md §69.25)."""
+    from vidgen.plan_yaml import commented_yaml, write_project
+    from vidgen.screenplay import parse_screenplay, screenplay_project
+
+    source = Path(args.input)
+    if not source.is_file():
+        raise VidgenError(f"{source}: no such file (give a screenplay, e.g. story.md)")
+    try:
+        text = source.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise VidgenError(f"{source}: cannot read it as UTF-8 text: {exc}") from None
+    try:
+        play = parse_screenplay(text)
+    except VidgenError as exc:
+        raise VidgenError(f"{source}: {exc}") from None
+    draft = screenplay_project(play, source.stem.replace("_", " ").replace("-", " ").strip().capitalize() or "Untitled")
+    header = [
+        f"# Written by `vidgen screenplay` from {source.name}: the screenplay's scenes as stage scenes, one",
+        "# beat per line. Characters without a declaration got a generated look and a voice; auto_direct adds",
+        "# the looks, reactions, gestures and close-ups. Check the # TODO: lines, then: vidgen validate,",
+        "# vidgen storyboard, vidgen lint (`vidgen guide cartoons`).",
+    ]
+    scene_notes = [list(todos) for todos in draft.scene_todos]
+    key_notes = {"characters": [f"generated: {', '.join(draft.generated)} (look and colours to adjust; `vidgen character-sheet --all`)"]} if draft.generated else {}
+    if draft.notes:
+        key_notes["voices" if "voices" in draft.config else "voice"] = [f"TODO: {n}" for n in draft.notes]
+    yaml_text = commented_yaml(draft.config, header, key_notes, scene_notes, draft.beat_todos)
+    output = Path(args.out) if args.out else Path(source.stem)
+    result = write_project(yaml_text, output, force=args.force)
+    project = Project.load(result.config)
+    problems, _ = validate_all(project, keep_going=True)
+    if args.json:
+        return jsonout.screenplay_document(project, draft, result, problems)
+    beats = sum(len(s["beats"]) for s in draft.config["scenes"])
+    print(
+        f"wrote {len(draft.config['scenes'])} stage scenes ({beats} beats), {len(draft.config['characters'])} characters, "
+        f"about {_format_seconds(project.estimated_duration())}; {draft.todo_count} TODOs to review (# TODO: in the config)"
+    )
+    print(f"{'created project in' if result.created else 'wrote'} {result.root if result.created else result.config}")
+    for problem in problems:
+        print(f"problem: {problem}", file=sys.stderr)
+    print("next: `vidgen character-sheet --all`, `vidgen direct`, `vidgen storyboard`, `vidgen lint`; then `vidgen tts`")
     return 1 if problems else 0
 
 
@@ -1227,6 +1273,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--language", metavar="TAG", help="language of the text (BCP-47, e.g. pt-BR): sentence and phrase rules, written as language:")
     p.add_argument("--force", action="store_true", help="write into a folder that is not empty, or replace an existing config")
     p.set_defaults(func=cmd_plan)
+
+    p = sub.add_parser("screenplay", help="a cartoon project from a screenplay: # Scene: headings, NAME: lines, [stage directions] (no AI)")
+    p.add_argument("input", help="the screenplay (.md or .txt)")
+    p.add_argument("--out", "-o", metavar="DIR|FILE", help="project folder to create, or a .yaml file to write (default: a folder named after INPUT)")
+    p.add_argument("--force", action="store_true", help="write into a folder that is not empty, or replace an existing config")
+    p.set_defaults(func=cmd_screenplay)
 
     p = sub.add_parser("guide", help="the author guide for AI agents making videos (workflow, pacing, scene types, ...)")
     p.add_argument("topic", nargs="?", metavar="TOPIC", help="print only this topic (vidgen guide --list shows them)")
