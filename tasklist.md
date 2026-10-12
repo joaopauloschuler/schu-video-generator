@@ -448,6 +448,89 @@ one.
 
 ---
 
+## Phase I — Livelier cartoons (directing, screenplays, props, shots, mood)
+
+Goal: cartoons that look directed and alive with less writing. Same rules as Phase H (guide,
+memory cap, targeted tests, original characters only). Each step updates the guide's
+`cartoons` topic where authors see the change.
+
+### Step 89 — Automatic directing, part 1: looks and reactions
+- [ ] `auto_direct: true | false | {looks, reactions, gestures, closeups}` (video, stage scene, beat; nearest wins; off by default)
+- [ ] Looks: listeners turn and look at whoever speaks (the beat's voice / `say`), the speaker at the one it last addressed; explicit actions in a beat always win
+- [ ] Reactions in the pad after a line: a listener's expression chosen from the line's punctuation and a small word list (`!` surprised / happy, `?` thinking, negations worried), seeded and never the same twice in a row
+- [ ] The added actions are visible: `vidgen storyboard` / `--json` mark them as auto, and `vidgen direct --print` writes them out as YAML an author can paste and edit
+- [ ] Tests: the planner is a pure function from beats to actions (no render)
+
+### Step 90 — Automatic directing, part 2: gestures and close-ups
+- [ ] Gestures on stressed words (from word timings: longest / capitalised / emphasised `*word*` words), at most one per line, chosen from the character's available parts
+- [ ] Close-ups: an occasional zoom on the speaker for a short punchy line after a long one, never two in a row, never during a walk or pan
+- [ ] Respect lint: no auto action may create a `facing_away`, `bubble_overlap` or `off_stage` warning (checked in the planner)
+- [ ] Tests: pure planner tests; examples/cartoon renders with `auto_direct: true` and lints clean
+
+### Step 91 — Screenplay format
+- [ ] `vidgen screenplay FILE.md [--out DIR]` turns a screenplay into a stage project: `# Scene: yard` headings (with an optional `set:` line for background / props / marks), `DOT: line`, `MOSS (doubtful): line` (the bracket becomes an expression; known pose names become poses), narrator lines as plain paragraphs, `[Dot walks to the box]` stage directions mapped to actions where a small grammar matches (walk to / enter / exit / jump / look at / point at), others kept as TODO comments
+- [ ] Characters not declared get generator looks that differ clearly (shape, colours, accessories) and voices assigned from the provider's list (different gender / accent where possible)
+- [ ] The output validates; `auto_direct: true` on by default in the generated project
+- [ ] Also as an MCP tool; the guide shows the format
+- [ ] Tests: parser (no render), round trip on a sample screenplay in `examples/`
+
+### Step 92 — Bending arms and legs
+- [ ] Arms and legs in two segments (upper / lower, elbow / knee pivots) for generated characters, with a simple two-bone solver (`reach(hand, point)`, `plant(foot, point)`)
+- [ ] Imported SVG: optional `arm_left_lower` / `leg_left_lower` ids; single-piece limbs keep working
+- [ ] Existing poses, gestures and the walk updated to bend (natural elbows, knee bend in the walk cycle); sheets and earlier tests still pass (update expected values with reasons in HANDOFF)
+- [ ] Tests: solver reach / out-of-reach / elbow side, pose tables
+
+### Step 93 — Interacting with props
+- [ ] Beat actions `pick_up: <character>, to: <prop>`, `hold`, `put_down` (at a mark), `give` (to another character), `throw` (to a mark, arc with spin, landing sound)
+- [ ] A held prop follows the hand (it becomes attached to the character, scaled to fit) and is drawn at the right depth; walking with it works
+- [ ] Validate: unknown prop, prop too far without a walk (suggest `walk_to` first), giving to a character who is not adjacent
+- [ ] Tests: attach / detach state machine, positions (no render), one tiny render
+
+### Step 94 — Sitting and leaning
+- [ ] `sit_on: <character>, to: <prop>` (chair, rock, box, any prop with a seat line), `stand_up`, `lean_on` (tree, door, sign); built-in props get seat / lean points; SVG props may give them (`data-seat`)
+- [ ] Tests: seat points per prop, character feet / hips position when seated
+
+### Step 95 — Shots within a scene
+- [ ] Beat key `shot: wide | two_shot | over_shoulder <character> | closeup <character> | medium <character>` cuts (hard cut, no move) the camera to a framing computed from the characters' positions; `shot: {..., move: true}` eases instead
+- [ ] Over-the-shoulder shows the near character large, partly out of frame, at the side (lint `off_stage` allows it in that shot)
+- [ ] `auto_direct` may pick shots (part of Step 90's close-ups switches to shots)
+- [ ] Tests: framing maths (no render), lint exceptions
+
+### Step 96 — Vertical cartoons follow the speaker
+- [ ] In 9:16 (and any format narrower than the stage), the camera keeps the speaker in frame by default (`reframe: speaker | none`), easing between speakers, holding during short replies
+- [ ] Storyboard / lint check the 9:16 variant of examples/cartoon
+- [ ] Tests: the reframe path from a beat list (no render)
+
+### Step 97 — Lighting and mood
+- [ ] Stage `light: day | morning | sunset | night | indoor` (or `{tint, strength}`): a colour grade over background, layers, props and characters, keeping theme contrast for text and bubbles; night adds a few stars; `light:` as a beat action to change it over time (fade)
+- [ ] Soft shadows under characters and props on the ground (ellipse, depth-scaled, off with `shadows: false`)
+- [ ] Tests: grade maths, contrast kept for bubble text (lint `contrast` still passes)
+
+### Step 98 — Wind
+- [ ] Stage `wind: 0..1` (and as a beat action): trees and bushes sway, scarves / hair / ears / hats trail (the Step 82 spring), particles drift with it; gusts as a seeded noise
+- [ ] Tests: sway angles from the seed, `wind: 0` changes nothing
+
+### Step 99 — Non-speech voice sounds
+- [ ] Inline markers in a line: `[gasp]`, `[hmm]`, `[laugh]`, `[sigh]`, `[giggle]`, `[groan]`: voiced through the TTS provider where it can (e.g. spoken "hmm", "ha ha") or a built-in generated sound otherwise, with matching mouth shapes and an expression (laugh → happy, gasp → surprised) unless the beat sets one
+- [ ] Captions and readback skip or bracket the markers; pronunciation rules unaffected
+- [ ] Tests: marker parsing, viseme track around a marker, caption text
+
+### Step 100 — Overlapping speech and interruptions
+- [ ] Beat `overlap: 0.4` (seconds the beat starts before the previous one ends) and `interrupt: true` (cuts the previous line's audio with a short fade at that point, mouth stops); both characters' mouths follow their own tracks while overlapping
+- [ ] Mixing keeps both voices audible (small gain dip), captions show both lines; lint warns when an overlap hides a whole word
+- [ ] Tests: timeline maths, mix plan, caption layout (no render)
+
+### Step 101 — Reusable casts and sets
+- [ ] `include: [cast.yaml, sets.yaml]` (paths relative to the project, or a shared folder): `characters:`, `voices:` and named `sets:` (background, layers, props, marks, light) that a stage uses with `set: <name>` and may override
+- [ ] Validate reports which file a problem came from; fingerprints include the included files; `vidgen screenplay --cast cast.yaml` reuses a cast
+- [ ] An `examples/cartoon_series/` with a shared cast and two short episodes (no audio committed)
+- [ ] Tests: merge rules, overrides, error locations
+
+### Step 102 — Review of Phase I
+- [ ] End to end: the screenplay example → project → validate, lint, storyboard, sheets, a preview render; examples/cartoon with `auto_direct`; real Kokoro narration on one example rendered at 720p and checked by eye; docs consistency; Phase I gaps moved to the Backlog; full suite only if the owner asks
+
+---
+
 ## Backlog (after Step 60)
 
 Not done in the roadmap; each is one line, with where it came from. Bugs first, then quality,
