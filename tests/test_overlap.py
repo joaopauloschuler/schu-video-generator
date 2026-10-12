@@ -29,6 +29,7 @@ from vidgen.overlap import (
     DIP_RAMP,
     INTERRUPT_FADE,
     INTERRUPT_LEAD,
+    INTERRUPT_WORD_SHARE,
     MIN_WINDOW,
     OVERLAP_DIP_DB,
     BeatWindow,
@@ -57,14 +58,50 @@ def test_overlap_and_interrupt_windows() -> None:
     first, second, third = beat_windows([SpokenLine(2.0, 1.8), SpokenLine(1.0, 1.0, overlap=0.5), SpokenLine(1.2, 1.2, interrupt=True)], 0.4)
     assert (first.body, first.rest, first.heard) == (pytest.approx(1.3), 0.0, 2.0)   # heard to its end, under the second
     assert first.shape == VoiceShape(dip_from=pytest.approx(1.3)) and first.joined
-    assert (second.body, second.heard) == (pytest.approx(1.0 - INTERRUPT_LEAD), pytest.approx(0.5))   # cut where the third starts
-    assert second.shape == VoiceShape(cut=pytest.approx(0.5))
+    assert (second.body, second.heard) == (pytest.approx(1.0 - INTERRUPT_LEAD), pytest.approx(1.0 - INTERRUPT_LEAD))   # cut where the third starts
+    assert second.shape == VoiceShape(cut=pytest.approx(1.0 - INTERRUPT_LEAD)) and second.next_lead == pytest.approx(INTERRUPT_LEAD)
     assert third == BeatWindow(1.2, 0.4, 1.2)   # the last beat keeps its pad
     # an interrupt with an overlap; an overlap longer than the line keeps MIN_WINDOW
     assert beat_windows([SpokenLine(3.0, 3.0), SpokenLine(1.0, 1.0, overlap=1.2, interrupt=True)], 0.4)[0].shape.cut == pytest.approx(1.8)
     assert beat_windows([SpokenLine(0.5, 0.5), SpokenLine(1.0, 1.0, overlap=2.0)], 0.4)[0].body == MIN_WINDOW
     # overlap: 0 starts right as the speech ends, without the pad
     assert beat_windows([SpokenLine(2.0, 1.7), SpokenLine(1.0, 1.0, overlap=0.0)], 0.4)[0].window == pytest.approx(1.7)
+
+
+def test_interrupt_without_overlap_cuts_inside_the_last_word() -> None:
+    # the last word lasts 1.2-1.7 s: the cut is 0.7 of the way through it, not a fixed lead before the speech end
+    said = SpokenLine(2.0, 1.8, last_word=(1.2, 1.7))
+    first, _ = beat_windows([said, SpokenLine(1.0, 1.0, interrupt=True)], 0.4)
+    assert first.shape.cut == pytest.approx(1.2 + INTERRUPT_WORD_SHARE * 0.5) and first.next_lead == pytest.approx(1.8 - 1.55)
+    assert SpokenLine(1.0, 1.0, interrupt=True).lead_after(SpokenLine(2.0, 1.8)) == INTERRUPT_LEAD   # times estimated
+    assert SpokenLine(1.0, 1.0, interrupt=True, overlap=0.6).lead_after(said) == 0.6                  # an explicit overlap wins
+    assert SpokenLine(1.0, 1.0).lead_after(said) == 0.0
+
+
+def _aligned_tone(audio_dir: Path, beat_id: str, seconds: float, words: list[tuple[str, float, float]]) -> None:
+    """A tone MP3 for ``beat_id`` with stored word times ``(word, start, end)``."""
+    from test_scene import make_tone
+    from vidgen.speech import write_alignment
+
+    make_tone(audio_dir / f"{beat_id}.mp3", seconds)
+    timed: list[tuple[str, float, float]] = []
+    for k, (word, start, end) in enumerate(words):
+        if k:
+            timed.append((" ", start, start))
+        step = (end - start) / len(word)
+        timed.extend((ch, start + step * i, start + step * (i + 1)) for i, ch in enumerate(word))
+    text = " ".join(w for w, _, _ in words)
+    alignment = {"characters": [c for c, _, _ in timed], "character_start_times_seconds": [s for _, s, _ in timed],
+                 "character_end_times_seconds": [e for _, _, e in timed]}
+    write_alignment(audio_dir, beat_id, text, (audio_dir / f"{beat_id}.mp3").read_bytes(), alignment)
+
+
+def test_planned_interrupt_reads_the_stored_word_times(make_project) -> None:
+    beats = [{"text": "one two", "voice": "pip_voice"}, {"text": "three", "voice": "kit_voice", "interrupt": True}]
+    project = Project.load(make_project(_video(*beats)))
+    _aligned_tone(project.audio_dir, "talk_b1", 1.0, [("one", 0.1, 0.4), ("two", 0.5, 0.9)])
+    b1, b2 = VideoPlan(project, 10).scenes[0].beats
+    assert b2.start == pytest.approx(0.8) and b1.end == pytest.approx(0.8)   # 0.5 + 0.7 * 0.4 = 0.78, in whole frames: "two" mostly heard
 
 
 # ----- mix plan ----------------------------------------------------------------------------------
@@ -207,8 +244,18 @@ def test_talked_over_rule(tmp_path: Path) -> None:
     second_short = {**second, "start": 2.6, "overlap": 0.4}
     assert list(timing_rules.talked_over(SceneContext("talk", _activity([{**first, "window": 2.6}, second_short]), tmp_path), LintConfig().rules.talked_over)) == []
     cut = {**second, "interrupt": True}
-    assert list(timing_rules.talked_over(SceneContext("talk", _activity([first, cut]), tmp_path), LintConfig().rules.talked_over)) == []
+    assert list(timing_rules.talked_over(SceneContext("talk", _activity([first, cut]), tmp_path), LintConfig().rules.talked_over)) == []   # no audio: nothing to cut
     assert [w.text for w in talked_over([WordTime("a", 0.0, 0.4), WordTime("b", 0.5, 0.9), WordTime("c", 1.0, 1.4)], 0.45, 1.4)] == ["b", "c"]
+
+
+def test_talked_over_reports_words_an_interrupt_cuts(tmp_path: Path) -> None:
+    _aligned_tone(tmp_path, "a", 1.0, [("one", 0.1, 0.4), ("two", 0.5, 0.9)])
+    line = {"id": "a", "start": 0.0, "busy": 0.1, "source": "audio", "text": "one two"}
+    stop = {"id": "b", "start": 0.45, "end": 1.0, "busy": 0.1, "source": "estimate", "text": "stop", "overlap": 0.55, "interrupt": True}
+    (issue,) = timing_rules.talked_over(SceneContext("talk", _activity([{**line, "end": 0.45, "window": 0.45}, stop]), tmp_path), LintConfig().rules.talked_over)
+    assert issue.beat == "a" and issue.value == 1 and '"two"' in issue.message and "overlap below 0.50 s" in issue.message
+    inside = {**stop, "start": 0.8, "overlap": 0.2}   # cut inside "two": its start is heard
+    assert list(timing_rules.talked_over(SceneContext("talk", _activity([{**line, "end": 0.8, "window": 0.8}, inside]), tmp_path), LintConfig().rules.talked_over)) == []
 
 
 def test_overrun_measures_the_window(tmp_path: Path) -> None:

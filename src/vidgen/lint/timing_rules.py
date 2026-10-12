@@ -7,6 +7,7 @@ signal. ``narration_speed`` also measures the beats' MP3s.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterator
 from typing import Any
 
@@ -203,13 +204,17 @@ def rushed_animation(ctx: SceneContext, settings: RushedAnimationRule) -> Iterat
 
 @rule("talked_over", scope="scene")
 def talked_over(ctx: SceneContext, settings: TalkedOverRule) -> Iterator[Issue]:
-    """Whole words of a line spoken while the next beat, which overlaps it, already speaks."""
+    """Whole words of a line spoken while the next beat, which overlaps it, already speaks, or
+    cut before they start by the next beat's interrupt."""
     from vidgen.speech import beat_word_times
 
     beats = ctx.beats
     for before, beat in zip(beats, beats[1:]):
-        if beat.get("overlap") is None or beat.get("interrupt"):
-            continue   # an interrupt cuts the line on purpose
+        if beat.get("overlap") is None:
+            continue
+        if beat.get("interrupt"):
+            yield from _cut_words(ctx, before, beat)
+            continue
         follower = beat["start"]
         audio = ctx.audio_dir / f"{beat['id']}.mp3"
         if beat["source"] == "audio" and audio.is_file():
@@ -229,3 +234,30 @@ def talked_over(ctx: SceneContext, settings: TalkedOverRule) -> Iterator[Issue]:
             beat=before["id"],
             time=round(hidden[0].start, 6),
         )
+
+
+def _cut_words(ctx: SceneContext, before: dict[str, Any], beat: dict[str, Any]) -> Iterator[Issue]:
+    """The ``talked_over`` issue of an interrupt that cuts the line ``before`` ahead of whole
+    words (its ``end`` is the cut). Only for a line with audio: an estimate has no words to cut."""
+    from vidgen.speech import audio_duration, beat_word_times
+
+    audio = ctx.audio_dir / f"{before['id']}.mp3"
+    if before["source"] != "audio" or not audio.is_file():
+        return
+    cut = before["end"]
+    words = beat_word_times(ctx.audio_dir, before["id"], before["text"], before["start"], before["start"] + audio_duration(audio), language=ctx.language)
+    hidden = talked_over_words(words, cut, math.inf)
+    if not hidden:
+        return
+    said = " ".join(w.text for w in hidden)
+    lead = float(beat["overlap"])
+    yield Issue(
+        f"beat {beat['id']} interrupts the line of {before['id']} {lead:g} s before its speech ends and cuts "
+        f"its last word{'s' if len(hidden) > 1 else ''} \"{said}\" before {'they start' if len(hidden) > 1 else 'it starts'}: "
+        f"start it later (overlap below {max(lead - (hidden[0].start - cut), 0.0):.2f} s here) so at most the end of the last word is cut",
+        None,
+        value=len(hidden),
+        limit=0,
+        beat=before["id"],
+        time=round(hidden[0].start, 6),
+    )

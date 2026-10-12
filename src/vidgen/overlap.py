@@ -4,9 +4,11 @@ of beats that start before the beat before them ends. No manim.
 A beat's ``overlap: S`` starts it ``S`` seconds before the speech of the beat before it ends
 (its MP3's trailing silence cut off, :func:`~vidgen.speech.speech_bounds`); both voices are
 heard, the earlier one :data:`OVERLAP_DIP_DB` lower from where the later one starts.
-``interrupt: true`` cuts the earlier line where the beat starts (a :data:`INTERRUPT_FADE` fade;
-without ``overlap`` it starts :data:`INTERRUPT_LEAD` before that line's speech ends). Only beats
-after the first of a scene may have them, so scenes still start and end as planned.
+``interrupt: true`` cuts the earlier line where the beat starts (a :data:`INTERRUPT_FADE` fade).
+Without ``overlap`` it starts inside that line's last word, :data:`INTERRUPT_WORD_SHARE` of the
+way through it (the word timings stored with its MP3), so at most the word's final part is cut;
+without stored timings :data:`INTERRUPT_LEAD` before that line's speech ends. Only beats after
+the first of a scene may have them, so scenes still start and end as planned.
 
 Each beat gets a :class:`BeatWindow` (:func:`beat_windows`): a beat whose next beat neither
 overlaps nor interrupts it keeps ``d`` for its own animations and ``d + narration.pad`` until
@@ -28,8 +30,12 @@ if TYPE_CHECKING:
     from vidgen.project import Project
     from vidgen.speech import WordTime
 
-#: Seconds an ``interrupt`` without ``overlap`` starts before the earlier line's speech ends.
-INTERRUPT_LEAD = 0.5
+#: How far into the earlier line's last word (a share of its length) an ``interrupt`` without
+#: ``overlap`` starts, when the word's times are stored with its MP3.
+INTERRUPT_WORD_SHARE = 0.7
+#: Seconds an ``interrupt`` without ``overlap`` starts before the earlier line's speech ends when
+#: its word times are only estimated (short, so no whole word is cut).
+INTERRUPT_LEAD = 0.2
 #: Seconds over which an interrupted line fades out from the cut.
 INTERRUPT_FADE = 0.05
 #: How much (dB) the earlier line is lowered while a later one overlaps it, so the new line
@@ -44,25 +50,33 @@ MIN_WINDOW = 0.2
 @dataclass(frozen=True)
 class SpokenLine:
     """A beat as the timeline sees it: its narration's length ``seconds`` (``d``), where its
-    speech ends (``speech_end``, seconds from its start, at most ``d``) and its own ``overlap``
-    and ``interrupt`` keys (how it joins the beat before it)."""
+    speech ends (``speech_end``, seconds from its start, at most ``d``), its own ``overlap``
+    and ``interrupt`` keys (how it joins the beat before it) and its ``last_word`` (start, end;
+    seconds from its start) when stored word times give it."""
 
     seconds: float
     speech_end: float
     overlap: float | None = None
     interrupt: bool = False
+    last_word: tuple[float, float] | None = None
 
     @property
     def joins(self) -> bool:
         """Whether it starts before the beat before it has ended (``overlap`` or ``interrupt``)."""
         return self.overlap is not None or self.interrupt
 
-    @property
-    def lead(self) -> float:
-        """Seconds it starts before the earlier line's speech ends."""
+    def lead_after(self, earlier: SpokenLine) -> float:
+        """Seconds it starts before the ``earlier`` line's speech ends: its ``overlap``; for an
+        interrupt without one, inside that line's last word (:data:`INTERRUPT_WORD_SHARE`), or
+        :data:`INTERRUPT_LEAD` when the word's times are not stored; 0 when it does not join."""
         if self.overlap is not None:
             return self.overlap
-        return INTERRUPT_LEAD if self.interrupt else 0.0
+        if not self.interrupt:
+            return 0.0
+        if earlier.last_word is None:
+            return INTERRUPT_LEAD
+        start, end = earlier.last_word
+        return max(earlier.speech_end - (start + INTERRUPT_WORD_SHARE * (end - start)), 0.0)
 
 
 def _rise(u: np.ndarray) -> np.ndarray:
@@ -115,13 +129,15 @@ class BeatWindow:
     """How long a beat lasts on the scene's clock: ``body`` seconds for its own animations and
     actions (what ``narrate`` yields), ``window`` from its start to the next beat's start
     (``body`` + the pad, or ``body`` when the next beat joins it), ``heard`` seconds of its voice
-    (``d``, or up to the cut of an interruption; the end in the timings) and its voice's
-    :class:`VoiceShape`."""
+    (``d``, or up to the cut of an interruption; the end in the timings), its voice's
+    :class:`VoiceShape` and ``next_lead``, the seconds the next beat starts before its speech
+    ends (0 when the next beat does not join it)."""
 
     body: float
     rest: float
     heard: float
     shape: VoiceShape = VoiceShape()
+    next_lead: float = 0.0
 
     @property
     def window(self) -> float:
@@ -137,23 +153,24 @@ class BeatWindow:
 def beat_windows(lines: Sequence[SpokenLine], pad: float, fps: float | None = None) -> list[BeatWindow]:
     """Each beat's :class:`BeatWindow` from the scene's ``lines`` in order and
     ``narration.pad``. A beat the next one does not join: ``body = d``, ``rest = pad``, heard
-    whole. One it joins: the window ends ``lead`` before its speech ends (at least
-    :data:`MIN_WINDOW`; with ``fps``, in whole frames, where the next beat really starts), no
-    pad; an interrupt cuts its voice there, an overlap dips it."""
+    whole. One it joins: the window ends :meth:`SpokenLine.lead_after` before its speech ends
+    (at least :data:`MIN_WINDOW`; with ``fps``, in whole frames, where the next beat really
+    starts), no pad; an interrupt cuts its voice there, an overlap dips it."""
     out = []
     for k, line in enumerate(lines):
         follower = lines[k + 1] if k + 1 < len(lines) else None
         if follower is None or not follower.joins:
             out.append(BeatWindow(line.seconds, pad, line.seconds))
             continue
-        window = max(line.speech_end - follower.lead, MIN_WINDOW)
+        window = max(line.speech_end - follower.lead_after(line), MIN_WINDOW)
         if fps:
             window = max(round(window * fps), 1) / fps
+        lead = line.speech_end - window
         if follower.interrupt:
             heard = min(window, line.seconds)
-            out.append(BeatWindow(window, 0.0, heard, VoiceShape(cut=heard)))
+            out.append(BeatWindow(window, 0.0, heard, VoiceShape(cut=heard), lead))
         else:
-            out.append(BeatWindow(window, 0.0, line.seconds, VoiceShape(dip_from=window)))
+            out.append(BeatWindow(window, 0.0, line.seconds, VoiceShape(dip_from=window), lead))
     return out
 
 
@@ -179,15 +196,26 @@ def has_joins(beats: Sequence[BeatConfig]) -> bool:
 
 def beat_lines(project: Project, beats: Sequence[BeatConfig], seconds: Callable[[BeatConfig], float]) -> list[SpokenLine]:
     """The :class:`SpokenLine` of each of a scene's ``beats``, ``seconds(beat)`` being its ``d``;
-    the speech end is read from the MP3 only for a beat the next one joins."""
+    the speech end is read from the MP3 only for a beat the next one joins, its last word only
+    for one the next beat interrupts without an ``overlap``."""
     lines = []
     for k, beat in enumerate(beats):
         d = seconds(beat)
         follower = beats[k + 1] if k + 1 < len(beats) else None
         joined = follower is not None and (follower.overlap is not None or follower.interrupt)
         end = beat_speech_end(project, beat.id, d) if joined else d
-        lines.append(SpokenLine(d, end, beat.overlap, beat.interrupt))
+        cut_inside = follower is not None and follower.interrupt and follower.overlap is None
+        lines.append(SpokenLine(d, end, beat.overlap, beat.interrupt, beat_last_word(project, beat) if cut_inside else None))
     return lines
+
+
+def beat_last_word(project: Project, beat: BeatConfig) -> tuple[float, float] | None:
+    """``(start, end)`` of the last word the TTS said for ``beat`` (seconds from its start), from
+    the word timings stored with its MP3; ``None`` without them."""
+    from vidgen.speech import stored_word_times
+
+    words = stored_word_times(project.audio_dir, beat.id, project.spoken(beat).spoken)
+    return (words[-1].start, words[-1].end) if words else None
 
 
 def talked_over(words: Sequence[WordTime], start: float, end: float) -> list[WordTime]:

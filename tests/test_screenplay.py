@@ -171,11 +171,62 @@ def test_kokoro_voices_differ_in_gender_and_accent() -> None:
     assert all("santa" not in v["voice"] for v in assign_voices({"provider": "kokoro", "voice": "am_adam"}, None, 30)[0])
 
 
+def test_kokoro_voices_follow_the_voice_kind() -> None:
+    kinds = ["feminine", "masculine", "neutral", "feminine", "masculine"]
+    settings, notes = assign_voices({"provider": "kokoro", "voice": "bf_emma"}, None, kinds)
+    voices = [s["voice"] for s in settings]
+    assert not notes and [v[:2] for v in voices] == ["af", "bm", "am", "bf", "bm"] and len(set(voices)) == 5   # accents alternate
+    assert assign_voices({"provider": "kokoro", "voice": "bf_emma"}, None, [None, None])[0] == assign_voices({"provider": "kokoro", "voice": "bf_emma"}, None, 2)[0]
+
+
+def test_pronoun_in_brackets_states_the_voice_kind() -> None:
+    play = parse_screenplay("# Scene: a\nFEN (she, doubtful): Hi.\nBRAM (he/him): Yo.\nGUS (They): Hm.\nFEN: Again.")
+    fen, bram, gus, again = play.scenes[0].items
+    assert (fen.voice_kind, fen.manner) == ("feminine", "doubtful") and (bram.voice_kind, bram.manner) == ("masculine", "")
+    assert gus.voice_kind == "neutral" and again.voice_kind is None
+    assert manner_actions(fen.manner) == ({"expression": "thinking"}, [])
+    with pytest.raises(VidgenError, match="line 2: a pronoun in brackets"):
+        parse_screenplay("# Scene: a\nNARRATOR (she): Once.")
+    with pytest.raises(VidgenError, match="line 3: fen is masculine here but feminine at line 2"):
+        screenplay_project(parse_screenplay("# Scene: a\nFEN (she): Hi.\nFEN (he): Yo."))
+
+
+def _cast(text: str) -> tuple[dict[str, Any], dict[str, str]]:
+    config = screenplay_project(parse_screenplay(text)).config
+    return {c["name"]: c for c in config["characters"]}, {name: v["voice"] for name, v in config["voices"].items()}
+
+
+def test_generated_looks_and_voices_suit_each_other() -> None:
+    by_name, voices = _cast("# Scene: a\nFEN: Hi.\nBRAM: Yo.\nGUS: Hm.")
+    assert by_name["fen"]["look"]["hair"] == "bun" and voices["fen_voice"][1] == "f"            # a feminine look, a feminine voice
+    assert by_name["bram"]["look"]["hair"] == "short" and voices["bram_voice"][1] == "m"
+    assert voices["fen_voice"][0] != voices["bram_voice"][0]                                     # other accent
+    assert all("voice_kind" not in c for c in by_name.values())
+    stated, voices = _cast("# Scene: a\nFEN (he): Hi.\nBRAM (she): Yo.")
+    assert LOOKS[1]["look"] == stated["fen"]["look"] and voices["fen_voice"][1] == "m"            # the look follows the stated kind
+    assert LOOKS[0]["look"] == stated["bram"]["look"] and voices["bram_voice"][1] == "f"
+    many, voices = _cast("# Scene: a\n" + "".join(f"P{k} (she): Hi.\n" for k in range(3)))
+    assert [many[f"p{k}"]["look"].get("hair") for k in range(3)] == ["bun", "long", "bun"] and many["p2"]["look"]["seed"] == 2
+    assert all(v[1] == "f" for v in voices.values()) and len(set(voices.values())) == 3
+
+
+def test_declared_characters_keep_their_entries() -> None:
+    text = ("---\ncharacters:\n  - {name: ash, look: {body: bean}, voice_kind: masculine}\n  - {name: wren, look: {body: tall}, voice: own}\n"
+            "voices: {own: {voice: af_heart}}\n---\n# Scene: a\nASH: Hi.\nWREN (he): Yo.")
+    by_name, voices = _cast(text)
+    assert by_name["ash"] == {"name": "ash", "look": {"body": "bean"}, "voice": "ash_voice"} and voices["ash_voice"][1] == "m"
+    assert by_name["wren"] == {"name": "wren", "look": {"body": "tall"}, "voice": "own"} and voices["own"] == "af_heart"   # its voice is kept
+    with pytest.raises(VidgenError, match="voice_kind 'deep' is not one of"):
+        _cast(text.replace("masculine", "deep"))
+
+
 def test_other_providers_voices() -> None:
     routed, notes = assign_voices({"provider": "openrouter", "model": "canopylabs/orpheus-3b-0.1-ft", "voice": "tara"}, None, 2)
     assert routed == [{"voice": "leah"}, {"voice": "jess"}] and not notes
     eleven, notes = assign_voices({"provider": "elevenlabs"}, None, 2)
     assert eleven == [{}, {}] and "voice_id" in notes[0]
+    draft = screenplay_project(parse_screenplay("---\nvoice: {provider: elevenlabs}\n---\n# Scene: a\nFEN: Hi.\nBRAM: Yo."))
+    assert "(fen: feminine, bram: masculine)" in draft.notes[0]   # TODO: ElevenLabs has no voice list here
 
 
 # ----- the project --------------------------------------------------------------------------------

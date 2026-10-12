@@ -9538,3 +9538,74 @@ How to test
   assertion updated), `test_phase_h_review test_mcp test_captions test_overlays` (16, 55 s),
   `test_builtin_scenes test_gallery -k "stage or gallery"` (3, 10 s). The render test of
   `test_phase_i_review.py` fails with the old `overlays.py`. Full suite not run (not asked).
+
+## Step 102 follow-up — Voices that suit the looks; interrupts that cut whole words
+
+What was built (the owner's two findings on the Phase I showcase)
+- **Voices vs looks** (`screenplay.py`): `vidgen screenplay` chose looks and voices separately, so
+  Fen (bun, scarf, round) got `bm_fable` and Bram (tall, short hair, glasses) `af_heart`. Each of
+  the six `LOOKS` now has a `voice_kind` (`VOICE_KINDS` feminine / masculine / neutral: two of
+  each); the kind is not written to `video.yaml`. A screenplay states a kind with a pronoun in a
+  line's brackets: `FEN (she): ...`, `BRAM (he, doubtful): ...`, `GUS (they): ...` (`she/her`...
+  too; `PRONOUN_KINDS`, `_pronoun_kind` takes it out of the manner; `Line.voice_kind`), or with
+  `voice_kind:` on a front matter character (taken out of the entry). `_stated_kinds`: two
+  kinds for one character, a pronoun on the narrator, an unknown kind are `VidgenError`s naming
+  the line. `_pick_look`: a stated kind gets the least used look of that kind (then neutral,
+  then any); without one the least used look in order (as before; `seed` when a look repeats).
+  `assign_voices(voice, language, kinds)` (a count still works) -> `_kokoro_picks`: a voice of
+  the kind's gender (neutral: the gender used less so far), least used group, then least used
+  accent; without kinds the same order as before. OpenRouter: in turn (no genders known);
+  ElevenLabs: still a TODO note, which now names each character's kind. Declared and cast
+  characters keep their entries and voices.
+- **Interrupt without overlap** (`overlap.py`): it started `INTERRUPT_LEAD` 0.5 s before the
+  earlier line's speech end and cut "normal" in "Is that normal?". Now
+  `SpokenLine.lead_after(earlier)` starts it `INTERRUPT_WORD_SHARE` 0.7 into the earlier line's
+  last word (`SpokenLine.last_word`, `beat_last_word`: the stored alignment of what the TTS said,
+  new `speech.stored_word_times`, which `beat_word_times` now uses too); without stored times
+  `INTERRUPT_LEAD` is 0.2 s. `BeatWindow.next_lead` (the lead used); the activity file's
+  `overlap` of such a beat is that lead.
+- **Lint** (`lint/timing_rules.py`): `talked_over` also reports an interrupt (with or without
+  `overlap`) that cuts a line with audio before whole words start (`_cut_words`: words timed over
+  the whole MP3, `talked_over(words, cut, inf)`), with the overlap below which they are heard.
+
+Showcase v2
+- Scratch copy `r102/show`: `fen_voice` `af_heart`, `bram_voice` `bm_fable` (speeds kept at
+  0.75). `vidgen tts` (Kokoro venv, 2500 MB cgroup) re-voiced the 6 beats of Fen and Bram; the
+  other 5 were up to date. Render 1280x720 30 fps: 35.8 + 42.8 s,
+  `/home/claude/work/phase-i-review/showcase_v2.mp4` (57.80 s, -21.1 LUFS).
+- "Is that normal?" (reveal_b2, 37.633 s): stored times say "normal?" 3.013–4.775 s, the MP3's
+  level shows the word at 3.0–3.62 s and a -40 dB tail to 4.57 s; the cut is at 4.233 s
+  (41.867 s in the video). In the MP4 "normal" sounds at 40.65–41.25 s (about -15 dB), then the
+  quiet tail, the fade at 41.87 s, Gus from 42.05 s: the word is heard whole. Six stills checked
+  by eye (Fen and Bram talking, the two-shot, Bram on the rock, the close-up of Gus).
+
+Files touched
+- `src/vidgen/screenplay.py`, `overlap.py`, `speech.py`, `activity.py`, `lint/timing_rules.py`,
+  `config.py` (`TalkedOverRule` docstring); `docs/CONFIG.md` (screenplay lines and characters,
+  overlapping lines, lint table), `DESIGN.md` (§69.25, §69.34), guide (+ `AGENTS.md` copy),
+  `tasklist.md` (follow-up line, 3 Backlog lines); tests `tests/test_screenplay.py` (+5),
+  `tests/test_overlap.py` (+3, one assertion follows `INTERRUPT_LEAD`).
+
+Decisions
+- The pronoun goes in the manner brackets (no new syntax; `(doubtful)` and other manners are
+  unchanged, a pronoun is never a manner word). Neutral looks balance genders across the cast.
+- Kokoro's alignment stretches the last word over the trailing tail, so the cut lands after the
+  audible word (late, never early); the speech end from `speech_bounds` is unchanged.
+- Searched first: no voice-kind code existed; `beat_word_times` held the alignment read, now
+  shared through `stored_word_times`; `talked_over` reused for the interrupt check.
+
+Known gaps
+- Only Kokoro picks by kind; declared characters' looks are not read for a kind.
+- Pre-existing, not fixed: `test_pronunciation.py::test_karaoke_captions_highlight_the_written_word_while_it_is_said`
+  fails on HEAD 0ad8eee as well (karaoke state shape from Step 100); in the Backlog.
+
+How to test
+- `pytest -m "not render" tests/test_screenplay.py tests/test_overlap.py tests/test_overlap_pinned.py
+  tests/test_includes.py tests/test_cartoon_lint.py tests/test_cartoon_directing.py
+  tests/test_phase_i_review.py tests/test_timing_lint.py tests/test_captions.py
+  tests/test_voice_sounds.py tests/test_cartoon_visemes.py tests/test_pronunciation.py
+  tests/test_guide.py tests/test_docs.py` (316 passed, 1 pre-existing failure, 11 s); `-m "not
+  render" test_mcp test_json_output test_tts_kokoro test_tts_openrouter` (102 passed, 1 skipped,
+  34 s); render: `test_overlap test_overlap_pinned test_cartoon_lint test_cartoon_directing
+  test_phase_i_review test_timing_lint` (9, 18 s), `test_screenplay test_includes test_mcp
+  test_json_output` (4, 32 s). Full suite not run.

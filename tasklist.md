@@ -529,6 +529,7 @@ memory cap, targeted tests, original characters only). Each step updates the gui
 
 ### Step 102 — Review of Phase I
 - [x] End to end: the screenplay example → project → validate, lint, storyboard, sheets, a preview render; examples/cartoon with `auto_direct`; real Kokoro narration on one example rendered at 720p and checked by eye; docs consistency; Phase I gaps moved to the Backlog; full suite only if the owner asks (CLI and MCP on the screenplay sample, examples/cartoon with `auto_direct: true` and both series episodes, all lint clean; `tests/test_phase_i_review.py`; fixed: captions on an `auto_direct` stage crashed, seats above the characters' hips (hips now on the seat line, lower chair / box / rock), stars beside heads, `vidgen mcp` confinement of `svg`, Kokoro `.pt` voices and a cast's includes, unused shared-cast voices warned; showcase with real Kokoro at 1280x720 checked by eye; Whisper check skipped by the owner; 16 Backlog lines; full suite not run: not asked)
+- [x] Owner's follow-up on the showcase: generated voices did not suit the looks (Fen, bun and scarf, had a male voice; Bram a female one) and an `interrupt` without `overlap` cut the whole word "normal" (looks carry a voice kind, `FEN (she):` / front matter `voice_kind:` state one, the voice is chosen from that kind; an interrupt without `overlap` starts 70% into the last word from the stored word times, else 0.2 s before the speech end; `talked_over` reports words an interrupt cuts; showcase v2 re-voiced and rendered)
 
 ---
 
@@ -550,6 +551,7 @@ Bugs / correctness
 - [ ] `VideoPlan` and a rendered scene can disagree by a frame on a beat's start when `d + pad` lands on half a frame (the scene rounds the wait left after its animations) (Step 100)
 - [ ] `vidgen mcp`: files found by scanning a folder (`assets/sfx/`, `assets/icons/`, `audio/`) are not confined to the root; a link there can point outside (Step 102)
 - [ ] Lint `facing_away` takes the nearest character as the listener, so a speaker turned to the one it addresses farther away is reported (seen on a seated speaker in the Step 102 showcase draft) (Step 102)
+- [ ] `tests/test_pronunciation.py::test_karaoke_captions_highlight_the_written_word_while_it_is_said` still expects the karaoke state `(caption, word)`; Step 100 made it `(caption, (word,))` (fails on 0ad8eee too) (Step 102 follow-up)
 
 Quality (what an agent's video looks like)
 - [ ] `vidgen plan`: prose-derived bullet items are truncated sentences ("Every request that reaches database costs"); a closing sentence can be split between two scenes; icon search is English-only; no cues for `network` / `line_chart` / `pie` / `map` / `screenshot` / `video_clip`; nested list items dropped; an intro of 2+ sentences becomes its own `bullets` scene; TODO texts in English (Step 58)
@@ -571,7 +573,8 @@ Quality (what an agent's video looks like)
 - [ ] Light: particles not graded; no stars over a picture background, no twinkling; a jump or a close-up can still bring a head among the stars; shadows do not stretch with a low sun; a lamp lights nothing; no top-level `light` (Steps 97, 102)
 - [ ] Wind: not relative to a walking character; held and SVG props, layers, pictures and SVG characters do not move; no top-level `wind` (Step 98)
 - [ ] Voice sounds: one face per beat (the first sound's); a `[gasp]`'s surprised face also plays the foley `pop`; a beat of sounds only is impossible; the face of a sound at a line's start waits for the speaker's earlier actions (a `[laugh]` while entering shows after the walk) (Steps 99, 102)
-- [ ] Overlaps: no per-beat dip / fade settings; an interrupted line's caption shows its whole text until the cut; no overlap across scenes; never tried with ElevenLabs audio (Step 100)
+- [ ] Overlaps: no per-beat dip / fade settings; an interrupted line's caption shows its whole text until the cut; no overlap across scenes; never tried with ElevenLabs audio (Step 100); Kokoro's stored times stretch a line's last word over its quiet tail ("normal?" 3.01–4.78 s, heard 3.0–3.62 s), so an interrupt without `overlap` starts ~0.6 s after the word is heard (Step 102 follow-up)
+- [ ] Voice kinds: only Kokoro voices are chosen by kind (OpenRouter models list no gender; ElevenLabs has no list here, the `# TODO:` names the kinds); declared characters' looks are not read for a kind (Step 102 follow-up)
 - [ ] Includes: unused sets are not validated on their own; no set based on another set (Step 101)
 - [ ] Phase I narration was not transcribed (Whisper check skipped in Step 102); Kokoro still reaches the 2500 MB cap during `vidgen tts` (page cache counted) and reads above 3.5 words/s at `speed: 0.85` (Step 102)
 - [ ] Acting: a long beat makes a large speech bubble; a bubble following its speaker is not clamped to the view; `look_at` is reset by a later `pose` / `emote` (Steps 78–79)

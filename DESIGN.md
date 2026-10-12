@@ -6500,15 +6500,30 @@ config; `write_plan` now calls both, its output unchanged).
   their word. A manner (`manner_actions`: built-in expression / pose names, `MANNERS` words) is a
   `react` first in the beat; unknown words and unmatched sentences are beat `# TODO:`s.
 - **Characters and voices** (`screenplay_project`): front matter `characters` are kept as
-  written (declared); every other speaker (`character_id`: `OLD ASH` -> `old_ash`) gets
-  `LOOKS[k]` (six looks differing in body, hair, eyes, ears, accessories, skin, clothes and hair
-  colours; from the seventh on with `seed: k`) and a `<id>_voice` entry with `label`.
-  `assign_voices(voice, language, count)`: Kokoro: the voices of the narrator's language
+  written (declared; only a screenplay `voice_kind:` key is taken out); every other speaker
+  (`character_id`: `OLD ASH` -> `old_ash`) gets a look of `LOOKS` (six looks differing in body,
+  hair, eyes, ears, accessories, skin, clothes and hair colours; a look taken again gets `seed:
+  k`) and a `<id>_voice` entry with `label`. **Voice kinds** (`VOICE_KINDS` feminine / masculine
+  / neutral; Phase I review follow-up): each look carries the `voice_kind` that suits it (bun +
+  scarf and long hair feminine, tall short hair + glasses and bald + hat masculine, the other two
+  neutral). `_stated_kinds` reads a kind from a pronoun in a line's brackets (`FEN (she): ...`,
+  `(he, doubtful)`, `(they)`; `_pronoun_kind` takes it out of the manner, `Line.voice_kind`;
+  `PRONOUN_KINDS`) or a front matter character's `voice_kind:`; two kinds for one character, a
+  pronoun on the narrator or an unknown kind are `VidgenError`s naming the line. `_pick_look`
+  gives a generated character the least used look of its stated kind (then a neutral look, then
+  any; without a kind: the least used look in order, as before), and the character's voice kind
+  is the stated one, else its look's. Declared characters keep their entries; one without a
+  `voice` gets one of its stated kind (else any).
+  `assign_voices(voice, language, kinds)` (`kinds`: one per character, or a count of
+  characters without a kind): Kokoro: the voices of the narrator's language
   (`kokoro_voices.resolve`), for English American and British, grouped by accent and gender,
-  each group best grade first without the narrator's voice (and no `santa` voice), groups in
-  turn with the narrator's own kind last; OpenRouter: the model's listed voices
-  (`openrouter.known_voices`) without the narrator's, in turn; ElevenLabs: no list, the entries
-  only get a `label` and a video `# TODO:` asks for `voice_id`s. Defaults (`DEFAULTS`): 1920x1080,
+  each group best grade first without the narrator's voice (and no `santa` voice), the narrator's
+  own group last; `_kokoro_picks` takes for each character a group of its kind's gender
+  (neutral: the gender used less so far), the least used group, then the least used accent, then
+  in order; within a group the next voice. Without kinds this gives the groups in turn as before.
+  OpenRouter: the model's listed voices (`openrouter.known_voices`) without the narrator's, in
+  turn (no kinds known); ElevenLabs: no list, the entries only get a `label` and a video `# TODO:`
+  asks for `voice_id`s, naming each character's voice kind. Defaults (`DEFAULTS`): 1920x1080,
   preview 854x480, `soft_pastel`, Kokoro `bf_emma` at 0.85, `narration.pad` 0.7, `auto_direct:
   true`; front matter keys win.
 - **Output**: a header comment, `# generated: ...` above `characters`, the notes above `voices`,
@@ -7148,8 +7163,14 @@ A beat's `overlap: S` starts it `S` seconds before the speech of the beat before
   joined, `(d, pad, d, plain)`, so `window = d + pad` is the same float expression as before;
   joined, `body = max(speech_end - lead, MIN_WINDOW)` in whole frames (with `fps`, so the cut
   lands where the next beat really starts), `rest = 0`, `heard = d` (overlap; `VoiceShape(dip_from
-  = body)`) or `body` (interrupt; `VoiceShape(cut = body)`). `lead` is `overlap`, else
-  `INTERRUPT_LEAD` (0.5 s) for an interrupt. `NarratedScene.beat_window` and `VideoPlan` call the
+  = body)`) or `body` (interrupt; `VoiceShape(cut = body)`), and `next_lead = speech_end - body`.
+  The lead (`SpokenLine.lead_after(earlier)`) is `overlap`; for an interrupt without `overlap`,
+  inside the earlier line's last word: `speech_end - (start + INTERRUPT_WORD_SHARE 0.7 *
+  length)` of that word (`SpokenLine.last_word`, read by `beat_last_word` from the stored
+  alignment of what the TTS said, `speech.stored_word_times`, only for a beat an interrupt
+  without overlap follows), so at most its last 30% is cut; without a stored alignment
+  `INTERRUPT_LEAD` (0.2 s; it was a fixed 0.5 s, which cut the whole word "normal" of a Kokoro
+  line in the Phase I showcase). `NarratedScene.beat_window` and `VideoPlan` call the
   same function, so the plan and the render agree; `narrate` yields `body`, gives the action
   runner `(body, rest)`, waits to `window`, records `end = start + heard`, captures `window`
   worth of frames, puts an `end` sting at `heard` and drops a generated voice sound after a cut.
@@ -7179,10 +7200,13 @@ A beat's `overlap: S` starts it `S` seconds before the speech of the beat before
   beat `seconds = body` and only the words that end before it, and the reactions pass adds no
   listener reaction after it (no pause). A voice-sound face after the cut is left out.
 - **Lint**: the activity file's beats get `window` (joined) and `overlap` / `interrupt` (the
-  joining beat); `animation_overrun` measures against `window`; the new rule `talked_over` (scene
+  joining beat; for an interrupt without `overlap`, `overlap` is the lead used, the earlier
+  beat's `next_lead`); `animation_overrun` measures against `window`; the new rule `talked_over` (scene
   scope, default warning, `TalkedOverRule` without settings) reports words of the earlier line
   (`beat_word_times`) spoken entirely after the overlapping beat's speech starts (`talked_over`),
-  with the largest overlap that keeps them clear. Interrupts are not reported.
+  with the largest overlap that keeps them clear. For an interrupt (`_cut_words`, a line with an
+  MP3 only) it reports the words that start at or after the cut (the beat's `end`), timed over
+  the whole MP3, with the overlap below which they would be heard.
 - **Fingerprint**: the beat keys are left out of the scene's config dump while unset and added
   as `joins` when set (scene, overlay inputs, the next transition's scene), so renders made
   before Step 100 stay valid.

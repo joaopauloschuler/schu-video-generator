@@ -288,6 +288,17 @@ def aligned_word_times(text: str, alignment: Mapping[str, Any], offset: float = 
     return out
 
 
+def stored_word_times(audio_dir: Path, beat_id: str, text: str, offset: float = 0.0) -> list[WordTime] | None:
+    """The words of ``text`` (what the TTS said for a beat) timed by its MP3's stored alignment,
+    shifted by ``offset``; ``None`` when there is no alignment for that MP3 and text (the times
+    would be estimates)."""
+    alignment = read_alignment(audio_dir, beat_id, text)
+    if alignment is None:
+        return None
+    timed = aligned_word_times(text, alignment, offset)
+    return timed if timed is not None and len(timed) == len(text.split()) else None
+
+
 def map_word_times(spoken: Spoken, times: Sequence[WordTime]) -> list[WordTime]:
     """The written words of ``spoken.text`` timed by ``times``, the times of the words of
     ``spoken.spoken`` (what the TTS said): a written word lasts from its first spoken word's
@@ -334,11 +345,9 @@ def beat_word_times(
     mp3 = audio_dir / f"{beat_id}.mp3" if audio_dir is not None else None
     if mp3 is None or not mp3.is_file():
         return estimate_word_times(words, start, end, language)
-    alignment = read_alignment(mp3.parent, beat_id, text)
-    if alignment is not None:
-        timed = aligned_word_times(text, alignment, start)
-        if timed is not None and len(timed) == len(words):
-            return timed
+    timed = stored_word_times(mp3.parent, beat_id, text, start)
+    if timed is not None:
+        return timed
     try:
         s0, s1 = speech_bounds(mp3)
     except VidgenError:

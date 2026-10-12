@@ -11,7 +11,9 @@ The format (Markdown-like, one element per line or paragraph):
   characters: wren at left`` (:func:`parse_set`);
 - ``WREN: line`` (a name in capitals) is a line of that character, ``PELL (doubtful): line``
   one with a manner: words naming a built-in expression or pose (or one of :data:`MANNERS`)
-  become a ``react`` for the line; ``[...]`` inside a line is a stage direction of its speaker
+  become a ``react`` for the line; a pronoun among those words (``FEN (she): ...``, ``(he,
+  doubtful)``, ``(they)``) states the speaker's voice kind (:data:`PRONOUN_KINDS`; a front matter
+  character may say ``voice_kind:`` instead); ``[...]`` inside a line is a stage direction of its speaker
   at that point of the line, except a voice sound marker (``[laugh]``, ``[gasp]``...:
   :mod:`vidgen.voicesounds`), which stays in the line's text;
 - a plain paragraph (or ``NARRATOR: ...``) is the narrator's line;
@@ -22,8 +24,9 @@ The format (Markdown-like, one element per line or paragraph):
 
 :func:`parse_screenplay` reads the text (pure); :func:`screenplay_project` builds the
 ``video.yaml`` mapping and its comments: every character without a declaration gets a generator
-look of :data:`LOOKS` (shape, colours and accessories differ) and a voice of the provider's list
-(:func:`assign_voices`: other gender and accent first), ``auto_direct: true``. No manim import
+look of :data:`LOOKS` (shape, colours and accessories differ; of the stated voice kind when there
+is one) and a voice of the provider's list that suits it (:func:`assign_voices`: the look's or
+the stated voice kind, other accent first), ``auto_direct: true``. No manim import
 (the props' kinds come from :mod:`vidgen.cartoon.props` when a ``set:`` line is read).
 """
 
@@ -31,7 +34,7 @@ from __future__ import annotations
 
 import math
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -93,21 +96,27 @@ MANNERS: dict[str, tuple[str, str]] = {
 }
 #: Speaker names that mean the narrator.
 NARRATOR_NAMES = frozenset({"NARRATOR", "NARRATION", "VOICE OVER", "V.O."})
+#: Kinds of voice a character can be given (:func:`assign_voices`); ``neutral`` takes either.
+VOICE_KINDS: tuple[str, ...] = ("feminine", "masculine", "neutral")
+#: Pronouns in a line's brackets (``FEN (she): ...``) that state its speaker's voice kind.
+PRONOUN_KINDS: dict[str, str] = {"she": "feminine", "he": "masculine", "they": "neutral"}
+_PRONOUN = re.compile(r"^(she|he|they)(?:\s*/\s*(?:her|him|them))?$", re.IGNORECASE)
 #: Generator looks for characters without a declaration, in turn: each differs from the others in
-#: body, hair, eyes, accessories and colours (skin, clothes, hair); later ones repeat with a seed.
+#: body, hair, eyes, accessories and colours (skin, clothes, hair) and has the ``voice_kind`` that
+#: suits it (the voice is chosen from that kind); later ones repeat with a seed.
 LOOKS: tuple[dict[str, Any], ...] = (
     {"look": {"body": "round", "head_size": 1.15, "eyes": "round", "hair": "bun", "accessories": ["scarf"]},
-     "colors": {"skin": "#F2C9A0", "clothes": "primary", "hair": "#6B4226", "accessory": "accent"}},
+     "colors": {"skin": "#F2C9A0", "clothes": "primary", "hair": "#6B4226", "accessory": "accent"}, "voice_kind": "feminine"},
     {"look": {"body": "tall", "eyes": "sleepy", "nose": "round", "hair": "short", "ears": "round", "accessories": ["glasses"]},
-     "colors": {"skin": "#B97A4E", "clothes": "tertiary", "hair": "#2B2B2B"}},
+     "colors": {"skin": "#B97A4E", "clothes": "tertiary", "hair": "#2B2B2B"}, "voice_kind": "masculine"},
     {"look": {"body": "square", "head_size": 0.9, "eyes": "oval", "nose": "triangle", "hair": "spiky", "ears": "pointy", "accessories": ["hat"]},
-     "colors": {"skin": "#9BD3AE", "clothes": "accent", "hair": "highlight", "accessory": "secondary"}},
+     "colors": {"skin": "#9BD3AE", "clothes": "accent", "hair": "highlight", "accessory": "secondary"}, "voice_kind": "neutral"},
     {"look": {"body": "bean", "head_size": 1.3, "eyes": "dot", "nose": "dot", "hair": "curly", "ears": "floppy", "accessories": ["bag"]},
-     "colors": {"skin": "#8D5A3B", "clothes": "highlight", "hair": "#E7E1D5", "accessory": "primary"}},
+     "colors": {"skin": "#8D5A3B", "clothes": "highlight", "hair": "#E7E1D5", "accessory": "primary"}, "voice_kind": "neutral"},
     {"look": {"body": "round", "head_size": 0.85, "eyes": "oval", "hair": "long", "ears": "round", "accessories": ["glasses", "scarf"]},
-     "colors": {"skin": "#FFE0BD", "clothes": "secondary", "hair": "#B5532E", "accessory": "tertiary"}},
+     "colors": {"skin": "#FFE0BD", "clothes": "secondary", "hair": "#B5532E", "accessory": "tertiary"}, "voice_kind": "feminine"},
     {"look": {"body": "tall", "head_size": 1.1, "eyes": "round", "nose": "dot", "hair": "none", "ears": "round", "accessories": ["hat", "bag"]},
-     "colors": {"skin": "#D9A3E0", "clothes": "#5B6C8F", "accessory": "highlight"}},
+     "colors": {"skin": "#D9A3E0", "clothes": "#5B6C8F", "accessory": "highlight"}, "voice_kind": "masculine"},
 )
 
 _HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
@@ -158,14 +167,16 @@ class Direction:
 @dataclass
 class Line:
     """A spoken line: its ``text`` (inline directions taken out), the ``speaker`` as written
-    (``None``: the narrator), its ``manner`` (the words in brackets after the name), its ``line``
-    number and its inline ``directions``."""
+    (``None``: the narrator), its ``manner`` (the words in brackets after the name, a pronoun
+    taken out), its ``line`` number, its inline ``directions`` and the speaker's ``voice_kind``
+    when the brackets name a pronoun (``(she)``: :data:`PRONOUN_KINDS`)."""
 
     text: str
     speaker: str | None
     manner: str = ""
     line: int = 0
     directions: list[Direction] = field(default_factory=list)
+    voice_kind: str | None = None
 
 
 @dataclass
@@ -252,7 +263,24 @@ def _speaker_line(match: re.Match[str], number: int) -> Line:
         at = round(min(words_before / total, 0.9), 2) if total else 0.0
         directions.append(Direction(found.group(1).strip(), number, at, speaker))
     spoken.extend(rest.split())
-    return Line(" ".join(spoken), speaker, (match.group("manner") or "").strip(), number, directions)
+    manner, kind = _pronoun_kind(match.group("manner") or "")
+    if kind is not None and speaker is None:
+        raise VidgenError(f"line {number}: a pronoun in brackets states a voice kind, but the narrator's voice is the front matter's voice:")
+    return Line(" ".join(spoken), speaker, manner, number, directions, kind)
+
+
+def _pronoun_kind(manner: str) -> tuple[str, str | None]:
+    """A line's bracket words without a pronoun (``she, doubtful`` -> ``doubtful``) and the voice
+    kind the pronoun states (``None``: none)."""
+    kind = None
+    kept = []
+    for part in (p.strip() for p in manner.split(",")):
+        found = _PRONOUN.match(part)
+        if found:
+            kind = PRONOUN_KINDS[found.group(1).lower()]
+        elif part:
+            kept.append(part)
+    return ", ".join(kept), kind
 
 
 def parse_screenplay(text: str) -> Screenplay:
@@ -682,14 +710,21 @@ def manner_actions(manner: str) -> tuple[dict[str, str], list[str]]:
     return found, unknown
 
 
-def assign_voices(voice: Mapping[str, Any], language: str | None, count: int) -> tuple[list[dict[str, Any]], list[str]]:
-    """Voice settings for ``count`` characters with the base ``voice`` (its provider) and the
-    video's ``language``: Kokoro's list (other gender, then other accent of the language first,
-    best grade first, the narrator's voice last), the OpenRouter model's listed voices in turn;
+def assign_voices(
+    voice: Mapping[str, Any], language: str | None, kinds: int | Sequence[str | None]
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Voice settings for characters of the given voice ``kinds`` (:data:`VOICE_KINDS`; ``None``
+    or ``neutral``: either; a count: that many without a kind) with the base ``voice`` (its
+    provider) and the video's ``language``. Kokoro: from the voices of the character's kind
+    (``feminine``: ``?f_``, ``masculine``: ``?m_``; a neutral one balances the two), the least
+    used accent of the language first, best grade first, the narrator's voice left out and its
+    own kind of voice last; OpenRouter: the model's listed voices in turn (no kinds known);
     ElevenLabs has no list here (the entries stay empty) and a note says so."""
     from vidgen import kokoro_voices
     from vidgen.tts.openrouter import known_voices
 
+    wanted = [None] * kinds if isinstance(kinds, int) else list(kinds)
+    count = len(wanted)
     provider = voice.get("provider", "elevenlabs")
     if provider == "kokoro":
         narrator, lang = kokoro_voices.resolve(voice.get("voice"), voice.get("lang"), language)
@@ -706,13 +741,33 @@ def assign_voices(voice: Mapping[str, Any], language: str | None, count: int) ->
         groups.sort(key=lambda g: g[0][:2] == mine)   # the narrator's own kind of voice last
         if not groups:
             return [{} for _ in range(count)], [f"Kokoro lists no other voice of lang {lang}: give each voices: entry a voice"]
-        return [{"voice": groups[k % len(groups)][(k // len(groups)) % len(groups[k % len(groups)])]} for k in range(count)], []
+        return [{"voice": v} for v in _kokoro_picks(groups, wanted)], []
     if provider == "openrouter":
         listed = [v for v in known_voices(str(voice.get("model", ""))) or [] if v != voice.get("voice")]
         if not listed:
             return [{} for _ in range(count)], [f"the model {voice.get('model')} lists no voices here: give each voices: entry a voice"]
         return [{"voice": listed[k % len(listed)]} for k in range(count)], []
     return [{} for _ in range(count)], ["every character speaks with the base voice: give each voices: entry its own voice_id"]
+
+
+def _kokoro_picks(groups: Sequence[Sequence[str]], kinds: Sequence[str | None]) -> list[str]:
+    """A voice of ``groups`` (Kokoro voices of one accent and gender each, in order of
+    preference) for each of ``kinds``: of the kind's gender when there is one, the least used
+    group and accent first; a neutral kind takes the gender used least so far."""
+    group_uses = [0] * len(groups)
+    accent_uses: dict[str, int] = {}
+    gender_uses = {"f": 0, "m": 0}
+    picks = []
+    for kind in kinds:
+        gender = {"feminine": "f", "masculine": "m"}.get(kind or "")
+        fitting = [k for k, g in enumerate(groups) if g[0][1] == gender] or list(range(len(groups)))
+        best = min(fitting, key=lambda k: (0 if gender else gender_uses[groups[k][0][1]], group_uses[k], accent_uses.get(groups[k][0][0], 0), k))
+        group = groups[best]
+        picks.append(group[group_uses[best] % len(group)])
+        group_uses[best] += 1
+        accent_uses[group[0][0]] = accent_uses.get(group[0][0], 0) + 1
+        gender_uses[group[0][1]] = gender_uses.get(group[0][1], 0) + 1
+    return picks
 
 
 @dataclass
@@ -748,6 +803,40 @@ def _speakers(play: Screenplay) -> list[str]:
     return list(dict.fromkeys(item.speaker for scene in play.scenes for item in scene.items if isinstance(item, Line) and item.speaker))
 
 
+def _stated_kinds(play: Screenplay, declared: list[dict[str, Any]]) -> dict[str, str]:
+    """Character id -> the voice kind the screenplay states: ``voice_kind:`` of a front matter
+    character (taken out of the entry, which ``video.yaml`` does not know) or a pronoun in a
+    line's brackets (``FEN (she): ...``). Two different kinds for one character are an error."""
+    stated: dict[str, tuple[str, str]] = {}
+
+    def state(cid: str, kind: str, where: str) -> None:
+        if kind not in VOICE_KINDS:
+            raise VidgenError(f"{where}: voice_kind {kind!r} is not one of {', '.join(VOICE_KINDS)}")
+        if cid in stated and stated[cid][0] != kind:
+            raise VidgenError(f"{where}: {cid} is {kind} here but {stated[cid][0]} at {stated[cid][1]}")
+        stated.setdefault(cid, (kind, where))
+
+    for entry in declared:
+        if "voice_kind" in entry:
+            state(str(entry.get("name")), str(entry.pop("voice_kind")), "front matter")
+    for scene in play.scenes:
+        for item in scene.items:
+            if isinstance(item, Line) and item.speaker and item.voice_kind:
+                state(character_id(item.speaker), item.voice_kind, f"line {item.line}")
+    return {cid: kind for cid, (kind, _) in stated.items()}
+
+
+def _pick_look(kind: str | None, uses: Sequence[int]) -> int:
+    """The index in :data:`LOOKS` of the look for a generated character of voice ``kind``
+    (``None``: any), ``uses`` being how often each look is taken: a look of that kind (then a
+    neutral one) used least, else the least used look, in order."""
+    def fit(k: int) -> int:
+        own = LOOKS[k]["voice_kind"]
+        return 0 if kind is None or own == kind else 1 if own == "neutral" else 2
+
+    return min(range(len(LOOKS)), key=lambda k: (fit(k), uses[k], k))
+
+
 def screenplay_project(
     play: Screenplay, default_title: str = "Untitled", cast: Mapping[str, Any] | None = None, include: str | None = None
 ) -> ScreenplayProject:
@@ -777,18 +866,27 @@ def screenplay_project(
     config.update(front)
     project = ScreenplayProject(config)
 
+    stated = _stated_kinds(play, declared)
     generated = [cid for cid in written if cid not in declared_ids]
     characters = [*declared]
+    kinds: dict[str, str] = dict(stated)
+    uses = [0] * len(LOOKS)
     for k, cid in enumerate(generated):
-        look = LOOKS[k % len(LOOKS)]
+        pick = _pick_look(stated.get(cid), uses)
+        look = LOOKS[pick]
         entry = {"name": cid, "look": dict(look["look"]), "colors": dict(look["colors"])}
-        if k >= len(LOOKS):
+        if uses[pick]:
             entry["look"]["seed"] = k
+        uses[pick] += 1
+        kinds.setdefault(cid, look["voice_kind"])
         characters.append(entry)
     project.generated = generated
     speaking = [c for c in characters if c["name"] in written and not c.get("voice")]
     voice_base = config["voice"] if isinstance(config["voice"], dict) else {}
-    settings, notes = assign_voices(voice_base, config.get("language"), len(speaking))
+    settings, notes = assign_voices(voice_base, config.get("language"), [kinds.get(c["name"]) for c in speaking])
+    wished = [f"{c['name']}: {kinds[c['name']]}" for c in speaking if kinds.get(c["name"])]
+    if notes and voice_base.get("provider", "elevenlabs") == "elevenlabs" and wished:
+        notes = [f"{notes[0]} of the kind that suits the character ({', '.join(wished)})", *notes[1:]]
     project.notes.extend(notes)
     for entry, setting in zip(speaking, settings):
         name = f"{entry['name']}_voice"

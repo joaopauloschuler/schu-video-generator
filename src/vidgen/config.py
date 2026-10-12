@@ -730,7 +730,8 @@ class RushedAnimationRule(RuleConfig):
 
 
 class TalkedOverRule(RuleConfig):
-    """``talked_over``: a beat's ``overlap`` starts so early that whole words of the line before are spoken under it."""
+    """``talked_over``: a beat's ``overlap`` starts so early that whole words of the line before are spoken under it,
+    or its ``interrupt`` cuts that line before whole words."""
 
 
 class ReadbackRule(RuleConfig):

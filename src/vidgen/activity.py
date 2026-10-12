@@ -80,16 +80,14 @@ def _joined_keys(scene: NarratedScene, beat_id: str) -> dict[str, Any]:
     """For beats that overlap (DESIGN.md §69.34): ``window`` (seconds until the next beat, which
     starts before this one ends), ``overlap`` (seconds this one starts before the line before it
     ends) and ``interrupt``; nothing for other beats."""
-    from vidgen.overlap import SpokenLine
-
     beat = scene.beat(beat_id)
     keys: dict[str, Any] = {}
     window = scene.beat_window(beat)
     if window.joined:
         keys["window"] = round(window.window, 6)
-    line = SpokenLine(0.0, 0.0, beat.overlap, beat.interrupt)
-    if line.joins:
-        keys["overlap"] = line.lead
+    if beat.overlap is not None or beat.interrupt:
+        before = scene.beats[[b.id for b in scene.beats].index(beat.id) - 1]
+        keys["overlap"] = beat.overlap if beat.overlap is not None else round(scene.beat_window(before).next_lead, 6)
         if beat.interrupt:
             keys["interrupt"] = True
     return keys

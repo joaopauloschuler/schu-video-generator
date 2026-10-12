@@ -836,7 +836,9 @@ BRAM: Boxes do not hum, Fen. Boxes do not do *anything*.
 ```
 
 `NAME (manner):` turns an expression or pose word (`doubtful`, `glad`, `arms crossed`) into a
-`react`; a plain paragraph is the narrator; `[...]` maps walk / run to, enter, exit, jump, look
+`react`, and a pronoun there states the voice kind (`FEN (she):`, `BRAM (he, doubtful):`,
+`GUS (they):`; once per character is enough): the generated look and voice then suit it (without
+one, the voice follows the look's kind); a plain paragraph is the narrator; `[...]` maps walk / run to, enter, exit, jump, look
 at, point at, wave, nod, shrug and shake head (on its own line: at the next line's start; inside a
 line: at that word), except a voice sound such as `[laugh]` inside a line, which stays in the
 line. `docs/CONFIG.md` "Cartoons from a screenplay" has the whole format.
@@ -895,10 +897,10 @@ into the set. `examples/cartoon_series/` shows it (CONFIG "Shared casts and sets
   (`docs/CONFIG.md` "Voice sounds").
 - **Talking at once**: `overlap: 0.4` on a beat starts it 0.4 s before the line before it ends
   (both heard, both mouths move, captions show both lines); `interrupt: true` cuts that line off
-  where the beat starts (0.5 s before its end, or `overlap` seconds). Not on a scene's first beat,
-  and not on a line of the same voice. Keep overlaps short: `vidgen lint` (`talked_over`) warns
-  when whole words of the earlier line are lost under the new one (`docs/CONFIG.md` "Overlapping
-  lines").
+  where the beat starts (inside its last word, or `overlap` seconds before its end). Not on a
+  scene's first beat, and not on a line of the same voice. Keep overlaps short: `vidgen lint`
+  (`talked_over`) warns when whole words of the earlier line are lost under the new one or cut by
+  an interrupt (`docs/CONFIG.md` "Overlapping lines").
 
 **The loop for a cartoon.**
 1. `vidgen character-sheet NAME` (or `--all`): every pose, expression and mouth shape on one PNG.
@@ -1428,7 +1430,7 @@ install; `vidgen validate` warns when it is missing.
 | `narration_speed` | words per second outside 1.8–3.5 (English) | shorten or lengthen the beat's text; without audio it is only `info` (an estimate) |
 | `animation_overrun` | animations ran past the narration | a custom scene's animations are too long for the beat |
 | `rushed_animation` | animations squeezed into a short beat | merge two short beats, or reveal fewer things per beat |
-| `talked_over` | an `overlap` hides whole words of the line before | a shorter `overlap`, or `interrupt: true` to cut the line |
+| `talked_over` | an `overlap` hides whole words of the line before, or an `interrupt` cuts them | a shorter `overlap` (none for an interrupt), or `interrupt: true` to cut the line |
 | `readback` | the audio does not say what the text says | add a `pronunciation:` entry, `vidgen tts`, check again |
 
 **Other things that go wrong**

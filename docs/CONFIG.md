@@ -2029,7 +2029,7 @@ beats:
     voice: pip_voice
   - text: "No, you listen!"
     voice: kit_voice
-    interrupt: true     # cuts pip off 0.5 s before the end of the line (overlap: S for another point)
+    interrupt: true     # cuts pip off inside the last word, "me" (overlap: S for another point)
 ```
 
 - **Timing.** `overlap: S` starts the beat `S` seconds before the speech of the beat before it
@@ -2040,9 +2040,11 @@ beats:
   end where they would, and chapters, transitions and `carry` are unchanged.
 - **Sound.** With `overlap` both lines are heard; the earlier one is 3 dB lower from where the
   later one starts (a 0.1 s ramp), so the new line leads and both stay audible. `interrupt: true`
-  cuts the earlier line where the beat starts with a 0.05 s fade; without `overlap` it starts 0.5
-  s before that line's speech ends (`interrupt: true` with `overlap: 0` is a config error: it
-  would cut nothing). The MP3s are not changed (no re-voicing; `vidgen tts` is unaffected): the
+  cuts the earlier line where the beat starts with a 0.05 s fade. Without `overlap` it starts
+  inside that line's last word, 70% of the way through it (the word times `vidgen tts` stores
+  with the MP3), so only the end of the word is cut; without stored word times (an estimate, or a
+  provider that gives none) 0.2 s before that line's speech ends (`interrupt: true` with
+  `overlap: 0` is a config error: it would cut nothing). The MP3s are not changed (no re-voicing; `vidgen tts` is unaffected): the
   scene's sound is shaped when it is rendered. Music ducks under both voices.
 - **What the beat before gets.** Its animations and actions get the time until the next beat
   starts (what `with self.narrate(i) as d` yields, and what `at:` fractions are of); a beat whose
@@ -2058,8 +2060,8 @@ beats:
   beat's `end` after the next beat's `start`.
 - **Checks.** `vidgen validate` warns when a beat overlaps a line of its own voice. `vidgen lint`
   warns when an overlap is so long that whole words of the line before are spoken under the new
-  one ([`talked_over`](#lint-vidgen-lint)); an `interrupt` cuts them on purpose and is not
-  reported.
+  one, or when an `interrupt` (with or without `overlap`) cuts the line before whole words of it
+  start ([`talked_over`](#lint-vidgen-lint)).
 
 ### `vidgen list-sfx`
 
@@ -4674,7 +4676,11 @@ GUS (glad): There it is! [jumps] I left my song in that crate.
   until a blank line. `NAME (manner): text`: manner words that name an expression or a pose
   (`happy`, `thinking`, `arms crossed`...) or a word for one (`doubtful` thinking, `glad`
   happy, `nervous` worried, `cross` angry, `shocked` surprised...) become `react` for that line;
-  other words a `# TODO:`. A plain paragraph, or `NARRATOR:`, is the narrator's line. `*word*`
+  other words a `# TODO:`. A pronoun among them states the speaker's voice kind, for the voice
+  and look it is given (once is enough, usually on the first line): `FEN (she): text` feminine,
+  `BRAM (he, doubtful): text` masculine, `GUS (they): text` neutral (`she/her`, `he/him`,
+  `they/them` too); two different kinds for one character are an error, and the narrator takes
+  none. A plain paragraph, or `NARRATOR:`, is the narrator's line. `*word*`
   stresses a word (the speaker gestures on it; the asterisks are not spoken). A
   [voice sound](#voice-sounds) inside a line (`KIT: Oh no [gasp] it fell!`) stays in the line's
   text: `[gasp]`, `[hmm]`, `[laugh]`, `[sigh]`, `[giggle]`, `[groan]` (or `[laughs]`...) are
@@ -4690,12 +4696,19 @@ GUS (glad): There it is! [jumps] I left my song in that crate.
   (`look_at`, then `gesture: point`), `X waves [at Y]`, `nods`, `shrugs`, `shakes his head`.
   Subjects are character names (`X and Y`) or `he` / `she` / `they` for the last ones; `it` /
   `him` / `her` name the last object. Anything else stays as `# TODO: [text]` above its beat.
-- **Characters**: a character listed in the front matter's `characters:` is kept as written;
-  every other speaker gets a generated look from a set of six that differ in body, hair, eyes,
-  accessories and colours (`# generated:` above `characters:`), and a named voice `NAME_voice`
-  with its `label`: Kokoro voices of another gender, then another accent (American / British),
-  than the ones before, the narrator's kind last; the OpenRouter model's listed voices in turn;
-  with ElevenLabs every character keeps the base `voice_id` and a `# TODO:` says to set one.
+- **Characters**: a character listed in the front matter's `characters:` is kept as written (a
+  `voice_kind: feminine | masculine | neutral` key there states its voice kind and is left out of
+  `video.yaml`; a declared character without a `voice` gets one of that kind); every other
+  speaker gets a generated look from a set of six that differ in body, hair, eyes, accessories
+  and colours (`# generated:` above `characters:`) and a named voice `NAME_voice` with its
+  `label`. Each look has a voice kind (two feminine, two masculine, two neutral); a character
+  with a stated kind gets a look of that kind (then a neutral one), and its voice is of the
+  look's kind (or the stated one), so the voice suits the look. Kokoro: a feminine character
+  gets an `af_` / `bf_` voice, a masculine one `am_` / `bm_`, a neutral one the gender used less
+  so far; another accent (American / British) than the characters before where possible, the
+  narrator's kind last. The OpenRouter model's listed voices go in turn (no kinds known); with
+  ElevenLabs every character keeps the base `voice_id` and a `# TODO:` says to set one, naming
+  each character's voice kind.
   A character who speaks or is named by a direction in a scene is on that scene's stage.
 - **Defaults**: 1920x1080 (preview 854x480), `theme: {preset: soft_pastel}`, the Kokoro narrator
   `bf_emma` at speed 0.85, `narration: {pad: 0.7}`, `auto_direct: true`; front matter keys win.
@@ -5682,7 +5695,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `dead_air` | warning | nothing on screen changes for more than `max_seconds` (a frame counts as changed when at least `min_change` of it changed, from the activity file's `motion`), narrated or not; the finding names the beat where the still picture starts and the beats it lasts through. Silent scenes are checked the same way: a silent card held longer than `max_seconds` without motion is reported. A still picture ends where a [crossfade](#transitions-transition) into the next scene starts blending it away |
 | `animation_overrun` | warning | a beat whose code (animations and waits inside `narrate`) takes longer than its narration plus `narration.pad` (or, when the next beat [overlaps](#overlapping-lines-overlap-interrupt) it, than the time until that beat) by more than `tolerance` seconds: the next beat (and its audio) starts late, leaving silence. The message lists the animations still running when the narration ends. A silent scene whose animations take longer than its `duration` is reported the same way |
 | `rushed_animation` | warning | animations that `play_steps` (and so `reveal` and most built-in scenes) had to shorten below `min_run_time` seconds because the beat is too short for its steps |
-| `talked_over` | warning | a beat with [`overlap`](#overlapping-lines-overlap-interrupt) that starts speaking before whole words of the line before it are said: those words are spoken entirely under the new line (word times from the alignment, else estimated). The message names the words and the largest overlap that keeps them clear. Not reported for `interrupt`, which cuts them on purpose. Fix: a shorter `overlap`, or `interrupt: true` |
+| `talked_over` | warning | a beat with [`overlap`](#overlapping-lines-overlap-interrupt) that starts speaking before whole words of the line before it are said: those words are spoken entirely under the new line (word times from the alignment, else estimated). The message names the words and the largest overlap that keeps them clear. With `interrupt`: words of a line with audio that the cut removes before they start (the interrupt should cut at most the end of the last word). Fix: a shorter `overlap`, or `interrupt: true`; for an interrupt, a shorter `overlap` or none |
 | `readback` | warning | a beat whose MP3, transcribed by [`vidgen readback`](#readback-vidgen-readback), differs from its spoken text by a word error rate above `max_wer`; the message quotes the first differences and a suggested fix. Reads only the transcripts `vidgen readback` cached for the beats' current MP3s and the `stt:` settings (it never runs speech to text): nothing is reported until that command has run |
 
 **Config** (all optional; the values shown are the defaults):
