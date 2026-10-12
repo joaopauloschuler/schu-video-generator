@@ -185,6 +185,7 @@ examples/
   custom_scene/           # built-ins + one extension scene type, helper module, variant, hook
   kphi3/                  # migrated paper video, custom scenes as extensions
   plan/                   # outline.md + the unedited draft video.yaml `vidgen plan` writes from it (golden file, §61)
+  cartoon/                # a two-scene cartoon, two generated characters, Kokoro voices, no audio (§69.18)
 docs/
   CONFIG.md               # config reference
   EXTENDING.md            # how to write project extensions
@@ -4148,8 +4149,8 @@ the measured loudness, §48).
   `GuideTopic(name, title, aliases, text)`, `guide_text()` (markers removed), `guide_topics()`,
   `find_topic(name)` (name or alias, case-insensitive; unknown → `VidgenError` with
   did-you-mean and the topic list), `topic_lines()`. Topics: `start`, `workflow`, `pacing`,
-  `social`, `scenes`, `design`, `actions`, `overlays`, `audio`, `examples`, `outputs`,
-  `troubleshooting`.
+  `social`, `scenes`, `design`, `actions`, `cartoons` (Step 85, §69.18), `overlays`, `audio`,
+  `examples`, `outputs`, `troubleshooting`.
 - **CLI** `vidgen guide [TOPIC] [--list] [--json]`: the whole guide, one topic, or the list
   (`TOPIC` with `--list` is an error). No PROJECT argument (the guide does not depend on one).
   `--json` (in `JSON_COMMANDS`): `{topic, title, topics: [{name, title, aliases}], text, path}`.
@@ -5972,3 +5973,29 @@ model each in `config.LintRules`. Like every still rule they read beat-end still
   overlap are reported like two at the same depth; boxes (not drawn pixels) decide what covers a
   face; keyed moves (§69.14) and jumps are not told apart from standing. Tests:
   `tests/test_cartoon_lint.py`.
+
+### 69.18 Cartoon storytelling in the guide, and `examples/cartoon` (Step 85)
+
+- **Guide topic `cartoons`** (aliases `cartoon`, `characters`, `character`, `stage`, `dialogue`,
+  `acting`), between `actions` and `overlays`: when to make a cartoon, original characters only
+  (generator or own SVG; never a known character, mascot, brand figure or logo, nor a "style of"
+  prompt), staging (marks and `facing`, depth, the set, room to move), shot variety (wide; `zoom`
+  for medium and close-up; `pan` / `follow`), reaction shots (`react`, `look_at`, `zoom` on the
+  listener, `at` near the line's end), comic timing (one short line per beat, `narration.pad` as
+  the pause, setup / pause / punchline), and the loop character sheet → validate → storyboard
+  (mid-action stills) → lint → `vidgen tts` (Kokoro) → again. One validated YAML block.
+- **Consolidated, not repeated**: the `actions` topic keeps one row per action (the test needs
+  every action there) and points to `cartoons` instead of its former dialogue bullet; the
+  `outputs` topic's cartoon-background bullet moved into "The set"; the `scenes` chooser keeps
+  the `stage` row and its snippet (the gallery sample) with a pointer; the cartoon lint rules stay
+  in `troubleshooting`, named once in the loop.
+- **`examples/cartoon`** ("The Box Kite", `output: box_kite`): two `stage` scenes, 12 beats
+  (115 words: ~44 s of narration at the word-count rate, ~54 s with pads and fades), two generated
+  characters (`dot` round with bun and scarf, `moss` tall with hat and glasses), Kokoro voices
+  (`bf_emma` narrator, `af_bella`, `am_michael`), `narration.pad: 0.7`, props, a `hills` layer,
+  a `width: 2` stage with `follow` on a flying prop (`move_along`), one close-up `zoom` per scene,
+  `react` / `emote` / `look_at` / `jump` / `gesture` / `say` with a bubble, dust and confetti
+  particles. No audio committed: `vidgen validate` (one warning: the Kokoro extra is not
+  installed) and `vidgen lint --fail-on warning` on the preview (timed from word counts) pass with
+  no findings. The test `test_examples_validate_against_their_schema` (`tests/test_schema.py`)
+  picks it up like every example folder.

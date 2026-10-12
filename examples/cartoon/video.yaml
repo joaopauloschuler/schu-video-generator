@@ -1,0 +1,136 @@
+# A short cartoon: two original characters, two scenes, under a minute (AGENTS.md "Cartoons",
+# `vidgen guide cartoons`). The voices are Kokoro's (local and free); no audio is committed, so
+# everything below works on the word-count-timed preview until you run `vidgen tts`.
+#   vidgen character-sheet --all examples/cartoon          # every pose, expression and mouth of dot and moss
+#   vidgen validate examples/cartoon
+#   vidgen storyboard examples/cartoon                     # beat ends and half-way stills of each move
+#   vidgen lint examples/cartoon
+#   vidgen tts examples/cartoon                            # needs pip install "schu-video-generator[kokoro]"
+title: "The Box Kite"
+output: box_kite
+theme: {preset: soft_pastel}
+
+format: {width: 1920, height: 1080, fps: 30}
+preview: {width: 854, height: 480, fps: 15}
+
+voice: {provider: kokoro, voice: bf_emma}           # the narrator: opens and closes each scene
+voices:
+  dot_voice: {voice: af_bella, label: Dot}
+  moss_voice: {voice: am_michael, label: Moss}
+narration: {pad: 0.7}                               # a beat of silence after every line, for the reactions
+
+characters:                                         # original figures from the generator: told apart by shape
+  - name: dot                                       # small, round, eager: a bun and a scarf
+    voice: dot_voice
+    look: {body: round, head_size: 1.2, eyes: round, hair: bun, accessories: [scarf]}
+    colors: {clothes: highlight, accessory: accent}
+  - name: moss                                      # tall, sleepy-eyed, doubtful: a hat and glasses
+    voice: moss_voice
+    look: {body: tall, eyes: sleepy, nose: round, hair: none, ears: round, accessories: [hat, glasses]}
+    colors: {clothes: tertiary}
+
+scenes:
+  - id: yard
+    type: stage
+    params:
+      background: ["#9CCBEA", "#E4F3FB"]          # a sky from top to bottom
+      ground_color: tertiary
+      props:
+        - {prop: house, at: 0.17, depth: 0.7}  # the set at the edges, the middle left free
+        - {prop: tree, at: 0.84, depth: 0.5}
+        - {prop: box, name: kite, at: 0.43}
+        - {prop: cloud}
+      characters:
+        - {name: dot, at: left}
+        - {name: moss, at: right, pose: arms_crossed}
+    beats:
+      - id: yard_plan
+        text: "On the windiest day of the year, Dot had a plan."
+      - id: yard_look
+        text: "Moss, look! I built a kite that flies by itself."
+        voice: dot_voice
+        actions:
+          - {jump: dot, at: 0.1}
+          - {look_at: moss, to: kite, at: 0.5}
+      - id: yard_box
+        text: "Dot, that is a cardboard box with a string on it."
+        voice: moss_voice
+        actions:
+          - {look_at: moss, to: dot}
+          - {react: dot, expression: worried, at: 0.8}   # lands at the end of the line, in the pause
+      - id: yard_clever
+        text: "It is a box kite. The box part is the clever bit."
+        voice: dot_voice
+        actions:
+          - {emote: dot, to: happy}
+          - {gesture: dot, to: point, at: 0.2}
+      - id: yard_expert
+        text: "Boxes do not fly. I am an expert on boxes."
+        voice: moss_voice
+        actions:
+          - {say: moss, bubble: "Boxes. Do not. Fly."}
+          - {react: dot, expression: sad, at: 0.6}
+      - id: yard_aside
+        text: "Moss was not, in fact, an expert on boxes."
+        actions:                                      # the narrator undercuts him: a close-up reaction shot
+          - {zoom: moss, scale: 2, at: 0.1}
+          - {look_at: moss, to: camera, at: 0.4}
+          - {react: moss, expression: worried, at: 0.4}
+
+  - id: hill
+    type: stage
+    params:
+      width: 2                                        # twice the frame: room for the camera to pan
+      camera_at: 0.25
+      background: ["#7FB8E0", "#D9EEF9"]
+      ground_color: tertiary
+      layers:
+        - {place: background, shapes: [{shape: hills, y: 0.18, width: 0.9, height: 0.25, color: secondary}]}
+      props:
+        - {prop: box, name: kite, at: 0.24}
+        - {prop: tree, at: 0.92, depth: 0.4}
+        - {prop: sun, at: 0.7}
+      characters:
+        - {name: dot, at: 0.14}
+        - {name: moss, at: 0.36, facing: left, pose: arms_crossed}   # auto would face the stage's middle
+      particles: [{kind: dust, density: 0.6}]       # the wind
+    beats:
+      - id: hill_wind
+        text: "Up on the hill, the wind grew stronger."
+      - id: hill_count
+        text: "Ready, Moss? On the count of three. One, two..."
+        voice: dot_voice
+        actions:
+          - {look_at: dot, to: moss}
+          - {react: moss, pose: thinking}
+          - move_along: kite                          # it goes before three
+            path: [[0.32, 0.25], [0.5, 0.45], [0.66, 0.55]]
+            speed: 4
+            at: 0.75
+          - {follow: kite, at: 0.75}                  # the camera goes with it
+      - id: hill_flew
+        text: "It flew. Before three. That box just flew away!"
+        voice: moss_voice
+        actions:
+          - {action: pan, to: 0.25}                  # back to the two of them
+          - {emote: moss, to: surprised, at: 0.2}
+          - {jump: moss, at: 0.5}
+          - {react: dot, expression: happy, at: 0.5}
+      - id: hill_told
+        text: "Told you. The box part is the clever bit."
+        voice: dot_voice
+        actions:
+          - {zoom: dot, scale: 2}                     # close-up on the punchline
+          - {look_at: dot, to: camera, at: 0.3}
+      - id: hill_bigger
+        text: "Fine. Could you build me one? A bigger box."
+        voice: moss_voice
+        actions:
+          - {emote: moss, to: happy}
+          - {pose: moss, to: stand}
+          - {look_at: moss, to: dot, at: 0.3}
+          - {react: dot, pose: waving, at: 0.7}
+      - id: hill_club
+        text: "And that is how the box kite club began."
+        actions:
+          - {particles: confetti, at: 0.3}

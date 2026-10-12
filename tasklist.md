@@ -429,8 +429,8 @@ one.
 - [x] Tests: one passing and one failing case per rule (`tests/test_cartoon_lint.py`: synthetic layout dumps, `lint_ignore` through `lint_project` on a faked render with a skipped mid still, 8 without rendering, 1 tiny render checking the dump keys and no findings on a plain dialogue)
 
 ### Step 85 — Guide: cartoon storytelling in AGENTS.md
-- [ ] A section on cartoons for agents: when to use one, designing original characters, staging (marks, depth, leaving room), shot variety (wide / medium / close-up via camera), reaction shots, comic timing (pauses, beats of silence), short lines; a small example project in `examples/cartoon/` (no audio committed)
-- [ ] Copied to root `AGENTS.md` (test_guide checks it)
+- [x] A section on cartoons for agents: when to use one, designing original characters, staging (marks, depth, leaving room), shot variety (wide / medium / close-up via camera), reaction shots, comic timing (pauses, beats of silence), short lines; a small example project in `examples/cartoon/` (no audio committed) (guide topic `cartoons`, aliases `cartoon characters character stage dialogue acting`; the dialogue bullet of `actions` and the cartoon-background bullet of `outputs` folded into it, pointers left; pauses are `narration.pad` + `at` near the line's end, since a beat has no pause key; `examples/cartoon` "The Box Kite": 2 stages, 12 beats, Kokoro voices, validate + `lint --fail-on warning` clean on the word-count preview; DESIGN §69.18)
+- [x] Copied to root `AGENTS.md` (test_guide checks it)
 
 ### Step 86 — Foley and music stings
 - [ ] Sound effects tied to actions (footsteps on `walk_to`, a whoosh on `enter` / `exit`, a pop on `emote: surprised`, a boing on `jump`) from the existing sfx library, on by default for `stage` scenes, off with `foley: false`

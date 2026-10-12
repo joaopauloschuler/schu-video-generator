@@ -7946,3 +7946,70 @@ How to test
   test_introspect test_particles` (9, 10 s). By hand: `vidgen lint` of a three-beat preview
   dialogue (854x480) where pip turns away from kit while speaking: one `facing_away` warning,
   nothing else.
+
+
+## Step 85 — Guide: cartoon storytelling in AGENTS.md
+
+What was built
+- Guide topic `cartoons` ("Cartoons: characters on a stage"; aliases `cartoon`, `characters`,
+  `character`, `stage`, `dialogue`, `acting`), between `actions` and `overlays`, named in the
+  guide's topic list: when to make a cartoon; original characters only (generator or own SVG,
+  never a known character, mascot, brand figure or logo, no "style of" prompts; how to tell two
+  apart; want and temper; one voice each); staging (marks and `facing`, depth, the set incl. the
+  generated-background advice, room to move); shot variety (wide, `zoom` 1.5 / 2–2.5, `pan` /
+  `follow`); reaction shots (`react`, `look_at`, a `zoom` on the listener, `at: 0.8`); comic
+  timing (one 6–12-word line per beat, `narration.pad` as the pause, setup / pause / punchline,
+  one thing at a time, `cartoon_motion`, `keyframes` / `move_along`); the loop character sheet →
+  validate → storyboard (½ stills) → lint (the seven cartoon rules by name) → `vidgen tts` with
+  Kokoro → again. One YAML block (validated by `test_yaml_snippet_validates`).
+- Consolidated: `actions` keeps one row per action (required by `test_guide`) and its long
+  "Cartoon dialogue" bullet became a two-line pointer; `outputs`' "Cartoon backgrounds" bullet
+  moved into "The set" (a pointer stays); the `scenes` chooser keeps the `stage` row and snippet
+  (the gallery's sample) plus a pointer line; lint rule rows stay in `troubleshooting`.
+- `examples/cartoon/video.yaml` ("The Box Kite", `output: box_kite`, `soft_pastel`): two
+  generated original characters (`dot`: round, bun, scarf; `moss`: tall, sleepy eyes, hat,
+  glasses), Kokoro voices (`bf_emma` narrator, `af_bella`, `am_michael`), `narration.pad: 0.7`;
+  scene `yard` (house / tree / box / cloud props, jump, look_at, react, emote, gesture, a `say`
+  bubble, a close-up `zoom` on the narrator's aside) and `hill` (`width: 2`, a `hills` layer, dust
+  particles, `move_along` of the box with `follow`, a `pan` back, a close-up punchline, confetti).
+  12 beats, 115 words (~44 s at 2.6 words/s; 54 s rendered with pads and fades). No audio.
+
+Files touched
+- New: `examples/cartoon/video.yaml`.
+- `src/vidgen/data/guide/AGENTS.md` (+ copy `AGENTS.md`), `DESIGN.md` (§2 tree, §59 topic list,
+  new §69.18), `docs/CONFIG.md` (a pointer sentence under `### stage`), `README.md` (example
+  row), `tasklist.md`.
+
+Public interfaces
+- None in code. New guide topic `cartoons` (so a new MCP resource `vidgen://guide/cartoons`).
+
+Decisions / deviations
+- "Beats of silence": a beat has no pause key and every beat is spoken, so the guide teaches
+  `narration.pad` (raised to 0.7 for a cartoon) with the reaction timed into it (`at: 0.8`), and
+  commas / "..." for pauses inside a line (heard in real audio, not in the word-count preview).
+  A silent stage scene was rejected: each scene fades in and out, which breaks the shot.
+- The guide's zoom advice stays "about one per scene", as in the `actions` table.
+- Searched first: the guide had cartoon text in `scenes` (row + snippet), `actions` (rows +
+  bullet), `outputs` (backgrounds) and `troubleshooting` (rules); no example used Kokoro or two
+  speaking characters (`examples/svg_character` has one silent beat).
+
+Known gaps / TODOs
+- Found, not fixed (outside this step): the JSON Schema of `stage` (`vidgen schema`) types
+  `characters[]`, `props[]` and `particles[]` as objects only, while `vidgen validate` and the
+  docs accept a bare name (`- tree`, `characters: [pip, kit]`, `particles: [snow]`); the
+  `before` validators of `StageCharacter` / `StageProp` / `StageParticles` are invisible to the
+  schema. `test_examples_validate_against_their_schema[cartoon]` failed on `- cloud`; the example
+  uses `{prop: cloud}` instead. Fix: add the string form (`anyOf`) via `json_schema_extra` or a
+  union type.
+- With Kokoro installed, `vidgen tts examples/cartoon` and a look at the real timing are still to
+  do (not installed here: Python 3.13). The example's audio would change the lint picture
+  (`narration_speed` measures real speech).
+
+How to test
+- `pytest -m "not render" tests/test_guide.py tests/test_docs.py tests/test_gallery.py` (108,
+  ~3 s); `pytest tests/test_schema.py -k "cartoon or svg_character"` (2, ~5 s);
+  `pytest tests/test_mcp.py -k guide` (1, ~7 s).
+- `vidgen validate examples/cartoon` (ok; one warning: the Kokoro extra), `vidgen lint
+  examples/cartoon --jobs 1 --fail-on warning` (preview 854x480 from word counts: 0 findings; a
+  first render took ~40 s), `vidgen storyboard examples/cartoon`, `vidgen character-sheet --all
+  examples/cartoon` (two sheets, ~30 KB each).

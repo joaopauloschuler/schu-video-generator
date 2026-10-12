@@ -3807,7 +3807,9 @@ the frame and cropped) or, without one, a theme colour or a gradient (`backgroun
 highlight]` runs from the first colour at the top to the last at the bottom).
 [Action targets](#beat-actions): each character and each [prop](#props) by its name (`dim: kit`,
 `highlight: tree`), and each part of a character as `<character>.<part>` (`kit.arm_left`, for
-[keyframes and paths](#keyframes-and-motion-paths)).
+[keyframes and paths](#keyframes-and-motion-paths)). A complete example: `examples/cartoon` (two
+scenes, two characters, Kokoro voices); how to stage, shoot and time a cartoon: `vidgen guide
+cartoons`.
 
 Characters stand on **marks**: `far_left` (x 0.1), `left` (0.25), `centre` (0.5), `right` (0.75),
 `far_right` (0.9), the stage's own `marks`, or an x position from 0 (left edge) to 1 (right edge).

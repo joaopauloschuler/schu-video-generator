@@ -534,6 +534,10 @@ my_video/
 - [examples/svg_character](examples/svg_character) — a cartoon character drawn from an SVG file
   split into parts by element ids (`vidgen character sprout examples/svg_character --png`), on a
   `stage` with a generated character.
+- [examples/cartoon](examples/cartoon) — "The Box Kite", a 54-second cartoon with two original
+  characters voiced by Kokoro (no audio committed): marks, depth, a wide stage with `follow`,
+  close-ups, reactions and pauses (`vidgen character-sheet --all examples/cartoon`,
+  `vidgen storyboard examples/cartoon`, `vidgen lint examples/cartoon`: no findings).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.
