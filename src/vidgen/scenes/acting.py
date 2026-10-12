@@ -40,9 +40,15 @@ def _declared() -> dict[str, Any]:
         return {}
 
 
+def is_part_target(name: str) -> bool:
+    """Whether a target name names a character's part (``kit.arm_left``, DESIGN.md §69.14)."""
+    return "." in name
+
+
 def _characters(scene: NarratedScene, targets: list[Target], name: str) -> list[Character]:
-    """The targets that are characters (others are logged and skipped)."""
-    others = [t.name for t in targets if not isinstance(t.mobject, Character)]
+    """The targets that are characters (others are logged and skipped; parts, which a pattern
+    such as ``*`` also selects, silently)."""
+    others = [t.name for t in targets if not isinstance(t.mobject, Character) and not is_part_target(t.name)]
     if others:
         log.warning("scene '%s': %s acts on characters; %s is not one, skipped", scene.spec.id, name, ", ".join(others))
     return [t.mobject for t in targets if isinstance(t.mobject, Character)]
@@ -65,13 +71,16 @@ class _Acting(Action):
 
     def _target_characters(self, scene_cls: type[NarratedScene], params: Any) -> tuple[list[str], list[tuple[str, str]]]:
         """The declared characters the targets name in a scene of ``scene_cls`` with ``params``,
-        and a problem for each target name that is something else (a prop)."""
+        and a problem for each target name that is something else (a prop, or a part named
+        on its own: ``kit.arm_left``; a pattern such as ``*`` skips the parts)."""
         declared = _declared()
         names = scene_cls.target_names(params)
         found: list[str] = []
         problems: list[tuple[str, str]] = []
         for pattern in self.config.targets():
-            for name in [n for n in names if fnmatchcase(n, pattern)]:
+            if is_part_target(pattern) and pattern in names:
+                problems.append(("target", f"'{pattern}' is a character's part; {self.config.action} acts on whole characters"))
+            for name in [n for n in names if fnmatchcase(n, pattern) and not is_part_target(n)]:
                 if name in declared:
                     found.append(name)
                 elif declared:

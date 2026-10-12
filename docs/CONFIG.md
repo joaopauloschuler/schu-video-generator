@@ -3796,7 +3796,8 @@ them still in this scene). The background is a picture (`image`, or a
 the frame and cropped) or, without one, a theme colour or a gradient (`background: [primary,
 highlight]` runs from the first colour at the top to the last at the bottom).
 [Action targets](#beat-actions): each character and each [prop](#props) by its name (`dim: kit`,
-`highlight: tree`).
+`highlight: tree`), and each part of a character as `<character>.<part>` (`kit.arm_left`, for
+[keyframes and paths](#keyframes-and-motion-paths)).
 
 Characters stand on **marks**: `far_left` (x 0.1), `left` (0.25), `centre` (0.5), `right` (0.75),
 `far_right` (0.9), the stage's own `marks`, or an x position from 0 (left edge) to 1 (right edge).
@@ -4118,6 +4119,67 @@ The wind-up and settle add time: a walk 0.65 s (`lively`; 0.26 s `calm`), a jump
 (0.19 s). Pose changes and gestures keep their time. As for any action, a beat with less time
 left shortens them.
 
+#### Keyframes and motion paths
+
+For motion the other actions do not have, two actions move a character, a [prop](#props) or one
+part of a character (`kit.arm_left`, `pip.head`; the parts are `body`, `legs`, `arm_left`,
+`arm_right`, `head`, `accessory`, `eyes`, `brows`, `mouth`, those the character has) by
+**keys** or along a **path**:
+
+| action | options | |
+|---|---|---|
+| `keyframes` | `keys` (required: `[{t, x, y, rotate, scale, ease}, ...]`), `ease` (`smooth`) | moves through the keys and stays at the last one. A key's `t` is seconds from the action's start (`at`), or a share of the beat's narration as a string (`"40%"`); every key one way or the other, in time order. Each key sets some of `x`, `y`, `rotate`, `scale`; a value a key leaves out holds, and the target starts from how it is. A key at `t: 0` sets its values at once. It takes until the last key. |
+| `move_along` | `path` (required: `[[x, y], ...]`), `curve` (`smooth` \| `straight`), `ease` (`smooth`), `speed` | moves from where it is through the points, at an even speed eased by `ease`: a smooth curve through every point (`smooth`) or straight lines between them. Takes `speed` units per second along the path, else `run_time` (default 2 s). Stays at the end. |
+
+The values mean, for a **character or prop**: `x` a mark or an x from 0 (left edge) to 1 (right
+edge) of the stage; `y` the height of its feet above its ground line (at its depth), in frame
+heights (`0` on the ground, `0.5` half the frame higher; at most 1 either way); `rotate` degrees
+counterclockwise on screen, about its feet; `scale` its size (`1` as built). For a **part**:
+`x` / `y` its shift right / up in character heights (at most 1 either way); `rotate` its angle
+about its pivot in degrees, as drawn facing right (a mirrored character turns it the mirrored
+way: `kit.arm_left` at `rotate: 90` points forward whichever way kit faces; arms hang down at 0);
+`scale` its size (a flipped part, such as a `sad` mouth, stays flipped). `rotate` and `scale` are
+where the target ends up, not steps: after `rotate: 30`, `rotate: 0` turns it back.
+
+`ease` names how each key is reached (a key's own `ease` wins over the action's) or how the path
+speeds up and slows down. The names are Manim's rate functions: `linear`, `smooth`, `rush_into`,
+`rush_from`, `ease_in_sine`, `ease_out_sine`, `ease_in_out_sine`, `ease_in_quad`,
+`ease_out_quad`, `ease_in_out_quad`, `ease_in_cubic`, `ease_out_cubic`, `ease_in_out_cubic`,
+`ease_in_back`, `ease_out_back`, `ease_in_out_back`, `ease_out_bounce`, `ease_out_elastic`; plus
+`lively` and `calm`, a smooth move with the anticipation and overshoot of that
+[`cartoon_motion`](#animation-principles-cartoon_motion) level (keyframes do not apply
+`cartoon_motion` on their own). On a path, an ease that passes the end (`ease_out_back`) holds at
+the end instead.
+
+Both last (`until: <beat>`: the target moves back to where it was, straight, in the action's
+`run_time`, default 1 s for `keyframes`, 2 s for `move_along`). `run_time:` on `keyframes`
+stretches or squeezes the keys to that time; a beat with less time left squeezes them too. A
+moved character does not turn to face where it goes (add a `turn`) and keeps walking, jumping
+and acting from where it is (a lifted one walks in the air: bring it down first).
+
+`vidgen validate` reports keys out of order, mixed seconds and shares, a share over 100%, an
+unknown ease, a mark the stage does not know, a mark as a part's `x`, a value out of range, a
+part the character does not have (`unknown target 'kit.tail'`) and these actions on other scene
+types. A pattern such as `k*` also selects the parts (`kit.arm_left`...); the acting and moving
+actions skip them, but `keyframes`, `dim` or `highlight` act on each.
+
+```yaml
+beats:
+  - text: "Pip floats over the bench while Kit waves its arm."
+    actions:
+      - move_along: pip
+        path: [[0.35, 0.25], [0.5, 0.0]]       # up and over, down onto the middle
+        speed: 4
+      - keyframes: kit.arm_left
+        keys:
+          - {t: 0.3, rotate: 150, ease: ease_out_back}
+          - {t: 0.6, rotate: 120}
+          - {t: 0.9, rotate: 150}
+          - {t: 1.5, rotate: 0}                # back down (arms hang at 0)
+      - keyframes: sun                         # a prop: across the sky over the whole beat
+        keys: [{t: "100%", x: 0.8, y: 0.6, ease: linear}]
+```
+
 #### Particles
 
 Rain, snow, sparkles, dust, confetti, smoke or bubbles over a scene: on a `stage` for the whole
@@ -4242,11 +4304,11 @@ the one key that names an action).
 
 | key | default | |
 |---|---|---|
-| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `enter`, `exit`, `gesture`, `jump`, or a project action (`vidgen list-scenes` lists them) |
+| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, or a project action (`vidgen list-scenes` lists them) |
 | `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one (`callout` with an `area` and `pan` with `to` need none) |
 | `at` | `0` | when, as a fraction of the beat's narration (`0` ≤ at < `1`) |
-| `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`, `callout`, `say`, `react`, `look_at`, `turn`, `emote`, `pose`: undone when it starts; `zoom`: the camera is back when it starts; `pan`: the camera moves back when it starts; `follow`: the camera stops following when it starts) |
-| `run_time` | the action's | seconds the animation takes (`reveal` / `callout` / `pose` 0.8, `dim` / `highlight` / `react` 0.6, `zoom` / `transform` / `follow` 1.0, `pan` 1.5, `look_at` / `emote` 0.5, `say` (the bubble) / `turn` 0.4, `jump` 0.6, `gesture` per gesture (1.2 for `point`), `walk_to` / `enter` / `exit` as long as the distance needs at their `speed`; a zoom takes as long again to come back) |
+| `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`, `callout`, `say`, `react`, `look_at`, `turn`, `emote`, `pose`: undone when it starts; `zoom`: the camera is back when it starts; `pan`: the camera moves back when it starts; `follow`: the camera stops following when it starts; `keyframes`, `move_along`: the target moves back) |
+| `run_time` | the action's | seconds the animation takes (`reveal` / `callout` / `pose` 0.8, `dim` / `highlight` / `react` 0.6, `zoom` / `transform` / `follow` 1.0, `pan` 1.5, `look_at` / `emote` 0.5, `say` (the bubble) / `turn` 0.4, `jump` 0.6, `gesture` per gesture (1.2 for `point`), `walk_to` / `enter` / `exit` as long as the distance needs at their `speed`, `keyframes` until its last key, `move_along` 2.0 or its path's length at its `speed`; a zoom takes as long again to come back) |
 
 **Targets** depend on the scene type (`vidgen list-scenes` prints them as `targets:`). Every
 built-in type has some; `<N>` counts from 1 (`item1`, `item2`...), `<text>`/`<label>`/`<name>`
@@ -4285,7 +4347,7 @@ a title card, a `transform` of a bar).
 | `diagram` | `heading`, `node<N>`, `node:<id>`, `edge:<from>-><to>` | reveal, dim, highlight, zoom | also for `flowchart`; a node is its shape, icon and label (a `box` frames the shape), an edge its line, arrowhead and label; `highlight: [node:a, "edge:a->b", node:b]` marks a path; revealing an edge brings its nodes |
 | `process` | `heading`, `input`, `stage<N>`, `stage:<label>`, `connector<N>`, `loop`, `output`, `token` | reveal, dim, highlight, zoom | a stage is its card (a `box` frames it); `connector2` runs from stage 2 to 3; revealing a stage early shows it without moving the token; `highlight: token` with `style: flash` points at it |
 | `network` | `heading`, `layer<N>`, `layer:<label>`, `edges<N>`, `neuron<L>.<i>` | reveal, dim, highlight, zoom | a layer is its units, ellipsis, label and count; `edges1` joins layers 1 and 2; `neuron2.3` is unit 3 of layer 2 as drawn |
-| `stage` | `<character>`, `<prop>` | say, look_at, turn, emote, pose, react, walk_to, enter, exit, gesture, jump, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting) and [moving](#moving) actions take characters only |
+| `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, walk_to, enter, exit, gesture, jump, keyframes, move_along, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting) and [moving](#moving) actions take whole characters only, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts |
 
 `title` and `heading` stand for each other (the header band, see "Built-in scenes"): `highlight:
 title` works on a `bullets` heading. [Project scene types](EXTENDING.md#8-per-beat-actions-targets-and-custom-actions)
@@ -4307,6 +4369,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `particles` | `kind` (or as the target: `- particles: snow`), `density` (`1`), `area`, `color`, `seed` (`1`), `keep` (`false`) | [particles](#particles) — `rain`, `snow`, `sparkles`, `dust`, `confetti`, `smoke` or `bubbles` — over the scene from `at`, in front of everything; works on every scene type. They fade in, and fade out (still moving; `run_time`, `0.6` s) when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: at the end of the scene). Its "target" is the kind, not a target of the scene. |
 | `say`, `look_at`, `turn`, `emote`, `pose`, `react` | see [Speaking and acting](#speaking-and-acting) | the acting actions on a `stage`'s characters: speak (lip sync and a speech bubble), look at something, turn round, change expression or pose, react to another speaker for one beat |
 | `walk_to`, `enter`, `exit`, `gesture`, `jump` | see [Moving](#moving) | the moving actions on a `stage`'s characters: walk to a mark, walk in or out of view, point / wave / shrug / nod / shake the head, jump |
+| `keyframes`, `move_along` | see [Keyframes and motion paths](#keyframes-and-motion-paths) | move a `stage`'s character, prop or character part (`kit.arm_left`) through keys (`t`, `x`, `y`, `rotate`, `scale`, `ease`) or along a path of points |
 
 `dim`, `highlight`, `zoom` and `transform` act on targets on screen; a target not shown yet is
 first revealed (as by `reveal`). `dim` and `highlight` change only opacity resp. colour, so

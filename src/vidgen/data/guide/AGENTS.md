@@ -678,6 +678,8 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `exit` | on a `stage`: a character walks out by an edge (`to: left` / `right`) | an `enter` brings it back |
 | `gesture` | on a `stage`: `to: point`, `wave`, `shrug`, `nod`, `shake_head` | on the word it goes with (`at`) |
 | `jump` | on a `stage`: a character jumps (`height`) | joy or surprise |
+| `keyframes` | on a `stage`: move a character, prop or part (`kit.arm_left`) through `keys: [{t, x, y, rotate, scale, ease}]` (`t` seconds or `"40%"` of the beat) | motion no other action has; keep it short |
+| `move_along` | on a `stage`: move a character, prop or part along `path: [[x, y], ...]` (smooth curve; `speed`) | flying, floating, a thrown ball |
 
 ```yaml
 - id: speeds
@@ -705,7 +707,9 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
   move with `walk_to`, `enter` / `exit`, `gesture` and `jump` ("Moving"); a walk takes the time
   its distance needs, so give it a beat long enough, and end it on a free mark. Moves have
   anticipation, squash and stretch, overshoot and follow-through built in; `cartoon_motion:
-  calm` (or `none`) at the top level, on a stage or on a character tones them down.
+  calm` (or `none`) at the top level, on a stage or on a character tones them down. For
+  anything else, `keyframes` and `move_along` move a character, a prop or one part
+  (`kit.arm_left`) by keys or along a path ("Keyframes and motion paths").
 - `until: <later beat id>` keeps a highlight / dim / callout on screen; without it a callout
   disappears at the next beat and a zoom comes back by the beat's end.
 - A callout without a target points at an `area: [x, y, w, h]` of the frame (fractions).
@@ -1151,7 +1155,7 @@ scenes:
 | `duplicate beat id` | beat ids are unique in the whole video; rename one |
 | `unknown target 'x' ...; did you mean ... (targets: ...)` | pick a name from the list (labels are case-sensitive: `bar:4K`) |
 | `until 'x' is not a later beat of scene 'y'` | `until` names a later beat id of the same scene |
-| `unknown action 'x'` / `unknown option` | actions are `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `enter`, `exit`, `gesture`, `jump` |
+| `unknown action 'x'` / `unknown option` | actions are `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along` |
 | `labels has 2 entries but values has 3` | one value per label |
 | `unknown theme color 'x'` | use a token (`primary`, `highlight`...) or quoted hex `"#0B5FFF"`, or add it to `theme.colors` |
 | `invalid hex color` | `#RGB`, `#RRGGBB` or `#RRGGBBAA`, in quotes (YAML reads `#` as a comment) |

@@ -206,17 +206,23 @@ class Stage(NarratedScene):
     (``walk_to``, ``enter``, ``exit``, ``gesture``, ``jump``) move them. A character with an
     ``enter`` action waits off stage until it enters.
 
-    Action targets: each character and each prop by its name.
+    The ``keyframes`` and ``move_along`` actions move a character, a prop or a character's part
+    by keys or along a path.
+
+    Action targets: each character and each prop by its name; each part of a character as
+    ``<character>.<part>`` (``kit.arm_left``).
     """
 
     outro = 0.5
-    target_patterns = ("<character>", "<prop>")
+    target_patterns = ("<character>", "<prop>", "<character>.<part>")
     uses_cartoon_style = True
 
     @classmethod
     def target_names(cls, params: Any) -> list[str]:
-        """The names of the characters, then of the props, on the stage."""
-        return [c.name for c in params.characters] + params.prop_names()
+        """The names of the characters, then of the props, on the stage, then the characters'
+        parts (``kit.arm_left``; only with an active project, which knows the parts)."""
+        names = [c.name for c in params.characters]
+        return names + params.prop_names() + part_target_names(names)
 
     class Params(SceneParams):
         image: str | None = None
@@ -407,10 +413,15 @@ class Stage(NarratedScene):
         self.props: dict[str, Prop] = {}
         #: each character's mark (its ``at``) as an x in Manim units, where ``enter`` walks it to
         self.homes: dict[str, float] = {}
+        #: the y of the ground line at each character's and prop's depth (``keyframes`` y 0, §69.14)
+        self.grounds: dict[str, float] = {}
         entering = self._entering()
         left, right = self.camera_bounds()[:2]
         on_stage: list[tuple[str, Mobject]] = []
         for place_at in placements:
+            self.grounds[place_at.name] = feet_point(
+                place_at.x_fraction, place_at.depth, p.ground, self.frame_width, self.frame_height,
+            )[1]
             if place_at.kind == "prop":
                 item = self._prop(place_at.name, props[place_at.name], place_at.height)
                 item.shift(np.array([*place_at.feet, 0.0]) - item.feet())
@@ -435,6 +446,10 @@ class Stage(NarratedScene):
             on_stage.append((member.name, figure))
         # register back to front, so the fade-ins add them (and draw them) in that order
         targets = [self.target(name, mob) for name, mob in on_stage]
+        for whole in targets:  # parts come on screen with their character (§69.14)
+            if isinstance(whole.mobject, Character):
+                for part in whole.mobject.parts:
+                    self.target(f"{whole.name}.{part}", whole.mobject.parts[part], entrance=lambda t=whole: self.entrance(t))
 
         def entrance() -> list:
             return [FadeIn(part) for part in backdrop] + [a for t in targets for a in self.entrance(t)] + [FadeIn(m) for m in in_front]

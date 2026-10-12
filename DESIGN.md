@@ -76,7 +76,7 @@ src/vidgen/
                           # generator.py (look: parameters -> parts, §69.1), svg_look.py (look: {svg} -> parts by
                           # element ids, §69.2), still.py (`vidgen character --png`), poses.py (pose and
                           # expression tables, §69.3; no manim), transition.py (PoseChange, §69.3;
-                          # Walk, Gesture, Jump, §69.12),
+                          # Walk, Gesture, Jump, §69.12; KeyedMotion, §69.14),
                           # visemes.py (lip sync: viseme tracks, .visemes.json, §69.4; no manim),
                           # idle.py (blinking, breathing, head sway: the seeded schedule, §69.5; no manim),
                           # stage.py (marks, ground line, depth, draw order of a stage, §69.6; parallax
@@ -85,7 +85,8 @@ src/vidgen/
                           # character looks: look_pose, camera_look, §69.11; walk times and cycle,
                           # entrances and exits, gestures, jumps, §69.12; no manim), motion.py
                           # (animation principles: anticipation, squash and stretch, overshoot,
-                          # follow-through, cartoon_motion, §69.13; no manim); still.py also
+                          # follow-through, cartoon_motion, §69.13; no manim), keyframes.py (keys,
+                          # eases, motion paths, §69.14; no manim); still.py also
                           # draws the prop gallery
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
@@ -159,7 +160,8 @@ src/vidgen/
                           # callout_action.py: the callout beat action, §44; sfx_action.py: sfx, §47;
                           # particles_action.py: particles, §69.9; acting.py: say, look_at, turn,
                           # emote, pose, react and the speech bubble, §69.11; moving.py: walk_to,
-                          # enter, exit, gesture, jump, §69.12;
+                          # enter, exit, gesture, jump, §69.12; keyframes_action.py: keyframes,
+                          # move_along, §69.14;
                           # overlays.py: the built-in overlays lower_third/watermark, §41;
                           # progress.py: progress_bar/chapter_indicator, §42; captions.py: captions, §43;
                           # stage.py: the stage scene type, §69.6)
@@ -664,6 +666,10 @@ Step 80 (§69.13) adds `MOTION_LEVELS`, `MotionSetting`, `walk_motion_seconds`,
 `Character` gains the constructor keyword `motion="lively"`, the attribute `motion`, the
 property `motion_strength` and `set_squash`; `character()` gains `motion=None` (all compatible;
 the default `lively` changes how the four animations look, not their end states).
+Step 81 (§69.14) adds `KeyedMotion`, `feet_of`, `CHANNELS`, `DEFAULT_EASE`, `EASE_NAMES`,
+`EaseName`, `Key`, `KeyFrame`, `MotionPath`, `ease_progress`, `key_seconds`,
+`key_time_problems`, `keyed_values`, `path_length`, `part_target_names`, `feet_point` (all
+compatible); the `stage` scene type gains the target pattern `<character>.<part>`.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -5656,7 +5662,7 @@ new state an option (`- walk_to: pip` + `to: door`; `- gesture: kit` + `to: wave
   another character's is reported (`character 'pip' ends its walk on character 'kit' (60% ...)`),
   a pair that both walked once.
 - **Not done here**: changing depth while walking (`walk_to` keeps the depth); a path or curve
-  (Step 81); foley (Step 86) (anticipation, squash and follow-through: §69.13); a single `legs`
+  is `move_along` (§69.14, not a walk); foley (Step 86) (anticipation, squash and follow-through: §69.13); a single `legs`
   part cannot step leg by leg (the cycle turns and narrows the pair); `enter` teleports a
   character that is on screen to the edge first; an `exit` with a camera that keeps moving can
   end in view (it is parked off stage at its end anyway). Tests: `tests/test_cartoon_moving.py`.
@@ -5733,3 +5739,75 @@ manim) applied inside the existing animations of `cartoon/transition.py` (`PoseC
   follow-through only on walks and jumps (not on pose changes or gestures); no squash on
   walking footfalls; anticipation of an `enter` happens off stage (unseen, its time is spent).
   Tests: `tests/test_cartoon_motion.py`.
+
+### 69.14 Keyframes and motion paths (Step 81)
+
+Two beat actions (`scenes/keyframes_action.py`, against `vidgen.api` only) move what the other
+actions cannot: `keyframes` (through keys) and `move_along` (along a path). They act on a
+`stage`'s characters, props and **character parts**.
+
+- **Part targets**: the `stage` registers each part of each character as a target
+  `<character>.<part>` (`kit.arm_left`; `target_patterns` gains `"<character>.<part>"`), the
+  dotted form of other scenes' sub-targets (`col2.item3`, `cell2.4`). The target's mobject is the
+  part's live `VGroup` (`Character.parts`); its entrance is its character's. `target_names`
+  lists them after the characters and props, from `cast.part_target_names(names)` (the parts
+  each declared character has: `character_part_shapes`, an svg read from the file), only while a
+  project is active (validate, render); without one only characters and props are named. A
+  wildcard such as `*` or `k*` selects parts too: the acting and moving actions skip them
+  (`scenes/acting.py`: `is_part_target`, a name with a dot; at render silently), a part named on
+  its own is a problem for them (`'kit.mouth' is a character's part; emote acts on whole
+  characters`); `dim` and `highlight` act on parts like any target.
+- **Channels** (`cartoon/keyframes.py`, no manim): `CHANNELS = x, y, rotate, scale`. Author units:
+  a character or prop's `x` is a mark or an x 0..1 of the stage (`camera_place`, as `walk_to`),
+  `y` the height of its feet above its ground line at its depth in frame heights (`Stage.grounds`,
+  name -> the ground line's y at the item's depth, a prop's `lift` not included), `rotate`
+  degrees counterclockwise on screen about the feet, `scale` a factor of its built size; a part's
+  `x` / `y` are its pose shift in character heights, `rotate` its pose angle (as drawn facing
+  right, so mirrored with the character), `scale` its size (`KeyedMotion` keeps the signs of the
+  pose's scale, so a flipped mouth stays flipped). `rotate` and `scale` are absolute: a whole
+  target keeps its turn and size as `keyed_rotate` / `keyed_scale` on the mobject.
+- **Keys** (`KeyFrame`, pydantic, `extra=forbid`): `t` (seconds 0..600, strict, or a share of the
+  beat's narration `"40%"`, `SHARE_PATTERN`), `x` (mark or number), `y` (±2), `rotate` (±1080),
+  `scale` (0, 10], `ease`; at least one channel. `key_seconds(t, beat_seconds)`;
+  `key_time_problems(times)`: all seconds or all shares (so the order is known without the
+  audio), strictly increasing, a share ≤ 100 %. Times count from the action's start (its `at`).
+- **Interpolation** (`keyed_values(start, keys, seconds)` with `Key(seconds, values, ease)`):
+  per channel, the value before the first key that sets it is `start` (the target now); between
+  two keys that set it, the later key's ease of the elapsed share; held after the last; a key at
+  0 s sets its values at once. Only channels some key sets are animated.
+- **Eases** (`EASES`, `EASE_NAMES`, `EaseName`, `DEFAULT_EASE` `smooth`): the names of Manim's rate
+  functions, so authors who know Manim know them (`linear`, `smooth`, `rush_into`, `rush_from`,
+  `ease_in|out|in_out_sine|quad|cubic|back`, `ease_out_bounce`, `ease_out_elastic`), written out
+  without importing manim (validate stays light) and checked against `manim.utils.rate_functions`
+  by a test; plus `lively` / `calm` = `motion_ease(u, MOTION_LEVELS[...], smoothstep)` (§69.13).
+  No author-facing ease names existed before (the project's scenes use Manim's functions in
+  code), and `there_and_back`-style eases are left out (they end where they start).
+- **Paths** (`path_curve(points, smooth)`: the points, or a uniform Catmull-Rom curve through them
+  (tangent half the chord from the point before to the point after; the ends' tangent the chord
+  to their neighbour) sampled `PATH_SAMPLES` 32 per segment; `path_length`; `MotionPath(points,
+  smooth).at(share)`: the point that share of the length along, so the speed is even). Lengths
+  are in the points' units.
+- **Animation** (`KeyedMotion(mobject, values_at, *, part=None)`, `cartoon/transition.py`,
+  exported): `values_at(share)` gives the channels at each share of the run time (rate_func
+  linear). A whole target: each frame undoes the last frame's turn and size about the old feet,
+  moves the feet, applies the new turn and size about them (a `Character`'s anchor moves along,
+  so its poses, idle and later walks work from there; another mobject's feet are kept as
+  `keyed_feet`, read by `feet_of`). A part (`mobject` the `Character`): `set_part` with the
+  channels. A character ends a running blink and keeps lip sync in step, as `PoseChange`.
+- **Actions**: `keyframes` (`keys`, `ease`; class `run_time` 1.0; `run_time_for` = the last key's
+  seconds, so a configured `run_time` or a short beat stretches or squeezes the keys);
+  `move_along` (`path` `[[x, y], ...]`, `curve` `smooth | straight`, `ease`, `speed` (0, 20]
+  units per second on screen; class `run_time` 2.0; with `speed`, `run_time_for` = the longest
+  path's screen length (a part's × `character_height`) / speed). The path starts where the
+  target is (that point first, repeated points dropped); an ease past 0..1 holds at the ends
+  (`MotionPath.at` clamps). Both reversible: `until` moves each target back to the values saved
+  at `apply`, straight with `smooth`, in the use's run time. `scene_problems`: the scene type's
+  `target_patterns` must include `<character>` (else `keyframes moves the characters, props and
+  character parts of a stage`); per matched target name and per key / point, a whole target's
+  `x` through `camera_place` and |y| ≤ `WHOLE_Y_LIMIT` 1, a part's `x` a number and |x|, |y| ≤
+  `PART_SHIFT_LIMIT` 1. `problems()`: `key_time_problems` (`keys[1].t: t 0.5 is not after the key
+  before (1.0); keys go in time order`). Unknown parts are the usual unknown-target problem.
+- **Not done here**: no `cartoon_motion` on keyed moves (use `ease: lively`); a moved character
+  does not face its way (add `turn`) and walks / jumps from where it is (a lifted character walks
+  in the air); a whole-target `scale` is a Manim scale (strokes keep their width); no rotation
+  along a path's direction; keys for `depth` or opacity. Tests: `tests/test_cartoon_keyframes.py`.

@@ -96,7 +96,7 @@ scenes:
 
 ## Targets
 
-`<character>`, `<prop>`
+`<character>`, `<prop>`, `<character>.<part>`
 
 ## Beats
 

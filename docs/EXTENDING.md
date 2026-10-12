@@ -194,6 +194,15 @@ with `MOTION_LEVELS[setting]`). `hero.set_squash(x, y)` scales the whole figure 
 actions (`say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `enter`, `exit`,
 `gesture`, `jump`) work on every target that is a `Character`, so register your characters as
 targets (`self.target(name, hero)`) to let a video's beats act on them.
+`KeyedMotion(mob, values_at, part=None)` moves any mobject (feet `x`, `y` on screen, `rotate`
+degrees and `scale` about its feet) or, with `part=`, a `Character`'s part (its pose's shift,
+angle and size) through the channel values `values_at(share)` returns; the pure helpers
+`keyed_values(start, keys, seconds)` (with `Key(seconds, values, ease)`, eases named as Manim's
+rate functions in `EASE_NAMES`), `MotionPath(points, smooth).at(share)` and `path_length` give
+them. The built-in `keyframes` and `move_along` actions (`src/vidgen/scenes/keyframes_action.py`)
+act on a `stage`'s characters, props and part targets `<character>.<part>`; a scene of your own
+can register part targets the same way (`self.target("hero.arm_left", hero.parts["arm_left"])`)
+and set `target_patterns` to include `"<character>"` to accept those actions.
 `character(name)` breathes, sways its head and blinks on its own (unless `idle: false`):
 `stop_idle()` / `start_idle(seed=None)` turn that off and on; a blink never shows during a
 `PoseChange`. Before drawing your own scene for characters on a set, check whether the built-in

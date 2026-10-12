@@ -111,7 +111,7 @@ def test_params_names_lift_and_targets() -> None:
     from vidgen import registry
 
     assert registry.get("stage").cls.target_names(params) == ["pip", "tree", "tree_2", "sun", "Old_well", "desk"]
-    assert registry.get("stage").cls.target_patterns == ("<character>", "<prop>")
+    assert registry.get("stage").cls.target_patterns == ("<character>", "<prop>", "<character>.<part>")
 
 
 @pytest.mark.parametrize(

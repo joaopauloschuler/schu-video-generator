@@ -15,14 +15,19 @@ All four apply the animation principles of :mod:`vidgen.cartoon.motion` (§69.13
 strength of the character's ``cartoon_motion`` setting (or their own ``motion=``): anticipation
 and overshoot on pose changes and gestures; a wind-up, a settle and follow-through on walks;
 a crouch, squash and stretch and follow-through on jumps. ``none`` plays the plain motion.
+
+:class:`KeyedMotion` moves a character, a prop or a character's part through the channel values
+of the ``keyframes`` and ``move_along`` actions (:mod:`vidgen.cartoon.keyframes`, §69.14).
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+import math
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 
-from manim import Animation, linear, smooth
+import numpy as np
+from manim import Animation, Mobject, linear, smooth
 
 from vidgen.cartoon.acting import (
     GESTURE_SECONDS,
@@ -317,4 +322,88 @@ class Jump(Animation):
         figure.sync_mouth()
 
 
-__all__ = ["Gesture", "Jump", "PoseChange", "Walk", "accented_state", "blend_poses", "part_windows", "walking_state"]
+def feet_of(mobject: Mobject) -> np.ndarray:
+    """Where ``mobject`` stands: a character's :meth:`~Character.feet`, else the point a
+    :class:`KeyedMotion` left it at, else its ``feet()`` (a prop), else the middle of its bottom
+    edge."""
+    if isinstance(mobject, Character):
+        return mobject.feet()
+    kept = getattr(mobject, "keyed_feet", None)
+    if kept is not None:
+        return np.array(kept, dtype=float)
+    feet = getattr(mobject, "feet", None)
+    return np.array(feet() if callable(feet) else mobject.get_bottom(), dtype=float)
+
+
+class KeyedMotion(Animation):
+    """Move ``mobject`` through the channel values ``values_at(share)`` gives at each ``share``
+    (0..1) of the animation (:func:`~vidgen.cartoon.keyframes.keyed_values`, or a point along a
+    :class:`~vidgen.cartoon.keyframes.MotionPath`); a channel it does not give holds.
+
+    Without ``part``: ``x`` and ``y`` are where its feet go on screen (:func:`feet_of`), ``rotate``
+    its turn in degrees counterclockwise about the feet and ``scale`` its size, both against how
+    it was built (kept on it as ``keyed_rotate`` / ``keyed_scale``, so a later motion starts from
+    them). With ``part`` (``mobject`` is then the :class:`Character`): the part's pose, ``x`` /
+    ``y`` its shift in character units, ``rotate`` its angle, ``scale`` its size (a flipped part
+    stays flipped). A character ends a running blink and keeps lip sync in step, as in
+    :class:`PoseChange`."""
+
+    def __init__(self, mobject: Mobject, values_at: Callable[[float], Mapping[str, float]], *, part: str | None = None, **kwargs) -> None:
+        if part is not None and not isinstance(mobject, Character):
+            raise TypeError("KeyedMotion: a part moves with its Character as the mobject")
+        self.values_at = values_at
+        self.part = part
+        kwargs.setdefault("rate_func", linear)
+        super().__init__(mobject, **kwargs)
+
+    def begin(self) -> None:
+        if isinstance(self.mobject, Character):
+            self.mobject.end_blink()
+        if self.part is not None:
+            sx, sy = self.mobject.pose_of(self.part).scale
+            self._signs = (math.copysign(1.0, sx), math.copysign(1.0, sy))
+        else:
+            self._feet = feet_of(self.mobject)
+            self._rotate = float(getattr(self.mobject, "keyed_rotate", 0.0))
+            self._scale = float(getattr(self.mobject, "keyed_scale", 1.0))
+        super().begin()
+
+    def interpolate_mobject(self, alpha: float) -> None:
+        values = self.values_at(self.rate_func(alpha))
+        if self.part is not None:
+            self._pose_part(values)
+        else:
+            self._place(values)
+        if isinstance(self.mobject, Character):
+            self.mobject.sync_mouth()
+
+    def _pose_part(self, values: Mapping[str, float]) -> None:
+        pose = self.mobject.pose_of(self.part)
+        scale = values.get("scale")
+        self.mobject.set_part(
+            self.part,
+            angle=values.get("rotate", pose.angle),
+            scale=pose.scale if scale is None else (scale * self._signs[0], scale * self._signs[1]),
+            shift=(values.get("x", pose.shift[0]), values.get("y", pose.shift[1])),
+        )
+
+    def _place(self, values: Mapping[str, float]) -> None:
+        """Undo the last frame's turn and size about the feet, move the feet, apply the new ones:
+        a character's anchor moves along, so its poses and later moves keep them."""
+        mob, old = self.mobject, self._feet
+        feet = np.array([values.get("x", old[0]), values.get("y", old[1]), 0.0])
+        rotate, scale = values.get("rotate", self._rotate), values.get("scale", self._scale)
+        if self._rotate:
+            mob.rotate(-math.radians(self._rotate), about_point=old)
+        if self._scale != scale:
+            mob.scale(scale / self._scale, about_point=old)
+        mob.shift(feet - old)
+        if rotate:
+            mob.rotate(math.radians(rotate), about_point=feet)
+        self._feet, self._rotate, self._scale = feet, rotate, scale
+        mob.keyed_rotate, mob.keyed_scale = rotate, scale
+        if not isinstance(mob, Character):
+            mob.keyed_feet = tuple(feet)
+
+
+__all__ = ["Gesture", "Jump", "KeyedMotion", "PoseChange", "Walk", "feet_of", "accented_state", "blend_poses", "part_windows", "walking_state"]

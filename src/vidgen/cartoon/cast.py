@@ -14,7 +14,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from vidgen.cartoon.poses import chosen_shape, merged_table, unknown_name_message
+from vidgen.cartoon.poses import EXPRESSION_PARTS, POSE_PARTS, chosen_shape, merged_table, unknown_name_message
 from vidgen.config import BeatConfig, CharacterEntry, PartPoseEntry, SceneConfig, VideoConfig
 from vidgen.errors import Problem, VidgenError
 from vidgen.theme import Theme
@@ -248,6 +248,32 @@ def pose_name_problem(config: VideoConfig, character: str, kind: str, name: str)
         return None
     table = merged_table(kind, getattr(entry, f"{kind}s"))
     return None if name in table else unknown_name_message(kind, name, table, entry.name)
+
+
+#: The order of a character's part targets (``kit.body`` ... ``kit.mouth``).
+TARGET_PART_ORDER: tuple[str, ...] = POSE_PARTS + EXPRESSION_PARTS
+
+
+def part_target_names(names: Iterable[str]) -> list[str]:
+    """``<character>.<part>`` for each part of each of the active project's characters among
+    ``names`` (DESIGN.md §69.14); none without an active project, nor for a character that is
+    not declared or whose svg cannot be read (validate reports those)."""
+    from vidgen import runtime
+
+    if not runtime.has_context():
+        return []
+    project = runtime.current_project()
+    entries = {entry.name: entry for entry in project.config.characters}
+    out: list[str] = []
+    for name in names:
+        if name not in entries:
+            continue
+        try:
+            parts = character_part_shapes(entries[name], project.root)
+        except VidgenError:
+            continue
+        out += [f"{name}.{part}" for part in TARGET_PART_ORDER if part in parts]
+    return out
 
 
 def check_character_name(name: str) -> str:

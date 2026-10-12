@@ -410,9 +410,9 @@ one.
 - [x] Tests: the easing curves (values at fixed times), the setting turns each effect off (`tests/test_cartoon_motion.py`: 14 without rendering, 1 tiny render)
 
 ### Step 81 — Keyframes and motion paths in YAML
-- [ ] A small keyframe format for any character, prop or part: `keys: [{t: 0.0, x: .., y: .., rotate: .., scale: ..}, ...]` with `ease:`; `path:` along points or a curve (`move_along: [[x,y], ...]`, smooth)
-- [ ] Times relative to the beat (seconds or fractions); validate checks order and ranges
-- [ ] Tests: interpolation values, path lengths
+- [x] A small keyframe format for any character, prop or part: `keys: [{t: 0.0, x: .., y: .., rotate: .., scale: ..}, ...]` with `ease:`; `path:` along points or a curve (`move_along: [[x,y], ...]`, smooth) (beat actions `keyframes` (`- keyframes: kit.arm_left` + `keys`, `ease`) and `move_along` (`- move_along: pip` + `path`, `curve: smooth | straight`, `ease`, `speed`) in `scenes/keyframes_action.py`, the `to:` convention of Steps 78–79: the shorthand value is the target, so the points are the `path` option; parts are stage targets `<character>.<part>`; `ease` takes Manim's rate function names plus `lively` / `calm`; pure math in `cartoon/keyframes.py`, `KeyedMotion` in `cartoon/transition.py`; both reversible with `until`; DESIGN §69.14)
+- [x] Times relative to the beat (seconds or fractions); validate checks order and ranges (`t` seconds from the action's start or `"40%"` of the beat's narration, all one way; order, shares ≤ 100 %, mark / x / y ranges per target kind, unknown parts, non-stage scenes)
+- [x] Tests: interpolation values, path lengths (`tests/test_cartoon_keyframes.py`: 10 without rendering, 1 tiny render)
 
 ### Step 82 — Spring physics for secondary motion
 - [ ] A damped spring helper (stiffness, damping) for parts that should lag and wobble (antennae, ears, tails, hair, hanging signs); used by Step 80's follow-through

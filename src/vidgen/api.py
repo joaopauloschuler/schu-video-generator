@@ -107,9 +107,9 @@ from vidgen.languages import LanguageRules, language_rules  # noqa: E402
 from vidgen.imagegen import GenerateImage, generated_image  # noqa: E402
 from vidgen.vector_mobject import VectorPicture, load_vector  # noqa: E402
 from vidgen.cartoon.character import PART_NAMES, Character, CharacterPart, CharacterState, PartPose, character  # noqa: E402
-from vidgen.cartoon.transition import Gesture, Jump, PoseChange, Walk  # noqa: E402
+from vidgen.cartoon.transition import Gesture, Jump, KeyedMotion, PoseChange, Walk, feet_of  # noqa: E402
 from vidgen.cartoon.visemes import VISEMES, VisemeCue, VisemeTrack  # noqa: E402
-from vidgen.cartoon.cast import beat_voice, pose_name_problem, say_problem, speaking_characters  # noqa: E402
+from vidgen.cartoon.cast import beat_voice, part_target_names, pose_name_problem, say_problem, speaking_characters  # noqa: E402
 from vidgen.cartoon.acting import (  # noqa: E402
     GESTURE_SECONDS,
     GESTURES,
@@ -126,6 +126,20 @@ from vidgen.cartoon.acting import (  # noqa: E402
     walk_seconds,
 )
 from vidgen.cartoon.motion import MOTION_LEVELS, jump_motion_seconds, walk_motion_seconds  # noqa: E402
+from vidgen.cartoon.keyframes import (  # noqa: E402
+    CHANNELS,
+    DEFAULT_EASE,
+    EASE_NAMES,
+    EaseName,
+    Key,
+    KeyFrame,
+    MotionPath,
+    ease_progress,
+    key_seconds,
+    key_time_problems,
+    keyed_values,
+    path_length,
+)
 from vidgen.config import MotionSetting  # noqa: E402
 from vidgen.cartoon.props import PROP_HEIGHTS, PROP_KINDS, PROP_LIFTS, SVG_PROP_HEIGHT, Prop, draw_prop, svg_prop  # noqa: E402
 from vidgen.cartoon.stage import (  # noqa: E402
@@ -135,6 +149,7 @@ from vidgen.cartoon.stage import (  # noqa: E402
     StageItem,
     StagePlacement,
     facing_towards_centre,
+    feet_point,
     layer_half_extent,
     layer_transform,
     mark_x,
@@ -389,6 +404,22 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "MotionSetting",
     "jump_motion_seconds",
     "walk_motion_seconds",
+    "CHANNELS",
+    "DEFAULT_EASE",
+    "EASE_NAMES",
+    "EaseName",
+    "Key",
+    "KeyFrame",
+    "KeyedMotion",
+    "MotionPath",
+    "ease_progress",
+    "feet_of",
+    "key_seconds",
+    "key_time_problems",
+    "keyed_values",
+    "part_target_names",
+    "path_length",
+    "feet_point",
     "MARKS",
     "StageItem",
     "StagePlacement",

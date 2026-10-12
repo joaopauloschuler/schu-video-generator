@@ -7644,3 +7644,85 @@ How to test
   s) and `test_gallery test_builtin_scenes test_actions_coverage test_extensions test_json_output
   test_mcp test_cli test_translation test_introspect test_lint` (304, 26 s); render: the cartoon
   files (6, 3 s), `test_actions_coverage test_builtin_scenes -k stage` (3, 2.5 s).
+
+
+## Step 81 — Keyframes and motion paths in YAML
+
+What was built
+- Two beat actions in `src/vidgen/scenes/keyframes_action.py` (against `vidgen.api` only):
+  `keyframes` (`keys: [{t, x, y, rotate, scale, ease}, ...]`, `ease`) and `move_along` (`path:
+  [[x, y], ...]`, `curve: smooth | straight`, `ease`, `speed`). They act on a `stage`'s
+  characters, props and character parts. Same `to:`-style convention as Steps 78–79: the
+  shorthand value is the target (`- keyframes: kit.arm_left`, `- move_along: pip`), so the
+  points are the `path` option (the task list wrote `move_along: [[x,y], ...]`).
+- Part targets: the stage registers `<character>.<part>` (`kit.arm_left`; new target pattern),
+  the dotted form other scenes use for sub-targets. `Stage.target_names` lists them after the
+  characters and props via `cast.part_target_names` (only with an active project). Acting and
+  moving actions skip parts that a wildcard selects and report a part named on its own.
+- Units: a character / prop's `x` is a mark or 0..1 of the stage, `y` its feet's height above its
+  ground line at its depth in frame heights (`Stage.grounds`), `rotate` degrees about the feet on
+  screen, `scale` a factor; a part's `x` / `y` its pose shift (character heights), `rotate` its
+  pose angle (as drawn facing right), `scale` its size (a flipped part stays flipped). `rotate`
+  and `scale` are absolute (`keyed_rotate` / `keyed_scale` kept on the mobject).
+- Times: `t` seconds from the action's start or `"40%"` of the beat's narration; all keys one way.
+- Pure functions (no manim) in `src/vidgen/cartoon/keyframes.py`: `EASES` (Manim's rate-function
+  names, reimplemented and checked against Manim by a test, plus `lively` / `calm` =
+  `motion_ease`), `ease_progress`, `key_seconds`, `key_time_problems`, `KeyFrame` (pydantic),
+  `Key`, `keyed_values`, `path_curve` (Catmull-Rom), `path_length`, `MotionPath` (even speed).
+- `KeyedMotion(mobject, values_at, part=None)` and `feet_of` in `cartoon/transition.py`.
+- Validate: key order, mixed seconds / shares, share > 100 %, unknown ease, unknown mark, a mark
+  as a part's x, |y| > 1 (whole, frame heights), |shift| > 1 (part, character heights), unknown
+  part (the usual unknown-target message), these actions on a non-stage scene.
+
+Files touched
+- New: `src/vidgen/cartoon/keyframes.py`, `src/vidgen/scenes/keyframes_action.py`,
+  `tests/test_cartoon_keyframes.py`.
+- `src/vidgen/cartoon/transition.py`, `cartoon/cast.py` (`part_target_names`,
+  `TARGET_PART_ORDER`), `scenes/stage.py` (part targets, `grounds`), `scenes/acting.py`
+  (`is_part_target`; parts skipped / reported), `scenes/__init__.py`, `api.py`,
+  `data/guide/AGENTS.md` (+ copy `AGENTS.md`: two action rows, a dialogue-bullet sentence,
+  troubleshooting list).
+- Tests updated: `tests/test_actions.py` (action name lists), `tests/test_cartoon_props.py`
+  (stage target patterns).
+- Docs: `docs/CONFIG.md` (stage targets sentence, new "Keyframes and motion paths" under
+  `stage`, `action` / `until` / `run_time` rows, targets table, actions table),
+  `docs/EXTENDING.md`, `docs/gallery/stage.md` (targets line, as `vidgen gallery` writes it),
+  `DESIGN.md` (§2 tree, §6.4, §69.12 note, new §69.14), `tasklist.md`.
+
+Public interfaces
+- `vidgen.api` adds `KeyedMotion`, `feet_of`, `CHANNELS`, `DEFAULT_EASE`, `EASE_NAMES`, `EaseName`,
+  `Key`, `KeyFrame`, `MotionPath`, `ease_progress`, `key_seconds`, `key_time_problems`,
+  `keyed_values`, `path_length`, `part_target_names`, `feet_point`. New built-in actions
+  `keyframes`, `move_along`; stage target pattern `<character>.<part>`. All compatible, except
+  that a wildcard target on a stage (`*`) now also matches parts for `dim` / `highlight` / `zoom`.
+
+Decisions / deviations
+- Ease names: no author-facing ease names existed in vidgen; the scenes use Manim's rate
+  functions in code, so `ease:` takes those names (not `there_and_back`-style ones, which end
+  where they start), plus the `cartoon_motion` words `lively` / `calm`. Default `smooth`.
+- Keys and paths do not apply `cartoon_motion` on their own (`ease: lively` does).
+- Mixed seconds and shares in one action are an error, so validate can check the order without
+  the audio.
+- `until` returns the target straight to where it was (not back along the path).
+- Searched first: no animation keyframe, ease-name or motion path code existed (`grep -rn -i
+  "keyframe\|catmull\|path_length\|easing\|rate_func" src/vidgen`: only video-codec keyframes
+  in `export.py` and Manim rate functions used in code); reused `camera_place` / `_place_x`, `feet_point`,
+  `motion_ease`, `character_part_shapes`, `Character.set_part`, the runner's `run_time_for`.
+
+Known gaps / TODOs
+- No facing along a path, no rotation along the path's direction, no `depth` or opacity keys.
+- A lifted or rotated character keeps that through later walks / jumps (walks keep feet y).
+- A whole-target `scale` is a Manim scale: strokes keep their width.
+- Step 83 (storyboards) and Step 84 (lint) do not know keyed moves yet (e.g. a target moved off
+  screen).
+
+How to test
+- `pytest tests/test_cartoon_keyframes.py` (10 not-render + 1 render at 160x90, ~2.5 s).
+- Also run (not render): `test_cartoon_acting test_cartoon_moving test_cartoon_motion
+  test_cartoon_stage test_cartoon_props test_cartoon_parallax test_cartoon_character
+  test_cartoon_poses test_actions test_api test_docs test_guide test_actions_coverage
+  test_schema` (with the new file 384, 61 s) and `test_gallery test_builtin_scenes
+  test_extensions test_json_output test_mcp test_cli test_translation test_introspect test_lint
+  test_cartoon_svg test_cartoon_visemes test_cartoon_idle test_particles test_cartoon_style
+  test_cartoon_generator test_config` (475, 28 s); render: the cartoon files (8, 4 s),
+  `test_actions_coverage test_builtin_scenes -k stage` (3, 2.5 s).
