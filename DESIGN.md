@@ -72,7 +72,8 @@ src/vidgen/
   svgclean.py             # SVG sanitiser (scripts, filters, rasters, text out; gradients flattened; caps) + theme_color (§65; no manim)
   vector_mobject.py       # load_vector() / VectorPicture: a sanitised SVG as Manim shapes (§65)
   cartoon/                # cartoons (§69): character.py (Character: named vector parts with pivots,
-                          # poses, mirroring; the basic figure; character()), cast.py (characters: lookups, checks; no manim)
+                          # poses, mirroring; character()), cast.py (characters: lookups, checks; no manim),
+                          # generator.py (look: parameters -> parts, §69.1), still.py (`vidgen character --png`)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
   actions.py              # per-beat actions: Target, Action, validation, ActionRunner (§26)
@@ -761,6 +762,7 @@ vidgen readback [PROJECT] [--variant NAME] [--beat ID ...] [--max-wer RATE] [--f
 vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME] [--json]   # generated pictures (§58)
 vidgen gallery [PROJECT] [--output DIR] [--types T,T] [--formats 16:9,9:16] [--theme PRESET]
               [--clips | --no-clips] [--jobs N] [--force] [--json]   # every scene type rendered (§60)
+vidgen character NAME [PROJECT] [--variant NAME] [--png [FILE]] [--facing right|left]   # a character's look; one still (§69.1)
 ```
 PROJECT defaults to the current directory. `render` renders the scenes whose render is missing
 or stale by its fingerprint (§14, §63; `--force`: all); `--scene` re-renders only those scenes
@@ -4861,15 +4863,22 @@ take `CharacterName` options.
   calling `set_part` / `set_state` from an updater; `.animate.set_part(...)` would interpolate
   points linearly (a chord, not an arc) — Step 70 adds the eased part-by-part transition.
   `copy()` is a deep copy with its own poses.
-- **The basic figure** (`basic_parts(colors)`): a round head on an oval body, sleeves with round
-  hands, two legs, dot eyes (`open` / `closed`), line brows, a smile arc or an open mouth; the
-  face sits 0.025 to the right so facing is visible. Outline width `OUTLINE_WIDTH = 4` (Manim
-  stroke width; Step 68 scales it with the frame). It is the only look until Step 68.
+- **The default look** (`generate_parts(CharacterLook(), colors)`, §69.1; Step 67 called it the
+  basic figure, `basic_parts`): a round head on an oval body, sleeves with round hands, two legs,
+  dot eyes (`open` / `closed`), line brows, a smile arc or an open mouth; the face sits 0.025 to
+  the right so facing is visible.
+- **Stroke widths** (Step 68): parts are drawn with `OUTLINE_WIDTH = 4` for a character
+  `REFERENCE_HEIGHT = 3` units tall. `Character.__init__` multiplies every stroke width of its
+  rest shapes by `height / REFERENCE_HEIGHT` and keeps each at least one pixel wide in the current
+  Manim config (`100 * frame_height / pixel_height`, as Cairo draws width `w` as `w * 0.01` frame
+  units). Since the frame's shorter side is always 8 units (§5), the outline is a fixed fraction
+  of the character and of the frame at any resolution and aspect. Manim's own `scale()` of a
+  character afterwards does not scale strokes (as for any `VGroup`).
 - **Config** (`config.py`): `characters: list[CharacterEntry]` at the top level;
   `CharacterEntry(name: Identifier, voice: Identifier | None, look: CharacterLook, colors:
-  CharacterColors)`; `CharacterLook` has no keys yet (Steps 68 / 69 add `look:` parameters and
+  CharacterColors)`; `CharacterLook` holds the generator's parameters (§69.1; Step 69 adds
   `svg:`); `CharacterColors(skin = secondary, clothes = primary, outline = features =
-  CHARACTER_INK #1F2430)` as `ColorRef`s. A list (not a mapping) so that a repeated name is a
+  CHARACTER_INK #1F2430, hair = accent, accessory = highlight)` as `ColorRef`s. A list (not a mapping) so that a repeated name is a
   clear error (YAML mappings silently keep the last duplicate key): `VideoConfig` raises
   `duplicate character name 'pip' (characters[0] and characters[1])`.
 - **Checks**: `voices.voice_reference_problems` also checks `characters[k].voice` (a config
@@ -4889,5 +4898,45 @@ take `CharacterName` options.
   characters).
 - **Layout dump**: a `Character` is reported as one `group` object (no text inside); Step 73
   gives it its own kind.
-- **Not done here**: no scene type draws characters yet (Step 73); `look:` has no keys; no
-  `vidgen character` command (Step 68); `.animate`-friendly pose transitions (Step 70).
+- **Not done here**: no scene type draws characters yet (Step 73); `.animate`-friendly pose
+  transitions (Step 70).
+
+### 69.1 The character generator (Step 68)
+
+`cartoon/generator.py`: `generate_parts(look, colors, *, outline_width=OUTLINE_WIDTH) ->
+list[CharacterPart]`, the parts `build_character` (and so `character(name)`) uses for every
+`characters:` entry. `colors` maps `COLOR_KEYS` (`skin, clothes, outline, features, hair,
+accessory`) to Manim colours.
+
+- **Parameters** (`CharacterLook`, all optional): `body` (`round | tall | square | bean`; sizes in
+  `BODY_SIZES`), `head_size` (0.6–1.6, radius 0.2 × it), `eyes` (`dot | oval | round | sleepy`),
+  `nose` (`none | dot | round | triangle`), `hair` (`none | short | spiky | long | bun | curly`),
+  `ears` (`none | round | pointy | floppy`), `accessories` (subset of `glasses, hat, scarf, bag`,
+  no repeats: a config error), `seed` (int or none).
+- **Proportions** (`resolve_proportions(look) -> Proportions`, no drawing): head radius, body
+  width and height, leg and arm length, eye gap, eye size and mouth width. With a `seed`, each is
+  multiplied by `0.92 + 0.16 × random.Random(seed).random()` in field order (`SEED_VARIATION`);
+  Python guarantees that `Random(int).random()` gives the same sequence on every platform and
+  version (`uniform` is not covered by that promise, so it is not used), so a look always gives
+  the same figure. Without a seed: no variation.
+- **Layout** (character units before scaling): legs from 0 to `leg_length`; the body from
+  `leg_length - 0.06` up `body_height`; shoulders (arm pivots) at `(±body_width/2, body_top -
+  0.08)`; the head centred `head_radius - 0.02` above the body top, its pivot at the neck; the
+  face 0.125 × the head radius to the right (facing right), eyes 0.15 r above the head centre.
+  The finished parts are then scaled about the feet so the top of the tallest shape (hair, bun,
+  ears or hat included) is at 1 (`_scaled_to_unit_height`); the default look is already 1 tall.
+- **Where things go**: hair (back pieces for `long` / `bun` / `curly`, then ears, the head
+  circle, the hair cap in front, the nose) is drawn inside the `head` part, so it turns with the
+  head; `scarf` and `bag` inside `body`; `glasses` and `hat` make the optional `accessory` part
+  (parent `head`, drawn on top). Shape names are the same for every look: eyes `open` /
+  `closed`, mouth `smile` / `open`, so Steps 70–72 swap them on any generated character.
+- **Originality**: every shape is a primitive (circle, ellipse, rounded rectangle, polygon, line,
+  arc); no option names or imitates a known character.
+- **`vidgen character NAME [PROJECT] [--variant NAME] [--png [FILE]] [--facing right|left]`**
+  (`cli.cmd_character`): with the project's extensions active (so project theme presets work),
+  prints `cast.character_lines(entry, theme)` (voice, every `look` value, every colour with its
+  resolved hex). `--png` calls `still.write_character_png(project, entry, theme, path,
+  facing=)`: Manim's camera draws the character `0.8 × 8` units tall, centred, on the theme
+  background, in the final format's aspect ratio with its shorter side 720 px; default file
+  `exports/character_<name>.png` (`default_png_path`). No `--json` yet (Step 83's
+  `character-sheet` is the agent tool, also over MCP).

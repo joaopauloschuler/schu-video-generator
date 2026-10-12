@@ -267,18 +267,56 @@ class CharacterColors(_Strict):
     """``colors`` of a character (DESIGN.md §69): theme tokens or hex colours of its parts."""
 
     skin: ColorRef = "secondary"
-    """Head and hands (skin or fur)."""
+    """Head, ears, nose and hands (skin or fur)."""
     clothes: ColorRef = "primary"
     """Body and legs."""
     outline: ColorRef = CHARACTER_INK
     """Outline of every part."""
     features: ColorRef = CHARACTER_INK
-    """Eyes, brows and mouth."""
+    """Eyes, brows, mouth and a dot nose."""
+    hair: ColorRef = "accent"
+    """Hair (look.hair)."""
+    accessory: ColorRef = "highlight"
+    """Hat, scarf and bag (look.accessories); glasses use outline."""
+
+
+BodyShape = Literal["round", "tall", "square", "bean"]
+EyeStyle = Literal["dot", "oval", "round", "sleepy"]
+NoseStyle = Literal["none", "dot", "round", "triangle"]
+HairStyle = Literal["none", "short", "spiky", "long", "bun", "curly"]
+EarStyle = Literal["none", "round", "pointy", "floppy"]
+Accessory = Literal["glasses", "hat", "scarf", "bag"]
 
 
 class CharacterLook(_Strict):
-    """``look`` of a character: how it is drawn. Empty for now: every character uses the basic
-    figure; the parametric generator and imported SVGs add keys here (DESIGN.md §69)."""
+    """``look`` of a character: the parameters of the character generator (DESIGN.md §69.1).
+    Every value builds an original figure from primitives (circles, ellipses, rounded
+    rectangles, polygons); ``seed`` varies its proportions a little."""
+
+    body: BodyShape = "round"
+    """Body shape: round, tall, square or bean."""
+    head_size: float = Field(1.0, ge=0.6, le=1.6)
+    """Head size relative to the default head (0.6 to 1.6)."""
+    eyes: EyeStyle = "dot"
+    """Eye style: dot, oval, round (white with a pupil) or sleepy."""
+    nose: NoseStyle = "none"
+    """Nose: none, dot, round or triangle."""
+    hair: HairStyle = "none"
+    """Hair: none, short, spiky, long, bun or curly (colour: colors.hair)."""
+    ears: EarStyle = "none"
+    """Ears: none, round, pointy or floppy (skin colour)."""
+    accessories: list[Accessory] = Field(default_factory=list)
+    """Any of glasses, hat, scarf, bag (each at most once)."""
+    seed: int | None = None
+    """A number that varies the proportions a little (same seed, same figure); none: no variation."""
+
+    @field_validator("accessories")
+    @classmethod
+    def _unique_accessories(cls, value: list[str]) -> list[str]:
+        repeated = sorted({a for a in value if value.count(a) > 1})
+        if repeated:
+            raise ValueError(f"accessory listed twice: {', '.join(repeated)}")
+        return value
 
 
 class CharacterEntry(_Strict):
@@ -290,9 +328,9 @@ class CharacterEntry(_Strict):
     voice: Identifier | None = None
     """Who speaks for this character: a name from voices (or default: the base voice); none: the character does not speak."""
     look: CharacterLook = Field(default_factory=CharacterLook)
-    """How the character is drawn (the basic figure for now)."""
+    """How the character is drawn: body shape, head size, eyes, nose, hair, ears, accessories, seed."""
     colors: CharacterColors = Field(default_factory=CharacterColors)
-    """Part colours {skin, clothes, outline, features}: theme tokens or hex."""
+    """Part colours {skin, clothes, outline, features, hair, accessory}: theme tokens or hex."""
 
 
 class PronunciationEntry(_Strict):

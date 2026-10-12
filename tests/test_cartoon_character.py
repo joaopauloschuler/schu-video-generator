@@ -19,19 +19,23 @@ from vidgen.cartoon.character import (
     Character,
     CharacterPart,
     PartPose,
-    basic_parts,
     character,
 )
+from vidgen.cartoon.generator import generate_parts
 from vidgen.cli import project_problems
-from vidgen.config import parse_config
+from vidgen.config import CharacterLook, parse_config
 from vidgen.errors import VidgenError
 from vidgen.project import Project
 
-COLORS = {"skin": "#F2A541", "clothes": "#58C4DD", "outline": "#1F2430", "features": "#1F2430"}
+COLORS = {"skin": "#F2A541", "clothes": "#58C4DD", "outline": "#1F2430", "features": "#1F2430", "hair": "#FF6B6B", "accessory": "#FFD166"}
+
+
+def default_parts(colors: dict[str, str]) -> list[CharacterPart]:
+    return generate_parts(CharacterLook(), colors)
 
 
 def figure(**kwargs) -> Character:
-    return Character(basic_parts(COLORS), name="tester", **kwargs)
+    return Character(default_parts(COLORS), name="tester", **kwargs)
 
 
 def points(mob) -> np.ndarray:
@@ -72,7 +76,7 @@ def test_size_and_feet() -> None:
 )
 def test_bad_part_sets(change: Callable, message: str) -> None:
     with pytest.raises(VidgenError, match=message.replace("(", r"\(").replace(")", r"\)")):
-        Character(change(basic_parts(COLORS)), name="bad")
+        Character(change(default_parts(COLORS)), name="bad")
 
 
 # ----- pivots ---------------------------------------------------------------------------------
@@ -175,7 +179,7 @@ def test_characters_schema() -> None:
     [
         ([{"name": "pip"}, {"name": "pip"}], "duplicate character name 'pip' (characters[0] and characters[1])"),
         ([{"name": "pip", "voice": "anna"}], "characters[0].voice: unknown voice 'anna'; did you mean 'ana'?"),
-        ([{"name": "pip", "look": {"body": "round"}}], "characters[0].look.body"),
+        ([{"name": "pip", "look": {"body": "blob"}}], "characters[0].look.body"),
         ([{"name": "two words"}], "characters[0].name"),
     ],
 )
@@ -238,7 +242,7 @@ def test_character_helper_uses_the_project(make_project) -> None:
     with runtime.use_context(project) as theme:
         c = character("pip", height=2.0, facing="left")
         assert c.name == "pip" and c.facing == "left" and c.get_top()[1] == pytest.approx(2.0)
-        body = c.parts["body"].submobjects[0]
+        body = c.parts["body"].family_members_with_points()[0]
         assert body.get_fill_color().to_hex().upper() == theme.color("accent").upper()
         with pytest.raises(VidgenError, match="unknown character 'bob'"):
             character("bob")

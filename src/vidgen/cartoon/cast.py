@@ -1,7 +1,7 @@
 """The characters a video declares under ``characters:`` (DESIGN.md §69). No manim.
 
 Looking a character up by name, the unknown-character message shared by ``vidgen validate`` and
-the build, and the theme check of each character's colours.
+the build, the theme check of each character's colours, and the lines ``vidgen character`` prints.
 """
 
 from __future__ import annotations
@@ -47,6 +47,24 @@ def character_color_problems(config: VideoConfig, theme: Theme) -> list[Problem]
             except VidgenError as exc:
                 problems.append(Problem(f"characters[{k}].colors.{part}", str(exc)))
     return problems
+
+
+def character_lines(entry: CharacterEntry, theme: Theme) -> list[str]:
+    """What ``vidgen character NAME`` prints: the voice, every ``look`` value and every colour
+    (a token with the colour it resolves to in ``theme``)."""
+    look = entry.look
+    accessories = ", ".join(look.accessories) or "none"
+    seed = "none" if look.seed is None else str(look.seed)
+    colors = []
+    for part, value in entry.colors.model_dump().items():
+        resolved = theme.color(value)
+        colors.append(f"{part} {value}" if resolved.lower() == value.lower() else f"{part} {value} ({resolved})")
+    return [
+        f"character {entry.name}  (voice: {entry.voice or 'none'})",
+        f"  look:   body {look.body}, head_size {look.head_size:g}, eyes {look.eyes}, nose {look.nose}, hair {look.hair}, "
+        f"ears {look.ears}, accessories {accessories}, seed {seed}",
+        f"  colors: {', '.join(colors)}",
+    ]
 
 
 def check_character_name(name: str) -> str:

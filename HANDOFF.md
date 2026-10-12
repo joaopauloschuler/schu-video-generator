@@ -6694,3 +6694,67 @@ How to test
 - Also run here: `tests/test_docs.py tests/test_api.py tests/test_config.py tests/test_schema.py
   tests/test_voices.py` (not render).
 
+
+## Step 68 — Parametric character generator
+
+What was built
+- `src/vidgen/cartoon/generator.py`: `generate_parts(look, colors, *, outline_width=4) ->
+  list[CharacterPart]` draws a figure from `look:` with primitives only (circles, ellipses,
+  rounded rectangles, polygons, lines, arcs): `body` round / tall / square / bean, `head_size`
+  0.6–1.6, `eyes` dot / oval / round / sleepy, `nose` none / dot / round / triangle, `hair` none /
+  short / spiky / long / bun / curly, `ears` none / round / pointy / floppy, `accessories`
+  glasses / hat (the optional `accessory` part, parent head) and scarf / bag (drawn in `body`),
+  `seed` (each proportion x [0.92, 1.08] from `Random(seed).random()`). Parts are scaled so the
+  top of the figure (hair, hat included) is at 1. Shape names are the same for every look (eyes
+  `open` / `closed`, mouth `smile` / `open`). `resolve_proportions(look)` gives the numbers.
+- `Character.__init__` scales stroke widths by `height / REFERENCE_HEIGHT (3)` with a floor of
+  one pixel in the current Manim config (so the outline follows the character's size and the
+  frame; any part source, Step 69's SVGs too, gets it).
+- `vidgen character NAME [PROJECT] [--variant] [--png [FILE]] [--facing right|left]`
+  (`cli.cmd_character`): prints voice, look and colours (`cast.character_lines`); `--png` writes
+  a still via `cartoon/still.py` `write_character_png` (theme background, video aspect, short
+  side 720 px; default `exports/character_<name>.png`).
+- Config: `CharacterLook` fields above (repeated accessory is an error); `CharacterColors` gains
+  `hair = accent`, `accessory = highlight`.
+
+Files touched
+- New: `src/vidgen/cartoon/generator.py`, `src/vidgen/cartoon/still.py`,
+  `tests/test_cartoon_generator.py`.
+- `src/vidgen/cartoon/character.py` (basic figure removed: `basic_parts` is replaced by
+  `generate_parts(CharacterLook(), colors)`, same geometry; stroke scaling; `REFERENCE_HEIGHT`),
+  `cartoon/cast.py` (`character_lines`), `config.py`, `cli.py`.
+- Tests: `tests/test_cartoon_character.py` (six colour keys, the default look via the generator,
+  a real unknown `look.body` value), `tests/test_docs.py` (`CharacterLook` documented).
+- Docs: `docs/CONFIG.md` (look and colour tables, `vidgen character`), `DESIGN.md` (§2 tree, §8
+  CLI, §69 stroke widths, new §69.1), `docs/EXTENDING.md`, `README.md` (command row).
+
+Public interfaces
+- No `vidgen.api` change. Internal: `generate_parts`, `resolve_proportions`, `Proportions`,
+  `COLOR_KEYS`, `BODY_SIZES`, `REFERENCE_HEIGHT`, `write_character_png`, `character_lines`.
+  Removed: `character.basic_parts` (was internal).
+
+Decisions / deviations
+- `outline` / `features` keep the fixed ink `#1F2430` (not a theme token): no built-in token is
+  dark on every preset; the new colour keys default to tokens.
+- "Outline scales with the frame size": Manim already draws stroke widths in frame units and the
+  short side is always 8 units, so the width is scaled by the character's height (and floored at
+  1 px), which keeps it a fixed fraction of the character and of the frame.
+- `random.uniform` is not used: only `Random(int).random()` is promised stable across Python
+  versions.
+- No `--json` for `vidgen character` (keeps JSON.md / MCP untouched); Step 83's
+  `character-sheet` is the agent tool.
+- Searched before adding: still capture reuses the `tempconfig` + `Camera` pattern of
+  `thumbnail._icon_image` / `iconlist._draw_icons`; frame size from `render.worker.frame_size`;
+  no existing shape generator.
+
+Known gaps / TODOs
+- Hair caps and long hair are polygons of many points; `.animate` / morphs between looks are not
+  a goal. Glasses lenses are not sized to oval eyes beyond a minimum radius.
+- `look:` is not part of a per-scene fingerprint narrowing (editing a character re-renders all,
+  as in Step 67). The AGENTS.md guide does not mention characters yet (Step 85).
+
+How to test
+- `pytest -m "not render" tests/test_cartoon_generator.py tests/test_cartoon_character.py`
+  (59 tests), `pytest -m render` on the same files (2 tests: the Step 67 render, the `--png`
+  still). Also run: `tests/test_docs.py tests/test_config.py tests/test_schema.py
+  tests/test_api.py tests/test_guide.py tests/test_voices.py` (not render).

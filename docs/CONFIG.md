@@ -984,23 +984,49 @@ voices:
 characters:
   - name: pip
     voice: ana                 # who speaks for pip: a name from voices: (or default)
+    look: {body: bean, hair: short, eyes: round, nose: dot, accessories: [glasses, scarf], seed: 3}
     colors: {skin: "#C68B59", clothes: accent}
-  - name: rex                  # no voice: rex does not speak
+  - name: rex                  # no voice: rex does not speak; the default look
 ```
 
 | key (`characters[]`) | default | |
 |---|---|---|
 | `name` | required | the name scenes use (letters, digits, `_`); unique |
 | `voice` | none | who speaks for the character: a name from [`voices:`](#multiple-voices-voices) or `default` (the base voice); none: the character does not speak |
-| `look` | `{}` | how the character is drawn; no keys yet: every character is the basic figure (a round head on an oval body) |
+| `look` | `{}` | how the character is drawn (the generator's parameters, below); `{}`: a round head on an oval body |
 | `colors` | see below | colours of the parts: theme tokens or hex |
+
+The **generator** draws every character from simple shapes (circles, ellipses, rounded
+rectangles, polygons, lines), so each figure is an original drawing:
+
+| key (`look`) | default | |
+|---|---|---|
+| `body` | `round` | body shape: `round`, `tall`, `square`, `bean` |
+| `head_size` | `1.0` | head size relative to the default head, 0.6 to 1.6 |
+| `eyes` | `dot` | `dot`, `oval` or `round` (white with a pupil), `sleepy` (half closed) |
+| `nose` | `none` | `none`, `dot`, `round`, `triangle` |
+| `hair` | `none` | `none`, `short`, `spiky`, `long`, `bun`, `curly` (colour `colors.hair`) |
+| `ears` | `none` | `none`, `round`, `pointy`, `floppy` (skin colour); with or without hair |
+| `accessories` | `[]` | any of `glasses`, `hat` (worn on the head), `scarf`, `bag` (on the body); each at most once |
+| `seed` | none | a number that varies the proportions (head, body, legs, arms, eye gap and size, mouth) by up to 8 %; the same look and seed always give the same figure; none: no variation |
 
 | key (`colors`) | default | |
 |---|---|---|
-| `skin` | `secondary` | head and hands (skin or fur) |
-| `clothes` | `primary` | body, arms and legs |
-| `outline` | `"#1F2430"` | outline of every part |
-| `features` | `"#1F2430"` | eyes, brows and mouth |
+| `skin` | `secondary` | head, ears, a `round` / `triangle` nose and hands (skin or fur) |
+| `clothes` | `primary` | body, arms and legs (and the hat band) |
+| `outline` | `"#1F2430"` | outline of every part, and the glasses |
+| `features` | `"#1F2430"` | eyes, brows, mouth and a `dot` nose |
+| `hair` | `accent` | hair |
+| `accessory` | `highlight` | hat, scarf and bag |
+
+`outline` and `features` default to a fixed dark ink, not a theme token: no token is dark in every
+theme preset. The outline width follows the character's size on screen (about 0.5 % of the
+frame's shorter side for a character 3/8 of it tall), and is never thinner than one pixel.
+
+**A quick look**: `vidgen character NAME` prints the character's look and colours (each token
+with the colour it resolves to); `--png [FILE]` also writes one still of it on the theme
+background, in the video's aspect ratio with its shorter side 720 px (default file:
+`exports/character_<name>.png`; `--facing left` mirrors it; `--variant NAME` applies a variant).
 
 - **Checks**: two characters with the same name, a `voice` that is not in `voices:` (nor
   `default`) and an unknown key are config errors (`characters[0].voice: unknown voice 'anna';

@@ -157,8 +157,10 @@ A character param is typed `CharacterName` (`who: CharacterName`, or `CharacterN
 `vidgen validate` checks the name against the video's [`characters:`](CONFIG.md#characters-characters)
 and suggests close names. In `construct`, `character(name, height=..., facing="right")` builds
 that character as a `Character`: a `VGroup` of named parts (`PART_NAMES`: `body`, `legs`,
-`arm_left`, `arm_right`, `head`, `eyes`, `brows`, `mouth`, `accessory`), the feet at the origin
-(`feet()`). Pose a part about its pivot with `set_part(part, angle=..., scale=..., shift=...,
+`arm_left`, `arm_right`, `head`, `eyes`, `brows`, `mouth`, `accessory`), drawn from its `look:`
+(body shape, hair, accessories...; every look has the same part and shape names), the feet at
+the origin (`feet()`); its outline width follows `height`. `vidgen character NAME --png` shows
+one still of it. Pose a part about its pivot with `set_part(part, angle=..., scale=..., shift=...,
 shape=...)` (degrees counterclockwise as drawn facing right; its child parts follow, e.g. the
 head carries the eyes), swap a shape with `swap("mouth", "open")`, mirror the whole character
 with `face("left")` / `turn()`, and snapshot or restore a pose with `state()` / `set_state()`.

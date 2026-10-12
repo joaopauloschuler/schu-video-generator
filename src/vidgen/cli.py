@@ -658,6 +658,24 @@ def cmd_thumbnail(args: argparse.Namespace) -> CommandResult:
     return 0
 
 
+def cmd_character(args: argparse.Namespace) -> int:
+    """Print a declared character's look and colours; with ``--png``, also write one still of it."""
+    from vidgen import extensions
+    from vidgen.cartoon.cast import character_lines, find_character
+
+    project = Project.load(args.project, variant=args.variant)
+    entry = find_character(project.config, args.name)
+    with extensions.project_session(project) as theme:
+        for line in character_lines(entry, theme):
+            print(line)
+        if args.png is not None:
+            from vidgen.cartoon.still import write_character_png
+
+            still = write_character_png(project, entry, theme, Path(args.png) if args.png else None, facing=args.facing)
+            print(f"png: {still.path}  ({still.width}x{still.height}, facing {args.facing})")
+    return 0
+
+
 def _slides_options(args: argparse.Namespace) -> None:
     """Options of one deck format given with the other are errors (before anything renders)."""
     if args.format == "pdf":
@@ -1249,6 +1267,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--jobs", "-j", type=int, default=1, metavar="N", help="render N scenes in parallel when scenes must be rendered (default: 1)")
     output_dir_arg(p)
     p.set_defaults(func=cmd_thumbnail)
+
+    p = sub.add_parser("character", help="show a character of characters: (its look and colours); --png writes one still of it")
+    p.add_argument("name", help="the character's name (from characters:)")
+    project_arg(p)
+    p.add_argument("--variant", metavar="NAME", help="apply a named variant")
+    p.add_argument(
+        "--png", nargs="?", const="", metavar="FILE",
+        help="write a still of the character to FILE (default: <project>/exports/character_<name>.png)",
+    )
+    p.add_argument("--facing", choices=["right", "left"], default="right", help="which way the character faces in the still (default: right)")
+    p.set_defaults(func=cmd_character)
 
     p = sub.add_parser("slides", help="an HTML (or PDF) slide deck of the video's key frames, narration as speaker notes (exports/)")
     project_arg(p)

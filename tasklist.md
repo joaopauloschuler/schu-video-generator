@@ -345,10 +345,10 @@ one.
 - [x] Tests without rendering (part tree, pivots, mirroring, schema) and one tiny render test (`tests/test_cartoon_character.py`)
 
 ### Step 68 — Parametric character generator
-- [ ] `look:` parameters: body shape (round, tall, square, bean), head size, colours (skin / fur, clothes, outline), eye style, nose, hair or ears, accessories (glasses, hat, scarf, bag); seeds give variations; results are original shapes built from primitives
-- [ ] Colours default to theme tokens; outline width scales with the frame size
-- [ ] `vidgen character NAME --png` (one still) for a quick look
-- [ ] Tests: every parameter value builds, the same parameters give the same shapes
+- [x] `look:` parameters: body shape (round, tall, square, bean), head size, colours (skin / fur, clothes, outline), eye style, nose, hair or ears, accessories (glasses, hat, scarf, bag); seeds give variations; results are original shapes built from primitives (`cartoon/generator.py`; `colors` gains `hair`, `accessory`; DESIGN §69.1)
+- [x] Colours default to theme tokens; outline width scales with the frame size (skin, clothes, hair, accessory are tokens; `outline` / `features` stay the fixed dark ink of Step 67, since no token is dark in every preset; strokes scale with the character's height, at least 1 px)
+- [x] `vidgen character NAME --png` (one still) for a quick look (also prints the look and colours; `--facing`, `--variant`; no `--json`, Step 83's sheet is the agent tool)
+- [x] Tests: every parameter value builds, the same parameters give the same shapes (`tests/test_cartoon_generator.py`)
 
 ### Step 69 — Imported SVG characters
 - [ ] `look: {svg: path/to/file.svg}`: an SVG (own art, or made with the SVG image models of Step 61b) split into parts by a naming convention (`id="mouth"`, `id="arm_left"`, `data-pivot="x y"`); sanitised with `svgclean`

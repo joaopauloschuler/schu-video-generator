@@ -21,7 +21,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 
 import numpy as np
-from manim import PI, Arc, Circle, Ellipse, Line, RoundedRectangle, VGroup, VMobject
+from manim import VGroup, VMobject
 
 from vidgen.config import CharacterEntry
 from vidgen.errors import VidgenError
@@ -43,8 +43,10 @@ DEFAULT_DRAW_ORDER: dict[str, int] = {
     "eyes": 60, "mouth": 60, "brows": 70, "accessory": 80,
 }
 FACINGS: tuple[str, ...] = ("right", "left")
-#: Outline width of the basic figure (Manim stroke width).
+#: Outline width of parts drawn for a character :data:`REFERENCE_HEIGHT` tall (Manim stroke width).
 OUTLINE_WIDTH = 4.0
+#: The height (Manim units) at which a character's strokes keep the widths its parts were drawn with.
+REFERENCE_HEIGHT = 3.0
 #: Side of the anchor triangle in character units (small, so it stays inside the figure's box).
 _ANCHOR_SIDE = 0.05
 
@@ -125,6 +127,22 @@ def _check_parts(specs: Mapping[str, CharacterPart], who: str) -> dict[str, str 
     return parents
 
 
+def _one_pixel_stroke() -> float:
+    """The Manim stroke width of one pixel in the current Manim config (Cairo draws a stroke
+    width ``w`` as ``w * 0.01`` frame units)."""
+    from manim import config
+
+    return 100.0 * float(config.frame_height) / float(config.pixel_height)
+
+
+def _scale_strokes(shape: VMobject, factor: float, floor: float) -> None:
+    """Multiply the stroke widths of ``shape``'s family by ``factor``, keeping drawn strokes at
+    least ``floor`` wide."""
+    for member in shape.get_family():
+        if isinstance(member, VMobject) and member.get_stroke_width() > 0:
+            member.set_stroke(width=max(member.get_stroke_width() * factor, floor), family=False)
+
+
 def _apply(matrix: np.ndarray, points: np.ndarray) -> np.ndarray:
     out = np.array(points, dtype=float)
     out[:, :2] = points[:, :2] @ matrix[:2, :2].T + matrix[:2, 2]
@@ -133,7 +151,8 @@ def _apply(matrix: np.ndarray, points: np.ndarray) -> np.ndarray:
 
 class Character(VGroup):
     """A rigged cartoon character (see the module docstring). ``height`` is the character's
-    height in Manim units (1 character unit); the feet start at the origin.
+    height in Manim units (1 character unit); the feet start at the origin. Stroke widths scale
+    with ``height`` (as drawn at :data:`REFERENCE_HEIGHT`), at least one pixel wide.
 
     ``parts`` maps each part name to its live ``VGroup`` (one child: the shape shown).
     """
@@ -160,6 +179,10 @@ class Character(VGroup):
         self.voice = voice
         self.facing = self._checked_facing(facing)
         self._shapes = {n: {k: v.copy() for k, v in s.shapes.items()} for n, s in specs.items()}
+        stroke_factor, stroke_floor = height / REFERENCE_HEIGHT, _one_pixel_stroke()
+        for shapes in self._shapes.values():
+            for shape in shapes.values():
+                _scale_strokes(shape, stroke_factor, stroke_floor)
         self._pivots = {n: np.array(s.pivot, dtype=float) for n, s in specs.items()}
         self._order = sorted(
             specs,
@@ -336,54 +359,16 @@ class Character(VGroup):
         return placement @ mirror
 
 
-# ----- the basic figure ---------------------------------------------------------------------
-
-
-def _outlined(mob: VMobject, fill: str, outline: str) -> VMobject:
-    return mob.set_fill(fill, opacity=1).set_stroke(outline, width=OUTLINE_WIDTH)
-
-
-def _arm(side: float, clothes: str, skin: str, outline: str) -> VGroup:
-    sleeve = _outlined(RoundedRectangle(width=0.08, height=0.26, corner_radius=0.035).move_to([side * 0.2, 0.43, 0]), clothes, outline)
-    hand = _outlined(Circle(radius=0.045).move_to([side * 0.2, 0.3, 0]), skin, outline)
-    return VGroup(sleeve, hand)
-
-
-def basic_parts(colors: Mapping[str, str]) -> list[CharacterPart]:
-    """The parts of the basic figure (a round head on an oval body, two arms, two legs; facing a
-    little to the right) in character units. ``colors`` maps ``skin``, ``clothes``, ``outline``
-    and ``features`` to Manim colours. Eyes have the shapes ``open`` and ``closed``, the mouth
-    ``smile`` and ``open``."""
-    skin, clothes, outline, features = (colors[k] for k in ("skin", "clothes", "outline", "features"))
-    face_x = 0.025
-    legs = VGroup(
-        *(_outlined(RoundedRectangle(width=0.08, height=0.24, corner_radius=0.035).move_to([x, 0.12, 0]), clothes, outline) for x in (-0.07, 0.07))
-    )
-    body = _outlined(Ellipse(width=0.4, height=0.44).move_to([0, 0.4, 0]), clothes, outline)
-    head = _outlined(Circle(radius=0.2).move_to([0, 0.8, 0]), skin, outline)
-    eye_xs = (face_x - 0.07, face_x + 0.07)
-    open_eyes = VGroup(*(Ellipse(width=0.05, height=0.075).move_to([x, 0.83, 0]).set_fill(features, opacity=1).set_stroke(width=0) for x in eye_xs))
-    closed_eyes = VGroup(*(Line([x - 0.03, 0.825, 0], [x + 0.03, 0.825, 0]).set_stroke(features, width=OUTLINE_WIDTH) for x in eye_xs))
-    brows = VGroup(*(Line([x - 0.035, 0.895, 0], [x + 0.035, 0.905, 0]).set_stroke(features, width=OUTLINE_WIDTH) for x in eye_xs))
-    smile = Arc(radius=0.06, start_angle=PI * 1.2, angle=PI * 0.6, arc_center=[face_x, 0.76, 0]).set_stroke(features, width=OUTLINE_WIDTH)
-    open_mouth = Ellipse(width=0.09, height=0.07).move_to([face_x, 0.71, 0]).set_fill(features, opacity=1).set_stroke(width=0)
-    return [
-        CharacterPart("legs", {"default": legs}, (0.0, 0.22)),
-        CharacterPart("body", {"default": body}, (0.0, 0.2)),
-        CharacterPart("arm_left", {"default": _arm(1.0, clothes, skin, outline)}, (0.2, 0.54)),
-        CharacterPart("arm_right", {"default": _arm(-1.0, clothes, skin, outline)}, (-0.2, 0.54)),
-        CharacterPart("head", {"default": head}, (0.0, 0.6)),
-        CharacterPart("eyes", {"open": open_eyes, "closed": closed_eyes}, (face_x, 0.83)),
-        CharacterPart("brows", {"default": brows}, (face_x, 0.9)),
-        CharacterPart("mouth", {"smile": smile, "open": open_mouth}, (face_x, 0.72)),
-    ]
+# ----- characters of the config ------------------------------------------------------------
 
 
 def build_character(entry: CharacterEntry, *, theme: Theme | None = None, height: float = 3.0, facing: str = "right") -> Character:
-    """The :class:`Character` of a ``characters:`` entry, its colours resolved in ``theme``
-    (default: the current theme). The feet start at the origin."""
+    """The :class:`Character` of a ``characters:`` entry: its ``look`` drawn by the generator,
+    its colours resolved in ``theme`` (default: the current theme). The feet start at the origin."""
+    from vidgen.cartoon.generator import generate_parts
+
     colors = {part: resolve_color(value, theme) for part, value in entry.colors.model_dump().items()}
-    return Character(basic_parts(colors), name=entry.name, height=height, facing=facing, voice=entry.voice)
+    return Character(generate_parts(entry.look, colors), name=entry.name, height=height, facing=facing, voice=entry.voice)
 
 
 def character(name: str, *, height: float = 3.0, facing: str = "right") -> Character:
@@ -402,7 +387,6 @@ __all__ = [
     "CharacterState",
     "PartPose",
     "PART_NAMES",
-    "basic_parts",
     "build_character",
     "character",
 ]
