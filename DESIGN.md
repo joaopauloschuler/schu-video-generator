@@ -88,7 +88,9 @@ src/vidgen/
                           # follow-through, cartoon_motion, §69.13; no manim), keyframes.py (keys,
                           # eases, motion paths, §69.14; no manim), spring.py (Spring: a damped
                           # spring for secondary motion, §69.15; no manim), foley.py (the sounds
-                          # of actions as they played, §69.19; no manim); still.py also
+                          # of actions as they played, §69.19; no manim), directing.py
+                          # (auto_direct: the looks and reactions it adds, `vidgen direct`,
+                          # §69.23; no manim); still.py also
                           # draws the prop gallery and `vidgen character-sheet` (§69.16)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
@@ -687,6 +689,9 @@ Step 86 (§69.19) adds `PlayedAction`, `FoleyCue`, `foley_cues`, the `NarratedSc
 `action_foley(action, options, animations, start, seconds)` (does nothing by default), `Walk.heights`
 and `Walk.phases` / `Jump.phases`, and compatibly the `SfxEvent` field `duck` (default `False`).
 The fixes after Step 88 (§69.22) add `ground_top` (compatible).
+Step 89 (§69.23) adds `ActionConfig`, `AutoDirect`, `AutoDirectSetting`, `DirectedBeat`, `stage_directions` and
+the `NarratedScene` class method `auto_actions(project, spec, params)` (none by default;
+compatible); `ActionConfig` gains `automatic(data)`, the property `auto` and `shorthand()`.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -6201,3 +6206,79 @@ Two faults the owner saw in the Step 88 review video (`examples/cartoon` at 1280
   it failed for all six before the fix).
 - **The review video again**: `/home/claude/work/phase-h-review/cartoon_review_v2.mp4` (the same
   scratch copy and Kokoro audio, 1280x720, 59.93 s).
+
+### 69.23 Automatic directing, part 1: looks and reactions (Step 89)
+
+`auto_direct` adds the routine acting of a dialogue to a stage's beats: listeners look at whoever
+speaks, the speaker at the one it talks to, and listeners react after lines. The added actions
+are ordinary beat actions (`look_at`, `react`), so the action runner, foley, mid stills, the
+layout dump and lint treat them like written ones.
+
+- **Setting** (`config.py`): `AutoDirect(looks, reactions, gestures, closeups)` (each `True` by
+  default: a kind not given is on), `AutoDirectSetting = bool | AutoDirect`, on `VideoConfig`
+  (`False`), the stage param `auto_direct` and `BeatConfig.auto_direct` (both none: inherit).
+  `directing_kinds(beat, scene, video)`: the first setting given wins (`true` every kind of
+  `DIRECTING_KINDS`, `false` none, a mapping its true kinds); none given: off. `gestures` and
+  `closeups` are accepted and planned by no pass yet (Step 90).
+- **Planner** (`cartoon/directing.py`, no manim): `plan_directions(scene_id, cast, beats) ->
+  [DirectedBeat(beat, actions)]` is a pure function of `CastMember(name, can_look, can_emote)`
+  (stage order) and `BeatInput(id, text, speakers, actions, kinds)` (the beat's written actions,
+  resolved). It walks the beats with one `_SceneState` (who is on stage, what each looks at,
+  whom each speaker last addressed, the speakers so far and to come, each character's last
+  automatic reaction) and runs, per beat, the pass of each kind on (`_PASSES`, in
+  `DIRECTING_KINDS` order). Before the passes, `_follow_written` applies the beat's written
+  actions to the state: `enter` / `exit` (characters an `enter` of the scene names are off stage
+  until their first `enter` beat, as `Stage` keeps them), `look_at` (its `to`), and
+  `LOOK_CHANGING` (`turn`, walks, `move_along`, `keyframes`, `pose`, `emote`), after which the look
+  is unknown. A character a written action of the beat targets (by name, wildcard or part,
+  except the `FRAMING_ACTIONS` `say`, `zoom`, `pan`, `follow`, `highlight`, `dim`, `callout`) is
+  *touched*: no pass adds anything for it in that beat (written actions always win).
+  - **Looks** (`_plan_looks`): with speakers on stage, every other present character looks at
+    the first speaker, each speaker at its addressee (`_addressee`: the most recent other speaker
+    on stage, else the one it addressed before, else the next other speaker of the scene, else
+    the only other character on stage, else none); a `look_at` (at 0, run time 0.5) is added
+    unless the character is touched, has no head (`ACTION_NEEDS["look_at"]`) or already looks
+    there.
+  - **Reactions** (`_plan_reactions`): `line_cue(text)` = `question` (a `?`), else `negation` (a
+    word of `NEGATIONS`, English, curly apostrophes too), else `exclaim` (a `!`), else none. Each
+    present listener that can `emote` and is not touched gets `react` with an expression of
+    `REACTIONS[cue]` (`thinking`/`surprised`, `worried`/`sad`, `surprised`/`happy`) other than
+    its last automatic one, picked by `random.Random("<scene>/<beat>/<character>")` (seeded by
+    the names: the same in every run and process), at `REACTION_AT` 0.95 of the narration, so
+    the 0.6 s change plays in the pad (shortened by the runner when the pad is short) and the
+    runner undoes it at the next beat (`until_next_beat`).
+  - Steps 90 and 95 add passes (gestures, close-ups, shots) to `_PASSES` and fields to
+    `CastMember` / `BeatInput` (word timings, positions) as they need them.
+- **Tag**: each added action is `ActionConfig.automatic(data)` (private `_auto`, property
+  `auto`); `describe()` appends `(auto)` (log lines, mid-still labels), `shorthand()` gives the
+  `video.yaml` form (`{NAME: TARGET, ...options, at}`).
+- **Merge**: `NarratedScene.auto_actions(project, spec, params)` (class method; default none) and
+  `with_auto_actions(spec, directed)` (a copy with each beat's automatic actions after its
+  written ones). `NarratedScene.__init__` merges right after parsing the params and sets
+  `self.spec` / `self.beats` to the merged scene, before `plan_actions` and the `ActionRunner`;
+  the project's config is unchanged. `Stage.auto_actions` = `stage_directions(project, spec,
+  characters, params.auto_direct)`: speakers per beat as `Stage.narrate` picks them (`say`
+  targets, else `speaking_characters` of `beat_voice`), `can_look` / `can_emote` from
+  `character_part_shapes` and `missing_needs`, the action names from the registry (so it runs in
+  a project session). `vidgen validate` checks only written actions; the planner emits only
+  built-in actions on declared characters with built-in expressions (a test runs
+  `scene_actions` on the directed `examples/cartoon`).
+- **Fingerprint**: `auto_direct` is in the config; `cartoon/directing.py` is render code. A
+  changed setting or planner makes the scene's render stale.
+- **Visible**: `project_directions(project, scenes)` (scene id -> directed beats; each scene
+  type's `auto_actions`; `directing_used` skips the session when `auto_direct` appears nowhere).
+  `vidgen storyboard`: `SheetStill.auto` (the beat's automatic actions), a wrapped line `auto:
+  look_at kit pip · react kit thinking` (`auto_label`, at most `AUTO_LINES` 2) under the beat's
+  narration; `--json` frames gain `auto` (the shorthand forms, `[]` for none).
+  **`vidgen direct [PROJECT] [--print] [--scene ID] [--variant NAME] [--json]`**
+  (`cli.cmd_direct`): without rendering, per scene and beat the added actions (`auto_label`);
+  `--print`: `directions_yaml`, a `scenes:` -> `id`, `beats:` -> `id`, `actions:` block (one flow
+  mapping per action) to paste into `video.yaml`; once pasted they are written actions, so the
+  planner adds nothing more for those characters (tested). JSON (`jsonout.direct_document`):
+  `project, variant, scenes: [{scene, beats: [{beat, actions}]}]`.
+- **Not done here**: gestures and close-ups (Step 90), shots (Step 95); no lint check inside the
+  planner yet (Step 90); a negation word list for other languages; a speaker with two or more
+  listeners and no one answering looks at nobody in particular; a listener looks where the
+  speaker stands when the look starts (not where a walk ends); `examples/cartoon` unchanged
+  (with `auto_direct: true` it would add one look: its beats act on both characters); no MCP
+  tool for `direct`. Tests: `tests/test_cartoon_directing.py`.

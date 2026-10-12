@@ -221,7 +221,8 @@ class Stage(NarratedScene):
     ``emote``, ``pose``, ``react``) change the characters during the beats, and the moving ones
     (``walk_to``, ``enter``, ``exit``, ``gesture``, ``jump``) move them. A character with an
     ``enter`` action waits off stage until it enters. Walks, entrances, exits, jumps and a
-    surprised face make their own sounds (foley; ``foley: false`` turns them off).
+    surprised face make their own sounds (foley; ``foley: false`` turns them off). With
+    ``auto_direct``, listeners look at whoever speaks and react after lines on their own.
 
     The ``keyframes`` and ``move_along`` actions move a character, a prop or a character's part
     by keys or along a path.
@@ -264,6 +265,8 @@ class Stage(NarratedScene):
         """false: the characters do not breathe, sway or blink in this scene."""
         foley: bool | None = None
         """Sounds for the characters' actions (footsteps, whoosh on enter / exit, boing on jump, pop on a surprised face): false for none in this scene; default: the video's foley (on)."""
+        auto_direct: AutoDirectSetting | None = None
+        """Automatic directing in this scene: listeners look at whoever speaks and react after lines (true, false or {looks, reactions, gestures, closeups}); a beat's own setting wins; default: the video's (off). Actions written in a beat always win."""
         cartoon_motion: MotionSetting | None = None
         """Animation principles for the characters in this scene (anticipation, squash and stretch, overshoot and settle, follow-through): lively, calm or none; a character's own setting wins; default: the video's (lively)."""
         width: float = Field(1.0, ge=1.0, le=4.0)
@@ -374,6 +377,13 @@ class Stage(NarratedScene):
                 if problem is not None:
                     problems.append(f"characters[{k}].{kind}: {problem}")
         return problems
+
+    @classmethod
+    def auto_actions(cls, project: Any, spec: Any, params: Any) -> list[DirectedBeat]:
+        """With ``auto_direct`` (beat, scene, video; nearest wins): listeners look at whoever
+        speaks, the speaker at the one it talks to, and listeners react after lines
+        (:func:`stage_directions`, DESIGN.md §69.23)."""
+        return stage_directions(project, spec, [c.name for c in params.characters], params.auto_direct)
 
     @contextmanager
     def narrate(self, beat: Any) -> Iterator[float]:

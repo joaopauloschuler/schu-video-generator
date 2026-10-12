@@ -57,6 +57,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `cartoon_style` | none | style words added to every `generate:` prompt of [`stage`](#generated-backgrounds-cartoon_style) scenes, so a cartoon's backgrounds look alike (`"flat colours, thick outlines, soft shadows"`); part of those pictures' cache key; a variant may change it |
 | `cartoon_motion` | `lively` | how characters move: `lively`, `calm` or `none` ([animation principles](#animation-principles-cartoon_motion)); a stage's or a character's own setting wins |
 | `foley` | `true` | sounds for the characters' actions on `stage` scenes (footsteps, whoosh, boing, pop); `false`: none; a stage's `foley` param wins; see [foley](#foley-and-music-stings) |
+| `auto_direct` | `false` | automatic directing on `stage` scenes: listeners look at whoever speaks and react after lines; `true`, `false` or `{looks, reactions, gestures, closeups}`; a stage's or a beat's `auto_direct` wins; see [automatic directing](#automatic-directing-auto_direct) |
 | `scenes` | required | the scenes in order, at least one |
 
 ### Output folder (`output_dir`, `--output-dir`)
@@ -120,7 +121,9 @@ re-voiced). A beat `text` is spoken as written; it is also the subtitle. A beat'
 [beat actions](#beat-actions). A beat's `voice` (default: its scene's) picks another speaker for
 that beat — a dialogue inside one scene, see [multiple voices](#multiple-voices-voices). A beat's
 `sting` (default none) plays a short music sting on it: `reveal`, `comic` or `sad`, or `{kind, at,
-gain}`, see [music stings](#foley-and-music-stings).
+gain}`, see [music stings](#foley-and-music-stings). A beat's `auto_direct` (default: its scene's,
+else the video's) turns [automatic directing](#automatic-directing-auto_direct) on or off for that
+beat of a `stage`.
 
 ## Chapters
 
@@ -3886,6 +3889,7 @@ never leaves the stage.
 | `idle` | bool | `true` | `false`: no breathing, head sway or blinking in this scene (for every character on it) |
 | `cartoon_motion` | `lively` \| `calm` \| `none` | none (the video's) | the [animation principles](#animation-principles-cartoon_motion) of the characters in this scene; a character's own setting wins |
 | `foley` | bool | none (the video's `foley`: on) | sounds for the characters' actions in this scene (footsteps, whoosh, boing, pop; [foley](#foley-and-music-stings)); `false`: none |
+| `auto_direct` | bool \| mapping | none (the video's `auto_direct`: off) | [automatic directing](#automatic-directing-auto_direct) in this scene: `true`, `false` or `{looks, reactions, gestures, closeups}`; a beat's own `auto_direct` wins |
 | `width` | float 1–4 | `1` | width of the stage in frame widths; wider than 1: the camera pans across it (`pan`, `follow`) |
 | `camera_at` | mark \| x | `centre` | where the camera looks at the start (on a stage wider than the frame) |
 | `layers` | list | `[]` | parallax layers (below), in the order given within their place |
@@ -4139,6 +4143,55 @@ scenes:
         actions:
           - {jump: pip}
           - {exit: kit, to: right, at: 0.4}
+```
+
+#### Automatic directing (`auto_direct`)
+
+With `auto_direct: true` (top level, a stage's param or a beat's key; the nearest one wins; off
+by default) vidgen adds acting actions to a stage's beats so a dialogue looks directed without
+writing each look:
+
+- **Looks.** When a character speaks (the beat's `voice`, or its `say`), the other characters on
+  the stage `look_at` it, and it looks at the one it talks to: the last other character who
+  spoke, else the one it talked to before, else the next one who will speak, else the only other
+  character on the stage. A look a character already has is not added again. Characters an
+  `enter` brings in are not on the stage before it, nor after their `exit`.
+- **Reactions.** After a line with a `?` the listeners `react` with `thinking` or `surprised`;
+  with a negation (`no`, `not`, `never`, `don't`, `can't`...) `worried` or `sad`; with a `!`
+  `surprised` or `happy` (checked in that order; a plain statement gets none). The reaction starts
+  at `at: 0.95`, so it plays in the pause after the line (`narration.pad`), and goes at the next
+  beat. Which of the two is picked is fixed per scene, beat and character (renders repeat), and a
+  character never gets the same automatic reaction twice in a row. A surprised face pops
+  ([foley](#foley-and-music-stings)).
+- **Actions written in a beat always win.** A character that one of the beat's own actions acts
+  on gets no automatic action in that beat; `say`, `zoom`, `pan`, `follow`, `highlight`, `dim`
+  and `callout` only frame or voice it and do not count. After its own `turn`, walk, `pose` or
+  `emote`, a character is given a look again the next time it listens or speaks.
+- **What the parts allow.** No look for a character without a head, no reaction without eyes,
+  brows or a mouth (an SVG character, [above](#characters-from-svg-files)).
+
+`auto_direct: {looks: true, reactions: false}` picks kinds (a kind not given is on);
+`gestures` and `closeups` are accepted and do nothing yet. The added actions are ordinary
+actions marked as automatic: `vidgen storyboard` lists them under their beat (`auto: look_at kit
+pip · react kit thinking`; `--json`: each frame's `auto`), and the log names them `look_at kit
+(auto)`. `vidgen direct [PROJECT]` prints them per beat without rendering; `vidgen direct
+--print` writes them as YAML to paste into `video.yaml` and edit (once pasted they are written
+actions, so automatic directing adds nothing more for those characters):
+
+```yaml
+auto_direct: true
+scenes:
+  - id: park
+    type: stage
+    params:
+      characters: [{name: pip, at: left}, {name: kit, at: right}]
+    beats:
+      - text: "Is that a kite in the tree?"
+        voice: pip_voice      # kit looks at pip, pip at kit; kit reacts: thinking or surprised
+      - text: "No, it is a very flat bird."
+        voice: kit_voice      # pip reacts: worried or sad
+      - text: "Kit was not good with birds."
+        auto_direct: false    # nothing added in this beat
 ```
 
 #### Animation principles (`cartoon_motion`)
@@ -5086,6 +5139,8 @@ several pages instead of one huge image. 16:9 videos get 4 stills per row (2 on 
 sheet), 9:16 videos 5 (4); with `--per-beat N` a beat's stills stay side by side on one row.
 On a [`stage`](#stage), the mid-action stills (above) come before their beat's end still, labelled
 `½ walk_to pip @ time`, so a walk or a gesture can be checked in motion, not only where it ends.
+With [`auto_direct`](#automatic-directing-auto_direct), a line `auto: look_at kit pip · react kit
+thinking` under a beat's narration lists the actions automatic directing added to it.
 
 Files, in `build/<preview|final>[_<variant>]/storyboard/`:
 
@@ -5308,7 +5363,7 @@ when the root has a `docs/gallery` folder (the schu-video-generator repository),
 
 ## JSON output (`--json`)
 
-`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail`, `vidgen export`, `vidgen slides`, `vidgen translate-template`, `vidgen readback`, `vidgen guide`, `vidgen gallery`, `vidgen plan`, `vidgen init`, `vidgen tts`, `vidgen imagegen` and `vidgen character-sheet` accept `--json` (every command but `vidgen mcp`, which speaks MCP): stdout then holds
+`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail`, `vidgen export`, `vidgen slides`, `vidgen translate-template`, `vidgen readback`, `vidgen guide`, `vidgen gallery`, `vidgen plan`, `vidgen init`, `vidgen tts`, `vidgen imagegen`, `vidgen character-sheet` and `vidgen direct` accept `--json` (every command but `vidgen mcp`, which speaks MCP): stdout then holds
 exactly one JSON document (ASCII-only, non-ASCII characters escaped), and everything else
 (progress, `warning:` lines, Manim output) goes to stderr. These shapes are meant for programs
 and AI agents driving vidgen. Without `--json` the human output is unchanged.
@@ -5323,7 +5378,7 @@ it. Times are seconds (floats), paths are absolute strings, absent values are `n
 |---|---|---|
 | `version` | int | schema version of the document (1) |
 | `vidgen` | str | vidgen package version |
-| `command` | str \| null | `validate`, `list-scenes`, `list-themes`, `list-icons`, `render`, `schema`, `storyboard`, `lint`, `thumbnail`, `export`, `slides`, `translate-template`, `readback`, `guide`, `gallery`, `plan`, `init`, `tts`, `imagegen`, `character-sheet` (`null` if the command line could not be parsed) |
+| `command` | str \| null | `validate`, `list-scenes`, `list-themes`, `list-icons`, `render`, `schema`, `storyboard`, `lint`, `thumbnail`, `export`, `slides`, `translate-template`, `readback`, `guide`, `gallery`, `plan`, `init`, `tts`, `imagegen`, `character-sheet`, `direct` (`null` if the command line could not be parsed) |
 | `ok` | bool | `true` on success; the exit code is 0 exactly when `ok` is true |
 | `warnings` | list | `{scene, message}`: vidgen warnings of the run (`scene` is `null`, or the scene whose render printed it) |
 | `error` | object | only when `ok` is false: `{kind, message, problems, details}` |
@@ -5502,7 +5557,7 @@ for a vidgen error, 2 for an exception in scene code), `rendered` the scene ids 
 | `rendered` | list | ids of the scenes rendered by this command (config order) |
 | `reused` | list | ids of the selected scenes whose current stills were reused |
 | `elapsed` | float | wall time of the command |
-| `sheets` | list | every page written: `{kind, scene, page, pages, path, width, height, frames}`; `kind` is `video` (the whole video, `scene` is `null`) or `scene`; `page` of `pages` (1-based); `width`/`height` in px; `frames` lists the stills on the page in order: `{scene, beat, k, n, mid, time, scene_time, path}` (`beat` `null` for a silent scene, `k` of `n` stills of the beat, `mid` the actions a mid-action still shows half-way (its `k` is 0) or `null`, `time` in the video or `null` when not every scene has a render at this format, `scene_time` from the scene start, `path` the still's PNG) |
+| `sheets` | list | every page written: `{kind, scene, page, pages, path, width, height, frames}`; `kind` is `video` (the whole video, `scene` is `null`) or `scene`; `page` of `pages` (1-based); `width`/`height` in px; `frames` lists the stills on the page in order: `{scene, beat, k, n, mid, auto, time, scene_time, path}` (`beat` `null` for a silent scene, `k` of `n` stills of the beat, `mid` the actions a mid-action still shows half-way (its `k` is 0) or `null`, `auto` the actions [automatic directing](#automatic-directing-auto_direct) added to the still's beat as written in `video.yaml` (`[]` for none), `time` in the video or `null` when not every scene has a render at this format, `scene_time` from the scene start, `path` the still's PNG) |
 
 Video sheets come first, then the scene sheets in config order. `warnings` and `error.details`
 on a failed scene are as for `vidgen render --json`.
@@ -5727,6 +5782,13 @@ The same document for a dry run (`--dry-run`, no key needed) and a run (DESIGN.m
 | `project`, `variant` | str \| null | |
 | `elapsed` | float | seconds |
 | `sheets` | list | one per character drawn, in `characters:` order: `{character, path, width, height, bytes, sections}`; `sections` lists `{kind, names, own}` in sheet order: `kind` `pose`, `expression` or `mouth` (mouth shapes; absent for a character without a mouth), `names` the cells in order, `own` the character's own poses / expressions among them |
+
+### `vidgen direct --json`
+
+| key | type | |
+|---|---|---|
+| `project`, `variant` | str \| null | |
+| `scenes` | list | each scene with automatic actions (`--scene`: only those), in config order: `{scene, beats}`; `beats` lists the beats with added actions: `{beat, actions}`, each action as written in `video.yaml` (`{look_at: kit, to: pip}`, `{react: kit, expression: thinking, at: 0.95}`) |
 
 ### `vidgen lint --json`
 

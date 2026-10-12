@@ -28,6 +28,7 @@ from vidgen import carry, helpers, regions, runtime
 from vidgen.actions import TARGET_NAME, ActionRunner, Target, match_names, plan_actions
 from vidgen.camera import Bounds, view_center_within
 from vidgen.capture import FrameCapture
+from vidgen.cartoon.directing import DirectedBeat, with_auto_actions
 from vidgen.cartoon.visemes import VisemeTrack, beat_visemes
 from vidgen.layout import distribute
 from vidgen.overlay_layer import OverlayLayer
@@ -267,6 +268,8 @@ class NarratedScene(MovingCameraScene):
             theme = runtime.current_theme() if active else Theme.for_format(self.project.config.theme, self.project.config.format)
         self.theme = theme
         self.params = type(self).parse_params(spec.params, scene_id=spec.id, theme=self.theme)
+        spec = with_auto_actions(spec, type(self).auto_actions(self.project, spec, self.params))
+        self.spec = spec  # with the actions automatic directing adds (DESIGN.md §69.23)
         problem = type(self).check_beat_count(len(spec.beats))
         if problem is not None:
             raise VidgenError(f"scene '{spec.id}': {problem}")
@@ -432,6 +435,14 @@ class NarratedScene(MovingCameraScene):
         empty list means no problems. Use the logger for warnings. Call ``super()`` to keep the
         checks of a parent class.
         """
+        return []
+
+    @classmethod
+    def auto_actions(cls, project: Project, spec: SceneConfig, params: Any) -> list[DirectedBeat]:
+        """The actions automatic directing adds to the beats of ``spec`` (validated ``params``),
+        appended after each beat's own before the scene plans its actions (DESIGN.md §69.23).
+        Default: none (``stage``: looks and reactions with ``auto_direct``). Pure for a given
+        project: ``vidgen direct`` and the storyboard call it without rendering."""
         return []
 
     #: How many beats the scene type narrates: ``None`` (any number, the default), an ``int``

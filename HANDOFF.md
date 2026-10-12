@@ -8285,3 +8285,90 @@ How to test
   `-m render tests/test_cartoon_*.py tests/test_phase_h_review.py` (17 passed); `-m render
   tests/test_builtin_scenes.py -k stage` (2 passed). The new mouth test failed for all six
   motions before the fix.
+
+## Step 89 — Automatic directing, part 1: looks and reactions
+
+What was built
+- `auto_direct: true | false | {looks, reactions, gestures, closeups}` on the video (default
+  `false`), a `stage` scene (param) and a beat (key); the nearest one wins
+  (`config.directing_kinds`); in a mapping a kind not given is on. `gestures` / `closeups` are
+  accepted and planned by nothing yet (Step 90).
+- Planner `src/vidgen/cartoon/directing.py` (no manim): `plan_directions(scene_id, cast, beats)
+  -> [DirectedBeat(beat, actions)]`, a pure function of `CastMember(name, can_look, can_emote)`
+  and `BeatInput(id, text, speakers, actions, kinds)`. One `_SceneState` walks the beats; each
+  kind is a pass in `_PASSES` (`looks`, `reactions`; Step 90 adds gestures / close-ups, Step 95
+  shots, as more passes and more input fields). Written actions are applied to the state first
+  (`enter` / `exit` presence, `look_at`, look-changing actions). A character targeted by a written
+  action of the beat gets nothing automatic in it (except the framing actions `say`, `zoom`,
+  `pan`, `follow`, `highlight`, `dim`, `callout`).
+  - Looks: listeners `look_at` the first speaker; the speaker its addressee (last other speaker,
+    else the one it addressed before, else the next other speaker, else the only other character
+    on stage); never a look the character already has; none without a head.
+  - Reactions: `line_cue` (`?` question, negation word, `!` exclaim, in that order) -> `react`
+    with `thinking`/`surprised`, `worried`/`sad`, `surprised`/`happy` at `at: 0.95` (in the pad);
+    picked by `random.Random("<scene>/<beat>/<character>")`, never the character's previous
+    automatic one; none without eyes / brows / mouth.
+- Tag and merge: `ActionConfig.automatic(data)` sets `auto`; `describe()` adds `(auto)`;
+  `shorthand()` gives the YAML form. `NarratedScene.auto_actions(project, spec, params)` (class
+  method, none by default) and `with_auto_actions(spec, directed)`; `NarratedScene.__init__`
+  merges them after the params are parsed, so `self.spec` / `self.beats` hold them before
+  `plan_actions` and the `ActionRunner`. `Stage.auto_actions` -> `stage_directions` (speakers as
+  `Stage.narrate` picks them; parts from `character_part_shapes`).
+- Visible: `vidgen direct [PROJECT] [--print] [--scene ID] [--variant] [--json]` (summary per
+  beat; `--print` YAML to paste; `direct_document`); storyboard sheets get an `auto: ...` line
+  under the beat's narration (`SheetStill.auto`), storyboard JSON frames an `auto` list.
+
+Files touched
+- New: `src/vidgen/cartoon/directing.py`, `tests/test_cartoon_directing.py`.
+- `src/vidgen/config.py` (`ActionConfig` tag / `shorthand`, `AutoDirect`, `AutoDirectSetting`,
+  `DIRECTING_KINDS`, `directing_kinds`, `BeatConfig.auto_direct`, `VideoConfig.auto_direct`),
+  `scene.py` (hook, merge), `scenes/stage.py` (param, hook), `api.py`, `cli.py` (`direct`),
+  `jsonout.py`, `sheets.py`, `storyboard.py`, `data/guide/AGENTS.md` (+ copy `AGENTS.md`:
+  "Automatic directing" paragraph in `cartoons`).
+- Tests updated: `tests/test_docs.py` (`AutoDirect` in `MODELS`).
+- Docs: `docs/CONFIG.md` (top-level row, beat paragraph, stage param row, new "Automatic
+  directing (`auto_direct`)", storyboard paragraph, storyboard JSON `auto`, `vidgen direct
+  --json`, JSON command lists), `DESIGN.md` (§2 tree, §6.4, new §69.23), `docs/EXTENDING.md`
+  (`auto_actions`), `README.md` (command row), `docs/gallery/stage.md` (param rows, as `vidgen
+  gallery` writes them; not re-rendered), `tasklist.md`.
+
+Public interfaces
+- `vidgen.api` adds `ActionConfig`, `AutoDirect`, `AutoDirectSetting`, `DirectedBeat`,
+  `stage_directions`; `NarratedScene.auto_actions`; `ActionConfig.automatic` / `.auto` /
+  `.shorthand()`. Config keys `auto_direct` (top level, stage param, beat). CLI `vidgen direct`
+  (+ `--json`). Storyboard JSON frames gain `auto`. All compatible.
+
+Decisions / deviations
+- The added actions are plain `look_at` / `react` uses merged into the scene's spec (not a new
+  animation path), so foley, the runner's batching and shortening, layout dump and lint see them.
+- "Explicit wins" is per character per beat: any written action targeting it (framing actions
+  aside). Pasting `vidgen direct --print` output therefore makes the planner add nothing more for
+  those beats (tested).
+- `?` gets `thinking` or `surprised` (two choices, so "never twice in a row" is possible); a plain
+  statement gets no reaction; narrator beats get nothing.
+- Seed from the scene / beat / character names, no seed key (renders repeat; Python's
+  `random.Random(str)` hashes with SHA-512, stable across processes).
+- `vidgen validate` does not check automatic actions (they are made only from built-in actions on
+  declared characters); a test runs `scene_actions` on the directed `examples/cartoon`.
+- Searched first: reused `beat_voice`, `speaking_characters`, `character_part_shapes`,
+  `missing_needs`, `ActionConfig.resolved` and the action runner; nothing planned actions
+  before.
+
+Known gaps / TODOs
+- Step 90: gestures, close-ups and the lint checks inside the planner (`facing_away`,
+  `bubble_overlap`, `off_stage`); `examples/cartoon` with `auto_direct` (today it would add one
+  look: its beats act on both characters). Step 95: shots as another pass.
+- English negation list only; a speaker with several listeners and no one answering looks at
+  nobody; a look aims where the speaker stands when it starts; no MCP tool for `direct`.
+
+How to test
+- `pytest tests/test_cartoon_directing.py` (14 not-render + 2 render at 160x90, ~5 s).
+- Also run (not render): `test_docs test_guide test_api test_storyboard test_cartoon_sheet
+  test_cartoon_acting test_cartoon_stage test_actions test_schema test_config` (287 with the new
+  file, 64 s), `test_json_output test_cli test_cartoon_moving test_cartoon_lint
+  test_builtin_scenes test_phase_h_review test_frames test_extensions test_actions_coverage`
+  (220, 10 s), `test_gallery test_translation test_mcp` (88, 18 s); render: `test_cartoon_directing
+  test_cartoon_stage test_cartoon_acting test_cartoon_moving test_storyboard
+  test_phase_h_review` (7, 45 s). By hand: a three-beat 480x270 stage with `auto_direct: true`:
+  `vidgen storyboard` shows the `auto:` lines and the reactions (kit surprised, pip sad),
+  `vidgen lint` 0 findings.

@@ -455,11 +455,11 @@ memory cap, targeted tests, original characters only). Each step updates the gui
 `cartoons` topic where authors see the change.
 
 ### Step 89 — Automatic directing, part 1: looks and reactions
-- [ ] `auto_direct: true | false | {looks, reactions, gestures, closeups}` (video, stage scene, beat; nearest wins; off by default)
-- [ ] Looks: listeners turn and look at whoever speaks (the beat's voice / `say`), the speaker at the one it last addressed; explicit actions in a beat always win
-- [ ] Reactions in the pad after a line: a listener's expression chosen from the line's punctuation and a small word list (`!` surprised / happy, `?` thinking, negations worried), seeded and never the same twice in a row
-- [ ] The added actions are visible: `vidgen storyboard` / `--json` mark them as auto, and `vidgen direct --print` writes them out as YAML an author can paste and edit
-- [ ] Tests: the planner is a pure function from beats to actions (no render)
+- [x] `auto_direct: true | false | {looks, reactions, gestures, closeups}` (video, stage scene, beat; nearest wins; off by default) (`config.AutoDirect`, `directing_kinds`; a kind not given is on; `gestures` / `closeups` accepted, planned in Step 90; DESIGN §69.23)
+- [x] Looks: listeners turn and look at whoever speaks (the beat's voice / `say`), the speaker at the one it last addressed; explicit actions in a beat always win (addressee: the last other speaker, else the one it addressed before, else the next speaker, else the only other character; a character any written action of the beat targets gets nothing automatic, except `say` / `zoom` / `pan` / `follow` / `highlight` / `dim` / `callout`; characters off stage before their `enter` / after their `exit` are left out; no look without a head)
+- [x] Reactions in the pad after a line: a listener's expression chosen from the line's punctuation and a small word list (`!` surprised / happy, `?` thinking, negations worried), seeded and never the same twice in a row (`react` at `at: 0.95`; `?` thinking / surprised, negation worried / sad, `!` surprised / happy, in that order; seeded by scene, beat and character names; English word list)
+- [x] The added actions are visible: `vidgen storyboard` / `--json` mark them as auto, and `vidgen direct --print` writes them out as YAML an author can paste and edit (an `auto:` line under the beat's narration, frames' `auto`; `ActionConfig.auto`, log lines `look_at kit (auto)`; `vidgen direct [--print] [--scene] [--json]`; no MCP tool)
+- [x] Tests: the planner is a pure function from beats to actions (no render) (`tests/test_cartoon_directing.py`: 14 without rendering, 2 tiny renders)
 
 ### Step 90 — Automatic directing, part 2: gestures and close-ups
 - [ ] Gestures on stressed words (from word timings: longest / capitalised / emphasised `*word*` words), at most one per line, chosen from the character's available parts

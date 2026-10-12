@@ -620,6 +620,12 @@ start, seconds)`: the action runner calls it for each built-in action as it star
 its scene start time and the seconds it plays (after any shortening); the base class does
 nothing, `stage` plays its foley through the pure `foley_cues(PlayedAction(...))` (docs/CONFIG.md
 "Foley and music stings").
+A scene type that adds beat actions of its own (automatic directing) overrides the class method
+`auto_actions(cls, project, spec, params)` and returns `DirectedBeat(beat, actions)` items, each
+action made with `ActionConfig.automatic({...})`; they are appended after each beat's written
+actions before the actions are planned, and `vidgen direct` and the storyboard list them. The
+base class adds none; `stage` returns `stage_directions(project, spec, characters,
+params.auto_direct)` (docs/CONFIG.md "Automatic directing").
 
 ```python
 @scene("countdown")

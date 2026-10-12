@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
-from vidgen.config import FormatConfig
+from vidgen.config import ActionConfig, FormatConfig
 from vidgen.errors import VidgenError
 from vidgen.fileio import remove_file, write_bytes_atomic
 from vidgen.project import Project
@@ -127,7 +127,24 @@ def scene_starts(project: Project, preview: bool) -> dict[str, float | None]:
     return starts
 
 
-def _sheet_scene(project: Project, preview: bool, scene_id: str, start: float | None) -> SheetScene:
+#: Automatic actions by (scene id, beat id).
+_AutoActions = dict[tuple[str, str], tuple[ActionConfig, ...]]
+
+
+def _auto_actions(project: Project, scene_ids: list[str]) -> _AutoActions:
+    """The actions automatic directing adds to the beats of ``scene_ids`` (DESIGN.md §69.23), by
+    (scene, beat); none without ``auto_direct`` anywhere."""
+    from vidgen import extensions
+    from vidgen.cartoon.directing import directing_used, project_directions
+
+    if not directing_used(project):
+        return {}
+    with extensions.project_session(project):
+        found = project_directions(project, scene_ids)
+    return {(sid, b.beat): b.actions for sid, beats in found.items() for b in beats}
+
+
+def _sheet_scene(project: Project, preview: bool, scene_id: str, start: float | None, auto: _AutoActions) -> SheetScene:
     spec = project.scene(scene_id)
     timings = _read_json(scene_timings_path(project, preview, scene_id))
     folder = scene_frames_dir(project, preview, scene_id)
@@ -146,6 +163,7 @@ def _sheet_scene(project: Project, preview: bool, scene_id: str, start: float | 
             path=folder / still["path"],
             text=texts.get(still["beat"]) if still["beat"] is not None else None,
             mid=still.get("mid"),
+            auto=auto.get((scene_id, still["beat"]), ()),
         )
         for still in index["frames"]
     )
@@ -253,7 +271,8 @@ def make_storyboard(
     )
 
     starts = scene_starts(project, preview)
-    sections = [_sheet_scene(project, preview, sid, starts[sid]) for sid in selected]
+    auto = _auto_actions(project, selected)
+    sections = [_sheet_scene(project, preview, sid, starts[sid], auto) for sid in selected]
     frame_size = (fmt.width, fmt.height)
     title = f"{project.config.title} — storyboard"
     _clear_old_sheets(folder, scenes or None)

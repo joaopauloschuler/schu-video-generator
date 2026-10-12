@@ -142,7 +142,8 @@ from vidgen.cartoon.keyframes import (  # noqa: E402
     keyed_values,
     path_length,
 )
-from vidgen.config import MotionSetting  # noqa: E402
+from vidgen.config import ActionConfig, AutoDirect, AutoDirectSetting, MotionSetting  # noqa: E402
+from vidgen.cartoon.directing import DirectedBeat, stage_directions  # noqa: E402
 from vidgen.cartoon.props import PROP_HEIGHTS, PROP_KINDS, PROP_LIFTS, SVG_PROP_HEIGHT, Prop, draw_prop, svg_prop  # noqa: E402
 from vidgen.cartoon.stage import (  # noqa: E402
     DEFAULT_FACTORS,
@@ -405,6 +406,11 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "walk_seconds",
     "MOTION_LEVELS",
     "MotionSetting",
+    "ActionConfig",
+    "AutoDirect",
+    "AutoDirectSetting",
+    "DirectedBeat",
+    "stage_directions",
     "jump_motion_seconds",
     "walk_motion_seconds",
     "Spring",

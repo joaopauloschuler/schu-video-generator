@@ -35,7 +35,7 @@ TEMPLATE_DOTFILES: tuple[str, ...] = ("gitignore",)
 JSON_COMMANDS: tuple[str, ...] = (
     "validate", "list-scenes", "list-themes", "list-icons", "list-sfx", "list-music", "render", "schema", "storyboard", "lint",
     "thumbnail", "export", "translate-template", "slides", "readback", "guide", "gallery", "plan",
-    "init", "tts", "imagegen", "character-sheet",
+    "init", "tts", "imagegen", "character-sheet", "direct",
 )
 
 #: What a command function returns: an exit code, or (with ``--json``) the JSON document.
@@ -720,6 +720,36 @@ def cmd_character_sheet(args: argparse.Namespace) -> CommandResult:
     return 0
 
 
+def cmd_direct(args: argparse.Namespace) -> CommandResult:
+    """Show the actions automatic directing (``auto_direct``) adds to the beats of the stage
+    scenes; with ``--print``, as YAML to paste into ``video.yaml`` (DESIGN.md §69.23)."""
+    from vidgen import extensions
+    from vidgen.cartoon.directing import auto_label, directions_yaml, project_directions
+
+    project = Project.load(args.project, variant=args.variant)
+    known = [s.id for s in project.config.scenes]
+    unknown = [sid for sid in args.scene if sid not in known]
+    if unknown:
+        raise VidgenError(f"unknown scene(s): {', '.join(unknown)}; scenes: {', '.join(known)}")
+    with extensions.project_session(project):
+        directed = project_directions(project, args.scene or None)
+    if args.json:
+        return jsonout.direct_document(project, directed)
+    if args.print:
+        print(directions_yaml(directed), end="")
+        return 0
+    if not directed:
+        print("auto_direct adds nothing: it is off (auto_direct: true turns it on), or no character speaks to another on a stage")
+        return 0
+    for scene_id, beats in directed.items():
+        count = sum(len(b.actions) for b in beats)
+        print(f"scene {scene_id}: {count} automatic action{'s' if count != 1 else ''}")
+        for beat in beats:
+            print(f"  {beat.beat}: {'  ·  '.join(auto_label(a) for a in beat.actions)}")
+    print("vidgen direct --print writes them as YAML to paste into video.yaml and edit")
+    return 0
+
+
 def _slides_options(args: argparse.Namespace) -> None:
     """Options of one deck format given with the other are errors (before anything renders)."""
     if args.format == "pdf":
@@ -1332,6 +1362,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--variant", metavar="NAME", help="apply a named variant")
     p.add_argument("--output", metavar="FILE", help="with NAME: write the sheet to FILE (default: <project>/exports/character_sheet_<name>.png)")
     p.set_defaults(func=cmd_character_sheet)
+
+    p = sub.add_parser("direct", help="show the looks and reactions auto_direct adds to the stage scenes' beats; --print writes them as YAML")
+    project_arg(p)
+    p.add_argument("--print", action="store_true", help="write the added actions as YAML to paste into video.yaml and edit")
+    p.add_argument("--scene", action="append", default=[], metavar="ID", help="only this scene (repeatable)")
+    p.add_argument("--variant", metavar="NAME", help="apply a named variant")
+    p.set_defaults(func=cmd_direct)
 
     p = sub.add_parser("slides", help="an HTML (or PDF) slide deck of the video's key frames, narration as speaker notes (exports/)")
     project_arg(p)

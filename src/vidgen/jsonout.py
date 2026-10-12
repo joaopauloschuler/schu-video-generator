@@ -22,6 +22,7 @@ from vidgen.errors import Problem, VidgenError
 from vidgen.project import Project
 
 if TYPE_CHECKING:
+    from vidgen.cartoon.directing import DirectedBeat
     from vidgen.export import ExportResult
     from vidgen.gallery import GalleryResult
     from vidgen.guide import GuideTopic
@@ -846,6 +847,7 @@ def storyboard_document(
                     "k": still.k,
                     "n": still.n,
                     "mid": still.mid,
+                    "auto": [a.shorthand() for a in still.auto],
                     "time": still.time,
                     "scene_time": still.scene_time,
                     "path": _path(still.path),
@@ -871,6 +873,19 @@ def storyboard_document(
         elapsed=round(elapsed, 3),
         sheets=sheets,
     )
+
+
+# ----- direct ----------------------------------------------------------------------------------------
+
+
+def direct_document(project: Project, directed: Mapping[str, Sequence[DirectedBeat]], warnings: Iterable[Mapping[str, Any]] = ()) -> dict[str, Any]:
+    """The ``vidgen direct --json`` document: per scene with automatic actions, per beat the
+    actions ``auto_direct`` adds, each as written in ``video.yaml`` (the shorthand form)."""
+    scenes = [
+        {"scene": scene_id, "beats": [{"beat": b.beat, "actions": [a.shorthand() for a in b.actions]} for b in beats]}
+        for scene_id, beats in directed.items()
+    ]
+    return envelope("direct", True, warnings, project=_path(project.root), variant=project.variant, scenes=scenes)
 
 
 # ----- character-sheet ---------------------------------------------------------------------------

@@ -60,6 +60,11 @@ scenes:
 | `size` | `float` | `0.45` | Height of a character at depth 0, as a fraction of the frame's shorter side. |
 | `idle` | `bool` | `True` | false: the characters do not breathe, sway or blink in this scene. |
 | `foley` | `bool \| None` |  | Sounds for the characters' actions (footsteps, whoosh on enter / exit, boing on jump, pop on a surprised face): false for none in this scene; default: the video's foley (on). |
+| `auto_direct` | `bool \| AutoDirect \| None` |  | Automatic directing in this scene: listeners look at whoever speaks and react after lines (true, false or {looks, reactions, gestures, closeups}); a beat's own setting wins; default: the video's (off). Actions written in a beat always win. |
+| `auto_direct.looks` | `bool` | `True` | Listeners turn and look at whoever speaks; the speaker looks at the one it talks to. |
+| `auto_direct.reactions` | `bool` | `True` | Listeners react in the pause after a line with an expression chosen from its punctuation and words (! surprised or happy, ? thinking, a negation worried). |
+| `auto_direct.gestures` | `bool` | `True` | Reserved for gestures on stressed words (not planned yet: no effect). |
+| `auto_direct.closeups` | `bool` | `True` | Reserved for close-ups on punchy lines (not planned yet: no effect). |
 | `cartoon_motion` | `'lively' \| 'calm' \| 'none' \| None` |  | Animation principles for the characters in this scene (anticipation, squash and stretch, overshoot and settle, follow-through): lively, calm or none; a character's own setting wins; default: the video's (lively). |
 | `width` | `float` | `1.0` | Width of the stage in frame widths (marks and x positions are fractions of it); wider than 1: the camera pans across it (pan, follow). |
 | `camera_at` | `str \| float` | `'centre'` | Where the camera looks at the start, on a stage wider than the frame: a mark or an x from 0 to 1 of the stage. |

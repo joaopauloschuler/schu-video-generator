@@ -831,6 +831,20 @@ class ActionConfig(BaseModel):
     """Seconds the action's animation takes (default: the action's own); shortened to fit the beat."""
 
     _shorthand: dict[str, Any] | None = PrivateAttr(default=None)
+    _auto: bool = PrivateAttr(default=False)
+
+    @classmethod
+    def automatic(cls, data: dict[str, Any]) -> ActionConfig:
+        """An action that automatic directing adds (``auto_direct``, DESIGN.md §69.23), not the
+        config: :attr:`auto` is true."""
+        made = cls.model_validate(data)
+        made._auto = True
+        return made
+
+    @property
+    def auto(self) -> bool:
+        """Whether automatic directing added this action (it is not in the config)."""
+        return self._auto
 
     @model_validator(mode="wrap")
     @classmethod
@@ -877,8 +891,20 @@ class ActionConfig(BaseModel):
         return [self.target] if isinstance(self.target, str) else list(self.target)
 
     def describe(self) -> str:
-        """``highlight item3`` (for messages)."""
-        return " ".join([self.action, *self.targets()])
+        """``highlight item3`` (for messages); ``look_at kit (auto)`` for an automatic action."""
+        return " ".join([self.action, *self.targets(), *(["(auto)"] if self._auto else [])])
+
+    def shorthand(self) -> dict[str, Any]:
+        """The action as written in ``video.yaml``: ``{NAME: TARGET, ...options}`` (``at``,
+        ``until`` and ``run_time`` only when set)."""
+        data: dict[str, Any] = {self.action: self.target} if self.target is not None else {"action": self.action}
+        data.update(self.options)
+        if self.at:
+            data["at"] = self.at
+        for key in ("until", "run_time"):
+            if getattr(self, key) is not None:
+                data[key] = getattr(self, key)
+        return data
 
 
 #: Keys every overlay entry has; any other key of an entry is an option of its overlay type.
@@ -994,6 +1020,41 @@ def _sting(value: str | StingCue) -> StingCue:
 
 #: A beat's ``sting:``: a kind, or ``{kind, at, gain}``.
 StingSetting = Annotated[Union[StingKind, StingCue], AfterValidator(_sting)]
+
+
+#: The kinds of automatic directing (``auto_direct:``; DESIGN.md §69.23), in planning order.
+DIRECTING_KINDS: tuple[str, ...] = ("looks", "reactions", "gestures", "closeups")
+
+
+class AutoDirect(_Strict):
+    """Which kinds of automatic directing a stage scene gets (``auto_direct: {...}``); a kind not
+    given is on. Actions written in a beat always win over automatic ones."""
+
+    looks: bool = True
+    """Listeners turn and look at whoever speaks; the speaker looks at the one it talks to."""
+    reactions: bool = True
+    """Listeners react in the pause after a line with an expression chosen from its punctuation and words (! surprised or happy, ? thinking, a negation worried)."""
+    gestures: bool = True
+    """Reserved for gestures on stressed words (not planned yet: no effect)."""
+    closeups: bool = True
+    """Reserved for close-ups on punchy lines (not planned yet: no effect)."""
+
+
+#: ``auto_direct:`` on the video, a stage scene or a beat: ``true`` (every kind), ``false``
+#: (none) or ``{looks, reactions, gestures, closeups}``; the nearest one wins.
+AutoDirectSetting = Union[bool, AutoDirect]
+
+
+def directing_kinds(*settings: AutoDirectSetting | None) -> frozenset[str]:
+    """The kinds of automatic directing on, from settings nearest first (a beat's, its scene's,
+    the video's): the first one given wins; none given: off."""
+    for setting in settings:
+        if setting is None:
+            continue
+        if isinstance(setting, bool):
+            return frozenset(DIRECTING_KINDS) if setting else frozenset()
+        return frozenset(kind for kind in DIRECTING_KINDS if getattr(setting, kind))
+    return frozenset()
 
 
 class SfxConfig(_Strict):
@@ -1299,6 +1360,8 @@ class BeatConfig(_Strict):
     """Who says this beat: a name from voices (or default: the base voice); default the scene's voice."""
     sting: StingSetting | None = None
     """A short music sting on this beat: reveal, comic or sad, or {kind, at: start | end, gain}; ducked under the narration."""
+    auto_direct: AutoDirectSetting | None = None
+    """On a stage scene: automatic looks and reactions for this beat (true, false or {looks, reactions, gestures, closeups}); default: the scene's, else the video's."""
 
     def estimated_duration(self, words_per_second: float) -> float:
         """Speech duration estimated from the word count (no padding)."""
@@ -1453,6 +1516,8 @@ class VideoConfig(_Strict):
     """Style words added to every generate: prompt of stage scenes, so a cartoon's backgrounds look alike, e.g. "flat colours, thick outlines, soft shadows"; part of the picture's cache key."""
     foley: bool = True
     """Sounds for the characters' actions on stage scenes: footsteps on walks, a whoosh on enter / exit, a boing on jump, a pop on a surprised face; false: none (a stage's foley param wins)."""
+    auto_direct: AutoDirectSetting = False
+    """Automatic directing on stage scenes: listeners look at whoever speaks and react after lines (true, false or {looks, reactions, gestures, closeups}); a stage's or a beat's setting wins; actions written in a beat always win."""
     cartoon_motion: MotionSetting | None = None
     """Animation principles for every character (anticipation, squash and stretch, overshoot and settle, follow-through): lively, calm or none; a stage's or a character's own setting wins; default lively."""
     scenes: list[SceneConfig] = Field(min_length=1)
