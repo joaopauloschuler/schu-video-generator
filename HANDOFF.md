@@ -6580,3 +6580,57 @@ How to test
   tests/test_tts_kokoro.py` runs `test_real_kokoro_synthesis` (downloads the model on first use;
   where Hugging Face's CDN is blocked, place the verified files in `$HF_HOME/hub` and set
   `HF_HUB_OFFLINE=1`). Example: `vidgen tts examples/minimal --variant kokoro`.
+
+## Step 66 — Output folder
+
+What was built
+- The deliverables of a render — `<output>[_<variant>][_preview].mp4`, `.srt`, `_chapters.txt`,
+  `_thumbnail.png` / `.jpg` (and so anything a `post_render` hook writes "next to the video") —
+  now go to `<project>/output/` instead of the project root. The folder is created by the
+  writers (the render before joining, the thumbnail via `write_bytes_atomic`), not on access.
+- New top-level key `output_dir:` (str, default none = `output`): relative to the project folder
+  (not the current directory), or absolute. Variants override it like any top-level key.
+- New flag `--output-dir DIR` on `vidgen render`, `thumbnail`, `export` (reads the MP4) and
+  `slides` (the PDF title page reads the thumbnail); relative to the current directory.
+  Precedence: flag > `output_dir:` > `output`. `lint` / `storyboard` do not read the MP4: no flag.
+- `build/` and `exports/` did not move. No fallback to (or special error for) an MP4 left in the
+  project root by older versions.
+- `output_dir` joined `project.PATH_KEYS`, so under `vidgen mcp` a config cannot point it outside
+  the allowed folder (the MCP tools do not expose the flag).
+
+Files touched
+- `src/vidgen/project.py` (`DEFAULT_OUTPUT_DIR`, `Project.output_dir`, `output_dir_override`,
+  `Project.load(..., output_dir=)`, `without_overlays` keeps the override, `PATH_KEYS`),
+  `src/vidgen/config.py` (`VideoConfig.output_dir`), `src/vidgen/cli.py` (`output_dir_arg`),
+  `src/vidgen/render/pipeline.py` (mkdir before join), `src/vidgen/templates/minimal/gitignore`,
+  `.gitignore` (`examples/**/output/`, replacing the custom_scene `*.txt` line).
+- Docs: `docs/CONFIG.md` (new "Output folder" subsection, `output` / `output_dir` rows, synopses),
+  `README.md`, `AGENTS.md` + `src/vidgen/data/guide/AGENTS.md`, `docs/COOKBOOK.md` (§1, §2, §17),
+  `DESIGN.md` (§3 tree, §4 rule, CLI synopses, §63 confinement list), example comments
+  (`examples/gallery/video.yaml`, `examples/kphi3/README.md`, `examples/kphi3/video.yaml`).
+- Tests: `tests/test_project.py` (4 new tests), old-path assertions in `test_render`,
+  `test_chapter_export`, `test_json_output`, `test_thumbnail_export`, `test_transitions`,
+  `test_music`, `test_sfx`, `test_push_wipe_carry`, `test_slides_pdf`, `test_custom_scene_example`
+  (ignores `output/` when copying the example), `test_config` (known-keys message).
+
+Public interfaces added / changed
+- `Project.output_dir` (property, the one place that decides the folder), `Project.load(path,
+  variant=None, output_dir=None)`, `Project.output_dir_override`, `project.DEFAULT_OUTPUT_DIR`.
+  `output_path` / `srt_path` / `chapters_path` / `thumbnail_path` keep their signatures and now
+  return paths in `output_dir`. `--json` documents and the MCP server report the new absolute
+  paths (they come from these functions). `vidgen.api` unchanged.
+
+Decisions / deviations
+- The flag is resolved to an absolute path at load time (from the current directory), the config
+  value lazily from the project root.
+- `export` / `slides` take the flag too so a render written elsewhere can be found.
+
+Known gaps / TODOs
+- MCP tools have no `output_dir` option (the config key works, confined to the root).
+- Render-marked tests of `test_transitions`, `test_music`, `test_sfx`, `test_push_wipe_carry`,
+  `test_custom_scene_example` were not run in this step (time / memory limits on this machine);
+  their edits are the same mechanical `root / "output" / ...` path change.
+
+How to test
+- `pytest -m "not render" tests/test_project.py` (the new tests), then the files above.
+- `vidgen render examples/minimal --preview` -> `examples/minimal/output/minimal_preview.mp4`.

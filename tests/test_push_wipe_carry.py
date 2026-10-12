@@ -414,7 +414,7 @@ def test_rendered_push_wipe_timings(rendered: tuple[Path, dict[str, Any]]) -> No
     assert [s["start"] for s in timings["scenes"]] == pytest.approx([s.start for s in plan.scenes], abs=1e-6)
     assert timings["scenes"][1]["transition"] == {"type": "push", "duration": 0.6, "overlap": 0.6, "direction": "left"}
     assert timings["scenes"][3]["transition"]["direction"] == "up"
-    assert len(_decode(root / "out_preview.mp4")) == round(plan.duration * FPS)
+    assert len(_decode(root / "output" / "out_preview.mp4")) == round(plan.duration * FPS)
     # the incoming scenes' first frames are bare; their overlays went to a clip (+ an end frame)
     for sid in ("card", "outro"):
         meta = json.loads((root / f"build/preview/timings/{sid}.json").read_text(encoding="utf-8"))["render"]
@@ -447,7 +447,7 @@ def _drawn(region: np.ndarray, background: np.ndarray, threshold: int = 40) -> n
 def test_overlays_stay_put_through_a_push(rendered: tuple[Path, dict[str, Any]]) -> None:
     root, _ = rendered
     plan = _plan(root)
-    video = _decode(root / "out_preview.mp4")
+    video = _decode(root / "output" / "out_preview.mp4")
     intro = _decode(root / "build/preview/scenes/intro.mp4")
     card = _decode(root / "build/preview/scenes/card.mp4")
     start = round(plan.scene("card").start * FPS)
@@ -476,7 +476,7 @@ def test_overlays_stay_put_through_a_push(rendered: tuple[Path, dict[str, Any]])
 def test_captions_appear_once_through_a_wipe(rendered: tuple[Path, dict[str, Any]]) -> None:
     root, _ = rendered
     plan = _plan(root)
-    video = _decode(root / "out_preview.mp4")
+    video = _decode(root / "output" / "out_preview.mp4")
     outro = _decode(root / "build/preview/scenes/outro.mp4")
     start = round(plan.scene("outro").start * FPS)
     after = _captions(video[start + 7])  # the outro's caption, drawn by its own render
@@ -491,7 +491,7 @@ def test_captions_appear_once_through_a_wipe(rendered: tuple[Path, dict[str, Any
 def test_carried_title_is_a_match_cut_then_moves(rendered: tuple[Path, dict[str, Any]]) -> None:
     root, _ = rendered
     plan = _plan(root)
-    video = _decode(root / "out_preview.mp4")
+    video = _decode(root / "output" / "out_preview.mp4")
     cut = round(plan.scene("more").start * FPS)
     band = slice(int(0.1 * H), int(0.75 * H))  # between the progress bar and the captions
     # the card's last frame shows only its title (number and rule faded); the next scene's

@@ -131,6 +131,7 @@ def test_title_page_with_thumbnail_and_portrait(tmp_path: Path, no_render: list[
     root = write_project(tmp_path / "tall", {"scenes": scenes_config(), "preview": {"width": 54, "height": 96, "fps": 5}})
     project = Project.load(root)
     fake_stills(project)
+    project.output_dir.mkdir()
     Image.new("RGB", (72, 128), (0, 120, 200)).save(project.thumbnail_path(False))
     result = make_slides_pdf(project, title_page=True, image_format="png")
     assert result.thumbnail == project.thumbnail_path(False)

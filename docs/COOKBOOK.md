@@ -39,7 +39,7 @@ vidgen tts                         # only changed beats are re-voiced
 vidgen storyboard --jobs 4         # contact sheets: build/preview/storyboard/*.png
 vidgen storyboard --scene X        # iterate on one scene
 vidgen lint --json                 # overlaps, contrast, min font, dead air, narration speed
-vidgen render --jobs 4             # full quality: MP4 + SRT + thumbnail + chapters
+vidgen render --jobs 4             # full quality: output/ gets MP4 + SRT + thumbnail + chapters
 vidgen lint --final                # lint on the real frames (slow)
 ```
 
@@ -49,7 +49,8 @@ vidgen lint --final                # lint on the real frames (slow)
 - Long renders: run them in the background and follow the log, e.g.
   `nohup vidgen render --jobs 4 > render.log 2>&1 &`. Re-running `vidgen render` after an
   interruption reuses every finished scene and only re-joins.
-- An MP4 newer than `video.yaml` and every file in `extensions/` is current.
+- An MP4 in `output/` (or your `output_dir:`) newer than `video.yaml` and every file in
+  `extensions/` is current.
 
 ## 2. QA loop: frames, not just lint
 
@@ -62,7 +63,7 @@ vidgen lint --final                # lint on the real frames (slow)
 
 ```bash
 mkdir -p qa && for t in 0.5 2 4 7 10 14 18 24 30; do
-  ffmpeg -v error -ss $t -i my_video.mp4 -frames:v 1 -vf scale=640:-1 qa/f$(printf %06.1f $t).png; done
+  ffmpeg -v error -ss $t -i output/my_video.mp4 -frames:v 1 -vf scale=640:-1 qa/f$(printf %06.1f $t).png; done
 python3 - <<'P'
 from PIL import Image; import glob
 fs = sorted(glob.glob('qa/f*.png'))
@@ -496,5 +497,5 @@ Short-form craft:
 - [ ] Pronunciation checked (readback or `whisper_check.py`).
 - [ ] validate ok · lint 0 errors · full render · lint --final · 20+ frames viewed (15+ per short)
       · thumbnail and SRT checked.
-- [ ] Report: paths (MP4, SRT, thumbnail), duration, TTS characters spent, the scene/chapter
+- [ ] Report: paths (MP4, SRT, thumbnail, all in `output/` by default), duration, TTS characters spent, the scene/chapter
       outline with sources, and any problems.

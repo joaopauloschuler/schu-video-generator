@@ -72,8 +72,8 @@ def test_sizes_paths_and_bare_project(make_project) -> None:
     overlays = [{"type": "watermark", "text": "W"}]
     root = make_project(minimal_config(output="out", overlays=overlays, variants={"v": {}}))
     project = Project.load(root, variant="v")
-    assert project.thumbnail_path(True) == root / "out_v_preview_thumbnail.png"
-    assert project.thumbnail_path(False, ".jpg") == root / "out_v_thumbnail.jpg"
+    assert project.thumbnail_path(True) == root / "output" / "out_v_preview_thumbnail.png"
+    assert project.thumbnail_path(False, ".jpg") == root / "output" / "out_v_thumbnail.jpg"
     assert project.exports_dir == root / "exports" and project.export_stem(True) == "out_v_preview"
     bare = project.without_overlays()
     assert bare.bare and not project.bare and bare.render_dir(True) == root / "build" / "preview_v_bare"
@@ -116,17 +116,17 @@ def test_designed_thumbnail_landscape_with_icon_and_jpeg(make_project) -> None:
     thumb = {"title": "Saving 77% of the parameters", "subtitle": "a short tour", "icon": "star", "jpeg": True}
     root = make_project(minimal_config(output="out", thumbnail=thumb))
     result = th.make_thumbnail(Project.load(root))
-    assert result.kind == "design" and result.path == root / "out_thumbnail.png" and result.rendered == []
+    assert result.kind == "design" and result.path == root / "output" / "out_thumbnail.png" and result.rendered == []
     with Image.open(result.path) as image:
         assert image.size == (1280, 720) and image.mode == "RGB"
     with Image.open(result.small) as small:
         assert small.size == (320, 180)
-    assert result.jpeg == root / "out_thumbnail.jpg" and result.jpeg_bytes is not None and result.jpeg_bytes < th.MAX_BYTES
+    assert result.jpeg == root / "output" / "out_thumbnail.jpg" and result.jpeg_bytes is not None and result.jpeg_bytes < th.MAX_BYTES
     assert result.source["title_px"] * 320 / 1280 >= th.MIN_TITLE_SMALL_PX
     assert [c.rule for c in result.checks] == []
     # without jpeg the old JPEG goes (it would show another thumbnail)
     th.make_thumbnail(Project.load(root), jpeg=False)
-    assert not (root / "out_thumbnail.jpg").exists()
+    assert not (root / "output" / "out_thumbnail.jpg").exists()
 
 
 def test_designed_thumbnail_vertical_preset_and_background(make_project) -> None:
@@ -201,7 +201,7 @@ def test_cli_thumbnail_json_and_usage(make_project, capsys: pytest.CaptureFixtur
     doc = json.loads(capsys.readouterr().out)
     assert doc["command"] == "thumbnail" and doc["ok"] and doc["kind"] == "design"
     assert (doc["width"], doc["height"]) == (1280, 720) and doc["source"]["title"] == "Test video"
-    assert Path(doc["path"]) == root / "out_thumbnail.png" and Path(doc["jpeg"]).is_file() and Path(doc["small"]).is_file()
+    assert Path(doc["path"]) == root / "output" / "out_thumbnail.png" and Path(doc["jpeg"]).is_file() and Path(doc["small"]).is_file()
     assert doc["checks"] == [] and doc["rendered"] == []
     assert main(["thumbnail", str(root), "--beat", "2"]) == 1
     assert "add --scene" in capsys.readouterr().err
@@ -294,7 +294,7 @@ def rendered(tmp_path_factory: pytest.TempPathFactory) -> Path:
 @pytest.mark.render
 def test_render_writes_the_frame_thumbnail(rendered: Path) -> None:
     info = json.loads((rendered / "result.json").read_text(encoding="utf-8"))
-    assert Path(info["path"]) == rendered / "out_preview_thumbnail.png"
+    assert Path(info["path"]) == rendered / "output" / "out_preview_thumbnail.png"
     assert info["rendered"] == []  # the scene's render was current: reused
     timings = json.loads((rendered / "build" / "preview" / "timings" / "intro.json").read_text(encoding="utf-8"))
     beat = timings["beats"][1]

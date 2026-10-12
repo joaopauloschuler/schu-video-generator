@@ -105,12 +105,65 @@ def test_output_paths(make_project) -> None:
     p = Project.load(root)
     v = Project.load(root, variant="vertical")
     r = root.resolve()
-    assert p.output_path() == r / "clip.mp4"
-    assert p.output_path(preview=True) == r / "clip_preview.mp4"
-    assert v.output_path() == r / "clip_vertical.mp4"
-    assert v.output_path(preview=True) == r / "clip_vertical_preview.mp4"
-    assert p.srt_path() == r / "clip.srt"
-    assert v.srt_path(preview=True) == r / "clip_vertical_preview.srt"
+    o = r / "output"
+    assert p.output_dir == o and not o.exists()  # created by the writers, not on access
+    assert p.output_path() == o / "clip.mp4"
+    assert p.output_path(preview=True) == o / "clip_preview.mp4"
+    assert v.output_path() == o / "clip_vertical.mp4"
+    assert v.output_path(preview=True) == o / "clip_vertical_preview.mp4"
+    assert p.srt_path() == o / "clip.srt"
+    assert v.srt_path(preview=True) == o / "clip_vertical_preview.srt"
+    assert p.chapters_path() == o / "clip_chapters.txt"
+    assert v.thumbnail_path(True, ".jpg") == o / "clip_vertical_preview_thumbnail.jpg"
+
+
+def test_output_dir_from_config_is_relative_to_the_project(make_project, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    absolute = (tmp_path / "abs out").resolve()
+    variants = {"elsewhere": {"output_dir": str(absolute)}, "plain": {}}
+    root = make_project(minimal_config(output="clip", output_dir="../renders", variants=variants))
+    (tmp_path / "cwd").mkdir()
+    monkeypatch.chdir(tmp_path / "cwd")  # a relative output_dir: does not follow the current directory
+    p = Project.load(root)
+    assert p.output_path().resolve() == (tmp_path / "renders" / "clip.mp4").resolve()
+    assert Project.load(root, variant="plain").srt_path().resolve() == (tmp_path / "renders" / "clip_plain.srt").resolve()
+    assert Project.load(root, variant="elsewhere").output_path() == absolute / "clip_elsewhere.mp4"
+    # build/ and exports/ stay in the project folder
+    assert p.build_dir == root.resolve() / "build" and p.exports_dir == root.resolve() / "exports"
+
+
+def test_output_dir_flag_wins(make_project, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    root = make_project(minimal_config(output="clip", output_dir="cfg"))
+    monkeypatch.chdir(tmp_path)
+    p = Project.load(root, output_dir="flag")  # relative to the current directory
+    assert p.output_dir == (tmp_path / "flag").resolve()
+    assert p.thumbnail_path() == (tmp_path / "flag" / "clip_thumbnail.png").resolve()
+    assert p.without_overlays().output_dir == p.output_dir
+    assert p.build_dir == root.resolve() / "build" and p.exports_dir == root.resolve() / "exports"
+
+
+def test_cli_output_dir_flag(make_project, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    from vidgen.cli import build_parser, main
+
+    parser = build_parser()
+    for argv in (["render"], ["thumbnail"], ["slides"], ["export", "gif"]):
+        assert parser.parse_args([*argv, "p", "--output-dir", "d"]).output_dir == "d"
+        assert parser.parse_args([*argv, "p"]).output_dir is None
+    root = make_project(minimal_config(output="out", output_dir="cfg"))
+    monkeypatch.chdir(tmp_path)
+    assert main(["thumbnail", str(root), "--output-dir", "mine", "--json"]) == 0  # a designed card: no render
+    doc = json.loads(capsys.readouterr().out)
+    assert Path(doc["path"]) == (tmp_path / "mine" / "out_thumbnail.png").resolve() and Path(doc["path"]).is_file()
+    assert not (root / "cfg").exists() and not (root / "output").exists()
+    assert sorted(f.name for f in root.iterdir()) == ["build", "video.yaml"]  # nothing in the project root
+
+
+def test_output_dir_is_confined_under_mcp(make_project, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from vidgen.project import CONFINE_ENV
+
+    root = make_project(minimal_config(output_dir="../outside"))
+    monkeypatch.setenv(CONFINE_ENV, str(root))
+    with pytest.raises(VidgenError, match="output_dir: '../outside' is outside the allowed folder"):
+        Project.load(root)
 
 
 def test_dirs(make_project) -> None:

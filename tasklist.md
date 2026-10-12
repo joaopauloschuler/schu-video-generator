@@ -324,6 +324,9 @@ by the coordinator at the end of each step with the owner's key; agents never se
 - [x] Tests mocked where the model is not installed; one real synthesis test, skipped unless the extra is installed (`tests/test_tts_kokoro.py`; the real test passed in a Python 3.12 venv with the extra)
 - [x] Docs: README install (Windows and Linux, incl. any system package such as espeak-ng), CONFIG.md "Narration providers", AGENTS.md (a free local voice for agents' own projects), THIRD_PARTY_NOTICES (Kokoro's licence) (+ DESIGN §68, `examples/minimal` variant `kokoro`; espeak-ng comes bundled in `espeakng-loader`, system package only a fallback)
 
+### Step 66 — Output folder
+- [x] Deliverables (`<output>[_<variant>][_preview].mp4`, `.srt`, `_chapters.txt`, `_thumbnail.png` / `.jpg`) go to `<project>/output/` (created when missing); top-level `output_dir:` (relative to the project folder, or absolute; a variant may set its own) and `--output-dir DIR` on `render`, `thumbnail`, `export`, `slides` (relative to the current directory) override it, flag first; one property decides it (`Project.output_dir`); `build/` and `exports/` unchanged; no fallback to an MP4 in the project root; init template `.gitignore` gets `output/`; docs, guide and tests updated
+
 ---
 
 ## Backlog (after Step 60)

@@ -179,10 +179,11 @@ my_video/
   audio/                  # generated: <beat_id>.mp3 + <beat_id>.hash  (kept, cheap to reuse)
     <variant>/            #   only for a variant whose voice or beat texts differ (§7)
   build/                  # generated: manim media, per-scene mp4, timings json, concat list
-  <output>.mp4            # final video   (<output>_preview.mp4 for previews,
-  <output>.srt            #               <output>_<variant>.mp4 for variants)
-  <output>_chapters.txt   # YouTube chapter list, when the video has chapters (Step 49, §52)
-  <output>_thumbnail.png  # thumbnail (+ .jpg), `vidgen thumbnail` / render with `thumbnail:` (Step 50, §53)
+  output/                 # the deliverables (Step 66; `output_dir:` / `--output-dir` move it, see §4)
+    <output>.mp4          #   final video   (<output>_preview.mp4 for previews,
+    <output>.srt          #                 <output>_<variant>.mp4 for variants)
+    <output>_chapters.txt #   YouTube chapter list, when the video has chapters (Step 49, §52)
+    <output>_thumbnail.png#   thumbnail (+ .jpg), `vidgen thumbnail` / render with `thumbnail:` (Step 50, §53)
   exports/                # `vidgen export`: GIFs and MP4 clips of parts of the video (Step 50, §53); `vidgen slides` decks (§55, §56)
 ```
 
@@ -311,6 +312,15 @@ Refinements (Step 1):
   lists such as `scenes` and scalars replace), then the result is validated. A variant may not
   contain `variants`. `vidgen validate` checks the base config and every variant.
 - `output` defaults to the project folder name and must be a plain file name (no path separators).
+- **Output folder** (Step 66): the deliverables — `Project.output_path` (MP4), `srt_path`,
+  `chapters_path`, `thumbnail_path` — live in `Project.output_dir`, the one property that decides
+  it: the CLI's `--output-dir DIR` (`Project.load(..., output_dir=)`, resolved from the current
+  directory; on `render`, `thumbnail`, `export`, `slides`) wins over the top-level
+  `output_dir:` (relative to the project root, or absolute; a variant may set its own), else
+  `<root>/output`. The path is not created on access; the render creates it before joining
+  (thumbnails via `write_bytes_atomic`). `build/` and `exports/` stay under the root. No
+  fallback to a video left in the root by older versions. `output_dir` is a confined path key
+  under `vidgen mcp` (§63).
 - `extensions` entries are directories relative to the project root; `Project.asset(rel)` also
   resolves relative to the project root (e.g. `assets/logo.png`).
 
@@ -729,19 +739,19 @@ vidgen list-music [PROJECT] [--render-dir DIR] [--json]   # music beds with desc
 vidgen schema [PROJECT] [--scene TYPE | --all] [--json]   # JSON Schema of video.yaml (§12)
 vidgen tts [PROJECT] [--force] [--dry-run] [--beat ID ...] [--voice NAME ...] [--variant NAME] [--json]
 vidgen render [PROJECT] [--preview] [--scene ID ...] [--variant NAME] [--no-audio] [--keep-going]
-              [--jobs N] [--frames] [--frames-per-beat N] [--force] [--json]   # changed scenes only (§63)
+              [--jobs N] [--frames] [--frames-per-beat N] [--force] [--output-dir DIR] [--json]   # changed scenes only (§63)
 vidgen storyboard [PROJECT] [--scene ID ...] [--per-beat N] [--variant NAME] [--preview | --final]
               [--width PX] [--jobs N] [--force] [--json]      # contact sheets (§14)
 vidgen lint [PROJECT] [--scene ID ...] [--rule NAME ...] [--variant NAME] [--preview | --final]
               [--fail-on SEVERITY] [--jobs N] [--force] [--json]   # layout checks (§16)
 vidgen thumbnail [PROJECT] [--variant NAME] [--preview] [--scene ID [--beat ID|N] [--at S] [--no-overlays]]
-              [--jpeg] [--jobs N] [--json]                    # <output>_thumbnail.png (§53)
+              [--jpeg] [--jobs N] [--output-dir DIR] [--json]   # output/<output>_thumbnail.png (§53)
 vidgen export gif|clip [PROJECT] [--scene ID] [--from S] [--to S] [--variant NAME] [--preview] [--width PX]
-              [--fps F] [--max-mb MB] [--with-audio] [--output FILE] [--json]   # exports/ (§53)
+              [--fps F] [--max-mb MB] [--with-audio] [--output FILE] [--output-dir DIR] [--json]   # exports/ (§53)
 vidgen slides [PROJECT] [--format html|pdf] [--variant NAME] [--preview | --final] [--mode beat|scene] [--per-beat N]
               [--overlays | --no-overlays] [--no-dedupe] [--image-format F] [--quality Q] [--max-width PX]
               [--audio] [--separate] [--notes] [--title-page] [--paper a4|letter]
-              [--output FILE] [--jobs N] [--force] [--json]   # HTML deck (§55), PDF deck (§56)
+              [--output FILE] [--jobs N] [--force] [--output-dir DIR] [--json]   # HTML deck (§55), PDF deck (§56)
 vidgen translate-template [PROJECT] [--variant NAME] [--language TAG] [--output FILE] [--json]   # translation file (§54)
 vidgen readback [PROJECT] [--variant NAME] [--beat ID ...] [--max-wer RATE] [--force] [--json]   # STT check of the audio (§57)
 vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME] [--json]   # generated pictures (§58)
@@ -4332,7 +4342,7 @@ the measured loudness, §48).
 - **Config files confined under MCP**: `Project.load` checks, when `VIDGEN_CONFINE_ROOT`
   (`project.CONFINE_ENV`) is set, that every string under a `PATH_KEYS` key anywhere in the raw
   config (variants included: `path`, `logo`, `image`, `source`, `pronunciation_file`,
-  `translations`, `extensions`) resolves (links followed) inside that folder
+  `translations`, `extensions`, `output_dir` since Step 66) resolves (links followed) inside that folder
   (`confinement_problems`); else a `VidgenError` "files outside the allowed folder". The MCP
   server sets it to its root for every command it runs. Non-path values under those keys (a
   quote's `source`, a music bed name) resolve inside the folder and pass.

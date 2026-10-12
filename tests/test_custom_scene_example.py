@@ -26,7 +26,7 @@ def test_example_validates(capsys: pytest.CaptureFixture[str]) -> None:
 
 def test_nested_theme_color_is_checked(tmp_path: Path) -> None:
     root = tmp_path / "proj"
-    shutil.copytree(EXAMPLE, root, ignore=shutil.ignore_patterns("__pycache__", "build", "*.mp4", "*.srt", "*.txt"))
+    shutil.copytree(EXAMPLE, root, ignore=shutil.ignore_patterns("__pycache__", "build", "output", "*.mp4", "*.srt", "*.txt"))
     data = yaml.safe_load((root / "video.yaml").read_text(encoding="utf-8"))
     data["scenes"][1]["params"]["rear"]["color"] = "sprockett"
     (root / "video.yaml").write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
@@ -43,7 +43,7 @@ def test_tiny_render_with_hook(tmp_path: Path, variant: str | None) -> None:
     from vidgen.render.pipeline import render_project
 
     root = tmp_path / "proj"
-    shutil.copytree(EXAMPLE, root, ignore=shutil.ignore_patterns("__pycache__", "build", "*.mp4", "*.srt", "*.txt"))
+    shutil.copytree(EXAMPLE, root, ignore=shutil.ignore_patterns("__pycache__", "build", "output", "*.mp4", "*.srt", "*.txt"))
     data = yaml.safe_load((root / "video.yaml").read_text(encoding="utf-8"))
     data["preview"] = {"width": 160, "height": 90, "fps": 5}
     data["variants"]["vertical"]["preview"] = {"width": 90, "height": 160}

@@ -436,7 +436,7 @@ def test_render_reports_and_reaches_the_target_loudness(music_project: tuple[Pat
     meter = loudness.measure(len(mixed), lambda a, b: mixed[a:b])
     assert meter.integrated == pytest.approx(-16.0, abs=1.0) and meter.true_peak <= -1.5 + 0.05
     # the encoded video: within 1 LU of the target, nothing clipped
-    audio = _mp4_audio(root / "out_preview.mp4")
+    audio = _mp4_audio(root / "output" / "out_preview.mp4")
     assert loudness.integrated_loudness(audio) == pytest.approx(-16.0, abs=1.0)
     assert np.abs(audio).max() < 1.0
 
@@ -510,7 +510,7 @@ def test_narration_only_video_keeps_its_level(tmp_path: Path) -> None:
         result = render_project(Project.load(root), preview=True, scenes=[])
     report = result.timings["mix"]
     assert report["mixed"] and report["normalized"] and report["integrated_lufs"] == pytest.approx(-18, abs=0.5)
-    assert loudness.integrated_loudness(_mp4_audio(root / "out_preview.mp4")) == pytest.approx(-18, abs=1.0)
+    assert loudness.integrated_loudness(_mp4_audio(root / "output" / "out_preview.mp4")) == pytest.approx(-18, abs=1.0)
     # --no-audio: no mix at all
     with registry.isolated():
         result = render_project(Project.load(root), preview=True, scenes=[], no_audio=True)

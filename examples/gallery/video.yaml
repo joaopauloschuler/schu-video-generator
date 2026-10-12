@@ -20,9 +20,9 @@
 #   vidgen list-music examples/gallery --render-dir build/music  # the music beds (this video: calm, ducked) as WAVs
 #   vidgen render examples/gallery --preview    # the whole video: scenes crossfade, chapter cards fade through a colour,
 #                                               # one push, one wipe, two carried objects (match cuts);
-#                                               # chapters in the MP4 + gallery_preview_chapters.txt (YouTube)
+#                                               # output/gallery_preview.mp4 with chapters + output/gallery_preview_chapters.txt (YouTube)
 #   vidgen storyboard examples/gallery --scene structure --scene tradeoff --per-beat 3  # the card's title becomes the heading
-#   vidgen thumbnail examples/gallery [--variant vertical]  # gallery_thumbnail.png (designed, see thumbnail: below)
+#   vidgen thumbnail examples/gallery [--variant vertical]  # output/gallery_thumbnail.png (designed, see thumbnail: below)
 #   vidgen thumbnail examples/gallery --preview --scene speedup --no-overlays  # a frame instead, without overlays
 #   vidgen export gif examples/gallery --preview --scene share --max-mb 2      # exports/gallery_preview_share.gif
 #   vidgen export clip examples/gallery --preview --scene reach --with-audio   # exports/gallery_preview_reach.mp4
@@ -59,7 +59,7 @@ narration:
   pad: 0.35
   words_per_second: 2.6
 
-thumbnail:            # gallery_thumbnail.png (+ .jpg) after every render, 1080x1920 in the vertical variant;
+thumbnail:            # output/gallery_thumbnail.png (+ .jpg) after every render, 1080x1920 in the vertical variant;
   title: "Every scene type, one YAML file"   # `vidgen thumbnail examples/gallery` makes it alone
   subtitle: "a vidgen gallery"                    # (docs/CONFIG.md "Thumbnail")
   icon: grid-3x3
@@ -95,7 +95,7 @@ music:                # a generated ambient bed under the whole video (docs/CONF
   duck: {depth: 12}   # 12 dB down while the narrator speaks (keyed off the narration only)
 # audio: {normalize: auto, target_lufs: -16}   # the default: a video with music is normalised to -16 LUFS
 
-chapters:             # the four chapters go into the MP4 and gallery_preview_chapters.txt, a list for a
+chapters:             # the four chapters go into the MP4 and output/..._chapters.txt, a list for a
   intro: Intro        # YouTube description (docs/CONFIG.md "Chapters in the outputs"); the video opens with
                       # chapter 1, so no intro chapter is needed (one is added at 0:00 when it starts later)
 metadata:             # tags of the MP4 (its title is the `title` above)

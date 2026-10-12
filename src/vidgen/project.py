@@ -18,6 +18,8 @@ from vidgen.translation import TranslationReport, apply_translations, read_trans
 from vidgen.voices import audio_fields, beat_voice_names, resolve_voice, speaker_tags
 
 CONFIG_NAMES: tuple[str, ...] = ("video.yaml", "video.yml", "video.json")
+#: Folder of the deliverables (MP4, SRT, chapter list, thumbnail) without ``output_dir:`` or ``--output-dir``.
+DEFAULT_OUTPUT_DIR = "output"
 
 
 def deep_merge(base: Mapping[str, Any], override: Mapping[str, Any]) -> dict[str, Any]:
@@ -74,8 +76,8 @@ def read_config_file(path: Path) -> Any:
 CONFINE_ENV = "VIDGEN_CONFINE_ROOT"
 #: Config keys (anywhere in the config, variants included) whose string values are files or
 #: folders of the project: scene ``path`` / ``logo``, watermark and thumbnail ``image``, music
-#: ``source``, ``pronunciation_file``, ``translations``, ``extensions``.
-PATH_KEYS = frozenset({"path", "logo", "image", "source", "pronunciation_file", "translations", "extensions"})
+#: ``source``, ``pronunciation_file``, ``translations``, ``extensions``, ``output_dir``.
+PATH_KEYS = frozenset({"path", "logo", "image", "source", "pronunciation_file", "translations", "extensions", "output_dir"})
 
 
 def confinement_problems(data: Any, root: Path, confine: Path) -> list[str]:
@@ -174,13 +176,24 @@ class Project:
         self._voices: dict[str | None, VoiceConfig] = {}
         #: True for :meth:`without_overlays` copies: their renders go to ``build/..._bare``.
         self.bare = False
+        #: The ``--output-dir`` folder (absolute); it wins over ``output_dir:`` (see :attr:`output_dir`).
+        self.output_dir_override: Path | None = None
 
     @classmethod
-    def load(cls, path: str | Path = ".", variant: str | None = None) -> Project:
+    def load(cls, path: str | Path = ".", variant: str | None = None, output_dir: str | Path | None = None) -> Project:
         """Load the project at ``path`` (directory or config file), optionally applying a variant.
 
         The variant's overrides are deep-merged onto the raw config before validation.
+        ``output_dir`` (the CLI's ``--output-dir``; relative to the current directory) overrides
+        where the deliverables go (:attr:`output_dir`).
         """
+        project = cls._load(path, variant)
+        if output_dir is not None:
+            project.output_dir_override = Path(output_dir).resolve()
+        return project
+
+    @classmethod
+    def _load(cls, path: str | Path, variant: str | None) -> Project:
         config_file = find_config_file(path).resolve()
         root = config_file.parent
         source = config_file.name
@@ -208,6 +221,7 @@ class Project:
         config = self.config.model_copy(update={"overlays": [], "scenes": scenes})
         bare = Project(self.root, self.config_file, config, self.variant, self.base_config, (self.source_data, self.source_config), self.translation)
         bare.bare = True
+        bare.output_dir_override = self.output_dir_override
         return bare
 
     # ----- names and paths -------------------------------------------------------------------
@@ -311,22 +325,31 @@ class Project:
             stem += "_preview"
         return stem
 
+    @property
+    def output_dir(self) -> Path:
+        """The folder of the deliverables (MP4, SRT, chapter list, thumbnail; DESIGN.md §3):
+        ``--output-dir`` (:attr:`output_dir_override`), else ``output_dir:`` (relative to the
+        project root, or absolute), else ``<root>/output``. Not created here: writers create it."""
+        if self.output_dir_override is not None:
+            return self.output_dir_override
+        return self.root / (self.config.output_dir or DEFAULT_OUTPUT_DIR)
+
     def output_path(self, preview: bool = False) -> Path:
-        """Final video path: ``<output>[_<variant>][_preview].mp4`` in the project root."""
-        return self.root / f"{self._output_stem(preview)}.mp4"
+        """Final video path: ``<output>[_<variant>][_preview].mp4`` in :attr:`output_dir`."""
+        return self.output_dir / f"{self._output_stem(preview)}.mp4"
 
     def srt_path(self, preview: bool = False) -> Path:
         """Subtitle path matching :meth:`output_path`."""
-        return self.root / f"{self._output_stem(preview)}.srt"
+        return self.output_dir / f"{self._output_stem(preview)}.srt"
 
     def chapters_path(self, preview: bool = False) -> Path:
         """YouTube chapter list matching :meth:`output_path`: ``<output>[_<variant>][_preview]_chapters.txt``."""
-        return self.root / f"{self._output_stem(preview)}_chapters.txt"
+        return self.output_dir / f"{self._output_stem(preview)}_chapters.txt"
 
     def thumbnail_path(self, preview: bool = False, suffix: str = ".png") -> Path:
         """Thumbnail matching :meth:`output_path`: ``<output>[_<variant>][_preview]_thumbnail.png``
         (``suffix`` ``.jpg`` for the JPEG copy)."""
-        return self.root / f"{self._output_stem(preview)}_thumbnail{suffix}"
+        return self.output_dir / f"{self._output_stem(preview)}_thumbnail{suffix}"
 
     def export_stem(self, preview: bool = False) -> str:
         """Start of the names of ``vidgen export`` files: ``<output>[_<variant>][_preview]``."""
