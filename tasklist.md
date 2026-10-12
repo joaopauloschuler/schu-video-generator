@@ -438,9 +438,9 @@ one.
 - [x] Tests: the action → sound schedule; mixing uses the existing path (`tests/test_cartoon_foley.py`: 6 without rendering, 1 tiny render)
 
 ### Step 87 — Render speed for cartoons
-- [ ] Static background layers rendered once per scene and reused as an image; character part drawings cached by look and part (only transforms change per frame)
-- [ ] Measure before and after on `examples/cartoon` at preview quality; record numbers in HANDOFF.md
-- [ ] Tests: the cache key changes when the look changes, not when the pose changes
+- [x] Static background layers rendered once per scene and reused as an image; character part drawings cached by look and part (only transforms change per frame) (Manim already kept a plain stage's backdrop in its static image per `play`; a stage with parallax layers now does too unless the camera follows; per-part point arrays transformed per frame; generated looks' parts cached by `look_key`; no raster cache: it would change the drawing; DESIGN §69.20)
+- [x] Measure before and after on `examples/cartoon` at preview quality; record numbers in HANDOFF.md (`hill` −8 %, `yard` −3 %, `character-sheet` −23 %; end to end and at the final format within noise)
+- [x] Tests: the cache key changes when the look changes, not when the pose changes (`tests/test_cartoon_speed.py`; the static image in `tests/test_cartoon_parallax.py`)
 
 ### Step 88 — Review of Phase H
 - [ ] End to end with mocks: the cartoon example through validate, lint, storyboard, character sheet and a preview render; docs consistency (CONFIG.md, DESIGN.md, AGENTS.md); targeted tests for Phase H, then the full suite only if the owner asks

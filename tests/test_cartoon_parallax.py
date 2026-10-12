@@ -284,3 +284,12 @@ def test_stage_layers_move_with_the_camera(make_project, tmp_path: Path) -> None
     assert post.get_center()[0] - frame.get_center()[0] == pytest.approx(-0.5 * frame.get_center()[0], abs=1e-6)
     assert bush.get_center()[0] - frame.get_center()[0] == pytest.approx(-DEFAULT_FACTORS["foreground"] * frame.get_center()[0], abs=1e-6)
     assert scene.camera_following is not None
+    # Step 87: the backdrop and layers go into Manim's static image unless the camera follows
+    hills = scene.layers["hills"]
+    scene.mobjects = [hills, post, pip]
+    assert hills in scene.get_moving_mobjects()   # following: the camera may move on any frame
+    scene.follow_with_camera(None)
+    frame.shift([1.0, 0.0, 0.0])
+    assert hills not in scene.get_moving_mobjects() and post not in scene.get_moving_mobjects()
+    # the listeners ran first: the static image shows the post where the camera is now
+    assert post.get_center()[0] - frame.get_center()[0] == pytest.approx(-0.5 * frame.get_center()[0], abs=1e-6)

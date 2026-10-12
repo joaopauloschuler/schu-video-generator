@@ -8086,3 +8086,83 @@ How to test
   (9, 16 s). By hand: a 96x54 preview of a two-beat `text_card` with `sting: reveal` / `comic`
   through `render_project`: timings carry `duck: true`, `padded/sfx.wav` peaks 6.0 / 2.4 dB under
   the raw stings.
+
+
+## Step 87 — Render speed for cartoons
+
+What was built
+- Measured first: `examples/cartoon` copied to the scratchpad, preview (854x480, 15 fps), no
+  audio (word-count timing: the worker's `--no-audio` / `render_scene(audio=False)`; `vidgen
+  render --preview` without MP3s takes the same path and warns), one scene per process under the
+  capped wrapper, cProfile plus a timer per stage object around Manim's
+  `Camera.display_vectorized`. Per scene (~9–11 s for 25–29 s of video): Cairo drawing of the two
+  characters 2–3 s, H.264 encoding in Manim's writer thread 2.6–3 s (overlaps on the 2nd core),
+  Manim's family walks ~1.5 s, `Character.refresh` 1.25 s, imports 2.7 s. Manim already kept a
+  plain stage's sky, ground and back props in its static image per `play` / `wait` (yard: 76
+  backdrop draws for 434 frames); a stage with parallax layers did not (Step 74 made every mobject
+  "moving" while `_camera_step` was installed): hill redrew sky, layer, ground and props on
+  every frame (1.24 s).
+- Static stage image: `NarratedScene.get_moving_mobjects` returns every mobject only while the
+  camera follows something; camera animations are still handled by Manim's `MovingCameraScene`;
+  the camera listeners run first so the static image has the layers where the camera is now.
+  hill: those draws 1.24 → 0.39 s.
+- Part drawings transformed only (`cartoon/character.py`): `shape_drawing(shape)` keeps each
+  part shape's point arrays once; `_live_members(part)` caches the shown shape's members until a
+  swap; `refresh` only applies matrices. yard: `refresh` 1.25 → 0.58 s.
+- Part drawings by look: `look_key(look, colors)` / `look_parts(look, colors)` (an LRU of
+  `LOOK_CACHE_SIZE` 16 generated looks); `build_character` uses it. Key = look + resolved colours,
+  never poses / expressions / name / voice / height / state.
+
+Numbers (before = HEAD 06a40cd in a scratchpad worktree, after = this step; alternating runs)
+| what | before | after |
+| --- | --- | --- |
+| yard preview, `render_scene` wall (3 runs) | 9.21 / 9.73 / 9.42 s (avg 9.45) | 9.04 / 9.09 / 9.43 s (avg 9.19, −3 %) |
+| yard CPU (process) | avg 11.78 s | avg 11.29 s |
+| hill preview wall (3 runs) | 10.32 / 10.82 / 10.42 s (avg 10.52) | 10.19 / 9.51 / 9.25 s (avg 9.65, −8 %) |
+| hill CPU | avg 12.33 s | avg 11.73 s |
+| `vidgen render --preview --force --jobs 1` (2 runs) | 25.2 / 23.1 s | 23.7 / 23.4 s (noise) |
+| hill at the final format 1920x1080 30 fps | 34.1 s wall, 50.5 s CPU | 34.5 s, 51.2 s (encoder bound) |
+| `vidgen character-sheet --all` (2 runs) | 2.11 / 2.03 s | 1.60 / 1.59 s (−23 %) |
+
+Output: hill preview decodes bit for bit as before (all 376 frames); yard is identical up to
+frame 372, and its last ~60 frames (the zoom on moss and the fade out) also differ between two
+runs of the unchanged code (up to 96 levels on some pixels; looked at frame 420 of three runs by
+eye: the same picture). Character sheets: identical PNGs.
+
+Files touched
+- `src/vidgen/cartoon/character.py`, `src/vidgen/scene.py`; new `tests/test_cartoon_speed.py`;
+  `tests/test_cartoon_parallax.py` (static-image assertions in the existing render test);
+  `DESIGN.md` (§2 tree, §67 fingerprint note, §69.7, new §69.20), `docs/EXTENDING.md`
+  (camera listeners), `tasklist.md`.
+
+Public interfaces
+- None in `vidgen.api`. New module-level helpers in `cartoon/character.py`: `shape_drawing`,
+  `look_key`, `look_parts`, `LOOK_CACHE_SIZE`. Behaviour: a camera listener now also runs before
+  each animation, and must place things from the camera alone (EXTENDING.md).
+
+Decisions / deviations
+- "Rendered once per scene and reused as an image" is Manim's static image, recomputed per
+  `play` / `wait` (a few ms each); not cached across animations (would need Manim internals).
+- No raster cache of parts: a bitmap rotated / scaled per frame changes the drawing beyond
+  anti-aliasing (not measured).
+- SVG looks are not cached by look (their split warnings are logged per build, which tests read).
+- Searched first: no cache of parts or drawings existed; `get_moving_mobjects` (Step 74) was the
+  only place deciding Manim's static image.
+
+Known gaps / TODOs
+- The look cache saves nothing in a render (each scene's worker builds each character once).
+- Not done: caching each part's subpath split (`get_subpath_split_indices_from_points`, ~1.1 s
+  of yard's main thread on Manim 0.21; a per-instance override of a Manim internal that 0.19
+  lacks). The rest is Cairo drawing and H.264 encoding.
+- Found, not fixed: yard's last ~60 preview frames are not reproducible between two runs of the
+  same code (likely an order or timing dependence in the zoom / fade out); worth a look in Step 88.
+- The fingerprint note of §69 (narrow `characters` to scenes that use them) was not done here.
+
+How to test
+- `pytest -m "not render" tests/test_cartoon_speed.py tests/test_cartoon_character.py
+  tests/test_cartoon_generator.py tests/test_cartoon_poses.py tests/test_cartoon_idle.py
+  tests/test_cartoon_acting.py tests/test_cartoon_moving.py tests/test_cartoon_motion.py
+  tests/test_cartoon_keyframes.py tests/test_cartoon_svg.py tests/test_cartoon_sheet.py
+  tests/test_cartoon_stage.py tests/test_cartoon_parallax.py tests/test_cartoon_visemes.py` (304,
+  8 s); `-m render` on character, stage, parallax, moving, acting, sheet, poses, lint (9, 5 s);
+  `tests/test_docs.py tests/test_guide.py tests/test_api.py` (108, 3 s).

@@ -1032,7 +1032,10 @@ center, width, height)`). A scene type that names places for `pan: {to: ...}` ov
 classmethod `camera_place(params, place)` (an x from 0 to 1 of the bounds' width). `follow_with_camera(x_of)`
 keeps the camera on the x a callable gives on every frame (`None` stops), and
 `add_camera_listener(callback)` calls `callback()` on every frame after the camera moved (the
-stage moves its parallax layers so); both run as one scene updater after every animation.
+stage moves its parallax layers so); both run as one scene updater after every animation. A
+listener must place things from the camera alone: it also runs before each animation, and while
+the camera neither follows nor animates, Manim draws what comes before the first moving mobject
+once into a static image for that animation.
 `zoom` comes back to the view it started from. Animate the parts that are in the
 scene (`scene.on_screen_parts(t)`), not a group of them that was never added: Manim would add
 that group and draw its parts twice. New mobjects (like the marks above) are simply added by

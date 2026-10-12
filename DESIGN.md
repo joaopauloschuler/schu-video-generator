@@ -72,7 +72,7 @@ src/vidgen/
   svgclean.py             # SVG sanitiser (scripts, filters, rasters, text out; gradients flattened; caps) + theme_color (§65; no manim)
   vector_mobject.py       # load_vector() / VectorPicture: a sanitised SVG as Manim shapes (§65)
   cartoon/                # cartoons (§69): character.py (Character: named vector parts with pivots,
-                          # poses, mirroring; character()), cast.py (characters: lookups, checks; no manim),
+                          # poses, mirroring; character(); part drawings cached by look, §69.20), cast.py (characters: lookups, checks; no manim),
                           # generator.py (look: parameters -> parts, §69.1), svg_look.py (look: {svg} -> parts by
                           # element ids, §69.2), still.py (`vidgen character --png`), poses.py (pose and
                           # expression tables, §69.3; no manim), transition.py (PoseChange, §69.3;
@@ -4962,8 +4962,8 @@ take `CharacterName` options.
 - **`character(name, height=3.0, facing="right")`** (exported): the active project's character,
   coloured with the current theme (`build_character(entry, theme=, height=, facing=)`).
 - **Fingerprint**: `characters` is not excluded from `scene_fingerprint`'s config part, so editing
-  a character re-renders every scene (conservative; Step 87 may narrow it to scenes that use
-  characters).
+  a character re-renders every scene (conservative; Step 87, §69.20, did not narrow it to
+  scenes that use characters: not one of its items).
 - **Layout dump**: a `Character` is one object of kind `character` named after it (Step 73,
   §69.6).
 - **Not done here**: no scene type draws characters yet (the `stage` scene type, Step 73, §69.6).
@@ -5357,8 +5357,9 @@ and the new `pan` and `follow`, which are generic (any scene type) and reuse `Mo
   inside `camera_bounds` at the view's size), then the listeners. A scene updater runs after
   every animation and mobject updater of the frame, and Manim never suspends it (a `MoveCamera`
   suspends the frame's own updaters), so layers move during a zoom or pan and never lag a frame.
-  While it is installed, `get_moving_mobjects` returns every mobject: otherwise Manim draws the
-  ones before the first moving mobject once into a static image, for the camera as it was.
+  While the camera follows something, `get_moving_mobjects` returns every mobject: otherwise
+  Manim draws the ones before the first moving mobject once into a static image, for the camera
+  as it was (with listeners only, Step 87 lets Manim keep that image; §69.20).
 - **`pan`** (`scenes/actions.py`; run_time 1.5, reversible, not temporary, `needs_target =
   False`, moves_camera): option `to` (a mark name or an x 0..1 of `camera_bounds`' width) or a
   target (one of the two: `problems`). Ends a `follow`, then a `MoveCamera` keeping the view's
@@ -6075,3 +6076,45 @@ downloaded: the five new sounds are built-in generators like the other eleven.
   `reveal` sting at a beat's start is ducked from its first sample and an `end` sting starts ducked
   and comes up over the 0.3 s release (checked by hand on a preview: −6.0 and −2.4 dB at the peaks). `examples/cartoon` has no
   sting yet (its guide excerpt does). Tests: `tests/test_cartoon_foley.py`.
+
+### 69.20 Render speed for cartoons (Step 87)
+
+Measured first (`examples/cartoon`, preview 854x480 at 15 fps, no audio, one scene per process,
+cProfile and a per-object timer around Manim's `Camera.display_vectorized`): a scene takes 9–11 s
+for 25–29 s of video. The time goes to Manim's Cairo drawing of the characters (about 45 shapes a
+frame for two characters, 2–3 s), H.264 encoding in Manim's writer thread (2.6–3 s, overlapping
+on the second core), Manim's per-frame family walks (1.5 s), `Character.refresh` (1.25 s) and
+imports (2.7 s). Manim already draws everything before the first moving mobject (with an updater,
+in an animation) once per `play` / `wait` into a static image: on a plain stage that is the sky,
+ground band and the props behind the characters. Two caches were added where the profile showed
+time to save:
+
+- **Static stage image with parallax layers** (`NarratedScene.get_moving_mobjects`): Step 74
+  returned every mobject while `_camera_step` was installed, so a stage with layers redrew its sky,
+  layers, ground band and props on every frame (1.24 s of the `hill` scene). Now every mobject is
+  moving only while the camera follows something (`follow_with_camera` may move it on any frame);
+  a camera animation (`zoom`, `pan`) still makes Manim's `MovingCameraScene` treat every mobject
+  as moving. With listeners only, the camera stays still for the whole animation: the listeners
+  run first (so the layers stand where the camera is now) and Manim keeps the static image
+  (`hill`: those draws 1.24 → 0.39 s).
+- **Part drawings, transformed only** (`cartoon/character.py`): each part shape's points are
+  kept once per character (`shape_drawing`: the point arrays of its family members with points),
+  and the live members of each part's shown shape are found again only when the shape shown
+  changes (`_live_members`, keyed by the shown child). `refresh` then only applies the matrices:
+  1.25 → 0.58 s in `yard`.
+- **Part drawings by look** (`look_parts(look, colors)`, `look_key`): the generator's parts for
+  a look in resolved colours are drawn once per process and shared (a `Character` copies the
+  shapes it is given); the key is the `look` and the colours, never the poses, expressions,
+  name, voice, height or state. At most `LOOK_CACHE_SIZE` 16 looks (the oldest dropped). A
+  render builds each character once per scene process, so this saves nothing there; `vidgen
+  character-sheet` builds each character six times (2.07 → 1.60 s for both sheets of the
+  example). SVG looks are not cached (their warnings are logged per build).
+- **Not done**: a raster cache of parts (rotating and scaling a bitmap per frame changes the
+  drawing beyond anti-aliasing; not measured); caching the subpath
+  split of each part (Manim 0.21's `get_subpath_split_indices_from_points`, 1.1 s of `yard`), which
+  needs a per-instance override of a Manim internal that Manim 0.19 does not have.
+- **Result**: the same frames (the `hill` preview decodes bit for bit as before; `yard` differs
+  only in its last 60 frames, which also differ between two runs of the unchanged code). Before /
+  after in HANDOFF.md (Step 87): `hill` −8 %, `yard` −3 % at preview, within noise end to end and
+  at the final format (encoding bound). Tests: `tests/test_cartoon_speed.py`,
+  `tests/test_cartoon_parallax.py`.

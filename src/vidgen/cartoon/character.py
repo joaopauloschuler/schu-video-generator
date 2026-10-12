@@ -15,7 +15,9 @@ so a pose set after a move lands where the character is.
 
 from __future__ import annotations
 
+import json
 import math
+from collections import OrderedDict
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -28,7 +30,7 @@ from vidgen.cartoon.idle import IdleClock, breath_scale, idle_seed, sway_angle
 from vidgen.cartoon.motion import DEFAULT_MOTION, motion_strength, resolve_motion
 from vidgen.cartoon.poses import KINDS, PoseTable, chosen_shape, find_entry, kind_parts, merged_table
 from vidgen.cartoon.visemes import VISEME_SHAPES, VISEMES, VisemeTrack
-from vidgen.config import CharacterEntry, PartPoseEntry
+from vidgen.config import CharacterEntry, CharacterLook, PartPoseEntry
 from vidgen.errors import VidgenError
 from vidgen.helpers import resolve_color
 from vidgen.theme import Theme
@@ -159,6 +161,12 @@ def scale_strokes(shape: VMobject, factor: float, floor: float) -> None:
             member.set_stroke(width=max(member.get_stroke_width() * factor, floor), family=False)
 
 
+def shape_drawing(shape: VMobject) -> tuple[np.ndarray, ...]:
+    """``shape`` as drawn: the points of each member of its family that has points, in family
+    order (what a redraw transforms; the styles stay on the live copy)."""
+    return tuple(np.array(member.points, dtype=float) for member in shape.family_members_with_points())
+
+
 def _apply(matrix: np.ndarray, points: np.ndarray) -> np.ndarray:
     out = np.array(points, dtype=float)
     out[:, :2] = points[:, :2] @ matrix[:2, :2].T + matrix[:2, 2]
@@ -217,6 +225,9 @@ class Character(VGroup):
         for shapes in self._shapes.values():
             for shape in shapes.values():
                 scale_strokes(shape, stroke_factor, stroke_floor)
+        # each shape's drawing as point arrays, so a redraw only transforms them (DESIGN.md §69.20)
+        self._drawings = {n: {k: shape_drawing(v) for k, v in s.items()} for n, s in self._shapes.items()}
+        self._live: dict[str, tuple[Any, list[VMobject]]] = {}  # part -> (shown child, its members with points)
         self._pivots = {n: np.array(s.pivot, dtype=float) for n, s in specs.items()}
         self._order = sorted(
             specs,
@@ -530,11 +541,10 @@ class Character(VGroup):
         Styles (colour, opacity) of the live parts are kept."""
         screen = self._screen()
         world = self._world()
-        for name, slot in self.parts.items():
+        for name in self.parts:
             matrix = screen @ world[name]
-            rest = self._shapes[name][self._shape_name(name)]
-            for live, source in zip(slot.family_members_with_points(), rest.family_members_with_points()):
-                live.points = _apply(matrix, source.points)
+            for live, points in zip(self._live_members(name), self._drawings[name][self._shape_name(name)]):
+                live.points = _apply(matrix, points)
         return self
 
     # ----- internals ------------------------------------------------------------------------
@@ -588,6 +598,17 @@ class Character(VGroup):
             self._overlays[part] = overlay
         self._show_shape(part, before)
 
+    def _live_members(self, part: str) -> list[VMobject]:
+        """The members with points of ``part``'s shown shape, found again only when the shape
+        shown changed (a swap puts in a new copy)."""
+        slot = self.parts[part]
+        child = slot.submobjects[0] if slot.submobjects else None
+        cached = self._live.get(part)
+        if cached is None or cached[0] is not child:
+            cached = (child, slot.family_members_with_points())
+            self._live[part] = cached
+        return cached[1]
+
     def _show_shape(self, part: str, before: str) -> None:
         if self._shape_name(part) != before:
             self.parts[part].submobjects = [self._shapes[part][self._shape_name(part)].copy()]
@@ -619,6 +640,36 @@ class Character(VGroup):
 
 # ----- characters of the config ------------------------------------------------------------
 
+#: How many generated looks' part drawings :func:`look_parts` keeps (the oldest is dropped).
+LOOK_CACHE_SIZE = 16
+_look_cache: OrderedDict[str, list[CharacterPart]] = OrderedDict()
+
+
+def look_key(look: CharacterLook, colors: Mapping[str, Any]) -> str:
+    """The key of a generated look's part drawings in :func:`look_parts`: the ``look``
+    parameters and the resolved ``colors``. A character's poses, expressions, name, voice and
+    state are not in it: they never change a part's drawing, only how it is transformed."""
+    resolved = {part: str(color) for part, color in sorted(colors.items())}
+    return json.dumps([look.model_dump(mode="json"), resolved], sort_keys=True)
+
+
+def look_parts(look: CharacterLook, colors: Mapping[str, Any]) -> list[CharacterPart]:
+    """The generator's parts for ``look`` in ``colors`` (:func:`~vidgen.cartoon.generator.generate_parts`),
+    drawn once per :func:`look_key` and shared: a :class:`Character` copies the shapes it is
+    given, so callers must not change them."""
+    from vidgen.cartoon.generator import generate_parts
+
+    key = look_key(look, colors)
+    parts = _look_cache.get(key)
+    if parts is None:
+        parts = generate_parts(look, colors)
+        _look_cache[key] = parts
+        while len(_look_cache) > LOOK_CACHE_SIZE:
+            _look_cache.popitem(last=False)
+    else:
+        _look_cache.move_to_end(key)
+    return parts
+
 
 def build_character(
     entry: CharacterEntry,
@@ -648,11 +699,9 @@ def build_character(
             poses=entry.poses, expressions=entry.expressions, motion=motion,
         )
     else:
-        from vidgen.cartoon.generator import generate_parts
-
         colors = {part: resolve_color(value, theme) for part, value in entry.colors.model_dump().items()}
         built = Character(
-            generate_parts(entry.look, colors), name=entry.name, height=height, facing=facing, voice=entry.voice,
+            look_parts(entry.look, colors), name=entry.name, height=height, facing=facing, voice=entry.voice,
             poses=entry.poses, expressions=entry.expressions, motion=motion,
         )
     return built.start_idle() if entry.idle else built

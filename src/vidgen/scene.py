@@ -945,10 +945,16 @@ class NarratedScene(MovingCameraScene):
             callback()
 
     def get_moving_mobjects(self, *animations: Animation) -> list[Mobject]:
-        """Manim's moving mobjects; all of them while :meth:`_camera_step` may move the camera or
-        layers on any frame (Manim would otherwise draw the others once, for the camera as it was)."""
+        """Manim's moving mobjects (all of them while a camera animation plays); all of them too
+        while the camera follows something, since :meth:`_camera_step` may then move it on any
+        frame. Otherwise the camera stays still for the whole animation, so Manim draws the
+        mobjects before the first moving one once into a static image (a stage's backdrop and
+        parallax layers, DESIGN.md §69.20); the camera listeners run first, so that image shows
+        them where the camera is now."""
+        for callback in self._camera_listeners:
+            callback()
         moving = super().get_moving_mobjects(*animations)
-        return list_update(self.mobjects, moving) if self._camera_step in self.updaters else moving
+        return list_update(self.mobjects, moving) if self._camera_follow is not None else moving
 
     #: Margins (Manim units) between the frame edge and the safe area (``vidgen.regions``
     #: defaults). The layout dump and ``vidgen lint``'s ``safe_area`` rule use the same values.
