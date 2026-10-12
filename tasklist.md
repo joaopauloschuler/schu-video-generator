@@ -503,9 +503,9 @@ memory cap, targeted tests, original characters only). Each step updates the gui
 - [x] Tests: the reframe path from a beat list (no render) (`tests/test_cartoon_reframe.py`: 11, no render)
 
 ### Step 97 — Lighting and mood
-- [ ] Stage `light: day | morning | sunset | night | indoor` (or `{tint, strength}`): a colour grade over background, layers, props and characters, keeping theme contrast for text and bubbles; night adds a few stars; `light:` as a beat action to change it over time (fade)
-- [ ] Soft shadows under characters and props on the ground (ellipse, depth-scaled, off with `shadows: false`)
-- [ ] Tests: grade maths, contrast kept for bubble text (lint `contrast` still passes)
+- [x] Stage `light: day | morning | sunset | night | indoor` (or `{tint, strength}`): a colour grade over background, layers, props and characters, keeping theme contrast for text and bubbles; night adds a few stars; `light:` as a beat action to change it over time (fade) (pure maths in `cartoon/lighting.py`: multiply + a warm glow for morning / sunset; drawn graded by `cartoon/shading.py` `StageLight`, which wraps the camera's colour and picture calls for mobjects marked lit, so bubbles, callouts, particles and text are never graded; `- light: night` is a non-animating action (`scenes/light_action.py`) whose `run_time` is the fade; everything is redrawn only while a fade runs; stars from the sparkles' seeded stream, static, colour backgrounds only; DESIGN §69.31)
+- [x] Soft shadows under characters and props on the ground (ellipse, depth-scaled, off with `shadows: false`) (three soft rings at the caster's ground line, shrinking and fading as it jumps or flies, none under a held or hanging prop; props that cannot move stay in the static image)
+- [x] Tests: grade maths, contrast kept for bubble text (lint `contrast` still passes) (`tests/test_cartoon_lighting.py`: 6 without rendering, 2 tiny renders)
 
 ### Step 98 — Wind
 - [ ] Stage `wind: 0..1` (and as a beat action): trees and bushes sway, scarves / hair / ears / hats trail (the Step 82 spring), particles drift with it; gusts as a seeded noise

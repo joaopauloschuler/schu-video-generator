@@ -8996,3 +8996,98 @@ How to test
   test_cartoon_shots test_cartoon_directing test_cartoon_stage test_actions_coverage
   test_cartoon_lint` (70, 44 s), `test_cartoon_moving test_cartoon_acting test_cartoon_seating
   test_cartoon_holding test_phase_h_review test_storyboard test_introspect` (8, 48 s).
+
+## Step 97 — Lighting and mood
+
+What was built
+- `src/vidgen/cartoon/lighting.py` (no manim): `LightGrade(multiply, glow, stars, shadow)` (a
+  channel becomes `clip(c * multiply + glow)`, alpha unchanged), `tint_grade`, `light_grade`
+  (presets `day`, `morning`, `sunset`, `night`, `indoor`; `PRESET_LIGHTS`), `blend_grades`,
+  `grade_rgbas`, `grade_pixels`, `LightChange` + `light_at` (fades, smoothstep, a change during
+  another continues from where it is) + `light_changing`, `night_stars` (the sparkles' seeded
+  stream), `shadow_ellipse` (depth from the caster's size, shrinks and fades above the ground).
+- `src/vidgen/cartoon/shading.py`: `CustomLight` / `LightSetting` / `resolve_light`; `mark_lit`;
+  `StageLight` wraps the scene camera's `get_fill_rgbas`, `get_stroke_rgbas` and
+  `display_image_mobject` and grades only mobjects marked lit (the backdrop, layers, props,
+  characters), so speech bubbles, callouts, particles, captions and text keep the theme's
+  colours and contrast; `StarField` (static stars with the sparkle's shape); `Shadow`,
+  `ShadowCaster`, `StageShadows`.
+- `stage` params `light` (default `day`: nothing installed) and `shadows` (default `true`). A lit
+  stage without a picture / `background` gets a `background` rectangle in the theme's background
+  colour (graded). Shadows: props that no action can move in one static group in the backdrop;
+  characters and props named by `pick_up` / `hold` / `keyframes` / `move_along` in a group with an
+  updater, faded in just before the first of them. `Stage.change_light`, `_light_step` (scene
+  updater while changes are pending), `get_moving_mobjects` (everything only while a change
+  falls in the animation, so the set stays in Manim's static image otherwise; Step 87).
+- `light` beat action (`src/vidgen/scenes/light_action.py`): `- light: night` or `tint` +
+  `strength`; `animates = False` (cued at its `at`, never stretches a batch), `run_time` = the
+  fade (2 s), not reversible; validate: unknown preset (did-you-mean), given twice, none, not a
+  stage scene.
+- Layout dump: shadows and stars are left out (`introspect`).
+- `particle_field._unit_shape` -> public `particle_shape` (now used by the stars).
+
+Checked by eye (scratch copies of `examples/cartoon`, preview storyboards): each preset on both
+stages; the hill fading to `sunset` and then to `night` (3 s) with confetti; a picture
+background at night. The bubble stays white, stars show behind the cloud and hills, dot's jump
+shadow shrinks, the flying kite's shadow fades. `vidgen lint` on the night and the fading copies:
+0 findings. Timing (yard storyboard, preview): `day` 12.5–13.1 s vs HEAD 12.3–13.0 s; `night`
+13.4 s (after making `grade_rgbas` cheap: 8.8 -> 1.8 µs a call).
+
+Files touched
+- New: `src/vidgen/cartoon/lighting.py`, `src/vidgen/cartoon/shading.py`,
+  `src/vidgen/scenes/light_action.py`, `tests/test_cartoon_lighting.py`.
+- `src/vidgen/scenes/stage.py`, `scenes/__init__.py`, `api.py`, `introspect.py`,
+  `particle_field.py`, guide (`src/vidgen/data/guide/AGENTS.md` + `AGENTS.md`: chooser row,
+  actions row, troubleshooting list, "Light and mood" bullet in `cartoons`).
+- Docs: `docs/CONFIG.md` (stage rows, new "Light and shadows", actions table, `action` and
+  `run_time` rows), `DESIGN.md` (§2 tree, §6.4, new §69.31), `docs/EXTENDING.md`,
+  `docs/gallery/stage.md` (the `light` / `shadows` rows as `vidgen gallery` writes them; stills
+  not re-rendered), `tasklist.md`.
+- Tests updated: `tests/test_actions.py` (action name lists gain `light`; `higlight` now also
+  suggests `light`).
+
+Public interfaces
+- `vidgen.api` adds the names listed in DESIGN §6.4 (Step 97). New built-in action `light`;
+  stage params `light`, `shadows`; `Stage.change_light`, `Stage.light`, `.stars`, `.shadows`,
+  `.base_light`. Behaviour change: every stage draws soft shadows (`shadows: false` for the old
+  picture); a stage with `light: day` and no `light` action is otherwise drawn as before.
+
+Decisions / deviations
+- Grading at draw time (a camera wrapper) instead of recolouring mobjects: no colour bookkeeping,
+  later colour changes (`dim`, `highlight`, expressions) stay right, and bubbles / text are
+  excluded by not being marked. The price is a little work per drawn lit shape (~5 % on `yard`).
+- A multiply alone turns a blue sky grey at sunset, so presets have a small additive glow;
+  `{tint, strength}` is the plain multiply the task asked for.
+- `light` is a non-animating action: its fade runs on the scene clock, independent of the
+  runner's batches (an animation would have been stretched to the longest action of its batch).
+  `run_time` cannot be 0 (ActionConfig), so "at once" is a short `run_time`.
+- Stars do not twinkle: a moving field behind the set would take the whole set out of the
+  static image. They reuse the sparkles' seeds and shape, not a `ParticleField`.
+- Shadows of things that can move are drawn in one group before the first of them (not before
+  each), which keeps the back of the set static; a shadow can then lie over the foot of a prop
+  standing at the same depth just before it in the list (not seen in the stills).
+- Searched first: no grade / shadow / star code existed (`git grep -ni "shadow\|tint\|grade"
+  src/vidgen`: "soft shadows" in prompt words, a video clip's opacity / tint modulation, a chart's
+  faint tint, Kokoro voice grades); reused
+  `hex_rgb`, `particle_count` / `particle_seeds` / the sparkle shape, `CHARACTER_INK`,
+  `resolve_color`, `self.grounds`, the action machinery of `sfx` (cue).
+
+Known gaps / TODOs
+- Particles are not graded; no stars over a picture background; stars do not twinkle; shadows
+  do not stretch with a low sun; a lamp prop does not light anything; `light` is not a top-level
+  or variant setting (Step 101's `sets:` may carry it); the gallery stills were not re-rendered.
+
+How to test
+- `pytest tests/test_cartoon_lighting.py` (6 not-render + 2 render at 160x90, ~3 s).
+- Also run: not render `test_api test_actions test_cartoon_stage test_cartoon_props
+  test_particles test_introspect test_lint test_cartoon_lint test_cartoon_parallax
+  test_cartoon_speed test_extensions test_cartoon_holding test_cartoon_shots` (251, 8 s),
+  `test_actions test_docs test_guide test_schema test_builtin_scenes test_actions_coverage
+  test_gallery test_phase_h_review test_cartoon_directing test_cartoon_reframe
+  test_cartoon_seating test_cartoon_sheet` (375, 66 s), `test_docs test_guide test_api
+  test_cartoon_lighting test_gallery` (127, 4 s); render `test_cartoon_stage test_cartoon_props
+  test_cartoon_parallax test_cartoon_lint test_cartoon_acting test_cartoon_moving
+  test_cartoon_holding test_cartoon_seating test_cartoon_shots test_cartoon_speed test_particles
+  test_cartoon_lighting test_cartoon_keyframes test_cartoon_foley` (16, 11 s), `test_introspect
+  test_phase_h_review test_cartoon_directing test_cartoon_sheet` (7, 34 s), `test_builtin_scenes
+  test_actions_coverage -k stage` (3, 3 s). The full suite was not run.

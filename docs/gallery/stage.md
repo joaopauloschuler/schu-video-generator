@@ -100,6 +100,10 @@ scenes:
 | `particles.color` | `color \| list[color] \| None` |  | A colour or a list (each particle picks one); default per kind (rain light blue, snow white, sparkles highlight, confetti the theme's colours...). |
 | `particles.seed` | `int` | `1` | Another number gives other positions; the same number gives the same particles in every render. |
 | `particles.kind` | `'rain' \| 'snow' \| 'sparkles' \| 'dust' \| 'confetti' \| 'smoke' \| 'bubbles'` | required | rain, snow, sparkles, dust, confetti, smoke or bubbles. |
+| `light` | `'day' \| 'morning' \| 'sunset' \| 'night' \| 'indoor' \| CustomLight` | `'day'` | The light on the set: day (as drawn), morning, sunset, night (dark blue, with stars on a colour background) or indoor, or {tint, strength}: a colour grade of the background, layers, props and characters (never of speech bubbles, captions or other text); the light action changes it during the scene. |
+| `light.tint` | `color` | required | The light's colour (a theme token or #hex): the set's colours are multiplied towards it. |
+| `light.strength` | `float` | `0.5` | How strongly: 0 = no change, 1 = the colours multiplied by the tint. |
+| `shadows` | `bool` | `True` | Soft shadows on the ground under the characters and the props standing on it (smaller when they jump, none under a held prop); false: none. |
 
 ## Targets
 

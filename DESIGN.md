@@ -100,7 +100,10 @@ src/vidgen/
                           # lean edges, Postures, seated feet and the crouch, §69.28; no
                           # manim), shots.py (the framings of a beat's shot:, §69.29; no
                           # manim), reframe.py (reframe: the camera keeps the speaker in view,
-                          # the landscape stage a narrow frame crops, §69.30; no manim); still.py also
+                          # the landscape stage a narrow frame crops, §69.30; no manim),
+                          # lighting.py (light presets, grades, fades, stars and shadow ellipses,
+                          # §69.31; no manim), shading.py (StageLight: the grade as the camera
+                          # draws, StarField, StageShadows, §69.31); still.py also
                           # draws the prop gallery and `vidgen character-sheet` (§69.16)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
@@ -179,6 +182,7 @@ src/vidgen/
                           # move_along, §69.14; handling.py: pick_up, hold, put_down, give,
                           # throw, §69.27; sitting.py: sit_on, lean_on, stand_up, §69.28;
                           # shot_action.py: shot (the beat key shot:), §69.29;
+                          # light_action.py: light (a stage's light fades), §69.31;
                           # overlays.py: the built-in overlays lower_third/watermark, §41;
                           # progress.py: progress_bar/chapter_indicator, §42; captions.py: captions, §43;
                           # stage.py: the stage scene type, §69.6)
@@ -736,6 +740,13 @@ Step 96 (§69.30) adds `ReframeSetting`, `REFRAME_SECONDS`, `REPLY_HOLD_SECONDS`
 `False`); the `pan` action the option `cut`. Compatible, except that a `stage` whose characters
 do not fit in one view now gets automatic pans, and in a frame narrower than 16:9 is laid out as
 wide as the 16:9 frame (set `reframe: none` for the old behaviour).
+Step 97 (§69.31) adds `LIGHT_PRESETS`, `LIGHT_FADE_SECONDS`, `DEFAULT_STRENGTH`, `STAR_SKY`,
+`SHADOW_WIDTH`, `PROP_SHADOW_WIDTH`, `LightGrade`, `LightChange`, `Stars`, `ShadowEllipse`,
+`tint_grade`, `light_grade`, `blend_grades`, `grade_rgbas`, `grade_pixels`, `light_at`,
+`night_stars`, `shadow_ellipse`, `CustomLight`, `LightSetting`, `resolve_light`, `mark_lit`,
+`StageLight`, `StarField`, `ShadowCaster` and `StageShadows`; `vidgen.particle_field`'s
+`_unit_shape` becomes `particle_shape`. Compatible, except that every `stage` now draws soft
+shadows under what stands on the ground (`shadows: false` for the old picture).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -6869,3 +6880,77 @@ so a cartoon written for 16:9 renders in a 9:16 variant without camera direction
   the characters stay small); a walk that does not speak is not followed; the entering side of an
   `enter` is predicted from the written camera only; props are not framed. Tests:
   `tests/test_cartoon_reframe.py`.
+
+### 69.31 Lighting and mood (Step 97)
+
+A `stage` has a light (`light:` param, the `light` beat action) and soft shadows on the ground
+(`shadows:` param, on by default).
+
+- **The grade** (`cartoon/lighting.py`, no manim): `LightGrade(multiply, glow, stars, shadow)`;
+  a colour channel `c` becomes `clip(c * multiply + glow, 0, 1)`, alpha unchanged
+  (`grade_rgbas` for Manim's RGBA rows, `grade_pixels` for 8-bit pictures). `tint_grade(tint,
+  strength)`: `multiply = 1 - strength * (1 - tint)` per channel. Presets (`PRESET_LIGHTS`,
+  `LIGHT_PRESETS`): `day` (no change), `morning` (`#FFE4CC` 0.3 + a small warm glow, shadows
+  0.8), `sunset` (`#FF8A5C` 0.55 + a warm glow, so a blue sky turns warm instead of grey; shadows
+  0.9), `night` (`#2A3C78` 0.72, stars 1, shadows 0.45), `indoor` (`#E6BC7E` 0.4, shadows 0.75).
+  `{tint, strength}` (`CustomLight`, default strength 0.5) has no glow, no stars, shadows 1.
+  `blend_grades` mixes every field linearly (exactly the ends at 0 and 1).
+- **Fades**: `LightChange(start, seconds, grade)`; `light_at(base, changes, now)` applies the
+  changes in start order, each from the light at its own start (so one that starts during
+  another continues from where that one is), eased with smoothstep. `light_changing(changes,
+  start, end)`: whether any change is under way in a window.
+- **Drawing** (`cartoon/shading.py`): the grade is applied as Manim draws, not to the mobjects'
+  colours. `StageLight(camera, base)` wraps the scene camera's `get_fill_rgbas`,
+  `get_stroke_rgbas` and `display_image_mobject` (Cairo camera; same names in Manim 0.21 and
+  0.22): a mobject with the `light_graded` attribute (`mark_lit`, set on every family member of
+  the backdrop, the layers, the props and the characters) is drawn graded; a picture's pixel
+  array is graded while it is drawn and put back. Nothing is recoloured, so `dim`, `highlight`,
+  expressions and lip sync keep working, and what the stage does not mark (speech bubbles,
+  callouts, particles, captions, text) keeps the theme's colours and contrast. A stage whose
+  light is `day` and that has no `light` action installs nothing (renders as before, apart from
+  the shadows). A lit stage without a picture or `background` gets a `background` rectangle in
+  the theme's background colour, so the sky is graded too.
+- **The `light` action** (`scenes/light_action.py`): `- light: night` or `tint` + `strength`;
+  `animates = False`, so the runner cues it at its `at` (`cue`) and it never stretches a batch of
+  other actions; `run_time` (default `LIGHT_FADE_SECONDS` 2) is the fade; not reversible (a later
+  `light` action changes it again); `scene_problems` refuses scene types without
+  `change_light`. `Stage.change_light(setting, start, seconds)` adds the change and a scene
+  updater (`_light_step`) that sets the grade for the scene time on every frame; while it is
+  installed a wait is not frozen. **Static image** (§69.20): `Stage.get_moving_mobjects` updates
+  the light first, returns every mobject while a change falls in the animation's time
+  (`self.duration`; unknown: until the changes are over), otherwise Manim's moving mobjects, so
+  the set stays in the static image before and after a fade; it removes the updater once the
+  changes are over. Measured on a scratch copy of `examples/cartoon`: `yard` storyboard at
+  preview 12.5–13.1 s with `day` (HEAD 12.3–13.0 s), 13.4 s with `night` (the grading of every
+  lit shape on every frame drawn).
+- **Stars**: when the starting light or any `light` action has stars and the stage has no
+  picture, `night_stars(area_share, seed, preview)` draws positions, sizes and brightness from
+  the `sparkles` particles' seeded stream (`particle_seeds`; `STAR_DENSITY` 1.0 of their count,
+  half at preview; `STAR_SIZE` 0.7 of their size; brightness from each seed's speed) and
+  `StarField` builds them with the sparkle's shape (`particle_field.particle_shape("star")`) in
+  `STAR_COLOR` over the top `STAR_SKY` 0.75 of the sky above the ground band, right after the
+  sky in the backdrop (behind the layers and the props). They do not twinkle (a moving field
+  behind the set would take the whole set out of the static image); `set_level(grade.stars)`
+  fades them with the light. Not graded.
+- **Shadows**: `shadow_ellipse(x, ground_y, width, above=, size=, strength=)`: on the ground
+  line of the caster's depth, `SHADOW_FLATNESS` 0.16 as high as wide, opacity `SHADOW_OPACITY`
+  0.3 × the light's `shadow`; `above` the ground the shadow shrinks and fades by `1 / (1 +
+  SHADOW_SHRINK (1.5) × above / size)`. Widths: `SHADOW_WIDTH` 0.55 of a character's standing
+  height, `PROP_SHADOW_WIDTH` 0.9 of a prop's width, so depth scales them with their caster.
+  `Shadow` is three ellipses in the characters' ink (`SHADOW_RINGS`, darker inside: soft
+  edges). `ShadowCaster(mobject, ground, width, size)` reads `feet()`; a prop with `held_by` set
+  casts none. `Stage._shadows` splits the casters: props on the ground that no action can move
+  form one `StageShadows` in the backdrop (after the ground band, static); characters and the
+  props a `pick_up` / `hold` names or `keyframes` / `move_along` targets form another, with an
+  updater (`follow`), faded in just before the first of them in the reveal, so the back of the
+  set stays in the static image. Props with a `lift` (cloud, sun, moon) cast none. The layout
+  dump leaves `StageShadows` and `StarField` out (`introspect`), so lint never sees them.
+- **Checked by eye** on scratch copies of `examples/cartoon` with each preset on both stages
+  (storyboards at preview), and the hill scene fading `sunset` then `night` (3 s, with
+  confetti): the bubble stays white with dark text, stars show in the night sky behind the cloud
+  and hills, the jump's shadow shrinks under dot, the kite's shadow leaves with it. `vidgen lint`
+  on the night and the fading copies: 0 findings (the `contrast` rule included).
+- **Not done here**: stars do not twinkle and are not drawn over a picture background
+  (`generate:` / `image`: the sky is unknown); particles are not graded; shadows do not stretch
+  with a low sun; a held prop's shadow is not under its holder's (the holder's covers it).
+  Tests: `tests/test_cartoon_lighting.py`.

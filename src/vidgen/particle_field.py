@@ -54,7 +54,7 @@ class ParticleSettings(BaseModel):
         return None if value is None else check_area(value)
 
 
-def _unit_shape(shape: Shape) -> VMobject:
+def particle_shape(shape: Shape) -> VMobject:
     """The shape of one particle at size 1 (a dot's radius, a streak's half length), centred."""
     if shape == "streak":
         return Rectangle(width=0.08, height=2.0)
@@ -100,7 +100,7 @@ class ParticleField(VGroup):
         #: 1 while shown; its fade out takes it to 0.
         self.level = 1.0
         spec = particle_kind(seeds.kind)
-        unit = _unit_shape(spec.shape)
+        unit = particle_shape(spec.shape)
         self._unit = unit.points.copy()
         ring = spec.shape == "ring"
         for k in range(len(seeds)):

@@ -1,7 +1,7 @@
 """``stage``: a cartoon set (a picture, a generated picture or a colour / gradient) with a ground
 line, named marks and the video's characters standing on them (DESIGN.md §69.6), parallax
-layers that move by their factor when the camera moves (§69.7), props (§69.8) and particles
-(§69.9)."""
+layers that move by their factor when the camera moves (§69.7), props (§69.8), particles
+(§69.9), and its light and shadows (§69.31)."""
 
 import math
 import re
@@ -214,7 +214,10 @@ class Stage(NarratedScene):
     actions); ``width`` makes the stage wider than the frame, for the camera to pan across.
     ``props`` (a table, a tree, a house... or an SVG file) stand on marks like the characters and
     sort with them by depth.
-    ``particles`` (rain, snow, confetti...) move over the whole scene.
+    ``particles`` (rain, snow, confetti...) move over the whole scene. ``light`` (``morning``,
+    ``sunset``, ``night``, ``indoor`` or a tint) grades the set and the characters, never the
+    speech bubbles or text (the ``light`` action fades it); soft shadows lie under whatever
+    stands on the ground (``shadows: false``: none).
 
     A beat is spoken by the characters whose voice says it (their mouths move with it), or by
     the ones its ``say`` action names; the acting actions (``say``, ``look_at``, ``turn``,
@@ -291,6 +294,10 @@ class Stage(NarratedScene):
         """Props: a built-in prop's name, or {prop | svg, name, at, depth, scale, lift, facing, color, detail, recolor}."""
         particles: list[StageParticles] = []
         """Particles over the whole scene, in front of everything: a kind (rain, snow, sparkles, dust, confetti, smoke, bubbles) or {kind, density, area, color, seed}; for one beat use the particles action."""
+        light: LightSetting = "day"
+        """The light on the set: day (as drawn), morning, sunset, night (dark blue, with stars on a colour background) or indoor, or {tint, strength}: a colour grade of the background, layers, props and characters (never of speech bubbles, captions or other text); the light action changes it during the scene."""
+        shadows: bool = True
+        """Soft shadows on the ground under the characters and the props standing on it (smaller when they jump, none under a held prop); false: none."""
 
         @model_validator(mode="after")
         def _check(self) -> SceneParams:
@@ -516,6 +523,7 @@ class Stage(NarratedScene):
         frame = self.camera.frame
         start_x = (mark_x(p.camera_at, p.marks) - 0.5) * self.stage_width
         frame.move_to([*view_center_within(self.camera_bounds(), (start_x, 0.0), frame.width, frame.height), 0.0])
+        self._start_light()
         layers = self._layers()
         #: the layers by name, in the order given (DESIGN.md §69.7)
         self.layers: dict[str, Mobject] = dict(zip(p.layer_names(), layers))
@@ -572,21 +580,123 @@ class Stage(NarratedScene):
                 figure.shift([offstage_x(side, left, right, figure.width / 2) - place_at.feet[0], 0.0, 0.0])
             self.cast[member.name] = figure
             on_stage.append((member.name, figure))
+        # the light grades the set, not the stars, shadows, bubbles or text (DESIGN.md §69.31)
+        mark_lit(*[m for m in backdrop if not isinstance(m, StarField)], *in_front, *(mob for _, mob in on_stage))
+        still, moving = self._shadows(placements)
+        backdrop += [still] if still is not None else []
         # register back to front, so the fade-ins add them (and draw them) in that order
         targets = [self.target(name, mob) for name, mob in on_stage]
         for whole in targets:  # parts come on screen with their character (§69.14)
             if isinstance(whole.mobject, Character):
                 for part in whole.mobject.parts:
                     self.target(f"{whole.name}.{part}", whole.mobject.parts[part], entrance=lambda t=whole: self.entrance(t))
+        cast_by = {id(c.mobject) for c in (moving.casters if moving is not None else [])}
+        first_moving = next((k for k, t in enumerate(targets) if id(t.mobject) in cast_by), None)
 
         def entrance() -> list:
-            return [FadeIn(part) for part in backdrop] + [a for t in targets for a in self.entrance(t)] + [FadeIn(m) for m in in_front]
+            items: list = []
+            for k, t in enumerate(targets):  # moving things' shadows: drawn just before the first of them
+                items += [FadeIn(moving)] if k == first_moving else []
+                items += self.entrance(t)
+            return [FadeIn(part) for part in backdrop] + items + [FadeIn(m) for m in in_front]
 
         #: the particle fields over the stage, in the order given (DESIGN.md §69.9)
         self.particles: list[ParticleField] = [particle_field(self, item.kind, item) for item in p.particles]
         self.add(*self.particles)
+        if self.light is not None:
+            self.light.on_change(self._show_light)
         self.reveal([entrance], fraction=0.6, cap=1.0)
         self.finish()
+
+    # ----- light and shadows (DESIGN.md §69.31) ---------------------------------------------------
+
+    def _start_light(self) -> None:
+        """The light at the start (``light``) and, when it grades anything or a ``light`` action
+        changes it, the :class:`StageLight` that grades the set as the camera draws it."""
+        #: the light from the start, and whether any light of the scene has stars
+        self.base_light = resolve_light(self.params.light, self.theme)
+        changes = [resolve_light(use.setting(), self.theme) for use in self.action_uses("light")]
+        self._starry = max([self.base_light.stars, *(g.stars for g in changes)]) > 0
+        #: the stage's light (``None``: the set as drawn, nothing changes it)
+        self.light: StageLight | None = StageLight(self.renderer.camera, self.base_light) if self.base_light.changes_colors or changes else None
+        self.stars: StarField | None = None
+        self.shadows: list[StageShadows] = []
+
+    def change_light(self, setting: str | CustomLight, start: float, seconds: float) -> None:
+        """Fade the light to ``setting`` (a preset or a tint) from scene time ``start`` over
+        ``seconds`` (the ``light`` action); everything is redrawn on every frame meanwhile."""
+        if self.light is None:
+            self.light = StageLight(self.renderer.camera, self.base_light)
+            self.light.on_change(self._show_light)
+        self.light.change(resolve_light(setting, self.theme), start, seconds)
+        if self._light_step not in self.updaters:
+            self.add_updater(self._light_step)
+
+    def _light_step(self, dt: float) -> None:
+        """Scene updater while the light changes: the grade for the scene time now."""
+        if self.light is not None:
+            self.light.update(float(self.renderer.time))
+
+    def _show_light(self, grade: LightGrade) -> None:
+        """The stars' brightness and the shadows' darkness for ``grade``."""
+        if self.stars is not None:
+            self.stars.set_level(grade.stars)
+        for group in self.shadows:
+            group.set_strength(grade.shadow)
+
+    def get_moving_mobjects(self, *animations: Animation) -> list[Mobject]:
+        """Manim's moving mobjects, or every mobject while the light changes during this
+        animation (the grade then changes on every frame, so nothing can stay in the static
+        image)."""
+        moving = super().get_moving_mobjects(*animations)
+        light = getattr(self, "light", None)
+        if light is None:
+            return moving
+        now = float(self.renderer.time)
+        light.update(now)
+        if light.settled(now) and self._light_step in self.updaters:
+            self.remove_updater(self._light_step)
+        duration = getattr(self, "duration", None)
+        if not light.changing(now, now + (math.inf if duration is None else float(duration))):
+            return moving
+        return [*self.mobjects, *(m for m in moving if m not in self.mobjects)]
+
+    def _shadows(self, placements: list[StagePlacement]) -> tuple[StageShadows | None, StageShadows | None]:
+        """The shadows (``shadows: true``): of the props on the ground that stay put (drawn
+        with the backdrop, so they stay in Manim's static image), and of the characters and the
+        props an action may move (placed under them on every frame)."""
+        if not self.params.shadows:
+            return None, None
+        lifts = {item.name: item.lift for item in self.params.items()}
+        movable = self._movable_props()
+        still: list[ShadowCaster] = []
+        moving: list[ShadowCaster] = []
+        for place_at in placements:
+            name = place_at.name
+            if place_at.kind == "prop":
+                if lifts[name] > 0:
+                    continue  # hangs in the sky
+                prop = self.props[name]
+                caster = ShadowCaster(prop, self.grounds[name], prop.width * PROP_SHADOW_WIDTH, prop.height)
+                (moving if name in movable else still).append(caster)
+            else:
+                figure = self.cast[name]
+                moving.append(ShadowCaster(figure, self.grounds[name], SHADOW_WIDTH * figure.standing_height, figure.standing_height))
+        strength = self.base_light.shadow
+        groups = [StageShadows(casters, strength) if casters else None for casters in (still, moving)]
+        if groups[1] is not None:
+            groups[1].add_updater(lambda m: m.follow())
+        self.shadows = [g for g in groups if g is not None]
+        return groups[0], groups[1]
+
+    def _movable_props(self) -> set[str]:
+        """The props an action may move: picked up or held (then put down, given or thrown),
+        or moved by ``keyframes`` / ``move_along``."""
+        moved = {use.options.to for kind in ("pick_up", "hold") for use in self.action_uses(kind)}
+        for kind in ("keyframes", "move_along"):
+            for use in self.action_uses(kind):
+                moved |= {name for name in self.props for pattern in use.config.targets() if fnmatchcase(name, pattern)}
+        return moved & set(self.props)
 
     def _entering(self) -> dict[str, str | None]:
         """The characters an ``enter`` action brings in, with the side of the first one naming
@@ -624,20 +734,26 @@ class Stage(NarratedScene):
         p = self.params
         fw, fh = self.stage_width, self.frame_height
         parts: list[Mobject] = []
+        top = ground_top(p.ground, p.items())  # up to the deepest thing standing on it (§69.6)
         if p.has_picture():
             parts.append(self._picture())
-        elif p.background is not None:
-            colors = p.background if isinstance(p.background, list) else [p.background]
+        elif p.background is not None or self.light is not None:   # a lit stage grades the theme's background too
+            colors = p.background if isinstance(p.background, list) else [p.background or self.theme.background]
             sky = Rectangle(width=fw, height=fh, stroke_width=0)
             sky.set_fill([resolve_color(c, self.theme) for c in colors], opacity=1.0)
             sky.set_sheen_direction(DOWN)  # a gradient runs from the first colour at the top
             sky.name = "background"
             parts.append(sky)
+        if self._starry and not p.has_picture():  # in the sky, behind the layers (§69.31)
+            sky_share = STAR_SKY * (1.0 - top)
+            stars = night_stars(fw / self.frame_width * sky_share, preview=self.is_preview)
+            box = (-fw / 2, fh / 2 - sky_share * fh, fw / 2, fh / 2)
+            self.stars = StarField(stars, box, min(self.frame_width, self.frame_height))
+            parts.append(self.stars)
         parts += layers
         ground_color = p.ground_color
         if ground_color is None and not p.has_picture():
             ground_color = DEFAULT_GROUND_COLOR
-        top = ground_top(p.ground, p.items())  # up to the deepest thing standing on it (§69.6)
         if ground_color and top > 0:
             band_height = top * fh
             band = Rectangle(width=fw, height=band_height, stroke_width=0)

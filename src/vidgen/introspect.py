@@ -18,7 +18,8 @@ keys the cartoon lint rules read, :func:`_character_keys`), the objects of a spe
 object of kind ``prop`` named after the prop (a held one also ``held_by`` and ``hand``; its box
 is not part of its holder's); a particle field
 (``vidgen.particle_field.ParticleField``) is one object of kind ``particles`` named after its
-kind. A group with no text or image anywhere
+kind; a stage's shadows and stars (``vidgen.cartoon.shading``) are left out. A group with no
+text or image anywhere
 inside is one ``group`` object (an axis' ticks, a network's edges); any other group is walked
 into. Parts at opacity 0 are not visible: they are left out of an object's box, and an object
 without visible parts is not recorded.
@@ -244,11 +245,12 @@ class LayoutRecorder:
 
         from vidgen.cartoon.character import Character
         from vidgen.cartoon.props import Prop
+        from vidgen.cartoon.shading import StageShadows, StarField
         from vidgen.icon_mobject import Icon
         from vidgen.particle_field import ParticleField
         from vidgen.vector_mobject import VectorPicture
 
-        if id(mob) in walk.seen:
+        if id(mob) in walk.seen or isinstance(mob, (StageShadows, StarField)):  # a stage's shadows and stars: not placed by authors (§69.31)
             return
         walk.seen.add(id(mob))
         name = walk.names.get(id(mob))

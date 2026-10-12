@@ -250,8 +250,15 @@ Particles: `particle_field(self, "snow", ParticleSettings(density=2))` builds a 
 for your scene (fewer at preview quality, `self.is_preview`) that moves on its own once added
 (`self.add(field)`) and fades out with `self.play(fade_out(field))`; `particle_states(particle_seeds(kind,
 count, seed), t)` gives the seeded positions without drawing anything.
+Light: `StageLight(self.camera, light_grade("night"))` grades, as the camera draws, whatever you
+pass to `mark_lit(...)` (leave text and bubbles unmarked: they keep their contrast);
+`.change(grade, start, seconds)` and `.update(scene_time)` fade it (redraw everything while it
+fades: return every mobject from `get_moving_mobjects`, as `stage` does). The maths is pure:
+`light_grade`, `tint_grade`, `blend_grades`, `light_at`, `grade_rgbas`, `grade_pixels`;
+`StageShadows([ShadowCaster(mob, ground_y, width, size)])` draws soft shadows (`follow()` in an
+updater for things that move), `StarField(night_stars(area_share), box, short_side)` stars.
 DESIGN.md §69 has the model, §69.3 the poses, §69.4 lip sync, §69.5 idle motion, §69.6 the
-stage, §69.7 layers and the camera, §69.8 props, §69.9 particles.
+stage, §69.7 layers and the camera, §69.8 props, §69.9 particles, §69.31 light and shadows.
 
 Params can nest: use another `SceneParams` class as a field type (also in lists). Theme tokens
 are checked inside nested models too, and `vidgen list-scenes` prints the nested fields. A nested
@@ -1055,7 +1062,8 @@ and implements `cue(self, scene, time)` instead of `apply`: the runner calls it 
 starts with the scene time the use is due (`at`, on a frame), whatever the scene animates then;
 with `scene_targets = False` its `target` names something other than a scene target (checked by
 your `problems()`, not against the scene's targets). The built-in `sfx` action
-(`src/vidgen/scenes/sfx_action.py`) is both: `- sfx: pop` cues `scene.sfx("pop", time)`. The
+(`src/vidgen/scenes/sfx_action.py`) is both: `- sfx: pop` cues `scene.sfx("pop", time)`; so is
+the `light` action (`- light: night` cues the stage's `change_light`). The
 built-in `particles` action (`src/vidgen/scenes/particles_action.py`) also has `scene_targets =
 False` (`- particles: snow`), but animates: its `apply` adds a mobject that moves on its own and
 returns no animation.

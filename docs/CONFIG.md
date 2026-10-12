@@ -3931,6 +3931,8 @@ never leaves the stage.
 | `layers` | list | `[]` | parallax layers (below), in the order given within their place |
 | `props` | list | `[]` | [props](#props): a built-in prop's name (`tree`), or a mapping (below) |
 | `particles` | list | `[]` | [particles](#particles) over the whole scene, in front of everything: a kind (`snow`), or `{kind, density, area, color, seed}` |
+| `light` | `day` \| `morning` \| `sunset` \| `night` \| `indoor` \| `{tint, strength}` | `day` | the [light](#light-and-shadows-light-shadows) on the set: a colour grade of the background, layers, props and characters (never of speech bubbles or text); `night` adds stars; the `light` action changes it during the scene |
+| `shadows` | bool | `true` | soft [shadows](#light-and-shadows-light-shadows) on the ground under the characters and the props standing on it; `false`: none |
 
 | key (`characters[]`) | default | |
 |---|---|---|
@@ -4653,6 +4655,51 @@ outside the frame, a `density` out of range, and `keep` with `until`. The layout
 field as one object of kind `particles` named after its kind; `vidgen lint`'s `off_frame` leaves
 it out (particles cross the edges on purpose).
 
+#### Light and shadows (`light`, `shadows`)
+
+A stage's `light` sets the mood with a colour grade of everything on the set: the background
+(picture, colour or the theme's background), the layers, the props and the characters. Speech
+bubbles, callouts, captions and other text are not graded, so they keep the theme's colours and
+their contrast (`vidgen lint`'s `contrast` rule reads the graded pixels behind any other text);
+particles keep their colours too.
+
+| `light` | what it does |
+|---|---|
+| `day` (default) | the set as drawn |
+| `morning` | a soft peach haze, a little brighter |
+| `sunset` | warm and orange-pink, a little darker; blue skies turn warm |
+| `night` | dark blue; stars in the sky (on a colour background only, behind the layers) and faint shadows |
+| `indoor` | warm lamplight, a little dimmer |
+| `{tint, strength}` | a light of your own: every colour multiplied towards `tint` (a theme token or `#hex`) by `strength` (0 = no change, 1 = fully, default `0.5`) |
+
+The `light` [beat action](#beat-actions) changes the light during the scene: `- light: night`
+(or `tint` + `strength`) fades from the light at its `at` over `run_time` seconds (default `2`)
+and lasts until another `light` action; the stars fade in and out with it. Everything on the
+stage is redrawn on every frame while the light fades; before and after, the set stays in
+Manim's static image as usual.
+
+`shadows` (default `true`) puts a soft shadow on the ground under each character and each prop
+standing on the ground (not under a cloud, sun or moon or another prop with a `lift`): an
+ellipse as wide as about half a character's height (a prop: nine tenths of its width), at the
+ground line of its `depth` (so smaller further back), following walks and jumps (smaller and
+fainter the higher it is) and thrown or keyed props, and none under a prop someone holds. The
+light sets how dark they are (`night` faint). The layout dump leaves shadows and stars out.
+
+```yaml
+- id: porch
+  type: stage
+  params:
+    background: ["#9CCBEA", "#E4F3FB"]
+    light: sunset                       # the scene starts at sunset
+    characters: [pip, kit]
+    props: [{prop: lamp, at: 0.85}]
+  beats:
+    - text: "The sun went down over the porch."
+    - text: "And the first stars came out."
+      actions:
+        - {light: night, at: 0.2, run_time: 3}
+```
+
 A wide stage with layers, the camera panning and then following a character:
 
 ```yaml
@@ -4736,11 +4783,11 @@ the one key that names an action).
 
 | key | default | |
 |---|---|---|
-| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `sit_on`, `lean_on`, `stand_up`, or a project action (`vidgen list-scenes` lists them) |
+| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `sit_on`, `lean_on`, `stand_up`, `light`, or a project action (`vidgen list-scenes` lists them) |
 | `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one (`callout` with an `area` and `pan` with `to` need none) |
 | `at` | `0` | when, as a fraction of the beat's narration (`0` ≤ at < `1`) |
 | `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`, `callout`, `say`, `react`, `look_at`, `turn`, `emote`, `pose`: undone when it starts; `zoom`: the camera is back when it starts; `pan`: the camera moves back when it starts; `follow`: the camera stops following when it starts; `keyframes`, `move_along`: the target moves back) |
-| `run_time` | the action's | seconds the animation takes (`reveal` / `callout` / `pose` 0.8, `dim` / `highlight` / `react` 0.6, `zoom` / `transform` / `follow` 1.0, `pan` 1.5, `look_at` / `emote` 0.5, `say` (the bubble) / `turn` 0.4, `jump` 0.6, `gesture` per gesture (1.2 for `point`), `walk_to` / `enter` / `exit` as long as the distance needs at their `speed`, `keyframes` until its last key, `move_along` 2.0 or its path's length at its `speed`, `pick_up` / `give` 1.2, `put_down` / `sit_on` 1.0, `lean_on` / `stand_up` 0.8, `hold` 0.4, `throw` 0.95–2.1 by the distance; a zoom takes as long again to come back) |
+| `run_time` | the action's | seconds the animation takes (`reveal` / `callout` / `pose` 0.8, `dim` / `highlight` / `react` 0.6, `zoom` / `transform` / `follow` 1.0, `pan` 1.5, `look_at` / `emote` 0.5, `say` (the bubble) / `turn` 0.4, `jump` 0.6, `gesture` per gesture (1.2 for `point`), `walk_to` / `enter` / `exit` as long as the distance needs at their `speed`, `keyframes` until its last key, `move_along` 2.0 or its path's length at its `speed`, `pick_up` / `give` 1.2, `put_down` / `sit_on` 1.0, `lean_on` / `stand_up` 0.8, `hold` 0.4, `throw` 0.95–2.1 by the distance, `light` 2.0 (its fade); a zoom takes as long again to come back) |
 
 **Targets** depend on the scene type (`vidgen list-scenes` prints them as `targets:`). Every
 built-in type has some; `<N>` counts from 1 (`item1`, `item2`...), `<text>`/`<label>`/`<name>`
@@ -4798,6 +4845,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `transform` | `into` (required: a target not on screen yet), `style` (`auto` default, `replace`, `shapes`, `tex`, `fade`) | morphs the target into `into`, which then stays on screen in its own place (the target is gone). `shapes` moves matching glyphs (what `auto` uses for text and formulas), `replace` morphs point by point (`auto` for other shapes), `tex` matches the TeX parts of two formulas, `fade` cross-fades. `into` must be a target of the scene; text that is not part of the scene cannot be morphed into (give the scene that content, e.g. as a later equation step). If `into` is already on screen, the target fades out into its place (warning). |
 | `callout` | `kind` (`box` default, `circle`, `arrow`, `label`, `spotlight`, `magnifier`), `label`, `area`, `within` (`frame` \| `safe`), `units` (`fraction` \| `px`), `color` (`highlight`), `label_size` (`caption`), `side` (`auto`, `top`, `bottom`, `left`, `right`), `curved` (arrow), `zoom` (magnifier, `2`), `keep` (`false`), `name` | points at the target — or, without a target, at `area` of the frame — with the [Step 34 callouts](#screenshot): a rounded `box` (label as a tag on its edge), a `circle`, an `arrow` from the label, a `label` beside it (no mark), a `spotlight` (the rest of the view darkened) or a `magnifier` (an enlarged inset of a picture: the target must show one, e.g. `image`). Gone when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: stays to the end of the scene). See "Callouts" below. |
 | `sfx` | `sound` (or as the target: `- sfx: NAME`), `gain` (`0` dB), `pan` (`0`), `align` (`start` \| `end`), `params` (`duration`, `pitch`, `intensity`) | plays a [sound effect](#sound-effects-sfx) at `at` — exactly then, even while the scene animates; draws nothing, works on every scene type. Its "target" is the sound's name, not a target of the scene; no `until`, no `run_time`. |
+| `light` | as the target: `- light: night` (`day`, `morning`, `sunset`, `night`, `indoor`), or `tint` + `strength` (`0.5`) | on a `stage`: fades the [light](#light-and-shadows-light-shadows) from `at` over `run_time` seconds (`2`); it lasts until another `light` action. Its "target" is the light, not a target of the scene; no `until`. |
 | `particles` | `kind` (or as the target: `- particles: snow`), `density` (`1`), `area`, `color`, `seed` (`1`), `keep` (`false`) | [particles](#particles) — `rain`, `snow`, `sparkles`, `dust`, `confetti`, `smoke` or `bubbles` — over the scene from `at`, in front of everything; works on every scene type. They fade in, and fade out (still moving; `run_time`, `0.6` s) when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: at the end of the scene). Its "target" is the kind, not a target of the scene. |
 | `say`, `look_at`, `turn`, `emote`, `pose`, `react` | see [Speaking and acting](#speaking-and-acting) | the acting actions on a `stage`'s characters: speak (lip sync and a speech bubble), look at something, turn round, change expression or pose, react to another speaker for one beat |
 | `walk_to`, `enter`, `exit`, `gesture`, `jump` | see [Moving](#moving) | the moving actions on a `stage`'s characters: walk to a mark, walk in or out of view, point / wave / shrug / nod / shake the head, jump |
