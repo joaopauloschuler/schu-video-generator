@@ -487,6 +487,10 @@ def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) ->
         }
         if scene_sfx:
             entry["sfx"] = [e.to_json() for e in scene_sfx]
+        if timings.get("ambience"):  # a stage's rain bed (DESIGN.md §69.39), at video times
+            entry["ambience"] = [
+                {**bed, "start": round(offset + bed["start"], 6), "end": round(offset + bed["end"], 6)} for bed in timings["ambience"]
+            ]
         transition = transitions.effective(project.config, i)
         if transition.type != "cut":
             entry["transition"] = {"type": transition.type, "duration": transition.seconds, "overlap": round(overlaps[i] / fmt.fps, 6)}

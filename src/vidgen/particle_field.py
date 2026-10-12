@@ -4,20 +4,44 @@ the camera shows (so they stay on screen through a zoom or a pan).
 
 :class:`ParticleSettings` holds the options shared by the ``particles`` beat action and the
 ``stage`` scene's ``particles`` param; :func:`particle_field` builds a field for a running scene.
+Rain on a stage ends on its ground with splashes, and :class:`Puddles` grow there
+(DESIGN.md §69.39, the model in :mod:`vidgen.cartoon.rain`).
 """
 
 from __future__ import annotations
 
 import math
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
-from manim import Animation, Circle, Mobject, Polygon, Rectangle, VGroup, VMobject
+from manim import Animation, Circle, Ellipse, Mobject, Polygon, Rectangle, VGroup, VMobject
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from vidgen.cartoon.rain import (
+    PUDDLE_FLAT,
+    SPLASH_OPACITY,
+    RainGround,
+    drop_floors,
+    drop_landings,
+    landing_lines,
+    landing_shares,
+    puddle_growth,
+    splash_depth_scale,
+    splash_shapes,
+)
 from vidgen.helpers import resolve_color
-from vidgen.particles import PARTICLE_KINDS, ParticleSeeds, Shape, check_area, particle_count, particle_kind, particle_seeds, particle_states
+from vidgen.particles import (
+    PARTICLE_KINDS,
+    ParticleSeeds,
+    ParticleStates,
+    Shape,
+    check_area,
+    particle_count,
+    particle_kind,
+    particle_seeds,
+    particle_states,
+)
 from vidgen.scene import ThemeColor
 
 if TYPE_CHECKING:
@@ -35,6 +59,11 @@ View = tuple[float, float, float, float]
 #: A scene's wind for particles (DESIGN.md §69.32): ``(start, now)`` scene seconds -> (its force
 #: added up from ``start`` to ``now``, its force at ``now``).
 ParticleWind = Callable[[float, float], tuple[float, float]]
+#: A stage's ground for its rain (DESIGN.md §69.39): where drops end now, shelters included.
+RainGroundSource = Callable[[], RainGround]
+#: Fill of a puddle (a grey blue, half seen through).
+PUDDLE_COLOR = "#7393B8"
+PUDDLE_OPACITY = 0.55
 
 
 class ParticleSettings(BaseModel):
@@ -50,6 +79,8 @@ class ParticleSettings(BaseModel):
     """A colour or a list (each particle picks one); default per kind (rain light blue, snow white, sparkles highlight, confetti the theme's colours...)."""
     seed: int = Field(1, ge=0)
     """Another number gives other positions; the same number gives the same particles in every render."""
+    puddles: bool = False
+    """Rain on a stage: true lets puddles grow on the ground while it rains."""
 
     @field_validator("area")
     @classmethod
@@ -95,6 +126,8 @@ class ParticleField(VGroup):
         frame_width: float,
         name: str | None = None,
         wind: ParticleWind | None = None,
+        ground: RainGroundSource | None = None,
+        seed: int = 1,
     ) -> None:
         super().__init__()
         self.seeds = seeds
@@ -104,8 +137,11 @@ class ParticleField(VGroup):
         self.short_side = short_side
         self.frame_width = frame_width
         self.wind = wind
+        self.ground = ground
         self.name = name or seeds.kind
         self.start = clock()
+        #: Scene time its fade out ended (``None``: still shown).
+        self.ended: float | None = None
         #: 1 while shown; its fade out takes it to 0.
         self.level = 1.0
         spec = particle_kind(seeds.kind)
@@ -119,8 +155,20 @@ class ParticleField(VGroup):
             particle.set_fill(color, opacity=0.15 if ring else 1.0)
             particle.set_stroke(color, width=RING_WIDTH if ring else 0.0, opacity=1.0 if ring else 0.0)
             self.add(particle)
-        self._fill = [p.fill_rgbas[:, 3].copy() for p in self.submobjects]
-        self._stroke = [p.stroke_rgbas[:, 3].copy() for p in self.submobjects]
+        #: the particles, one per seed (the field may also hold its splashes)
+        self.drops: list[VMobject] = list(self.submobjects)
+        self._fill = [p.fill_rgbas[:, 3].copy() for p in self.drops]
+        self._stroke = [p.stroke_rgbas[:, 3].copy() for p in self.drops]
+        #: rain on a stage's ground (DESIGN.md §69.39): each drop's landing share and splash spread
+        self.splashes: VMobject | None = None
+        if ground is not None:
+            self._landing, self._spread = landing_shares(len(seeds), seed)
+            self._circle = Circle(radius=1.0, num_components=9).points.copy()
+            self.splashes = VMobject()
+            self.splashes.points = np.zeros((0, 3))
+            self.splashes.set_fill(colors[0], opacity=1.0)
+            self.splashes.set_stroke(colors[0], width=0.0, opacity=0.0)
+            self.add(self.splashes)
         self.draw_at(self.start)
         self.add_updater(self._step)
 
@@ -150,8 +198,12 @@ class ParticleField(VGroup):
         xs = left + (x + states.x * w) * view_width
         ys = top - (y + states.y * h) * view_height
         cos, sin = np.cos(states.angle), np.sin(states.angle)
+        shown = states.opacity * level
+        ground = self.ground() if self.ground is not None else None
+        if ground is not None:
+            shown = shown * self._draw_splashes(ground, xs, ys, states, short, level)
         unit = self._unit
-        for k, particle in enumerate(self.submobjects):
+        for k, particle in enumerate(self.drops):
             size = states.size[k] * short
             px = unit[:, 0] * size * states.flip[k]
             py = unit[:, 1] * size
@@ -160,9 +212,32 @@ class ParticleField(VGroup):
             points[:, 1] = ys[k] + px * sin[k] + py * cos[k]
             points[:, 2] = 0.0
             particle.points = points
-            seen = states.opacity[k] * level
-            particle.fill_rgbas[:, 3] = self._fill[k] * seen
-            particle.stroke_rgbas[:, 3] = self._stroke[k] * seen
+            particle.fill_rgbas[:, 3] = self._fill[k] * shown[k]
+            particle.stroke_rgbas[:, 3] = self._stroke[k] * shown[k]
+
+    def _draw_splashes(
+        self, ground: RainGround, xs: np.ndarray, ys: np.ndarray, states: ParticleStates, short: float, level: float
+    ) -> np.ndarray:
+        """Rain on a stage (DESIGN.md §69.39): the splashes of the drops that reached their floor
+        (the ground, or a shelter's top) in the last moments; returns 1 for each drop still
+        falling, 0 for one that landed (not drawn until it starts again at the top)."""
+        assert self.splashes is not None
+        spec = particle_kind(self.seeds.kind)
+        size = states.size * short
+        tip_x = xs + size * np.sin(states.angle)
+        tip_y = ys - size * np.cos(states.angle)
+        floor = drop_floors(tip_x, landing_lines(self._landing, ground), ground)
+        slant = float(np.tan(states.angle[0])) if len(states.angle) else 0.0
+        landed = drop_landings(tip_y, floor, spec.fall * self.seeds.speed * short, slant)
+        idx = np.nonzero(landed.splashing)[0]
+        shapes = splash_shapes(landed.age[idx], self._spread[idx], splash_depth_scale(floor[idx], ground)) * short
+        centres = np.stack([tip_x[idx] - landed.back[idx], floor[idx]], axis=1)[:, None, :] + shapes[:, :, :2]
+        circle = self._circle[None, None, :, :2] * shapes[:, :, None, 2:] + centres[:, :, None, :]
+        points = np.zeros((circle.shape[0] * circle.shape[1] * circle.shape[2], 3))
+        points[:, :2] = circle.reshape(-1, 2)
+        self.splashes.points = points
+        self.splashes.fill_rgbas[:, 3] = SPLASH_OPACITY * level
+        return landed.falling.astype(float)
 
     def fade_out_animation(self, **kwargs: Any) -> Animation:
         """An animation that fades the field out (still moving) and removes it."""
@@ -188,9 +263,10 @@ class _FieldFadeOut(Animation):
         self.field.draw_at(self.field.clock())
 
     def clean_up_from_scene(self, scene: Any) -> None:
-        """Remove the field (its level stays 0)."""
+        """Remove the field (its level stays 0) and note when it ended."""
         super().clean_up_from_scene(scene)
         self.field.level = 0.0
+        self.field.ended = self.field.clock()
 
 
 def scene_view(scene: NarratedScene) -> View:
@@ -210,11 +286,48 @@ def particle_colors(kind: str, color: str | list[str] | None, theme: Theme) -> l
     return [resolve_color(c, theme) for c in tokens]
 
 
+class Puddles(VGroup):
+    """Flat puddles on a stage's ground (DESIGN.md §69.39): one ellipse per spot ``(x, y, half
+    width)``, growing from nothing with the seconds of rain (:func:`puddle_growth`) from scene
+    time ``start`` until ``ended()`` (``None`` while it rains), and staying when it stops.
+    ``clock()`` gives the scene's time. (Plain functions, not the field or the scene: Manim
+    deep-copies a mobject it fades in.)"""
+
+    def __init__(
+        self, spots: Sequence[tuple[float, float, float]], *, start: float, ended: Callable[[], float | None], clock: Callable[[], float]
+    ) -> None:
+        super().__init__()
+        self.start = start
+        self.ended = ended
+        self.clock = clock
+        self._shapes: list[tuple[np.ndarray, np.ndarray]] = []
+        for x, y, half in spots:
+            puddle = Ellipse(width=2 * half, height=2 * half * PUDDLE_FLAT, stroke_width=0)
+            puddle.set_fill(PUDDLE_COLOR, opacity=PUDDLE_OPACITY)
+            puddle.move_to([x, y, 0.0])
+            self._shapes.append((puddle.points - np.array([x, y, 0.0]), np.array([x, y, 0.0])))
+            self.add(puddle)
+        self._grow()
+        self.add_updater(lambda mob, dt: self._grow())
+
+    def _grow(self) -> None:
+        """Size every puddle for the rain so far; stops updating once they can grow no more."""
+        now = self.clock()
+        ended = self.ended()
+        growth = puddle_growth((now if ended is None else min(now, ended)) - self.start)
+        for puddle, (shape, centre) in zip(self.submobjects, self._shapes):
+            puddle.points = shape * growth + centre
+        if growth >= 1.0 or ended is not None:
+            self.clear_updaters()
+
+
 def particle_field(scene: NarratedScene, kind: str, settings: ParticleSettings) -> ParticleField:
     """A field of ``kind`` particles for ``scene``, starting now, drawn above everything on screen
     (not added to the scene). Fewer particles when the scene renders at preview quality
     (:attr:`NarratedScene.is_preview`). They drift with the scene's ``particle_wind`` when it has
-    one (a windy stage, DESIGN.md §69.32)."""
+    one (a windy stage, DESIGN.md §69.32); rain ends on the scene's ``rain_ground`` when it has
+    one (a stage, §69.39). The scene's :meth:`~vidgen.scene.NarratedScene.particles_started`
+    hears of the new field."""
     area = settings.area or [0.0, 0.0, 1.0, 1.0]
     colors = particle_colors(kind, settings.color, scene.theme)
     count = particle_count(kind, settings.density, area[2] * area[3], preview=scene.is_preview)
@@ -228,7 +341,12 @@ def particle_field(scene: NarratedScene, kind: str, settings: ParticleSettings) 
         short_side=min(scene.frame_width, scene.frame_height),
         frame_width=scene.frame_width,
         wind=getattr(scene, "particle_wind", None),
+        ground=getattr(scene, "rain_ground", None) if kind == "rain" else None,
+        seed=settings.seed,
     )
     top = max((m.z_index for m in scene.get_mobject_family_members()), default=0)
     field.set_z_index(top + 1)
+    started = getattr(scene, "particles_started", None)
+    if started is not None:
+        started(field, settings)
     return field

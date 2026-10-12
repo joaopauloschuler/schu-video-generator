@@ -142,6 +142,12 @@ class StageParticles(ParticleSettings, SceneParams):
     def _kind_only(cls, data: Any) -> Any:
         return {"kind": data} if isinstance(data, str) else data
 
+    @model_validator(mode="after")
+    def _puddles_in_rain(self) -> "StageParticles":
+        if self.puddles and self.kind != "rain":
+            raise ValueError(f"puddles grow under rain only, not {self.kind}")
+        return self
+
     @classmethod
     def __get_pydantic_json_schema__(cls, core_schema: Any, handler: Any) -> dict[str, Any]:
         """A kind alone is also a particle setting (JSON Schema ``anyOf`` kind | object)."""
@@ -297,7 +303,7 @@ class Stage(NarratedScene):
         props: list[StageProp] = []
         """Props: a built-in prop's name, or {prop | svg, name, at, depth, scale, lift, facing, color, detail, recolor, open}."""
         particles: list[StageParticles] = []
-        """Particles over the whole scene, in front of everything: a kind (rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves, streaks) or {kind, density, area, color, seed}; for one beat use the particles action."""
+        """Particles over the whole scene, in front of everything: a kind (rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves, streaks) or {kind, density, area, color, seed, puddles}; rain ends on the ground with splashes, not under an open umbrella or a tree, and plays a rain sound with foley; for one beat use the particles action."""
         light: LightSetting = "day"
         """The light on the set: day (as drawn), morning, sunset, night (dark blue, with stars on a colour background) or indoor, or {tint, strength}: a colour grade of the background, layers, props and characters (never of speech bubbles, captions or other text); the light action changes it during the scene."""
         shadows: bool = True
@@ -469,8 +475,7 @@ class Stage(NarratedScene):
         on a surprised face
         (:func:`foley_cues`); none with ``foley: false`` (the stage's, else the video's). A
         project file with a sound's name plays as it is (without the cue's params)."""
-        on = self.params.foley if self.params.foley is not None else self.project.config.foley
-        if not on:
+        if not self._foley_on():
             return
         expression = options.to if action == "emote" else getattr(options, "expression", None) if action == "react" else None
         for anim in animations:
@@ -485,6 +490,73 @@ class Stage(NarratedScene):
             for cue in foley_cues(played):
                 params = {} if self.sounds.file(cue.sound) is not None else cue.params
                 self.sfx(cue.sound, max(cue.time, 0.0), gain=cue.gain, align=cue.align, **params)
+
+    def _foley_on(self) -> bool:
+        """Whether this stage plays its sounds: its ``foley``, else the video's."""
+        return self.params.foley if self.params.foley is not None else self.project.config.foley
+
+    # ----- rain on the ground (DESIGN.md §69.39) --------------------------------------------------
+
+    def rain_ground(self) -> RainGround:
+        """Where rain ends now: the landing band from the ground line up to the top of the ground
+        area, and the shelters (open umbrellas, held or standing, and trees) where they are."""
+        shelters: list[ShelterBox] = []
+        for prop in self.props.values():
+            if prop.kind not in SHELTER_PROPS:
+                continue
+            holder = self.cast.get(prop.held_by) if prop.held_by is not None else None
+            feet = float((holder.feet() if holder is not None else prop.feet())[1])
+            box = (float(prop.get_left()[0]), float(prop.get_right()[0]), float(prop.get_top()[1]))
+            shelter = prop_shelter(prop.kind, prop.shape, box, feet)
+            if shelter is not None:
+                shelters.append(shelter)
+        top = ground_top(self.params.ground, self.params.items())
+        return rain_ground(self.params.ground, top, self.frame_height, shelters)
+
+    def particles_started(self, field: Any, settings: Any) -> None:
+        """A rain field: its sound bed plays while it lasts (with foley), and, with ``puddles:
+        true``, puddles grow on the ground under it (drawn over the ground band, under the
+        shadows, characters and props)."""
+        if field.seeds.kind != "rain":
+            return
+        if self._foley_on():
+            self._rain_fields.append(field)
+        if not settings.puddles:
+            return
+        left, right = self.camera_bounds()[:2]
+        spots = puddle_spots(
+            puddle_count(self.stage_width / self.frame_width), settings.seed, left, right, self.rain_ground(),
+            min(self.frame_width, self.frame_height),
+        )
+        puddles = Puddles(spots, start=field.start, ended=lambda: field.ended, clock=lambda: float(self.renderer.time))
+        mark_lit(puddles)
+        self.puddles.append(puddles)
+        self._lay_on_ground(puddles)
+
+    def _lay_on_ground(self, mobject: Mobject) -> None:
+        """Put ``mobject`` right in front of the set behind the characters (before the shadows):
+        into the backdrop while it has not come on screen yet (it fades in with it), else into
+        the scene."""
+        behind = [m for m in self._backdrop if not isinstance(m, StageShadows)]
+        ids = {id(m) for m in behind}
+        shown = [k for k, m in enumerate(self.mobjects) if id(m) in ids]
+        if shown:
+            self.mobjects.insert(max(shown) + 1, mobject)
+        elif any(m in self.mobjects for m in [*self.cast.values(), *self.props.values()]):
+            self.mobjects.insert(0, mobject)
+        else:
+            self._backdrop.insert(len(behind), mobject)
+
+    def timings(self) -> dict[str, Any]:
+        """The scene's timings, plus ``ambience``: the rain sound bed from each rain field's start
+        to its end (the scene's end while it lasts), scene seconds (DESIGN.md §69.39)."""
+        data = super().timings()
+        end = float(self.renderer.time)
+        spans = [(f.start, end if f.ended is None else min(f.ended, end)) for f in getattr(self, "_rain_fields", [])]
+        beds = [{"bed": "rain", "start": round(a, 6), "end": round(b, 6)} for a, b in spans if b > a]
+        if beds:
+            data["ambience"] = beds
+        return data
 
     def shot_framing(self, kind: str, names: list[str]) -> tuple[ShotView, Shot]:
         """The camera view of a ``kind`` shot of the characters ``names`` (filled in by
@@ -605,6 +677,12 @@ class Stage(NarratedScene):
             return [FadeIn(part) for part in backdrop] + items + [FadeIn(m) for m in in_front]
 
         self._start_wind(placements)
+        #: the set behind the characters (puddles go in it, DESIGN.md §69.39)
+        self._backdrop = backdrop
+        #: the rain fields whose sound bed plays (foley on)
+        self._rain_fields: list[ParticleField] = []
+        #: the puddles under the rain fields with ``puddles: true``
+        self.puddles: list[Puddles] = []
         #: the particle fields over the stage, in the order given (DESIGN.md §69.9)
         self.particles: list[ParticleField] = [particle_field(self, item.kind, item) for item in p.particles]
         self.add(*self.particles)

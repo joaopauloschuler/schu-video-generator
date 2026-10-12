@@ -15,7 +15,9 @@ class Particles(Action):
     only while a stage's wind blows) over the scene from `at` of the beat: `- particles: snow`. They fade out when the next beat starts (`until: <beat>`: when
     that beat starts; `keep: true`: at the end of the scene); `run_time` is the fade out. Works
     on every scene type; seeded, so every render is the same. Options: density, area [x, y, w,
-    h] of the visible frame from its top-left corner, color (one or a list), seed."""
+    h] of the visible frame from its top-left corner, color (one or a list), seed, puddles (rain
+    on a stage: it ends on the ground with splashes, stops on open umbrellas and trees, plays a
+    rain sound with foley)."""
 
     class Options(ParticleSettings, ActionOptions):
         kind: ParticleKindName | None = None
@@ -50,6 +52,8 @@ class Particles(Action):
             close = difflib.get_close_matches(names[0], PARTICLE_KINDS, n=1)
             hint = f"; did you mean '{close[0]}'?" if close else ""
             found.append(("target", f"unknown particles '{names[0]}'{hint} (kinds: {', '.join(PARTICLE_KINDS)})"))
+        if o.puddles and self.kind() != "rain":
+            found.append(("puddles", "puddles grow under rain only (- particles: rain, on a stage)"))
         if o.keep and self.config.until is not None:
             found.append(("keep", "keep: stays to the scene's end, until: goes at a beat; give one of them"))
         return found

@@ -549,9 +549,9 @@ forecast, wind, rain, night), and the few things it needs. Same rules as Phases 
 - [x] Tests: seeded paths, wind 0 still changes nothing (`tests/test_cartoon_wind.py`: +6 without rendering, +1 tiny render; the Step 98 frame-hash test passes; `examples/cartoon` with `wind: 0` at 160x90 gives HEAD 837eb8b's frame hashes)
 
 ### Step 105 — Rain on the ground
-- [ ] Rain stops at the ground line (depth-aware) with small splashes and, optionally, puddles that grow; rain does not fall through an open umbrella or a tree canopy held / stood under (simple shelter boxes)
-- [ ] A `rain` sound bed under the scene while it rains (generated, ducked like music), on with `foley`
-- [ ] Tests: drop end heights, shelter boxes, splash positions seeded
+- [x] Rain stops at the ground line (depth-aware) with small splashes and, optionally, puddles that grow; rain does not fall through an open umbrella or a tree canopy held / stood under (simple shelter boxes) (pure `cartoon/rain.py`: each drop's seeded landing line in a band from 0.05 frame heights in front of the ground line up to `ground_top`; `ShelterBox` from an open umbrella (held or standing) or a tree's drawn bounds, keeping dry the drops landing behind 0.1 frame heights in front of its feet; splashes (ring + two droplets, 0.3 s, depth-scaled) drawn as one `VMobject` of the field; `puddles: true` (rain only) grows `Puddles` over 10 s, laid behind the characters; stage only, other scene types unchanged; DESIGN §69.39)
+- [x] A `rain` sound bed under the scene while it rains (generated, ducked like music), on with `foley` (`ambience.py`: a seamless 8 s numpy loop at −32 LUFS; the stage's timings `ambience` spans → `mix.plan_ambience` on the music track, 1.5 s fades, ducked 5 dB (music 12); measured −32.0 LUFS loop, −37 LUFS under a word-count preview's narration; `foley: false` turns it off)
+- [x] Tests: drop end heights, shelter boxes, splash positions seeded (`tests/test_cartoon_rain.py`: 13 without rendering, 2 tiny renders)
 
 ### Step 106 — The "Rain Check" example
 - [ ] An original screenplay `examples/cartoon-rain-check/rain_check.md` and the hand-edited project `video.yaml` beside it (no audio committed), four beats of story: sunny meadow and the forecast; the picnic and the wind; the rain and the run to the tree (overlap, interrupt); night, stars, soggy sandwiches, a comic sting; background music

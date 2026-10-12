@@ -945,6 +945,11 @@ class NarratedScene(MovingCameraScene):
         any shortening): the place for sounds tied to actions. Does nothing here; ``stage`` plays
         its foley (DESIGN.md §69.19)."""
 
+    def particles_started(self, field: Any, settings: Any) -> None:
+        """Called by :func:`vidgen.particle_field.particle_field` with each new particle field
+        (not yet added) and its settings. Does nothing here; ``stage`` grows puddles under rain
+        and plays the rain sound bed (DESIGN.md §69.39)."""
+
     # ----- frame -----------------------------------------------------------------------------
 
     @property

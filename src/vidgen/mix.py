@@ -8,6 +8,8 @@ beat from its start to the end of its speech (the MP3's trailing silence cut off
 for a beat without audio), pauses shorter than ``duck.hold`` filled — plus, with
 ``duck.clips``, the scenes whose ``video_clip`` has sound. Sound effects never duck the music;
 a beat's music sting, on the SFX track, ducks under the narration too (:func:`sting_ducking`).
+The rain bed of a stage's rain (:mod:`vidgen.ambience`) is mixed with the music, ducked less
+(:func:`plan_ambience`).
 The gain curve is computed at 100 Hz (10 ms frames) and interpolated per sample: in dB, the
 music falls by ``depth`` over ``attack`` seconds *ending* where the speech starts (the mix is
 offline, so it can look ahead) and rises over ``release`` seconds after it ends, both with
@@ -34,6 +36,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from vidgen import loudness
+from vidgen.ambience import RAIN_DUCK, RAIN_FADE_IN, RAIN_FADE_OUT, LoopSource, ambience_spans, rain_loop
 from vidgen.config import DuckConfig, MusicCue, SceneMusic
 from vidgen.errors import VidgenError
 from vidgen.music import Source, is_bed
@@ -188,10 +191,28 @@ class Placement:
         }
 
 
-class MusicTrack:
-    """The music of the whole video: every cue's source times its gain curve."""
+@dataclass
+class AmbiencePlacement:
+    """An ambience bed (DESIGN.md §69.39) placed in the video: samples ``start`` to ``end``, its
+    loop and its gain per 10 ms frame of the whole video (linear)."""
 
-    def __init__(self, placements: Sequence[Placement]) -> None:
+    bed: str
+    start: int
+    end: int
+    source: LoopSource
+    gain: np.ndarray
+    duck: float
+
+    def summary(self) -> dict[str, Any]:
+        """``{bed, start, end, duck}`` (times in seconds)."""
+        return {"bed": self.bed, "start": round(self.start / RATE, 6), "end": round(self.end / RATE, 6), "duck": self.duck}
+
+
+class MusicTrack:
+    """The music of the whole video: every cue's source times its gain curve (and the ambience
+    beds, mixed the same way)."""
+
+    def __init__(self, placements: Sequence[Placement | AmbiencePlacement]) -> None:
         self.placements = list(placements)
 
     def read(self, a: int, b: int) -> np.ndarray:
@@ -312,6 +333,27 @@ def plan_music(project: Project, timings: dict[str, Any], total: int) -> list[Pl
     return placements
 
 
+def plan_ambience(project: Project, timings: dict[str, Any], total: int) -> list[AmbiencePlacement]:
+    """Place the rain bed (DESIGN.md §69.39) in the video of ``total`` samples wherever a scene's
+    timings say it rains (``ambience``, joined across scenes): fading in over
+    :data:`~vidgen.ambience.RAIN_FADE_IN` from the rain's start, out over ``RAIN_FADE_OUT`` ending
+    at its end, and ducked under the narration by :data:`~vidgen.ambience.RAIN_DUCK`."""
+    spans = ambience_spans(timings, "rain")
+    if not spans:
+        return []
+    frames = total // FRAME + 2
+    times = np.arange(frames) * FRAME / RATE
+    ducking = 10 ** (duck_curve(speech_spans(project, timings), frames, RAIN_DUCK) / 20)
+    source = LoopSource(rain_loop())
+    placements = []
+    for a, b in spans:
+        start, end = round(a * RATE), min(round(b * RATE), total)
+        if end > start:
+            gain = _fade_curve(times, a, b, RAIN_FADE_IN, RAIN_FADE_OUT) * ducking
+            placements.append(AmbiencePlacement("rain", start, end, source, gain, RAIN_DUCK.depth))
+    return placements
+
+
 # ----- the mix ---------------------------------------------------------------------------------------
 
 
@@ -328,12 +370,15 @@ class MixReport:
     true_peak_dbtp: float
     limited_db: float  # the limiter's largest gain reduction (0: never engaged)
     music: list[dict[str, Any]] = field(default_factory=list)
+    ambience: list[dict[str, Any]] = field(default_factory=list)
 
     def to_json(self) -> dict[str, Any]:
+        """The report; ``ambience`` only when a bed played (DESIGN.md §69.39)."""
+
         def num(value: float | None) -> float | None:
             return None if value is None or not math.isfinite(value) else round(value, 2)
 
-        return {
+        data = {
             "mixed": self.mixed,
             "normalized": self.normalized,
             "target_lufs": self.target_lufs,
@@ -344,6 +389,9 @@ class MixReport:
             "limited_db": num(self.limited_db),
             "music": self.music,
         }
+        if self.ambience:
+            data["ambience"] = self.ambience
+        return data
 
 
 def limit(x: np.ndarray, ceiling: float) -> tuple[np.ndarray, float]:
@@ -407,7 +455,8 @@ def mix_audio(project: Project, timings: dict[str, Any], voices: Sequence[Path],
     total = voice.length
     sfx = WavTrack([sfx_track]) if sfx_track is not None else None
     placements = plan_music(project, timings, total)
-    music = MusicTrack(placements) if placements else None
+    beds = plan_ambience(project, timings, total)
+    music = MusicTrack([*placements, *beds]) if placements or beds else None
 
     def read(a: int, b: int) -> np.ndarray:
         x = voice.read(a, b)
@@ -424,10 +473,11 @@ def mix_audio(project: Project, timings: dict[str, Any], voices: Sequence[Path],
         log.info("no narration audio yet (vidgen tts): the mix is not normalised")
         normalize = False
     summaries = [p.summary() for p in placements]
+    ambience = [b.summary() for b in beds]
     out.unlink(missing_ok=True)
     if not normalize and music is None:
         meter = loudness.measure(total, read)
-        return MixReport(False, False, None, None, 0.0, meter.integrated, meter.true_peak, 0.0, summaries)
+        return MixReport(False, False, None, None, 0.0, meter.integrated, meter.true_peak, 0.0, summaries, ambience)
     gain_db = 0.0
     if normalize:
         before = loudness.measure(total, read, peaks=False).integrated
@@ -446,4 +496,5 @@ def mix_audio(project: Project, timings: dict[str, Any], voices: Sequence[Path],
         meter.true_peak,
         -20 * math.log10(lowest) if lowest > 0 else math.inf,
         summaries,
+        ambience,
     )

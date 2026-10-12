@@ -780,6 +780,10 @@ asks for one, say vidgen makes original characters and offer one with the same r
   hats trail and particles drift; `- wind: gale` fades it in a beat. From `windy` on it shows
   clearly; add `particles: [leaves, streaks]` so it reads at once. `- blow_away: napkin` blows a
   light prop off the stage (or `to:` a mark), out of a hand too; the wind must blow then.
+- **Rain**: `particles: [rain]` (or `- particles: rain` from a beat) on a stage ends on the
+  ground with small splashes; an open umbrella (held or standing) and a tree's crown keep the
+  rain off whoever stands under them; `{kind: rain, puddles: true}` grows puddles. A generated
+  rain sound plays under it while it lasts, ducked less than music (off with `foley: false`).
 
 **Shot variety.** Change the shot every few beats, as a comic changes panels. A beat's `shot:`
 key cuts the camera to a framing of the characters for that beat; the next beat without one cuts
@@ -891,8 +895,8 @@ into the set. `examples/cartoon_series/` shows it (CONFIG "Shared casts and sets
   validate` says when the prop is too far, the seat taken, or a seated character walks
   (`docs/CONFIG.md` "Sitting and leaning").
 - **Sound**: walks, entrances, exits, jumps and a `surprised` face make their own sounds
-  (foley: footsteps, whoosh, boing, pop; a thrown prop lands with a thud), timed to the action; `foley: false` (top level or a
-  stage) turns them off. A beat's `sting: reveal | comic | sad` adds a short music sting
+  (foley: footsteps, whoosh, boing, pop; a thrown prop lands with a thud), timed to the action,
+  and rain plays a rain sound bed; `foley: false` (top level or a stage) turns them off. A beat's `sting: reveal | comic | sad` adds a short music sting
   (`reveal` as the beat starts, `comic` and `sad` in the pause after the line), ducked under the
   voice. One or two per cartoon, on the real punchline, or they stop being funny.
 - **Voice sounds**: `[gasp]`, `[hmm]`, `[laugh]`, `[sigh]`, `[giggle]`, `[groan]` in a line

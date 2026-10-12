@@ -106,7 +106,9 @@ src/vidgen/
                           # draws, StarField, StageShadows, §69.31), wind.py (wind levels,
                           # seeded gusts, fades, sway and trailing angles, §69.32; the felt
                           # force and a blown prop's path, §69.38; no manim),
-                          # windblown.py (SwayingProp, StageWind, §69.32); still.py also
+                          # windblown.py (SwayingProp, StageWind, §69.32), rain.py (rain on a
+                          # stage's ground: landing band, shelter boxes, splashes, puddles,
+                          # §69.39; no manim); still.py also
                           # draws the prop gallery and `vidgen character-sheet` (§69.16)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
@@ -117,7 +119,9 @@ src/vidgen/
   scene.py                # NarratedScene base class + narrate()
   camera.py               # camera views kept inside bounds (zoom, pan, follow, a wide stage; §69.7; no manim)
   particles.py            # particle kinds, count cap, seeded positions over time (§69.9; no manim)
-  particle_field.py       # ParticleField: draws the particles over the camera's view, shared options (§69.9)
+  particle_field.py       # ParticleField: draws the particles over the camera's view, shared options (§69.9);
+                          # rain splashes, Puddles (§69.39)
+  ambience.py             # the generated rain sound bed: a seamless loop, its level and ducking (§69.39; no manim)
   capture.py              # frame capture: stills at beat ends / N per beat (see §13); mid-action stills (§69.16)
   introspect.py           # layout dump of the captured frames: objects, px boxes, sizes (§15)
   activity.py             # activity file: beat timings, play log, per-frame motion signal (§17)
@@ -791,6 +795,14 @@ other kinds' seeded streams are unchanged), `ParticleKind` the field `wind_shown
 action `blow_away`. Changed on purpose: a windy stage sways and trails more (`felt_force`, larger
 `SWAYS`, `TRAIL_WEIGHTS` for long hair, bun and hat), so its frames differ from Step 98's; a
 calm stage (`wind: 0`) renders the same frames as before.
+Step 105 (§69.39) adds `Puddles`, `RainGroundSource`, `RainGround`, `ShelterBox`, `SHELTER_PROPS`,
+`SPLASH_SECONDS`, `drop_floors`, `drop_landings`, `landing_lines`, `prop_shelter`,
+`puddle_count`, `puddle_growth`, `puddle_spots`, `rain_ground` and `splash_shapes`;
+`ParticleSettings` gains `puddles` (default `False`), `ParticleField` the keywords `ground` and
+`seed` and the attributes `drops`, `splashes`, `ended`, and `NarratedScene` the hook
+`particles_started(field, settings)` (does nothing by default). Changed on purpose: rain on a
+`stage` ends on its ground and shelters (other scene types: unchanged), and plays a rain bed with
+foley on.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -5563,7 +5575,8 @@ Rain, snow, sparkles, dust, confetti, smoke and bubbles: a field of small shapes
 drifts, spins or rises over a scene. On a `stage` for the whole scene (`particles` param); on any
 scene type from a beat (the `particles` beat action). Nothing like it existed before (the
 cookbook's `_looping_particles` is an example file, not library code), so the step adds the model
-and reuses the action machinery rather than overlays.
+and reuses the action machinery rather than overlays. (Step 105 makes rain on a `stage` end on
+its ground and shelters, with splashes, puddles and a rain sound bed: §69.39.)
 
 - **Model** (`particles.py`, no manim): `PARTICLE_KINDS = rain, snow, sparkles, dust, confetti,
   smoke, bubbles` (Step 104 adds `leaves` and `streaks`, §69.38); `KINDS` (kind -> `ParticleKind`: shape `streak | dot | star | chip | ring`,
@@ -7447,3 +7460,82 @@ the wind take a light prop.
 - **Not done here**: an open umbrella tugging its holder or turning inside out (optional, left
   out); hair bending rather than turning as one piece; no sound for a blown prop; leaves and
   streaks are not added automatically. Tests: `tests/test_cartoon_wind.py`.
+
+### 69.39 Rain on the ground (Step 105)
+
+Step 76's rain fell through the whole frame, past the ground and through an open umbrella. On a
+`stage` it now ends on the ground, depth-aware, with splashes; open umbrellas and trees keep it
+off; puddles may grow; and a generated rain sound bed plays under it.
+
+- **Model** (`cartoon/rain.py`, pure numpy, Manim units of the scene, `y` up): `rain_ground(ground,
+  top, frame_height, shelters)` → `RainGround(ground, front, back, frame_height, shelters)`: the
+  *landing band* from `LANDING_FRONT` 0.05 frame heights in front of the ground line (never below
+  the frame) up to the top of the ground area (`ground_top`, the deepest thing on the ground).
+  Each drop gets a landing share (and a splash spread) once from `landing_shares(count, seed)`,
+  `default_rng([seed, 105])`, a stream of its own so the drops keep Step 76's positions;
+  `landing_lines` maps it into the band. `ShelterBox(left, right, top, feet)`: `covers(x, landing,
+  reach)` = over it, landing at most `reach` in front of its feet (`SHELTER_REACH` 0.1 frame
+  heights: a shelter up to depth ~0.4 keeps its whole column dry; at 0.05 a few drops landing in
+  front of a tree's crown crossed it on screen and read as rain through it), and below its top.
+  `drop_floors` = the landing line, or the highest covering shelter's top. `drop_landings(tip,
+  floor, speed, slant)`: a drop whose lower tip is below its floor is not drawn (it reappears at
+  the top when it wraps, as before) and splashes for `SPLASH_SECONDS` 0.3 after its tip crossed
+  (age = distance below / fall speed; `back` = how far it slid along the slant since, so the
+  splash stays where it landed). `splash_shapes(age, spread, scale)`: three ellipses per splash
+  (a flat ring widening from 0.008 to 0.024 shorter sides and flattening to nothing; two droplets
+  thrown left and right up to 0.022, radius 0.0045 shrinking to 0), scaled by the floor's depth
+  (`splash_depth_scale`). Puddles: `puddle_spots(count, seed, left, right, ground, short_side)`
+  (`default_rng([seed, 1105])`, rejected under a shelter, half width 0.05–0.1 shorter sides × depth
+  scale, `PUDDLE_FLAT` 0.22 high), `puddle_count` = 4 per frame width, `puddle_growth(seconds)`
+  eases out to full at `PUDDLE_GROW_SECONDS` 10. `prop_shelter(kind, shape, box, feet)`:
+  `SHELTER_PROPS` tree (any shape) and umbrella (`open` only).
+- **Drawing** (`particle_field.py`): `ParticleField` takes `ground` (a callable giving the
+  `RainGround` now; `particle_field` passes the scene's `rain_ground` for kind `rain` only) and
+  `seed`; with a ground it holds one more child, `splashes`, a single `VMobject` whose subpaths
+  are every splash's ellipses this frame (opacity `SPLASH_OPACITY` 0.85 × the field's level),
+  and multiplies each drop's alpha by "still falling". `drops` lists the particles; `ended` is
+  set by its fade out. `Puddles(spots, start=, ended=, clock=)` (a `VGroup` of ellipses,
+  `#7393B8` at 0.55) resize about their centres from the rain's seconds and drop their updater
+  once full or once the rain ended; they hold plain functions, not the field or the scene,
+  because Manim deep-copies a mobject it fades in. The layout dump leaves puddles out (like
+  shadows and stars).
+- **Stage** (`scenes/stage.py`): `rain_ground()` builds the shelters every frame from its props
+  (box = the prop's drawn bounds now, so a held umbrella and a swaying tree carry theirs; feet =
+  the holder's feet for a held one). `NarratedScene.particles_started(field, settings)` (new hook,
+  nothing by default; `particle_field` calls it) on a stage keeps rain fields for the sound bed
+  when foley is on (`_foley_on`: the stage's `foley`, else the video's, shared with
+  `action_foley`) and lays `Puddles` (lit by the light) right after the set behind the characters
+  (`_lay_on_ground`: into the backdrop while it has not come on screen, so they fade in with it;
+  else into `scene.mobjects` after the ground band, before the shadows). `puddles` on another kind
+  is a config error (stage param) or a validate problem (the action). Other scene types have no
+  `rain_ground`: their rain is unchanged.
+- **Sound bed** (`ambience.py`, `mix.py`): a stage's `timings()` adds `ambience: [{bed: rain,
+  start, end}]` (scene seconds: each kept field's start to its `ended`, or the scene's end);
+  `join_scenes` shifts them to video times in the combined timings. `ambience_spans` merges spans
+  closer than `JOIN_GAP` 0.25 s (rain across a cut plays on). `rain_loop()`: 8 s stereo, numpy
+  only, seeded by `crc32("ambience:rain")`: per channel a hiss (noise, Gaussian band 2.5 kHz σ 1.1
+  octaves, high-pass 300 Hz, low-pass 9 kHz), 240 drop ticks per second (impulses, Pareto
+  amplitudes capped at 3×, band 3.5 kHz) and 25 plops per second (band 900 Hz), a 2-cycle ±15 %
+  swell; every filter one circular FFT, so the loop has no seam; set to `RAIN_LEVEL` −32 LUFS
+  integrated (measured: −32.0, peak −14.9 dBFS, 62 % of its energy at 1–4 kHz, 31 % at 4–8 kHz).
+  `plan_ambience` places it like a music cue (`AmbiencePlacement`, read by `MusicTrack`):
+  raised-cosine fades `RAIN_FADE_IN` / `RAIN_FADE_OUT` 1.5 s inside the span, ducked by
+  `RAIN_DUCK` (depth 5 dB, attack 0.4, release 1.0, hold 1.5; the music's default depth is 12) over
+  `speech_spans`. So in a pause it sits 4 dB under the music's −28 LUFS (~11 dB under narration
+  at ~−21), under speech at about −37 LUFS (~16 dB under the voice; music ducked: −40). A bed
+  makes `mix_audio` write the mix (like music) but does not trigger `normalize: auto`; the `mix`
+  report gains `ambience: [{bed, start, end, duck}]` when one played. Measured on a 20 s
+  word-count preview (every beat counts as speech, so ducked throughout): −37.5 LUFS integrated,
+  per-second −36.4 to −38.3 (the swell), −45 / −44 in the first and last second (the fades).
+- **Render cost**: drops stay capped (`MAX_PARTICLES`, half at preview); the ground adds a few
+  numpy operations per frame and one `VMobject`. A 20 s preview of a stage with rain at density
+  1.5 (120 drops): HEAD 518e142 14.2 s, this step 14.3 s, with puddles 14.8 s (without rain:
+  10.3 s).
+- **Checked by eye**: a scratch stage (854x480) with a held open umbrella, a tree at depth 0.3, a
+  bush, wind `breeze`, rain 1.5 with puddles: the umbrella's and the tree's columns stay dry, the
+  splashes read as small light marks on the ground band, puddles sit on the ground under the
+  characters, the rain still falls on the character before the umbrella opens.
+- **Not done here**: drops are drawn in front of everything (Step 76), so a drop landing behind a
+  character still crosses it on screen; no rain on other props (a house's roof, a table); puddles
+  do not reflect or ripple; the bed has one intensity (no light / heavy rain by density); snow does
+  not settle. Tests: `tests/test_cartoon_rain.py`.

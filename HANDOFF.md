@@ -9788,3 +9788,93 @@ How to test
   (210, 31 s); render `test_cartoon_wind test_particles test_cartoon_holding test_cartoon_sheet`
   (9, 7 s), `test_cartoon_stage test_cartoon_props test_cartoon_directing test_cartoon_seating
   test_cartoon_lighting test_cartoon_character test_cartoon_generator` (11, 10 s). Full suite not run.
+
+## Step 105 — Rain on the ground
+
+What was built
+- Pure model `src/vidgen/cartoon/rain.py` (no manim, Manim units, `y` up): `rain_ground(ground,
+  top, frame_height, shelters)` → `RainGround` (landing band from `LANDING_FRONT` 0.05 frame
+  heights in front of the ground line up to `ground_top`); per-drop seeded landing shares and
+  splash spreads (`landing_shares`, `default_rng([seed, 105])`, so Step 76's drop positions are
+  unchanged); `ShelterBox(left, right, top, feet).covers` and `drop_floors` (drops landing behind
+  `SHELTER_REACH` 0.1 frame heights in front of a shelter's feet stop at its top);
+  `drop_landings` (falling / splashing / age / slide back along the slant); `splash_shapes` (ring
+  + two droplets over `SPLASH_SECONDS` 0.3, depth-scaled); `puddle_spots` / `puddle_count` (4 per
+  frame width) / `puddle_growth` (full at 10 s); `prop_shelter` (`SHELTER_PROPS`: tree, open
+  umbrella).
+- `particle_field.py`: `ParticleField(ground=, seed=)`: a rain field with a ground hides drops past
+  their floor and draws all splashes as one extra `VMobject` child (`splashes`); `drops`, `ended`
+  (set by its fade out). `ParticleSettings.puddles` (default false). `Puddles` (ellipses that grow
+  with the rain's seconds and stay). `particle_field` passes the scene's `rain_ground` for rain
+  and calls the new hook `NarratedScene.particles_started(field, settings)`.
+- `scenes/stage.py`: `Stage.rain_ground()` (shelters from the props' drawn bounds each frame; a
+  held umbrella's feet = its holder's), `particles_started` (keeps rain fields for the bed when
+  foley is on; lays puddles behind the characters, lit), `_lay_on_ground`, `_foley_on` (shared
+  with `action_foley`), `timings()` adds `ambience: [{bed: rain, start, end}]`. `puddles` on a
+  kind other than rain: a config error (stage param) / validate problem (action).
+- Sound: `src/vidgen/ambience.py` (`rain_loop()`: seamless 8 s stereo numpy loop, hiss + drop
+  ticks + plops, circular FFT filters, `RAIN_LEVEL` −32 LUFS; `RAIN_DUCK` 5 dB / 0.4 / 1.0 / 1.5;
+  fades 1.5 s; `merge_spans` / `ambience_spans`, `JOIN_GAP` 0.25 s; `LoopSource`). `mix.py`:
+  `AmbiencePlacement`, `plan_ambience` (on the music track), `MixReport.ambience` (JSON key only
+  when a bed played); a bed makes the mix be written but does not trigger `normalize: auto`.
+  `render/pipeline.py`: scenes' `ambience` shifted to video times in the combined timings.
+- Layout dump leaves `Puddles` out (introspect).
+
+Evidence
+- Stills by eye (scratch stage 854x480: dot picks up and opens an umbrella, moss under a tree at
+  depth 0.3, bush at 0.6, breeze, rain 1.5 + puddles): umbrella and tree columns dry, splashes read
+  as small light marks on the ground band, puddles under the characters, rain falls on dot before
+  the umbrella opens. Two changes after looking: splashes 1.5× larger and opacity 0.85 (they were
+  barely visible), `SHELTER_REACH` 0.05 → 0.1 (drops landing just in front of the tree crossed its
+  crown and moss's hat on screen).
+- Bed level: loop −32.0 LUFS, peak −14.9 dBFS (−2.9 before capping the Pareto tick amplitudes),
+  62 % of the energy at 1–4 kHz. The scratch project's 20 s word-count preview (every beat counts
+  as speech, so ducked all along): −37.5 LUFS integrated; per second −36.4..−38.3 (the swell),
+  −45.5 in the first and −44.5 in the last second (fades). Not listened to by a human.
+- Render cost, same 20 s rain stage at preview (120 drops): HEAD 518e142 14.2 s, this step 14.3 s,
+  with puddles 14.8 s; the dry stage 10.3 s.
+
+Files touched
+- New: `src/vidgen/cartoon/rain.py`, `src/vidgen/ambience.py`, `tests/test_cartoon_rain.py`.
+- `src/vidgen/particle_field.py`, `scenes/stage.py`, `scenes/particles_action.py`, `scene.py`,
+  `mix.py`, `render/pipeline.py`, `introspect.py`, `api.py`.
+- Docs: `docs/CONFIG.md` (particles `puddles` row, new "Rain on the ground", foley sentence, stage
+  `particles` row, action row), `DESIGN.md` (§2 tree, §6.4, §69.9 pointer, new §69.39),
+  `docs/EXTENDING.md` (`particles_started`, `rain_ground`), `docs/gallery/stage.md` (rows as the
+  param docs now say), guide (`src/vidgen/data/guide/AGENTS.md` + `AGENTS.md`: "Rain" bullet,
+  sound bullet), `tasklist.md`.
+
+Public interfaces
+- `vidgen.api` adds `Puddles`, `RainGroundSource`, `RainGround`, `ShelterBox`, `SHELTER_PROPS`,
+  `SPLASH_SECONDS`, `drop_floors`, `drop_landings`, `landing_lines`, `prop_shelter`,
+  `puddle_count`, `puddle_growth`, `puddle_spots`, `rain_ground`, `splash_shapes`. Compatible:
+  `ParticleSettings.puddles`, `ParticleField(ground=, seed=)`, `NarratedScene.particles_started`.
+  Timings: scene `ambience`, mix report `ambience`. Changed on purpose: rain on a stage.
+
+Decisions / deviations
+- Drops are hidden past their floor rather than recycled at it, so camera moves never make them
+  jump; a hidden drop reappears when it wraps to the top (Step 76's cycle).
+- Shelters cover a whole column (behind and a little in front of their feet): drops are drawn in
+  front of everything, so depth-true rain in front of a crown read as rain through it.
+- The bed is on the music track (fades and ducking like music), not an SFX event: it lasts as long
+  as the rain and needs its own ducking depth. Stage only (foley is a stage thing).
+- Searched first: no ground / landing / puddle / ambience code existed (`grep -rn "splash\|puddle\|
+  ambience\|shelter" src/vidgen`: none); reused `ground_top`, `depth_scale`, `FAR_RISE`, the
+  particle model and field, `duck_curve`, `speech_spans`, `_fade_curve`, `MusicTrack`,
+  `integrated_loudness`, the sfx filters, `mark_lit`.
+
+Known gaps / TODOs
+- A drop landing behind a character still crosses it on screen; no rain on roofs or tables;
+  puddles neither reflect nor ripple; one bed intensity for any density; snow does not settle.
+
+How to test
+- `pytest tests/test_cartoon_rain.py` (13 not-render + 2 render, ~6 s).
+- Also run: not render `test_particles test_cartoon_wind test_api test_actions test_music
+  test_cartoon_foley test_introspect test_cartoon_stage test_cartoon_props test_cartoon_holding
+  test_sfx` (265, 32 s), `test_docs test_guide test_schema test_gallery test_actions_coverage
+  test_extensions test_builtin_scenes test_json_output` (337, 68 s), `test_overlap
+  test_overlap_pinned test_scene test_phase_h_review test_phase_i_review test_cartoon_directing
+  test_cartoon_sheet test_lint test_config test_cartoon_lint` (133, 9 s); render `test_particles
+  test_cartoon_stage test_cartoon_wind test_cartoon_foley test_cartoon_lighting test_cartoon_props
+  test_cartoon_holding test_cartoon_rain` (15, 10 s), `test_music test_overlap test_overlap_pinned
+  test_introspect test_scene` (12, 28 s). Full suite not run.

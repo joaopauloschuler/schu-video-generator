@@ -1939,7 +1939,9 @@ puts on the `surprised` expression. Other actions are
 silent. They are ordinary sound effects (listed in `timings.json` `sfx`, mixed like the rest):
 `sfx: {gain}` sets their level with the others, and `assets/sfx/footstep.wav` (or `boing.wav`,
 ...) replaces a sound with your own. `foley: false` at the top level turns them off for the
-video, a stage's `foley: false` (or `true`) for that scene.
+video, a stage's `foley: false` (or `true`) for that scene. Rain on a stage also plays a
+generated rain sound bed while it lasts, mixed with the music and ducked less
+([Rain on the ground](#rain-on-the-ground)); `foley: false` turns it off too.
 
 **Music stings.** A beat's `sting` plays a short musical phrase on it:
 
@@ -4118,7 +4120,7 @@ never leaves the stage.
 | `camera_at` | mark \| x | `centre` | where the camera looks at the start (on a stage wider than the frame) |
 | `layers` | list | `[]` | parallax layers (below), in the order given within their place |
 | `props` | list | `[]` | [props](#props): a built-in prop's name (`tree`), or a mapping (below) |
-| `particles` | list | `[]` | [particles](#particles) over the whole scene, in front of everything: a kind (`snow`), or `{kind, density, area, color, seed}` |
+| `particles` | list | `[]` | [particles](#particles) over the whole scene, in front of everything: a kind (`snow`), or `{kind, density, area, color, seed, puddles}`; rain ends on the ground ([Rain on the ground](#rain-on-the-ground)) |
 | `light` | `day` \| `morning` \| `sunset` \| `night` \| `indoor` \| `{tint, strength}` | `day` | the [light](#light-and-shadows-light-shadows) on the set: a colour grade of the background, layers, props and characters (never of speech bubbles or text); `night` adds stars; the `light` action changes it during the scene |
 | `shadows` | bool | `true` | soft [shadows](#light-and-shadows-light-shadows) on the ground under the characters and the props standing on it; `false`: none |
 | `wind` | number -1..1 \| `calm` \| `breeze` \| `windy` \| `gale` | `0` | [wind](#wind-wind) in gusts: trees, bushes, plants, signs and lamps sway, scarves, long hair, floppy or pointy ears and hats trail, particles drift (`0.3` breeze .. `1` gale, blowing right; negative blows left); `0` changes nothing; the `wind` action changes it during the scene; `blow_away` blows a light prop away |
@@ -4879,6 +4881,7 @@ a `pan`), fade in over 0.5 s, and fall, drift, spin or rise on their own. Positi
 | `area` | the whole frame | `[x, y, w, h]`: fractions 0–1 of the visible frame from its top-left corner (smoke from a chimney: `[0.6, 0.1, 0.08, 0.5]`); particles fade out near its edges |
 | `color` | per kind | a colour (theme token or `#hex`) or a list, each particle picking one: rain `#A9C1DD`, snow `#FFFFFF`, sparkles `highlight`, dust `#E6DCC8`, confetti `accent highlight primary secondary tertiary`, smoke `#B9BEC6`, bubbles `#CFE9FF`, leaves `#7BAE4E #C9A23A #C2703D`, streaks `#FFFFFF` |
 | `seed` | `1` | another number gives other positions |
+| `puddles` | `false` | rain on a `stage` only: `true` lets puddles grow on the ground while it rains ([Rain on the ground](#rain-on-the-ground)) |
 
 ```yaml
 - id: storm
@@ -4899,9 +4902,47 @@ a `pan`), fade in over 0.5 s, and fall, drift, spin or rise on their own. Positi
 ```
 
 `vidgen validate` reports an unknown kind (with a did-you-mean), the kind given twice, an `area`
-outside the frame, a `density` out of range, and `keep` with `until`. The layout dump sees a
+outside the frame, a `density` out of range, `keep` with `until`, and `puddles` on a kind other
+than rain. The layout dump sees a
 field as one object of kind `particles` named after its kind; `vidgen lint`'s `off_frame` leaves
 it out (particles cross the edges on purpose).
+
+##### Rain on the ground
+
+On a `stage`, rain (the `particles` param or the `particles` action) ends on the ground instead of
+falling past it. Each drop lands on its own line between 0.05 frame heights in front of the
+ground line and the top of the ground area (up to where the deepest character or prop stands),
+so drops land at different depths, and a small splash (a flat ring and two droplets, seeded like
+the drops) shows where it landed for 0.3 s, smaller further back.
+
+Rain does not fall through a shelter: an **open umbrella** (standing, or held overhead) and a
+**tree**'s crown. A shelter is the box its drawing covers now (it follows a held umbrella and a
+swaying tree): drops over it stop at its top edge (with a splash there) when they would land
+behind its front edge (0.1 frame heights in front of the ground line where it stands, or its
+holder stands). So a character under an open umbrella or a tree stays dry; a closed umbrella
+shelters nothing. `puddles: true` grows a few flat puddles (4 per frame width of the stage, seeded,
+none under a shelter) on the ground from nothing to full size over 10 s of rain; they stay when
+the rain stops.
+
+While a rain field lasts, a generated **rain sound bed** plays under the scene (no recordings: a
+soft hiss with many small drop ticks and a few plops, a seamless 8 s loop), fading in over 1.5 s
+from the rain's start and out over 1.5 s ending where the field is gone (its fade out included);
+rain running from one stage scene into the next plays as one bed. It is mixed like the
+[music](#background-music-music) at **−32 LUFS** (4 dB under the music's −28 LUFS, about 11 dB
+under typical narration in its pauses) and ducked under the narration by **5 dB** (the music: 12),
+so it stays faintly audible under the voice (about 16 dB under it). It follows the stage's foley:
+on by default, off with `foley: false` (the stage param or the top-level key). The render's
+`timings.json` lists it under each scene's `ambience` and the `mix` report's `ambience`. Other
+scene types get no ground and no bed: their rain falls through the frame as before.
+
+```yaml
+- id: picnic
+  type: stage
+  params:
+    props: [{prop: tree, at: right}, {prop: umbrella, at: 0.35, open: true}]
+    characters: [{name: dot, at: 0.3}, {name: moss, at: right}]
+    particles: [{kind: rain, density: 1.5, puddles: true}]   # dot under the umbrella, moss under the tree
+```
 
 #### Light and shadows (`light`, `shadows`)
 
@@ -5172,7 +5213,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `wind` | as the target: `- wind: 0.8` (a number from `-1` to `1`, negative blowing left) or `calm`, `breeze`, `windy`, `gale` | on a `stage`: fades the [wind](#wind-wind) from `at` over `run_time` seconds (`2`); it lasts until another `wind` action. Its "target" is the strength, not a target of the scene; no `until`. |
 | `blow_away` | as the target: the prop (`- blow_away: napkin`); `to` (a mark or an x 0–1; default: off the stage downwind) | on a `stage`: the wind blows a light prop away, tumbling, out of a holder's hand too; it lands upright at `to` or is gone ([props that blow away](#props-that-blow-away-blow_away)). No `until`. |
 | `light` | as the target: `- light: night` (`day`, `morning`, `sunset`, `night`, `indoor`), or `tint` + `strength` (`0.5`) | on a `stage`: fades the [light](#light-and-shadows-light-shadows) from `at` over `run_time` seconds (`2`); it lasts until another `light` action. Its "target" is the light, not a target of the scene; no `until`. |
-| `particles` | `kind` (or as the target: `- particles: snow`), `density` (`1`), `area`, `color`, `seed` (`1`), `keep` (`false`) | [particles](#particles) — `rain`, `snow`, `sparkles`, `dust`, `confetti`, `smoke` or `bubbles` — over the scene from `at`, in front of everything; works on every scene type. They fade in, and fade out (still moving; `run_time`, `0.6` s) when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: at the end of the scene). Its "target" is the kind, not a target of the scene. |
+| `particles` | `kind` (or as the target: `- particles: snow`), `density` (`1`), `area`, `color`, `seed` (`1`), `keep` (`false`), `puddles` (`false`, rain on a stage) | [particles](#particles) — `rain`, `snow`, `sparkles`, `dust`, `confetti`, `smoke` or `bubbles` — over the scene from `at`, in front of everything; works on every scene type; on a stage, rain ends on the ground and plays a rain sound bed while it lasts ([Rain on the ground](#rain-on-the-ground)). They fade in, and fade out (still moving; `run_time`, `0.6` s) when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: at the end of the scene). Its "target" is the kind, not a target of the scene. |
 | `say`, `look_at`, `turn`, `emote`, `pose`, `react` | see [Speaking and acting](#speaking-and-acting) | the acting actions on a `stage`'s characters: speak (lip sync and a speech bubble), look at something, turn round, change expression or pose, react to another speaker for one beat |
 | `walk_to`, `enter`, `exit`, `gesture`, `jump` | see [Moving](#moving) | the moving actions on a `stage`'s characters: walk to a mark, walk in or out of view, point / wave / shrug / nod / shake the head, jump |
 | `keyframes`, `move_along` | see [Keyframes and motion paths](#keyframes-and-motion-paths) | move a `stage`'s character, prop or character part (`kit.arm_left`) through keys (`t`, `x`, `y`, `rotate`, `scale`, `ease`) or along a path of points |

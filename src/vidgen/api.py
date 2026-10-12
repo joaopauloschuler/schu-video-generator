@@ -230,7 +230,22 @@ from vidgen.cartoon.stage import (  # noqa: E402
 from vidgen.camera import view_center_within  # noqa: E402
 from vidgen.cartoon.shots import SHOT_KINDS, SHOT_MOVE_SECONDS, Shot, ShotFigure, ShotView, frame_shot, shot_figures, shot_view  # noqa: E402
 from vidgen.particles import MAX_PARTICLES, PARTICLE_KINDS, particle_count, particle_seeds, particle_states  # noqa: E402
-from vidgen.particle_field import ParticleField, ParticleKindName, ParticleSettings, ParticleWind, particle_field  # noqa: E402
+from vidgen.particle_field import ParticleField, ParticleKindName, ParticleSettings, ParticleWind, Puddles, RainGroundSource, particle_field  # noqa: E402
+from vidgen.cartoon.rain import (  # noqa: E402
+    SHELTER_PROPS,
+    SPLASH_SECONDS,
+    RainGround,
+    ShelterBox,
+    drop_floors,
+    drop_landings,
+    landing_lines,
+    prop_shelter,
+    puddle_count,
+    puddle_growth,
+    puddle_spots,
+    rain_ground,
+    splash_shapes,
+)
 from vidgen.cartoon.lighting import (  # noqa: E402
     DEFAULT_STRENGTH,
     LIGHT_FADE_SECONDS,
@@ -698,6 +713,21 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "particle_field",
     "particle_seeds",
     "particle_states",
+    "Puddles",
+    "RainGroundSource",
+    "SHELTER_PROPS",
+    "SPLASH_SECONDS",
+    "RainGround",
+    "ShelterBox",
+    "drop_floors",
+    "drop_landings",
+    "landing_lines",
+    "prop_shelter",
+    "puddle_count",
+    "puddle_growth",
+    "puddle_spots",
+    "rain_ground",
+    "splash_shapes",
     "Field",
     "field_validator",
     "model_validator",
