@@ -547,7 +547,8 @@ def _named_object(plain: str, text: str, state: StageState, *, camera: bool) -> 
 
 def _target_x(state: StageState, who: str, kind: str, value: str | float) -> float | str:
     """Where a walk to ``value`` ends: a mark as it is, else beside the character / prop on the
-    walker's side."""
+    walker's side; when another character stands there, the other side, then a character's gap
+    further out (so two walks to one tree do not end on one spot)."""
     if kind == "mark":
         return value
     there = state.props[str(value)] if kind == "prop" else state.x.get(str(value))
@@ -556,8 +557,14 @@ def _target_x(state: StageState, who: str, kind: str, value: str | float) -> flo
     here = state.x.get(who)
     here = state.home.get(who, 0.5) if here is None else here
     gap = PROP_GAP if kind == "prop" else CHARACTER_GAP
-    x = there - gap if here <= there else there + gap
-    return round(min(max(x, 0.05), 0.95), 2)
+    side = -1.0 if here <= there else 1.0
+    others = [x for name, x in state.x.items() if name != who and x is not None]
+    for extra in range(len(others) + 1):
+        for sign in (side, -side):
+            x = round(there + sign * (gap + extra * CHARACTER_GAP), 2)
+            if 0.05 <= x <= 0.95 and all(abs(x - other) >= CHARACTER_GAP - 1e-6 for other in others):
+                return x
+    return round(min(max(there + side * gap, 0.05), 0.95), 2)
 
 
 def _clauses(sentence: str, state: StageState) -> list[str]:

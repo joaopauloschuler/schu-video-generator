@@ -557,6 +557,12 @@ my_video/
 - [examples/cartoon-music-box](examples/cartoon-music-box) — "The Humming Box" after hand editing: automatic
   directing, shots, sitting, a prop picked up and given, sunset to night, wind, a laugh and a
   gasp, an overlap and an interruption, speaker-coloured captions, background music; about 58 s.
+- [examples/cartoon-rain-check](examples/cartoon-rain-check) — "Rain Check", a weather cartoon from
+  its screenplay (`rain_check.md`) after hand editing: a picnic basket, a napkin handed over and
+  blown away, an umbrella opened too late and lost to a gust, visible wind, rain that stops at the
+  ground and under the tree with a rain sound bed, puddles, light from day to storm grey to night
+  with stars, an overlap, an interruption, a comic sting and a pull-back, two music beds; about
+  94 s with Kokoro narration (no audio committed).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.

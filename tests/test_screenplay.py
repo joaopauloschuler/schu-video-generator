@@ -149,6 +149,19 @@ def test_direction_grammar() -> None:
     assert direction_actions("He sighs", state)[1] == ["He sighs"]
 
 
+def test_two_walks_to_one_prop_end_apart() -> None:
+    """Step 106: "Pip runs to the tree. Juno runs to the tree." ended both on one spot."""
+    state = stage(wren=0.25, ash=0.6)
+    state.props["tree"], state.kinds["tree"] = 0.84, "tree"
+    groups, _ = direction_actions("Wren runs to the tree. Ash runs to the tree.", state)
+    ends = [a["to"] for group in groups for a in group]
+    assert ends == [0.74, 0.94] and state.x == {"wren": 0.74, "ash": 0.94}   # the other side of it
+    edge = stage(wren=0.25, ash=0.4)
+    edge.props["tree"], edge.kinds["tree"] = 0.9, "tree"
+    both, _ = direction_actions("Wren and Ash walk to the tree.", edge)
+    assert [a["to"] for a in both[0]] == [0.8, 0.66]   # no room behind it: a character's gap further out
+
+
 def test_names_and_looks() -> None:
     assert character_id("OLD ASH") == "old_ash" and character_id("O'NEIL") == "o_neil"
     silhouettes = {(lk["look"]["body"], lk["look"].get("hair"), tuple(lk["look"].get("accessories", []))) for lk in LOOKS}

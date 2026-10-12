@@ -9878,3 +9878,76 @@ How to test
   test_cartoon_stage test_cartoon_wind test_cartoon_foley test_cartoon_lighting test_cartoon_props
   test_cartoon_holding test_cartoon_rain` (15, 10 s), `test_music test_overlap test_overlap_pinned
   test_introspect test_scene` (12, 28 s). Full suite not run.
+
+
+## Step 106 — The "Rain Check" cartoon example
+
+What was built
+- `examples/cartoon-rain-check/rain_check.md`: an original screenplay (Pip, she; Juno, he, very
+  sure of his forecast; a narrator), four scenes: meadow (the forecast, a cloud drifts in behind
+  Juno), picnic (two rocks, a sandwich in a napkin handed over, wind, the napkin blown out of
+  Juno's hand, a close-up on Pip), storm (rain, the light goes grey, the run to the tree, an
+  overlap "It is just a little shower!" / "It is a storm, Juno!", Pip interrupts "Juno. Your
+  umbrella.", he opens it under the tree and a gust takes it), night (the rain runs out, stars,
+  "Tomorrow will be sunny. I checked." in a close-up with a comic sting, a pull-back as the rain
+  comes back).
+- `examples/cartoon-rain-check/video.yaml`: `vidgen screenplay` draft hand-edited (2-line header,
+  compact): one `sets: meadow` (sky, ground, tree at 0.8) used by all four scenes; props basket,
+  umbrella (held closed from the start, `open`, `blow_away`), napkin (`hold`, `give`,
+  `blow_away`), cloud (`keyframes`), rocks (`sit_on`); wind 0.15 → `windy` with leaves and
+  streaks, `gale` for the gust; rain with puddles from a beat (`keep: true`), a grey `light` tint,
+  `light: night` with stars; speaker-coloured captions; music cues `bright` (meadow–picnic, −2)
+  then `calm` (storm–night, −6, 2 dB under the rain bed). 1280x720 30 fps, preview 640x360 15 fps.
+  Narrator `bf_emma` 0.75, Pip `af_heart` 0.75, Juno `am_fenrir` 0.7.
+- README example list entry.
+
+Fixes found on the way (with tests)
+- Schema: `shot: {kind: closeup, of: juno, move: true}` (one name, as CONFIG documents and
+  `ShotConfig._from_words` accepts) failed `vidgen schema` validation, which wanted a list.
+  `config._name_or_names_schema` makes `of` a name or a list
+  (`tests/test_schema.py::test_shot_mapping_may_name_one_character`; the examples' schema test
+  caught it).
+- Screenplay: "[Pip runs to the tree. Juno runs to the tree.]" sent both to the same x
+  (`walk_overlap`). `screenplay._target_x` now tries the other side of the prop / character,
+  then a `CHARACTER_GAP` further out, when another character stands within `CHARACTER_GAP` of the
+  spot (`tests/test_screenplay.py::test_two_walks_to_one_prop_end_apart`). DESIGN §69.25 and
+  CONFIG's screenplay grammar say so.
+
+Evidence
+- `vidgen validate`: ok. `vidgen lint` at preview (word-count timing): 0 findings (first pass had
+  the tree / cloud cut at the edges, a rushed react, Pip facing away at night; fixed in the yaml).
+- Real Kokoro (scratch copy, kvenv312, 2500 MB cgroup, offline HF cache): 20 beats; at narrator
+  0.8 / Juno 0.75 `narration_speed` warned on 4 beats (3.57–3.72 words/s; one list line 1.64), so
+  0.75 / 0.7 and the list line rephrased: lint 0 findings.
+- Render 1280x720 30 fps with `--frames-per-beat 3` (one command, 157 s for the 4 scenes):
+  `/home/claude/work/rain-check/rain_check.mp4`, 93.93 s, 11.5 MB, −16.1 LUFS integrated, true
+  peak −1.9 dBTP, volumedetect max −1.7 dB.
+- Stills by eye (~60): feet on the ground walking and standing; seated on the rocks (the low rock
+  hides behind the body); basket in Pip's hand by its handle, napkin in Pip's then Juno's hand;
+  napkin tumbling over the tree; umbrella overhead above Juno's hat, then flying off up-right;
+  rain ends on the ground with splashes, stops on the crown (dry under it), puddles; leaves and
+  streaks while windy; storm grey; stars at night, rain gone in night_b2 and back in night_b4;
+  captions in speaker colours, both lines stacked during the overlap.
+- Levels (stems: `mix.wav` / its gain − narration − sfx, correlation with narration −0.05; pre-
+  normalisation LUFS, +5.4 dB in the MP4): narration −20.8; background under speech −40.4 meadow,
+  −39.9 picnic, −36.0 storm (rain, ducked 5 dB, dominates), −39.4 night; in pauses −30.2 / −31.0
+  / −31.2 / −33.5; the rain spans −35.0 / −34.6 / −38.1. So music sits ~19 dB under the voice,
+  the rain ~15 dB under it, and in the storm the music is below the rain.
+
+Files touched
+- New: `examples/cartoon-rain-check/rain_check.md`, `examples/cartoon-rain-check/video.yaml`.
+- `src/vidgen/screenplay.py`, `src/vidgen/config.py`; `tests/test_screenplay.py`,
+  `tests/test_schema.py`; `DESIGN.md` (§69.25), `docs/CONFIG.md` (screenplay grammar),
+  `README.md`, `tasklist.md` (Step 106, one Backlog line).
+
+Known gaps
+- About 94 s, longer than the planned 70 s (Kokoro at 0.7–0.75 plus 0.7 s pads on 20 beats).
+- Rain started by the night scene's first-beat action begins after the set's 1 s fade-in, so
+  the rain bed dips at the storm → night cut (Backlog). Seated characters on a rock read weakly.
+- Not listened to by a person; Whisper not run.
+
+How to test
+- `pytest -m "not render" tests/test_screenplay.py tests/test_schema.py tests/test_config.py
+  tests/test_cartoon_shots.py tests/test_json_output.py tests/test_docs.py tests/test_guide.py
+  tests/test_mcp.py` (all passed: 20, 79 with config, 108 with shots/json/docs/screenplay, 61 with
+  mcp/guide). `vidgen validate` / `vidgen lint examples/cartoon-rain-check`. Full suite not run.

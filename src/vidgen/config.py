@@ -1049,6 +1049,13 @@ ShotKind = Literal["wide", "two_shot", "medium", "over_shoulder", "closeup"]
 SHOT_NAMES: dict[str, tuple[int, int]] = {"wide": (0, 0), "two_shot": (0, 2), "medium": (1, 1), "over_shoulder": (1, 2), "closeup": (1, 1)}
 
 
+def _name_or_names_schema(schema: dict[str, Any]) -> None:
+    """JSON Schema of a list of names that may also be written as one name (``of: kit``), which a
+    model's ``before`` validator turns into a list."""
+    names = {key: schema.pop(key) for key in ("type", "items") if key in schema}
+    schema["anyOf"] = [names["items"], names]
+
+
 class ShotConfig(_Strict):
     """A beat's camera framing on a stage (``shot:``): ``closeup kit`` or ``{kind, of, move,
     run_time}``. It cuts to the framing as the beat starts (eases with ``move: true``) and holds
@@ -1056,7 +1063,7 @@ class ShotConfig(_Strict):
 
     kind: ShotKind
     """wide (everyone, no zoom), two_shot (two characters, whole), medium (one from the hips up), over_shoulder (one seen past another, who stands cut by the frame's edge) or closeup (head and shoulders)."""
-    of: list[Identifier] = Field(default_factory=list)
+    of: list[Identifier] = Field(default_factory=list, json_schema_extra=_name_or_names_schema)
     """The characters it frames: none for wide; two_shot two (default: the speaker and the one nearest it); medium and closeup one; over_shoulder the one seen, then the near one (default: the one it looks at, else the nearest)."""
     move: bool = False
     """true: the camera eases to the framing (and back after the beat) instead of cutting."""

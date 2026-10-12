@@ -6520,7 +6520,9 @@ config; `write_plan` now calls both, its output unchanged).
   (written names and, for a multi-word name, its last word when unique), `he` / `she` / `it` for a
   single last subject, `they`; else `default`. `_VERBS` (in order): walk / go / run... `to` ->
   `walk_to` (a mark or x as given; a prop or character: `PROP_GAP` 0.1 / `CHARACTER_GAP` 0.14
-  before it on the walker's side; `runs` `speed: RUN_SPEED` 5), `enter` / `exit` with a side,
+  before it on the walker's side; when another character stands within `CHARACTER_GAP` of that
+  spot, the other side, then `CHARACTER_GAP` further out (Step 106); `runs` `speed: RUN_SPEED`
+  5), `enter` / `exit` with a side,
   `jump`, `look at` (characters, props by name or unique kind, marks, `camera` / `us`; `each
   other`), `point at` (`look_at` + `gesture: point`), `wave` / `nod` (+ a look when they name
   someone), `shrug`, `shake ... head`. `StageState` follows each character's x (`home`: its

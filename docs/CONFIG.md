@@ -4730,8 +4730,8 @@ GUS (glad): There it is! [jumps] I left my song in that crate.
   the last line of a scene: at 0.6 of it), one after the other, each `at` estimated from how long
   the one before takes (a walk by its distance); inside a line they act at that point of it, with
   the speaker as subject. Each sentence (or clause after `and`) is matched against a small
-  grammar: `X walks / goes / runs to Y` (`walk_to`: a mark, an x, or beside a prop or character;
-  `runs` twice as fast), `X enters [from the left]`, `X exits / leaves [left]`, `X jumps`,
+  grammar: `X walks / goes / runs to Y` (`walk_to`: a mark, an x, or beside a prop or character,
+  on the other side or a little further out when someone already stands there; `runs` twice as fast), `X enters [from the left]`, `X exits / leaves [left]`, `X jumps`,
   `X looks at Y` (a character, prop, mark or the camera; `look at each other`), `X points at Y`
   (`look_at`, then `gesture: point`), `X waves [at Y]`, `nods`, `shrugs`, `shakes his head`.
   Subjects are character names (`X and Y`) or `he` / `she` / `they` for the last ones; `it` /
