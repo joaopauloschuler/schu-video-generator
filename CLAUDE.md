@@ -39,7 +39,7 @@ to the user.
   (`-n`) or two suites at once. The full suite is run only when the user asks.
 
 ## Git
-- Work on branch `main` (the user's current branch). **Never push. Never add remotes.** One commit per step (you may make
+- Work on the user's current branch (check with `git branch --show-current`; do not switch). **Never push. Never add remotes.** One commit per step (you may make
   more, but the step must end with everything committed and the tree clean).
 - Commit message: `Step N: <summary>` followed by a short body, then exactly these trailer lines:
 
