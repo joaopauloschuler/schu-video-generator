@@ -1,4 +1,4 @@
-# Phase I showcase: built from examples/screenplay, then hand-edited. No audio committed:
+# A cartoon about a music box: built from examples/screenplay, then hand-edited. No audio committed:
 # `vidgen tts` (Kokoro, free and local) makes the narration.
 title: The Humming Box
 format:
@@ -204,7 +204,7 @@ scenes:
     - gesture: gus
       to: nod
       at: 0.5
-output: showcase
+output: cartoon-music-box
 overlays:
 - type: captions
   speakers: color
