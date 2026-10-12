@@ -24,6 +24,8 @@ MODELS: list[type[BaseModel]] = [
     config.VoiceSettings,
     config.VoiceEntry,
     config.VoiceSettingsOverride,
+    config.CharacterEntry,
+    config.CharacterColors,
     config.SubtitlesConfig,
     config.NarrationConfig,
     config.PronunciationEntry,

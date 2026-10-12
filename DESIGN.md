@@ -71,6 +71,8 @@ src/vidgen/
   icon_mobject.py         # icon() / Icon: SVG -> recoloured VGroup with scaling strokes (§22); SvgDrawing base
   svgclean.py             # SVG sanitiser (scripts, filters, rasters, text out; gradients flattened; caps) + theme_color (§65; no manim)
   vector_mobject.py       # load_vector() / VectorPicture: a sanitised SVG as Manim shapes (§65)
+  cartoon/                # cartoons (§69): character.py (Character: named vector parts with pivots,
+                          # poses, mirroring; the basic figure; character()), cast.py (characters: lookups, checks; no manim)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
   actions.py              # per-beat actions: Target, Action, validation, ActionRunner (§26)
@@ -610,6 +612,8 @@ Step 51 (§54) adds `TranslatableStr`, `TextRef`, `LanguageRules`, `language_rul
 keyword argument `language=None` of `caption_cues`, `segment_cues`, `phrase_break_cost`,
 `beat_word_times`, `estimate_word_times` and `syllables`.
 Step 55 (§58) adds `GenerateImage`, `generated_image`.
+Step 67 (§69) adds `Character`, `CharacterPart`, `CharacterState`, `PartPose`, `PART_NAMES`,
+`character` and the param type `CharacterName`.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -4809,3 +4813,81 @@ the measured loudness, §48).
   the forced install above, then a real synthesis with word timestamps, worked.
 - **Not done**: Kokoro v1.1-zh (`hexgrad/Kokoro-82M-v1.1-zh`), custom `.pt` voice files are not
   hashed by content, no streaming, no automatic download of `misaki[ja]` / `[zh]`.
+
+## 69. Characters (Step 67, character model: vector parts with pivots)
+
+The base of Phase H (cartoons). Later steps build on these names: the parametric generator (Step
+68) and imported SVGs (Step 69) produce `CharacterPart` lists; poses and expressions (Step 70)
+are `PartPose` tables applied with `set_state`; lip sync (Step 71) and blinking (Step 72) swap
+shapes; the `stage` scene (Step 73) places characters by `feet()`; acting actions (Step 78+)
+take `CharacterName` options.
+
+- **Parts** (`cartoon/character.py`): `PART_NAMES = body, legs, arm_left, arm_right, head, eyes,
+  brows, mouth, accessory`; `REQUIRED_PARTS` all but `legs` and `accessory`. A part is a
+  `CharacterPart(name, shapes, pivot, parent=None, order=None)`: `shapes` maps shape names to
+  `VMobject`s (the first is the rest shape; e.g. eyes `open` / `closed`, mouth `smile` / `open`;
+  Step 71 adds viseme shapes the same way), `pivot` an (x, y) point. Parents default to
+  `DEFAULT_PARENTS` (body is the root; head, arms, legs hang from body; eyes, brows, mouth,
+  accessory from head); a custom `parent` must be a part the character has, without cycles.
+  Draw order defaults to `DEFAULT_DRAW_ORDER` (arm_right 10, legs 20, body 30, arm_left 40, head
+  50, eyes / mouth 60, brows 70, accessory 80; ties by `PART_NAMES`), so facing right the
+  character's right arm is the far arm behind the body. `arm_left` / `arm_right` are the
+  character's own left / right (as in anatomy), so `arm_left` is on the screen's right in the
+  rest view. Bad part sets raise `VidgenError` naming the character and the parts.
+- **Character units**: parts are drawn with the origin between the feet, `y` up, 1 = the top of
+  the character. `Character(parts, name=, height=3.0, facing="right", voice=None)` scales them to
+  `height` Manim units; `feet()` is the origin on screen (the ground point a stage uses).
+- **State and redraw**: the character keeps a copy of every rest shape and one
+  `PartPose(angle, scale, shift, shape)` per part (frozen dataclass; angle in degrees
+  counterclockwise as drawn facing right, scale (x, y) about the pivot, shift in character
+  units). `refresh()` writes each live part's points as `screen · mirror · world(part) ·
+  rest_points`, where `world(part) = world(parent) · pose(part)` and `pose = T(shift) · T(pivot) ·
+  R · S · T(-pivot)`. So a part's pose moves its children and nothing else, and poses never
+  accumulate rounding: every redraw starts from the rest shape. Styles of the live parts
+  (colour, opacity) are not touched; only a shape swap replaces a part's child with a copy of
+  the new shape (its rest style). `pivot(part)` gives the pivot on screen now.
+- **Placement**: `submobjects[0]` is an invisible anchor of three points (feet, feet + 0.05
+  right, feet + 0.05 up, in character units, inside the figure's box so `get_center` / `width` do
+  not change). Manim's `shift`, `scale`, `rotate`, `move_to` move it with the parts, and
+  `refresh()` reads the placement back from it, so poses set after a move land where the
+  character is. No overrides of Manim's transforms were needed.
+- **Facing**: `face("left")` mirrors the whole character about the vertical line through its
+  feet (in character units, before the placement); `turn()` toggles. The draw order is kept (a
+  mirror image), and part names keep their meaning (the left arm stays `arm_left`).
+- **API**: `set_part(part, angle=, scale=, shift=, shape=)` (values not given keep the pose),
+  `swap(part, shape)`, `reset(part=None)`, `face`, `turn`, `state()` → `CharacterState(facing,
+  parts)`, `set_state(state)`, `pose_of`, `shape_names`, `parent_of`, `has_part`, `draw_order`,
+  `parts` (name → live `VGroup`). All changes return the character (chainable). Animate poses by
+  calling `set_part` / `set_state` from an updater; `.animate.set_part(...)` would interpolate
+  points linearly (a chord, not an arc) — Step 70 adds the eased part-by-part transition.
+  `copy()` is a deep copy with its own poses.
+- **The basic figure** (`basic_parts(colors)`): a round head on an oval body, sleeves with round
+  hands, two legs, dot eyes (`open` / `closed`), line brows, a smile arc or an open mouth; the
+  face sits 0.025 to the right so facing is visible. Outline width `OUTLINE_WIDTH = 4` (Manim
+  stroke width; Step 68 scales it with the frame). It is the only look until Step 68.
+- **Config** (`config.py`): `characters: list[CharacterEntry]` at the top level;
+  `CharacterEntry(name: Identifier, voice: Identifier | None, look: CharacterLook, colors:
+  CharacterColors)`; `CharacterLook` has no keys yet (Steps 68 / 69 add `look:` parameters and
+  `svg:`); `CharacterColors(skin = secondary, clothes = primary, outline = features =
+  CHARACTER_INK #1F2430)` as `ColorRef`s. A list (not a mapping) so that a repeated name is a
+  clear error (YAML mappings silently keep the last duplicate key): `VideoConfig` raises
+  `duplicate character name 'pip' (characters[0] and characters[1])`.
+- **Checks**: `voices.voice_reference_problems` also checks `characters[k].voice` (a config
+  error from `parse_config`, so variants too). `cartoon/cast.py` (no manim): `character_names`,
+  `find_character` (raises with `unknown_character_message`: did-you-mean and the known names,
+  or "the video declares no characters"), `character_color_problems` (run by
+  `cli.project_problems`, i.e. `vidgen validate`), `check_character_name`.
+- **`CharacterName`** (`scene.py`, exported): `Annotated[str, pattern ID_PATTERN,
+  AfterValidator]`; like `IconName`, it checks the name only when the validation context has a
+  theme (`vidgen validate`, scene build) and a project is active, against that project's
+  `characters:`. It works in scene `Params` and action `Options` alike. It is not given an enum
+  in `vidgen schema` (the schema is per video, not per project yet).
+- **`character(name, height=3.0, facing="right")`** (exported): the active project's character,
+  coloured with the current theme (`build_character(entry, theme=, height=, facing=)`).
+- **Fingerprint**: `characters` is not excluded from `scene_fingerprint`'s config part, so editing
+  a character re-renders every scene (conservative; Step 87 may narrow it to scenes that use
+  characters).
+- **Layout dump**: a `Character` is reported as one `group` object (no text inside); Step 73
+  gives it its own kind.
+- **Not done here**: no scene type draws characters yet (Step 73); `look:` has no keys; no
+  `vidgen character` command (Step 68); `.animate`-friendly pose transitions (Step 70).

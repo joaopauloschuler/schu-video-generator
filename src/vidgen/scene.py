@@ -22,7 +22,7 @@ from typing import Annotated, Any, ClassVar, NamedTuple, Union
 
 import av
 from manim import DEFAULT_WAIT_TIME, NORMAL, Animation, FadeIn, MarkupText, Mobject, MovingCameraScene, Text, Wait, config
-from pydantic import AfterValidator, AliasChoices, BaseModel, ConfigDict, GetJsonSchemaHandler, ValidationError, ValidationInfo
+from pydantic import AfterValidator, AliasChoices, BaseModel, ConfigDict, Field, GetJsonSchemaHandler, ValidationError, ValidationInfo
 
 from vidgen import carry, helpers, regions, runtime
 from vidgen.actions import TARGET_NAME, ActionRunner, Target, match_names, plan_actions
@@ -30,7 +30,7 @@ from vidgen.capture import FrameCapture
 from vidgen.layout import distribute
 from vidgen.overlay_layer import OverlayLayer
 from vidgen.overlays import Overlay, avoid, mobject_region, scene_overlays
-from vidgen.config import DIRECTED_TRANSITIONS, BeatConfig, SceneConfig, SfxCue, validation_error_lines
+from vidgen.config import DIRECTED_TRANSITIONS, ID_PATTERN, BeatConfig, SceneConfig, SfxCue, validation_error_lines
 from vidgen.errors import VidgenError
 from vidgen.project import Project
 from vidgen.sfx import AUTO_ACTION_SFX, SfxEvent, SoundLibrary, decode_audio, stereo, write_wav
@@ -125,6 +125,14 @@ def _check_icon_name(value: str, info: ValidationInfo) -> str:
     return value
 
 
+def _check_character_name(value: str, info: ValidationInfo) -> str:
+    if (info.context or {}).get("theme") is not None:
+        from vidgen.cartoon.cast import check_character_name
+
+        check_character_name(value)
+    return value
+
+
 class ThemeToken(NamedTuple):
     """Marker in ``ThemeColor``/``ThemeSize``/``IconName`` annotations: names resolved in the
     project (``kind`` is ``"color"``, ``"size"`` or ``"icon"``)."""
@@ -146,6 +154,9 @@ ThemeSize = Annotated[Union[str, float], AfterValidator(_check_theme_size), Them
 #: A ``Params`` field holding an icon name (built-in or the project's ``assets/icons``); checked
 #: against the available icons by ``vidgen validate`` and when the scene is built.
 IconName = Annotated[str, AfterValidator(_check_icon_name), ThemeToken("icon")]
+#: A ``Params`` / ``Options`` field naming a character of ``characters:``; checked against the
+#: project's characters by ``vidgen validate`` and when the scene is built (DESIGN.md §69).
+CharacterName = Annotated[str, Field(pattern=ID_PATTERN), AfterValidator(_check_character_name)]
 
 
 def _as_list(value: Any) -> list[Any]:

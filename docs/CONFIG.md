@@ -10,7 +10,7 @@ the bodies of `variants`, so typos are caught by `vidgen validate`. Paths are re
 project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-and-beats),
 [format](#format-and-preview), [variants](#variants), [theme](#theme), [voice](#voice-voice),
 [narration](#narration-narration), [narration audio](#narration-audio-elevenlabs),
-[multiple voices](#multiple-voices-voices), [pronunciation](#pronunciation-pronunciation),
+[multiple voices](#multiple-voices-voices), [characters](#characters-characters), [pronunciation](#pronunciation-pronunciation),
 [readback (speech to text)](#readback-vidgen-readback),
 [generated images](#generated-images-imagegen-vidgen-imagegen),
 [languages and translations](#languages-and-translations),
@@ -35,6 +35,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `theme` | see [theme](#theme) | preset, colors, sizes, font, background, code style |
 | `voice` | see [voice](#voice-voice) | the narration voice: ElevenLabs (default), OpenRouter, or Kokoro running locally (free; extra `schu-video-generator[kokoro]`; [Kokoro](#kokoro-on-this-computer-provider-kokoro)) — one provider per video ([narration providers](#narration-providers)) |
 | `voices` | `{}` | named voices for dialogue, picked by scenes and beats with `voice: NAME`, see [multiple voices](#multiple-voices-voices) |
+| `characters` | `[]` | cartoon characters `{name, voice, look, colors}`, declared once and used by any scene; see [characters](#characters-characters) |
 | `subtitles` | `{speakers: off}` | `speakers: name` puts the speaker's label before their lines in the SRT, see [multiple voices](#multiple-voices-voices) |
 | `narration` | see [narration](#narration-narration) | beat padding, duration estimate |
 | `pronunciation` | `{}` | how the narrator says terms (TTS text only), see [pronunciation](#pronunciation-pronunciation) |
@@ -968,6 +969,47 @@ scenes:
 - **Pronunciation** is one dictionary for all voices (the hash covers each beat's spoken text and
   its voice); there are no per-voice entries yet: write a variant (`pronunciation:` in it) when a
   voice of another language needs other spoken forms.
+
+## Characters (`characters:`)
+
+Cartoon characters, declared once at the top level and used by any scene that draws characters
+(scene types with a character param, e.g. an extension's `CharacterName` param; see
+docs/EXTENDING.md). Each one is a figure made of named parts (head, eyes, brows, mouth, body, two
+arms, legs) that can be posed one by one. Only original characters: nothing that imitates a known
+character, mascot or brand figure.
+
+```yaml
+voices:
+  ana: {voice_id: 21m00Tcm4TlvDq8ikWAM}
+characters:
+  - name: pip
+    voice: ana                 # who speaks for pip: a name from voices: (or default)
+    colors: {skin: "#C68B59", clothes: accent}
+  - name: rex                  # no voice: rex does not speak
+```
+
+| key (`characters[]`) | default | |
+|---|---|---|
+| `name` | required | the name scenes use (letters, digits, `_`); unique |
+| `voice` | none | who speaks for the character: a name from [`voices:`](#multiple-voices-voices) or `default` (the base voice); none: the character does not speak |
+| `look` | `{}` | how the character is drawn; no keys yet: every character is the basic figure (a round head on an oval body) |
+| `colors` | see below | colours of the parts: theme tokens or hex |
+
+| key (`colors`) | default | |
+|---|---|---|
+| `skin` | `secondary` | head and hands (skin or fur) |
+| `clothes` | `primary` | body, arms and legs |
+| `outline` | `"#1F2430"` | outline of every part |
+| `features` | `"#1F2430"` | eyes, brows and mouth |
+
+- **Checks**: two characters with the same name, a `voice` that is not in `voices:` (nor
+  `default`) and an unknown key are config errors (`characters[0].voice: unknown voice 'anna';
+  did you mean 'ana'?`); `vidgen validate` also reports a colour that is not a theme token or hex
+  colour, and a scene param naming a character that is not declared (`unknown character 'pop';
+  did you mean 'pip'? characters: pip, rex`).
+- **Renders**: editing `characters:` renders every scene again (it is part of each scene's
+  fingerprint, like the theme).
+- **Variants** replace the whole `characters:` list (lists are not merged).
 
 ## Narration (`narration:`)
 

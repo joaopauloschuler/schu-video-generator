@@ -6634,3 +6634,63 @@ Known gaps / TODOs
 How to test
 - `pytest -m "not render" tests/test_project.py` (the new tests), then the files above.
 - `vidgen render examples/minimal --preview` -> `examples/minimal/output/minimal_preview.mp4`.
+
+## Step 67 — Character model (vector parts with pivots)
+
+What was built
+- `src/vidgen/cartoon/character.py`: `Character(VGroup)` made of named parts (`PART_NAMES`:
+  body, legs, arm_left, arm_right, head, eyes, brows, mouth, accessory; legs and accessory
+  optional). Each `CharacterPart` has named shapes (first = rest), a pivot, a parent (default
+  tree: body root; head / arms / legs on body; eyes / brows / mouth / accessory on head) and a
+  draw order. The character keeps the rest shapes and one `PartPose(angle, scale, shift, shape)`
+  per part and redraws every part from rest on each change (`refresh`), so posing a part moves
+  its children only. `face("left")` mirrors the whole character about its feet. Placement is read
+  from an invisible anchor (submobjects[0]), so Manim's own move / scale keep working with poses.
+  `state()` / `set_state()` snapshot poses for Step 70. `basic_parts(colors)` is the only look
+  (round head, oval body, arms, legs; eyes open/closed, mouth smile/open). `character(name)`
+  builds a declared character with the current theme.
+- Top-level `characters:` (a list of `{name, voice, look, colors}`); `look` has no keys yet;
+  `colors {skin, clothes, outline, features}` default to `secondary`, `primary`, `#1F2430`.
+- Checks: duplicate names (config error), unknown `voice` (config error, with did-you-mean),
+  colour tokens (`vidgen validate`), unknown character names in params / options typed
+  `CharacterName` (`vidgen validate` and scene build).
+
+Files touched
+- New: `src/vidgen/cartoon/__init__.py`, `cartoon/character.py`, `cartoon/cast.py`,
+  `tests/test_cartoon_character.py`.
+- `src/vidgen/config.py` (`CHARACTER_INK`, `CharacterColors`, `CharacterLook`, `CharacterEntry`,
+  `VideoConfig.characters` + duplicate check), `src/vidgen/voices.py`
+  (`voice_reference_problems` covers characters), `src/vidgen/scene.py` (`CharacterName`),
+  `src/vidgen/cli.py` (`project_problems` runs `character_color_problems`), `src/vidgen/api.py`.
+- Docs: `docs/CONFIG.md` (top-level row, new "Characters" section), `docs/EXTENDING.md`
+  (`CharacterName`, `character()`, posing), `DESIGN.md` (§2 tree, §6.4, new §69),
+  `tests/test_docs.py` (the two new models).
+
+Public interfaces added
+- `vidgen.api`: `Character`, `CharacterPart`, `CharacterState`, `PartPose`, `PART_NAMES`,
+  `character`, `CharacterName`. Internal: `build_character`, `basic_parts`, `cartoon.cast.*`.
+
+Decisions / deviations
+- `characters:` is a list, not a mapping: YAML mappings drop duplicate keys silently, so a list
+  is the only way to report duplicate names.
+- "Unknown character" is checked through the `CharacterName` param type (like `IconName`),
+  because no scene type or action names characters yet; Steps 73 / 78 get the check by typing
+  their fields with it.
+- `cartoon/cast.py` holds the no-manim helpers so config checks do not import manim.
+- Searched before adding: no existing rig / pivot / mirror code (`grep -rn "pivot\|mirror"
+  src/vidgen`); colours reuse `resolve_color`, messages follow `voices.unknown_voice_message`.
+- Editing `characters:` re-renders every scene (part of the fingerprint's config); conservative.
+
+Known gaps / TODOs
+- No scene draws characters yet (Step 73), no `vidgen character` (Step 68), `look:` empty.
+- `.animate.set_part` interpolates points linearly; pose transitions are Step 70 (use updaters).
+- A shape swap resets that part's style to the shape's rest style (a faded character's swapped
+  mouth comes back opaque); Step 70 / 71 should carry the opacity over if needed.
+- `vidgen schema` has no enum of character names.
+
+How to test
+- `pytest -m "not render" tests/test_cartoon_character.py` (21 tests), then
+  `pytest -m render tests/test_cartoon_character.py` (one 160x90 render).
+- Also run here: `tests/test_docs.py tests/test_api.py tests/test_config.py tests/test_schema.py
+  tests/test_voices.py` (not render).
+

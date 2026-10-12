@@ -153,6 +153,20 @@ validate` checks the name against the built-in and the project's icons (suggesti
 and icons tagged like it), `vidgen list-scenes` shows its type as `icon`, and `vidgen schema`
 gives it an `enum` of the icon names.
 
+A character param is typed `CharacterName` (`who: CharacterName`, or `CharacterName | None`):
+`vidgen validate` checks the name against the video's [`characters:`](CONFIG.md#characters-characters)
+and suggests close names. In `construct`, `character(name, height=..., facing="right")` builds
+that character as a `Character`: a `VGroup` of named parts (`PART_NAMES`: `body`, `legs`,
+`arm_left`, `arm_right`, `head`, `eyes`, `brows`, `mouth`, `accessory`), the feet at the origin
+(`feet()`). Pose a part about its pivot with `set_part(part, angle=..., scale=..., shift=...,
+shape=...)` (degrees counterclockwise as drawn facing right; its child parts follow, e.g. the
+head carries the eyes), swap a shape with `swap("mouth", "open")`, mirror the whole character
+with `face("left")` / `turn()`, and snapshot or restore a pose with `state()` / `set_state()`.
+Move and scale the character with Manim's own `move_to` / `shift` / `scale`; poses set afterwards
+land where it is. To animate a pose, call `set_part` from an updater
+(`UpdateFromAlphaFunc(hero, lambda m, a: m.set_part("arm_left", angle=120 * a))`), not with
+`.animate` (that would move points along straight lines). DESIGN.md §69 has the model.
+
 Params can nest: use another `SceneParams` class as a field type (also in lists). Theme tokens
 are checked inside nested models too, and `vidgen list-scenes` prints the nested fields. A nested
 model that also takes a shorthand (the built-in `bullets` items are a string or `{text, icon}`:

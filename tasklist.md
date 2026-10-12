@@ -339,10 +339,10 @@ original characters: no step adds a known character, mascot or brand figure, nor
 one.
 
 ### Step 67 — Character model (vector parts with pivots)
-- [ ] A character is a group of named vector parts (`head`, `eyes`, `brows`, `mouth`, `body`, `arm_left`, `arm_right`, optional `legs`, `accessory`), each with a pivot point and a draw order; one module (`vidgen/cartoon/character.py`), exposed through `vidgen.api`
-- [ ] Parts can be rotated / swapped / scaled around their pivots without moving the rest; facing left or right is a mirror of the whole character
-- [ ] Top-level `characters:` in `video.yaml` (name, look, colours, `voice:` = a named voice from `voices:`), declared once and reused by any scene; validate: unknown character, unknown voice, duplicate names
-- [ ] Tests without rendering (part tree, pivots, mirroring, schema) and one tiny render test
+- [x] A character is a group of named vector parts (`head`, `eyes`, `brows`, `mouth`, `body`, `arm_left`, `arm_right`, optional `legs`, `accessory`), each with a pivot point and a draw order; one module (`vidgen/cartoon/character.py`), exposed through `vidgen.api` (+ `cartoon/cast.py`: the config-side lookups and checks, no manim; a basic figure is the only look until Step 68; DESIGN §69)
+- [x] Parts can be rotated / swapped / scaled around their pivots without moving the rest; facing left or right is a mirror of the whole character
+- [x] Top-level `characters:` in `video.yaml` (name, look, colours, `voice:` = a named voice from `voices:`), declared once and reused by any scene; validate: unknown character, unknown voice, duplicate names (a list, so duplicates are caught; unknown character via the `CharacterName` param type, since no built-in scene names characters yet)
+- [x] Tests without rendering (part tree, pivots, mirroring, schema) and one tiny render test (`tests/test_cartoon_character.py`)
 
 ### Step 68 — Parametric character generator
 - [ ] `look:` parameters: body shape (round, tall, square, bean), head size, colours (skin / fur, clothes, outline), eye style, nose, hair or ears, accessories (glasses, hat, scarf, bag); seeds give variations; results are original shapes built from primitives

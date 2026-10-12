@@ -151,12 +151,13 @@ def project_problems(project: Project) -> list[Problem]:
     and runs the type's ``validate_project`` (e.g. missing asset files); checks the beats'
     ``actions`` (action names, options, targets of the scene) and the ``overlays`` (types,
     options, scene references; DESIGN.md §41); also checks the project's ``assets/icons``,
-    the sounds of the scenes' ``sfx:`` lists (§47), the ``music:`` sources (§48) and a designed
-    ``thumbnail:``'s icon, image, preset and background (§53).
+    the sounds of the scenes' ``sfx:`` lists (§47), the ``music:`` sources (§48), a designed
+    ``thumbnail:``'s icon, image, preset and background (§53) and the ``characters:`` colours (§69).
     """
     from vidgen import extensions, registry
     from vidgen.actions import scene_actions
     from vidgen.carry import carry_problems
+    from vidgen.cartoon.cast import character_color_problems
     from vidgen.icons import PROJECT_ICONS_DIR, project_icons
     from vidgen.imagegen import imagegen_problems
     from vidgen.music import config_problems as music_problems
@@ -200,6 +201,7 @@ def project_problems(project: Project) -> list[Problem]:
                     problems.append(Problem(f"scenes[{i}]", str(exc)))
             problems.extend(overlay_problems(project, theme))
             problems.extend(voice_color_problems(project.config, theme))
+            problems.extend(character_color_problems(project.config, theme))
             problems.extend(transition_color_problems(project.config, theme))
             problems.extend(carry_problems(project.config))
             problems.extend(Problem(loc, message) for loc, message in sfx_problems(project.config, project.root))

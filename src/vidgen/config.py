@@ -259,6 +259,42 @@ class SubtitlesConfig(_Strict):
     """name: put the speaker's label before a beat's first cue when the speaker changes ("Ana: ..."); also the captions' default."""
 
 
+#: Default outline and feature colour of a character: a dark ink that reads on light and dark themes.
+CHARACTER_INK = "#1F2430"
+
+
+class CharacterColors(_Strict):
+    """``colors`` of a character (DESIGN.md §69): theme tokens or hex colours of its parts."""
+
+    skin: ColorRef = "secondary"
+    """Head and hands (skin or fur)."""
+    clothes: ColorRef = "primary"
+    """Body and legs."""
+    outline: ColorRef = CHARACTER_INK
+    """Outline of every part."""
+    features: ColorRef = CHARACTER_INK
+    """Eyes, brows and mouth."""
+
+
+class CharacterLook(_Strict):
+    """``look`` of a character: how it is drawn. Empty for now: every character uses the basic
+    figure; the parametric generator and imported SVGs add keys here (DESIGN.md §69)."""
+
+
+class CharacterEntry(_Strict):
+    """One entry of ``characters:`` (DESIGN.md §69): a cartoon character declared once and used
+    by any scene."""
+
+    name: Identifier
+    """Name scenes and beats use for this character (letters, digits, _); unique."""
+    voice: Identifier | None = None
+    """Who speaks for this character: a name from voices (or default: the base voice); none: the character does not speak."""
+    look: CharacterLook = Field(default_factory=CharacterLook)
+    """How the character is drawn (the basic figure for now)."""
+    colors: CharacterColors = Field(default_factory=CharacterColors)
+    """Part colours {skin, clothes, outline, features}: theme tokens or hex."""
+
+
 class PronunciationEntry(_Strict):
     """The long form of a ``pronunciation:`` entry (DESIGN.md §45): how the narrator says a
     term. Applied to the text sent to the TTS only; subtitles and captions keep the term."""
@@ -1177,6 +1213,8 @@ class VideoConfig(_Strict):
     """Text-to-speech voice."""
     voices: dict[Identifier, VoiceEntry] = Field(default_factory=dict)
     """Named voices for dialogue (name: {voice_id, settings, label, color, ...}), each the base voice with what it sets changed; scenes and beats pick one with voice: NAME."""
+    characters: list[CharacterEntry] = Field(default_factory=list)
+    """Cartoon characters ({name, voice, look, colors}), declared once and used by any scene; names unique."""
     subtitles: SubtitlesConfig = Field(default_factory=SubtitlesConfig)
     """What the SRT shows besides the narration (speaker names)."""
     narration: NarrationConfig = Field(default_factory=NarrationConfig)
@@ -1231,6 +1269,16 @@ class VideoConfig(_Strict):
 
         if DEFAULT_VOICE in value:
             raise ValueError(f"'{DEFAULT_VOICE}' is the base voice (the voice: section) and cannot be a name in voices")
+        return value
+
+    @field_validator("characters")
+    @classmethod
+    def _unique_character_names(cls, value: list[CharacterEntry]) -> list[CharacterEntry]:
+        seen: dict[str, int] = {}
+        for k, entry in enumerate(value):
+            if entry.name in seen:
+                raise ValueError(f"duplicate character name '{entry.name}' (characters[{seen[entry.name]}] and characters[{k}])")
+            seen[entry.name] = k
         return value
 
     @field_validator("pronunciation", mode="before")

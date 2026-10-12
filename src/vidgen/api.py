@@ -106,6 +106,8 @@ from vidgen.translation import TextRef, TranslatableStr  # noqa: E402
 from vidgen.languages import LanguageRules, language_rules  # noqa: E402
 from vidgen.imagegen import GenerateImage, generated_image  # noqa: E402
 from vidgen.vector_mobject import VectorPicture, load_vector  # noqa: E402
+from vidgen.cartoon.character import PART_NAMES, Character, CharacterPart, CharacterState, PartPose, character  # noqa: E402
+from vidgen.scene import CharacterName  # noqa: E402
 
 
 def register_theme_defaults(colors: dict[str, str] | None = None, sizes: dict[str, float] | None = None) -> None:
@@ -316,6 +318,13 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "generated_image",
     "VectorPicture",
     "load_vector",
+    "PART_NAMES",
+    "Character",
+    "CharacterName",
+    "CharacterPart",
+    "CharacterState",
+    "PartPose",
+    "character",
     "Field",
     "field_validator",
     "model_validator",
