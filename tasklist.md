@@ -533,6 +533,32 @@ memory cap, targeted tests, original characters only). Each step updates the gui
 
 ---
 
+## Phase J — "Rain Check" (a weather cartoon example)
+
+Goal: a ~70 s original cartoon example, `examples/cartoon-rain-check/` (a picnic, a confident
+forecast, wind, rain, night), and the few things it needs. Same rules as Phases H and I.
+
+### Step 103 — Props: basket, umbrella, napkin
+- [ ] Built-in props `basket`, `umbrella` (closed and open shapes; `open: true` or an action to open it; held overhead when open) and `napkin` (small, light), drawn from primitives in theme colours like the other 17; prop gallery still updated
+- [ ] They work with pick_up / hold / give / put_down; sheets and docs list them
+- [ ] Tests: each builds, umbrella open / closed, held positions
+
+### Step 104 — Visible wind and props that blow away
+- [ ] Wind clearly visible at `windy` and above: stronger sway, leaves / dust streaks drifting, scarves and hair trailing further (Backlog: "wind barely visible")
+- [ ] A light prop can blow away: `blow_away: <prop>` (tumbles across and off stage along a seeded gusty path, or `to:` a mark); a held prop can be blown out of a hand
+- [ ] Tests: seeded paths, wind 0 still changes nothing
+
+### Step 105 — Rain on the ground
+- [ ] Rain stops at the ground line (depth-aware) with small splashes and, optionally, puddles that grow; rain does not fall through an open umbrella or a tree canopy held / stood under (simple shelter boxes)
+- [ ] A `rain` sound bed under the scene while it rains (generated, ducked like music), on with `foley`
+- [ ] Tests: drop end heights, shelter boxes, splash positions seeded
+
+### Step 106 — The "Rain Check" example
+- [ ] An original screenplay `examples/cartoon-rain-check/rain_check.md` and the hand-edited project `video.yaml` beside it (no audio committed), four beats of story: sunny meadow and the forecast; the picnic and the wind; the rain and the run to the tree (overlap, interrupt); night, stars, soggy sandwiches, a comic sting; background music
+- [ ] Validates and lints clean at preview; rendered at 1280x720 with real Kokoro narration (not committed) and checked by eye and ear proxies (levels, stills); README example list
+
+---
+
 ## Backlog (after Step 60)
 
 Not done in the roadmap; each is one line, with where it came from. Bugs first, then quality,
