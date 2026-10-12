@@ -1,7 +1,7 @@
 """``stage``: a cartoon set (a picture, a generated picture or a colour / gradient) with a ground
 line, named marks and the video's characters standing on them (DESIGN.md §69.6), parallax
 layers that move by their factor when the camera moves (§69.7), props (§69.8), particles
-(§69.9), and its light and shadows (§69.31)."""
+(§69.9), its light and shadows (§69.31) and its wind (§69.32)."""
 
 import math
 import re
@@ -217,7 +217,9 @@ class Stage(NarratedScene):
     ``particles`` (rain, snow, confetti...) move over the whole scene. ``light`` (``morning``,
     ``sunset``, ``night``, ``indoor`` or a tint) grades the set and the characters, never the
     speech bubbles or text (the ``light`` action fades it); soft shadows lie under whatever
-    stands on the ground (``shadows: false``: none).
+    stands on the ground (``shadows: false``: none). ``wind`` (0 calm .. 1 a gale; negative
+    blows to the left) sways trees, bushes, plants, signs and lamps, makes scarves, long hair,
+    floppy ears and hats trail and particles drift (the ``wind`` action fades it).
 
     A beat is spoken by the characters whose voice says it (their mouths move with it), or by
     the ones its ``say`` action names; the acting actions (``say``, ``look_at``, ``turn``,
@@ -298,6 +300,8 @@ class Stage(NarratedScene):
         """The light on the set: day (as drawn), morning, sunset, night (dark blue, with stars on a colour background) or indoor, or {tint, strength}: a colour grade of the background, layers, props and characters (never of speech bubbles, captions or other text); the light action changes it during the scene."""
         shadows: bool = True
         """Soft shadows on the ground under the characters and the props standing on it (smaller when they jump, none under a held prop); false: none."""
+        wind: WindSetting = 0.0
+        """Wind from the start, in gusts: 0 calm (nothing moves) .. 1 a gale blowing to the right (negative: to the left), or calm, breeze (0.3), windy (0.6), gale (1); trees, bushes, plants, signs and lamps sway, scarves, long hair, floppy or pointy ears and hats trail, particles drift; the wind action changes it during the scene."""
 
         @model_validator(mode="after")
         def _check(self) -> SceneParams:
@@ -600,6 +604,7 @@ class Stage(NarratedScene):
                 items += self.entrance(t)
             return [FadeIn(part) for part in backdrop] + items + [FadeIn(m) for m in in_front]
 
+        self._start_wind(placements)
         #: the particle fields over the stage, in the order given (DESIGN.md §69.9)
         self.particles: list[ParticleField] = [particle_field(self, item.kind, item) for item in p.particles]
         self.add(*self.particles)
@@ -647,19 +652,80 @@ class Stage(NarratedScene):
     def get_moving_mobjects(self, *animations: Animation) -> list[Mobject]:
         """Manim's moving mobjects, or every mobject while the light changes during this
         animation (the grade then changes on every frame, so nothing can stay in the static
-        image)."""
+        image), or, while the wind may move something, everything from the first swaying prop or
+        trailing character on (DESIGN.md §69.32; the set behind it stays in the static image)."""
         moving = super().get_moving_mobjects(*animations)
-        light = getattr(self, "light", None)
-        if light is None:
-            return moving
         now = float(self.renderer.time)
-        light.update(now)
-        if light.settled(now) and self._light_step in self.updaters:
-            self.remove_updater(self._light_step)
         duration = getattr(self, "duration", None)
-        if not light.changing(now, now + (math.inf if duration is None else float(duration))):
+        end = now + (math.inf if duration is None else float(duration))
+        light = getattr(self, "light", None)
+        if light is not None:
+            light.update(now)
+            if light.settled(now) and self._light_step in self.updaters:
+                self.remove_updater(self._light_step)
+            if light.changing(now, end):
+                return [*self.mobjects, *(m for m in moving if m not in self.mobjects)]
+        blowing = getattr(self, "blowing", None)
+        if blowing is None:
             return moving
-        return [*self.mobjects, *(m for m in moving if m not in self.mobjects)]
+        blowing.update(now)
+        if not blowing.moving(now, end):
+            if not blowing.moving(now, math.inf):
+                self.remove_updater(self._wind_updater)
+            return moving
+        family = self.get_mobject_family_members()
+        blown = {id(m) for mob in blowing.mobjects() for m in mob.get_family()}
+        first = next((k for k, m in enumerate(family) if id(m) in blown), len(family))
+        return list_update(family[first:], moving)
+
+    # ----- wind (DESIGN.md §69.32) ----------------------------------------------------------------
+
+    def _start_wind(self, placements: list[StagePlacement]) -> None:
+        """The wind from the start (``wind``) and, when it or a ``wind`` action blows, the
+        :class:`StageWind` that sways the props and turns the characters' trailing pieces, with
+        a scene updater; nothing at all on a calm stage (it renders as without wind)."""
+        base = wind_level(self.params.wind)
+        later = [use.level() for use in self.action_uses("wind")]
+        #: the stage's wind and what it moves (``None``: calm all along, nothing installed)
+        self.blowing: StageWind | None = None
+        #: the particles' drift (``vidgen.particle_field``; ``None``: none)
+        self.particle_wind: ParticleWind | None = None
+        if base == 0.0 and not any(later):
+            return
+        wind = Wind(base, seed=wind_seed(self.spec.id))
+        lifts = {item.name: item.lift for item in self.params.items()}
+        still = set(self.props) - self._movable_props() - self._posture_props()
+        swaying = [
+            SwayingProp(self.props[place.name], self.props[place.name].kind, place.x_fraction)
+            for place in placements
+            if place.kind == "prop" and place.name in still and lifts[place.name] == 0 and self.props[place.name].kind in SWAYS
+        ]
+        left = -self.stage_width / 2
+        self.blowing = StageWind(wind, swaying, self.cast, lambda x: (x - left) / self.stage_width)
+        self.particle_wind = self.blowing.particle_push
+        self.blowing.update(float(self.renderer.time))
+        #: the scene updater, kept: Manim removes an updater by identity, and each
+        #: ``self._wind_step`` is a new bound method
+        self._wind_updater = self._wind_step
+        self.add_updater(self._wind_updater)
+
+    def _posture_props(self) -> set[str]:
+        """The props a ``sit_on`` or ``lean_on`` names (they do not sway under a character)."""
+        return {use.options.to for kind in ("sit_on", "lean_on") for use in self.action_uses(kind)}
+
+    def change_wind(self, level: float, start: float, seconds: float) -> None:
+        """Fade the wind to the signed ``level`` from scene time ``start`` over ``seconds`` (the
+        ``wind`` action)."""
+        if self.blowing is None:
+            return  # every level of the scene is 0: nothing to move
+        self.blowing.wind.change(level, start, seconds)
+        if not any(f is self._wind_updater for f in self.updaters):
+            self.add_updater(self._wind_updater)
+
+    def _wind_step(self, dt: float) -> None:
+        """Scene updater while the wind may move something: props and trailing pieces for now."""
+        if self.blowing is not None:
+            self.blowing.update(float(self.renderer.time))
 
     def _shadows(self, placements: list[StagePlacement]) -> tuple[StageShadows | None, StageShadows | None]:
         """The shadows (``shadows: true``): of the props on the ground that stay put (drawn

@@ -1,5 +1,5 @@
 """Light on a stage (DESIGN.md §69.31): the colour grade of a ``light`` preset or tint, fades
-between grades over time, the night's stars and the soft shadows under what stands on the
+between grades over time (:func:`fade_at`, also the wind's, §69.32), the night's stars and the soft shadows under what stands on the
 ground. No manim: :mod:`vidgen.cartoon.shading` draws them.
 
 A *grade* multiplies each colour channel of what the stage draws (its background, layers,
@@ -12,9 +12,10 @@ dark the shadows are (a factor of :data:`SHADOW_OPACITY`). Colours are sRGB comp
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from functools import cached_property
+from typing import Any, Protocol, TypeVar
 
 import numpy as np
 
@@ -52,6 +53,8 @@ SHADOW_FLATNESS = 0.16
 SHADOW_SHRINK = 1.5
 
 RGB = tuple[float, float, float]
+T = TypeVar("T")
+T_co = TypeVar("T_co", covariant=True)
 
 
 @dataclass(frozen=True)
@@ -143,32 +146,63 @@ class LightChange:
         """When it is over."""
         return self.start + max(self.seconds, 0.0)
 
+    @property
+    def value(self) -> LightGrade:
+        """What it fades to (its ``grade``; :func:`fade_at`)."""
+        return self.grade
+
+
+class Fading(Protocol[T_co]):
+    """A change of a stage setting that fades (:class:`LightChange`, the wind's
+    :class:`~vidgen.cartoon.wind.WindChange`): from ``start`` (scene seconds) to ``value`` over
+    ``seconds`` (0: at once), over at ``end``."""
+
+    @property
+    def start(self) -> float: ...
+    @property
+    def seconds(self) -> float: ...
+    @property
+    def end(self) -> float: ...
+    @property
+    def value(self) -> T_co: ...
+
 
 def _smooth(share: float) -> float:
     s = min(max(share, 0.0), 1.0)
     return s * s * (3.0 - 2.0 * s)
 
 
-def light_at(base: LightGrade, changes: Sequence[LightChange], now: float) -> LightGrade:
-    """The light at scene time ``now``: ``base``, then each change from its ``start`` on (in
+def fade_at(base: T, changes: Sequence[Fading[T]], now: float, blend: Callable[[T, T, float], T]) -> T:
+    """A faded setting at scene time ``now``: ``base``, then each change from its ``start`` on (in
     start order; a change that starts during another fades from where that one is then), eased
-    (smoothstep)."""
+    (smoothstep) by ``blend(from, to, share)``."""
     ordered = sorted(changes, key=lambda c: c.start)
-    grade = base
+    value = base
     for k, change in enumerate(ordered):
         if now < change.start:
             break
-        start = light_at(base, ordered[:k], change.start)
+        start = fade_at(base, ordered[:k], change.start, blend)
         share = 1.0 if change.seconds <= 0 else _smooth((now - change.start) / change.seconds)
-        grade = blend_grades(start, change.grade, share)
-    return grade
+        value = blend(start, change.value, share)
+    return value
+
+
+def changing(changes: Sequence[Fading[Any]], start: float, end: float) -> bool:
+    """Whether any change is under way between scene times ``start`` and ``end`` (a stage then
+    redraws on every frame). A change at once counts when it falls after ``start`` (one at
+    ``start`` is drawn by then)."""
+    return any(c.start < end and c.end > start if c.seconds > 0 else start < c.start < end for c in changes)
+
+
+def light_at(base: LightGrade, changes: Sequence[LightChange], now: float) -> LightGrade:
+    """The light at scene time ``now`` (:func:`fade_at` with :func:`blend_grades`)."""
+    return fade_at(base, changes, now, blend_grades)
 
 
 def light_changing(changes: Sequence[LightChange], start: float, end: float) -> bool:
-    """Whether any change is under way between scene times ``start`` and ``end`` (a stage then
-    redraws everything on every frame). A change at once counts when it falls after ``start``
-    (one at ``start`` is drawn by then)."""
-    return any(c.start < end and c.end > start if c.seconds > 0 else start < c.start < end for c in changes)
+    """Whether any light change is under way between scene times ``start`` and ``end``
+    (:func:`changing`)."""
+    return changing(changes, start, end)
 
 
 @dataclass(frozen=True)

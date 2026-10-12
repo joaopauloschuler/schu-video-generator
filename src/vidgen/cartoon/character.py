@@ -71,6 +71,10 @@ OUTLINE_WIDTH = 4.0
 REFERENCE_HEIGHT = 3.0
 #: Side of the anchor triangle in character units (small, so it stays inside the figure's box).
 _ANCHOR_SIDE = 0.05
+#: The attribute marking a shape's member as a piece that trails in the wind (DESIGN.md §69.32):
+#: ``(pivot x, pivot y, weight)`` in the part's character units (the generator sets it on a
+#: scarf's end, long hair, a bun, pointy or floppy ears and a hat).
+TRAIL_ATTRIBUTE = "wind_trail"
 
 
 @dataclass(frozen=True)
@@ -286,6 +290,7 @@ class Character(VGroup):
         self._overlays: dict[str, PartPose] = {}  # idle motion on top of the poses (:meth:`start_idle`)
         self._idle: IdleClock | None = None
         self._lip_sync: _LipSync | None = None  # the running lip sync (:meth:`lip_sync`)
+        self._wind = 0.0  # degrees its trailing pieces turn (:meth:`set_wind`)
         self._spoken: str | None = None  # the mouth shape lip sync shows over the pose's
         #: The beat in which the character's last walk ended (set by the walking actions; the
         #: layout dump records it for the ``walk_overlap`` lint rule), ``None`` before any walk.
@@ -313,6 +318,9 @@ class Character(VGroup):
             self.parts[part_name] = VGroup(*copies.values())
             for shape in list(copies)[1:]:  # the rest shape shows
                 self._hide(part_name, shape)
+        #: part -> shape -> per drawn member, its trailing pivot and signed weight (``None``: not a
+        #: trailing piece); only parts and shapes with one (DESIGN.md §69.32)
+        self._trails = self._trailing_members()
         self.add(self._anchor, *(self.parts[n] for n in self._order))
         self.refresh()
 
@@ -761,18 +769,68 @@ class Character(VGroup):
             self._set_overlay("eyes", PartPose(shape="closed") if idle.is_blinking else None)
         return self.refresh()
 
+    # ----- wind (DESIGN.md §69.32) ----------------------------------------------------------
+
+    @property
+    def has_trails(self) -> bool:
+        """Whether it has pieces that trail in the wind (a scarf, long hair, ears, a hat)."""
+        return bool(self._trails)
+
+    @property
+    def wind(self) -> float:
+        """The degrees its trailing pieces turn now (:meth:`set_wind`)."""
+        return self._wind
+
+    def set_wind(self, degrees: float) -> Character:
+        """Turn its trailing pieces (marked :data:`TRAIL_ATTRIBUTE`) ``degrees`` times their weight
+        about their pivots, the free ends towards the right of the screen (negative: the left)
+        whichever way it faces; on top of the poses, not part of :meth:`state`. 0: as drawn."""
+        degrees = float(degrees)
+        if degrees == self._wind:
+            return self
+        self._wind = degrees
+        return self.refresh() if self._trails else self
+
     def refresh(self) -> Character:
-        """Redraw every part's points from its rest shape, pose, parents, facing and placement.
-        Styles (colour, opacity) of the live parts are kept."""
+        """Redraw every part's points from its rest shape, pose, parents, facing and placement
+        (and the wind on its trailing pieces). Styles (colour, opacity) of the live parts are kept."""
         screen = self._screen()
         world = self._world()
         for name in self.parts:
             matrix = screen @ world[name]
-            for live, points in zip(self._live_members(name), self._drawings[name][self._shape_name(name)]):
-                live.points = _apply(matrix, points)
+            shape = self._shape_name(name)
+            trails = self._trails.get(name, {}).get(shape) if self._wind else None
+            if trails is None:
+                for live, points in zip(self._live_members(name), self._drawings[name][shape]):
+                    live.points = _apply(matrix, points)
+                continue
+            turn = self._wind if self.facing == "right" else -self._wind   # the mirror turns it back
+            for live, points, trail in zip(self._live_members(name), self._drawings[name][shape], trails):
+                bent = matrix if trail is None else matrix @ PartPose(angle=turn * trail[1]).matrix(trail[0])
+                live.points = _apply(bent, points)
         return self
 
     # ----- internals ------------------------------------------------------------------------
+
+    def _trailing_members(self) -> dict[str, dict[str, list[tuple[np.ndarray, float] | None]]]:
+        """Per part and shape, each drawn member's trailing pivot and weight, signed so a positive
+        turn moves its free end to the right as drawn facing right: + for a piece hanging below its
+        pivot (a scarf's end), - for one standing above it (a hat, pointy ears)."""
+        found: dict[str, dict[str, list[tuple[np.ndarray, float] | None]]] = {}
+        for part, shapes in self._members.items():
+            for shape, members in shapes.items():
+                row: list[tuple[np.ndarray, float] | None] = []
+                for member, points in zip(members, self._drawings[part][shape]):
+                    trail = getattr(member, TRAIL_ATTRIBUTE, None)
+                    if trail is None or not len(points):
+                        row.append(None)
+                        continue
+                    pivot = np.array([float(trail[0]), float(trail[1])])
+                    hanging = float(points[:, 1].mean()) < pivot[1]
+                    row.append((pivot, float(trail[2]) * (1.0 if hanging else -1.0)))
+                if any(t is not None for t in row):
+                    found.setdefault(part, {})[shape] = row
+        return found
 
     def _part_name(self, part: str) -> str:
         if part not in self._shapes:
@@ -1046,6 +1104,7 @@ def character(name: str, *, height: float = 3.0, facing: str = "right", motion: 
 
 
 __all__ = [
+    "TRAIL_ATTRIBUTE",
     "Character",
     "CharacterPart",
     "CharacterState",

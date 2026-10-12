@@ -32,6 +32,9 @@ RING_WIDTH = 1.5
 ParticleKindName = Literal[PARTICLE_KINDS]  # type: ignore[valid-type]
 #: ``(left, bottom, right, top)`` of the part of the scene the camera shows, in Manim units.
 View = tuple[float, float, float, float]
+#: A scene's wind for particles (DESIGN.md §69.32): ``(start, now)`` scene seconds -> (its force
+#: added up from ``start`` to ``now``, its force at ``now``).
+ParticleWind = Callable[[float, float], tuple[float, float]]
 
 
 class ParticleSettings(BaseModel):
@@ -70,7 +73,8 @@ class ParticleField(VGroup):
     """Particles of one kind over ``area`` of the view, moving with the scene's time.
 
     ``clock()`` gives the scene's time in seconds and ``view()`` the part of the scene the camera
-    shows; ``short_side`` is the frame's shorter side and ``frame_width`` its width (Manim units).
+    shows; ``short_side`` is the frame's shorter side and ``frame_width`` its width (Manim units);
+    ``wind`` (a stage's, :data:`ParticleWind`) makes them drift with it.
     The field fades in over :data:`FADE_IN` seconds and keeps moving while other animations play
     (its updating is never suspended); its fade out (:meth:`fade_out_animation`, used by
     :func:`vidgen.helpers.fade_out`) keeps it moving too and removes it.
@@ -87,6 +91,7 @@ class ParticleField(VGroup):
         short_side: float,
         frame_width: float,
         name: str | None = None,
+        wind: ParticleWind | None = None,
     ) -> None:
         super().__init__()
         self.seeds = seeds
@@ -95,6 +100,7 @@ class ParticleField(VGroup):
         self.area = area
         self.short_side = short_side
         self.frame_width = frame_width
+        self.wind = wind
         self.name = name or seeds.kind
         self.start = clock()
         #: 1 while shown; its fade out takes it to 0.
@@ -135,7 +141,8 @@ class ParticleField(VGroup):
         zoom = view_width / self.frame_width  # < 1 when zoomed in: the particles stay as large on screen
         short = self.short_side * zoom
         t = self.elapsed(now)
-        states = particle_states(self.seeds, t, width=w * view_width / short, height=h * view_height / short)
+        blown, force = self.wind(self.start, now) if self.wind is not None else (0.0, 0.0)
+        states = particle_states(self.seeds, t, width=w * view_width / short, height=h * view_height / short, blown=blown, wind=force)
         level = self.level * min(t / FADE_IN, 1.0)
         xs = left + (x + states.x * w) * view_width
         ys = top - (y + states.y * h) * view_height
@@ -203,7 +210,8 @@ def particle_colors(kind: str, color: str | list[str] | None, theme: Theme) -> l
 def particle_field(scene: NarratedScene, kind: str, settings: ParticleSettings) -> ParticleField:
     """A field of ``kind`` particles for ``scene``, starting now, drawn above everything on screen
     (not added to the scene). Fewer particles when the scene renders at preview quality
-    (:attr:`NarratedScene.is_preview`)."""
+    (:attr:`NarratedScene.is_preview`). They drift with the scene's ``particle_wind`` when it has
+    one (a windy stage, DESIGN.md §69.32)."""
     area = settings.area or [0.0, 0.0, 1.0, 1.0]
     colors = particle_colors(kind, settings.color, scene.theme)
     count = particle_count(kind, settings.density, area[2] * area[3], preview=scene.is_preview)
@@ -216,6 +224,7 @@ def particle_field(scene: NarratedScene, kind: str, settings: ParticleSettings) 
         area=area,
         short_side=min(scene.frame_width, scene.frame_height),
         frame_width=scene.frame_width,
+        wind=getattr(scene, "particle_wind", None),
     )
     top = max((m.z_index for m in scene.get_mobject_family_members()), default=0)
     field.set_z_index(top + 1)

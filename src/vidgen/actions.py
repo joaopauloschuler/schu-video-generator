@@ -154,6 +154,9 @@ class Action:
     #: a sound), is neither checked against the scene's targets nor resolved; :meth:`problems`
     #: checks it.
     scene_targets: ClassVar[bool] = True
+    #: Whether its target may be written as a number (``- wind: 0.6``; the config keeps it as
+    #: text and the schema accepts a number). Only with ``scene_targets = False``.
+    number_target: ClassVar[bool] = False
     #: Whether it animates. ``False``: it draws nothing; when its beat starts the runner calls
     #: :meth:`cue` with the scene time it is due at (``at``), instead of playing :meth:`apply` in
     #: a wait (``sfx`` records a sound there). Such actions cannot be reversible.

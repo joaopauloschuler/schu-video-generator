@@ -104,6 +104,7 @@ scenes:
 | `light.tint` | `color` | required | The light's colour (a theme token or #hex): the set's colours are multiplied towards it. |
 | `light.strength` | `float` | `0.5` | How strongly: 0 = no change, 1 = the colours multiplied by the tint. |
 | `shadows` | `bool` | `True` | Soft shadows on the ground under the characters and the props standing on it (smaller when they jump, none under a held prop); false: none. |
+| `wind` | `float \| 'calm' \| 'breeze' \| 'windy' \| 'gale'` | `0.0` | Wind from the start, in gusts: 0 calm (nothing moves) .. 1 a gale blowing to the right (negative: to the left), or calm, breeze (0.3), windy (0.6), gale (1); trees, bushes, plants, signs and lamps sway, scarves, long hair, floppy or pointy ears and hats trail, particles drift; the wind action changes it during the scene. |
 
 ## Targets
 

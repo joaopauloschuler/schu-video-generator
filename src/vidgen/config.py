@@ -873,6 +873,12 @@ class ActionConfig(BaseModel):
         model._shorthand = dict(data)
         return model
 
+    @field_validator("target", mode="before")
+    @classmethod
+    def _number_text(cls, value: Any) -> Any:
+        """A number as the target (``- wind: 0.6``) is kept as its text; the action reads it."""
+        return str(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else value
+
     def resolved(self, known: Collection[str]) -> ActionConfig:
         """This action, or — for a shorthand whose first key is not a known action but exactly
         one other key is (keys sorted by a tool) — the action that key names."""

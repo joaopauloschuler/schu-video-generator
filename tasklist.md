@@ -508,8 +508,8 @@ memory cap, targeted tests, original characters only). Each step updates the gui
 - [x] Tests: grade maths, contrast kept for bubble text (lint `contrast` still passes) (`tests/test_cartoon_lighting.py`: 6 without rendering, 2 tiny renders)
 
 ### Step 98 — Wind
-- [ ] Stage `wind: 0..1` (and as a beat action): trees and bushes sway, scarves / hair / ears / hats trail (the Step 82 spring), particles drift with it; gusts as a seeded noise
-- [ ] Tests: sway angles from the seed, `wind: 0` changes nothing
+- [x] Stage `wind: 0..1` (and as a beat action): trees and bushes sway, scarves / hair / ears / hats trail (the Step 82 spring), particles drift with it; gusts as a seeded noise (pure maths in `cartoon/wind.py`: signed level -1..1 or `calm` / `breeze` / `windy` / `gale`, `gust` = two-octave value noise from splitmix64, fades with the light's `fade_at`; trees, bushes, plants, signs and lamps bend about their base (`bent_points`), not when an action moves, holds, sits or leans on them; hair / ears / scarf end / hat are members marked inside the generated head / body / accessory parts and turned by `Character.set_wind` on `TRAIL_SPRING`, so no new parts; SVG characters and props do not move; `- wind: gale` is non-animating like `light`, its run_time the fade; swaying props leave Manim's static image only while the wind may move them: examples/cartoon +7–13 % render time at a gale; DESIGN §69.32)
+- [x] Tests: sway angles from the seed, `wind: 0` changes nothing (`tests/test_cartoon_wind.py`: 11 without rendering, 2 tiny renders, one comparing frame hashes of `wind: 0` + `- wind: calm` with no wind; examples/cartoon with `wind: 0` rendered at 160x90 gives HEAD's frame hashes)
 
 ### Step 99 — Non-speech voice sounds
 - [ ] Inline markers in a line: `[gasp]`, `[hmm]`, `[laugh]`, `[sigh]`, `[giggle]`, `[groan]`: voiced through the TTS provider where it can (e.g. spoken "hmm", "ha ha") or a built-in generated sound otherwise, with matching mouth shapes and an expression (laugh → happy, gasp → surprised) unless the beat sets one

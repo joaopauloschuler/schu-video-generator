@@ -16,7 +16,7 @@ from dataclasses import dataclass, fields, replace
 import numpy as np
 from manim import PI, Arc, Circle, Ellipse, Line, Polygon, RoundedRectangle, VGroup, VMobject
 
-from vidgen.cartoon.character import OUTLINE_WIDTH, CharacterPart
+from vidgen.cartoon.character import OUTLINE_WIDTH, TRAIL_ATTRIBUTE, CharacterPart
 from vidgen.config import CharacterLook
 
 #: Colour keys :func:`generate_parts` needs (the fields of ``characters[].colors``).
@@ -29,6 +29,10 @@ BODY_SIZES: dict[str, tuple[float, float]] = {
 }
 #: How far ``seed`` may move each proportion (a factor in [1 - x, 1 + x]).
 SEED_VARIATION = 0.08
+#: How far each trailing piece turns in the wind, as a share of
+#: :data:`~vidgen.cartoon.wind.TRAIL_DEGREES` (DESIGN.md §69.32): the scarf's end, long hair, a
+#: bun, pointy and floppy ears, the hat. Round ears and the other hair styles do not trail.
+TRAIL_WEIGHTS: dict[str, float] = {"scarf": 1.2, "long": 0.55, "bun": 0.35, "pointy": 0.35, "floppy": 1.0, "hat": 0.3}
 
 
 @dataclass(frozen=True)
@@ -89,6 +93,14 @@ def _polygon(points: Sequence[Sequence[float]]) -> Polygon:
     return Polygon(*(np.array([p[0], p[1], 0.0]) for p in points))
 
 
+def _trailing(mob: VMobject, pivot: tuple[float, float], piece: str) -> VMobject:
+    """Mark ``mob`` as a piece that trails in the wind, turning about ``pivot`` (the
+    :class:`~vidgen.cartoon.character.Character` reads the mark; DESIGN.md §69.32)."""
+    for member in mob.get_family():
+        setattr(member, TRAIL_ATTRIBUTE, (float(pivot[0]), float(pivot[1]), TRAIL_WEIGHTS[piece]))
+    return mob
+
+
 # ----- the figure ---------------------------------------------------------------------------
 
 
@@ -146,6 +158,7 @@ def _body(look: CharacterLook, f: _Frame, c: Mapping[str, str], w: float) -> VGr
         band_w = min(p.body_width, 0.36) * 0.85
         band = RoundedRectangle(width=band_w, height=0.08, corner_radius=0.035).move_to([0, f.body_top - 0.03, 0])
         tail = RoundedRectangle(width=0.07, height=0.17, corner_radius=0.03).move_to([-band_w * 0.25, f.body_top - 0.12, 0]).rotate(-0.2)
+        tail = _trailing(tail, (-band_w * 0.25, f.body_top - 0.05), "scarf")
         group.add(_outlined(tail, c["accessory"], c["outline"], w), _outlined(band, c["accessory"], c["outline"], w))
     return group
 
@@ -206,9 +219,10 @@ def _hair_back(look: CharacterLook, f: _Frame) -> list[VMobject]:
     r, cx, cy = f.p.head_radius, f.head_x, f.head_y
     if look.hair == "long":
         top = _arc_points(cx, cy, [1.1 * r] * 25, 0, 180)
-        return [_polygon([*top, (cx - 1.15 * r, cy - 1.3 * r), (cx - 0.5 * r, cy - 1.4 * r), (cx + 1.05 * r, cy - 1.25 * r)])]
+        hair = _polygon([*top, (cx - 1.15 * r, cy - 1.3 * r), (cx - 0.5 * r, cy - 1.4 * r), (cx + 1.05 * r, cy - 1.25 * r)])
+        return [_trailing(hair, (cx, cy + 0.4 * r), "long")]
     if look.hair == "bun":
-        return [Circle(radius=0.38 * r).move_to([cx - 0.15 * r, cy + 1.18 * r, 0])]
+        return [_trailing(Circle(radius=0.38 * r).move_to([cx - 0.15 * r, cy + 1.18 * r, 0]), (cx - 0.15 * r, cy + 0.85 * r), "bun")]
     if look.hair == "curly":
         return [Circle(radius=0.32 * r).move_to([x, y, 0]) for x, y in _arc_points(cx, cy, [0.95 * r] * 12, -20, 200)]
     return []
@@ -219,9 +233,15 @@ def _ears(look: CharacterLook, f: _Frame) -> list[VMobject]:
     if look.ears == "round":
         return [Circle(radius=0.28 * r).move_to([cx + side * 0.98 * r, cy, 0]) for side in (-1, 1)]
     if look.ears == "pointy":
-        return [_polygon([_at(cx, cy, 0.9 * r, tip - 15), _at(cx, cy, 1.55 * r, tip), _at(cx, cy, 0.9 * r, tip + 15)]) for tip in (65, 115)]
+        return [
+            _trailing(_polygon([_at(cx, cy, 0.9 * r, tip - 15), _at(cx, cy, 1.55 * r, tip), _at(cx, cy, 0.9 * r, tip + 15)]), _at(cx, cy, 0.9 * r, tip), "pointy")
+            for tip in (65, 115)
+        ]
     if look.ears == "floppy":
-        return [Ellipse(width=0.4 * r, height=0.95 * r).move_to([cx + side * 1.0 * r, cy - 0.2 * r, 0]).rotate(side * 0.25) for side in (-1, 1)]
+        return [
+            _trailing(Ellipse(width=0.4 * r, height=0.95 * r).move_to([cx + side * 1.0 * r, cy - 0.2 * r, 0]).rotate(side * 0.25), (cx + side * 1.0 * r, cy + 0.2 * r), "floppy")
+            for side in (-1, 1)
+        ]
     return []
 
 
@@ -334,10 +354,8 @@ def _worn_on_head(look: CharacterLook, f: _Frame, c: Mapping[str, str], w: float
         crown = RoundedRectangle(width=1.4 * r, height=0.9 * r, corner_radius=0.15 * r).move_to([cx, brim_y + 0.45 * r, 0])
         band = _polygon([(cx - 0.7 * r, brim_y + 0.06 * r), (cx + 0.7 * r, brim_y + 0.06 * r), (cx + 0.7 * r, brim_y + 0.22 * r), (cx - 0.7 * r, brim_y + 0.22 * r)])
         brim = RoundedRectangle(width=2.5 * r, height=0.16 * r, corner_radius=0.07 * r).move_to([cx, brim_y, 0])
-        group.add(
-            _outlined(crown, c["accessory"], c["outline"], w), _outlined(band, c["clothes"], c["outline"], w),
-            _outlined(brim, c["accessory"], c["outline"], w),
-        )
+        hat = (_outlined(crown, c["accessory"], c["outline"], w), _outlined(band, c["clothes"], c["outline"], w), _outlined(brim, c["accessory"], c["outline"], w))
+        group.add(*(_trailing(piece, (cx, brim_y), "hat") for piece in hat))
     return group
 
 
@@ -363,7 +381,8 @@ def generate_parts(look: CharacterLook, colors: Mapping[str, str], *, outline_wi
 
 
 def _scaled_to_unit_height(parts: list[CharacterPart]) -> list[CharacterPart]:
-    """``parts`` scaled about the feet so the top of the figure (every shape) is at 1."""
+    """``parts`` scaled about the feet so the top of the figure (every shape) is at 1 (the
+    trailing pieces' pivots too)."""
     top = max(shape.get_top()[1] for part in parts for shape in part.shapes.values())
     factor = 1.0 / top
     if math.isclose(factor, 1.0):
@@ -371,10 +390,14 @@ def _scaled_to_unit_height(parts: list[CharacterPart]) -> list[CharacterPart]:
     for part in parts:
         for shape in part.shapes.values():
             shape.scale(factor, about_point=np.zeros(3))
+            for member in shape.get_family():
+                trail = getattr(member, TRAIL_ATTRIBUTE, None)
+                if trail is not None:
+                    setattr(member, TRAIL_ATTRIBUTE, (trail[0] * factor, trail[1] * factor, trail[2]))
     def scaled(point: tuple[float, float] | None) -> tuple[float, float] | None:
         return None if point is None else (point[0] * factor, point[1] * factor)
 
     return [replace(part, pivot=scaled(part.pivot), end=scaled(part.end)) for part in parts]
 
 
-__all__ = ["BODY_SIZES", "COLOR_KEYS", "EYE_WHITE", "LIMB_WIDTH", "Proportions", "generate_parts", "resolve_proportions"]
+__all__ = ["BODY_SIZES", "COLOR_KEYS", "EYE_WHITE", "LIMB_WIDTH", "TRAIL_WEIGHTS", "Proportions", "generate_parts", "resolve_proportions"]

@@ -257,8 +257,15 @@ fades: return every mobject from `get_moving_mobjects`, as `stage` does). The ma
 `light_grade`, `tint_grade`, `blend_grades`, `light_at`, `grade_rgbas`, `grade_pixels`;
 `StageShadows([ShadowCaster(mob, ground_y, width, size)])` draws soft shadows (`follow()` in an
 updater for things that move), `StarField(night_stars(area_share), box, short_side)` stars.
+Wind: `Wind(0.6, seed=1)` is a pure, seeded wind (`.level(t)`, `.force(t, delay)`, `.change(level,
+start, seconds)`, `.blown(start, t)`); `sway_degrees(kind, force, t)` and `bent_points(points,
+degrees, foot_y, height)` bend a prop about its base, `trail_degrees(wind, t)` follows it on a
+spring for `Character.set_wind(degrees)` (turns the pieces a generated look marks with
+`TRAIL_ATTRIBUTE`: scarf end, long hair, bun, floppy / pointy ears, hat). `StageWind(wind,
+[SwayingProp(prop, kind, x_share)], characters, x_share)` does both for a scene time (`update`);
+a `ParticleField(..., wind=)` drifts with it.
 DESIGN.md §69 has the model, §69.3 the poses, §69.4 lip sync, §69.5 idle motion, §69.6 the
-stage, §69.7 layers and the camera, §69.8 props, §69.9 particles, §69.31 light and shadows.
+stage, §69.7 layers and the camera, §69.8 props, §69.9 particles, §69.31 light and shadows, §69.32 wind.
 
 Params can nest: use another `SceneParams` class as a field type (also in lists). Theme tokens
 are checked inside nested models too, and `vidgen list-scenes` prints the nested fields. A nested

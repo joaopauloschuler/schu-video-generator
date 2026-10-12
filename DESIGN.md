@@ -103,7 +103,9 @@ src/vidgen/
                           # the landscape stage a narrow frame crops, §69.30; no manim),
                           # lighting.py (light presets, grades, fades, stars and shadow ellipses,
                           # §69.31; no manim), shading.py (StageLight: the grade as the camera
-                          # draws, StarField, StageShadows, §69.31); still.py also
+                          # draws, StarField, StageShadows, §69.31), wind.py (wind levels,
+                          # seeded gusts, fades, sway and trailing angles, §69.32; no manim),
+                          # windblown.py (SwayingProp, StageWind, §69.32); still.py also
                           # draws the prop gallery and `vidgen character-sheet` (§69.16)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
@@ -183,6 +185,7 @@ src/vidgen/
                           # throw, §69.27; sitting.py: sit_on, lean_on, stand_up, §69.28;
                           # shot_action.py: shot (the beat key shot:), §69.29;
                           # light_action.py: light (a stage's light fades), §69.31;
+                          # wind_action.py: wind (a stage's wind fades), §69.32;
                           # overlays.py: the built-in overlays lower_third/watermark, §41;
                           # progress.py: progress_bar/chapter_indicator, §42; captions.py: captions, §43;
                           # stage.py: the stage scene type, §69.6)
@@ -747,6 +750,13 @@ Step 97 (§69.31) adds `LIGHT_PRESETS`, `LIGHT_FADE_SECONDS`, `DEFAULT_STRENGTH`
 `StageLight`, `StarField`, `ShadowCaster` and `StageShadows`; `vidgen.particle_field`'s
 `_unit_shape` becomes `particle_shape`. Compatible, except that every `stage` now draws soft
 shadows under what stands on the ground (`shadows: false` for the old picture).
+Step 98 (§69.32) adds `SWAYS`, `WIND_FADE_SECONDS`, `WIND_LEVELS`, `Sway`, `Wind`, `WindChange`,
+`WindSetting`, `bent_points`, `gust`, `sway_degrees`, `trail_degrees`, `wind_level`, `wind_seed`,
+`StageWind`, `SwayingProp` and `ParticleWind`; `Character` gains `set_wind`, `wind`,
+`has_trails` (`TRAIL_ATTRIBUTE` in `cartoon/character.py`), `ParticleField` the keyword `wind`,
+`particle_states` the keywords `blown` and `wind`, `Spring` the property `memory_seconds`,
+`Action` the class attribute `number_target`; `ActionConfig.target` keeps a number as its
+text. Compatible: a stage without `wind` (or `wind: 0`) renders the same frames as before.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -6953,4 +6963,80 @@ A `stage` has a light (`light:` param, the `light` beat action) and soft shadows
 - **Not done here**: stars do not twinkle and are not drawn over a picture background
   (`generate:` / `image`: the sky is unknown); particles are not graded; shadows do not stretch
   with a low sun; a held prop's shadow is not under its holder's (the holder's covers it).
-  Tests: `tests/test_cartoon_lighting.py`.
+  Tests: `tests/test_cartoon_lighting.py`. Since Step 98 `light_at` / `light_changing` are
+  `fade_at` / `changing` (any change with `start`, `seconds`, `end`, `value`), shared with the wind.
+
+### 69.32 Wind (Step 98)
+
+A `stage` has a wind (`wind:` param, the `wind` beat action): props sway, characters' trailing
+pieces follow it on a spring, particles drift.
+
+- **Levels and gusts** (`cartoon/wind.py`, no manim): a level is signed, `0` calm, `1` a gale
+  blowing right (`+x` on screen), `-1` left; `wind_level` reads a number (also as text) or
+  `WIND_LEVELS` (`calm` 0, `breeze` 0.3, `windy` 0.6, `gale` 1). `gust(t, seed)` is smooth value
+  noise in 0..1: two octaves (`GUST_OCTAVES`: knots 2.6 s apart weight 0.65, 0.85 s weight 0.35),
+  knot values from splitmix64 of (seed, octave, knot) (pure integers: the same on every
+  platform, cached), eased between knots with a quintic. `Wind(base, seed, changes)`: `level(t)`
+  fades through `WindChange(start, seconds, value)` with the light's `fade_at` (smoothstep, a
+  change during another continues from where it is); `force(t, delay) = level ×
+  (STEADY_SHARE 0.5 + 0.5 × gust(t − delay))`; `delay(x_share, t)` = `GUST_CROSSING_SECONDS` 1.2
+  × the distance from the upwind edge (gusts cross the stage); `blown(start, t)` adds the force
+  up with trapezoids `BLOWN_STEP` 0.05 s apart from 0 (cached; the same whatever order frames are
+  asked in). The scene's seed is `wind_seed(scene id)` (the idle motion's name hash).
+- **Sway**: `SWAYS` (tree 5° at force 1, 0.45 Hz, straight up to 0.08 of its height; bush 4°;
+  plant 9°, from 0.45 (above the pot); sign 1.5°; lamp 1.2°); `sway_degrees(kind, force, t,
+  phase) = degrees × force × (1 + SWAY_WOBBLE 0.25 × sin(2π hz t + phase))`, phase from the
+  prop's name (`wind_phase`). `bent_points(points, degrees, foot_y, height, bend_from)` moves
+  each point sideways by `tan(degrees) × bending length × u²` (`u` the share of the height above
+  `bend_from`): the base stays, the top leans; `y` is kept. Exactly the rest points at 0°.
+- **Trailing pieces**: the generator marks members of a shape with `TRAIL_ATTRIBUTE`
+  (`wind_trail` = pivot x, pivot y, weight; scaled with the figure): the scarf's end (weight
+  1.2, pivot its top), long hair (0.55, above the head's middle), a bun (0.35, its bottom),
+  pointy ears (0.35, their base), floppy ears (1.0, their top), the hat's crown, band and brim
+  (0.3, the brim's middle) (`TRAIL_WEIGHTS`). Hair and ears are drawn inside the `head` part
+  and the scarf inside `body`, so trailing is per member inside a part, not a new part: the part
+  set, poses, sheets, SVG ids and the look cache are unchanged. `Character` finds them once
+  (`_trailing_members`; sign + for a piece hanging below its pivot, − for one standing above it,
+  so a positive turn always moves its free end right as drawn facing right) and
+  `set_wind(degrees)` turns each by `degrees × weight` about its pivot after its part's matrix,
+  mirrored for `facing: left`, on top of the poses (not in `state()`); at 0 `refresh` takes the
+  old path. `trail_degrees(wind, t, delay, phase) = TRAIL_DEGREES 24 × TRAIL_SPRING.follow(force)
+  + FLUTTER_DEGREES 4 × level × sin(2π 2.5 t + phase)`, `TRAIL_SPRING = Spring.tuned(1.2 Hz,
+  ζ 0.3)` (Step 82: it lags a gust and swings past it); exactly 0 once the force has been 0 for
+  `Spring.memory_seconds` (6 decay times, 2.65 s). Imported SVG characters have no marks.
+- **Particles** (`particles.py`): `WIND_DRIFT` per kind (shorter sides per second at force 1;
+  dust 0.4, snow 0.35, rain / confetti 0.3, smoke 0.25, bubbles 0.2, sparkles 0.08);
+  `particle_states(..., blown, wind)` shifts each particle by drift × |speed| × blown and slants
+  rain by `atan2(drift + WIND_DRIFT × wind, fall)`; 0 adds nothing. `ParticleField(wind=)` reads
+  `(blown since it started, force now)`; `particle_field` passes the scene's `particle_wind`.
+- **Stage** (`windblown.py`, `scenes/stage.py`): `_start_wind` installs nothing when the param
+  and every `wind` action are 0 (`blowing` and `particle_wind` stay `None`: proved by frame
+  hashes, below). Otherwise `StageWind(wind, props, cast, x_share)`: the swaying props are
+  built-in `SWAYS` kinds on the ground that no action moves, holds (`_movable_props`), sits on or
+  leans on (`_posture_props`), each a `SwayingProp` keeping its rest points; characters with
+  trailing pieces. A scene updater (kept in `_wind_updater`: Manim removes updaters by identity)
+  calls `update(t)` each frame after the animations; `refresh` is anchor-based, so turning
+  trailing pieces during a walk or pose change is consistent. **Static image** (§69.20, cost
+  asked for): `get_moving_mobjects` returns, while `moving(now − spring memory, end)`, the scene's
+  family from the first swaying prop or trailing character on (the sky, layers, ground band,
+  still shadows and props behind stay static); otherwise Manim's set, and the updater is removed
+  once nothing can move again. Measured (854x480, 15 fps, no audio, 2 runs each, a scratch copy
+  of `examples/cartoon`): `yard` 11.5 / 10.9 s → 12.8 / 12.8 s with `wind: windy` (+13 %, the
+  tree and everything in front of it redrawn); `hill` 13.2 / 12.9 s → 13.8 / 14.3 s with `gale`
+  (+7 %). `trail_degrees` costs about 0.4 ms per character per frame.
+- **The `wind` action** (`scenes/wind_action.py`): `- wind: 0.8` / `calm` / `breeze` / `windy`
+  / `gale`; like `light`: `animates = False`, cued at its `at`, `run_time` the fade
+  (`WIND_FADE_SECONDS` 2), `scene_problems` refuses scenes without `change_wind`; validate:
+  none, several, unknown name (did-you-mean), out of range. `number_target = True`: the YAML
+  number is kept as text by `ActionConfig` (a `before` validator on `target`) and the schema's
+  shorthand accepts a number.
+- **`wind: 0` changes nothing**: a scratch copy of `examples/cartoon` with `wind: 0` on both
+  stages rendered at 160x90, 5 fps on this step's code gives the same frame hashes as the
+  unchanged copy on HEAD 868914f (`yard` 147 frames, `hill` 127); `tests/test_cartoon_wind.py`
+  checks `wind: 0` plus a `- wind: calm` action against no wind frame by frame.
+- **Not done here**: wind relative to a walking character (walking into it), wind on held props,
+  SVG props or picture backgrounds, layers swaying, a `wind` setting at the top level, leaves
+  blowing as particles of their own. Found, not fixed: `Stage.change_light` / `get_moving_mobjects`
+  remove `self._light_step` by a fresh bound method, which Manim's `remove_updater` (identity)
+  never matches, so the light's updater stays installed after a fade (waits are then not frozen).
+  Tests: `tests/test_cartoon_wind.py`.

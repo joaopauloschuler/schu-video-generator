@@ -9091,3 +9091,83 @@ How to test
   test_cartoon_lighting test_cartoon_keyframes test_cartoon_foley` (16, 11 s), `test_introspect
   test_phase_h_review test_cartoon_directing test_cartoon_sheet` (7, 34 s), `test_builtin_scenes
   test_actions_coverage -k stage` (3, 3 s). The full suite was not run.
+
+## Step 98 — Wind
+
+What was built
+- `src/vidgen/cartoon/wind.py` (no manim): `wind_level` (signed -1..1 or `WIND_LEVELS` calm /
+  breeze / windy / gale), `gust(t, seed)` (two-octave smooth value noise, splitmix64 knots),
+  `Wind(base, seed)` (`level`, `force(t, delay)`, `delay(x_share, t)`, `change`, `blowing`,
+  `blown(start, t)` cached trapezoids), `WindChange`, `SWAYS` + `sway_degrees`, `bent_points`
+  (bend about the base, quadratic), `trail_degrees` (force through `TRAIL_SPRING` 1.2 Hz ζ 0.3 +
+  flutter), `wind_seed`, `wind_phase`, `WindSetting`.
+- `src/vidgen/cartoon/windblown.py`: `SwayingProp`, `StageWind` (update for a scene time,
+  `moving`, `particle_push`).
+- Characters: hair and ears are drawn inside `head`, the scarf inside `body`, the hat in
+  `accessory`. Instead of new parts, the generator marks members with `TRAIL_ATTRIBUTE`
+  (`wind_trail` = pivot, weight; `TRAIL_WEIGHTS`): scarf end, long hair, bun, pointy and floppy
+  ears, hat. `Character.set_wind(degrees)` turns them about their pivots in `refresh` (signed
+  so the free end goes downwind, mirrored when facing left); `has_trails`, `wind`. Not part of
+  `state()`; 0 takes the old code path.
+- Stage param `wind` and the `wind` beat action (`scenes/wind_action.py`, non-animating like
+  `light`; `- wind: 0.8` works because `ActionConfig.target` keeps a number as text and the schema
+  shorthand accepts a number for actions with `number_target`). `Stage._start_wind` installs
+  nothing when every level is 0; else `StageWind` + a scene updater; `get_moving_mobjects`
+  returns the family from the first swaying prop / trailing character on while the wind may move
+  something (including the spring's 2.65 s memory), and removes the updater after.
+- Particles: `WIND_DRIFT`, `particle_states(..., blown, wind)`, `ParticleField(wind=)`,
+  `particle_field` reads the scene's `particle_wind` (so `particles` actions drift too).
+- Shared fades: `lighting.fade_at` / `changing` (generic), `light_at` / `light_changing` call
+  them; `LightChange.value`; `Spring.memory_seconds`.
+
+Evidence
+- `wind: 0`: scratch copy of `examples/cartoon` with `wind: 0` on both stages, 160x90 5 fps, frame
+  hashes equal to the unchanged copy rendered by HEAD 868914f in a worktree (yard 147 frames,
+  hill 127). The render test does the same for `wind: 0` + `- wind: calm` vs no wind.
+- Cost (854x480, 15 fps, no audio, 2 runs): yard 11.5 / 10.9 s -> 12.8 / 12.8 s with `windy`;
+  hill 13.2 / 12.9 s -> 13.8 / 14.3 s with `gale`. `trail_degrees` ~0.4 ms per character per frame.
+- Stills checked by eye (yard windy): the tree crown leans and moves, dot's scarf end and moss's
+  hat move downwind; `vidgen validate` of the windy copy: ok.
+
+Files touched
+- New: `src/vidgen/cartoon/wind.py`, `cartoon/windblown.py`, `scenes/wind_action.py`,
+  `tests/test_cartoon_wind.py`.
+- `cartoon/character.py`, `generator.py`, `lighting.py`, `spring.py`, `particles.py`,
+  `particle_field.py`, `scenes/stage.py`, `scenes/__init__.py`, `actions.py`, `config.py`,
+  `schema.py`, `api.py`, guide (+ `AGENTS.md` copy), `docs/CONFIG.md` (row, "Wind", action rows),
+  `docs/EXTENDING.md`, `docs/gallery/stage.md` (param row), `DESIGN.md` (§2, §6.4, §69.31 note,
+  new §69.32), `tasklist.md`. Tests updated: `tests/test_actions.py` (action name lists gain `wind`).
+
+Public interfaces
+- `vidgen.api` adds the names in DESIGN §6.4 (Step 98). New action `wind`, stage param `wind`.
+  All compatible.
+
+Decisions / deviations
+- Trailing pieces are marked members inside existing parts, not new parts (no change to part
+  names, poses, sheets, SVG ids, the look cache). Round ears, short / spiky / curly hair and
+  glasses do not trail; SVG characters have no marks.
+- Props bend (quadratic shear about the base) rather than rotate, so the base stays planted.
+- Direction is the sign of the level (task asked 0..1; negative blows left).
+- Searched first: no wind / gust / noise code existed (`grep -rni "wind\b\|gust\|noise" src/vidgen`:
+  only prose and the example's comments); reused `fade_at` (generalised from `light_at`), `Spring`,
+  `idle_seed`, the `light` action pattern and Step 87's static-image hook.
+
+Known gaps / TODOs
+- No wind relative to a walking character; held / SVG props, layers and picture backgrounds do not
+  move; no top-level `wind`; the example is unchanged (no `wind:` in `examples/cartoon`).
+- Found, not fixed (Step 97): `Stage` removes `self._light_step` with a fresh bound method;
+  Manim's `Scene.remove_updater` compares by identity, so the light updater is never removed
+  (the wind keeps its bound method in `_wind_updater`).
+
+How to test
+- `pytest tests/test_cartoon_wind.py` (11 not-render + 2 render, ~6 s).
+- Also run (not render): `test_cartoon_lighting test_particles test_cartoon_spring
+  test_cartoon_motion test_cartoon_character test_cartoon_generator test_cartoon_stage
+  test_cartoon_props test_cartoon_limbs test_cartoon_speed test_api test_docs test_guide
+  test_config test_actions` (358 with the wind file, 12 s), `test_actions test_schema
+  test_introspect test_gallery test_actions_coverage test_builtin_scenes test_cartoon_sheet
+  test_cartoon_holding test_cartoon_seating test_cartoon_directing test_lint test_cartoon_lint
+  test_mcp test_extensions` (354, 89 s); render: `test_cartoon_wind test_cartoon_lighting
+  test_particles test_cartoon_stage test_cartoon_props test_cartoon_character
+  test_cartoon_generator test_cartoon_motion test_cartoon_speed test_cartoon_parallax
+  test_cartoon_holding test_cartoon_seating` (15, 8 s). The full suite was not run.

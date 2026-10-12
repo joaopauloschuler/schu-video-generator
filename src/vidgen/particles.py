@@ -75,6 +75,12 @@ KINDS: dict[str, ParticleKind] = {
     "bubbles": ParticleKind("ring", 30, (0.01, 0.025), -0.15, (0.7, 1.3), 0.0, False, 0.025, (0.5, 1.0), 0.0, 0.0, 1.0, 0.85, ("#CFE9FF",)),
 }
 
+#: How fast each kind drifts with a stage's wind (DESIGN.md §69.32): shorter sides per second at
+#: force 1, times each particle's speed factor (light snow and confetti blow far, rain a little).
+WIND_DRIFT: dict[str, float] = {
+    "rain": 0.3, "snow": 0.35, "sparkles": 0.08, "dust": 0.4, "confetti": 0.3, "smoke": 0.25, "bubbles": 0.2,
+}
+
 
 @dataclass(frozen=True)
 class ParticleSeeds:
@@ -154,19 +160,27 @@ def _edge_fade(u: np.ndarray) -> np.ndarray:
     return np.clip(np.minimum(u, 1.0 - u) / EDGE_FADE, 0.0, 1.0)
 
 
-def particle_states(seeds: ParticleSeeds, t: float, width: float = 1.0, height: float = 1.0) -> ParticleStates:
+def particle_states(
+    seeds: ParticleSeeds, t: float, width: float = 1.0, height: float = 1.0, *, blown: float = 0.0, wind: float = 0.0,
+) -> ParticleStates:
     """Where the particles are ``t`` seconds after they started, in an area ``width`` x
-    ``height`` shorter sides large. A particle leaving one edge comes back at the other."""
+    ``height`` shorter sides large. A particle leaving one edge comes back at the other. A
+    stage's wind (§69.32): ``blown`` is its force added up since they started (force × seconds;
+    each particle drifts :data:`WIND_DRIFT` × its speed factor × that to the right), ``wind`` its
+    force now (rain slants with it)."""
     spec = particle_kind(seeds.kind)
     sway = spec.sway * np.sin(2 * math.pi * seeds.sway_hz * t + seeds.phase)
     y = np.mod(seeds.y + spec.fall * seeds.speed * t / height, 1.0)
-    x = np.mod(seeds.x + (seeds.drift * t + sway) / width, 1.0)
+    side = seeds.drift * t + sway
+    if blown:
+        side = side + WIND_DRIFT[seeds.kind] * np.abs(seeds.speed) * blown
+    x = np.mod(seeds.x + side / width, 1.0)
     size = seeds.size.copy()
     angle = np.zeros(len(seeds))
     flip = np.ones(len(seeds))
     opacity = np.full(len(seeds), spec.opacity) * _edge_fade(x)
     if spec.shape == "streak":  # along its fall: tilted by the wind
-        angle[:] = math.atan2(spec.drift, spec.fall)
+        angle[:] = math.atan2(spec.drift + WIND_DRIFT[seeds.kind] * wind, spec.fall)
     if spec.spin:
         turns = seeds.spin * t
         angle = seeds.phase + 2 * math.pi * turns
