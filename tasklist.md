@@ -551,7 +551,6 @@ Bugs / correctness
 - [ ] `VideoPlan` and a rendered scene can disagree by a frame on a beat's start when `d + pad` lands on half a frame (the scene rounds the wait left after its animations) (Step 100)
 - [ ] `vidgen mcp`: files found by scanning a folder (`assets/sfx/`, `assets/icons/`, `audio/`) are not confined to the root; a link there can point outside (Step 102)
 - [ ] Lint `facing_away` takes the nearest character as the listener, so a speaker turned to the one it addresses farther away is reported (seen on a seated speaker in the Step 102 showcase draft) (Step 102)
-- [ ] `tests/test_pronunciation.py::test_karaoke_captions_highlight_the_written_word_while_it_is_said` still expects the karaoke state `(caption, word)`; Step 100 made it `(caption, (word,))` (fails on 0ad8eee too) (Step 102 follow-up)
 
 Quality (what an agent's video looks like)
 - [ ] `vidgen plan`: prose-derived bullet items are truncated sentences ("Every request that reaches database costs"); a closing sentence can be split between two scenes; icon search is English-only; no cues for `network` / `line_chart` / `pie` / `map` / `screenshot` / `video_clip`; nested list items dropped; an intro of 2+ sentences becomes its own `bullets` scene; TODO texts in English (Step 58)

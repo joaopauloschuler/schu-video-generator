@@ -9609,3 +9609,13 @@ How to test
   34 s); render: `test_overlap test_overlap_pinned test_cartoon_lint test_cartoon_directing
   test_phase_i_review test_timing_lint` (9, 18 s), `test_screenplay test_includes test_mcp
   test_json_output` (4, 32 s). Full suite not run.
+
+## Fix — karaoke pronunciation test after Step 100
+
+The test, not the code: `Captions.state` returns `(caption, (word, ...))` (one word index per
+overlapping part) since Step 100, and with a pronunciation the karaoke still shows the written
+words timed by the respelled audio (same word indices as before). Only
+`tests/test_pronunciation.py::test_karaoke_captions_highlight_the_written_word_while_it_is_said`
+used the old `(caption, word)` shape (grep of tests/); it now expects `(0, (0,))` / `(0, (1,))`.
+Backlog line removed. How to test: `pytest tests/test_pronunciation.py tests/test_captions.py
+tests/test_voices.py tests/test_overlap.py tests/test_overlap_pinned.py` (78 non-render, 7 render passed).
