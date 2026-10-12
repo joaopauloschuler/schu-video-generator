@@ -443,7 +443,7 @@ one.
 - [x] Tests: the cache key changes when the look changes, not when the pose changes (`tests/test_cartoon_speed.py`; the static image in `tests/test_cartoon_parallax.py`)
 
 ### Step 88 — Review of Phase H
-- [ ] End to end with mocks: the cartoon example through validate, lint, storyboard, character sheet and a preview render; docs consistency (CONFIG.md, DESIGN.md, AGENTS.md); targeted tests for Phase H, then the full suite only if the owner asks
+- [x] End to end with mocks: the cartoon example through validate, lint, storyboard, character sheet and a preview render; docs consistency (CONFIG.md, DESIGN.md, AGENTS.md); targeted tests for Phase H, then the full suite only if the owner asks (CLI and MCP on the example; `tests/test_phase_h_review.py`; the stage JSON Schema takes bare names again; real Kokoro narration and a 1280x720 render checked by eye; the `yard` difference traced to x264 at non-mod-16 widths; Phase H gaps moved to the Backlog; full suite not run: not asked)
 
 ---
 
@@ -457,6 +457,11 @@ Bugs / correctness
 - [ ] MCP on Windows: process-tree kill on cancel is untested; no session with a real client (Claude Desktop / Code) was possible here (Step 59)
 - [ ] `equation_derivation`: a `highlight` colour on a step is not carried into its dimmed copy; `code`'s own highlight steps reset opacities a `dim` action set (Step 37)
 - [ ] Not run on real Windows / macOS: font registration, MiKTeX's install prompts, long paths (Step 7 onwards)
+- [ ] Renders are not byte-reproducible at a width that is not a multiple of 16 (the 854x480 preview): Manim's libx264 encode (via PyAV) of identical frames varies between runs in fast-moving shots; compare frames before encoding or use mod-16 sizes (Step 88, found in Step 87)
+- [ ] Kokoro `vidgen tts` needs more than the 1500 MB cap (killed after three beats twice; finished under 2500 MB, peak ~2.2 GB): find out whether memory grows per beat or per voice (Step 88)
+- [ ] A shape swap resets that part's style: a dimmed or faded character's speaking mouth or blinking eyes show at full opacity (Steps 67, 78)
+- [ ] A walk's run time is planned when its batch starts: two walks of one character due on the same frame both start from its position then; `enter` on a character already on screen first jumps it to the edge (Step 79)
+- [ ] An SVG character or SVG prop outside `assets/` is not in the scene fingerprint; `use` elements pointing into a part are not followed when splitting an SVG character (Steps 69, 75)
 
 Quality (what an agent's video looks like)
 - [ ] `vidgen plan`: prose-derived bullet items are truncated sentences ("Every request that reaches database costs"); a closing sentence can be split between two scenes; icon search is English-only; no cues for `network` / `line_chart` / `pie` / `map` / `screenshot` / `video_clip`; nested list items dropped; an intro of 2+ sentences becomes its own `bullets` scene; TODO texts in English (Step 58)
@@ -465,8 +470,20 @@ Quality (what an agent's video looks like)
 - [ ] A frame thumbnail's text is not measured (`min_font` / `contrast` at 320x180 from a `--frames` render or lint stills) (Step 50)
 - [ ] Locale: number formats, `map` English country names, `"A -> B"` arcs naming translated pins, `lint_ignore` / `point:` targets do not follow translations; no-space languages cut cues only at punctuation (Step 51)
 - [ ] A storyboard / lint view of the frames around each transition and carry (Steps 47–48)
+- [ ] Cartoon lint: a speaker wholly out of view (the camera still on a flying prop, a pan not yet back) is not reported; no `depth` in the layout dump (characters at different depths overlap like same-depth ones); boxes, not pixels, decide what hides a face; keyed moves and jumps count as standing (Steps 84, 88)
+- [ ] `examples/cartoon` with real Kokoro audio: three beats still read at 3.54–3.68 words/s (`narration_speed`) at `speed: 0.8` / `0.85` (Step 88)
+- [ ] Characters: arms are rigid (no elbows), `sitting` has no knees, one `legs` part swings as a pair; a portrait stage leaves a tall empty sky (Steps 70, 73, 79)
+- [ ] Acting: a long beat makes a large speech bubble; a bubble following its speaker is not clamped to the view; `look_at` is reset by a later `pose` / `emote` (Steps 78–79)
+- [ ] Motion: no follow-through on pose changes, gestures or keyed moves; no squash on footfalls; an `enter`'s wind-up happens off stage; a facing change flips at half; no facing or rotation along a `move_along` path, no `depth` / opacity keys; a lifted character walks in the air (Steps 80–81)
+- [ ] Mid-action stills only for walks, gestures, jumps and keyed moves (not `pose`, `emote`, `turn`, `look_at` or camera moves); the character sheet shows no left-facing view, blink or gesture (Step 83)
+- [ ] Foley: no panning by where the character stands, no depth / speed / ground variation, no landing sound, gestures and keyed moves silent; not listened to by a person (Step 86)
 
 Nice-to-have / performance
+- [ ] Stage: `follow` tracks x only, no vertical pan, layers are not action targets, a near image layer zoomed at the bottom can show a sliver; no `on: <prop>` (a prop's `lift` worked out by hand); particles have no `place: behind`, wind or ground stop; no per-scene opt-out of `cartoon_style` (Steps 74–77)
+- [ ] No YAML for springs (no tail or antenna part; generated hair and ears are drawn in the head) (Step 82)
+- [ ] Cartoon render speed: cache each part's subpath split (~1.1 s of `yard` on Manim 0.21); narrow the fingerprint so editing `characters:` / `cartoon_style` re-renders only scenes that use them (Steps 67, 77, 87)
+- [ ] `vidgen character` does not print `idle` / `cartoon_motion`; `vidgen schema` has no enum of character names; `vidgen gallery` does not add a project's own `characters:` to its work project (Steps 67, 72, 73, 80)
+- [ ] Lip sync: the misaki and espeak-ng G2P paths were only run with mocks (Kokoro's own phonemes ran for real in Step 88); one espeak-ng process per word (Step 71)
 - [ ] `vidgen clean` (or a size report): `build/` and its `_bare` caches only grow (Steps 7, 50)
 - [ ] Joins with a crossfade / push / wipe re-encode the whole video (Step 48); `image` Ken Burns ~1.6x real time in preview, `code_walkthrough` ~0.1 s per line (Step 37)
 - [ ] MP4 cover art from the thumbnail (Steps 49–50); `generate:` for `screenshot` and behind a designed thumbnail (Step 55)

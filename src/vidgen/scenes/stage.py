@@ -23,7 +23,8 @@ DEFAULT_GROUND_COLOR = "surface"
 #: Corners drawn per hill of a ``hills`` layer shape.
 HILL_POINTS = 16
 
-Identifier = Annotated[str, Field(pattern=r"^[A-Za-z0-9_]+$")]
+IDENTIFIER_PATTERN = r"^[A-Za-z0-9_]+$"
+Identifier = Annotated[str, Field(pattern=IDENTIFIER_PATTERN)]
 
 
 class StageCharacter(SceneParams):
@@ -50,6 +51,11 @@ class StageCharacter(SceneParams):
     @classmethod
     def _name_only(cls, data: Any) -> Any:
         return {"name": data} if isinstance(data, str) else data
+
+    @classmethod
+    def __get_pydantic_json_schema__(cls, core_schema: Any, handler: Any) -> dict[str, Any]:
+        """A plain string is also a character (JSON Schema ``anyOf`` name | object)."""
+        return {"anyOf": [{"type": "string", "pattern": IDENTIFIER_PATTERN}, handler(core_schema)]}
 
 
 class StageProp(SceneParams):
@@ -85,6 +91,11 @@ class StageProp(SceneParams):
     @classmethod
     def _kind_only(cls, data: Any) -> Any:
         return {"prop": data} if isinstance(data, str) else data
+
+    @classmethod
+    def __get_pydantic_json_schema__(cls, core_schema: Any, handler: Any) -> dict[str, Any]:
+        """A built-in prop's name alone is also a prop (JSON Schema ``anyOf`` name | object)."""
+        return {"anyOf": [{"enum": list(PROP_KINDS)}, handler(core_schema)]}
 
     @model_validator(mode="after")
     def _one_source(self) -> "StageProp":
@@ -130,6 +141,11 @@ class StageParticles(ParticleSettings, SceneParams):
     @classmethod
     def _kind_only(cls, data: Any) -> Any:
         return {"kind": data} if isinstance(data, str) else data
+
+    @classmethod
+    def __get_pydantic_json_schema__(cls, core_schema: Any, handler: Any) -> dict[str, Any]:
+        """A kind alone is also a particle setting (JSON Schema ``anyOf`` kind | object)."""
+        return {"anyOf": [{"enum": list(PARTICLE_KINDS)}, handler(core_schema)]}
 
 
 class LayerShape(SceneParams):

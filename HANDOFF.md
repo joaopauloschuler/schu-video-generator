@@ -8166,3 +8166,84 @@ How to test
   tests/test_cartoon_stage.py tests/test_cartoon_parallax.py tests/test_cartoon_visemes.py` (304,
   8 s); `-m render` on character, stage, parallax, moving, acting, sheet, poses, lint (9, 5 s);
   `tests/test_docs.py tests/test_guide.py tests/test_api.py` (108, 3 s).
+
+
+## Step 88 — Review of Phase H
+
+What was done
+- End to end on `examples/cartoon` (a copy in the scratchpad, preview 854x480 from word counts):
+  `vidgen validate`, `lint --fail-on warning` (0 findings), `storyboard` (mid-action stills),
+  `character-sheet --all` and `render --preview`, through the CLI and through the MCP tools
+  `validate`, `schema` (scene=stage), `lint`, `storyboard`, `character_sheet`, `render` (a stdio
+  session with the SDK's client): nothing broke.
+- New `tests/test_phase_h_review.py` (3 without rendering + 1 render at 160x90, 5 fps, ~16 s):
+  the stage schema takes bare names; the example with a fake Kokoro (`test_tts_kokoro`'s
+  pipeline): `validate --json`, `tts` writes 12 MP3s and 12 `.visemes.json`; then `storyboard
+  --json` (six mid stills, named), `lint` (12 stills, renders reused, no cartoon-rule finding),
+  `character-sheet --all --json`, `render --preview --json` with footstep / whoosh / boing / pop
+  in the timings.
+- Fix (Step 85's gap): `StageCharacter`, `StageProp`, `StageParticles` (`scenes/stage.py`) gain
+  `__get_pydantic_json_schema__` returning `anyOf` (a character name pattern / the `PROP_KINDS`
+  enum / the `PARTICLE_KINDS` enum, then the object), the pattern used by `bullets` and `process`.
+  `examples/cartoon` uses `- cloud` again.
+- `examples/cartoon`: a `walk_to` (dot up to the kite, then points) and an `enter` (dot walks onto
+  the hill), so the example shows walking and its foley; Kokoro voices slowed (`speed: 0.8`
+  narrator, `0.85` characters). Still `lint --fail-on warning` clean on the word-count preview.
+- Real narration (Kokoro 0.9.4 in the Python 3.12 venv, Manim 0.22, HF cache in the scratchpad's
+  `hfhome`, the two missing voices fetched from Hugging Face): `vidgen tts` on a scratch copy,
+  12 MP3s, `.align.json` and `.visemes.json` (`source` / `timing` `kokoro`, 13–22 cues a beat).
+  Killed twice by the 1500 MB cap after three beats each; finished under a 2500 MB cap (cgroup
+  max usage ~2.2 GB). At `speed: 1` `lint` gave `narration_speed` on 9 of 12 beats (3.5–4.6
+  words/s); at 0.85 / 0.9 on 5; at 0.8 / 0.85 on 3 (3.54–3.68). Guide: one sentence on Kokoro's
+  pace in the cartoon timing advice, speeds in its YAML block.
+- The final video: the copy rendered at 1280x720 30 fps (format changed in the copy only), one
+  command, 59 s wall: `/home/claude/work/phase-h-review/cartoon_review.mp4` (59.93 s, 4.57 MB,
+  H.264 + AAC 48 kHz stereo, −21.9 LUFS). Looked at 30 stills by eye; the SFX track and the final
+  mix measured with ffmpeg `volumedetect` per window (boing, two footsteps in `yard`; whoosh, five
+  footsteps, pop, boing in `hill`; −8 to −14 dB peaks in the mix, −91 dB in a silent window).
+- Step 87's non-reproducible `yard` frames: traced (DESIGN §69.21). The raw frames Manim passes
+  to its writer are identical across runs (md5 of every frame); an encode run after the scene (no
+  thread overlap) still differs; only the two zoom partial movies differ, and only at width 854:
+  three renders at 848x480 gave identical partial files. Standalone PyAV / ffmpeg encodes of the
+  same frames are identical every time, so it looks like libx264 reading uninitialised padding of
+  a non-mod-16 frame in a long-lived process. Not fixed (Manim's encoder options are not reachable
+  from vidgen; a new preview size would change every preview): Backlog.
+- Docs: DESIGN §6.4 gains the Step 71 (visemes) and Step 75 (props) export lines that were
+  missing; §69.18 (example changes), §69.20 (the cause), new §69.21; EXTENDING's particle line
+  says `self.play(fade_out(field))` (`fade_out` returns an animation). Checked, no change needed:
+  every Phase H action, lint rule, top-level key, stage param and command is in CONFIG.md and the
+  guide with the code's defaults (action option defaults and run times, lint rule settings, stage
+  param defaults compared by script); every Phase H `vidgen.api` export is in DESIGN §6.4 or
+  EXTENDING.
+- Wheel: `pip wheel . --no-build-isolation` (3.12 venv): `vidgen/cartoon/*.py`, `camera.py`,
+  `particles.py`, `particle_field.py`, `lint/cartoon_rules.py`, the stage / acting / moving /
+  keyframes / particles scene modules and `data/guide/AGENTS.md` are in it; Phase H added no data
+  files.
+- Backlog: 17 lines for the Phase H "not done" items worth keeping, each with its step.
+
+What looks wrong in the video (stills)
+- Lip sync moves with the voice (dot's mouth O / A on her lines, moss's on his; the narrator's
+  beats leave both mouths at rest); the bubble "Boxes. Do not. Fly." sits above moss, readable but
+  small at 720p; dot's walk and the hill entrance read well; the jump, the zoom close-ups and the
+  confetti look right.
+- In `hill_flew` moss's line starts while the camera still shows the kite in the empty sky; the
+  pan back reaches the two characters about a second into the line (the speaker is out of view;
+  no lint rule reports that: Backlog).
+- During `move_along` the kite passes in front of moss's face for a few frames.
+- `narration_speed`: three beats still a little fast with real Kokoro audio (above).
+
+Files touched
+- `src/vidgen/scenes/stage.py`, `examples/cartoon/video.yaml`, `src/vidgen/data/guide/AGENTS.md`
+  (+ copy `AGENTS.md`), `DESIGN.md`, `docs/EXTENDING.md`, `tasklist.md`, new
+  `tests/test_phase_h_review.py`.
+
+Public interfaces
+- None changed. `vidgen schema` output for `stage` now lists the string forms.
+
+How to test
+- `pytest -m "not render" tests/test_schema.py tests/test_docs.py tests/test_guide.py
+  tests/test_gallery.py tests/test_translation.py tests/test_particles.py
+  tests/test_phase_h_review.py` (250 passed, 62 s); `-m "not render" tests/test_cartoon_*.py
+  tests/test_builtin_scenes.py` (483, 12 s); `-m render tests/test_cartoon_*.py` (16, 7 s);
+  `-m render tests/test_builtin_scenes.py -k stage` (2, 2 s); `-m render
+  tests/test_phase_h_review.py` (1, 16 s). The full suite was not run (not asked).

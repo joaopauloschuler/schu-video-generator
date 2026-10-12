@@ -13,10 +13,10 @@ theme: {preset: soft_pastel}
 format: {width: 1920, height: 1080, fps: 30}
 preview: {width: 854, height: 480, fps: 15}
 
-voice: {provider: kokoro, voice: bf_emma}           # the narrator: opens and closes each scene
+voice: {provider: kokoro, voice: bf_emma, speed: 0.8}   # the narrator; Kokoro reads fast, so slowed down
 voices:
-  dot_voice: {voice: af_bella, label: Dot}
-  moss_voice: {voice: am_michael, label: Moss}
+  dot_voice: {voice: af_bella, speed: 0.85, label: Dot}
+  moss_voice: {voice: am_michael, speed: 0.85, label: Moss}
 narration: {pad: 0.7}                               # a beat of silence after every line, for the reactions
 
 characters:                                         # original figures from the generator: told apart by shape
@@ -39,7 +39,7 @@ scenes:
         - {prop: house, at: 0.17, depth: 0.7}  # the set at the edges, the middle left free
         - {prop: tree, at: 0.84, depth: 0.5}
         - {prop: box, name: kite, at: 0.43}
-        - {prop: cloud}
+        - cloud
       characters:
         - {name: dot, at: left}
         - {name: moss, at: right, pose: arms_crossed}
@@ -62,8 +62,9 @@ scenes:
         text: "It is a box kite. The box part is the clever bit."
         voice: dot_voice
         actions:
+          - {walk_to: dot, to: 0.34}                    # up to the kite (footsteps), then point at it
           - {emote: dot, to: happy}
-          - {gesture: dot, to: point, at: 0.2}
+          - {gesture: dot, to: point}
       - id: yard_expert
         text: "Boxes do not fly. I am an expert on boxes."
         voice: moss_voice
@@ -97,6 +98,8 @@ scenes:
     beats:
       - id: hill_wind
         text: "Up on the hill, the wind grew stronger."
+        actions:
+          - {enter: dot, side: left}                    # walks in from the edge (a whoosh, footsteps)
       - id: hill_count
         text: "Ready, Moss? On the count of three. One, two..."
         voice: dot_voice

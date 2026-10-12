@@ -770,7 +770,8 @@ happens: `at: 0.8` lands it on the end of the line, not on its first word.
 **Comic timing.**
 - **Short lines**: one line per beat, one speaker per beat (the beat's `voice`), 6–12 words.
   Kokoro needs about 8 words to sound natural, and a two-word beat with actions trips
-  `rushed_animation`.
+  `rushed_animation`. It also reads fast (3.5–4.5 words a second): `speed: 0.8`–`0.85` on each
+  voice gives the lines room (`narration_speed` warns above 3.5 once the audio is real).
 - **Pauses**: every beat ends with `narration.pad` seconds of silence (0.35). Raise it for a
   cartoon (`narration: {pad: 0.7}`) and put the reaction in it (`at: 0.8`): line, pause,
   reaction. Commas and "..." are pauses in the voice (not in the word-count preview).
@@ -805,10 +806,10 @@ happens: `at: 0.8` lands it on the end of the line, not on its first word.
    tracks; then storyboard and lint again, since real lines change the timing.
 
 ```yaml
-voice: {provider: kokoro, voice: bf_emma}          # the narrator
+voice: {provider: kokoro, voice: bf_emma, speed: 0.8}   # the narrator, slowed down
 voices:
-  dot_voice: {voice: af_bella, label: Dot}
-  moss_voice: {voice: am_michael, label: Moss}
+  dot_voice: {voice: af_bella, speed: 0.85, label: Dot}
+  moss_voice: {voice: am_michael, speed: 0.85, label: Moss}
 narration: {pad: 0.7}                              # room for reactions after each line
 characters:
   - {name: dot, voice: dot_voice, look: {body: round, hair: bun, accessories: [scarf]}}

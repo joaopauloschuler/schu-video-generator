@@ -226,7 +226,7 @@ of `PROP_KINDS` (`table`, `tree`, `house`, ...) and `svg_prop(path, height=, nam
 "prop", at, depth, PROP_HEIGHTS[kind], lift)` places it; the layout dump reports it as kind `prop`.
 Particles: `particle_field(self, "snow", ParticleSettings(density=2))` builds a `ParticleField`
 for your scene (fewer at preview quality, `self.is_preview`) that moves on its own once added
-(`self.add(field)`) and fades out with `fade_out(field)`; `particle_states(particle_seeds(kind,
+(`self.add(field)`) and fades out with `self.play(fade_out(field))`; `particle_states(particle_seeds(kind,
 count, seed), t)` gives the seeded positions without drawing anything.
 DESIGN.md §69 has the model, §69.3 the poses, §69.4 lip sync, §69.5 idle motion, §69.6 the
 stage, §69.7 layers and the camera, §69.8 props, §69.9 particles.

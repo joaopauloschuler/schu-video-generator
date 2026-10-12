@@ -644,12 +644,16 @@ Step 67 (§69) adds `Character`, `CharacterPart`, `CharacterState`, `PartPose`, 
 `character` and the param type `CharacterName`.
 Step 70 (§69.3) adds `PoseChange` (and the `Character` methods `set_pose`, `set_expression`,
 `posed_state`, `names`).
+Step 71 (§69.4) adds `VISEMES`, `VisemeCue`, `VisemeTrack` (and the `Character` methods
+`viseme_shape`, `show_viseme`, `lip_sync`, `stop_lip_sync`; `NarratedScene.beat_visemes`).
 Step 73 (§69.6) adds the stage geometry `MARKS`, `StageItem`, `StagePlacement`, `stage_layout`,
 `mark_x`, `facing_towards_centre` and the check `pose_name_problem` (the built-in `stage` scene
 uses only `vidgen.api`, like every built-in).
 Step 74 (§69.7) adds `DEFAULT_FACTORS`, `LAYER_PLACES`, `layer_transform`, `layer_half_extent`
 and `view_center_within`; `NarratedScene` gains `camera_bounds`, `camera_place`,
 `follow_with_camera`, `camera_following`, `add_camera_listener`; `Action` gains `scene_problems`.
+Step 75 (§69.8) adds `Prop`, `draw_prop`, `svg_prop`, `PROP_KINDS`, `PROP_HEIGHTS`, `PROP_LIFTS`,
+`SVG_PROP_HEIGHT`; `StageItem` gains `lift=0.0` (compatible).
 Step 76 (§69.9) adds `PARTICLE_KINDS`, `MAX_PARTICLES`, `particle_count`, `particle_seeds`,
 `particle_states`, `ParticleField`, `ParticleSettings`, `ParticleKindName`, `particle_field`, and
 compatibly the attribute `NarratedScene.is_preview`.
@@ -6000,7 +6004,9 @@ model each in `config.LintRules`. Like every still rule they read beat-end still
   (`bf_emma` narrator, `af_bella`, `am_michael`), `narration.pad: 0.7`, props, a `hills` layer,
   a `width: 2` stage with `follow` on a flying prop (`move_along`), one close-up `zoom` per scene,
   `react` / `emote` / `look_at` / `jump` / `gesture` / `say` with a bubble, dust and confetti
-  particles. No audio committed: `vidgen validate` (one warning: the Kokoro extra is not
+  particles; since Step 88 also a `walk_to` and an `enter` (so footsteps and a whoosh), a bare
+  prop name (`- cloud`) and slower voices (`speed: 0.8` narrator, `0.85` characters; §69.21). No
+  audio committed: `vidgen validate` (one warning: the Kokoro extra is not
   installed) and `vidgen lint --fail-on warning` on the preview (timed from word counts) pass with
   no findings. The test `test_examples_validate_against_their_schema` (`tests/test_schema.py`)
   picks it up like every example folder.
@@ -6114,7 +6120,37 @@ time to save:
   split of each part (Manim 0.21's `get_subpath_split_indices_from_points`, 1.1 s of `yard`), which
   needs a per-instance override of a Manim internal that Manim 0.19 does not have.
 - **Result**: the same frames (the `hill` preview decodes bit for bit as before; `yard` differs
-  only in its last 60 frames, which also differ between two runs of the unchanged code). Before /
+  only in its last 60 frames, which also differ between two runs of the unchanged code: Step 88
+  found that Manim's H.264 encoding, not the drawing, varies there, §69.21). Before /
   after in HANDOFF.md (Step 87): `hill` −8 %, `yard` −3 % at preview, within noise end to end and
   at the final format (encoding bound). Tests: `tests/test_cartoon_speed.py`,
   `tests/test_cartoon_parallax.py`.
+
+### 69.21 Review of Phase H (Step 88)
+
+- **End to end**: `examples/cartoon` through `vidgen validate`, `lint --fail-on warning`,
+  `storyboard` (4 mid-action stills before Step 88's walk and enter, 6 after), `character-sheet
+  --all` and a preview render, by the CLI and by the MCP tools `validate`, `schema`, `lint`,
+  `storyboard`, `character_sheet`, `render`: no failures. `tests/test_phase_h_review.py` repeats
+  this cheaply (a 160x90, 5 fps copy of the example, word-count timing; mocked Kokoro audio).
+- **JSON Schema of `stage`**: `StageCharacter`, `StageProp` and `StageParticles` accept a plain
+  string (a character name, a built-in prop, a particle kind) through `before` validators, which
+  `vidgen schema` did not show; each now has `__get_pydantic_json_schema__` returning `anyOf`
+  (the string form, then the object), like `bullets`' items. The example uses `- cloud` again.
+- **Real narration** (Kokoro 0.9.4, Python 3.12, Manim 0.22, not committed): `vidgen tts` wrote
+  the 12 MP3s, `.align.json` and `.visemes.json` (source and timing `kokoro`, 13–22 cues a beat
+  after merging). It was killed twice by the 1500 MB cap after three beats each (peak about 2.2
+  GB counting the page cache) and finished under 2500 MB. At `speed: 1` Kokoro reads 3.5–4.6
+  words a second, so `narration_speed` warned on 9 of 12 beats; at `speed: 0.8` / `0.85` 3 beats
+  remain just above 3.5 (3.54–3.68). The guide says so in its cartoon timing advice.
+- **The `yard` render that differed between runs** (Step 87): the raw frames Manim hands its
+  writer are bit-identical across runs (md5 of every frame), and a render whose partial movie
+  files are encoded after the scene (no thread overlap) still differs, but only in the two zoom
+  animations and only at the 854-pixel preview width: at 848x480 (a multiple of 16) three runs
+  give identical files. So libx264, as Manim calls it through PyAV, encodes a frame whose width is
+  not a multiple of 16 differently from run to run (most likely reading uninitialised padding
+  next to the frame in a long-running process; a fresh process encoding the same frames gives
+  the same bytes every time). Decoded frames of the variants are equally close to the raw frames.
+  Not fixed (Manim's encoder options are not reachable from vidgen; changing the preview size
+  would change every preview): compare renders by their frames before encoding, or at sizes that
+  are multiples of 16. Backlog.
