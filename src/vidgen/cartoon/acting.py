@@ -13,6 +13,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+from vidgen.cartoon.motion import motion_ease
+
 #: Largest head tilt (degrees) when looking up or down at something.
 LOOK_MAX_DEGREES = 20.0
 #: How far the eyes move forward (character units) when looking at something beside the character.
@@ -197,22 +199,25 @@ class PartMove:
     shift: tuple[float, float] = (0.0, 0.0)
 
 
-def gesture_weight(t: float) -> float:
+def gesture_weight(t: float, strength: float = 0.0) -> float:
     """How far into a gesture the parts are at ``t`` (0..1): easing in over
-    :data:`GESTURE_EASE`, held, easing back out (0 at both ends, so it ends in the pose)."""
+    :data:`GESTURE_EASE`, held, easing back out (0 at both ends, so it ends in the pose). With
+    the animation principles' ``strength`` (§69.13) each ease winds up the other way first and
+    passes its end and settles (:func:`~vidgen.cartoon.motion.motion_ease`; the way back is the
+    way in, reversed)."""
     t = min(max(t, 0.0), 1.0)
-    rise = min(1.0, t / GESTURE_EASE, (1.0 - t) / GESTURE_EASE)
-    return rise * rise * (3.0 - 2.0 * rise)
+    return motion_ease(min(1.0, t / GESTURE_EASE, (1.0 - t) / GESTURE_EASE), strength)
 
 
-def gesture_moves(kind: str, t: float, arm: str = "arm_left") -> dict[str, PartMove]:
+def gesture_moves(kind: str, t: float, arm: str = "arm_left", strength: float = 0.0) -> dict[str, PartMove]:
     """The part changes of gesture ``kind`` at ``t`` (0..1). ``point`` and ``wave`` use ``arm``
     (the near arm ``arm_left``, or ``arm_right`` when the character has no left arm: its angles
     are mirrored, as it hangs on the other side), ``shrug`` both arms, ``nod`` and
-    ``shake_head`` the head (and the eyes)."""
+    ``shake_head`` the head (and the eyes). ``strength``: the animation principles' anticipation
+    and overshoot on the arms' ease in and out (:func:`gesture_weight`)."""
     if kind not in GESTURES:
         raise ValueError(f"unknown gesture {kind!r} (gestures: {', '.join(GESTURES)})")
-    w = gesture_weight(t)
+    w = gesture_weight(t, strength)
     sign = 1.0 if arm == "arm_left" else -1.0
     if kind == "point":
         return {arm: PartMove(sign * POINT_DEGREES, w)}

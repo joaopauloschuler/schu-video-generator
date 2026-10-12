@@ -47,6 +47,14 @@ from vidgen.project import Project
 FPS = 30
 
 
+def plain(name: str = "pip") -> Any:
+    """A character moving without the animation principles (``cartoon_motion: none``, Step 80):
+    the plain motion of this step."""
+    c = figure(name)
+    c.motion = "none"
+    return c
+
+
 # ----- walking, entering, leaving (no manim) --------------------------------------------------------
 
 
@@ -131,7 +139,7 @@ def play(anim: Any, frames: int = FPS) -> list[Any]:
 
 
 def test_walk_moves_the_feet_and_ends_in_the_pose() -> None:
-    c = figure().face("left").shift([-3.0, -2.0, 0.0])
+    c = plain().face("left").shift([-3.0, -2.0, 0.0])
     c.set_pose("pointing")
     before = c.state()
     walk = Walk(c, 2.0)
@@ -162,7 +170,7 @@ def test_walk_from_and_to_off_stage() -> None:
 
 
 def test_gesture_and_jump_come_back() -> None:
-    c = figure()
+    c = plain()
     before = c.state()
     wave = Gesture(c, "wave")
     wave.begin()
@@ -204,7 +212,7 @@ class StageFake(FakeScene):
 
 
 def test_walk_to_enter_and_exit_actions() -> None:
-    pip = figure().shift([-4.0, -2.0, 0.0])
+    pip = plain().shift([-4.0, -2.0, 0.0])
     scene = StageFake(pip=pip)
     walk = use("walk_to", to="door")   # the stage's own mark at 0.9 of -8..8: x 6.4
     assert walk.run_time_for(scene, [target("pip", pip)]) == pytest.approx(walk_seconds(10.4))
@@ -248,7 +256,7 @@ def test_gesture_and_jump_actions() -> None:
 def test_runner_uses_the_walk_time_and_plays_follow_with_the_walk() -> None:
     """The phase of a walk lasts its distance over its speed (``run_time:`` wins), and a
     ``follow`` due with it plays in the same phase (it only reads where the character is)."""
-    pip = figure().shift([-4.0, -2.0, 0.0])
+    pip = plain().shift([-4.0, -2.0, 0.0])
     scene = StageFake(pip=pip)
     scene.find_targets = lambda p: [target(p, pip)]
     scene.is_shown = lambda t: True

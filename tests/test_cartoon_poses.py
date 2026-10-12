@@ -188,7 +188,7 @@ def test_blend_and_windows() -> None:
 
 
 def test_pose_change_eases_each_part_along_its_arc() -> None:
-    c = built("default")
+    c = built("default", cartoon_motion="none")   # the plain easing (Step 80 adds overshoot)
     pivot = c.pivot("arm_left")
     hand = c.parts["arm_left"].submobjects[0].submobjects[1]
     reach = np.linalg.norm(hand.get_center() - pivot)

@@ -83,7 +83,9 @@ src/vidgen/
                           # layer offsets and extents, §69.7; no manim), props.py (Prop, draw_prop,
                           # svg_prop: props from primitives or an SVG, §69.8), acting.py (where a
                           # character looks: look_pose, camera_look, §69.11; walk times and cycle,
-                          # entrances and exits, gestures, jumps, §69.12; no manim); still.py also
+                          # entrances and exits, gestures, jumps, §69.12; no manim), motion.py
+                          # (animation principles: anticipation, squash and stretch, overshoot,
+                          # follow-through, cartoon_motion, §69.13; no manim); still.py also
                           # draws the prop gallery
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
@@ -657,6 +659,11 @@ Step 79 (§69.12) adds `Walk`, `Gesture`, `Jump`, `WALK_SPEED`, `GESTURES`, `GES
 `offstage_x`; `Action` gains `run_time_for` and the class attribute `alters_targets` (default
 `True`); `NarratedScene` gains `action_uses`; `Character` gains `character_height` and
 `walked_in` (all compatible).
+Step 80 (§69.13) adds `MOTION_LEVELS`, `MotionSetting`, `walk_motion_seconds`,
+`jump_motion_seconds`; `PoseChange`, `Walk`, `Gesture` and `Jump` gain the keyword `motion=None`;
+`Character` gains the constructor keyword `motion="lively"`, the attribute `motion`, the
+property `motion_strength` and `set_squash`; `character()` gains `motion=None` (all compatible;
+the default `lively` changes how the four animations look, not their end states).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -5249,7 +5256,7 @@ lint, Step 84) reuse it.
   top); none: nothing drawn (the theme's background). `image` with `generate`, or either with
   `background`, is an error. `ground` (0..0.6, default 0.2); `ground_color` (a band from the
   ground line to the bottom edge, named `ground`; default `surface` without a picture, nothing
-  with one; `false`: nothing). `marks` (identifier -> 0..1). `size` (0.45). `idle` (true).
+  with one; `false`: nothing). `marks` (identifier -> 0..1). `size` (0.45). `idle` (true). `cartoon_motion` (none: the video's; §69.13).
   `characters: list[StageCharacter]` (a string is the name): `name: CharacterName`, `at` (mark or
   x), `depth` 0..1, `scale` (0, 3], `facing` `auto | right | left`, `pose`, `expression` (none:
   rest). A name twice or an unknown mark is a params error (`characters[k].at: unknown mark ...`).
@@ -5649,7 +5656,80 @@ new state an option (`- walk_to: pip` + `to: door`; `- gesture: kit` + `to: wave
   another character's is reported (`character 'pip' ends its walk on character 'kit' (60% ...)`),
   a pair that both walked once.
 - **Not done here**: changing depth while walking (`walk_to` keeps the depth); a path or curve
-  (Step 81); anticipation, squash and follow-through (Step 80); foley (Step 86); a single `legs`
+  (Step 81); foley (Step 86) (anticipation, squash and follow-through: §69.13); a single `legs`
   part cannot step leg by leg (the cycle turns and narrows the pair); `enter` teleports a
   character that is on screen to the edge first; an `exit` with a camera that keeps moving can
   end in view (it is parked off stage at its end anyway). Tests: `tests/test_cartoon_moving.py`.
+
+### 69.13 Animation principles built in (Step 80)
+
+Characters move with four principles of cartoon animation: anticipation, squash and stretch,
+overshoot and settle, follow-through. They are pure functions of time in `cartoon/motion.py` (no
+manim) applied inside the existing animations of `cartoon/transition.py` (`PoseChange`, `Walk`,
+`Gesture`, `Jump`; no new animation class), scaled by one setting.
+
+- **Setting**: `cartoon_motion: lively | calm | none` (`config.MotionSetting`, exported) at the
+  top level (`VideoConfig.cartoon_motion`), as a `stage` param and on a character
+  (`CharacterEntry.cartoon_motion`), all default none. The nearest wins:
+  `resolve_motion(character, scene, video)` = the first given, else `DEFAULT_MOTION` `lively`.
+  `character(name, motion=<the scene's>)` resolves the scene's against the video's;
+  `build_character(entry, motion=)` puts the entry's own first. `MOTION_LEVELS` gives the
+  strength: `lively` 1, `calm` 0.4, `none` 0. Every effect is linear in it, and at 0 every
+  function returns the plain motion of §69.3 / §69.12 (no offset, no extra time).
+- **Character** (`cartoon/character.py`): `Character(..., motion="lively")` (an unknown value is
+  a `VidgenError`), the attribute `motion` (read by the animations when they are created; a
+  `motion=` keyword on the animation wins), `motion_strength`, and `set_squash(x, y)`: a scale of
+  the whole figure about its feet, applied in `_screen` before the mirror, outside the poses
+  (`state()` never holds it; the feet stay on the ground; `set_squash()` puts it back; a call
+  with the current values does not redraw).
+- **Phases** (`Phases(before, after)`, `Phases.of(before_s, main_s, after_s)`, `split(t)` →
+  how far into the wind-up, the move and the settle): an animation with the principles has a
+  wind-up before the move and a settle after it.
+- **Anticipation and overshoot** (`motion_ease(u, strength, base=smoothstep)`, a part's or a
+  gesture's progress): the first `ANTICIPATION_SHARE` 0.2 × strength of the time goes back
+  `ANTICIPATION` 0.12 × strength of the move (`-A sin²(πx)`, flat at both ends), the middle is
+  `base`, the last `SETTLE_SHARE` 0.25 × strength passes the end by up to `OVERSHOOT` 0.1 ×
+  strength and comes back a third of that (`settle_wobble(v)`: `sin(πv) sin(2πv) e^(−3v)`
+  normalised to peak 1; 0 and flat at both ends). `PoseChange` eases each part's window with
+  `motion_ease(local, strength, part_rate_func)`; `gesture_weight(t, strength)` (and
+  `gesture_moves(..., strength)`) eases the arms in and out with it (the way out is the way in
+  reversed, so it winds up before going back and passes the pose before stopping); `nod` and
+  `shake_head` keep their own oscillation.
+- **Walk**: `walk_motion_seconds(walk_time, strength)` = the walk's time plus strength ×
+  (`WALK_WIND_UP_SECONDS` 0.25 + `WALK_SETTLE_SECONDS` 0.4) (no walk: 0); `walk_phases`. The
+  feet stand still in the wind-up and the settle; the walk cycle and `walk_progress` run in the
+  move. `walk_accent(t, phases, strength) -> BodyAccent(lean, stretch)`: the wind-up crouches
+  (`WALK_CROUCH` 0.05) and leans back (`WALK_LEAN_DEGREES` 6, body angle about its pivot) as
+  `sin²`, the settle leans on forward (`STOP_LEAN_DEGREES` 6 × `settle_wobble`). `Walk`'s run
+  time default and the actions' `run_time_for` (`walk_to`, `enter`, `exit`) use
+  `walk_motion_seconds` with the character's strength.
+- **Jump**: `jump_motion_seconds(flight, strength)` = flight (`JUMP_SECONDS` 0.6) + strength ×
+  (`JUMP_CROUCH_SECONDS` 0.18 + `JUMP_LAND_SECONDS` 0.3); `jump_phases`. The lift is
+  `jump_lift` of the move's share (0 in the crouch and the landing). `jump_stretch(t, phases,
+  strength)`: the crouch squashes to `−JUMP_SQUASH` 0.22 (`sin²(πx/2)`), the flight stretches by
+  `JUMP_STRETCH` 0.15 × `(1 − 2m)²` (most at take-off and landing, round at the top), the landing
+  squashes fully at touch-down and bounces back (`landing_bounce(v) = (1 − v)² cos(2.5πv)`).
+  `squash_scale(stretch)` = (1 / (1 + stretch), 1 + stretch): the area stays. `JumpAction` gains
+  `run_time_for`.
+- **Follow-through** (arms, head, accessory; a generated character's hair and ears are drawn in
+  its head, §69.1, so they move with it): `follow_through(position, seconds)` = the lagged body
+  speed minus the body speed (character heights per second, the speed by central difference of
+  `position`, the body's distance walked or height jumped as a function of seconds): negative
+  while the body speeds up, positive while it slows down and just after it stops, 0 at a steady
+  speed. The lag is `follow_lag(signal, seconds, lag_seconds=FOLLOW_LAG_SECONDS 0.12)`, a
+  first-order lag (kernel `e^(−age/τ)/τ`, integrated over 40 slices of the last 5 τ with exact
+  slice weights, the signal before 0 taken as at 0), so it is a pure function of time, whatever
+  the frame rate. `follow_angles(forward, up, strength)` turns the parts: both arms
+  `FOLLOW_ARM_DEGREES` 30 per height/s (trailing back, at most `FOLLOW_ARM_LIMIT` 25°), head
+  `−FOLLOW_HEAD_DEGREES` 10 (tips back, at most 8°), accessory `−FOLLOW_ACCESSORY_DEGREES` 18 (at
+  most 12°); `up` raises the arms outwards (as a shrug: `arm_left` +, `arm_right` −; inwards at
+  most `FOLLOW_INWARD_LIMIT` 8°). `end_fade(t)` takes it to 0 over the last `FOLLOW_FADE_SHARE`
+  0.12, so the animation ends exactly in its state. `accented_state(base, lean, turns)` adds the
+  lean and the turns to a state (`transition.py`).
+- **Step 82** (spring physics) replaces the kernel of `follow_lag` with its damped spring (lag,
+  then overshoot and wobble); that function is the only place the lag is computed, so walks and
+  jumps get the spring without other changes.
+- **Not done here**: no principle on a `PoseChange`'s facing switch (it still flips at half);
+  follow-through only on walks and jumps (not on pose changes or gestures); no squash on
+  walking footfalls; anticipation of an `enter` happens off stage (unseen, its time is spent).
+  Tests: `tests/test_cartoon_motion.py`.

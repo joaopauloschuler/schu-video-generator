@@ -4,7 +4,8 @@
 The motion is worked out without manim in :mod:`vidgen.cartoon.acting` (walk times, the walk
 cycle, where an entrance starts and an exit ends, gestures, jumps) and played with the
 :class:`Walk`, :class:`Gesture` and :class:`Jump` animations. A walk lasts its distance over its
-speed (:meth:`Action.run_time_for`), shortened like any action when its beat has less time.
+speed (:meth:`Action.run_time_for`) plus the wind-up and settle of the character's
+``cartoon_motion`` (§69.13), shortened like any action when its beat has less time.
 """
 
 from typing import Annotated, Any, Literal
@@ -32,6 +33,12 @@ def _view(scene: NarratedScene) -> tuple[float, float]:
 
 def _feet_x(character: Character) -> float:
     return float(character.feet()[0])
+
+
+def _walk_time(character: Character, distance: float, speed: float) -> float:
+    """How long ``character`` takes to walk ``distance`` units at ``speed``, with its
+    ``cartoon_motion``'s wind-up and settle."""
+    return walk_motion_seconds(walk_seconds(distance, speed), character.motion_strength)
 
 
 def _ended_walk(scene: NarratedScene, character: Character) -> None:
@@ -75,7 +82,7 @@ class WalkTo(_Moving):
 
     def run_time_for(self, scene: NarratedScene, targets: list[Target]) -> float | None:
         x = _place_x(scene, self.options.to)
-        times = [walk_seconds(x - _feet_x(c), self.options.speed) for c in _characters(scene, targets, "walk_to")]
+        times = [_walk_time(c, x - _feet_x(c), self.options.speed) for c in _characters(scene, targets, "walk_to")]
         return max(times, default=None)
 
     def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
@@ -117,8 +124,11 @@ class Enter(_Moving):
         return enter_path(self.options.side, to_x, _view(scene), character.width / 2)
 
     def run_time_for(self, scene: NarratedScene, targets: list[Target]) -> float | None:
-        paths = [self._path(scene, c) for c in _characters(scene, targets, "enter")]
-        return max((walk_seconds(end - start, self.options.speed) for _, start, end in paths), default=None)
+        times = []
+        for character in _characters(scene, targets, "enter"):
+            _, start, end = self._path(scene, character)
+            times.append(_walk_time(character, end - start, self.options.speed))
+        return max(times, default=None)
 
     def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
         """Put each character just beyond the view's edge and walk it in."""
@@ -151,7 +161,7 @@ class Exit(_Moving):
         times = []
         for character in _characters(scene, targets, "exit"):
             _, end = exit_path(self.options.to, _feet_x(character), _view(scene), character.width / 2)
-            times.append(walk_seconds(end - _feet_x(character), self.options.speed))
+            times.append(_walk_time(character, end - _feet_x(character), self.options.speed))
         return max(times, default=None)
 
     def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
@@ -204,6 +214,10 @@ class JumpAction(_Moving):
 
     def scene_problems(self, scene_cls: type[NarratedScene], params: Any) -> list[tuple[str, str]]:
         return self._target_characters(scene_cls, params)[1]
+
+    def run_time_for(self, scene: NarratedScene, targets: list[Target]) -> float | None:
+        times = [jump_motion_seconds(JUMP_SECONDS, c.motion_strength) for c in _characters(scene, targets, "jump")]
+        return max(times, default=None)
 
     def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
         """A :class:`Jump` on each character."""

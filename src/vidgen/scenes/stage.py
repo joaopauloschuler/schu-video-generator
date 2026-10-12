@@ -237,6 +237,8 @@ class Stage(NarratedScene):
         """Height of a character at depth 0, as a fraction of the frame's shorter side."""
         idle: bool = True
         """false: the characters do not breathe, sway or blink in this scene."""
+        cartoon_motion: MotionSetting | None = None
+        """Animation principles for the characters in this scene (anticipation, squash and stretch, overshoot and settle, follow-through): lively, calm or none; a character's own setting wins; default: the video's (lively)."""
         width: float = Field(1.0, ge=1.0, le=4.0)
         """Width of the stage in frame widths (marks and x positions are fractions of it); wider than 1: the camera pans across it (pan, follow)."""
         camera_at: str | Annotated[float, Field(ge=0.0, le=1.0)] = "centre"
@@ -417,7 +419,7 @@ class Stage(NarratedScene):
                 continue
             member = members[place_at.name]
             facing = facing_towards_centre(place_at.x_fraction) if member.facing == "auto" else member.facing
-            figure = character(member.name, height=place_at.height, facing=facing)
+            figure = character(member.name, height=place_at.height, facing=facing, motion=p.cartoon_motion)
             if member.pose is not None:
                 figure.set_pose(member.pose)
             if member.expression is not None:

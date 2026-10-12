@@ -406,8 +406,8 @@ one.
 - [x] Tests: walk duration from distance and speed, enter / exit end positions (`tests/test_cartoon_moving.py`: 15 without rendering, 1 tiny render)
 
 ### Step 80 — Animation principles built in
-- [ ] Anticipation before a move, squash and stretch on jumps and landings, overshoot and settle on stops, follow-through on arms / ears / hair; one `cartoon_motion: lively | calm | none` setting (per video, scene or character)
-- [ ] Tests: the easing curves (values at fixed times), the setting turns each effect off
+- [x] Anticipation before a move, squash and stretch on jumps and landings, overshoot and settle on stops, follow-through on arms / ears / hair; one `cartoon_motion: lively | calm | none` setting (per video, scene or character) (pure functions in `cartoon/motion.py` applied inside `PoseChange` / `Walk` / `Gesture` / `Jump`, no new animation class; squash is `Character.set_squash` about the feet; follow-through turns arms, head and accessory (a generated character's hair and ears are in its head) on walks and jumps through `follow_lag`, a first-order lag that Step 82's spring replaces; nearest setting wins: character, then stage param, then top level, default `lively`; walks and jumps gain wind-up / settle time; DESIGN §69.13)
+- [x] Tests: the easing curves (values at fixed times), the setting turns each effect off (`tests/test_cartoon_motion.py`: 14 without rendering, 1 tiny render)
 
 ### Step 81 — Keyframes and motion paths in YAML
 - [ ] A small keyframe format for any character, prop or part: `keys: [{t: 0.0, x: .., y: .., rotate: .., scale: ..}, ...]` with `ease:`; `path:` along points or a curve (`move_along: [[x,y], ...]`, smooth)

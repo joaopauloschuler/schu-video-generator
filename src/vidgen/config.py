@@ -332,6 +332,10 @@ class CharacterLook(_Strict):
 
 
 #: Parts a pose sets (DESIGN.md §69.3); the parts of an expression are :data:`ExpressionPart`.
+#: How strongly characters move with the animation principles (anticipation, squash and
+#: stretch, overshoot and settle, follow-through; DESIGN.md §69.13): ``cartoon_motion:``.
+MotionSetting = Literal["lively", "calm", "none"]
+
 PosePart = Literal["body", "legs", "arm_left", "arm_right", "head", "accessory"]
 ExpressionPart = Literal["eyes", "brows", "mouth"]
 
@@ -383,6 +387,8 @@ class CharacterEntry(_Strict):
     """The character's own expressions (eyes, brows, mouth), like poses."""
     idle: bool = True
     """Breathe, sway the head slightly and blink every 2 to 6 s on its own; false: hold still between actions."""
+    cartoon_motion: MotionSetting | None = None
+    """Animation principles for this character (anticipation, squash and stretch, overshoot and settle, follow-through): lively, calm or none; wins over the scene's and the video's; default lively."""
 
 
 class PronunciationEntry(_Strict):
@@ -1354,6 +1360,8 @@ class VideoConfig(_Strict):
     """Image generation for generate: params and `vidgen imagegen`: {provider (openai or openrouter), model, size, quality, resolution, style, negative}."""
     cartoon_style: str | None = Field(default=None, min_length=1)
     """Style words added to every generate: prompt of stage scenes, so a cartoon's backgrounds look alike, e.g. "flat colours, thick outlines, soft shadows"; part of the picture's cache key."""
+    cartoon_motion: MotionSetting | None = None
+    """Animation principles for every character (anticipation, squash and stretch, overshoot and settle, follow-through): lively, calm or none; a stage's or a character's own setting wins; default lively."""
     scenes: list[SceneConfig] = Field(min_length=1)
     """The scenes in order (at least one); scene ids and beat ids must be unique."""
 

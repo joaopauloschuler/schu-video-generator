@@ -7564,3 +7564,83 @@ How to test
   (4, 3 s), `test_introspect test_callout_action` (9, 31 s), `test_actions_coverage
   test_builtin_scenes -k "stage or zoom or follow or pan"` (6, 6 s). A preview `vidgen lint` of a
   two-character stage where pip walks onto kit's mark reported one `walk_overlap` warning.
+
+
+## Step 80 — Animation principles built in
+
+What was built
+- `src/vidgen/cartoon/motion.py` (no manim): the four principles as pure functions of time,
+  scaled by a strength (`MOTION_LEVELS`: lively 1, calm 0.4, none 0; strength 0 gives the plain
+  Step 70 / 79 motion back). `Phases` (wind-up / move / settle shares, `split`), `motion_ease(u,
+  strength, base)` (anticipation dip, `base` easing, overshoot and `settle_wobble`),
+  `walk_motion_seconds`, `walk_phases`, `walk_accent` (crouch and lean back before, lean on past
+  the stop), `jump_motion_seconds`, `jump_phases`, `jump_stretch` (crouch squash, flight stretch,
+  landing squash and `landing_bounce`), `squash_scale` (area kept), `follow_lag` (a first-order
+  lag, the spot for Step 82's spring), `follow_through` (lagged minus actual speed),
+  `follow_angles` (arms, head, accessory), `end_fade`, `resolve_motion`, `motion_strength`.
+- Applied inside the existing animations (no new class): `PoseChange` eases each part with
+  `motion_ease`; `Gesture` through `gesture_weight(t, strength)` / `gesture_moves(..., strength)`;
+  `Walk` gets a wind-up and a settle (feet still), the body accent, follow-through and a crouch
+  squash; `Jump` gets a crouch, squash and stretch, landing bounce and the arms lifting as it
+  falls. Each takes `motion=` (default: the character's). `accented_state` in `transition.py`.
+- `Character(..., motion="lively")`, `motion`, `motion_strength`, `set_squash(x, y)` (whole figure
+  about the feet, outside the state, in `_screen`).
+- Setting `cartoon_motion: lively | calm | none` (`config.MotionSetting`): top level, `stage`
+  param, `characters[]`; nearest wins (character, scene, video, default lively) via
+  `character(name, motion=<scene's>)` and `build_character(entry, motion=)`.
+- Actions: `walk_to` / `enter` / `exit` run times include the wind-up and settle
+  (`_walk_time`); `jump` gains `run_time_for`.
+
+Files touched
+- New: `src/vidgen/cartoon/motion.py`, `tests/test_cartoon_motion.py`.
+- `src/vidgen/cartoon/transition.py`, `cartoon/acting.py`, `cartoon/character.py`, `config.py`,
+  `api.py`, `scenes/moving.py`, `scenes/stage.py`, `data/guide/AGENTS.md` (+ copy `AGENTS.md`:
+  one sentence in the dialogue bullet).
+- Tests updated: `tests/test_cartoon_moving.py` (a `plain()` character with `motion = "none"` for
+  the four tests that check Step 79's exact timing and positions), `tests/test_cartoon_poses.py`
+  (the arc test uses `cartoon_motion: none`).
+- Docs: `docs/CONFIG.md` (top-level, character and stage rows, new "Animation principles
+  (`cartoon_motion`)" under `stage`, walk / jump rows), `DESIGN.md` (§2 tree, §6.4, §69.6, §69.12,
+  new §69.13), `docs/EXTENDING.md`, `docs/gallery/stage.md` (the new param row, as `vidgen
+  gallery` writes it; the sample and media are unchanged), `tasklist.md`.
+
+Public interfaces
+- `vidgen.api` adds `MOTION_LEVELS`, `MotionSetting`, `walk_motion_seconds`,
+  `jump_motion_seconds`. Keyword `motion=None` on `PoseChange`, `Walk`, `Gesture`, `Jump`,
+  `character()`; `Character(motion=)`, `.motion`, `.motion_strength`, `.set_squash`. All
+  compatible, but the default `lively` changes how the four animations look mid-way and makes
+  walks (+0.65 s) and jumps (+0.48 s) longer; end states are unchanged.
+
+Decisions / deviations
+- Default `lively` ("built in"); `none` reproduces Step 79 exactly (tested).
+- One strength scales every effect, so `calm` is the same motion smaller; no per-effect switches.
+- Squash and stretch is a whole-figure scale about the feet (legs included), not a body-part
+  scale: scaling `body` about its pivot would lift the feet off the ground.
+- Follow-through is driven by speed (lagged speed minus speed), not position, so a steady walk
+  shows none, setting off trails and stopping carries on. It turns the arms, head and accessory;
+  a generated character's hair and ears are drawn in its head part, so they move with the head
+  (no separate hair / ear parts exist).
+- The follow-through lag is a first-order lag (no wobble) computed by integration over the last
+  5 lag times, so it is a pure function of time (frame-rate independent); Step 82 swaps the
+  kernel in `follow_lag` for its spring.
+- Searched first: no anticipation / overshoot / squash / lag code existed (`grep -rn
+  "overshoot\|squash\|anticipat\|follow_through" src/vidgen`); easing reuses the existing
+  `part_rate_func` as the base, phases reuse `walk_progress` / `jump_lift` / `walk_cycle`.
+
+Known gaps / TODOs
+- No follow-through on pose changes or gestures; no squash on walking footfalls; a `PoseChange`'s
+  facing still flips at half (no principle on it).
+- An `enter`'s wind-up happens off stage (time spent unseen); an `exit`'s settle too.
+- `vidgen character` does not print `cartoon_motion`; the storyboard shows only frames.
+- Step 82: replace the kernel of `motion.follow_lag` with the spring (lag + overshoot); keep
+  `FOLLOW_LAG_SECONDS`-like tuning there.
+
+How to test
+- `pytest tests/test_cartoon_motion.py` (14 not-render + 1 render at 160x90, ~2 s).
+- Also run (not render): `test_cartoon_moving test_cartoon_acting test_cartoon_poses
+  test_cartoon_idle test_cartoon_character test_cartoon_stage test_cartoon_parallax
+  test_cartoon_props test_cartoon_svg test_cartoon_visemes test_cartoon_generator
+  test_cartoon_style test_api test_docs test_guide test_config test_schema test_actions` (526, 62
+  s) and `test_gallery test_builtin_scenes test_actions_coverage test_extensions test_json_output
+  test_mcp test_cli test_translation test_introspect test_lint` (304, 26 s); render: the cartoon
+  files (6, 3 s), `test_actions_coverage test_builtin_scenes -k stage` (3, 2.5 s).

@@ -55,6 +55,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `stt` | `{provider: faster_whisper}` | speech to text for `vidgen readback` (the narration transcribed and compared with the beat texts): `{provider, model, language, device}`; see [readback](#readback-vidgen-readback) |
 | `imagegen` | `{provider: openai, model: gpt-image-1, size: auto}` | image generation for `generate:` params and `vidgen imagegen`: `{provider (openai \| openrouter), model, size, quality, resolution, style, negative, svg_model}`; see [generated images](#generated-images-imagegen-vidgen-imagegen) |
 | `cartoon_style` | none | style words added to every `generate:` prompt of [`stage`](#generated-backgrounds-cartoon_style) scenes, so a cartoon's backgrounds look alike (`"flat colours, thick outlines, soft shadows"`); part of those pictures' cache key; a variant may change it |
+| `cartoon_motion` | `lively` | how characters move: `lively`, `calm` or `none` ([animation principles](#animation-principles-cartoon_motion)); a stage's or a character's own setting wins |
 | `scenes` | required | the scenes in order, at least one |
 
 ### Output folder (`output_dir`, `--output-dir`)
@@ -999,6 +1000,7 @@ characters:
 | `poses` | `{}` | the character's own poses: name -> part -> settings ([below](#poses-and-expressions)) |
 | `expressions` | `{}` | the character's own expressions, like `poses` |
 | `idle` | `true` | breathe, sway the head slightly and blink every 2 to 6 s on its own ([below](#idle-motion)); `false`: hold still between actions |
+| `cartoon_motion` | none (the scene's, else the video's: `lively`) | this character's [animation principles](#animation-principles-cartoon_motion): `lively`, `calm` or `none`; wins over the scene's and the video's |
 
 The **generator** draws every character from simple shapes (circles, ellipses, rounded
 rectangles, polygons, lines), so each figure is an original drawing:
@@ -3827,6 +3829,7 @@ never leaves the stage.
 | `characters` | list | `[]` | the characters on the stage: a name, or a mapping (below); each at most once |
 | `size` | float | `0.45` | height of a character at depth 0, as a fraction of the frame's shorter side |
 | `idle` | bool | `true` | `false`: no breathing, head sway or blinking in this scene (for every character on it) |
+| `cartoon_motion` | `lively` \| `calm` \| `none` | none (the video's) | the [animation principles](#animation-principles-cartoon_motion) of the characters in this scene; a character's own setting wins |
 | `width` | float 1–4 | `1` | width of the stage in frame widths; wider than 1: the camera pans across it (`pan`, `follow`) |
 | `camera_at` | mark \| x | `centre` | where the camera looks at the start (on a stage wider than the frame) |
 | `layers` | list | `[]` | parallax layers (below), in the order given within their place |
@@ -4036,11 +4039,11 @@ as targets and the new state as an option:
 
 | action | options | |
 |---|---|---|
-| `walk_to` | `to` (required: a mark or an x 0–1 of the stage), `speed` (`2.5`) | walks along the ground to that place, facing the way it goes, legs, arms and body moving in step; it speeds up, walks at `speed` units per second (the frame's shorter side is 8 units; a character is about 3.6 tall at `size: 0.45`) and slows down. It takes as long as the distance needs: about 3.3 s from `left` to `right` of a 16:9 stage (7.1 units). Stays there. |
+| `walk_to` | `to` (required: a mark or an x 0–1 of the stage), `speed` (`2.5`) | walks along the ground to that place, facing the way it goes, legs, arms and body moving in step; it speeds up, walks at `speed` units per second (the frame's shorter side is 8 units; a character is about 3.6 tall at `size: 0.45`) and slows down. It takes as long as the distance needs: about 3.3 s from `left` to `right` of a 16:9 stage (7.1 units), plus the wind-up and settle of [`cartoon_motion`](#animation-principles-cartoon_motion). Stays there. |
 | `enter` | `side` (`left` \| `right`; default: the edge nearer where it goes), `to` (a mark or x; default its own `at`), `speed` | walks in from just beyond that edge of what the camera shows. A character with an `enter` action waits off stage (beyond the stage's edge) from the start of the scene until then. |
 | `exit` | `to` (`left` \| `right`; default: the nearer edge), `speed` | walks out beyond that edge of what the camera shows, then waits off stage (an `enter` brings it back). A camera `follow`ing it stops (and stays). |
 | `gesture` | `to` (required: `point`, `wave`, `shrug`, `nod`, `shake_head`) | the gesture, then back to its pose: `point` raises the near arm forward, `wave` raises it and waves three times, `shrug` raises both arms, `nod` dips the head twice, `shake_head` moves the head (and eyes) side to side twice. 1.2 s (`point`), 1.6 (`wave`), 1.0 (`shrug`), 0.9 (`nod`), 1.1 (`shake_head`). |
-| `jump` | `height` (`0.4`: its own heights, up to 2) | jumps up and lands where it stood (0.6 s). |
+| `jump` | `height` (`0.4`: its own heights, up to 2) | jumps up and lands where it stood (0.6 s in the air; with `cartoon_motion` a crouch before and a squash after, [below](#animation-principles-cartoon_motion)). |
 
 A walk's time comes from its distance and `speed`; `run_time:` sets the time instead (and so the
 speed). An action never makes its beat longer: a walk longer than the time left in the beat is
@@ -4073,6 +4076,47 @@ scenes:
           - {jump: pip}
           - {exit: kit, to: right, at: 0.4}
 ```
+
+#### Animation principles (`cartoon_motion`)
+
+Characters move with four classic principles of cartoon animation, built into the acting and
+moving actions:
+
+- **anticipation**: before a move, a short move the other way. A pose change, `emote`, `turn`,
+  `look_at`, `react` or `gesture` swings each part a little back first; a walk crouches and
+  leans back before the feet move; a jump crouches before take-off.
+- **squash and stretch**: a jump squashes the figure in the crouch, stretches it as it leaves the
+  ground and as it falls (round at the top), squashes it on landing; its width changes the other
+  way, so it keeps its area.
+- **overshoot and settle**: a moving part passes where it stops and comes back (a pointing arm, a
+  gesture's arm going up and coming down); after a walk the body leans on past the stop and
+  straightens; after a landing the figure bounces back a little.
+- **follow-through**: the arms, head and accessory (a hat; a generated character's hair and ears
+  are part of its head) trail when the body sets off and carry on when it stops; in a jump the
+  arms lift as the figure falls.
+
+One setting, `cartoon_motion`, chooses how much: `lively` (the default: all four, fully),
+`calm` (the same, at 0.4 of the amount: for a quiet or serious video) or `none` (the plain
+motion: parts ease straight to their place, nothing squashes). Set it for the whole video
+(top level), for one `stage` scene (param) or for one character (`characters[]`); the nearest
+wins: the character's own, else the scene's, else the video's.
+
+```yaml
+cartoon_motion: calm            # the whole video
+characters:
+  - name: pip
+    cartoon_motion: lively      # pip stays bouncy everywhere
+scenes:
+  - id: office
+    type: stage
+    params:
+      cartoon_motion: none      # this scene: plain motion (pip still lively)
+      characters: [pip, kit]
+```
+
+The wind-up and settle add time: a walk 0.65 s (`lively`; 0.26 s `calm`), a jump 0.48 s
+(0.19 s). Pose changes and gestures keep their time. As for any action, a beat with less time
+left shortens them.
 
 #### Particles
 

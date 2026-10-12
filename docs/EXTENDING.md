@@ -183,7 +183,14 @@ character without a mouth is left alone. `Walk(hero, x)` walks it along the grou
 (`speed=`, units per second; `start_x=` / `park_x=` for an entrance or exit), `Gesture(hero,
 "wave")` (`point`, `wave`, `shrug`, `nod`, `shake_head`) and `Jump(hero, 0.4)` play a motion and
 end in the pose; all three keep lip sync in step, and their timing is the pure functions
-`walk_seconds`, `enter_path`, `exit_path`, `offstage_x` (no manim). The built-in acting and moving
+`walk_seconds`, `enter_path`, `exit_path`, `offstage_x` (no manim). These four animations add
+the animation principles (anticipation, squash and stretch, overshoot and settle,
+follow-through) by the character's `cartoon_motion` setting, `hero.motion` (`lively`, `calm`,
+`none`; `character(name, motion=...)` passes a scene's setting, the character's own wins), or
+their own `motion=` keyword; `Walk` and `Jump` then last longer by a wind-up and settle
+(`walk_motion_seconds(walk_seconds(d), strength)`, `jump_motion_seconds(JUMP_SECONDS, strength)`
+with `MOTION_LEVELS[setting]`). `hero.set_squash(x, y)` scales the whole figure about its feet
+(not part of its state). The built-in acting and moving
 actions (`say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `enter`, `exit`,
 `gesture`, `jump`) work on every target that is a `Character`, so register your characters as
 targets (`self.target(name, hero)`) to let a video's beats act on them.

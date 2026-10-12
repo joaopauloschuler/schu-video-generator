@@ -25,6 +25,7 @@ import numpy as np
 from manim import VGroup, VMobject
 
 from vidgen.cartoon.idle import IdleClock, breath_scale, idle_seed, sway_angle
+from vidgen.cartoon.motion import DEFAULT_MOTION, motion_strength, resolve_motion
 from vidgen.cartoon.poses import KINDS, PoseTable, chosen_shape, find_entry, kind_parts, merged_table
 from vidgen.cartoon.visemes import VISEME_SHAPES, VISEMES, VisemeTrack
 from vidgen.config import CharacterEntry, PartPoseEntry
@@ -171,6 +172,8 @@ class Character(VGroup):
     ``required`` names the parts it must have (default :data:`REQUIRED_PARTS`; an imported SVG
     needs only ``body``, §69.2). ``poses`` / ``expressions`` are the character's own entries
     (name -> part -> :class:`~vidgen.config.PartPoseEntry`), added to the built-in tables (§69.3).
+    ``motion`` is its ``cartoon_motion`` setting (``lively``, ``calm``, ``none``; §69.13), read by
+    the animations of :mod:`vidgen.cartoon.transition`.
 
     ``parts`` maps each part name to its live ``VGroup`` (one child: the shape shown).
     """
@@ -186,8 +189,13 @@ class Character(VGroup):
         required: Iterable[str] = REQUIRED_PARTS,
         poses: PoseTable | None = None,
         expressions: PoseTable | None = None,
+        motion: str = DEFAULT_MOTION,
     ) -> None:
         super().__init__()
+        try:
+            motion_strength(motion)
+        except ValueError as exc:
+            raise VidgenError(f"character '{name}': {exc}") from None
         specs: dict[str, CharacterPart] = {}
         for spec in parts:
             if spec.name in specs:
@@ -199,6 +207,10 @@ class Character(VGroup):
         self.name = name
         self.voice = voice
         self.facing = self._checked_facing(facing)
+        #: The ``cartoon_motion`` setting its animations use (anticipation, squash and stretch,
+        #: overshoot, follow-through; DESIGN.md §69.13).
+        self.motion = motion
+        self._squash = (1.0, 1.0)  # the whole figure's scale about its feet (squash and stretch)
         self._own_entries: dict[str, PoseTable] = {"pose": dict(poses or {}), "expression": dict(expressions or {})}
         self._shapes = {n: {k: v.copy() for k, v in s.shapes.items()} for n, s in specs.items()}
         stroke_factor, stroke_floor = height / REFERENCE_HEIGHT, one_pixel_stroke()
@@ -284,6 +296,20 @@ class Character(VGroup):
         made with, times any Manim ``scale`` since. Its box (``height``) changes with the pose."""
         p0, _, p2 = (np.asarray(p, dtype=float) for p in self._anchor.points[:3])
         return float(np.linalg.norm((p2 - p0)[:2])) / _ANCHOR_SIDE
+
+    @property
+    def motion_strength(self) -> float:
+        """The strength (0..1) of its :attr:`motion` setting."""
+        return motion_strength(self.motion)
+
+    def set_squash(self, x: float = 1.0, y: float = 1.0) -> Character:
+        """Scale the whole figure by ``x``, ``y`` about its feet (squash and stretch, §69.13), on
+        top of the poses: not part of :meth:`state`; ``set_squash()`` puts it back."""
+        squash = (float(x), float(y))
+        if squash == self._squash:
+            return self
+        self._squash = squash
+        return self.refresh()
 
     def feet(self) -> np.ndarray:
         """The point between the feet on screen (the character's origin)."""
@@ -567,13 +593,14 @@ class Character(VGroup):
         return world
 
     def _screen(self) -> np.ndarray:
-        """Character units -> screen: the mirror for ``facing: left``, then the anchor's placement."""
+        """Character units -> screen: the squash about the feet, the mirror for ``facing: left``,
+        then the anchor's placement."""
         p0, p1, p2 = (np.asarray(p, dtype=float) for p in self._anchor.points[:3])
         placement = np.eye(3)
         placement[:2, 0] = (p1 - p0)[:2] / _ANCHOR_SIDE
         placement[:2, 1] = (p2 - p0)[:2] / _ANCHOR_SIDE
         placement[:2, 2] = p0[:2]
-        mirror = np.diag([-1.0 if self.facing == "left" else 1.0, 1.0, 1.0])
+        mirror = np.diag([(-1.0 if self.facing == "left" else 1.0) * self._squash[0], self._squash[1], 1.0])
         return placement @ mirror
 
 
@@ -587,11 +614,14 @@ def build_character(
     height: float = 3.0,
     facing: str = "right",
     root: Path | None = None,
+    motion: str | None = None,
 ) -> Character:
     """The :class:`Character` of a ``characters:`` entry, feet at the origin: its ``look`` drawn
     by the generator with its colours resolved in ``theme`` (default: the current theme), or
     ``look.svg`` (relative to ``root``, default: the active project's folder) split into parts.
-    Its idle motion runs unless the entry says ``idle: false``."""
+    Its idle motion runs unless the entry says ``idle: false``. Its ``cartoon_motion`` is the
+    entry's, else ``motion`` (the scene's or the video's), else ``lively``."""
+    motion = resolve_motion(entry.cartoon_motion, motion)
     if entry.look.svg is not None:
         from vidgen.cartoon.svg_look import SVG_REQUIRED_PARTS, svg_character_parts
 
@@ -602,7 +632,7 @@ def build_character(
         parts = svg_character_parts(root / entry.look.svg, where=f"characters '{entry.name}': {entry.look.svg}")
         built = Character(
             parts, name=entry.name, height=height, facing=facing, voice=entry.voice, required=SVG_REQUIRED_PARTS,
-            poses=entry.poses, expressions=entry.expressions,
+            poses=entry.poses, expressions=entry.expressions, motion=motion,
         )
     else:
         from vidgen.cartoon.generator import generate_parts
@@ -610,20 +640,24 @@ def build_character(
         colors = {part: resolve_color(value, theme) for part, value in entry.colors.model_dump().items()}
         built = Character(
             generate_parts(entry.look, colors), name=entry.name, height=height, facing=facing, voice=entry.voice,
-            poses=entry.poses, expressions=entry.expressions,
+            poses=entry.poses, expressions=entry.expressions, motion=motion,
         )
     return built.start_idle() if entry.idle else built
 
 
-def character(name: str, *, height: float = 3.0, facing: str = "right") -> Character:
+def character(name: str, *, height: float = 3.0, facing: str = "right", motion: str | None = None) -> Character:
     """The character ``name`` of the active project's ``characters:``, ``height`` Manim units
-    tall, feet at the origin. Unknown names raise :class:`VidgenError` with suggestions."""
+    tall, feet at the origin. Unknown names raise :class:`VidgenError` with suggestions. Its
+    ``cartoon_motion`` is its own, else ``motion`` (a scene's), else the video's, else ``lively``."""
     from vidgen.cartoon.cast import find_character
     from vidgen.runtime import current_project, current_theme
 
     project = current_project()
     entry = find_character(project.config, name)
-    return build_character(entry, theme=current_theme(), height=height, facing=facing, root=project.root)
+    return build_character(
+        entry, theme=current_theme(), height=height, facing=facing, root=project.root,
+        motion=resolve_motion(motion, project.config.cartoon_motion),
+    )
 
 
 __all__ = [

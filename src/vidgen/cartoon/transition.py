@@ -10,6 +10,11 @@ move its points along straight lines), and parts start one after another from th
 :class:`Walk`, :class:`Gesture` and :class:`Jump` redraw the character on every frame from its
 state when they begin plus the motion of :mod:`vidgen.cartoon.acting` at that moment, and end in
 that state. Like :class:`PoseChange`, they end a running blink and keep lip sync in step.
+
+All four apply the animation principles of :mod:`vidgen.cartoon.motion` (§69.13) with the
+strength of the character's ``cartoon_motion`` setting (or their own ``motion=``): anticipation
+and overshoot on pose changes and gestures; a wind-up, a settle and follow-through on walks;
+a crouch, squash and stretch and follow-through on jumps. ``none`` plays the plain motion.
 """
 
 from __future__ import annotations
@@ -34,6 +39,20 @@ from vidgen.cartoon.acting import (
     walk_seconds,
 )
 from vidgen.cartoon.character import PART_NAMES, Character, CharacterState, PartPose
+from vidgen.cartoon.motion import (
+    end_fade,
+    follow_angles,
+    follow_through,
+    jump_motion_seconds,
+    jump_phases,
+    jump_stretch,
+    motion_ease,
+    motion_strength,
+    squash_scale,
+    walk_accent,
+    walk_motion_seconds,
+    walk_phases,
+)
 
 
 def blend_poses(start: PartPose, end: PartPose, progress: float) -> PartPose:
@@ -64,6 +83,8 @@ class PoseChange(Animation):
     :meth:`Character.names`), or to ``state``; ``facing`` turns it too (the mirror switches
     halfway). Every changing part eases with ``part_rate_func`` in its own window; parts start
     ``lag_ratio`` apart, body first, then legs, arms, head and face (:data:`PART_NAMES` order).
+    With the character's ``cartoon_motion`` (or ``motion``) each part first moves a little the
+    other way and passes its end and settles (:func:`~vidgen.cartoon.motion.motion_ease`).
     The target is resolved when the animation is created; the start when it begins, which also
     ends a running blink (the idle clock stops while it plays, §69.5). A running lip sync keeps
     following its clock on every frame (§69.4).
@@ -81,6 +102,7 @@ class PoseChange(Animation):
         facing: str | None = None,
         lag_ratio: float = 0.15,
         part_rate_func: Callable[[float], float] = smooth,
+        motion: str | None = None,
         **kwargs,
     ) -> None:
         if state is not None and (pose is not None or expression is not None):
@@ -90,6 +112,7 @@ class PoseChange(Animation):
             target = CharacterState(facing, dict(target.parts))
         self.target = target
         self.part_rate_func = part_rate_func
+        self.strength = motion_strength(motion or character.motion)
         self._start = character.state()
         self._windows: dict[str, tuple[float, float]] = {}
         kwargs.setdefault("rate_func", linear)
@@ -110,7 +133,8 @@ class PoseChange(Animation):
         parts = {}
         for part, (begin, end) in self._windows.items():
             local = min(max((progress - begin) / (end - begin), 0.0), 1.0)
-            parts[part] = blend_poses(self._start.parts[part], self.target.parts[part], self.part_rate_func(local))
+            eased = motion_ease(local, self.strength, self.part_rate_func)
+            parts[part] = blend_poses(self._start.parts[part], self.target.parts[part], eased)
         facing = self.target.facing if progress >= 0.5 else self._start.facing
         self.mobject.set_state(CharacterState(facing, parts))
         self.mobject.sync_mouth()  # Manim pauses the character's updaters: keep lip sync in step
@@ -136,14 +160,28 @@ def walking_state(base: CharacterState, cycle: WalkCycle, facing: str) -> Charac
     return CharacterState(facing, parts)
 
 
+def accented_state(base: CharacterState, lean: float = 0.0, turns: dict[str, float] | None = None) -> CharacterState:
+    """``base`` with the body leaning back ``lean`` degrees and each part of ``turns`` turned by
+    its degrees (follow-through, :func:`~vidgen.cartoon.motion.follow_angles`); parts the
+    character lacks are skipped."""
+    parts = dict(base.parts)
+    for part, degrees in {"body": lean, **(turns or {})}.items():
+        if part in parts and degrees:
+            parts[part] = replace(parts[part], angle=parts[part].angle + degrees)
+    return CharacterState(base.facing, parts)
+
+
 class Walk(Animation):
     """Walk ``character`` along the ground (its feet keep their height) to ``x`` (Manim units),
     facing the way it goes: it speeds up, walks at ``speed`` units per second, slows down and
     stops (:func:`~vidgen.cartoon.acting.walk_progress`), its legs, arms and body moving in step
     with the distance walked (:func:`~vidgen.cartoon.acting.walk_cycle`). ``start_x``: it first
     stands there (an entrance from off stage); ``park_x``: when the walk is over it is moved there
-    (off stage, after an exit). The run time defaults to
-    :func:`~vidgen.cartoon.acting.walk_seconds`; a given one changes the speed.
+    (off stage, after an exit). With the character's ``cartoon_motion`` (or ``motion``) it first
+    crouches and leans back, its arms, head and accessory trail as it sets off and carry on when
+    it stops, and it leans on past the stop and settles (§69.13). The run time defaults to
+    :func:`~vidgen.cartoon.acting.walk_seconds` plus that wind-up and settle
+    (:func:`~vidgen.cartoon.motion.walk_motion_seconds`); a given one changes the speed.
 
     ``self.play(Walk(pip, 3.0))``
     """
@@ -156,11 +194,15 @@ class Walk(Animation):
         start_x: float | None = None,
         park_x: float | None = None,
         speed: float = WALK_SPEED,
+        motion: str | None = None,
         **kwargs,
     ) -> None:
         self.to_x, self.start_x, self.park_x = float(x), start_x, park_x
+        self.strength = motion_strength(motion or character.motion)
         from_x = float(character.feet()[0]) if start_x is None else float(start_x)
-        kwargs.setdefault("run_time", max(walk_seconds(self.to_x - from_x, speed), 1e-3))
+        walk_time = walk_seconds(self.to_x - from_x, speed)
+        self._phases = walk_phases(walk_time, self.strength)
+        kwargs.setdefault("run_time", max(walk_motion_seconds(walk_time, self.strength), 1e-3))
         kwargs.setdefault("rate_func", linear)
         super().__init__(character, **kwargs)
 
@@ -174,14 +216,26 @@ class Walk(Animation):
         distance = self.to_x - float(self._from[0])
         self._facing = self._base.facing if abs(distance) < 1e-9 else ("right" if distance > 0 else "left")
         self._step = STEP_LENGTH * figure.character_height
+        self._heights = abs(distance) / figure.character_height if figure.character_height > 0 else 0.0
         super().begin()
+
+    def _ahead(self, seconds: float) -> float:
+        """How far it has walked (character heights) ``seconds`` into the walk."""
+        return walk_progress(self._phases.split(seconds / self.run_time)[1]) * self._heights
 
     def interpolate_mobject(self, alpha: float) -> None:
         t = self.rate_func(alpha)
         figure = self.mobject
-        walked = walk_progress(t) * (self.to_x - float(self._from[0]))
-        cycle = walk_cycle(abs(walked) / self._step if self._step > 0 else 0.0, walk_amplitude(t))
-        figure.set_state(walking_state(self._base, cycle, self._facing))
+        move = self._phases.split(t)[1]
+        walked = walk_progress(move) * (self.to_x - float(self._from[0]))
+        cycle = walk_cycle(abs(walked) / self._step if self._step > 0 else 0.0, walk_amplitude(move))
+        state = walking_state(self._base, cycle, self._facing)
+        if self.strength > 0:
+            accent = walk_accent(t, self._phases, self.strength)
+            trail = follow_through(self._ahead, t * self.run_time) * end_fade(t)
+            state = accented_state(state, accent.lean, follow_angles(trail, 0.0, self.strength))
+            figure.set_squash(*squash_scale(accent.stretch))
+        figure.set_state(state)
         figure.shift([self._from[0] + walked - figure.feet()[0], self._from[1] - figure.feet()[1], 0.0])
         figure.sync_mouth()  # Manim pauses the character's updaters: keep lip sync in step
 
@@ -195,11 +249,13 @@ class Gesture(Animation):
     """``character`` makes gesture ``kind`` (``point``, ``wave``, ``shrug``, ``nod``,
     ``shake_head``; :func:`~vidgen.cartoon.acting.gesture_moves`) and comes back to its pose.
     ``point`` and ``wave`` use the near arm (``arm_left``; ``arm_right`` when it has no left arm);
-    parts it lacks are skipped. The run time defaults to the gesture's
-    (:data:`~vidgen.cartoon.acting.GESTURE_SECONDS`)."""
+    parts it lacks are skipped. With the character's ``cartoon_motion`` (or ``motion``) the arms
+    wind up and overshoot as they move in and out (§69.13). The run time defaults to the
+    gesture's (:data:`~vidgen.cartoon.acting.GESTURE_SECONDS`)."""
 
-    def __init__(self, character: Character, kind: str, **kwargs) -> None:
+    def __init__(self, character: Character, kind: str, *, motion: str | None = None, **kwargs) -> None:
         self.kind = kind
+        self.strength = motion_strength(motion or character.motion)
         kwargs.setdefault("run_time", GESTURE_SECONDS[kind])
         kwargs.setdefault("rate_func", linear)
         super().__init__(character, **kwargs)
@@ -212,7 +268,7 @@ class Gesture(Animation):
 
     def interpolate_mobject(self, alpha: float) -> None:
         parts = dict(self._base.parts)
-        for part, move in gesture_moves(self.kind, self.rate_func(alpha), self._arm).items():
+        for part, move in gesture_moves(self.kind, self.rate_func(alpha), self._arm, self.strength).items():
             if part not in parts:
                 continue
             pose = parts[part]
@@ -225,25 +281,40 @@ class Gesture(Animation):
 
 class Jump(Animation):
     """``character`` jumps ``height`` character heights up and lands where it stood
-    (:func:`~vidgen.cartoon.acting.jump_lift`); run time :data:`~vidgen.cartoon.acting.JUMP_SECONDS`
-    unless given."""
+    (:func:`~vidgen.cartoon.acting.jump_lift`). With the character's ``cartoon_motion`` (or
+    ``motion``) it crouches first, stretches as it rises and falls, squashes on landing and
+    settles, its arms lifting as it falls (§69.13). Run time
+    :data:`~vidgen.cartoon.acting.JUMP_SECONDS` plus the crouch and landing
+    (:func:`~vidgen.cartoon.motion.jump_motion_seconds`) unless given."""
 
-    def __init__(self, character: Character, height: float = JUMP_HEIGHT, **kwargs) -> None:
+    def __init__(self, character: Character, height: float = JUMP_HEIGHT, *, motion: str | None = None, **kwargs) -> None:
         self.lift = float(height)
-        kwargs.setdefault("run_time", JUMP_SECONDS)
+        self.strength = motion_strength(motion or character.motion)
+        self._phases = jump_phases(JUMP_SECONDS, self.strength)
+        kwargs.setdefault("run_time", jump_motion_seconds(JUMP_SECONDS, self.strength))
         kwargs.setdefault("rate_func", linear)
         super().__init__(character, **kwargs)
 
     def begin(self) -> None:
         self.mobject.end_blink()
         self._from = self.mobject.feet()
+        self._base = self.mobject.state()
         super().begin()
+
+    def _up(self, seconds: float) -> float:
+        """How high it is (character heights) ``seconds`` into the jump."""
+        return jump_lift(self._phases.split(seconds / self.run_time)[1], self.lift)
 
     def interpolate_mobject(self, alpha: float) -> None:
         figure = self.mobject
-        up = jump_lift(self.rate_func(alpha), self.lift) * figure.character_height
+        t = self.rate_func(alpha)
+        if self.strength > 0:
+            rise = follow_through(self._up, t * self.run_time) * end_fade(t)
+            figure.set_squash(*squash_scale(jump_stretch(t, self._phases, self.strength)))
+            figure.set_state(accented_state(self._base, 0.0, follow_angles(0.0, rise, self.strength)))
+        up = jump_lift(self._phases.split(t)[1], self.lift) * figure.character_height
         figure.shift([0.0, self._from[1] + up - figure.feet()[1], 0.0])
         figure.sync_mouth()
 
 
-__all__ = ["Gesture", "Jump", "PoseChange", "Walk", "blend_poses", "part_windows", "walking_state"]
+__all__ = ["Gesture", "Jump", "PoseChange", "Walk", "accented_state", "blend_poses", "part_windows", "walking_state"]

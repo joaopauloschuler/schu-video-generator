@@ -703,7 +703,9 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
   `voice` of who says it; that character's mouth moves with the beat. Listeners `react`, and
   `look_at` the speaker (`docs/CONFIG.md`, "Speaking and acting", has an example). Characters
   move with `walk_to`, `enter` / `exit`, `gesture` and `jump` ("Moving"); a walk takes the time
-  its distance needs, so give it a beat long enough, and end it on a free mark.
+  its distance needs, so give it a beat long enough, and end it on a free mark. Moves have
+  anticipation, squash and stretch, overshoot and follow-through built in; `cartoon_motion:
+  calm` (or `none`) at the top level, on a stage or on a character tones them down.
 - `until: <later beat id>` keeps a highlight / dim / callout on screen; without it a callout
   disappears at the next beat and a zoom comes back by the beat's end.
 - A callout without a target points at an `area: [x, y, w, h]` of the frame (fractions).

@@ -125,6 +125,8 @@ from vidgen.cartoon.acting import (  # noqa: E402
     offstage_x,
     walk_seconds,
 )
+from vidgen.cartoon.motion import MOTION_LEVELS, jump_motion_seconds, walk_motion_seconds  # noqa: E402
+from vidgen.config import MotionSetting  # noqa: E402
 from vidgen.cartoon.props import PROP_HEIGHTS, PROP_KINDS, PROP_LIFTS, SVG_PROP_HEIGHT, Prop, draw_prop, svg_prop  # noqa: E402
 from vidgen.cartoon.stage import (  # noqa: E402
     DEFAULT_FACTORS,
@@ -383,6 +385,10 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "nearer_side",
     "offstage_x",
     "walk_seconds",
+    "MOTION_LEVELS",
+    "MotionSetting",
+    "jump_motion_seconds",
+    "walk_motion_seconds",
     "MARKS",
     "StageItem",
     "StagePlacement",
