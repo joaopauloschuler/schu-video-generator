@@ -246,6 +246,7 @@ def render_scene(
         configure_manim(project, preview, theme.background, media_dir, scene_id, progress)
         scene = cls(spec, project, theme, audio=audio, capture=capture)
         scene.carried_in = carried_in
+        scene.is_preview = preview
         layer = scene.overlay_layer
         if layer is not None and scene.overlay_head:  # a push / wipe moves the first frames (§50)
             layer.split_head(scene.overlay_head, scene_overlay_path(project, preview, scene_id))

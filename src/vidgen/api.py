@@ -124,6 +124,8 @@ from vidgen.cartoon.stage import (  # noqa: E402
     stage_layout,
 )
 from vidgen.camera import view_center_within  # noqa: E402
+from vidgen.particles import MAX_PARTICLES, PARTICLE_KINDS, particle_count, particle_seeds, particle_states  # noqa: E402
+from vidgen.particle_field import ParticleField, ParticleKindName, ParticleSettings, particle_field  # noqa: E402
 from vidgen.scene import CharacterName  # noqa: E402
 
 
@@ -365,6 +367,15 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "draw_prop",
     "svg_prop",
     "view_center_within",
+    "PARTICLE_KINDS",
+    "MAX_PARTICLES",
+    "ParticleField",
+    "ParticleKindName",
+    "ParticleSettings",
+    "particle_count",
+    "particle_field",
+    "particle_seeds",
+    "particle_states",
     "Field",
     "field_validator",
     "model_validator",

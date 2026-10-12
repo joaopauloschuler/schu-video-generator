@@ -7245,3 +7245,81 @@ How to test
   test_actions test_extensions test_json_output test_mcp test_cli test_translation
   test_cartoon_svg test_vector_images` (384); render: the cartoon files above and
   `test_introspect` (7), `test_builtin_scenes -k stage` (4).
+
+
+## Step 76 — Particles
+
+What was built
+- `src/vidgen/particles.py` (no manim): `PARTICLE_KINDS` (rain, snow, sparkles, dust, confetti,
+  smoke, bubbles), `KINDS` (shape, count per frame, size, fall / rise, drift, sway, spin, twinkle,
+  grow, opacity, default colours), `particle_seeds(kind, count, seed, colors)` (numpy
+  `default_rng([seed, kind index])`), `particle_states(seeds, t, width, height)` (pure: positions
+  as area fractions, wrapped, edge-faded; rain tilted, confetti spinning / tumbling, sparkles
+  twinkling, smoke growing and thinning), `particle_count(kind, density, area_share, preview=)`
+  (capped at `MAX_PARTICLES` 300, `PREVIEW_SHARE` 0.5 at preview, at least 1), `check_area`.
+- `src/vidgen/particle_field.py`: `ParticleField(VGroup)` (one VMobject per particle; a time-based
+  updater calls `draw_at(scene time)` over the camera's current view; never suspended, so it
+  moves during fades; fades in over 0.5 s; `fade_out_animation()` fades it out moving and removes
+  it), `ParticleSettings` (density, area, color, seed), `ParticleKindName`, `particle_field(scene,
+  kind, settings)`, `scene_view`, `particle_colors`.
+- `particles` beat action (`scenes/particles_action.py`): `- particles: snow` or `kind:`; until the
+  next beat by default, `until`, `keep: true`; `run_time` = fade out. Works on every scene type.
+- `stage` param `particles: [kind | {kind, density, area, color, seed}]` for the whole scene;
+  `Stage.particles`.
+- `NarratedScene.is_preview` (set by `render_scene` in the worker).
+- `helpers.fade_out` uses a mobject's own `fade_out_animation` when it has one (so `clear_all`
+  fades a field properly); `ActionRunner._resolve` resolves no targets when `scene_targets` is
+  `False`.
+- Layout dump: a field is one object of kind `particles` named after its kind; lint `describe`
+  -> `particles 'snow'`; `off_frame` skips it.
+
+Files touched
+- New: `src/vidgen/particles.py`, `src/vidgen/particle_field.py`,
+  `src/vidgen/scenes/particles_action.py`, `tests/test_particles.py`.
+- `src/vidgen/api.py`, `scene.py`, `render/worker.py`, `helpers.py`, `actions.py`,
+  `introspect.py`, `lint/layout_rules.py`, `scenes/__init__.py`, `scenes/stage.py`,
+  `data/guide/AGENTS.md` (+ copy `AGENTS.md`: actions table row, stage chooser row, troubleshooting
+  list).
+- Tests updated for a new built-in action: `tests/test_actions.py` (action name lists).
+- Docs: `docs/CONFIG.md` (stage `particles` row, "Particles" subsection, actions table and
+  `action` key, layout `kind` row, `off_frame` row), `DESIGN.md` (§2 tree, §6.4, new §69.9),
+  `docs/EXTENDING.md`, `tasklist.md`.
+
+Public interfaces
+- `vidgen.api` adds `PARTICLE_KINDS`, `MAX_PARTICLES`, `particle_count`, `particle_seeds`,
+  `particle_states`, `ParticleField`, `ParticleKindName`, `ParticleSettings`, `particle_field`.
+  `NarratedScene.is_preview` (default `False`). New action `particles`; stage param `particles`;
+  layout kind `particles`.
+
+Decisions / deviations
+- Searched first: no particle or confetti code in `src/` (only `_looping_particles` in the
+  cookbook example files, which users copy; not reusable library code). So the step adds the model
+  and reuses the action machinery (like `callout`) instead of overlays: overlays are composited per
+  distinct state with two whole-frame cameras (§41), which particles changing on every frame would
+  make two extra renders per frame, and overlays cannot start at a beat's `at`.
+- Particles work on every scene type through the action; for a whole scene of a type other than
+  `stage`, `keep: true` on the first beat. Only `stage` has a scene-level param.
+- Particles follow the camera's view (screen space), drawn in front of everything (`z_index` one
+  above what is on screen when they start); no "behind the characters" option.
+- Their clock is the scene's `renderer.time`, so positions at a frame are the pure function of the
+  time since the field started, whatever the number of updater calls.
+- `color` is `ThemeColor | list[ThemeColor]` like the stage's `background`, so a bad token gives
+  two validate lines (one per accepted form), as there.
+
+Known gaps / TODOs
+- No `place: behind`, no wind / speed option, rain does not stop at a stage's ground line.
+- `covered_text` may report dense particles over text (it measures pixels); no particle-specific
+  lint rule.
+- `docs/gallery/stage.md` (generated) still lacks Step 74–76's params (needs `vidgen gallery
+  --types stage`).
+
+How to test
+- `pytest tests/test_particles.py` (19 not-render + 2 render at 160x90, ~2 s).
+- Also run (not render): `test_api test_actions test_actions_coverage test_builtin_scenes
+  test_schema test_introspect test_lint test_docs test_guide test_extensions test_json_output
+  test_mcp test_cli test_cartoon_stage test_cartoon_props test_cartoon_parallax
+  test_callout_action test_sfx test_gallery test_translation` (593 passed, 74 s); render:
+  `test_cartoon_stage test_cartoon_props test_particles` (5), `test_introspect
+  test_callout_action` (9, 31 s). A `vidgen render --preview --no-audio --frames` of a one-scene
+  `title` project with `- particles: confetti` drew 45 particles (90 at final) and `vidgen lint`
+  found nothing.

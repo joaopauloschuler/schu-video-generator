@@ -194,8 +194,12 @@ how large to draw it. Props: `draw_prop(kind, height=, theme=, main=, detail=, f
 of `PROP_KINDS` (`table`, `tree`, `house`, ...) and `svg_prop(path, height=, name=)` an SVG file
 (through `load_vector`), both a `Prop` with `feet()` like a character's, so a `StageItem(name,
 "prop", at, depth, PROP_HEIGHTS[kind], lift)` places it; the layout dump reports it as kind `prop`.
+Particles: `particle_field(self, "snow", ParticleSettings(density=2))` builds a `ParticleField`
+for your scene (fewer at preview quality, `self.is_preview`) that moves on its own once added
+(`self.add(field)`) and fades out with `fade_out(field)`; `particle_states(particle_seeds(kind,
+count, seed), t)` gives the seeded positions without drawing anything.
 DESIGN.md §69 has the model, §69.3 the poses, §69.4 lip sync, §69.5 idle motion, §69.6 the
-stage, §69.7 layers and the camera, §69.8 props.
+stage, §69.7 layers and the camera, §69.8 props, §69.9 particles.
 
 Params can nest: use another `SceneParams` class as a field type (also in lists). Theme tokens
 are checked inside nested models too, and `vidgen list-scenes` prints the nested fields. A nested
@@ -964,7 +968,10 @@ and implements `cue(self, scene, time)` instead of `apply`: the runner calls it 
 starts with the scene time the use is due (`at`, on a frame), whatever the scene animates then;
 with `scene_targets = False` its `target` names something other than a scene target (checked by
 your `problems()`, not against the scene's targets). The built-in `sfx` action
-(`src/vidgen/scenes/sfx_action.py`) is both: `- sfx: pop` cues `scene.sfx("pop", time)`.
+(`src/vidgen/scenes/sfx_action.py`) is both: `- sfx: pop` cues `scene.sfx("pop", time)`. The
+built-in `particles` action (`src/vidgen/scenes/particles_action.py`) also has `scene_targets =
+False` (`- particles: snow`), but animates: its `apply` adds a mobject that moves on its own and
+returns no animation.
 
 **The camera.** `NarratedScene` is a Manim `MovingCameraScene`: `self.camera.frame` can be
 moved and scaled (`self.camera.frame.animate.set_width(4).move_to(dot)`). Every scene starts

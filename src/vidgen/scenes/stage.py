@@ -1,6 +1,7 @@
 """``stage``: a cartoon set (a picture, a generated picture or a colour / gradient) with a ground
 line, named marks and the video's characters standing on them (DESIGN.md §69.6), parallax
-layers that move by their factor when the camera moves (§69.7) and props (§69.8)."""
+layers that move by their factor when the camera moves (§69.7), props (§69.8) and particles
+(§69.9)."""
 
 import math
 import re
@@ -114,6 +115,20 @@ class StageProp(SceneParams):
         return PROP_LIFTS.get(self.prop or "", 0.0)
 
 
+class StageParticles(ParticleSettings, SceneParams):
+    """Particles over the whole scene (rain, snow...). A plain string is the kind."""
+
+    also_accepts: ClassVar[tuple[type, ...]] = (str,)
+
+    kind: ParticleKindName
+    """rain, snow, sparkles, dust, confetti, smoke or bubbles."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _kind_only(cls, data: Any) -> Any:
+        return {"kind": data} if isinstance(data, str) else data
+
+
 class LayerShape(SceneParams):
     """A filled shape of a layer, placed as the layer is seen with the camera at its start."""
 
@@ -180,6 +195,7 @@ class Stage(NarratedScene):
     actions); ``width`` makes the stage wider than the frame, for the camera to pan across.
     ``props`` (a table, a tree, a house... or an SVG file) stand on marks like the characters and
     sort with them by depth.
+    ``particles`` (rain, snow, confetti...) move over the whole scene.
 
     Action targets: each character and each prop by its name.
     """
@@ -219,6 +235,8 @@ class Stage(NarratedScene):
         """Parallax layers: {place: background | middle | foreground, factor, image | shapes}."""
         props: list[StageProp] = []
         """Props: a built-in prop's name, or {prop | svg, name, at, depth, scale, lift, facing, color, detail, recolor}."""
+        particles: list[StageParticles] = []
+        """Particles over the whole scene, in front of everything: a kind (rain, snow, sparkles, dust, confetti, smoke, bubbles) or {kind, density, area, color, seed}; for one beat use the particles action."""
 
         @model_validator(mode="after")
         def _check(self) -> SceneParams:
@@ -384,6 +402,9 @@ class Stage(NarratedScene):
         def entrance() -> list:
             return [FadeIn(part) for part in backdrop] + [a for t in targets for a in self.entrance(t)] + [FadeIn(m) for m in in_front]
 
+        #: the particle fields over the stage, in the order given (DESIGN.md §69.9)
+        self.particles: list[ParticleField] = [particle_field(self, item.kind, item) for item in p.particles]
+        self.add(*self.particles)
         self.reveal([entrance], fraction=0.6, cap=1.0)
         self.finish()
 

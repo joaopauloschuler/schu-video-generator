@@ -224,9 +224,13 @@ class Fade(Animation):
 
 def fade_out(mobject: Mobject, **kwargs: Any) -> Animation:
     """A ``FadeOut``: :class:`Fade` for vector mobjects (no copies), Manim's for others
-    (images, clips)."""
+    (images, clips); a mobject with its own ``fade_out_animation(**kwargs)`` (a particle field,
+    which keeps moving while it fades) builds it."""
     from manim import FadeOut
 
+    own = getattr(mobject, "fade_out_animation", None)
+    if callable(own):
+        return own(**kwargs)
     if all(isinstance(m, VMobject) or type(m) in (Group, Mobject) for m in mobject.get_family()):
         return Fade(mobject, out=True, **kwargs)
     return FadeOut(mobject, **kwargs)

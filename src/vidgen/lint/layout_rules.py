@@ -75,8 +75,8 @@ def has_letters_or_digits(obj: dict[str, Any]) -> bool:
 
 
 def describe(obj: dict[str, Any]) -> str:
-    """A short human label: ``text 'Hello world'``, ``icon 'cpu'``, ``character 'pip'``, ``prop 'tree'`` or
-    ``shape Rectangle 'Group[0]/Rectangle[1]'``."""
+    """A short human label: ``text 'Hello world'``, ``icon 'cpu'``, ``character 'pip'``, ``prop 'tree'``,
+    ``particles 'snow'`` or ``shape Rectangle 'Group[0]/Rectangle[1]'``."""
     if is_text(obj):
         text = " / ".join(line.strip() for line in str(obj.get("text", "")).splitlines() if line.strip())
         if len(text) > 40:
@@ -84,7 +84,7 @@ def describe(obj: dict[str, Any]) -> str:
         return f"{obj['kind']} '{text}'"
     if obj["kind"] == "icon":
         return f"icon '{obj.get('icon')}'"
-    if obj["kind"] in ("character", "prop"):
+    if obj["kind"] in ("character", "prop", "particles"):
         return f"{obj['kind']} '{obj.get('name')}'"
     return f"{obj['kind']} {obj['class']} '{obj.get('name') or obj['path']}'"
 
@@ -115,12 +115,14 @@ def _is_ancestor(path: str, of: str) -> bool:
 @rule("off_frame", default="error")
 def off_frame(ctx: StillContext, settings: OffFrameRule) -> Iterator[Issue]:
     """An object is cut off by the frame edge (not checked while the camera is zoomed in or
-    moved away from the frame's centre)."""
+    moved away from the frame's centre; particles cross the edges on purpose)."""
     if ctx.camera_moved:
         return
     width, height = ctx.width, ctx.height
     tolerance = settings.tolerance * ctx.short_side
     for obj in ctx.objects:
+        if obj["kind"] == "particles":
+            continue  # particles cross the edges on purpose (rain falling out of the frame)
         x0, y0, x1, y1 = _bbox(obj)
         if x1 <= 0 or y1 <= 0 or x0 >= width or y0 >= height:
             continue  # wholly outside: not seen at all (e.g. waiting to slide in)

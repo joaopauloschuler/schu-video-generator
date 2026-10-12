@@ -1,0 +1,70 @@
+"""The ``particles`` beat action (DESIGN.md §69.9): rain, snow, sparkles, dust, confetti, smoke or
+bubbles over any scene type from ``at`` of a beat, written against ``vidgen.api`` only, like
+project actions. The ``stage`` scene's ``particles`` param shows the same fields for the whole
+scene."""
+
+import difflib
+from typing import Any
+
+from vidgen.api import *
+
+
+@action("particles")
+class Particles(Action):
+    """Rain, snow, sparkles, dust, confetti, smoke or bubbles over the scene from `at` of the
+    beat: `- particles: snow`. They fade out when the next beat starts (`until: <beat>`: when
+    that beat starts; `keep: true`: at the end of the scene); `run_time` is the fade out. Works
+    on every scene type; seeded, so every render is the same. Options: density, area [x, y, w,
+    h] of the visible frame from its top-left corner, color (one or a list), seed."""
+
+    class Options(ParticleSettings, ActionOptions):
+        kind: ParticleKindName | None = None
+        """The particles, when not written as `- particles: KIND`: rain, snow, sparkles, dust, confetti, smoke or bubbles."""
+        keep: bool = False
+        """true: they stay to the end of the scene."""
+
+    run_time = 0.6
+    reversible = True
+    until_next_beat = True
+    needs_target = False
+    needs_visible = False
+    scene_targets = False
+
+    def kind(self) -> str:
+        """The kind: ``kind``, else the action's single target."""
+        names = self.config.targets()
+        return self.options.kind or (names[0] if len(names) == 1 else "")
+
+    def problems(self) -> list[tuple[str, str]]:
+        """One kind, given once and known; ``keep`` and ``until`` not both."""
+        names = self.config.targets()
+        o = self.options
+        if o.kind is not None and names:
+            return [("kind", "the kind is given twice: write `- particles: KIND` or `kind: KIND`")]
+        if len(names) > 1:
+            return [("target", "one kind per particles action (add an action per kind)")]
+        if o.kind is None and not names:
+            return [("target", f"which particles? write `- particles: KIND` ({', '.join(PARTICLE_KINDS)})")]
+        found: list[tuple[str, str]] = []
+        if o.kind is None and names[0] not in PARTICLE_KINDS:
+            close = difflib.get_close_matches(names[0], PARTICLE_KINDS, n=1)
+            hint = f"; did you mean '{close[0]}'?" if close else ""
+            found.append(("target", f"unknown particles '{names[0]}'{hint} (kinds: {', '.join(PARTICLE_KINDS)})"))
+        if o.keep and self.config.until is not None:
+            found.append(("keep", "keep: stays to the scene's end, until: goes at a beat; give one of them"))
+        return found
+
+    def default_until(self, later: Any) -> str | None:
+        """The next beat, unless ``keep``."""
+        return None if self.options.keep else super().default_until(later)
+
+    def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
+        """Start the field (it fades itself in, so there is nothing to play)."""
+        self.field = particle_field(scene, self.kind(), self.options)
+        scene.add(self.field)
+        return []
+
+    def revert(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
+        """Fade the field out (it keeps moving meanwhile)."""
+        field = getattr(self, "field", None)
+        return [fade_out(field)] if field is not None and field in scene.mobjects else []

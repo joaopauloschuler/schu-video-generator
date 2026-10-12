@@ -292,6 +292,9 @@ class NarratedScene(MovingCameraScene):
         self._sounds: SoundLibrary | None = None
         self._camera_follow: Callable[[], float] | None = None  # the x the camera follows (follow_with_camera)
         self._camera_listeners: list[Callable[[], None]] = []
+        #: Whether the scene renders at preview quality (set by the render worker); scenes may
+        #: draw less then, e.g. fewer particles.
+        self.is_preview = False
         super().__init__(**scene_kwargs)
         self.capture = capture
         if capture is not None:

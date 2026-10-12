@@ -488,8 +488,11 @@ class ActionRunner:
         return due
 
     def _resolve(self, use: ActionUse) -> list[Target]:
-        """The registered targets the use's patterns select (in registration order)."""
+        """The registered targets the use's patterns select (in registration order); none when
+        its ``target`` names something else (:attr:`Action.scene_targets` ``False``)."""
         found: list[Target] = []
+        if not use.kind.cls.scene_targets:
+            return found
         for pattern in use.config.targets():
             found += [t for t in resolve_targets(self.scene, pattern, use.location) if t not in found]
         return found

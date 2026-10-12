@@ -387,9 +387,9 @@ one.
 - [x] Tests: each prop builds; a prop gallery still for the docs (`tests/test_cartoon_props.py`; `still.write_props_png` -> `docs/gallery/media/props.png`, 20 KB, shown in CONFIG.md "Props")
 
 ### Step 76 — Particles
-- [ ] `particles: rain | snow | sparkles | dust | confetti | smoke | bubbles` for a scene or a beat, with density, area and colour; seeded so renders are repeatable
-- [ ] Particle count capped for render speed; preview quality uses fewer
-- [ ] Tests: seeded positions, the cap
+- [x] `particles: rain | snow | sparkles | dust | confetti | smoke | bubbles` for a scene or a beat, with density, area and colour; seeded so renders are repeatable (`particles.py` pure model, `particle_field.py` `ParticleField`; a `particles` beat action on every scene type (`- particles: snow`, gone at the next beat, `until` / `keep: true`) and a `stage` `particles` param for the whole scene; drawn over the camera's view; no particle code existed to reuse; DESIGN §69.9)
+- [x] Particle count capped for render speed; preview quality uses fewer (`MAX_PARTICLES` 300 per field, half at preview via `NarratedScene.is_preview`, set by the worker)
+- [x] Tests: seeded positions, the cap (`tests/test_particles.py`: 19 without rendering, 2 tiny renders)
 
 ### Step 77 — Shared style for generated backgrounds
 - [ ] `cartoon_style:` (top level) appended to every `generate:` prompt of `stage` scenes (e.g. "flat colours, thick outlines, soft shadows"), part of the image cache key; a variant may change it

@@ -90,6 +90,8 @@ src/vidgen/
   runtime.py              # "current project/theme" context used by helpers and extensions
   scene.py                # NarratedScene base class + narrate()
   camera.py               # camera views kept inside bounds (zoom, pan, follow, a wide stage; §69.7; no manim)
+  particles.py            # particle kinds, count cap, seeded positions over time (§69.9; no manim)
+  particle_field.py       # ParticleField: draws the particles over the camera's view, shared options (§69.9)
   capture.py              # frame capture: stills at beat ends / N per beat (see §13)
   introspect.py           # layout dump of the captured frames: objects, px boxes, sizes (§15)
   activity.py             # activity file: beat timings, play log, per-frame motion signal (§17)
@@ -150,6 +152,7 @@ src/vidgen/
                           # the built-in beat actions reveal/dim/highlight/zoom/transform, §26-27,
                           # pan/follow, §69.7;
                           # callout_action.py: the callout beat action, §44; sfx_action.py: sfx, §47;
+                          # particles_action.py: particles, §69.9;
                           # overlays.py: the built-in overlays lower_third/watermark, §41;
                           # progress.py: progress_bar/chapter_indicator, §42; captions.py: captions, §43;
                           # stage.py: the stage scene type, §69.6)
@@ -634,6 +637,9 @@ uses only `vidgen.api`, like every built-in).
 Step 74 (§69.7) adds `DEFAULT_FACTORS`, `LAYER_PLACES`, `layer_transform`, `layer_half_extent`
 and `view_center_within`; `NarratedScene` gains `camera_bounds`, `camera_place`,
 `follow_with_camera`, `camera_following`, `add_camera_listener`; `Action` gains `scene_problems`.
+Step 76 (§69.9) adds `PARTICLE_KINDS`, `MAX_PARTICLES`, `particle_count`, `particle_seeds`,
+`particle_states`, `ParticleField`, `ParticleSettings`, `ParticleKindName`, `particle_field`, and
+compatibly the attribute `NarratedScene.is_preview`.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -5382,3 +5388,64 @@ They are placed by the same `stage_layout` as the characters and sort with them 
   table needs the table's height worked out by hand); props do not move or animate (Step 79's
   motion, Step 76's particles). An SVG prop outside `assets/` is not in the scene fingerprint.
   Tests: `tests/test_cartoon_props.py`.
+
+### 69.9 Particles (Step 76)
+
+Rain, snow, sparkles, dust, confetti, smoke and bubbles: a field of small shapes that falls,
+drifts, spins or rises over a scene. On a `stage` for the whole scene (`particles` param); on any
+scene type from a beat (the `particles` beat action). Nothing like it existed before (the
+cookbook's `_looping_particles` is an example file, not library code), so the step adds the model
+and reuses the action machinery rather than overlays.
+
+- **Model** (`particles.py`, no manim): `PARTICLE_KINDS = rain, snow, sparkles, dust, confetti,
+  smoke, bubbles`; `KINDS` (kind -> `ParticleKind`: shape `streak | dot | star | chip | ring`,
+  `count` per whole frame at density 1, size range, `fall` (negative: rises), speed range,
+  `drift` (rain's slant, or a random one for dust), sway amplitude / Hz, `spin`, `twinkle`,
+  `grow`, opacity, default colours). Sizes and speeds are fractions of the frame's shorter side
+  (per second). `particle_seeds(kind, count, seed, colors)` draws each particle's start from
+  `numpy.random.default_rng([seed, kind index])` once; `particle_states(seeds, t, width, height)`
+  is a pure function of the time: positions are fractions of the area (`y` from the top, like a
+  callout's area), wrapped into 0..1 (a particle leaving one edge comes back at the other), faded
+  within `EDGE_FADE` 0.06 of the area's edges; rain is tilted along its fall, confetti spins and
+  tumbles (`flip`, a width factor), sparkles twinkle (`sin²`), smoke grows by `grow` and thins out
+  as it rises. `particle_count(kind, density, area_share, preview=)` = the kind's count × density
+  × the area's share of the frame, at most `MAX_PARTICLES` 300, at preview quality
+  `PREVIEW_SHARE` 0.5 of that (rounded up), at least 1. `check_area` checks `[x, y, w, h]`.
+- **Drawing** (`particle_field.py`): `ParticleField(VGroup)` holds one `VMobject` per particle
+  with the unit shape's points; `draw_at(now)` sets every particle's points (unit points scaled,
+  flipped, rotated, moved) and fill / stroke alpha from `particle_states` at `now - start`, over
+  the part of the scene the camera shows (`scene_view`: the `camera.frame`), sizes scaled with the
+  view, so particles stay on screen and the same size through a `zoom`, `pan` or `follow`. Its
+  clock is the scene's `renderer.time`, so the look at a frame does not depend on how often the
+  updater ran. A time-based updater calls `draw_at` (a wait with a field draws every frame);
+  `suspend_updating` is a no-op, so an animation of the field (the outro's fade) never freezes
+  it. Fade in: `FADE_IN` 0.5 s from its start; fade out: `fade_out_animation()` (`_FieldFadeOut`,
+  a remover that takes `level` to 0 while the particles keep moving). `helpers.fade_out` uses a
+  mobject's own `fade_out_animation` when it has one, so `clear_all` / `finish()` fade fields that
+  way. `particle_field(scene, kind, settings)` builds a field for a running scene (count from
+  `scene.is_preview`, colours resolved with the theme, `z_index` one above everything on screen).
+  `ParticleSettings` (a pydantic model): `density` (0, 4], `area`, `color` (one or a list; each
+  particle picks one by its seed), `seed`.
+- **Preview quality**: `NarratedScene.is_preview` (default `False`) is set by the render worker
+  (`render_scene`) before the scene renders; preview and final renders live in separate build
+  folders, so it needs no fingerprint entry.
+- **The `particles` action** (`scenes/particles_action.py`; run_time 0.6 = the fade out,
+  reversible, `until_next_beat`, `needs_target = False`, `needs_visible = False`, `scene_targets =
+  False`): `- particles: snow` or `kind:`; `Options(ParticleSettings, ActionOptions)` + `kind`,
+  `keep`. `apply` adds the field and returns no animation (it fades itself in); `revert` fades it
+  out. `problems()`: kind given twice, more than one, none, unknown (did-you-mean), `keep` with
+  `until`. The runner (`ActionRunner._resolve`) now resolves no targets for actions with
+  `scene_targets = False` (until now only the non-animating `sfx` had it). Works on every scene
+  type; particles for a whole scene of any type: `keep: true` on the first beat.
+- **Stage** (§69.6): `particles: list[StageParticles]` (`ParticleSettings` + `kind`; a string is
+  the kind); the fields are made before the entrance step (they fade in on their own) and drawn in
+  front of everything, foreground layers included; `Stage.particles` (list of `ParticleField`).
+- **Layout dump / lint**: `introspect` reports a field as one object of kind `particles` named
+  after its kind; `describe` gives `particles 'snow'`; `off_frame` skips it (particles cross the
+  edges on purpose). Other rules see it like any shape group (`covered_text` measures its pixels).
+- **Why not an overlay**: overlays are composited per distinct state with two whole-frame Manim
+  cameras (§41); particles change on every frame, so that would cost two extra full renders per
+  frame, and overlays cannot start at a beat's `at`.
+- **Not done here**: a `place: behind` (particles between the backdrop and the characters); wind
+  or speed options; particles reacting to the stage (rain stopping at the ground line). Tests:
+  `tests/test_particles.py`.
