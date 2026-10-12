@@ -1,6 +1,9 @@
 """``stage``: a cartoon set (a picture, a generated picture or a colour / gradient) with a ground
-line, named marks and the video's characters standing on them (DESIGN.md §69.6)."""
+line, named marks and the video's characters standing on them (DESIGN.md §69.6), and parallax
+layers that move by their factor when the camera moves (§69.7)."""
 
+import math
+from dataclasses import dataclass
 from typing import Annotated, Any, ClassVar, Literal
 
 import numpy as np
@@ -11,6 +14,10 @@ from .image import check_image, is_vector, load_image
 
 #: Ground band colour on a colour background when ``ground_color`` is not given.
 DEFAULT_GROUND_COLOR = "surface"
+#: Corners drawn per hill of a ``hills`` layer shape.
+HILL_POINTS = 16
+
+Identifier = Annotated[str, Field(pattern=r"^[A-Za-z0-9_]+$")]
 
 
 class StageCharacter(SceneParams):
@@ -39,6 +46,60 @@ class StageCharacter(SceneParams):
         return {"name": data} if isinstance(data, str) else data
 
 
+class LayerShape(SceneParams):
+    """A filled shape of a layer, placed as the layer is seen with the camera at its start."""
+
+    shape: Literal["rect", "ellipse", "triangle", "hills"]
+    """rect, ellipse, triangle, or hills: a row of rounded hills across the whole layer (x is not used)."""
+    x: float = Field(0.5, ge=0.0, le=1.0)
+    """Its middle: an x from 0 (left edge) to 1 (right edge) of the stage."""
+    y: float = Field(0.0, ge=0.0, le=1.0)
+    """Its bottom, as a fraction of the frame height above the bottom edge (hills: their foot; they are filled down from there)."""
+    width: float = Field(0.3, gt=0.0, le=4.0)
+    """Its width as a fraction of the frame's shorter side (hills: the width of one hill)."""
+    height: float = Field(0.2, gt=0.0, le=2.0)
+    """Its height as a fraction of the frame's shorter side."""
+    color: ThemeColor = "secondary"
+    """Fill colour (a theme token or #hex)."""
+
+
+class StageLayer(SceneParams):
+    """A picture or shapes drawn behind the ground (background, middle) or in front of the
+    characters (foreground), moving by its parallax factor when the camera moves."""
+
+    name: Identifier | None = None
+    """Its name in the layout dump; default <place>_layer (then _2, _3...)."""
+    place: Literal["background", "middle", "foreground"] = "background"
+    """background and middle are drawn behind the ground band (in that order), foreground in front of the characters."""
+    factor: float | None = Field(None, ge=0.0, le=3.0)
+    """How far it moves for a camera move of one unit: 1 = with the stage and its characters, 0 = fixed on screen; default background 0.3, middle 0.6, foreground 1.4."""
+    image: str | None = None
+    """A picture relative to the project folder (a PNG with transparency, or an SVG), as wide as the layer, standing on bottom."""
+    bottom: float = Field(0.0, ge=0.0, le=1.0)
+    """With image: the height of its bottom edge above the frame's bottom edge, as a fraction of the frame height."""
+    shapes: list[LayerShape] = []
+    """Instead of image: filled shapes, e.g. [{shape: hills, y: 0.2, height: 0.15, color: secondary}]."""
+
+    @model_validator(mode="after")
+    def _one_kind(self) -> "StageLayer":
+        if (self.image is None) == (not self.shapes):
+            raise ValueError("a layer has either image (a file) or shapes, one of the two")
+        return self
+
+    def resolved_factor(self) -> float:
+        """``factor``, else the default of its place (:data:`DEFAULT_FACTORS`)."""
+        return DEFAULT_FACTORS[self.place] if self.factor is None else self.factor
+
+
+@dataclass
+class _Parallax:
+    """A layer on screen: its mobject, factor and every member's points at the camera's home."""
+
+    mobject: Mobject
+    factor: float
+    home: list[tuple[Mobject, np.ndarray]]
+
+
 @scene("stage")
 class Stage(NarratedScene):
     """A cartoon set: a background (``image`` file, ``generate:`` picture, or a theme colour or
@@ -46,7 +107,9 @@ class Stage(NarratedScene):
 
     Beat 1 fades the set and the characters in; later beats hold the picture while the characters
     breathe and blink (``idle: false`` keeps them still). Characters further back (``depth``) are
-    smaller, higher up and drawn behind the ones in front.
+    smaller, higher up and drawn behind the ones in front. ``layers`` (pictures or shapes) move
+    by their parallax factor when the camera moves (the ``zoom``, ``pan`` and ``follow``
+    actions); ``width`` makes the stage wider than the frame, for the camera to pan across.
 
     Action targets: each character by its name.
     """
@@ -78,6 +141,12 @@ class Stage(NarratedScene):
         """Height of a character at depth 0, as a fraction of the frame's shorter side."""
         idle: bool = True
         """false: the characters do not breathe, sway or blink in this scene."""
+        width: float = Field(1.0, ge=1.0, le=4.0)
+        """Width of the stage in frame widths (marks and x positions are fractions of it); wider than 1: the camera pans across it (pan, follow)."""
+        camera_at: str | Annotated[float, Field(ge=0.0, le=1.0)] = "centre"
+        """Where the camera looks at the start, on a stage wider than the frame: a mark or an x from 0 to 1 of the stage."""
+        layers: list[StageLayer] = []
+        """Parallax layers: {place: background | middle | foreground, factor, image | shapes}."""
 
         @model_validator(mode="after")
         def _check(self) -> SceneParams:
@@ -96,7 +165,29 @@ class Stage(NarratedScene):
                     mark_x(member.at, self.marks)
                 except ValueError as exc:
                     raise ValueError(f"characters[{k}].at: {exc}") from None
+            try:
+                mark_x(self.camera_at, self.marks)
+            except ValueError as exc:
+                raise ValueError(f"camera_at: {exc}") from None
+            names = self.layer_names()
+            for k, name in enumerate(names):
+                if name in names[:k]:
+                    raise ValueError(f"layer name '{name}' is used twice (layers[{k}])")
             return self
+
+        def layer_names(self) -> list[str]:
+            """Each layer's name: its own, else ``<place>_layer`` numbered from the second
+            unnamed layer of a place on (``middle_layer``, ``middle_layer_2``)."""
+            names: list[str] = []
+            count: dict[str, int] = {}
+            for layer in self.layers:
+                if layer.name is not None:
+                    names.append(layer.name)
+                    continue
+                count[layer.place] = count.get(layer.place, 0) + 1
+                n = count[layer.place]
+                names.append(f"{layer.place}_layer" + (f"_{n}" if n > 1 else ""))
+            return names
 
         def has_picture(self) -> bool:
             """Whether the background is a picture (``image`` or ``generate``)."""
@@ -111,6 +202,9 @@ class Stage(NarratedScene):
         problems = super().validate_project(params, project)
         if params.image is not None:
             problems += check_image(project, params.image, "image")
+        for k, layer in enumerate(params.layers):
+            if layer.image is not None:
+                problems += check_image(project, layer.image, f"layers[{k}].image")
         for k, member in enumerate(params.characters):
             for kind in ("pose", "expression"):
                 name = getattr(member, kind)
@@ -119,11 +213,40 @@ class Stage(NarratedScene):
                     problems.append(f"characters[{k}].{kind}: {problem}")
         return problems
 
+    @classmethod
+    def camera_place(cls, params: Any, place: str | float) -> float:
+        """A mark of the stage (its own too) or an x from 0 to 1."""
+        return mark_x(place, params.marks)
+
+    def camera_bounds(self) -> tuple[float, float, float, float]:
+        """The stage: ``width`` frames wide, the frame's height."""
+        half = self.stage_width / 2
+        return (-half, half, -self.frame_height / 2, self.frame_height / 2)
+
+    @property
+    def stage_width(self) -> float:
+        """The stage's width in Manim units."""
+        return self.params.width * self.frame_width
+
     def construct(self) -> None:
         p = self.params
-        backdrop = self._backdrop()
+        frame = self.camera.frame
+        start_x = (mark_x(p.camera_at, p.marks) - 0.5) * self.stage_width
+        frame.move_to([*view_center_within(self.camera_bounds(), (start_x, 0.0), frame.width, frame.height), 0.0])
+        layers = self._layers()
+        #: the layers by name, in the order given (DESIGN.md §69.7)
+        self.layers: dict[str, Mobject] = dict(zip(p.layer_names(), layers))
+        behind = [m for layer, m in zip(p.layers, layers) if layer.place != "foreground"]
+        in_front = [m for layer, m in zip(p.layers, layers) if layer.place == "foreground"]
+        backdrop = self._backdrop(behind)
         placements = stage_layout(
-            p.items(), marks=p.marks, ground=p.ground, size=p.size, frame_width=self.frame_width, frame_height=self.frame_height
+            p.items(),
+            marks=p.marks,
+            ground=p.ground,
+            size=p.size,
+            frame_width=self.frame_width,
+            frame_height=self.frame_height,
+            stage_width=self.stage_width,
         )
         members = {m.name: m for m in p.characters}
         # the characters on the stage by name, back to front (for actions; DESIGN.md §69.6)
@@ -144,17 +267,18 @@ class Stage(NarratedScene):
         targets = [self.target(name, figure) for name, figure in self.cast.items()]
 
         def entrance() -> list:
-            return [FadeIn(part) for part in backdrop] + [a for t in targets for a in self.entrance(t)]
+            return [FadeIn(part) for part in backdrop] + [a for t in targets for a in self.entrance(t)] + [FadeIn(m) for m in in_front]
 
         self.reveal([entrance], fraction=0.6, cap=1.0)
         self.finish()
 
-    def _backdrop(self) -> list[Mobject]:
+    def _backdrop(self, layers: list[Mobject]) -> list[Mobject]:
         """The set behind the characters, back to front: the picture (cover) or the colour /
-        gradient (named ``background``), then the ground band (``ground``). Empty when the stage
-        shows the theme's background and no ground band."""
+        gradient (named ``background``), the background and middle ``layers``, then the ground
+        band (``ground``). Empty when the stage shows the theme's background, no layers and no
+        ground band."""
         p = self.params
-        fw, fh = self.frame_width, self.frame_height
+        fw, fh = self.stage_width, self.frame_height
         parts: list[Mobject] = []
         if p.has_picture():
             parts.append(self._picture())
@@ -165,6 +289,7 @@ class Stage(NarratedScene):
             sky.set_sheen_direction(DOWN)  # a gradient runs from the first colour at the top
             sky.name = "background"
             parts.append(sky)
+        parts += layers
         ground_color = p.ground_color
         if ground_color is None and not p.has_picture():
             ground_color = DEFAULT_GROUND_COLOR
@@ -178,20 +303,101 @@ class Stage(NarratedScene):
         return parts
 
     def _picture(self) -> Mobject:
-        """The background picture, scaled to cover the frame and centred."""
+        """The background picture, scaled to cover the stage and centred."""
         p = self.params
         if p.generate is not None:  # the stored picture, or a placeholder card until it is made
             source = generated_image(self.project, p.generate, self.theme)
+            picture = self._load_picture(source)
         else:
-            problems = check_image(self.project, p.image, "image")
-            if problems:
-                raise VidgenError(f"scene '{self.spec.id}': {problems[0]}")
-            source = self.project.asset(p.image)
-        if is_vector(source):
-            picture: Mobject = load_vector(source, theme=self.theme, where=f"scene '{self.spec.id}' ({source.name})")
-        else:
-            picture = load_image(source)
+            picture = self._file_picture(p.image, "image")
         aspect = picture.width / picture.height
-        picture.scale_to_fit_width(max(self.frame_width, self.frame_height * aspect)).move_to(ORIGIN)
+        picture.scale_to_fit_width(max(self.stage_width, self.frame_height * aspect)).move_to(ORIGIN)
         picture.name = "background"
         return picture
+
+    def _file_picture(self, path: str, key: str) -> Mobject:
+        """The picture file ``path`` of the param ``key`` (raster or SVG), unscaled."""
+        problems = check_image(self.project, path, key)
+        if problems:
+            raise VidgenError(f"scene '{self.spec.id}': {problems[0]}")
+        return self._load_picture(self.project.asset(path))
+
+    def _load_picture(self, source: Any) -> Mobject:
+        if is_vector(source):
+            return load_vector(source, theme=self.theme, where=f"scene '{self.spec.id}' ({source.name})")
+        return load_image(source)
+
+    # ----- parallax layers (DESIGN.md §69.7) -----------------------------------------------------
+
+    def _layers(self) -> list[Mobject]:
+        """Each layer's mobject (named after it), drawn for the camera's home view (the stage's
+        centre, zoom 1) and moved for the camera as it is now; a listener moves the layers whose
+        factor is not 1 on every frame."""
+        p = self.params
+        made: list[Mobject] = []
+        moving: list[_Parallax] = []
+        for k, (layer, name) in enumerate(zip(p.layers, p.layer_names())):
+            factor = layer.resolved_factor()
+            half_w, half_h = layer_half_extent(factor, stage_width=self.stage_width, frame_width=self.frame_width, frame_height=self.frame_height)
+            mob = self._layer_picture(layer, k, half_w) if layer.image is not None else self._layer_shapes(layer, half_w, half_h)
+            mob.name = name
+            made.append(mob)
+            if abs(factor - 1.0) > 1e-9:
+                moving.append(_Parallax(mob, factor, [(m, m.points.copy()) for m in mob.get_family() if len(m.points)]))
+        if moving:
+            self._parallax = moving
+            self._move_layers()
+            self.add_camera_listener(self._move_layers)
+        return made
+
+    def _move_layers(self) -> None:
+        """Put every moving layer where its factor shows it for the camera now (from its points at
+        the camera's home, so animations of the layer, e.g. its fade-in, cannot shift it)."""
+        frame = self.camera.frame
+        center = frame.get_center()[:2]
+        zoom = self.frame_width / frame.width
+        for layer in self._parallax:
+            scale, (dx, dy) = layer_transform(layer.factor, center, zoom)
+            shift = np.array([dx, dy, 0.0])
+            for member, home in layer.home:
+                member.points = home * scale + shift
+
+    def _layer_picture(self, layer: StageLayer, k: int, half_width: float) -> Mobject:
+        """A layer's picture: as wide as the layer, its bottom edge at ``bottom``."""
+        picture = self._file_picture(layer.image, f"layers[{k}].image")
+        picture.scale_to_fit_width(2 * half_width)
+        picture.move_to([0.0, (layer.bottom - 0.5) * self.frame_height + picture.height / 2, 0.0])
+        return picture
+
+    def _layer_shapes(self, layer: StageLayer, half_width: float, half_height: float) -> Mobject:
+        """A layer's shapes (``hills`` run across the whole layer, filled down to its bottom)."""
+        short_side = min(self.frame_width, self.frame_height)
+        shapes = VGroup()
+        for item in layer.shapes:
+            width, height = item.width * short_side, item.height * short_side
+            x = (item.x - 0.5) * self.stage_width
+            bottom = (item.y - 0.5) * self.frame_height
+            if item.shape == "hills":
+                mob: VMobject = Polygon(*hill_outline(half_width, bottom, -half_height, width, height), stroke_width=0)
+            elif item.shape == "rect":
+                mob = Rectangle(width=width, height=height, stroke_width=0).move_to([x, bottom + height / 2, 0.0])
+            elif item.shape == "ellipse":
+                mob = Ellipse(width=width, height=height, stroke_width=0).move_to([x, bottom + height / 2, 0.0])
+            else:
+                mob = Polygon([x - width / 2, bottom, 0.0], [x + width / 2, bottom, 0.0], [x, bottom + height, 0.0], stroke_width=0)
+            mob.set_fill(resolve_color(item.color, self.theme), opacity=1.0)
+            shapes.add(mob)
+        return shapes
+
+
+def hill_outline(half_width: float, foot: float, low: float, hill_width: float, hill_height: float) -> list[list[float]]:
+    """Corners of a row of rounded hills from ``-half_width`` to ``half_width``: each hill
+    ``hill_width`` wide and ``hill_height`` above ``foot``, the row filled down to ``low``."""
+    count = max(1, math.ceil(2 * half_width / hill_width))
+    span = 2 * half_width / count
+    corners = [[-half_width, min(low, foot), 0.0]]
+    for i in range(count * HILL_POINTS + 1):
+        u = i / HILL_POINTS
+        corners.append([-half_width + u * span, foot + hill_height * math.sin(math.pi * (u % 1.0)), 0.0])
+    corners.append([half_width, min(low, foot), 0.0])
+    return corners

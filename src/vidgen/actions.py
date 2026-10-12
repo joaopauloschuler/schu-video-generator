@@ -164,6 +164,12 @@ class Action:
         ``until``...), as ``(key, message)``; reported by ``vidgen validate``. Default: none."""
         return []
 
+    def scene_problems(self, scene_cls: type[NarratedScene], params: Any) -> list[tuple[str, str]]:
+        """Problems of this use in a scene of type ``scene_cls`` with validated ``params`` (``pan``:
+        a place the scene does not know), as ``(key, message)``; reported by ``vidgen validate``.
+        Default: none."""
+        return []
+
     def provides(self) -> list[str]:
         """Target names this use registers when it is applied (with :meth:`NarratedScene.target
         <vidgen.scene.NarratedScene.target>`), so that actions after it may name them. Default:
@@ -328,6 +334,8 @@ def scene_actions(
                 problems.append((f"{where}.target", f"action '{act.action}' needs a target"))
             instance = kind.cls(options, act)
             problems += [(f"{where}.{key}", message) for key, message in instance.problems()]
+            if params is not None:
+                problems += [(f"{where}.{key}", message) for key, message in instance.scene_problems(cls, params)]
             checked = [("target", p) for p in act.targets()] if kind.cls.scene_targets else []
             for option in kind.cls.target_options:
                 value = getattr(options, option)

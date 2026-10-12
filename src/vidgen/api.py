@@ -110,7 +110,19 @@ from vidgen.cartoon.character import PART_NAMES, Character, CharacterPart, Chara
 from vidgen.cartoon.transition import PoseChange  # noqa: E402
 from vidgen.cartoon.visemes import VISEMES, VisemeCue, VisemeTrack  # noqa: E402
 from vidgen.cartoon.cast import pose_name_problem  # noqa: E402
-from vidgen.cartoon.stage import MARKS, StageItem, StagePlacement, facing_towards_centre, mark_x, stage_layout  # noqa: E402
+from vidgen.cartoon.stage import (  # noqa: E402
+    DEFAULT_FACTORS,
+    LAYER_PLACES,
+    MARKS,
+    StageItem,
+    StagePlacement,
+    facing_towards_centre,
+    layer_half_extent,
+    layer_transform,
+    mark_x,
+    stage_layout,
+)
+from vidgen.camera import view_center_within  # noqa: E402
 from vidgen.scene import CharacterName  # noqa: E402
 
 
@@ -340,6 +352,11 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "facing_towards_centre",
     "mark_x",
     "stage_layout",
+    "DEFAULT_FACTORS",
+    "LAYER_PLACES",
+    "layer_half_extent",
+    "layer_transform",
+    "view_center_within",
     "Field",
     "field_validator",
     "model_validator",

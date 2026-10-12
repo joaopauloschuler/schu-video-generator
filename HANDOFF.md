@@ -7111,3 +7111,71 @@ How to test
   test_imagegen test_api test_schema test_mcp test_cli test_json_output test_overlays
   test_review2/3/4 test_robustness` and the other cartoon files; render: `test_builtin_scenes -k
   "stage or image"`, `test_actions_coverage -k stage`, `test_gallery`, `test_introspect`.
+
+
+## Step 74 — Parallax layers and camera on a stage
+
+What was built
+- `cartoon/stage.py` (no manim): `layer_transform(factor, camera_center, zoom) -> (scale, (dx,
+  dy))` (a layer drawn for the home view, shown moved by `factor` × the camera's move and
+  magnified `zoom ** factor`), `layer_half_extent(factor, stage_width=, frame_width=,
+  frame_height=, max_zoom=8)` (how large to draw a layer so no view inside the stage shows its
+  edge), `LAYER_PLACES`, `DEFAULT_FACTORS` (background 0.3, middle 0.6, foreground 1.4),
+  `MAX_ZOOM`; `stage_layout(..., stage_width=)`.
+- `src/vidgen/camera.py` (no manim): `view_center_within(bounds, center, width, height)`.
+- `NarratedScene`: `camera_bounds()` (the frame), classmethod `camera_place(params, place)`,
+  `follow_with_camera(x_of)`, `camera_following`, `add_camera_listener(cb)`; one scene updater
+  `_camera_step` (follow, then listeners) and, while it runs, `get_moving_mobjects` returns every
+  mobject (Manim's static-frame cache would otherwise draw the set for the old camera).
+- `Action.scene_problems(scene_cls, params)` (called by `scene_actions` with valid params).
+- Actions (`scenes/actions.py`): `pan` (`to`: a mark or x, or a target; reversible with
+  `until`; ends a follow), `follow` (one target; pans to it, then follows its feet x; `until`
+  stops it). `zoom` clamps to `camera_bounds` and reverts to the view before it (was: the whole
+  frame). Helpers `camera_view`, `move_camera_back`.
+- `stage` params: `width` (1–4 frames), `camera_at`, `layers: [{name, place, factor, image |
+  shapes, bottom}]`, shapes `rect | ellipse | triangle | hills` (`hill_outline`). Draw order:
+  picture / colour, background, middle layers, ground band, characters, foreground layers.
+  `Stage.layers` (name -> mobject); layers move from their home points on every frame.
+- Lint: `StillContext.camera_moved`; `off_frame` / `safe_area` skip stills with a moved camera.
+
+Files touched
+- New: `src/vidgen/camera.py`, `tests/test_cartoon_parallax.py`.
+- `src/vidgen/cartoon/stage.py`, `scenes/stage.py`, `scenes/actions.py`, `scenes/__init__.py`
+  (docstring), `scene.py`, `actions.py`, `api.py`, `lint/rules.py`, `lint/layout_rules.py`,
+  `data/guide/AGENTS.md` (+ copy `AGENTS.md`).
+- Tests updated: `tests/test_actions.py` (action name lists), `tests/test_actions_coverage.py`
+  (the zoom fakes gain `camera_bounds`).
+- Docs: `docs/CONFIG.md` (stage layers / camera, `layers[]` table, a wide-stage example, `pan` /
+  `follow` rows, `until` / `run_time`, lint rows), `DESIGN.md` (§2 tree, §6.4, §69.6 note, new
+  §69.7), `docs/EXTENDING.md`, `tasklist.md`.
+
+Public interfaces
+- `vidgen.api` adds `DEFAULT_FACTORS`, `LAYER_PLACES`, `layer_transform`, `layer_half_extent`,
+  `view_center_within`. New actions `pan`, `follow`. `NarratedScene` and `Action` methods above.
+
+Decisions / deviations
+- The camera moves are beat actions (like `zoom`), generic for every scene type; marks reach
+  `pan` through `camera_place`, checked at validate time by the new `scene_problems` hook.
+- The backdrop picture / colour and ground band stay at factor 1 (part of the stage, as in Step
+  73); layers are extra. Layer x positions are where the layer shows with the camera at the
+  stage's centre.
+- Layers move from stored home points (not by deltas), so a fade-in of a layer cannot shift it.
+- One scene updater (not mobject updaters on the frame): Manim suspends a `MoveCamera`'s frame
+  updaters, and mobject updaters would run before the follow, one frame late.
+- Searched before adding: camera moves reuse `MoveCamera`; zoom's inline clamp became
+  `view_center_within`; no parallax / follow code existed.
+
+Known gaps / TODOs
+- Follow tracks x only; a zoom on another character during a follow stays on the followed one.
+- An image layer's bottom stays at `bottom`: a near layer zoomed at the stage's bottom can show a
+  sliver under it. No vertical pan; layers are not action targets.
+- Walking (Step 79) works with `follow` as is (it reads `feet()` each frame).
+
+How to test
+- `pytest tests/test_cartoon_parallax.py` (49 not-render + 1 render at 160x90, ~4 s).
+- Also run (not render): `test_cartoon_stage test_actions test_actions_coverage test_api
+  test_docs test_guide test_schema test_lint test_builtin_scenes test_extensions test_json_output
+  test_mcp test_cli test_introspect test_gallery test_cartoon_character test_cartoon_idle
+  test_callout_action test_sfx`; render: `test_actions_coverage -k "zoom or stage"`,
+  `test_callout_action -k zoom`, `test_overlays -k zoom`, `test_cartoon_stage`,
+  `test_introspect`, `test_builtin_scenes -k stage`.

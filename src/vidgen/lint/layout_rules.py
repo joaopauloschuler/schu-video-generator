@@ -114,8 +114,9 @@ def _is_ancestor(path: str, of: str) -> bool:
 
 @rule("off_frame", default="error")
 def off_frame(ctx: StillContext, settings: OffFrameRule) -> Iterator[Issue]:
-    """An object is cut off by the frame edge (not checked while the camera is zoomed in)."""
-    if ctx.zoomed:
+    """An object is cut off by the frame edge (not checked while the camera is zoomed in or
+    moved away from the frame's centre)."""
+    if ctx.camera_moved:
         return
     width, height = ctx.width, ctx.height
     tolerance = settings.tolerance * ctx.short_side
@@ -150,9 +151,9 @@ def off_frame(ctx: StillContext, settings: OffFrameRule) -> Iterator[Issue]:
 @rule("safe_area")
 def safe_area(ctx: StillContext, settings: SafeAreaRule) -> Iterator[Issue]:
     """Text lies outside the safe area (the scene's margins), though inside the frame (not
-    checked while the camera is zoomed in; overlays place themselves, e.g. a watermark in the
-    margin, and are not checked)."""
-    if ctx.zoomed:
+    checked while the camera is zoomed in or moved; overlays place themselves, e.g. a watermark
+    in the margin, and are not checked)."""
+    if ctx.camera_moved:
         return
     sx0, sy0, sx1, sy1 = ctx.layout["safe_area"]
     tolerance = settings.tolerance * ctx.short_side

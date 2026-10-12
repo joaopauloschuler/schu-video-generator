@@ -378,8 +378,8 @@ one.
 - [x] Tests: placement, depth order, a tiny render test with an image background (`tests/test_cartoon_stage.py`)
 
 ### Step 74 — Parallax layers and camera on a stage
-- [ ] `layers:` background / middle / foreground, each an image or shapes, with a parallax factor; camera `pan`, `zoom`, `follow: <character>` move the layers by their factors
-- [ ] Tests: layer offsets for a given camera move (no render), one tiny render
+- [x] `layers:` background / middle / foreground, each an image or shapes, with a parallax factor; camera `pan`, `zoom`, `follow: <character>` move the layers by their factors (`layer_transform` / `layer_half_extent` in `cartoon/stage.py`, no manim; shapes `rect ellipse triangle hills`; stage `width` (up to 4 frames) and `camera_at`; `pan` / `follow` are beat actions next to `zoom`, all three reuse `MoveCamera` and stay inside `NarratedScene.camera_bounds` (`camera.py`); `zoom` now comes back to the view before it; DESIGN §69.7)
+- [x] Tests: layer offsets for a given camera move (no render), one tiny render (`tests/test_cartoon_parallax.py`)
 
 ### Step 75 — Props
 - [ ] A set of colourful filled props drawn from primitives (table, chair, tree, bush, house, door, lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup), themed colours, placed by mark or position like characters

@@ -3799,6 +3799,17 @@ and is drawn at 0.55 of its size; characters further back are drawn behind the o
 is the same in 16:9 and 9:16) times its own `scale`. Facing `auto` turns each character towards the
 middle, so two characters on either side face each other.
 
+**Layers and the camera.** `layers` add pictures or shapes in front of the background that move
+by a **parallax factor** when the camera moves: `1` moves with the stage and its characters, `0`
+stays fixed on screen, between them is further away (moves less, and is magnified less in a
+zoom), above 1 is nearer (moves more). Each layer has a `place`: `background` and `middle` are
+drawn behind the ground band (in that order), `foreground` in front of the characters; default
+factors `0.3`, `0.6` and `1.4`. A stage `width` of more than 1 (frame widths) gives the camera
+room to pan: marks and x positions are then fractions of the whole stage, the picture or colour
+and the ground band cover all of it, and `camera_at` says where the camera looks at the start.
+The camera moves with the beat actions [`pan`, `follow` and `zoom`](#beat-actions); the view
+never leaves the stage.
+
 | param | type | default | |
 |---|---|---|---|
 | `image` | str | none | background picture relative to the project folder (png, jpg, svg, ...) |
@@ -3810,6 +3821,9 @@ middle, so two characters on either side face each other.
 | `characters` | list | `[]` | the characters on the stage: a name, or a mapping (below); each at most once |
 | `size` | float | `0.45` | height of a character at depth 0, as a fraction of the frame's shorter side |
 | `idle` | bool | `true` | `false`: no breathing, head sway or blinking in this scene (for every character on it) |
+| `width` | float 1–4 | `1` | width of the stage in frame widths; wider than 1: the camera pans across it (`pan`, `follow`) |
+| `camera_at` | mark \| x | `centre` | where the camera looks at the start (on a stage wider than the frame) |
+| `layers` | list | `[]` | parallax layers (below), in the order given within their place |
 
 | key (`characters[]`) | default | |
 |---|---|---|
@@ -3821,11 +3835,29 @@ middle, so two characters on either side face each other.
 | `pose` | none | the [pose](#poses-and-expressions) it starts in (`waving`, its own `bow`, ...); none: at rest |
 | `expression` | none | the [expression](#poses-and-expressions) it starts with (`happy`, ...); none: at rest |
 
+| key (`layers[]`) | default | |
+|---|---|---|
+| `name` | `<place>_layer` | its name in the layout dump (`middle_layer`, then `middle_layer_2`, ...); each name once |
+| `place` | `background` | `background`, `middle` (both behind the ground band) or `foreground` (in front of the characters) |
+| `factor` | by `place` | 0–3: how far it moves for a camera move that moves the stage by one; `0.3` / `0.6` / `1.4` |
+| `image` | none | a picture file (a PNG with transparency, or an SVG), as wide as the layer needs, its bottom edge at `bottom` |
+| `bottom` | `0` | with `image`: height of the picture's bottom edge above the frame's bottom edge (fraction of the frame height) |
+| `shapes` | `[]` | instead of `image`: filled shapes `{shape, x, y, width, height, color}` |
+
+A layer has either `image` or `shapes`. A shape is a `rect`, `ellipse` or `triangle` with its
+middle at `x` (0–1 of the stage, as seen with the camera at the stage's centre; default `0.5`) and
+its bottom at `y` (a fraction of the frame height above the bottom edge, `0`), `width` (`0.3`)
+and `height` (`0.2`) as fractions of the frame's shorter side, and `color` (`secondary`); or
+`hills`: a row of rounded hills across the whole layer, each `width` wide and `height` high, their
+foot at `y`, filled down to the bottom. A layer is drawn larger than the frame, so that no
+camera view inside the stage (a zoom up to 8x included) shows its edge.
+
 `vidgen validate` reports an unknown character, mark, pose or expression (with the known names),
-a missing `image` file, a character placed twice, and `image` with `generate` or with
-`background`. The layout dump and `vidgen lint` see each character as one object of kind
-`character` named after it, the picture or colour as `background` and the band as `ground`.
-Speaking, gestures and moving across the stage are beat actions of later versions.
+a missing `image` file (also a layer's), a character placed twice, a layer name used twice, and
+`image` with `generate` or with `background`. The layout dump and `vidgen lint` see each character
+as one object of kind `character` named after it, the picture or colour as `background`, the band
+as `ground` and each layer by its name. Speaking, gestures and moving across the stage are beat
+actions of later versions.
 
 ```yaml
 characters:
@@ -3843,6 +3875,27 @@ scenes:
         - {name: kit, at: bench, depth: 0.5, pose: bow}
     beats:
       - text: "Pip spots an old friend by the bench."
+```
+
+A wide stage with layers, the camera panning and then following a character:
+
+```yaml
+  - id: walk
+    type: stage
+    params:
+      width: 2                                   # two frames wide
+      camera_at: left
+      background: [primary, surface]
+      layers:
+        - {name: hills, shapes: [{shape: hills, y: 0.2, height: 0.2, width: 0.8, color: tertiary}]}
+        - {name: trees, place: middle, image: assets/trees.png, bottom: 0.18}
+        - {name: bushes, place: foreground, shapes: [{shape: ellipse, x: 0.4, width: 0.5, height: 0.15, color: accent}]}
+      characters: [{name: pip, at: left}, {name: kit, at: far_right}]
+    beats:
+      - text: "Far away, on the other side of the park, Kit is waiting."
+        actions: [{action: pan, to: far_right, run_time: 2}]
+      - text: "Back to Pip, who has not seen her yet."
+        actions: [{follow: pip}]
 ```
 
 ## Beat actions
@@ -3907,11 +3960,11 @@ the one key that names an action).
 
 | key | default | |
 |---|---|---|
-| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `transform`, `callout`, `sfx`, or a project action (`vidgen list-scenes` lists them) |
-| `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one (`callout` with an `area` needs none) |
+| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, or a project action (`vidgen list-scenes` lists them) |
+| `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one (`callout` with an `area` and `pan` with `to` need none) |
 | `at` | `0` | when, as a fraction of the beat's narration (`0` ≤ at < `1`) |
-| `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`, `callout`: undone when it starts; `zoom`: the camera is back when it starts) |
-| `run_time` | the action's | seconds the animation takes (`reveal` / `callout` 0.8, `dim` / `highlight` 0.6, `zoom` / `transform` 1.0; a zoom takes as long again to come back) |
+| `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`, `callout`: undone when it starts; `zoom`: the camera is back when it starts; `pan`: the camera moves back when it starts; `follow`: the camera stops following when it starts) |
+| `run_time` | the action's | seconds the animation takes (`reveal` / `callout` 0.8, `dim` / `highlight` 0.6, `zoom` / `transform` / `follow` 1.0, `pan` 1.5; a zoom takes as long again to come back) |
 
 **Targets** depend on the scene type (`vidgen list-scenes` prints them as `targets:`). Every
 built-in type has some; `<N>` counts from 1 (`item1`, `item2`...), `<text>`/`<label>`/`<name>`
@@ -3950,7 +4003,7 @@ a title card, a `transform` of a bar).
 | `diagram` | `heading`, `node<N>`, `node:<id>`, `edge:<from>-><to>` | reveal, dim, highlight, zoom | also for `flowchart`; a node is its shape, icon and label (a `box` frames the shape), an edge its line, arrowhead and label; `highlight: [node:a, "edge:a->b", node:b]` marks a path; revealing an edge brings its nodes |
 | `process` | `heading`, `input`, `stage<N>`, `stage:<label>`, `connector<N>`, `loop`, `output`, `token` | reveal, dim, highlight, zoom | a stage is its card (a `box` frames it); `connector2` runs from stage 2 to 3; revealing a stage early shows it without moving the token; `highlight: token` with `style: flash` points at it |
 | `network` | `heading`, `layer<N>`, `layer:<label>`, `edges<N>`, `neuron<L>.<i>` | reveal, dim, highlight, zoom | a layer is its units, ellipsis, label and count; `edges1` joins layers 1 and 2; `neuron2.3` is unit 3 of layer 2 as drawn |
-| `stage` | `<character>` | dim, highlight, zoom | each character on the stage by its name (`dim: kit`, `zoom: pip`); every character comes in at step 1 |
+| `stage` | `<character>` | dim, highlight, zoom, pan, follow | each character on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`); every character comes in at step 1; `pan` also takes a mark (`to: right`) |
 
 `title` and `heading` stand for each other (the header band, see "Built-in scenes"): `highlight:
 title` works on a `bullets` heading. [Project scene types](EXTENDING.md#8-per-beat-actions-targets-and-custom-actions)
@@ -3963,7 +4016,9 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `reveal` | — | brings the target on screen with the scene's own entrance animation (e.g. item 4 before its turn). A target already on screen is left alone, and the scene does not reveal it again at its own step. |
 | `dim` | `opacity` (`0.45`, 0–1, of the target's full opacity) | fades the target; one that is already dimmer (e.g. by `bullets`' `dim_previous`) stays as it is, so dimming never compounds; `until:` restores the opacity |
 | `highlight` | `color` (`highlight`, a theme token or hex), `style` (`color` default, `box`, `underline`, `fill`, `flash`, or a list such as `[color, box]`) | `color` recolours the target and brings a dimmed one back to full opacity while highlighted; `box` draws a rounded frame around it, `underline` a line under it, `fill` lays a translucent band of the colour under it (over backdrops such as table stripes and cards); `flash` flashes the colour there and back (leaves no trace; not with `color`). `until:` restores the colours (and the dimming) and removes box / underline / fill. |
-| `zoom` | `scale` (magnification > 1, up to 8; default: as close as the targets fit), `padding` (`0.15`: share of the view kept free on each side of the targets) | moves the camera in on the targets and back out: the zoom-out ends with the beat (with `until: <beat>`, when that beat starts). Without `scale` the view is at most 3x; a target that already fills the frame is not zoomed (a warning says so). The view never leaves the frame. |
+| `zoom` | `scale` (magnification > 1, up to 8; default: as close as the targets fit), `padding` (`0.15`: share of the view kept free on each side of the targets) | moves the camera in on the targets and back out: the zoom-out ends with the beat (with `until: <beat>`, when that beat starts). Without `scale` the view is at most 3x; a target that already fills the frame is not zoomed (a warning says so). The view never leaves the frame (on a wide `stage`: the stage). Coming back, the camera returns to the view it had before the zoom. While a `follow` runs, the camera keeps the followed character in the middle. |
+| `pan` | `to` (a `stage`'s mark, or an x from 0 = left to 1 = right of the stage) | moves the camera sideways to the target (on a `stage`: a character) or to `to` — one of the two — keeping its zoom; it stays there (`until: <beat>`: it moves back when that beat starts). Ends a `follow`. The view never leaves the stage, so on a scene as wide as the frame the camera pans only while zoomed in. Other scene types know no marks (`to` is an x). |
+| `follow` | — | pans to the target (one character) and then keeps the camera on its feet as it moves, inside the stage, at the camera's zoom: to the end of the scene, or until the `until` beat starts (the camera then stays where it is). A `pan` or another `follow` ends it. |
 | `transform` | `into` (required: a target not on screen yet), `style` (`auto` default, `replace`, `shapes`, `tex`, `fade`) | morphs the target into `into`, which then stays on screen in its own place (the target is gone). `shapes` moves matching glyphs (what `auto` uses for text and formulas), `replace` morphs point by point (`auto` for other shapes), `tex` matches the TeX parts of two formulas, `fade` cross-fades. `into` must be a target of the scene; text that is not part of the scene cannot be morphed into (give the scene that content, e.g. as a later equation step). If `into` is already on screen, the target fades out into its place (warning). |
 | `callout` | `kind` (`box` default, `circle`, `arrow`, `label`, `spotlight`, `magnifier`), `label`, `area`, `within` (`frame` \| `safe`), `units` (`fraction` \| `px`), `color` (`highlight`), `label_size` (`caption`), `side` (`auto`, `top`, `bottom`, `left`, `right`), `curved` (arrow), `zoom` (magnifier, `2`), `keep` (`false`), `name` | points at the target — or, without a target, at `area` of the frame — with the [Step 34 callouts](#screenshot): a rounded `box` (label as a tag on its edge), a `circle`, an `arrow` from the label, a `label` beside it (no mark), a `spotlight` (the rest of the view darkened) or a `magnifier` (an enlarged inset of a picture: the target must show one, e.g. `image`). Gone when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: stays to the end of the scene). See "Callouts" below. |
 | `sfx` | `sound` (or as the target: `- sfx: NAME`), `gain` (`0` dB), `pan` (`0`), `align` (`start` \| `end`), `params` (`duration`, `pitch`, `intensity`) | plays a [sound effect](#sound-effects-sfx) at `at` — exactly then, even while the scene animates; draws nothing, works on every scene type. Its "target" is the sound's name, not a target of the scene; no `until`, no `run_time`. |
@@ -4523,8 +4578,8 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 
 | rule | default severity | finds |
 |---|---|---|
-| `off_frame` | error for text, warning for other objects | an object cut off by the frame edge by more than `tolerance`. Not reported: objects wholly outside (not visible), and non-text objects running from edge to edge on the side they cross (a full-frame image with `fit: cover` or Ken Burns, a background, a band or divider): those bleeds are intentional; nothing while the camera is zoomed in (a `zoom` action) |
-| `safe_area` | warning | text inside the frame but in its margins (the scene's `margin_x`/`margin_y`, `safe_area` in the layout dump, smaller where an overlay has `reserve: true`) by more than `tolerance`; not checked while the camera is zoomed in, nor for [overlays](#overlays) (their place is deliberate) |
+| `off_frame` | error for text, warning for other objects | an object cut off by the frame edge by more than `tolerance`. Not reported: objects wholly outside (not visible), and non-text objects running from edge to edge on the side they cross (a full-frame image with `fit: cover` or Ken Burns, a background, a band or divider): those bleeds are intentional; nothing while the camera is zoomed in or looks away from the frame's centre (`zoom`, `pan`, `follow`, a wide `stage`) |
+| `safe_area` | warning | text inside the frame but in its margins (the scene's `margin_x`/`margin_y`, `safe_area` in the layout dump, smaller where an overlay has `reserve: true`) by more than `tolerance`; not checked while the camera is zoomed in or moved (`pan`, `follow`), nor for [overlays](#overlays) (their place is deliberate) |
 | `text_overlap` | error | two texts whose boxes overlap by at least `min_overlap` of the smaller box (the same text drawn twice in the same place is not reported) |
 | `covered_text` | warning | a shape or image drawn **after** (on top of) a text whose colour shows in at least `min_covered` of the middle of the text's box, measured on the still's pixels. Not reported: shapes drawn before the text (plates, highlight bands, a code window), the text's own parent group, shapes fainter than 0.3, and shapes in the text's own colour (a strike-through) |
 | `label_spacing` | warning | a **label on its own plate** — a filled rounded shape without an outline, not in the background colour, drawn just behind one text and hugging it (a callout label, a tag) — closer than `min_gap` of the shorter side to another text (a bar's value, the title, a neighbour's label): it reads as part of that text. The text on the plate itself, texts inside the plate, lone symbols (a bullet) and the text framed by the callout's own mark (an outline in the plate's colour: a `box` tag sits on its edge by design) are not checked; cards, table rows, cells and code bands (several texts, or much larger than their text) are not labels |

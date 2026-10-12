@@ -21,10 +21,12 @@ from pathlib import Path
 from typing import Annotated, Any, ClassVar, NamedTuple, Union
 
 from manim import DEFAULT_WAIT_TIME, NORMAL, Animation, FadeIn, MarkupText, Mobject, MovingCameraScene, Text, Wait, config
+from manim.utils.iterables import list_update
 from pydantic import AfterValidator, AliasChoices, BaseModel, ConfigDict, Field, GetJsonSchemaHandler, ValidationError, ValidationInfo
 
 from vidgen import carry, helpers, regions, runtime
 from vidgen.actions import TARGET_NAME, ActionRunner, Target, match_names, plan_actions
+from vidgen.camera import Bounds, view_center_within
 from vidgen.capture import FrameCapture
 from vidgen.cartoon.visemes import VisemeTrack, beat_visemes
 from vidgen.layout import distribute
@@ -288,6 +290,8 @@ class NarratedScene(MovingCameraScene):
         #: they were added; the worker stores them in the timings, the pipeline mixes them.
         self.sfx_log: list[SfxEvent] = []
         self._sounds: SoundLibrary | None = None
+        self._camera_follow: Callable[[], float] | None = None  # the x the camera follows (follow_with_camera)
+        self._camera_listeners: list[Callable[[], None]] = []
         super().__init__(**scene_kwargs)
         self.capture = capture
         if capture is not None:
@@ -817,6 +821,65 @@ class NarratedScene(MovingCameraScene):
     def is_portrait(self) -> bool:
         """True when the frame is taller than wide (e.g. a 1080x1920 vertical variant)."""
         return config.pixel_height > config.pixel_width
+
+    # ----- camera ----------------------------------------------------------------------------
+
+    def camera_bounds(self) -> Bounds:
+        """``(left, right, bottom, top)`` in Manim units: the box the camera's view stays inside
+        (``zoom``, ``pan``, ``follow``). The frame; a ``stage`` wider than the frame widens it."""
+        return (-self.frame_width / 2, self.frame_width / 2, -self.frame_height / 2, self.frame_height / 2)
+
+    @classmethod
+    def camera_place(cls, params: Any, place: str | float) -> float:
+        """Where ``pan: {to: place}`` points the camera: an x from 0 (left) to 1 (right) of
+        :meth:`camera_bounds`. A number is itself; a name raises ``ValueError`` unless the scene
+        type knows it (a ``stage``'s marks)."""
+        if isinstance(place, str):
+            raise ValueError(f"'{place}' is not a place this scene type knows; give an x from 0 (left edge) to 1 (right edge)")
+        return float(place)
+
+    def follow_with_camera(self, x_of: Callable[[], float] | None) -> None:
+        """Keep the camera's centre on the x that ``x_of()`` gives (Manim units) on every frame,
+        inside :meth:`camera_bounds` at the view's current size; ``None`` stops following (the
+        camera stays where it is). A later call replaces the earlier one."""
+        self._camera_follow = x_of
+        self._sync_camera_updater()
+
+    @property
+    def camera_following(self) -> Callable[[], float] | None:
+        """The ``x_of`` given to :meth:`follow_with_camera` while the camera follows it."""
+        return self._camera_follow
+
+    def add_camera_listener(self, callback: Callable[[], None]) -> None:
+        """Call ``callback()`` on every frame after the camera has moved (also while a camera
+        animation plays), e.g. to move a ``stage``'s parallax layers with it."""
+        self._camera_listeners.append(callback)
+        self._sync_camera_updater()
+
+    def _sync_camera_updater(self) -> None:
+        """Run :meth:`_camera_step` as a scene updater while something follows or listens."""
+        active = self._camera_follow is not None or bool(self._camera_listeners)
+        installed = self._camera_step in self.updaters
+        if active and not installed:
+            self.add_updater(self._camera_step)
+        elif installed and not active:
+            self.updaters = [f for f in self.updaters if f != self._camera_step]  # a bound method: not `is`
+
+    def _camera_step(self, dt: float) -> None:
+        """Scene updater (run after every mobject updater and animation of the frame): follow,
+        then tell the listeners."""
+        frame = self.camera.frame
+        if self._camera_follow is not None:
+            x, y = view_center_within(self.camera_bounds(), (self._camera_follow(), frame.get_center()[1]), frame.width, frame.height)
+            frame.move_to([x, y, 0.0])
+        for callback in self._camera_listeners:
+            callback()
+
+    def get_moving_mobjects(self, *animations: Animation) -> list[Mobject]:
+        """Manim's moving mobjects; all of them while :meth:`_camera_step` may move the camera or
+        layers on any frame (Manim would otherwise draw the others once, for the camera as it was)."""
+        moving = super().get_moving_mobjects(*animations)
+        return list_update(self.mobjects, moving) if self._camera_step in self.updaters else moving
 
     #: Margins (Manim units) between the frame edge and the safe area (``vidgen.regions``
     #: defaults). The layout dump and ``vidgen lint``'s ``safe_area`` rule use the same values.

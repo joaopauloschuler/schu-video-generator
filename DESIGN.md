@@ -78,7 +78,8 @@ src/vidgen/
                           # expression tables, §69.3; no manim), transition.py (PoseChange, §69.3),
                           # visemes.py (lip sync: viseme tracks, .visemes.json, §69.4; no manim),
                           # idle.py (blinking, breathing, head sway: the seeded schedule, §69.5; no manim),
-                          # stage.py (marks, ground line, depth, draw order of a stage, §69.6; no manim)
+                          # stage.py (marks, ground line, depth, draw order of a stage, §69.6; parallax
+                          # layer offsets and extents, §69.7; no manim)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
   actions.py              # per-beat actions: Target, Action, validation, ActionRunner (§26)
@@ -86,6 +87,7 @@ src/vidgen/
   hooks.py                # hook registry + dispatch
   runtime.py              # "current project/theme" context used by helpers and extensions
   scene.py                # NarratedScene base class + narrate()
+  camera.py               # camera views kept inside bounds (zoom, pan, follow, a wide stage; §69.7; no manim)
   capture.py              # frame capture: stills at beat ends / N per beat (see §13)
   introspect.py           # layout dump of the captured frames: objects, px boxes, sizes (§15)
   activity.py             # activity file: beat timings, play log, per-frame motion signal (§17)
@@ -143,7 +145,8 @@ src/vidgen/
   carry.py                # continuity: carried objects' record, rebuild and move, carry checks (§50; manim imported lazily)
   fileio.py               # atomic writes; replacing files that Windows programs keep open
   scenes/                 # built-in scene library (registered like extensions; actions.py:
-                          # the built-in beat actions reveal/dim/highlight/zoom/transform, §26-27;
+                          # the built-in beat actions reveal/dim/highlight/zoom/transform, §26-27,
+                          # pan/follow, §69.7;
                           # callout_action.py: the callout beat action, §44; sfx_action.py: sfx, §47;
                           # overlays.py: the built-in overlays lower_third/watermark, §41;
                           # progress.py: progress_bar/chapter_indicator, §42; captions.py: captions, §43;
@@ -626,6 +629,9 @@ Step 70 (§69.3) adds `PoseChange` (and the `Character` methods `set_pose`, `set
 Step 73 (§69.6) adds the stage geometry `MARKS`, `StageItem`, `StagePlacement`, `stage_layout`,
 `mark_x`, `facing_towards_centre` and the check `pose_name_problem` (the built-in `stage` scene
 uses only `vidgen.api`, like every built-in).
+Step 74 (§69.7) adds `DEFAULT_FACTORS`, `LAYER_PLACES`, `layer_transform`, `layer_half_extent`
+and `view_center_within`; `NarratedScene` gains `camera_bounds`, `camera_place`,
+`follow_with_camera`, `camera_following`, `add_camera_listener`; `Action` gains `scene_problems`.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -5244,5 +5250,79 @@ lint, Step 84) reuse it.
   the stage's targets (the character's name) and change its state with `PoseChange` / `face`;
   walking (Step 79) moves the feet along the ground line with `feet_point` at the character's
   depth and should re-sort the draw order when depths change.
-- **Not done here**: parallax layers and a camera (Step 74), props (Step 75), speech and acting
-  (Steps 78–79), cartoon lint rules (Step 84). Tests: `tests/test_cartoon_stage.py`.
+- **Not done here**: props (Step 75), speech and acting (Steps 78–79), cartoon lint rules (Step
+  84). Parallax layers, a stage wider than the frame and the camera actions are Step 74 (§69.7).
+  Tests: `tests/test_cartoon_stage.py`.
+
+### 69.7 Parallax layers and the camera on a stage (Step 74)
+
+A `stage` can be wider than the frame and have layers (pictures or shapes) that move by a
+*parallax factor* when the camera moves. The camera moves with beat actions: the existing `zoom`
+and the new `pan` and `follow`, which are generic (any scene type) and reuse `MoveCamera`.
+
+- **Layer offsets** (`cartoon/stage.py`, no manim): a layer is drawn for the camera's *home view*
+  (centre at the origin = the stage's centre, zoom 1). `layer_transform(factor, camera_center,
+  zoom) -> (scale, (dx, dy))` gives the move that makes it appear moved by `factor` × the
+  camera's move and magnified by `zoom ** factor` (zoom = frame width / view width): a home point
+  `b` is put at `k b + c (1 - factor k)`, `k = zoom ** (factor - 1)`, so it shows at `zoom **
+  factor (b - factor c)` from the view's centre. Factor 1 (the stage, its ground and characters):
+  no change; 0: fixed on screen; < 1 far, > 1 near. `layer_half_extent(factor, stage_width=,
+  frame_width=, frame_height=, max_zoom=MAX_ZOOM (8))` is the half size a layer must cover so no
+  view inside the stage at zoom 1–8 shows its edge (`half view / z ** factor + factor × the
+  farthest view centre`, maximised over a 64-step grid of `z`; a test checks random views).
+  `LAYER_PLACES = (background, middle, foreground)`, `DEFAULT_FACTORS` 0.3 / 0.6 / 1.4.
+- **Camera bounds** (`camera.py`, no manim): `view_center_within(bounds, center, width, height)`
+  clamps a view's centre into `(left, right, bottom, top)` (the bounds' middle on an axis where
+  the view is larger). `NarratedScene.camera_bounds()` is the frame; `Stage` returns its width ×
+  the frame height. `zoom` now clamps with it (was the frame), so a zoom on a wide stage stays on
+  the stage.
+- **Stage params** (§69.6 plus): `width` (1–4 frame widths; marks and x are fractions of the
+  stage, `stage_layout(..., stage_width=)`; sizes still follow the frame's shorter side; the
+  picture covers the stage, the colour / gradient and ground band span it), `camera_at` (a mark
+  or x: the view's centre at the start, clamped), `layers: [StageLayer]` = `{name, place,
+  factor, image | shapes, bottom}` (one of `image` / `shapes`; names default to
+  `<place>_layer`, then `_2`...; a name twice is an error; `validate_project` checks layer
+  images with `check_image`). An image layer is scaled to the layer's width (`2 × half extent`)
+  with its bottom edge at `bottom`; shapes (`LayerShape`: `rect`, `ellipse`, `triangle` at `x`
+  of the stage and bottom `y` of the frame height, `width` / `height` of the short side, `color`;
+  `hills`: `hill_outline`, a row of sine-arc hills over the layer's whole width filled down to
+  its lower extent). Draw order: picture / colour, background then middle layers, ground band,
+  characters (back to front), foreground layers; the entrance fades them in in that order.
+  `Stage.layers` (name -> mobject) like `Stage.cast`. Each layer mobject is named after it
+  (layout dump, lint).
+- **Moving the layers**: the stage keeps every layer member's points at the home view
+  (`_Parallax`) and, when some factor is not 1, registers `_move_layers` with
+  `NarratedScene.add_camera_listener`: on every frame each member's points are set to `home ×
+  scale + shift` for the camera now. Starting from the home points (not the last frame's) means
+  an animation of the layer (its fade-in copies points) can never shift it.
+- **Camera driver** (`NarratedScene`): `follow_with_camera(x_of)` (a callable giving the x to
+  follow; `None` stops; `camera_following` reads it) and `add_camera_listener(callback)` share
+  one scene updater, `_camera_step`: first the follow (the frame's centre x set to `x_of()`
+  inside `camera_bounds` at the view's size), then the listeners. A scene updater runs after
+  every animation and mobject updater of the frame, and Manim never suspends it (a `MoveCamera`
+  suspends the frame's own updaters), so layers move during a zoom or pan and never lag a frame.
+  While it is installed, `get_moving_mobjects` returns every mobject: otherwise Manim draws the
+  ones before the first moving mobject once into a static image, for the camera as it was.
+- **`pan`** (`scenes/actions.py`; run_time 1.5, reversible, not temporary, `needs_target =
+  False`, moves_camera): option `to` (a mark name or an x 0..1 of `camera_bounds`' width) or a
+  target (one of the two: `problems`). Ends a `follow`, then a `MoveCamera` keeping the view's
+  size and y. `until` moves back to the view before. Marks: the new classmethod
+  `NarratedScene.camera_place(params, place)` (a number is itself, a name `ValueError`; `Stage`:
+  `mark_x` with its own marks), checked at validate time through the new hook
+  `Action.scene_problems(scene_cls, params)` (called by `scene_actions` when params are valid).
+- **`follow`** (run_time 1.0, reversible, moves_camera; one target pattern): pans to the target
+  (`_MoveThenFollow`, a `MoveCamera` that calls `follow_with_camera` in
+  `clean_up_from_scene`, so it starts after the move, also when the runner applies it without
+  animation) and then follows it to the end of the scene; `until` stops following (the camera
+  stays), unless a later `follow` took over. A `Character` is followed by its `feet()` x (a
+  pointing arm does not move the camera), anything else by its centre.
+- **`zoom` coming back**: `revert` returns to the view *before the zoom* (`camera_view` /
+  `move_camera_back`), not to the whole frame. Without other camera moves it is the same; after
+  a `pan` or on a stage with `camera_at`, the camera no longer jumps home.
+- **Lint**: `StillContext.camera_moved` (zoomed, or the view's centre away from the frame's
+  centre); `off_frame` and `safe_area` skip such stills (they skipped zoomed ones).
+- **Not done here**: a followed character that walks (Step 79) is followed by x only (the view's
+  y and zoom stay); `zoom` on another character while following keeps the followed one in the
+  middle. An image layer's bottom stays at `bottom`, so a near layer (factor > 1) zoomed in at the
+  bottom of the stage can show a sliver below it. No vertical pan. Layers are not action targets.
+  Tests: `tests/test_cartoon_parallax.py`.

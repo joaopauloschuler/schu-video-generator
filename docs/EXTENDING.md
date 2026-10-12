@@ -186,8 +186,12 @@ targets) already does it. Its geometry is exported for your own scenes: `stage_l
 ground=, size=, frame_width=, frame_height=, marks=None)` places `StageItem(name, kind, at,
 depth, scale)`s (`at`: a name of `MARKS` or an x from 0 to 1) and returns `StagePlacement`s
 (`feet`, `height`) from the back to the front; `pose_name_problem(project.config, who, "pose",
-name)` in `validate_project` reports a pose or expression the character does not know. DESIGN.md §69 has the model, §69.3 the poses, §69.4 lip sync, §69.5
-idle motion, §69.6 the stage.
+name)` in `validate_project` reports a pose or expression the character does not know
+(`stage_width=` places marks across a stage wider than the frame). For parallax in your own
+scene, `layer_transform(factor, camera_center, zoom)` gives the `(scale, (dx, dy))` that shows a
+layer drawn for the home view moved by `factor` of a camera move, and `layer_half_extent(...)`
+how large to draw it. DESIGN.md §69 has the model, §69.3 the poses, §69.4 lip sync, §69.5 idle
+motion, §69.6 the stage, §69.7 layers and the camera.
 
 Params can nest: use another `SceneParams` class as a field type (also in lists). Theme tokens
 are checked inside nested models too, and `vidgen list-scenes` prints the nested fields. A nested
@@ -948,6 +952,8 @@ beats after the action's own) to choose per use, e.g. by an option. `problems()`
 `(key, message)` pairs for checks that need more than the options (the target, `until`), and
 `provides()` the target names the use registers when applied (`scene.target(name, mob)` in
 `apply`), which later actions of the scene may then use — `vidgen validate` checks both.
+`scene_problems(scene_cls, params)` returns the problems that depend on the scene (the built-in
+`pan` checks its `to` with `scene_cls.camera_place(params, to)`).
 The built-in `callout` action (`src/vidgen/scenes/callout_action.py`) is an example of all
 three, built on the callout helpers below. An action that draws nothing sets `animates = False`
 and implements `cue(self, scene, time)` instead of `apply`: the runner calls it when the beat
@@ -959,7 +965,15 @@ your `problems()`, not against the scene's targets). The built-in `sfx` action
 **The camera.** `NarratedScene` is a Manim `MovingCameraScene`: `self.camera.frame` can be
 moved and scaled (`self.camera.frame.animate.set_width(4).move_to(dot)`). Every scene starts
 with it on the whole frame; the layout dump and `vidgen lint` take a moved camera into account
-(`camera.zoom` in the layout dump). The `zoom` action uses it. Animate the parts that are in the
+(`camera.zoom` in the layout dump). The `zoom`, `pan` and `follow` actions use it and keep the
+view inside `scene.camera_bounds()` (`(left, right, bottom, top)`; the frame, unless the scene
+type overrides it, as a wide `stage` does; clamp your own views with `view_center_within(bounds,
+center, width, height)`). A scene type that names places for `pan: {to: ...}` overrides the
+classmethod `camera_place(params, place)` (an x from 0 to 1 of the bounds' width). `follow_with_camera(x_of)`
+keeps the camera on the x a callable gives on every frame (`None` stops), and
+`add_camera_listener(callback)` calls `callback()` on every frame after the camera moved (the
+stage moves its parallax layers so); both run as one scene updater after every animation.
+`zoom` comes back to the view it started from. Animate the parts that are in the
 scene (`scene.on_screen_parts(t)`), not a group of them that was never added: Manim would add
 that group and draw its parts twice. New mobjects (like the marks above) are simply added by
 their animation. `vidgen list-scenes` lists your action with its options; `vidgen schema`

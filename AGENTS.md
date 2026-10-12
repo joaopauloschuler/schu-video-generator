@@ -289,7 +289,7 @@ project's own scene types, in its theme).
 | a derivation with reasons | `equation_derivation` | `title`, `steps`, `colors`, `result` |
 | a short listing (≤ 15 lines) | `code` | `title`, `code`, `path`, `highlight` |
 | a long file, explained part by part | `code_walkthrough` | `title`, `path`, `code`, `steps`, `excerpt` |
-| characters on a set (a cartoon) | `stage` | `characters`, `background`, `image`, `generate`, `marks`, `ground` |
+| characters on a set (a cartoon) | `stage` | `characters`, `background`, `image`, `generate`, `marks`, `ground`, `layers`, `width` |
 | thanks, links, call to action | `end_card` | `title`, `lines`, `icon`, `logo` |
 
 How beats drive scenes: each type splits its content into **reveal steps** and plays step *i*
@@ -661,6 +661,8 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `dim` | push the rest back (`opacity`) | pair with a highlight, undo with `until` |
 | `callout` | label or point at something (`kind: box`, `circle`, `arrow`, `label`, `spotlight`, `magnifier`) | one per beat; gone at the next beat |
 | `zoom` | look closer at a detail, then come back | at most one per scene |
+| `pan` | on a `stage`: move the camera to a character or a mark (`to: right`) | on a stage wider than the frame (`width: 2`) |
+| `follow` | on a `stage`: keep the camera on a character as it moves | one at a time |
 | `reveal` | bring a later element in early | rarely: the default order is usually right |
 | `transform` | morph one target into another (`into`) | for equations and before / after |
 | `sfx` | a sound at that moment (`vidgen guide audio`) | the important moments only |
@@ -1125,7 +1127,7 @@ scenes:
 | `duplicate beat id` | beat ids are unique in the whole video; rename one |
 | `unknown target 'x' ...; did you mean ... (targets: ...)` | pick a name from the list (labels are case-sensitive: `bar:4K`) |
 | `until 'x' is not a later beat of scene 'y'` | `until` names a later beat id of the same scene |
-| `unknown action 'x'` / `unknown option` | actions are `reveal`, `dim`, `highlight`, `zoom`, `transform`, `callout`, `sfx` |
+| `unknown action 'x'` / `unknown option` | actions are `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx` |
 | `labels has 2 entries but values has 3` | one value per label |
 | `unknown theme color 'x'` | use a token (`primary`, `highlight`...) or quoted hex `"#0B5FFF"`, or add it to `theme.colors` |
 | `invalid hex color` | `#RGB`, `#RRGGBB` or `#RRGGBBAA`, in quotes (YAML reads `#` as a comment) |
