@@ -1163,6 +1163,8 @@ class VideoConfig(_Strict):
     """The video's title."""
     output: str | None = Field(default=None, pattern=r"^[^/\\:*?\"<>|]+$")
     """Base name of the output files (no path separators); default: the project folder name."""
+    output_dir: str | None = Field(default=None, min_length=1)
+    """Folder of the rendered MP4, SRT, chapter list and thumbnail: relative to the project folder, or absolute; default: output."""
     format: FormatConfig = Field(default_factory=FormatConfig)
     """Final render resolution and frame rate."""
     preview: FormatConfig = Field(default_factory=_preview_format)

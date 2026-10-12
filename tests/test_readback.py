@@ -14,6 +14,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+import av
+import numpy as np
 import pytest
 import yaml
 
@@ -30,7 +32,7 @@ from vidgen.readback import align, cached_readback, compare_beat, hard_term, run
 from vidgen.render import fingerprint
 from vidgen.stt import Transcript, TranscriptWord, get_stt_provider, stt_settings
 from vidgen.stt.elevenlabs import STT_URL, ElevenLabsSTTProvider, parse_response
-from vidgen.stt.faster_whisper import FasterWhisperProvider
+from vidgen.stt.faster_whisper import SAMPLE_RATE, FasterWhisperProvider, load_audio
 from vidgen.textnorm import english_number, normalize_text, number_words, portuguese_number
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -191,8 +193,8 @@ class FakeWhisper:
             raise OSError("no such model")
         FakeWhisper.loaded.append((model, device))
 
-    def transcribe(self, path: str, **options: Any) -> tuple[Any, Any]:
-        FakeWhisper.calls.append({"path": path, **options})
+    def transcribe(self, audio: Any, **options: Any) -> tuple[Any, Any]:
+        FakeWhisper.calls.append({"audio": audio, **options})
         word = types.SimpleNamespace
         segments = [
             types.SimpleNamespace(text=" Hello there.", words=[word(word=" Hello", start=0.1, end=0.4), word(word=" there.", start=0.5, end=0.9)]),
@@ -208,19 +210,52 @@ def fake_faster_whisper(monkeypatch: pytest.MonkeyPatch) -> type[FakeWhisper]:
     return FakeWhisper
 
 
+def write_sine(path: Path, seconds: float, rate: int = 44100, channels: int = 2) -> Path:
+    """A 440 Hz sine written with PyAV (WAV or MP3, by the suffix)."""
+    codec = "pcm_s16le" if path.suffix == ".wav" else "libmp3lame"
+    t = np.arange(int(seconds * rate)) / rate
+    samples = (0.3 * np.sin(2 * np.pi * 440 * t)).astype(np.float32)
+    with av.open(str(path), "w") as container:
+        stream = container.add_stream(codec, rate=rate, layout="stereo" if channels == 2 else "mono")
+        frame_format = "s16" if codec == "pcm_s16le" else "fltp"
+        resampler = av.AudioResampler(format=frame_format, layout=stream.layout.name, rate=rate)
+        for start in range(0, len(samples), 1024):
+            chunk = np.tile(samples[start:start + 1024], (channels, 1))
+            frame = av.AudioFrame.from_ndarray(chunk, format="fltp", layout=stream.layout.name)
+            frame.sample_rate = rate
+            for out in resampler.resample(frame):
+                container.mux(stream.encode(out))
+        container.mux(stream.encode(None))
+    return path
+
+
+@pytest.mark.parametrize("name", ["b.wav", "b.mp3"])
+def test_load_audio_is_16k_mono_float32(tmp_path: Path, name: str) -> None:
+    audio = load_audio(write_sine(tmp_path / name, 1.5))
+    assert audio.ndim == 1 and audio.dtype == np.float32
+    assert abs(len(audio) - 1.5 * SAMPLE_RATE) < 0.1 * SAMPLE_RATE
+    assert 0.2 < np.abs(audio).max() < 0.5  # the 0.3 sine (downmixed as faster-whisper does), not silence
+    (tmp_path / "bad.mp3").write_bytes(b"not audio")
+    with pytest.raises(VidgenError, match="bad.mp3"):
+        load_audio(tmp_path / "bad.mp3")
+
+
 def test_faster_whisper_provider(fake_faster_whisper: type[FakeWhisper], tmp_path: Path) -> None:
     provider = FasterWhisperProvider("small.en", "en", device="cpu")
     provider.check_available()
-    transcript = provider.transcribe(tmp_path / "b.mp3")
+    beat = write_sine(tmp_path / "b.wav", 1.0)
+    transcript = provider.transcribe(beat)
     assert transcript == Transcript(
         "Hello there. Bye", (TranscriptWord("Hello", 0.1, 0.4), TranscriptWord("there.", 0.5, 0.9), TranscriptWord("Bye", 1.2, 1.5)), "en")
-    provider.transcribe(tmp_path / "c.mp3")
+    provider.transcribe(beat)
     assert fake_faster_whisper.loaded == [("small.en", "cpu")]  # loaded once
     call = fake_faster_whisper.calls[0]
-    assert call["path"] == str(tmp_path / "b.mp3") and call["language"] == "en"
+    audio = call["audio"]  # decoded by vidgen, not the path (faster-whisper's decoder breaks on PyAV 19)
+    assert isinstance(audio, np.ndarray) and audio.ndim == 1 and audio.dtype == np.float32
+    assert abs(len(audio) - SAMPLE_RATE) < 0.1 * SAMPLE_RATE and call["language"] == "en"
     assert call["word_timestamps"] is True and call["condition_on_previous_text"] is False
     with pytest.raises(VidgenError, match="cannot load the Whisper model 'missing': OSError: no such model"):
-        FasterWhisperProvider("missing", None).transcribe(tmp_path / "b.mp3")
+        FasterWhisperProvider("missing", None).transcribe(beat)
 
 
 def test_faster_whisper_missing(monkeypatch: pytest.MonkeyPatch) -> None:

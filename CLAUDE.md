@@ -8,6 +8,9 @@
 > `src/vidgen/data/guide/AGENTS.md` and copy it to `AGENTS.md` (`tests/test_guide.py` checks both).
 
 Read `DESIGN.md` (the contract) and `HANDOFF.md` (what previous steps did) before changing code.
+Follow `docs/CODING-AND-COMMUNICATION-GUIDE.md`: when to write code, naming, reuse, how to run
+tests on a small machine (memory cap, timeout, one at a time), progress reports, and how to write
+to the user.
 
 ## Environment (cloud workspace)
 - Python venv: `/home/claude/venv` (Python 3.13, manim 0.21, pydantic 2, pyyaml, pytest installed).
@@ -28,9 +31,12 @@ Read `DESIGN.md` (the contract) and `HANDOFF.md` (what previous steps did) befor
   (defined in `vidgen/errors.py`) with a clear message; the CLI prints it without a traceback.
 
 ## Tests
-- `cd /home/claude/work/video-generator && /home/claude/venv/bin/python -m pytest -q` must pass
-  before you commit. Add tests for everything you build.
-- Rendering tests: `@pytest.mark.render`, tiny resolution (e.g. 160x90, 5 fps), use `tmp_path`.
+- Add tests for everything you build, and keep them cheap (guide rule 9): test logic without
+  rendering when you can; rendering tests use `@pytest.mark.render`, tiny resolution (e.g. 160x90,
+  5 fps) and `tmp_path`.
+- Before you commit, run the tests that cover your change, not the whole suite (guide rule 8),
+  each command under a memory cap and a timeout (guide rule 7). Never run tests in parallel
+  (`-n`) or two suites at once. The full suite is run only when the user asks.
 
 ## Git
 - Work on branch `main` (the user's current branch). **Never push. Never add remotes.** One commit per step (you may make

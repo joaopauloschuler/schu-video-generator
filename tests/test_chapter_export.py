@@ -215,14 +215,14 @@ def test_rendered_chapters_metadata_and_youtube_list(make_project, caplog: pytes
     # timings.json and the YouTube list
     timings = json.loads(result.timings_file.read_text(encoding="utf-8"))
     assert [ce.chapter_from_json(c).title for c in timings["chapters"]] == [c.title for c in planned]
-    assert result.chapters == root / "out_preview_chapters.txt"
+    assert result.chapters == root / "output" / "out_preview_chapters.txt"
     assert result.chapters.read_text(encoding="utf-8") == "0:00 Intro\n0:01 Setup\n0:03 Results = done; #1\n"
     youtube = [r.getMessage() for r in caplog.records if r.getMessage().startswith("chapters:")]
     assert len(youtube) == 3 and all("shorter than 10 s" in m for m in youtube)
 
     # a variant writes its own files; with both outputs off: no chapters, tags still, an old list removed
     plain = Project.load(root, variant="plain")
-    stale = root / "out_plain_preview_chapters.txt"
+    stale = root / "output" / "out_plain_preview_chapters.txt"
     stale.write_text("old\n", encoding="utf-8")
     result = render_project(plain, preview=True, no_audio=True)
     info = ffprobe(result.output)
@@ -233,6 +233,6 @@ def test_rendered_chapters_metadata_and_youtube_list(make_project, caplog: pytes
 
     nointro = Project.load(root, variant="nointro")
     result = render_project(nointro, preview=True, no_audio=True)
-    assert result.chapters == root / "out_nointro_preview_chapters.txt"
+    assert result.chapters == root / "output" / "out_nointro_preview_chapters.txt"
     assert result.chapters.read_text(encoding="utf-8") == "0:00 Setup\n0:03 Results = done; #1\n"
     assert [float(c["start_time"]) for c in ffprobe(result.output)["chapters"]][0] == 0.0

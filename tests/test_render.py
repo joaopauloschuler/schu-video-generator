@@ -152,7 +152,7 @@ def combined_timings(root: Path, sub: str = "final") -> dict[str, Any]:
 @pytest.mark.render
 @pytest.mark.slow
 def test_full_render_outputs(main_project: Path) -> None:
-    out = main_project / "out.mp4"
+    out = main_project / "output" / "out.mp4"
     info = streams(out)
     assert sorted(info["types"]) == ["audio", "video"]
     assert (info["width"], info["height"], info["rate"], info["channels"]) == (160, 90, 48000, 2)
@@ -181,7 +181,7 @@ def test_full_render_outputs(main_project: Path) -> None:
 @pytest.mark.render
 @pytest.mark.slow
 def test_no_drift_beats_start_where_timings_say(main_project: Path) -> None:
-    samples = decode_audio(main_project / "out.mp4")
+    samples = decode_audio(main_project / "output" / "out.mp4")
     rate = 48000
     timings = combined_timings(main_project)
     beats = [b for s in timings["scenes"] for b in s["beats"]]
@@ -201,7 +201,7 @@ def test_no_drift_beats_start_where_timings_say(main_project: Path) -> None:
 
 @pytest.mark.render
 def test_srt_from_render(main_project: Path) -> None:
-    text = (main_project / "out.srt").read_text(encoding="utf-8")
+    text = (main_project / "output" / "out.srt").read_text(encoding="utf-8")
     blocks = text.strip().split("\n\n")
     assert len(blocks) == 4  # One. | long text in 2 cues | Last beat.
     assert [b.split("\n")[0] for b in blocks] == ["1", "2", "3", "4"]
@@ -224,7 +224,7 @@ def test_hooks_dispatched_with_data(main_project: Path) -> None:
     assert Path(records[1]["data"]["video"]) == main_project / "build/final/scenes/s1.mp4"
     assert records[1]["data"]["timings"]["n"] == 2
     post = records[-1]["data"]
-    assert Path(post["output"]) == main_project / "out.mp4" and Path(post["srt"]) == main_project / "out.srt"
+    assert Path(post["output"]) == main_project / "output" / "out.mp4" and Path(post["srt"]) == main_project / "output" / "out.srt"
     assert Path(post["timings_file"]) == main_project / "build/final/timings.json"
     assert post["timings"]["n"] == 3 and post["timings"]["duration"] > 3
 
@@ -234,19 +234,19 @@ def test_hooks_dispatched_with_data(main_project: Path) -> None:
 def test_scene_option_rerenders_only_that_scene(main_project: Path, capsys: pytest.CaptureFixture[str]) -> None:
     scenes_dir = main_project / "build" / "final" / "scenes"
     before = {p.name: p.stat().st_mtime_ns for p in scenes_dir.glob("*.mp4")}
-    out_before = (main_project / "out.mp4").stat().st_mtime_ns
+    out_before = (main_project / "output" / "out.mp4").stat().st_mtime_ns
     (main_project / "hooks.jsonl").unlink()
     assert main(["render", str(main_project), "--scene", "s3"]) == 0
     after = {p.name: p.stat().st_mtime_ns for p in scenes_dir.glob("*.mp4")}
     assert after["s1.mp4"] == before["s1.mp4"] and after["quiet.mp4"] == before["quiet.mp4"]
     assert after["s3.mp4"] != before["s3.mp4"]
-    assert (main_project / "out.mp4").stat().st_mtime_ns != out_before
+    assert (main_project / "output" / "out.mp4").stat().st_mtime_ns != out_before
     out = capsys.readouterr().out
     assert "[1/1] s3: rendering" in out and "rendered 1 scene(s), 2 reused" in out
-    assert f"video:     {main_project / 'out.mp4'}" in out and "duration:  0:0" in out
+    assert f"video:     {main_project / 'output' / 'out.mp4'}" in out and "duration:  0:0" in out
     records = [json.loads(line)["event"] for line in (main_project / "hooks.jsonl").read_text(encoding="utf-8").splitlines()]
     assert records == ["pre_render", "post_scene", "post_render"]
-    assert streams(main_project / "out.mp4")["video"] == pytest.approx(combined_timings(main_project)["duration"], abs=FRAME)
+    assert streams(main_project / "output" / "out.mp4")["video"] == pytest.approx(combined_timings(main_project)["duration"], abs=FRAME)
 
 
 # ----- single-scene projects ----------------------------------------------------------------------
@@ -269,7 +269,7 @@ def small(tmp_path: Path) -> Callable[..., Path]:
 def test_no_audio_has_silent_track(small: Callable[..., Path]) -> None:
     root = small()
     result = render_project(Project.load(root), preview=True, no_audio=True)
-    assert result.output == root / "out_preview.mp4" and result.srt == root / "out_preview.srt"
+    assert result.output == root / "output" / "out_preview.mp4" and result.srt == root / "output" / "out_preview.srt"
     info = streams(result.output)
     assert sorted(info["types"]) == ["audio", "video"] and (info["width"], info["height"]) == (96, 54)
     assert np.abs(decode_audio(result.output)).max() < 0.001
@@ -300,7 +300,7 @@ def test_variant_naming_resolution_and_frame(small: Callable[..., Path]) -> None
         variants={"vertical": {"format": {"width": 90, "height": 160}}},
     )
     result = render_project(Project.load(root, variant="vertical"))
-    assert result.output == root / "out_vertical.mp4" and result.srt == root / "out_vertical.srt"
+    assert result.output == root / "output" / "out_vertical.mp4" and result.srt == root / "output" / "out_vertical.srt"
     assert result.timings_file == root / "build" / "final_vertical" / "timings.json"
     assert (root / "build" / "final_vertical" / "scenes" / "p.mp4").is_file()
     info = streams(result.output)
@@ -337,7 +337,7 @@ def test_worker_failure_shows_user_traceback(small: Callable[..., Path]) -> None
     assert message.startswith("scene 'b' failed (worker exit code 2):")
     assert "bad.py" in message and "explode_here = 1 / 0" in message and "ZeroDivisionError" in message
     assert not (root / "build/final/scenes/ok.mp4").exists()  # stopped at the first failure
-    assert not (root / "out.mp4").exists()
+    assert not (root / "output" / "out.mp4").exists()
 
 
 @pytest.mark.render
@@ -356,7 +356,7 @@ def test_keep_going_reports_failures_at_end(small: Callable[..., Path], capsys: 
     assert "error: scene 'b' failed" in err and "ZeroDivisionError" in err
     assert "error: scene 'c' failed (worker exit code 1):\nerror: asset not found: assets/missing.png" in err
     assert err.rstrip().endswith("error: 2 scene(s) failed: b, c; the video was not joined (1 scene(s) rendered)")
-    assert (root / "build/final/scenes/ok.mp4").is_file() and not (root / "out.mp4").exists()
+    assert (root / "build/final/scenes/ok.mp4").is_file() and not (root / "output" / "out.mp4").exists()
 
 
 # ----- no rendering -------------------------------------------------------------------------------

@@ -460,7 +460,7 @@ def test_track_and_video_hold_the_sounds(sfx_project: Path) -> None:
             expected[start : start + len(data)] += data[: len(track) - start]
     assert np.abs(track - expected).max() < 1.5 / 32768
     # the final video: narration (none here: no MP3s) + effects; onsets where the timings say
-    audio = _mp4_audio(sfx_project / "out_preview.mp4")
+    audio = _mp4_audio(sfx_project / "output" / "out_preview.mp4")
     beep = timings["scenes"][2]
     for offset, channel in ((0.4, 1), (2.0, 0)):
         at = beep["start"] + offset
@@ -478,7 +478,7 @@ def test_no_audio_render_has_no_effects(sfx_project: Path) -> None:
     with registry.isolated():
         render_project(Project.load(sfx_project), preview=True, scenes=["card"], no_audio=True)
     assert not (sfx_project / "build/preview/padded/sfx.wav").exists()
-    assert np.abs(_mp4_audio(sfx_project / "out_preview.mp4")).max() < 1e-4
+    assert np.abs(_mp4_audio(sfx_project / "output" / "out_preview.mp4")).max() < 1e-4
     assert _timings(sfx_project)["scenes"][0]["sfx"]  # still recorded
 
 

@@ -534,7 +534,7 @@ def cmd_render(args: argparse.Namespace) -> CommandResult:
         raise VidgenError("--frames-per-beat must be at least 1")
     frames = args.frames_per_beat or (1 if args.frames else 0)
     started = time.monotonic()
-    project = Project.load(args.project, variant=args.variant)
+    project = Project.load(args.project, variant=args.variant, output_dir=args.output_dir)
     result = render_project(
         project,
         preview=args.preview,
@@ -634,7 +634,7 @@ def cmd_thumbnail(args: argparse.Namespace) -> CommandResult:
     if args.jobs < 1:
         raise VidgenError("--jobs must be at least 1")
     started = time.monotonic()
-    project = Project.load(args.project, variant=args.variant)
+    project = Project.load(args.project, variant=args.variant, output_dir=args.output_dir)
     spec = _cli_thumbnail(project, args)
     result = make_thumbnail(project, preview=args.preview, spec=spec, jpeg=True if args.jpeg else None, jobs=args.jobs)
     if args.json:
@@ -713,7 +713,7 @@ def cmd_slides(args: argparse.Namespace) -> CommandResult:
 
     started = time.monotonic()
     _slides_options(args)
-    project = Project.load(args.project, variant=args.variant)
+    project = Project.load(args.project, variant=args.variant, output_dir=args.output_dir)
     if args.format == "pdf":
         return cmd_slides_pdf(args, project, started)
     result = make_slides(
@@ -752,7 +752,7 @@ def cmd_export(args: argparse.Namespace) -> CommandResult:
     from vidgen.export import export_clip, export_gif
 
     started = time.monotonic()
-    project = Project.load(args.project, variant=args.variant)
+    project = Project.load(args.project, variant=args.variant, output_dir=args.output_dir)
     output = Path(args.output).resolve() if args.output else None
     common = {"preview": args.preview, "scene": args.scene, "start": args.from_, "end": args.to, "width": args.width, "fps": args.fps, "output": output}
     if args.kind == "gif":
@@ -1111,6 +1111,13 @@ def build_parser() -> argparse.ArgumentParser:
     def json_arg(p: argparse.ArgumentParser) -> None:
         p.add_argument("--json", action="store_true", help="print one JSON document on stdout (see docs/CONFIG.md)")
 
+    def output_dir_arg(p: argparse.ArgumentParser) -> None:
+        p.add_argument(
+            "--output-dir", metavar="DIR",
+            help="folder of the rendered MP4, SRT, chapter list and thumbnail (relative to the current directory; "
+            "default: output_dir: in video.yaml, else <project>/output)",
+        )
+
     p = sub.add_parser("init", help="scaffold a new project")
     p.add_argument("dir", help="directory to create (must not exist or be empty)")
     examples = sorted(d.name for d in TEMPLATES_DIR.iterdir() if d.is_dir())
@@ -1212,6 +1219,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--frames-per-beat", type=int, metavar="N", help="save N evenly spaced stills per beat, the last at its end (implies --frames)"
     )
     p.add_argument("--force", action="store_true", help="render every scene again, even those whose render is current")
+    output_dir_arg(p)
     p.set_defaults(func=cmd_render)
 
     p = sub.add_parser("storyboard", help="contact sheets (PNG) of the video's frames, for review")
@@ -1237,6 +1245,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--no-overlays", action="store_true", help="with --scene: the frame without captions, watermark... (renders the scene again)")
     p.add_argument("--jpeg", action="store_true", help="also write <output>_thumbnail.jpg under 2 MB")
     p.add_argument("--jobs", "-j", type=int, default=1, metavar="N", help="render N scenes in parallel when scenes must be rendered (default: 1)")
+    output_dir_arg(p)
     p.set_defaults(func=cmd_thumbnail)
 
     p = sub.add_parser("slides", help="an HTML (or PDF) slide deck of the video's key frames, narration as speaker notes (exports/)")
@@ -1264,6 +1273,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--jobs", "-j", type=int, default=1, metavar="N", help="render N scenes in parallel (default: 1)")
     p.add_argument("--force", action="store_true", help="render the scenes again even if their stills are current")
+    output_dir_arg(p)
     p.set_defaults(func=cmd_slides)
 
     p = sub.add_parser("export", help="export a scene or part of the rendered video as a GIF or MP4 clip (exports/)")
@@ -1279,6 +1289,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--max-mb", type=float, metavar="MB", help="GIF: lower the frame rate, then the width, until the file is at most this big")
     p.add_argument("--with-audio", action="store_true", help="clip: keep the sound")
     p.add_argument("--output", "-o", metavar="FILE", help="write here instead of exports/<output>_<scene>[_<from>-<to>s].gif|mp4")
+    output_dir_arg(p)
     p.set_defaults(func=cmd_export)
 
     p = sub.add_parser("gallery", help="render every scene type's sample (16:9 and 9:16) into a Markdown gallery with stills, GIFs and YAML")

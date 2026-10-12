@@ -11,11 +11,26 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 from vidgen import DIST_NAME
 from vidgen.errors import VidgenError
 from vidgen.stt import Transcript, TranscriptWord
 
 INSTALL_HINT = f'the faster_whisper speech-to-text provider needs the optional extra: pip install "{DIST_NAME}[stt]"'
+
+#: The sample rate Whisper models take.
+SAMPLE_RATE = 16000
+
+
+def load_audio(path: Path) -> np.ndarray:
+    """``path`` decoded with PyAV to the 1-D float32 16 kHz mono samples Whisper takes.
+
+    Decoding here instead of handing faster-whisper the path keeps readback working with every
+    PyAV version (faster-whisper's own decoder passes an argument PyAV 19 removed)."""
+    from vidgen.sfx import decode_audio
+
+    return decode_audio(path, rate=SAMPLE_RATE, mono=True)[:, 0]
 
 
 def _module() -> Any:
@@ -59,9 +74,10 @@ class FasterWhisperProvider:
         """What is said in ``path``: word timestamps on, no conditioning on earlier text (each
         beat is heard on its own, so a mistake cannot carry over), beam search of 5."""
         model = self._load()
+        audio = load_audio(path)
         try:
             segments, info = model.transcribe(
-                str(path),
+                audio,
                 language=self.language,
                 beam_size=5,
                 word_timestamps=True,

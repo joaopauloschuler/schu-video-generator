@@ -27,12 +27,13 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | key | default | |
 |---|---|---|
 | `title` | required | the video's title (the MP4's title tag and `timings.json`; not drawn by itself) |
-| `output` | folder name | base name of the output files: `<output>.mp4`, `<output>.srt`, `<output>_chapters.txt`, `<output>_thumbnail.png`, `<output>_preview.mp4`, `<output>_<variant>.mp4`; no path separators |
+| `output` | folder name | base name of the output files: `<output>.mp4`, `<output>.srt`, `<output>_chapters.txt`, `<output>_thumbnail.png`, `<output>_preview.mp4`, `<output>_<variant>.mp4`, all in the [output folder](#output-folder-output_dir---output-dir); no path separators |
+| `output_dir` | `output` | the [output folder](#output-folder-output_dir---output-dir) of those files: relative to the project folder, or absolute |
 | `format` | `{width: 1920, height: 1080, fps: 30}` | final render (`vidgen render`) |
 | `preview` | `{width: 854, height: 480, fps: 15}` | `vidgen render --preview` |
 | `variants` | `{}` | named overrides, see [variants](#variants) |
 | `theme` | see [theme](#theme) | preset, colors, sizes, font, background, code style |
-| `voice` | see [voice](#voice-voice) | the narration voice: ElevenLabs (default) or OpenRouter ([narration providers](#narration-providers)) |
+| `voice` | see [voice](#voice-voice) | the narration voice: ElevenLabs (default), OpenRouter, or Kokoro running locally (free; extra `schu-video-generator[kokoro]`; [Kokoro](#kokoro-on-this-computer-provider-kokoro)) — one provider per video ([narration providers](#narration-providers)) |
 | `voices` | `{}` | named voices for dialogue, picked by scenes and beats with `voice: NAME`, see [multiple voices](#multiple-voices-voices) |
 | `subtitles` | `{speakers: off}` | `speakers: name` puts the speaker's label before their lines in the SRT, see [multiple voices](#multiple-voices-voices) |
 | `narration` | see [narration](#narration-narration) | beat padding, duration estimate |
@@ -53,6 +54,27 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `stt` | `{provider: faster_whisper}` | speech to text for `vidgen readback` (the narration transcribed and compared with the beat texts): `{provider, model, language, device}`; see [readback](#readback-vidgen-readback) |
 | `imagegen` | `{provider: openai, model: gpt-image-1, size: auto}` | image generation for `generate:` params and `vidgen imagegen`: `{provider (openai \| openrouter), model, size, quality, resolution, style, negative, svg_model}`; see [generated images](#generated-images-imagegen-vidgen-imagegen) |
 | `scenes` | required | the scenes in order, at least one |
+
+### Output folder (`output_dir`, `--output-dir`)
+
+`vidgen render` and `vidgen thumbnail` write the deliverables — the MP4, the SRT, the YouTube
+chapter list and the thumbnail (`<output>[_<variant>][_preview].mp4`, `.srt`, `_chapters.txt`,
+`_thumbnail.png` / `.jpg`) — into **`<project>/output/`**, created when missing. `vidgen export`,
+and `vidgen slides` (the PDF title page's thumbnail) read them from there. Where it is:
+
+1. `--output-dir DIR` on `vidgen render`, `thumbnail`, `export` and `slides`: a relative `DIR`
+   is relative to the **current directory**, like any command-line path;
+2. else `output_dir:` in `video.yaml` (a variant may set its own): a relative path is relative
+   to the **project folder** (not the current directory), an absolute path is used as is;
+3. else `output`.
+
+```yaml
+output_dir: ../renders     # <project>/../renders/<output>.mp4
+```
+
+The intermediate files stay in `build/` and the GIFs, clips and slide decks of `vidgen export`
+and `vidgen slides` in `exports/`, wherever the output folder is. The `--json` documents give
+the absolute paths. Under `vidgen mcp`, `output_dir:` must stay inside the allowed folder.
 
 ## Scenes and beats
 
@@ -244,12 +266,13 @@ Changing `thumbnail:` re-renders no scene.
 
 ```
 vidgen thumbnail [PROJECT] [--variant NAME] [--preview] [--scene ID [--beat ID|N] [--at SECONDS]
-                 [--no-overlays]] [--jpeg] [--jobs N] [--json]
+                 [--no-overlays]] [--jpeg] [--jobs N] [--output-dir DIR] [--json]
 ```
 
 `--scene` (with `--beat`, `--at`, `--no-overlays`) takes a frame instead of what the config says;
 `--preview` takes frames from the preview render (fast, but scaled up: an `info` says so) and
-names the files `..._preview_thumbnail.png`; `--jpeg` also writes the JPEG.
+names the files `..._preview_thumbnail.png`; `--jpeg` also writes the JPEG. The files go to the
+[output folder](#output-folder-output_dir---output-dir) (`output/`; `--output-dir DIR`).
 
 **Legibility.** YouTube shows thumbnails at about 320x180 in its grids (and smaller beside a
 video). Every run also writes that size, `build/<final|preview>[_<variant>]/thumbnail/<name>_small.png`:
@@ -273,10 +296,12 @@ A frame thumbnail's text is not measured: check it at the small size, or check t
 
 ```
 vidgen export gif|clip [PROJECT] [--scene ID] [--from SECONDS] [--to SECONDS] [--variant NAME]
-              [--preview] [--width PX] [--fps F] [--max-mb MB] [--with-audio] [--output FILE] [--json]
+              [--preview] [--width PX] [--fps F] [--max-mb MB] [--with-audio] [--output FILE]
+              [--output-dir DIR] [--json]
 ```
 
-Writes a part of the **rendered video** (`<output>[_<variant>][_preview].mp4` and its
+Writes a part of the **rendered video** (`<output>[_<variant>][_preview].mp4` in the
+[output folder](#output-folder-output_dir---output-dir), `--output-dir DIR` to read it elsewhere, and its
 `build/.../timings.json`; render it first) as an animated GIF or an MP4 clip, by default to
 `<project>/exports/<output>[_<variant>][_preview]_<scene>[_<from>-<to>s].gif|mp4` (`video` in
 place of the scene without `--scene`; `--output FILE` writes elsewhere). With `--scene`,
@@ -301,7 +326,8 @@ including a transition out of it); without it they are times in the video (defau
 ```
 vidgen slides [PROJECT] [--format html|pdf] [--variant NAME] [--preview | --final] [--mode beat|scene] [--per-beat N]
               [--overlays | --no-overlays] [--no-dedupe] [--image-format webp|jpeg|png] [--quality Q]
-              [--max-width PX] [--audio] [--separate] [--output FILE] [--jobs N] [--force] [--json]
+              [--max-width PX] [--audio] [--separate] [--output FILE] [--jobs N] [--force]
+              [--output-dir DIR] [--json]
 ```
 
 Writes the video as a **slide deck** (a PDF with `--format pdf`, [below](#pdf-deck---format-pdf)): one HTML file, by default

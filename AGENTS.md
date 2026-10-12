@@ -1012,8 +1012,10 @@ Good: the result first, then the context.
 <!-- topic: outputs (also: slides, export, gif, thumbnail, chapters, translations, translate, languages, licence, license, rights) -->
 ## Outputs: video, chapters, thumbnail, slides, GIFs, translations
 
-- **Video and subtitles**: `vidgen render` writes `<output>.mp4` and `<output>.srt`
-  (`--preview`: `<output>_preview.mp4`; `--variant NAME`: `<output>_<variant>.mp4`).
+- **Video and subtitles**: `vidgen render` writes `output/<output>.mp4` and `<output>.srt`
+  (`--preview`: `<output>_preview.mp4`; `--variant NAME`: `<output>_<variant>.mp4`). The
+  chapter list and thumbnail go to `output/` too; `output_dir:` (relative to the project folder)
+  or `--output-dir DIR` moves them. `build/` and `exports/` stay put.
 - **Chapters**: with `chapter` cards or `chapter:` keys the MP4 gets chapter marks and
   `<output>_chapters.txt` the YouTube list (`0:00 Intro`...); `vidgen validate` warns when
   YouTube would ignore it (fewer than 3 chapters, one under 10 s). `metadata:` adds tags.

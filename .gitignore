@@ -232,6 +232,6 @@ __marimo__/
 *_thumbnail.png
 *_thumbnail.jpg
 **/exports/
-
-# summary written by the examples/custom_scene post_render hook
-examples/custom_scene/*.txt
+# the deliverables folder (vidgen render / thumbnail, Step 66); it also holds the summary the
+# examples/custom_scene post_render hook writes next to the video
+examples/**/output/

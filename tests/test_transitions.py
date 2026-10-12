@@ -293,10 +293,10 @@ def test_rendered_times_follow_the_plan(rendered: tuple[Path, dict[str, Any]]) -
     assert [s.get("transition", {}).get("type") for s in timings["scenes"]] == [None, "crossfade", "fade_color", "crossfade"]
     assert timings["scenes"][1]["transition"] == {"type": "crossfade", "duration": 0.5, "overlap": 0.5}
     # the video and its audio have the planned length
-    assert len(_frames(root / "out_preview.mp4")) == round(plan.duration * FPS)
-    assert len(_audio(root / "out_preview.mp4")) == pytest.approx(plan.duration * RATE, abs=2048)
+    assert len(_frames(root / "output" / "out_preview.mp4")) == round(plan.duration * FPS)
+    assert len(_audio(root / "output" / "out_preview.mp4")) == pytest.approx(plan.duration * RATE, abs=2048)
     # subtitles start where the overlapped scenes' beats start
-    srt = (root / "out_preview.srt").read_text(encoding="utf-8")
+    srt = (root / "output" / "out_preview.srt").read_text(encoding="utf-8")
     talk = plan.scene("talk").start
     assert f"00:00:0{int(talk)},{round((talk % 1) * 1000):03d} -->" in srt
     # the effects sit at their scene's overlapped start
@@ -309,7 +309,7 @@ def test_rendered_times_follow_the_plan(rendered: tuple[Path, dict[str, Any]]) -
 def test_audio_lands_where_planned(rendered: tuple[Path, dict[str, Any]]) -> None:
     root, _ = rendered
     plan = _plan(root)
-    audio = _audio(root / "out_preview.mp4")
+    audio = _audio(root / "output" / "out_preview.mp4")
     level = np.abs(audio).max(axis=1)
 
     def onset(after: float, threshold: float) -> float:
@@ -330,7 +330,7 @@ def test_audio_lands_where_planned(rendered: tuple[Path, dict[str, Any]]) -> Non
 def test_mid_crossfade_frame_blends_both_scenes(rendered: tuple[Path, dict[str, Any]]) -> None:
     root, _ = rendered
     plan = _plan(root)
-    video = _frames(root / "out_preview.mp4")
+    video = _frames(root / "output" / "out_preview.mp4")
     a = _frames(root / "build/preview/scenes/intro.mp4")
     b = _frames(root / "build/preview/scenes/talk.mp4")
     start = round(plan.scene("talk").start * FPS)  # first shared frame; 5 frames, weights 0.1 .. 0.9
@@ -361,7 +361,7 @@ def test_mid_crossfade_frame_blends_both_scenes(rendered: tuple[Path, dict[str, 
 def test_fade_color_dips_to_the_colour(rendered: tuple[Path, dict[str, Any]]) -> None:
     root, _ = rendered
     plan = _plan(root)
-    video = _frames(root / "out_preview.mp4")
+    video = _frames(root / "output" / "out_preview.mp4")
     cut = round(plan.scene("more").start * FPS)
     accent = np.array([0xFF, 0x6B, 0x6B])  # dark_tech accent
     for k in (cut - 1, cut):  # the last frame of talk and the first of more are the colour

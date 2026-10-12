@@ -389,11 +389,11 @@ def test_render_json(render_project_dir: Callable[..., Path], capsys: pytest.Cap
     assert (doc["project"], doc["variant"], doc["preview"], doc["audio"]) == (str(root.resolve()), None, True, False)
     assert doc["format"] == {"width": 96, "height": 54, "fps": 5}
     assert doc["outputs"] == {
-        "video": str((root / "out_preview.mp4").resolve()),
-        "subtitles": str((root / "out_preview.srt").resolve()),
+        "video": str((root / "output" / "out_preview.mp4").resolve()),
+        "subtitles": str((root / "output" / "out_preview.srt").resolve()),
         "timings": str((root / "build" / "preview" / "timings.json").resolve()),
         "frames": None,
-        "chapters": str((root / "out_preview_chapters.txt").resolve()),
+        "chapters": str((root / "output" / "out_preview_chapters.txt").resolve()),
         "thumbnail": None,
     }
     intro, second = doc["chapters"]  # the intro chapter before the first chapter (DESIGN.md §52)

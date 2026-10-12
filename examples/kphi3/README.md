@@ -20,7 +20,7 @@ example can be rendered, and are not part of the pip package (see `THIRD_PARTY_N
 vidgen validate examples/kphi3            # config, scene params, audio: 27 ok
 vidgen tts examples/kphi3 --dry-run       # 0 beats to generate (the MP3s are up to date)
 vidgen render examples/kphi3 --preview    # 854x480 @ 15 fps, about 1 min with --jobs 2
-vidgen render examples/kphi3 --jobs 2     # final 1080p -> kphi3_video.mp4 + .srt
+vidgen render examples/kphi3 --jobs 2     # final 1080p -> examples/kphi3/output/kphi3_video.mp4 + .srt
 vidgen render examples/kphi3 --scene params   # re-render one scene and re-join
 ```
 

@@ -542,6 +542,7 @@ def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) ->
         report = mix.mix_audio(project, combined, audios, track if track.is_file() else None, mixed)
         combined["mix"] = report.to_json()
     output = project.output_path(preview)
+    output.parent.mkdir(parents=True, exist_ok=True)  # the SRT and chapter list go there too
     ff.join(
         ffmpeg, videos, audios, output, padded_dir,
         sfx=track if track.is_file() else None,
