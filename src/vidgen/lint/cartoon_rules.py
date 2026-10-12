@@ -86,10 +86,42 @@ def walk_overlap(ctx: StillContext, settings: WalkOverlapRule) -> Iterator[Issue
             )
 
 
+#: Shots (DESIGN.md §69.29) whose subjects need only their face in view (the frame cuts the rest).
+FACE_SHOTS = frozenset({"medium", "over_shoulder", "closeup"})
+
+
+def _off_shot(ctx: StillContext, settings: OffStageRule, shot: dict[str, Any]) -> Iterator[Issue]:
+    """``off_stage`` in a shot: each character it frames is in view (its face in a medium,
+    over-the-shoulder or close-up shot, else its whole box); the near character of an
+    over-the-shoulder shot and characters the shot does not frame may be cut by the frame."""
+    kind = str(shot.get("kind"))
+    subjects = set(shot.get("subjects") or ())
+    for obj in _figures(ctx):
+        if obj.get("passage") or obj.get("name") not in subjects:
+            continue
+        what, box = ("face", tuple(float(v) for v in obj["face"])) if kind in FACE_SHOTS and obj.get("face") else ("box", object_box(obj))
+        seen = intersection(box, (0, 0, ctx.width, ctx.height))
+        hidden = 1.0 if seen is None else 1 - area(seen) / max(area(box), 1e-9)
+        if hidden < settings.min_hidden:
+            continue
+        yield Issue(
+            f"{describe(obj)} is out of the {kind} shot that frames it ({hidden:.0%} of its {what} outside the view); "
+            "frame it in a later beat or another shot, or keep it from walking out during the shot",
+            box,
+            (obj,),
+            value=round(hidden, 3),
+            limit=settings.min_hidden,
+        )
+
+
 @rule("off_stage")
 def off_stage(ctx: StillContext, settings: OffStageRule) -> Iterator[Issue]:
     """A character is partly outside the view (not while it enters or exits, nor while the
-    camera is zoomed in)."""
+    camera is zoomed in); in a shot, a character the shot frames is out of it."""
+    shot = ctx.frame.get("shot")
+    if shot and shot.get("kind") != "wide":
+        yield from _off_shot(ctx, settings, shot)
+        return
     if ctx.zoomed:
         return
     width, height = ctx.width, ctx.height

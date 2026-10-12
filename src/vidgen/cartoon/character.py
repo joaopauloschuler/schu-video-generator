@@ -393,6 +393,11 @@ class Character(VGroup):
         """The point between the feet on screen (the character's origin)."""
         return np.array(self._anchor.points[0], dtype=float)
 
+    @property
+    def standing_height(self) -> float:
+        """How tall it is built (``height``, times any scaling of it since), whatever its pose."""
+        return float(np.linalg.norm(self._anchor.points[2] - self._anchor.points[0])) / _ANCHOR_SIDE
+
     def hand_point(self, hand: str) -> np.ndarray:
         """Where the ``left`` or ``right`` hand is on screen now (the end of that arm: the hand's
         middle on a generated character; on an SVG the point of the arm farthest from the

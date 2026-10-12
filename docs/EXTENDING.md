@@ -1074,7 +1074,11 @@ stage moves its parallax layers so); both run as one scene updater after every a
 listener must place things from the camera alone: it also runs before each animation, and while
 the camera neither follows nor animates, Manim draws what comes before the first moving mobject
 once into a static image for that animation.
-`zoom` comes back to the view it started from. Animate the parts that are in the
+`zoom` comes back to the view it started from. A beat's `shot:` (DESIGN.md §69.29) works on a
+scene type with a `shot_framing(kind, names)` method returning `(ShotView, Shot)` (the built-in
+`stage`; the framing maths is `frame_shot` / `shot_figures` / `shot_view`); while a shot is on,
+`scene.camera_shot` holds what the layout dump records and `scene.shot_home` the view the next
+beat goes back to. Animate the parts that are in the
 scene (`scene.on_screen_parts(t)`), not a group of them that was never added: Manim would add
 that group and draw its parts twice. New mobjects (like the marks above) are simply added by
 their animation. `vidgen list-scenes` lists your action with its options; `vidgen schema`

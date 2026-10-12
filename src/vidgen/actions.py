@@ -18,7 +18,7 @@ from __future__ import annotations
 import difflib
 import logging
 import re
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Collection, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -313,6 +313,28 @@ class ActionUse:
         return float(self.config.run_time or self.kind.cls.run_time)
 
 
+def beat_action_list(spec: SceneConfig, known: Collection[str]) -> list[tuple[str, str, ActionConfig]]:
+    """Every action of ``spec``'s beats in order, resolved, with its beat's id and its location: each beat's
+    ``shot:`` (as a ``shot`` action, DESIGN.md §69.29) first, then its written actions. A beat
+    after one with a shot gets, unless it starts with a shot of its own, a ``shot`` without a
+    kind first: back to the view before the shots (easing back when the last shot eased in)."""
+    found: list[tuple[str, str, ActionConfig]] = []
+    last_shot: ActionConfig | None = None   # of the beat before
+    for j, beat in enumerate(spec.beats):
+        listed = [(f"beats[{j}].actions[{k}]", act.resolved(known)) for k, act in enumerate(beat.actions)]
+        if beat.shot is not None:
+            listed.insert(0, (f"beats[{j}].shot", beat.shot.action()))
+        shots = [act for _, act in listed if act.action == "shot"]
+        if last_shot is not None and not any(act.at == 0 for act in shots):
+            back: dict[str, Any] = {"action": "shot"}
+            if last_shot.options.get("move"):
+                back.update(move=True, run_time=last_shot.run_time)
+            listed.insert(0, (f"beats[{j}].shot", ActionConfig.model_validate(back)))
+        last_shot = next((act for act in reversed(shots) if act.options.get("kind") is not None), None)
+        found += [(beat.id, where, act) for where, act in listed]
+    return found
+
+
 def scene_actions(
     scene_type: str, cls: type[NarratedScene], spec: SceneConfig, params: Any, theme: Theme | None
 ) -> tuple[list[ActionUse], list[tuple[str, str]]]:
@@ -329,44 +351,41 @@ def scene_actions(
     names = cls.target_names(params) if params is not None else None
     provided: list[str] = []  # target names registered by earlier actions (a named callout)
     known = registry.action_names()
-    for j, beat in enumerate(spec.beats):
-        for k, act in enumerate(beat.actions):
-            where = f"beats[{j}].actions[{k}]"
-            act = act.resolved(known)
-            kind = registry.find_action(act.action)
-            if kind is None:
-                problems.append((f"{where}.action", registry.unknown_action_message(act.action)))
-                continue
-            try:
-                options = kind.cls.Options.model_validate(act.options, context={"theme": theme})
-            except ValidationError as exc:
-                problems += [(f"{where}.{p.location}", p.message) for p in validation_problems(exc, model=kind.cls.Options, noun="option")]
-                continue
-            found = len(problems)
-            if act.until is not None and not kind.cls.reversible:
-                reversible = ", ".join(e.name for e in registry.all_actions() if e.cls.reversible) or "none"
-                problems.append((f"{where}.until", f"action '{act.action}' cannot be undone; until works with: {reversible}"))
-            if kind.cls.needs_target and not act.targets():
-                problems.append((f"{where}.target", f"action '{act.action}' needs a target"))
-            instance = kind.cls(options, act)
-            problems += [(f"{where}.{key}", message) for key, message in instance.problems()]
-            if params is not None:
-                problems += [(f"{where}.{key}", message) for key, message in instance.scene_problems(cls, params)]
-            checked = [("target", p) for p in act.targets()] if kind.cls.scene_targets else []
-            for option in kind.cls.target_options:
-                value = getattr(options, option)
-                checked += [(option, p) for p in ([value] if isinstance(value, str) else value or [])]
-            for key, pattern in checked if names is not None else []:
-                if not match_names(pattern, names + provided):
-                    problems.append((f"{where}.{key}", unknown_target_message(pattern, scene_type, names + provided, cls.target_patterns)))
-            for name in instance.provides():
-                if not TARGET_NAME.match(name):
-                    problems.append((f"{where}.name", f"invalid target name {name!r} (use name, name3, name1.part2 or kind:label)"))
-                elif names is not None and match_names(name, names + provided):
-                    problems.append((f"{where}.name", f"target name '{name}' is already taken in this scene; pick another"))
-            if len(problems) == found:
-                uses.append(ActionUse(beat.id, where, act, kind, instance))
-                provided += instance.provides()
+    for beat_id, where, act in beat_action_list(spec, known):
+        kind = registry.find_action(act.action)
+        if kind is None:
+            problems.append((f"{where}.action", registry.unknown_action_message(act.action)))
+            continue
+        try:
+            options = kind.cls.Options.model_validate(act.options, context={"theme": theme})
+        except ValidationError as exc:
+            problems += [(f"{where}.{p.location}", p.message) for p in validation_problems(exc, model=kind.cls.Options, noun="option")]
+            continue
+        found = len(problems)
+        if act.until is not None and not kind.cls.reversible:
+            reversible = ", ".join(e.name for e in registry.all_actions() if e.cls.reversible) or "none"
+            problems.append((f"{where}.until", f"action '{act.action}' cannot be undone; until works with: {reversible}"))
+        if kind.cls.needs_target and not act.targets():
+            problems.append((f"{where}.target", f"action '{act.action}' needs a target"))
+        instance = kind.cls(options, act)
+        problems += [(f"{where}.{key}", message) for key, message in instance.problems()]
+        if params is not None:
+            problems += [(f"{where}.{key}", message) for key, message in instance.scene_problems(cls, params)]
+        checked = [("target", p) for p in act.targets()] if kind.cls.scene_targets else []
+        for option in kind.cls.target_options:
+            value = getattr(options, option)
+            checked += [(option, p) for p in ([value] if isinstance(value, str) else value or [])]
+        for key, pattern in checked if names is not None else []:
+            if not match_names(pattern, names + provided):
+                problems.append((f"{where}.{key}", unknown_target_message(pattern, scene_type, names + provided, cls.target_patterns)))
+        for name in instance.provides():
+            if not TARGET_NAME.match(name):
+                problems.append((f"{where}.name", f"invalid target name {name!r} (use name, name3, name1.part2 or kind:label)"))
+            elif names is not None and match_names(name, names + provided):
+                problems.append((f"{where}.name", f"target name '{name}' is already taken in this scene; pick another"))
+        if len(problems) == found:
+            uses.append(ActionUse(beat_id, where, act, kind, instance))
+            provided += instance.provides()
     if params is not None and not problems:
         problems += cls.action_sequence_problems(spec, params, uses)
     return uses, problems

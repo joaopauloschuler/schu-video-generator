@@ -637,7 +637,7 @@ class WalkOverlapRule(RuleConfig):
 
 
 class OffStageRule(RuleConfig):
-    """``off_stage``: a character partly outside the view (not while it enters or exits)."""
+    """``off_stage``: a character partly outside the view (not while it enters or exits); in a shot, a character the shot frames."""
 
     min_hidden: Fraction = 0.05
     """Share of the character's box outside the view from which it is reported."""
@@ -1026,6 +1026,62 @@ def _sting(value: str | StingCue) -> StingCue:
 StingSetting = Annotated[Union[StingKind, StingCue], AfterValidator(_sting)]
 
 
+#: The framings of a beat's ``shot:`` (DESIGN.md §69.29; :data:`vidgen.cartoon.shots.SHOT_KINDS`).
+ShotKind = Literal["wide", "two_shot", "medium", "over_shoulder", "closeup"]
+#: How many characters each framing names: (fewest, most); fewer than the most are filled in
+#: when the shot is framed (:func:`vidgen.cartoon.shots.shot_figures`).
+SHOT_NAMES: dict[str, tuple[int, int]] = {"wide": (0, 0), "two_shot": (0, 2), "medium": (1, 1), "over_shoulder": (1, 2), "closeup": (1, 1)}
+
+
+class ShotConfig(_Strict):
+    """A beat's camera framing on a stage (``shot:``): ``closeup kit`` or ``{kind, of, move,
+    run_time}``. It cuts to the framing as the beat starts (eases with ``move: true``) and holds
+    for the beat; the next beat without a shot goes back to the view before the shots."""
+
+    kind: ShotKind
+    """wide (everyone, no zoom), two_shot (two characters, whole), medium (one from the hips up), over_shoulder (one seen past another, who stands cut by the frame's edge) or closeup (head and shoulders)."""
+    of: list[Identifier] = Field(default_factory=list)
+    """The characters it frames: none for wide; two_shot two (default: the speaker and the one nearest it); medium and closeup one; over_shoulder the one seen, then the near one (default: the one it looks at, else the nearest)."""
+    move: bool = False
+    """true: the camera eases to the framing (and back after the beat) instead of cutting."""
+    run_time: PositiveFloat | None = None
+    """Seconds of the move with move: true (default 1.0)."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _from_words(cls, data: Any) -> Any:
+        """``"over_shoulder kit pip"`` -> ``{kind: over_shoulder, of: [kit, pip]}``; ``of`` may be one name."""
+        if isinstance(data, str):
+            kind, *names = data.split()
+            return {"kind": kind, "of": names}
+        if isinstance(data, dict) and isinstance(data.get("of"), str):
+            return {**data, "of": [data["of"]]}
+        return data
+
+    @model_validator(mode="after")
+    def _check_names(self) -> ShotConfig:
+        fewest, most = SHOT_NAMES[self.kind]
+        if not fewest <= len(self.of) <= most:
+            wanted = "no character" if most == 0 else f"{fewest} to {most} characters" if fewest != most else f"{most} character"
+            raise ValueError(f"a {self.kind} shot names {wanted}, got {len(self.of)} ({' '.join(self.of) or 'none'})")
+        if len(set(self.of)) != len(self.of):
+            raise ValueError(f"a {self.kind} shot names a character twice ({' '.join(self.of)})")
+        if self.run_time is not None and not self.move:
+            raise ValueError("run_time is for a shot with move: true (a cut takes no time)")
+        return self
+
+    def action(self) -> ActionConfig:
+        """The ``shot`` action this key stands for (at the beat's start)."""
+        data: dict[str, Any] = {"action": "shot", "kind": self.kind}
+        if self.of:
+            data["target"] = list(self.of)
+        if self.move:
+            data["move"] = True
+        if self.run_time is not None:
+            data["run_time"] = self.run_time
+        return ActionConfig.model_validate(data)
+
+
 #: The kinds of automatic directing (``auto_direct:``; DESIGN.md §69.23), in planning order.
 DIRECTING_KINDS: tuple[str, ...] = ("looks", "reactions", "gestures", "closeups")
 
@@ -1041,7 +1097,7 @@ class AutoDirect(_Strict):
     gestures: bool = True
     """The speaker gestures on a line's stressed word (*word*, an all-capitals word, else a long one): at most one per line, from the gestures its parts allow."""
     closeups: bool = True
-    """A short punchy line right after a long one gets a close-up (a zoom on the speaker): never two beats in a row, never during a walk or a camera move."""
+    """A short punchy line right after a long one gets a close-up (a zoom on the speaker, or a closeup shot when the line is too short for the zoom's moves): never two beats in a row, never during a walk, a camera move or a written shot."""
 
 
 #: ``auto_direct:`` on the video, a stage scene or a beat: ``true`` (every kind), ``false``
@@ -1393,6 +1449,8 @@ class BeatConfig(_Strict):
     """A short music sting on this beat: reveal, comic or sad, or {kind, at: start | end, gain}; ducked under the narration."""
     auto_direct: AutoDirectSetting | None = None
     """On a stage scene: automatic looks and reactions for this beat (true, false or {looks, reactions, gestures, closeups}); default: the scene's, else the video's."""
+    shot: ShotConfig | None = None
+    """On a stage scene: the camera's framing for this beat (wide, two_shot, medium KIT, over_shoulder KIT [NEAR], closeup KIT, or {kind, of, move, run_time}); a cut as the beat starts, back to the view before at the next beat without one."""
 
     def estimated_duration(self, words_per_second: float) -> float:
         """Speech duration estimated from the word count (no padding)."""

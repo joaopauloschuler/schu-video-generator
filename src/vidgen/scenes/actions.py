@@ -5,7 +5,7 @@ Written against ``vidgen.api`` only, like project actions. ``dim`` and ``highlig
 opacity resp. colour, so they combine and undo (``until:``) independently; both also work on
 images (their pixels). ``zoom`` moves the scene's camera and brings it back by the end of the
 beat; ``pan`` moves it sideways to a character or a place and ``follow`` keeps it on a character
-(both stay inside :meth:`NarratedScene.camera_bounds`); ``transform`` morphs targets into another target that is not on screen yet.
+(both stay inside :meth:`NarratedScene.camera_bounds` and end a ``shot``); ``transform`` morphs targets into another target that is not on screen yet.
 """
 
 import logging
@@ -482,6 +482,13 @@ def move_camera_back(scene: NarratedScene, view: tuple[float, np.ndarray] | None
     return [MoveCamera(scene, width, center)]
 
 
+def end_shot(scene: NarratedScene) -> None:
+    """A ``pan`` or ``follow`` takes the camera from a ``shot`` (DESIGN.md §69.29): the shot is
+    over, and the next beat does not go back to the view before it."""
+    scene.camera_shot = None
+    scene.shot_home = None
+
+
 def _sideways(scene: NarratedScene, x: float) -> np.ndarray | None:
     """The centre, at the view's size and height, nearest ``x`` that
     :meth:`NarratedScene.camera_bounds` allow; ``None`` when the camera is there already."""
@@ -541,8 +548,10 @@ class Pan(Action):
         return []
 
     def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
-        """Stop following, then move the view's centre to the targets' (or the place's) x."""
+        """Stop following (and end a ``shot``), then move the view's centre to the targets' (or the
+        place's) x."""
         scene.follow_with_camera(None)
+        end_shot(scene)
         if targets:
             x = float(np.mean([_x_of(t.mobject)() for t in targets]))
         else:
@@ -597,8 +606,9 @@ class Follow(Action):
         return []
 
     def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
-        """Pan to the first target, then follow it."""
+        """Pan to the first target, then follow it (ending a ``shot``)."""
         scene.follow_with_camera(None)
+        end_shot(scene)
         self.x_of = _x_of(targets[0].mobject)
         center = _sideways(scene, self.x_of())
         if center is None:

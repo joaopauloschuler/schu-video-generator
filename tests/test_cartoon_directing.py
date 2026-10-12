@@ -18,7 +18,6 @@ from test_cartoon_stage import render_with_layout
 from vidgen import actions, cli, extensions, registry
 from vidgen.cartoon.acting import GESTURE_EASE, GESTURE_SECONDS, GESTURES
 from vidgen.cartoon.directing import (
-    CLOSEUP_CUT_SECONDS,
     CLOSEUP_SCALE,
     CLOSEUP_SECONDS,
     REACTION_AT,
@@ -249,8 +248,8 @@ def test_a_closeup_for_a_short_line_after_a_long_one() -> None:
     beats = [line("b1", LONG, ("pip",), kinds=frozenset({"closeups"})), line("b2", "No, not today, my friend.", ("kit",), kinds=frozenset({"closeups"})),
              line("b3", "Why not?", ("pip",), kinds=frozenset({"closeups"}))]
     assert directed(beats) == {"b2": [{"zoom": "kit", "scale": CLOSEUP_SCALE, "run_time": CLOSEUP_SECONDS}]}
-    quick = [beats[0], line("b2", "No.", ("kit",), kinds=frozenset({"closeups"}))]   # 0.33 s: cut in and back
-    assert directed(quick) == {"b2": [{"zoom": "kit", "scale": CLOSEUP_SCALE, "run_time": CLOSEUP_CUT_SECONDS}]}
+    quick = [beats[0], line("b2", "No.", ("kit",), kinds=frozenset({"closeups"}))]   # 0.33 s: a cut to a close-up shot (Step 95)
+    assert directed(quick) == {"b2": [{"shot": "kit", "kind": "closeup"}]}
     again = [beats[0], beats[1], line("b3", LONG, ("pip",), kinds=frozenset({"closeups"})), line("b4", "Fine.", ("kit",), kinds=frozenset({"closeups"}))]
     assert sorted(directed(again)) == ["b2", "b4"]
     assert directed([beats[0], line("b2", "Hm.", ("kit",), kinds=frozenset({"closeups"}))], stage=None) == {}   # no geometry
@@ -458,8 +457,8 @@ def test_storyboard_marks_the_automatic_actions(make_project, capsys) -> None:
 
 @pytest.mark.render
 def test_gestures_and_a_closeup_render_and_lint_clean(make_project, capsys) -> None:
-    """A long line with a stressed word, then a short answer: pip gestures, kit gets a close-up,
-    and the cartoon lint rules find nothing in the rendered stills."""
+    """A long line with a stressed word, then a short answer: pip gestures, kit gets a close-up
+    shot, and the cartoon lint rules find nothing in the rendered stills."""
     tiny = {"width": 160, "height": 90, "fps": 5}
     project = directed_project(make_project, [
         {"text": "This kite is truly REMARKABLE, it flies all day and all night long.", "voice": "pip_voice"},
@@ -468,7 +467,7 @@ def test_gestures_and_a_closeup_render_and_lint_clean(make_project, capsys) -> N
         format=tiny, preview=tiny)
     with extensions.project_session(project):
         added = {d.beat: [auto_label(a) for a in d.actions] for d in project_directions(project)["park"]}
-    assert any(a.startswith("gesture pip ") for a in added["park_b1"]) and "zoom kit 2" in added["park_b2"]
+    assert any(a.startswith("gesture pip ") for a in added["park_b1"]) and added["park_b2"] == ["shot closeup kit"]   # too short for the zoom's moves (Step 95)
     rules = ["off_stage", "facing_away", "bubble_overlap", "character_overlap", "rushed_animation"]
     assert cli.main(["lint", str(project.root), "--json", "--fail-on", "warning", *[x for r in rules for x in ("--rule", r)]]) == 0
     doc = json.loads(capsys.readouterr().out)

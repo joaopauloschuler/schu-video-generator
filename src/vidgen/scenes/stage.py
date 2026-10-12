@@ -222,7 +222,9 @@ class Stage(NarratedScene):
     (``walk_to``, ``enter``, ``exit``, ``gesture``, ``jump``) move them. A character with an
     ``enter`` action waits off stage until it enters. Walks, entrances, exits, jumps and a
     surprised face make their own sounds (foley; ``foley: false`` turns them off). With
-    ``auto_direct``, listeners look at whoever speaks and react after lines on their own.
+    ``auto_direct``, listeners look at whoever speaks and react after lines on their own. A
+    beat's ``shot:`` frames characters for that beat (``closeup kit``, ``two_shot``,
+    ``over_shoulder kit pip``...): a cut, and back at the next beat without one.
 
     The ``keyframes`` and ``move_along`` actions move a character, a prop or a character's part
     by keys or along a path. Characters handle props with ``pick_up``, ``hold``, ``put_down``,
@@ -432,6 +434,9 @@ class Stage(NarratedScene):
         speaks (DESIGN.md §69.11)."""
         b = self.beat(beat)
         voiced = [] if "say" in self.beat_action_names(b) else speaking_characters(self.project.config, beat_voice(self.spec, b), self.cast)
+        said = [p for act in b.actions if act.action == "say" for p in act.targets()]
+        #: who says the beat being narrated (a shot's default framing reads it, DESIGN.md §69.29)
+        self.beat_speakers = voiced or [n for n in self.cast if any(fnmatchcase(n, p) for p in said)]
         speakers: list[tuple[Character, Any]] = []
         with super().narrate(b) as d:
             for name in voiced:
@@ -464,6 +469,23 @@ class Stage(NarratedScene):
             for cue in foley_cues(played):
                 params = {} if self.sounds.file(cue.sound) is not None else cue.params
                 self.sfx(cue.sound, max(cue.time, 0.0), gain=cue.gain, align=cue.align, **params)
+
+    def shot_framing(self, kind: str, names: list[str]) -> tuple[ShotView, Shot]:
+        """The camera view of a ``kind`` shot of the characters ``names`` (filled in by
+        :func:`shot_figures`) where the characters on the stage stand now (DESIGN.md §69.29)."""
+        left, right = self.camera_bounds()[:2]
+        present: dict[str, ShotFigure] = {}
+        for name, figure in self.cast.items():
+            x = float(figure.feet()[0])
+            if not left <= x <= right:
+                continue  # waiting to enter, or gone
+            tops = [figure.parts[part].get_top()[1] for part in ("head", "accessory") if figure.has_part(part)]   # a hat too
+            top = max(tops) if tops else figure.get_top()[1]
+            present[name] = ShotFigure(name, x, float(figure.feet()[1]), figure.standing_height, figure.facing, float(top))
+        looked = {name: figure.looked_at for name, figure in self.cast.items()}
+        shot = shot_figures(kind, names, present, speakers=getattr(self, "beat_speakers", []), looked_at=looked)
+        view = shot_view(shot, present, frame_width=self.frame_width, frame_height=self.frame_height, bounds=self.camera_bounds())
+        return view, shot
 
     @classmethod
     def camera_place(cls, params: Any, place: str | float) -> float:

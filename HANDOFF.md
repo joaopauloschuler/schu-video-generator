@@ -8796,3 +8796,111 @@ How to test
   test_extensions test_json_output test_cli test_config` (750, 26 s), `test_docs test_guide
   test_schema test_actions_coverage test_api` (176, 61 s); render: `tests/test_cartoon_*.py` (21,
   14 s), `test_phase_h_review test_builtin_scenes -k "stage or review"` (3, 21 s).
+
+## Step 95 — Shots within a scene
+
+What was built
+- Beat key `shot:` on `stage` scenes: `closeup kit`, `medium kit`, `two_shot [a b]`,
+  `over_shoulder kit [near]`, `wide`, or `{kind, of, move, run_time}` (`config.ShotConfig`,
+  `SHOT_NAMES` checks how many names each kind takes; `run_time` only with `move`). The camera
+  cuts to the framing as the beat starts (`move: true`: eases, 1.0 s) and holds it to the beat's
+  end; the next beat without a shot goes back to the view before the shots (eased if the last
+  shot eased).
+- Framing maths, no manim (`src/vidgen/cartoon/shots.py`): `ShotFigure`, `ShotView`, `Shot`,
+  `frame_shot(kind, subjects, frame_width=, frame_height=, bounds=, near=)` (wide: scale 1 on the
+  subjects' middle; two_shot: both boxes + 0.1 padding; medium / closeup: `SHOT_SPANS` from the
+  head's top, `LOOK_ROOM` 0.1 in front of the face; over_shoulder: subject at `SUBJECT_AT` 0.66 of
+  the width from the near side, the near one's middle on the edge, scale between 1 and the
+  close-up's), kept in the stage by `view_center_within`, at most `MAX_ZOOM` 8;
+  `shot_figures(kind, named, present, speakers=, looked_at=)` fills in missing names;
+  `shot_view`.
+- `shot` action (`src/vidgen/scenes/shot_action.py`, on `_Acting`): the key becomes it
+  (`ShotConfig.action()`). `actions.beat_action_list(spec, known)` (now the list `scene_actions`
+  validates and plans) puts each beat's key first and inserts a `shot` without a kind (back) at
+  the start of a beat after a shot's beat. A cut sets the camera frame directly (no animation,
+  since the runner plays a batch for its longest run time); `move` returns a `MoveCamera`.
+  `Stage.shot_framing(kind, names)` gives the view from the characters now (feet inside the stage;
+  head top from the `head` / `accessory` parts; new `Character.standing_height`;
+  `Stage.beat_speakers`). `NarratedScene.camera_shot` / `shot_home` hold the shot for the layout
+  dump and the view to go back to; `pan` / `follow` end a shot (`scenes/actions.end_shot`).
+- Layout dump frames in a shot get `shot: {kind, subjects, near}`. Lint `off_stage` in a shot
+  (not `wide`) checks only its subjects (face in medium / over_shoulder / closeup, whole box in
+  two_shot, also when zoomed or wholly outside); the near character and others may be cut.
+- Planner (`cartoon/directing.py`): the close-up that was a 0.03 s zoom cut in and back is now a
+  `shot` of kind `closeup` of the speaker (checked with `_closeup_shot` on a predicted still with
+  the shot); the eased 0.5 s zoom stays. `shot` is a framing action and a move (no automatic
+  close-up in or right after a beat with a written shot); in a beat with a written shot the passes
+  check looks and gestures on the shot's view. `directions_yaml` prints an automatic shot as the
+  beat's `shot: closeup kit` line (`actions:` only when others remain); `auto_label` reads
+  `shot closeup kit`. `CLOSEUP_CUT_SECONDS` removed; `FIGURE_HALF_WIDTH` now lives in `shots.py`.
+
+Checked by eye: a scratch copy of examples/cartoon with an over-the-shoulder, a two-shot (with a
+walk: the ½ still is inside the shot), a close-up with a speech bubble (bubble sized and placed
+for the shot), an eased two-shot taken over by a `follow`, a close-up on the wide stage with the
+hills layer and dust, an over-the-shoulder with the default near character: `vidgen validate` ok,
+`vidgen storyboard` (preview) looked right, `vidgen lint` 0 findings (after making `pan` / `follow`
+end a shot: before, the written `follow` in a two-shot beat left both subjects out of the dump's
+shot). A three-beat scratch dialogue with `auto_direct: true`: `vidgen direct --print` writes
+`shot: closeup moss` for the short reply, the storyboard shows it, lint 0 findings.
+
+Files touched
+- New: `src/vidgen/cartoon/shots.py`, `src/vidgen/scenes/shot_action.py`, `tests/test_cartoon_shots.py`.
+- `src/vidgen/config.py` (`ShotKind`, `SHOT_NAMES`, `ShotConfig`, `BeatConfig.shot`, docstrings of
+  `AutoDirect.closeups` / `OffStageRule`), `actions.py` (`beat_action_list`), `scene.py`
+  (`camera_shot`, `shot_home`), `scenes/stage.py` (`shot_framing`, `beat_speakers`, docstring),
+  `scenes/actions.py` (`end_shot`), `scenes/__init__.py`, `cartoon/character.py`
+  (`standing_height`), `cartoon/directing.py`, `introspect.py`, `lint/cartoon_rules.py`, `api.py`,
+  guide (`src/vidgen/data/guide/AGENTS.md` + `AGENTS.md`: shot variety, reaction shots, auto
+  close-ups, actions table row, troubleshooting row).
+- Docs: `docs/CONFIG.md` (beat keys, new "Shots (`shot:`)", actions row, `off_stage` row,
+  auto_direct close-ups and `--print`, layout `shot`), `DESIGN.md` (§2 tree, §6.4, §69.17 /
+  §69.23 / §69.24 / §69.25 pointers, new §69.29), `docs/EXTENDING.md` (camera paragraph),
+  `docs/gallery/stage.md` (the `auto_direct.closeups` row, as `vidgen gallery` writes it),
+  `tasklist.md`.
+- Tests updated: `tests/test_actions.py` (action name lists gain `shot`),
+  `tests/test_cartoon_directing.py` (the quick close-up is now a shot; the render test expects
+  `shot closeup kit`), `tests/test_docs.py` (`ShotConfig` in `MODELS`).
+
+Public interfaces
+- `vidgen.api` adds `ShotConfig`, `SHOT_NAMES`, `SHOT_KINDS`, `SHOT_MOVE_SECONDS`, `Shot`,
+  `ShotFigure`, `ShotView`, `frame_shot`, `shot_figures`, `shot_view`. `BeatConfig.shot`; built-in
+  action `shot`; `Character.standing_height`; `NarratedScene.camera_shot` / `shot_home`;
+  `Stage.shot_framing`, `Stage.beat_speakers`; `actions.beat_action_list`; layout key `shot`.
+  Compatible, except that `auto_direct` now writes a short line's close-up as a `shot` (renders of
+  such beats change) and `directing.CLOSEUP_CUT_SECONDS` is gone.
+
+Decisions / deviations
+- The key is sugar for a `shot` action, so validation, the runner, batching with other actions,
+  `at`, mid stills and the planner's "written actions win" all reuse the action path; the action
+  form is documented for a shot later in a beat. Back-to-the-view is an inserted `shot` without a
+  kind, not `until` / `temporary` (a temporary revert would play at the end of the pad, and two
+  shots in a row would cut back and forth).
+- A shot lasts its beat (shot / reverse shot is one key per beat); it does not follow a walk.
+- "Lint off_stage allows the near character": done by making `off_stage` shot-aware (only the
+  framed characters are checked), which also catches a close-up that cuts its subject's face.
+  Without a shot, a zoomed still is still skipped.
+- Over-the-shoulder in 2D: the characters are flat and side-on, so the near one is magnified with
+  the subject, not drawn larger; on far-apart marks (`left` / `right`) the shot is only ~1.3x.
+- "Where cleaner": only the cut close-up became a shot; the eased push-in zoom stays a `zoom`.
+- Searched first: reused `view_center_within`, `MoveCamera`, `_MoveThenFollow`, `camera_view`,
+  `_Acting._target_characters`, the planner's predicted stills and `still_findings`; no framing
+  code existed besides `zoom`'s fit.
+
+Known gaps / TODOs
+- Step 96 (vertical reframing) can reuse `frame_shot`; the screenplay grammar has no shots; a
+  seated character's head top comes from its parts at render time but from its standing height
+  in the planner; a `pan` / `follow` in a shot ends it rather than reframing; the deprecation
+  warning of Manim's `set_width` in the existing `MoveCamera` is untouched.
+
+How to test
+- `pytest tests/test_cartoon_shots.py` (13 not-render + 1 render at 160x90, ~4 s).
+- Also run: not render `test_cartoon_shots test_cartoon_directing test_cartoon_lint test_actions
+  test_docs test_guide test_api test_config test_gallery` (215, 4 s), `test_guide test_schema
+  test_cartoon_stage test_cartoon_acting test_cartoon_moving test_cartoon_parallax
+  test_introspect test_lint test_storyboard test_json_output test_cli test_mcp
+  test_actions_coverage test_cartoon_seating test_cartoon_holding test_phase_h_review
+  test_screenplay test_builtin_scenes test_extensions test_cartoon_sheet` (502, 94 s); render
+  `test_cartoon_shots test_cartoon_directing test_cartoon_parallax test_cartoon_lint
+  test_cartoon_stage test_actions_coverage` (70, 38 s), `test_phase_h_review test_introspect
+  test_storyboard` (4, 50 s), `test_builtin_scenes -k stage test_cartoon_seating
+  test_cartoon_holding test_cartoon_acting test_cartoon_moving` (6, 4 s).

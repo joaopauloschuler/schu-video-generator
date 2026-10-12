@@ -125,7 +125,9 @@ that beat — a dialogue inside one scene, see [multiple voices](#multiple-voice
 `sting` (default none) plays a short music sting on it: `reveal`, `comic` or `sad`, or `{kind, at,
 gain}`, see [music stings](#foley-and-music-stings). A beat's `auto_direct` (default: its scene's,
 else the video's) turns [automatic directing](#automatic-directing-auto_direct) on or off for that
-beat of a `stage`.
+beat of a `stage`. A beat's `shot` (default none) frames characters of a `stage` for that beat:
+`closeup kit`, `two_shot`, `over_shoulder kit pip`, ... or `{kind, of, move, run_time}`, see
+[shots](#shots-shot).
 
 ## Chapters
 
@@ -4288,6 +4290,45 @@ scenes:
           - {walk_to: pip, to: centre, at: 0.4}
 ```
 
+#### Shots (`shot:`)
+
+A beat's `shot` frames characters of a `stage` for that beat: the camera cuts to the framing as
+the beat starts and holds it to the beat's end; the next beat without a `shot` cuts back to the
+view before the shots (a run of beats with shots goes from one framing to the next). The framing
+is computed from where the characters stand when the beat starts (no rendering involved: the
+same maths runs in `vidgen direct`); the camera does not follow them during the shot (a walk can
+leave it; lint `off_stage` says so).
+
+| shot | names | frames |
+|---|---|---|
+| `wide` | none | every character on the stage, no zoom (the middle of them on a wide stage) |
+| `two_shot` | none, one or two | two characters, whole, with a margin; default: the beat's speaker and the character nearest it (one name: that one and the nearest) |
+| `medium` | one | the character from about the hips up, with more room on the side it faces |
+| `over_shoulder` | one, optionally the near one | the character seen past the *near* one (default: the one it last looked at, else the nearest), who stands at the other edge, cut by the frame. The nearer they stand, the tighter the shot (at most a close-up) |
+| `closeup` | one | its head and shoulders, with more room on the side it faces |
+
+`shot: closeup kit` (the kind, then the names) or `shot: {kind: closeup, of: kit, move: true,
+run_time: 1.2}`: `move: true` eases to the framing (1.0 s, or `run_time`) instead of cutting, and
+eases back after the beat. A `pan` or `follow` during a shot ends it (the camera stays where they
+take it). Shots are views of the stage: parallax layers move and particles stay screen-sized as
+for any camera move, and a speech bubble is placed and sized for the shot's view. Storyboard
+stills (the beat's end and half-way through its moves) show the shot. The layout dump records
+`shot: {kind, subjects, near}` on the frames in a shot, and lint `off_stage` then checks only the
+characters the shot frames (the near character of an over-the-shoulder shot may be cut).
+`vidgen validate` reports a shot naming no character or the wrong number of them, a prop or
+unknown name, and a shot on a scene that is not a `stage`.
+
+```yaml
+beats:
+  - text: "Is that a kite in the tree?"
+    voice: pip_voice
+    shot: over_shoulder pip kit      # pip seen past kit's shoulder
+  - text: "A very flat bird."
+    voice: kit_voice
+    shot: closeup kit
+  - text: "They looked at each other."  # no shot: back to the view before the shots
+```
+
 #### Automatic directing (`auto_direct`)
 
 With `auto_direct: true` (top level, a stage's param or a beat's key; the nearest one wins; off
@@ -4307,8 +4348,9 @@ writing each look:
   character never gets the same automatic reaction twice in a row. A surprised face pops
   ([foley](#foley-and-music-stings)).
 - **Actions written in a beat always win.** A character that one of the beat's own actions acts
-  on gets no automatic action in that beat; `say`, `zoom`, `pan`, `follow`, `highlight`, `dim`
-  and `callout` only frame or voice it and do not count. After its own `turn`, walk, `pose` or
+  on gets no automatic action in that beat; `say`, `zoom`, `pan`, `follow`, a shot, `highlight`,
+  `dim` and `callout` only frame or voice it and do not count. In a beat with a written shot the
+  lint check below looks at the shot's view. After its own `turn`, walk, `pose` or
   `emote`, a character is given a look again the next time it listens or speaks.
 - **Gestures.** A speaker makes one `gesture` per line at most, held on the line's stressed
   word: the first `*word*`, else the first word in capitals (`NEVER`, two letters or more), else
@@ -4322,10 +4364,11 @@ writing each look:
   text when the config is read: the TTS, captions, subtitles, speech bubbles, `vidgen readback`
   and lint see `word`; only the planner sees the mark. `2*3*4`, `a * b` and `**bold**` are left
   as written.
-- **Close-ups.** A line of at most 5 words right after a beat of at least 8 gets a `zoom` on its
-  speaker (`scale: 2`): it moves in and back in 0.5 s each when both fit in 80 % of the line, else
-  it cuts in and back. Never in two beats in a row (a written `zoom` counts), never in a beat with
-  a walk, `enter`, `exit`, `move_along`, `keyframes`, `pan`, `follow`, `zoom`, `pick_up`,
+- **Close-ups.** A line of at most 5 words right after a beat of at least 8 gets a close-up of
+  its speaker: a `zoom` (`scale: 2`) that moves in and back in 0.5 s each when both fit in 80 % of
+  the line, else a [`shot: closeup`](#shots-shot) of it (a cut held for the line; the next beat
+  cuts back). Never in two beats in a row (a written `zoom` or shot counts), never in a beat with
+  a walk, `enter`, `exit`, `move_along`, `keyframes`, `pan`, `follow`, `zoom`, a shot, `pick_up`,
   `put_down`, `give`, `throw`, `sit_on`, `lean_on` or `stand_up`, nor while the camera follows something, nor in a beat with a
   speech bubble or an automatic gesture of the speaker.
 - **Lint-safe.** Before adding a look, an arm gesture (`point`, `wave`, `shrug`) or a close-up,
@@ -4345,8 +4388,9 @@ writing each look:
 actions marked as automatic: `vidgen storyboard` lists them under their beat (`auto: look_at kit
 pip · react kit thinking`; `--json`: each frame's `auto`), and the log names them `look_at kit
 (auto)`. `vidgen direct [PROJECT]` (MCP tool `direct`) prints them per beat without rendering; `vidgen direct
---print` writes them as YAML to paste into `video.yaml` and edit (once pasted they are written
-actions, so automatic directing adds nothing more for those characters):
+--print` writes them as YAML to paste into `video.yaml` and edit (a close-up shot as the beat's
+`shot:` line; once pasted they are written actions, so automatic directing adds nothing more for
+those characters):
 
 ```yaml
 auto_direct: true
@@ -4722,6 +4766,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `keyframes`, `move_along` | see [Keyframes and motion paths](#keyframes-and-motion-paths) | move a `stage`'s character, prop or character part (`kit.arm_left`) through keys (`t`, `x`, `y`, `rotate`, `scale`, `ease`) or along a path of points |
 | `pick_up`, `hold`, `put_down`, `give`, `throw` | see [Props in hands](#props-in-hands) | a `stage`'s character takes a prop in its hand, puts it down, hands it to another character or throws it |
 | `sit_on`, `lean_on`, `stand_up` | see [Sitting and leaning](#sitting-and-leaning) | a `stage`'s character sits on a chair, a rock or a box, leans on a tree, a door or a sign, and stands up again |
+| `shot` | `kind` (`wide`, `two_shot`, `medium`, `over_shoulder`, `closeup`), `move` (`false`) | what a beat's [`shot:`](#shots-shot) key writes, as an action: the camera frames the target characters of a `stage` from `at` to the beat's end. Write the key; the action is for a shot that starts later in the beat (`at`). |
 
 `dim`, `highlight`, `zoom` and `transform` act on targets on screen; a target not shown yet is
 first revealed (as by `reveal`). `dim` and `highlight` change only opacity resp. colour, so
@@ -5156,6 +5201,8 @@ File `build/<final|preview>[_<variant>]/layout/<scene>.json`:
                                   # this time (false in the pad after it)
            camera: {center: [x, y], width, height,    # the camera frame in Manim units
                     zoom},                    # frame width / camera width: > 1 while zoomed in
+           shot: {kind, subjects, near},      # a stage's shot on screen (shot:), absent outside
+                                              # shots; near: over_shoulder only
            objects: [...],
            overlays: [{id, type, settled, skip}]}]}   # overlays drawn in this still; settled:
                                      # false while one slides or fades; skip: lint rules not
@@ -5303,7 +5350,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `max_words` | warning | more than `max_words` words (tokens with a letter) of visible `text` objects in one still; code and math do not count |
 | `overlay_overlap` | warning | an [overlay](#overlays) whose box (all its objects) covers at least `min_overlap` of the box of a scene text or icon. `text_overlap` and `covered_text` leave an overlay over scene text to this rule; overlays of a type with a `lint_skip` (the watermark: `contrast`) are not checked by those rules |
 | `walk_overlap` | warning | a character whose walk (`walk_to`, `enter`) ended in the still's beat sharing at least `min_overlap` of the narrower character's width with another character: it stopped on the other's place. Only characters that walked in that beat are checked (the layout dump's `walked_in`); see [Moving](#moving) |
-| `off_stage` | warning | a character with at least `min_hidden` of its box outside the view (the frame, or what a `pan` / `follow` shows) and part of it inside. Not reported: characters wholly outside (waiting to enter, gone), while it walks in or out (`enter`, `exit`), and while the camera is zoomed in. Fix: put it on a mark inside the view, or pan to it |
+| `off_stage` | warning | a character with at least `min_hidden` of its box outside the view (the frame, or what a `pan` / `follow` shows) and part of it inside. Not reported: characters wholly outside (waiting to enter, gone), while it walks in or out (`enter`, `exit`), and while the camera is zoomed in. In a [shot](#shots-shot) (other than `wide`) only the characters it frames are checked, wholly outside too: their face in a `medium`, `over_shoulder` or `closeup` shot, their whole box in a `two_shot`; the near character of an `over_shoulder` shot and characters the shot does not frame may be cut. Fix: put it on a mark inside the view, or pan to it (in a shot: keep it from walking out, or frame another shot) |
 | `character_overlap` | warning | two characters at rest whose boxes share at least `min_overlap` of the narrower one's width. A character that walked in the still's beat is `walk_overlap`'s. Fix: marks further apart, or walk one away |
 | `bubble_overlap` | warning | a speech bubble (`say` with `bubble`) covering at least `min_overlap` of a character's face box (its speaker's too) or of the smaller of two bubbles. Fix: a shorter `bubble` text, the characters further apart, or the two lines in different beats |
 | `facing_away` | warning | a speaking character facing away from the one it talks to: the character it last looked at (`look_at`), else the nearest one; not checked after `look_at: camera` (it talks to the viewer). Fix: `turn`, `look_at: <listener>`, or swap their marks |

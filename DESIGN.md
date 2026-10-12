@@ -98,6 +98,7 @@ src/vidgen/
                           # (props in hands: Holdings, where held / put-down / thrown props go, the
                           # replay vidgen validate runs, §69.27; no manim), seating.py (seats,
                           # lean edges, Postures, seated feet and the crouch, §69.28; no
+                          # manim), shots.py (the framings of a beat's shot:, §69.29; no
                           # manim); still.py also
                           # draws the prop gallery and `vidgen character-sheet` (§69.16)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
@@ -176,6 +177,7 @@ src/vidgen/
                           # enter, exit, gesture, jump, §69.12; keyframes_action.py: keyframes,
                           # move_along, §69.14; handling.py: pick_up, hold, put_down, give,
                           # throw, §69.27; sitting.py: sit_on, lean_on, stand_up, §69.28;
+                          # shot_action.py: shot (the beat key shot:), §69.29;
                           # overlays.py: the built-in overlays lower_third/watermark, §41;
                           # progress.py: progress_bar/chapter_indicator, §42; captions.py: captions, §43;
                           # stage.py: the stage scene type, §69.6)
@@ -723,6 +725,10 @@ Step 94 (§69.28) adds `BodyMove`, `Postures`, `PostureError`, `PROP_SEATS`, `PR
 attributes `sitting_on` / `leaning_on`, `reached_parts` the optional `state`; `Prop` gains `seat`,
 `lean`, `seat_point()` and `lean_edges()`; `StageFrame` the field `seat_facings` (default empty).
 `holding_problems` also replays sitting and leaning. All compatible.
+Step 95 (§69.29) adds `ShotConfig`, `SHOT_NAMES`, `SHOT_KINDS`, `SHOT_MOVE_SECONDS`, `Shot`,
+`ShotFigure`, `ShotView`, `frame_shot`, `shot_figures` and `shot_view`; `Character` gains
+`standing_height`; `NarratedScene` the attributes `camera_shot` and `shot_home`; `BeatConfig` the
+key `shot`. All compatible.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -5998,6 +6004,7 @@ model each in `config.LintRules`. Like every still rule they read beat-end still
   - `off_stage` (`min_hidden` 0.05): a character with at least that share of its box outside the
     view and some of it inside; skipped with `passage` set and while the camera is zoomed in (a
     pan still counts: the viewer sees the cut). `off_frame` now skips characters (one finding).
+    In a shot (Step 95, §69.29) only the characters the shot frames are checked.
   - `character_overlap` (`min_overlap` 0.25 of the narrower width, as `walk_overlap`): two
     characters at rest whose boxes share that much; a character that walked in the still's beat
     (`walk_overlap`'s) or has `passage` set is left out.
@@ -6309,7 +6316,7 @@ layout dump and lint treat them like written ones.
   mapping per action) to paste into `video.yaml`; once pasted they are written actions, so the
   planner adds nothing more for those characters (tested). JSON (`jsonout.direct_document`):
   `project, variant, scenes: [{scene, beats: [{beat, actions}]}]`.
-- **Not done here**: gestures, close-ups and the lint check (Step 90, §69.24), shots (Step 95); a negation word list for other languages; a speaker with two or more
+- **Not done here**: gestures, close-ups and the lint check (Step 90, §69.24), shots (Step 95, §69.29); a negation word list for other languages; a speaker with two or more
   listeners and no one answering looks at nobody in particular; a listener looks where the
   speaker stands when the look starts (not where a walk ends); `examples/cartoon` unchanged
   (with `auto_direct: true` it would add one look: its beats act on both characters); no MCP
@@ -6368,7 +6375,7 @@ rendering: `plan_directions(scene_id, cast, beats, stage=None)` stays a pure fun
   in 80 % of the narration after the speaker's look, else `CLOSEUP_CUT_SECONDS` 0.03 (a cut in and
   back: under a frame at 25 fps, so the runner plays it at once and never rushes it; the runner
   ends the narration's actions at its end, so a 0.5 s move into a 0.8 s line was shortened and
-  `rushed_animation` warned). Not in the beat after a close-up or a written `zoom`, nor with a
+  `rushed_animation` warned; since Step 95 the cut is a `shot: closeup`, §69.29). Not in the beat after a close-up or a written `zoom`, nor with a
   written `MOVING_ACTIONS` action (walks, `enter`, `exit`, `move_along`, `keyframes`, `pan`,
   `follow`, `zoom`), a `say` with a bubble or an automatic gesture of the speaker, nor while the
   camera follows. The check: on the zoomed view the speaker is wholly in view (`off_stage` on the
@@ -6395,7 +6402,7 @@ rendering: `plan_directions(scene_id, cast, beats, stage=None)` stays a pure fun
   the beat's start (the undoing of the speaker's reaction of the beat before) before it moves;
   depth and props are not in the predicted stills (`hidden_speaker`, `character_overlap` not
   checked: automatic actions move no one); a written `zoom` with `until` is not followed (the
-  planner takes the camera as unzoomed); shots are Step 95. Tests:
+  planner takes the camera as unzoomed); shots: §69.29. Tests:
   `tests/test_cartoon_directing.py` (Step 90 part).
 
 ### 69.25 Screenplays (Step 91)
@@ -6462,7 +6469,7 @@ config; `write_plan` now calls both, its output unchanged).
   adds 18 actions (looks, reactions, a head shake on `*anything*`, a shrug). Tests:
   `tests/test_screenplay.py`.
 - **Not done here**: English grammar and manner words only; no grammar for props moving, sitting
-  (Step 94), holding (Step 93) or shots (Step 95); a walk to a character goes where it stood at
+  (Step 94), holding (Step 93) or shots (Step 95, §69.29); a walk to a character goes where it stood at
   the start of the beat; one set per scene (no set changes inside a scene); ElevenLabs voices are
   not chosen.
 
@@ -6707,3 +6714,88 @@ The target is the character; `to` is the prop.
 - **Not done here**: sitting on the ground or on a table; a seat at another depth than the
   character's is not refused (the hips go to the seat's screen height); no arms on the prop while
   leaning; no foley for sitting down. Tests: `tests/test_cartoon_seating.py`.
+
+### 69.29 Shots within a scene (Step 95)
+
+A beat's `shot:` frames characters of a `stage` for that beat: the camera cuts (or, with `move:
+true`, eases) to a framing computed from where they stand, holds it for the beat, and the next
+beat without a shot goes back to the view before the shots.
+
+- **Framing maths** (`cartoon/shots.py`, no manim). `ShotFigure(name, x, feet_y, height, facing,
+  top)` (the figure's middle x, its feet, its standing height, the top of its head: lower while
+  it sits); its box is `FIGURE_HALF_WIDTH` 0.21 heights to each side (as the planner's predicted
+  stills, §69.24). `frame_shot(kind, subjects, frame_width=, frame_height=, bounds=, near=) ->
+  ShotView(center_x, center_y, scale)`, kept inside `bounds` with `view_center_within`, scale
+  within 1 .. `MAX_SHOT_SCALE` (= `MAX_ZOOM` 8, what the parallax layers are sized for):
+  - `wide`: scale 1, centred on the middle of the subjects' boxes (the stage's middle without any);
+  - `two_shot`: the union of the subjects' boxes with `TWO_SHOT_PADDING` 0.1 of the view free on
+    each side (the tighter of the width and height fits);
+  - `medium` / `closeup`: `SHOT_SPANS` (below / above the head's top, in heights) 1.0 / 0.12 and
+    0.62 / 0.1 give the view's height, so its scale; the subject moved `LOOK_ROOM` 0.1 of the
+    view's width away from the side it faces;
+  - `over_shoulder` (subject, near): vertically like `medium`; the view's width puts the subject
+    at `SUBJECT_AT` 0.66 of it from the near character's side and the near one's middle on that
+    edge (scale `0.66 × frame width / their distance`, between 1 and the close-up's scale); then
+    centred from the subject, so a clamped scale keeps the subject in place. Characters are flat
+    and side-on, so the near character is as large as the subject (both magnified), cut by the
+    edge; far apart (the `left` and `right` marks) the shot is only about 1.3x.
+  - `shot_figures(kind, named, present, speakers=, looked_at=) -> Shot(kind, subjects, near)` fills
+    in names: `wide` every present character; `two_shot` the named two, else the named one or the
+    beat's first speaker (else the first present) and the present character nearest it;
+    `over_shoulder` the near one named second, else the one the subject last looked at, else the
+    nearest. A named character not present (waiting to enter, gone) is left out; nothing to frame
+    gives a `wide`. `shot_view(shot, present, ...)` = `frame_shot` of those figures.
+- **Config** (`config.py`): `ShotConfig(kind, of, move, run_time)`, from a mapping or the words
+  `"over_shoulder kit pip"` (`of` may be one name). `SHOT_NAMES` (kind -> fewest, most names: wide
+  0, two_shot 0–2, medium 1, over_shoulder 1–2, closeup 1) checked there, names twice, `run_time`
+  without `move`. `BeatConfig.shot`. `ShotConfig.action()` is the `shot` action it stands for.
+- **The `shot` action** (`scenes/shot_action.py`, against `vidgen.api`, on `_Acting` so its
+  targets must be characters): options `kind` (none: back to the view before the shots) and
+  `move`; `needs_target` / `needs_visible` false (a character waiting to enter is not brought
+  in), `moves_camera`, `alters_targets` false, run time `SHOT_MOVE_SECONDS` 1.0 when moving, 0
+  (`run_time_for`) when cutting. `scene_problems`: a scene type without `shot_framing` (only
+  `stage`) is refused; the targets' names are checked as for the acting actions. `apply`: asks
+  `Stage.shot_framing(kind, names)` for the view (present = characters whose feet are inside the
+  stage; `ShotFigure` top = the highest of the `head` and `accessory` parts, so a hat is in
+  frame; height = the new `Character.standing_height`; speakers = `Stage.beat_speakers`, set by
+  `narrate`; `looked_at` of each character), stores the view before the first shot and what the
+  camera followed in `NarratedScene.shot_home`, stops following, sets `NarratedScene.camera_shot`
+  (`Shot.layout()`), and cuts by setting the camera frame directly (no animation: the runner
+  batches a camera move with the other actions due on its frame and plays the batch for the
+  longest run time, so a cut must not be an animation) or returns a `MoveCamera`. Without a kind
+  it goes back to `shot_home` (cut, or `MoveCamera` / `_MoveThenFollow` when following was
+  paused) and clears both attributes. `pan` and `follow` call `end_shot` (both cleared): the
+  camera stays where they take it.
+- **Where shots come from** (`actions.beat_action_list(spec, known)`, the list `scene_actions`
+  validates and the runner plays): each beat's `shot:` key first (location `beats[j].shot`), then
+  its written actions; a beat after one with a shot (key or a written `shot` action with a kind)
+  gets a `shot` without a kind first, unless it has a shot at `at: 0` (`move` and `run_time` as the
+  last shot, so it eases back as it eased in). The planner reads the key too (`_resolved_actions`).
+- **Layers, particles, bubbles, stills**: a cut changes the camera between two plays; the next
+  play's `get_moving_mobjects` runs the camera listeners first (§69.20), so the parallax layers
+  and Manim's static image are for the new view; particles draw themselves over the view each
+  frame (screen-sized, §69.9). A `say` bubble is `after_camera`, so it is built (sized and placed)
+  for the shot's view. Beat-end and mid-action stills (§69.16) show the shot as rendered; a walk
+  in a shot can leave the view (the shot does not follow).
+- **Layout dump / lint**: frames in a shot get `shot: {kind, subjects, near}`
+  (`introspect`, from `camera_shot`). `off_stage` with a shot other than `wide`: only the
+  subjects are checked, also when wholly outside or zoomed; their `face` box in `medium`,
+  `over_shoulder` and `closeup` (`FACE_SHOTS`), their box in `two_shot`; the near character and
+  characters not framed are left out. Without a shot, a zoomed still is still skipped (§69.17).
+- **Automatic directing** (§69.24): `shot` is a framing action (`FRAMING_ACTIONS`: it does not
+  touch its characters) and a move (`MOVING_ACTIONS`: no close-up in its beat; after it, none in
+  the next). A close-up whose 0.5 s moves fit the line stays a `zoom`; otherwise (was: a 0.03 s
+  zoom cut in and back) it is a `shot` of kind `closeup` of the speaker, held for the line and cut
+  back at the next beat: no cut back at the end of the pad, and the framing is a close-up (head and
+  shoulders), not a 2x zoom. Its check (`_closeup_shot`) predicts the still with the shot's view
+  and `shot` key, so `off_stage` checks the speaker's face and `facing_away` the one it talks to
+  if in view. In a beat with a written shot, the passes check their looks and gestures on the
+  shot's view (`_SceneState.shot`); a shot whose framing cannot be predicted leaves the camera
+  unknown for that beat (no arm gestures, unchecked looks). `vidgen direct --print` writes an
+  automatic shot as the beat's `shot: closeup kit` line (and `actions:` only when others remain),
+  `auto_label` as `shot closeup kit`; `--json` keeps the action's shorthand.
+- **Not done here**: the shot does not follow a walk (lint reports a subject that walks out); a
+  pan or follow in a shot ends it; a seated character's head top is taken from its parts at
+  runtime but from its standing height in the planner; no shots in `vidgen screenplay`'s grammar;
+  the near character of an over-the-shoulder shot is not drawn larger (no depth change). Tests:
+  `tests/test_cartoon_shots.py`.

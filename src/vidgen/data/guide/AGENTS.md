@@ -691,6 +691,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `sit_on` | on a `stage`: a character sits on a `chair`, `rock` or `box` (`to: chair`); its hips and knees bend | next to the prop; `stand_up` before it walks |
 | `lean_on` | on a `stage`: a character leans its back on a `tree`, `door`, `sign`, `lamp` or `house` (`to: tree`) | next to the prop; `stand_up` before it walks |
 | `stand_up` | on a `stage`: a character gets up from where it sits or leans | |
+| `shot` | on a `stage`: the camera frames characters for the beat; write it as the beat's key `shot: closeup kit` (`wide`, `two_shot`, `medium`, `over_shoulder kit pip`); the next beat without one cuts back | a beat's dialogue line or reaction; not with a walk out of the framing |
 
 ```yaml
 - id: speeds
@@ -761,19 +762,24 @@ asks for one, say vidgen makes original characters and offer one with the same r
   in 16:9), so give it a beat that long and end it on a free mark (`walk_overlap`). On a stage wider than
   the frame (`width: 2`), the camera goes along with `follow`.
 
-**Shot variety.** Change the shot every few beats, as a comic changes panels:
-- **wide** (the whole stage): the first beat of a scene, entrances, anything two characters do
-  together;
-- **medium / close-up**: `zoom` on one character (`scale: 1.5` medium, `2`–`2.5` close-up),
-  for the punchline or the reaction to it. It comes back by the beat's end (`until:` holds it);
-  about one per scene, or close-ups stop meaning anything;
+**Shot variety.** Change the shot every few beats, as a comic changes panels. A beat's `shot:`
+key cuts the camera to a framing of the characters for that beat; the next beat without one cuts
+back (`shot: {kind: closeup, of: kit, move: true}` eases instead):
+- **wide** (the whole stage, no `shot` or `shot: wide`): the first beat of a scene, entrances,
+  anything two characters do together;
+- **`two_shot`** (two characters, whole) and **`over_shoulder kit pip`** (kit seen past pip, who
+  stands cut at the edge): a dialogue, alternating the speaker's over-the-shoulder shots;
+- **`medium kit`** / **`closeup kit`** (hips up / head and shoulders): the punchline or the
+  reaction to it; about one close-up per scene, or close-ups stop meaning anything. A `zoom`
+  (`scale: 2`) pushes in and comes back within the beat instead of cutting;
 - **moving**: `pan` to a character or a mark (`- {action: pan, to: right}`) and `follow` a
-  character or a flying prop across a wide stage.
+  character or a flying prop across a wide stage (either ends a shot).
+A shot is framed where the characters stand as the beat starts and does not follow a walk.
 
 **Reaction shots.** The listener's face is often the joke. While one character speaks, the other
 `react`s (`expression` and / or `pose`, for that beat only) and `look_at`s the speaker; `emote` and
-`pose` change them for good. A `zoom` on the listener while the other talks is the reaction
-shot. `look_at: camera` turns a character to the viewer for an aside. Put the reaction where it
+`pose` change them for good. A `shot: closeup` of the listener while the other talks is the
+reaction shot. `look_at: camera` turns a character to the viewer for an aside. Put the reaction where it
 happens: `at: 0.8` lands it on the end of the line, not on its first word.
 
 **Automatic directing.** `auto_direct: true` (top level, a stage's param or a beat's key) adds
@@ -782,7 +788,8 @@ the one it answers, and after a line with `?`, a negation or `!` the listeners `
 pause (`thinking`, `worried`, `surprised`...). The speaker gestures on the line's stressed word
 (mark it `*word*`: the asterisks are not spoken or shown; or write it in CAPITALS; else the
 longest word counts; at most one per line), and a short punchy line
-right after a long one gets a close-up on its speaker. Nothing it adds may cause an `off_stage`
+right after a long one gets a close-up on its speaker (a short push-in, or a `shot: closeup` when
+the line is too short for it). Nothing it adds may cause an `off_stage`
 or `facing_away` lint warning (it checks the stage's layout first). Actions you write win: a
 character with its own action in a beat gets nothing automatic there. So turn it on, then write only the moments that
 matter (the reaction shot, the punchline's look to camera). `vidgen direct` lists what it adds,
@@ -1371,7 +1378,7 @@ install; `vidgen validate` warns when it is missing.
 | `contrast` | text hard to read on its background | theme tokens instead of custom colours; another preset |
 | `overlay_overlap` | an overlay covers scene text | `reserve: true` on the overlay, or another corner / position |
 | `walk_overlap` | a character's walk ends on another character | walk it to another mark or x, or move the other one first |
-| `off_stage` | a character is cut by the edge of the view | another mark or x inside the view, or `pan` to it |
+| `off_stage` | a character is cut by the edge of the view (in a `shot`: a character it frames is out of it) | another mark or x inside the view, or `pan` to it; in a shot, keep it from walking out or frame another shot |
 | `character_overlap` | two characters stand on each other | marks further apart, or `walk_to` one away |
 | `bubble_overlap` | a speech bubble covers a face or another bubble | a shorter `bubble` text, characters further apart, or the lines in different beats |
 | `facing_away` | a speaker faces away from the one it talks to (last looked at, else the nearest) | `turn`, `look_at: <listener>`, or swap their marks |

@@ -492,10 +492,10 @@ memory cap, targeted tests, original characters only). Each step updates the gui
 - [x] Tests: seat points per prop, character feet / hips position when seated (`tests/test_cartoon_seating.py`: 12 without rendering, 1 render; stills checked by eye on a generated look and sprout)
 
 ### Step 95 — Shots within a scene
-- [ ] Beat key `shot: wide | two_shot | over_shoulder <character> | closeup <character> | medium <character>` cuts (hard cut, no move) the camera to a framing computed from the characters' positions; `shot: {..., move: true}` eases instead
-- [ ] Over-the-shoulder shows the near character large, partly out of frame, at the side (lint `off_stage` allows it in that shot)
-- [ ] `auto_direct` may pick shots (part of Step 90's close-ups switches to shots)
-- [ ] Tests: framing maths (no render), lint exceptions
+- [x] Beat key `shot: wide | two_shot | over_shoulder <character> | closeup <character> | medium <character>` cuts (hard cut, no move) the camera to a framing computed from the characters' positions; `shot: {..., move: true}` eases instead (`cartoon/shots.py` `frame_shot` / `shot_figures`, no manim; `config.ShotConfig` `{kind, of, move, run_time}` or words, `two_shot` / `over_shoulder` may name a second character, defaults filled in; the key becomes a `shot` action (`scenes/shot_action.py`) that `actions.beat_action_list` puts first in its beat; it holds for the beat and the next beat without a shot cuts (or eases) back to the view before the shots; `pan` / `follow` end a shot; layers, particles and bubbles follow the shot's view; DESIGN §69.29)
+- [x] Over-the-shoulder shows the near character large, partly out of frame, at the side (lint `off_stage` allows it in that shot) (the near character's middle on the frame's edge, the subject at 0.66 of the width; both magnified, flat characters get no depth change; layout dump frames get `shot: {kind, subjects, near}`; `off_stage` in a shot checks only the characters it frames: their face in medium / over_shoulder / closeup, their box in two_shot)
+- [x] `auto_direct` may pick shots (part of Step 90's close-ups switches to shots) (the close-up that was a 0.03 s zoom cut is now `shot: closeup` of the speaker, checked on its predicted still; the eased 0.5 s zoom stays; written shots are where the planner's checks look; `vidgen direct --print` writes it as the beat's `shot:` line)
+- [x] Tests: framing maths (no render), lint exceptions (`tests/test_cartoon_shots.py`: 13 without rendering, 1 tiny render; scratch copies of examples/cartoon with shots and with `auto_direct` checked by eye, lint clean)
 
 ### Step 96 — Vertical cartoons follow the speaker
 - [ ] In 9:16 (and any format narrower than the stage), the camera keeps the speaker in frame by default (`reframe: speaker | none`), easing between speakers, holding during short replies

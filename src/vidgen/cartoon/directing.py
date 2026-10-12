@@ -32,6 +32,7 @@ from vidgen.camera import Bounds, view_center_within
 from vidgen.cartoon.acting import GESTURE_EASE, GESTURE_SECONDS, GESTURES, look_pose, nearer_side
 from vidgen.cartoon.holding import HoldingError, Holdings, put_down_x
 from vidgen.cartoon.seating import SEAT_BACKS, PostureError, Postures
+from vidgen.cartoon.shots import FIGURE_HALF_WIDTH, Shot, ShotFigure, ShotView, shot_figures, shot_view
 from vidgen.cartoon.stage import mark_x
 from vidgen.config import DIRECTING_KINDS, ActionConfig, AutoDirectSetting, BeatConfig, SceneConfig, directing_kinds
 
@@ -42,7 +43,7 @@ if TYPE_CHECKING:
 
 #: Actions that only frame, voice or point at a character: written ones leave it to automatic
 #: directing in their beat.
-FRAMING_ACTIONS = frozenset({"say", "zoom", "pan", "follow", "highlight", "dim", "callout"})
+FRAMING_ACTIONS = frozenset({"say", "zoom", "pan", "follow", "shot", "highlight", "dim", "callout"})
 #: Written actions after which a character's look is not known (it turned, moved or took a pose).
 LOOK_CHANGING = frozenset({"turn", "walk_to", "enter", "exit", "move_along", "keyframes", "pose", "emote", "sit_on", "lean_on"})
 #: When an automatic reaction starts, as a fraction of the line: it plays in the pause after it.
@@ -80,24 +81,23 @@ LOOK_SECONDS = 0.5
 #: A close-up: a line of at most :data:`SHORT_LINE_WORDS` words right after a beat of at least
 #: :data:`LONG_LINE_WORDS`; a ``zoom`` on the speaker by :data:`CLOSEUP_SCALE`, moving in and
 #: back in :data:`CLOSEUP_SECONDS` each when both fit in 80 % of the narration (after the
-#: speaker's look), else cutting in and back (:data:`CLOSEUP_CUT_SECONDS`: under a frame at
-#: 25 fps, so the action runner never has to rush it).
+#: speaker's look), else a ``shot: closeup`` of the speaker (a cut held for the line, DESIGN.md
+#: §69.29).
 SHORT_LINE_WORDS = 5
 LONG_LINE_WORDS = 8
 CLOSEUP_SCALE: float = 2
 CLOSEUP_SECONDS = 0.5
-CLOSEUP_CUT_SECONDS = 0.03
 #: Written actions during which no close-up is added: walks and other moves of a character, and
 #: the camera's own moves.
 MOVING_ACTIONS = frozenset({
     "walk_to", "enter", "exit", "move_along", "keyframes", "pan", "follow", "zoom", "pick_up", "put_down", "give", "throw",
-    "sit_on", "lean_on", "stand_up",
+    "sit_on", "lean_on", "stand_up", "shot",
 })
 #: A generated figure's proportions, in its heights (measured on the generator's looks; an SVG
-#: look is taken to be alike): half its width, the bottom of its face box (above its feet), and
+#: look is taken to be alike): half its width (``FIGURE_HALF_WIDTH``, shared with the shots'
+#: framing), the bottom of its face box (above its feet), and
 #: how far an arm gesture reaches from its middle (``point`` and ``wave`` forward, ``shrug`` to
 #: both sides).
-FIGURE_HALF_WIDTH = 0.21
 FACE_BOTTOM = 0.5
 GESTURE_REACH: dict[str, float] = {"point": 0.4, "wave": 0.35, "shrug": 0.34}
 #: The hands each arm gesture moves (``near``: the character's near hand, :attr:`CastMember.near_hand`):
@@ -229,6 +229,7 @@ class _SceneState:
     holdings: Holdings = field(default_factory=Holdings)          # who holds which prop
     postures: Postures = field(default_factory=Postures)          # who sits or leans on which prop
     prop_x: dict[str, float | None] = field(default_factory=dict)  # prop -> its x where it stands (None: not known)
+    shot: tuple[ShotView, Shot] | None = None                      # the beat's shot (written or automatic), if any
 
 
 @dataclass(frozen=True)
@@ -255,16 +256,20 @@ def _named(patterns: Sequence[str], names: Sequence[str]) -> set[str]:
 
 
 def _still(state: _SceneState, beat: _Beat, *, view: tuple[float, float, float] | None = None, reach: tuple[str, str] | None = None,
-           zoomed: bool = True) -> StillContext:
+           zoomed: bool = True, shot: Shot | None = None) -> StillContext:
     """The beat's still as the lint rules would see it, predicted from the state (no rendering):
     each present character whose place is known as a box (with ``reach``'s character in its
     arm gesture), its face box, facing, whether it speaks and what it looks at; the camera at
-    ``view`` (centre x, centre y, magnification; default the state's view). ``zoomed`` false
-    leaves the magnification out of the frame's camera (so ``off_stage`` checks the view)."""
+    ``view`` (centre x, centre y, magnification) in ``shot`` (default: the beat's shot, else the
+    state's view). ``zoomed`` false leaves the magnification out of the frame's camera (so
+    ``off_stage`` checks the view)."""
     from vidgen.lint.rules import StillContext
 
     frame = state.frame
-    assert frame is not None and (view is not None or state.camera_x is not None)
+    assert frame is not None and (view is not None or state.camera_x is not None or state.shot is not None)
+    shot = state.shot[1] if state.shot is not None and view is None else shot
+    if view is None and state.shot is not None:
+        view = (state.shot[0].center_x, state.shot[0].center_y, state.shot[0].scale)
     cx, cy, scale = view if view is not None else (state.camera_x, 0.0, 1.0)
     view_width, view_height = frame.frame_width / scale, frame.frame_height / scale
     px = _PX * scale
@@ -296,7 +301,8 @@ def _still(state: _SceneState, beat: _Beat, *, view: tuple[float, float, float] 
         })
     layout = {"width": frame.frame_width * _PX, "height": frame.frame_height * _PX}
     camera = {"zoom": scale if zoomed else 1.0, "center": [cx, cy]}
-    return StillContext(layout, {"beat": beat.input.id, "camera": camera}, objects)
+    still = {"beat": beat.input.id, "camera": camera, **({"shot": shot.layout()} if shot is not None else {})}
+    return StillContext(layout, still, objects)
 
 
 def still_findings(ctx: StillContext) -> set[tuple[str, tuple[str, ...]]]:
@@ -543,12 +549,48 @@ def _closeup_is_safe(state: _SceneState, beat: _Beat, name: str) -> bool:
     return not _adds_finding(_still(state, beat), _still(state, beat, view=view))
 
 
+def _present_figures(state: _SceneState) -> dict[str, ShotFigure]:
+    """The characters on stage whose place is known, as a shot frames them (in the stage's order)."""
+    frame = state.frame
+    found: dict[str, ShotFigure] = {}
+    for name in state.cast:
+        x, place = state.x.get(name), frame.places.get(name) if frame is not None else None
+        if name in state.present and x is not None and place is not None:
+            found[name] = ShotFigure(name, x, place.feet_y, place.height, state.facing.get(name, place.facing))
+    return found
+
+
+def _framed(state: _SceneState, beat: _Beat, kind: str, names: Sequence[str]) -> tuple[ShotView, Shot] | None:
+    """The view and figures of a ``kind`` shot of ``names`` as the beat starts (``None``: no
+    geometry, or a named character whose place is not known)."""
+    frame = state.frame
+    present = _present_figures(state)
+    if frame is None or any(n not in present for n in names):
+        return None
+    shot = shot_figures(kind, names, present, speakers=beat.speakers, looked_at=state.looking)
+    view = shot_view(shot, present, frame_width=frame.frame_width, frame_height=frame.frame_height, bounds=frame.bounds)
+    return view, shot
+
+
+def _closeup_shot(state: _SceneState, beat: _Beat, name: str) -> tuple[ShotView, Shot] | None:
+    """A ``closeup`` shot of ``name`` when it adds no lint finding (``off_stage`` checks its face
+    in the shot, ``facing_away`` the one it talks to if in view); ``None`` otherwise."""
+    if state.frame is None or state.camera_x is None:
+        return None
+    framed = _framed(state, beat, "closeup", [name])
+    if framed is None:
+        return None
+    view, shot = framed
+    after = _still(state, beat, view=(view.center_x, view.center_y, view.scale), shot=shot)
+    return None if _adds_finding(_still(state, beat), after) else framed
+
+
 def _plan_closeups(state: _SceneState, beat: _Beat) -> list[ActionConfig]:
-    """A close-up (a ``zoom`` on the speaker) for a short line right after a long one: never in
-    two beats in a row, nor in a beat with a written move (:data:`MOVING_ACTIONS`), a speech
-    bubble or an automatic gesture of the speaker, nor while the camera follows something; its
-    moves in and back fit the narration (after the speaker's look); only where the lint check
-    passes."""
+    """A close-up for a short line right after a long one: a ``zoom`` on the speaker moving in
+    and back when both moves fit the narration (after the speaker's look), else a ``shot:
+    closeup`` of it (a cut held for the line). Never in two beats in a row, nor in a beat with a
+    written move or shot (:data:`MOVING_ACTIONS`), a speech bubble or an automatic gesture of the
+    speaker, nor while the camera follows something; only where the lint check passes."""
     if not beat.speakers or state.closeup_at == state.index - 1:
         return []
     if len(beat.input.text.split()) > SHORT_LINE_WORDS or state.words_before < LONG_LINE_WORDS:
@@ -557,15 +599,22 @@ def _plan_closeups(state: _SceneState, beat: _Beat) -> list[ActionConfig]:
     if any(a.action in MOVING_ACTIONS or (a.action == "say" and a.options.get("bubble")) for a in written):
         return []
     speaker = beat.speakers[0]
-    room = beat.input.seconds - (LOOK_SECONDS if speaker in state.looked_now else 0.0)
-    run_time = CLOSEUP_SECONDS if beat.input.seconds <= 0 or 2 * CLOSEUP_SECONDS <= 0.8 * room else CLOSEUP_CUT_SECONDS
-    if speaker in state.gestured_now or not _closeup_is_safe(state, beat, speaker):
+    if speaker in state.gestured_now:
         return []
-    state.closeup_at = state.index
-    return [ActionConfig.automatic({"action": "zoom", "target": speaker, "scale": CLOSEUP_SCALE, "run_time": run_time})]
+    room = beat.input.seconds - (LOOK_SECONDS if speaker in state.looked_now else 0.0)
+    if beat.input.seconds <= 0 or 2 * CLOSEUP_SECONDS <= 0.8 * room:
+        if not _closeup_is_safe(state, beat, speaker):
+            return []
+        state.closeup_at = state.index
+        return [ActionConfig.automatic({"action": "zoom", "target": speaker, "scale": CLOSEUP_SCALE, "run_time": CLOSEUP_SECONDS})]
+    framed = _closeup_shot(state, beat, speaker)
+    if framed is None:
+        return []
+    state.closeup_at, state.shot = state.index, framed
+    return [ActionConfig.automatic({"action": "shot", "target": speaker, "kind": "closeup"})]
 
 
-#: The passes of each kind of directing (Step 95 adds shots).
+#: The passes of each kind of directing.
 _PASSES: dict[str, Callable[[_SceneState, _Beat], list[ActionConfig]]] = {
     "looks": _plan_looks,
     "reactions": _plan_reactions,
@@ -712,8 +761,16 @@ def plan_directions(
             if act.action not in FRAMING_ACTIONS:
                 touched |= _named(act.targets(), names)
         current = _Beat(beat, tuple(s for s in beat.speakers if s in state.present), frozenset(touched), scene_id)
+        home_x = state.camera_x
+        written_shot = next((a for a in beat.actions if a.action == "shot" and a.options.get("kind")), None)
+        if written_shot is not None:   # the passes check their actions in the shot's view
+            framed = [n for pattern in written_shot.targets() for n in names if fnmatchcase(n, pattern.split(".", 1)[0])]
+            state.shot = _framed(state, current, str(written_shot.options["kind"]), framed)
+            if state.shot is None:
+                state.camera_x = None   # a view not known: nothing is checked against it
         added = [a for kind in DIRECTING_KINDS if kind in beat.kinds and kind in _PASSES for a in _PASSES[kind](state, current)]
-        if any(act.action == "zoom" for act in beat.actions):
+        state.camera_x, state.shot = home_x, None   # the next beat goes back to the view before the shot
+        if any(act.action in ("zoom", "shot") for act in beat.actions):
             state.closeup_at = k
         for speaker in current.speakers:
             state.gestured_line[speaker] = any(a.action == "gesture" and a.target == speaker for a in added)
@@ -739,7 +796,9 @@ def with_auto_actions(spec: SceneConfig, directed: Sequence[DirectedBeat]) -> Sc
 
 
 def _resolved_actions(beat: BeatConfig, known: Sequence[str]) -> tuple[ActionConfig, ...]:
-    return tuple(act.resolved(known) for act in beat.actions)
+    """The beat's written actions, its ``shot:`` first (as the action it stands for)."""
+    shot = (beat.shot.action(),) if beat.shot is not None else ()
+    return (*shot, *(act.resolved(known) for act in beat.actions))
 
 
 def stage_frame(project: Project, params: Any) -> StageFrame:
@@ -860,15 +919,18 @@ def directing_used(project: Project) -> bool:
 
 
 def auto_label(act: ActionConfig) -> str:
-    """``look_at kit pip`` / ``react pip surprised``: the action, its target and option values
-    (for the storyboard)."""
+    """``look_at kit pip`` / ``react pip surprised`` / ``shot closeup kit``: the action, its target
+    and option values (a shot: its kind first, as the ``shot:`` key reads; for the storyboard)."""
+    if act.action == "shot":
+        return " ".join(["shot", str(act.options.get("kind")), *act.targets()])
     return " ".join([act.action, *act.targets(), *(str(v) for v in act.options.values())])
 
 
 def directions_yaml(directed: Mapping[str, Sequence[DirectedBeat]]) -> str:
     """The automatic actions (scene id -> directed beats) as ``video.yaml`` text an author can
-    paste and edit: ``scenes`` -> each scene's ``id`` and ``beats`` -> each beat's ``id`` and its
-    added ``actions``, one action per line in the shorthand form."""
+    paste and edit: ``scenes`` -> each scene's ``id`` and ``beats`` -> each beat's ``id``, its
+    ``shot`` (the ``shot:`` key: ``closeup kit``) and its added ``actions``, one action per line
+    in the shorthand form."""
     import yaml
 
     def flow(data: Any) -> str:
@@ -878,7 +940,8 @@ def directions_yaml(directed: Mapping[str, Sequence[DirectedBeat]]) -> str:
 
     lines = [
         "# Actions auto_direct adds (vidgen direct --print). Paste a beat's actions into its actions: list",
-        "# and edit them: actions written in a beat win, so the automatic ones for those characters go away.",
+        "# (and a shot: line into the beat) and edit them: actions written in a beat win, so the automatic",
+        "# ones for those characters go away.",
     ]
     if not directed:
         return "\n".join([*lines, "# Nothing added: auto_direct is off, or no character speaks to another on a stage.", "scenes: []", ""])
@@ -886,6 +949,11 @@ def directions_yaml(directed: Mapping[str, Sequence[DirectedBeat]]) -> str:
     for scene_id, beats in directed.items():
         lines += [f"  - id: {flow(scene_id)}", "    beats:"]
         for beat in beats:
-            lines += [f"      - id: {flow(beat.beat)}", "        actions:"]
-            lines += [f"          - {flow(act.shorthand())}" for act in beat.actions]
+            lines.append(f"      - id: {flow(beat.beat)}")
+            shots = [act for act in beat.actions if act.action == "shot"]
+            others = [act for act in beat.actions if act.action != "shot"]
+            lines += [f"        shot: {flow(' '.join([str(act.options['kind']), *act.targets()]))}" for act in shots[:1]]
+            if others:
+                lines.append("        actions:")
+                lines += [f"          - {flow(act.shorthand())}" for act in others]
     return "\n".join(lines) + "\n"

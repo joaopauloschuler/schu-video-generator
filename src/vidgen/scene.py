@@ -297,6 +297,12 @@ class NarratedScene(MovingCameraScene):
         self._sounds: SoundLibrary | None = None
         self._camera_follow: Callable[[], float] | None = None  # the x the camera follows (follow_with_camera)
         self._camera_listeners: list[Callable[[], None]] = []
+        #: The shot on screen (``shot:``, DESIGN.md §69.29) as the layout dump records it
+        #: (``{kind, subjects, near}``), ``None`` outside shots; set by the ``shot`` action.
+        self.camera_shot: dict[str, Any] | None = None
+        #: The camera's view before the shots and what it followed then (``(width, centre),
+        #: x_of``), where the camera goes back after them; set by the ``shot`` action.
+        self.shot_home: tuple[tuple[float, Any], Callable[[], float] | None] | None = None
         #: Whether the scene renders at preview quality (set by the render worker); scenes may
         #: draw less then, e.g. fewer particles.
         self.is_preview = False

@@ -64,7 +64,7 @@ scenes:
 | `auto_direct.looks` | `bool` | `True` | Listeners turn and look at whoever speaks; the speaker looks at the one it talks to. |
 | `auto_direct.reactions` | `bool` | `True` | Listeners react in the pause after a line with an expression chosen from its punctuation and words (! surprised or happy, ? thinking, a negation worried). |
 | `auto_direct.gestures` | `bool` | `True` | The speaker gestures on a line's stressed word (*word*, an all-capitals word, else a long one): at most one per line, from the gestures its parts allow. |
-| `auto_direct.closeups` | `bool` | `True` | A short punchy line right after a long one gets a close-up (a zoom on the speaker): never two beats in a row, never during a walk or a camera move. |
+| `auto_direct.closeups` | `bool` | `True` | A short punchy line right after a long one gets a close-up (a zoom on the speaker, or a closeup shot when the line is too short for the zoom's moves): never two beats in a row, never during a walk, a camera move or a written shot. |
 | `cartoon_motion` | `'lively' \| 'calm' \| 'none' \| None` |  | Animation principles for the characters in this scene (anticipation, squash and stretch, overshoot and settle, follow-through): lively, calm or none; a character's own setting wins; default: the video's (lively). |
 | `width` | `float` | `1.0` | Width of the stage in frame widths (marks and x positions are fractions of it); wider than 1: the camera pans across it (pan, follow). |
 | `camera_at` | `str \| float` | `'centre'` | Where the camera looks at the start, on a stage wider than the frame: a mark or an x from 0 to 1 of the stage. |

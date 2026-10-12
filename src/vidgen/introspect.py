@@ -143,6 +143,7 @@ class LayoutRecorder:
                     "height": _r(camera.frame_height, 4),
                     "zoom": _r(config.frame_width / camera.frame_width, 4),
                 },
+                **({"shot": dict(scene.camera_shot)} if getattr(scene, "camera_shot", None) else {}),
                 "objects": objects,
                 "overlays": [
                     {"id": overlay.id, "type": overlay.config.type, "settled": settled, "skip": list(overlay.lint_skip)}

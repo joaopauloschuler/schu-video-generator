@@ -180,7 +180,7 @@ from vidgen.cartoon.keyframes import (  # noqa: E402
     keyed_values,
     path_length,
 )
-from vidgen.config import ActionConfig, AutoDirect, AutoDirectSetting, MotionSetting  # noqa: E402
+from vidgen.config import ActionConfig, AutoDirect, AutoDirectSetting, MotionSetting, SHOT_NAMES, ShotConfig  # noqa: E402
 from vidgen.cartoon.directing import DirectedBeat, StageFrame, StagePlace, stage_directions, stage_frame  # noqa: E402
 from vidgen.cartoon.props import PROP_HEIGHTS, PROP_KINDS, PROP_LIFTS, SVG_PROP_HEIGHT, Prop, draw_prop, read_svg_seat_and_lean, svg_prop  # noqa: E402
 from vidgen.cartoon.stage import (  # noqa: E402
@@ -198,6 +198,7 @@ from vidgen.cartoon.stage import (  # noqa: E402
     stage_layout,
 )
 from vidgen.camera import view_center_within  # noqa: E402
+from vidgen.cartoon.shots import SHOT_KINDS, SHOT_MOVE_SECONDS, Shot, ShotFigure, ShotView, frame_shot, shot_figures, shot_view  # noqa: E402
 from vidgen.particles import MAX_PARTICLES, PARTICLE_KINDS, particle_count, particle_seeds, particle_states  # noqa: E402
 from vidgen.particle_field import ParticleField, ParticleKindName, ParticleSettings, particle_field  # noqa: E402
 from vidgen.scene import CharacterName  # noqa: E402
@@ -531,6 +532,16 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "read_svg_seat_and_lean",
     "svg_prop",
     "view_center_within",
+    "SHOT_KINDS",
+    "SHOT_MOVE_SECONDS",
+    "SHOT_NAMES",
+    "Shot",
+    "ShotConfig",
+    "ShotFigure",
+    "ShotView",
+    "frame_shot",
+    "shot_figures",
+    "shot_view",
     "PARTICLE_KINDS",
     "MAX_PARTICLES",
     "ParticleField",
