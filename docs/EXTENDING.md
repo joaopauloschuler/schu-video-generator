@@ -1211,11 +1211,13 @@ scene that shows the narration its own way):
   beat. `estimate_word_times(words, start, end)` is the estimate alone (by `syllables(word)`,
   with pauses after punctuation); `speech_bounds(path)` finds the speech in an audio file;
   `spoken_words(text)` counts spoken words (numbers, acronyms).
-  With a project `pronunciation:` (docs/CONFIG.md "Pronunciation") the MP3 says something else
-  than the written text: pass `spoken=project.pronunciation.apply(text)` (a `Spoken`: `text`,
-  `spoken`, `replacements`, `word_groups()`) as the last argument to get the written words timed
-  by their spoken form (`map_word_times(spoken, times)` does that mapping for times of the spoken
-  words). `project.pronunciation.say(text)` / `project.spoken_texts()` give what the TTS says.
+  With a project `pronunciation:` (docs/CONFIG.md "Pronunciation") or voice sounds (`[laugh]`,
+  docs/CONFIG.md "Voice sounds") the MP3 says something else than the written text: pass
+  `spoken=project.spoken(beat)` (a `Spoken`: `text`, `spoken`, `replacements`, `word_groups()`;
+  `project.pronunciation.apply(text)` for a text without sounds) as the last argument to get the
+  written words timed by their spoken form (`map_word_times(spoken, times)` does that mapping for
+  times of the spoken words). `project.spoken_texts()` gives what the TTS says per beat;
+  `beat.voice_sounds` lists a beat's sounds (their markers are not in `beat.text`).
 - `caption_cues(text, start, end, *, words=None, widths=None, space=1, max_width=42,
   max_lines=2, max_words=None, until=None, prefix="", prefix_width=None) -> [CaptionCue(start,
   end, lines, words, prefix)]`: the text cut at phrase boundaries into cues (`segment_cues`, costs

@@ -837,7 +837,8 @@ BRAM: Boxes do not hum, Fen. Boxes do not do *anything*.
 `NAME (manner):` turns an expression or pose word (`doubtful`, `glad`, `arms crossed`) into a
 `react`; a plain paragraph is the narrator; `[...]` maps walk / run to, enter, exit, jump, look
 at, point at, wave, nod, shrug and shake head (on its own line: at the next line's start; inside a
-line: at that word). `docs/CONFIG.md` "Cartoons from a screenplay" has the whole format.
+line: at that word), except a voice sound such as `[laugh]` inside a line, which stays in the
+line. `docs/CONFIG.md` "Cartoons from a screenplay" has the whole format.
 
 **Comic timing.**
 - **Short lines**: one line per beat, one speaker per beat (the beat's `voice`), 6–12 words.
@@ -875,6 +876,12 @@ line: at that word). `docs/CONFIG.md` "Cartoons from a screenplay" has the whole
   stage) turns them off. A beat's `sting: reveal | comic | sad` adds a short music sting
   (`reveal` as the beat starts, `comic` and `sad` in the pause after the line), ducked under the
   voice. One or two per cartoon, on the real punchline, or they stop being funny.
+- **Voice sounds**: `[gasp]`, `[hmm]`, `[laugh]`, `[sigh]`, `[giggle]`, `[groan]` in a line
+  (`text: "[gasp] The box is open! [laugh]"`) are made by the voice at that point (`Ha ha ha!`,
+  `Hmm.`; a gasp or sigh at the line's start or end is a generated breath) and never shown in
+  captions; the speaker's mouth follows and its face changes (laugh happy, gasp surprised, sigh
+  sad) unless the beat's own `emote` / `react` sets it. A line needs words besides its sounds
+  (`docs/CONFIG.md` "Voice sounds").
 
 **The loop for a cartoon.**
 1. `vidgen character-sheet NAME` (or `--all`): every pose, expression and mouth shape on one PNG.
@@ -1077,7 +1084,7 @@ scenes:
 **Sound effects** (`vidgen list-sfx` describes each in words): `whoosh` (something moves in),
 `pop` (an item appears), `tick` (steps, counting), `click` (a UI click), `chime` (a key
 insight), `success` / `error` (a result), `riser` (tension before a reveal, `align: end`),
-`thud` (a big number lands), `swoosh`, `typing`; `footstep`, `boing` and the music stings
+`thud` (a big number lands), `swoosh`, `typing`; `footstep`, `boing`, `gasp`, `sigh` and the music stings
 `sting_reveal` / `sting_comic` / `sting_sad` are for cartoons (`vidgen guide cartoons`). Two or three per minute, on the moments that
 matter; `sfx: {auto: true}` adds soft ones to built-in reveals if you want a uniform feel.
 

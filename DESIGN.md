@@ -163,6 +163,7 @@ src/vidgen/
   subtitles.py            # SRT from beat timings (cues cut and timed like captions, §43)
   speech.py               # spoken words, speech bounds of an MP3, word times: estimate / TTS alignment (§43)
   pronunciation.py        # pronunciation dictionary: TTS text of a beat, spoken -> written word map (§45; no manim)
+  voicesounds.py          # [gasp] [laugh] ... in a beat's text: markers, what each voice says, sound times (§69.33; no manim)
   voices.py               # named voices: effective voice per beat, speaker labels / colours / tags (§46; no manim)
   languages.py            # language tags and per-language rules: cue words, speech rate, TTS / MP4 codes (§54; no manim)
   translation.py          # translation files: text markers, keys, extracting, applying, merging, warnings (§54; no manim)
@@ -757,6 +758,9 @@ Step 98 (§69.32) adds `SWAYS`, `WIND_FADE_SECONDS`, `WIND_LEVELS`, `Sway`, `Win
 `particle_states` the keywords `blown` and `wind`, `Spring` the property `memory_seconds`,
 `Action` the class attribute `number_target`; `ActionConfig.target` keeps a number as its
 text. Compatible: a stage without `wind` (or `wind: 0`) renders the same frames as before.
+Step 99 (§69.33) adds no names: `stage_directions` also returns the speakers' faces for voice
+sounds (any `auto_direct`), `BeatConfig` gains `voice_sounds`, `Project` the method `spoken`,
+`Spoken` the method `inserted`; beats without `[laugh]`-style markers are unchanged.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -6925,12 +6929,14 @@ A `stage` has a light (`light:` param, the `light` beat action) and soft shadows
   other actions; `run_time` (default `LIGHT_FADE_SECONDS` 2) is the fade; not reversible (a later
   `light` action changes it again); `scene_problems` refuses scene types without
   `change_light`. `Stage.change_light(setting, start, seconds)` adds the change and a scene
-  updater (`_light_step`) that sets the grade for the scene time on every frame; while it is
+  updater (`_light_step`, kept as `_light_updater`: Manim removes an updater by identity and
+  each `self._light_step` is a new bound method) that sets the grade for the scene time on every
+  frame and removes itself once every change is over (Step 99; before, the removal in
+  `get_moving_mobjects` never matched and ran only when a new animation started); while it is
   installed a wait is not frozen. **Static image** (§69.20): `Stage.get_moving_mobjects` updates
   the light first, returns every mobject while a change falls in the animation's time
   (`self.duration`; unknown: until the changes are over), otherwise Manim's moving mobjects, so
-  the set stays in the static image before and after a fade; it removes the updater once the
-  changes are over. Measured on a scratch copy of `examples/cartoon`: `yard` storyboard at
+  the set stays in the static image before and after a fade. Measured on a scratch copy of `examples/cartoon`: `yard` storyboard at
   preview 12.5–13.1 s with `day` (HEAD 12.3–13.0 s), 13.4 s with `night` (the grading of every
   lit shape on every frame drawn).
 - **Stars**: when the starting light or any `light` action has stars and the stage has no
@@ -7036,7 +7042,72 @@ pieces follow it on a spring, particles drift.
   checks `wind: 0` plus a `- wind: calm` action against no wind frame by frame.
 - **Not done here**: wind relative to a walking character (walking into it), wind on held props,
   SVG props or picture backgrounds, layers swaying, a `wind` setting at the top level, leaves
-  blowing as particles of their own. Found, not fixed: `Stage.change_light` / `get_moving_mobjects`
-  remove `self._light_step` by a fresh bound method, which Manim's `remove_updater` (identity)
-  never matches, so the light's updater stays installed after a fade (waits are then not frozen).
-  Tests: `tests/test_cartoon_wind.py`.
+  blowing as particles of their own. The light's updater, found never removed here, is fixed in
+  Step 99 (§69.31). Tests: `tests/test_cartoon_wind.py`.
+
+### 69.33 Non-speech voice sounds (Step 99)
+
+A beat's text may hold `[gasp]`, `[hmm]`, `[laugh]`, `[sigh]`, `[giggle]`, `[groan]` (any case,
+an `s` allowed: `[laughs]`): sounds of its speaker at that point (CONFIG "Voice sounds").
+
+- **One place for the markers** (`voicesounds.py`, no manim): `BeatConfig`'s after-validator
+  calls `take_out_sounds` (`SOUND_MARKER`, the spaces before a marker go with it, a word glued
+  to it gets a space) before `strip_emphasis`: `text` is the plain line, `marked_text` keeps the
+  `*word*` marks (the same words, so the gesture planner's word count holds), `voice_sounds` the
+  `VoiceSound(kind, word)` list, `word` = how many words of `text` come before it (independent
+  of the asterisks). Everything that reads `beat.text` (captions, SRT, bubbles, slides, lint,
+  readback's written side) never sees a marker; a text of markers only is a config error. Other
+  brackets stay in the text. `model_copy` keeps the private attributes (automatic actions copy
+  beats).
+- **What the TTS gets**: `Project.spoken(beat)` = `pronunciation.apply(beat.text)` (the rules
+  see the written words only), then `voiced_spoken`, which inserts what the beat's voice says
+  for each sound (`sound_voicing`) after its word with `Spoken.inserted` (zero-length
+  `Replacement`s: the said words belong to no written word in `word_groups`, so
+  `map_word_times` times the written words around them). `spoken_texts` (the audio hash, the
+  dry run, `context_texts`, lint's speed, `vidgen tts`) is built from it. A beat without
+  markers is unchanged (pinned cache keys in `tests/test_voice_sounds.py`).
+- **Per provider** (`VOICE_SOUNDS`): ElevenLabs models starting `eleven_v3` read audio tags
+  (`[laughs]`, `[gasps]`, `[sighs]`, `[giggles]`, `[groans]`; `hmm` is said `Hmm.`). Every other
+  voice (Kokoro, other ElevenLabs models, OpenRouter's models) says `Ha ha ha!`, `Hee hee!`,
+  `Hmm.`, `Ugh.`; `gasp` / `sigh` at the line's first or last position are the built-in
+  generated `gasp` / `sigh` sounds (`sfx.py`, breath noise through formant bands, plus a falling
+  hum for the sigh), not in the text, so the beat's audio and hash stay as without the marker;
+  inside a line they are said `Hah!` / `Haah.` (the speech leaves no silence: Kokoro makes a
+  0.05 s pause for `…` and 0.11 s for `...`, measured). Real Kokoro (`af_heart`, Step 99): `Ha ha
+  ha!` 0.73 s, `Hee hee!` 0.43 s, `Hmm.` 0.28 s, `Ugh.` 0.33 s, `Hah!` 0.23 s; with timings, so
+  the alignment holds the sound and the mouth follows it (`Hmm` -> `M`).
+- **When** (`sound_spans`, `beat_sound_spans`): from the written words' times (the caption
+  path: alignment of the spoken text, else the estimate over the spoken words, which weighs the
+  sound's words and pauses): a said sound spans the gap between its words (from 0 / to the
+  beat's end at the edges); a generated one ends `SOUND_GAP` (0.05 s) before the first word or
+  starts that long after the last, its built-in length long (the gasp may start before the beat,
+  in the previous beat's pad; clamped to the scene's start).
+- **Generated sounds** are recorded by `NarratedScene.narrate` (any scene type) as sound effects
+  of the beat at `SOUND_GAIN_DB` (+6 dB: built-ins sit −27 LUFS, about 7 dB under the voice; a
+  breath belongs to it), so `assets/sfx/gasp.wav` replaces one like any built-in.
+- **Mouth**: said sounds are in the viseme track (stored or built from the spoken text).
+  `beat_visemes` lays the generated ones over it with `with_cues` (`gasp` `O`, `sigh` `A`;
+  before 0 cut off, past the end with `rest` before it), at read time, so stored
+  `.visemes.json` files are unchanged.
+- **Face**: `directing.sound_reactions` (run first by `stage_directions`, whatever
+  `auto_direct` says; `directing_used` is true for a stage with sounds) adds per beat an
+  automatic `react` with the expression of its first sound (`laugh` / `giggle` happy, `gasp`
+  surprised, `sigh` sad, `hmm` thinking, `groan` worried) at the sound's start as a share of the
+  beat (at most `REACTION_AT`), for each speaker (`say` targets, else the voice's characters)
+  that can emote and that no written `emote` / `react` (`FACE_ACTIONS`) acts on. The planner
+  then sees it as written, so it adds no gesture or reaction for that speaker in that line.
+  `vidgen direct` lists it (pasting it makes it written; the automatic one then goes away).
+- **Captions, SRT, readback**: `captions` and `write_srt` (`spoken=` per beat, from the
+  pipeline) time the written words with `Project.spoken`; `directing._beat_words` too for a beat
+  with sounds. `readback` compares with the line without sounds and `compare_beat(...,
+  skip_heard=)` drops heard tokens in `heard_sound_words` that the line does not say.
+- **Screenplay** (§69.25): inside a line, a bracket whose content `is_voice_sound` stays in the
+  line's text; every other `[...]` is a direction. On its own line a `[laugh]` stays a direction
+  (no verb matches: a `# TODO:`). A line of sounds only is an error naming its line.
+- **Fingerprint**: a scene with sounds adds `voice_sounds` (beat -> `[kind, word]`), since a
+  generated sound changes the SFX, the mouth and the face but not the text or audio.
+- **Not done here**: one face per beat (the first sound's); a sound marker on a line of its own
+  (a beat needs words); no panning; the `[gasp]` foley `pop` of a `surprised` react plays with
+  the gasp; ElevenLabs v3 tags and OpenRouter models were not tried against the real services
+  (no API calls), and how a given OpenRouter model says `Ha ha ha!` is unknown.
+  Tests: `tests/test_voice_sounds.py`.

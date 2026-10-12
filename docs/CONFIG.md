@@ -119,7 +119,8 @@ scenes:
 Beat `id`s name the audio files: keep them when you edit the text (only that beat is
 re-voiced). A beat `text` is spoken as written; it is also the subtitle. `*word*` in it marks a
 stressed word for [automatic directing](#automatic-directing-auto_direct): the asterisks are not
-spoken or shown. A beat's `actions`
+spoken or shown. `[laugh]`, `[gasp]`, `[sigh]`, `[hmm]`, `[giggle]` and `[groan]` in it are
+[voice sounds](#voice-sounds): made at that point, not shown. A beat's `actions`
 (default `[]`) point at parts of the scene while it is spoken — reveal, dim, highlight — see
 [beat actions](#beat-actions). A beat's `voice` (default: its scene's) picks another speaker for
 that beat — a dialogue inside one scene, see [multiple voices](#multiple-voices-voices). A beat's
@@ -1328,7 +1329,9 @@ Does the narration say what the text says? `vidgen readback [PROJECT]` transcrib
 MP3 with a speech-to-text (STT) provider and compares the transcript with the beat's text. It
 catches what nobody hears without listening: a name or acronym the voice mispronounces, a number
 read wrongly, words the voice dropped or added. An AI author can act on the report without
-listening: each difference names the written words, what was heard, and a suggested fix.
+listening: each difference names the written words, what was heard, and a suggested fix. A
+beat's [voice sounds](#voice-sounds) are left out: the words a transcript writes for them (`ha
+ha`, `hmm`) are not differences.
 
 ```yaml
 stt:
@@ -1805,6 +1808,8 @@ writes them as WAV files to listen to):
 | `thud` | 0.45 s (0.15–1.5) | a soft low impact, 110 → 55 Hz with a muffled knock | something landing, a big number |
 | `footstep` | 0.14 s (0.06–0.4) | one soft step: a muffled heel knock (~260 Hz, a 95 Hz thump), then a faint scuff | a character's step ([foley](#foley-and-music-stings)) |
 | `boing` | 0.5 s (0.2–1.5) | a twangy cartoon spring gliding up ~140 → ~260 Hz with a fast wobble | a jump, a bounce |
+| `gasp` | 0.35 s (0.15–1) | a sharp breath in, "hah": breath noise around 1.1, 1.75 and 2.9 kHz, loudest after ~50 ms, cut off | surprise ([`[gasp]`](#voice-sounds) at a line's start or end) |
+| `sigh` | 0.9 s (0.4–2.5) | a long breath out, "haaah": breathy "ah" noise with a faint hum falling ~190 → ~130 Hz, trailing off | tiredness, relief ([`[sigh]`](#voice-sounds) at a line's start or end) |
 | `sting_reveal` | 1.4 s (0.6–4) | a "ta-da": a brassy pickup note, then a bright C major chord with a soft bell | a reveal ([`sting: reveal`](#foley-and-music-stings)) |
 | `sting_comic` | 1.1 s (0.6–3) | "ba-dum-tss": two falling tom hits and a splashy cymbal | after a punchline (`sting: comic`) |
 | `sting_sad` | 2.2 s (1.2–5) | "wah wah wah waaah": four muted brass notes falling B♭3 → G3, the last long and wobbling | a let-down played for laughs (`sting: sad`) |
@@ -1874,6 +1879,56 @@ music: 6 dB down while the narrator speaks, 0.15 s down before the speech starts
 after it ends, no hold (the music's 1.5 s hold would keep a sting down through every pause). A
 sting at a beat's end therefore plays in the clear and ducks when the next line starts. In a
 preview timed from word counts (no MP3s yet) the whole beat counts as speech.
+
+### Voice sounds
+
+A beat's text may hold non-speech sounds of its speaker: `[gasp]`, `[hmm]`, `[laugh]`, `[sigh]`,
+`[giggle]`, `[groan]` (any case; `[laughs]`, `[sighs]`... work too). Any scene type; on a
+[`stage`](#stage) the speaker's face follows.
+
+```yaml
+beats:
+  - text: "[gasp] The box is open! [laugh] It was empty."
+    voice: kit_voice
+  - text: "Well [hmm] I suppose so. [sigh]"
+```
+
+- **The text.** The markers are taken out of the beat's `text` when the config is read, like
+  `*word*`: captions, subtitles, speech bubbles, slides and lint show `The box is open! It was
+  empty.`. Other brackets (`[cough]`, `[pause]`) stay in the text and are spoken as written. A
+  beat needs words besides its sounds.
+- **The sound.** The voice says the sound where it can, as words in the text sent to the TTS
+  (what `vidgen tts --dry-run` shows as `says:` and what the audio hash covers):
+
+  | sound | Kokoro, ElevenLabs (other models), OpenRouter | ElevenLabs `eleven_v3` | face on a stage |
+  |---|---|---|---|
+  | `[laugh]` | `Ha ha ha!` | `[laughs]` (an audio tag) | `happy` |
+  | `[giggle]` | `Hee hee!` | `[giggles]` | `happy` |
+  | `[hmm]` | `Hmm.` | `Hmm.` | `thinking` |
+  | `[groan]` | `Ugh.` | `[groans]` | `worried` |
+  | `[gasp]` | at the line's start or end: the built-in `gasp` sound; inside it: `Hah!` | `[gasps]` | `surprised` |
+  | `[sigh]` | at the line's start or end: the built-in `sigh` sound; inside it: `Haah.` | `[sighs]` | `sad` |
+
+  A TTS says a breath as a word, so `[gasp]` and `[sigh]` at the start or end of a line are
+  generated sounds instead, mixed into the silence there: a gasp ends just before the first word
+  (in the pause after the previous line), a sigh starts just after the last one (in the beat's
+  `narration.pad`). They are sound effects of the beat (`timings.json` `sfx`, 6 dB louder than
+  other effects at `gain: 0`; `assets/sfx/gasp.wav` replaces the sound with your own), and the
+  beat's audio stays as without the marker. Inside a line there is no silence to fill, so it is
+  said. Measured with Kokoro (`af_heart`): `Ha ha ha!` takes 0.7 s, `Hee hee!` 0.4 s, `Hmm.` and
+  `Ugh.` about 0.3 s.
+- **Pronunciation** entries apply to the line's words only, never to a sound's words; a beat
+  without markers keeps its audio hash.
+- **Mouth and face.** A speaking character's mouth follows the sound: the said ones are in the
+  beat's viseme track like words (`Hmm.` closes the lips, `Ha ha ha!` opens them), a generated
+  gasp opens it round (`O`), a sigh open (`A`). On a `stage`, each speaker of the line takes the
+  face of its first sound (table above) as the sound is heard, until the next beat: an automatic
+  `react` (listed by `vidgen direct`, whatever `auto_direct` says), left out when the beat's own
+  `emote` or `react` acts on that character or its parts have no face.
+- **Captions and readback.** Captions and the SRT time the line's words by the audio (the sound
+  takes its own time between them) and never show the sound. `vidgen readback` compares the
+  transcript with the line without its sounds and skips the words a transcript writes for them
+  (`ha ha`, `hmm`, `ugh`, `laughs`...) unless the line says them.
 
 ### `vidgen list-sfx`
 
@@ -4489,7 +4544,11 @@ GUS (glad): There it is! [jumps] I left my song in that crate.
   (`happy`, `thinking`, `arms crossed`...) or a word for one (`doubtful` thinking, `glad`
   happy, `nervous` worried, `cross` angry, `shocked` surprised...) become `react` for that line;
   other words a `# TODO:`. A plain paragraph, or `NARRATOR:`, is the narrator's line. `*word*`
-  stresses a word (the speaker gestures on it; the asterisks are not spoken).
+  stresses a word (the speaker gestures on it; the asterisks are not spoken). A
+  [voice sound](#voice-sounds) inside a line (`KIT: Oh no [gasp] it fell!`) stays in the line's
+  text: `[gasp]`, `[hmm]`, `[laugh]`, `[sigh]`, `[giggle]`, `[groan]` (or `[laughs]`...) are
+  sounds, every other `[...]` is a stage direction; on its own line `[laugh]` is a direction
+  (a `# TODO:`, no verb matches it).
 - **Stage directions** `[...]`: on their own line they act at the start of the next line (after
   the last line of a scene: at 0.6 of it), one after the other, each `at` estimated from how long
   the one before takes (a walk by its distance); inside a line they act at that point of it, with

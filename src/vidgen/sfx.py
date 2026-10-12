@@ -449,6 +449,32 @@ def _sting_sad(s: Synth) -> np.ndarray:
     return _filtered(out, lambda f: _lowpass(f, 3000 * s.ratio, 2))
 
 
+def _breath(s: Synth, formants: Sequence[tuple[float, float, float]], glide: float) -> np.ndarray:
+    """Breath noise through ``(Hz, octaves wide, amplitude)`` formants whose centres move by the
+    factor ``glide`` over the sound (a mouth shape rather than a pitch)."""
+    noise = s.rng.standard_normal(s.n)
+    out = np.zeros(s.n)
+    for freq, width, amplitude in formants:
+        band = _sweep(noise, lambda u, f=freq: f * s.ratio * glide**u, width)
+        out += amplitude * _normalized(band)
+    return out
+
+
+def _gasp(s: Synth) -> np.ndarray:
+    # a sharp breath in through an open mouth ("hah"): loudest after ~50 ms, cut off at the end
+    body = _breath(s, ((1100.0, 0.45, 1.0), (1750.0, 0.4, 0.7), (2900.0, 0.5, 0.35 + 0.3 * s.intensity)), 1.25)
+    return body * _bump(s.u, 0.12) ** 0.5
+
+
+def _sigh(s: Synth) -> np.ndarray:
+    # a long breath out ("haaah"): breathy noise of an open "ah" with a faint low hum falling
+    # from ~190 to ~130 Hz, swelling early and trailing off
+    body = _breath(s, ((750.0, 0.5, 1.0), (1200.0, 0.45, 0.6), (2600.0, 0.6, 0.15 + 0.2 * s.intensity)), 0.85)
+    hum = _harmonic_tone(_tone(190 * s.ratio * (130 / 190) ** s.u, s.n), 0.45, 6, 1.0)
+    hum = _filtered(hum, lambda f: _lowpass(f, 900 * s.ratio, 2))
+    return (body + 0.25 * _normalized(hum)) * _bump(s.u, 0.2)
+
+
 @dataclass(frozen=True)
 class BuiltinSound:
     """A built-in sound: its generator, default ``duration`` and allowed range (s), and a precise
@@ -543,6 +569,20 @@ BUILTIN_SOUNDS: dict[str, BuiltinSound] = {
             "A cartoon spring: a twangy tone gliding up from ~140 Hz to ~260 Hz with a fast 12 Hz "
             "wobble that dies away, decaying over about its length.",
             "a jump, a bounce, something springy (stage jumps play it: foley)",
+        ),
+        BuiltinSound(
+            "gasp", _gasp, 0.35, (0.15, 1.0),
+            "A sharp breath in through an open mouth, 'hah': unvoiced breath noise in three bands "
+            "(~1.1, ~1.75 and ~2.9 kHz) rising a little, at its loudest after ~50 ms, held, then cut "
+            "off quickly at the end.",
+            "a character's surprise (a beat's [gasp] at the start or end of a line plays it)",
+        ),
+        BuiltinSound(
+            "sigh", _sigh, 0.9, (0.4, 2.5),
+            "A long breath out, 'haaah': breathy noise shaped like an open 'ah' (~750 Hz and "
+            "~1.2 kHz, falling a little) with a faint low hum gliding from ~190 to ~130 Hz, swelling "
+            "over the first fifth and trailing off.",
+            "tiredness, relief or giving up (a beat's [sigh] at the start or end of a line plays it)",
         ),
         BuiltinSound(
             "sting_reveal", _sting_reveal, 1.4, (0.6, 4.0),

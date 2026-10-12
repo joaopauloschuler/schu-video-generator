@@ -512,9 +512,9 @@ memory cap, targeted tests, original characters only). Each step updates the gui
 - [x] Tests: sway angles from the seed, `wind: 0` changes nothing (`tests/test_cartoon_wind.py`: 11 without rendering, 2 tiny renders, one comparing frame hashes of `wind: 0` + `- wind: calm` with no wind; examples/cartoon with `wind: 0` rendered at 160x90 gives HEAD's frame hashes)
 
 ### Step 99 — Non-speech voice sounds
-- [ ] Inline markers in a line: `[gasp]`, `[hmm]`, `[laugh]`, `[sigh]`, `[giggle]`, `[groan]`: voiced through the TTS provider where it can (e.g. spoken "hmm", "ha ha") or a built-in generated sound otherwise, with matching mouth shapes and an expression (laugh → happy, gasp → surprised) unless the beat sets one
-- [ ] Captions and readback skip or bracket the markers; pronunciation rules unaffected
-- [ ] Tests: marker parsing, viseme track around a marker, caption text
+- [x] Inline markers in a line: `[gasp]`, `[hmm]`, `[laugh]`, `[sigh]`, `[giggle]`, `[groan]`: voiced through the TTS provider where it can (e.g. spoken "hmm", "ha ha") or a built-in generated sound otherwise, with matching mouth shapes and an expression (laugh → happy, gasp → surprised) unless the beat sets one
+- [x] Captions and readback skip or bracket the markers; pronunciation rules unaffected
+- [x] Tests: marker parsing, viseme track around a marker, caption text
 
 ### Step 100 — Overlapping speech and interruptions
 - [ ] Beat `overlap: 0.4` (seconds the beat starts before the previous one ends) and `interrupt: true` (cuts the previous line's audio with a short fade at that point, mouth stops); both characters' mouths follow their own tracks while overlapping

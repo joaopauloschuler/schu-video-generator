@@ -180,6 +180,8 @@ def test_sunset_to_night_keeps_the_bubble_readable(make_project, tmp_path: Path,
 
     night = light_grade("night")
     assert scene.light is not None and scene.light.grade == night   # the fade is over
+    stage_class = registry.get("stage").cls   # and its updater is gone (Manim removes by identity)
+    assert not any(getattr(f, "__func__", None) is stage_class._light_step for f in scene.updaters)
     sky = next(m for m in scene.mobjects if getattr(m, "name", None) == "background")
     camera = scene.renderer.camera
     assert camera.get_fill_rgbas(sky) == pytest.approx(grade_rgbas(sky.get_fill_rgbas(), night))   # graded as drawn

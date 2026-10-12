@@ -231,8 +231,9 @@ class Captions(Overlay):
         beats = scene.beats
         for k, beat in enumerate(beats):
             until = beats[k + 1].start if k + 1 < len(beats) else scene.duration
-            # The written words, timed by the audio of their spoken form (pronunciation, §45).
-            spoken = project.pronunciation.apply(beat.text)
+            # The written words, timed by the audio of their spoken form (pronunciation, §45;
+            # voice sounds, §69.33).
+            spoken = project.spoken(project.beat(beat.id))
             words = beat_word_times(audio, beat.id, beat.text, beat.start, beat.end, spoken, language)
             prefix = speaker_prefix(tags[beat.id]) if beat.id in tags else ""
             tag_width = sum(width(w) for w in prefix.split()) + space * (len(prefix.split()) - 1) if prefix else None

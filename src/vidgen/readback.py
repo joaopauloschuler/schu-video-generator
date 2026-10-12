@@ -25,7 +25,7 @@ import hashlib
 import json
 import re
 import time
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Collection, Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
@@ -34,6 +34,7 @@ from vidgen.errors import VidgenError
 from vidgen.fileio import write_text_atomic
 from vidgen.stt import STTProvider, Transcript, stt_settings
 from vidgen.textnorm import Token, normalize_text, normalize_words
+from vidgen.voicesounds import heard_sound_words
 
 if TYPE_CHECKING:
     from vidgen.project import Project
@@ -282,16 +283,22 @@ def compare_beat(
     spoken: Spoken,
     transcript: Transcript,
     language: str | None = None,
+    skip_heard: Collection[str] = (),
 ) -> BeatReadback:
     """Compare a beat (its :class:`~vidgen.pronunciation.Spoken` text) with a transcript of its
     MP3: normalised words aligned, differences grouped by written word (see the module
-    docstring), each with a suggestion."""
+    docstring), each with a suggestion. Heard words in ``skip_heard`` (normalised: what a
+    transcript shows for the beat's voice sounds, ``ha``, ``hmm``) that the text does not say are
+    left out."""
     written_words = spoken.text.split()
     spoken_words = spoken.spoken.split()
     ref = normalize_words(spoken_words, language)
     heard_words = transcript.word_texts()
     times = transcript.word_times()
     hyp = normalize_words(heard_words, language)
+    if skip_heard:
+        said = {t.text for t in ref}
+        hyp = [t for t in hyp if t.text not in skip_heard or t.text in said]
     owner = _invert_groups(spoken, len(spoken_words))
     entries = _entries_by_word(spoken)
 
@@ -597,15 +604,22 @@ def run_readback(
             transcripts[beat] = transcript
             result.transcribed += 1
             log(f"[{n + 1}/{len(pending)}] transcribed {beat} ({time.monotonic() - started:.1f} s)")
-    language = project.config.language
     for scene, beat, _mp3, state in chosen:
-        compared = compare_beat(scene, beat, project.pronunciation.apply(project.beat(beat).text), transcripts[beat], language)
+        compared = _compare(project, scene, beat, transcripts[beat])
         compared.audio = state
         compared.cached = beat not in {p[1] for p in pending}
         compared.flagged = compared.wer > threshold
         compared.suggestions = beat_suggestions(compared) if compared.edits else []
         result.beats.append(compared)
     return result
+
+
+def _compare(project: Project, scene: str, beat_id: str, transcript: Transcript) -> BeatReadback:
+    """:func:`compare_beat` of a beat of ``project``: its text as pronounced, without its voice
+    sounds (a transcript's ``ha ha`` for a ``[laugh]`` is skipped, DESIGN.md §69.33)."""
+    beat = project.beat(beat_id)
+    spoken = project.pronunciation.apply(beat.text)
+    return compare_beat(scene, beat_id, spoken, transcript, project.config.language, heard_sound_words(beat.voice_sounds))
 
 
 def cached_readback(project: Project, beat_ids: Iterable[str]) -> dict[str, BeatReadback]:
@@ -624,8 +638,7 @@ def cached_readback(project: Project, beat_ids: Iterable[str]) -> dict[str, Beat
         transcript = read_cached(cache_path(project, digest, settings), digest, settings)
         if transcript is None:
             continue
-        spoken = project.pronunciation.apply(project.beat(beat_id).text)
-        compared = compare_beat(scenes[beat_id], beat_id, spoken, transcript, project.config.language)
+        compared = _compare(project, scenes[beat_id], beat_id, transcript)
         compared.cached = True
         compared.suggestions = beat_suggestions(compared) if compared.edits else []
         out[beat_id] = compared

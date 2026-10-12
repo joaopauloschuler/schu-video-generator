@@ -31,6 +31,7 @@ from pydantic import (
 
 from vidgen.errors import Problem, VidgenError
 from vidgen.languages import LANGUAGE_TAG_PATTERN, normalize_language
+from vidgen.voicesounds import VoiceSound, take_out_sounds
 
 ID_PATTERN = r"^[A-Za-z0-9_]+$"
 HEX_COLOR_PATTERN = r"^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$"
@@ -1430,29 +1431,40 @@ def strip_emphasis(text: str) -> str:
 
 class BeatConfig(_Strict):
     """One narrated sentence/paragraph. ``id`` is filled in by :class:`SceneConfig` if omitted.
-    ``text`` is what is spoken and shown: the ``*word*`` emphasis marks of the config are taken
-    out of it here (:func:`strip_emphasis`) and kept in :attr:`marked_text` for automatic
-    directing."""
+    ``text`` is what is spoken and shown: the voice sound markers (``[laugh]``,
+    :mod:`vidgen.voicesounds`) are taken out of it here and kept in :attr:`voice_sounds`, then
+    the ``*word*`` emphasis marks (:func:`strip_emphasis`), kept in :attr:`marked_text` for
+    automatic directing."""
 
     id: Identifier
     """Unique in the whole video (names audio/<id>.mp3); default <scene id>_b<n> (1-based)."""
     text: str = Field(min_length=1)
-    """What the narrator says; also the subtitle. *word* stresses a word (its speaker gestures on it with auto_direct); the asterisks are not spoken or shown."""
+    """What the narrator says; also the subtitle. *word* stresses a word (its speaker gestures on it with auto_direct); the asterisks are not spoken or shown. [gasp] [hmm] [laugh] [sigh] [giggle] [groan] are voice sounds at that point (not shown)."""
 
     _marked_text: str | None = PrivateAttr(default=None)
+    _voice_sounds: tuple[VoiceSound, ...] = PrivateAttr(default=())
 
     @model_validator(mode="after")
-    def _take_out_emphasis(self) -> BeatConfig:
-        plain = strip_emphasis(self.text)
-        if plain != self.text:
-            self._marked_text = self.text
-            self.text = plain
+    def _take_out_marks(self) -> BeatConfig:
+        text, self._voice_sounds = take_out_sounds(self.text)
+        if not text.strip():
+            raise ValueError("text: has only voice sounds; a beat needs words to say besides [gasp], [laugh]...")
+        plain = strip_emphasis(text)
+        if plain != text:
+            self._marked_text = text
+        self.text = plain
         return self
 
     @property
     def marked_text(self) -> str:
-        """The text as written in the config, ``*word*`` emphasis marks included."""
+        """The text with its ``*word*`` emphasis marks (voice sound markers taken out: the same
+        words as :attr:`text`)."""
         return self._marked_text or self.text
+
+    @property
+    def voice_sounds(self) -> tuple[VoiceSound, ...]:
+        """The voice sounds of the text, each after its number of words of :attr:`text`."""
+        return self._voice_sounds
     actions: list[ActionConfig] = Field(default_factory=list)
     """Per-beat actions on the scene's targets (reveal, dim, highlight, ...), run during this beat."""
     voice: Identifier | None = None

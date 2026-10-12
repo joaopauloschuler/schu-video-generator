@@ -12,7 +12,8 @@ The format (Markdown-like, one element per line or paragraph):
 - ``WREN: line`` (a name in capitals) is a line of that character, ``PELL (doubtful): line``
   one with a manner: words naming a built-in expression or pose (or one of :data:`MANNERS`)
   become a ``react`` for the line; ``[...]`` inside a line is a stage direction of its speaker
-  at that point of the line;
+  at that point of the line, except a voice sound marker (``[laugh]``, ``[gasp]``...:
+  :mod:`vidgen.voicesounds`), which stays in the line's text;
 - a plain paragraph (or ``NARRATOR: ...``) is the narrator's line;
 - ``[Wren walks to the box]`` on its own is a stage direction for the next line (the last one
   at the end of a scene): :func:`direction_actions` maps each of its sentences to actions where a
@@ -42,6 +43,7 @@ from vidgen.cartoon.motion import jump_motion_seconds, walk_motion_seconds
 from vidgen.cartoon.poses import EXPRESSIONS, POSES
 from vidgen.cartoon.stage import MARKS, mark_x
 from vidgen.errors import VidgenError
+from vidgen.voicesounds import is_voice_sound, take_out_sounds
 
 #: Gradients (top to bottom) for ``background: <word>``.
 SKIES: dict[str, list[str]] = {
@@ -243,9 +245,12 @@ def _speaker_line(match: re.Match[str], number: int) -> Line:
         before = rest[: found.start()].split()
         spoken.extend(before)
         words_before += len(before)
+        rest = rest[found.end():]
+        if is_voice_sound(found.group(1)):   # [laugh] is a voice sound of the line, not a direction
+            spoken.append(found.group(0))
+            continue
         at = round(min(words_before / total, 0.9), 2) if total else 0.0
         directions.append(Direction(found.group(1).strip(), number, at, speaker))
-        rest = rest[found.end():]
     spoken.extend(rest.split())
     return Line(" ".join(spoken), speaker, (match.group("manner") or "").strip(), number, directions)
 
@@ -284,8 +289,8 @@ def parse_screenplay(text: str) -> Screenplay:
             continue
         speaker = _SPEAKER.match(raw)
         line = _speaker_line(speaker, number) if speaker else _speaker_line(_SPEAKER.match(f"NARRATOR: {raw}"), number)  # type: ignore[arg-type]
-        if not line.text:
-            raise VidgenError(f"line {number}: {raw[:40]!r} has nothing to say (a line needs words besides its [directions])")
+        if not take_out_sounds(line.text)[0]:
+            raise VidgenError(f"line {number}: {raw[:40]!r} has nothing to say (a line needs words besides its [directions] and [sounds])")
         scene.items.append(line)
     if not scenes:
         raise VidgenError("the screenplay has no scenes (start one with a heading: # Scene: yard)")

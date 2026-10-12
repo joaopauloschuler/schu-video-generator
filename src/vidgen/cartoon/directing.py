@@ -913,35 +913,21 @@ def _beat_words(project: Project, beat: BeatConfig) -> tuple[float, tuple[WordTi
 
     mp3 = project.audio_dir / f"{beat.id}.mp3"
     seconds = audio_duration(mp3) if mp3.is_file() else beat.estimated_duration(project.config.narration.words_per_second)
-    times = beat_word_times(project.audio_dir, beat.id, beat.text, 0.0, seconds, language=project.config.language)
+    spoken = project.spoken(beat) if beat.voice_sounds else None   # the audio also says the sounds (§69.33)
+    times = beat_word_times(project.audio_dir, beat.id, beat.text, 0.0, seconds, spoken, project.config.language)
     marked = beat.marked_text.split()   # the words as written, *word* marks included (same count)
     if len(marked) == len(times):
         times = [WordTime(word, t.start, t.end) for word, t in zip(marked, times)]
     return seconds, tuple(times)
 
 
-def stage_directions(
-    project: Project, spec: SceneConfig, characters: Sequence[str], setting: AutoDirectSetting | None, stage: StageFrame | None = None,
-    *, reframe: bool = False,
-) -> list[DirectedBeat]:
-    """The automatic actions of a stage scene ``spec`` with ``characters`` on it (in the stage's
-    order), the stage's ``auto_direct`` ``setting`` and its geometry ``stage``
-    (:func:`stage_frame`; none: arm gestures and close-ups are not added): reads who speaks each
-    beat (its ``say`` actions, else its voice), the beats' word times, the characters' parts (a
-    ``look: {svg}`` from the project folder) and the video's setting, then
-    :func:`plan_directions`. With ``reframe`` (:func:`stage_reframes`) and the geometry, the
-    pans of :func:`plan_reframe` come first in their beats, and the directing passes see them as
-    written. Needs the project's registry (a project session) for the action names."""
-    from vidgen import registry
-    from vidgen.cartoon.cast import beat_voice, character_part_shapes, missing_needs, speaking_characters
+def _stage_cast(project: Project, characters: Sequence[str]) -> list[CastMember]:
+    """The ``characters`` on a stage as the planner sees them (what their parts allow; a
+    character whose parts cannot be read allows nothing)."""
+    from vidgen.cartoon.cast import character_part_shapes, missing_needs
     from vidgen.errors import VidgenError
 
-    config = project.config
-    kinds = [directing_kinds(beat.auto_direct, setting, config.auto_direct) for beat in spec.beats]
-    reframe = reframe and stage is not None
-    if not any(kinds) and not reframe:
-        return []
-    entries = {e.name: e for e in config.characters}
+    entries = {e.name: e for e in project.config.characters}
     cast: list[CastMember] = []
     for name in characters:
         try:
@@ -955,25 +941,105 @@ def stage_directions(
             gestures=() if shapes is None else tuple(g for g in GESTURES if missing_needs(shapes, f"gesture: {g}") is None),
             near_hand="right" if shapes is not None and "arm_left" not in shapes and "arm_right" in shapes else "left",
         ))
+    return cast
+
+
+def _beat_speakers(project: Project, spec: SceneConfig, beat: BeatConfig, written: Sequence[ActionConfig], characters: Sequence[str]) -> list[str]:
+    """Who says ``beat`` among ``characters``: its ``say`` actions' targets, else the characters
+    of its voice."""
+    from vidgen.cartoon.cast import beat_voice, speaking_characters
+
+    said = [act for act in written if act.action == "say"]
+    if said:
+        return [n for n in characters if n in _named([p for act in said for p in act.targets()], characters)]
+    return speaking_characters(project.config, beat_voice(spec, beat), characters)
+
+
+#: Written actions that set a character's face: a voice sound adds no expression to it.
+FACE_ACTIONS = frozenset({"emote", "react"})
+
+
+def sound_reactions(project: Project, spec: SceneConfig, characters: Sequence[str]) -> list[DirectedBeat]:
+    """The faces of a stage's speakers for the voice sounds of their lines (DESIGN.md §69.33,
+    whatever ``auto_direct`` says): a ``react`` with the expression of the beat's first sound
+    (:data:`~vidgen.voicesounds.VOICE_SOUNDS`: laugh -> happy, gasp -> surprised...) as it is
+    heard, for each speaker that can emote and that no ``emote`` / ``react`` of the beat acts on.
+    Needs the project's registry (a project session)."""
+    from vidgen import registry
+    from vidgen.voicesounds import VOICE_SOUNDS, beat_sound_spans
+
+    if not any(beat.voice_sounds for beat in spec.beats):
+        return []
+    can_emote = {member.name for member in _stage_cast(project, characters) if member.can_emote}
+    known = registry.action_names()
+    out: list[DirectedBeat] = []
+    for beat in spec.beats:
+        if not beat.voice_sounds:
+            continue
+        written = _resolved_actions(beat, known)
+        faced = _named([p for act in written if act.action in FACE_ACTIONS for p in act.targets()], characters)
+        speakers = [n for n in _beat_speakers(project, spec, beat, written, characters) if n in can_emote and n not in faced]
+        if not speakers:
+            continue
+        seconds, _ = _beat_words(project, beat)
+        span = beat_sound_spans(project, beat, seconds)[0]
+        at = round(min(max(span.start / seconds, 0.0), REACTION_AT), 3) if seconds > 0 else 0.0
+        expression = VOICE_SOUNDS[span.kind].expression
+        out.append(DirectedBeat(beat.id, tuple(
+            ActionConfig.automatic({"action": "react", "target": name, "expression": expression, "at": at}) for name in speakers
+        )))
+    return out
+
+
+def _merged_directions(spec: SceneConfig, *lists: Sequence[DirectedBeat]) -> list[DirectedBeat]:
+    """Several lists of automatic actions of ``spec``'s beats as one: per beat (in the scene's
+    order), the actions in the order of the lists."""
+    merged: dict[str, tuple[ActionConfig, ...]] = {}
+    for directed in lists:
+        for d in directed:
+            merged[d.beat] = (*merged.get(d.beat, ()), *d.actions)
+    return [DirectedBeat(beat.id, merged[beat.id]) for beat in spec.beats if beat.id in merged]
+
+
+def stage_directions(
+    project: Project, spec: SceneConfig, characters: Sequence[str], setting: AutoDirectSetting | None, stage: StageFrame | None = None,
+    *, reframe: bool = False,
+) -> list[DirectedBeat]:
+    """The automatic actions of a stage scene ``spec`` with ``characters`` on it (in the stage's
+    order), the stage's ``auto_direct`` ``setting`` and its geometry ``stage``
+    (:func:`stage_frame`; none: arm gestures and close-ups are not added): reads who speaks each
+    beat (its ``say`` actions, else its voice), the beats' word times, the characters' parts (a
+    ``look: {svg}`` from the project folder) and the video's setting, then
+    :func:`plan_directions`. With ``reframe`` (:func:`stage_reframes`) and the geometry, the
+    pans of :func:`plan_reframe` come first in their beats, and the directing passes see them as
+    written. Whatever ``setting`` says, the speakers' faces for the voice sounds of their lines
+    (:func:`sound_reactions`) come first, seen as written too. Needs the project's registry (a
+    project session) for the action names."""
+    from vidgen import registry
+
+    config = project.config
+    sounds = sound_reactions(project, spec, characters)
+    spec = with_auto_actions(spec, sounds)
+    kinds = [directing_kinds(beat.auto_direct, setting, config.auto_direct) for beat in spec.beats]
+    reframe = reframe and stage is not None
+    if not any(kinds) and not reframe:
+        return sounds
+    cast = _stage_cast(project, characters)
     known = registry.action_names()
     beats: list[BeatInput] = []
     for beat, on in zip(spec.beats, kinds):
         written = _resolved_actions(beat, known)
-        said = [act for act in written if act.action == "say"]
-        if said:
-            speakers = [n for n in characters if n in _named([p for act in said for p in act.targets()], characters)]
-        else:
-            speakers = speaking_characters(config, beat_voice(spec, beat), characters)
+        speakers = _beat_speakers(project, spec, beat, written, characters)
         seconds, words = _beat_words(project, beat) if ({"gestures", "closeups"} & on or reframe) and speakers else (0.0, ())
         beats.append(BeatInput(beat.id, beat.marked_text, tuple(speakers), written, on, seconds, words))
     if not reframe or stage is None:
-        return plan_directions(spec.id, cast, beats, stage)
+        return _merged_directions(spec, sounds, plan_directions(spec.id, cast, beats, stage))
     pans = {d.beat: d.actions for d in plan_reframe(cast, beats, stage)}
     beats = [replace(b, actions=(*b.actions, *pans[b.id])) if b.id in pans else b for b in beats]
     directed = {d.beat: d.actions for d in plan_directions(spec.id, cast, beats, stage)}
-    return [
+    return _merged_directions(spec, sounds, [
         DirectedBeat(b.id, (*pans.get(b.id, ()), *directed.get(b.id, ()))) for b in beats if b.id in pans or b.id in directed
-    ]
+    ])
 
 
 def project_directions(project: Project, scenes: Sequence[str] | None = None) -> dict[str, list[DirectedBeat]]:
@@ -996,13 +1062,15 @@ def project_directions(project: Project, scenes: Sequence[str] | None = None) ->
 
 def directing_used(project: Project) -> bool:
     """Whether automatic actions are possible: ``auto_direct`` is set anywhere (the video, a
-    scene's params, a beat), or a ``stage`` scene may reframe (its ``reframe``, else the
-    video's, is not ``none``): a cheap check before :func:`project_directions`."""
+    scene's params, a beat), a ``stage`` scene may reframe (its ``reframe``, else the video's,
+    is not ``none``) or has voice sounds: a cheap check before :func:`project_directions`."""
     config = project.config
     if config.auto_direct:
         return True
     if any(spec.type == "stage" and (spec.params.get("reframe") or config.reframe) != "none" for spec in config.scenes):
         return True
+    if any(spec.type == "stage" and any(b.voice_sounds for b in spec.beats) for spec in config.scenes):
+        return True   # a speaker's face for a voice sound (§69.33)
     return any(spec.params.get("auto_direct") or any(b.auto_direct for b in spec.beats) for spec in config.scenes)
 
 

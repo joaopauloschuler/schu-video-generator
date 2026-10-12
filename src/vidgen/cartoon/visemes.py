@@ -447,22 +447,47 @@ def write_beat_visemes(
     return write_visemes(audio_dir, beat_id, text, audio, track)
 
 
+def with_cues(track: VisemeTrack, spans: Sequence[tuple[float, float, str]]) -> VisemeTrack:
+    """``track`` with ``(start, end, viseme)`` spans laid over it (the generated voice sounds of
+    a beat, DESIGN.md §69.33): cut to 0 and on, past its end with ``rest`` before them."""
+    cues = list(track.cues)
+    for start, end, viseme in spans:
+        start = max(start, 0.0)
+        if end <= start:
+            continue
+        kept: list[VisemeCue] = []
+        for cue in cues:
+            if cue.start < start:
+                kept.append(cue._replace(end=min(cue.end, start)))
+            if cue.end > end:
+                kept.append(cue._replace(start=max(cue.start, end)))
+        last = max((c.end for c in kept), default=0.0)
+        if start > last:   # past the track's end
+            kept.append(VisemeCue(last, start, REST))
+        kept.append(VisemeCue(start, end, viseme))
+        cues = sorted(kept, key=lambda c: c.start)
+    return VisemeTrack(tuple(cues), track.source, track.timing)
+
+
 def beat_visemes(project: Project, beat_id: str, duration: float | None = None) -> VisemeTrack:
     """The viseme track of a beat of ``project``: the stored one while it matches the beat's MP3
-    and spoken text, else built from the spoken text (not stored). ``duration`` (seconds) is the
-    beat's length; default: its MP3's length, else the word-count estimate."""
+    and spoken text, else built from the spoken text (not stored); the mouth shapes of its
+    generated voice sounds over it (:func:`with_cues`). ``duration`` (seconds) is the beat's
+    length; default: its MP3's length, else the word-count estimate."""
+    from vidgen.voicesounds import VOICE_SOUNDS, beat_sound_spans
+
     spoken = project.spoken_texts()
     if beat_id not in spoken:
         raise VidgenError(f"unknown beat '{beat_id}'")
+    beat = project.beat(beat_id)
     audio_dir = project.audio_dir
-    stored = read_visemes(audio_dir, beat_id, spoken[beat_id])
-    if stored is not None:
-        return stored
+    track = read_visemes(audio_dir, beat_id, spoken[beat_id])
+    if track is not None and not beat.voice_sounds:
+        return track
     if duration is None:
         mp3 = audio_dir / f"{beat_id}.mp3"
-        if mp3.is_file():
-            duration = audio_duration(mp3)
-        else:
-            beat = next(b for _, b in project.beats() if b.id == beat_id)
-            duration = beat.estimated_duration(project.config.narration.words_per_second)
-    return build_visemes(audio_dir, beat_id, spoken[beat_id], duration, project.config.language)
+        duration = audio_duration(mp3) if mp3.is_file() else beat.estimated_duration(project.config.narration.words_per_second)
+    if track is None:
+        track = build_visemes(audio_dir, beat_id, spoken[beat_id], duration, project.config.language)
+    spans = [(s.start, s.end, VOICE_SOUNDS[s.kind].viseme) for s in beat_sound_spans(project, beat, duration) if s.generated]
+    return with_cues(track, spans) if spans else track

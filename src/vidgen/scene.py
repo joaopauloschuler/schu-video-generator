@@ -42,6 +42,7 @@ from vidgen.speech import audio_duration
 from vidgen.theme import Theme
 from vidgen.transitions import ColorFade, has_transitions, resolve_color
 from vidgen.videoplan import TransitionSlot, VideoPlan
+from vidgen.voicesounds import SOUND_GAIN_DB, VOICE_SOUNDS, beat_sound_spans
 
 log = logging.getLogger("vidgen.scene")
 
@@ -593,6 +594,10 @@ class NarratedScene(MovingCameraScene):
         self._beat_start = start
         if b.sting is not None:
             self._add_sting(b.sting, start + (d if b.sting.placed_at == "end" else 0.0))
+        for span in beat_sound_spans(self.project, b, d):
+            if span.generated:   # a breath the TTS cannot say, in the silence before / after the line (§69.33)
+                sound = VOICE_SOUNDS[span.kind].sfx or ""
+                self._add_sfx(sound, max(start + span.start, 0.0), SOUND_GAIN_DB, 0.0, "start", {}, "voice sound")
         if self._actions is not None:
             self._actions.start_beat(b.id, d, self.pad)
         try:

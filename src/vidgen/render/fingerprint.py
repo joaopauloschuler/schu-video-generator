@@ -184,6 +184,10 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
     if marked:
         # *word* marks are taken out of the beat's text but steer automatic gestures (§69.24)
         data["emphasis"] = marked
+    sounds = {beat.id: [list(s) for s in beat.voice_sounds] for beat in spec.beats if beat.voice_sounds}
+    if sounds:
+        # [laugh] marks are taken out of the text but make sounds, faces and mouths (§69.33)
+        data["voice_sounds"] = sounds
     if project.config.characters:
         # a character's mouth follows the beat's viseme track, stored or built from its alignment (§69.4)
         data["visemes"] = {

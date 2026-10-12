@@ -17,7 +17,7 @@ from typing import NamedTuple
 
 from vidgen.cues import caption_cues, split_cues
 from vidgen.fileio import write_text_atomic
-from vidgen.pronunciation import Pronunciation
+from vidgen.pronunciation import Pronunciation, Spoken
 from vidgen.speech import WordTime, beat_word_times
 from vidgen.voices import speaker_prefix
 
@@ -65,11 +65,13 @@ def cues_from_timings(
     pronunciation: Pronunciation | None = None,
     speakers: Mapping[str, str] | None = None,
     language: str | None = None,
+    spoken: Mapping[str, Spoken] | None = None,
 ) -> list[Cue]:
     """All cues of a combined ``timings.json`` mapping (beat times are absolute); with
     ``audio_dir``, word times come from the beats' MP3s and alignments there. The cues show the
     written text; with ``pronunciation`` (the project's) the words are timed by their spoken
-    form, which is what the MP3s say. ``speakers`` (beat id -> label, see
+    form, which is what the MP3s say; ``spoken`` (beat id -> what the TTS got,
+    :meth:`vidgen.project.Project.spoken`, voice sounds included) wins over it for its beats. ``speakers`` (beat id -> label, see
     :meth:`vidgen.project.Project.speaker_tags`) names the speaker before those beats.
     ``language`` (default: the timings' ``language``, else English) chooses the break rules."""
     cues: list[Cue] = []
@@ -80,8 +82,10 @@ def cues_from_timings(
         for beat in scene["beats"]:
             words = None
             if audio_dir is not None:
-                spoken = pronunciation.apply(beat["text"]) if pronunciation is not None else None
-                words = beat_word_times(audio_dir, beat["id"], beat["text"], beat["start"], beat["end"], spoken, language)
+                said = spoken.get(beat["id"]) if spoken is not None else None
+                if said is None and pronunciation is not None:
+                    said = pronunciation.apply(beat["text"])
+                words = beat_word_times(audio_dir, beat["id"], beat["text"], beat["start"], beat["end"], said, language)
             cues.extend(
                 beat_cues(beat["start"], beat["end"], beat["text"], words=words, speaker=speakers.get(beat["id"]), language=language)
             )
@@ -113,10 +117,11 @@ def write_srt(
     pronunciation: Pronunciation | None = None,
     speakers: Mapping[str, str] | None = None,
     language: str | None = None,
+    spoken: Mapping[str, Spoken] | None = None,
 ) -> list[Cue]:
-    """Write the SRT for a combined timings mapping as UTF-8 (word times from ``audio_dir`` and
-    ``pronunciation``, speaker names ``speakers``, cue breaks for ``language``, see
+    """Write the SRT for a combined timings mapping as UTF-8 (word times from ``audio_dir``,
+    ``pronunciation`` and ``spoken``, speaker names ``speakers``, cue breaks for ``language``, see
     :func:`cues_from_timings`); returns the cues."""
-    cues = cues_from_timings(timings, audio_dir, pronunciation, speakers, language)
+    cues = cues_from_timings(timings, audio_dir, pronunciation, speakers, language, spoken)
     write_text_atomic(path, format_srt(cues))
     return cues

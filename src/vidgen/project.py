@@ -13,9 +13,10 @@ import yaml
 
 from vidgen.config import BeatConfig, FormatConfig, SceneConfig, VideoConfig, VoiceConfig, parse_config
 from vidgen.errors import VidgenError
-from vidgen.pronunciation import Pronunciation, load_pronunciation
+from vidgen.pronunciation import Pronunciation, Spoken, load_pronunciation
 from vidgen.translation import TranslationReport, apply_translations, read_translation_file
 from vidgen.voices import audio_fields, beat_voice_names, resolve_voice, speaker_tags
+from vidgen.voicesounds import voiced_spoken
 
 CONFIG_NAMES: tuple[str, ...] = ("video.yaml", "video.yml", "video.json")
 #: Folder of the deliverables (MP4, SRT, chapter list, thumbnail) without ``output_dir:`` or ``--output-dir``.
@@ -288,10 +289,15 @@ class Project:
         mode = self.config.subtitles.speakers if mode is None else mode
         return {} if mode in ("off", "color") else speaker_tags(self.config)
 
+    def spoken(self, beat: BeatConfig) -> Spoken:
+        """What the TTS gets for ``beat``: its text with ``pronunciation`` applied and what its
+        voice says for its voice sounds (:func:`vidgen.voicesounds.voiced_spoken`)."""
+        spoken = self.pronunciation.apply(beat.text)
+        return voiced_spoken(spoken, beat.voice_sounds, self.beat_voice(beat.id)) if beat.voice_sounds else spoken
+
     def spoken_texts(self) -> dict[str, str]:
-        """Beat id -> the text the TTS gets for it (``pronunciation`` applied), in video order."""
-        say = self.pronunciation.say
-        return {beat.id: say(beat.text) for _, beat in self.beats()}
+        """Beat id -> the text the TTS gets for it (:meth:`spoken`), in video order."""
+        return {beat.id: self.spoken(beat).spoken for _, beat in self.beats()}
 
     @property
     def build_dir(self) -> Path:

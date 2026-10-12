@@ -731,7 +731,8 @@ def render_project(
         timings_file = project.render_dir(preview) / "timings.json"
         write_json(timings_file, timings)
         srt = project.srt_path(preview)
-        write_srt(srt, timings, project.audio_dir, project.pronunciation, project.speaker_tags(), project.config.language)
+        spoken = {beat.id: project.spoken(beat) for _, beat in project.beats() if beat.voice_sounds}
+        write_srt(srt, timings, project.audio_dir, project.pronunciation, project.speaker_tags(), project.config.language, spoken)
         chapters_file = write_chapter_list(project, preview, timings)
         index = write_frames_index(project, preview, timings, frames) if frames else None
         post: dict[str, Any] = {

@@ -407,7 +407,8 @@ class Stage(NarratedScene):
         speaks, the speaker at the one it talks to, listeners react after lines, speakers
         gesture on stressed words and short punchy lines get a close-up, each checked against
         the stage's geometry (:func:`stage_directions`, DESIGN.md §69.23, §69.24). When the stage
-        reframes (:func:`stage_reframes`), pans keep the speaker in view (§69.30)."""
+        reframes (:func:`stage_reframes`), pans keep the speaker in view (§69.30). Always: a
+        speaker's face for the voice sounds of its line (§69.33)."""
         names = [c.name for c in params.characters]
         frame = stage_frame(project, params)
         return stage_directions(project, spec, names, params.auto_direct, frame, reframe=stage_reframes(project, params))
@@ -626,6 +627,9 @@ class Stage(NarratedScene):
         self.light: StageLight | None = StageLight(self.renderer.camera, self.base_light) if self.base_light.changes_colors or changes else None
         self.stars: StarField | None = None
         self.shadows: list[StageShadows] = []
+        #: the scene updater while the light changes, kept: Manim removes an updater by identity,
+        #: and each ``self._light_step`` is a new bound method
+        self._light_updater = self._light_step
 
     def change_light(self, setting: str | CustomLight, start: float, seconds: float) -> None:
         """Fade the light to ``setting`` (a preset or a tint) from scene time ``start`` over
@@ -634,13 +638,17 @@ class Stage(NarratedScene):
             self.light = StageLight(self.renderer.camera, self.base_light)
             self.light.on_change(self._show_light)
         self.light.change(resolve_light(setting, self.theme), start, seconds)
-        if self._light_step not in self.updaters:
-            self.add_updater(self._light_step)
+        if not any(f is self._light_updater for f in self.updaters):
+            self.add_updater(self._light_updater)
 
     def _light_step(self, dt: float) -> None:
-        """Scene updater while the light changes: the grade for the scene time now."""
+        """Scene updater while the light changes: the grade for the scene time now; it removes
+        itself once every change is over (a scene updater makes Manim redraw every frame)."""
+        now = float(self.renderer.time)
         if self.light is not None:
-            self.light.update(float(self.renderer.time))
+            self.light.update(now)
+        if self.light is None or self.light.settled(now):
+            self.remove_updater(self._light_updater)
 
     def _show_light(self, grade: LightGrade) -> None:
         """The stars' brightness and the shadows' darkness for ``grade``."""
@@ -661,8 +669,6 @@ class Stage(NarratedScene):
         light = getattr(self, "light", None)
         if light is not None:
             light.update(now)
-            if light.settled(now) and self._light_step in self.updaters:
-                self.remove_updater(self._light_step)
             if light.changing(now, end):
                 return [*self.mobjects, *(m for m in moving if m not in self.mobjects)]
         blowing = getattr(self, "blowing", None)

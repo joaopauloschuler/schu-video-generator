@@ -9171,3 +9171,98 @@ How to test
   test_particles test_cartoon_stage test_cartoon_props test_cartoon_character
   test_cartoon_generator test_cartoon_motion test_cartoon_speed test_cartoon_parallax
   test_cartoon_holding test_cartoon_seating` (15, 8 s). The full suite was not run.
+
+## Step 99 — Non-speech voice sounds
+
+What was built
+- `src/vidgen/voicesounds.py` (no manim): `VOICE_SOUNDS` (`gasp hmm laugh sigh giggle groan`:
+  said form, ElevenLabs v3 tag, built-in sfx, expression, mouth viseme, words a transcript
+  shows), `SOUND_MARKER` (`[laugh]` / `[laughs]`, any case), `take_out_sounds`, `VoiceSound(kind,
+  word)`, `sound_voicing`, `voiced_spoken`, `SoundSpan`, `sound_spans`, `beat_sound_spans`,
+  `heard_sound_words`, `is_voice_sound`, `SOUND_GAP` 0.05 s, `SOUND_GAIN_DB` +6.
+- One place for the markers: `BeatConfig`'s validator takes them out of `text` (before the
+  `*word*` strip) into `voice_sounds`; `marked_text` keeps emphasis only (same words). A text of
+  sounds only is a config error. Other brackets stay in the text.
+- What each voice says (`Project.spoken(beat)`, `spoken_texts` built from it; `Spoken.inserted`
+  adds the sound's words after their word, owned by no written word): `eleven_v3*` models get
+  audio tags (`[laughs]`, `[gasps]`...); Kokoro, other ElevenLabs models and OpenRouter say
+  `Ha ha ha!`, `Hee hee!`, `Hmm.`, `Ugh.`; `gasp` / `sigh` at a line's start or end are new
+  built-in generated sounds `gasp` / `sigh` (`sfx.py`, 18 built-ins now) mixed in the silence
+  before / after the line (recorded by `NarratedScene.narrate` as beat sound effects), so the
+  audio and its hash stay as without the marker; inside a line they are said `Hah!` / `Haah.`.
+- Mouth: said sounds are in the viseme track like words; `beat_visemes` lays generated ones over
+  it (`visemes.with_cues`: gasp `O`, sigh `A`). Face: `directing.sound_reactions` (run first by
+  `stage_directions`, whatever `auto_direct` says) adds a `react` with the first sound's
+  expression at its time for each speaker that can emote and that no written `emote` / `react`
+  acts on. `stage_directions`' cast and speaker code moved into `_stage_cast` / `_beat_speakers`
+  (shared).
+- Captions (`scenes/captions.py`) and the SRT (`write_srt(..., spoken=)` from the pipeline) time
+  the written words with `Project.spoken`; `directing._beat_words` too for beats with sounds.
+  Readback compares the line without sounds and skips heard sound words
+  (`compare_beat(..., skip_heard=)`, `readback._compare`).
+- Screenplay: inside a line a known sound marker stays in the line's text; every other `[...]`
+  is a stage direction; a `[laugh]` on its own line stays a direction. Fingerprint:
+  `voice_sounds` per beat.
+- Step 97 bug found by Step 98, fixed: the light fade's scene updater was never removed
+  (`remove_updater` compares by identity and `Stage` passed a fresh bound method; also the
+  removal only ran in `get_moving_mobjects`, i.e. when a new animation started, so a fade ending
+  inside a long wait kept it). Now `_start_light` keeps the bound method in `_light_updater`
+  (as the wind does) and `_light_step` removes itself once every change is over.
+  `test_sunset_to_night_keeps_the_bubble_readable` asserts no bound `_light_step` remains (it
+  failed before the fix).
+
+Evidence
+- Real Kokoro (`af_heart`, the scratchpad venv, 2.5 GB cap): raw pipeline: `Ha ha ha!` 0.73 s,
+  `Hee hee!` 0.43 s, `Hmm.` 0.28 s, `Ugh.` 0.33 s, `Hah!` 0.23 s, `Haaah.` 0.28 s; a pause from
+  `…` is 0.05 s and from `...` 0.11 s (too short for a 0.35 s gasp, hence generated breaths only at
+  line edges). `vidgen tts` on a 3-beat scratch stage (`s99/kproj`): says `Ha ha ha! That is
+  funny.` (2.30 s; the laugh spans 0.00–1.10 s, mouth `A`), `Well Hmm. I wonder.` (hmm 0.53–0.85
+  s, mouth `M`), `Oh no, it fell!` for `[gasp] Oh no, it fell!` (gasp generated −0.05–0.30 s,
+  ending at the speech start, mouth `O`); alignments stored; Whisper not needed. `vidgen
+  direct` lists `react pip happy / thinking / surprised`. Not listened to by a human.
+
+Files touched
+- New: `src/vidgen/voicesounds.py`, `tests/test_voice_sounds.py`.
+- `config.py`, `project.py`, `pronunciation.py`, `sfx.py`, `scene.py`, `subtitles.py`,
+  `readback.py`, `screenplay.py`, `render/pipeline.py`, `render/fingerprint.py`,
+  `scenes/captions.py`, `scenes/stage.py` (docstring; light updater), `cartoon/visemes.py`,
+  `cartoon/directing.py`; guide (+ `AGENTS.md` copy: cartoons "Voice sounds" bullet, screenplay
+  note, sound list); `docs/CONFIG.md` (beat text, sounds table, new "Voice sounds", readback,
+  screenplay), `docs/EXTENDING.md`, `DESIGN.md` (§2 tree, §6.4, §69.31, §69.32 note, new
+  §69.33), `tasklist.md`; `tests/test_cartoon_lighting.py` (updater assertion).
+
+Public interfaces
+- No new `vidgen.api` names. `BeatConfig.voice_sounds`, `Project.spoken`, `Spoken.inserted`,
+  `compare_beat(skip_heard=)`, `cues_from_timings` / `write_srt(spoken=)`; `stage_directions`
+  also returns the sound reactions. Built-in sounds `gasp`, `sigh`.
+
+Decisions / deviations
+- Per provider: text where the TTS can say it, tags for ElevenLabs v3, generated breaths only at
+  a line's edges (no TTS here makes a pause long enough inside a line; measured). Beats without
+  markers keep their spoken text, hashes (pinned) and fingerprints.
+- The face is an automatic `react` (one per beat, the first sound's), so `vidgen direct` shows it
+  and pasting it makes it written; a written `emote` / `react` on the speaker wins.
+- Searched first: no marker, interjection or breath code existed (`grep -rni "\[laugh\|gasp\|
+  sigh\|giggle" src/vidgen`); reused `Spoken` / `word_groups` / `map_word_times`,
+  `beat_word_times`, the sfx machinery (`_add_sfx`, project sound overrides), `react`, the
+  directing passes and the `strip_emphasis` pattern.
+
+Known gaps / TODOs
+- ElevenLabs v3 tags (`[giggles]`, `[groans]` especially) and OpenRouter models were not tried
+  against the real services (no API calls). One face per beat; a `surprised` react from a gasp
+  also gets the foley `pop`; a sound alone on a line is not possible (a beat needs words).
+- Found, not fixed: the wind's updater (`Stage._wind_updater`) is likewise removed only in
+  `get_moving_mobjects`, i.e. when an animation starts after the wind calmed down.
+
+How to test
+- `pytest tests/test_voice_sounds.py` (7 not-render + 1 render at 160x90, ~3 s).
+- Also run (not render): `test_sfx test_config test_pronunciation test_readback test_subtitles
+  test_captions test_tts test_tts_kokoro test_cartoon_visemes test_screenplay test_guide test_docs
+  test_cartoon_foley test_voices` with the new file (428 + 2 skipped, 20 s); `test_cartoon_directing
+  test_schema test_cartoon_acting test_cartoon_stage test_storyboard test_json_output test_cli
+  test_lint test_cartoon_lint test_api test_translation test_cartoon_reframe test_cartoon_lighting`
+  (298, 65 s); `test_chapter_export test_chapters_progress test_imagegen test_overlays
+  test_push_wipe_carry test_regions test_thumbnail_export test_transitions test_mcp test_actions
+  test_scene` (205, 50 s); render: `test_voice_sounds test_cartoon_lighting test_cartoon_acting
+  test_cartoon_directing test_cartoon_visemes test_cartoon_foley test_cartoon_wind test_captions
+  test_sfx` (18, 33 s). The full suite was not run.

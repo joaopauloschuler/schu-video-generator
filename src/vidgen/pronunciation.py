@@ -167,6 +167,28 @@ class Spoken:
             shift += (r.spoken_end - r.spoken_start) - (r.end - r.start)
         return pos + shift + (1 if end else 0)
 
+    def inserted(self, inserts: Sequence[tuple[int, str, str]]) -> Spoken:
+        """This text with ``(position, said, term)`` inserts: ``said`` is spoken at ``position``
+        of :attr:`text` (between words) but not written; it belongs to no written word
+        (:meth:`word_groups`). Voice sounds use it (DESIGN.md §69.33)."""
+        events = sorted(
+            [(r.start, 1, r.end, r.term, self.spoken[r.spoken_start : r.spoken_end]) for r in self.replacements]
+            + [(position, 0, position, term, said) for position, said, term in inserts]
+        )
+        pieces: list[str] = []
+        replacements = []
+        pos = length = 0
+        for start, _, end, term, said in events:
+            start = max(start, pos)   # an insert inside a replacement goes after it
+            pieces.append(self.text[pos:start])
+            length += start - pos
+            replacements.append(Replacement(term, start, max(end, start), length, length + len(said)))
+            pieces.append(said)
+            length += len(said)
+            pos = max(end, start)
+        pieces.append(self.text[pos:])
+        return Spoken(self.text, "".join(pieces), tuple(replacements), self.matched, self.conflicts)
+
     def word_groups(self) -> list[list[int]]:
         """For each word of ``text`` (``str.split()``), the indices of the words of ``spoken``
         it is said as: ``K-Phi-3`` -> ``kay fye three`` gives three indices; a term said as
