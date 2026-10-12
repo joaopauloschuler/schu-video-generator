@@ -331,12 +331,16 @@ class CharacterLook(_Strict):
         return self
 
 
-#: Parts a pose sets (DESIGN.md §69.3); the parts of an expression are :data:`ExpressionPart`.
 #: How strongly characters move with the animation principles (anticipation, squash and
 #: stretch, overshoot and settle, follow-through; DESIGN.md §69.13): ``cartoon_motion:``.
 MotionSetting = Literal["lively", "calm", "none"]
 
-PosePart = Literal["body", "legs", "arm_left", "arm_right", "head", "accessory"]
+#: Parts a pose sets (DESIGN.md §69.3, the two-segment limbs §69.26); the parts of an expression
+#: are :data:`ExpressionPart`.
+PosePart = Literal[
+    "body", "legs", "leg_left", "leg_left_lower", "leg_right", "leg_right_lower",
+    "arm_left", "arm_left_lower", "arm_right", "arm_right_lower", "head", "accessory",
+]
 ExpressionPart = Literal["eyes", "brows", "mouth"]
 
 

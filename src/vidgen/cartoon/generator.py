@@ -150,21 +150,47 @@ def _body(look: CharacterLook, f: _Frame, c: Mapping[str, str], w: float) -> VGr
     return group
 
 
-def _legs(f: _Frame, c: Mapping[str, str], w: float) -> VGroup:
+#: Width of a sleeve or a leg; its ends are round (half this radius), so a bent elbow or knee
+#: stays a smooth joint.
+LIMB_WIDTH = 0.08
+
+
+def _segment(x: float, top: float, bottom: float, color: str, c: Mapping[str, str], w: float) -> VMobject:
+    """A limb segment hanging from (x, ``top``) to (x, ``bottom``), the round ends centred there."""
+    length = top - bottom + LIMB_WIDTH
+    shape = RoundedRectangle(width=LIMB_WIDTH, height=length, corner_radius=LIMB_WIDTH / 2).move_to([x, (top + bottom) / 2, 0])
+    return _outlined(shape, color, c["outline"], w)
+
+
+def _legs(f: _Frame, c: Mapping[str, str], w: float) -> list[CharacterPart]:
+    """Each leg in two segments: the thigh turns about the hip (under the body), the shin about
+    the knee half-way down; the foot's sole is at the ground."""
     p = f.p
     x = 0.07 * p.body_width / 0.4
-    return VGroup(*(
-        _outlined(RoundedRectangle(width=0.08, height=p.leg_length, corner_radius=0.035).move_to([side * x, p.leg_length / 2, 0]), c["clothes"], c["outline"], w)
-        for side in (-1, 1)
-    ))
+    hip, foot = p.leg_length - LIMB_WIDTH / 2, LIMB_WIDTH / 2
+    knee = (hip + foot) / 2
+    parts = []
+    for name, side in (("leg_left", 1.0), ("leg_right", -1.0)):
+        parts.append(CharacterPart(name, {"default": VGroup(_segment(side * x, hip, knee, c["clothes"], c, w))}, (side * x, hip)))
+        shin = VGroup(_segment(side * x, knee, foot, c["clothes"], c, w))
+        parts.append(CharacterPart(f"{name}_lower", {"default": shin}, (side * x, knee), end=(side * x, 0.0)))
+    return parts
 
 
-def _arm(side: float, f: _Frame, c: Mapping[str, str], w: float) -> tuple[VGroup, tuple[float, float]]:
+def _arm(name: str, side: float, f: _Frame, c: Mapping[str, str], w: float) -> list[CharacterPart]:
+    """An arm in two segments: the upper sleeve turns about the shoulder, the forearm (sleeve and
+    hand) about the elbow half-way down; its end is the hand's middle."""
     p = f.p
     x, shoulder_y = side * p.body_width / 2, f.body_top - 0.08
-    sleeve = RoundedRectangle(width=0.08, height=p.arm_length, corner_radius=0.035).move_to([x, shoulder_y + 0.02 - p.arm_length / 2, 0])
-    hand = Circle(radius=0.045).move_to([x, shoulder_y + 0.02 - p.arm_length, 0])
-    return VGroup(_outlined(sleeve, c["clothes"], c["outline"], w), _outlined(hand, c["skin"], c["outline"], w)), (x, shoulder_y)
+    top, wrist = shoulder_y + 0.02 - LIMB_WIDTH / 2, shoulder_y + 0.02 - p.arm_length
+    elbow = (top + wrist) / 2
+    upper = VGroup(_segment(x, top, elbow, c["clothes"], c, w))
+    hand = _outlined(Circle(radius=0.045).move_to([x, wrist, 0]), c["skin"], c["outline"], w)
+    lower = VGroup(_segment(x, elbow, wrist, c["clothes"], c, w), hand)
+    return [
+        CharacterPart(name, {"default": upper}, (x, shoulder_y)),
+        CharacterPart(f"{name}_lower", {"default": lower}, (x, elbow), end=(x, wrist)),
+    ]
 
 
 def _hair_cap(look: CharacterLook, f: _Frame) -> Polygon:
@@ -322,13 +348,11 @@ def generate_parts(look: CharacterLook, colors: Mapping[str, str], *, outline_wi
     The same look always gives the same shapes."""
     f = _Frame.of(resolve_proportions(look))
     w = outline_width
-    arm_left, shoulder_left = _arm(1.0, f, colors, w)
-    arm_right, shoulder_right = _arm(-1.0, f, colors, w)
     parts = [
-        CharacterPart("legs", {"default": _legs(f, colors, w)}, (0.0, f.p.leg_length - 0.02)),
+        *_legs(f, colors, w),
         CharacterPart("body", {"default": _body(look, f, colors, w)}, (0.0, f.body_bottom + 0.02)),
-        CharacterPart("arm_left", {"default": arm_left}, shoulder_left),
-        CharacterPart("arm_right", {"default": arm_right}, shoulder_right),
+        *_arm("arm_left", 1.0, f, colors, w),
+        *_arm("arm_right", -1.0, f, colors, w),
         CharacterPart("head", {"default": _head(look, f, colors, w)}, (0.0, f.body_top - 0.02)),
         *_face(look, f, colors, w),
     ]
@@ -347,7 +371,10 @@ def _scaled_to_unit_height(parts: list[CharacterPart]) -> list[CharacterPart]:
     for part in parts:
         for shape in part.shapes.values():
             shape.scale(factor, about_point=np.zeros(3))
-    return [replace(part, pivot=(part.pivot[0] * factor, part.pivot[1] * factor)) for part in parts]
+    def scaled(point: tuple[float, float] | None) -> tuple[float, float] | None:
+        return None if point is None else (point[0] * factor, point[1] * factor)
+
+    return [replace(part, pivot=scaled(part.pivot), end=scaled(part.end)) for part in parts]
 
 
-__all__ = ["BODY_SIZES", "COLOR_KEYS", "EYE_WHITE", "Proportions", "generate_parts", "resolve_proportions"]
+__all__ = ["BODY_SIZES", "COLOR_KEYS", "EYE_WHITE", "LIMB_WIDTH", "Proportions", "generate_parts", "resolve_proportions"]

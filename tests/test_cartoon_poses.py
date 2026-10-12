@@ -76,11 +76,11 @@ def test_shape_choices_fall_back_per_character() -> None:
 
 def test_pose_and_expression_combine_and_reset_their_own_parts() -> None:
     c = built("default").set_pose("pointing").set_expression("happy")
-    assert c.pose_of("arm_left").angle == 88 and c.pose_of("mouth").scale == (1.15, 1.25)
+    assert c.pose_of("arm_left").angle == 82 and c.pose_of("arm_left_lower").angle == 12 and c.pose_of("mouth").scale == (1.15, 1.25)
     c.set_pose("stand")
     assert c.pose_of("arm_left") == PartPose() and c.pose_of("mouth").scale == (1.15, 1.25)
     state = c.posed_state(pose="shrug", expression="sad")
-    assert state.parts["arm_right"].angle == -45 and state.parts["brows"].shape == "sad"
+    assert state.parts["arm_right"].angle == -15 and state.parts["arm_right_lower"].angle == -60 and state.parts["brows"].shape == "sad"
     assert c.pose_of("arm_right") == PartPose()   # posed_state does not draw
 
 
@@ -190,15 +190,17 @@ def test_blend_and_windows() -> None:
 def test_pose_change_eases_each_part_along_its_arc() -> None:
     c = built("default", cartoon_motion="none")   # the plain easing (Step 80 adds overshoot)
     pivot = c.pivot("arm_left")
-    hand = c.parts["arm_left"].submobjects[0].submobjects[1]
-    reach = np.linalg.norm(hand.get_center() - pivot)
+    hand = c.parts["arm_left_lower"].submobjects[0].submobjects[1]   # Step 92: the hand is on the forearm
+    upper, lower = (np.linalg.norm(c.pivot("arm_left_lower") - pivot), np.linalg.norm(hand.get_center() - c.pivot("arm_left_lower")))
     change = PoseChange(c, pose="pointing", expression="surprised", run_time=1)
     change.begin()
     assert c.pose_of("arm_left") == PartPose()
     change.interpolate(0.5)
     angle = c.pose_of("arm_left").angle
-    assert 0 < angle < 88
-    assert np.linalg.norm(hand.get_center() - pivot) == pytest.approx(reach)   # on the arc, not the chord
+    assert 0 < angle < 82 and 0 < c.pose_of("arm_left_lower").angle < 12   # the forearm in the arm's window
+    # the elbow on its arc about the shoulder, the hand on its arc about the elbow (not the chords)
+    assert np.linalg.norm(c.pivot("arm_left_lower") - pivot) == pytest.approx(upper)
+    assert np.linalg.norm(hand.get_center() - c.pivot("arm_left_lower")) == pytest.approx(lower)
     assert c.pose_of("head").angle != 0 and c.pose_of("mouth").shape is None   # the head moves before the mouth swaps
     change.interpolate(0.9)
     assert c.pose_of("mouth").shape == "open"

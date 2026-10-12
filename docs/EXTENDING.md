@@ -156,8 +156,9 @@ gives it an `enum` of the icon names.
 A character param is typed `CharacterName` (`who: CharacterName`, or `CharacterName | None`):
 `vidgen validate` checks the name against the video's [`characters:`](CONFIG.md#characters-characters)
 and suggests close names. In `construct`, `character(name, height=..., facing="right")` builds
-that character as a `Character`: a `VGroup` of named parts (`PART_NAMES`: `body`, `legs`,
-`arm_left`, `arm_right`, `head`, `eyes`, `brows`, `mouth`, `accessory`), drawn from its `look:`
+that character as a `Character`: a `VGroup` of named parts (`PART_NAMES`: `body`, `legs` or
+`leg_left` / `leg_right`, `arm_left`, `arm_right`, `head`, `eyes`, `brows`, `mouth`, `accessory`;
+arms and single legs may have a lower segment, `arm_left_lower`, `leg_left_lower`, ...), drawn from its `look:`
 (body shape, hair, accessories...; every generated look has the same part and shape names), the
 feet at the origin (`feet()`). A character drawn from an SVG file (`look: {svg: ...}`, CONFIG.md
 "Characters from SVG files") may lack parts and has its own shape names: check `has_part("arm_left")`
@@ -174,7 +175,12 @@ set at once with `set_pose(name)` / `set_expression(name)`, or animated part by 
 `self.play(PoseChange(hero, pose="waving", expression="happy"), run_time=0.8)` (each part eases
 about its pivot, body first; `state=` takes any `CharacterState`). For a single part, call
 `set_part` from an updater (`UpdateFromAlphaFunc(hero, lambda m, a: m.set_part("arm_left",
-angle=120 * a))`), not `.animate` (that would move points along straight lines). Lip sync:
+angle=120 * a))`), not `.animate` (that would move points along straight lines). Bend an arm so
+its hand is on a point with `hero.reach("left", point)` (the elbow bends naturally; `bend=-1` the
+other way) and a leg with `hero.plant("right", point)` (knee forward; needs `leg_left` /
+`leg_right`); `hand_point("left")` / `foot_point("right")` say where the hand or sole is now. An arm
+drawn in one piece (an older SVG) shows its elbow folded, so `reach` and the poses work on it
+too (DESIGN.md §69.26). Lip sync:
 inside `with self.narrate(0) as d:`, `self.speak(hero)` makes the mouth follow the beat's
 `VisemeTrack`, timed from the beat's start by the scene's clock (`hero.lip_sync(self.beat_visemes(0),
 clock=self.beat_clock())`), so it stays in step through a `PoseChange`; `stop_lip_sync()` ends it

@@ -65,6 +65,13 @@ STEP_LENGTH = 0.35
 #: Largest swing of the legs (degrees about the hips) and of the arms (about the shoulders).
 WALK_LEG_DEGREES = 10.0
 WALK_ARM_DEGREES = 16.0
+#: Legs drawn one each (§69.26): the largest swing of a thigh about its hip, and the largest bend
+#: of the knee of the leg swinging forward (as it passes the other).
+WALK_THIGH_DEGREES = 20.0
+WALK_KNEE_DEGREES = 40.0
+#: The elbows' bend while walking, and how much more an elbow bends as its arm swings forward.
+WALK_ELBOW_DEGREES = 10.0
+WALK_ELBOW_SWING = 20.0
 #: How much narrower the legs get as they pass each other in mid-step (a share of their width).
 WALK_LEG_SQUEEZE = 0.3
 #: How far the body rises in mid-step (character units).
@@ -105,12 +112,18 @@ def walk_amplitude(t: float) -> float:
 class WalkCycle:
     """The walk's change to the pose at one moment: ``legs_angle`` and ``arm_angle`` (degrees,
     added to the legs' and the near arm's angles; the far arm swings the other way),
-    ``legs_width`` (the legs' x scale factor) and ``body_lift`` (character units)."""
+    ``legs_width`` (the legs' x scale factor) and ``body_lift`` (character units), for legs in
+    one piece. Legs drawn one each: ``thigh_angle`` (added to ``leg_left``; ``leg_right`` the
+    other way) and ``knee_bends`` (left, right; degrees each knee bends, the foot back). Arms in
+    two segments (or folded): ``elbow_bends`` (left, right; degrees, the hand forward)."""
 
     legs_angle: float
     legs_width: float
     arm_angle: float
     body_lift: float
+    thigh_angle: float = 0.0
+    knee_bends: tuple[float, float] = (0.0, 0.0)
+    elbow_bends: tuple[float, float] = (0.0, 0.0)
 
 
 def walk_cycle(steps: float, amplitude: float = 1.0) -> WalkCycle:
@@ -118,14 +131,22 @@ def walk_cycle(steps: float, amplitude: float = 1.0) -> WalkCycle:
     walked, so the feet keep pace with the ground), scaled by ``amplitude`` (0..1). Legs and arms
     swing furthest one way at a footfall (half-way through a step) and the other way at the
     next; between footfalls, as the legs pass each other, they are narrowest and the body is
-    highest."""
+    highest. Legs drawn one each: the knee of the leg swinging forward bends most as it passes
+    the other and is straight at the footfall; an elbow bends more as its arm swings forward."""
     swing = math.sin(math.pi * steps)
+    forward = math.cos(math.pi * steps)  # > 0 while the left leg swings forward
     passing = 1.0 - swing * swing
     return WalkCycle(
         legs_angle=WALK_LEG_DEGREES * swing * amplitude,
         legs_width=1.0 - WALK_LEG_SQUEEZE * passing * amplitude,
         arm_angle=WALK_ARM_DEGREES * swing * amplitude,
         body_lift=WALK_BOB * passing * amplitude,
+        thigh_angle=WALK_THIGH_DEGREES * swing * amplitude,
+        knee_bends=(WALK_KNEE_DEGREES * max(forward, 0.0) * amplitude, WALK_KNEE_DEGREES * max(-forward, 0.0) * amplitude),
+        elbow_bends=(
+            (WALK_ELBOW_DEGREES + WALK_ELBOW_SWING * max(swing, 0.0)) * amplitude,
+            (WALK_ELBOW_DEGREES + WALK_ELBOW_SWING * max(-swing, 0.0)) * amplitude,
+        ),
     )
 
 
@@ -168,14 +189,20 @@ GESTURES: tuple[str, ...] = ("point", "wave", "shrug", "nod", "shake_head")
 GESTURE_SECONDS: dict[str, float] = {"point": 1.2, "wave": 1.6, "shrug": 1.0, "nod": 0.9, "shake_head": 1.1}
 #: Share of a gesture spent moving into it, and the same share moving back out.
 GESTURE_EASE = 0.25
-#: The near arm's angle (degrees, at rest it hangs down) for ``point`` and ``wave``, and how far
-#: a wave swings to and fro (three times).
-POINT_DEGREES = 88.0
-WAVE_DEGREES = 145.0
-WAVE_SWING = 20.0
+#: The near arm's angle (degrees, at rest it hangs down) for ``point`` and ``wave`` (the upper
+#: arm; the elbow bends ``POINT_ELBOW`` / ``WAVE_ELBOW`` more, the hand forward: an arm in one
+#: piece shows half the bend, 88° and 145°), and how far a wave swings to and fro (three times,
+#: the forearm about the elbow; an arm in one piece swings half as far).
+POINT_DEGREES = 82.0
+POINT_ELBOW = 12.0
+WAVE_DEGREES = 115.0
+WAVE_ELBOW = 60.0
+WAVE_SWING = 40.0
 WAVES = 3
-#: Both arms' angle for ``shrug`` (raised outwards), and how far the shoulders rise (character units).
-SHRUG_DEGREES = 45.0
+#: Both upper arms' angle for ``shrug`` (raised outwards), their elbows' bend (the forearms out)
+#: and how far the shoulders rise (character units).
+SHRUG_DEGREES = 15.0
+SHRUG_ELBOW = 60.0
 SHRUG_LIFT = 0.02
 #: How far the head dips in a nod (twice), and how far it moves (and the eyes with it, twice as
 #: far) to each side in a ``shake_head`` (twice), in degrees and character units.
@@ -211,22 +238,28 @@ def gesture_weight(t: float, strength: float = 0.0) -> float:
 
 def gesture_moves(kind: str, t: float, arm: str = "arm_left", strength: float = 0.0) -> dict[str, PartMove]:
     """The part changes of gesture ``kind`` at ``t`` (0..1). ``point`` and ``wave`` use ``arm``
-    (the near arm ``arm_left``, or ``arm_right`` when the character has no left arm: its angles
-    are mirrored, as it hangs on the other side), ``shrug`` both arms, ``nod`` and
+    and its forearm ``<arm>_lower`` (the near arm ``arm_left``, or ``arm_right`` when the
+    character has no left arm: its angles are mirrored, as it hangs on the other side), ``shrug``
+    both arms and forearms, ``nod`` and
     ``shake_head`` the head (and the eyes). ``strength``: the animation principles' anticipation
     and overshoot on the arms' ease in and out (:func:`gesture_weight`)."""
     if kind not in GESTURES:
         raise ValueError(f"unknown gesture {kind!r} (gestures: {', '.join(GESTURES)})")
     w = gesture_weight(t, strength)
     sign = 1.0 if arm == "arm_left" else -1.0
+    lower = f"{arm}_lower"
     if kind == "point":
-        return {arm: PartMove(sign * POINT_DEGREES, w)}
+        return {arm: PartMove(sign * POINT_DEGREES, w), lower: PartMove(sign * POINT_ELBOW, w)}
     if kind == "wave":
         held = min(max((t - GESTURE_EASE) / (1.0 - 2 * GESTURE_EASE), 0.0), 1.0)
-        return {arm: PartMove(sign * WAVE_DEGREES, w, sign * WAVE_SWING * w * math.sin(2 * math.pi * WAVES * held))}
+        swing = sign * WAVE_SWING * w * math.sin(2 * math.pi * WAVES * held)
+        return {arm: PartMove(sign * WAVE_DEGREES, w), lower: PartMove(sign * WAVE_ELBOW, w, swing)}
     if kind == "shrug":
         lift = (0.0, SHRUG_LIFT * w)
-        return {"arm_left": PartMove(SHRUG_DEGREES, w, shift=lift), "arm_right": PartMove(-SHRUG_DEGREES, w, shift=lift)}
+        return {
+            "arm_left": PartMove(SHRUG_DEGREES, w, shift=lift), "arm_left_lower": PartMove(SHRUG_ELBOW, w),
+            "arm_right": PartMove(-SHRUG_DEGREES, w, shift=lift), "arm_right_lower": PartMove(-SHRUG_ELBOW, w),
+        }
     if kind == "nod":
         return {"head": PartMove(turn=-NOD_DEGREES * math.sin(2 * math.pi * t) ** 2)}
     side = SHAKE_SHIFT * gesture_weight(t) * math.sin(4 * math.pi * t)

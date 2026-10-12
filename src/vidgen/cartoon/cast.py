@@ -14,6 +14,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from vidgen.cartoon.limbs import UPPER_OF
 from vidgen.cartoon.poses import EXPRESSION_PARTS, POSE_PARTS, chosen_shape, merged_table, unknown_name_message
 from vidgen.config import BeatConfig, CharacterEntry, PartPoseEntry, SceneConfig, VideoConfig
 from vidgen.errors import Problem, VidgenError
@@ -171,7 +172,9 @@ def character_look_warnings(config: VideoConfig, root: Path) -> list[str]:
 
 #: Shape names of a generated character's parts (``cartoon/generator.py``); the first is the rest shape.
 GENERATED_SHAPES: dict[str, list[str]] = {
-    "body": ["default"], "legs": ["default"], "arm_left": ["default"], "arm_right": ["default"], "head": ["default"],
+    "body": ["default"], "leg_left": ["default"], "leg_left_lower": ["default"], "leg_right": ["default"],
+    "leg_right_lower": ["default"], "arm_left": ["default"], "arm_left_lower": ["default"], "arm_right": ["default"],
+    "arm_right_lower": ["default"], "head": ["default"],
     "eyes": ["open", "closed"], "brows": ["default", "angry", "sad"], "mouth": ["smile", "open", "A", "E", "O", "U", "M", "F", "L", "W"],
 }
 
@@ -221,11 +224,12 @@ def character_pose_problems(config: VideoConfig, root: Path) -> list[Problem]:
 
 def character_pose_warnings(config: VideoConfig, root: Path) -> list[str]:
     """Parts named by the characters' own poses and expressions that the character does not have
-    (those settings do nothing)."""
+    (those settings do nothing; a lower arm or leg segment of a limb in one piece is shown folded,
+    DESIGN.md §69.26, so it is not reported)."""
     return [
         f"{where}: character '{entry.name}' has no {part}; this setting does nothing"
         for where, _, entry, part, _, shapes in _own_pose_parts(config, root)
-        if part not in shapes
+        if part not in shapes and UPPER_OF.get(part) not in shapes
     ]
 
 

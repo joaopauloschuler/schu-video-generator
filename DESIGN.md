@@ -93,7 +93,8 @@ src/vidgen/
                           # of actions as they played, §69.19; no manim), directing.py
                           # (auto_direct: the looks, reactions, gestures and close-ups it adds,
                           # checked by the lint rules on predicted stills, `vidgen direct`,
-                          # §69.23, §69.24; no manim); still.py also
+                          # §69.23, §69.24; no manim), limbs.py (arms and legs in two segments: the
+                          # two-bone solver, folded one-piece limbs, §69.26; no manim); still.py also
                           # draws the prop gallery and `vidgen character-sheet` (§69.16)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
@@ -697,6 +698,10 @@ the `NarratedScene` class method `auto_actions(project, spec, params)` (none by 
 compatible); `ActionConfig` gains `automatic(data)`, the property `auto` and `shorthand()`.
 Step 90 (§69.24) adds `StageFrame`, `StagePlace` and `stage_frame`; `stage_directions` gains the
 optional `stage` argument (compatible).
+Step 92 (§69.26) adds no names; `PART_NAMES` gains `leg_left`, `leg_right` and the `_lower`
+segments, `CharacterPart` the optional `end`, and `Character` the methods `reach`, `plant`,
+`hand_point`, `foot_point`, `sole_height`, `grounded` (compatible; generated characters have
+single legs instead of `legs`).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -4909,7 +4914,8 @@ shapes; the `stage` scene (Step 73) places characters by `feet()`; acting action
 take `CharacterName` options.
 
 - **Parts** (`cartoon/character.py`): `PART_NAMES = body, legs, arm_left, arm_right, head, eyes,
-  brows, mouth, accessory`; `REQUIRED_PARTS` all but `legs` and `accessory` (`Character(...,
+  brows, mouth, accessory` (Step 92 adds `leg_left`, `leg_right` and the lower segments
+  `arm_left_lower`, `arm_right_lower`, `leg_left_lower`, `leg_right_lower`, §69.26); `REQUIRED_PARTS` all but `legs` and `accessory` (`Character(...,
   required=)` overrides it: an imported SVG needs only `body`, §69.2). A part is a
   `CharacterPart(name, shapes, pivot, parent=None, order=None)`: `shapes` maps shape names to
   `VMobject`s (the first is the rest shape; e.g. eyes `open` / `closed`, mouth `smile` / `open`;
@@ -6438,3 +6444,79 @@ config; `write_plan` now calls both, its output unchanged).
   (Step 94), holding (Step 93) or shots (Step 95); a walk to a character goes where it stood at
   the start of the beat; one set per scene (no set changes inside a scene); ElevenLabs voices are
   not chosen.
+
+### 69.26 Arms and legs in two segments (Step 92)
+
+Arms and legs bend at the elbow and the knee. `cartoon/limbs.py` (no manim) holds the limb names,
+the two-bone solver and the fold of one-piece limbs; `Character` (§69) applies them.
+
+- **Parts**: `arm_left` / `arm_right` keep their names and are now the upper arm (pivot: the
+  shoulder); `arm_left_lower` / `arm_right_lower` are the forearm and hand (pivot: the elbow,
+  parent: the upper arm). Legs are either `legs` (both in one piece, as before) or `leg_left` /
+  `leg_right` (a thigh each, pivot the hip, parent `body`) with optional `leg_left_lower` /
+  `leg_right_lower` (shin, pivot the knee); a character with `legs` and a single leg is a
+  `VidgenError` (and an SVG split error). Draw order: each lower segment over its upper one, the
+  far leg (`leg_right`) behind the near one, all legs behind the body. `CharacterPart.end` (new,
+  optional) is the hand's middle or the foot's sole on a limb's last segment; without it the
+  drawn point of the limb farthest from its root is taken. A default parent the character lacks
+  is replaced by its own parent (a forearm without an upper arm hangs from the body); an
+  explicit `parent` must still exist.
+- **Generated characters** (`generator.py`): arms and legs in two capsule segments
+  (`LIMB_WIDTH` 0.08, round ends centred on the joints, so a bent joint stays smooth); the elbow
+  and the knee half-way; the sole at the ground. The figure at rest is unchanged in size and
+  place (the sleeve and leg ends are rounder). They have no `legs` part any more: one-leg parts
+  replace it (`cast.GENERATED_SHAPES`).
+- **Solver** (`solve_two_bone(root, target, upper_length, lower_length, bend) -> TwoBone(direction,
+  bend, reached)`): law of cosines; `bend`'s sign picks the joint's side (`ELBOW_BEND` +1:
+  counterclockwise as drawn facing right, the hand forward and the elbow behind / below the line
+  to the hand; `KNEE_BEND` −1: the foot back, the knee forward). Too far: straight at the point;
+  too near: folded as far as the lengths allow; `reached` says which.
+- **Character API**: `reach(hand, point, bend=+1)` (`hand` `left` / `right`), `plant(foot, point,
+  bend=-1)` (needs `leg_left` / `leg_right`), `hand_point(hand)`, `foot_point(foot)` (screen,
+  Manim units; Step 93 holds props at `hand_point`), `sole_height(state=None)` (the lower sole
+  above the ground, character units; `None` without single legs), `grounded(state, level=0)`
+  (the body shifted so the lower sole is at `level`). `reach` / `plant` work in the parent's frame
+  through the inverse of the screen matrix, so facing left, squash and Manim moves are handled;
+  they set only the two angles (shift and scale kept; lengths as drawn at rest).
+- **One-piece limbs keep working (folded)**: a character with `arm_left` but no `arm_left_lower`
+  (sprout, any older SVG) still has a pose for `arm_left_lower` (in `state()`, `pose_of`,
+  `set_part`, poses, gestures and walks; not in `parts`, `has_part`, keyframe targets). Its bend
+  `b` is shown on the one piece by `fold(b)`: turned by `b / 2` and shortened along the limb
+  to `cos(b / 2)` (at least `FOLD_MIN_LENGTH` 0.6) about the root, which puts its end where a limb
+  of two equal halves would. So `reach` also works on one-piece arms, and the built-in poses and
+  gestures were chosen so that upper + half the elbow is the one-piece angle they had before
+  (pointing 82 + 12/2 = 88, wave 115 + 60/2 = 145, shrug 15 + 60/2 = 45, waving 150, thinking
+  160; arms_crossed −55 against −65). The look changes a little: a bent one-piece arm is shorter
+  (waving 0.82, thinking 0.6 against the old explicit 0.72, arms_crossed 0.77 against 0.8).
+  `validate` does not warn about a lower segment whose upper part the character has.
+- **Poses** (§69.3): `pointing`, `waving`, `thinking`, `shrug`, `arms_crossed` bend the elbows;
+  `sitting` names both `legs` (80°, one piece) and the single legs (thighs 80° / 75°, knees
+  −35°: the feet forward on the ground); a character uses the entries of the parts it has. A
+  pose names the new parts like the others (`PosePart`), so own poses can bend elbows and knees.
+- **Pose changes**: `part_windows` gives a part of `TIMING_GROUP` its group's window: a lower
+  segment moves with its upper part, single legs together as `legs` did, so pose changes keep
+  their timing.
+- **Gestures** (§69.12): `point` and `wave` turn the upper arm and bend the forearm
+  (`POINT_DEGREES` 82 + `POINT_ELBOW` 12; `WAVE_DEGREES` 115 + `WAVE_ELBOW` 60, the wave's
+  `WAVE_SWING` 40° to and fro now about the elbow), `shrug` both (15 + 60). The planner's
+  `GESTURE_REACH` (§69.24) was measured again: the reaches did not grow (round look: point 0.484
+  → 0.484, wave 0.384 → 0.373, shrug 0.415 → 0.386 heights), so it stays.
+- **Walk** (§69.12): legs in one piece walk as before. Single legs swing opposite ways
+  (`WALK_THIGH_DEGREES` 20), the knee of the leg swinging forward bends most as it passes the
+  other (`WALK_KNEE_DEGREES` 40 × max(cos πs, 0)) and both are straight at the footfall; elbows
+  bend `WALK_ELBOW_DEGREES` 10, plus `WALK_ELBOW_SWING` 20 as the arm swings forward
+  (`WalkCycle.thigh_angle`, `knee_bends`, `elbow_bends`). Instead of the fixed `WALK_BOB`, `Walk`
+  keeps the lower sole at the height it started at (`grounded`; only when that is within
+  `GROUND_TOLERANCE` 0.02 of the ground, so a sitting walk is not pulled down): the body dips at
+  the footfall and rises as the legs pass, and no foot sinks or floats.
+- **SVG** (§69.2): ids `arm_left_lower`, `leg_left`, `leg_left_lower`, ... (the longest part name
+  wins, so `arm_left_lower` is a part, no longer arm_left's shape `lower`); default pivots: a single
+  leg and a lower segment the top centre of their box; `pivot_warnings` names them too; the feet
+  are under the middle of all leg parts. `examples/svg_character`'s sprout stays one-piece (the
+  compatibility case); its raised hand in `waving` / `thinking` is behind its head, as before,
+  since the file draws `arm_left` before `head`.
+- **Not done here**: no knees in `Jump` (the crouch is still the whole-figure squash); no
+  follow-through on forearms; no YAML action for `reach` / `plant` (Step 93's `pick_up`, Step
+  94's sitting use them); a generated `legs` reference (an own pose's `legs:`, a `kit.legs`
+  keyframe target) no longer applies to generated characters (validate warns / reports an
+  unknown part). Tests: `tests/test_cartoon_limbs.py`.

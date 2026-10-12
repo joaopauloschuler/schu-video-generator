@@ -8519,3 +8519,98 @@ How to test
   (15, 25 s); render: `test_cartoon_directing -m render` (3, 7 s). By hand: the sample to a
   scratch project, `vidgen lint` (preview) 0 findings, `vidgen direct` 18 automatic actions,
   storyboard checked by eye.
+
+
+## Step 92 — Bending arms and legs
+
+What was built
+- `src/vidgen/cartoon/limbs.py` (no manim): `LIMBS` (upper -> lower part), `UPPER_OF`, `HANDS` /
+  `FEET` (side -> limb), `solve_two_bone(root, target, upper, lower, bend) -> TwoBone(direction,
+  bend, reached)` (law of cosines; `ELBOW_BEND` +1 = counterclockwise as drawn facing right, the
+  natural elbow; `KNEE_BEND` -1, the knee forward; too far: straight at it; too near: folded),
+  `fold(bend)` (one-piece limb: half the turn, chord length, at least `FOLD_MIN_LENGTH` 0.6),
+  `TIMING_GROUP`, `wrap_degrees`.
+- Parts (design): `arm_left` / `arm_right` keep their names as the upper arm; new
+  `arm_left_lower` / `arm_right_lower` (forearm + hand, pivot the elbow, parent the upper arm).
+  Legs: `legs` stays (both legs in one piece, SVGs); new `leg_left` / `leg_right` (thigh, pivot
+  the hip, parent body) + optional `leg_left_lower` / `leg_right_lower` (shin, pivot the knee).
+  `legs` together with single legs is a `VidgenError` (Character and SVG split). Generated
+  characters now have single legs and two-segment arms (capsule segments, `LIMB_WIDTH` 0.08,
+  joints half-way), no `legs`. `CharacterPart.end` (hand middle / sole). Default parents walk up
+  to a present part.
+- `Character`: `reach(hand, point, bend=+1)`, `plant(foot, point, bend=-1)`, `hand_point(hand)`
+  (for Step 93's held props), `foot_point(foot)`, `sole_height(state=None)`, `grounded(state,
+  level=0)`. A one-piece limb (`arm_left` without `arm_left_lower`, e.g. sprout) keeps a pose for
+  the missing lower part (`state()`, `pose_of`, `set_part`; not in `parts` / `has_part`), shown
+  folded on the one piece (`_fold_matrix` in `_world`), so poses, gestures, walks and `reach` work
+  on it unchanged in code.
+- Poses: `pointing` 82 + elbow 12, `waving` 115 + 70, `thinking` 110 + 100, `shrug` ±15 + ±60,
+  `arms_crossed` ∓15 + ∓80, `sitting` thighs 80 / 75 and knees −35 (feet forward on the ground)
+  plus the old `legs: 80` for one-piece legs. Upper + half the elbow is the old one-piece angle
+  (88, 150, 160, 45; arms_crossed −55 vs −65).
+- Gestures (`gesture_moves`): `point` / `wave` / `shrug` also move `<arm>_lower`
+  (`POINT_DEGREES` 82 + `POINT_ELBOW` 12, `WAVE_DEGREES` 115 + `WAVE_ELBOW` 60 with the 40° wave
+  about the elbow, `SHRUG_DEGREES` 15 + `SHRUG_ELBOW` 60).
+- Walk: `WalkCycle` gains `thigh_angle`, `knee_bends`, `elbow_bends` (`WALK_THIGH_DEGREES` 20,
+  `WALK_KNEE_DEGREES` 40 on the leg swinging forward, max at passing, straight at the footfall;
+  elbows 10 + 20 swinging forward). `walking_state` uses them for single legs (one-piece `legs`
+  as before, `WALK_BOB` only there). `Walk` keeps the lower sole at its starting height
+  (`grounded`, when within `GROUND_TOLERANCE` 0.02 of the ground), so the body dips at the
+  footfall.
+- `part_windows` gives lower segments their upper part's window and single legs the `legs`
+  window: pose-change timing unchanged.
+- SVG: new ids (longest part name wins), default pivots top centre for single legs and lower
+  segments, `TURNING_PARTS` extended, feet under all leg parts. `config.PosePart` and so
+  `POSE_PARTS`, keyframe part targets and the schema list the new parts. `cast.GENERATED_SHAPES`
+  updated; `character_pose_warnings` does not warn about a folded lower segment.
+
+Checked by eye (scratch stills: every pose, the gestures at their peak, five walk phases, facing
+right and left, on the default look, a tall long-haired look with bag and scarf, and sprout;
+`vidgen character-sheet --all` on copies of `examples/cartoon` and `examples/svg_character`; a
+storyboard of the cartoon copy, mid-walk stills show the knee bend with a foot on the ground;
+`vidgen lint --fail-on warning` on that copy: 0 findings). Sprout's raised hand in `waving` /
+`thinking` / `wave` is behind its head, as before Step 92 (its file draws `arm_left` before
+`head`).
+
+Files touched
+- New: `src/vidgen/cartoon/limbs.py`, `tests/test_cartoon_limbs.py`.
+- `src/vidgen/cartoon/character.py`, `generator.py`, `poses.py`, `acting.py`, `transition.py`,
+  `svg_look.py`, `cast.py`, `src/vidgen/config.py` (`PosePart`).
+- Docs: `DESIGN.md` (§2 tree, §6.4, §69 parts, new §69.26), `docs/CONFIG.md` (new "Bending arms
+  and legs", pose parts, SVG id table and pivots, keyframe parts), `docs/EXTENDING.md`, guide
+  `cartoons` (+ `AGENTS.md` copy), `tasklist.md`.
+- Tests updated, each because of the design change: `tests/test_cartoon_character.py` (the
+  generated part set and draw order now have the six limb parts and no `legs`; the "given twice"
+  case names `leg_left`, now the first part), `tests/test_cartoon_moving.py` (point / wave / shrug
+  now move the forearm: the wave's to-and-fro is on `arm_left_lower`, new constants; added the
+  check that upper + half the elbow equals the old angles), `tests/test_cartoon_poses.py`
+  (`pointing` is 82 + 12, `shrug`'s `arm_right` −15 + −60; the arc test checks the elbow's arc
+  about the shoulder and the hand's about the elbow, since the hand is on the forearm now).
+
+Public interfaces
+- `vidgen.api`: no new names. `PART_NAMES` gains six names; `CharacterPart.end`; `Character`
+  methods above; `WalkCycle` fields (defaults); gesture constants changed meaning (upper arm).
+  Incompatible for generated characters only: no `legs` part (an own pose's `legs:` does
+  nothing, validate warns; a `kit.legs` keyframe target is an unknown part). An SVG id
+  `arm_left_lower` now names a part instead of arm_left's shape `lower`.
+
+Decisions / deviations
+- Folded lower segments instead of separate one-piece pose values: one table and one code path
+  for both kinds; the price is a slightly shorter bent one-piece arm (waving 0.82, shrug 0.87).
+- Grounding replaces the fixed bob for single legs (a fixed bob made the feet float at passing).
+- `GESTURE_REACH` (Step 90's planner) re-measured: no reach grew, kept.
+- Searched first: no IK / solver / limb code existed (`grep -rni "solve\|ik\b\|elbow\|knee"
+  src/vidgen`); reused `PartPose`, `_world`, `part_windows`, `walk_cycle`, `gesture_moves`.
+
+Known gaps / TODOs
+- No knees in `Jump`; no follow-through on forearms; no YAML action for `reach` / `plant` (Steps
+  93 / 94 use the methods). `docs/gallery/stage.md` media not regenerated (its characters' rest
+  look changed only at the sleeve / leg ends). SVG `data-end` (an explicit hand point) not added:
+  the farthest point of the arm is used.
+
+How to test
+- `pytest tests/test_cartoon_limbs.py` (24, ~2.5 s, no render).
+- Also run: not render `tests/test_cartoon_*.py test_phase_h_review test_docs test_guide test_api
+  test_config test_screenplay` (583, 18 s), `test_schema test_gallery test_builtin_scenes
+  test_actions test_lint test_storyboard` (240, 65 s); render `tests/test_cartoon_*.py
+  test_phase_h_review` (20, 32 s), `test_builtin_scenes -k stage` (2, 2.5 s).

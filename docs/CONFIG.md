@@ -985,7 +985,8 @@ scenes:
 Cartoon characters, declared once at the top level and used by any scene that draws characters:
 the [`stage`](#stage) scene type, or an extension's scene type with a `CharacterName` param (see
 docs/EXTENDING.md). Each one is a figure made of named parts (head, eyes, brows, mouth, body, two
-arms, legs) that can be posed one by one. Only original characters: nothing that imitates a known
+arms, legs) that can be posed one by one; a generated character's arms and legs bend at the elbow
+and the knee ([Bending arms and legs](#bending-arms-and-legs)). Only original characters: nothing that imitates a known
 character, mascot or brand figure.
 
 ```yaml
@@ -1092,7 +1093,8 @@ characters:
 | `shift` | `[0, 0]` | `[x, y]` in character units (1 = the character's height) |
 | `shape` | none | the shape shown (`open`, `closed`, `A`, ...): a name, or a list of names of which the first the character has is used; none: the rest shape |
 
-A pose may name `body`, `legs`, `arm_left`, `arm_right`, `head`, `accessory`; an expression
+A pose may name `body`, `legs`, `leg_left`, `leg_left_lower`, `leg_right`, `leg_right_lower`,
+`arm_left`, `arm_left_lower`, `arm_right`, `arm_right_lower`, `head`, `accessory`; an expression
 `eyes`, `brows`, `mouth` (anything else is a config error). Parts of its group a pose or an
 expression does not name go back to their rest pose. Generated characters have the shapes eyes
 `open` / `closed`, brows `default` / `angry` / `sad`, mouth `smile` / `open` and the lip-sync shapes
@@ -1147,6 +1149,31 @@ An SVG character blinks only when its file has `eyes_closed`. `idle: false` turn
 for one character; a [`stage`](#stage) scene's `idle: false` turns it off for every character in
 that scene.
 
+### Bending arms and legs
+
+A generated character's arms and legs come in two segments: `arm_left` is the upper arm (it
+turns about the shoulder) and `arm_left_lower` the forearm and hand (it turns about the elbow);
+the legs are `leg_left` / `leg_right` (thighs, about the hips) and `leg_left_lower` /
+`leg_right_lower` (shins, about the knees). The built-in poses and gestures bend the elbows
+(`pointing`, `waving`, `thinking`, `shrug`, `arms_crossed`), `sitting` bends the knees, and the walk
+swings the legs one by one with the knee of the swinging leg bent, keeping a foot on the ground.
+In an own pose a lower segment's `angle` is the joint's bend relative to the upper part (an
+elbow `+`: the hand comes forward; a knee `-`: the foot goes back):
+
+```yaml
+characters:
+  - name: pip
+    poses:
+      reach_up: {arm_left: {angle: 150}, arm_left_lower: {angle: 20}}
+      kneel: {body: {shift: [0, -0.08]}, leg_left: {angle: 90}, leg_left_lower: {angle: -90}}
+```
+
+A character drawn in one piece (an SVG without `arm_left_lower`) still takes these settings: the
+arm turns by half the elbow's bend and gets a little shorter, so its hand ends about where a
+bent arm's would. Generated characters have no `legs` part any more (it was both legs in one
+piece): an own pose's `legs:` does nothing on them (validate warns), use `leg_left` /
+`leg_right`. Extensions can put a hand or a foot on a point (`reach`, `plant`, docs/EXTENDING.md).
+
 ### Characters from SVG files
 
 `look: {svg: assets/sprout.svg}` draws the character from your own SVG file (or one made with a
@@ -1157,8 +1184,10 @@ the `image` scene) and splits it into parts by **element ids**:
 | id | meaning |
 |---|---|
 | `body`, `legs`, `arm_left`, `arm_right`, `head`, `eyes`, `brows`, `mouth`, `accessory` | that part at rest (a group or one shape). `arm_left` is the character's own left arm: facing right it is the near arm, so draw `arm_right` behind the body |
+| `arm_left_lower`, `arm_right_lower` (optional) | the forearm and hand: the arm then bends at the elbow (`arm_left` is the upper arm); without it the arm is one piece and shows a bend folded |
+| `leg_left`, `leg_right`, `leg_left_lower`, `leg_right_lower` (optional) | the legs one each instead of `legs` (not both): a thigh and, optionally, a shin that bends at the knee; draw `leg_right` behind |
 | `<part>_<shape>` (`eyes_closed`, `mouth_A`, `mouth_E`, `mouth_O`, `mouth_M`, `arm_left_up`) | another shape of the part, shown when swapped in; hide it in the file with `display="none"` |
-| `data-pivot="x y"` (on a part's element) | the point the part turns about, in the SVG's `viewBox` coordinates: the neck for `head`, the shoulder for an arm, the hips for `legs` |
+| `data-pivot="x y"` (on a part's element) | the point the part turns about, in the SVG's `viewBox` coordinates: the neck for `head`, the shoulder for an arm, the hips for `legs` / `leg_left`, the elbow for `arm_left_lower`, the knee for `leg_left_lower` |
 
 - A part's element takes everything inside it, except elements with another part's id (so
   `eyes` may sit inside the `head` group). An id starting with the part's own name inside its
@@ -1170,9 +1199,9 @@ the `image` scene) and splits it into parts by **element ids**:
   `mouth_E`, `mouth_O`, `mouth_U`, `mouth_M` (M, B, P), `mouth_F` (F, V), `mouth_L`, `mouth_W`
   (W, Q); any subset may be present ([lip sync](#lip-sync) uses the closest one a file has).
 - Parts are drawn in the file's order. The feet are the bottom of the rest shapes, under the
-  middle of `legs` (else of `body`); the top of the rest shapes is the character's height.
+  middle of the legs (else of `body`); the top of the rest shapes is the character's height.
   Without `data-pivot` the pivot is guessed from the part's box (head and body: bottom centre;
-  legs: top centre; an arm: its top corner nearer the body; face parts: the centre).
+  legs, a single leg and a lower segment: top centre; an arm: its top corner nearer the body; face parts: the centre).
 - The SVG's own colours and stroke widths are drawn (`colors:` is not used); stroke widths scale
   with the character's height like a generated character's outline.
 - **Missing parts are allowed**: only a body is needed. `vidgen validate` lists the actions such
@@ -4327,8 +4356,9 @@ left shortens them.
 #### Keyframes and motion paths
 
 For motion the other actions do not have, two actions move a character, a [prop](#props) or one
-part of a character (`kit.arm_left`, `pip.head`; the parts are `body`, `legs`, `arm_left`,
-`arm_right`, `head`, `accessory`, `eyes`, `brows`, `mouth`, those the character has) by
+part of a character (`kit.arm_left`, `pip.head`; the parts are `body`, `legs`, `leg_left`, `leg_left_lower`,
+`leg_right`, `leg_right_lower`, `arm_left`, `arm_left_lower`, `arm_right`, `arm_right_lower`, `head`,
+`accessory`, `eyes`, `brows`, `mouth`, those the character has) by
 **keys** or along a **path**:
 
 | action | options | |

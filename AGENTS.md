@@ -824,7 +824,10 @@ line: at that word). `docs/CONFIG.md` "Cartoons from a screenplay" has the whole
 - **Motion**: anticipation, squash and stretch, overshoot and follow-through are built in;
   `cartoon_motion: calm` (top level, a stage or a character) tones them down for a quiet story.
   For a move no action has, `keyframes` and `move_along` move a character, a prop or one part
-  (`kit.arm_left`); `docs/CONFIG.md` "Keyframes and motion paths".
+  (`kit.arm_left`); `docs/CONFIG.md` "Keyframes and motion paths". Generated characters bend
+  at the elbows and knees: `arm_left` is the upper arm, `arm_left_lower` the forearm (its angle
+  is the elbow's bend), the legs are `leg_left` / `leg_right` (+ `_lower`); own poses can bend
+  them too (`docs/CONFIG.md` "Bending arms and legs").
 - **Sound**: walks, entrances, exits, jumps and a `surprised` face make their own sounds
   (foley: footsteps, whoosh, boing, pop), timed to the action; `foley: false` (top level or a
   stage) turns them off. A beat's `sting: reveal | comic | sad` adds a short music sting

@@ -44,6 +44,7 @@ from vidgen.cartoon.acting import (
     walk_seconds,
 )
 from vidgen.cartoon.character import PART_NAMES, Character, CharacterState, PartPose
+from vidgen.cartoon.limbs import TIMING_GROUP
 from vidgen.cartoon.motion import (
     Phases,
     end_fade,
@@ -77,11 +78,16 @@ def blend_poses(start: PartPose, end: PartPose, progress: float) -> PartPose:
 
 def part_windows(parts: Sequence[str], lag_ratio: float) -> dict[str, tuple[float, float]]:
     """When each of ``parts`` moves, as (start, end) fractions of the animation: each starts
-    ``lag_ratio`` of a part's duration after the previous one (0: all together), the last ends at 1."""
-    if not parts:
+    ``lag_ratio`` of a part's duration after the previous one (0: all together), the last ends at
+    1. A part of :data:`~vidgen.cartoon.limbs.TIMING_GROUP` shares its group's window (a forearm
+    moves with its upper arm, the legs together), so limbs in two segments keep the timing of
+    limbs in one piece."""
+    groups = list(dict.fromkeys(TIMING_GROUP.get(part, part) for part in parts))
+    if not groups:
         return {}
-    total = 1.0 + (len(parts) - 1) * lag_ratio
-    return {part: (k * lag_ratio / total, (k * lag_ratio + 1.0) / total) for k, part in enumerate(parts)}
+    total = 1.0 + (len(groups) - 1) * lag_ratio
+    windows = {group: (k * lag_ratio / total, (k * lag_ratio + 1.0) / total) for k, group in enumerate(groups)}
+    return {part: windows[TIMING_GROUP.get(part, part)] for part in parts}
 
 
 class PoseChange(Animation):
@@ -146,23 +152,33 @@ class PoseChange(Animation):
         self.mobject.sync_mouth()  # Manim pauses the character's updaters: keep lip sync in step
 
 
+#: A walk keeps the lower sole on the ground (legs drawn one each) when the pose it starts in has
+#: it within this many character units of the ground.
+GROUND_TOLERANCE = 0.02
+
+
 def walking_state(base: CharacterState, cycle: WalkCycle, facing: str) -> CharacterState:
-    """``base`` with the walk's ``cycle`` added: the legs turned and narrowed, the body raised, the
-    arms swinging (the far arm the other way); parts the character lacks are skipped."""
+    """``base`` with the walk's ``cycle`` added: legs in one piece turned and narrowed and the
+    body raised; legs drawn one each swung the opposite ways, the knee of the leg swinging forward
+    bent; the arms swinging (the far arm the other way), the elbows bent; parts the character
+    lacks are skipped (a folded forearm is in ``base``, :meth:`Character.state`)."""
     parts = dict(base.parts)
 
-    def change(part: str, **values: object) -> None:
+    def turn(part: str, degrees: float) -> None:
         if part in parts:
-            parts[part] = replace(parts[part], **values)
+            parts[part] = replace(parts[part], angle=parts[part].angle + degrees)
 
     if "legs" in parts:
         sx, sy = parts["legs"].scale
-        change("legs", angle=parts["legs"].angle + cycle.legs_angle, scale=(sx * cycle.legs_width, sy))
-    if "body" in parts:
-        change("body", shift=(parts["body"].shift[0], parts["body"].shift[1] + cycle.body_lift))
-    for arm, sign in (("arm_left", 1.0), ("arm_right", -1.0)):
-        if arm in parts:
-            change(arm, angle=parts[arm].angle + sign * cycle.arm_angle)
+        parts["legs"] = replace(parts["legs"], angle=parts["legs"].angle + cycle.legs_angle, scale=(sx * cycle.legs_width, sy))
+        if "body" in parts:
+            parts["body"] = replace(parts["body"], shift=(parts["body"].shift[0], parts["body"].shift[1] + cycle.body_lift))
+    for leg, sign, knee in (("leg_left", 1.0, cycle.knee_bends[0]), ("leg_right", -1.0, cycle.knee_bends[1])):
+        turn(leg, sign * cycle.thigh_angle)
+        turn(f"{leg}_lower", -knee)
+    for arm, sign, elbow in (("arm_left", 1.0, cycle.elbow_bends[0]), ("arm_right", -1.0, cycle.elbow_bends[1])):
+        turn(arm, sign * cycle.arm_angle)
+        turn(f"{arm}_lower", elbow)
     return CharacterState(facing, parts)
 
 
@@ -227,6 +243,10 @@ class Walk(Animation):
         figure.passage = "enter" if self.start_x is not None else "exit" if self.park_x is not None else None
         self._from = figure.feet()
         self._base = figure.state()
+        # legs drawn one each: the body rises and falls so the lower sole stays where it stands
+        # (lowest at the footfall, legs apart); not when the pose does not stand (sitting)
+        sole = figure.sole_height(self._base)
+        self._ground = sole if sole is not None and abs(sole) <= GROUND_TOLERANCE else None
         distance = self.to_x - float(self._from[0])
         self._facing = self._base.facing if abs(distance) < 1e-9 else ("right" if distance > 0 else "left")
         self._step = STEP_LENGTH * figure.character_height
@@ -249,7 +269,7 @@ class Walk(Animation):
             trail = follow_through(self._ahead, t * self.run_time) * end_fade(t)
             state = accented_state(state, accent.lean, follow_angles(trail, 0.0, self.strength))
             figure.set_squash(*squash_scale(accent.stretch))
-        figure.set_state(state)
+        figure.set_state(state if self._ground is None else figure.grounded(state, self._ground))
         figure.shift([self._from[0] + walked - figure.feet()[0], self._from[1] - figure.feet()[1], 0.0])
         figure.sync_mouth()  # Manim pauses the character's updaters: keep lip sync in step
 

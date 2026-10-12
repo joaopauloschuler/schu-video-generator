@@ -32,15 +32,28 @@ def _p(**settings: dict) -> dict[str, PartPoseEntry]:
 
 
 #: Built-in poses. Facing right, ``arm_left`` is the near arm (on the screen's right); arms hang
-#: down at rest, so +90 points it forward.
+#: down at rest, so +90 points it forward. ``arm_left`` turns the upper arm about the shoulder,
+#: ``arm_left_lower`` the forearm about the elbow (+: the hand forward); an arm in one piece
+#: shows the elbow folded (half the bend, shortened: :func:`~vidgen.cartoon.limbs.fold`), so each
+#: upper angle plus half its elbow is the angle a one-piece arm had before Step 92. ``legs`` (both
+#: legs in one piece) and ``leg_left`` / ``leg_right`` (+ ``_lower``, the knee: - bends the foot
+#: back) are alternatives: a character has one kind, the other entries are skipped.
 POSES: dict[str, dict[str, PartPoseEntry]] = {
     "stand": {},
-    "pointing": _p(arm_left={"angle": 88}, head={"angle": -3}),
-    "waving": _p(arm_left={"angle": 150}, head={"angle": 4}),
-    "thinking": _p(arm_left={"angle": 160, "scale": [1, 0.72]}, head={"angle": 7}),
-    "shrug": _p(arm_left={"angle": 45, "shift": [0, 0.02]}, arm_right={"angle": -45, "shift": [0, 0.02]}, head={"angle": 6}),
-    "arms_crossed": _p(arm_left={"angle": -65, "scale": [1, 0.8]}, arm_right={"angle": 65, "scale": [1, 0.8]}),
-    "sitting": _p(body={"shift": [0, -0.1]}, legs={"angle": 80}),
+    "pointing": _p(arm_left={"angle": 82}, arm_left_lower={"angle": 12}, head={"angle": -3}),
+    "waving": _p(arm_left={"angle": 115}, arm_left_lower={"angle": 70}, head={"angle": 4}),
+    "thinking": _p(arm_left={"angle": 110}, arm_left_lower={"angle": 100}, head={"angle": 7}),
+    "shrug": _p(
+        arm_left={"angle": 15, "shift": [0, 0.02]}, arm_left_lower={"angle": 60},
+        arm_right={"angle": -15, "shift": [0, 0.02]}, arm_right_lower={"angle": -60}, head={"angle": 6},
+    ),
+    "arms_crossed": _p(
+        arm_left={"angle": -15}, arm_left_lower={"angle": -80}, arm_right={"angle": 15}, arm_right_lower={"angle": 80},
+    ),
+    "sitting": _p(
+        body={"shift": [0, -0.1]}, legs={"angle": 80},
+        leg_left={"angle": 80}, leg_left_lower={"angle": -35}, leg_right={"angle": 75}, leg_right_lower={"angle": -35},
+    ),
 }
 
 #: Built-in expressions. The rest mouth is a smile (``smile``), so a negative y scale makes a frown.

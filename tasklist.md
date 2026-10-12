@@ -475,10 +475,10 @@ memory cap, targeted tests, original characters only). Each step updates the gui
 - [x] Tests: parser (no render), round trip on a sample screenplay in `examples/` (`tests/test_screenplay.py`: 15, no render; `examples/screenplay/humming_box.md`; MCP test)
 
 ### Step 92 — Bending arms and legs
-- [ ] Arms and legs in two segments (upper / lower, elbow / knee pivots) for generated characters, with a simple two-bone solver (`reach(hand, point)`, `plant(foot, point)`)
-- [ ] Imported SVG: optional `arm_left_lower` / `leg_left_lower` ids; single-piece limbs keep working
-- [ ] Existing poses, gestures and the walk updated to bend (natural elbows, knee bend in the walk cycle); sheets and earlier tests still pass (update expected values with reasons in HANDOFF)
-- [ ] Tests: solver reach / out-of-reach / elbow side, pose tables
+- [x] Arms and legs in two segments (upper / lower, elbow / knee pivots) for generated characters, with a simple two-bone solver (`reach(hand, point)`, `plant(foot, point)`) (`cartoon/limbs.py`; `arm_left` = upper arm + `arm_left_lower`; legs `leg_left` / `leg_right` + `_lower` replace a generated character's one-piece `legs`; `Character.reach` / `plant` / `hand_point` / `foot_point` / `sole_height` / `grounded`; DESIGN §69.26)
+- [x] Imported SVG: optional `arm_left_lower` / `leg_left_lower` ids; single-piece limbs keep working (also `leg_left` / `leg_right`, not with `legs`; a one-piece limb keeps a pose for its lower segment and shows the bend folded: half the angle, shortened to the chord, so `reach` works on it too)
+- [x] Existing poses, gestures and the walk updated to bend (natural elbows, knee bend in the walk cycle); sheets and earlier tests still pass (update expected values with reasons in HANDOFF) (upper + half the elbow = the old one-piece angle; legs swing one by one, the walk keeps a sole on the ground instead of a fixed bob; lower segments share their limb's pose-change window; no knees in `jump`)
+- [x] Tests: solver reach / out-of-reach / elbow side, pose tables (`tests/test_cartoon_limbs.py`: 24, no render)
 
 ### Step 93 — Interacting with props
 - [ ] Beat actions `pick_up: <character>, to: <prop>`, `hold`, `put_down` (at a mark), `give` (to another character), `throw` (to a mark, arc with spin, landing sound)
