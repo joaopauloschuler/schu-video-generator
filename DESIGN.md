@@ -105,7 +105,8 @@ src/vidgen/
   storyboard.py           # `vidgen storyboard`: reuse/render stills, write contact sheets (§14)
   sheets.py               # contact-sheet layout and drawing with Pillow (§14)
   lint/                   # `vidgen lint` (§16, §17): rules.py (framework), layout_rules.py,
-                          # timing_rules.py, readback_rule.py (§57), color.py, run.py (lint_project), findings.py, report.py
+                          # cartoon_rules.py (characters, §69.17), timing_rules.py, readback_rule.py (§57),
+                          # color.py, run.py (lint_project), findings.py, report.py
   helpers.py              # theme-aware text helpers and generic drawing utilities
   layout.py               # fit/wrap text, beat distribution, chart numbers, LaTeX detection
   regions.py              # layout regions: safe area, named regions, grids, place(), readable text (§18)
@@ -674,6 +675,8 @@ compatible); the `stage` scene type gains the target pattern `<character>.<part>
 Step 82 (§69.15) adds `Spring` (compatible; follow-through in `Walk` and `Jump` now wobbles).
 Step 83 (§69.16) adds the `NarratedScene` class attribute `mid_still_actions` (default empty;
 compatible).
+Step 84 (§69.17) adds to `Character` the attributes `looked_at` and `passage` and the property
+`spoken_viseme` (all compatible).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -5287,8 +5290,8 @@ lint, Step 84) reuse it.
 - **Layout dump / lint**: `introspect` reports a `Character` as one object of kind `character`
   whose `name` is the character's (its box: every drawn part; the invisible anchor has opacity 0
   and is left out); the picture or colour is `background`, the band `ground`. `lint`'s
-  `describe` names it `character 'pip'`, and `lint_ignore` matches it by that name. No rule is
-  specific to characters yet (Step 84).
+  `describe` names it `character 'pip'`, and `lint_ignore` matches it by that name. The rules specific to characters are §69.12's
+  `walk_overlap` and §69.17's.
 - **Guide and gallery**: the author guide's `scenes` topic has a `# cartoons` block that is a
   config (`characters:` + `scenes:`), since a stage needs declared characters. `gallery.guide_samples`
   reads such a block as one sample per scene, shown whole, with `Sample.characters`;
@@ -5660,7 +5663,8 @@ new state an option (`- walk_to: pip` + `to: door`; `- gesture: kit` + `to: wave
 - **Speech bubble follows its speaker** (fixes §69.11's gap): `follow_speaker(bubble, speaker)`
   (`scenes/acting.py`) adds an updater keeping the bubble at its offset from the speaker's feet,
   so it moves with a walk or jump (it is not clamped to the view).
-- **Lint `walk_overlap`** (layout rule after `overlay_overlap`, default warning, `WalkOverlapRule`
+- **Lint `walk_overlap`** (still rule after `overlay_overlap`, in `lint/cartoon_rules.py` since
+  Step 84, default warning, `WalkOverlapRule`
   `min_overlap` 0.25): the walk actions set `Character.walked_in` to the current beat; `introspect`
   writes it as `walked_in` on the character's object; at a beat-end still, a character whose
   `walked_in` is that beat and whose box shares at least `min_overlap` of the narrower width with
@@ -5918,3 +5922,53 @@ rendering it whole.
   `turn`) or camera moves; the sheet shows no facing left, no blink (`eyes` `closed`) and no
   gestures in motion (the storyboard does). Tests: `tests/test_cartoon_sheet.py`,
   `tests/test_frames.py` (mid-action frames, the capture), `tests/test_mcp.py`.
+
+### 69.17 Cartoon lint rules (Step 84)
+
+Six still rules in `lint/cartoon_rules.py` (with §69.12's `walk_overlap`, moved there; imported
+right after `layout_rules`, so `RULES` keeps `LINT_RULES`' order), default `warning`, one settings
+model each in `config.LintRules`. Like every still rule they read beat-end stills only (`k == n`;
+§69.16's mid-action stills stay skipped by the runner).
+
+- **Layout dump** (`introspect._character_keys`, read by these rules only): a `character` object
+  always has `facing` (`left` / `right`) and `speaking` (a lip sync runs:
+  `Character.lip_sync_track` is set; at a beat-end still that is the beat's speakers, `Stage.narrate`
+  stops them after it); when they apply, `face` (the box of the `head` part's drawn shapes, px),
+  `viseme` (new property `Character.spoken_viseme`: the viseme the running lip sync shows, `rest`
+  between words), `looked_at` (new attribute `Character.looked_at`: the `to` of its last
+  `look_at` when that is a name, a mark or `camera`; `LookAt.revert` puts the one before back),
+  `passage` (new attribute `Character.passage`: `enter` / `exit` while a `Walk` with `start_x` /
+  `park_x` plays; `begin` sets it, `clean_up_from_scene` clears it) and `walked_in`. The objects
+  of a speech bubble (its plate-and-tail `Union` and its text) carry `bubble`: the speaker's name
+  (`Say._bubble` sets `speech_bubble_of` on the bubble group; `LayoutRecorder._walk` copies it onto
+  the objects walked under it). A frame of a beat-end still has `narrating`: whether its time lies
+  in its beat's narration (`scene.beat_log`: `start <= time < end`, so false in the pad); other
+  stills have no such key (the beat is not logged yet).
+- **Rules**:
+  - `off_stage` (`min_hidden` 0.05): a character with at least that share of its box outside the
+    view and some of it inside; skipped with `passage` set and while the camera is zoomed in (a
+    pan still counts: the viewer sees the cut). `off_frame` now skips characters (one finding).
+  - `character_overlap` (`min_overlap` 0.25 of the narrower width, as `walk_overlap`): two
+    characters at rest whose boxes share that much; a character that walked in the still's beat
+    (`walk_overlap`'s) or has `passage` set is left out.
+  - `bubble_overlap` (`min_overlap` 0.1): a bubble (union of its objects' boxes) covering that
+    share of a character's `face` box (its own speaker's too), or of the smaller of two bubbles.
+  - `facing_away`: a speaking character in view whose listener's face x lies on the side it does
+    not face (more than 0.02 of the shorter side away). The listener is the character it last
+    looked at (`looked_at`) when in view, else the nearest one by face x; `looked_at: camera`
+    means it talks to the viewer: not checked.
+  - `hidden_speaker` (`min_hidden` 0.5): the characters are flat and face left or right, so a
+    back turned to the camera does not exist; what does is a speaker the viewer cannot see:
+    the share of its `face` box covered by the boxes of objects drawn after it (`order`: a
+    character or prop nearer the camera, a foreground layer, an overlay; not text, particles or
+    bubbles), sampled on a 12 x 12 grid.
+  - `mouth_without_voice`: a frame with `narrating: false` where a character's `viseme` is not
+    `rest`: its mouth shows speech while nothing is heard (a viseme track longer than the beat's
+    audio, a custom scene's lip sync without the beat clock).
+- **Fix hints**: each message ends with the usual fix; the same in docs/CONFIG.md's rule table
+  and the guide's troubleshooting table. `lint_ignore`'s `object` also matches a bubble's
+  `bubble` (the speaker), so `{rule: all, object: pip}` covers pip's bubble too.
+- **Not done here**: depth is not in the dump, so two characters at different depths that
+  overlap are reported like two at the same depth; boxes (not drawn pixels) decide what covers a
+  face; keyed moves (§69.14) and jumps are not told apart from standing. Tests:
+  `tests/test_cartoon_lint.py`.

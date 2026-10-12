@@ -62,11 +62,13 @@ def small_config(tmp_path: Path) -> Iterator[None]:
 
 
 class FakeScene:
-    """What the recorder reads from a scene: camera, mobjects, attributes, safe area, spec, overlays."""
+    """What the recorder reads from a scene: camera, mobjects, attributes, safe area, spec, overlays,
+    the beats narrated so far."""
 
     margin_x = 0.6
     margin_y = 0.5
     overlay_layer = None
+    beat_log: tuple[Any, ...] = ()
 
     @property
     def safe_area(self) -> Any:

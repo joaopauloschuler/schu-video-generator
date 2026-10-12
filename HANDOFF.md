@@ -7876,3 +7876,73 @@ How to test
   test_cartoon_sheet` (11, 68 s), `test_mcp test_actions_coverage test_builtin_scenes -k "stage or
   character_sheet or storyboard"` (5, 19 s). By hand: a two-beat stage storyboard shows ½ stills
   for a walk, a gesture and a jump; `vidgen lint` checked 2 stills, `vidgen slides` made 2 slides.
+
+
+## Step 84 — Cartoon lint rules
+
+What was built
+- Six still rules in the new `src/vidgen/lint/cartoon_rules.py` (default warning), registered right
+  after `layout_rules` so `RULES` keeps `LINT_RULES`' order; Step 79's `walk_overlap` moved there
+  (unchanged behaviour). `off_stage` (`min_hidden` 0.05 of the box outside the view; not with
+  `passage`, not while zoomed, not wholly outside), `character_overlap` (`min_overlap` 0.25 of the
+  narrower width; characters that walked in the beat are `walk_overlap`'s), `bubble_overlap`
+  (`min_overlap` 0.1 of a face box or of the smaller bubble), `facing_away` (listener = the
+  character it last looked at, else the nearest by face x; `looked_at: camera` not checked),
+  `hidden_speaker` (`min_hidden` 0.5 of the speaker's face box under boxes drawn after it; text,
+  particles, bubbles left out), `mouth_without_voice` (`narrating: false` and a `viseme` other than
+  `rest`). Each message ends with its fix.
+- Layout dump (`introspect._character_keys`): `character` objects gain `facing`, `speaking`, and
+  when they apply `face` (head part's box), `viseme`, `looked_at`, `passage`; the bubble's objects
+  `bubble` (speaker name; `Say._bubble` sets `speech_bubble_of`, `LayoutRecorder._walk` copies it);
+  beat-end frames `narrating` (from `scene.beat_log`).
+- `Character.looked_at` (set by `look_at`, restored by its `until`), `Character.passage` (set /
+  cleared by `Walk` with `start_x` / `park_x`), property `Character.spoken_viseme`.
+- `off_frame` skips characters (`off_stage`'s); `lint_ignore`'s `object` also matches a bubble's
+  speaker. `layout_rules._bbox` is now the public `object_box` (shared with the cartoon rules).
+
+Files touched
+- New: `src/vidgen/lint/cartoon_rules.py`, `tests/test_cartoon_lint.py`.
+- `src/vidgen/lint/layout_rules.py`, `lint/__init__.py`, `lint/run.py`, `config.py` (6 rule models,
+  `LINT_RULES`, `RuleName`, `LintRules`), `introspect.py`, `cartoon/character.py`,
+  `cartoon/transition.py`, `scenes/acting.py`, `data/guide/AGENTS.md` (+ copy `AGENTS.md`:
+  troubleshooting rows).
+- Tests updated: `tests/test_introspect.py` (its `FakeScene` gains `beat_log`),
+  `tests/test_cartoon_stage.py` (`render_with_layout(..., recorder=None)`).
+- Docs: `docs/CONFIG.md` (rule table rows, defaults block, layout keys and `narrating`, `off_frame`
+  row, `lint_ignore` object, a sentence under "Speaking and acting"), `DESIGN.md` (§2 tree, §6.4,
+  §69.6, §69.12, new §69.17), `tasklist.md`.
+
+Public interfaces
+- `Character.looked_at`, `Character.passage`, `Character.spoken_viseme` (compatible). Lint rules
+  and config keys `lint.rules.{off_stage, character_overlap, bubble_overlap, facing_away,
+  hidden_speaker, mouth_without_voice}`. Layout keys above (additions; `LAYOUT_VERSION` unchanged).
+
+Decisions / deviations
+- "Back turned": characters are drawn side-on and face left or right only, so no back view exists;
+  `hidden_speaker` checks the 2D case where the viewer cannot see who talks (face covered by what
+  is drawn in front). Off-frame parts of a face are `off_stage`'s, and a zoom / pan reaction shot
+  is deliberate, so they do not count.
+- "Mouth moving while no voice speaks": every beat has text (so a voice), so the check is a lip
+  sync still showing speech after its beat's narration ended (the beat-end still is in the pad).
+  It catches a viseme track longer than the audio or a custom scene's lip sync without the beat
+  clock; a `say` by a character whose voice is not the beat's stays allowed (Step 78).
+- `off_stage` checks panned views too (the viewer sees the cut); only a zoom skips it.
+- Searched first: reused `describe`, `area`, `intersection`, the walk_overlap share, `_matches`;
+  no character-specific lint code existed besides `walk_overlap`.
+
+Known gaps / TODOs
+- No `depth` in the dump: overlapping characters at different depths are reported like same-depth
+  ones. Boxes, not pixels, decide what covers a face. Keyed moves / jumps are not "moving" for
+  `character_overlap`. Per-beat stills other than beat ends get no `narrating` key.
+
+How to test
+- `pytest tests/test_cartoon_lint.py` (8 not-render + 1 render at 160x90, ~2 s).
+- Also run (not render): `test_lint test_cartoon_moving test_guide test_docs test_cartoon_acting
+  test_cartoon_stage test_introspect test_schema test_config test_api test_cartoon_character
+  test_cartoon_visemes` (with the new file 339, 60 s), `test_overlays test_icons test_regions
+  test_vector_images test_cartoon_props test_cartoon_parallax test_particles
+  test_cartoon_keyframes test_cartoon_motion test_timing_lint test_readback` (269, 21 s); render:
+  `test_cartoon_lint test_cartoon_stage test_cartoon_props test_cartoon_moving test_cartoon_acting
+  test_introspect test_particles` (9, 10 s). By hand: `vidgen lint` of a three-beat preview
+  dialogue (854x480) where pip turns away from kit while speaking: one `facing_away` warning,
+  nothing else.

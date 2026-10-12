@@ -231,6 +231,12 @@ class Character(VGroup):
         #: The beat in which the character's last walk ended (set by the walking actions; the
         #: layout dump records it for the ``walk_overlap`` lint rule), ``None`` before any walk.
         self.walked_in: str | None = None
+        #: What its last ``look_at`` looked at (a target name or ``camera``; set by the action,
+        #: recorded in the layout dump for the ``facing_away`` lint rule), ``None`` before any.
+        self.looked_at: str | None = None
+        #: ``enter`` or ``exit`` while a :class:`~vidgen.cartoon.transition.Walk` brings it in
+        #: from off stage or takes it off (lint ``off_stage`` skips it then), else ``None``.
+        self.passage: str | None = None
         self._anchor = VMobject(fill_opacity=0, stroke_width=0, stroke_opacity=0)
         side = _ANCHOR_SIDE * height
         self._anchor.set_points(np.array([[0, 0, 0], [side, 0, 0], [0, side, 0], [0, side, 0]], dtype=float))
@@ -440,6 +446,13 @@ class Character(VGroup):
     def lip_sync_track(self) -> VisemeTrack | None:
         """The track the running :meth:`lip_sync` follows (``None`` when none runs)."""
         return self._lip_sync.track if self._lip_sync is not None else None
+
+    @property
+    def spoken_viseme(self) -> str | None:
+        """The viseme the running :meth:`lip_sync` showed last (``rest`` between words; ``None``
+        when none runs)."""
+        speech = self._lip_sync
+        return speech.track.at(speech.seconds) if speech is not None else None
 
     def sync_mouth(self) -> Character:
         """Show the running lip sync's viseme for its clock now (nothing without one)."""

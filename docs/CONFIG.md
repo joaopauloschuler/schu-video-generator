@@ -4016,7 +4016,12 @@ pose or expression (with the known names, the character's own included), a `say`
 without a `voice`, a `look_at` place that is neither a target, a mark nor `camera`, and an acting
 action on a prop; it warns when a character lacks the parts an action needs (a `say` without a
 mouth, a `look_at` without a head, an `emote` without eyes, brows or mouth): the action does
-nothing for that character.
+nothing for that character. `vidgen lint` checks the beat ends of a stage: a speaker facing
+away from the character it last looked at (or the nearest one; `facing_away`), a speaker whose
+face something in front of it hides (`hidden_speaker`), a speech bubble over a face or another
+bubble (`bubble_overlap`), a mouth moving while no narration is heard (`mouth_without_voice`),
+characters standing on each other (`character_overlap`) and a character cut by the view's edge
+(`off_stage`); see [lint](#lint-vidgen-lint).
 
 ```yaml
 voices:
@@ -4812,6 +4817,8 @@ File `build/<final|preview>[_<variant>]/layout/<scene>.json`:
                                # (and minus overlays with reserve: true)
  frames: [{beat, k, n, frame, time,     # the same keys as the stills index
            still: "../frames/<scene>/<file>.png",
+           narrating,             # beat-end stills: whether the beat's narration is heard at
+                                  # this time (false in the pad after it)
            camera: {center: [x, y], width, height,    # the camera frame in Manim units
                     zoom},                    # frame width / camera width: > 1 while zoomed in
            objects: [...],
@@ -4845,6 +4852,10 @@ Each object:
 | other kinds: `fill`, `stroke` | `{color, opacity}` / `{color, opacity, width_px}` of the largest visible part, or `null` |
 | `icon` only: `icon` | the icon's name (`cpu`); its `bbox` is what it draws, not its padded design box |
 | `character` only: `walked_in` | the beat in which its last walk (`walk_to`, `enter`) ended; absent before it walks (read by the `walk_overlap` rule) |
+| `character` only: `facing`, `speaking` | `left` or `right`; whether its lip sync runs (it speaks this beat) |
+| `character` only: `face` | the box of its head (with hair and ears), absent without a `head` part |
+| `character` only: `viseme`, `looked_at`, `passage` | when they apply: the viseme its lip sync shows (`rest` between words), the `to` of its last `look_at` (a name, a mark or `camera`), and `enter` / `exit` while it walks in or out |
+| speech bubbles only: `bubble` | the name of the character speaking (on the bubble's shape and its text) |
 | overlays only: `overlay` | the id of the [overlay](#overlays) it belongs to; overlay objects come after the scene's, their `path` starts with `overlay:<id>` and they are measured as drawn: fixed to the screen whatever the camera does |
 
 An object is one text mobject (not one per glyph), one path, one image, or one group of shapes.
@@ -4944,7 +4955,7 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 
 | rule | default severity | finds |
 |---|---|---|
-| `off_frame` | error for text, warning for other objects | an object cut off by the frame edge by more than `tolerance`. Not reported: objects wholly outside (not visible), and non-text objects running from edge to edge on the side they cross (a full-frame image with `fit: cover` or Ken Burns, a background, a band or divider): those bleeds are intentional; nothing while the camera is zoomed in or looks away from the frame's centre (`zoom`, `pan`, `follow`, a wide `stage`); never [particles](#particles), which cross the edges on purpose |
+| `off_frame` | error for text, warning for other objects | an object cut off by the frame edge by more than `tolerance`. Not reported: objects wholly outside (not visible), and non-text objects running from edge to edge on the side they cross (a full-frame image with `fit: cover` or Ken Burns, a background, a band or divider): those bleeds are intentional; nothing while the camera is zoomed in or looks away from the frame's centre (`zoom`, `pan`, `follow`, a wide `stage`); never [particles](#particles), which cross the edges on purpose, nor characters (`off_stage`'s) |
 | `safe_area` | warning | text inside the frame but in its margins (the scene's `margin_x`/`margin_y`, `safe_area` in the layout dump, smaller where an overlay has `reserve: true`) by more than `tolerance`; not checked while the camera is zoomed in or moved (`pan`, `follow`), nor for [overlays](#overlays) (their place is deliberate) |
 | `text_overlap` | error | two texts whose boxes overlap by at least `min_overlap` of the smaller box (the same text drawn twice in the same place is not reported) |
 | `covered_text` | warning | a shape or image drawn **after** (on top of) a text whose colour shows in at least `min_covered` of the middle of the text's box, measured on the still's pixels. Not reported: shapes drawn before the text (plates, highlight bands, a code window), the text's own parent group, shapes fainter than 0.3, and shapes in the text's own colour (a strike-through) |
@@ -4954,6 +4965,12 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `max_words` | warning | more than `max_words` words (tokens with a letter) of visible `text` objects in one still; code and math do not count |
 | `overlay_overlap` | warning | an [overlay](#overlays) whose box (all its objects) covers at least `min_overlap` of the box of a scene text or icon. `text_overlap` and `covered_text` leave an overlay over scene text to this rule; overlays of a type with a `lint_skip` (the watermark: `contrast`) are not checked by those rules |
 | `walk_overlap` | warning | a character whose walk (`walk_to`, `enter`) ended in the still's beat sharing at least `min_overlap` of the narrower character's width with another character: it stopped on the other's place. Only characters that walked in that beat are checked (the layout dump's `walked_in`); see [Moving](#moving) |
+| `off_stage` | warning | a character with at least `min_hidden` of its box outside the view (the frame, or what a `pan` / `follow` shows) and part of it inside. Not reported: characters wholly outside (waiting to enter, gone), while it walks in or out (`enter`, `exit`), and while the camera is zoomed in. Fix: put it on a mark inside the view, or pan to it |
+| `character_overlap` | warning | two characters at rest whose boxes share at least `min_overlap` of the narrower one's width. A character that walked in the still's beat is `walk_overlap`'s. Fix: marks further apart, or walk one away |
+| `bubble_overlap` | warning | a speech bubble (`say` with `bubble`) covering at least `min_overlap` of a character's face box (its speaker's too) or of the smaller of two bubbles. Fix: a shorter `bubble` text, the characters further apart, or the two lines in different beats |
+| `facing_away` | warning | a speaking character facing away from the one it talks to: the character it last looked at (`look_at`), else the nearest one; not checked after `look_at: camera` (it talks to the viewer). Fix: `turn`, `look_at: <listener>`, or swap their marks |
+| `hidden_speaker` | warning | a speaking character with at least `min_hidden` of its face box covered by things drawn in front of it (a character or prop nearer the camera, a foreground layer, an overlay). The characters are drawn side-on and face left or right, so they never turn their back: this is the case where the viewer cannot see who talks. Fix: move one of them, or a smaller `depth` for the speaker |
+| `mouth_without_voice` | warning | at a beat's end, after its narration (the pad), a character whose lip sync still shows a speech shape: its viseme track is longer than the beat's audio. Fix: `vidgen tts` again (the track and the audio are made together); in a custom scene, lip sync with `clock=self.beat_clock()` |
 | `narration_speed` | warning; info without audio | a beat (of at least `min_words` spoken words) narrated at fewer than `min_rate` or more than `max_rate` words per second (`unit: words`) or characters per second (`unit: characters`: letters and digits). `unit: auto` counts words for the languages vidgen has a word rate for and characters for others; the default range is the video [language](#languages-and-translations)'s: English (also no `language`) 1.8-3.5 words/s, Portuguese 1.7-3.4, Spanish and French 1.8-3.6, Italian 1.8-3.5, German 1.5-3.1, characters 8-17/s; `min_rate` / `max_rate` set override it. With an MP3 the time is the speech in it (leading and trailing silence below -40 dB of its peak cut off). Words count as spoken: hyphens, dashes and slashes separate words (`K-Phi-3` is 3), a number counts one word per digit up to 3 per digit run, plus one per decimal point and symbol (`2.58` is 4, `15%` 3), an all-capitals acronym of 2-5 letters half a word per letter (`GPU` 1.5). **Without audio** the beat's length is the word-count estimate (`narration.words_per_second`), so the rate is only off when the text is (many numbers or acronyms) or the configured rate itself is implausible: reported as `info`, one finding per scene listing the beats |
 | `dead_air` | warning | nothing on screen changes for more than `max_seconds` (a frame counts as changed when at least `min_change` of it changed, from the activity file's `motion`), narrated or not; the finding names the beat where the still picture starts and the beats it lasts through. Silent scenes are checked the same way: a silent card held longer than `max_seconds` without motion is reported. A still picture ends where a [crossfade](#transitions-transition) into the next scene starts blending it away |
 | `animation_overrun` | warning | a beat whose code (animations and waits inside `narrate`) takes longer than its narration plus `narration.pad` by more than `tolerance` seconds: the next beat (and its audio) starts late, leaving silence. The message lists the animations still running when the narration ends. A silent scene whose animations take longer than its `duration` is reported the same way |
@@ -4977,6 +4994,12 @@ lint:
     max_words: {max_words: 40}
     overlay_overlap: {min_overlap: 0.05}    # fraction of the scene object's box
     walk_overlap: {min_overlap: 0.25}       # fraction of the narrower character's width
+    off_stage: {min_hidden: 0.05}           # fraction of the character's box outside the view
+    character_overlap: {min_overlap: 0.25}  # fraction of the narrower character's width
+    bubble_overlap: {min_overlap: 0.1}      # fraction of the face's (or smaller bubble's) box
+    facing_away: {}
+    hidden_speaker: {min_hidden: 0.5}       # fraction of the speaker's face box
+    mouth_without_voice: {}
     narration_speed: {unit: auto, min_words: 5}   # + min_rate / max_rate: default the language's range
     dead_air: {max_seconds: 6.0, min_change: 0.0002}   # min_change: fraction of the frame
     animation_overrun: {tolerance: 0.1}     # seconds past narration + pad
@@ -4990,7 +5013,8 @@ never makes stills stale.
 
 **Ignoring findings in a scene** (`lint_ignore` on the scene): a list of rule names (or `all`),
 or `{rule, object, beat}` filters. `object` is a pattern (`*` and `?` wildcards, case-sensitive)
-matched against the object's `name`, `path`, `text` and icon name (for a pair, either object); `beat`
+matched against the object's `name`, `path`, `text`, icon name and, for a speech bubble, its
+speaker's name (for a pair, either object); `beat`
 limits the entry to the end of that beat (it must be a beat of the scene).
 
 ```yaml

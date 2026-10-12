@@ -499,6 +499,12 @@ LINT_RULES: tuple[str, ...] = (
     "max_words",
     "overlay_overlap",
     "walk_overlap",
+    "off_stage",
+    "character_overlap",
+    "bubble_overlap",
+    "facing_away",
+    "hidden_speaker",
+    "mouth_without_voice",
     "narration_speed",
     "dead_air",
     "animation_overrun",
@@ -516,6 +522,12 @@ RuleName = Literal[
     "max_words",
     "overlay_overlap",
     "walk_overlap",
+    "off_stage",
+    "character_overlap",
+    "bubble_overlap",
+    "facing_away",
+    "hidden_speaker",
+    "mouth_without_voice",
     "narration_speed",
     "dead_air",
     "animation_overrun",
@@ -620,6 +632,42 @@ class WalkOverlapRule(RuleConfig):
     """Share of the narrower character's width the two must share side by side to be reported."""
 
 
+class OffStageRule(RuleConfig):
+    """``off_stage``: a character partly outside the view (not while it enters or exits)."""
+
+    min_hidden: Fraction = 0.05
+    """Share of the character's box outside the view from which it is reported."""
+
+
+class CharacterOverlapRule(RuleConfig):
+    """``character_overlap``: two characters standing on each other (neither walked there in the beat)."""
+
+    min_overlap: Fraction = 0.25
+    """Share of the narrower character's width the two must share side by side to be reported."""
+
+
+class BubbleOverlapRule(RuleConfig):
+    """``bubble_overlap``: a speech bubble covering a character's face or another bubble."""
+
+    min_overlap: Fraction = 0.1
+    """Share of the face's box (or of the smaller bubble's box) the bubble must cover to be reported."""
+
+
+class FacingAwayRule(RuleConfig):
+    """``facing_away``: a speaking character facing away from the one it talks to."""
+
+
+class HiddenSpeakerRule(RuleConfig):
+    """``hidden_speaker``: a speaking character whose face something in front of it hides."""
+
+    min_hidden: Fraction = 0.5
+    """Share of the face's box covered by things drawn in front from which it is reported."""
+
+
+class MouthWithoutVoiceRule(RuleConfig):
+    """``mouth_without_voice``: a character's lip sync showing a speech shape while no narration is heard."""
+
+
 class NarrationSpeedRule(RuleConfig):
     """``narration_speed``: a beat spoken too fast or too slow (spoken words, or characters, per second)."""
 
@@ -704,6 +752,18 @@ class LintRules(_Strict):
     """Overlays covering scene text or icons (default: warning)."""
     walk_overlap: WalkOverlapRule = Field(default_factory=WalkOverlapRule)
     """A character ending its walk on another character (default: warning)."""
+    off_stage: OffStageRule = Field(default_factory=OffStageRule)
+    """A character partly outside the view, not entering or exiting (default: warning)."""
+    character_overlap: CharacterOverlapRule = Field(default_factory=CharacterOverlapRule)
+    """Two characters standing on each other (default: warning)."""
+    bubble_overlap: BubbleOverlapRule = Field(default_factory=BubbleOverlapRule)
+    """A speech bubble covering a face or another bubble (default: warning)."""
+    facing_away: FacingAwayRule = Field(default_factory=FacingAwayRule)
+    """A speaking character facing away from its listener (default: warning)."""
+    hidden_speaker: HiddenSpeakerRule = Field(default_factory=HiddenSpeakerRule)
+    """A speaking character whose face is hidden by something in front of it (default: warning)."""
+    mouth_without_voice: MouthWithoutVoiceRule = Field(default_factory=MouthWithoutVoiceRule)
+    """A mouth moving with lip sync while no narration is heard (default: warning)."""
     narration_speed: NarrationSpeedRule = Field(default_factory=NarrationSpeedRule)
     """Narration too fast or too slow (default: warning; info for beats without audio)."""
     dead_air: DeadAirRule = Field(default_factory=DeadAirRule)

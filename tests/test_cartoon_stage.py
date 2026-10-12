@@ -144,8 +144,9 @@ def test_lint_names_characters() -> None:
 # ----- render ------------------------------------------------------------------------------------
 
 
-def render_with_layout(project: Project, scene_id: str, media: Path) -> tuple[Any, list[dict[str, Any]]]:
-    """Render one scene at 160x90 with a layout recorder; returns the scene and its first still's objects."""
+def render_with_layout(project: Project, scene_id: str, media: Path, recorder: Any = None) -> tuple[Any, list[dict[str, Any]]]:
+    """Render one scene at 160x90 with a layout recorder (``recorder``: one of the caller's, to
+    read every still); returns the scene and its first still's objects."""
     from manim import tempconfig
 
     from vidgen.capture import FrameCapture
@@ -155,7 +156,7 @@ def render_with_layout(project: Project, scene_id: str, media: Path) -> tuple[An
     fw, fh = frame_size(160, 90)
     settings = {"pixel_width": 160, "pixel_height": 90, "frame_width": fw, "frame_height": fh, "frame_rate": 5,
                 "media_dir": str(media), "disable_caching": True, "progress_bar": "none", "verbosity": "ERROR"}
-    recorder = LayoutRecorder()
+    recorder = recorder or LayoutRecorder()
     with tempconfig(settings):
         spec = project.scene(scene_id)
         theme = extensions.activate(project)

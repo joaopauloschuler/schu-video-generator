@@ -216,6 +216,7 @@ class Walk(Animation):
         figure.end_blink()
         if self.start_x is not None:
             figure.shift([self.start_x - float(figure.feet()[0]), 0.0, 0.0])
+        figure.passage = "enter" if self.start_x is not None else "exit" if self.park_x is not None else None
         self._from = figure.feet()
         self._base = figure.state()
         distance = self.to_x - float(self._from[0])
@@ -246,6 +247,7 @@ class Walk(Animation):
 
     def clean_up_from_scene(self, scene) -> None:
         super().clean_up_from_scene(scene)
+        self.mobject.passage = None
         if self.park_x is not None:
             self.mobject.shift([self.park_x - float(self.mobject.feet()[0]), 0.0, 0.0])
 

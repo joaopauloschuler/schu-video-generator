@@ -190,6 +190,7 @@ class Say(_Acting):
         top = max((m.z_index for m in scene.get_mobject_family_members()), default=0)
         made.set_z_index(top + 2)
         follow_speaker(made.mark, speaker)
+        made.mark.speech_bubble_of = speaker.name  # the layout dump's ``bubble`` (lint bubble_overlap)
         return made
 
 
@@ -281,14 +282,20 @@ class LookAt(_Acting):
     def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
         """Turn each character towards ``to`` and tilt its head."""
         anims = []
+        #: (character, what it looked at before) per character, for :meth:`revert`
+        self.looked_before: list[tuple[Character, str | None]] = []
         for character in _characters(scene, targets, "look_at"):
             look = self._look(scene, character)
             if look is not None:
                 anims.append(self._change(character, looked_state(character, look)))
+                self.looked_before.append((character, character.looked_at))
+                character.looked_at = self.options.to if isinstance(self.options.to, str) else None
         return anims
 
     def revert(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
         """Back to where it looked before."""
+        for character, before in getattr(self, "looked_before", []):
+            character.looked_at = before
         return self._undo()
 
     def _look(self, scene: NarratedScene, character: Character) -> LookPose | None:

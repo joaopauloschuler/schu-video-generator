@@ -1182,6 +1182,12 @@ install; `vidgen validate` warns when it is missing.
 | `contrast` | text hard to read on its background | theme tokens instead of custom colours; another preset |
 | `overlay_overlap` | an overlay covers scene text | `reserve: true` on the overlay, or another corner / position |
 | `walk_overlap` | a character's walk ends on another character | walk it to another mark or x, or move the other one first |
+| `off_stage` | a character is cut by the edge of the view | another mark or x inside the view, or `pan` to it |
+| `character_overlap` | two characters stand on each other | marks further apart, or `walk_to` one away |
+| `bubble_overlap` | a speech bubble covers a face or another bubble | a shorter `bubble` text, characters further apart, or the lines in different beats |
+| `facing_away` | a speaker faces away from the one it talks to (last looked at, else the nearest) | `turn`, `look_at: <listener>`, or swap their marks |
+| `hidden_speaker` | something in front hides the speaker's face | move one of them, or a smaller `depth` for the speaker |
+| `mouth_without_voice` | a mouth still shows speech after the narration ended | `vidgen tts` again; in a custom scene, lip sync with `clock=self.beat_clock()` |
 | `dead_air` | nothing moved for over 6 s | split the beat, add a reveal or an action, shorten a silent `duration` |
 | `narration_speed` | words per second outside 1.8–3.5 (English) | shorten or lengthen the beat's text; without audio it is only `info` (an estimate) |
 | `animation_overrun` | animations ran past the narration | a custom scene's animations are too long for the beat |
