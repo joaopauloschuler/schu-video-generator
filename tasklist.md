@@ -329,6 +329,124 @@ by the coordinator at the end of each step with the owner's key; agents never se
 
 ---
 
+## Phase H — Cartoons (characters, acting, stages)
+
+Goal: an agent can write a cartoon in `video.yaml` (characters who talk, move and react, on an
+image or drawn background) without drawing frames by hand. Order: characters and poses → lip
+sync → stages → acting actions → motion primitives → agent tooling → audio and speed. Each step
+follows `docs/CODING-AND-COMMUNICATION-GUIDE.md` (memory cap, targeted tests, cheap tests). Only
+original characters: no step adds a known character, mascot or brand figure, nor a way to imitate
+one.
+
+### Step 67 — Character model (vector parts with pivots)
+- [ ] A character is a group of named vector parts (`head`, `eyes`, `brows`, `mouth`, `body`, `arm_left`, `arm_right`, optional `legs`, `accessory`), each with a pivot point and a draw order; one module (`vidgen/cartoon/character.py`), exposed through `vidgen.api`
+- [ ] Parts can be rotated / swapped / scaled around their pivots without moving the rest; facing left or right is a mirror of the whole character
+- [ ] Top-level `characters:` in `video.yaml` (name, look, colours, `voice:` = a named voice from `voices:`), declared once and reused by any scene; validate: unknown character, unknown voice, duplicate names
+- [ ] Tests without rendering (part tree, pivots, mirroring, schema) and one tiny render test
+
+### Step 68 — Parametric character generator
+- [ ] `look:` parameters: body shape (round, tall, square, bean), head size, colours (skin / fur, clothes, outline), eye style, nose, hair or ears, accessories (glasses, hat, scarf, bag); seeds give variations; results are original shapes built from primitives
+- [ ] Colours default to theme tokens; outline width scales with the frame size
+- [ ] `vidgen character NAME --png` (one still) for a quick look
+- [ ] Tests: every parameter value builds, the same parameters give the same shapes
+
+### Step 69 — Imported SVG characters
+- [ ] `look: {svg: path/to/file.svg}`: an SVG (own art, or made with the SVG image models of Step 61b) split into parts by a naming convention (`id="mouth"`, `id="arm_left"`, `data-pivot="x y"`); sanitised with `svgclean`
+- [ ] Missing parts degrade gracefully (no arm → no `wave` gesture; validate warns which actions are unavailable); mouth shapes as named alternatives (`mouth_A`, `mouth_E`, …) when present
+- [ ] Docs: the naming convention with a small example SVG in `examples/`; tests with that SVG
+
+### Step 70 — Poses and expressions
+- [ ] Named poses (`stand`, `pointing`, `waving`, `thinking`, `shrug`, `arms_crossed`, `sitting`) and expressions (`neutral`, `happy`, `sad`, `angry`, `surprised`, `worried`, `thinking`) as part angles / part shapes, in one table
+- [ ] A transition between two poses or expressions eases part by part (not a cross-fade)
+- [ ] Characters may define their own poses in YAML; validate lists the known names
+- [ ] Tests: every pose and expression builds on the generator and on the example SVG
+
+### Step 71 — Lip sync (visemes)
+- [ ] Phonemes per beat: from Kokoro's G2P (misaki) when the provider is Kokoro, else from text (misaki / espeak-ng when installed, a letter-based fallback otherwise), timed with the word timings already stored (ElevenLabs timestamps, Kokoro `.align.json`, estimated timings otherwise)
+- [ ] Map phonemes to 6–9 standard mouth shapes (rest, A/I, E, O, U, M/B/P, F/V, L, W/Q) and store a per-beat viseme track (`.visemes.json` next to the audio, in the beat's hash)
+- [ ] The speaking character's mouth follows the track; short shapes merged to avoid flicker
+- [ ] Tests: the mapping table, the merge rule, a track from a stored alignment (no TTS call)
+
+### Step 72 — Automatic life: blinking and idle motion
+- [ ] Blinks at random but seeded intervals (2–6 s), never during a pose change; idle breathing (small body scale) and a slight head sway; `idle: false` per character or scene to turn them off
+- [ ] Tests: blink times are deterministic for a seed; no blink overlaps a pose change
+
+### Step 73 — `stage` scene type
+- [ ] A scene with a background (image file, generated image via `generate:`, or a theme colour / gradient), a ground line, named marks (`left`, `centre`, `right`, or x positions) and characters placed on them
+- [ ] Depth sorting: characters and props drawn by their `depth` (scaled smaller further back)
+- [ ] Layout dump / lint know the stage: characters and props are boxes with names
+- [ ] Tests: placement, depth order, a tiny render test with an image background
+
+### Step 74 — Parallax layers and camera on a stage
+- [ ] `layers:` background / middle / foreground, each an image or shapes, with a parallax factor; camera `pan`, `zoom`, `follow: <character>` move the layers by their factors
+- [ ] Tests: layer offsets for a given camera move (no render), one tiny render
+
+### Step 75 — Props
+- [ ] A set of colourful filled props drawn from primitives (table, chair, tree, bush, house, door, lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup), themed colours, placed by mark or position like characters
+- [ ] Imported SVG props (sanitised) with the same placement
+- [ ] Tests: each prop builds; a prop gallery still for the docs
+
+### Step 76 — Particles
+- [ ] `particles: rain | snow | sparkles | dust | confetti | smoke | bubbles` for a scene or a beat, with density, area and colour; seeded so renders are repeatable
+- [ ] Particle count capped for render speed; preview quality uses fewer
+- [ ] Tests: seeded positions, the cap
+
+### Step 77 — Shared style for generated backgrounds
+- [ ] `cartoon_style:` (top level) appended to every `generate:` prompt of `stage` scenes (e.g. "flat colours, thick outlines, soft shadows"), part of the image cache key; a variant may change it
+- [ ] Docs: writing background prompts that leave room for characters (empty middle, ground visible)
+
+### Step 78 — Acting actions, part 1: speaking and looking
+- [ ] Beat actions `say` (mouth follows the visemes; optional speech bubble with the beat's text or a short version), `look_at: <character | mark | camera>`, `turn` (face left / right), `emote: <expression>`, `pose: <name>`
+- [ ] The beat's `voice:` picks who speaks (via the character's voice); other characters can have `react:` (expression or pose) during that beat
+- [ ] Tests: action schedules without rendering; validate (unknown character, `say` by a character with no voice)
+
+### Step 79 — Acting actions, part 2: moving
+- [ ] `walk_to: <mark | x>` (walk cycle from leg / body bob, speed in units per second), `enter: left | right`, `exit: left | right`, `gesture: point | shrug | wave | nod | shake_head`, `jump`
+- [ ] Characters in a walk do not overlap others' marks at the end (lint warning otherwise)
+- [ ] Tests: walk duration from distance and speed, enter / exit end positions
+
+### Step 80 — Animation principles built in
+- [ ] Anticipation before a move, squash and stretch on jumps and landings, overshoot and settle on stops, follow-through on arms / ears / hair; one `cartoon_motion: lively | calm | none` setting (per video, scene or character)
+- [ ] Tests: the easing curves (values at fixed times), the setting turns each effect off
+
+### Step 81 — Keyframes and motion paths in YAML
+- [ ] A small keyframe format for any character, prop or part: `keys: [{t: 0.0, x: .., y: .., rotate: .., scale: ..}, ...]` with `ease:`; `path:` along points or a curve (`move_along: [[x,y], ...]`, smooth)
+- [ ] Times relative to the beat (seconds or fractions); validate checks order and ranges
+- [ ] Tests: interpolation values, path lengths
+
+### Step 82 — Spring physics for secondary motion
+- [ ] A damped spring helper (stiffness, damping) for parts that should lag and wobble (antennae, ears, tails, hair, hanging signs); used by Step 80's follow-through
+- [ ] Tests: settles within a time, no overshoot when critically damped
+
+### Step 83 — Character sheets and mid-action storyboards
+- [ ] `vidgen character-sheet [NAME]`: every pose, expression and mouth shape of a character on one PNG (and over MCP)
+- [ ] Storyboard stills for `stage` scenes include mid-action frames (half-way through a walk or gesture), not only the end of each beat
+- [ ] Tests: sheet grid size per character; storyboard picks mid-action times
+
+### Step 84 — Cartoon lint rules
+- [ ] Character partly off-stage (unless entering / exiting); speech bubble covering a face or another bubble; characters overlapping at rest; speaker facing away from the listener (the character it last looked at or the nearest one); mouth moving while no voice speaks; a character speaking with no line of sight to the camera (back turned)
+- [ ] Each rule in the lint rule list with a fix hint, `lint_ignore` works for them
+- [ ] Tests: one passing and one failing case per rule
+
+### Step 85 — Guide: cartoon storytelling in AGENTS.md
+- [ ] A section on cartoons for agents: when to use one, designing original characters, staging (marks, depth, leaving room), shot variety (wide / medium / close-up via camera), reaction shots, comic timing (pauses, beats of silence), short lines; a small example project in `examples/cartoon/` (no audio committed)
+- [ ] Copied to root `AGENTS.md` (test_guide checks it)
+
+### Step 86 — Foley and music stings
+- [ ] Sound effects tied to actions (footsteps on `walk_to`, a whoosh on `enter` / `exit`, a pop on `emote: surprised`, a boing on `jump`) from the existing sfx library, on by default for `stage` scenes, off with `foley: false`
+- [ ] Short music stings on a beat (`sting: reveal | comic | sad`), mixed under narration with the existing ducking
+- [ ] Tests: the action → sound schedule; mixing uses the existing path
+
+### Step 87 — Render speed for cartoons
+- [ ] Static background layers rendered once per scene and reused as an image; character part drawings cached by look and part (only transforms change per frame)
+- [ ] Measure before and after on `examples/cartoon` at preview quality; record numbers in HANDOFF.md
+- [ ] Tests: the cache key changes when the look changes, not when the pose changes
+
+### Step 88 — Review of Phase H
+- [ ] End to end with mocks: the cartoon example through validate, lint, storyboard, character sheet and a preview render; docs consistency (CONFIG.md, DESIGN.md, AGENTS.md); targeted tests for Phase H, then the full suite only if the owner asks
+
+---
+
 ## Backlog (after Step 60)
 
 Not done in the roadmap; each is one line, with where it came from. Bugs first, then quality,
