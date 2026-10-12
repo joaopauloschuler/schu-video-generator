@@ -14,6 +14,7 @@ import yaml
 from vidgen.config import BeatConfig, FormatConfig, SceneConfig, VideoConfig, VoiceConfig, parse_config
 from vidgen.errors import Problem, VidgenError
 from vidgen.includes import ConfigSource, Origin, after_variant, attributed, attributed_error, expand_sets, project_relative, read_project_config
+from vidgen.kokoro_voices import voice_parts
 from vidgen.pronunciation import Pronunciation, Spoken, load_pronunciation
 from vidgen.translation import TranslationReport, apply_translations, read_translation_file
 from vidgen.voices import audio_fields, beat_voice_names, resolve_voice, speaker_tags
@@ -76,22 +77,28 @@ def read_config_file(path: Path) -> Any:
 #: Environment variable naming a folder that every file a config refers to must lie in (set by
 #: ``vidgen mcp`` for the commands it runs: its ``--root``; DESIGN.md §63).
 CONFINE_ENV = "VIDGEN_CONFINE_ROOT"
-#: Config keys (anywhere in the config, variants included) whose string values are files or
-#: folders of the project: scene ``path`` / ``logo``, watermark and thumbnail ``image``, music
-#: ``source``, ``pronunciation_file``, ``translations``, ``extensions``, ``output_dir``.
-PATH_KEYS = frozenset({"path", "logo", "image", "source", "pronunciation_file", "translations", "extensions", "output_dir"})
+#: Config keys (anywhere in the config, variants and sets included) whose string values are
+#: files or folders of the project: scene ``path`` / ``logo``, watermark, thumbnail, stage and
+#: layer ``image``, music ``source``, ``pronunciation_file``, ``translations``, ``extensions``,
+#: ``output_dir``, a character's ``look.svg`` and a stage prop's ``svg``.
+PATH_KEYS = frozenset({"path", "logo", "image", "source", "pronunciation_file", "translations", "extensions", "output_dir", "svg"})
+#: Config key whose value may name a file among other words: a Kokoro ``voice`` (a blend
+#: ``af_bella,own.pt``) whose parts ending in ``.pt`` are voice files Kokoro reads from the
+#: current folder (DESIGN.md §68).
+VOICE_FILE_KEY = "voice"
 
 
 def confinement_problems(data: Any, root: Path, confine: Path) -> list[str]:
-    """Config locations whose file (a :data:`PATH_KEYS` value, relative to ``root``) resolves
-    outside ``confine`` — through an absolute path, ``..`` or a link. Values that are not paths
-    (a quote's ``source`` text, a music bed's name) resolve inside and pass."""
+    """Config locations whose file (a :data:`PATH_KEYS` value, relative to ``root``, or a ``.pt``
+    part of a ``voice``, relative to ``root`` and to the current folder) resolves outside
+    ``confine`` — through an absolute path, ``..`` or a link. Values that are not paths (a
+    quote's ``source`` text, a music bed's name, a voice name) resolve inside and pass."""
     confine = confine.resolve()
     problems: list[str] = []
 
-    def check(value: str, where: str) -> None:
+    def check(value: str, where: str, base: Path = root) -> None:
         try:
-            resolved = (root / value).resolve()
+            resolved = (base / value).resolve()
         except (OSError, ValueError):
             return
         if not resolved.is_relative_to(confine):
@@ -101,7 +108,12 @@ def confinement_problems(data: Any, root: Path, confine: Path) -> list[str]:
         if isinstance(node, Mapping):
             for key, value in node.items():
                 here = f"{where}.{key}" if where else str(key)
-                if key in PATH_KEYS and isinstance(value, str):
+                if key == VOICE_FILE_KEY and isinstance(value, str):
+                    for part in voice_parts(value):
+                        if part.endswith(".pt"):
+                            check(part, here)
+                            check(part, here, Path.cwd())
+                elif key in PATH_KEYS and isinstance(value, str):
                     check(value, here)
                 elif key in PATH_KEYS and isinstance(value, list) and all(isinstance(v, str) for v in value):
                     for k, v in enumerate(value):
@@ -113,7 +125,7 @@ def confinement_problems(data: Any, root: Path, confine: Path) -> list[str]:
                 walk(value, f"{where}[{k}]")
 
     walk(data, "")
-    return problems
+    return list(dict.fromkeys(problems))
 
 
 def _confine(data: Any, root: Path, source: str) -> None:

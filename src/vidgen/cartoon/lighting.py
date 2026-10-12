@@ -38,10 +38,12 @@ DEFAULT_STRENGTH = 0.5
 LIGHT_FADE_SECONDS = 2.0
 
 #: Stars: the share of a frame's usual sparkles, their size as a share of a sparkle's, and the
-#: share of the sky (from its top) they are scattered over.
+#: share of the sky (from its top) they are scattered over, and the free band (a share of the frame
+#: height) kept between them and the highest character's head at the start.
 STAR_DENSITY = 1.0
 STAR_SIZE = 0.7
 STAR_SKY = 0.75
+STAR_HEAD_ROOM = 0.04
 
 #: Shadows: opacity in daylight on the ground, width under a character (its heights), width under
 #: a prop (its widths), height as a share of the width, and how fast one shrinks as its owner

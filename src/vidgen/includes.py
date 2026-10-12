@@ -452,9 +452,13 @@ def read_project_config(config_file: Path, confine: Path | None = None) -> Confi
 
 def read_include_file(path: Path) -> dict[str, Any]:
     """An include file read on its own, its own includes merged (``vidgen screenplay --cast``);
-    errors name the chain from ``--cast``. File paths in it stay relative to it."""
+    errors name the chain from ``--cast``. File paths in it stay relative to it. Under ``vidgen
+    mcp`` (``CONFINE_ENV`` set) its includes must lie in that folder, as a project's do."""
+    from vidgen.project import CONFINE_ENV
+
     folder = path.resolve().parent
-    reader = _Includes(folder, None)
+    confine = os.environ.get(CONFINE_ENV)
+    reader = _Includes(folder, Path(confine).resolve() if confine else None)
     reader.read([path.name], folder / "--cast", [folder / "--cast"])
     merged: dict[str, Any] = {}
     for _, body in reader.order:

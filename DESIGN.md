@@ -771,6 +771,8 @@ state becomes `(caption, (word, ...))`. Compatible: beats without the keys keep 
 and audio (pinned in `tests/test_overlap_pinned.py`).
 Step 101 (§69.35) adds `numbered_names` and `prop_default_name` (the stage's prop and layer
 names, shared with the set merge); `Problem` gains `file`.
+Step 102 (§69.36) adds `STAR_HEAD_ROOM`; `PROP_HEIGHTS` changes for `chair`, `box` and `rock`
+(lower seats), and `Character.seated` puts the hips, not the body's lowest point, on the seat.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -4508,7 +4510,8 @@ the measured loudness, §48).
 - **Config files confined under MCP**: `Project.load` checks, when `VIDGEN_CONFINE_ROOT`
   (`project.CONFINE_ENV`) is set, that every string under a `PATH_KEYS` key anywhere in the raw
   config (variants included: `path`, `logo`, `image`, `source`, `pronunciation_file`,
-  `translations`, `extensions`, `output_dir` since Step 66) resolves (links followed) inside that folder
+  `translations`, `extensions`, `output_dir` since Step 66, `svg` since Step 102; and the `.pt` parts of a
+  Kokoro `voice`, against the project folder and the current folder) resolves (links followed) inside that folder
   (`confinement_problems`); else a `VidgenError` "files outside the allowed folder". The MCP
   server sets it to its root for every command it runs. Non-path values under those keys (a
   quote's `source`, a music bed name) resolve inside the folder and pass.
@@ -5503,8 +5506,9 @@ They are placed by the same `stage_layout` as the characters and sort with them 
   `svgclean`, sanitiser warnings logged; `recolor: theme` maps colours to the theme's) and stands
   it on the bottom edge of its `viewBox`.
 - **Sizes**: `PROP_HEIGHTS` gives each prop's height relative to a character (the stage's
-  `size`): table 0.42, chair 0.5, tree 1.7, bush 0.35, house 1.6, door 1.0, lamp 1.5, sign 0.75,
-  box 0.3, ball 0.18, cloud 0.35, sun 0.4, moon 0.35, rock 0.22, plant 0.4, laptop 0.14, cup 0.09;
+  `size`): table 0.42, chair 0.26, tree 1.7, bush 0.35, house 1.6, door 1.0, lamp 1.5, sign 0.75,
+  box 0.155, ball 0.18, cloud 0.35, sun 0.4, moon 0.35, rock 0.155, plant 0.4, laptop 0.14, cup 0.09
+  (chair 0.5, box 0.3, rock 0.22 before Step 102, §69.36);
   an SVG `SVG_PROP_HEIGHT` 0.5. The stage passes `height factor × scale` as the item's `scale`.
   `PROP_LIFTS`: `cloud`, `sun`, `moon` hang 0.5 of the frame height above the ground line unless
   `lift` says otherwise.
@@ -6705,7 +6709,8 @@ The target is the character; `to` is the prop.
   and the planner too. `Character.sitting_on` / `leaning_on` record it (layout dump keys of the
   same names).
 - **Character states** (`Character`, none drawn; character units as drawn facing right):
-  `seated(state, seat)`: the body shifted until the lowest point of its drawing is on the seat;
+  `seated(state, seat)`: the body shifted until the hips (the leg parts' pivot; without legs the lowest
+  point of the body) are on the seat (since Step 102, §69.36; before, the body's lowest point);
   single legs planted at `seated_sole(hip, thigh, shin)` (the shin straight down to the ground in
   front, the knee forward; a seat higher than shin + thigh: the thigh level, the foot hanging; a
   seat too low: folded); a one-piece `legs` part turned forward until its end is on the ground
@@ -6956,7 +6961,8 @@ A `stage` has a light (`light:` param, the `light` beat action) and soft shadows
   the `sparkles` particles' seeded stream (`particle_seeds`; `STAR_DENSITY` 1.0 of their count,
   half at preview; `STAR_SIZE` 0.7 of their size; brightness from each seed's speed) and
   `StarField` builds them with the sparkle's shape (`particle_field.particle_shape("star")`) in
-  `STAR_COLOR` over the top `STAR_SKY` 0.75 of the sky above the ground band, right after the
+  `STAR_COLOR` over the top `STAR_SKY` 0.75 of the sky above the ground band (since Step 102 ending
+  `STAR_HEAD_ROOM` 0.04 of the frame height above the highest character's head at the start), right after the
   sky in the backdrop (behind the layers and the props). They do not twinkle (a moving field
   behind the set would take the whole set out of the static image); `set_level(grade.stars)`
   fades them with the light. Not graded.
@@ -7235,3 +7241,44 @@ A series keeps its characters, voices and places in files every episode includes
   characters the set already places at the same spot are not written again).
 - **Example**: `examples/cartoon_series/` (`shared/cast.yaml`, `shared/sets.yaml`, `episode_1`,
   `episode_2`), both episodes validate and lint clean at preview. Tests: `tests/test_includes.py`.
+
+### 69.36 Review of Phase I (Step 102)
+
+- **End to end**: `examples/screenplay` (`vidgen screenplay` -> project -> `validate`, `direct`,
+  `storyboard`, `lint`, `character-sheet --all`, `render --preview`), `examples/cartoon` with
+  `auto_direct: true` and both `examples/cartoon_series` episodes (`validate`, `direct`, `lint`,
+  sheets, a storyboard, a preview render), by the CLI and by the MCP tools `screenplay` (also with
+  `cast`), `validate`, `direct`, `character_sheet`, `lint`: lint clean everywhere.
+  `tests/test_phase_i_review.py` repeats the cheap part and renders one 160x90 stage using the
+  Phase I features together.
+- **Captions over an automatically directed scene**: `overlays.scene_overlays` looked the scene up
+  with `list.index(spec)`; a stage with `auto_direct` renders a copy of its `SceneConfig` with the
+  automatic actions merged (§69.23), which equals no scene of the config, so any overlay on such a
+  scene raised `ValueError`. It now looks the scene up by id.
+- **Seats**: generated characters' hips are 0.15–0.24 of their height (big heads, short legs;
+  `head_size` 1.6 to 0.6), the SVG examples' 0.19–0.23, but the built-in seats were at 0.27
+  (chair, box) and 0.2 (rock): a seated character sat higher than it stood, its feet hanging, and
+  read as standing on the prop. `PROP_HEIGHTS` now makes `chair` 0.26 (seat 0.14), `box` 0.155 and
+  `rock` 0.155 (seats 0.14), below every generated look's hips, and `Character.seated` puts the
+  hips (`_hips_y`: the pivot of the first leg part) on the seat line, the body's bottom sinking a
+  little in front of the seat, so the knees bend and the soles reach the ground. Tested for every
+  body and head size and the SVG examples. A box or rock is drawn smaller than before everywhere
+  (`examples/cartoon`'s box, the series' crate).
+- **Stars**: the night's stars stopped `STAR_SKY` of the sky above the ground, which is beside
+  the characters' heads; the stage now builds its backdrop after the layout and ends the stars
+  `STAR_HEAD_ROOM` 0.04 of the frame height above the highest character's head at the start (a
+  jump or a close-up can still bring a head among them).
+- **`vidgen mcp` confinement**: `svg` (a character's `look.svg`, a stage or set prop's `svg`)
+  joins `PATH_KEYS`; a Kokoro `voice` part ending in `.pt` (Kokoro reads it from the current
+  folder, which under `vidgen mcp` is the root) is checked against the project folder and the
+  current folder; `read_include_file` (`screenplay --cast`) confines the cast's own includes when
+  `VIDGEN_CONFINE_ROOT` is set. Files found by scanning a folder (`assets/sfx/`, `assets/icons/`,
+  `audio/`) are not checked (a link there can still point outside: Backlog).
+- **Unused voices of a shared cast**: `voices.voice_warnings(config, origins)` leaves out voices
+  written in an included file (an episode need not use the whole cast).
+- **Real narration**: a scratch copy of the screenplay project with a two-shot, a close-up, an
+  overlap, an interrupt, `[gasp]` / `[laugh]`, sitting, leaning, a crate picked up and given,
+  sunset fading to night, wind and captions; Kokoro at speed 0.75 / 0.8 (`narration_speed` warned
+  at 0.85), lint clean, rendered at 1280x720 (`/home/claude/work/phase-i-review/showcase.mp4`,
+  57.6 s). Not transcribed (the owner skipped the Whisper check).
+

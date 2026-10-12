@@ -9460,3 +9460,81 @@ How to test
 - By hand: `vidgen validate` both episodes ok; `vidgen lint` at preview on scratch copies: 0
   findings each (after moving the meadow's tree to 0.83, lengthening one line and using a tint
   instead of `night` indoors); stills checked by eye. Full suite not run.
+
+## Step 102 — Review of Phase I
+
+What was done
+- End to end (scratch copies): `vidgen screenplay examples/screenplay/humming_box.md` -> project ->
+  `validate`, `direct` (18 automatic actions), `storyboard`, `lint` (0 findings),
+  `character-sheet --all`, `render --preview` (53 s); `examples/cartoon` with `auto_direct: true`
+  (`direct`: a look and a head shake; lint 0); `examples/cartoon_series` episode 1 and 2
+  (`validate` with `included:`, `direct`, `lint` 0 each, sheets, a storyboard, a preview render).
+  Through `vidgen mcp` (stdio, the SDK's client): `screenplay` (also with `cast`), `validate`,
+  `direct`, `character_sheet`, `lint`.
+- Fixes (DESIGN §69.36):
+  - **Captions on an automatically directed stage crashed** (`ValueError: SceneConfig(...) is
+    not in list`): `overlays.scene_overlays` found the scene with `list.index(spec)`, but a stage
+    with `auto_direct` renders a copy of its spec with the automatic actions merged. Now by id.
+  - **Seats**: every built-in seat (chair / box 0.27, rock 0.2 of a character's height) was above
+    every generated character's hips (0.15–0.24), so a seated character sat higher than it stood,
+    feet hanging, and looked as if standing on the prop. `PROP_HEIGHTS`: chair 0.5 -> 0.26, box
+    0.3 -> 0.155, rock 0.22 -> 0.155 (seats at 0.14); `Character.seated` puts the hips
+    (`_hips_y`, the first leg part's pivot) on the seat line instead of the body's lowest point.
+    Boxes and rocks are drawn smaller everywhere (examples/cartoon and both episodes still lint
+    clean).
+  - **Stars beside heads**: `Stage.construct` builds the backdrop after the layout; the stars end
+    `STAR_HEAD_ROOM` (0.04 of the frame height, new, exported) above the highest character's head.
+  - **`vidgen mcp` confinement** (Step 101's gap): `svg` in `project.PATH_KEYS` (character
+    `look.svg`, stage and set prop `svg`); `.pt` parts of a Kokoro `voice` checked against the
+    project folder and the current folder (`VOICE_FILE_KEY`, `kokoro_voices.voice_parts`);
+    `includes.read_include_file` (`--cast`) confines the cast's own includes under
+    `VIDGEN_CONFINE_ROOT`. Problems are de-duplicated.
+  - **Unused shared voices**: `voices.voice_warnings(config, origins)` skips voices written in an
+    included file (an episode made with `screenplay --cast` warned about every cast voice).
+- Showcase (real narration): a scratch copy of the screenplay project with captions (speaker
+  colours), sunset light fading to night, breeze then `wind: windy`, `[gasp]` and `[laugh]`, an
+  overlap (0.3 s), an interrupt, a two-shot and a close-up, leaning on the tree, sitting on a rock,
+  a crate picked up and given. `vidgen tts` with Kokoro (3.12 venv, 2500 MB cgroup, 42 s for 11
+  beats; bm_fable / am_fenrir fetched into the scratchpad's HF cache); at the generated speed 0.85
+  `narration_speed` warned on 5 beats, so the copy uses 0.75 / 0.8 (lint 0 findings). Rendered at
+  1280x720 30 fps in one command (79 s, again 82 s after the fixes):
+  `/home/claude/work/phase-i-review/showcase.mp4` (57.6 s, 4.6 MB, −21.0 LUFS).
+- Stills checked by eye (about 30): feet on the ground while walking, seated (after the fix: hips
+  on the rock, knees bent) and leaning; the crate in Gus's hand in the close-up and in Fen's after
+  `give`; shadows under characters and props, none under the held crate; captions stack Fen's and
+  Bram's lines in their colours during the overlap and both mouths move; the interrupt cuts at the
+  next line's start; night grade leaves captions white; no stray parts. Wind is subtle (the tree
+  Bram leans on does not sway, by design). Whisper transcription: skipped (the owner's call).
+- Docs: README (cartoon feature line, MCP tool list gains `screenplay`), CONFIG.md (MCP tools and
+  folder rule, `sit_on`, `night` stars), DESIGN (§6.4 Step 102, §63 confinement, §69.8 sizes, §69.28
+  `seated`, §69.31 stars, new §69.36), EXTENDING (`seated`), guide MCP tool list (+ `AGENTS.md`).
+  Checked by grep: every Phase I action, beat / scene / top-level key, command, MCP tool, lint
+  rule and voice-sound marker is in CONFIG.md, DESIGN.md and the guide. `docs/gallery/stage.md`
+  media regenerated (`vidgen gallery --types stage`: shadows; the page text unchanged).
+- Wheel (`pip wheel . --no-build-isolation` in the 3.12 venv): all 19 Phase I modules and all 223
+  tracked `vidgen/data` files are in it (Phase I added no data files).
+- Backlog: 3 bug lines and 13 quality lines for Phase I gaps (Steps 89–102); the "arms rigid, no
+  knees" line trimmed (Step 92 did it).
+
+Files touched
+- `src/vidgen/overlays.py`, `cartoon/character.py`, `cartoon/props.py`, `cartoon/lighting.py`,
+  `scenes/stage.py`, `project.py`, `includes.py`, `voices.py`, `cli.py`, `api.py`; docs above;
+  `docs/gallery/media/stage-*`; `tasklist.md`; new `tests/test_phase_i_review.py`; updated
+  `tests/test_cartoon_seating.py` (hips on the seat line, the seated body's bottom a little below
+  it; on the stage the feet stay on the ground and the head goes down, instead of the feet hanging).
+
+Public interfaces
+- `vidgen.api` adds `STAR_HEAD_ROOM`. `PROP_HEIGHTS` values for chair / box / rock;
+  `Character.seated` semantics (hips on the seat); `project.PATH_KEYS` gains `svg`,
+  `project.VOICE_FILE_KEY`; `voices.voice_warnings(config, origins=None)`.
+
+How to test
+- `pytest -m "not render" tests/test_cartoon_*.py tests/test_overlap*.py tests/test_includes.py
+  tests/test_screenplay.py tests/test_voice_sounds.py tests/test_phase_i_review.py` (570 passed,
+  21 s; 3 seating failures before the test update, all from the seat change); `-m "not render"
+  test_cartoon_seating test_docs test_guide test_api test_gallery test_project test_review4
+  test_voices test_overlays test_captions` (215, 17 s); `-m "not render" test_mcp
+  test_json_output test_cli` (46, 28 s); render: the Phase I files above (31, 26 s; one seating
+  assertion updated), `test_phase_h_review test_mcp test_captions test_overlays` (16, 55 s),
+  `test_builtin_scenes test_gallery -k "stage or gallery"` (3, 10 s). The render test of
+  `test_phase_i_review.py` fails with the old `overlays.py`. Full suite not run (not asked).

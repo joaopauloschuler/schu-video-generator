@@ -52,8 +52,8 @@ PROP_KINDS: tuple[str, ...] = (
 )
 #: Each prop's height relative to a character's (the stage's ``size``) before its own ``scale``.
 PROP_HEIGHTS: dict[str, float] = {
-    "table": 0.42, "chair": 0.5, "tree": 1.7, "bush": 0.35, "house": 1.6, "door": 1.0, "lamp": 1.5,
-    "sign": 0.75, "box": 0.3, "ball": 0.18, "cloud": 0.35, "sun": 0.4, "moon": 0.35, "rock": 0.22,
+    "table": 0.42, "chair": 0.26, "tree": 1.7, "bush": 0.35, "house": 1.6, "door": 1.0, "lamp": 1.5,
+    "sign": 0.75, "box": 0.155, "ball": 0.18, "cloud": 0.35, "sun": 0.4, "moon": 0.35, "rock": 0.155,
     "plant": 0.4, "laptop": 0.14, "cup": 0.09,
 }
 #: Height of an SVG prop relative to a character's, before its own ``scale``.

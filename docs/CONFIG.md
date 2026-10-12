@@ -4433,7 +4433,7 @@ character is the target; `to` names the prop:
 
 | action | options | |
 |---|---|---|
-| `sit_on` | `to` (required: a prop with a seat: `chair`, `rock`, `box`, or an SVG prop with `data-seat`) | the character moves onto the seat, its body lowers until it rests on the seat line and its hips and knees bend: the feet on the ground in front, or hanging when the seat is higher than its legs are long (legs in one piece turn forward to the ground, or stick out). On a `chair` it faces the way the chair faces (its back to the chair's back); on a rock or a box it keeps its facing. 1.0 s. It must stand next to the prop (within 0.75 of its heights). One character per seat. |
+| `sit_on` | `to` (required: a prop with a seat: `chair`, `rock`, `box`, or an SVG prop with `data-seat`) | the character moves onto the seat, its body lowers until its hips are on the seat line and its hips and knees bend: the feet on the ground in front (the built-in seats are lower than any generated character's hips), or hanging when an SVG prop's seat is higher than its legs are long (legs in one piece turn forward to the ground, or stick out). On a `chair` it faces the way the chair faces (its back to the chair's back); on a rock or a box it keeps its facing. 1.0 s. It must stand next to the prop (within 0.75 of its heights). One character per seat. |
 | `lean_on` | `to` (required: a prop with lean edges: `tree`, `door`, `sign`, `lamp`, `house`, or an SVG prop with `data-lean`) | the character turns its back to the prop (on the side of it where it stands), steps against its edge (the trunk, the door's frame, the sign's board, the lamp's post, the wall) and leans back 12°, the feet forward on the ground. 0.8 s. It must stand within 1.0 of its heights of the prop. Several characters may lean on one prop. |
 | `stand_up` | none | the character stands up from where it sits or leans, over its feet: its body and legs go back to how they were before. 0.8 s. |
 
@@ -4865,7 +4865,7 @@ particles keep their colours too.
 | `day` (default) | the set as drawn |
 | `morning` | a soft peach haze, a little brighter |
 | `sunset` | warm and orange-pink, a little darker; blue skies turn warm |
-| `night` | dark blue; stars in the sky (on a colour background only, behind the layers) and faint shadows |
+| `night` | dark blue; stars in the sky (on a colour background only, behind the layers, above the characters' heads) and faint shadows |
 | `indoor` | warm lamplight, a little dimmer |
 | `{tint, strength}` | a light of your own: every colour multiplied towards `tint` (a theme token or `#hex`) by `strength` (0 = no change, 1 = fully, default `0.5`) |
 
@@ -5929,7 +5929,8 @@ The server calls itself `schu-video-generator`; configuration snippets (server k
 back as a tool error with the same text): `guide`, `init`, `plan` (`input_path`, or the outline as
 `markdown_text`), `validate`, `schema`, `list_scenes`, `list_icons`, `list_themes`, `list_sfx`,
 `list_music`, `storyboard`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
-`thumbnail`, `export`, `gallery`, `translate_template`, `character_sheet`, `direct`. Their parameters are the command's
+`thumbnail`, `export`, `gallery`, `translate_template`, `character_sheet`, `direct`, `screenplay`
+(`input_path` or `screenplay_text`, `out`, `cast`, `force`). Their parameters are the command's
 options in snake_case (`per_beat`, `fail_on`, `no_audio`...); list options take lists. Defaults
 that differ from the CLI, for agents: `render`, `thumbnail` and `export` use the preview (`preview:
 false` for the final format); `gallery` writes into `build/mcp/gallery` without GIFs; `schema`
@@ -5951,8 +5952,11 @@ for `confirm_cost: true` when the project's `stt.provider` is a paid service (`e
 **Folder.** Every path a tool takes (project, outputs, `init`'s folder, `plan`'s input) is relative
 to `--root` (default: the current folder) and must resolve inside it, `..` and symbolic links
 included; other paths are refused. The files a project's config names (a scene's `path` /
-`logo`, a watermark or thumbnail `image`, a music `source` file, `pronunciation_file`,
-`translations`, `extensions`, in every variant) must be inside the root too: a config naming
+`logo`, a watermark, thumbnail, stage or layer `image`, a music `source` file,
+`pronunciation_file`, `translations`, `extensions`, `output_dir`, a character's `look.svg`, a
+stage prop's `svg`, a Kokoro `voice` file ending in `.pt`, in every variant, set and included
+file; and the `include:` files themselves, also those of `screenplay`'s `cast`) must be inside
+the root too: a config naming
 `../other/file.png` or an absolute path elsewhere does not load in the server's commands
 (`files outside the allowed folder`; the commands it runs get `VIDGEN_CONFINE_ROOT`, which you
 can also set yourself). Files the server asks for itself (icon sheet, swatches,

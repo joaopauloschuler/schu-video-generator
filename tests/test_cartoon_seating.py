@@ -119,7 +119,9 @@ def test_seated_crouched_and_leaning_states(look: str) -> None:
     c = figure("pip") if look == "generated" else built("svg")
     rest = c.state()
     seated = c.seated(rest, 0.12)
-    assert c.part_box("body", seated)[1] == pytest.approx(0.12)   # resting on the seat line
+    hips = c._hips_y(c._world({**c._poses, **seated.parts}), seated.parts)
+    assert hips == pytest.approx(0.12)   # the hips on the seat line (Step 102; was the body's bottom)
+    assert 0.12 - 0.03 < c.part_box("body", seated)[1] < 0.12   # its bottom a little lower, in front of the seat
     if look == "generated":
         soles = c.sole_points(seated)
         assert all(y == pytest.approx(0.0, abs=GROUND) for _, y in soles.values())   # feet on the ground ahead
@@ -168,14 +170,15 @@ def test_sit_on_a_chair_and_stand_up() -> None:
     run([anim])
     seat = chair.seat_point()
     assert pip.facing == "right"   # the way the chair faces, its back behind
-    assert pip.feet()[0] == pytest.approx(seat[0]) and pip.parts["body"].get_bottom()[1] == pytest.approx(seat[1], abs=0.02)
+    sink = 0.03 * pip.character_height   # the hips on the seat line, the body's bottom a little lower (Step 102)
+    assert pip.feet()[0] == pytest.approx(seat[0]) and seat[1] - sink < pip.parts["body"].get_bottom()[1] < seat[1]
     assert pip.sitting_on == "chair" and scene.postures.of("pip") == ("sitting", "chair")
     feet = [pip.foot_point(f) for f in ("left", "right")]
     assert all(f[0] > seat[0] for f in feet)   # the feet in front
     run(use("look_at", to=0.05).apply(scene, [target("pip", pip)]))
     assert pip.facing == "right"   # a look behind does not turn it round
     run(use("pose", to="sitting").apply(scene, [target("pip", pip)]))
-    assert pip.parts["body"].get_bottom()[1] == pytest.approx(seat[1], abs=0.02)   # a pose keeps the body and legs
+    assert seat[1] - sink < pip.parts["body"].get_bottom()[1] < seat[1]   # a pose keeps the body and legs
     standing_x = float(np.mean([f[0] for f in feet]))
     run(use("stand_up").apply(scene, [target("pip", pip)]))
     assert pip.sitting_on is None and scene.postures.of("pip") is None
@@ -305,6 +308,7 @@ def test_sitting_on_a_stage(make_project, tmp_path: Path) -> None:
     assert first["pip"]["sitting_on"] == "chair" and first["kit"]["leaning_on"] == "tree"
     last = {o["name"]: o for o in ends[-1]["objects"] if o["name"]}
     assert "sitting_on" not in last["pip"] and "leaning_on" not in last["kit"]
-    assert first["pip"]["bbox"][3] < last["pip"]["bbox"][3]   # on the chair pip's short legs hang (y down in pixels)
+    assert first["pip"]["bbox"][1] > last["pip"]["bbox"][1]   # seated, pip's head is lower (y down in pixels)
+    assert first["pip"]["bbox"][3] == pytest.approx(last["pip"]["bbox"][3], abs=1.0)   # its feet on the ground (Step 102)
     assert any(f.get("mid", "").startswith("sit_on") for f in recorder.frames)
     assert scene.cast["pip"].sitting_on is None

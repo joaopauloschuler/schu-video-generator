@@ -500,7 +500,7 @@ def scene_overlays(project: Project, spec: SceneConfig, theme: Theme, plan: Vide
     out: list[Overlay] = []
     context = OverlayContext(project, theme, plan, spec.id)
     specs = list(project.config.scenes)
-    index = specs.index(spec)
+    index = [s.id for s in specs].index(spec.id)   # by id: ``spec`` may carry automatic actions (§69.23)
     for entry in entries:
         if entry.kind is None or not entry.selects(spec):
             continue

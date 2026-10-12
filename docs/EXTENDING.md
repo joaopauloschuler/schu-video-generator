@@ -225,7 +225,7 @@ need `"<prop>"` in `target_patterns` and `Prop` targets. Their pieces are export
 a held prop sits. To keep a prop in a hand, give it an updater (`prop.add_updater(lambda m:
 m.move_to(hero.hand_point("left")))`); never add it to the `Character` (its parts must not change).
 The sitting actions (`sit_on`, `lean_on`, `stand_up`; `src/vidgen/scenes/sitting.py`) build on
-`character.seated(state, seat)` (the body on a seat `seat` character units high, the legs bent
+`character.seated(state, seat)` (the hips on a seat `seat` character units high, the legs bent
 by the solver), `character.leaning(state)`, `character.lowered(state, drop, stoop=)` (a crouch,
 the feet kept) and `character.planted(state, soles)` (each leg's sole put at a point), all states
 not drawn; `BodyMove(character, keys, x=, facing=, soles=)` plays one (an `ArmMove` that also

@@ -71,7 +71,9 @@ subtitles (and, if you like, chapters, a thumbnail, GIFs and an HTML or PDF slid
   - maths and code: `equation`, `equation_derivation` (steps morphing into each other, with
     notes), `code`, `code_walkthrough` (a long file scrolling to the lines each beat explains);
   - cartoons: `stage` (the video's `characters:` on a set: a picture, a generated picture or a
-    gradient, a ground line, marks and depth).
+    gradient, a ground line, marks and depth; characters walk, sit, lean, pick up, give and throw
+    props; shots, light and wind, voice sounds like `[laugh]`, overlapping lines, and automatic
+    directing with `auto_direct`).
 
   See them all in the **[scene gallery](docs/gallery/README.md)**: every type at 16:9 and 9:16,
   with a GIF, its YAML, params and targets (`vidgen gallery` makes it, also for a project's own
@@ -239,7 +241,7 @@ draft project to refine: its `# TODO:` comments list what to check first.
 Claude Desktop, Claude Code or any MCP client calls vidgen's commands as tools — `guide`, `plan`,
 `init`, `validate`, `schema`, `list_scenes`, `list_icons`, `list_themes`, `list_sfx`,
 `list_music`, `storyboard`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
-`thumbnail`, `export`, `gallery`, `translate_template`, `character_sheet`, `direct` — and gets each command's JSON document
+`thumbnail`, `export`, `gallery`, `translate_template`, `character_sheet`, `direct`, `screenplay` — and gets each command's JSON document
 back. `storyboard`, `thumbnail`, `gallery` and `character_sheet` also return their pictures, so the agent **sees** its
 video. Install the extra: `pip install ".[mcp]"` (the official MCP Python SDK).
 

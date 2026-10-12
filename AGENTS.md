@@ -165,7 +165,8 @@ stdout, `{version, ok, warnings, ..., error?}`, exit code 0 exactly when `ok`. `
 commands are tools with the same JSON documents: `guide`, `plan`, `init`, `validate`, `schema`,
 `list_scenes`, `list_icons`, `list_themes`, `list_sfx`, `list_music`, `storyboard`, `lint`,
 `render`, `tts`, `imagegen`, `readback`, `slides`, `thumbnail`, `export`, `gallery`,
-`translate_template`, `character_sheet` (options in snake_case: `per_beat`, `fail_on`). Paths are
+`translate_template`, `character_sheet`, `direct`, `screenplay` (options in snake_case: `per_beat`,
+`fail_on`). Paths are
 relative to the server's root folder. `storyboard` returns the contact sheets as images (look at
 them; page with `image_offset`), `thumbnail`, `gallery` and `character_sheet` their pictures. `render` previews by default. `tts` and
 `imagegen` are dry runs unless you pass `dry_run: false` and `confirm_cost: true`: run the dry

@@ -528,7 +528,7 @@ memory cap, targeted tests, original characters only). Each step updates the gui
 - [x] Tests: merge rules, overrides, error locations (`tests/test_includes.py`: 24, no render)
 
 ### Step 102 — Review of Phase I
-- [ ] End to end: the screenplay example → project → validate, lint, storyboard, sheets, a preview render; examples/cartoon with `auto_direct`; real Kokoro narration on one example rendered at 720p and checked by eye; docs consistency; Phase I gaps moved to the Backlog; full suite only if the owner asks
+- [x] End to end: the screenplay example → project → validate, lint, storyboard, sheets, a preview render; examples/cartoon with `auto_direct`; real Kokoro narration on one example rendered at 720p and checked by eye; docs consistency; Phase I gaps moved to the Backlog; full suite only if the owner asks (CLI and MCP on the screenplay sample, examples/cartoon with `auto_direct: true` and both series episodes, all lint clean; `tests/test_phase_i_review.py`; fixed: captions on an `auto_direct` stage crashed, seats above the characters' hips (hips now on the seat line, lower chair / box / rock), stars beside heads, `vidgen mcp` confinement of `svg`, Kokoro `.pt` voices and a cast's includes, unused shared-cast voices warned; showcase with real Kokoro at 1280x720 checked by eye; Whisper check skipped by the owner; 16 Backlog lines; full suite not run: not asked)
 
 ---
 
@@ -547,6 +547,9 @@ Bugs / correctness
 - [ ] A shape swap resets that part's style: a dimmed or faded character's speaking mouth or blinking eyes show at full opacity (Steps 67, 78)
 - [ ] A walk's run time is planned when its batch starts: two walks of one character due on the same frame both start from its position then; `enter` on a character already on screen first jumps it to the edge (Step 79)
 - [ ] An SVG character or SVG prop outside `assets/` is not in the scene fingerprint; `use` elements pointing into a part are not followed when splitting an SVG character (Steps 69, 75)
+- [ ] `VideoPlan` and a rendered scene can disagree by a frame on a beat's start when `d + pad` lands on half a frame (the scene rounds the wait left after its animations) (Step 100)
+- [ ] `vidgen mcp`: files found by scanning a folder (`assets/sfx/`, `assets/icons/`, `audio/`) are not confined to the root; a link there can point outside (Step 102)
+- [ ] Lint `facing_away` takes the nearest character as the listener, so a speaker turned to the one it addresses farther away is reported (seen on a seated speaker in the Step 102 showcase draft) (Step 102)
 
 Quality (what an agent's video looks like)
 - [ ] `vidgen plan`: prose-derived bullet items are truncated sentences ("Every request that reaches database costs"); a closing sentence can be split between two scenes; icon search is English-only; no cues for `network` / `line_chart` / `pie` / `map` / `screenshot` / `video_clip`; nested list items dropped; an intro of 2+ sentences becomes its own `bullets` scene; TODO texts in English (Step 58)
@@ -557,7 +560,20 @@ Quality (what an agent's video looks like)
 - [ ] A storyboard / lint view of the frames around each transition and carry (Steps 47–48)
 - [ ] Cartoon lint: a speaker wholly out of view (the camera still on a flying prop, a pan not yet back) is not reported; no `depth` in the layout dump (characters at different depths overlap like same-depth ones); boxes, not pixels, decide what hides a face; keyed moves and jumps count as standing (Steps 84, 88)
 - [ ] `examples/cartoon` with real Kokoro audio: three beats still read at 3.54–3.68 words/s (`narration_speed`) at `speed: 0.8` / `0.85` (Step 88)
-- [ ] Characters: arms are rigid (no elbows), `sitting` has no knees, one `legs` part swings as a pair; a portrait stage leaves a tall empty sky (Steps 70, 73, 79)
+- [ ] Characters: a portrait stage leaves a tall empty sky (Step 73; elbows and knees came with Step 92)
+- [ ] Automatic directing: English word lists only (negations, gestures, manners); a speaker with several listeners and no answer looks at nobody; a look aims where the speaker stood when it starts; a close-up waits for its speaker's changes at the beat start; a written `zoom` with `until` is not followed; depth and props are not in the predicted stills (Steps 89–90)
+- [ ] Screenplay grammar: no verbs for props, sitting, shots or overlaps; a walk to a character aims where it stood at the beat's start; one set per scene; ElevenLabs voices not chosen; generated voices may repeat a cast's voice (Steps 91, 93–95, 100, 101)
+- [ ] Limbs: no knees in `jump`, no follow-through on forearms, no YAML `reach` / `plant`, no SVG `data-end` hand point (Step 92)
+- [ ] Props in hands: a held prop is not mirrored when its holder turns; `dim` / `highlight` on a held prop pauses its following; no `on: <prop>`; `give` turns both characters at once (Step 93)
+- [ ] Sitting: not on the ground or a table; a seat or lean edge at another depth than the character is not refused; no arms on the prop while leaning; no foley for sitting (Step 94)
+- [ ] Shots: a shot does not follow a walk; `pan` / `follow` in a shot end it; the planner takes a seated character's head top from its standing height; the near character of `over_shoulder` is not drawn larger (Step 95)
+- [ ] Reframe: x only (no zoom on the speaker in a tall frame); props and non-speaking walkers not framed; an `enter`'s side predicted from the written camera; a `follow` with `until` suspends reframing for the rest of the scene; `examples/cartoon`'s 9:16 variant needs the hill's `follow` changed to lint clean (Step 96)
+- [ ] Light: particles not graded; no stars over a picture background, no twinkling; a jump or a close-up can still bring a head among the stars; shadows do not stretch with a low sun; a lamp lights nothing; no top-level `light` (Steps 97, 102)
+- [ ] Wind: not relative to a walking character; held and SVG props, layers, pictures and SVG characters do not move; no top-level `wind` (Step 98)
+- [ ] Voice sounds: one face per beat (the first sound's); a `[gasp]`'s surprised face also plays the foley `pop`; a beat of sounds only is impossible; the face of a sound at a line's start waits for the speaker's earlier actions (a `[laugh]` while entering shows after the walk) (Steps 99, 102)
+- [ ] Overlaps: no per-beat dip / fade settings; an interrupted line's caption shows its whole text until the cut; no overlap across scenes; never tried with ElevenLabs audio (Step 100)
+- [ ] Includes: unused sets are not validated on their own; no set based on another set (Step 101)
+- [ ] Phase I narration was not transcribed (Whisper check skipped in Step 102); Kokoro still reaches the 2500 MB cap during `vidgen tts` (page cache counted) and reads above 3.5 words/s at `speed: 0.85` (Step 102)
 - [ ] Acting: a long beat makes a large speech bubble; a bubble following its speaker is not clamped to the view; `look_at` is reset by a later `pose` / `emote` (Steps 78–79)
 - [ ] Motion: no follow-through on pose changes, gestures or keyed moves; no squash on footfalls; an `enter`'s wind-up happens off stage; a facing change flips at half; no facing or rotation along a `move_along` path, no `depth` / opacity keys; a lifted character walks in the air (Steps 80–81)
 - [ ] Mid-action stills only for walks, gestures, jumps and keyed moves (not `pose`, `emote`, `turn`, `look_at` or camera moves); the character sheet shows no left-facing view, blink or gesture (Step 83)

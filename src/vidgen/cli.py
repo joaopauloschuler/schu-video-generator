@@ -375,7 +375,7 @@ def validate_warnings(project: Project) -> list[str]:
     return (
         theme_warnings(project)
         + pronunciation_warnings(project)
-        + voice_warnings(project.config)
+        + voice_warnings(project.config, project.origins)
         + tts_warnings(project)
         + transition_warnings(project)
         + carry_warnings(project.config)

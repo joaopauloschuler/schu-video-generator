@@ -510,7 +510,6 @@ class Stage(NarratedScene):
         self.layers: dict[str, Mobject] = dict(zip(p.layer_names(), layers))
         behind = [m for layer, m in zip(p.layers, layers) if layer.place != "foreground"]
         in_front = [m for layer, m in zip(p.layers, layers) if layer.place == "foreground"]
-        backdrop = self._backdrop(behind)
         placements = stage_layout(
             p.items(),
             marks=p.marks,
@@ -520,6 +519,8 @@ class Stage(NarratedScene):
             frame_height=self.frame_height,
             stage_width=self.stage_width,
         )
+        heads = [place.feet[1] + place.height for place in placements if place.kind == "character"]
+        backdrop = self._backdrop(behind, max(heads, default=None))
         members = {m.name: m for m in p.characters}
         props = dict(zip(p.prop_names(), p.props))
         # the characters and the props on the stage by name, back to front (DESIGN.md §69.6, §69.8)
@@ -779,9 +780,10 @@ class Stage(NarratedScene):
             facing=prop.facing, character_height=height / prop.height_factor(),
         )
 
-    def _backdrop(self, layers: list[Mobject]) -> list[Mobject]:
+    def _backdrop(self, layers: list[Mobject], heads: float | None = None) -> list[Mobject]:
         """The set behind the characters, back to front: the picture (cover) or the colour /
-        gradient (named ``background``), the background and middle ``layers``, then the ground
+        gradient (named ``background``), the night's stars (above ``heads``, the highest head top
+        at the start, y in Manim units), the background and middle ``layers``, then the ground
         band (``ground``). Empty when the stage shows the theme's background, no layers and no
         ground band."""
         p = self.params
@@ -799,6 +801,8 @@ class Stage(NarratedScene):
             parts.append(sky)
         if self._starry and not p.has_picture():  # in the sky, behind the layers (§69.31)
             sky_share = STAR_SKY * (1.0 - top)
+            if heads is not None:   # not beside the characters' heads
+                sky_share = min(sky_share, max(fh / 2 - heads - STAR_HEAD_ROOM * fh, 0.0) / fh)
             stars = night_stars(fw / self.frame_width * sky_share, preview=self.is_preview)
             box = (-fw / 2, fh / 2 - sky_share * fh, fw / 2, fh / 2)
             self.stars = StarField(stars, box, min(self.frame_width, self.frame_height))

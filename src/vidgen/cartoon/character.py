@@ -598,13 +598,15 @@ class Character(VGroup):
 
     def seated(self, state: CharacterState, seat: float) -> CharacterState:
         """``state`` sitting on a seat ``seat`` character units above the ground: the body lowered
-        until its lowest point is on the seat; single legs with the thighs forward and the shins
-        down to the ground (:func:`~vidgen.cartoon.seating.seated_sole`); a one-piece ``legs`` part
-        turned forward until its feet rest on the ground, or on a seat higher than the legs are
-        long held out (:data:`~vidgen.cartoon.seating.SEATED_LEGS_DEGREES`). Not drawn."""
+        until the hips (where the legs turn; without legs the body's lowest point) are on the
+        seat; single legs with the thighs forward and the shins down to the ground
+        (:func:`~vidgen.cartoon.seating.seated_sole`); a one-piece ``legs`` part turned forward
+        until its feet rest on the ground, or on a seat higher than the legs are long held out
+        (:data:`~vidgen.cartoon.seating.SEATED_LEGS_DEGREES`). Not drawn."""
         parts = dict(state.parts)
         body = parts["body"]
-        bottom = self.part_box("body", state)[1]
+        hips = self._hips_y(self._world({**self._poses, **parts}), parts)
+        bottom = self.part_box("body", state)[1] if hips is None else hips
         parts["body"] = replace(body, shift=(body.shift[0], body.shift[1] + seat - bottom))
         world = self._world({**self._poses, **parts})
         if "legs" in self._pivots:
@@ -620,6 +622,14 @@ class Character(VGroup):
                 _, thigh, shin = self.limb_rest(upper)
                 soles[foot] = seated_sole((float(hip[0]), float(hip[1])), thigh, shin)
         return self.planted(CharacterState(state.facing, parts), soles)
+
+    def _hips_y(self, world: dict[str, Any], parts: dict[str, PartPose]) -> float | None:
+        """The height of the hips (the pivot of the first leg part) in ``world``; ``None`` without legs."""
+        for part in (*FEET.values(), "legs"):
+            if part in self._pivots and part in parts:
+                parent = self._parents[part]
+                return float((world[parent] @ np.array([*(self._pivots[part] + np.asarray(parts[part].shift)), 1.0]))[1])
+        return None
 
     def leaning(self, state: CharacterState, degrees: float = LEAN_DEGREES) -> CharacterState:
         """``state`` leaning back ``degrees`` (the body turned back about its pivot, the legs with
