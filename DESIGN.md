@@ -686,6 +686,7 @@ Step 84 (§69.17) adds to `Character` the attributes `looked_at` and `passage` a
 Step 86 (§69.19) adds `PlayedAction`, `FoleyCue`, `foley_cues`, the `NarratedScene` hook
 `action_foley(action, options, animations, start, seconds)` (does nothing by default), `Walk.heights`
 and `Walk.phases` / `Jump.phases`, and compatibly the `SfxEvent` field `duck` (default `False`).
+The fixes after Step 88 (§69.22) add `ground_top` (compatible).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -4932,7 +4933,7 @@ take `CharacterName` options.
 - **API**: `set_part(part, angle=, scale=, shift=, shape=)` (values not given keep the pose),
   `swap(part, shape)`, `reset(part=None)`, `face`, `turn`, `state()` → `CharacterState(facing,
   parts)`, `set_state(state)`, `pose_of`, `shape_names`, `parent_of`, `has_part`, `draw_order`,
-  `parts` (name → live `VGroup`). All changes return the character (chainable). Animate poses by
+  `parts` (name → live `VGroup`; since §69.22 one child per shape, only the shown one has points). All changes return the character (chainable). Animate poses by
   calling `set_part` / `set_state` from an updater, or with `PoseChange` (§69.3);
   `.animate.set_part(...)` would interpolate points linearly (a chord, not an arc).
   `copy()` is a deep copy with its own poses.
@@ -5278,7 +5279,8 @@ lint, Step 84) reuse it.
   gradient: one `Rectangle` filled with the colours, `sheen_direction` DOWN, first colour at the
   top); none: nothing drawn (the theme's background). `image` with `generate`, or either with
   `background`, is an error. `ground` (0..0.6, default 0.2); `ground_color` (a band from the
-  ground line to the bottom edge, named `ground`; default `surface` without a picture, nothing
+  bottom edge up to `ground_top(ground, items)`: the ground line, or the line where the deepest
+  character or prop on the ground stands, §69.22; named `ground`; default `surface` without a picture, nothing
   with one; `false`: nothing). `marks` (identifier -> 0..1). `size` (0.45). `idle` (true). `cartoon_motion` (none: the video's; §69.13).
   `characters: list[StageCharacter]` (a string is the name): `name: CharacterName`, `at` (mark or
   x), `depth` 0..1, `scale` (0, 3], `facing` `auto | right | left`, `pose`, `expression` (none:
@@ -6106,7 +6108,8 @@ time to save:
 - **Part drawings, transformed only** (`cartoon/character.py`): each part shape's points are
   kept once per character (`shape_drawing`: the point arrays of its family members with points),
   and the live members of each part's shown shape are found again only when the shape shown
-  changes (`_live_members`, keyed by the shown child). `refresh` then only applies the matrices:
+  changes (`_live_members`, keyed by the shown child; since §69.22 each shape keeps one live
+  copy and its members are listed once). `refresh` then only applies the matrices:
   1.25 → 0.58 s in `yard`.
 - **Part drawings by look** (`look_parts(look, colors)`, `look_key`): the generator's parts for
   a look in resolved colours are drawn once per process and shared (a `Character` copies the
@@ -6154,3 +6157,47 @@ time to save:
   Not fixed (Manim's encoder options are not reachable from vidgen; changing the preview size
   would change every preview): compare renders by their frames before encoding, or at sizes that
   are multiples of 16. Backlog.
+
+### 69.22 Fixes after the Phase H review: the ground under the set, the mouth while moving
+
+Two faults the owner saw in the Step 88 review video (`examples/cartoon` at 1280x720):
+
+- **Props standing above the ground**: a thing at `depth` d stands `FAR_RISE` × d of the frame
+  height above the ground line (`feet_point`), but the `ground_color` band ended at the ground
+  line, so the house (depth 0.7) and the tree (0.5) in `yard` stood on the sky. The band now
+  reaches up to `ground_top(ground, items)` (`cartoon/stage.py`, exported): `ground + FAR_RISE ×`
+  the largest depth of the items on the ground (`lift` 0; a lifted sun or cloud hangs in the air
+  and does not count), so everything at a depth stands inside the drawn ground and the deepest
+  thing on its top edge, as a thing at depth 0 stood on the band's edge before. The depth
+  geometry itself is unchanged (feet, sizes, `grounds` for `keyframes` y 0), so characters,
+  props, walks and lint keep their places; only the band grows, and only on stages with
+  something at a depth (the gallery's `stage` sample, `kit` at 0.3, changed a little). Chosen
+  over keeping the lift inside a fixed band (which would move every depth-0 thing down) and over
+  a band always up to depth 1 (which would change every stage). Layers: `background` and
+  `middle` layers are drawn behind the band, so its taller top covers a little more of their
+  lower part (hills keep their tops; a layer meant to sit on the horizon goes at a `y` at or
+  above `ground_top`). A picture (`image`, `generate`) has no band unless `ground_color` is
+  given (then the same rule); its own floor must reach up to where its deepest things stand.
+  Test: `tests/test_cartoon_stage.py` (every placement on the ground lies between the bottom
+  edge and the band's top, for the example's yard and two more stages) and the props render test
+  (the band's top is at or above the tree at depth 0.6).
+- **A mouth left behind**: while `dot` walked and spoke, a copy of her mouth stayed where the walk
+  began. Lip sync (and blinks, expressions) changed a part's shape by replacing the part slot's
+  child with a fresh copy of the shape. Manim lists, when an animation begins, the moving
+  mobjects as the flattened families (`Scene.get_moving_mobjects` returns family members), and
+  draws that list on every frame: the replaced child stayed in the list, no longer in the
+  character, so `shift` and `refresh` no longer moved it, and it was drawn where it was when it
+  was swapped out (the camera's follow path lists the same way). The same held for every
+  animation on a speaking or blinking character (walk, enter, exit, jump, gesture, keyframes,
+  `move_along`, pose changes). Now a `Character` keeps one live copy of every shape of every
+  part for its whole life (`parts[name]` holds them in `shape_names` order); the shapes not shown
+  have no points, so Manim draws only the shown one, and a swap only moves points (the old
+  shape's are emptied, `refresh` draws the new one). The family never changes, so any list made
+  from it stays right, and a style set on the character (a fade, `dim`) is kept by every shape.
+  Cost: a few more family members per character (the hidden shapes, not drawn). Test:
+  `tests/test_cartoon_acting.py` (for a walk, an entrance, a jump, a gesture, a keyed motion and
+  a pose change of a speaking, blinking character: what Manim would draw from the list made at
+  the start holds nothing outside the character, and every mouth point lies in the head's box;
+  it failed for all six before the fix).
+- **The review video again**: `/home/claude/work/phase-h-review/cartoon_review_v2.mp4` (the same
+  scratch copy and Kokoro audio, 1280x720, 59.93 s).

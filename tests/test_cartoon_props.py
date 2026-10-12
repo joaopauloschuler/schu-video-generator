@@ -178,6 +178,7 @@ def test_stage_renders_props(make_project, tmp_path: Path) -> None:
     named = {obj["name"]: obj for obj in objects if obj["name"]}
     assert [named[n]["kind"] for n in ("tree", "sun", "table", "well", "pip")] == ["prop"] * 4 + ["character"]
     assert named["tree"]["order"] < named["table"]["order"] < named["pip"]["order"]   # back to front; a character in front of a prop
+    assert named["ground"]["bbox"][1] <= named["tree"]["bbox"][3] + 0.5   # the band reaches up to the tree at depth 0.6
 
 
 @pytest.mark.render

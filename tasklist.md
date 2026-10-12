@@ -444,6 +444,7 @@ one.
 
 ### Step 88 — Review of Phase H
 - [x] End to end with mocks: the cartoon example through validate, lint, storyboard, character sheet and a preview render; docs consistency (CONFIG.md, DESIGN.md, AGENTS.md); targeted tests for Phase H, then the full suite only if the owner asks (CLI and MCP on the example; `tests/test_phase_h_review.py`; the stage JSON Schema takes bare names again; real Kokoro narration and a 1280x720 render checked by eye; the `yard` difference traced to x264 at non-mod-16 widths; Phase H gaps moved to the Backlog; full suite not run: not asked)
+- [x] Fixes after the review (owner): props and characters at a depth stood above the ground band (the band now reaches up to the deepest thing on the ground, `ground_top`); a speaking character that moved left a copy of its mouth behind (a `Character` keeps one live copy per shape, its family never changes); review video re-rendered as `cartoon_review_v2.mp4` (DESIGN §69.22)
 
 ---
 

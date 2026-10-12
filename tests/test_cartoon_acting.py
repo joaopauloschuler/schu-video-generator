@@ -15,7 +15,7 @@ from vidgen import actions, extensions, registry
 from vidgen.cartoon.acting import CAMERA_EYES_BACK, LOOK_MAX_DEGREES, camera_look, look_pose
 from vidgen.cartoon.cast import ACTION_NEEDS, beat_voice, missing_needs, say_problem, shared_voice_warnings, speaking_characters
 from vidgen.cartoon.character import Character, CharacterState, build_character
-from vidgen.cartoon.transition import PoseChange
+from vidgen.cartoon.transition import Gesture, Jump, KeyedMotion, PoseChange, Walk
 from vidgen.cartoon.visemes import VisemeCue, VisemeTrack
 from vidgen.cli import check_project, validate_warnings
 from vidgen.config import BeatConfig, CharacterEntry, SceneConfig, parse_config
@@ -134,6 +134,54 @@ def test_lip_sync_layer_keeps_the_pose_and_an_emote_while_speaking() -> None:
     assert c.shown_shape("mouth") == "open"   # rest: the new expression's mouth
     c.stop_lip_sync()
     assert c.shown_shape("mouth") == "open"
+
+
+def _moves(c: Character) -> dict[str, Any]:
+    """One of each animation that moves a character (walk_to / enter / exit, jump, gesture,
+    keyframes and move_along, a pose change), made when asked (they read where it stands)."""
+    x0 = float(c.feet()[0])
+    return {
+        "walk": lambda: Walk(c, x0 + 3.0),
+        "enter": lambda: Walk(c, x0, start_x=x0 - 4.0),
+        "jump": lambda: Jump(c),
+        "gesture": lambda: Gesture(c, "wave"),
+        "keyed": lambda: KeyedMotion(c, lambda t: {"x": x0 + 2.0 * t, "y": 0.5 * t, "rotate": 10.0 * t}, run_time=1.0),
+        "pose": lambda: PoseChange(c, pose="pointing", run_time=1.0),
+    }
+
+
+@pytest.mark.parametrize("move", ["walk", "enter", "jump", "gesture", "keyed", "pose"])
+def test_a_speaking_character_takes_its_whole_mouth_along(move: str) -> None:
+    """Manim draws, every frame of an animation, the family members it listed when the
+    animation began (the character's family, flattened). A mouth shape swapped by lip sync while
+    the character moves must not leave the old shape in that list: no stray mouth stays behind
+    where the speaking started, and the mouth stays inside the head (the Step 88 review video)."""
+    from manim.utils.family import extract_mobject_family_members
+
+    track = VisemeTrack(tuple(VisemeCue(k * 0.1, (k + 1) * 0.1, v) for k, v in enumerate("AOMEUOAOEA" * 3)))
+    c = figure()
+    c.start_idle()   # blinks swap the eyes' shape too
+    now = [0.0]
+    c.lip_sync(track, clock=lambda: now[0])
+    animation = _moves(c)[move]()
+    listed = c.get_family()   # what Scene.get_moving_mobjects lists when the animation begins
+    animation.begin()
+    shapes = set()
+    for frame in range(1, FPS + 1):
+        now[0] += FRAME
+        animation.interpolate(frame / FPS)
+        shapes.add(c.shown_shape("mouth"))
+    assert len(shapes) > 2   # the mouth changed shape while it moved
+    drawn = extract_mobject_family_members(listed, only_those_with_points=True)
+    family = {id(m) for m in c.get_family()}
+    assert [m for m in drawn if id(m) not in family] == []   # nothing left behind
+    head = c.parts["head"]
+    low, high = head.get_corner(np.array([-1, -1, 0])), head.get_corner(np.array([1, 1, 0]))
+    mouth = c.parts["mouth"].family_members_with_points()
+    assert mouth and all(m in drawn for m in mouth)
+    for member in mouth:
+        points = member.points[:, :2]
+        assert (points >= low[:2] - 1e-6).all() and (points <= high[:2] + 1e-6).all(), move
 
 
 # ----- the actions on a character (no render) ---------------------------------------------------------

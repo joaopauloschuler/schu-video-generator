@@ -47,7 +47,7 @@ scenes:
 | `generate.format` | `'png' \| 'svg'` | `'png'` | png: a raster picture; svg: a vector picture drawn as shapes (provider openrouter with an SVG model, e.g. imagegen.svg_model: recraft/recraft-v4.1-vector; good for flat illustrations, not photos). |
 | `background` | `color \| list[color] \| None` |  | Without a picture: a colour, or a list of colours for a gradient from the top down; none: the theme's background. |
 | `ground` | `float` | `0.2` | Height of the ground line (where the characters' feet are) above the bottom edge, as a fraction of the frame height. |
-| `ground_color` | `color \| False \| None` |  | Fill below the ground line; none: surface on a colour background, nothing on a picture; false: nothing. |
+| `ground_color` | `color \| False \| None` |  | Fill below the ground line, up to where the deepest character or prop on the ground stands; none: surface on a colour background, nothing on a picture; false: nothing. |
 | `marks` | `dict[str, float]` |  | Own marks: name -> x from 0 (left edge) to 1 (right edge), besides far_left 0.1, left 0.25, centre 0.5, right 0.75, far_right 0.9. |
 | `characters` | `list[str \| StageCharacter]` |  | The characters on the stage: a name, or {name, at, depth, scale, facing, pose, expression}. |
 | `characters.name` | `str` | required | A character of the video's characters: list. |

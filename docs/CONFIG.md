@@ -3879,7 +3879,7 @@ never leaves the stage.
 | `generate` | str \| mapping | none | a generated background instead of `image` (not both): the prompt, or `{prompt, negative, style, aspect, seed, format}`, with the video's [`cartoon_style`](#generated-backgrounds-cartoon_style) added; leave room for the characters (an empty middle, the ground visible) |
 | `background` | color \| list of colors | none | without a picture: one colour, or two or more for a gradient from the top down; none: the theme's background |
 | `ground` | float 0–0.6 | `0.2` | height of the ground line above the bottom edge, as a fraction of the frame height |
-| `ground_color` | color \| `false` | none | fill below the ground line; none: `surface` on a colour background, nothing on a picture; `false`: nothing |
+| `ground_color` | color \| `false` | none | fill below the ground line, up to where the deepest character or prop on the ground (no `lift`) stands, so things at a `depth` stand on it; none: `surface` on a colour background, nothing on a picture; `false`: nothing |
 | `marks` | mapping | `{}` | own marks, name -> x from 0 to 1 (`{door: 0.85}`); a built-in name moves that mark |
 | `characters` | list | `[]` | the characters on the stage: a name, or a mapping (below); each at most once |
 | `size` | float | `0.45` | height of a character at depth 0, as a fraction of the frame's shorter side |

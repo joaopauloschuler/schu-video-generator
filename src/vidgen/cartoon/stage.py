@@ -103,6 +103,15 @@ def feet_point(x_fraction: float, depth: float, ground: float, frame_width: floa
     return (x, y)
 
 
+def ground_top(ground: float, items: Sequence[StageItem] = ()) -> float:
+    """The top of the ground area (a fraction of the frame height above the bottom edge): the
+    ground line, or higher, the line where the deepest item standing on the ground (``lift`` 0)
+    stands, so everything at a depth stands on the drawn ground, not above it (§69.6). Items
+    with a ``lift`` hang in the air and do not count."""
+    depths = [item.depth for item in items if item.lift == 0]
+    return ground + FAR_RISE * max(depths, default=0.0)
+
+
 def draw_order(depths: Sequence[float]) -> list[int]:
     """Indices of ``depths`` from the back to the front: deeper first, ties in list order."""
     return sorted(range(len(depths)), key=lambda i: (-depths[i], i))
@@ -193,6 +202,7 @@ __all__ = [
     "draw_order",
     "facing_towards_centre",
     "feet_point",
+    "ground_top",
     "known_marks",
     "layer_half_extent",
     "layer_transform",

@@ -183,7 +183,11 @@ class Character(VGroup):
     ``motion`` is its ``cartoon_motion`` setting (``lively``, ``calm``, ``none``; §69.13), read by
     the animations of :mod:`vidgen.cartoon.transition`.
 
-    ``parts`` maps each part name to its live ``VGroup`` (one child: the shape shown).
+    ``parts`` maps each part name to its live ``VGroup``: one child per shape, in
+    :meth:`shape_names` order, all kept for the character's life; the shapes not shown have no
+    points (so Manim draws only the shown one). Its family never changes, so an animation that
+    lists the character's family when it begins draws every frame what is shown, where it is
+    (a swapped-out mouth is never left behind, DESIGN.md §69.22).
     """
 
     def __init__(
@@ -227,7 +231,9 @@ class Character(VGroup):
                 scale_strokes(shape, stroke_factor, stroke_floor)
         # each shape's drawing as point arrays, so a redraw only transforms them (DESIGN.md §69.20)
         self._drawings = {n: {k: shape_drawing(v) for k, v in s.items()} for n, s in self._shapes.items()}
-        self._live: dict[str, tuple[Any, list[VMobject]]] = {}  # part -> (shown child, its members with points)
+        #: part -> shape -> the members of that shape's live copy that are drawn (have points
+        #: when shown), in the order of its drawing
+        self._members: dict[str, dict[str, list[VMobject]]] = {}
         self._pivots = {n: np.array(s.pivot, dtype=float) for n, s in specs.items()}
         self._order = sorted(
             specs,
@@ -253,7 +259,11 @@ class Character(VGroup):
         self._anchor.set_points(np.array([[0, 0, 0], [side, 0, 0], [0, side, 0], [0, side, 0]], dtype=float))
         self.parts: dict[str, VGroup] = {}
         for part_name in self._order:
-            self.parts[part_name] = VGroup(next(iter(self._shapes[part_name].values())).copy())
+            copies = {shape: drawing.copy() for shape, drawing in self._shapes[part_name].items()}
+            self._members[part_name] = {shape: copy.family_members_with_points() for shape, copy in copies.items()}
+            self.parts[part_name] = VGroup(*copies.values())
+            for shape in list(copies)[1:]:  # the rest shape shows
+                self._hide(part_name, shape)
         self.add(self._anchor, *(self.parts[n] for n in self._order))
         self.refresh()
 
@@ -599,19 +609,20 @@ class Character(VGroup):
         self._show_shape(part, before)
 
     def _live_members(self, part: str) -> list[VMobject]:
-        """The members with points of ``part``'s shown shape, found again only when the shape
-        shown changed (a swap puts in a new copy)."""
-        slot = self.parts[part]
-        child = slot.submobjects[0] if slot.submobjects else None
-        cached = self._live.get(part)
-        if cached is None or cached[0] is not child:
-            cached = (child, slot.family_members_with_points())
-            self._live[part] = cached
-        return cached[1]
+        """The drawn members of ``part``'s shown shape (its live copy, kept for the character's
+        life), in the order of the shape's drawing."""
+        return self._members[part][self._shape_name(part)]
+
+    def _hide(self, part: str, shape: str) -> None:
+        """Take the points off ``shape``'s live copy (it stays in the family, not drawn)."""
+        for member in self._members[part][shape]:
+            member.points = np.zeros((0, 3))
 
     def _show_shape(self, part: str, before: str) -> None:
+        """Hide the shape ``before`` when ``part`` now shows another; the next :meth:`refresh`
+        draws the new one (only points change: the family stays as it is, §69.22)."""
         if self._shape_name(part) != before:
-            self.parts[part].submobjects = [self._shapes[part][self._shape_name(part)].copy()]
+            self._hide(part, before)
 
     def _world(self) -> dict[str, np.ndarray]:
         """Each part's matrix in character units: its idle overlay and pose about its pivot, then

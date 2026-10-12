@@ -253,7 +253,7 @@ class Stage(NarratedScene):
         ground: float = Field(0.2, ge=0.0, le=0.6)
         """Height of the ground line (where the characters' feet are) above the bottom edge, as a fraction of the frame height."""
         ground_color: ThemeColor | Literal[False] | None = None
-        """Fill below the ground line; none: surface on a colour background, nothing on a picture; false: nothing."""
+        """Fill below the ground line, up to where the deepest character or prop on the ground stands; none: surface on a colour background, nothing on a picture; false: nothing."""
         marks: dict[Annotated[str, Field(pattern=r"^[A-Za-z0-9_]+$")], Annotated[float, Field(ge=0.0, le=1.0)]] = {}
         """Own marks: name -> x from 0 (left edge) to 1 (right edge), besides far_left 0.1, left 0.25, centre 0.5, right 0.75, far_right 0.9."""
         characters: list[StageCharacter] = []
@@ -550,8 +550,9 @@ class Stage(NarratedScene):
         ground_color = p.ground_color
         if ground_color is None and not p.has_picture():
             ground_color = DEFAULT_GROUND_COLOR
-        if ground_color and p.ground > 0:
-            band_height = p.ground * fh
+        top = ground_top(p.ground, p.items())  # up to the deepest thing standing on it (§69.6)
+        if ground_color and top > 0:
+            band_height = top * fh
             band = Rectangle(width=fw, height=band_height, stroke_width=0)
             band.set_fill(resolve_color(ground_color, self.theme), opacity=1.0)
             band.move_to([0.0, -fh / 2 + band_height / 2, 0.0])

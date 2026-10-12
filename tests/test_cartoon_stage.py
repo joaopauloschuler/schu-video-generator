@@ -20,6 +20,7 @@ from vidgen.cartoon.stage import (
     draw_order,
     facing_towards_centre,
     feet_point,
+    ground_top,
     mark_x,
     stage_layout,
 )
@@ -58,6 +59,35 @@ def test_depth_scales_and_raises() -> None:
     assert depth_scale(0) == 1.0 and depth_scale(1) == FAR_SCALE and depth_scale(0.5) == pytest.approx((1 + FAR_SCALE) / 2)
     assert feet_point(0.5, 0.0, 0.2, 16.0, 8.0) == pytest.approx((0.0, -2.4))   # 0.2 of 8 above the bottom edge (-4)
     assert feet_point(0.25, 1.0, 0.2, 16.0, 8.0) == pytest.approx((-4.0, -2.4 + FAR_RISE * 8))
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {   # examples/cartoon's yard: a house and a tree further back (they floated, Step 88's review)
+            "props": [{"prop": "house", "at": 0.17, "depth": 0.7}, {"prop": "tree", "at": 0.84, "depth": 0.5}, {"prop": "box", "at": 0.43}, "cloud"],
+            "characters": [{"name": "pip", "at": "left"}, {"name": "kit", "at": "right", "depth": 0.3}],
+        },
+        {"ground": 0.0, "characters": [{"name": "pip", "depth": 1.0}], "props": [{"prop": "rock", "depth": 0.2}]},
+        {"ground": 0.35, "characters": ["pip", {"name": "kit", "at": "far_right", "depth": 0.9}]},
+    ],
+)
+def test_everything_on_the_ground_stands_inside_the_ground_band(params: dict[str, Any]) -> None:
+    """The ground band reaches up to the deepest thing standing on it: no prop or character at
+    a depth stands above the drawn ground (props with a ``lift`` hang in the air)."""
+    p = stage_params(**params)
+    fw, fh = 16.0, 9.0
+    top = (ground_top(p.ground, p.items()) - 0.5) * fh   # the band's top edge, as the scene draws it
+    bottom = -fh / 2
+    placements = stage_layout(p.items(), marks=p.marks, ground=p.ground, size=p.size, frame_width=fw, frame_height=fh)
+    lifted = {item.name for item in p.items() if item.lift > 0}
+    standing = [place for place in placements if place.name not in lifted]
+    assert standing and any(place.depth > 0 for place in standing)
+    for place in standing:
+        assert bottom <= place.feet[1] <= top + 1e-9, place.name
+    deepest = max(standing, key=lambda place: place.depth)
+    assert deepest.feet[1] == pytest.approx(top)   # the band ends where the deepest one stands
+    assert ground_top(0.2, [StageItem("sun", "prop", 0.5, depth=1.0, lift=0.5)]) == 0.2   # hanging: not counted
 
 
 def test_draw_order_is_back_to_front_and_stable() -> None:

@@ -740,7 +740,8 @@ asks for one, say vidgen makes original characters and offer one with the same r
   goes at `centre` or further back. Keep characters at least a mark apart and the space above
   their heads free for speech bubbles.
 - **Depth**: what matters stands in front (`depth: 0`); the set goes back (`depth: 0.5`–`0.8`:
-  higher, smaller, behind). Nothing in front of a speaker's face (`hidden_speaker`).
+  higher, smaller, behind; the `ground_color` band reaches up to the deepest of them). Nothing in
+  front of a speaker's face (`hidden_speaker`).
 - **The set**: things at the edges (a `house`, a `tree`), the middle free for the action.
   Props stay inside the frame: `far_left` / `far_right` cut a wide prop (`off_frame`). A
   drawn set is a gradient `background`, a `ground_color`, `layers` (`hills`) and props; a

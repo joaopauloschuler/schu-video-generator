@@ -8247,3 +8247,41 @@ How to test
   tests/test_builtin_scenes.py` (483, 12 s); `-m render tests/test_cartoon_*.py` (16, 7 s);
   `-m render tests/test_builtin_scenes.py -k stage` (2, 2 s); `-m render
   tests/test_phase_h_review.py` (1, 16 s). The full suite was not run (not asked).
+
+## Step 88a — Fix floating stage props and a mouth left behind while speaking
+
+What was done (two faults the owner saw in `cartoon_review.mp4`; DESIGN §69.22)
+- **Floating set**: things at `depth` d stand `FAR_RISE` × d above the ground line, but the
+  `ground_color` band stopped at the ground line, so the house (0.7) and tree (0.5) in `yard`
+  stood on the sky. New `ground_top(ground, items)` (`cartoon/stage.py`, exported from
+  `vidgen.api`): the ground line raised to where the deepest item with `lift` 0 stands; the
+  stage's band goes up to it. Depth geometry, walks, keyframes and lint are unchanged; stages
+  without depth look as before. A picture still has no band unless `ground_color` is given.
+- **Mouth left behind**: lip sync (and blinks / expressions) swapped a part slot's child for a
+  fresh copy. Manim lists the flattened family when an animation begins and draws that list every
+  frame, so the swapped-out mouth stayed drawn where the walk began. A `Character` now keeps one
+  live copy of every shape of each part for life; hidden shapes have no points; a swap only
+  empties / redraws points. Covers walk, enter, exit, jump, gesture, keyframes, `move_along`,
+  pose changes and the camera follow path (all use the same family list).
+- Review video again (same scratch copy `cartoon_tts`'s audio and YAML in
+  `scratchpad/fix2/proj`, 1280x720, 68 s wall, capped): `/home/claude/work/phase-h-review/
+  cartoon_review_v2.mp4` (59.93 s). Stills: at 6 s the house and tree stand on the green; dot's
+  walk at 15.3–16.5 s shows one mouth, moving with her (before: a dark mouth stayed on the door).
+- Gallery `stage` regenerated (`kit` at depth 0.3: the band slightly higher).
+
+Files touched
+- `src/vidgen/cartoon/character.py`, `src/vidgen/cartoon/stage.py`, `src/vidgen/scenes/stage.py`,
+  `src/vidgen/api.py`, `DESIGN.md` (§6.4, §69 Character, §69.6, §69.20, new §69.22), `docs/CONFIG.md`,
+  `src/vidgen/data/guide/AGENTS.md` (+ `AGENTS.md`), `docs/gallery/stage.md` + media,
+  `tasklist.md`, tests `test_cartoon_acting.py`, `test_cartoon_stage.py`, `test_cartoon_props.py`.
+
+Public interfaces
+- Added `ground_top` (compatible). `Character.parts[name]` now holds one child per shape (only
+  the shown one has points) instead of one child.
+
+How to test
+- `-m "not render" tests/test_docs.py tests/test_guide.py tests/test_gallery.py
+  tests/test_schema.py tests/test_phase_h_review.py tests/test_cartoon_*.py` (547 passed);
+  `-m render tests/test_cartoon_*.py tests/test_phase_h_review.py` (17 passed); `-m render
+  tests/test_builtin_scenes.py -k stage` (2 passed). The new mouth test failed for all six
+  motions before the fix.
