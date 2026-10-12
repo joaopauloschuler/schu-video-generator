@@ -338,7 +338,7 @@ def holding_problems(
                     where.x[who] = place_x(o["to"]) if o.get("to") is not None else characters[who][0]
                 elif step.action == "exit":
                     where.present.discard(who)
-                elif step.action == "walk_to":
+                elif step.action in ("walk_to", "run_to"):
                     where.x[who] = place_x(o.get("to"))
                 elif step.action in ("move_along", "keyframes"):
                     where.x[who] = None

@@ -687,9 +687,10 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `react` | on a `stage`: a listener's `expression` / `pose` for this beat only | the listener, not the speaker |
 | `effect` | on a `stage`: a symbol over a character's head for this beat (`to: idea`, `question`, `exclaim`, `sweat`, `anger`, `sleep`, `hearts`, `stars`, `sparkle`, `tear`) | a feeling that should read at a glance; one per line |
 | `walk_to` | on a `stage`: a character walks to a mark or x (`to:`; `speed`) | with `follow` on a wide stage; the walk takes its distance's time |
+| `run_to` | on a `stage`: a character runs to a mark or x (`to:`; `speed`): longer strides, leaning forward, dust and speed lines | a hurry, a chase, an escape |
 | `enter` | on a `stage`: a character walks in from an edge (`side:`) to its mark (or `to:`) | it waits off stage until then |
 | `exit` | on a `stage`: a character walks out by an edge (`to: left` / `right`) | an `enter` brings it back |
-| `gesture` | on a `stage`: `to: point`, `wave`, `shrug`, `nod`, `shake_head` | on the word it goes with (`at`) |
+| `gesture` | on a `stage`: `to: point`, `wave`, `shrug`, `nod`, `shake_head`; `big: true` adds a whoosh arc | on the word it goes with (`at`) |
 | `jump` | on a `stage`: a character jumps (`height`) | joy or surprise |
 | `keyframes` | on a `stage`: move a character, prop or part (`kit.arm_left`) through `keys: [{t, x, y, rotate, scale, ease}]` (`t` seconds or `"40%"` of the beat) | motion no other action has; keep it short |
 | `move_along` | on a `stage`: move a character, prop or part along `path: [[x, y], ...]` (smooth curve; `speed`) | flying, floating |
@@ -886,7 +887,10 @@ into the set. `examples/cartoon_series/` shows it (CONFIG "Shared casts and sets
   beat. Speech bubbles only for short lines (`bubble: "Up there!"`).
 - **Motion**: anticipation, squash and stretch, overshoot and follow-through are built in;
   `cartoon_motion: calm` (top level, a stage or a character) tones them down for a quiet story.
-  For a move no action has, `keyframes` and `move_along` move a character, a prop or one part
+  Motion effects come with them: dust where a `run_to` (or a fast walk) sets off and stops and
+  where a jump lands, speed lines behind runs and thrown or blown props, stars on a high jump's
+  landing, a whoosh arc on a `gesture` with `big: true`; `motion_effects: false` (top level or a
+  stage) turns them off. For a move no action has, `keyframes` and `move_along` move a character, a prop or one part
   (`kit.arm_left`); `docs/CONFIG.md` "Keyframes and motion paths". Generated characters bend
   at the elbows and knees: `arm_left` is the upper arm, `arm_left_lower` the forearm (its angle
   is the elbow's bend), the legs are `leg_left` / `leg_right` (+ `_lower`); own poses can bend
@@ -1414,7 +1418,7 @@ scenes:
 | `duplicate beat id` | beat ids are unique in the whole video; rename one |
 | `unknown target 'x' ...; did you mean ... (targets: ...)` | pick a name from the list (labels are case-sensitive: `bar:4K`) |
 | `until 'x' is not a later beat of scene 'y'` | `until` names a later beat id of the same scene |
-| `unknown action 'x'` / `unknown option` | actions are `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `sit_on`, `lean_on`, `stand_up`, `light`, `wind`, `blow_away`, `effect` |
+| `unknown action 'x'` / `unknown option` | actions are `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `sit_on`, `lean_on`, `stand_up`, `light`, `wind`, `blow_away`, `effect` |
 | `labels has 2 entries but values has 3` | one value per label |
 | `unknown theme color 'x'` | use a token (`primary`, `highlight`...) or quoted hex `"#0B5FFF"`, or add it to `theme.colors` |
 | `invalid hex color` | `#RGB`, `#RRGGBB` or `#RRGGBBAA`, in quotes (YAML reads `#` as a comment) |

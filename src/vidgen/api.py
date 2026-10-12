@@ -160,7 +160,11 @@ from vidgen.cartoon.acting import (  # noqa: E402
     GESTURES,
     JUMP_HEIGHT,
     JUMP_SECONDS,
+    RUN_SPEED,
+    RUNNING,
     WALK_SPEED,
+    WALKING,
+    Gait,
     LookPose,
     camera_look,
     enter_path,
@@ -170,7 +174,7 @@ from vidgen.cartoon.acting import (  # noqa: E402
     offstage_x,
     walk_seconds,
 )
-from vidgen.cartoon.motion import MOTION_LEVELS, jump_motion_seconds, walk_motion_seconds  # noqa: E402
+from vidgen.cartoon.motion import MOTION_LEVELS, jump_motion_seconds, motion_strength, resolve_motion, walk_motion_seconds  # noqa: E402
 from vidgen.cartoon.spring import Spring  # noqa: E402
 from vidgen.cartoon.foley import FoleyCue, PlayedAction, foley_cues  # noqa: E402
 from vidgen.cartoon.keyframes import (  # noqa: E402
@@ -300,6 +304,16 @@ from vidgen.cartoon.effects import (  # noqa: E402
     pop_scale,
 )
 from vidgen.cartoon.effect_symbols import EffectSymbol, effect_color, head_box  # noqa: E402
+from vidgen.cartoon.motion_effects import (  # noqa: E402
+    FAST_SPEED,
+    HARD_LANDING,
+    MOTION_EFFECT_KINDS,
+    MotionEffectCue,
+    effect_scale,
+    motion_effect_cues,
+    motion_seed,
+)
+from vidgen.cartoon.motion_effect_shapes import MotionEffect  # noqa: E402
 from vidgen.scene import CharacterName  # noqa: E402
 
 
@@ -750,6 +764,20 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "head_box",
     "piece_pose",
     "pop_scale",
+    "FAST_SPEED",
+    "HARD_LANDING",
+    "MOTION_EFFECT_KINDS",
+    "MotionEffect",
+    "MotionEffectCue",
+    "effect_scale",
+    "motion_effect_cues",
+    "motion_seed",
+    "motion_strength",
+    "resolve_motion",
+    "RUN_SPEED",
+    "RUNNING",
+    "WALKING",
+    "Gait",
     "Field",
     "field_validator",
     "model_validator",

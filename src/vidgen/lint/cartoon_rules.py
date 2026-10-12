@@ -279,15 +279,15 @@ def facing_away(ctx: StillContext, settings: FacingAwayRule) -> Iterator[Issue]:
 @rule("hidden_speaker")
 def hidden_speaker(ctx: StillContext, settings: HiddenSpeakerRule) -> Iterator[Issue]:
     """A speaking character's face is hidden by something drawn in front of it (a character or
-    prop nearer the camera, a foreground layer; not an effect symbol): the viewer cannot see who
-    talks."""
+    prop nearer the camera, a foreground layer; not an effect symbol or a motion effect): the
+    viewer cannot see who talks."""
     for speaker in _figures(ctx):
         if not speaker.get("speaking") or not speaker.get("face"):
             continue
         face = tuple(float(v) for v in speaker["face"])
         fronts = [
             obj for obj in ctx.objects
-            if obj["order"] > speaker["order"] and not is_text(obj) and obj["kind"] not in ("particles", "effect")
+            if obj["order"] > speaker["order"] and not is_text(obj) and obj["kind"] not in ("particles", "effect", "motion_effect")
             and obj.get("bubble") is None and intersection(object_box(obj), face) is not None
         ]
         if not fronts:

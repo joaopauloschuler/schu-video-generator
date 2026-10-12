@@ -10057,3 +10057,106 @@ How to test
   `test_cartoon_effects test_cartoon_acting test_cartoon_directing test_cartoon_foley
   test_cartoon_lint test_cartoon_lighting` (9, 11 s), `test_introspect test_phase_i_review
   test_screenplay` (2, 12 s). The full suite was not run.
+
+## Step 108 — Motion effects
+
+What was built
+- Pure `src/vidgen/cartoon/motion_effects.py`: `motion_effect_cues(played, strength)` ->
+  `MotionEffectCue(kind, time, seconds, toward, arm)` for one animation as it played: a walk
+  (`walk_to`, `run_to`, `enter`, `exit`) with top speed >= `FAST_SPEED` 1.15 heights/s gets dust
+  back at set-off (not for `enter`), speed lines near full speed, dust forward at the stop (not
+  for `exit`); a jump gets dust at the landing and `impact` stars from `HARD_LANDING` 0.7
+  heights; a flying `PropMove` (throw, blow_away) gets speed lines from leave to arrive; a
+  `gesture` with `big: true` (point, wave; shrug both hands) gets a `whoosh`. Strength 0
+  (`cartoon_motion: none`) gives nothing. Shapes: `dust_puffs`, `speed_lines`, `impact_stars`,
+  `arc_band`, `fade`; `motion_seed` (crc32), `effect_scale` (calm 0.76).
+- `src/vidgen/cartoon/motion_effect_shapes.py`: `MotionEffect` (a `VGroup` pool redrawn by a dt
+  updater; dust / stars stay where they rose; speed lines follow a character's back or a prop's
+  motion; the whoosh follows the hand about the shoulder). Never added to a character, not lit.
+- Runner: `ActionRunner._run` calls the new hook `NarratedScene.action_motion_effects` right after
+  `action_foley`. `Stage.action_motion_effects` adds the effects (`motion_effects` stage param,
+  else top-level `motion_effects`, default true), inserts each right after its mover and its held
+  props (speed lines right before it), and a scene updater `_motion_sweep` takes finished ones off.
+  Foley and effects share `_played` (builds the `PlayedAction`).
+- `run_to` (`scenes/moving.py`, subclass of `WalkTo`): `Walk(gait=RUNNING)`; `Gait` /
+  `WALKING` / `RUNNING` / `RUN_SPEED` 6 in `cartoon/acting.py`; `walk_cycle(steps, amplitude,
+  gait)`; `Walk.step_length` (foley footfalls via `footfall_shares(..., step_length)` and
+  `PlayedAction.step_length`); body lean 12° × walk amplitude. `gesture` option `big`.
+- `run_to` added wherever `walk_to` counts as a walk: `WALKING_ACTIONS` (foley), directing's
+  `LOOK_CHANGING`, `MOVING_ACTIONS` and state replay, `holding_problems` replay, `PINNED_ACTIONS`,
+  `Stage.mid_still_actions`.
+- Layout dump kind `motion_effect` (`motion_effect`, `effect_of`); lint `describe`; `off_frame`,
+  `covered_text`, `hidden_speaker` skip it.
+
+Files touched
+- New: `src/vidgen/cartoon/motion_effects.py`, `src/vidgen/cartoon/motion_effect_shapes.py`,
+  `tests/test_cartoon_motion_effects.py`.
+- `src/vidgen/actions.py`, `scene.py`, `api.py`, `config.py`, `introspect.py`,
+  `scenes/stage.py`, `scenes/moving.py`, `cartoon/acting.py`, `cartoon/transition.py`,
+  `cartoon/foley.py`, `cartoon/directing.py`, `cartoon/holding.py`, `cartoon/seating.py`,
+  `lint/layout_rules.py`, `lint/cartoon_rules.py`, guide `src/vidgen/data/guide/AGENTS.md` + copy
+  `AGENTS.md`.
+- Docs: `docs/CONFIG.md` (top-level and stage rows, `run_to` and `big` in Moving, new "Motion
+  effects (`motion_effects`)", action lists, run times, targets, foley, layout kinds, mid stills),
+  `DESIGN.md` (§2 tree, §6.4, new §69.41), `docs/EXTENDING.md` (hook), `docs/gallery/stage.md`
+  (param row, hand-added as the docstring reads), `tasklist.md`.
+- Tests updated: `tests/test_actions.py` (action name lists), `tests/test_cartoon_sheet.py`
+  (`mid_still_actions`).
+
+Public interfaces
+- `vidgen.api` adds `MOTION_EFFECT_KINDS`, `FAST_SPEED`, `HARD_LANDING`, `MotionEffectCue`,
+  `MotionEffect`, `effect_scale`, `motion_effect_cues`, `motion_seed`, `motion_strength`,
+  `resolve_motion`, `Gait`, `WALKING`, `RUNNING`, `RUN_SPEED`. `Walk(gait=)`, `.gait`,
+  `.step_length`; `PlayedAction` fields `step_length`, `lift`, `gesture`, `big`, `flight`;
+  `footfall_shares(step_length=)`; hook `NarratedScene.action_motion_effects`; config
+  `motion_effects` (top level, stage). New action `run_to`, gesture option `big`.
+- Changed on purpose: with `cartoon_motion` lively / calm, jumps now land in dust (stars from 0.7
+  heights), fast walks / throws / blown props get speed lines. Default-speed walks are unchanged.
+
+Decisions / deviations
+- `calm` keeps the effects, drawn smaller (0.6 + 0.4 × strength), as `calm` is "the same motion
+  smaller" (§69.13); only `none` turns them off.
+- "Fast" is measured in the character's own heights per second (what the viewer sees), from the
+  walk as played, so a walk sped up by a short beat can become fast.
+- No sounds for motion effects: foley already has footsteps, boing and thud.
+- Dust and stars are drawn in front of the mover (after its held props), speed lines behind.
+  Found by `test_cartoon_holding`: inserting right after the mover broke "a held prop is right
+  after its holder".
+- The lean is part of the run's gait, so a run leans also with `cartoon_motion: none`.
+- Searched first: no speed-line / run code existed (`git grep -il "speed.line\|run_to\|whoosh
+  arc" 7faf60e -- src/vidgen`: none; dust exists only as a particle kind, whoosh as a sound);
+  reused `PlayedAction`,
+  the foley hook pattern, `thick_path`, `_circle`, `_star`, `_counterclockwise`, `smoothstep`,
+  `feet_of`, the dust particles' colour, the effect symbols' outline width and `_light_updater`'s
+  kept-updater pattern.
+
+Evidence
+- Stills by eye from a scratch preview (854x480, 15 fps): run with long strides and lean, three
+  lines behind, dust at set-off and stop; a 0.9-height jump landing in dust and stars; whoosh
+  arcs behind a big wave; lines behind a thrown ball (at first specks: fixed with
+  `PROP_LINE_UNIT`); dust and stars at first too small (enlarged). `vidgen lint` on it: only the
+  author's tree at the edge. `vidgen lint` on a scratch copy of `examples/cartoon-rain-check`:
+  0 findings.
+- Pixel identity: the same scene with `motion_effects: false` (fast `walk_to`s, a high jump, a
+  throw, gestures) rendered at preview, and at HEAD 7faf60e in a worktree without the key: the
+  two videos' 350 frames have the same `framemd5`.
+
+Known gaps / TODOs
+- No dust where a thrown prop lands; no effects for `keyframes` / `move_along`; `big` does not
+  enlarge the gesture; the screenplay's `runs to` still writes `walk_to`; dust at a stop can
+  still be on screen in the beat-end still. Not looked at in 9:16 or a night light.
+
+How to test
+- `pytest tests/test_cartoon_motion_effects.py` (11 not-render + 2 render at 160x90, ~5 s).
+- Also run (not render): `test_actions test_cartoon_sheet test_cartoon_moving test_cartoon_motion
+  test_cartoon_foley test_cartoon_effects test_cartoon_holding test_cartoon_seating
+  test_cartoon_directing test_cartoon_lint test_lint test_introspect test_api test_config` with
+  the new file (252, 8 s), `test_docs test_guide test_gallery test_schema test_actions_coverage
+  test_extensions` (206, 65 s), `test_screenplay test_phase_h_review test_phase_i_review
+  test_json_output test_cli test_mcp test_builtin_scenes test_storyboard test_cartoon_stage
+  test_cartoon_wind test_cartoon_acting test_cartoon_limbs test_cartoon_keyframes test_sfx` (376,
+  42 s); render: the cartoon files above + wind / lint / sheet (14, 12 s; holding re-run after the
+  fix), `test_introspect test_phase_h_review test_phase_i_review test_cartoon_directing
+  test_cartoon_seating test_cartoon_stage test_cartoon_lighting test_screenplay` (10, 36 s),
+  `test_builtin_scenes test_actions_coverage -k "stage or jump or walk"` (7, 4 s). The full suite
+  was not run.

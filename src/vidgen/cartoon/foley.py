@@ -2,7 +2,7 @@
 out without manim. :func:`foley_cues` turns one action *as it played* (its scene start time and
 the seconds it took, after any shortening to fit its beat; :class:`PlayedAction`) into sound
 cues of the built-in sound library (:mod:`vidgen.sfx`): footsteps on each footfall of a walk
-(``walk_to``, ``enter``, ``exit``), a whoosh as a character enters and a swoosh as it leaves, a
+(``walk_to``, ``run_to``, ``enter``, ``exit``), a whoosh as a character enters and a swoosh as it leaves, a
 boing as a jump takes off, a thud where a thrown prop lands (``throw``), a pop on a surprised
 face (``emote`` / ``react``) and a short sound as most effect symbols pop up (``effect``,
 :data:`EFFECT_SOUNDS`).
@@ -39,7 +39,7 @@ LAST_STEP_INTENSITY = 0.3
 #: A stop closer than this (in steps) after the last footfall adds no step of its own.
 LAST_STEP_MIN = 0.25
 #: The actions that walk (footsteps).
-WALKING_ACTIONS: frozenset[str] = frozenset({"walk_to", "enter", "exit"})
+WALKING_ACTIONS: frozenset[str] = frozenset({"walk_to", "run_to", "enter", "exit"})
 #: The sound of each effect symbol as it pops up (DESIGN.md §69.40): built-in sound, gain (dB)
 #: and its params; sleep, stars and a tear are silent. Idea's short ding is the chime cut short.
 EFFECT_SOUNDS: dict[str, tuple[str, float, dict[str, float]]] = {
@@ -58,7 +58,9 @@ class PlayedAction:
     """One character's action as it played: its type, the scene time it started (``start``) and
     the seconds it took (``seconds``); ``expression``: the expression an ``emote`` / ``react``
     put on; ``heights``: how far a walk went, in the character's heights; ``phases``: the wind-up
-    and settle shares of a walk or a jump (``cartoon_motion``); ``lands``: below."""
+    and settle shares of a walk or a jump (``cartoon_motion``); the others below. Foley
+    (:func:`foley_cues`) and motion effects
+    (:func:`~vidgen.cartoon.motion_effects.motion_effect_cues`) read it."""
 
     action: str
     start: float
@@ -70,6 +72,15 @@ class PlayedAction:
     """The share of its time at which a prop it moved lands on the ground (a ``throw``)."""
     effect: str | None = None
     """The symbol an ``effect`` put up (``None``: none, or its ``sound: false``)."""
+    step_length: float = STEP_LENGTH
+    """A walk's step length in the character's heights (longer for a run)."""
+    lift: float = 0.0
+    """How high a jump went, in the character's heights."""
+    gesture: str | None = None
+    """The gesture a ``gesture`` made; ``big``: it was marked ``big: true``."""
+    big: bool = False
+    flight: tuple[float, float] | None = None
+    """The shares of its time between which a prop it moved flew (a ``throw``, ``blow_away``)."""
 
 
 @dataclass(frozen=True)
@@ -97,11 +108,12 @@ def _walk_time_share(distance_share: float) -> float:
     return p / top + r / 2.0
 
 
-def footfall_shares(heights: float, phases: Phases = Phases()) -> list[tuple[float, bool]]:
-    """When a walk of ``heights`` character heights puts a foot down, as shares (0..1) of the
-    whole animation with its wind-up and settle ``phases``: ``(share, last)`` per footfall,
-    ``last`` for the step that brings the feet together at the stop."""
-    steps = heights / STEP_LENGTH
+def footfall_shares(heights: float, phases: Phases = Phases(), step_length: float = STEP_LENGTH) -> list[tuple[float, bool]]:
+    """When a walk of ``heights`` character heights (steps ``step_length`` heights long) puts a
+    foot down, as shares (0..1) of the whole animation with its wind-up and settle ``phases``:
+    ``(share, last)`` per footfall, ``last`` for the step that brings the feet together at the
+    stop."""
+    steps = heights / step_length
     if steps <= 0:
         return []
     move = 1.0 - phases.before - phases.after
@@ -120,7 +132,7 @@ def foley_cues(played: PlayedAction) -> list[FoleyCue]:
     if played.action in WALKING_ACTIONS:
         if played.action == "enter":
             cues.append(FoleyCue(start, "whoosh", WHOOSH_GAIN))
-        for k, (share, last) in enumerate(footfall_shares(played.heights, played.phases)):
+        for k, (share, last) in enumerate(footfall_shares(played.heights, played.phases, played.step_length)):
             pitch, intensity = FEET[k % 2]
             cues.append(FoleyCue(start + share * seconds, "footstep", FOOTSTEP_GAIN, {"pitch": pitch, "intensity": LAST_STEP_INTENSITY if last else intensity}))
         if played.action == "exit":

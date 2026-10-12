@@ -39,6 +39,8 @@ from vidgen.cartoon.acting import (
     JUMP_SECONDS,
     STEP_LENGTH,
     WALK_SPEED,
+    WALKING,
+    Gait,
     WalkCycle,
     gesture_moves,
     jump_lift,
@@ -209,6 +211,8 @@ class Walk(Animation):
     it stops, and it leans on past the stop and settles (§69.13). The run time defaults to
     :func:`~vidgen.cartoon.acting.walk_seconds` plus that wind-up and settle
     (:func:`~vidgen.cartoon.motion.walk_motion_seconds`); a given one changes the speed.
+    ``gait``: :data:`~vidgen.cartoon.acting.RUNNING` runs (longer strides, bigger swings, leaning
+    forward as it speeds up; ``run_to``).
 
     ``self.play(Walk(pip, 3.0))``
     """
@@ -222,10 +226,14 @@ class Walk(Animation):
         park_x: float | None = None,
         speed: float = WALK_SPEED,
         motion: str | None = None,
+        gait: Gait = WALKING,
         **kwargs,
     ) -> None:
         self.to_x, self.start_x, self.park_x = float(x), start_x, park_x
         self.strength = motion_strength(motion or character.motion)
+        self.gait = gait
+        #: The length of one step, in the character's heights.
+        self.step_length = STEP_LENGTH * gait.stride
         from_x = float(character.feet()[0]) if start_x is None else float(start_x)
         walk_time = walk_seconds(self.to_x - from_x, speed)
         self._phases = walk_phases(walk_time, self.strength)
@@ -254,7 +262,7 @@ class Walk(Animation):
         self._ground = sole if sole is not None and abs(sole) <= GROUND_TOLERANCE else None
         distance = self.to_x - float(self._from[0])
         self._facing = self._base.facing if abs(distance) < 1e-9 else ("right" if distance > 0 else "left")
-        self._step = STEP_LENGTH * figure.character_height
+        self._step = self.step_length * figure.character_height
         self._heights = abs(distance) / figure.character_height if figure.character_height > 0 else 0.0
         super().begin()
 
@@ -267,8 +275,10 @@ class Walk(Animation):
         figure = self.mobject
         move = self._phases.split(t)[1]
         walked = walk_progress(move) * (self.to_x - float(self._from[0]))
-        cycle = walk_cycle(abs(walked) / self._step if self._step > 0 else 0.0, walk_amplitude(move))
+        cycle = walk_cycle(abs(walked) / self._step if self._step > 0 else 0.0, walk_amplitude(move), self.gait)
         state = walking_state(self._base, cycle, self._facing)
+        if self.gait.lean:
+            state = accented_state(state, -self.gait.lean * walk_amplitude(move))
         if self.strength > 0:
             accent = walk_accent(t, self._phases, self.strength)
             trail = follow_through(self._ahead, t * self.run_time) * end_fade(t)

@@ -232,10 +232,12 @@ class Stage(NarratedScene):
     A beat is spoken by the characters whose voice says it (their mouths move with it), or by
     the ones its ``say`` action names; the acting actions (``say``, ``look_at``, ``turn``,
     ``emote``, ``pose``, ``react``) change the characters during the beats, and the moving ones
-    (``walk_to``, ``enter``, ``exit``, ``gesture``, ``jump``) move them; ``effect`` puts a symbol
-    over a head (an idea bulb, a sweat drop, a question mark...). A character with an
+    (``walk_to``, ``run_to``, ``enter``, ``exit``, ``gesture``, ``jump``) move them; ``effect``
+    puts a symbol over a head (an idea bulb, a sweat drop, a question mark...). A character with an
     ``enter`` action waits off stage until it enters. Walks, entrances, exits, jumps, a
-    surprised face and most symbols make their own sounds (foley; ``foley: false`` turns them off). With
+    surprised face and most symbols make their own sounds (foley; ``foley: false`` turns them off);
+    runs and jumps raise dust, fast moves leave speed lines (motion effects; ``motion_effects:
+    false`` turns them off). With
     ``auto_direct``, listeners look at whoever speaks and react after lines on their own. A
     beat's ``shot:`` frames characters for that beat (``closeup kit``, ``two_shot``,
     ``over_shoulder kit pip``...): a cut, and back at the next beat without one. On a stage wider
@@ -257,7 +259,7 @@ class Stage(NarratedScene):
     uses_cartoon_style = True
     #: Storyboard stills also show these actions half-way through (DESIGN.md §69.16).
     mid_still_actions = frozenset({
-        "walk_to", "enter", "exit", "gesture", "jump", "keyframes", "move_along", "pick_up", "put_down", "give", "throw",
+        "walk_to", "run_to", "enter", "exit", "gesture", "jump", "keyframes", "move_along", "pick_up", "put_down", "give", "throw",
         "sit_on", "lean_on", "stand_up", "blow_away",
     })
 
@@ -293,6 +295,8 @@ class Stage(NarratedScene):
         """Automatic directing in this scene: listeners look at whoever speaks and react after lines, speakers gesture on stressed words, short punchy lines get a close-up (true, false or {looks, reactions, gestures, closeups, effects}); a beat's own setting wins; default: the video's (off). Actions written in a beat always win."""
         cartoon_motion: MotionSetting | None = None
         """Animation principles for the characters in this scene (anticipation, squash and stretch, overshoot and settle, follow-through): lively, calm or none; a character's own setting wins; default: the video's (lively)."""
+        motion_effects: bool | None = None
+        """Dust where a run sets off and stops and where a jump lands, speed lines behind runs, fast walks and thrown or blown props, impact stars on a hard landing, a whoosh arc on a big gesture, while a character's cartoon_motion is not none: false for none in this scene; default: the video's motion_effects (on)."""
         width: float = Field(1.0, ge=1.0, le=4.0)
         """Width of the stage in frame widths (marks and x positions are fractions of it; while it reframes in a frame narrower than 16:9, in 16:9 frame widths); wider than 1: the camera pans across it (pan, follow)."""
         camera_at: str | Annotated[float, Field(ge=0.0, le=1.0)] = "centre"
@@ -478,24 +482,72 @@ class Stage(NarratedScene):
         project file with a sound's name plays as it is (without the cue's params)."""
         if not self._foley_on():
             return
-        expression = options.to if action == "emote" else getattr(options, "expression", None) if action == "react" else None
-        effect = options.to if action == "effect" and options.sound else None
         for anim in animations:
-            if isinstance(anim, Walk):
-                played = PlayedAction(action, start, seconds, heights=anim.heights, phases=anim.phases)
-            elif isinstance(anim, Jump):
-                played = PlayedAction(action, start, seconds, phases=anim.phases)
-            elif isinstance(anim, PropMove):
-                played = PlayedAction(action, start, seconds, lands=anim.lands_at)
-            else:
-                played = PlayedAction(action, start, seconds, expression=expression, effect=effect)
-            for cue in foley_cues(played):
+            for cue in foley_cues(_played(action, options, anim, start, seconds)):
                 params = {} if self.sounds.file(cue.sound) is not None else cue.params
                 self.sfx(cue.sound, max(cue.time, 0.0), gain=cue.gain, align=cue.align, **params)
 
     def _foley_on(self) -> bool:
         """Whether this stage plays its sounds: its ``foley``, else the video's."""
         return self.params.foley if self.params.foley is not None else self.project.config.foley
+
+    # ----- motion effects (DESIGN.md §69.41) ------------------------------------------------------
+
+    def action_motion_effects(self, action: str, options: Any, animations: Any, start: float, seconds: float) -> None:
+        """The motion effects of a character's action as it plays (:func:`motion_effect_cues`):
+        dust, speed lines and impact stars of walks, runs and jumps, speed lines behind a thrown
+        or blown prop, a whoosh arc on a ``big`` gesture; none with ``motion_effects: false``
+        (the stage's, else the video's) or for a character whose ``cartoon_motion`` is none.
+        Each is a :class:`MotionEffect` of its own, drawn right in front of its mover (speed
+        lines right behind it), not graded by the light, and taken off the scene when its cue is
+        over."""
+        on = self.params.motion_effects if self.params.motion_effects is not None else self.project.config.motion_effects
+        if not on:
+            return
+        movers = {id(m): name for name, m in [*self.cast.items(), *self.props.items()]}
+        figure = next((a.mobject for a in animations if isinstance(a.mobject, Character)), None)
+        for anim in animations:
+            mover = anim.mobject
+            strength = getattr(anim, "strength", None)
+            if strength is None:   # a prop's move: its thrower's cartoon_motion, else the scene's
+                setting = figure.motion if figure is not None else resolve_motion(self.params.cartoon_motion, self.project.config.cartoon_motion)
+                strength = motion_strength(setting)
+            name = movers.get(id(mover))
+            for cue in motion_effect_cues(_played(action, options, anim, start, seconds), strength):
+                effect = MotionEffect(
+                    cue, mover, delay=cue.time - start, seed=motion_seed(self.spec.id, name, cue.kind, round(cue.time, 3), cue.arm),
+                    scale=effect_scale(strength), star_color=self.theme.color("highlight"), effect_of=name,
+                )
+                self._add_motion_effect(effect, mover, behind=cue.kind == "speed_lines")
+
+    def _add_motion_effect(self, effect: MotionEffect, mover: Mobject, *, behind: bool) -> None:
+        """Put ``effect`` right in front of ``mover`` and the props it holds (``behind``: right
+        behind it) in the scene (on top when the mover is not in it; a held prop stays right after
+        its holder, §69.27), and start the sweep that takes it off when it is done."""
+        effect.set_z_index(mover.z_index)
+        k = next((i for i, m in enumerate(self.mobjects) if m is mover), None)
+        if k is None:
+            self.add(effect)
+        elif behind:
+            self.mobjects.insert(k, effect)
+        else:
+            held = getattr(mover, "name", None)
+            while held is not None and k + 1 < len(self.mobjects) and getattr(self.mobjects[k + 1], "held_by", None) == held:
+                k += 1
+            self.mobjects.insert(k + 1, effect)
+        self.motion_effects.append(effect)
+        if not any(f is self._motion_sweep for f in self.updaters):
+            self.add_updater(self._motion_sweep)
+
+    def _sweep_motion_effects(self, dt: float) -> None:
+        """Scene updater while motion effects are on: takes the ones whose cue is over off the
+        scene, and itself once none is left (an updater makes Manim redraw every frame)."""
+        done = [e for e in self.motion_effects if e.done]
+        if done:
+            self.remove(*done)
+            self.motion_effects = [e for e in self.motion_effects if not e.done]
+        if not self.motion_effects:
+            self.remove_updater(self._motion_sweep)
 
     # ----- rain on the ground (DESIGN.md §69.39) --------------------------------------------------
 
@@ -685,6 +737,10 @@ class Stage(NarratedScene):
         self._rain_fields: list[ParticleField] = []
         #: the puddles under the rain fields with ``puddles: true``
         self.puddles: list[Puddles] = []
+        #: the motion effects on the scene now (DESIGN.md §69.41), and the scene updater that
+        #: takes finished ones off, kept: Manim removes an updater by identity
+        self.motion_effects: list[MotionEffect] = []
+        self._motion_sweep = self._sweep_motion_effects
         #: the particle fields over the stage, in the order given (DESIGN.md §69.9)
         self.particles: list[ParticleField] = [particle_field(self, item.kind, item) for item in p.particles]
         self.add(*self.particles)
@@ -1009,6 +1065,23 @@ class Stage(NarratedScene):
             mob.set_fill(resolve_color(item.color, self.theme), opacity=1.0)
             shapes.add(mob)
         return shapes
+
+
+def _played(action: str, options: Any, anim: Animation, start: float, seconds: float) -> PlayedAction:
+    """One animation of a built-in ``action`` (its ``options``) as it plays from scene time
+    ``start`` for ``seconds``, for foley and motion effects."""
+    if isinstance(anim, Walk):
+        return PlayedAction(action, start, seconds, heights=anim.heights, phases=anim.phases, step_length=anim.step_length)
+    if isinstance(anim, Jump):
+        return PlayedAction(action, start, seconds, phases=anim.phases, lift=anim.lift)
+    if isinstance(anim, PropMove):
+        flies = anim.rise > 0 or anim.path is not None
+        return PlayedAction(action, start, seconds, lands=anim.lands_at, flight=(anim.leave, anim.arrive) if flies else None)
+    if isinstance(anim, Gesture):
+        return PlayedAction(action, start, seconds, gesture=anim.kind, big=bool(getattr(options, "big", False)))
+    expression = options.to if action == "emote" else getattr(options, "expression", None) if action == "react" else None
+    effect = options.to if action == "effect" and options.sound else None
+    return PlayedAction(action, start, seconds, expression=expression, effect=effect)
 
 
 def hill_outline(half_width: float, foot: float, low: float, hill_width: float, hill_height: float) -> list[list[float]]:

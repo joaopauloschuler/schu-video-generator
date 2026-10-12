@@ -48,7 +48,7 @@ if TYPE_CHECKING:
 #: directing in their beat.
 FRAMING_ACTIONS = frozenset({"say", "zoom", "pan", "follow", "shot", "highlight", "dim", "callout"})
 #: Written actions after which a character's look is not known (it turned, moved or took a pose).
-LOOK_CHANGING = frozenset({"turn", "walk_to", "enter", "exit", "move_along", "keyframes", "pose", "emote", "sit_on", "lean_on"})
+LOOK_CHANGING = frozenset({"turn", "walk_to", "run_to", "enter", "exit", "move_along", "keyframes", "pose", "emote", "sit_on", "lean_on"})
 #: When an automatic reaction starts, as a fraction of the line: it plays in the pause after it.
 REACTION_AT = 0.95
 #: Expressions a listener reacts with, by the line's cue (:func:`line_cue`); never the same one
@@ -93,7 +93,7 @@ CLOSEUP_SECONDS = 0.5
 #: Written actions during which no close-up is added: walks and other moves of a character, and
 #: the camera's own moves.
 MOVING_ACTIONS = frozenset({
-    "walk_to", "enter", "exit", "move_along", "keyframes", "pan", "follow", "zoom", "pick_up", "put_down", "give", "throw",
+    "walk_to", "run_to", "enter", "exit", "move_along", "keyframes", "pan", "follow", "zoom", "pick_up", "put_down", "give", "throw",
     "sit_on", "lean_on", "stand_up", "shot", "blow_away",
 })
 #: A generated figure's proportions, in its heights (measured on the generator's looks; an SVG
@@ -739,7 +739,7 @@ def _follow_written(state: _SceneState, beat: BeatInput, names: Sequence[str]) -
                 _enter(state, name, options)
         elif act.action == "exit":
             state.present -= targets
-        elif act.action == "walk_to":
+        elif act.action in ("walk_to", "run_to"):
             for name in targets:
                 _walk(state, name, state.frame.place_x(options.get("to")) if state.frame is not None else None)
         elif act.action in ("move_along", "keyframes"):

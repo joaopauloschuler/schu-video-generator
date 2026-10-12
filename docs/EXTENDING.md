@@ -679,7 +679,11 @@ wants sounds tied to the beat actions overrides `action_foley(self, action, opti
 start, seconds)`: the action runner calls it for each built-in action as it starts playing, with
 its scene start time and the seconds it plays (after any shortening); the base class does
 nothing, `stage` plays its foley through the pure `foley_cues(PlayedAction(...))` (docs/CONFIG.md
-"Foley and music stings"). `particles_started(self, field, settings)` hears of every particle
+"Foley and music stings"). Right after it the runner calls `action_motion_effects` with the same
+arguments (nothing by default): `stage` turns each animation into `motion_effect_cues(...)` and
+adds a `MotionEffect(cue, mover, delay=, seed=motion_seed(...))` per cue (dust, speed lines,
+impact stars, a whoosh; docs/CONFIG.md "Motion effects"); `Walk(..., gait=RUNNING)` runs.
+`particles_started(self, field, settings)` hears of every particle
 field `particle_field` builds for the scene (before it is added; nothing by default): `stage`
 grows `Puddles` under rain and plays the rain sound bed. A scene with a method `rain_ground()`
 returning a `RainGround` (`rain_ground(ground, top, frame_height, shelters)` with `ShelterBox`es)

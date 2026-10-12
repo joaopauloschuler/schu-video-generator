@@ -110,7 +110,10 @@ src/vidgen/
                           # stage's ground: landing band, shelter boxes, splashes, puddles,
                           # §69.39; no manim), effects.py (effect symbols: shapes, spots on
                           # the head, motion, pop, §69.40; no manim), effect_symbols.py
-                          # (EffectSymbol: drawn and following a head, §69.40); still.py also
+                          # (EffectSymbol: drawn and following a head, §69.40),
+                          # motion_effects.py (dust, speed lines, impact stars, whoosh: when
+                          # they fire and their shapes, §69.41; no manim),
+                          # motion_effect_shapes.py (MotionEffect, §69.41); still.py also
                           # draws the prop gallery and `vidgen character-sheet` (§69.16)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
@@ -813,6 +816,16 @@ Step 107 (§69.40) adds `EFFECT_KINDS`, `EFFECT_SECONDS`, `EFFECT_STYLES`, `EXPR
 Changed on purpose: `auto_direct: true` now also adds effect symbols (a stage with
 `auto_direct` and a surprised, thinking or angry face renders a symbol it did not before;
 `{effects: false}` gives the old actions).
+Step 108 (§69.41) adds `MOTION_EFFECT_KINDS`, `FAST_SPEED`, `HARD_LANDING`, `MotionEffectCue`,
+`MotionEffect`, `effect_scale`, `motion_effect_cues`, `motion_seed`, `motion_strength`,
+`resolve_motion`, `Gait`, `WALKING`, `RUNNING` and `RUN_SPEED`; `Walk(gait=)` with
+`Walk.gait` / `Walk.step_length`; `PlayedAction` gains `step_length`, `lift`, `gesture`, `big`,
+`flight`; `NarratedScene` the hook `action_motion_effects(action, options, animations, start,
+seconds)` (does nothing by default, called right after `action_foley`). New built-in action
+`run_to`, `gesture` option `big`, top-level and stage `motion_effects`; layout kind
+`motion_effect`. Changed on purpose: with `cartoon_motion` lively or calm, jumps land in dust,
+fast walks, throws and blown props get speed lines (a default-speed walk is unchanged);
+`motion_effects: false` renders the same frames as before.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -7637,3 +7650,72 @@ head (`- effect: pip` + `to: idea`, the `to:` convention of §69.11).
 - **Not done here**: symbols do not scale with a close-up beyond the head's own size; a symbol
   that cycles (tear, Zs) can be between cycles in a still; no symbol for a prop. Tests:
   `tests/test_cartoon_effects.py`.
+
+### 69.41 Motion effects and running (Step 108)
+
+Fast moves read better with the cartoon marks of speed; the motion code adds them on its own.
+
+- **When** (`cartoon/motion_effects.py`, pure): `motion_effect_cues(played, strength)` turns one
+  animation of an action *as it played* (`PlayedAction`, the record foley reads, §69.19; new
+  fields `step_length`, `lift`, `gesture`, `big`, `flight`) into `MotionEffectCue(kind, time,
+  seconds, toward, arm)`, scene times. Strength 0 (`cartoon_motion: none`) gives none. A walk
+  (`walk_to`, `run_to`, `enter`, `exit`) whose top speed (`walk_top_speed`: heights over the
+  feet's seconds × (1 − `WALK_EASE`)) is at least `FAST_SPEED` 1.15 heights/s (default walk ≈
+  0.7, run ≈ 1.7): `dust` blowing `back` where the feet set off (after the wind-up; not for an
+  `enter`, off view), `speed_lines` while the speed is at least `SPEED_SHOWN` 0.7 of the top,
+  `dust` blowing `front` where the feet stop (not for an `exit`). A `jump`: `dust` both ways at
+  the landing (the end of the flight phase), plus `impact` stars from `HARD_LANDING` 0.7 heights.
+  A prop `PropMove` that flies (`rise > 0`: a throw; `path`: blown): `speed_lines` from `leave`
+  to `arrive`. A `gesture` with `big: true` of `WHOOSH_ARMS` (point, wave: the gesture's arm;
+  shrug: both): `whoosh` while the arm moves in (the ease-in window without the anticipation and
+  settle of `motion_ease`) plus `WHOOSH_TRAIL_SECONDS` 0.15. Lasting `DUST_SECONDS` 0.55,
+  `IMPACT_SECONDS` 0.6.
+- **Shapes** (pure, seconds since the cue started + a seed, lengths in mover heights):
+  `dust_puffs` (5 round puffs, each a little later, drifting away and up, growing, fading),
+  `speed_lines` (3 lanes, flickering length, faded in and out by `fade`), `impact_stars` (4 stars
+  bursting in a 25–155° fan, popping in, spinning, shrinking), `arc_band` (a band along a circle
+  tapering from nothing to its width: the whoosh). `motion_seed(scene, mover, kind, time, arm)`
+  (crc32) makes every render alike. `effect_scale(strength)` = 0.6 + 0.4 × strength (`calm`
+  0.76).
+- **Drawing** (`cartoon/motion_effect_shapes.py`): `MotionEffect(cue, mover, delay=, seed=,
+  scale=, star_color=, effect_of=)`, a `VGroup` of a fixed pool of `VMobject`s redrawn from the
+  pure shapes by a `dt` updater (`clock`; nothing before `delay`, `done` and no points after
+  the cue). Dust and stars stay where the mover's feet were when they started (`feet_of`); speed
+  lines follow the mover: behind a character's back edge at 0.45 of its height along its facing,
+  behind a prop along its frame-to-frame motion (sized by at least `PROP_LINE_UNIT` 2 units so a
+  ball's lines are not specks); the whoosh follows the hand about the shoulder (`hand_point`,
+  `shoulder_point`), trailing back to where the hand was 0.15 s ago (angle history, so its arc is
+  round at any frame rate). Ink outline and lines (`CHARACTER_INK`, lines at 0.55 opacity), dust
+  in the `dust` particles' colour, stars in `highlight`. Never added to a character (§69.22).
+- **On a stage** (`scenes/stage.py`): the runner calls the new hook
+  `NarratedScene.action_motion_effects` right after `action_foley` with the same arguments (base:
+  nothing). `Stage` returns at once with `motion_effects: false` (the stage's param, else the
+  top-level `motion_effects`, default true); else per animation the strength is the animation's
+  (`Walk` / `Jump` / `Gesture` `.strength`), for a prop move its thrower's `cartoon_motion`, else
+  the scene's. Each `MotionEffect` goes right after its mover in `scene.mobjects` (speed lines
+  right before it), with its `z_index`; it is not marked lit, so the light never grades it
+  (§69.31). A scene updater (`_motion_sweep`, kept by identity) removes finished effects and
+  itself when none is left, so a scene after its effects keeps Manim's static frames. Foley and
+  motion effects build their `PlayedAction` with one helper (`_played`).
+- **Running** (`run_to`, `scenes/moving.py`, a `WalkTo` subclass): `Walk(gait=RUNNING)`; `Gait`
+  (`cartoon/acting.py`) scales the walk cycle: `stride` 1.6 (`Walk.step_length` = `STEP_LENGTH`
+  × stride, also for the footsteps: `footfall_shares(..., step_length)`), `swing` 1.5, `knee`
+  1.6, `elbow` 2, `bob` 2 and `lean` 12° forward × `walk_amplitude` (part of the gait, so also
+  with `cartoon_motion: none`). `RUN_SPEED` 6 units/s. `WALKING` is the plain walk, computed with
+  the same floating-point operations as before. `run_to` counts as a walk everywhere a walk does
+  (foley, directing's look and move sets, the holding replay, a pinned seat, mid-action stills).
+- **`big` gestures**: `gesture` option `big` (default false); only the whoosh reads it.
+- **Layout dump and lint**: kind `motion_effect` named after the kind, keys `motion_effect` and
+  `effect_of` (`lint_ignore`'s `object` matches it); `describe` says `motion effect 'dust' of
+  'pip'`; `off_frame`, `covered_text` and `hidden_speaker` skip it (a mark that passes in a
+  moment).
+- **Checked**: a scratch stage at preview 854×480 / 15 fps (run, high jump, big wave, fast walk,
+  throw, big point): stills by eye (the run's long strides and lean, lines behind it, dust at
+  set-off and stop, stars and dust at the landing, the whoosh behind the waving hand, lines
+  behind the ball); `vidgen lint`: only an author-caused `off_frame` of the tree. The same scene
+  with `motion_effects: false` (run_to → a fast walk_to, no `big`) gives a video whose 350 frames
+  have the same `framemd5` as one rendered by the code before this step.
+- **Not done here**: no sound of its own (foley has footsteps, boing, thud); no dust where a prop
+  lands; `big` does not enlarge the gesture itself; no effects for `keyframes` / `move_along`
+  moves; the screenplay has no "runs" verb for `run_to` (`runs to` still means `walk_to`).
+  Tests: `tests/test_cartoon_motion_effects.py`.

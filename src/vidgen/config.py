@@ -1679,6 +1679,8 @@ class VideoConfig(_Strict):
     """On stage scenes wider than the frame (a 9:16 variant crops the landscape stage): speaker moves the camera to whoever speaks, easing between speakers and holding during short replies; none: only the beats' own pan / follow / zoom / shot move it; default: speaker when the characters do not fit in one view (a stage's reframe param wins)."""
     cartoon_motion: MotionSetting | None = None
     """Animation principles for every character (anticipation, squash and stretch, overshoot and settle, follow-through): lively, calm or none; a stage's or a character's own setting wins; default lively."""
+    motion_effects: bool = True
+    """Motion effects on stage scenes, added on their own while cartoon_motion is lively or calm (smaller): dust where a run sets off and stops and where a jump lands, speed lines behind runs, fast walks and thrown or blown props, impact stars on a hard landing, a whoosh arc on a big gesture; false: none (a stage's motion_effects param wins)."""
     scenes: list[SceneConfig] = Field(min_length=1)
     """The scenes in order (at least one); scene ids and beat ids must be unique."""
 

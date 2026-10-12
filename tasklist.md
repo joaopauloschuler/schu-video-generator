@@ -572,9 +572,9 @@ changes and a wider range of original characters. Same rules as Phases H–J.
 - [x] Tests: placement per head size / facing, timing, planner rules (`tests/test_cartoon_effects.py`: 46 without rendering, 1 tiny render; stills of every symbol checked by eye on dot, moss and sprout facing both ways)
 
 ### Step 108 — Motion effects
-- [ ] Dust puffs on running starts / stops and jump landings, speed lines behind fast moves (walk faster than a threshold, throws, blown props), impact stars on a hard landing, a small "whoosh arc" on gestures with `big: true`; added by the motion code automatically (`motion_effects: true` default with `cartoon_motion: lively`), seeded
-- [ ] `run_to` as an action (a walk at running speed with a lean and longer strides)
-- [ ] Tests: when each effect fires (pure), `none` turns them off
+- [x] Dust puffs on running starts / stops and jump landings, speed lines behind fast moves (walk faster than a threshold, throws, blown props), impact stars on a hard landing, a small "whoosh arc" on gestures with `big: true`; added by the motion code automatically (`motion_effects: true` default with `cartoon_motion: lively`), seeded (pure `cartoon/motion_effects.py`: `motion_effect_cues(PlayedAction, strength)`, fast = 1.15 heights/s, hard landing = 0.7 heights; `cartoon/motion_effect_shapes.py` `MotionEffect`, never added to a character, not graded; new hook `action_motion_effects`; `calm` draws them at 0.76; top-level and stage `motion_effects`; layout kind `motion_effect`, skipped by `off_frame` / `covered_text` / `hidden_speaker`; no sound of their own; DESIGN §69.41)
+- [x] `run_to` as an action (a walk at running speed with a lean and longer strides) (`Gait` / `RUNNING`: stride 1.6, swings 1.5, lean 12°, 6 units/s; footsteps follow the strides; screenplay `runs to` still writes `walk_to`)
+- [x] Tests: when each effect fires (pure), `none` turns them off (`tests/test_cartoon_motion_effects.py`: 11 without rendering, 2 tiny renders, one checking `motion_effects: false` frame for frame against the scene without the effect code; by hand a 350-frame preview with `motion_effects: false` has the same `framemd5` as one rendered at 7faf60e; stills checked by eye)
 
 ### Step 109 — Rooms (indoor sets), part 1
 - [ ] A stage `room:` setting: back wall (colour / wallpaper pattern), floor (colour / boards / tiles), skirting line at the ground line, ceiling optional; windows (sky inside follows `light:`; curtains), doors (closed / open; `enter` / `exit` through a door mark)

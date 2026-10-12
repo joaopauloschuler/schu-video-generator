@@ -635,8 +635,9 @@ class ActionRunner:
                 continue
             if mid is not None and self.scene.capture is not None:
                 self.scene.capture.add_mid_still(self._beat, self._now(), frames, mid)
-            for d, made in self._built:  # sounds tied to the actions, timed as they play (§69.19)
+            for d, made in self._built:  # sounds and motion effects, timed as the actions play (§69.19, §69.41)
                 self.scene.action_foley(d.use.kind.name, d.use.action.options, made, self._now() / fps, frames / fps)
+                self.scene.action_motion_effects(d.use.kind.name, d.use.action.options, made, self._now() / fps, frames / fps)
             self.scene._requested = natural if factor < 1 - 1e-9 else None
             try:
                 self.scene.play(*anims, run_time=frames / fps)

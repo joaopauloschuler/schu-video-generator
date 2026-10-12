@@ -19,7 +19,9 @@ object of kind ``prop`` named after the prop (a held one also ``held_by`` and ``
 is not part of its holder's; one with shapes also ``shape``, an umbrella's ``closed`` or
 ``open``); an effect symbol over a head (``vidgen.cartoon.effect_symbols.EffectSymbol``) one
 object of kind ``effect`` named after the symbol, with ``effect`` (the symbol) and ``effect_of``
-(the character); a particle field
+(the character); a motion effect (``vidgen.cartoon.motion_effect_shapes.MotionEffect``: dust,
+speed lines, impact stars, a whoosh) one object of kind ``motion_effect`` named after its kind,
+with ``motion_effect`` (the kind) and ``effect_of`` (the character or prop); a particle field
 (``vidgen.particle_field.ParticleField``) is one object of kind ``particles`` named after its
 kind; a stage's shadows and stars (``vidgen.cartoon.shading``) and puddles are left out. A group with no
 text or image anywhere
@@ -248,6 +250,7 @@ class LayoutRecorder:
 
         from vidgen.cartoon.character import Character
         from vidgen.cartoon.effect_symbols import EffectSymbol
+        from vidgen.cartoon.motion_effect_shapes import MotionEffect
         from vidgen.cartoon.props import Prop
         from vidgen.cartoon.shading import StageShadows, StarField
         from vidgen.icon_mobject import Icon
@@ -287,6 +290,11 @@ class LayoutRecorder:
             self._emit_parts(walk, mob, path, name or mob.kind, "effect", [m for m in mob.get_family() if _drawn(m)])
             if walk.objects and walk.objects[-1]["id"] == self._id(mob):
                 walk.objects[-1].update({"effect": mob.kind, "effect_of": mob.effect_of})
+            return
+        if isinstance(mob, MotionEffect):  # dust, speed lines, stars or a whoosh (§69.41)
+            self._emit_parts(walk, mob, path, name or mob.kind, "motion_effect", [m for m in mob.get_family() if _drawn(m)])
+            if walk.objects and walk.objects[-1]["id"] == self._id(mob):
+                walk.objects[-1].update({"motion_effect": mob.kind, "effect_of": mob.effect_of})
             return
         if isinstance(mob, ParticleField):  # one field of particles, named after its kind
             self._emit_parts(walk, mob, path, name or mob.name, "particles", [m for m in mob.get_family() if _drawn(m)])

@@ -56,7 +56,7 @@ LEAN_SECONDS = 0.8
 #: The actions that sit, lean or stand up, and the whole-character moves a character that sits or
 #: leans cannot make before it stands up.
 POSTURE_ACTIONS: frozenset[str] = frozenset({"sit_on", "lean_on", "stand_up"})
-PINNED_ACTIONS: frozenset[str] = frozenset({"walk_to", "enter", "exit", "jump", "turn", "move_along", "keyframes"})
+PINNED_ACTIONS: frozenset[str] = frozenset({"walk_to", "run_to", "enter", "exit", "jump", "turn", "move_along", "keyframes"})
 
 
 class PostureError(ValueError):

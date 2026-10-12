@@ -88,6 +88,8 @@ def describe(obj: dict[str, Any]) -> str:
         return f"{obj['kind']} '{obj.get('name')}'"
     if obj["kind"] == "effect":
         return f"effect '{obj.get('effect')}' of character '{obj.get('effect_of')}'"
+    if obj["kind"] == "motion_effect":
+        return f"motion effect '{obj.get('motion_effect')}' of '{obj.get('effect_of')}'"
     return f"{obj['kind']} {obj['class']} '{obj.get('name') or obj['path']}'"
 
 
@@ -118,15 +120,15 @@ def _is_ancestor(path: str, of: str) -> bool:
 @rule("off_frame", default="error")
 def off_frame(ctx: StillContext, settings: OffFrameRule) -> Iterator[Issue]:
     """An object is cut off by the frame edge (not checked while the camera is zoomed in or
-    moved away from the frame's centre; particles cross the edges on purpose; characters are
-    ``off_stage``'s)."""
+    moved away from the frame's centre; particles and motion effects cross the edges on purpose;
+    characters are ``off_stage``'s)."""
     if ctx.camera_moved:
         return
     width, height = ctx.width, ctx.height
     tolerance = settings.tolerance * ctx.short_side
     for obj in ctx.objects:
-        if obj["kind"] == "particles":
-            continue  # particles cross the edges on purpose (rain falling out of the frame)
+        if obj["kind"] in ("particles", "motion_effect"):
+            continue  # they cross the edges on purpose (rain falling out of the frame, speed lines of an exit)
         if obj["kind"] == "character":
             continue  # off_stage's finding (it knows entrances and exits)
         x0, y0, x1, y1 = object_box(obj)
@@ -276,9 +278,9 @@ def _distance(rgb: np.ndarray, colors: list[np.ndarray]) -> np.ndarray:
 @rule("covered_text")
 def covered_text(ctx: StillContext, settings: CoveredTextRule) -> Iterator[Issue]:
     """A shape or image is drawn on top of text (an overlay's over the scene's text is
-    ``overlay_overlap``'s finding)."""
+    ``overlay_overlap``'s finding; a motion effect passes in a moment and is not reported)."""
     texts = [obj for obj in ctx.objects if is_text(obj)]
-    others = [obj for obj in ctx.objects if not is_text(obj)]
+    others = [obj for obj in ctx.objects if not is_text(obj) and obj["kind"] != "motion_effect"]
     for text in texts:
         for shape in others:
             if shape["order"] <= text["order"]:

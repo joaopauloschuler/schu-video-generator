@@ -1,5 +1,6 @@
-"""Moving beat actions (DESIGN.md §69.12): ``walk_to``, ``enter``, ``exit``, ``gesture`` and
-``jump`` on the characters of a scene. Written against ``vidgen.api`` only, like project actions.
+"""Moving beat actions (DESIGN.md §69.12): ``walk_to``, ``run_to`` (§69.41), ``enter``, ``exit``,
+``gesture`` and ``jump`` on the characters of a scene. Written against ``vidgen.api`` only, like
+project actions.
 
 The motion is worked out without manim in :mod:`vidgen.cartoon.acting` (walk times, the walk
 cycle, where an entrance starts and an exit ends, gestures, jumps) and played with the
@@ -82,18 +83,40 @@ class WalkTo(_Moving):
 
     def run_time_for(self, scene: NarratedScene, targets: list[Target]) -> float | None:
         x = _place_x(scene, self.options.to)
-        times = [_walk_time(c, x - _feet_x(c), self.options.speed) for c in _characters(scene, targets, "walk_to")]
+        times = [_walk_time(c, x - _feet_x(c), self.options.speed) for c in _characters(scene, targets, self.label)]
         return max(times, default=None)
+
+    #: Its action name (in log messages) and how it moves its feet (a run: :data:`RUNNING`).
+    label = "walk_to"
+    gait = WALKING
 
     def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
         """A :class:`Walk` to the place for each character not there yet."""
         x = _place_x(scene, self.options.to)
         anims: list[Animation] = []
-        for character in _characters(scene, targets, "walk_to"):
+        for character in _characters(scene, targets, self.label):
             if abs(x - _feet_x(character)) > 1e-6:
-                anims.append(Walk(character, x, speed=self.options.speed))
+                anims.append(Walk(character, x, speed=self.options.speed, gait=self.gait))
                 _ended_walk(scene, character)
         return anims
+
+
+@action("run_to")
+class RunTo(WalkTo):
+    """The target character runs along the ground to ``to`` (a mark of the stage, or an x from 0
+    = left to 1 = right): a walk at running ``speed`` with longer strides, bigger swings and the
+    body leaning forward. With motion effects (``cartoon_motion`` not none) dust puffs up where
+    it sets off and stops and speed lines trail it."""
+
+    class Options(ActionOptions):
+        to: Place
+        """Where it runs: a mark (left, centre, right, ... or the stage's own) or an x from 0 (left edge) to 1 (right edge) of the stage."""
+        speed: float = Field(RUN_SPEED, gt=0.0, le=20.0)
+        """Running speed in units per second (the frame's shorter side is 8 units; a stage character is about 3.6 tall)."""
+
+    run_time = 1.2
+    label = "run_to"
+    gait = RUNNING
 
 
 @action("enter")
@@ -180,11 +203,15 @@ class Exit(_Moving):
 @action("gesture")
 class GestureAction(_Moving):
     """The target character makes a gesture ``to``: point (the near arm forward), wave, shrug,
-    nod or shake_head, and comes back to its pose."""
+    nod or shake_head, and comes back to its pose. ``big: true``: a sweeping gesture; with motion
+    effects (``cartoon_motion`` not none) a small whoosh arc trails the hand of a point, wave or
+    shrug."""
 
     class Options(ActionOptions):
         to: Literal[GESTURES]  # type: ignore[valid-type]
         """The gesture: point, wave, shrug, nod or shake_head."""
+        big: bool = False
+        """true: a big, sweeping gesture: with motion effects a whoosh arc trails the hand (point, wave, shrug)."""
 
     run_time = 1.2
 

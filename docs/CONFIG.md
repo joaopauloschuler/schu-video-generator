@@ -58,6 +58,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `imagegen` | `{provider: openai, model: gpt-image-1, size: auto}` | image generation for `generate:` params and `vidgen imagegen`: `{provider (openai \| openrouter), model, size, quality, resolution, style, negative, svg_model}`; see [generated images](#generated-images-imagegen-vidgen-imagegen) |
 | `cartoon_style` | none | style words added to every `generate:` prompt of [`stage`](#generated-backgrounds-cartoon_style) scenes, so a cartoon's backgrounds look alike (`"flat colours, thick outlines, soft shadows"`); part of those pictures' cache key; a variant may change it |
 | `cartoon_motion` | `lively` | how characters move: `lively`, `calm` or `none` ([animation principles](#animation-principles-cartoon_motion)); a stage's or a character's own setting wins |
+| `motion_effects` | `true` | dust, speed lines, impact stars and whoosh arcs the moves on `stage` scenes add while `cartoon_motion` is not `none`; `false`: none; a stage's `motion_effects` param wins; see [motion effects](#motion-effects-motion_effects) |
 | `foley` | `true` | sounds for the characters' actions on `stage` scenes (footsteps, whoosh, boing, pop); `false`: none; a stage's `foley` param wins; see [foley](#foley-and-music-stings) |
 | `auto_direct` | `false` | automatic directing on `stage` scenes: listeners look at whoever speaks and react after lines, speakers gesture on stressed words, short punchy lines get a close-up; `true`, `false` or `{looks, reactions, gestures, closeups, effects}`; a stage's or a beat's `auto_direct` wins; see [automatic directing](#automatic-directing-auto_direct) |
 | `reframe` | none | on `stage` scenes wider than the frame: `speaker` moves the camera to whoever speaks (a 9:16 frame then crops the stage laid out as wide as the 16:9 one), `none` leaves the camera to the beats' own camera actions; none: `speaker` when a stage's characters do not fit in one view; a stage's `reframe` wins; see [vertical cartoons](#vertical-cartoons-reframe) |
@@ -1932,7 +1933,7 @@ Video-wide `sfx:`:
 
 **Foley.** On a [`stage`](#stage) the characters' actions make their own sounds, timed to the
 action as it plays (also when its beat speeds it up): a `footstep` on every footfall of a
-`walk_to`, `enter` or `exit` (alternating feet, a softer one when the feet come together), a
+`walk_to`, `run_to`, `enter` or `exit` (alternating feet, a softer one when the feet come together), a
 `whoosh` as a character enters and a `swoosh` as it leaves the view, a `boing` as a `jump` takes
 off, a `thud` where a [thrown](#props-in-hands) prop lands, a `pop` when `emote` or `react`
 puts on the `surprised` expression, and a short sound as most [effect
@@ -4115,6 +4116,7 @@ never leaves the stage.
 | `size` | float | `0.45` | height of a character at depth 0, as a fraction of the frame's shorter side |
 | `idle` | bool | `true` | `false`: no breathing, head sway or blinking in this scene (for every character on it) |
 | `cartoon_motion` | `lively` \| `calm` \| `none` | none (the video's) | the [animation principles](#animation-principles-cartoon_motion) of the characters in this scene; a character's own setting wins |
+| `motion_effects` | bool | none (the video's `motion_effects`: on) | dust, speed lines, impact stars and whoosh arcs in this scene ([motion effects](#motion-effects-motion_effects)); `false`: none |
 | `foley` | bool | none (the video's `foley`: on) | sounds for the characters' actions in this scene (footsteps, whoosh, boing, pop; [foley](#foley-and-music-stings)); `false`: none |
 | `auto_direct` | bool \| mapping | none (the video's `auto_direct`: off) | [automatic directing](#automatic-directing-auto_direct) in this scene: `true`, `false` or `{looks, reactions, gestures, closeups, effects}`; a beat's own `auto_direct` wins |
 | `reframe` | `speaker` \| `none` | none (the video's, else `speaker` when the characters do not fit in one view) | [vertical cartoons](#vertical-cartoons-reframe): the camera keeps whoever speaks in view on a stage wider than the frame |
@@ -4383,15 +4385,16 @@ beats:
 
 #### Moving
 
-Five more actions move the characters of a `stage`; like the acting actions they take characters
+Six more actions move the characters of a `stage`; like the acting actions they take characters
 as targets and the new state as an option:
 
 | action | options | |
 |---|---|---|
 | `walk_to` | `to` (required: a mark or an x 0–1 of the stage), `speed` (`2.5`) | walks along the ground to that place, facing the way it goes, legs, arms and body moving in step; it speeds up, walks at `speed` units per second (the frame's shorter side is 8 units; a character is about 3.6 tall at `size: 0.45`) and slows down. It takes as long as the distance needs: about 3.3 s from `left` to `right` of a 16:9 stage (7.1 units), plus the wind-up and settle of [`cartoon_motion`](#animation-principles-cartoon_motion). Stays there. |
+| `run_to` | `to` (required), `speed` (`6`) | runs there: a `walk_to` at running speed with steps 1.6 times as long, legs and arms swinging 1.5 times as far, knees and elbows bending more and the body leaning forward 12° at full speed (also with `cartoon_motion: none`). About 1.4 s from `left` to `right` of a 16:9 stage, plus the wind-up and settle. Footsteps follow the longer strides; with [motion effects](#motion-effects-motion_effects) dust puffs up where it sets off and stops and speed lines trail it. |
 | `enter` | `side` (`left` \| `right`; default: the edge nearer where it goes), `to` (a mark or x; default its own `at`), `speed` | walks in from just beyond that edge of what the camera shows. A character with an `enter` action waits off stage (beyond the stage's edge) from the start of the scene until then. |
 | `exit` | `to` (`left` \| `right`; default: the nearer edge), `speed` | walks out beyond that edge of what the camera shows, then waits off stage (an `enter` brings it back). A camera `follow`ing it stops (and stays). |
-| `gesture` | `to` (required: `point`, `wave`, `shrug`, `nod`, `shake_head`) | the gesture, then back to its pose: `point` raises the near arm forward, `wave` raises it and waves three times, `shrug` raises both arms, `nod` dips the head twice, `shake_head` moves the head (and eyes) side to side twice. 1.2 s (`point`), 1.6 (`wave`), 1.0 (`shrug`), 0.9 (`nod`), 1.1 (`shake_head`). |
+| `gesture` | `to` (required: `point`, `wave`, `shrug`, `nod`, `shake_head`), `big` (`false`) | `big: true`: a sweeping gesture, a whoosh arc trailing the hand of a `point`, `wave` or `shrug` ([motion effects](#motion-effects-motion_effects)). The gesture, then back to its pose: `point` raises the near arm forward, `wave` raises it and waves three times, `shrug` raises both arms, `nod` dips the head twice, `shake_head` moves the head (and eyes) side to side twice. 1.2 s (`point`), 1.6 (`wave`), 1.0 (`shrug`), 0.9 (`nod`), 1.1 (`shake_head`). |
 | `jump` | `height` (`0.4`: its own heights, up to 2) | jumps up and lands where it stood (0.6 s in the air; with `cartoon_motion` a crouch before and a squash after, [below](#animation-principles-cartoon_motion)). |
 
 A walk's time comes from its distance and `speed`; `run_time:` sets the time instead (and so the
@@ -4862,6 +4865,42 @@ The wind-up and settle add time: a walk 0.65 s (`lively`; 0.26 s `calm`), a jump
 (0.19 s). Pose changes and gestures keep their time. As for any action, a beat with less time
 left shortens them.
 
+#### Motion effects (`motion_effects`)
+
+With `cartoon_motion` on (`lively`; `calm` draws them at 0.76 of the size), the moves add small
+drawings of their own, with nothing to write:
+
+| effect | when |
+|---|---|
+| dust | puffs blow back where a fast walk or a `run_to` sets off and forward where it stops (not where an `enter` starts or an `exit` ends: off view), and both ways where a `jump` lands |
+| speed lines | three ink lines behind a fast walk or a run while it is near full speed (fast: 1.15 of its own heights per second or more; a default `walk_to` goes about 0.7, a `run_to` about 1.7), and behind a prop a `throw` or `blow_away` sends flying |
+| impact stars | a burst of small stars from the feet when a `jump` of `height: 0.7` or more lands |
+| whoosh | two thin arcs trailing the hand while the arm of a `gesture` with `big: true` sweeps up (`point`, `wave`; `shrug` both hands) |
+
+Each is a drawing of its own beside its character or prop (never part of it), not graded by the
+stage's `light`, the same in every render (seeded by the scene, the mover and the time), and gone
+when it ends (0.55 s for dust, 0.6 s for stars). `motion_effects: false` turns them off for the
+whole video (top level) or one `stage` scene (param; the scene's wins); `cartoon_motion: none`
+turns them off for that character. With them off a video renders exactly as without them. They
+make no sound (foley does that). In the layout dump each is an object of kind `motion_effect`
+(name and `motion_effect`: `dust`, `speed_lines`, `impact`, `whoosh`; `effect_of`: the
+character or prop); `off_frame`, `covered_text` and `hidden_speaker` skip them (they pass in a
+moment), and `lint_ignore`'s `object` matches `effect_of`.
+
+```yaml
+motion_effects: false           # the whole video: no dust or lines
+scenes:
+  - id: race
+    type: stage
+    params:
+      motion_effects: true      # but this scene has them
+    beats:
+      - text: "Pip dashes off."
+        actions:
+          - {run_to: pip, to: far_right}
+          - {gesture: kit, to: wave, big: true, at: 0.5}
+```
+
 #### Keyframes and motion paths
 
 For motion the other actions do not have, two actions move a character, a [prop](#props) or one
@@ -5208,11 +5247,11 @@ the one key that names an action).
 
 | key | default | |
 |---|---|---|
-| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `sit_on`, `lean_on`, `stand_up`, `light`, `wind`, `blow_away`, `effect`, or a project action (`vidgen list-scenes` lists them) |
+| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `sit_on`, `lean_on`, `stand_up`, `light`, `wind`, `blow_away`, `effect`, or a project action (`vidgen list-scenes` lists them) |
 | `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one (`callout` with an `area` and `pan` with `to` need none) |
 | `at` | `0` | when, as a fraction of the beat's narration (`0` ≤ at < `1`) |
 | `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`, `callout`, `say`, `react`, `look_at`, `turn`, `emote`, `pose`: undone when it starts; `zoom`: the camera is back when it starts; `pan`: the camera moves back when it starts; `follow`: the camera stops following when it starts; `keyframes`, `move_along`: the target moves back) |
-| `run_time` | the action's | seconds the animation takes (`reveal` / `callout` / `pose` 0.8, `dim` / `highlight` / `react` 0.6, `zoom` / `transform` / `follow` 1.0, `pan` 1.5, `look_at` / `emote` 0.5, `say` (the bubble) / `turn` / `effect` (the pop) 0.4, `jump` 0.6, `gesture` per gesture (1.2 for `point`), `walk_to` / `enter` / `exit` as long as the distance needs at their `speed`, `keyframes` until its last key, `move_along` 2.0 or its path's length at its `speed`, `pick_up` / `give` 1.2, `put_down` / `sit_on` 1.0, `lean_on` / `stand_up` 0.8, `hold` 0.4, `open` / `close` 0.6, `throw` 0.95–2.1 by the distance, `light` / `wind` 2.0 (the fade), `blow_away` by the distance and the wind (0.6–6); a zoom takes as long again to come back) |
+| `run_time` | the action's | seconds the animation takes (`reveal` / `callout` / `pose` 0.8, `dim` / `highlight` / `react` 0.6, `zoom` / `transform` / `follow` 1.0, `pan` 1.5, `look_at` / `emote` 0.5, `say` (the bubble) / `turn` / `effect` (the pop) 0.4, `jump` 0.6, `gesture` per gesture (1.2 for `point`), `walk_to` / `run_to` / `enter` / `exit` as long as the distance needs at their `speed`, `keyframes` until its last key, `move_along` 2.0 or its path's length at its `speed`, `pick_up` / `give` 1.2, `put_down` / `sit_on` 1.0, `lean_on` / `stand_up` 0.8, `hold` 0.4, `open` / `close` 0.6, `throw` 0.95–2.1 by the distance, `light` / `wind` 2.0 (the fade), `blow_away` by the distance and the wind (0.6–6); a zoom takes as long again to come back) |
 
 **Targets** depend on the scene type (`vidgen list-scenes` prints them as `targets:`). Every
 built-in type has some; `<N>` counts from 1 (`item1`, `item2`...), `<text>`/`<label>`/`<name>`
@@ -5251,7 +5290,7 @@ a title card, a `transform` of a bar).
 | `diagram` | `heading`, `node<N>`, `node:<id>`, `edge:<from>-><to>` | reveal, dim, highlight, zoom | also for `flowchart`; a node is its shape, icon and label (a `box` frames the shape), an edge its line, arrowhead and label; `highlight: [node:a, "edge:a->b", node:b]` marks a path; revealing an edge brings its nodes |
 | `process` | `heading`, `input`, `stage<N>`, `stage:<label>`, `connector<N>`, `loop`, `output`, `token` | reveal, dim, highlight, zoom | a stage is its card (a `box` frames it); `connector2` runs from stage 2 to 3; revealing a stage early shows it without moving the token; `highlight: token` with `style: flash` points at it |
 | `network` | `heading`, `layer<N>`, `layer:<label>`, `edges<N>`, `neuron<L>.<i>` | reveal, dim, highlight, zoom | a layer is its units, ellipsis, label and count; `edges1` joins layers 1 and 2; `neuron2.3` is unit 3 of layer 2 as drawn |
-| `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, effect, walk_to, enter, exit, gesture, jump, keyframes, move_along, pick_up, hold, put_down, give, throw, open, close, blow_away, sit_on, lean_on, stand_up, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting), [moving](#moving), [prop](#props-in-hands) and [sitting](#sitting-and-leaning) actions take whole characters only, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts, [`open` / `close`](#umbrellas-open-and-close) props |
+| `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, effect, walk_to, run_to, enter, exit, gesture, jump, keyframes, move_along, pick_up, hold, put_down, give, throw, open, close, blow_away, sit_on, lean_on, stand_up, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting), [moving](#moving), [prop](#props-in-hands) and [sitting](#sitting-and-leaning) actions take whole characters only, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts, [`open` / `close`](#umbrellas-open-and-close) props |
 
 `title` and `heading` stand for each other (the header band, see "Built-in scenes"): `highlight:
 title` works on a `bullets` heading. [Project scene types](EXTENDING.md#8-per-beat-actions-targets-and-custom-actions)
@@ -5276,7 +5315,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `particles` | `kind` (or as the target: `- particles: snow`), `density` (`1`), `area`, `color`, `seed` (`1`), `keep` (`false`), `puddles` (`false`, rain on a stage) | [particles](#particles) — `rain`, `snow`, `sparkles`, `dust`, `confetti`, `smoke` or `bubbles` — over the scene from `at`, in front of everything; works on every scene type; on a stage, rain ends on the ground and plays a rain sound bed while it lasts ([Rain on the ground](#rain-on-the-ground)). They fade in, and fade out (still moving; `run_time`, `0.6` s) when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: at the end of the scene). Its "target" is the kind, not a target of the scene. |
 | `say`, `look_at`, `turn`, `emote`, `pose`, `react` | see [Speaking and acting](#speaking-and-acting) | the acting actions on a `stage`'s characters: speak (lip sync and a speech bubble), look at something, turn round, change expression or pose, react to another speaker for one beat |
 | `effect` | `to` (required: `sweat`, `anger`, `idea`, `question`, `exclaim`, `sleep`, `hearts`, `stars`, `sparkle`, `tear`), `color`, `sound` (`true`) | on a `stage`'s characters: a symbol over the head that pops in, follows the character and shrinks away when the next beat starts (`until: <beat>`: when that beat starts); see [Effect symbols](#effect-symbols-effect) |
-| `walk_to`, `enter`, `exit`, `gesture`, `jump` | see [Moving](#moving) | the moving actions on a `stage`'s characters: walk to a mark, walk in or out of view, point / wave / shrug / nod / shake the head, jump |
+| `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump` | see [Moving](#moving) | the moving actions on a `stage`'s characters: walk or run to a mark, walk in or out of view, point / wave / shrug / nod / shake the head, jump |
 | `keyframes`, `move_along` | see [Keyframes and motion paths](#keyframes-and-motion-paths) | move a `stage`'s character, prop or character part (`kit.arm_left`) through keys (`t`, `x`, `y`, `rotate`, `scale`, `ease`) or along a path of points |
 | `pick_up`, `hold`, `put_down`, `give`, `throw` | see [Props in hands](#props-in-hands) | a `stage`'s character takes a prop in its hand, puts it down, hands it to another character or throws it |
 | `open`, `close` | see [Umbrellas](#umbrellas-open-and-close) | a `stage`'s umbrella opens (held overhead) or closes |
@@ -5656,7 +5695,7 @@ its `narration.pad`) is over. `--frames-per-beat N` takes N evenly spaced stills
 last one again at the end (N=3: after a third, two thirds and all of the beat). A silent scene
 counts as one beat lasting `duration` minus the scene's fade-out, so its last still is taken
 before the fade. A [`stage`](#stage) scene also gets a **mid-action still** half-way through each
-`walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes` and `move_along` (at most 3 per beat,
+`walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes` and `move_along` (at most 3 per beat,
 none within 0.4 s of another still of the beat). Stills are off by default; they work with `--preview`, `--variant`, `--scene`
 and `--jobs`. They are taken from Manim's renderer while it writes the video (the same pixels
 as the video frame, before compression), so they do not change the video or its timings.
@@ -5733,7 +5772,7 @@ Each object:
 | key | meaning |
 |---|---|
 | `id` | `m1`, `m2`, ...: the same Python object keeps its id in every frame of the scene |
-| `kind` | `text` (`Text`, `MarkupText`, `Paragraph`), `code` (the text of a `Code` listing), `math` (`Tex`, `MathTex`), `number` (`DecimalNumber`, `Integer`), `shape` (one path), `group` (a group of shapes with no text or image inside, e.g. an axis' ticks), `image`, `icon` (an icon from `icon()`: one object, not one per path), `vector` (a vector picture, an SVG: one object, not one per path), `character` (a cartoon character: one object named after it, its box covering every part), `prop` (a prop on a stage, built-in or SVG: one object named after it), `particles` (a field of [particles](#particles): one object named after its kind) |
+| `kind` | `text` (`Text`, `MarkupText`, `Paragraph`), `code` (the text of a `Code` listing), `math` (`Tex`, `MathTex`), `number` (`DecimalNumber`, `Integer`), `shape` (one path), `group` (a group of shapes with no text or image inside, e.g. an axis' ticks), `image`, `icon` (an icon from `icon()`: one object, not one per path), `vector` (a vector picture, an SVG: one object, not one per path), `character` (a cartoon character: one object named after it, its box covering every part), `prop` (a prop on a stage, built-in or SVG: one object named after it), `particles` (a field of [particles](#particles): one object named after its kind), `motion_effect` (dust, speed lines, impact stars or a whoosh of a [motion effect](#motion-effects-motion_effects): one object named after its kind, with `motion_effect` and `effect_of`) |
 | `class` | the Manim class |
 | `path` | where it sits: parent groups from the top-level mobject down, each `Class[index]` (index among its parent's submobjects; top level: in the scene), or the name the scene gave it |
 | `name` | the scene attribute that holds it (`self.title = ...`) or a `Mobject.name` set by the scene, else `null` |

@@ -1,6 +1,6 @@
 """The geometry and timing of the acting actions, worked out without manim: where a character
 looks (``look_at``, DESIGN.md §69.11), and how it walks, enters, leaves, gestures and jumps
-(``walk_to``, ``enter``, ``exit``, ``gesture``, ``jump``, §69.12).
+(``walk_to``, ``enter``, ``exit``, ``gesture``, ``jump``, §69.12; ``run_to``, §69.41).
 
 Angles are in degrees counterclockwise as drawn facing right (a character facing left is the
 mirror image, so a positive angle tilts the head up towards where it looks in both facings);
@@ -126,26 +126,52 @@ class WalkCycle:
     elbow_bends: tuple[float, float] = (0.0, 0.0)
 
 
-def walk_cycle(steps: float, amplitude: float = 1.0) -> WalkCycle:
-    """The pose change after ``steps`` steps (a step every :data:`STEP_LENGTH` character heights
-    walked, so the feet keep pace with the ground), scaled by ``amplitude`` (0..1). Legs and arms
-    swing furthest one way at a footfall (half-way through a step) and the other way at the
-    next; between footfalls, as the legs pass each other, they are narrowest and the body is
-    highest. Legs drawn one each: the knee of the leg swinging forward bends most as it passes
-    the other and is straight at the footfall; an elbow bends more as its arm swings forward."""
+@dataclass(frozen=True)
+class Gait:
+    """How a character moves its feet along the ground, as factors of a walk's: ``stride`` (the
+    step length, :data:`STEP_LENGTH` × it), ``swing`` (legs, thighs and arms), ``knee`` and
+    ``elbow`` (the bends), ``bob`` (the body's rise); ``lean``: degrees the body leans forward at
+    full speed (it builds up and fades with the speed)."""
+
+    stride: float = 1.0
+    swing: float = 1.0
+    knee: float = 1.0
+    elbow: float = 1.0
+    bob: float = 1.0
+    lean: float = 0.0
+
+
+#: A walk, and a run (``run_to``, DESIGN.md §69.41): longer strides, bigger swings and bends, the
+#: body leaning forward.
+WALKING = Gait()
+RUNNING = Gait(stride=1.6, swing=1.5, knee=1.6, elbow=2.0, bob=2.0, lean=12.0)
+#: Running speed (Manim units per second) when a ``run_to`` gives none: about 1.7 of a stage
+#: character's heights per second.
+RUN_SPEED = 6.0
+
+
+def walk_cycle(steps: float, amplitude: float = 1.0, gait: Gait = WALKING) -> WalkCycle:
+    """The pose change after ``steps`` steps (a step every :data:`STEP_LENGTH` × ``gait.stride``
+    character heights walked, so the feet keep pace with the ground), scaled by ``amplitude``
+    (0..1) and ``gait``. Legs and arms swing furthest one way at a footfall (half-way through a
+    step) and the other way at the next; between footfalls, as the legs pass each other, they are
+    narrowest and the body is highest. Legs drawn one each: the knee of the leg swinging forward
+    bends most as it passes the other and is straight at the footfall; an elbow bends more as its
+    arm swings forward."""
     swing = math.sin(math.pi * steps)
     forward = math.cos(math.pi * steps)  # > 0 while the left leg swings forward
     passing = 1.0 - swing * swing
+    sway, knee, elbow = amplitude * gait.swing, amplitude * gait.knee, amplitude * gait.elbow
     return WalkCycle(
-        legs_angle=WALK_LEG_DEGREES * swing * amplitude,
+        legs_angle=WALK_LEG_DEGREES * swing * sway,
         legs_width=1.0 - WALK_LEG_SQUEEZE * passing * amplitude,
-        arm_angle=WALK_ARM_DEGREES * swing * amplitude,
-        body_lift=WALK_BOB * passing * amplitude,
-        thigh_angle=WALK_THIGH_DEGREES * swing * amplitude,
-        knee_bends=(WALK_KNEE_DEGREES * max(forward, 0.0) * amplitude, WALK_KNEE_DEGREES * max(-forward, 0.0) * amplitude),
+        arm_angle=WALK_ARM_DEGREES * swing * sway,
+        body_lift=WALK_BOB * passing * amplitude * gait.bob,
+        thigh_angle=WALK_THIGH_DEGREES * swing * sway,
+        knee_bends=(WALK_KNEE_DEGREES * max(forward, 0.0) * knee, WALK_KNEE_DEGREES * max(-forward, 0.0) * knee),
         elbow_bends=(
-            (WALK_ELBOW_DEGREES + WALK_ELBOW_SWING * max(swing, 0.0)) * amplitude,
-            (WALK_ELBOW_DEGREES + WALK_ELBOW_SWING * max(-swing, 0.0)) * amplitude,
+            (WALK_ELBOW_DEGREES + WALK_ELBOW_SWING * max(swing, 0.0)) * elbow,
+            (WALK_ELBOW_DEGREES + WALK_ELBOW_SWING * max(-swing, 0.0)) * elbow,
         ),
     )
 
@@ -282,10 +308,14 @@ __all__ = [
     "LOOK_EYES_AHEAD",
     "LOOK_MAX_DEGREES",
     "OFFSTAGE_GAP",
+    "RUNNING",
+    "RUN_SPEED",
     "SAME_X",
     "SIDES",
     "STEP_LENGTH",
+    "WALKING",
     "WALK_SPEED",
+    "Gait",
     "LookPose",
     "PartMove",
     "WalkCycle",
