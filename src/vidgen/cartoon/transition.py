@@ -20,7 +20,8 @@ a crouch, squash and stretch and follow-through on jumps. ``none`` plays the pla
 of the ``keyframes`` and ``move_along`` actions (:mod:`vidgen.cartoon.keyframes`, §69.14).
 :class:`ArmMove` and :class:`PropMove` play the prop actions (a hand reaching, carrying,
 throwing; a prop going into a hand, onto the ground or flying, §69.27); :class:`BodyMove` sits a
-character down, stands it up, leans it and crouches it (§69.28).
+character down, stands it up, leans it and crouches it (§69.28); :class:`PropReshape` opens or
+closes an umbrella (§69.37).
 """
 
 from __future__ import annotations
@@ -445,7 +446,8 @@ class BodyMove(ArmMove):
 
 
 class PropMove(Animation):
-    """Move ``prop`` (its middle) between a hand and a place: until ``leave`` (a share of the
+    """Move ``prop`` (its grip, :meth:`~vidgen.cartoon.props.Prop.grip_point`: its middle unless
+    it has one) between a hand and a place: until ``leave`` (a share of the
     animation) it stays at ``follow()`` (a hand's point, read every frame) or, without
     ``follow``, where it is; from ``leave`` to ``arrive`` it goes from there to ``to`` (a point,
     or a function giving one every frame), growing or shrinking to ``height`` units tall; then it
@@ -478,7 +480,8 @@ class PropMove(Animation):
     def begin(self) -> None:
         prop = self.mobject
         self._members = [(m, m.points.copy()) for m in prop.get_family() if len(m.points)]
-        self._middle = np.array(prop.get_center(), dtype=float)
+        grip = getattr(prop, "grip_point", None)
+        self._middle = np.array(grip() if callable(grip) else prop.get_center(), dtype=float)
         self._height = max(float(prop.height), 1e-9)
         self._from: np.ndarray | None = None
         super().begin()
@@ -519,6 +522,43 @@ class PropMove(Animation):
     def finish(self) -> None:
         super().finish()
         self.mobject.keyed_feet = None   # a keyed move's kept feet are stale now (feet_of)
+
+
+class PropReshape(Animation):
+    """Switch ``prop`` (a :class:`~vidgen.cartoon.props.Prop` with shapes) to ``shape`` at ``at``
+    (a share of the animation; an umbrella opening or closing, DESIGN.md §69.37), then make it
+    ``height`` units tall about its grip (``None``: its size kept). With ``follow`` (a hand's
+    point, read every frame) its grip stays there all along: a prop's own follow updater is paused
+    while an animation plays on it."""
+
+    def __init__(
+        self,
+        prop: Mobject,
+        shape: str,
+        *,
+        at: float = 0.5,
+        height: float | None = None,
+        follow: Callable[[], Sequence[float]] | None = None,
+        **kwargs,
+    ) -> None:
+        self.shape, self.at, self.target_height, self.follow = shape, float(at), height, follow
+        kwargs.setdefault("rate_func", linear)
+        super().__init__(prop, **kwargs)
+
+    def begin(self) -> None:
+        self._switched = False
+        super().begin()
+
+    def interpolate_mobject(self, alpha: float) -> None:
+        prop = self.mobject
+        if not self._switched and self.rate_func(alpha) >= self.at:
+            prop.show_shape(self.shape)
+            if self.target_height is not None:
+                prop.scale(self.target_height / max(float(prop.height), 1e-9), about_point=prop.grip_point())
+            self._switched = True
+        if self.follow is not None:
+            hand = self.follow()
+            prop.shift(np.array([float(hand[0]), float(hand[1]), 0.0]) - prop.grip_point())
 
 
 def feet_of(mobject: Mobject) -> np.ndarray:

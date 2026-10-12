@@ -774,6 +774,14 @@ Step 101 (§69.35) adds `numbered_names` and `prop_default_name` (the stage's pr
 names, shared with the set merge); `Problem` gains `file`.
 Step 102 (§69.36) adds `STAR_HEAD_ROOM`; `PROP_HEIGHTS` changes for `chair`, `box` and `rock`
 (lower seats), and `Character.seated` puts the hips, not the body's lowest point, on the seat.
+Step 103 (§69.37) adds `PROP_SHAPES`, `PROP_GRIPS`, `PropReshape`, `OVERHEAD_SHAPES`,
+`OVERHEAD_FORWARD`, `OVERHEAD_HAND`, `OVERHEAD_HEIGHT`, `RESHAPE_SECONDS`, `RESHAPE_SHARE` and
+`overhead_point`; `PROP_KINDS` gains `basket`, `umbrella`, `napkin`; `Prop` gains `shapes`,
+`shape`, `show_shape`, `shape_width`, `grips`, `grip`, `grip_point` (and the keywords `shapes`,
+`grips`), `draw_prop` the keyword `shape`, `held_height` the keyword `overhead`, `ShadowCaster`
+the field `widths`; `PropMove` moves a prop by its grip (its middle unless it has one). New
+built-in actions `open` / `close`, stage prop key `open`, layout key `shape`. Compatible: props
+without a grip are moved and held by their middle as before.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -5489,7 +5497,8 @@ Things on a stage that are not characters: built-in props drawn from primitives,
 They are placed by the same `stage_layout` as the characters and sort with them by depth.
 
 - **Built-in props** (`cartoon/props.py`): `PROP_KINDS = table, chair, tree, bush, house, door,
-  lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup`. Each is drawn in *prop
+  lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup` (and `basket, umbrella,
+  napkin` since Step 103, §69.37). Each is drawn in *prop
   units* (feet at the origin, `y` up, top at 1) from rectangles, rounded rectangles, circles,
   ellipses, polygons (some with rounded corners), lines and `Union`s of circles (a tree's crown,
   a bush, a cloud: one outline). Colours: two per prop, `main` and `detail` (`PROP_COLORS`, theme
@@ -5508,8 +5517,8 @@ They are placed by the same `stage_layout` as the characters and sort with them 
   it on the bottom edge of its `viewBox`.
 - **Sizes**: `PROP_HEIGHTS` gives each prop's height relative to a character (the stage's
   `size`): table 0.42, chair 0.26, tree 1.7, bush 0.35, house 1.6, door 1.0, lamp 1.5, sign 0.75,
-  box 0.155, ball 0.18, cloud 0.35, sun 0.4, moon 0.35, rock 0.155, plant 0.4, laptop 0.14, cup 0.09
-  (chair 0.5, box 0.3, rock 0.22 before Step 102, §69.36);
+  box 0.155, ball 0.18, cloud 0.35, sun 0.4, moon 0.35, rock 0.155, plant 0.4, laptop 0.14, cup 0.09,
+  basket 0.2, umbrella 0.6, napkin 0.05 (chair 0.5, box 0.3, rock 0.22 before Step 102, §69.36);
   an SVG `SVG_PROP_HEIGHT` 0.5. The stage passes `height factor × scale` as the item's `scale`.
   `PROP_LIFTS`: `cloud`, `sun`, `moon` hang 0.5 of the frame height above the ground line unless
   `lift` says otherwise.
@@ -5531,7 +5540,8 @@ They are placed by the same `stage_layout` as the characters and sort with them 
 - **Layout dump / lint**: `introspect` reports a `Prop` (an SVG one too, not a `vector`) as one
   object of kind `prop` named after it; `describe` gives `prop 'tree'`.
 - **Gallery still**: `still.write_props_png(theme, path, width=960, height=540)` draws every
-  built-in prop with its name in a 6-column grid (64-colour palette PNG, about 20 KB):
+  built-in prop with its name in a 6-column grid, a prop with shapes once per shape (`umbrella`,
+  `umbrella (open)`; 64-colour palette PNG, about 20 KB):
   `docs/gallery/media/props.png`, shown in CONFIG.md.
 - **Not done here**: putting a prop on another one (`lift` is in frame heights: a laptop on a
   table needs the table's height worked out by hand); props do not move or animate (Step 79's
@@ -7306,4 +7316,65 @@ A series keeps its characters, voices and places in files every episode includes
   sunset fading to night, wind and captions; Kokoro at speed 0.75 / 0.8 (`narration_speed` warned
   at 0.85), lint clean, rendered at 1280x720 (`/home/claude/work/phase-i-review/showcase.mp4`,
   57.6 s). Not transcribed (the owner skipped the Whisper check).
+
+### 69.37 Props: basket, umbrella, napkin (Step 103)
+
+Three built-in props for Phase J's picnic in the rain, and the two things the umbrella needs: a
+prop with more than one shape, and a prop held somewhere other than its middle.
+
+- **Drawings** (`cartoon/props.py`, primitives and theme colours like §69.8): `basket` (0.2 of a
+  character; `secondary` wicker with weave lines, an `accent` cloth peeking out, an arched
+  handle), `umbrella` (0.6; `primary` canopy with lighter panels and ribs, `dim` wooden shaft
+  and hook), `napkin` (0.05; a light cloth `#F4F6FA` lying flat with `accent` checks and a
+  turned-up corner; small, for Step 104's wind to blow away). Both umbrella shapes are one prop
+  unit tall (tip or hook at 0, the top at 1), so a swap keeps its height; closed it stands on its
+  tip with the hook up, open it stands on its hook with the canopy up.
+- **Shapes** (`PROP_SHAPES = {"umbrella": ("closed", "open")}`): a drawer returns a dict of shapes
+  instead of a list; `Prop(shapes=...)` adds each shape as a group and shows the first. Like a
+  character's part shapes (§69.22) every shape stays in the family for the prop's life: a hidden
+  shape's members have no points, and `Prop.show_shape(name)` hides the shown one and draws the
+  other from its points in prop units (recorded at construction) through an invisible anchor
+  triangle (`character.anchor_mobject` / `anchor_placement`, now shared with `Character`; the
+  affine helper is `apply_matrix`) that moves, scales and mirrors with the prop, so the new shape
+  appears where the old one was, at its size and facing, whatever moved it since (a `PropMove`, a
+  hand's updater, a throw). `Prop.shape` (`None` for one shape), `shapes`, `shape_width(shape)`.
+  `draw_prop(..., shape=)` draws another shape first; `StageProp.open: true` passes `shape="open"`
+  (only for props with an `open` shape; else a config error).
+- **Grips** (`PROP_GRIPS`, prop units per (kind, shape)): where a hand holds a prop:
+  `("basket", None)` the top of its handle (it hangs below the hand), `("umbrella", "open")` the
+  shaft just above the hook; others (a closed umbrella, every other prop) by their middle.
+  `Prop.grip_point()` maps it through the anchor (the middle without one). Every hand use goes
+  through it: the follow updater keeps the grip at `hand_point` (was the middle), `PropMove`
+  moves and scales the prop about its grip (`_standing_grip` gives the grip's spot on the ground
+  for `put_down` / `throw`), `pick_up` reaches for the grip when there is one (else the top).
+  `Prop.feet()` of a prop with an anchor is the bottom edge below the anchor's origin (the tip or
+  hook), the same for each shape, so opening on the ground does not slide it sideways.
+- **Overhead** (`cartoon/holding.py`): a prop showing an `OVERHEAD_SHAPES` shape (`open`) is held
+  with the hand at `overhead_point(feet, height, facing)`, `OVERHEAD_FORWARD` 0.08 heights in
+  front of the feet and `OVERHEAD_HAND` 0.6 above them, and is `OVERHEAD_HEIGHT` 0.85 of the
+  holder tall (`held_height(..., overhead=True)`, not capped at 0.4). Measured on every body
+  (round, tall, square, bean) at head size 0.6 / 1.0 / 1.6 with a bun: the arm reaches 0.6 or
+  stops at 0.53–0.57 (big heads), the canopy's rim is 1.02–1.09 heights up (the head top is 1.0)
+  and it spans −0.34 to +0.50 heights about the feet (heads are at most ±0.25). A prop held
+  overhead is drawn right *before* its holder in `scene.mobjects` (the shaft behind the head and
+  body, the canopy above the head; the hand in front), others right after (§69.27).
+- **Actions** `open` / `close` (`scenes/handling.py`, `_Reshape`; the targets are props, `0.6 s`
+  `RESHAPE_SECONDS`): each target prop that has the shape and does not show it switches at
+  `RESHAPE_SHARE` 0.5 (`PropReshape(prop, shape, at=, height=, follow=)` in
+  `cartoon/transition.py`: shows the shape, rescales about the grip, and keeps the grip at
+  `follow()` every frame, since Manim pauses the prop's own follow updater while it is
+  animated). A held one: an `ArmMove` to the overhead point (open) or the hold point (close) and
+  the new held height; standing: it changes where it stands. Validate (`scene_problems`): a target
+  that is not a prop, or a prop without that shape (`'tree' cannot open (props that can:
+  umbrella)`). No sequence check: opening an open umbrella does nothing. An open umbrella stays
+  open through `pick_up`, `hold`, `give` (the receiver holds it overhead), `put_down` and `throw`.
+- **Shadows**: props targeted by `open` / `close` are movable (§69.31: their shadow follows), and
+  a `ShadowCaster` takes `widths` per shape, so a closing umbrella's shadow narrows.
+- **Layout dump**: a prop with shapes carries `shape`.
+- **Gallery**: `docs/gallery/media/props.png` shows the 20 props plus the open umbrella.
+- **Not done here**: no tilt of the umbrella towards the head (it stays upright, the canopy
+  centred on the hand); no opening animation in between (the shape switches at once, half-way);
+  the automatic directing planner does not count `open` / `close` as moves; a closed umbrella is
+  held upright by its middle; wind does not move a held umbrella (Step 104), rain does not
+  stop under it (Step 105). Tests: `tests/test_cartoon_props.py`, `tests/test_cartoon_holding.py`.
 

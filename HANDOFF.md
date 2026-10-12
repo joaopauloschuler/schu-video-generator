@@ -9619,3 +9619,92 @@ words timed by the respelled audio (same word indices as before). Only
 used the old `(caption, word)` shape (grep of tests/); it now expects `(0, (0,))` / `(0, (1,))`.
 Backlog line removed. How to test: `pytest tests/test_pronunciation.py tests/test_captions.py
 tests/test_voices.py tests/test_overlap.py tests/test_overlap_pinned.py` (78 non-render, 7 render passed).
+
+## Step 103 — Props: basket, umbrella, napkin
+
+What was built
+- Three built-in props in `src/vidgen/cartoon/props.py` (primitives, theme colours, original
+  drawings): `basket` (0.2 of a character; `secondary` wicker, `accent` cloth, arched handle),
+  `umbrella` (0.6; `primary` canopy, `dim` shaft and hook; closed and open shapes), `napkin`
+  (0.05; light `#F4F6FA` cloth with `accent` checks, lying flat). `PROP_KINDS` has 20 props.
+- Props with shapes (`PROP_SHAPES = {"umbrella": ("closed", "open")}`): a drawer may return a
+  dict of shapes; `Prop(shapes=...)` keeps every shape in its family, the hidden ones without
+  points (the Step 88 live-copy rule), and `Prop.show_shape(name)` redraws the other shape from
+  its prop-unit points through an invisible anchor that moves, scales and mirrors with the prop
+  (`character.anchor_mobject` / `anchor_placement` / `apply_matrix`, factored out of `Character`,
+  which uses them too). `Prop.shape`, `shapes`, `shape_width`; `draw_prop(..., shape=)`.
+- Grips (`PROP_GRIPS`): a basket is held by the top of its handle (it hangs below the hand), an
+  open umbrella by its shaft above the hook; other props by their middle. `Prop.grip`,
+  `Prop.grip_point()`. The follow updater, `PropMove` (moves and scales about the grip) and
+  `put_down` / `throw` targets (`_standing_grip`) go through it; `pick_up` reaches for the grip.
+  `Prop.feet()` of a prop with an anchor is below the anchor's origin (no sideways slide when an
+  umbrella opens on the ground).
+- Overhead (`cartoon/holding.py`): `OVERHEAD_SHAPES` (`open`), `overhead_point(feet, height,
+  facing)` (0.08 heights in front of the feet, 0.6 up), `OVERHEAD_HEIGHT` 0.85 (`held_height(...,
+  overhead=True)`, not capped at 0.4). A prop held overhead is drawn right before its holder (the
+  shaft behind the head, the canopy above it).
+- Actions `open` / `close` (choice: actions on the prop, `- open: umbrella`, not a `hold` option,
+  so a standing umbrella can open too and a held one can open later in the scene): 0.6 s, the
+  shape switches half-way (`PropReshape` in `cartoon/transition.py`, which also keeps the grip at
+  the hand because Manim pauses the prop's follow updater while it is animated); a held one gets
+  an `ArmMove` to the overhead / hold point and its new held size. Validate: a target that is not
+  a prop, or a prop that cannot (`'tree' cannot open (props that can: umbrella)`). Stage prop key
+  `open: true` (umbrella only; else a config error).
+- Shadows: `ShadowCaster.widths` per shape; props targeted by `open` / `close` are movable (their
+  shadow follows and narrows when they close). Layout dump: `shape` on a prop with shapes.
+- Prop gallery still `docs/gallery/media/props.png` regenerated (20.8 KB): 20 props plus
+  `umbrella (open)`, 4 rows.
+
+Checked by eye: the gallery at 1920x1080; a scratch stage (`vidgen validate`, `vidgen storyboard`,
+`vidgen lint`) where dot holds the umbrella and opens it (canopy over the bun, shaft behind the
+head), walks with it, hands it open to moss (moss holds it overhead), moss picks up the basket by
+its handle and puts it down, a spare umbrella starts open and closes on the ground (its shadow
+narrows). Lint: one author-caused `rushed_animation` (too many steps in a 2.7 s beat). Geometry of
+the overhead hold measured for every body (round, tall, square, bean) at head sizes 0.6 / 1.0 /
+1.6 with a bun: canopy rim 1.02–1.09 heights up (head top 1.0), canopy −0.34..+0.50 heights about
+the feet.
+
+Files touched
+- `src/vidgen/cartoon/props.py`, `holding.py`, `transition.py`, `character.py` (anchor helpers,
+  `_apply` -> `apply_matrix`), `shading.py`, `still.py`, `src/vidgen/scenes/handling.py`,
+  `scenes/stage.py`, `introspect.py`, `api.py`.
+- Docs: `docs/CONFIG.md` (props table and picnic line, new "Umbrellas: open and close",
+  action / run_time / targets / actions rows, layout `shape`), `DESIGN.md` (§6.4, §69.8, new
+  §69.37), `docs/EXTENDING.md`, `docs/gallery/stage.md` (props rows as `vidgen gallery` writes
+  them), `docs/gallery/media/props.png`, guide (`src/vidgen/data/guide/AGENTS.md` + `AGENTS.md`:
+  action rows, props-in-hands bullet, troubleshooting list), `tasklist.md`.
+- Tests: `tests/test_cartoon_props.py`, `tests/test_cartoon_holding.py`, `tests/test_actions.py`
+  (action name lists gain `close` / `open`).
+
+Public interfaces
+- `vidgen.api` adds `PROP_SHAPES`, `PROP_GRIPS`, `PropReshape`, `OVERHEAD_SHAPES`,
+  `OVERHEAD_FORWARD`, `OVERHEAD_HAND`, `OVERHEAD_HEIGHT`, `RESHAPE_SECONDS`, `RESHAPE_SHARE`,
+  `overhead_point`; `Prop`, `draw_prop`, `held_height`, `ShadowCaster` gain the keywords above.
+  New built-in actions `open`, `close`; stage prop key `open`; layout key `shape`. Compatible:
+  props without a grip are moved and held by their middle as before.
+
+Decisions / deviations
+- Both umbrella shapes are one prop unit tall, so `height_factor` and every size rule hold for
+  either shape; the open one on the ground stands on its hook.
+- The open umbrella is held upright (no tilt): the hand reaches for a point near the chest, the
+  shaft long enough that the canopy clears the head of every generated look, at the price of an
+  umbrella larger in the hand (0.85) than standing (0.6).
+- Searched first: no multi-shape prop or grip code existed (`grep -rn "shape\|grip" src/vidgen/cartoon/props.py
+  src/vidgen/scenes/handling.py`: none); reused the character's live-copy approach and anchor
+  maths (now shared helpers), `_carry`, `ArmMove`, `PropMove`, `_held`, the shadow casters.
+
+Known gaps / TODOs
+- No in-between opening animation (the shape switches at once); the planner does not count
+  `open` / `close` as moves; a closed umbrella is held upright by its middle; wind does not move
+  a held umbrella or blow the napkin away (Step 104); rain falls through the canopy (Step 105).
+
+How to test
+- `pytest tests/test_cartoon_props.py tests/test_cartoon_holding.py` (54 not-render + 4 render, 5 s).
+- Also run (not render): `tests/test_cartoon_*.py test_api test_actions test_introspect test_lint
+  test_phase_h_review test_phase_i_review test_includes test_screenplay` (633, 25 s),
+  `test_docs test_guide test_schema test_actions_coverage test_gallery test_builtin_scenes
+  test_extensions` (314 passed, 65 s; the 2 failures, a YAML snippet and a combined guide row,
+  were fixed and `test_docs test_guide` re-run: 100 passed); render: `test_cartoon_stage test_cartoon_lighting
+  test_cartoon_seating test_cartoon_speed test_cartoon_wind test_cartoon_acting
+  test_cartoon_moving test_introspect` (9, 12 s), `test_phase_i_review test_phase_h_review
+  test_cartoon_sheet test_cartoon_directing` (7, 30 s). Full suite not run.

@@ -8,14 +8,16 @@ the middle of the prop's foot, ``y`` up, the top at 1, then scaled to the prop's
 prop (:func:`svg_prop`) is sanitised and loaded by :func:`vidgen.vector_mobject.load_vector`.
 
 Either way the result is a :class:`Prop`: one group whose :meth:`Prop.feet` is the middle of its
-bottom edge, so a stage places it like a character (``stage_layout``).
+bottom edge, so a stage places it like a character (``stage_layout``). An umbrella is drawn in two
+shapes, closed and open (:data:`PROP_SHAPES`, :meth:`Prop.show_shape`); a basket and an open
+umbrella are held by a grip (:data:`PROP_GRIPS`, :meth:`Prop.grip_point`), DESIGN.md §69.37.
 """
 
 from __future__ import annotations
 
 import math
 import xml.etree.ElementTree as ET
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -37,7 +39,16 @@ from manim import (
     interpolate_color,
 )
 
-from vidgen.cartoon.character import OUTLINE_WIDTH, REFERENCE_HEIGHT, one_pixel_stroke, scale_strokes
+from vidgen.cartoon.character import (
+    OUTLINE_WIDTH,
+    REFERENCE_HEIGHT,
+    anchor_mobject,
+    anchor_placement,
+    apply_matrix,
+    one_pixel_stroke,
+    scale_strokes,
+    shape_drawing,
+)
 from vidgen.cartoon.seating import PROP_LEANS, PROP_SEATS, mirrored_lean, mirrored_seat, svg_seat_and_lean
 from vidgen.config import CHARACTER_INK
 from vidgen.errors import VidgenError
@@ -48,13 +59,22 @@ from vidgen.theme import Theme
 #: The built-in props.
 PROP_KINDS: tuple[str, ...] = (
     "table", "chair", "tree", "bush", "house", "door", "lamp", "sign", "box",
-    "ball", "cloud", "sun", "moon", "rock", "plant", "laptop", "cup",
+    "ball", "cloud", "sun", "moon", "rock", "plant", "laptop", "cup", "basket", "umbrella", "napkin",
 )
 #: Each prop's height relative to a character's (the stage's ``size``) before its own ``scale``.
 PROP_HEIGHTS: dict[str, float] = {
     "table": 0.42, "chair": 0.26, "tree": 1.7, "bush": 0.35, "house": 1.6, "door": 1.0, "lamp": 1.5,
     "sign": 0.75, "box": 0.155, "ball": 0.18, "cloud": 0.35, "sun": 0.4, "moon": 0.35, "rock": 0.155,
-    "plant": 0.4, "laptop": 0.14, "cup": 0.09,
+    "plant": 0.4, "laptop": 0.14, "cup": 0.09, "basket": 0.2, "umbrella": 0.6, "napkin": 0.05,
+}
+#: Props drawn in more than one shape: kind -> its shape names, the first drawn unless the stage
+#: asks for another (``open: true``); the ``open`` / ``close`` actions switch them.
+PROP_SHAPES: dict[str, tuple[str, ...]] = {"umbrella": ("closed", "open")}
+#: Where a hand holds a prop, in prop units as drawn facing right, per (kind, shape) (``None``: a
+#: prop with one shape); a prop or shape not listed is held by its middle. A basket hangs from
+#: its handle; an open umbrella is held by its shaft above the hook.
+PROP_GRIPS: dict[tuple[str, str | None], tuple[float, float]] = {
+    ("basket", None): (0.0, 0.94), ("umbrella", "open"): (0.0, 0.16),
 }
 #: Height of an SVG prop relative to a character's, before its own ``scale``.
 SVG_PROP_HEIGHT = 0.5
@@ -62,14 +82,15 @@ SVG_PROP_HEIGHT = 0.5
 #: ``lift``: the sky props; every other prop stands on the ground (0).
 PROP_LIFTS: dict[str, float] = {"cloud": 0.5, "sun": 0.5, "moon": 0.5}
 #: Default (main, detail) colour of each prop: theme tokens, or a hex where no token fits every
-#: theme (a white cloud).
+#: theme (a white cloud, a napkin's light cloth).
 PROP_COLORS: dict[str, tuple[str, str]] = {
     "table": ("secondary", "secondary"), "chair": ("accent", "accent"), "tree": ("tertiary", "secondary"),
     "bush": ("tertiary", "tertiary"), "house": ("secondary", "accent"), "door": ("accent", "highlight"),
     "lamp": ("dim", "highlight"), "sign": ("highlight", "secondary"), "box": ("secondary", "highlight"),
     "ball": ("accent", "highlight"), "cloud": ("#F4F6FA", "#F4F6FA"), "sun": ("highlight", "secondary"),
     "moon": ("highlight", "dim"), "rock": ("dim", "dim"), "plant": ("tertiary", "accent"),
-    "laptop": ("dim", "primary"), "cup": ("primary", "secondary"),
+    "laptop": ("dim", "primary"), "cup": ("primary", "secondary"), "basket": ("secondary", "accent"),
+    "umbrella": ("primary", "dim"), "napkin": ("#F4F6FA", "accent"),
 }
 #: The glass of a house's window (light in every theme, like a character's eye whites).
 GLASS = "#D6EEF8"
@@ -103,11 +124,20 @@ class Prop(VGroup):
     height in the heights of a character next to it (the stage sets it; ``None``: not known).
     ``held_by`` / ``hand``: the character holding it and which hand (DESIGN.md §69.27).
     ``seat`` / ``lean``: the middle of its seat line (x, y) and the edges a character leans its
-    back on (left x, right x), in prop units as it faces (``None``: it has none; DESIGN.md §69.28)."""
+    back on (left x, right x), in prop units as it faces (``None``: it has none; DESIGN.md §69.28).
+
+    ``shapes`` (DESIGN.md §69.37): a prop drawn in several shapes (an umbrella closed and open)
+    gets them instead of ``drawn``, shape name -> its members, the first shown. Every shape stays
+    in the family for the prop's life; the hidden ones have no points (like a character's part
+    shapes, §69.22), and :meth:`show_shape` draws another from its points in prop units through an
+    invisible anchor that moves, scales and mirrors with the prop. ``grips``: shape (``None`` for
+    a prop with one shape) -> where a hand holds it, prop units as drawn facing right."""
 
     def __init__(
         self, *drawn: VMobject, name: str, kind: str, facing: str = "right",
         seat: tuple[float, float] | None = None, lean: tuple[float, float] | None = None,
+        shapes: Mapping[str, Sequence[VMobject]] | None = None,
+        grips: Mapping[str | None, tuple[float, float]] | None = None,
     ) -> None:
         super().__init__(*drawn)
         self.name = name
@@ -118,10 +148,76 @@ class Prop(VGroup):
         self.hand: str | None = None
         self.seat = seat
         self.lean = lean
+        self.grips = dict(grips or {})
+        #: The shape it shows (``None``: a prop with one shape).
+        self.shape: str | None = None
+        self._members: dict[str, list[VMobject]] = {}
+        self._drawings: dict[str, tuple[np.ndarray, ...]] = {}
+        self._anchor: VMobject | None = None
+        if shapes or self.grips:
+            self._anchor = anchor_mobject()   # drawn in prop units: the placement starts as the identity
+            self.add(self._anchor)
+        for shape, members in (shapes or {}).items():
+            group = VGroup(*members)
+            self.add(group)
+            self._members[shape] = group.family_members_with_points()
+            self._drawings[shape] = shape_drawing(group)
+            if self.shape is None:
+                self.shape = shape
+            else:
+                for member in self._members[shape]:
+                    member.points = np.zeros((0, 3))
+
+    @property
+    def shapes(self) -> tuple[str, ...]:
+        """The shapes it can show (empty: it has one)."""
+        return tuple(self._members)
+
+    def show_shape(self, shape: str) -> Prop:
+        """Show ``shape`` instead of the shape shown now, where the prop is now (its size,
+        facing and place kept); only points change, the family stays as it is."""
+        if shape not in self._members:
+            known = ", ".join(self._members) or "it has one shape"
+            raise VidgenError(f"prop '{self.name}' has no shape '{shape}' ({known})")
+        if shape == self.shape or self.shape is None or self._anchor is None:
+            return self
+        placement = anchor_placement(self._anchor)
+        for member in self._members[self.shape]:
+            member.points = np.zeros((0, 3))
+        for member, points in zip(self._members[shape], self._drawings[shape]):
+            member.points = apply_matrix(placement, points)
+        self.shape = shape
+        return self
+
+    def shape_width(self, shape: str) -> float:
+        """How wide it is when it shows ``shape``, at its size now (Manim units)."""
+        if shape not in self._drawings or self._anchor is None:
+            raise VidgenError(f"prop '{self.name}' has no shape '{shape}'")
+        placed = [apply_matrix(anchor_placement(self._anchor), points) for points in self._drawings[shape] if len(points)]
+        xs = np.concatenate([p[:, 0] for p in placed])
+        return float(xs.max() - xs.min())
+
+    @property
+    def grip(self) -> tuple[float, float] | None:
+        """Where a hand holds the shape it shows (prop units), ``None``: by its middle."""
+        return self.grips.get(self.shape)
+
+    def grip_point(self) -> np.ndarray:
+        """Where a hand holds it on screen now: its :attr:`grip`, else its middle."""
+        grip = self.grip
+        if grip is None or self._anchor is None:
+            return np.array(self.get_center(), dtype=float)
+        placed = apply_matrix(anchor_placement(self._anchor), np.array([[grip[0], grip[1], 0.0]]))[0]
+        return np.array([placed[0], placed[1], 0.0])
 
     def feet(self) -> np.ndarray:
-        """The middle of the prop's bottom edge (where it stands)."""
-        return self.get_bottom()
+        """Where the prop stands: the middle of its bottom edge; for one with shapes or a grip the
+        point of its bottom edge below where it was drawn from (an umbrella's tip or hook, the
+        same for each shape)."""
+        bottom = self.get_bottom()
+        if self._anchor is not None:
+            bottom[0] = self._anchor.points[0][0]
+        return bottom
 
     def seat_point(self) -> np.ndarray | None:
         """The middle of its seat line on screen now (``None``: it has no seat)."""
@@ -356,10 +452,83 @@ def _cup(p: _Paint) -> list[VMobject]:
     ]
 
 
-_DRAWERS: dict[str, Callable[[_Paint], list[VMobject]]] = {
+def _handle(points: list[tuple[float, float]], color: str, paint: _Paint, width: float = 2.6) -> list[VMobject]:
+    """A thick bar along ``points`` (a cup's or a basket's handle, an umbrella's shaft): an ink
+    stroke ``width`` outlines wide with a ``color`` stroke inside it."""
+    path = [np.array([x, y, 0.0]) for x, y in points]
+    outer = VMobject().set_points_smoothly(path).set_fill(opacity=0).set_stroke(paint.ink, width=OUTLINE_WIDTH * width)
+    inner = VMobject().set_points_smoothly(path).set_fill(opacity=0).set_stroke(color, width=OUTLINE_WIDTH * (width - 1.4))
+    return [outer, inner]
+
+
+def _arc(cx: float, cy: float, r: float, start: float, end: float, steps: int = 12) -> list[tuple[float, float]]:
+    """Points on a circle about (cx, cy) from angle ``start`` to ``end`` (degrees)."""
+    return [(cx + r * math.cos(math.radians(a)), cy + r * math.sin(math.radians(a))) for a in np.linspace(start, end, steps)]
+
+
+def _basket(p: _Paint) -> list[VMobject]:
+    weave = p.dark(p.main)
+    body = _poly([(-0.5, 0.0), (0.5, 0.0), (0.6, 0.5), (-0.6, 0.5)], p.main, p, round_by=0.04)
+    bands = [_line(-0.55 + 0.1 * (y / 0.5), y, 0.55 - 0.1 * (y / 0.5), y, weave, 1.5 * OUTLINE_WIDTH) for y in (0.17, 0.33)]
+    slats = [_line(x, 0.03, x * 1.2, 0.47, weave, 1.2 * OUTLINE_WIDTH) for x in (-0.3, 0.0, 0.3)]
+    cloth = _poly([(-0.46, 0.5), (-0.3, 0.66), (-0.12, 0.55), (0.06, 0.64), (0.2, 0.5)], p.detail, p, round_by=0.03)
+    return [
+        *_handle(_arc(0.0, 0.52, 0.42, 180, 0, 15), p.main, p),
+        body, *bands, *slats, cloth,
+        _rect(-0.64, 0.46, 0.64, 0.56, weave, p, radius=0.03),
+    ]
+
+
+def _umbrella(p: _Paint) -> dict[str, list[VMobject]]:
+    wood, dark = p.dark(p.detail), p.dark(p.main)
+    closed = [
+        _line(0.0, 0.0, 0.0, 0.08, p.ink, 2 * OUTLINE_WIDTH),
+        _poly([(0.0, 0.05), (0.1, 0.3), (0.09, 0.62), (0.03, 0.74), (-0.03, 0.74), (-0.09, 0.62), (-0.1, 0.3)], p.main, p, round_by=0.03),
+        _line(0.0, 0.12, 0.05, 0.66, dark, 1.5 * OUTLINE_WIDTH),
+        _rect(-0.1, 0.42, 0.1, 0.47, p.detail, p, radius=0.01),
+        *_handle([(0.0, 0.72), (0.0, 0.9), *_arc(0.1, 0.9, 0.1, 180, 0, 9)[1:], (0.2, 0.84)], wood, p),
+    ]
+    rim, top = 0.74, 0.96
+    dome = [(0.5 * math.cos(a), rim + (top - rim) * math.sin(a)) for a in np.linspace(0.0, math.pi, 25)]
+    ribs = (-0.5, -0.25, 0.0, 0.25, 0.5)
+    scallops = [
+        (x0 + (x1 - x0) * k / 6, rim + 0.05 * math.sin(math.pi * k / 6))
+        for x0, x1 in zip(ribs, ribs[1:]) for k in range(1, 7)
+    ][:-1]
+    panels = [
+        _poly([(0.0, top), (x0, rim), *[(x0 + (x1 - x0) * k / 6, rim + 0.05 * math.sin(math.pi * k / 6)) for k in range(1, 6)], (x1, rim)],
+              p.light(p.main), p, outline=False)
+        for x0, x1 in ((-0.25, 0.0), (0.25, 0.5))
+    ]
+    opened = [
+        *_handle([(0.2, 0.1), *_arc(0.1, 0.1, 0.1, 0, -180, 9), (0.0, 0.2), (0.0, rim)], wood, p),
+        _poly([*dome, *scallops], p.main, p),
+        *panels,
+        *[_line(0.0, top, x, rim, dark, 1.2 * OUTLINE_WIDTH) for x in ribs[1:-1]],
+        _line(0.0, top - 0.01, 0.0, 1.0, p.ink, 2 * OUTLINE_WIDTH),
+    ]
+    return {"closed": closed, "open": opened}
+
+
+def _napkin(p: _Paint) -> list[VMobject]:
+    def at(u: float, v: float) -> tuple[float, float]:   # (0..1 across, 0..1 back) -> the cloth lying flat, seen from the front
+        return (-1.1 + 2.0 * u + 0.4 * v, v)
+
+    def band(u0: float, u1: float, v0: float, v1: float) -> VMobject:
+        return _poly([at(u0, v0), at(u1, v0), at(u1, v1), at(u0, v1)], p.detail, p, outline=False)
+
+    return [
+        _poly([at(0, 0), at(1, 0), at(1, 1), at(0, 1)], p.main, p),
+        band(0.0, 1.0, 0.4, 0.6), band(0.2, 0.32, 0.0, 1.0), band(0.68, 0.8, 0.0, 1.0),
+        _poly([at(0.82, 0.0), at(1.0, 0.0), at(1.0, 0.5)], p.light(p.detail), p, round_by=0.02),
+    ]
+
+
+_DRAWERS: dict[str, Callable[[_Paint], list[VMobject] | dict[str, list[VMobject]]]] = {
     "table": _table, "chair": _chair, "tree": _tree, "bush": _bush, "house": _house, "door": _door,
     "lamp": _lamp, "sign": _sign, "box": _box, "ball": _ball, "cloud": _cloud, "sun": _sun,
     "moon": _moon, "rock": _rock, "plant": _plant, "laptop": _laptop, "cup": _cup,
+    "basket": _basket, "umbrella": _umbrella, "napkin": _napkin,
 }
 
 
@@ -396,19 +565,26 @@ def draw_prop(
     detail: str | None = None,
     facing: str = "right",
     character_height: float | None = None,
+    shape: str | None = None,
 ) -> Prop:
     """A built-in prop ``kind`` ``height`` Manim units tall, its feet at the origin, coloured
     ``main`` / ``detail`` (theme tokens or #hex; default :data:`PROP_COLORS`). Outlines are as
-    wide as a character's ``character_height`` tall (default: ``height``), at least one pixel."""
+    wide as a character's ``character_height`` tall (default: ``height``), at least one pixel.
+    ``shape``: which of its :data:`PROP_SHAPES` it shows (default: the first)."""
     if kind not in _DRAWERS:
         raise VidgenError(f"unknown prop '{kind}' (props: {', '.join(PROP_KINDS)})")
     if height <= 0:
         raise VidgenError(f"prop '{name or kind}': height must be positive, got {height}")
     paint = _Paint(*prop_colors(kind, theme, main, detail))
+    drawn = _DRAWERS[kind](paint)
+    shapes = drawn if isinstance(drawn, dict) else None
     prop = Prop(
-        *_DRAWERS[kind](paint), name=name or kind, kind=kind, facing=facing,
+        *([] if shapes is not None else drawn), name=name or kind, kind=kind, facing=facing,
         seat=mirrored_seat(PROP_SEATS.get(kind), facing), lean=mirrored_lean(PROP_LEANS.get(kind), facing),
+        shapes=shapes, grips={s: g for (k, s), g in PROP_GRIPS.items() if k == kind},
     )
+    if shape is not None:
+        prop.show_shape(shape)
     return _finish(prop, height, character_height or height, facing)
 
 
@@ -462,6 +638,8 @@ __all__ = [
     "PROP_HEIGHTS",
     "PROP_KINDS",
     "PROP_LIFTS",
+    "PROP_GRIPS",
+    "PROP_SHAPES",
     "SVG_PROP_HEIGHT",
     "Prop",
     "draw_prop",

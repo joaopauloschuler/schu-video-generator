@@ -539,9 +539,9 @@ Goal: a ~70 s original cartoon example, `examples/cartoon-rain-check/` (a picnic
 forecast, wind, rain, night), and the few things it needs. Same rules as Phases H and I.
 
 ### Step 103 — Props: basket, umbrella, napkin
-- [ ] Built-in props `basket`, `umbrella` (closed and open shapes; `open: true` or an action to open it; held overhead when open) and `napkin` (small, light), drawn from primitives in theme colours like the other 17; prop gallery still updated
-- [ ] They work with pick_up / hold / give / put_down; sheets and docs list them
-- [ ] Tests: each builds, umbrella open / closed, held positions
+- [x] Built-in props `basket`, `umbrella` (closed and open shapes; `open: true` or an action to open it; held overhead when open) and `napkin` (small, light), drawn from primitives in theme colours like the other 17; prop gallery still updated (`PROP_SHAPES`, shapes swapped by points through an anchor, family unchanged; beat actions `open` / `close` on the prop; held open: hand at 0.6 heights, 0.85 heights tall, drawn behind its holder; grips `PROP_GRIPS`: a basket by its handle, an open umbrella by its shaft; `props.png` shows the open umbrella too; DESIGN §69.37)
+- [x] They work with pick_up / hold / give / put_down; sheets and docs list them (also throw; the gallery still, CONFIG.md, the guide, `docs/gallery/stage.md`; layout dump `shape`; shadow width per shape)
+- [x] Tests: each builds, umbrella open / closed, held positions (`tests/test_cartoon_props.py` +3, `tests/test_cartoon_holding.py` +5 without rendering, +1 tiny render)
 
 ### Step 104 — Visible wind and props that blow away
 - [ ] Wind clearly visible at `windy` and above: stronger sway, leaves / dust streaks drifting, scarves and hair trailing further (Backlog: "wind barely visible")

@@ -16,7 +16,8 @@ the character (its box covers every part; plus ``facing``, ``speaking``, ``face`
 keys the cartoon lint rules read, :func:`_character_keys`), the objects of a speech bubble carry
 ``bubble`` (the speaker's name), and a stage prop (``vidgen.cartoon.props.Prop``) one
 object of kind ``prop`` named after the prop (a held one also ``held_by`` and ``hand``; its box
-is not part of its holder's); a particle field
+is not part of its holder's; one with shapes also ``shape``, an umbrella's ``closed`` or
+``open``); a particle field
 (``vidgen.particle_field.ParticleField``) is one object of kind ``particles`` named after its
 kind; a stage's shadows and stars (``vidgen.cartoon.shading``) are left out. A group with no
 text or image anywhere
@@ -272,8 +273,11 @@ class LayoutRecorder:
             return
         if isinstance(mob, Prop):  # one prop, also an SVG one (not a vector picture inside)
             self._emit_parts(walk, mob, path, name or mob.name, "prop", [m for m in mob.get_family() if _drawn(m)])
-            if mob.held_by is not None and walk.objects and walk.objects[-1]["id"] == self._id(mob):
-                walk.objects[-1].update({"held_by": mob.held_by, "hand": mob.hand})
+            if walk.objects and walk.objects[-1]["id"] == self._id(mob):
+                if mob.held_by is not None:
+                    walk.objects[-1].update({"held_by": mob.held_by, "hand": mob.hand})
+                if mob.shape is not None:
+                    walk.objects[-1]["shape"] = mob.shape
             return
         if isinstance(mob, ParticleField):  # one field of particles, named after its kind
             self._emit_parts(walk, mob, path, name or mob.name, "particles", [m for m in mob.get_family() if _drawn(m)])

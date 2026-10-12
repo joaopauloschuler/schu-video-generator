@@ -76,15 +76,16 @@ GALLERY_COLUMNS = 6
 
 def write_props_png(theme: Theme, path: Path, *, width: int = 960, height: int = 540) -> Path:
     """Draw every built-in prop (:data:`~vidgen.cartoon.props.PROP_KINDS`) in ``theme``, each
-    in a cell with its name below, on the theme background, and write a ``width`` x ``height``
-    PNG to ``path`` (folders are created; colours reduced to a 64-colour palette, so the file is
-    small enough for the docs)."""
+    in a cell with its name below (a prop with more shapes once per shape, :data:`PROP_SHAPES`),
+    on the theme background, and write a ``width`` x ``height`` PNG to ``path`` (folders are
+    created; colours reduced to a 64-colour palette, so the file is small enough for the docs)."""
     from manim import Camera, Text, VGroup, tempconfig
 
-    from vidgen.cartoon.props import PROP_KINDS, draw_prop
+    from vidgen.cartoon.props import PROP_KINDS, PROP_SHAPES, draw_prop
 
+    shown = [(kind, shape) for kind in PROP_KINDS for shape in PROP_SHAPES.get(kind, (None,))]
     frame_width, frame_height = frame_size(width, height)
-    rows = -(-len(PROP_KINDS) // GALLERY_COLUMNS)
+    rows = -(-len(shown) // GALLERY_COLUMNS)
     cell_w, cell_h = frame_width / GALLERY_COLUMNS, frame_height / rows
     settings = {
         "pixel_width": width, "pixel_height": height, "frame_width": frame_width, "frame_height": frame_height,
@@ -92,14 +93,15 @@ def write_props_png(theme: Theme, path: Path, *, width: int = 960, height: int =
     }
     with tempconfig(settings):
         cells = VGroup()
-        for k, kind in enumerate(PROP_KINDS):
+        for k, (kind, shape) in enumerate(shown):
             row, column = divmod(k, GALLERY_COLUMNS)
             left, top = -frame_width / 2 + column * cell_w, frame_height / 2 - row * cell_h
-            prop = draw_prop(kind, height=0.6 * cell_h, theme=theme, character_height=1.2 * cell_h)
+            prop = draw_prop(kind, height=0.6 * cell_h, theme=theme, character_height=1.2 * cell_h, shape=shape)
             if prop.width > 0.8 * cell_w:
                 prop.scale(0.8 * cell_w / prop.width)
             prop.shift([left + cell_w / 2, top - 0.75 * cell_h, 0.0] - prop.feet())
-            label = Text(kind, font=theme.font, font_size=0.11 * cell_h * 72, color=theme.color("text"))
+            name = kind if shape is None or shape == PROP_SHAPES[kind][0] else f"{kind} ({shape})"
+            label = Text(name, font=theme.font, font_size=0.11 * cell_h * 72, color=theme.color("text"))
             label.move_to([left + cell_w / 2, top - 0.87 * cell_h, 0.0])
             cells.add(prop, label)
         camera = Camera()

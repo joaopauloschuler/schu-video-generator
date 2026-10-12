@@ -107,13 +107,19 @@ from vidgen.languages import LanguageRules, language_rules  # noqa: E402
 from vidgen.imagegen import GenerateImage, generated_image  # noqa: E402
 from vidgen.vector_mobject import VectorPicture, load_vector  # noqa: E402
 from vidgen.cartoon.character import PART_NAMES, Character, CharacterPart, CharacterState, PartPose, character  # noqa: E402
-from vidgen.cartoon.transition import ArmMove, BodyMove, Gesture, Jump, KeyedMotion, PoseChange, PropMove, Walk, feet_of  # noqa: E402
+from vidgen.cartoon.transition import ArmMove, BodyMove, Gesture, Jump, KeyedMotion, PoseChange, PropMove, PropReshape, Walk, feet_of  # noqa: E402
 from vidgen.cartoon.holding import (  # noqa: E402
     GIVE_SECONDS,
     HAND_ORDER,
     HANDLING_ACTIONS,
     HOLD_SECONDS,
+    OVERHEAD_FORWARD,
+    OVERHEAD_HAND,
+    OVERHEAD_HEIGHT,
+    OVERHEAD_SHAPES,
     PICK_UP_SECONDS,
+    RESHAPE_SECONDS,
+    RESHAPE_SHARE,
     PUT_DOWN_LAND_SHARE,
     PUT_DOWN_REACH_SHARE,
     PUT_DOWN_SECONDS,
@@ -128,6 +134,7 @@ from vidgen.cartoon.holding import (  # noqa: E402
     held_height,
     hold_point,
     holding_problems,
+    overhead_point,
     put_down_x,
     throw_release_share,
     throw_seconds,
@@ -192,7 +199,18 @@ from vidgen.cartoon.reframe import (  # noqa: E402
     reframe_path,
     stage_base_width,
 )
-from vidgen.cartoon.props import PROP_HEIGHTS, PROP_KINDS, PROP_LIFTS, SVG_PROP_HEIGHT, Prop, draw_prop, read_svg_seat_and_lean, svg_prop  # noqa: E402
+from vidgen.cartoon.props import (  # noqa: E402
+    PROP_GRIPS,
+    PROP_HEIGHTS,
+    PROP_KINDS,
+    PROP_LIFTS,
+    PROP_SHAPES,
+    SVG_PROP_HEIGHT,
+    Prop,
+    draw_prop,
+    read_svg_seat_and_lean,
+    svg_prop,
+)
 from vidgen.cartoon.stage import (  # noqa: E402
     DEFAULT_FACTORS,
     LAYER_PLACES,
@@ -494,11 +512,18 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "ArmMove",
     "BodyMove",
     "PropMove",
+    "PropReshape",
     "GIVE_SECONDS",
     "HAND_ORDER",
     "HANDLING_ACTIONS",
     "HOLD_SECONDS",
+    "OVERHEAD_FORWARD",
+    "OVERHEAD_HAND",
+    "OVERHEAD_HEIGHT",
+    "OVERHEAD_SHAPES",
     "PICK_UP_SECONDS",
+    "RESHAPE_SECONDS",
+    "RESHAPE_SHARE",
     "PUT_DOWN_LAND_SHARE",
     "PUT_DOWN_REACH_SHARE",
     "PUT_DOWN_SECONDS",
@@ -513,6 +538,7 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "held_height",
     "hold_point",
     "holding_problems",
+    "overhead_point",
     "put_down_x",
     "throw_release_share",
     "throw_seconds",
@@ -578,9 +604,11 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "LAYER_PLACES",
     "layer_half_extent",
     "layer_transform",
+    "PROP_GRIPS",
     "PROP_HEIGHTS",
     "PROP_KINDS",
     "PROP_LIFTS",
+    "PROP_SHAPES",
     "SVG_PROP_HEIGHT",
     "Prop",
     "draw_prop",

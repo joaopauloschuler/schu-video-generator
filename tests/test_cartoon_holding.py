@@ -1,7 +1,8 @@
 """Step 93: interacting with props (``pick_up``, ``hold``, ``put_down``, ``give``, ``throw``): the
 holding state machine, where held, put-down and thrown props go (no manim), the actions on a fake
 stage, the checks of ``vidgen validate``, the planner leaving holding hands alone, the landing
-sound, and one tiny render with the layout dump's keys."""
+sound, and one tiny render with the layout dump's keys. Step 103: an umbrella opened overhead and
+closed (``open`` / ``close``), a basket by its handle, a napkin; one tiny render."""
 
 from __future__ import annotations
 
@@ -19,7 +20,11 @@ from conftest import minimal_config
 from vidgen.cartoon.foley import PlayedAction, foley_cues
 from vidgen.cartoon.holding import (
     HOLD_MAX_HEIGHT,
+    OVERHEAD_FORWARD,
+    OVERHEAD_HAND,
+    OVERHEAD_HEIGHT,
     PICK_UP_REACH,
+    RESHAPE_SECONDS,
     THROW_FLIGHT_MAX,
     HandlingStep,
     HoldingError,
@@ -27,6 +32,7 @@ from vidgen.cartoon.holding import (
     held_height,
     hold_point,
     holding_problems,
+    overhead_point,
     put_down_x,
     spin_degrees,
     throw_point,
@@ -34,7 +40,7 @@ from vidgen.cartoon.holding import (
     throw_seconds,
 )
 from vidgen.cartoon.props import draw_prop
-from vidgen.cartoon.transition import ArmMove, BodyMove, PropMove
+from vidgen.cartoon.transition import ArmMove, BodyMove, PropMove, PropReshape
 from vidgen.cli import check_project
 from vidgen.project import Project
 from vidgen.theme import Theme
@@ -192,12 +198,105 @@ def test_a_big_prop_is_smaller_in_the_hand() -> None:
     assert box.height == pytest.approx(pip.character_height, rel=1e-3)
 
 
+# ----- Step 103: an umbrella held overhead, a basket by its handle (no render) -------------------------
+
+
+def test_overhead_geometry() -> None:
+    assert overhead_point((1.0, -2.0), 3.0, "right") == pytest.approx((1.0 + OVERHEAD_FORWARD * 3.0, -2.0 + OVERHEAD_HAND * 3.0))
+    assert overhead_point((1.0, -2.0), 3.0, "left")[0] == pytest.approx(1.0 - OVERHEAD_FORWARD * 3.0)
+    assert held_height(0.6, 3.0, overhead=True) == pytest.approx(OVERHEAD_HEIGHT * 3.0)   # not capped at HOLD_MAX_HEIGHT
+    assert held_height(0.6, 3.0) == pytest.approx(HOLD_MAX_HEIGHT * 3.0)
+
+
+def umbrella_stage(**umbrella: Any) -> tuple[StageFake, Any, Any, Any]:
+    scene, pip, kit, _ = stage()
+    prop = draw_prop("umbrella", height=0.6 * pip.character_height, theme=Theme(), name="umbrella", **umbrella).shift([-3.6, -2.0, 0.0])
+    prop.height_factor = 0.6
+    scene.mobs["umbrella"] = prop
+    scene.mobjects = [prop, pip, kit]
+    return scene, pip, kit, prop
+
+
+def assert_overhead(umbrella: Any, holder: Any) -> None:
+    h = holder.character_height
+    assert umbrella.shape == "open" and umbrella.height == pytest.approx(OVERHEAD_HEIGHT * h, rel=1e-3)
+    assert np.allclose(umbrella.grip_point()[:2], holder.hand_point("left")[:2], atol=1e-6)   # held by the shaft
+    rim = umbrella.get_top()[1] - (1.0 - 0.74) * umbrella.height
+    assert rim > holder.get_top()[1]   # the canopy is above the head
+    assert umbrella.get_left()[0] < holder.parts["head"].get_left()[0] and umbrella.get_right()[0] > holder.parts["head"].get_right()[0]
+
+
+def test_an_umbrella_opens_overhead_and_closes_in_the_hand() -> None:
+    scene, pip, kit, umbrella = umbrella_stage()
+    run(use("hold", to="umbrella").apply(scene, [target("pip", pip)]))
+    assert umbrella.shape == "closed" and np.allclose(umbrella.get_center(), pip.hand_point("left"), atol=1e-6)
+    assert umbrella.height == pytest.approx(HOLD_MAX_HEIGHT * pip.character_height, rel=1e-3)
+    family = umbrella.get_family()
+    opening = use("open", target="umbrella")
+    anims = opening.apply(scene, [target("umbrella", umbrella)])
+    assert [type(a) for a in anims] == [ArmMove, PropReshape] and opening.run_time == RESHAPE_SECONDS
+    assert scene.mobjects == [umbrella, pip, kit]   # drawn just behind its holder: the shaft behind the head
+    run(anims)
+    umbrella.update()
+    assert umbrella.get_family() == family
+    assert_overhead(umbrella, pip)
+    expected = overhead_point(pip.feet(), pip.character_height, "right")
+    assert pip.hand_point("left")[:2] == pytest.approx(expected, abs=1e-6)   # the arm raised to it
+    pip.shift([1.5, 0.0, 0.0])
+    umbrella.update()
+    assert_overhead(umbrella, pip)   # walks along overhead
+    assert use("open", target="umbrella").apply(scene, [target("umbrella", umbrella)]) == []   # already open
+    run(use("give", to="kit").apply(scene, [target("pip", pip)]))
+    umbrella.update()
+    assert_overhead(umbrella, kit)   # the receiver holds it overhead too
+    assert scene.mobjects.index(umbrella) == scene.mobjects.index(kit) - 1
+    run(use("close", target="umbrella").apply(scene, [target("umbrella", umbrella)]))
+    umbrella.update()
+    assert umbrella.shape == "closed" and np.allclose(umbrella.get_center(), kit.hand_point("left"), atol=1e-6)
+    assert umbrella.height == pytest.approx(HOLD_MAX_HEIGHT * kit.character_height, rel=1e-3)
+    assert scene.mobjects.index(umbrella) == scene.mobjects.index(kit) + 1   # in front again
+
+
+def test_an_open_umbrella_is_picked_up_and_put_down_open() -> None:
+    scene, pip, _, umbrella = umbrella_stage(shape="open")
+    run(use("pick_up", to="umbrella").apply(scene, [target("pip", pip)]))
+    umbrella.update()
+    assert_overhead(umbrella, pip)
+    run(use("put_down").apply(scene, [target("pip", pip)]))
+    assert umbrella.shape == "open" and umbrella.height == pytest.approx(0.6 * pip.character_height, rel=0.02)
+    assert umbrella.feet()[1] == pytest.approx(pip.feet()[1], abs=1e-6)   # stands on the ground, open
+    assert umbrella.feet()[0] == pytest.approx(put_down_x(float(pip.feet()[0]), pip.character_height, "right"), abs=0.02)
+    feet = umbrella.feet()
+    run(use("close", target="umbrella").apply(scene, [target("umbrella", umbrella)]))
+    assert umbrella.shape == "closed" and umbrella.feet()[1] == pytest.approx(feet[1], abs=1e-6)   # closes where it stands
+
+
+def test_a_basket_hangs_from_its_handle() -> None:
+    scene, pip, _, _ = stage()
+    basket = draw_prop("basket", height=0.2 * pip.character_height, theme=Theme(), name="basket").shift([-3.6, -2.0, 0.0])
+    basket.height_factor = 0.2
+    scene.mobs["basket"] = basket
+    scene.mobjects.append(basket)
+    run(use("pick_up", to="basket").apply(scene, [target("pip", pip)]))
+    basket.update()
+    hand = pip.hand_point("left")
+    assert np.allclose(basket.grip_point()[:2], hand[:2], atol=1e-6) and basket.get_top()[1] == pytest.approx(hand[1], abs=0.02)
+    assert basket.get_bottom()[1] > pip.feet()[1]   # off the ground
+    napkin = draw_prop("napkin", height=0.05 * pip.character_height, theme=Theme(), name="napkin").shift([-3.6, -2.0, 0.0])
+    napkin.height_factor = 0.05
+    scene.mobs["napkin"] = napkin
+    scene.mobjects.append(napkin)
+    run(use("pick_up", to="napkin").apply(scene, [target("pip", pip)]))
+    napkin.update()
+    assert np.allclose(napkin.get_center(), pip.hand_point("right"), atol=1e-6) and napkin.height == pytest.approx(0.05 * pip.character_height, rel=1e-3)
+
+
 # ----- validate ---------------------------------------------------------------------------------------
 
 
-def prop_project(make_project, beats: list[dict[str, Any]]) -> Project:
+def prop_project(make_project, beats: list[dict[str, Any]], props: list[Any] | None = None) -> Project:
     params = {"idle": False, "characters": [{"name": "pip", "at": "left"}, {"name": "kit", "at": "right"}],
-              "props": [{"prop": "ball", "at": 0.5}, {"prop": "tree", "at": "far_right"}]}
+              "props": props or [{"prop": "ball", "at": 0.5}, {"prop": "tree", "at": "far_right"}]}
     scenes = [{"id": "park", "type": "stage", "params": params, "beats": beats}]
     return Project.load(make_project(minimal_config(characters=CAST, voices=VOICES, scenes=scenes)))
 
@@ -225,6 +324,19 @@ def test_validate_prop_actions(make_project) -> None:
     (far, apart) = check_project(order)
     assert far.startswith("scenes[0].beats[0].actions[0].to: pip is") and "walk_to first (- walk_to: pip, to: 0.40)" in far
     assert apart.startswith("scenes[0].beats[1].actions[2].to: pip is") and "next to each other" in apart
+
+
+def test_validate_open_and_close(make_project) -> None:
+    props = [{"prop": "umbrella", "at": 0.3}, {"prop": "umbrella", "name": "spare", "open": True}, "tree"]
+    good = prop_project(make_project, [{"text": "Pip opens it.", "actions": [{"hold": "pip", "to": "umbrella"}, {"open": "umbrella", "at": 0.3},
+                                                                           {"close": "spare"}]}], props)
+    assert check_project(good) == []
+    bad = prop_project(make_project, [{"text": "Hello.", "actions": [{"open": "tree"}, {"close": "pip"}, {"open": "kite"}]}], props)
+    problems = check_project(bad)
+    where = "scenes[0].beats[0].actions"
+    assert f"{where}[0].target: 'tree' cannot open (props that can: umbrella)" in problems
+    assert f"{where}[1].target: 'pip' is not a prop; close acts on props (- close: <prop>)" in problems
+    assert any(p.startswith(f"{where}[2].target: unknown target 'kite'") for p in problems), problems
 
 
 # ----- the planner leaves holding hands alone, the landing sound -----------------------------------------
@@ -280,3 +392,25 @@ def test_props_change_hands_on_a_stage(make_project, tmp_path: Path) -> None:
     thud = next(e for e in scene.sfx_log if e.sound == "thud")
     flight = next(p for p in scene.play_log if "PropMove" in p.animations and "ArmMove" in p.animations and p.start > scene.beat_log[1].start)
     assert thud.time == pytest.approx(flight.end, abs=0.25)
+
+
+@pytest.mark.render
+def test_an_umbrella_opens_on_a_stage(make_project, tmp_path: Path) -> None:
+    """Step 103: pip opens the umbrella it holds (overhead, the dump says its shape); the spare one,
+    open from the start, closes where it stands."""
+    project = prop_project(make_project, [
+        {"text": "Pip opens the umbrella.", "voice": "pip_voice", "actions": [{"hold": "pip", "to": "umbrella"}, {"open": "umbrella", "at": 0.3}]},
+        {"text": "The spare one closes.", "voice": "kit_voice", "actions": [{"close": "spare"}]},
+    ], [{"prop": "umbrella", "at": 0.3}, {"prop": "umbrella", "name": "spare", "at": 0.8, "open": True}])
+    from vidgen.introspect import LayoutRecorder
+
+    recorder = LayoutRecorder()
+    scene, _ = render_with_layout(project, "park", tmp_path / "media", recorder)
+    ends = [f for f in recorder.frames if "mid" not in f]
+    first = {o["name"]: o for o in ends[0]["objects"] if o["name"]}
+    assert first["umbrella"]["shape"] == "open" and first["umbrella"]["held_by"] == "pip" and first["spare"]["shape"] == "open"
+    names = [o["name"] for o in ends[0]["objects"]]
+    assert names.index("umbrella") == names.index("pip") - 1   # drawn just behind its holder
+    last = {o["name"]: o for o in ends[-1]["objects"] if o["name"]}
+    assert last["spare"]["shape"] == "closed" and last["umbrella"]["shape"] == "open"
+    assert scene.props["umbrella"].get_top()[1] > scene.cast["pip"].get_top()[1]

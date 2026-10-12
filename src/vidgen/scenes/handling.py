@@ -1,23 +1,25 @@
 """Prop beat actions (DESIGN.md §69.27): ``pick_up``, ``hold``, ``put_down``, ``give`` and
-``throw`` on the characters and props of a ``stage``. Written against ``vidgen.api`` only, like
-project actions.
+``throw`` on the characters and props of a ``stage``, and ``open`` / ``close`` on its props
+(an umbrella, §69.37). Written against ``vidgen.api`` only, like project actions.
 
 Who holds what is a :class:`Holdings` on the scene. A held prop is not added to its character
 (a character's parts never change, §69.22): it stays a mobject of its own, drawn right after its
-holder (in front of it, behind what stands in front of it), and an updater keeps its middle at the
+holder (in front of it, behind what stands in front of it; right before it when held overhead),
+and an updater keeps its grip (its middle unless it has one) at the
 hand (:meth:`Character.hand_point`) on every frame, so it goes along with walks, jumps and turns.
 The arm reaches with :meth:`Character.reached_parts` (:class:`ArmMove`) and the prop travels with
 :class:`PropMove`. The geometry and the checks are in :mod:`vidgen.cartoon.holding`.
 """
 
 from dataclasses import dataclass
-from typing import Any, Literal
+from fnmatch import fnmatchcase
+from typing import Any, ClassVar, Literal
 
 import numpy as np
 
 from vidgen.api import *
 
-from .acting import _Acting, _characters, is_posed, posture_parts
+from .acting import _Acting, _characters, is_part_target, is_posed, posture_parts
 from .moving import Place, _place_x
 
 #: Which hand: left (the near one, drawn in front of the body) or right.
@@ -73,9 +75,20 @@ def _arm(character: Character, hand: str) -> dict[str, PartPose]:
     return {upper: character.pose_of(upper), f"{upper}_lower": character.pose_of(f"{upper}_lower")}
 
 
-def _carry(character: Character, hand: str) -> dict[str, PartPose]:
-    """The arm poses that hold a prop in front of the shoulder (:func:`hold_point`)."""
-    point = hold_point(character.shoulder_point(hand), character.character_height, character.facing)
+def is_overhead(prop: Prop, shape: str | None = None) -> bool:
+    """Whether ``prop`` is held overhead when it shows ``shape`` (default: the shape it shows; an
+    open umbrella, :data:`OVERHEAD_SHAPES`)."""
+    return (shape or prop.shape) in OVERHEAD_SHAPES
+
+
+def _carry(character: Character, hand: str, overhead: bool = False) -> dict[str, PartPose]:
+    """The arm poses that hold a prop in front of the shoulder (:func:`hold_point`), or
+    ``overhead`` (:func:`overhead_point`)."""
+    h = character.character_height
+    if overhead:
+        point = overhead_point(character.feet(), h, character.facing)
+    else:
+        point = hold_point(character.shoulder_point(hand), h, character.facing)
     return character.reached_parts(hand, [point[0], point[1], 0.0])
 
 
@@ -117,25 +130,34 @@ def _standing_height(prop: Prop, character: Character) -> float:
     return float(prop.height)
 
 
-def _in_hand_height(prop: Prop, character: Character) -> float:
+def _in_hand_height(prop: Prop, character: Character, overhead: bool = False) -> float:
     """How tall ``prop`` is in ``character``'s hand (:func:`held_height`)."""
     factor = prop.height_factor if prop.height_factor is not None else prop.height / character.character_height
-    return held_height(factor, character.character_height)
+    return held_height(factor, character.character_height, overhead=overhead)
 
 
-def _draw_after(scene: NarratedScene, prop: Prop, character: Character) -> None:
-    """Draw ``prop`` right after ``character`` (in front of it, behind later ones)."""
+def _standing_grip(prop: Prop, x: float, ground: float, height: float) -> list[float]:
+    """Where ``prop``'s grip (its middle without one) is when it stands ``height`` tall with its
+    feet at (``x``, ``ground``): the target of a :class:`PropMove` onto the ground."""
+    offset = (prop.grip_point() - prop.feet()) * (height / max(float(prop.height), 1e-9))
+    return [x + float(offset[0]), ground + float(offset[1])]
+
+
+def _draw_beside(scene: NarratedScene, prop: Prop, character: Character, overhead: bool) -> None:
+    """Draw ``prop`` right after ``character`` (in front of it, behind later ones), or right
+    before it when it is held ``overhead`` (the shaft behind the head, the canopy above it)."""
     mobjects = getattr(scene, "mobjects", [])
     if prop not in mobjects or character not in mobjects:
         return
     mobjects.remove(prop)
-    mobjects.insert(mobjects.index(character) + 1, prop)
+    mobjects.insert(mobjects.index(character) + (0 if overhead else 1), prop)
 
 
 def attach(scene: NarratedScene, prop: Prop, character: Character, hand: str, arm_before: dict[str, PartPose], standing: float) -> None:
-    """Make ``prop`` follow ``character``'s ``hand`` from now on (an updater on the prop)."""
+    """Make ``prop`` follow ``character``'s ``hand`` from now on (an updater on the prop that
+    keeps its grip there, :meth:`Prop.grip_point`)."""
     def follow(mob: Mobject) -> None:
-        mob.move_to(character.hand_point(hand))
+        mob.shift(character.hand_point(hand) - mob.grip_point())
 
     detach(scene, prop)
     prop.add_updater(follow)
@@ -143,7 +165,7 @@ def attach(scene: NarratedScene, prop: Prop, character: Character, hand: str, ar
     prop.keyed_feet = None
     character.holding[hand] = prop.name
     _held(scene)[prop.name] = _Held(character, hand, follow, arm_before, standing)
-    _draw_after(scene, prop, character)
+    _draw_beside(scene, prop, character, is_overhead(prop))
 
 
 def detach(scene: NarratedScene, prop: Prop) -> _Held | None:
@@ -209,9 +231,11 @@ class PickUp(_Handling):
         for character in _characters(scene, targets, "pick_up")[:1]:
             prop = _prop(scene, self.options.to)
             hand = holdings(scene).take(character.name, prop.name, _hand(scene, character, self.options.hand))
-            before, standing = _arm(character, hand), float(prop.height)
-            anims.append(_reach_low(character, hand, prop.get_top(), REACH_SHARE, _carry(character, hand)))
-            anims.append(PropMove(prop, to=lambda c=character, h=hand: c.hand_point(h), leave=REACH_SHARE, height=_in_hand_height(prop, character)))
+            before, standing, overhead = _arm(character, hand), float(prop.height), is_overhead(prop)
+            grip = prop.grip_point() if prop.grip is not None else prop.get_top()
+            anims.append(_reach_low(character, hand, grip, REACH_SHARE, _carry(character, hand, overhead)))
+            anims.append(PropMove(prop, to=lambda c=character, h=hand: c.hand_point(h), leave=REACH_SHARE,
+                                  height=_in_hand_height(prop, character, overhead)))
             attach(scene, prop, character, hand, before, standing)
         return anims
 
@@ -238,9 +262,9 @@ class Hold(_Handling):
         for character in _characters(scene, targets, "hold")[:1]:
             prop = _prop(scene, self.options.to)
             hand = holdings(scene).take(character.name, prop.name, _hand(scene, character, self.options.hand))
-            before, standing = _arm(character, hand), float(prop.height)
-            anims.append(ArmMove(character, [(1.0, _carry(character, hand))]))
-            anims.append(PropMove(prop, to=lambda c=character, h=hand: c.hand_point(h), height=_in_hand_height(prop, character)))
+            before, standing, overhead = _arm(character, hand), float(prop.height), is_overhead(prop)
+            anims.append(ArmMove(character, [(1.0, _carry(character, hand, overhead))]))
+            anims.append(PropMove(prop, to=lambda c=character, h=hand: c.hand_point(h), height=_in_hand_height(prop, character, overhead)))
             attach(scene, prop, character, hand, before, standing)
         return anims
 
@@ -280,7 +304,7 @@ class PutDown(_Handling):
             back = held.arm_before if held is not None else _arm(character, hand)
             anims.append(_reach_low(character, hand, spot, PUT_DOWN_REACH_SHARE, back))
             anims.append(self._move(scene, prop, leave=PUT_DOWN_REACH_SHARE, arrive=PUT_DOWN_LAND_SHARE,
-                                    to=[x, float(feet[1]) + height / 2], height=height))
+                                    to=_standing_grip(prop, x, float(feet[1]), height), height=height))
             detach(scene, prop)
         return anims
 
@@ -334,9 +358,10 @@ class Give(_Handling):
             back = held.arm_before if held is not None else _arm(giver, from_hand)
             receiver_before = _arm(receiver, to_hand)
             anims.append(ArmMove(giver, [(REACH_SHARE, giver.reached_parts(from_hand, point)), (1.0, back)]))
-            anims.append(ArmMove(receiver, [(REACH_SHARE, receiver.reached_parts(to_hand, point)), (1.0, _carry(receiver, to_hand))]))
+            overhead = is_overhead(prop)
+            anims.append(ArmMove(receiver, [(REACH_SHARE, receiver.reached_parts(to_hand, point)), (1.0, _carry(receiver, to_hand, overhead))]))
             anims.append(self._move(scene, prop, leave=REACH_SHARE, arrive=1.0, to=lambda r=receiver, h=to_hand: r.hand_point(h),
-                                    height=_in_hand_height(prop, receiver)))
+                                    height=_in_hand_height(prop, receiver, overhead)))
             standing = held.standing_height if held is not None else float(prop.height)
             attach(scene, prop, receiver, to_hand, receiver_before, standing)
         return anims
@@ -394,10 +419,70 @@ class Throw(_Handling):
                 (wind, character.reached_parts(hand, behind)), (release, character.reached_parts(hand, ahead)), (settle, back),
             ]))
             height = _standing_height(prop, character)
-            anims.append(self._move(scene, prop, leave=release, arrive=1.0, to=[x, float(feet[1]) + height / 2], height=height,
+            anims.append(self._move(scene, prop, leave=release, arrive=1.0, to=_standing_grip(prop, x, float(feet[1]), height), height=height,
                                     rise=self.options.height * h, turns=self.options.spin, lands=True))
             detach(scene, prop)
         return anims
+
+
+class _Reshape(Action):
+    """``open`` / ``close``: the target props (by name) switch to the action's shape
+    (:data:`PROP_SHAPES`); a held one is lifted overhead or brought back to the hold point by its
+    holder's arm, changing size in the hand (DESIGN.md §69.37)."""
+
+    #: The shape the prop shows afterwards.
+    shape: ClassVar[str]
+    run_time = RESHAPE_SECONDS
+
+    def scene_problems(self, scene_cls: type[NarratedScene], params: Any) -> list[tuple[str, str]]:
+        action = self.config.action
+        if "<prop>" not in scene_cls.target_patterns:
+            return [("target", f"{action} is for the props of a stage")]
+        kinds = dict(zip(params.prop_names(), (p.prop for p in params.props)))
+        able = sorted(kind for kind, shapes in PROP_SHAPES.items() if self.shape in shapes)
+        problems: list[tuple[str, str]] = []
+        for pattern in self.config.targets():
+            for name in [n for n in scene_cls.target_names(params) if fnmatchcase(n, pattern) and not is_part_target(n)]:
+                if name not in kinds:
+                    problems.append(("target", f"'{name}' is not a prop; {action} acts on props (- {action}: <prop>)"))
+                elif self.shape not in PROP_SHAPES.get(kinds[name] or "", ()):
+                    problems.append(("target", f"'{name}' cannot {action} (props that can: {', '.join(able)})"))
+        return problems
+
+    def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
+        """Switch each target prop's shape half-way; a held one's arm moves to where it holds
+        it in its new shape (overhead or in front), the prop at the hand."""
+        anims: list[Animation] = []
+        for prop in [t.mobject for t in targets if isinstance(t.mobject, Prop)]:
+            if self.shape not in prop.shapes or prop.shape == self.shape:
+                continue
+            held = _held(scene).get(prop.name)
+            if held is None:
+                anims.append(PropReshape(prop, self.shape, at=RESHAPE_SHARE))
+                continue
+            character, hand, overhead = held.character, held.hand, is_overhead(prop, self.shape)
+            anims.append(ArmMove(character, [(1.0, _carry(character, hand, overhead))]))
+            anims.append(PropReshape(prop, self.shape, at=RESHAPE_SHARE, height=_in_hand_height(prop, character, overhead),
+                                     follow=lambda c=character, h=hand: c.hand_point(h)))
+            _draw_beside(scene, prop, character, overhead)
+        return anims
+
+
+@action("open")
+class Open(_Reshape):
+    """The target prop opens (an umbrella: `- open: umbrella`). Held, it goes up overhead, the
+    holder's arm raised; standing, it opens where it stands. A prop can also start open
+    (`open: true` in the stage's props)."""
+
+    shape = "open"
+
+
+@action("close")
+class Close(_Reshape):
+    """The target prop closes (an umbrella: `- close: umbrella`). Held, it comes down to the
+    holder's hand in front of it; standing, it closes where it stands."""
+
+    shape = "closed"
 
 
 def _place_problem(scene_cls: type[NarratedScene], params: Any, place: Any) -> list[tuple[str, str]]:

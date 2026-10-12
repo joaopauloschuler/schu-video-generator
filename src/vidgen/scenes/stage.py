@@ -63,7 +63,7 @@ class StageProp(SceneParams):
     also_accepts: ClassVar[tuple[type, ...]] = (str,)
 
     prop: Literal[PROP_KINDS] | None = None  # type: ignore[valid-type]
-    """A built-in prop: table, chair, tree, bush, house, door, lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup."""
+    """A built-in prop: table, chair, tree, bush, house, door, lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup, basket, umbrella, napkin."""
     svg: str | None = None
     """Instead of prop: an SVG file relative to the project folder (sanitised like any SVG), standing on the bottom edge of its viewBox."""
     name: Identifier | None = None
@@ -84,6 +84,8 @@ class StageProp(SceneParams):
     """Its second colour (a tree's trunk, a house's roof, a laptop's screen...); default per prop."""
     recolor: Literal["none", "theme"] = "none"
     """With svg: theme maps the picture's colours to the nearest theme colours; none keeps them."""
+    open: bool = False
+    """An umbrella: true starts it open (the open / close actions change it later)."""
 
     @model_validator(mode="before")
     @classmethod
@@ -106,6 +108,9 @@ class StageProp(SceneParams):
                 raise ValueError("color and detail are for built-in props; an SVG keeps its colours (or recolor: theme)")
         elif self.recolor != "none":
             raise ValueError("recolor is for svg props; a built-in prop takes color and detail")
+        if self.open and "open" not in PROP_SHAPES.get(self.prop or "", ()):
+            able = ", ".join(kind for kind, shapes in PROP_SHAPES.items() if "open" in shapes)
+            raise ValueError(f"open is for props that open ({able}), not {self.prop or 'an svg prop'}")
         return self
 
     def default_name(self) -> str:
@@ -288,7 +293,7 @@ class Stage(NarratedScene):
         layers: list[StageLayer] = []
         """Parallax layers: {place: background | middle | foreground, factor, image | shapes}."""
         props: list[StageProp] = []
-        """Props: a built-in prop's name, or {prop | svg, name, at, depth, scale, lift, facing, color, detail, recolor}."""
+        """Props: a built-in prop's name, or {prop | svg, name, at, depth, scale, lift, facing, color, detail, recolor, open}."""
         particles: list[StageParticles] = []
         """Particles over the whole scene, in front of everything: a kind (rain, snow, sparkles, dust, confetti, smoke, bubbles) or {kind, density, area, color, seed}; for one beat use the particles action."""
         light: LightSetting = "day"
@@ -731,7 +736,8 @@ class Stage(NarratedScene):
                 if lifts[name] > 0:
                     continue  # hangs in the sky
                 prop = self.props[name]
-                caster = ShadowCaster(prop, self.grounds[name], prop.width * PROP_SHADOW_WIDTH, prop.height)
+                widths = {shape: prop.shape_width(shape) * PROP_SHADOW_WIDTH for shape in prop.shapes}
+                caster = ShadowCaster(prop, self.grounds[name], prop.width * PROP_SHADOW_WIDTH, prop.height, widths)
                 (moving if name in movable else still).append(caster)
             else:
                 figure = self.cast[name]
@@ -744,10 +750,10 @@ class Stage(NarratedScene):
         return groups[0], groups[1]
 
     def _movable_props(self) -> set[str]:
-        """The props an action may move: picked up or held (then put down, given or thrown),
-        or moved by ``keyframes`` / ``move_along``."""
+        """The props an action may move or reshape: picked up or held (then put down, given or
+        thrown), moved by ``keyframes`` / ``move_along``, opened or closed."""
         moved = {use.options.to for kind in ("pick_up", "hold") for use in self.action_uses(kind)}
-        for kind in ("keyframes", "move_along"):
+        for kind in ("keyframes", "move_along", "open", "close"):
             for use in self.action_uses(kind):
                 moved |= {name for name in self.props for pattern in use.config.targets() if fnmatchcase(name, pattern)}
         return moved & set(self.props)
@@ -777,7 +783,7 @@ class Stage(NarratedScene):
             )
         return draw_prop(
             prop.prop, height=height, theme=self.theme, name=name, main=prop.color, detail=prop.detail,
-            facing=prop.facing, character_height=height / prop.height_factor(),
+            facing=prop.facing, character_height=height / prop.height_factor(), shape="open" if prop.open else None,
         )
 
     def _backdrop(self, layers: list[Mobject], heads: float | None = None) -> list[Mobject]:

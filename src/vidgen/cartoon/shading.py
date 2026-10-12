@@ -11,8 +11,8 @@ colours and its contrast.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field
 from typing import Any, Literal
 
 import numpy as np
@@ -166,18 +166,21 @@ class StarField(VGroup):
 class ShadowCaster:
     """What casts a shadow: ``mobject`` (with ``feet()``; a prop with ``held_by`` set casts none),
     the y of its ``ground`` line, its shadow's ``width`` and its ``size`` (height, the unit of how
-    high it is off the ground)."""
+    high it is off the ground). ``widths``: the shadow's width per shape a prop with shapes shows
+    (an umbrella closed or open; a shape not listed: ``width``)."""
 
     mobject: Any
     ground: float
     width: float
     size: float
+    widths: Mapping[str, float] = field(default_factory=dict)
 
     def ellipse(self, strength: float) -> ShadowEllipse:
         """Its shadow now (:func:`~vidgen.cartoon.lighting.shadow_ellipse`)."""
         x, y = (float(v) for v in self.mobject.feet()[:2])
         held = getattr(self.mobject, "held_by", None) is not None
-        return shadow_ellipse(x, self.ground, self.width, above=y - self.ground, size=self.size, strength=0.0 if held else strength)
+        width = self.widths.get(getattr(self.mobject, "shape", None) or "", self.width)
+        return shadow_ellipse(x, self.ground, width, above=y - self.ground, size=self.size, strength=0.0 if held else strength)
 
 
 class Shadow(VGroup):

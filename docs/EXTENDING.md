@@ -215,7 +215,7 @@ them. The built-in `keyframes` and `move_along` actions (`src/vidgen/scenes/keyf
 act on a `stage`'s characters, props and part targets `<character>.<part>`; a scene of your own
 can register part targets the same way (`self.target("hero.arm_left", hero.parts["arm_left"])`)
 and set `target_patterns` to include `"<character>"` to accept those actions.
-The prop actions (`pick_up`, `hold`, `put_down`, `give`, `throw`; `src/vidgen/scenes/handling.py`)
+The prop actions (`pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`; `src/vidgen/scenes/handling.py`)
 need `"<prop>"` in `target_patterns` and `Prop` targets. Their pieces are exported:
 `ArmMove(character, [(share, {part: PartPose}), ...])` eases some parts through keys;
 `PropMove(prop, to=, follow=, leave=, arrive=, height=, rise=, turns=)` carries a prop from a hand
@@ -223,7 +223,12 @@ need `"<prop>"` in `target_patterns` and `Prop` targets. Their pieces are export
 `character.reached_parts(hand, point)` gives the arm poses `reach` would set, and
 `hold_point(character.shoulder_point(hand), character.character_height, character.facing)` where
 a held prop sits. To keep a prop in a hand, give it an updater (`prop.add_updater(lambda m:
-m.move_to(hero.hand_point("left")))`); never add it to the `Character` (its parts must not change).
+m.shift(hero.hand_point("left") - m.grip_point()))`); never add it to the `Character` (its parts
+must not change). `prop.grip_point()` is where a hand holds it (a basket's handle, an open
+umbrella's shaft; else its middle), and `PropMove` moves a prop by that point. A prop with
+shapes (`prop.shapes`, an umbrella's `closed` / `open`) switches with `prop.show_shape(name)` or
+the animation `PropReshape(prop, shape, at=, height=, follow=)` (the `open` / `close` actions);
+`overhead_point(feet, height, facing)` is where a hand holds an open umbrella overhead.
 The sitting actions (`sit_on`, `lean_on`, `stand_up`; `src/vidgen/scenes/sitting.py`) build on
 `character.seated(state, seat)` (the hips on a seat `seat` character units high, the legs bent
 by the solver), `character.leaning(state)`, `character.lowered(state, drop, stoop=)` (a crouch,

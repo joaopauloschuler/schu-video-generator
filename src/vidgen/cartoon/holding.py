@@ -8,7 +8,8 @@ one (:func:`holding_problems`, with the distances), and the automatic directing 
 so it adds no arm gesture with a hand that holds something.
 
 The geometry is in Manim units and character heights: where a held prop sits (:func:`hold_point`,
-in front of the shoulder), how tall it is in the hand (:func:`held_height`), where a prop is put
+in front of the shoulder; :func:`overhead_point` for an open umbrella, §69.37), how tall it is
+in the hand (:func:`held_height`), where a prop is put
 down (:func:`put_down_x`) and the arc and spin of a throw (:func:`throw_point`, :func:`spin_degrees`).
 """
 
@@ -64,6 +65,18 @@ THROW_FLIGHT_PER_UNIT = 0.06
 THROW_FLIGHT_MAX = 1.6
 #: The actions that hand props around, and the ones after which a character's hand is free.
 HANDLING_ACTIONS: frozenset[str] = frozenset({"pick_up", "hold", "put_down", "give", "throw"})
+#: A prop showing one of these shapes (an open umbrella) is held overhead (DESIGN.md §69.37): the
+#: hand ``OVERHEAD_FORWARD`` of its holder's heights in front of the feet and ``OVERHEAD_HAND``
+#: above them (where every generated look's arm reaches, or nearly), the prop
+#: ``OVERHEAD_HEIGHT`` holder heights tall (not :data:`HOLD_MAX_HEIGHT`), so an umbrella's canopy
+#: is above the head of every generated look and wide enough to cover it.
+OVERHEAD_SHAPES: frozenset[str] = frozenset({"open"})
+OVERHEAD_FORWARD = 0.08
+OVERHEAD_HAND = 0.6
+OVERHEAD_HEIGHT = 0.85
+#: Seconds of an ``open`` / ``close`` action, and the share of it at which the shape changes.
+RESHAPE_SECONDS = 0.6
+RESHAPE_SHARE = 0.5
 
 
 class HoldingError(ValueError):
@@ -152,10 +165,20 @@ def hold_point(shoulder: Sequence[float], height: float, facing: str) -> tuple[f
     return float(shoulder[0]) + ahead, float(shoulder[1]) - HOLD_DROP * height
 
 
-def held_height(height_factor: float, holder_height: float) -> float:
+def held_height(height_factor: float, holder_height: float, *, overhead: bool = False) -> float:
     """How tall a prop is in a hand: its height next to the holder (``height_factor`` of the
-    holder's height), at most :data:`HOLD_MAX_HEIGHT` of it."""
+    holder's height), at most :data:`HOLD_MAX_HEIGHT` of it; held ``overhead``:
+    :data:`OVERHEAD_HEIGHT` of it."""
+    if overhead:
+        return OVERHEAD_HEIGHT * holder_height
     return min(height_factor, HOLD_MAX_HEIGHT) * holder_height
+
+
+def overhead_point(feet: Sequence[float], height: float, facing: str) -> tuple[float, float]:
+    """Where the hand holding a prop overhead is: :data:`OVERHEAD_FORWARD` heights in front of
+    the holder's ``feet`` (screen) and :data:`OVERHEAD_HAND` above them."""
+    ahead = OVERHEAD_FORWARD * height * (1.0 if facing == "right" else -1.0)
+    return float(feet[0]) + ahead, float(feet[1]) + OVERHEAD_HAND * height
 
 
 def put_down_x(feet_x: float, height: float, facing: str) -> float:

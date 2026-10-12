@@ -209,10 +209,32 @@ def shape_drawing(shape: VMobject) -> tuple[np.ndarray, ...]:
     return tuple(np.array(member.points, dtype=float) for member in shape.family_members_with_points())
 
 
-def _apply(matrix: np.ndarray, points: np.ndarray) -> np.ndarray:
+def apply_matrix(matrix: np.ndarray, points: np.ndarray) -> np.ndarray:
+    """``points`` (n x 3) moved by the 3 x 3 affine ``matrix`` in x and y (z kept)."""
     out = np.array(points, dtype=float)
     out[:, :2] = points[:, :2] @ matrix[:2, :2].T + matrix[:2, 2]
     return out
+
+
+def anchor_mobject(unit: float = 1.0) -> VMobject:
+    """An invisible triangle at the origin, :data:`_ANCHOR_SIDE` ``unit`` s wide: added to a
+    group, it moves, scales and mirrors with it, so :func:`anchor_placement` can map the units
+    the group was drawn in (``unit`` long) to the screen later."""
+    anchor = VMobject(fill_opacity=0, stroke_width=0, stroke_opacity=0)
+    side = _ANCHOR_SIDE * unit
+    anchor.set_points(np.array([[0, 0, 0], [side, 0, 0], [0, side, 0], [0, side, 0]], dtype=float))
+    return anchor
+
+
+def anchor_placement(anchor: VMobject) -> np.ndarray:
+    """The 3 x 3 affine matrix from the units ``anchor`` (:func:`anchor_mobject`) was made in to
+    where it is on screen now."""
+    p0, p1, p2 = (np.asarray(p, dtype=float) for p in anchor.points[:3])
+    placement = np.eye(3)
+    placement[:2, 0] = (p1 - p0)[:2] / _ANCHOR_SIDE
+    placement[:2, 1] = (p2 - p0)[:2] / _ANCHOR_SIDE
+    placement[:2, 2] = p0[:2]
+    return placement
 
 
 class Character(VGroup):
@@ -308,9 +330,7 @@ class Character(VGroup):
         #: recorded in the layout dump), ``None`` while it stands (DESIGN.md §69.28).
         self.sitting_on: str | None = None
         self.leaning_on: str | None = None
-        self._anchor = VMobject(fill_opacity=0, stroke_width=0, stroke_opacity=0)
-        side = _ANCHOR_SIDE * height
-        self._anchor.set_points(np.array([[0, 0, 0], [side, 0, 0], [0, side, 0], [0, side, 0]], dtype=float))
+        self._anchor = anchor_mobject(height)
         self.parts: dict[str, VGroup] = {}
         for part_name in self._order:
             copies = {shape: drawing.copy() for shape, drawing in self._shapes[part_name].items()}
@@ -554,7 +574,7 @@ class Character(VGroup):
         in ``state`` (default: now)."""
         name = self._part_name(part)
         matrix = self._world({**self._poses, **(state.parts if state is not None else {})})[name]
-        points = np.concatenate([_apply(matrix, p)[:, :2] for p in self._drawings[name][self._shape_name(name)] if len(p)])
+        points = np.concatenate([apply_matrix(matrix, p)[:, :2] for p in self._drawings[name][self._shape_name(name)] if len(p)])
         return float(points[:, 0].min()), float(points[:, 1].min()), float(points[:, 0].max()), float(points[:, 1].max())
 
     def sole_points(self, state: CharacterState | None = None) -> dict[str, tuple[float, float]]:
@@ -812,12 +832,12 @@ class Character(VGroup):
             trails = self._trails.get(name, {}).get(shape) if self._wind else None
             if trails is None:
                 for live, points in zip(self._live_members(name), self._drawings[name][shape]):
-                    live.points = _apply(matrix, points)
+                    live.points = apply_matrix(matrix, points)
                 continue
             turn = self._wind if self.facing == "right" else -self._wind   # the mirror turns it back
             for live, points, trail in zip(self._live_members(name), self._drawings[name][shape], trails):
                 bent = matrix if trail is None else matrix @ PartPose(angle=turn * trail[1]).matrix(trail[0])
-                live.points = _apply(bent, points)
+                live.points = apply_matrix(bent, points)
         return self
 
     # ----- internals ------------------------------------------------------------------------
@@ -1020,11 +1040,7 @@ class Character(VGroup):
     def _screen(self) -> np.ndarray:
         """Character units -> screen: the squash about the feet, the mirror for ``facing: left``,
         then the anchor's placement."""
-        p0, p1, p2 = (np.asarray(p, dtype=float) for p in self._anchor.points[:3])
-        placement = np.eye(3)
-        placement[:2, 0] = (p1 - p0)[:2] / _ANCHOR_SIDE
-        placement[:2, 1] = (p2 - p0)[:2] / _ANCHOR_SIDE
-        placement[:2, 2] = p0[:2]
+        placement = anchor_placement(self._anchor)
         mirror = np.diag([(-1.0 if self.facing == "left" else 1.0) * self._squash[0], self._squash[1], 1.0])
         return placement @ mirror
 
