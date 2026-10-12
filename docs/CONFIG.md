@@ -4093,8 +4093,8 @@ moving actions:
   gesture's arm going up and coming down); after a walk the body leans on past the stop and
   straightens; after a landing the figure bounces back a little.
 - **follow-through**: the arms, head and accessory (a hat; a generated character's hair and ears
-  are part of its head) trail when the body sets off and carry on when it stops; in a jump the
-  arms lift as the figure falls.
+  are part of its head) trail when the body sets off and carry on when it stops, swinging back
+  once as on a spring; in a jump the arms lift as the figure falls.
 
 One setting, `cartoon_motion`, chooses how much: `lively` (the default: all four, fully),
 `calm` (the same, at 0.4 of the amount: for a quiet or serious video) or `none` (the plain

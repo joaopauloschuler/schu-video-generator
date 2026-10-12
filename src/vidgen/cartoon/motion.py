@@ -1,7 +1,8 @@
 """The animation principles characters move with (DESIGN.md §69.13), worked out without manim:
 anticipation before a move, squash and stretch on jumps and landings, overshoot and settle on
 stops, and follow-through of the parts that hang on the body (arms, head, accessory; a generated
-character's hair and ears are drawn in its head and move with it).
+character's hair and ears are drawn in its head and move with it) on a damped spring
+(:mod:`vidgen.cartoon.spring`, §69.15).
 
 Every effect is scaled by a *strength* from the ``cartoon_motion`` setting (:data:`MOTION_LEVELS`:
 ``lively`` 1, ``calm`` 0.4, ``none`` 0); at strength 0 each function gives the plain motion of
@@ -19,6 +20,8 @@ from __future__ import annotations
 import math
 from collections.abc import Callable
 from dataclasses import dataclass
+
+from vidgen.cartoon.spring import Spring
 
 #: Strength of the animation principles for each ``cartoon_motion`` setting.
 MOTION_LEVELS: dict[str, float] = {"lively": 1.0, "calm": 0.4, "none": 0.0}
@@ -204,8 +207,11 @@ def squash_scale(stretch: float) -> tuple[float, float]:
 
 # ----- follow-through ----------------------------------------------------------------------------
 
-#: How long (seconds) a hanging part takes to catch up with the body (the lag's time constant).
-FOLLOW_LAG_SECONDS = 0.12
+#: The spring hanging parts follow the body's speed on: it lags (about
+#: 2ζ/ω = 0.08 s), passes the body's speed by about 16 % when it changes and settles in 0.6 s.
+FOLLOW_SPRING_HZ = 2.0
+FOLLOW_DAMPING_RATIO = 0.5
+FOLLOW_SPRING = Spring.tuned(FOLLOW_SPRING_HZ, FOLLOW_DAMPING_RATIO)
 #: Degrees a part turns per character height per second its speed lags the body's, and the most
 #: it turns (an arm swinging inwards in a jump: :data:`FOLLOW_INWARD_LIMIT`).
 FOLLOW_ARM_DEGREES = 30.0
@@ -217,35 +223,26 @@ FOLLOW_ACCESSORY_LIMIT = 12.0
 FOLLOW_INWARD_LIMIT = 8.0
 #: Share of an animation's end over which follow-through fades out, so it ends in its state.
 FOLLOW_FADE_SHARE = 0.12
-_LAG_SAMPLES = 40
 _SPEED_STEP = 1e-3
 
 
-def follow_lag(signal: Callable[[float], float], seconds: float, lag_seconds: float = FOLLOW_LAG_SECONDS) -> float:
-    """``signal`` (a function of seconds from 0, as it was before 0) as a part trailing it sees it
-    at ``seconds``: a first-order lag (each moment weighs ``e^(−age / lag_seconds)``), no wobble.
+def follow_lag(signal: Callable[[float], float], seconds: float, spring: Spring = FOLLOW_SPRING) -> float:
+    """``signal`` (a function of seconds from 0, as it was before 0) as a part hanging on
+    ``spring`` sees it at ``seconds``: late, then past it and back (:meth:`Spring.follow`).
 
-    This is the one place follow-through's lag is computed: Step 82's damped spring replaces this
-    kernel (the lag, then an overshoot), and every caller gets it."""
-    if lag_seconds <= 0:
-        return signal(seconds)
-    span = min(max(seconds, 0.0), 5.0 * lag_seconds)
-    step = span / _LAG_SAMPLES
-    total = 0.0
-    for k in range(_LAG_SAMPLES):  # each slice weighs the kernel's integral over it: weights sum to 1
-        weight = math.exp(-k * step / lag_seconds) - math.exp(-(k + 1) * step / lag_seconds)
-        total += signal(seconds - (k + 0.5) * step) * weight
-    return total + signal(seconds - span) * math.exp(-span / lag_seconds)
+    This is the one place follow-through's lag is computed."""
+    return spring.follow(signal, seconds)
 
 
-def follow_through(position: Callable[[float], float], seconds: float, lag_seconds: float = FOLLOW_LAG_SECONDS) -> float:
+def follow_through(position: Callable[[float], float], seconds: float, spring: Spring = FOLLOW_SPRING) -> float:
     """How far behind (negative) or ahead of the body's speed a hanging part's speed is at
     ``seconds``, the body at ``position(seconds)`` (character heights): lagging when the body
-    speeds up, carrying on when it slows down or stops, nothing at a steady speed."""
+    speeds up, carrying on when it slows down or stops and swinging back once, nothing at a
+    steady speed."""
     def speed(at: float) -> float:
         return (position(at + _SPEED_STEP) - position(at - _SPEED_STEP)) / (2.0 * _SPEED_STEP)
 
-    return follow_lag(speed, seconds, lag_seconds) - speed(seconds)
+    return follow_lag(speed, seconds, spring) - speed(seconds)
 
 
 def end_fade(t: float) -> float:

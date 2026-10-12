@@ -86,7 +86,8 @@ src/vidgen/
                           # entrances and exits, gestures, jumps, §69.12; no manim), motion.py
                           # (animation principles: anticipation, squash and stretch, overshoot,
                           # follow-through, cartoon_motion, §69.13; no manim), keyframes.py (keys,
-                          # eases, motion paths, §69.14; no manim); still.py also
+                          # eases, motion paths, §69.14; no manim), spring.py (Spring: a damped
+                          # spring for secondary motion, §69.15; no manim); still.py also
                           # draws the prop gallery
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
@@ -670,6 +671,7 @@ Step 81 (§69.14) adds `KeyedMotion`, `feet_of`, `CHANNELS`, `DEFAULT_EASE`, `EA
 `EaseName`, `Key`, `KeyFrame`, `MotionPath`, `ease_progress`, `key_seconds`,
 `key_time_problems`, `keyed_values`, `path_length`, `part_target_names`, `feet_point` (all
 compatible); the `stage` scene type gains the target pattern `<character>.<part>`.
+Step 82 (§69.15) adds `Spring` (compatible; follow-through in `Walk` and `Jump` now wobbles).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -5722,19 +5724,20 @@ manim) applied inside the existing animations of `cartoon/transition.py` (`PoseC
   speed minus the body speed (character heights per second, the speed by central difference of
   `position`, the body's distance walked or height jumped as a function of seconds): negative
   while the body speeds up, positive while it slows down and just after it stops, 0 at a steady
-  speed. The lag is `follow_lag(signal, seconds, lag_seconds=FOLLOW_LAG_SECONDS 0.12)`, a
-  first-order lag (kernel `e^(−age/τ)/τ`, integrated over 40 slices of the last 5 τ with exact
-  slice weights, the signal before 0 taken as at 0), so it is a pure function of time, whatever
-  the frame rate. `follow_angles(forward, up, strength)` turns the parts: both arms
+  speed. The lag is `follow_lag(signal, seconds, spring=FOLLOW_SPRING)`, the signal as a part on
+  a damped spring sees it (§69.15; Step 80 had a first-order lag here): `FOLLOW_SPRING` =
+  `Spring.tuned(FOLLOW_SPRING_HZ 2.0, FOLLOW_DAMPING_RATIO 0.5)`, so a part trails a steady
+  speed-up by 2ζ/ω ≈ 0.08 s, passes a sudden change by about 16 % and swings back once (settled
+  to 2 % in 0.64 s). It is a pure function of time, whatever
+the frame rate. `follow_angles(forward, up, strength)` turns the parts: both arms
   `FOLLOW_ARM_DEGREES` 30 per height/s (trailing back, at most `FOLLOW_ARM_LIMIT` 25°), head
   `−FOLLOW_HEAD_DEGREES` 10 (tips back, at most 8°), accessory `−FOLLOW_ACCESSORY_DEGREES` 18 (at
   most 12°); `up` raises the arms outwards (as a shrug: `arm_left` +, `arm_right` −; inwards at
   most `FOLLOW_INWARD_LIMIT` 8°). `end_fade(t)` takes it to 0 over the last `FOLLOW_FADE_SHARE`
   0.12, so the animation ends exactly in its state. `accented_state(base, lean, turns)` adds the
   lean and the turns to a state (`transition.py`).
-- **Step 82** (spring physics) replaces the kernel of `follow_lag` with its damped spring (lag,
-  then overshoot and wobble); that function is the only place the lag is computed, so walks and
-  jumps get the spring without other changes.
+- **Spring** (Step 82, §69.15): `follow_lag` is the only place the lag is computed, so walks and
+  jumps got the spring without other changes.
 - **Not done here**: no principle on a `PoseChange`'s facing switch (it still flips at half);
   follow-through only on walks and jumps (not on pose changes or gestures); no squash on
   walking footfalls; anticipation of an `enter` happens off stage (unseen, its time is spent).
@@ -5811,3 +5814,38 @@ actions cannot: `keyframes` (through keys) and `move_along` (along a path). They
   does not face its way (add `turn`) and walks / jumps from where it is (a lifted character walks
   in the air); a whole-target `scale` is a Manim scale (strokes keep their width); no rotation
   along a path's direction; keys for `depth` or opacity. Tests: `tests/test_cartoon_keyframes.py`.
+
+### 69.15 Spring physics for secondary motion (Step 82)
+
+Parts that hang on something moving (antennae, ears, tails, hair, hanging signs) lag behind it,
+pass it and wobble back. `cartoon/spring.py` (no manim, exported by `vidgen.api`) gives that as a
+pure function of time, so custom scenes and the built-in follow-through (§69.13) share one helper.
+
+- **`Spring(stiffness, damping)`** (frozen dataclass): a spring of unit mass, `x'' = stiffness·(s −
+  x) − damping·x'` (stiffness 1/s² = ω², damping 1/s = 2ζω; both > 0, else `ValueError`).
+  `Spring.tuned(frequency_hz, damping_ratio)` builds one from the undamped wobbles per second and
+  ζ. Properties: `angular_frequency` ω, `damping_ratio` ζ, `is_critical` (|ζ − 1| < 1e-9, so
+  `tuned(f, 1.0)` counts despite rounding), `decay_rate` (ζω, or ω(ζ − √(ζ² − 1)) over-damped: how
+  fast the slowest motion dies).
+- **Closed form**: `step_response(seconds)`, the spring's position after its target jumps 0 → 1
+  from rest (under-damped `1 − e^(−ζωt)(cos ω_d t + ζ/√(1−ζ²) sin ω_d t)`, critical `1 −
+  e^(−ωt)(1 + ωt)`, over-damped the two-exponential form). `overshoot()` = e^(−πζ/√(1−ζ²)) (0 when
+  ζ ≥ 1). `settle_seconds(tolerance=0.02)`: when it enters the band ±tolerance for good,
+  bisected between the last turning point outside the band and the first inside (turning points
+  at kπ/ω_d, e^(−ζω kπ/ω_d) from 1), or from 0 when ζ ≥ 1 (the response only rises).
+- **`follow(target, seconds)`**: where a part on the spring is while it follows `target(seconds)`,
+  at rest at `target(0)` before 0. It weighs the target's past by the spring's impulse response
+  (the slice weights are differences of `step_response`, exact, so they sum to 1 and a constant
+  target gives itself back), over the last 6 decay times (older weighs < e^−6, taken at the
+  oldest value) in 32..512 slices (8 per radian of ω). No state between calls: the same value at
+  any frame rate and after any seek, unlike stepping the equation frame by frame. Checked
+  against the equation stepped at 20 µs (within 0.005).
+- **Use**: follow-through (`motion.follow_lag`, §69.13). A custom scene drives a part from it, e.g.
+  an antenna's angle `k·(spring.follow(head_x, t) − head_x(t))` in an updater, `t` the seconds
+  since the motion started.
+- **`cartoon_motion: none`** still gives no offset: `follow_angles` scales by the strength (0) and
+  `Walk` / `Jump` skip follow-through at 0 (tested on a walk's head angle).
+- **Not done here**: no author-facing YAML for springs (a character has no tail or antenna part;
+  generated hair and ears are drawn in the head); follow-through stays on walks and jumps (not
+  pose changes, gestures or keyed moves). Tests: `tests/test_cartoon_spring.py`,
+  `tests/test_cartoon_motion.py`.

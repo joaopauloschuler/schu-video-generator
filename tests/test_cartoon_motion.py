@@ -22,7 +22,7 @@ from vidgen.cartoon.motion import (
     DEFAULT_MOTION,
     FOLLOW_ARM_LIMIT,
     FOLLOW_INWARD_LIMIT,
-    FOLLOW_LAG_SECONDS,
+    FOLLOW_SPRING,
     JUMP_CROUCH_SECONDS,
     JUMP_LAND_SECONDS,
     JUMP_SQUASH,
@@ -132,21 +132,24 @@ def test_jump_squash_and_stretch() -> None:
 
 
 def test_follow_through_lags_then_carries_on() -> None:
+    spring = FOLLOW_SPRING   # Step 82: a damped spring (lag, then past and back), was a first-order lag
     step = lambda s: 1.0 if s >= 0.05 else 0.0   # noqa: E731
-    tau = FOLLOW_LAG_SECONDS
-    assert follow_lag(step, 0.05 + tau) == pytest.approx(1 - math.exp(-1), abs=0.01)   # a first-order lag
-    assert follow_lag(step, 0.05 + 6 * tau) == pytest.approx(1.0, abs=0.01) and follow_lag(step, 0.0) == 0.0
+    peak = 0.05 + math.pi / (spring.angular_frequency * math.sqrt(1 - spring.damping_ratio**2))
+    assert follow_lag(step, 0.15) == pytest.approx(spring.step_response(0.1), abs=0.02) and spring.step_response(0.1) < 0.5   # late
+    assert follow_lag(step, peak) == pytest.approx(1 + spring.overshoot(), abs=0.02) and spring.overshoot() > 0.1   # past, then back
+    assert follow_lag(step, 0.05 + spring.settle_seconds(0.01)) == pytest.approx(1.0, abs=0.015) and follow_lag(step, 0.0) == 0.0
     assert follow_lag(lambda s: 3.0, 0.4) == pytest.approx(3.0)
-    assert follow_lag(step, 0.3, 0.0) == 1.0
 
     def speeding_up_then_steady(s: float) -> float:   # accelerates at 1 height/s² for 1 s, then 1 height/s
         s = max(s, 0.0)
         return s * s / 2 if s < 1 else 0.5 + (s - 1)
 
-    assert follow_through(speeding_up_then_steady, 0.5) == pytest.approx(-tau * (1 - math.exp(-0.5 / tau)), abs=0.01)   # trails
+    ramp_lag = 2 * spring.damping_ratio / spring.angular_frequency   # a spring trails a ramp by 2ζ/ω
+    assert follow_through(speeding_up_then_steady, 0.7) == pytest.approx(-ramp_lag, abs=0.01)   # trails
     assert follow_through(speeding_up_then_steady, 3.0) == pytest.approx(0.0, abs=1e-3)   # steady: nothing
     stopping = lambda s: min(max(s, 0.0), 1.0)   # noqa: E731  walks 1 height/s, stops at 1 s
     assert follow_through(stopping, 1.05) > 0.5   # carries on after the stop
+    assert min(follow_through(stopping, 1 + k / 20) for k in range(20)) < -0.1   # and swings back once
     angles = follow_angles(-1.0, 0.0, 1.0)
     assert angles["arm_left"] == angles["arm_right"] < 0 and angles["head"] > 0 and angles["accessory"] > 0   # trailing
     assert follow_angles(-100.0, 0.0, 1.0)["arm_left"] == -FOLLOW_ARM_LIMIT

@@ -190,7 +190,12 @@ follow-through) by the character's `cartoon_motion` setting, `hero.motion` (`liv
 their own `motion=` keyword; `Walk` and `Jump` then last longer by a wind-up and settle
 (`walk_motion_seconds(walk_seconds(d), strength)`, `jump_motion_seconds(JUMP_SECONDS, strength)`
 with `MOTION_LEVELS[setting]`). `hero.set_squash(x, y)` scales the whole figure about its feet
-(not part of its state). The built-in acting and moving
+(not part of its state). For a part of your own that should lag and wobble (an antenna, a tail, a
+hanging sign), `Spring.tuned(frequency_hz, damping_ratio)` (or `Spring(stiffness, damping)`) is
+the damped spring the built-in follow-through uses: `spring.follow(x_of, seconds)` is where a
+part on it is while it follows `x_of(seconds)` (pure, the same at any frame rate), so an updater
+can turn the part by `k * (spring.follow(x_of, t) - x_of(t))`; `step_response`, `overshoot()` and
+`settle_seconds()` help tune it (a damping ratio of 1 never overshoots). The built-in acting and moving
 actions (`say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `enter`, `exit`,
 `gesture`, `jump`) work on every target that is a `Character`, so register your characters as
 targets (`self.target(name, hero)`) to let a video's beats act on them.

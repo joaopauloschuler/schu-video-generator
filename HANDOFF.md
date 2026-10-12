@@ -7726,3 +7726,68 @@ How to test
   test_cartoon_svg test_cartoon_visemes test_cartoon_idle test_particles test_cartoon_style
   test_cartoon_generator test_config` (475, 28 s); render: the cartoon files (8, 4 s),
   `test_actions_coverage test_builtin_scenes -k stage` (3, 2.5 s).
+
+
+## Step 82 — Spring physics for secondary motion
+
+What was built
+- `src/vidgen/cartoon/spring.py` (no manim): `Spring(stiffness, damping)`, a frozen dataclass for
+  a damped spring of unit mass (`x'' = stiffness·(s − x) − damping·x'`), and
+  `Spring.tuned(frequency_hz, damping_ratio)`. Properties `angular_frequency`, `damping_ratio`,
+  `is_critical`, `decay_rate`. Closed-form `step_response(seconds)` (under-, critically and
+  over-damped), `overshoot()`, `settle_seconds(tolerance=0.02)` (exact: bisected between turning
+  points), and `follow(target, seconds)`: where a part on the spring is while it follows
+  `target`, a weighting of the target's past by the spring's impulse response (slice weights are
+  differences of the closed-form step response; window 6 decay times; 32..512 slices). No state
+  between calls, so the value is the same at any frame rate and after a seek.
+- `motion.follow_lag(signal, seconds, spring=FOLLOW_SPRING)` now calls `spring.follow`
+  (`FOLLOW_SPRING = Spring.tuned(FOLLOW_SPRING_HZ 2.0, FOLLOW_DAMPING_RATIO 0.5)`); Step 80's
+  first-order lag (`FOLLOW_LAG_SECONDS`, `_LAG_SAMPLES`) is gone. `follow_through` takes
+  `spring=` instead of `lag_seconds=`. `Walk` and `Jump` are unchanged and get the spring: the
+  arms, head and accessory trail (2ζ/ω ≈ 0.08 s behind a steady speed-up, was 0.12 s), pass a
+  sudden change by about 16 % and swing back once (settled to 2 % in 0.64 s).
+- `cartoon_motion: none` still gives no offset (`follow_angles` × strength 0; `Walk` / `Jump` skip
+  follow-through at 0), now also tested on a walk's head angle.
+
+Files touched
+- New: `src/vidgen/cartoon/spring.py`, `tests/test_cartoon_spring.py`.
+- `src/vidgen/cartoon/motion.py`, `src/vidgen/api.py`, `tests/test_cartoon_motion.py`.
+- Docs: `DESIGN.md` (§2 tree, §6.4, §69.13 follow-through, new §69.15), `docs/EXTENDING.md`
+  (a `Spring` paragraph), `docs/CONFIG.md` (follow-through swings back once), `tasklist.md`.
+
+Public interfaces
+- `vidgen.api` adds `Spring` (compatible). Internal (not in `vidgen.api`): `follow_lag` /
+  `follow_through` keyword `lag_seconds` became `spring`; `FOLLOW_LAG_SECONDS` replaced by
+  `FOLLOW_SPRING`, `FOLLOW_SPRING_HZ`, `FOLLOW_DAMPING_RATIO`.
+
+Decisions / deviations
+- Convolution with the closed-form response instead of stepping the equation per frame: a
+  stepped spring would depend on the frame rate and on frames drawn before (seeks, storyboards).
+  Checked against the equation stepped at 20 µs in the tests (within 0.005 for ζ 0.15..2.5).
+- Tuning 2 Hz, ζ 0.5: the first swing back peaks 0.29 s after a stop, inside a walk's 0.4 s
+  settle, before `end_fade` takes follow-through to 0; a 2ζ/ω lag close to Step 80's 0.12 s.
+- Step 80 test changes (`test_follow_through_lags_then_carries_on`), all because the kernel
+  changed by design: the "1 − e^−1 after one τ" value of a first-order lag became the spring's
+  step response at 0.1 s; "1.0 after 6 τ" became "1.0 at `settle_seconds(0.01)`" plus a new check
+  of the overshoot peak (1 + `overshoot()`); the trailing value for a ramp became the spring's
+  ramp lag `−2ζ/ω` (checked at 0.7 s, after the start transient); `follow_lag(step, 0.3, 0.0)`
+  (lag 0 = no lag) was removed, since a spring cannot have zero stiffness or damping; a new check
+  that the speed swings back below 0 after a stop. The constant-signal, steady-speed and
+  "carries on after the stop" checks are unchanged and pass.
+- Searched first: no spring or damping code existed (`grep -rni "spring\|damp" src/vidgen`: only
+  icon keywords).
+
+Known gaps / TODOs
+- No YAML for springs: a character has no tail or antenna part (generated hair and ears are drawn
+  in the head), and props have no hanging sub-parts. Follow-through still runs on walks and jumps
+  only (not pose changes, gestures or `keyframes` / `move_along`).
+- `follow` samples slice midpoints: a target with a jump lands up to about 0.005 off near the jump
+  (smooth targets, like the speeds follow-through uses, are within 1e-3).
+
+How to test
+- `pytest tests/test_cartoon_spring.py tests/test_cartoon_motion.py` (27, ~3 s; 1 render).
+- Also run (not render): `test_cartoon_moving test_cartoon_acting test_cartoon_keyframes
+  test_cartoon_character test_cartoon_parallax test_cartoon_svg test_cartoon_poses
+  test_cartoon_stage test_api test_docs test_guide test_actions` (with the two above 311, 6.6 s);
+  render: `test_cartoon_motion test_cartoon_moving test_cartoon_keyframes` (3, 2.5 s),
+  `test_actions_coverage test_builtin_scenes -k stage` (5, 2.7 s).

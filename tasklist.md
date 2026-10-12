@@ -415,8 +415,8 @@ one.
 - [x] Tests: interpolation values, path lengths (`tests/test_cartoon_keyframes.py`: 10 without rendering, 1 tiny render)
 
 ### Step 82 — Spring physics for secondary motion
-- [ ] A damped spring helper (stiffness, damping) for parts that should lag and wobble (antennae, ears, tails, hair, hanging signs); used by Step 80's follow-through
-- [ ] Tests: settles within a time, no overshoot when critically damped
+- [x] A damped spring helper (stiffness, damping) for parts that should lag and wobble (antennae, ears, tails, hair, hanging signs); used by Step 80's follow-through (`Spring(stiffness, damping)` / `Spring.tuned(frequency_hz, damping_ratio)` in `cartoon/spring.py`, exported by `vidgen.api`: closed-form step response, `overshoot`, `settle_seconds`, and `follow(target, seconds)`, a pure function of time (frame-rate independent); `motion.follow_lag` now runs on `FOLLOW_SPRING` (2 Hz, ζ 0.5) instead of the first-order lag; `cartoon_motion: none` still gives no offset; no YAML for springs, since no tail / antenna parts exist; DESIGN §69.15)
+- [x] Tests: settles within a time, no overshoot when critically damped (`tests/test_cartoon_spring.py`: 12 without rendering; `tests/test_cartoon_motion.py`'s follow-through test now checks the spring)
 
 ### Step 83 — Character sheets and mid-action storyboards
 - [ ] `vidgen character-sheet [NAME]`: every pose, expression and mouth shape of a character on one PNG (and over MCP)
