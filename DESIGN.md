@@ -212,6 +212,7 @@ examples/
   plan/                   # outline.md + the unedited draft video.yaml `vidgen plan` writes from it (golden file, §61)
   cartoon/                # a two-scene cartoon, two generated characters, Kokoro voices, no audio (§69.18)
   cartoon_series/         # shared/cast.yaml + shared/sets.yaml included by two short episodes, no audio (§69.35)
+  showcase/               # the screenplay example after hand editing, most Phase I features, no audio
 docs/
   CONFIG.md               # config reference
   EXTENDING.md            # how to write project extensions

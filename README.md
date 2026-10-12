@@ -554,6 +554,9 @@ my_video/
 - [examples/cartoon_series](examples/cartoon_series) — two short episodes of "Nib and Olla" that
   include one shared cast (`shared/cast.yaml`) and two sets (`shared/sets.yaml`), each episode
   overriding the light, a prop or a character for itself; both validate and lint clean.
+- [examples/showcase](examples/showcase) — "The Humming Box" after hand editing: automatic
+  directing, shots, sitting, a prop picked up and given, sunset to night, wind, a laugh and a
+  gasp, an overlap and an interruption, speaker-coloured captions; about 58 s with `vidgen tts`.
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.

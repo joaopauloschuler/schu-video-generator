@@ -1098,6 +1098,13 @@ class ShotConfig(_Strict):
         return ActionConfig.model_validate(data)
 
 
+def _shot_words_schema(schema: dict[str, Any]) -> None:
+    """JSON Schema of a beat's ``shot:``: also the words form (``"two_shot kit pip"``), which
+    :meth:`ShotConfig._from_words` reads but the generated schema does not list."""
+    words = {"type": "string", "pattern": r"^\s*(wide|two_shot|medium|over_shoulder|closeup)(\s+\S+)*\s*$"}
+    schema.setdefault("anyOf", []).insert(0, words)
+
+
 #: The kinds of automatic directing (``auto_direct:``; DESIGN.md §69.23), in planning order.
 DIRECTING_KINDS: tuple[str, ...] = ("looks", "reactions", "gestures", "closeups")
 
@@ -1482,7 +1489,7 @@ class BeatConfig(_Strict):
     """A short music sting on this beat: reveal, comic or sad, or {kind, at: start | end, gain}; ducked under the narration."""
     auto_direct: AutoDirectSetting | None = None
     """On a stage scene: automatic looks and reactions for this beat (true, false or {looks, reactions, gestures, closeups}); default: the scene's, else the video's."""
-    shot: ShotConfig | None = None
+    shot: ShotConfig | None = Field(default=None, json_schema_extra=_shot_words_schema)
     """On a stage scene: the camera's framing for this beat (wide, two_shot, medium KIT, over_shoulder KIT [NEAR], closeup KIT, or {kind, of, move, run_time}); a cut as the beat starts, back to the view before at the next beat without one."""
     overlap: float | None = Field(default=None, ge=0)
     """Seconds this beat starts before the previous beat's speech ends: both lines are heard (the earlier a little lower) and both mouths move; not on a scene's first beat."""
