@@ -8,8 +8,8 @@ the middle of the prop's foot, ``y`` up, the top at 1, then scaled to the prop's
 prop (:func:`svg_prop`) is sanitised and loaded by :func:`vidgen.vector_mobject.load_vector`.
 
 Either way the result is a :class:`Prop`: one group whose :meth:`Prop.feet` is the middle of its
-bottom edge, so a stage places it like a character (``stage_layout``). An umbrella is drawn in two
-shapes, closed and open (:data:`PROP_SHAPES`, :meth:`Prop.show_shape`); a basket and an open
+bottom edge, so a stage places it like a character (``stage_layout``). A door and an umbrella are
+drawn in two shapes, closed and open (:data:`PROP_SHAPES`, :meth:`Prop.show_shape`); a basket and an open
 umbrella are held by a grip (:data:`PROP_GRIPS`, :meth:`Prop.grip_point`), DESIGN.md §69.37.
 """
 
@@ -69,7 +69,7 @@ PROP_HEIGHTS: dict[str, float] = {
 }
 #: Props drawn in more than one shape: kind -> its shape names, the first drawn unless the stage
 #: asks for another (``open: true``); the ``open`` / ``close`` actions switch them.
-PROP_SHAPES: dict[str, tuple[str, ...]] = {"umbrella": ("closed", "open")}
+PROP_SHAPES: dict[str, tuple[str, ...]] = {"door": ("closed", "open"), "umbrella": ("closed", "open")}
 #: Where a hand holds a prop, in prop units as drawn facing right, per (kind, shape) (``None``: a
 #: prop with one shape); a prop or shape not listed is held by its middle. A basket hangs from
 #: its handle; an open umbrella is held by its shaft above the hook.
@@ -126,7 +126,7 @@ class Prop(VGroup):
     ``seat`` / ``lean``: the middle of its seat line (x, y) and the edges a character leans its
     back on (left x, right x), in prop units as it faces (``None``: it has none; DESIGN.md §69.28).
 
-    ``shapes`` (DESIGN.md §69.37): a prop drawn in several shapes (an umbrella closed and open)
+    ``shapes`` (DESIGN.md §69.37): a prop drawn in several shapes (a door or an umbrella closed and open)
     gets them instead of ``drawn``, shape name -> its members, the first shown. Every shape stays
     in the family for the prop's life; the hidden ones have no points (like a character's part
     shapes, §69.22), and :meth:`show_shape` draws another from its points in prop units through an
@@ -330,15 +330,28 @@ def _house(p: _Paint) -> list[VMobject]:
     ]
 
 
-def _door(p: _Paint) -> list[VMobject]:
+def _door(p: _Paint) -> dict[str, list[VMobject]]:
+    """Closed, and open: the doorway dark, the leaf swung towards the viewer on its hinge side (the
+    left as drawn), seen nearly edge on and a little taller at its near edge."""
     dark = p.dark(p.main)
-    return [
-        _rect(-0.3, 0.0, 0.3, 1.0, p.dark(dark), p),
+    frame = _rect(-0.3, 0.0, 0.3, 1.0, p.dark(dark), p)
+    closed = [
+        frame,
         _rect(-0.24, 0.0, 0.24, 0.94, p.main, p, radius=0.02),
         _rect(-0.17, 0.54, 0.17, 0.86, dark, p, outline=False),
         _rect(-0.17, 0.08, 0.17, 0.44, dark, p, outline=False),
         _circle(0.15, 0.49, 0.035, p.detail, p),
     ]
+    beyond = interpolate_color(ManimColor(p.ink), ManimColor(p.main), 0.25).to_hex()
+    opened = [
+        _rect(-0.3, 0.0, 0.3, 1.0, p.dark(dark), p),
+        _rect(-0.24, 0.0, 0.24, 0.94, beyond, p),
+        _poly([(-0.24, 0.0), (-0.24, 0.94), (-0.44, 1.0), (-0.44, 0.0)], p.main, p),
+        _poly([(-0.27, 0.54), (-0.27, 0.86), (-0.39, 0.9), (-0.39, 0.54)], dark, p, outline=False),
+        _poly([(-0.27, 0.08), (-0.27, 0.44), (-0.39, 0.44), (-0.39, 0.06)], dark, p, outline=False),
+        _circle(-0.41, 0.49, 0.03, p.detail, p),
+    ]
+    return {"closed": closed, "open": opened}
 
 
 def _lamp(p: _Paint) -> list[VMobject]:

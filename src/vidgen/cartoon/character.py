@@ -323,6 +323,9 @@ class Character(VGroup):
         #: ``enter`` or ``exit`` while a :class:`~vidgen.cartoon.transition.Walk` brings it in
         #: from off stage or takes it off (lint ``off_stage`` skips it then), else ``None``.
         self.passage: str | None = None
+        #: How much of it shows (1; less while it fades in or out through a door, DESIGN.md
+        #: §69.42): its shadow fades with it.
+        self.shown = 1.0
         #: The props in its hands (hand -> prop name; set by the prop actions, recorded in the
         #: layout dump as ``holding``), empty while it holds nothing (DESIGN.md §69.27).
         self.holding: dict[str, str] = {}

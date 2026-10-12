@@ -4128,6 +4128,7 @@ never leaves the stage.
 | `light` | `day` \| `morning` \| `sunset` \| `night` \| `indoor` \| `{tint, strength}` | `day` | the [light](#light-and-shadows-light-shadows) on the set: a colour grade of the background, layers, props and characters (never of speech bubbles or text); `night` adds stars; the `light` action changes it during the scene |
 | `shadows` | bool | `true` | soft [shadows](#light-and-shadows-light-shadows) on the ground under the characters and the props standing on it; `false`: none |
 | `wind` | number -1..1 \| `calm` \| `breeze` \| `windy` \| `gale` | `0` | [wind](#wind-wind) in gusts: trees, bushes, plants, signs and lamps sway, scarves, long hair, floppy or pointy ears and hats trail, particles drift (`0.3` breeze .. `1` gale, blowing right; negative blows left); `0` changes nothing; the `wind` action changes it during the scene; `blow_away` blows a light prop away |
+| `room` | `true` \| mapping | none | an [indoor set](#rooms-room) instead of the sky and the ground band: a back wall, a floor, a skirting board, an optional ceiling, windows (their sky follows `light`) and doors (door props whose names are marks; `enter` / `exit` through them); not with `image`, `generate`, `background`, `ground_color`, `wind` or outdoor particles |
 
 | key (`characters[]`) | default | |
 |---|---|---|
@@ -4155,6 +4156,81 @@ and `height` (`0.2`) as fractions of the frame's shorter side, and `color` (`sec
 `hills`: a row of rounded hills across the whole layer, each `width` wide and `height` high, their
 foot at `y`, filled down to the bottom. A layer is drawn larger than the frame, so that no
 camera view inside the stage (a zoom up to 8x included) shows its edge.
+
+#### Rooms (`room`)
+
+`room:` turns a stage into an indoor set: a **back wall** (a colour and a wallpaper), a **floor**
+in front of it (a colour and boards or tiles drawn in perspective), a **skirting board** where
+they meet and an optional **ceiling** band, all drawn from simple shapes and filling the whole
+stage (a wide stage too). `room: true` is a room with the defaults. The wall stands at a
+**depth** like the characters and props: the floor reaches back to where a thing at that depth
+stands (default `0.4`, or further back when something on the floor stands deeper), so everything
+on the floor stands in front of the wall. Characters, props, depth, shots, `reframe`, shadows and
+the camera work as on any stage; `sets:` can hold a room (a scene giving a room drops its set's
+`image` / `generate` / `background` / `ground_color`; one giving one of those drops the set's room;
+a set's room and the scene's merge key by key).
+
+- **Windows** hang on the wall and show the sky outside, with its stars: its colours follow the
+  stage's `light` (`day` blue, `morning` peach low in the sky, `sunset` blue over orange, `night`
+  dark blue with stars, `indoor` evening blue with a few stars: lamplight inside means evening
+  outside; a `{tint, strength}` light tints the day's sky) and fade with the `light` action. The
+  sky is not graded by the light inside (the room is); frames, sills and curtains are.
+- **Doors** are `door` props standing at the wall, drawn closed or open; each door's name
+  (default `door`, then `door_2`...) is a target (`- open: door`, `- close: door`, `lean_on`) and
+  a **mark** (`walk_to: pip, to: door`; the names may not be marks already). `enter` with
+  `door: <name>` brings a character in through it: the door opens (at once, if closed), the
+  character fades in in the doorway over 0.35 s and walks to its mark; `exit` with `door:` walks
+  it to the door, where it fades out, and then waits off stage. Doors cast no shadows.
+- **Indoors there is no weather**: `wind`, the `wind` action and `rain`, `snow`, `leaves` and
+  `streaks` particles are refused (`vidgen validate`); sparkles, dust, confetti, smoke and bubbles
+  work.
+
+| key (`room`) | default | |
+|---|---|---|
+| `wall` | `#E9DCC9` | the wall's colour (a theme token or `#hex`) |
+| `wallpaper` | `plain` | `plain`, `stripes` or `dots` (a shade of the wall's colour) |
+| `floor` | `#C9A27A` | the floor's colour |
+| `flooring` | `boards` | `boards` (rows of boards, joints staggered), `tiles` (rows and lines spreading towards the front) or `plain` |
+| `skirting` | the floor's, darker | the skirting board's colour |
+| `ceiling` | `false` | a band at the top: `true` (the wall's colour, lighter) or a colour |
+| `depth` | `0.4` or deeper | how far back the wall stands (0–1); a character or prop on the floor deeper than a given `depth` is a config error |
+| `windows` | `[]` | a mark or an x, or `{at, width, height, sill, frame, curtains}` (below) |
+| `doors` | `[]` | a mark or an x, or `{name, at, open, facing, scale, color, detail}` (below) |
+
+| key (`windows[]`) | default | |
+|---|---|---|
+| `at` | `centre` | its middle: a mark or an x from 0 to 1 of the stage |
+| `width` / `height` | `0.6` / `0.62` | in the heights of a character standing at the wall |
+| `sill` | `0.42` | how high its bottom is above the floor, in those heights |
+| `frame` | `#F4F6FA` | colour of the frame, bars and sill |
+| `curtains` | `true` | curtains on both sides: `true` (`accent`), a colour, or `false` |
+
+| key (`doors[]`) | default | |
+|---|---|---|
+| `name` | `door` | its name (a target and a mark), numbered from the second on |
+| `at` | `right` | a mark or an x from 0 to 1 of the stage |
+| `open` | `false` | `true`: it starts open |
+| `facing` | `right` | its hinges: `right` swings the open door to the left; `left` mirrors it |
+| `scale` | `1.3` | its height in the heights of a character standing at the wall |
+| `color` / `detail` | `accent` / `highlight` | the door's and its knob's colours |
+
+```yaml
+- id: kitchen
+  type: stage
+  params:
+    light: indoor                       # lamplight inside; the windows show the evening sky
+    room: {wallpaper: stripes, flooring: boards, windows: [0.3], doors: [{at: 0.8}]}
+    characters: [{name: pip, at: left}, {name: kit, at: 0.6}]
+    props: [{prop: table, at: 0.45, depth: 0.2}]
+  beats:
+    - text: "Then Kit comes in."
+      actions:
+        - {enter: kit, door: door}      # kit waits off stage until now
+    - text: "And Pip goes out for the night."
+      actions:
+        - {exit: pip, door: door}       # the door stays open (- close: door shuts it)
+        - {light: night, at: 0.5}       # the windows' sky fades to night, stars come out
+```
 
 #### Generated backgrounds (`cartoon_style`)
 
@@ -4227,7 +4303,7 @@ prop has a usual height next to a character (a `tree` is 1.7 characters tall, a 
 | `color` | per prop | its main colour (a theme token or `#hex`): a tree's leaves (`tertiary`), a chair (`accent`)... |
 | `detail` | per prop | its second colour: a tree's trunk, a house's roof, a laptop's screen... |
 | `recolor` | `none` | `svg` only: `theme` maps the picture's colours to the nearest theme colours |
-| `open` | `false` | `umbrella` only: `true` starts it open ([Umbrellas](#umbrellas-open-and-close)) |
+| `open` | `false` | `umbrella` or `door` only: `true` starts it open ([Umbrellas](#umbrellas-open-and-close), [rooms](#rooms-room)) |
 
 A picnic set: a `basket` (0.2 of a character, held by its handle), a `napkin` (small: 0.05, a
 checked cloth lying flat) and an `umbrella` (0.6), drawn closed or open.
@@ -4392,8 +4468,8 @@ as targets and the new state as an option:
 |---|---|---|
 | `walk_to` | `to` (required: a mark or an x 0–1 of the stage), `speed` (`2.5`) | walks along the ground to that place, facing the way it goes, legs, arms and body moving in step; it speeds up, walks at `speed` units per second (the frame's shorter side is 8 units; a character is about 3.6 tall at `size: 0.45`) and slows down. It takes as long as the distance needs: about 3.3 s from `left` to `right` of a 16:9 stage (7.1 units), plus the wind-up and settle of [`cartoon_motion`](#animation-principles-cartoon_motion). Stays there. |
 | `run_to` | `to` (required), `speed` (`6`) | runs there: a `walk_to` at running speed with steps 1.6 times as long, legs and arms swinging 1.5 times as far, knees and elbows bending more and the body leaning forward 12° at full speed (also with `cartoon_motion: none`). About 1.4 s from `left` to `right` of a 16:9 stage, plus the wind-up and settle. Footsteps follow the longer strides; with [motion effects](#motion-effects-motion_effects) dust puffs up where it sets off and stops and speed lines trail it. |
-| `enter` | `side` (`left` \| `right`; default: the edge nearer where it goes), `to` (a mark or x; default its own `at`), `speed` | walks in from just beyond that edge of what the camera shows. A character with an `enter` action waits off stage (beyond the stage's edge) from the start of the scene until then. |
-| `exit` | `to` (`left` \| `right`; default: the nearer edge), `speed` | walks out beyond that edge of what the camera shows, then waits off stage (an `enter` brings it back). A camera `follow`ing it stops (and stays). |
+| `enter` | `side` (`left` \| `right`; default: the edge nearer where it goes), `door` (instead of `side`: a [room](#rooms-room)'s door by name), `to` (a mark or x; default its own `at`), `speed` | walks in from just beyond that edge of what the camera shows, or through the door (it opens; the character fades in in the doorway over 0.35 s). A character with an `enter` action waits off stage (beyond the stage's edge) from the start of the scene until then. |
+| `exit` | `to` (`left` \| `right`; default: the nearer edge), `door` (instead of `to`: a room's door by name), `speed` | walks out beyond that edge of what the camera shows, or to the door (it opens) where it fades out over 0.35 s, then waits off stage (an `enter` brings it back). A camera `follow`ing it stops (and stays). |
 | `gesture` | `to` (required: `point`, `wave`, `shrug`, `nod`, `shake_head`), `big` (`false`) | `big: true`: a sweeping gesture, a whoosh arc trailing the hand of a `point`, `wave` or `shrug` ([motion effects](#motion-effects-motion_effects)). The gesture, then back to its pose: `point` raises the near arm forward, `wave` raises it and waves three times, `shrug` raises both arms, `nod` dips the head twice, `shake_head` moves the head (and eyes) side to side twice. 1.2 s (`point`), 1.6 (`wave`), 1.0 (`shrug`), 0.9 (`nod`), 1.1 (`shake_head`). |
 | `jump` | `height` (`0.4`: its own heights, up to 2) | jumps up and lands where it stood (0.6 s in the air; with `cartoon_motion` a crouch before and a squash after, [below](#animation-principles-cartoon_motion)). |
 
@@ -4499,8 +4575,8 @@ the prop is the target:
 
 An open umbrella stays open when it is picked up, held, given (the receiver holds it overhead),
 put down (it stands on its hook) or thrown. `vidgen validate` reports `open` / `close` on a prop
-that cannot open (`'tree' cannot open (props that can: umbrella)`) or on a character. The layout
-dump records `shape` (`closed` or `open`) on an umbrella.
+that cannot open (`'tree' cannot open (props that can: door, umbrella)`) or on a character. The layout
+dump records `shape` (`closed` or `open`) on an umbrella or a door. A `door` prop opens and closes the same way (half-way through, where it stands): the doorway dark, the leaf swung towards the viewer on its hinge side.
 
 ```yaml
 scenes:

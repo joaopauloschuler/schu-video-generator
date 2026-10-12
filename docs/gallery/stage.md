@@ -48,7 +48,7 @@ scenes:
 | `background` | `color \| list[color] \| None` |  | Without a picture: a colour, or a list of colours for a gradient from the top down; none: the theme's background. |
 | `ground` | `float` | `0.2` | Height of the ground line (where the characters' feet are) above the bottom edge, as a fraction of the frame height. |
 | `ground_color` | `color \| False \| None` |  | Fill below the ground line, up to where the deepest character or prop on the ground stands; none: surface on a colour background, nothing on a picture; false: nothing. |
-| `marks` | `dict[str, float]` |  | Own marks: name -> x from 0 (left edge) to 1 (right edge), besides far_left 0.1, left 0.25, centre 0.5, right 0.75, far_right 0.9. |
+| `marks` | `dict[str, float]` |  | Own marks: name -> x from 0 (left edge) to 1 (right edge), besides far_left 0.1, left 0.25, centre 0.5, right 0.75, far_right 0.9 (and a room's doors, each a mark of its name). |
 | `characters` | `list[str \| StageCharacter]` |  | The characters on the stage: a name, or {name, at, depth, scale, facing, pose, expression}. |
 | `characters.name` | `str` | required | A character of the video's characters: list. |
 | `characters.at` | `str \| float` | `'centre'` | Where it stands: a mark (far_left, left, centre, right, far_right, or the stage's own marks) or an x position from 0 (left edge) to 1 (right edge). |
@@ -96,7 +96,7 @@ scenes:
 | `props.color` | `color \| None` |  | Its main colour (a theme token or #hex); default per prop (a tree's leaves tertiary, a chair accent...). |
 | `props.detail` | `color \| None` |  | Its second colour (a tree's trunk, a house's roof, a laptop's screen...); default per prop. |
 | `props.recolor` | `'none' \| 'theme'` | `'none'` | With svg: theme maps the picture's colours to the nearest theme colours; none keeps them. |
-| `props.open` | `bool` | `False` | An umbrella: true starts it open (the open / close actions change it later). |
+| `props.open` | `bool` | `False` | An umbrella or a door: true starts it open (the open / close actions change it later). |
 | `particles` | `list[str \| StageParticles]` |  | Particles over the whole scene, in front of everything: a kind (rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves, streaks) or {kind, density, area, color, seed, puddles}; rain ends on the ground with splashes, not under an open umbrella or a tree, and plays a rain sound with foley; for one beat use the particles action. |
 | `particles.density` | `float` | `1.0` | How many: 1 = the kind's usual amount for a whole frame, 2 = twice as many (at most 300 in all; half at preview quality). |
 | `particles.area` | `list[float] \| None` |  | Where they are: [x, y, w, h] fractions 0-1 of the visible frame from its top-left corner; default the whole frame. |
@@ -109,6 +109,29 @@ scenes:
 | `light.strength` | `float` | `0.5` | How strongly: 0 = no change, 1 = the colours multiplied by the tint. |
 | `shadows` | `bool` | `True` | Soft shadows on the ground under the characters and the props standing on it (smaller when they jump, none under a held prop); false: none. |
 | `wind` | `float \| 'calm' \| 'breeze' \| 'windy' \| 'gale'` | `0.0` | Wind from the start, in gusts: 0 calm (nothing moves) .. 1 a gale blowing to the right (negative: to the left), or calm, breeze (0.3), windy (0.6), gale (1); trees, bushes, plants, signs and lamps sway, scarves, long hair, floppy or pointy ears and hats trail (clearly from windy on), particles drift (add leaves or streaks to show it more); the wind action changes it during the scene, blow_away blows a light prop away. |
+| `room` | `bool \| StageRoom \| None` |  | An indoor set instead of the sky and the ground: true, or {wall, wallpaper (plain, stripes, dots), floor, flooring (boards, tiles, plain), skirting, ceiling, depth, windows, doors}; windows show the sky of the stage's light, doors are door props whose names are marks (enter / exit through them); no wind, rain, snow, leaves or streaks inside. |
+| `room.wall` | `color` | `'#E9DCC9'` | The wall's colour (a theme token or #hex). |
+| `room.wallpaper` | `'plain' \| 'stripes' \| 'dots'` | `'plain'` | The wall's pattern: plain, stripes or dots (a shade of the wall's colour). |
+| `room.floor` | `color` | `'#C9A27A'` | The floor's colour (a theme token or #hex). |
+| `room.flooring` | `'plain' \| 'boards' \| 'tiles'` | `'boards'` | The floor's pattern: boards, tiles or plain. |
+| `room.skirting` | `color \| None` |  | The skirting board's colour; default the floor's, darker. |
+| `room.ceiling` | `color \| bool` | `False` | A ceiling band at the top: true (the wall's colour, lighter), a colour, or false for none. |
+| `room.depth` | `float \| None` |  | How far back the wall stands (the depth of characters and props, 0..1): the floor ends there; default 0.4, or the depth of the deepest thing standing on the floor when that is further back. |
+| `room.windows` | `list[str \| float \| RoomWindow]` |  | Windows on the wall: a mark or an x, or {at, width, height, sill, frame, curtains}; their sky follows the stage's light. |
+| `room.windows.at` | `str \| float` | `'centre'` | Its middle: a mark or an x position from 0 (left edge) to 1 (right edge) of the stage. |
+| `room.windows.width` | `float` | `0.6` | Its width in the heights of a character standing at the wall. |
+| `room.windows.height` | `float` | `0.62` | Its height in the heights of a character standing at the wall. |
+| `room.windows.sill` | `float` | `0.42` | How high its bottom is above the floor, in the heights of a character standing at the wall. |
+| `room.windows.frame` | `color` | `'#F4F6FA'` | Colour of its frame, bars and sill (a theme token or #hex). |
+| `room.windows.curtains` | `color \| bool` | `True` | Curtains on both sides: true (accent), a colour, or false for none. |
+| `room.doors` | `list[str \| float \| RoomDoor]` |  | Doors in the wall: a mark or an x, or {name, at, open, facing, scale, color, detail}; each is a door prop and a mark of its name. |
+| `room.doors.name` | `str \| None` |  | Its name for actions, the layout dump and its mark; default door (then door_2, ...). |
+| `room.doors.at` | `str \| float` | `'right'` | Where it is: a mark or an x position from 0 (left edge) to 1 (right edge) of the stage. |
+| `room.doors.open` | `bool` | `False` | true: it starts open (the open / close actions change it; a character entering or leaving through it opens it). |
+| `room.doors.facing` | `'right' \| 'left'` | `'right'` | Its hinges: right swings the open door to the left; left mirrors it. |
+| `room.doors.scale` | `float` | `1.3` | Its height in the heights of a character standing at the wall. |
+| `room.doors.color` | `color \| None` |  | The door's colour (a theme token or #hex); default accent. |
+| `room.doors.detail` | `color \| None` |  | Its knob's colour; default highlight. |
 
 ## Targets
 

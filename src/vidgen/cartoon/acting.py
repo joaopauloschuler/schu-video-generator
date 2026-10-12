@@ -208,6 +208,21 @@ def exit_path(side: str | None, from_x: float, view: tuple[float, float], half_w
     return side, offstage_x(side, view[0], view[1], half_width)
 
 
+def passage_fade(seconds: float, run_time: float, fade_in: float = 0.0, fade_out: float = 0.0) -> float:
+    """How much of a walking character shows (0..1) ``seconds`` into a walk of ``run_time``
+    seconds that fades in over its first ``fade_in`` seconds and out over its last ``fade_out``
+    (each at most half the walk; smoothstep): a walk in or out through a door (DESIGN.md §69.42)."""
+    def ramp(t: float, length: float) -> float:
+        if length <= 0:
+            return 1.0
+        s = min(max(t / min(length, run_time / 2), 0.0), 1.0)
+        return s * s * (3.0 - 2.0 * s)
+
+    if run_time <= 0:
+        return 1.0 if fade_out <= 0 else 0.0
+    return min(ramp(seconds, fade_in), ramp(run_time - seconds, fade_out))
+
+
 # ----- gestures and jumps ------------------------------------------------------------------------------
 
 GESTURES: tuple[str, ...] = ("point", "wave", "shrug", "nod", "shake_head")
@@ -328,6 +343,7 @@ __all__ = [
     "look_pose",
     "nearer_side",
     "offstage_x",
+    "passage_fade",
     "walk_amplitude",
     "walk_cycle",
     "walk_progress",

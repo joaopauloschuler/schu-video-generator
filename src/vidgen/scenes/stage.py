@@ -1,7 +1,7 @@
 """``stage``: a cartoon set (a picture, a generated picture or a colour / gradient) with a ground
 line, named marks and the video's characters standing on them (DESIGN.md §69.6), parallax
 layers that move by their factor when the camera moves (§69.7), props (§69.8), particles
-(§69.9), its light and shadows (§69.31) and its wind (§69.32)."""
+(§69.9), its light and shadows (§69.31), its wind (§69.32) or a room instead of the sky (§69.42)."""
 
 import math
 from collections.abc import Iterator
@@ -85,7 +85,7 @@ class StageProp(SceneParams):
     recolor: Literal["none", "theme"] = "none"
     """With svg: theme maps the picture's colours to the nearest theme colours; none keeps them."""
     open: bool = False
-    """An umbrella: true starts it open (the open / close actions change it later)."""
+    """An umbrella or a door: true starts it open (the open / close actions change it later)."""
 
     @model_validator(mode="before")
     @classmethod
@@ -199,6 +199,104 @@ class StageLayer(SceneParams):
         return DEFAULT_FACTORS[self.place] if self.factor is None else self.factor
 
 
+class RoomWindow(SceneParams):
+    """A window on a room's wall. A plain string or number is where it is (``at``)."""
+
+    also_accepts: ClassVar[tuple[type, ...]] = (str, float)
+
+    at: str | float = "centre"
+    """Its middle: a mark or an x position from 0 (left edge) to 1 (right edge) of the stage."""
+    width: float = Field(WINDOW_WIDTH, gt=0.0, le=4.0)
+    """Its width in the heights of a character standing at the wall."""
+    height: float = Field(WINDOW_HEIGHT, gt=0.0, le=2.0)
+    """Its height in the heights of a character standing at the wall."""
+    sill: float = Field(WINDOW_SILL, ge=0.0, le=1.5)
+    """How high its bottom is above the floor, in the heights of a character standing at the wall."""
+    frame: ThemeColor = WINDOW_FRAME
+    """Colour of its frame, bars and sill (a theme token or #hex)."""
+    curtains: ThemeColor | bool = True
+    """Curtains on both sides: true (accent), a colour, or false for none."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _at_only(cls, data: Any) -> Any:
+        return {"at": data} if isinstance(data, (str, int, float)) and not isinstance(data, bool) else data
+
+    @classmethod
+    def __get_pydantic_json_schema__(cls, core_schema: Any, handler: Any) -> dict[str, Any]:
+        """A mark or an x alone is also a window (JSON Schema ``anyOf`` mark | x | object)."""
+        return {"anyOf": [{"type": "string"}, {"type": "number", "minimum": 0, "maximum": 1}, handler(core_schema)]}
+
+
+class RoomDoor(SceneParams):
+    """A door in a room's wall: a ``door`` prop standing at the wall, closed or open, whose name is
+    also a mark (enter / exit through it). A plain string or number is where it is (``at``)."""
+
+    also_accepts: ClassVar[tuple[type, ...]] = (str, float)
+
+    name: Identifier | None = None
+    """Its name for actions, the layout dump and its mark; default door (then door_2, ...)."""
+    at: str | float = "right"
+    """Where it is: a mark or an x position from 0 (left edge) to 1 (right edge) of the stage."""
+    open: bool = False
+    """true: it starts open (the open / close actions change it; a character entering or leaving through it opens it)."""
+    facing: Literal["right", "left"] = "right"
+    """Its hinges: right swings the open door to the left; left mirrors it."""
+    scale: float = Field(DOOR_SCALE, gt=0.0, le=3.0)
+    """Its height in the heights of a character standing at the wall."""
+    color: ThemeColor | None = None
+    """The door's colour (a theme token or #hex); default accent."""
+    detail: ThemeColor | None = None
+    """Its knob's colour; default highlight."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _at_only(cls, data: Any) -> Any:
+        return {"at": data} if isinstance(data, (str, int, float)) and not isinstance(data, bool) else data
+
+    @classmethod
+    def __get_pydantic_json_schema__(cls, core_schema: Any, handler: Any) -> dict[str, Any]:
+        """A mark or an x alone is also a door (JSON Schema ``anyOf`` mark | x | object)."""
+        return {"anyOf": [{"type": "string"}, {"type": "number", "minimum": 0, "maximum": 1}, handler(core_schema)]}
+
+
+class StageRoom(SceneParams):
+    """An indoor set instead of the sky and the ground band: a back wall, a floor, a skirting
+    board where they meet, an optional ceiling, windows and doors. ``true`` is a room with the
+    defaults."""
+
+    also_accepts: ClassVar[tuple[type, ...]] = (bool,)
+
+    wall: ThemeColor = DEFAULT_WALL
+    """The wall's colour (a theme token or #hex)."""
+    wallpaper: Literal[WALLPAPERS] = "plain"  # type: ignore[valid-type]
+    """The wall's pattern: plain, stripes or dots (a shade of the wall's colour)."""
+    floor: ThemeColor = DEFAULT_FLOOR
+    """The floor's colour (a theme token or #hex)."""
+    flooring: Literal[FLOORINGS] = "boards"  # type: ignore[valid-type]
+    """The floor's pattern: boards, tiles or plain."""
+    skirting: ThemeColor | None = None
+    """The skirting board's colour; default the floor's, darker."""
+    ceiling: ThemeColor | bool = False
+    """A ceiling band at the top: true (the wall's colour, lighter), a colour, or false for none."""
+    depth: float | None = Field(None, ge=0.0, le=1.0)
+    """How far back the wall stands (the depth of characters and props, 0..1): the floor ends there; default 0.4, or the depth of the deepest thing standing on the floor when that is further back."""
+    windows: list[RoomWindow] = []
+    """Windows on the wall: a mark or an x, or {at, width, height, sill, frame, curtains}; their sky follows the stage's light."""
+    doors: list[RoomDoor] = []
+    """Doors in the wall: a mark or an x, or {name, at, open, facing, scale, color, detail}; each is a door prop and a mark of its name."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _plain(cls, data: Any) -> Any:
+        return {} if data is True else data
+
+    @classmethod
+    def __get_pydantic_json_schema__(cls, core_schema: Any, handler: Any) -> dict[str, Any]:
+        """``true`` is also a room (JSON Schema ``anyOf`` true | object)."""
+        return {"anyOf": [{"const": True}, handler(core_schema)]}
+
+
 @dataclass
 class _Parallax:
     """A layer on screen: its mobject, factor and every member's points at the camera's home."""
@@ -227,7 +325,9 @@ class Stage(NarratedScene):
     blows to the left) sways trees, bushes, plants, signs and lamps, makes scarves, long hair,
     floppy ears and hats trail and particles drift (the ``wind`` action fades it; ``leaves`` and
     ``streaks`` particles show it more); ``blow_away`` blows a light prop off the stage or to a
-    mark, out of a hand too.
+    mark, out of a hand too. ``room`` makes it an indoor set: a wall, a floor, windows showing
+    the sky of the light, and doors (door props whose names are marks; ``enter`` and ``exit``
+    through them); no wind or weather inside.
 
     A beat is spoken by the characters whose voice says it (their mouths move with it), or by
     the ones its ``say`` action names; the acting actions (``say``, ``look_at``, ``turn``,
@@ -282,7 +382,7 @@ class Stage(NarratedScene):
         ground_color: ThemeColor | Literal[False] | None = None
         """Fill below the ground line, up to where the deepest character or prop on the ground stands; none: surface on a colour background, nothing on a picture; false: nothing."""
         marks: dict[Annotated[str, Field(pattern=r"^[A-Za-z0-9_]+$")], Annotated[float, Field(ge=0.0, le=1.0)]] = {}
-        """Own marks: name -> x from 0 (left edge) to 1 (right edge), besides far_left 0.1, left 0.25, centre 0.5, right 0.75, far_right 0.9."""
+        """Own marks: name -> x from 0 (left edge) to 1 (right edge), besides far_left 0.1, left 0.25, centre 0.5, right 0.75, far_right 0.9 (and a room's doors, each a mark of its name)."""
         characters: list[StageCharacter] = []
         """The characters on the stage: a name, or {name, at, depth, scale, facing, pose, expression}."""
         size: float = Field(0.45, gt=0.0, le=1.0)
@@ -315,6 +415,8 @@ class Stage(NarratedScene):
         """Soft shadows on the ground under the characters and the props standing on it (smaller when they jump, none under a held prop); false: none."""
         wind: WindSetting = 0.0
         """Wind from the start, in gusts: 0 calm (nothing moves) .. 1 a gale blowing to the right (negative: to the left), or calm, breeze (0.3), windy (0.6), gale (1); trees, bushes, plants, signs and lamps sway, scarves, long hair, floppy or pointy ears and hats trail (clearly from windy on), particles drift (add leaves or streaks to show it more); the wind action changes it during the scene, blow_away blows a light prop away."""
+        room: StageRoom | None = None
+        """An indoor set instead of the sky and the ground: true, or {wall, wallpaper (plain, stripes, dots), floor, flooring (boards, tiles, plain), skirting, ceiling, depth, windows, doors}; windows show the sky of the stage's light, doors are door props whose names are marks (enter / exit through them); no wind, rain, snow, leaves or streaks inside."""
 
         @model_validator(mode="after")
         def _check(self) -> SceneParams:
@@ -324,17 +426,20 @@ class Stage(NarratedScene):
                 raise ValueError("background (a colour) is for stages without a picture; remove it or the image / generate")
             if isinstance(self.background, list) and len(self.background) < 2:
                 raise ValueError("a background gradient needs at least two colours (or give one colour)")
+            if self.room is not None:
+                self._check_room_places()
+            marks = self.stage_marks()
             seen: set[str] = set()
             for k, member in enumerate(self.characters):
                 if member.name in seen:
                     raise ValueError(f"character '{member.name}' is on the stage twice (characters[{k}])")
                 seen.add(member.name)
                 try:
-                    mark_x(member.at, self.marks)
+                    mark_x(member.at, marks)
                 except ValueError as exc:
                     raise ValueError(f"characters[{k}].at: {exc}") from None
             try:
-                mark_x(self.camera_at, self.marks)
+                mark_x(self.camera_at, marks)
             except ValueError as exc:
                 raise ValueError(f"camera_at: {exc}") from None
             names = self.layer_names()
@@ -348,15 +453,86 @@ class Stage(NarratedScene):
                 if name in prop_names[:k]:
                     raise ValueError(f"prop name '{name}' is used twice (props[{k}])")
                 try:
-                    mark_x(prop.at, self.marks)
+                    mark_x(prop.at, marks)
                 except ValueError as exc:
                     raise ValueError(f"props[{k}].at: {exc}") from None
+            if self.room is not None:
+                self._check_room()
             return self
 
+        def _check_room_places(self) -> None:
+            """The room's windows and doors stand on the stage's own marks or at an x."""
+            assert self.room is not None
+            for kind, entries in (("windows", self.room.windows), ("doors", self.room.doors)):
+                for k, entry in enumerate(entries):
+                    try:
+                        mark_x(entry.at, self.marks)
+                    except ValueError as exc:
+                        raise ValueError(f"room.{kind}[{k}].at: {exc}") from None
+
+        def _check_room(self) -> None:
+            """A room draws its own wall and floor, keeps the weather out, and stands behind
+            everything on its floor; its doors' names are marks."""
+            assert self.room is not None
+            given = [key for key in ("image", "generate", "background", "ground_color") if getattr(self, key) is not None]
+            if given:
+                raise ValueError(f"a room draws its own wall and floor: remove {', '.join(given)} (or the room)")
+            if wind_level(self.wind) != 0.0:
+                raise ValueError("there is no wind in a room: remove wind (or the room)")
+            for k, item in enumerate(self.particles):
+                if item.kind in OUTDOOR_PARTICLES:
+                    raise ValueError(f"particles[{k}]: {item.kind} stays outdoors; a room has none inside (sparkles, dust, confetti, smoke and bubbles work)")
+            if self.room.depth is not None:
+                for item in self._floor_items():
+                    if item.lift == 0 and item.depth > self.room.depth:
+                        raise ValueError(f"'{item.name}' stands at depth {item.depth}, behind the room's wall (room.depth {self.room.depth}): "
+                                         "move it forward or the wall back")
+            names = self.prop_names()
+            characters = {c.name for c in self.characters}
+            for k, name in enumerate(self.door_names()):
+                if name in {**MARKS, **self.marks}:
+                    raise ValueError(f"room.doors[{k}]: '{name}' is also a mark; a door's name is its mark, give the door another name")
+                if name in characters or names.count(name) > 1:
+                    raise ValueError(f"room.doors[{k}]: '{name}' is also the name of a character or another prop; give the door another name")
+
+        def _floor_items(self) -> list[StageItem]:
+            """The props (without the room's doors) and the characters, as stage items."""
+            props = [
+                StageItem(name, "prop", prop.at, prop.depth, prop.height_factor(), prop.resolved_lift())
+                for prop, name in zip(self.props, numbered_names([(p.name, p.default_name()) for p in self.props]))
+            ]
+            return props + [StageItem(c.name, "character", c.at, c.depth, c.scale) for c in self.characters]
+
+        def wall_depth(self) -> float | None:
+            """How far back the room's wall stands (``None``: no room; :func:`wall_depth`)."""
+            return None if self.room is None else wall_depth(self._floor_items(), self.room.depth)
+
+        def stage_props(self) -> list[StageProp]:
+            """The props, then the room's doors as ``door`` props standing at its wall."""
+            if self.room is None:
+                return list(self.props)
+            depth = self.wall_depth()
+            return [*self.props, *(
+                StageProp(prop="door", name=door.name, at=door.at, depth=depth, scale=door.scale, facing=door.facing,
+                          color=door.color, detail=door.detail, open=door.open)
+                for door in self.room.doors
+            )]
+
+        def door_names(self) -> list[str]:
+            """The names of the room's doors (none without a room)."""
+            return self.prop_names()[len(self.props):]
+
+        def stage_marks(self) -> dict[str, float]:
+            """The stage's own marks, plus a mark at each of its room's doors (named after it)."""
+            if self.room is None or not self.room.doors:
+                return dict(self.marks)
+            doors = {name: mark_x(door.at, self.marks) for name, door in zip(self.door_names(), self.room.doors)}
+            return {**self.marks, **doors}
+
         def prop_names(self) -> list[str]:
-            """Each prop's name: its own, else its default name numbered from the second prop of
-            that name on (``tree``, ``tree_2``)."""
-            return numbered_names([(prop.name, prop.default_name()) for prop in self.props])
+            """Each prop's name (the room's doors last): its own, else its default name numbered
+            from the second prop of that name on (``tree``, ``tree_2``)."""
+            return numbered_names([(prop.name, prop.default_name()) for prop in self.stage_props()])
 
         def layer_names(self) -> list[str]:
             """Each layer's name: its own, else ``<place>_layer`` numbered from the second
@@ -373,7 +549,7 @@ class Stage(NarratedScene):
             front of a prop)."""
             props = [
                 StageItem(name, "prop", prop.at, prop.depth, prop.height_factor(), prop.resolved_lift())
-                for prop, name in zip(self.props, self.prop_names())
+                for prop, name in zip(self.stage_props(), self.prop_names())
             ]
             return props + [StageItem(c.name, "character", c.at, c.depth, c.scale) for c in self.characters]
 
@@ -631,8 +807,8 @@ class Stage(NarratedScene):
 
     @classmethod
     def camera_place(cls, params: Any, place: str | float) -> float:
-        """A mark of the stage (its own too) or an x from 0 to 1."""
-        return mark_x(place, params.marks)
+        """A mark of the stage (its own and its room's doors too) or an x from 0 to 1."""
+        return mark_x(place, params.stage_marks())
 
     def camera_bounds(self) -> tuple[float, float, float, float]:
         """The stage: ``width`` frames wide, the frame's height."""
@@ -650,7 +826,7 @@ class Stage(NarratedScene):
     def construct(self) -> None:
         p = self.params
         frame = self.camera.frame
-        start_x = (mark_x(p.camera_at, p.marks) - 0.5) * self.stage_width
+        start_x = (mark_x(p.camera_at, p.stage_marks()) - 0.5) * self.stage_width
         frame.move_to([*view_center_within(self.camera_bounds(), (start_x, 0.0), frame.width, frame.height), 0.0])
         self._start_light()
         layers = self._layers()
@@ -660,7 +836,7 @@ class Stage(NarratedScene):
         in_front = [m for layer, m in zip(p.layers, layers) if layer.place == "foreground"]
         placements = stage_layout(
             p.items(),
-            marks=p.marks,
+            marks=p.stage_marks(),
             ground=p.ground,
             size=p.size,
             frame_width=self.frame_width,
@@ -670,7 +846,7 @@ class Stage(NarratedScene):
         heads = [place.feet[1] + place.height for place in placements if place.kind == "character"]
         backdrop = self._backdrop(behind, max(heads, default=None))
         members = {m.name: m for m in p.characters}
-        props = dict(zip(p.prop_names(), p.props))
+        props = dict(zip(p.prop_names(), p.stage_props()))
         # the characters and the props on the stage by name, back to front (DESIGN.md §69.6, §69.8)
         self.cast: dict[str, Character] = {}
         self.props: dict[str, Prop] = {}
@@ -711,7 +887,7 @@ class Stage(NarratedScene):
             self.cast[member.name] = figure
             on_stage.append((member.name, figure))
         # the light grades the set, not the stars, shadows, bubbles or text (DESIGN.md §69.31)
-        mark_lit(*[m for m in backdrop if not isinstance(m, StarField)], *in_front, *(mob for _, mob in on_stage))
+        mark_lit(*[m for m in backdrop if not isinstance(m, (StarField, WindowViews))], *in_front, *(mob for _, mob in on_stage))
         still, moving = self._shadows(placements)
         backdrop += [still] if still is not None else []
         # register back to front, so the fade-ins add them (and draw them) in that order
@@ -761,6 +937,7 @@ class Stage(NarratedScene):
         #: the stage's light (``None``: the set as drawn, nothing changes it)
         self.light: StageLight | None = StageLight(self.renderer.camera, self.base_light) if self.base_light.changes_colors or changes else None
         self.stars: StarField | None = None
+        self.window_views: WindowViews | None = None
         self.shadows: list[StageShadows] = []
         #: the scene updater while the light changes, kept: Manim removes an updater by identity,
         #: and each ``self._light_step`` is a new bound method
@@ -769,6 +946,8 @@ class Stage(NarratedScene):
     def change_light(self, setting: str | CustomLight, start: float, seconds: float) -> None:
         """Fade the light to ``setting`` (a preset or a tint) from scene time ``start`` over
         ``seconds`` (the ``light`` action); everything is redrawn on every frame meanwhile."""
+        if self.window_views is not None:   # the sky outside fades with it (§69.42)
+            self._sky_changes.append(SkyChange(float(start), max(float(seconds), 0.0), window_sky(self._light_key(setting))))
         if self.light is None:
             self.light = StageLight(self.renderer.camera, self.base_light)
             self.light.on_change(self._show_light)
@@ -786,9 +965,12 @@ class Stage(NarratedScene):
             self.remove_updater(self._light_updater)
 
     def _show_light(self, grade: LightGrade) -> None:
-        """The stars' brightness and the shadows' darkness for ``grade``."""
+        """The stars' brightness and the shadows' darkness for ``grade``, and the sky outside a
+        room's windows for the light now."""
         if self.stars is not None:
             self.stars.set_level(grade.stars)
+        if self.window_views is not None:
+            self.window_views.show(sky_at(self._sky_base, self._sky_changes, float(self.renderer.time)))
         for group in self.shadows:
             group.set_strength(grade.shadow)
 
@@ -881,13 +1063,14 @@ class Stage(NarratedScene):
             return None, None
         lifts = {item.name: item.lift for item in self.params.items()}
         movable = self._movable_props()
+        doors = set(self.params.door_names())
         still: list[ShadowCaster] = []
         moving: list[ShadowCaster] = []
         for place_at in placements:
             name = place_at.name
             if place_at.kind == "prop":
-                if lifts[name] > 0:
-                    continue  # hangs in the sky
+                if lifts[name] > 0 or name in doors:
+                    continue  # hangs in the sky, or is part of the room's wall
                 prop = self.props[name]
                 widths = {shape: prop.shape_width(shape) * PROP_SHADOW_WIDTH for shape in prop.shapes}
                 caster = ShadowCaster(prop, self.grounds[name], prop.width * PROP_SHADOW_WIDTH, prop.height, widths)
@@ -947,6 +1130,8 @@ class Stage(NarratedScene):
         ground band."""
         p = self.params
         fw, fh = self.stage_width, self.frame_height
+        if p.room is not None:  # the room's wall and floor instead of the sky and the ground (§69.42)
+            return [*self._room().mobjects(), *layers]
         parts: list[Mobject] = []
         top = ground_top(p.ground, p.items())  # up to the deepest thing standing on it (§69.6)
         if p.has_picture():
@@ -978,6 +1163,60 @@ class Stage(NarratedScene):
             band.name = "ground"
             parts.append(band)
         return parts
+
+    # ----- rooms (DESIGN.md §69.42) -------------------------------------------------------------
+
+    def _room(self) -> RoomDrawing:
+        """The room: its wall and floor, the sky outside its windows (for the light at the start;
+        :meth:`_show_light` keeps it in step) and its window frames and curtains."""
+        p = self.params
+        room = p.room
+        assert room is not None
+        depth = p.wall_depth()
+        geometry = room_geometry(
+            ground=p.ground, depth=depth, size=p.size, frame_width=self.frame_width, frame_height=self.frame_height,
+            stage_width=self.stage_width, ceiling=room.ceiling is not False,
+        )
+        left = -self.stage_width / 2
+        theme = self.theme
+        windows = [
+            WindowLook(
+                window_parts(left + mark_x(w.at, p.marks) * self.stage_width, geometry.wall_line, geometry.unit,
+                             width=w.width, height=w.height, sill=w.sill, curtains=w.curtains is not False),
+                resolve_color(w.frame, theme),
+                None if w.curtains is False else resolve_color("accent" if w.curtains is True else w.curtains, theme),
+            )
+            for w in room.windows
+        ]
+        colors = room_colors(
+            resolve_color(room.wall, theme), resolve_color(room.floor, theme),
+            skirting=resolve_color(room.skirting, theme) if room.skirting is not None else None,
+            ceiling=room.ceiling if isinstance(room.ceiling, bool) else resolve_color(room.ceiling, theme),
+        )
+        #: the sky outside the windows at the start and the light actions' changes of it
+        self._sky_base = window_sky(self._light_key(p.light))
+        self._sky_changes: list[SkyChange] = []
+        drawing = draw_room(
+            geometry, colors, wallpaper=room.wallpaper, flooring=room.flooring, windows=windows, sky=self._sky_base,
+            short_side=min(self.frame_width, self.frame_height), frame_area=self.frame_width * self.frame_height,
+            preview=self.is_preview,
+        )
+        #: what the room's windows show (``None``: not a room)
+        self.window_views = drawing.views
+        return drawing
+
+    def _light_key(self, setting: str | CustomLight) -> str | tuple[str, float]:
+        """A light setting as :func:`window_sky` takes it: a preset name, or (#hex tint, strength)."""
+        if isinstance(setting, CustomLight):
+            return (resolve_color(setting.tint, self.theme), setting.strength)
+        return setting
+
+    def door(self, name: str) -> Prop:
+        """The room's door ``name`` (a :class:`VidgenError` when the room has no such door)."""
+        if name not in self.params.door_names():
+            known = ", ".join(self.params.door_names()) or "none"
+            raise VidgenError(f"scene '{self.spec.id}': no door '{name}' (the room's doors: {known})")
+        return self.props[name]
 
     def _picture(self) -> Mobject:
         """The background picture, scaled to cover the stage and centred."""

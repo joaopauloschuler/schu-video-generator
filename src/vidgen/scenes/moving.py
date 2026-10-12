@@ -119,16 +119,41 @@ class RunTo(WalkTo):
     gait = RUNNING
 
 
+def _door_problems(params: Any, door: str | None, other: str, given: Any) -> list[tuple[str, str]]:
+    """``door`` names a door of the stage's room, and the edge option ``other`` is not ``given``
+    too (DESIGN.md §69.42)."""
+    if door is None:
+        return []
+    doors = params.door_names() if hasattr(params, "door_names") else []
+    problems: list[tuple[str, str]] = []
+    if door not in doors:
+        known = ", ".join(doors) or "none (add room: {doors: [...]} to the stage)"
+        problems.append(("door", f"no door '{door}' on this stage (its room's doors: {known})"))
+    if given is not None:
+        problems.append(("door", f"give {other} (an edge) or door, not both"))
+    return problems
+
+
+def _door_x(scene: NarratedScene, name: str) -> float:
+    """The x of the room's door ``name`` (opened if it is closed: a character goes through it)."""
+    door = scene.door(name)
+    if door.shape != "open":
+        door.show_shape("open")
+    return float(door.feet()[0])
+
+
 @action("enter")
 class Enter(_Moving):
     """The target character walks in from beyond the ``side`` edge of what the camera shows (left
-    or right; default: the edge nearer where it goes) to ``to`` (a mark or an x; default its own
-    mark on the stage). On a ``stage`` a character with an enter action waits off stage until
-    then."""
+    or right; default: the edge nearer where it goes), or through the room's ``door`` (it opens,
+    the character appears in it and walks on), to ``to`` (a mark or an x; default its own mark on
+    the stage). On a ``stage`` a character with an enter action waits off stage until then."""
 
     class Options(ActionOptions):
         side: Literal["left", "right"] | None = None
         """The edge it comes in from: left or right; default: the one nearer where it goes."""
+        door: str | None = None
+        """Instead of side: a door of the stage's room (its name) it comes in through."""
         to: Place | None = None
         """Where it walks to: a mark or an x from 0 to 1 of the stage; default: its own mark (its at on the stage)."""
         speed: float = Field(WALK_SPEED, gt=0.0, le=20.0)
@@ -137,28 +162,37 @@ class Enter(_Moving):
     run_time = 2.0
 
     def scene_problems(self, scene_cls: type[NarratedScene], params: Any) -> list[tuple[str, str]]:
-        return self._place_problems(scene_cls, params, self.options.to)
+        return self._place_problems(scene_cls, params, self.options.to) + _door_problems(params, self.options.door, "side", self.options.side)
 
-    def _path(self, scene: NarratedScene, character: Character) -> tuple[str, float, float]:
+    def _path(self, scene: NarratedScene, character: Character, *, opening: bool = False) -> tuple[str, float, float]:
         if self.options.to is not None:
             to_x = _place_x(scene, self.options.to)
         else:
             to_x = getattr(scene, "homes", {}).get(character.name, _feet_x(character))
+        if self.options.door is not None:
+            door = scene.door(self.options.door)
+            return "door", _door_x(scene, self.options.door) if opening else float(door.feet()[0]), to_x
         return enter_path(self.options.side, to_x, _view(scene), character.width / 2)
+
+    def _seconds(self, character: Character, start: float, end: float) -> float:
+        walk = _walk_time(character, end - start, self.options.speed)
+        return max(walk, 2 * DOOR_FADE_SECONDS) if self.options.door is not None else walk
 
     def run_time_for(self, scene: NarratedScene, targets: list[Target]) -> float | None:
         times = []
         for character in _characters(scene, targets, "enter"):
             _, start, end = self._path(scene, character)
-            times.append(_walk_time(character, end - start, self.options.speed))
+            times.append(self._seconds(character, start, end))
         return max(times, default=None)
 
     def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
-        """Put each character just beyond the view's edge and walk it in."""
+        """Put each character just beyond the view's edge, or in the open door, and walk it in
+        (fading in at the door)."""
         anims: list[Animation] = []
         for character in _characters(scene, targets, "enter"):
-            _, start, end = self._path(scene, character)
-            anims.append(Walk(character, end, start_x=start, speed=self.options.speed))
+            _, start, end = self._path(scene, character, opening=True)
+            door = {} if self.options.door is None else {"fade_in": DOOR_FADE_SECONDS, "run_time": self._seconds(character, start, end)}
+            anims.append(Walk(character, end, start_x=start, speed=self.options.speed, **door))
             _ended_walk(scene, character)
         return anims
 
@@ -166,37 +200,49 @@ class Enter(_Moving):
 @action("exit")
 class Exit(_Moving):
     """The target character walks out of what the camera shows, beyond its ``to`` edge (left or
-    right; default: the nearer one), and then waits off the stage (an ``enter`` brings it back).
-    A camera following it stops following (and stays)."""
+    right; default: the nearer one), or out through the room's ``door`` (it opens; the character
+    fades away in it), and then waits off the stage (an ``enter`` brings it back). A camera
+    following it stops following (and stays)."""
 
     class Options(ActionOptions):
         to: Literal["left", "right"] | None = None
         """The edge it leaves by: left or right; default: the nearer one."""
+        door: str | None = None
+        """Instead of to: a door of the stage's room (its name) it leaves through."""
         speed: float = Field(WALK_SPEED, gt=0.0, le=20.0)
         """Walking speed in units per second."""
 
     run_time = 2.0
 
     def scene_problems(self, scene_cls: type[NarratedScene], params: Any) -> list[tuple[str, str]]:
-        return self._target_characters(scene_cls, params)[1]
+        return self._target_characters(scene_cls, params)[1] + _door_problems(params, self.options.door, "to", self.options.to)
+
+    def _end(self, scene: NarratedScene, character: Character, *, opening: bool = False) -> tuple[str, float]:
+        if self.options.door is not None:
+            door = scene.door(self.options.door)
+            return nearer_side(_feet_x(character), *scene.camera_bounds()[:2]), _door_x(scene, self.options.door) if opening else float(door.feet()[0])
+        return exit_path(self.options.to, _feet_x(character), _view(scene), character.width / 2)
+
+    def _seconds(self, character: Character, end: float) -> float:
+        walk = _walk_time(character, end - _feet_x(character), self.options.speed)
+        return max(walk, 2 * DOOR_FADE_SECONDS) if self.options.door is not None else walk
 
     def run_time_for(self, scene: NarratedScene, targets: list[Target]) -> float | None:
-        times = []
-        for character in _characters(scene, targets, "exit"):
-            _, end = exit_path(self.options.to, _feet_x(character), _view(scene), character.width / 2)
-            times.append(_walk_time(character, end - _feet_x(character), self.options.speed))
+        times = [self._seconds(c, self._end(scene, c)[1]) for c in _characters(scene, targets, "exit")]
         return max(times, default=None)
 
     def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
-        """Walk each character out of the view; then put it beyond the stage's edge."""
+        """Walk each character out of the view or into the door (fading away there); then put it
+        beyond the stage's edge."""
         left, right = scene.camera_bounds()[:2]
         anims: list[Animation] = []
         for character in _characters(scene, targets, "exit"):
             if getattr(scene.camera_following, "followed", None) is character:
                 scene.follow_with_camera(None)
             half = character.width / 2
-            side, end = exit_path(self.options.to, _feet_x(character), _view(scene), half)
-            anims.append(Walk(character, end, park_x=offstage_x(side, left, right, half), speed=self.options.speed))
+            side, end = self._end(scene, character, opening=True)
+            door = {} if self.options.door is None else {"fade_out": DOOR_FADE_SECONDS, "run_time": self._seconds(character, end)}
+            anims.append(Walk(character, end, park_x=offstage_x(side, left, right, half), speed=self.options.speed, **door))
         return anims
 
 

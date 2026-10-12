@@ -35,7 +35,7 @@ def _posed(scene: NarratedScene) -> dict[str, dict[str, PartPose]]:
 
 
 def _stage_prop(params: Any, name: str) -> Any:
-    return dict(zip(params.prop_names(), params.props)).get(name)
+    return dict(zip(params.prop_names(), params.stage_props())).get(name)
 
 
 def _svg_points(svg: str) -> tuple[Any, Any]:

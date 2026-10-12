@@ -907,11 +907,11 @@ def stage_frame(project: Project, params: Any) -> StageFrame:
     frame_width, frame_height = frame_size(fmt.width, fmt.height)
     stage_width = params.width * stage_base_width(frame_width, frame_height, stage_reframes(project, params))
     placements = stage_layout(
-        params.items(), marks=params.marks, ground=params.ground, size=params.size,
+        params.items(), marks=params.stage_marks(), ground=params.ground, size=params.size,
         frame_width=frame_width, frame_height=frame_height, stage_width=stage_width,
     )
     facings = {c.name: c.facing for c in params.characters}
-    seat_facings = {name: p.facing for name, p in zip(params.prop_names(), params.props) if p.prop in SEAT_BACKS}
+    seat_facings = {name: p.facing for name, p in zip(params.prop_names(), params.stage_props()) if p.prop in SEAT_BACKS}
     places: dict[str, StagePlace] = {}
     props: dict[str, float] = {}
     for placed in placements:
@@ -921,8 +921,8 @@ def stage_frame(project: Project, params: Any) -> StageFrame:
         facing = facings.get(placed.name, "auto")
         facing = facing_towards_centre(placed.x_fraction) if facing == "auto" else facing
         places[placed.name] = StagePlace(placed.feet[0], placed.feet[1], placed.height, facing)
-    camera_x = (mark_x(params.camera_at, params.marks) - 0.5) * stage_width
-    return StageFrame(frame_width, frame_height, stage_width, camera_x, places, props, dict(params.marks), seat_facings)
+    camera_x = (mark_x(params.camera_at, params.stage_marks()) - 0.5) * stage_width
+    return StageFrame(frame_width, frame_height, stage_width, camera_x, places, props, params.stage_marks(), seat_facings)
 
 
 def stage_reframes(project: Project, params: Any) -> bool:
@@ -939,7 +939,7 @@ def stage_reframes(project: Project, params: Any) -> bool:
     fmt = project.config.format
     frame_width, frame_height = frame_size(fmt.width, fmt.height)
     placements = stage_layout(
-        params.items(), marks=params.marks, ground=params.ground, size=params.size, frame_width=frame_width,
+        params.items(), marks=params.stage_marks(), ground=params.ground, size=params.size, frame_width=frame_width,
         frame_height=frame_height, stage_width=params.width * stage_base_width(frame_width, frame_height, True),
     )
     boxes = [(p.feet[0] - FIGURE_HALF_WIDTH * p.height, p.feet[0] + FIGURE_HALF_WIDTH * p.height) for p in placements if p.kind == "character"]

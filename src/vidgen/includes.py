@@ -32,6 +32,8 @@ from vidgen.errors import Problem, VidgenError
 INCLUDABLE_KEYS: tuple[str, ...] = ("include", "characters", "voices", "sets")
 #: Set params that are one choice: a stage that gives any of them drops all of the set's.
 BACKGROUND_KEYS = frozenset({"image", "generate", "background"})
+#: A stage's indoor set (DESIGN.md §69.42): another choice of backdrop, see :func:`apply_set`.
+ROOM_KEY = "room"
 #: Set params whose lists combine with the stage's (the set's entries first).
 COMBINED_LISTS: tuple[str, ...] = ("characters", "props", "layers", "particles")
 
@@ -257,7 +259,8 @@ def apply_set(set_params: Mapping[str, Any], params: Mapping[str, Any]) -> SetMe
     """A stage's ``params`` started from a set's (the stage's own values win):
 
     - ``image``, ``generate`` and ``background`` are one choice: a stage giving any of them drops
-      all three of the set's;
+      all three of the set's, and its ``room``; a stage giving a ``room`` drops the set's three
+      and its ``ground_color`` (a set's room and the stage's merge key by key, like any mapping);
     - mappings (``marks``...) merge key by key;
     - ``characters``, ``props``, ``layers`` and ``particles`` combine: the set's entries, then the
       stage's; a stage entry named like a set entry (a character's name; a prop's or layer's
@@ -266,8 +269,12 @@ def apply_set(set_params: Mapping[str, Any], params: Mapping[str, Any]) -> SetMe
     - anything else is replaced.
     """
     own = dict(params)
-    drop_background = bool(BACKGROUND_KEYS & own.keys())
-    base = {k: v for k, v in set_params.items() if not (drop_background and k in BACKGROUND_KEYS)}
+    dropped: set[str] = set()
+    if BACKGROUND_KEYS & own.keys():
+        dropped |= BACKGROUND_KEYS | {ROOM_KEY}
+    if ROOM_KEY in own:
+        dropped |= BACKGROUND_KEYS | {"ground_color"}
+    base = {k: v for k, v in set_params.items() if k not in dropped}
     result = SetMerge({})
     for key in [*base, *(k for k in own if k not in base)]:
         if key not in own:

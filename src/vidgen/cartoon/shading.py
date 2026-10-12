@@ -176,11 +176,13 @@ class ShadowCaster:
     widths: Mapping[str, float] = field(default_factory=dict)
 
     def ellipse(self, strength: float) -> ShadowEllipse:
-        """Its shadow now (:func:`~vidgen.cartoon.lighting.shadow_ellipse`)."""
+        """Its shadow now (:func:`~vidgen.cartoon.lighting.shadow_ellipse`), as faint as its caster
+        shows (``shown``: fading through a door)."""
         x, y = (float(v) for v in self.mobject.feet()[:2])
         held = getattr(self.mobject, "held_by", None) is not None
         width = self.widths.get(getattr(self.mobject, "shape", None) or "", self.width)
-        return shadow_ellipse(x, self.ground, width, above=y - self.ground, size=self.size, strength=0.0 if held else strength)
+        shown = float(getattr(self.mobject, "shown", 1.0))
+        return shadow_ellipse(x, self.ground, width, above=y - self.ground, size=self.size, strength=0.0 if held else strength * shown)
 
 
 class Shadow(VGroup):

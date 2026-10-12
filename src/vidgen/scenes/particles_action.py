@@ -58,6 +58,12 @@ class Particles(Action):
             found.append(("keep", "keep: stays to the scene's end, until: goes at a beat; give one of them"))
         return found
 
+    def scene_problems(self, scene_cls: type[NarratedScene], params: Any) -> list[tuple[str, str]]:
+        """Rain, snow, leaves and streaks stay out of a stage's room (DESIGN.md §69.42)."""
+        if getattr(params, "room", None) is not None and self.kind() in OUTDOOR_PARTICLES:
+            return [("target", f"{self.kind()} stays outdoors; a room has none inside (sparkles, dust, confetti, smoke and bubbles work)")]
+        return []
+
     def default_until(self, later: Any) -> str | None:
         """The next beat, unless ``keep``."""
         return None if self.options.keep else super().default_until(later)

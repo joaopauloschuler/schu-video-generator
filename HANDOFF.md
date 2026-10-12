@@ -10160,3 +10160,127 @@ How to test
   test_cartoon_seating test_cartoon_stage test_cartoon_lighting test_screenplay` (10, 36 s),
   `test_builtin_scenes test_actions_coverage -k "stage or jump or walk"` (7, 4 s). The full suite
   was not run.
+
+## Step 109 — Rooms (indoor sets), part 1
+
+What was built
+- Pure `src/vidgen/cartoon/room.py`: `wall_depth` (given `room.depth`, else the larger of
+  `WALL_DEPTH` 0.4 and the deepest thing standing on the floor), `room_geometry` (wall, floor up
+  to the wall line `ground + FAR_RISE × depth`, skirting, optional ceiling band; the *wall unit*
+  = a character's height at the wall), `wallpaper_stripes` / `wallpaper_dots`, `floor_rows` /
+  `floor_lines` (boards with staggered joints, tiles spreading towards the front, plain),
+  `window_parts` (frame, glass, bars, sill, rod, two curtains), `shade` / `darker` / `lighter`,
+  `WindowSky` + `WINDOW_SKIES` + `window_sky(light)` (per preset; `indoor` = evening outside; a
+  tint multiplies the day's sky), `SkyChange` / `sky_at` / `blend_skies` (fades with §69.31's
+  `fade_at`).
+- `src/vidgen/cartoon/room_drawing.py`: `draw_room(...)` → `RoomDrawing(back, views, front)`;
+  `WindowViews` (sky gradient + a `StarField` per window, `show(sky)`), `RoomColors` /
+  `room_colors`, `WindowLook`.
+- Stage param `room` (`StageRoom`, `RoomWindow`, `RoomDoor`; `room: true`; a mark or an x alone
+  is a window / door). The room replaces the picture / colour, the open-sky stars and the
+  ground band; layers still draw after it. Everything but the window views is lit; `_room` keeps
+  the sky outside, `change_light` adds a `SkyChange`, `_show_light` shows `sky_at(...)`.
+- Doors: the `door` prop has shapes `closed` / `open` (`PROP_SHAPES`; live copies as the
+  umbrella, Step 103). `Params.stage_props()` = props + one door prop per room door at the wall's
+  depth (scale `DOOR_SCALE` 1.3); `prop_names`, `items`, `door_names`, `stage_marks` (a door's
+  name is a mark), `wall_depth`. Used by the construct, `camera_place`, `stage_frame` /
+  `stage_reframes` (directing), the reshape / blow-away / seating checks. Doors cast no shadow.
+- `enter` / `exit` option `door` (`scenes/moving.py`): opens the door (at once), then
+  `Walk(start_x=door, fade_in=DOOR_FADE_SECONDS)` / `Walk(door, park_x=..., fade_out=...)`, at
+  least twice the fade long; validate: unknown door (lists the room's), `side` / `to` with
+  `door`. `Walk(fade_in=, fade_out=)` scales every member's fill / stroke alphas by the pure
+  `passage_fade` (acting.py), sets `Character.shown` (new, 1 by default), restores them after
+  parking; `ShadowCaster` multiplies the shadow by `shown`.
+- No weather inside: `room` with `wind` ≠ 0 or rain / snow / leaves / streaks particles is a
+  config error; the `wind` action and such a `particles` action are validate problems
+  (`scene_problems`). `room` with `image` / `generate` / `background` / `ground_color` is a
+  config error.
+- Sets (`includes.apply_set`): a scene's `room` drops the set's `image` / `generate` /
+  `background` / `ground_color`; a scene's backdrop drops the set's `room` (`ROOM_KEY`); rooms
+  merge key by key.
+- Prop gallery still `docs/gallery/media/props.png` regenerated (21.3 KB): now with `door (open)`.
+
+Files touched
+- New: `src/vidgen/cartoon/room.py`, `src/vidgen/cartoon/room_drawing.py`, `tests/test_cartoon_room.py`.
+- `src/vidgen/scenes/stage.py`, `scenes/moving.py`, `scenes/handling.py`, `scenes/sitting.py`,
+  `scenes/wind_action.py`, `scenes/particles_action.py`, `cartoon/props.py`, `cartoon/transition.py`,
+  `cartoon/acting.py`, `cartoon/character.py` (`shown`), `cartoon/shading.py`, `cartoon/directing.py`,
+  `includes.py`, `api.py`.
+- Docs: `docs/CONFIG.md` (stage `room` row, new "Rooms (`room`)", `enter` / `exit` rows, props
+  `open` row, umbrellas paragraph), `DESIGN.md` (§2 tree, §6.4, §69.37 gallery line, new §69.42),
+  `docs/EXTENDING.md`, `docs/gallery/stage.md` (param rows as `vidgen gallery` writes them; stills
+  not re-rendered), `docs/gallery/media/props.png`, guide (`src/vidgen/data/guide/AGENTS.md` +
+  `AGENTS.md`: `enter` / `exit` / `open` / `close` rows, "Indoors" bullet), `tasklist.md`.
+- Tests updated: `tests/test_cartoon_props.py`, `tests/test_cartoon_holding.py` (the "props that
+  can open" lists gain `door`).
+
+Public interfaces
+- `vidgen.api` adds the names in DESIGN §6.4 (Step 109). Stage param `room`; `enter` / `exit`
+  option `door`; `Walk(fade_in=, fade_out=)`; `Character.shown`; `Stage.door(name)`,
+  `Stage.window_views`; `door` prop shapes. Compatible: a stage without `room` renders as before.
+
+Decisions / deviations
+- "Skirting line at the ground line": the skirting is where the floor meets the wall, at the
+  wall's depth (default 0.4, behind everything on the floor), not at the depth-0 ground line,
+  so characters and props at a depth stand on the floor in front of the wall (§69.22's rule).
+- The window shows the sky *outside* (its own colours per light, not graded by the room's
+  light); `indoor` means lamplight inside, so the window shows an evening sky with a few stars.
+- Doors are `door` props (so `open` / `close`, `lean_on`, the layout dump and the props'
+  validation reuse Step 103's code), and their names are marks (`stage_marks`), not entries
+  added to `marks` (the params stay as written, fingerprints included).
+- Entering through a door is a fade in the doorway at the character's own depth (no walking in
+  depth until Step 111); the door opens at once (no `PropReshape`: a second animation in an
+  `enter` would give it a second whoosh in foley).
+- Wind and weather indoors: refused rather than ignored, with a message naming what works.
+  Rain through windows was left out (an animated window behind the characters makes the whole
+  set "moving" for Manim, §69.20).
+- Default colours are fixed hex (cream wall, wood floor, white frames) like the cloud's white:
+  no theme token is light and warm in every preset; authors pass tokens.
+- Searched first: no room / wall / window / skirting code existed (`git grep -il "skirting\|wallpaper\|
+  window_sky\|room_geometry" c3054e8 -- src/vidgen`: none); reused `FAR_RISE`, `depth_scale`,
+  `ground_top`, `numbered_names`, `fade_at`, `grade_rgbas` / `tint_grade`, `night_stars`,
+  `StarField`, `mark_lit`, the `door` prop and `show_shape`, `hex_rgb` / `rgb_hex` / `blend` /
+  `relative_luminance`, `one_pixel_stroke`.
+
+Evidence
+- Stills by eye (`vidgen storyboard`, scratch projects at preview 854×480): a striped room with
+  boards, a table, a window and a door: moss enters through the door (half-way: fading in in the
+  open doorway), dot leaves through it (fading out, shadow fading with her); `sunset` (dots,
+  tiles, ceiling, an open door facing left; the window sky blue over orange); `night` (dark sky
+  with stars, room graded blue); `indoor`, then `- light: night` (evening blue, then night sky);
+  a 2-frame-wide `morning` room with a close-up shot, automatic reframing pans, a door used as a
+  mark and `lean_on: front`; its 9:16 variant. `vidgen lint`: 0 findings on the first project,
+  one author-caused `rushed_animation` on the second.
+- Unchanged outdoors: a copy of `examples/cartoon` with a `door` prop added, rendered at 160×90 /
+  5 fps by this step and by HEAD c3054e8 (worktree): all 274 frames have the same `framemd5`
+  except frames 255–270, which also differ between two renders of HEAD (as do 185–189 and
+  230–234 between those two HEAD runs; the known non-reproducible encodes of §69.21).
+
+Known gaps / TODOs
+- Found, not fixed (fails at HEAD c3054e8 too): `tests/test_includes.py::test_screenplay_reuses_a_cast`
+  (`walk_to` x 0.86, the test expects < 0.62).
+- No rain / snow through windows; no door sound (an entrance through a door still plays the
+  `enter` whoosh); the screenplay's `set:` lines do not name rooms (Step 110); windows are not
+  checked against the ceiling or the frame's top; one vanishing point at the stage's middle for
+  tiles (a wide stage's edges slant strongly).
+
+How to test
+- `pytest tests/test_cartoon_room.py` (26 not-render + 1 render at 160x90, ~2 s).
+- Also run: not render `test_cartoon_props test_cartoon_stage test_cartoon_holding
+  test_cartoon_seating test_cartoon_moving test_cartoon_directing test_cartoon_lighting
+  test_includes test_actions test_api test_cartoon_shots test_cartoon_reframe test_particles
+  test_cartoon_wind test_cartoon_parallax test_cartoon_acting test_cartoon_rain
+  test_cartoon_motion_effects test_cartoon_foley` (352 + the 2 updated messages, 9 s; 1 failure
+  pre-existing, above), `test_docs test_guide test_schema test_gallery test_api test_config
+  test_includes test_cartoon_room` (249 passed + the same pre-existing failure, 66 s),
+  `test_introspect test_lint test_cartoon_lint test_builtin_scenes test_actions_coverage
+  test_screenplay test_json_output test_mcp test_extensions test_cartoon_sheet
+  test_phase_h_review test_phase_i_review test_storyboard test_cartoon_effects
+  test_cartoon_keyframes test_cartoon_character test_cartoon_generator` (405, 41 s); render
+  `test_cartoon_props test_cartoon_stage test_cartoon_moving test_cartoon_lighting
+  test_cartoon_holding test_cartoon_seating test_cartoon_parallax test_cartoon_rain
+  test_cartoon_motion_effects test_cartoon_wind` (17, 13 s), `test_cartoon_props
+  test_cartoon_shots test_cartoon_directing test_cartoon_sheet test_cartoon_effects
+  test_cartoon_foley test_cartoon_acting test_cartoon_keyframes` (12, 13 s), `test_introspect
+  test_phase_h_review test_phase_i_review test_builtin_scenes test_actions_coverage -k "stage or
+  introspect or review or walk or enter"` (10, 33 s). The full suite was not run.

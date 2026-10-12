@@ -439,7 +439,7 @@ class _Reshape(Action):
         action = self.config.action
         if "<prop>" not in scene_cls.target_patterns:
             return [("target", f"{action} is for the props of a stage")]
-        kinds = dict(zip(params.prop_names(), (p.prop for p in params.props)))
+        kinds = dict(zip(params.prop_names(), (p.prop for p in params.stage_props())))
         able = sorted(kind for kind, shapes in PROP_SHAPES.items() if self.shape in shapes)
         problems: list[tuple[str, str]] = []
         for pattern in self.config.targets():
@@ -471,7 +471,7 @@ class _Reshape(Action):
 
 @action("open")
 class Open(_Reshape):
-    """The target prop opens (an umbrella: `- open: umbrella`). Held, it goes up overhead, the
+    """The target prop opens (an umbrella or a door: `- open: umbrella`). Held, it goes up overhead, the
     holder's arm raised; standing, it opens where it stands. A prop can also start open
     (`open: true` in the stage's props)."""
 
@@ -480,7 +480,7 @@ class Open(_Reshape):
 
 @action("close")
 class Close(_Reshape):
-    """The target prop closes (an umbrella: `- close: umbrella`). Held, it comes down to the
+    """The target prop closes (an umbrella or a door: `- close: door`). Held, it comes down to the
     holder's hand in front of it; standing, it closes where it stands."""
 
     shape = "closed"
@@ -514,7 +514,7 @@ class BlowAway(Action):
         """Targets are props light enough to blow away; ``to`` a place of the stage."""
         if "<prop>" not in scene_cls.target_patterns:
             return [("target", "blow_away is for the props of a stage")]
-        kinds = dict(zip(params.prop_names(), (p.prop for p in params.props)))
+        kinds = dict(zip(params.prop_names(), (p.prop for p in params.stage_props())))
         light = ", ".join(sorted(LIGHT_PROPS))
         problems: list[tuple[str, str]] = []
         for pattern in self.config.targets():

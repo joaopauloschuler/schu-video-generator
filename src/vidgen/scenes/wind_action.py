@@ -50,6 +50,8 @@ class WindAction(Action):
     def scene_problems(self, scene_cls: type[NarratedScene], params: Any) -> list[tuple[str, str]]:
         if not hasattr(scene_cls, "change_wind"):
             return [("action", f"wind is for stage scenes; a {scene_cls.__name__} scene has nothing to blow")]
+        if getattr(params, "room", None) is not None:
+            return [("action", "there is no wind in a room (the stage has room:)")]
         return []
 
     def cue(self, scene: NarratedScene, time: float) -> None:

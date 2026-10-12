@@ -688,8 +688,8 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `effect` | on a `stage`: a symbol over a character's head for this beat (`to: idea`, `question`, `exclaim`, `sweat`, `anger`, `sleep`, `hearts`, `stars`, `sparkle`, `tear`) | a feeling that should read at a glance; one per line |
 | `walk_to` | on a `stage`: a character walks to a mark or x (`to:`; `speed`) | with `follow` on a wide stage; the walk takes its distance's time |
 | `run_to` | on a `stage`: a character runs to a mark or x (`to:`; `speed`): longer strides, leaning forward, dust and speed lines | a hurry, a chase, an escape |
-| `enter` | on a `stage`: a character walks in from an edge (`side:`) to its mark (or `to:`) | it waits off stage until then |
-| `exit` | on a `stage`: a character walks out by an edge (`to: left` / `right`) | an `enter` brings it back |
+| `enter` | on a `stage`: a character walks in from an edge (`side:`) or through a room's door (`door: door`) to its mark (or `to:`) | it waits off stage until then |
+| `exit` | on a `stage`: a character walks out by an edge (`to: left` / `right`) or through a room's door (`door: door`) | an `enter` brings it back |
 | `gesture` | on a `stage`: `to: point`, `wave`, `shrug`, `nod`, `shake_head`; `big: true` adds a whoosh arc | on the word it goes with (`at`) |
 | `jump` | on a `stage`: a character jumps (`height`) | joy or surprise |
 | `keyframes` | on a `stage`: move a character, prop or part (`kit.arm_left`) through `keys: [{t, x, y, rotate, scale, ease}]` (`t` seconds or `"40%"` of the beat) | motion no other action has; keep it short |
@@ -699,8 +699,8 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `put_down` | on a `stage`: the held prop goes on the ground (`to:` a mark or x, default in front) | within reach |
 | `give` | on a `stage`: the held prop goes to another character (`to: kit`) | the two stand next to each other |
 | `throw` | on a `stage`: the held prop flies to a mark or x (`to:`; `spin`, `height`) and lands with a thud | |
-| `open` | on a `stage`: an `umbrella` prop opens (`- open: umbrella`); held, it goes up over its holder's head | `open: true` in `props` starts it open |
-| `close` | on a `stage`: an open `umbrella` closes (`- close: umbrella`); held, it comes down to the hand | |
+| `open` | on a `stage`: an `umbrella` or `door` prop opens (`- open: umbrella`); a held umbrella goes up over its holder's head | `open: true` in `props` starts it open |
+| `close` | on a `stage`: an open `umbrella` or `door` closes (`- close: door`); a held umbrella comes down to the hand | |
 | `sit_on` | on a `stage`: a character sits on a `chair`, `rock` or `box` (`to: chair`); its hips and knees bend | next to the prop; `stand_up` before it walks |
 | `lean_on` | on a `stage`: a character leans its back on a `tree`, `door`, `sign`, `lamp` or `house` (`to: tree`) | next to the prop; `stand_up` before it walks |
 | `stand_up` | on a `stage`: a character gets up from where it sits or leans | |
@@ -786,6 +786,12 @@ asks for one, say vidgen makes original characters and offer one with the same r
   ground with small splashes; an open umbrella (held or standing) and a tree's crown keep the
   rain off whoever stands under them; `{kind: rain, puddles: true}` grows puddles. A generated
   rain sound plays under it while it lasts, ducked less than music (off with `foley: false`).
+- **Indoors**: `room: {wallpaper: stripes, windows: [0.3], doors: [{at: 0.8}]}` (or `room:
+  true`) replaces the sky and ground with a wall, a floor (`flooring: boards | tiles`) and a
+  skirting board; windows show the sky of the stage's `light` (`indoor`: lamplight inside, evening
+  outside; `- light: night` darkens it and brings out stars), doors are `door` props whose name is
+  a mark: `- {enter: kit, door: door}` brings a character in through it, `exit` with `door:`
+  takes it out. No wind, rain or snow inside; a set (`sets:`) can be a room.
 
 **Shot variety.** Change the shot every few beats, as a comic changes panels. A beat's `shot:`
 key cuts the camera to a framing of the characters for that beat; the next beat without one cuts

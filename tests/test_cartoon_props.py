@@ -170,7 +170,7 @@ def test_params_names_lift_and_targets() -> None:
         ([{"prop": "ball", "name": "pip"}], "props\\[0\\]: 'pip' is also a character"),
         ([{"prop": "rock", "at": "middle"}], "props\\[0\\].at: unknown mark 'middle'"),
         ([{"prop": "rock", "lift": 2}], "less than or equal to 1"),
-        ([{"prop": "tree", "open": True}], "open is for props that open \\(umbrella\\), not tree"),
+        ([{"prop": "tree", "open": True}], "open is for props that open \\(door, umbrella\\), not tree"),
     ],
 )
 def test_bad_props(props: list[Any], message: str) -> None:

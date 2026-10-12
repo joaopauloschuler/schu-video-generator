@@ -187,7 +187,8 @@ clock=self.beat_clock())`), so it stays in step through a `PoseChange`; `stop_li
 (the mouth shows its pose's shape again; after the beat, `self.end_lip_sync(hero, track)` ends
 it now or, when the next beat `overlap`s this line, once that beat ends, DESIGN.md §69.34); `show_viseme("O")` shows one of `VISEMES` at once; a
 character without a mouth is left alone. `Walk(hero, x)` walks it along the ground to `x`
-(`speed=`, units per second; `start_x=` / `park_x=` for an entrance or exit), `Gesture(hero,
+(`speed=`, units per second; `start_x=` / `park_x=` for an entrance or exit; `fade_in=` /
+`fade_out=` seconds to appear or vanish on the way, as through a door, `passage_fade`), `Gesture(hero,
 "wave")` (`point`, `wave`, `shrug`, `nod`, `shake_head`) and `Jump(hero, 0.4)` play a motion and
 end in the pose; all three keep lip sync in step, and their timing is the pure functions
 `walk_seconds`, `enter_path`, `exit_path`, `offstage_x` (no manim). These four animations add
@@ -227,9 +228,15 @@ a held prop sits. To keep a prop in a hand, give it an updater (`prop.add_update
 m.shift(hero.hand_point("left") - m.grip_point()))`); never add it to the `Character` (its parts
 must not change). `prop.grip_point()` is where a hand holds it (a basket's handle, an open
 umbrella's shaft; else its middle), and `PropMove` moves a prop by that point. A prop with
-shapes (`prop.shapes`, an umbrella's `closed` / `open`) switches with `prop.show_shape(name)` or
+shapes (`prop.shapes`, a door's or an umbrella's `closed` / `open`) switches with `prop.show_shape(name)` or
 the animation `PropReshape(prop, shape, at=, height=, follow=)` (the `open` / `close` actions);
 `overhead_point(feet, height, facing)` is where a hand holds an open umbrella overhead.
+A room of your own (DESIGN.md §69.42): `room_geometry(...)`, `window_parts(...)` and
+`window_sky(light)` give the shapes and the sky outside (no manim), and `draw_room(geometry,
+room_colors(wall, floor), wallpaper=, flooring=, windows=[WindowLook(parts, frame, curtains)],
+sky=, short_side=, frame_area=)` draws them (its `views.show(sky)` recolours the windows'
+sky); mark the room lit (`mark_lit`) but not its `WindowViews`. On a `stage`, `Stage.door(name)`
+is a room's door prop.
 The `effect` action (`src/vidgen/scenes/effect_action.py`) works on every `Character` target. Its
 symbol is an `EffectSymbol(kind, color=, character_height=)` (kinds `EFFECT_KINDS`; the colour of
 `effect_color(kind, None, theme.color)` by default): `symbol.follow(hero, avoid=[boxes])` gives it

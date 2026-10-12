@@ -113,7 +113,9 @@ src/vidgen/
                           # (EffectSymbol: drawn and following a head, §69.40),
                           # motion_effects.py (dust, speed lines, impact stars, whoosh: when
                           # they fire and their shapes, §69.41; no manim),
-                          # motion_effect_shapes.py (MotionEffect, §69.41); still.py also
+                          # motion_effect_shapes.py (MotionEffect, §69.41), room.py (rooms:
+                          # wall, floor, windows, the sky outside, §69.42; no manim),
+                          # room_drawing.py (draw_room, WindowViews, §69.42); still.py also
                           # draws the prop gallery and `vidgen character-sheet` (§69.16)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
@@ -826,6 +828,16 @@ seconds)` (does nothing by default, called right after `action_foley`). New buil
 `motion_effect`. Changed on purpose: with `cartoon_motion` lively or calm, jumps land in dust,
 fast walks, throws and blown props get speed lines (a default-speed walk is unchanged);
 `motion_effects: false` renders the same frames as before.
+Step 109 (§69.42) adds `DEFAULT_FLOOR`, `DEFAULT_WALL`, `DOOR_FADE_SECONDS`, `DOOR_SCALE`,
+`FLOORINGS`, `OUTDOOR_PARTICLES`, `WALL_DEPTH`, `WALLPAPERS`, `WINDOW_FRAME`, `WINDOW_HEIGHT`,
+`WINDOW_SILL`, `WINDOW_SKIES`, `WINDOW_WIDTH`, `RoomGeometry`, `SkyChange`, `WindowParts`,
+`WindowSky`, `floor_lines`, `room_geometry`, `sky_at`, `wall_depth`, `window_parts`,
+`window_sky`, `RoomColors`, `RoomDrawing`, `WindowLook`, `WindowViews`, `draw_room`,
+`room_colors` and `passage_fade`; `Walk(fade_in=, fade_out=)`; `Character.shown`; the `door`
+prop gains the shapes `closed` / `open` (`PROP_SHAPES`). New stage param `room`; `enter` /
+`exit` option `door`; `Stage.door(name)`, `Stage.window_views`; stage params' `stage_props()`,
+`stage_marks()`, `door_names()`, `wall_depth()`. Compatible: a stage without `room` renders as
+before (a `door` prop draws its closed shape as it did).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -7419,7 +7431,7 @@ prop with more than one shape, and a prop held somewhere other than its middle.
 - **Shadows**: props targeted by `open` / `close` are movable (§69.31: their shadow follows), and
   a `ShadowCaster` takes `widths` per shape, so a closing umbrella's shadow narrows.
 - **Layout dump**: a prop with shapes carries `shape`.
-- **Gallery**: `docs/gallery/media/props.png` shows the 20 props plus the open umbrella.
+- **Gallery**: `docs/gallery/media/props.png` shows the 20 props plus the open umbrella (and, since Step 109, the open door).
 - **Not done here**: no tilt of the umbrella towards the head (it stays upright, the canopy
   centred on the hand); no opening animation in between (the shape switches at once, half-way);
   the automatic directing planner does not count `open` / `close` as moves; a closed umbrella is
@@ -7719,3 +7731,94 @@ Fast moves read better with the cartoon marks of speed; the motion code adds the
   lands; `big` does not enlarge the gesture itself; no effects for `keyframes` / `move_along`
   moves; the screenplay has no "runs" verb for `run_to` (`runs to` still means `walk_to`).
   Tests: `tests/test_cartoon_motion_effects.py`.
+
+### 69.42 Rooms: indoor sets (Step 109)
+
+Indoor stories need a set that reads as a room at once. A stage's `room:` param draws one instead
+of the sky and the ground band; everything else on the stage stays as it is.
+
+- **Geometry** (`cartoon/room.py`, pure): the wall stands at a *depth* (§69.6):
+  `wall_depth(items, depth)` is the given `room.depth`, else the larger of `WALL_DEPTH` 0.4 and
+  the deepest item standing on the floor (`lift` 0), so the floor always reaches behind what
+  stands on it (a given depth with something deeper is a config error). `room_geometry(ground=,
+  depth=, size=, frame_width=, frame_height=, stage_width=, ceiling=)` → `RoomGeometry`: the
+  `floor` box from the frame's bottom edge up to the *wall line* (`ground + FAR_RISE × depth`,
+  where a thing at that depth stands, which is also `ground_top` of the stage's items, the
+  doors included), the `wall` above it to the frame's top, the `skirting` board
+  `SKIRTING_HEIGHT` 0.07 wall units high on the wall, an optional `ceiling` band
+  (`CEILING_HEIGHT` 0.07 of the frame height); all as wide as the stage. The *wall unit* is the
+  height of a character of scale 1 at the wall's depth; windows and doors are sized in it, so
+  they match the characters in 16:9, 9:16 and on a wide stage. Patterns: `wallpaper_stripes`
+  (`STRIPE_WIDTH` 0.11), `wallpaper_dots` (a grid `DOT_SPACING` 0.28, every other row shifted);
+  `floor_rows` (rows of boards or tiles, the first `ROW_DEPTH` 0.16 deep at the wall, each
+  further one deeper by a constant ratio so the front row is about `FRONT_ROWS` 2.2 times the
+  first: perspective without a camera model), `floor_lines(flooring, floor, unit)`: `boards`
+  (row seams plus joints every `BOARD_LENGTH` 0.9, scaled with the row, staggered by 0.37 of a
+  board per row), `tiles` (row seams plus lines from the wall line to the bottom edge spreading
+  `FLOOR_SPREAD` 1.6 times from the stage's middle, cut at the side edges), `plain`.
+  `window_parts(x, wall_line, unit, width, height, sill, curtains)` → `WindowParts`: frame,
+  glass (inset by `FRAME_SHARE` 0.08 of the smaller side), a cross of bars, the sill, the rod and
+  two gathered curtains (closed outlines, `CURTAIN_SHARE` 0.3 of the width each).
+- **The sky outside** (pure): `window_sky(light)` → `WindowSky(top, bottom, stars)`:
+  `WINDOW_SKIES` per preset (`day` blue, `morning` peach low in the sky, `sunset` blue over
+  orange, `night` dark blue with stars at 1, `indoor` an evening blue with stars at 0.6: lamplight
+  inside means evening outside), a `(tint, strength)` light multiplies the day's sky as the grade
+  would. `SkyChange` + `sky_at(base, changes, now)` fade it with the light (§69.31's `fade_at`,
+  smoothstep, `blend_skies`).
+- **Drawing** (`cartoon/room_drawing.py`): `draw_room(geometry, colors, wallpaper=, flooring=,
+  windows=[WindowLook(parts, frame, curtains)], sky=, short_side=, frame_area=, preview=)` →
+  `RoomDrawing` of three mobjects, back to front: `room` (wall, wallpaper in `shade(wall, 0.1)`:
+  darker on a light wall, lighter on a dark one; floor, seams, skirting, ceiling), `window_views`
+  (`WindowViews`: a gradient per glass and a `StarField` per window, seeded per window) and
+  `room_front` (frames with the glass cut out, bars, sills, rods, curtains, ink outlines as wide
+  as a character's at the wall). `room_colors` fills in the skirting (the floor's colour 0.3
+  darker) and a `ceiling: true` (the wall's 0.25 lighter). Default colours are fixed hex
+  (`DEFAULT_WALL` cream, `DEFAULT_FLOOR` wood, `WINDOW_FRAME` white; no theme token is light and
+  warm in every preset, like the cloud's white, §69.8); curtains default to `accent`.
+- **On the stage** (`scenes/stage.py`): `StageRoom` (`wall`, `wallpaper`, `floor`, `flooring`,
+  `skirting`, `ceiling`, `depth`, `windows`, `doors`; `room: true` = defaults), `RoomWindow` and
+  `RoomDoor` (a mark or an x alone is one). `_backdrop` returns the room's three mobjects then the
+  background / middle layers (no picture, colour, ground band or open-sky stars); the construct
+  marks everything lit but `WindowViews` (and stars): the room is graded by the light, the sky
+  outside is not. `_room` keeps `_sky_base`; `change_light` adds a `SkyChange` per `light` action;
+  `_show_light` (the light's listener, called on every grade change, so every frame of a fade)
+  shows `sky_at(...)` in the windows. Manim's static image keeps the whole room while the light
+  does not change (§69.20).
+- **Doors are props** (§69.8): the `door` prop gains the shapes `closed` / `open` (§69.37's live
+  copies; open: the doorway in a dark shade, the leaf swung towards the viewer on the hinge side,
+  nearly edge on, within the prop's box), so `open` / `close`, `open: true`, `lean_on` and the
+  layout dump's `shape` work as for an umbrella. `Params.stage_props()` is the props, then one
+  `StageProp(prop: door, depth: wall depth, scale: DOOR_SCALE 1.3...)` per room door;
+  `prop_names()` (numbered together, so a second door is `door_2`), `items()`, the holding /
+  seating / reshape / blow-away checks, `stage_frame` and the construct read it. A door's name is
+  also a **mark** (`stage_marks()`: own marks plus doors; used for characters' `at`, `camera_at`,
+  `camera_place`, `stage_layout` and the planner's frame); a door named like a mark, a character
+  or another prop is a config error. Doors cast no shadow (they are in the wall). The prop
+  gallery still (`docs/gallery/media/props.png`) gains `door (open)`.
+- **Through a door** (`scenes/moving.py`): `enter` / `exit` option `door` (not with `side` /
+  `to`). The action opens the door at once if it is closed (`Stage.door(name).show_shape`), then
+  `Walk(start_x=door x, fade_in=DOOR_FADE_SECONDS 0.35)` (exit: `Walk(door x, park_x=offstage,
+  fade_out=...)`), at least twice the fade long. `Walk` keeps every family member's fill and
+  stroke alphas at `begin` and scales them by `passage_fade(t, run_time, fade_in, fade_out)`
+  (smoothstep ramps, each at most half the walk), sets `Character.shown`, and puts them back
+  after parking; `ShadowCaster` fades the shadow by `shown`. Without `door` nothing changes (no
+  alphas kept, the same `run_time`). The character keeps its own depth (moving in depth is Step
+  111), so it fades in in front of the doorway.
+- **No weather inside**: a room with `wind` not 0, or `particles` of `OUTDOOR_PARTICLES` (rain,
+  snow, leaves, streaks), is a config error; the `wind` action and an outdoor `particles` action
+  are validate problems. Rain or snow seen through a window was left out: drawn behind the
+  characters, an animated window would put the whole set in Manim's moving mobjects (§69.20).
+- **Sets** (`includes.apply_set`, §69.35): a stage's `room` drops the set's `image`, `generate`,
+  `background` and `ground_color`; a stage's `image` / `generate` / `background` drops the set's
+  `room`; a set's room and a stage's merge key by key (a mapping).
+- **Checked by eye** (scratch projects at preview 854×480, `vidgen storyboard`): a striped room
+  with boards, a table, a window and a door where moss comes in through the door (half-way still:
+  fading in in the doorway, the door open) and dot leaves through it (fading out); `sunset` with
+  dots, tiles, a ceiling and an open door facing left (the window sky blue over orange);
+  `night` (dark sky with stars in both windows, the room graded blue); `indoor` then `- light:
+  night` (evening blue, then night); a 2-frame-wide room in `morning` with a close-up and
+  automatic reframing pans, and its 9:16 variant. `vidgen lint` on both projects: 0 findings
+  (one author-caused `rushed_animation`).
+- **Not done here** (Step 110 adds furniture): rain or snow through the windows; a door's own
+  sound; walking in depth through a door; screenplay `set:` lines naming a room.
+  Tests: `tests/test_cartoon_room.py`.

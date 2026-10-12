@@ -44,6 +44,7 @@ from vidgen.cartoon.acting import (
     WalkCycle,
     gesture_moves,
     jump_lift,
+    passage_fade,
     walk_amplitude,
     walk_cycle,
     walk_progress,
@@ -212,7 +213,9 @@ class Walk(Animation):
     :func:`~vidgen.cartoon.acting.walk_seconds` plus that wind-up and settle
     (:func:`~vidgen.cartoon.motion.walk_motion_seconds`); a given one changes the speed.
     ``gait``: :data:`~vidgen.cartoon.acting.RUNNING` runs (longer strides, bigger swings, leaning
-    forward as it speeds up; ``run_to``).
+    forward as it speeds up; ``run_to``). ``fade_in`` / ``fade_out``: seconds it takes to appear at
+    the start / disappear at the end (through a door, DESIGN.md §69.42; at most half the walk
+    each); its colours are as before once it is over.
 
     ``self.play(Walk(pip, 3.0))``
     """
@@ -227,9 +230,13 @@ class Walk(Animation):
         speed: float = WALK_SPEED,
         motion: str | None = None,
         gait: Gait = WALKING,
+        fade_in: float = 0.0,
+        fade_out: float = 0.0,
         **kwargs,
     ) -> None:
         self.to_x, self.start_x, self.park_x = float(x), start_x, park_x
+        self.fade_in, self.fade_out = max(float(fade_in), 0.0), max(float(fade_out), 0.0)
+        self._alphas: list[tuple[Mobject, np.ndarray, np.ndarray]] = []
         self.strength = motion_strength(motion or character.motion)
         self.gait = gait
         #: The length of one step, in the character's heights.
@@ -264,7 +271,16 @@ class Walk(Animation):
         self._facing = self._base.facing if abs(distance) < 1e-9 else ("right" if distance > 0 else "left")
         self._step = self.step_length * figure.character_height
         self._heights = abs(distance) / figure.character_height if figure.character_height > 0 else 0.0
+        if self.fade_in > 0 or self.fade_out > 0:
+            self._alphas = [(m, m.fill_rgbas[:, 3].copy(), m.stroke_rgbas[:, 3].copy()) for m in figure.get_family()]
         super().begin()
+
+    def _show_at(self, level: float) -> None:
+        """Draw the character at ``level`` (0..1) of its own opacities (a fade through a door)."""
+        self.mobject.shown = level
+        for member, fill, stroke in self._alphas:
+            member.fill_rgbas[:, 3] = fill * level
+            member.stroke_rgbas[:, 3] = stroke * level
 
     def _ahead(self, seconds: float) -> float:
         """How far it has walked (character heights) ``seconds`` into the walk."""
@@ -287,12 +303,16 @@ class Walk(Animation):
         figure.set_state(state if self._ground is None else figure.grounded(state, self._ground))
         figure.shift([self._from[0] + walked - figure.feet()[0], self._from[1] - figure.feet()[1], 0.0])
         figure.sync_mouth()  # Manim pauses the character's updaters: keep lip sync in step
+        if self._alphas:
+            self._show_at(passage_fade(t * self.run_time, self.run_time, self.fade_in, self.fade_out))
 
     def clean_up_from_scene(self, scene) -> None:
         super().clean_up_from_scene(scene)
         self.mobject.passage = None
         if self.park_x is not None:
             self.mobject.shift([self.park_x - float(self.mobject.feet()[0]), 0.0, 0.0])
+        if self._alphas:   # parked off stage after a fade out: seen again when it comes back
+            self._show_at(1.0)
 
 
 class Gesture(Animation):
