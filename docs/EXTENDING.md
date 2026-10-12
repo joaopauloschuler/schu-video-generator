@@ -178,7 +178,9 @@ angle=120 * a))`), not `.animate` (that would move points along straight lines).
 inside `with self.narrate(0) as d:`, `hero.lip_sync(self.beat_visemes(0))` makes the mouth
 follow the beat's `VisemeTrack` (an updater; `stop_lip_sync()` ends it and restores the mouth;
 `show_viseme("O")` shows one of `VISEMES` at once; a character without a mouth is left alone).
-DESIGN.md §69 has the model, §69.3 the poses, §69.4 lip sync.
+`character(name)` breathes, sways its head and blinks on its own (unless `idle: false`):
+`stop_idle()` / `start_idle(seed=None)` turn that off and on; a blink never shows during a
+`PoseChange`. DESIGN.md §69 has the model, §69.3 the poses, §69.4 lip sync, §69.5 idle motion.
 
 Params can nest: use another `SceneParams` class as a field type (also in lists). Theme tokens
 are checked inside nested models too, and `vidgen list-scenes` prints the nested fields. A nested

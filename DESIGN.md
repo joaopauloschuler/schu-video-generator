@@ -76,7 +76,8 @@ src/vidgen/
                           # generator.py (look: parameters -> parts, §69.1), svg_look.py (look: {svg} -> parts by
                           # element ids, §69.2), still.py (`vidgen character --png`), poses.py (pose and
                           # expression tables, §69.3; no manim), transition.py (PoseChange, §69.3),
-                          # visemes.py (lip sync: viseme tracks, .visemes.json, §69.4; no manim)
+                          # visemes.py (lip sync: viseme tracks, .visemes.json, §69.4; no manim),
+                          # idle.py (blinking, breathing, head sway: the seeded schedule, §69.5; no manim)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
   actions.py              # per-beat actions: Target, Action, validation, ActionRunner (§26)
@@ -5052,8 +5053,8 @@ between two of them is the `PoseChange` animation.
   `.animate`'s straight lines). `rate_func` (default `linear`) maps the animation's time first.
   A facing change switches the mirror at the halfway point. `state=` with `pose` / `expression`
   is a `TypeError`.
-- **Not done here**: no scene type or action uses poses yet (Steps 73, 78); blinking (Step 72)
-  must avoid a running `PoseChange`. Tests: `tests/test_cartoon_poses.py`.
+- **Not done here**: no scene type or action uses poses yet (Steps 73, 78). Blinking (Step 72,
+  §69.5) never shows during a `PoseChange`: `begin` calls `Character.end_blink()`. Tests: `tests/test_cartoon_poses.py`.
 
 ### 69.4 Lip sync: viseme tracks (Step 71)
 
@@ -5128,3 +5129,49 @@ A beat's **viseme track** says which mouth shape shows when; a character's mouth
 - **Not done here**: no scene type speaks yet (the `stage` scene, Step 73, and the `say` action,
   Step 78+, call `lip_sync`); no per-language phoneme tables beyond IPA; no coarticulation (each
   phoneme is one shape). Tests: `tests/test_cartoon_visemes.py`.
+
+### 69.5 Automatic life: blinking and idle motion (Step 72)
+
+A character from `characters:` breathes, sways its head slightly and blinks on its own, so it
+does not freeze between actions. The motion is a layer on top of the poses, driven by one
+updater, so `PoseChange` (§69.3) and `lip_sync` (§69.4) never fight with it.
+
+- **Schedule** (`cartoon/idle.py`, no manim): blinks start `next_blink_gap(rng)` apart on the
+  character's *idle clock*, uniform in `BLINK_GAP_SECONDS = (2, 6)` from `random.Random(seed)`
+  (`random()` only, as in §69.1, so a seed gives the same blinks on every Python version), the
+  first one a gap after the clock starts; each keeps the eyes `closed` for `BLINK_SECONDS = 0.15`.
+  The seed defaults to `idle_seed(name)` (CRC-32 of the name), so two characters do not blink
+  together. Breathing: `breath_scale(seconds, seed)` scales the body about its pivot (the bottom
+  of the body; its children follow) by at most `BREATH_SCALE = (0.006, 0.015)` (x, y), one breath
+  every `BREATH_SECONDS = 3.6`; head sway: `sway_angle(seconds, seed)` turns the head by at most
+  2 × `SWAY_DEGREES = 1.5`° every `SWAY_SECONDS = 5.5`. Both are 0 at the clock's start (the
+  phases come from the seed), so a still at time 0 is the plain pose.
+- **Idle clock and pose changes**: the clock advances by each frame's `dt` in the updater, and
+  Manim suspends a mobject's updaters while an animation plays on it, so the clock stops during a
+  `PoseChange` (and any other animation played on the character): no blink starts there, and the
+  breath and sway hold. `PoseChange.begin` calls `Character.end_blink()`, so a blink running when
+  it starts ends at once (it is not resumed). `blink_times(seed, duration, *, pose_changes=())`
+  gives exactly this schedule in scene seconds, `(start, end)` per blink, without drawing: the
+  idle clock mapped past each pose change window (a blink due at a window's start comes after
+  it), a blink cut at the start of the next window. `IdleClock` (seed, `seconds`, `advance(dt)`,
+  `is_blinking`, `end_blink()`) is the running state the updater keeps; a test checks it against
+  `blink_times` frame by frame.
+- **Character** (`cartoon/character.py`): `start_idle(seed=None)` adds the updater
+  `Character._idle_step` (a plain method, so `copy()` gets its own clock), `stop_idle()` removes
+  it and the layer, `end_blink()`, `is_idle`, `shown_shape(part)` (the shape on screen, a blink
+  included). The layer is `_overlays`: part -> `PartPose` (body: scale; head: angle; eyes: shape
+  `closed` while blinking), applied after the part's pose about the same pivot (`world(part) =
+  world(parent) · pose(part) · overlay(part)`); an overlay's shape is shown instead of the
+  pose's. `state()` / `set_state()` / `posed_state()` hold the poses only, so `PoseChange` blends
+  and stores no idle values, an expression set during a blink shows once the blink ends, and the
+  mouth (lip sync) is never touched by the layer. A character without `head` does not sway;
+  without an `eyes` shape `closed` it does not blink (`ACTION_NEEDS["blink"]`, §69.2).
+- **Config**: `characters[].idle: bool = True`; `build_character` (so `character(name)`) calls
+  `start_idle()` unless it is false. A `Character` built directly from parts does not idle until
+  `start_idle()`.
+- **Not done here**: `idle: false` per scene is for the `stage` scene (Step 73: call
+  `stop_idle()` on its characters). Only `PoseChange` ends a running blink; another animation
+  played on the character (e.g. `.animate.shift`) holds the eyes as they are until it ends (Step
+  79's walking should end the blink or move the character with an updater). The lip sync clock
+  (§69.4) also stops during an animation on the character, so a long `PoseChange` while speaking
+  shifts the mouth behind the audio (Step 78). Tests: `tests/test_cartoon_idle.py`.

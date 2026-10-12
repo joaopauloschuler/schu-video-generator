@@ -368,8 +368,8 @@ one.
 - [x] Tests: the mapping table, the merge rule, a track from a stored alignment (no TTS call) (`tests/test_cartoon_visemes.py`)
 
 ### Step 72 — Automatic life: blinking and idle motion
-- [ ] Blinks at random but seeded intervals (2–6 s), never during a pose change; idle breathing (small body scale) and a slight head sway; `idle: false` per character or scene to turn them off
-- [ ] Tests: blink times are deterministic for a seed; no blink overlaps a pose change
+- [~] Blinks at random but seeded intervals (2–6 s), never during a pose change; idle breathing (small body scale) and a slight head sway; `idle: false` per character or scene to turn them off (`cartoon/idle.py`, `Character.start_idle` / `stop_idle` / `end_blink`, a layer on top of the poses; the idle clock stops during a `PoseChange`, which ends a running blink; `characters[].idle`; per scene left to Step 73's `stage` scene, which does not exist yet; DESIGN §69.5)
+- [x] Tests: blink times are deterministic for a seed; no blink overlaps a pose change (`blink_times` without manim, and the running character checked against it frame by frame: `tests/test_cartoon_idle.py`)
 
 ### Step 73 — `stage` scene type
 - [ ] A scene with a background (image file, generated image via `generate:`, or a theme colour / gradient), a ground line, named marks (`left`, `centre`, `right`, or x positions) and characters placed on them

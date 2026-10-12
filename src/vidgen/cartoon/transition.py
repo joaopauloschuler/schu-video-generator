@@ -44,7 +44,8 @@ class PoseChange(Animation):
     :meth:`Character.names`), or to ``state``; ``facing`` turns it too (the mirror switches
     halfway). Every changing part eases with ``part_rate_func`` in its own window; parts start
     ``lag_ratio`` apart, body first, then legs, arms, head and face (:data:`PART_NAMES` order).
-    The target is resolved when the animation is created; the start when it begins.
+    The target is resolved when the animation is created; the start when it begins, which also
+    ends a running blink (the idle clock stops while it plays, §69.5).
 
     ``self.play(PoseChange(pip, pose="waving", expression="happy"), run_time=0.8)``
     """
@@ -74,6 +75,7 @@ class PoseChange(Animation):
         super().__init__(character, lag_ratio=lag_ratio, **kwargs)
 
     def begin(self) -> None:
+        self.mobject.end_blink()
         self._start = self.mobject.state()
         changing = [
             part for part in PART_NAMES

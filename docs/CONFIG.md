@@ -997,6 +997,7 @@ characters:
 | `colors` | see below | colours of the parts: theme tokens or hex |
 | `poses` | `{}` | the character's own poses: name -> part -> settings ([below](#poses-and-expressions)) |
 | `expressions` | `{}` | the character's own expressions, like `poses` |
+| `idle` | `true` | breathe, sway the head slightly and blink every 2 to 6 s on its own ([below](#idle-motion)); `false`: hold still between actions |
 
 The **generator** draws every character from simple shapes (circles, ellipses, rounded
 rectangles, polygons, lines), so each figure is an original drawing:
@@ -1111,6 +1112,15 @@ mouth shapes shows when, from the sounds of the spoken text (pronunciation appli
   no current track is timed from its text when the scene is drawn.
 - Editing a track (or a beat's alignment) re-renders the scenes of that beat in a video with
   characters.
+
+### Idle motion
+
+A character breathes (its body grows and shrinks by about 1 %), sways its head by a degree or two
+and blinks every 2 to 6 seconds, so it never stands frozen. The blinks are random but repeatable:
+the same character name gives the same blinks in every render. A character never blinks during a
+pose or expression change, and the motion does not change its pose, expression or lip sync.
+An SVG character blinks only when its file has `eyes_closed`. `idle: false` turns all of it off
+for one character.
 
 ### Characters from SVG files
 

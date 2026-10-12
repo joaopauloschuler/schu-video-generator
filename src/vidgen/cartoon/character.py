@@ -24,6 +24,7 @@ from typing import Any
 import numpy as np
 from manim import VGroup, VMobject
 
+from vidgen.cartoon.idle import IdleClock, breath_scale, idle_seed, sway_angle
 from vidgen.cartoon.poses import KINDS, PoseTable, chosen_shape, find_entry, kind_parts, merged_table
 from vidgen.cartoon.visemes import VISEME_SHAPES, VISEMES, VisemeTrack
 from vidgen.config import CharacterEntry, PartPoseEntry
@@ -201,6 +202,8 @@ class Character(VGroup):
         )
         self._tree_order = sorted(specs, key=self._depth)
         self._poses = {n: PartPose() for n in specs}
+        self._overlays: dict[str, PartPose] = {}  # idle motion on top of the poses (:meth:`start_idle`)
+        self._idle: IdleClock | None = None
         self._lip_sync: Any = None  # the running lip sync updater (:meth:`lip_sync`)
         self._anchor = VMobject(fill_opacity=0, stroke_width=0, stroke_opacity=0)
         side = _ANCHOR_SIDE * height
@@ -229,6 +232,10 @@ class Character(VGroup):
     def shape_names(self, part: str) -> list[str]:
         """The names of ``part``'s shapes; the first is its rest shape."""
         return list(self._shapes[self._part_name(part)])
+
+    def shown_shape(self, part: str) -> str:
+        """The name of ``part``'s shape on screen now (a blink's ``closed`` eyes included)."""
+        return self._shape_name(self._part_name(part))
 
     def pose_of(self, part: str) -> PartPose:
         """``part``'s current :class:`PartPose`."""
@@ -385,6 +392,55 @@ class Character(VGroup):
         self._store_pose("mouth", replace(self._poses["mouth"], shape=before))
         return self.refresh()
 
+    # ----- idle motion (DESIGN.md §69.5) ----------------------------------------------------
+
+    @property
+    def is_idle(self) -> bool:
+        """True while :meth:`start_idle`'s motion runs."""
+        return self._idle is not None
+
+    def start_idle(self, seed: int | None = None) -> Character:
+        """Breathe (the body scales a little), sway the head slightly and blink (eyes ``closed``)
+        at seeded random intervals of 2 to 6 s (``seed`` default: from the name;
+        :func:`~vidgen.cartoon.idle.blink_times`), from now, through an updater. The motion is a
+        layer on top of the poses: :meth:`state`, :meth:`set_state`, :class:`PoseChange` and
+        :meth:`lip_sync` never see it. Its clock stops while Manim suspends the updaters (an
+        animation playing on the character); :class:`PoseChange` ends a running blink."""
+        self.stop_idle()
+        self._idle = IdleClock(idle_seed(self.name) if seed is None else int(seed))
+        self.add_updater(Character._idle_step)
+        return self._idle_step(0.0)
+
+    def stop_idle(self) -> Character:
+        """End :meth:`start_idle`: the body, head and eyes show their poses only."""
+        if self._idle is None:
+            return self
+        self.remove_updater(Character._idle_step)
+        self._idle = None
+        for part in list(self._overlays):
+            self._set_overlay(part, None)
+        return self.refresh()
+
+    def end_blink(self) -> Character:
+        """Open the eyes now if a blink is running (it is not resumed)."""
+        if self._idle is None or not self._idle.is_blinking:
+            return self
+        self._idle.end_blink()
+        self._set_overlay("eyes", None)
+        return self.refresh()
+
+    def _idle_step(self, dt: float) -> Character:
+        idle = self._idle
+        if idle is None:
+            return self
+        idle.advance(dt)
+        self._set_overlay("body", PartPose(scale=breath_scale(idle.seconds, idle.seed)))
+        if "head" in self._shapes:
+            self._set_overlay("head", PartPose(angle=sway_angle(idle.seconds, idle.seed)))
+        if "closed" in self._shapes.get("eyes", {}):
+            self._set_overlay("eyes", PartPose(shape="closed") if idle.is_blinking else None)
+        return self.refresh()
+
     def refresh(self) -> Character:
         """Redraw every part's points from its rest shape, pose, parents, facing and placement.
         Styles (colour, opacity) of the live parts are kept."""
@@ -423,6 +479,10 @@ class Character(VGroup):
         return PartPose(float(entry.angle), entry.scale_xy(), shift, chosen_shape(entry, self._shapes[part]))
 
     def _shape_name(self, part: str) -> str:
+        """The shape shown: the idle overlay's (a blink), else the pose's, else the rest shape."""
+        overlay = self._overlays.get(part)
+        if overlay is not None and overlay.shape is not None:
+            return overlay.shape
         return self._poses[part].shape or next(iter(self._shapes[part]))
 
     def _store_pose(self, part: str, pose: PartPose) -> None:
@@ -430,14 +490,30 @@ class Character(VGroup):
             raise VidgenError(f"character '{self.name}': part '{part}' has no shape '{pose.shape}' (shapes: {_known(self._shapes[part])})")
         before = self._shape_name(part)
         self._poses[part] = pose
+        self._show_shape(part, before)
+
+    def _set_overlay(self, part: str, overlay: PartPose | None) -> None:
+        """Set (``None``: remove) ``part``'s idle overlay, applied after its pose; not redrawn."""
+        before = self._shape_name(part)
+        if overlay is None:
+            self._overlays.pop(part, None)
+        else:
+            self._overlays[part] = overlay
+        self._show_shape(part, before)
+
+    def _show_shape(self, part: str, before: str) -> None:
         if self._shape_name(part) != before:
             self.parts[part].submobjects = [self._shapes[part][self._shape_name(part)].copy()]
 
     def _world(self) -> dict[str, np.ndarray]:
-        """Each part's matrix in character units: its pose about its pivot, then its parents'."""
+        """Each part's matrix in character units: its idle overlay and pose about its pivot, then
+        its parents'."""
         world: dict[str, np.ndarray] = {}
         for name in self._tree_order:
             local = self._poses[name].matrix(self._pivots[name])
+            overlay = self._overlays.get(name)
+            if overlay is not None:
+                local = local @ overlay.matrix(self._pivots[name])
             parent = self._parents[name]
             world[name] = local if parent is None else world[parent] @ local
         return world
@@ -466,7 +542,8 @@ def build_character(
 ) -> Character:
     """The :class:`Character` of a ``characters:`` entry, feet at the origin: its ``look`` drawn
     by the generator with its colours resolved in ``theme`` (default: the current theme), or
-    ``look.svg`` (relative to ``root``, default: the active project's folder) split into parts."""
+    ``look.svg`` (relative to ``root``, default: the active project's folder) split into parts.
+    Its idle motion runs unless the entry says ``idle: false``."""
     if entry.look.svg is not None:
         from vidgen.cartoon.svg_look import SVG_REQUIRED_PARTS, svg_character_parts
 
@@ -475,17 +552,19 @@ def build_character(
 
             root = current_project().root
         parts = svg_character_parts(root / entry.look.svg, where=f"characters '{entry.name}': {entry.look.svg}")
-        return Character(
+        built = Character(
             parts, name=entry.name, height=height, facing=facing, voice=entry.voice, required=SVG_REQUIRED_PARTS,
             poses=entry.poses, expressions=entry.expressions,
         )
-    from vidgen.cartoon.generator import generate_parts
+    else:
+        from vidgen.cartoon.generator import generate_parts
 
-    colors = {part: resolve_color(value, theme) for part, value in entry.colors.model_dump().items()}
-    return Character(
-        generate_parts(entry.look, colors), name=entry.name, height=height, facing=facing, voice=entry.voice,
-        poses=entry.poses, expressions=entry.expressions,
-    )
+        colors = {part: resolve_color(value, theme) for part, value in entry.colors.model_dump().items()}
+        built = Character(
+            generate_parts(entry.look, colors), name=entry.name, height=height, facing=facing, voice=entry.voice,
+            poses=entry.poses, expressions=entry.expressions,
+        )
+    return built.start_idle() if entry.idle else built
 
 
 def character(name: str, *, height: float = 3.0, facing: str = "right") -> Character:

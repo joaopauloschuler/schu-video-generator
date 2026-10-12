@@ -381,6 +381,8 @@ class CharacterEntry(_Strict):
     """The character's own poses (name -> part -> {angle, scale, shift, shape}); a built-in name is replaced."""
     expressions: dict[Identifier, dict[ExpressionPart, PartPoseEntry]] = Field(default_factory=dict)
     """The character's own expressions (eyes, brows, mouth), like poses."""
+    idle: bool = True
+    """Breathe, sway the head slightly and blink every 2 to 6 s on its own; false: hold still between actions."""
 
 
 class PronunciationEntry(_Strict):

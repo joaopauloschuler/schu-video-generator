@@ -6970,3 +6970,64 @@ How to test
   tests/test_api.py tests/test_scene.py tests/test_robustness.py tests/test_voices.py
   tests/test_captions.py tests/test_pronunciation.py tests/test_readback.py tests/test_transitions.py
   tests/test_docs.py tests/test_guide.py tests/test_config.py`; `-m render` on the cartoon files.
+
+
+## Step 72 — Automatic life: blinking and idle motion
+
+What was built
+- `src/vidgen/cartoon/idle.py` (no manim): `blink_times(seed, duration, *, pose_changes=())`
+  -> `[(start, end), ...]` in scene seconds (gaps uniform in 2–6 s from `Random(seed).random()`,
+  0.15 s closed; the idle clock stops in each pose change window, a blink running into one is cut
+  at its start), `next_blink_gap`, `idle_seed(name)` (CRC-32), `breath_scale(seconds, seed)`,
+  `sway_angle(seconds, seed)` (both at rest at time 0), `IdleClock` (the running state).
+- `Character.start_idle(seed=None)`, `stop_idle()`, `end_blink()`, `is_idle`, `shown_shape(part)`.
+  The motion is an overlay layer (`_overlays`: body scale, head angle, eyes `closed`) applied after
+  each part's pose; `state()` / `set_state()` / `PoseChange` / `lip_sync` never see it. The
+  updater is the plain method `Character._idle_step`, so `copy()` gets its own clock.
+- `PoseChange.begin` calls `end_blink()`. Manim suspends the character's updaters during the
+  animation, so the idle clock stops: no blink starts during a pose change.
+- Config: `characters[].idle: bool = True`; `build_character` (so `character(name)`) starts the
+  idle motion unless `idle: false`.
+
+Files touched
+- New: `src/vidgen/cartoon/idle.py`, `tests/test_cartoon_idle.py`.
+- `src/vidgen/cartoon/character.py`, `cartoon/transition.py`, `config.py`.
+- Docs: `DESIGN.md` (§2 tree, §69.3 note, new §69.5), `docs/CONFIG.md` (`idle` row, "Idle
+  motion"), `docs/EXTENDING.md`, `tasklist.md`.
+
+Public interfaces
+- No `vidgen.api` change. `Character` gains `start_idle`, `stop_idle`, `end_blink`, `is_idle`,
+  `shown_shape`. `CharacterEntry.idle`. Internal: `cartoon/idle.py`.
+
+Decisions / deviations
+- `idle: false` is per character only. Per scene needs a scene that draws characters: the
+  `stage` scene (Step 73) should take an `idle` param and call `stop_idle()` on its characters.
+- Idle values live in a separate layer, not in the poses: otherwise a `PoseChange` would blend
+  and keep the breath / sway values, and the idle updater would overwrite a pose's head angle.
+- A blink is a shape overlay on the eyes, so an expression set during a blink shows when it ends.
+- "Never during a pose change" is done by the clock stopping (Manim's updater suspension) plus
+  `end_blink` in `PoseChange.begin`, not by knowing future pose changes; `blink_times` models the
+  result for given pose change windows (a stage scene or storyboard can use it).
+- Characters built directly from `Character(parts)` do not idle until `start_idle()`.
+- Searched before adding: no blink / idle / breathing code existed; seeding follows the
+  generator's `Random(int).random()` rule and the name hash follows `sfx` / `music` (`zlib.crc32`).
+
+Known gaps / TODOs
+- Only `PoseChange` ends a blink. Another animation on the character (`.animate.shift`,
+  `FadeIn`) holds the eyes as they are while it plays (a blink in progress stays closed); Step 79
+  should move characters with an updater or end the blink first. Swapping the eye shape inside
+  `suspend_updating` was rejected: it would break Transform's point alignment.
+- Lip sync's clock (Step 71) also stops during any animation on the character, so the mouth
+  falls behind the audio by the animation's length (Step 78 should keep `PoseChange` short while
+  speaking or drive lip sync from scene time).
+- The idle updater redraws every part each frame (Step 87's render speed work may cache this).
+- `vidgen character` does not print `idle`.
+
+How to test
+- `pytest tests/test_cartoon_idle.py` (37 tests, ~2 s, no render).
+- Also run: `-m "not render" tests/test_cartoon_character.py tests/test_cartoon_generator.py
+  tests/test_cartoon_svg.py tests/test_cartoon_poses.py tests/test_cartoon_visemes.py
+  tests/test_config.py tests/test_api.py tests/test_docs.py tests/test_guide.py tests/test_schema.py
+  tests/test_voices.py`; `-m render` on the four cartoon files with a render test (they now
+  render idling characters).
+
