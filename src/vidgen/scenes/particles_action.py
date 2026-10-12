@@ -1,5 +1,5 @@
-"""The ``particles`` beat action (DESIGN.md §69.9): rain, snow, sparkles, dust, confetti, smoke or
-bubbles over any scene type from ``at`` of a beat, written against ``vidgen.api`` only, like
+"""The ``particles`` beat action (DESIGN.md §69.9): rain, snow, sparkles, dust, confetti, smoke,
+bubbles, leaves or wind streaks over any scene type from ``at`` of a beat, written against ``vidgen.api`` only, like
 project actions. The ``stage`` scene's ``particles`` param shows the same fields for the whole
 scene."""
 
@@ -11,15 +11,15 @@ from vidgen.api import *
 
 @action("particles")
 class Particles(Action):
-    """Rain, snow, sparkles, dust, confetti, smoke or bubbles over the scene from `at` of the
-    beat: `- particles: snow`. They fade out when the next beat starts (`until: <beat>`: when
+    """Rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves or streaks (wind lines, seen
+    only while a stage's wind blows) over the scene from `at` of the beat: `- particles: snow`. They fade out when the next beat starts (`until: <beat>`: when
     that beat starts; `keep: true`: at the end of the scene); `run_time` is the fade out. Works
     on every scene type; seeded, so every render is the same. Options: density, area [x, y, w,
     h] of the visible frame from its top-left corner, color (one or a list), seed."""
 
     class Options(ParticleSettings, ActionOptions):
         kind: ParticleKindName | None = None
-        """The particles, when not written as `- particles: KIND`: rain, snow, sparkles, dust, confetti, smoke or bubbles."""
+        """The particles, when not written as `- particles: KIND`: rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves or streaks."""
         keep: bool = False
         """true: they stay to the end of the scene."""
 

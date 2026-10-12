@@ -104,7 +104,8 @@ src/vidgen/
                           # lighting.py (light presets, grades, fades, stars and shadow ellipses,
                           # §69.31; no manim), shading.py (StageLight: the grade as the camera
                           # draws, StarField, StageShadows, §69.31), wind.py (wind levels,
-                          # seeded gusts, fades, sway and trailing angles, §69.32; no manim),
+                          # seeded gusts, fades, sway and trailing angles, §69.32; the felt
+                          # force and a blown prop's path, §69.38; no manim),
                           # windblown.py (SwayingProp, StageWind, §69.32); still.py also
                           # draws the prop gallery and `vidgen character-sheet` (§69.16)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
@@ -185,7 +186,8 @@ src/vidgen/
                           # emote, pose, react and the speech bubble, §69.11; moving.py: walk_to,
                           # enter, exit, gesture, jump, §69.12; keyframes_action.py: keyframes,
                           # move_along, §69.14; handling.py: pick_up, hold, put_down, give,
-                          # throw, §69.27; sitting.py: sit_on, lean_on, stand_up, §69.28;
+                          # throw, §69.27, open, close, §69.37, blow_away, §69.38;
+                          # sitting.py: sit_on, lean_on, stand_up, §69.28;
                           # shot_action.py: shot (the beat key shot:), §69.29;
                           # light_action.py: light (a stage's light fades), §69.31;
                           # wind_action.py: wind (a stage's wind fades), §69.32;
@@ -782,6 +784,13 @@ Step 103 (§69.37) adds `PROP_SHAPES`, `PROP_GRIPS`, `PropReshape`, `OVERHEAD_SH
 the field `widths`; `PropMove` moves a prop by its grip (its middle unless it has one). New
 built-in actions `open` / `close`, stage prop key `open`, layout key `shape`. Compatible: props
 without a grip are moved and held by their middle as before.
+Step 104 (§69.38) adds `LIGHT_PROPS`, `blow_seconds`, `blown_point`, `felt_force` and
+`gusty_progress`; `PropMove` gains the keyword `path`, `Holdings` the method `drop`,
+`HANDLING_ACTIONS` the name `blow_away`, `PARTICLE_KINDS` `leaves` and `streaks` (last, so the
+other kinds' seeded streams are unchanged), `ParticleKind` the field `wind_shown`. New built-in
+action `blow_away`. Changed on purpose: a windy stage sways and trails more (`felt_force`, larger
+`SWAYS`, `TRAIL_WEIGHTS` for long hair, bun and hat), so its frames differ from Step 98's; a
+calm stage (`wind: 0`) renders the same frames as before.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -5557,7 +5566,7 @@ cookbook's `_looping_particles` is an example file, not library code), so the st
 and reuses the action machinery rather than overlays.
 
 - **Model** (`particles.py`, no manim): `PARTICLE_KINDS = rain, snow, sparkles, dust, confetti,
-  smoke, bubbles`; `KINDS` (kind -> `ParticleKind`: shape `streak | dot | star | chip | ring`,
+  smoke, bubbles` (Step 104 adds `leaves` and `streaks`, §69.38); `KINDS` (kind -> `ParticleKind`: shape `streak | dot | star | chip | ring`,
   `count` per whole frame at density 1, size range, `fall` (negative: rises), speed range,
   `drift` (rain's slant, or a random one for dust), sway amplitude / Hz, `spin`, `twinkle`,
   `grow`, opacity, default colours). Sizes and speeds are fractions of the frame's shorter side
@@ -7033,7 +7042,7 @@ pieces follow it on a spring, particles drift.
   × the distance from the upwind edge (gusts cross the stage); `blown(start, t)` adds the force
   up with trapezoids `BLOWN_STEP` 0.05 s apart from 0 (cached; the same whatever order frames are
   asked in). The scene's seed is `wind_seed(scene id)` (the idle motion's name hash).
-- **Sway**: `SWAYS` (tree 5° at force 1, 0.45 Hz, straight up to 0.08 of its height; bush 4°;
+- **Sway** (Step 104 changed the numbers and added `felt_force`, §69.38): `SWAYS` (tree 5° at force 1, 0.45 Hz, straight up to 0.08 of its height; bush 4°;
   plant 9°, from 0.45 (above the pot); sign 1.5°; lamp 1.2°); `sway_degrees(kind, force, t,
   phase) = degrees × force × (1 + SWAY_WOBBLE 0.25 × sin(2π hz t + phase))`, phase from the
   prop's name (`wind_phase`). `bent_points(points, degrees, foot_y, height, bend_from)` moves
@@ -7087,7 +7096,7 @@ pieces follow it on a spring, particles drift.
   checks `wind: 0` plus a `- wind: calm` action against no wind frame by frame.
 - **Not done here**: wind relative to a walking character (walking into it), wind on held props,
   SVG props or picture backgrounds, layers swaying, a `wind` setting at the top level, leaves
-  blowing as particles of their own. The light's updater, found never removed here, is fixed in
+  blowing as particles of their own (Step 104 adds `leaves` and a held prop blowing away, §69.38). The light's updater, found never removed here, is fixed in
   Step 99 (§69.31). Tests: `tests/test_cartoon_wind.py`.
 
 ### 69.33 Non-speech voice sounds (Step 99)
@@ -7378,3 +7387,63 @@ prop with more than one shape, and a prop held somewhere other than its middle.
   held upright by its middle; wind does not move a held umbrella (Step 104), rain does not
   stop under it (Step 105). Tests: `tests/test_cartoon_props.py`, `tests/test_cartoon_holding.py`.
 
+### 69.38 Visible wind and props that blow away (Step 104)
+
+Step 98's wind was barely visible (Backlog); Step 104 makes it read at `windy` and above and lets
+the wind take a light prop.
+
+- **Felt force** (`cartoon/wind.py`): `felt_force(f) = f × (1 + WIND_BOOST 2 × |f|)` (odd, 0 at 0,
+  3 at force 1). `sway_degrees` uses it, and `SWAYS` grow to tree 8°, bush 6°, plant 12°, sign
+  2°, lamp 1.5° (per felt force 1). `trail_degrees` feeds the felt force to the spring and the
+  flutter, then limits softly: `TRAIL_LIMIT 80 × tanh(x / 80)` (a scarf streams out flat, never
+  over the head). `TRAIL_WEIGHTS`: long hair 0.55 → 0.7, bun 0.35 → 0.4, hat 0.3 → 0.35. Measured
+  over 30 s (seed 5; mean / max |degrees|; before → after): tree breeze 1.1 / 1.7 → 2.5 / 4.1,
+  windy 2.1 / 3.3 → 6.4 / 10.9, gale 3.6 / 5.5 → 14.1 / 24.5; scarf end (weight 1.2) windy 12.5 /
+  18.5 → 23.0 / 37.0, gale 20.9 / 30.9 → 46.3 / 69.4; long hair windy 5.7 / 8.5 → 15.3 / 24.7 at
+  weight 0.8 (0.7 kept: at a gale the hair, turned as one piece about the head's top, swings out
+  too far on the other side). Stills checked by eye at breeze, windy and gale (854x480): the tree
+  bends visibly at windy and leans hard at a gale.
+- **Leaves and streaks** (`particles.py`, reusing particles): `leaves` (shape `leaf`, a pointed
+  lens; 28 per frame, falling slowly, tumbling like confetti, `WIND_DRIFT` 0.6, green / ochre /
+  rust hex colours like snow's white) and `streaks` (the `streak` shape, `fall` 0, so the
+  existing "along its fall" angle lays them along the wind; twinkling in and out; `WIND_DRIFT`
+  1.6). `ParticleKind.wind_shown` (streaks 0.2): opacity × `clip((|force| − wind_shown) /
+  WIND_SHOWN_RAMP 0.3, 0, 1)`, so streaks show the gusts and are never seen on a calm stage or a
+  scene without a stage wind. Not automatic: the author adds `particles: [leaves, streaks]` (an
+  automatic field would change the layout dump and lint of every windy stage).
+- **The blown path** (pure): `gusty_progress(share, seed)` is how far along the way a prop is,
+  the normalised running sum of `0.35 + gust(share × BLOW_GUSTS 6, seed)` (64 trapezoids, cached):
+  monotone, surging and slowing, 0 → 1. `blown_point(share, start, end, rise=, seed=)` = x along
+  by that progress, y on the straight line plus `rise × sin(π g) × (1 + 0.3 sin(2π 3 g + phase))`
+  (never below the line, so a landing prop never dips under the ground), turn
+  `−360 × blow_turns(dx) × g × direction + 25° wobble × sin(π g)` (whole turns, so it ends
+  upright; `blow_turns` = one per 3 units, at least 1). `blow_seconds(distance, level) = 0.6 +
+  distance / (3 × max(felt_force(|level|), 0.5))`, at most 6 s.
+- **`blow_away`** (`scenes/handling.py`, `BlowAway`; targets are props, `to` optional): light
+  props only (`LIGHT_PROPS` napkin, umbrella, ball, cup, basket, box; SVG props allowed). The end:
+  `to` → its grip standing there at its standing height on its own ground line (a held prop:
+  its holder's, like `put_down`); no `to` → beyond the stage edge downwind (the sign of the
+  stage's level now; right when calm) by the prop's size + 0.3, `BLOW_AWAY_UP` 0.2 frame heights
+  above where it started. Rise: `min(0.12 frame heights, 0.35 × distance)`; seed
+  `wind_seed("<scene>:<prop>")`. It plays as `PropMove(..., path=blown_point)` (the new keyword:
+  `path(u, start, end) -> (x, y, degrees)` replaces the arc) from the hand at once (`follow`,
+  `leave` 0), growing back to its standing size; a held prop is dropped from the scene's
+  `Holdings` (`drop`), detached (`held_by` / `hand` cleared, so the layout dump agrees) and its
+  holder's arm goes back to how it was before it took the prop (`ArmMove` by `BLOW_ARM_SHARE`
+  0.35). `run_time_for` from the distance and the level now. Blown props are movable
+  (`_movable_props`: their shadow follows, they do not sway); `mid_still_actions` includes it;
+  the directing planner counts it as a move and follows it (`Holdings.drop`, where it lands).
+- **Validate**: `scene_problems`: not a prop, too heavy, a bad `to`. `holding_problems` (the
+  replay): a prop someone sits or leans on; a prop blown off stage (no `to`) is *gone*: a later
+  `pick_up`, `hold`, `sit_on`, `lean_on` (`.to`), `move_along`, `keyframes`, `open`, `close` or
+  `blow_away` of it is reported with where it blew away; the former holder's `put_down` / `give`
+  / `throw` reads "holds no prop then"; a prop blown `to` a mark lies there for later reach
+  checks. `Stage._calm_blow_problems`: a `blow_away` without `to` while the stage's level (its
+  `wind`, then the `wind` actions in play order) is 0.
+- **`wind: 0` still changes nothing**: nothing in the calm path changed (no `StageWind`, the new
+  particle kinds appended last); the Step 98 frame-hash test passes, and a scratch copy of
+  `examples/cartoon` with `wind: 0` at 160x90, 5 fps gives the same frame hashes as HEAD 837eb8b
+  (`yard` 147 frames, `hill` 127).
+- **Not done here**: an open umbrella tugging its holder or turning inside out (optional, left
+  out); hair bending rather than turning as one piece; no sound for a blown prop; leaves and
+  streaks are not added automatically. Tests: `tests/test_cartoon_wind.py`.

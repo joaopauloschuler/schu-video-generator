@@ -1,6 +1,7 @@
 """Prop beat actions (DESIGN.md §69.27): ``pick_up``, ``hold``, ``put_down``, ``give`` and
-``throw`` on the characters and props of a ``stage``, and ``open`` / ``close`` on its props
-(an umbrella, §69.37). Written against ``vidgen.api`` only, like project actions.
+``throw`` on the characters and props of a ``stage``, ``open`` / ``close`` on its props
+(an umbrella, §69.37) and ``blow_away`` (the wind takes a light prop, out of a hand too, §69.32).
+Written against ``vidgen.api`` only, like project actions.
 
 Who holds what is a :class:`Holdings` on the scene. A held prop is not added to its character
 (a character's parts never change, §69.22): it stays a mobject of its own, drawn right after its
@@ -483,6 +484,97 @@ class Close(_Reshape):
     holder's hand in front of it; standing, it closes where it stands."""
 
     shape = "closed"
+
+
+#: A prop blown off stage ends this many frame heights above where it started (up and away), and
+#: its path's arc rises at most ``BLOW_RISE`` frame heights (less over a short way: ``BLOW_RISE_SHARE``
+#: of the distance).
+BLOW_AWAY_UP = 0.2
+BLOW_RISE = 0.12
+BLOW_RISE_SHARE = 0.35
+#: Share of a ``blow_away`` by which the holder's empty arm is back down.
+BLOW_ARM_SHARE = 0.35
+
+
+@action("blow_away")
+class BlowAway(Action):
+    """The wind blows the target prop away (`- blow_away: napkin`): it tumbles along a gusty
+    path, out of a holder's hand too, downwind and off the stage, or to `to` (a mark or an x of
+    the stage), where it lands upright at its full size. Light props only (napkin, umbrella,
+    ball, cup, basket, box, or an SVG prop); faster in a stronger wind. Without `to` the stage's
+    wind must blow then (vidgen validate checks); a prop blown off stage is gone for the scene."""
+
+    class Options(ActionOptions):
+        to: Place | None = None
+        """Where it lands: a mark or an x from 0 (left edge) to 1 (right edge) of the stage; default: off the stage, downwind."""
+
+    run_time = 2.0
+
+    def scene_problems(self, scene_cls: type[NarratedScene], params: Any) -> list[tuple[str, str]]:
+        """Targets are props light enough to blow away; ``to`` a place of the stage."""
+        if "<prop>" not in scene_cls.target_patterns:
+            return [("target", "blow_away is for the props of a stage")]
+        kinds = dict(zip(params.prop_names(), (p.prop for p in params.props)))
+        light = ", ".join(sorted(LIGHT_PROPS))
+        problems: list[tuple[str, str]] = []
+        for pattern in self.config.targets():
+            for name in [n for n in scene_cls.target_names(params) if fnmatchcase(n, pattern) and not is_part_target(n)]:
+                if name not in kinds:
+                    problems.append(("target", f"'{name}' is not a prop; blow_away acts on props (- blow_away: <prop>)"))
+                elif kinds[name] is not None and kinds[name] not in LIGHT_PROPS:
+                    problems.append(("target", f"'{name}' ({kinds[name]}) is too heavy to blow away (props that can: {light}, or an svg prop)"))
+        return problems + _place_problem(scene_cls, params, self.options.to)
+
+    def _props(self, targets: list[Target]) -> list[Prop]:
+        return [t.mobject for t in targets if isinstance(t.mobject, Prop)]
+
+    def _level(self, scene: NarratedScene) -> float:
+        """The stage's signed wind level now (0: calm)."""
+        blowing = getattr(scene, "blowing", None)
+        return blowing.wind.level(float(scene.renderer.time)) if blowing is not None else 0.0
+
+    def _end(self, scene: NarratedScene, prop: Prop, height: float) -> list[float]:
+        """Where its grip ends (screen): standing at ``to``, else up and off the stage downwind."""
+        held = _held(scene).get(prop.name)
+        if self.options.to is not None:
+            x = _place_x(scene, self.options.to)
+            ground = float(held.character.feet()[1]) if held is not None else getattr(scene, "grounds", {}).get(prop.name, float(prop.feet()[1]))
+            return _standing_grip(prop, x, ground, height)
+        left, right = scene.camera_bounds()[:2]
+        margin = max(float(prop.width), float(prop.height), height) + 0.3
+        x = right + margin if self._level(scene) >= 0.0 else left - margin
+        return [x, float(prop.grip_point()[1]) + BLOW_AWAY_UP * scene.frame_height]
+
+    def _height(self, scene: NarratedScene, prop: Prop) -> float:
+        """How tall it ends: its standing height (a held one grows back to it)."""
+        held = _held(scene).get(prop.name)
+        return _standing_height(prop, held.character) if held is not None else float(prop.height)
+
+    def run_time_for(self, scene: NarratedScene, targets: list[Target]) -> float | None:
+        """By the longest way and the wind now (:func:`blow_seconds`)."""
+        level = self._level(scene)
+        times = [blow_seconds(self._end(scene, p, self._height(scene, p))[0] - float(p.grip_point()[0]), level) for p in self._props(targets)]
+        return max(times, default=None)
+
+    def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
+        """Each prop leaves the hand holding it (that arm goes back down) and tumbles away."""
+        anims: list[Animation] = []
+        for prop in self._props(targets):
+            height = self._height(scene, prop)
+            end = self._end(scene, prop, height)
+            start = prop.grip_point()
+            rise = min(BLOW_RISE * scene.frame_height, BLOW_RISE_SHARE * abs(end[0] - float(start[0])))
+            seed = wind_seed(f"{scene.spec.id}:{prop.name}")
+            held = _held(scene).get(prop.name)
+            follow = None
+            if held is not None:
+                holdings(scene).drop(prop.name)
+                anims.append(ArmMove(held.character, [(BLOW_ARM_SHARE, held.arm_before)]))
+                follow = (lambda h=held: h.character.hand_point(h.hand))
+            anims.append(PropMove(prop, to=end, follow=follow, height=height,
+                                  path=lambda u, a, b, rise=rise, seed=seed: blown_point(u, a, b, rise=rise, seed=seed)))
+            detach(scene, prop)
+        return anims
 
 
 def _place_problem(scene_cls: type[NarratedScene], params: Any, place: Any) -> list[tuple[str, str]]:

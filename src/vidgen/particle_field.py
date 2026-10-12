@@ -58,11 +58,14 @@ class ParticleSettings(BaseModel):
 
 
 def particle_shape(shape: Shape) -> VMobject:
-    """The shape of one particle at size 1 (a dot's radius, a streak's half length), centred."""
+    """The shape of one particle at size 1 (a dot's radius, a streak's or leaf's half length), centred."""
     if shape == "streak":
         return Rectangle(width=0.08, height=2.0)
     if shape == "chip":
         return Rectangle(width=2.0, height=1.2)
+    if shape == "leaf":  # a lens with pointed tips, 2 long
+        angles = np.linspace(0.0, 2 * math.pi, 13)[:-1]
+        return Polygon(*[[math.cos(a), 0.45 * math.sin(a) * abs(math.sin(a)) ** 0.5, 0.0] for a in angles])
     if shape == "star":
         corners = [(math.cos(a), math.sin(a)) for a in np.linspace(math.pi / 2, math.pi / 2 + 2 * math.pi, 9)[:-1]]
         return Polygon(*[[x * (1.0 if k % 2 == 0 else 0.3), y * (1.0 if k % 2 == 0 else 0.3), 0.0] for k, (x, y) in enumerate(corners)])

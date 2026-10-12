@@ -7,6 +7,9 @@ screen), ``-1`` one blowing to the left. Its *force* at a time is the level time
 plus a gust share, the gusts being smooth seeded noise (:func:`gust`), so the same seed gives the
 same wind in every render. Every function is pure: values depend only on the arguments and the
 scene time, never on frames drawn before (a storyboard still or a seek shows the same).
+
+Strong wind shows more than its force alone (:func:`felt_force`), and a light prop can blow away
+(the ``blow_away`` action) along a seeded gusty, tumbling path (:func:`blown_point`).
 """
 
 from __future__ import annotations
@@ -51,21 +54,28 @@ class Sway:
 
 #: The built-in props that sway, pivoting at their base.
 SWAYS: dict[str, Sway] = {
-    "tree": Sway(5.0, 0.45, 0.08),
-    "bush": Sway(4.0, 0.8),
-    "plant": Sway(9.0, 1.1, 0.45),
-    "sign": Sway(1.5, 1.4),
-    "lamp": Sway(1.2, 1.2),
+    "tree": Sway(8.0, 0.45, 0.08),
+    "bush": Sway(6.0, 0.8),
+    "plant": Sway(12.0, 1.1, 0.45),
+    "sign": Sway(2.0, 1.4),
+    "lamp": Sway(1.5, 1.2),
 }
 #: How much a prop's own to-and-fro adds to its lean (a share of it).
 SWAY_WOBBLE = 0.25
+#: Strong wind moves things more than its force alone says (:func:`felt_force`): the felt force
+#: is the force times ``1 + WIND_BOOST × |force|``, so a gale (force 1) bends and trails
+#: ``1 + WIND_BOOST`` times as far as the linear rule, a breeze little more.
+WIND_BOOST = 2.0
 
-#: How far a trailing piece (scarf end, long hair, floppy ears, hat) turns at force 1, before its
-#: own weight (:data:`vidgen.cartoon.generator.TRAIL_WEIGHTS`).
+#: How far a trailing piece (scarf end, long hair, floppy ears, hat) turns at felt force 1,
+#: before its own weight (:data:`vidgen.cartoon.generator.TRAIL_WEIGHTS`).
 TRAIL_DEGREES = 24.0
+#: A trailing piece turns at most about this far (degrees before its weight; a soft limit, so a
+#: gale's scarf streams out flat but does not swing over the head).
+TRAIL_LIMIT = 80.0
 #: The spring a trailing piece follows the force with: it lags a gust and swings past it.
 TRAIL_SPRING = Spring.tuned(1.2, 0.3)
-#: A small quick flutter on top (degrees at level 1, and its frequency).
+#: A small quick flutter on top (degrees at felt level 1, and its frequency).
 FLUTTER_DEGREES = 4.0
 FLUTTER_HZ = 2.5
 
@@ -202,22 +212,30 @@ class Wind:
         return self._blown[k] + (self._blown[k + 1] - self._blown[k]) * (u - k)
 
 
+def felt_force(force: float) -> float:
+    """The signed ``force`` as the swaying and trailing feel it: ``force × (1 + WIND_BOOST ×
+    |force|)`` (:data:`WIND_BOOST`), so strong wind shows clearly; 0 stays 0."""
+    return force * (1.0 + WIND_BOOST * abs(force))
+
+
 def sway_degrees(kind: str, force: float, seconds: float, phase: float = 0.0) -> float:
     """How many degrees a ``kind`` prop (:data:`SWAYS`) leans to the right (negative: to the left)
-    under the signed ``force`` at ``seconds``: its lean at force 1 times the force, with its own
-    to-and-fro (:data:`SWAY_WOBBLE`) at its frequency, shifted by ``phase``. 0 without force."""
+    under the signed ``force`` at ``seconds``: its lean at felt force 1 times the
+    :func:`felt_force`, with its own to-and-fro (:data:`SWAY_WOBBLE`) at its frequency, shifted
+    by ``phase``. 0 without force."""
     sway = SWAYS[kind]
-    return sway.degrees * force * (1.0 + SWAY_WOBBLE * math.sin(2.0 * math.pi * sway.hz * seconds + phase))
+    return sway.degrees * felt_force(force) * (1.0 + SWAY_WOBBLE * math.sin(2.0 * math.pi * sway.hz * seconds + phase))
 
 
 def trail_degrees(wind: Wind, seconds: float, *, delay: float = 0.0, phase: float = 0.0) -> float:
     """How many degrees a trailing piece of weight 1 turns with the wind at ``seconds`` (positive:
-    its free end towards the right of the screen): the force (gusts ``delay`` seconds late)
-    followed by :data:`TRAIL_SPRING`, so it lags a gust and swings past it, plus a small flutter.
-    Exactly 0 while the wind has been calm for the spring's whole memory."""
-    lagged = TRAIL_SPRING.follow(lambda s: wind.force(s, delay), seconds)
-    flutter = FLUTTER_DEGREES * wind.level(seconds) * math.sin(2.0 * math.pi * FLUTTER_HZ * seconds + phase)
-    return TRAIL_DEGREES * lagged + flutter
+    its free end towards the right of the screen): the :func:`felt_force` (gusts ``delay``
+    seconds late) followed by :data:`TRAIL_SPRING`, so it lags a gust and swings past it, plus a
+    small flutter, softly limited to :data:`TRAIL_LIMIT`. Exactly 0 while the wind has been calm
+    for the spring's whole memory."""
+    lagged = TRAIL_SPRING.follow(lambda s: felt_force(wind.force(s, delay)), seconds)
+    flutter = FLUTTER_DEGREES * felt_force(wind.level(seconds)) * math.sin(2.0 * math.pi * FLUTTER_HZ * seconds + phase)
+    return TRAIL_LIMIT * math.tanh((TRAIL_DEGREES * lagged + flutter) / TRAIL_LIMIT)
 
 
 def trail_memory_seconds() -> float:
@@ -238,3 +256,75 @@ def bent_points(points: np.ndarray, degrees: float, foot_y: float, height: float
     u = np.clip((out[:, 1] - foot_y) / height - straight, 0.0, None) / (1.0 - straight)
     out[:, 0] += math.tan(math.radians(degrees)) * bending * u * u
     return out
+
+
+# ----- props that blow away (the ``blow_away`` action) ---------------------------------------------
+
+#: The built-in props light enough for ``blow_away`` (an SVG prop may too: the author knows).
+LIGHT_PROPS: frozenset[str] = frozenset({"napkin", "umbrella", "ball", "cup", "basket", "box"})
+#: A blown prop's speed along the stage: Manim units per second at felt force 1 (:func:`felt_force`;
+#: at least :data:`BLOW_SLOWEST` of it in a light wind), plus :data:`BLOW_MIN_SECONDS` to get going;
+#: at most :data:`BLOW_MAX_SECONDS` in all.
+BLOW_SPEED = 3.0
+BLOW_SLOWEST = 0.5
+BLOW_MIN_SECONDS = 0.6
+BLOW_MAX_SECONDS = 6.0
+#: How far it is blown per tumble (Manim units per whole turn; at least one turn).
+BLOW_TURN_UNITS = 3.0
+#: How much faster than the gusts the path's own gusts come (gust seconds per share of the path).
+BLOW_GUSTS = 6.0
+#: Its bobbing on the way: cycles over the path, and their height as a share of the rise.
+BLOW_BOBS = 3.0
+BLOW_BOB_SHARE = 0.3
+#: A tumble's extra wobble (degrees) on top of its whole turns.
+BLOW_WOBBLE = 25.0
+_PROGRESS_SAMPLES = 64
+
+
+def blow_seconds(distance: float, level: float) -> float:
+    """How long a prop takes to blow ``distance`` Manim units in a wind of signed ``level``."""
+    speed = BLOW_SPEED * max(felt_force(abs(level)), BLOW_SLOWEST)
+    return min(BLOW_MIN_SECONDS + abs(distance) / speed, BLOW_MAX_SECONDS)
+
+
+def blow_turns(distance: float) -> int:
+    """The whole turns a prop tumbles over ``distance`` Manim units (at least 1)."""
+    return max(1, round(abs(distance) / BLOW_TURN_UNITS))
+
+
+@lru_cache(maxsize=64)
+def _gusty_progress_table(seed: int) -> tuple[float, ...]:
+    """Cumulative gusty speed at :data:`_PROGRESS_SAMPLES` + 1 even shares, from 0 to 1."""
+    speeds = [0.35 + gust(k / _PROGRESS_SAMPLES * BLOW_GUSTS, seed) for k in range(_PROGRESS_SAMPLES + 1)]
+    sums = [0.0]
+    for k in range(_PROGRESS_SAMPLES):
+        sums.append(sums[-1] + 0.5 * (speeds[k] + speeds[k + 1]))
+    return tuple(s / sums[-1] for s in sums)
+
+
+def gusty_progress(share: float, seed: int = 1) -> float:
+    """How far along its path (0..1) a blown prop is at ``share`` (0..1) of its time: it surges
+    with each seeded gust and slows in the lulls, never going back; 0 at 0 and 1 at 1."""
+    table = _gusty_progress_table(seed)
+    u = min(max(float(share), 0.0), 1.0) * _PROGRESS_SAMPLES
+    k = min(int(u), _PROGRESS_SAMPLES - 1)
+    return table[k] + (table[k + 1] - table[k]) * (u - k)
+
+
+def blown_point(share: float, start: tuple[float, float] | np.ndarray, end: tuple[float, float] | np.ndarray, *,
+                rise: float, seed: int = 1) -> tuple[float, float, float]:
+    """A blown prop's middle (x, y) and its turn (degrees, counterclockwise) at ``share`` (0..1)
+    of its time, from ``start`` to ``end`` (screen): along by :func:`gusty_progress`, lifted in an
+    arc ``rise`` units high with a few bobs (never below the straight line from start to end),
+    tumbling :func:`blow_turns` whole turns the way it goes, so it ends upright. Pure: the same
+    arguments give the same point."""
+    x0, y0, x1, y1 = float(start[0]), float(start[1]), float(end[0]), float(end[1])
+    g = gusty_progress(share, seed)
+    arc = math.sin(math.pi * g)
+    phase = wind_phase(str(seed))
+    bob = BLOW_BOB_SHARE * math.sin(2.0 * math.pi * BLOW_BOBS * g + phase)
+    x = x0 + (x1 - x0) * g
+    y = y0 + (y1 - y0) * g + rise * arc * (1.0 + bob)
+    towards = 1.0 if x1 >= x0 else -1.0
+    turn = -360.0 * blow_turns(x1 - x0) * g * towards + BLOW_WOBBLE * math.sin(2.0 * math.pi * 1.5 * g + phase) * arc
+    return x, y, turn

@@ -453,7 +453,9 @@ class PropMove(Animation):
     or a function giving one every frame), growing or shrinking to ``height`` units tall; then it
     stays there. ``rise`` > 0: it flies an arc peaking that many units above the higher end
     (:func:`~vidgen.cartoon.holding.throw_point`) and spins ``turns`` whole turns; ``lands``: the
-    move ends on the ground (``lands_at`` is then ``arrive``, for the landing sound). Each frame
+    move ends on the ground (``lands_at`` is then ``arrive``, for the landing sound). ``path``
+    instead: ``path(u, start, end)`` gives the middle's x, y and turn (degrees) at ``u`` (0..1)
+    of the way (a prop blowing away, :func:`~vidgen.cartoon.wind.blown_point`). Each frame
     is drawn from the prop's points when the animation began, so it ends exactly upright."""
 
     def __init__(
@@ -468,9 +470,10 @@ class PropMove(Animation):
         rise: float = 0.0,
         turns: int = 0,
         lands: bool = False,
+        path: Callable[[float, np.ndarray, np.ndarray], tuple[float, float, float]] | None = None,
         **kwargs,
     ) -> None:
-        self.to, self.follow = to, follow
+        self.to, self.follow, self.path = to, follow, path
         self.leave, self.arrive = float(leave), max(float(arrive), float(leave))
         self.target_height, self.rise, self.turns = height, float(rise), int(turns)
         self.lands_at: float | None = self.arrive if lands else None
@@ -503,7 +506,10 @@ class PropMove(Animation):
         u = 1.0 if span <= 0 else min((t - self.leave) / span, 1.0)
         end = self._point(self.to)
         height = self._height if self.target_height is None else self._height + (self.target_height - self._height) * smooth(u)
-        if self.rise > 0:
+        if self.path is not None:
+            x, y, angle = self.path(u, self._from, end)
+            middle = np.array([x, y, 0.0])
+        elif self.rise > 0:
             x, y = throw_point(u, self._from, end, self.rise)
             middle, angle = np.array([x, y, 0.0]), spin_degrees(u, self.turns, float(end[0] - self._from[0]))
         else:

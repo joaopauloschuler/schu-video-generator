@@ -95,17 +95,17 @@ scenes:
 | `props.detail` | `color \| None` |  | Its second colour (a tree's trunk, a house's roof, a laptop's screen...); default per prop. |
 | `props.recolor` | `'none' \| 'theme'` | `'none'` | With svg: theme maps the picture's colours to the nearest theme colours; none keeps them. |
 | `props.open` | `bool` | `False` | An umbrella: true starts it open (the open / close actions change it later). |
-| `particles` | `list[str \| StageParticles]` |  | Particles over the whole scene, in front of everything: a kind (rain, snow, sparkles, dust, confetti, smoke, bubbles) or {kind, density, area, color, seed}; for one beat use the particles action. |
+| `particles` | `list[str \| StageParticles]` |  | Particles over the whole scene, in front of everything: a kind (rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves, streaks) or {kind, density, area, color, seed}; for one beat use the particles action. |
 | `particles.density` | `float` | `1.0` | How many: 1 = the kind's usual amount for a whole frame, 2 = twice as many (at most 300 in all; half at preview quality). |
 | `particles.area` | `list[float] \| None` |  | Where they are: [x, y, w, h] fractions 0-1 of the visible frame from its top-left corner; default the whole frame. |
 | `particles.color` | `color \| list[color] \| None` |  | A colour or a list (each particle picks one); default per kind (rain light blue, snow white, sparkles highlight, confetti the theme's colours...). |
 | `particles.seed` | `int` | `1` | Another number gives other positions; the same number gives the same particles in every render. |
-| `particles.kind` | `'rain' \| 'snow' \| 'sparkles' \| 'dust' \| 'confetti' \| 'smoke' \| 'bubbles'` | required | rain, snow, sparkles, dust, confetti, smoke or bubbles. |
+| `particles.kind` | `'rain' \| 'snow' \| 'sparkles' \| 'dust' \| 'confetti' \| 'smoke' \| 'bubbles' \| 'leaves' \| 'streaks'` | required | rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves or streaks (wind lines, seen only in wind). |
 | `light` | `'day' \| 'morning' \| 'sunset' \| 'night' \| 'indoor' \| CustomLight` | `'day'` | The light on the set: day (as drawn), morning, sunset, night (dark blue, with stars on a colour background) or indoor, or {tint, strength}: a colour grade of the background, layers, props and characters (never of speech bubbles, captions or other text); the light action changes it during the scene. |
 | `light.tint` | `color` | required | The light's colour (a theme token or #hex): the set's colours are multiplied towards it. |
 | `light.strength` | `float` | `0.5` | How strongly: 0 = no change, 1 = the colours multiplied by the tint. |
 | `shadows` | `bool` | `True` | Soft shadows on the ground under the characters and the props standing on it (smaller when they jump, none under a held prop); false: none. |
-| `wind` | `float \| 'calm' \| 'breeze' \| 'windy' \| 'gale'` | `0.0` | Wind from the start, in gusts: 0 calm (nothing moves) .. 1 a gale blowing to the right (negative: to the left), or calm, breeze (0.3), windy (0.6), gale (1); trees, bushes, plants, signs and lamps sway, scarves, long hair, floppy or pointy ears and hats trail, particles drift; the wind action changes it during the scene. |
+| `wind` | `float \| 'calm' \| 'breeze' \| 'windy' \| 'gale'` | `0.0` | Wind from the start, in gusts: 0 calm (nothing moves) .. 1 a gale blowing to the right (negative: to the left), or calm, breeze (0.3), windy (0.6), gale (1); trees, bushes, plants, signs and lamps sway, scarves, long hair, floppy or pointy ears and hats trail (clearly from windy on), particles drift (add leaves or streaks to show it more); the wind action changes it during the scene, blow_away blows a light prop away. |
 
 ## Targets
 

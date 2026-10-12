@@ -32,7 +32,7 @@ SEED_VARIATION = 0.08
 #: How far each trailing piece turns in the wind, as a share of
 #: :data:`~vidgen.cartoon.wind.TRAIL_DEGREES` (DESIGN.md §69.32): the scarf's end, long hair, a
 #: bun, pointy and floppy ears, the hat. Round ears and the other hair styles do not trail.
-TRAIL_WEIGHTS: dict[str, float] = {"scarf": 1.2, "long": 0.55, "bun": 0.35, "pointy": 0.35, "floppy": 1.0, "hat": 0.3}
+TRAIL_WEIGHTS: dict[str, float] = {"scarf": 1.2, "long": 0.7, "bun": 0.4, "pointy": 0.35, "floppy": 1.0, "hat": 0.35}
 
 
 @dataclass(frozen=True)

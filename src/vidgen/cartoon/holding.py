@@ -63,8 +63,8 @@ THROW_SPIN = 1
 THROW_FLIGHT_MIN = 0.45
 THROW_FLIGHT_PER_UNIT = 0.06
 THROW_FLIGHT_MAX = 1.6
-#: The actions that hand props around, and the ones after which a character's hand is free.
-HANDLING_ACTIONS: frozenset[str] = frozenset({"pick_up", "hold", "put_down", "give", "throw"})
+#: The actions that hand props around or take one out of a hand (``blow_away``, DESIGN.md §69.32).
+HANDLING_ACTIONS: frozenset[str] = frozenset({"pick_up", "hold", "put_down", "give", "throw", "blow_away"})
 #: A prop showing one of these shapes (an open umbrella) is held overhead (DESIGN.md §69.37): the
 #: hand ``OVERHEAD_FORWARD`` of its holder's heights in front of the feet and ``OVERHEAD_HAND``
 #: above them (where every generated look's arm reaches, or nearly), the prop
@@ -143,6 +143,11 @@ class Holdings:
         name, hand = self.held_prop(character, prop)
         del self.held[name]
         return name, hand
+
+    def drop(self, prop: str) -> tuple[str, str] | None:
+        """Whoever holds ``prop`` loses it (it blows out of the hand); ``(character, hand)`` that
+        held it, or ``None`` (nobody did)."""
+        return self.held.pop(prop, None)
 
     def give(self, giver: str, receiver: str, prop: str | None = None, hand: str | None = None) -> tuple[str, str, str]:
         """``giver`` hands ``prop`` (default: the only one it holds) to ``receiver``'s ``hand``
@@ -267,7 +272,8 @@ def holding_problems(
     the giver, a keyed move of a prop someone holds; sitting or leaning (DESIGN.md §69.28): a seat
     taken, a prop held or too far to sit or lean on, a ``stand_up`` with nothing to stand up from,
     a walk, jump, turn or keyed move of a character that sits or leans, a prop picked up or moved
-    while someone sits or leans on it. ``characters``: name -> (feet x, height); ``props``: name ->
+    while someone sits or leans on it; ``blow_away`` (§69.32) takes a prop out of whoever's hand,
+    and one blown off stage (no ``to``) cannot be used again. ``characters``: name -> (feet x, height); ``props``: name ->
     x; ``place_x`` a mark or x of the stage in Manim units (``None``: neither); ``to_fraction`` an
     x back to 0..1 of the stage; ``entering``: characters off stage until their first ``enter``."""
     holdings = Holdings()
@@ -292,10 +298,21 @@ def holding_problems(
         verb = "sits" if postures.of(users[0])[0] == "sitting" else "leans"
         return f"{users[0]} {verb} on '{prop}' then; stand_up first (- stand_up: {users[0]})"
 
+    def blown_off(prop: str) -> str | None:
+        if prop not in gone:
+            return None
+        return f"'{prop}' blew away off stage ({gone[prop]}); blow it to: a mark instead to use it again"
+
+    #: props a ``blow_away`` without ``to`` took off stage -> where that action is
+    gone: dict[str, str] = {}
     for step in steps:
         o = step.options
         for who in [t for t in step.targets if t in characters]:
             here, height = where.x.get(who), where.heights[who]
+            named = str(o.get("to")) if step.action in ("pick_up", "hold", "sit_on", "lean_on") else None
+            if named is not None and blown_off(named) is not None:
+                problems.append((f"{step.location}.to", blown_off(named)))
+                continue
             try:
                 postures.pinned(who, step.action)
                 if step.action in ("sit_on", "lean_on"):
@@ -367,7 +384,16 @@ def holding_problems(
                 problems.append((f"{step.location}.{key}", str(exc)))
         for prop in [t for t in step.targets if t in props]:
             holder = holdings.holder(prop)
-            if step.action in ("move_along", "keyframes") and holder is not None:
+            if step.action in ("move_along", "keyframes", "blow_away", "open", "close") and blown_off(prop) is not None:
+                problems.append((f"{step.location}.target", blown_off(prop)))
+            elif step.action == "blow_away" and in_use(prop) is not None:
+                problems.append((f"{step.location}.target", in_use(prop)))
+            elif step.action == "blow_away":
+                holdings.drop(prop)
+                where.x[prop] = place_x(o["to"]) if o.get("to") is not None else None
+                if o.get("to") is None:
+                    gone[prop] = step.location
+            elif step.action in ("move_along", "keyframes") and holder is not None:
                 problems.append((f"{step.location}.target", f"'{prop}' is held by {holder[0]} then; put_down or throw it first"))
             elif step.action in ("move_along", "keyframes") and in_use(prop) is not None:
                 problems.append((f"{step.location}.target", in_use(prop)))

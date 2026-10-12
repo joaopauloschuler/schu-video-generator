@@ -135,7 +135,7 @@ class StageParticles(ParticleSettings, SceneParams):
     also_accepts: ClassVar[tuple[type, ...]] = (str,)
 
     kind: ParticleKindName
-    """rain, snow, sparkles, dust, confetti, smoke or bubbles."""
+    """rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves or streaks (wind lines, seen only in wind)."""
 
     @model_validator(mode="before")
     @classmethod
@@ -219,7 +219,9 @@ class Stage(NarratedScene):
     speech bubbles or text (the ``light`` action fades it); soft shadows lie under whatever
     stands on the ground (``shadows: false``: none). ``wind`` (0 calm .. 1 a gale; negative
     blows to the left) sways trees, bushes, plants, signs and lamps, makes scarves, long hair,
-    floppy ears and hats trail and particles drift (the ``wind`` action fades it).
+    floppy ears and hats trail and particles drift (the ``wind`` action fades it; ``leaves`` and
+    ``streaks`` particles show it more); ``blow_away`` blows a light prop off the stage or to a
+    mark, out of a hand too.
 
     A beat is spoken by the characters whose voice says it (their mouths move with it), or by
     the ones its ``say`` action names; the acting actions (``say``, ``look_at``, ``turn``,
@@ -249,7 +251,7 @@ class Stage(NarratedScene):
     #: Storyboard stills also show these actions half-way through (DESIGN.md §69.16).
     mid_still_actions = frozenset({
         "walk_to", "enter", "exit", "gesture", "jump", "keyframes", "move_along", "pick_up", "put_down", "give", "throw",
-        "sit_on", "lean_on", "stand_up",
+        "sit_on", "lean_on", "stand_up", "blow_away",
     })
 
     @classmethod
@@ -295,13 +297,13 @@ class Stage(NarratedScene):
         props: list[StageProp] = []
         """Props: a built-in prop's name, or {prop | svg, name, at, depth, scale, lift, facing, color, detail, recolor, open}."""
         particles: list[StageParticles] = []
-        """Particles over the whole scene, in front of everything: a kind (rain, snow, sparkles, dust, confetti, smoke, bubbles) or {kind, density, area, color, seed}; for one beat use the particles action."""
+        """Particles over the whole scene, in front of everything: a kind (rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves, streaks) or {kind, density, area, color, seed}; for one beat use the particles action."""
         light: LightSetting = "day"
         """The light on the set: day (as drawn), morning, sunset, night (dark blue, with stars on a colour background) or indoor, or {tint, strength}: a colour grade of the background, layers, props and characters (never of speech bubbles, captions or other text); the light action changes it during the scene."""
         shadows: bool = True
         """Soft shadows on the ground under the characters and the props standing on it (smaller when they jump, none under a held prop); false: none."""
         wind: WindSetting = 0.0
-        """Wind from the start, in gusts: 0 calm (nothing moves) .. 1 a gale blowing to the right (negative: to the left), or calm, breeze (0.3), windy (0.6), gale (1); trees, bushes, plants, signs and lamps sway, scarves, long hair, floppy or pointy ears and hats trail, particles drift; the wind action changes it during the scene."""
+        """Wind from the start, in gusts: 0 calm (nothing moves) .. 1 a gale blowing to the right (negative: to the left), or calm, breeze (0.3), windy (0.6), gale (1); trees, bushes, plants, signs and lamps sway, scarves, long hair, floppy or pointy ears and hats trail (clearly from windy on), particles drift (add leaves or streaks to show it more); the wind action changes it during the scene, blow_away blows a light prop away."""
 
         @model_validator(mode="after")
         def _check(self) -> SceneParams:
@@ -418,7 +420,7 @@ class Stage(NarratedScene):
         ordered = [u for _, u in sorted(enumerate(uses), key=lambda iu: (beats.index(iu[1].beat), iu[1].config.at, iu[0]))]
         steps = [HandlingStep(u.location, u.config.action, matched(u), u.config.options) for u in ordered]
         left = -frame.stage_width / 2
-        return holding_problems(
+        problems = holding_problems(
             steps,
             characters={name: (place.x, place.height) for name, place in frame.places.items()},
             props=dict(frame.props),
@@ -426,6 +428,21 @@ class Stage(NarratedScene):
             to_fraction=lambda x: min(max((x - left) / frame.stage_width, 0.0), 1.0),
             entering=[n for u in uses if u.config.action == "enter" for n in matched(u)],
         )
+        return problems + cls._calm_blow_problems(params, ordered)
+
+    @staticmethod
+    def _calm_blow_problems(params: Any, ordered: list[Any]) -> list[tuple[str, str]]:
+        """A ``blow_away`` without ``to`` while the stage's wind is calm (its ``wind`` and the
+        ``wind`` actions before it, DESIGN.md §69.32): nothing would blow the prop off stage."""
+        level = wind_level(params.wind)
+        problems: list[tuple[str, str]] = []
+        for use in ordered:
+            if use.config.action == "wind":
+                level = use.action.level()
+            elif use.config.action == "blow_away" and use.config.options.get("to") is None and level == 0.0:
+                problems.append((f"{use.location}.target", "the wind is calm then, so nothing blows it off stage: add a wind action before it "
+                                 "(- wind: windy) or the stage's wind:, or give to: a mark"))
+        return problems
 
     @contextmanager
     def narrate(self, beat: Any) -> Iterator[float]:
@@ -751,9 +768,9 @@ class Stage(NarratedScene):
 
     def _movable_props(self) -> set[str]:
         """The props an action may move or reshape: picked up or held (then put down, given or
-        thrown), moved by ``keyframes`` / ``move_along``, opened or closed."""
+        thrown), moved by ``keyframes`` / ``move_along``, opened or closed, blown away."""
         moved = {use.options.to for kind in ("pick_up", "hold") for use in self.action_uses(kind)}
-        for kind in ("keyframes", "move_along", "open", "close"):
+        for kind in ("keyframes", "move_along", "open", "close", "blow_away"):
             for use in self.action_uses(kind):
                 moved |= {name for name in self.props for pattern in use.config.targets() if fnmatchcase(name, pattern)}
         return moved & set(self.props)

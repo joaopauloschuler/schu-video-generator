@@ -215,11 +215,12 @@ them. The built-in `keyframes` and `move_along` actions (`src/vidgen/scenes/keyf
 act on a `stage`'s characters, props and part targets `<character>.<part>`; a scene of your own
 can register part targets the same way (`self.target("hero.arm_left", hero.parts["arm_left"])`)
 and set `target_patterns` to include `"<character>"` to accept those actions.
-The prop actions (`pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`; `src/vidgen/scenes/handling.py`)
+The prop actions (`pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `blow_away`; `src/vidgen/scenes/handling.py`)
 need `"<prop>"` in `target_patterns` and `Prop` targets. Their pieces are exported:
 `ArmMove(character, [(share, {part: PartPose}), ...])` eases some parts through keys;
-`PropMove(prop, to=, follow=, leave=, arrive=, height=, rise=, turns=)` carries a prop from a hand
-(`follow`, read every frame) to a point or another hand, on an arc with spin when `rise` > 0;
+`PropMove(prop, to=, follow=, leave=, arrive=, height=, rise=, turns=, path=)` carries a prop from a hand
+(`follow`, read every frame) to a point or another hand, on an arc with spin when `rise` > 0, or
+along `path(u, start, end) -> (x, y, degrees)` (`blow_away` passes `blown_point`);
 `character.reached_parts(hand, point)` gives the arm poses `reach` would set, and
 `hold_point(character.shoulder_point(hand), character.character_height, character.facing)` where
 a held prop sits. To keep a prop in a hand, give it an updater (`prop.add_updater(lambda m:
@@ -269,7 +270,10 @@ degrees, foot_y, height)` bend a prop about its base, `trail_degrees(wind, t)` f
 spring for `Character.set_wind(degrees)` (turns the pieces a generated look marks with
 `TRAIL_ATTRIBUTE`: scarf end, long hair, bun, floppy / pointy ears, hat). `StageWind(wind,
 [SwayingProp(prop, kind, x_share)], characters, x_share)` does both for a scene time (`update`);
-a `ParticleField(..., wind=)` drifts with it.
+a `ParticleField(..., wind=)` drifts with it. `felt_force(force)` is the force the swaying and
+trailing use (strong wind more than in proportion); `blown_point(share, start, end, rise=, seed=)`
+is a blown prop's seeded, gusty, tumbling path (`gusty_progress`, `blow_seconds(distance,
+level)`, `LIGHT_PROPS`), and `Holdings.drop(prop)` takes a prop out of whoever holds it.
 DESIGN.md §69 has the model, §69.3 the poses, §69.4 lip sync, §69.5 idle motion, §69.6 the
 stage, §69.7 layers and the camera, §69.8 props, §69.9 particles, §69.31 light and shadows, §69.32 wind.
 
@@ -1070,7 +1074,7 @@ its targets (the built-in `pan` and `follow`), so it plays together with another
 that falls due at the same moment instead of before or after it.
 A scene type that lists action type names in its class attribute `mid_still_actions` (the
 built-in `stage`: `walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`,
-`pick_up`, `put_down`, `give`, `throw`, `sit_on`, `lean_on`, `stand_up`) gets a
+`pick_up`, `put_down`, `give`, `throw`, `sit_on`, `lean_on`, `stand_up`, `blow_away`) gets a
 still half-way through each use of them whenever stills are taken (`vidgen storyboard`,
 `render --frames`), besides the beat ends (docs/CONFIG.md "Frame stills").
 The built-in `callout` action (`src/vidgen/scenes/callout_action.py`) is an example of all

@@ -9708,3 +9708,83 @@ How to test
   test_cartoon_seating test_cartoon_speed test_cartoon_wind test_cartoon_acting
   test_cartoon_moving test_introspect` (9, 12 s), `test_phase_i_review test_phase_h_review
   test_cartoon_sheet test_cartoon_directing` (7, 30 s). Full suite not run.
+
+## Step 104 — Visible wind and props that blow away
+
+What was built
+- Stronger wind (`src/vidgen/cartoon/wind.py`): `felt_force(f) = f × (1 + WIND_BOOST 2 × |f|)`
+  drives `sway_degrees` and `trail_degrees` (spring input and flutter); `trail_degrees` is softly
+  limited (`TRAIL_LIMIT` 80 × tanh); `SWAYS` tree 5 → 8°, bush 4 → 6, plant 9 → 12, sign 1.5 →
+  2, lamp 1.2 → 1.5; `TRAIL_WEIGHTS` (`generator.py`) long hair 0.55 → 0.7, bun 0.35 → 0.4, hat
+  0.3 → 0.35.
+- Particle kinds `leaves` (new shape `leaf`, tumbling like confetti, drift 0.6) and `streaks`
+  (wind lines: the `streak` shape with `fall` 0 lies along the wind; `ParticleKind.wind_shown`
+  0.2 hides them below that force, so never on a calm stage). Appended to `PARTICLE_KINDS` last.
+- `blow_away` beat action (`scenes/handling.py`, `BlowAway`): `- blow_away: napkin` tumbles a
+  light prop (`LIGHT_PROPS`: napkin, umbrella, ball, cup, basket, box; SVG props too) along the
+  pure seeded path `blown_point` (`gusty_progress`: monotone gusty progress; arc + bobs never
+  under the straight line; whole tumbling turns, so it lands upright) downwind off the stage, or
+  `to:` a mark where it lands at its standing size. Held: `Holdings.drop`, detached (dump agrees),
+  the arm goes back down. Played by `PropMove(..., path=)` (new keyword). Duration
+  `blow_seconds(distance, level)`.
+- Validate: heavy prop / not a prop / bad `to` (`scene_problems`); `holding_problems` drops the
+  holder, refuses a prop someone sits on, and reports any later use of a prop blown off stage;
+  `Stage._calm_blow_problems`: no `to` while the wind is calm. Directing planner follows it
+  (`MOVING_ACTIONS`, `Holdings.drop`). `mid_still_actions` and `_movable_props` include it.
+
+Evidence
+- Angles over 30 s (seed 5, mean / max |°|, before → after): tree breeze 1.1/1.7 → 2.5/4.1,
+  windy 2.1/3.3 → 6.4/10.9, gale 3.6/5.5 → 14.1/24.5; scarf end windy 12.5/18.5 → 23.0/37.0, gale
+  20.9/30.9 → 46.3/69.4; long hair windy 5.7/8.5 → ~13/22.
+- Stills by eye (scratch stage, 854x480): before, windy and gale looked almost still; after, the
+  tree bends at windy and leans hard at a gale, hair / ears / scarf stream, leaves and streaks
+  read at once (streaks absent at breeze). A blow_away scene: the napkin tumbles off right, a gust
+  takes the open umbrella out of dot's hand and it lands upright at 0.8.
+- `wind: 0`: scratch copy of `examples/cartoon` with `wind: 0`, 160x90 5 fps: frame hashes equal
+  to HEAD 837eb8b in a worktree (yard 147, hill 127). The Step 98 hash test passes.
+- `vidgen validate` / `vidgen lint` on the scratch project: ok; lint only the author's tree at
+  0.85 cut off at the edge.
+
+Files touched
+- `src/vidgen/cartoon/wind.py`, `generator.py`, `holding.py`, `transition.py`, `directing.py`,
+  `src/vidgen/particles.py`, `particle_field.py`, `scenes/handling.py`, `scenes/stage.py`,
+  `scenes/particles_action.py`, `api.py`.
+- Docs: `docs/CONFIG.md` (particles kinds / counts / colours, wind section numbers, new "Props that
+  blow away", stage `wind` row, action / run_time / targets / actions rows), `DESIGN.md` (§2
+  tree, §6.4, §69.9 / §69.32 pointers, new §69.38), `docs/EXTENDING.md`, `docs/gallery/stage.md`
+  (rows as `vidgen gallery` writes them), guide (`src/vidgen/data/guide/AGENTS.md` + `AGENTS.md`),
+  `tasklist.md`.
+- Tests: `tests/test_cartoon_wind.py` (+6 not-render, +1 render; sway test uses `felt_force`),
+  `tests/test_particles.py` (9 kinds), `tests/test_actions.py` (action lists),
+  `tests/test_cartoon_sheet.py` (`mid_still_actions`).
+
+Public interfaces
+- `vidgen.api` adds `LIGHT_PROPS`, `blow_seconds`, `blown_point`, `felt_force`, `gusty_progress`;
+  `PropMove(path=)`, `Holdings.drop`, `HANDLING_ACTIONS` gains `blow_away`, `PARTICLE_KINDS`
+  gains `leaves`, `streaks`, `ParticleKind.wind_shown`. New built-in action `blow_away`.
+  Changed on purpose: windy stages render differently (more sway / trail); calm ones do not.
+
+Decisions / deviations
+- Leaves and streaks are particle kinds the author adds, not an automatic effect (an automatic
+  field would change the layout dump and lint of every windy stage).
+- Without `to` and with a calm wind the prop would still go right; validate reports it instead.
+- A prop blown off stage is gone for the scene (validate refuses later uses).
+- Searched first: no blow / tumble / gusty-path code existed (`grep -rn "blow\|tumble" src/vidgen`:
+  none); reused `gust`, `wind_phase`, `wind_seed`, `PropMove`, `_standing_grip`, `_held` /
+  `detach`, `Holdings`, the particle model's spin / twinkle / streak angle.
+
+Known gaps / TODOs
+- No open-umbrella tug or flip (optional, left out); long hair turns as one piece (at a gale its
+  far side swings out); no sound for a blown prop; a blown prop does not bounce on landing.
+
+How to test
+- `pytest tests/test_cartoon_wind.py` (17 not-render + 3 render, ~10 s).
+- Also run: not render `test_cartoon_wind test_particles test_cartoon_holding test_actions
+  test_api test_cartoon_directing test_cartoon_stage test_cartoon_props test_cartoon_seating
+  test_cartoon_generator test_cartoon_character test_cartoon_lint test_cartoon_sheet test_lint
+  test_introspect` (298 passed + the sheet fix), `test_cartoon_sheet test_docs test_guide
+  test_schema test_actions_coverage test_gallery` (186, 63 s), `test_phase_h_review
+  test_phase_i_review test_screenplay test_includes test_mcp test_extensions test_builtin_scenes`
+  (210, 31 s); render `test_cartoon_wind test_particles test_cartoon_holding test_cartoon_sheet`
+  (9, 7 s), `test_cartoon_stage test_cartoon_props test_cartoon_directing test_cartoon_seating
+  test_cartoon_lighting test_cartoon_character test_cartoon_generator` (11, 10 s). Full suite not run.

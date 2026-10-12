@@ -93,7 +93,7 @@ CLOSEUP_SECONDS = 0.5
 #: the camera's own moves.
 MOVING_ACTIONS = frozenset({
     "walk_to", "enter", "exit", "move_along", "keyframes", "pan", "follow", "zoom", "pick_up", "put_down", "give", "throw",
-    "sit_on", "lean_on", "stand_up", "shot",
+    "sit_on", "lean_on", "stand_up", "shot", "blow_away",
 })
 #: A generated figure's proportions, in its heights (measured on the generator's looks; an SVG
 #: look is taken to be alike): half its width (``FIGURE_HALF_WIDTH``, shared with the shots'
@@ -725,6 +725,11 @@ def _follow_written(state: _SceneState, beat: BeatInput, names: Sequence[str]) -
             state.camera_x = None
         elif act.action in ("pick_up", "hold", "give", "put_down", "throw"):
             _handle(state, act.action, targets, options)
+        elif act.action == "blow_away":   # out of any hand; where it lands, or gone
+            for prop in act.targets():
+                state.holdings.drop(prop)
+                to = options.get("to")
+                state.prop_x[prop] = state.frame.place_x(to) if state.frame is not None and to is not None else None
         elif act.action in ("sit_on", "lean_on", "stand_up"):
             _pose(state, act.action, targets, options)
         if act.action == "look_at":

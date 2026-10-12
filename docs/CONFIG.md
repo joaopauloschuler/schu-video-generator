@@ -4121,7 +4121,7 @@ never leaves the stage.
 | `particles` | list | `[]` | [particles](#particles) over the whole scene, in front of everything: a kind (`snow`), or `{kind, density, area, color, seed}` |
 | `light` | `day` \| `morning` \| `sunset` \| `night` \| `indoor` \| `{tint, strength}` | `day` | the [light](#light-and-shadows-light-shadows) on the set: a colour grade of the background, layers, props and characters (never of speech bubbles or text); `night` adds stars; the `light` action changes it during the scene |
 | `shadows` | bool | `true` | soft [shadows](#light-and-shadows-light-shadows) on the ground under the characters and the props standing on it; `false`: none |
-| `wind` | number -1..1 \| `calm` \| `breeze` \| `windy` \| `gale` | `0` | [wind](#wind-wind) in gusts: trees, bushes, plants, signs and lamps sway, scarves, long hair, floppy or pointy ears and hats trail, particles drift (`0.3` breeze .. `1` gale, blowing right; negative blows left); `0` changes nothing; the `wind` action changes it during the scene |
+| `wind` | number -1..1 \| `calm` \| `breeze` \| `windy` \| `gale` | `0` | [wind](#wind-wind) in gusts: trees, bushes, plants, signs and lamps sway, scarves, long hair, floppy or pointy ears and hats trail, particles drift (`0.3` breeze .. `1` gale, blowing right; negative blows left); `0` changes nothing; the `wind` action changes it during the scene; `blow_away` blows a light prop away |
 
 | key (`characters[]`) | default | |
 |---|---|---|
@@ -4864,7 +4864,7 @@ beats:
 
 #### Particles
 
-Rain, snow, sparkles, dust, confetti, smoke or bubbles over a scene: on a `stage` for the whole
+Rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves or wind streaks over a scene: on a `stage` for the whole
 scene with the `particles` param, or on any scene type from a beat with the `particles`
 [beat action](#beat-actions) (for that beat; `until: <beat>` or `keep: true` for longer; `keep:
 true` on the first beat gives any scene type particles throughout). They are drawn in front of
@@ -4874,10 +4874,10 @@ a `pan`), fade in over 0.5 s, and fall, drift, spin or rise on their own. Positi
 
 | key | default | |
 |---|---|---|
-| `kind` | required | `rain` (slanted streaks), `snow` (white dots that sway), `sparkles` (twinkling stars, `highlight`), `dust` (faint drifting motes), `confetti` (spinning chips in the theme's colours), `smoke` (grey puffs that rise, grow and thin out), `bubbles` (rising rings) |
-| `density` | `1` | how many, up to 4: 1 is the kind's usual amount for a whole frame (rain 160, snow 120, confetti 90, dust 60, sparkles 40, bubbles 30, smoke 24), scaled by the share of the frame `area` covers. At most 300 per field, whatever the density; a [preview render](#format-and-preview) draws half as many |
+| `kind` | required | `rain` (slanted streaks), `snow` (white dots that sway), `sparkles` (twinkling stars, `highlight`), `dust` (faint drifting motes), `confetti` (spinning chips in the theme's colours), `smoke` (grey puffs that rise, grow and thin out), `bubbles` (rising rings), `leaves` (tumbling leaves that drift far in a [wind](#wind-wind)), `streaks` (faint white lines along the wind, seen only while a stage's wind blows harder than a breeze: none on a calm stage or another scene type) |
+| `density` | `1` | how many, up to 4: 1 is the kind's usual amount for a whole frame (rain 160, snow 120, confetti 90, dust 60, sparkles 40, bubbles 30, leaves 28, smoke 24, streaks 22), scaled by the share of the frame `area` covers. At most 300 per field, whatever the density; a [preview render](#format-and-preview) draws half as many |
 | `area` | the whole frame | `[x, y, w, h]`: fractions 0–1 of the visible frame from its top-left corner (smoke from a chimney: `[0.6, 0.1, 0.08, 0.5]`); particles fade out near its edges |
-| `color` | per kind | a colour (theme token or `#hex`) or a list, each particle picking one: rain `#A9C1DD`, snow `#FFFFFF`, sparkles `highlight`, dust `#E6DCC8`, confetti `accent highlight primary secondary tertiary`, smoke `#B9BEC6`, bubbles `#CFE9FF` |
+| `color` | per kind | a colour (theme token or `#hex`) or a list, each particle picking one: rain `#A9C1DD`, snow `#FFFFFF`, sparkles `highlight`, dust `#E6DCC8`, confetti `accent highlight primary secondary tertiary`, smoke `#B9BEC6`, bubbles `#CFE9FF`, leaves `#7BAE4E #C9A23A #C2703D`, streaks `#FFFFFF` |
 | `seed` | `1` | another number gives other positions |
 
 ```yaml
@@ -4954,14 +4954,18 @@ A stage's `wind` blows in gusts (seeded noise, the same in every render): `0` is
 changes nothing, `0.3` (`breeze`), `0.6` (`windy`), `1` (`gale`) blow to the right, a negative
 number to the left. In the wind:
 
-- built-in trees, bushes, plants, signs and lamps sway, bending about their base (a tree's top
-  about 5° at a gale, a plant's leaves more, a lamp post hardly), each in its own rhythm, gusts
-  reaching the far side of the stage a little later. Props an action moves, holds, sits on or
-  leans on, props with a `lift` and SVG props stand still;
+- built-in trees, bushes, plants, signs and lamps sway, bending about their base, each in its
+  own rhythm, gusts reaching the far side of the stage a little later. Strong wind moves things
+  more than in proportion: a tree's top leans about 2.5° on average in a breeze, 6° when windy
+  and 14° in a gale (up to 25° in a gust), a plant's leaves more, a lamp post hardly. Props an
+  action moves, holds, sits on or leans on, props with a `lift` and SVG props stand still;
 - generated characters' scarf ends, long hair, buns, floppy and pointy ears and hats trail
-  downwind on a spring: they lag a gust and swing past it. Imported SVG characters, round ears,
-  short or curly hair and glasses do not move (nothing marks such pieces in a drawing);
+  downwind on a spring: they lag a gust and swing past it (a scarf's end about 23° when windy,
+  45° in a gale, never over the head). Imported SVG characters, round ears, short or curly hair
+  and glasses do not move (nothing marks such pieces in a drawing);
 - particles (the stage's and those of a `particles` action) drift downwind; rain slants more.
+  `leaves` tumble and blow far, and `streaks` (faint lines along the wind) show the gusts
+  from `windy` on: `particles: [leaves, streaks]` makes a windy scene read at once.
 
 The `wind` [beat action](#beat-actions) changes it: `- wind: 0.8` (or `calm`, `breeze`, `windy`,
 `gale`) fades from the wind at its `at` over `run_time` seconds (default `2`) and lasts until
@@ -4981,6 +4985,43 @@ in Manim's static image as usual.
     - text: "Then the storm came in."
       actions:
         - {wind: gale, at: 0.3, run_time: 3}
+```
+
+##### Props that blow away (`blow_away`)
+
+`- blow_away: napkin` blows a light prop away: it tumbles along a gusty path (seeded, the same
+in every render), lifted and bobbing, downwind and off the stage (up and away); with `to:` (a
+mark or an x of the stage) it lands there upright, at its full size, at its own depth (or its
+holder's). A prop someone holds is blown out of the hand: the hand lets go at once, the empty arm
+goes back down and the holder holds nothing from then on (the layout dump and `vidgen validate`
+agree). It takes longer the farther it goes and the lighter the wind (from the middle of a 16:9
+stage to off its edge: 1.6 s in a gale, 2.9 s when windy; at most 6 s); `run_time` sets it. Light props only: `napkin`,
+`umbrella` (open or closed), `ball`, `cup`, `basket`, `box`, and SVG props.
+
+`vidgen validate` reports a heavy prop (`'tree' (tree) is too heavy to blow away`), a target
+that is not a prop, an unknown `to`, a `blow_away` without `to` while the stage's wind is calm
+(its `wind` and the `wind` actions before it), a prop someone sits or leans on, and any later use
+of a prop blown off stage (`pick_up`, `hold`, `sit_on`, `lean_on`, `move_along`, `keyframes`,
+`open`, `close`, another `blow_away`); a `put_down`, `give` or `throw` by its former holder is
+"holds no prop then".
+
+```yaml
+- id: picnic
+  type: stage
+  params:
+    wind: windy
+    particles: [leaves, streaks]
+    characters: [pip, kit]
+    props: [{prop: umbrella, at: 0.3, open: true}, {prop: napkin, at: 0.5}]
+  beats:
+    - text: "Pip holds the umbrella up, and the napkin flies away."
+      actions:
+        - {hold: pip, to: umbrella}
+        - {blow_away: napkin, at: 0.3}
+    - text: "Then a gust takes the umbrella right out of her hand!"
+      actions:
+        - {wind: gale, run_time: 0.5}
+        - {blow_away: umbrella, at: 0.2, to: far_right}
 ```
 
 A wide stage with layers, the camera panning and then following a character:
@@ -5066,11 +5107,11 @@ the one key that names an action).
 
 | key | default | |
 |---|---|---|
-| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `sit_on`, `lean_on`, `stand_up`, `light`, `wind`, or a project action (`vidgen list-scenes` lists them) |
+| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `sit_on`, `lean_on`, `stand_up`, `light`, `wind`, `blow_away`, or a project action (`vidgen list-scenes` lists them) |
 | `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one (`callout` with an `area` and `pan` with `to` need none) |
 | `at` | `0` | when, as a fraction of the beat's narration (`0` ≤ at < `1`) |
 | `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`, `callout`, `say`, `react`, `look_at`, `turn`, `emote`, `pose`: undone when it starts; `zoom`: the camera is back when it starts; `pan`: the camera moves back when it starts; `follow`: the camera stops following when it starts; `keyframes`, `move_along`: the target moves back) |
-| `run_time` | the action's | seconds the animation takes (`reveal` / `callout` / `pose` 0.8, `dim` / `highlight` / `react` 0.6, `zoom` / `transform` / `follow` 1.0, `pan` 1.5, `look_at` / `emote` 0.5, `say` (the bubble) / `turn` 0.4, `jump` 0.6, `gesture` per gesture (1.2 for `point`), `walk_to` / `enter` / `exit` as long as the distance needs at their `speed`, `keyframes` until its last key, `move_along` 2.0 or its path's length at its `speed`, `pick_up` / `give` 1.2, `put_down` / `sit_on` 1.0, `lean_on` / `stand_up` 0.8, `hold` 0.4, `open` / `close` 0.6, `throw` 0.95–2.1 by the distance, `light` / `wind` 2.0 (the fade); a zoom takes as long again to come back) |
+| `run_time` | the action's | seconds the animation takes (`reveal` / `callout` / `pose` 0.8, `dim` / `highlight` / `react` 0.6, `zoom` / `transform` / `follow` 1.0, `pan` 1.5, `look_at` / `emote` 0.5, `say` (the bubble) / `turn` 0.4, `jump` 0.6, `gesture` per gesture (1.2 for `point`), `walk_to` / `enter` / `exit` as long as the distance needs at their `speed`, `keyframes` until its last key, `move_along` 2.0 or its path's length at its `speed`, `pick_up` / `give` 1.2, `put_down` / `sit_on` 1.0, `lean_on` / `stand_up` 0.8, `hold` 0.4, `open` / `close` 0.6, `throw` 0.95–2.1 by the distance, `light` / `wind` 2.0 (the fade), `blow_away` by the distance and the wind (0.6–6); a zoom takes as long again to come back) |
 
 **Targets** depend on the scene type (`vidgen list-scenes` prints them as `targets:`). Every
 built-in type has some; `<N>` counts from 1 (`item1`, `item2`...), `<text>`/`<label>`/`<name>`
@@ -5109,7 +5150,7 @@ a title card, a `transform` of a bar).
 | `diagram` | `heading`, `node<N>`, `node:<id>`, `edge:<from>-><to>` | reveal, dim, highlight, zoom | also for `flowchart`; a node is its shape, icon and label (a `box` frames the shape), an edge its line, arrowhead and label; `highlight: [node:a, "edge:a->b", node:b]` marks a path; revealing an edge brings its nodes |
 | `process` | `heading`, `input`, `stage<N>`, `stage:<label>`, `connector<N>`, `loop`, `output`, `token` | reveal, dim, highlight, zoom | a stage is its card (a `box` frames it); `connector2` runs from stage 2 to 3; revealing a stage early shows it without moving the token; `highlight: token` with `style: flash` points at it |
 | `network` | `heading`, `layer<N>`, `layer:<label>`, `edges<N>`, `neuron<L>.<i>` | reveal, dim, highlight, zoom | a layer is its units, ellipsis, label and count; `edges1` joins layers 1 and 2; `neuron2.3` is unit 3 of layer 2 as drawn |
-| `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, walk_to, enter, exit, gesture, jump, keyframes, move_along, pick_up, hold, put_down, give, throw, open, close, sit_on, lean_on, stand_up, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting), [moving](#moving), [prop](#props-in-hands) and [sitting](#sitting-and-leaning) actions take whole characters only, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts, [`open` / `close`](#umbrellas-open-and-close) props |
+| `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, walk_to, enter, exit, gesture, jump, keyframes, move_along, pick_up, hold, put_down, give, throw, open, close, blow_away, sit_on, lean_on, stand_up, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting), [moving](#moving), [prop](#props-in-hands) and [sitting](#sitting-and-leaning) actions take whole characters only, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts, [`open` / `close`](#umbrellas-open-and-close) props |
 
 `title` and `heading` stand for each other (the header band, see "Built-in scenes"): `highlight:
 title` works on a `bullets` heading. [Project scene types](EXTENDING.md#8-per-beat-actions-targets-and-custom-actions)
@@ -5129,6 +5170,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `callout` | `kind` (`box` default, `circle`, `arrow`, `label`, `spotlight`, `magnifier`), `label`, `area`, `within` (`frame` \| `safe`), `units` (`fraction` \| `px`), `color` (`highlight`), `label_size` (`caption`), `side` (`auto`, `top`, `bottom`, `left`, `right`), `curved` (arrow), `zoom` (magnifier, `2`), `keep` (`false`), `name` | points at the target — or, without a target, at `area` of the frame — with the [Step 34 callouts](#screenshot): a rounded `box` (label as a tag on its edge), a `circle`, an `arrow` from the label, a `label` beside it (no mark), a `spotlight` (the rest of the view darkened) or a `magnifier` (an enlarged inset of a picture: the target must show one, e.g. `image`). Gone when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: stays to the end of the scene). See "Callouts" below. |
 | `sfx` | `sound` (or as the target: `- sfx: NAME`), `gain` (`0` dB), `pan` (`0`), `align` (`start` \| `end`), `params` (`duration`, `pitch`, `intensity`) | plays a [sound effect](#sound-effects-sfx) at `at` — exactly then, even while the scene animates; draws nothing, works on every scene type. Its "target" is the sound's name, not a target of the scene; no `until`, no `run_time`. |
 | `wind` | as the target: `- wind: 0.8` (a number from `-1` to `1`, negative blowing left) or `calm`, `breeze`, `windy`, `gale` | on a `stage`: fades the [wind](#wind-wind) from `at` over `run_time` seconds (`2`); it lasts until another `wind` action. Its "target" is the strength, not a target of the scene; no `until`. |
+| `blow_away` | as the target: the prop (`- blow_away: napkin`); `to` (a mark or an x 0–1; default: off the stage downwind) | on a `stage`: the wind blows a light prop away, tumbling, out of a holder's hand too; it lands upright at `to` or is gone ([props that blow away](#props-that-blow-away-blow_away)). No `until`. |
 | `light` | as the target: `- light: night` (`day`, `morning`, `sunset`, `night`, `indoor`), or `tint` + `strength` (`0.5`) | on a `stage`: fades the [light](#light-and-shadows-light-shadows) from `at` over `run_time` seconds (`2`); it lasts until another `light` action. Its "target" is the light, not a target of the scene; no `until`. |
 | `particles` | `kind` (or as the target: `- particles: snow`), `density` (`1`), `area`, `color`, `seed` (`1`), `keep` (`false`) | [particles](#particles) — `rain`, `snow`, `sparkles`, `dust`, `confetti`, `smoke` or `bubbles` — over the scene from `at`, in front of everything; works on every scene type. They fade in, and fade out (still moving; `run_time`, `0.6` s) when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: at the end of the scene). Its "target" is the kind, not a target of the scene. |
 | `say`, `look_at`, `turn`, `emote`, `pose`, `react` | see [Speaking and acting](#speaking-and-acting) | the acting actions on a `stage`'s characters: speak (lip sync and a speech bubble), look at something, turn round, change expression or pose, react to another speaker for one beat |
