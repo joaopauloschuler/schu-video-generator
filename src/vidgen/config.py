@@ -259,6 +259,138 @@ class SubtitlesConfig(_Strict):
     """name: put the speaker's label before a beat's first cue when the speaker changes ("Ana: ..."); also the captions' default."""
 
 
+#: Default outline and feature colour of a character: a dark ink that reads on light and dark themes.
+CHARACTER_INK = "#1F2430"
+
+
+class CharacterColors(_Strict):
+    """``colors`` of a character (DESIGN.md §69): theme tokens or hex colours of its parts."""
+
+    skin: ColorRef = "secondary"
+    """Head, ears, nose and hands (skin or fur)."""
+    clothes: ColorRef = "primary"
+    """Body and legs."""
+    outline: ColorRef = CHARACTER_INK
+    """Outline of every part."""
+    features: ColorRef = CHARACTER_INK
+    """Eyes, brows, mouth and a dot nose."""
+    hair: ColorRef = "accent"
+    """Hair (look.hair)."""
+    accessory: ColorRef = "highlight"
+    """Hat, scarf and bag (look.accessories); glasses use outline."""
+
+
+BodyShape = Literal["round", "tall", "square", "bean"]
+EyeStyle = Literal["dot", "oval", "round", "sleepy"]
+NoseStyle = Literal["none", "dot", "round", "triangle"]
+HairStyle = Literal["none", "short", "spiky", "long", "bun", "curly"]
+EarStyle = Literal["none", "round", "pointy", "floppy"]
+Accessory = Literal["glasses", "hat", "scarf", "bag"]
+
+
+class CharacterLook(_Strict):
+    """``look`` of a character: the parameters of the character generator (DESIGN.md §69.1).
+    Every value builds an original figure from primitives (circles, ellipses, rounded
+    rectangles, polygons); ``seed`` varies its proportions a little. ``svg`` draws the character
+    from an SVG file split into parts by element ids instead (§69.2)."""
+
+    body: BodyShape = "round"
+    """Body shape: round, tall, square or bean."""
+    head_size: float = Field(1.0, ge=0.6, le=1.6)
+    """Head size relative to the default head (0.6 to 1.6)."""
+    eyes: EyeStyle = "dot"
+    """Eye style: dot, oval, round (white with a pupil) or sleepy."""
+    nose: NoseStyle = "none"
+    """Nose: none, dot, round or triangle."""
+    hair: HairStyle = "none"
+    """Hair: none, short, spiky, long, bun or curly (colour: colors.hair)."""
+    ears: EarStyle = "none"
+    """Ears: none, round, pointy or floppy (skin colour)."""
+    accessories: list[Accessory] = Field(default_factory=list)
+    """Any of glasses, hat, scarf, bag (each at most once)."""
+    seed: int | None = None
+    """A number that varies the proportions a little (same seed, same figure); none: no variation."""
+    svg: str | None = Field(default=None, min_length=1)
+    """An SVG file (relative to the project folder; best under assets/) drawn instead of the generator: parts by id (head, mouth, arm_left, mouth_A, ...), data-pivot="x y"."""
+
+    @field_validator("accessories")
+    @classmethod
+    def _unique_accessories(cls, value: list[str]) -> list[str]:
+        repeated = sorted({a for a in value if value.count(a) > 1})
+        if repeated:
+            raise ValueError(f"accessory listed twice: {', '.join(repeated)}")
+        return value
+
+    @model_validator(mode="after")
+    def _svg_alone(self) -> CharacterLook:
+        generator_keys = sorted(self.model_fields_set - {"svg"})
+        if self.svg is not None and generator_keys:
+            raise ValueError(f"svg draws the character from the file; {', '.join(generator_keys)} only apply to the generator (remove them or svg)")
+        if self.svg is not None and not self.svg.lower().endswith(".svg"):
+            raise ValueError(f"svg must name an .svg file, not {self.svg!r}")
+        return self
+
+
+#: Parts a pose sets (DESIGN.md §69.3); the parts of an expression are :data:`ExpressionPart`.
+#: How strongly characters move with the animation principles (anticipation, squash and
+#: stretch, overshoot and settle, follow-through; DESIGN.md §69.13): ``cartoon_motion:``.
+MotionSetting = Literal["lively", "calm", "none"]
+
+PosePart = Literal["body", "legs", "arm_left", "arm_right", "head", "accessory"]
+ExpressionPart = Literal["eyes", "brows", "mouth"]
+
+
+class PartPoseEntry(_Strict):
+    """How a pose or an expression sets one part of a character (DESIGN.md §69.3), relative to
+    its rest drawing."""
+
+    angle: float = 0.0
+    """Degrees counterclockwise about the part's pivot, as drawn facing right (facing left mirrors it)."""
+    scale: float | tuple[float, float] = 1.0
+    """One factor, or [x, y], about the pivot; a negative factor flips the part (y -1 turns a smile into a frown)."""
+    shift: tuple[float, float] = (0.0, 0.0)
+    """[x, y] in character units (1 = the character's height)."""
+    shape: str | list[str] | None = None
+    """The shape shown: a name, or a list of names (the first the character has); none: the rest shape."""
+
+    @field_validator("scale")
+    @classmethod
+    def _nonzero_scale(cls, value: float | tuple[float, float]) -> float | tuple[float, float]:
+        if 0 in ((value,) if isinstance(value, (int, float)) else value):
+            raise ValueError("a scale factor of 0 makes the part vanish; use a small number instead")
+        return value
+
+    def shape_choices(self) -> list[str]:
+        """The shape names to try, in order (empty: the rest shape)."""
+        return [] if self.shape is None else [self.shape] if isinstance(self.shape, str) else list(self.shape)
+
+    def scale_xy(self) -> tuple[float, float]:
+        """``scale`` as (x, y)."""
+        return (float(self.scale), float(self.scale)) if isinstance(self.scale, (int, float)) else (float(self.scale[0]), float(self.scale[1]))
+
+
+class CharacterEntry(_Strict):
+    """One entry of ``characters:`` (DESIGN.md §69): a cartoon character declared once and used
+    by any scene."""
+
+    name: Identifier
+    """Name scenes and beats use for this character (letters, digits, _); unique."""
+    voice: Identifier | None = None
+    """Who speaks for this character: a name from voices (or default: the base voice); none: the character does not speak."""
+    look: CharacterLook = Field(default_factory=CharacterLook)
+    """How the character is drawn: body shape, head size, eyes, nose, hair, ears, accessories, seed; or svg: a file split into parts."""
+    colors: CharacterColors = Field(default_factory=CharacterColors)
+    """Part colours {skin, clothes, outline, features, hair, accessory}: theme tokens or hex (not used by an svg look)."""
+    poses: dict[Identifier, dict[PosePart, PartPoseEntry]] = Field(default_factory=dict)
+    """The character's own poses (name -> part -> {angle, scale, shift, shape}); a built-in name is replaced."""
+    expressions: dict[Identifier, dict[ExpressionPart, PartPoseEntry]] = Field(default_factory=dict)
+    """The character's own expressions (eyes, brows, mouth), like poses."""
+    idle: bool = True
+    """Breathe, sway the head slightly and blink every 2 to 6 s on its own; false: hold still between actions."""
+    cartoon_motion: MotionSetting | None = None
+    """Animation principles for this character (anticipation, squash and stretch, overshoot and settle, follow-through): lively, calm or none; wins over the scene's and the video's; default lively."""
+
+
 class PronunciationEntry(_Strict):
     """The long form of a ``pronunciation:`` entry (DESIGN.md §45): how the narrator says a
     term. Applied to the text sent to the TTS only; subtitles and captions keep the term."""
@@ -366,6 +498,13 @@ LINT_RULES: tuple[str, ...] = (
     "contrast",
     "max_words",
     "overlay_overlap",
+    "walk_overlap",
+    "off_stage",
+    "character_overlap",
+    "bubble_overlap",
+    "facing_away",
+    "hidden_speaker",
+    "mouth_without_voice",
     "narration_speed",
     "dead_air",
     "animation_overrun",
@@ -382,6 +521,13 @@ RuleName = Literal[
     "contrast",
     "max_words",
     "overlay_overlap",
+    "walk_overlap",
+    "off_stage",
+    "character_overlap",
+    "bubble_overlap",
+    "facing_away",
+    "hidden_speaker",
+    "mouth_without_voice",
     "narration_speed",
     "dead_air",
     "animation_overrun",
@@ -479,6 +625,49 @@ class OverlayOverlapRule(RuleConfig):
     """Part of a scene object's box an overlay must cover to be reported."""
 
 
+class WalkOverlapRule(RuleConfig):
+    """``walk_overlap``: a character's walk (``walk_to``, ``enter``) ends on another character."""
+
+    min_overlap: Fraction = 0.25
+    """Share of the narrower character's width the two must share side by side to be reported."""
+
+
+class OffStageRule(RuleConfig):
+    """``off_stage``: a character partly outside the view (not while it enters or exits)."""
+
+    min_hidden: Fraction = 0.05
+    """Share of the character's box outside the view from which it is reported."""
+
+
+class CharacterOverlapRule(RuleConfig):
+    """``character_overlap``: two characters standing on each other (neither walked there in the beat)."""
+
+    min_overlap: Fraction = 0.25
+    """Share of the narrower character's width the two must share side by side to be reported."""
+
+
+class BubbleOverlapRule(RuleConfig):
+    """``bubble_overlap``: a speech bubble covering a character's face or another bubble."""
+
+    min_overlap: Fraction = 0.1
+    """Share of the face's box (or of the smaller bubble's box) the bubble must cover to be reported."""
+
+
+class FacingAwayRule(RuleConfig):
+    """``facing_away``: a speaking character facing away from the one it talks to."""
+
+
+class HiddenSpeakerRule(RuleConfig):
+    """``hidden_speaker``: a speaking character whose face something in front of it hides."""
+
+    min_hidden: Fraction = 0.5
+    """Share of the face's box covered by things drawn in front from which it is reported."""
+
+
+class MouthWithoutVoiceRule(RuleConfig):
+    """``mouth_without_voice``: a character's lip sync showing a speech shape while no narration is heard."""
+
+
 class NarrationSpeedRule(RuleConfig):
     """``narration_speed``: a beat spoken too fast or too slow (spoken words, or characters, per second)."""
 
@@ -561,6 +750,20 @@ class LintRules(_Strict):
     """Too many words on screen (default: warning)."""
     overlay_overlap: OverlayOverlapRule = Field(default_factory=OverlayOverlapRule)
     """Overlays covering scene text or icons (default: warning)."""
+    walk_overlap: WalkOverlapRule = Field(default_factory=WalkOverlapRule)
+    """A character ending its walk on another character (default: warning)."""
+    off_stage: OffStageRule = Field(default_factory=OffStageRule)
+    """A character partly outside the view, not entering or exiting (default: warning)."""
+    character_overlap: CharacterOverlapRule = Field(default_factory=CharacterOverlapRule)
+    """Two characters standing on each other (default: warning)."""
+    bubble_overlap: BubbleOverlapRule = Field(default_factory=BubbleOverlapRule)
+    """A speech bubble covering a face or another bubble (default: warning)."""
+    facing_away: FacingAwayRule = Field(default_factory=FacingAwayRule)
+    """A speaking character facing away from its listener (default: warning)."""
+    hidden_speaker: HiddenSpeakerRule = Field(default_factory=HiddenSpeakerRule)
+    """A speaking character whose face is hidden by something in front of it (default: warning)."""
+    mouth_without_voice: MouthWithoutVoiceRule = Field(default_factory=MouthWithoutVoiceRule)
+    """A mouth moving with lip sync while no narration is heard (default: warning)."""
     narration_speed: NarrationSpeedRule = Field(default_factory=NarrationSpeedRule)
     """Narration too fast or too slow (default: warning; info for beats without audio)."""
     dead_air: DeadAirRule = Field(default_factory=DeadAirRule)
@@ -762,6 +965,35 @@ def _cue(value: str | SfxCue) -> SfxCue:
 
 #: An entry of a scene's ``sfx:`` list: a cue, or a sound name (that sound at the scene's start).
 SfxEntry = Annotated[Union[SoundName, SfxCue], AfterValidator(_cue)]
+
+
+#: The kinds of a beat's music sting (``sting:``; DESIGN.md §69.19).
+StingKind = Literal["reveal", "comic", "sad"]
+
+
+class StingCue(_Strict):
+    """A short music sting on a beat (``sting:``): a reveal, a comic drum hit or a sad trombone,
+    ducked under the narration like the music."""
+
+    kind: StingKind
+    """reveal (a "ta-da" chord), comic (ba-dum-tss) or sad (wah wah wah waaah)."""
+    at: Literal["start", "end"] | None = None
+    """start: as the beat starts; end: when its narration ends, in the pause after the line; default start for reveal, end for comic and sad."""
+    gain: float = Field(default=0.0, ge=-60, le=12)
+    """Level change in dB (0: about 7 dB under the narration before ducking)."""
+
+    @property
+    def placed_at(self) -> Literal["start", "end"]:
+        """``at``, or the kind's default (reveal: start; comic, sad: end)."""
+        return self.at or ("start" if self.kind == "reveal" else "end")
+
+
+def _sting(value: str | StingCue) -> StingCue:
+    return StingCue(kind=value) if isinstance(value, str) else value
+
+
+#: A beat's ``sting:``: a kind, or ``{kind, at, gain}``.
+StingSetting = Annotated[Union[StingKind, StingCue], AfterValidator(_sting)]
 
 
 class SfxConfig(_Strict):
@@ -1065,6 +1297,8 @@ class BeatConfig(_Strict):
     """Per-beat actions on the scene's targets (reveal, dim, highlight, ...), run during this beat."""
     voice: Identifier | None = None
     """Who says this beat: a name from voices (or default: the base voice); default the scene's voice."""
+    sting: StingSetting | None = None
+    """A short music sting on this beat: reveal, comic or sad, or {kind, at: start | end, gain}; ducked under the narration."""
 
     def estimated_duration(self, words_per_second: float) -> float:
         """Speech duration estimated from the word count (no padding)."""
@@ -1177,6 +1411,8 @@ class VideoConfig(_Strict):
     """Text-to-speech voice."""
     voices: dict[Identifier, VoiceEntry] = Field(default_factory=dict)
     """Named voices for dialogue (name: {voice_id, settings, label, color, ...}), each the base voice with what it sets changed; scenes and beats pick one with voice: NAME."""
+    characters: list[CharacterEntry] = Field(default_factory=list)
+    """Cartoon characters ({name, voice, look, colors}), declared once and used by any scene; names unique."""
     subtitles: SubtitlesConfig = Field(default_factory=SubtitlesConfig)
     """What the SRT shows besides the narration (speaker names)."""
     narration: NarrationConfig = Field(default_factory=NarrationConfig)
@@ -1213,6 +1449,12 @@ class VideoConfig(_Strict):
     """Speech to text for `vidgen readback` (the narration transcribed and compared with the text): {provider, model, language, device}."""
     imagegen: ImagegenConfig = Field(default_factory=ImagegenConfig)
     """Image generation for generate: params and `vidgen imagegen`: {provider (openai or openrouter), model, size, quality, resolution, style, negative}."""
+    cartoon_style: str | None = Field(default=None, min_length=1)
+    """Style words added to every generate: prompt of stage scenes, so a cartoon's backgrounds look alike, e.g. "flat colours, thick outlines, soft shadows"; part of the picture's cache key."""
+    foley: bool = True
+    """Sounds for the characters' actions on stage scenes: footsteps on walks, a whoosh on enter / exit, a boing on jump, a pop on a surprised face; false: none (a stage's foley param wins)."""
+    cartoon_motion: MotionSetting | None = None
+    """Animation principles for every character (anticipation, squash and stretch, overshoot and settle, follow-through): lively, calm or none; a stage's or a character's own setting wins; default lively."""
     scenes: list[SceneConfig] = Field(min_length=1)
     """The scenes in order (at least one); scene ids and beat ids must be unique."""
 
@@ -1231,6 +1473,16 @@ class VideoConfig(_Strict):
 
         if DEFAULT_VOICE in value:
             raise ValueError(f"'{DEFAULT_VOICE}' is the base voice (the voice: section) and cannot be a name in voices")
+        return value
+
+    @field_validator("characters")
+    @classmethod
+    def _unique_character_names(cls, value: list[CharacterEntry]) -> list[CharacterEntry]:
+        seen: dict[str, int] = {}
+        for k, entry in enumerate(value):
+            if entry.name in seen:
+                raise ValueError(f"duplicate character name '{entry.name}' (characters[{seen[entry.name]}] and characters[{k}])")
+            seen[entry.name] = k
         return value
 
     @field_validator("pronunciation", mode="before")

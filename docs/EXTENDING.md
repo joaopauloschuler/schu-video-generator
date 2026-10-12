@@ -153,6 +153,84 @@ validate` checks the name against the built-in and the project's icons (suggesti
 and icons tagged like it), `vidgen list-scenes` shows its type as `icon`, and `vidgen schema`
 gives it an `enum` of the icon names.
 
+A character param is typed `CharacterName` (`who: CharacterName`, or `CharacterName | None`):
+`vidgen validate` checks the name against the video's [`characters:`](CONFIG.md#characters-characters)
+and suggests close names. In `construct`, `character(name, height=..., facing="right")` builds
+that character as a `Character`: a `VGroup` of named parts (`PART_NAMES`: `body`, `legs`,
+`arm_left`, `arm_right`, `head`, `eyes`, `brows`, `mouth`, `accessory`), drawn from its `look:`
+(body shape, hair, accessories...; every generated look has the same part and shape names), the
+feet at the origin (`feet()`). A character drawn from an SVG file (`look: {svg: ...}`, CONFIG.md
+"Characters from SVG files") may lack parts and has its own shape names: check `has_part("arm_left")`
+and `shape_names("mouth")` before posing it; its outline width follows `height`. `vidgen character NAME --png` shows
+one still of it. Pose a part about its pivot with `set_part(part, angle=..., scale=..., shift=...,
+shape=...)` (degrees counterclockwise as drawn facing right; its child parts follow, e.g. the
+head carries the eyes), swap a shape with `swap("mouth", "open")`, mirror the whole character
+with `face("left")` / `turn()`, and snapshot or restore a pose with `state()` / `set_state()`.
+Move and scale the character with Manim's own `move_to` / `shift` / `scale`; poses set afterwards
+land where it is. Named poses (`stand`, `pointing`, `waving`, `thinking`, `shrug`,
+`arms_crossed`, `sitting`) and expressions (`neutral`, `happy`, `sad`, `angry`, `surprised`,
+`worried`, `thinking`), plus the character's own (`names("pose")`, `names("expression")`), are
+set at once with `set_pose(name)` / `set_expression(name)`, or animated part by part with
+`self.play(PoseChange(hero, pose="waving", expression="happy"), run_time=0.8)` (each part eases
+about its pivot, body first; `state=` takes any `CharacterState`). For a single part, call
+`set_part` from an updater (`UpdateFromAlphaFunc(hero, lambda m, a: m.set_part("arm_left",
+angle=120 * a))`), not `.animate` (that would move points along straight lines). Lip sync:
+inside `with self.narrate(0) as d:`, `self.speak(hero)` makes the mouth follow the beat's
+`VisemeTrack`, timed from the beat's start by the scene's clock (`hero.lip_sync(self.beat_visemes(0),
+clock=self.beat_clock())`), so it stays in step through a `PoseChange`; `stop_lip_sync()` ends it
+(the mouth shows its pose's shape again); `show_viseme("O")` shows one of `VISEMES` at once; a
+character without a mouth is left alone. `Walk(hero, x)` walks it along the ground to `x`
+(`speed=`, units per second; `start_x=` / `park_x=` for an entrance or exit), `Gesture(hero,
+"wave")` (`point`, `wave`, `shrug`, `nod`, `shake_head`) and `Jump(hero, 0.4)` play a motion and
+end in the pose; all three keep lip sync in step, and their timing is the pure functions
+`walk_seconds`, `enter_path`, `exit_path`, `offstage_x` (no manim). These four animations add
+the animation principles (anticipation, squash and stretch, overshoot and settle,
+follow-through) by the character's `cartoon_motion` setting, `hero.motion` (`lively`, `calm`,
+`none`; `character(name, motion=...)` passes a scene's setting, the character's own wins), or
+their own `motion=` keyword; `Walk` and `Jump` then last longer by a wind-up and settle
+(`walk_motion_seconds(walk_seconds(d), strength)`, `jump_motion_seconds(JUMP_SECONDS, strength)`
+with `MOTION_LEVELS[setting]`). `hero.set_squash(x, y)` scales the whole figure about its feet
+(not part of its state). For a part of your own that should lag and wobble (an antenna, a tail, a
+hanging sign), `Spring.tuned(frequency_hz, damping_ratio)` (or `Spring(stiffness, damping)`) is
+the damped spring the built-in follow-through uses: `spring.follow(x_of, seconds)` is where a
+part on it is while it follows `x_of(seconds)` (pure, the same at any frame rate), so an updater
+can turn the part by `k * (spring.follow(x_of, t) - x_of(t))`; `step_response`, `overshoot()` and
+`settle_seconds()` help tune it (a damping ratio of 1 never overshoots). The built-in acting and moving
+actions (`say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `enter`, `exit`,
+`gesture`, `jump`) work on every target that is a `Character`, so register your characters as
+targets (`self.target(name, hero)`) to let a video's beats act on them.
+`KeyedMotion(mob, values_at, part=None)` moves any mobject (feet `x`, `y` on screen, `rotate`
+degrees and `scale` about its feet) or, with `part=`, a `Character`'s part (its pose's shift,
+angle and size) through the channel values `values_at(share)` returns; the pure helpers
+`keyed_values(start, keys, seconds)` (with `Key(seconds, values, ease)`, eases named as Manim's
+rate functions in `EASE_NAMES`), `MotionPath(points, smooth).at(share)` and `path_length` give
+them. The built-in `keyframes` and `move_along` actions (`src/vidgen/scenes/keyframes_action.py`)
+act on a `stage`'s characters, props and part targets `<character>.<part>`; a scene of your own
+can register part targets the same way (`self.target("hero.arm_left", hero.parts["arm_left"])`)
+and set `target_patterns` to include `"<character>"` to accept those actions.
+`character(name)` breathes, sways its head and blinks on its own (unless `idle: false`):
+`stop_idle()` / `start_idle(seed=None)` turn that off and on; a blink never shows during a
+`PoseChange`. Before drawing your own scene for characters on a set, check whether the built-in
+`stage` type (CONFIG.md, a background, ground line, marks and depth; its characters are action
+targets) already does it. Its geometry is exported for your own scenes: `stage_layout(items,
+ground=, size=, frame_width=, frame_height=, marks=None)` places `StageItem(name, kind, at,
+depth, scale)`s (`at`: a name of `MARKS` or an x from 0 to 1) and returns `StagePlacement`s
+(`feet`, `height`) from the back to the front; `pose_name_problem(project.config, who, "pose",
+name)` in `validate_project` reports a pose or expression the character does not know
+(`stage_width=` places marks across a stage wider than the frame). For parallax in your own
+scene, `layer_transform(factor, camera_center, zoom)` gives the `(scale, (dx, dy))` that shows a
+layer drawn for the home view moved by `factor` of a camera move, and `layer_half_extent(...)`
+how large to draw it. Props: `draw_prop(kind, height=, theme=, main=, detail=, facing=)` draws one
+of `PROP_KINDS` (`table`, `tree`, `house`, ...) and `svg_prop(path, height=, name=)` an SVG file
+(through `load_vector`), both a `Prop` with `feet()` like a character's, so a `StageItem(name,
+"prop", at, depth, PROP_HEIGHTS[kind], lift)` places it; the layout dump reports it as kind `prop`.
+Particles: `particle_field(self, "snow", ParticleSettings(density=2))` builds a `ParticleField`
+for your scene (fewer at preview quality, `self.is_preview`) that moves on its own once added
+(`self.add(field)`) and fades out with `self.play(fade_out(field))`; `particle_states(particle_seeds(kind,
+count, seed), t)` gives the seeded positions without drawing anything.
+DESIGN.md §69 has the model, §69.3 the poses, §69.4 lip sync, §69.5 idle motion, §69.6 the
+stage, §69.7 layers and the camera, §69.8 props, §69.9 particles.
+
 Params can nest: use another `SceneParams` class as a field type (also in lists). Theme tokens
 are checked inside nested models too, and `vidgen list-scenes` prints the nested fields. A nested
 model that also takes a shorthand (the built-in `bullets` items are a string or `{text, icon}`:
@@ -494,9 +572,11 @@ class Capital(NarratedScene):
 **Generated pictures** (docs/CONFIG.md "Generated images"). A param typed
 `GenerateImage | None` (a top-level field of `Params`) is a `generate:` like the `image` scene's:
 `vidgen imagegen` finds it in any scene type, `vidgen validate` warns about it, and
-`generated_image(self.project, params.generate, self.theme)` returns the file to show — the
-stored picture once it is made, else a placeholder card with the prompt. Rendering never calls
-the provider.
+`self.generated_picture(params.generate)` returns the file to show — the stored picture once it
+is made, else a placeholder card with the prompt. Rendering never calls the provider. A scene
+type that sets the class attribute `uses_cartoon_style = True` (like `stage`) gets the video's
+`cartoon_style` words added to its prompts, by `vidgen imagegen` and by `generated_picture` alike
+(`generated_image(project, generate, theme, cartoon=True)` outside a scene).
 
 ```python
 @scene("backdrop_title")
@@ -508,14 +588,14 @@ class BackdropTitle(NarratedScene):
         generate: GenerateImage
 
     def construct(self):
-        picture = ImageMobject(str(generated_image(self.project, self.params.generate, self.theme)))
+        picture = ImageMobject(str(self.generated_picture(self.params.generate)))
         picture.scale_to_fit_width(self.frame_width).set_opacity(0.45)
         title = fit_text(self.params.title, self.safe_width, size="title")
         self.reveal([[FadeIn(picture), Write(title)]])
         self.finish()
 ```
 
-A `generate:` with `format: svg` (a vector picture) is stored as an `.svg`: `generated_image`
+A `generate:` with `format: svg` (a vector picture) is stored as an `.svg`: `generated_picture`
 returns that path once it is made (still a PNG placeholder before). Draw it as shapes with
 `load_vector(path, *, height=1.0, recolor="none" | "theme", theme=None, simplify=False)`, which
 sanitises the SVG first (no scripts, filters, rasters or text; gradients flattened; shapes and
@@ -534,7 +614,12 @@ Unknown sounds and bad values raise `VidgenError`. `self.sounds` is the scene's 
 (`names()`, `knows(name)`); `synthesize(name, duration, pitch, intensity)` returns a built-in
 sound's samples (48 kHz mono float32) if you want to analyse or mix one yourself. A scene type
 that should make a sound when it starts with `sfx: {auto: true}` sets the class attribute
-`entrance_sfx = ("whoosh", -3.0)` (sound, gain in dB), as `chapter` does.
+`entrance_sfx = ("whoosh", -3.0)` (sound, gain in dB), as `chapter` does. A scene type that
+wants sounds tied to the beat actions overrides `action_foley(self, action, options, animations,
+start, seconds)`: the action runner calls it for each built-in action as it starts playing, with
+its scene start time and the seconds it plays (after any shortening); the base class does
+nothing, `stage` plays its foley through the pure `foley_cues(PlayedAction(...))` (docs/CONFIG.md
+"Foley and music stings").
 
 ```python
 @scene("countdown")
@@ -912,18 +997,46 @@ beats after the action's own) to choose per use, e.g. by an option. `problems()`
 `(key, message)` pairs for checks that need more than the options (the target, `until`), and
 `provides()` the target names the use registers when applied (`scene.target(name, mob)` in
 `apply`), which later actions of the scene may then use — `vidgen validate` checks both.
+`scene_problems(scene_cls, params)` returns the problems that depend on the scene (the built-in
+`pan` checks its `to` with `scene_cls.camera_place(params, to)`).
+`character_needs()` names the entry of `vidgen.cartoon.cast.ACTION_NEEDS` (`"say"`, `"look_at"`,
+`"emote"`, ...) the use needs of the characters it targets; `vidgen validate` then warns when one
+lacks those parts (the built-in acting actions in `src/vidgen/scenes/acting.py`).
+`run_time_for(scene, targets)` returns the run time the use needs for its targets as they are
+when it falls due (the built-in `walk_to`: the distance over its speed), or `None` for the class's
+`run_time`; a `run_time:` in the config wins. `alters_targets = False` says the action only reads
+its targets (the built-in `pan` and `follow`), so it plays together with another action on them
+that falls due at the same moment instead of before or after it.
+A scene type that lists action type names in its class attribute `mid_still_actions` (the
+built-in `stage`: `walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`) gets a
+still half-way through each use of them whenever stills are taken (`vidgen storyboard`,
+`render --frames`), besides the beat ends (docs/CONFIG.md "Frame stills").
 The built-in `callout` action (`src/vidgen/scenes/callout_action.py`) is an example of all
 three, built on the callout helpers below. An action that draws nothing sets `animates = False`
 and implements `cue(self, scene, time)` instead of `apply`: the runner calls it when the beat
 starts with the scene time the use is due (`at`, on a frame), whatever the scene animates then;
 with `scene_targets = False` its `target` names something other than a scene target (checked by
 your `problems()`, not against the scene's targets). The built-in `sfx` action
-(`src/vidgen/scenes/sfx_action.py`) is both: `- sfx: pop` cues `scene.sfx("pop", time)`.
+(`src/vidgen/scenes/sfx_action.py`) is both: `- sfx: pop` cues `scene.sfx("pop", time)`. The
+built-in `particles` action (`src/vidgen/scenes/particles_action.py`) also has `scene_targets =
+False` (`- particles: snow`), but animates: its `apply` adds a mobject that moves on its own and
+returns no animation.
 
 **The camera.** `NarratedScene` is a Manim `MovingCameraScene`: `self.camera.frame` can be
 moved and scaled (`self.camera.frame.animate.set_width(4).move_to(dot)`). Every scene starts
 with it on the whole frame; the layout dump and `vidgen lint` take a moved camera into account
-(`camera.zoom` in the layout dump). The `zoom` action uses it. Animate the parts that are in the
+(`camera.zoom` in the layout dump). The `zoom`, `pan` and `follow` actions use it and keep the
+view inside `scene.camera_bounds()` (`(left, right, bottom, top)`; the frame, unless the scene
+type overrides it, as a wide `stage` does; clamp your own views with `view_center_within(bounds,
+center, width, height)`). A scene type that names places for `pan: {to: ...}` overrides the
+classmethod `camera_place(params, place)` (an x from 0 to 1 of the bounds' width). `follow_with_camera(x_of)`
+keeps the camera on the x a callable gives on every frame (`None` stops), and
+`add_camera_listener(callback)` calls `callback()` on every frame after the camera moved (the
+stage moves its parallax layers so); both run as one scene updater after every animation. A
+listener must place things from the camera alone: it also runs before each animation, and while
+the camera neither follows nor animates, Manim draws what comes before the first moving mobject
+once into a static image for that animation.
+`zoom` comes back to the view it started from. Animate the parts that are in the
 scene (`scene.on_screen_parts(t)`), not a group of them that was never added: Manim would add
 that group and draw its parts twice. New mobjects (like the marks above) are simply added by
 their animation. `vidgen list-scenes` lists your action with its options; `vidgen schema`

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- "Sprout": an original example character for vidgen's SVG naming convention (DESIGN.md §69.2).
+     Drawn facing right. Part ids: body, legs, arm_left, arm_right, head, eyes, brows, mouth;
+     other shapes of a part: <part>_<shape>, hidden with display="none" (eyes_closed, mouth_A, ...).
+     data-pivot="x y" (viewBox coordinates) is the point a part turns about. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 300" width="200" height="300"
+     stroke="#1F2430" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">
+  <!-- the far arm (the character's right arm), behind the body -->
+  <g id="arm_right" data-pivot="70 150">
+    <path d="M 70 150 L 50 200" fill="none" stroke-width="10" stroke="#3B7F81"/>
+    <circle cx="48" cy="206" r="9" fill="#F2C57C"/>
+  </g>
+  <g id="legs" data-pivot="100 226">
+    <rect x="78" y="220" width="16" height="58" rx="7" fill="#2E5E60"/>
+    <rect x="108" y="220" width="16" height="58" rx="7" fill="#2E5E60"/>
+    <ellipse cx="90" cy="282" rx="14" ry="8" fill="#1F2430"/>
+    <ellipse cx="120" cy="282" rx="14" ry="8" fill="#1F2430"/>
+  </g>
+  <rect id="body" x="60" y="130" width="82" height="100" rx="32" fill="#4FA3A5" data-pivot="101 230"/>
+  <!-- the near arm (the character's left arm), in front of the body -->
+  <g id="arm_left" data-pivot="132 150">
+    <path d="M 132 150 L 152 200" fill="none" stroke-width="10" stroke="#3B7F81"/>
+    <circle cx="154" cy="206" r="9" fill="#F2C57C"/>
+  </g>
+  <g id="head" data-pivot="102 132">
+    <path d="M 104 40 C 104 24 112 14 126 12 C 124 26 116 36 104 40 Z" fill="#7BC96F"/>
+    <circle cx="104" cy="86" r="48" fill="#F2C57C"/>
+  </g>
+  <g id="eyes" fill="#1F2430" stroke="none">
+    <circle cx="98" cy="80" r="6"/>
+    <circle cx="124" cy="80" r="6"/>
+  </g>
+  <g id="eyes_closed" display="none" fill="none" stroke-width="3">
+    <path d="M 92 81 Q 98 85 104 81"/>
+    <path d="M 118 81 Q 124 85 130 81"/>
+  </g>
+  <g id="brows" fill="none" stroke-width="3">
+    <path d="M 91 68 L 104 66"/>
+    <path d="M 118 66 L 131 68"/>
+  </g>
+  <path id="mouth" d="M 100 102 Q 112 112 124 102" fill="none" stroke-width="3"/>
+  <ellipse id="mouth_A" display="none" cx="112" cy="106" rx="8" ry="8" fill="#1F2430" stroke="none"/>
+  <ellipse id="mouth_E" display="none" cx="112" cy="105" rx="11" ry="4" fill="#1F2430" stroke="none"/>
+  <circle id="mouth_O" display="none" cx="112" cy="106" r="5" fill="#1F2430" stroke="none"/>
+  <path id="mouth_M" display="none" d="M 102 105 L 122 105" fill="none" stroke-width="3"/>
+</svg>

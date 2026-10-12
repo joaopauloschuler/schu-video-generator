@@ -13,7 +13,7 @@ a key, or changes a value's type, bumps :data:`SCHEMA_VERSION` (new keys do not)
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -40,6 +40,7 @@ if TYPE_CHECKING:
     from vidgen.lint import LintResult
     from vidgen.readback import ReadbackResult
     from vidgen.storyboard import StoryboardResult
+    from vidgen.cartoon.still import CharacterSheet
 
 #: Version of the JSON document shapes (not of vidgen).
 SCHEMA_VERSION = 1
@@ -844,6 +845,7 @@ def storyboard_document(
                     "beat": still.beat_id,
                     "k": still.k,
                     "n": still.n,
+                    "mid": still.mid,
                     "time": still.time,
                     "scene_time": still.scene_time,
                     "path": _path(still.path),
@@ -868,6 +870,35 @@ def storyboard_document(
         reused=result.reused,
         elapsed=round(elapsed, 3),
         sheets=sheets,
+    )
+
+
+# ----- character-sheet ---------------------------------------------------------------------------
+
+
+def character_sheet_document(
+    project: Project, sheets: Sequence[CharacterSheet], elapsed: float, warnings: Iterable[Mapping[str, Any]] = ()
+) -> dict[str, Any]:
+    """The ``vidgen character-sheet --json`` document: per character its sheet (PNG path, size)
+    and the names it shows by section."""
+    return envelope(
+        "character-sheet",
+        True,
+        warnings,
+        project=_path(project.root),
+        variant=project.variant,
+        elapsed=round(elapsed, 3),
+        sheets=[
+            {
+                "character": sheet.character,
+                "path": _path(sheet.path),
+                "width": sheet.width,
+                "height": sheet.height,
+                "bytes": sheet.bytes,
+                "sections": [{"kind": s.kind, "names": list(s.names), "own": list(s.own)} for s in sheet.sections],
+            }
+            for sheet in sheets
+        ],
     )
 
 

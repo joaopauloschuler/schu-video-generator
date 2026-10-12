@@ -19,7 +19,8 @@ narrates on the computer itself at no cost (see `vidgen guide audio`).
 
 Topics: `start` (rules at a glance), `workflow` (the loop), `pacing` (storytelling and on-screen
 text), `social` (vertical videos), `scenes` (which scene type), `design` (themes, colour, icons),
-`actions` (pointing at things), `overlays` (overlays, transitions, continuity), `audio` (voices,
+`actions` (pointing at things), `cartoons` (characters on a stage), `overlays` (overlays,
+transitions, continuity), `audio` (voices,
 pronunciation, effects, music), `examples` (good vs bad), `outputs` (slides, chapters,
 thumbnail, GIFs, translations, rights to your content), `troubleshooting` (validate and lint messages).
 
@@ -164,9 +165,9 @@ stdout, `{version, ok, warnings, ..., error?}`, exit code 0 exactly when `ok`. `
 commands are tools with the same JSON documents: `guide`, `plan`, `init`, `validate`, `schema`,
 `list_scenes`, `list_icons`, `list_themes`, `list_sfx`, `list_music`, `storyboard`, `lint`,
 `render`, `tts`, `imagegen`, `readback`, `slides`, `thumbnail`, `export`, `gallery`,
-`translate_template` (options in snake_case: `per_beat`, `fail_on`). Paths are relative to the
-server's root folder. `storyboard` returns the contact sheets as images (look at them; page with
-`image_offset`), `thumbnail` and `gallery` their pictures. `render` previews by default. `tts` and
+`translate_template`, `character_sheet` (options in snake_case: `per_beat`, `fail_on`). Paths are
+relative to the server's root folder. `storyboard` returns the contact sheets as images (look at
+them; page with `image_offset`), `thumbnail`, `gallery` and `character_sheet` their pictures. `render` previews by default. `tts` and
 `imagegen` are dry runs unless you pass `dry_run: false` and `confirm_cost: true`: run the dry
 run, tell the user what it will cost, and confirm only after they agree.
 
@@ -289,6 +290,7 @@ project's own scene types, in its theme).
 | a derivation with reasons | `equation_derivation` | `title`, `steps`, `colors`, `result` |
 | a short listing (≤ 15 lines) | `code` | `title`, `code`, `path`, `highlight` |
 | a long file, explained part by part | `code_walkthrough` | `title`, `path`, `code`, `steps`, `excerpt` |
+| characters on a set (a cartoon) | `stage` | `characters`, `props`, `background`, `image`, `generate`, `marks`, `ground`, `layers`, `width`, `particles` |
 | thanks, links, call to action | `end_card` | `title`, `lines`, `icon`, `logo` |
 
 How beats drive scenes: each type splits its content into **reveal steps** and plays step *i*
@@ -575,6 +577,24 @@ Minimal snippets (copy, then adapt):
     - text: "Then it takes one step per batch."
 ```
 
+```yaml
+# cartoons
+characters:              # top level of video.yaml: declared once, used by any stage
+  - {name: pip, look: {body: bean, hair: short}}
+  - {name: kit, look: {body: tall, hair: spiky, accessories: [scarf]}}
+scenes:
+  - id: park
+    type: stage
+    params:
+      background: [primary, highlight]   # a gradient sky; or image: / generate: for a picture
+      characters:
+        - {name: pip, at: left, pose: waving, expression: happy}
+        - {name: kit, at: right, depth: 0.3}   # further back: smaller, drawn behind
+    beats: [{text: "Pip waves at an old friend across the park."}]
+```
+
+A whole cartoon (characters, staging, shots, timing): `vidgen guide cartoons`.
+
 **When to write a custom scene type** (a Python file in the project's `extensions/`, see
 `docs/EXTENDING.md`): when the idea is a specific drawing no built-in can express (a mechanism,
 a geometric construction, a bespoke animation) and you would otherwise bend a built-in into
@@ -644,9 +664,25 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `dim` | push the rest back (`opacity`) | pair with a highlight, undo with `until` |
 | `callout` | label or point at something (`kind: box`, `circle`, `arrow`, `label`, `spotlight`, `magnifier`) | one per beat; gone at the next beat |
 | `zoom` | look closer at a detail, then come back | at most one per scene |
+| `pan` | on a `stage`: move the camera to a character or a mark (`to: right`) | on a stage wider than the frame (`width: 2`) |
+| `follow` | on a `stage`: keep the camera on a character as it moves | one at a time |
 | `reveal` | bring a later element in early | rarely: the default order is usually right |
 | `transform` | morph one target into another (`into`) | for equations and before / after |
 | `sfx` | a sound at that moment (`vidgen guide audio`) | the important moments only |
+| `particles` | rain, snow, sparkles, dust, confetti, smoke or bubbles over any scene (`- particles: confetti`; `density`, `area`, `keep: true` for the rest of the scene) | a mood or a celebration, not on dense text |
+| `say` | on a `stage`: pick who speaks the beat (`- say: kit`; `bubble: true` or a short text for a speech bubble) | without it the characters whose `voice` is the beat's voice speak; bubbles for short lines |
+| `look_at` | on a `stage`: a character looks at another, a prop, a mark or `camera` (`to:`) | when attention moves |
+| `turn` | on a `stage`: a character faces the other way (`to: left` / `right`) | |
+| `emote` | on a `stage`: change a character's expression (`to: happy`) | on the word that causes it (`at`) |
+| `pose` | on a `stage`: change a character's pose (`to: pointing`) | one pose change per beat |
+| `react` | on a `stage`: a listener's `expression` / `pose` for this beat only | the listener, not the speaker |
+| `walk_to` | on a `stage`: a character walks to a mark or x (`to:`; `speed`) | with `follow` on a wide stage; the walk takes its distance's time |
+| `enter` | on a `stage`: a character walks in from an edge (`side:`) to its mark (or `to:`) | it waits off stage until then |
+| `exit` | on a `stage`: a character walks out by an edge (`to: left` / `right`) | an `enter` brings it back |
+| `gesture` | on a `stage`: `to: point`, `wave`, `shrug`, `nod`, `shake_head` | on the word it goes with (`at`) |
+| `jump` | on a `stage`: a character jumps (`height`) | joy or surprise |
+| `keyframes` | on a `stage`: move a character, prop or part (`kit.arm_left`) through `keys: [{t, x, y, rotate, scale, ease}]` (`t` seconds or `"40%"` of the beat) | motion no other action has; keep it short |
+| `move_along` | on a `stage`: move a character, prop or part along `path: [[x, y], ...]` (smooth curve; `speed`) | flying, floating, a thrown ball |
 
 ```yaml
 - id: speeds
@@ -668,10 +704,148 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 
 - `at` (0–1, a fraction of the beat) times the action to the word it belongs to; actions never
   make a beat longer.
+- The `stage` actions (`say` to `move_along`) take the character as the target and the new
+  state as `to:` (`- emote: kit` + `to: happy`). How to use them together for a cartoon:
+  `vidgen guide cartoons`.
 - `until: <later beat id>` keeps a highlight / dim / callout on screen; without it a callout
   disappears at the next beat and a zoom comes back by the beat's end.
 - A callout without a target points at an `area: [x, y, w, h]` of the frame (fractions).
 - Check actions mid-beat with `vidgen storyboard --scene ID --per-beat 3`.
+
+<!-- topic: cartoons (also: cartoon, characters, character, stage, dialogue, acting) -->
+## Cartoons: characters on a stage
+
+**When to make one.** When the idea has people in it: two points of view arguing it out, a
+mistake and its fix, a story with a turn, a gentle explainer for beginners or children. A short
+sketch also works as the hook of an explainer, before the charts. Not for numbers, code or
+formulas: those have their own scene types, and a character pointing at a chart is slower than
+the chart. Keep it small: 2–3 characters, one set per scene, 30–90 s.
+
+**Original characters only.** Build them with the generator (`look:`) or from your own SVG
+(`look: {svg: ...}`, `docs/CONFIG.md` "Characters"). Never imitate a known character, mascot,
+brand figure or logo: not its silhouette and colours, its name or catchphrase, an SVG traced
+from it, nor "in the style of" a studio in a `generate:` prompt or `cartoon_style`. If someone
+asks for one, say vidgen makes original characters and offer one with the same role.
+- Tell them apart at a glance: a different `body` (`round` vs `tall`), one signature item each
+  (`hat`, `scarf`, `glasses`, `bag`), clothes in different theme tokens. A good test: would
+  the two silhouettes, filled black, still differ?
+- Give each a want and a temper (the eager one, the doubter); their starting `pose` and
+  `expression` say it before they speak. Short names, easy to say (the voice says them).
+- One voice each (`voices:` + `characters[].voice`), clearly different; keep the narrator's
+  voice for the few lines that set the scene.
+
+**Staging.**
+- **Marks**: two characters on `left` and `right` face each other (`facing: auto` turns them
+  towards the stage's middle; on a wide stage, or with both on one side, set `facing`). A third
+  goes at `centre` or further back. Keep characters at least a mark apart and the space above
+  their heads free for speech bubbles.
+- **Depth**: what matters stands in front (`depth: 0`); the set goes back (`depth: 0.5`–`0.8`:
+  higher, smaller, behind; the `ground_color` band reaches up to the deepest of them). Nothing in
+  front of a speaker's face (`hidden_speaker`).
+- **The set**: things at the edges (a `house`, a `tree`), the middle free for the action.
+  Props stay inside the frame: `far_left` / `far_right` cut a wide prop (`off_frame`). A
+  drawn set is a gradient `background`, a `ground_color`, `layers` (`hills`) and props; a
+  generated one (`generate:`) gets one top-level `cartoon_style` ("flat colours, thick outlines,
+  soft shadows") so all stages match, and a prompt that describes a set, not a scene: things at
+  the edges, an empty middle, the ground across the lower part, `negative: "people, animals,
+  text"` (`docs/CONFIG.md` "Generated backgrounds").
+- **Room to move**: a walk takes the time its distance needs (about 4 s from `left` to `right`
+  in 16:9), so give it a beat that long and end it on a free mark (`walk_overlap`). On a stage wider than
+  the frame (`width: 2`), the camera goes along with `follow`.
+
+**Shot variety.** Change the shot every few beats, as a comic changes panels:
+- **wide** (the whole stage): the first beat of a scene, entrances, anything two characters do
+  together;
+- **medium / close-up**: `zoom` on one character (`scale: 1.5` medium, `2`–`2.5` close-up),
+  for the punchline or the reaction to it. It comes back by the beat's end (`until:` holds it);
+  about one per scene, or close-ups stop meaning anything;
+- **moving**: `pan` to a character or a mark (`- {action: pan, to: right}`) and `follow` a
+  character or a flying prop across a wide stage.
+
+**Reaction shots.** The listener's face is often the joke. While one character speaks, the other
+`react`s (`expression` and / or `pose`, for that beat only) and `look_at`s the speaker; `emote` and
+`pose` change them for good. A `zoom` on the listener while the other talks is the reaction
+shot. `look_at: camera` turns a character to the viewer for an aside. Put the reaction where it
+happens: `at: 0.8` lands it on the end of the line, not on its first word.
+
+**Comic timing.**
+- **Short lines**: one line per beat, one speaker per beat (the beat's `voice`), 6–12 words.
+  Kokoro needs about 8 words to sound natural, and a two-word beat with actions trips
+  `rushed_animation`. It also reads fast (3.5–4.5 words a second): `speed: 0.8`–`0.85` on each
+  voice gives the lines room (`narration_speed` warns above 3.5 once the audio is real).
+- **Pauses**: every beat ends with `narration.pad` seconds of silence (0.35). Raise it for a
+  cartoon (`narration: {pad: 0.7}`) and put the reaction in it (`at: 0.8`): line, pause,
+  reaction. Commas and "..." are pauses in the voice (not in the word-count preview).
+- **Setup, pause, punchline**: the punchline is its own beat, after the reaction to the setup.
+  The narrator undercutting a character ("Moss was not, in fact, an expert") is a cheap, good
+  laugh.
+- **One thing at a time**: a move, then a line; at most one or two actions per character per
+  beat. Speech bubbles only for short lines (`bubble: "Up there!"`).
+- **Motion**: anticipation, squash and stretch, overshoot and follow-through are built in;
+  `cartoon_motion: calm` (top level, a stage or a character) tones them down for a quiet story.
+  For a move no action has, `keyframes` and `move_along` move a character, a prop or one part
+  (`kit.arm_left`); `docs/CONFIG.md` "Keyframes and motion paths".
+- **Sound**: walks, entrances, exits, jumps and a `surprised` face make their own sounds
+  (foley: footsteps, whoosh, boing, pop), timed to the action; `foley: false` (top level or a
+  stage) turns them off. A beat's `sting: reveal | comic | sad` adds a short music sting
+  (`reveal` as the beat starts, `comic` and `sad` in the pause after the line), ducked under the
+  voice. One or two per cartoon, on the real punchline, or they stop being funny.
+
+**The loop for a cartoon.**
+1. `vidgen character-sheet NAME` (or `--all`): every pose, expression and mouth shape on one PNG.
+   Fix looks that are hard to tell apart now, before writing scenes.
+2. `vidgen validate --json`: unknown marks, poses and expressions, a `say` by a character
+   without a voice, and warnings for actions a character lacks the parts for (an SVG without
+   arms cannot `wave`).
+3. `vidgen storyboard --scene ID`: each still is a comic panel. The ½ stills are half-way
+   through a walk, gesture, jump or path. Ask: is it clear who speaks? Are both faces visible,
+   facing each other? Does the reaction read without the words? Is anything cut by the edge?
+4. `vidgen lint --json`: the cartoon rules `off_stage`, `character_overlap`, `walk_overlap`,
+   `bubble_overlap`, `facing_away`, `hidden_speaker` and `mouth_without_voice` (fixes in
+   `vidgen guide troubleshooting`).
+5. Voices: with Kokoro (`vidgen guide audio`) `vidgen tts` is free and writes the lip sync
+   tracks; then storyboard and lint again, since real lines change the timing.
+
+```yaml
+voice: {provider: kokoro, voice: bf_emma, speed: 0.8}   # the narrator, slowed down
+voices:
+  dot_voice: {voice: af_bella, speed: 0.85, label: Dot}
+  moss_voice: {voice: am_michael, speed: 0.85, label: Moss}
+narration: {pad: 0.7}                              # room for reactions after each line
+characters:
+  - {name: dot, voice: dot_voice, look: {body: round, hair: bun, accessories: [scarf]}}
+  - {name: moss, voice: moss_voice, look: {body: tall, eyes: sleepy, accessories: [hat, glasses]}}
+scenes:
+  - id: yard
+    type: stage
+    params:
+      background: ["#9CCBEA", "#E4F3FB"]
+      ground_color: tertiary
+      props: [{prop: house, at: 0.17, depth: 0.7}, {prop: box, name: kite, at: 0.43}]
+      characters:
+        - {name: dot, at: left}
+        - {name: moss, at: right, pose: arms_crossed}
+    beats:
+      - text: "On the windiest day of the year, Dot had a plan."
+      - text: "Moss, look! I built a kite that flies by itself."
+        voice: dot_voice
+        actions:
+          - {jump: dot, at: 0.1}
+          - {look_at: moss, to: kite, at: 0.5}
+      - text: "Dot, that is a cardboard box with a string on it."
+        voice: moss_voice
+        actions:
+          - {look_at: moss, to: dot}
+          - {react: dot, expression: worried, at: 0.8}   # in the pause after the line
+      - text: "Moss was not, in fact, an expert on boxes."
+        sting: comic                                     # ba-dum-tss after the line
+        actions:                                         # the narrator's aside: a close-up
+          - {zoom: moss, scale: 2, at: 0.1}
+          - {look_at: moss, to: camera, at: 0.4}
+```
+
+A complete two-scene cartoon (under a minute, a wide stage, `follow` on a flying prop, a close-up
+punchline) is `examples/cartoon/` in the schu-video-generator repository.
 
 <!-- topic: overlays (also: transitions, transition, carry, continuity, captions) -->
 ## Overlays, transitions and continuity
@@ -818,7 +992,8 @@ scenes:
 **Sound effects** (`vidgen list-sfx` describes each in words): `whoosh` (something moves in),
 `pop` (an item appears), `tick` (steps, counting), `click` (a UI click), `chime` (a key
 insight), `success` / `error` (a result), `riser` (tension before a reveal, `align: end`),
-`thud` (a big number lands), `swoosh`, `typing`. Two or three per minute, on the moments that
+`thud` (a big number lands), `swoosh`, `typing`; `footstep`, `boing` and the music stings
+`sting_reveal` / `sting_comic` / `sting_sad` are for cartoons (`vidgen guide cartoons`). Two or three per minute, on the moments that
 matter; `sfx: {auto: true}` adds soft ones to built-in reveals if you want a uniform feel.
 
 ```yaml
@@ -1062,6 +1237,7 @@ scenes:
   cost; placeholders render until you run `vidgen imagegen`. Describe a scene, never text,
   charts or logos (vidgen draws those better), and set one `imagegen: {style: ...}` for the
   whole video.
+- **Cartoon backgrounds** (`stage` `generate:`): see "The set" in `vidgen guide cartoons`.
 - **Choosing an image provider**: `openai` (the default; `OPENAI_API_KEY`, gpt-image-1) is one
   good model at a known price. `imagegen: {provider: openrouter, model: author/name}`
   (`OPENROUTER_API_KEY`) reaches many models with one key — some cheaper per picture
@@ -1108,7 +1284,7 @@ scenes:
 | `duplicate beat id` | beat ids are unique in the whole video; rename one |
 | `unknown target 'x' ...; did you mean ... (targets: ...)` | pick a name from the list (labels are case-sensitive: `bar:4K`) |
 | `until 'x' is not a later beat of scene 'y'` | `until` names a later beat id of the same scene |
-| `unknown action 'x'` / `unknown option` | actions are `reveal`, `dim`, `highlight`, `zoom`, `transform`, `callout`, `sfx` |
+| `unknown action 'x'` / `unknown option` | actions are `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along` |
 | `labels has 2 entries but values has 3` | one value per label |
 | `unknown theme color 'x'` | use a token (`primary`, `highlight`...) or quoted hex `"#0B5FFF"`, or add it to `theme.colors` |
 | `invalid hex color` | `#RGB`, `#RRGGBB` or `#RRGGBBAA`, in quotes (YAML reads `#` as a comment) |
@@ -1132,6 +1308,13 @@ install; `vidgen validate` warns when it is missing.
 | `label_spacing` | a callout label touches other text (a value, the title) | another `side:`, an `arrow` instead of a `label`, a shorter label |
 | `contrast` | text hard to read on its background | theme tokens instead of custom colours; another preset |
 | `overlay_overlap` | an overlay covers scene text | `reserve: true` on the overlay, or another corner / position |
+| `walk_overlap` | a character's walk ends on another character | walk it to another mark or x, or move the other one first |
+| `off_stage` | a character is cut by the edge of the view | another mark or x inside the view, or `pan` to it |
+| `character_overlap` | two characters stand on each other | marks further apart, or `walk_to` one away |
+| `bubble_overlap` | a speech bubble covers a face or another bubble | a shorter `bubble` text, characters further apart, or the lines in different beats |
+| `facing_away` | a speaker faces away from the one it talks to (last looked at, else the nearest) | `turn`, `look_at: <listener>`, or swap their marks |
+| `hidden_speaker` | something in front hides the speaker's face | move one of them, or a smaller `depth` for the speaker |
+| `mouth_without_voice` | a mouth still shows speech after the narration ended | `vidgen tts` again; in a custom scene, lip sync with `clock=self.beat_clock()` |
 | `dead_air` | nothing moved for over 6 s | split the beat, add a reveal or an action, shorten a silent `duration` |
 | `narration_speed` | words per second outside 1.8–3.5 (English) | shorten or lengthen the beat's text; without audio it is only `info` (an estimate) |
 | `animation_overrun` | animations ran past the narration | a custom scene's animations are too long for the beat |

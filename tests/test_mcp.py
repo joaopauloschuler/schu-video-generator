@@ -9,6 +9,7 @@ import base64
 import io
 import json
 import os
+import shutil
 import sys
 import urllib.request
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -202,6 +203,7 @@ def test_page_of() -> None:
 TOOLS = {
     "guide", "init", "plan", "validate", "schema", "lint", "storyboard", "list_scenes", "list_icons", "list_themes", "list_sfx",
     "list_music", "render", "tts", "imagegen", "readback", "slides", "thumbnail", "export", "gallery", "translate_template",
+    "character_sheet",
 }
 
 
@@ -354,5 +356,23 @@ def test_server_storyboard_and_lint_return_pictures(tmp_path: Path) -> None:
 
         doc = doc_of(await client.call_tool("lint", {"project": "proj", "fail_on": "never"}))
         assert doc["command"] == "lint" and doc["stills"] == 2 and doc["rendered"] == []  # the storyboard's stills reused
+
+    run_session(tmp_path, body)
+
+
+@pytest.mark.render
+def test_server_character_sheet_returns_the_sheets(tmp_path: Path) -> None:
+    example = Path(__file__).resolve().parents[1] / "examples" / "svg_character"
+    shutil.copytree(example, tmp_path / "cast", ignore=shutil.ignore_patterns("build", "exports", "output"))
+
+    async def body(client: Any) -> None:
+        result = await client.call_tool("character_sheet", {"project": "cast", "name": "pebble"})
+        doc = doc_of(result)
+        images = [c for c in result.content if c.type == "image"]
+        assert [s["character"] for s in doc["sheets"]] == ["pebble"] and len(images) == 1
+        assert Image.open(io.BytesIO(base64.b64decode(images[0].data))).size == (doc["sheets"][0]["width"], doc["sheets"][0]["height"])
+        doc = doc_of(await client.call_tool("character_sheet", {"project": "cast"}))   # every character
+        assert [s["character"] for s in doc["sheets"]] == ["sprout", "pebble"] and doc["mcp_images"]["total"] == 2
+        assert "unknown character" in error_text(await client.call_tool("character_sheet", {"project": "cast", "name": "nobody"}))
 
     run_session(tmp_path, body)

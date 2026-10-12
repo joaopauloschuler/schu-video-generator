@@ -53,6 +53,16 @@ def test_samples_prefer_a_real_picture_and_name_shipped_files() -> None:
         gallery.sample_asset("code", "assets/train.py")
 
 
+def test_a_config_snippet_brings_its_characters() -> None:
+    stage = gallery.guide_samples()["stage"]
+    assert stage.group == "cartoons" and stage.config["type"] == "stage"
+    assert {c["name"] for c in stage.characters} == {c["name"] for c in stage.config["params"]["characters"]}
+    assert stage.yaml.startswith("characters:") and "type: stage" in stage.yaml   # the page shows the whole config
+    config = gallery.work_config(builtin_gallery(), None, None)
+    assert [c["name"] for c in config["characters"]] == [c["name"] for c in stage.characters]
+    assert gallery._config_snippet("# data\n- id: a\n  type: stat\n") is None
+
+
 def test_snippet_items_keep_the_guide_text() -> None:
     group, items = gallery._snippet_items("# data\n- id: a\n  type: stat\n- id: b\n  type: pie\n  params: {x: 1}\n")
     assert group == "data"

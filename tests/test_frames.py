@@ -17,7 +17,7 @@ from PIL import Image
 
 from test_json_output import documented
 from test_render import make_tone, write_project
-from vidgen.capture import CapturedFrame, FrameCapture, StillWriter, plan_targets
+from vidgen.capture import MAX_MID_STILLS, CapturedFrame, FrameCapture, StillWriter, mid_action_frame, mid_action_frames, plan_targets
 from vidgen.cli import main
 from vidgen.errors import VidgenError
 from vidgen.project import Project
@@ -110,6 +110,46 @@ def test_capture_validation_and_empty_beat() -> None:
     capture.end_segment("b")  # no frame written during the beat: no still
     capture.end_segment("unknown")
     assert seen == []
+
+
+def test_mid_action_frames() -> None:
+    """Half-way through each action, kept clear of the beat's other stills, at most MAX_MID_STILLS."""
+    assert mid_action_frame(10, 20, [], min_gap=2) == 20
+    assert mid_action_frame(10, 21, [], min_gap=2) == 20          # the middle frame of an odd count
+    assert mid_action_frame(10, 1, [], min_gap=2) is None          # too short to have a middle
+    assert mid_action_frame(10, 20, [21], min_gap=2) is None       # the beat's end (or another still) is close
+    assert mid_action_frame(10, 20, [22], min_gap=2) == 20
+    # a walk, a gesture during it (same middle: dropped), a jump later, the beat's end at 59
+    assert mid_action_frames([(0, 30), (5, 20), (40, 6)], [59], min_gap=3) == [15, 43]
+    assert mid_action_frames([(0, 10), (0, 12)], [], min_gap=1) == [5, 6]
+    many = [(10 * k, 4) for k in range(8)]
+    assert MAX_MID_STILLS == 3 and mid_action_frames(many, [], min_gap=1) == [2, 12, 22]
+    assert mid_action_frames(many, [], min_gap=1, limit=5) == [2, 12, 22, 32, 42]
+
+
+def test_capture_takes_mid_action_stills(tmp_path: Path) -> None:
+    """``add_mid_still`` plans a k=0 still half-way through an action; the writer names it by frame."""
+    from manim import tempconfig
+
+    scene = fake_scene()
+    writer = StillWriter(tmp_path / "f")
+    seen: list[CapturedFrame] = []
+    capture = FrameCapture(1, [lambda sc, cap: seen.append(cap), writer])
+    capture.attach(scene)  # type: ignore[arg-type]
+    with tempconfig({"frame_rate": 10}):   # gap 0.4 s = 4 frames
+        capture.begin_segment("b1", 30, include_end=False)   # its end still at frame 29
+        scene.renderer.add_frame(pixel(1), 4)
+        assert capture.add_mid_still("b1", 4, 12, "walk_to pip") == 10
+        assert capture.add_mid_still("b1", 4, 13, "gesture kit") is None     # 10 is taken
+        assert capture.add_mid_still("b1", 20, 16, "jump pip") is None       # 28: next to the end
+        assert capture.add_mid_still("b1", 0, 2, "gesture pip") is None      # already over
+        scene.renderer.add_frame(pixel(2), 26)
+        capture.end_segment("b1")
+    got = [(c.beat_id, c.k, c.frame, c.mid, int(c.pixels[0, 0, 0])) for c in seen]
+    assert got == [("b1", 0, 10, "walk_to pip", 2), ("b1", 1, 29, None, 2)]
+    index = writer.index("sc", 1, 3, 2, 10)
+    assert index["frames"][0] == {"beat": "b1", "k": 0, "n": 1, "frame": 10, "time": 1.0, "path": "b1-m10.png", "mid": "walk_to pip"}
+    assert "mid" not in index["frames"][1] and (tmp_path / "f" / "b1-m10.png").is_file()
 
 
 def test_still_writer(tmp_path: Path) -> None:

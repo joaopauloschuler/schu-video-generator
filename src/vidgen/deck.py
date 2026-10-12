@@ -216,7 +216,11 @@ def _scene_stills(project: Project, preview: bool, scene_id: str) -> tuple[dict[
     timings = _read_json(scene_timings_path(project, preview, scene_id))
     folder = scene_frames_dir(project, preview, scene_id)
     index = _read_json(folder / "index.json")
-    stills = [_Still(s["beat"], int(s["k"]), int(s["n"]), float(s["time"]), folder / s["path"]) for s in index.get("frames", [])]
+    stills = [
+        _Still(s["beat"], int(s["k"]), int(s["n"]), float(s["time"]), folder / s["path"])
+        for s in index.get("frames", [])
+        if "mid" not in s  # mid-action stills are for the storyboard
+    ]
     if not stills:
         raise VidgenError(f"scene '{scene_id}' has no stills in {folder}; render it again (--force)")
     return timings, stills

@@ -35,7 +35,7 @@ TEMPLATE_DOTFILES: tuple[str, ...] = ("gitignore",)
 JSON_COMMANDS: tuple[str, ...] = (
     "validate", "list-scenes", "list-themes", "list-icons", "list-sfx", "list-music", "render", "schema", "storyboard", "lint",
     "thumbnail", "export", "translate-template", "slides", "readback", "guide", "gallery", "plan",
-    "init", "tts", "imagegen",
+    "init", "tts", "imagegen", "character-sheet",
 )
 
 #: What a command function returns: an exit code, or (with ``--json``) the JSON document.
@@ -151,12 +151,14 @@ def project_problems(project: Project) -> list[Problem]:
     and runs the type's ``validate_project`` (e.g. missing asset files); checks the beats'
     ``actions`` (action names, options, targets of the scene) and the ``overlays`` (types,
     options, scene references; DESIGN.md §41); also checks the project's ``assets/icons``,
-    the sounds of the scenes' ``sfx:`` lists (§47), the ``music:`` sources (§48) and a designed
-    ``thumbnail:``'s icon, image, preset and background (§53).
+    the sounds of the scenes' ``sfx:`` lists (§47), the ``music:`` sources (§48), a designed
+    ``thumbnail:``'s icon, image, preset and background (§53) and the ``characters:`` colours,
+    SVG files (§69) and the shapes of their own poses (§69.3).
     """
     from vidgen import extensions, registry
     from vidgen.actions import scene_actions
     from vidgen.carry import carry_problems
+    from vidgen.cartoon.cast import character_color_problems, character_look_problems, character_pose_problems
     from vidgen.icons import PROJECT_ICONS_DIR, project_icons
     from vidgen.imagegen import imagegen_problems
     from vidgen.music import config_problems as music_problems
@@ -200,6 +202,9 @@ def project_problems(project: Project) -> list[Problem]:
                     problems.append(Problem(f"scenes[{i}]", str(exc)))
             problems.extend(overlay_problems(project, theme))
             problems.extend(voice_color_problems(project.config, theme))
+            problems.extend(character_color_problems(project.config, theme))
+            problems.extend(character_look_problems(project.config, project.root))
+            problems.extend(character_pose_problems(project.config, project.root))
             problems.extend(transition_color_problems(project.config, theme))
             problems.extend(carry_problems(project.config))
             problems.extend(Problem(loc, message) for loc, message in sfx_problems(project.config, project.root))
@@ -295,8 +300,12 @@ def validate_warnings(project: Project) -> list[str]:
     (§50), a YouTube chapter list YouTube would ignore (§52), texts a translation file leaves in
     the source language and base pronunciations kept in another language (§54), generated
     pictures not made yet and prompts asking for words in a picture (§58), OpenRouter TTS models
-    and voices not in the bundled list and ``timestamps`` it cannot honour (§66)."""
+    and voices not in the bundled list and ``timestamps`` it cannot honour (§66), and SVG
+    characters' unavailable actions and part warnings (§69.2), parts the characters' own
+    poses name that they do not have (§69.3), characters sharing a voice and beat actions on a
+    character that lacks the parts they need (§69.11)."""
     from vidgen.carry import carry_warnings
+    from vidgen.cartoon.cast import acting_warnings, character_look_warnings, character_pose_warnings, shared_voice_warnings
     from vidgen.chapter_export import chapter_warnings
     from vidgen.imagegen import imagegen_warnings
     from vidgen.transitions import transition_warnings
@@ -315,6 +324,10 @@ def validate_warnings(project: Project) -> list[str]:
         + translation_warnings(project)
         + language_warnings(project)
         + imagegen_warnings(project)
+        + character_look_warnings(project.config, project.root)
+        + character_pose_warnings(project.config, project.root)
+        + shared_voice_warnings(project.config)
+        + acting_warnings(project)
     )
 
 
@@ -653,6 +666,57 @@ def cmd_thumbnail(args: argparse.Namespace) -> CommandResult:
         print(f"rendered {len(result.rendered)} scene(s) for it: {', '.join(result.rendered)}")
     for check in result.checks:
         print(str(check))
+    return 0
+
+
+def cmd_character(args: argparse.Namespace) -> int:
+    """Print a declared character's look, colours, poses and expressions; with ``--png``, also write one still of it."""
+    from vidgen import extensions
+    from vidgen.cartoon.cast import character_lines, find_character, pose_lines
+
+    project = Project.load(args.project, variant=args.variant)
+    entry = find_character(project.config, args.name)
+    with extensions.project_session(project) as theme:
+        for line in [*character_lines(entry, theme, project.root), *pose_lines(entry)]:
+            print(line)
+        if args.png is not None:
+            from vidgen.cartoon.still import write_character_png
+
+            still = write_character_png(project, entry, theme, Path(args.png) if args.png else None, facing=args.facing)
+            print(f"png: {still.path}  ({still.width}x{still.height}, facing {args.facing})")
+    return 0
+
+
+def cmd_character_sheet(args: argparse.Namespace) -> CommandResult:
+    """Write a character sheet (every pose, expression and mouth shape on one PNG) of one declared
+    character, or of each with no NAME / ``--all``."""
+    from vidgen import extensions
+    from vidgen.cartoon.cast import find_character
+    from vidgen.cartoon.still import write_character_sheet
+
+    started = time.monotonic()
+    name, where = args.name, args.project
+    if args.all:
+        if name is not None and where != ".":
+            raise VidgenError("--all takes no character name: vidgen character-sheet --all [PROJECT]")
+        name, where = None, name or where
+    project = Project.load(where, variant=args.variant)
+    if name is not None and args.output:
+        targets = [(find_character(project.config, name), Path(args.output))]
+    elif args.output:
+        raise VidgenError("--output needs a character NAME (each character gets its own sheet)")
+    else:
+        entries = [find_character(project.config, name)] if name is not None else list(project.config.characters)
+        if not entries:
+            raise VidgenError("the video declares no characters (characters: in video.yaml)")
+        targets = [(entry, None) for entry in entries]
+    with extensions.project_session(project) as theme:
+        sheets = [write_character_sheet(project, entry, theme, path) for entry, path in targets]
+    if args.json:
+        return jsonout.character_sheet_document(project, sheets, time.monotonic() - started)
+    for sheet in sheets:
+        counts = ", ".join(f"{len(s.names)} {s.title}" for s in sheet.sections)
+        print(f"character sheet: {sheet.path}  ({sheet.width}x{sheet.height}, {counts}, {sheet.bytes / 1e3:.0f} KB)")
     return 0
 
 
@@ -1247,6 +1311,27 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--jobs", "-j", type=int, default=1, metavar="N", help="render N scenes in parallel when scenes must be rendered (default: 1)")
     output_dir_arg(p)
     p.set_defaults(func=cmd_thumbnail)
+
+    p = sub.add_parser("character", help="show a character of characters: (its look and colours); --png writes one still of it")
+    p.add_argument("name", help="the character's name (from characters:)")
+    project_arg(p)
+    p.add_argument("--variant", metavar="NAME", help="apply a named variant")
+    p.add_argument(
+        "--png", nargs="?", const="", metavar="FILE",
+        help="write a still of the character to FILE (default: <project>/exports/character_<name>.png)",
+    )
+    p.add_argument("--facing", choices=["right", "left"], default="right", help="which way the character faces in the still (default: right)")
+    p.set_defaults(func=cmd_character)
+
+    p = sub.add_parser(
+        "character-sheet", help="one PNG per character with every pose, expression and mouth shape (exports/character_sheet_<name>.png)"
+    )
+    p.add_argument("name", nargs="?", help="the character's name (from characters:; default: every character)")
+    project_arg(p)
+    p.add_argument("--all", action="store_true", help="every character; the one positional is then the project (vidgen character-sheet --all PROJECT)")
+    p.add_argument("--variant", metavar="NAME", help="apply a named variant")
+    p.add_argument("--output", metavar="FILE", help="with NAME: write the sheet to FILE (default: <project>/exports/character_sheet_<name>.png)")
+    p.set_defaults(func=cmd_character_sheet)
 
     p = sub.add_parser("slides", help="an HTML (or PDF) slide deck of the video's key frames, narration as speaker notes (exports/)")
     project_arg(p)

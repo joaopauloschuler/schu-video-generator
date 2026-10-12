@@ -140,6 +140,10 @@ class Action:
     #: Whether it is built for the camera as it will be (``callout``: a label readable in a zoom):
     #: when it falls due together with a camera move, it plays after that move.
     after_camera: ClassVar[bool] = False
+    #: Whether it changes its targets. ``False`` (``pan``, ``follow``): it only reads where they
+    #: are, so it plays together with an action on the same targets that falls due with it (a
+    #: ``follow`` and a ``walk_to``), instead of before or after it.
+    alters_targets: ClassVar[bool] = True
     #: Options whose values are target names (checked like ``target``; e.g. ``into`` of
     #: ``transform``). Resolve them with :meth:`NarratedScene.find_targets`.
     target_options: ClassVar[tuple[str, ...]] = ()
@@ -163,6 +167,24 @@ class Action:
         """Problems of this use that its ``Options`` alone cannot see (they involve ``target``,
         ``until``...), as ``(key, message)``; reported by ``vidgen validate``. Default: none."""
         return []
+
+    def scene_problems(self, scene_cls: type[NarratedScene], params: Any) -> list[tuple[str, str]]:
+        """Problems of this use in a scene of type ``scene_cls`` with validated ``params`` (``pan``:
+        a place the scene does not know), as ``(key, message)``; reported by ``vidgen validate``.
+        Default: none."""
+        return []
+
+    def character_needs(self) -> str | None:
+        """The :data:`~vidgen.cartoon.cast.ACTION_NEEDS` entry (``"say"``, ``"look_at"``...) this
+        use needs of each character it targets: ``vidgen validate`` warns when one lacks those
+        parts. Default: none."""
+        return None
+
+    def run_time_for(self, scene: NarratedScene, targets: list[Target]) -> float | None:
+        """The run time this use needs for ``targets`` as they are when it falls due (``walk_to``:
+        the distance over the speed), or ``None`` for the class's :attr:`run_time`. A
+        ``run_time:`` in the config wins. Default: ``None``."""
+        return None
 
     def provides(self) -> list[str]:
         """Target names this use registers when it is applied (with :meth:`NarratedScene.target
@@ -328,6 +350,8 @@ def scene_actions(
                 problems.append((f"{where}.target", f"action '{act.action}' needs a target"))
             instance = kind.cls(options, act)
             problems += [(f"{where}.{key}", message) for key, message in instance.problems()]
+            if params is not None:
+                problems += [(f"{where}.{key}", message) for key, message in instance.scene_problems(cls, params)]
             checked = [("target", p) for p in act.targets()] if kind.cls.scene_targets else []
             for option in kind.cls.target_options:
                 value = getattr(options, option)
@@ -387,6 +411,14 @@ def _rank(due: _Due) -> int:
     return 2 if due.use.kind.cls.temporary else 0
 
 
+def _changed(due: _Due) -> set[int]:
+    """Ids of the mobjects ``due`` changes: its targets' families (none for an action that only
+    reads them, :attr:`Action.alters_targets`)."""
+    if not due.use.kind.cls.alters_targets:
+        return set()
+    return {id(m) for t in due.use.targets for m in t.mobject.get_family()}
+
+
 def _after_camera(due: _Due) -> bool:
     """An action built for the camera's coming view (not its undoing)."""
     return not due.revert and due.use.kind.cls.after_camera
@@ -411,6 +443,7 @@ class ActionRunner:
             later = ids[ids.index(u.beat) + 1 :] if u.beat in ids else []
             u.until = u.config.until or u.action.default_until(later)
         self._pending: list[_Due] = []
+        self._built: list[tuple[_Due, list[Animation]]] = []  # what the phase being built applied
         self._end = 0
         self._beat = ""
         #: Seconds of the beat's remaining time the scene has committed after the current wait
@@ -480,14 +513,19 @@ class ActionRunner:
         return due
 
     def _resolve(self, use: ActionUse) -> list[Target]:
-        """The registered targets the use's patterns select (in registration order)."""
+        """The registered targets the use's patterns select (in registration order); none when
+        its ``target`` names something else (:attr:`Action.scene_targets` ``False``)."""
         found: list[Target] = []
+        if not use.kind.cls.scene_targets:
+            return found
         for pattern in use.config.targets():
             found += [t for t in resolve_targets(self.scene, pattern, use.location) if t not in found]
         return found
 
-    def _phases(self, due: list[_Due]) -> list[tuple[Callable[[], list[Animation]], float]]:
-        """Hidden targets' entrances first, then batches of actions whose targets do not overlap."""
+    def _phases(self, due: list[_Due]) -> list[tuple[Callable[[], list[Animation]], float, str | None]]:
+        """Hidden targets' entrances first, then batches of actions whose targets do not overlap.
+        Each phase: how to build its animations, its natural run time, and the label of its
+        actions that want a mid-action still (:attr:`NarratedScene.mid_still_actions`), if any."""
         scene = self.scene
         for d in due:
             d.use.targets = self._resolve(d.use)
@@ -495,37 +533,52 @@ class ActionRunner:
         for d in due:
             if not d.revert and d.use.kind.cls.needs_visible:
                 hidden += [t for t in d.use.targets if t not in hidden and not scene.is_shown(t)]
-        phases: list[tuple[Callable[[], list[Animation]], float]] = []
+        phases: list[tuple[Callable[[], list[Animation]], float, str | None]] = []
         if hidden:
-            phases.append((lambda: [a for t in hidden for a in scene.entrance(t)], self.reveal_time))
+            phases.append((lambda: [a for t in hidden for a in scene.entrance(t)], self.reveal_time, None))
         batch: list[_Due] = []
         batches = [batch]
         camera = id(getattr(scene.camera, "frame", scene.camera))
         if any(d.use.kind.cls.moves_camera for d in due):   # camera moves before what is built for the view
             due = [d for d in due if not _after_camera(d)] + [d for d in due if _after_camera(d)]
         for d in due:
-            mobs = {id(m) for t in d.use.targets for m in t.mobject.get_family()}
+            mobs = _changed(d)
             mobs |= {camera} if d.use.kind.cls.moves_camera or _after_camera(d) else set()
-            taken = {id(m) for b in batch for t in b.use.targets for m in t.mobject.get_family()}
+            taken = {m for b in batch for m in _changed(b)}
             taken |= {camera} if any(b.use.kind.cls.moves_camera for b in batch) else set()
             if mobs & taken:
                 batch = []
                 batches.append(batch)
             batch.append(d)
+        wanted = type(scene).mid_still_actions
         for b in batches:
             if b:
-                phases.append((lambda b=b: self._build(b), max(d.use.run_time for d in b)))
+                mid = [d.use.config.describe() for d in b if not d.revert and d.use.kind.name in wanted]
+                phases.append((lambda b=b: self._build(b), max(self._natural(d) for d in b), ", ".join(mid) or None))
         return phases
 
+    def _natural(self, due: _Due) -> float:
+        """The run time ``due`` asks for: the config's, else the action's for its targets now
+        (:meth:`Action.run_time_for`; not when undoing), else its class's."""
+        if due.use.config.run_time or due.revert:
+            return due.use.run_time
+        wanted = due.use.action.run_time_for(self.scene, due.use.targets)
+        return due.use.run_time if wanted is None else float(wanted)
+
     def _build(self, batch: list[_Due]) -> list[Animation]:
+        """The batch's animations; records in :attr:`_built` each built-in action applied with
+        the animations it made (for :meth:`NarratedScene.action_foley`)."""
         anims: list[Animation] = []
+        self._built = []
         for d in batch:
             act = d.use.action
             if d.revert and not d.use.applied:
                 continue
             made = act.revert(self.scene, d.use.targets) if d.revert else act.apply(self.scene, d.use.targets)
-            if made and not d.revert and d.use.kind.builtin and not self._has_sounds(d.use.beat):
-                self.scene.auto_sfx(d.use.kind.name)  # with sfx: {auto: true}; it plays now
+            if made and not d.revert and d.use.kind.builtin:
+                self._built.append((d, made))
+                if not self._has_sounds(d.use.beat):
+                    self.scene.auto_sfx(d.use.kind.name)  # with sfx: {auto: true}; it plays now
             anims += made
             d.use.applied = not d.revert
         return anims
@@ -546,7 +599,8 @@ class ActionRunner:
         remaining = max(self._end - self._now() - round(self.held * fps), 0) / fps
         total = sum(p[1] for p in phases)
         factor = min(1.0, remaining / (total + reserved)) if total > 0 else 1.0
-        for build, natural in phases:
+        for build, natural, mid in phases:
+            self._built = []
             anims = build()
             if not anims:
                 continue
@@ -554,6 +608,10 @@ class ActionRunner:
             if instant or frames < 1:
                 self.scene._apply_now(anims)
                 continue
+            if mid is not None and self.scene.capture is not None:
+                self.scene.capture.add_mid_still(self._beat, self._now(), frames, mid)
+            for d, made in self._built:  # sounds tied to the actions, timed as they play (§69.19)
+                self.scene.action_foley(d.use.kind.name, d.use.action.options, made, self._now() / fps, frames / fps)
             self.scene._requested = natural if factor < 1 - 1e-9 else None
             try:
                 self.scene.play(*anims, run_time=frames / fps)

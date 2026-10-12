@@ -1,0 +1,35 @@
+# An imported SVG character (DESIGN.md §69.2, docs/CONFIG.md "Characters"): assets/sprout.svg is
+# split into parts by its element ids (body, legs, arm_left, arm_right, head, eyes, brows, mouth;
+# eyes_closed and mouth_A / _E / _O / _M are other shapes), pivots from data-pivot="x y".
+#   vidgen validate examples/svg_character                  # lists the actions sprout cannot do
+#   vidgen character sprout examples/svg_character --png    # one still: exports/character_sprout.png
+#   vidgen character pebble examples/svg_character --png    # a generated character, for comparison
+#   vidgen storyboard examples/svg_character                # the two on a stage (DESIGN.md §69.6)
+# Both know the same poses and expressions (vidgen character lists them); sprout adds its own.
+title: "An SVG character"
+output: svg_character
+
+format: {width: 1920, height: 1080, fps: 30}
+preview: {width: 854, height: 480, fps: 15}
+
+characters:
+  - name: sprout
+    look: {svg: assets/sprout.svg}   # under assets/, so editing the file re-renders scenes
+    expressions:                     # sprout's own, besides neutral, happy, sad, ... (DESIGN.md §69.3)
+      cheer: {mouth: {shape: [A, open], scale: 1.2}, brows: {shift: [0, 0.02]}}
+    poses:
+      bow: {body: {angle: -15}, head: {angle: -12}}
+  - name: pebble
+    look: {body: round, eyes: round, hair: short, seed: 4}
+
+scenes:
+  - id: meet
+    type: stage                      # a set: a gradient sky, a ground band, characters on marks
+    params:
+      background: [primary, highlight]   # top to bottom
+      ground_color: tertiary
+      characters:
+        - {name: sprout, at: left, pose: bow, expression: cheer}   # sprout's own pose and expression
+        - {name: pebble, at: right, depth: 0.4, expression: happy}  # further back: smaller, higher, behind
+    beats:
+      - text: "Characters can be drawn from your own SVG files, split into parts by their names."

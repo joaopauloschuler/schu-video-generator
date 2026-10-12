@@ -52,6 +52,28 @@ def _recolor(part: VMobject, theme: Theme, cache: dict[str, str]) -> None:
         part.set_stroke(color=mapped(part.get_stroke_color()))
 
 
+def svg_shapes(data: bytes, where: str) -> tuple[VMobject, list[VMobject]]:
+    """Manim's shapes of the sanitised SVG ``data`` (:func:`~vidgen.svgclean.sanitize_svg`), in
+    SVG units with ``y`` up: the invisible ``viewBox`` box and the drawn shapes (at least one)."""
+    svg = SVGMobject(str(work_copy(data)), height=None, should_center=False)
+    box, *parts = svg.submobjects
+    box.set_fill(opacity=0).set_stroke(width=0, opacity=0)
+    if not parts:
+        raise VidgenError(f"{where}: the SVG draws nothing")
+    return box, parts
+
+
+def set_svg_stroke(part: VMobject, units_per_svg_unit: float) -> None:
+    """Turn ``part``'s SVG stroke width into Manim's for a drawing scaled by
+    ``units_per_svg_unit``; a fill-only part gets a zero-width outline in its fill colour (which
+    ``DrawBorderThenFill`` traces)."""
+    width = float(part.get_stroke_width())
+    if width > 0 and part.get_stroke_opacity() > 0:
+        part.set_stroke(width=width * units_per_svg_unit / _STROKE_UNIT)
+    else:
+        part.set_stroke(color=part.get_fill_color(), width=0, opacity=1)
+
+
 def load_vector(
     path: Path,
     *,
@@ -73,11 +95,7 @@ def load_vector(
     report = sanitize_svg(data, where=name, simplify=simplify, current="#000000")
     for message in report.warnings:
         log.warning("%s", message)
-    svg = SVGMobject(str(work_copy(report.data)), height=None, should_center=False)
-    box, *parts = svg.submobjects
-    box.set_fill(opacity=0).set_stroke(width=0, opacity=0)
-    if not parts:
-        raise VidgenError(f"{name}: the SVG draws nothing")
+    box, parts = svg_shapes(report.data, name)
     factor = height / report.view_box[3]
     cache: dict[str, str] = {}
     if recolor == "theme" and theme is None:
@@ -87,11 +105,7 @@ def load_vector(
     for part in parts:
         if recolor == "theme" and theme is not None:
             _recolor(part, theme, cache)
-        width = float(part.get_stroke_width())
-        if width > 0 and part.get_stroke_opacity() > 0:
-            part.set_stroke(width=width * factor / _STROKE_UNIT)
-        else:  # fill only: a zero-width outline in the fill colour, traced by DrawBorderThenFill
-            part.set_stroke(color=part.get_fill_color(), width=0, opacity=1)
+        set_svg_stroke(part, factor)
     result = VectorPicture(box, *parts, source=name, report=report)
     VGroup.scale(result, factor)  # strokes were already set for the final size
     return result.move_to(ORIGIN)

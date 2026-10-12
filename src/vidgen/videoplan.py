@@ -132,7 +132,7 @@ class Chapter:
 
 @lru_cache(maxsize=4096)
 def _decoded_length(path: str, size: int, mtime: int) -> float:
-    from vidgen.scene import audio_duration
+    from vidgen.speech import audio_duration
 
     return audio_duration(Path(path))
 

@@ -50,6 +50,7 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "code_walkthrough": {"code": "a = 1\nb = 2\nc = 3", "title": "T", "steps": [{"lines": 1}, {"lines": "2-3", "note": "n"}]},
     "end_card": {"title": "Thanks", "lines": ["one", "two"], "icon": "rocket", "logo": "assets/pic.png"},
     "chapter": {"number": 2, "title": "Results", "subtitle": "Sub", "icon": "rocket"},
+    "stage": {"characters": [{"name": "pip", "at": "left"}, {"name": "kit", "at": "right", "depth": 0.5}]},
     "stat": {"value": 42, "suffix": "%", "label": "L", "context": "C", "comparison": 30, "icon": "rocket"},
     "comparison": {"heading": "H", "columns": [{"heading": "A", "points": ["x", "y"]}, {"heading": "B", "points": ["z"]}]},
     "table": {"title": "T", "header": ["Name", "N"], "rows": [["a", 1], ["b", 2]], "caption": "C"},
@@ -64,6 +65,8 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "map": {"title": "T", "countries": ["France"], "values": {"Spain": 1, "Italy": 2},
             "steps": [{"pins": [{"lon": 2.35, "lat": 48.86, "label": "Paris"}]}, {"countries": ["Germany"], "arcs": ["Paris -> Germany"]}]},
 }
+#: The characters a ``stage`` sample names.
+CHARACTERS = [{"name": "pip"}, {"name": "kit"}]
 #: Built-in types registered under a second name (same class, params and targets).
 ALIASES = {"flowchart": "diagram"}
 
@@ -79,7 +82,7 @@ def with_picture(root: Path) -> Path:
 
 
 def load(make_project, scenes: list[dict[str, Any]]) -> Project:
-    return Project.load(with_picture(make_project(minimal_config(scenes=scenes, narration=NARRATION))))
+    return Project.load(with_picture(make_project(minimal_config(scenes=scenes, narration=NARRATION, characters=CHARACTERS))))
 
 
 def camera_moves(scene: Any, beat: str) -> list[Any]:
@@ -288,6 +291,9 @@ def test_zoom_fits_the_target_and_stays_inside_the_frame() -> None:
             def on_screen_parts(self, target: Any) -> list[Any]:
                 return [target.mobject]
 
+            def camera_bounds(self) -> tuple[float, float, float, float]:
+                return (-self.frame_width / 2, self.frame_width / 2, -self.frame_height / 2, self.frame_height / 2)
+
         def end_frame(mob: Any, **options: Any) -> tuple[float, np.ndarray]:
             act = zoom_cls(zoom_cls.Options(**options), None)  # type: ignore[arg-type]
             anims = act.apply(FakeScene(), [actions.Target(("t",), mob)])  # type: ignore[arg-type]
@@ -312,12 +318,13 @@ def test_zoom_on_a_target_that_fills_the_frame_warns(caplog: pytest.LogCaptureFi
     zoom_cls = registry.find_action("zoom").cls
     with tempconfig({"pixel_width": 160, "pixel_height": 90, "frame_width": 8 * 16 / 9, "frame_height": 8.0}):
         scene = type("S", (), {"frame_width": 8 * 16 / 9, "frame_height": 8.0, "camera": MovingCamera(),
-                               "spec": type("Spec", (), {"id": "s"})(), "on_screen_parts": lambda self, t: [t.mobject]})()
+                               "spec": type("Spec", (), {"id": "s"})(), "on_screen_parts": lambda self, t: [t.mobject],
+                               "camera_bounds": lambda self: (-8 * 16 / 9 / 2, 8 * 16 / 9 / 2, -4.0, 4.0)})()
         act = zoom_cls(zoom_cls.Options(), None)  # type: ignore[arg-type]
         with caplog.at_level(logging.WARNING, logger="vidgen"):
             assert act.apply(scene, [actions.Target(("big",), Rectangle(width=12, height=7))]) == []
         assert "zoom on big: the targets already fill the frame" in caplog.text
-        assert act.revert(scene, []) == []   # the camera is home: nothing to undo
+        assert act.revert(scene, []) == []   # the camera never moved: nothing to undo
 
 
 def test_lint_skips_frame_edges_while_zoomed() -> None:

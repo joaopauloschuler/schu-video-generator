@@ -71,6 +71,25 @@ src/vidgen/
   icon_mobject.py         # icon() / Icon: SVG -> recoloured VGroup with scaling strokes (§22); SvgDrawing base
   svgclean.py             # SVG sanitiser (scripts, filters, rasters, text out; gradients flattened; caps) + theme_color (§65; no manim)
   vector_mobject.py       # load_vector() / VectorPicture: a sanitised SVG as Manim shapes (§65)
+  cartoon/                # cartoons (§69): character.py (Character: named vector parts with pivots,
+                          # poses, mirroring; character(); part drawings cached by look, §69.20), cast.py (characters: lookups, checks; no manim),
+                          # generator.py (look: parameters -> parts, §69.1), svg_look.py (look: {svg} -> parts by
+                          # element ids, §69.2), still.py (`vidgen character --png`), poses.py (pose and
+                          # expression tables, §69.3; no manim), transition.py (PoseChange, §69.3;
+                          # Walk, Gesture, Jump, §69.12; KeyedMotion, §69.14),
+                          # visemes.py (lip sync: viseme tracks, .visemes.json, §69.4; no manim),
+                          # idle.py (blinking, breathing, head sway: the seeded schedule, §69.5; no manim),
+                          # stage.py (marks, ground line, depth, draw order of a stage, §69.6; parallax
+                          # layer offsets and extents, §69.7; no manim), props.py (Prop, draw_prop,
+                          # svg_prop: props from primitives or an SVG, §69.8), acting.py (where a
+                          # character looks: look_pose, camera_look, §69.11; walk times and cycle,
+                          # entrances and exits, gestures, jumps, §69.12; no manim), motion.py
+                          # (animation principles: anticipation, squash and stretch, overshoot,
+                          # follow-through, cartoon_motion, §69.13; no manim), keyframes.py (keys,
+                          # eases, motion paths, §69.14; no manim), spring.py (Spring: a damped
+                          # spring for secondary motion, §69.15; no manim), foley.py (the sounds
+                          # of actions as they played, §69.19; no manim); still.py also
+                          # draws the prop gallery and `vidgen character-sheet` (§69.16)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
   actions.py              # per-beat actions: Target, Action, validation, ActionRunner (§26)
@@ -78,13 +97,17 @@ src/vidgen/
   hooks.py                # hook registry + dispatch
   runtime.py              # "current project/theme" context used by helpers and extensions
   scene.py                # NarratedScene base class + narrate()
-  capture.py              # frame capture: stills at beat ends / N per beat (see §13)
+  camera.py               # camera views kept inside bounds (zoom, pan, follow, a wide stage; §69.7; no manim)
+  particles.py            # particle kinds, count cap, seeded positions over time (§69.9; no manim)
+  particle_field.py       # ParticleField: draws the particles over the camera's view, shared options (§69.9)
+  capture.py              # frame capture: stills at beat ends / N per beat (see §13); mid-action stills (§69.16)
   introspect.py           # layout dump of the captured frames: objects, px boxes, sizes (§15)
   activity.py             # activity file: beat timings, play log, per-frame motion signal (§17)
   storyboard.py           # `vidgen storyboard`: reuse/render stills, write contact sheets (§14)
   sheets.py               # contact-sheet layout and drawing with Pillow (§14)
   lint/                   # `vidgen lint` (§16, §17): rules.py (framework), layout_rules.py,
-                          # timing_rules.py, readback_rule.py (§57), color.py, run.py (lint_project), findings.py, report.py
+                          # cartoon_rules.py (characters, §69.17), timing_rules.py, readback_rule.py (§57),
+                          # color.py, run.py (lint_project), findings.py, report.py
   helpers.py              # theme-aware text helpers and generic drawing utilities
   layout.py               # fit/wrap text, beat distribution, chart numbers, LaTeX detection
   regions.py              # layout regions: safe area, named regions, grids, place(), readable text (§18)
@@ -135,10 +158,16 @@ src/vidgen/
   carry.py                # continuity: carried objects' record, rebuild and move, carry checks (§50; manim imported lazily)
   fileio.py               # atomic writes; replacing files that Windows programs keep open
   scenes/                 # built-in scene library (registered like extensions; actions.py:
-                          # the built-in beat actions reveal/dim/highlight/zoom/transform, §26-27;
+                          # the built-in beat actions reveal/dim/highlight/zoom/transform, §26-27,
+                          # pan/follow, §69.7;
                           # callout_action.py: the callout beat action, §44; sfx_action.py: sfx, §47;
+                          # particles_action.py: particles, §69.9; acting.py: say, look_at, turn,
+                          # emote, pose, react and the speech bubble, §69.11; moving.py: walk_to,
+                          # enter, exit, gesture, jump, §69.12; keyframes_action.py: keyframes,
+                          # move_along, §69.14;
                           # overlays.py: the built-in overlays lower_third/watermark, §41;
-                          # progress.py: progress_bar/chapter_indicator, §42; captions.py: captions, §43)
+                          # progress.py: progress_bar/chapter_indicator, §42; captions.py: captions, §43;
+                          # stage.py: the stage scene type, §69.6)
   data/fonts/             # Inter, Source Serif 4, JetBrains Mono NL (.ttf + OFL.txt; package data)
   data/icons/             # manifest.json + lucide/*.svg + lucide/LICENSE (ISC; package data, §22)
   data/geo/               # world-110m.json: Natural Earth 1:110m countries (public domain; package data, §39)
@@ -157,6 +186,7 @@ examples/
   custom_scene/           # built-ins + one extension scene type, helper module, variant, hook
   kphi3/                  # migrated paper video, custom scenes as extensions
   plan/                   # outline.md + the unedited draft video.yaml `vidgen plan` writes from it (golden file, §61)
+  cartoon/                # a two-scene cartoon, two generated characters, Kokoro voices, no audio (§69.18)
 docs/
   CONFIG.md               # config reference
   EXTENDING.md            # how to write project extensions
@@ -610,6 +640,53 @@ Step 51 (§54) adds `TranslatableStr`, `TextRef`, `LanguageRules`, `language_rul
 keyword argument `language=None` of `caption_cues`, `segment_cues`, `phrase_break_cost`,
 `beat_word_times`, `estimate_word_times` and `syllables`.
 Step 55 (§58) adds `GenerateImage`, `generated_image`.
+Step 67 (§69) adds `Character`, `CharacterPart`, `CharacterState`, `PartPose`, `PART_NAMES`,
+`character` and the param type `CharacterName`.
+Step 70 (§69.3) adds `PoseChange` (and the `Character` methods `set_pose`, `set_expression`,
+`posed_state`, `names`).
+Step 71 (§69.4) adds `VISEMES`, `VisemeCue`, `VisemeTrack` (and the `Character` methods
+`viseme_shape`, `show_viseme`, `lip_sync`, `stop_lip_sync`; `NarratedScene.beat_visemes`).
+Step 73 (§69.6) adds the stage geometry `MARKS`, `StageItem`, `StagePlacement`, `stage_layout`,
+`mark_x`, `facing_towards_centre` and the check `pose_name_problem` (the built-in `stage` scene
+uses only `vidgen.api`, like every built-in).
+Step 74 (§69.7) adds `DEFAULT_FACTORS`, `LAYER_PLACES`, `layer_transform`, `layer_half_extent`
+and `view_center_within`; `NarratedScene` gains `camera_bounds`, `camera_place`,
+`follow_with_camera`, `camera_following`, `add_camera_listener`; `Action` gains `scene_problems`.
+Step 75 (§69.8) adds `Prop`, `draw_prop`, `svg_prop`, `PROP_KINDS`, `PROP_HEIGHTS`, `PROP_LIFTS`,
+`SVG_PROP_HEIGHT`; `StageItem` gains `lift=0.0` (compatible).
+Step 76 (§69.9) adds `PARTICLE_KINDS`, `MAX_PARTICLES`, `particle_count`, `particle_seeds`,
+`particle_states`, `ParticleField`, `ParticleSettings`, `ParticleKindName`, `particle_field`, and
+compatibly the attribute `NarratedScene.is_preview`.
+Step 77 (§69.10) adds, compatibly, the keyword argument `cartoon=False` of `generated_image`, the
+`NarratedScene` class attribute `uses_cartoon_style` (default `False`) and the method
+`generated_picture(generate)`.
+Step 78 (§69.11) adds `beat_voice`, `speaking_characters`, `say_problem`, `LookPose`,
+`look_pose`, `camera_look`; `NarratedScene` gains `current_beat`, `beat_clock`, `speak`,
+`beat_action_names`; `Action` gains `character_needs`; `Character.lip_sync` gains the keyword
+`clock=None` and `Character` the methods `sync_mouth`, `lip_sync_track` (all compatible).
+Step 79 (§69.12) adds `Walk`, `Gesture`, `Jump`, `WALK_SPEED`, `GESTURES`, `GESTURE_SECONDS`,
+`JUMP_HEIGHT`, `JUMP_SECONDS`, `walk_seconds`, `enter_path`, `exit_path`, `nearer_side`,
+`offstage_x`; `Action` gains `run_time_for` and the class attribute `alters_targets` (default
+`True`); `NarratedScene` gains `action_uses`; `Character` gains `character_height` and
+`walked_in` (all compatible).
+Step 80 (§69.13) adds `MOTION_LEVELS`, `MotionSetting`, `walk_motion_seconds`,
+`jump_motion_seconds`; `PoseChange`, `Walk`, `Gesture` and `Jump` gain the keyword `motion=None`;
+`Character` gains the constructor keyword `motion="lively"`, the attribute `motion`, the
+property `motion_strength` and `set_squash`; `character()` gains `motion=None` (all compatible;
+the default `lively` changes how the four animations look, not their end states).
+Step 81 (§69.14) adds `KeyedMotion`, `feet_of`, `CHANNELS`, `DEFAULT_EASE`, `EASE_NAMES`,
+`EaseName`, `Key`, `KeyFrame`, `MotionPath`, `ease_progress`, `key_seconds`,
+`key_time_problems`, `keyed_values`, `path_length`, `part_target_names`, `feet_point` (all
+compatible); the `stage` scene type gains the target pattern `<character>.<part>`.
+Step 82 (§69.15) adds `Spring` (compatible; follow-through in `Walk` and `Jump` now wobbles).
+Step 83 (§69.16) adds the `NarratedScene` class attribute `mid_still_actions` (default empty;
+compatible).
+Step 84 (§69.17) adds to `Character` the attributes `looked_at` and `passage` and the property
+`spoken_viseme` (all compatible).
+Step 86 (§69.19) adds `PlayedAction`, `FoleyCue`, `foley_cues`, the `NarratedScene` hook
+`action_foley(action, options, animations, start, seconds)` (does nothing by default), `Walk.heights`
+and `Walk.phases` / `Jump.phases`, and compatibly the `SfxEvent` field `duck` (default `False`).
+The fixes after Step 88 (§69.22) add `ground_top` (compatible).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -757,6 +834,8 @@ vidgen readback [PROJECT] [--variant NAME] [--beat ID ...] [--max-wer RATE] [--f
 vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME] [--json]   # generated pictures (§58)
 vidgen gallery [PROJECT] [--output DIR] [--types T,T] [--formats 16:9,9:16] [--theme PRESET]
               [--clips | --no-clips] [--jobs N] [--force] [--json]   # every scene type rendered (§60)
+vidgen character NAME [PROJECT] [--variant NAME] [--png [FILE]] [--facing right|left]   # a character's look, poses; one still (§69.1)
+vidgen character-sheet [NAME] [PROJECT] [--all] [--variant NAME] [--output FILE] [--json]   # every pose, expression, mouth shape on one PNG (§69.16)
 ```
 PROJECT defaults to the current directory. `render` renders the scenes whose render is missing
 or stale by its fingerprint (§14, §63; `--force`: all); `--scene` re-renders only those scenes
@@ -990,7 +1069,7 @@ the measured loudness, §48).
 - **JSON** (`jsonout.storyboard_document`, `storyboard` in `cli.JSON_COMMANDS`): `project,
   variant, preview, per_beat, format, folder, rendered, reused, elapsed, sheets: [{kind
   (video|scene), scene, page, pages, path, width, height, frames: [{scene, beat, k, n, time,
-  scene_time, path}]}]`.
+  scene_time, path}]}]` (`mid`, Step 83: the actions a mid-action still shows, else null; §69.16).
 
 ## 15. Refinements (Step 12, layout introspection)
 
@@ -3066,7 +3145,7 @@ the measured loudness, §48).
 
 ## 47. Refinements (Step 44, sound effects)
 
-- **Sounds** (`vidgen/sfx.py`, no manim): eleven built-in sounds (`BUILTIN_SOUNDS`: whoosh,
+- **Sounds** (`vidgen/sfx.py`, no manim): eleven built-in sounds (five more since Step 86, §69.19) (`BUILTIN_SOUNDS`: whoosh,
   swoosh, pop, click, tick, typing, riser, chime, success, error, thud), each a deterministic
   numpy generator (`BuiltinSound(name, generate, duration, duration_range, description, use)`;
   noise from `default_rng(crc32(name))`; filters as zero-phase magnitude responses in the
@@ -4079,8 +4158,8 @@ the measured loudness, §48).
   `GuideTopic(name, title, aliases, text)`, `guide_text()` (markers removed), `guide_topics()`,
   `find_topic(name)` (name or alias, case-insensitive; unknown → `VidgenError` with
   did-you-mean and the topic list), `topic_lines()`. Topics: `start`, `workflow`, `pacing`,
-  `social`, `scenes`, `design`, `actions`, `overlays`, `audio`, `examples`, `outputs`,
-  `troubleshooting`.
+  `social`, `scenes`, `design`, `actions`, `cartoons` (Step 85, §69.18), `overlays`, `audio`,
+  `examples`, `outputs`, `troubleshooting`.
 - **CLI** `vidgen guide [TOPIC] [--list] [--json]`: the whole guide, one topic, or the list
   (`TOPIC` with `--list` is an error). No PROJECT argument (the guide does not depend on one).
   `--json` (in `JSON_COMMANDS`): `{topic, title, topics: [{name, title, aliases}], text, path}`.
@@ -4250,7 +4329,7 @@ the measured loudness, §48).
 - **Tools** (`mcp_server.build_server`): `guide`, `init`, `plan`, `validate`, `schema`,
   `list_scenes`, `list_icons`, `list_themes`, `list_sfx`, `list_music`, `storyboard`, `lint`,
   `render`, `tts`, `imagegen`, `readback`, `slides`, `thumbnail`, `export`, `gallery`,
-  `translate_template`. Parameters mirror the command's options (snake_case; lists for repeatable
+  `translate_template`; Step 83 adds `character_sheet` (§69.16). Parameters mirror the command's options (snake_case; lists for repeatable
   options), with pydantic `Field` descriptions and bounds. Result: one text block with the
   command's `--json` document re-serialised compactly (fewer tokens), then images; a document with
   `ok` false is an `isError` result holding only the JSON. Argument errors (path outside the root,
@@ -4809,3 +4888,1316 @@ the measured loudness, §48).
   the forced install above, then a real synthesis with word timestamps, worked.
 - **Not done**: Kokoro v1.1-zh (`hexgrad/Kokoro-82M-v1.1-zh`), custom `.pt` voice files are not
   hashed by content, no streaming, no automatic download of `misaki[ja]` / `[zh]`.
+
+## 69. Characters (Step 67, character model: vector parts with pivots)
+
+The base of Phase H (cartoons). Later steps build on these names: the parametric generator (Step
+68) and imported SVGs (Step 69) produce `CharacterPart` lists; poses and expressions (Step 70)
+are `PartPose` tables applied with `set_state`; lip sync (Step 71) and blinking (Step 72) swap
+shapes; the `stage` scene (Step 73) places characters by `feet()`; acting actions (Step 78+)
+take `CharacterName` options.
+
+- **Parts** (`cartoon/character.py`): `PART_NAMES = body, legs, arm_left, arm_right, head, eyes,
+  brows, mouth, accessory`; `REQUIRED_PARTS` all but `legs` and `accessory` (`Character(...,
+  required=)` overrides it: an imported SVG needs only `body`, §69.2). A part is a
+  `CharacterPart(name, shapes, pivot, parent=None, order=None)`: `shapes` maps shape names to
+  `VMobject`s (the first is the rest shape; e.g. eyes `open` / `closed`, mouth `smile` / `open`;
+  Step 71 adds viseme shapes the same way), `pivot` an (x, y) point. Parents default to
+  `DEFAULT_PARENTS` (body is the root; head, arms, legs hang from body; eyes, brows, mouth,
+  accessory from head); a custom `parent` must be a part the character has, without cycles.
+  Draw order defaults to `DEFAULT_DRAW_ORDER` (arm_right 10, legs 20, body 30, arm_left 40, head
+  50, eyes / mouth 60, brows 70, accessory 80; ties by `PART_NAMES`), so facing right the
+  character's right arm is the far arm behind the body. `arm_left` / `arm_right` are the
+  character's own left / right (as in anatomy), so `arm_left` is on the screen's right in the
+  rest view. Bad part sets raise `VidgenError` naming the character and the parts.
+- **Character units**: parts are drawn with the origin between the feet, `y` up, 1 = the top of
+  the character. `Character(parts, name=, height=3.0, facing="right", voice=None)` scales them to
+  `height` Manim units; `feet()` is the origin on screen (the ground point a stage uses).
+- **State and redraw**: the character keeps a copy of every rest shape and one
+  `PartPose(angle, scale, shift, shape)` per part (frozen dataclass; angle in degrees
+  counterclockwise as drawn facing right, scale (x, y) about the pivot, shift in character
+  units). `refresh()` writes each live part's points as `screen · mirror · world(part) ·
+  rest_points`, where `world(part) = world(parent) · pose(part)` and `pose = T(shift) · T(pivot) ·
+  R · S · T(-pivot)`. So a part's pose moves its children and nothing else, and poses never
+  accumulate rounding: every redraw starts from the rest shape. Styles of the live parts
+  (colour, opacity) are not touched; only a shape swap replaces a part's child with a copy of
+  the new shape (its rest style). `pivot(part)` gives the pivot on screen now.
+- **Placement**: `submobjects[0]` is an invisible anchor of three points (feet, feet + 0.05
+  right, feet + 0.05 up, in character units, inside the figure's box so `get_center` / `width` do
+  not change). Manim's `shift`, `scale`, `rotate`, `move_to` move it with the parts, and
+  `refresh()` reads the placement back from it, so poses set after a move land where the
+  character is. No overrides of Manim's transforms were needed.
+- **Facing**: `face("left")` mirrors the whole character about the vertical line through its
+  feet (in character units, before the placement); `turn()` toggles. The draw order is kept (a
+  mirror image), and part names keep their meaning (the left arm stays `arm_left`).
+- **API**: `set_part(part, angle=, scale=, shift=, shape=)` (values not given keep the pose),
+  `swap(part, shape)`, `reset(part=None)`, `face`, `turn`, `state()` → `CharacterState(facing,
+  parts)`, `set_state(state)`, `pose_of`, `shape_names`, `parent_of`, `has_part`, `draw_order`,
+  `parts` (name → live `VGroup`; since §69.22 one child per shape, only the shown one has points). All changes return the character (chainable). Animate poses by
+  calling `set_part` / `set_state` from an updater, or with `PoseChange` (§69.3);
+  `.animate.set_part(...)` would interpolate points linearly (a chord, not an arc).
+  `copy()` is a deep copy with its own poses.
+- **The default look** (`generate_parts(CharacterLook(), colors)`, §69.1; Step 67 called it the
+  basic figure, `basic_parts`): a round head on an oval body, sleeves with round hands, two legs,
+  dot eyes (`open` / `closed`), line brows, a smile arc or an open mouth; the face sits 0.025 to
+  the right so facing is visible.
+- **Stroke widths** (Step 68): parts are drawn with `OUTLINE_WIDTH = 4` for a character
+  `REFERENCE_HEIGHT = 3` units tall. `Character.__init__` multiplies every stroke width of its
+  rest shapes by `height / REFERENCE_HEIGHT` and keeps each at least one pixel wide in the current
+  Manim config (`100 * frame_height / pixel_height`, as Cairo draws width `w` as `w * 0.01` frame
+  units). Since the frame's shorter side is always 8 units (§5), the outline is a fixed fraction
+  of the character and of the frame at any resolution and aspect. Manim's own `scale()` of a
+  character afterwards does not scale strokes (as for any `VGroup`).
+- **Config** (`config.py`): `characters: list[CharacterEntry]` at the top level;
+  `CharacterEntry(name: Identifier, voice: Identifier | None, look: CharacterLook, colors:
+  CharacterColors)`; `CharacterLook` holds the generator's parameters (§69.1) or `svg:` (§69.2); `CharacterColors(skin = secondary, clothes = primary, outline = features =
+  CHARACTER_INK #1F2430, hair = accent, accessory = highlight)` as `ColorRef`s. A list (not a mapping) so that a repeated name is a
+  clear error (YAML mappings silently keep the last duplicate key): `VideoConfig` raises
+  `duplicate character name 'pip' (characters[0] and characters[1])`.
+- **Checks**: `voices.voice_reference_problems` also checks `characters[k].voice` (a config
+  error from `parse_config`, so variants too). `cartoon/cast.py` (no manim): `character_names`,
+  `find_character` (raises with `unknown_character_message`: did-you-mean and the known names,
+  or "the video declares no characters"), `character_color_problems` (run by
+  `cli.project_problems`, i.e. `vidgen validate`), `check_character_name`.
+- **`CharacterName`** (`scene.py`, exported): `Annotated[str, pattern ID_PATTERN,
+  AfterValidator]`; like `IconName`, it checks the name only when the validation context has a
+  theme (`vidgen validate`, scene build) and a project is active, against that project's
+  `characters:`. It works in scene `Params` and action `Options` alike. It is not given an enum
+  in `vidgen schema` (the schema is per video, not per project yet).
+- **`character(name, height=3.0, facing="right")`** (exported): the active project's character,
+  coloured with the current theme (`build_character(entry, theme=, height=, facing=)`).
+- **Fingerprint**: `characters` is not excluded from `scene_fingerprint`'s config part, so editing
+  a character re-renders every scene (conservative; Step 87, §69.20, did not narrow it to
+  scenes that use characters: not one of its items).
+- **Layout dump**: a `Character` is one object of kind `character` named after it (Step 73,
+  §69.6).
+- **Not done here**: no scene type draws characters yet (the `stage` scene type, Step 73, §69.6).
+
+### 69.1 The character generator (Step 68)
+
+`cartoon/generator.py`: `generate_parts(look, colors, *, outline_width=OUTLINE_WIDTH) ->
+list[CharacterPart]`, the parts `build_character` (and so `character(name)`) uses for every
+`characters:` entry. `colors` maps `COLOR_KEYS` (`skin, clothes, outline, features, hair,
+accessory`) to Manim colours.
+
+- **Parameters** (`CharacterLook`, all optional): `body` (`round | tall | square | bean`; sizes in
+  `BODY_SIZES`), `head_size` (0.6–1.6, radius 0.2 × it), `eyes` (`dot | oval | round | sleepy`),
+  `nose` (`none | dot | round | triangle`), `hair` (`none | short | spiky | long | bun | curly`),
+  `ears` (`none | round | pointy | floppy`), `accessories` (subset of `glasses, hat, scarf, bag`,
+  no repeats: a config error), `seed` (int or none).
+- **Proportions** (`resolve_proportions(look) -> Proportions`, no drawing): head radius, body
+  width and height, leg and arm length, eye gap, eye size and mouth width. With a `seed`, each is
+  multiplied by `0.92 + 0.16 × random.Random(seed).random()` in field order (`SEED_VARIATION`);
+  Python guarantees that `Random(int).random()` gives the same sequence on every platform and
+  version (`uniform` is not covered by that promise, so it is not used), so a look always gives
+  the same figure. Without a seed: no variation.
+- **Layout** (character units before scaling): legs from 0 to `leg_length`; the body from
+  `leg_length - 0.06` up `body_height`; shoulders (arm pivots) at `(±body_width/2, body_top -
+  0.08)`; the head centred `head_radius - 0.02` above the body top, its pivot at the neck; the
+  face 0.125 × the head radius to the right (facing right), eyes 0.15 r above the head centre.
+  The finished parts are then scaled about the feet so the top of the tallest shape (hair, bun,
+  ears or hat included) is at 1 (`_scaled_to_unit_height`); the default look is already 1 tall.
+- **Where things go**: hair (back pieces for `long` / `bun` / `curly`, then ears, the head
+  circle, the hair cap in front, the nose) is drawn inside the `head` part, so it turns with the
+  head; `scarf` and `bag` inside `body`; `glasses` and `hat` make the optional `accessory` part
+  (parent `head`, drawn on top). Shape names are the same for every look: eyes `open` /
+  `closed`, mouth `smile` / `open` (and, since Step 71, the viseme shapes `A E O U M F L W`, §69.4),
+  so Steps 70–72 swap them on any generated character.
+- **Originality**: every shape is a primitive (circle, ellipse, rounded rectangle, polygon, line,
+  arc); no option names or imitates a known character.
+- **`vidgen character NAME [PROJECT] [--variant NAME] [--png [FILE]] [--facing right|left]`**
+  (`cli.cmd_character`): with the project's extensions active (so project theme presets work),
+  prints `cast.character_lines(entry, theme)` (voice, every `look` value, every colour with its
+  resolved hex). `--png` calls `still.write_character_png(project, entry, theme, path,
+  facing=)`: Manim's camera draws the character `0.8 × 8` units tall, centred, on the theme
+  background, in the final format's aspect ratio with its shorter side 720 px; default file
+  `exports/character_<name>.png` (`default_png_path`). No `--json`: Step 83's
+  `vidgen character-sheet` (§69.16) is the agent tool, with `--json` and over MCP.
+
+### 69.2 Characters from SVG files (Step 69)
+
+`look: {svg: FILE}` (`CharacterLook.svg`, a path relative to the project folder ending in `.svg`;
+any other `look` key with it is a config error) draws the character from an SVG instead of the
+generator. `build_character(entry, root=)` (root default: the active project's folder; `character()`
+and `still.write_character_png` pass it) calls `cartoon/svg_look.py`.
+
+- **Splitting** (`split_character_svg(data, where) -> SvgCharacter`, `read_character_svg(path,
+  where)`; no manim): the file goes through `svgclean.sanitize_svg` (§65; `currentColor` black),
+  then every drawn element (`path rect circle ellipse line polyline polygon use`, not inside
+  `defs` / `symbol`) is marked with its owner: the nearest enclosing element whose id names a part
+  (`part_key`: `<part>` → the rest shape, `<part>_<shape>` → another shape; the longest part name
+  wins, so `arm_left_up` is arm_left's `up`). An id of the same part inside its element does not
+  start a new shape (`head_outline` in `head` is a piece of the head). Shapes with no owner belong
+  to `body` (rest), except shapes hidden in the file there (`display: none` / `visibility:
+  hidden`, inherited), which are dropped; hiding is reset inside a part element (alternatives are
+  hidden in the file). Rest names: `REST_SHAPE_NAMES` (`eyes` → `open`, `mouth` → `smile`, as the
+  generator), else `rest`. Each (part, shape) becomes its own document: a copy of the sanitised
+  file with the other owners' shapes removed and its element and ancestors un-hidden, so
+  inherited styles and transforms and the viewBox box stay. Parts keep the order of their first
+  drawn shape in the file; the rest shape first, then the others in file order.
+- **Pivots**: `data-pivot="x y"` (or `x,y`) on a part's element, in viewBox coordinates (the
+  rest element's wins over an alternative's). Without it, `default_pivot` from the rest shape's
+  box in character units: head / body bottom centre, legs top centre, an arm the top corner
+  nearer the body's centre, others the centre. `pivot_warnings` names `TURNING_PARTS` (head, arms,
+  legs) without one.
+- **Problems** (`VidgenError`): a missing / unreadable file, what the sanitiser refuses, two
+  elements naming the same (part, shape), a `data-pivot` that is not two numbers, no body.
+  **Warnings** (`SvgCharacter.warnings`): ids that look like misspelt part names (`_near_miss`:
+  lower case / `-` → `_` names a part, or difflib ≥ 0.8: `Mouth`, `arm-left`, `eye`), a non-rest
+  shape the file shows, a part element that draws nothing.
+- **Shapes** (`svg_character_parts(path, where) -> list[CharacterPart]`, manim): each document
+  is parsed with `vector_mobject.svg_shapes` (factored out of `load_vector`: `SVGMobject` of the
+  work copy, the invisible box first) and moved so its viewBox's top-left corner is the origin
+  (Manim flips y about each drawing's own centre, so documents are aligned by their box). The
+  rest shapes' union box gives the character units: bottom = feet height, x = the middle of the
+  `legs` box (else `body`), top → 1. Stroke widths: `vector_mobject.set_svg_stroke` (also
+  factored out of `load_vector`) with the factor for a character `REFERENCE_HEIGHT` tall, so
+  `Character` scales them with `height` like a generated outline; fill-only shapes get a zero
+  outline in their fill colour. Parent: `DEFAULT_PARENTS`, walking up to a part the file has (no
+  head: the eyes hang from the body). Draw order: the file's order (`order = 10 × index`). The
+  SVG's colours are kept (`colors:` unused). `Character(..., required=SVG_REQUIRED_PARTS)` (only
+  `body`).
+- **Actions a character cannot do** (`cast.ACTION_NEEDS`: action → alternatives of parts or
+  `part.shape`; `unavailable_actions(part_shapes)`, `missing_needs(part_shapes, action)`): `say`
+  mouth (Step 69 called it `say (lip sync)`), `blink` eyes.closed, `look_at` head, `emote` eyes or
+  brows or mouth, `gesture: point` / `wave` an arm, `shrug` both arms, `nod` / `shake_head` head.
+  Actions name their entry with `Action.character_needs()` and skip what a character lacks;
+  `vidgen validate` warns per use (§69.11).
+- **Validate**: `cast.character_look_problems(config, root)` (in `cli.project_problems`:
+  `characters[k].look.svg: ...`); `cast.character_look_warnings(config, root)` (in
+  `cli.validate_warnings`): the sanitiser's warnings, the split warnings, guessed pivots,
+  `colors` given (unused), a mouth with one shape (it will not move when speaking), and
+  `character 'x' (FILE): actions unavailable: gesture: wave (needs arm_left or arm_right); ...`.
+- **`vidgen character NAME`**: for an svg look prints `look: svg FILE`, `parts: arm_right, legs,
+  body, ..., eyes (open, closed), mouth (smile, A, E, O, M)` (`character_lines(entry, theme,
+  root)`) and `colors: the SVG's own`; `--png` works unchanged.
+- **Fingerprint**: a file under `assets/` is part of every scene's fingerprint (its stat); a
+  file elsewhere is not (documented: keep it under `assets/`).
+- **Example**: `examples/svg_character` (`assets/sprout.svg`, an original figure: every part,
+  `eyes_closed`, `mouth_A` / `_E` / `_O` / `_M`, pivots), with a generated character beside it.
+  Tests: `tests/test_cartoon_svg.py`.
+
+### 69.3 Poses and expressions (Step 70)
+
+Named poses and expressions are tables of part settings, applied with `set_state`; a change
+between two of them is the `PoseChange` animation.
+
+- **Tables** (`cartoon/poses.py`, no manim): `POSES` (`stand, pointing, waving, thinking, shrug,
+  arms_crossed, sitting`) and `EXPRESSIONS` (`neutral, happy, sad, angry, surprised, worried,
+  thinking`), each name -> part -> `PartPoseEntry(angle, scale, shift, shape)` (the config model of
+  `poses:`, so built-in and own entries are one type). A pose sets `POSE_PARTS` (`body, legs,
+  arm_left, arm_right, head, accessory`), an expression `EXPRESSION_PARTS` (`eyes, brows, mouth`),
+  so one of each combines; the parts of its group an entry does not name go back to rest (`stand`
+  is empty: everything at rest). Values are relative to the rest drawing: arms hang down, so
+  `pointing` turns `arm_left` (the near arm facing right) +88°; `sitting` lowers `body` 0.1 and
+  turns `legs` +80°; the rest mouth is a smile, so `sad` / `angry` / `worried` flip it with a
+  negative y scale. `shape` is a list of choices (`surprised`: mouth `open`, `O`, `A`): the first
+  the character has (`chosen_shape`), else the rest shape. A part the character lacks is skipped.
+  So every entry works on generated characters (brows gain the shapes `angry` / `sad`, inner ends
+  low / high) and on SVGs (`brows_angry` if the file has it; otherwise only the shift).
+- **Character** (`cartoon/character.py`): `Character(..., poses=, expressions=)` takes the
+  character's own tables; `names(kind)` (built-in first, then own; an own entry with a built-in
+  name replaces it), `posed_state(pose=None, expression=None) -> CharacterState` (the current
+  state with the entries applied; nothing drawn), `set_pose(name)`, `set_expression(name)`.
+  Unknown names raise `VidgenError` from `poses.find_entry`: `character 'pip': unknown pose
+  'pointng'; did you mean 'pointing'? poses: stand, pointing, ...`. `build_character` passes the
+  entry's `poses` / `expressions`.
+- **Own entries** (`characters[].poses` / `.expressions`, config): name -> part -> `{angle, scale,
+  shift, shape}`; a part outside the group, a zero scale or an unknown key is a config error.
+  `vidgen validate`: `cast.character_pose_problems` (a `shape` none of whose choices the
+  character has: `characters[0].expressions.grin.mouth.shape: character 'pip': part 'mouth' has
+  no shape 'wide' (shapes: smile, open, A, E, O, U, M, F, L, W)`) and `character_pose_warnings` (a part the character
+  does not have). Shapes are known without drawing: an svg look's from `read_character_svg`, a
+  generated one's from `cast.GENERATED_SHAPES` (a test keeps it equal to the generator's).
+  `vidgen character NAME` lists the known names (`cast.pose_lines`; own ones marked `*`).
+- **`PoseChange(character, *, pose=None, expression=None, state=None, facing=None,
+  lag_ratio=0.15, part_rate_func=smooth, **animation_kwargs)`** (`cartoon/transition.py`,
+  exported): the target is resolved when it is created, the start when it begins. Each part
+  whose `PartPose` differs gets a window (`part_windows`: parts in `PART_NAMES` order, i.e. body,
+  legs, arms, head, then the face, each starting `lag_ratio` of a window after the previous; the
+  last ends at 1) and eases in it with `part_rate_func`; `blend_poses` mixes angle, scale and shift
+  linearly and switches the shape at the halfway point. The character is redrawn with
+  `set_state` each frame, so a turning part sweeps an arc about its pivot (not a cross-fade, not
+  `.animate`'s straight lines). `rate_func` (default `linear`) maps the animation's time first.
+  A facing change switches the mirror at the halfway point. `state=` with `pose` / `expression`
+  is a `TypeError`.
+- **Not done here**: no action uses poses yet (Step 78); the `stage` scene (§69.6) starts its
+  characters in a pose / expression. Blinking (Step 72,
+  §69.5) never shows during a `PoseChange`: `begin` calls `Character.end_blink()`. Tests: `tests/test_cartoon_poses.py`.
+
+### 69.4 Lip sync: viseme tracks (Step 71)
+
+A beat's **viseme track** says which mouth shape shows when; a character's mouth follows it.
+`cartoon/visemes.py` (no manim) builds and stores tracks; `Character.lip_sync` plays one.
+
+- **Visemes** (`VISEMES`): `rest, A (also I), E (and most consonants), O, U, M (M B P), F (F V),
+  L (L, TH), W (W Q)`, the nine Preston Blair groups; their names are the SVG mouth shape names
+  of §69.2. `VISEME_SHAPES` gives each viseme's mouth shapes in order of preference (`U`: `U, O,
+  W, open`; `M`: `M` only; `F`: `F, E, M`; ...); none present (and `rest`) shows the rest shape.
+  Generated characters (§69.1) gain the mouth shapes `A E O U M F L W` (filled ellipses in the
+  `features` ink, `M` a line), so every viseme has its own shape; `cast.GENERATED_SHAPES` follows.
+- **Phonemes -> visemes** (`PHONEME_VISEMES`, one code point each): IPA from espeak-ng / misaki
+  and misaki's diphthong letters (`I` = aɪ -> `A, E`, `O` = oʊ -> `O, U`, `W` = aʊ -> `A, U`, `Y`
+  = ɔɪ -> `O, E`, `A` = eɪ -> `E`). Stress and length marks, `h`, the glottal stop and anything not
+  listed take no time. `phoneme_units` gives (viseme, weight): vowels 2, consonants 1 (a
+  diphthong splits its 2), a space a `rest` of 0.5. **Letter fallback** (`letter_units`): digraphs
+  (`th` L, `ph` F, `sh` / `ch` / `ck` / `ng` E, `wh` / `qu` W, `oo` U, `ee` E, `gh` silent), then
+  letters (`a` A; `e i y` E; `o` O; `u` U; `m b p` M; `f v` F; `l` L; `w q` W; `h` silent; other
+  Latin letters E; digits and other scripts A), a silent final `e` dropped where
+  `language_rules(...).silent_final_e` (checked before accents are removed: a final `é` is said).
+- **Phoneme sources** (`SOURCES`): `kokoro` — `KokoroProvider.last_phonemes`, set by every
+  `synthesize_timed`: `(token.phonemes, start, end)` per timed token (English), else `(result.phonemes,
+  chunk start, chunk end)` per chunk. Otherwise the spoken text, word by word, through
+  `text_g2p(language)`: the first of `G2P_BACKENDS` that loads — `misaki` (English: `en.G2P(trf=False,
+  british=en-GB/IE/AU/NZ, fallback=None)` only when `en_core_web_sm` is importable, since misaki
+  would pip-install it; other languages: `espeak.EspeakG2P` when `espeakng_loader` is importable),
+  then `espeak` (the `espeak-ng` program on `PATH`: `-q --ipa -v <voice> <word>`, voice = the tag
+  lower-cased, `en` -> `en-us`) — else `letters`. A word the G2P fails on or gives nothing for
+  uses its letters. Nothing is installed by vidgen; none is needed (tests mock them).
+- **Timing** (`TIMINGS`): Kokoro's token times (`kokoro`), else the words of
+  `speech.beat_word_times(audio_dir, beat, spoken_text, 0, duration, language)` — the stored
+  alignment (`alignment`: ElevenLabs timestamps or Kokoro's `.align.json`), else the estimate
+  within the MP3's speech (`speech`), else over the beat (`estimate`). Each word's (or token's)
+  units share its time by weight (`cues_from_units`); `rest` fills the time between words and
+  around them, 0 .. the beat's duration (the MP3's length).
+- **Merge rule** (`merge_short_cues`, `MIN_CUE_SECONDS = 0.07`, two frames at 30 fps): neighbours
+  of one viseme join; then, shortest first, a cue shorter than the minimum goes to its longer
+  neighbour (the earlier on a tie), joining again, until none is short or one cue remains. A short
+  `M` is instead lengthened to the minimum from its longer neighbour when that one stays at least
+  the minimum (closed lips that never show read as mumbling). The cues stay contiguous.
+- **Storage** (`.visemes.json` next to the MP3, `write_visemes` / `read_visemes`): `{version: 1,
+  text (spoken), audio_sha1, source, timing, cues: [[start, end, viseme], ...]}` (seconds, 4
+  decimals). Like `.align.json`, it is used only while the MP3's sha1 and the spoken text match
+  (`speech.audio_digest`, made public; reads cached by mtime). `vidgen tts` (`run.py`) writes it
+  for every voiced or copied beat **when the video declares `characters:`** (`_store_visemes`: a
+  copied beat's stored track is copied; else built with Kokoro's phonemes or from the text), and
+  after the run writes the missing tracks of up-to-date beats (`_store_missing_visemes`: "wrote
+  viseme tracks (lip sync) for N beat(s) already voiced"; a beat whose MP3 cannot be read gets a
+  `note:`). The beat's `.hash` is unchanged (the track never re-voices a beat).
+- **Reading** (`beat_visemes(project, beat_id, duration=None) -> VisemeTrack`; scene shortcut
+  `NarratedScene.beat_visemes(beat)` with `beat_duration`): the stored track while current, else
+  built from the spoken text in memory (not written, so rendering never changes the inputs of its
+  own fingerprint). `VisemeTrack(cues, source, timing)`: `duration`, `at(seconds)` (`rest`
+  outside the cues).
+- **Fingerprint**: in a video with `characters:`, each scene's fingerprint has `visemes`: the
+  stat of every beat's `.visemes.json` and `.align.json` (videos without characters keep their
+  fingerprints' shape).
+- **Character** (`cartoon/character.py`): `viseme_shape(viseme)` (the first of `VISEME_SHAPES` it
+  has, or `None`; an unknown viseme is a `VidgenError`), `show_viseme(viseme, rest=None)` (sets
+  the mouth's pose shape; swaps only when the shape changes), `lip_sync(track, *, start=0.0,
+  clock=None)`: adds the updater `Character._lip_sync_step` (a plain method, like idle's) that
+  shows `track.at(seconds)`; `seconds` is `clock()` when a clock is given (Step 78: the scene's
+  time since the beat started, `NarratedScene.beat_clock`), else `start` plus the frames' `dt`.
+  The viseme's shape is a layer over the mouth's pose (`_spoken`, shown by `_shape_name`), so the
+  pose (the expression's shape, scale and angle: a `sad` flipped mouth speaks flipped) is never
+  changed; `rest`, or a viseme without a shape, shows the pose's shape, also one set while
+  speaking. It replaces a running lip sync; `stop_lip_sync()` removes the layer; `lip_sync_track`
+  is the running track; `sync_mouth()` shows the viseme for the clock now. No mouth: all do
+  nothing (`ACTION_NEEDS["say"]`). Manim suspends a mobject's updaters while an `Animation` plays
+  on it: `PoseChange` calls `sync_mouth()` on every frame, so with a clock the mouth stays in
+  step through a pose change; other animations on the character hold it, and it catches up when
+  they end (Step 72 left this open: the `dt` clock fell behind by every such animation).
+- **API**: `vidgen.api` exports `VISEMES`, `VisemeCue`, `VisemeTrack`; `Character.lip_sync`,
+  `stop_lip_sync`, `show_viseme`, `viseme_shape`; `NarratedScene.beat_visemes`.
+- **Also**: `audio_duration` moved from `scene.py` to `speech.py` (no manim; `scene` re-imports
+  it), so `vidgen tts` measures MP3s without loading Manim.
+- **Speaking** (Step 78, §69.11): a `stage` makes the characters with the beat's voice speak; the
+  `say` action picks them instead. No per-language phoneme tables beyond IPA; no coarticulation (each
+  phoneme is one shape). Tests: `tests/test_cartoon_visemes.py`.
+
+### 69.5 Automatic life: blinking and idle motion (Step 72)
+
+A character from `characters:` breathes, sways its head slightly and blinks on its own, so it
+does not freeze between actions. The motion is a layer on top of the poses, driven by one
+updater, so `PoseChange` (§69.3) and `lip_sync` (§69.4) never fight with it.
+
+- **Schedule** (`cartoon/idle.py`, no manim): blinks start `next_blink_gap(rng)` apart on the
+  character's *idle clock*, uniform in `BLINK_GAP_SECONDS = (2, 6)` from `random.Random(seed)`
+  (`random()` only, as in §69.1, so a seed gives the same blinks on every Python version), the
+  first one a gap after the clock starts; each keeps the eyes `closed` for `BLINK_SECONDS = 0.15`.
+  The seed defaults to `idle_seed(name)` (CRC-32 of the name), so two characters do not blink
+  together. Breathing: `breath_scale(seconds, seed)` scales the body about its pivot (the bottom
+  of the body; its children follow) by at most `BREATH_SCALE = (0.006, 0.015)` (x, y), one breath
+  every `BREATH_SECONDS = 3.6`; head sway: `sway_angle(seconds, seed)` turns the head by at most
+  2 × `SWAY_DEGREES = 1.5`° every `SWAY_SECONDS = 5.5`. Both are 0 at the clock's start (the
+  phases come from the seed), so a still at time 0 is the plain pose.
+- **Idle clock and pose changes**: the clock advances by each frame's `dt` in the updater, and
+  Manim suspends a mobject's updaters while an animation plays on it, so the clock stops during a
+  `PoseChange` (and any other animation played on the character): no blink starts there, and the
+  breath and sway hold. `PoseChange.begin` calls `Character.end_blink()`, so a blink running when
+  it starts ends at once (it is not resumed). `blink_times(seed, duration, *, pose_changes=())`
+  gives exactly this schedule in scene seconds, `(start, end)` per blink, without drawing: the
+  idle clock mapped past each pose change window (a blink due at a window's start comes after
+  it), a blink cut at the start of the next window. `IdleClock` (seed, `seconds`, `advance(dt)`,
+  `is_blinking`, `end_blink()`) is the running state the updater keeps; a test checks it against
+  `blink_times` frame by frame.
+- **Character** (`cartoon/character.py`): `start_idle(seed=None)` adds the updater
+  `Character._idle_step` (a plain method, so `copy()` gets its own clock), `stop_idle()` removes
+  it and the layer, `end_blink()`, `is_idle`, `shown_shape(part)` (the shape on screen, a blink
+  included). The layer is `_overlays`: part -> `PartPose` (body: scale; head: angle; eyes: shape
+  `closed` while blinking), applied after the part's pose about the same pivot (`world(part) =
+  world(parent) · pose(part) · overlay(part)`); an overlay's shape is shown instead of the
+  pose's. `state()` / `set_state()` / `posed_state()` hold the poses only, so `PoseChange` blends
+  and stores no idle values, an expression set during a blink shows once the blink ends, and the
+  mouth (lip sync) is never touched by the layer. A character without `head` does not sway;
+  without an `eyes` shape `closed` it does not blink (`ACTION_NEEDS["blink"]`, §69.2).
+- **Config**: `characters[].idle: bool = True`; `build_character` (so `character(name)`) calls
+  `start_idle()` unless it is false. A `Character` built directly from parts does not idle until
+  `start_idle()`.
+- **Per scene**: the `stage` scene's `idle: false` calls `stop_idle()` on its characters (§69.6).
+- **Not done here**: `PoseChange`, `Walk`, `Gesture` and `Jump` (§69.12) end a running blink;
+  another animation played on the character (e.g. `.animate.shift`) holds the eyes as they are
+  until it ends. Lip sync (§69.4) has
+  its own clock (the scene's time since Step 78), so it does not fall behind during an animation.
+  Tests: `tests/test_cartoon_idle.py`.
+
+### 69.6 The `stage` scene type (Step 73)
+
+A built-in scene type (`scenes/stage.py`) that puts the video's characters on a set: a
+background, a ground line, named marks and depth. Its geometry lives in `cartoon/stage.py` (no
+manim), so it is tested without rendering and later steps (props, Step 75; walking, Step 79;
+lint, Step 84) reuse it.
+
+- **Geometry** (`cartoon/stage.py`): x positions are fractions of the frame width (0 = left
+  edge), the ground line's height a fraction of the frame height above the bottom edge, sizes
+  fractions of the frame's shorter side (8 units in every aspect, so a character is as tall in 9:16
+  as in 16:9). `MARKS` = `far_left 0.1, left 0.25, centre 0.5, right 0.75, far_right 0.9`; a
+  stage's own `marks` are added (same name: its own wins). `mark_x(at, marks)` (a mark or an x in
+  0..1; `ValueError` with did-you-mean and the known marks otherwise). Depth 0..1:
+  `depth_scale(d) = 1 - (1 - FAR_SCALE) d` (`FAR_SCALE = 0.55`), the feet `FAR_RISE = 0.12` × the
+  frame height higher at depth 1 (`feet_point`). `draw_order(depths)`: deeper first, ties in list
+  order. `stage_layout(items, marks=, ground=, size=, frame_width=, frame_height=) ->
+  [StagePlacement]` in draw order: `StageItem(name, kind, at, depth, scale, lift=0)` in, `StagePlacement(name, kind,
+  index, x_fraction, depth, feet, height)` out (`height = size × short side × scale ×
+  depth_scale`; `lift`, Step 75, raises the feet by that fraction of the frame height). `kind`
+  is `character` or `prop` (§69.8); both sort together by depth. `facing_towards_centre(x)`: `right` on the left half and in
+  the middle, else `left`.
+- **Params** (`Stage.Params`): `image` (a file, checked by `image`'s `check_image`; raster via
+  `load_image`, `.svg` via `load_vector`) or `generate` (a top-level `GenerateImage`, so `vidgen
+  imagegen` finds it like `image`'s; a placeholder until made) — both scaled to cover the frame,
+  centred, named `background`; else `background`: a colour or a list of two or more (a vertical
+  gradient: one `Rectangle` filled with the colours, `sheen_direction` DOWN, first colour at the
+  top); none: nothing drawn (the theme's background). `image` with `generate`, or either with
+  `background`, is an error. `ground` (0..0.6, default 0.2); `ground_color` (a band from the
+  bottom edge up to `ground_top(ground, items)`: the ground line, or the line where the deepest
+  character or prop on the ground stands, §69.22; named `ground`; default `surface` without a picture, nothing
+  with one; `false`: nothing). `marks` (identifier -> 0..1). `size` (0.45). `idle` (true). `cartoon_motion` (none: the video's; §69.13).
+  `characters: list[StageCharacter]` (a string is the name): `name: CharacterName`, `at` (mark or
+  x), `depth` 0..1, `scale` (0, 3], `facing` `auto | right | left`, `pose`, `expression` (none:
+  rest). A name twice or an unknown mark is a params error (`characters[k].at: unknown mark ...`).
+  `validate_project` checks the image file and each pose / expression with
+  `cast.pose_name_problem` (exported; the built-in and the character's own tables) (`characters[0].pose: character 'kit': unknown pose 'pointng';
+  did you mean 'pointing'? poses: ...`); the name itself is the `CharacterName` check.
+- **Construct**: `stage_layout` with the frame size; each character is `character(name,
+  height=placement.height, facing=...)` (the theme's colours, idle running unless the entry says
+  `idle: false`), then `set_pose` / `set_expression`, `stop_idle()` when the scene says `idle:
+  false`, and shifted so `feet()` is the placement's feet. **Starting state** is this minimal
+  pose / expression / facing per character; actions change it later (Step 78). One reveal step:
+  the backdrop parts fade in with every character's entrance (targets registered back to front,
+  so the fade-ins add, and Manim draws, them in that order); later beats hold (idle motion
+  runs); `finish()` fades out (outro 0.5 s).
+- **Targets**: each character by its name (`target_patterns = ("<character>",)`), so `dim`,
+  `highlight`, `zoom`, `reveal` and `callout` work on characters today.
+- **Layout dump / lint**: `introspect` reports a `Character` as one object of kind `character`
+  whose `name` is the character's (its box: every drawn part; the invisible anchor has opacity 0
+  and is left out); the picture or colour is `background`, the band `ground`. `lint`'s
+  `describe` names it `character 'pip'`, and `lint_ignore` matches it by that name. The rules specific to characters are §69.12's
+  `walk_overlap` and §69.17's.
+- **Guide and gallery**: the author guide's `scenes` topic has a `# cartoons` block that is a
+  config (`characters:` + `scenes:`), since a stage needs declared characters. `gallery.guide_samples`
+  reads such a block as one sample per scene, shown whole, with `Sample.characters`;
+  `work_config` adds the samples' characters to the work project. `tests/test_guide.py` accepts
+  both block forms.
+- **Hooks for Step 78+**: `Stage.cast` (name -> `Character`, back to front) is set in
+  `construct`. Step 78 (§69.11) built speaking (`Stage.narrate`) and the acting actions on it;
+  walking (Step 79, §69.12) moves the feet along the ground line at the character's depth (it
+  keeps its depth, so the draw order stays).
+- **Not done here**: props (Step 75), speech and acting (Steps 78–79, §69.11), cartoon lint
+  rules (Step 84). Parallax layers, a stage wider than the frame and the camera actions are Step 74 (§69.7).
+  Tests: `tests/test_cartoon_stage.py`.
+
+### 69.7 Parallax layers and the camera on a stage (Step 74)
+
+A `stage` can be wider than the frame and have layers (pictures or shapes) that move by a
+*parallax factor* when the camera moves. The camera moves with beat actions: the existing `zoom`
+and the new `pan` and `follow`, which are generic (any scene type) and reuse `MoveCamera`.
+
+- **Layer offsets** (`cartoon/stage.py`, no manim): a layer is drawn for the camera's *home view*
+  (centre at the origin = the stage's centre, zoom 1). `layer_transform(factor, camera_center,
+  zoom) -> (scale, (dx, dy))` gives the move that makes it appear moved by `factor` × the
+  camera's move and magnified by `zoom ** factor` (zoom = frame width / view width): a home point
+  `b` is put at `k b + c (1 - factor k)`, `k = zoom ** (factor - 1)`, so it shows at `zoom **
+  factor (b - factor c)` from the view's centre. Factor 1 (the stage, its ground and characters):
+  no change; 0: fixed on screen; < 1 far, > 1 near. `layer_half_extent(factor, stage_width=,
+  frame_width=, frame_height=, max_zoom=MAX_ZOOM (8))` is the half size a layer must cover so no
+  view inside the stage at zoom 1–8 shows its edge (`half view / z ** factor + factor × the
+  farthest view centre`, maximised over a 64-step grid of `z`; a test checks random views).
+  `LAYER_PLACES = (background, middle, foreground)`, `DEFAULT_FACTORS` 0.3 / 0.6 / 1.4.
+- **Camera bounds** (`camera.py`, no manim): `view_center_within(bounds, center, width, height)`
+  clamps a view's centre into `(left, right, bottom, top)` (the bounds' middle on an axis where
+  the view is larger). `NarratedScene.camera_bounds()` is the frame; `Stage` returns its width ×
+  the frame height. `zoom` now clamps with it (was the frame), so a zoom on a wide stage stays on
+  the stage.
+- **Stage params** (§69.6 plus): `width` (1–4 frame widths; marks and x are fractions of the
+  stage, `stage_layout(..., stage_width=)`; sizes still follow the frame's shorter side; the
+  picture covers the stage, the colour / gradient and ground band span it), `camera_at` (a mark
+  or x: the view's centre at the start, clamped), `layers: [StageLayer]` = `{name, place,
+  factor, image | shapes, bottom}` (one of `image` / `shapes`; names default to
+  `<place>_layer`, then `_2`...; a name twice is an error; `validate_project` checks layer
+  images with `check_image`). An image layer is scaled to the layer's width (`2 × half extent`)
+  with its bottom edge at `bottom`; shapes (`LayerShape`: `rect`, `ellipse`, `triangle` at `x`
+  of the stage and bottom `y` of the frame height, `width` / `height` of the short side, `color`;
+  `hills`: `hill_outline`, a row of sine-arc hills over the layer's whole width filled down to
+  its lower extent). Draw order: picture / colour, background then middle layers, ground band,
+  characters (back to front), foreground layers; the entrance fades them in in that order.
+  `Stage.layers` (name -> mobject) like `Stage.cast`. Each layer mobject is named after it
+  (layout dump, lint).
+- **Moving the layers**: the stage keeps every layer member's points at the home view
+  (`_Parallax`) and, when some factor is not 1, registers `_move_layers` with
+  `NarratedScene.add_camera_listener`: on every frame each member's points are set to `home ×
+  scale + shift` for the camera now. Starting from the home points (not the last frame's) means
+  an animation of the layer (its fade-in copies points) can never shift it.
+- **Camera driver** (`NarratedScene`): `follow_with_camera(x_of)` (a callable giving the x to
+  follow; `None` stops; `camera_following` reads it) and `add_camera_listener(callback)` share
+  one scene updater, `_camera_step`: first the follow (the frame's centre x set to `x_of()`
+  inside `camera_bounds` at the view's size), then the listeners. A scene updater runs after
+  every animation and mobject updater of the frame, and Manim never suspends it (a `MoveCamera`
+  suspends the frame's own updaters), so layers move during a zoom or pan and never lag a frame.
+  While the camera follows something, `get_moving_mobjects` returns every mobject: otherwise
+  Manim draws the ones before the first moving mobject once into a static image, for the camera
+  as it was (with listeners only, Step 87 lets Manim keep that image; §69.20).
+- **`pan`** (`scenes/actions.py`; run_time 1.5, reversible, not temporary, `needs_target =
+  False`, moves_camera): option `to` (a mark name or an x 0..1 of `camera_bounds`' width) or a
+  target (one of the two: `problems`). Ends a `follow`, then a `MoveCamera` keeping the view's
+  size and y. `until` moves back to the view before. Marks: the new classmethod
+  `NarratedScene.camera_place(params, place)` (a number is itself, a name `ValueError`; `Stage`:
+  `mark_x` with its own marks), checked at validate time through the new hook
+  `Action.scene_problems(scene_cls, params)` (called by `scene_actions` when params are valid).
+- **`follow`** (run_time 1.0, reversible, moves_camera; one target pattern): pans to the target
+  (`_MoveThenFollow`, a `MoveCamera` that calls `follow_with_camera` in
+  `clean_up_from_scene`, so it starts after the move, also when the runner applies it without
+  animation) and then follows it to the end of the scene; `until` stops following (the camera
+  stays), unless a later `follow` took over. A `Character` is followed by its `feet()` x (a
+  pointing arm does not move the camera), anything else by its centre.
+- **`zoom` coming back**: `revert` returns to the view *before the zoom* (`camera_view` /
+  `move_camera_back`), not to the whole frame. Without other camera moves it is the same; after
+  a `pan` or on a stage with `camera_at`, the camera no longer jumps home.
+- **Lint**: `StillContext.camera_moved` (zoomed, or the view's centre away from the frame's
+  centre); `off_frame` and `safe_area` skip such stills (they skipped zoomed ones).
+- **Not done here**: a followed character that walks (§69.12) is followed by x only (the view's
+  y and zoom stay; a `follow` due with a walk plays with it and catches up, §69.12); `zoom` on another character while following keeps the followed one in the
+  middle. An image layer's bottom stays at `bottom`, so a near layer (factor > 1) zoomed in at the
+  bottom of the stage can show a sliver below it. No vertical pan. Layers are not action targets.
+  Tests: `tests/test_cartoon_parallax.py`.
+
+### 69.8 Props (Step 75)
+
+Things on a stage that are not characters: built-in props drawn from primitives, or SVG files.
+They are placed by the same `stage_layout` as the characters and sort with them by depth.
+
+- **Built-in props** (`cartoon/props.py`): `PROP_KINDS = table, chair, tree, bush, house, door,
+  lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup`. Each is drawn in *prop
+  units* (feet at the origin, `y` up, top at 1) from rectangles, rounded rectangles, circles,
+  ellipses, polygons (some with rounded corners), lines and `Union`s of circles (a tree's crown,
+  a bush, a cloud: one outline). Colours: two per prop, `main` and `detail` (`PROP_COLORS`, theme
+  tokens, except the cloud's fixed light `#F4F6FA` and the window glass `GLASS`), plus shades of
+  them (`SHADE` 0.25 towards black, `LIGHT` 0.4 towards white) and the characters' outline ink
+  `CHARACTER_INK`, stroke `OUTLINE_WIDTH`. Every shape is original; no option names or imitates
+  a known design.
+- **`Prop(VGroup)`**: `name`, `kind` (a `PROP_KINDS` name or `svg`), `facing`; `feet()` is the
+  middle of its bottom edge. `draw_prop(kind, *, height, theme, name=None, main=None,
+  detail=None, facing="right", character_height=None)` scales the drawing to `height` and its
+  strokes like a character's of `character_height` (`scale_strokes` / `one_pixel_stroke` of
+  `character.py`, made public for this), so a cup and a house next to a character share its
+  outline width; `facing="left"` mirrors it. `svg_prop(path, *, height, name, theme=None,
+  recolor="none", facing="right", where=None)` loads the file with `load_vector` (sanitised by
+  `svgclean`, sanitiser warnings logged; `recolor: theme` maps colours to the theme's) and stands
+  it on the bottom edge of its `viewBox`.
+- **Sizes**: `PROP_HEIGHTS` gives each prop's height relative to a character (the stage's
+  `size`): table 0.42, chair 0.5, tree 1.7, bush 0.35, house 1.6, door 1.0, lamp 1.5, sign 0.75,
+  box 0.3, ball 0.18, cloud 0.35, sun 0.4, moon 0.35, rock 0.22, plant 0.4, laptop 0.14, cup 0.09;
+  an SVG `SVG_PROP_HEIGHT` 0.5. The stage passes `height factor × scale` as the item's `scale`.
+  `PROP_LIFTS`: `cloud`, `sun`, `moon` hang 0.5 of the frame height above the ground line unless
+  `lift` says otherwise.
+- **Stage params**: `props: list[StageProp]`; a string is a built-in prop's name. `StageProp`:
+  `prop` (one of `PROP_KINDS`) or `svg` (a `.svg` file relative to the project; one of the two),
+  `name`, `at` (mark or x), `depth`, `scale` (0, 5], `lift` (0..1 or default), `facing` (`right`
+  | `left`), `color` / `detail` (built-in props only), `recolor` (`none` | `theme`, SVG only).
+  Names default to the prop's name (an SVG: its file stem made an identifier), numbered from the
+  second (`tree`, `tree_2`, `Params.prop_names`). Errors: a name twice, a prop named like a
+  character on the stage, an unknown mark (`props[k].at: ...`), both or neither of `prop` / `svg`.
+  `validate_project` checks SVG files with `image`'s `check_image` (missing, sanitiser refusal).
+- **Construct**: `Params.items()` lists the props first, then the characters (`StageItem(name,
+  "prop", at, depth, height factor, lift)`), so at the same depth a character is drawn in front of
+  a prop (a character behind a table: give it a larger depth). Each placement builds its prop or
+  character; all are registered as targets back to front (they fade in with the set at step 1).
+  `Stage.props` (name -> `Prop`, back to front) next to `Stage.cast`.
+- **Targets**: `target_patterns = ("<character>", "<prop>")`; `target_names` = the characters,
+  then the props. `dim`, `highlight`, `zoom`, `pan` / `follow` (by its centre) work on props.
+- **Layout dump / lint**: `introspect` reports a `Prop` (an SVG one too, not a `vector`) as one
+  object of kind `prop` named after it; `describe` gives `prop 'tree'`.
+- **Gallery still**: `still.write_props_png(theme, path, width=960, height=540)` draws every
+  built-in prop with its name in a 6-column grid (64-colour palette PNG, about 20 KB):
+  `docs/gallery/media/props.png`, shown in CONFIG.md.
+- **Not done here**: putting a prop on another one (`lift` is in frame heights: a laptop on a
+  table needs the table's height worked out by hand); props do not move or animate (Step 79's
+  motion, Step 76's particles). An SVG prop outside `assets/` is not in the scene fingerprint.
+  Tests: `tests/test_cartoon_props.py`.
+
+### 69.9 Particles (Step 76)
+
+Rain, snow, sparkles, dust, confetti, smoke and bubbles: a field of small shapes that falls,
+drifts, spins or rises over a scene. On a `stage` for the whole scene (`particles` param); on any
+scene type from a beat (the `particles` beat action). Nothing like it existed before (the
+cookbook's `_looping_particles` is an example file, not library code), so the step adds the model
+and reuses the action machinery rather than overlays.
+
+- **Model** (`particles.py`, no manim): `PARTICLE_KINDS = rain, snow, sparkles, dust, confetti,
+  smoke, bubbles`; `KINDS` (kind -> `ParticleKind`: shape `streak | dot | star | chip | ring`,
+  `count` per whole frame at density 1, size range, `fall` (negative: rises), speed range,
+  `drift` (rain's slant, or a random one for dust), sway amplitude / Hz, `spin`, `twinkle`,
+  `grow`, opacity, default colours). Sizes and speeds are fractions of the frame's shorter side
+  (per second). `particle_seeds(kind, count, seed, colors)` draws each particle's start from
+  `numpy.random.default_rng([seed, kind index])` once; `particle_states(seeds, t, width, height)`
+  is a pure function of the time: positions are fractions of the area (`y` from the top, like a
+  callout's area), wrapped into 0..1 (a particle leaving one edge comes back at the other), faded
+  within `EDGE_FADE` 0.06 of the area's edges; rain is tilted along its fall, confetti spins and
+  tumbles (`flip`, a width factor), sparkles twinkle (`sin²`), smoke grows by `grow` and thins out
+  as it rises. `particle_count(kind, density, area_share, preview=)` = the kind's count × density
+  × the area's share of the frame, at most `MAX_PARTICLES` 300, at preview quality
+  `PREVIEW_SHARE` 0.5 of that (rounded up), at least 1. `check_area` checks `[x, y, w, h]`.
+- **Drawing** (`particle_field.py`): `ParticleField(VGroup)` holds one `VMobject` per particle
+  with the unit shape's points; `draw_at(now)` sets every particle's points (unit points scaled,
+  flipped, rotated, moved) and fill / stroke alpha from `particle_states` at `now - start`, over
+  the part of the scene the camera shows (`scene_view`: the `camera.frame`), sizes scaled with the
+  view, so particles stay on screen and the same size through a `zoom`, `pan` or `follow`. Its
+  clock is the scene's `renderer.time`, so the look at a frame does not depend on how often the
+  updater ran. A time-based updater calls `draw_at` (a wait with a field draws every frame);
+  `suspend_updating` is a no-op, so an animation of the field (the outro's fade) never freezes
+  it. Fade in: `FADE_IN` 0.5 s from its start; fade out: `fade_out_animation()` (`_FieldFadeOut`,
+  a remover that takes `level` to 0 while the particles keep moving). `helpers.fade_out` uses a
+  mobject's own `fade_out_animation` when it has one, so `clear_all` / `finish()` fade fields that
+  way. `particle_field(scene, kind, settings)` builds a field for a running scene (count from
+  `scene.is_preview`, colours resolved with the theme, `z_index` one above everything on screen).
+  `ParticleSettings` (a pydantic model): `density` (0, 4], `area`, `color` (one or a list; each
+  particle picks one by its seed), `seed`.
+- **Preview quality**: `NarratedScene.is_preview` (default `False`) is set by the render worker
+  (`render_scene`) before the scene renders; preview and final renders live in separate build
+  folders, so it needs no fingerprint entry.
+- **The `particles` action** (`scenes/particles_action.py`; run_time 0.6 = the fade out,
+  reversible, `until_next_beat`, `needs_target = False`, `needs_visible = False`, `scene_targets =
+  False`): `- particles: snow` or `kind:`; `Options(ParticleSettings, ActionOptions)` + `kind`,
+  `keep`. `apply` adds the field and returns no animation (it fades itself in); `revert` fades it
+  out. `problems()`: kind given twice, more than one, none, unknown (did-you-mean), `keep` with
+  `until`. The runner (`ActionRunner._resolve`) now resolves no targets for actions with
+  `scene_targets = False` (until now only the non-animating `sfx` had it). Works on every scene
+  type; particles for a whole scene of any type: `keep: true` on the first beat.
+- **Stage** (§69.6): `particles: list[StageParticles]` (`ParticleSettings` + `kind`; a string is
+  the kind); the fields are made before the entrance step (they fade in on their own) and drawn in
+  front of everything, foreground layers included; `Stage.particles` (list of `ParticleField`).
+- **Layout dump / lint**: `introspect` reports a field as one object of kind `particles` named
+  after its kind; `describe` gives `particles 'snow'`; `off_frame` skips it (particles cross the
+  edges on purpose). Other rules see it like any shape group (`covered_text` measures its pixels).
+- **Why not an overlay**: overlays are composited per distinct state with two whole-frame Manim
+  cameras (§41); particles change on every frame, so that would cost two extra full renders per
+  frame, and overlays cannot start at a beat's `at`.
+- **Not done here**: a `place: behind` (particles between the backdrop and the characters); wind
+  or speed options; particles reacting to the stage (rain stopping at the ground line). Tests:
+  `tests/test_particles.py`.
+
+### 69.10 Shared style for generated backgrounds (Step 77)
+
+A cartoon's stages should look like one world. `cartoon_style:` (top level, `VideoConfig`; a
+non-empty string, none by default) holds style words added to every `generate:` prompt of
+`stage` scenes, e.g. "flat colours, thick outlines, soft shadows".
+
+- **Which scene types**: a scene type opts in with the class attribute
+  `NarratedScene.uses_cartoon_style` (`False`; `Stage` sets `True`). `find_images` (so `vidgen
+  imagegen`, `validate`, orphans and `used_keys`) reads it from the registry entry's class, and
+  the scene's `generated_picture(generate)` (= `generated_image(project, generate, theme,
+  cartoon=self.uses_cartoon_style)`) uses it when rendering, so both resolve the same request.
+  The `image` scene and extension types keep their prompts unless they opt in. Stage `layers`
+  take only files (no `generate:`), so the background's `generate` is the only stage prompt.
+- **Prompt** (`image_request(project, generate, *, cartoon=False)`): the style part is
+  `"; ".join` of the style words (`generate.style` or `imagegen.style`, §58) and
+  `cartoon_style_words` (spaces collapsed, a final full stop dropped), each once. So the text sent
+  is `<prompt>. Style: <style words>; <cartoon style>. Avoid: <negative>.`; `style: none` drops
+  the style words but not the cartoon style. `ImageRequest.style` and the sidecar's `style` hold
+  the joined words.
+- **Cache key**: unchanged formula (§58, `KEY_VERSION` 1); the cartoon style is in the text, so
+  it changes the key of stage pictures only. Without `cartoon_style`, or for other scene types,
+  the request and its key are exactly what they were (the keys pinned in
+  `test_imagegen_openrouter.test_openai_keys_are_unchanged` and `tests/test_cartoon_style.py`).
+- **Variants**: a top-level key, so a variant may set another style (or `null`) by the usual
+  deep merge; its stage pictures get their own keys, and `used_keys` counts them, so neither set
+  is reported as unused.
+- **Fingerprint**: `cartoon_style` is in the dumped config like `imagegen`, so changing it makes
+  every scene's render stale (not only stages); accepted, as for `imagegen.style`.
+- **Docs**: CONFIG.md "Generated backgrounds (`cartoon_style`)" under `stage`, with how to write
+  a background prompt that leaves room for the characters (an empty middle, the ground visible,
+  no people or text, calm detail, wide stages). Tests: `tests/test_cartoon_style.py`.
+
+### 69.11 Acting actions, part 1: speaking and looking (Step 78)
+
+Characters speak and act during beats: who speaks follows the beat's voice; six beat actions
+(`scenes/acting.py`, written against `vidgen.api` only) change a character's state with
+`PoseChange` (§69.3).
+
+- **Who speaks** (`cartoon/cast.py`, no manim): `beat_voice(scene, beat)` = the beat's `voice`,
+  else the scene's, else `default`; `speaking_characters(config, voice, names)` = the characters
+  among `names` whose `voice` is it (none without a voice). `Stage.narrate` (a context manager
+  around `NarratedScene.narrate`) makes those characters on the stage speak for the beat
+  (`self.speak(c)` on entering, `stop_lip_sync()` after the beat's `d + pad`, unless a later lip
+  sync took over: `lip_sync_track` is no longer the one it started), except in a beat with a `say`
+  action (`beat_action_names(beat)`), where the `say` picks the speakers. `shared_voice_warnings`
+  (`vidgen validate`): characters sharing a voice all speak its beats.
+- **Timing**: `NarratedScene.beat_clock()` returns a callable giving `renderer.time` minus the
+  scene time the current beat started (`narrate` records it); `speak(character)` =
+  `character.lip_sync(self.beat_visemes(current_beat), clock=self.beat_clock())`. The mouth is
+  thus a function of the scene time from the audio's start, whatever runs meanwhile (§69.4); a
+  `say` applied at `at: 0.5` or after the stage's entrance starts mid-track, in step.
+  `NarratedScene.current_beat` is the beat being narrated.
+- **Actions** (all target characters; `_Acting` base: a target name of the scene that is not a
+  declared character is a problem from `scene_problems`, `'tree' is not a character; emote acts on
+  characters`; at render time a non-character target is logged and skipped; `_change` records,
+  per character, the parts and facing a `PoseChange` changes and `_undo` puts back just those,
+  so later changes to other parts stay):
+  - `say` (run_time 0.4 = the bubble's fade-in; reversible, `until_next_beat`; needs `say`):
+    options `bubble` (`false`; `true`: the beat's text; a string: that text, `TranslatableStr`;
+    empty is a problem), `color` (`#FFFFFF`), `size` (`caption`). `apply` calls `scene.speak` on
+    each character and draws a bubble; `revert` stops the lip sync it started (not a later one)
+    and fades the bubble out. `scene_problems`: `say_problem` (a character without `voice`).
+    On the scene's last beat nothing reverts it: the mouth rests after the track and the bubble
+    goes with the scene's fade-out.
+  - `look_at` (0.5; reversible; needs `look_at`): `to` = a target name (a character or prop), a
+    mark or x (through `camera_place`, like `pan`), or `camera`; checked in `scene_problems`. The
+    geometry is `cartoon/acting.py` (no manim): `look_pose(dx, dy, facing)` from the looker's head
+    centre to the other's head (a prop's centre; a mark at the looker's head height): faces that
+    way unless `|dx| < SAME_X` (0.05 units), the head angle `atan2(dy, max(|dx|, SAME_X))` capped at
+    `LOOK_MAX_DEGREES` 20 (positive tilts up in both facings: the mirror), the eyes shifted
+    `LOOK_EYES_AHEAD` 0.008 forward and up / down with the angle; `camera_look(facing)`: head
+    straight, eyes `CAMERA_EYES_BACK` 0.025 back (the middle of a generated face). Applied with
+    `looked_state` (head angle and eyes shift set in the pose; missing parts skipped). A later
+    `pose` / `emote` sets the head / eyes again.
+  - `turn` (0.4; reversible): `to` `left` | `right` (default: the other way); a `PoseChange` with
+    the same parts and another facing (the mirror switches halfway).
+  - `emote` (0.5; reversible; needs `emote`): `to` an expression; `pose` (0.8; reversible): `to`
+    a pose. Both checked with `pose_name_problem` (built-in and the character's own names).
+  - `react` (0.6; reversible, `until_next_beat`): `expression` and / or `pose` (neither: a
+    problem); needs `emote` when it has an expression.
+  Several on one character in a beat play one after another (the runner's batches by target).
+- **Speech bubble** (`speech_bubble(text, anchor, *, color, size, bounds, avoid, scale, theme)`):
+  reuses the callout helpers: `callout_label` (text wrapped to a third of the frame, readable size,
+  ink that reads on `color`) and `label_spot` (`side: top`, `straight`, gaps `BUBBLE_GAPS` 0.25 /
+  0.45 / 0.8 × scale) above the speaker's head region, inside `label_bounds` (the safe area, or the
+  zoomed / panned view) clear of `label_avoid` (text, callouts, other small targets such as the
+  other characters, overlays) and earlier bubbles; these three helpers of `callout_action.py`
+  were made public for it (they were `_view`, `_bounds`, `_avoid`). The tail (`bubble_tail`: a
+  triangle from the plate's edge facing the head, `TAIL_HALF_WIDTH` 0.14, at most `TAIL_LENGTH`
+  0.4 or `TAIL_REACH` 0.6 of the way; counterclockwise like the plate, since Manim's `Union` joins
+  only paths turning the same way) and the plate are one `Union` filled with `color` and outlined
+  in the text's ink (`BUBBLE_STROKE` 3). It is a `Callout` of kind `label` (so later callouts and
+  bubbles avoid it), fading in (`callout_fade`), one z-index level above everything like a callout.
+- **Validate**: problems as above, plus the usual unknown target (an unknown character name) and
+  option errors. Warnings (`cast.acting_warnings(project)`, run by `cli.validate_warnings` in a
+  project session so project actions count): for each action use whose `character_needs()` names
+  an `ACTION_NEEDS` entry, each declared character its targets match (`fnmatch`) whose parts
+  (`character_part_shapes`) lack it: `scenes[0].beats[0].actions[1]: character 'blob' cannot
+  look_at (needs head); the action does nothing for it`.
+- **Not done here**: gestures, walking, entering and leaving are §69.12 (which also makes a bubble
+  follow its speaker); a long beat text makes a large bubble (use a short `bubble` text); a
+  `say` by a character whose voice differs from the beat's is allowed (its mouth follows the
+  beat's audio) and not warned about; a shape swap still resets the mouth's style, so a dimmed
+  character's speaking mouth shows at full opacity (Step 67 gap). Tests:
+  `tests/test_cartoon_acting.py`.
+
+### 69.12 Acting actions, part 2: moving (Step 79)
+
+Five beat actions (`scenes/moving.py`, against `vidgen.api` only, on the `_Acting` base of §69.11:
+targets must be declared characters, a prop is a problem from `scene_problems`) move characters:
+`walk_to`, `enter`, `exit`, `gesture`, `jump`. As in §69.11 the character is the target and the
+new state an option (`- walk_to: pip` + `to: door`; `- gesture: kit` + `to: wave`).
+
+- **Motion without manim** (`cartoon/acting.py`): `walk_seconds(distance, speed=WALK_SPEED 2.5)`
+  = |distance| / (speed × (1 − `WALK_EASE` 0.15)): the walk speeds up evenly over the first 15 %
+  of its time, goes at `speed` (Manim units per second), slows down evenly over the last 15 %
+  (`walk_progress(t)`, the share of the distance at time share `t`; `walk_amplitude(t)`, the speed
+  as a share of the full one). `walk_cycle(steps, amplitude)` gives the pose change after
+  `steps` steps (one per `STEP_LENGTH` 0.35 character heights walked, so the feet keep pace):
+  legs turned ±`WALK_LEG_DEGREES` 10 and arms ±`WALK_ARM_DEGREES` 16 (the far arm the other way)
+  furthest at a footfall (`sin(π steps)`), the legs `WALK_LEG_SQUEEZE` 0.3 narrower and the body
+  `WALK_BOB` 0.02 higher as the legs pass (`1 − sin²`); scaled by the amplitude, so a walk starts
+  and ends in the pose. Entrances and exits: `nearer_side(x, left, right)`, `offstage_x(side,
+  left, right, half_width)` (wholly beyond that edge, `OFFSTAGE_GAP` 0.25 away), `enter_path(side,
+  to_x, view, half_width)` → (side, start, end), `exit_path(side, from_x, view, half_width)` →
+  (side, end). Gestures (`GESTURES`: point, wave, shrug, nod, shake_head; `GESTURE_SECONDS`
+  1.2 / 1.6 / 1.0 / 0.9 / 1.1): `gesture_moves(kind, t, arm)` → part → `PartMove(angle, weight,
+  turn, shift)` (turn `weight` of the way from the pose's angle to `angle`, plus `turn`, plus
+  `shift`), with `gesture_weight(t)` easing in and out over `GESTURE_EASE` 0.25 (smoothstep): point
+  the near arm to 88°; wave to 145° ± 20° three times; shrug both arms ±45° and 0.02 up; nod the
+  head down 12° twice (`sin²(2πt)`); shake_head the head 0.012 sideways twice and the eyes as far
+  again (a flat figure cannot turn its head in depth). The near arm is `arm_left`, else
+  `arm_right` with mirrored angles. `jump_lift(t, height)` = 4 h t (1 − t), `JUMP_HEIGHT` 0.4
+  character heights, `JUMP_SECONDS` 0.6.
+- **Animations** (`cartoon/transition.py`, exported): `Walk(character, x, *, start_x=None,
+  park_x=None, speed=WALK_SPEED)` (run time `walk_seconds` unless given; `begin` ends a blink,
+  jumps to `start_x`, records the state, the feet and the facing towards `x`; each frame sets
+  `walking_state(base, cycle, facing)`, moves the feet's x (y kept) and calls `sync_mouth`;
+  `clean_up_from_scene` moves it to `park_x`), `Gesture(character, kind)`, `Jump(character,
+  height)`. All redraw from the state they began with and end in it (a walk with the new
+  facing). `Character.character_height` (its height in Manim units, from the anchor) scales steps
+  and jumps.
+- **Actions**: `walk_to` (`to` a mark or x, `speed` (0, 20]; class `run_time` 2.0; faces the way
+  it goes and keeps that facing); `enter` (`side`, `to` (default the character's own mark:
+  `Stage.homes`, name -> x), `speed`; starts just beyond the camera view's edge); `exit` (`to`
+  edge, `speed`; ends just beyond the view's edge, then is parked beyond the stage's edge so a
+  later pan never shows it; a `follow` of that character stops: the follow function's
+  `followed`); `gesture` (`to` one of `GESTURES`; `character_needs` = `"gesture: <kind>"`, the
+  §69.2 entries); `jump` (`height` (0, 2]). None is reversible. Places are checked like `pan`'s
+  (`camera_place`).
+- **Timing**: the new hook `Action.run_time_for(scene, targets) -> float | None` (default `None`)
+  gives a use's natural run time for its targets when it falls due; `ActionRunner._phases` uses
+  it (through `_natural`) unless the config gives `run_time` or the phase undoes something. So a
+  walk lasts its distance over its speed (the longest of several targets; all walk for that
+  time), and is shortened with the other actions when the beat has less time left (as always,
+  `rushed_animation` may report it). The estimate is taken when the batch is planned: two walks of
+  one character due on the same frame use the first one's start for both.
+- **Camera**: `Action.alters_targets` (class attribute, default `True`; `pan` and `follow`
+  `False`): such an action's targets do not count when the runner splits due actions into batches
+  of distinct targets, so a `follow` due with a `walk_to` of the same character plays with it.
+  `_MoveThenFollow` re-aims its end view at `x_of()` on every frame (inside `camera_bounds`), so
+  the pan catches up with a walking character and hands over to following without a jump.
+- **Stage**: `Stage.homes` (each character's mark x); characters an `enter` names
+  (`NarratedScene.action_uses("enter")`, the new method listing a scene's validated uses of an
+  action type) start parked beyond the stage's edge on the side of their first `enter` (else the
+  edge nearer their mark) and fade in there with the set (unseen); `off_frame` ignores objects
+  wholly outside. A walk keeps the character's depth (feet y), so the draw order never changes.
+- **Speech bubble follows its speaker** (fixes §69.11's gap): `follow_speaker(bubble, speaker)`
+  (`scenes/acting.py`) adds an updater keeping the bubble at its offset from the speaker's feet,
+  so it moves with a walk or jump (it is not clamped to the view).
+- **Lint `walk_overlap`** (still rule after `overlay_overlap`, in `lint/cartoon_rules.py` since
+  Step 84, default warning, `WalkOverlapRule`
+  `min_overlap` 0.25): the walk actions set `Character.walked_in` to the current beat; `introspect`
+  writes it as `walked_in` on the character's object; at a beat-end still, a character whose
+  `walked_in` is that beat and whose box shares at least `min_overlap` of the narrower width with
+  another character's is reported (`character 'pip' ends its walk on character 'kit' (60% ...)`),
+  a pair that both walked once.
+- **Not done here**: changing depth while walking (`walk_to` keeps the depth); a path or curve
+  is `move_along` (§69.14, not a walk); foley is §69.19 (anticipation, squash and follow-through: §69.13); a single `legs`
+  part cannot step leg by leg (the cycle turns and narrows the pair); `enter` teleports a
+  character that is on screen to the edge first; an `exit` with a camera that keeps moving can
+  end in view (it is parked off stage at its end anyway). Tests: `tests/test_cartoon_moving.py`.
+
+### 69.13 Animation principles built in (Step 80)
+
+Characters move with four principles of cartoon animation: anticipation, squash and stretch,
+overshoot and settle, follow-through. They are pure functions of time in `cartoon/motion.py` (no
+manim) applied inside the existing animations of `cartoon/transition.py` (`PoseChange`, `Walk`,
+`Gesture`, `Jump`; no new animation class), scaled by one setting.
+
+- **Setting**: `cartoon_motion: lively | calm | none` (`config.MotionSetting`, exported) at the
+  top level (`VideoConfig.cartoon_motion`), as a `stage` param and on a character
+  (`CharacterEntry.cartoon_motion`), all default none. The nearest wins:
+  `resolve_motion(character, scene, video)` = the first given, else `DEFAULT_MOTION` `lively`.
+  `character(name, motion=<the scene's>)` resolves the scene's against the video's;
+  `build_character(entry, motion=)` puts the entry's own first. `MOTION_LEVELS` gives the
+  strength: `lively` 1, `calm` 0.4, `none` 0. Every effect is linear in it, and at 0 every
+  function returns the plain motion of §69.3 / §69.12 (no offset, no extra time).
+- **Character** (`cartoon/character.py`): `Character(..., motion="lively")` (an unknown value is
+  a `VidgenError`), the attribute `motion` (read by the animations when they are created; a
+  `motion=` keyword on the animation wins), `motion_strength`, and `set_squash(x, y)`: a scale of
+  the whole figure about its feet, applied in `_screen` before the mirror, outside the poses
+  (`state()` never holds it; the feet stay on the ground; `set_squash()` puts it back; a call
+  with the current values does not redraw).
+- **Phases** (`Phases(before, after)`, `Phases.of(before_s, main_s, after_s)`, `split(t)` →
+  how far into the wind-up, the move and the settle): an animation with the principles has a
+  wind-up before the move and a settle after it.
+- **Anticipation and overshoot** (`motion_ease(u, strength, base=smoothstep)`, a part's or a
+  gesture's progress): the first `ANTICIPATION_SHARE` 0.2 × strength of the time goes back
+  `ANTICIPATION` 0.12 × strength of the move (`-A sin²(πx)`, flat at both ends), the middle is
+  `base`, the last `SETTLE_SHARE` 0.25 × strength passes the end by up to `OVERSHOOT` 0.1 ×
+  strength and comes back a third of that (`settle_wobble(v)`: `sin(πv) sin(2πv) e^(−3v)`
+  normalised to peak 1; 0 and flat at both ends). `PoseChange` eases each part's window with
+  `motion_ease(local, strength, part_rate_func)`; `gesture_weight(t, strength)` (and
+  `gesture_moves(..., strength)`) eases the arms in and out with it (the way out is the way in
+  reversed, so it winds up before going back and passes the pose before stopping); `nod` and
+  `shake_head` keep their own oscillation.
+- **Walk**: `walk_motion_seconds(walk_time, strength)` = the walk's time plus strength ×
+  (`WALK_WIND_UP_SECONDS` 0.25 + `WALK_SETTLE_SECONDS` 0.4) (no walk: 0); `walk_phases`. The
+  feet stand still in the wind-up and the settle; the walk cycle and `walk_progress` run in the
+  move. `walk_accent(t, phases, strength) -> BodyAccent(lean, stretch)`: the wind-up crouches
+  (`WALK_CROUCH` 0.05) and leans back (`WALK_LEAN_DEGREES` 6, body angle about its pivot) as
+  `sin²`, the settle leans on forward (`STOP_LEAN_DEGREES` 6 × `settle_wobble`). `Walk`'s run
+  time default and the actions' `run_time_for` (`walk_to`, `enter`, `exit`) use
+  `walk_motion_seconds` with the character's strength.
+- **Jump**: `jump_motion_seconds(flight, strength)` = flight (`JUMP_SECONDS` 0.6) + strength ×
+  (`JUMP_CROUCH_SECONDS` 0.18 + `JUMP_LAND_SECONDS` 0.3); `jump_phases`. The lift is
+  `jump_lift` of the move's share (0 in the crouch and the landing). `jump_stretch(t, phases,
+  strength)`: the crouch squashes to `−JUMP_SQUASH` 0.22 (`sin²(πx/2)`), the flight stretches by
+  `JUMP_STRETCH` 0.15 × `(1 − 2m)²` (most at take-off and landing, round at the top), the landing
+  squashes fully at touch-down and bounces back (`landing_bounce(v) = (1 − v)² cos(2.5πv)`).
+  `squash_scale(stretch)` = (1 / (1 + stretch), 1 + stretch): the area stays. `JumpAction` gains
+  `run_time_for`.
+- **Follow-through** (arms, head, accessory; a generated character's hair and ears are drawn in
+  its head, §69.1, so they move with it): `follow_through(position, seconds)` = the lagged body
+  speed minus the body speed (character heights per second, the speed by central difference of
+  `position`, the body's distance walked or height jumped as a function of seconds): negative
+  while the body speeds up, positive while it slows down and just after it stops, 0 at a steady
+  speed. The lag is `follow_lag(signal, seconds, spring=FOLLOW_SPRING)`, the signal as a part on
+  a damped spring sees it (§69.15; Step 80 had a first-order lag here): `FOLLOW_SPRING` =
+  `Spring.tuned(FOLLOW_SPRING_HZ 2.0, FOLLOW_DAMPING_RATIO 0.5)`, so a part trails a steady
+  speed-up by 2ζ/ω ≈ 0.08 s, passes a sudden change by about 16 % and swings back once (settled
+  to 2 % in 0.64 s). It is a pure function of time, whatever
+the frame rate. `follow_angles(forward, up, strength)` turns the parts: both arms
+  `FOLLOW_ARM_DEGREES` 30 per height/s (trailing back, at most `FOLLOW_ARM_LIMIT` 25°), head
+  `−FOLLOW_HEAD_DEGREES` 10 (tips back, at most 8°), accessory `−FOLLOW_ACCESSORY_DEGREES` 18 (at
+  most 12°); `up` raises the arms outwards (as a shrug: `arm_left` +, `arm_right` −; inwards at
+  most `FOLLOW_INWARD_LIMIT` 8°). `end_fade(t)` takes it to 0 over the last `FOLLOW_FADE_SHARE`
+  0.12, so the animation ends exactly in its state. `accented_state(base, lean, turns)` adds the
+  lean and the turns to a state (`transition.py`).
+- **Spring** (Step 82, §69.15): `follow_lag` is the only place the lag is computed, so walks and
+  jumps got the spring without other changes.
+- **Not done here**: no principle on a `PoseChange`'s facing switch (it still flips at half);
+  follow-through only on walks and jumps (not on pose changes or gestures); no squash on
+  walking footfalls; anticipation of an `enter` happens off stage (unseen, its time is spent).
+  Tests: `tests/test_cartoon_motion.py`.
+
+### 69.14 Keyframes and motion paths (Step 81)
+
+Two beat actions (`scenes/keyframes_action.py`, against `vidgen.api` only) move what the other
+actions cannot: `keyframes` (through keys) and `move_along` (along a path). They act on a
+`stage`'s characters, props and **character parts**.
+
+- **Part targets**: the `stage` registers each part of each character as a target
+  `<character>.<part>` (`kit.arm_left`; `target_patterns` gains `"<character>.<part>"`), the
+  dotted form of other scenes' sub-targets (`col2.item3`, `cell2.4`). The target's mobject is the
+  part's live `VGroup` (`Character.parts`); its entrance is its character's. `target_names`
+  lists them after the characters and props, from `cast.part_target_names(names)` (the parts
+  each declared character has: `character_part_shapes`, an svg read from the file), only while a
+  project is active (validate, render); without one only characters and props are named. A
+  wildcard such as `*` or `k*` selects parts too: the acting and moving actions skip them
+  (`scenes/acting.py`: `is_part_target`, a name with a dot; at render silently), a part named on
+  its own is a problem for them (`'kit.mouth' is a character's part; emote acts on whole
+  characters`); `dim` and `highlight` act on parts like any target.
+- **Channels** (`cartoon/keyframes.py`, no manim): `CHANNELS = x, y, rotate, scale`. Author units:
+  a character or prop's `x` is a mark or an x 0..1 of the stage (`camera_place`, as `walk_to`),
+  `y` the height of its feet above its ground line at its depth in frame heights (`Stage.grounds`,
+  name -> the ground line's y at the item's depth, a prop's `lift` not included), `rotate`
+  degrees counterclockwise on screen about the feet, `scale` a factor of its built size; a part's
+  `x` / `y` are its pose shift in character heights, `rotate` its pose angle (as drawn facing
+  right, so mirrored with the character), `scale` its size (`KeyedMotion` keeps the signs of the
+  pose's scale, so a flipped mouth stays flipped). `rotate` and `scale` are absolute: a whole
+  target keeps its turn and size as `keyed_rotate` / `keyed_scale` on the mobject.
+- **Keys** (`KeyFrame`, pydantic, `extra=forbid`): `t` (seconds 0..600, strict, or a share of the
+  beat's narration `"40%"`, `SHARE_PATTERN`), `x` (mark or number), `y` (±2), `rotate` (±1080),
+  `scale` (0, 10], `ease`; at least one channel. `key_seconds(t, beat_seconds)`;
+  `key_time_problems(times)`: all seconds or all shares (so the order is known without the
+  audio), strictly increasing, a share ≤ 100 %. Times count from the action's start (its `at`).
+- **Interpolation** (`keyed_values(start, keys, seconds)` with `Key(seconds, values, ease)`):
+  per channel, the value before the first key that sets it is `start` (the target now); between
+  two keys that set it, the later key's ease of the elapsed share; held after the last; a key at
+  0 s sets its values at once. Only channels some key sets are animated.
+- **Eases** (`EASES`, `EASE_NAMES`, `EaseName`, `DEFAULT_EASE` `smooth`): the names of Manim's rate
+  functions, so authors who know Manim know them (`linear`, `smooth`, `rush_into`, `rush_from`,
+  `ease_in|out|in_out_sine|quad|cubic|back`, `ease_out_bounce`, `ease_out_elastic`), written out
+  without importing manim (validate stays light) and checked against `manim.utils.rate_functions`
+  by a test; plus `lively` / `calm` = `motion_ease(u, MOTION_LEVELS[...], smoothstep)` (§69.13).
+  No author-facing ease names existed before (the project's scenes use Manim's functions in
+  code), and `there_and_back`-style eases are left out (they end where they start).
+- **Paths** (`path_curve(points, smooth)`: the points, or a uniform Catmull-Rom curve through them
+  (tangent half the chord from the point before to the point after; the ends' tangent the chord
+  to their neighbour) sampled `PATH_SAMPLES` 32 per segment; `path_length`; `MotionPath(points,
+  smooth).at(share)`: the point that share of the length along, so the speed is even). Lengths
+  are in the points' units.
+- **Animation** (`KeyedMotion(mobject, values_at, *, part=None)`, `cartoon/transition.py`,
+  exported): `values_at(share)` gives the channels at each share of the run time (rate_func
+  linear). A whole target: each frame undoes the last frame's turn and size about the old feet,
+  moves the feet, applies the new turn and size about them (a `Character`'s anchor moves along,
+  so its poses, idle and later walks work from there; another mobject's feet are kept as
+  `keyed_feet`, read by `feet_of`). A part (`mobject` the `Character`): `set_part` with the
+  channels. A character ends a running blink and keeps lip sync in step, as `PoseChange`.
+- **Actions**: `keyframes` (`keys`, `ease`; class `run_time` 1.0; `run_time_for` = the last key's
+  seconds, so a configured `run_time` or a short beat stretches or squeezes the keys);
+  `move_along` (`path` `[[x, y], ...]`, `curve` `smooth | straight`, `ease`, `speed` (0, 20]
+  units per second on screen; class `run_time` 2.0; with `speed`, `run_time_for` = the longest
+  path's screen length (a part's × `character_height`) / speed). The path starts where the
+  target is (that point first, repeated points dropped); an ease past 0..1 holds at the ends
+  (`MotionPath.at` clamps). Both reversible: `until` moves each target back to the values saved
+  at `apply`, straight with `smooth`, in the use's run time. `scene_problems`: the scene type's
+  `target_patterns` must include `<character>` (else `keyframes moves the characters, props and
+  character parts of a stage`); per matched target name and per key / point, a whole target's
+  `x` through `camera_place` and |y| ≤ `WHOLE_Y_LIMIT` 1, a part's `x` a number and |x|, |y| ≤
+  `PART_SHIFT_LIMIT` 1. `problems()`: `key_time_problems` (`keys[1].t: t 0.5 is not after the key
+  before (1.0); keys go in time order`). Unknown parts are the usual unknown-target problem.
+- **Not done here**: no `cartoon_motion` on keyed moves (use `ease: lively`); a moved character
+  does not face its way (add `turn`) and walks / jumps from where it is (a lifted character walks
+  in the air); a whole-target `scale` is a Manim scale (strokes keep their width); no rotation
+  along a path's direction; keys for `depth` or opacity. Tests: `tests/test_cartoon_keyframes.py`.
+
+### 69.15 Spring physics for secondary motion (Step 82)
+
+Parts that hang on something moving (antennae, ears, tails, hair, hanging signs) lag behind it,
+pass it and wobble back. `cartoon/spring.py` (no manim, exported by `vidgen.api`) gives that as a
+pure function of time, so custom scenes and the built-in follow-through (§69.13) share one helper.
+
+- **`Spring(stiffness, damping)`** (frozen dataclass): a spring of unit mass, `x'' = stiffness·(s −
+  x) − damping·x'` (stiffness 1/s² = ω², damping 1/s = 2ζω; both > 0, else `ValueError`).
+  `Spring.tuned(frequency_hz, damping_ratio)` builds one from the undamped wobbles per second and
+  ζ. Properties: `angular_frequency` ω, `damping_ratio` ζ, `is_critical` (|ζ − 1| < 1e-9, so
+  `tuned(f, 1.0)` counts despite rounding), `decay_rate` (ζω, or ω(ζ − √(ζ² − 1)) over-damped: how
+  fast the slowest motion dies).
+- **Closed form**: `step_response(seconds)`, the spring's position after its target jumps 0 → 1
+  from rest (under-damped `1 − e^(−ζωt)(cos ω_d t + ζ/√(1−ζ²) sin ω_d t)`, critical `1 −
+  e^(−ωt)(1 + ωt)`, over-damped the two-exponential form). `overshoot()` = e^(−πζ/√(1−ζ²)) (0 when
+  ζ ≥ 1). `settle_seconds(tolerance=0.02)`: when it enters the band ±tolerance for good,
+  bisected between the last turning point outside the band and the first inside (turning points
+  at kπ/ω_d, e^(−ζω kπ/ω_d) from 1), or from 0 when ζ ≥ 1 (the response only rises).
+- **`follow(target, seconds)`**: where a part on the spring is while it follows `target(seconds)`,
+  at rest at `target(0)` before 0. It weighs the target's past by the spring's impulse response
+  (the slice weights are differences of `step_response`, exact, so they sum to 1 and a constant
+  target gives itself back), over the last 6 decay times (older weighs < e^−6, taken at the
+  oldest value) in 32..512 slices (8 per radian of ω). No state between calls: the same value at
+  any frame rate and after any seek, unlike stepping the equation frame by frame. Checked
+  against the equation stepped at 20 µs (within 0.005).
+- **Use**: follow-through (`motion.follow_lag`, §69.13). A custom scene drives a part from it, e.g.
+  an antenna's angle `k·(spring.follow(head_x, t) − head_x(t))` in an updater, `t` the seconds
+  since the motion started.
+- **`cartoon_motion: none`** still gives no offset: `follow_angles` scales by the strength (0) and
+  `Walk` / `Jump` skip follow-through at 0 (tested on a walk's head angle).
+- **Not done here**: no author-facing YAML for springs (a character has no tail or antenna part;
+  generated hair and ears are drawn in the head); follow-through stays on walks and jumps (not
+  pose changes, gestures or keyed moves). Tests: `tests/test_cartoon_spring.py`,
+  `tests/test_cartoon_motion.py`.
+
+### 69.16 Character sheets and mid-action storyboard stills (Step 83)
+
+Two ways for an author (or an agent, which cannot watch a video) to look at cartoon work without
+rendering it whole.
+
+- **Character sheet** (`cartoon/still.py`, next to `write_character_png`):
+  `character_sheet_sections(entry, root) -> [SheetSection]` (no manim): `pose` (`merged_table`
+  names: built-in, then the character's own), `expression` (same) and `mouth` (the mouth's shape
+  names from `cast.character_part_shapes`; no section without a mouth); `own` marks the
+  character's own entries. `sheet_layout(sections, columns=SHEET_COLUMNS 8) -> SheetLayout(width,
+  height, columns, section_tops, cells)` (no drawing): a title and a note line, then per section a
+  heading line and its cells in rows of at most `columns` (fewer when no section has that many),
+  each cell `SHEET_CELL_WIDTH` 128 px wide, `SHEET_POSE_CELL_HEIGHT` 160 (whole figure) or
+  `SHEET_HEAD_CELL_HEIGHT` 128 (close-up) high, a label line under it. `write_character_sheet(project,
+  entry, theme, path=None) -> CharacterSheet(character, path, width, height, bytes, sections)`:
+  each section's cells are drawn by Manim's `Camera` at the cell's pixel size (`tempconfig`, so
+  strokes keep their one-pixel floor), facing right, on the theme background, then pasted onto a
+  white Pillow page with the storyboard's fonts and colours (`sheets.load_font`, `TEXT`, `MUTED`,
+  `BORDER`). Poses: one figure, its height chosen from a probe at height 1 so the tallest and the
+  widest pose fit (0.84 of the cell's height, 0.9 of its width), centred on its drawn parts, feet
+  near the bottom; expressions and mouth shapes (`swap("mouth", shape)`, the rest face): a figure
+  built `HEAD_FILL` 0.6 times the cell's size over its head box (`HEAD_PARTS` head, eyes, brows,
+  mouth, accessory; the whole figure if it has none) and shifted so the rest head box is centred,
+  so every close-up has the same scale. Built at the right height (not scaled afterwards), so
+  outlines stay proportional. The page is saved as a `SHEET_COLORS` 64-colour PNG without
+  dithering: a generated character is 1148 x 858 px, about 33 KB (sprout, `examples/svg_character`,
+  1148 x 696, 26 KB), drawn in about 0.5 s.
+- **`vidgen character-sheet [NAME] [PROJECT] [--all] [--variant NAME] [--output FILE] [--json]`**
+  (`cli.cmd_character_sheet`): NAME, else every character (`--all PROJECT` makes the one
+  positional the project, since NAME comes first, as in `vidgen character NAME [PROJECT]`);
+  default file `exports/character_sheet_<name>.png` (`default_sheet_path`); `--output` only with a
+  NAME; no characters is a `VidgenError`. Human output: one line per sheet (path, size, counts,
+  KB). JSON (`jsonout.character_sheet_document`, in `cli.JSON_COMMANDS`): `project, variant,
+  elapsed, sheets: [{character, path, width, height, bytes, sections: [{kind, names, own}]}]`.
+- **MCP** (`mcp_server`): tool `character_sheet(project, name=None, variant=None, images,
+  image_offset)` runs `character-sheet [NAME] PROJECT` (no name: `--all`) and returns the document
+  and the sheets as pictures (paged like `storyboard`); not serialised with the rendering tools
+  (a few seconds).
+- **Mid-action stills** (`capture.py`): `NarratedScene.mid_still_actions` (class attribute, empty
+  by default; `Stage`: `walk_to, enter, exit, gesture, jump, keyframes, move_along`) names the
+  action types whose uses also get a still half-way through them. `ActionRunner._phases` labels
+  each batch with those of its (not undoing) actions (`ActionConfig.describe()`: `walk_to pip`,
+  joined by `, `); `ActionRunner._run`, right before it plays the batch for `frames` frames from
+  frame `now`, calls `FrameCapture.add_mid_still(beat, now, frames, label)` when stills are
+  captured. Which frame is the pure function `mid_action_frame(start, frames, taken, min_gap)`:
+  `start + frames // 2`, `None` for an action under two frames or within `min_gap` frames
+  (`MID_STILL_GAP_SECONDS` 0.4 s) of another still of the beat (`taken`: its planned stills and
+  planned end, and its mid stills so far); at most `MAX_MID_STILLS` 3 per beat.
+  `mid_action_frames(spans, taken, min_gap, limit)` folds it over a beat's actions in play order
+  (what the capture does one call at a time; tested without rendering). Times come from the run
+  as played (after `run_time_for` and any shortening to fit the beat), so a pure function of
+  the played spans; computing them before the render would need every walk's distance there.
+- **Records**: a mid still is a `CapturedFrame` with `k` 0 and `mid` the label; file
+  `<beat>-m<frame>.png` (`still_name`); its `index.json` entry and its layout dump frame carry
+  `mid` (absent on other stills, so their shape is unchanged). `FrameCapture.finish` drops mid
+  stills never reached. Readers: `lint` checks only `k == n` (unchanged: mid stills are skipped),
+  `deck` (slides) leaves entries with `mid` out, `gallery` takes the last still (an end still).
+  `storyboard` passes `mid` to `SheetStill.mid`; `sheets._label` writes `½ walk_to pip @ time`;
+  the subtitle adds `½ = half-way through an action` when a page shows one; the JSON frames gain
+  `mid` (null on others). Existing renders are stale anyway (capture, actions and scene code are
+  in the render fingerprint).
+- **Not done here**: no mid stills for `PoseChange`-based acting actions (`pose`, `emote`,
+  `turn`) or camera moves; the sheet shows no facing left, no blink (`eyes` `closed`) and no
+  gestures in motion (the storyboard does). Tests: `tests/test_cartoon_sheet.py`,
+  `tests/test_frames.py` (mid-action frames, the capture), `tests/test_mcp.py`.
+
+### 69.17 Cartoon lint rules (Step 84)
+
+Six still rules in `lint/cartoon_rules.py` (with §69.12's `walk_overlap`, moved there; imported
+right after `layout_rules`, so `RULES` keeps `LINT_RULES`' order), default `warning`, one settings
+model each in `config.LintRules`. Like every still rule they read beat-end stills only (`k == n`;
+§69.16's mid-action stills stay skipped by the runner).
+
+- **Layout dump** (`introspect._character_keys`, read by these rules only): a `character` object
+  always has `facing` (`left` / `right`) and `speaking` (a lip sync runs:
+  `Character.lip_sync_track` is set; at a beat-end still that is the beat's speakers, `Stage.narrate`
+  stops them after it); when they apply, `face` (the box of the `head` part's drawn shapes, px),
+  `viseme` (new property `Character.spoken_viseme`: the viseme the running lip sync shows, `rest`
+  between words), `looked_at` (new attribute `Character.looked_at`: the `to` of its last
+  `look_at` when that is a name, a mark or `camera`; `LookAt.revert` puts the one before back),
+  `passage` (new attribute `Character.passage`: `enter` / `exit` while a `Walk` with `start_x` /
+  `park_x` plays; `begin` sets it, `clean_up_from_scene` clears it) and `walked_in`. The objects
+  of a speech bubble (its plate-and-tail `Union` and its text) carry `bubble`: the speaker's name
+  (`Say._bubble` sets `speech_bubble_of` on the bubble group; `LayoutRecorder._walk` copies it onto
+  the objects walked under it). A frame of a beat-end still has `narrating`: whether its time lies
+  in its beat's narration (`scene.beat_log`: `start <= time < end`, so false in the pad); other
+  stills have no such key (the beat is not logged yet).
+- **Rules**:
+  - `off_stage` (`min_hidden` 0.05): a character with at least that share of its box outside the
+    view and some of it inside; skipped with `passage` set and while the camera is zoomed in (a
+    pan still counts: the viewer sees the cut). `off_frame` now skips characters (one finding).
+  - `character_overlap` (`min_overlap` 0.25 of the narrower width, as `walk_overlap`): two
+    characters at rest whose boxes share that much; a character that walked in the still's beat
+    (`walk_overlap`'s) or has `passage` set is left out.
+  - `bubble_overlap` (`min_overlap` 0.1): a bubble (union of its objects' boxes) covering that
+    share of a character's `face` box (its own speaker's too), or of the smaller of two bubbles.
+  - `facing_away`: a speaking character in view whose listener's face x lies on the side it does
+    not face (more than 0.02 of the shorter side away). The listener is the character it last
+    looked at (`looked_at`) when in view, else the nearest one by face x; `looked_at: camera`
+    means it talks to the viewer: not checked.
+  - `hidden_speaker` (`min_hidden` 0.5): the characters are flat and face left or right, so a
+    back turned to the camera does not exist; what does is a speaker the viewer cannot see:
+    the share of its `face` box covered by the boxes of objects drawn after it (`order`: a
+    character or prop nearer the camera, a foreground layer, an overlay; not text, particles or
+    bubbles), sampled on a 12 x 12 grid.
+  - `mouth_without_voice`: a frame with `narrating: false` where a character's `viseme` is not
+    `rest`: its mouth shows speech while nothing is heard (a viseme track longer than the beat's
+    audio, a custom scene's lip sync without the beat clock).
+- **Fix hints**: each message ends with the usual fix; the same in docs/CONFIG.md's rule table
+  and the guide's troubleshooting table. `lint_ignore`'s `object` also matches a bubble's
+  `bubble` (the speaker), so `{rule: all, object: pip}` covers pip's bubble too.
+- **Not done here**: depth is not in the dump, so two characters at different depths that
+  overlap are reported like two at the same depth; boxes (not drawn pixels) decide what covers a
+  face; keyed moves (§69.14) and jumps are not told apart from standing. Tests:
+  `tests/test_cartoon_lint.py`.
+
+### 69.18 Cartoon storytelling in the guide, and `examples/cartoon` (Step 85)
+
+- **Guide topic `cartoons`** (aliases `cartoon`, `characters`, `character`, `stage`, `dialogue`,
+  `acting`), between `actions` and `overlays`: when to make a cartoon, original characters only
+  (generator or own SVG; never a known character, mascot, brand figure or logo, nor a "style of"
+  prompt), staging (marks and `facing`, depth, the set, room to move), shot variety (wide; `zoom`
+  for medium and close-up; `pan` / `follow`), reaction shots (`react`, `look_at`, `zoom` on the
+  listener, `at` near the line's end), comic timing (one short line per beat, `narration.pad` as
+  the pause, setup / pause / punchline), and the loop character sheet → validate → storyboard
+  (mid-action stills) → lint → `vidgen tts` (Kokoro) → again. One validated YAML block.
+- **Consolidated, not repeated**: the `actions` topic keeps one row per action (the test needs
+  every action there) and points to `cartoons` instead of its former dialogue bullet; the
+  `outputs` topic's cartoon-background bullet moved into "The set"; the `scenes` chooser keeps
+  the `stage` row and its snippet (the gallery sample) with a pointer; the cartoon lint rules stay
+  in `troubleshooting`, named once in the loop.
+- **`examples/cartoon`** ("The Box Kite", `output: box_kite`): two `stage` scenes, 12 beats
+  (115 words: ~44 s of narration at the word-count rate, ~54 s with pads and fades), two generated
+  characters (`dot` round with bun and scarf, `moss` tall with hat and glasses), Kokoro voices
+  (`bf_emma` narrator, `af_bella`, `am_michael`), `narration.pad: 0.7`, props, a `hills` layer,
+  a `width: 2` stage with `follow` on a flying prop (`move_along`), one close-up `zoom` per scene,
+  `react` / `emote` / `look_at` / `jump` / `gesture` / `say` with a bubble, dust and confetti
+  particles; since Step 88 also a `walk_to` and an `enter` (so footsteps and a whoosh), a bare
+  prop name (`- cloud`) and slower voices (`speed: 0.8` narrator, `0.85` characters; §69.21). No
+  audio committed: `vidgen validate` (one warning: the Kokoro extra is not
+  installed) and `vidgen lint --fail-on warning` on the preview (timed from word counts) pass with
+  no findings. The test `test_examples_validate_against_their_schema` (`tests/test_schema.py`)
+  picks it up like every example folder.
+
+### 69.19 Foley and music stings (Step 86)
+
+Sounds tied to what the characters do (foley), and short music stings on beats. Both are ordinary
+sound effects (§47): `SfxEvent`s in the scene's `sfx_log`, stored in its timings and placed on the
+video's one SFX track when the scenes are joined. No audio files were added and nothing is
+downloaded: the five new sounds are built-in generators like the other eleven.
+
+- **New built-in sounds** (`sfx.BUILTIN_SOUNDS`, now 16; same finishing and level as §47, so
+  `test_sfx` checks them like the others): `footstep` (0.14 s: a heel knock, band noise at 260 Hz
+  plus a 95 Hz thump, then a faint scuff at 1.8 kHz), `boing` (0.5 s: a three-partial tone gliding
+  140 → 260 Hz with a 12 Hz wobble dying away), and three music stings, `sting_reveal` (1.4 s: a
+  brassy G4 pickup, then a C major chord C5 E5 G5 C6 of eight-partial brass tones with a soft C7
+  bell), `sting_comic` (1.1 s: two tom hits 200 → 130 and 150 → 100 Hz 150 ms apart, a cymbal of
+  noise around 7.5 kHz at 0.33 s) and `sting_sad` (2.2 s: four muted-horn notes B♭3 A3 A♭3 G3, ten
+  partials whose brightness opens and closes per note like a wah mute, the last long, sagging 3 %
+  with a 5.5 Hz vibrato). Searched first: whoosh, swoosh and pop were reused for enter, exit and
+  surprise; nothing could stand in for a step, a spring or a musical phrase.
+- **The schedule, without manim** (`cartoon/foley.py`, exported): `foley_cues(PlayedAction) ->
+  [FoleyCue]`. `PlayedAction(action, start, seconds, expression, heights, phases)` is one
+  character's action *as it played*: its scene start time and the seconds it took (after
+  `run_time_for` and any shortening to fit the beat), the expression an `emote` / `react` put on,
+  the walk's length in character heights and the wind-up / settle shares (`Phases`,
+  `cartoon_motion`). `FoleyCue(time, sound, gain, params, align)`.
+  - `walk_to`, `enter`, `exit`: a `footstep` on each footfall (`footfall_shares(heights, phases)`):
+    the walk cycle of §69.12 has the legs furthest apart at `k + 0.5` steps (`STEP_LENGTH` 0.35
+    heights), so a foot lands there; the share of the walk's time comes from inverting
+    `walk_progress` (its ease-in / ease-out is quadratic, so the inverse is closed-form), mapped
+    into the move between the wind-up and the settle; plus one softer step (`intensity` 0.3) when
+    the walk stops at least `LAST_STEP_MIN` 0.25 steps after the last footfall (the feet come
+    together). Feet alternate `pitch` 0 / −1.5 semitones, `intensity` 0.5 / 0.4; −5 dB.
+    `enter` adds a `whoosh` (−6 dB) at its start, `exit` a `swoosh` (−6 dB) ending (`align: end`)
+    when the walk ends, just beyond the view.
+  - `jump`: a `boing` (−3 dB) at take-off, after the crouch (`phases.before`).
+  - `emote` / `react` putting on `surprised`: a `pop` (−3 dB) at its start.
+  - Other actions: nothing. Gestures were left silent (not asked for; a wave has no natural sound).
+- **Timing from the real run**: as Step 83 found, the times an action plays are only known in
+  `ActionRunner._run` (after `run_time_for`, the batch split and the beat's shortening).
+  `_build` records each built-in action it applied with the animations it made (`_built`);
+  `_run`, right before `scene.play`, calls `scene.action_foley(name, options, animations,
+  start=now, seconds=frames / fps)` for each. Not for actions applied without animation at a
+  beat's end (they make no sound) nor for undoing. `NarratedScene.action_foley` does nothing;
+  `Stage.action_foley` builds one `PlayedAction` per animation (`Walk.heights` / `Walk.phases`,
+  `Jump.phases`, the new public read-outs of what the animations computed) and records each cue
+  with `self.sfx`, without `params` when the project's `assets/sfx` replaces that sound.
+- **Switch**: top-level `foley: true` (`VideoConfig.foley`) and a `stage` param `foley: bool |
+  None` (none: the video's). Part of the config, so of the render fingerprint (the events are
+  recorded by the render, like the `sfx` action's).
+- **Music stings**: a beat's `sting:` (`BeatConfig.sting`, `StingSetting`: a kind `reveal |
+  comic | sad` or `StingCue(kind, at, gain)`; `StingCue.placed_at`: `at`, else `start` for reveal
+  and `end` for comic / sad). `NarratedScene.narrate` records it when the beat starts:
+  `STING_SOUNDS[kind]` at the beat's start, or at start + `d` (the end of its narration, before
+  `narration.pad`), with `duck` set. Any scene type, since every beat is narrated by `narrate`.
+- **Ducking, the existing path**: `SfxEvent.duck` (JSON `duck: true` only when set, so other
+  events keep their shape). `join_scenes`, when any event ducks, computes
+  `mix.sting_ducking(project, {"scenes": ...}, samples)` = `duck_curve(speech_spans(...),
+  frames, STING_DUCK)`: the music's own curve and narration spans (§48) with
+  `STING_DUCK = {depth 6, attack 0.15, release 0.3, hold 0}`, and passes it to
+  `sfx.write_track(..., ducking_db=)`, which scales the ducked events by it (`ducked`, per sample).
+  **Decision**: lighter and quicker than the music's 12 dB / 1.5 s hold, since a sting lasts
+  1–2.5 s and with that hold it would stay down through every pause between lines. The stings stay
+  on the SFX track (not the music track): they are events at beat times, they must sound with or
+  without `music:`, and the SFX track already carries per-event gains.
+- **Docs**: CONFIG.md "Foley and music stings" (under Sound effects), the sounds table, the `foley`
+  top-level and stage rows, the beat `sting` key; guide topic `cartoons` ("Sound" bullet, a
+  `sting` in its example); EXTENDING.md (`action_foley`).
+- **Not done here**: no panning by where the character stands; footsteps do not change with
+  depth, speed or the ground; no landing sound for a jump; gestures, `pose`, `look_at`, keyed moves
+  and particles make no sound; in a preview timed from word counts every beat is "speech", so a
+  `reveal` sting at a beat's start is ducked from its first sample and an `end` sting starts ducked
+  and comes up over the 0.3 s release (checked by hand on a preview: −6.0 and −2.4 dB at the peaks). `examples/cartoon` has no
+  sting yet (its guide excerpt does). Tests: `tests/test_cartoon_foley.py`.
+
+### 69.20 Render speed for cartoons (Step 87)
+
+Measured first (`examples/cartoon`, preview 854x480 at 15 fps, no audio, one scene per process,
+cProfile and a per-object timer around Manim's `Camera.display_vectorized`): a scene takes 9–11 s
+for 25–29 s of video. The time goes to Manim's Cairo drawing of the characters (about 45 shapes a
+frame for two characters, 2–3 s), H.264 encoding in Manim's writer thread (2.6–3 s, overlapping
+on the second core), Manim's per-frame family walks (1.5 s), `Character.refresh` (1.25 s) and
+imports (2.7 s). Manim already draws everything before the first moving mobject (with an updater,
+in an animation) once per `play` / `wait` into a static image: on a plain stage that is the sky,
+ground band and the props behind the characters. Two caches were added where the profile showed
+time to save:
+
+- **Static stage image with parallax layers** (`NarratedScene.get_moving_mobjects`): Step 74
+  returned every mobject while `_camera_step` was installed, so a stage with layers redrew its sky,
+  layers, ground band and props on every frame (1.24 s of the `hill` scene). Now every mobject is
+  moving only while the camera follows something (`follow_with_camera` may move it on any frame);
+  a camera animation (`zoom`, `pan`) still makes Manim's `MovingCameraScene` treat every mobject
+  as moving. With listeners only, the camera stays still for the whole animation: the listeners
+  run first (so the layers stand where the camera is now) and Manim keeps the static image
+  (`hill`: those draws 1.24 → 0.39 s).
+- **Part drawings, transformed only** (`cartoon/character.py`): each part shape's points are
+  kept once per character (`shape_drawing`: the point arrays of its family members with points),
+  and the live members of each part's shown shape are found again only when the shape shown
+  changes (`_live_members`, keyed by the shown child; since §69.22 each shape keeps one live
+  copy and its members are listed once). `refresh` then only applies the matrices:
+  1.25 → 0.58 s in `yard`.
+- **Part drawings by look** (`look_parts(look, colors)`, `look_key`): the generator's parts for
+  a look in resolved colours are drawn once per process and shared (a `Character` copies the
+  shapes it is given); the key is the `look` and the colours, never the poses, expressions,
+  name, voice, height or state. At most `LOOK_CACHE_SIZE` 16 looks (the oldest dropped). A
+  render builds each character once per scene process, so this saves nothing there; `vidgen
+  character-sheet` builds each character six times (2.07 → 1.60 s for both sheets of the
+  example). SVG looks are not cached (their warnings are logged per build).
+- **Not done**: a raster cache of parts (rotating and scaling a bitmap per frame changes the
+  drawing beyond anti-aliasing; not measured); caching the subpath
+  split of each part (Manim 0.21's `get_subpath_split_indices_from_points`, 1.1 s of `yard`), which
+  needs a per-instance override of a Manim internal that Manim 0.19 does not have.
+- **Result**: the same frames (the `hill` preview decodes bit for bit as before; `yard` differs
+  only in its last 60 frames, which also differ between two runs of the unchanged code: Step 88
+  found that Manim's H.264 encoding, not the drawing, varies there, §69.21). Before /
+  after in HANDOFF.md (Step 87): `hill` −8 %, `yard` −3 % at preview, within noise end to end and
+  at the final format (encoding bound). Tests: `tests/test_cartoon_speed.py`,
+  `tests/test_cartoon_parallax.py`.
+
+### 69.21 Review of Phase H (Step 88)
+
+- **End to end**: `examples/cartoon` through `vidgen validate`, `lint --fail-on warning`,
+  `storyboard` (4 mid-action stills before Step 88's walk and enter, 6 after), `character-sheet
+  --all` and a preview render, by the CLI and by the MCP tools `validate`, `schema`, `lint`,
+  `storyboard`, `character_sheet`, `render`: no failures. `tests/test_phase_h_review.py` repeats
+  this cheaply (a 160x90, 5 fps copy of the example, word-count timing; mocked Kokoro audio).
+- **JSON Schema of `stage`**: `StageCharacter`, `StageProp` and `StageParticles` accept a plain
+  string (a character name, a built-in prop, a particle kind) through `before` validators, which
+  `vidgen schema` did not show; each now has `__get_pydantic_json_schema__` returning `anyOf`
+  (the string form, then the object), like `bullets`' items. The example uses `- cloud` again.
+- **Real narration** (Kokoro 0.9.4, Python 3.12, Manim 0.22, not committed): `vidgen tts` wrote
+  the 12 MP3s, `.align.json` and `.visemes.json` (source and timing `kokoro`, 13–22 cues a beat
+  after merging). It was killed twice by the 1500 MB cap after three beats each (peak about 2.2
+  GB counting the page cache) and finished under 2500 MB. At `speed: 1` Kokoro reads 3.5–4.6
+  words a second, so `narration_speed` warned on 9 of 12 beats; at `speed: 0.8` / `0.85` 3 beats
+  remain just above 3.5 (3.54–3.68). The guide says so in its cartoon timing advice.
+- **The `yard` render that differed between runs** (Step 87): the raw frames Manim hands its
+  writer are bit-identical across runs (md5 of every frame), and a render whose partial movie
+  files are encoded after the scene (no thread overlap) still differs, but only in the two zoom
+  animations and only at the 854-pixel preview width: at 848x480 (a multiple of 16) three runs
+  give identical files. So libx264, as Manim calls it through PyAV, encodes a frame whose width is
+  not a multiple of 16 differently from run to run (most likely reading uninitialised padding
+  next to the frame in a long-running process; a fresh process encoding the same frames gives
+  the same bytes every time). Decoded frames of the variants are equally close to the raw frames.
+  Not fixed (Manim's encoder options are not reachable from vidgen; changing the preview size
+  would change every preview): compare renders by their frames before encoding, or at sizes that
+  are multiples of 16. Backlog.
+
+### 69.22 Fixes after the Phase H review: the ground under the set, the mouth while moving
+
+Two faults the owner saw in the Step 88 review video (`examples/cartoon` at 1280x720):
+
+- **Props standing above the ground**: a thing at `depth` d stands `FAR_RISE` × d of the frame
+  height above the ground line (`feet_point`), but the `ground_color` band ended at the ground
+  line, so the house (depth 0.7) and the tree (0.5) in `yard` stood on the sky. The band now
+  reaches up to `ground_top(ground, items)` (`cartoon/stage.py`, exported): `ground + FAR_RISE ×`
+  the largest depth of the items on the ground (`lift` 0; a lifted sun or cloud hangs in the air
+  and does not count), so everything at a depth stands inside the drawn ground and the deepest
+  thing on its top edge, as a thing at depth 0 stood on the band's edge before. The depth
+  geometry itself is unchanged (feet, sizes, `grounds` for `keyframes` y 0), so characters,
+  props, walks and lint keep their places; only the band grows, and only on stages with
+  something at a depth (the gallery's `stage` sample, `kit` at 0.3, changed a little). Chosen
+  over keeping the lift inside a fixed band (which would move every depth-0 thing down) and over
+  a band always up to depth 1 (which would change every stage). Layers: `background` and
+  `middle` layers are drawn behind the band, so its taller top covers a little more of their
+  lower part (hills keep their tops; a layer meant to sit on the horizon goes at a `y` at or
+  above `ground_top`). A picture (`image`, `generate`) has no band unless `ground_color` is
+  given (then the same rule); its own floor must reach up to where its deepest things stand.
+  Test: `tests/test_cartoon_stage.py` (every placement on the ground lies between the bottom
+  edge and the band's top, for the example's yard and two more stages) and the props render test
+  (the band's top is at or above the tree at depth 0.6).
+- **A mouth left behind**: while `dot` walked and spoke, a copy of her mouth stayed where the walk
+  began. Lip sync (and blinks, expressions) changed a part's shape by replacing the part slot's
+  child with a fresh copy of the shape. Manim lists, when an animation begins, the moving
+  mobjects as the flattened families (`Scene.get_moving_mobjects` returns family members), and
+  draws that list on every frame: the replaced child stayed in the list, no longer in the
+  character, so `shift` and `refresh` no longer moved it, and it was drawn where it was when it
+  was swapped out (the camera's follow path lists the same way). The same held for every
+  animation on a speaking or blinking character (walk, enter, exit, jump, gesture, keyframes,
+  `move_along`, pose changes). Now a `Character` keeps one live copy of every shape of every
+  part for its whole life (`parts[name]` holds them in `shape_names` order); the shapes not shown
+  have no points, so Manim draws only the shown one, and a swap only moves points (the old
+  shape's are emptied, `refresh` draws the new one). The family never changes, so any list made
+  from it stays right, and a style set on the character (a fade, `dim`) is kept by every shape.
+  Cost: a few more family members per character (the hidden shapes, not drawn). Test:
+  `tests/test_cartoon_acting.py` (for a walk, an entrance, a jump, a gesture, a keyed motion and
+  a pose change of a speaking, blinking character: what Manim would draw from the list made at
+  the start holds nothing outside the character, and every mouth point lies in the head's box;
+  it failed for all six before the fix).
+- **The review video again**: `/home/claude/work/phase-h-review/cartoon_review_v2.mp4` (the same
+  scratch copy and Kokoro audio, 1280x720, 59.93 s).

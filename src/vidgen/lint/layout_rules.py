@@ -75,8 +75,8 @@ def has_letters_or_digits(obj: dict[str, Any]) -> bool:
 
 
 def describe(obj: dict[str, Any]) -> str:
-    """A short human label: ``text 'Hello world'``, ``icon 'cpu'`` or
-    ``shape Rectangle 'Group[0]/Rectangle[1]'``."""
+    """A short human label: ``text 'Hello world'``, ``icon 'cpu'``, ``character 'pip'``, ``prop 'tree'``,
+    ``particles 'snow'`` or ``shape Rectangle 'Group[0]/Rectangle[1]'``."""
     if is_text(obj):
         text = " / ".join(line.strip() for line in str(obj.get("text", "")).splitlines() if line.strip())
         if len(text) > 40:
@@ -84,6 +84,8 @@ def describe(obj: dict[str, Any]) -> str:
         return f"{obj['kind']} '{text}'"
     if obj["kind"] == "icon":
         return f"icon '{obj.get('icon')}'"
+    if obj["kind"] in ("character", "prop", "particles"):
+        return f"{obj['kind']} '{obj.get('name')}'"
     return f"{obj['kind']} {obj['class']} '{obj.get('name') or obj['path']}'"
 
 
@@ -98,7 +100,8 @@ def intersection(a: Bbox | list[float], b: Bbox | list[float]) -> Bbox | None:
     return box if box[2] > box[0] and box[3] > box[1] else None
 
 
-def _bbox(obj: dict[str, Any]) -> Bbox:
+def object_box(obj: dict[str, Any]) -> Bbox:
+    """An object's ``bbox`` as a tuple of floats."""
     x0, y0, x1, y1 = obj["bbox"]
     return (float(x0), float(y0), float(x1), float(y1))
 
@@ -112,13 +115,19 @@ def _is_ancestor(path: str, of: str) -> bool:
 
 @rule("off_frame", default="error")
 def off_frame(ctx: StillContext, settings: OffFrameRule) -> Iterator[Issue]:
-    """An object is cut off by the frame edge (not checked while the camera is zoomed in)."""
-    if ctx.zoomed:
+    """An object is cut off by the frame edge (not checked while the camera is zoomed in or
+    moved away from the frame's centre; particles cross the edges on purpose; characters are
+    ``off_stage``'s)."""
+    if ctx.camera_moved:
         return
     width, height = ctx.width, ctx.height
     tolerance = settings.tolerance * ctx.short_side
     for obj in ctx.objects:
-        x0, y0, x1, y1 = _bbox(obj)
+        if obj["kind"] == "particles":
+            continue  # particles cross the edges on purpose (rain falling out of the frame)
+        if obj["kind"] == "character":
+            continue  # off_stage's finding (it knows entrances and exits)
+        x0, y0, x1, y1 = object_box(obj)
         if x1 <= 0 or y1 <= 0 or x0 >= width or y0 >= height:
             continue  # wholly outside: not seen at all (e.g. waiting to slide in)
         outside = {"left": -x0, "top": -y0, "right": x1 - width, "bottom": y1 - height}
@@ -133,11 +142,11 @@ def off_frame(ctx: StillContext, settings: OffFrameRule) -> Iterator[Issue]:
         if not sides:
             continue
         worst = max(outside[side] for side in sides)
-        hidden = 1 - area(intersection(_bbox(obj), (0, 0, width, height)) or (0, 0, 0, 0)) / max(area(_bbox(obj)), 1e-9)
+        hidden = 1 - area(intersection(object_box(obj), (0, 0, width, height)) or (0, 0, 0, 0)) / max(area(object_box(obj)), 1e-9)
         yield Issue(
             f"{describe(obj)} is cut off at the {' and '.join(sides)} edge of the frame "
             f"({worst:.0f} px outside, {hidden:.0%} of its box hidden)",
-            _bbox(obj),
+            object_box(obj),
             (obj,),
             severity="error" if is_text(obj) else "warning",
             value=round(worst, 1),
@@ -148,16 +157,16 @@ def off_frame(ctx: StillContext, settings: OffFrameRule) -> Iterator[Issue]:
 @rule("safe_area")
 def safe_area(ctx: StillContext, settings: SafeAreaRule) -> Iterator[Issue]:
     """Text lies outside the safe area (the scene's margins), though inside the frame (not
-    checked while the camera is zoomed in; overlays place themselves, e.g. a watermark in the
-    margin, and are not checked)."""
-    if ctx.zoomed:
+    checked while the camera is zoomed in or moved; overlays place themselves, e.g. a watermark
+    in the margin, and are not checked)."""
+    if ctx.camera_moved:
         return
     sx0, sy0, sx1, sy1 = ctx.layout["safe_area"]
     tolerance = settings.tolerance * ctx.short_side
     for obj in ctx.objects:
         if not is_text(obj) or is_overlay(obj):
             continue
-        x0, y0, x1, y1 = _bbox(obj)
+        x0, y0, x1, y1 = object_box(obj)
         if x0 < -0.5 or y0 < -0.5 or x1 > ctx.width + 0.5 or y1 > ctx.height + 0.5:
             continue  # off the frame: off_frame's finding
         outside = {"left": sx0 - x0, "top": sy0 - y0, "right": x1 - sx1, "bottom": y1 - sy1}
@@ -168,7 +177,7 @@ def safe_area(ctx: StillContext, settings: SafeAreaRule) -> Iterator[Issue]:
         yield Issue(
             f"{describe(obj)} is outside the safe area at the {' and '.join(sides)} "
             f"({worst:.0f} px into the {', '.join(sides)} margin)",
-            _bbox(obj),
+            object_box(obj),
             (obj,),
             value=round(worst, 1),
             limit=round(tolerance, 1),
@@ -182,14 +191,14 @@ def text_overlap(ctx: StillContext, settings: TextOverlapRule) -> Iterator[Issue
     for a, b in combinations(texts, 2):
         if is_overlay(a) != is_overlay(b):
             continue
-        box = intersection(_bbox(a), _bbox(b))
+        box = intersection(object_box(a), object_box(b))
         if box is None:
             continue
-        smaller = min(area(_bbox(a)), area(_bbox(b)))
+        smaller = min(area(object_box(a)), area(object_box(b)))
         fraction = area(box) / max(smaller, 1e-9)
         if fraction < settings.min_overlap:
             continue
-        union = area(_bbox(a)) + area(_bbox(b)) - area(box)
+        union = area(object_box(a)) + area(object_box(b)) - area(box)
         if a.get("text") == b.get("text") and area(box) / union > 0.9:
             continue  # the same text drawn twice in the same place looks like one
         first, second = sorted((a, b), key=lambda o: o["order"])
@@ -236,8 +245,8 @@ def _covered(ctx: StillContext, shape: dict[str, Any], text: dict[str, Any]) -> 
     """
     if _is_ancestor(shape["path"], text["path"]) or shape["opacity"] < _COVER_OPACITY:
         return None  # the text's own container (a label's box, a Code's background), a faint shape
-    core = _core(_bbox(text))
-    box = intersection(_bbox(shape), core)
+    core = _core(object_box(text))
+    box = intersection(object_box(shape), core)
     if box is None:
         return None
     if shape["kind"] == "image":
@@ -280,7 +289,7 @@ def covered_text(ctx: StillContext, settings: CoveredTextRule) -> Iterator[Issue
             yield Issue(
                 f"{describe(shape)} is drawn over {describe(text)} "
                 f"({fraction:.0%} of the middle of the text's box shows it)",
-                intersection(_bbox(shape), _bbox(text)),
+                intersection(object_box(shape), object_box(text)),
                 (text, shape),
                 value=round(fraction, 3),
                 limit=settings.min_covered,
@@ -315,12 +324,12 @@ def label_plates(ctx: StillContext) -> list[tuple[dict[str, Any], dict[str, Any]
             continue  # an outlined badge (a timeline's "now" tag) sits in its line by design
         if str(fill["color"]).lower() == background:
             continue
-        plate = _bbox(shape)
-        inside = [t for t in texts if _inside(_bbox(t), plate) and t["order"] > shape["order"]]
+        plate = object_box(shape)
+        inside = [t for t in texts if _inside(object_box(t), plate) and t["order"] > shape["order"]]
         if len(inside) != 1:
             continue
         text = inside[0]
-        box = _bbox(text)
+        box = object_box(text)
         height = box[3] - box[1]
         if str(text.get("backdrop", "")).lower() != str(fill["color"]).lower():
             continue
@@ -337,23 +346,23 @@ def label_spacing(ctx: StillContext, settings: LabelSpacingRule) -> Iterator[Iss
     limit = settings.min_gap * ctx.short_side
     texts = [obj for obj in ctx.objects if is_text(obj)]
     for label, shape in label_plates(ctx):
-        plate = _bbox(shape)
+        plate = object_box(shape)
         color = str(shape["fill"]["color"]).lower()
         # the callout's own mark: an outline in the plate's colour; the text it frames is the
         # label's own target (a box's tag sits on its edge, next to it, by design)
         marks = [
-            _bbox(m) for m in ctx.objects
+            object_box(m) for m in ctx.objects
             if m["kind"] == "shape" and m.get("stroke") and str(m["stroke"]["color"]).lower() == color
             and (not m.get("fill") or m["fill"]["opacity"] < 0.1)
         ]
         for other in texts:
-            if other is label or is_overlay(other) != is_overlay(label) or _inside(_bbox(other), plate):
+            if other is label or is_overlay(other) != is_overlay(label) or _inside(object_box(other), plate):
                 continue
             if not has_letters_or_digits(other):  # a bullet, an arrow glyph: no text to confuse it with
                 continue
-            if any(_inside(_bbox(other), mark) for mark in marks):
+            if any(_inside(object_box(other), mark) for mark in marks):
                 continue
-            gap = _gap(plate, _bbox(other))
+            gap = _gap(plate, object_box(other))
             if gap >= limit:
                 continue
             yield Issue(
@@ -381,7 +390,7 @@ def min_font(ctx: StillContext, settings: MinFontRule) -> Iterator[Issue]:
         yield Issue(
             f"{describe(obj)} is {size:.1f} px tall (cap height, {size / short:.2%} of the frame's "
             f"shorter side; minimum {limit:.2%} = {limit * short:.1f} px)",
-            _bbox(obj),
+            object_box(obj),
             (obj,),
             severity="error" if error else "warning",
             value=round(size / short, 4),
@@ -415,7 +424,7 @@ def contrast(ctx: StillContext, settings: ContrastRule) -> Iterator[Issue]:
         yield Issue(
             f"{describe(obj)} has contrast {ratio:.2f}:1 ({seen} on {backdrop}); "
             f"{what} needs {required:g}:1",
-            _bbox(obj),
+            object_box(obj),
             (obj,),
             value=round(ratio, 2),
             limit=required,
@@ -434,7 +443,7 @@ def max_words(ctx: StillContext, settings: MaxWordsRule) -> Iterator[Issue]:
     total = sum(_words(str(obj["text"])) for obj in counted)
     if total <= settings.max_words:
         return
-    boxes = np.array([_bbox(obj) for obj in counted])
+    boxes = np.array([object_box(obj) for obj in counted])
     box = (float(boxes[:, 0].min()), float(boxes[:, 1].min()), float(boxes[:, 2].max()), float(boxes[:, 3].max()))
     yield Issue(
         f"{total} words on screen in {len(counted)} texts (at most {settings.max_words}); "
@@ -455,15 +464,15 @@ def overlay_overlap(ctx: StillContext, settings: OverlayOverlapRule) -> Iterator
     boxes: dict[str, list[Bbox]] = {}
     for obj in ctx.objects:
         if is_overlay(obj):
-            boxes.setdefault(str(obj["overlay"]), []).append(_bbox(obj))
+            boxes.setdefault(str(obj["overlay"]), []).append(object_box(obj))
     content = [obj for obj in ctx.objects if not is_overlay(obj) and obj["kind"] in _CONTENT_KINDS]
     for overlay, parts in boxes.items():
         union = (min(b[0] for b in parts), min(b[1] for b in parts), max(b[2] for b in parts), max(b[3] for b in parts))
         for obj in content:
-            box = intersection(union, _bbox(obj))
+            box = intersection(union, object_box(obj))
             if box is None:
                 continue
-            fraction = area(box) / max(area(_bbox(obj)), 1e-9)
+            fraction = area(box) / max(area(object_box(obj)), 1e-9)
             if fraction < settings.min_overlap:
                 continue
             yield Issue(

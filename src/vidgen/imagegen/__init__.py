@@ -3,7 +3,8 @@
 - :class:`GenerateImage` is the ``generate:`` param (prompt, negative, style, aspect, seed) a
   scene type uses in place of an image ``path`` (the built-in ``image`` scene does).
 - :func:`image_request` resolves it against the project's ``imagegen:`` section into an
-  :class:`ImageRequest`: the prompt sent (style and negative added), provider, model, size,
+  :class:`ImageRequest`: the prompt sent (style, the video's ``cartoon_style`` for scene types
+  that use it, and negative added), provider, model, size,
   quality, seed and the cache key, a hash of all of them. The picture is stored as
   ``assets/generated/<key>.png`` with a sidecar ``<key>.json`` (prompt, provider, model, date,
   revised prompt); both are meant to be committed, like narration audio (they cost money).
@@ -309,10 +310,19 @@ def nominal_size(aspect_ratio: str, resolution: str | None) -> str:
     return f"{w}x{h}"
 
 
-def image_request(project: Project, generate: GenerateImage) -> ImageRequest:
-    """``generate`` resolved with the project's ``imagegen:`` settings."""
+def cartoon_style_words(project: Project, cartoon: bool) -> str:
+    """The video's ``cartoon_style`` words for a scene type that uses them (``cartoon``), else ``""``."""
+    value = project.config.cartoon_style
+    return " ".join(value.split()).rstrip(".") if cartoon and value else ""
+
+
+def image_request(project: Project, generate: GenerateImage, *, cartoon: bool = False) -> ImageRequest:
+    """``generate`` resolved with the project's ``imagegen:`` settings. ``cartoon``: the scene
+    type uses the video's ``cartoon_style`` (``stage``), added after the style words; without a
+    ``cartoon_style`` the request is the same either way."""
     cfg = project.config.imagegen
-    style = style_words(generate.style if generate.style is not None else cfg.style)
+    styles = [style_words(generate.style if generate.style is not None else cfg.style), cartoon_style_words(project, cartoon)]
+    style = "; ".join(dict.fromkeys(w for w in styles if w))
     negatives = [n.strip() for n in (generate.negative, cfg.negative or "") if n and n.strip()]
     negative = "; ".join(dict.fromkeys(negatives))
     text = compose_prompt(generate.prompt, style, negative)
@@ -350,11 +360,11 @@ def image_request(project: Project, generate: GenerateImage) -> ImageRequest:
     )
 
 
-def generated_image(project: Project, generate: GenerateImage, theme: Theme | None = None) -> Path:
+def generated_image(project: Project, generate: GenerateImage, theme: Theme | None = None, *, cartoon: bool = False) -> Path:
     """The picture of ``generate``: ``assets/generated/<key>.png`` (``.svg`` for ``format: svg``)
     once ``vidgen imagegen`` made it, else a placeholder card (PNG) in the theme's colours showing
-    the prompt (``build/imagegen/``; never calls the provider)."""
-    request = image_request(project, generate)
+    the prompt (``build/imagegen/``; never calls the provider). ``cartoon`` as in :func:`image_request`."""
+    request = image_request(project, generate, cartoon=cartoon)
     if request.exists:
         return request.path
     from vidgen.imagegen.placeholder import placeholder_path
@@ -371,8 +381,9 @@ def generated_image(project: Project, generate: GenerateImage, theme: Theme | No
 
 def find_images(project: Project) -> list[SceneImage]:
     """Every ``generate:`` (a top-level param of type :class:`GenerateImage`) of the project's
-    scenes, in order. Needs the registry of a project session; scenes whose type is unknown or
-    whose params do not validate are skipped (``vidgen validate`` reports them)."""
+    scenes, in order, with the video's ``cartoon_style`` for scene types whose
+    ``uses_cartoon_style`` is true. Needs the registry of a project session; scenes whose type is
+    unknown or whose params do not validate are skipped (``vidgen validate`` reports them)."""
     from vidgen import registry
 
     found: list[SceneImage] = []
@@ -386,10 +397,11 @@ def find_images(project: Project) -> list[SceneImage]:
             continue
         if not isinstance(params, BaseModel):  # a scene type without a Params model
             continue
+        cartoon = bool(getattr(entry.cls, "uses_cartoon_style", False))
         for name in type(params).model_fields:
             value = getattr(params, name)
             if isinstance(value, GenerateImage):
-                found.append(SceneImage(spec.id, i, name, value, image_request(project, value), params))
+                found.append(SceneImage(spec.id, i, name, value, image_request(project, value, cartoon=cartoon), params))
     return found
 
 
@@ -559,6 +571,7 @@ __all__ = [
     "ImageRequest",
     "PriceQuote",
     "SceneImage",
+    "cartoon_style_words",
     "compose_prompt",
     "find_images",
     "generated_image",

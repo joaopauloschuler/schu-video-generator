@@ -46,9 +46,12 @@ def unknown_voice_message(name: str, known: Iterable[str]) -> str:
 
 
 def voice_reference_problems(config: VideoConfig) -> list[Problem]:
-    """Scene and beat ``voice:`` names that are not in ``voices:`` (nor ``default``)."""
+    """Scene, beat and character ``voice:`` names that are not in ``voices:`` (nor ``default``)."""
     known = voice_names(config)
     problems = []
+    for k, character in enumerate(config.characters):
+        if character.voice is not None and character.voice not in known:
+            problems.append(Problem(f"characters[{k}].voice", unknown_voice_message(character.voice, known)))
     for i, scene in enumerate(config.scenes):
         if scene.voice is not None and scene.voice not in known:
             problems.append(Problem(f"scenes[{i}].voice", unknown_voice_message(scene.voice, known)))

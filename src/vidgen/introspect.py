@@ -9,8 +9,15 @@ the stills; ``vidgen lint`` reads it. Format: DESIGN.md §15 and docs/CONFIG.md.
 Grouping: a text mobject (``Text``, ``MarkupText``, ``Paragraph``, ``Tex``/``MathTex``,
 ``DecimalNumber``) is one object, not one per glyph; the paragraphs of a ``Code`` listing are
 objects of kind ``code`` and its background a shape; an icon (``vidgen.icon_mobject.Icon``) is
-one object of kind ``icon`` with its name in ``icon``, and a vector picture
-(``vidgen.vector_mobject.VectorPicture``, an SVG) one object of kind ``vector``. A group with no text or image anywhere
+one object of kind ``icon`` with its name in ``icon``, a vector picture
+(``vidgen.vector_mobject.VectorPicture``, an SVG) one object of kind ``vector``, and a cartoon
+character (``vidgen.cartoon.character.Character``) one object of kind ``character`` named after
+the character (its box covers every part; plus ``facing``, ``speaking``, ``face`` and the other
+keys the cartoon lint rules read, :func:`_character_keys`), the objects of a speech bubble carry
+``bubble`` (the speaker's name), and a stage prop (``vidgen.cartoon.props.Prop``) one
+object of kind ``prop`` named after the prop; a particle field
+(``vidgen.particle_field.ParticleField``) is one object of kind ``particles`` named after its
+kind. A group with no text or image anywhere
 inside is one ``group`` object (an axis' ticks, a network's edges); any other group is walked
 into. Parts at opacity 0 are not visible: they are left out of an object's box, and an object
 without visible parts is not recorded.
@@ -124,8 +131,10 @@ class LayoutRecorder:
                 "beat": captured.beat_id,
                 "k": captured.k,
                 "n": captured.n,
+                **({"mid": captured.mid} if captured.mid is not None else {}),
                 "frame": captured.frame,
                 "time": round(captured.time, 6),
+                **_narrating(scene, captured),
                 "still": f"../frames/{captured.scene_id}/{still_name(captured)}",
                 "camera": {
                     "center": [_r(c, 4) for c in np.asarray(camera.frame_center)[:2]],
@@ -220,10 +229,21 @@ class LayoutRecorder:
         return entry[1]
 
     def _walk(self, walk: _Walk, mob: Mobject, parents: list[str], index: int, *, in_code: bool) -> None:
+        first = len(walk.objects)
+        self._walk_one(walk, mob, parents, index, in_code=in_code)
+        speaker = getattr(mob, "speech_bubble_of", None)
+        if isinstance(speaker, str):  # a speech bubble: its plate and text say whose it is
+            for obj in walk.objects[first:]:
+                obj["bubble"] = speaker
+
+    def _walk_one(self, walk: _Walk, mob: Mobject, parents: list[str], index: int, *, in_code: bool) -> None:
         from manim import Code
         from manim.mobject.types.image_mobject import AbstractImageMobject
 
+        from vidgen.cartoon.character import Character
+        from vidgen.cartoon.props import Prop
         from vidgen.icon_mobject import Icon
+        from vidgen.particle_field import ParticleField
         from vidgen.vector_mobject import VectorPicture
 
         if id(mob) in walk.seen:
@@ -240,6 +260,17 @@ class LayoutRecorder:
             return
         if isinstance(mob, Icon):
             self._emit_parts(walk, mob, path, name, "icon", [m for m in mob.get_family() if _drawn(m)], icon=mob.icon_name)
+            return
+        if isinstance(mob, Character):  # one figure, not one object per part
+            self._emit_parts(walk, mob, path, name or mob.name, "character", [m for m in mob.get_family() if _drawn(m)])
+            if walk.objects and walk.objects[-1]["id"] == self._id(mob):
+                walk.objects[-1].update(_character_keys(walk, mob))
+            return
+        if isinstance(mob, Prop):  # one prop, also an SVG one (not a vector picture inside)
+            self._emit_parts(walk, mob, path, name or mob.name, "prop", [m for m in mob.get_family() if _drawn(m)])
+            return
+        if isinstance(mob, ParticleField):  # one field of particles, named after its kind
+            self._emit_parts(walk, mob, path, name or mob.name, "particles", [m for m in mob.get_family() if _drawn(m)])
             return
         if isinstance(mob, VectorPicture):  # one picture, not one object per path
             self._emit_parts(walk, mob, path, name, "vector", [m for m in mob.get_family() if _drawn(m)])
@@ -322,6 +353,30 @@ class LayoutRecorder:
             None if stroke is None else {"color": stroke[0], "opacity": _r(stroke[1], 3), "width_px": _r(stroke[2], 2)}
         )
         walk.objects.append(item)
+
+
+def _character_keys(walk: _Walk, figure: Any) -> dict[str, Any]:
+    """What the cartoon lint rules read about a character (DESIGN.md §69.17): ``facing``,
+    ``speaking`` and, when they apply, ``face`` (its head's box), ``viseme`` (what its lip sync
+    shows), ``looked_at``, ``passage`` (``enter`` / ``exit`` under way) and ``walked_in``."""
+    keys: dict[str, Any] = {"facing": figure.facing, "speaking": figure.lip_sync_track is not None}
+    if figure.has_part("head"):
+        boxes = [p.box for p in (_measure(walk, m) for m in figure.parts["head"].get_family()) if p is not None]
+        if boxes:
+            keys["face"] = [_r(min(b[0] for b in boxes)), _r(min(b[1] for b in boxes)), _r(max(b[2] for b in boxes)), _r(max(b[3] for b in boxes))]
+    optional = {"viseme": figure.spoken_viseme, "looked_at": figure.looked_at, "passage": figure.passage, "walked_in": figure.walked_in}
+    keys.update({key: value for key, value in optional.items() if value is not None})
+    return keys
+
+
+def _narrating(scene: NarratedScene, captured: CapturedFrame) -> dict[str, bool]:
+    """``{"narrating": ...}``: whether the still's beat is being narrated at its time (its audio, or
+    the estimate, between its start and ``start + d``; not in the pad), for a still taken once
+    the beat has ended (a beat-end still); ``{}`` for others."""
+    for timing in scene.beat_log:
+        if timing.beat_id == captured.beat_id:
+            return {"narrating": timing.start <= captured.time < timing.end}
+    return {}
 
 
 # ----- measuring -------------------------------------------------------------------------------

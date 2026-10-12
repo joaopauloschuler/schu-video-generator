@@ -101,6 +101,13 @@ class StillContext:
         return float(self.frame.get("camera", {}).get("zoom", 1.0)) > 1.001
 
     @property
+    def camera_moved(self) -> bool:
+        """Whether the camera is zoomed in or looks away from the frame's centre (``pan``,
+        ``follow``, a ``stage`` wider than the frame): things are cut off by the frame on purpose."""
+        center = self.frame.get("camera", {}).get("center", [0.0, 0.0])
+        return self.zoomed or max(abs(float(c)) for c in center) > 1e-3
+
+    @property
     def short_side(self) -> int:
         """The frame's shorter side in px (the height of landscape video): sizes are measured
         against it, so a 480p preview and the 1080p video (and 16:9 and 9:16) agree."""

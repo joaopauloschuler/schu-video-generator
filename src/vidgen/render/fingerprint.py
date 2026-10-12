@@ -180,6 +180,12 @@ def scene_fingerprint(project: Project, scene_id: str) -> str:
         # colour, or held longer (DESIGN.md §49)
         "next_transition": _next_transition(project, scene_id),
     }
+    if project.config.characters:
+        # a character's mouth follows the beat's viseme track, stored or built from its alignment (§69.4)
+        data["visemes"] = {
+            beat.id: [_stat(project.audio_dir / f"{beat.id}.visemes.json"), _stat(project.audio_dir / f"{beat.id}.align.json")]
+            for beat in spec.beats
+        }
     # continuity (DESIGN.md §50): what the next scene carries changes how this one fades out;
     # what this scene carries in is the end of the scene before (its render's inputs)
     carried_out = carry.carried_out(project.config, scene_id)

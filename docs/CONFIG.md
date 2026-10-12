@@ -10,7 +10,7 @@ the bodies of `variants`, so typos are caught by `vidgen validate`. Paths are re
 project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-and-beats),
 [format](#format-and-preview), [variants](#variants), [theme](#theme), [voice](#voice-voice),
 [narration](#narration-narration), [narration audio](#narration-audio-elevenlabs),
-[multiple voices](#multiple-voices-voices), [pronunciation](#pronunciation-pronunciation),
+[multiple voices](#multiple-voices-voices), [characters](#characters-characters), [pronunciation](#pronunciation-pronunciation),
 [readback (speech to text)](#readback-vidgen-readback),
 [generated images](#generated-images-imagegen-vidgen-imagegen),
 [languages and translations](#languages-and-translations),
@@ -35,6 +35,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `theme` | see [theme](#theme) | preset, colors, sizes, font, background, code style |
 | `voice` | see [voice](#voice-voice) | the narration voice: ElevenLabs (default), OpenRouter, or Kokoro running locally (free; extra `schu-video-generator[kokoro]`; [Kokoro](#kokoro-on-this-computer-provider-kokoro)) — one provider per video ([narration providers](#narration-providers)) |
 | `voices` | `{}` | named voices for dialogue, picked by scenes and beats with `voice: NAME`, see [multiple voices](#multiple-voices-voices) |
+| `characters` | `[]` | cartoon characters `{name, voice, look, colors}`, declared once and used by any scene; see [characters](#characters-characters) |
 | `subtitles` | `{speakers: off}` | `speakers: name` puts the speaker's label before their lines in the SRT, see [multiple voices](#multiple-voices-voices) |
 | `narration` | see [narration](#narration-narration) | beat padding, duration estimate |
 | `pronunciation` | `{}` | how the narrator says terms (TTS text only), see [pronunciation](#pronunciation-pronunciation) |
@@ -53,6 +54,9 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `thumbnail` | none | the thumbnail `<output>_thumbnail.png`, written by `vidgen render` and `vidgen thumbnail`: a scene's frame `{scene, beat, at, overlays}` or a designed card `{title, subtitle, icon, image, preset, background}`, + `{jpeg, auto}`; see [thumbnail](#thumbnail-thumbnail-vidgen-thumbnail) |
 | `stt` | `{provider: faster_whisper}` | speech to text for `vidgen readback` (the narration transcribed and compared with the beat texts): `{provider, model, language, device}`; see [readback](#readback-vidgen-readback) |
 | `imagegen` | `{provider: openai, model: gpt-image-1, size: auto}` | image generation for `generate:` params and `vidgen imagegen`: `{provider (openai \| openrouter), model, size, quality, resolution, style, negative, svg_model}`; see [generated images](#generated-images-imagegen-vidgen-imagegen) |
+| `cartoon_style` | none | style words added to every `generate:` prompt of [`stage`](#generated-backgrounds-cartoon_style) scenes, so a cartoon's backgrounds look alike (`"flat colours, thick outlines, soft shadows"`); part of those pictures' cache key; a variant may change it |
+| `cartoon_motion` | `lively` | how characters move: `lively`, `calm` or `none` ([animation principles](#animation-principles-cartoon_motion)); a stage's or a character's own setting wins |
+| `foley` | `true` | sounds for the characters' actions on `stage` scenes (footsteps, whoosh, boing, pop); `false`: none; a stage's `foley` param wins; see [foley](#foley-and-music-stings) |
 | `scenes` | required | the scenes in order, at least one |
 
 ### Output folder (`output_dir`, `--output-dir`)
@@ -114,7 +118,9 @@ Beat `id`s name the audio files: keep them when you edit the text (only that bea
 re-voiced). A beat `text` is spoken as written; it is also the subtitle. A beat's `actions`
 (default `[]`) point at parts of the scene while it is spoken — reveal, dim, highlight — see
 [beat actions](#beat-actions). A beat's `voice` (default: its scene's) picks another speaker for
-that beat — a dialogue inside one scene, see [multiple voices](#multiple-voices-voices).
+that beat — a dialogue inside one scene, see [multiple voices](#multiple-voices-voices). A beat's
+`sting` (default none) plays a short music sting on it: `reveal`, `comic` or `sad`, or `{kind, at,
+gain}`, see [music stings](#foley-and-music-stings).
 
 ## Chapters
 
@@ -969,6 +975,211 @@ scenes:
   its voice); there are no per-voice entries yet: write a variant (`pronunciation:` in it) when a
   voice of another language needs other spoken forms.
 
+## Characters (`characters:`)
+
+Cartoon characters, declared once at the top level and used by any scene that draws characters:
+the [`stage`](#stage) scene type, or an extension's scene type with a `CharacterName` param (see
+docs/EXTENDING.md). Each one is a figure made of named parts (head, eyes, brows, mouth, body, two
+arms, legs) that can be posed one by one. Only original characters: nothing that imitates a known
+character, mascot or brand figure.
+
+```yaml
+voices:
+  ana: {voice_id: 21m00Tcm4TlvDq8ikWAM}
+characters:
+  - name: pip
+    voice: ana                 # who speaks for pip: a name from voices: (or default)
+    look: {body: bean, hair: short, eyes: round, nose: dot, accessories: [glasses, scarf], seed: 3}
+    colors: {skin: "#C68B59", clothes: accent}
+  - name: rex                  # no voice: rex does not speak; the default look
+```
+
+| key (`characters[]`) | default | |
+|---|---|---|
+| `name` | required | the name scenes use (letters, digits, `_`); unique |
+| `voice` | none | who speaks for the character: a name from [`voices:`](#multiple-voices-voices) or `default` (the base voice); none: the character does not speak |
+| `look` | `{}` | how the character is drawn (the generator's parameters, below); `{}`: a round head on an oval body |
+| `colors` | see below | colours of the parts: theme tokens or hex |
+| `poses` | `{}` | the character's own poses: name -> part -> settings ([below](#poses-and-expressions)) |
+| `expressions` | `{}` | the character's own expressions, like `poses` |
+| `idle` | `true` | breathe, sway the head slightly and blink every 2 to 6 s on its own ([below](#idle-motion)); `false`: hold still between actions |
+| `cartoon_motion` | none (the scene's, else the video's: `lively`) | this character's [animation principles](#animation-principles-cartoon_motion): `lively`, `calm` or `none`; wins over the scene's and the video's |
+
+The **generator** draws every character from simple shapes (circles, ellipses, rounded
+rectangles, polygons, lines), so each figure is an original drawing:
+
+| key (`look`) | default | |
+|---|---|---|
+| `body` | `round` | body shape: `round`, `tall`, `square`, `bean` |
+| `head_size` | `1.0` | head size relative to the default head, 0.6 to 1.6 |
+| `eyes` | `dot` | `dot`, `oval` or `round` (white with a pupil), `sleepy` (half closed) |
+| `nose` | `none` | `none`, `dot`, `round`, `triangle` |
+| `hair` | `none` | `none`, `short`, `spiky`, `long`, `bun`, `curly` (colour `colors.hair`) |
+| `ears` | `none` | `none`, `round`, `pointy`, `floppy` (skin colour); with or without hair |
+| `accessories` | `[]` | any of `glasses`, `hat` (worn on the head), `scarf`, `bag` (on the body); each at most once |
+| `seed` | none | a number that varies the proportions (head, body, legs, arms, eye gap and size, mouth) by up to 8 %; the same look and seed always give the same figure; none: no variation |
+| `svg` | none | an SVG file (relative to the project folder) drawn instead of the generator, split into parts by element ids ([below](#characters-from-svg-files)); the other `look` keys and `colors` do not apply |
+
+| key (`colors`) | default | |
+|---|---|---|
+| `skin` | `secondary` | head, ears, a `round` / `triangle` nose and hands (skin or fur) |
+| `clothes` | `primary` | body, arms and legs (and the hat band) |
+| `outline` | `"#1F2430"` | outline of every part, and the glasses |
+| `features` | `"#1F2430"` | eyes, brows, mouth and a `dot` nose |
+| `hair` | `accent` | hair |
+| `accessory` | `highlight` | hat, scarf and bag |
+
+`outline` and `features` default to a fixed dark ink, not a theme token: no token is dark in every
+theme preset. The outline width follows the character's size on screen (about 0.5 % of the
+frame's shorter side for a character 3/8 of it tall), and is never thinner than one pixel.
+
+**A quick look**: `vidgen character NAME` prints the character's look and colours (each token
+with the colour it resolves to); `--png [FILE]` also writes one still of it on the theme
+background, in the video's aspect ratio with its shorter side 720 px (default file:
+`exports/character_<name>.png`; `--facing left` mirrors it; `--variant NAME` applies a variant).
+
+**Character sheet**: `vidgen character-sheet [NAME] [PROJECT]` draws every pose (the whole
+figure, rest face), every expression and every mouth shape (close-ups of the head) of a
+character on one labelled PNG, facing right, on the theme background:
+`exports/character_sheet_<name>.png` (`--output FILE` with a NAME). Without NAME it writes one
+sheet per character; `--all PROJECT` does that for a project in another folder. The character's
+own poses and expressions are marked `*`. Rows hold up to 8 cells of 128 px, so a generated
+character's sheet is 1148 x 858 px and about 35 KB (a 64-colour PNG), readable as it is by an AI
+agent's image viewer. `--variant NAME`, `--json` (below); over MCP the `character_sheet` tool
+returns the sheets as pictures. Use it to check a character before writing its scenes.
+
+- **Checks**: two characters with the same name, a `voice` that is not in `voices:` (nor
+  `default`) and an unknown key are config errors (`characters[0].voice: unknown voice 'anna';
+  did you mean 'ana'?`); `vidgen validate` also reports a colour that is not a theme token or hex
+  colour, and a scene param naming a character that is not declared (`unknown character 'pop';
+  did you mean 'pip'? characters: pip, rex`).
+- **Renders**: editing `characters:` renders every scene again (it is part of each scene's
+  fingerprint, like the theme).
+- **Variants** replace the whole `characters:` list (lists are not merged).
+
+### Poses and expressions
+
+Every character knows the same named **poses** (`stand`, `pointing`, `waving`, `thinking`,
+`shrug`, `arms_crossed`, `sitting`), which set the body, legs, arms, head and accessory, and
+**expressions** (`neutral`, `happy`, `sad`, `angry`, `surprised`, `worried`, `thinking`), which set
+the eyes, brows and mouth; a pose and an expression combine. A change from one to another is
+animated part by part: each part turns, scales or slides about its pivot with its own easing,
+body first and face last (not a cross-fade). Parts a character does not have are skipped, so the
+names work on generated and SVG characters alike (an SVG without `brows_angry` frowns with its
+brows lowered only). `vidgen character NAME` lists the names a character knows.
+
+A character may add its own, or replace a built-in one of the same name:
+
+```yaml
+characters:
+  - name: pip
+    poses:
+      bow: {body: {angle: -20}, head: {angle: -10}}        # tilt forward
+      waving: {arm_right: {angle: -150}}                   # pip waves with the other arm
+    expressions:
+      smug: {mouth: {shape: [grin, smile], scale: [1.2, 0.6]}, brows: {angle: 10}}
+```
+
+| key (each part of a pose or expression) | default | |
+|---|---|---|
+| `angle` | `0` | degrees counterclockwise about the part's pivot, as drawn facing right (facing left mirrors it); arms hang down at rest, so `90` points the near arm (`arm_left`) forward |
+| `scale` | `1` | one factor or `[x, y]` about the pivot; negative flips the part (`[1, -1]` turns the smile into a frown); `0` is an error |
+| `shift` | `[0, 0]` | `[x, y]` in character units (1 = the character's height) |
+| `shape` | none | the shape shown (`open`, `closed`, `A`, ...): a name, or a list of names of which the first the character has is used; none: the rest shape |
+
+A pose may name `body`, `legs`, `arm_left`, `arm_right`, `head`, `accessory`; an expression
+`eyes`, `brows`, `mouth` (anything else is a config error). Parts of its group a pose or an
+expression does not name go back to their rest pose. Generated characters have the shapes eyes
+`open` / `closed`, brows `default` / `angry` / `sad`, mouth `smile` / `open` and the lip-sync shapes
+`A E O U M F L W` ([below](#lip-sync)); an SVG character
+has the shapes its file names (`vidgen character NAME` lists them). `vidgen validate` reports a
+`shape` the character does not have (none of the choices), and warns about a part it lacks.
+
+### Lip sync
+
+A speaking character's mouth follows its words. For a video with `characters:`, `vidgen tts`
+stores next to each beat's MP3 a **viseme track** (`audio/<beat>.visemes.json`): which of nine
+mouth shapes shows when, from the sounds of the spoken text (pronunciation applied).
+
+| viseme | sounds | generated mouth | SVG shapes tried, in order |
+|---|---|---|---|
+| `rest` | silence | the mouth the expression shows | the mouth's rest shape |
+| `A` | a, i as in "eye", the schwa | wide open | `A`, `open` |
+| `E` | e, ee, i as in "sit", and most consonants (t, d, s, z, k, g, n, r, sh, ch, j) | wide, flat | `E`, `A`, `open` |
+| `O` | o, aw | round | `O`, `A`, `open` |
+| `U` | oo, u | small round | `U`, `O`, `W`, `open` |
+| `M` | m, b, p | closed lips | `M`, else the rest shape |
+| `F` | f, v | a thin line | `F`, `E`, `M`, else the rest shape |
+| `L` | l, th | open | `L`, `E`, `A`, `open` |
+| `W` | w, q | puckered | `W`, `U`, `O`, `open` |
+
+- **Where the sounds come from**: Kokoro's own phonemes when Kokoro voiced the beat; else
+  [misaki](https://github.com/hexgrad/misaki) or the `espeak-ng` program when installed (misaki
+  for English needs spaCy's `en_core_web_sm`; nothing is installed for you); else the letters of
+  the words (`th` -> `L`, `ph` -> `F`, `oo` -> `U`, a silent final `e` dropped in English and
+  French).
+- **When**: the word timings the captions use (ElevenLabs timestamps, Kokoro's `.align.json`,
+  else an estimate within the MP3's speech). Shapes shorter than 0.07 s are merged into the
+  longer neighbour so the mouth does not flicker; a short `M` is lengthened instead, so lips
+  still close.
+- The track belongs to the MP3 and the spoken text it was made for (their hash is stored in it);
+  a re-voiced or edited beat gets a new one with its audio. Audio voiced before the video had
+  characters gets its tracks on the next `vidgen tts` (no new audio, nothing billed). A beat with
+  no current track is timed from its text when the scene is drawn.
+- Editing a track (or a beat's alignment) re-renders the scenes of that beat in a video with
+  characters.
+- Who speaks a beat on a `stage` (the characters with the beat's voice, or a `say` action) is in
+  [Speaking and acting](#speaking-and-acting). The mouth is timed from the beat's start, so a
+  pose change while speaking does not put it behind the audio.
+
+### Idle motion
+
+A character breathes (its body grows and shrinks by about 1 %), sways its head by a degree or two
+and blinks every 2 to 6 seconds, so it never stands frozen. The blinks are random but repeatable:
+the same character name gives the same blinks in every render. A character never blinks during a
+pose or expression change, and the motion does not change its pose, expression or lip sync.
+An SVG character blinks only when its file has `eyes_closed`. `idle: false` turns all of it off
+for one character; a [`stage`](#stage) scene's `idle: false` turns it off for every character in
+that scene.
+
+### Characters from SVG files
+
+`look: {svg: assets/sprout.svg}` draws the character from your own SVG file (or one made with a
+`generate: {format: svg}` model), drawn **facing right**. vidgen sanitises it as it does an SVG
+picture (scripts, filters, raster images and text are removed; gradients become one colour; see
+the `image` scene) and splits it into parts by **element ids**:
+
+| id | meaning |
+|---|---|
+| `body`, `legs`, `arm_left`, `arm_right`, `head`, `eyes`, `brows`, `mouth`, `accessory` | that part at rest (a group or one shape). `arm_left` is the character's own left arm: facing right it is the near arm, so draw `arm_right` behind the body |
+| `<part>_<shape>` (`eyes_closed`, `mouth_A`, `mouth_E`, `mouth_O`, `mouth_M`, `arm_left_up`) | another shape of the part, shown when swapped in; hide it in the file with `display="none"` |
+| `data-pivot="x y"` (on a part's element) | the point the part turns about, in the SVG's `viewBox` coordinates: the neck for `head`, the shoulder for an arm, the hips for `legs` |
+
+- A part's element takes everything inside it, except elements with another part's id (so
+  `eyes` may sit inside the `head` group). An id starting with the part's own name inside its
+  element (`head_outline` inside `head`) is just a piece of it. Shapes outside every named part
+  make the `body` (a file without part ids is a body-only character); shapes hidden there are
+  not drawn.
+- The rest shape of `eyes` is called `open` and that of `mouth` `smile`, as on generated
+  characters; other rest shapes are `rest`. Name the mouth shapes for speech `mouth_A` (also I),
+  `mouth_E`, `mouth_O`, `mouth_U`, `mouth_M` (M, B, P), `mouth_F` (F, V), `mouth_L`, `mouth_W`
+  (W, Q); any subset may be present ([lip sync](#lip-sync) uses the closest one a file has).
+- Parts are drawn in the file's order. The feet are the bottom of the rest shapes, under the
+  middle of `legs` (else of `body`); the top of the rest shapes is the character's height.
+  Without `data-pivot` the pivot is guessed from the part's box (head and body: bottom centre;
+  legs: top centre; an arm: its top corner nearer the body; face parts: the centre).
+- The SVG's own colours and stroke widths are drawn (`colors:` is not used); stroke widths scale
+  with the character's height like a generated character's outline.
+- **Missing parts are allowed**: only a body is needed. `vidgen validate` lists the actions such
+  a character cannot do (no arm: no `gesture: wave` / `point` / `shrug`; no `eyes_closed`: no
+  blink; no head: no `look_at`, `nod`, `shake_head`), ids that look like misspelt part names
+  (`Mouth`, `arm-left`), other shapes the file shows, parts without `data-pivot` that turn, and
+  what the sanitiser removed. A missing file, two elements with the same part id or a bad
+  `data-pivot` are problems.
+- Keep the file under `assets/`: editing it then renders the scenes again.
+- `vidgen character NAME` lists the parts and shapes found; `--png` shows a still.
+  `examples/svg_character` has a small example (`assets/sprout.svg`).
+
 ## Narration (`narration:`)
 
 ```yaml
@@ -1231,12 +1442,13 @@ scenes:
 `illustration` (clean digital illustration, soft shading, limited colour palette), `flat` (flat
 vector illustration, simple geometric shapes, solid colours, no outlines), `isometric`,
 `watercolor`, `line_art`, `render_3d`, `cinematic`. The prompt sent is `<prompt>. Style: <style
-words>. Avoid: <negative>.`; `vidgen imagegen --dry-run` prints it.
+words>. Avoid: <negative>.`, where a [`stage`](#generated-backgrounds-cartoon_style) scene adds the
+video's `cartoon_style` to the style words; `vidgen imagegen --dry-run` prints it.
 
 **Cache.** Each picture is stored as `assets/generated/<key>.png` (`<key>.svg` for `format: svg`) with `<key>.json` beside it
 (`prompt`, `negative`, `style`, `sent_prompt`, `revised_prompt` — the prompt the model says it
 used —, `provider`, `model`, `size`, `quality`, `seed`, `created` date, `scenes`). The key is a
-hash of the prompt sent (with style and negative), provider, model, size, quality and seed:
+hash of the prompt sent (with style, `cartoon_style` on a stage, and negative), provider, model, size, quality and seed:
 editing any of them asks for a new picture, while scenes sharing a request share one file.
 **Commit `assets/generated/`** like `audio/`: the pictures cost money and cannot be made again
 identically. A variant with another format (9:16) gets portrait pictures of its own. Pictures no
@@ -1554,6 +1766,11 @@ writes them as WAV files to listen to):
 | `success` | 0.9 s (0.4–3) | two soft bell notes, E5 then B5 | a check mark, a goal reached |
 | `error` | 0.5 s (0.3–2) | two muted notes falling G4 → E♭4 | a mistake, a failing case |
 | `thud` | 0.45 s (0.15–1.5) | a soft low impact, 110 → 55 Hz with a muffled knock | something landing, a big number |
+| `footstep` | 0.14 s (0.06–0.4) | one soft step: a muffled heel knock (~260 Hz, a 95 Hz thump), then a faint scuff | a character's step ([foley](#foley-and-music-stings)) |
+| `boing` | 0.5 s (0.2–1.5) | a twangy cartoon spring gliding up ~140 → ~260 Hz with a fast wobble | a jump, a bounce |
+| `sting_reveal` | 1.4 s (0.6–4) | a "ta-da": a brassy pickup note, then a bright C major chord with a soft bell | a reveal ([`sting: reveal`](#foley-and-music-stings)) |
+| `sting_comic` | 1.1 s (0.6–3) | "ba-dum-tss": two falling tom hits and a splashy cymbal | after a punchline (`sting: comic`) |
+| `sting_sad` | 2.2 s (1.2–5) | "wah wah wah waaah": four muted brass notes falling B♭3 → G3, the last long and wobbling | a let-down played for laughs (`sting: sad`) |
 
 | key | default | |
 |---|---|---|
@@ -1582,9 +1799,43 @@ Video-wide `sfx:`:
   (`build/.../padded/sfx.wav`, 48 kHz) and adds it to the narration when it writes the MP4 (with
   [music](#background-music-music), into the final mix; effects never duck the music).
   `--no-audio` renders have none. The sounds are listed per scene in `timings.json` (`sfx`: video
-  times, sound, gain, pan, align, params, beat).
+  times, sound, gain, pan, align, params, beat; `duck: true` on a music sting).
 - **Checks.** `vidgen validate` reports unknown sounds (with a suggestion) and params outside a
   sound's range; a sound starting after its scene ends is a render warning.
+
+### Foley and music stings
+
+**Foley.** On a [`stage`](#stage) the characters' actions make their own sounds, timed to the
+action as it plays (also when its beat speeds it up): a `footstep` on every footfall of a
+`walk_to`, `enter` or `exit` (alternating feet, a softer one when the feet come together), a
+`whoosh` as a character enters and a `swoosh` as it leaves the view, a `boing` as a `jump` takes
+off, and a `pop` when `emote` or `react` puts on the `surprised` expression. Other actions are
+silent. They are ordinary sound effects (listed in `timings.json` `sfx`, mixed like the rest):
+`sfx: {gain}` sets their level with the others, and `assets/sfx/footstep.wav` (or `boing.wav`,
+...) replaces a sound with your own. `foley: false` at the top level turns them off for the
+video, a stage's `foley: false` (or `true`) for that scene.
+
+**Music stings.** A beat's `sting` plays a short musical phrase on it:
+
+```yaml
+beats:
+  - text: "And the winner is... the box!"
+    sting: reveal                     # "ta-da", as the beat starts
+  - text: "It was empty all along."
+    sting: {kind: sad, gain: 2}       # "wah wah wah waaah", when the line ends
+```
+
+| key | default | |
+|---|---|---|
+| `kind` | required | `reveal` (`sting_reveal`: a "ta-da" chord), `comic` (`sting_comic`: ba-dum-tss) or `sad` (`sting_sad`: a sad trombone); a plain string is the kind |
+| `at` | `start` for `reveal`, `end` for `comic` and `sad` | `start`: as the beat starts; `end`: when its narration ends, in the pause after the line (the beat's `narration.pad`) |
+| `gain` | `0` | dB, -60 to 12, like a sound effect's |
+
+Stings go on the sound-effect track (any scene type) and duck under the narration like the
+music: 6 dB down while the narrator speaks, 0.15 s down before the speech starts, 0.3 s back up
+after it ends, no hold (the music's 1.5 s hold would keep a sting down through every pause). A
+sting at a beat's end therefore plays in the clear and ducks when the next line starts. In a
+preview timed from word counts (no MP3s yet) the whole beat counts as speech.
 
 ### `vidgen list-sfx`
 
@@ -3587,6 +3838,473 @@ One block of text, wrapped to fit, faded in at the first beat and held (no fade-
   duration: 2
 ```
 
+### `stage`
+
+A cartoon set: a background, a ground line and the video's [characters](#characters-characters)
+standing on it. Steps: (1) the set and every character fade in together; later beats hold the
+picture while the characters breathe and blink ([idle motion](#idle-motion); `idle: false` keeps
+them still in this scene). The background is a picture (`image`, or a
+[generated picture](#generated-images-imagegen-vidgen-imagegen) via `generate:`, scaled to fill
+the frame and cropped) or, without one, a theme colour or a gradient (`background: [primary,
+highlight]` runs from the first colour at the top to the last at the bottom).
+[Action targets](#beat-actions): each character and each [prop](#props) by its name (`dim: kit`,
+`highlight: tree`), and each part of a character as `<character>.<part>` (`kit.arm_left`, for
+[keyframes and paths](#keyframes-and-motion-paths)). A complete example: `examples/cartoon` (two
+scenes, two characters, Kokoro voices); how to stage, shoot and time a cartoon: `vidgen guide
+cartoons`.
+
+Characters stand on **marks**: `far_left` (x 0.1), `left` (0.25), `centre` (0.5), `right` (0.75),
+`far_right` (0.9), the stage's own `marks`, or an x position from 0 (left edge) to 1 (right edge).
+Their feet are on the **ground line**, `ground` (a fraction of the frame height) above the bottom
+edge. **Depth** moves a character back: at `depth: 1` it stands `0.12` of the frame height higher
+and is drawn at 0.55 of its size; characters further back are drawn behind the ones in front
+(ties: in list order). A character's size is `size` (a fraction of the frame's shorter side, so it
+is the same in 16:9 and 9:16) times its own `scale`. Facing `auto` turns each character towards the
+middle, so two characters on either side face each other.
+
+**Layers and the camera.** `layers` add pictures or shapes in front of the background that move
+by a **parallax factor** when the camera moves: `1` moves with the stage and its characters, `0`
+stays fixed on screen, between them is further away (moves less, and is magnified less in a
+zoom), above 1 is nearer (moves more). Each layer has a `place`: `background` and `middle` are
+drawn behind the ground band (in that order), `foreground` in front of the characters; default
+factors `0.3`, `0.6` and `1.4`. A stage `width` of more than 1 (frame widths) gives the camera
+room to pan: marks and x positions are then fractions of the whole stage, the picture or colour
+and the ground band cover all of it, and `camera_at` says where the camera looks at the start.
+The camera moves with the beat actions [`pan`, `follow` and `zoom`](#beat-actions); the view
+never leaves the stage.
+
+| param | type | default | |
+|---|---|---|---|
+| `image` | str | none | background picture relative to the project folder (png, jpg, svg, ...) |
+| `generate` | str \| mapping | none | a generated background instead of `image` (not both): the prompt, or `{prompt, negative, style, aspect, seed, format}`, with the video's [`cartoon_style`](#generated-backgrounds-cartoon_style) added; leave room for the characters (an empty middle, the ground visible) |
+| `background` | color \| list of colors | none | without a picture: one colour, or two or more for a gradient from the top down; none: the theme's background |
+| `ground` | float 0–0.6 | `0.2` | height of the ground line above the bottom edge, as a fraction of the frame height |
+| `ground_color` | color \| `false` | none | fill below the ground line, up to where the deepest character or prop on the ground (no `lift`) stands, so things at a `depth` stand on it; none: `surface` on a colour background, nothing on a picture; `false`: nothing |
+| `marks` | mapping | `{}` | own marks, name -> x from 0 to 1 (`{door: 0.85}`); a built-in name moves that mark |
+| `characters` | list | `[]` | the characters on the stage: a name, or a mapping (below); each at most once |
+| `size` | float | `0.45` | height of a character at depth 0, as a fraction of the frame's shorter side |
+| `idle` | bool | `true` | `false`: no breathing, head sway or blinking in this scene (for every character on it) |
+| `cartoon_motion` | `lively` \| `calm` \| `none` | none (the video's) | the [animation principles](#animation-principles-cartoon_motion) of the characters in this scene; a character's own setting wins |
+| `foley` | bool | none (the video's `foley`: on) | sounds for the characters' actions in this scene (footsteps, whoosh, boing, pop; [foley](#foley-and-music-stings)); `false`: none |
+| `width` | float 1–4 | `1` | width of the stage in frame widths; wider than 1: the camera pans across it (`pan`, `follow`) |
+| `camera_at` | mark \| x | `centre` | where the camera looks at the start (on a stage wider than the frame) |
+| `layers` | list | `[]` | parallax layers (below), in the order given within their place |
+| `props` | list | `[]` | [props](#props): a built-in prop's name (`tree`), or a mapping (below) |
+| `particles` | list | `[]` | [particles](#particles) over the whole scene, in front of everything: a kind (`snow`), or `{kind, density, area, color, seed}` |
+
+| key (`characters[]`) | default | |
+|---|---|---|
+| `name` | required | a character of [`characters:`](#characters-characters) |
+| `at` | `centre` | a mark or an x position from 0 to 1 |
+| `depth` | `0` | 0 (front, on the ground line) to 1 (back: higher up, smaller, drawn behind) |
+| `scale` | `1` | size relative to `size` (e.g. `0.8` for a child), up to 3 |
+| `facing` | `auto` | `auto` (towards the middle), `right` or `left` |
+| `pose` | none | the [pose](#poses-and-expressions) it starts in (`waving`, its own `bow`, ...); none: at rest |
+| `expression` | none | the [expression](#poses-and-expressions) it starts with (`happy`, ...); none: at rest |
+
+| key (`layers[]`) | default | |
+|---|---|---|
+| `name` | `<place>_layer` | its name in the layout dump (`middle_layer`, then `middle_layer_2`, ...); each name once |
+| `place` | `background` | `background`, `middle` (both behind the ground band) or `foreground` (in front of the characters) |
+| `factor` | by `place` | 0–3: how far it moves for a camera move that moves the stage by one; `0.3` / `0.6` / `1.4` |
+| `image` | none | a picture file (a PNG with transparency, or an SVG), as wide as the layer needs, its bottom edge at `bottom` |
+| `bottom` | `0` | with `image`: height of the picture's bottom edge above the frame's bottom edge (fraction of the frame height) |
+| `shapes` | `[]` | instead of `image`: filled shapes `{shape, x, y, width, height, color}` |
+
+A layer has either `image` or `shapes`. A shape is a `rect`, `ellipse` or `triangle` with its
+middle at `x` (0–1 of the stage, as seen with the camera at the stage's centre; default `0.5`) and
+its bottom at `y` (a fraction of the frame height above the bottom edge, `0`), `width` (`0.3`)
+and `height` (`0.2`) as fractions of the frame's shorter side, and `color` (`secondary`); or
+`hills`: a row of rounded hills across the whole layer, each `width` wide and `height` high, their
+foot at `y`, filled down to the bottom. A layer is drawn larger than the frame, so that no
+camera view inside the stage (a zoom up to 8x included) shows its edge.
+
+#### Generated backgrounds (`cartoon_style`)
+
+A stage's `generate:` makes its background with [`vidgen imagegen`](#generated-images-imagegen-vidgen-imagegen).
+The top-level **`cartoon_style`** gives every stage of the video the same look: its words are
+added to the style words of each stage's `generate:` prompt (after `imagegen.style` or the
+`generate.style`, also when that style is `none`). Only `stage` scenes get them: an
+[`image`](#image) scene's picture, and its cache key, stay as they are.
+
+```yaml
+cartoon_style: "flat colours, thick outlines, soft shadows"
+imagegen: {negative: "people, animals, text"}
+variants:
+  sketch: {cartoon_style: "pencil sketch, light watercolour wash"}   # its own set of pictures
+scenes:
+  - id: park
+    type: stage
+    params:
+      generate: "a sunny park seen from the side, a path running across the lower third, trees at both edges, open grass in the middle"
+      characters: [pip, kit]
+    beats: [{text: "Pip and Kit meet in the park."}]
+# sent: "a sunny park seen from the side, ... open grass in the middle. Style: flat colours,
+#        thick outlines, soft shadows. Avoid: people, animals, text."
+```
+
+The words are part of the prompt sent, so they are part of the picture's cache key: changing
+`cartoon_style` (or a variant that sets another one) asks for new pictures (`vidgen imagegen
+--dry-run` lists them and their cost); the old ones are reported as unused, never deleted.
+
+**Writing a background prompt that leaves room for the characters.** The characters stand on
+the ground line in front of the picture, so describe a set, not a scene:
+
+- **An empty middle**: put the interesting things at the edges ("trees at both edges", "a
+  house on the left") and keep the middle plain ("open grass in the middle", "an empty
+  street"), where the characters stand on `left`, `centre` and `right`.
+- **The ground visible**: a side view at eye level with a floor or ground across the lower
+  part ("seen from the side", "a path running across the lower third"), so feet stand on
+  something; set `ground` to where that ground is in the picture.
+- **No people, animals or text**: add them to `negative` (or `imagegen.negative`): a
+  generated figure competes with your characters, and generators draw words poorly.
+- **Calm detail behind the characters**: few small details, soft contrast; a busy picture
+  hides the outlines of the characters (`cartoon_style` words like "simple shapes, soft
+  shadows" help).
+- **Wide stages**: on a stage wider than the frame (`width: 2`) the picture is enlarged to cover
+  the whole stage, so its top and bottom are cut off; keep the ground and the things that matter
+  near the middle of its height, and describe the set from left to right.
+
+#### Props
+
+`props` put things on the stage: a built-in prop drawn from simple shapes in the theme's colours,
+or an SVG file of your own. A prop stands on a mark or x position like a character, at a `depth`
+(further back: higher up, smaller, drawn behind), and sorts with the characters by depth; at the
+same depth a character is drawn in front of a prop. Its size follows the stage's `size`: each
+prop has a usual height next to a character (a `tree` is 1.7 characters tall, a `table` 0.42, a
+`cup` 0.09, an SVG prop 0.5), times its own `scale`. `cloud`, `sun` and `moon` hang in the sky
+(`lift: 0.5`); other props stand on the ground unless given a `lift`.
+
+![Every built-in prop in the default theme](gallery/media/props.png)
+
+| key (`props[]`) | default | |
+|---|---|---|
+| `prop` | — | a built-in prop: `table chair tree bush house door lamp sign box ball cloud sun moon rock plant laptop cup` |
+| `svg` | — | instead of `prop`: an SVG file relative to the project folder (sanitised like every SVG: no scripts, filters, embedded pictures or text), standing on the bottom edge of its `viewBox` |
+| `name` | the prop's name | its name for actions and the layout dump; an SVG's default is its file name (`assets/old_well.svg` -> `old_well`); repeats are numbered (`tree`, `tree_2`) |
+| `at` | `centre` | a mark or an x position from 0 to 1 of the stage |
+| `depth` | `0` | 0 (front, on the ground line) to 1 (back) |
+| `scale` | `1` | size relative to the prop's usual size, up to 5 |
+| `lift` | `0.5` for `cloud`, `sun`, `moon`; else `0` | height above the ground line, as a fraction of the frame height |
+| `facing` | `right` | `left` mirrors it |
+| `color` | per prop | its main colour (a theme token or `#hex`): a tree's leaves (`tertiary`), a chair (`accent`)... |
+| `detail` | per prop | its second colour: a tree's trunk, a house's roof, a laptop's screen... |
+| `recolor` | `none` | `svg` only: `theme` maps the picture's colours to the nearest theme colours |
+
+```yaml
+      props:
+        - tree                                   # a built-in prop at centre
+        - {prop: house, at: far_left, depth: 0.8}
+        - {prop: table, at: left, color: tertiary}
+        - sun                                    # hangs in the sky
+        - {svg: assets/old_well.svg, at: far_right, scale: 1.5, recolor: theme}
+```
+
+`vidgen validate` reports an unknown character, mark, pose or expression (with the known names),
+a missing `image` file (also a layer's) or `svg` file of a prop, a character placed twice, a layer
+or prop name used twice (or a prop named like a character), and `image` with `generate` or with
+`background`. The layout dump and `vidgen lint` see each character as one object of kind
+`character` named after it, each prop as one object of kind `prop` named after it, the picture or
+colour as `background`, the band as `ground`, each layer by its name and each particle field as
+one object of kind `particles` named after its kind. Characters speak and act through beat
+actions ([Speaking and acting](#speaking-and-acting)), and walk, enter, leave, gesture and jump
+through others ([Moving](#moving)).
+
+```yaml
+characters:
+  - {name: pip, look: {body: bean, hair: short}}
+  - {name: kit, look: {body: tall, hair: spiky}, poses: {bow: {body: {angle: -15}}}}
+scenes:
+  - id: park
+    type: stage
+    params:
+      generate: "a sunny park, an empty lawn in the middle, flat colours"
+      ground: 0.18
+      marks: {bench: 0.62}
+      characters:
+        - {name: pip, at: left, pose: waving, expression: happy}
+        - {name: kit, at: bench, depth: 0.5, pose: bow}
+    beats:
+      - text: "Pip spots an old friend by the bench."
+```
+
+#### Speaking and acting
+
+**Who speaks.** A beat is said by its voice (the beat's `voice`, else the scene's, else the base
+voice `default`; see [Multiple voices](#multiple-voices-voices)). On a `stage`, the characters whose `voice` is that voice
+speak it: their mouths follow the beat's [viseme track](#lip-sync) from the beat's start to its
+end. A character without a `voice` never speaks; a beat in the narrator's voice moves no mouth
+unless a character has `voice: default`. A `say` action in the beat picks who speaks instead
+(also a character whose voice is not the beat's: its mouth follows the beat's audio). When two
+characters share a voice, both speak its beats unless a `say` picks one (`vidgen validate`
+warns).
+
+The mouth is timed from the beat's start (the scene's clock), so it stays in step with the audio
+while the character changes pose; during other animations of the character (a fade, a `dim`) it
+holds and then catches up.
+
+**Acting actions** change a character during a beat; all take characters as targets (`- emote:
+kit`), and several may share a beat (each waits for the one before on the same character):
+
+| action | options | |
+|---|---|---|
+| `say` | `bubble` (`false`; `true`: the beat's text, or a short text), `color` (`#FFFFFF`), `size` (`caption`) | the character speaks this beat; `bubble` draws a speech bubble above its head (where there is room, clear of text and other characters) with a tail towards it. Both last until the next beat starts (`until: <beat>`: until that beat starts). |
+| `look_at` | `to` (required: a character or prop of the scene, a mark, an x 0–1, or `camera`) | turns towards it and tilts the head up or down (at most 20°); `camera` turns the eyes to the viewer. Stays so. |
+| `turn` | `to` (`left` \| `right`; default: the other way) | faces the other way (a mirror at half time). Stays so. |
+| `emote` | `to` (required: an expression) | changes the expression (eyes, brows, mouth ease one after another). Stays so. |
+| `pose` | `to` (required: a pose) | takes the pose (body, legs, arms, head ease one after another). Stays so. |
+| `react` | `expression` and / or `pose` | a listener's reaction for this beat: undone when the next beat starts. |
+
+`look_at`, `turn`, `emote` and `pose` last; `until: <beat>` puts back what they changed when that
+beat starts (other changes made since stay). `vidgen validate` reports an unknown character,
+pose or expression (with the known names, the character's own included), a `say` by a character
+without a `voice`, a `look_at` place that is neither a target, a mark nor `camera`, and an acting
+action on a prop; it warns when a character lacks the parts an action needs (a `say` without a
+mouth, a `look_at` without a head, an `emote` without eyes, brows or mouth): the action does
+nothing for that character. `vidgen lint` checks the beat ends of a stage: a speaker facing
+away from the character it last looked at (or the nearest one; `facing_away`), a speaker whose
+face something in front of it hides (`hidden_speaker`), a speech bubble over a face or another
+bubble (`bubble_overlap`), a mouth moving while no narration is heard (`mouth_without_voice`),
+characters standing on each other (`character_overlap`) and a character cut by the view's edge
+(`off_stage`); see [lint](#lint-vidgen-lint).
+
+```yaml
+voices:
+  pip_voice: {voice_id: VOICE_ID_1}
+  kit_voice: {voice_id: VOICE_ID_2}
+characters:
+  - {name: pip, voice: pip_voice, look: {body: bean}}
+  - {name: kit, voice: kit_voice, look: {body: tall, hair: spiky}}
+scenes:
+  - id: park
+    type: stage
+    params:
+      characters: [{name: pip, at: left}, {name: kit, at: right}]
+    beats:
+      - text: "Hello! Have you seen my kite?"
+        voice: pip_voice                        # pip speaks
+        actions:
+          - {react: kit, expression: surprised} # kit listens, surprised, for this beat
+      - text: "It is up in the tree."
+        voice: kit_voice
+        actions:
+          - {say: kit, bubble: "Up there!"}     # kit speaks, with a short bubble
+          - {look_at: kit, to: tree, at: 0.3}
+          - {emote: pip, to: worried, at: 0.5}
+```
+
+#### Moving
+
+Five more actions move the characters of a `stage`; like the acting actions they take characters
+as targets and the new state as an option:
+
+| action | options | |
+|---|---|---|
+| `walk_to` | `to` (required: a mark or an x 0–1 of the stage), `speed` (`2.5`) | walks along the ground to that place, facing the way it goes, legs, arms and body moving in step; it speeds up, walks at `speed` units per second (the frame's shorter side is 8 units; a character is about 3.6 tall at `size: 0.45`) and slows down. It takes as long as the distance needs: about 3.3 s from `left` to `right` of a 16:9 stage (7.1 units), plus the wind-up and settle of [`cartoon_motion`](#animation-principles-cartoon_motion). Stays there. |
+| `enter` | `side` (`left` \| `right`; default: the edge nearer where it goes), `to` (a mark or x; default its own `at`), `speed` | walks in from just beyond that edge of what the camera shows. A character with an `enter` action waits off stage (beyond the stage's edge) from the start of the scene until then. |
+| `exit` | `to` (`left` \| `right`; default: the nearer edge), `speed` | walks out beyond that edge of what the camera shows, then waits off stage (an `enter` brings it back). A camera `follow`ing it stops (and stays). |
+| `gesture` | `to` (required: `point`, `wave`, `shrug`, `nod`, `shake_head`) | the gesture, then back to its pose: `point` raises the near arm forward, `wave` raises it and waves three times, `shrug` raises both arms, `nod` dips the head twice, `shake_head` moves the head (and eyes) side to side twice. 1.2 s (`point`), 1.6 (`wave`), 1.0 (`shrug`), 0.9 (`nod`), 1.1 (`shake_head`). |
+| `jump` | `height` (`0.4`: its own heights, up to 2) | jumps up and lands where it stood (0.6 s in the air; with `cartoon_motion` a crouch before and a squash after, [below](#animation-principles-cartoon_motion)). |
+
+A walk's time comes from its distance and `speed`; `run_time:` sets the time instead (and so the
+speed). An action never makes its beat longer: a walk longer than the time left in the beat is
+sped up (and logged). Look where it goes with `follow` in the same beat and `at`: the camera
+catches up with the walking character and then follows it (the two play together). A speech
+bubble moves with its character. Lip sync stays in step during a walk, gesture or jump.
+
+`vidgen validate` reports an unknown mark, gesture or edge, and a moving action on a prop; it
+warns when a character lacks the parts a gesture needs (`point` / `wave`: an arm; `shrug`: both
+arms; `nod` / `shake_head`: a head). `vidgen lint` reports a walk that ends on another character
+(`walk_overlap`): pick another mark, or move the other character first. `vidgen storyboard` shows
+each walk, entrance, exit, gesture and jump (and `keyframes` / `move_along`) half-way as well as
+at the beat's end ([mid-action stills](#frame-stills-vidgen-render---frames)). Walks, entrances,
+exits and jumps make their own sounds ([foley](#foley-and-music-stings)).
+
+```yaml
+scenes:
+  - id: park
+    type: stage
+    params:
+      characters: [{name: pip, at: left}, {name: kit, at: right}]
+    beats:
+      - text: "Pip strolls over to the tree."
+        actions:
+          - {follow: pip, at: 0.2}
+          - {walk_to: pip, to: centre, at: 0.2}
+      - text: "Then Kit arrives, waving."
+        actions:
+          - {enter: kit, side: right}           # waits off stage until now; walks to its mark
+          - {gesture: kit, to: wave, at: 0.6}
+      - text: "Pip jumps for joy, and Kit leaves."
+        actions:
+          - {jump: pip}
+          - {exit: kit, to: right, at: 0.4}
+```
+
+#### Animation principles (`cartoon_motion`)
+
+Characters move with four classic principles of cartoon animation, built into the acting and
+moving actions:
+
+- **anticipation**: before a move, a short move the other way. A pose change, `emote`, `turn`,
+  `look_at`, `react` or `gesture` swings each part a little back first; a walk crouches and
+  leans back before the feet move; a jump crouches before take-off.
+- **squash and stretch**: a jump squashes the figure in the crouch, stretches it as it leaves the
+  ground and as it falls (round at the top), squashes it on landing; its width changes the other
+  way, so it keeps its area.
+- **overshoot and settle**: a moving part passes where it stops and comes back (a pointing arm, a
+  gesture's arm going up and coming down); after a walk the body leans on past the stop and
+  straightens; after a landing the figure bounces back a little.
+- **follow-through**: the arms, head and accessory (a hat; a generated character's hair and ears
+  are part of its head) trail when the body sets off and carry on when it stops, swinging back
+  once as on a spring; in a jump the arms lift as the figure falls.
+
+One setting, `cartoon_motion`, chooses how much: `lively` (the default: all four, fully),
+`calm` (the same, at 0.4 of the amount: for a quiet or serious video) or `none` (the plain
+motion: parts ease straight to their place, nothing squashes). Set it for the whole video
+(top level), for one `stage` scene (param) or for one character (`characters[]`); the nearest
+wins: the character's own, else the scene's, else the video's.
+
+```yaml
+cartoon_motion: calm            # the whole video
+characters:
+  - name: pip
+    cartoon_motion: lively      # pip stays bouncy everywhere
+scenes:
+  - id: office
+    type: stage
+    params:
+      cartoon_motion: none      # this scene: plain motion (pip still lively)
+      characters: [pip, kit]
+```
+
+The wind-up and settle add time: a walk 0.65 s (`lively`; 0.26 s `calm`), a jump 0.48 s
+(0.19 s). Pose changes and gestures keep their time. As for any action, a beat with less time
+left shortens them.
+
+#### Keyframes and motion paths
+
+For motion the other actions do not have, two actions move a character, a [prop](#props) or one
+part of a character (`kit.arm_left`, `pip.head`; the parts are `body`, `legs`, `arm_left`,
+`arm_right`, `head`, `accessory`, `eyes`, `brows`, `mouth`, those the character has) by
+**keys** or along a **path**:
+
+| action | options | |
+|---|---|---|
+| `keyframes` | `keys` (required: `[{t, x, y, rotate, scale, ease}, ...]`), `ease` (`smooth`) | moves through the keys and stays at the last one. A key's `t` is seconds from the action's start (`at`), or a share of the beat's narration as a string (`"40%"`); every key one way or the other, in time order. Each key sets some of `x`, `y`, `rotate`, `scale`; a value a key leaves out holds, and the target starts from how it is. A key at `t: 0` sets its values at once. It takes until the last key. |
+| `move_along` | `path` (required: `[[x, y], ...]`), `curve` (`smooth` \| `straight`), `ease` (`smooth`), `speed` | moves from where it is through the points, at an even speed eased by `ease`: a smooth curve through every point (`smooth`) or straight lines between them. Takes `speed` units per second along the path, else `run_time` (default 2 s). Stays at the end. |
+
+The values mean, for a **character or prop**: `x` a mark or an x from 0 (left edge) to 1 (right
+edge) of the stage; `y` the height of its feet above its ground line (at its depth), in frame
+heights (`0` on the ground, `0.5` half the frame higher; at most 1 either way); `rotate` degrees
+counterclockwise on screen, about its feet; `scale` its size (`1` as built). For a **part**:
+`x` / `y` its shift right / up in character heights (at most 1 either way); `rotate` its angle
+about its pivot in degrees, as drawn facing right (a mirrored character turns it the mirrored
+way: `kit.arm_left` at `rotate: 90` points forward whichever way kit faces; arms hang down at 0);
+`scale` its size (a flipped part, such as a `sad` mouth, stays flipped). `rotate` and `scale` are
+where the target ends up, not steps: after `rotate: 30`, `rotate: 0` turns it back.
+
+`ease` names how each key is reached (a key's own `ease` wins over the action's) or how the path
+speeds up and slows down. The names are Manim's rate functions: `linear`, `smooth`, `rush_into`,
+`rush_from`, `ease_in_sine`, `ease_out_sine`, `ease_in_out_sine`, `ease_in_quad`,
+`ease_out_quad`, `ease_in_out_quad`, `ease_in_cubic`, `ease_out_cubic`, `ease_in_out_cubic`,
+`ease_in_back`, `ease_out_back`, `ease_in_out_back`, `ease_out_bounce`, `ease_out_elastic`; plus
+`lively` and `calm`, a smooth move with the anticipation and overshoot of that
+[`cartoon_motion`](#animation-principles-cartoon_motion) level (keyframes do not apply
+`cartoon_motion` on their own). On a path, an ease that passes the end (`ease_out_back`) holds at
+the end instead.
+
+Both last (`until: <beat>`: the target moves back to where it was, straight, in the action's
+`run_time`, default 1 s for `keyframes`, 2 s for `move_along`). `run_time:` on `keyframes`
+stretches or squeezes the keys to that time; a beat with less time left squeezes them too. A
+moved character does not turn to face where it goes (add a `turn`) and keeps walking, jumping
+and acting from where it is (a lifted one walks in the air: bring it down first).
+
+`vidgen validate` reports keys out of order, mixed seconds and shares, a share over 100%, an
+unknown ease, a mark the stage does not know, a mark as a part's `x`, a value out of range, a
+part the character does not have (`unknown target 'kit.tail'`) and these actions on other scene
+types. A pattern such as `k*` also selects the parts (`kit.arm_left`...); the acting and moving
+actions skip them, but `keyframes`, `dim` or `highlight` act on each.
+
+```yaml
+beats:
+  - text: "Pip floats over the bench while Kit waves its arm."
+    actions:
+      - move_along: pip
+        path: [[0.35, 0.25], [0.5, 0.0]]       # up and over, down onto the middle
+        speed: 4
+      - keyframes: kit.arm_left
+        keys:
+          - {t: 0.3, rotate: 150, ease: ease_out_back}
+          - {t: 0.6, rotate: 120}
+          - {t: 0.9, rotate: 150}
+          - {t: 1.5, rotate: 0}                # back down (arms hang at 0)
+      - keyframes: sun                         # a prop: across the sky over the whole beat
+        keys: [{t: "100%", x: 0.8, y: 0.6, ease: linear}]
+```
+
+#### Particles
+
+Rain, snow, sparkles, dust, confetti, smoke or bubbles over a scene: on a `stage` for the whole
+scene with the `particles` param, or on any scene type from a beat with the `particles`
+[beat action](#beat-actions) (for that beat; `until: <beat>` or `keep: true` for longer; `keep:
+true` on the first beat gives any scene type particles throughout). They are drawn in front of
+everything, over the part of the frame the camera shows (they stay on screen through a `zoom` or
+a `pan`), fade in over 0.5 s, and fall, drift, spin or rise on their own. Positions come from
+`seed`, so every render of the same video shows the same particles.
+
+| key | default | |
+|---|---|---|
+| `kind` | required | `rain` (slanted streaks), `snow` (white dots that sway), `sparkles` (twinkling stars, `highlight`), `dust` (faint drifting motes), `confetti` (spinning chips in the theme's colours), `smoke` (grey puffs that rise, grow and thin out), `bubbles` (rising rings) |
+| `density` | `1` | how many, up to 4: 1 is the kind's usual amount for a whole frame (rain 160, snow 120, confetti 90, dust 60, sparkles 40, bubbles 30, smoke 24), scaled by the share of the frame `area` covers. At most 300 per field, whatever the density; a [preview render](#format-and-preview) draws half as many |
+| `area` | the whole frame | `[x, y, w, h]`: fractions 0–1 of the visible frame from its top-left corner (smoke from a chimney: `[0.6, 0.1, 0.08, 0.5]`); particles fade out near its edges |
+| `color` | per kind | a colour (theme token or `#hex`) or a list, each particle picking one: rain `#A9C1DD`, snow `#FFFFFF`, sparkles `highlight`, dust `#E6DCC8`, confetti `accent highlight primary secondary tertiary`, smoke `#B9BEC6`, bubbles `#CFE9FF` |
+| `seed` | `1` | another number gives other positions |
+
+```yaml
+- id: storm
+  type: stage
+  params:
+    background: ["#2B3240", "#4A5568"]
+    characters: [pip]
+    particles: [{kind: rain, density: 1.5}]
+  beats:
+    - text: "It never stops raining here."
+- id: result
+  type: title
+  params: {title: "We shipped it"}
+  beats:
+    - text: "And then, after a year of work, we shipped it."
+      actions:
+        - {particles: confetti, at: 0.4, keep: true}
+```
+
+`vidgen validate` reports an unknown kind (with a did-you-mean), the kind given twice, an `area`
+outside the frame, a `density` out of range, and `keep` with `until`. The layout dump sees a
+field as one object of kind `particles` named after its kind; `vidgen lint`'s `off_frame` leaves
+it out (particles cross the edges on purpose).
+
+A wide stage with layers, the camera panning and then following a character:
+
+```yaml
+  - id: walk
+    type: stage
+    params:
+      width: 2                                   # two frames wide
+      camera_at: left
+      background: [primary, surface]
+      layers:
+        - {name: hills, shapes: [{shape: hills, y: 0.2, height: 0.2, width: 0.8, color: tertiary}]}
+        - {name: trees, place: middle, image: assets/trees.png, bottom: 0.18}
+        - {name: bushes, place: foreground, shapes: [{shape: ellipse, x: 0.4, width: 0.5, height: 0.15, color: accent}]}
+      characters: [{name: pip, at: left}, {name: kit, at: far_right}]
+    beats:
+      - text: "Far away, on the other side of the park, Kit is waiting."
+        actions: [{action: pan, to: far_right, run_time: 2}]
+      - text: "Back to Pip, who has not seen her yet."
+        actions: [{follow: pip}]
+```
+
 ## Beat actions
 
 A beat can act on named parts of its scene — **targets** such as `item3` or `bar:4K` — while it
@@ -3649,11 +4367,11 @@ the one key that names an action).
 
 | key | default | |
 |---|---|---|
-| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `transform`, `callout`, `sfx`, or a project action (`vidgen list-scenes` lists them) |
-| `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one (`callout` with an `area` needs none) |
+| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, or a project action (`vidgen list-scenes` lists them) |
+| `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one (`callout` with an `area` and `pan` with `to` need none) |
 | `at` | `0` | when, as a fraction of the beat's narration (`0` ≤ at < `1`) |
-| `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`, `callout`: undone when it starts; `zoom`: the camera is back when it starts) |
-| `run_time` | the action's | seconds the animation takes (`reveal` / `callout` 0.8, `dim` / `highlight` 0.6, `zoom` / `transform` 1.0; a zoom takes as long again to come back) |
+| `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`, `callout`, `say`, `react`, `look_at`, `turn`, `emote`, `pose`: undone when it starts; `zoom`: the camera is back when it starts; `pan`: the camera moves back when it starts; `follow`: the camera stops following when it starts; `keyframes`, `move_along`: the target moves back) |
+| `run_time` | the action's | seconds the animation takes (`reveal` / `callout` / `pose` 0.8, `dim` / `highlight` / `react` 0.6, `zoom` / `transform` / `follow` 1.0, `pan` 1.5, `look_at` / `emote` 0.5, `say` (the bubble) / `turn` 0.4, `jump` 0.6, `gesture` per gesture (1.2 for `point`), `walk_to` / `enter` / `exit` as long as the distance needs at their `speed`, `keyframes` until its last key, `move_along` 2.0 or its path's length at its `speed`; a zoom takes as long again to come back) |
 
 **Targets** depend on the scene type (`vidgen list-scenes` prints them as `targets:`). Every
 built-in type has some; `<N>` counts from 1 (`item1`, `item2`...), `<text>`/`<label>`/`<name>`
@@ -3692,6 +4410,7 @@ a title card, a `transform` of a bar).
 | `diagram` | `heading`, `node<N>`, `node:<id>`, `edge:<from>-><to>` | reveal, dim, highlight, zoom | also for `flowchart`; a node is its shape, icon and label (a `box` frames the shape), an edge its line, arrowhead and label; `highlight: [node:a, "edge:a->b", node:b]` marks a path; revealing an edge brings its nodes |
 | `process` | `heading`, `input`, `stage<N>`, `stage:<label>`, `connector<N>`, `loop`, `output`, `token` | reveal, dim, highlight, zoom | a stage is its card (a `box` frames it); `connector2` runs from stage 2 to 3; revealing a stage early shows it without moving the token; `highlight: token` with `style: flash` points at it |
 | `network` | `heading`, `layer<N>`, `layer:<label>`, `edges<N>`, `neuron<L>.<i>` | reveal, dim, highlight, zoom | a layer is its units, ellipsis, label and count; `edges1` joins layers 1 and 2; `neuron2.3` is unit 3 of layer 2 as drawn |
+| `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, walk_to, enter, exit, gesture, jump, keyframes, move_along, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting) and [moving](#moving) actions take whole characters only, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts |
 
 `title` and `heading` stand for each other (the header band, see "Built-in scenes"): `highlight:
 title` works on a `bullets` heading. [Project scene types](EXTENDING.md#8-per-beat-actions-targets-and-custom-actions)
@@ -3704,10 +4423,16 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `reveal` | — | brings the target on screen with the scene's own entrance animation (e.g. item 4 before its turn). A target already on screen is left alone, and the scene does not reveal it again at its own step. |
 | `dim` | `opacity` (`0.45`, 0–1, of the target's full opacity) | fades the target; one that is already dimmer (e.g. by `bullets`' `dim_previous`) stays as it is, so dimming never compounds; `until:` restores the opacity |
 | `highlight` | `color` (`highlight`, a theme token or hex), `style` (`color` default, `box`, `underline`, `fill`, `flash`, or a list such as `[color, box]`) | `color` recolours the target and brings a dimmed one back to full opacity while highlighted; `box` draws a rounded frame around it, `underline` a line under it, `fill` lays a translucent band of the colour under it (over backdrops such as table stripes and cards); `flash` flashes the colour there and back (leaves no trace; not with `color`). `until:` restores the colours (and the dimming) and removes box / underline / fill. |
-| `zoom` | `scale` (magnification > 1, up to 8; default: as close as the targets fit), `padding` (`0.15`: share of the view kept free on each side of the targets) | moves the camera in on the targets and back out: the zoom-out ends with the beat (with `until: <beat>`, when that beat starts). Without `scale` the view is at most 3x; a target that already fills the frame is not zoomed (a warning says so). The view never leaves the frame. |
+| `zoom` | `scale` (magnification > 1, up to 8; default: as close as the targets fit), `padding` (`0.15`: share of the view kept free on each side of the targets) | moves the camera in on the targets and back out: the zoom-out ends with the beat (with `until: <beat>`, when that beat starts). Without `scale` the view is at most 3x; a target that already fills the frame is not zoomed (a warning says so). The view never leaves the frame (on a wide `stage`: the stage). Coming back, the camera returns to the view it had before the zoom. While a `follow` runs, the camera keeps the followed character in the middle. |
+| `pan` | `to` (a `stage`'s mark, or an x from 0 = left to 1 = right of the stage) | moves the camera sideways to the target (on a `stage`: a character) or to `to` — one of the two — keeping its zoom; it stays there (`until: <beat>`: it moves back when that beat starts). Ends a `follow`. The view never leaves the stage, so on a scene as wide as the frame the camera pans only while zoomed in. Other scene types know no marks (`to` is an x). |
+| `follow` | — | pans to the target (one character) and then keeps the camera on its feet as it moves, inside the stage, at the camera's zoom: to the end of the scene, or until the `until` beat starts (the camera then stays where it is). A `pan` or another `follow` ends it. |
 | `transform` | `into` (required: a target not on screen yet), `style` (`auto` default, `replace`, `shapes`, `tex`, `fade`) | morphs the target into `into`, which then stays on screen in its own place (the target is gone). `shapes` moves matching glyphs (what `auto` uses for text and formulas), `replace` morphs point by point (`auto` for other shapes), `tex` matches the TeX parts of two formulas, `fade` cross-fades. `into` must be a target of the scene; text that is not part of the scene cannot be morphed into (give the scene that content, e.g. as a later equation step). If `into` is already on screen, the target fades out into its place (warning). |
 | `callout` | `kind` (`box` default, `circle`, `arrow`, `label`, `spotlight`, `magnifier`), `label`, `area`, `within` (`frame` \| `safe`), `units` (`fraction` \| `px`), `color` (`highlight`), `label_size` (`caption`), `side` (`auto`, `top`, `bottom`, `left`, `right`), `curved` (arrow), `zoom` (magnifier, `2`), `keep` (`false`), `name` | points at the target — or, without a target, at `area` of the frame — with the [Step 34 callouts](#screenshot): a rounded `box` (label as a tag on its edge), a `circle`, an `arrow` from the label, a `label` beside it (no mark), a `spotlight` (the rest of the view darkened) or a `magnifier` (an enlarged inset of a picture: the target must show one, e.g. `image`). Gone when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: stays to the end of the scene). See "Callouts" below. |
 | `sfx` | `sound` (or as the target: `- sfx: NAME`), `gain` (`0` dB), `pan` (`0`), `align` (`start` \| `end`), `params` (`duration`, `pitch`, `intensity`) | plays a [sound effect](#sound-effects-sfx) at `at` — exactly then, even while the scene animates; draws nothing, works on every scene type. Its "target" is the sound's name, not a target of the scene; no `until`, no `run_time`. |
+| `particles` | `kind` (or as the target: `- particles: snow`), `density` (`1`), `area`, `color`, `seed` (`1`), `keep` (`false`) | [particles](#particles) — `rain`, `snow`, `sparkles`, `dust`, `confetti`, `smoke` or `bubbles` — over the scene from `at`, in front of everything; works on every scene type. They fade in, and fade out (still moving; `run_time`, `0.6` s) when the next beat starts (`until: <beat>`: when that beat starts; `keep: true`: at the end of the scene). Its "target" is the kind, not a target of the scene. |
+| `say`, `look_at`, `turn`, `emote`, `pose`, `react` | see [Speaking and acting](#speaking-and-acting) | the acting actions on a `stage`'s characters: speak (lip sync and a speech bubble), look at something, turn round, change expression or pose, react to another speaker for one beat |
+| `walk_to`, `enter`, `exit`, `gesture`, `jump` | see [Moving](#moving) | the moving actions on a `stage`'s characters: walk to a mark, walk in or out of view, point / wave / shrug / nod / shake the head, jump |
+| `keyframes`, `move_along` | see [Keyframes and motion paths](#keyframes-and-motion-paths) | move a `stage`'s character, prop or character part (`kit.arm_left`) through keys (`t`, `x`, `y`, `rotate`, `scale`, `ease`) or along a path of points |
 
 `dim`, `highlight`, `zoom` and `transform` act on targets on screen; a target not shown yet is
 first revealed (as by `reveal`). `dim` and `highlight` change only opacity resp. colour, so
@@ -4081,7 +4806,9 @@ still per beat: its **last frame**, i.e. what is on screen when the narration of
 its `narration.pad`) is over. `--frames-per-beat N` takes N evenly spaced stills per beat, the
 last one again at the end (N=3: after a third, two thirds and all of the beat). A silent scene
 counts as one beat lasting `duration` minus the scene's fade-out, so its last still is taken
-before the fade. Stills are off by default; they work with `--preview`, `--variant`, `--scene`
+before the fade. A [`stage`](#stage) scene also gets a **mid-action still** half-way through each
+`walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes` and `move_along` (at most 3 per beat,
+none within 0.4 s of another still of the beat). Stills are off by default; they work with `--preview`, `--variant`, `--scene`
 and `--jobs`. They are taken from Manim's renderer while it writes the video (the same pixels
 as the video frame, before compression), so they do not change the video or its timings.
 
@@ -4093,13 +4820,16 @@ frames/
   <scene>/
     index.json          # the scene's stills
     <beat>-<k>.png      # still k (1..N) of a beat; <scene>-<k>.png for a silent scene
+    <beat>-m<frame>.png # a mid-action still (stage scenes), named by its frame
 ```
 
 `<scene>/index.json`: `{scene, per_beat, width, height, fps, frames}`; `frames` lists, in time
 order, `{beat, k, n, frame, time, path}`: the beat id (`null` for a silent scene), the still's
 number within its beat (`k == n` is the end of the beat), `n` = stills per beat, the frame's
 0-based index in the scene's video, its time in seconds from the scene start (`frame / fps`)
-and the PNG file name.
+and the PNG file name. A mid-action still has `k` 0 and a key `mid` naming the actions it shows
+half-way (`"walk_to pip"`, several joined by `, `); the [layout dump](#layout-dump-buildlayoutscenejson)
+marks it the same way, `vidgen lint` skips it (it checks beat ends) and `vidgen slides` leaves it out.
 
 `frames/index.json`: `{title, variant, preview, format, per_beat, vidgen, scenes}`; each scene
 is `{id, start, duration, frames}` (`start` in the video) and each still is as above with
@@ -4133,6 +4863,8 @@ File `build/<final|preview>[_<variant>]/layout/<scene>.json`:
                                # (and minus overlays with reserve: true)
  frames: [{beat, k, n, frame, time,     # the same keys as the stills index
            still: "../frames/<scene>/<file>.png",
+           narrating,             # beat-end stills: whether the beat's narration is heard at
+                                  # this time (false in the pad after it)
            camera: {center: [x, y], width, height,    # the camera frame in Manim units
                     zoom},                    # frame width / camera width: > 1 while zoomed in
            objects: [...],
@@ -4150,7 +4882,7 @@ Each object:
 | key | meaning |
 |---|---|
 | `id` | `m1`, `m2`, ...: the same Python object keeps its id in every frame of the scene |
-| `kind` | `text` (`Text`, `MarkupText`, `Paragraph`), `code` (the text of a `Code` listing), `math` (`Tex`, `MathTex`), `number` (`DecimalNumber`, `Integer`), `shape` (one path), `group` (a group of shapes with no text or image inside, e.g. an axis' ticks), `image`, `icon` (an icon from `icon()`: one object, not one per path), `vector` (a vector picture, an SVG: one object, not one per path) |
+| `kind` | `text` (`Text`, `MarkupText`, `Paragraph`), `code` (the text of a `Code` listing), `math` (`Tex`, `MathTex`), `number` (`DecimalNumber`, `Integer`), `shape` (one path), `group` (a group of shapes with no text or image inside, e.g. an axis' ticks), `image`, `icon` (an icon from `icon()`: one object, not one per path), `vector` (a vector picture, an SVG: one object, not one per path), `character` (a cartoon character: one object named after it, its box covering every part), `prop` (a prop on a stage, built-in or SVG: one object named after it), `particles` (a field of [particles](#particles): one object named after its kind) |
 | `class` | the Manim class |
 | `path` | where it sits: parent groups from the top-level mobject down, each `Class[index]` (index among its parent's submobjects; top level: in the scene), or the name the scene gave it |
 | `name` | the scene attribute that holds it (`self.title = ...`) or a `Mobject.name` set by the scene, else `null` |
@@ -4165,6 +4897,11 @@ Each object:
 | `backdrop` | the most common colour of the frame inside its box, ignoring its own colours: what the text is read against (`null` when off-frame) |
 | other kinds: `fill`, `stroke` | `{color, opacity}` / `{color, opacity, width_px}` of the largest visible part, or `null` |
 | `icon` only: `icon` | the icon's name (`cpu`); its `bbox` is what it draws, not its padded design box |
+| `character` only: `walked_in` | the beat in which its last walk (`walk_to`, `enter`) ended; absent before it walks (read by the `walk_overlap` rule) |
+| `character` only: `facing`, `speaking` | `left` or `right`; whether its lip sync runs (it speaks this beat) |
+| `character` only: `face` | the box of its head (with hair and ears), absent without a `head` part |
+| `character` only: `viseme`, `looked_at`, `passage` | when they apply: the viseme its lip sync shows (`rest` between words), the `to` of its last `look_at` (a name, a mark or `camera`), and `enter` / `exit` while it walks in or out |
+| speech bubbles only: `bubble` | the name of the character speaking (on the bubble's shape and its text) |
 | overlays only: `overlay` | the id of the [overlay](#overlays) it belongs to; overlay objects come after the scene's, their `path` starts with `overlay:<id>` and they are measured as drawn: fixed to the screen whatever the camera does |
 
 An object is one text mobject (not one per glyph), one path, one image, or one group of shapes.
@@ -4264,8 +5001,8 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 
 | rule | default severity | finds |
 |---|---|---|
-| `off_frame` | error for text, warning for other objects | an object cut off by the frame edge by more than `tolerance`. Not reported: objects wholly outside (not visible), and non-text objects running from edge to edge on the side they cross (a full-frame image with `fit: cover` or Ken Burns, a background, a band or divider): those bleeds are intentional; nothing while the camera is zoomed in (a `zoom` action) |
-| `safe_area` | warning | text inside the frame but in its margins (the scene's `margin_x`/`margin_y`, `safe_area` in the layout dump, smaller where an overlay has `reserve: true`) by more than `tolerance`; not checked while the camera is zoomed in, nor for [overlays](#overlays) (their place is deliberate) |
+| `off_frame` | error for text, warning for other objects | an object cut off by the frame edge by more than `tolerance`. Not reported: objects wholly outside (not visible), and non-text objects running from edge to edge on the side they cross (a full-frame image with `fit: cover` or Ken Burns, a background, a band or divider): those bleeds are intentional; nothing while the camera is zoomed in or looks away from the frame's centre (`zoom`, `pan`, `follow`, a wide `stage`); never [particles](#particles), which cross the edges on purpose, nor characters (`off_stage`'s) |
+| `safe_area` | warning | text inside the frame but in its margins (the scene's `margin_x`/`margin_y`, `safe_area` in the layout dump, smaller where an overlay has `reserve: true`) by more than `tolerance`; not checked while the camera is zoomed in or moved (`pan`, `follow`), nor for [overlays](#overlays) (their place is deliberate) |
 | `text_overlap` | error | two texts whose boxes overlap by at least `min_overlap` of the smaller box (the same text drawn twice in the same place is not reported) |
 | `covered_text` | warning | a shape or image drawn **after** (on top of) a text whose colour shows in at least `min_covered` of the middle of the text's box, measured on the still's pixels. Not reported: shapes drawn before the text (plates, highlight bands, a code window), the text's own parent group, shapes fainter than 0.3, and shapes in the text's own colour (a strike-through) |
 | `label_spacing` | warning | a **label on its own plate** — a filled rounded shape without an outline, not in the background colour, drawn just behind one text and hugging it (a callout label, a tag) — closer than `min_gap` of the shorter side to another text (a bar's value, the title, a neighbour's label): it reads as part of that text. The text on the plate itself, texts inside the plate, lone symbols (a bullet) and the text framed by the callout's own mark (an outline in the plate's colour: a `box` tag sits on its edge by design) are not checked; cards, table rows, cells and code bands (several texts, or much larger than their text) are not labels |
@@ -4273,6 +5010,13 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `contrast` | warning | text whose WCAG contrast ratio with its `backdrop` is below `min_ratio` (4.5, WCAG AA), `large_ratio` (3) for text with a cap height of at least `large_size`, or `dimmed_ratio` (2) for text faded on purpose (opacity below 1, e.g. previous bullets); the text colour is blended with the backdrop at the text's opacity, every colour of a multi-coloured text is checked. A code listing's line numbers are not checked |
 | `max_words` | warning | more than `max_words` words (tokens with a letter) of visible `text` objects in one still; code and math do not count |
 | `overlay_overlap` | warning | an [overlay](#overlays) whose box (all its objects) covers at least `min_overlap` of the box of a scene text or icon. `text_overlap` and `covered_text` leave an overlay over scene text to this rule; overlays of a type with a `lint_skip` (the watermark: `contrast`) are not checked by those rules |
+| `walk_overlap` | warning | a character whose walk (`walk_to`, `enter`) ended in the still's beat sharing at least `min_overlap` of the narrower character's width with another character: it stopped on the other's place. Only characters that walked in that beat are checked (the layout dump's `walked_in`); see [Moving](#moving) |
+| `off_stage` | warning | a character with at least `min_hidden` of its box outside the view (the frame, or what a `pan` / `follow` shows) and part of it inside. Not reported: characters wholly outside (waiting to enter, gone), while it walks in or out (`enter`, `exit`), and while the camera is zoomed in. Fix: put it on a mark inside the view, or pan to it |
+| `character_overlap` | warning | two characters at rest whose boxes share at least `min_overlap` of the narrower one's width. A character that walked in the still's beat is `walk_overlap`'s. Fix: marks further apart, or walk one away |
+| `bubble_overlap` | warning | a speech bubble (`say` with `bubble`) covering at least `min_overlap` of a character's face box (its speaker's too) or of the smaller of two bubbles. Fix: a shorter `bubble` text, the characters further apart, or the two lines in different beats |
+| `facing_away` | warning | a speaking character facing away from the one it talks to: the character it last looked at (`look_at`), else the nearest one; not checked after `look_at: camera` (it talks to the viewer). Fix: `turn`, `look_at: <listener>`, or swap their marks |
+| `hidden_speaker` | warning | a speaking character with at least `min_hidden` of its face box covered by things drawn in front of it (a character or prop nearer the camera, a foreground layer, an overlay). The characters are drawn side-on and face left or right, so they never turn their back: this is the case where the viewer cannot see who talks. Fix: move one of them, or a smaller `depth` for the speaker |
+| `mouth_without_voice` | warning | at a beat's end, after its narration (the pad), a character whose lip sync still shows a speech shape: its viseme track is longer than the beat's audio. Fix: `vidgen tts` again (the track and the audio are made together); in a custom scene, lip sync with `clock=self.beat_clock()` |
 | `narration_speed` | warning; info without audio | a beat (of at least `min_words` spoken words) narrated at fewer than `min_rate` or more than `max_rate` words per second (`unit: words`) or characters per second (`unit: characters`: letters and digits). `unit: auto` counts words for the languages vidgen has a word rate for and characters for others; the default range is the video [language](#languages-and-translations)'s: English (also no `language`) 1.8-3.5 words/s, Portuguese 1.7-3.4, Spanish and French 1.8-3.6, Italian 1.8-3.5, German 1.5-3.1, characters 8-17/s; `min_rate` / `max_rate` set override it. With an MP3 the time is the speech in it (leading and trailing silence below -40 dB of its peak cut off). Words count as spoken: hyphens, dashes and slashes separate words (`K-Phi-3` is 3), a number counts one word per digit up to 3 per digit run, plus one per decimal point and symbol (`2.58` is 4, `15%` 3), an all-capitals acronym of 2-5 letters half a word per letter (`GPU` 1.5). **Without audio** the beat's length is the word-count estimate (`narration.words_per_second`), so the rate is only off when the text is (many numbers or acronyms) or the configured rate itself is implausible: reported as `info`, one finding per scene listing the beats |
 | `dead_air` | warning | nothing on screen changes for more than `max_seconds` (a frame counts as changed when at least `min_change` of it changed, from the activity file's `motion`), narrated or not; the finding names the beat where the still picture starts and the beats it lasts through. Silent scenes are checked the same way: a silent card held longer than `max_seconds` without motion is reported. A still picture ends where a [crossfade](#transitions-transition) into the next scene starts blending it away |
 | `animation_overrun` | warning | a beat whose code (animations and waits inside `narrate`) takes longer than its narration plus `narration.pad` by more than `tolerance` seconds: the next beat (and its audio) starts late, leaving silence. The message lists the animations still running when the narration ends. A silent scene whose animations take longer than its `duration` is reported the same way |
@@ -4295,6 +5039,13 @@ lint:
     contrast: {min_ratio: 4.5, large_ratio: 3.0, large_size: 0.045, dimmed_ratio: 2.0}
     max_words: {max_words: 40}
     overlay_overlap: {min_overlap: 0.05}    # fraction of the scene object's box
+    walk_overlap: {min_overlap: 0.25}       # fraction of the narrower character's width
+    off_stage: {min_hidden: 0.05}           # fraction of the character's box outside the view
+    character_overlap: {min_overlap: 0.25}  # fraction of the narrower character's width
+    bubble_overlap: {min_overlap: 0.1}      # fraction of the face's (or smaller bubble's) box
+    facing_away: {}
+    hidden_speaker: {min_hidden: 0.5}       # fraction of the speaker's face box
+    mouth_without_voice: {}
     narration_speed: {unit: auto, min_words: 5}   # + min_rate / max_rate: default the language's range
     dead_air: {max_seconds: 6.0, min_change: 0.0002}   # min_change: fraction of the frame
     animation_overrun: {tolerance: 0.1}     # seconds past narration + pad
@@ -4308,7 +5059,8 @@ never makes stills stale.
 
 **Ignoring findings in a scene** (`lint_ignore` on the scene): a list of rule names (or `all`),
 or `{rule, object, beat}` filters. `object` is a pattern (`*` and `?` wildcards, case-sensitive)
-matched against the object's `name`, `path`, `text` and icon name (for a pair, either object); `beat`
+matched against the object's `name`, `path`, `text`, icon name and, for a speech bubble, its
+speaker's name (for a pair, either object); `beat`
 limits the entry to the end of that beat (it must be a beat of the scene).
 
 ```yaml
@@ -4332,6 +5084,8 @@ are 1280 px wide (`--width PX`, 640–2000) and at most about 1.25 times as high
 grow with the width, long narration is wrapped and cut with `…`, and long videos are split into
 several pages instead of one huge image. 16:9 videos get 4 stills per row (2 on a scene's
 sheet), 9:16 videos 5 (4); with `--per-beat N` a beat's stills stay side by side on one row.
+On a [`stage`](#stage), the mid-action stills (above) come before their beat's end still, labelled
+`½ walk_to pip @ time`, so a walk or a gesture can be checked in motion, not only where it ends.
 
 Files, in `build/<preview|final>[_<variant>]/storyboard/`:
 
@@ -4510,7 +5264,7 @@ The server calls itself `schu-video-generator`; configuration snippets (server k
 back as a tool error with the same text): `guide`, `init`, `plan` (`input_path`, or the outline as
 `markdown_text`), `validate`, `schema`, `list_scenes`, `list_icons`, `list_themes`, `list_sfx`,
 `list_music`, `storyboard`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
-`thumbnail`, `export`, `gallery`, `translate_template`. Their parameters are the command's
+`thumbnail`, `export`, `gallery`, `translate_template`, `character_sheet`. Their parameters are the command's
 options in snake_case (`per_beat`, `fail_on`, `no_audio`...); list options take lists. Defaults
 that differ from the CLI, for agents: `render`, `thumbnail` and `export` use the preview (`preview:
 false` for the final format); `gallery` writes into `build/mcp/gallery` without GIFs; `schema`
@@ -4554,7 +5308,7 @@ when the root has a `docs/gallery` folder (the schu-video-generator repository),
 
 ## JSON output (`--json`)
 
-`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail`, `vidgen export`, `vidgen slides`, `vidgen translate-template`, `vidgen readback`, `vidgen guide`, `vidgen gallery`, `vidgen plan`, `vidgen init`, `vidgen tts` and `vidgen imagegen` accept `--json` (every command but `vidgen mcp`, which speaks MCP): stdout then holds
+`vidgen validate`, `vidgen list-scenes`, `vidgen list-themes`, `vidgen list-icons`, `vidgen render`, `vidgen schema`, `vidgen storyboard`, `vidgen lint`, `vidgen thumbnail`, `vidgen export`, `vidgen slides`, `vidgen translate-template`, `vidgen readback`, `vidgen guide`, `vidgen gallery`, `vidgen plan`, `vidgen init`, `vidgen tts`, `vidgen imagegen` and `vidgen character-sheet` accept `--json` (every command but `vidgen mcp`, which speaks MCP): stdout then holds
 exactly one JSON document (ASCII-only, non-ASCII characters escaped), and everything else
 (progress, `warning:` lines, Manim output) goes to stderr. These shapes are meant for programs
 and AI agents driving vidgen. Without `--json` the human output is unchanged.
@@ -4569,7 +5323,7 @@ it. Times are seconds (floats), paths are absolute strings, absent values are `n
 |---|---|---|
 | `version` | int | schema version of the document (1) |
 | `vidgen` | str | vidgen package version |
-| `command` | str \| null | `validate`, `list-scenes`, `list-themes`, `list-icons`, `render`, `schema`, `storyboard`, `lint`, `thumbnail`, `export`, `slides`, `translate-template`, `readback`, `guide`, `gallery`, `plan`, `init`, `tts`, `imagegen` (`null` if the command line could not be parsed) |
+| `command` | str \| null | `validate`, `list-scenes`, `list-themes`, `list-icons`, `render`, `schema`, `storyboard`, `lint`, `thumbnail`, `export`, `slides`, `translate-template`, `readback`, `guide`, `gallery`, `plan`, `init`, `tts`, `imagegen`, `character-sheet` (`null` if the command line could not be parsed) |
 | `ok` | bool | `true` on success; the exit code is 0 exactly when `ok` is true |
 | `warnings` | list | `{scene, message}`: vidgen warnings of the run (`scene` is `null`, or the scene whose render printed it) |
 | `error` | object | only when `ok` is false: `{kind, message, problems, details}` |
@@ -4748,7 +5502,7 @@ for a vidgen error, 2 for an exception in scene code), `rendered` the scene ids 
 | `rendered` | list | ids of the scenes rendered by this command (config order) |
 | `reused` | list | ids of the selected scenes whose current stills were reused |
 | `elapsed` | float | wall time of the command |
-| `sheets` | list | every page written: `{kind, scene, page, pages, path, width, height, frames}`; `kind` is `video` (the whole video, `scene` is `null`) or `scene`; `page` of `pages` (1-based); `width`/`height` in px; `frames` lists the stills on the page in order: `{scene, beat, k, n, time, scene_time, path}` (`beat` `null` for a silent scene, `k` of `n` stills of the beat, `time` in the video or `null` when not every scene has a render at this format, `scene_time` from the scene start, `path` the still's PNG) |
+| `sheets` | list | every page written: `{kind, scene, page, pages, path, width, height, frames}`; `kind` is `video` (the whole video, `scene` is `null`) or `scene`; `page` of `pages` (1-based); `width`/`height` in px; `frames` lists the stills on the page in order: `{scene, beat, k, n, mid, time, scene_time, path}` (`beat` `null` for a silent scene, `k` of `n` stills of the beat, `mid` the actions a mid-action still shows half-way (its `k` is 0) or `null`, `time` in the video or `null` when not every scene has a render at this format, `scene_time` from the scene start, `path` the still's PNG) |
 
 Video sheets come first, then the scene sheets in config order. `warnings` and `error.details`
 on a failed scene are as for `vidgen render --json`.
@@ -4965,6 +5719,14 @@ The same document for a dry run (`--dry-run`, no key needed) and a run (DESIGN.m
 | `up_to_date` | list | keys whose picture exists (skipped) |
 | `orphaned` | list | pictures in `assets/generated/` no config of the project uses (never deleted) |
 | `elapsed` | float | seconds |
+
+### `vidgen character-sheet --json`
+
+| key | type | |
+|---|---|---|
+| `project`, `variant` | str \| null | |
+| `elapsed` | float | seconds |
+| `sheets` | list | one per character drawn, in `characters:` order: `{character, path, width, height, bytes, sections}`; `sections` lists `{kind, names, own}` in sheet order: `kind` `pose`, `expression` or `mouth` (mouth shapes; absent for a character without a mouth), `names` the cells in order, `own` the character's own poses / expressions among them |
 
 ### `vidgen lint --json`
 

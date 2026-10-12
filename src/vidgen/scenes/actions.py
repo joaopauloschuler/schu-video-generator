@@ -1,15 +1,16 @@
-"""Built-in per-beat actions: ``reveal``, ``dim``, ``highlight``, ``zoom`` and ``transform``
-(DESIGN.md §26, §27).
+"""Built-in per-beat actions: ``reveal``, ``dim``, ``highlight``, ``zoom``, ``pan``, ``follow``
+and ``transform`` (DESIGN.md §26, §27, §69.7).
 
 Written against ``vidgen.api`` only, like project actions. ``dim`` and ``highlight`` change only
 opacity resp. colour, so they combine and undo (``until:``) independently; both also work on
 images (their pixels). ``zoom`` moves the scene's camera and brings it back by the end of the
-beat; ``transform`` morphs targets into another target that is not on screen yet.
+beat; ``pan`` moves it sideways to a character or a place and ``follow`` keeps it on a character
+(both stay inside :meth:`NarratedScene.camera_bounds`); ``transform`` morphs targets into another target that is not on screen yet.
 """
 
 import logging
 from collections.abc import Callable
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 import numpy as np
 
@@ -445,16 +446,13 @@ class Zoom(Action):
             log.warning("scene '%s': zoom on %s: the targets already fill the frame; the camera stays (use scale)", scene.spec.id, names)
             return []
         width, height = fw / factor, fh / factor
-        x, y = group.get_center()[:2]
-        center = np.array([np.clip(x, (width - fw) / 2, (fw - width) / 2), np.clip(y, (height - fh) / 2, (fh - height) / 2), 0.0])
-        return [MoveCamera(scene, width, center)]
+        center = view_center_within(scene.camera_bounds(), group.get_center()[:2], width, height)
+        self.before = camera_view(scene)
+        return [MoveCamera(scene, width, np.array([*center, 0.0]))]
 
     def revert(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
-        """Back to the whole frame (nothing to do when the camera is there)."""
-        frame = scene.camera.frame
-        if abs(frame.width - scene.frame_width) < 1e-6 and np.allclose(frame.get_center(), ORIGIN, atol=1e-6):
-            return []
-        return [MoveCamera(scene, scene.frame_width, ORIGIN)]
+        """Back to the view before the zoom (nothing to do when the camera is there)."""
+        return move_camera_back(scene, getattr(self, "before", None))
 
 
 class MoveCamera(Transform):
@@ -464,6 +462,155 @@ class MoveCamera(Transform):
     def __init__(self, scene: NarratedScene, width: float, center: np.ndarray, **kwargs: Any) -> None:
         frame = scene.camera.frame
         super().__init__(frame, frame.copy().set_width(width).move_to(center), **kwargs)
+
+
+def camera_view(scene: NarratedScene) -> tuple[float, np.ndarray]:
+    """The camera's view now: ``(width, centre)``."""
+    frame = scene.camera.frame
+    return float(frame.width), np.array(frame.get_center())
+
+
+def move_camera_back(scene: NarratedScene, view: tuple[float, np.ndarray] | None) -> list[Animation]:
+    """A :class:`MoveCamera` back to ``view`` (from :func:`camera_view`); none when there is no
+    view or the camera is there."""
+    if view is None:
+        return []
+    width, center = view
+    frame = scene.camera.frame
+    if abs(frame.width - width) < 1e-6 and np.allclose(frame.get_center(), center, atol=1e-6):
+        return []
+    return [MoveCamera(scene, width, center)]
+
+
+def _sideways(scene: NarratedScene, x: float) -> np.ndarray | None:
+    """The centre, at the view's size and height, nearest ``x`` that
+    :meth:`NarratedScene.camera_bounds` allow; ``None`` when the camera is there already."""
+    frame = scene.camera.frame
+    center = view_center_within(scene.camera_bounds(), (x, frame.get_center()[1]), frame.width, frame.height)
+    if np.allclose(center, frame.get_center()[:2], atol=1e-6):
+        return None
+    return np.array([*center, 0.0])
+
+
+def _x_of(mob: Mobject) -> Callable[[], float]:
+    """Where the camera points at ``mob``: a character's feet (its arms do not move the camera),
+    else the centre of its box. The function's ``followed`` is ``mob`` (an ``exit`` lets the
+    camera stop following the character that leaves)."""
+    if isinstance(mob, Character):
+        def x_of() -> float:
+            return float(mob.feet()[0])
+    else:
+        def x_of() -> float:
+            return float(mob.get_center()[0])
+    x_of.followed = mob  # type: ignore[attr-defined]
+    return x_of
+
+
+@action("pan")
+class Pan(Action):
+    """Move the camera sideways to targets (a character) or to a place (``to``: a mark of a
+    ``stage``, or an x from 0 = left to 1 = right of the stage), keeping its zoom. It stays there;
+    ``until: <beat>`` moves it back. Ends a ``follow``. The view never leaves the stage (the
+    frame, in other scene types: there the camera pans only while zoomed in)."""
+
+    class Options(ActionOptions):
+        to: str | Annotated[float, Field(ge=0.0, le=1.0)] | None = None
+        """A place instead of a target: a stage's mark (left, centre, right, ...) or an x from 0 (left edge) to 1 (right edge) of the stage."""
+
+    run_time = 1.5
+    reversible = True
+    needs_target = False
+    moves_camera = True
+    alters_targets = False
+
+    def problems(self) -> list[tuple[str, str]]:
+        has_target = bool(self.config.targets())
+        if has_target and self.options.to is not None:
+            return [("to", "give a target (a character) or to (a mark or an x from 0 to 1), not both")]
+        if not has_target and self.options.to is None:
+            return [("to", "give a target (a character) or to (a mark or an x from 0 to 1)")]
+        return []
+
+    def scene_problems(self, scene_cls: type[NarratedScene], params: Any) -> list[tuple[str, str]]:
+        if self.options.to is None:
+            return []
+        try:
+            scene_cls.camera_place(params, self.options.to)
+        except ValueError as exc:
+            return [("to", str(exc))]
+        return []
+
+    def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
+        """Stop following, then move the view's centre to the targets' (or the place's) x."""
+        scene.follow_with_camera(None)
+        if targets:
+            x = float(np.mean([_x_of(t.mobject)() for t in targets]))
+        else:
+            left, right = scene.camera_bounds()[:2]
+            x = left + scene.camera_place(scene.params, self.options.to) * (right - left)
+        self.before = camera_view(scene)
+        center = _sideways(scene, x)
+        return [] if center is None else [MoveCamera(scene, scene.camera.frame.width, center)]
+
+    def revert(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
+        """Back to the view before the pan."""
+        return move_camera_back(scene, getattr(self, "before", None))
+
+
+class _MoveThenFollow(MoveCamera):
+    """A :class:`MoveCamera` to ``x_of()`` after which the camera follows ``x_of``. Its end view
+    is taken again on every frame, so it catches up with a target that moves meanwhile (a
+    character walking) and hands over to following without a jump."""
+
+    def __init__(self, scene: NarratedScene, width: float, center: np.ndarray, x_of: Callable[[], float], **kwargs: Any) -> None:
+        super().__init__(scene, width, center, **kwargs)
+        self.x_of = x_of
+        self.bounds = scene.camera_bounds
+        self.target_y = float(center[1])
+
+    def interpolate_mobject(self, alpha: float) -> None:
+        end = self.target_copy
+        x, y = view_center_within(self.bounds(), (self.x_of(), self.target_y), end.width, end.height)
+        end.move_to([x, y, 0.0])
+        super().interpolate_mobject(alpha)
+
+    def clean_up_from_scene(self, scene: Any) -> None:
+        super().clean_up_from_scene(scene)
+        scene.follow_with_camera(self.x_of)
+
+
+@action("follow")
+class Follow(Action):
+    """Keep the camera on a character (its feet) as it moves, at the camera's zoom, inside the
+    stage: from this beat to the end of the scene, or until ``until: <beat>`` starts (the camera
+    then stays where it is). The camera first pans to it (``run_time``). A ``pan`` or another
+    ``follow`` ends it."""
+
+    run_time = 1.0
+    reversible = True
+    moves_camera = True
+    alters_targets = False
+
+    def problems(self) -> list[tuple[str, str]]:
+        if len(self.config.targets()) > 1:
+            return [("target", "follow takes one target (a character)")]
+        return []
+
+    def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
+        """Pan to the first target, then follow it."""
+        scene.follow_with_camera(None)
+        self.x_of = _x_of(targets[0].mobject)
+        center = _sideways(scene, self.x_of())
+        if center is None:
+            scene.follow_with_camera(self.x_of)
+            return []
+        return [_MoveThenFollow(scene, scene.camera.frame.width, center, self.x_of)]
+
+    def revert(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
+        """Stop following (unless a later ``follow`` took over); the camera stays."""
+        if scene.camera_following is getattr(self, "x_of", None):
+            scene.follow_with_camera(None)
+        return []
 
 
 TransformStyle = Literal["auto", "replace", "shapes", "tex", "fade"]

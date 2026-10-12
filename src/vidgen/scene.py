@@ -20,20 +20,24 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Annotated, Any, ClassVar, NamedTuple, Union
 
-import av
 from manim import DEFAULT_WAIT_TIME, NORMAL, Animation, FadeIn, MarkupText, Mobject, MovingCameraScene, Text, Wait, config
-from pydantic import AfterValidator, AliasChoices, BaseModel, ConfigDict, GetJsonSchemaHandler, ValidationError, ValidationInfo
+from manim.utils.iterables import list_update
+from pydantic import AfterValidator, AliasChoices, BaseModel, ConfigDict, Field, GetJsonSchemaHandler, ValidationError, ValidationInfo
 
 from vidgen import carry, helpers, regions, runtime
 from vidgen.actions import TARGET_NAME, ActionRunner, Target, match_names, plan_actions
+from vidgen.camera import Bounds, view_center_within
 from vidgen.capture import FrameCapture
+from vidgen.cartoon.visemes import VisemeTrack, beat_visemes
 from vidgen.layout import distribute
 from vidgen.overlay_layer import OverlayLayer
 from vidgen.overlays import Overlay, avoid, mobject_region, scene_overlays
-from vidgen.config import DIRECTED_TRANSITIONS, BeatConfig, SceneConfig, SfxCue, validation_error_lines
+from vidgen.config import DIRECTED_TRANSITIONS, ID_PATTERN, BeatConfig, SceneConfig, SfxCue, StingCue, validation_error_lines
 from vidgen.errors import VidgenError
+from vidgen.imagegen import GenerateImage, generated_image
 from vidgen.project import Project
-from vidgen.sfx import AUTO_ACTION_SFX, SfxEvent, SoundLibrary, decode_audio, stereo, write_wav
+from vidgen.sfx import AUTO_ACTION_SFX, STING_SOUNDS, SfxEvent, SoundLibrary, decode_audio, stereo, write_wav
+from vidgen.speech import audio_duration
 from vidgen.theme import Theme
 from vidgen.transitions import ColorFade, has_transitions, resolve_color
 from vidgen.videoplan import TransitionSlot, VideoPlan
@@ -125,6 +129,14 @@ def _check_icon_name(value: str, info: ValidationInfo) -> str:
     return value
 
 
+def _check_character_name(value: str, info: ValidationInfo) -> str:
+    if (info.context or {}).get("theme") is not None:
+        from vidgen.cartoon.cast import check_character_name
+
+        check_character_name(value)
+    return value
+
+
 class ThemeToken(NamedTuple):
     """Marker in ``ThemeColor``/``ThemeSize``/``IconName`` annotations: names resolved in the
     project (``kind`` is ``"color"``, ``"size"`` or ``"icon"``)."""
@@ -146,6 +158,9 @@ ThemeSize = Annotated[Union[str, float], AfterValidator(_check_theme_size), Them
 #: A ``Params`` field holding an icon name (built-in or the project's ``assets/icons``); checked
 #: against the available icons by ``vidgen validate`` and when the scene is built.
 IconName = Annotated[str, AfterValidator(_check_icon_name), ThemeToken("icon")]
+#: A ``Params`` / ``Options`` field naming a character of ``characters:``; checked against the
+#: project's characters by ``vidgen validate`` and when the scene is built (DESIGN.md §69).
+CharacterName = Annotated[str, Field(pattern=ID_PATTERN), AfterValidator(_check_character_name)]
 
 
 def _as_list(value: Any) -> list[Any]:
@@ -207,28 +222,6 @@ def add_narration(scene: MovingCameraScene, path: Path) -> None:
         wav = Path(folder) / "narration.wav"
         write_wav(wav, stereo(decode_audio(path)))
         scene.add_sound(str(wav))
-
-
-def audio_duration(path: Path) -> float:
-    """Length of an audio file in seconds: its decoded samples / sample rate (read with PyAV).
-
-    Decoding (rather than reading the container's duration) gives the same answer with every
-    PyAV/FFmpeg version: older ones (PyAV 13, which Manim 0.19 pins on Python 3.10) include the
-    MP3 encoder padding in the container duration, ~25-50 ms more per file.
-    """
-    try:
-        with av.open(str(path)) as container:
-            stream = container.streams.audio[0]
-            samples = 0
-            rate = stream.rate or 0
-            for frame in container.decode(stream):
-                samples += frame.samples
-                rate = frame.sample_rate or rate
-            if not samples or not rate:
-                raise ValueError("no audio samples")
-            return samples / rate
-    except (OSError, ValueError, IndexError, av.error.FFmpegError) as exc:
-        raise VidgenError(f"cannot read audio file {path}: {exc}") from None
 
 
 def _beats(k: int) -> str:
@@ -293,11 +286,17 @@ class NarratedScene(MovingCameraScene):
         self.silent_busy: float | None = None
         self._durations: dict[str, float] = {}
         self._current_beat: str | None = None
+        self._beat_start = 0.0  # scene time the current beat's narration started
         self._requested: float | None = None
         #: Sound effects of the scene (:class:`~vidgen.sfx.SfxEvent`, scene times), in the order
         #: they were added; the worker stores them in the timings, the pipeline mixes them.
         self.sfx_log: list[SfxEvent] = []
         self._sounds: SoundLibrary | None = None
+        self._camera_follow: Callable[[], float] | None = None  # the x the camera follows (follow_with_camera)
+        self._camera_listeners: list[Callable[[], None]] = []
+        #: Whether the scene renders at preview quality (set by the render worker); scenes may
+        #: draw less then, e.g. fewer particles.
+        self.is_preview = False
         super().__init__(**scene_kwargs)
         self.capture = capture
         if capture is not None:
@@ -506,6 +505,46 @@ class NarratedScene(MovingCameraScene):
                 self._durations[b.id] = b.estimated_duration(self.project.config.narration.words_per_second)
         return self._durations[b.id]
 
+    def beat_visemes(self, beat: str | int | BeatConfig) -> VisemeTrack:
+        """The beat's viseme track over its :meth:`beat_duration`, for
+        :meth:`~vidgen.cartoon.character.Character.lip_sync` (stored by ``vidgen tts``, else
+        built from the spoken text; DESIGN.md §69.4)."""
+        b = self.beat(beat)
+        return beat_visemes(self.project, b.id, self.beat_duration(b))
+
+    @property
+    def current_beat(self) -> BeatConfig | None:
+        """The beat being narrated now (inside :meth:`narrate`), else ``None``."""
+        return self.beat(self._current_beat) if self._current_beat is not None else None
+
+    def beat_clock(self) -> Callable[[], float]:
+        """A clock for :meth:`Character.lip_sync <vidgen.cartoon.character.Character.lip_sync>`:
+        called, it gives the seconds since the current beat's narration (its audio) started, from
+        the scene's time, so it keeps counting while animations pause the character's updaters.
+        Call it inside :meth:`narrate`."""
+        start = self._beat_start
+        return lambda: float(self.renderer.time) - start
+
+    def speak(self, character: Any) -> None:
+        """Make ``character``'s mouth follow the current beat's viseme track (:meth:`beat_visemes`),
+        timed from the beat's start (:meth:`beat_clock`); ``character.stop_lip_sync()`` ends it
+        (DESIGN.md §69.11). Call it inside :meth:`narrate`."""
+        beat = self.current_beat
+        if beat is None:
+            raise VidgenError(f"scene '{self.spec.id}': speak() is called outside a beat")
+        character.lip_sync(self.beat_visemes(beat), clock=self.beat_clock())
+
+    def beat_action_names(self, beat: str | int | BeatConfig) -> list[str]:
+        """The action types the beat's ``actions`` use (validated), in order."""
+        b = self.beat(beat)
+        return [u.kind.name for u in self._actions.uses if u.beat == b.id] if self._actions is not None else []
+
+    def action_uses(self, name: str) -> list[Any]:
+        """The scene's validated uses of action type ``name``, in beat order: :class:`Action`
+        objects with their ``options`` and ``config`` (e.g. a ``stage`` keeps the characters an
+        ``enter`` brings in off stage until then)."""
+        return [u.action for u in self._actions.uses if u.kind.name == name] if self._actions is not None else []
+
     @contextmanager
     def narrate(self, beat: str | int | BeatConfig) -> Iterator[float]:
         """Narrate one beat: ``with self.narrate(0) as d: ...``.
@@ -525,6 +564,9 @@ class NarratedScene(MovingCameraScene):
         if self.capture is not None:
             self.capture.begin_segment(b.id, round((d + self.pad) * config.frame_rate), include_end=False)
         self._current_beat = b.id
+        self._beat_start = start
+        if b.sting is not None:
+            self._add_sting(b.sting, start + (d if b.sting.placed_at == "end" else 0.0))
         if self._actions is not None:
             self._actions.start_beat(b.id, d, self.pad)
         try:
@@ -752,6 +794,23 @@ class NarratedScene(MovingCameraScene):
     #: true}`` (``chapter``: a whoosh); ``None``: nothing.
     entrance_sfx: ClassVar[tuple[str, float] | None] = None
 
+    # ----- stills (DESIGN.md §14, §69.16) ----------------------------------------------------------
+
+    #: Action types whose uses also get a still half-way through them when stills are captured
+    #: (``vidgen storyboard``, ``render --frames``; ``stage``: walks, gestures, jumps, keyframes...).
+    mid_still_actions: ClassVar[frozenset[str]] = frozenset()
+
+    # ----- generated pictures (DESIGN.md §58, §69.10) ------------------------------------------
+
+    #: Whether the video's ``cartoon_style`` is added to this type's ``generate:`` prompts
+    #: (``stage``: yes). ``vidgen imagegen`` reads it too, so both ask for the same picture.
+    uses_cartoon_style: ClassVar[bool] = False
+
+    def generated_picture(self, generate: GenerateImage) -> Path:
+        """The picture of a ``generate:`` param: :func:`vidgen.imagegen.generated_image` with
+        this type's :attr:`uses_cartoon_style` (the stored picture, or a placeholder card)."""
+        return generated_image(self.project, generate, self.theme, cartoon=self.uses_cartoon_style)
+
     @property
     def sounds(self) -> SoundLibrary:
         """The sounds this scene can play: the built-ins and the project's ``assets/sfx``."""
@@ -775,8 +834,13 @@ class NarratedScene(MovingCameraScene):
         time = float(self.renderer.time) if at is None else at
         return self._add_sfx(sound, time, gain, pan, align, params, "sfx")
 
+    def _add_sting(self, sting: StingCue, time: float) -> None:
+        """Record the beat's music sting (DESIGN.md §69.19) at scene time ``time``: its built-in
+        sound (or the project's file of that name), ducked under the narration when mixed."""
+        self._add_sfx(STING_SOUNDS[sting.kind], time, sting.gain, 0.0, "start", {}, "sting", duck=True)
+
     def _add_sfx(
-        self, sound: str, time: float, gain: float, pan: float, align: str, params: Mapping[str, Any], where: str
+        self, sound: str, time: float, gain: float, pan: float, align: str, params: Mapping[str, Any], where: str, duck: bool = False
     ) -> SfxEvent:
         try:
             cue = SfxCue.model_validate({"sound": sound, "at": time, "gain": gain, "pan": pan, "align": align, "params": dict(params)})
@@ -787,7 +851,7 @@ class NarratedScene(MovingCameraScene):
         problems = self.sounds.problems(cue.sound, given)
         if problems:
             raise VidgenError(f"scene '{self.spec.id}' {where}: " + "; ".join(f"{key}: {message}" for key, message in problems))
-        event = SfxEvent(round(cue.at, 6), cue.sound, cue.gain, cue.pan, cue.align, given, self._current_beat)
+        event = SfxEvent(round(cue.at, 6), cue.sound, cue.gain, cue.pan, cue.align, given, self._current_beat, duck)
         self.sfx_log.append(event)
         return event
 
@@ -798,6 +862,12 @@ class NarratedScene(MovingCameraScene):
         if entry is not None and self.project.config.sfx.auto:
             sound, gain, params = entry
             self.sfx(sound, gain=gain, **params)
+
+    def action_foley(self, action: str, options: Any, animations: Sequence[Animation], start: float, seconds: float) -> None:
+        """Called by the action runner when the built-in beat action ``action`` (its ``options``)
+        starts playing ``animations`` at scene time ``start`` for ``seconds`` (as played, after
+        any shortening): the place for sounds tied to actions. Does nothing here; ``stage`` plays
+        its foley (DESIGN.md §69.19)."""
 
     # ----- frame -----------------------------------------------------------------------------
 
@@ -820,6 +890,71 @@ class NarratedScene(MovingCameraScene):
     def is_portrait(self) -> bool:
         """True when the frame is taller than wide (e.g. a 1080x1920 vertical variant)."""
         return config.pixel_height > config.pixel_width
+
+    # ----- camera ----------------------------------------------------------------------------
+
+    def camera_bounds(self) -> Bounds:
+        """``(left, right, bottom, top)`` in Manim units: the box the camera's view stays inside
+        (``zoom``, ``pan``, ``follow``). The frame; a ``stage`` wider than the frame widens it."""
+        return (-self.frame_width / 2, self.frame_width / 2, -self.frame_height / 2, self.frame_height / 2)
+
+    @classmethod
+    def camera_place(cls, params: Any, place: str | float) -> float:
+        """Where ``pan: {to: place}`` points the camera: an x from 0 (left) to 1 (right) of
+        :meth:`camera_bounds`. A number is itself; a name raises ``ValueError`` unless the scene
+        type knows it (a ``stage``'s marks)."""
+        if isinstance(place, str):
+            raise ValueError(f"'{place}' is not a place this scene type knows; give an x from 0 (left edge) to 1 (right edge)")
+        return float(place)
+
+    def follow_with_camera(self, x_of: Callable[[], float] | None) -> None:
+        """Keep the camera's centre on the x that ``x_of()`` gives (Manim units) on every frame,
+        inside :meth:`camera_bounds` at the view's current size; ``None`` stops following (the
+        camera stays where it is). A later call replaces the earlier one."""
+        self._camera_follow = x_of
+        self._sync_camera_updater()
+
+    @property
+    def camera_following(self) -> Callable[[], float] | None:
+        """The ``x_of`` given to :meth:`follow_with_camera` while the camera follows it."""
+        return self._camera_follow
+
+    def add_camera_listener(self, callback: Callable[[], None]) -> None:
+        """Call ``callback()`` on every frame after the camera has moved (also while a camera
+        animation plays), e.g. to move a ``stage``'s parallax layers with it."""
+        self._camera_listeners.append(callback)
+        self._sync_camera_updater()
+
+    def _sync_camera_updater(self) -> None:
+        """Run :meth:`_camera_step` as a scene updater while something follows or listens."""
+        active = self._camera_follow is not None or bool(self._camera_listeners)
+        installed = self._camera_step in self.updaters
+        if active and not installed:
+            self.add_updater(self._camera_step)
+        elif installed and not active:
+            self.updaters = [f for f in self.updaters if f != self._camera_step]  # a bound method: not `is`
+
+    def _camera_step(self, dt: float) -> None:
+        """Scene updater (run after every mobject updater and animation of the frame): follow,
+        then tell the listeners."""
+        frame = self.camera.frame
+        if self._camera_follow is not None:
+            x, y = view_center_within(self.camera_bounds(), (self._camera_follow(), frame.get_center()[1]), frame.width, frame.height)
+            frame.move_to([x, y, 0.0])
+        for callback in self._camera_listeners:
+            callback()
+
+    def get_moving_mobjects(self, *animations: Animation) -> list[Mobject]:
+        """Manim's moving mobjects (all of them while a camera animation plays); all of them too
+        while the camera follows something, since :meth:`_camera_step` may then move it on any
+        frame. Otherwise the camera stays still for the whole animation, so Manim draws the
+        mobjects before the first moving one once into a static image (a stage's backdrop and
+        parallax layers, DESIGN.md §69.20); the camera listeners run first, so that image shows
+        them where the camera is now."""
+        for callback in self._camera_listeners:
+            callback()
+        moving = super().get_moving_mobjects(*animations)
+        return list_update(self.mobjects, moving) if self._camera_follow is not None else moving
 
     #: Margins (Manim units) between the frame edge and the safe area (``vidgen.regions``
     #: defaults). The layout dump and ``vidgen lint``'s ``safe_area`` rule use the same values.
