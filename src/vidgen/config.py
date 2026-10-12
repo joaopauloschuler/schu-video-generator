@@ -331,6 +331,40 @@ class CharacterLook(_Strict):
         return self
 
 
+#: Parts a pose sets (DESIGN.md §69.3); the parts of an expression are :data:`ExpressionPart`.
+PosePart = Literal["body", "legs", "arm_left", "arm_right", "head", "accessory"]
+ExpressionPart = Literal["eyes", "brows", "mouth"]
+
+
+class PartPoseEntry(_Strict):
+    """How a pose or an expression sets one part of a character (DESIGN.md §69.3), relative to
+    its rest drawing."""
+
+    angle: float = 0.0
+    """Degrees counterclockwise about the part's pivot, as drawn facing right (facing left mirrors it)."""
+    scale: float | tuple[float, float] = 1.0
+    """One factor, or [x, y], about the pivot; a negative factor flips the part (y -1 turns a smile into a frown)."""
+    shift: tuple[float, float] = (0.0, 0.0)
+    """[x, y] in character units (1 = the character's height)."""
+    shape: str | list[str] | None = None
+    """The shape shown: a name, or a list of names (the first the character has); none: the rest shape."""
+
+    @field_validator("scale")
+    @classmethod
+    def _nonzero_scale(cls, value: float | tuple[float, float]) -> float | tuple[float, float]:
+        if 0 in ((value,) if isinstance(value, (int, float)) else value):
+            raise ValueError("a scale factor of 0 makes the part vanish; use a small number instead")
+        return value
+
+    def shape_choices(self) -> list[str]:
+        """The shape names to try, in order (empty: the rest shape)."""
+        return [] if self.shape is None else [self.shape] if isinstance(self.shape, str) else list(self.shape)
+
+    def scale_xy(self) -> tuple[float, float]:
+        """``scale`` as (x, y)."""
+        return (float(self.scale), float(self.scale)) if isinstance(self.scale, (int, float)) else (float(self.scale[0]), float(self.scale[1]))
+
+
 class CharacterEntry(_Strict):
     """One entry of ``characters:`` (DESIGN.md §69): a cartoon character declared once and used
     by any scene."""
@@ -343,6 +377,10 @@ class CharacterEntry(_Strict):
     """How the character is drawn: body shape, head size, eyes, nose, hair, ears, accessories, seed; or svg: a file split into parts."""
     colors: CharacterColors = Field(default_factory=CharacterColors)
     """Part colours {skin, clothes, outline, features, hair, accessory}: theme tokens or hex (not used by an svg look)."""
+    poses: dict[Identifier, dict[PosePart, PartPoseEntry]] = Field(default_factory=dict)
+    """The character's own poses (name -> part -> {angle, scale, shift, shape}); a built-in name is replaced."""
+    expressions: dict[Identifier, dict[ExpressionPart, PartPoseEntry]] = Field(default_factory=dict)
+    """The character's own expressions (eyes, brows, mouth), like poses."""
 
 
 class PronunciationEntry(_Strict):

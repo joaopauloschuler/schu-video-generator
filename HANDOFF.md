@@ -6832,3 +6832,68 @@ How to test
   tests/test_guide.py`; `-m render` on the cartoon and vector test files;
   `tests/test_schema.py -k svg_character`.
 
+
+## Step 70 — Poses and expressions
+
+What was built
+- `src/vidgen/cartoon/poses.py` (no manim): `POSES` (stand, pointing, waving, thinking, shrug,
+  arms_crossed, sitting) and `EXPRESSIONS` (neutral, happy, sad, angry, surprised, worried,
+  thinking): name -> part -> `config.PartPoseEntry(angle, scale, shift, shape)`. Poses set
+  `POSE_PARTS` (body, legs, arms, head, accessory), expressions `EXPRESSION_PARTS` (eyes, brows,
+  mouth); unnamed parts of the group go back to rest. `shape` is a list of choices (first the
+  character has); missing parts are skipped. `find_entry` raises with did-you-mean + known names.
+- `Character(..., poses=, expressions=)`: `names(kind)`, `posed_state(pose=, expression=)`,
+  `set_pose`, `set_expression`; `build_character` passes the entry's own tables.
+- `src/vidgen/cartoon/transition.py`: `PoseChange(character, pose=, expression=, state=,
+  facing=, lag_ratio=0.15, part_rate_func=smooth)` (a Manim `Animation`): per-part windows in
+  `PART_NAMES` order (`part_windows`), `blend_poses` (angle / scale / shift linear, shape swaps
+  at half), redrawn with `set_state`, so parts sweep arcs about their pivots. Facing flips at half.
+- Generator: brows gain the shapes `angry` / `sad`.
+- Config: `characters[].poses` / `.expressions` (own entries; a built-in name is replaced);
+  `PartPoseEntry` (zero scale is an error; parts outside the group are config errors).
+- `vidgen validate`: `cast.character_pose_problems` (a shape none of whose choices exist) and
+  `character_pose_warnings` (a part the character lacks), shapes known without drawing
+  (`cast.GENERATED_SHAPES`, `character_part_shapes`). `vidgen character` prints `poses:` and
+  `expressions:` (own ones marked `*`, `cast.pose_lines`).
+- Example: `examples/svg_character` gives sprout an own expression `cheer` and pose `bow`.
+
+Files touched
+- New: `src/vidgen/cartoon/poses.py`, `src/vidgen/cartoon/transition.py`,
+  `tests/test_cartoon_poses.py`.
+- `src/vidgen/cartoon/character.py` (own tables, pose methods; private `_set_pose` renamed
+  `_store_pose`), `cartoon/generator.py` (brow shapes), `cartoon/cast.py`, `config.py`
+  (`PosePart`, `ExpressionPart`, `PartPoseEntry`, `CharacterEntry.poses / expressions`), `cli.py`
+  (validate problems / warnings, `vidgen character` lines), `api.py` (`PoseChange`),
+  `tests/test_docs.py` (`PartPoseEntry`), `examples/svg_character/video.yaml`.
+- Docs: `docs/CONFIG.md` (two rows, "Poses and expressions"), `DESIGN.md` (§2 tree, §6.4, §8, §69,
+  new §69.3), `docs/EXTENDING.md`.
+
+Public interfaces
+- `vidgen.api`: `PoseChange`. `Character`: `names`, `posed_state`, `set_pose`, `set_expression`,
+  constructor keywords `poses=`, `expressions=`.
+
+Decisions / deviations
+- One entry type (`PartPoseEntry`) for built-in and YAML entries. Poses and expressions touch
+  disjoint parts so they combine; `accessory` is a pose part.
+- Expressions use geometry where shapes are missing: the rest mouth (a smile) is flipped with a
+  negative y scale for sad / angry / worried, so SVG characters need no extra shapes; brows use
+  `angry` / `sad` shapes when present, else only their shift.
+- `PoseChange` is an `Animation` (not an updater) so it composes with `self.play`; its default
+  `rate_func` is `linear` and each part eases with `part_rate_func`.
+- Searched first: no pose tables or pose animations existed; the did-you-mean message follows
+  `cast.unknown_character_message`; validation reuses `read_character_svg`.
+
+Known gaps / TODOs
+- Arms are one rigid piece: `thinking` holds the hand beside the face, `arms_crossed` folds
+  arms across the body; `sitting` turns both legs forward together (no knees).
+- No scene / action names a pose yet: Steps 73 / 78 should type pose fields and check them with
+  `poses.find_entry` / `Character.names` (validate then lists the known names).
+- A shape swap still resets that part's style (Step 67 gap). Blinks (Step 72) must avoid a
+  running `PoseChange`.
+
+How to test
+- `pytest tests/test_cartoon_poses.py` (16 not-render + 1 render at 160x90).
+- Also run: `-m "not render" tests/test_cartoon_character.py tests/test_cartoon_generator.py
+  tests/test_cartoon_svg.py tests/test_docs.py tests/test_api.py tests/test_config.py
+  tests/test_guide.py tests/test_voices.py`; `-m render` on the four cartoon files;
+  `tests/test_schema.py -k "svg_character or example"`.

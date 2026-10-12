@@ -74,7 +74,8 @@ src/vidgen/
   cartoon/                # cartoons (§69): character.py (Character: named vector parts with pivots,
                           # poses, mirroring; character()), cast.py (characters: lookups, checks; no manim),
                           # generator.py (look: parameters -> parts, §69.1), svg_look.py (look: {svg} -> parts by
-                          # element ids, §69.2), still.py (`vidgen character --png`)
+                          # element ids, §69.2), still.py (`vidgen character --png`), poses.py (pose and
+                          # expression tables, §69.3; no manim), transition.py (PoseChange, §69.3)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
   actions.py              # per-beat actions: Target, Action, validation, ActionRunner (§26)
@@ -616,6 +617,8 @@ keyword argument `language=None` of `caption_cues`, `segment_cues`, `phrase_brea
 Step 55 (§58) adds `GenerateImage`, `generated_image`.
 Step 67 (§69) adds `Character`, `CharacterPart`, `CharacterState`, `PartPose`, `PART_NAMES`,
 `character` and the param type `CharacterName`.
+Step 70 (§69.3) adds `PoseChange` (and the `Character` methods `set_pose`, `set_expression`,
+`posed_state`, `names`).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -763,7 +766,7 @@ vidgen readback [PROJECT] [--variant NAME] [--beat ID ...] [--max-wer RATE] [--f
 vidgen imagegen [PROJECT] [--dry-run] [--force] [--scene ID ...] [--variant NAME] [--json]   # generated pictures (§58)
 vidgen gallery [PROJECT] [--output DIR] [--types T,T] [--formats 16:9,9:16] [--theme PRESET]
               [--clips | --no-clips] [--jobs N] [--force] [--json]   # every scene type rendered (§60)
-vidgen character NAME [PROJECT] [--variant NAME] [--png [FILE]] [--facing right|left]   # a character's look; one still (§69.1)
+vidgen character NAME [PROJECT] [--variant NAME] [--png [FILE]] [--facing right|left]   # a character's look, poses; one still (§69.1)
 ```
 PROJECT defaults to the current directory. `render` renders the scenes whose render is missing
 or stale by its fingerprint (§14, §63; `--force`: all); `--scene` re-renders only those scenes
@@ -4862,8 +4865,8 @@ take `CharacterName` options.
   `swap(part, shape)`, `reset(part=None)`, `face`, `turn`, `state()` → `CharacterState(facing,
   parts)`, `set_state(state)`, `pose_of`, `shape_names`, `parent_of`, `has_part`, `draw_order`,
   `parts` (name → live `VGroup`). All changes return the character (chainable). Animate poses by
-  calling `set_part` / `set_state` from an updater; `.animate.set_part(...)` would interpolate
-  points linearly (a chord, not an arc) — Step 70 adds the eased part-by-part transition.
+  calling `set_part` / `set_state` from an updater, or with `PoseChange` (§69.3);
+  `.animate.set_part(...)` would interpolate points linearly (a chord, not an arc).
   `copy()` is a deep copy with its own poses.
 - **The default look** (`generate_parts(CharacterLook(), colors)`, §69.1; Step 67 called it the
   basic figure, `basic_parts`): a round head on an oval body, sleeves with round hands, two legs,
@@ -4899,8 +4902,7 @@ take `CharacterName` options.
   characters).
 - **Layout dump**: a `Character` is reported as one `group` object (no text inside); Step 73
   gives it its own kind.
-- **Not done here**: no scene type draws characters yet (Step 73); `.animate`-friendly pose
-  transitions (Step 70).
+- **Not done here**: no scene type draws characters yet (Step 73).
 
 ### 69.1 The character generator (Step 68)
 
@@ -5003,3 +5005,50 @@ and `still.write_character_png` pass it) calls `cartoon/svg_look.py`.
 - **Example**: `examples/svg_character` (`assets/sprout.svg`, an original figure: every part,
   `eyes_closed`, `mouth_A` / `_E` / `_O` / `_M`, pivots), with a generated character beside it.
   Tests: `tests/test_cartoon_svg.py`.
+
+### 69.3 Poses and expressions (Step 70)
+
+Named poses and expressions are tables of part settings, applied with `set_state`; a change
+between two of them is the `PoseChange` animation.
+
+- **Tables** (`cartoon/poses.py`, no manim): `POSES` (`stand, pointing, waving, thinking, shrug,
+  arms_crossed, sitting`) and `EXPRESSIONS` (`neutral, happy, sad, angry, surprised, worried,
+  thinking`), each name -> part -> `PartPoseEntry(angle, scale, shift, shape)` (the config model of
+  `poses:`, so built-in and own entries are one type). A pose sets `POSE_PARTS` (`body, legs,
+  arm_left, arm_right, head, accessory`), an expression `EXPRESSION_PARTS` (`eyes, brows, mouth`),
+  so one of each combines; the parts of its group an entry does not name go back to rest (`stand`
+  is empty: everything at rest). Values are relative to the rest drawing: arms hang down, so
+  `pointing` turns `arm_left` (the near arm facing right) +88°; `sitting` lowers `body` 0.1 and
+  turns `legs` +80°; the rest mouth is a smile, so `sad` / `angry` / `worried` flip it with a
+  negative y scale. `shape` is a list of choices (`surprised`: mouth `open`, `O`, `A`): the first
+  the character has (`chosen_shape`), else the rest shape. A part the character lacks is skipped.
+  So every entry works on generated characters (brows gain the shapes `angry` / `sad`, inner ends
+  low / high) and on SVGs (`brows_angry` if the file has it; otherwise only the shift).
+- **Character** (`cartoon/character.py`): `Character(..., poses=, expressions=)` takes the
+  character's own tables; `names(kind)` (built-in first, then own; an own entry with a built-in
+  name replaces it), `posed_state(pose=None, expression=None) -> CharacterState` (the current
+  state with the entries applied; nothing drawn), `set_pose(name)`, `set_expression(name)`.
+  Unknown names raise `VidgenError` from `poses.find_entry`: `character 'pip': unknown pose
+  'pointng'; did you mean 'pointing'? poses: stand, pointing, ...`. `build_character` passes the
+  entry's `poses` / `expressions`.
+- **Own entries** (`characters[].poses` / `.expressions`, config): name -> part -> `{angle, scale,
+  shift, shape}`; a part outside the group, a zero scale or an unknown key is a config error.
+  `vidgen validate`: `cast.character_pose_problems` (a `shape` none of whose choices the
+  character has: `characters[0].expressions.grin.mouth.shape: character 'pip': part 'mouth' has
+  no shape 'wide' (shapes: smile, open)`) and `character_pose_warnings` (a part the character
+  does not have). Shapes are known without drawing: an svg look's from `read_character_svg`, a
+  generated one's from `cast.GENERATED_SHAPES` (a test keeps it equal to the generator's).
+  `vidgen character NAME` lists the known names (`cast.pose_lines`; own ones marked `*`).
+- **`PoseChange(character, *, pose=None, expression=None, state=None, facing=None,
+  lag_ratio=0.15, part_rate_func=smooth, **animation_kwargs)`** (`cartoon/transition.py`,
+  exported): the target is resolved when it is created, the start when it begins. Each part
+  whose `PartPose` differs gets a window (`part_windows`: parts in `PART_NAMES` order, i.e. body,
+  legs, arms, head, then the face, each starting `lag_ratio` of a window after the previous; the
+  last ends at 1) and eases in it with `part_rate_func`; `blend_poses` mixes angle, scale and shift
+  linearly and switches the shape at the halfway point. The character is redrawn with
+  `set_state` each frame, so a turning part sweeps an arc about its pivot (not a cross-fade, not
+  `.animate`'s straight lines). `rate_func` (default `linear`) maps the animation's time first.
+  A facing change switches the mirror at the halfway point. `state=` with `pose` / `expression`
+  is a `TypeError`.
+- **Not done here**: no scene type or action uses poses yet (Steps 73, 78); blinking (Step 72)
+  must avoid a running `PoseChange`. Tests: `tests/test_cartoon_poses.py`.

@@ -152,13 +152,13 @@ def project_problems(project: Project) -> list[Problem]:
     ``actions`` (action names, options, targets of the scene) and the ``overlays`` (types,
     options, scene references; DESIGN.md §41); also checks the project's ``assets/icons``,
     the sounds of the scenes' ``sfx:`` lists (§47), the ``music:`` sources (§48), a designed
-    ``thumbnail:``'s icon, image, preset and background (§53) and the ``characters:`` colours and
-    SVG files (§69).
+    ``thumbnail:``'s icon, image, preset and background (§53) and the ``characters:`` colours,
+    SVG files (§69) and the shapes of their own poses (§69.3).
     """
     from vidgen import extensions, registry
     from vidgen.actions import scene_actions
     from vidgen.carry import carry_problems
-    from vidgen.cartoon.cast import character_color_problems, character_look_problems
+    from vidgen.cartoon.cast import character_color_problems, character_look_problems, character_pose_problems
     from vidgen.icons import PROJECT_ICONS_DIR, project_icons
     from vidgen.imagegen import imagegen_problems
     from vidgen.music import config_problems as music_problems
@@ -204,6 +204,7 @@ def project_problems(project: Project) -> list[Problem]:
             problems.extend(voice_color_problems(project.config, theme))
             problems.extend(character_color_problems(project.config, theme))
             problems.extend(character_look_problems(project.config, project.root))
+            problems.extend(character_pose_problems(project.config, project.root))
             problems.extend(transition_color_problems(project.config, theme))
             problems.extend(carry_problems(project.config))
             problems.extend(Problem(loc, message) for loc, message in sfx_problems(project.config, project.root))
@@ -300,9 +301,10 @@ def validate_warnings(project: Project) -> list[str]:
     the source language and base pronunciations kept in another language (§54), generated
     pictures not made yet and prompts asking for words in a picture (§58), OpenRouter TTS models
     and voices not in the bundled list and ``timestamps`` it cannot honour (§66), and SVG
-    characters' unavailable actions and part warnings (§69.2)."""
+    characters' unavailable actions and part warnings (§69.2), and parts the characters' own
+    poses name that they do not have (§69.3)."""
     from vidgen.carry import carry_warnings
-    from vidgen.cartoon.cast import character_look_warnings
+    from vidgen.cartoon.cast import character_look_warnings, character_pose_warnings
     from vidgen.chapter_export import chapter_warnings
     from vidgen.imagegen import imagegen_warnings
     from vidgen.transitions import transition_warnings
@@ -322,6 +324,7 @@ def validate_warnings(project: Project) -> list[str]:
         + language_warnings(project)
         + imagegen_warnings(project)
         + character_look_warnings(project.config, project.root)
+        + character_pose_warnings(project.config, project.root)
     )
 
 
@@ -664,14 +667,14 @@ def cmd_thumbnail(args: argparse.Namespace) -> CommandResult:
 
 
 def cmd_character(args: argparse.Namespace) -> int:
-    """Print a declared character's look and colours; with ``--png``, also write one still of it."""
+    """Print a declared character's look, colours, poses and expressions; with ``--png``, also write one still of it."""
     from vidgen import extensions
-    from vidgen.cartoon.cast import character_lines, find_character
+    from vidgen.cartoon.cast import character_lines, find_character, pose_lines
 
     project = Project.load(args.project, variant=args.variant)
     entry = find_character(project.config, args.name)
     with extensions.project_session(project) as theme:
-        for line in character_lines(entry, theme, project.root):
+        for line in [*character_lines(entry, theme, project.root), *pose_lines(entry)]:
             print(line)
         if args.png is not None:
             from vidgen.cartoon.still import write_character_png

@@ -247,7 +247,7 @@ def _open_eye(look: CharacterLook, x: float, f: _Frame, c: Mapping[str, str], w:
 
 
 def _face(look: CharacterLook, f: _Frame, c: Mapping[str, str], w: float) -> list[CharacterPart]:
-    """Eyes (``open`` / ``closed``), brows and mouth (``smile`` / ``open``)."""
+    """Eyes (``open`` / ``closed``), brows (``default`` / ``angry`` / ``sad``) and mouth (``smile`` / ``open``)."""
     r, fx = f.p.head_radius, f.face_x
     width, height = _eye_size(look, f)
     xs = _eye_xs(f)
@@ -255,13 +255,26 @@ def _face(look: CharacterLook, f: _Frame, c: Mapping[str, str], w: float) -> lis
     closed_y = f.eye_y - (0 if look.eyes == "sleepy" else 0.025 * r)
     closed_eyes = VGroup(*(Line([x - width * 0.6, closed_y, 0], [x + width * 0.6, closed_y, 0]).set_stroke(c["features"], width=w) for x in xs))
     brow_y = f.eye_y + height / 2 + 0.16 * r
-    brows = VGroup(*(Line([x - 0.175 * r, brow_y - 0.025 * r, 0], [x + 0.175 * r, brow_y + 0.025 * r, 0]).set_stroke(c["features"], width=w) for x in xs))
+
+    def brows(back_left: float, back_right: float, front_left: float, front_right: float) -> VGroup:
+        """Two brow lines; the arguments are each end's height (× r) above ``brow_y``."""
+        ends = ((back_left, back_right), (front_left, front_right))
+        return VGroup(*(
+            Line([x - 0.175 * r, brow_y + left * r, 0], [x + 0.175 * r, brow_y + right * r, 0]).set_stroke(c["features"], width=w)
+            for x, (left, right) in zip(xs, ends)
+        ))
+
     mouth_r = 0.3 * r * f.p.mouth_width
     smile = Arc(radius=mouth_r, start_angle=PI * 1.2, angle=PI * 0.6, arc_center=[fx, f.head_y - 0.2 * r, 0]).set_stroke(c["features"], width=w)
     open_mouth = _filled(Ellipse(width=1.5 * mouth_r, height=0.35 * r).move_to([fx, f.head_y - 0.45 * r, 0]), c["features"])
     return [
         CharacterPart("eyes", {"open": open_eyes, "closed": closed_eyes}, (fx, f.eye_y)),
-        CharacterPart("brows", {"default": brows}, (fx, brow_y)),
+        # angry: the inner ends (toward the face's middle) low; sad: the inner ends high
+        CharacterPart("brows", {
+            "default": brows(-0.025, 0.025, -0.025, 0.025),
+            "angry": brows(0.05, -0.07, -0.07, 0.05),
+            "sad": brows(-0.05, 0.07, 0.07, -0.05),
+        }, (fx, brow_y)),
         CharacterPart("mouth", {"smile": smile, "open": open_mouth}, (fx, f.head_y - 0.4 * r)),
     ]
 

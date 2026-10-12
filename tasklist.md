@@ -356,10 +356,10 @@ one.
 - [x] Docs: the naming convention with a small example SVG in `examples/`; tests with that SVG (`examples/svg_character/assets/sprout.svg`, CONFIG.md "Characters from SVG files", `tests/test_cartoon_svg.py`)
 
 ### Step 70 — Poses and expressions
-- [ ] Named poses (`stand`, `pointing`, `waving`, `thinking`, `shrug`, `arms_crossed`, `sitting`) and expressions (`neutral`, `happy`, `sad`, `angry`, `surprised`, `worried`, `thinking`) as part angles / part shapes, in one table
-- [ ] A transition between two poses or expressions eases part by part (not a cross-fade)
-- [ ] Characters may define their own poses in YAML; validate lists the known names
-- [ ] Tests: every pose and expression builds on the generator and on the example SVG
+- [x] Named poses (`stand`, `pointing`, `waving`, `thinking`, `shrug`, `arms_crossed`, `sitting`) and expressions (`neutral`, `happy`, `sad`, `angry`, `surprised`, `worried`, `thinking`) as part angles / part shapes, in one table (`cartoon/poses.py`: `POSES` / `EXPRESSIONS`, part -> `PartPoseEntry`; shape choices fall back per character; generated brows gain `angry` / `sad`; DESIGN §69.3)
+- [x] A transition between two poses or expressions eases part by part (not a cross-fade) (`PoseChange` animation in `cartoon/transition.py`, exported: each part eases about its pivot in its own window, body first)
+- [x] Characters may define their own poses in YAML; validate lists the known names (`characters[].poses` / `.expressions`; validate checks their shapes and parts; unknown names raise with did-you-mean and the known names; `vidgen character` lists them; no scene / action names a pose yet, so validate has no pose reference to check until Steps 73 / 78)
+- [x] Tests: every pose and expression builds on the generator and on the example SVG (`tests/test_cartoon_poses.py`)
 
 ### Step 71 — Lip sync (visemes)
 - [ ] Phonemes per beat: from Kokoro's G2P (misaki) when the provider is Kokoro, else from text (misaki / espeak-ng when installed, a letter-based fallback otherwise), timed with the word timings already stored (ElevenLabs timestamps, Kokoro `.align.json`, estimated timings otherwise)

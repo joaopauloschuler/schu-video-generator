@@ -2,8 +2,8 @@
 
 Looking a character up by name, the unknown-character message shared by ``vidgen validate`` and
 the build, the theme check of each character's colours, the checks of ``look: {svg: FILE}``
-(§69.2: problems, and warnings naming the actions its parts do not allow) and the lines
-``vidgen character`` prints.
+(§69.2: problems, and warnings naming the actions its parts do not allow), the checks of the
+characters' own poses and expressions (§69.3) and the lines ``vidgen character`` prints.
 """
 
 from __future__ import annotations
@@ -12,7 +12,8 @@ import difflib
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 
-from vidgen.config import CharacterEntry, VideoConfig
+from vidgen.cartoon.poses import chosen_shape, merged_table
+from vidgen.config import CharacterEntry, PartPoseEntry, VideoConfig
 from vidgen.errors import Problem, VidgenError
 from vidgen.theme import Theme
 
@@ -154,6 +155,76 @@ def character_look_warnings(config: VideoConfig, root: Path) -> list[str]:
             listed = "; ".join(f"{action} (needs {needs})" for action, needs in missing)
             warnings.append(f"{where}: actions unavailable: {listed}")
     return warnings
+
+
+#: Shape names of a generated character's parts (``cartoon/generator.py``); the first is the rest shape.
+GENERATED_SHAPES: dict[str, list[str]] = {
+    "body": ["default"], "legs": ["default"], "arm_left": ["default"], "arm_right": ["default"], "head": ["default"],
+    "eyes": ["open", "closed"], "brows": ["default", "angry", "sad"], "mouth": ["smile", "open"],
+}
+
+
+def character_part_shapes(entry: CharacterEntry, root: Path) -> dict[str, list[str]]:
+    """Part name -> shape names of ``entry`` without drawing it (an svg look is read from
+    ``root``; raises :class:`VidgenError` when the file cannot be split)."""
+    if entry.look.svg is not None:
+        from vidgen.cartoon.svg_look import read_character_svg
+
+        return read_character_svg(root / entry.look.svg, where=entry.look.svg).part_shapes()
+    shapes = {part: list(names) for part, names in GENERATED_SHAPES.items()}
+    if {"glasses", "hat"} & set(entry.look.accessories):
+        shapes["accessory"] = ["default"]
+    return shapes
+
+
+def _own_pose_parts(config: VideoConfig, root: Path) -> Iterable[tuple[str, str, CharacterEntry, str, PartPoseEntry, dict[str, list[str]]]]:
+    """(location, kind, entry, part, setting, the character's part shapes) of every part of the
+    characters' own poses and expressions; characters whose svg cannot be read are skipped."""
+    for k, entry in enumerate(config.characters):
+        if not entry.poses and not entry.expressions:
+            continue
+        try:
+            shapes = character_part_shapes(entry, root)
+        except VidgenError:
+            continue
+        for kind, table in (("pose", entry.poses), ("expression", entry.expressions)):
+            for name, parts in table.items():
+                for part, setting in parts.items():
+                    yield f"characters[{k}].{kind}s.{name}.{part}", kind, entry, part, setting, shapes
+
+
+def character_pose_problems(config: VideoConfig, root: Path) -> list[Problem]:
+    """Shapes of the characters' own poses and expressions that the character does not have
+    (none of a list of choices)."""
+    problems = []
+    for where, _, entry, part, setting, shapes in _own_pose_parts(config, root):
+        choices = setting.shape_choices()
+        if part in shapes and choices and chosen_shape(setting, shapes[part]) is None:
+            problems.append(Problem(
+                f"{where}.shape",
+                f"character '{entry.name}': part '{part}' has no shape {' or '.join(map(repr, choices))} (shapes: {', '.join(shapes[part])})",
+            ))
+    return problems
+
+
+def character_pose_warnings(config: VideoConfig, root: Path) -> list[str]:
+    """Parts named by the characters' own poses and expressions that the character does not have
+    (those settings do nothing)."""
+    return [
+        f"{where}: character '{entry.name}' has no {part}; this setting does nothing"
+        for where, _, entry, part, _, shapes in _own_pose_parts(config, root)
+        if part not in shapes
+    ]
+
+
+def pose_lines(entry: CharacterEntry) -> list[str]:
+    """What ``vidgen character NAME`` prints about poses: the known pose and expression names
+    (the character's own marked ``*``)."""
+    lines = []
+    for kind, own in (("pose", entry.poses), ("expression", entry.expressions)):
+        names = [f"{name}*" if name in own else name for name in merged_table(kind, own)]
+        lines.append(f"  {kind}s: {', '.join(names)}")
+    return lines
 
 
 def check_character_name(name: str) -> str:

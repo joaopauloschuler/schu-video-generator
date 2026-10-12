@@ -167,9 +167,15 @@ shape=...)` (degrees counterclockwise as drawn facing right; its child parts fol
 head carries the eyes), swap a shape with `swap("mouth", "open")`, mirror the whole character
 with `face("left")` / `turn()`, and snapshot or restore a pose with `state()` / `set_state()`.
 Move and scale the character with Manim's own `move_to` / `shift` / `scale`; poses set afterwards
-land where it is. To animate a pose, call `set_part` from an updater
-(`UpdateFromAlphaFunc(hero, lambda m, a: m.set_part("arm_left", angle=120 * a))`), not with
-`.animate` (that would move points along straight lines). DESIGN.md §69 has the model.
+land where it is. Named poses (`stand`, `pointing`, `waving`, `thinking`, `shrug`,
+`arms_crossed`, `sitting`) and expressions (`neutral`, `happy`, `sad`, `angry`, `surprised`,
+`worried`, `thinking`), plus the character's own (`names("pose")`, `names("expression")`), are
+set at once with `set_pose(name)` / `set_expression(name)`, or animated part by part with
+`self.play(PoseChange(hero, pose="waving", expression="happy"), run_time=0.8)` (each part eases
+about its pivot, body first; `state=` takes any `CharacterState`). For a single part, call
+`set_part` from an updater (`UpdateFromAlphaFunc(hero, lambda m, a: m.set_part("arm_left",
+angle=120 * a))`), not `.animate` (that would move points along straight lines). DESIGN.md §69
+has the model, §69.3 the poses.
 
 Params can nest: use another `SceneParams` class as a field type (also in lists). Theme tokens
 are checked inside nested models too, and `vidgen list-scenes` prints the nested fields. A nested

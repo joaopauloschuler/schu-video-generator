@@ -995,6 +995,8 @@ characters:
 | `voice` | none | who speaks for the character: a name from [`voices:`](#multiple-voices-voices) or `default` (the base voice); none: the character does not speak |
 | `look` | `{}` | how the character is drawn (the generator's parameters, below); `{}`: a round head on an oval body |
 | `colors` | see below | colours of the parts: theme tokens or hex |
+| `poses` | `{}` | the character's own poses: name -> part -> settings ([below](#poses-and-expressions)) |
+| `expressions` | `{}` | the character's own expressions, like `poses` |
 
 The **generator** draws every character from simple shapes (circles, ellipses, rounded
 rectangles, polygons, lines), so each figure is an original drawing:
@@ -1037,6 +1039,43 @@ background, in the video's aspect ratio with its shorter side 720 px (default fi
 - **Renders**: editing `characters:` renders every scene again (it is part of each scene's
   fingerprint, like the theme).
 - **Variants** replace the whole `characters:` list (lists are not merged).
+
+### Poses and expressions
+
+Every character knows the same named **poses** (`stand`, `pointing`, `waving`, `thinking`,
+`shrug`, `arms_crossed`, `sitting`), which set the body, legs, arms, head and accessory, and
+**expressions** (`neutral`, `happy`, `sad`, `angry`, `surprised`, `worried`, `thinking`), which set
+the eyes, brows and mouth; a pose and an expression combine. A change from one to another is
+animated part by part: each part turns, scales or slides about its pivot with its own easing,
+body first and face last (not a cross-fade). Parts a character does not have are skipped, so the
+names work on generated and SVG characters alike (an SVG without `brows_angry` frowns with its
+brows lowered only). `vidgen character NAME` lists the names a character knows.
+
+A character may add its own, or replace a built-in one of the same name:
+
+```yaml
+characters:
+  - name: pip
+    poses:
+      bow: {body: {angle: -20}, head: {angle: -10}}        # tilt forward
+      waving: {arm_right: {angle: -150}}                   # pip waves with the other arm
+    expressions:
+      smug: {mouth: {shape: [grin, smile], scale: [1.2, 0.6]}, brows: {angle: 10}}
+```
+
+| key (each part of a pose or expression) | default | |
+|---|---|---|
+| `angle` | `0` | degrees counterclockwise about the part's pivot, as drawn facing right (facing left mirrors it); arms hang down at rest, so `90` points the near arm (`arm_left`) forward |
+| `scale` | `1` | one factor or `[x, y]` about the pivot; negative flips the part (`[1, -1]` turns the smile into a frown); `0` is an error |
+| `shift` | `[0, 0]` | `[x, y]` in character units (1 = the character's height) |
+| `shape` | none | the shape shown (`open`, `closed`, `A`, ...): a name, or a list of names of which the first the character has is used; none: the rest shape |
+
+A pose may name `body`, `legs`, `arm_left`, `arm_right`, `head`, `accessory`; an expression
+`eyes`, `brows`, `mouth` (anything else is a config error). Parts of its group a pose or an
+expression does not name go back to their rest pose. Generated characters have the shapes eyes
+`open` / `closed`, brows `default` / `angry` / `sad`, mouth `smile` / `open`; an SVG character
+has the shapes its file names (`vidgen character NAME` lists them). `vidgen validate` reports a
+`shape` the character does not have (none of the choices), and warns about a part it lacks.
 
 ### Characters from SVG files
 

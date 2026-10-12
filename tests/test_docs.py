@@ -27,6 +27,7 @@ MODELS: list[type[BaseModel]] = [
     config.CharacterEntry,
     config.CharacterColors,
     config.CharacterLook,
+    config.PartPoseEntry,
     config.SubtitlesConfig,
     config.NarrationConfig,
     config.PronunciationEntry,

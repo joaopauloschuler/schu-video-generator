@@ -24,7 +24,8 @@ from typing import Any
 import numpy as np
 from manim import VGroup, VMobject
 
-from vidgen.config import CharacterEntry
+from vidgen.cartoon.poses import KINDS, PoseTable, chosen_shape, find_entry, kind_parts, merged_table
+from vidgen.config import CharacterEntry, PartPoseEntry
 from vidgen.errors import VidgenError
 from vidgen.helpers import resolve_color
 from vidgen.theme import Theme
@@ -156,7 +157,8 @@ class Character(VGroup):
     height in Manim units (1 character unit); the feet start at the origin. Stroke widths scale
     with ``height`` (as drawn at :data:`REFERENCE_HEIGHT`), at least one pixel wide.
     ``required`` names the parts it must have (default :data:`REQUIRED_PARTS`; an imported SVG
-    needs only ``body``, §69.2).
+    needs only ``body``, §69.2). ``poses`` / ``expressions`` are the character's own entries
+    (name -> part -> :class:`~vidgen.config.PartPoseEntry`), added to the built-in tables (§69.3).
 
     ``parts`` maps each part name to its live ``VGroup`` (one child: the shape shown).
     """
@@ -170,6 +172,8 @@ class Character(VGroup):
         facing: str = "right",
         voice: str | None = None,
         required: Iterable[str] = REQUIRED_PARTS,
+        poses: PoseTable | None = None,
+        expressions: PoseTable | None = None,
     ) -> None:
         super().__init__()
         specs: dict[str, CharacterPart] = {}
@@ -183,6 +187,7 @@ class Character(VGroup):
         self.name = name
         self.voice = voice
         self.facing = self._checked_facing(facing)
+        self._own_entries: dict[str, PoseTable] = {"pose": dict(poses or {}), "expression": dict(expressions or {})}
         self._shapes = {n: {k: v.copy() for k, v in s.shapes.items()} for n, s in specs.items()}
         stroke_factor, stroke_floor = height / REFERENCE_HEIGHT, _one_pixel_stroke()
         for shapes in self._shapes.values():
@@ -231,6 +236,25 @@ class Character(VGroup):
         """A snapshot of the facing and every part's pose (for :meth:`set_state`)."""
         return CharacterState(self.facing, dict(self._poses))
 
+    def names(self, kind: str) -> list[str]:
+        """The ``pose`` or ``expression`` names this character knows (built-in, then its own)."""
+        return list(merged_table(kind, self._own_entries[kind]))
+
+    def posed_state(self, pose: str | None = None, expression: str | None = None) -> CharacterState:
+        """The current state with pose ``pose`` and / or expression ``expression`` applied (not
+        drawn: pass it to :meth:`set_state` or :class:`~vidgen.cartoon.transition.PoseChange`).
+        A pose sets every body part it does not name back to rest, an expression every face part.
+        Parts the character lacks are skipped; a shape the character lacks leaves the rest shape."""
+        parts = dict(self._poses)
+        for kind, name in zip(KINDS, (pose, expression)):
+            if name is None:
+                continue
+            entry = find_entry(kind, name, self._own_entries[kind], self.name)
+            for part in kind_parts(kind):
+                if part in self._shapes:
+                    parts[part] = self._entry_pose(part, entry.get(part))
+        return CharacterState(self.facing, parts)
+
     def feet(self) -> np.ndarray:
         """The point between the feet on screen (the character's origin)."""
         return np.array(self._anchor.points[0], dtype=float)
@@ -272,7 +296,7 @@ class Character(VGroup):
             if shape not in self._shapes[name]:
                 raise VidgenError(f"character '{self.name}': part '{name}' has no shape '{shape}' (shapes: {_known(self._shapes[name])})")
             changes["shape"] = shape
-        self._set_pose(name, replace(pose, **changes))
+        self._store_pose(name, replace(pose, **changes))
         return self.refresh()
 
     def swap(self, part: str, shape: str) -> Character:
@@ -282,7 +306,7 @@ class Character(VGroup):
     def reset(self, part: str | None = None) -> Character:
         """Put ``part`` (default: every part) back to its rest pose and shape."""
         for name in [self._part_name(part)] if part is not None else list(self._poses):
-            self._set_pose(name, PartPose())
+            self._store_pose(name, PartPose())
         return self.refresh()
 
     def face(self, direction: str) -> Character:
@@ -299,8 +323,16 @@ class Character(VGroup):
         """Apply a :meth:`state` snapshot (parts it does not name keep their pose)."""
         self.facing = self._checked_facing(state.facing)
         for part, pose in state.parts.items():
-            self._set_pose(self._part_name(part), pose)
+            self._store_pose(self._part_name(part), pose)
         return self.refresh()
+
+    def set_pose(self, name: str) -> Character:
+        """Show pose ``name`` at once (``stand``, ``pointing``, ...; :meth:`names`)."""
+        return self.set_state(self.posed_state(pose=name))
+
+    def set_expression(self, name: str) -> Character:
+        """Show expression ``name`` at once (``neutral``, ``happy``, ...; :meth:`names`)."""
+        return self.set_state(self.posed_state(expression=name))
 
     def refresh(self) -> Character:
         """Redraw every part's points from its rest shape, pose, parents, facing and placement.
@@ -333,10 +365,16 @@ class Character(VGroup):
             depth, parent = depth + 1, self._parents[parent]
         return depth
 
+    def _entry_pose(self, part: str, entry: PartPoseEntry | None) -> PartPose:
+        if entry is None:
+            return PartPose()
+        shift = (float(entry.shift[0]), float(entry.shift[1]))
+        return PartPose(float(entry.angle), entry.scale_xy(), shift, chosen_shape(entry, self._shapes[part]))
+
     def _shape_name(self, part: str) -> str:
         return self._poses[part].shape or next(iter(self._shapes[part]))
 
-    def _set_pose(self, part: str, pose: PartPose) -> None:
+    def _store_pose(self, part: str, pose: PartPose) -> None:
         if pose.shape is not None and pose.shape not in self._shapes[part]:
             raise VidgenError(f"character '{self.name}': part '{part}' has no shape '{pose.shape}' (shapes: {_known(self._shapes[part])})")
         before = self._shape_name(part)
@@ -386,11 +424,17 @@ def build_character(
 
             root = current_project().root
         parts = svg_character_parts(root / entry.look.svg, where=f"characters '{entry.name}': {entry.look.svg}")
-        return Character(parts, name=entry.name, height=height, facing=facing, voice=entry.voice, required=SVG_REQUIRED_PARTS)
+        return Character(
+            parts, name=entry.name, height=height, facing=facing, voice=entry.voice, required=SVG_REQUIRED_PARTS,
+            poses=entry.poses, expressions=entry.expressions,
+        )
     from vidgen.cartoon.generator import generate_parts
 
     colors = {part: resolve_color(value, theme) for part, value in entry.colors.model_dump().items()}
-    return Character(generate_parts(entry.look, colors), name=entry.name, height=height, facing=facing, voice=entry.voice)
+    return Character(
+        generate_parts(entry.look, colors), name=entry.name, height=height, facing=facing, voice=entry.voice,
+        poses=entry.poses, expressions=entry.expressions,
+    )
 
 
 def character(name: str, *, height: float = 3.0, facing: str = "right") -> Character:
