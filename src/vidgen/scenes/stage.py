@@ -266,7 +266,7 @@ class Stage(NarratedScene):
         foley: bool | None = None
         """Sounds for the characters' actions (footsteps, whoosh on enter / exit, boing on jump, pop on a surprised face): false for none in this scene; default: the video's foley (on)."""
         auto_direct: AutoDirectSetting | None = None
-        """Automatic directing in this scene: listeners look at whoever speaks and react after lines (true, false or {looks, reactions, gestures, closeups}); a beat's own setting wins; default: the video's (off). Actions written in a beat always win."""
+        """Automatic directing in this scene: listeners look at whoever speaks and react after lines, speakers gesture on stressed words, short punchy lines get a close-up (true, false or {looks, reactions, gestures, closeups}); a beat's own setting wins; default: the video's (off). Actions written in a beat always win."""
         cartoon_motion: MotionSetting | None = None
         """Animation principles for the characters in this scene (anticipation, squash and stretch, overshoot and settle, follow-through): lively, calm or none; a character's own setting wins; default: the video's (lively)."""
         width: float = Field(1.0, ge=1.0, le=4.0)
@@ -381,9 +381,11 @@ class Stage(NarratedScene):
     @classmethod
     def auto_actions(cls, project: Any, spec: Any, params: Any) -> list[DirectedBeat]:
         """With ``auto_direct`` (beat, scene, video; nearest wins): listeners look at whoever
-        speaks, the speaker at the one it talks to, and listeners react after lines
-        (:func:`stage_directions`, DESIGN.md §69.23)."""
-        return stage_directions(project, spec, [c.name for c in params.characters], params.auto_direct)
+        speaks, the speaker at the one it talks to, listeners react after lines, speakers
+        gesture on stressed words and short punchy lines get a close-up, each checked against
+        the stage's geometry (:func:`stage_directions`, DESIGN.md §69.23, §69.24)."""
+        names = [c.name for c in params.characters]
+        return stage_directions(project, spec, names, params.auto_direct, stage_frame(project, params))
 
     @contextmanager
     def narrate(self, beat: Any) -> Iterator[float]:

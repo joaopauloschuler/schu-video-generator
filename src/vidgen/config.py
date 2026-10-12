@@ -1035,9 +1035,9 @@ class AutoDirect(_Strict):
     reactions: bool = True
     """Listeners react in the pause after a line with an expression chosen from its punctuation and words (! surprised or happy, ? thinking, a negation worried)."""
     gestures: bool = True
-    """Reserved for gestures on stressed words (not planned yet: no effect)."""
+    """The speaker gestures on a line's stressed word (*word*, an all-capitals word, else a long one): at most one per line, from the gestures its parts allow."""
     closeups: bool = True
-    """Reserved for close-ups on punchy lines (not planned yet: no effect)."""
+    """A short punchy line right after a long one gets a close-up (a zoom on the speaker): never two beats in a row, never during a walk or a camera move."""
 
 
 #: ``auto_direct:`` on the video, a stage scene or a beat: ``true`` (every kind), ``false``

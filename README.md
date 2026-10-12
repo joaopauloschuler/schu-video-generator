@@ -233,7 +233,7 @@ draft project to refine: its `# TODO:` comments list what to check first.
 Claude Desktop, Claude Code or any MCP client calls vidgen's commands as tools — `guide`, `plan`,
 `init`, `validate`, `schema`, `list_scenes`, `list_icons`, `list_themes`, `list_sfx`,
 `list_music`, `storyboard`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
-`thumbnail`, `export`, `gallery`, `translate_template`, `character_sheet` — and gets each command's JSON document
+`thumbnail`, `export`, `gallery`, `translate_template`, `character_sheet`, `direct` — and gets each command's JSON document
 back. `storyboard`, `thumbnail`, `gallery` and `character_sheet` also return their pictures, so the agent **sees** its
 video. Install the extra: `pip install ".[mcp]"` (the official MCP Python SDK).
 
@@ -447,7 +447,7 @@ narration.
 | `vidgen gallery [PROJECT] [--output DIR] [--types T,T] [--formats 16:9,9:16] [--theme PRESET] [--clips \| --no-clips] [--jobs N] [--force] [--json]` | render every scene type's sample (from the author guide; a project's own types from its `video.yaml`) at 16:9 and 9:16 into a Markdown gallery: an index, a page per type (stills, GIF, YAML, params, targets); default `docs/gallery` ([this repository's](docs/gallery/README.md)) |
 | `vidgen character NAME [PROJECT] [--variant NAME] [--png [FILE]] [--facing right\|left]` | print a character of `characters:` (its `look:` and colours); `--png` writes one still of it (default `exports/character_<name>.png`) |
 | `vidgen character-sheet [NAME] [PROJECT] [--all] [--variant NAME] [--output FILE] [--json]` | every pose, expression and mouth shape of a character on one PNG (`exports/character_sheet_<name>.png`); no NAME: one sheet per character |
-| `vidgen direct [PROJECT] [--print] [--scene ID] [--variant NAME] [--json]` | the looks and reactions `auto_direct` adds to the beats of `stage` scenes; `--print` writes them as YAML to paste into `video.yaml` |
+| `vidgen direct [PROJECT] [--print] [--scene ID] [--variant NAME] [--json]` | the looks, reactions, gestures and close-ups `auto_direct` adds to the beats of `stage` scenes; `--print` writes them as YAML to paste into `video.yaml` |
 | `vidgen slides [PROJECT] [--format html\|pdf] [--variant NAME] [--preview \| --final] [--mode beat\|scene] [--per-beat N] [--overlays \| --no-overlays] [--no-dedupe] [--image-format webp\|jpeg\|png] [--quality Q] [--max-width PX] [--audio] [--separate] [--notes] [--title-page] [--paper a4\|letter] [--output FILE] [--jobs N] [--force] [--output-dir DIR] [--json]` | one self-contained HTML slide deck in `exports/`: a slide per beat (or scene) from the stills, the narration as speaker notes, keyboard navigation, overview, fullscreen, optional narrated play mode; `--format pdf`: a PDF (slide pages or `--notes` pages, `--title-page`, bookmarks by chapter; needs `schu-video-generator[pdf]`) |
 
 `PROJECT` is a project folder or its config file (default: the current folder).

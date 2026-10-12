@@ -66,8 +66,8 @@ agreed to the cost `tts` with dry_run=false and confirm_cost=true (voice.provide
 free: no confirm_cost); then `render`. `schema` with \
 scene=TYPE gives one scene type's params as JSON Schema, `list_scenes` / `list_icons` / \
 `list_themes` / `list_sfx` / `list_music` what exists, `character_sheet` a cartoon character's \
-poses, expressions and mouth shapes. Every tool returns the command's JSON \
-document (`ok`, `warnings`, `error`...); a document with ok=false comes back as a tool error."""
+poses, expressions and mouth shapes, `direct` what auto_direct adds to a cartoon's beats. Every \
+tool returns the command's JSON document (`ok`, `warnings`, `error`...); a document with ok=false comes back as a tool error."""
 
 Progress = Callable[[str], Awaitable[None]]
 
@@ -339,6 +339,12 @@ def build_server(root: Path) -> Any:
           "narration audio status, generated pictures. Run it after every edit.", read_only)
     async def validate(ctx: Context, project: Project = ".") -> Any:
         return answer(await call(ctx, args_of(["validate"], [str(where(project))])))
+
+    @tool("The actions auto_direct adds to the beats of the stage scenes (looks, reactions, gestures, close-ups), "
+          "without rendering: per scene and beat, each in the form to paste into the beat's actions: list and "
+          "edit (written actions win, so pasted ones replace the automatic ones).", read_only)
+    async def direct(ctx: Context, project: Project = ".", variant: Variant = None, scene: Scenes = None) -> Any:
+        return answer(await call(ctx, args_of(["direct"], [str(where(project))], {"variant": variant, "scene": scene})))
 
     @tool("The JSON Schema of one scene type's params (scene=TYPE, a few KB: what you normally want), or of the "
           "whole video.yaml (full=true) or of one scene item with every type (all_types=true): both are hundreds "

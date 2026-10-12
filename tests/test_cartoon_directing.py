@@ -1,6 +1,7 @@
-"""Step 89: automatic directing, part 1 (``auto_direct``: looks and reactions). The planner is a
-pure function from a scene's beats to added actions; the stage merges them before its action
-runner; ``vidgen direct`` and the storyboard show them."""
+"""Steps 89 and 90: automatic directing (``auto_direct``: looks and reactions; gestures and
+close-ups, checked against the cartoon lint rules on predicted stills). The planner is a pure
+function from a scene's beats to added actions; the stage merges them before its action runner;
+``vidgen direct`` and the storyboard show them."""
 
 from __future__ import annotations
 
@@ -15,20 +16,34 @@ from conftest import minimal_config
 from test_cartoon_acting import CAST, VOICES
 from test_cartoon_stage import render_with_layout
 from vidgen import actions, cli, extensions, registry
+from vidgen.cartoon.acting import GESTURE_EASE, GESTURE_SECONDS, GESTURES
 from vidgen.cartoon.directing import (
+    CLOSEUP_CUT_SECONDS,
+    CLOSEUP_SCALE,
+    CLOSEUP_SECONDS,
     REACTION_AT,
     BeatInput,
     CastMember,
+    StageFrame,
+    StagePlace,
+    _SceneState,
+    _still,
+    _Beat,
     auto_label,
     directions_yaml,
+    gesture_choices,
     line_cue,
     plan_directions,
     project_directions,
+    stage_frame,
+    still_findings,
+    stressed_word,
     with_auto_actions,
 )
 from vidgen.config import ActionConfig, AutoDirect, SceneConfig, directing_kinds
 from vidgen.project import Project
 from vidgen.sheets import SheetScene, SheetStill, _blocks, _metrics
+from vidgen.speech import estimate_word_times
 
 ALL = frozenset({"looks", "reactions"})
 TRIO = [CastMember("pip"), CastMember("kit"), CastMember("rex")]
@@ -143,6 +158,143 @@ def test_merged_after_the_written_actions_and_marked_auto() -> None:
     assert merged.beats[1] is spec.beats[1]
 
 
+# ----- gestures and close-ups (Step 90, no manim) ---------------------------------------------------------
+
+FW, FH = 128 / 9, 8.0   # a 16:9 frame in Manim units
+HEIGHT = 3.6            # a stage character at size 0.45
+FEET = -2.4             # on the ground line at 0.2
+
+
+def frame(**places: tuple[float, str]) -> StageFrame:
+    """A stage as wide as the frame with characters at (x, facing), the camera at its middle."""
+    return StageFrame(FW, FH, FW, 0.0, {n: StagePlace(x, FEET, HEIGHT, facing) for n, (x, facing) in places.items()})
+
+
+DUO = frame(pip=(-3.5, "right"), kit=(3.5, "left"))
+MOVERS = [CastMember("pip", gestures=GESTURES), CastMember("kit", gestures=GESTURES)]
+
+
+def line(id: str, text: str, speakers: tuple[str, ...] = (), actions: list[dict[str, Any]] | None = None,
+         kinds: frozenset[str] = frozenset({"gestures", "closeups"})) -> BeatInput:
+    """A beat with its words timed by the estimate (3 words a second)."""
+    seconds = len(text.split()) / 3
+    words = tuple(estimate_word_times(text.split(), 0.0, seconds))
+    return BeatInput(id, text, speakers, tuple(ActionConfig.model_validate(a) for a in actions or []), kinds, seconds, words)
+
+
+def directed(beats: list[BeatInput], stage: StageFrame | None = DUO, cast: list[CastMember] = MOVERS) -> dict[str, list[dict[str, Any]]]:
+    return {d.beat: [a.shorthand() for a in d.actions] for d in plan_directions("park", cast, beats, stage)}
+
+
+def test_the_stressed_word_of_a_line() -> None:
+    assert stressed_word("I *really* mean it, TRULY".split()) == (1, "emphasis")
+    assert stressed_word("I said it was ENORMOUS, honestly".split()) == (4, "capitals")
+    assert stressed_word(["A", "wonderful", "remarkable", "thing"], [0.1, 0.5, 0.4, 0.2]) == (1, "longest")   # by spoken length
+    assert stressed_word("A wonderful remarkable thing".split()) == (2, "longest")                            # else by letters
+    assert stressed_word("I am a box.".split()) is None   # no long, capital or emphasised word ("I" is one letter)
+
+
+def test_gesture_choices_follow_the_word_and_the_line() -> None:
+    assert gesture_choices("never!", "That will never fly!", "s")[0] == "shake_head"
+    assert gesture_choices("Yes,", "Yes, exactly.", "s")[0] == "nod"
+    assert gesture_choices("hello", "Well hello there.", "s")[0] == "wave"
+    assert gesture_choices("*there*", "It is over there.", "s")[0] == "point"
+    assert gesture_choices("wonderful", "Is it wonderful?", "s")[0] == "shrug"
+    rest = gesture_choices("wonderful", "It is wonderful.", "s", last="nod")
+    assert sorted(rest) == ["nod", "point", "shrug"] and rest[-1] == "nod" and rest == gesture_choices("wonderful", "It is wonderful.", "s", last="nod")
+
+
+def test_a_gesture_is_held_on_the_stressed_word_once_per_line() -> None:
+    first = line("b1", "This kite is truly REMARKABLE today, my friend.", ("pip",))
+    added = directed([first])
+    (gesture,) = added["b1"]
+    word = first.words[4]   # REMARKABLE
+    start = gesture["at"] * first.seconds
+    assert gesture["gesture"] == "pip" and gesture["to"] in GESTURES
+    assert start <= word.start - GESTURE_EASE * GESTURE_SECONDS[gesture["to"]] + 1e-9 < start + 0.011 * first.seconds
+    assert start + GESTURE_SECONDS[gesture["to"]] <= first.seconds   # over before the line ends
+
+    # the longest word only when the speaker did not gesture in its previous line; capitals always
+    beats = [first, line("b2", "A wonderful machine for every single person.", ("pip",)), line("b3", "Another remarkable machine for everyone here.", ("pip",)),
+             line("b4", "And ANOTHER one for you, and you, and you.", ("pip",))]
+    assert sorted(directed(beats)) == ["b1", "b3", "b4"]
+    assert directed([line("b1", "A wonderful machine for every single person.", ("pip",))], cast=[CastMember("pip"), CastMember("kit")]) == {}   # no parts
+    assert directed([line("b1", "REALLY now.", ("pip",))]) == {}   # no time for a gesture in the line
+    touched = line("b1", "This kite is truly REMARKABLE today, my friend.", ("pip",), [{"emote": "pip", "to": "happy"}])
+    assert directed([touched]) == {}   # written actions win
+
+
+def test_an_arm_gesture_never_leaves_the_view() -> None:
+    edge = frame(pip=(-FW / 2 + 0.9, "left"), kit=(3.5, "left"))   # facing out, an arm's length from the edge
+    text = "That is a perfectly *ordinary* cardboard box, of course."
+    assert directed([line("b1", text, ("pip",))], edge)["b1"][0]["to"] in ("nod", "shake_head")   # point and shrug would stick out
+    assert directed([line("b1", text, ("pip",))], stage=DUO)["b1"][0]["to"] in GESTURES
+    assert directed([line("b1", text, ("pip",))], stage=None)["b1"][0]["to"] in ("nod", "shake_head")   # no geometry: the head only
+
+
+def test_predicted_stills_use_the_lint_rules() -> None:
+    state = _SceneState(cast={m.name: m for m in MOVERS}, present={"pip", "kit"}, frame=DUO, x={"pip": -3.5, "kit": 3.5},
+                        facing={"pip": "left", "kit": "left"}, camera_x=0.0)
+    beat = _Beat(line("b1", "Hi.", ("pip",)), ("pip",), frozenset(), "park")
+    assert still_findings(_still(state, beat)) == {("facing_away", ("pip", "kit"))}
+    state.facing["pip"] = "right"
+    state.x["pip"] = -FW / 2 + 0.2
+    assert still_findings(_still(state, beat)) == {("off_stage", ("pip",))}
+
+
+LONG = "Well, I have been thinking about kites for a very long time."
+
+
+def test_a_closeup_for_a_short_line_after_a_long_one() -> None:
+    beats = [line("b1", LONG, ("pip",), kinds=frozenset({"closeups"})), line("b2", "No, not today, my friend.", ("kit",), kinds=frozenset({"closeups"})),
+             line("b3", "Why not?", ("pip",), kinds=frozenset({"closeups"}))]
+    assert directed(beats) == {"b2": [{"zoom": "kit", "scale": CLOSEUP_SCALE, "run_time": CLOSEUP_SECONDS}]}
+    quick = [beats[0], line("b2", "No.", ("kit",), kinds=frozenset({"closeups"}))]   # 0.33 s: cut in and back
+    assert directed(quick) == {"b2": [{"zoom": "kit", "scale": CLOSEUP_SCALE, "run_time": CLOSEUP_CUT_SECONDS}]}
+    again = [beats[0], beats[1], line("b3", LONG, ("pip",), kinds=frozenset({"closeups"})), line("b4", "Fine.", ("kit",), kinds=frozenset({"closeups"}))]
+    assert sorted(directed(again)) == ["b2", "b4"]
+    assert directed([beats[0], line("b2", "Hm.", ("kit",), kinds=frozenset({"closeups"}))], stage=None) == {}   # no geometry
+
+
+@pytest.mark.parametrize("act", [
+    {"walk_to": "pip", "to": "centre"}, {"action": "pan", "to": "left"}, {"zoom": "pip"}, {"say": "kit", "bubble": "No!"},
+])
+def test_no_closeup_during_a_move_or_with_a_bubble(act: dict[str, Any]) -> None:
+    beats = [line("b1", LONG, ("pip",), kinds=frozenset({"closeups"})), line("b2", "No, not today, my friend.", ("kit",), [act], kinds=frozenset({"closeups"}))]
+    assert directed(beats) == {}
+
+
+def test_no_closeup_while_the_camera_follows_or_right_after_a_zoom() -> None:
+    follow = line("b1", LONG, ("pip",), [{"follow": "pip"}], kinds=frozenset({"closeups"}))
+    assert directed([follow, line("b2", "Not today.", ("kit",), kinds=frozenset({"closeups"}))]) == {}
+    zoomed = line("b1", LONG, ("pip",), [{"zoom": "pip"}], kinds=frozenset({"closeups"}))
+    assert directed([zoomed, line("b2", "Not today.", ("kit",), kinds=frozenset({"closeups"}))]) == {}
+
+
+def test_a_closeup_that_would_turn_the_speaker_away_is_not_added() -> None:
+    """Zoomed in on pip, kit (whom it talks to) is out of the view and rex, behind pip, is the
+    nearest one: lint would report pip facing away."""
+    trio = frame(pip=(0.0, "right"), kit=(5.0, "left"), rex=(-2.0, "right"))
+    cast = [*MOVERS, CastMember("rex")]
+    first = line("b1", LONG, ("kit",), [{"look_at": "pip", "to": "kit"}], kinds=frozenset({"closeups"}))
+    short = line("b2", "No, not today, my friend.", ("pip",), kinds=frozenset({"closeups"}))
+    assert directed([first, short], trio, cast) == {}
+    clear = frame(pip=(0.0, "right"), kit=(2.5, "left"), rex=(-5.5, "right"))   # kit in the close-up's view
+    assert directed([first, short], clear, cast) == {"b2": [{"zoom": "pip", "scale": CLOSEUP_SCALE, "run_time": CLOSEUP_SECONDS}]}
+
+
+def test_a_look_that_would_add_a_lint_finding_is_not_added() -> None:
+    """kit talks to pip, who has walked off the view's right edge (the camera stays left);
+    turning kit right, away from rex beside it in view, would make lint report it facing away."""
+    wide = StageFrame(FW, FH, 2 * FW, -FW / 2, {"kit": StagePlace(-FW / 2, FEET, HEIGHT, "left"), "rex": StagePlace(-FW / 2 - 2.5, FEET, HEIGHT, "right"),
+                                                "pip": StagePlace(FW / 2, FEET, HEIGHT, "left")})
+    cast = [CastMember("pip"), CastMember("kit"), CastMember("rex")]
+    beats = [line("b1", "Hello.", ("pip",), kinds=frozenset()), line("b2", "Hello to you.", ("kit",), kinds=frozenset({"looks"}))]
+    looks = directed(beats, wide, cast)["b2"]
+    assert {"look_at": "kit", "to": "pip"} not in looks and {"look_at": "rex", "to": "kit"} in looks
+    assert {"look_at": "kit", "to": "pip"} in directed(beats, None, cast)["b2"]   # without the geometry: as in Step 89
+
+
 # ----- a stage project ----------------------------------------------------------------------------------
 
 
@@ -200,10 +352,26 @@ def test_cartoon_example_with_auto_direct_validates(tmp_path: Path) -> None:
             params = cls.validate_params(spec.params, theme)
             _, problems = actions.scene_actions(spec.type, cls, with_auto_actions(spec, directed.get(spec.id, [])), params, theme)
             assert problems == [], spec.id
-    # every beat of the example acts on both characters, except one look in hill_told (explicit actions win)
+    # every beat of the example acts on both characters (explicit actions win), except one look in hill_told
+    # and a gesture of moss on its longest word in yard_expert (its say only voices it)
     assert {sid: [(d.beat, [auto_label(a) for a in d.actions]) for d in beats] for sid, beats in directed.items()} == {
+        "yard": [("yard_expert", ["gesture moss shake_head"])],
         "hill": [("hill_told", ["look_at moss dot"])],
     }
+
+
+def test_stage_frame_places_the_characters_as_the_stage_does(make_project) -> None:
+    project = directed_project(make_project, DIALOGUE, params={"marks": {"door": 0.6}, "props": [{"prop": "tree", "at": "door"}],
+                                                               "characters": [{"name": "pip", "at": "left"}, {"name": "kit", "at": "door", "depth": 1, "facing": "left"}]})
+    spec = project.scene("park")
+    with extensions.project_session(project) as theme:
+        made = stage_frame(project, registry.get("stage").cls.validate_params(spec.params, theme))
+    fw = made.frame_width
+    assert made.frame_height == 8.0 and made.stage_width == fw and made.camera_x == 0.0
+    assert made.places["pip"] == StagePlace(-0.25 * fw, -2.4, 3.6, "right")
+    kit = made.places["kit"]
+    assert kit.x == pytest.approx(0.1 * fw) and kit.height == pytest.approx(3.6 * 0.55) and kit.feet_y > -2.4 and kit.facing == "left"
+    assert made.props == {"tree": pytest.approx(0.1 * fw)} and made.place_x("door") == pytest.approx(0.1 * fw)
 
 
 # ----- vidgen direct and the storyboard ------------------------------------------------------------------
@@ -286,3 +454,22 @@ def test_storyboard_marks_the_automatic_actions(make_project, capsys) -> None:
     frames = {f["beat"]: f["auto"] for f in doc["sheets"][0]["frames"]}
     assert frames["park_b1"][:2] == [{"look_at": "pip", "to": "kit"}, {"look_at": "kit", "to": "pip"}]
     assert frames["park_b1"][2]["react"] == "kit" and frames["park_b2"] == []   # kit acts itself; pip already looks at kit
+
+
+@pytest.mark.render
+def test_gestures_and_a_closeup_render_and_lint_clean(make_project, capsys) -> None:
+    """A long line with a stressed word, then a short answer: pip gestures, kit gets a close-up,
+    and the cartoon lint rules find nothing in the rendered stills."""
+    tiny = {"width": 160, "height": 90, "fps": 5}
+    project = directed_project(make_project, [
+        {"text": "This kite is truly REMARKABLE, it flies all day and all night long.", "voice": "pip_voice"},
+        {"text": "Not today.", "voice": "kit_voice"},
+    ], params={"characters": [{"name": "pip", "at": "left"}, {"name": "kit", "at": "right"}]}, auto_direct={"reactions": False},
+        format=tiny, preview=tiny)
+    with extensions.project_session(project):
+        added = {d.beat: [auto_label(a) for a in d.actions] for d in project_directions(project)["park"]}
+    assert any(a.startswith("gesture pip ") for a in added["park_b1"]) and "zoom kit 2" in added["park_b2"]
+    rules = ["off_stage", "facing_away", "bubble_overlap", "character_overlap", "rushed_animation"]
+    assert cli.main(["lint", str(project.root), "--json", "--fail-on", "warning", *[x for r in rules for x in ("--rule", r)]]) == 0
+    doc = json.loads(capsys.readouterr().out)
+    assert doc["findings"] == []

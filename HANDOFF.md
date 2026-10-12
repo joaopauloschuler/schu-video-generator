@@ -8372,3 +8372,76 @@ How to test
   test_phase_h_review` (7, 45 s). By hand: a three-beat 480x270 stage with `auto_direct: true`:
   `vidgen storyboard` shows the `auto:` lines and the reactions (kit surprised, pip sad),
   `vidgen lint` 0 findings.
+
+## Step 90 — Automatic directing, part 2: gestures and close-ups
+
+What was built
+- Two passes in `src/vidgen/cartoon/directing.py` (`_PASSES`: `gestures`, `closeups`) and a lint
+  check of what the planner adds. `plan_directions(scene_id, cast, beats, stage=None)` stays
+  pure. New inputs: `CastMember.gestures`, `BeatInput.seconds` / `.words` (`WordTime`s from the
+  beat's start), `StageFrame` / `StagePlace` (the stage's geometry, Manim units) built by
+  `stage_frame(project, params)` with `stage_layout`; `Stage.auto_actions` passes it to
+  `stage_directions(..., stage)`.
+- The state follows each character's x and facing and the camera's x through written `enter`,
+  `walk_to`, `turn`, `look_at`, `move_along` / `keyframes`, `pan`, `follow`; automatic looks turn.
+- Lint check: `_still` predicts the beat's still as a lint `StillContext` (character boxes 0.21
+  heights to each side, arm reach 0.4 / 0.35 / 0.34, face from 0.5 heights: measured on the
+  generator's looks), `still_findings` runs the registered `off_stage` and `facing_away` rules;
+  a look, arm gesture or close-up is added only when it adds no finding. `bubble_overlap`: no
+  automatic action draws a bubble or moves a face, and close-ups skip bubble beats.
+- Gestures: `stressed_word` (`*word*`, else ALL CAPS, else the longest 6+ letter word by spoken
+  length, the last only when the speaker did not gesture in its previous line);
+  `gesture_choices` (word's own, line's, then seeded point / nod / shrug, last one last); first
+  allowed, fitting and safe choice; `at` puts the hold on the word, after an automatic look, and
+  ends within the narration (else none).
+- Close-ups: ≤ 5 words right after ≥ 8, `zoom` scale 2 on the speaker; 0.5 s moves if both fit in
+  80 % of the line, else a 0.03 s cut (a 0.5 s move into a 0.8 s line was shortened by the runner
+  and tripped `rushed_animation`); not after a close-up / written zoom, not with written moves,
+  a bubble, the speaker's automatic gesture, or while following.
+- MCP tool `direct` (read-only, `vidgen direct --json`; `variant`, `scene`).
+
+Files touched
+- `src/vidgen/cartoon/directing.py`, `src/vidgen/scenes/stage.py` (`auto_actions` passes the
+  geometry; docs), `src/vidgen/api.py` (`StageFrame`, `StagePlace`, `stage_frame`),
+  `src/vidgen/config.py` (`AutoDirect` docs), `src/vidgen/mcp_server.py` (`direct`, instructions),
+  `src/vidgen/data/guide/AGENTS.md` + `AGENTS.md`, `docs/CONFIG.md`, `docs/EXTENDING.md`,
+  `docs/gallery/stage.md` (param rows as `vidgen gallery` writes them), `README.md`, `DESIGN.md`
+  (§2 tree, §6.4, §69.23 notes, MCP tool list, new §69.24), `tasklist.md`.
+- Tests: `tests/test_cartoon_directing.py` (14 new not-render tests, 1 render test; the example
+  test now expects moss's `shake_head` in yard_expert), `tests/test_mcp.py` (`direct` tool).
+
+Public interfaces
+- `vidgen.api` adds `StageFrame`, `StagePlace`, `stage_frame`; `stage_directions` gains optional
+  `stage`; `CastMember.gestures`, `BeatInput.seconds` / `.words` (defaults keep Step 89 calls
+  working). MCP tool `direct`. `auto_direct.gestures` / `.closeups` now act.
+
+Decisions / deviations
+- The lint check reuses the rules themselves on a predicted still (no copy of their geometry).
+  Without a `StageFrame` (or while following) looks are unchecked (as Step 89), arm gestures and
+  close-ups are not added; head gestures always pass.
+- "Capitalised" = all capitals (2+ letters), not a capital first letter (names would trigger).
+- `*word*` is read but not stripped from the text (would touch TTS, alignments, captions and
+  bubbles): ticked [~].
+- examples/cartoon left unchanged. Scratch copies (preview 854x480, `vidgen lint --fail-on
+  warning`): with `auto_direct: true` it adds a look (hill_told) and a `shake_head`
+  (yard_expert); 0 findings. A copy keeping only walks / enter / move_along / follow / pan / jump /
+  particles (and hill_told cut to "Told you.") gets 13 automatic actions (looks, reactions, two
+  shrugs, one cut close-up); 0 findings after the cut fix; frames checked by eye.
+- Searched first: reused `stage_layout`, `mark_x`, `facing_towards_centre`, `view_center_within`,
+  `look_pose`, `nearer_side`, `GESTURE_*`, `ACTION_NEEDS` / `missing_needs`, `beat_word_times`,
+  `frame_size` and the lint `RULES`.
+
+Known gaps / TODOs
+- Asterisks of `*word*` stay in the text; English word lists; the close-up waits for changes to
+  its speaker at the beat's start (the undoing of its reaction of the beat before); a written
+  `zoom` with `until` is not followed; depth and props are not in the predicted stills; Step 95
+  moves close-ups to shots.
+
+How to test
+- `pytest tests/test_cartoon_directing.py` (28 not-render + 3 render, ~7 s).
+- Also run: not render `test_docs test_guide test_api test_gallery test_schema test_config
+  test_mcp` (210, 75 s), `test_cartoon_stage test_cartoon_acting test_cartoon_moving
+  test_cartoon_lint test_phase_h_review test_storyboard test_json_output test_cli test_actions
+  test_extensions` (163, 8 s); render `test_cartoon_stage test_cartoon_directing` (4, 6 s),
+  `test_phase_h_review test_mcp` (3, 33 s).
+

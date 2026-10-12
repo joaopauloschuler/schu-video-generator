@@ -625,7 +625,8 @@ A scene type that adds beat actions of its own (automatic directing) overrides t
 action made with `ActionConfig.automatic({...})`; they are appended after each beat's written
 actions before the actions are planned, and `vidgen direct` and the storyboard list them. The
 base class adds none; `stage` returns `stage_directions(project, spec, characters,
-params.auto_direct)` (docs/CONFIG.md "Automatic directing").
+params.auto_direct, stage_frame(project, params))` (its geometry, for the lint check of
+gestures and close-ups; docs/CONFIG.md "Automatic directing").
 
 ```python
 @scene("countdown")

@@ -771,8 +771,11 @@ happens: `at: 0.8` lands it on the end of the line, not on its first word.
 **Automatic directing.** `auto_direct: true` (top level, a stage's param or a beat's key) adds
 the routine looks and reactions for you: listeners `look_at` whoever speaks, the speaker looks at
 the one it answers, and after a line with `?`, a negation or `!` the listeners `react` in the
-pause (`thinking`, `worried`, `surprised`...). Actions you write win: a character with its own
-action in a beat gets nothing automatic there. So turn it on, then write only the moments that
+pause (`thinking`, `worried`, `surprised`...). The speaker gestures on the line's stressed word
+(write it in CAPITALS, or the longest word counts; at most one per line), and a short punchy line
+right after a long one gets a close-up on its speaker. Nothing it adds may cause an `off_stage`
+or `facing_away` lint warning (it checks the stage's layout first). Actions you write win: a
+character with its own action in a beat gets nothing automatic there. So turn it on, then write only the moments that
 matter (the reaction shot, the punchline's look to camera). `vidgen direct` lists what it adds,
 `vidgen direct --print` writes it as YAML to paste into the beats and edit; the storyboard shows
 an `auto:` line under each beat.

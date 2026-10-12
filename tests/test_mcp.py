@@ -203,7 +203,7 @@ def test_page_of() -> None:
 TOOLS = {
     "guide", "init", "plan", "validate", "schema", "lint", "storyboard", "list_scenes", "list_icons", "list_themes", "list_sfx",
     "list_music", "render", "tts", "imagegen", "readback", "slides", "thumbnail", "export", "gallery", "translate_template",
-    "character_sheet",
+    "character_sheet", "direct",
 }
 
 
@@ -356,6 +356,19 @@ def test_server_storyboard_and_lint_return_pictures(tmp_path: Path) -> None:
 
         doc = doc_of(await client.call_tool("lint", {"project": "proj", "fail_on": "never"}))
         assert doc["command"] == "lint" and doc["stills"] == 2 and doc["rendered"] == []  # the storyboard's stills reused
+
+    run_session(tmp_path, body)
+
+
+def test_server_direct_returns_the_automatic_actions(tmp_path: Path) -> None:
+    example = Path(__file__).resolve().parents[1] / "examples" / "cartoon"
+    data = yaml.safe_load((example / "video.yaml").read_text(encoding="utf-8"))
+    (tmp_path / "toon").mkdir()
+    (tmp_path / "toon" / "video.yaml").write_text(yaml.safe_dump({**data, "auto_direct": True}, sort_keys=False), encoding="utf-8")
+
+    async def body(client: Any) -> None:
+        doc = doc_of(await client.call_tool("direct", {"project": "toon", "scene": ["hill"]}))
+        assert doc["command"] == "direct" and doc["scenes"] == [{"scene": "hill", "beats": [{"beat": "hill_told", "actions": [{"look_at": "moss", "to": "dot"}]}]}]
 
     run_session(tmp_path, body)
 

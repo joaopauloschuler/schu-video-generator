@@ -89,8 +89,9 @@ src/vidgen/
                           # eases, motion paths, §69.14; no manim), spring.py (Spring: a damped
                           # spring for secondary motion, §69.15; no manim), foley.py (the sounds
                           # of actions as they played, §69.19; no manim), directing.py
-                          # (auto_direct: the looks and reactions it adds, `vidgen direct`,
-                          # §69.23; no manim); still.py also
+                          # (auto_direct: the looks, reactions, gestures and close-ups it adds,
+                          # checked by the lint rules on predicted stills, `vidgen direct`,
+                          # §69.23, §69.24; no manim); still.py also
                           # draws the prop gallery and `vidgen character-sheet` (§69.16)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
@@ -692,6 +693,8 @@ The fixes after Step 88 (§69.22) add `ground_top` (compatible).
 Step 89 (§69.23) adds `ActionConfig`, `AutoDirect`, `AutoDirectSetting`, `DirectedBeat`, `stage_directions` and
 the `NarratedScene` class method `auto_actions(project, spec, params)` (none by default;
 compatible); `ActionConfig` gains `automatic(data)`, the property `auto` and `shorthand()`.
+Step 90 (§69.24) adds `StageFrame`, `StagePlace` and `stage_frame`; `stage_directions` gains the
+optional `stage` argument (compatible).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -4334,7 +4337,7 @@ the measured loudness, §48).
 - **Tools** (`mcp_server.build_server`): `guide`, `init`, `plan`, `validate`, `schema`,
   `list_scenes`, `list_icons`, `list_themes`, `list_sfx`, `list_music`, `storyboard`, `lint`,
   `render`, `tts`, `imagegen`, `readback`, `slides`, `thumbnail`, `export`, `gallery`,
-  `translate_template`; Step 83 adds `character_sheet` (§69.16). Parameters mirror the command's options (snake_case; lists for repeatable
+  `translate_template`; Step 83 adds `character_sheet` (§69.16), Step 90 `direct` (§69.24). Parameters mirror the command's options (snake_case; lists for repeatable
   options), with pydantic `Field` descriptions and bounds. Result: one text block with the
   command's `--json` document re-serialised compactly (fewer tokens), then images; a document with
   `ok` false is an `isError` result holding only the JSON. Argument errors (path outside the root,
@@ -6219,7 +6222,7 @@ layout dump and lint treat them like written ones.
   (`False`), the stage param `auto_direct` and `BeatConfig.auto_direct` (both none: inherit).
   `directing_kinds(beat, scene, video)`: the first setting given wins (`true` every kind of
   `DIRECTING_KINDS`, `false` none, a mapping its true kinds); none given: off. `gestures` and
-  `closeups` are accepted and planned by no pass yet (Step 90).
+  `closeups` are planned since Step 90 (§69.24).
 - **Planner** (`cartoon/directing.py`, no manim): `plan_directions(scene_id, cast, beats) ->
   [DirectedBeat(beat, actions)]` is a pure function of `CastMember(name, can_look, can_emote)`
   (stage order) and `BeatInput(id, text, speakers, actions, kinds)` (the beat's written actions,
@@ -6276,9 +6279,84 @@ layout dump and lint treat them like written ones.
   mapping per action) to paste into `video.yaml`; once pasted they are written actions, so the
   planner adds nothing more for those characters (tested). JSON (`jsonout.direct_document`):
   `project, variant, scenes: [{scene, beats: [{beat, actions}]}]`.
-- **Not done here**: gestures and close-ups (Step 90), shots (Step 95); no lint check inside the
-  planner yet (Step 90); a negation word list for other languages; a speaker with two or more
+- **Not done here**: gestures, close-ups and the lint check (Step 90, §69.24), shots (Step 95); a negation word list for other languages; a speaker with two or more
   listeners and no one answering looks at nobody in particular; a listener looks where the
   speaker stands when the look starts (not where a walk ends); `examples/cartoon` unchanged
   (with `auto_direct: true` it would add one look: its beats act on both characters); no MCP
   tool for `direct`. Tests: `tests/test_cartoon_directing.py`.
+
+### 69.24 Automatic directing, part 2: gestures, close-ups and the lint check (Step 90)
+
+Two more passes in `cartoon/directing.py`'s `_PASSES` (after looks and reactions, in
+`DIRECTING_KINDS` order) and a lint check of what the planner adds. Still no manim and no
+rendering: `plan_directions(scene_id, cast, beats, stage=None)` stays a pure function.
+
+- **Inputs**: `CastMember.gestures` (the gestures of `GESTURES` whose `ACTION_NEEDS` entry
+  `gesture: <kind>` the character's parts meet); `BeatInput.seconds` and `.words` (the
+  narration's length and `WordTime`s from its start: `_beat_words`, the MP3's length else the
+  word-count estimate, `beat_word_times` as captions use them; only read for beats with
+  `gestures` or `closeups` on and a speaker). `StageFrame(frame_width, frame_height, stage_width,
+  camera_x, places, props, marks)`: the stage's geometry in Manim units, `StagePlace(x, feet_y,
+  height, facing)` per character; `stage_frame(project, params)` builds it from a `stage`'s
+  params with `stage_layout` as `Stage.construct` places them (frame size from the video's
+  `format` by `render.worker.frame_size`). `Stage.auto_actions` passes it to `stage_directions`.
+- **State**: `_SceneState` also follows each character's feet x (`None`: not known, after a
+  `move_along` / `keyframes` of the whole character), its facing and the camera's centre x
+  (`None` while it follows): `_follow_written` applies written `enter` (to `to`, else its place;
+  facing the way it walks, from the `side` or the view's nearer edge), `walk_to` (facing the way it
+  goes), `turn`, `look_at` (facing the target's x by `look_pose`), `pan` (to the targets' or the
+  place's x, kept on the stage by `view_center_within`) and `follow`. Automatic looks turn the
+  character too.
+- **Predicted stills** (`_still`): the beat's still as a lint `StillContext` built from the
+  state, 100 px per unit: a `character` object per present character whose x is known, its box
+  `FIGURE_HALF_WIDTH` 0.21 heights to each side (with an arm gesture: `GESTURE_REACH` 0.4 / 0.35
+  forward for `point` / `wave`, 0.34 to both sides for `shrug`), its `face` from `FACE_BOTTOM` 0.5
+  heights up, `facing`, `speaking` (a speaker of the beat), `looked_at`; the frame's `camera`
+  (zoom, centre). The proportions are the generator's looks measured (an SVG look is taken to be
+  alike). `still_findings(ctx)` runs the registered rules of `CHECKED_RULES` (`off_stage`,
+  `facing_away`, their default settings) and returns `(rule, object names)`; an action is added
+  only when the still with it has no finding the still without it lacks. `bubble_overlap` needs no
+  check: automatic actions draw no bubble and move no face, and no close-up goes into a beat with
+  a bubble (the bubble is placed for the view at its start). Without a `StageFrame` (or while the
+  camera follows) looks are not checked (as in Step 89), and arm gestures and close-ups are not
+  added.
+- **Gestures** (`_plan_gestures`): `stressed_word(words, seconds)`: the first `*word*`
+  (`emphasis`), else the first all-capitals word of 2+ letters (`capitals`), else the longest word
+  of `LONG_WORD_LETTERS` 6+ letters by spoken length (`longest`, only when the speaker did not
+  gesture in its previous line: `gestured_line`). `gesture_choices(word, text, seed, last)`: the
+  word's own (`NEGATIONS` shake_head, `AFFIRMATIONS` nod, `GREETINGS` wave, `POINTING` point),
+  the line's (question shrug, negation shake_head), then `EMPHASIS_GESTURES` (point, nod, shrug)
+  shuffled by `random.Random("<scene>/<beat>/<speaker>")`, the speaker's last automatic gesture
+  last. The first speaker not touched with gestures takes the first choice its parts allow, that
+  fits and passes the check (head gestures always pass): at most one per line. `at` (rounded
+  down to hundredths) starts it `GESTURE_EASE` of its length before the word, not before
+  `LOOK_SECONDS` 0.5 when the speaker got an automatic look in the beat, and so that it ends
+  within the narration; a line too short for it gets none (the action runner would rush it).
+- **Close-ups** (`_plan_closeups`): a line of at most `SHORT_LINE_WORDS` 5 words right after a
+  beat of at least `LONG_LINE_WORDS` 8 gets `zoom` on its first speaker, `scale: CLOSEUP_SCALE`
+  (2, centred on its box, kept on the stage), `run_time` `CLOSEUP_SECONDS` 0.5 when both moves fit
+  in 80 % of the narration after the speaker's look, else `CLOSEUP_CUT_SECONDS` 0.03 (a cut in and
+  back: under a frame at 25 fps, so the runner plays it at once and never rushes it; the runner
+  ends the narration's actions at its end, so a 0.5 s move into a 0.8 s line was shortened and
+  `rushed_animation` warned). Not in the beat after a close-up or a written `zoom`, nor with a
+  written `MOVING_ACTIONS` action (walks, `enter`, `exit`, `move_along`, `keyframes`, `pan`,
+  `follow`, `zoom`), a `say` with a bubble or an automatic gesture of the speaker, nor while the
+  camera follows. The check: on the zoomed view the speaker is wholly in view (`off_stage` on the
+  view with the zoom left out of the frame's camera, since the rule skips zoomed stills), and
+  `facing_away` adds nothing (in a close-up the one it talks to may be out of view and lint then
+  takes the nearest character in view as the listener).
+- **Visible**: as §69.23 (`vidgen direct`, the storyboard's `auto:` line); MCP tool `direct`
+  (`vidgen direct --json`; read-only; `variant`, `scene`).
+- **Measured on `examples/cartoon`** (scratch copies, preview 854x480, `vidgen lint --fail-on
+  warning`): with `auto_direct: true` the planner adds a `look_at` (hill_told) and a `shake_head`
+  (yard_expert: its `say` only voices moss); lint clean. A copy with only the walks, entrance,
+  flight, pan, jump and confetti kept (and `hill_told` cut to "Told you.") gets 13 automatic
+  actions (looks, reactions, two shrugs, a cut close-up); lint clean. The committed example is
+  unchanged (its explicit actions are the guide's example of writing them).
+- **Not done here**: the asterisks of `*word*` are not removed from the beat's text (TTS,
+  captions, bubbles get them); English word lists; a close-up waits for changes to its speaker at
+  the beat's start (the undoing of the speaker's reaction of the beat before) before it moves;
+  depth and props are not in the predicted stills (`hidden_speaker`, `character_overlap` not
+  checked: automatic actions move no one); a written `zoom` with `until` is not followed (the
+  planner takes the camera as unzoomed); shots are Step 95. Tests:
+  `tests/test_cartoon_directing.py` (Step 90 part).

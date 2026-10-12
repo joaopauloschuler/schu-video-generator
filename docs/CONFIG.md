@@ -57,7 +57,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `cartoon_style` | none | style words added to every `generate:` prompt of [`stage`](#generated-backgrounds-cartoon_style) scenes, so a cartoon's backgrounds look alike (`"flat colours, thick outlines, soft shadows"`); part of those pictures' cache key; a variant may change it |
 | `cartoon_motion` | `lively` | how characters move: `lively`, `calm` or `none` ([animation principles](#animation-principles-cartoon_motion)); a stage's or a character's own setting wins |
 | `foley` | `true` | sounds for the characters' actions on `stage` scenes (footsteps, whoosh, boing, pop); `false`: none; a stage's `foley` param wins; see [foley](#foley-and-music-stings) |
-| `auto_direct` | `false` | automatic directing on `stage` scenes: listeners look at whoever speaks and react after lines; `true`, `false` or `{looks, reactions, gestures, closeups}`; a stage's or a beat's `auto_direct` wins; see [automatic directing](#automatic-directing-auto_direct) |
+| `auto_direct` | `false` | automatic directing on `stage` scenes: listeners look at whoever speaks and react after lines, speakers gesture on stressed words, short punchy lines get a close-up; `true`, `false` or `{looks, reactions, gestures, closeups}`; a stage's or a beat's `auto_direct` wins; see [automatic directing](#automatic-directing-auto_direct) |
 | `scenes` | required | the scenes in order, at least one |
 
 ### Output folder (`output_dir`, `--output-dir`)
@@ -4167,14 +4167,36 @@ writing each look:
   on gets no automatic action in that beat; `say`, `zoom`, `pan`, `follow`, `highlight`, `dim`
   and `callout` only frame or voice it and do not count. After its own `turn`, walk, `pose` or
   `emote`, a character is given a look again the next time it listens or speaks.
+- **Gestures.** A speaker makes one `gesture` per line at most, held on the line's stressed
+  word: the first `*word*`, else the first word in capitals (`NEVER`, two letters or more), else
+  the longest word of six letters or more, the last only when the speaker did not gesture in its
+  previous line. The word picks the gesture: a negation shakes the head, `yes` / `right` / `sure`
+  nod, `hello` / `bye` wave, `this` / `that` / `there` / `you` point; else a question shrugs, a
+  negation in the line shakes the head, and otherwise `point`, `nod` or `shrug` (fixed per scene,
+  beat and speaker, the speaker's last one tried last). The word times come from the beat's
+  alignment, else the estimate (as captions use them); a line too short for the gesture gets
+  none. The asterisks of `*word*` stay in the beat's text (TTS, captions and bubbles get it as
+  written), so prefer capitals where the text is shown.
+- **Close-ups.** A line of at most 5 words right after a beat of at least 8 gets a `zoom` on its
+  speaker (`scale: 2`): it moves in and back in 0.5 s each when both fit in 80 % of the line, else
+  it cuts in and back. Never in two beats in a row (a written `zoom` counts), never in a beat with
+  a walk, `enter`, `exit`, `move_along`, `keyframes`, `pan`, `follow` or `zoom`, nor while the camera
+  follows something, nor in a beat with a speech bubble or an automatic gesture of the speaker.
+- **Lint-safe.** Before adding a look, an arm gesture (`point`, `wave`, `shrug`) or a close-up,
+  vidgen predicts the beat's still from the stage's layout (no rendering) with and without it and
+  runs the lint rules `off_stage` and `facing_away` on both; an action that would add a finding is
+  left out (an arm out of the view, a speaker turned from the one it talks to, a close-up that cuts
+  the speaker or leaves only a character behind it in view). Automatic actions draw no bubble, so
+  `bubble_overlap` cannot come from them.
 - **What the parts allow.** No look for a character without a head, no reaction without eyes,
-  brows or a mouth (an SVG character, [above](#characters-from-svg-files)).
+  brows or a mouth, only the gestures its arms and head allow (an SVG character,
+  [above](#characters-from-svg-files)).
 
-`auto_direct: {looks: true, reactions: false}` picks kinds (a kind not given is on);
-`gestures` and `closeups` are accepted and do nothing yet. The added actions are ordinary
+`auto_direct: {looks: true, reactions: false}` picks kinds (`looks`, `reactions`, `gestures`,
+`closeups`; a kind not given is on). The added actions are ordinary
 actions marked as automatic: `vidgen storyboard` lists them under their beat (`auto: look_at kit
 pip · react kit thinking`; `--json`: each frame's `auto`), and the log names them `look_at kit
-(auto)`. `vidgen direct [PROJECT]` prints them per beat without rendering; `vidgen direct
+(auto)`. `vidgen direct [PROJECT]` (MCP tool `direct`) prints them per beat without rendering; `vidgen direct
 --print` writes them as YAML to paste into `video.yaml` and edit (once pasted they are written
 actions, so automatic directing adds nothing more for those characters):
 
@@ -4186,10 +4208,11 @@ scenes:
     params:
       characters: [{name: pip, at: left}, {name: kit, at: right}]
     beats:
-      - text: "Is that a kite in the tree?"
-        voice: pip_voice      # kit looks at pip, pip at kit; kit reacts: thinking or surprised
-      - text: "No, it is a very flat bird."
-        voice: kit_voice      # pip reacts: worried or sad
+      - text: "Is that a kite in the tree, or something else entirely?"
+        voice: pip_voice      # kit looks at pip, pip at kit; kit reacts: thinking or surprised;
+                              # pip shrugs on "entirely" (a question)
+      - text: "A very flat bird."
+        voice: kit_voice      # a close-up on kit: a short line after a long one
       - text: "Kit was not good with birds."
         auto_direct: false    # nothing added in this beat
 ```
@@ -5319,7 +5342,7 @@ The server calls itself `schu-video-generator`; configuration snippets (server k
 back as a tool error with the same text): `guide`, `init`, `plan` (`input_path`, or the outline as
 `markdown_text`), `validate`, `schema`, `list_scenes`, `list_icons`, `list_themes`, `list_sfx`,
 `list_music`, `storyboard`, `lint`, `render`, `tts`, `imagegen`, `readback`, `slides`,
-`thumbnail`, `export`, `gallery`, `translate_template`, `character_sheet`. Their parameters are the command's
+`thumbnail`, `export`, `gallery`, `translate_template`, `character_sheet`, `direct`. Their parameters are the command's
 options in snake_case (`per_beat`, `fail_on`, `no_audio`...); list options take lists. Defaults
 that differ from the CLI, for agents: `render`, `thumbnail` and `export` use the preview (`preview:
 false` for the final format); `gallery` writes into `build/mcp/gallery` without GIFs; `schema`
