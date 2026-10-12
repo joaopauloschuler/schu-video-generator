@@ -226,7 +226,9 @@ class Stage(NarratedScene):
 
     The ``keyframes`` and ``move_along`` actions move a character, a prop or a character's part
     by keys or along a path. Characters handle props with ``pick_up``, ``hold``, ``put_down``,
-    ``give`` and ``throw``: a held prop goes along with its holder's hand.
+    ``give`` and ``throw``: a held prop goes along with its holder's hand (they crouch for a low
+    one). They sit on a chair, a rock or a box with ``sit_on``, lean on a tree, a door or a sign
+    with ``lean_on``, and get up with ``stand_up``.
 
     Action targets: each character and each prop by its name; each part of a character as
     ``<character>.<part>`` (``kit.arm_left``).
@@ -238,6 +240,7 @@ class Stage(NarratedScene):
     #: Storyboard stills also show these actions half-way through (DESIGN.md §69.16).
     mid_still_actions = frozenset({
         "walk_to", "enter", "exit", "gesture", "jump", "keyframes", "move_along", "pick_up", "put_down", "give", "throw",
+        "sit_on", "lean_on", "stand_up",
     })
 
     @classmethod
@@ -393,14 +396,15 @@ class Stage(NarratedScene):
     @classmethod
     def action_sequence_problems(cls, spec: Any, params: Any, uses: list[Any]) -> list[tuple[str, str]]:
         """The prop actions replayed in order with the stage's geometry (DESIGN.md §69.27,
-        :func:`holding_problems`): a prop held by someone else, a full hand, nothing to put down,
-        a prop or spot too far without a walk, giving to someone not next to the giver. Needs the
-        active project (the video's frame); none without one."""
+        §69.28, :func:`holding_problems`): a prop held by someone else, a full hand, nothing to put
+        down, a prop or spot too far without a walk, giving to someone not next to the giver, a
+        seat taken, a walk of a character that sits or leans. Needs the active project (the
+        video's frame); none without one."""
         try:
             project = current_project()
         except VidgenError:
             return []
-        if not any(u.config.action in HANDLING_ACTIONS for u in uses):
+        if not any(u.config.action in HANDLING_ACTIONS | POSTURE_ACTIONS for u in uses):
             return []
         frame = stage_frame(project, params)
         names = [c.name for c in params.characters] + params.prop_names()

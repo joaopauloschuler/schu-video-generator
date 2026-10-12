@@ -34,7 +34,7 @@ from vidgen.cartoon.holding import (
     throw_seconds,
 )
 from vidgen.cartoon.props import draw_prop
-from vidgen.cartoon.transition import ArmMove, PropMove
+from vidgen.cartoon.transition import ArmMove, BodyMove, PropMove
 from vidgen.cli import check_project
 from vidgen.project import Project
 from vidgen.theme import Theme
@@ -129,7 +129,7 @@ def test_pick_up_follow_and_put_down() -> None:
     rest = pip.state()
     pick = use("pick_up", to="cup")
     anims = pick.apply(scene, [target("pip", pip)])
-    assert [type(a) for a in anims] == [ArmMove, PropMove] and scene.mobjects == [pip, cup, kit]   # drawn right after its holder
+    assert [type(a) for a in anims] == [BodyMove, PropMove] and scene.mobjects == [pip, cup, kit]   # crouches for it (Step 94); drawn right after its holder
     run(anims)
     assert np.allclose(cup.get_center(), pip.hand_point("left"), atol=1e-6)
     expected = hold_point(pip.shoulder_point("left"), pip.character_height, "right")

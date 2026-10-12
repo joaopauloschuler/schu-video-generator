@@ -19,6 +19,8 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
+from vidgen.cartoon.seating import LEAN_REACH, SIT_REACH, PostureError, Postures
+
 #: The hands, the near one (``left``, drawn in front of the body) first: a hand is taken in this
 #: order when the action does not name one.
 HAND_ORDER: tuple[str, ...] = ("left", "right")
@@ -234,15 +236,19 @@ def holding_problems(
     to_fraction: Callable[[float], float],
     entering: Sequence[str] = (),
 ) -> list[tuple[str, str]]:
-    """Replay a stage scene's actions (``steps`` in play order) through :class:`Holdings` and
-    the characters' positions; ``(location, message)`` per action that cannot happen then: a prop
-    held by another or a hand full (``pick_up``, ``hold``, ``give``), nothing to put down, give or
-    throw, a prop or a spot too far without a walk (with the ``walk_to`` that fixes it), a
-    character to give to who is not next to the giver, a keyed move of a prop someone holds.
-    ``characters``: name -> (feet x, height); ``props``: name -> x; ``place_x`` a mark or x of
-    the stage in Manim units (``None``: neither); ``to_fraction`` an x back to 0..1 of the stage;
-    ``entering``: characters off stage until their first ``enter``."""
+    """Replay a stage scene's actions (``steps`` in play order) through :class:`Holdings`,
+    :class:`~vidgen.cartoon.seating.Postures` and the characters' positions; ``(location,
+    message)`` per action that cannot happen then: a prop held by another or a hand full
+    (``pick_up``, ``hold``, ``give``), nothing to put down, give or throw, a prop or a spot too far
+    without a walk (with the ``walk_to`` that fixes it), a character to give to who is not next to
+    the giver, a keyed move of a prop someone holds; sitting or leaning (DESIGN.md §69.28): a seat
+    taken, a prop held or too far to sit or lean on, a ``stand_up`` with nothing to stand up from,
+    a walk, jump, turn or keyed move of a character that sits or leans, a prop picked up or moved
+    while someone sits or leans on it. ``characters``: name -> (feet x, height); ``props``: name ->
+    x; ``place_x`` a mark or x of the stage in Manim units (``None``: neither); ``to_fraction`` an
+    x back to 0..1 of the stage; ``entering``: characters off stage until their first ``enter``."""
     holdings = Holdings()
+    postures = Postures()
     where = _Positions({n: x for n, (x, _) in characters.items()}, {n: h for n, (_, h) in characters.items()}, set(characters) - set(entering))
     where.x.update(props)
     problems: list[tuple[str, str]] = []
@@ -256,12 +262,38 @@ def holding_problems(
         side = -1.0 if here is None or here <= x else 1.0
         return f"walk_to first (- walk_to: {who}, to: {to_fraction(x + side * STAND_BESIDE * where.heights[who]):.2f})"
 
+    def in_use(prop: str) -> str | None:
+        users = postures.on(prop)
+        if not users:
+            return None
+        verb = "sits" if postures.of(users[0])[0] == "sitting" else "leans"
+        return f"{users[0]} {verb} on '{prop}' then; stand_up first (- stand_up: {users[0]})"
+
     for step in steps:
         o = step.options
         for who in [t for t in step.targets if t in characters]:
             here, height = where.x.get(who), where.heights[who]
             try:
-                if step.action == "enter":
+                postures.pinned(who, step.action)
+                if step.action in ("sit_on", "lean_on"):
+                    prop = str(o.get("to"))
+                    if prop not in props:
+                        continue
+                    holder = holdings.holder(prop)
+                    if holder is not None:
+                        problems.append((f"{step.location}.to", f"'{prop}' is held by {holder[0]} then; put_down it first"))
+                        continue
+                    reach = SIT_REACH if step.action == "sit_on" else LEAN_REACH
+                    if here is not None and x_of(prop) is not None:
+                        message = _too_far(who, f"'{prop}'", x_of(prop) - here, height, reach, beside(who, x_of(prop)))
+                        if message is not None:
+                            problems.append((f"{step.location}.to", message))
+                            continue
+                    (postures.sit if step.action == "sit_on" else postures.lean)(who, prop)
+                    where.x[who] = x_of(prop)
+                elif step.action == "stand_up":
+                    postures.stand(who)
+                elif step.action == "enter":
                     where.present.add(who)
                     where.x[who] = place_x(o["to"]) if o.get("to") is not None else characters[who][0]
                 elif step.action == "exit":
@@ -273,6 +305,9 @@ def holding_problems(
                 elif step.action in ("pick_up", "hold"):
                     prop = str(o.get("to"))
                     if prop not in props:
+                        continue
+                    if in_use(prop) is not None:
+                        problems.append((f"{step.location}.to", in_use(prop)))
                         continue
                     if step.action == "pick_up" and here is not None and holdings.holder(prop) is None and x_of(prop) is not None:
                         message = _too_far(who, f"'{prop}'", x_of(prop) - here, height, PICK_UP_REACH, beside(who, x_of(prop)))
@@ -304,13 +339,15 @@ def holding_problems(
                             continue
                     holdings.release(who, prop)
                     where.x[prop] = spot
-            except HoldingError as exc:
+            except (HoldingError, PostureError) as exc:
                 key = "prop" if step.action in ("put_down", "throw", "give") and o.get("prop") is not None else "target"
                 problems.append((f"{step.location}.{key}", str(exc)))
         for prop in [t for t in step.targets if t in props]:
             holder = holdings.holder(prop)
             if step.action in ("move_along", "keyframes") and holder is not None:
                 problems.append((f"{step.location}.target", f"'{prop}' is held by {holder[0]} then; put_down or throw it first"))
+            elif step.action in ("move_along", "keyframes") and in_use(prop) is not None:
+                problems.append((f"{step.location}.target", in_use(prop)))
             elif step.action in ("move_along", "keyframes"):
                 where.x[prop] = None
     return problems

@@ -223,6 +223,13 @@ need `"<prop>"` in `target_patterns` and `Prop` targets. Their pieces are export
 `hold_point(character.shoulder_point(hand), character.character_height, character.facing)` where
 a held prop sits. To keep a prop in a hand, give it an updater (`prop.add_updater(lambda m:
 m.move_to(hero.hand_point("left")))`); never add it to the `Character` (its parts must not change).
+The sitting actions (`sit_on`, `lean_on`, `stand_up`; `src/vidgen/scenes/sitting.py`) build on
+`character.seated(state, seat)` (the body on a seat `seat` character units high, the legs bent
+by the solver), `character.leaning(state)`, `character.lowered(state, drop, stoop=)` (a crouch,
+the feet kept) and `character.planted(state, soles)` (each leg's sole put at a point), all states
+not drawn; `BodyMove(character, keys, x=, facing=, soles=)` plays one (an `ArmMove` that also
+moves the feet's x and keeps the soles on the ground). A `Prop`'s `seat_point()` and
+`lean_edges()` say where to sit and lean (`None` when it has none).
 `character(name)` breathes, sways its head and blinks on its own (unless `idle: false`):
 `stop_idle()` / `start_idle(seed=None)` turn that off and on; a blink never shows during a
 `PoseChange`. Before drawing your own scene for characters on a set, check whether the built-in
@@ -306,7 +313,7 @@ uses (`use.beat`, `use.location` such as `beats[1].actions[0]`, `use.config`); r
 `(location, message)` pairs (`("beats[1].actions[0].to", "...")`). It runs in `vidgen validate`
 and before a render, once every action is valid; `current_project()` is the active project. The
 built-in `stage` replays its prop actions with `holding_problems` (a prop picked up from too far
-away, given to someone not next to the giver).
+away, given to someone not next to the giver, a seat taken, a walk of a character that sits).
 
 **Layout regions.** Lay out in regions rather than raw coordinates, so one scene works at
 16:9, 1:1 and 9:16 (the frame's shorter side is always 8 units; 16:9 is 14.22 x 8, 9:16 is
@@ -1039,7 +1046,7 @@ its targets (the built-in `pan` and `follow`), so it plays together with another
 that falls due at the same moment instead of before or after it.
 A scene type that lists action type names in its class attribute `mid_still_actions` (the
 built-in `stage`: `walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`,
-`pick_up`, `put_down`, `give`, `throw`) gets a
+`pick_up`, `put_down`, `give`, `throw`, `sit_on`, `lean_on`, `stand_up`) gets a
 still half-way through each use of them whenever stills are taken (`vidgen storyboard`,
 `render --frames`), besides the beat ends (docs/CONFIG.md "Frame stills").
 The built-in `callout` action (`src/vidgen/scenes/callout_action.py`) is an example of all

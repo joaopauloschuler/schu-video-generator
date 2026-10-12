@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING, Any
 from vidgen.camera import Bounds, view_center_within
 from vidgen.cartoon.acting import GESTURE_EASE, GESTURE_SECONDS, GESTURES, look_pose, nearer_side
 from vidgen.cartoon.holding import HoldingError, Holdings, put_down_x
+from vidgen.cartoon.seating import SEAT_BACKS, PostureError, Postures
 from vidgen.cartoon.stage import mark_x
 from vidgen.config import DIRECTING_KINDS, ActionConfig, AutoDirectSetting, BeatConfig, SceneConfig, directing_kinds
 
@@ -43,7 +44,7 @@ if TYPE_CHECKING:
 #: directing in their beat.
 FRAMING_ACTIONS = frozenset({"say", "zoom", "pan", "follow", "highlight", "dim", "callout"})
 #: Written actions after which a character's look is not known (it turned, moved or took a pose).
-LOOK_CHANGING = frozenset({"turn", "walk_to", "enter", "exit", "move_along", "keyframes", "pose", "emote"})
+LOOK_CHANGING = frozenset({"turn", "walk_to", "enter", "exit", "move_along", "keyframes", "pose", "emote", "sit_on", "lean_on"})
 #: When an automatic reaction starts, as a fraction of the line: it plays in the pause after it.
 REACTION_AT = 0.95
 #: Expressions a listener reacts with, by the line's cue (:func:`line_cue`); never the same one
@@ -88,7 +89,10 @@ CLOSEUP_SECONDS = 0.5
 CLOSEUP_CUT_SECONDS = 0.03
 #: Written actions during which no close-up is added: walks and other moves of a character, and
 #: the camera's own moves.
-MOVING_ACTIONS = frozenset({"walk_to", "enter", "exit", "move_along", "keyframes", "pan", "follow", "zoom", "pick_up", "put_down", "give", "throw"})
+MOVING_ACTIONS = frozenset({
+    "walk_to", "enter", "exit", "move_along", "keyframes", "pan", "follow", "zoom", "pick_up", "put_down", "give", "throw",
+    "sit_on", "lean_on", "stand_up",
+})
 #: A generated figure's proportions, in its heights (measured on the generator's looks; an SVG
 #: look is taken to be alike): half its width, the bottom of its face box (above its feet), and
 #: how far an arm gesture reaches from its middle (``point`` and ``wave`` forward, ``shrug`` to
@@ -151,7 +155,8 @@ class StagePlace:
 class StageFrame:
     """A stage's geometry as the planner's lint check sees it (Manim units, no rendering): the
     frame's size, the stage's width, the x the camera's view is centred on at the start, each
-    character's :class:`StagePlace`, each prop's x and the stage's own marks."""
+    character's :class:`StagePlace`, each prop's x, the stage's own marks and the facing of each
+    prop with a seat back (a character sitting on it faces that way, DESIGN.md §69.28)."""
 
     frame_width: float
     frame_height: float
@@ -160,6 +165,7 @@ class StageFrame:
     places: Mapping[str, StagePlace]
     props: Mapping[str, float] = field(default_factory=dict)
     marks: Mapping[str, float] = field(default_factory=dict)
+    seat_facings: Mapping[str, str] = field(default_factory=dict)
 
     @property
     def bounds(self) -> Bounds:
@@ -221,6 +227,7 @@ class _SceneState:
     words_before: int = 0                                         # the words of the beat before
     closeup_at: int = -2                                          # the last beat (index) with a close-up
     holdings: Holdings = field(default_factory=Holdings)          # who holds which prop
+    postures: Postures = field(default_factory=Postures)          # who sits or leans on which prop
     prop_x: dict[str, float | None] = field(default_factory=dict)  # prop -> its x where it stands (None: not known)
 
 
@@ -324,10 +331,19 @@ def _target_x(state: _SceneState, to: Any) -> float | None:
 
 
 def _turn_to(state: _SceneState, name: str, to: Any) -> None:
-    """``name`` faces ``to`` as a look turns it (``look_pose``; kept when either is not known)."""
+    """``name`` faces ``to`` as a look turns it (``look_pose``; kept when either is not known, and
+    while it sits or leans: a look turns only its head then)."""
     here, there = state.x.get(name), _target_x(state, to)
-    if here is not None and there is not None:
+    if here is not None and there is not None and state.postures.of(name) is None:
         state.facing[name] = look_pose(there - here, 0.0, state.facing.get(name, "right")).facing
+
+
+def _behind(state: _SceneState, name: str, to: Any) -> bool:
+    """Whether ``to`` is behind ``name`` while it sits or leans (it cannot turn to look at it)."""
+    here, there = state.x.get(name), _target_x(state, to)
+    if state.postures.of(name) is None or here is None or there is None:
+        return False
+    return (there - here) * (1.0 if state.facing.get(name, "right") == "right" else -1.0) < 0
 
 
 # ----- the passes ------------------------------------------------------------------------------------
@@ -384,7 +400,7 @@ def _plan_looks(state: _SceneState, beat: _Beat) -> list[ActionConfig]:
             wanted[speaker] = other
     for name in [n for n in state.cast if n in wanted]:   # in the stage's order
         member = state.cast[name]
-        if name in beat.touched or not member.can_look or state.looking.get(name) == wanted[name]:
+        if name in beat.touched or not member.can_look or state.looking.get(name) == wanted[name] or _behind(state, name, wanted[name]):
             continue
         if not _look_is_safe(state, beat, name, wanted[name]):
             continue
@@ -603,6 +619,28 @@ def _handle(state: _SceneState, action: str, targets: set[str], options: Mapping
             continue
 
 
+def _pose(state: _SceneState, action: str, targets: set[str], options: Mapping[str, Any]) -> None:
+    """A written ``sit_on`` / ``lean_on`` / ``stand_up``: who sits or leans, where and which way
+    it faces (a change :class:`Postures` refuses is ignored: ``vidgen validate`` reports it)."""
+    prop = str(options.get("to"))
+    there = state.prop_x.get(prop, state.frame.props.get(prop)) if state.frame is not None else None
+    for name in sorted(targets):
+        try:
+            if action == "stand_up":
+                state.postures.stand(name)
+                continue
+            (state.postures.sit if action == "sit_on" else state.postures.lean)(name, prop)
+        except PostureError:
+            continue
+        here = state.x.get(name)
+        if action == "sit_on":
+            state.x[name] = there
+            if state.frame is not None and prop in state.frame.seat_facings:
+                state.facing[name] = state.frame.seat_facings[prop]
+        elif here is not None and there is not None:
+            state.facing[name] = "left" if here < there else "right"   # its back to the prop
+
+
 def _follow_written(state: _SceneState, beat: BeatInput, names: Sequence[str]) -> None:
     """Update the state with the beat's written actions: entrances and exits, walks and other
     moves, turns, looks and what makes a look unknown, and the camera's pans and follows."""
@@ -633,6 +671,8 @@ def _follow_written(state: _SceneState, beat: BeatInput, names: Sequence[str]) -
             state.camera_x = None
         elif act.action in ("pick_up", "hold", "give", "put_down", "throw"):
             _handle(state, act.action, targets, options)
+        elif act.action in ("sit_on", "lean_on", "stand_up"):
+            _pose(state, act.action, targets, options)
         if act.action == "look_at":
             to = options.get("to")
             for name in targets:
@@ -717,6 +757,7 @@ def stage_frame(project: Project, params: Any) -> StageFrame:
         frame_width=frame_width, frame_height=frame_height, stage_width=stage_width,
     )
     facings = {c.name: c.facing for c in params.characters}
+    seat_facings = {name: p.facing for name, p in zip(params.prop_names(), params.props) if p.prop in SEAT_BACKS}
     places: dict[str, StagePlace] = {}
     props: dict[str, float] = {}
     for placed in placements:
@@ -727,7 +768,7 @@ def stage_frame(project: Project, params: Any) -> StageFrame:
         facing = facing_towards_centre(placed.x_fraction) if facing == "auto" else facing
         places[placed.name] = StagePlace(placed.feet[0], placed.feet[1], placed.height, facing)
     camera_x = (mark_x(params.camera_at, params.marks) - 0.5) * stage_width
-    return StageFrame(frame_width, frame_height, stage_width, camera_x, places, props, dict(params.marks))
+    return StageFrame(frame_width, frame_height, stage_width, camera_x, places, props, dict(params.marks), seat_facings)
 
 
 def _beat_words(project: Project, beat: BeatConfig) -> tuple[float, tuple[WordTime, ...]]:

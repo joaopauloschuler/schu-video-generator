@@ -45,6 +45,29 @@ def is_part_target(name: str) -> bool:
     return "." in name
 
 
+#: The parts sitting, leaning and crouching set (the arms and the head keep their poses; §69.28).
+POSTURE_PARTS: tuple[str, ...] = ("body", "legs", "leg_left", "leg_left_lower", "leg_right", "leg_right_lower")
+
+
+def posture_parts(state: CharacterState) -> dict[str, PartPose]:
+    """The body's and legs' poses of ``state`` (:data:`POSTURE_PARTS` it has)."""
+    return {part: state.parts[part] for part in POSTURE_PARTS if part in state.parts}
+
+
+def is_posed(character: Character) -> bool:
+    """Whether ``character`` sits or leans (DESIGN.md §69.28): it keeps its facing, body and legs
+    then (a look turns only its head, a pose moves only its arms and head)."""
+    return character.sitting_on is not None or character.leaning_on is not None
+
+
+def _kept_posture(character: Character, state: CharacterState) -> CharacterState:
+    """``state`` with ``character``'s facing, body and legs as they are now when it sits or leans."""
+    if not is_posed(character):
+        return state
+    now = character.state()
+    return CharacterState(now.facing, {**state.parts, **posture_parts(now)})
+
+
 def _characters(scene: NarratedScene, targets: list[Target], name: str) -> list[Character]:
     """The targets that are characters (others are logged and skipped; parts, which a pattern
     such as ``*`` also selects, silently)."""
@@ -257,8 +280,8 @@ def _head_point(mob: Mobject) -> np.ndarray:
 class LookAt(_Acting):
     """The target character looks at ``to``: another character or a prop (by its name), a mark of
     the stage or an x from 0 (left) to 1 (right), or ``camera`` (the viewer). It turns that way
-    and tilts its head up or down towards it; ``camera`` turns the eyes to the viewer. It stays
-    so (``until: <beat>`` turns it back)."""
+    (not while it sits or leans) and tilts its head up or down towards it; ``camera`` turns the
+    eyes to the viewer. It stays so (``until: <beat>`` turns it back)."""
 
     class Options(ActionOptions):
         to: str | Annotated[float, Field(ge=0.0, le=1.0)]
@@ -311,7 +334,10 @@ class LookAt(_Acting):
         else:
             left, right = scene.camera_bounds()[:2]
             point = np.array([left + scene.camera_place(scene.params, to) * (right - left), start[1], 0.0])
-        return look_pose(float(point[0] - start[0]), float(point[1] - start[1]), character.facing)
+        dx = float(point[0] - start[0])
+        if is_posed(character):   # it sits or leans: it does not turn round, only tilts its head
+            dx = abs(dx) if character.facing == "right" else -abs(dx)
+        return look_pose(dx, float(point[1] - start[1]), character.facing)
 
 
 def looked_state(character: Character, look: LookPose) -> CharacterState:
@@ -387,8 +413,9 @@ class Emote(_Acting):
 @action("pose")
 class PoseAction(_Acting):
     """The target character takes pose ``to`` (stand, pointing, waving, thinking, shrug,
-    arms_crossed, sitting, or its own); body, legs, arms and head move one after another. It
-    keeps it (``until: <beat>``: back to the pose before)."""
+    arms_crossed, sitting, or its own); body, legs, arms and head move one after another (only
+    arms and head while it sits or leans). It keeps it (``until: <beat>``: back to the pose
+    before)."""
 
     class Options(ActionOptions):
         to: str = Field(pattern=r"^[A-Za-z0-9_]+$")
@@ -402,7 +429,7 @@ class PoseAction(_Acting):
 
     def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
         """A :class:`PoseChange` to the pose on each character."""
-        return [self._change(c, c.posed_state(pose=self.options.to)) for c in _characters(scene, targets, "pose")]
+        return [self._change(c, _kept_posture(c, c.posed_state(pose=self.options.to))) for c in _characters(scene, targets, "pose")]
 
     def revert(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
         """Back to the pose before."""
@@ -440,7 +467,7 @@ class React(_Acting):
     def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
         """A :class:`PoseChange` to the expression and pose on each character."""
         o = self.options
-        return [self._change(c, c.posed_state(pose=o.pose, expression=o.expression)) for c in _characters(scene, targets, "react")]
+        return [self._change(c, _kept_posture(c, c.posed_state(pose=o.pose, expression=o.expression))) for c in _characters(scene, targets, "react")]
 
     def revert(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
         """Back to the expression and pose before."""

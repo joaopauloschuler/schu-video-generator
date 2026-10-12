@@ -688,6 +688,9 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `put_down` | on a `stage`: the held prop goes on the ground (`to:` a mark or x, default in front) | within reach |
 | `give` | on a `stage`: the held prop goes to another character (`to: kit`) | the two stand next to each other |
 | `throw` | on a `stage`: the held prop flies to a mark or x (`to:`; `spin`, `height`) and lands with a thud | |
+| `sit_on` | on a `stage`: a character sits on a `chair`, `rock` or `box` (`to: chair`); its hips and knees bend | next to the prop; `stand_up` before it walks |
+| `lean_on` | on a `stage`: a character leans its back on a `tree`, `door`, `sign`, `lamp` or `house` (`to: tree`) | next to the prop; `stand_up` before it walks |
+| `stand_up` | on a `stage`: a character gets up from where it sits or leans | |
 
 ```yaml
 - id: speeds
@@ -836,7 +839,14 @@ line: at that word). `docs/CONFIG.md` "Cartoons from a screenplay" has the whole
 - **Props in hands**: `walk_to` next to a prop, `pick_up` it, walk with it, then `put_down`,
   `give` (to a character standing next to it) or `throw` it; `hold` puts a prop in a hand at
   the start. `vidgen validate` replays the scene and says when a prop is too far, held by
-  someone else or not held (`docs/CONFIG.md` "Props in hands").
+  someone else or not held (`docs/CONFIG.md` "Props in hands"). A character crouches by
+  itself for a prop on the ground.
+- **Sitting and leaning**: `sit_on: pip, to: chair` (a `chair`, `rock`, `box`, or an SVG prop
+  with `data-seat`), `lean_on: kit, to: tree` (a `tree`, `door`, `sign`, `lamp`, `house`, or an
+  SVG prop with `data-lean`), then `stand_up` before it walks, jumps or turns again. While it sits
+  or leans it can talk, gesture, emote and handle props; a look turns only its head. `vidgen
+  validate` says when the prop is too far, the seat taken, or a seated character walks
+  (`docs/CONFIG.md` "Sitting and leaning").
 - **Sound**: walks, entrances, exits, jumps and a `surprised` face make their own sounds
   (foley: footsteps, whoosh, boing, pop; a thrown prop lands with a thud), timed to the action; `foley: false` (top level or a
   stage) turns them off. A beat's `sting: reveal | comic | sad` adds a short music sting
@@ -1336,7 +1346,7 @@ scenes:
 | `duplicate beat id` | beat ids are unique in the whole video; rename one |
 | `unknown target 'x' ...; did you mean ... (targets: ...)` | pick a name from the list (labels are case-sensitive: `bar:4K`) |
 | `until 'x' is not a later beat of scene 'y'` | `until` names a later beat id of the same scene |
-| `unknown action 'x'` / `unknown option` | actions are `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw` |
+| `unknown action 'x'` / `unknown option` | actions are `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `sit_on`, `lean_on`, `stand_up` |
 | `labels has 2 entries but values has 3` | one value per label |
 | `unknown theme color 'x'` | use a token (`primary`, `highlight`...) or quoted hex `"#0B5FFF"`, or add it to `theme.colors` |
 | `invalid hex color` | `#RGB`, `#RRGGBB` or `#RRGGBBAA`, in quotes (YAML reads `#` as a comment) |

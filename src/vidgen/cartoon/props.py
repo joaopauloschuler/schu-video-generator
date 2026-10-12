@@ -14,6 +14,7 @@ bottom edge, so a stage places it like a character (``stage_layout``).
 from __future__ import annotations
 
 import math
+import xml.etree.ElementTree as ET
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -37,9 +38,11 @@ from manim import (
 )
 
 from vidgen.cartoon.character import OUTLINE_WIDTH, REFERENCE_HEIGHT, one_pixel_stroke, scale_strokes
+from vidgen.cartoon.seating import PROP_LEANS, PROP_SEATS, mirrored_lean, mirrored_seat, svg_seat_and_lean
 from vidgen.config import CHARACTER_INK
 from vidgen.errors import VidgenError
 from vidgen.helpers import resolve_color
+from vidgen.svgclean import CleanSvg
 from vidgen.theme import Theme
 
 #: The built-in props.
@@ -98,9 +101,14 @@ class Prop(VGroup):
     """A prop on a stage: its drawn shapes, ``name`` (the layout dump and action targets use it),
     ``kind`` (a :data:`PROP_KINDS` name or ``svg``) and ``facing``. ``height_factor``: its
     height in the heights of a character next to it (the stage sets it; ``None``: not known).
-    ``held_by`` / ``hand``: the character holding it and which hand (DESIGN.md §69.27)."""
+    ``held_by`` / ``hand``: the character holding it and which hand (DESIGN.md §69.27).
+    ``seat`` / ``lean``: the middle of its seat line (x, y) and the edges a character leans its
+    back on (left x, right x), in prop units as it faces (``None``: it has none; DESIGN.md §69.28)."""
 
-    def __init__(self, *drawn: VMobject, name: str, kind: str, facing: str = "right") -> None:
+    def __init__(
+        self, *drawn: VMobject, name: str, kind: str, facing: str = "right",
+        seat: tuple[float, float] | None = None, lean: tuple[float, float] | None = None,
+    ) -> None:
         super().__init__(*drawn)
         self.name = name
         self.kind = kind
@@ -108,10 +116,25 @@ class Prop(VGroup):
         self.height_factor: float | None = None
         self.held_by: str | None = None
         self.hand: str | None = None
+        self.seat = seat
+        self.lean = lean
 
     def feet(self) -> np.ndarray:
         """The middle of the prop's bottom edge (where it stands)."""
         return self.get_bottom()
+
+    def seat_point(self) -> np.ndarray | None:
+        """The middle of its seat line on screen now (``None``: it has no seat)."""
+        if self.seat is None:
+            return None
+        return self.feet() + np.array([self.seat[0], self.seat[1], 0.0]) * self.height
+
+    def lean_edges(self) -> tuple[float, float] | None:
+        """The x on screen of the edges a character leans on, left and right (``None``: none)."""
+        if self.lean is None:
+            return None
+        x = float(self.feet()[0])
+        return x + self.lean[0] * self.height, x + self.lean[1] * self.height
 
 
 # ----- primitives (prop units) ----------------------------------------------------------------
@@ -382,7 +405,10 @@ def draw_prop(
     if height <= 0:
         raise VidgenError(f"prop '{name or kind}': height must be positive, got {height}")
     paint = _Paint(*prop_colors(kind, theme, main, detail))
-    prop = Prop(*_DRAWERS[kind](paint), name=name or kind, kind=kind, facing=facing)
+    prop = Prop(
+        *_DRAWERS[kind](paint), name=name or kind, kind=kind, facing=facing,
+        seat=mirrored_seat(PROP_SEATS.get(kind), facing), lean=mirrored_lean(PROP_LEANS.get(kind), facing),
+    )
     return _finish(prop, height, character_height or height, facing)
 
 
@@ -398,14 +424,37 @@ def svg_prop(
 ) -> Prop:
     """A prop drawn from the SVG file ``path`` (sanitised and loaded by
     :func:`~vidgen.vector_mobject.load_vector`): its ``viewBox`` ``height`` units tall, the middle
-    of the box's bottom edge at the origin. ``recolor="theme"`` maps its colours to the theme's."""
+    of the box's bottom edge at the origin. ``recolor="theme"`` maps its colours to the theme's.
+    Its ``<svg>`` element's ``data-seat`` / ``data-lean`` give its seat and lean edges
+    (:func:`~vidgen.cartoon.seating.svg_seat_and_lean`; a bad value is a :class:`VidgenError`)."""
     from vidgen.vector_mobject import load_vector
 
     picture = load_vector(path, height=height, recolor=recolor, theme=theme, where=where or path.name)
-    prop = Prop(picture, name=name, kind="svg", facing=facing)
+    seat, lean = _seat_and_lean(picture.report, where or path.name)
+    prop = Prop(picture, name=name, kind="svg", facing=facing, seat=mirrored_seat(seat, facing), lean=mirrored_lean(lean, facing))
     if facing == "left":
         prop.flip(UP)
     return prop.shift(-prop.feet())
+
+
+def _seat_and_lean(report: CleanSvg, where: str) -> tuple[tuple[float, float] | None, tuple[float, float] | None]:
+    try:
+        return svg_seat_and_lean(ET.fromstring(report.data), report.view_box, where)
+    except ValueError as exc:
+        raise VidgenError(str(exc)) from None
+
+
+def read_svg_seat_and_lean(path: Path, *, where: str) -> tuple[tuple[float, float] | None, tuple[float, float] | None]:
+    """The seat and lean edges (prop units, facing right) the SVG prop file ``path`` gives on its
+    ``<svg>`` element (``data-seat``, ``data-lean``); :class:`VidgenError` for a file that cannot
+    be read or sanitised, or a bad value."""
+    from vidgen.svgclean import sanitize_svg
+
+    try:
+        data = path.read_bytes()
+    except OSError as exc:
+        raise VidgenError(f"cannot read {where}: {exc}") from None
+    return _seat_and_lean(sanitize_svg(data, where=where), where)
 
 
 __all__ = [
@@ -418,4 +467,5 @@ __all__ = [
     "draw_prop",
     "prop_colors",
     "svg_prop",
+    "read_svg_seat_and_lean",
 ]

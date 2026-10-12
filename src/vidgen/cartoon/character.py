@@ -32,6 +32,7 @@ from vidgen.cartoon.idle import IdleClock, breath_scale, idle_seed, sway_angle
 from vidgen.cartoon.limbs import ELBOW_BEND, FEET, HANDS, KNEE_BEND, LIMBS, fold, limb_side, solve_two_bone, wrap_degrees
 from vidgen.cartoon.motion import DEFAULT_MOTION, motion_strength, resolve_motion
 from vidgen.cartoon.poses import KINDS, PoseTable, chosen_shape, find_entry, kind_parts, merged_table
+from vidgen.cartoon.seating import LEAN_DEGREES, SEATED_LEGS_DEGREES, seated_sole
 from vidgen.cartoon.visemes import VISEME_SHAPES, VISEMES, VisemeTrack
 from vidgen.config import CharacterEntry, CharacterLook, PartPoseEntry
 from vidgen.errors import VidgenError
@@ -298,6 +299,10 @@ class Character(VGroup):
         #: The props in its hands (hand -> prop name; set by the prop actions, recorded in the
         #: layout dump as ``holding``), empty while it holds nothing (DESIGN.md §69.27).
         self.holding: dict[str, str] = {}
+        #: The prop it sits on / leans on (set by ``sit_on`` / ``lean_on``, cleared by ``stand_up``;
+        #: recorded in the layout dump), ``None`` while it stands (DESIGN.md §69.28).
+        self.sitting_on: str | None = None
+        self.leaning_on: str | None = None
         self._anchor = VMobject(fill_opacity=0, stroke_width=0, stroke_opacity=0)
         side = _ANCHOR_SIDE * height
         self._anchor.set_points(np.array([[0, 0, 0], [side, 0, 0], [0, side, 0], [0, side, 0]], dtype=float))
@@ -478,10 +483,14 @@ class Character(VGroup):
         scale stay); an arm in one piece turns and shortens (:func:`~vidgen.cartoon.limbs.fold`)."""
         return self._bend_limb(self._limb_of(HANDS, hand, "hand"), point, bend)
 
-    def reached_parts(self, hand: str, point: Sequence[float], *, bend: float = ELBOW_BEND) -> dict[str, PartPose]:
+    def reached_parts(
+        self, hand: str, point: Sequence[float], *, bend: float = ELBOW_BEND, state: CharacterState | None = None,
+    ) -> dict[str, PartPose]:
         """The poses :meth:`reach` would give the ``left`` or ``right`` arm (upper and lower part
-        names -> :class:`PartPose`), without changing the character (for an animation's target)."""
-        return self._limb_poses(self._limb_of(HANDS, hand, "hand"), point, bend)
+        names -> :class:`PartPose`), without changing the character (for an animation's target).
+        ``state``: reach from the shoulder as it is in that state (a crouch), not as it is now."""
+        poses = {**self._poses, **(state.parts if state is not None else {})}
+        return self._limb_poses(self._limb_of(HANDS, hand, "hand"), self._to_character(point), bend, poses)
 
     def plant(self, foot: str, point: Sequence[float], *, bend: float = KNEE_BEND) -> Character:
         """Bend the ``left`` or ``right`` leg so its sole (:meth:`foot_point`) is at ``point``
@@ -508,6 +517,107 @@ class Character(VGroup):
         body = state.parts["body"]
         moved = replace(body, shift=(body.shift[0], body.shift[1] - (height - level)))
         return CharacterState(state.facing, {**state.parts, "body": moved})
+
+    def limb_rest(self, limb: str) -> tuple[tuple[float, float], float, float]:
+        """An arm or a leg (``arm_left``, ``leg_right``, ...) at rest, in character units: where it
+        turns (shoulder or hip) and the lengths of its upper and lower segment (one-piece limbs:
+        the halves)."""
+        if limb not in self._limbs:
+            raise VidgenError(f"character '{self.name}' has no {limb} (limbs: {_known(self._limbs)})")
+        rest = self._limbs[limb]
+        upper, lower = float(np.linalg.norm(rest.joint - rest.root)), float(np.linalg.norm(rest.end - rest.joint))
+        return (float(rest.root[0]), float(rest.root[1])), upper, lower
+
+    def hip_height(self) -> float | None:
+        """How high the hips are at rest (character units): where ``leg_left`` / ``leg_right`` or
+        the one-piece ``legs`` turn; ``None`` without legs."""
+        for part in (*FEET.values(), "legs"):
+            if part in self._pivots:
+                return float(self._pivots[part][1])
+        return None
+
+    def part_box(self, part: str, state: CharacterState | None = None) -> tuple[float, float, float, float]:
+        """``part``'s box ``(left, bottom, right, top)`` in character units as drawn facing right,
+        in ``state`` (default: now)."""
+        name = self._part_name(part)
+        matrix = self._world({**self._poses, **(state.parts if state is not None else {})})[name]
+        points = np.concatenate([_apply(matrix, p)[:, :2] for p in self._drawings[name][self._shape_name(name)] if len(p)])
+        return float(points[:, 0].min()), float(points[:, 1].min()), float(points[:, 0].max()), float(points[:, 1].max())
+
+    def sole_points(self, state: CharacterState | None = None) -> dict[str, tuple[float, float]]:
+        """Where each single leg's sole is in ``state`` (default: now): ``left`` / ``right`` ->
+        (x, y) in character units as drawn facing right; empty without ``leg_left`` / ``leg_right``."""
+        world = self._world({**self._poses, **(state.parts if state is not None else {})})
+        found = {}
+        for foot, upper in FEET.items():
+            if upper in self._limbs:
+                x, y = self._end_in_character(upper, world)
+                found[foot] = (float(x), float(y))
+        return found
+
+    def planted(self, state: CharacterState, soles: Mapping[str, Sequence[float]], *, bend: float = KNEE_BEND) -> CharacterState:
+        """``state`` with each single leg of ``soles`` (``left`` / ``right`` -> (x, y), character
+        units as drawn facing right) bent so its sole is there, the knee forward (:meth:`plant`
+        for a state, not drawn). Legs the character lacks are skipped."""
+        parts = dict(state.parts)
+        for foot, sole in soles.items():
+            upper = FEET.get(foot)
+            if upper in self._limbs:
+                poses = {**self._poses, **parts}
+                parts.update(self._limb_poses(upper, np.array([float(sole[0]), float(sole[1])]), bend, poses))
+        return CharacterState(state.facing, parts)
+
+    def lowered(self, state: CharacterState, drop: float, *, stoop: float = 0.0, soles: Mapping[str, Sequence[float]] | None = None) -> CharacterState:
+        """``state`` crouched: the body ``drop`` character units lower and bent ``stoop`` degrees
+        forward, the feet kept on the ground: single legs planted at ``soles`` (default: where they
+        are in ``state``), knees forward; a one-piece ``legs`` part shortened from its top (and
+        turned back upright) so it still reaches the ground. Not drawn."""
+        feet = dict(soles) if soles is not None else self.sole_points(state)
+        parts = dict(state.parts)
+        body = parts["body"]
+        parts["body"] = replace(body, angle=body.angle - stoop, shift=(body.shift[0], body.shift[1] - drop))
+        if "legs" in self._pivots:
+            top = float(self._pivots["legs"][1])
+            legs = parts["legs"]
+            squeeze = max(top - drop, 0.1 * top) / top if top > 0 else 1.0
+            parts["legs"] = replace(legs, angle=legs.angle + stoop, scale=(legs.scale[0], legs.scale[1] * squeeze))
+        return self.planted(CharacterState(state.facing, parts), feet)
+
+    def seated(self, state: CharacterState, seat: float) -> CharacterState:
+        """``state`` sitting on a seat ``seat`` character units above the ground: the body lowered
+        until its lowest point is on the seat; single legs with the thighs forward and the shins
+        down to the ground (:func:`~vidgen.cartoon.seating.seated_sole`); a one-piece ``legs`` part
+        turned forward until its feet rest on the ground, or on a seat higher than the legs are
+        long held out (:data:`~vidgen.cartoon.seating.SEATED_LEGS_DEGREES`). Not drawn."""
+        parts = dict(state.parts)
+        body = parts["body"]
+        bottom = self.part_box("body", state)[1]
+        parts["body"] = replace(body, shift=(body.shift[0], body.shift[1] + seat - bottom))
+        world = self._world({**self._poses, **parts})
+        if "legs" in self._pivots:
+            pivot = self._pivots["legs"]
+            top = float((world["body"] @ np.array([*(pivot + np.asarray(parts["legs"].shift)), 1.0]))[1])
+            length = float(pivot[1]) - min(float(p[:, 1].min()) for p in self._drawings["legs"][self._shape_name("legs")] if len(p))
+            angle = math.degrees(math.acos(top / length)) if 0 < top < length else SEATED_LEGS_DEGREES
+            parts["legs"] = replace(parts["legs"], angle=angle)
+        soles = {}
+        for foot, upper in FEET.items():
+            if upper in self._limbs:
+                hip = world[self._parents[upper]] @ np.array([*(self._limbs[upper].root + np.asarray(parts[upper].shift)), 1.0])
+                _, thigh, shin = self.limb_rest(upper)
+                soles[foot] = seated_sole((float(hip[0]), float(hip[1])), thigh, shin)
+        return self.planted(CharacterState(state.facing, parts), soles)
+
+    def leaning(self, state: CharacterState, degrees: float = LEAN_DEGREES) -> CharacterState:
+        """``state`` leaning back ``degrees`` (the body turned back about its pivot, the legs with
+        it, so the feet come forward), lowered until the higher sole is on the ground and the other
+        leg planted beside it. Not drawn."""
+        body = state.parts["body"]
+        leant = CharacterState(state.facing, {**state.parts, "body": replace(body, angle=body.angle + degrees)})
+        soles = self.sole_points(leant)
+        if not soles:
+            return leant
+        return self.lowered(leant, max(y for _, y in soles.values()), soles={foot: (x, 0.0) for foot, (x, _) in soles.items()})
 
     def set_pose(self, name: str) -> Character:
         """Show pose ``name`` at once (``stand``, ``pointing``, ...; :meth:`names`)."""
@@ -709,19 +819,24 @@ class Character(VGroup):
     def _bend_limb(self, upper: str, point: Sequence[float], bend: float) -> Character:
         """Set the angles of the limb ``upper`` (and its lower part) that put its end at ``point``
         (screen)."""
-        for part, pose in self._limb_poses(upper, point, bend).items():
+        for part, pose in self._limb_poses(upper, self._to_character(point), bend, self._poses).items():
             self._store_pose(part, pose)
         return self.refresh()
 
-    def _limb_poses(self, upper: str, point: Sequence[float], bend: float) -> dict[str, PartPose]:
+    def _to_character(self, point: Sequence[float]) -> np.ndarray:
+        """A screen point in character units (as drawn facing right)."""
+        return np.linalg.solve(self._screen(), np.array([float(point[0]), float(point[1]), 1.0]))[:2]
+
+    def _limb_poses(self, upper: str, point: np.ndarray, bend: float, poses: Mapping[str, PartPose]) -> dict[str, PartPose]:
         """The poses of the limb ``upper`` and its lower part that put its end at ``point``
-        (screen), from :func:`~vidgen.cartoon.limbs.solve_two_bone`."""
+        (character units) with the other parts posed as ``poses`` says, from
+        :func:`~vidgen.cartoon.limbs.solve_two_bone`."""
         lower = LIMBS[upper]
         limb = self._limbs[upper]
         parent = self._parents[upper]
-        frame = self._screen() @ (self._world()[parent] if parent is not None else np.eye(3))
+        frame = self._world(poses)[parent] if parent is not None else np.eye(3)
         target = np.linalg.solve(frame, np.array([float(point[0]), float(point[1]), 1.0]))[:2]
-        root = limb.root + np.asarray(self._poses[upper].shift, dtype=float)
+        root = limb.root + np.asarray(poses[upper].shift, dtype=float)
         upper_rest, lower_rest = limb.joint - limb.root, limb.end - limb.joint
         solution = solve_two_bone(
             (float(root[0]), float(root[1])), (float(target[0]), float(target[1])),
@@ -730,8 +845,8 @@ class Character(VGroup):
         upper_dir = math.degrees(math.atan2(upper_rest[1], upper_rest[0]))
         lower_dir = math.degrees(math.atan2(lower_rest[1], lower_rest[0]))
         return {
-            upper: replace(self._poses[upper], angle=wrap_degrees(solution.direction - upper_dir)),
-            lower: replace(self._poses[lower], angle=wrap_degrees(solution.bend + upper_dir - lower_dir)),
+            upper: replace(poses[upper], angle=wrap_degrees(solution.direction - upper_dir)),
+            lower: replace(poses[lower], angle=wrap_degrees(solution.bend + upper_dir - lower_dir)),
         }
 
     def _fold_matrix(self, upper: str, bend: float) -> np.ndarray:

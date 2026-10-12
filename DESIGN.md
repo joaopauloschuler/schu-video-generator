@@ -96,7 +96,9 @@ src/vidgen/
                           # §69.23, §69.24; no manim), limbs.py (arms and legs in two segments: the
                           # two-bone solver, folded one-piece limbs, §69.26; no manim), holding.py
                           # (props in hands: Holdings, where held / put-down / thrown props go, the
-                          # replay vidgen validate runs, §69.27; no manim); still.py also
+                          # replay vidgen validate runs, §69.27; no manim), seating.py (seats,
+                          # lean edges, Postures, seated feet and the crouch, §69.28; no
+                          # manim); still.py also
                           # draws the prop gallery and `vidgen character-sheet` (§69.16)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
@@ -173,7 +175,7 @@ src/vidgen/
                           # emote, pose, react and the speech bubble, §69.11; moving.py: walk_to,
                           # enter, exit, gesture, jump, §69.12; keyframes_action.py: keyframes,
                           # move_along, §69.14; handling.py: pick_up, hold, put_down, give,
-                          # throw, §69.27;
+                          # throw, §69.27; sitting.py: sit_on, lean_on, stand_up, §69.28;
                           # overlays.py: the built-in overlays lower_third/watermark, §41;
                           # progress.py: progress_bar/chapter_indicator, §42; captions.py: captions, §43;
                           # stage.py: the stage scene type, §69.6)
@@ -714,6 +716,13 @@ Step 93 (§69.27) adds `ArmMove`, `PropMove`, `Holdings`, `HoldingError`, `Handl
 `Prop` the attributes `height_factor`, `held_by` and `hand`, `PlayedAction` the field `lands`, and
 `NarratedScene` the class method `action_sequence_problems(spec, params, uses)` (none by
 default). All compatible.
+Step 94 (§69.28) adds `BodyMove`, `Postures`, `PostureError`, `PROP_SEATS`, `PROP_LEANS`,
+`SEAT_BACKS`, `POSTURE_ACTIONS`, `SIT_SECONDS`, `LEAN_SECONDS`, `STAND_UP_SECONDS`, `CROUCH_MIN`,
+`crouch_drop`, `crouch_stoop` and `read_svg_seat_and_lean`; `Character` gains `limb_rest`,
+`hip_height`, `part_box`, `sole_points`, `planted`, `lowered`, `seated`, `leaning` and the
+attributes `sitting_on` / `leaning_on`, `reached_parts` the optional `state`; `Prop` gains `seat`,
+`lean`, `seat_point()` and `lean_edges()`; `StageFrame` the field `seat_facings` (default empty).
+`holding_problems` also replays sitting and leaning. All compatible.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -6611,10 +6620,90 @@ one, drawn in front of the body; `right`).
   hand, `CastMember.near_hand`, `shrug` both); prop actions count as moves for close-ups
   (`MOVING_ACTIONS`). Storyboards show `pick_up`, `put_down`, `give` and `throw` half-way
   (`mid_still_actions`).
-- **Not done here**: no crouch to the ground (a prop lower than the hand's reach jumps up to the
-  straight arm's end; Step 94's sitting and knees could add one); a held prop is not mirrored when
+- **Not done here**: a crouch to the ground came with Step 94 (§69.28); a held prop is not mirrored when
   its holder turns, and pose changes and gestures of the holding arm move it (written ones are
   allowed); `dim` / `highlight` on a held prop pauses its following for that animation (Manim
   suspends a mobject's updaters while it is animated); no `on: <prop>` to put a prop on a
   table; the screenplay grammar (§69.25) has no prop verbs yet. Tests:
   `tests/test_cartoon_holding.py`.
+
+### 69.28 Sitting, leaning and crouching (Step 94)
+
+Three beat actions (`scenes/sitting.py`, against `vidgen.api` only, on the `_Acting` base of
+§69.11) let a stage's characters sit on its props and lean on them, and `pick_up` / `put_down`
+(§69.27) crouch for a low prop. They reuse the two-bone solver of §69.26 for the hips and knees.
+The target is the character; `to` is the prop.
+
+- **Seats and lean edges** (`cartoon/seating.py`, no manim), in prop units (origin the middle of
+  the prop's foot, `y` up, top 1, `x` in the same unit) as drawn facing right:
+  `PROP_SEATS` (the middle of the seat line: chair (0.1, 0.54), rock (0, 0.9), box (−0.1, 0.9)),
+  `PROP_LEANS` (the left and right x a back leans on: tree ±0.08 (the trunk), door ±0.3, sign
+  (−0.4, 0.36) (the board), lamp ±0.04, house ±0.5), `SEAT_BACKS` (`chair`: a sitter faces the way
+  it faces). `Prop` keeps `seat` / `lean` mirrored with its facing (`mirrored_seat`,
+  `mirrored_lean`); `seat_point()` / `lean_edges()` give them on screen. An SVG prop gives
+  `data-seat="x y"` / `data-lean="left right"` on its `<svg>` element in `viewBox` coordinates
+  (the sanitiser keeps them; `svg_seat_and_lean`, `read_svg_seat_and_lean`; a bad value is a
+  `VidgenError`).
+- **State**: `Postures` maps character -> (`sitting` | `leaning`, prop): `sit` (one sitter per
+  prop), `lean` (several may lean on one), `stand`, `pinned(character, action)` (refuses
+  `PINNED_ACTIONS`: `walk_to`, `enter`, `exit`, `jump`, `turn`, `move_along`, `keyframes` while it
+  sits or leans); each refusal is a `PostureError` saying what to do (`pip sits on 'chair' then;
+  stand_up first (- stand_up: pip)`). The stage keeps one (`Stage.postures`), `vidgen validate`
+  and the planner too. `Character.sitting_on` / `leaning_on` record it (layout dump keys of the
+  same names).
+- **Character states** (`Character`, none drawn; character units as drawn facing right):
+  `seated(state, seat)`: the body shifted until the lowest point of its drawing is on the seat;
+  single legs planted at `seated_sole(hip, thigh, shin)` (the shin straight down to the ground in
+  front, the knee forward; a seat higher than shin + thigh: the thigh level, the foot hanging; a
+  seat too low: folded); a one-piece `legs` part turned forward until its end is on the ground
+  (`acos(hip height / leg length)`), or `SEATED_LEGS_DEGREES` 80 when the seat is higher than the
+  legs are long. `leaning(state, degrees=LEAN_DEGREES 12)`: the body turned back about its pivot
+  (the legs, its children, swing forward), lowered until the higher sole is on the ground and both
+  soles planted there. `lowered(state, drop, stoop=, soles=)`: the body `drop` lower and turned
+  `stoop` degrees forward, the soles planted where they were (a one-piece `legs` part shortened
+  from its top and turned back upright instead). `planted(state, soles)` re-solves each single leg
+  so its sole is at a point (`plant` for a state); `sole_points`, `part_box`, `limb_rest`,
+  `hip_height` read the geometry. `reached_parts(..., state=)` reaches from the shoulder of a
+  state (a crouch). `_limb_poses` now works in character units with given poses, so `reach`,
+  `plant`, `reached_parts` and `planted` share one solver path.
+- **Animation**: `BodyMove(character, keys, x=, facing=, soles=)` (`cartoon/transition.py`) is
+  an `ArmMove` (parts eased through keys) that faces `facing` at its start, eases the feet's x to
+  `x` and, with `soles`, re-plants the single legs every frame on the way from their soles at the
+  start to `soles` (so feet stay on the ground while the hips go down or up).
+- **Actions**: `sit_on` (`SIT_SECONDS` 1.0): the character's feet x goes to the seat's x, it
+  faces the chair's way (rock, box: its own), and eases to `seated` with the seat
+  `(seat_y − feet_y) / height` character units high. `lean_on` (`LEAN_SECONDS` 0.8): it faces
+  away from the prop (it stays on its side), eases to `leaning`, and its feet x is put where the
+  back edge of its body (`part_box("body")` of the leaning state) meets the prop's near lean edge.
+  `stand_up` (`STAND_UP_SECONDS` 0.8): the body and legs back to how they were before the
+  `sit_on` / `lean_on`, the feet x moved to the middle of its soles (it stands up over its feet,
+  so they stay put on screen). Only body and legs (`POSTURE_PARTS`) change; arms and head keep
+  their poses. One character per action (the first target), like the prop actions.
+- **While seated or leaning** (`is_posed`): `look_at` keeps the facing and tilts only the head
+  (the point is taken on the side it faces); `pose` / `react` keep the body and legs
+  (`_kept_posture`); `give` / `throw` do not turn it; it does not crouch.
+- **Crouch** (`handling.crouch`): when the arm (`limb_rest`: upper + lower, using `CROUCH_REACH`
+  0.95 of it) cannot reach the point from the shoulder, `crouch_drop(above, ahead, arm, hips)` is
+  how far the body lowers (at most `CROUCH_MAX` 0.6 of the hips' height), `crouch_stoop` bends it
+  forward up to `CROUCH_STOOP` 15° in proportion; under `CROUCH_MIN` 0.01 no crouch. `pick_up` and
+  `put_down` then play a `BodyMove` with the soles kept: crouched with the arm at the prop at the
+  reach share, standing with the carry (or the arm before) at the end. A point still out of reach
+  (beside, not below the shoulder) is reached as far as the arm goes, as before.
+- **Validate**: `_Posture.scene_problems` checks the prop (of the stage, with a seat / lean
+  edges; an SVG prop's attributes read through the sanitiser); `holding_problems` (§69.27) also
+  replays the postures: a seat taken, a prop held, a prop farther than `SIT_REACH` 0.75 /
+  `LEAN_REACH` 1.0 heights (with the `walk_to` that fixes it; sitting or leaning puts the
+  character at the prop's x), a `stand_up` with nothing to stand up from, a pinned action of a
+  posed character, a `pick_up` / `hold` / `keyframes` / `move_along` of a prop someone sits or leans
+  on. `Stage.action_sequence_problems` runs it when a scene has a handling or posture action.
+- **Automatic directing** (§69.23–24): the planner follows written `sit_on` / `lean_on` /
+  `stand_up` (`Postures`; a seat's facing from `StageFrame.seat_facings`, a leaner faces away
+  from its prop); a posed character is not turned by a look (`_turn_to`) and gets no look at a
+  speaker behind it (`_behind`); the three actions count as moves for close-ups and make a look
+  unknown. Storyboards show them half-way (`mid_still_actions`).
+- **Checked by eye** (scratch storyboards at 854x480): a tall generated look and sprout on a
+  chair, a rock and a box; leaning on a tree, a door and a sign; crouching to pick up and put down
+  a box (generated) and a ball (sprout, shortened legs).
+- **Not done here**: sitting on the ground or on a table; a seat at another depth than the
+  character's is not refused (the hips go to the seat's screen height); no arms on the prop while
+  leaning; no foley for sitting down. Tests: `tests/test_cartoon_seating.py`.

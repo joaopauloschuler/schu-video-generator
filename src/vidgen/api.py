@@ -107,7 +107,7 @@ from vidgen.languages import LanguageRules, language_rules  # noqa: E402
 from vidgen.imagegen import GenerateImage, generated_image  # noqa: E402
 from vidgen.vector_mobject import VectorPicture, load_vector  # noqa: E402
 from vidgen.cartoon.character import PART_NAMES, Character, CharacterPart, CharacterState, PartPose, character  # noqa: E402
-from vidgen.cartoon.transition import ArmMove, Gesture, Jump, KeyedMotion, PoseChange, PropMove, Walk, feet_of  # noqa: E402
+from vidgen.cartoon.transition import ArmMove, BodyMove, Gesture, Jump, KeyedMotion, PoseChange, PropMove, Walk, feet_of  # noqa: E402
 from vidgen.cartoon.holding import (  # noqa: E402
     GIVE_SECONDS,
     HAND_ORDER,
@@ -131,6 +131,20 @@ from vidgen.cartoon.holding import (  # noqa: E402
     put_down_x,
     throw_release_share,
     throw_seconds,
+)
+from vidgen.cartoon.seating import (  # noqa: E402
+    CROUCH_MIN,
+    LEAN_SECONDS,
+    POSTURE_ACTIONS,
+    PROP_LEANS,
+    PROP_SEATS,
+    SEAT_BACKS,
+    SIT_SECONDS,
+    STAND_UP_SECONDS,
+    PostureError,
+    Postures,
+    crouch_drop,
+    crouch_stoop,
 )
 from vidgen.cartoon.visemes import VISEMES, VisemeCue, VisemeTrack  # noqa: E402
 from vidgen.cartoon.cast import beat_voice, part_target_names, pose_name_problem, say_problem, speaking_characters  # noqa: E402
@@ -168,7 +182,7 @@ from vidgen.cartoon.keyframes import (  # noqa: E402
 )
 from vidgen.config import ActionConfig, AutoDirect, AutoDirectSetting, MotionSetting  # noqa: E402
 from vidgen.cartoon.directing import DirectedBeat, StageFrame, StagePlace, stage_directions, stage_frame  # noqa: E402
-from vidgen.cartoon.props import PROP_HEIGHTS, PROP_KINDS, PROP_LIFTS, SVG_PROP_HEIGHT, Prop, draw_prop, svg_prop  # noqa: E402
+from vidgen.cartoon.props import PROP_HEIGHTS, PROP_KINDS, PROP_LIFTS, SVG_PROP_HEIGHT, Prop, draw_prop, read_svg_seat_and_lean, svg_prop  # noqa: E402
 from vidgen.cartoon.stage import (  # noqa: E402
     DEFAULT_FACTORS,
     LAYER_PLACES,
@@ -424,6 +438,7 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "Jump",
     "Walk",
     "ArmMove",
+    "BodyMove",
     "PropMove",
     "GIVE_SECONDS",
     "HAND_ORDER",
@@ -447,6 +462,18 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "put_down_x",
     "throw_release_share",
     "throw_seconds",
+    "CROUCH_MIN",
+    "LEAN_SECONDS",
+    "POSTURE_ACTIONS",
+    "PROP_LEANS",
+    "PROP_SEATS",
+    "SEAT_BACKS",
+    "SIT_SECONDS",
+    "STAND_UP_SECONDS",
+    "PostureError",
+    "Postures",
+    "crouch_drop",
+    "crouch_stoop",
     "enter_path",
     "exit_path",
     "nearer_side",
@@ -501,6 +528,7 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "SVG_PROP_HEIGHT",
     "Prop",
     "draw_prop",
+    "read_svg_seat_and_lean",
     "svg_prop",
     "view_center_within",
     "PARTICLE_KINDS",

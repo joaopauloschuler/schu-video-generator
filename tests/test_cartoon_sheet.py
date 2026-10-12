@@ -90,7 +90,7 @@ def test_sheet_grid_size_per_character(counts: tuple[int, ...], columns: int, ro
 def test_stage_asks_for_mid_action_stills_of_its_moving_actions() -> None:
     extensions.load_builtins()
     stage = registry.get("stage").cls
-    assert stage.mid_still_actions == {"walk_to", "enter", "exit", "gesture", "jump", "keyframes", "move_along", "pick_up", "put_down", "give", "throw"}
+    assert stage.mid_still_actions == {"walk_to", "enter", "exit", "gesture", "jump", "keyframes", "move_along", "pick_up", "put_down", "give", "throw", "sit_on", "lean_on", "stand_up"}
     assert stage.mid_still_actions <= set(registry.action_names())
     assert registry.get("text_card").cls.mid_still_actions == frozenset()
 

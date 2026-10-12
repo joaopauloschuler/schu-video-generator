@@ -487,8 +487,9 @@ memory cap, targeted tests, original characters only). Each step updates the gui
 - [x] Tests: attach / detach state machine, positions (no render), one tiny render (`tests/test_cartoon_holding.py`: 9 without rendering, 1 render)
 
 ### Step 94 — Sitting and leaning
-- [ ] `sit_on: <character>, to: <prop>` (chair, rock, box, any prop with a seat line), `stand_up`, `lean_on` (tree, door, sign); built-in props get seat / lean points; SVG props may give them (`data-seat`)
-- [ ] Tests: seat points per prop, character feet / hips position when seated
+- [x] `sit_on: <character>, to: <prop>` (chair, rock, box, any prop with a seat line), `stand_up`, `lean_on` (tree, door, sign); built-in props get seat / lean points; SVG props may give them (`data-seat`) (`scenes/sitting.py`, pure parts in `cartoon/seating.py`; also `lamp` / `house` to lean on; SVG `data-seat="x y"` / `data-lean="left right"` in viewBox coordinates; hips and knees bent with the Step 92 solver: `Character.seated` / `leaning` / `planted`, played by `BodyMove`; validate replays it with the props in hands (seat taken, too far, walk while seated); a seated or leaning character keeps its facing (looks turn the head, the planner adds no look behind it); layout dump `sitting_on` / `leaning_on`; DESIGN §69.28)
+- [x] Also Step 93's gap: `pick_up` / `put_down` crouch for a low prop (knees bend, body lowers and bends forward, feet kept: `Character.lowered`, `crouch_drop`; one-piece SVG legs shorten)
+- [x] Tests: seat points per prop, character feet / hips position when seated (`tests/test_cartoon_seating.py`: 12 without rendering, 1 render; stills checked by eye on a generated look and sprout)
 
 ### Step 95 — Shots within a scene
 - [ ] Beat key `shot: wide | two_shot | over_shoulder <character> | closeup <character> | medium <character>` cuts (hard cut, no move) the camera to a framing computed from the characters' positions; `shot: {..., move: true}` eases instead

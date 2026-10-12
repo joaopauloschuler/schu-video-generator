@@ -19,7 +19,8 @@ a crouch, squash and stretch and follow-through on jumps. ``none`` plays the pla
 :class:`KeyedMotion` moves a character, a prop or a character's part through the channel values
 of the ``keyframes`` and ``move_along`` actions (:mod:`vidgen.cartoon.keyframes`, §69.14).
 :class:`ArmMove` and :class:`PropMove` play the prop actions (a hand reaching, carrying,
-throwing; a prop going into a hand, onto the ground or flying, §69.27).
+throwing; a prop going into a hand, onto the ground or flying, §69.27); :class:`BodyMove` sits a
+character down, stands it up, leans it and crouches it (§69.28).
 """
 
 from __future__ import annotations
@@ -399,6 +400,50 @@ class ArmMove(Animation):
         self.mobject.sync_mouth()
 
 
+class BodyMove(ArmMove):
+    """An :class:`ArmMove` of the whole figure: the parts eased through ``keys`` (body, legs,
+    arms), the feet's x eased (``smooth``) to ``x`` (Manim units; ``None``: it stays), facing
+    ``facing`` from the start, and single legs kept on the ground: each frame their soles are
+    planted (:meth:`Character.planted`) on the way from where they were when it began to ``soles``
+    (``left`` / ``right`` -> (x, y), character units as drawn facing right; ``None``: the legs move
+    as the keys say). For sitting down, standing up, leaning and crouching (DESIGN.md §69.28)."""
+
+    def __init__(
+        self,
+        character: Character,
+        keys: Sequence[tuple[float, Mapping[str, PartPose]]],
+        *,
+        x: float | None = None,
+        facing: str | None = None,
+        soles: Mapping[str, Sequence[float]] | None = None,
+        **kwargs,
+    ) -> None:
+        self.to_x, self.facing = x, facing
+        self.soles = None if soles is None else {foot: (float(p[0]), float(p[1])) for foot, p in soles.items()}
+        super().__init__(character, keys, **kwargs)
+
+    def begin(self) -> None:
+        figure = self.mobject
+        if self.facing is not None:
+            figure.face(self.facing)
+        self._from_x = float(figure.feet()[0])
+        self._from_soles = figure.sole_points() if self.soles is not None else {}
+        super().begin()
+
+    def interpolate_mobject(self, alpha: float) -> None:
+        super().interpolate_mobject(alpha)
+        figure = self.mobject
+        t = smooth(self.rate_func(alpha))
+        if self.soles:
+            soles = {
+                foot: (start[0] + (end[0] - start[0]) * t, start[1] + (end[1] - start[1]) * t)
+                for foot, end in self.soles.items() if (start := self._from_soles.get(foot)) is not None
+            }
+            figure.set_state(figure.planted(figure.state(), soles))
+        if self.to_x is not None:
+            figure.shift([self._from_x + (self.to_x - self._from_x) * t - float(figure.feet()[0]), 0.0, 0.0])
+
+
 class PropMove(Animation):
     """Move ``prop`` (its middle) between a hand and a place: until ``leave`` (a share of the
     animation) it stays at ``follow()`` (a hand's point, read every frame) or, without
@@ -560,4 +605,4 @@ class KeyedMotion(Animation):
             mob.keyed_feet = tuple(feet)
 
 
-__all__ = ["ArmMove", "PropMove", "Gesture", "Jump", "KeyedMotion", "PoseChange", "Walk", "feet_of", "accented_state", "blend_poses", "part_windows", "walking_state"]
+__all__ = ["ArmMove", "BodyMove", "PropMove", "Gesture", "Jump", "KeyedMotion", "PoseChange", "Walk", "feet_of", "accented_state", "blend_poses", "part_windows", "walking_state"]

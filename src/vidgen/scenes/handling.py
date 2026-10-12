@@ -17,7 +17,7 @@ import numpy as np
 
 from vidgen.api import *
 
-from .acting import _Acting, _characters
+from .acting import _Acting, _characters, is_posed, posture_parts
 from .moving import Place, _place_x
 
 #: Which hand: left (the near one, drawn in front of the body) or right.
@@ -77,6 +77,37 @@ def _carry(character: Character, hand: str) -> dict[str, PartPose]:
     """The arm poses that hold a prop in front of the shoulder (:func:`hold_point`)."""
     point = hold_point(character.shoulder_point(hand), character.character_height, character.facing)
     return character.reached_parts(hand, [point[0], point[1], 0.0])
+
+
+def crouch(character: Character, hand: str, point: Any) -> CharacterState | None:
+    """The crouched state from which ``character``'s ``hand`` reaches ``point`` (screen) when it
+    cannot from where it stands (:func:`crouch_drop`: the knees bend, the body lowers and bends
+    forward, the feet stay); ``None``: no crouch needed, or none it can make (it sits or leans,
+    or has no legs)."""
+    hips = character.hip_height()
+    if hips is None or is_posed(character):
+        return None
+    h = character.character_height
+    shoulder = character.shoulder_point(hand)
+    _, upper, lower = character.limb_rest(f"arm_{hand}")
+    above = (float(shoulder[1]) - float(point[1])) / h
+    ahead = abs(float(point[0]) - float(shoulder[0])) / h
+    drop = crouch_drop(above, ahead, upper + lower, hips)
+    if drop < CROUCH_MIN:
+        return None
+    return character.lowered(character.state(), drop, stoop=crouch_stoop(drop, hips))
+
+
+def _reach_low(character: Character, hand: str, point: Any, share: float, back: dict[str, PartPose]) -> Animation:
+    """The arm reaching ``point`` at ``share`` of the action and going to ``back`` at its end,
+    crouching for a low point (:func:`crouch`) and rising again."""
+    low = crouch(character, hand, point)
+    reach = character.reached_parts(hand, point, state=low)
+    if low is None:
+        return ArmMove(character, [(share, reach), (1.0, back)])
+    standing = posture_parts(character.state())
+    return BodyMove(character, [(share, {**posture_parts(low), **reach}), (1.0, {**standing, **back})],
+                    soles=character.sole_points() or None)
 
 
 def _standing_height(prop: Prop, character: Character) -> float:
@@ -155,7 +186,8 @@ class _Handling(_Acting):
 
 @action("pick_up")
 class PickUp(_Handling):
-    """The target character reaches for the prop ``to`` (its arm bends towards it), lifts it and
+    """The target character reaches for the prop ``to`` (its arm bends towards it; it crouches
+    for a low one, knees bent), lifts it and
     holds it in front of it in its ``hand`` (default: a free one, the near one first); a prop
     taller than 0.4 of the character is made smaller while it is held. It holds it until a
     put_down, give or throw (walks, jumps and turns take it along). It must stand next to the
@@ -178,8 +210,7 @@ class PickUp(_Handling):
             prop = _prop(scene, self.options.to)
             hand = holdings(scene).take(character.name, prop.name, _hand(scene, character, self.options.hand))
             before, standing = _arm(character, hand), float(prop.height)
-            reach = character.reached_parts(hand, prop.get_top())
-            anims.append(ArmMove(character, [(REACH_SHARE, reach), (1.0, _carry(character, hand))]))
+            anims.append(_reach_low(character, hand, prop.get_top(), REACH_SHARE, _carry(character, hand)))
             anims.append(PropMove(prop, to=lambda c=character, h=hand: c.hand_point(h), leave=REACH_SHARE, height=_in_hand_height(prop, character)))
             attach(scene, prop, character, hand, before, standing)
         return anims
@@ -218,7 +249,8 @@ class Hold(_Handling):
 class PutDown(_Handling):
     """The target character puts the prop it holds (``prop``: which, when it holds two) down on
     the ground at ``to`` (a mark or an x of the stage; default: just in front of it), at its
-    own depth, back to its full size; its arm goes back to how it was. The spot must be within
+    own depth, back to its full size, crouching when the spot is low; its arm goes back to how it
+    was. The spot must be within
     its reach (vidgen validate says where to walk_to first)."""
 
     class Options(ActionOptions):
@@ -246,7 +278,7 @@ class PutDown(_Handling):
             height = _standing_height(prop, character)
             spot = [x, float(feet[1]) + height, 0.0]
             back = held.arm_before if held is not None else _arm(character, hand)
-            anims.append(ArmMove(character, [(PUT_DOWN_REACH_SHARE, character.reached_parts(hand, spot)), (1.0, back)]))
+            anims.append(_reach_low(character, hand, spot, PUT_DOWN_REACH_SHARE, back))
             anims.append(self._move(scene, prop, leave=PUT_DOWN_REACH_SHARE, arrive=PUT_DOWN_LAND_SHARE,
                                     to=[x, float(feet[1]) + height / 2], height=height))
             detach(scene, prop)
@@ -292,8 +324,9 @@ class Give(_Handling):
             name, from_hand, to_hand = holdings(scene).give(giver.name, receiver.name, self.options.prop, _hand(scene, receiver, self.options.hand))
             prop = _prop(scene, name)
             towards = 1.0 if receiver.feet()[0] >= giver.feet()[0] else -1.0
-            giver.face("right" if towards > 0 else "left")
-            receiver.face("left" if towards > 0 else "right")
+            for who, facing in ((giver, "right" if towards > 0 else "left"), (receiver, "left" if towards > 0 else "right")):
+                if not is_posed(who):   # one that sits or leans keeps its facing
+                    who.face(facing)
             held = _held(scene).get(name)
             meet = (np.array(hold_point(giver.shoulder_point(from_hand), giver.character_height, giver.facing))
                     + np.array(hold_point(receiver.shoulder_point(to_hand), receiver.character_height, receiver.facing))) / 2
@@ -348,7 +381,8 @@ class Throw(_Handling):
             feet = character.feet()
             x = _place_x(scene, self.options.to)
             towards = 1.0 if x >= feet[0] else -1.0
-            character.face("right" if towards > 0 else "left")
+            if not is_posed(character):
+                character.face("right" if towards > 0 else "left")
             h, shoulder = character.character_height, character.shoulder_point(hand)
             release = throw_release_share(x - float(feet[0]))
             wind = THROW_WIND_UP / (THROW_WIND_UP + THROW_SWING) * release
