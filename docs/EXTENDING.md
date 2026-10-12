@@ -180,7 +180,14 @@ follow the beat's `VisemeTrack` (an updater; `stop_lip_sync()` ends it and resto
 `show_viseme("O")` shows one of `VISEMES` at once; a character without a mouth is left alone).
 `character(name)` breathes, sways its head and blinks on its own (unless `idle: false`):
 `stop_idle()` / `start_idle(seed=None)` turn that off and on; a blink never shows during a
-`PoseChange`. DESIGN.md §69 has the model, §69.3 the poses, §69.4 lip sync, §69.5 idle motion.
+`PoseChange`. Before drawing your own scene for characters on a set, check whether the built-in
+`stage` type (CONFIG.md, a background, ground line, marks and depth; its characters are action
+targets) already does it. Its geometry is exported for your own scenes: `stage_layout(items,
+ground=, size=, frame_width=, frame_height=, marks=None)` places `StageItem(name, kind, at,
+depth, scale)`s (`at`: a name of `MARKS` or an x from 0 to 1) and returns `StagePlacement`s
+(`feet`, `height`) from the back to the front; `pose_name_problem(project.config, who, "pose",
+name)` in `validate_project` reports a pose or expression the character does not know. DESIGN.md §69 has the model, §69.3 the poses, §69.4 lip sync, §69.5
+idle motion, §69.6 the stage.
 
 Params can nest: use another `SceneParams` class as a field type (also in lists). Theme tokens
 are checked inside nested models too, and `vidgen list-scenes` prints the nested fields. A nested

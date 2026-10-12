@@ -1,0 +1,197 @@
+"""``stage``: a cartoon set (a picture, a generated picture or a colour / gradient) with a ground
+line, named marks and the video's characters standing on them (DESIGN.md §69.6)."""
+
+from typing import Annotated, Any, ClassVar, Literal
+
+import numpy as np
+
+from vidgen.api import *
+
+from .image import check_image, is_vector, load_image
+
+#: Ground band colour on a colour background when ``ground_color`` is not given.
+DEFAULT_GROUND_COLOR = "surface"
+
+
+class StageCharacter(SceneParams):
+    """A character of ``characters:`` on the stage. A plain string is the name."""
+
+    also_accepts: ClassVar[tuple[type, ...]] = (str,)
+
+    name: CharacterName
+    """A character of the video's characters: list."""
+    at: str | float = "centre"
+    """Where it stands: a mark (far_left, left, centre, right, far_right, or the stage's own marks) or an x position from 0 (left edge) to 1 (right edge)."""
+    depth: float = Field(0.0, ge=0.0, le=1.0)
+    """0 = on the ground line at full size; up to 1 = at the back of the stage, higher up and 0.55 x the size; deeper characters are drawn behind."""
+    scale: float = Field(1.0, gt=0.0, le=3.0)
+    """Its size relative to the stage's size (e.g. 0.8 for a child)."""
+    facing: Literal["auto", "right", "left"] = "auto"
+    """Which way it looks; auto: towards the middle of the stage (right on the left half, left on the right half)."""
+    pose: str | None = None
+    """The pose it starts in (stand, pointing, waving, thinking, shrug, arms_crossed, sitting, or its own); none: at rest."""
+    expression: str | None = None
+    """The expression it starts with (neutral, happy, sad, angry, surprised, worried, thinking, or its own); none: at rest."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _name_only(cls, data: Any) -> Any:
+        return {"name": data} if isinstance(data, str) else data
+
+
+@scene("stage")
+class Stage(NarratedScene):
+    """A cartoon set: a background (``image`` file, ``generate:`` picture, or a theme colour or
+    gradient), a ground line and the video's characters standing on named marks.
+
+    Beat 1 fades the set and the characters in; later beats hold the picture while the characters
+    breathe and blink (``idle: false`` keeps them still). Characters further back (``depth``) are
+    smaller, higher up and drawn behind the ones in front.
+
+    Action targets: each character by its name.
+    """
+
+    outro = 0.5
+    target_patterns = ("<character>",)
+
+    @classmethod
+    def target_names(cls, params: Any) -> list[str]:
+        """The names of the characters on the stage."""
+        return [c.name for c in params.characters]
+
+    class Params(SceneParams):
+        image: str | None = None
+        """Background picture relative to the project folder, e.g. assets/park.png (fills the frame, cropped)."""
+        generate: GenerateImage | None = None
+        """A generated background instead of a file: {prompt, negative, style, aspect, seed, format} or the prompt; made by `vidgen imagegen`, a placeholder until then."""
+        background: ThemeColor | list[ThemeColor] | None = None
+        """Without a picture: a colour, or a list of colours for a gradient from the top down; none: the theme's background."""
+        ground: float = Field(0.2, ge=0.0, le=0.6)
+        """Height of the ground line (where the characters' feet are) above the bottom edge, as a fraction of the frame height."""
+        ground_color: ThemeColor | Literal[False] | None = None
+        """Fill below the ground line; none: surface on a colour background, nothing on a picture; false: nothing."""
+        marks: dict[Annotated[str, Field(pattern=r"^[A-Za-z0-9_]+$")], Annotated[float, Field(ge=0.0, le=1.0)]] = {}
+        """Own marks: name -> x from 0 (left edge) to 1 (right edge), besides far_left 0.1, left 0.25, centre 0.5, right 0.75, far_right 0.9."""
+        characters: list[StageCharacter] = []
+        """The characters on the stage: a name, or {name, at, depth, scale, facing, pose, expression}."""
+        size: float = Field(0.45, gt=0.0, le=1.0)
+        """Height of a character at depth 0, as a fraction of the frame's shorter side."""
+        idle: bool = True
+        """false: the characters do not breathe, sway or blink in this scene."""
+
+        @model_validator(mode="after")
+        def _check(self) -> SceneParams:
+            if self.image is not None and self.generate is not None:
+                raise ValueError("give either image (a file) or generate (a picture to generate), not both")
+            if (self.image is not None or self.generate is not None) and self.background is not None:
+                raise ValueError("background (a colour) is for stages without a picture; remove it or the image / generate")
+            if isinstance(self.background, list) and len(self.background) < 2:
+                raise ValueError("a background gradient needs at least two colours (or give one colour)")
+            seen: set[str] = set()
+            for k, member in enumerate(self.characters):
+                if member.name in seen:
+                    raise ValueError(f"character '{member.name}' is on the stage twice (characters[{k}])")
+                seen.add(member.name)
+                try:
+                    mark_x(member.at, self.marks)
+                except ValueError as exc:
+                    raise ValueError(f"characters[{k}].at: {exc}") from None
+            return self
+
+        def has_picture(self) -> bool:
+            """Whether the background is a picture (``image`` or ``generate``)."""
+            return self.image is not None or self.generate is not None
+
+        def items(self) -> list[StageItem]:
+            """The characters as stage items (for :func:`~vidgen.cartoon.stage.stage_layout`)."""
+            return [StageItem(c.name, "character", c.at, c.depth, c.scale) for c in self.characters]
+
+    @classmethod
+    def validate_project(cls, params: Any, project: Any) -> list[str]:
+        problems = super().validate_project(params, project)
+        if params.image is not None:
+            problems += check_image(project, params.image, "image")
+        for k, member in enumerate(params.characters):
+            for kind in ("pose", "expression"):
+                name = getattr(member, kind)
+                problem = None if name is None else pose_name_problem(project.config, member.name, kind, name)
+                if problem is not None:
+                    problems.append(f"characters[{k}].{kind}: {problem}")
+        return problems
+
+    def construct(self) -> None:
+        p = self.params
+        backdrop = self._backdrop()
+        placements = stage_layout(
+            p.items(), marks=p.marks, ground=p.ground, size=p.size, frame_width=self.frame_width, frame_height=self.frame_height
+        )
+        members = {m.name: m for m in p.characters}
+        # the characters on the stage by name, back to front (for actions; DESIGN.md §69.6)
+        self.cast: dict[str, Character] = {}
+        for place_at in placements:
+            member = members[place_at.name]
+            facing = facing_towards_centre(place_at.x_fraction) if member.facing == "auto" else member.facing
+            figure = character(member.name, height=place_at.height, facing=facing)
+            if member.pose is not None:
+                figure.set_pose(member.pose)
+            if member.expression is not None:
+                figure.set_expression(member.expression)
+            if not p.idle:
+                figure.stop_idle()
+            figure.shift(np.array([*place_at.feet, 0.0]) - figure.feet())
+            self.cast[member.name] = figure
+        # register back to front, so the characters' fade-ins add them (and draw them) in that order
+        targets = [self.target(name, figure) for name, figure in self.cast.items()]
+
+        def entrance() -> list:
+            return [FadeIn(part) for part in backdrop] + [a for t in targets for a in self.entrance(t)]
+
+        self.reveal([entrance], fraction=0.6, cap=1.0)
+        self.finish()
+
+    def _backdrop(self) -> list[Mobject]:
+        """The set behind the characters, back to front: the picture (cover) or the colour /
+        gradient (named ``background``), then the ground band (``ground``). Empty when the stage
+        shows the theme's background and no ground band."""
+        p = self.params
+        fw, fh = self.frame_width, self.frame_height
+        parts: list[Mobject] = []
+        if p.has_picture():
+            parts.append(self._picture())
+        elif p.background is not None:
+            colors = p.background if isinstance(p.background, list) else [p.background]
+            sky = Rectangle(width=fw, height=fh, stroke_width=0)
+            sky.set_fill([resolve_color(c, self.theme) for c in colors], opacity=1.0)
+            sky.set_sheen_direction(DOWN)  # a gradient runs from the first colour at the top
+            sky.name = "background"
+            parts.append(sky)
+        ground_color = p.ground_color
+        if ground_color is None and not p.has_picture():
+            ground_color = DEFAULT_GROUND_COLOR
+        if ground_color and p.ground > 0:
+            band_height = p.ground * fh
+            band = Rectangle(width=fw, height=band_height, stroke_width=0)
+            band.set_fill(resolve_color(ground_color, self.theme), opacity=1.0)
+            band.move_to([0.0, -fh / 2 + band_height / 2, 0.0])
+            band.name = "ground"
+            parts.append(band)
+        return parts
+
+    def _picture(self) -> Mobject:
+        """The background picture, scaled to cover the frame and centred."""
+        p = self.params
+        if p.generate is not None:  # the stored picture, or a placeholder card until it is made
+            source = generated_image(self.project, p.generate, self.theme)
+        else:
+            problems = check_image(self.project, p.image, "image")
+            if problems:
+                raise VidgenError(f"scene '{self.spec.id}': {problems[0]}")
+            source = self.project.asset(p.image)
+        if is_vector(source):
+            picture: Mobject = load_vector(source, theme=self.theme, where=f"scene '{self.spec.id}' ({source.name})")
+        else:
+            picture = load_image(source)
+        aspect = picture.width / picture.height
+        picture.scale_to_fit_width(max(self.frame_width, self.frame_height * aspect)).move_to(ORIGIN)
+        picture.name = "background"
+        return picture

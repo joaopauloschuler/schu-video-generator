@@ -289,6 +289,7 @@ project's own scene types, in its theme).
 | a derivation with reasons | `equation_derivation` | `title`, `steps`, `colors`, `result` |
 | a short listing (≤ 15 lines) | `code` | `title`, `code`, `path`, `highlight` |
 | a long file, explained part by part | `code_walkthrough` | `title`, `path`, `code`, `steps`, `excerpt` |
+| characters on a set (a cartoon) | `stage` | `characters`, `background`, `image`, `generate`, `marks`, `ground` |
 | thanks, links, call to action | `end_card` | `title`, `lines`, `icon`, `logo` |
 
 How beats drive scenes: each type splits its content into **reveal steps** and plays step *i*
@@ -573,6 +574,22 @@ Minimal snippets (copy, then adapt):
   beats:
     - text: "The function starts by creating the model."
     - text: "Then it takes one step per batch."
+```
+
+```yaml
+# cartoons
+characters:              # top level of video.yaml: declared once, used by any stage
+  - {name: pip, look: {body: bean, hair: short}}
+  - {name: kit, look: {body: tall, hair: spiky, accessories: [scarf]}}
+scenes:
+  - id: park
+    type: stage
+    params:
+      background: [primary, highlight]   # a gradient sky; or image: / generate: for a picture
+      characters:
+        - {name: pip, at: left, pose: waving, expression: happy}
+        - {name: kit, at: right, depth: 0.3}   # further back: smaller, drawn behind
+    beats: [{text: "Pip waves at an old friend across the park."}]
 ```
 
 **When to write a custom scene type** (a Python file in the project's `extensions/`, see

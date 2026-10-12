@@ -20,7 +20,7 @@ from vidgen.render.worker import frame_size
 from vidgen.scenes.code import parse_line_spec
 from vidgen.theme import Theme
 
-BUILTINS = ["bar_chart", "bullets", "chapter", "code", "code_walkthrough", "comparison", "diagram", "end_card", "equation", "equation_derivation", "flowchart", "heatmap", "histogram", "icon_grid", "image", "line_chart", "map", "network", "pie", "process", "quote", "scatter", "screenshot", "stat", "table", "text_card", "timeline", "title", "video_clip"]
+BUILTINS = ["bar_chart", "bullets", "chapter", "code", "code_walkthrough", "comparison", "diagram", "end_card", "equation", "equation_derivation", "flowchart", "heatmap", "histogram", "icon_grid", "image", "line_chart", "map", "network", "pie", "process", "quote", "scatter", "screenshot", "stage", "stat", "table", "text_card", "timeline", "title", "video_clip"]
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "minimal"
 GALLERY = EXAMPLE.parent / "gallery"
 FPS = 5
@@ -61,6 +61,7 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "pie": {"title": "Shares", "labels": ["a", "b", "c", "d", "e"], "values": [50, 25, 15, 6, 4], "donut": True, "center_label": "total", "other_below": 10, "highlight": "b"},
     "map": {"title": "World", "view": "world", "countries": ["USA"], "values": {"Brazil": 3, "India": 5}, "legend_label": "v",
             "steps": [["Germany", "FR"], {"pins": [{"lon": 2.35, "lat": 48.86, "label": "Paris"}], "arcs": ["Paris -> Japan"], "focus": True}]},
+    "stage": {"background": ["primary", "highlight"], "characters": [{"name": "pip", "at": "left", "pose": "waving"}, {"name": "kit", "at": "right", "depth": 0.5}]},
     "heatmap": {"title": "Grid", "rows": ["r1", "r2"], "columns": ["c1", "c2", "c3"], "values": [[1, -2, 3], [None, 0.5, -1]], "legend_label": "v", "highlight": ["row:r2"]},
 }
 
@@ -265,10 +266,13 @@ def test_examples_validate(example: Path, capsys: pytest.CaptureFixture[str]) ->
 
 
 def test_examples_use_every_builtin_scene_type() -> None:
-    """examples/minimal shows the core types, examples/gallery each newer one once."""
+    """examples/minimal shows the core types, examples/gallery each newer one once, and
+    examples/svg_character the cartoon ones (they need the video's characters)."""
     core = [s.type for s in Project.load(EXAMPLE).config.scenes]
     gallery = [s.type for s in Project.load(GALLERY).config.scenes]
-    assert set(core) | set(gallery) == set(BUILTINS) - {"flowchart"}   # = diagram
+    cartoon = {s.type for s in Project.load(EXAMPLE.parent / "svg_character").config.scenes}
+    assert set(core) | set(gallery) | {"stage"} == set(BUILTINS) - {"flowchart"}   # = diagram
+    assert "stage" in cartoon and "stage" not in set(core) | set(gallery)
     assert not set(core) & set(gallery) - {"chapter"}
     assert len(core) == len(set(core)) and gallery.count("chapter") == 3 and len(gallery) - 2 == len(set(gallery))
 
@@ -327,7 +331,7 @@ def render_project(tmp_path_factory: pytest.TempPathFactory) -> Project:
         {"id": "hbars", "type": "bar_chart", "params": {"labels": list("abcdefg"), "values": [1, 2, 3, 4, 5, 6, 7], "reveal": "per_beat"}, "beats": [{"text": "a b"}, {"text": "c d"}]},
         {"id": "cover", "type": "image", "params": {"path": "assets/pic.png", "fit": "cover", "caption": "c"}, "duration": 1.0},
     ]
-    data = minimal_config(scenes=scenes, narration={"pad": 0.2, "words_per_second": 4.0})
+    data = minimal_config(scenes=scenes, narration={"pad": 0.2, "words_per_second": 4.0}, characters=[{"name": "pip"}, {"name": "kit"}])
     (root / "video.yaml").write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
     write_png(root / "assets" / "pic.png")
     write_clip(root / "assets" / "clip.mp4")

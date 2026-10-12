@@ -12,7 +12,7 @@ import difflib
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 
-from vidgen.cartoon.poses import chosen_shape, merged_table
+from vidgen.cartoon.poses import chosen_shape, merged_table, unknown_name_message
 from vidgen.config import CharacterEntry, PartPoseEntry, VideoConfig
 from vidgen.errors import Problem, VidgenError
 from vidgen.theme import Theme
@@ -225,6 +225,17 @@ def pose_lines(entry: CharacterEntry) -> list[str]:
         names = [f"{name}*" if name in own else name for name in merged_table(kind, own)]
         lines.append(f"  {kind}s: {', '.join(names)}")
     return lines
+
+
+def pose_name_problem(config: VideoConfig, character: str, kind: str, name: str) -> str | None:
+    """Why ``name`` is not a ``pose`` / ``expression`` (``kind``) that ``character`` knows (built-in
+    or its own; the message lists the known names), or ``None``. Also ``None`` for a character the
+    video does not declare: the :data:`~vidgen.scene.CharacterName` check reports that."""
+    entry = next((e for e in config.characters if e.name == character), None)
+    if entry is None:
+        return None
+    table = merged_table(kind, getattr(entry, f"{kind}s"))
+    return None if name in table else unknown_name_message(kind, name, table, entry.name)
 
 
 def check_character_name(name: str) -> str:

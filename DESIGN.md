@@ -77,7 +77,8 @@ src/vidgen/
                           # element ids, §69.2), still.py (`vidgen character --png`), poses.py (pose and
                           # expression tables, §69.3; no manim), transition.py (PoseChange, §69.3),
                           # visemes.py (lip sync: viseme tracks, .visemes.json, §69.4; no manim),
-                          # idle.py (blinking, breathing, head sway: the seeded schedule, §69.5; no manim)
+                          # idle.py (blinking, breathing, head sway: the seeded schedule, §69.5; no manim),
+                          # stage.py (marks, ground line, depth, draw order of a stage, §69.6; no manim)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
   actions.py              # per-beat actions: Target, Action, validation, ActionRunner (§26)
@@ -145,7 +146,8 @@ src/vidgen/
                           # the built-in beat actions reveal/dim/highlight/zoom/transform, §26-27;
                           # callout_action.py: the callout beat action, §44; sfx_action.py: sfx, §47;
                           # overlays.py: the built-in overlays lower_third/watermark, §41;
-                          # progress.py: progress_bar/chapter_indicator, §42; captions.py: captions, §43)
+                          # progress.py: progress_bar/chapter_indicator, §42; captions.py: captions, §43;
+                          # stage.py: the stage scene type, §69.6)
   data/fonts/             # Inter, Source Serif 4, JetBrains Mono NL (.ttf + OFL.txt; package data)
   data/icons/             # manifest.json + lucide/*.svg + lucide/LICENSE (ISC; package data, §22)
   data/geo/               # world-110m.json: Natural Earth 1:110m countries (public domain; package data, §39)
@@ -621,6 +623,9 @@ Step 67 (§69) adds `Character`, `CharacterPart`, `CharacterState`, `PartPose`, 
 `character` and the param type `CharacterName`.
 Step 70 (§69.3) adds `PoseChange` (and the `Character` methods `set_pose`, `set_expression`,
 `posed_state`, `names`).
+Step 73 (§69.6) adds the stage geometry `MARKS`, `StageItem`, `StagePlacement`, `stage_layout`,
+`mark_x`, `facing_towards_centre` and the check `pose_name_problem` (the built-in `stage` scene
+uses only `vidgen.api`, like every built-in).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -4902,9 +4907,9 @@ take `CharacterName` options.
 - **Fingerprint**: `characters` is not excluded from `scene_fingerprint`'s config part, so editing
   a character re-renders every scene (conservative; Step 87 may narrow it to scenes that use
   characters).
-- **Layout dump**: a `Character` is reported as one `group` object (no text inside); Step 73
-  gives it its own kind.
-- **Not done here**: no scene type draws characters yet (Step 73).
+- **Layout dump**: a `Character` is one object of kind `character` named after it (Step 73,
+  §69.6).
+- **Not done here**: no scene type draws characters yet (the `stage` scene type, Step 73, §69.6).
 
 ### 69.1 The character generator (Step 68)
 
@@ -5053,7 +5058,8 @@ between two of them is the `PoseChange` animation.
   `.animate`'s straight lines). `rate_func` (default `linear`) maps the animation's time first.
   A facing change switches the mirror at the halfway point. `state=` with `pose` / `expression`
   is a `TypeError`.
-- **Not done here**: no scene type or action uses poses yet (Steps 73, 78). Blinking (Step 72,
+- **Not done here**: no action uses poses yet (Step 78); the `stage` scene (§69.6) starts its
+  characters in a pose / expression. Blinking (Step 72,
   §69.5) never shows during a `PoseChange`: `begin` calls `Character.end_blink()`. Tests: `tests/test_cartoon_poses.py`.
 
 ### 69.4 Lip sync: viseme tracks (Step 71)
@@ -5126,8 +5132,8 @@ A beat's **viseme track** says which mouth shape shows when; a character's mouth
   `stop_lip_sync`, `show_viseme`, `viseme_shape`; `NarratedScene.beat_visemes`.
 - **Also**: `audio_duration` moved from `scene.py` to `speech.py` (no manim; `scene` re-imports
   it), so `vidgen tts` measures MP3s without loading Manim.
-- **Not done here**: no scene type speaks yet (the `stage` scene, Step 73, and the `say` action,
-  Step 78+, call `lip_sync`); no per-language phoneme tables beyond IPA; no coarticulation (each
+- **Not done here**: no scene type speaks yet (the `say` action, Step 78, calls `lip_sync` on a
+  `stage`'s characters, §69.6); no per-language phoneme tables beyond IPA; no coarticulation (each
   phoneme is one shape). Tests: `tests/test_cartoon_visemes.py`.
 
 ### 69.5 Automatic life: blinking and idle motion (Step 72)
@@ -5169,9 +5175,74 @@ updater, so `PoseChange` (§69.3) and `lip_sync` (§69.4) never fight with it.
 - **Config**: `characters[].idle: bool = True`; `build_character` (so `character(name)`) calls
   `start_idle()` unless it is false. A `Character` built directly from parts does not idle until
   `start_idle()`.
-- **Not done here**: `idle: false` per scene is for the `stage` scene (Step 73: call
-  `stop_idle()` on its characters). Only `PoseChange` ends a running blink; another animation
+- **Per scene**: the `stage` scene's `idle: false` calls `stop_idle()` on its characters (§69.6).
+- **Not done here**: Only `PoseChange` ends a running blink; another animation
   played on the character (e.g. `.animate.shift`) holds the eyes as they are until it ends (Step
   79's walking should end the blink or move the character with an updater). The lip sync clock
   (§69.4) also stops during an animation on the character, so a long `PoseChange` while speaking
   shifts the mouth behind the audio (Step 78). Tests: `tests/test_cartoon_idle.py`.
+
+### 69.6 The `stage` scene type (Step 73)
+
+A built-in scene type (`scenes/stage.py`) that puts the video's characters on a set: a
+background, a ground line, named marks and depth. Its geometry lives in `cartoon/stage.py` (no
+manim), so it is tested without rendering and later steps (props, Step 75; walking, Step 79;
+lint, Step 84) reuse it.
+
+- **Geometry** (`cartoon/stage.py`): x positions are fractions of the frame width (0 = left
+  edge), the ground line's height a fraction of the frame height above the bottom edge, sizes
+  fractions of the frame's shorter side (8 units in every aspect, so a character is as tall in 9:16
+  as in 16:9). `MARKS` = `far_left 0.1, left 0.25, centre 0.5, right 0.75, far_right 0.9`; a
+  stage's own `marks` are added (same name: its own wins). `mark_x(at, marks)` (a mark or an x in
+  0..1; `ValueError` with did-you-mean and the known marks otherwise). Depth 0..1:
+  `depth_scale(d) = 1 - (1 - FAR_SCALE) d` (`FAR_SCALE = 0.55`), the feet `FAR_RISE = 0.12` × the
+  frame height higher at depth 1 (`feet_point`). `draw_order(depths)`: deeper first, ties in list
+  order. `stage_layout(items, marks=, ground=, size=, frame_width=, frame_height=) ->
+  [StagePlacement]` in draw order: `StageItem(name, kind, at, depth, scale)` in, `StagePlacement(name, kind,
+  index, x_fraction, depth, feet, height)` out (`height = size × short side × scale ×
+  depth_scale`). `kind` is `character` now; Step 75's props are items of another kind, so they
+  sort with the characters by depth. `facing_towards_centre(x)`: `right` on the left half and in
+  the middle, else `left`.
+- **Params** (`Stage.Params`): `image` (a file, checked by `image`'s `check_image`; raster via
+  `load_image`, `.svg` via `load_vector`) or `generate` (a top-level `GenerateImage`, so `vidgen
+  imagegen` finds it like `image`'s; a placeholder until made) — both scaled to cover the frame,
+  centred, named `background`; else `background`: a colour or a list of two or more (a vertical
+  gradient: one `Rectangle` filled with the colours, `sheen_direction` DOWN, first colour at the
+  top); none: nothing drawn (the theme's background). `image` with `generate`, or either with
+  `background`, is an error. `ground` (0..0.6, default 0.2); `ground_color` (a band from the
+  ground line to the bottom edge, named `ground`; default `surface` without a picture, nothing
+  with one; `false`: nothing). `marks` (identifier -> 0..1). `size` (0.45). `idle` (true).
+  `characters: list[StageCharacter]` (a string is the name): `name: CharacterName`, `at` (mark or
+  x), `depth` 0..1, `scale` (0, 3], `facing` `auto | right | left`, `pose`, `expression` (none:
+  rest). A name twice or an unknown mark is a params error (`characters[k].at: unknown mark ...`).
+  `validate_project` checks the image file and each pose / expression with
+  `cast.pose_name_problem` (exported; the built-in and the character's own tables) (`characters[0].pose: character 'kit': unknown pose 'pointng';
+  did you mean 'pointing'? poses: ...`); the name itself is the `CharacterName` check.
+- **Construct**: `stage_layout` with the frame size; each character is `character(name,
+  height=placement.height, facing=...)` (the theme's colours, idle running unless the entry says
+  `idle: false`), then `set_pose` / `set_expression`, `stop_idle()` when the scene says `idle:
+  false`, and shifted so `feet()` is the placement's feet. **Starting state** is this minimal
+  pose / expression / facing per character; actions change it later (Step 78). One reveal step:
+  the backdrop parts fade in with every character's entrance (targets registered back to front,
+  so the fade-ins add, and Manim draws, them in that order); later beats hold (idle motion
+  runs); `finish()` fades out (outro 0.5 s).
+- **Targets**: each character by its name (`target_patterns = ("<character>",)`), so `dim`,
+  `highlight`, `zoom`, `reveal` and `callout` work on characters today.
+- **Layout dump / lint**: `introspect` reports a `Character` as one object of kind `character`
+  whose `name` is the character's (its box: every drawn part; the invisible anchor has opacity 0
+  and is left out); the picture or colour is `background`, the band `ground`. `lint`'s
+  `describe` names it `character 'pip'`, and `lint_ignore` matches it by that name. No rule is
+  specific to characters yet (Step 84).
+- **Guide and gallery**: the author guide's `scenes` topic has a `# cartoons` block that is a
+  config (`characters:` + `scenes:`), since a stage needs declared characters. `gallery.guide_samples`
+  reads such a block as one sample per scene, shown whole, with `Sample.characters`;
+  `work_config` adds the samples' characters to the work project. `tests/test_guide.py` accepts
+  both block forms.
+- **Hooks for Step 78+** (not built here): `Stage.cast` (name -> `Character`, back to front) is
+  set in `construct`; speaking means `cast[name].lip_sync(self.beat_visemes(beat))` inside the
+  beat's `narrate` (and `stop_lip_sync()` after), acting actions resolve their character through
+  the stage's targets (the character's name) and change its state with `PoseChange` / `face`;
+  walking (Step 79) moves the feet along the ground line with `feet_point` at the character's
+  depth and should re-sort the draw order when depths change.
+- **Not done here**: parallax layers and a camera (Step 74), props (Step 75), speech and acting
+  (Steps 78–79), cartoon lint rules (Step 84). Tests: `tests/test_cartoon_stage.py`.

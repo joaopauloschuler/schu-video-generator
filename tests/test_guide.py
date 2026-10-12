@@ -200,7 +200,8 @@ def test_scene_chooser_names_every_type_and_real_params() -> None:
 
 def test_every_scene_type_has_a_snippet_in_the_chooser() -> None:
     blocks = [yaml.safe_load(body) for lang, body in FENCE.findall(topic_text("scenes")) if lang == "yaml"]
-    shown = {scene["type"] for block in blocks for scene in block}
+    # a block is a list of scenes, or a config with `characters:` and `scenes:` (the cartoons)
+    shown = {scene["type"] for block in blocks for scene in (block["scenes"] if isinstance(block, dict) else block)}
     missing = set(builtin_types()) - shown - {"diagram"}   # `flowchart` is the same type as `diagram`
     assert not missing and "flowchart" in shown, sorted(missing)
 

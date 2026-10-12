@@ -37,6 +37,7 @@ from vidgen.scenes import (  # noqa: F401
     scatter,
     screenshot,
     sfx_action,
+    stage,
     stat,
     table,
     text_card,

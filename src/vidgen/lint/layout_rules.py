@@ -75,7 +75,7 @@ def has_letters_or_digits(obj: dict[str, Any]) -> bool:
 
 
 def describe(obj: dict[str, Any]) -> str:
-    """A short human label: ``text 'Hello world'``, ``icon 'cpu'`` or
+    """A short human label: ``text 'Hello world'``, ``icon 'cpu'``, ``character 'pip'`` or
     ``shape Rectangle 'Group[0]/Rectangle[1]'``."""
     if is_text(obj):
         text = " / ".join(line.strip() for line in str(obj.get("text", "")).splitlines() if line.strip())
@@ -84,6 +84,8 @@ def describe(obj: dict[str, Any]) -> str:
         return f"{obj['kind']} '{text}'"
     if obj["kind"] == "icon":
         return f"icon '{obj.get('icon')}'"
+    if obj["kind"] == "character":
+        return f"character '{obj.get('name')}'"
     return f"{obj['kind']} {obj['class']} '{obj.get('name') or obj['path']}'"
 
 

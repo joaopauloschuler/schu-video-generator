@@ -50,6 +50,7 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "code_walkthrough": {"code": "a = 1\nb = 2\nc = 3", "title": "T", "steps": [{"lines": 1}, {"lines": "2-3", "note": "n"}]},
     "end_card": {"title": "Thanks", "lines": ["one", "two"], "icon": "rocket", "logo": "assets/pic.png"},
     "chapter": {"number": 2, "title": "Results", "subtitle": "Sub", "icon": "rocket"},
+    "stage": {"characters": [{"name": "pip", "at": "left"}, {"name": "kit", "at": "right", "depth": 0.5}]},
     "stat": {"value": 42, "suffix": "%", "label": "L", "context": "C", "comparison": 30, "icon": "rocket"},
     "comparison": {"heading": "H", "columns": [{"heading": "A", "points": ["x", "y"]}, {"heading": "B", "points": ["z"]}]},
     "table": {"title": "T", "header": ["Name", "N"], "rows": [["a", 1], ["b", 2]], "caption": "C"},
@@ -64,6 +65,8 @@ SAMPLES: dict[str, dict[str, Any]] = {
     "map": {"title": "T", "countries": ["France"], "values": {"Spain": 1, "Italy": 2},
             "steps": [{"pins": [{"lon": 2.35, "lat": 48.86, "label": "Paris"}]}, {"countries": ["Germany"], "arcs": ["Paris -> Germany"]}]},
 }
+#: The characters a ``stage`` sample names.
+CHARACTERS = [{"name": "pip"}, {"name": "kit"}]
 #: Built-in types registered under a second name (same class, params and targets).
 ALIASES = {"flowchart": "diagram"}
 
@@ -79,7 +82,7 @@ def with_picture(root: Path) -> Path:
 
 
 def load(make_project, scenes: list[dict[str, Any]]) -> Project:
-    return Project.load(with_picture(make_project(minimal_config(scenes=scenes, narration=NARRATION))))
+    return Project.load(with_picture(make_project(minimal_config(scenes=scenes, narration=NARRATION, characters=CHARACTERS))))
 
 
 def camera_moves(scene: Any, beat: str) -> list[Any]:

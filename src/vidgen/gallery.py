@@ -64,14 +64,16 @@ _TICKED = re.compile(r"`([^`]+)`")
 @dataclass(frozen=True)
 class Sample:
     """The canonical example of a scene type: its scene ``config`` (a ``scenes:`` entry), the
-    ``yaml`` as written in its source, the index ``group`` and where it came from (``guide`` or
-    the project's config file name)."""
+    ``yaml`` as written in its source, the index ``group``, where it came from (``guide`` or
+    the project's config file name) and the ``characters:`` entries its snippet declares (a
+    ``stage`` needs them; DESIGN.md §69.6)."""
 
     type: str
     config: dict[str, Any]
     yaml: str
     group: str
     origin: str
+    characters: tuple[dict[str, Any], ...] = ()
 
 
 @dataclass
@@ -130,22 +132,41 @@ def _snippet_items(body: str) -> tuple[str, list[str]]:
     return group, ["\n".join(item).rstrip() + "\n" for item in items]
 
 
+def _config_snippet(body: str) -> tuple[str, str, dict[str, Any]] | None:
+    """A YAML block of the guide that is a config (``characters:`` and ``scenes:``, for types
+    that need top-level entries) as ``(group, its text without the group comment, the
+    mapping)``; ``None`` for a block that is a list of scenes."""
+    data = yaml.safe_load(body)
+    if not isinstance(data, dict):
+        return None
+    lines = body.splitlines()
+    group = lines[0].lstrip("# ").strip() if lines and lines[0].startswith("#") else ""
+    text = "\n".join(lines[1:] if group else lines).rstrip() + "\n"
+    return group, text, data
+
+
 def guide_samples() -> dict[str, Sample]:
     """Type name -> sample from the guide's ``scenes`` topic (its first snippet of the type; a
-    later one replaces a snippet that uses ``generate:``, which only renders a placeholder)."""
+    later one replaces a snippet that uses ``generate:``, which only renders a placeholder). A
+    block that is a config (``characters:`` + ``scenes:``) is one sample per scene, shown whole."""
     from vidgen.guide import find_topic
 
     samples: dict[str, Sample] = {}
     for lang, body in _FENCE.findall(find_topic("scenes").text):
         if lang != "yaml":
             continue
-        group, items = _snippet_items(body)
-        for text in items:
-            scene = yaml.safe_load(text)[0]
+        config = _config_snippet(body)
+        if config is not None:
+            group, text, data = config
+            found = [(scene, text, tuple(data.get("characters") or ())) for scene in data.get("scenes") or []]
+        else:
+            group, items = _snippet_items(body)
+            found = [(yaml.safe_load(text)[0], text, ()) for text in items]
+        for scene, text, characters in found:
             name = scene["type"]
             known = samples.get(name)
             if known is None or "generate" in known.config.get("params", {}):
-                samples[name] = Sample(name, scene, text, group, "guide")
+                samples[name] = Sample(name, scene, text, group, "guide", characters)
     return samples
 
 
@@ -224,7 +245,7 @@ def gallery_types(project: Project | None) -> list[GalleryType]:
             sample = next((own[n] for n in names if n in own), None)
         if sample is not None and sample.type != entry.name:  # the snippet of another name of it
             text = sample.yaml.replace(f"type: {sample.type}", f"type: {entry.name}")
-            sample = Sample(entry.name, {**sample.config, "type": entry.name}, text, sample.group, sample.origin)
+            sample = Sample(entry.name, {**sample.config, "type": entry.name}, text, sample.group, sample.origin, sample.characters)
         types.append(GalleryType(entry.name, None, sample))
     groups = list(dict.fromkeys(s.group for s in guide.values()))
     order = {g: i for i, g in enumerate(groups)}
@@ -262,13 +283,17 @@ def work_dir(project: Project | None) -> Path:
 
 
 def work_config(types: list[GalleryType], project: Project | None, preset: str | None) -> dict[str, Any]:
-    """The work project's config: one scene per rendered type (id = type name), 16:9 preview,
-    9:16 as the ``portrait`` variant; the project's theme and extensions."""
+    """The work project's config: one scene per rendered type (id = type name), the characters
+    the samples declare (the first entry of a name), 16:9 preview, 9:16 as the ``portrait``
+    variant; the project's theme and extensions."""
     (w, h), (pw, ph) = FORMATS["16:9"], FORMATS["9:16"]
     scenes = []
+    characters: dict[str, dict[str, Any]] = {}
     for t in types:
         if t.alias_of is None and t.sample is not None:
             scenes.append({**t.sample.config, "id": t.name})
+            for entry in t.sample.characters:
+                characters.setdefault(entry["name"], entry)
     config: dict[str, Any] = {
         "title": "vidgen gallery",
         "output": "gallery",
@@ -277,6 +302,8 @@ def work_config(types: list[GalleryType], project: Project | None, preset: str |
         "extensions": [],
         "scenes": scenes,
     }
+    if characters:
+        config["characters"] = list(characters.values())
     if project is not None:
         from vidgen.extensions import extension_dirs
 

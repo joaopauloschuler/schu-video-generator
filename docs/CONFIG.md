@@ -972,8 +972,8 @@ scenes:
 
 ## Characters (`characters:`)
 
-Cartoon characters, declared once at the top level and used by any scene that draws characters
-(scene types with a character param, e.g. an extension's `CharacterName` param; see
+Cartoon characters, declared once at the top level and used by any scene that draws characters:
+the [`stage`](#stage) scene type, or an extension's scene type with a `CharacterName` param (see
 docs/EXTENDING.md). Each one is a figure made of named parts (head, eyes, brows, mouth, body, two
 arms, legs) that can be posed one by one. Only original characters: nothing that imitates a known
 character, mascot or brand figure.
@@ -1120,7 +1120,8 @@ and blinks every 2 to 6 seconds, so it never stands frozen. The blinks are rando
 the same character name gives the same blinks in every render. A character never blinks during a
 pose or expression change, and the motion does not change its pose, expression or lip sync.
 An SVG character blinks only when its file has `eyes_closed`. `idle: false` turns all of it off
-for one character.
+for one character; a [`stage`](#stage) scene's `idle: false` turns it off for every character in
+that scene.
 
 ### Characters from SVG files
 
@@ -3778,6 +3779,72 @@ One block of text, wrapped to fit, faded in at the first beat and held (no fade-
   duration: 2
 ```
 
+### `stage`
+
+A cartoon set: a background, a ground line and the video's [characters](#characters-characters)
+standing on it. Steps: (1) the set and every character fade in together; later beats hold the
+picture while the characters breathe and blink ([idle motion](#idle-motion); `idle: false` keeps
+them still in this scene). The background is a picture (`image`, or a
+[generated picture](#generated-images-imagegen-vidgen-imagegen) via `generate:`, scaled to fill
+the frame and cropped) or, without one, a theme colour or a gradient (`background: [primary,
+highlight]` runs from the first colour at the top to the last at the bottom).
+[Action targets](#beat-actions): each character by its name (`dim: kit`, `highlight: pip`).
+
+Characters stand on **marks**: `far_left` (x 0.1), `left` (0.25), `centre` (0.5), `right` (0.75),
+`far_right` (0.9), the stage's own `marks`, or an x position from 0 (left edge) to 1 (right edge).
+Their feet are on the **ground line**, `ground` (a fraction of the frame height) above the bottom
+edge. **Depth** moves a character back: at `depth: 1` it stands `0.12` of the frame height higher
+and is drawn at 0.55 of its size; characters further back are drawn behind the ones in front
+(ties: in list order). A character's size is `size` (a fraction of the frame's shorter side, so it
+is the same in 16:9 and 9:16) times its own `scale`. Facing `auto` turns each character towards the
+middle, so two characters on either side face each other.
+
+| param | type | default | |
+|---|---|---|---|
+| `image` | str | none | background picture relative to the project folder (png, jpg, svg, ...) |
+| `generate` | str \| mapping | none | a generated background instead of `image` (not both): the prompt, or `{prompt, negative, style, aspect, seed, format}`; leave room for the characters (an empty middle, the ground visible) |
+| `background` | color \| list of colors | none | without a picture: one colour, or two or more for a gradient from the top down; none: the theme's background |
+| `ground` | float 0–0.6 | `0.2` | height of the ground line above the bottom edge, as a fraction of the frame height |
+| `ground_color` | color \| `false` | none | fill below the ground line; none: `surface` on a colour background, nothing on a picture; `false`: nothing |
+| `marks` | mapping | `{}` | own marks, name -> x from 0 to 1 (`{door: 0.85}`); a built-in name moves that mark |
+| `characters` | list | `[]` | the characters on the stage: a name, or a mapping (below); each at most once |
+| `size` | float | `0.45` | height of a character at depth 0, as a fraction of the frame's shorter side |
+| `idle` | bool | `true` | `false`: no breathing, head sway or blinking in this scene (for every character on it) |
+
+| key (`characters[]`) | default | |
+|---|---|---|
+| `name` | required | a character of [`characters:`](#characters-characters) |
+| `at` | `centre` | a mark or an x position from 0 to 1 |
+| `depth` | `0` | 0 (front, on the ground line) to 1 (back: higher up, smaller, drawn behind) |
+| `scale` | `1` | size relative to `size` (e.g. `0.8` for a child), up to 3 |
+| `facing` | `auto` | `auto` (towards the middle), `right` or `left` |
+| `pose` | none | the [pose](#poses-and-expressions) it starts in (`waving`, its own `bow`, ...); none: at rest |
+| `expression` | none | the [expression](#poses-and-expressions) it starts with (`happy`, ...); none: at rest |
+
+`vidgen validate` reports an unknown character, mark, pose or expression (with the known names),
+a missing `image` file, a character placed twice, and `image` with `generate` or with
+`background`. The layout dump and `vidgen lint` see each character as one object of kind
+`character` named after it, the picture or colour as `background` and the band as `ground`.
+Speaking, gestures and moving across the stage are beat actions of later versions.
+
+```yaml
+characters:
+  - {name: pip, look: {body: bean, hair: short}}
+  - {name: kit, look: {body: tall, hair: spiky}, poses: {bow: {body: {angle: -15}}}}
+scenes:
+  - id: park
+    type: stage
+    params:
+      generate: "a sunny park, an empty lawn in the middle, flat colours"
+      ground: 0.18
+      marks: {bench: 0.62}
+      characters:
+        - {name: pip, at: left, pose: waving, expression: happy}
+        - {name: kit, at: bench, depth: 0.5, pose: bow}
+    beats:
+      - text: "Pip spots an old friend by the bench."
+```
+
 ## Beat actions
 
 A beat can act on named parts of its scene — **targets** such as `item3` or `bar:4K` — while it
@@ -3883,6 +3950,7 @@ a title card, a `transform` of a bar).
 | `diagram` | `heading`, `node<N>`, `node:<id>`, `edge:<from>-><to>` | reveal, dim, highlight, zoom | also for `flowchart`; a node is its shape, icon and label (a `box` frames the shape), an edge its line, arrowhead and label; `highlight: [node:a, "edge:a->b", node:b]` marks a path; revealing an edge brings its nodes |
 | `process` | `heading`, `input`, `stage<N>`, `stage:<label>`, `connector<N>`, `loop`, `output`, `token` | reveal, dim, highlight, zoom | a stage is its card (a `box` frames it); `connector2` runs from stage 2 to 3; revealing a stage early shows it without moving the token; `highlight: token` with `style: flash` points at it |
 | `network` | `heading`, `layer<N>`, `layer:<label>`, `edges<N>`, `neuron<L>.<i>` | reveal, dim, highlight, zoom | a layer is its units, ellipsis, label and count; `edges1` joins layers 1 and 2; `neuron2.3` is unit 3 of layer 2 as drawn |
+| `stage` | `<character>` | dim, highlight, zoom | each character on the stage by its name (`dim: kit`, `zoom: pip`); every character comes in at step 1 |
 
 `title` and `heading` stand for each other (the header band, see "Built-in scenes"): `highlight:
 title` works on a `bullets` heading. [Project scene types](EXTENDING.md#8-per-beat-actions-targets-and-custom-actions)
@@ -4341,7 +4409,7 @@ Each object:
 | key | meaning |
 |---|---|
 | `id` | `m1`, `m2`, ...: the same Python object keeps its id in every frame of the scene |
-| `kind` | `text` (`Text`, `MarkupText`, `Paragraph`), `code` (the text of a `Code` listing), `math` (`Tex`, `MathTex`), `number` (`DecimalNumber`, `Integer`), `shape` (one path), `group` (a group of shapes with no text or image inside, e.g. an axis' ticks), `image`, `icon` (an icon from `icon()`: one object, not one per path), `vector` (a vector picture, an SVG: one object, not one per path) |
+| `kind` | `text` (`Text`, `MarkupText`, `Paragraph`), `code` (the text of a `Code` listing), `math` (`Tex`, `MathTex`), `number` (`DecimalNumber`, `Integer`), `shape` (one path), `group` (a group of shapes with no text or image inside, e.g. an axis' ticks), `image`, `icon` (an icon from `icon()`: one object, not one per path), `vector` (a vector picture, an SVG: one object, not one per path), `character` (a cartoon character: one object named after it, its box covering every part) |
 | `class` | the Manim class |
 | `path` | where it sits: parent groups from the top-level mobject down, each `Class[index]` (index among its parent's submobjects; top level: in the scene), or the name the scene gave it |
 | `name` | the scene attribute that holds it (`self.title = ...`) or a `Mobject.name` set by the scene, else `null` |

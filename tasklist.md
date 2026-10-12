@@ -372,10 +372,10 @@ one.
 - [x] Tests: blink times are deterministic for a seed; no blink overlaps a pose change (`blink_times` without manim, and the running character checked against it frame by frame: `tests/test_cartoon_idle.py`)
 
 ### Step 73 — `stage` scene type
-- [ ] A scene with a background (image file, generated image via `generate:`, or a theme colour / gradient), a ground line, named marks (`left`, `centre`, `right`, or x positions) and characters placed on them
-- [ ] Depth sorting: characters and props drawn by their `depth` (scaled smaller further back)
-- [ ] Layout dump / lint know the stage: characters and props are boxes with names
-- [ ] Tests: placement, depth order, a tiny render test with an image background
+- [x] A scene with a background (image file, generated image via `generate:`, or a theme colour / gradient), a ground line, named marks (`left`, `centre`, `right`, or x positions) and characters placed on them (`scenes/stage.py`, geometry in `cartoon/stage.py`; also `far_left` / `far_right` and own `marks`; each character starts in a `pose` / `expression` / `facing`; `idle: false` per scene; DESIGN §69.6)
+- [x] Depth sorting: characters and props drawn by their `depth` (scaled smaller further back) (characters only: props are Step 75, and `stage_layout` sorts any item kind)
+- [x] Layout dump / lint know the stage: characters and props are boxes with names (kind `character` named after it; `background` / `ground` named; lint `describe` says `character 'pip'`)
+- [x] Tests: placement, depth order, a tiny render test with an image background (`tests/test_cartoon_stage.py`)
 
 ### Step 74 — Parallax layers and camera on a stage
 - [ ] `layers:` background / middle / foreground, each an image or shapes, with a parallax factor; camera `pan`, `zoom`, `follow: <character>` move the layers by their factors

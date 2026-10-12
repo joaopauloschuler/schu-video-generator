@@ -4,8 +4,8 @@
 #   vidgen validate examples/svg_character                  # lists the actions sprout cannot do
 #   vidgen character sprout examples/svg_character --png    # one still: exports/character_sprout.png
 #   vidgen character pebble examples/svg_character --png    # a generated character, for comparison
+#   vidgen storyboard examples/svg_character                # the two on a stage (DESIGN.md §69.6)
 # Both know the same poses and expressions (vidgen character lists them); sprout adds its own.
-# No scene type draws characters yet (the stage scene comes later), so the video is one card.
 title: "An SVG character"
 output: svg_character
 
@@ -23,9 +23,13 @@ characters:
     look: {body: round, eyes: round, hair: short, seed: 4}
 
 scenes:
-  - id: note
-    type: text_card
+  - id: meet
+    type: stage                      # a set: a gradient sky, a ground band, characters on marks
     params:
-      text: "Characters can be drawn from your own SVG files"
+      background: [primary, highlight]   # top to bottom
+      ground_color: tertiary
+      characters:
+        - {name: sprout, at: left, pose: bow, expression: cheer}   # sprout's own pose and expression
+        - {name: pebble, at: right, depth: 0.4, expression: happy}  # further back: smaller, higher, behind
     beats:
       - text: "Characters can be drawn from your own SVG files, split into parts by their names."

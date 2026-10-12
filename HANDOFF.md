@@ -7031,3 +7031,83 @@ How to test
   tests/test_voices.py`; `-m render` on the four cartoon files with a render test (they now
   render idling characters).
 
+
+
+## Step 73 — `stage` scene type
+
+What was built
+- `src/vidgen/cartoon/stage.py` (no manim): `MARKS` (`far_left 0.1, left 0.25, centre 0.5,
+  right 0.75, far_right 0.9`, fractions of the frame width), `mark_x` (a mark, a stage's own mark
+  or an x in 0..1; did-you-mean otherwise), `depth_scale` (1 at depth 0, `FAR_SCALE` 0.55 at 1),
+  `feet_point` (ground line as a fraction of the frame height; `FAR_RISE` 0.12 higher at depth 1),
+  `draw_order` (deeper first, ties in list order), `stage_layout(items, ...)` ->
+  `StagePlacement`s back to front (sizes are fractions of the frame's shorter side, so 16:9 and
+  9:16 agree), `facing_towards_centre`.
+- `src/vidgen/scenes/stage.py`: the `stage` scene type. Params `image` | `generate` (top-level
+  `GenerateImage`, so `vidgen imagegen` finds it) | `background` (a colour or a gradient list,
+  top to bottom), `ground`, `ground_color` (default `surface` without a picture, none with one;
+  `false` = none), `marks`, `size`, `idle`, `characters: [name | {name, at, depth, scale, facing,
+  pose, expression}]`. One reveal step: backdrop parts and characters fade in together; targets =
+  character names; `self.cast` (name -> Character, back to front). `idle: false` calls
+  `stop_idle()` on each character (the per-scene switch Step 72 left open).
+- `cast.pose_name_problem` (validate: unknown pose / expression with the known names, own
+  entries included).
+- Layout dump: a `Character` is one object of kind `character` named after it (introspect);
+  lint `describe` -> `character 'pip'`.
+- Guide: chooser row and a `# cartoons` block that is a config (`characters:` + `scenes:`);
+  `gallery.guide_samples` reads such blocks (`Sample.characters`, `_config_snippet`),
+  `work_config` adds the characters; `docs/gallery/stage.md` + 4 media files rendered with
+  `vidgen gallery --types stage` (README index gains a "Cartoons" group).
+- `examples/svg_character` now shows its two characters on a stage (was one text card).
+
+Files touched
+- New: `src/vidgen/cartoon/stage.py`, `src/vidgen/scenes/stage.py`, `tests/test_cartoon_stage.py`,
+  `docs/gallery/stage.md`, `docs/gallery/media/stage-{16x9,9x16}.{png,gif}`.
+- `src/vidgen/scenes/__init__.py`, `api.py`, `cartoon/cast.py`, `introspect.py`,
+  `lint/layout_rules.py`, `gallery.py`, `data/guide/AGENTS.md` (+ copy `AGENTS.md`),
+  `examples/svg_character/video.yaml`, `docs/gallery/README.md`.
+- Tests updated for a new built-in type: `test_builtin_scenes.py` (BUILTINS, SAMPLES, render
+  project characters; the example check also counts `examples/svg_character`),
+  `test_actions_coverage.py` (sample, characters in `load`), `test_translation.py` (sample),
+  `test_extensions.py` (known types message), `test_guide.py` (config blocks in the chooser
+  test), `test_gallery.py` (config snippet test).
+- Docs: `docs/CONFIG.md` (`### stage`, targets table row, layout `kind` row, Characters / Idle
+  notes), `DESIGN.md` (§2 tree, §6.4, §69 / §69.3 / §69.4 / §69.5 notes, new §69.6),
+  `docs/EXTENDING.md`, `README.md`, `tasklist.md`.
+
+Public interfaces
+- `vidgen.api` adds `MARKS`, `StageItem`, `StagePlacement`, `stage_layout`, `mark_x`,
+  `facing_towards_centre`, `pose_name_problem` (built-in scenes may import only `vidgen.api`,
+  `test_builtins_use_only_the_public_api`). New scene type `stage`; layout kind `character`.
+
+Decisions / deviations
+- Starting state is minimal: `pose`, `expression`, `facing` (`auto` = towards the middle) per
+  character; everything else is for actions (Step 78+).
+- Sizes are a fraction of the frame's shorter side, x a fraction of the width, the ground a
+  fraction of the height.
+- All characters enter at step 1 (no per-character entrance; `enter:` is Step 79).
+- The guide snippet had to be a whole config, since `vidgen validate` checks character names;
+  the gallery and the guide test learned that block form.
+- The example check accepts `stage` from `examples/svg_character` instead of adding characters
+  to `examples/gallery` (which many other tests read).
+- Searched before adding: picture loading / checks reuse `image`'s `check_image`, `load_image`,
+  `is_vector` and `load_vector`; pose checks reuse `poses.merged_table` /
+  `unknown_name_message`; no stage / mark / depth code existed.
+
+Known gaps / TODOs
+- Hooks for Step 78 (DESIGN §69.6): `cast[name].lip_sync(self.beat_visemes(beat))` inside
+  `narrate`; actions find characters through the stage's targets. Walking (Step 79) should move
+  feet with `feet_point` and re-sort the draw order when depth changes.
+- `reveal` of a character does nothing useful (all enter at step 1). No lint rule is
+  character-specific (Step 84); `overlay_overlap` does not count characters as content.
+- `vidgen gallery` in a project whose own scene types need characters does not add the
+  project's `characters:` to the work project (only the guide samples' ones).
+- A portrait stage leaves a tall empty sky (characters keep their landscape size).
+
+How to test
+- `pytest tests/test_cartoon_stage.py` (20 not-render + 1 render at 160x90, ~2 s).
+- Also run here (not render): `test_builtin_scenes test_actions_coverage test_actions
+  test_translation test_extensions test_gallery test_guide test_docs test_introspect test_lint
+  test_imagegen test_api test_schema test_mcp test_cli test_json_output test_overlays
+  test_review2/3/4 test_robustness` and the other cartoon files; render: `test_builtin_scenes -k
+  "stage or image"`, `test_actions_coverage -k stage`, `test_gallery`, `test_introspect`.

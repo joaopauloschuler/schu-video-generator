@@ -309,6 +309,7 @@ SAMPLES: dict[str, list[dict[str, Any]]] = {
             "steps": [[{"box": BOX, "label": "T:c1"}], {"box": BOX, "label": "T:c2"}, {"callouts": [{"box": BOX, "label": "T:c3"}]}],
         }
     ],
+    "stage": [{"background": "primary", "characters": ["pip", {"name": "kit", "at": "right", "pose": "waving"}]}],   # no text
     "stat": [
         {
             "value": 12, "label": "T:label", "context": "T:context", "prefix": "T:p", "suffix": "T:s", "unit": "T:u",
