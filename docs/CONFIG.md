@@ -54,6 +54,7 @@ project folder. Contents: [top level](#top-level), [scenes and beats](#scenes-an
 | `thumbnail` | none | the thumbnail `<output>_thumbnail.png`, written by `vidgen render` and `vidgen thumbnail`: a scene's frame `{scene, beat, at, overlays}` or a designed card `{title, subtitle, icon, image, preset, background}`, + `{jpeg, auto}`; see [thumbnail](#thumbnail-thumbnail-vidgen-thumbnail) |
 | `stt` | `{provider: faster_whisper}` | speech to text for `vidgen readback` (the narration transcribed and compared with the beat texts): `{provider, model, language, device}`; see [readback](#readback-vidgen-readback) |
 | `imagegen` | `{provider: openai, model: gpt-image-1, size: auto}` | image generation for `generate:` params and `vidgen imagegen`: `{provider (openai \| openrouter), model, size, quality, resolution, style, negative, svg_model}`; see [generated images](#generated-images-imagegen-vidgen-imagegen) |
+| `cartoon_style` | none | style words added to every `generate:` prompt of [`stage`](#generated-backgrounds-cartoon_style) scenes, so a cartoon's backgrounds look alike (`"flat colours, thick outlines, soft shadows"`); part of those pictures' cache key; a variant may change it |
 | `scenes` | required | the scenes in order, at least one |
 
 ### Output folder (`output_dir`, `--output-dir`)
@@ -1423,12 +1424,13 @@ scenes:
 `illustration` (clean digital illustration, soft shading, limited colour palette), `flat` (flat
 vector illustration, simple geometric shapes, solid colours, no outlines), `isometric`,
 `watercolor`, `line_art`, `render_3d`, `cinematic`. The prompt sent is `<prompt>. Style: <style
-words>. Avoid: <negative>.`; `vidgen imagegen --dry-run` prints it.
+words>. Avoid: <negative>.`, where a [`stage`](#generated-backgrounds-cartoon_style) scene adds the
+video's `cartoon_style` to the style words; `vidgen imagegen --dry-run` prints it.
 
 **Cache.** Each picture is stored as `assets/generated/<key>.png` (`<key>.svg` for `format: svg`) with `<key>.json` beside it
 (`prompt`, `negative`, `style`, `sent_prompt`, `revised_prompt` — the prompt the model says it
 used —, `provider`, `model`, `size`, `quality`, `seed`, `created` date, `scenes`). The key is a
-hash of the prompt sent (with style and negative), provider, model, size, quality and seed:
+hash of the prompt sent (with style, `cartoon_style` on a stage, and negative), provider, model, size, quality and seed:
 editing any of them asks for a new picture, while scenes sharing a request share one file.
 **Commit `assets/generated/`** like `audio/`: the pictures cost money and cannot be made again
 identically. A variant with another format (9:16) gets portrait pictures of its own. Pictures no
@@ -3814,7 +3816,7 @@ never leaves the stage.
 | param | type | default | |
 |---|---|---|---|
 | `image` | str | none | background picture relative to the project folder (png, jpg, svg, ...) |
-| `generate` | str \| mapping | none | a generated background instead of `image` (not both): the prompt, or `{prompt, negative, style, aspect, seed, format}`; leave room for the characters (an empty middle, the ground visible) |
+| `generate` | str \| mapping | none | a generated background instead of `image` (not both): the prompt, or `{prompt, negative, style, aspect, seed, format}`, with the video's [`cartoon_style`](#generated-backgrounds-cartoon_style) added; leave room for the characters (an empty middle, the ground visible) |
 | `background` | color \| list of colors | none | without a picture: one colour, or two or more for a gradient from the top down; none: the theme's background |
 | `ground` | float 0–0.6 | `0.2` | height of the ground line above the bottom edge, as a fraction of the frame height |
 | `ground_color` | color \| `false` | none | fill below the ground line; none: `surface` on a colour background, nothing on a picture; `false`: nothing |
@@ -3854,6 +3856,52 @@ and `height` (`0.2`) as fractions of the frame's shorter side, and `color` (`sec
 `hills`: a row of rounded hills across the whole layer, each `width` wide and `height` high, their
 foot at `y`, filled down to the bottom. A layer is drawn larger than the frame, so that no
 camera view inside the stage (a zoom up to 8x included) shows its edge.
+
+#### Generated backgrounds (`cartoon_style`)
+
+A stage's `generate:` makes its background with [`vidgen imagegen`](#generated-images-imagegen-vidgen-imagegen).
+The top-level **`cartoon_style`** gives every stage of the video the same look: its words are
+added to the style words of each stage's `generate:` prompt (after `imagegen.style` or the
+`generate.style`, also when that style is `none`). Only `stage` scenes get them: an
+[`image`](#image) scene's picture, and its cache key, stay as they are.
+
+```yaml
+cartoon_style: "flat colours, thick outlines, soft shadows"
+imagegen: {negative: "people, animals, text"}
+variants:
+  sketch: {cartoon_style: "pencil sketch, light watercolour wash"}   # its own set of pictures
+scenes:
+  - id: park
+    type: stage
+    params:
+      generate: "a sunny park seen from the side, a path running across the lower third, trees at both edges, open grass in the middle"
+      characters: [pip, kit]
+    beats: [{text: "Pip and Kit meet in the park."}]
+# sent: "a sunny park seen from the side, ... open grass in the middle. Style: flat colours,
+#        thick outlines, soft shadows. Avoid: people, animals, text."
+```
+
+The words are part of the prompt sent, so they are part of the picture's cache key: changing
+`cartoon_style` (or a variant that sets another one) asks for new pictures (`vidgen imagegen
+--dry-run` lists them and their cost); the old ones are reported as unused, never deleted.
+
+**Writing a background prompt that leaves room for the characters.** The characters stand on
+the ground line in front of the picture, so describe a set, not a scene:
+
+- **An empty middle**: put the interesting things at the edges ("trees at both edges", "a
+  house on the left") and keep the middle plain ("open grass in the middle", "an empty
+  street"), where the characters stand on `left`, `centre` and `right`.
+- **The ground visible**: a side view at eye level with a floor or ground across the lower
+  part ("seen from the side", "a path running across the lower third"), so feet stand on
+  something; set `ground` to where that ground is in the picture.
+- **No people, animals or text**: add them to `negative` (or `imagegen.negative`): a
+  generated figure competes with your characters, and generators draw words poorly.
+- **Calm detail behind the characters**: few small details, soft contrast; a busy picture
+  hides the outlines of the characters (`cartoon_style` words like "simple shapes, soft
+  shadows" help).
+- **Wide stages**: on a stage wider than the frame (`width: 2`) the picture is enlarged to cover
+  the whole stage, so its top and bottom are cut off; keep the ground and the things that matter
+  near the middle of its height, and describe the set from left to right.
 
 #### Props
 

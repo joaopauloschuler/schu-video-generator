@@ -38,7 +38,7 @@ scenes:
 | param | type | default | notes |
 |---|---|---|---|
 | `image` | `str \| None` |  | Background picture relative to the project folder, e.g. assets/park.png (fills the frame, cropped). |
-| `generate` | `str \| GenerateImage \| None` |  | A generated background instead of a file: {prompt, negative, style, aspect, seed, format} or the prompt; made by `vidgen imagegen`, a placeholder until then. |
+| `generate` | `str \| GenerateImage \| None` |  | A generated background instead of a file: {prompt, negative, style, aspect, seed, format} or the prompt (the video's cartoon_style is added); made by `vidgen imagegen`, a placeholder until then. |
 | `generate.prompt` | `str` | required | What the picture shows, e.g. "a lighthouse on a cliff at dawn" (keep words out of it: generators draw text poorly). |
 | `generate.negative` | `str` |  | What the picture should not show (added to the prompt as "Avoid: ..."), e.g. "people, text". |
 | `generate.style` | `str \| None` |  | Style words added to the prompt: a preset (photo, illustration, flat, isometric, watercolor, line_art, render_3d, cinematic), your own words, or none; default imagegen.style. |
@@ -59,10 +59,43 @@ scenes:
 | `characters.expression` | `str \| None` |  | The expression it starts with (neutral, happy, sad, angry, surprised, worried, thinking, or its own); none: at rest. |
 | `size` | `float` | `0.45` | Height of a character at depth 0, as a fraction of the frame's shorter side. |
 | `idle` | `bool` | `True` | false: the characters do not breathe, sway or blink in this scene. |
+| `width` | `float` | `1.0` | Width of the stage in frame widths (marks and x positions are fractions of it); wider than 1: the camera pans across it (pan, follow). |
+| `camera_at` | `str \| float` | `'centre'` | Where the camera looks at the start, on a stage wider than the frame: a mark or an x from 0 to 1 of the stage. |
+| `layers` | `list[StageLayer]` |  | Parallax layers: {place: background \| middle \| foreground, factor, image \| shapes}. |
+| `layers.name` | `str \| None` |  | Its name in the layout dump; default <place>_layer (then _2, _3...). |
+| `layers.place` | `'background' \| 'middle' \| 'foreground'` | `'background'` | background and middle are drawn behind the ground band (in that order), foreground in front of the characters. |
+| `layers.factor` | `float \| None` |  | How far it moves for a camera move of one unit: 1 = with the stage and its characters, 0 = fixed on screen; default background 0.3, middle 0.6, foreground 1.4. |
+| `layers.image` | `str \| None` |  | A picture relative to the project folder (a PNG with transparency, or an SVG), as wide as the layer, standing on bottom. |
+| `layers.bottom` | `float` | `0.0` | With image: the height of its bottom edge above the frame's bottom edge, as a fraction of the frame height. |
+| `layers.shapes` | `list[LayerShape]` |  | Instead of image: filled shapes, e.g. [{shape: hills, y: 0.2, height: 0.15, color: secondary}]. |
+| `layers.shapes.shape` | `'rect' \| 'ellipse' \| 'triangle' \| 'hills'` | required | rect, ellipse, triangle, or hills: a row of rounded hills across the whole layer (x is not used). |
+| `layers.shapes.x` | `float` | `0.5` | Its middle: an x from 0 (left edge) to 1 (right edge) of the stage. |
+| `layers.shapes.y` | `float` | `0.0` | Its bottom, as a fraction of the frame height above the bottom edge (hills: their foot; they are filled down from there). |
+| `layers.shapes.width` | `float` | `0.3` | Its width as a fraction of the frame's shorter side (hills: the width of one hill). |
+| `layers.shapes.height` | `float` | `0.2` | Its height as a fraction of the frame's shorter side. |
+| `layers.shapes.color` | `color` | `'secondary'` | Fill colour (a theme token or #hex). |
+| `props` | `list[str \| StageProp]` |  | Props: a built-in prop's name, or {prop \| svg, name, at, depth, scale, lift, facing, color, detail, recolor}. |
+| `props.prop` | `'table' \| 'chair' \| 'tree' \| 'bush' \| 'house' \| 'door' \| 'lamp' \| 'sign' \| 'box' \| 'ball' \| 'cloud' \| 'sun' \| 'moon' \| 'rock' \| 'plant' \| 'laptop' \| 'cup' \| None` |  | A built-in prop: table, chair, tree, bush, house, door, lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup. |
+| `props.svg` | `str \| None` |  | Instead of prop: an SVG file relative to the project folder (sanitised like any SVG), standing on the bottom edge of its viewBox. |
+| `props.name` | `str \| None` |  | Its name for actions and the layout dump; default: the prop's name (an SVG: the file name), then _2, _3... |
+| `props.at` | `str \| float` | `'centre'` | Where it stands: a mark or an x position from 0 (left edge) to 1 (right edge) of the stage. |
+| `props.depth` | `float` | `0.0` | 0 = on the ground line at full size; up to 1 = at the back, higher up and smaller; at the same depth characters are drawn in front of props. |
+| `props.scale` | `float` | `1.0` | Its size relative to its usual size next to a character (a tree is 1.7 characters tall, a cup 0.09; an SVG 0.5). |
+| `props.lift` | `float \| None` |  | How far above the ground line it hangs, as a fraction of the frame height; default 0.5 for cloud, sun and moon, else 0 (on the ground). |
+| `props.facing` | `'right' \| 'left'` | `'right'` | left: mirrored. |
+| `props.color` | `color \| None` |  | Its main colour (a theme token or #hex); default per prop (a tree's leaves tertiary, a chair accent...). |
+| `props.detail` | `color \| None` |  | Its second colour (a tree's trunk, a house's roof, a laptop's screen...); default per prop. |
+| `props.recolor` | `'none' \| 'theme'` | `'none'` | With svg: theme maps the picture's colours to the nearest theme colours; none keeps them. |
+| `particles` | `list[str \| StageParticles]` |  | Particles over the whole scene, in front of everything: a kind (rain, snow, sparkles, dust, confetti, smoke, bubbles) or {kind, density, area, color, seed}; for one beat use the particles action. |
+| `particles.density` | `float` | `1.0` | How many: 1 = the kind's usual amount for a whole frame, 2 = twice as many (at most 300 in all; half at preview quality). |
+| `particles.area` | `list[float] \| None` |  | Where they are: [x, y, w, h] fractions 0-1 of the visible frame from its top-left corner; default the whole frame. |
+| `particles.color` | `color \| list[color] \| None` |  | A colour or a list (each particle picks one); default per kind (rain light blue, snow white, sparkles highlight, confetti the theme's colours...). |
+| `particles.seed` | `int` | `1` | Another number gives other positions; the same number gives the same particles in every render. |
+| `particles.kind` | `'rain' \| 'snow' \| 'sparkles' \| 'dust' \| 'confetti' \| 'smoke' \| 'bubbles'` | required | rain, snow, sparkles, dust, confetti, smoke or bubbles. |
 
 ## Targets
 
-`<character>`
+`<character>`, `<prop>`
 
 ## Beats
 

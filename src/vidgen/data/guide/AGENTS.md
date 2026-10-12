@@ -1082,6 +1082,11 @@ scenes:
   cost; placeholders render until you run `vidgen imagegen`. Describe a scene, never text,
   charts or logos (vidgen draws those better), and set one `imagegen: {style: ...}` for the
   whole video.
+- **Cartoon backgrounds** (`stage` `generate:`): set one top-level `cartoon_style: "flat
+  colours, thick outlines, soft shadows"` so every stage looks alike (added to stage prompts
+  only; changing it means new pictures). Describe a set, not a scene: things at the edges, an
+  empty middle for the characters, the ground visible across the lower part, and `negative:
+  "people, animals, text"`.
 - **Choosing an image provider**: `openai` (the default; `OPENAI_API_KEY`, gpt-image-1) is one
   good model at a known price. `imagegen: {provider: openrouter, model: author/name}`
   (`OPENROUTER_API_KEY`) reaches many models with one key — some cheaper per picture

@@ -136,7 +136,7 @@ class Image(NarratedScene):
     def construct(self) -> None:
         p = self.params
         if p.generate is not None:  # the stored picture, or a placeholder card until it is made
-            source = generated_image(self.project, p.generate, self.theme)
+            source = self.generated_picture(p.generate)
         else:
             problems = check_image(self.project, p.path, "path")
             if problems:

@@ -392,8 +392,8 @@ one.
 - [x] Tests: seeded positions, the cap (`tests/test_particles.py`: 19 without rendering, 2 tiny renders)
 
 ### Step 77 — Shared style for generated backgrounds
-- [ ] `cartoon_style:` (top level) appended to every `generate:` prompt of `stage` scenes (e.g. "flat colours, thick outlines, soft shadows"), part of the image cache key; a variant may change it
-- [ ] Docs: writing background prompts that leave room for characters (empty middle, ground visible)
+- [x] `cartoon_style:` (top level) appended to every `generate:` prompt of `stage` scenes (e.g. "flat colours, thick outlines, soft shadows"), part of the image cache key; a variant may change it (added to the style words, `Style: <style>; <cartoon style>`; scene types opt in with `NarratedScene.uses_cartoon_style`, read by `find_images` and `generated_picture`; other pictures keep their keys; stage layers take no `generate:`; DESIGN §69.10; `tests/test_cartoon_style.py`)
+- [x] Docs: writing background prompts that leave room for characters (empty middle, ground visible) (CONFIG.md "Generated backgrounds (`cartoon_style`)", a guide bullet; also `docs/gallery/stage.md` regenerated with Step 74–76's params)
 
 ### Step 78 — Acting actions, part 1: speaking and looking
 - [ ] Beat actions `say` (mouth follows the visemes; optional speech bubble with the beat's text or a short version), `look_at: <character | mark | camera>`, `turn` (face left / right), `emote: <expression>`, `pose: <name>`

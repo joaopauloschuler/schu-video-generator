@@ -34,6 +34,7 @@ from vidgen.overlay_layer import OverlayLayer
 from vidgen.overlays import Overlay, avoid, mobject_region, scene_overlays
 from vidgen.config import DIRECTED_TRANSITIONS, ID_PATTERN, BeatConfig, SceneConfig, SfxCue, validation_error_lines
 from vidgen.errors import VidgenError
+from vidgen.imagegen import GenerateImage, generated_image
 from vidgen.project import Project
 from vidgen.sfx import AUTO_ACTION_SFX, SfxEvent, SoundLibrary, decode_audio, stereo, write_wav
 from vidgen.speech import audio_duration
@@ -755,6 +756,17 @@ class NarratedScene(MovingCameraScene):
     #: ``(sound, gain in dB)`` played at the scene's start when the video sets ``sfx: {auto:
     #: true}`` (``chapter``: a whoosh); ``None``: nothing.
     entrance_sfx: ClassVar[tuple[str, float] | None] = None
+
+    # ----- generated pictures (DESIGN.md §58, §69.10) ------------------------------------------
+
+    #: Whether the video's ``cartoon_style`` is added to this type's ``generate:`` prompts
+    #: (``stage``: yes). ``vidgen imagegen`` reads it too, so both ask for the same picture.
+    uses_cartoon_style: ClassVar[bool] = False
+
+    def generated_picture(self, generate: GenerateImage) -> Path:
+        """The picture of a ``generate:`` param: :func:`vidgen.imagegen.generated_image` with
+        this type's :attr:`uses_cartoon_style` (the stored picture, or a placeholder card)."""
+        return generated_image(self.project, generate, self.theme, cartoon=self.uses_cartoon_style)
 
     @property
     def sounds(self) -> SoundLibrary:

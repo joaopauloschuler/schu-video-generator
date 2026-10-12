@@ -7323,3 +7323,64 @@ How to test
   test_callout_action` (9, 31 s). A `vidgen render --preview --no-audio --frames` of a one-scene
   `title` project with `- particles: confetti` drew 45 particles (90 at final) and `vidgen lint`
   found nothing.
+
+
+## Step 77 — Shared style for generated backgrounds
+
+What was built
+- `cartoon_style:` (top level, `VideoConfig`, a non-empty string, default none): words added to
+  every `generate:` prompt of `stage` scenes. `image_request(project, generate, *, cartoon=False)`
+  joins the style words (`generate.style` / `imagegen.style`) and `cartoon_style_words(project,
+  cartoon)` (spaces collapsed, final full stop dropped) with `"; "`, each once: the text sent is
+  `<prompt>. Style: <style>; <cartoon style>. Avoid: <negative>.` (`style: none` keeps the cartoon
+  style). The words are in the text, so in the cache key; `KEY_VERSION` unchanged.
+- Opt-in per scene type: `NarratedScene.uses_cartoon_style` (class attribute, `False`; `Stage`
+  sets `True`). `find_images` reads it from the registry class (so `vidgen imagegen`, validate,
+  `used_keys` / orphans); `NarratedScene.generated_picture(generate)` passes it to
+  `generated_image(..., cartoon=)` when rendering. `image` and `stage` now call
+  `generated_picture`. Stage `layers` take only files, so there is no layer `generate:` to cover.
+- A variant changes it by the usual deep merge (`null` removes it); its pictures get their own keys.
+- Docs: CONFIG.md top-level row, stage `generate` row, "Generated backgrounds (`cartoon_style`)"
+  (example + how to write a background prompt that leaves room for the characters: empty middle,
+  ground visible, no people / text, calm detail, wide stages), the prompt and cache-key sentences
+  of "Generated images"; guide bullet "Cartoon backgrounds".
+- Cleanup: `docs/gallery/stage.md` regenerated with `vidgen gallery --types stage` (params of
+  Steps 74–76 and `<prop>` in Targets). The four media files came out byte-identical (the sample
+  did not change), so they are not in the diff.
+
+Files touched
+- New: `tests/test_cartoon_style.py`.
+- `src/vidgen/config.py`, `imagegen/__init__.py`, `scene.py`, `scenes/stage.py`, `scenes/image.py`,
+  `data/guide/AGENTS.md` (+ copy `AGENTS.md`).
+- Docs: `docs/CONFIG.md`, `DESIGN.md` (§6.4 note, new §69.10), `docs/EXTENDING.md` (generated
+  pictures use `self.generated_picture`, `uses_cartoon_style`), `docs/gallery/stage.md`, `tasklist.md`.
+
+Public interfaces
+- Compatible: `generated_image(..., *, cartoon=False)`, `image_request(..., *, cartoon=False)`,
+  `NarratedScene.uses_cartoon_style`, `NarratedScene.generated_picture(generate)`;
+  `vidgen.imagegen.cartoon_style_words`. Config key `cartoon_style`.
+
+Decisions / deviations
+- The cartoon style goes into the `Style:` part (not a separate sentence), so the sidecar's
+  `style` records it and prompts keep their three-part shape.
+- Existing keys are unchanged: without `cartoon_style`, and for every non-stage scene, the request
+  is identical; `test_imagegen_openrouter.test_openai_keys_are_unchanged` (pinned key
+  `834a61963bcbaf9e`) passes and `tests/test_cartoon_style.py` checks the same key for a stage and
+  an image scene without the style, and for the image scene with it.
+- `cartoon_style` is part of every scene's render fingerprint (the whole config dump is), like
+  `imagegen.style`; changing it re-renders non-stage scenes too.
+- Searched before adding: no prompt-suffix code beyond `style_words` / `compose_prompt`, reused.
+
+Known gaps / TODOs
+- No per-scene opt-out of the cartoon style (a stage that wants another look sets its own words in
+  `generate.style`, but the cartoon style is still added).
+
+How to test
+- `pytest tests/test_cartoon_style.py` (7, no render, ~1.5 s).
+- Also run (not render): `test_imagegen test_imagegen_openrouter test_vector_images
+  test_cartoon_stage test_docs test_guide test_schema test_api test_extensions test_registry
+  test_phase_f_review` (333 with the new file, 55 s), `test_gallery test_docs test_guide` after the
+  gallery run (107, 3 s); render: `test_imagegen test_cartoon_stage -m render` (2, 3 s). A 160x90
+  preview render of a stage + image project with `cartoon_style` drew placeholders keyed like
+  `vidgen imagegen --dry-run`'s requests.
+

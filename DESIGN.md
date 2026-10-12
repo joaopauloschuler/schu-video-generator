@@ -640,6 +640,9 @@ and `view_center_within`; `NarratedScene` gains `camera_bounds`, `camera_place`,
 Step 76 (§69.9) adds `PARTICLE_KINDS`, `MAX_PARTICLES`, `particle_count`, `particle_seeds`,
 `particle_states`, `ParticleField`, `ParticleSettings`, `ParticleKindName`, `particle_field`, and
 compatibly the attribute `NarratedScene.is_preview`.
+Step 77 (§69.10) adds, compatibly, the keyword argument `cartoon=False` of `generated_image`, the
+`NarratedScene` class attribute `uses_cartoon_style` (default `False`) and the method
+`generated_picture(generate)`.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -5449,3 +5452,35 @@ and reuses the action machinery rather than overlays.
 - **Not done here**: a `place: behind` (particles between the backdrop and the characters); wind
   or speed options; particles reacting to the stage (rain stopping at the ground line). Tests:
   `tests/test_particles.py`.
+
+### 69.10 Shared style for generated backgrounds (Step 77)
+
+A cartoon's stages should look like one world. `cartoon_style:` (top level, `VideoConfig`; a
+non-empty string, none by default) holds style words added to every `generate:` prompt of
+`stage` scenes, e.g. "flat colours, thick outlines, soft shadows".
+
+- **Which scene types**: a scene type opts in with the class attribute
+  `NarratedScene.uses_cartoon_style` (`False`; `Stage` sets `True`). `find_images` (so `vidgen
+  imagegen`, `validate`, orphans and `used_keys`) reads it from the registry entry's class, and
+  the scene's `generated_picture(generate)` (= `generated_image(project, generate, theme,
+  cartoon=self.uses_cartoon_style)`) uses it when rendering, so both resolve the same request.
+  The `image` scene and extension types keep their prompts unless they opt in. Stage `layers`
+  take only files (no `generate:`), so the background's `generate` is the only stage prompt.
+- **Prompt** (`image_request(project, generate, *, cartoon=False)`): the style part is
+  `"; ".join` of the style words (`generate.style` or `imagegen.style`, §58) and
+  `cartoon_style_words` (spaces collapsed, a final full stop dropped), each once. So the text sent
+  is `<prompt>. Style: <style words>; <cartoon style>. Avoid: <negative>.`; `style: none` drops
+  the style words but not the cartoon style. `ImageRequest.style` and the sidecar's `style` hold
+  the joined words.
+- **Cache key**: unchanged formula (§58, `KEY_VERSION` 1); the cartoon style is in the text, so
+  it changes the key of stage pictures only. Without `cartoon_style`, or for other scene types,
+  the request and its key are exactly what they were (the keys pinned in
+  `test_imagegen_openrouter.test_openai_keys_are_unchanged` and `tests/test_cartoon_style.py`).
+- **Variants**: a top-level key, so a variant may set another style (or `null`) by the usual
+  deep merge; its stage pictures get their own keys, and `used_keys` counts them, so neither set
+  is reported as unused.
+- **Fingerprint**: `cartoon_style` is in the dumped config like `imagegen`, so changing it makes
+  every scene's render stale (not only stages); accepted, as for `imagegen.style`.
+- **Docs**: CONFIG.md "Generated backgrounds (`cartoon_style`)" under `stage`, with how to write
+  a background prompt that leaves room for the characters (an empty middle, the ground visible,
+  no people or text, calm detail, wide stages). Tests: `tests/test_cartoon_style.py`.

@@ -542,9 +542,11 @@ class Capital(NarratedScene):
 **Generated pictures** (docs/CONFIG.md "Generated images"). A param typed
 `GenerateImage | None` (a top-level field of `Params`) is a `generate:` like the `image` scene's:
 `vidgen imagegen` finds it in any scene type, `vidgen validate` warns about it, and
-`generated_image(self.project, params.generate, self.theme)` returns the file to show — the
-stored picture once it is made, else a placeholder card with the prompt. Rendering never calls
-the provider.
+`self.generated_picture(params.generate)` returns the file to show — the stored picture once it
+is made, else a placeholder card with the prompt. Rendering never calls the provider. A scene
+type that sets the class attribute `uses_cartoon_style = True` (like `stage`) gets the video's
+`cartoon_style` words added to its prompts, by `vidgen imagegen` and by `generated_picture` alike
+(`generated_image(project, generate, theme, cartoon=True)` outside a scene).
 
 ```python
 @scene("backdrop_title")
@@ -556,14 +558,14 @@ class BackdropTitle(NarratedScene):
         generate: GenerateImage
 
     def construct(self):
-        picture = ImageMobject(str(generated_image(self.project, self.params.generate, self.theme)))
+        picture = ImageMobject(str(self.generated_picture(self.params.generate)))
         picture.scale_to_fit_width(self.frame_width).set_opacity(0.45)
         title = fit_text(self.params.title, self.safe_width, size="title")
         self.reveal([[FadeIn(picture), Write(title)]])
         self.finish()
 ```
 
-A `generate:` with `format: svg` (a vector picture) is stored as an `.svg`: `generated_image`
+A `generate:` with `format: svg` (a vector picture) is stored as an `.svg`: `generated_picture`
 returns that path once it is made (still a PNG placeholder before). Draw it as shapes with
 `load_vector(path, *, height=1.0, recolor="none" | "theme", theme=None, simplify=False)`, which
 sanitises the SVG first (no scripts, filters, rasters or text; gradients flattened; shapes and

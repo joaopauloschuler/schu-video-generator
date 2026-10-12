@@ -202,6 +202,7 @@ class Stage(NarratedScene):
 
     outro = 0.5
     target_patterns = ("<character>", "<prop>")
+    uses_cartoon_style = True
 
     @classmethod
     def target_names(cls, params: Any) -> list[str]:
@@ -212,7 +213,7 @@ class Stage(NarratedScene):
         image: str | None = None
         """Background picture relative to the project folder, e.g. assets/park.png (fills the frame, cropped)."""
         generate: GenerateImage | None = None
-        """A generated background instead of a file: {prompt, negative, style, aspect, seed, format} or the prompt; made by `vidgen imagegen`, a placeholder until then."""
+        """A generated background instead of a file: {prompt, negative, style, aspect, seed, format} or the prompt (the video's cartoon_style is added); made by `vidgen imagegen`, a placeholder until then."""
         background: ThemeColor | list[ThemeColor] | None = None
         """Without a picture: a colour, or a list of colours for a gradient from the top down; none: the theme's background."""
         ground: float = Field(0.2, ge=0.0, le=0.6)
@@ -458,7 +459,7 @@ class Stage(NarratedScene):
         """The background picture, scaled to cover the stage and centred."""
         p = self.params
         if p.generate is not None:  # the stored picture, or a placeholder card until it is made
-            source = generated_image(self.project, p.generate, self.theme)
+            source = self.generated_picture(p.generate)
             picture = self._load_picture(source)
         else:
             picture = self._file_picture(p.image, "image")
