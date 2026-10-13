@@ -19,6 +19,10 @@ by element ids:
   and ``arm_left_lower`` the forearm and hand (pivot: the elbow); legs either as one ``legs`` or
   as ``leg_left`` / ``leg_right``, each with an optional ``leg_left_lower`` (pivot: the knee).
   A limb in one piece keeps working: its bend is shown folded.
+- ``id="tail"`` (optional, DESIGN.md §69.48) hangs from ``body`` and is drawn where the file
+  puts it; it swings on a spring as the figure sets off and stops, swishes while idle and turns
+  as a whole about its pivot (``data-pivot``: where it leaves the body) and trails in the wind
+  (§69.32) like a generated character's tail.
 
 Splitting (:func:`split_character_svg`) needs no manim, so ``vidgen validate`` can report
 problems and the actions a character cannot do (:mod:`vidgen.cartoon.cast`).
@@ -45,7 +49,7 @@ if TYPE_CHECKING:
 #: Every part name (the same as :data:`vidgen.cartoon.character.PART_NAMES`, kept here without manim).
 SVG_PART_NAMES: tuple[str, ...] = (
     "body", "legs", "leg_left", "leg_left_lower", "leg_right", "leg_right_lower",
-    "arm_left", "arm_left_lower", "arm_right", "arm_right_lower", "head", "eyes", "brows", "mouth", "accessory",
+    "arm_left", "arm_left_lower", "arm_right", "arm_right_lower", "head", "eyes", "brows", "mouth", "accessory", "tail",
 )
 #: Legs drawn one each (``legs`` is both in one piece; a file has one kind).
 SVG_SINGLE_LEGS: tuple[str, ...] = ("leg_left", "leg_left_lower", "leg_right", "leg_right_lower")
@@ -56,7 +60,7 @@ SVG_REQUIRED_PARTS: tuple[str, ...] = ("body",)
 #: Names of the rest shapes (the element with the plain part id); other parts: ``rest``.
 REST_SHAPE_NAMES: dict[str, str] = {"eyes": "open", "mouth": "smile"}
 #: Parts whose pivot a figure should set with ``data-pivot`` (they turn; a guess may look wrong).
-TURNING_PARTS: tuple[str, ...] = ("head", "arm_left", "arm_right", "legs", *SVG_SINGLE_LEGS, "arm_left_lower", "arm_right_lower")
+TURNING_PARTS: tuple[str, ...] = ("head", "arm_left", "arm_right", "legs", *SVG_SINGLE_LEGS, "arm_left_lower", "arm_right_lower", "tail")
 #: Elements kept in every part's document (definitions, not drawn where they stand).
 _DEFINITIONS = {"defs", "symbol"}
 _OWNER = "data-vidgen-owner"
@@ -280,15 +284,16 @@ def default_pivot(part: str, box: tuple[float, float, float, float], body_center
     """The pivot of a part without ``data-pivot``, from its box ``(left, bottom, right, top)`` in
     character units: ``head`` and ``body`` the bottom centre, ``legs``, a single leg and a lower
     segment the top centre (hip, knee, elbow), an arm the top corner nearer the body's centre (the
-    shoulder), face parts and ``accessory`` the centre."""
+    shoulder), a ``tail`` the bottom corner nearer it (where it leaves the body), face parts and
+    ``accessory`` the centre."""
     left, bottom, right, top = box
     if part in ("head", "body"):
         return (left + right) / 2, bottom
     if part in _HANGING_PARTS:
         return (left + right) / 2, top
-    if part in ("arm_left", "arm_right"):
+    if part in ("arm_left", "arm_right", "tail"):
         nearer = left if abs(left - body_center_x) < abs(right - body_center_x) else right
-        return nearer, top
+        return nearer, top if part != "tail" else bottom
     return (left + right) / 2, (bottom + top) / 2
 
 
@@ -310,6 +315,7 @@ def svg_character_parts(path: Path, *, where: str) -> list[CharacterPart]:
     from manim import VGroup
 
     from vidgen.cartoon.character import REFERENCE_HEIGHT, CharacterPart
+    from vidgen.cartoon.primitives import trailing
     from vidgen.vector_mobject import set_svg_stroke, svg_shapes
 
     svg = read_character_svg(path, where=where)
@@ -356,6 +362,9 @@ def svg_character_parts(path: Path, *, where: str) -> list[CharacterPart]:
         rest_key = (part, names[0])
         pivot = to_character(svg.pivots[part]) if part in svg.pivots else default_pivot(part, char_boxes[rest_key], body_center_x)
         parent = _parent_of(part, part_shapes)
+        if part == "tail":   # it trails in the wind about its pivot, like a generated tail
+            for name in names:
+                trailing(groups[(part, name)], pivot, "tail")
         parts.append(CharacterPart(part, {name: groups[(part, name)] for name in names}, pivot, parent=parent, order=order * 10))
     return parts
 

@@ -74,7 +74,7 @@ def test_size_and_feet() -> None:
     ("change", "message"),
     [
         (lambda parts: [p for p in parts if p.name != "mouth"], "missing part(s) mouth"),
-        (lambda parts: [*parts, CharacterPart("tail", parts[0].shapes, (0, 0))], "unknown part(s) tail"),
+        (lambda parts: [*parts, CharacterPart("wing", parts[0].shapes, (0, 0))], "unknown part(s) wing"),
         (lambda parts: [*parts, parts[0]], "part 'leg_left' given twice"),
         (lambda parts: [*parts, CharacterPart("accessory", parts[0].shapes, (0, 0), parent="hat")], "hangs from 'hat'"),
         (lambda parts: [CharacterPart(p.name, p.shapes, p.pivot, parent="eyes") if p.name == "head" else p for p in parts], "hangs from itself"),

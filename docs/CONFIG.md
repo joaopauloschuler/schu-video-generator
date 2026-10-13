@@ -1116,12 +1116,13 @@ rectangles, polygons, lines), so each figure is an original drawing:
 | `outfit` | `plain` | what it wears: `plain` (one colour all over), `dress` (short sleeves, a skirt), `overalls` (over a shirt in `colors.trim`), `coat` (long sleeves, tails, trousers in `trim`), `shorts` (a top, short sleeves, shorts in `trim`), `apron` (in `trim`, over plain clothes) |
 | `pattern` | `none` | `none`, `stripes`, `dots` on the clothes of the body (and a skirt), in a darker tone of a light cloth or a lighter tone of a dark one |
 | `shoes` | `none` | `none`, `shoes`, `boots` (colour `colors.accessory`) |
+| `species` | `human` | `human`, or an animal: `cat`, `dog`, `bird`, `bear`, `rabbit`, `mouse` ([Animal characters](#animal-characters-species)); an animal draws its own ears, nose and muzzle, so `ears`, `nose` and `facial_hair` are not given with it |
 | `seed` | none | a number that varies the proportions (head, body, legs, arms, eye gap and size, mouth) by up to 8 %; the same look and seed always give the same figure; none: no variation |
 | `svg` | none | an SVG file (relative to the project folder) drawn instead of the generator, split into parts by element ids ([below](#characters-from-svg-files)); the other `look` keys and `colors` do not apply |
 
 | key (`colors`) | default | |
 |---|---|---|
-| `skin` | `secondary` | head, ears, a `round` / `triangle` nose and hands (skin or fur) |
+| `skin` | `secondary` | head, ears, a `round` / `triangle` nose and hands (skin); an animal's fur or feathers (its muzzle and inner ears are tints of it) |
 | `clothes` | `primary` | body, arms and legs (and the hat band); with an `outfit`, the outfit's main cloth |
 | `outline` | `"#1F2430"` | outline of every part, and the glasses |
 | `features` | `"#1F2430"` | eyes, brows, mouth and a `dot` nose |
@@ -1143,6 +1144,44 @@ hair, a bun, the scarf and the hat do). [Effect symbols](#effect-symbols-effect)
 not by an afro or a beard round it, and above an afro, a hat or a cap.
 
 ![The looks vidgen screenplay gives, and a kid, from the side and the front](gallery/media/looks.png)
+
+#### Animal characters (`species`)
+
+`look.species` draws an original animal instead of a person: `cat`, `dog`, `bird`, `bear`,
+`rabbit` or `mouse`. Each is a plain, generic animal built from the same simple shapes, in your
+colours (`colors.skin` is its fur or feathers): it changes the head (its shape, the ears or a
+bird's crest, a muzzle, a dog's or mouse's snout, a bird's beak, the nose and whiskers), the hands
+(round paws; a bird's arms are wings) and a bird's bare shins (thin, with toes), and adds a
+**`tail`** part behind the body (a cat's long curve, a dog's short one, a mouse's long thin tail,
+a bear's round stub, a rabbit's puff, a bird's fan of feathers). Everything else is the same as
+for a person: bodies, outfits, hair, accessories, poses, gestures, walking, sitting, the front view
+and effect symbols. Pick natural fur colours or theme tokens, and vary them between characters.
+
+```yaml
+characters:
+  - name: tib
+    look: {species: cat, eyes: oval, outfit: overalls}
+    colors: {skin: "#9C8E80", clothes: primary, trim: "#E7E1D5"}
+  - name: wren
+    look: {species: bird, eyes: round, outfit: shorts}
+    colors: {skin: "#5E86B5", clothes: "#E7E1D5", trim: "#8C5A3C"}
+```
+
+- **Talking**: the mouth sits on the muzzle or under the snout, smaller, with every
+  [lip-sync](#lip-sync) shape; a bird talks with its beak (it opens more for `A` and `O` than for
+  `E` or `F`, and shuts for `M`). Expressions work as on people (a sad bird frowns at the corner
+  of its beak).
+- **The tail** swings on a spring as the animal sets off, stops or jumps (follow-through, with
+  `cartoon_motion`), swings with its steps while it walks, swishes a little while it idles, and
+  trails in the [wind](#wind-wind) (long tails, a bird's feathers; a rabbit's or bear's round tail
+  does not). An own pose or a [keyframe](#keyframes-and-motion-paths) can turn it: part `tail`
+  (`tib.tail`).
+- [Effect symbols](#effect-symbols-effect) go by the head, not the ears or the snout, and above
+  tall ears.
+- Voices: an animal has no voice kind of its own (any voice suits it) unless you state one
+  (`voice_kind:` or a pronoun in a [screenplay](#cartoons-from-a-screenplay-vidgen-screenplay)).
+
+![The six animals from the side and the front](gallery/media/animals.png)
 
 **A quick look**: `vidgen character NAME` prints the character's look and colours (each token
 with the colour it resolves to); `--png [FILE]` also writes one still of it on the theme
@@ -1201,7 +1240,7 @@ characters:
 | `shape` | none | the shape shown (`open`, `closed`, `A`, ...): a name, or a list of names of which the first the character has is used; none: the rest shape |
 
 A pose may name `body`, `legs`, `leg_left`, `leg_left_lower`, `leg_right`, `leg_right_lower`,
-`arm_left`, `arm_left_lower`, `arm_right`, `arm_right_lower`, `head`, `accessory`; an expression
+`arm_left`, `arm_left_lower`, `arm_right`, `arm_right_lower`, `head`, `accessory`, `tail` (an animal's); an expression
 `eyes`, `brows`, `mouth` (anything else is a config error). Parts of its group a pose or an
 expression does not name go back to their rest pose. Generated characters have the shapes eyes
 `open` / `closed`, brows `default` / `angry` / `sad`, mouth `smile` / `open` and the lip-sync shapes
@@ -1293,8 +1332,9 @@ the `image` scene) and splits it into parts by **element ids**:
 | `body`, `legs`, `arm_left`, `arm_right`, `head`, `eyes`, `brows`, `mouth`, `accessory` | that part at rest (a group or one shape). `arm_left` is the character's own left arm: facing right it is the near arm, so draw `arm_right` behind the body |
 | `arm_left_lower`, `arm_right_lower` (optional) | the forearm and hand: the arm then bends at the elbow (`arm_left` is the upper arm); without it the arm is one piece and shows a bend folded |
 | `leg_left`, `leg_right`, `leg_left_lower`, `leg_right_lower` (optional) | the legs one each instead of `legs` (not both): a thigh and, optionally, a shin that bends at the knee; draw `leg_right` behind |
+| `tail` (optional) | a tail (or anything that hangs from the body and swings): it swings on a spring as the figure sets off and stops, swishes while idle and trails in the wind, turning about its pivot ([animal characters](#animal-characters-species)); draw it first, behind the body |
 | `<part>_<shape>` (`eyes_closed`, `mouth_A`, `mouth_E`, `mouth_O`, `mouth_M`, `arm_left_up`) | another shape of the part, shown when swapped in; hide it in the file with `display="none"` |
-| `data-pivot="x y"` (on a part's element) | the point the part turns about, in the SVG's `viewBox` coordinates: the neck for `head`, the shoulder for an arm, the hips for `legs` / `leg_left`, the elbow for `arm_left_lower`, the knee for `leg_left_lower` |
+| `data-pivot="x y"` (on a part's element) | the point the part turns about, in the SVG's `viewBox` coordinates: the neck for `head`, the shoulder for an arm, the hips for `legs` / `leg_left`, the elbow for `arm_left_lower`, the knee for `leg_left_lower`, where it leaves the body for `tail` |
 
 - A part's element takes everything inside it, except elements with another part's id (so
   `eyes` may sit inside the `head` group). An id starting with the part's own name inside its
@@ -1308,7 +1348,7 @@ the `image` scene) and splits it into parts by **element ids**:
 - Parts are drawn in the file's order. The feet are the bottom of the rest shapes, under the
   middle of the legs (else of `body`); the top of the rest shapes is the character's height.
   Without `data-pivot` the pivot is guessed from the part's box (head and body: bottom centre;
-  legs, a single leg and a lower segment: top centre; an arm: its top corner nearer the body; face parts: the centre).
+  legs, a single leg and a lower segment: top centre; an arm: its top corner nearer the body; `tail`: its bottom corner nearer the body; face parts: the centre).
 - The SVG's own colours and stroke widths are drawn (`colors:` is not used); stroke widths scale
   with the character's height like a generated character's outline.
 - **Missing parts are allowed**: only a body is needed. `vidgen validate` lists the actions such
@@ -5128,7 +5168,7 @@ scenes:
 For motion the other actions do not have, two actions move a character, a [prop](#props) or one
 part of a character (`kit.arm_left`, `pip.head`; the parts are `body`, `legs`, `leg_left`, `leg_left_lower`,
 `leg_right`, `leg_right_lower`, `arm_left`, `arm_left_lower`, `arm_right`, `arm_right_lower`, `head`,
-`accessory`, `eyes`, `brows`, `mouth`, those the character has) by
+`accessory`, `tail`, `eyes`, `brows`, `mouth`, those the character has) by
 **keys** or along a **path**:
 
 | action | options | |
@@ -5321,9 +5361,9 @@ number to the left. In the wind:
   more than in proportion: a tree's top leans about 2.5° on average in a breeze, 6° when windy
   and 14° in a gale (up to 25° in a gust), a plant's leaves more, a lamp post hardly. Props an
   action moves, holds, sits on or leans on, props with a `lift` and SVG props stand still;
-- generated characters' scarf ends, long hair, buns, floppy and pointy ears and hats trail
+- generated characters' scarf ends, long hair, buns, floppy and pointy ears, hats and an animal's tail trail
   downwind on a spring: they lag a gust and swing past it (a scarf's end about 23° when windy,
-  45° in a gale, never over the head). Imported SVG characters, round ears, short or curly hair
+  45° in a gale, never over the head). Imported SVG characters (except a part `tail`), round ears, short or curly hair
   and glasses do not move (nothing marks such pieces in a drawing);
 - particles (the stage's and those of a `particles` action) drift downwind; rain slants more.
   `leaves` tumble and blow far, and `streaks` (faint lines along the wind) show the gusts

@@ -8,7 +8,8 @@ to the right and the nose points right. The front view (``front=True``, DESIGN.m
 the same parts and shapes with the face in the middle of the head, the pupils looking ahead, a
 symmetric nose, hair and body, and temples on both sides of glasses. What is worn on the body
 (the outfit, its pattern, shoes, scarf, bag, backpack, necklace) is drawn by
-:mod:`vidgen.cartoon.clothes`.
+:mod:`vidgen.cartoon.clothes`; an animal's head, paws or wings, a bird's feet and the tail
+(``species``) by :mod:`vidgen.cartoon.animals`.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from dataclasses import dataclass, fields, replace
 import numpy as np
 from manim import PI, Arc, Circle, Ellipse, Line, RoundedRectangle, VGroup, VMobject
 
+from vidgen.cartoon import animals
 from vidgen.cartoon.character import OUTLINE_WIDTH, TRAIL_ATTRIBUTE, CharacterPart
 from vidgen.cartoon.clothes import LIMB_WIDTH, body_shapes, limb_colors, shoe
 from vidgen.cartoon.primitives import (
@@ -177,7 +179,10 @@ def _legs(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> list
     parts = []
     for name, side in (("leg_left", 1.0), ("leg_right", -1.0)):
         parts.append(CharacterPart(name, {"default": VGroup(_segment(side * x, hip, knee, thigh_color, c, w))}, (side * x, hip)))
-        shin = VGroup(_segment(side * x, knee, foot, shin_color, c, w), *shoe(look, side * x, f.front, c, w))
+        if look.species == "bird" and shin_color == c["skin"]:   # bare: a bird's thin shin and toes
+            shin = VGroup(*animals.bird_shin(look, side * x, knee, f.front, c, w), *shoe(look, side * x, f.front, c, w))
+        else:
+            shin = VGroup(_segment(side * x, knee, foot, shin_color, c, w), *shoe(look, side * x, f.front, c, w))
         parts.append(CharacterPart(f"{name}_lower", {"default": shin}, (side * x, knee), end=(side * x, 0.0)))
     return parts
 
@@ -190,9 +195,12 @@ def _arm(name: str, side: float, look: CharacterLook, f: Frame, c: Mapping[str, 
     top, wrist = shoulder_y + 0.02 - LIMB_WIDTH / 2, shoulder_y + 0.02 - p.arm_length
     elbow = (top + wrist) / 2
     upper_color, lower_color, _, _ = limb_colors(look, c)
-    upper = VGroup(_segment(x, top, elbow, upper_color, c, w))
-    hand = outlined(Circle(radius=0.045).move_to([x, wrist, 0]), c["skin"], c["outline"], w)
-    lower = VGroup(_segment(x, elbow, wrist, lower_color, c, w), hand)
+    if look.species == "bird":   # a wing, whatever the sleeves (§69.48)
+        upper, lower = animals.wing(x, top, elbow, wrist, c, w)
+    else:
+        upper = VGroup(_segment(x, top, elbow, upper_color, c, w))
+        hand = animals.paw(x, wrist, c, w) if animals.is_animal(look) else outlined(Circle(radius=0.045).move_to([x, wrist, 0]), c["skin"], c["outline"], w)
+        lower = VGroup(_segment(x, elbow, wrist, lower_color, c, w), hand)
     return [
         CharacterPart(name, {"default": upper}, (x, shoulder_y)),
         CharacterPart(f"{name}_lower", {"default": lower}, (x, elbow), end=(x, wrist)),
@@ -308,14 +316,21 @@ def _facial_hair(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) 
 
 
 def _head(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> VGroup:
-    """Back hair, ears, the head, the hair cap, facial hair and the nose (all move with the head)."""
+    """Back hair, ears, the head, the hair cap, facial hair and the nose (all move with the head);
+    an animal's ears, head and face (muzzle, snout or beak, nose, whiskers) instead (§69.48)."""
     group = VGroup(*(outlined(m, c["hair"], c["outline"], w) for m in _hair_back(look, f)))
-    group.add(*(outlined(m, c["skin"], c["outline"], w) for m in _ears(look, f)))
-    group.add(outlined(Circle(radius=f.p.head_radius).move_to([f.head_x, f.head_y, 0]), c["skin"], c["outline"], w))
+    if animals.is_animal(look):
+        group.add(*animals.ears(look, f, c, w))
+        group.add(outlined(animals.head_shape(look, f), c["skin"], c["outline"], w))
+    else:
+        group.add(*(outlined(m, c["skin"], c["outline"], w) for m in _ears(look, f)))
+        group.add(outlined(Circle(radius=f.p.head_radius).move_to([f.head_x, f.head_y, 0]), c["skin"], c["outline"], w))
     if look.hair != "none":
         group.add(outlined(_hair_cap(look, f), c["hair"], c["outline"], w))
     group.add(*_facial_hair(look, f, c, w))
     group.add(*_nose(look, f, c, w))
+    if animals.is_animal(look):
+        group.add(*animals.face(look, f, c, w))
     return group
 
 
@@ -363,21 +378,28 @@ def _face(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> list
             for x, (left, right) in zip(xs, ends)
         ))
 
-    mouth_r = 0.3 * r * f.p.mouth_width
-    mouth_y = f.head_y - 0.45 * r
-    smile = Arc(radius=mouth_r, start_angle=PI * 1.2, angle=PI * 0.6, arc_center=[fx, f.head_y - 0.2 * r, 0]).set_stroke(c["features"], width=w)
+    # the mouth: on the face, or (an animal, §69.48) on its muzzle, under its snout, smaller
+    mx, my, size = animals.mouth_place(look, f)
+    mr = r * size   # the head radius the mouth is drawn for
+    mouth_r = 0.3 * mr * f.p.mouth_width
+    mouth_y = my - 0.45 * mr
+    smile = Arc(radius=mouth_r, start_angle=PI * 1.2, angle=PI * 0.6, arc_center=[mx, my - 0.2 * mr, 0]).set_stroke(c["features"], width=w)
 
     def opening(width: float, height: float) -> VMobject:
         """A filled mouth opening, ``width`` × the mouth radius by ``height`` × the head radius."""
-        return filled(Ellipse(width=width * mouth_r, height=height * r).move_to([fx, mouth_y, 0]), c["features"])
+        return filled(Ellipse(width=width * mouth_r, height=height * mr).move_to([mx, mouth_y, 0]), c["features"])
 
-    closed = Line([fx - 0.75 * mouth_r, mouth_y + 0.03 * r, 0], [fx + 0.75 * mouth_r, mouth_y + 0.03 * r, 0]).set_stroke(c["features"], width=w)
+    closed = Line([mx - 0.75 * mouth_r, mouth_y + 0.03 * mr, 0], [mx + 0.75 * mouth_r, mouth_y + 0.03 * mr, 0]).set_stroke(c["features"], width=w)
     # viseme shapes (DESIGN.md §69.4): A open, E wide, O round, U small round, M closed lips,
     # F a thin line (lip under the teeth), L open, W puckered
     speech = {
         "A": opening(1.6, 0.42), "E": opening(1.8, 0.18), "O": opening(0.95, 0.36), "U": opening(0.6, 0.24),
         "M": closed, "F": opening(1.3, 0.08), "L": opening(1.2, 0.28), "W": opening(0.45, 0.18),
     }
+    mouth = CharacterPart("mouth", {"smile": smile, "open": opening(1.5, 0.35), **speech}, (mx, my - 0.4 * mr))
+    if look.species == "bird":   # it talks with its beak
+        shapes, hinge = animals.beak_mouth(f, c, w)
+        mouth = CharacterPart("mouth", shapes, hinge)
     return [
         CharacterPart("eyes", {"open": open_eyes, "closed": closed_eyes}, (fx, f.eye_y)),
         # angry: the inner ends (toward the face's middle) low; sad: the inner ends high
@@ -386,7 +408,7 @@ def _face(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> list
             "angry": brows(0.05, -0.07, -0.07, 0.05),
             "sad": brows(-0.05, 0.07, 0.07, -0.05),
         }, (fx, brow_y)),
-        CharacterPart("mouth", {"smile": smile, "open": opening(1.5, 0.35), **speech}, (fx, f.head_y - 0.4 * r)),
+        mouth,
     ]
 
 
@@ -464,6 +486,8 @@ def generate_parts(
     worn = _worn_on_head(look, f, colors, w)
     if worn.submobjects:
         parts.append(CharacterPart("accessory", {"default": worn}, (f.head_x, f.head_y)))
+    if animals.is_animal(look):
+        parts.append(animals.tail_part(look, f, colors, w))
     return _scaled_to_unit_height(parts)
 
 

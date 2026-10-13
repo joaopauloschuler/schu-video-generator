@@ -268,7 +268,7 @@ class CharacterColors(_Strict):
     """``colors`` of a character (DESIGN.md §69): theme tokens or hex colours of its parts."""
 
     skin: ColorRef = "secondary"
-    """Head, ears, nose and hands (skin or fur)."""
+    """Head, ears, nose and hands (skin; an animal's fur or feathers, its muzzle and tail tints of it)."""
     clothes: ColorRef = "primary"
     """Body and legs."""
     outline: ColorRef = CHARACTER_INK
@@ -294,6 +294,10 @@ Outfit = Literal["plain", "dress", "overalls", "coat", "shorts", "apron"]
 ClothesPattern = Literal["none", "stripes", "dots"]
 ShoeStyle = Literal["none", "shoes", "boots"]
 FacialHair = Literal["none", "moustache", "beard"]
+Species = Literal["human", "cat", "dog", "bird", "bear", "rabbit", "mouse"]
+#: Look keys an animal (``species`` other than ``human``) draws its own way, so they are not
+#: given with it (DESIGN.md §69.48).
+SPECIES_OWN_KEYS: tuple[str, ...] = ("ears", "nose", "facial_hair")
 #: Accessories worn on the head: they make the optional ``accessory`` part (DESIGN.md §69.1).
 HEAD_ACCESSORIES: frozenset[str] = frozenset({"glasses", "hat", "bow", "cap"})
 #: Outfits with a skirt or coat tails hanging from the body: their ``body`` part has a second
@@ -333,6 +337,8 @@ class CharacterLook(_Strict):
     """none, shoes or boots (colour: colors.accessory)."""
     facial_hair: FacialHair = "none"
     """none, moustache or beard (with a moustache; colour: colors.hair; hair: none for bald)."""
+    species: Species = "human"
+    """human, or an original animal: cat, dog, bird, bear, rabbit, mouse (its own head, ears, muzzle or beak, paws or wings, and a tail; fur colour: colors.skin)."""
     seed: int | None = None
     """A number that varies the proportions a little (same seed, same figure); none: no variation."""
     svg: str | None = Field(default=None, min_length=1)
@@ -355,6 +361,9 @@ class CharacterLook(_Strict):
             raise ValueError(f"svg draws the character from the file; {', '.join(generator_keys)} only apply to the generator (remove them or svg)")
         if self.svg is not None and not self.svg.lower().endswith(".svg"):
             raise ValueError(f"svg must name an .svg file, not {self.svg!r}")
+        own = [key for key in SPECIES_OWN_KEYS if key in self.model_fields_set and getattr(self, key) != "none"]
+        if self.species != "human" and own:
+            raise ValueError(f"a {self.species} draws its own ears, nose and face; remove {', '.join(own)} (or use species: human)")
         return self
 
 
@@ -362,11 +371,11 @@ class CharacterLook(_Strict):
 #: stretch, overshoot and settle, follow-through; DESIGN.md §69.13): ``cartoon_motion:``.
 MotionSetting = Literal["lively", "calm", "none"]
 
-#: Parts a pose sets (DESIGN.md §69.3, the two-segment limbs §69.26); the parts of an expression
+#: Parts a pose sets (DESIGN.md §69.3, the two-segment limbs §69.26, an animal's tail §69.48); the parts of an expression
 #: are :data:`ExpressionPart`.
 PosePart = Literal[
     "body", "legs", "leg_left", "leg_left_lower", "leg_right", "leg_right_lower",
-    "arm_left", "arm_left_lower", "arm_right", "arm_right_lower", "head", "accessory",
+    "arm_left", "arm_left_lower", "arm_right", "arm_right_lower", "head", "accessory", "tail",
 ]
 ExpressionPart = Literal["eyes", "brows", "mouth"]
 
@@ -409,7 +418,7 @@ class CharacterEntry(_Strict):
     voice: Identifier | None = None
     """Who speaks for this character: a name from voices (or default: the base voice); none: the character does not speak."""
     look: CharacterLook = Field(default_factory=CharacterLook)
-    """How the character is drawn: body shape, head size, eyes, nose, hair, ears, accessories, proportions, outfit, pattern, shoes, facial hair, seed; or svg: a file split into parts."""
+    """How the character is drawn: body shape, head size, eyes, nose, hair, ears, accessories, proportions, outfit, pattern, shoes, facial hair, species, seed; or svg: a file split into parts."""
     colors: CharacterColors = Field(default_factory=CharacterColors)
     """Part colours {skin, clothes, outline, features, hair, accessory, trim}: theme tokens or hex (not used by an svg look)."""
     poses: dict[Identifier, dict[PosePart, PartPoseEntry]] = Field(default_factory=dict)

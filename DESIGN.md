@@ -76,7 +76,8 @@ src/vidgen/
   cartoon/                # cartoons (§69): character.py (Character: named vector parts with pivots,
                           # poses, mirroring; character(); part drawings cached by look, §69.20), cast.py (characters: lookups, checks; no manim),
                           # generator.py (look: parameters -> parts, §69.1), clothes.py (outfits,
-                          # patterns, shoes, things worn on the body, §69.47), primitives.py (the
+                          # patterns, shoes, things worn on the body, §69.47), animals.py (species:
+                          # heads, paws, wings, tails, a beak that talks, §69.48), primitives.py (the
                           # generator's shapes, trailing and outer-hair marks, outline maths), svg_look.py (look: {svg} -> parts by
                           # element ids, §69.2), still.py (`vidgen character --png`), poses.py (pose and
                           # expression tables, §69.3; no manim), transition.py (PoseChange, §69.3;
@@ -5082,7 +5083,8 @@ take `CharacterName` options.
 
 - **Parts** (`cartoon/character.py`): `PART_NAMES = body, legs, arm_left, arm_right, head, eyes,
   brows, mouth, accessory` (Step 92 adds `leg_left`, `leg_right` and the lower segments
-  `arm_left_lower`, `arm_right_lower`, `leg_left_lower`, `leg_right_lower`, §69.26); `REQUIRED_PARTS` all but `legs` and `accessory` (`Character(...,
+  `arm_left_lower`, `arm_right_lower`, `leg_left_lower`, `leg_right_lower`, §69.26; Step 114 an
+  animal's `tail`, parent `body`, draw order 5, §69.48); `REQUIRED_PARTS` all but `legs`, `accessory` and `tail` (`Character(...,
   required=)` overrides it: an imported SVG needs only `body`, §69.2). A part is a
   `CharacterPart(name, shapes, pivot, parent=None, order=None)`: `shapes` maps shape names to
   `VMobject`s (the first is the rest shape; e.g. eyes `open` / `closed`, mouth `smile` / `open`;
@@ -8173,3 +8175,57 @@ front drawing (§69.44):
   entries)` draws looks side and front; `docs/gallery/media/looks.png` (the screenplay looks and a
   kid, about 50 KB) is in CONFIG.md "Characters".
   Tests: `tests/test_cartoon_outfits.py` (sampled combinations from a seed, not every one).
+
+### 69.48 Animal characters and the `tail` part (Step 114)
+
+`look.species` (`config.Species`): `human` (default, unchanged) or `cat`, `dog`, `bird`, `bear`,
+`rabbit`, `mouse`. Each is a plain generic animal from primitives in the look's colours, with no
+feature taken from a known character (brief: no signature ear shape paired with a signature colour,
+gloves, buttoned shorts, a bow on a mouse...). `ears`, `nose` and `facial_hair` other than `none`
+with an animal are a config error (`config.SPECIES_OWN_KEYS`); `svg` with `species` is the usual
+"svg draws the character" error.
+
+- **Drawing** (`cartoon/animals.py`, called by the generator; side and front each): the head is an
+  ellipse (`HEAD_SHAPES`; a mouse's drawn out into a snout from the side, `MOUSE_SNOUT`); ears
+  behind it (cat triangles with a lining, rabbit long ellipses, mouse big ovals set back on the
+  sides, bear rounds, a bird's crest of three feathers; a dog's long ears hang beside the head from
+  the front and over its side from the side); on the face a muzzle (`fur_tint`: 50 % towards white
+  on dark fur, 14 % towards black on light fur), a dog's snout, noses (`PINK` for cat, rabbit and
+  mouse, the features ink for dog and bear), whiskers, a bird's beak (`BEAK_COLOR`). Ears, snouts
+  and the beak are marked `OUTER_HAIR_ATTRIBUTE` (§69.47), so effect symbols size and place by the
+  head and go above tall ears. Hands are round paws with two toe lines (`paw`); a bird's arms are
+  `wing`s (feather colour whatever the sleeves, three darker feather tips at the hand point); a
+  bird's bare shins (`limb_colors` gives skin) are thin and `BEAK_COLOR` with toes unless it wears
+  shoes. Fixed natural colours (`BEAK_COLOR`, `PINK`) are like `EYE_WHITE`: not theme tokens.
+- **Mouth**: `mouth_place` moves the human mouth (same shapes and numbers, scaled by a size) onto
+  the muzzle or under the snout (`MOUTH_PLACES`, `FRONT_MOUTH_PLACES`); a human's place is the old
+  one exactly. A bird's `mouth` part is `beak_mouth`: pivot the hinge; `smile` a line at the
+  beak's corner, `M` the closed seam, `open` and the other visemes the beak opened by
+  `BEAK_OPENINGS` degrees (both halves turned apart about the hinge over a dark fan; from the
+  front a dark opening on the rhombus). Every shape is symmetric about the hinge's line, so the
+  expressions' negative y scale (a frown) keeps an open beak the right way up while speaking.
+- **`tail` part** (`PART_NAMES`, `PosePart`, `DEFAULT_PARENTS` body, `DEFAULT_DRAW_ORDER` 5 in
+  both views; optional): `tail_part` roots it low on the back of the body (from the front behind
+  the body, its end showing on one side), pivot the root; centre lines (`TAIL_LINES`, a
+  Catmull-Rom `keyframes.path_curve`) turned into `primitives.tapered_band` (a band narrowing to
+  a round tip); a bear's round stub, a rabbit's puff (`fur_tint`), a bird's fan of three
+  feathers (`TAIL_FEATHERS`). Motion: `motion.follow_angles` gives `tail` −`FOLLOW_TAIL_DEGREES`
+  45 × (forward + up) × strength, limited to ±30° (the Step 82 spring: back and down as the body
+  sets off or rises, on past it as it stops or falls); `walking_state` swings it by
+  `WALK_TAIL_SWING` 0.5 of the near arm's swing; the idle layer swishes it (`idle.tail_sway_angle`,
+  ±2 × 5° every 2.6 s, 0 at the clock's start); wind trails it (`TRAIL_WEIGHTS` `tail` 0.8,
+  `feathers` 0.4, a rabbit's `long_ears` 0.3; the bear's and rabbit's round tails do not trail).
+  An SVG `id="tail"` is that part (default pivot: the bottom corner nearer the body; a
+  `TURNING_PARTS` pivot warning), and `svg_character_parts` marks it trailing like a generated
+  tail. Characters without a tail take the old code paths (their drawings, poses and idle state
+  are unchanged; pinned in `tests/test_cartoon_animals.py` with the eight looks of
+  `test_cartoon_outfits.py` and seven Step 113 looks).
+- **Validate and tools**: `cast.character_part_shapes` adds `tail` for an animal (so part targets
+  `tib.tail`, own poses and the character sheet know it); `vidgen character` prints `species` on
+  the look line for an animal.
+- **Voice kinds** (§69.25): an animal has no kind of its own (either suits it) unless the
+  screenplay states one; the screenplay's `LOOKS` stay human (animals for undeclared characters
+  are Step 115's `--species`).
+- **Docs**: CONFIG.md "Animal characters (`species`)" and `docs/gallery/media/animals.png` (the six
+  species side and front, `still.write_looks_png`, about 30 KB).
+  Tests: `tests/test_cartoon_animals.py`.

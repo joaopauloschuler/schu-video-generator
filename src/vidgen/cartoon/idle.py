@@ -1,4 +1,5 @@
-"""Automatic life of characters: blinking, breathing and head sway (DESIGN.md §69.5). No manim.
+"""Automatic life of characters: blinking, breathing, head sway and an animal's tail swishing
+(DESIGN.md §69.5, §69.48). No manim.
 
 A character's *idle clock* runs while its updaters run. Manim suspends a mobject's updaters
 while an animation plays on it, so the clock stops during a :class:`~vidgen.cartoon.transition.PoseChange`
@@ -26,6 +27,9 @@ BREATH_SCALE: tuple[float, float] = (0.006, 0.015)
 #: One head sway, left and right (seconds), and its largest angle (degrees).
 SWAY_SECONDS = 5.5
 SWAY_DEGREES = 1.5
+#: One swish of an animal's tail, to and fro (seconds), and its largest angle (degrees).
+TAIL_SWAY_SECONDS = 2.6
+TAIL_SWAY_DEGREES = 5.0
 
 
 def idle_seed(name: str) -> int:
@@ -57,6 +61,13 @@ def sway_angle(seconds: float, seed: int) -> float:
     within ±2 × :data:`SWAY_DEGREES` (one sway every :data:`SWAY_SECONDS`, phase from ``seed``)."""
     phase = _phase(seed, 0.414214)
     return SWAY_DEGREES * (math.sin(2.0 * math.pi * seconds / SWAY_SECONDS + phase) - math.sin(phase))
+
+
+def tail_sway_angle(seconds: float, seed: int) -> float:
+    """A tail's extra angle (degrees) ``seconds`` into the idle clock: 0 at the clock's start,
+    within ±2 × :data:`TAIL_SWAY_DEGREES` (one swish every :data:`TAIL_SWAY_SECONDS`)."""
+    phase = _phase(seed, 0.302776)
+    return TAIL_SWAY_DEGREES * (math.sin(2.0 * math.pi * seconds / TAIL_SWAY_SECONDS + phase) - math.sin(phase))
 
 
 def _merged(windows: Iterable[tuple[float, float]]) -> list[tuple[float, float]]:
@@ -135,10 +146,13 @@ __all__ = [
     "BREATH_SECONDS",
     "SWAY_DEGREES",
     "SWAY_SECONDS",
+    "TAIL_SWAY_DEGREES",
+    "TAIL_SWAY_SECONDS",
     "IdleClock",
     "blink_times",
     "breath_scale",
     "idle_seed",
     "next_blink_gap",
     "sway_angle",
+    "tail_sway_angle",
 ]

@@ -89,9 +89,10 @@ def character_lines(entry: CharacterEntry, theme: Theme, root: Path | None = Non
     for part, value in entry.colors.model_dump().items():
         resolved = theme.color(value)
         colors.append(f"{part} {value}" if resolved.lower() == value.lower() else f"{part} {value} ({resolved})")
+    species = "" if look.species == "human" else f"species {look.species}, "
     return [
         f"character {entry.name}  (voice: {entry.voice or 'none'})",
-        f"  look:   body {look.body}, head_size {look.head_size:g}, eyes {look.eyes}, nose {look.nose}, hair {look.hair}, "
+        f"  look:   {species}body {look.body}, head_size {look.head_size:g}, eyes {look.eyes}, nose {look.nose}, hair {look.hair}, "
         f"ears {look.ears}, accessories {accessories}, seed {seed}",
         f"  wears:  proportions {look.proportions}, outfit {look.outfit}, pattern {look.pattern}, shoes {look.shoes}, "
         f"facial_hair {look.facial_hair}",
@@ -181,7 +182,8 @@ def character_look_warnings(config: VideoConfig, root: Path) -> list[str]:
     return warnings
 
 
-#: Shape names of a generated character's parts (``cartoon/generator.py``); the first is the rest shape.
+#: Shape names of a generated character's parts (``cartoon/generator.py``); the first is the rest
+#: shape. A head accessory adds ``accessory``, an animal (``species``) a ``tail``.
 GENERATED_SHAPES: dict[str, list[str]] = {
     "body": ["default"], "leg_left": ["default"], "leg_left_lower": ["default"], "leg_right": ["default"],
     "leg_right_lower": ["default"], "arm_left": ["default"], "arm_left_lower": ["default"], "arm_right": ["default"],
@@ -202,6 +204,8 @@ def character_part_shapes(entry: CharacterEntry, root: Path) -> dict[str, list[s
         shapes["accessory"] = ["default"]
     if entry.look.outfit in SKIRTED_OUTFITS:
         shapes["body"].append(SEATED_BODY_SHAPE)
+    if entry.look.species != "human":
+        shapes["tail"] = ["default"]
     return shapes
 
 

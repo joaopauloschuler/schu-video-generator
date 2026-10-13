@@ -10734,3 +10734,90 @@ How to test
   test_cartoon_furniture test_cartoon_holding test_cartoon_acting test_cartoon_moving` (10, 13
   s), `-k "sheet or character or screenplay"` on `test_mcp test_json_output test_phase_i_review
   test_includes` (1, 10 s). The full suite was not run.
+
+## Step 114 — More characters, part 2: original animal characters
+
+What was built
+- **`look.species`** (`config.Species`): `human` (default) or `cat`, `dog`, `bird`, `bear`,
+  `rabbit`, `mouse`. `ears`, `nose` or `facial_hair` other than `none` with an animal is a config
+  error (`config.SPECIES_OWN_KEYS`). Hair, accessories, bodies, outfits, proportions all still apply.
+- **Drawing** (`src/vidgen/cartoon/animals.py`, called from `generator.py`, side and front): head
+  ellipses (`HEAD_SHAPES`; a mouse's head drawn out into a snout from the side, `MOUSE_SNOUT`), ears
+  (cat triangles with a lining, rabbit long ears, mouse big ovals set back on the sides, bear
+  rounds, a bird's three-feather crest, a dog's long ears beside / over the head), muzzles in
+  `fur_tint`, noses (`PINK` or the ink), whiskers, a dog's snout, a bird's beak (`BEAK_COLOR`);
+  round `paw`s; a bird's `wing` arms (feather colour whatever the sleeves) and thin bare shins with
+  toes (`bird_shin`). Ears, snouts and beaks are marked `OUTER_HAIR_ATTRIBUTE`, so effect symbols
+  go by the head and above tall ears. Designs are generic animals in the look's colours.
+- **Mouth / lip sync**: `mouth_place` puts the human mouth (all shapes, scaled) on the muzzle or
+  under the snout; a bird's `mouth` is `beak_mouth` (hinge pivot; visemes open the beak by
+  `BEAK_OPENINGS`; every shape symmetric about the hinge's line so a frown's negative y scale keeps
+  an open beak upright).
+- **`tail` part** (`PART_NAMES`, `PosePart`, `DEFAULT_PARENTS` body, draw order 5): `tail_part`
+  (`TAIL_LINES` through `keyframes.path_curve` into the new `primitives.tapered_band`; bear stub,
+  rabbit puff, bird fan). Follow-through on the Step 82 spring (`motion.follow_angles` key `tail`,
+  `FOLLOW_TAIL_DEGREES` 45, limit 30), `transition.WALK_TAIL_SWING` 0.5 in `walking_state`, idle
+  swish (`idle.tail_sway_angle`, `TAIL_SWAY_SECONDS` 2.6, `TAIL_SWAY_DEGREES` 5; an idle overlay),
+  wind (`TRAIL_WEIGHTS` `tail` 0.8, `feathers` 0.4, `long_ears` 0.3). SVG `id="tail"`: default pivot
+  the bottom corner nearer the body, in `TURNING_PARTS`, marked trailing by `svg_character_parts`.
+- `cast.character_part_shapes` adds `tail` for animals (validate, part targets `tib.tail`, sheets);
+  `vidgen character` prints `species X, ` on the look line for an animal.
+- Gallery still `docs/gallery/media/animals.png` (30 KB, `still.write_looks_png`, six species).
+
+Files touched
+- New: `src/vidgen/cartoon/animals.py`, `tests/test_cartoon_animals.py`, `docs/gallery/media/animals.png`.
+- `src/vidgen/config.py`, `cartoon/generator.py`, `cartoon/character.py`, `cartoon/primitives.py`,
+  `cartoon/motion.py`, `cartoon/transition.py`, `cartoon/idle.py`, `cartoon/cast.py`,
+  `cartoon/svg_look.py`.
+- Docs: `docs/CONFIG.md` (`species` row, `skin` row, new "Animal characters (`species`)" with the
+  picture, pose / keyframe part lists, SVG id table, pivot guess, wind), `DESIGN.md` (§2 tree, §69
+  parts, new §69.48), `docs/EXTENDING.md` (part names), guide `cartoons` bullet + `AGENTS.md` copy,
+  `tasklist.md`.
+- Test updated: `tests/test_cartoon_character.py` (`test_bad_part_sets` used `tail` as its unknown
+  part name; now `wing`, since `tail` is a part).
+
+Public interfaces
+- No `vidgen.api` names added. `PART_NAMES` gains `tail` (at the end, so pose-change order and
+  draw-order ties of other parts are unchanged); `config.PosePart` gains `tail`; `follow_angles`
+  returns a `tail` key. YAML: `look.species`. Internal: `cartoon/animals.*`,
+  `primitives.tapered_band`, `idle.tail_sway_angle`, `transition.WALK_TAIL_SWING`,
+  `motion.FOLLOW_TAIL_*`, `config.SPECIES_OWN_KEYS`.
+
+Decisions / deviations
+- The tail is a real part (not only a wind-marked member like hair): SVG naming, poses, keyframes
+  and the follow-through spring need a pivot of its own. It also carries the wind mark.
+- Voice kinds: the screenplay's `LOOKS` stay human; adding animals there would turn the 12th
+  undeclared character of a screenplay into an animal. An animal has no voice kind of its own
+  (either fits) unless the screenplay states one. Random animal casts are Step 115 (`--species`).
+- Animals keep the human body and clothes (cartoon animals dressed); fixed natural colours for
+  beaks, pink noses and a mouse's tail (like `EYE_WHITE`).
+- Searched first: no species / tail / beak / paw code existed (`git grep -n -i "tail\b\|beak\|paw\|species" src/vidgen/cartoon`:
+  only "tails" of a coat and "detail"); reused `path_curve` (Catmull-Rom), `trailing` /
+  `outer_hair` marks, `limb_colors`, the idle overlay layer, `follow_angles` / `accented_state`.
+
+Evidence
+- Human drawings unchanged: digests of the 8 looks pinned in Step 113 and of 7 Step 113 looks
+  (screenplay 7–11, kid, tall kid; taken at 96dfd2b before any edit), side and front.
+- Stills checked by eye (scratch grids 240 x 340 px cells): each species side, front, waving,
+  walking, talking `A` / `O`, sad while talking, seated, in wind (40°), walking and talking from the
+  front. Fixed on the way: a dog's side ear hidden behind the head (now drawn over it), a mouse's
+  cone snout (now the head's own shape), a too small beak, round tails hidden behind the body.
+
+Known gaps / TODOs
+- No still of effect symbols on animals was checked by eye (tested: `head_box` / `crown_top`
+  leave the ears out); the cat's tail is cut at the left edge of `animals.png`'s first cell.
+- A bird's wings ignore sleeves; bird toes are not drawn under shoes; no back view of tails.
+- Mouse and rabbit tails do not wag with walking from the front (side only).
+
+How to test
+- `pytest tests/test_cartoon_animals.py` (40 not-render + 1 render at 160x90, ~11 s).
+- Also run, not render: `test_cartoon_character test_cartoon_generator test_cartoon_poses
+  test_cartoon_motion test_cartoon_spring test_cartoon_wind test_cartoon_outfits test_cartoon_svg
+  test_cartoon_idle test_cartoon_effects test_cartoon_depth test_cartoon_seating
+  test_cartoon_keyframes test_cartoon_moving test_cartoon_acting test_cartoon_speed
+  test_cartoon_visemes` (418, 34 s), `test_config test_docs test_schema test_api test_guide
+  test_screenplay test_cartoon_sheet test_cartoon_holding test_cartoon_directing` (284, 69 s),
+  `test_docs test_guide test_cartoon_animals test_cartoon_character test_gallery test_cartoon_lint
+  test_introspect test_mcp` (211, 35 s); render: `test_cartoon_animals test_cartoon_outfits
+  test_cartoon_wind test_cartoon_character test_cartoon_svg test_cartoon_motion test_cartoon_poses
+  test_cartoon_idle` (11, 9 s). The full suite was not run.

@@ -217,9 +217,11 @@ FOLLOW_SPRING = Spring.tuned(FOLLOW_SPRING_HZ, FOLLOW_DAMPING_RATIO)
 FOLLOW_ARM_DEGREES = 30.0
 FOLLOW_HEAD_DEGREES = 10.0
 FOLLOW_ACCESSORY_DEGREES = 18.0
+FOLLOW_TAIL_DEGREES = 45.0
 FOLLOW_ARM_LIMIT = 25.0
 FOLLOW_HEAD_LIMIT = 8.0
 FOLLOW_ACCESSORY_LIMIT = 12.0
+FOLLOW_TAIL_LIMIT = 30.0
 FOLLOW_INWARD_LIMIT = 8.0
 #: Share of an animation's end over which follow-through fades out, so it ends in its state.
 FOLLOW_FADE_SHARE = 0.12
@@ -257,12 +259,15 @@ def _limited(value: float, low: float, high: float) -> float:
 def follow_angles(forward: float, up: float, strength: float) -> dict[str, float]:
     """Degrees each hanging part turns for follow-through ``forward`` (along the way the
     character faces) and ``up`` (:func:`follow_through`, heights per second): the arms trail
-    and swing on, raised outwards while falling; the head and accessory tip back and on."""
+    and swing on, raised outwards while falling; the head and accessory tip back and on; an
+    animal's tail (drawn behind it, DESIGN.md §69.48) swings back and down as the body sets off or
+    rises, and on past it as the body stops or falls."""
     arm = _limited(FOLLOW_ARM_DEGREES * forward * strength, FOLLOW_ARM_LIMIT, FOLLOW_ARM_LIMIT)
     out = _limited(FOLLOW_ARM_DEGREES * up * strength, FOLLOW_INWARD_LIMIT, FOLLOW_ARM_LIMIT)
     head = _limited(-FOLLOW_HEAD_DEGREES * forward * strength, FOLLOW_HEAD_LIMIT, FOLLOW_HEAD_LIMIT)
     hat = _limited(-FOLLOW_ACCESSORY_DEGREES * forward * strength, FOLLOW_ACCESSORY_LIMIT, FOLLOW_ACCESSORY_LIMIT)
-    return {"arm_left": arm + out, "arm_right": arm - out, "head": head, "accessory": hat}
+    tail = _limited(-FOLLOW_TAIL_DEGREES * (forward + up) * strength, FOLLOW_TAIL_LIMIT, FOLLOW_TAIL_LIMIT)
+    return {"arm_left": arm + out, "arm_right": arm - out, "head": head, "accessory": hat, "tail": tail}
 
 
 __all__ = [

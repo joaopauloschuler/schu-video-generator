@@ -16,10 +16,12 @@ from vidgen.cartoon.character import OUTER_HAIR_ATTRIBUTE, TRAIL_ATTRIBUTE
 #: How far each trailing piece turns in the wind, as a share of
 #: :data:`~vidgen.cartoon.wind.TRAIL_DEGREES` (DESIGN.md §69.32): the scarf's end, long hair, a
 #: bun, pointy and floppy ears, the hat; since Step 113 a ponytail, braids, a cap and a
-#: necklace's pendant. Round ears and the other hair styles do not trail.
+#: necklace's pendant; since Step 114 an animal's tail (a bird's fan of feathers less) and its
+#: long ears. Round ears and the other hair styles do not trail.
 TRAIL_WEIGHTS: dict[str, float] = {
     "scarf": 1.2, "long": 0.7, "bun": 0.4, "pointy": 0.35, "floppy": 1.0, "hat": 0.35,
     "ponytail": 0.9, "braids": 0.6, "cap": 0.25, "pendant": 0.5,
+    "tail": 0.8, "feathers": 0.4, "long_ears": 0.3,
 }
 
 Point = tuple[float, float]
@@ -51,6 +53,30 @@ def arc_points(cx: float, cy: float, radii: Sequence[float], start_deg: float, e
 def polygon(points: Sequence[Sequence[float]]) -> Polygon:
     """A closed polygon through ``points`` (x, y)."""
     return Polygon(*(np.array([p[0], p[1], 0.0]) for p in points))
+
+
+def tapered_band(points: Sequence[Point], start_width: float, end_width: float, tip_points: int = 7) -> list[Point]:
+    """The outline of a band along the path ``points``, ``start_width`` wide at the first point
+    narrowing evenly to ``end_width`` at the last, with a round tip there (a tail, a feather)."""
+    if len(points) < 2:
+        raise ValueError("a band needs two points or more")
+    lengths = [0.0]
+    for (x0, y0), (x1, y1) in zip(points, points[1:]):
+        lengths.append(lengths[-1] + math.hypot(x1 - x0, y1 - y0))
+    total = lengths[-1] or 1e-9
+    left, right = [], []
+    for k, (x, y) in enumerate(points):
+        x0, y0 = points[max(k - 1, 0)]
+        x1, y1 = points[min(k + 1, len(points) - 1)]
+        length = math.hypot(x1 - x0, y1 - y0) or 1e-9
+        nx, ny = -(y1 - y0) / length, (x1 - x0) / length
+        half = (start_width + (end_width - start_width) * lengths[k] / total) / 2
+        left.append((x + nx * half, y + ny * half))
+        right.append((x - nx * half, y - ny * half))
+    (xa, ya), (xb, yb) = points[-2], points[-1]
+    heading = math.degrees(math.atan2(yb - ya, xb - xa))
+    tip = [point_at(xb, yb, end_width / 2, heading + 90 - 180 * k / (tip_points + 1)) for k in range(1, tip_points + 1)]
+    return [*left, *tip, *reversed(right)]
 
 
 def trailing(mob: VMobject, pivot: Sequence[float], piece: str) -> VMobject:
@@ -175,5 +201,6 @@ __all__ = [
     "point_at",
     "polygon",
     "span_at",
+    "tapered_band",
     "trailing",
 ]

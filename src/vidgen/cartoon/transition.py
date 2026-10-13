@@ -178,12 +178,15 @@ class PoseChange(Animation):
 #: A walk keeps the lower sole on the ground (legs drawn one each) when the pose it starts in has
 #: it within this many character units of the ground.
 GROUND_TOLERANCE = 0.02
+#: An animal's tail swings with the steps of a walk: this share of the near arm's swing.
+WALK_TAIL_SWING = 0.5
 
 
 def walking_state(base: CharacterState, cycle: WalkCycle, facing: str) -> CharacterState:
     """``base`` with the walk's ``cycle`` added: legs in one piece turned and narrowed and the
     body raised; legs drawn one each swung the opposite ways, the knee of the leg swinging forward
-    bent; the arms swinging (the far arm the other way), the elbows bent; parts the character
+    bent; the arms swinging (the far arm the other way), the elbows bent, a tail swinging with
+    the near arm (:data:`WALK_TAIL_SWING`); parts the character
     lacks are skipped (a folded forearm is in ``base``, :meth:`Character.state`). Facing
     ``front`` (DESIGN.md §69.44) the steps come towards the camera: the legs do not swing, a leg
     drawn one each looks shorter as its knee bends (its foot lifts), the arms sway a little out
@@ -207,6 +210,7 @@ def walking_state(base: CharacterState, cycle: WalkCycle, facing: str) -> Charac
     for arm, sign, elbow in (("arm_left", 1.0, cycle.elbow_bends[0]), ("arm_right", -1.0, cycle.elbow_bends[1])):
         turn(arm, sign * cycle.arm_angle)
         turn(f"{arm}_lower", elbow)
+    turn("tail", WALK_TAIL_SWING * cycle.arm_angle)
     return CharacterState(facing, parts)
 
 
