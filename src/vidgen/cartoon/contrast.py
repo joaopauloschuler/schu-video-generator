@@ -49,11 +49,11 @@ HEAD_SIZE_SPAN = 0.4
 MIN_CONTRAST: float = LookAlikeRule.model_fields["min_contrast"].default
 #: Colours closer than this (CIEDE2000) are named as shared in :func:`compare`'s advice.
 CLOSE_COLOUR = 10.0
-#: Accessories that change the outline of the head.
-HEADWEAR: tuple[str, ...] = ("hat", "cap", "bow")
+#: Accessories that change the outline of the head (with the costume pieces worn there, §69.58).
+HEADWEAR: tuple[str, ...] = ("hat", "cap", "bow", "crown", "wizard_hat", "party_hat")
 #: What to change, per shared feature, in :func:`compare`'s advice.
 _FIXES: dict[str, str] = {
-    "body": "look.body", "hair": "look.hair", "species": "look.species", "headwear": "a hat, cap or bow",
+    "body": "look.body", "hair": "look.hair", "species": "look.species", "headwear": "a hat, cap, bow or crown",
     "proportions": "look.proportions", "head_size": "look.head_size", "ears": "look.ears", "outfit": "look.outfit",
     "clothes": "colors.clothes", "skin": "colors.skin", "hair colour": "colors.hair", "accessory": "colors.accessory",
 }
@@ -97,6 +97,9 @@ def look_features(look: CharacterLook | Mapping[str, Any], colors: CharacterColo
     details = {a for a in worn if a not in HEADWEAR}
     details |= {f"{key} {getattr(look, key)}" for key in ("facial_hair", "pattern", "shoes") if getattr(look, key) != "none"}
     details |= {f"eyes {look.eyes}", *([f"nose {look.nose}"] if look.nose != "none" else [])}
+    if look.species == "robot":   # two robots differ by their build (§69.58)
+        robot = look.robot_look()
+        details |= {f"robot head {robot.head}", f"robot face {robot.face}", f"robot on {robot.moves_on}", *(["antenna"] if robot.antenna else [])}
     resolved = {key: _resolve(getattr(colors, key), theme) for key in ("clothes", "skin", "hair", "accessory")}
     if look.hair == "none" and look.facial_hair == "none" and look.species != "turtle":
         resolved["hair"] = resolved["skin"]          # a bald head shows skin (a turtle's shell is in the hair colour)

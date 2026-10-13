@@ -777,7 +777,12 @@ asks for one, say vidgen makes original characters and offer one with the same r
   on the stage (about 0.7). An animal: `species: cat | dog | bird | bear | rabbit | mouse |
   fox | owl | frog | turtle | penguin` (fur colour `colors.skin`: natural tones or theme tokens,
   different for each; a turtle's shell `colors.hair`; it gets a `tail`, not a frog; a turtle
-  walks slowly, a penguin waddles, a frog jumps higher). `vidgen character-sheet` shows every pose and the front view. `vidgen cast --random 4
+  walks slowly, a penguin waddles, a frog jumps higher). A robot: `species: robot` with `robot:
+  {head: box | round, face: eyes | screen, antenna: true | false, moves_on: legs | wheels}` (no
+  hair; plating `colors.skin`; a screen face shows its mouth shapes; on wheels it rolls; a
+  `[beep]` in its lines). Costume pieces for anyone: `crown`, `wizard_hat`, `party_hat` (one
+  thing on top of the head, like `hat` or `cap`) and a `cape` that trails in the wind
+  (`docs/CONFIG.md` "Robots and costumes"). `vidgen character-sheet` shows every pose and the front view. `vidgen cast --random 4
   [--seed S] [--species cat dog]` writes a cast chosen to differ (looks, colours, voice kinds
   and voices, original names) for `include:`; lint `look_alike` warns when two look too alike.
 - Give each a want and a temper (the eager one, the doubter); their starting `pose` and
@@ -1013,9 +1018,10 @@ into the set. `examples/cartoon_series/` shows it (CONFIG "Shared casts and sets
   and rain plays a rain sound bed; `foley: false` (top level or a stage) turns them off. A beat's `sting: reveal | comic | sad` adds a short music sting
   (`reveal` as the beat starts, `comic` and `sad` in the pause after the line), ducked under the
   voice. One or two per cartoon, on the real punchline, or they stop being funny.
-- **Voice sounds**: `[gasp]`, `[hmm]`, `[laugh]`, `[sigh]`, `[giggle]`, `[groan]` in a line
+- **Voice sounds**: `[gasp]`, `[hmm]`, `[laugh]`, `[sigh]`, `[giggle]`, `[groan]`, `[beep]` in a line
   (`text: "[gasp] The box is open! [laugh]"`) are made by the voice at that point (`Ha ha ha!`,
-  `Hmm.`; a gasp or sigh at the line's start or end is a generated breath) and never shown in
+  `Hmm.`; a gasp or sigh at the line's start or end is a generated breath, a beep a generated
+  robot chirp) and never shown in
   captions; the speaker's mouth follows and its face changes (laugh happy, gasp surprised, sigh
   sad) unless the beat's own `emote` / `react` sets it. A line needs words besides its sounds
   (`docs/CONFIG.md` "Voice sounds").
@@ -1228,7 +1234,7 @@ scenes:
 **Sound effects** (`vidgen list-sfx` describes each in words): `whoosh` (something moves in),
 `pop` (an item appears), `tick` (steps, counting), `click` (a UI click), `chime` (a key
 insight), `success` / `error` (a result), `riser` (tension before a reveal, `align: end`),
-`thud` (a big number lands), `swoosh`, `typing`; `footstep`, `boing`, `gasp`, `sigh`, `bell`, `engine`, `brakes`, `burner`, `launch`, `phone` and the music stings
+`thud` (a big number lands), `swoosh`, `typing`; `footstep`, `boing`, `gasp`, `sigh`, `beep`, `bell`, `engine`, `brakes`, `burner`, `launch`, `phone` and the music stings
 `sting_reveal` / `sting_comic` / `sting_sad` are for cartoons (`vidgen guide cartoons`). Two or three per minute, on the moments that
 matter; `sfx: {auto: true}` adds soft ones to built-in reveals if you want a uniform feel.
 

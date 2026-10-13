@@ -11705,3 +11705,110 @@ How to test
   test_cartoon_vehicles test_cartoon_foley test_phase_k_review test_cartoon_holding
   test_cartoon_directing` (131, 35 s); render: `test_cartoon_outfits moving motion_effects depth`
   (8, 7 s). The full suite was not run.
+
+## Step 124 — Robots and costumes
+
+What was built
+- **`species: robot`** (`config.Species`) with **`look.robot`** (`config.RobotLook`: `head` box |
+  round, `face` eyes | screen, `antenna` true | false, `moves_on` legs | wheels;
+  `CharacterLook.robot_look()` gives the defaults). Config errors: `hair`, `ears`, `nose`,
+  `facial_hair` with a robot (`ROBOT_OWN_KEYS`), `robot` on another species, shoes on wheels.
+- **Drawing** (`src/vidgen/cartoon/robots.py`, side and front): neck, side bolts, a rounded box or
+  ball head, a light face plate (`eyes`) or a dark screen (`screen`) on which the eyes, brows and
+  every mouth shape glow (`SCREEN_GLOW`, via `face_colors` and `screen_eye`); joint bolts at
+  shoulders, elbows and knees, gripper hands, block feet, or a strut and a wheel per leg (the sole
+  still at 0); a chest panel of lights. Plain outfits leave the limbs in the plating
+  (`colors.skin`); other outfits colour them as on people.
+- **New parts** `antenna` (parent head, order 49; shapes `default` / `dim`; socket, coil spring,
+  ball light in `colors.accessory`) and `cape` (parent body, order 3) at the end of `PART_NAMES`,
+  `PosePart`, `SVG_PART_NAMES`. Both swing on the Step 82 spring (`follow_angles` keys `antenna`,
+  `cape`), trail in the wind (`TRAIL_WEIGHTS` `antenna` 0.35, `cape` 0.9); the antenna wobbles and
+  its light blinks while idle (`idle.antenna_sway_angle`, `antenna_light_on`); the cape flutters
+  back with each step (`transition.WALK_CAPE_FLUTTER`). `crown_top` counts the antenna, so effect
+  symbols go above it.
+- **Moving**: a legged robot walks with stiff knees and elbows (`SPECIES_MOTIONS["robot"]`); on
+  wheels `ROLLING_MOTION` (`Gait.rolls`, no swing; a run leans), `species_motion(species, wheels=)`;
+  `PlayedAction.rolls` (from `Walk.gait`) plays no footsteps.
+- **Costume pieces** (`src/vidgen/cartoon/costumes.py`; `Accessory` + `crown`, `wizard_hat`,
+  `party_hat`, `cape`): the three hats in the `accessory` part (`HEADWEAR_DRAWINGS`; a wizard hat
+  and a party hat trail), the `cape` part plus a clasp on the body (`cape_clasp`). One piece on
+  top of the head: `config.TOP_OF_HEAD` (hat, cap, crown, wizard_hat, party_hat), message
+  generalised (the hat-and-cap text unchanged).
+- **Voice**: `[beep]` voice sound (said `Beep boop!`, face happy, viseme `E`) and the generated
+  built-in sound `beep` (0.4 s) at a line's start or end. Voices work as usual.
+- **Cast / contrast**: `character_part_shapes` knows `antenna` and `cape`; `vidgen character`
+  prints `species robot (box head, eyes face, antenna, legs)`; `contrast.HEADWEAR` + the three
+  hats, robot build details; `random_cast` robots (`SPECIES_COLORS["robot"]`, `ROBOT_CHOICES`),
+  `--species robot` (cli help).
+- Gallery still `docs/gallery/media/robots.png` (960×420, 32 KB; four robots, four costumed looks).
+
+Files touched
+- New: `src/vidgen/cartoon/robots.py`, `src/vidgen/cartoon/costumes.py`,
+  `tests/test_cartoon_robots.py`, `docs/gallery/media/robots.png`.
+- `src/vidgen/config.py`, `cartoon/generator.py`, `cartoon/character.py`, `cartoon/animals.py`
+  (`is_animal` false for a robot), `cartoon/idle.py`, `cartoon/motion.py`, `cartoon/transition.py`,
+  `cartoon/acting.py`, `cartoon/foley.py`, `cartoon/cast.py`, `cartoon/contrast.py`,
+  `cartoon/primitives.py`, `cartoon/svg_look.py`, `cartoon/effect_symbols.py`, `scenes/stage.py`
+  (`_played` passes `rolls`), `random_cast.py`, `voicesounds.py`, `sfx.py`, `cli.py` (help).
+- Docs: `docs/CONFIG.md` (look / colour rows, new "Robots and costumes" with the picture, part
+  lists, SVG id row, wind, sounds table, voice sounds, `vidgen cast --species`), `DESIGN.md` (§2
+  tree, §6.4 note, §69 parts, new §69.58), `docs/EXTENDING.md` (parts), guide + `AGENTS.md` copy,
+  `tasklist.md`.
+- Tests updated: `tests/test_cartoon_outfits.py` (`sampled_looks` now also draws the costume
+  pieces and keeps one piece on top of the head), `tests/test_voice_sounds.py` (`beep` among the
+  generated voice sounds).
+
+Public interfaces
+- No new `vidgen.api` names; `PART_NAMES` gains `antenna`, `cape` at its end (DESIGN §6.4). YAML:
+  `species: robot`, `look.robot`, the four accessories, `[beep]`; pose / keyframe parts `antenna`,
+  `cape`. Built-in sound `beep`. Internal: `robots.*`, `costumes.*`, `config.RobotLook`,
+  `ROBOT_OWN_KEYS`, `TOP_OF_HEAD`, `idle.ANTENNA_*`, `antenna_sway_angle`, `antenna_light_on`,
+  `motion.FOLLOW_ANTENNA_*`, `FOLLOW_CAPE_*`, `transition.WALK_CAPE_FLUTTER`, `acting.ROLLING_MOTION`,
+  `Gait.rolls`, `PlayedAction.rolls`, `random_cast.ROBOT_CHOICES`.
+
+Decisions / deviations
+- Antenna and cape are real parts (not only wind-marked members) so the follow-through spring,
+  idle overlays, poses and keyframes can move them about their own pivots, as the tail does.
+- Wheels keep the two-segment legs (a strut and a wheel instead of a shin and foot), so sitting,
+  planting and grounding need no new code; the wheels do not spin (a plain tyre and hub), the
+  robot glides.
+- Robot design kept generic: box or ball heads, no dome, no binocular eyes, no gold humanoid; the
+  round screen head reads a little like a helmet (acceptable, generic).
+- Costume pieces are never drawn by `random_look` (existing seeded casts keep their picks); the
+  beep is said `Beep boop!` by ElevenLabs v3 too (no audio tag for it).
+- Searched first: no robot, screen-face, costume or cape code existed (`git grep -n -i -w
+  "robot\|robots\|crown\|cape\|antenna" 8dceb29 -- src/vidgen/cartoon`: only a hat's and a tree's
+  "crown" and the effect symbols' `crown_top`; wheels only on vehicles, `vehicle_drawing.py`, not
+  a character's part); reused `tapered_band`, `path_curve`,
+  `clip_to_box`, `fur_shade` / `fur_tint`, `trailing`, `limb_colors`, `shoe`, `Gait`, the idle
+  overlay layer and the voice-sound machinery.
+
+Evidence
+- Pins: the 15 human looks and 7 Step 114 animals (`test_cartoon_animals.py`) and the 5 Step 123
+  species (new pins, taken at 8dceb29 before any edit), side and front, unchanged.
+- Stills checked by eye (scratch grids, 150 × 260 and 300 × 520 px cells): every robot kind side
+  and front, screen talking `A`, surprised, sad from the front, walking, rolling, seated on wheels,
+  wind 40°, a dimmed and turned antenna; crown, wizard hat, party hat, a caped cat; a caped
+  character in wind (side and front), walking, seated. Fixed on the way: a side bolt hidden behind
+  the face plate (moved back). A `vidgen storyboard` (`--per-beat 3`, preview) of two robots, a
+  crowned girl in a cape and a frog in a wizard hat on a breezy stage: a robot rolling over, an
+  idea symbol (then fixed to go above the antenna), the cape flying as she runs, the frog's jump,
+  a robot walking to a chair and sitting, the antenna light blinking in the idle stills.
+
+Known gaps / TODOs
+- Wheels do not turn while rolling; a wheeled robot has no rolling sound (Step 128 may add one).
+- An SVG character's `antenna` / `cape` swing on the spring but are not marked to trail in the wind.
+- Robots have no hum while idle (only the light blinks); the beep was not listened to by a human.
+
+How to test
+- `pytest tests/test_cartoon_robots.py` (39 not-render + 1 render at 160x90, ~18 s).
+- Also run, not render: `test_cartoon_character generator poses motion spring wind svg idle effects
+  depth seating keyframes moving acting speed visemes limbs motion_effects test_random_cast
+  test_voice_sounds test_sfx test_cartoon_foley` (524 passed, 27 s), `test_cartoon_animals
+  more_animals outfits` (130, 29 s), `test_docs test_guide test_schema test_config test_api
+  test_cli` (202, 76 s), `test_mcp test_screenplay test_cartoon_lint test_cartoon_sheet
+  test_gallery test_introspect test_json_output test_cartoon_holding test_cartoon_directing
+  test_cartoon_vehicles test_cartoon_animals test_cartoon_more_animals test_cartoon_robots
+  test_phase_k_review test_cartoon_small_props` (303, 75 s); render: `test_cartoon_outfits animals
+  more_animals test_voice_sounds test_cartoon_foley test_cartoon_robots` (8, 9 s). The full suite
+  was not run.

@@ -64,7 +64,7 @@ def test_each_provider_says_the_sounds() -> None:
         assert sound_voicing(voice, VoiceSound("gasp", 1), 3) == "Hah!"   # inside the line: no silence to fill
     assert sound_voicing(v3, VoiceSound("gasp", 0), 3) == "[gasps]" and sound_voicing(v3, VoiceSound("laugh", 2), 3) == "[laughs]"
     assert sound_voicing(v3, VoiceSound("hmm", 2), 3) == "Hmm."
-    assert {k.sfx for k in VOICE_SOUNDS.values()} - {None} == {"gasp", "sigh"}
+    assert {k.sfx for k in VOICE_SOUNDS.values()} - {None} == {"gasp", "sigh", "beep"}   # a robot's beep since Step 124
     for name in ("gasp", "sigh"):
         samples = sfx.synthesize(name)
         assert len(samples) == round(sfx.BUILTIN_SOUNDS[name].duration * sfx.RATE)

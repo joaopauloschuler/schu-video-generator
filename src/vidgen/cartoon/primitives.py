@@ -17,11 +17,13 @@ from vidgen.cartoon.character import OUTER_HAIR_ATTRIBUTE, TRAIL_ATTRIBUTE
 #: :data:`~vidgen.cartoon.wind.TRAIL_DEGREES` (DESIGN.md §69.32): the scarf's end, long hair, a
 #: bun, pointy and floppy ears, the hat; since Step 113 a ponytail, braids, a cap and a
 #: necklace's pendant; since Step 114 an animal's tail (a bird's fan of feathers less) and its
-#: long ears. Round ears and the other hair styles do not trail.
+#: long ears; since Step 124 a robot's antenna, a cape, a wizard hat and a party hat (a crown does
+#: not). Round ears and the other hair styles do not trail.
 TRAIL_WEIGHTS: dict[str, float] = {
     "scarf": 1.2, "long": 0.7, "bun": 0.4, "pointy": 0.35, "floppy": 1.0, "hat": 0.35,
     "ponytail": 0.9, "braids": 0.6, "cap": 0.25, "pendant": 0.5,
     "tail": 0.8, "feathers": 0.4, "long_ears": 0.3,
+    "antenna": 0.35, "cape": 0.9, "wizard_hat": 0.4, "party_hat": 0.2,
 }
 
 Point = tuple[float, float]

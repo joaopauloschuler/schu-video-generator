@@ -1982,7 +1982,7 @@ def _played(action: str, options: Any, anim: Animation, start: float, seconds: f
     """One animation of a built-in ``action`` (its ``options``) as it plays from scene time
     ``start`` for ``seconds``, for foley and motion effects."""
     if isinstance(anim, Walk):
-        return PlayedAction(action, start, seconds, heights=anim.heights, phases=anim.phases, step_length=anim.step_length)
+        return PlayedAction(action, start, seconds, heights=anim.heights, phases=anim.phases, step_length=anim.step_length, rolls=anim.gait.rolls)
     if isinstance(anim, Ride):
         lands = 1.0 if anim.flies and anim.course.land else None   # a balloon or a toy rocket touching down (§69.53)
         return PlayedAction(action, start, seconds, heights=anim.heights, phases=anim.phases, vehicle=anim.kind, lands=lands)

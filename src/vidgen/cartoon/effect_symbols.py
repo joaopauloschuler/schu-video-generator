@@ -75,11 +75,13 @@ def head_box(character: Character) -> Box:
 
 def crown_top(character: Character) -> float | None:
     """The top of what ``character`` wears on its head on screen: its ``accessory`` (a hat, a
-    cap) or hair beyond the head (an afro), whichever is higher; ``None`` without either drawn."""
+    cap), a robot's ``antenna`` (DESIGN.md §69.58) or hair beyond the head (an afro), whichever
+    is higher; ``None`` without any drawn."""
     tops = []
-    accessory = character.parts.get("accessory")
-    if accessory is not None and accessory.family_members_with_points():
-        tops.append(float(accessory.get_top()[1]))
+    for name in ("accessory", "antenna"):
+        worn = character.parts.get(name)
+        if worn is not None and worn.family_members_with_points():
+            tops.append(float(worn.get_top()[1]))
     if character.has_part("head"):
         outer = _head_members(character)[1]
         if outer:

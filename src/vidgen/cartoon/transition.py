@@ -180,13 +180,15 @@ class PoseChange(Animation):
 GROUND_TOLERANCE = 0.02
 #: An animal's tail swings with the steps of a walk: this share of the near arm's swing.
 WALK_TAIL_SWING = 0.5
+#: A cape flutters back with each step: this share of the size of the near arm's swing (DESIGN.md §69.58).
+WALK_CAPE_FLUTTER = 0.4
 
 
 def walking_state(base: CharacterState, cycle: WalkCycle, facing: str) -> CharacterState:
     """``base`` with the walk's ``cycle`` added: legs in one piece turned and narrowed and the
     body raised; legs drawn one each swung the opposite ways, the knee of the leg swinging forward
     bent; the arms swinging (the far arm the other way), the elbows bent, a tail swinging with
-    the near arm (:data:`WALK_TAIL_SWING`), a waddling body rocking (``cycle.rock``, legs kept
+    the near arm (:data:`WALK_TAIL_SWING`), a cape fluttering back (:data:`WALK_CAPE_FLUTTER`), a waddling body rocking (``cycle.rock``, legs kept
     upright; :data:`SIDE_ROCK` of it from the side); parts the character
     lacks are skipped (a folded forearm is in ``base``, :meth:`Character.state`). Facing
     ``front`` (DESIGN.md §69.44) the steps come towards the camera: the legs do not swing, a leg
@@ -212,6 +214,7 @@ def walking_state(base: CharacterState, cycle: WalkCycle, facing: str) -> Charac
         turn(arm, sign * cycle.arm_angle)
         turn(f"{arm}_lower", elbow)
     turn("tail", WALK_TAIL_SWING * cycle.arm_angle)
+    turn("cape", -WALK_CAPE_FLUTTER * abs(cycle.arm_angle))
     _rock(parts, SIDE_ROCK * cycle.rock)
     return CharacterState(facing, parts)
 

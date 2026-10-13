@@ -1,5 +1,5 @@
 """Non-speech voice sounds in a beat's text: ``[gasp]``, ``[hmm]``, ``[laugh]``, ``[sigh]``,
-``[giggle]``, ``[groan]`` (DESIGN.md §69.33).
+``[giggle]``, ``[groan]`` (DESIGN.md §69.33) and a robot's ``[beep]`` (§69.58).
 
 - :func:`take_out_sounds` finds the markers (a trailing ``s`` is allowed: ``[laughs]``) and
   returns the text without them plus each :class:`VoiceSound` with the number of words before
@@ -58,6 +58,7 @@ VOICE_SOUNDS: dict[str, VoiceSoundKind] = {
         VoiceSoundKind("sigh", "Haah.", "sad", frozenset({"haah", "hah", "ha", "ah", "ahh", "oh", "sigh", "sighs"}), "[sighs]", "sigh", "A"),
         VoiceSoundKind("giggle", "Hee hee!", "happy", frozenset({"hee", "heehee", "hehe", "hihi", "he", "giggle", "giggles"}), "[giggles]"),
         VoiceSoundKind("groan", "Ugh.", "worried", frozenset({"ugh", "uh", "argh", "groan", "groans"}), "[groans]"),
+        VoiceSoundKind("beep", "Beep boop!", "happy", frozenset({"beep", "boop", "bleep", "bip", "beeps"}), None, "beep", "E"),
     )
 }
 

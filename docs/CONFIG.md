@@ -123,7 +123,7 @@ scenes:
 Beat `id`s name the audio files: keep them when you edit the text (only that beat is
 re-voiced). A beat `text` is spoken as written; it is also the subtitle. `*word*` in it marks a
 stressed word for [automatic directing](#automatic-directing-auto_direct): the asterisks are not
-spoken or shown. `[laugh]`, `[gasp]`, `[sigh]`, `[hmm]`, `[giggle]` and `[groan]` in it are
+spoken or shown. `[laugh]`, `[gasp]`, `[sigh]`, `[hmm]`, `[giggle]`, `[groan]` and `[beep]` in it are
 [voice sounds](#voice-sounds): made at that point, not shown. A beat's `actions`
 (default `[]`) point at parts of the scene while it is spoken — reveal, dim, highlight — see
 [beat actions](#beat-actions). A beat's `voice` (default: its scene's) picks another speaker for
@@ -1112,23 +1112,24 @@ rectangles, polygons, lines), so each figure is an original drawing:
 | `hair` | `none` | `none` (bald), `short`, `spiky`, `long`, `bun`, `curly`, `ponytail`, `braids`, `afro` (colour `colors.hair`) |
 | `ears` | `none` | `none`, `round`, `pointy`, `floppy` (skin colour); with or without hair |
 | `facial_hair` | `none` | `none`, `moustache`, `beard` (with a moustache; the mouth stays seen); colour `colors.hair` |
-| `accessories` | `[]` | any of `glasses`, `hat`, `cap`, `bow` (worn on the head), `scarf`, `bag`, `backpack`, `necklace` (on the body); each at most once, not `hat` and `cap` together |
+| `accessories` | `[]` | any of `glasses`, `hat`, `cap`, `bow` (worn on the head), `scarf`, `bag`, `backpack`, `necklace` (on the body), and the [costume pieces](#robots-and-costumes) `crown`, `wizard_hat`, `party_hat` (on the head) and `cape`; each at most once, and only one of `hat`, `cap`, `crown`, `wizard_hat`, `party_hat` |
 | `proportions` | `adult` | `adult`, `kid` (a big head on a short body and legs), `tall_kid` (lankier, a smaller head than a kid's); the figure is as tall as any other, so make a kid smaller with the stage's `scale` (about 0.7 for a `kid`, 0.85 for a `tall_kid`) |
 | `outfit` | `plain` | what it wears: `plain` (one colour all over), `dress` (short sleeves, a skirt), `overalls` (over a shirt in `colors.trim`), `coat` (long sleeves, tails, trousers in `trim`), `shorts` (a top, short sleeves, shorts in `trim`), `apron` (in `trim`, over plain clothes) |
 | `pattern` | `none` | `none`, `stripes`, `dots` on the clothes of the body (and a skirt), in a darker tone of a light cloth or a lighter tone of a dark one |
 | `shoes` | `none` | `none`, `shoes`, `boots` (colour `colors.accessory`) |
-| `species` | `human` | `human`, or an animal: `cat`, `dog`, `bird`, `bear`, `rabbit`, `mouse`, `fox`, `owl`, `frog`, `turtle`, `penguin` ([Animal characters](#animal-characters-species)); an animal draws its own ears, nose and muzzle, so `ears`, `nose` and `facial_hair` are not given with it |
+| `species` | `human` | `human`, or an animal: `cat`, `dog`, `bird`, `bear`, `rabbit`, `mouse`, `fox`, `owl`, `frog`, `turtle`, `penguin` ([Animal characters](#animal-characters-species)); an animal draws its own ears, nose and muzzle, so `ears`, `nose` and `facial_hair` are not given with it; or `robot` ([Robots and costumes](#robots-and-costumes); no `hair` either) |
+| `robot` | none | `species: robot` only: `{head: box \| round, face: eyes \| screen, antenna: true \| false, moves_on: legs \| wheels}`; default a box head, eyes, an antenna, legs |
 | `seed` | none | a number that varies the proportions (head, body, legs, arms, eye gap and size, mouth) by up to 8 %; the same look and seed always give the same figure; none: no variation |
 | `svg` | none | an SVG file (relative to the project folder) drawn instead of the generator, split into parts by element ids ([below](#characters-from-svg-files)); the other `look` keys and `colors` do not apply |
 
 | key (`colors`) | default | |
 |---|---|---|
-| `skin` | `secondary` | head, ears, a `round` / `triangle` nose and hands (skin); an animal's fur or feathers (its muzzle and inner ears are tints of it) |
+| `skin` | `secondary` | head, ears, a `round` / `triangle` nose and hands (skin); an animal's fur or feathers (its muzzle and inner ears are tints of it); a robot's plating (head, limbs; its face plate a tint of it) |
 | `clothes` | `primary` | body, arms and legs (and the hat band); with an `outfit`, the outfit's main cloth |
 | `outline` | `"#1F2430"` | outline of every part, and the glasses |
 | `features` | `"#1F2430"` | eyes, brows, mouth and a `dot` nose |
 | `hair` | `accent` | hair, moustache and beard; a `turtle`'s shell |
-| `accessory` | `highlight` | hat, cap, bow, scarf, bag, backpack, necklace and shoes |
+| `accessory` | `highlight` | hat, cap, bow, scarf, bag, backpack, necklace, the costume pieces (crown, wizard hat, party hat, cape) and shoes; a robot's antenna light |
 | `trim` | `dim` | the outfit's second cloth: the shirt under `overalls`, the trousers under a `coat`, the `shorts`, the `apron` |
 
 `outline` and `features` default to a fixed dark ink, not a theme token: no token is dark in every
@@ -1218,6 +1219,52 @@ characters:
 
 ![The fox, owl, frog, turtle and penguin from the side and the front](gallery/media/more_animals.png)
 
+#### Robots and costumes
+
+`species: robot` draws a friendly, original robot from the same simple shapes, built the way
+`look.robot` says:
+
+| key (`look.robot`) | default | |
+|---|---|---|
+| `head` | `box` | `box` (a rounded box) or `round` (a ball), on a short neck with a round bolt on each side |
+| `face` | `eyes` | `eyes`: the look's `eyes`, brows and mouth on a light face plate; `screen`: a dark screen on which the eyes, brows and mouth glow (mint), so its [lip-sync](#lip-sync) shapes, blinks and expressions show on the screen |
+| `antenna` | `true` | an antenna on a coil spring with a light on top (`colors.accessory`): it tips back and springs on as the robot sets off, stops or jumps (with `cartoon_motion`), wobbles and blinks its light while it idles, and trails in the [wind](#wind-wind); part `antenna` (`zed.antenna`), shapes `default` and `dim` (the light off) |
+| `moves_on` | `legs` | `legs`: it walks with stiff knees and elbows; `wheels`: each leg ends in a wheel and it rolls (legs and arms still, no footsteps) on `walk_to`, `run_to`, `enter` and `exit` |
+
+Its plating is `colors.skin` (head, arms, legs), its casing `colors.clothes` (the body, with a
+small panel of lights on the chest); the joints show as bolts at the shoulders, elbows and knees,
+the hands are round grippers and the feet blocks. Outfits, patterns, shoes (not on wheels) and
+accessories work as on people (a plain outfit leaves the limbs in the plating); `hair`, `ears`,
+`nose` and `facial_hair` are not given with a robot. Poses, gestures, sitting, the front view,
+effect symbols (above the antenna) and voices work as for everyone. A robot speaks with any voice;
+the voice sound [`[beep]`](#voice-sounds) gives it a "bee-boop" at the start or end of a line.
+
+```yaml
+characters:
+  - name: zed
+    look: {species: robot, robot: {face: screen, moves_on: wheels}, eyes: oval}
+    colors: {skin: "#A7B4C2", clothes: "#4A7BD0", accessory: "#F2C14E"}
+  - name: bolt
+    look: {species: robot, robot: {head: round}, body: square, accessories: [party_hat]}
+```
+
+**Costume pieces** are accessories any character may wear (people, animals and robots), drawn in
+`colors.accessory` with trimmings in `colors.clothes`, from the side and the front:
+
+- `crown`: a band with points and gems (worn on top of the head);
+- `wizard_hat`: a wide brim, a tall cone whose tip bends back, a band and two stars; it trails in
+  the wind;
+- `party_hat`: a narrow striped cone at a slant with a pompom; it trails in the wind;
+- `cape`: hangs from the shoulders behind the body to about the knees (a clasp at the throat;
+  from the front its darker inside shows beside the body); part `cape` (`ida.cape`): it swings back
+  on a spring as the character sets off, falls or stops (with `cartoon_motion`), flutters back with
+  each step and trails far in the wind.
+
+Only one piece goes on top of the head: `hat`, `cap`, `crown`, `wizard_hat` and `party_hat` exclude
+each other (a config error); glasses, a bow, a scarf and a cape go with any of them.
+
+![Robots (box, screen, round and on wheels) and the costume pieces, from the side and the front](gallery/media/robots.png)
+
 **A quick look**: `vidgen character NAME` prints the character's look and colours (each token
 with the colour it resolves to); `--png [FILE]` also writes one still of it on the theme
 background, in the video's aspect ratio with its shorter side 720 px (default file:
@@ -1275,7 +1322,8 @@ characters:
 | `shape` | none | the shape shown (`open`, `closed`, `A`, ...): a name, or a list of names of which the first the character has is used; none: the rest shape |
 
 A pose may name `body`, `legs`, `leg_left`, `leg_left_lower`, `leg_right`, `leg_right_lower`,
-`arm_left`, `arm_left_lower`, `arm_right`, `arm_right_lower`, `head`, `accessory`, `tail` (an animal's); an expression
+`arm_left`, `arm_left_lower`, `arm_right`, `arm_right_lower`, `head`, `accessory`, `tail` (an animal's), `antenna` (a robot's),
+`cape`; an expression
 `eyes`, `brows`, `mouth` (anything else is a config error). Parts of its group a pose or an
 expression does not name go back to their rest pose. Generated characters have the shapes eyes
 `open` / `closed`, brows `default` / `angry` / `sad`, mouth `smile` / `open` and the lip-sync shapes
@@ -1368,6 +1416,7 @@ the `image` scene) and splits it into parts by **element ids**:
 | `arm_left_lower`, `arm_right_lower` (optional) | the forearm and hand: the arm then bends at the elbow (`arm_left` is the upper arm); without it the arm is one piece and shows a bend folded |
 | `leg_left`, `leg_right`, `leg_left_lower`, `leg_right_lower` (optional) | the legs one each instead of `legs` (not both): a thigh and, optionally, a shin that bends at the knee; draw `leg_right` behind |
 | `tail` (optional) | a tail (or anything that hangs from the body and swings): it swings on a spring as the figure sets off and stops, swishes while idle and trails in the wind, turning about its pivot ([animal characters](#animal-characters-species)); draw it first, behind the body |
+| `antenna`, `cape` (optional) | an antenna on the head, a cape on the body (as a [robot's](#robots-and-costumes) and a cape's): each swings on the follow-through spring and an `antenna` wobbles while idle (with `antenna_dim`, its light blinks); they do not trail in the wind (nothing marks pieces in a drawing) |
 | `<part>_<shape>` (`eyes_closed`, `mouth_A`, `mouth_E`, `mouth_O`, `mouth_M`, `arm_left_up`) | another shape of the part, shown when swapped in; hide it in the file with `display="none"` |
 | `data-pivot="x y"` (on a part's element) | the point the part turns about, in the SVG's `viewBox` coordinates: the neck for `head`, the shoulder for an arm, the hips for `legs` / `leg_left`, the elbow for `arm_left_lower`, the knee for `leg_left_lower`, where it leaves the body for `tail` |
 
@@ -1994,6 +2043,7 @@ writes them as WAV files to listen to):
 | `phone` | 1.0 s (0.4–3) | a phone ringing, "brring-brring": a soft electronic trill (a tone flipping between ~1.1 and ~1.4 kHz 20 times a second) in two pulses of about 0.4 s | a ringing [phone](#everyday-small-props-let_go-pour) (each burst of rings) |
 | `gasp` | 0.35 s (0.15–1) | a sharp breath in, "hah": breath noise around 1.1, 1.75 and 2.9 kHz, loudest after ~50 ms, cut off | surprise ([`[gasp]`](#voice-sounds) at a line's start or end) |
 | `sigh` | 0.9 s (0.4–2.5) | a long breath out, "haaah": breathy "ah" noise with a faint hum falling ~190 → ~130 Hz, trailing off | tiredness, relief ([`[sigh]`](#voice-sounds) at a line's start or end) |
+| `beep` | 0.4 s (0.2–1.2) | a friendly robot chirp, "bee-boop": two soft electronic notes, ~1.3 kHz (with a quick upward blip) then ~880 Hz | a robot's voice sound ([`[beep]`](#voice-sounds) at a line's start or end), a gadget |
 | `sting_reveal` | 1.4 s (0.6–4) | a "ta-da": a brassy pickup note, then a bright C major chord with a soft bell | a reveal ([`sting: reveal`](#foley-and-music-stings)) |
 | `sting_comic` | 1.1 s (0.6–3) | "ba-dum-tss": two falling tom hits and a splashy cymbal | after a punchline (`sting: comic`) |
 | `sting_sad` | 2.2 s (1.2–5) | "wah wah wah waaah": four muted brass notes falling B♭3 → G3, the last long and wobbling | a let-down played for laughs (`sting: sad`) |
@@ -2079,7 +2129,8 @@ preview timed from word counts (no MP3s yet) the whole beat counts as speech.
 ### Voice sounds
 
 A beat's text may hold non-speech sounds of its speaker: `[gasp]`, `[hmm]`, `[laugh]`, `[sigh]`,
-`[giggle]`, `[groan]` (any case; `[laughs]`, `[sighs]`... work too). Any scene type; on a
+`[giggle]`, `[groan]` and a [robot](#robots-and-costumes)'s `[beep]` (any case; `[laughs]`,
+`[sighs]`... work too). Any scene type; on a
 [`stage`](#stage) the speaker's face follows.
 
 ```yaml
@@ -2104,8 +2155,9 @@ beats:
   | `[groan]` | `Ugh.` | `[groans]` | `worried` |
   | `[gasp]` | at the line's start or end: the built-in `gasp` sound; inside it: `Hah!` | `[gasps]` | `surprised` |
   | `[sigh]` | at the line's start or end: the built-in `sigh` sound; inside it: `Haah.` | `[sighs]` | `sad` |
+  | `[beep]` | at the line's start or end: the built-in `beep` sound; inside it: `Beep boop!` | `Beep boop!` | `happy` |
 
-  A TTS says a breath as a word, so `[gasp]` and `[sigh]` at the start or end of a line are
+  A TTS says a breath (or a beep) as a word, so `[gasp]`, `[sigh]` and `[beep]` at the start or end of a line are
   generated sounds instead, mixed into the silence there: a gasp ends just before the first word
   (in the pause after the previous line), a sigh starts just after the last one (in the beat's
   `narration.pad`). They are sound effects of the beat (`timings.json` `sfx`, 6 dB louder than
@@ -2117,7 +2169,7 @@ beats:
   without markers keeps its audio hash.
 - **Mouth and face.** A speaking character's mouth follows the sound: the said ones are in the
   beat's viseme track like words (`Hmm.` closes the lips, `Ha ha ha!` opens them), a generated
-  gasp opens it round (`O`), a sigh open (`A`). On a `stage`, each speaker of the line takes the
+  gasp opens it round (`O`), a sigh open (`A`), a beep wide (`E`). On a `stage`, each speaker of the line takes the
   face of its first sound (table above) as the sound is heard, until the next beat: an automatic
   `react` (listed by `vidgen direct`, whatever `auto_direct` says), left out when the beat's own
   `emote` or `react` acts on that character or its parts have no face.
@@ -5416,7 +5468,7 @@ GUS (glad): There it is! [jumps] I left my song in that crate.
   none. A plain paragraph, or `NARRATOR:`, is the narrator's line. `*word*`
   stresses a word (the speaker gestures on it; the asterisks are not spoken). A
   [voice sound](#voice-sounds) inside a line (`KIT: Oh no [gasp] it fell!`) stays in the line's
-  text: `[gasp]`, `[hmm]`, `[laugh]`, `[sigh]`, `[giggle]`, `[groan]` (or `[laughs]`...) are
+  text: `[gasp]`, `[hmm]`, `[laugh]`, `[sigh]`, `[giggle]`, `[groan]`, `[beep]` (or `[laughs]`...) are
   sounds, every other `[...]` is a stage direction; on its own line `[laugh]` is a direction
   (a `# TODO:`, no verb matches it).
 - **Stage directions** `[...]`: on their own line they act at the start of the next line (after
@@ -5478,9 +5530,10 @@ and `voices`; default `cast.yaml`), chosen to be told apart at a glance. Use it 
   accessories; adult proportions; hex colours, so the cast looks the same in every theme). For
   each character 48 random looks are drawn and the one least like the characters before it is
   kept (the highest lowest contrast). `--species` draws from those species (`human`, `cat`, `dog`,
-  `bird`, `bear`, `rabbit`, `mouse`, `fox`, `owl`, `frog`, `turtle`, `penguin`; several: a mix;
+  `bird`, `bear`, `rabbit`, `mouse`, `fox`, `owl`, `frog`, `turtle`, `penguin`, `robot`; several: a mix;
   default `human`; a fox, owl, frog, turtle or penguin gets fur or skin in its own natural tones,
-  a turtle a shell colour).
+  a turtle a shell colour, a robot a plating colour and a random `look.robot`). Costume pieces are
+  never drawn at random.
 - **Voice kinds and voices**: the kinds go round feminine, masculine and neutral (each round of
   three shuffled); a look suits its kind (facial hair only masculine; no dress or bow for a
   masculine or neutral character; no bun, ponytail or braids for a masculine one). Voices are
@@ -5583,7 +5636,7 @@ scenes:
 For motion the other actions do not have, two actions move a character, a [prop](#props) or one
 part of a character (`kit.arm_left`, `pip.head`; the parts are `body`, `legs`, `leg_left`, `leg_left_lower`,
 `leg_right`, `leg_right_lower`, `arm_left`, `arm_left_lower`, `arm_right`, `arm_right_lower`, `head`,
-`accessory`, `tail`, `eyes`, `brows`, `mouth`, those the character has) by
+`accessory`, `tail`, `antenna`, `cape`, `eyes`, `brows`, `mouth`, those the character has) by
 **keys** or along a **path**:
 
 | action | options | |
@@ -5776,7 +5829,8 @@ number to the left. In the wind:
   more than in proportion: a tree's top leans about 2.5° on average in a breeze, 6° when windy
   and 14° in a gale (up to 25° in a gust), a plant's leaves more, a lamp post hardly. Props an
   action moves, holds, sits on or leans on, props with a `lift` and SVG props stand still;
-- generated characters' scarf ends, long hair, buns, floppy and pointy ears, hats and an animal's tail trail
+- generated characters' scarf ends, long hair, buns, floppy and pointy ears, hats, an animal's tail, a robot's
+  antenna, a cape (far), a wizard hat and a party hat trail
   downwind on a spring: they lag a gust and swing past it (a scarf's end about 23° when windy,
   45° in a gale, never over the head). Imported SVG characters (except a part `tail`), round ears, short or curly hair
   and glasses do not move (nothing marks such pieces in a drawing);

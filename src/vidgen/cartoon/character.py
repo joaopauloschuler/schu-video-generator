@@ -30,7 +30,16 @@ import numpy as np
 from manim import VGroup, VMobject
 
 from vidgen.cartoon.acting import PERSON_MOTION, SpeciesMotion, species_motion
-from vidgen.cartoon.idle import IdleClock, breath_scale, idle_seed, sway_angle, tail_sway_angle
+from vidgen.cartoon.idle import (
+    ANTENNA_DIM_SHAPE,
+    IdleClock,
+    antenna_light_on,
+    antenna_sway_angle,
+    breath_scale,
+    idle_seed,
+    sway_angle,
+    tail_sway_angle,
+)
 from vidgen.cartoon.limbs import ELBOW_BEND, FEET, HANDS, KNEE_BEND, LIMBS, fold, limb_side, solve_two_bone, wrap_degrees
 from vidgen.cartoon.motion import DEFAULT_MOTION, motion_strength, resolve_motion
 from vidgen.cartoon.poses import KINDS, PoseTable, chosen_shape, find_entry, kind_parts, merged_table
@@ -47,8 +56,10 @@ from vidgen.theme import Theme
 PART_NAMES: tuple[str, ...] = (
     "body", "legs", "leg_left", "leg_left_lower", "leg_right", "leg_right_lower",
     "arm_left", "arm_left_lower", "arm_right", "arm_right_lower", "head", "eyes", "brows", "mouth", "accessory", "tail",
+    "antenna", "cape",
 )
-#: Parts every character has; the legs, the lower segments, ``accessory`` and ``tail`` are optional.
+#: Parts every character has; the legs, the lower segments, ``accessory``, ``tail``, ``antenna``
+#: and ``cape`` are optional.
 REQUIRED_PARTS: tuple[str, ...] = ("body", "arm_left", "arm_right", "head", "eyes", "brows", "mouth")
 #: The legs drawn one leg each; a character draws its legs either so or as one ``legs`` part.
 SINGLE_LEG_PARTS: tuple[str, ...] = ("leg_left", "leg_left_lower", "leg_right", "leg_right_lower")
@@ -58,15 +69,15 @@ DEFAULT_PARENTS: dict[str, str | None] = {
     "body": None, "legs": "body", "leg_left": "body", "leg_left_lower": "leg_left", "leg_right": "body",
     "leg_right_lower": "leg_right", "arm_left": "body", "arm_left_lower": "arm_left", "arm_right": "body",
     "arm_right_lower": "arm_right", "head": "body", "eyes": "head", "brows": "head", "mouth": "head", "accessory": "head",
-    "tail": "body",
+    "tail": "body", "antenna": "head", "cape": "body",
 }
 #: Default draw order (low first). Facing right, ``arm_right`` is the far arm (behind the body)
 #: and ``leg_right`` the far leg; each lower segment is drawn over its upper one; a ``tail``
-#: comes out from behind everything.
+#: comes out from behind everything but a ``cape``; a robot's ``antenna`` stands behind its head.
 DEFAULT_DRAW_ORDER: dict[str, int] = {
     "arm_right": 10, "arm_right_lower": 11, "leg_right": 16, "leg_right_lower": 17, "legs": 20,
     "leg_left": 22, "leg_left_lower": 23, "body": 30, "arm_left": 40, "arm_left_lower": 41, "head": 50,
-    "eyes": 60, "mouth": 60, "brows": 70, "accessory": 80, "tail": 5,
+    "eyes": 60, "mouth": 60, "brows": 70, "accessory": 80, "tail": 5, "antenna": 49, "cape": 3,
 }
 #: Draw order of the front view (DESIGN.md §69.44): both arms hang beside the body, in front of it.
 FRONT_DRAW_ORDER: dict[str, int] = {**DEFAULT_DRAW_ORDER, "arm_right": 42, "arm_right_lower": 43}
@@ -861,7 +872,8 @@ class Character(VGroup):
         return self._idle is not None
 
     def start_idle(self, seed: int | None = None) -> Character:
-        """Breathe (the body scales a little), sway the head slightly, swish a ``tail`` and blink
+        """Breathe (the body scales a little), sway the head slightly, swish a ``tail``, wobble a
+        robot's ``antenna`` and blink its light (:func:`~vidgen.cartoon.idle.antenna_light_on`) and blink
         (eyes ``closed``) at seeded random intervals of 2 to 6 s (``seed`` default: from the name;
         :func:`~vidgen.cartoon.idle.blink_times`), from now, through an updater. The motion is a
         layer on top of the poses: :meth:`state`, :meth:`set_state`, :class:`PoseChange` and
@@ -900,6 +912,9 @@ class Character(VGroup):
             self._set_overlay("head", PartPose(angle=sway_angle(idle.seconds, idle.seed)))
         if "tail" in self._shapes:
             self._set_overlay("tail", PartPose(angle=tail_sway_angle(idle.seconds, idle.seed)))
+        if "antenna" in self._shapes:   # a robot's antenna wobbles on its spring, its light blinking
+            dim = ANTENNA_DIM_SHAPE in self._shapes["antenna"] and not antenna_light_on(idle.seconds, idle.seed)
+            self._set_overlay("antenna", PartPose(angle=antenna_sway_angle(idle.seconds, idle.seed), shape=ANTENNA_DIM_SHAPE if dim else None))
         if "closed" in self._shapes.get("eyes", {}):
             self._set_overlay("eyes", PartPose(shape="closed") if idle.is_blinking else None)
         return self.refresh()
@@ -1231,8 +1246,8 @@ def build_character(
     by the generator with its colours resolved in ``theme`` (default: the current theme), or
     ``look.svg`` (relative to ``root``, default: the active project's folder) split into parts.
     Its idle motion runs unless the entry says ``idle: false``. Its ``cartoon_motion`` is the
-    entry's, else ``motion`` (the scene's or the video's), else ``lively``. An animal walks,
-    runs and jumps its species' way (:attr:`Character.species_motion`)."""
+    entry's, else ``motion`` (the scene's or the video's), else ``lively``. An animal or a robot
+    walks, runs and jumps its species' way, a robot on wheels rolls (:attr:`Character.species_motion`)."""
     motion = resolve_motion(entry.cartoon_motion, motion)
     if entry.look.svg is not None:
         from vidgen.cartoon.svg_look import SVG_REQUIRED_PARTS, svg_character_parts
@@ -1252,7 +1267,8 @@ def build_character(
             look_parts(entry.look, colors), name=entry.name, height=height, facing=facing, voice=entry.voice,
             poses=entry.poses, expressions=entry.expressions, motion=motion, front=look_parts(entry.look, colors, front=True),
         )
-        built.species_motion = species_motion(entry.look.species)
+        wheels = entry.look.species == "robot" and entry.look.robot_look().moves_on == "wheels"
+        built.species_motion = species_motion(entry.look.species, wheels=wheels)
     return built.start_idle() if entry.idle else built
 
 

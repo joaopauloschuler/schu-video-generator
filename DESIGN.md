@@ -78,7 +78,9 @@ src/vidgen/
                           # poses, mirroring; character(); part drawings cached by look, §69.20), cast.py (characters: lookups, checks; no manim),
                           # generator.py (look: parameters -> parts, §69.1), clothes.py (outfits,
                           # patterns, shoes, things worn on the body, §69.47), animals.py (species:
-                          # heads, paws, wings, tails, a beak that talks, §69.48), contrast.py (how
+                          # heads, paws, wings, tails, a beak that talks, §69.48), robots.py (species
+                          # robot: heads, screen face, antenna, joints, wheels, §69.58), costumes.py
+                          # (crown, wizard hat, party hat, cape, §69.58), contrast.py (how
                           # clearly two looks differ, §69.49; no manim), primitives.py (the
                           # generator's shapes, trailing and outer-hair marks, outline maths), svg_look.py (look: {svg} -> parts by
                           # element ids, §69.2), still.py (`vidgen character --png`), poses.py (pose and
@@ -928,6 +930,8 @@ Step 122 (§69.56) adds `SMALL_PROPS`, `WATERING_SPOUT`, `OVERHEAD_PROPS`, `FULL
 `Prop.drawn_points`, `Prop.anchor`; `held_height(full_size=False)`; `holding_problems(kinds=None)`;
 `HANDLING_ACTIONS` gains `let_go`, `pour`; actions `let_go`, `pour`; built-in sound `phone`.
 Compatible: a scene without them renders as before (`props.png` is byte-identical).
+Step 124 (§69.58) adds no names; `PART_NAMES` gains `antenna` and `cape` at its end (draw-order
+ties and pose-change order of the other parts unchanged; compatible).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -5150,7 +5154,8 @@ take `CharacterName` options.
 - **Parts** (`cartoon/character.py`): `PART_NAMES = body, legs, arm_left, arm_right, head, eyes,
   brows, mouth, accessory` (Step 92 adds `leg_left`, `leg_right` and the lower segments
   `arm_left_lower`, `arm_right_lower`, `leg_left_lower`, `leg_right_lower`, §69.26; Step 114 an
-  animal's `tail`, parent `body`, draw order 5, §69.48); `REQUIRED_PARTS` all but `legs`, `accessory` and `tail` (`Character(...,
+  animal's `tail`, parent `body`, draw order 5, §69.48; Step 124 a robot's `antenna`, parent `head`,
+  order 49, and a `cape`, parent `body`, order 3, §69.58); `REQUIRED_PARTS` all but `legs`, `accessory`, `tail`, `antenna` and `cape` (`Character(...,
   required=)` overrides it: an imported SVG needs only `body`, §69.2). A part is a
   `CharacterPart(name, shapes, pivot, parent=None, order=None)`: `shapes` maps shape names to
   `VMobject`s (the first is the rest shape; e.g. eyes `open` / `closed`, mouth `smile` / `open`;
@@ -8942,6 +8947,70 @@ primitives in the look's colours, no feature or colour combination taken from a 
   front, in CONFIG.md "Animal characters". `animals.png` is unchanged.
 - Step 114's six species and every human look draw exactly as before (digests pinned in
   `tests/test_cartoon_animals.py`). Tests: `tests/test_cartoon_more_animals.py`.
+
+### 69.58 Robots and costumes (Step 124)
+
+`config.Species` gains `robot`, built by the new `look.robot` (`config.RobotLook`: `head` box |
+round, `face` eyes | screen, `antenna` true | false, `moves_on` legs | wheels; `CharacterLook.robot_look()`
+gives the defaults when it is not given). A robot is a friendly generic machine from primitives
+in the look's colours, no shape taken from a known film, TV or game robot (no dome head, no
+binocular eyes, no humanoid protocol figure). Rules: `ROBOT_OWN_KEYS` (`ears`, `nose`,
+`facial_hair`, `hair`) are not given with a robot; `robot` with another species and `shoes` on
+wheels are config errors. `animals.is_animal` is false for a robot; `SPECIES_WITHOUT_TAIL` holds
+`robot`.
+
+- **Drawing** (`cartoon/robots.py`, called by the generator): the `head` part is a neck, side
+  bolts, a rounded box (`BOX_HEAD`) or a ball, and a face plate (`fur_tint` of the plating) or a
+  dark screen (`SCREEN_COLOR`, a glare line). The eyes, brows and mouth are the person's parts;
+  on a screen they are drawn with `features` = `SCREEN_GLOW` (`face_colors`) and the open eyes
+  are filled glowing ellipses (`screen_eye`; sleepy: the lower half), so visemes, blinks and
+  expressions show on the screen. Arms and legs are the person's segments in the plating (a plain
+  outfit) or the outfit's colours, with `joint` bolts at the shoulders, elbows and knees,
+  gripper `hand`s and block `foot`s (none with shoes); on wheels each shin ends at a `wheel`
+  (`WHEEL_RADIUS`, tyre `TYRE_COLOR`, the sole still at 0, so seats, planting and grounding are
+  unchanged). A `chest_panel` of three lights goes over every `body` shape.
+- **`antenna` part** (new in `PART_NAMES`, `PosePart`, `SVG_PART_NAMES`; parent `head`, draw order
+  49, behind the head): a socket, a coil (stroked zigzag) and a ball light in `colors.accessory`,
+  pivoting at the socket; shapes `default` and `dim` (`idle.ANTENNA_DIM_SHAPE`, the light 55 %
+  darker). The coil and light trail in the wind (`TRAIL_WEIGHTS["antenna"]` 0.35);
+  `follow_angles` gives it `-FOLLOW_ANTENNA_DEGREES (40) × (forward + up)`, limit 25° (it tips back
+  as the robot sets off); idle: `antenna_sway_angle` (1.7 s, 3°) and `antenna_light_on` (dim 30 %
+  of every 1.3 s, lit at the clock's start) as overlays. `crown_top` counts it, so effect symbols
+  go above it.
+- **Moving** (`acting.py`): a legged robot walks with `SPECIES_MOTIONS["robot"]` (knees 0.5,
+  elbows 0.4); on wheels `ROLLING_MOTION` (`Gait(swing 0, knee 0, elbow 0, bob 0.25, rolls=True)`;
+  a run keeps the roll and leans like a run): `species_motion(species, wheels=)`, set by
+  `build_character`. `Gait.rolls` reaches `foley.PlayedAction.rolls` (from `Walk.gait`), which
+  plays no footsteps.
+- **Costume pieces** (`cartoon/costumes.py`; `Accessory` gains `crown`, `wizard_hat`,
+  `party_hat`, `cape`): the first three are drawn in the `accessory` part (`HEADWEAR_DRAWINGS`,
+  `HEAD_ACCESSORIES`), their base `BASE_RISE` 0.72 head radii above the head's centre (the hat's
+  brim): a crown (band, points with balls, gems in `colors.clothes`; rigid), a wizard hat (brim,
+  a `tapered_band` cone along a `path_curve` bending back, band, two stars; trailing
+  `wizard_hat` 0.4), a party hat (a cone turned 12°, two stripes `clip_to_box`ed, a pompom;
+  trailing `party_hat` 0.2). `config.TOP_OF_HEAD` (hat, cap, crown, wizard_hat, party_hat): at
+  most one per look ("X and Y are both worn on top of the head", the old hat-and-cap message
+  unchanged).
+- **`cape` part** (new; parent `body`, draw order 3, behind the tail and everything): from the
+  shoulders to `CAPE_HEM` 0.45 of the legs' length, a waving hem; from the side flaring out
+  behind the back, from the front its inside (`fur_shade` of `colors.accessory`) beside the body;
+  pivot at the neck. Its ties and clasp (`cape_clasp`) go over every `body` shape. Trailing
+  `cape` 0.9; `follow_angles` `FOLLOW_CAPE_DEGREES (50) × (forward - up)`, limit 35° (back as it
+  sets off or falls, on as it stops); `walking_state` turns it back by `WALK_CAPE_FLUTTER` 0.4 of
+  the size of the arm swing each step.
+- **Voice**: `[beep]` (`VOICE_SOUNDS`, said `Beep boop!`, face `happy`, viseme `E`) with the new
+  built-in sound `beep` (0.4 s, two soft electronic notes) at a line's start or end, like a gasp
+  (§69.33); voices work as for anyone.
+- **Cast and contrast**: `cast.character_part_shapes` adds `antenna` (`default`, `dim`) and
+  `cape`; `vidgen character` prints `species robot (box head, eyes face, antenna, legs)`.
+  `contrast.HEADWEAR` gains the three hats; two robots differ by details `robot head ...`,
+  `robot face ...`, `robot on ...`, `antenna`. `random_cast` draws a robot's plating from
+  `SPECIES_COLORS["robot"]` and its build from `ROBOT_CHOICES` (only for `robot`, so other casts
+  keep their picks); costume pieces are never drawn at random.
+- **Gallery**: `docs/gallery/media/robots.png` (four robots and four costumed characters, side and
+  front). Every earlier look draws as before: Steps 113 / 114 pins in `tests/test_cartoon_animals.py`,
+  Step 123 species pinned in `tests/test_cartoon_robots.py` (taken at 8dceb29). Tests:
+  `tests/test_cartoon_robots.py`.
 
 ## 70. Render jobs: `--jobs auto` (Step 117)
 

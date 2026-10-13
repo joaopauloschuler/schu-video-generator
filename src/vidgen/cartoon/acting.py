@@ -189,7 +189,8 @@ class Gait:
     step length, :data:`STEP_LENGTH` × it), ``swing`` (legs, thighs and arms), ``knee`` and
     ``elbow`` (the bends), ``bob`` (the body's rise); ``lean``: degrees the body leans forward at
     full speed (it builds up and fades with the speed); ``waddle``: degrees the body rocks from
-    one foot to the other with each step (a penguin's waddle, DESIGN.md §69.57)."""
+    one foot to the other with each step (a penguin's waddle, DESIGN.md §69.57); ``rolls``: it
+    rolls on wheels (a robot's, §69.58): no steps are heard."""
 
     stride: float = 1.0
     swing: float = 1.0
@@ -198,6 +199,7 @@ class Gait:
     bob: float = 1.0
     lean: float = 0.0
     waddle: float = 0.0
+    rolls: bool = False
 
 
 #: A walk, and a run (``run_to``, DESIGN.md §69.41): longer strides, bigger swings and bends, the
@@ -222,25 +224,36 @@ class SpeciesMotion:
 
     def walking(self, gait: Gait) -> Gait:
         """The gait to move with when an action asks for ``gait`` (:data:`WALKING` or
-        :data:`RUNNING`): this walk instead of a plain walk; a run with this walk's waddle."""
+        :data:`RUNNING`): this walk instead of a plain walk; a run with this walk's waddle; on
+        wheels this roll, leaning forward like a run."""
         if gait == WALKING:
             return self.gait
+        if self.gait.rolls:
+            return replace(self.gait, lean=gait.lean)
         return gait if not self.gait.waddle else replace(gait, waddle=self.gait.waddle)
 
 
 #: The species that move their own way: a turtle plods slowly with short steps, a penguin
-#: waddles with short quick steps, a frog jumps higher. Every other look moves like a person.
+#: waddles with short quick steps, a frog jumps higher, a robot walks with stiff knees and
+#: elbows. Every other look moves like a person.
 SPECIES_MOTIONS: dict[str, SpeciesMotion] = {
     "turtle": SpeciesMotion(Gait(stride=0.7, swing=0.7, knee=0.6, elbow=0.6, bob=0.5), speed=0.4),
     "penguin": SpeciesMotion(Gait(stride=0.55, swing=0.45, knee=0.35, elbow=0.3, bob=1.5, waddle=9.0), speed=0.7),
     "frog": SpeciesMotion(jump=1.8),
+    "robot": SpeciesMotion(Gait(knee=0.5, elbow=0.4)),
 }
+#: A robot on wheels (DESIGN.md §69.58): it glides, legs and arms still, a little bump with each
+#: wheel turn.
+ROLLING_MOTION = SpeciesMotion(Gait(swing=0.0, knee=0.0, elbow=0.0, bob=0.25, rolls=True))
 #: A person's (and every species not in :data:`SPECIES_MOTIONS`).
 PERSON_MOTION = SpeciesMotion()
 
 
-def species_motion(species: str) -> SpeciesMotion:
-    """How a look of ``species`` moves (:data:`SPECIES_MOTIONS`, else :data:`PERSON_MOTION`)."""
+def species_motion(species: str, *, wheels: bool = False) -> SpeciesMotion:
+    """How a look of ``species`` moves (:data:`SPECIES_MOTIONS`, else :data:`PERSON_MOTION`);
+    ``wheels``: it rolls on wheels (:data:`ROLLING_MOTION`)."""
+    if wheels:
+        return ROLLING_MOTION
     return SPECIES_MOTIONS.get(species, PERSON_MOTION)
 
 
@@ -422,6 +435,7 @@ __all__ = [
     "LOOK_MAX_DEGREES",
     "OFFSTAGE_GAP",
     "PERSON_MOTION",
+    "ROLLING_MOTION",
     "RUNNING",
     "RUN_SPEED",
     "SAME_X",

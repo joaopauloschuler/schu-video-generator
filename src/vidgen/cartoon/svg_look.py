@@ -50,6 +50,7 @@ if TYPE_CHECKING:
 SVG_PART_NAMES: tuple[str, ...] = (
     "body", "legs", "leg_left", "leg_left_lower", "leg_right", "leg_right_lower",
     "arm_left", "arm_left_lower", "arm_right", "arm_right_lower", "head", "eyes", "brows", "mouth", "accessory", "tail",
+    "antenna", "cape",
 )
 #: Legs drawn one each (``legs`` is both in one piece; a file has one kind).
 SVG_SINGLE_LEGS: tuple[str, ...] = ("leg_left", "leg_left_lower", "leg_right", "leg_right_lower")

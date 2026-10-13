@@ -104,6 +104,8 @@ class PlayedAction:
     """The shares of its time between which a prop it moved flew (a ``throw``, ``blow_away``)."""
     vehicle: str | None = None
     """The kind of the vehicle a ``ride_to`` moved (DESIGN.md §69.52)."""
+    rolls: bool = False
+    """A walk on wheels (a robot's, DESIGN.md §69.58): no footsteps."""
 
 
 @dataclass(frozen=True)
@@ -180,7 +182,8 @@ def foley_cues(played: PlayedAction) -> list[FoleyCue]:
     if played.action in WALKING_ACTIONS:
         if played.action == "enter":
             cues.append(FoleyCue(start, "whoosh", WHOOSH_GAIN))
-        for k, (share, last) in enumerate(footfall_shares(played.heights, played.phases, played.step_length)):
+        footfalls = [] if played.rolls else footfall_shares(played.heights, played.phases, played.step_length)
+        for k, (share, last) in enumerate(footfalls):
             pitch, intensity = FEET[k % 2]
             cues.append(FoleyCue(start + share * seconds, "footstep", FOOTSTEP_GAIN, {"pitch": pitch, "intensity": LAST_STEP_INTENSITY if last else intensity}))
         if played.action == "exit":

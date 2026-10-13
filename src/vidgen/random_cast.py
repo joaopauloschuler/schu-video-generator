@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, TypeVar, get_args
 
 from vidgen.cartoon.contrast import MIN_CONTRAST, LookFeatures, look_features, min_contrast
-from vidgen.config import SPECIES_OWN_KEYS, Species
+from vidgen.config import ROBOT_OWN_KEYS, SPECIES_OWN_KEYS, RobotLook, Species
 from vidgen.errors import VidgenError
 from vidgen.screenplay import VOICE_KINDS, assign_voices
 
@@ -70,14 +70,21 @@ SKIN_COLORS: tuple[str, ...] = (
 )
 FUR_COLORS: tuple[str, ...] = ("#B5652E", "#8A8A8A", "#F2EDE4", "#3A3A3A", "#C8A27A", "#6E4B32", "#E0B860", "#5C6F8A")
 #: Natural colours of the species whose fur, feathers or skin differ from :data:`FUR_COLORS`
-#: (a turtle's shell is its ``hair`` colour: :data:`SHELL_COLORS`).
+#: (a turtle's shell is its ``hair`` colour: :data:`SHELL_COLORS`; a robot's: its plating).
 SPECIES_COLORS: dict[str, tuple[str, ...]] = {
     "fox": ("#C8642B", "#B5532E", "#D98A4E", "#8A8A8A", "#F2EDE4", "#6E4B32"),
     "owl": ("#8A6E52", "#B39B7A", "#6E5A48", "#C9C2B6", "#5C6F8A"),
     "frog": ("#6FA84A", "#4E8F3A", "#9BBF4C", "#3F8F7A", "#C9B04A", "#7A9A5A"),
     "turtle": ("#9DB06B", "#7FA05A", "#A7A27A", "#6E8F6A", "#B8B07A"),
     "penguin": ("#2F3440", "#3A3A3A", "#3B4A5F", "#4A4F5A", "#5C6F8A"),
+    "robot": ("#A7B4C2", "#C9CED6", "#8A9BA8", "#E9E4D8", "#F0AD4E", "#8FA35A", "#6C8EBF", "#D96B5B"),
 }
+#: A random robot's build (``look.robot``, DESIGN.md §69.58): each value as likely; the defaults
+#: are left out of the look.
+ROBOT_CHOICES: dict[str, tuple[Any, ...]] = {
+    "head": ("box", "round"), "face": ("eyes", "screen"), "antenna": (True, True, False), "moves_on": ("legs", "legs", "wheels"),
+}
+ROBOT_DEFAULTS: dict[str, Any] = RobotLook().model_dump()
 SHELL_COLORS: tuple[str, ...] = ("#7A5C3E", "#6B4A2B", "#8C6E3F", "#5F6B3A", "#9A7A4E", "#4E5A3A")
 CLOTHES_COLORS: tuple[str, ...] = (
     "#D9534F", "#F0AD4E", "#E8D44D", "#5CB85C", "#2E8B8B", "#4A7BD0", "#3B4A8F", "#8E5BB5", "#D96BA0", "#7A5C3E",
@@ -127,8 +134,15 @@ def random_look(rng: random.Random, kind: str, species: Sequence[str] = ("human"
         look["accessories"] = worn
     if animal != "human":
         look["species"] = animal
-        for key in SPECIES_OWN_KEYS:
+        for key in ROBOT_OWN_KEYS if animal == "robot" else SPECIES_OWN_KEYS:
             look.pop(key, None)
+    if animal == "robot":
+        robot = {key: _pick(rng, values) for key, values in ROBOT_CHOICES.items()}
+        if robot["moves_on"] == "wheels":
+            look.pop("shoes", None)
+        differs = {key: value for key, value in robot.items() if ROBOT_DEFAULTS[key] != value}
+        if differs:
+            look["robot"] = differs
     defaults = {"head_size": 1.0, "nose": "none", "ears": "none", "hair": "none", "outfit": "plain", "pattern": "none", "shoes": "none"}
     look = {key: value for key, value in look.items() if defaults.get(key) != value}
     colors = {

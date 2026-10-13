@@ -22,7 +22,7 @@ from vidgen.cartoon.effect_symbols import crown_top, head_box
 from vidgen.cartoon.generator import TRAIL_WEIGHTS, generate_parts, resolve_proportions
 from vidgen.cartoon.primitives import clip_to_box, dot_centres, span_at
 from vidgen.cartoon.transition import walking_state
-from vidgen.config import HEAD_ACCESSORIES, SEATED_BODY_SHAPE, SKIRTED_OUTFITS, CharacterColors, CharacterEntry, CharacterLook
+from vidgen.config import HEAD_ACCESSORIES, SEATED_BODY_SHAPE, SKIRTED_OUTFITS, TOP_OF_HEAD, CharacterColors, CharacterEntry, CharacterLook
 from vidgen.lint.color import hex_rgb, relative_luminance
 from vidgen.project import Project
 from vidgen.theme import Theme
@@ -96,13 +96,15 @@ ACCESSORIES: tuple[str, ...] = get_args(get_args(CharacterLook.model_fields["acc
 
 def sampled_looks(count: int, seed: int = 113) -> list[dict[str, Any]]:
     """``count`` looks drawn at random (seeded) from every parameter's values, each with up to
-    three accessories (never hat and cap together) and every third with a seed."""
+    three accessories (never two worn on top of the head: the first one drawn is kept) and every
+    third with a seed."""
     rng = random.Random(seed)
     looks = []
     for k in range(count):
         values: dict[str, Any] = {name: rng.choice(get_args(CharacterLook.model_fields[name].annotation)) for name in CHOICES}
         chosen = rng.sample(ACCESSORIES, rng.randint(0, 3))
-        values["accessories"] = [a for a in chosen if not (a == "cap" and "hat" in chosen)]
+        on_top = [a for a in chosen if a in TOP_OF_HEAD]
+        values["accessories"] = [a for a in chosen if a not in on_top[1:]]
         values["head_size"] = round(rng.uniform(0.7, 1.4), 2)
         if k % 3 == 0:
             values["seed"] = k

@@ -457,6 +457,18 @@ def _phone(s: Synth) -> np.ndarray:
     return tone * gate
 
 
+def _beep(s: Synth) -> np.ndarray:
+    # a friendly robot chirp, "bee-boop": two soft electronic notes (7 harmonics), ~1.3 kHz with a
+    # quick upward blip at its start, then ~880 Hz; the first 42 % and the last 52 % of the length
+    u = s.u
+    high = (u < 0.42).astype(float)
+    freq = s.ratio * np.where(u < 0.45, 1320.0 * (1 + 0.08 * np.exp(-s.t / 0.015)), 880.0)
+    tone = _harmonic_tone(_tone(freq, s.n), 0.35 + 0.2 * s.intensity, 7, 1.0)
+    edge = 0.03
+    gate = np.clip(u / edge, 0, 1) * np.clip((0.42 - u) / edge, 0, 1) * high + np.clip((u - 0.48) / edge, 0, 1) * np.clip((1.0 - u) / edge, 0, 1)
+    return tone * gate
+
+
 def _harmonic_tone(phase: np.ndarray, brightness: np.ndarray | float, harmonics: int, tilt: float) -> np.ndarray:
     """A tone of ``harmonics`` partials of ``phase``: partial ``h`` at ``brightness ** (h - 1) /
     h ** tilt`` (brightness 0..1, constant or per sample: a brass or muted-horn timbre)."""
@@ -691,6 +703,12 @@ BUILTIN_SOUNDS: dict[str, BuiltinSound] = {
             "~1.2 kHz, falling a little) with a faint low hum gliding from ~190 to ~130 Hz, swelling "
             "over the first fifth and trailing off.",
             "tiredness, relief or giving up (a beat's [sigh] at the start or end of a line plays it)",
+        ),
+        BuiltinSound(
+            "beep", _beep, 0.4, (0.2, 1.2),
+            "A friendly robot chirp, 'bee-boop': two soft electronic notes, ~1.3 kHz (with a quick "
+            "upward blip as it starts) then ~880 Hz, the first 42% and the last 52% of its length.",
+            "a robot's voice sound (a beat's [beep] at the start or end of a line plays it), a gadget",
         ),
         BuiltinSound(
             "sting_reveal", _sting_reveal, 1.4, (0.6, 4.0),

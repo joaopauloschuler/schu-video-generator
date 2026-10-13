@@ -101,8 +101,8 @@ FOX_TAIL = (((0.0, 0.0), (-0.08, -0.02), (-0.17, 0.0), (-0.24, 0.06), (-0.28, 0.
 
 
 def is_animal(look: CharacterLook) -> bool:
-    """Whether ``look`` is an animal (``species`` other than ``human``)."""
-    return look.species != "human"
+    """Whether ``look`` is an animal (``species`` other than ``human`` and ``robot``)."""
+    return look.species not in ("human", "robot")
 
 
 def _mix(color: str, other: str, share: float) -> str:

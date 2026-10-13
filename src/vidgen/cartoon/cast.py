@@ -14,6 +14,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from vidgen.cartoon.idle import ANTENNA_DIM_SHAPE
 from vidgen.cartoon.limbs import UPPER_OF
 from vidgen.cartoon.poses import EXPRESSION_PARTS, POSE_PARTS, chosen_shape, merged_table, unknown_name_message
 from vidgen.config import (
@@ -91,6 +92,10 @@ def character_lines(entry: CharacterEntry, theme: Theme, root: Path | None = Non
         resolved = theme.color(value)
         colors.append(f"{part} {value}" if resolved.lower() == value.lower() else f"{part} {value} ({resolved})")
     species = "" if look.species == "human" else f"species {look.species}, "
+    if look.species == "robot":
+        robot = look.robot_look()
+        moving = "wheels" if robot.moves_on == "wheels" else "legs"
+        species = f"species robot ({robot.head} head, {robot.face} face, {'antenna, ' if robot.antenna else ''}{moving}), "
     return [
         f"character {entry.name}  (voice: {entry.voice or 'none'})",
         f"  look:   {species}body {look.body}, head_size {look.head_size:g}, eyes {look.eyes}, nose {look.nose}, hair {look.hair}, "
@@ -184,7 +189,8 @@ def character_look_warnings(config: VideoConfig, root: Path) -> list[str]:
 
 
 #: Shape names of a generated character's parts (``cartoon/generator.py``); the first is the rest
-#: shape. A head accessory adds ``accessory``, an animal (``species``) a ``tail`` (not a frog).
+#: shape. A head accessory adds ``accessory``, an animal (``species``) a ``tail`` (not a frog), a
+#: robot an ``antenna`` (unless ``robot.antenna`` is false), a ``cape`` accessory a ``cape``.
 GENERATED_SHAPES: dict[str, list[str]] = {
     "body": ["default"], "leg_left": ["default"], "leg_left_lower": ["default"], "leg_right": ["default"],
     "leg_right_lower": ["default"], "arm_left": ["default"], "arm_left_lower": ["default"], "arm_right": ["default"],
@@ -207,6 +213,10 @@ def character_part_shapes(entry: CharacterEntry, root: Path) -> dict[str, list[s
         shapes["body"].append(SEATED_BODY_SHAPE)
     if entry.look.species != "human" and entry.look.species not in SPECIES_WITHOUT_TAIL:
         shapes["tail"] = ["default"]
+    if entry.look.species == "robot" and entry.look.robot_look().antenna:
+        shapes["antenna"] = ["default", ANTENNA_DIM_SHAPE]
+    if "cape" in entry.look.accessories:
+        shapes["cape"] = ["default"]
     return shapes
 
 

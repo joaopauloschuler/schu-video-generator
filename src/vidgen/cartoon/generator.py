@@ -9,7 +9,10 @@ the same parts and shapes with the face in the middle of the head, the pupils lo
 symmetric nose, hair and body, and temples on both sides of glasses. What is worn on the body
 (the outfit, its pattern, shoes, scarf, bag, backpack, necklace) is drawn by
 :mod:`vidgen.cartoon.clothes`; an animal's head, paws, wings or flippers, its feet, the tail,
-a turtle's shell and the species' proportions (``species``) by :mod:`vidgen.cartoon.animals`.
+a turtle's shell and the species' proportions (``species``) by :mod:`vidgen.cartoon.animals`; a
+robot's head, antenna, joints, hands, feet or wheels and chest panel by
+:mod:`vidgen.cartoon.robots`; the costume pieces (crown, wizard hat, party hat, cape) by
+:mod:`vidgen.cartoon.costumes`.
 """
 
 from __future__ import annotations
@@ -22,7 +25,7 @@ from dataclasses import dataclass, fields, replace
 import numpy as np
 from manim import PI, Arc, Circle, Ellipse, Line, RoundedRectangle, VGroup, VMobject
 
-from vidgen.cartoon import animals
+from vidgen.cartoon import animals, costumes, robots
 from vidgen.cartoon.character import OUTLINE_WIDTH, TRAIL_ATTRIBUTE, CharacterPart
 from vidgen.cartoon.clothes import LIMB_WIDTH, body_shapes, limb_colors, shoe
 from vidgen.cartoon.primitives import (
@@ -180,9 +183,18 @@ def _legs(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> list
     knee = (hip + foot) / 2
     _, _, thigh_color, shin_color = limb_colors(look, c)
     parts = []
+    robot = robots.is_robot(look)
+    if robot:
+        _, _, thigh_color, shin_color = robots.limb_colors(look, c, limb_colors(look, c))
     for name, side in (("leg_left", 1.0), ("leg_right", -1.0)):
         parts.append(CharacterPart(name, {"default": VGroup(_segment(side * x, hip, knee, thigh_color, c, w))}, (side * x, hip)))
-        if look.species in animals.WINGED and shin_color == c["skin"]:   # bare: a bird's thin shin and toes
+        if robot:   # a knee bolt, and a block foot or a wheel (§69.58)
+            if look.robot_look().moves_on == "wheels":
+                shin = VGroup(_segment(side * x, knee, robots.WHEEL_RADIUS, shin_color, c, w), *robots.wheel(side * x, f.front, c, w))
+            else:
+                shin = VGroup(_segment(side * x, knee, foot, shin_color, c, w), *shoe(look, side * x, f.front, c, w), *robots.foot(look, side * x, f.front, c, w))
+            shin.add(robots.joint(side * x, knee, c, w))
+        elif look.species in animals.WINGED and shin_color == c["skin"]:   # bare: a bird's thin shin and toes
             shin = VGroup(*animals.bird_shin(look, side * x, knee, f.front, c, w), *shoe(look, side * x, f.front, c, w))
         else:
             shin = VGroup(_segment(side * x, knee, foot, shin_color, c, w), *shoe(look, side * x, f.front, c, w))
@@ -204,6 +216,10 @@ def _arm(name: str, side: float, look: CharacterLook, f: Frame, c: Mapping[str, 
         upper, lower = animals.wing(x, top, elbow, wrist, c, w)
     elif look.species == "penguin":   # a flipper, whatever the sleeves (§69.57)
         upper, lower = animals.flipper(x, top, elbow, wrist, c, w)
+    elif robots.is_robot(look):   # bolted joints and a gripper (§69.58)
+        upper_color, lower_color, _, _ = robots.limb_colors(look, c, limb_colors(look, c))
+        upper = VGroup(_segment(x, top, elbow, upper_color, c, w), robots.joint(x, shoulder_y, c, w))
+        lower = VGroup(_segment(x, elbow, wrist, lower_color, c, w), robots.hand(x, wrist, c, w), robots.joint(x, elbow, c, w))
     else:
         upper = VGroup(_segment(x, top, elbow, upper_color, c, w))
         hand = animals.paw(x, wrist, c, w) if animals.is_animal(look) else outlined(Circle(radius=0.045).move_to([x, wrist, 0]), c["skin"], c["outline"], w)
@@ -325,6 +341,8 @@ def _facial_hair(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) 
 def _head(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> VGroup:
     """Back hair, ears, the head, the hair cap, facial hair and the nose (all move with the head);
     an animal's ears, head and face (muzzle, snout or beak, nose, whiskers) instead (§69.48)."""
+    if robots.is_robot(look):   # its own neck, head and face plate or screen; no hair (§69.58)
+        return VGroup(*robots.head(look, f, c, w))
     group = VGroup(*(outlined(m, c["hair"], c["outline"], w) for m in _hair_back(look, f)))
     if animals.is_animal(look):
         group.add(*animals.ears(look, f, c, w))
@@ -372,7 +390,10 @@ def _face(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> list
     r, fx = f.p.head_radius, f.face_x
     width, height = _eye_size(look, f)
     xs = _eye_xs(f)
-    open_eyes = VGroup(*(_open_eye(look, x, f, c, w) for x in xs))
+    if robots.has_screen(look):   # glowing on the screen (§69.58)
+        open_eyes = VGroup(*(robots.screen_eye(look.eyes, x, f.eye_y, width, height) for x in xs))
+    else:
+        open_eyes = VGroup(*(_open_eye(look, x, f, c, w) for x in xs))
     closed_y = f.eye_y - (0 if look.eyes == "sleepy" else 0.025 * r)
     closed_eyes = VGroup(*(Line([x - width * 0.6, closed_y, 0], [x + width * 0.6, closed_y, 0]).set_stroke(c["features"], width=w) for x in xs))
     brow_y = f.eye_y + height / 2 + animals.BROW_GAPS.get(look.species, 0.16) * r
@@ -468,6 +489,9 @@ def _worn_on_head(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float)
         group.add(*_cap(f, c, w))
     if "bow" in look.accessories:
         group.add(*_bow(f, c, w))
+    for piece, drawing in costumes.HEADWEAR_DRAWINGS.items():   # a crown, a wizard hat, a party hat (§69.58)
+        if piece in look.accessories:
+            group.add(*drawing(f, c, w))
     return group
 
 
@@ -486,19 +510,27 @@ def generate_parts(
     if look.species == "turtle":   # its shell on its back, behind the body and clothes
         for shape in body.values():
             shape.add_to_back(animals.shell(f, colors, w))
+    over_body = [*(robots.chest_panel(f, colors, w) if robots.is_robot(look) else []),
+                 *(costumes.cape_clasp(f, colors, w) if "cape" in look.accessories else [])]
+    if over_body:   # a robot's chest panel, a cape's ties and clasp (§69.58)
+        for k, shape in enumerate(body.values()):
+            shape.add(*(m if k == 0 else m.copy() for m in over_body))
     parts = [
         *_legs(look, f, colors, w),
         CharacterPart("body", body, (0.0, f.body_bottom + 0.02)),
         *_arm("arm_left", 1.0, look, f, colors, w),
         *_arm("arm_right", -1.0, look, f, colors, w),
         CharacterPart("head", {"default": _head(look, f, colors, w)}, (0.0, f.body_top - 0.02)),
-        *_face(look, f, colors, w),
+        *_face(look, f, robots.face_colors(look, colors), w),
     ]
     worn = _worn_on_head(look, f, colors, w)
     if worn.submobjects:
         parts.append(CharacterPart("accessory", {"default": worn}, (f.head_x, f.head_y)))
     if animals.is_animal(look) and look.species not in SPECIES_WITHOUT_TAIL:
         parts.append(animals.tail_part(look, f, colors, w))
+    for extra in (robots.antenna_part(look, f, colors, w) if robots.is_robot(look) else None, costumes.cape_part(look, f, colors, w)):
+        if extra is not None:
+            parts.append(extra)
     return _scaled_to_unit_height(parts)
 
 

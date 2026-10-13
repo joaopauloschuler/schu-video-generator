@@ -223,6 +223,11 @@ FOLLOW_HEAD_LIMIT = 8.0
 FOLLOW_ACCESSORY_LIMIT = 12.0
 FOLLOW_TAIL_LIMIT = 30.0
 FOLLOW_INWARD_LIMIT = 8.0
+#: A robot's antenna and a cape (DESIGN.md §69.58): both swing freely on the spring.
+FOLLOW_ANTENNA_DEGREES = 40.0
+FOLLOW_ANTENNA_LIMIT = 25.0
+FOLLOW_CAPE_DEGREES = 50.0
+FOLLOW_CAPE_LIMIT = 35.0
 #: Share of an animation's end over which follow-through fades out, so it ends in its state.
 FOLLOW_FADE_SHARE = 0.12
 _SPEED_STEP = 1e-3
@@ -261,13 +266,17 @@ def follow_angles(forward: float, up: float, strength: float) -> dict[str, float
     character faces) and ``up`` (:func:`follow_through`, heights per second): the arms trail
     and swing on, raised outwards while falling; the head and accessory tip back and on; an
     animal's tail (drawn behind it, DESIGN.md §69.48) swings back and down as the body sets off or
-    rises, and on past it as the body stops or falls."""
+    rises, and on past it as the body stops or falls; a robot's antenna tips back like the hat but
+    further, and a cape hanging from the shoulders swings back as the body sets off or falls
+    (§69.58)."""
     arm = _limited(FOLLOW_ARM_DEGREES * forward * strength, FOLLOW_ARM_LIMIT, FOLLOW_ARM_LIMIT)
     out = _limited(FOLLOW_ARM_DEGREES * up * strength, FOLLOW_INWARD_LIMIT, FOLLOW_ARM_LIMIT)
     head = _limited(-FOLLOW_HEAD_DEGREES * forward * strength, FOLLOW_HEAD_LIMIT, FOLLOW_HEAD_LIMIT)
     hat = _limited(-FOLLOW_ACCESSORY_DEGREES * forward * strength, FOLLOW_ACCESSORY_LIMIT, FOLLOW_ACCESSORY_LIMIT)
     tail = _limited(-FOLLOW_TAIL_DEGREES * (forward + up) * strength, FOLLOW_TAIL_LIMIT, FOLLOW_TAIL_LIMIT)
-    return {"arm_left": arm + out, "arm_right": arm - out, "head": head, "accessory": hat, "tail": tail}
+    antenna = _limited(-FOLLOW_ANTENNA_DEGREES * (forward + up) * strength, FOLLOW_ANTENNA_LIMIT, FOLLOW_ANTENNA_LIMIT)
+    cape = _limited(FOLLOW_CAPE_DEGREES * (forward - up) * strength, FOLLOW_CAPE_LIMIT, FOLLOW_CAPE_LIMIT)
+    return {"arm_left": arm + out, "arm_right": arm - out, "head": head, "accessory": hat, "tail": tail, "antenna": antenna, "cape": cape}
 
 
 __all__ = [

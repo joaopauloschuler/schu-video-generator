@@ -1,5 +1,5 @@
-"""Automatic life of characters: blinking, breathing, head sway and an animal's tail swishing
-(DESIGN.md §69.5, §69.48). No manim.
+"""Automatic life of characters: blinking, breathing, head sway, an animal's tail swishing and a
+robot's antenna wobbling with its light blinking (DESIGN.md §69.5, §69.48, §69.58). No manim.
 
 A character's *idle clock* runs while its updaters run. Manim suspends a mobject's updaters
 while an animation plays on it, so the clock stops during a :class:`~vidgen.cartoon.transition.PoseChange`
@@ -30,6 +30,14 @@ SWAY_DEGREES = 1.5
 #: One swish of an animal's tail, to and fro (seconds), and its largest angle (degrees).
 TAIL_SWAY_SECONDS = 2.6
 TAIL_SWAY_DEGREES = 5.0
+#: A robot's antenna on its spring: one wobble (seconds) and its largest angle (degrees); its light
+#: goes dim once per :data:`ANTENNA_BLINK_SECONDS` for :data:`ANTENNA_DIM_SHARE` of it (the
+#: ``antenna`` part's shape :data:`ANTENNA_DIM_SHAPE`, DESIGN.md §69.58).
+ANTENNA_SWAY_SECONDS = 1.7
+ANTENNA_SWAY_DEGREES = 3.0
+ANTENNA_BLINK_SECONDS = 1.3
+ANTENNA_DIM_SHARE = 0.3
+ANTENNA_DIM_SHAPE = "dim"
 
 
 def idle_seed(name: str) -> int:
@@ -68,6 +76,20 @@ def tail_sway_angle(seconds: float, seed: int) -> float:
     within ±2 × :data:`TAIL_SWAY_DEGREES` (one swish every :data:`TAIL_SWAY_SECONDS`)."""
     phase = _phase(seed, 0.302776)
     return TAIL_SWAY_DEGREES * (math.sin(2.0 * math.pi * seconds / TAIL_SWAY_SECONDS + phase) - math.sin(phase))
+
+
+def antenna_sway_angle(seconds: float, seed: int) -> float:
+    """A robot's antenna's extra angle (degrees) ``seconds`` into the idle clock: 0 at the clock's
+    start, within ±2 × :data:`ANTENNA_SWAY_DEGREES` (one wobble every :data:`ANTENNA_SWAY_SECONDS`)."""
+    phase = _phase(seed, 0.236068)
+    return ANTENNA_SWAY_DEGREES * (math.sin(2.0 * math.pi * seconds / ANTENNA_SWAY_SECONDS + phase) - math.sin(phase))
+
+
+def antenna_light_on(seconds: float, seed: int) -> bool:
+    """Whether a robot's antenna light is lit ``seconds`` into the idle clock: lit at the clock's
+    start, dim for :data:`ANTENNA_DIM_SHARE` of each :data:`ANTENNA_BLINK_SECONDS` (phase from ``seed``)."""
+    cycle = (seconds / ANTENNA_BLINK_SECONDS + 0.5 * ((seed * 0.381966) % 1.0)) % 1.0
+    return not 0.6 <= cycle < 0.6 + ANTENNA_DIM_SHARE
 
 
 def _merged(windows: Iterable[tuple[float, float]]) -> list[tuple[float, float]]:
@@ -140,6 +162,11 @@ class IdleClock:
 
 
 __all__ = [
+    "ANTENNA_BLINK_SECONDS",
+    "ANTENNA_DIM_SHAPE",
+    "ANTENNA_DIM_SHARE",
+    "ANTENNA_SWAY_DEGREES",
+    "ANTENNA_SWAY_SECONDS",
     "BLINK_GAP_SECONDS",
     "BLINK_SECONDS",
     "BREATH_SCALE",
@@ -149,6 +176,8 @@ __all__ = [
     "TAIL_SWAY_DEGREES",
     "TAIL_SWAY_SECONDS",
     "IdleClock",
+    "antenna_light_on",
+    "antenna_sway_angle",
     "blink_times",
     "breath_scale",
     "idle_seed",

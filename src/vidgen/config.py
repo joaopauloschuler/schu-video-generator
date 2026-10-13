@@ -288,20 +288,42 @@ EyeStyle = Literal["dot", "oval", "round", "sleepy"]
 NoseStyle = Literal["none", "dot", "round", "triangle"]
 HairStyle = Literal["none", "short", "spiky", "long", "bun", "curly", "ponytail", "braids", "afro"]
 EarStyle = Literal["none", "round", "pointy", "floppy"]
-Accessory = Literal["glasses", "hat", "scarf", "bag", "bow", "cap", "backpack", "necklace"]
+Accessory = Literal[
+    "glasses", "hat", "scarf", "bag", "bow", "cap", "backpack", "necklace", "crown", "wizard_hat", "party_hat", "cape",
+]
 ProportionStyle = Literal["adult", "kid", "tall_kid"]
 Outfit = Literal["plain", "dress", "overalls", "coat", "shorts", "apron"]
 ClothesPattern = Literal["none", "stripes", "dots"]
 ShoeStyle = Literal["none", "shoes", "boots"]
 FacialHair = Literal["none", "moustache", "beard"]
-Species = Literal["human", "cat", "dog", "bird", "bear", "rabbit", "mouse", "fox", "owl", "frog", "turtle", "penguin"]
-#: Look keys an animal (``species`` other than ``human``) draws its own way, so they are not
-#: given with it (DESIGN.md §69.48).
+Species = Literal["human", "cat", "dog", "bird", "bear", "rabbit", "mouse", "fox", "owl", "frog", "turtle", "penguin", "robot"]
+#: Look keys an animal or a robot (``species`` other than ``human``) draws its own way, so they
+#: are not given with it (DESIGN.md §69.48); a robot has no hair either (§69.58).
 SPECIES_OWN_KEYS: tuple[str, ...] = ("ears", "nose", "facial_hair")
-#: Animals drawn without a ``tail`` part (DESIGN.md §69.57).
-SPECIES_WITHOUT_TAIL: frozenset[str] = frozenset({"frog"})
-#: Accessories worn on the head: they make the optional ``accessory`` part (DESIGN.md §69.1).
-HEAD_ACCESSORIES: frozenset[str] = frozenset({"glasses", "hat", "bow", "cap"})
+ROBOT_OWN_KEYS: tuple[str, ...] = (*SPECIES_OWN_KEYS, "hair")
+#: Species drawn without a ``tail`` part (DESIGN.md §69.57, §69.58).
+SPECIES_WITHOUT_TAIL: frozenset[str] = frozenset({"frog", "robot"})
+#: Accessories worn on the head: they make the optional ``accessory`` part (DESIGN.md §69.1,
+#: the costume pieces §69.58).
+HEAD_ACCESSORIES: frozenset[str] = frozenset({"glasses", "hat", "bow", "cap", "crown", "wizard_hat", "party_hat"})
+#: Accessories worn on top of the head: a look wears at most one of them.
+TOP_OF_HEAD: tuple[str, ...] = ("hat", "cap", "crown", "wizard_hat", "party_hat")
+RobotHead = Literal["box", "round"]
+RobotFace = Literal["eyes", "screen"]
+RobotMoves = Literal["legs", "wheels"]
+
+
+class RobotLook(_Strict):
+    """``look.robot``: how a ``species: robot`` is built (DESIGN.md §69.58)."""
+
+    head: RobotHead = "box"
+    """box (a rounded box) or round."""
+    face: RobotFace = "eyes"
+    """eyes (eyes and a mouth on a light face plate) or screen (a dark screen showing glowing eyes and mouth shapes)."""
+    antenna: bool = True
+    """An antenna on a spring with a light on top (it wobbles, blinks while idle and trails in the wind)."""
+    moves_on: RobotMoves = "legs"
+    """legs (it walks), or wheels (it rolls: no steps, no footsteps)."""
 #: Outfits with a skirt or coat tails hanging from the body: their ``body`` part has a second
 #: shape, ``seated``, the cloth over the lap (DESIGN.md §69.47).
 SKIRTED_OUTFITS: frozenset[str] = frozenset({"dress", "coat"})
@@ -328,7 +350,7 @@ class CharacterLook(_Strict):
     ears: EarStyle = "none"
     """Ears: none, round, pointy or floppy (skin colour)."""
     accessories: list[Accessory] = Field(default_factory=list)
-    """Any of glasses, hat, scarf, bag, bow, cap, backpack, necklace (each at most once; not hat and cap together)."""
+    """Any of glasses, hat, scarf, bag, bow, cap, backpack, necklace and the costume pieces crown, wizard_hat, party_hat, cape (each at most once; one of hat, cap, crown, wizard_hat, party_hat)."""
     proportions: ProportionStyle = "adult"
     """adult, kid (big head, short body and legs) or tall_kid (lankier); pair a kid with the stage's scale (e.g. 0.7)."""
     outfit: Outfit = "plain"
@@ -340,7 +362,9 @@ class CharacterLook(_Strict):
     facial_hair: FacialHair = "none"
     """none, moustache or beard (with a moustache; colour: colors.hair; hair: none for bald)."""
     species: Species = "human"
-    """human, or an original animal: cat, dog, bird, bear, rabbit, mouse, fox, owl, frog, turtle, penguin (its own head, ears, muzzle or beak, paws, wings or flippers, a tail but a frog's, a turtle's shell; fur colour: colors.skin, a shell: colors.hair)."""
+    """human, or an original animal: cat, dog, bird, bear, rabbit, mouse, fox, owl, frog, turtle, penguin (its own head, ears, muzzle or beak, paws, wings or flippers, a tail but a frog's, a turtle's shell; fur colour: colors.skin, a shell: colors.hair); or robot (see robot; plating: colors.skin)."""
+    robot: RobotLook | None = None
+    """species robot only: {head: box | round, face: eyes | screen, antenna: true | false, moves_on: legs | wheels}; default a box head, eyes, an antenna, legs."""
     seed: int | None = None
     """A number that varies the proportions a little (same seed, same figure); none: no variation."""
     svg: str | None = Field(default=None, min_length=1)
@@ -352,8 +376,10 @@ class CharacterLook(_Strict):
         repeated = sorted({a for a in value if value.count(a) > 1})
         if repeated:
             raise ValueError(f"accessory listed twice: {', '.join(repeated)}")
-        if {"hat", "cap"} <= set(value):
-            raise ValueError("hat and cap are both worn on top of the head: choose one")
+        on_top = [a for a in TOP_OF_HEAD if a in value]
+        if len(on_top) > 1:
+            listed = f"{', '.join(on_top[:-1])} and {on_top[-1]} are {'both' if len(on_top) == 2 else 'all'}"
+            raise ValueError(f"{listed} worn on top of the head: choose one")
         return value
 
     @model_validator(mode="after")
@@ -363,10 +389,23 @@ class CharacterLook(_Strict):
             raise ValueError(f"svg draws the character from the file; {', '.join(generator_keys)} only apply to the generator (remove them or svg)")
         if self.svg is not None and not self.svg.lower().endswith(".svg"):
             raise ValueError(f"svg must name an .svg file, not {self.svg!r}")
+        if self.species == "robot":
+            own = [key for key in ROBOT_OWN_KEYS if key in self.model_fields_set and getattr(self, key) != "none"]
+            if own:
+                raise ValueError(f"a robot draws its own head and face and has no hair; remove {', '.join(own)} (or use another species)")
+            if self.robot is not None and self.robot.moves_on == "wheels" and self.shoes != "none":
+                raise ValueError("a robot on wheels wears no shoes; remove shoes (or use robot: {moves_on: legs})")
+            return self
+        if self.robot is not None:
+            raise ValueError(f"robot only applies to species: robot (this look is a {self.species}); remove robot or set species: robot")
         own = [key for key in SPECIES_OWN_KEYS if key in self.model_fields_set and getattr(self, key) != "none"]
         if self.species != "human" and own:
             raise ValueError(f"a {self.species} draws its own ears, nose and face; remove {', '.join(own)} (or use species: human)")
         return self
+
+    def robot_look(self) -> RobotLook:
+        """``robot``, or the default robot (a box head, eyes, an antenna, legs) when not given."""
+        return self.robot if self.robot is not None else RobotLook()
 
 
 #: How strongly characters move with the animation principles (anticipation, squash and
@@ -377,7 +416,7 @@ MotionSetting = Literal["lively", "calm", "none"]
 #: are :data:`ExpressionPart`.
 PosePart = Literal[
     "body", "legs", "leg_left", "leg_left_lower", "leg_right", "leg_right_lower",
-    "arm_left", "arm_left_lower", "arm_right", "arm_right_lower", "head", "accessory", "tail",
+    "arm_left", "arm_left_lower", "arm_right", "arm_right_lower", "head", "accessory", "tail", "antenna", "cape",
 ]
 ExpressionPart = Literal["eyes", "brows", "mouth"]
 
