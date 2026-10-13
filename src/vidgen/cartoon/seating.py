@@ -78,7 +78,8 @@ class PostureError(ValueError):
 @dataclass
 class Postures:
     """Who sits or leans on which prop: character -> (``sitting`` | ``leaning``, prop), and the
-    place on the seat each sitter took (character -> index)."""
+    place on the seat each sitter took (character -> index); a rider of a vehicle is ``riding``
+    it, in the place it took (DESIGN.md §69.52)."""
 
     held: dict[str, tuple[str, str]] = field(default_factory=dict)
     places: dict[str, int] = field(default_factory=dict)
@@ -93,9 +94,38 @@ class Postures:
 
     def _free(self, character: str) -> None:
         now = self.of(character)
+        if now is not None and now[0] == "riding":
+            raise PostureError(f"{character} rides '{now[1]}' then; get_out first (- get_out: {character})")
         if now is not None:
             verb = "sits on" if now[0] == "sitting" else "leans on"
             raise PostureError(f"{character} {verb} '{now[1]}' then; stand_up first (- stand_up: {character})")
+
+    def riders(self, vehicle: str) -> list[str]:
+        """The characters riding ``vehicle`` (DESIGN.md §69.52), in the order they got in."""
+        return [who for who, (posture, name) in self.held.items() if name == vehicle and posture == "riding"]
+
+    def ride(self, character: str, vehicle: str, places: int = 1, prefer: Sequence[int] = ()) -> int:
+        """``character`` gets in (or on) ``vehicle``, which has ``places`` seats (one rider each),
+        in the first free one of ``prefer`` (default: in order); the place it took."""
+        self._free(character)
+        riding = self.riders(vehicle)
+        taken = {self.places.get(who, 0) for who in riding}
+        free = [k for k in [*prefer, *range(places)] if 0 <= k < places and k not in taken]
+        if not free:
+            seats, verb = "seat" if places == 1 else "seats", "rides" if len(riding) == 1 else "ride"
+            raise PostureError(f"'{vehicle}' is full: it has {places} {seats} and {', '.join(riding)} {verb} it then; get_out one first")
+        self.held[character] = ("riding", vehicle)
+        self.places[character] = free[0]
+        return free[0]
+
+    def get_out(self, character: str) -> str:
+        """``character`` gets out of (or off) the vehicle it rides; that vehicle's name."""
+        now = self.of(character)
+        if now is None or now[0] != "riding":
+            raise PostureError(f"{character} rides nothing then; get_out follows a get_in (- get_in: {character}, to: <vehicle>)")
+        del self.held[character]
+        self.places.pop(character, None)
+        return now[1]
 
     def sit(self, character: str, prop: str, places: int = 1, prefer: Sequence[int] = ()) -> int:
         """``character`` sits down on ``prop``, whose seat has ``places`` places (one character
@@ -119,10 +149,13 @@ class Postures:
 
     def stand(self, character: str) -> tuple[str, str]:
         """``character`` stands up; what it did: ``(posture, prop)``."""
-        now = self.held.pop(character, None)
-        self.places.pop(character, None)
+        now = self.of(character)
         if now is None:
             raise PostureError(f"{character} neither sits nor leans then; stand_up follows a sit_on or a lean_on")
+        if now[0] == "riding":
+            raise PostureError(f"{character} rides '{now[1]}' then; it gets out with get_out, not stand_up (- get_out: {character})")
+        del self.held[character]
+        self.places.pop(character, None)
         return now
 
     def pinned(self, character: str, action: str) -> None:

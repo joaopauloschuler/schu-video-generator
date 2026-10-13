@@ -63,7 +63,7 @@ class StageProp(SceneParams):
     also_accepts: ClassVar[tuple[type, ...]] = (str,)
 
     prop: Literal[PROP_KINDS] | None = None  # type: ignore[valid-type]
-    """A built-in prop: table, chair, tree, bush, house, door, lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup, basket, umbrella, napkin; furniture: sofa, armchair, bed, bookshelf, counter, fridge, picture, rug, houseplant, clock, tv, desk."""
+    """A built-in prop: table, chair, tree, bush, house, door, lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup, basket, umbrella, napkin; furniture: sofa, armchair, bed, bookshelf, counter, fridge, picture, rug, houseplant, clock, tv, desk; vehicles: bicycle, car, bus."""
     svg: str | None = None
     """Instead of prop: an SVG file relative to the project folder (sanitised like any SVG), standing on the bottom edge of its viewBox."""
     name: Identifier | None = None
@@ -366,7 +366,8 @@ class Stage(NarratedScene):
     ``give`` and ``throw``: a held prop goes along with its holder's hand (they crouch for a low
     one). They sit on a chair, a rock, a box, a sofa, an armchair, a bed or at a desk with
     ``sit_on``, lean on a tree, a door, a sign or a counter with ``lean_on``, and get up with
-    ``stand_up``.
+    ``stand_up``. They ``get_in`` a car or a bus (or on a bicycle), ``ride_to`` a place in it with
+    its wheels turning (pedalling on a bicycle) and ``get_out``.
 
     Action targets: each character and each prop by its name; each part of a character as
     ``<character>.<part>`` (``kit.arm_left``).
@@ -378,7 +379,7 @@ class Stage(NarratedScene):
     #: Storyboard stills also show these actions half-way through (DESIGN.md §69.16).
     mid_still_actions = frozenset({
         "walk_to", "run_to", "enter", "exit", "gesture", "jump", "keyframes", "move_along", "pick_up", "put_down", "give", "throw",
-        "sit_on", "lean_on", "stand_up", "blow_away",
+        "sit_on", "lean_on", "stand_up", "blow_away", "get_in", "ride_to", "get_out",
     })
 
     @classmethod
@@ -606,13 +607,13 @@ class Stage(NarratedScene):
         """The prop actions replayed in order with the stage's geometry (DESIGN.md §69.27,
         §69.28, :func:`holding_problems`): a prop held by someone else, a full hand, nothing to put
         down, a prop or spot too far without a walk, giving to someone not next to the giver, a
-        seat taken, a walk of a character that sits or leans. Needs the active project (the
-        video's frame); none without one."""
+        seat taken, a walk of a character that sits, leans or rides, a full vehicle or one too far
+        to get in (§69.52). Needs the active project (the video's frame); none without one."""
         try:
             project = current_project()
         except VidgenError:
             return []
-        if not any(u.config.action in HANDLING_ACTIONS | POSTURE_ACTIONS for u in uses):
+        if not any(u.config.action in HANDLING_ACTIONS | POSTURE_ACTIONS | RIDING_ACTIONS for u in uses):
             return []
         frame = stage_frame(project, params)
         names = [c.name for c in params.characters] + params.prop_names()
@@ -633,6 +634,7 @@ class Stage(NarratedScene):
             entering=[n for u in uses if u.config.action == "enter" for n in matched(u)],
             seat_places=frame.seat_places,
             depths=frame.depths,
+            vehicles={name: (kind, height) for name, (kind, height, _) in frame.vehicles.items()},
         )
         return problems + cls._calm_blow_problems(params, ordered)
 
@@ -758,11 +760,21 @@ class Stage(NarratedScene):
         self._depth_walks.append((character, walk))
         self._watch_draw_order()
 
+    def ride_in_depth(self, vehicle: Prop, ride: Ride) -> None:
+        """``vehicle`` rides in depth with ``ride``: its place in the draw order, with its riders,
+        follows its depth on every frame (:meth:`_keep_depth_order`, DESIGN.md §69.52), and the
+        ground line under it is its new depth's once it stops."""
+        self.grounds[vehicle.name] = self.feet_y_at(ride.to_depth)
+        for seat in ride.seats:
+            self.grounds[seat.rider.name] = self.grounds[vehicle.name]
+        self._depth_walks.append((vehicle, ride))
+        self._watch_draw_order()
+
     def _start_depth_order(self) -> None:
         """Watch the draw order from the start when a walk in depth or a turn to the front may
         change it (a character facing front, or a turn to it, :meth:`_watch_draw_order`)."""
-        #: the walks in depth under way: (character, walk)
-        self._depth_walks: list[tuple[Character, Walk]] = []
+        #: the walks and rides in depth under way: (character or vehicle, walk or ride)
+        self._depth_walks: list[tuple[Mobject, Walk | Ride]] = []
         #: each character's :attr:`Character.order_changes` when last looked at
         self._part_orders = {name: c.order_changes for name, c in self.cast.items()}
         #: the scene updater keeping the draw order, kept: Manim removes an updater by identity
@@ -802,19 +814,17 @@ class Stage(NarratedScene):
         known = {id(m) for m in ordered}
         return [m for m in [*ordered, *(m for m in now if id(m) not in known)] if id(m) in kept]
 
-    def _keep_depth_order(self, walker: Character) -> bool:
-        """Move ``walker`` (with the props it holds) to its place among the characters and props
-        for its depth now (:func:`depth_slot`), the moving shadows before the first thing whose
-        shadow they draw; whether it moved."""
-        things = {id(m) for m in [*self.cast.values(), *self.props.values()] if getattr(m, "held_by", None) is None}
-        block_at = next((k for k, m in enumerate(self.mobjects) if m is walker), None)
-        if block_at is None:
+    def _keep_depth_order(self, walker: Mobject) -> bool:
+        """Move ``walker`` (with the props it holds; a vehicle with its riders) to its place among
+        the characters and props for its depth now (:func:`depth_slot`), the moving shadows before
+        the first thing whose shadow they draw; whether it moved."""
+        block = _moving_block(self, walker)
+        if not block:
             return False
-        end = block_at + 1
-        while end < len(self.mobjects) and getattr(self.mobjects[end], "held_by", None) == walker.name:
-            end += 1
-        block = self.mobjects[block_at:end]
-        rest = self.mobjects[:block_at] + self.mobjects[end:]
+        ids = {id(m) for m in block}
+        things = {id(m) for m in [*self.cast.values(), *self.props.values()] if getattr(m, "held_by", None) is None} - ids
+        block_at = next(k for k, m in enumerate(self.mobjects) if id(m) in ids)
+        rest = [m for m in self.mobjects if id(m) not in ids]
         others = [m for m in rest if id(m) in things]
         current = sum(1 for m in self.mobjects[:block_at] if id(m) in things)
         slot = depth_slot(walker.stage_depth, [(float(getattr(m, "stage_depth", 0.0)), isinstance(m, Character)) for m in others], current)
@@ -844,10 +854,11 @@ class Stage(NarratedScene):
         found: set[int] = set()
         things = [*self.cast.values(), *self.props.values()]
         for anim in animations:
-            if not isinstance(anim, Walk) or anim.to_depth is None:
+            if not isinstance(anim, (Walk, Ride)) or anim.to_depth is None:
                 continue
             low, high = sorted((float(anim.mobject.stage_depth), anim.to_depth))
-            for thing in [anim.mobject, *(t for t in things if low - SAME_DEPTH <= float(getattr(t, "stage_depth", 0.0)) <= high + SAME_DEPTH)]:
+            riders = [seat.rider for seat in anim.seats] if isinstance(anim, Ride) else []
+            for thing in [anim.mobject, *riders, *(t for t in things if low - SAME_DEPTH <= float(getattr(t, "stage_depth", 0.0)) <= high + SAME_DEPTH)]:
                 found |= {id(m) for m in thing.get_family()}
         return found
 
@@ -1232,7 +1243,7 @@ class Stage(NarratedScene):
                     continue  # hangs in the sky or on a wall, is part of the room's wall, or lies flat
                 prop = self.props[name]
                 widths = {shape: prop.shape_width(shape) * PROP_SHADOW_WIDTH for shape in prop.shapes}
-                caster = ShadowCaster(prop, self.grounds[name], prop.width * PROP_SHADOW_WIDTH, prop.height, widths)
+                caster = ShadowCaster(prop, self.grounds[name], prop.width * PROP_SHADOW_WIDTH, prop.height, widths, grows=prop.is_vehicle)
                 (moving if name in movable else still).append(caster)
             else:
                 figure = self.cast[name]
@@ -1248,8 +1259,11 @@ class Stage(NarratedScene):
 
     def _movable_props(self) -> set[str]:
         """The props an action may move or reshape: picked up or held (then put down, given or
-        thrown), moved by ``keyframes`` / ``move_along``, opened or closed, blown away."""
+        thrown), moved by ``keyframes`` / ``move_along``, opened or closed, blown away; the
+        vehicles of a scene with a ``ride_to`` (DESIGN.md §69.52)."""
         moved = {use.options.to for kind in ("pick_up", "hold") for use in self.action_uses(kind)}
+        if self.action_uses("ride_to"):
+            moved |= {name for name, prop in self.props.items() if prop.is_vehicle}
         for kind in ("keyframes", "move_along", "open", "close", "blow_away"):
             for use in self.action_uses(kind):
                 moved |= {name for name in self.props for pattern in use.config.targets() if fnmatchcase(name, pattern)}
@@ -1482,11 +1496,28 @@ class Stage(NarratedScene):
         return shapes
 
 
+def _moving_block(scene: Any, mover: Mobject) -> list[Mobject]:
+    """``mover`` with what moves with it in ``scene``'s draw order: a walker and the props right
+    after it that it holds; a vehicle, its riders and the props they hold (DESIGN.md §69.52)."""
+    at = next((k for k, m in enumerate(scene.mobjects) if m is mover), None)
+    if at is None:
+        return []
+    if isinstance(mover, Character):
+        end = at + 1
+        while end < len(scene.mobjects) and getattr(scene.mobjects[end], "held_by", None) == mover.name:
+            end += 1
+        return scene.mobjects[at:end]
+    riders = {name for name, figure in scene.cast.items() if getattr(figure, "riding", None) == getattr(mover, "name", None)}
+    return [m for m in scene.mobjects if m is mover or (isinstance(m, Character) and m.name in riders) or getattr(m, "held_by", None) in riders]
+
+
 def _played(action: str, options: Any, anim: Animation, start: float, seconds: float) -> PlayedAction:
     """One animation of a built-in ``action`` (its ``options``) as it plays from scene time
     ``start`` for ``seconds``, for foley and motion effects."""
     if isinstance(anim, Walk):
         return PlayedAction(action, start, seconds, heights=anim.heights, phases=anim.phases, step_length=anim.step_length)
+    if isinstance(anim, Ride):
+        return PlayedAction(action, start, seconds, heights=anim.heights, phases=anim.phases, vehicle=anim.kind)
     if isinstance(anim, Jump):
         return PlayedAction(action, start, seconds, phases=anim.phases, lift=anim.lift)
     if isinstance(anim, PropMove):

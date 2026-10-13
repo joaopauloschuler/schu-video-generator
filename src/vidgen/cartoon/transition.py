@@ -536,7 +536,9 @@ class BodyMove(ArmMove):
     ``facing`` from the start, and single legs kept on the ground: each frame their soles are
     planted (:meth:`Character.planted`) on the way from where they were when it began to ``soles``
     (``left`` / ``right`` -> (x, y), character units as drawn facing right; ``None``: the legs move
-    as the keys say). For sitting down, standing up, leaning and crouching (DESIGN.md §69.28)."""
+    as the keys say). For sitting down, standing up, leaning and crouching (DESIGN.md §69.28).
+    ``y``: the feet's y eased there too (getting in or out of a vehicle, whose floor is above the
+    ground, §69.52; ``None``: it stays)."""
 
     def __init__(
         self,
@@ -544,11 +546,12 @@ class BodyMove(ArmMove):
         keys: Sequence[tuple[float, Mapping[str, PartPose]]],
         *,
         x: float | None = None,
+        y: float | None = None,
         facing: str | None = None,
         soles: Mapping[str, Sequence[float]] | None = None,
         **kwargs,
     ) -> None:
-        self.to_x, self.facing = x, facing
+        self.to_x, self.to_y, self.facing = x, y, facing
         self.soles = None if soles is None else {foot: (float(p[0]), float(p[1])) for foot, p in soles.items()}
         super().__init__(character, keys, **kwargs)
 
@@ -556,7 +559,7 @@ class BodyMove(ArmMove):
         figure = self.mobject
         if self.facing is not None:
             figure.face(self.facing)
-        self._from_x = float(figure.feet()[0])
+        self._from_x, self._from_y = float(figure.feet()[0]), float(figure.feet()[1])
         self._from_soles = figure.sole_points() if self.soles is not None else {}
         super().begin()
 
@@ -572,6 +575,8 @@ class BodyMove(ArmMove):
             figure.set_state(figure.planted(figure.state(), soles))
         if self.to_x is not None:
             figure.shift([self._from_x + (self.to_x - self._from_x) * t - float(figure.feet()[0]), 0.0, 0.0])
+        if self.to_y is not None:
+            figure.shift([0.0, self._from_y + (self.to_y - self._from_y) * t - float(figure.feet()[1]), 0.0])
 
 
 class PropMove(Animation):

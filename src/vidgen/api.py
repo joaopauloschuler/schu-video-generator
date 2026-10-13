@@ -154,6 +154,22 @@ from vidgen.cartoon.seating import (  # noqa: E402
     crouch_drop,
     crouch_stoop,
 )
+from vidgen.cartoon.vehicles import (  # noqa: E402
+    GET_IN_REACH,
+    GET_IN_SECONDS,
+    GET_OUT_SECONDS,
+    RIDING_ACTIONS,
+    VEHICLE_KINDS,
+    VEHICLES,
+    VehicleSpec,
+    get_in_gap,
+    pedal_points,
+    place_order,
+    seat_count,
+    seat_origin,
+    wheel_degrees,
+)
+from vidgen.cartoon.riding import Ride, RiderSeat, place_rider, riding_state, seat_point  # noqa: E402
 from vidgen.cartoon.visemes import VISEMES, VisemeCue, VisemeTrack  # noqa: E402
 from vidgen.cartoon.cast import beat_voice, part_target_names, pose_name_problem, say_problem, speaking_characters  # noqa: E402
 from vidgen.cartoon.acting import (  # noqa: E402
@@ -650,6 +666,24 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "Postures",
     "crouch_drop",
     "crouch_stoop",
+    "GET_IN_REACH",
+    "GET_IN_SECONDS",
+    "GET_OUT_SECONDS",
+    "RIDING_ACTIONS",
+    "VEHICLE_KINDS",
+    "VEHICLES",
+    "VehicleSpec",
+    "get_in_gap",
+    "pedal_points",
+    "place_order",
+    "seat_count",
+    "seat_origin",
+    "wheel_degrees",
+    "Ride",
+    "RiderSeat",
+    "place_rider",
+    "riding_state",
+    "seat_point",
     "enter_path",
     "exit_path",
     "nearer_side",

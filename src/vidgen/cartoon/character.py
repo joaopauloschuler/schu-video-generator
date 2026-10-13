@@ -400,6 +400,9 @@ class Character(VGroup):
         #: recorded in the layout dump), ``None`` while it stands (DESIGN.md §69.28).
         self.sitting_on: str | None = None
         self.leaning_on: str | None = None
+        #: The vehicle it rides (set by ``get_in``, cleared by ``get_out``; recorded in the layout
+        #: dump), ``None`` while it is on foot (DESIGN.md §69.52).
+        self.riding: str | None = None
         #: How far back it stands on a stage (0 front .. 1 back; set by the stage and by walks in
         #: depth, DESIGN.md §69.44), and the y of the ground line there (``None``: not on a stage).
         self.stage_depth = 0.0

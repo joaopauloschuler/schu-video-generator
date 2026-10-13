@@ -55,9 +55,10 @@ def posture_parts(state: CharacterState) -> dict[str, PartPose]:
 
 
 def is_posed(character: Character) -> bool:
-    """Whether ``character`` sits or leans (DESIGN.md §69.28): it keeps its facing, body and legs
-    then (a look turns only its head, a pose moves only its arms and head)."""
-    return character.sitting_on is not None or character.leaning_on is not None
+    """Whether ``character`` sits, leans (DESIGN.md §69.28) or rides a vehicle (§69.52): it keeps
+    its facing, body and legs then (a look turns only its head, a pose moves only its arms and
+    head)."""
+    return character.sitting_on is not None or character.leaning_on is not None or character.riding is not None
 
 
 def _kept_posture(character: Character, state: CharacterState) -> CharacterState:

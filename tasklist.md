@@ -631,8 +631,8 @@ Phases H–K. Examples may now be up to 10 KB (owner, after Step 116).
 - [x] Tests: the job formula with mocked memory / cores per platform (`tests/test_jobs.py`, 24 tests)
 
 ### Step 118 — Vehicles, part 1: on the ground
-- [ ] Built-in vehicles `bicycle`, `car`, `bus` (original simple shapes, theme colours, wheels that turn); actions `get_in` (or on), `ride_to` (a mark / x / depth; speed; the riders move with it, seated or pedalling), `get_out`; several riders in a car or bus; foley (bell, engine, brakes) from generated sounds
-- [ ] Tests: seat points per vehicle, ride paths, rider attachment and detachment (no render)
+- [x] Built-in vehicles `bicycle`, `car`, `bus` (original simple shapes, theme colours, wheels that turn); actions `get_in` (or on), `ride_to` (a mark / x / depth; speed; the riders move with it, seated or pedalling), `get_out`; several riders in a car or bus; foley (bell, engine, brakes) from generated sounds (vehicles are props: pure `cartoon/vehicles.py` (seats, floor, wheels, cranks, pedals, get-in reach), `cartoon/vehicle_drawing.py`, `cartoon/riding.py` (`Ride`, riders on their seats by an updater, never added to the vehicle, pedalling with the limb solver); a car 2 and a bus 4 riders behind the side (heads in see-through windows), a bicycle 1 on the saddle; riding is a posture (`Postures.ride` / `get_out`); `ride_to` takes a vehicle or a rider, turns the vehicle round, eases like a walk, rides in depth with draw-order changes; validate: not a vehicle, full, too far / other depth with the `walk_to`, walking while riding, a vehicle picked up; new sounds `bell`, `engine`, `brakes`; dust and speed lines on fast rides; planner / reframe / follow know rides; lint skips riders of one vehicle; `docs/gallery/media/vehicles.png` 10 KB; DESIGN §69.52)
+- [x] Tests: seat points per vehicle, ride paths, rider attachment and detachment (no render) (`tests/test_cartoon_vehicles.py`: 21 without rendering, 2 tiny renders; stills checked by eye: a car with two riders riding right and into depth behind a tree, a cyclist pedalling both ways, four riders on a bus turning round, the CONFIG.md example)
 
 ### Step 119 — Vehicles, part 2: water and air
 - [ ] `boat` (bobbing on a water strip / the beach later), `hot-air balloon` (rising and drifting with the wind), `toy rocket` (a launch with smoke and a small arc; a toy, not a real spacecraft); flight and float paths seeded and pure
@@ -702,6 +702,7 @@ Bugs / correctness
 - [ ] `VideoPlan` and a rendered scene can disagree by a frame on a beat's start when `d + pad` lands on half a frame (the scene rounds the wait left after its animations) (Step 100)
 - [ ] `vidgen mcp`: files found by scanning a folder (`assets/sfx/`, `assets/icons/`, `audio/`) are not confined to the root; a link there can point outside (Step 102)
 - [ ] Lint `facing_away` takes the nearest character as the listener, so a speaker turned to the one it addresses farther away is reported (seen on a seated speaker in the Step 102 showcase draft) (Step 102)
+- [ ] `tests/test_builtin_scenes.py::test_every_builtin_is_registered` and two tests of `tests/test_actions_coverage.py` fail at HEAD ee5e160 too: their scene-type lists lack `card` (Step 112) (found in Step 118, not fixed)
 
 Quality (what an agent's video looks like)
 - [ ] `vidgen plan`: prose-derived bullet items are truncated sentences ("Every request that reaches database costs"); a closing sentence can be split between two scenes; icon search is English-only; no cues for `network` / `line_chart` / `pie` / `map` / `screenshot` / `video_clip`; nested list items dropped; an intro of 2+ sentences becomes its own `bullets` scene; TODO texts in English (Step 58)
@@ -741,6 +742,7 @@ Quality (what an agent's video looks like)
 - [ ] Motion: no follow-through on pose changes, gestures or keyed moves; no squash on footfalls; an `enter`'s wind-up happens off stage; a facing change flips at half; no facing or rotation along a `move_along` path, no `depth` / opacity keys; a lifted character walks in the air (Steps 80–81)
 - [ ] Mid-action stills only for walks, gestures, jumps and keyed moves (not `pose`, `emote`, `turn`, `look_at` or camera moves); the character sheet shows no left-facing view, blink or gesture (Step 83)
 - [ ] Foley: no panning by where the character stands, no depth / speed / ground variation, no landing sound, gestures and keyed moves silent; not listened to by a person (Step 86)
+- [ ] Vehicles: no doors open; a beat's `shot` does not follow a ride within the beat; a rider's feet show under a car's side for a moment while it climbs in; a prop a rider holds keeps its size during a ride in depth; no vehicle words in the screenplay grammar; ride sounds not listened to by a person (Step 118)
 
 Nice-to-have / performance
 - [ ] Stage: `follow` tracks x only, no vertical pan, layers are not action targets, a near image layer zoomed at the bottom can show a sliver; no `on: <prop>` (a prop's `lift` worked out by hand); particles have no `place: behind`, wind or ground stop; no per-scene opt-out of `cartoon_style` (Steps 74–77)

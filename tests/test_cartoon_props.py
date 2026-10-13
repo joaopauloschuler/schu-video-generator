@@ -12,6 +12,7 @@ import pytest
 from pydantic import ValidationError
 
 from test_cartoon_stage import render_with_layout, stage_params, stage_project
+from vidgen.cartoon.vehicles import VEHICLE_KINDS
 from vidgen.cartoon.props import (
     FURNITURE,
     PROP_COLORS,
@@ -52,8 +53,8 @@ def fills(prop: Prop) -> set[str]:
 
 
 def test_tables_cover_every_prop() -> None:
-    assert len(PROP_KINDS) == 32 and len(set(PROP_KINDS)) == 32 and set(FURNITURE) <= set(PROP_KINDS)
-    assert set(PROP_HEIGHTS) == set(PROP_COLORS) == set(_DRAWERS) == set(PROP_KINDS)
+    assert len(PROP_KINDS) == 35 and len(set(PROP_KINDS)) == 35 and set(FURNITURE) <= set(PROP_KINDS)
+    assert set(PROP_HEIGHTS) == set(PROP_COLORS) == set(_DRAWERS) | set(VEHICLE_KINDS) == set(PROP_KINDS)   # vehicles: Step 118
     assert set(PROP_LIFTS) <= set(PROP_KINDS) and set(PROP_SHAPES) <= set(PROP_KINDS)
     assert all(kind in PROP_KINDS and (shape is None or shape in PROP_SHAPES[kind]) for kind, shape in PROP_GRIPS)
 

@@ -388,6 +388,42 @@ def _boing(s: Synth) -> np.ndarray:
     return tone * _decay(t, 0.003, 0.16 * scale)
 
 
+_RING_PARTIALS = ((1.0, 1.0, 1.0), (2.76, 0.5, 0.55), (5.4, 0.25, 0.3), (8.93, 0.1, 0.18))
+
+
+def _ring(s: Synth) -> np.ndarray:
+    # a bicycle bell, "ring-ring": two quick strikes of a small bright bell, its partials beating
+    scale = s.duration / 0.7
+    out = np.zeros(s.n)
+    for start in (0.0, 0.13):
+        k = int(start * scale * RATE)
+        out[k:] += _bell(s.n - k, 2350 * s.ratio, s.intensity, 0.22 * scale, _RING_PARTIALS)
+    return out * (1 + 0.25 * np.sin(2 * np.pi * 18 * s.t))
+
+
+def _engine(s: Synth) -> np.ndarray:
+    # a small engine starting and running: a buzzy low tone (firing pulses) revving up over the
+    # first fifth and settling, with a little rumble noise
+    u = s.u
+    rev = 1 + 0.55 * _bump(np.clip(u / 0.4, 0.0, 1.0), 0.5)
+    freq = 42 * s.ratio * rev
+    tone = _harmonic_tone(_tone(freq, s.n), 0.7 + 0.2 * s.intensity, 14, 0.7)
+    tone *= 1 + 0.35 * np.sin(_tone(freq / 2, s.n))   # uneven firing
+    rumble = _normalized(_filtered(s.rng.standard_normal(s.n), lambda f: _band(f, 180 * s.ratio, 1.2)))
+    body = _filtered(_normalized(tone) + 0.25 * rumble, lambda f: _lowpass(f, 1400 * s.ratio, 2))
+    return body * _fades(s.n, 0.06, 0.25)
+
+
+def _brakes(s: Synth) -> np.ndarray:
+    # brakes squealing to a stop: a thin tone near 2.1 kHz wavering and falling a little, over a
+    # soft scrape of noise, swelling and stopping short
+    u = s.u
+    freq = 2100 * s.ratio * (1 - 0.06 * u) * (1 + 0.012 * np.sin(2 * np.pi * 9 * s.t))
+    squeal = np.sin(_tone(freq, s.n)) + 0.3 * np.sin(2 * _tone(freq, s.n))
+    scrape = _normalized(_filtered(s.rng.standard_normal(s.n), lambda f: _band(f, 1500 * s.ratio, 1.0)))
+    return (squeal + (0.25 + 0.3 * s.intensity) * scrape) * _bump(u, 0.6) * _fades(s.n, 0.02, 0.04)
+
+
 def _harmonic_tone(phase: np.ndarray, brightness: np.ndarray | float, harmonics: int, tilt: float) -> np.ndarray:
     """A tone of ``harmonics`` partials of ``phase``: partial ``h`` at ``brightness ** (h - 1) /
     h ** tilt`` (brightness 0..1, constant or per sample: a brass or muted-horn timbre)."""
@@ -569,6 +605,25 @@ BUILTIN_SOUNDS: dict[str, BuiltinSound] = {
             "A cartoon spring: a twangy tone gliding up from ~140 Hz to ~260 Hz with a fast 12 Hz "
             "wobble that dies away, decaying over about its length.",
             "a jump, a bounce, something springy (stage jumps play it: foley)",
+        ),
+        BuiltinSound(
+            "bell", _ring, 0.7, (0.3, 2.0),
+            "A bicycle bell, 'ring-ring': two quick strikes 130 ms apart of a small bright bell at "
+            "~2.35 kHz with inharmonic overtones, a fast shimmer, each ringing out in ~0.2 s.",
+            "a bicycle setting off (a stage's bicycle ride_to plays it: foley), a doorbell-like call",
+        ),
+        BuiltinSound(
+            "engine", _engine, 1.6, (0.5, 8.0),
+            "A small engine starting and running: a buzzy low tone (~42 Hz with many harmonics and "
+            "uneven firing pulses) revving up over the first fifth, settling, with a soft rumble "
+            "around 180 Hz; fades in and out.",
+            "a car or a bus setting off (a stage's ride_to plays it for most of the ride: foley)",
+        ),
+        BuiltinSound(
+            "brakes", _brakes, 0.5, (0.2, 1.5),
+            "Brakes squealing to a stop: a thin tone near 2.1 kHz wavering and falling a little, "
+            "over a soft scrape of noise, swelling and stopping short.",
+            "a vehicle stopping (a stage's ride_to plays it as the vehicle stops: foley)",
         ),
         BuiltinSound(
             "gasp", _gasp, 0.35, (0.15, 1.0),

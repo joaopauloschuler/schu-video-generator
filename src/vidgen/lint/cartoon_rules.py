@@ -41,6 +41,12 @@ def _apart_in_depth(a: dict[str, Any], b: dict[str, Any]) -> bool:
     return abs(float(a.get("depth", 0.0)) - float(b.get("depth", 0.0))) >= DEPTH_APART
 
 
+def _riding_together(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    """Whether two characters ride the same vehicle (one behind the other in a car or a bus,
+    DESIGN.md §69.52)."""
+    return a.get("riding") is not None and a.get("riding") == b.get("riding")
+
+
 def _figures(ctx: StillContext) -> list[dict[str, Any]]:
     return [obj for obj in ctx.objects if obj["kind"] == "character"]
 
@@ -82,7 +88,7 @@ def walk_overlap(ctx: StillContext, settings: WalkOverlapRule) -> Iterator[Issue
         if beat is None or walker.get("walked_in") != beat:
             continue
         for j, other in enumerate(figures):
-            if other is walker or (j < k and other.get("walked_in") == beat) or _apart_in_depth(walker, other):
+            if other is walker or (j < k and other.get("walked_in") == beat) or _apart_in_depth(walker, other) or _riding_together(walker, other):
                 continue  # a pair that both walked is reported once; one behind the other is fine
             share = _side_share(object_box(walker), object_box(other))
             if share is None or share < settings.min_overlap:
@@ -161,11 +167,12 @@ def off_stage(ctx: StillContext, settings: OffStageRule) -> Iterator[Issue]:
 @rule("character_overlap")
 def character_overlap(ctx: StillContext, settings: CharacterOverlapRule) -> Iterator[Issue]:
     """Two characters stand on each other at rest (a walk that ends so is ``walk_overlap``'s); not
-    two at depths :data:`DEPTH_APART` or more apart (one stands behind the other)."""
+    two at depths :data:`DEPTH_APART` or more apart (one stands behind the other), nor two riding
+    the same vehicle."""
     beat = ctx.frame.get("beat")
     resting = [obj for obj in _figures(ctx) if not obj.get("passage") and (beat is None or obj.get("walked_in") != beat)]
     for a, b in combinations(resting, 2):
-        if _apart_in_depth(a, b):
+        if _apart_in_depth(a, b) or _riding_together(a, b):
             continue
         share = _side_share(object_box(a), object_box(b))
         if share is None or share < settings.min_overlap:
@@ -320,8 +327,8 @@ def facing_away(ctx: StillContext, settings: FacingAwayRule) -> Iterator[Issue]:
 @rule("hidden_speaker")
 def hidden_speaker(ctx: StillContext, settings: HiddenSpeakerRule) -> Iterator[Issue]:
     """A speaking character's face is hidden by something drawn in front of it (a character or
-    prop nearer the camera, a foreground layer; not an effect symbol or a motion effect): the
-    viewer cannot see who talks."""
+    prop nearer the camera, a foreground layer; not an effect symbol or a motion effect, nor the
+    vehicle it rides, whose windows show it, DESIGN.md §69.52): the viewer cannot see who talks."""
     for speaker in _figures(ctx):
         if not speaker.get("speaking") or not speaker.get("face"):
             continue
@@ -330,6 +337,7 @@ def hidden_speaker(ctx: StillContext, settings: HiddenSpeakerRule) -> Iterator[I
             obj for obj in ctx.objects
             if obj["order"] > speaker["order"] and not is_text(obj) and obj["kind"] not in ("particles", "effect", "motion_effect")
             and obj.get("bubble") is None and intersection(object_box(obj), face) is not None
+            and not (obj["kind"] == "prop" and speaker.get("riding") is not None and obj.get("name") == speaker.get("riding"))
         ]
         if not fronts:
             continue

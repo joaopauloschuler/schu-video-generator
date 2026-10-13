@@ -36,6 +36,7 @@ from vidgen.cartoon.reframe import ReframeBeat, ReframeFigure, reframe_needed, r
 from vidgen.cartoon.seating import SEAT_BACKS, SEAT_PLACES, PostureError, Postures
 from vidgen.cartoon.shots import FIGURE_HALF_WIDTH, Shot, ShotFigure, ShotView, shot_figures, shot_view
 from vidgen.cartoon.stage import facing_sign, mark_x, walk_destination
+from vidgen.cartoon.vehicles import VEHICLES, seat_count
 from vidgen.config import DIRECTING_KINDS, ActionConfig, AutoDirectSetting, BeatConfig, ReframeSetting, SceneConfig, directing_kinds
 
 if TYPE_CHECKING:
@@ -48,7 +49,9 @@ if TYPE_CHECKING:
 #: directing in their beat.
 FRAMING_ACTIONS = frozenset({"say", "zoom", "pan", "follow", "shot", "highlight", "dim", "callout"})
 #: Written actions after which a character's look is not known (it turned, moved or took a pose).
-LOOK_CHANGING = frozenset({"turn", "walk_to", "run_to", "enter", "exit", "move_along", "keyframes", "pose", "emote", "sit_on", "lean_on"})
+LOOK_CHANGING = frozenset({
+    "turn", "walk_to", "run_to", "enter", "exit", "move_along", "keyframes", "pose", "emote", "sit_on", "lean_on", "get_in", "ride_to", "get_out",
+})
 #: When an automatic reaction starts, as a fraction of the line: it plays in the pause after it.
 REACTION_AT = 0.95
 #: Expressions a listener reacts with, by the line's cue (:func:`line_cue`); never the same one
@@ -94,7 +97,7 @@ CLOSEUP_SECONDS = 0.5
 #: the camera's own moves.
 MOVING_ACTIONS = frozenset({
     "walk_to", "run_to", "enter", "exit", "move_along", "keyframes", "pan", "follow", "zoom", "pick_up", "put_down", "give", "throw",
-    "sit_on", "lean_on", "stand_up", "shot", "blow_away",
+    "sit_on", "lean_on", "stand_up", "shot", "blow_away", "get_in", "ride_to", "get_out",
 })
 #: A generated figure's proportions, in its heights (measured on the generator's looks; an SVG
 #: look is taken to be alike): half its width (``FIGURE_HALF_WIDTH``, shared with the shots'
@@ -163,8 +166,8 @@ class StageFrame:
     frame's size, the stage's width, the x the camera's view is centred on at the start, each
     character's :class:`StagePlace`, each prop's x, the stage's own marks and the facing of each
     prop with a seat back (a character sitting on it faces that way, DESIGN.md §69.28), how
-    many sit side by side on each prop that seats more than one (§69.43), and the depth each
-    character and prop starts at (§69.44)."""
+    many sit side by side on each prop that seats more than one (§69.43), the depth each
+    character and prop starts at (§69.44), and each vehicle's kind, height and facing (§69.52)."""
 
     frame_width: float
     frame_height: float
@@ -176,6 +179,7 @@ class StageFrame:
     seat_facings: Mapping[str, str] = field(default_factory=dict)
     seat_places: Mapping[str, int] = field(default_factory=dict)
     depths: Mapping[str, float] = field(default_factory=dict)
+    vehicles: Mapping[str, tuple[str, float, str]] = field(default_factory=dict)
 
     @property
     def bounds(self) -> Bounds:
@@ -738,6 +742,48 @@ def _pose(state: _SceneState, action: str, targets: set[str], options: Mapping[s
             state.facing[name] = "left" if here < there else "right"   # its back to the prop
 
 
+def _riding(state: _SceneState, act: ActionConfig, names: Sequence[str]) -> None:
+    """A written ``get_in`` / ``ride_to`` / ``get_out`` (DESIGN.md §69.52): who rides which
+    vehicle, where the vehicles and their riders are and which way they face (a change
+    :class:`Postures` refuses is ignored: ``vidgen validate`` reports it)."""
+    frame = state.frame
+    vehicles = dict(frame.vehicles) if frame is not None else {}
+    options = act.options
+
+    def vehicle_x(name: str) -> float | None:
+        return state.prop_x.get(name, frame.props.get(name) if frame is not None else None)
+
+    if act.action == "ride_to":
+        chosen = set(_named(act.targets(), list(vehicles)))
+        for rider in _named(act.targets(), names):
+            posture = state.postures.of(rider)
+            if posture is not None and posture[0] == "riding":
+                chosen.add(posture[1])
+        place = walk_destination(options)[0]
+        for vehicle in sorted(chosen):
+            here = vehicle_x(vehicle)
+            to_x = here if place is None else frame.place_x(place) if frame is not None else None
+            if here is not None and to_x is not None and abs(to_x - here) > 1e-6:
+                state.facing[vehicle] = "right" if to_x > here else "left"
+            state.prop_x[vehicle] = to_x
+            for rider in state.postures.riders(vehicle):
+                _walk(state, rider, to_x)
+        return
+    for name in sorted(_named(act.targets(), names)):
+        try:
+            if act.action == "get_out":
+                state.postures.get_out(name)
+                continue
+            vehicle = str(options.get("to"))
+            if vehicle not in vehicles:
+                continue
+            state.postures.ride(name, vehicle, seat_count(vehicles[vehicle][0]))
+        except PostureError:
+            continue
+        state.x[name] = vehicle_x(vehicle)
+        state.facing[name] = state.facing.get(vehicle, vehicles[vehicle][2])
+
+
 def _follow_written(state: _SceneState, beat: BeatInput, names: Sequence[str]) -> None:
     """Update the state with the beat's written actions: entrances and exits, walks and other
     moves, turns, looks and what makes a look unknown, and the camera's pans and follows."""
@@ -777,6 +823,8 @@ def _follow_written(state: _SceneState, beat: BeatInput, names: Sequence[str]) -
                 state.prop_x[prop] = state.frame.place_x(to) if state.frame is not None and to is not None else None
         elif act.action in ("sit_on", "lean_on", "stand_up"):
             _pose(state, act.action, targets, options)
+        elif act.action in ("get_in", "ride_to", "get_out"):
+            _riding(state, act, names)
         if act.action == "look_at":
             to = options.get("to")
             for name in targets:
@@ -928,16 +976,21 @@ def stage_frame(project: Project, params: Any) -> StageFrame:
     seat_places = {name: len(SEAT_PLACES[p.prop]) for name, p in zip(params.prop_names(), params.stage_props()) if p.prop in SEAT_PLACES}
     places: dict[str, StagePlace] = {}
     props: dict[str, float] = {}
+    stage_props = dict(zip(params.prop_names(), params.stage_props()))
+    vehicles: dict[str, tuple[str, float, str]] = {}
     for placed in placements:
         if placed.kind != "character":
             props[placed.name] = placed.feet[0]
+            prop = stage_props[placed.name]
+            if prop.prop in VEHICLES:
+                vehicles[placed.name] = (prop.prop, placed.height, prop.facing)
             continue
         facing = facings.get(placed.name, "auto")
         facing = facing_towards_centre(placed.x_fraction) if facing == "auto" else facing
         places[placed.name] = StagePlace(placed.feet[0], placed.feet[1], placed.height, facing)
     camera_x = (mark_x(params.camera_at, params.stage_marks()) - 0.5) * stage_width
     depths = {placed.name: placed.depth for placed in placements}
-    return StageFrame(frame_width, frame_height, stage_width, camera_x, places, props, params.stage_marks(), seat_facings, seat_places, depths)
+    return StageFrame(frame_width, frame_height, stage_width, camera_x, places, props, params.stage_marks(), seat_facings, seat_places, depths, vehicles)
 
 
 def stage_reframes(project: Project, params: Any) -> bool:

@@ -11132,3 +11132,112 @@ How to test
   tests/test_mcp.py tests/test_cli.py` (46 passed, 4 deselected, 29.5 s); `tests/test_docs.py
   tests/test_guide.py tests/test_packaging.py` (104 passed, 2.4 s). All under the 1500 MB cap. No
   render tests changed or run; the full suite was not run.
+
+## Step 118 — Vehicles, part 1: on the ground
+
+What was built (DESIGN §69.52)
+- Three built-in vehicle props `bicycle` (0.38 of a character, 1 rider), `car` (1.12 tall, 1.9
+  long, 2 riders), `bus` (1.45 tall, 3.2 long, a driver and 3 passengers): pure geometry in the
+  new `src/vidgen/cartoon/vehicles.py` (`VEHICLES` → `VehicleSpec`: seats, seat line, floor,
+  wheels, half length, speed, a bicycle's crank and grip; `seat_origin`, `seated_height`,
+  `get_in_gap`, `place_order`, `wheel_degrees`, `crank_degrees`, `pedal_points`, `ride_facing`),
+  drawings in `cartoon/vehicle_drawing.py` (original side views from primitives, theme colours,
+  see-through windows, spokes / hub bolts and cranks that turn). `Prop(wheels=, crank=)`,
+  `Prop.turn_wheels`, `.prop_point`, `.unit`, `.standing_height`, `.is_vehicle`.
+- Riding in `cartoon/riding.py`: `RiderSeat` + `place_rider` (a rider follows its seat by an
+  updater, never added to the vehicle; scales with it in depth), `riding_state` (seated; on a
+  bicycle leaning, feet planted on the pedals with the limb solver, hands on the handlebar),
+  `Ride` (turns round, eases like a walk, scales in depth, turns the wheels, pedals).
+  `BodyMove(y=)` eases the feet's y.
+- Actions in `scenes/riding.py`: `get_in` (characters, `to` a vehicle; nearest free seat; drawn
+  behind a car / bus side, on a bicycle), `ride_to` (a vehicle or a rider; `to` a place or
+  `{mark, depth}`, `depth`, `speed`), `get_out` (stands beside its seat, in front of the vehicle).
+  `Character.riding`; riding counts as posed (`is_posed`). `Postures.ride` / `get_out` /
+  `riders`; riders cannot walk, sit or stand up before `get_out`.
+- Stage: vehicles are movable props when a `ride_to` is used (shadow follows and grows); riders
+  cast no shadow; the depth draw-order keeper moves a vehicle with its riders (`_moving_block`,
+  `ride_in_depth`, `_depth_crossers` knows `Ride`); mid stills for the three actions.
+- Validate (`holding_problems(vehicles=)`, `StageFrame.vehicles`): not a vehicle (naming the
+  stage's), full, too far beyond its end or at another depth (with the `walk_to`), `ride_to` of a
+  character that rides nothing, `get_out` without `get_in`, walking / sitting / `stand_up` while
+  riding, a vehicle picked up, a ridden vehicle moved by keys.
+- Foley: `PlayedAction.vehicle`, `foley.ride_cues` (bicycle `bell`; car / bus `engine` for 0.8 of
+  the ride; `brakes` ending at the stop); new generated sounds `bell`, `engine`, `brakes` in
+  `sfx.py`. Motion effects: a ride counts like a walk (dust at the vehicle's back / front end,
+  speed lines from its back end).
+- Planner (`directing._riding`): riders' x and facing follow their vehicle (looks, close-ups,
+  `reframe`); the actions are `LOOK_CHANGING` and `MOVING_ACTIONS`. `follow` of a vehicle or a
+  rider works as it was (the camera reads the box / feet each frame).
+- Lint / layout: key `riding`; `character_overlap` / `walk_overlap` skip riders of one vehicle;
+  `hidden_speaker` ignores a rider's own vehicle.
+- Gallery still `docs/gallery/media/vehicles.png` (720×240, 9.7 KB) in CONFIG.md "Vehicles";
+  `props.png` leaves vehicles out and is byte-identical (md5 checked).
+
+Files touched
+- New: `src/vidgen/cartoon/vehicles.py`, `cartoon/vehicle_drawing.py`, `cartoon/riding.py`,
+  `src/vidgen/scenes/riding.py`, `tests/test_cartoon_vehicles.py`, `docs/gallery/media/vehicles.png`.
+- `src/vidgen/cartoon/props.py`, `seating.py`, `holding.py`, `directing.py`, `foley.py`,
+  `motion_effects.py`, `motion_effect_shapes.py`, `shading.py`, `still.py`, `transition.py`,
+  `character.py`; `src/vidgen/scenes/stage.py`, `scenes/acting.py`, `scenes/__init__.py`;
+  `src/vidgen/sfx.py`, `introspect.py`, `lint/cartoon_rules.py`, `api.py`; guide
+  `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md` (action rows, Vehicles bullet, sounds).
+- Docs: `docs/CONFIG.md` (new "Vehicles", props / actions / run_time / targets / layout rows,
+  sounds table, foley), `DESIGN.md` (§2 tree, §6.4, new §69.52), `docs/EXTENDING.md`,
+  `docs/gallery/stage.md` (props row, by hand as `vidgen gallery` writes it), `tasklist.md`
+  (ticks, 2 Backlog lines).
+- Tests updated: `tests/test_cartoon_props.py` (35 kinds), `tests/test_actions.py` (action name
+  lists), `tests/test_cartoon_sheet.py` (mid stills).
+
+Public interfaces
+- `vidgen.api` adds the names in DESIGN §6.4 (Step 118). Actions `get_in`, `ride_to`, `get_out`;
+  props `bicycle`, `car`, `bus`; sounds `bell`, `engine`, `brakes` (`vidgen list-sfx`: 18 → 21
+  built-in sounds); layout key `riding`. Compatible: scenes without vehicles render as before.
+
+Decisions / deviations
+- Vehicles are props, riding a posture: placing, depth, shadows, light, layout dump and the
+  replay of `vidgen validate` reuse the prop and posture code; `ride_to` targets the vehicle (or
+  a rider, meaning its vehicle).
+- "A car/bus has doors or hides the lower body": the side hides it (riders drawn before the
+  vehicle, windows see-through); no door animation. Getting out puts the rider in front of the
+  vehicle (stepping out towards the camera), at its seat's x.
+- Sizes are true to the characters (a bus is 3.2 characters long); docs tell authors to use
+  `scale` or a smaller stage `size`. The bicycle's saddle is at 0.255 of a character: short
+  generated legs reach towards the low pedal as far as they go.
+- A vehicle turns round at once when it rides the other way (a cut), like a walker's facing.
+- `bell` / `engine` / `brakes` are added now (Step 128 also lists a bicycle bell and an engine
+  hum; it can reuse them).
+- Searched first: no vehicle, wheel or rider code existed (`grep -rni "vehicle\|wheel\|ride"
+  src/vidgen`: only unrelated words); reused props' primitives (`_rect`, `_handle`, `_arc`,
+  anchors), `Postures`, `holding_problems`' replay and messages, `Character.seated` /
+  `planted` / `reached_parts`, `BodyMove`, `walk_seconds` / `walk_progress`,
+  `depth_walk_distance`, `depth_slot`, `PlayedAction`, `motion_effect_cues`, `_bell` in sfx.
+
+Evidence
+- Storyboards (preview 854×480; scratch projects in the scratchpad `s118/proj`, `s118/proj2`):
+  two riders getting in a car (heads in the windows, legs hidden), riding right, then to depth
+  0.7 behind a tree, getting out in front of it; a cyclist on the saddle, leaning, feet on the
+  pedals, hands on the bar, riding right and back left (the bicycle turned round); four riders
+  (one a cat) getting on a bus facing left, the bus turning and riding right with dust and speed
+  lines; the CONFIG.md example (validates, storyboard looks right, `vidgen lint`: only the
+  scratch cast's `look_alike`). The validate message in CONFIG.md is real output.
+
+Known gaps / TODOs (Backlog line "Vehicles")
+- No doors; a beat's `shot` does not follow a ride within the beat; a rider's feet show under a
+  car's side for a moment while it climbs in; a held prop keeps its size during a ride in depth;
+  no screenplay words; ride sounds not listened to by a person.
+- Found, not fixed (fail at HEAD ee5e160 too, worktree check): `tests/test_builtin_scenes.py::
+  test_every_builtin_is_registered`, `tests/test_actions_coverage.py::
+  test_every_builtin_type_has_targets_and_the_docs_table_matches` and
+  `::test_a_type_without_targets_rejects_actions` (their scene-type lists lack `card`).
+
+How to test
+- `pytest tests/test_cartoon_vehicles.py` (21 not-render + 2 render, ~4 s).
+- Also run (not render): `tests/test_cartoon_*.py test_lint test_introspect test_phase_k_review
+  test_phase_i_review test_phase_h_review` (875 passed, 82 s), `test_docs test_guide` (102),
+  `test_schema test_gallery test_config test_actions_coverage` (3 failed: the 2 pre-existing
+  above and the guide's sound list, fixed and re-run), `test_cli test_json_output test_screenplay
+  test_builtin_scenes test_storyboard test_extensions test_includes test_random_cast
+  test_overlays` (261 passed, 1 pre-existing failure), `test_mcp test_api test_packaging` (27);
+  render: `test_cartoon_depth holding seating motion_effects foley props furniture lighting stage
+  room vehicles` (18 passed, 12 s), `test_cartoon_lint directing sheet moving acting
+  test_introspect test_sfx test_phase_k_review` (14 passed, 34 s). The full suite was not run.

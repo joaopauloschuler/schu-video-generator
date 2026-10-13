@@ -105,6 +105,8 @@ class MotionEffect(VGroup):
     def _mover_height(self) -> float:
         if isinstance(self.mover, Character):
             return self.mover.character_height
+        if getattr(self.mover, "is_vehicle", False):   # a long bus raises dust as tall as it, not as long
+            return max(float(self.mover.height), 1e-6)
         return max(float(self.mover.height), float(self.mover.width), 1e-6)
 
     @staticmethod
@@ -137,12 +139,17 @@ class MotionEffect(VGroup):
                 member.set_stroke(opacity=opacity * DUST_OUTLINE_OPACITY)
 
     def _start(self) -> None:
-        """Where it starts: the mover's feet, its size and, for a character, the way it faces (a
-        prop's way is found as it moves)."""
+        """Where it starts: the mover's feet, its size and, for a character or a vehicle, the way it
+        faces (another prop's way is found as it moves); a vehicle's dust rises at its back end
+        (setting off) or its front end (stopping)."""
         self._anchor = np.array(feet_of(self.mover), dtype=float)
         self._size = self._mover_height()
-        if isinstance(self.mover, Character):
+        if isinstance(self.mover, Character) or getattr(self.mover, "is_vehicle", False):
             self._direction = np.array([facing_sign(self.mover.facing), 0.0])
+        if getattr(self.mover, "is_vehicle", False) and self.kind == "dust":
+            ahead = float(self._direction[0]) > 0
+            front = self.cue.toward == "front"
+            self._anchor[0] = float(self.mover.get_right()[0] if ahead == front else self.mover.get_left()[0])
 
     def _dust(self, age: float) -> int:
         h, side = self._size * self.size_factor, float(self._direction[0])
@@ -175,6 +182,9 @@ class MotionEffect(VGroup):
         self._last = middle
         if self._direction is None:
             return None
+        if getattr(mover, "is_vehicle", False):   # from its back end, halfway up
+            back = mover.get_left()[0] if self._direction[0] > 0 else mover.get_right()[0]
+            return self._direction, np.array([float(back), float(feet_of(mover)[1]) + 0.45 * self._size])
         return self._direction, middle - self._direction * self._size / 2
 
     def _lines(self, age: float) -> int:

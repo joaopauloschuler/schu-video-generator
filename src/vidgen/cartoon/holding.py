@@ -22,6 +22,7 @@ from typing import Any
 
 from vidgen.cartoon.seating import LEAN_REACH, SIT_REACH, PostureError, Postures
 from vidgen.cartoon.stage import depth_scale, facing_sign, walk_destination
+from vidgen.cartoon.vehicles import GET_IN_REACH, get_in_gap, seat_count
 
 #: The hands, the near one (``left``, drawn in front of the body) first: a hand is taken in this
 #: order when the action does not name one.
@@ -278,6 +279,50 @@ def _other_depth(where: _Positions, who: str, what: str, name: str, fraction: Ca
             f"(- walk_to: {who}, to: {{{mark}depth: {theirs:g}}})")
 
 
+def _get_in_problem(
+    where: _Positions, who: str, vehicle: str, kind: str, fraction: Callable[[float], float], beside: Callable[[str, float], str],
+) -> str | None:
+    """Why ``who`` cannot get in ``vehicle`` (a ``kind``) where they are: another depth, or further
+    than :data:`~vidgen.cartoon.vehicles.GET_IN_REACH` of its heights beyond the vehicle's nearer
+    end (with the ``walk_to`` that fixes it); ``None``: it can."""
+    deeper = _other_depth(where, who, f"'{vehicle}'", vehicle, fraction)
+    if deeper is not None:
+        return deeper
+    here, there = where.x.get(who), where.x.get(vehicle)
+    if here is None or there is None:
+        return None
+    height = where.heights[who]
+    gap = get_in_gap(here, there, where.heights[vehicle], kind)
+    if gap <= GET_IN_REACH * height:
+        return None
+    return (f"{who} is {gap / height:.1f} of its heights beyond the end of '{vehicle}' (it gets in from at most {GET_IN_REACH}); "
+            f"{beside(who, there)}")
+
+
+def _ride(
+    step: HandlingStep, where: _Positions, postures: Postures, rides: Mapping[str, tuple[str, float]],
+    characters: Mapping[str, tuple[float, float]], place_x: Callable[[Any], float | None],
+) -> list[tuple[str, str]]:
+    """A ``ride_to``: its target vehicles, and the vehicles its target characters ride, go to its
+    place and depth with their riders; a target character that rides nothing is a problem."""
+    problems: list[tuple[str, str]] = []
+    chosen = [t for t in step.targets if t in rides]
+    for who in [t for t in step.targets if t in characters]:
+        now = postures.of(who)
+        if now is None or now[0] != "riding":
+            named = next(iter(rides)) if len(rides) == 1 else "<vehicle>"
+            problems.append((f"{step.location}.target", f"{who} rides nothing then; get_in first (- get_in: {who}, to: {named})"))
+        elif now[1] not in chosen:
+            chosen.append(now[1])
+    place, depth = walk_destination(step.options)
+    for vehicle in chosen:
+        x = place_x(place) if place is not None else where.x.get(vehicle)
+        for name in [vehicle, *postures.riders(vehicle)]:
+            where.x[name] = x
+            where.walk_depth(name, depth)
+    return problems
+
+
 def _too_far(who: str, what: str, gap: float, height: float, reach: float, fix: str) -> str | None:
     if abs(gap) <= reach * height:
         return None
@@ -294,6 +339,7 @@ def holding_problems(
     entering: Sequence[str] = (),
     seat_places: Mapping[str, int] | None = None,
     depths: Mapping[str, float] | None = None,
+    vehicles: Mapping[str, tuple[str, float]] | None = None,
 ) -> list[tuple[str, str]]:
     """Replay a stage scene's actions (``steps`` in play order) through :class:`Holdings`,
     :class:`~vidgen.cartoon.seating.Postures` and the characters' positions; ``(location,
@@ -310,13 +356,20 @@ def holding_problems(
     ``seat_places``: prop -> how many sit on it side by side (a sofa: 2; default 1); ``depths``:
     character or prop -> its depth at the start (DESIGN.md §69.44): sitting, leaning, picking up
     and giving at another depth (beyond :data:`DEPTH_REACH`) need a ``walk_to`` to that depth
-    first; a put-down or thrown prop is at its holder's depth."""
+    first; a put-down or thrown prop is at its holder's depth. ``vehicles``: name -> (kind, height
+    in Manim units) of the props that are vehicles (DESIGN.md §69.52): ``get_in`` needs the vehicle
+    next to the rider (:data:`~vidgen.cartoon.vehicles.GET_IN_REACH` beyond its ends, at its
+    depth) and a free seat, ``ride_to`` takes the riders along (a character target that rides
+    nothing is a problem), ``get_out`` needs a vehicle to get out of; a rider cannot walk, sit or
+    stand up before it gets out, and a vehicle cannot be picked up or moved by keys while ridden."""
     holdings = Holdings()
     postures = Postures()
     where = _Positions(
         {n: x for n, (x, _) in characters.items()}, {n: h for n, (_, h) in characters.items()}, set(characters) - set(entering), dict(depths or {}),
     )
     where.x.update(props)
+    rides = dict(vehicles or {})
+    where.heights.update({name: height for name, (_, height) in rides.items()})
     problems: list[tuple[str, str]] = []
 
     def x_of(name: str) -> float | None:
@@ -332,7 +385,10 @@ def holding_problems(
         users = postures.on(prop)
         if not users:
             return None
-        verb = "sits" if postures.of(users[0])[0] == "sitting" else "leans"
+        posture = postures.of(users[0])[0]
+        if posture == "riding":
+            return f"{users[0]} rides '{prop}' then; get_out first (- get_out: {users[0]})"
+        verb = "sits" if posture == "sitting" else "leans"
         return f"{users[0]} {verb} on '{prop}' then; stand_up first (- stand_up: {users[0]})"
 
     def blown_off(prop: str) -> str | None:
@@ -377,6 +433,21 @@ def holding_problems(
                     where.x[who] = x_of(prop)
                 elif step.action == "stand_up":
                     postures.stand(who)
+                elif step.action == "get_in":
+                    vehicle = str(o.get("to"))
+                    if vehicle not in rides:
+                        continue
+                    message = _get_in_problem(where, who, vehicle, rides[vehicle][0], to_fraction, beside)
+                    if message is not None:
+                        problems.append((f"{step.location}.to", message))
+                        continue
+                    postures.ride(who, vehicle, seat_count(rides[vehicle][0]))
+                    where.x[who] = where.x.get(vehicle)
+                elif step.action == "get_out":
+                    postures.get_out(who)
+                elif step.action in ("pick_up", "hold") and str(o.get("to")) in rides:
+                    vehicle = str(o.get("to"))
+                    problems.append((f"{step.location}.to", f"'{vehicle}' is a vehicle, too big to {step.action.replace('_', ' ')}; get_in it instead (- get_in: {who}, to: {vehicle})"))
                 elif step.action == "enter":
                     where.present.add(who)
                     where.x[who] = place_x(o["to"]) if o.get("to") is not None else characters[who][0]
@@ -440,6 +511,8 @@ def holding_problems(
             except (HoldingError, PostureError) as exc:
                 key = "prop" if step.action in ("put_down", "throw", "give") and o.get("prop") is not None else "target"
                 problems.append((f"{step.location}.{key}", str(exc)))
+        if step.action == "ride_to":
+            problems += _ride(step, where, postures, rides, characters, place_x)
         for prop in [t for t in step.targets if t in props]:
             holder = holdings.holder(prop)
             if step.action in ("move_along", "keyframes", "blow_away", "open", "close") and blown_off(prop) is not None:

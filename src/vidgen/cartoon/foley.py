@@ -4,8 +4,9 @@ the seconds it took, after any shortening to fit its beat; :class:`PlayedAction`
 cues of the built-in sound library (:mod:`vidgen.sfx`): footsteps on each footfall of a walk
 (``walk_to``, ``run_to``, ``enter``, ``exit``), a whoosh as a character enters and a swoosh as it leaves, a
 boing as a jump takes off, a thud where a thrown prop lands (``throw``), a pop on a surprised
-face (``emote`` / ``react``) and a short sound as most effect symbols pop up (``effect``,
-:data:`EFFECT_SOUNDS`).
+face (``emote`` / ``react``), a short sound as most effect symbols pop up (``effect``,
+:data:`EFFECT_SOUNDS`), and a bicycle's bell or an engine as a vehicle sets off and its brakes as
+it stops (``ride_to``, :data:`RIDE_SOUNDS`).
 
 Footfalls follow the walk cycle of :func:`~vidgen.cartoon.acting.walk_cycle`: a foot lands each
 time the legs are furthest apart (half a step, :data:`~vidgen.cartoon.acting.STEP_LENGTH`
@@ -40,6 +41,14 @@ LAST_STEP_INTENSITY = 0.3
 LAST_STEP_MIN = 0.25
 #: The actions that walk (footsteps).
 WALKING_ACTIONS: frozenset[str] = frozenset({"walk_to", "run_to", "enter", "exit"})
+#: A ride's sounds (DESIGN.md §69.52), per vehicle: the sound as it sets off (``bell`` or
+#: ``engine``), its pitch (semitones) and gain (dB); then its brakes as it stops: pitch and gain.
+RIDE_SOUNDS: dict[str, tuple[str, float, float]] = {"bicycle": ("bell", 0.0, -6.0), "car": ("engine", 0.0, -5.0), "bus": ("engine", -5.0, -4.0)}
+BRAKES: dict[str, tuple[float, float]] = {"bicycle": (4.0, -12.0), "car": (0.0, -8.0), "bus": (-3.0, -7.0)}
+#: An engine sounds for this share of the ride, at least / at most these seconds.
+ENGINE_SHARE = 0.8
+ENGINE_MIN_SECONDS = 0.8
+ENGINE_MAX_SECONDS = 6.0
 #: The sound of each effect symbol as it pops up (DESIGN.md §69.40): built-in sound, gain (dB)
 #: and its params; sleep, stars and a tear are silent. Idea's short ding is the chime cut short.
 EFFECT_SOUNDS: dict[str, tuple[str, float, dict[str, float]]] = {
@@ -81,6 +90,8 @@ class PlayedAction:
     big: bool = False
     flight: tuple[float, float] | None = None
     """The shares of its time between which a prop it moved flew (a ``throw``, ``blow_away``)."""
+    vehicle: str | None = None
+    """The kind of the vehicle a ``ride_to`` moved (DESIGN.md §69.52)."""
 
 
 @dataclass(frozen=True)
@@ -124,6 +135,21 @@ def footfall_shares(heights: float, phases: Phases = Phases(), step_length: floa
     return shares
 
 
+def ride_cues(played: PlayedAction) -> list[FoleyCue]:
+    """The sounds of a ``ride_to`` (DESIGN.md §69.52): as it sets off a bicycle's bell, or a car's
+    or a bus's engine for most of the ride (at least :data:`ENGINE_MIN_SECONDS`); its brakes ending
+    as it stops (:data:`RIDE_SOUNDS`)."""
+    start, seconds = played.start, played.seconds
+    off, pitch, gain = RIDE_SOUNDS[played.vehicle or ""]
+    if off == "engine":
+        length = min(max(ENGINE_SHARE * seconds, ENGINE_MIN_SECONDS), ENGINE_MAX_SECONDS)
+        first = FoleyCue(start, "engine", gain, {"duration": round(length, 3), "pitch": pitch})
+    else:
+        first = FoleyCue(start, "bell", gain, {"pitch": pitch})
+    brakes_pitch, brakes_gain = BRAKES[played.vehicle or ""]
+    return [first, FoleyCue(start + seconds, "brakes", brakes_gain, {"pitch": brakes_pitch}, align="end")]
+
+
 def foley_cues(played: PlayedAction) -> list[FoleyCue]:
     """The sounds of one action as it played (scene times from ``played.start``, scaled by the
     seconds it took): none for actions without foley."""
@@ -140,6 +166,8 @@ def foley_cues(played: PlayedAction) -> list[FoleyCue]:
             cues.append(FoleyCue(moved, "swoosh", WHOOSH_GAIN, align="end"))
     elif played.action == "jump":
         cues.append(FoleyCue(start + played.phases.before * seconds, "boing", BOING_GAIN))
+    elif played.action == "ride_to" and played.vehicle in RIDE_SOUNDS:
+        cues += ride_cues(played)
     elif played.lands is not None:
         cues.append(FoleyCue(start + played.lands * seconds, "thud", LANDING_GAIN))
     elif played.action == "effect" and played.effect in EFFECT_SOUNDS:

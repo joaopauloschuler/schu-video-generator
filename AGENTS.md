@@ -715,6 +715,9 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `sit_on` | on a `stage`: a character sits on a `chair`, `rock`, `box`, `sofa`, `armchair`, `bed` or `desk` (`to: chair`); its hips and knees bend | next to the prop; `stand_up` before it walks |
 | `lean_on` | on a `stage`: a character leans its back on a `tree`, `door`, `sign`, `lamp`, `house`, `bookshelf`, `counter` or `fridge` (`to: tree`) | next to the prop; `stand_up` before it walks |
 | `stand_up` | on a `stage`: a character gets up from where it sits or leans | |
+| `get_in` | on a `stage`: characters get in a `car` or a `bus` or on a `bicycle` (`to: car`); they ride with it until `get_out` | next to the vehicle; a bicycle seats 1, a car 2, a bus 4 |
+| `ride_to` | on a `stage`: a vehicle (or a rider: its vehicle) rides to a mark, an x or `{mark, depth}` with its riders, wheels turning | `get_in` first |
+| `get_out` | on a `stage`: riders get out of their vehicle where it is | |
 | `shot` | on a `stage`: the camera frames characters for the beat; write it as the beat's key `shot: closeup kit` (`wide`, `two_shot`, `medium`, `over_shoulder kit pip`); the next beat without one cuts back | a beat's dialogue line or reaction; not with a walk out of the framing |
 
 ```yaml
@@ -974,8 +977,13 @@ into the set. `examples/cartoon_series/` shows it (CONFIG "Shared casts and sets
   or leans it can talk, gesture, emote and handle props; a look turns only its head. `vidgen
   validate` says when the prop is too far, the seat taken, or a seated character walks
   (`docs/CONFIG.md` "Sitting and leaning").
+- **Vehicles**: props `bicycle`, `car`, `bus`. `get_in: [pip, kit], to: car` (each must stand
+  beside it), `ride_to: car, to: right` (or `{mark, depth}`; the riders go along, a cyclist
+  pedals), `get_out: [pip, kit]`; no walking while riding. They are big next to the characters
+  (a bus is 3.2 characters long): give it a `scale` or the stage a smaller `size`
+  (`docs/CONFIG.md` "Vehicles").
 - **Sound**: walks, entrances, exits, jumps, a `surprised` face and most effect symbols make their own sounds
-  (foley: footsteps, whoosh, boing, pop, an idea's ding; a thrown prop lands with a thud), timed to the action,
+  (foley: footsteps, whoosh, boing, pop, an idea's ding; a thrown prop lands with a thud; a ride rings a bell or starts an engine and brakes), timed to the action,
   and rain plays a rain sound bed; `foley: false` (top level or a stage) turns them off. A beat's `sting: reveal | comic | sad` adds a short music sting
   (`reveal` as the beat starts, `comic` and `sad` in the pause after the line), ducked under the
   voice. One or two per cartoon, on the real punchline, or they stop being funny.
@@ -1194,7 +1202,7 @@ scenes:
 **Sound effects** (`vidgen list-sfx` describes each in words): `whoosh` (something moves in),
 `pop` (an item appears), `tick` (steps, counting), `click` (a UI click), `chime` (a key
 insight), `success` / `error` (a result), `riser` (tension before a reveal, `align: end`),
-`thud` (a big number lands), `swoosh`, `typing`; `footstep`, `boing`, `gasp`, `sigh` and the music stings
+`thud` (a big number lands), `swoosh`, `typing`; `footstep`, `boing`, `gasp`, `sigh`, `bell`, `engine`, `brakes` and the music stings
 `sting_reveal` / `sting_comic` / `sting_sad` are for cartoons (`vidgen guide cartoons`). Two or three per minute, on the moments that
 matter; `sfx: {auto: true}` adds soft ones to built-in reveals if you want a uniform feel.
 
@@ -1486,7 +1494,7 @@ scenes:
 | `duplicate beat id` | beat ids are unique in the whole video; rename one |
 | `unknown target 'x' ...; did you mean ... (targets: ...)` | pick a name from the list (labels are case-sensitive: `bar:4K`) |
 | `until 'x' is not a later beat of scene 'y'` | `until` names a later beat id of the same scene |
-| `unknown action 'x'` / `unknown option` | actions are `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `sit_on`, `lean_on`, `stand_up`, `light`, `wind`, `blow_away`, `effect` |
+| `unknown action 'x'` / `unknown option` | actions are `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `sit_on`, `lean_on`, `stand_up`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect` |
 | `labels has 2 entries but values has 3` | one value per label |
 | `unknown theme color 'x'` | use a token (`primary`, `highlight`...) or quoted hex `"#0B5FFF"`, or add it to `theme.colors` |
 | `invalid hex color` | `#RGB`, `#RRGGBB` or `#RRGGBBAA`, in quotes (YAML reads `#` as a comment) |

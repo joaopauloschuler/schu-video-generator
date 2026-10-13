@@ -121,9 +121,11 @@ src/vidgen/
                           # motion_effect_shapes.py (MotionEffect, §69.41), room.py (rooms:
                           # wall, floor, windows, the sky outside, §69.42; no manim),
                           # room_drawing.py (draw_room, WindowViews, §69.42), cards.py (title
-                          # cards: layout, burst rays, outlined text colours, §69.46; no manim);
-                          # still.py also
-                          # draws the prop and furniture galleries (§69.43), the look gallery
+                          # cards: layout, burst rays, outlined text colours, §69.46; no manim),
+                          # vehicles.py (seats, wheels, pedals, get-in reach, §69.52; no manim),
+                          # vehicle_drawing.py (the bicycle, car and bus, §69.52), riding.py
+                          # (Ride, riders on their seats, pedalling, §69.52); still.py also
+                          # draws the prop, furniture and vehicle galleries (§69.43), the look gallery
                           # (§69.47) and `vidgen character-sheet` (§69.16)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
@@ -871,6 +873,16 @@ New built-in scene type `card`; transition types `iris_out` / `iris_in` with the
 `character` and `at`. Compatible: renders without them are unchanged, but the fingerprint of a
 scene with a transition next to it changes once (the transition's dump gains `character` and
 `at`), so those scenes render again once.
+Step 118 (§69.52) adds `VEHICLE_KINDS`, `VEHICLES`, `VehicleSpec`, `RIDING_ACTIONS`,
+`GET_IN_REACH`, `GET_IN_SECONDS`, `GET_OUT_SECONDS`, `get_in_gap`, `pedal_points`,
+`place_order`, `seat_count`, `seat_origin`, `wheel_degrees`, `Ride`, `RiderSeat`, `place_rider`,
+`riding_state` and `seat_point`; `PROP_KINDS` gains `bicycle`, `car`, `bus`; `Prop(wheels=(),
+crank=None)`, `Prop.is_vehicle`, `.prop_point`, `.unit`, `.standing_height`, `.turn_wheels`,
+`.wheels`, `.crank`, `.wheel_angle`, `.crank_angle`, `.ground_y`; `BodyMove(y=None)`;
+`Character.riding`; `Postures.ride`, `.get_out`, `.riders`; `PlayedAction.vehicle`;
+`StageFrame.vehicles`; `holding_problems(vehicles=None)`; `Stage.ride_in_depth`; actions
+`get_in`, `ride_to`, `get_out`; built-in sounds `bell`, `engine`, `brakes`; layout key `riding`.
+Compatible: a scene without vehicles renders as before (`props.png` is byte-identical).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -8375,6 +8387,104 @@ with an animal are a config error (`config.SPECIES_OWN_KEYS`); `svg` with `speci
   by one amount (`test_the_set_fades_in_as_one_picture`). A copy carried from the scene before
   (`carry:`) still moves in. Not changed: the scene's fade out (`finish` → `clear_all`) still
   fades each thing on its own (Backlog); with a transition other than a cut it is held instead.
+
+### 69.52 Vehicles on the ground (Step 118)
+
+Characters get in a car or a bus, or on a bicycle, ride it somewhere and get out. A vehicle is a
+built-in prop (§69.8), so placing, `scale`, `facing`, colours, depth, shadows, the light, the
+layout dump and the prop checks work as for any prop; riding is a posture like sitting (§69.28).
+
+- **Geometry** (`cartoon/vehicles.py`, no manim): `VEHICLES` kind → `VehicleSpec` (prop units as
+  drawn facing right, built by `_spec` from measures in a character's heights): `height` next to
+  a character (bicycle 0.38, car 1.12, bus 1.45; `PROP_HEIGHTS` reads them), `seats` (each
+  place's hips x, front first: 1, 2, 4 places), the `seat` line and the `floor` under the riders'
+  feet (car 0.2 / 0.08, bus 0.44 / 0.3, bicycle 0.255 / 0), `wheels` (x, y, radius: every
+  wheel stands on the ground), `half_length`, `hides_legs` (car, bus), default `speed` (bicycle
+  and bus 4, car 5 units/s), a bicycle's `crank` and `grip`. The car's and bus's seat lines put a
+  seated head (about 0.8 above the hips) under the roof, the floor behind the side. Pure
+  functions: `seat_origin`, `seated_height`, `get_in_gap` (beyond the nearer end),
+  `place_order` (nearest seat first), `wheel_degrees(forward, radius)` (clockwise going forward,
+  one turn per circumference), `crank_degrees` (÷ `GEAR` 2), `pedal_points(kind, angle)` (the
+  two pedals opposite on the crank circle), `ride_facing`. A ride's time is a walk's
+  (`walk_seconds`: eased over 15 % at each end) at the vehicle's speed; in depth it goes as far
+  as a walk in depth (`depth_walk_distance`, a unit of depth = 2 heights of a character there).
+- **Drawings** (`cartoon/vehicle_drawing.py`): side on, the front on the right, primitives in
+  the prop's two colours (`PROP_COLORS`: bicycle primary / accent, car accent / highlight, bus
+  highlight / primary) plus shades, dark tyres (`TV_CASE`), fixed light hubs and headlights.
+  Original simple shapes; nothing imitates a known make or model. Windows are see-through glass
+  (`GLASS_OPACITY` 0.3) between filled pillars, so riders drawn *before* the vehicle show in them
+  while its lower side hides their legs. Drawn in character heights, then scaled to prop units;
+  wheel and crank places come from the spec (one source). `draw_prop` returns a `Prop` with an
+  anchor and `wheels` (each wheel's spokes or bolts group and its axle) and a `crank`;
+  `Prop.turn_wheels(degrees)` rotates them about their axles (mirrored when facing left) and
+  keeps `wheel_angle` / `crank_angle`; `Prop.prop_point(x, y)` and `Prop.unit` map prop units to
+  the screen. Gallery: `write_props_png(..., kinds=VEHICLE_KINDS, columns=3)` →
+  `docs/gallery/media/vehicles.png` (720×240, 10 KB) in CONFIG.md "Vehicles"; `props.png` leaves
+  the vehicles out (byte-identical).
+- **Riders** (`cartoon/riding.py`): never added to the vehicle (§69.22's fixed family; the
+  vehicle's box stays its own). A `RiderSeat` (rider, vehicle, place, `ratio` = rider height /
+  vehicle unit) and `place_rider` put the rider's feet on its seat's floor point where the
+  vehicle is now, at `ratio` × the vehicle's unit (growing and shrinking with it in depth), facing
+  its way, with its `stage_depth` / `ground_y`. An updater on the rider calls it every frame
+  while it rides; `Ride` calls it too (Manim pauses an animated character's updaters).
+  `riding_state` seats the rider (`Character.seated` on the seat above the floor); on a bicycle
+  it also leans forward `CYCLING_LEAN` 14°, plants the feet on the pedals (`Character.planted`,
+  the two-bone solver of §69.26; legs too short reach towards them) and reaches both hands to the
+  grip. `Ride(vehicle, x, seats=, speed=, depth=, feet_y=, strength=)` turns the vehicle round
+  at once to face the way it goes (riders with it), moves its feet along `walk_progress`, scales
+  it about its feet in depth (like `Walk`), turns the wheels by the way gone and re-plants a
+  cyclist's feet every frame. `BodyMove(y=)` eases the feet's y too (getting in climbs to the
+  floor, getting out steps down).
+- **Actions** (`scenes/riding.py`, against `vidgen.api`): `get_in` (characters; `to` a vehicle;
+  1.0 s): each takes the nearest free seat (`Postures.ride`), faces the vehicle, a `BodyMove` to
+  its seat with the riding posture (arms too on a bicycle), the follow updater, `Character.riding`,
+  and is drawn right before a car / bus (behind its side) or right after a bicycle (on it).
+  `ride_to` (a vehicle, or a character: the vehicle it rides; `to` a place or `{mark, depth}`,
+  `depth`, `speed`): a `Ride` per vehicle; a ride in depth registers with `Stage.ride_in_depth`.
+  `get_out` (0.9 s): the updater off, `Postures.get_out`, a `BodyMove` back to the saved body,
+  legs and arms with the feet on the ground, drawn right after the vehicle (stepping out towards
+  the camera). Riding counts as posed (`is_posed`): looks turn only the head, poses move only
+  the arms and head.
+- **Stage** (`scenes/stage.py`): vehicles are movable props when a `ride_to` is used (their
+  shadow follows; `ShadowCaster(grows=True)` with `Prop.standing_height`); a rider casts no
+  shadow (`ShadowCaster` treats `riding` like `held_by`). The draw-order keeper of §69.44 moves a
+  vehicle with its riders and their held props as one block (`_moving_block`) and redraws what a
+  ride in depth passes (`_depth_crossers` knows `Ride`). Mid-action stills cover the three actions.
+- **Validate** (`holding_problems(vehicles=)`, `StageFrame.vehicles`): `get_in` too far beyond the
+  vehicle's end (`GET_IN_REACH` 0.5 heights) or at another depth, with the `walk_to` that fixes
+  it; a full vehicle ("'car' is full: it has 2 seats and pip, kit ride it then; get_out one
+  first"); a `ride_to` of a character that rides nothing; `get_out` without `get_in`; the
+  pinned actions (§69.28) and `stand_up` / `sit_on` / `lean_on` while riding ("pip rides 'car'
+  then; get_out first (- get_out: pip)"); `pick_up` / `hold` of a vehicle; `keyframes` /
+  `move_along` of a ridden one. The replay moves riders and vehicles (and their depths) with each
+  ride. `scene_problems`: `to` / targets that are not vehicles, naming the stage's vehicles.
+- **Foley and motion effects**: `PlayedAction.vehicle`; `ride_cues`: a bicycle's `bell` as it
+  sets off, a car's / bus's `engine` (pitch −5 for the bus) for `ENGINE_SHARE` 0.8 of the ride
+  (0.8–6 s), `brakes` ending at the stop (`RIDE_SOUNDS`, `BRAKES`). Three new generated sounds in
+  `sfx.py` (`bell`, `engine`, `brakes`; nothing downloaded). `motion_effect_cues` treats a
+  `ride_to` like a walk (its `heights` in the heights of a character beside the vehicle): dust
+  at the vehicle's back end as it sets off and its front end as it stops, speed lines from its
+  back end, from `FAST_SPEED`.
+- **Planner, reframe, shots, follow**: `_follow_written` replays `get_in` / `ride_to` /
+  `get_out` (`_riding`): riders' x and facing follow their vehicle, so automatic looks, close-up
+  checks and `reframe` pans see them where they are; the three actions are `LOOK_CHANGING` and
+  `MOVING_ACTIONS`. `follow` of a vehicle (its box) or a rider (its feet) keeps the camera on
+  it during the ride. A beat's `shot` is framed where the riders are when the beat starts.
+- **Lint and layout dump**: layout key `riding` on a character; `character_overlap` and
+  `walk_overlap` skip two riders of one vehicle; `hidden_speaker` does not count a rider's own
+  vehicle as covering its face.
+- **Checked by eye** (scratch projects at preview 854×480, `vidgen storyboard`): two riders
+  getting in a car (heads in the windows, legs hidden), the car riding right then to depth 0.7
+  behind a tree (shrinking, riders with it) and both getting out in front of it; a cyclist (a
+  tall look) on the saddle, leaning to the handlebar, feet on the pedals, riding right and back
+  left (the bicycle turning round); four characters (one a cat) getting on a bus facing left, the
+  bus turning and riding right with dust and speed lines; the CONFIG.md example. `vidgen lint`:
+  only the scratch cast's own `look_alike`.
+- **Not done here**: no door opening; a shot does not follow a ride within its beat (as for
+  walks); a rider's feet show under a car's side for a moment while it climbs in; a prop a rider
+  holds follows its hand but keeps its size during a ride in depth; no vehicles in the
+  screenplay grammar; water and air vehicles are Step 119. Tests:
+  `tests/test_cartoon_vehicles.py`.
 
 ## 70. Render jobs: `--jobs auto` (Step 117)
 

@@ -164,7 +164,8 @@ class StarField(VGroup):
 
 @dataclass
 class ShadowCaster:
-    """What casts a shadow: ``mobject`` (with ``feet()``; a prop with ``held_by`` set casts none),
+    """What casts a shadow: ``mobject`` (with ``feet()``; a prop with ``held_by`` set casts none,
+    nor does a character ``riding`` a vehicle, DESIGN.md §69.52),
     the y of its ``ground`` line (a character's own ``ground_y`` wins: it walks in depth), its
     shadow's ``width`` and its ``size`` (height, the unit of how high it is off the ground).
     ``widths``: the shadow's width per shape a prop with shapes shows (an umbrella closed or open;
@@ -182,7 +183,7 @@ class ShadowCaster:
         """Its shadow now (:func:`~vidgen.cartoon.lighting.shadow_ellipse`), as faint as its caster
         shows (``shown``: fading through a door)."""
         x, y = (float(v) for v in self.mobject.feet()[:2])
-        held = getattr(self.mobject, "held_by", None) is not None
+        held = getattr(self.mobject, "held_by", None) is not None or getattr(self.mobject, "riding", None) is not None   # its vehicle's shadow covers a rider's
         width = self.widths.get(getattr(self.mobject, "shape", None) or "", self.width)
         shown = float(getattr(self.mobject, "shown", 1.0))
         own = getattr(self.mobject, "ground_y", None)

@@ -257,8 +257,16 @@ The sitting actions (`sit_on`, `lean_on`, `stand_up`; `src/vidgen/scenes/sitting
 by the solver), `character.leaning(state)`, `character.lowered(state, drop, stoop=)` (a crouch,
 the feet kept) and `character.planted(state, soles)` (each leg's sole put at a point), all states
 not drawn; `BodyMove(character, keys, x=, facing=, soles=)` plays one (an `ArmMove` that also
-moves the feet's x and keeps the soles on the ground). A `Prop`'s `seat_point()` and
-`lean_edges()` say where to sit and lean (`None` when it has none).
+moves the feet's x and keeps the soles on the ground; `y=` eases the feet's y too). A `Prop`'s
+`seat_point()` and `lean_edges()` say where to sit and lean (`None` when it has none).
+The riding actions (`get_in`, `ride_to`, `get_out`; `src/vidgen/scenes/riding.py`) work on the
+vehicle props (`VEHICLE_KINDS`, geometry in `VEHICLES`): `RiderSeat(rider, vehicle, place,
+ratio)` with `place_rider(seat)` puts a rider on its seat where the vehicle is now (call it from
+an updater on the rider, never add the rider to the vehicle), `riding_state(rider, vehicle,
+place, state)` seats it (on a bicycle: leaning, feet on the pedals, hands on the handlebar), and
+`Ride(vehicle, x, seats=, speed=, depth=, feet_y=)` drives the vehicle with its riders, wheels
+turning (`Prop.turn_wheels`); `vehicle.prop_point(x, y)` maps the vehicle's prop units to the
+screen.
 `character(name)` breathes, sways its head and blinks on its own (unless `idle: false`):
 `stop_idle()` / `start_idle(seed=None)` turn that off and on; a blink never shows during a
 `PoseChange`. Before drawing your own scene for characters on a set, check whether the built-in
@@ -1106,7 +1114,7 @@ its targets (the built-in `pan` and `follow`), so it plays together with another
 that falls due at the same moment instead of before or after it.
 A scene type that lists action type names in its class attribute `mid_still_actions` (the
 built-in `stage`: `walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`,
-`pick_up`, `put_down`, `give`, `throw`, `sit_on`, `lean_on`, `stand_up`, `blow_away`) gets a
+`pick_up`, `put_down`, `give`, `throw`, `sit_on`, `lean_on`, `stand_up`, `blow_away`, `get_in`, `ride_to`, `get_out`) gets a
 still half-way through each use of them whenever stills are taken (`vidgen storyboard`,
 `render --frames`), besides the beat ends (docs/CONFIG.md "Frame stills").
 The built-in `callout` action (`src/vidgen/scenes/callout_action.py`) is an example of all

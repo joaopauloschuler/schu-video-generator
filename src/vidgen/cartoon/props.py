@@ -60,6 +60,7 @@ from vidgen.cartoon.seating import (
     mirrored_seat,
     svg_seat_and_lean,
 )
+from vidgen.cartoon.vehicles import VEHICLE_KINDS, VEHICLES, crank_degrees
 from vidgen.config import CHARACTER_INK
 from vidgen.errors import VidgenError
 from vidgen.helpers import resolve_color
@@ -75,7 +76,7 @@ FURNITURE: tuple[str, ...] = (
 PROP_KINDS: tuple[str, ...] = (
     "table", "chair", "tree", "bush", "house", "door", "lamp", "sign", "box",
     "ball", "cloud", "sun", "moon", "rock", "plant", "laptop", "cup", "basket", "umbrella", "napkin",
-    *FURNITURE,
+    *FURNITURE, *VEHICLE_KINDS,
 )
 #: Each prop's height relative to a character's (the stage's ``size``) before its own ``scale``.
 PROP_HEIGHTS: dict[str, float] = {
@@ -84,6 +85,7 @@ PROP_HEIGHTS: dict[str, float] = {
     "plant": 0.4, "laptop": 0.14, "cup": 0.09, "basket": 0.2, "umbrella": 0.6, "napkin": 0.05,
     "sofa": 0.36, "armchair": 0.38, "bed": 0.34, "bookshelf": 0.9, "counter": 0.5, "fridge": 0.95,
     "picture": 0.3, "rug": 0.06, "houseplant": 0.75, "clock": 0.2, "tv": 0.55, "desk": 0.42,
+    **{kind: spec.height for kind, spec in VEHICLES.items()},
 }
 #: Props that hang on a wall: how far their bottom edge is above the floor, in the heights of a
 #: character standing where they are (on top of any ``lift``).
@@ -118,6 +120,7 @@ PROP_COLORS: dict[str, tuple[str, str]] = {
     "bookshelf": ("secondary", "accent"), "counter": ("tertiary", "dim"), "fridge": ("#F4F6FA", "dim"),
     "picture": ("secondary", "primary"), "rug": ("accent", "highlight"), "houseplant": ("tertiary", "secondary"),
     "clock": ("#F4F6FA", "secondary"), "tv": ("secondary", "primary"), "desk": ("secondary", "accent"),
+    "bicycle": ("primary", "accent"), "car": ("accent", "highlight"), "bus": ("highlight", "primary"),
 }
 #: The glass of a house's window (light in every theme, like a character's eye whites).
 GLASS = "#D6EEF8"
@@ -172,6 +175,8 @@ class Prop(VGroup):
         shapes: Mapping[str, Sequence[VMobject]] | None = None,
         grips: Mapping[str | None, tuple[float, float]] | None = None,
         seat_places: Sequence[float] = (),
+        wheels: Sequence[tuple[VMobject, tuple[float, float]]] = (),
+        crank: tuple[VMobject, tuple[float, float]] | None = None,
     ) -> None:
         super().__init__(*drawn)
         self.name = name
@@ -192,7 +197,15 @@ class Prop(VGroup):
         self._members: dict[str, list[VMobject]] = {}
         self._drawings: dict[str, tuple[np.ndarray, ...]] = {}
         self._anchor: VMobject | None = None
-        if shapes or self.grips:
+        #: A vehicle's turning parts (DESIGN.md §69.52): each wheel's group and axle, the cranks'
+        #: (prop units as drawn facing right), and how far they have turned (degrees as drawn).
+        self.wheels = list(wheels)
+        self.crank = crank
+        self.wheel_angle = 0.0
+        self.crank_angle = 0.0
+        #: The y of the ground line under it while it rides in depth (``None``: its stage's).
+        self.ground_y: float | None = None
+        if shapes or self.grips or self.wheels:
             self._anchor = anchor_mobject()   # drawn in prop units: the placement starts as the identity
             self.add(self._anchor)
         for shape, members in (shapes or {}).items():
@@ -271,6 +284,48 @@ class Prop(VGroup):
             return None
         x = float(self.feet()[0])
         return x + self.lean[0] * self.height, x + self.lean[1] * self.height
+
+    # ----- vehicles (DESIGN.md §69.52) ---------------------------------------------------------
+
+    @property
+    def is_vehicle(self) -> bool:
+        """Whether it is a vehicle (riders get in, it rides with them)."""
+        return self.kind in VEHICLES
+
+    def prop_point(self, x: float, y: float) -> np.ndarray:
+        """Where the point (``x``, ``y``) in prop units as drawn facing right is on screen now (its
+        place, size and facing; a prop drawn with an anchor: shapes, a grip or wheels)."""
+        if self._anchor is None:
+            raise VidgenError(f"prop '{self.name}' has no anchor to place points by")
+        placed = apply_matrix(anchor_placement(self._anchor), np.array([[float(x), float(y), 0.0]]))[0]
+        return np.array([placed[0], placed[1], 0.0])
+
+    @property
+    def unit(self) -> float:
+        """How long one prop unit is on screen now (its height as built, times any scaling)."""
+        if self._anchor is None:
+            return float(self.height)
+        return float(np.linalg.norm(self.prop_point(0.0, 1.0) - self.prop_point(0.0, 0.0)))
+
+    @property
+    def standing_height(self) -> float:
+        """How tall it is built, times any scaling since (:attr:`unit`): its shadow grows and
+        shrinks with it as it rides in depth."""
+        return self.unit
+
+    def turn_wheels(self, degrees: float) -> Prop:
+        """Turn its wheels ``degrees`` (counterclockwise as drawn facing right) about their axles,
+        and its cranks by :func:`~vidgen.cartoon.vehicles.crank_degrees` of that."""
+        mirror = 1.0 if self.facing == "right" else -1.0
+        for group, (x, y) in self.wheels:
+            group.rotate(np.radians(degrees * mirror), about_point=self.prop_point(x, y))
+        self.wheel_angle += degrees
+        if self.crank is not None:
+            turn = crank_degrees(degrees)
+            group, (x, y) = self.crank
+            group.rotate(np.radians(turn * mirror), about_point=self.prop_point(x, y))
+            self.crank_angle += turn
+        return self
 
 
 # ----- primitives (prop units) ----------------------------------------------------------------
@@ -805,11 +860,17 @@ def draw_prop(
     ``main`` / ``detail`` (theme tokens or #hex; default :data:`PROP_COLORS`). Outlines are as
     wide as a character's ``character_height`` tall (default: ``height``), at least one pixel.
     ``shape``: which of its :data:`PROP_SHAPES` it shows (default: the first)."""
-    if kind not in _DRAWERS:
+    if kind not in _DRAWERS and kind not in VEHICLES:
         raise VidgenError(f"unknown prop '{kind}' (props: {', '.join(PROP_KINDS)})")
     if height <= 0:
         raise VidgenError(f"prop '{name or kind}': height must be positive, got {height}")
     paint = _Paint(*prop_colors(kind, theme, main, detail))
+    if kind in VEHICLES:
+        from vidgen.cartoon.vehicle_drawing import draw_vehicle
+
+        vehicle = draw_vehicle(kind, paint)
+        prop = Prop(*vehicle.members, name=name or kind, kind=kind, facing=facing, wheels=vehicle.wheels, crank=vehicle.crank)
+        return _finish(prop, height, character_height or height, facing)
     drawn = _DRAWERS[kind](paint)
     shapes = drawn if isinstance(drawn, dict) else None
     prop = Prop(

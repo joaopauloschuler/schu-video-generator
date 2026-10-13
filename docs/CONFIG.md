@@ -1952,6 +1952,9 @@ writes them as WAV files to listen to):
 | `thud` | 0.45 s (0.15–1.5) | a soft low impact, 110 → 55 Hz with a muffled knock | something landing, a big number |
 | `footstep` | 0.14 s (0.06–0.4) | one soft step: a muffled heel knock (~260 Hz, a 95 Hz thump), then a faint scuff | a character's step ([foley](#foley-and-music-stings)) |
 | `boing` | 0.5 s (0.2–1.5) | a twangy cartoon spring gliding up ~140 → ~260 Hz with a fast wobble | a jump, a bounce |
+| `bell` | 0.7 s (0.3–2) | a bicycle bell, "ring-ring": two quick strikes of a small bright bell at ~2.35 kHz | a bicycle setting off ([foley](#foley-and-music-stings)) |
+| `engine` | 1.6 s (0.5–8) | a small engine starting and running: a buzzy ~42 Hz tone revving up, settling, with a soft rumble | a car or a bus setting off |
+| `brakes` | 0.5 s (0.2–1.5) | brakes squealing to a stop: a thin wavering tone near 2.1 kHz over a soft scrape | a vehicle stopping |
 | `gasp` | 0.35 s (0.15–1) | a sharp breath in, "hah": breath noise around 1.1, 1.75 and 2.9 kHz, loudest after ~50 ms, cut off | surprise ([`[gasp]`](#voice-sounds) at a line's start or end) |
 | `sigh` | 0.9 s (0.4–2.5) | a long breath out, "haaah": breathy "ah" noise with a faint hum falling ~190 → ~130 Hz, trailing off | tiredness, relief ([`[sigh]`](#voice-sounds) at a line's start or end) |
 | `sting_reveal` | 1.4 s (0.6–4) | a "ta-da": a brassy pickup note, then a bright C major chord with a soft bell | a reveal ([`sting: reveal`](#foley-and-music-stings)) |
@@ -1998,8 +2001,9 @@ action as it plays (also when its beat speeds it up): a `footstep` on every foot
 off, a `thud` where a [thrown](#props-in-hands) prop lands, a `pop` when `emote` or `react`
 puts on the `surprised` expression, and a short sound as most [effect
 symbols](#effect-symbols-effect) pop up (`idea` a short `chime` ding; `sound: false` on the
-`effect` for none). Other actions are
-silent. They are ordinary sound effects (listed in `timings.json` `sfx`, mixed like the rest):
+`effect` for none), and on a [`ride_to`](#vehicles-get_in-ride_to-get_out) a bicycle's `bell`
+as it sets off, or a car's or a bus's `engine` for most of the ride, and `brakes` ending as it
+stops. Other actions are silent. They are ordinary sound effects (listed in `timings.json` `sfx`, mixed like the rest):
 `sfx: {gain}` sets their level with the others, and `assets/sfx/footstep.wav` (or `boing.wav`,
 ...) replaces a sound with your own. `foley: false` at the top level turns them off for the
 video, a stage's `foley: false` (or `true`) for that scene. Rain on a stage also plays a
@@ -4409,7 +4413,7 @@ a `lift`. The furniture for [rooms](#rooms-room) has a gallery of its own there.
 
 | key (`props[]`) | default | |
 |---|---|---|
-| `prop` | — | a built-in prop: `table chair tree bush house door lamp sign box ball cloud sun moon rock plant laptop cup basket umbrella napkin`; [furniture](#rooms-room): `sofa armchair bed bookshelf counter fridge picture rug houseplant clock tv desk` |
+| `prop` | — | a built-in prop: `table chair tree bush house door lamp sign box ball cloud sun moon rock plant laptop cup basket umbrella napkin`; [furniture](#rooms-room): `sofa armchair bed bookshelf counter fridge picture rug houseplant clock tv desk`; [vehicles](#vehicles-get_in-ride_to-get_out): `bicycle car bus` |
 | `svg` | — | instead of `prop`: an SVG file relative to the project folder (sanitised like every SVG: no scripts, filters, embedded pictures or text), standing on the bottom edge of its `viewBox` |
 | `name` | the prop's name | its name for actions and the layout dump; an SVG's default is its file name (`assets/old_well.svg` -> `old_well`); repeats are numbered (`tree`, `tree_2`) |
 | `at` | `centre` | a mark or an x position from 0 to 1 of the stage |
@@ -4447,7 +4451,8 @@ through others ([Moving](#moving)), pick up, carry, put down, hand over and thro
 ([Props in hands](#props-in-hands)), and sit on a `chair`, `rock`, `box`, `sofa`, `armchair`,
 `bed` or `desk` and lean on a `tree`, `door`, `sign`, `lamp`, `house`, `bookshelf`, `counter` or
 `fridge` ([Sitting and leaning](#sitting-and-leaning); an SVG prop gives `data-seat` /
-`data-lean`).
+`data-lean`), and get in a `car` or a `bus` or on a `bicycle` and ride it
+([Vehicles](#vehicles-get_in-ride_to-get_out)).
 
 ```yaml
 characters:
@@ -4824,6 +4829,68 @@ scenes:
         actions:
           - {stand_up: [pip, kit]}
           - {walk_to: pip, to: centre, at: 0.4}
+```
+
+#### Vehicles (`get_in`, `ride_to`, `get_out`)
+
+Three built-in [props](#props) are vehicles: a `bicycle` (0.38 of a character tall; one rider),
+a `car` (1.12 tall, 1.9 long; two riders, front and back) and a `bus` (1.45 tall, 3.2 long; a
+driver and three passengers), drawn side on from simple shapes in the theme's colours, the front
+on the right (`facing: left` mirrors them). They are large next to the characters, as real ones
+are: give a bus a `scale` below 1, or the stage a smaller `size`, when it must fit the frame.
+
+![The vehicles in the default theme](gallery/media/vehicles.png)
+
+| action | target | options | |
+|---|---|---|---|
+| `get_in` | characters | `to` (required: a vehicle of the stage) | each character takes the free seat nearest to it and sits down: in a car or a bus it goes behind the side (which hides its legs; its head shows in a window), on a bicycle it sits on the saddle, its feet on the pedals and its hands on the handlebar. 1.0 s. It must stand next to the vehicle (within 0.5 of its heights of either end) at its depth. A full vehicle takes no more. |
+| `ride_to` | vehicles, or characters that ride one (their vehicle) | `to` (a mark, an x, or `{mark, depth}`), `depth`, `speed` (units per second; default: a bicycle and a bus 4, a car 5) | the vehicle rides there with everyone in it: it turns to face the way it goes (at once), speeds up, goes, slows down and stops, its wheels turning; a bicycle's rider pedals. With a depth it rides towards or away from the camera, growing or shrinking with its riders and passing in front of or behind the others. As long as the distance needs (`run_time` sets it). |
+| `get_out` | characters | none | each rider gets out where the vehicle is now: it stands up beside its seat, in front of the vehicle, its body, legs and arms as they were before it got in. 0.9 s. |
+
+While a character rides it keeps its seat and its facing (the vehicle's): it cannot `walk_to`,
+`run_to`, `enter`, `exit`, `jump`, `turn`, `sit_on`, `lean_on`, `keyframes` or `move_along`
+before a `get_out` (nor `stand_up`), a `look_at` turns only its head, a `pose` or `react` moves
+only its arms and head. It can still speak (its mouth shows in the window), gesture and emote. A
+rider is not added to its vehicle: it follows its seat on every frame. A vehicle cannot be picked
+up, and while someone rides it `keyframes` / `move_along` cannot move it. Its shadow lies under it
+(a rider casts none of its own); a ride raises dust where it sets off and stops and leaves speed
+lines when it goes fast ([motion effects](#motion-effects-motion_effects)); a bicycle rings its
+`bell` as it sets off, a car or a bus starts its `engine`, and each `brakes` as it stops
+([foley](#foley-and-music-stings)). A `follow` of the vehicle or of a rider keeps the camera on it;
+with [`reframe`](#vertical-cartoons-reframe) and [`auto_direct`](#automatic-directing-auto_direct)
+the riders are where their vehicle took them. The layout dump records `riding` (the vehicle's
+name) on a rider; `vidgen lint` does not report two riders of one vehicle as standing on each
+other, nor a rider's face as hidden by its own vehicle.
+
+`vidgen validate` plays the scene's actions in order and reports a `to` that is not a vehicle of
+the stage (with the stage's vehicles), a full vehicle, a rider too far from it or at another depth
+(with the `walk_to` that fixes it), a `ride_to` of a character that rides nothing, a `get_out`
+without a `get_in`, a walk (or any action above) of a character that rides, and a vehicle picked
+up:
+
+```text
+scenes[1].beats[0].actions[0].to: pip is 0.9 of its heights beyond the end of 'bus' (it gets in from at most 0.5); walk_to first (- walk_to: pip, to: 0.50)
+```
+
+```yaml
+scenes:
+  - id: street
+    type: stage
+    params:
+      props: [{prop: car, at: 0.35}, {prop: bicycle, at: 0.8}]
+      characters: [{name: pip, at: 0.3}, {name: kit, at: 0.4}, {name: moss, at: 0.85}]
+    beats:
+      - text: "Pip and Kit get in the car; Moss gets on her bicycle."
+        actions:
+          - {get_in: [pip, kit], to: car}
+          - {get_in: moss, to: bicycle}
+      - text: "Off they go."
+        actions:
+          - {ride_to: car, to: {mark: 0.7, depth: 0.4}}
+          - {ride_to: moss, to: 0.15, speed: 3}
+      - text: "Everyone out!"
+        actions:
+          - {get_out: [pip, kit, moss]}
 ```
 
 #### Shots (`shot:`)
@@ -5577,11 +5644,11 @@ the one key that names an action).
 
 | key | default | |
 |---|---|---|
-| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `sit_on`, `lean_on`, `stand_up`, `light`, `wind`, `blow_away`, `effect`, or a project action (`vidgen list-scenes` lists them) |
+| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `sit_on`, `lean_on`, `stand_up`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect`, or a project action (`vidgen list-scenes` lists them) |
 | `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one (`callout` with an `area` and `pan` with `to` need none) |
 | `at` | `0` | when, as a fraction of the beat's narration (`0` ≤ at < `1`) |
 | `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`, `callout`, `say`, `react`, `look_at`, `turn`, `emote`, `pose`: undone when it starts; `zoom`: the camera is back when it starts; `pan`: the camera moves back when it starts; `follow`: the camera stops following when it starts; `keyframes`, `move_along`: the target moves back) |
-| `run_time` | the action's | seconds the animation takes (`reveal` / `callout` / `pose` 0.8, `dim` / `highlight` / `react` 0.6, `zoom` / `transform` / `follow` 1.0, `pan` 1.5, `look_at` / `emote` 0.5, `say` (the bubble) / `turn` / `effect` (the pop) 0.4, `jump` 0.6, `gesture` per gesture (1.2 for `point`), `walk_to` / `run_to` / `enter` / `exit` as long as the distance needs at their `speed`, `keyframes` until its last key, `move_along` 2.0 or its path's length at its `speed`, `pick_up` / `give` 1.2, `put_down` / `sit_on` 1.0, `lean_on` / `stand_up` 0.8, `hold` 0.4, `open` / `close` 0.6, `throw` 0.95–2.1 by the distance, `light` / `wind` 2.0 (the fade), `blow_away` by the distance and the wind (0.6–6); a zoom takes as long again to come back) |
+| `run_time` | the action's | seconds the animation takes (`reveal` / `callout` / `pose` 0.8, `dim` / `highlight` / `react` 0.6, `zoom` / `transform` / `follow` 1.0, `pan` 1.5, `look_at` / `emote` 0.5, `say` (the bubble) / `turn` / `effect` (the pop) 0.4, `jump` 0.6, `gesture` per gesture (1.2 for `point`), `walk_to` / `run_to` / `enter` / `exit` as long as the distance needs at their `speed`, `keyframes` until its last key, `move_along` 2.0 or its path's length at its `speed`, `pick_up` / `give` 1.2, `put_down` / `sit_on` 1.0, `lean_on` / `stand_up` 0.8, `get_in` 1.0, `get_out` 0.9, `ride_to` as long as the distance needs at its `speed`, `hold` 0.4, `open` / `close` 0.6, `throw` 0.95–2.1 by the distance, `light` / `wind` 2.0 (the fade), `blow_away` by the distance and the wind (0.6–6); a zoom takes as long again to come back) |
 
 **Targets** depend on the scene type (`vidgen list-scenes` prints them as `targets:`). Every
 built-in type has some; `<N>` counts from 1 (`item1`, `item2`...), `<text>`/`<label>`/`<name>`
@@ -5620,7 +5687,7 @@ a title card, a `transform` of a bar).
 | `diagram` | `heading`, `node<N>`, `node:<id>`, `edge:<from>-><to>` | reveal, dim, highlight, zoom | also for `flowchart`; a node is its shape, icon and label (a `box` frames the shape), an edge its line, arrowhead and label; `highlight: [node:a, "edge:a->b", node:b]` marks a path; revealing an edge brings its nodes |
 | `process` | `heading`, `input`, `stage<N>`, `stage:<label>`, `connector<N>`, `loop`, `output`, `token` | reveal, dim, highlight, zoom | a stage is its card (a `box` frames it); `connector2` runs from stage 2 to 3; revealing a stage early shows it without moving the token; `highlight: token` with `style: flash` points at it |
 | `network` | `heading`, `layer<N>`, `layer:<label>`, `edges<N>`, `neuron<L>.<i>` | reveal, dim, highlight, zoom | a layer is its units, ellipsis, label and count; `edges1` joins layers 1 and 2; `neuron2.3` is unit 3 of layer 2 as drawn |
-| `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, effect, walk_to, run_to, enter, exit, gesture, jump, keyframes, move_along, pick_up, hold, put_down, give, throw, open, close, blow_away, sit_on, lean_on, stand_up, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting), [moving](#moving), [prop](#props-in-hands) and [sitting](#sitting-and-leaning) actions take whole characters only, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts, [`open` / `close`](#umbrellas-open-and-close) props |
+| `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, effect, walk_to, run_to, enter, exit, gesture, jump, keyframes, move_along, pick_up, hold, put_down, give, throw, open, close, blow_away, sit_on, lean_on, stand_up, get_in, ride_to, get_out, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting), [moving](#moving), [prop](#props-in-hands) and [sitting](#sitting-and-leaning) actions and `get_in` / `get_out` take whole characters only, [`ride_to`](#vehicles-get_in-ride_to-get_out) a vehicle or its riders, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts, [`open` / `close`](#umbrellas-open-and-close) props |
 
 `title` and `heading` stand for each other (the header band, see "Built-in scenes"): `highlight:
 title` works on a `bullets` heading. [Project scene types](EXTENDING.md#8-per-beat-actions-targets-and-custom-actions)
@@ -5650,6 +5717,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `pick_up`, `hold`, `put_down`, `give`, `throw` | see [Props in hands](#props-in-hands) | a `stage`'s character takes a prop in its hand, puts it down, hands it to another character or throws it |
 | `open`, `close` | see [Umbrellas](#umbrellas-open-and-close) | a `stage`'s umbrella opens (held overhead) or closes |
 | `sit_on`, `lean_on`, `stand_up` | see [Sitting and leaning](#sitting-and-leaning) | a `stage`'s character sits on a chair, a rock, a box or furniture (a sofa, an armchair, a bed, a desk), leans on a tree, a door, a sign or furniture (a counter...), and stands up again |
+| `get_in`, `ride_to`, `get_out` | see [Vehicles](#vehicles-get_in-ride_to-get_out) | a `stage`'s character gets in a car or a bus or on a bicycle, the vehicle rides to a place with its riders, and they get out |
 | `shot` | `kind` (`wide`, `two_shot`, `medium`, `over_shoulder`, `closeup`), `move` (`false`) | what a beat's [`shot:`](#shots-shot) key writes, as an action: the camera frames the target characters of a `stage` from `at` to the beat's end. Write the key; the action is for a shot that starts later in the beat (`at`). |
 
 `dim`, `highlight`, `zoom` and `transform` act on targets on screen; a target not shown yet is
@@ -6152,6 +6220,7 @@ Each object:
 | `character` only: `viseme`, `looked_at`, `passage` | when they apply: the viseme its lip sync shows (`rest` between words), the `to` of its last `look_at` (a name, a mark or `camera`), and `enter` / `exit` while it walks in or out |
 | `character` only: `holding` | the props in its hands, `{hand: prop}` (`{"left": "ball"}`); absent while it holds nothing ([Props in hands](#props-in-hands)) |
 | `character` only: `sitting_on`, `leaning_on` | the prop it sits or leans on; absent while it stands ([Sitting and leaning](#sitting-and-leaning)) |
+| `character` only: `riding` | the vehicle it rides; absent while it is on foot ([Vehicles](#vehicles-get_in-ride_to-get_out)) |
 | `prop` only: `held_by`, `hand` | the character holding it and which hand; absent while it stands somewhere. A held prop is its own object, drawn right after its holder (an open umbrella right before it); its box is not part of the character's |
 | `prop` only: `shape` | the shape a prop with several shows: an umbrella's `closed` or `open`; absent for other props |
 | `prop` only: `prop`, `depth`, `raised`, `flat` | its kind (a built-in prop's name, or `svg`); how far back it stands (0..1, absent at the front); `raised: true` when it is lifted (`lift`) or hangs on a wall, `flat: true` when it lies on the floor (a rug), each absent otherwise; read by `prop_overlap` |

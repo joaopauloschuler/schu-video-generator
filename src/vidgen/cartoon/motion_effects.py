@@ -81,7 +81,9 @@ def motion_effect_cues(played: PlayedAction, strength: float) -> list[MotionEffe
     """The motion effects of one action as it played (scene times from ``played.start``, scaled
     by the seconds it took), for a mover whose ``cartoon_motion`` has ``strength``: none at 0.
 
-    - a walk (``walk_to``, ``run_to``, ``enter``, ``exit``) at :data:`FAST_SPEED` or faster:
+    - a walk (``walk_to``, ``run_to``, ``enter``, ``exit``) or a ride (``ride_to``, its
+      ``heights`` in the heights of a character beside the vehicle, DESIGN.md §69.52) at
+      :data:`FAST_SPEED` or faster:
       dust blowing back where its feet set off (not for an ``enter``: off stage), dust blowing
       forward where they stop (not for an ``exit``), speed lines while it goes at least
       :data:`SPEED_SHOWN` of its top speed;
@@ -93,7 +95,7 @@ def motion_effect_cues(played: PlayedAction, strength: float) -> list[MotionEffe
         return []
     start, seconds = played.start, played.seconds
     cues: list[MotionEffectCue] = []
-    if played.action in WALKING_ACTIONS:
+    if played.action in WALKING_ACTIONS or played.action == "ride_to":
         before, after = played.phases.before, played.phases.after
         move = 1.0 - before - after
         if walk_top_speed(played.heights, move * seconds) < FAST_SPEED:
