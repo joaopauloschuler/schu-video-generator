@@ -3,8 +3,9 @@
 :func:`contrast_score` is a pure function of two :class:`LookFeatures`: a weighted sum
 (:data:`WEIGHTS`) of three parts, each from 0 (the same) to 1 (fully different):
 
-- **silhouette** (:data:`SILHOUETTE_WEIGHTS`): body shape, proportions, head size, species, ears,
-  hair style, what is worn on the head (hat, cap, bow) and a skirt or coat tails;
+- **silhouette** (:data:`SILHOUETTE_WEIGHTS`): body shape, proportions, head size, species (half
+  as different within a :data:`SPECIES_FAMILIES` family), ears, hair style, what is worn on the
+  head (hat, cap, bow) and a skirt or coat tails;
 - **colour** (:data:`COLOUR_WEIGHTS`): the CIEDE2000 difference (CIELAB, the theme's tokens
   resolved) of the clothes, skin (fur), hair and accessory colours, each divided by
   :data:`COLOUR_SPAN` and capped at 1;
@@ -57,6 +58,11 @@ _FIXES: dict[str, str] = {
     "clothes": "colors.clothes", "skin": "colors.skin", "hair colour": "colors.hair", "accessory": "colors.accessory",
 }
 
+#: Species whose outlines are alike (a beak and a round head; tall pointed ears): two of one
+#: family differ in ``species`` by :data:`SPECIES_FAMILY_DIFFERENCE`, not 1.
+SPECIES_FAMILIES: dict[str, str] = {"bird": "beaked", "owl": "beaked", "penguin": "beaked", "cat": "pointed ears", "fox": "pointed ears"}
+SPECIES_FAMILY_DIFFERENCE = 0.5
+
 #: Silhouette values not named as shared in :func:`compare`'s advice (most characters have them).
 _UNREMARKABLE: dict[str, Any] = {"ears": "none", "outfit": "plain", "headwear": "none", "species": "human", "proportions": "adult", "head_size": 1.0}
 
@@ -92,8 +98,8 @@ def look_features(look: CharacterLook | Mapping[str, Any], colors: CharacterColo
     details |= {f"{key} {getattr(look, key)}" for key in ("facial_hair", "pattern", "shoes") if getattr(look, key) != "none"}
     details |= {f"eyes {look.eyes}", *([f"nose {look.nose}"] if look.nose != "none" else [])}
     resolved = {key: _resolve(getattr(colors, key), theme) for key in ("clothes", "skin", "hair", "accessory")}
-    if look.hair == "none" and look.facial_hair == "none":
-        resolved["hair"] = resolved["skin"]          # a bald head shows skin
+    if look.hair == "none" and look.facial_hair == "none" and look.species != "turtle":
+        resolved["hair"] = resolved["skin"]          # a bald head shows skin (a turtle's shell is in the hair colour)
     if not worn and look.shoes == "none":
         resolved["accessory"] = resolved["clothes"]  # no accessory colour is drawn
     labs = {key: lab(hex_rgb(value)) if _is_hex(value) else None for key, value in resolved.items()}
@@ -122,12 +128,23 @@ def colour_difference(a: LookFeatures, b: LookFeatures, key: str) -> float:
     return delta_e(lab_a, lab_b)
 
 
+def species_difference(a: str, b: str) -> float:
+    """How different two species' outlines are: 0 the same, :data:`SPECIES_FAMILY_DIFFERENCE`
+    for two of one :data:`SPECIES_FAMILIES` family (a bird and an owl), else 1."""
+    if a == b:
+        return 0.0
+    family = SPECIES_FAMILIES.get(a)
+    return SPECIES_FAMILY_DIFFERENCE if family is not None and family == SPECIES_FAMILIES.get(b) else 1.0
+
+
 def contrast_parts(a: LookFeatures, b: LookFeatures) -> dict[str, float]:
     """``{silhouette, colour, accessories}``, each 0 (the same) to 1 (fully different)."""
     silhouette = 0.0
     for key, weight in SILHOUETTE_WEIGHTS.items():
         if key == "head_size":
             silhouette += weight * min(abs(a.silhouette[key] - b.silhouette[key]) / HEAD_SIZE_SPAN, 1.0)
+        elif key == "species":
+            silhouette += weight * species_difference(a.silhouette[key], b.silhouette[key])
         else:
             silhouette += weight * (a.silhouette[key] != b.silhouette[key])
     colour = sum(weight * min(colour_difference(a, b, key) / COLOUR_SPAN, 1.0) for key, weight in COLOUR_WEIGHTS.items())

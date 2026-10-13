@@ -29,6 +29,7 @@ from typing import Any
 import numpy as np
 from manim import VGroup, VMobject
 
+from vidgen.cartoon.acting import PERSON_MOTION, SpeciesMotion, species_motion
 from vidgen.cartoon.idle import IdleClock, breath_scale, idle_seed, sway_angle, tail_sway_angle
 from vidgen.cartoon.limbs import ELBOW_BEND, FEET, HANDS, KNEE_BEND, LIMBS, fold, limb_side, solve_two_bone, wrap_degrees
 from vidgen.cartoon.motion import DEFAULT_MOTION, motion_strength, resolve_motion
@@ -364,6 +365,9 @@ class Character(VGroup):
         #: The ``cartoon_motion`` setting its animations use (anticipation, squash and stretch,
         #: overshoot, follow-through; DESIGN.md §69.13).
         self.motion = motion
+        #: How its species walks, runs and jumps (DESIGN.md §69.57; :func:`build_character` sets an
+        #: animal's): a person's unless set.
+        self.species_motion: SpeciesMotion = PERSON_MOTION
         self._squash = (1.0, 1.0)  # the whole figure's scale about its feet (squash and stretch)
         self._own_entries: dict[str, PoseTable] = {"pose": dict(poses or {}), "expression": dict(expressions or {})}
         stroke_factor, stroke_floor = height / REFERENCE_HEIGHT, one_pixel_stroke()
@@ -1227,7 +1231,8 @@ def build_character(
     by the generator with its colours resolved in ``theme`` (default: the current theme), or
     ``look.svg`` (relative to ``root``, default: the active project's folder) split into parts.
     Its idle motion runs unless the entry says ``idle: false``. Its ``cartoon_motion`` is the
-    entry's, else ``motion`` (the scene's or the video's), else ``lively``."""
+    entry's, else ``motion`` (the scene's or the video's), else ``lively``. An animal walks,
+    runs and jumps its species' way (:attr:`Character.species_motion`)."""
     motion = resolve_motion(entry.cartoon_motion, motion)
     if entry.look.svg is not None:
         from vidgen.cartoon.svg_look import SVG_REQUIRED_PARTS, svg_character_parts
@@ -1247,6 +1252,7 @@ def build_character(
             look_parts(entry.look, colors), name=entry.name, height=height, facing=facing, voice=entry.voice,
             poses=entry.poses, expressions=entry.expressions, motion=motion, front=look_parts(entry.look, colors, front=True),
         )
+        built.species_motion = species_motion(entry.look.species)
     return built.start_idle() if entry.idle else built
 
 

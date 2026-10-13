@@ -56,6 +56,14 @@ def _walk_time(character: Character, distance: float, speed: float) -> float:
     return walk_motion_seconds(walk_seconds(distance, speed), character.motion_strength)
 
 
+def _speed(options: ActionOptions, character: Character) -> float:
+    """The action's ``speed``, or when it gives none its default times the character's species
+    factor (a turtle plods, a penguin waddles; DESIGN.md §69.57)."""
+    if "speed" in options.model_fields_set:
+        return options.speed
+    return options.speed * character.species_motion.speed
+
+
 def _carried(scene: NarratedScene, character: Character) -> list[Mobject]:
     """The props ``character`` holds (they grow with a walk in depth and fade through a door)."""
     return [p for p in getattr(scene, "props", {}).values() if getattr(p, "held_by", None) == character.name]
@@ -115,7 +123,7 @@ class WalkTo(_Moving):
         depth: Depth | None = None
         """How far back it walks to: 0 = the front (the ground line, full size) .. 1 = the back of the stage, smaller; default: its depth now."""
         speed: float = Field(WALK_SPEED, gt=0.0, le=20.0)
-        """Walking speed in units per second (the frame's shorter side is 8 units; a stage character is about 3.6 tall)."""
+        """Walking speed in units per second (the frame's shorter side is 8 units; a stage character is about 3.6 tall); default 2.5 (a turtle 1, a penguin 1.75)."""
 
     run_time = 2.0
 
@@ -144,7 +152,7 @@ class WalkTo(_Moving):
         for c in _characters(scene, targets, self.label):
             x, depth = self._goal(scene, c)
             far = abs(x - _feet_x(c)) if depth is None else depth_walk_distance(x - _feet_x(c), c.stage_depth, depth, c.character_height)
-            times.append(_walk_time(c, far, self.options.speed))
+            times.append(_walk_time(c, far, _speed(self.options, c)))
         return max(times, default=None)
 
     #: Its action name (in log messages) and how it moves its feet (a run: :data:`RUNNING`).
@@ -160,9 +168,9 @@ class WalkTo(_Moving):
             if abs(x - _feet_x(character)) <= 1e-6 and not deeper:
                 continue
             if not deeper:
-                anims.append(Walk(character, x, speed=self.options.speed, gait=self.gait))
+                anims.append(Walk(character, x, speed=_speed(self.options, character), gait=self.gait))
             else:
-                walk = Walk(character, x, speed=self.options.speed, gait=self.gait, depth=depth, feet_y=scene.feet_y_at,
+                walk = Walk(character, x, speed=_speed(self.options, character), gait=self.gait, depth=depth, feet_y=scene.feet_y_at,
                             carried=_carried(scene, character))
                 anims.append(walk)
                 scene.walk_in_depth(character, walk)
@@ -183,7 +191,7 @@ class RunTo(WalkTo):
         depth: Depth | None = None
         """How far back it runs to: 0 = the front (the ground line, full size) .. 1 = the back of the stage, smaller; default: its depth now."""
         speed: float = Field(RUN_SPEED, gt=0.0, le=20.0)
-        """Running speed in units per second (the frame's shorter side is 8 units; a stage character is about 3.6 tall)."""
+        """Running speed in units per second (the frame's shorter side is 8 units; a stage character is about 3.6 tall); default 6 (a turtle 2.4, a penguin 4.2)."""
 
     run_time = 1.2
     label = "run_to"
@@ -246,7 +254,7 @@ class Enter(_Moving):
         return enter_path(self.options.side, to_x, _view(scene), character.width / 2)
 
     def _seconds(self, character: Character, start: float, end: float) -> float:
-        walk = _walk_time(character, end - start, self.options.speed)
+        walk = _walk_time(character, end - start, _speed(self.options, character))
         return max(walk, 2 * DOOR_FADE_SECONDS) if self.options.door is not None else walk
 
     def run_time_for(self, scene: NarratedScene, targets: list[Target]) -> float | None:
@@ -265,7 +273,7 @@ class Enter(_Moving):
             door = {} if self.options.door is None else {
                 "fade_in": DOOR_FADE_SECONDS, "run_time": self._seconds(character, start, end), "carried": _carried(scene, character),
             }
-            anims.append(Walk(character, end, start_x=start, speed=self.options.speed, **door))
+            anims.append(Walk(character, end, start_x=start, speed=_speed(self.options, character), **door))
             _ended_walk(scene, character)
         return anims
 
@@ -297,7 +305,7 @@ class Exit(_Moving):
         return exit_path(self.options.to, _feet_x(character), _view(scene), character.width / 2)
 
     def _seconds(self, character: Character, end: float) -> float:
-        walk = _walk_time(character, end - _feet_x(character), self.options.speed)
+        walk = _walk_time(character, end - _feet_x(character), _speed(self.options, character))
         return max(walk, 2 * DOOR_FADE_SECONDS) if self.options.door is not None else walk
 
     def run_time_for(self, scene: NarratedScene, targets: list[Target]) -> float | None:
@@ -317,7 +325,7 @@ class Exit(_Moving):
             door = {} if self.options.door is None else {
                 "fade_out": DOOR_FADE_SECONDS, "run_time": self._seconds(character, end), "carried": _carried(scene, character),
             }
-            anims.append(Walk(character, end, park_x=offstage_x(side, left, right, half), speed=self.options.speed, **door))
+            anims.append(Walk(character, end, park_x=offstage_x(side, left, right, half), speed=_speed(self.options, character), **door))
         return anims
 
 
@@ -352,11 +360,17 @@ class GestureAction(_Moving):
 
 @action("jump")
 class JumpAction(_Moving):
-    """The target character jumps up (``height`` in character heights) and lands where it stood."""
+    """The target character jumps up (``height`` in character heights) and lands where it stood.
+    Without a ``height`` a frog jumps higher (its species' factor, DESIGN.md §69.57)."""
 
     class Options(ActionOptions):
         height: float = Field(JUMP_HEIGHT, gt=0.0, le=2.0)
-        """How high it jumps, in its own heights (0.4: a hop; 1: its own height)."""
+        """How high it jumps, in its own heights (0.4: a hop; 1: its own height); default 0.4 (a frog 0.72)."""
+
+    def _height(self, character: Character) -> float:
+        if "height" in self.options.model_fields_set:
+            return self.options.height
+        return self.options.height * character.species_motion.jump
 
     run_time = JUMP_SECONDS
 
@@ -369,4 +383,4 @@ class JumpAction(_Moving):
 
     def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
         """A :class:`Jump` on each character."""
-        return [Jump(c, self.options.height) for c in _characters(scene, targets, "jump")]
+        return [Jump(c, self._height(c)) for c in _characters(scene, targets, "jump")]

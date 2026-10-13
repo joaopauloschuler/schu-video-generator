@@ -186,7 +186,8 @@ def walking_state(base: CharacterState, cycle: WalkCycle, facing: str) -> Charac
     """``base`` with the walk's ``cycle`` added: legs in one piece turned and narrowed and the
     body raised; legs drawn one each swung the opposite ways, the knee of the leg swinging forward
     bent; the arms swinging (the far arm the other way), the elbows bent, a tail swinging with
-    the near arm (:data:`WALK_TAIL_SWING`); parts the character
+    the near arm (:data:`WALK_TAIL_SWING`), a waddling body rocking (``cycle.rock``, legs kept
+    upright; :data:`SIDE_ROCK` of it from the side); parts the character
     lacks are skipped (a folded forearm is in ``base``, :meth:`Character.state`). Facing
     ``front`` (DESIGN.md §69.44) the steps come towards the camera: the legs do not swing, a leg
     drawn one each looks shorter as its knee bends (its foot lifts), the arms sway a little out
@@ -211,7 +212,23 @@ def walking_state(base: CharacterState, cycle: WalkCycle, facing: str) -> Charac
         turn(arm, sign * cycle.arm_angle)
         turn(f"{arm}_lower", elbow)
     turn("tail", WALK_TAIL_SWING * cycle.arm_angle)
+    _rock(parts, SIDE_ROCK * cycle.rock)
     return CharacterState(facing, parts)
+
+
+#: Seen from the side a waddle (:attr:`~vidgen.cartoon.acting.WalkCycle.rock`) shows as this
+#: share of its rock, forward and back; from the front it rocks fully from side to side.
+SIDE_ROCK = 0.5
+
+
+def _rock(parts: dict[str, PartPose], degrees: float) -> None:
+    """Rock the body ``degrees`` about its pivot, the legs turned back so they stay upright."""
+    if not degrees or "body" not in parts:
+        return
+    parts["body"] = replace(parts["body"], angle=parts["body"].angle + degrees)
+    for leg in ("legs", "leg_left", "leg_right"):
+        if leg in parts:
+            parts[leg] = replace(parts[leg], angle=parts[leg].angle - degrees)
 
 
 def _front_walking_state(parts: dict[str, PartPose], cycle: WalkCycle) -> CharacterState:
@@ -236,6 +253,7 @@ def _front_walking_state(parts: dict[str, PartPose], cycle: WalkCycle) -> Charac
     for arm in ("arm_left", "arm_right"):
         if arm in parts:
             parts[arm] = replace(parts[arm], angle=parts[arm].angle + FRONT_ARM_SWING * cycle.arm_angle)
+    _rock(parts, cycle.rock)
     return CharacterState("front", parts)
 
 
@@ -262,7 +280,8 @@ class Walk(Animation):
     :func:`~vidgen.cartoon.acting.walk_seconds` plus that wind-up and settle
     (:func:`~vidgen.cartoon.motion.walk_motion_seconds`); a given one changes the speed.
     ``gait``: :data:`~vidgen.cartoon.acting.RUNNING` runs (longer strides, bigger swings, leaning
-    forward as it speeds up; ``run_to``). ``fade_in`` / ``fade_out``: seconds it takes to appear at
+    forward as it speeds up; ``run_to``); an animal walks its own way
+    (:attr:`Character.species_motion`: a turtle's short steps, a penguin's waddle). ``fade_in`` / ``fade_out``: seconds it takes to appear at
     the start / disappear at the end (through a door, DESIGN.md §69.42; at most half the walk
     each), the props in ``carried`` with it; its colours are as before once it is over.
 
@@ -304,9 +323,10 @@ class Walk(Animation):
         self.carried = list(carried)
         self._alphas: list[tuple[Mobject, np.ndarray, np.ndarray]] = []
         self.strength = motion_strength(motion or character.motion)
-        self.gait = gait
+        #: How it moves its feet: ``gait`` as the character's species walks it (DESIGN.md §69.57).
+        self.gait = character.species_motion.walking(gait)
         #: The length of one step, in the character's heights.
-        self.step_length = STEP_LENGTH * gait.stride
+        self.step_length = STEP_LENGTH * self.gait.stride
         from_x = float(character.feet()[0]) if start_x is None else float(start_x)
         #: The depth it starts at (read again when it begins).
         self.from_depth = float(character.stage_depth)

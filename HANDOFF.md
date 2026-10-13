@@ -11612,3 +11612,96 @@ How to test
   test_cartoon_lighting test_cartoon_effects test_cartoon_motion_effects test_cartoon_foley` (388
   passed, 46 s); render: `small_props living fire_nature props holding depth wind` (14, 11 s),
   `introspect cartoon_lint vehicles furniture stage phase_k_review` (7, 13 s). Full suite not run.
+
+## Step 123 — More animals
+
+What was built
+- **Five species** (`config.Species` + `fox`, `owl`, `frog`, `turtle`, `penguin`), drawn in
+  `src/vidgen/cartoon/animals.py`, side and front: a fox (tall lined ears, a snout grown out of
+  the head with a dark nose at its tip, a light jaw / cheek ruffs and muzzle, a bushy tail with a
+  light tip); an owl (two tufts of slim feathers, big eyes in light discs, a short beak, a bird's
+  wings and bare shins, a short fan of tail feathers); a frog (wide flat head lowered onto the
+  shoulders, eyes high in bulges behind the head, brows on the bulges, a wide mouth, long legs,
+  flat feet with toe pads, no tail); a turtle (light chin, short legs, a shell in `colors.hair` at
+  the back of the `body` part: a dome with plates from the side, a rim round the body from the
+  front; a short tail behind it); a penguin (light face patch, a beak, flippers, short legs, flat
+  orange feet, one stubby tail feather). Proportions per species (`SPECIES_PROPORTIONS`), beaks
+  per species (`BEAKS`, `BEAKED`), wings (`WINGED`), `flipper`, `flat_foot`, `shell`,
+  `patch_tint`, `species_frame`, `BROW_GAPS`; `primitives.tapered_band(profile=...)`.
+- **Lip sync**: fox, frog and turtle use the human mouth on the snout / face (`MOUTH_PLACES`,
+  `FRONT_MOUTH_PLACES`); owl and penguin talk with their beak (`beak_mouth(species, ...)`, front
+  openings scaled to the beak).
+- **Moving** (`cartoon/acting.py`): `SpeciesMotion` / `SPECIES_MOTIONS` / `species_motion`;
+  `Gait.waddle`, `WalkCycle.rock`; `transition.walking_state` rocks a waddling body (`SIDE_ROCK`
+  0.5 from the side), legs kept upright; `Walk` walks the species' gait (step length and
+  footsteps follow); `Character.species_motion` (set by `build_character`). `scenes/moving.py`:
+  `walk_to`, `run_to`, `enter`, `exit` without a written `speed` go at the species' factor (turtle
+  0.4, penguin 0.7); `jump` without `height` goes 1.8 × higher for a frog.
+- **Cast**: `contrast.species_difference` (bird / owl / penguin and cat / fox 0.5 apart); a
+  turtle's hair colour counts without hair; `random_cast.SPECIES_COLORS`, `SHELL_COLORS`.
+- **Gallery**: `still.write_looks_png` moves a figure back inside its character's cell;
+  `docs/gallery/media/more_animals.png` (720×420, 25 KB).
+
+Files touched
+- New: `tests/test_cartoon_more_animals.py`, `docs/gallery/media/more_animals.png`.
+- `src/vidgen/cartoon/animals.py`, `generator.py`, `primitives.py`, `acting.py`, `transition.py`,
+  `character.py`, `cast.py`, `contrast.py`, `still.py`; `src/vidgen/config.py`,
+  `scenes/moving.py`, `random_cast.py`, `cli.py` (`--species` help).
+- Docs: `docs/CONFIG.md` (look and colour tables, "Animal characters" five more species with an
+  example and the picture, `vidgen cast --species`), `DESIGN.md` §69.57, `docs/EXTENDING.md`
+  (a frog has no tail), guide characters bullet + `AGENTS.md` copy, `tasklist.md`.
+- Test updated: `tests/test_cartoon_animals.py` (Step 114 species pinned; muzzle, beak and wind
+  tests also run on the new species).
+
+Public interfaces
+- No `vidgen.api` change. YAML: the five `species` values; `colors.hair` is a turtle's shell.
+  Internal: `animals.*` above, `config.SPECIES_WITHOUT_TAIL`, `acting.SpeciesMotion`,
+  `SPECIES_MOTIONS`, `PERSON_MOTION`, `species_motion`, `Gait.waddle`, `WalkCycle.rock`,
+  `transition.SIDE_ROCK`, `Character.species_motion`, `contrast.SPECIES_FAMILIES`,
+  `species_difference`, `random_cast.SPECIES_COLORS`, `SHELL_COLORS`.
+
+Decisions / deviations
+- A written `speed` / `height` wins: the action checks `model_fields_set`, so the option's schema
+  default stays 2.5 / 6 / 0.4 (no schema change) and people walk exactly as before.
+- The shell is part of the `body` part (drawn first), not a new part: it moves with the body and
+  needs no pivot; its colour is `colors.hair` (turtles have no hair by default) rather than a new
+  colour key.
+- Waddle = the body part turning about its pivot with the legs turned back: no new transform;
+  from the side half of it, so it reads as a rock forward and back.
+- The animals still was not redrawn (its cast is not recorded); a second still shows the new
+  species. `write_looks_png` now keeps figures inside their cells, so a redraw would not cut the
+  cat's tail.
+- Searched first: no gait-per-character, waddle, shell, flipper or species-speed code existed
+  (`git grep -i "waddle\|flipper\|SpeciesMotion"` in `src/vidgen` and `"shell"` in
+  `src/vidgen/cartoon` at ddfeaf6: no match); reused `wing`, `bird_shin`, `beak_mouth`, `tapered_band`, `path_curve`,
+  `fur_tint` / `fur_shade`, `outer_hair` / `trailing`, `Gait`.
+
+Evidence
+- Pins: the 15 human looks (Steps 113 / 114) and 7 Step 114 animal looks (taken at ddfeaf6
+  before any edit), side and front, unchanged.
+- Stills checked by eye (scratch grids, 150 × 210 px and 300 × 420 px cells): each new species side,
+  front, waving, walking (two phases), talking `A` / `O`, sad and talking, seated, wind 40°, front
+  walking, front talking, surprised. Fixed on the way: a fox snout that read as a beak (now grown
+  out of the head), owl tufts that read as cat ears, frog bulges that read as glasses and a gap
+  under its head, frog brows floating above the bulges, a turtle `Walk` that kept a person's step
+  length. A `vidgen storyboard` of the five on a windy stage (`--per-beat 3`): idea / question /
+  exclaim symbols above the ears, tufts and bulges, the frog's high jump with landing stars, the
+  turtle walking to a chair and sitting, the penguin waddling, the owl turning to the front, the
+  fox's tail trailing.
+
+Known gaps / TODOs
+- The screenplay still plans a turtle's or penguin's walk at a person's speed (the walk then
+  fills the beat's time).
+- A backpack's pack is drawn over a turtle's shell; the shell hides most of a small chair.
+- An owl's beak is short, so its lip-sync openings are small; no back view of shells or tails.
+
+How to test
+- `pytest tests/test_cartoon_more_animals.py tests/test_cartoon_animals.py` (76 not-render,
+  17 s; 2 render, 4 s).
+- Also run, not render: `test_cartoon_character generator poses motion spring wind outfits svg
+  idle effects depth seating keyframes moving acting speed visemes limbs motion_effects
+  test_random_cast` (468 passed, 33 s), `test_docs test_schema test_guide test_config test_api
+  test_cli` (202, 79 s), `test_mcp test_screenplay test_cartoon_lint test_cartoon_sheet
+  test_cartoon_vehicles test_cartoon_foley test_phase_k_review test_cartoon_holding
+  test_cartoon_directing` (131, 35 s); render: `test_cartoon_outfits moving motion_effects depth`
+  (8, 7 s). The full suite was not run.

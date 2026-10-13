@@ -11,7 +11,7 @@ are in Manim units (the frame's shorter side is 8 units in every aspect).
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from vidgen.cartoon.motion import Phases, motion_ease
 from vidgen.cartoon.stage import depth_crossings
@@ -170,7 +170,8 @@ class WalkCycle:
     ``legs_width`` (the legs' x scale factor) and ``body_lift`` (character units), for legs in
     one piece. Legs drawn one each: ``thigh_angle`` (added to ``leg_left``; ``leg_right`` the
     other way) and ``knee_bends`` (left, right; degrees each knee bends, the foot back). Arms in
-    two segments (or folded): ``elbow_bends`` (left, right; degrees, the hand forward)."""
+    two segments (or folded): ``elbow_bends`` (left, right; degrees, the hand forward). ``rock``:
+    degrees the body rocks over the foot it stands on (a waddle; 0 for a person)."""
 
     legs_angle: float
     legs_width: float
@@ -179,6 +180,7 @@ class WalkCycle:
     thigh_angle: float = 0.0
     knee_bends: tuple[float, float] = (0.0, 0.0)
     elbow_bends: tuple[float, float] = (0.0, 0.0)
+    rock: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -186,7 +188,8 @@ class Gait:
     """How a character moves its feet along the ground, as factors of a walk's: ``stride`` (the
     step length, :data:`STEP_LENGTH` × it), ``swing`` (legs, thighs and arms), ``knee`` and
     ``elbow`` (the bends), ``bob`` (the body's rise); ``lean``: degrees the body leans forward at
-    full speed (it builds up and fades with the speed)."""
+    full speed (it builds up and fades with the speed); ``waddle``: degrees the body rocks from
+    one foot to the other with each step (a penguin's waddle, DESIGN.md §69.57)."""
 
     stride: float = 1.0
     swing: float = 1.0
@@ -194,6 +197,7 @@ class Gait:
     elbow: float = 1.0
     bob: float = 1.0
     lean: float = 0.0
+    waddle: float = 0.0
 
 
 #: A walk, and a run (``run_to``, DESIGN.md §69.41): longer strides, bigger swings and bends, the
@@ -203,6 +207,41 @@ RUNNING = Gait(stride=1.6, swing=1.5, knee=1.6, elbow=2.0, bob=2.0, lean=12.0)
 #: Running speed (Manim units per second) when a ``run_to`` gives none: about 1.7 of a stage
 #: character's heights per second.
 RUN_SPEED = 6.0
+
+
+@dataclass(frozen=True)
+class SpeciesMotion:
+    """How an animal moves unlike a person (DESIGN.md §69.57): its walking ``gait`` (a run keeps
+    :data:`RUNNING`'s with this gait's waddle), ``speed`` (a factor on the walking and running
+    speed when an action gives none) and ``jump`` (a factor on the jump height when ``jump`` gives
+    none)."""
+
+    gait: Gait = WALKING
+    speed: float = 1.0
+    jump: float = 1.0
+
+    def walking(self, gait: Gait) -> Gait:
+        """The gait to move with when an action asks for ``gait`` (:data:`WALKING` or
+        :data:`RUNNING`): this walk instead of a plain walk; a run with this walk's waddle."""
+        if gait == WALKING:
+            return self.gait
+        return gait if not self.gait.waddle else replace(gait, waddle=self.gait.waddle)
+
+
+#: The species that move their own way: a turtle plods slowly with short steps, a penguin
+#: waddles with short quick steps, a frog jumps higher. Every other look moves like a person.
+SPECIES_MOTIONS: dict[str, SpeciesMotion] = {
+    "turtle": SpeciesMotion(Gait(stride=0.7, swing=0.7, knee=0.6, elbow=0.6, bob=0.5), speed=0.4),
+    "penguin": SpeciesMotion(Gait(stride=0.55, swing=0.45, knee=0.35, elbow=0.3, bob=1.5, waddle=9.0), speed=0.7),
+    "frog": SpeciesMotion(jump=1.8),
+}
+#: A person's (and every species not in :data:`SPECIES_MOTIONS`).
+PERSON_MOTION = SpeciesMotion()
+
+
+def species_motion(species: str) -> SpeciesMotion:
+    """How a look of ``species`` moves (:data:`SPECIES_MOTIONS`, else :data:`PERSON_MOTION`)."""
+    return SPECIES_MOTIONS.get(species, PERSON_MOTION)
 
 
 def walk_cycle(steps: float, amplitude: float = 1.0, gait: Gait = WALKING) -> WalkCycle:
@@ -228,6 +267,7 @@ def walk_cycle(steps: float, amplitude: float = 1.0, gait: Gait = WALKING) -> Wa
             (WALK_ELBOW_DEGREES + WALK_ELBOW_SWING * max(swing, 0.0)) * elbow,
             (WALK_ELBOW_DEGREES + WALK_ELBOW_SWING * max(-swing, 0.0)) * elbow,
         ),
+        rock=gait.waddle * swing * amplitude,
     )
 
 
@@ -381,16 +421,19 @@ __all__ = [
     "LOOK_EYES_AHEAD",
     "LOOK_MAX_DEGREES",
     "OFFSTAGE_GAP",
+    "PERSON_MOTION",
     "RUNNING",
     "RUN_SPEED",
     "SAME_X",
     "SIDES",
+    "SPECIES_MOTIONS",
     "STEP_LENGTH",
     "WALKING",
     "WALK_SPEED",
     "Gait",
     "LookPose",
     "PartMove",
+    "SpeciesMotion",
     "WalkCycle",
     "camera_look",
     "depth_switch_times",
@@ -403,6 +446,7 @@ __all__ = [
     "nearer_side",
     "offstage_x",
     "passage_fade",
+    "species_motion",
     "turn_squash",
     "walk_amplitude",
     "walk_cycle",

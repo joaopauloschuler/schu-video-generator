@@ -6,7 +6,7 @@ height, dots that fit inside it). Character units throughout (``y`` up)."""
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 import numpy as np
 from manim import Polygon, VMobject
@@ -55,9 +55,13 @@ def polygon(points: Sequence[Sequence[float]]) -> Polygon:
     return Polygon(*(np.array([p[0], p[1], 0.0]) for p in points))
 
 
-def tapered_band(points: Sequence[Point], start_width: float, end_width: float, tip_points: int = 7) -> list[Point]:
+def tapered_band(
+    points: Sequence[Point], start_width: float, end_width: float, tip_points: int = 7, *, profile: Callable[[float], float] | None = None,
+) -> list[Point]:
     """The outline of a band along the path ``points``, ``start_width`` wide at the first point
-    narrowing evenly to ``end_width`` at the last, with a round tip there (a tail, a feather)."""
+    narrowing evenly to ``end_width`` at the last, with a round tip there (a tail, a feather).
+    ``profile``: the width at each share (0..1) of the length instead (a bushy tail); the tip
+    stays ``end_width`` wide."""
     if len(points) < 2:
         raise ValueError("a band needs two points or more")
     lengths = [0.0]
@@ -70,7 +74,8 @@ def tapered_band(points: Sequence[Point], start_width: float, end_width: float, 
         x1, y1 = points[min(k + 1, len(points) - 1)]
         length = math.hypot(x1 - x0, y1 - y0) or 1e-9
         nx, ny = -(y1 - y0) / length, (x1 - x0) / length
-        half = (start_width + (end_width - start_width) * lengths[k] / total) / 2
+        width = start_width + (end_width - start_width) * lengths[k] / total if profile is None else profile(lengths[k] / total)
+        half = width / 2
         left.append((x + nx * half, y + ny * half))
         right.append((x - nx * half, y - ny * half))
     (xa, ya), (xb, yb) = points[-2], points[-1]

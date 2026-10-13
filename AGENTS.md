@@ -774,9 +774,10 @@ asks for one, say vidgen makes original characters and offer one with the same r
   `overalls`, `coat`, `shorts`, `apron`; second colour `colors.trim`) in different theme tokens,
   maybe a `pattern` (`stripes`, `dots`) or `shoes`. A good test: would the two silhouettes,
   filled black, still differ? A child: `proportions: kid` (or `tall_kid`) and a smaller `scale`
-  on the stage (about 0.7). An animal: `species: cat | dog | bird | bear | rabbit | mouse`
-  (fur colour `colors.skin`: natural tones or theme tokens, different for each; it gets a
-  `tail`). `vidgen character-sheet` shows every pose and the front view. `vidgen cast --random 4
+  on the stage (about 0.7). An animal: `species: cat | dog | bird | bear | rabbit | mouse |
+  fox | owl | frog | turtle | penguin` (fur colour `colors.skin`: natural tones or theme tokens,
+  different for each; a turtle's shell `colors.hair`; it gets a `tail`, not a frog; a turtle
+  walks slowly, a penguin waddles, a frog jumps higher). `vidgen character-sheet` shows every pose and the front view. `vidgen cast --random 4
   [--seed S] [--species cat dog]` writes a cast chosen to differ (looks, colours, voice kinds
   and voices, original names) for `include:`; lint `look_alike` warns when two look too alike.
 - Give each a want and a temper (the eager one, the doubter); their starting `pose` and

@@ -1117,7 +1117,7 @@ rectangles, polygons, lines), so each figure is an original drawing:
 | `outfit` | `plain` | what it wears: `plain` (one colour all over), `dress` (short sleeves, a skirt), `overalls` (over a shirt in `colors.trim`), `coat` (long sleeves, tails, trousers in `trim`), `shorts` (a top, short sleeves, shorts in `trim`), `apron` (in `trim`, over plain clothes) |
 | `pattern` | `none` | `none`, `stripes`, `dots` on the clothes of the body (and a skirt), in a darker tone of a light cloth or a lighter tone of a dark one |
 | `shoes` | `none` | `none`, `shoes`, `boots` (colour `colors.accessory`) |
-| `species` | `human` | `human`, or an animal: `cat`, `dog`, `bird`, `bear`, `rabbit`, `mouse` ([Animal characters](#animal-characters-species)); an animal draws its own ears, nose and muzzle, so `ears`, `nose` and `facial_hair` are not given with it |
+| `species` | `human` | `human`, or an animal: `cat`, `dog`, `bird`, `bear`, `rabbit`, `mouse`, `fox`, `owl`, `frog`, `turtle`, `penguin` ([Animal characters](#animal-characters-species)); an animal draws its own ears, nose and muzzle, so `ears`, `nose` and `facial_hair` are not given with it |
 | `seed` | none | a number that varies the proportions (head, body, legs, arms, eye gap and size, mouth) by up to 8 %; the same look and seed always give the same figure; none: no variation |
 | `svg` | none | an SVG file (relative to the project folder) drawn instead of the generator, split into parts by element ids ([below](#characters-from-svg-files)); the other `look` keys and `colors` do not apply |
 
@@ -1127,7 +1127,7 @@ rectangles, polygons, lines), so each figure is an original drawing:
 | `clothes` | `primary` | body, arms and legs (and the hat band); with an `outfit`, the outfit's main cloth |
 | `outline` | `"#1F2430"` | outline of every part, and the glasses |
 | `features` | `"#1F2430"` | eyes, brows, mouth and a `dot` nose |
-| `hair` | `accent` | hair, moustache and beard |
+| `hair` | `accent` | hair, moustache and beard; a `turtle`'s shell |
 | `accessory` | `highlight` | hat, cap, bow, scarf, bag, backpack, necklace and shoes |
 | `trim` | `dim` | the outfit's second cloth: the shirt under `overalls`, the trousers under a `coat`, the `shorts`, the `apron` |
 
@@ -1183,6 +1183,40 @@ characters:
   (`voice_kind:` or a pronoun in a [screenplay](#cartoons-from-a-screenplay-vidgen-screenplay)).
 
 ![The six animals from the side and the front](gallery/media/animals.png)
+
+Five more species have bodies and moves of their own:
+
+- **`fox`**: tall pointed ears with a light lining, a long snout with a dark nose at its tip (from
+  the front a light muzzle and cheek ruffs), a bushy tail with a light tip.
+- **`owl`**: two feather tufts on top, big eyes (larger and set apart) in light discs, a short
+  beak it talks with, wings for arms, thin shins with toes when they are bare, a short fan of tail
+  feathers.
+- **`frog`**: a wide, flat head with the eyes high in bulges above it, a wide mouth, long legs
+  and flat feet with round toe pads; no tail. It jumps higher: a `jump` without `height` goes
+  0.72 of its height (others 0.4).
+- **`turtle`**: a small head with a light chin, short legs and a shell on its back
+  (`colors.hair`, drawn behind the body: a dome with plates from the side, its rim round the body
+  from the front), a short pointed tail. It walks slowly with short steps: `walk_to`, `run_to`,
+  `enter` and `exit` without `speed` go at 0.4 of the usual speed.
+- **`penguin`**: a light face patch, a beak it talks with, flippers for arms, short legs with flat
+  orange feet. It waddles, rocking from foot to foot with short quick steps, at 0.7 of the usual
+  speed.
+
+A `speed` or `height` you give is used as it is. Lip sync, expressions, effect symbols (above the
+ears, tufts or eye bulges), sitting, the front view and the wind work on all of them (a fox's
+tail, an owl's tufts and feathers trail).
+
+```yaml
+characters:
+  - name: rusk
+    look: {species: fox, eyes: oval, outfit: overalls}
+    colors: {skin: "#C8642B", clothes: "#8FA35A", trim: "#E7E1D5"}
+  - name: shelby
+    look: {species: turtle, eyes: oval}
+    colors: {skin: "#9DB06B", hair: "#7A5C3E", clothes: "#E8D44D"}
+```
+
+![The fox, owl, frog, turtle and penguin from the side and the front](gallery/media/more_animals.png)
 
 **A quick look**: `vidgen character NAME` prints the character's look and colours (each token
 with the colour it resolves to); `--png [FILE]` also writes one still of it on the theme
@@ -5444,7 +5478,9 @@ and `voices`; default `cast.yaml`), chosen to be told apart at a glance. Use it 
   accessories; adult proportions; hex colours, so the cast looks the same in every theme). For
   each character 48 random looks are drawn and the one least like the characters before it is
   kept (the highest lowest contrast). `--species` draws from those species (`human`, `cat`, `dog`,
-  `bird`, `bear`, `rabbit`, `mouse`; several: a mix; default `human`).
+  `bird`, `bear`, `rabbit`, `mouse`, `fox`, `owl`, `frog`, `turtle`, `penguin`; several: a mix;
+  default `human`; a fox, owl, frog, turtle or penguin gets fur or skin in its own natural tones,
+  a turtle a shell colour).
 - **Voice kinds and voices**: the kinds go round feminine, masculine and neutral (each round of
   three shuffled); a look suits its kind (facial hair only masculine; no dress or bow for a
   masculine or neutral character; no bun, ponytail or braids for a masculine one). Voices are

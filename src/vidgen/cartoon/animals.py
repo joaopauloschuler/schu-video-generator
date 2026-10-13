@@ -1,21 +1,26 @@
-"""Original animal characters of the generator (DESIGN.md §69.48): ``look.species`` ``cat``,
-``dog``, ``bird``, ``bear``, ``rabbit`` or ``mouse``.
+"""Original animal characters of the generator (DESIGN.md §69.48, §69.57): ``look.species``
+``cat``, ``dog``, ``bird``, ``bear``, ``rabbit``, ``mouse`` and (Step 123) ``fox``, ``owl``,
+``frog``, ``turtle``, ``penguin``.
 
-A species changes the head (its shape, ears or a crest, a muzzle, snout or beak, a nose and
-whiskers), the hands (round paws, a bird's wings), a bird's shins and feet, where the mouth sits
-(on the muzzle, under the snout; a bird talks with its beak), and adds a ``tail`` part behind the
-body. Everything else (bodies, outfits, hair, accessories, poses, lip sync) is the human
-generator's. Each design is a plain generic animal built from circles, ellipses and polygons in
-the look's own colours (fur or feathers: ``colors.skin``; a muzzle, inner ear or rabbit's tail a
-tint of it; noses, beaks and a mouse's tail a fixed natural colour), with no feature taken from
-any known character. Character units before the figure is scaled to height 1, as in
-:mod:`vidgen.cartoon.generator`, which calls these; facing right, the face looks right.
+A species changes the head (its shape, ears, a crest or tufts, a muzzle, snout or beak, a nose and
+whiskers, a frog's eye bulges, an owl's face discs, a penguin's face patch), the hands (round paws,
+a bird's or owl's wings, a penguin's flippers), the shins and feet (a bird's or owl's thin shins
+with toes, a frog's or penguin's flat feet), some proportions (:data:`SPECIES_PROPORTIONS`), where
+the mouth sits (on the muzzle, under the snout; birds, owls and penguins talk with their beaks),
+adds a ``tail`` part behind the body (not a frog) and a turtle's shell on its back. Everything else
+(bodies, outfits, hair, accessories, poses, lip sync) is the human generator's. Each design is a
+plain generic animal built from circles, ellipses and polygons in the look's own colours (fur,
+feathers or skin: ``colors.skin``; a turtle's shell: ``colors.hair``; a muzzle, inner ear or
+rabbit's tail a tint of it; noses, beaks and a mouse's tail a fixed natural colour), with no
+feature taken from any known character. Character units before the figure is scaled to height 1,
+as in :mod:`vidgen.cartoon.generator`, which calls these; facing right, the face looks right.
 """
 
 from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -36,7 +41,32 @@ PINK = "#E39AA2"
 #: The head's (width, height) as a share of the round human head's.
 HEAD_SHAPES: dict[str, tuple[float, float]] = {
     "cat": (1.08, 0.95), "dog": (1.0, 0.98), "bird": (1.0, 1.0), "bear": (1.06, 1.0), "rabbit": (0.95, 1.04), "mouse": (0.98, 0.96),
+    "fox": (1.0, 0.92), "owl": (1.06, 1.0), "frog": (1.32, 0.8), "turtle": (0.95, 0.86), "penguin": (0.98, 0.98),
 }
+#: Factors on the proportions (:class:`~vidgen.cartoon.generator.Proportions` fields) of the
+#: species that differ from a person's build: a frog's long legs and wide mouth, an owl's big eyes
+#: set apart, a penguin's short legs and flippers, a turtle's short legs and small head.
+SPECIES_PROPORTIONS: dict[str, dict[str, float]] = {
+    "frog": {"leg_length": 1.3, "mouth_width": 2.2},
+    "owl": {"eye_size": 1.4, "eye_gap": 1.2},
+    "penguin": {"leg_length": 0.6, "arm_length": 0.85, "body_width": 1.08},
+    "turtle": {"leg_length": 0.85, "head_radius": 0.92},
+}
+#: Species that talk with a beak (:func:`beak_mouth`), and those whose arms are wings.
+BEAKED: frozenset[str] = frozenset({"bird", "owl", "penguin"})
+WINGED: frozenset[str] = frozenset({"bird", "owl"})
+#: Each beak: from the side (hinge x and y from the head's centre, half height, length) and from
+#: the front (the seam's y, half height, half width), in head radii.
+BEAKS: dict[str, tuple[tuple[float, float, float, float], tuple[float, float, float]]] = {
+    "bird": ((0.8, -0.14, 0.21, 0.78), (-0.16, 0.2, 0.26)),
+    "owl": ((0.5, -0.3, 0.13, 0.42), (-0.3, 0.17, 0.13)),
+    "penguin": ((0.8, -0.12, 0.15, 0.72), (-0.14, 0.15, 0.2)),
+}
+#: Where a frog's eyes sit: this many head radii above the head's centre, in skin-coloured bulges.
+FROG_EYE_RISE = 0.6
+#: The gap between the top of an eye and its brow (head radii) where it is not a person's 0.16:
+#: a frog's brows sit on its eye bulges.
+BROW_GAPS: dict[str, float] = {"frog": 0.06}
 #: A mouse's snout from the side: how much farther than the head it reaches, its direction
 #: (radians from forward, + up) and how wide it starts (a spread of angles, radians squared).
 MOUSE_SNOUT = (0.55, -0.22, 0.12)
@@ -45,10 +75,12 @@ MOUSE_SNOUT = (0.55, -0.22, 0.12)
 MOUTH_PLACES: dict[str, tuple[float, float, float]] = {
     "cat": (0.33, -0.16, 0.55), "rabbit": (0.3, -0.16, 0.5), "bear": (0.33, -0.18, 0.6),
     "dog": (0.72, -0.21, 0.6), "mouse": (0.72, -0.3, 0.45),
+    "fox": (0.85, -0.2, 0.5), "frog": (0.32, 0.15, 0.9), "turtle": (0.42, -0.2, 0.6),
 }
 #: The same from the front (x is 0).
 FRONT_MOUTH_PLACES: dict[str, tuple[float, float]] = {
     "cat": (-0.16, 0.55), "rabbit": (-0.16, 0.5), "bear": (-0.18, 0.6), "dog": (-0.21, 0.6), "mouse": (-0.24, 0.45),
+    "fox": (-0.26, 0.5), "frog": (0.15, 0.9), "turtle": (-0.22, 0.6),
 }
 #: How far a bird's beak opens for each mouth shape (degrees, side view): ``open`` for a
 #: surprised face, the visemes of DESIGN.md §69.4; ``M`` is closed.
@@ -59,9 +91,13 @@ TAIL_LINES: dict[str, tuple[tuple[Point, ...], float, float]] = {
     "cat": (((0.0, 0.0), (-0.09, -0.02), (-0.18, 0.0), (-0.25, 0.07), (-0.28, 0.16), (-0.26, 0.25), (-0.21, 0.3)), 0.05, 0.032),
     "dog": (((0.0, 0.0), (-0.07, 0.02), (-0.13, 0.07), (-0.16, 0.14), (-0.16, 0.2)), 0.06, 0.03),
     "mouse": (((0.0, 0.0), (-0.1, -0.04), (-0.2, -0.06), (-0.29, -0.03), (-0.34, 0.04), (-0.35, 0.11)), 0.03, 0.012),
+    "turtle": (((0.0, 0.0), (-0.05, -0.02), (-0.1, -0.025)), 0.045, 0.012),   # short, from under the shell
 }
 #: A bird's tail feathers: directions (degrees, side view), length and widths.
 TAIL_FEATHERS = ((200.0, 215.0, 230.0), 0.24, 0.07, 0.04)
+#: A fox's bushy tail from the side: its centre line, its widest (character units) and the share
+#: of its length that is a light tip.
+FOX_TAIL = (((0.0, 0.0), (-0.08, -0.02), (-0.17, 0.0), (-0.24, 0.06), (-0.28, 0.15), (-0.27, 0.24)), 0.13, 0.3)
 
 
 def is_animal(look: CharacterLook) -> bool:
@@ -83,6 +119,29 @@ def fur_tint(color: str) -> str:
 def fur_shade(color: str) -> str:
     """A darker tone of ``color`` (a dog's ears, a bird's crest and wing tips)."""
     return _mix(color, BLACK, 0.28)
+
+
+def patch_tint(color: str) -> str:
+    """A penguin's face patch or a fox's tail tip on fur of ``color``: nearly white, or (on very
+    light fur) a clearly darker tone."""
+    hexed = ManimColor(color).to_hex()
+    light = relative_luminance(hex_rgb(hexed)) > 0.7
+    return _mix(hexed, BLACK if light else WHITE, 0.3 if light else 0.85)
+
+
+def proportion_factors(look: CharacterLook) -> dict[str, float]:
+    """The factors :data:`SPECIES_PROPORTIONS` gives ``look``'s species (none: no change)."""
+    return SPECIES_PROPORTIONS.get(look.species, {})
+
+
+def species_frame(look: CharacterLook, f: Frame) -> Frame:
+    """``f``, or for a frog the same with its flat head lowered onto its shoulders and the eyes
+    high in its bulges (:data:`FROG_EYE_RISE`)."""
+    if look.species != "frog":
+        return f
+    r = f.p.head_radius
+    head_y = f.head_y - (1.0 - HEAD_SHAPES["frog"][1]) * r
+    return replace(f, head_y=head_y, eye_y=head_y + FROG_EYE_RISE * r)
 
 
 def head_shape(look: CharacterLook, f: Frame) -> VMobject:
@@ -113,7 +172,7 @@ def snout_tip(look: CharacterLook, f: Frame) -> Point:
 def mouth_place(look: CharacterLook, f: Frame) -> tuple[float, float, float]:
     """``(x, y, size)``: where the mouth's reference point is (the human mouth's: the face's
     middle at the head's centre height) and the mouth's size (1 for a human)."""
-    if not is_animal(look) or look.species == "bird":
+    if not is_animal(look) or look.species in BEAKED:
         return f.face_x, f.head_y, 1.0
     r = f.p.head_radius
     if f.front:
@@ -171,6 +230,21 @@ def ears(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> list[
             base = point_at(cx, cy, 0.86 * r, angle)
             tip = point_at(base[0], base[1], 0.5 * r, angle + (0.0 if f.front else 12.0))
             pieces.append(trailing(outlined(polygon(tapered_band([base, tip], 0.16 * r, 0.08 * r)), shade, ink, w), base, "pointy"))
+    elif species == "fox":   # tall pointed ears with a light lining
+        for tip in _ear_angles(f.front, (64.0, 102.0), (58.0, 122.0)):
+            outer = polygon([point_at(cx, cy, 0.78 * r, tip - 17), point_at(cx, cy, 1.62 * r, tip), point_at(cx, cy, 0.78 * r, tip + 17)])
+            lining = polygon([point_at(cx, cy, 0.9 * r, tip - 9), point_at(cx, cy, 1.42 * r, tip), point_at(cx, cy, 0.9 * r, tip + 9)])
+            pieces += [outlined(outer, skin, ink, w), outlined(lining, fur_tint(skin), ink, w * 0.5)]
+    elif species == "frog":   # the eye bulges rising above the top of the head (the eyes sit in them)
+        pieces += [outlined(Circle(radius=0.34 * r * f.p.eye_size).move_to([x, f.eye_y, 0]), skin, ink, w)
+                   for x in (f.face_x - f.p.eye_gap, f.face_x + f.p.eye_gap)]
+    elif species == "owl":   # two tufts of two slim feathers each on top
+        shade = fur_shade(skin)
+        for angle, lean in zip(_ear_angles(f.front, (60.0, 106.0), (48.0, 132.0)), (-1.0, 1.0)):
+            base = point_at(cx, cy, 0.86 * r, angle)
+            for outward, length in ((4.0, 0.5), (22.0, 0.4)):   # leaning out, away from the middle
+                tip = point_at(base[0], base[1], length * r, angle + lean * outward)
+                pieces.append(trailing(outlined(polygon(tapered_band([base, tip], 0.17 * r, 0.04 * r)), shade, ink, w), base, "pointy"))
     return [outer_hair(piece) for piece in pieces]
 
 
@@ -232,34 +306,90 @@ def face(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> list[
             tip = snout_tip(look, f)
             pieces.append(outer_hair(outlined(Circle(radius=0.12 * r).move_to([tip[0], tip[1], 0]), PINK, ink, w * 0.6)))
             pieces += _whiskers(tip[0] - 0.4 * r, tip[1] - 0.02 * r, r, (1.0,), c, w, 0.5)
-    elif species == "bird":
-        pieces += [outer_hair(piece) for piece in _closed_beak(f, c, w)]
+    elif species == "fox":
+        pieces += _fox_face(f, c, w)
+    elif species == "frog":
+        pieces += _frog_face(f, c, w)
+    elif species == "turtle":
+        chin = Ellipse(width=1.0 * r, height=0.45 * r).move_to([cx, cy - 0.44 * r, 0]) if f.front else \
+            Ellipse(width=0.85 * r, height=0.42 * r).move_to([cx + 0.38 * r, cy - 0.42 * r, 0])
+        pieces.append(outlined(chin, tint, ink, w * 0.6))
+        nostrils = [(cx - 0.1 * r, cy - 0.08 * r), (cx + 0.1 * r, cy - 0.08 * r)] if f.front else [(cx + 0.8 * r, cy + 0.0 * r)]
+        pieces += [filled(Circle(radius=0.035 * r).move_to([x, y, 0]), c["features"]) for x, y in nostrils]
+    if species == "owl":   # light discs round the eyes
+        pieces += [outlined(Circle(radius=0.3 * r * f.p.eye_size).move_to([x, f.eye_y, 0]), tint, ink, w * 0.5)
+                   for x in (f.face_x - f.p.eye_gap, f.face_x + f.p.eye_gap)]
+    elif species == "penguin":   # a light patch over the eyes and cheeks
+        patch = patch_tint(skin)
+        if f.front:
+            pieces += [filled(Circle(radius=0.36 * r).move_to([x, f.eye_y, 0]), patch) for x in (f.face_x - f.p.eye_gap, f.face_x + f.p.eye_gap)]
+            pieces.append(filled(Ellipse(width=1.3 * r, height=0.75 * r).move_to([cx, cy - 0.32 * r, 0]), patch))
+        else:
+            pieces.append(filled(Ellipse(width=1.0 * r, height=1.15 * r).move_to([cx + 0.42 * r, cy - 0.12 * r, 0]), patch))
+    if species in BEAKED:
+        pieces += [outer_hair(piece) for piece in _closed_beak(species, f, c, w)]
     return pieces
+
+
+def _fox_face(f: Frame, c: Mapping[str, str], w: float) -> list[VMobject]:
+    """A fox's light cheek ruffs and a long pointed snout with a dark nose at its tip (from the
+    front: a light muzzle under a small dark nose)."""
+    r, cx, cy, skin, ink = f.p.head_radius, f.head_x, f.head_y, c["skin"], c["outline"]
+    tint = fur_tint(skin)
+
+    def at(points: Sequence[Point]) -> VMobject:
+        return polygon([(cx + x * r, cy + y * r) for x, y in points])
+
+    if f.front:
+        pieces: list[VMobject] = [
+            outlined(at([(s * 0.15, -0.22), (s * 0.78, -0.24), (s * 1.1, -0.56), (s * 0.72, -0.6), (s * 0.55, -0.84), (s * 0.12, -0.74)]), tint, ink, w * 0.6)
+            for s in (-1.0, 1.0)
+        ]
+        pieces.append(outlined(Ellipse(width=0.62 * r, height=0.5 * r).move_to([cx, cy - 0.42 * r, 0]), tint, ink, w * 0.6))
+        pieces.append(outlined(Ellipse(width=0.22 * r, height=0.14 * r).move_to([cx, cy - 0.22 * r, 0]), c["features"], ink, w * 0.5))
+        return pieces
+    # the snout grows out of the head: filled over the head's outline, its ridge and underside drawn
+    ridge = [(0.92, 0.36), (1.1, 0.1), (1.32, -0.12), (1.54, -0.26)]
+    underside = [(1.52, -0.37), (1.2, -0.5), (0.85, -0.66), (0.53, -0.78)]
+    snout = at([*ridge, *underside, (0.3, -0.4), (0.5, 0.1)])
+    jaw = at([(0.5, -0.46), (1.0, -0.4), (1.5, -0.35), *underside, (0.4, -0.62)])
+    nose = Ellipse(width=0.18 * r, height=0.14 * r).move_to([cx + 1.52 * r, cy - 0.31 * r, 0])
+    edges = [VMobject().set_points_as_corners([[cx + x * r, cy + y * r, 0] for x, y in edge]).set_stroke(ink, width=w) for edge in (ridge, underside)]
+    return [outer_hair(filled(snout, skin)), outer_hair(filled(jaw, tint)), *(outer_hair(edge) for edge in edges),
+            outer_hair(outlined(nose, c["features"], ink, w * 0.5))]
+
+
+def _frog_face(f: Frame, c: Mapping[str, str], w: float) -> list[VMobject]:
+    """A frog's nostrils (its eye bulges are drawn behind the head, :func:`ears`)."""
+    r, cx, cy = f.p.head_radius, f.head_x, f.head_y
+    nostrils = [(cx - 0.14 * r, cy + 0.12 * r), (cx + 0.14 * r, cy + 0.12 * r)] if f.front else [(cx + 1.15 * r, cy + 0.12 * r)]
+    return [filled(Circle(radius=0.035 * r).move_to([x, ny, 0]), c["features"]) for x, ny in nostrils]
 
 
 # ----- a bird's beak --------------------------------------------------------------------------------
 
 
-def _beak_frame(f: Frame) -> tuple[float, float, float, float]:
-    """(hinge x, hinge y, half height, length) of the beak (side view; from the front the
-    rhombus's half width, the seam's y, its half height and 0)."""
+def _beak_frame(species: str, f: Frame) -> tuple[float, float, float, float]:
+    """(hinge x, hinge y, half height, length) of the species' beak (:data:`BEAKS`; side view;
+    from the front the middle of the seam, its y, the rhombus's half height and 0)."""
     r = f.p.head_radius
+    (dx, dy, half, length), (front_dy, front_half, _) = BEAKS[species]
     if f.front:
-        return f.head_x, f.head_y - 0.16 * r, 0.2 * r, 0.0
-    return f.head_x + 0.8 * r, f.head_y - 0.14 * r, 0.21 * r, 0.78 * r
+        return f.head_x, f.head_y + front_dy * r, front_half * r, 0.0
+    return f.head_x + dx * r, f.head_y + dy * r, half * r, length * r
 
 
-def _beak_halves(f: Frame) -> tuple[list[Point], list[Point]]:
+def _beak_halves(species: str, f: Frame) -> tuple[list[Point], list[Point]]:
     """The upper and lower half of the closed beak, mirror images about the hinge's line."""
-    x, y, h, length = _beak_frame(f)
+    x, y, h, length = _beak_frame(species, f)
     if f.front:
-        width = 0.26 * f.p.head_radius
+        width = BEAKS[species][1][2] * f.p.head_radius
         return [(x - width, y), (x + width, y), (x, y + h)], [(x - width, y), (x, y - h), (x + width, y)]
     return [(x, y + h), (x, y), (x + length, y)], [(x, y), (x, y - h), (x + length, y)]
 
 
-def _closed_beak(f: Frame, c: Mapping[str, str], w: float) -> list[VMobject]:
-    upper, lower = _beak_halves(f)
+def _closed_beak(species: str, f: Frame, c: Mapping[str, str], w: float) -> list[VMobject]:
+    upper, lower = _beak_halves(species, f)
     return [outlined(polygon(lower), BEAK_COLOR, c["outline"], w), outlined(polygon(upper), BEAK_COLOR, c["outline"], w)]
 
 
@@ -268,28 +398,32 @@ def _turned(points: Sequence[Point], center: Point, degrees: float) -> list[Poin
     return [(center[0] + (x - center[0]) * cos - (y - center[1]) * sin, center[1] + (x - center[0]) * sin + (y - center[1]) * cos) for x, y in points]
 
 
-def beak_mouth(f: Frame, c: Mapping[str, str], w: float) -> tuple[dict[str, VMobject], Point]:
-    """A bird's ``mouth`` shapes and pivot (the hinge): ``smile`` the line at the beak's corner;
-    ``open`` and the visemes the beak open by :data:`BEAK_OPENINGS` (side view: both halves
-    turned apart about the hinge over the dark inside; from the front a dark opening on the
-    beak), ``M`` closed. Each shape is symmetric about the hinge's line, so an expression's
-    flipped mouth (a frown) still shows an open beak the right way up."""
-    x, y, h, length = _beak_frame(f)
+def beak_mouth(species: str, f: Frame, c: Mapping[str, str], w: float) -> tuple[dict[str, VMobject], Point]:
+    """The ``mouth`` shapes and pivot (the hinge) of a species that talks with its beak
+    (:data:`BEAKED`): ``smile`` the line at the beak's corner; ``open`` and the visemes the beak
+    open by :data:`BEAK_OPENINGS` (side view: both halves turned apart about the hinge over the
+    dark inside; from the front a dark opening on the beak), ``M`` closed. Each shape is
+    symmetric about the hinge's line, so an expression's flipped mouth (a frown) still shows an
+    open beak the right way up."""
+    x, y, h, length = _beak_frame(species, f)
     r, ink, inside = f.p.head_radius, c["outline"], c["features"]
     hinge = (x, y)
+    # from the front, the openings scale with the beak (the bird's is the reference)
+    across, up = BEAKS[species][1][2] / BEAKS["bird"][1][2], BEAKS[species][1][1] / BEAKS["bird"][1][1]
     if f.front:
-        smile: VMobject = Arc(radius=0.12 * r, start_angle=math.radians(240), angle=math.radians(60), arc_center=[x, y + 0.08 * r, 0])
-        closed: VMobject = Line([x - 0.26 * r, y, 0], [x + 0.26 * r, y, 0])
+        width = BEAKS[species][1][2] * r
+        smile: VMobject = Arc(radius=0.12 * r * up, start_angle=math.radians(240), angle=math.radians(60), arc_center=[x, y + 0.08 * r * up, 0])
+        closed: VMobject = Line([x - width, y, 0], [x + width, y, 0])
     else:
         smile = Arc(radius=0.13 * r, start_angle=math.radians(200), angle=math.radians(70), arc_center=[x, y + 0.13 * r, 0])
         closed = Line([x, y, 0], [x + 0.55 * length, y, 0])
     shapes: dict[str, VMobject] = {"smile": smile.set_stroke(inside, width=w)}
-    upper, lower = _beak_halves(f)
+    upper, lower = _beak_halves(species, f)
     for name, degrees in BEAK_OPENINGS.items():
         if f.front:
             share = degrees / BEAK_OPENINGS["open"]
             wide = 0.42 if name == "E" else 0.22 if name in ("U", "W", "O") else 0.32
-            shapes[name] = filled(Ellipse(width=wide * r, height=max(0.3 * share, 0.03) * r).move_to([x, y, 0]), inside)
+            shapes[name] = filled(Ellipse(width=wide * r * across, height=max(0.3 * share, 0.03) * r * up).move_to([x, y, 0]), inside)
             continue
         half = degrees / 2
         fan = [hinge, *(point_at(x, y, length, a) for a in np.linspace(-half, half, 7))]
@@ -325,6 +459,34 @@ def wing(x: float, top: float, elbow: float, wrist: float, c: Mapping[str, str],
     return VGroup(outlined(upper, c["skin"], c["outline"], w)), lower
 
 
+def flipper(x: float, top: float, elbow: float, wrist: float, c: Mapping[str, str], w: float) -> tuple[VGroup, VGroup]:
+    """A penguin's arm as a flipper (upper, lower), whatever the sleeves: a smooth upper segment
+    from the shoulder (``x``, ``top``) to the elbow, then a flat paddle narrowing to a round tip
+    at the wrist (its end)."""
+    width = 0.1
+    upper = RoundedRectangle(width=width, height=top - elbow + width, corner_radius=width / 2).move_to([x, (top + elbow) / 2, 0])
+    paddle = polygon(tapered_band([(x, elbow), (x, wrist - 0.01)], width, 0.05))
+    return VGroup(outlined(upper, c["skin"], c["outline"], w)), VGroup(outlined(paddle, c["skin"], c["outline"], w))
+
+
+def flat_foot(look: CharacterLook, x: float, front: bool, c: Mapping[str, str], w: float) -> list[VMobject]:
+    """A frog's or a penguin's flat foot on the ground under the shin at ``x`` (none with
+    shoes): a penguin's in :data:`BEAK_COLOR`, a frog's in its skin with round toe pads."""
+    if look.shoes != "none":
+        return []
+    color = BEAK_COLOR if look.species == "penguin" else c["skin"]
+    if front:
+        foot: VMobject = Ellipse(width=0.12, height=0.045).move_to([x, 0.0225, 0])
+        tips = [(x + dx, 0.014) for dx in (-0.05, 0.0, 0.05)]
+    else:
+        foot = Ellipse(width=0.14, height=0.04).move_to([x + 0.035, 0.02, 0])
+        tips = [(x + 0.1, 0.014), (x + 0.075, 0.03)]
+    pieces = [outlined(foot, color, c["outline"], w * 0.75)]
+    if look.species == "frog":
+        pieces += [outlined(Circle(radius=0.014).move_to([tx, ty, 0]), color, c["outline"], w * 0.6) for tx, ty in tips]
+    return pieces
+
+
 def bird_shin(look: CharacterLook, x: float, knee: float, front: bool, c: Mapping[str, str], w: float) -> list[VMobject]:
     """A bird's thin shin from the knee to the ground and, without shoes, its toes (three
     forward and one back from the side; spread from the front), the soles at 0."""
@@ -347,23 +509,74 @@ def _bumpy_puff(x: float, y: float, radius: float) -> VMobject:
     return polygon([point_at(x, y, radius * (1.0 if k % 2 else 1.12), 360.0 * k / 24) for k in range(24)])
 
 
+def shell(f: Frame, c: Mapping[str, str], w: float) -> VGroup:
+    """A turtle's shell (``colors.hair``) for the back of the ``body`` part, drawn behind the
+    body: from the side a dome bulging out behind the back with a light rim and the lines of its
+    plates; from the front its rim showing round the body's sides and shoulders."""
+    p, ink = f.p, c["outline"]
+    color = c["hair"]
+    middle = f.body_bottom + 0.52 * p.body_height
+    if f.front:
+        outer = Ellipse(width=1.3 * p.body_width, height=1.08 * p.body_height).move_to([0.0, middle, 0])
+        inner = Ellipse(width=1.12 * p.body_width, height=0.98 * p.body_height).move_to([0.0, middle, 0])
+        return VGroup(outlined(outer, fur_tint(color), ink, w), outlined(inner, color, ink, w * 0.6))
+    centre = (-0.2 * p.body_width, middle + 0.02)
+    rim = Ellipse(width=1.22 * p.body_width, height=1.06 * p.body_height).move_to([*centre, 0])
+    dome = Ellipse(width=1.12 * p.body_width, height=0.98 * p.body_height).move_to([centre[0] + 0.01, centre[1], 0])
+    plates = Ellipse(width=0.7 * p.body_width, height=0.6 * p.body_height).move_to([*centre, 0])
+    seams: list[Line] = []
+    for angle in (135.0, 180.0, 225.0):
+        inner_point = (centre[0] + 0.35 * p.body_width * math.cos(math.radians(angle)), centre[1] + 0.3 * p.body_height * math.sin(math.radians(angle)))
+        outer_point = (centre[0] + 0.56 * p.body_width * math.cos(math.radians(angle)), centre[1] + 0.49 * p.body_height * math.sin(math.radians(angle)))
+        seams.append(Line([*inner_point, 0], [*outer_point, 0]))
+    shade = fur_shade(color)
+    return VGroup(
+        outlined(rim, fur_tint(color), ink, w), outlined(dome, color, ink, w * 0.6),
+        plates.set_fill(opacity=0).set_stroke(shade, width=w * 0.6), *(seam.set_stroke(shade, width=w * 0.6) for seam in seams),
+    )
+
+
+def _fox_tail(root: Point, side: float, c: Mapping[str, str], w: float) -> list[VMobject]:
+    """A fox's bushy tail (:data:`FOX_TAIL`): a band widest in its middle, its tip light."""
+    line, widest, tip_share = FOX_TAIL
+    centre = path_curve([(root[0] - side * dx, root[1] + dy) for dx, dy in line], samples=4)
+    tip_from = int(len(centre) * (1.0 - tip_share))
+
+    def bushy(share: float) -> float:
+        return widest * (0.35 + 0.65 * math.sin(math.pi * min(0.15 + 0.85 * share, 1.0)))
+
+    tail = polygon(tapered_band(centre, widest, 0.04, profile=bushy))
+    tip = polygon(tapered_band(centre[tip_from:], bushy((tip_from) / (len(centre) - 1)), 0.04))
+    return [trailing(outlined(tail, c["skin"], c["outline"], w), root, "tail"), trailing(outlined(tip, patch_tint(c["skin"]), c["outline"], w), root, "tail")]
+
+
 def tail_part(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> CharacterPart:
     """The ``tail`` part: from its root low on the back of the body (from the front: behind the
     body, its end showing beside it), pivoting there; long tails and a bird's feathers trail in
-    the wind (:data:`~vidgen.cartoon.primitives.TRAIL_WEIGHTS`)."""
+    the wind (:data:`~vidgen.cartoon.primitives.TRAIL_WEIGHTS`). A frog has none (the generator
+    does not call this for one)."""
     p, skin, ink = f.p, c["skin"], c["outline"]
     side = 1.0 if f.front else -1.0   # the way the tail goes: back, or (from the front) to one side
-    root = ((0.12 if f.front else -0.4) * p.body_width, f.body_bottom + 0.22 * p.body_height)
     species = look.species
+    if species == "turtle":   # out from under the back of the shell
+        root = ((0.12 if f.front else -0.62) * p.body_width, f.body_bottom + 0.12 * p.body_height)
+    else:
+        root = ((0.12 if f.front else -0.4) * p.body_width, f.body_bottom + 0.22 * p.body_height)
     pieces: list[VMobject]
     if species in TAIL_LINES:
         line, start, end = TAIL_LINES[species]
         centre = path_curve([(root[0] - side * dx, root[1] + dy) for dx, dy in line], samples=4)
         color = _mix(skin, PINK, 0.6) if species == "mouse" else skin
         pieces = [trailing(outlined(polygon(tapered_band(centre, start, end)), color, ink, w), root, "tail")]
-    elif species == "bird":
+    elif species == "fox":
+        pieces = _fox_tail(root, side, c, w)
+    elif species in BEAKED:   # a fan of feathers (an owl's short, a penguin's one stubby wedge)
         angles, length, start, end = TAIL_FEATHERS
         shown = (245.0, 270.0, 295.0) if f.front else angles
+        if species == "owl":
+            length *= 0.65
+        elif species == "penguin":
+            shown, length, start, end = (270.0,) if f.front else (212.0,), 0.11, 0.09, 0.03
         pieces = [trailing(outlined(polygon(tapered_band([root, point_at(*root, length, a)], start, end)), fur_shade(skin), ink, w), root, "feathers")
                   for a in shown]
     else:   # a round tail on the back (from the front: hidden behind the body)
@@ -376,22 +589,34 @@ def tail_part(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> 
 
 
 __all__ = [
+    "BEAKED",
+    "BEAKS",
     "BEAK_COLOR",
     "BEAK_OPENINGS",
+    "FOX_TAIL",
+    "FROG_EYE_RISE",
     "HEAD_SHAPES",
     "MOUTH_PLACES",
     "PINK",
+    "SPECIES_PROPORTIONS",
     "TAIL_LINES",
+    "WINGED",
     "beak_mouth",
     "bird_shin",
     "ears",
     "face",
+    "flat_foot",
+    "flipper",
     "fur_shade",
     "fur_tint",
     "head_shape",
     "is_animal",
     "mouth_place",
+    "patch_tint",
     "paw",
+    "proportion_factors",
+    "shell",
+    "species_frame",
     "tail_part",
     "wing",
 ]

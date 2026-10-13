@@ -56,6 +56,26 @@ def test_humans_keep_their_drawings(name: str) -> None:
     assert (drawing_digest(look), drawing_digest(look, front=True)) == digests
 
 
+#: Animals of Step 114 whose drawings must not change: :func:`drawing_digest` (side, front) taken
+#: at HEAD ddfeaf6 before Step 123.
+PINNED_114: dict[str, tuple[dict[str, Any], tuple[str, str]]] = {
+    "cat": ({"species": "cat"}, ("4eb837539a5f81ef", "a97f153b2ea57bfe")),
+    "dog": ({"species": "dog", "outfit": "coat", "shoes": "boots"}, ("44314e01632845a1", "b66b1091b8c8f26c")),
+    "bird": ({"species": "bird", "outfit": "dress"}, ("263cd04fa8a77f1f", "795f89264f08aaee")),
+    "bird_shoes": ({"species": "bird", "outfit": "shorts", "shoes": "shoes", "accessories": ["scarf"]}, ("a2f5b254e6ec0586", "51d5831c4dd7543a")),
+    "bear": ({"species": "bear", "outfit": "apron", "body": "square"}, ("f19ac80e9330d3f0", "c3c0a770706e8935")),
+    "rabbit": ({"species": "rabbit", "outfit": "dress", "pattern": "stripes", "eyes": "oval"}, ("c880cecf5b130157", "a9e375c41ad173c4")),
+    "mouse": ({"species": "mouse", "hair": "short", "accessories": ["backpack"], "seed": 4}, ("326bf7368f90ea49", "32c611ba9c12e314")),
+}
+
+
+@pytest.mark.parametrize("name", PINNED_114)
+def test_step_114_animals_keep_their_drawings(name: str) -> None:
+    values, digests = PINNED_114[name]
+    look = CharacterLook(**values)
+    assert (drawing_digest(look), drawing_digest(look, front=True)) == digests
+
+
 def animal(species: str, height: float = 1.0, **look: Any) -> Character:
     values = CharacterLook(species=species, **look)
     return Character(generate_parts(values, PIN_COLORS), name=species, height=height, front=generate_parts(values, PIN_COLORS, front=True))
@@ -127,7 +147,7 @@ def test_look_schema() -> None:
 # ----- lip sync on muzzles and beaks -----------------------------------------------------------------
 
 
-@pytest.mark.parametrize("species", ("cat", "dog", "bear", "rabbit", "mouse"))
+@pytest.mark.parametrize("species", ("cat", "dog", "bear", "rabbit", "mouse", "fox", "frog", "turtle"))
 def test_the_mouth_sits_on_the_muzzle_and_opens(species: str) -> None:
     for front in (False, True):
         c = animal(species)
@@ -143,9 +163,10 @@ def test_the_mouth_sits_on_the_muzzle_and_opens(species: str) -> None:
         assert sizes["A"] > sizes["M"] and sizes["O"] > sizes["M"]
 
 
-def test_a_bird_talks_with_its_beak() -> None:
+@pytest.mark.parametrize("species", ("bird", "owl", "penguin"))
+def test_a_bird_talks_with_its_beak(species: str) -> None:
     for front in (False, True):
-        c = animal("bird")
+        c = animal(species)
         if front:
             c.face("front")
         hinge = c.pivot("mouth")
@@ -195,7 +216,7 @@ def test_tail_swishes_while_idle_and_swings_in_a_walk() -> None:
     assert swung.parts["tail"].angle != 0.0
 
 
-@pytest.mark.parametrize("species", SPECIES)
+@pytest.mark.parametrize("species", [*SPECIES, "fox", "owl", "turtle", "penguin"])
 def test_tails_trail_in_the_wind(species: str) -> None:
     c = animal(species)
     marked = [m for m in c.parts["tail"].get_family() if getattr(m, TRAIL_ATTRIBUTE, None)]

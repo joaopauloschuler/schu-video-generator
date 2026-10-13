@@ -160,7 +160,7 @@ that character as a `Character`: a `VGroup` of named parts (`PART_NAMES`: `body`
 `leg_left` / `leg_right`, `arm_left`, `arm_right`, `head`, `eyes`, `brows`, `mouth`, `accessory`,
 `tail`; arms and single legs may have a lower segment, `arm_left_lower`, `leg_left_lower`, ...), drawn from its `look:`
 (body shape, hair, accessories, outfit, species...; every generated look has the same part and shape names,
-except the optional `accessory` part, an animal's `tail` (`look.species`) and a `dress` or `coat`
+except the optional `accessory` part, an animal's `tail` (`look.species`; a frog has none) and a `dress` or `coat`
 body's second shape `seated`, which `Character.seated` and the `sitting` pose show), the
 feet at the origin (`feet()`). A character drawn from an SVG file (`look: {svg: ...}`, CONFIG.md
 "Characters from SVG files") may lack parts and has its own shape names: check `has_part("arm_left")`

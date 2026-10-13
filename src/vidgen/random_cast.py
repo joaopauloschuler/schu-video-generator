@@ -69,6 +69,16 @@ SKIN_COLORS: tuple[str, ...] = (
     "#FFE0BD", "#F5D0B5", "#F2C9A0", "#E8B48A", "#C68B59", "#B97A4E", "#8D5A3B", "#6B4429", "#9BD3AE", "#A7C7E7", "#D9A3E0",
 )
 FUR_COLORS: tuple[str, ...] = ("#B5652E", "#8A8A8A", "#F2EDE4", "#3A3A3A", "#C8A27A", "#6E4B32", "#E0B860", "#5C6F8A")
+#: Natural colours of the species whose fur, feathers or skin differ from :data:`FUR_COLORS`
+#: (a turtle's shell is its ``hair`` colour: :data:`SHELL_COLORS`).
+SPECIES_COLORS: dict[str, tuple[str, ...]] = {
+    "fox": ("#C8642B", "#B5532E", "#D98A4E", "#8A8A8A", "#F2EDE4", "#6E4B32"),
+    "owl": ("#8A6E52", "#B39B7A", "#6E5A48", "#C9C2B6", "#5C6F8A"),
+    "frog": ("#6FA84A", "#4E8F3A", "#9BBF4C", "#3F8F7A", "#C9B04A", "#7A9A5A"),
+    "turtle": ("#9DB06B", "#7FA05A", "#A7A27A", "#6E8F6A", "#B8B07A"),
+    "penguin": ("#2F3440", "#3A3A3A", "#3B4A5F", "#4A4F5A", "#5C6F8A"),
+}
+SHELL_COLORS: tuple[str, ...] = ("#7A5C3E", "#6B4A2B", "#8C6E3F", "#5F6B3A", "#9A7A4E", "#4E5A3A")
 CLOTHES_COLORS: tuple[str, ...] = (
     "#D9534F", "#F0AD4E", "#E8D44D", "#5CB85C", "#2E8B8B", "#4A7BD0", "#3B4A8F", "#8E5BB5", "#D96BA0", "#7A5C3E",
     "#5B6C8F", "#2F2F2F", "#E9E4D8", "#8FA35A",
@@ -122,8 +132,9 @@ def random_look(rng: random.Random, kind: str, species: Sequence[str] = ("human"
     defaults = {"head_size": 1.0, "nose": "none", "ears": "none", "hair": "none", "outfit": "plain", "pattern": "none", "shoes": "none"}
     look = {key: value for key, value in look.items() if defaults.get(key) != value}
     colors = {
-        "skin": _pick(rng, SKIN_COLORS if animal == "human" else FUR_COLORS), "clothes": _pick(rng, CLOTHES_COLORS),
-        "hair": _pick(rng, HAIR_COLORS), "accessory": _pick(rng, ACCESSORY_COLORS), "trim": _pick(rng, TRIM_COLORS),
+        "skin": _pick(rng, SKIN_COLORS if animal == "human" else SPECIES_COLORS.get(animal, FUR_COLORS)), "clothes": _pick(rng, CLOTHES_COLORS),
+        "hair": _pick(rng, SHELL_COLORS if animal == "turtle" else HAIR_COLORS), "accessory": _pick(rng, ACCESSORY_COLORS),
+        "trim": _pick(rng, TRIM_COLORS),
     }
     return {"look": look, "colors": colors, "voice_kind": kind}
 

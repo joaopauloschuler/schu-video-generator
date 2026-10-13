@@ -123,7 +123,8 @@ def write_looks_png(
     """Draw each generated character of ``entries`` from the side and from the front, side by
     side, with its name below, in rows of ``columns`` characters on the theme background, and
     write the PNG to ``path`` (folders are created; 64 colours, small enough for the docs). The
-    look gallery of DESIGN.md §69.47."""
+    look gallery of DESIGN.md §69.47. A figure reaching past its character's cell (a long tail)
+    is moved back inside it."""
     from manim import Camera, Text, VGroup, tempconfig
 
     from vidgen.cartoon.character import build_character
@@ -145,6 +146,9 @@ def write_looks_png(
                 figure = build_character(entry.model_copy(update={"idle": False}), theme=theme, height=0.72 * unit_h, facing=facing)
                 x = -frame_width / 2 + (2 * column + view + 0.5) * unit_w
                 figure.shift([x, ground, 0.0] - figure.feet())
+                cell_left = -frame_width / 2 + 2 * column * unit_w + 0.03 * unit_w
+                cell_right = cell_left + 1.94 * unit_w
+                figure.shift([max(0.0, cell_left - figure.get_left()[0]) - max(0.0, figure.get_right()[0] - cell_right), 0.0, 0.0])
                 cells.add(figure)
             label = Text(entry.name, font=theme.font, font_size=0.075 * unit_h * 72, color=theme.color("text"))
             label.move_to([-frame_width / 2 + (2 * column + 1) * unit_w, top - 0.92 * unit_h, 0.0])

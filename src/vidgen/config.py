@@ -294,10 +294,12 @@ Outfit = Literal["plain", "dress", "overalls", "coat", "shorts", "apron"]
 ClothesPattern = Literal["none", "stripes", "dots"]
 ShoeStyle = Literal["none", "shoes", "boots"]
 FacialHair = Literal["none", "moustache", "beard"]
-Species = Literal["human", "cat", "dog", "bird", "bear", "rabbit", "mouse"]
+Species = Literal["human", "cat", "dog", "bird", "bear", "rabbit", "mouse", "fox", "owl", "frog", "turtle", "penguin"]
 #: Look keys an animal (``species`` other than ``human``) draws its own way, so they are not
 #: given with it (DESIGN.md §69.48).
 SPECIES_OWN_KEYS: tuple[str, ...] = ("ears", "nose", "facial_hair")
+#: Animals drawn without a ``tail`` part (DESIGN.md §69.57).
+SPECIES_WITHOUT_TAIL: frozenset[str] = frozenset({"frog"})
 #: Accessories worn on the head: they make the optional ``accessory`` part (DESIGN.md §69.1).
 HEAD_ACCESSORIES: frozenset[str] = frozenset({"glasses", "hat", "bow", "cap"})
 #: Outfits with a skirt or coat tails hanging from the body: their ``body`` part has a second
@@ -338,7 +340,7 @@ class CharacterLook(_Strict):
     facial_hair: FacialHair = "none"
     """none, moustache or beard (with a moustache; colour: colors.hair; hair: none for bald)."""
     species: Species = "human"
-    """human, or an original animal: cat, dog, bird, bear, rabbit, mouse (its own head, ears, muzzle or beak, paws or wings, and a tail; fur colour: colors.skin)."""
+    """human, or an original animal: cat, dog, bird, bear, rabbit, mouse, fox, owl, frog, turtle, penguin (its own head, ears, muzzle or beak, paws, wings or flippers, a tail but a frog's, a turtle's shell; fur colour: colors.skin, a shell: colors.hair)."""
     seed: int | None = None
     """A number that varies the proportions a little (same seed, same figure); none: no variation."""
     svg: str | None = Field(default=None, min_length=1)

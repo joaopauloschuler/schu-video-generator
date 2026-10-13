@@ -8,8 +8,8 @@ to the right and the nose points right. The front view (``front=True``, DESIGN.m
 the same parts and shapes with the face in the middle of the head, the pupils looking ahead, a
 symmetric nose, hair and body, and temples on both sides of glasses. What is worn on the body
 (the outfit, its pattern, shoes, scarf, bag, backpack, necklace) is drawn by
-:mod:`vidgen.cartoon.clothes`; an animal's head, paws or wings, a bird's feet and the tail
-(``species``) by :mod:`vidgen.cartoon.animals`.
+:mod:`vidgen.cartoon.clothes`; an animal's head, paws, wings or flippers, its feet, the tail,
+a turtle's shell and the species' proportions (``species``) by :mod:`vidgen.cartoon.animals`.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ from vidgen.cartoon.primitives import (
     polygon,
     trailing,
 )
-from vidgen.config import CharacterLook
+from vidgen.config import SPECIES_WITHOUT_TAIL, CharacterLook
 
 #: Colour keys :func:`generate_parts` needs (the fields of ``characters[].colors``).
 COLOR_KEYS: tuple[str, ...] = ("skin", "clothes", "outline", "features", "hair", "accessory", "trim")
@@ -87,6 +87,9 @@ def resolve_proportions(look: CharacterLook) -> Proportions:
     )
     if look.proportions != "adult":
         base = replace(base, **{name: getattr(base, name) * factor for name, factor in PROPORTION_FACTORS[look.proportions].items()})
+    species = animals.proportion_factors(look)
+    if species:
+        base = replace(base, **{name: getattr(base, name) * factor for name, factor in species.items()})
     if look.seed is None:
         return base
     rng = random.Random(look.seed)  # random() (unlike uniform()) is promised the same sequence in every Python version
@@ -179,10 +182,12 @@ def _legs(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> list
     parts = []
     for name, side in (("leg_left", 1.0), ("leg_right", -1.0)):
         parts.append(CharacterPart(name, {"default": VGroup(_segment(side * x, hip, knee, thigh_color, c, w))}, (side * x, hip)))
-        if look.species == "bird" and shin_color == c["skin"]:   # bare: a bird's thin shin and toes
+        if look.species in animals.WINGED and shin_color == c["skin"]:   # bare: a bird's thin shin and toes
             shin = VGroup(*animals.bird_shin(look, side * x, knee, f.front, c, w), *shoe(look, side * x, f.front, c, w))
         else:
             shin = VGroup(_segment(side * x, knee, foot, shin_color, c, w), *shoe(look, side * x, f.front, c, w))
+        if look.species in ("frog", "penguin"):
+            shin.add(*animals.flat_foot(look, side * x, f.front, c, w))
         parts.append(CharacterPart(f"{name}_lower", {"default": shin}, (side * x, knee), end=(side * x, 0.0)))
     return parts
 
@@ -195,8 +200,10 @@ def _arm(name: str, side: float, look: CharacterLook, f: Frame, c: Mapping[str, 
     top, wrist = shoulder_y + 0.02 - LIMB_WIDTH / 2, shoulder_y + 0.02 - p.arm_length
     elbow = (top + wrist) / 2
     upper_color, lower_color, _, _ = limb_colors(look, c)
-    if look.species == "bird":   # a wing, whatever the sleeves (§69.48)
+    if look.species in animals.WINGED:   # a wing, whatever the sleeves (§69.48)
         upper, lower = animals.wing(x, top, elbow, wrist, c, w)
+    elif look.species == "penguin":   # a flipper, whatever the sleeves (§69.57)
+        upper, lower = animals.flipper(x, top, elbow, wrist, c, w)
     else:
         upper = VGroup(_segment(x, top, elbow, upper_color, c, w))
         hand = animals.paw(x, wrist, c, w) if animals.is_animal(look) else outlined(Circle(radius=0.045).move_to([x, wrist, 0]), c["skin"], c["outline"], w)
@@ -368,7 +375,7 @@ def _face(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> list
     open_eyes = VGroup(*(_open_eye(look, x, f, c, w) for x in xs))
     closed_y = f.eye_y - (0 if look.eyes == "sleepy" else 0.025 * r)
     closed_eyes = VGroup(*(Line([x - width * 0.6, closed_y, 0], [x + width * 0.6, closed_y, 0]).set_stroke(c["features"], width=w) for x in xs))
-    brow_y = f.eye_y + height / 2 + 0.16 * r
+    brow_y = f.eye_y + height / 2 + animals.BROW_GAPS.get(look.species, 0.16) * r
 
     def brows(back_left: float, back_right: float, front_left: float, front_right: float) -> VGroup:
         """Two brow lines; the arguments are each end's height (× r) above ``brow_y``."""
@@ -397,8 +404,8 @@ def _face(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> list
         "M": closed, "F": opening(1.3, 0.08), "L": opening(1.2, 0.28), "W": opening(0.45, 0.18),
     }
     mouth = CharacterPart("mouth", {"smile": smile, "open": opening(1.5, 0.35), **speech}, (mx, my - 0.4 * mr))
-    if look.species == "bird":   # it talks with its beak
-        shapes, hinge = animals.beak_mouth(f, c, w)
+    if look.species in animals.BEAKED:   # it talks with its beak
+        shapes, hinge = animals.beak_mouth(look.species, f, c, w)
         mouth = CharacterPart("mouth", shapes, hinge)
     return [
         CharacterPart("eyes", {"open": open_eyes, "closed": closed_eyes}, (fx, f.eye_y)),
@@ -473,11 +480,15 @@ def generate_parts(
     feature lines (the :class:`Character` scales it with its height); ``front``: its front view,
     the same parts and shapes seen from the front (DESIGN.md §69.44). The same look always gives
     the same shapes."""
-    f = Frame.of(resolve_proportions(look), front)
+    f = animals.species_frame(look, Frame.of(resolve_proportions(look), front))
     w = outline_width
+    body = body_shapes(look, f, _body_shape(look, f), colors, w)
+    if look.species == "turtle":   # its shell on its back, behind the body and clothes
+        for shape in body.values():
+            shape.add_to_back(animals.shell(f, colors, w))
     parts = [
         *_legs(look, f, colors, w),
-        CharacterPart("body", body_shapes(look, f, _body_shape(look, f), colors, w), (0.0, f.body_bottom + 0.02)),
+        CharacterPart("body", body, (0.0, f.body_bottom + 0.02)),
         *_arm("arm_left", 1.0, look, f, colors, w),
         *_arm("arm_right", -1.0, look, f, colors, w),
         CharacterPart("head", {"default": _head(look, f, colors, w)}, (0.0, f.body_top - 0.02)),
@@ -486,7 +497,7 @@ def generate_parts(
     worn = _worn_on_head(look, f, colors, w)
     if worn.submobjects:
         parts.append(CharacterPart("accessory", {"default": worn}, (f.head_x, f.head_y)))
-    if animals.is_animal(look):
+    if animals.is_animal(look) and look.species not in SPECIES_WITHOUT_TAIL:
         parts.append(animals.tail_part(look, f, colors, w))
     return _scaled_to_unit_height(parts)
 

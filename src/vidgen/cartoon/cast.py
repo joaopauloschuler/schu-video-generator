@@ -20,6 +20,7 @@ from vidgen.config import (
     HEAD_ACCESSORIES,
     SEATED_BODY_SHAPE,
     SKIRTED_OUTFITS,
+    SPECIES_WITHOUT_TAIL,
     BeatConfig,
     CharacterEntry,
     PartPoseEntry,
@@ -183,7 +184,7 @@ def character_look_warnings(config: VideoConfig, root: Path) -> list[str]:
 
 
 #: Shape names of a generated character's parts (``cartoon/generator.py``); the first is the rest
-#: shape. A head accessory adds ``accessory``, an animal (``species``) a ``tail``.
+#: shape. A head accessory adds ``accessory``, an animal (``species``) a ``tail`` (not a frog).
 GENERATED_SHAPES: dict[str, list[str]] = {
     "body": ["default"], "leg_left": ["default"], "leg_left_lower": ["default"], "leg_right": ["default"],
     "leg_right_lower": ["default"], "arm_left": ["default"], "arm_left_lower": ["default"], "arm_right": ["default"],
@@ -204,7 +205,7 @@ def character_part_shapes(entry: CharacterEntry, root: Path) -> dict[str, list[s
         shapes["accessory"] = ["default"]
     if entry.look.outfit in SKIRTED_OUTFITS:
         shapes["body"].append(SEATED_BODY_SHAPE)
-    if entry.look.species != "human":
+    if entry.look.species != "human" and entry.look.species not in SPECIES_WITHOUT_TAIL:
         shapes["tail"] = ["default"]
     return shapes
 

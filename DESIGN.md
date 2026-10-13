@@ -8892,6 +8892,57 @@ where no token fits every theme: `CANDLE_FLAME`, `LIGHT_FLAME`, `PAPER`, `PAGE_T
   by a character that turned pours the way its spout points. Tests:
   `tests/test_cartoon_small_props.py`.
 
+### 69.57 More animals: fox, owl, frog, turtle, penguin (Step 123)
+
+`config.Species` gains `fox`, `owl`, `frog`, `turtle`, `penguin`: generic animals from the same
+primitives in the look's colours, no feature or colour combination taken from a known character
+(no mask or bandana on a turtle, no hat or glasses on the owl by default, no signature outfit). The
+§69.48 rules hold (`SPECIES_OWN_KEYS`, svg error, clothes, hair, accessories).
+
+- **Drawing** (`cartoon/animals.py`): `HEAD_SHAPES` for each; `SPECIES_PROPORTIONS` multiplies
+  `Proportions` fields after `proportions` and before the seed (frog `leg_length` 1.3 and
+  `mouth_width` 2.2; owl `eye_size` 1.4 and `eye_gap` 1.2; penguin `leg_length` 0.6,
+  `arm_length` 0.85, `body_width` 1.08; turtle `leg_length` 0.85, `head_radius` 0.92). A **fox**:
+  tall pointed ears lined with `fur_tint`, from the side a snout grown out of the head (filled over
+  the head's outline, only its ridge and underside stroked) with a light jaw and a dark nose at the
+  tip, from the front cheek ruffs and a light muzzle; a bushy tail (`FOX_TAIL`, the new
+  `tapered_band(profile=...)` widest in its middle) with a `patch_tint` tip. An **owl**: two tufts
+  of two slim feathers (`fur_shade`, trailing `pointy`), light discs round its big eyes, the
+  `wing` arms and bare `bird_shin`s of a bird (`WINGED`), a short fan of tail feathers. A **frog**:
+  a wide flat head lowered onto the shoulders and the eyes `FROG_EYE_RISE` 0.6 head radii up in
+  bulges drawn behind the head (`species_frame` replaces the `Frame`'s `head_y` and `eye_y`;
+  brows on the bulges, `BROW_GAPS`), nostrils, a wide mouth, `flat_foot` with toe pads, no tail
+  (`config.SPECIES_WITHOUT_TAIL`, also in `cast.character_part_shapes`). A **turtle**: a light
+  chin, nostrils, a short pointed tail rooted behind the shell, and a `shell` (`colors.hair`)
+  added at the back of every `body` shape: from the side a dome bulging out behind the back over
+  a `fur_tint` rim with plate lines in `fur_shade`, from the front its rim round the body. A
+  **penguin**: a `patch_tint` face patch, `flipper` arms (skin colour whatever the sleeves), short
+  legs with `BEAK_COLOR` flat feet (none with shoes), one stubby tail feather.
+- **Beaks**: `BEAKS` gives each beaked species (`BEAKED`: bird, owl, penguin) its side hinge,
+  half height and length and its front seam, half height and half width; `beak_mouth(species,
+  ...)` scales the front openings by the beak's size against the bird's (the bird's numbers are
+  the old ones exactly). Mouth places for fox, frog and turtle are in `MOUTH_PLACES` /
+  `FRONT_MOUTH_PLACES`.
+- **Moving** (`cartoon/acting.py`): `SpeciesMotion(gait, speed, jump)` and `SPECIES_MOTIONS`
+  (turtle: short slow steps, speed 0.4; penguin: `Gait(stride 0.55, swing 0.45, ...,
+  waddle 9)`, speed 0.7; frog: jump 1.8); every other species and a person use `PERSON_MOTION`.
+  `build_character` sets `Character.species_motion`. `Walk` walks `species_motion.walking(gait)`
+  (a plain walk becomes the species' walk; a run keeps `RUNNING` with the waddle), so its
+  `step_length` and footsteps follow. `Gait.waddle` puts `WalkCycle.rock` (`waddle × swing ×
+  amplitude`) on the cycle; `walking_state` rocks the body by it (`SIDE_ROCK` 0.5 of it from the
+  side) and turns the legs back so they stay upright. The moving actions use the species factor
+  only when the YAML gives no `speed` (`model_fields_set`), and `jump` only when it gives no
+  `height`. The screenplay still plans walk times at a person's speed.
+- **Contrast** (§69.49): `species_difference` counts two species of one `SPECIES_FAMILIES` family
+  (bird / owl / penguin, cat / fox) 0.5 apart instead of 1; a turtle's hair colour is compared even
+  without hair (its shell). `random_cast` draws fur from `SPECIES_COLORS` for the new species and a
+  turtle's hair from `SHELL_COLORS` (the other species and humans get the same picks as before).
+- **Gallery**: `write_looks_png` moves a figure back inside its character's cell (a long tail is
+  no longer cut); `docs/gallery/media/more_animals.png` (720×420, 25 KB) shows the five side and
+  front, in CONFIG.md "Animal characters". `animals.png` is unchanged.
+- Step 114's six species and every human look draw exactly as before (digests pinned in
+  `tests/test_cartoon_animals.py`). Tests: `tests/test_cartoon_more_animals.py`.
+
 ## 70. Render jobs: `--jobs auto` (Step 117)
 
 - **Formula** (`vidgen/render/jobs.py`, `jobs_for(available_bytes, cores, per_job_bytes)`):
