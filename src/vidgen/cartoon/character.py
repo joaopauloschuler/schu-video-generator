@@ -34,7 +34,7 @@ from vidgen.cartoon.motion import DEFAULT_MOTION, motion_strength, resolve_motio
 from vidgen.cartoon.poses import KINDS, PoseTable, chosen_shape, find_entry, kind_parts, merged_table
 from vidgen.cartoon.seating import LEAN_DEGREES, SEATED_LEGS_DEGREES, seated_sole
 from vidgen.cartoon.visemes import VISEME_SHAPES, VISEMES, VisemeTrack
-from vidgen.config import CharacterEntry, CharacterLook, PartPoseEntry
+from vidgen.config import SEATED_BODY_SHAPE, CharacterEntry, CharacterLook, PartPoseEntry
 from vidgen.errors import VidgenError
 from vidgen.helpers import resolve_color
 from vidgen.theme import Theme
@@ -80,6 +80,10 @@ _ANCHOR_SIDE = 0.05
 #: ``(pivot x, pivot y, weight)`` in the part's character units (the generator sets it on a
 #: scarf's end, long hair, a bun, pointy or floppy ears and a hat).
 TRAIL_ATTRIBUTE = "wind_trail"
+#: The attribute marking a member of the ``head`` part as hair beyond the head (an afro, a
+#: ponytail, braids, a beard; DESIGN.md §69.47): the effect symbols size and place themselves by
+#: the head without it and go above its top (:func:`~vidgen.cartoon.effect_symbols.head_box`).
+OUTER_HAIR_ATTRIBUTE = "outer_hair"
 
 
 @dataclass(frozen=True)
@@ -708,12 +712,14 @@ class Character(VGroup):
         seat; single legs with the thighs forward and the shins down to the ground
         (:func:`~vidgen.cartoon.seating.seated_sole`); a one-piece ``legs`` part turned forward
         until its feet rest on the ground, or on a seat higher than the legs are long held out
-        (:data:`~vidgen.cartoon.seating.SEATED_LEGS_DEGREES`). Not drawn."""
+        (:data:`~vidgen.cartoon.seating.SEATED_LEGS_DEGREES`); the body's ``seated`` shape when it
+        has one (:data:`~vidgen.config.SEATED_BODY_SHAPE`, DESIGN.md §69.47). Not drawn."""
         parts = dict(state.parts)
         body = parts["body"]
         hips = self._hips_y(self._world({**self._poses, **parts}), parts)
         bottom = self.part_box("body", state)[1] if hips is None else hips
-        parts["body"] = replace(body, shift=(body.shift[0], body.shift[1] + seat - bottom))
+        shape = SEATED_BODY_SHAPE if SEATED_BODY_SHAPE in self._shapes["body"] else body.shape   # a skirt over the lap
+        parts["body"] = replace(body, shift=(body.shift[0], body.shift[1] + seat - bottom), shape=shape)
         world = self._world({**self._poses, **parts})
         if "legs" in self._pivots:
             pivot = self._pivots["legs"]

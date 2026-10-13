@@ -137,6 +137,19 @@ LOOKS: tuple[dict[str, Any], ...] = (
      "colors": {"skin": "#FFE0BD", "clothes": "secondary", "hair": "#B5532E", "accessory": "tertiary"}, "voice_kind": "feminine"},
     {"look": {"body": "tall", "head_size": 1.1, "eyes": "round", "nose": "dot", "hair": "none", "ears": "round", "accessories": ["hat", "bag"]},
      "colors": {"skin": "#D9A3E0", "clothes": "#5B6C8F", "accessory": "highlight"}, "voice_kind": "masculine"},
+    # since Step 113: outfits, patterns, shoes, more hair and accessories (DESIGN.md §69.47)
+    {"look": {"body": "pear", "head_size": 1.05, "eyes": "oval", "hair": "ponytail", "outfit": "dress", "pattern": "dots", "shoes": "shoes",
+              "accessories": ["necklace"]},
+     "colors": {"skin": "#E8B48A", "clothes": "accent", "hair": "#3B2A1E", "accessory": "highlight"}, "voice_kind": "feminine"},
+    {"look": {"body": "triangle", "eyes": "dot", "nose": "round", "hair": "none", "facial_hair": "beard", "outfit": "coat", "shoes": "boots",
+              "accessories": ["cap"]},
+     "colors": {"skin": "#C68B59", "clothes": "#7A5C3E", "hair": "#4A3426", "accessory": "highlight", "trim": "dim"}, "voice_kind": "masculine"},
+    {"look": {"body": "bean", "head_size": 1.2, "eyes": "round", "hair": "afro", "outfit": "overalls", "pattern": "stripes", "accessories": ["backpack"]},
+     "colors": {"skin": "#6B4429", "clothes": "primary", "hair": "#1E1A17", "accessory": "secondary", "trim": "highlight"}, "voice_kind": "neutral"},
+    {"look": {"body": "square", "eyes": "sleepy", "nose": "triangle", "hair": "braids", "outfit": "apron", "shoes": "shoes", "accessories": ["bow"]},
+     "colors": {"skin": "#F5D0B5", "clothes": "tertiary", "hair": "#B5532E", "accessory": "highlight", "trim": "#E7E1D5"}, "voice_kind": "feminine"},
+    {"look": {"body": "round", "eyes": "oval", "hair": "short", "facial_hair": "moustache", "outfit": "shorts", "pattern": "stripes", "shoes": "shoes"},
+     "colors": {"skin": "#A7C7E7", "clothes": "secondary", "hair": "#2B2B2B", "accessory": "accent", "trim": "dim"}, "voice_kind": "masculine"},
 )
 
 _HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")

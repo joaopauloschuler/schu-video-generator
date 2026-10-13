@@ -757,9 +757,13 @@ the chart. Keep it small: 2–3 characters, one set per scene, 30–90 s.
 brand figure or logo: not its silhouette and colours, its name or catchphrase, an SVG traced
 from it, nor "in the style of" a studio in a `generate:` prompt or `cartoon_style`. If someone
 asks for one, say vidgen makes original characters and offer one with the same role.
-- Tell them apart at a glance: a different `body` (`round` vs `tall`), one signature item each
-  (`hat`, `scarf`, `glasses`, `bag`), clothes in different theme tokens. A good test: would
-  the two silhouettes, filled black, still differ?
+- Tell them apart at a glance: a different `body` (`round`, `tall`, `pear`, `triangle`...),
+  hair (`ponytail`, `braids`, `afro`, or bald with `facial_hair: beard`), one signature item
+  each (`hat`, `cap`, `bow`, `scarf`, `glasses`, `backpack`...), an `outfit` (`dress`,
+  `overalls`, `coat`, `shorts`, `apron`; second colour `colors.trim`) in different theme tokens,
+  maybe a `pattern` (`stripes`, `dots`) or `shoes`. A good test: would the two silhouettes,
+  filled black, still differ? A child: `proportions: kid` (or `tall_kid`) and a smaller `scale`
+  on the stage (about 0.7). `vidgen character-sheet` shows every pose and the front view.
 - Give each a want and a temper (the eager one, the doubter); their starting `pose` and
   `expression` say it before they speak. Short names, easy to say (the voice says them).
 - One voice each (`voices:` + `characters[].voice`), clearly different; keep the narrator's

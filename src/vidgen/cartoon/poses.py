@@ -15,7 +15,7 @@ import difflib
 from collections.abc import Iterable, Mapping
 from typing import get_args
 
-from vidgen.config import ExpressionPart, PartPoseEntry, PosePart
+from vidgen.config import SEATED_BODY_SHAPE, ExpressionPart, PartPoseEntry, PosePart
 from vidgen.errors import VidgenError
 
 #: Parts a pose sets.
@@ -51,7 +51,7 @@ POSES: dict[str, dict[str, PartPoseEntry]] = {
         arm_left={"angle": -15}, arm_left_lower={"angle": -80}, arm_right={"angle": 15}, arm_right_lower={"angle": 80},
     ),
     "sitting": _p(
-        body={"shift": [0, -0.1]}, legs={"angle": 80},
+        body={"shift": [0, -0.1], "shape": SEATED_BODY_SHAPE}, legs={"angle": 80},
         leg_left={"angle": 80}, leg_left_lower={"angle": -35}, leg_right={"angle": 75}, leg_right_lower={"angle": -35},
     ),
 }

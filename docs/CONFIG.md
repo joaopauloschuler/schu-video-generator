@@ -1104,28 +1104,45 @@ rectangles, polygons, lines), so each figure is an original drawing:
 
 | key (`look`) | default | |
 |---|---|---|
-| `body` | `round` | body shape: `round`, `tall`, `square`, `bean` |
+| `body` | `round` | body shape: `round`, `tall`, `square`, `bean`, `pear` (narrow shoulders, wide hips), `triangle` (broad shoulders) |
 | `head_size` | `1.0` | head size relative to the default head, 0.6 to 1.6 |
 | `eyes` | `dot` | `dot`, `oval` or `round` (white with a pupil), `sleepy` (half closed) |
 | `nose` | `none` | `none`, `dot`, `round`, `triangle` |
-| `hair` | `none` | `none`, `short`, `spiky`, `long`, `bun`, `curly` (colour `colors.hair`) |
+| `hair` | `none` | `none` (bald), `short`, `spiky`, `long`, `bun`, `curly`, `ponytail`, `braids`, `afro` (colour `colors.hair`) |
 | `ears` | `none` | `none`, `round`, `pointy`, `floppy` (skin colour); with or without hair |
-| `accessories` | `[]` | any of `glasses`, `hat` (worn on the head), `scarf`, `bag` (on the body); each at most once |
+| `facial_hair` | `none` | `none`, `moustache`, `beard` (with a moustache; the mouth stays seen); colour `colors.hair` |
+| `accessories` | `[]` | any of `glasses`, `hat`, `cap`, `bow` (worn on the head), `scarf`, `bag`, `backpack`, `necklace` (on the body); each at most once, not `hat` and `cap` together |
+| `proportions` | `adult` | `adult`, `kid` (a big head on a short body and legs), `tall_kid` (lankier, a smaller head than a kid's); the figure is as tall as any other, so make a kid smaller with the stage's `scale` (about 0.7 for a `kid`, 0.85 for a `tall_kid`) |
+| `outfit` | `plain` | what it wears: `plain` (one colour all over), `dress` (short sleeves, a skirt), `overalls` (over a shirt in `colors.trim`), `coat` (long sleeves, tails, trousers in `trim`), `shorts` (a top, short sleeves, shorts in `trim`), `apron` (in `trim`, over plain clothes) |
+| `pattern` | `none` | `none`, `stripes`, `dots` on the clothes of the body (and a skirt), in a darker tone of a light cloth or a lighter tone of a dark one |
+| `shoes` | `none` | `none`, `shoes`, `boots` (colour `colors.accessory`) |
 | `seed` | none | a number that varies the proportions (head, body, legs, arms, eye gap and size, mouth) by up to 8 %; the same look and seed always give the same figure; none: no variation |
 | `svg` | none | an SVG file (relative to the project folder) drawn instead of the generator, split into parts by element ids ([below](#characters-from-svg-files)); the other `look` keys and `colors` do not apply |
 
 | key (`colors`) | default | |
 |---|---|---|
 | `skin` | `secondary` | head, ears, a `round` / `triangle` nose and hands (skin or fur) |
-| `clothes` | `primary` | body, arms and legs (and the hat band) |
+| `clothes` | `primary` | body, arms and legs (and the hat band); with an `outfit`, the outfit's main cloth |
 | `outline` | `"#1F2430"` | outline of every part, and the glasses |
 | `features` | `"#1F2430"` | eyes, brows, mouth and a `dot` nose |
-| `hair` | `accent` | hair |
-| `accessory` | `highlight` | hat, scarf and bag |
+| `hair` | `accent` | hair, moustache and beard |
+| `accessory` | `highlight` | hat, cap, bow, scarf, bag, backpack, necklace and shoes |
+| `trim` | `dim` | the outfit's second cloth: the shirt under `overalls`, the trousers under a `coat`, the `shorts`, the `apron` |
 
 `outline` and `features` default to a fixed dark ink, not a theme token: no token is dark in every
 theme preset. The outline width follows the character's size on screen (about 0.5 % of the
 frame's shorter side for a character 3/8 of it tall), and is never thinner than one pixel.
+
+**Clothes follow the limbs**: sleeves are drawn on the arm segments (a `dress` or `shorts` has
+short sleeves: bare forearms), trouser legs on the leg segments (`shorts` cover the thighs), shoes
+on the shins, so they bend at the elbow and knee with them. A `dress`'s skirt and a `coat`'s tails
+hang from the body, so the legs walk under them; when the character sits (`sit_on`, or the
+`sitting` pose) the body shows its `seated` shape, the cloth lying over the lap. Hanging hair and
+accessories trail in the [wind](#wind-wind) (a ponytail, braids, a cap, a necklace's pendant, as long
+hair, a bun, the scarf and the hat do). [Effect symbols](#effect-symbols-effect) go by the head,
+not by an afro or a beard round it, and above an afro, a hat or a cap.
+
+![The looks vidgen screenplay gives, and a kid, from the side and the front](gallery/media/looks.png)
 
 **A quick look**: `vidgen character NAME` prints the character's look and colours (each token
 with the colour it resolves to); `--png [FILE]` also writes one still of it on the theme
@@ -1135,11 +1152,12 @@ background, in the video's aspect ratio with its shorter side 720 px (default fi
 
 **Character sheet**: `vidgen character-sheet [NAME] [PROJECT]` draws every pose (the whole
 figure, rest face), every expression and every mouth shape (close-ups of the head) of a
-character on one labelled PNG, facing right, on the theme background:
+character on one labelled PNG, facing right, on the theme background, and last a generated
+character's front view (section kind `view`):
 `exports/character_sheet_<name>.png` (`--output FILE` with a NAME). Without NAME it writes one
 sheet per character; `--all PROJECT` does that for a project in another folder. The character's
 own poses and expressions are marked `*`. Rows hold up to 8 cells of 128 px, so a generated
-character's sheet is 1148 x 858 px and about 35 KB (a 64-colour PNG), readable as it is by an AI
+character's sheet is 1148 x 1082 px and about 35 to 45 KB (a 64-colour PNG), readable as it is by an AI
 agent's image viewer. `--variant NAME`, `--json` (below); over MCP the `character_sheet` tool
 returns the sheets as pictures. Use it to check a character before writing its scenes.
 
@@ -4150,7 +4168,7 @@ never leaves the stage.
 | `particles` | list | `[]` | [particles](#particles) over the whole scene, in front of everything: a kind (`snow`), or `{kind, density, area, color, seed, puddles}`; rain ends on the ground ([Rain on the ground](#rain-on-the-ground)) |
 | `light` | `day` \| `morning` \| `sunset` \| `night` \| `indoor` \| `{tint, strength}` | `day` | the [light](#light-and-shadows-light-shadows) on the set: a colour grade of the background, layers, props and characters (never of speech bubbles or text); `night` adds stars; the `light` action changes it during the scene |
 | `shadows` | bool | `true` | soft [shadows](#light-and-shadows-light-shadows) on the ground under the characters and the props standing on it; `false`: none |
-| `wind` | number -1..1 \| `calm` \| `breeze` \| `windy` \| `gale` | `0` | [wind](#wind-wind) in gusts: trees, bushes, plants, signs and lamps sway, scarves, long hair, floppy or pointy ears and hats trail, particles drift (`0.3` breeze .. `1` gale, blowing right; negative blows left); `0` changes nothing; the `wind` action changes it during the scene; `blow_away` blows a light prop away |
+| `wind` | number -1..1 \| `calm` \| `breeze` \| `windy` \| `gale` | `0` | [wind](#wind-wind) in gusts: trees, bushes, plants, signs and lamps sway, scarves, long hair, ponytails, braids, floppy or pointy ears, hats and caps trail, particles drift (`0.3` breeze .. `1` gale, blowing right; negative blows left); `0` changes nothing; the `wind` action changes it during the scene; `blow_away` blows a light prop away |
 | `room` | `true` \| mapping | none | an [indoor set](#rooms-room) instead of the sky and the ground band: a back wall, a floor, a skirting board, an optional ceiling, windows (their sky follows `light`) and doors (door props whose names are marks; `enter` / `exit` through them); not with `image`, `generate`, `background`, `ground_color`, `wind` or outdoor particles |
 
 | key (`characters[]`) | default | |
@@ -5005,9 +5023,10 @@ GUS (glad): There it is! [jumps] I left my song in that crate.
 - **Characters**: a character listed in the front matter's `characters:` is kept as written (a
   `voice_kind: feminine | masculine | neutral` key there states its voice kind and is left out of
   `video.yaml`; a declared character without a `voice` gets one of that kind); every other
-  speaker gets a generated look from a set of six that differ in body, hair, eyes, accessories
-  and colours (`# generated:` above `characters:`) and a named voice `NAME_voice` with its
-  `label`. Each look has a voice kind (two feminine, two masculine, two neutral); a character
+  speaker gets a generated look from a set of eleven that differ in body, hair, eyes,
+  accessories, clothes and colours (`# generated:` above `characters:`; the
+  [gallery](#characters-characters) shows them) and a named voice `NAME_voice` with its `label`. Each look
+  has a voice kind (four feminine, four masculine, three neutral); a character
   with a stated kind gets a look of that kind (then a neutral one), and its voice is of the
   look's kind (or the stated one), so the voice suits the look. Kokoro: a feminine character
   gets an `af_` / `bf_` voice, a masculine one `am_` / `bm_`, a neutral one the gender used less
@@ -6869,7 +6888,7 @@ The same document for a dry run (`--dry-run`, no key needed) and a run (DESIGN.m
 |---|---|---|
 | `project`, `variant` | str \| null | |
 | `elapsed` | float | seconds |
-| `sheets` | list | one per character drawn, in `characters:` order: `{character, path, width, height, bytes, sections}`; `sections` lists `{kind, names, own}` in sheet order: `kind` `pose`, `expression` or `mouth` (mouth shapes; absent for a character without a mouth), `names` the cells in order, `own` the character's own poses / expressions among them |
+| `sheets` | list | one per character drawn, in `characters:` order: `{character, path, width, height, bytes, sections}`; `sections` lists `{kind, names, own}` in sheet order: `kind` `pose`, `expression`, `mouth` (mouth shapes; absent for a character without a mouth) or `view` (`names` `[front]`: a generated character's front view, last), `names` the cells in order, `own` the character's own poses / expressions among them |
 
 ### `vidgen direct --json`
 

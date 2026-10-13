@@ -278,15 +278,29 @@ class CharacterColors(_Strict):
     hair: ColorRef = "accent"
     """Hair (look.hair)."""
     accessory: ColorRef = "highlight"
-    """Hat, scarf and bag (look.accessories); glasses use outline."""
+    """Hat, cap, bow, scarf, bag, backpack, necklace (look.accessories) and shoes (look.shoes); glasses use outline."""
+    trim: ColorRef = "dim"
+    """The second clothes colour (look.outfit): trousers under a coat, shorts, the shirt under overalls, an apron."""
 
 
-BodyShape = Literal["round", "tall", "square", "bean"]
+BodyShape = Literal["round", "tall", "square", "bean", "pear", "triangle"]
 EyeStyle = Literal["dot", "oval", "round", "sleepy"]
 NoseStyle = Literal["none", "dot", "round", "triangle"]
-HairStyle = Literal["none", "short", "spiky", "long", "bun", "curly"]
+HairStyle = Literal["none", "short", "spiky", "long", "bun", "curly", "ponytail", "braids", "afro"]
 EarStyle = Literal["none", "round", "pointy", "floppy"]
-Accessory = Literal["glasses", "hat", "scarf", "bag"]
+Accessory = Literal["glasses", "hat", "scarf", "bag", "bow", "cap", "backpack", "necklace"]
+ProportionStyle = Literal["adult", "kid", "tall_kid"]
+Outfit = Literal["plain", "dress", "overalls", "coat", "shorts", "apron"]
+ClothesPattern = Literal["none", "stripes", "dots"]
+ShoeStyle = Literal["none", "shoes", "boots"]
+FacialHair = Literal["none", "moustache", "beard"]
+#: Accessories worn on the head: they make the optional ``accessory`` part (DESIGN.md §69.1).
+HEAD_ACCESSORIES: frozenset[str] = frozenset({"glasses", "hat", "bow", "cap"})
+#: Outfits with a skirt or coat tails hanging from the body: their ``body`` part has a second
+#: shape, ``seated``, the cloth over the lap (DESIGN.md §69.47).
+SKIRTED_OUTFITS: frozenset[str] = frozenset({"dress", "coat"})
+#: The name of that shape: a seated character shows it (``Character.seated``, the ``sitting`` pose).
+SEATED_BODY_SHAPE = "seated"
 
 
 class CharacterLook(_Strict):
@@ -296,7 +310,7 @@ class CharacterLook(_Strict):
     from an SVG file split into parts by element ids instead (§69.2)."""
 
     body: BodyShape = "round"
-    """Body shape: round, tall, square or bean."""
+    """Body shape: round, tall, square, bean, pear (narrow shoulders, wide hips) or triangle (broad shoulders)."""
     head_size: float = Field(1.0, ge=0.6, le=1.6)
     """Head size relative to the default head (0.6 to 1.6)."""
     eyes: EyeStyle = "dot"
@@ -304,11 +318,21 @@ class CharacterLook(_Strict):
     nose: NoseStyle = "none"
     """Nose: none, dot, round or triangle."""
     hair: HairStyle = "none"
-    """Hair: none, short, spiky, long, bun or curly (colour: colors.hair)."""
+    """Hair: none, short, spiky, long, bun, curly, ponytail, braids or afro (colour: colors.hair)."""
     ears: EarStyle = "none"
     """Ears: none, round, pointy or floppy (skin colour)."""
     accessories: list[Accessory] = Field(default_factory=list)
-    """Any of glasses, hat, scarf, bag (each at most once)."""
+    """Any of glasses, hat, scarf, bag, bow, cap, backpack, necklace (each at most once; not hat and cap together)."""
+    proportions: ProportionStyle = "adult"
+    """adult, kid (big head, short body and legs) or tall_kid (lankier); pair a kid with the stage's scale (e.g. 0.7)."""
+    outfit: Outfit = "plain"
+    """plain (one colour), dress, overalls, coat, shorts or apron (second colour: colors.trim)."""
+    pattern: ClothesPattern = "none"
+    """none, stripes or dots on the clothes (a lighter or darker tone of their colour)."""
+    shoes: ShoeStyle = "none"
+    """none, shoes or boots (colour: colors.accessory)."""
+    facial_hair: FacialHair = "none"
+    """none, moustache or beard (with a moustache; colour: colors.hair; hair: none for bald)."""
     seed: int | None = None
     """A number that varies the proportions a little (same seed, same figure); none: no variation."""
     svg: str | None = Field(default=None, min_length=1)
@@ -320,6 +344,8 @@ class CharacterLook(_Strict):
         repeated = sorted({a for a in value if value.count(a) > 1})
         if repeated:
             raise ValueError(f"accessory listed twice: {', '.join(repeated)}")
+        if {"hat", "cap"} <= set(value):
+            raise ValueError("hat and cap are both worn on top of the head: choose one")
         return value
 
     @model_validator(mode="after")
@@ -383,9 +409,9 @@ class CharacterEntry(_Strict):
     voice: Identifier | None = None
     """Who speaks for this character: a name from voices (or default: the base voice); none: the character does not speak."""
     look: CharacterLook = Field(default_factory=CharacterLook)
-    """How the character is drawn: body shape, head size, eyes, nose, hair, ears, accessories, seed; or svg: a file split into parts."""
+    """How the character is drawn: body shape, head size, eyes, nose, hair, ears, accessories, proportions, outfit, pattern, shoes, facial hair, seed; or svg: a file split into parts."""
     colors: CharacterColors = Field(default_factory=CharacterColors)
-    """Part colours {skin, clothes, outline, features, hair, accessory}: theme tokens or hex (not used by an svg look)."""
+    """Part colours {skin, clothes, outline, features, hair, accessory, trim}: theme tokens or hex (not used by an svg look)."""
     poses: dict[Identifier, dict[PosePart, PartPoseEntry]] = Field(default_factory=dict)
     """The character's own poses (name -> part -> {angle, scale, shift, shape}); a built-in name is replaced."""
     expressions: dict[Identifier, dict[ExpressionPart, PartPoseEntry]] = Field(default_factory=dict)

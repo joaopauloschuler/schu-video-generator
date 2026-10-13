@@ -10626,3 +10626,111 @@ How to test
   render` and `vidgen lint` (0 findings) of a 4-scene iris / card project at 320x180, contact
   sheets checked by eye; `vidgen screenplay` on a story with two cards (valid, irises written).
   The full suite was not run.
+
+## Step 113 — More characters, part 1: bodies and clothes
+
+What was built
+- **Look parameters** (`config.CharacterLook`): `body` gains `pear` and `triangle`; `hair` gains
+  `ponytail`, `braids`, `afro`; `accessories` gain `bow`, `cap`, `backpack`, `necklace` (hat and
+  cap together: config error); new `proportions: adult | kid | tall_kid`, `outfit: plain | dress |
+  overalls | coat | shorts | apron`, `pattern: none | stripes | dots`, `shoes: none | shoes |
+  boots`, `facial_hair: none | moustache | beard`. `CharacterColors.trim` (default `dim`): the
+  outfit's second cloth. Constants `HEAD_ACCESSORIES`, `SKIRTED_OUTFITS`, `SEATED_BODY_SHAPE`.
+- **Drawing** (all primitives, a side and a front drawing each): `cartoon/primitives.py` (moved
+  from the generator and made public: `outlined`, `filled`, `point_at`, `arc_points`, `polygon`,
+  `trailing`, `TRAIL_WEIGHTS`; new `outer_hair`, `outline_polygon`, `clip_to_box`, `span_at`,
+  `dot_centres`), `cartoon/clothes.py` (`body_shapes`, `limb_colors`, `shoe`, `pattern_tone`; the
+  bag and scarf moved here unchanged), `cartoon/generator.py` (new bodies, `PROPORTION_FACTORS`,
+  `SHOULDER_SHARES`, hair, facial hair, cap, bow; `_Frame` is now `Frame`).
+- **Clothes on limbs** (Step 92): sleeves and trouser legs colour the upper / lower segments
+  (`limb_colors`), shoes are in the shin group with the sole at 0. **Skirts on the body**: a
+  dress's skirt and a coat's tails hang from `body`; such a body has a second shape `seated` (the
+  cloth as a wedge over the lap), which `Character.seated` (so `sit_on`) and the `sitting` pose
+  (`shape: seated`, falling back to the rest shape for every other character) show.
+- **Seats** (Steps 94 / 102): `Character.seated` already puts the hips on the seat whatever the
+  legs; tested for kid, tall kid, pear and triangle at seats 0.14 and 0.2 (a kid at stage scale 0.7).
+  A kid's figure is still 1 tall; its size on stage is the stage character's `scale`.
+- **Wind** (Steps 72 / 98 / 104): ponytail 0.9, braids 0.6, cap 0.25, a necklace's pendant 0.5
+  trail. **Effect symbols** (Step 107): afro, ponytail, braids and beard are marked
+  `OUTER_HAIR_ATTRIBUTE` (in `character.py`); `head_box` leaves them out, `crown_top` counts the
+  higher of the accessory and them (symbols go above an afro or a cap). Unmarked looks take the
+  old code path. Motion effects (Step 108) need nothing: they go by the character's box.
+- **Sheets and docs**: `vidgen character-sheet` ends with a `view` section (`front`) for
+  generated characters (1148 x 1082 px now); `vidgen character` prints a `wears:` line;
+  `still.write_looks_png` draws looks side and front: `docs/gallery/media/looks.png` (51 KB).
+- **Screenplay** (Step 91): `LOOKS` 6 → 11 (pear + ponytail + dress feminine, triangle + beard +
+  coat + cap masculine, bean + afro + overalls + backpack neutral, square + braids + apron + bow
+  feminine, round + moustache + shorts masculine).
+
+Files touched
+- New: `src/vidgen/cartoon/clothes.py`, `src/vidgen/cartoon/primitives.py`,
+  `tests/test_cartoon_outfits.py`, `docs/gallery/media/looks.png`.
+- `src/vidgen/config.py`, `cartoon/generator.py`, `cartoon/character.py`, `cartoon/cast.py`,
+  `cartoon/poses.py`, `cartoon/effect_symbols.py`, `cartoon/still.py`, `screenplay.py`.
+- Docs: `docs/CONFIG.md` (look and colour tables, clothes paragraph and gallery picture, sheet
+  size and JSON `view` kind, screenplay looks, wind row), `DESIGN.md` (§2 tree, §69.1 note, §69.25
+  looks, new §69.47), `docs/EXTENDING.md` (shape names), guide `cartoons` bullet + `AGENTS.md` copy,
+  `tasklist.md`.
+- Tests updated: `tests/test_cartoon_generator.py` (7 colours, the new look fields in "every value
+  builds", the `wears:` line moves colours to line 4), `tests/test_cartoon_sheet.py` (a generated
+  character's sheet ends with the `view` section), `tests/test_screenplay.py` (a third "she" now
+  gets the new ponytail look instead of the bun again with a seed; five "she"s repeat the bun at
+  the fifth).
+
+Public interfaces
+- No `vidgen.api` change. YAML: the look keys and `colors.trim` above. JSON: character-sheet
+  section kind `view`. Internal: `generator.Frame`, `PROPORTION_FACTORS`, `SHOULDER_SHARES`,
+  `COLOR_KEYS` (+ `trim`), the clothes / primitives modules, `still.write_looks_png`,
+  `WHOLE_FIGURE_KINDS`, `character.OUTER_HAIR_ATTRIBUTE`.
+
+Decisions / deviations
+- `outfit` (not `clothes`): `colors.clothes` already names a colour; `proportions` (not `build`):
+  "build" is the cache folder's word.
+- Kids are not drawn shorter: every figure is 1 tall, so seats, reach, lint and the planner keep
+  one character unit; the stage's existing `scale` makes a kid small (documented: 0.7 / 0.85).
+  No kid is in the screenplay's `LOOKS` for that reason (a screenplay stage has no scale).
+- The skirt is not on the legs (so the legs walk under it and it never splits); seated, the body
+  swaps to the `seated` shape. A pattern is a tone of its cloth (no new colour key); shoes use
+  `colors.accessory`.
+- Searched first: no clothes or polygon-clipping code existed (`git grep -i "stripe\|clip_"
+  src/vidgen/cartoon`: the room's wallpaper stripes and dots, boxes laid on a rectangular wall
+  with no clipping to a shape, and one prop's stripe polygon); reused
+  `relative_luminance` / `hex_rgb` (lint), `interpolate_color`, `seated_sole`, the trailing marks.
+
+Evidence
+- Pinned: the drawing digests of eight earlier looks (the default, the six screenplay looks, one
+  with every accessory and a seed), side and front, are unchanged (taken at 095b596 before any
+  edit). `vidgen character dot --png` (examples/cartoon) and `juno --facing front`
+  (examples/cartoon-rain-check) are byte-identical to HEAD's. The character sheets of dot, moss,
+  pip and juno differ only by the added front view, the subtitle and the 64-colour palette
+  (max 78 levels summed over RGB in the cells above).
+- By eye: three grids of 4 looks (pear dress dots ponytail necklace; triangle coat beard cap
+  boots; bean overalls stripes afro backpack; square apron braids bow; shorts moustache; two kids;
+  a tall kid; dotted coat with braids, hat and scarf; striped dress with a bag; pear apron beard;
+  the default) side, walking, on a chair, sitting pose, front, front walking, front waving; a
+  scratch stage (`windy`, sit_on, walk_to, run_to, turn, idea / question effects) storyboarded at
+  preview: hips on the chair, skirt over the lap, braids and ponytail trailing, symbols above the
+  cap and the kid's head; lint found only the scratch layout's own `off_frame` / `facing_away`.
+
+Known gaps / TODOs
+- Stripes and dots are on the body's cloth and a skirt, not on sleeves or trouser legs.
+- The seated skirt wedge is one shape for every seat height (a kid's level thighs show a little
+  of the wedge below them); from the front the seated skirt is just shorter and wider.
+- Coat lapels from the side are small; the necklace's beads are tiny below about 200 px tall.
+- A kid's default stage size is not automatic (the author sets `scale`).
+
+How to test
+- `pytest tests/test_cartoon_outfits.py` (54 not-render + 3 render, ~22 s).
+- Also run, not render: `test_cartoon_generator test_cartoon_character test_cartoon_sheet
+  test_cartoon_wind test_cartoon_effects test_cartoon_seating test_cartoon_depth
+  test_cartoon_speed test_cartoon_poses test_cartoon_svg test_screenplay` (239 passed, 15 s),
+  `test_docs test_schema test_guide test_config test_api` (191, 67 s), `test_mcp
+  test_json_output test_includes test_phase_i_review test_phase_h_review test_cartoon_furniture
+  test_cartoon_holding test_cartoon_directing test_cartoon_lint test_cartoon_acting
+  test_cartoon_moving test_introspect test_cartoon_idle test_cartoon_visemes` (273, 56 s); render:
+  `test_cartoon_sheet test_cartoon_generator test_cartoon_seating test_cartoon_effects
+  test_cartoon_wind` (8, 10 s), `test_cartoon_depth test_cartoon_character test_cartoon_poses
+  test_screenplay test_phase_h_review` (4, 23 s), `test_cartoon_lint test_cartoon_directing
+  test_cartoon_furniture test_cartoon_holding test_cartoon_acting test_cartoon_moving` (10, 13
+  s), `-k "sheet or character or screenplay"` on `test_mcp test_json_output test_phase_i_review
+  test_includes` (1, 10 s). The full suite was not run.

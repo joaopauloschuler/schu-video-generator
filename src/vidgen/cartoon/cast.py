@@ -16,7 +16,16 @@ from typing import TYPE_CHECKING
 
 from vidgen.cartoon.limbs import UPPER_OF
 from vidgen.cartoon.poses import EXPRESSION_PARTS, POSE_PARTS, chosen_shape, merged_table, unknown_name_message
-from vidgen.config import BeatConfig, CharacterEntry, PartPoseEntry, SceneConfig, VideoConfig
+from vidgen.config import (
+    HEAD_ACCESSORIES,
+    SEATED_BODY_SHAPE,
+    SKIRTED_OUTFITS,
+    BeatConfig,
+    CharacterEntry,
+    PartPoseEntry,
+    SceneConfig,
+    VideoConfig,
+)
 from vidgen.errors import Problem, VidgenError
 from vidgen.theme import Theme
 from vidgen.voices import DEFAULT_VOICE
@@ -84,6 +93,8 @@ def character_lines(entry: CharacterEntry, theme: Theme, root: Path | None = Non
         f"character {entry.name}  (voice: {entry.voice or 'none'})",
         f"  look:   body {look.body}, head_size {look.head_size:g}, eyes {look.eyes}, nose {look.nose}, hair {look.hair}, "
         f"ears {look.ears}, accessories {accessories}, seed {seed}",
+        f"  wears:  proportions {look.proportions}, outfit {look.outfit}, pattern {look.pattern}, shoes {look.shoes}, "
+        f"facial_hair {look.facial_hair}",
         f"  colors: {', '.join(colors)}",
     ]
 
@@ -187,8 +198,10 @@ def character_part_shapes(entry: CharacterEntry, root: Path) -> dict[str, list[s
 
         return read_character_svg(root / entry.look.svg, where=entry.look.svg).part_shapes()
     shapes = {part: list(names) for part, names in GENERATED_SHAPES.items()}
-    if {"glasses", "hat"} & set(entry.look.accessories):
+    if HEAD_ACCESSORIES & set(entry.look.accessories):
         shapes["accessory"] = ["default"]
+    if entry.look.outfit in SKIRTED_OUTFITS:
+        shapes["body"].append(SEATED_BODY_SHAPE)
     return shapes
 
 

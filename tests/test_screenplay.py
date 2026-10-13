@@ -219,8 +219,11 @@ def test_generated_looks_and_voices_suit_each_other() -> None:
     assert LOOKS[1]["look"] == stated["fen"]["look"] and voices["fen_voice"][1] == "m"            # the look follows the stated kind
     assert LOOKS[0]["look"] == stated["bram"]["look"] and voices["bram_voice"][1] == "f"
     many, voices = _cast("# Scene: a\n" + "".join(f"P{k} (she): Hi.\n" for k in range(3)))
-    assert [many[f"p{k}"]["look"].get("hair") for k in range(3)] == ["bun", "long", "bun"] and many["p2"]["look"]["seed"] == 2
+    # Step 113 added two feminine looks (ponytail, braids): a third "she" gets the ponytail, not the bun again
+    assert [many[f"p{k}"]["look"].get("hair") for k in range(3)] == ["bun", "long", "ponytail"] and "seed" not in many["p2"]["look"]
     assert all(v[1] == "f" for v in voices.values()) and len(set(voices.values())) == 3
+    more, _ = _cast("# Scene: a\n" + "".join(f"P{k} (she): Hi.\n" for k in range(5)))
+    assert [more[f"p{k}"]["look"].get("hair") for k in range(5)] == ["bun", "long", "ponytail", "braids", "bun"] and more["p4"]["look"]["seed"] == 4
 
 
 def test_declared_characters_keep_their_entries() -> None:

@@ -15,7 +15,7 @@ from collections.abc import Callable, Sequence
 import numpy as np
 from manim import Mobject, VGroup, VMobject
 
-from vidgen.cartoon.character import OUTLINE_WIDTH, REFERENCE_HEIGHT, Character, one_pixel_stroke
+from vidgen.cartoon.character import OUTER_HAIR_ATTRIBUTE, OUTLINE_WIDTH, REFERENCE_HEIGHT, Character, one_pixel_stroke
 from vidgen.cartoon.effects import (
     EFFECT_STYLES,
     Box,
@@ -50,11 +50,23 @@ def _shape_mobject(shape: EffectShape, color: str, stroke: float) -> VMobject:
     return mob
 
 
+def _head_members(character: Character) -> tuple[list[VMobject], list[VMobject]]:
+    """The drawn members of ``character``'s head part: the head's own, and the hair beyond the
+    head (:data:`~vidgen.cartoon.character.OUTER_HAIR_ATTRIBUTE`: an afro, braids, a beard)."""
+    members = character.parts["head"].family_members_with_points()
+    outer = [m for m in members if getattr(m, OUTER_HAIR_ATTRIBUTE, False)]
+    return [m for m in members if not getattr(m, OUTER_HAIR_ATTRIBUTE, False)], outer
+
+
 def head_box(character: Character) -> Box:
-    """The box ``(left, bottom, right, top)`` of ``character``'s head on screen now; without a
-    ``head`` part, the top 30 % of its box."""
+    """The box ``(left, bottom, right, top)`` of ``character``'s head on screen now (without the
+    hair beyond the head, DESIGN.md §69.47); without a ``head`` part, the top 30 % of its box."""
     if character.has_part("head"):
         head = character.parts["head"]
+        own, outer = _head_members(character)
+        if outer and own:
+            points = np.vstack([m.points for m in own])
+            return (float(points[:, 0].min()), float(points[:, 1].min()), float(points[:, 0].max()), float(points[:, 1].max()))
         return (float(head.get_left()[0]), float(head.get_bottom()[1]), float(head.get_right()[0]), float(head.get_top()[1]))
     x0, x1 = float(character.get_left()[0]), float(character.get_right()[0])
     y0, y1 = float(character.get_bottom()[1]), float(character.get_top()[1])
@@ -62,11 +74,17 @@ def head_box(character: Character) -> Box:
 
 
 def crown_top(character: Character) -> float | None:
-    """The top of ``character``'s ``accessory`` on screen (a hat), ``None`` without one drawn."""
+    """The top of what ``character`` wears on its head on screen: its ``accessory`` (a hat, a
+    cap) or hair beyond the head (an afro), whichever is higher; ``None`` without either drawn."""
+    tops = []
     accessory = character.parts.get("accessory")
-    if accessory is None or not accessory.family_members_with_points():
-        return None
-    return float(accessory.get_top()[1])
+    if accessory is not None and accessory.family_members_with_points():
+        tops.append(float(accessory.get_top()[1]))
+    if character.has_part("head"):
+        outer = _head_members(character)[1]
+        if outer:
+            tops.append(float(np.vstack([m.points for m in outer])[:, 1].max()))
+    return max(tops) if tops else None
 
 
 def eye_point(character: Character) -> tuple[float, float] | None:

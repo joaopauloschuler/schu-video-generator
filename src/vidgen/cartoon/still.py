@@ -117,6 +117,46 @@ def write_props_png(
     return path
 
 
+def write_looks_png(
+    theme: Theme, path: Path, entries: Sequence[CharacterEntry], *, columns: int = 4, cell_width: int = 120, cell_height: int = 210,
+) -> Path:
+    """Draw each generated character of ``entries`` from the side and from the front, side by
+    side, with its name below, in rows of ``columns`` characters on the theme background, and
+    write the PNG to ``path`` (folders are created; 64 colours, small enough for the docs). The
+    look gallery of DESIGN.md §69.47."""
+    from manim import Camera, Text, VGroup, tempconfig
+
+    from vidgen.cartoon.character import build_character
+
+    rows = -(-len(entries) // columns)
+    width, height = 2 * columns * cell_width, rows * cell_height
+    frame_width, frame_height = frame_size(width, height)
+    unit_w, unit_h = frame_width / (2 * columns), frame_height / rows
+    settings = {
+        "pixel_width": width, "pixel_height": height, "frame_width": frame_width, "frame_height": frame_height,
+        "background_color": theme.background,
+    }
+    with tempconfig(settings):
+        cells = VGroup()
+        for k, entry in enumerate(entries):
+            row, column = divmod(k, columns)
+            top, ground = frame_height / 2 - row * unit_h, frame_height / 2 - row * unit_h - 0.84 * unit_h
+            for view, facing in enumerate(("right", "front")):
+                figure = build_character(entry.model_copy(update={"idle": False}), theme=theme, height=0.72 * unit_h, facing=facing)
+                x = -frame_width / 2 + (2 * column + view + 0.5) * unit_w
+                figure.shift([x, ground, 0.0] - figure.feet())
+                cells.add(figure)
+            label = Text(entry.name, font=theme.font, font_size=0.075 * unit_h * 72, color=theme.color("text"))
+            label.move_to([-frame_width / 2 + (2 * column + 1) * unit_w, top - 0.92 * unit_h, 0.0])
+            cells.add(label)
+        camera = Camera()
+        camera.capture_mobjects([cells])
+        image = camera.get_image().convert("RGB").quantize(colors=64)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    image.save(path, optimize=True)
+    return path
+
+
 # ----- character sheet (vidgen character-sheet) -------------------------------------------------------
 
 #: Most cells in one row of a character sheet.
@@ -137,13 +177,16 @@ HEAD_FILL = 0.6
 #: Parts a close-up frames (those the character has; none: the whole figure).
 HEAD_PARTS: tuple[str, ...] = ("head", "eyes", "brows", "mouth", "accessory")
 
-SheetKind = Literal["pose", "expression", "mouth"]
+SheetKind = Literal["pose", "expression", "mouth", "view"]
+#: Sections drawn as the whole figure (the others are close-ups of the head).
+WHOLE_FIGURE_KINDS: frozenset[str] = frozenset({"pose", "view"})
 
 
 @dataclass(frozen=True)
 class SheetSection:
-    """A row group of a character sheet: ``kind`` ``pose`` (whole figure), ``expression`` or
-    ``mouth`` (close-ups of the head); ``names`` in order; ``own`` the character's own entries."""
+    """A row group of a character sheet: ``kind`` ``pose`` or ``view`` (whole figure; a view is
+    a way it faces other than its side, DESIGN.md §69.47), ``expression`` or ``mouth``
+    (close-ups of the head); ``names`` in order; ``own`` the character's own entries."""
 
     kind: SheetKind
     title: str
@@ -176,7 +219,8 @@ class SheetLayout:
 
 def character_sheet_sections(entry: CharacterEntry, root: Path) -> list[SheetSection]:
     """The sections of ``entry``'s sheet without drawing it: its poses and expressions (built-in,
-    then its own) and its mouth shapes (none without a mouth; an svg look is read from ``root``)."""
+    then its own), its mouth shapes (none without a mouth; an svg look is read from ``root``)
+    and, for a generated look, its front view (kind ``view``)."""
     from vidgen.cartoon.cast import character_part_shapes
     from vidgen.cartoon.poses import merged_table
 
@@ -187,6 +231,8 @@ def character_sheet_sections(entry: CharacterEntry, root: Path) -> list[SheetSec
     mouths = character_part_shapes(entry, root).get("mouth", [])
     if mouths:
         sections.append(SheetSection("mouth", "mouth shapes", tuple(mouths)))
+    if entry.look.svg is None:
+        sections.append(SheetSection("view", "front view", ("front",)))
     return sections
 
 
@@ -201,7 +247,7 @@ def sheet_layout(sections: Sequence[SheetSection], columns: int = SHEET_COLUMNS)
     for index, section in enumerate(sections):
         tops.append(y)
         y += SHEET_SECTION_LINE
-        cell_height = SHEET_POSE_CELL_HEIGHT if section.kind == "pose" else SHEET_HEAD_CELL_HEIGHT
+        cell_height = SHEET_POSE_CELL_HEIGHT if section.kind in WHOLE_FIGURE_KINDS else SHEET_HEAD_CELL_HEIGHT
         for k, name in enumerate(section.names):
             row, column = divmod(k, columns)
             x = SHEET_MARGIN + column * (SHEET_CELL_WIDTH + SHEET_GUTTER)
@@ -233,7 +279,8 @@ def write_character_sheet(
     project: Project, entry: CharacterEntry, theme: Theme, path: Path | None = None
 ) -> CharacterSheet:
     """Draw every pose (whole figure, rest face), expression and mouth shape (head close-ups) of
-    the character ``entry`` of ``project`` in ``theme``, facing right, each in a labelled cell on
+    the character ``entry`` of ``project`` in ``theme``, facing right, and its front view (a
+    generated look), each in a labelled cell on
     the theme background, and write the sheet to ``path`` (default: :func:`default_sheet_path`;
     folders are created) as a PNG of :data:`SHEET_COLORS` colours. Call it with the project's
     extensions active (``extensions.project_session``)."""
@@ -250,6 +297,8 @@ def write_character_sheet(
     text_width = layout.width - 2 * SHEET_MARGIN
     draw.text((SHEET_MARGIN, SHEET_MARGIN), fit_line(title, f"{entry.name} \u2014 character sheet", text_width), font=title, fill=TEXT)
     note = "poses with the rest face; expressions and mouth shapes close up; facing right"
+    if any(section.kind == "view" for section in sections):
+        note += "; front view at the end"
     if any(section.own for section in sections):
         note += "; * = the character's own"
     draw.text((SHEET_MARGIN, SHEET_MARGIN + SHEET_TITLE_LINE), fit_line(subtitle, note, text_width), font=subtitle, fill=MUTED)
@@ -284,19 +333,20 @@ def _section_pictures(
     pictures = []
     with tempconfig(settings):
         probe = build_character(entry, theme=theme, height=1.0, root=project.root)
-        if section.kind == "pose":
-            sizes = [(probe.set_pose(name).width, probe.height) for name in section.names]
+        whole = section.kind in WHOLE_FIGURE_KINDS
+        if whole:
+            sizes = [(_show_whole(probe, section.kind, name).width, probe.height) for name in section.names]
             figure_height = min(0.84 * frame_height / max(h for _, h in sizes), 0.9 * frame_width / max(w for w, _ in sizes))
         else:
             box_width, box_height = _box_size(_head_box(probe))
             figure_height = HEAD_FILL * min(frame_width / box_width, frame_height / box_height)
         figure = build_character(entry, theme=theme, height=figure_height, root=project.root)
-        if section.kind != "pose":
+        if not whole:
             low, high = _head_box(figure)
             figure.shift([-(low[0] + high[0]) / 2, -(low[1] + high[1]) / 2, 0.0])
         for name in section.names:
-            if section.kind == "pose":
-                figure.set_pose(name)
+            if whole:
+                _show_whole(figure, section.kind, name)
                 low, high = _box(figure)
                 figure.shift([-(low[0] + high[0]) / 2, -0.42 * frame_height - figure.feet()[1], 0.0])
             elif section.kind == "expression":
@@ -307,6 +357,11 @@ def _section_pictures(
             camera.capture_mobjects([figure])
             pictures.append(camera.get_image().convert("RGB"))
     return pictures
+
+
+def _show_whole(figure: Character, kind: str, name: str) -> Character:
+    """``figure`` in pose ``name`` (``kind`` ``pose``) or facing ``name`` (``view``)."""
+    return figure.set_pose(name) if kind == "pose" else figure.face(name)
 
 
 def _box(figure: Character, parts: Sequence[str] | None = None) -> tuple[list[float], list[float]]:

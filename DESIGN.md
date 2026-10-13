@@ -75,7 +75,9 @@ src/vidgen/
   vector_mobject.py       # load_vector() / VectorPicture: a sanitised SVG as Manim shapes (§65)
   cartoon/                # cartoons (§69): character.py (Character: named vector parts with pivots,
                           # poses, mirroring; character(); part drawings cached by look, §69.20), cast.py (characters: lookups, checks; no manim),
-                          # generator.py (look: parameters -> parts, §69.1), svg_look.py (look: {svg} -> parts by
+                          # generator.py (look: parameters -> parts, §69.1), clothes.py (outfits,
+                          # patterns, shoes, things worn on the body, §69.47), primitives.py (the
+                          # generator's shapes, trailing and outer-hair marks, outline maths), svg_look.py (look: {svg} -> parts by
                           # element ids, §69.2), still.py (`vidgen character --png`), poses.py (pose and
                           # expression tables, §69.3; no manim), transition.py (PoseChange, §69.3;
                           # Walk, Gesture, Jump, §69.12; KeyedMotion, §69.14),
@@ -118,8 +120,8 @@ src/vidgen/
                           # room_drawing.py (draw_room, WindowViews, §69.42), cards.py (title
                           # cards: layout, burst rays, outlined text colours, §69.46; no manim);
                           # still.py also
-                          # draws the prop and furniture galleries (§69.43) and
-                          # `vidgen character-sheet` (§69.16)
+                          # draws the prop and furniture galleries (§69.43), the look gallery
+                          # (§69.47) and `vidgen character-sheet` (§69.16)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
   actions.py              # per-beat actions: Target, Action, validation, ActionRunner (§26)
@@ -5161,7 +5163,8 @@ take `CharacterName` options.
 `cartoon/generator.py`: `generate_parts(look, colors, *, outline_width=OUTLINE_WIDTH) ->
 list[CharacterPart]`, the parts `build_character` (and so `character(name)`) uses for every
 `characters:` entry. `colors` maps `COLOR_KEYS` (`skin, clothes, outline, features, hair,
-accessory`) to Manim colours.
+accessory`, and since Step 113 `trim`) to Manim colours. Step 113 added more bodies, hair,
+accessories and the clothes (§69.47); the values below are those of Step 68.
 
 - **Parameters** (`CharacterLook`, all optional): `body` (`round | tall | square | bean`; sizes in
   `BODY_SIZES`), `head_size` (0.6–1.6, radius 0.2 × it), `eyes` (`dot | oval | round | sleepy`),
@@ -6601,12 +6604,13 @@ config; `write_plan` now calls both, its output unchanged).
   `react` first in the beat; unknown words and unmatched sentences are beat `# TODO:`s.
 - **Characters and voices** (`screenplay_project`): front matter `characters` are kept as
   written (declared; only a screenplay `voice_kind:` key is taken out); every other speaker
-  (`character_id`: `OLD ASH` -> `old_ash`) gets a look of `LOOKS` (six looks differing in body,
-  hair, eyes, ears, accessories, skin, clothes and hair colours; a look taken again gets `seed:
-  k`) and a `<id>_voice` entry with `label`. **Voice kinds** (`VOICE_KINDS` feminine / masculine
-  / neutral; Phase I review follow-up): each look carries the `voice_kind` that suits it (bun +
-  scarf and long hair feminine, tall short hair + glasses and bald + hat masculine, the other two
-  neutral). `_stated_kinds` reads a kind from a pronoun in a line's brackets (`FEN (she): ...`,
+  (`character_id`: `OLD ASH` -> `old_ash`) gets a look of `LOOKS` (eleven looks differing in body,
+  hair, eyes, ears, accessories, skin, clothes and hair colours, the last five also in outfit,
+  pattern, shoes and facial hair, §69.47; a look taken again gets `seed: k`) and a `<id>_voice`
+  entry with `label`. **Voice kinds** (`VOICE_KINDS` feminine / masculine / neutral; Phase I
+  review follow-up): each look carries the `voice_kind` that suits it (bun + scarf, long hair,
+  ponytail + dress and braids + apron feminine; tall short hair + glasses, bald + hat, beard +
+  coat and moustache + shorts masculine; the other three neutral). `_stated_kinds` reads a kind from a pronoun in a line's brackets (`FEN (she): ...`,
   `(he, doubtful)`, `(they)`; `_pronoun_kind` takes it out of the manner, `Line.voice_kind`;
   `PRONOUN_KINDS`) or a front matter character's `voice_kind:`; two kinds for one character, a
   pronoun on the narrator or an unknown kind are `VidgenError`s naming the line. `_pick_look`
@@ -8098,3 +8102,74 @@ away from the camera, and turn to face the viewer.
   `docs/gallery/card.md` and its four media files (about 180 KB) come from `vidgen gallery
   --types card`.
   Tests: `tests/test_cartoon_cards.py`.
+
+### 69.47 More bodies and clothes (Step 113)
+
+New `look` values (`config.CharacterLook`), all drawn from primitives, each with a side and a
+front drawing (§69.44):
+
+- **Bodies**: `body: pear` (an ellipse whose half width is × `0.78 − 0.22 sin t`: narrow at the
+  shoulders, widest low down; its shoulders at `SHOULDER_SHARES` 0.62 of half its width) and
+  `triangle` (a squarish outline, broad at the top, × `0.76 + 0.24 y` towards the hips);
+  `BODY_SIZES` 0.42 × 0.46 and 0.44 × 0.46. **`proportions`**: `adult` (unchanged), `kid`, `tall_kid`
+  multiply the adult `Proportions` by `PROPORTION_FACTORS` before the seed's variation (kid: head
+  and eye gap × 1.3, eyes × 1.12, body 0.85 wide and 0.72 tall, legs 0.72, arms 0.78; tall kid:
+  head 1.12, body 0.8 / 0.85, legs 0.95, arms 0.9). The figure is still scaled to height 1; how
+  small a kid stands is the stage character's `scale` (guide: 0.7 / 0.85), so seats, reach and
+  lint keep using one character unit. Hips stay on seats (Step 102): `Character.seated` puts the
+  hips on the seat whatever the legs; a kid at scale 0.7 meets a seat 0.2 of its height up, above
+  its hips, so its feet hang (`seated_sole`).
+- **Outfits** (`cartoon/clothes.py`, `outfit` + `colors.trim`, default token `dim`): `limb_colors`
+  colours the segments of §69.26 (upper arm, forearm, thigh, shin): `plain` and `apron` all
+  `clothes`; `dress` short sleeves (bare forearms) and bare legs; `overalls` a `trim` shirt with
+  `clothes` trouser legs, a bib clipped to the body and straps with buttons; `coat` long sleeves,
+  `trim` trousers, a closure line, three buttons and lapels; `shorts` short sleeves, `trim` thighs
+  and waistband, bare shins. `apron`: a `trim` panel from the chest to below the body (side view
+  the front half, front view the middle), neck straps, a pocket from the front. The clothes of
+  the body are cut from its outline (`primitives.outline_polygon`: each Bézier curve sampled;
+  `clip_to_box`: Sutherland–Hodgman; `span_at`: its width at a height).
+- **Skirts on the body, not on the legs**: a dress's skirt and a coat's tails (`SKIRTED_OUTFITS`)
+  are drawn in the `body` part, from just above its bottom to the knee (a curved hem, flaring
+  `SKIRT_FLARE`), so the legs walk under them. Such a body has a second shape `seated`
+  (`config.SEATED_BODY_SHAPE`): the cloth as a wedge from the hips between `LAP_UP_DEGREES` 15°
+  and `LAP_DOWN_DEGREES` −50° out to the knee plus 0.045 (from the front: shorter and wider).
+  `Character.seated` shows it when the body has it (so `sit_on` does; `stand_up` goes back to the
+  state before), and the `sitting` pose names it as its body's shape (`chosen_shape` falls back
+  to the rest shape for every other character, which keeps their drawings). `cast.character_part_shapes`
+  lists it, so validate knows it.
+- **Patterns**: `stripes` (bands `STRIPE_HEIGHT` 0.03 every 0.065) and `dots` (radius 0.017 on a
+  0.06 grid, every other row shifted, at least 0.008 inside the edge) on the body's cloth and on a
+  skirt, in `pattern_tone`: 28 % towards black on a cloth of relative luminance above 0.35, else
+  40 % towards white; the outline is drawn again over the pattern.
+- **Shoes** (`shoes: shoes | boots`, `colors.accessory`): in the shin's group (`leg_*_lower`),
+  the sole on the ground (the figure's bottom stays at 0), the toe forward (from the front a
+  dome; boots add a shaft to 0.11).
+- **Hair**: `ponytail` (tied at the back, a tapering tail, from the front swinging out on one
+  side), `braids` (four lobes and a tie; one behind the head from the side, one each side from
+  the front), `afro` (a bumpy mass 3 × 2.5 head radii about the head); all three with the hair
+  cap. **`facial_hair`**: `moustache` (two lobes under the nose) and `beard` (round the jaw,
+  growing towards the chin, a skin patch where the mouth moves, and the moustache), in
+  `colors.hair`; `hair: none` gives bald with a beard.
+- **Accessories**: `bow`, `cap` (head: the `accessory` part, `config.HEAD_ACCESSORIES`; a cap's
+  dome sits above the brows, its peak forward or, from the front, a band), `backpack` (the pack
+  behind the back from the side, the straps over the shoulders from the front), `necklace` (beads
+  and a pendant) in the body. `hat` and `cap` together are a config error.
+- **Wind** (§69.32): `TRAIL_WEIGHTS` (now in `cartoon/primitives.py`, re-exported by the
+  generator) adds ponytail 0.9, braids 0.6, cap 0.25, pendant 0.5. Afro, bow, backpack and beard
+  do not trail.
+- **Effect symbols** (§69.40): afro, ponytail, braids and beard are marked
+  `OUTER_HAIR_ATTRIBUTE`; `effect_symbols.head_box` leaves them out (the size and spots go by the
+  head) and `crown_top` is the higher of the accessory's top and theirs (symbols go above an
+  afro). Looks without those marks take the old code path.
+- **Looks made before stay the same**: a plain outfit without pattern, backpack or necklace goes
+  through the old body code; the new branches add nothing to old looks. `tests/test_cartoon_outfits.py`
+  pins a digest of every drawn member (points, styles, trailing marks) of eight earlier looks, both
+  views, taken before the change.
+- **Screenplay** (§69.25): `LOOKS` gains five looks using the new values, each with its
+  `voice_kind` (two feminine, two masculine, one neutral); casts of up to six without stated
+  kinds get the same looks as before.
+- **Sheets and docs**: `vidgen character-sheet` ends with a `view` section (`front`) for generated
+  characters; `vidgen character` prints a `wears:` line. `still.write_looks_png(theme, path,
+  entries)` draws looks side and front; `docs/gallery/media/looks.png` (the screenplay looks and a
+  kid, about 50 KB) is in CONFIG.md "Characters".
+  Tests: `tests/test_cartoon_outfits.py` (sampled combinations from a seed, not every one).

@@ -44,10 +44,12 @@ GENERATED_MOUTHS = ["smile", "open", "A", "E", "O", "U", "M", "F", "L", "W"]
 def test_sections_of_a_generated_and_an_svg_character() -> None:
     kit = CharacterEntry(**CAST[1])   # its own expression 'smug'
     sections = character_sheet_sections(kit, Path("."))
-    assert [(s.kind, s.title) for s in sections] == [("pose", "poses"), ("expression", "expressions"), ("mouth", "mouth shapes")]
+    assert [(s.kind, s.title) for s in sections] == [
+        ("pose", "poses"), ("expression", "expressions"), ("mouth", "mouth shapes"), ("view", "front view"),   # Step 113: the front view
+    ]
     assert list(sections[0].names) == list(POSES) and sections[0].own == ()
     assert list(sections[1].names) == [*EXPRESSIONS, "smug"] and sections[1].own == ("smug",)
-    assert list(sections[2].names) == GENERATED_MOUTHS
+    assert list(sections[2].names) == GENERATED_MOUTHS and sections[3].names == ("front",)
     sprout = Project.load(EXAMPLE).config.characters[0]
     poses, expressions, mouths = character_sheet_sections(sprout, EXAMPLE)
     assert poses.names[-1] == "bow" and poses.own == ("bow",) and expressions.own == ("cheer",)
@@ -62,19 +64,19 @@ def rows_height(cells: int, columns: int, cell_height: int) -> int:
 @pytest.mark.parametrize(
     ("counts", "columns", "rows"),
     [
-        ((7, 7, 10), SHEET_COLUMNS, (1, 1, 2)),   # a generated character: 10 mouth shapes take two rows
+        ((7, 7, 10, 1), SHEET_COLUMNS, (1, 1, 2, 1)),   # a generated character: 10 mouth shapes take two rows; its front view
         ((8, 8, 5), SHEET_COLUMNS, (1, 1, 1)),    # sprout (examples/svg_character)
         ((7, 9), SHEET_COLUMNS, (1, 2)),          # no mouth: two sections
         ((3, 2), 3, (1, 1)),                      # few names: the sheet is narrower
     ],
 )
 def test_sheet_grid_size_per_character(counts: tuple[int, ...], columns: int, rows: tuple[int, ...]) -> None:
-    kinds = ["pose", "expression", "mouth"]
+    kinds = ["pose", "expression", "mouth", "view"]
     sections = [SheetSection(kinds[k], kinds[k], tuple(f"n{i}" for i in range(n))) for k, n in enumerate(counts)]  # type: ignore[arg-type]
     layout = sheet_layout(sections)
     assert layout.columns == columns
     assert layout.width == 2 * SHEET_MARGIN + columns * SHEET_CELL_WIDTH + (columns - 1) * SHEET_GUTTER
-    heights = [SHEET_POSE_CELL_HEIGHT] + [SHEET_HEAD_CELL_HEIGHT] * (len(counts) - 1)
+    heights = [SHEET_POSE_CELL_HEIGHT if kinds[k] in ("pose", "view") else SHEET_HEAD_CELL_HEIGHT for k in range(len(counts))]
     body = sum(rows_height(n, columns, h) for n, h in zip(counts, heights))
     assert layout.height == SHEET_MARGIN + SHEET_TITLE_LINE + SHEET_SUBTITLE_LINE + body + SHEET_MARGIN - SHEET_GUTTER
     assert len(layout.cells) == sum(counts)
@@ -125,10 +127,11 @@ def test_character_sheet_command(tmp_path: Path, capsys: pytest.CaptureFixture[s
             assert image.size == (layout.width, layout.height) == (sheet["width"], sheet["height"])
             assert image.mode == "P"   # a palette: small
         assert sheet["bytes"] == path.stat().st_size < 60_000
-        assert [s["kind"] for s in sheet["sections"]] == ["pose", "expression", "mouth"]
+        generated = sheet["character"] == "pebble"   # sprout is drawn from its SVG: no front view
+        assert [s["kind"] for s in sheet["sections"]] == ["pose", "expression", "mouth", *(["view"] if generated else [])]
     out = tmp_path / "pebble.png"
     assert main(["character-sheet", "pebble", str(root), "--output", str(out)]) == 0
-    assert out.is_file() and "7 poses, 7 expressions, 10 mouth shapes" in capsys.readouterr().out
+    assert out.is_file() and "7 poses, 7 expressions, 10 mouth shapes, 1 front view" in capsys.readouterr().out
     assert main(["character-sheet", "nobody", str(root)]) == 1
 
 

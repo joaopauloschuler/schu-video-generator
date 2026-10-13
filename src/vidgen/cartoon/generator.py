@@ -1,41 +1,61 @@
-"""The parametric character generator (DESIGN.md §69.1): ``look:`` parameters -> character parts.
+"""The parametric character generator (DESIGN.md §69.1, §69.47): ``look:`` parameters -> character parts.
 
 Every figure is built from primitives (circles, ellipses, rounded rectangles, polygons and lines)
 in character units (origin between the feet, ``y`` up), then scaled so its top is at 1. The
-proportions come from :func:`resolve_proportions` (numbers only): the look's values, varied a little
-by ``seed``. Facing right, the face sits a little to the right and the nose points right. The
-front view (``front=True``, DESIGN.md §69.44) draws the same parts and shapes with the face in the
-middle of the head, the pupils looking ahead, a symmetric nose, hair and body, and temples on both
-sides of glasses.
+proportions come from :func:`resolve_proportions` (numbers only): the look's values, its
+``proportions`` (adult or kid), varied a little by ``seed``. Facing right, the face sits a little
+to the right and the nose points right. The front view (``front=True``, DESIGN.md §69.44) draws
+the same parts and shapes with the face in the middle of the head, the pupils looking ahead, a
+symmetric nose, hair and body, and temples on both sides of glasses. What is worn on the body
+(the outfit, its pattern, shoes, scarf, bag, backpack, necklace) is drawn by
+:mod:`vidgen.cartoon.clothes`.
 """
 
 from __future__ import annotations
 
 import math
 import random
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, fields, replace
 
 import numpy as np
-from manim import PI, Arc, Circle, Ellipse, Line, Polygon, RoundedRectangle, VGroup, VMobject
+from manim import PI, Arc, Circle, Ellipse, Line, RoundedRectangle, VGroup, VMobject
 
 from vidgen.cartoon.character import OUTLINE_WIDTH, TRAIL_ATTRIBUTE, CharacterPart
+from vidgen.cartoon.clothes import LIMB_WIDTH, body_shapes, limb_colors, shoe
+from vidgen.cartoon.primitives import (
+    TRAIL_WEIGHTS,
+    arc_points,
+    filled,
+    outer_hair,
+    outlined,
+    point_at,
+    polygon,
+    trailing,
+)
 from vidgen.config import CharacterLook
 
 #: Colour keys :func:`generate_parts` needs (the fields of ``characters[].colors``).
-COLOR_KEYS: tuple[str, ...] = ("skin", "clothes", "outline", "features", "hair", "accessory")
+COLOR_KEYS: tuple[str, ...] = ("skin", "clothes", "outline", "features", "hair", "accessory", "trim")
 #: The whites of the ``oval`` and ``round`` eyes.
 EYE_WHITE = "#FFFFFF"
 #: (width, height) of each body shape, in character units before the figure is scaled to height 1.
 BODY_SIZES: dict[str, tuple[float, float]] = {
     "round": (0.40, 0.44), "tall": (0.30, 0.52), "square": (0.42, 0.40), "bean": (0.36, 0.48),
+    "pear": (0.42, 0.46), "triangle": (0.44, 0.46),
 }
 #: How far ``seed`` may move each proportion (a factor in [1 - x, 1 + x]).
 SEED_VARIATION = 0.08
-#: How far each trailing piece turns in the wind, as a share of
-#: :data:`~vidgen.cartoon.wind.TRAIL_DEGREES` (DESIGN.md §69.32): the scarf's end, long hair, a
-#: bun, pointy and floppy ears, the hat. Round ears and the other hair styles do not trail.
-TRAIL_WEIGHTS: dict[str, float] = {"scarf": 1.2, "long": 0.7, "bun": 0.4, "pointy": 0.35, "floppy": 1.0, "hat": 0.35}
+#: ``proportions`` other than ``adult``: factors on the adult proportions. A small kid has a big
+#: head and eyes on a short body and legs; a tall kid is lankier, with a smaller head than a
+#: small kid's (DESIGN.md §69.47).
+PROPORTION_FACTORS: dict[str, dict[str, float]] = {
+    "kid": {"head_radius": 1.3, "eye_gap": 1.3, "eye_size": 1.12, "body_width": 0.85, "body_height": 0.72, "leg_length": 0.72, "arm_length": 0.78},
+    "tall_kid": {"head_radius": 1.12, "eye_gap": 1.12, "eye_size": 1.05, "body_width": 0.8, "body_height": 0.85, "leg_length": 0.95, "arm_length": 0.9},
+}
+#: Where the shoulders (the arms' pivots) are, as a share of half the body's width: a pear's
+#: are narrower than its hips.
+SHOULDER_SHARES: dict[str, float] = {"pear": 0.62}
 
 
 @dataclass(frozen=True)
@@ -54,61 +74,28 @@ class Proportions:
 
 
 def resolve_proportions(look: CharacterLook) -> Proportions:
-    """The proportions of ``look``: its body shape and head size, each varied by up to
-    :data:`SEED_VARIATION` with ``random.Random(look.seed)`` (no variation without a seed)."""
+    """The proportions of ``look``: its body shape and head size, its ``proportions``
+    (:data:`PROPORTION_FACTORS`), then each varied by up to :data:`SEED_VARIATION` with
+    ``random.Random(look.seed)`` (no variation without a seed)."""
     width, height = BODY_SIZES[look.body]
     head_radius = 0.2 * look.head_size
     base = Proportions(
         head_radius=head_radius, body_width=width, body_height=height, leg_length=0.24, arm_length=0.26,
         eye_gap=0.35 * head_radius, eye_size=1.0, mouth_width=1.0,
     )
+    if look.proportions != "adult":
+        base = replace(base, **{name: getattr(base, name) * factor for name, factor in PROPORTION_FACTORS[look.proportions].items()})
     if look.seed is None:
         return base
     rng = random.Random(look.seed)  # random() (unlike uniform()) is promised the same sequence in every Python version
     return replace(base, **{f.name: getattr(base, f.name) * (1 + SEED_VARIATION * (2 * rng.random() - 1)) for f in fields(base)})
 
 
-# ----- primitives ---------------------------------------------------------------------------
-
-
-def _outlined(mob: VMobject, fill: str, outline: str, width: float) -> VMobject:
-    return mob.set_fill(fill, opacity=1).set_stroke(outline, width=width)
-
-
-def _filled(mob: VMobject, fill: str) -> VMobject:
-    return mob.set_fill(fill, opacity=1).set_stroke(width=0)
-
-
-def _at(cx: float, cy: float, radius: float, degrees: float) -> tuple[float, float]:
-    """The point ``radius`` from (cx, cy) at ``degrees`` counterclockwise from the right."""
-    angle = math.radians(degrees)
-    return cx + radius * math.cos(angle), cy + radius * math.sin(angle)
-
-
-def _arc_points(cx: float, cy: float, radii: Sequence[float], start_deg: float, end_deg: float) -> list[tuple[float, float]]:
-    """Points from ``start_deg`` to ``end_deg`` around (cx, cy), one per radius (alternating
-    radii give a zigzag)."""
-    last = len(radii) - 1
-    return [_at(cx, cy, radius, start_deg + (end_deg - start_deg) * k / last) for k, radius in enumerate(radii)]
-
-
-def _polygon(points: Sequence[Sequence[float]]) -> Polygon:
-    return Polygon(*(np.array([p[0], p[1], 0.0]) for p in points))
-
-
-def _trailing(mob: VMobject, pivot: tuple[float, float], piece: str) -> VMobject:
-    """Mark ``mob`` as a piece that trails in the wind, turning about ``pivot`` (the
-    :class:`~vidgen.cartoon.character.Character` reads the mark; DESIGN.md §69.32)."""
-    for member in mob.get_family():
-        setattr(member, TRAIL_ATTRIBUTE, (float(pivot[0]), float(pivot[1]), TRAIL_WEIGHTS[piece]))
-    return mob
-
-
 # ----- the figure ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
-class _Frame:
+class Frame:
     """Where the generator puts things (character units, before scaling to height 1)."""
 
     p: Proportions
@@ -121,7 +108,7 @@ class _Frame:
     front: bool = False
 
     @classmethod
-    def of(cls, p: Proportions, front: bool = False) -> _Frame:
+    def of(cls, p: Proportions, front: bool = False) -> Frame:
         """Where things go for proportions ``p``; ``front``: the front view (the face centred)."""
         body_bottom = p.leg_length - 0.06
         body_top = body_bottom + p.body_height
@@ -130,7 +117,18 @@ class _Frame:
         return cls(p, body_bottom, body_top, 0.0, head_y, face_x, head_y + 0.15 * p.head_radius, front)
 
 
-def _body_shape(look: CharacterLook, f: _Frame) -> VMobject:
+def _outline_points(center_y: float, half_w: float, half_h: float, width_at: Callable[[float], float], count: int = 40) -> list[list[float]]:
+    """A closed outline about (0, ``center_y``): at angle t the point (cos t, sin t) scaled by
+    ``half_w`` × ``width_at(sin t)`` and ``half_h``."""
+    points = []
+    for k in range(count):
+        t = 2 * PI * k / count
+        x, y = math.cos(t), math.sin(t)
+        points.append([x * half_w * width_at(y), center_y + y * half_h])
+    return points
+
+
+def _body_shape(look: CharacterLook, f: Frame) -> VMobject:
     p = f.p
     center = [0.0, (f.body_bottom + f.body_top) / 2, 0.0]
     if look.body == "round":
@@ -139,8 +137,18 @@ def _body_shape(look: CharacterLook, f: _Frame) -> VMobject:
         return RoundedRectangle(width=p.body_width, height=p.body_height, corner_radius=p.body_width * 0.4).move_to(center)
     if look.body == "square":
         return RoundedRectangle(width=p.body_width, height=p.body_height, corner_radius=0.05).move_to(center)
-    # bean: an oval pinched in at the back (not from the front), a little wider at the bottom
     half_w, half_h = p.body_width / 2, p.body_height / 2
+    if look.body == "pear":   # narrow at the shoulders, widest low down
+        return polygon(_outline_points(center[1], half_w, half_h, lambda y: 0.78 - 0.22 * y))
+    if look.body == "triangle":   # broad square shoulders, narrowing to the hips
+        points = []
+        for k in range(40):
+            t = 2 * PI * k / 40
+            c, s = math.cos(t), math.sin(t)
+            squarish_x, squarish_y = math.copysign(abs(c) ** 0.6, c), math.copysign(abs(s) ** 0.7, s)
+            points.append([squarish_x * half_w * (0.76 + 0.24 * squarish_y), center[1] + squarish_y * half_h])
+        return polygon(points)
+    # bean: an oval pinched in at the back (not from the front), a little wider at the bottom
     pinch = 0.0 if f.front else 0.22
     points = []
     for k in range(40):
@@ -148,165 +156,195 @@ def _body_shape(look: CharacterLook, f: _Frame) -> VMobject:
         x, y = math.cos(t), math.sin(t)
         width = 1.0 + 0.12 * (-y) - (pinch * math.exp(-((t - PI) ** 2) / 0.25))
         points.append([x * half_w * width, center[1] + y * half_h])
-    return _polygon(points)
-
-
-def _body(look: CharacterLook, f: _Frame, c: Mapping[str, str], w: float) -> VGroup:
-    """The body and the accessories worn on it (scarf, bag)."""
-    p = f.p
-    group = VGroup(_outlined(_body_shape(look, f), c["clothes"], c["outline"], w))
-    if "bag" in look.accessories:
-        bag_x, bag_y = -p.body_width * 0.42, f.body_bottom + p.body_height * 0.3
-        strap = Line([p.body_width * 0.28, f.body_top - 0.04, 0], [bag_x, bag_y + 0.05, 0]).set_stroke(c["accessory"], width=w * 1.8)
-        bag = _outlined(RoundedRectangle(width=0.16, height=0.12, corner_radius=0.03).move_to([bag_x, bag_y, 0]), c["accessory"], c["outline"], w)
-        flap = Line([bag_x - 0.08, bag_y + 0.025, 0], [bag_x + 0.08, bag_y + 0.025, 0]).set_stroke(c["outline"], width=w)
-        group.add(strap, bag, flap)
-    if "scarf" in look.accessories:
-        band_w = min(p.body_width, 0.36) * 0.85
-        band = RoundedRectangle(width=band_w, height=0.08, corner_radius=0.035).move_to([0, f.body_top - 0.03, 0])
-        tail = RoundedRectangle(width=0.07, height=0.17, corner_radius=0.03).move_to([-band_w * 0.25, f.body_top - 0.12, 0]).rotate(-0.2)
-        tail = _trailing(tail, (-band_w * 0.25, f.body_top - 0.05), "scarf")
-        group.add(_outlined(tail, c["accessory"], c["outline"], w), _outlined(band, c["accessory"], c["outline"], w))
-    return group
-
-
-#: Width of a sleeve or a leg; its ends are round (half this radius), so a bent elbow or knee
-#: stays a smooth joint.
-LIMB_WIDTH = 0.08
+    return polygon(points)
 
 
 def _segment(x: float, top: float, bottom: float, color: str, c: Mapping[str, str], w: float) -> VMobject:
     """A limb segment hanging from (x, ``top``) to (x, ``bottom``), the round ends centred there."""
     length = top - bottom + LIMB_WIDTH
     shape = RoundedRectangle(width=LIMB_WIDTH, height=length, corner_radius=LIMB_WIDTH / 2).move_to([x, (top + bottom) / 2, 0])
-    return _outlined(shape, color, c["outline"], w)
+    return outlined(shape, color, c["outline"], w)
 
 
-def _legs(f: _Frame, c: Mapping[str, str], w: float) -> list[CharacterPart]:
+def _legs(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> list[CharacterPart]:
     """Each leg in two segments: the thigh turns about the hip (under the body), the shin about
-    the knee half-way down; the foot's sole is at the ground."""
+    the knee half-way down; the foot's sole is at the ground (with the look's shoes on it)."""
     p = f.p
     x = 0.07 * p.body_width / 0.4
     hip, foot = p.leg_length - LIMB_WIDTH / 2, LIMB_WIDTH / 2
     knee = (hip + foot) / 2
+    _, _, thigh_color, shin_color = limb_colors(look, c)
     parts = []
     for name, side in (("leg_left", 1.0), ("leg_right", -1.0)):
-        parts.append(CharacterPart(name, {"default": VGroup(_segment(side * x, hip, knee, c["clothes"], c, w))}, (side * x, hip)))
-        shin = VGroup(_segment(side * x, knee, foot, c["clothes"], c, w))
+        parts.append(CharacterPart(name, {"default": VGroup(_segment(side * x, hip, knee, thigh_color, c, w))}, (side * x, hip)))
+        shin = VGroup(_segment(side * x, knee, foot, shin_color, c, w), *shoe(look, side * x, f.front, c, w))
         parts.append(CharacterPart(f"{name}_lower", {"default": shin}, (side * x, knee), end=(side * x, 0.0)))
     return parts
 
 
-def _arm(name: str, side: float, f: _Frame, c: Mapping[str, str], w: float) -> list[CharacterPart]:
-    """An arm in two segments: the upper sleeve turns about the shoulder, the forearm (sleeve and
-    hand) about the elbow half-way down; its end is the hand's middle."""
+def _arm(name: str, side: float, look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> list[CharacterPart]:
+    """An arm in two segments: the upper sleeve turns about the shoulder, the forearm (sleeve or
+    bare arm, and hand) about the elbow half-way down; its end is the hand's middle."""
     p = f.p
-    x, shoulder_y = side * p.body_width / 2, f.body_top - 0.08
+    x, shoulder_y = side * p.body_width / 2 * SHOULDER_SHARES.get(look.body, 1.0), f.body_top - 0.08
     top, wrist = shoulder_y + 0.02 - LIMB_WIDTH / 2, shoulder_y + 0.02 - p.arm_length
     elbow = (top + wrist) / 2
-    upper = VGroup(_segment(x, top, elbow, c["clothes"], c, w))
-    hand = _outlined(Circle(radius=0.045).move_to([x, wrist, 0]), c["skin"], c["outline"], w)
-    lower = VGroup(_segment(x, elbow, wrist, c["clothes"], c, w), hand)
+    upper_color, lower_color, _, _ = limb_colors(look, c)
+    upper = VGroup(_segment(x, top, elbow, upper_color, c, w))
+    hand = outlined(Circle(radius=0.045).move_to([x, wrist, 0]), c["skin"], c["outline"], w)
+    lower = VGroup(_segment(x, elbow, wrist, lower_color, c, w), hand)
     return [
         CharacterPart(name, {"default": upper}, (x, shoulder_y)),
         CharacterPart(f"{name}_lower", {"default": lower}, (x, elbow), end=(x, wrist)),
     ]
 
 
-def _hair_cap(look: CharacterLook, f: _Frame) -> Polygon:
+def _hair_cap(look: CharacterLook, f: Frame) -> VMobject:
     """The hair over the top of the head: an arc (zigzag for ``spiky``) and a fringe above the eyes."""
     r, cx, cy = f.p.head_radius, f.head_x, f.head_y
     radii = [1.35 * r if k % 2 else 1.0 * r for k in range(19)] if look.hair == "spiky" else [1.06 * r] * 25
-    outer = _arc_points(cx, cy, radii, -10, 190)
+    outer = arc_points(cx, cy, radii, -10, 190)
     fringe = [(-0.92, -0.15), (-0.7, 0.45), (-0.3, 0.62), (0.05, 0.55), (0.45, 0.7), (0.85, 0.4), (0.98, -0.05)]
     if f.front:   # symmetric: parted in the middle
         fringe = [(-0.97, -0.1), (-0.75, 0.42), (-0.35, 0.62), (0.0, 0.5), (0.35, 0.62), (0.75, 0.42), (0.97, -0.1)]
-    return _polygon([*outer, *((cx + a * r, cy + b * r) for a, b in fringe)])
+    return polygon([*outer, *((cx + a * r, cy + b * r) for a, b in fringe)])
 
 
-def _hair_back(look: CharacterLook, f: _Frame) -> list[VMobject]:
+def _braid(x: float, top: float, r: float) -> VGroup:
+    """A braid hanging from (``x``, ``top``): four plaited lobes and a tie at the end."""
+    lobes = [Ellipse(width=0.42 * r, height=0.38 * r).move_to([x, top - (0.17 + 0.3 * k) * r, 0]) for k in range(4)]
+    tie = Ellipse(width=0.24 * r, height=0.2 * r).move_to([x, top - 1.33 * r, 0])
+    return VGroup(*lobes, tie)
+
+
+def _hair_back(look: CharacterLook, f: Frame) -> list[VMobject]:
     r, cx, cy = f.p.head_radius, f.head_x, f.head_y
     if look.hair == "long":
-        top = _arc_points(cx, cy, [1.1 * r] * 25, 0, 180)
+        top = arc_points(cx, cy, [1.1 * r] * 25, 0, 180)
         ends = [(-1.12, -1.28), (0.0, -1.38), (1.12, -1.28)] if f.front else [(-1.15, -1.3), (-0.5, -1.4), (1.05, -1.25)]
-        hair = _polygon([*top, *((cx + a * r, cy + b * r) for a, b in ends)])
-        return [_trailing(hair, (cx, cy + 0.4 * r), "long")]
+        hair = polygon([*top, *((cx + a * r, cy + b * r) for a, b in ends)])
+        return [trailing(hair, (cx, cy + 0.4 * r), "long")]
     if look.hair == "bun":
         bun_x = cx if f.front else cx - 0.15 * r
-        return [_trailing(Circle(radius=0.38 * r).move_to([bun_x, cy + 1.18 * r, 0]), (bun_x, cy + 0.85 * r), "bun")]
+        return [trailing(Circle(radius=0.38 * r).move_to([bun_x, cy + 1.18 * r, 0]), (bun_x, cy + 0.85 * r), "bun")]
     if look.hair == "curly":
-        return [Circle(radius=0.32 * r).move_to([x, y, 0]) for x, y in _arc_points(cx, cy, [0.95 * r] * 12, -20, 200)]
+        return [Circle(radius=0.32 * r).move_to([x, y, 0]) for x, y in arc_points(cx, cy, [0.95 * r] * 12, -20, 200)]
+    if look.hair == "ponytail":   # tied high at the back (from the front: swinging out on one side)
+        tie_x, tie_y = (cx - 0.75 * r, cy + 0.6 * r) if f.front else (cx - 0.88 * r, cy + 0.42 * r)
+        tip_x = tie_x - (0.55 if f.front else 0.42) * r
+        tail = polygon([
+            (tie_x + 0.12 * r, tie_y + 0.1 * r), (tie_x - 0.28 * r, tie_y + 0.05 * r), (tip_x - 0.1 * r, tie_y - 0.55 * r),
+            (tip_x, tie_y - 1.15 * r), (tip_x + 0.22 * r, tie_y - 0.75 * r), (tie_x + 0.12 * r, tie_y - 0.2 * r),
+        ])
+        tie = Circle(radius=0.12 * r).move_to([tie_x, tie_y, 0])
+        return [outer_hair(trailing(tail, (tie_x, tie_y), "ponytail")), outer_hair(tie)]
+    if look.hair == "braids":   # one on each side; from the side the far one is hidden behind the head
+        xs = (cx - 0.98 * r, cx + 0.98 * r) if f.front else (cx - 0.72 * r,)
+        return [outer_hair(trailing(_braid(x, cy - 0.05 * r, r), (x, cy - 0.05 * r), "braids")) for x in xs]
+    if look.hair == "afro":   # a big round mass of curls about the head
+        mass_x = cx if f.front else cx - 0.12 * r
+        radii = [1.0 if k % 2 else 1.07 for k in range(41)]
+        outline = [(mass_x + 1.5 * r * radius * math.cos(2 * PI * k / 40), cy + 0.42 * r + 1.27 * r * radius * math.sin(2 * PI * k / 40))
+                   for k, radius in enumerate(radii[:40])]
+        return [outer_hair(polygon(outline))]
     return []
 
 
-def _ears(look: CharacterLook, f: _Frame) -> list[VMobject]:
+def _ears(look: CharacterLook, f: Frame) -> list[VMobject]:
     r, cx, cy = f.p.head_radius, f.head_x, f.head_y
     if look.ears == "round":
         return [Circle(radius=0.28 * r).move_to([cx + side * 0.98 * r, cy, 0]) for side in (-1, 1)]
     if look.ears == "pointy":
         return [
-            _trailing(_polygon([_at(cx, cy, 0.9 * r, tip - 15), _at(cx, cy, 1.55 * r, tip), _at(cx, cy, 0.9 * r, tip + 15)]), _at(cx, cy, 0.9 * r, tip), "pointy")
+            trailing(polygon([point_at(cx, cy, 0.9 * r, tip - 15), point_at(cx, cy, 1.55 * r, tip), point_at(cx, cy, 0.9 * r, tip + 15)]), point_at(cx, cy, 0.9 * r, tip), "pointy")
             for tip in (65, 115)
         ]
     if look.ears == "floppy":
         return [
-            _trailing(Ellipse(width=0.4 * r, height=0.95 * r).move_to([cx + side * 1.0 * r, cy - 0.2 * r, 0]).rotate(side * 0.25), (cx + side * 1.0 * r, cy + 0.2 * r), "floppy")
+            trailing(Ellipse(width=0.4 * r, height=0.95 * r).move_to([cx + side * 1.0 * r, cy - 0.2 * r, 0]).rotate(side * 0.25), (cx + side * 1.0 * r, cy + 0.2 * r), "floppy")
             for side in (-1, 1)
         ]
     return []
 
 
-def _nose(look: CharacterLook, f: _Frame, c: Mapping[str, str], w: float) -> list[VMobject]:
+def _nose(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> list[VMobject]:
     r, y = f.p.head_radius, f.head_y - 0.1 * f.p.head_radius
     x = f.face_x + (0.0 if f.front else 0.05 * r)
     if look.nose == "dot":
-        return [_filled(Ellipse(width=0.12 * r, height=0.09 * r).move_to([x, y, 0]), c["features"])]
+        return [filled(Ellipse(width=0.12 * r, height=0.09 * r).move_to([x, y, 0]), c["features"])]
     if look.nose == "round":
-        return [_outlined(Circle(radius=0.1 * r).move_to([x, y, 0]), c["skin"], c["outline"], w)]
+        return [outlined(Circle(radius=0.1 * r).move_to([x, y, 0]), c["skin"], c["outline"], w)]
     if look.nose == "triangle":
         corners = [(x, y + 0.11 * r), (x + 0.1 * r, y - 0.09 * r), (x - 0.1 * r, y - 0.09 * r)] if f.front else \
             [(x - 0.04 * r, y + 0.11 * r), (x + 0.24 * r, y - 0.09 * r), (x - 0.04 * r, y - 0.09 * r)]
-        return [_outlined(_polygon(corners), c["skin"], c["outline"], w)]
+        return [outlined(polygon(corners), c["skin"], c["outline"], w)]
     return []
 
 
-def _head(look: CharacterLook, f: _Frame, c: Mapping[str, str], w: float) -> VGroup:
-    """Back hair, ears, the head, the hair cap and the nose (all move with the head)."""
-    group = VGroup(*(_outlined(m, c["hair"], c["outline"], w) for m in _hair_back(look, f)))
-    group.add(*(_outlined(m, c["skin"], c["outline"], w) for m in _ears(look, f)))
-    group.add(_outlined(Circle(radius=f.p.head_radius).move_to([f.head_x, f.head_y, 0]), c["skin"], c["outline"], w))
+def _facial_hair(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> list[VMobject]:
+    """A beard round the jaw (with a patch of skin where the mouth moves) and a moustache under the
+    nose (``beard`` has both), in the hair colour."""
+    if look.facial_hair == "none":
+        return []
+    r, cx, cy, fx = f.p.head_radius, f.head_x, f.head_y, f.face_x
+    pieces: list[VMobject] = []
+    if look.facial_hair == "beard":
+        start, end = (200.0, 340.0) if f.front else (215.0, 345.0)
+        outer = []
+        for k in range(17):
+            degrees = start + (end - start) * k / 16
+            below = max(0.0, -math.sin(math.radians(degrees)))
+            x, y = point_at(cx, cy, 1.03 * r + 0.32 * r * below**3, degrees)
+            outer.append((x + (fx - cx) * below**3, y))
+        inner = arc_points(fx, cy - 0.12 * r, [0.6 * r] * 9, end, start)
+        pieces.append(outer_hair(outlined(polygon([*outer, *inner]), c["hair"], c["outline"], w)))
+        pieces.append(filled(Ellipse(width=0.72 * r, height=0.5 * r).move_to([fx, cy - 0.45 * r, 0]), c["skin"]))
+    lean = 0.0 if f.front else 0.04 * r
+    for side in (-1.0, 1.0):
+        lobe = Ellipse(width=(0.34 if f.front or side > 0 else 0.28) * r, height=0.14 * r)
+        lobe.rotate(side * 0.25).move_to([fx + lean + side * 0.15 * r, cy - 0.3 * r, 0])
+        pieces.append(outlined(lobe, c["hair"], c["outline"], w * 0.75))
+    return pieces
+
+
+def _head(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> VGroup:
+    """Back hair, ears, the head, the hair cap, facial hair and the nose (all move with the head)."""
+    group = VGroup(*(outlined(m, c["hair"], c["outline"], w) for m in _hair_back(look, f)))
+    group.add(*(outlined(m, c["skin"], c["outline"], w) for m in _ears(look, f)))
+    group.add(outlined(Circle(radius=f.p.head_radius).move_to([f.head_x, f.head_y, 0]), c["skin"], c["outline"], w))
     if look.hair != "none":
-        group.add(_outlined(_hair_cap(look, f), c["hair"], c["outline"], w))
+        group.add(outlined(_hair_cap(look, f), c["hair"], c["outline"], w))
+    group.add(*_facial_hair(look, f, c, w))
     group.add(*_nose(look, f, c, w))
     return group
 
 
-def _eye_size(look: CharacterLook, f: _Frame) -> tuple[float, float]:
+def _eye_size(look: CharacterLook, f: Frame) -> tuple[float, float]:
     """(width, height) of one open eye."""
     r = f.p.head_radius * f.p.eye_size
     return {"dot": (0.25 * r, 0.375 * r), "oval": (0.3 * r, 0.45 * r), "round": (0.4 * r, 0.4 * r), "sleepy": (0.3 * r, 0.2 * r)}[look.eyes]
 
 
-def _eye_xs(f: _Frame) -> tuple[float, float]:
+def _eye_xs(f: Frame) -> tuple[float, float]:
     return f.face_x - f.p.eye_gap, f.face_x + f.p.eye_gap
 
 
-def _open_eye(look: CharacterLook, x: float, f: _Frame, c: Mapping[str, str], w: float) -> VGroup:
+def _open_eye(look: CharacterLook, x: float, f: Frame, c: Mapping[str, str], w: float) -> VGroup:
     width, height = _eye_size(look, f)
     y, look_x = f.eye_y, 0.0 if f.front else 0.15 * width  # pupils look a little to the right (from the front: ahead)
     if look.eyes == "dot":
-        return VGroup(_filled(Ellipse(width=width, height=height).move_to([x, y, 0]), c["features"]))
+        return VGroup(filled(Ellipse(width=width, height=height).move_to([x, y, 0]), c["features"]))
     if look.eyes == "sleepy":
-        lower = _arc_points(x, y, [width / 2] * 13, 180, 360)
-        half = _polygon([(px, y + (py - y) * 2 * height / width) for px, py in lower])
+        lower = arc_points(x, y, [width / 2] * 13, 180, 360)
+        half = polygon([(px, y + (py - y) * 2 * height / width) for px, py in lower])
         lid = Line([x - width * 0.65, y + 0.01, 0], [x + width * 0.65, y + 0.01, 0]).set_stroke(c["features"], width=w)
-        return VGroup(_filled(half, c["features"]), lid)
+        return VGroup(filled(half, c["features"]), lid)
     white = Ellipse(width=width, height=height) if look.eyes == "oval" else Circle(radius=width / 2)
     pupil = Ellipse(width=width * 0.45, height=height * 0.45).move_to([x + look_x, y - 0.05 * height, 0])
-    return VGroup(_outlined(white.move_to([x, y, 0]), EYE_WHITE, c["outline"], w * 0.75), _filled(pupil, c["features"]))
+    return VGroup(outlined(white.move_to([x, y, 0]), EYE_WHITE, c["outline"], w * 0.75), filled(pupil, c["features"]))
 
 
-def _face(look: CharacterLook, f: _Frame, c: Mapping[str, str], w: float) -> list[CharacterPart]:
+def _face(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> list[CharacterPart]:
     """Eyes (``open`` / ``closed``), brows (``default`` / ``angry`` / ``sad``) and mouth (``smile`` /
     ``open`` and the viseme shapes ``A E O U M F L W``)."""
     r, fx = f.p.head_radius, f.face_x
@@ -331,7 +369,7 @@ def _face(look: CharacterLook, f: _Frame, c: Mapping[str, str], w: float) -> lis
 
     def opening(width: float, height: float) -> VMobject:
         """A filled mouth opening, ``width`` × the mouth radius by ``height`` × the head radius."""
-        return _filled(Ellipse(width=width * mouth_r, height=height * r).move_to([fx, mouth_y, 0]), c["features"])
+        return filled(Ellipse(width=width * mouth_r, height=height * r).move_to([fx, mouth_y, 0]), c["features"])
 
     closed = Line([fx - 0.75 * mouth_r, mouth_y + 0.03 * r, 0], [fx + 0.75 * mouth_r, mouth_y + 0.03 * r, 0]).set_stroke(c["features"], width=w)
     # viseme shapes (DESIGN.md §69.4): A open, E wide, O round, U small round, M closed lips,
@@ -352,8 +390,32 @@ def _face(look: CharacterLook, f: _Frame, c: Mapping[str, str], w: float) -> lis
     ]
 
 
-def _worn_on_head(look: CharacterLook, f: _Frame, c: Mapping[str, str], w: float) -> VGroup:
-    """Glasses and hat (the ``accessory`` part)."""
+def _cap(f: Frame, c: Mapping[str, str], w: float) -> list[VMobject]:
+    """A cap: a dome over the top of the head with a button, its peak forward (from the front: a
+    band across the forehead)."""
+    r, cx, cy = f.p.head_radius, f.head_x, f.head_y
+    dome = polygon(arc_points(cx, cy + 0.08 * r, [1.06 * r] * 17, 28, 152))
+    button = Circle(radius=0.08 * r).move_to([cx, cy + 1.16 * r, 0])
+    if f.front:
+        peak = Ellipse(width=1.9 * r, height=0.24 * r).move_to([cx, cy + 0.6 * r, 0])
+        pieces = [dome, peak, button]
+    else:
+        peak = polygon([(cx + 0.55 * r, cy + 0.7 * r), (cx + 1.42 * r, cy + 0.6 * r), (cx + 1.5 * r, cy + 0.5 * r), (cx + 1.4 * r, cy + 0.43 * r), (cx + 0.6 * r, cy + 0.5 * r)])
+        pieces = [peak, dome, button]
+    return [trailing(outlined(piece, c["accessory"], c["outline"], w), (cx, cy + 0.6 * r), "cap") for piece in pieces]
+
+
+def _bow(f: Frame, c: Mapping[str, str], w: float) -> list[VMobject]:
+    """A bow on top of the head (towards the back; from the front: on one side)."""
+    r = f.p.head_radius
+    x, y = (f.head_x + 0.55 * r, f.head_y + 0.82 * r) if f.front else (f.head_x - 0.42 * r, f.head_y + 0.9 * r)
+    loops = [polygon([(x, y), (x + side * 0.42 * r, y + 0.22 * r), (x + side * 0.46 * r, y - 0.18 * r)]) for side in (-1.0, 1.0)]
+    knot = Circle(radius=0.1 * r).move_to([x, y, 0])
+    return [outlined(piece, c["accessory"], c["outline"], w) for piece in (*loops, knot)]
+
+
+def _worn_on_head(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> VGroup:
+    """Glasses, hat, cap and bow (the ``accessory`` part)."""
     r, cx, cy = f.p.head_radius, f.head_x, f.head_y
     group = VGroup()
     if "glasses" in look.accessories:
@@ -369,10 +431,14 @@ def _worn_on_head(look: CharacterLook, f: _Frame, c: Mapping[str, str], w: float
     if "hat" in look.accessories:
         brim_y = cy + 0.72 * r
         crown = RoundedRectangle(width=1.4 * r, height=0.9 * r, corner_radius=0.15 * r).move_to([cx, brim_y + 0.45 * r, 0])
-        band = _polygon([(cx - 0.7 * r, brim_y + 0.06 * r), (cx + 0.7 * r, brim_y + 0.06 * r), (cx + 0.7 * r, brim_y + 0.22 * r), (cx - 0.7 * r, brim_y + 0.22 * r)])
+        band = polygon([(cx - 0.7 * r, brim_y + 0.06 * r), (cx + 0.7 * r, brim_y + 0.06 * r), (cx + 0.7 * r, brim_y + 0.22 * r), (cx - 0.7 * r, brim_y + 0.22 * r)])
         brim = RoundedRectangle(width=2.5 * r, height=0.16 * r, corner_radius=0.07 * r).move_to([cx, brim_y, 0])
-        hat = (_outlined(crown, c["accessory"], c["outline"], w), _outlined(band, c["clothes"], c["outline"], w), _outlined(brim, c["accessory"], c["outline"], w))
-        group.add(*(_trailing(piece, (cx, brim_y), "hat") for piece in hat))
+        hat = (outlined(crown, c["accessory"], c["outline"], w), outlined(band, c["clothes"], c["outline"], w), outlined(brim, c["accessory"], c["outline"], w))
+        group.add(*(trailing(piece, (cx, brim_y), "hat") for piece in hat))
+    if "cap" in look.accessories:
+        group.add(*_cap(f, c, w))
+    if "bow" in look.accessories:
+        group.add(*_bow(f, c, w))
     return group
 
 
@@ -380,17 +446,18 @@ def generate_parts(
     look: CharacterLook, colors: Mapping[str, str], *, outline_width: float = OUTLINE_WIDTH, front: bool = False,
 ) -> list[CharacterPart]:
     """The parts of the figure ``look`` describes, in character units with its top at 1.
-    ``colors`` maps every key of :data:`COLOR_KEYS` to a Manim colour; ``outline_width`` is the
-    stroke width of outlines and feature lines (the :class:`Character` scales it with its height);
-    ``front``: its front view, the same parts and shapes seen from the front (DESIGN.md §69.44).
-    The same look always gives the same shapes."""
-    f = _Frame.of(resolve_proportions(look), front)
+    ``colors`` maps every key of :data:`COLOR_KEYS` to a Manim colour (``trim`` may be left out
+    for an outfit that does not use it); ``outline_width`` is the stroke width of outlines and
+    feature lines (the :class:`Character` scales it with its height); ``front``: its front view,
+    the same parts and shapes seen from the front (DESIGN.md §69.44). The same look always gives
+    the same shapes."""
+    f = Frame.of(resolve_proportions(look), front)
     w = outline_width
     parts = [
-        *_legs(f, colors, w),
-        CharacterPart("body", {"default": _body(look, f, colors, w)}, (0.0, f.body_bottom + 0.02)),
-        *_arm("arm_left", 1.0, f, colors, w),
-        *_arm("arm_right", -1.0, f, colors, w),
+        *_legs(look, f, colors, w),
+        CharacterPart("body", body_shapes(look, f, _body_shape(look, f), colors, w), (0.0, f.body_bottom + 0.02)),
+        *_arm("arm_left", 1.0, look, f, colors, w),
+        *_arm("arm_right", -1.0, look, f, colors, w),
         CharacterPart("head", {"default": _head(look, f, colors, w)}, (0.0, f.body_top - 0.02)),
         *_face(look, f, colors, w),
     ]
@@ -420,4 +487,16 @@ def _scaled_to_unit_height(parts: list[CharacterPart]) -> list[CharacterPart]:
     return [replace(part, pivot=scaled(part.pivot), end=scaled(part.end)) for part in parts]
 
 
-__all__ = ["BODY_SIZES", "COLOR_KEYS", "EYE_WHITE", "LIMB_WIDTH", "TRAIL_WEIGHTS", "Proportions", "generate_parts", "resolve_proportions"]
+__all__ = [
+    "BODY_SIZES",
+    "COLOR_KEYS",
+    "EYE_WHITE",
+    "LIMB_WIDTH",
+    "PROPORTION_FACTORS",
+    "SHOULDER_SHARES",
+    "TRAIL_WEIGHTS",
+    "Frame",
+    "Proportions",
+    "generate_parts",
+    "resolve_proportions",
+]
