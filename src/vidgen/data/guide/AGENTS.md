@@ -1000,7 +1000,7 @@ into the set. `examples/cartoon_series/` shows it (CONFIG "Shared casts and sets
    through a walk, gesture, jump or path. Ask: is it clear who speaks? Are both faces visible,
    facing each other? Does the reaction read without the words? Is anything cut by the edge?
 4. `vidgen lint --json`: the cartoon rules `off_stage`, `character_overlap`, `walk_overlap`,
-   `bubble_overlap`, `facing_away`, `hidden_speaker`, `mouth_without_voice` and `look_alike` (fixes in
+   `prop_overlap`, `bubble_overlap`, `facing_away`, `hidden_speaker`, `mouth_without_voice` and `look_alike` (fixes in
    `vidgen guide troubleshooting`).
 5. Voices: with Kokoro (`vidgen guide audio`) `vidgen tts` is free and writes the lip sync
    tracks; then storyboard and lint again, since real lines change the timing.
@@ -1511,6 +1511,7 @@ install; `vidgen validate` warns when it is missing.
 | `walk_overlap` | a character's walk ends on another character | walk it to another mark or x, or move the other one first |
 | `off_stage` | a character is cut by the edge of the view (in a `shot`: a character it frames is out of it) | another mark or x inside the view, or `pan` to it; in a shot, keep it from walking out or frame another shot |
 | `character_overlap` | two characters stand on each other (at about the same depth) | marks further apart, or `walk_to` one away (across, or in depth) |
+| `prop_overlap` | two props on the floor at about the same depth are drawn over each other (a room's door over the sofa against the wall) | another `at` for one (a door: its x in the room's `doors`), a smaller `scale`, or a `depth` that puts one in front; a picture or clock above furniture, a lifted prop and a rug are fine |
 | `bubble_overlap` | a speech bubble covers a face, another bubble or an effect symbol | a shorter `bubble` text, characters further apart, or the lines (or the line and the effect) in different beats |
 | `facing_away` | a speaker faces away from the one it talks to (last looked at, else the nearest) | `turn`, `look_at: <listener>`, or swap their marks |
 | `hidden_speaker` | something in front hides the speaker's face | move one of them, or a smaller `depth` for the speaker |

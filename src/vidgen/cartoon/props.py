@@ -180,6 +180,9 @@ class Prop(VGroup):
         self.height_factor: float | None = None
         self.held_by: str | None = None
         self.hand: str | None = None
+        #: Whether it stands above the floor: lifted (a basket on a counter) or hung on a wall (the
+        #: stage sets it; lint's ``prop_overlap`` leaves such props out).
+        self.raised = False
         self.seat = seat
         self.lean = lean
         self.seat_places = tuple(seat_places)

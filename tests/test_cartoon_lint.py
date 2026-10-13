@@ -61,6 +61,24 @@ def test_character_overlap() -> None:
     assert check("character_overlap", [fig("pip", [540, 100, 640, 400], walked_in="b2"), kit]) == []   # walk_overlap's
 
 
+def test_prop_overlap() -> None:
+    """Props standing on the floor at about the same depth (a door over the sofa at the wall);
+    not a prop in front of another, one lifted onto another or hung above it, a rug, a held one."""
+    sofa = thing("sofa", [100, 300, 260, 400], prop="sofa", depth=0.4)
+    door = thing("door", [60, 200, 140, 400], prop="door", depth=0.4)
+    (issue,) = check("prop_overlap", [sofa, door])
+    assert issue.message.startswith("prop 'sofa' and prop 'door' stand on each other at the same depth (50% of the narrower one's width); move one")
+    assert issue.value == 0.5 and issue.limit == 0.15
+    assert check("prop_overlap", [sofa, thing("door", [20, 200, 100, 400], prop="door", depth=0.4)]) == []   # side by side
+    assert check("prop_overlap", [sofa, thing("armchair", [150, 320, 230, 420], prop="armchair", depth=0.2)]) == []   # in front
+    assert len(check("prop_overlap", [sofa, thing("plant", [150, 320, 230, 420], prop="houseplant", depth=0.3)])) == 1   # 0.1 apart: on it
+    assert check("prop_overlap", [sofa, thing("picture", [140, 200, 220, 260], prop="picture", depth=0.4, raised=True)]) == []   # on the wall
+    assert check("prop_overlap", [sofa, thing("basket", [150, 280, 190, 300], prop="basket", depth=0.4, raised=True)]) == []   # lifted onto it
+    assert check("prop_overlap", [sofa, thing("rug", [80, 390, 300, 410], prop="rug", depth=0.4, flat=True)]) == []   # lies under it
+    assert check("prop_overlap", [sofa, thing("cup", [150, 300, 170, 320], prop="cup", depth=0.4, held_by="pip")]) == []
+    assert check("prop_overlap", [fig("pip", [100, 100, 200, 400], depth=0.4), sofa]) == []   # characters are character_overlap's
+
+
 def test_bubble_overlap() -> None:
     kit = fig("kit", [500, 100, 600, 400], face=[500, 100, 600, 180])
     low = thing("plate", [480, 60, 640, 150], kind="shape", bubble="pip")

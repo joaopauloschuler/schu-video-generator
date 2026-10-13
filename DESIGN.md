@@ -8338,3 +8338,37 @@ with an animal are a config error (`config.SPECIES_OWN_KEYS`); `svg` with `speci
 - **Real narration**: Kokoro (narrator `bf_emma` 0.8, Mira `af_heart` 0.75, Olen `am_fenrir`
   0.75, the dog `bm_fable` 0.8; `narration_speed` warned at 3.52 words/s for Mira at 0.8), rendered
   at 1280x720 (`/home/claude/work/phase-k-review/muffin_mystery.mp4`, 69.9 s, −16.2 LUFS).
+
+### 69.51 Props that vanished, overlapped or showed through (after Step 116)
+
+- **Props vanished during a walk in depth** (the example at 0:12: the door, picture, sofa,
+  counter, basket and fridge went while Mira walked from the wall to the front). Manim draws the
+  mobjects before the first moving one once into a static image when an animation begins, and the
+  rest (`moving_mobjects`) on every frame. `get_moving_mobjects` (§69.44) makes everything from
+  the first thing a walk in depth passes "moving", measured from the walker's depth *now*. The
+  draw-order updater (`_draw_order_step`) rebuilt that list mid-play when the walker crossed the
+  armchair; by then the walker had left the wall's depth, so the props there were no longer passed
+  and dropped out of the list, while they were not in the static image either: drawn by nothing
+  until the next animation. The camera did not move. Now `Stage._moving_in_order` keeps
+  everything the list had and adds what moves now, in the current draw order; a rebuild never
+  drops a thing. Test: a render where every frame's moving list plus static image holds every
+  prop on the stage (`test_props_at_the_depth_a_walker_leaves_stay_drawn`, fails before).
+- **`prop_overlap` lint rule** (warning, `min_overlap` 0.15 of the narrower prop's width): two
+  props standing on the floor at depths less than `DEPTH_APART` (0.15) apart whose boxes overlap
+  side by side, e.g. a room's door over the sofa against the wall. Props in front of others
+  (further apart in depth), lifted (`lift`) or hanging on a wall (a picture over the sofa), lying
+  flat (a rug) or held are left out. The layout dump gains on a prop: `prop` (its kind), `depth`
+  (above 0), `raised` and `flat` (only when true); `Prop.raised` is set by the stage from
+  `lift` + the hang height. A still rule, like `character_overlap`, so it sees the props where they
+  are drawn (a door's width, an open door); the runner merges a pair's findings over the beats.
+  The example's layout was fixed with it (door at 0.13, the sofa at 0.325 and scale 0.9, the
+  picture at 0.26; the counter at 0.745 and the fridge at 0.925 overlapped too).
+- **The set fades in as one picture**: the stage's entrance faded each thing in on its own, so
+  during the fade (and under an `iris_in` that opens meanwhile) what stood behind showed through
+  what stood in front (the dog over the armchair, the door over the sofa). The entrance now adds
+  the set, props, shadows and characters at once, back to front, under `Stage._entrance_cover`: a
+  rectangle of the camera's background colour, 1.5 times the view and kept on it, that fades out
+  over the same time. Every frame of the fade is the finished picture blended with the background
+  by one amount (`test_the_set_fades_in_as_one_picture`). A copy carried from the scene before
+  (`carry:`) still moves in. Not changed: the scene's fade out (`finish` → `clear_all`) still
+  fades each thing on its own (Backlog); with a transition other than a cut it is held instead.

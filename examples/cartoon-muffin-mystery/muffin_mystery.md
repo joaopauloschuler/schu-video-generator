@@ -15,7 +15,7 @@ characters:
 # Card: The Muffin Mystery
 
 # Scene: evening
-set: room: stripes, boards, window at 0.5, door at 0.13; props: sofa at 0.24 against the wall, picture at 0.24 on the wall, clock at 0.66 on the wall, armchair at 0.36, counter at 0.79 against the wall, fridge at 0.92 against the wall, basket at 0.77, rug at 0.4; characters: mira at 0.68, crumb at 0.36
+set: room: stripes, boards, window at 0.5, door at 0.13; props: sofa at 0.325 against the wall, picture at 0.26 on the wall, clock at 0.66 on the wall, armchair at 0.36, counter at 0.745 against the wall, fridge at 0.925 against the wall, basket at 0.74, rug at 0.4; characters: mira at 0.68, crumb at 0.36
 
 On Saturday evening, Mira baked a basket of blueberry muffins.
 
@@ -30,7 +30,7 @@ So the whole house went to bed, and the muffins waited on the counter, all alone
 [Crumb falls asleep.]
 
 # Scene: morning
-set: room: stripes, boards, window at 0.5, door at 0.13; props: sofa at 0.24 against the wall, picture at 0.24 on the wall, clock at 0.66 on the wall, armchair at 0.36, counter at 0.79 against the wall, fridge at 0.92 against the wall, rug at 0.4; characters: mira at 0.55, crumb at 0.36
+set: room: stripes, boards, window at 0.5, door at 0.13; props: sofa at 0.325 against the wall, picture at 0.26 on the wall, clock at 0.66 on the wall, armchair at 0.36, counter at 0.745 against the wall, fridge at 0.925 against the wall, rug at 0.4; characters: mira at 0.55, crumb at 0.36
 
 In the morning, Olen came down for breakfast, still half asleep.
 

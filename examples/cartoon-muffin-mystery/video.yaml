@@ -28,13 +28,13 @@ sets:
   home:
     room: {wallpaper: stripes, flooring: boards, windows: [0.5], doors: [0.13]}
     props:
-      - {prop: sofa, at: 0.24, against: wall}
-      - {prop: picture, at: 0.24}
+      - {prop: sofa, at: 0.325, against: wall, scale: 0.9}
+      - {prop: picture, at: 0.26}
       - {prop: clock, at: 0.66}
       - {prop: armchair, at: 0.36, depth: 0.2}
       - {prop: rug, at: 0.4, depth: 0.15}
-      - {prop: counter, at: 0.79, against: wall}
-      - {prop: fridge, at: 0.92, against: wall}
+      - {prop: counter, at: 0.745, against: wall}
+      - {prop: fridge, at: 0.925, against: wall}
 scenes:
   - id: title
     type: card
@@ -46,7 +46,7 @@ scenes:
     set: home
     params:
       light: indoor
-      props: [{prop: basket, at: 0.77, depth: 0.4, lift: 0.185}]
+      props: [{prop: basket, at: 0.74, depth: 0.4, lift: 0.185}]
       characters: [{name: mira, at: 0.68, depth: 0.4}, {name: crumb, at: 0.36, depth: 0.2}]
     beats:
       - text: "On Saturday evening, Mira baked a basket of blueberry muffins."

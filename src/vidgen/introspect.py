@@ -285,6 +285,7 @@ class LayoutRecorder:
                     walk.objects[-1].update({"held_by": mob.held_by, "hand": mob.hand})
                 if mob.shape is not None:
                     walk.objects[-1]["shape"] = mob.shape
+                walk.objects[-1].update(_prop_keys(mob))
             return
         if isinstance(mob, EffectSymbol):  # one symbol over a head (§69.40)
             self._emit_parts(walk, mob, path, name or mob.kind, "effect", [m for m in mob.get_family() if _drawn(m)])
@@ -399,6 +400,24 @@ def _character_keys(walk: _Walk, figure: Any) -> dict[str, Any]:
     optional = {"viseme": figure.spoken_viseme, "looked_at": figure.looked_at, "passage": figure.passage, "walked_in": figure.walked_in,
                 "holding": dict(figure.holding) or None, "sitting_on": figure.sitting_on, "leaning_on": figure.leaning_on}
     keys.update({key: value for key, value in optional.items() if value is not None})
+    return keys
+
+
+def _prop_keys(prop: Any) -> dict[str, Any]:
+    """What ``prop_overlap`` reads about a prop (DESIGN.md §69.51): ``prop`` (its kind: a
+    built-in prop's name or ``svg``), ``depth`` (how far back it stands, when not at the front, as
+    for a character), ``raised`` (lifted, or hanging on a wall) and ``flat`` (lying flat on the
+    floor, a rug), each only when true."""
+    from vidgen.cartoon.props import FLAT_PROPS
+
+    keys: dict[str, Any] = {"prop": prop.kind}
+    depth = float(getattr(prop, "stage_depth", 0.0))
+    if depth > 0:
+        keys["depth"] = round(depth, 4)
+    if prop.raised:
+        keys["raised"] = True
+    if prop.kind in FLAT_PROPS:
+        keys["flat"] = True
     return keys
 
 

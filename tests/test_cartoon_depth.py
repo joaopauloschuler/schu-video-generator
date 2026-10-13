@@ -385,3 +385,38 @@ def test_walking_behind_a_tree_and_a_front_view_on_a_stage(make_project, tmp_pat
     caster = next(c for group in scene.shadows for c in group.casters if c.mobject is pip)
     assert caster.ellipse(1.0).y == pytest.approx(scene.feet_y_at(0.9))   # its shadow on the ground there
     assert kit.facing == "left" and kit.side_facing == "left" and kit.draw_order.index("arm_right") < kit.draw_order.index("body")
+
+
+@pytest.mark.render
+def test_props_at_the_depth_a_walker_leaves_stay_drawn(make_project, tmp_path: Path, monkeypatch) -> None:
+    """pip walks from the wall's depth to the front past the armchair: every frame still draws the
+    fridge and the door at the wall (they were redrawn while pip stood at their depth, and vanished
+    once pip's crossing of the armchair rebuilt Manim's list without them)."""
+    from manim.renderer.cairo_renderer import CairoRenderer
+
+    params = {"idle": False, "room": {"doors": [0.1]}, "props": [{"prop": "fridge", "at": 0.9, "against": "wall"}, {"prop": "armchair", "at": 0.3, "depth": 0.2},
+                                                                 {"prop": "picture", "at": 0.3}, {"prop": "rug", "at": 0.3, "depth": 0.1}],
+              "characters": [{"name": "pip", "at": 0.6, "depth": 0.4}]}
+    scenes = [{"id": "den", "type": "stage", "params": params, "beats": [
+        {"text": "Pip walks from the wall to the front of the room.", "actions": [{"walk_to": "pip", "to": {"mark": 0.6, "depth": 0.0}, "speed": 4}]}]}]
+    project = Project.load(make_project(minimal_config(characters=CAST, voices=VOICES, scenes=scenes)))
+    missing: list[tuple[float, str]] = []
+    in_front: list[bool] = []   # pip drawn after the armchair, frame by frame
+    render = CairoRenderer.render
+
+    def checking(self: Any, scene: Any, time: float, moving: Any = None) -> None:
+        pip, armchair = scene.cast["pip"], scene.props["armchair"]
+        if moving and pip in scene.mobjects and armchair in scene.mobjects:
+            in_front.append(scene.mobjects.index(pip) > scene.mobjects.index(armchair))
+            drawn = {id(m) for mob in [*moving, *scene.static_mobjects] for m in mob.get_family()}
+            missing.extend((float(self.time), p.name) for p in scene.props.values() if p in scene.mobjects and not all(id(m) in drawn for m in p.family_members_with_points()))
+        render(self, scene, time, moving)
+
+    monkeypatch.setattr(CairoRenderer, "render", checking)
+    scene, objects = render_with_layout(project, "den", tmp_path / "media")
+    assert scene.cast["pip"].stage_depth == 0.0 and not in_front[0] and in_front[-1]   # it crossed the armchair's depth
+    assert missing == []
+    props = {o["name"]: o for o in objects if o["kind"] == "prop"}   # the keys prop_overlap reads
+    assert (props["fridge"]["prop"], props["fridge"]["depth"], props["armchair"]["depth"]) == ("fridge", 0.4, 0.2)
+    assert props["door"]["prop"] == "door" and "raised" not in props["door"] and "flat" not in props["door"]
+    assert props["picture"]["raised"] and props["rug"]["flat"] and "raised" not in props["rug"]

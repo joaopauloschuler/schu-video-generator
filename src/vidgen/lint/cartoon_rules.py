@@ -24,6 +24,7 @@ from vidgen.config import (
     LookAlikeRule,
     MouthWithoutVoiceRule,
     OffStageRule,
+    PropOverlapRule,
     WalkOverlapRule,
 )
 from vidgen.lint.layout_rules import area, describe, intersection, is_text, object_box
@@ -172,6 +173,34 @@ def character_overlap(ctx: StillContext, settings: CharacterOverlapRule) -> Iter
         yield Issue(
             f"{describe(a)} and {describe(b)} stand on each other ({share:.0%} of the narrower one's width); "
             "put them on marks further apart, or walk one of them away",
+            intersection(object_box(a), object_box(b)),
+            (a, b),
+            value=round(share, 3),
+            limit=settings.min_overlap,
+        )
+
+
+def _standing_props(ctx: StillContext) -> list[dict[str, Any]]:
+    """The props standing on the floor: not held, not lifted or hung on a wall (``raised``), not
+    lying flat (a rug: furniture stands on it)."""
+    return [obj for obj in ctx.objects if obj["kind"] == "prop" and not obj.get("held_by") and not obj.get("raised") and not obj.get("flat")]
+
+
+@rule("prop_overlap")
+def prop_overlap(ctx: StillContext, settings: PropOverlapRule) -> Iterator[Issue]:
+    """Two props standing on the floor at depths less than :data:`DEPTH_APART` apart are drawn
+    over each other (a door and the sofa against the wall); not a prop in front of another (depths
+    further apart), one lifted onto another or hung on the wall above it, or a rug under them."""
+    for a, b in combinations(_standing_props(ctx), 2):
+        if _apart_in_depth(a, b):
+            continue
+        share = _side_share(object_box(a), object_box(b))
+        if share is None or share < settings.min_overlap:
+            continue
+        yield Issue(
+            f"{describe(a)} and {describe(b)} stand on each other at the same depth ({share:.0%} of the narrower one's width); "
+            "move one along the floor (another `at`, or a door's x in the room's `doors`), or put one in front of the other "
+            f"(a `depth` at least {DEPTH_APART} nearer)",
             intersection(object_box(a), object_box(b)),
             (a, b),
             value=round(share, 3),

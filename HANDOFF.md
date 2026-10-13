@@ -10999,3 +10999,63 @@ How to test
   test_push_wipe_carry` (250, 79 s), `test_mcp` (15, 29 s); render: the cartoon files in two
   batches (27, 39 s; 16, 13 s), `test_random_cast test_screenplay test_includes test_phase_*_review`
   (5, 37 s). The full suite was not run (not asked).
+
+## Step 116a — Fix furniture vanishing during camera moves and the door overlapping the sofa
+
+What was done (two faults the owner saw in `muffin_mystery.mp4`; DESIGN §69.51)
+- **Furniture vanished at 0:12** while Mira walked from the wall (depth 0.4) to the front. Cause:
+  not the camera (it did not move; the frames keep the same framing) but the draw-order updater of
+  Step 111. `Stage.get_moving_mobjects` marks as moving everything from the first thing a walk in
+  depth passes, measured from the walker's depth now; `_draw_order_step` rebuilt Manim's
+  `moving_mobjects` mid-play when Mira crossed the armchair, and by then the props at the wall's
+  depth were no longer "passed", so they left the list while not being in the static image Manim
+  drew when the animation began. Fix: `Stage._moving_in_order` keeps everything the list had plus
+  what moves now, in the current draw order.
+- **Door over the sofa (and counter over the fridge)**: example layout changed (door 0.13, sofa
+  0.325 with scale 0.9, picture 0.26, counter 0.745, fridge 0.925, basket 0.74; the screenplay's
+  `set:` lines too). New lint rule `prop_overlap` (warning, `min_overlap` 0.15): props standing on
+  the floor at depths < 0.15 apart overlapping side by side; lifted / hung (`raised`), flat (rug)
+  and held props are left out. Layout dump keys on props: `prop`, `depth`, `raised`, `flat`;
+  `Prop.raised` set by the stage. On the old layout it reports sofa/door (50%) and counter/fridge
+  (38%), merged over the beats; the new layout lints clean (all rules, Kokoro audio). The other
+  stage examples (rain check, svg_character, series 1 and 2, cartoon) give no `prop_overlap`.
+- **Show-through during the opening fade**: the stage faded each thing in on its own (FadeIn per
+  backdrop part, shadow group, character, prop). The entrance now adds them all at once under a
+  background-coloured cover that fades out (`Stage._entrance_cover`), so the set fades in as one
+  picture, under an `iris_in` too. Carried copies (`carry:`) still move in.
+
+Files touched
+- `src/vidgen/scenes/stage.py`, `src/vidgen/cartoon/props.py` (`raised`), `src/vidgen/introspect.py`
+  (`_prop_keys`), `src/vidgen/lint/cartoon_rules.py` (`prop_overlap`), `src/vidgen/config.py`
+  (`PropOverlapRule`, rule lists); `examples/cartoon-muffin-mystery/video.yaml`, `muffin_mystery.md`;
+  tests `test_cartoon_depth.py`, `test_cartoon_lint.py`, `test_cartoon_room.py`; docs `DESIGN.md`
+  (§69.51), `docs/CONFIG.md` (rules table, lint defaults, layout keys), guide + `AGENTS.md`
+  (troubleshooting row, cartoon rules list), `tasklist.md` (a Backlog line).
+
+Public interfaces
+- Lint rule `prop_overlap` (`lint.rules.prop_overlap.min_overlap`); layout dump prop keys `prop`,
+  `depth`, `raised`, `flat`; `Prop.raised`. No `vidgen.api` names. Behaviour: the stage's opening
+  fade is one picture; renders of every stage scene change in their first second.
+
+Evidence
+- Tests that fail before the fix (checked by stashing `scenes/stage.py`):
+  `test_props_at_the_depth_a_walker_leaves_stay_drawn` (door and fridge missing from frame 1.6 s
+  on) and `test_the_set_fades_in_as_one_picture` (4.7% of the pixels off the common blend, limit 1%).
+- Re-rendered the scratch copy (`/home/claude/work/phase-k-review/proj`, its Kokoro audio reused) at
+  1280x720: `/home/claude/work/phase-k-review/muffin_mystery_v2.mp4`, 69.93 s, −16.2 LUFS. By eye:
+  `look/sheet12_v2.png` (11.4–12.5 s at 10 fps) and `look/walk_v2.png` (10–19 s) keep every piece
+  of furniture through the walk; `look/t03_v2.png` (0:03, under the iris) shows no show-through
+  and the door clear of the sofa; `look/all_v2.png` (every 5.5 s) looks right.
+
+Known gaps
+- Backlog line "Stage fades and props": the scene's fade out still fades each thing on its own;
+  `prop_overlap` checks beat-end stills and boxes only; found, not fixed: `examples/cartoon-music-box`
+  fails `vidgen validate` at HEAD too (a `lean_on` the tree across depths). Gallery stage media not
+  regenerated (only their first second's fade frames would change).
+
+How to test
+- `pytest -m "not render" tests/test_cartoon_*.py tests/test_phase_k_review.py tests/test_lint.py
+  tests/test_introspect.py` (832, 62 s); `tests/test_guide.py tests/test_docs.py tests/test_schema.py
+  tests/test_config.py` (182, 79 s); render: `tests/test_cartoon_[a-l]*.py` (21, 26 s),
+  `tests/test_cartoon_[m-z]*.py` (24, 15 s), `test_phase_k_review test_lint test_introspect
+  test_phase_h_review` (3, 28 s). The full suite was not run.

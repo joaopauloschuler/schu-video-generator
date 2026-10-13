@@ -289,3 +289,36 @@ def test_a_room_at_night_with_a_character_coming_in_through_the_door(make_projec
     assert names["room"]["order"] < names["window_views"]["order"] < names["room_front"]["order"] < names["door"]["order"] < names["pip"]["order"]
     shadows = [c.mobject for group in scene.shadows for c in group.casters]
     assert door not in shadows and kit in shadows   # a door in the wall casts no shadow
+
+
+@pytest.mark.render
+def test_the_set_fades_in_as_one_picture(make_project, tmp_path: Path, monkeypatch) -> None:
+    """While the room fades in, nothing shows through what stands in front of it (pip over the
+    armchair, the armchair over the sofa): each frame is the finished picture blended with the
+    background by one amount, not each thing faded on its own (§69.51)."""
+    import numpy as np
+    from manim.scene.scene_file_writer import SceneFileWriter
+
+    params = {"idle": False, "room": {"wallpaper": "plain", "flooring": "plain"},
+              "props": [{"prop": "sofa", "at": 0.5, "against": "wall"}, {"prop": "armchair", "at": 0.5, "depth": 0.2}],
+              "characters": [{"name": "pip", "at": 0.5, "depth": 0.1}]}
+    project = room_project(make_project, params, [{"id": "b1", "text": "Pip waits in front of the armchair for a while, quietly."}])
+    frames: list[np.ndarray] = []
+    write = SceneFileWriter.write_frame
+
+    def recording(self: Any, frame: Any, num_frames: int = 1) -> None:
+        frames.extend([np.asarray(frame)[:, :, :3].astype(float)] * num_frames)
+        write(self, frame, num_frames)
+
+    monkeypatch.setattr(SceneFileWriter, "write_frame", recording)
+    render_with_layout(project, "home", tmp_path / "media")
+    background, done = frames[0], frames[7]   # nothing yet; the set after its 1 s fade (5 fps)
+    assert np.abs(frames[8] - done).max() == 0   # finished: nothing moves
+    change = done - background
+    power = (change**2).sum(axis=2)
+    contrast = power > 40**2
+    for mid in frames[1:5]:   # per pixel: how far from the background towards the finished picture
+        blend = (((mid - background) * change).sum(axis=2) / np.maximum(power, 1.0))[contrast]
+        amount = float(np.median(blend))
+        assert 0.02 < amount < 0.98
+        assert float(np.mean(np.abs(blend - amount) > 0.12)) < 0.01   # one amount everywhere (anti-aliased edges aside)

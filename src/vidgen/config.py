@@ -541,6 +541,7 @@ LINT_RULES: tuple[str, ...] = (
     "walk_overlap",
     "off_stage",
     "character_overlap",
+    "prop_overlap",
     "bubble_overlap",
     "facing_away",
     "hidden_speaker",
@@ -566,6 +567,7 @@ RuleName = Literal[
     "walk_overlap",
     "off_stage",
     "character_overlap",
+    "prop_overlap",
     "bubble_overlap",
     "facing_away",
     "hidden_speaker",
@@ -690,6 +692,13 @@ class CharacterOverlapRule(RuleConfig):
     """Share of the narrower character's width the two must share side by side to be reported."""
 
 
+class PropOverlapRule(RuleConfig):
+    """``prop_overlap``: two props standing on the floor at about the same depth drawn over each other (a door and the sofa against the wall)."""
+
+    min_overlap: Fraction = 0.15
+    """Share of the narrower prop's width the two must share side by side to be reported."""
+
+
 class BubbleOverlapRule(RuleConfig):
     """``bubble_overlap``: a speech bubble covering a character's face, another bubble or an effect symbol."""
 
@@ -812,6 +821,8 @@ class LintRules(_Strict):
     """A character partly outside the view, not entering or exiting (default: warning)."""
     character_overlap: CharacterOverlapRule = Field(default_factory=CharacterOverlapRule)
     """Two characters standing on each other (default: warning)."""
+    prop_overlap: PropOverlapRule = Field(default_factory=PropOverlapRule)
+    """Two props on the floor at about the same depth drawn over each other (default: warning)."""
     bubble_overlap: BubbleOverlapRule = Field(default_factory=BubbleOverlapRule)
     """A speech bubble covering a face or another bubble (default: warning)."""
     facing_away: FacingAwayRule = Field(default_factory=FacingAwayRule)

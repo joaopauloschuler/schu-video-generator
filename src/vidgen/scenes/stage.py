@@ -788,8 +788,19 @@ class Stage(NarratedScene):
                 self._part_orders[name] = figure.order_changes
                 changed = True
         if changed and getattr(self, "animations", None):
-            # Manim lists what it draws when an animation begins; keep that list in the new order
-            self.moving_mobjects = self.get_moving_and_static_mobjects(self.animations)[0]
+            self.moving_mobjects = self._moving_in_order()
+
+    def _moving_in_order(self) -> list[Mobject]:
+        """What Manim draws on each frame of the animation playing now, in the current draw order:
+        what it drew so far plus what moves now. Manim drew everything else once, when the
+        animation began, into its static image; a thing dropped from this list mid-play (a prop at
+        the depth the walker has left behind, so no longer one it passes) would be drawn in neither
+        and vanish until the next animation (§69.44)."""
+        now = self.get_moving_and_static_mobjects(self.animations)[0]
+        kept = {id(m) for m in self.moving_mobjects} | {id(m) for m in now}
+        ordered = self.get_mobject_family_members()
+        known = {id(m) for m in ordered}
+        return [m for m in [*ordered, *(m for m in now if id(m) not in known)] if id(m) in kept]
 
     def _keep_depth_order(self, walker: Character) -> bool:
         """Move ``walker`` (with the props it holds) to its place among the characters and props
@@ -983,6 +994,7 @@ class Stage(NarratedScene):
                 item.height_factor = props[place_at.name].height_factor()
                 item.shift(np.array([*place_at.feet, 0.0]) - item.feet())
                 item.stage_depth = place_at.depth   # its place in the draw order (walks in depth, §69.44)
+                item.raised = props[place_at.name].resolved_lift() + props[place_at.name].resolved_hang() > 0
                 self.props[place_at.name] = item
                 on_stage.append((place_at.name, item))
                 continue
@@ -1022,11 +1034,22 @@ class Stage(NarratedScene):
         first_moving = next((k for k, t in enumerate(targets) if id(t.mobject) in cast_by), None)
 
         def entrance() -> list:
+            """The set comes in as one picture: everything is added at once, back to front, under
+            a cover of the background colour that fades out (a fade-in per thing would show the
+            things behind through each one while they fade, §69.51)."""
+            shown: list[Mobject] = [*backdrop]
             items: list = []
             for k, t in enumerate(targets):  # moving things' shadows: drawn just before the first of them
-                items += [FadeIn(moving)] if k == first_moving else []
-                items += self.entrance(t)
-            return [FadeIn(part) for part in backdrop] + items + [FadeIn(m) for m in in_front]
+                shown += [moving] if k == first_moving else []
+                if self.is_shown(t):
+                    continue
+                carried = self._claim_carried(t) if self._carried else None   # a copy from the scene before moves in (§50)
+                if carried is not None:
+                    items.append(carried)
+                else:
+                    shown.append(t.mobject)
+            self.add(*shown, *in_front)
+            return [FadeOut(self._entrance_cover()), *items]
 
         self._start_wind(placements)
         self._start_depth_order()
@@ -1047,6 +1070,16 @@ class Stage(NarratedScene):
             self.light.on_change(self._show_light)
         self.reveal([entrance], fraction=0.6, cap=1.0)
         self.finish()
+
+    def _entrance_cover(self) -> Rectangle:
+        """A rectangle of the background colour over everything, larger than the view and kept
+        on it, for the set to fade in under as one picture (:meth:`construct`'s entrance)."""
+        frame = self.camera.frame
+        cover = Rectangle(width=frame.width * 1.5, height=frame.height * 1.5, stroke_width=0)
+        cover.set_fill(self.camera.background_color, opacity=1.0)
+        cover.add_updater(lambda m: m.move_to(frame.get_center()))
+        self.add(cover.move_to(frame.get_center()))
+        return cover
 
     # ----- light and shadows (DESIGN.md §69.31) ---------------------------------------------------
 
