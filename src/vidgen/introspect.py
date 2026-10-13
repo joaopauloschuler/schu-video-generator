@@ -250,6 +250,7 @@ class LayoutRecorder:
 
         from vidgen.cartoon.character import Character
         from vidgen.cartoon.effect_symbols import EffectSymbol
+        from vidgen.cartoon.living_drawing import PropGlow
         from vidgen.cartoon.motion_effect_shapes import MotionEffect
         from vidgen.cartoon.props import Prop
         from vidgen.cartoon.shading import StageShadows, StarField
@@ -257,8 +258,8 @@ class LayoutRecorder:
         from vidgen.particle_field import ParticleField, Puddles
         from vidgen.vector_mobject import VectorPicture
 
-        # a stage's shadows, stars and puddles: not placed by authors (§69.31, §69.39)
-        if id(mob) in walk.seen or isinstance(mob, (StageShadows, StarField, Puddles)):
+        # a stage's shadows, stars, puddles and glows: not placed by authors (§69.31, §69.39, §69.54)
+        if id(mob) in walk.seen or isinstance(mob, (StageShadows, StarField, Puddles, PropGlow)):
             return
         walk.seen.add(id(mob))
         name = walk.names.get(id(mob))

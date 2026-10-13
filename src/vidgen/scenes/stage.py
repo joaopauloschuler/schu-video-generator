@@ -1,7 +1,8 @@
 """``stage``: a cartoon set (a picture, a generated picture or a colour / gradient) with a ground
 line, named marks and the video's characters standing on them (DESIGN.md §69.6), parallax
 layers that move by their factor when the camera moves (§69.7), props (§69.8), particles
-(§69.9), its light and shadows (§69.31), its wind (§69.32) or a room instead of the sky (§69.42)."""
+(§69.9), its light and shadows (§69.31), its wind (§69.32) or a room instead of the sky (§69.42),
+and props that move by themselves (§69.54)."""
 
 import math
 from collections.abc import Iterator
@@ -20,6 +21,11 @@ from .image import check_image, is_vector, load_image
 DEFAULT_GROUND_COLOR = "surface"
 #: Corners drawn per hill of a ``hills`` layer shape.
 HILL_POINTS = 16
+#: How far around a moving part of a prop that moves by itself another member counts as drawn
+#: over it (frame heights: outlines and anti-aliasing reach past the points), and the level of
+#: the click of a switch (dB).
+REDRAW_MARGIN = 0.006
+SWITCH_CLICK_GAIN = -4.0
 
 IDENTIFIER_PATTERN = r"^[A-Za-z0-9_]+$"
 Identifier = Annotated[str, Field(pattern=IDENTIFIER_PATTERN)]
@@ -88,10 +94,18 @@ class StageProp(SceneParams):
     """An umbrella or a door: true starts it open (the open / close actions change it later)."""
     against: Literal["wall"] | None = None
     """wall: it stands with its back to the room's wall, at the wall's depth unless depth is given (a room only); a picture or a clock in a room hangs on the wall without it."""
+    on: bool = False
+    """A tv or a lamp: true starts it switched on (a tv's picture changes and flickers, a lamp glows; the switch_on / switch_off actions change it)."""
+    time: str | None = None
+    """A clock: the time it shows at the scene's start, H:MM or H:MM:SS (default 10:10, as drawn); with time or speed the clock runs, its hands turning."""
+    speed: float | None = Field(None, gt=0.0, le=MAX_CLOCK_SPEED)
+    """A clock: how fast it runs, clock seconds per second (1 real time, the default; 60 a minute a second; up to 3600); with time or speed the clock runs."""
 
     @model_validator(mode="before")
     @classmethod
     def _kind_only(cls, data: Any) -> Any:
+        if isinstance(data, dict) and True in data and "on" not in data:   # YAML 1.1 reads the bare key `on` as true
+            data = {("on" if key is True else key): value for key, value in data.items()}
         return {"prop": data} if isinstance(data, str) else data
 
     @classmethod
@@ -113,7 +127,21 @@ class StageProp(SceneParams):
         if self.open and "open" not in PROP_SHAPES.get(self.prop or "", ()):
             able = ", ".join(kind for kind, shapes in PROP_SHAPES.items() if "open" in shapes)
             raise ValueError(f"open is for props that open ({able}), not {self.prop or 'an svg prop'}")
+        if self.on and self.prop not in SWITCHED_PROPS:
+            raise ValueError(f"on is for props that switch on ({', '.join(SWITCHED_PROPS)}), not {self.prop or 'an svg prop'}")
+        if (self.time is not None or self.speed is not None) and self.prop != "clock":
+            raise ValueError(f"time and speed are for a clock, not {self.prop or 'an svg prop'}")
+        if self.time is not None:
+            parse_clock_time(self.time)
         return self
+
+    def runs(self) -> bool:
+        """Whether it is a clock that runs (it has a ``time`` or a ``speed``)."""
+        return self.prop == "clock" and (self.time is not None or self.speed is not None)
+
+    def clock_start(self) -> float:
+        """The time a running clock shows at the scene's start, seconds after midnight."""
+        return DRAWN_CLOCK_SECONDS if self.time is None else parse_clock_time(self.time)
 
     def default_name(self) -> str:
         """The prop's name (``tree``), or the SVG's file name made an identifier (``old_well``)."""
@@ -369,6 +397,8 @@ class Stage(NarratedScene):
     the sky of the light, and doors (door props whose names are marks; ``enter`` and ``exit``
     through them); no wind or weather inside. Furniture (a sofa, a bed, a kitchen counter, a
     picture...) stands ``against: wall`` at the wall's depth; a picture and a clock hang on it.
+    A clock with a ``time`` or a ``speed`` runs; a tv ``on`` shows a flickering picture and a
+    lamp ``on`` glows (``switch_on`` / ``switch_off`` change them).
 
     A beat is spoken by the characters whose voice says it (their mouths move with it), or by
     the ones its ``say`` action names; the acting actions (``say``, ``look_at``, ``turn``,
@@ -452,7 +482,7 @@ class Stage(NarratedScene):
         layers: list[StageLayer] = []
         """Parallax layers: {place: background | middle | foreground, factor, image | shapes}."""
         props: list[StageProp] = []
-        """Props: a built-in prop's name, or {prop | svg, name, at, depth, scale, lift, facing, color, detail, recolor, open, against}."""
+        """Props: a built-in prop's name, or {prop | svg, name, at, depth, scale, lift, facing, color, detail, recolor, open, against, on, time, speed}."""
         particles: list[StageParticles] = []
         """Particles over the whole scene, in front of everything: a kind (rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves, streaks) or {kind, density, area, color, seed, puddles}; rain ends on the ground with splashes, not under an open umbrella or a tree, and plays a rain sound with foley; for one beat use the particles action."""
         light: LightSetting = "day"
@@ -1060,6 +1090,7 @@ class Stage(NarratedScene):
         #: the y of the ground line at each character's and prop's depth (``keyframes`` y 0, §69.14)
         self.grounds: dict[str, float] = {}
         entering = self._entering()
+        living = self._living_names()
         left, right = self.camera_bounds()[:2]
         on_stage: list[tuple[str, Mobject]] = []
         for place_at in placements:
@@ -1067,7 +1098,7 @@ class Stage(NarratedScene):
                 place_at.x_fraction, place_at.depth, p.ground, self.frame_width, self.frame_height,
             )[1]
             if place_at.kind == "prop":
-                item = self._prop(place_at.name, props[place_at.name], place_at.height)
+                item = self._prop(place_at.name, props[place_at.name], place_at.height, living=place_at.name in living)
                 item.height_factor = props[place_at.name].height_factor()
                 item.shift(np.array([*place_at.feet, 0.0]) - item.feet())
                 item.stage_depth = place_at.depth   # its place in the draw order (walks in depth, §69.44)
@@ -1108,6 +1139,7 @@ class Stage(NarratedScene):
                     self.water.float_boat(prop)
         # the light grades the set, not the stars, shadows, bubbles or text (DESIGN.md §69.31)
         mark_lit(*[m for m in backdrop if not isinstance(m, (StarField, WindowViews))], *in_front, *(mob for _, mob in on_stage))
+        self._start_living(living)
         still, moving = self._shadows(placements)
         backdrop += [still] if still is not None else []
         # register back to front, so the fade-ins add them (and draw them) in that order
@@ -1133,7 +1165,8 @@ class Stage(NarratedScene):
                 if carried is not None:
                     items.append(carried)
                 else:
-                    shown.append(t.mobject)
+                    glow = self.living[t.name].glow if t.name in self.living else None   # a lamp's or a tv's, right behind it (§69.54)
+                    shown += [glow, t.mobject] if glow is not None else [t.mobject]
             self.add(*shown, *in_front)
             return [FadeOut(self._entrance_cover()), *items]
 
@@ -1223,8 +1256,9 @@ class Stage(NarratedScene):
         image), or, while the wind may move something, everything from the first swaying prop or
         trailing character on (DESIGN.md §69.32; the set behind it stays in the static image),
         while a character walks in depth, everything from the first thing whose depth it passes
-        on (its place in the draw order changes, §69.44), and on a stage with water everything from
-        the first boat on (the waves and the bobbing move every frame, §69.53)."""
+        on (its place in the draw order changes, §69.44), on a stage with water everything from
+        the first boat on (the waves and the bobbing move every frame, §69.53), and the parts of the
+        props that move by themselves with what is drawn over them (§69.54)."""
         moving = super().get_moving_mobjects(*animations)
         now = float(self.renderer.time)
         duration = getattr(self, "duration", None)
@@ -1243,11 +1277,11 @@ class Stage(NarratedScene):
                 redrawn |= {id(m) for mob in blowing.mobjects() for m in mob.get_family()}
             elif not blowing.moving(now, math.inf):
                 self.remove_updater(self._wind_updater)
-        if not redrawn:
-            return moving
-        family = self.get_mobject_family_members()
-        first = next((k for k, m in enumerate(family) if id(m) in redrawn), len(family))
-        return list_update(family[first:], moving)
+        if redrawn:
+            family = self.get_mobject_family_members()
+            first = next((k for k, m in enumerate(family) if id(m) in redrawn), len(family))
+            moving = list_update(family[first:], moving)
+        return self._living_redrawn(moving, now, end)
 
     # ----- wind (DESIGN.md §69.32) ----------------------------------------------------------------
 
@@ -1345,6 +1379,72 @@ class Stage(NarratedScene):
         riders = [seat.rider for boat in boats for seat in self._riders_of(boat)]
         return {id(m) for mob in [water.front, *boats, *riders] for m in mob.get_family()}
 
+    # ----- props that move by themselves (DESIGN.md §69.54) ----------------------------------------
+
+    def _living_names(self) -> set[str]:
+        """The props that move by themselves in this scene: running clocks, and the tvs and lamps
+        that are on at the start or that a ``switch_on`` names. Every other prop is drawn as before."""
+        p = self.params
+        patterns = [pattern for use in self.action_uses("switch_on") for pattern in use.config.targets()]
+        return {
+            name for name, prop in zip(p.prop_names(), p.stage_props())
+            if prop.runs() or (prop.prop in SWITCHED_PROPS and (prop.on or any(fnmatchcase(name, pat) for pat in patterns)))
+        }
+
+    def _start_living(self, names: set[str]) -> None:
+        """A :class:`LivingProp` per prop of ``names`` (made after the light marks the props: its
+        moving parts and glow are not graded), and the scene updater that shows them for the scene
+        time on every frame."""
+        given = dict(zip(self.params.prop_names(), self.params.stage_props()))
+        movable = self._movable_props() if names else set()
+        #: the props that move by themselves, by name (DESIGN.md §69.54)
+        self.living: dict[str, LivingProp] = {}
+        for name in sorted(names):
+            prop = given[name]
+            self.living[name] = LivingProp(
+                self.props[name], start=prop.clock_start() if prop.runs() else None, speed=prop.speed or 1.0, on=prop.on,
+                seed=motion_seed(self.spec.id, name), movable=name in movable,
+            )
+        if self.living:
+            #: the scene updater, kept: Manim removes an updater by identity
+            self._living_updater = self._living_step
+            self.add_updater(self._living_updater)
+
+    def _living_step(self, dt: float) -> None:
+        """Scene updater: every prop that moves by itself as it is at the scene time now."""
+        now = float(self.renderer.time)
+        for live in self.living.values():
+            live.update(now)
+
+    def switch_props(self, patterns: list[str], on: bool, time: float) -> None:
+        """Switch the tvs and lamps matching ``patterns`` on (or off) at scene ``time`` (the
+        ``switch_on`` / ``switch_off`` actions), with a click (foley)."""
+        names = [name for name in getattr(self, "living", {}) if any(fnmatchcase(name, pat) for pat in patterns)]
+        for name in names:
+            self.living[name].switch(on, time)
+        if names and self._foley_on():
+            self.sfx("click", max(float(time), 0.0), gain=SWITCH_CLICK_GAIN)
+
+    def _living_redrawn(self, moving: list[Mobject], start: float, end: float) -> list[Mobject]:
+        """``moving`` plus what props that move by themselves change between scene times
+        ``start`` and ``end`` (the hands, a picture, a glow) and every member drawn after those
+        that overlaps them (:func:`redrawn_members`); the rest of the set stays in Manim's static
+        image. In draw order."""
+        changing = [live for live in getattr(self, "living", {}).values() if live.changing(start, end)]
+        if not changing:
+            return moving
+        family = self.get_mobject_family_members()
+        movers = {id(m) for live in changing for mob in live.movers() for m in mob.get_family()}
+        first = next((k for k, m in enumerate(family) if id(m) in movers), None)
+        if first is None:
+            return moving   # not on screen yet
+        drawn = {id(m) for m in moving}
+        after = [m for m in family[first:] if id(m) not in movers and id(m) not in drawn]
+        boxes = [_box(m) for m in after]
+        kept = movers | drawn | {id(after[k]) for k in redrawn_members(boxes, [live.region() for live in changing], REDRAW_MARGIN * self.frame_height)}
+        known = {id(m) for m in family}
+        return [m for m in family if id(m) in kept] + [m for m in moving if id(m) not in known]
+
     def _shadows(self, placements: list[StagePlacement]) -> tuple[StageShadows | None, StageShadows | None]:
         """The shadows (``shadows: true``): of the props on the ground that stay put (drawn
         with the backdrop, so they stay in Manim's static image), and of the characters and the
@@ -1416,9 +1516,9 @@ class Stage(NarratedScene):
                 held.setdefault(use.action.options.to, names[0])
         return held
 
-    def _prop(self, name: str, prop: StageProp, height: float) -> Prop:
+    def _prop(self, name: str, prop: StageProp, height: float, *, living: bool = False) -> Prop:
         """The prop ``name`` drawn ``height`` units tall, its feet at the origin; outlines as wide
-        as a character's at its depth."""
+        as a character's at its depth; ``living``: with the parts it moves by itself (§69.54)."""
         if prop.svg is not None:
             problems = check_image(self.project, prop.svg, "svg")
             if problems:
@@ -1430,6 +1530,7 @@ class Stage(NarratedScene):
         return draw_prop(
             prop.prop, height=height, theme=self.theme, name=name, main=prop.color, detail=prop.detail,
             facing=prop.facing, character_height=height / prop.height_factor(), shape="open" if prop.open else None,
+            living=living,
         )
 
     def _backdrop(self, layers: list[Mobject], heads: float | None = None) -> list[Mobject]:
@@ -1629,6 +1730,14 @@ def _moving_block(scene: Any, mover: Mobject) -> list[Mobject]:
         return scene.mobjects[at:end]
     riders = {name for name, figure in scene.cast.items() if getattr(figure, "riding", None) == getattr(mover, "name", None)}
     return [m for m in scene.mobjects if m is mover or (isinstance(m, Character) and m.name in riders) or getattr(m, "held_by", None) in riders]
+
+
+def _box(mob: Mobject) -> tuple[float, float, float, float] | None:
+    """The box of ``mob``'s own points (left, bottom, right, top; ``None``: it has none)."""
+    points = mob.points
+    if len(points) == 0:
+        return None
+    return float(points[:, 0].min()), float(points[:, 1].min()), float(points[:, 0].max()), float(points[:, 1].max())
 
 
 def _played(action: str, options: Any, anim: Animation, start: float, seconds: float) -> PlayedAction:

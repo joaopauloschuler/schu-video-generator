@@ -690,6 +690,8 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `wind` | on a `stage`: fade the wind to `0.8` or `calm`, `breeze`, `windy`, `gale` (`- wind: gale`; `run_time` = the fade, 2 s) | a storm coming, a gust in the story |
 | `blow_away` | on a `stage`: the wind blows a light prop away, tumbling, out of a hand too (`- blow_away: napkin`; `to:` a mark to land there, else off the stage) | a gust in the story; napkin, umbrella, ball, cup, basket, box only |
 | `light` | on a `stage`: fade the light to `morning`, `sunset`, `night`, `indoor` or `day` (`- light: night`; `run_time` = the fade, 2 s) | when time passes in the story |
+| `switch_on` | on a `stage`: a `tv` or a `lamp` goes on (`- switch_on: tv`; a click with foley) | when someone in the story switches it on |
+| `switch_off` | on a `stage`: a `tv` or a `lamp` goes off (`- switch_off: lamp`) | when someone in the story switches it off |
 | `say` | on a `stage`: pick who speaks the beat (`- say: kit`; `bubble: true` or a short text for a speech bubble) | without it the characters whose `voice` is the beat's voice speak; bubbles for short lines |
 | `look_at` | on a `stage`: a character looks at another, a prop, a mark or `camera` (`to:`) | when attention moves |
 | `turn` | on a `stage`: a character faces the other way (`to: left` / `right`), or the viewer (`to: front`: its front view) | an SVG character has no front view |
@@ -822,6 +824,10 @@ asks for one, say vidgen makes original characters and offer one with the same r
   (`picture` and `clock` hang on the wall by themselves). Characters that sit on such furniture
   stand at the wall's depth too (`depth: 0.4`, or walk there: `- {walk_to: dot, to: {mark: 0.42,
   depth: 0.4}}`; `vidgen validate` says where); a sofa or a bed seats two.
+- **Props that move by themselves**: `{prop: clock, time: "21:45"}` runs (`speed: 60` = a minute
+  a second); `{prop: tv, on: true}` shows a flickering picture, `{prop: lamp, on: true}` glows;
+  `- switch_on: lamp` / `- switch_off: tv` switch them in a beat (with a click). A lamp at
+  `light: night` makes a warm spot, it does not light the whole room.
 
 **Shot variety.** Change the shot every few beats, as a comic changes panels. A beat's `shot:`
 key cuts the camera to a framing of the characters for that beat; the next beat without one cuts
@@ -1498,7 +1504,7 @@ scenes:
 | `duplicate beat id` | beat ids are unique in the whole video; rename one |
 | `unknown target 'x' ...; did you mean ... (targets: ...)` | pick a name from the list (labels are case-sensitive: `bar:4K`) |
 | `until 'x' is not a later beat of scene 'y'` | `until` names a later beat id of the same scene |
-| `unknown action 'x'` / `unknown option` | actions are `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `sit_on`, `lean_on`, `stand_up`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect` |
+| `unknown action 'x'` / `unknown option` | actions are `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `switch_on`, `switch_off`, `sit_on`, `lean_on`, `stand_up`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect` |
 | `labels has 2 entries but values has 3` | one value per label |
 | `unknown theme color 'x'` | use a token (`primary`, `highlight`...) or quoted hex `"#0B5FFF"`, or add it to `theme.colors` |
 | `invalid hex color` | `#RGB`, `#RRGGBB` or `#RRGGBBAA`, in quotes (YAML reads `#` as a comment) |

@@ -11339,3 +11339,91 @@ How to test
   test_phase_h_review` (1347 passed, 177 s); render: `test_cartoon_vehicles motion_effects props
   foley stage room depth` (12 passed, 9 s), the `card` renders of `test_builtin_scenes` /
   `test_actions_coverage` (5 passed). The full suite was not run.
+
+## Step 120 — Props that move by themselves, part 1: indoors
+
+What was built (DESIGN §69.54)
+- Pure `src/vidgen/cartoon/living.py`: clock maths (`parse_clock_time`, `clock_seconds`,
+  `hand_angles` clockwise from twelve, `hand_tip`, `shows_second_hand`, `DRAWN_CLOCK_SECONDS`
+  10:10, `MAX_CLOCK_SPEED` 3600), switches (`switched_on`, `switch_between`, `on_between`), a
+  tv's picture (`tv_shot`, `tv_flicker`, `tv_picture`, `TV_PALETTES`, seeded by `random.Random` of
+  a text key), glows (`GLOWS`, `glow_rings`, `glow_box`, `union_box`, `boxes_overlap`) and
+  `redrawn_members(boxes, regions, margin)` (which members drawn after a moving part must be
+  redrawn with it, transitively). `LIVING_KINDS`, `SWITCHED_PROPS`, `LIVING_PART`.
+- `src/vidgen/cartoon/living_drawing.py`: `living_overlays` (a clock's red second hand, a tv's
+  4-part picture over its screen, a lamp's lit lantern), `LivingProp` (sets the hands, the
+  picture, the lantern and the glow for a scene time; `switch`, `changing`, `movers`, `region`),
+  `PropGlow` (12 rings, its own mobject right before the prop, not graded, left out of the layout
+  dump). `draw_prop(..., living=True)` adds the overlays and an anchor (`Prop(anchored=True)`);
+  the clock's hour and minute hands are tagged in its drawing (no change to how it looks).
+- Stage: prop keys `on` (tv, lamp), `time`, `speed` (clock); a bare YAML `on` key (read as
+  `true` by YAML 1.1) is taken as `on`. Only running clocks and tvs / lamps that are `on` or named
+  by a `switch_on` are drawn living (`_living_names`); `_start_living` and the scene updater
+  `_living_step`; glows enter with their props; `switch_props` (+ `click` foley);
+  `get_moving_mobjects` ends with `_living_redrawn` (the moving parts plus overlapping members
+  after them; the rest stays in Manim's static image).
+- Actions `switch_on` / `switch_off` (`src/vidgen/scenes/switch_action.py`), non-animating like
+  `light`; validate refuses non-props and props that do not switch.
+
+Measured (DESIGN §69.54 has the table; scratch project `s120/proj` and `s120/proj_on` in the
+scratchpad, `s120/measure_room.py`): a night room at preview 854×480, 266 frames: HEAD 118b1b9
+20 358 Cairo draws, 2.9–3.1 s drawing, 6.6–6.9 s wall; this step with nothing on: the same 266
+raw frame hashes and draws; with a clock running in real time, a tv and a lamp on: 32 665
+draws, in alternating pairs drawing +1.1 to +1.5 s, wall +1.7 to +2.3 s (+23 to +31 %).
+Redrawing everything from the clock on instead gives the same frames with 1 506 more draws; a
+logging run showed the overlap rule added no member besides the moving parts in this room.
+
+Files touched
+- New: `src/vidgen/cartoon/living.py`, `src/vidgen/cartoon/living_drawing.py`,
+  `src/vidgen/scenes/switch_action.py`, `tests/test_cartoon_living.py`.
+- `src/vidgen/cartoon/props.py`, `src/vidgen/scenes/stage.py`, `src/vidgen/scenes/__init__.py`,
+  `src/vidgen/introspect.py`, `src/vidgen/api.py`; guide `src/vidgen/data/guide/AGENTS.md` + copy
+  `AGENTS.md` (two action rows, "Props that move by themselves" bullet, troubleshooting list).
+- Docs: `docs/CONFIG.md` (props rows `on` / `time` / `speed`, new "Clocks, televisions and
+  lamps", actions rows, `action` row, targets row, foley), `DESIGN.md` (§2 tree, §6.4, new
+  §69.54), `docs/EXTENDING.md`, `docs/gallery/stage.md` (props rows as `vidgen gallery` writes
+  them), `tasklist.md` (ticks, a Backlog line).
+- Tests updated: `tests/test_actions.py` (action name lists gain `switch_off`, `switch_on`).
+
+Public interfaces
+- `vidgen.api` adds the names in DESIGN §6.4 (Step 120). `Prop(anchored=False)`,
+  `draw_prop(living=False)`; stage prop keys `on`, `time`, `speed`; `Stage.living`,
+  `Stage.switch_props`; actions `switch_on`, `switch_off`. Compatible: nothing changes for a scene
+  without a running clock or a tv / lamp that comes on.
+
+Decisions / deviations
+- A clock runs only with `time` or `speed` (a clock without them stays as drawn, so existing
+  scenes such as the muffin-mystery room keep their pixels and render cost); `time` is the start,
+  the scene clock drives it.
+- "The room's light where simple": the lamp's glow lies right behind the lamp, so it brightens
+  the wall, the window, the floor and what stands behind it; the room's grade is not changed and
+  characters in front are not lit (a lit character would need per-character grading).
+- Moving parts are redrawn by overlap, not "everything from the first moving part on" (§69.20):
+  correct because Manim draws the moving list over the static image in draw order; a member
+  after a moving part that overlaps it (or overlaps one already redrawn) is redrawn too.
+- Switching is instant (a click), like a light switch; `run_time` is not used.
+- Searched first: no running clock, tv flicker, prop glow or switch code existed (`git grep -in
+  "flicker\|switch_on" 118b1b9 -- src/vidgen`: only a speed line's length flicker and a viseme
+  comment; "glow" only as `LightGrade.glow`, an additive grade term); reused `draw_prop` and its primitives, the anchor helpers, `darker`, `mark_lit` /
+  `LIT`, `motion_seed`, the `light` action's non-animating pattern, the scene-updater pattern of
+  the water / wind (kept bound method), `click` from sfx.
+
+Known gaps / TODOs (Backlog line "Living props")
+- No room light falloff or lit characters; instant switches (no fade); a carried lamp's glow
+  keeps its draw-order place; no tv sound, no clock strike; no screenplay words. A scene with a
+  living prop keeps a scene updater all along (Manim then renders every frame, no static waits;
+  with idle characters it did anyway).
+
+How to test
+- `pytest tests/test_cartoon_living.py` (25 not-render + 2 render at 160x90, ~4 s).
+- Also run (not render): `test_cartoon_living test_actions test_api test_cartoon_props
+  test_cartoon_furniture test_cartoon_room test_cartoon_stage test_introspect
+  test_cartoon_lighting test_cartoon_holding test_cartoon_vehicles test_cartoon_water_air
+  test_cartoon_depth` (270 passed, 9 s), `test_docs test_guide test_schema test_gallery
+  test_actions_coverage test_builtin_scenes test_extensions test_config` (342 passed and 2 failed:
+  a CONFIG snippet and a combined guide row, fixed; `test_docs test_guide` re-run: 102 passed),
+  `test_lint test_cartoon_lint test_mcp test_cli test_json_output test_screenplay test_includes
+  test_phase_k_review test_cartoon_speed test_cartoon_sheet` (140 passed, 39 s); render:
+  `test_cartoon_living props furniture room stage lighting depth speed parallax` (14 passed, 8 s),
+  `test_introspect test_cartoon_lint wind water_air vehicles holding test_phase_k_review` (10
+  passed, 15 s). The full suite was not run.

@@ -95,7 +95,7 @@ def test_until_must_be_a_later_beat_of_the_scene() -> None:
 
 def test_builtin_actions_are_registered() -> None:
     extensions.load_builtins()
-    assert registry.action_names() == ["blow_away", "callout", "close", "dim", "effect", "emote", "enter", "exit", "follow", "gesture", "get_in", "get_out", "give", "highlight", "hold", "jump", "keyframes", "lean_on", "light", "look_at", "move_along", "open", "pan", "particles", "pick_up", "pose", "put_down", "react", "reveal", "ride_to", "run_to", "say", "sfx", "shot", "sit_on", "stand_up", "throw", "transform", "turn", "walk_to", "wind", "zoom"]
+    assert registry.action_names() == ["blow_away", "callout", "close", "dim", "effect", "emote", "enter", "exit", "follow", "gesture", "get_in", "get_out", "give", "highlight", "hold", "jump", "keyframes", "lean_on", "light", "look_at", "move_along", "open", "pan", "particles", "pick_up", "pose", "put_down", "react", "reveal", "ride_to", "run_to", "say", "sfx", "shot", "sit_on", "stand_up", "switch_off", "switch_on", "throw", "transform", "turn", "walk_to", "wind", "zoom"]
     assert all(a.builtin for a in registry.all_actions())
     assert registry.find_action("dim").cls.reversible and not registry.find_action("reveal").cls.reversible
     assert "did you mean 'highlight'" in registry.unknown_action_message("higlight")
@@ -196,7 +196,7 @@ def test_validate_reports_bad_actions(make_project) -> None:
     assert "targets: heading, item1, item:Write the beats" in by_location[f"{at}[0].target"][0]
     assert "forms: heading, item<N>, item:<text>" in by_location[f"{at}[0].target"][0]
     assert by_location[f"{at}[1].action"] == [
-        "unknown action 'higlight'; did you mean 'highlight' or 'light'? (known actions: blow_away, callout, close, dim, effect, emote, enter, exit, follow, gesture, get_in, get_out, give, highlight, hold, jump, keyframes, lean_on, light, look_at, move_along, open, pan, particles, pick_up, pose, put_down, react, reveal, ride_to, run_to, say, sfx, shot, sit_on, stand_up, throw, transform, turn, walk_to, wind, zoom)"
+        "unknown action 'higlight'; did you mean 'highlight' or 'light'? (known actions: blow_away, callout, close, dim, effect, emote, enter, exit, follow, gesture, get_in, get_out, give, highlight, hold, jump, keyframes, lean_on, light, look_at, move_along, open, pan, particles, pick_up, pose, put_down, react, reveal, ride_to, run_to, say, sfx, shot, sit_on, stand_up, switch_off, switch_on, throw, transform, turn, walk_to, wind, zoom)"
     ]
     assert "less than or equal to 1" in by_location[f"{at}[2].opacity"][0]
     assert by_location[f"{at}[2].colour"] == ["unknown option 'colour' (known: opacity)"]
@@ -240,7 +240,7 @@ def test_schema_describes_both_forms_and_options() -> None:
         doc = schema.config_schema(registry.all(), [Theme()])
     validator = jsonschema.Draft202012Validator(doc)
     defs = doc["$defs"]
-    assert defs["ActionConfig"]["properties"]["action"]["enum"] == ["blow_away", "callout", "close", "dim", "effect", "emote", "enter", "exit", "follow", "gesture", "get_in", "get_out", "give", "highlight", "hold", "jump", "keyframes", "lean_on", "light", "look_at", "move_along", "open", "pan", "particles", "pick_up", "pose", "put_down", "react", "reveal", "ride_to", "run_to", "say", "sfx", "shot", "sit_on", "stand_up", "throw", "transform", "turn", "walk_to", "wind", "zoom"]
+    assert defs["ActionConfig"]["properties"]["action"]["enum"] == ["blow_away", "callout", "close", "dim", "effect", "emote", "enter", "exit", "follow", "gesture", "get_in", "get_out", "give", "highlight", "hold", "jump", "keyframes", "lean_on", "light", "look_at", "move_along", "open", "pan", "particles", "pick_up", "pose", "put_down", "react", "reveal", "ride_to", "run_to", "say", "sfx", "shot", "sit_on", "stand_up", "switch_off", "switch_on", "throw", "transform", "turn", "walk_to", "wind", "zoom"]
     assert {"action.dim", "action.highlight", "action.reveal", "ActionShorthand"} <= set(defs)
 
     def ok(*acts: dict[str, Any]) -> bool:

@@ -127,7 +127,9 @@ src/vidgen/
                           # rocket, §69.52-53), riding.py (Ride, riders on their seats,
                           # pedalling, §69.52), vehicle_paths.py (waves, bobbing, balloon and
                           # rocket paths, smoke, §69.53; no manim), water.py (a stage's water,
-                          # §69.53); still.py also
+                          # §69.53), living.py (clock hands, a tv's picture and flicker, glows,
+                          # switches, what is redrawn over moving parts, §69.54; no manim),
+                          # living_drawing.py (LivingProp, PropGlow, §69.54); still.py also
                           # draws the prop, furniture and vehicle galleries (§69.43), the look gallery
                           # (§69.47) and `vidgen character-sheet` (§69.16)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
@@ -217,6 +219,7 @@ src/vidgen/
                           # light_action.py: light (a stage's light fades), §69.31;
                           # wind_action.py: wind (a stage's wind fades), §69.32;
                           # effect_action.py: effect (a symbol over a head), §69.40;
+                          # switch_action.py: switch_on, switch_off (a tv or a lamp), §69.54;
                           # overlays.py: the built-in overlays lower_third/watermark, §41;
                           # progress.py: progress_bar/chapter_indicator, §42; captions.py: captions, §43;
                           # stage.py: the stage scene type, §69.6; card.py: the card scene type, §69.46)
@@ -895,6 +898,12 @@ Step 119 (§69.53) adds `GROUND_VEHICLES`, `WATER_VEHICLES`, `AIR_VEHICLES`, `me
 `StageFrame.water`; `holding_problems(water=None)`; the stage param `water`; the `ride_to`
 option `land`; motion effect `smoke`; built-in sounds `burner`, `launch`. Compatible: scenes
 without these vehicles or water render as before.
+Step 120 (§69.54) adds `DRAWN_CLOCK_SECONDS`, `GLOWS`, `LIVING_KINDS`, `MAX_CLOCK_SPEED`,
+`SWITCHED_PROPS`, `LivingProp`, `PropGlow`, `glow_box`, `hand_angles`, `parse_clock_time`,
+`redrawn_members` and `tv_picture`; `Prop(anchored=False)`; `draw_prop(living=False)`; the stage
+prop keys `on`, `time`, `speed`; `Stage.living`, `Stage.switch_props`; actions `switch_on`,
+`switch_off`. Compatible: a scene without a running clock or a tv / lamp that comes on renders as
+before, pixel for pixel.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -8582,6 +8591,96 @@ updaters and the validate replay; only where they go differs.
   smoke does not drift with the wind; a balloon's riders are as tall as on the ground, so the
   balloon is 2.1 characters tall (authors use a small `size`). Tests:
   `tests/test_cartoon_water_air.py`.
+
+### 69.54 Props that move by themselves, indoors (Step 120)
+
+A wall `clock` runs, a `tv` shows a flickering picture and a `lamp` glows. They are the props of
+§69.8 / §69.43 drawn with a few extra parts; every other prop, and these three while they never
+run or come on, are drawn exactly as before.
+
+- **Maths** (`cartoon/living.py`, no manim): `parse_clock_time` (`H:MM` / `H:MM:SS`, 0:00–23:59:59),
+  `clock_seconds(start, speed, t)`, `hand_angles(seconds)` → `HandAngles(hour, minute, second)`
+  in degrees clockwise from twelve (the hour hand twice round a day, moving between hours),
+  `hand_tip`, `shows_second_hand(speed)` (up to `SECOND_HAND_MAX_SPEED` 10), `DRAWN_CLOCK_SECONDS`
+  (10:10, the drawing), `MAX_CLOCK_SPEED` 3600. Switches: `switched_on(on_at_start, switches, t)`
+  (the last `(time, on)` at or before `t` wins), `switch_between`, `on_between`. A television's
+  picture: `tv_shot(t, seed)` (picture `k` starts near `k` × `TV_SHOT_SECONDS` 1.8 s, moved by up to
+  ± `TV_SHOT_JITTER` / 2, so they stay in order), `tv_flicker(t, seed)` (1 − `FLICKER_DEPTH` 0.22 ×
+  u², a new u every `FLICKER_STEP` 1/12 s), `tv_picture` → `TvPicture(shot, colors, brightness)`
+  from `TV_PALETTES` (six sets of sky, ground and two shapes; no programme of any kind). Glows:
+  `GLOWS` (lamp: warm `#FFD67A` about the lantern, radius 0.42 prop units, 0.55 at the middle; tv:
+  cool `#A8D8FF` about the screen, 0.8, 0.3), `glow_rings(radius, opacity)` (`GLOW_RINGS` 12 equal
+  discs whose stacked opacity is `opacity` at the middle), `glow_box`, `union_box`,
+  `boxes_overlap`, and `redrawn_members(boxes, regions, margin)` (below). Seeds are
+  `random.Random` of a text key, the same in every run.
+- **Drawing** (`cartoon/living_drawing.py`): `draw_prop(kind, ..., living=True)` (for `clock`,
+  `tv`, `lamp`: `LIVING_KINDS`) adds `living_overlays` after the drawing and an anchor
+  (`Prop(anchored=True)`): a clock's red second hand (`SECOND_HAND`), a tv's picture over its
+  screen (four members, the first outlined like the screen), a lamp's lit lantern and core. The
+  clock's hour and minute hands are tagged in its drawing (`LIVING_PART`); the overlays lie inside
+  the prop's box, so its feet, size, shadow and layout dump are unchanged. A `LivingProp(prop,
+  start, speed, on, seed, movable)` sets them for a scene time (`update`): the hands from the
+  screen position of the clock's middle (`prop_point`), so a clock facing left still runs
+  clockwise; a tv's picture colours darkened by the flicker; the overlays shown (their drawn
+  opacities) or hidden (0). A `PropGlow` (the rings) is a mobject of its own, placed by the
+  prop's anchor, drawn right before the prop, never graded by the light (§69.31); the lit
+  overlays are not graded either (`LIT` cleared), the hands are. The layout dump leaves glows out.
+- **Stage** (`scenes/stage.py`): prop keys `on` (`tv` / `lamp`), `time` and `speed` (`clock`;
+  a clock with either runs: `StageProp.runs`, `clock_start`), each a config error on other props.
+  YAML 1.1 reads a bare key `on` as `true`; `StageProp` takes that key as `on`. `_living_names`:
+  running clocks, and tvs / lamps that are `on` or named by a `switch_on` (glob patterns too);
+  only those are drawn `living`. `_start_living` makes the `LivingProp`s (after `mark_lit`; seeds
+  from `motion_seed(scene, name)`; `movable` from `_movable_props`) and a scene updater
+  (`_living_step`) that updates them on every frame; the entrance adds each glow right before its
+  prop. `switch_props(patterns, on, time)` records the switches and plays a `click`
+  (`SWITCH_CLICK_GAIN` −4 dB) with foley.
+- **Actions** (`scenes/switch_action.py`): `switch_on` / `switch_off`, non-animating like `light`
+  (cued at `at` when the beat starts, at once); `scene_problems`: not a prop, or a prop that does
+  not switch ("'sofa' cannot be switched on or off (props that can: lamp, tv)"), or not a stage.
+- **Only the moving parts leave the static image** (§69.20): `get_moving_mobjects` ends with
+  `_living_redrawn`. For each `LivingProp` that changes during the animation (`changing(start,
+  end)`: a running clock always; a tv while on; a lamp only when a switch falls in it, or while on
+  if an action may move it) its movers (the hands; the picture or lantern and the glow) are
+  redrawn on every frame, and so is every family member drawn after the first mover whose box
+  overlaps a mover's region (the prop's box with its glow, + `REDRAW_MARGIN` 0.006 frame heights
+  for outlines) or the box of a member already redrawn (`redrawn_members`: a member redrawn over
+  the static image would otherwise cover what lies on it). Everything else, before or after,
+  stays in Manim's static image; Manim's own moving list (characters with idle motion, from the
+  first of them on) is kept as it was. The result is in draw order.
+- **Measured** (scratch room at preview 854×480, 15 fps, 266 frames, no audio, one process per
+  run under the 1500 MB cap; a sofa, a picture, a clock, a tv, a lamp, an armchair, a rug, a
+  door, a window, two characters, `light: night`; Cairo draws counted around
+  `Camera.display_vectorized`, raw frames hashed):
+
+  | render | Cairo draws | drawing (s) | wall (s) | CPU (s) |
+  |---|---|---|---|---|
+  | HEAD 118b1b9 (props as drawn), 3 runs | 20 358 | 2.88–3.09 | 6.60–6.91 | 7.73–8.23 |
+  | this step, same scene | 20 358 | 3.41 | 8.82 | 10.07 |
+  | this step, clock running (`speed: 1`, second hand), tv and lamp `on` (lamp glow 0.34 then), 3 runs | 32 665 | 4.66–4.92 | 10.50–10.77 | 11.63–11.95 |
+  | the same, everything from the first moving part redrawn (for comparison) | 34 171 | 4.71 | 9.61 | 10.92 |
+  | final glow size, alternating with the plain scene (2 pairs): plain | 20 358 | 2.83–2.84 | 7.27–7.49 | 8.44–8.64 |
+  | final glow size, alternating: everything on | 32 665 | 3.90–4.38 | 8.97–9.83 | 10.21–10.88 |
+
+  The scene with nothing on gives the same raw frames as HEAD (all 266 hashes; the 8.8 s run
+  was on a busier machine: two HEAD runs with hashing took 7.6 and 8.7 s). With everything on, 46
+  more draws a frame on average: the hands (3), the tv's picture (4) and glow (12 rings) on every
+  frame; the lamp's glow (12) and lantern (2), which stand after a character sitting at the wall
+  and so are redrawn with it anyway; the rest in the fade in and out, where everything is drawn.
+  A logging run shows the overlap rule added nothing else in this room (no member after the clock
+  or the tv overlaps them before the first character). In the alternating pairs, drawing +1.1 to
+  +1.5 s (the glows are large translucent discs) and wall +1.7 to +2.3 s (+23 to +31 %) for
+  17.7 s of video; the earlier runs (+1.7 s drawing) were on a busier machine. Against redrawing everything from the clock on, the rule saved
+  1 506 draws here (the tv's body, the door...); both give the same frames. A lamp that stays on
+  and stands before every moving thing stays in the static image (render test).
+- **Checked by eye** (scratch projects, preview stills and frames): a night room with the lamp
+  switched on in beat 2 (glow on the wall and window behind it, lantern lit), the tv switched on
+  in beat 3 (picture, cool glow), the lamp off in beat 4 with the tv still on, a clock at 23:55
+  running a minute a second; a second room with a clock at 21:40 in real time (the second hand
+  sweeping), a tv and a lamp on from the start. `vidgen lint`: 0 findings.
+- **Not done**: the room's own light does not change with a lamp (no light falloff, no lit
+  characters: the glow lies behind the lamp); a carried lamp's glow follows it but keeps its
+  place in the draw order; no fade when switching (at once); a tv has no sound; the clock does
+  not strike. Tests: `tests/test_cartoon_living.py`.
 
 ## 70. Render jobs: `--jobs auto` (Step 117)
 

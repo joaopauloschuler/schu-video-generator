@@ -2006,8 +2006,9 @@ symbols](#effect-symbols-effect) pop up (`idea` a short `chime` ding; `sound: fa
 `effect` for none), and on a [`ride_to`](#vehicles-get_in-ride_to-get_out) a bicycle's `bell`
 as it sets off, or a car's, a bus's or a boat's `engine` for most of the ride, and `brakes`
 ending as a bicycle, a car or a bus stops; a balloon's `burner` and a toy rocket's `launch` as
-they set off, the rocket's parachute `pop`, and a soft `thud` where either lands. Other actions
-are silent. They are ordinary sound effects (listed in `timings.json` `sfx`, mixed like the rest):
+they set off, the rocket's parachute `pop`, and a soft `thud` where either lands; a `click` when
+a `tv` or a `lamp` is [switched on or off](#clocks-televisions-and-lamps-time-on-switch_on). Other
+actions are silent. They are ordinary sound effects (listed in `timings.json` `sfx`, mixed like the rest):
 `sfx: {gain}` sets their level with the others, and `assets/sfx/footstep.wav` (or `boing.wav`,
 ...) replaces a sound with your own. `foley: false` at the top level turns them off for the
 video, a stage's `foley: false` (or `true`) for that scene. Rain on a stage also plays a
@@ -4357,6 +4358,50 @@ a set's room and the scene's merge key by key).
         - {sit_on: kit, to: sofa}       # the other place
 ```
 
+##### Clocks, televisions and lamps (`time`, `on`, `switch_on`)
+
+Three props move by themselves (outdoors too):
+
+- A **`clock` runs** when it has a `time` (what it shows at the scene's start, `H:MM` or
+  `H:MM:SS`; default the drawn `10:10`) or a `speed` (clock seconds per second: `1` real time, the
+  default; `60` a minute a second; up to `3600`). Its hands turn from the scene's clock, clockwise
+  also when the clock faces left; up to `speed: 10` a red second hand sweeps round too. A clock
+  without either stays as drawn.
+- A **`tv` that is on** shows a simple picture (a sky, a ground and two shapes) that changes about every
+  1.8 s and flickers about 12 times a second, with a faint cool glow on the wall around it.
+- A **`lamp` that is on** lights its lantern and lays a soft warm glow around it. The glow is drawn
+  right behind the lamp, so it brightens the wall, the floor and whatever stands behind the lamp;
+  characters and props in front of it are not brightened, and the room's `light` stays as set
+  (`light: night` with a lamp on is a dark room with one warm spot; there is no light falloff
+  across the room).
+
+`on: true` starts a `tv` or a `lamp` switched on; `- switch_on: <prop>` and `- switch_off: <prop>`
+switch it at `at` of the beat (at once, with a `click` while `foley` is on). The lit screen, the
+lantern and the glows are never graded by the stage's light, so they shine at night. Other props
+take no `on`, `time` or `speed` (a config error), and the actions refuse them ("'sofa' cannot be
+switched on or off (props that can: lamp, tv)").
+
+Render cost: only the moving parts leave Manim's static picture of the set (the hands; the
+picture and the glow of a tv; a lamp's lantern and glow only in the animation where it is
+switched), together with whatever is drawn over them; the rest of the room is drawn once per
+animation as before. A clock, tv or lamp that never runs or comes on is drawn exactly as before.
+
+```yaml
+- id: late_night
+  type: stage
+  params:
+    light: night
+    room: {wallpaper: dots, windows: [0.42]}
+    props:
+      - {prop: clock, at: 0.42, time: "23:55", speed: 60}   # midnight in five seconds
+      - {prop: tv, at: 0.8, against: wall}
+      - {prop: lamp, at: 0.6, depth: 0.25, scale: 0.6, on: true}
+    characters: [{name: pip, at: 0.3}]
+  beats:
+    - text: "Then Pip turned on the television."
+      actions: [{switch_on: tv, at: 0.4}, {switch_off: lamp, at: 0.8}]
+```
+
 #### Generated backgrounds (`cartoon_style`)
 
 A stage's `generate:` makes its background with [`vidgen imagegen`](#generated-images-imagegen-vidgen-imagegen).
@@ -4431,6 +4476,9 @@ a `lift`. The furniture for [rooms](#rooms-room) has a gallery of its own there.
 | `recolor` | `none` | `svg` only: `theme` maps the picture's colours to the nearest theme colours |
 | `open` | `false` | `umbrella` or `door` only: `true` starts it open ([Umbrellas](#umbrellas-open-and-close), [rooms](#rooms-room)) |
 | `against` | none | `wall`: in a [room](#rooms-room), it stands with its back to the wall at the wall's depth (unless `depth` is given); a `picture` or `clock` in a room does so without it |
+| `on` | `false` | `tv` or `lamp` only: `true` starts it switched on ([Clocks, televisions and lamps](#clocks-televisions-and-lamps-time-on-switch_on)) |
+| `time` | none | `clock` only: the time it shows at the scene's start, `H:MM` or `H:MM:SS` (`"21:45"`); with `time` or `speed` the clock runs |
+| `speed` | `1` | `clock` only: how fast it runs, clock seconds per second (`1` real time, `60` a minute a second, up to `3600`) |
 
 A picnic set: a `basket` (0.2 of a character, held by its handle), a `napkin` (small: 0.05, a
 checked cloth lying flat) and an `umbrella` (0.6), drawn closed or open.
@@ -5702,7 +5750,7 @@ the one key that names an action).
 
 | key | default | |
 |---|---|---|
-| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `sit_on`, `lean_on`, `stand_up`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect`, or a project action (`vidgen list-scenes` lists them) |
+| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `switch_on`, `switch_off`, `sit_on`, `lean_on`, `stand_up`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect`, or a project action (`vidgen list-scenes` lists them) |
 | `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one (`callout` with an `area` and `pan` with `to` need none) |
 | `at` | `0` | when, as a fraction of the beat's narration (`0` ≤ at < `1`) |
 | `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`, `callout`, `say`, `react`, `look_at`, `turn`, `emote`, `pose`: undone when it starts; `zoom`: the camera is back when it starts; `pan`: the camera moves back when it starts; `follow`: the camera stops following when it starts; `keyframes`, `move_along`: the target moves back) |
@@ -5746,7 +5794,7 @@ a title card, a `transform` of a bar).
 | `diagram` | `heading`, `node<N>`, `node:<id>`, `edge:<from>-><to>` | reveal, dim, highlight, zoom | also for `flowchart`; a node is its shape, icon and label (a `box` frames the shape), an edge its line, arrowhead and label; `highlight: [node:a, "edge:a->b", node:b]` marks a path; revealing an edge brings its nodes |
 | `process` | `heading`, `input`, `stage<N>`, `stage:<label>`, `connector<N>`, `loop`, `output`, `token` | reveal, dim, highlight, zoom | a stage is its card (a `box` frames it); `connector2` runs from stage 2 to 3; revealing a stage early shows it without moving the token; `highlight: token` with `style: flash` points at it |
 | `network` | `heading`, `layer<N>`, `layer:<label>`, `edges<N>`, `neuron<L>.<i>` | reveal, dim, highlight, zoom | a layer is its units, ellipsis, label and count; `edges1` joins layers 1 and 2; `neuron2.3` is unit 3 of layer 2 as drawn |
-| `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, effect, walk_to, run_to, enter, exit, gesture, jump, keyframes, move_along, pick_up, hold, put_down, give, throw, open, close, blow_away, sit_on, lean_on, stand_up, get_in, ride_to, get_out, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting), [moving](#moving), [prop](#props-in-hands) and [sitting](#sitting-and-leaning) actions and `get_in` / `get_out` take whole characters only, [`ride_to`](#vehicles-get_in-ride_to-get_out) a vehicle or its riders, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts, [`open` / `close`](#umbrellas-open-and-close) props |
+| `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, effect, walk_to, run_to, enter, exit, gesture, jump, keyframes, move_along, pick_up, hold, put_down, give, throw, open, close, switch_on, switch_off, blow_away, sit_on, lean_on, stand_up, get_in, ride_to, get_out, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting), [moving](#moving), [prop](#props-in-hands) and [sitting](#sitting-and-leaning) actions and `get_in` / `get_out` take whole characters only, [`ride_to`](#vehicles-get_in-ride_to-get_out) a vehicle or its riders, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts, [`open` / `close`](#umbrellas-open-and-close) and [`switch_on` / `switch_off`](#clocks-televisions-and-lamps-time-on-switch_on) props |
 
 `title` and `heading` stand for each other (the header band, see "Built-in scenes"): `highlight:
 title` works on a `bullets` heading. [Project scene types](EXTENDING.md#8-per-beat-actions-targets-and-custom-actions)
@@ -5775,6 +5823,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `keyframes`, `move_along` | see [Keyframes and motion paths](#keyframes-and-motion-paths) | move a `stage`'s character, prop or character part (`kit.arm_left`) through keys (`t`, `x`, `y`, `rotate`, `scale`, `ease`) or along a path of points |
 | `pick_up`, `hold`, `put_down`, `give`, `throw` | see [Props in hands](#props-in-hands) | a `stage`'s character takes a prop in its hand, puts it down, hands it to another character or throws it |
 | `open`, `close` | see [Umbrellas](#umbrellas-open-and-close) | a `stage`'s umbrella opens (held overhead) or closes |
+| `switch_on`, `switch_off` | as the target: the prop (`- switch_on: tv`) | on a `stage`: a `tv` or a `lamp` goes on or off at `at` (at once, with a click); see [Clocks, televisions and lamps](#clocks-televisions-and-lamps-time-on-switch_on). No `until`. |
 | `sit_on`, `lean_on`, `stand_up` | see [Sitting and leaning](#sitting-and-leaning) | a `stage`'s character sits on a chair, a rock, a box or furniture (a sofa, an armchair, a bed, a desk), leans on a tree, a door, a sign or furniture (a counter...), and stands up again |
 | `get_in`, `ride_to`, `get_out` | see [Vehicles](#vehicles-get_in-ride_to-get_out) | a `stage`'s character gets in a car, a bus, a boat or a balloon or on a bicycle, the vehicle rides (or flies) to a place with its riders, and they get out |
 | `shot` | `kind` (`wide`, `two_shot`, `medium`, `over_shoulder`, `closeup`), `move` (`false`) | what a beat's [`shot:`](#shots-shot) key writes, as an action: the camera frames the target characters of a `stage` from `at` to the beat's end. Write the key; the action is for a shot that starts later in the beat (`at`). |

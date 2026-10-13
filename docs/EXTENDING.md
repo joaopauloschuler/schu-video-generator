@@ -270,6 +270,13 @@ screen. A boat, a hot-air balloon and a toy rocket (`medium(kind)`: `water` / `a
 `Course` instead (`Ride(..., rise=, drift=, away_y=, seed=)`; its pure points are
 `balloon_point` and `rocket_point`); `Prop.pose_at(x, y, degrees)` sets a vehicle's place and
 turn afresh, and `StageWater` draws a stage's water and bobs the boats on it (`boat_bob`).
+Props that move by themselves (DESIGN.md §69.54): `draw_prop("clock" | "tv" | "lamp", ...,
+living=True)` adds their moving parts, and `LivingProp(prop, start=, speed=, on=, seed=)` sets
+them for a scene time (`update(t)`, from a scene updater; `switch(on, time)`); its `glow` (a
+`PropGlow`, or `None`) is a mobject of its own to add right before the prop. The maths is pure:
+`hand_angles(seconds)`, `parse_clock_time("21:45")`, `tv_picture(t, seed)`, `glow_box`, and
+`redrawn_members(boxes, regions)` says which members drawn after a moving part must be redrawn
+with it. The `switch_on` / `switch_off` actions call `Stage.switch_props(patterns, on, time)`.
 `character(name)` breathes, sways its head and blinks on its own (unless `idle: false`):
 `stop_idle()` / `start_idle(seed=None)` turn that off and on; a blink never shows during a
 `PoseChange`. Before drawing your own scene for characters on a set, check whether the built-in

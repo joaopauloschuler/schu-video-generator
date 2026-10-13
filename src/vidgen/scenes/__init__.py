@@ -9,7 +9,8 @@ transform; ``callout_action``: callout; ``sfx_action``: sfx;
 exit, gesture, jump; ``keyframes_action``: keyframes, move_along; ``handling``: pick_up, hold,
 put_down, give, throw; ``sitting``: sit_on, lean_on, stand_up; ``riding``: get_in, ride_to, get_out;
 ``shot_action``: shot;
-``light_action``: light; ``wind_action``: wind; ``effect_action``: effect) and the
+``light_action``: light; ``wind_action``: wind; ``effect_action``: effect; ``switch_action``:
+switch_on, switch_off) and the
 built-in overlays (``overlays``: lower_third, watermark; ``progress``: progress_bar,
 chapter_indicator; ``captions``: captions).
 """
@@ -55,6 +56,7 @@ from vidgen.scenes import (  # noqa: F401
     sfx_action,
     stage,
     stat,
+    switch_action,
     table,
     text_card,
     timeline,

@@ -84,7 +84,7 @@ scenes:
 | `layers.shapes.width` | `float` | `0.3` | Its width as a fraction of the frame's shorter side (hills: the width of one hill). |
 | `layers.shapes.height` | `float` | `0.2` | Its height as a fraction of the frame's shorter side. |
 | `layers.shapes.color` | `color` | `'secondary'` | Fill colour (a theme token or #hex). |
-| `props` | `list[str \| StageProp]` |  | Props: a built-in prop's name, or {prop \| svg, name, at, depth, scale, lift, facing, color, detail, recolor, open, against}. |
+| `props` | `list[str \| StageProp]` |  | Props: a built-in prop's name, or {prop \| svg, name, at, depth, scale, lift, facing, color, detail, recolor, open, against, on, time, speed}. |
 | `props.prop` | `'table' \| 'chair' \| 'tree' \| 'bush' \| 'house' \| 'door' \| 'lamp' \| 'sign' \| 'box' \| 'ball' \| 'cloud' \| 'sun' \| 'moon' \| 'rock' \| 'plant' \| 'laptop' \| 'cup' \| 'basket' \| 'umbrella' \| 'napkin' \| 'sofa' \| 'armchair' \| 'bed' \| 'bookshelf' \| 'counter' \| 'fridge' \| 'picture' \| 'rug' \| 'houseplant' \| 'clock' \| 'tv' \| 'desk' \| 'bicycle' \| 'car' \| 'bus' \| 'boat' \| 'hot_air_balloon' \| 'toy_rocket' \| None` |  | A built-in prop: table, chair, tree, bush, house, door, lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup, basket, umbrella, napkin; furniture: sofa, armchair, bed, bookshelf, counter, fridge, picture, rug, houseplant, clock, tv, desk; vehicles: bicycle, car, bus, boat (on the stage's water), hot_air_balloon, toy_rocket. |
 | `props.svg` | `str \| None` |  | Instead of prop: an SVG file relative to the project folder (sanitised like any SVG), standing on the bottom edge of its viewBox. |
 | `props.name` | `str \| None` |  | Its name for actions and the layout dump; default: the prop's name (an SVG: the file name), then _2, _3... |
@@ -98,6 +98,9 @@ scenes:
 | `props.recolor` | `'none' \| 'theme'` | `'none'` | With svg: theme maps the picture's colours to the nearest theme colours; none keeps them. |
 | `props.open` | `bool` | `False` | An umbrella or a door: true starts it open (the open / close actions change it later). |
 | `props.against` | `'wall' \| None` |  | wall: it stands with its back to the room's wall, at the wall's depth unless depth is given (a room only); a picture or a clock in a room hangs on the wall without it. |
+| `props.on` | `bool` | `False` | A tv or a lamp: true starts it switched on (a tv's picture changes and flickers, a lamp glows; the switch_on / switch_off actions change it). |
+| `props.time` | `str \| None` |  | A clock: the time it shows at the scene's start, H:MM or H:MM:SS (default 10:10, as drawn); with time or speed the clock runs, its hands turning. |
+| `props.speed` | `float \| None` |  | A clock: how fast it runs, clock seconds per second (1 real time, the default; 60 a minute a second; up to 3600); with time or speed the clock runs. |
 | `particles` | `list[str \| StageParticles]` |  | Particles over the whole scene, in front of everything: a kind (rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves, streaks) or {kind, density, area, color, seed, puddles}; rain ends on the ground with splashes, not under an open umbrella or a tree, and plays a rain sound with foley; for one beat use the particles action. |
 | `particles.density` | `float` | `1.0` | How many: 1 = the kind's usual amount for a whole frame, 2 = twice as many (at most 300 in all; half at preview quality). |
 | `particles.area` | `list[float] \| None` |  | Where they are: [x, y, w, h] fractions 0-1 of the visible frame from its top-left corner; default the whole frame. |

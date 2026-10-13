@@ -52,6 +52,7 @@ from vidgen.cartoon.character import (
     scale_strokes,
     shape_drawing,
 )
+from vidgen.cartoon.living import LIVING_KINDS, LIVING_PART
 from vidgen.cartoon.seating import (
     PROP_LEANS,
     PROP_SEATS,
@@ -169,7 +170,9 @@ class Prop(VGroup):
     in the family for the prop's life; the hidden ones have no points (like a character's part
     shapes, §69.22), and :meth:`show_shape` draws another from its points in prop units through an
     invisible anchor that moves, scales and mirrors with the prop. ``grips``: shape (``None`` for
-    a prop with one shape) -> where a hand holds it, prop units as drawn facing right."""
+    a prop with one shape) -> where a hand holds it, prop units as drawn facing right.
+    ``anchored``: give it an anchor even without shapes or grips (a prop that moves by itself
+    places its moving parts by it, DESIGN.md §69.54)."""
 
     def __init__(
         self, *drawn: VMobject, name: str, kind: str, facing: str = "right",
@@ -179,6 +182,7 @@ class Prop(VGroup):
         seat_places: Sequence[float] = (),
         wheels: Sequence[tuple[VMobject, tuple[float, float]]] = (),
         crank: tuple[VMobject, tuple[float, float]] | None = None,
+        anchored: bool = False,
     ) -> None:
         super().__init__(*drawn)
         self.name = name
@@ -214,7 +218,7 @@ class Prop(VGroup):
         #: flying vehicle's last flight: its course and seconds (the rocket's smoke reads it).
         self.afloat: tuple[float, float] | None = None
         self.flight: tuple[Any, float] | None = None
-        if shapes or self.grips or self.wheels or kind in VEHICLES:
+        if shapes or self.grips or self.wheels or kind in VEHICLES or anchored:
             self._anchor = anchor_mobject()   # drawn in prop units: the placement starts as the identity
             self.add(self._anchor)
         for shape, members in (shapes or {}).items():
@@ -792,12 +796,17 @@ def _clock(p: _Paint) -> list[VMobject]:
         for a in (math.pi * k / 2 for k in range(4))
     ]
     hour, minute = math.radians(150), math.radians(30)
+    hands = [
+        _line(0.0, 0.5, 0.2 * math.cos(hour), 0.5 + 0.2 * math.sin(hour), p.ink, 2.5 * OUTLINE_WIDTH),
+        _line(0.0, 0.5, 0.3 * math.cos(minute), 0.5 + 0.3 * math.sin(minute), p.ink, 2.0 * OUTLINE_WIDTH),
+    ]
+    for hand, part in zip(hands, ("hour", "minute")):   # a running clock turns them (DESIGN.md §69.54)
+        setattr(hand, LIVING_PART, part)
     return [
         _circle(0.0, 0.5, 0.5, p.detail, p),
         _circle(0.0, 0.5, 0.41, p.main, p),
         *ticks,
-        _line(0.0, 0.5, 0.2 * math.cos(hour), 0.5 + 0.2 * math.sin(hour), p.ink, 2.5 * OUTLINE_WIDTH),
-        _line(0.0, 0.5, 0.3 * math.cos(minute), 0.5 + 0.3 * math.sin(minute), p.ink, 2.0 * OUTLINE_WIDTH),
+        *hands,
         _circle(0.0, 0.5, 0.04, p.ink, p, outline=False),
     ]
 
@@ -877,11 +886,14 @@ def draw_prop(
     facing: str = "right",
     character_height: float | None = None,
     shape: str | None = None,
+    living: bool = False,
 ) -> Prop:
     """A built-in prop ``kind`` ``height`` Manim units tall, its feet at the origin, coloured
     ``main`` / ``detail`` (theme tokens or #hex; default :data:`PROP_COLORS`). Outlines are as
     wide as a character's ``character_height`` tall (default: ``height``), at least one pixel.
-    ``shape``: which of its :data:`PROP_SHAPES` it shows (default: the first)."""
+    ``shape``: which of its :data:`PROP_SHAPES` it shows (default: the first). ``living``: a
+    clock, television or lamp that moves by itself gets its moving parts and an anchor
+    (:func:`~vidgen.cartoon.living_drawing.living_overlays`, DESIGN.md §69.54)."""
     if kind not in _DRAWERS and kind not in VEHICLES:
         raise VidgenError(f"unknown prop '{kind}' (props: {', '.join(PROP_KINDS)})")
     if height <= 0:
@@ -898,11 +910,16 @@ def draw_prop(
         return _finish(prop, height, character_height or height, facing)
     drawn = _DRAWERS[kind](paint)
     shapes = drawn if isinstance(drawn, dict) else None
+    living = living and kind in LIVING_KINDS
+    if living and isinstance(drawn, list):
+        from vidgen.cartoon.living_drawing import living_overlays
+
+        drawn = [*drawn, *living_overlays(kind, paint)]
     prop = Prop(
         *([] if shapes is not None else drawn), name=name or kind, kind=kind, facing=facing,
         seat=mirrored_seat(PROP_SEATS.get(kind), facing), lean=mirrored_lean(PROP_LEANS.get(kind), facing),
         shapes=shapes, grips={s: g for (k, s), g in PROP_GRIPS.items() if k == kind},
-        seat_places=mirrored_places(SEAT_PLACES.get(kind, ()), facing),
+        seat_places=mirrored_places(SEAT_PLACES.get(kind, ()), facing), anchored=living,
     )
     if shape is not None:
         prop.show_shape(shape)

@@ -253,6 +253,19 @@ from vidgen.cartoon.props import (  # noqa: E402
     read_svg_seat_and_lean,
     svg_prop,
 )
+from vidgen.cartoon.living import (  # noqa: E402
+    DRAWN_CLOCK_SECONDS,
+    GLOWS,
+    LIVING_KINDS,
+    MAX_CLOCK_SPEED,
+    SWITCHED_PROPS,
+    glow_box,
+    hand_angles,
+    parse_clock_time,
+    redrawn_members,
+    tv_picture,
+)
+from vidgen.cartoon.living_drawing import LivingProp, PropGlow  # noqa: E402
 from vidgen.cartoon.stage import (  # noqa: E402
     DEFAULT_FACTORS,
     DEPTH_WALK_HEIGHTS,
@@ -787,6 +800,18 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "draw_prop",
     "read_svg_seat_and_lean",
     "svg_prop",
+    "DRAWN_CLOCK_SECONDS",
+    "GLOWS",
+    "LIVING_KINDS",
+    "MAX_CLOCK_SPEED",
+    "SWITCHED_PROPS",
+    "LivingProp",
+    "PropGlow",
+    "glow_box",
+    "hand_angles",
+    "parse_clock_time",
+    "redrawn_members",
+    "tv_picture",
     "view_center_within",
     "SHOT_KINDS",
     "SHOT_MOVE_SECONDS",
