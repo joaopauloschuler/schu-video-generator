@@ -31,12 +31,15 @@ from vidgen.cartoon.motion_effects import (
 )
 from vidgen.cartoon.transition import feet_of
 from vidgen.cartoon.stage import facing_sign
+from vidgen.cartoon.vehicle_paths import SMOKE_BURST, SMOKE_TRAIL, smoke_puffs
 from vidgen.config import CHARACTER_INK
 from vidgen.particles import KINDS as PARTICLE_SPECS
 
 #: The dust's colour (the ``dust`` particles'), and the opacity of its ink outline.
 DUST_COLOR = PARTICLE_SPECS["dust"].colors[0]
 DUST_OUTLINE_OPACITY = 0.5
+#: A toy rocket's smoke: the ``smoke`` particles' colour (DESIGN.md §69.53).
+SMOKE_COLOR = PARTICLE_SPECS["smoke"].colors[0]
 #: Speed lines and whoosh arcs: ink at this opacity, this wide (mover heights).
 LINE_OPACITY = 0.55
 LINE_WIDTH = 0.016
@@ -97,6 +100,8 @@ class MotionEffect(VGroup):
             shapes = [_shape(star_color, 1.0, stroke, 1.0) for _ in range(IMPACT_STARS)]
         elif self.kind == "speed_lines":
             shapes = [_shape(CHARACTER_INK, LINE_OPACITY, 0.0, 0.0) for _ in range(SPEED_LINES)]
+        elif self.kind == "smoke":
+            shapes = [_shape(SMOKE_COLOR, 1.0, stroke, DUST_OUTLINE_OPACITY) for _ in range(SMOKE_TRAIL + SMOKE_BURST)]
         else:
             shapes = [_shape(CHARACTER_INK, LINE_OPACITY, 0.0, 0.0) for _ in WHOOSH_RADII]
         self.add(*shapes)
@@ -122,7 +127,8 @@ class MotionEffect(VGroup):
             return self
         if self._anchor is None:
             self._start()
-        drawn = {"dust": self._dust, "impact": self._impact, "speed_lines": self._lines, "whoosh": self._whoosh}[self.kind](age)
+        drawers = {"dust": self._dust, "impact": self._impact, "speed_lines": self._lines, "whoosh": self._whoosh, "smoke": self._smoke}
+        drawn = drawers[self.kind](age)
         self._hide(range(drawn, len(self.submobjects)))
         return self
 
@@ -135,7 +141,7 @@ class MotionEffect(VGroup):
         member.set_points_as_corners(np.array([[x, y, 0.0] for x, y in (*points, points[0])]))
         if opacity is not None:
             member.set_fill(opacity=opacity * (LINE_OPACITY if self.kind in ("speed_lines", "whoosh") else 1.0))
-            if self.kind == "dust":
+            if self.kind in ("dust", "smoke"):
                 member.set_stroke(opacity=opacity * DUST_OUTLINE_OPACITY)
 
     def _start(self) -> None:
@@ -168,6 +174,19 @@ class MotionEffect(VGroup):
             outline = _star(5, star.size * h, 0.45 * star.size * h)
             self._set(k, [(cx + x * c - y * s, cy + x * s + y * c) for x, y in outline])
         return len(stars)
+
+    def _smoke(self, age: float) -> int:
+        """A toy rocket's smoke where its flight puts it (:func:`smoke_puffs` of the course its
+        :class:`~vidgen.cartoon.riding.Ride` left on it; nothing before it set off)."""
+        flight = getattr(self.mover, "flight", None)
+        if flight is None:
+            return 0
+        course, seconds = flight
+        size = self._size * self.size_factor
+        puffs = smoke_puffs(age, course, seconds, size, self.seed)
+        for k, puff in enumerate(puffs):
+            self._set(k, [(puff.x + x * puff.radius, puff.y + y * puff.radius) for x, y in _circle(0.0, 0.0, 1.0, 20)], puff.opacity)
+        return len(puffs)
 
     def _way(self) -> tuple[np.ndarray, np.ndarray] | None:
         """The way the mover goes now (unit vector) and the middle of its back edge."""

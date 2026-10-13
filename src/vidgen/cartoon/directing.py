@@ -167,7 +167,8 @@ class StageFrame:
     character's :class:`StagePlace`, each prop's x, the stage's own marks and the facing of each
     prop with a seat back (a character sitting on it faces that way, DESIGN.md §69.28), how
     many sit side by side on each prop that seats more than one (§69.43), the depth each
-    character and prop starts at (§69.44), and each vehicle's kind, height and facing (§69.52)."""
+    character and prop starts at (§69.44), each vehicle's kind, height and facing (§69.52), and
+    the x from and to which the stage's water goes (§69.53; ``None``: no water)."""
 
     frame_width: float
     frame_height: float
@@ -180,6 +181,7 @@ class StageFrame:
     seat_places: Mapping[str, int] = field(default_factory=dict)
     depths: Mapping[str, float] = field(default_factory=dict)
     vehicles: Mapping[str, tuple[str, float, str]] = field(default_factory=dict)
+    water: tuple[float, float] | None = None
 
     @property
     def bounds(self) -> Bounds:
@@ -765,9 +767,12 @@ def _riding(state: _SceneState, act: ActionConfig, names: Sequence[str]) -> None
             to_x = here if place is None else frame.place_x(place) if frame is not None else None
             if here is not None and to_x is not None and abs(to_x - here) > 1e-6:
                 state.facing[vehicle] = "right" if to_x > here else "left"
-            state.prop_x[vehicle] = to_x
+            away = options.get("land") is False   # a balloon or a toy rocket flies off: gone (DESIGN.md §69.53)
+            state.prop_x[vehicle] = None if away else to_x
             for rider in state.postures.riders(vehicle):
-                _walk(state, rider, to_x)
+                _walk(state, rider, None if away else to_x)
+                if away:
+                    state.present.discard(rider)
         return
     for name in sorted(_named(act.targets(), names)):
         try:
@@ -990,7 +995,9 @@ def stage_frame(project: Project, params: Any) -> StageFrame:
         places[placed.name] = StagePlace(placed.feet[0], placed.feet[1], placed.height, facing)
     camera_x = (mark_x(params.camera_at, params.stage_marks()) - 0.5) * stage_width
     depths = {placed.name: placed.depth for placed in placements}
-    return StageFrame(frame_width, frame_height, stage_width, camera_x, places, props, params.stage_marks(), seat_facings, seat_places, depths, vehicles)
+    span = params.water_span() if hasattr(params, "water_span") else None
+    water = None if span is None else ((span[0] - 0.5) * stage_width, (span[1] - 0.5) * stage_width)
+    return StageFrame(frame_width, frame_height, stage_width, camera_x, places, props, params.stage_marks(), seat_facings, seat_places, depths, vehicles, water)
 
 
 def stage_reframes(project: Project, params: Any) -> bool:

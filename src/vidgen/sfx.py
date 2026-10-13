@@ -424,6 +424,27 @@ def _brakes(s: Synth) -> np.ndarray:
     return (squeal + (0.25 + 0.3 * s.intensity) * scrape) * _bump(u, 0.6) * _fades(s.n, 0.02, 0.04)
 
 
+def _burner(s: Synth) -> np.ndarray:
+    # a hot-air balloon's gas burner: a deep breathy roar (noise around 450 Hz, low-passed at
+    # 1.4 kHz) catching at once, fluttering a little at 9 Hz, held and dying away at the end
+    roar = _normalized(_filtered(s.rng.standard_normal(s.n), lambda f: _band(f, 450 * s.ratio, 1.6) * _lowpass(f, 1400 * s.ratio, 2)))
+    hiss = _normalized(_filtered(s.rng.standard_normal(s.n), lambda f: _band(f, 2600 * s.ratio, 0.8)))
+    flutter = 1 + 0.12 * np.sin(2 * np.pi * 9 * s.t)
+    return (roar + (0.08 + 0.12 * s.intensity) * hiss) * flutter * _fades(s.n, 0.03, 0.3)
+
+
+def _launch(s: Synth) -> np.ndarray:
+    # a toy rocket taking off: a soft low "whump" as it lights, then a fizzing hiss whose band
+    # climbs from ~1.5 to ~5 kHz with a crackle of tiny clicks, fading out as it flies away
+    t, u = s.t, s.u
+    whump = np.sin(_tone(75 * s.ratio * (1 + np.exp(-t / 0.04)), s.n)) * _decay(t, 0.002, 0.08)
+    fizz = _normalized(_sweep(s.rng.standard_normal(s.n), lambda v: 1500 * s.ratio * (5000 / 1500) ** v, 0.7))
+    crackle = np.where(s.rng.random(s.n) < 0.004, s.rng.standard_normal(s.n), 0.0)
+    crackle = _normalized(_filtered(crackle, lambda f: _band(f, 3500 * s.ratio, 1.0)))
+    body = (fizz + (0.2 + 0.3 * s.intensity) * crackle) * np.clip(u / 0.06, 0.0, 1.0) * (1 - u) ** 1.5
+    return 0.8 * whump + body
+
+
 def _harmonic_tone(phase: np.ndarray, brightness: np.ndarray | float, harmonics: int, tilt: float) -> np.ndarray:
     """A tone of ``harmonics`` partials of ``phase``: partial ``h`` at ``brightness ** (h - 1) /
     h ** tilt`` (brightness 0..1, constant or per sample: a brass or muted-horn timbre)."""
@@ -624,6 +645,20 @@ BUILTIN_SOUNDS: dict[str, BuiltinSound] = {
             "Brakes squealing to a stop: a thin tone near 2.1 kHz wavering and falling a little, "
             "over a soft scrape of noise, swelling and stopping short.",
             "a vehicle stopping (a stage's ride_to plays it as the vehicle stops: foley)",
+        ),
+        BuiltinSound(
+            "burner", _burner, 1.2, (0.4, 4.0),
+            "A gas burner's roar: deep breathy noise around 450 Hz (low-passed at 1.4 kHz) with a "
+            "faint hiss near 2.6 kHz, catching at once, fluttering a little at 9 Hz, dying away "
+            "over the last 0.3 s.",
+            "a hot-air balloon rising (a stage's balloon ride_to plays it: foley), a gas flame",
+        ),
+        BuiltinSound(
+            "launch", _launch, 1.0, (0.4, 3.0),
+            "A toy rocket taking off: a soft low 'whump' (~75 Hz falling) as it lights, then a "
+            "fizzing hiss whose band climbs from ~1.5 to ~5 kHz with a crackle of tiny clicks, "
+            "fading out as it flies away.",
+            "a toy rocket or a firework launching (a stage's toy_rocket ride_to plays it: foley)",
         ),
         BuiltinSound(
             "gasp", _gasp, 0.35, (0.15, 1.0),

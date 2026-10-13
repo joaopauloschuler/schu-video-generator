@@ -24,9 +24,14 @@ from vidgen.cartoon.acting import GESTURE_EASE, WALK_EASE
 from vidgen.cartoon.effects import Point, _counterclockwise
 from vidgen.cartoon.foley import WALKING_ACTIONS, PlayedAction
 from vidgen.cartoon.motion import ANTICIPATION_SHARE, SETTLE_SHARE, smoothstep
+from vidgen.cartoon.vehicles import medium
 
 #: The motion effects, in the order the docs list them.
-MOTION_EFFECT_KINDS: tuple[str, ...] = ("dust", "speed_lines", "impact", "whoosh")
+MOTION_EFFECT_KINDS: tuple[str, ...] = ("dust", "speed_lines", "impact", "whoosh", "smoke")
+#: How long each puff of a toy rocket's smoke lasts (seconds), and the longest share of a launch
+#: its motor burns (DESIGN.md §69.53; :func:`~vidgen.cartoon.vehicle_paths.smoke_puffs`).
+SMOKE_SECONDS = 1.1
+SMOKE_BURN_SHARE = 0.7
 #: A walk is fast (dust where it sets off and stops, speed lines) from this top speed, in the
 #: character's heights per second (a default walk goes about 0.7, a default run about 1.7).
 FAST_SPEED = 1.15
@@ -88,6 +93,8 @@ def motion_effect_cues(played: PlayedAction, strength: float) -> list[MotionEffe
       forward where they stop (not for an ``exit``), speed lines while it goes at least
       :data:`SPEED_SHOWN` of its top speed;
     - a jump: dust both ways where it lands, impact stars too from :data:`HARD_LANDING` up;
+    - a ride on the water or in the air: none, except a toy rocket's smoke from its launch on
+      (DESIGN.md §69.53);
     - a prop flying (``throw``, ``blow_away``): speed lines from take-off to landing;
     - a ``big`` gesture of :data:`WHOOSH_ARMS`: a whoosh arc while the arm sweeps in, and
       :data:`WHOOSH_TRAIL_SECONDS` after."""
@@ -95,6 +102,10 @@ def motion_effect_cues(played: PlayedAction, strength: float) -> list[MotionEffe
         return []
     start, seconds = played.start, played.seconds
     cues: list[MotionEffectCue] = []
+    if played.action == "ride_to" and played.vehicle is not None and medium(played.vehicle) != "ground":
+        if played.vehicle == "toy_rocket":   # its smoke, as long as the motor may burn and the last puff fades
+            cues.append(MotionEffectCue("smoke", start, SMOKE_BURN_SHARE * seconds + SMOKE_SECONDS + 0.12))
+        return cues
     if played.action in WALKING_ACTIONS or played.action == "ride_to":
         before, after = played.phases.before, played.phases.after
         move = 1.0 - before - after
@@ -248,6 +259,7 @@ __all__ = [
     "HARD_LANDING",
     "IMPACT_SECONDS",
     "MOTION_EFFECT_KINDS",
+    "SMOKE_SECONDS",
     "WHOOSH_ARMS",
     "ImpactStar",
     "MotionEffectCue",

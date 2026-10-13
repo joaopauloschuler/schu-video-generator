@@ -1,6 +1,7 @@
-"""Riding beat actions (DESIGN.md §69.52): ``get_in`` (or on), ``ride_to`` and ``get_out`` on the
-characters and vehicles (a ``bicycle``, a ``car``, a ``bus``) of a ``stage``. Written against
-``vidgen.api`` only, like project actions.
+"""Riding beat actions (DESIGN.md §69.52, §69.53): ``get_in`` (or on), ``ride_to`` and
+``get_out`` on the characters and vehicles (a ``bicycle``, a ``car``, a ``bus``; a ``boat`` on the
+stage's water; a ``hot_air_balloon`` and a ``toy_rocket`` in the air) of a ``stage``. Written
+against ``vidgen.api`` only, like project actions.
 
 Who rides what is the scene's :class:`Postures` (a rider is ``riding`` its vehicle, in a seat);
 the riders follow their vehicle with an updater (:func:`place_rider`; a rider is never added to
@@ -16,6 +17,13 @@ from vidgen.api import *
 from .acting import _Acting, _characters, is_part_target, posture_parts
 from .moving import Depth, Place, WalkPlace, _ended_walk, _place_x, _walk_problems
 from .sitting import _posed, _stage_prop, postures
+
+#: A flight's top keeps this far (frame heights) under the frame's top edge, rising at least
+#: ``LOWEST_RISE`` (frame heights) even when the vehicle is too tall for that; a toy rocket with
+#: its parachute open is ``CHUTE_HEIGHT`` times as tall as folded.
+FLIGHT_MARGIN = 0.04
+LOWEST_RISE = 0.12
+CHUTE_HEIGHT = 2.2
 
 
 def _riders(scene: NarratedScene) -> dict[str, tuple[RiderSeat, Any]]:
@@ -33,9 +41,14 @@ def _vehicle(scene: NarratedScene, name: str) -> Prop:
     return found[0]
 
 
+def _vehicle_kinds(params: Any) -> dict[str, str]:
+    """The stage's vehicles (props of a :data:`VEHICLE_KINDS` kind): name -> kind."""
+    return {name: prop.prop for name, prop in zip(params.prop_names(), params.stage_props()) if prop.prop in VEHICLE_KINDS}
+
+
 def _vehicle_names(params: Any) -> list[str]:
-    """The stage's vehicles (props of a :data:`VEHICLE_KINDS` kind), by name."""
-    return [name for name, prop in zip(params.prop_names(), params.stage_props()) if prop.prop in VEHICLE_KINDS]
+    """The stage's vehicles, by name."""
+    return list(_vehicle_kinds(params))
 
 
 def vehicle_problem(params: Any, name: str) -> str | None:
@@ -89,6 +102,8 @@ class GetIn(_Acting):
         if "<prop>" not in scene_cls.target_patterns:
             return problems + [("target", "get_in is for the characters and vehicles of a stage")]
         problem = vehicle_problem(params, self.options.to)
+        if problem is None and seat_count(_vehicle_kinds(params)[self.options.to]) == 0:
+            problem = f"'{self.options.to}' is a toy: nobody rides it (- ride_to: {self.options.to} launches it on its own)"
         return problems + ([("to", problem)] if problem is not None else [])
 
     def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
@@ -161,15 +176,21 @@ class RideTo(Action):
     {mark, depth}``) rides it towards (smaller) or away from (larger) the camera too, its riders
     growing or shrinking with it. A bicycle rings its bell as it sets off, a car or a bus starts its
     engine; it brakes at the stop (foley); a fast ride raises dust and leaves speed lines (motion
-    effects). It takes as long as the distance needs (``run_time`` sets it instead)."""
+    effects). A boat goes along the stage's water, bobbing. A hot-air balloon rises, drifts aside
+    with the wind on the way and lands at ``to``; a toy rocket launches with smoke along an arc and
+    floats down under its parachute to ``to`` (``land: false``: either flies up out of the top of
+    the frame towards ``to``, gone for the scene with its riders). It takes as long as the distance
+    needs (``run_time`` sets it instead)."""
 
     class Options(ActionOptions):
         to: WalkPlace | Place | None = None
         """Where it rides: a mark (left, centre, right, ... or the stage's own), an x from 0 (left edge) to 1 (right edge) of the stage, or {mark, depth}; default: where it is (with depth)."""
         depth: Depth | None = None
-        """How far back it rides to: 0 = the front (the ground line, full size) .. 1 = the back of the stage, smaller; default: its depth now."""
+        """How far back it rides to: 0 = the front (the ground line, full size) .. 1 = the back of the stage, smaller; default: its depth now (vehicles on the ground only)."""
         speed: float | None = Field(None, gt=0.0, le=30.0)
-        """Speed in units per second (the frame's shorter side is 8 units); default: the vehicle's (a bicycle and a bus 4, a car 5)."""
+        """Speed in units per second (the frame's shorter side is 8 units); default: the vehicle's (a bicycle and a bus 4, a car 5, a boat 2.5, a balloon 1.2, a toy rocket 6)."""
+        land: bool = True
+        """A hot-air balloon or a toy rocket: false flies it up and away out of the top of the frame (towards to), gone for the scene with its riders; default: it lands at to."""
 
     run_time = 2.0
 
@@ -218,11 +239,31 @@ class RideTo(Action):
 
     def _ride(self, scene: NarratedScene, vehicle: Prop) -> Ride:
         x, depth = self._goal(scene, vehicle)
-        deeper = depth is not None and abs(depth - float(getattr(vehicle, "stage_depth", 0.0))) > SAME_DEPTH
+        on_ground = medium(vehicle.kind) == "ground"
+        deeper = on_ground and depth is not None and abs(depth - float(getattr(vehicle, "stage_depth", 0.0))) > SAME_DEPTH
         seats = self._seats(scene, vehicle)
         strength = min((s.rider.motion_strength for s in seats), default=None)   # no rider: the scene's (motion effects)
         return Ride(vehicle, x, seats=seats, speed=self.options.speed, depth=depth if deeper else None,
-                    feet_y=getattr(scene, "feet_y_at", None) if deeper else None, strength=strength)
+                    feet_y=getattr(scene, "feet_y_at", None) if deeper else None, strength=strength, **self._flight(scene, vehicle))
+
+    def _flight(self, scene: NarratedScene, vehicle: Prop) -> dict[str, Any]:
+        """A flying vehicle's ``rise`` (a balloon's altitude, a rocket's apex: as wanted, but its top
+        stays in the frame), a balloon's ``drift`` with the stage's wind now, its ``away_y`` when it
+        does not land (above the frame) and its ``seed``; nothing for the others."""
+        if medium(vehicle.kind) != "air":
+            return {}
+        frame_height = float(scene.camera.frame.height)
+        top = float(scene.camera.frame.get_top()[1])
+        feet_y = float(vehicle.prop_point(0.0, 0.0)[1])
+        rocket = vehicle.kind == "toy_rocket"
+        tall = (CHUTE_HEIGHT if rocket else 1.0) * float(vehicle.unit)
+        wanted = (ROCKET_APEX if rocket else BALLOON_ALTITUDE) * frame_height
+        rise = max(min(wanted, top - FLIGHT_MARGIN * frame_height - feet_y - tall), LOWEST_RISE * frame_height)
+        blowing = getattr(scene, "blowing", None)
+        level = blowing.wind.level(float(scene.renderer.time)) if blowing is not None and not rocket else 0.0
+        away = None if self.options.land else top + float(vehicle.unit) + 0.3
+        return {"rise": rise, "drift": BALLOON_DRIFT * level * character_unit(vehicle), "away_y": away,
+                "seed": wind_seed(f"{scene.spec.id}:{vehicle.name}")}
 
     def run_time_for(self, scene: NarratedScene, targets: list[Target]) -> float | None:
         times = [self._ride(scene, v).run_time for v in self._vehicles(scene, targets)]

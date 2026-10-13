@@ -168,8 +168,25 @@ from vidgen.cartoon.vehicles import (  # noqa: E402
     seat_count,
     seat_origin,
     wheel_degrees,
+    AIR_VEHICLES,
+    GROUND_VEHICLES,
+    WATER_VEHICLES,
+    medium,
 )
-from vidgen.cartoon.riding import Ride, RiderSeat, place_rider, riding_state, seat_point  # noqa: E402
+from vidgen.cartoon.riding import Ride, RiderSeat, character_unit, place_rider, riding_state, seat_point  # noqa: E402
+from vidgen.cartoon.vehicle_paths import (  # noqa: E402
+    BALLOON_ALTITUDE,
+    BALLOON_DRIFT,
+    ROCKET_APEX,
+    WATER_COLOR,
+    Course,
+    balloon_point,
+    boat_bob,
+    rocket_point,
+    smoke_puffs,
+    wave_offset,
+)
+from vidgen.cartoon.water import StageWater  # noqa: E402
 from vidgen.cartoon.visemes import VISEMES, VisemeCue, VisemeTrack  # noqa: E402
 from vidgen.cartoon.cast import beat_voice, part_target_names, pose_name_problem, say_problem, speaking_characters  # noqa: E402
 from vidgen.cartoon.acting import (  # noqa: E402
@@ -679,11 +696,27 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "seat_count",
     "seat_origin",
     "wheel_degrees",
+    "AIR_VEHICLES",
+    "GROUND_VEHICLES",
+    "WATER_VEHICLES",
+    "medium",
     "Ride",
     "RiderSeat",
+    "character_unit",
     "place_rider",
     "riding_state",
     "seat_point",
+    "BALLOON_ALTITUDE",
+    "BALLOON_DRIFT",
+    "ROCKET_APEX",
+    "WATER_COLOR",
+    "Course",
+    "balloon_point",
+    "boat_bob",
+    "rocket_point",
+    "smoke_puffs",
+    "wave_offset",
+    "StageWater",
     "enter_path",
     "exit_path",
     "nearer_side",

@@ -1955,6 +1955,8 @@ writes them as WAV files to listen to):
 | `bell` | 0.7 s (0.3–2) | a bicycle bell, "ring-ring": two quick strikes of a small bright bell at ~2.35 kHz | a bicycle setting off ([foley](#foley-and-music-stings)) |
 | `engine` | 1.6 s (0.5–8) | a small engine starting and running: a buzzy ~42 Hz tone revving up, settling, with a soft rumble | a car or a bus setting off |
 | `brakes` | 0.5 s (0.2–1.5) | brakes squealing to a stop: a thin wavering tone near 2.1 kHz over a soft scrape | a vehicle stopping |
+| `burner` | 1.2 s (0.4–4) | a gas burner's roar: deep breathy noise around 450 Hz with a faint hiss, fluttering at 9 Hz, dying away at the end | a hot-air balloon rising |
+| `launch` | 1.0 s (0.4–3) | a toy rocket taking off: a soft low "whump", then a fizzing hiss climbing ~1.5 → ~5 kHz with a crackle, fading out | a toy rocket or a firework launching |
 | `gasp` | 0.35 s (0.15–1) | a sharp breath in, "hah": breath noise around 1.1, 1.75 and 2.9 kHz, loudest after ~50 ms, cut off | surprise ([`[gasp]`](#voice-sounds) at a line's start or end) |
 | `sigh` | 0.9 s (0.4–2.5) | a long breath out, "haaah": breathy "ah" noise with a faint hum falling ~190 → ~130 Hz, trailing off | tiredness, relief ([`[sigh]`](#voice-sounds) at a line's start or end) |
 | `sting_reveal` | 1.4 s (0.6–4) | a "ta-da": a brassy pickup note, then a bright C major chord with a soft bell | a reveal ([`sting: reveal`](#foley-and-music-stings)) |
@@ -2002,8 +2004,10 @@ off, a `thud` where a [thrown](#props-in-hands) prop lands, a `pop` when `emote`
 puts on the `surprised` expression, and a short sound as most [effect
 symbols](#effect-symbols-effect) pop up (`idea` a short `chime` ding; `sound: false` on the
 `effect` for none), and on a [`ride_to`](#vehicles-get_in-ride_to-get_out) a bicycle's `bell`
-as it sets off, or a car's or a bus's `engine` for most of the ride, and `brakes` ending as it
-stops. Other actions are silent. They are ordinary sound effects (listed in `timings.json` `sfx`, mixed like the rest):
+as it sets off, or a car's, a bus's or a boat's `engine` for most of the ride, and `brakes`
+ending as a bicycle, a car or a bus stops; a balloon's `burner` and a toy rocket's `launch` as
+they set off, the rocket's parachute `pop`, and a soft `thud` where either lands. Other actions
+are silent. They are ordinary sound effects (listed in `timings.json` `sfx`, mixed like the rest):
 `sfx: {gain}` sets their level with the others, and `assets/sfx/footstep.wav` (or `boing.wav`,
 ...) replaces a sound with your own. `foley: false` at the top level turns them off for the
 video, a stage's `foley: false` (or `true`) for that scene. Rain on a stage also plays a
@@ -4214,6 +4218,7 @@ never leaves the stage.
 | `light` | `day` \| `morning` \| `sunset` \| `night` \| `indoor` \| `{tint, strength}` | `day` | the [light](#light-and-shadows-light-shadows) on the set: a colour grade of the background, layers, props and characters (never of speech bubbles or text); `night` adds stars; the `light` action changes it during the scene |
 | `shadows` | bool | `true` | soft [shadows](#light-and-shadows-light-shadows) on the ground under the characters and the props standing on it; `false`: none |
 | `wind` | number -1..1 \| `calm` \| `breeze` \| `windy` \| `gale` | `0` | [wind](#wind-wind) in gusts: trees, bushes, plants, signs and lamps sway, scarves, long hair, ponytails, braids, floppy or pointy ears, hats and caps trail, particles drift (`0.3` breeze .. `1` gale, blowing right; negative blows left); `0` changes nothing; the `wind` action changes it during the scene; `blow_away` blows a light prop away |
+| `water` | `true` \| mapping | none | a strip of [water](#water-and-air-vehicles-water-land) with waves at the front of the stage, for a `boat`: `true` (the whole width) or `{left, right, color}` (`left` / `right`: marks or x from 0 to 1; `color`: a theme token or #hex, default a clear blue); not in a `room` |
 | `room` | `true` \| mapping | none | an [indoor set](#rooms-room) instead of the sky and the ground band: a back wall, a floor, a skirting board, an optional ceiling, windows (their sky follows `light`) and doors (door props whose names are marks; `enter` / `exit` through them); not with `image`, `generate`, `background`, `ground_color`, `wind` or outdoor particles |
 
 | key (`characters[]`) | default | |
@@ -4413,7 +4418,7 @@ a `lift`. The furniture for [rooms](#rooms-room) has a gallery of its own there.
 
 | key (`props[]`) | default | |
 |---|---|---|
-| `prop` | — | a built-in prop: `table chair tree bush house door lamp sign box ball cloud sun moon rock plant laptop cup basket umbrella napkin`; [furniture](#rooms-room): `sofa armchair bed bookshelf counter fridge picture rug houseplant clock tv desk`; [vehicles](#vehicles-get_in-ride_to-get_out): `bicycle car bus` |
+| `prop` | — | a built-in prop: `table chair tree bush house door lamp sign box ball cloud sun moon rock plant laptop cup basket umbrella napkin`; [furniture](#rooms-room): `sofa armchair bed bookshelf counter fridge picture rug houseplant clock tv desk`; [vehicles](#vehicles-get_in-ride_to-get_out): `bicycle car bus`, [on water and in the air](#water-and-air-vehicles-water-land): `boat hot_air_balloon toy_rocket` |
 | `svg` | — | instead of `prop`: an SVG file relative to the project folder (sanitised like every SVG: no scripts, filters, embedded pictures or text), standing on the bottom edge of its `viewBox` |
 | `name` | the prop's name | its name for actions and the layout dump; an SVG's default is its file name (`assets/old_well.svg` -> `old_well`); repeats are numbered (`tree`, `tree_2`) |
 | `at` | `centre` | a mark or an x position from 0 to 1 of the stage |
@@ -4844,7 +4849,7 @@ are: give a bus a `scale` below 1, or the stage a smaller `size`, when it must f
 | action | target | options | |
 |---|---|---|---|
 | `get_in` | characters | `to` (required: a vehicle of the stage) | each character takes the free seat nearest to it and sits down: in a car or a bus it goes behind the side (which hides its legs; its head shows in a window), on a bicycle it sits on the saddle, its feet on the pedals and its hands on the handlebar. 1.0 s. It must stand next to the vehicle (within 0.5 of its heights of either end) at its depth. A full vehicle takes no more. |
-| `ride_to` | vehicles, or characters that ride one (their vehicle) | `to` (a mark, an x, or `{mark, depth}`), `depth`, `speed` (units per second; default: a bicycle and a bus 4, a car 5) | the vehicle rides there with everyone in it: it turns to face the way it goes (at once), speeds up, goes, slows down and stops, its wheels turning; a bicycle's rider pedals. With a depth it rides towards or away from the camera, growing or shrinking with its riders and passing in front of or behind the others. As long as the distance needs (`run_time` sets it). |
+| `ride_to` | vehicles, or characters that ride one (their vehicle) | `to` (a mark, an x, or `{mark, depth}`), `depth`, `speed` (units per second; default: a bicycle and a bus 4, a car 5, a boat 2.5, a balloon 1.2, a toy rocket 6), `land` (a balloon or a toy rocket: `false` flies it away, see [below](#water-and-air-vehicles-water-land)) | the vehicle rides there with everyone in it: it turns to face the way it goes (at once), speeds up, goes, slows down and stops, its wheels turning; a bicycle's rider pedals. With a depth it rides towards or away from the camera, growing or shrinking with its riders and passing in front of or behind the others. As long as the distance needs (`run_time` sets it). |
 | `get_out` | characters | none | each rider gets out where the vehicle is now: it stands up beside its seat, in front of the vehicle, its body, legs and arms as they were before it got in. 0.9 s. |
 
 While a character rides it keeps its seat and its facing (the vehicle's): it cannot `walk_to`,
@@ -4891,6 +4896,58 @@ scenes:
       - text: "Everyone out!"
         actions:
           - {get_out: [pip, kit, moss]}
+```
+
+#### Water and air vehicles (`water`, `land`)
+
+Three more vehicles go outdoors only (a `room` refuses them): a `boat` (0.58 of a character tall,
+1.9 long, an outboard motor at the back; two riders sitting behind its side), a
+`hot_air_balloon` (2.1 tall; two riders standing in its basket, which hides their legs) and a
+`toy_rocket` (0.55 tall; a toy: nobody rides it, and `get_in` to it is refused). They are in the
+[vehicles gallery](gallery/media/vehicles.png) above, with the rocket's parachute open.
+
+- **The boat** floats on the stage's `water`: a strip of water at the front, from the bottom of
+  the frame up to a little above the ground line, between `left` and `right` (`water: true` is
+  the whole width). Waves drift along its front edge (with the wind's way when the stage's `wind`
+  blows left) and the boat bobs and rocks on them all the time, its riders with it. The front of
+  the water is drawn in front of the boat, over its keel, so it sits in the water. The boat must
+  stand on the water (its `at` between `left` and `right`; keep its ends over it too) at depth 0;
+  `ride_to` takes it along the water like a car along the road (default speed 2.5), and
+  `vidgen validate` refuses a `to` off the water. Its motor runs (an `engine`, higher), no
+  brakes, no dust, and it casts no shadow.
+- **The balloon** rises about 0.3 of the frame's height above where it set off (less when its top
+  would leave the frame; at least 0.12) over the first 30 % of the flight, floats gently along,
+  and comes down over the last 30 % to land at `to`. The stage's wind when it sets off blows it
+  aside on the way (up to 1.2 character heights at a gale, most half-way); it still lands at
+  `to`. Its `burner` roars as it rises, and its basket lands with a soft thud. At 2.1 characters
+  tall it needs a small stage `size` (about 0.3) to fit the frame.
+- **The toy rocket** launches with a burst of smoke on the ground and a trail of puffs behind it,
+  shooting up an arc (about 0.45 of the frame's height, its nose along the way), and at the top its
+  parachute pops open: it turns upright and floats down to `to`, swaying less and less, and lands
+  softly (`launch`, a `pop`, a soft thud). The smoke is a [motion effect](#motion-effects-motion_effects)
+  (`motion_effects: false` turns it off).
+
+`land: false` on a `ride_to` flies a balloon or a toy rocket up out of the top of the frame
+(heading for `to`'s x): it and its riders are gone for the scene, and `vidgen validate` reports a
+later action on them. Only vehicles on the ground ride in depth (`depth` is refused for the
+others), and `land: false` is refused for the others.
+
+```yaml
+scenes:
+  - id: lake
+    type: stage
+    params:
+      water: {left: 0.35, right: 1.0}
+      props: [{prop: boat, at: 0.6}, {prop: toy_rocket, at: 0.12, name: rocket}]
+      characters: [{name: pip, at: 0.25}, {name: kit, at: 0.3}]
+    beats:
+      - text: "Pip and Kit climb into the little boat."
+        actions:
+          - {get_in: [pip, kit], to: boat}
+      - text: "They motor across the lake, and a toy rocket shoots over them."
+        actions:
+          - {ride_to: boat, to: 0.8}
+          - {ride_to: rocket, to: 0.3, land: false}
 ```
 
 #### Shots (`shot:`)
@@ -5243,6 +5300,7 @@ drawings of their own, with nothing to write:
 | speed lines | three ink lines behind a fast walk or a run while it is near full speed (fast: 1.15 of its own heights per second or more; a default `walk_to` goes about 0.7, a `run_to` about 1.7), and behind a prop a `throw` or `blow_away` sends flying |
 | impact stars | a burst of small stars from the feet when a `jump` of `height: 0.7` or more lands |
 | whoosh | two thin arcs trailing the hand while the arm of a `gesture` with `big: true` sweeps up (`point`, `wave`; `shrug` both hands) |
+| smoke | grey puffs rolling out on the ground where a [`toy_rocket`](#water-and-air-vehicles-water-land) launches and a trail behind it while its motor burns, each growing and fading over 1.1 s (behind the rocket); a boat or a balloon makes no dust or lines |
 
 Each is a drawing of its own beside its character or prop (never part of it), not graded by the
 stage's `light`, the same in every render (seeded by the scene, the mover and the time), and gone
@@ -5250,7 +5308,7 @@ when it ends (0.55 s for dust, 0.6 s for stars). `motion_effects: false` turns t
 whole video (top level) or one `stage` scene (param; the scene's wins); `cartoon_motion: none`
 turns them off for that character. With them off a video renders exactly as without them. They
 make no sound (foley does that). In the layout dump each is an object of kind `motion_effect`
-(name and `motion_effect`: `dust`, `speed_lines`, `impact`, `whoosh`; `effect_of`: the
+(name and `motion_effect`: `dust`, `speed_lines`, `impact`, `whoosh`, `smoke`; `effect_of`: the
 character or prop); `off_frame`, `covered_text` and `hidden_speaker` skip them (they pass in a
 moment), and `lint_ignore`'s `object` matches `effect_of`.
 
@@ -5680,6 +5738,7 @@ a title card, a `transform` of a bar).
 | `code_walkthrough` | `title`, `listing`, `line<N>`, `lines:<a-b>`, `note<N>` | reveal, dim, highlight | `reveal: line40` scrolls it into view; `lines:<a-b>`: every range up to 40 lines, else the steps' ranges; `note2` is step 2's note (revealing it plays the step); the next step resets line opacities |
 | `end_card` | `logo`, `icon`, `title`, `line<N>` | reveal, dim, highlight | those present |
 | `chapter` | `icon`, `number`, `title`, `subtitle` | reveal, dim, highlight | those present |
+| `card` | `text`, `subtitle`, `burst`, `frame` | reveal, dim, highlight, zoom | `subtitle` when given; `burst` or `frame` by `style` |
 | `stat` | `icon`, `value`, `label`, `comparison`, `context` | reveal, dim, highlight, zoom | `reveal: value` early runs the count; `comparison` is the change chip with its text |
 | `comparison` | `heading`, `col<N>`, `col:<heading>`, `col<N>.item<M>`, `verdict` | reveal, dim, highlight, zoom | a column is its heading and points (a `box` frames its card); `col2.item1` is a point with its marker; revealing a point brings its column's card |
 | `table` | `title`, `header`, `row<N>`, `row:<first cell>`, `col<N>`, `col:<header>`, `cell<R>.<C>`, `caption` | reveal, dim, highlight, zoom | `box` and `fill` cover the whole row / column / cell; `cell2.3` is row 2 (below the header), column 3 |
@@ -5717,7 +5776,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `pick_up`, `hold`, `put_down`, `give`, `throw` | see [Props in hands](#props-in-hands) | a `stage`'s character takes a prop in its hand, puts it down, hands it to another character or throws it |
 | `open`, `close` | see [Umbrellas](#umbrellas-open-and-close) | a `stage`'s umbrella opens (held overhead) or closes |
 | `sit_on`, `lean_on`, `stand_up` | see [Sitting and leaning](#sitting-and-leaning) | a `stage`'s character sits on a chair, a rock, a box or furniture (a sofa, an armchair, a bed, a desk), leans on a tree, a door, a sign or furniture (a counter...), and stands up again |
-| `get_in`, `ride_to`, `get_out` | see [Vehicles](#vehicles-get_in-ride_to-get_out) | a `stage`'s character gets in a car or a bus or on a bicycle, the vehicle rides to a place with its riders, and they get out |
+| `get_in`, `ride_to`, `get_out` | see [Vehicles](#vehicles-get_in-ride_to-get_out) | a `stage`'s character gets in a car, a bus, a boat or a balloon or on a bicycle, the vehicle rides (or flies) to a place with its riders, and they get out |
 | `shot` | `kind` (`wide`, `two_shot`, `medium`, `over_shoulder`, `closeup`), `move` (`false`) | what a beat's [`shot:`](#shots-shot) key writes, as an action: the camera frames the target characters of a `stage` from `at` to the beat's end. Write the key; the action is for a shot that starts later in the beat (`at`). |
 
 `dim`, `highlight`, `zoom` and `transform` act on targets on screen; a target not shown yet is

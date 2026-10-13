@@ -1,8 +1,11 @@
-"""Vehicles on the ground (DESIGN.md §69.52): a bicycle, a car and a bus. No manim.
+"""Vehicles (DESIGN.md §69.52, §69.53): a bicycle, a car and a bus on the ground, a boat on the
+water, a hot-air balloon and a toy rocket in the air. No manim.
 
 A vehicle is a built-in prop (:mod:`vidgen.cartoon.props` draws it) with seats, wheels that turn
 and, on a bicycle, pedals. Its geometry is in *prop units*, as for every prop: the origin at the
-middle of its foot, ``y`` up, the top at 1, as drawn facing right (the front on the right).
+middle of its foot, ``y`` up, the top at 1, as drawn facing right (the front on the right). Where
+it goes is its :attr:`VehicleSpec.medium`; the water and air paths are in
+:mod:`vidgen.cartoon.vehicle_paths`.
 
 - a *seat* is where a rider sits: the x of its hips and the y of the seat line, and the *floor*
   under it, where the rider's feet rest (a car's and a bus's floor is above the ground and behind
@@ -23,8 +26,11 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-#: The built-in vehicles.
-VEHICLE_KINDS: tuple[str, ...] = ("bicycle", "car", "bus")
+#: The built-in vehicles on the ground, on the water and in the air, and all of them.
+GROUND_VEHICLES: tuple[str, ...] = ("bicycle", "car", "bus")
+WATER_VEHICLES: tuple[str, ...] = ("boat",)
+AIR_VEHICLES: tuple[str, ...] = ("hot_air_balloon", "toy_rocket")
+VEHICLE_KINDS: tuple[str, ...] = (*GROUND_VEHICLES, *WATER_VEHICLES, *AIR_VEHICLES)
 #: The actions that put riders in a vehicle, move it, and take them out.
 RIDING_ACTIONS: frozenset[str] = frozenset({"get_in", "ride_to", "get_out"})
 #: How far beyond a vehicle's end (in the rider's heights) a character can get in without
@@ -37,6 +43,9 @@ GET_OUT_SECONDS = 0.9
 GEAR = 2.0
 #: How far a bicycle's rider leans forward (degrees) to reach the handlebar.
 CYCLING_LEAN = 14.0
+#: The share of a toy rocket's landing flight it spends shooting up; its parachute opens then
+#: (:mod:`vidgen.cartoon.vehicle_paths`; its foley pops then).
+ROCKET_ASCENT_SHARE = 0.3
 
 
 @dataclass(frozen=True)
@@ -48,7 +57,9 @@ class VehicleSpec:
     radius): where its pedals turn) and ``grip`` (the handlebar, where the rider's hands go);
     ``hides_legs``: riders sit behind its side (a car, a bus: drawn before it), else on it (a
     bicycle: drawn after it); ``speed``: units per second (the frame's shorter side is 8);
-    ``bell``: it rings a bell when it sets off (else its engine starts)."""
+    ``bell``: it rings a bell when it sets off (else its engine starts); ``medium``: where it goes
+    (``ground``, ``water`` or ``air``, DESIGN.md §69.53); ``stands``: its riders stand on the floor
+    (a balloon's basket) instead of sitting on the seat line."""
 
     height: float
     seats: tuple[float, ...]
@@ -61,6 +72,8 @@ class VehicleSpec:
     crank: tuple[float, float, float] | None = None
     grip: tuple[float, float] | None = None
     bell: bool = False
+    medium: str = "ground"
+    stands: bool = False
 
 
 def _units(height: float, value: float) -> float:
@@ -68,9 +81,9 @@ def _units(height: float, value: float) -> float:
     return value / height
 
 
-def _spec(height: float, *, seats: tuple[float, ...], seat: float, floor: float, wheels: tuple[tuple[float, float, float], ...],
+def _spec(height: float, *, seats: tuple[float, ...], seat: float, floor: float, wheels: tuple[tuple[float, float, float], ...] = (),
           half_length: float, hides_legs: bool, speed: float, crank: tuple[float, float, float] | None = None,
-          grip: tuple[float, float] | None = None, bell: bool = False) -> VehicleSpec:
+          grip: tuple[float, float] | None = None, bell: bool = False, medium: str = "ground", stands: bool = False) -> VehicleSpec:
     """A :class:`VehicleSpec` from measures in a character's heights (the drawings use them too)."""
     def u(value: float) -> float:
         return _units(height, value)
@@ -78,7 +91,7 @@ def _spec(height: float, *, seats: tuple[float, ...], seat: float, floor: float,
     return VehicleSpec(
         height, tuple(u(x) for x in seats), u(seat), u(floor), tuple((u(x), u(y), u(r)) for x, y, r in wheels), u(half_length),
         hides_legs, speed, None if crank is None else (u(crank[0]), u(crank[1]), u(crank[2])),
-        None if grip is None else (u(grip[0]), u(grip[1])), bell,
+        None if grip is None else (u(grip[0]), u(grip[1])), bell, medium, stands,
     )
 
 
@@ -98,12 +111,24 @@ VEHICLES: dict[str, VehicleSpec] = {
         1.45, seats=(1.28, 0.38, -0.38, -1.12), seat=0.44, floor=0.3, wheels=((-1.0, 0.22, 0.22), (1.15, 0.22, 0.22)),
         half_length=1.6, hides_legs=True, speed=4.0,
     ),
+    "boat": _spec(
+        0.58, seats=(0.2, -0.3), seat=0.2, floor=0.05, half_length=0.9, hides_legs=True, speed=2.5, medium="water",
+    ),
+    "hot_air_balloon": _spec(
+        2.1, seats=(0.15, -0.15), seat=0.04, floor=0.04, half_length=0.5, hides_legs=True, speed=1.2, medium="air", stands=True,
+    ),
+    "toy_rocket": _spec(0.55, seats=(), seat=0.0, floor=0.0, half_length=0.12, hides_legs=False, speed=6.0, medium="air"),
 }
 
 
 def is_vehicle(kind: str | None) -> bool:
     """Whether a built-in prop ``kind`` is a vehicle."""
     return kind in VEHICLES
+
+
+def medium(kind: str) -> str:
+    """Where a ``kind`` vehicle goes: ``ground``, ``water`` or ``air``."""
+    return VEHICLES[kind].medium
 
 
 def seat_count(kind: str) -> int:
@@ -174,18 +199,23 @@ def ride_facing(facing: str, dx: float) -> str:
 
 
 __all__ = [
+    "AIR_VEHICLES",
     "CYCLING_LEAN",
     "GEAR",
     "GET_IN_REACH",
     "GET_IN_SECONDS",
     "GET_OUT_SECONDS",
+    "GROUND_VEHICLES",
     "RIDING_ACTIONS",
+    "ROCKET_ASCENT_SHARE",
     "VEHICLES",
     "VEHICLE_KINDS",
+    "WATER_VEHICLES",
     "VehicleSpec",
     "crank_degrees",
     "get_in_gap",
     "is_vehicle",
+    "medium",
     "pedal_points",
     "place_order",
     "ride_facing",

@@ -11241,3 +11241,101 @@ How to test
   render: `test_cartoon_depth holding seating motion_effects foley props furniture lighting stage
   room vehicles` (18 passed, 12 s), `test_cartoon_lint directing sheet moving acting
   test_introspect test_sfx test_phase_k_review` (14 passed, 34 s). The full suite was not run.
+
+## Step 119 — Vehicles, part 2: water and air
+
+What was built (DESIGN §69.53)
+- Three vehicle props: `boat` (0.58 of a character tall, 1.9 long, 2 seated riders behind its
+  side, an outboard motor), `hot_air_balloon` (2.1 tall, 2 riders standing in the basket),
+  `toy_rocket` (0.55 tall, nobody rides it; shapes `folded` / `chute`). `VehicleSpec.medium`
+  (`ground` / `water` / `air`) and `.stands`; `GROUND_VEHICLES`, `WATER_VEHICLES`,
+  `AIR_VEHICLES`, `medium()`; `ROCKET_ASCENT_SHARE` in `cartoon/vehicles.py`.
+- Pure, seeded paths in the new `cartoon/vehicle_paths.py`: `Course(...).at(share)` (feet and
+  turn), `balloon_point` (rise 30 % of the time, cruise with a float, land; a wind `drift` bulge
+  that is 0 at both ends; `land=False` keeps rising), `rocket_point` (arc up with the nose along
+  the tangent, parachute descent turning upright, or away out of the frame), `balloon_seconds`,
+  `rocket_seconds`, `wave_offset`, `front_outline`, `boat_bob`, `bob_phase`, `smoke_puffs`.
+- Stage param `water: true | {left, right, color}` (`WaterStrip`); `cartoon/water.py`
+  `StageWater` draws the band (backdrop) and the wavy front strip (first foreground item, over the
+  keels) and, from a scene updater, moves the waves and bobs the boats (`Prop.afloat`), re-placing
+  their riders. Boats cast no shadow; the redraw set includes the water's movers.
+- `Prop.pose_at(x, y, degrees)` / `.tilt`; every vehicle prop has an anchor; `Ride(rise=, drift=,
+  away_y=, seed=)` flies a `Course` for water and air kinds (ground rides unchanged), switches the
+  rocket's parachute, leaves `Prop.flight`. `ride_to` option `land` (`false`: a balloon or rocket
+  flies out of the top of the frame); `RideTo._flight` caps the rise so the top stays in the frame
+  and takes the drift from the stage's wind level.
+- Validate: Params refuse a boat without water / off it / not at depth 0, and water, a boat, a
+  balloon or a rocket in a room; `get_in` to a toy rocket is refused; the replay
+  (`holding_problems(water=)`, `StageFrame.water`) refuses a boat's `to` off the water, `depth`
+  off the ground, `land: false` on the ground or water, and any later use of a vehicle that flew
+  away and its riders. The planner drops flown riders.
+- Foley: boat `engine` (pitch +6, no brakes), balloon `burner`, rocket `launch`, its parachute
+  `pop` and a soft `thud` at a touchdown (`PlayedAction.lands`). New generated sounds `burner`
+  and `launch` in `sfx.py` (21 → 23 built-in sounds). Motion effects: none for water / air rides
+  except the rocket's `smoke` (new kind, drawn behind it).
+- `docs/gallery/media/vehicles.png` regenerated: 960×480, 4 columns, 7 cells (rocket twice),
+  19.7 KB; `docs/gallery/stage.md` rows for `props.prop` and `water` (as `_param_rows` writes them).
+
+Pre-existing failures fixed (from Step 118's note)
+- `tests/test_builtin_scenes.py`: `card` added to `BUILTINS` and `SAMPLES`; the "examples use
+  every type" check counts `card` with `stage` (it is in the cartoon examples).
+  `tests/test_actions_coverage.py`: `SAMPLES["card"]` and `card` in the "types with targets"
+  message; `docs/CONFIG.md`'s targets table gains a `card` row (`text`, `subtitle`, `burst`,
+  `frame`). The lists stay written out (not derived), as the tests compare them on purpose.
+  Backlog line removed.
+
+Files touched
+- New: `src/vidgen/cartoon/vehicle_paths.py`, `src/vidgen/cartoon/water.py`,
+  `tests/test_cartoon_water_air.py`.
+- `src/vidgen/cartoon/vehicles.py`, `vehicle_drawing.py`, `riding.py`, `props.py`, `holding.py`,
+  `directing.py`, `foley.py`, `motion_effects.py`, `motion_effect_shapes.py`;
+  `src/vidgen/scenes/stage.py`, `scenes/riding.py`; `src/vidgen/sfx.py`, `src/vidgen/api.py`;
+  guide `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md`.
+- Docs: `docs/CONFIG.md` (new "Water and air vehicles", `water` param row, props row, `ride_to`
+  options, sounds, foley, motion effects, targets table `card`), `DESIGN.md` (§2 tree, §6.4,
+  new §69.53), `docs/EXTENDING.md`, `docs/gallery/stage.md`, `docs/gallery/media/vehicles.png`,
+  `tasklist.md` (ticks, Backlog: card line removed, water-and-air line added).
+- Tests updated: `tests/test_cartoon_vehicles.py` (kinds, ground-only seat test),
+  `tests/test_cartoon_props.py` (38 kinds), `tests/test_builtin_scenes.py`,
+  `tests/test_actions_coverage.py`.
+
+Public interfaces
+- `vidgen.api` adds the names listed in DESIGN §6.4 (Step 119). Prop kinds `boat`,
+  `hot_air_balloon`, `toy_rocket`; stage param `water`; `ride_to` option `land`; motion effect
+  `smoke`; sounds `burner`, `launch`. Compatible: scenes without them render as before.
+
+Decisions / deviations
+- One action set for every vehicle: `ride_to` launches a toy rocket too (no `launch` action);
+  the rocket has no seats (a toy, not a craft to ride).
+- The water is a front strip only (depth 0); boats float at depth 0 and do not ride in depth.
+- `to` is required as for ground rides; the wind bows a balloon's way aside but it lands at `to`
+  (without `to` it would land somewhere `vidgen validate` cannot predict).
+- Flown-away vehicles and riders are "gone" in the replay; on screen they stay above the frame.
+- Searched first: no water, boat, balloon, flight or smoke-trail code existed (`grep -rni
+  "water\|boat\|balloon\|rocket\|smoke" src/vidgen`: only the `smoke` particles and unrelated
+  words); reused `walk_progress`, `smoothstep`, `idle_seed` / `wind_seed`, `Wind.level`, the
+  prop shapes (`show_shape`), `Puff`, `MotionEffect`, the smoke particles' colour, `_param_rows`.
+
+Evidence
+- Storyboards at preview 854×480 (scratch project `s119/proj` in the scratchpad), checked by eye:
+  two riders climbing into a boat on water from 0.35, motoring right, waves crossing the keel and
+  the boat bobbing; a balloon at `size: 0.3` with `wind: windy` lifting two standing riders,
+  drifting and landing at 0.75, both getting out; a toy rocket launching with a smoke burst and
+  trail, its parachute opening at the top, landing upright; a second rocket flying off the top.
+  The vehicles gallery still checked at 1920×960 and 960×480.
+
+Known gaps / TODOs (Backlog line "Water and air")
+- A boat's ends are not checked against the water's edges; `get_out` of a balloon stands the
+  riders in front of the basket; no water in depth, no splash; the balloon does not lean with the
+  wind and the smoke does not drift; the balloon is 2.1 characters tall; the new sounds were not
+  listened to by a person. Render cost of a stage with water: everything from the first boat on is
+  redrawn every frame (not measured).
+
+How to test
+- `pytest tests/test_cartoon_water_air.py` (25 not-render + 1 render, ~3 s).
+- Also run (not render): `tests/test_cartoon_*.py test_sfx test_guide test_docs test_api
+  test_voice_sounds test_lint test_introspect test_schema test_gallery test_config test_actions
+  test_actions_coverage test_builtin_scenes test_phase_k_review test_phase_i_review
+  test_phase_h_review` (1347 passed, 177 s); render: `test_cartoon_vehicles motion_effects props
+  foley stage room depth` (12 passed, 9 s), the `card` renders of `test_builtin_scenes` /
+  `test_actions_coverage` (5 passed). The full suite was not run.

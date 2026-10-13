@@ -266,7 +266,10 @@ an updater on the rider, never add the rider to the vehicle), `riding_state(ride
 place, state)` seats it (on a bicycle: leaning, feet on the pedals, hands on the handlebar), and
 `Ride(vehicle, x, seats=, speed=, depth=, feet_y=)` drives the vehicle with its riders, wheels
 turning (`Prop.turn_wheels`); `vehicle.prop_point(x, y)` maps the vehicle's prop units to the
-screen.
+screen. A boat, a hot-air balloon and a toy rocket (`medium(kind)`: `water` / `air`) fly a
+`Course` instead (`Ride(..., rise=, drift=, away_y=, seed=)`; its pure points are
+`balloon_point` and `rocket_point`); `Prop.pose_at(x, y, degrees)` sets a vehicle's place and
+turn afresh, and `StageWater` draws a stage's water and bobs the boats on it (`boat_bob`).
 `character(name)` breathes, sways its head and blinks on its own (unless `idle: false`):
 `stop_idle()` / `start_idle(seed=None)` turn that off and on; a blink never shows during a
 `PoseChange`. Before drawing your own scene for characters on a set, check whether the built-in

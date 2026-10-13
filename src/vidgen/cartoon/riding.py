@@ -24,6 +24,7 @@ from vidgen.cartoon.character import Character, CharacterState, scale_strokes
 from vidgen.cartoon.motion import Phases
 from vidgen.cartoon.props import Prop
 from vidgen.cartoon.stage import depth_along, depth_scale, depth_walk_distance
+from vidgen.cartoon.vehicle_paths import Course, balloon_seconds, chute_open, rocket_seconds
 from vidgen.cartoon.vehicles import CYCLING_LEAN, VEHICLES, pedal_points, ride_facing, seat_origin, seated_height, wheel_degrees
 
 
@@ -82,9 +83,11 @@ def pedal_soles(seat: RiderSeat) -> dict[str, tuple[float, float]]:
 
 def riding_state(rider: Character, vehicle: Prop, place: int, base: CharacterState) -> CharacterState:
     """``base`` (the rider standing) as it rides ``vehicle`` in seat ``place``: its hips on the
-    seat line; on a bicycle leaning forward (:data:`CYCLING_LEAN`), its feet on the pedals and its
+    seat line (standing as it is in a balloon's basket); on a bicycle leaning forward (:data:`CYCLING_LEAN`), its feet on the pedals and its
     hands on the handlebar. The rider must face the vehicle's way and stand at its size already."""
     spec = VEHICLES[vehicle.kind]
+    if spec.stands:   # in a balloon's basket: standing, the basket hides the legs
+        return base
     seated = rider.seated(base, seated_height(vehicle.kind, vehicle.unit, rider.character_height))
     if spec.crank is None:
         return seated
@@ -120,7 +123,14 @@ class Ride(Animation):
     bicycle's rider pedalling. ``depth``: it also rides towards or away from the camera
     (DESIGN.md §69.44), its feet to ``feet_y(depth)``, growing or shrinking by the depth scale with
     its riders. ``strength``: its riders' ``cartoon_motion`` strength, for the motion effects
-    (``None``: the scene's)."""
+    (``None``: the scene's).
+
+    A boat goes along the water like a car along the road, from where it rests (``afloat``: the
+    stage's water bobs it on top, DESIGN.md §69.53). A hot-air balloon or a toy rocket flies a
+    :class:`~vidgen.cartoon.vehicle_paths.Course` instead: ``rise`` units high (a balloon's
+    altitude, a rocket's apex), a balloon blown ``drift`` units aside by the wind on the way, and
+    lands at ``x`` on its ground, or, with ``away_y``, flies on up to that y (above the frame). A
+    toy rocket's parachute opens at the top of a landing flight and folds as it touches down."""
 
     def __init__(
         self,
@@ -132,6 +142,10 @@ class Ride(Animation):
         depth: float | None = None,
         feet_y: Callable[[float], float] | None = None,
         strength: float | None = None,
+        rise: float = 0.0,
+        drift: float = 0.0,
+        away_y: float | None = None,
+        seed: int = 1,
         **kwargs,
     ) -> None:
         if depth is not None and feet_y is None:
@@ -142,34 +156,66 @@ class Ride(Animation):
         self.seats = list(seats)
         self.strength = strength
         self.kind = vehicle.kind
+        self.rise, self.drift, self.away_y, self.seed = float(rise), float(drift), away_y, seed
+        self.flies = VEHICLES[vehicle.kind].medium == "air"
         self.from_depth = float(getattr(vehicle, "stage_depth", 0.0))
         unit = character_unit(vehicle)
-        self.path = self._distance(self.to_x - float(vehicle.feet()[0]), unit)
+        self.course = self._course(vehicle)
+        self.path = self._distance(self.to_x - self.course.start[0], unit)
         #: How far it rides, in the heights of a character beside it.
         self.heights = self.path / unit if unit > 0 else 0.0
         self.phases = Phases()
-        kwargs.setdefault("run_time", max(walk_seconds(self.path, speed or VEHICLES[vehicle.kind].speed), 1e-3))
+        kwargs.setdefault("run_time", max(self._seconds(speed or VEHICLES[vehicle.kind].speed), 1e-3))
         kwargs.setdefault("rate_func", linear)
         super().__init__(vehicle, **kwargs)
 
+    def _start(self, vehicle: Prop) -> tuple[float, float]:
+        """Where its feet are now (a boat: where it rests, under its bobbing)."""
+        if vehicle.afloat is not None:
+            return vehicle.afloat
+        point = vehicle.feet() if not (self.flies or vehicle.tilt) else vehicle.prop_point(0.0, 0.0)
+        return float(point[0]), float(point[1])
+
+    def _course(self, vehicle: Prop) -> Course:
+        start = self._start(vehicle)
+        end_y = start[1] if self.away_y is None else float(self.away_y)
+        return Course(self.kind, start, (self.to_x, end_y), self.rise, self.drift, self.away_y is None, self.seed)
+
+    def _seconds(self, speed: float) -> float:
+        dx = self.to_x - self.course.start[0]
+        if self.kind == "hot_air_balloon":
+            return balloon_seconds(dx, self.rise, speed)
+        if self.kind == "toy_rocket":
+            return rocket_seconds(dx, self.rise, speed, land=self.course.land)
+        return walk_seconds(self.path, speed)
+
     def _distance(self, dx: float, unit: float) -> float:
+        if self.flies:
+            climb = 2.0 * self.rise if self.away_y is None else abs(float(self.away_y) - self.course.start[1])
+            return abs(dx) + climb
         if self.to_depth is None:
             return abs(dx)
         return depth_walk_distance(dx, self.from_depth, self.to_depth, unit)
 
     def begin(self) -> None:
         vehicle = self.mobject
-        self._from = vehicle.feet()
+        self.course = self._course(vehicle)
+        start = self.course.start
+        self._from = np.array([start[0], start[1], 0.0])
         self.from_depth = self._shown_depth = float(getattr(vehicle, "stage_depth", 0.0))
-        self.path = self._distance(self.to_x - float(self._from[0]), character_unit(vehicle))
-        facing = ride_facing(vehicle.facing, self.to_x - float(self._from[0]))
+        self.path = self._distance(self.to_x - start[0], character_unit(vehicle))
+        facing = ride_facing(vehicle.facing, self.to_x - start[0])
         if facing != vehicle.facing:
+            if vehicle.tilt:
+                vehicle.pose_at(start[0], start[1], 0.0)
             vehicle.flip(np.array([0.0, 1.0, 0.0]), about_point=self._from)
             vehicle.facing = facing
             for seat in self.seats:
                 seat.rider.face(facing)
                 place_rider(seat)
         self._travelled = 0.0
+        #: its course and seconds, for the smoke of a toy rocket's launch (motion effects)
+        vehicle.flight = (self.course, float(self.run_time))
         super().begin()
 
     def _to_depth_now(self, share: float) -> float:
@@ -187,14 +233,31 @@ class Ride(Animation):
 
     def interpolate_mobject(self, alpha: float) -> None:
         vehicle = self.mobject
-        share = walk_progress(self.rate_func(alpha))
-        feet_y = float(self._from[1]) if self.to_depth is None else self._to_depth_now(share)
-        x = float(self._from[0]) + share * (self.to_x - float(self._from[0]))
-        vehicle.shift(np.array([x, feet_y, 0.0]) - vehicle.feet())
-        travelled = share * self.path
-        wheel = VEHICLES[self.kind].wheels[0][2] * vehicle.unit
-        vehicle.turn_wheels(wheel_degrees(travelled - self._travelled, wheel))
-        self._travelled = travelled
+        if self.flies or vehicle.afloat is not None:
+            self._move_along(vehicle, self.rate_func(alpha))
+        else:
+            share = walk_progress(self.rate_func(alpha))
+            feet_y = float(self._from[1]) if self.to_depth is None else self._to_depth_now(share)
+            x = float(self._from[0]) + share * (self.to_x - float(self._from[0]))
+            vehicle.shift(np.array([x, feet_y, 0.0]) - vehicle.feet())
+            travelled = share * self.path
+            wheel = VEHICLES[self.kind].wheels[0][2] * vehicle.unit
+            vehicle.turn_wheels(wheel_degrees(travelled - self._travelled, wheel))
+            self._travelled = travelled
+        self._place_riders()
+
+    def _move_along(self, vehicle: Prop, share: float) -> None:
+        """A boat or a flying vehicle at ``share`` of its time on its course (a toy rocket's
+        parachute open from the top of a landing flight until it touches down)."""
+        x, y, degrees = self.course.at(share)
+        if vehicle.afloat is not None:
+            vehicle.afloat = (x, y)
+        vehicle.pose_at(x, y, degrees)
+        if vehicle.shapes and self.kind == "toy_rocket":
+            folded, opened = vehicle.shapes[:2]
+            vehicle.show_shape(opened if chute_open(share, self.course.land) and share < 1.0 else folded)
+
+    def _place_riders(self) -> None:
         for seat in self.seats:
             place_rider(seat)
             pedal(seat)

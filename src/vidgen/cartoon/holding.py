@@ -22,7 +22,7 @@ from typing import Any
 
 from vidgen.cartoon.seating import LEAN_REACH, SIT_REACH, PostureError, Postures
 from vidgen.cartoon.stage import depth_scale, facing_sign, walk_destination
-from vidgen.cartoon.vehicles import GET_IN_REACH, get_in_gap, seat_count
+from vidgen.cartoon.vehicles import GET_IN_REACH, get_in_gap, medium, seat_count
 
 #: The hands, the near one (``left``, drawn in front of the body) first: a hand is taken in this
 #: order when the action does not name one.
@@ -302,9 +302,13 @@ def _get_in_problem(
 def _ride(
     step: HandlingStep, where: _Positions, postures: Postures, rides: Mapping[str, tuple[str, float]],
     characters: Mapping[str, tuple[float, float]], place_x: Callable[[Any], float | None],
+    water: tuple[float, float] | None, to_fraction: Callable[[float], float], flown: dict[str, str],
 ) -> list[tuple[str, str]]:
     """A ``ride_to``: its target vehicles, and the vehicles its target characters ride, go to its
-    place and depth with their riders; a target character that rides nothing is a problem."""
+    place and depth with their riders; a target character that rides nothing is a problem. A boat
+    rides on the ``water`` only (its x from .. to, Manim units), only vehicles on the ground ride
+    in depth, only flying ones fly away (``land: false``: then they and their riders are
+    ``flown``, DESIGN.md §69.53)."""
     problems: list[tuple[str, str]] = []
     chosen = [t for t in step.targets if t in rides]
     for who in [t for t in step.targets if t in characters]:
@@ -315,11 +319,22 @@ def _ride(
         elif now[1] not in chosen:
             chosen.append(now[1])
     place, depth = walk_destination(step.options)
+    lands = step.options.get("land", True) is not False
     for vehicle in chosen:
+        kind = rides[vehicle][0]
         x = place_x(place) if place is not None else where.x.get(vehicle)
+        if depth is not None and medium(kind) != "ground":
+            problems.append((f"{step.location}.depth", f"'{vehicle}' ({kind}) keeps its depth; only vehicles on the ground ride in depth"))
+        if not lands and medium(kind) != "air":
+            problems.append((f"{step.location}.land", f"'{vehicle}' ({kind}) cannot fly away; land: false is for a hot_air_balloon or a toy_rocket"))
+        if medium(kind) == "water" and x is not None and water is not None and not water[0] - 1e-6 <= x <= water[1] + 1e-6:
+            problems.append((f"{step.location}.to", f"'{vehicle}' floats on the water, from {to_fraction(water[0]):.2f} to "
+                                                    f"{to_fraction(water[1]):.2f}; ride it to an x there"))
         for name in [vehicle, *postures.riders(vehicle)]:
             where.x[name] = x
             where.walk_depth(name, depth)
+            if not lands and medium(kind) == "air":
+                flown[name] = step.location
     return problems
 
 
@@ -340,6 +355,7 @@ def holding_problems(
     seat_places: Mapping[str, int] | None = None,
     depths: Mapping[str, float] | None = None,
     vehicles: Mapping[str, tuple[str, float]] | None = None,
+    water: tuple[float, float] | None = None,
 ) -> list[tuple[str, str]]:
     """Replay a stage scene's actions (``steps`` in play order) through :class:`Holdings`,
     :class:`~vidgen.cartoon.seating.Postures` and the characters' positions; ``(location,
@@ -361,7 +377,10 @@ def holding_problems(
     next to the rider (:data:`~vidgen.cartoon.vehicles.GET_IN_REACH` beyond its ends, at its
     depth) and a free seat, ``ride_to`` takes the riders along (a character target that rides
     nothing is a problem), ``get_out`` needs a vehicle to get out of; a rider cannot walk, sit or
-    stand up before it gets out, and a vehicle cannot be picked up or moved by keys while ridden."""
+    stand up before it gets out, and a vehicle cannot be picked up or moved by keys while ridden.
+    ``water``: the x (Manim units) from and to which the stage's water goes (DESIGN.md §69.53): a
+    boat rides there only; only vehicles on the ground ride in depth; a balloon or a toy rocket
+    that flies away (``land: false``) is gone for the scene with its riders."""
     holdings = Holdings()
     postures = Postures()
     where = _Positions(
@@ -398,8 +417,15 @@ def holding_problems(
 
     #: props a ``blow_away`` without ``to`` took off stage -> where that action is
     gone: dict[str, str] = {}
+    #: vehicles that flew away out of the frame, and their riders -> where that ride is
+    flown: dict[str, str] = {}
     for step in steps:
         o = step.options
+        named_to = str(o.get("to")) if step.action in ("get_in", "pick_up", "hold", "sit_on", "lean_on") else None
+        away = [(f"{step.location}.target", t) for t in step.targets if t in flown] + ([(f"{step.location}.to", named_to)] if named_to in flown else [])
+        if away:
+            problems += [(key, f"'{name}' flew away out of the frame ({flown[name]}); it is gone for the scene") for key, name in away]
+            continue
         for who in [t for t in step.targets if t in characters]:
             here, height = where.x.get(who), where.heights[who]
             named = str(o.get("to")) if step.action in ("pick_up", "hold", "sit_on", "lean_on") else None
@@ -435,7 +461,7 @@ def holding_problems(
                     postures.stand(who)
                 elif step.action == "get_in":
                     vehicle = str(o.get("to"))
-                    if vehicle not in rides:
+                    if vehicle not in rides or seat_count(rides[vehicle][0]) == 0:   # not a vehicle, or a toy: the action says so
                         continue
                     message = _get_in_problem(where, who, vehicle, rides[vehicle][0], to_fraction, beside)
                     if message is not None:
@@ -512,7 +538,7 @@ def holding_problems(
                 key = "prop" if step.action in ("put_down", "throw", "give") and o.get("prop") is not None else "target"
                 problems.append((f"{step.location}.{key}", str(exc)))
         if step.action == "ride_to":
-            problems += _ride(step, where, postures, rides, characters, place_x)
+            problems += _ride(step, where, postures, rides, characters, place_x, water, to_fraction, flown)
         for prop in [t for t in step.targets if t in props]:
             holder = holdings.holder(prop)
             if step.action in ("move_along", "keyframes", "blow_away", "open", "close") and blown_off(prop) is not None:

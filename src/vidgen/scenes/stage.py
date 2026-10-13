@@ -63,7 +63,7 @@ class StageProp(SceneParams):
     also_accepts: ClassVar[tuple[type, ...]] = (str,)
 
     prop: Literal[PROP_KINDS] | None = None  # type: ignore[valid-type]
-    """A built-in prop: table, chair, tree, bush, house, door, lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup, basket, umbrella, napkin; furniture: sofa, armchair, bed, bookshelf, counter, fridge, picture, rug, houseplant, clock, tv, desk; vehicles: bicycle, car, bus."""
+    """A built-in prop: table, chair, tree, bush, house, door, lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup, basket, umbrella, napkin; furniture: sofa, armchair, bed, bookshelf, counter, fridge, picture, rug, houseplant, clock, tv, desk; vehicles: bicycle, car, bus, boat (on the stage's water), hot_air_balloon, toy_rocket."""
     svg: str | None = None
     """Instead of prop: an SVG file relative to the project folder (sanitised like any SVG), standing on the bottom edge of its viewBox."""
     name: Identifier | None = None
@@ -313,6 +313,30 @@ class StageRoom(SceneParams):
         return {"anyOf": [{"const": True}, handler(core_schema)]}
 
 
+class WaterStrip(SceneParams):
+    """A strip of water at the front of the stage, with waves: a boat floats on it (DESIGN.md
+    §69.53). ``true`` is water across the whole stage."""
+
+    also_accepts: ClassVar[tuple[type, ...]] = (bool,)
+
+    left: str | Annotated[float, Field(ge=0.0, le=1.0)] = 0.0
+    """Where it starts: a mark or an x from 0 (left edge) to 1 (right edge) of the stage."""
+    right: str | Annotated[float, Field(ge=0.0, le=1.0)] = 1.0
+    """Where it ends: a mark or an x from 0 to 1, right of left."""
+    color: ThemeColor | None = None
+    """The water's colour (a theme token or #hex); default a clear blue."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _plain(cls, data: Any) -> Any:
+        return {} if data is True else data
+
+    @classmethod
+    def __get_pydantic_json_schema__(cls, core_schema: Any, handler: Any) -> dict[str, Any]:
+        """``true`` is also water (JSON Schema ``anyOf`` true | object)."""
+        return {"anyOf": [{"const": True}, handler(core_schema)]}
+
+
 @dataclass
 class _Parallax:
     """A layer on screen: its mobject, factor and every member's points at the camera's home."""
@@ -367,7 +391,10 @@ class Stage(NarratedScene):
     one). They sit on a chair, a rock, a box, a sofa, an armchair, a bed or at a desk with
     ``sit_on``, lean on a tree, a door, a sign or a counter with ``lean_on``, and get up with
     ``stand_up``. They ``get_in`` a car or a bus (or on a bicycle), ``ride_to`` a place in it with
-    its wheels turning (pedalling on a bicycle) and ``get_out``.
+    its wheels turning (pedalling on a bicycle) and ``get_out``. ``water`` puts a strip of water
+    with waves at the front, where a boat bobs and rides; a hot-air balloon rises, drifts with the
+    wind and lands; a toy rocket launches with smoke and floats down under its parachute (or flies
+    off, ``land: false``).
 
     Action targets: each character and each prop by its name; each part of a character as
     ``<character>.<part>`` (``kit.arm_left``).
@@ -436,6 +463,8 @@ class Stage(NarratedScene):
         """Wind from the start, in gusts: 0 calm (nothing moves) .. 1 a gale blowing to the right (negative: to the left), or calm, breeze (0.3), windy (0.6), gale (1); trees, bushes, plants, signs and lamps sway, scarves, long hair, floppy or pointy ears and hats trail (clearly from windy on), particles drift (add leaves or streaks to show it more); the wind action changes it during the scene, blow_away blows a light prop away."""
         room: StageRoom | None = None
         """An indoor set instead of the sky and the ground: true, or {wall, wallpaper (plain, stripes, dots), floor, flooring (boards, tiles, plain), skirting, ceiling, depth, windows, doors}; windows show the sky of the stage's light, doors are door props whose names are marks (enter / exit through them); no wind, rain, snow, leaves or streaks inside."""
+        water: WaterStrip | None = None
+        """A strip of water with waves at the front of the stage, for a boat to float on: true (the whole width) or {left, right, color} (marks or x from 0 to 1); outdoors only."""
 
         @model_validator(mode="after")
         def _check(self) -> SceneParams:
@@ -477,9 +506,45 @@ class Stage(NarratedScene):
                     raise ValueError(f"props[{k}].at: {exc}") from None
                 if prop.against == "wall" and self.room is None:
                     raise ValueError(f"props[{k}]: against: wall needs a room (room: true) to stand against")
+            self._check_water_and_air(marks)
             if self.room is not None:
                 self._check_room()
             return self
+
+        def water_span(self) -> tuple[float, float] | None:
+            """The water's left and right x (0..1 of the stage; ``None``: no water)."""
+            if self.water is None:
+                return None
+            marks = self.stage_marks()
+            return mark_x(self.water.left, marks), mark_x(self.water.right, marks)
+
+        def _check_water_and_air(self, marks: dict[str, float]) -> None:
+            """Water and air vehicles stay outdoors; a boat floats on the stage's water, at the
+            front (DESIGN.md §69.53)."""
+            if self.water is not None:
+                if self.room is not None:
+                    raise ValueError("a room has no water: remove water (or the room)")
+                try:
+                    left, right = self.water_span() or (0.0, 1.0)
+                except ValueError as exc:
+                    raise ValueError(f"water: {exc}") from None
+                if left >= right:
+                    raise ValueError(f"water: left ({left:g}) must be left of right ({right:g})")
+            for k, (prop, name) in enumerate(zip(self.props, self.prop_names())):
+                if prop.prop not in VEHICLES or VEHICLES[prop.prop].medium == "ground":
+                    continue
+                if self.room is not None:
+                    raise ValueError(f"props[{k}]: a {prop.prop.replace('_', ' ')} stays outdoors; remove it (or the room)")
+                if VEHICLES[prop.prop].medium != "water":
+                    continue
+                span = self.water_span()
+                if span is None:
+                    raise ValueError(f"props[{k}]: '{name}' floats on water: give the stage water: true (or {{left, right}})")
+                x = mark_x(prop.at, marks)
+                if not span[0] <= x <= span[1]:
+                    raise ValueError(f"props[{k}]: '{name}' at {x:.2f} is not on the water (from {span[0]:.2f} to {span[1]:.2f}); put it at an x there")
+                if prop.depth != 0.0:
+                    raise ValueError(f"props[{k}]: '{name}' floats at the front (depth 0), where the water is; remove its depth")
 
         def _check_room_places(self) -> None:
             """The room's windows and doors stand on the stage's own marks or at an x."""
@@ -635,6 +700,7 @@ class Stage(NarratedScene):
             seat_places=frame.seat_places,
             depths=frame.depths,
             vehicles={name: (kind, height) for name, (kind, height, _) in frame.vehicles.items()},
+            water=frame.water,
         )
         return problems + cls._calm_blow_problems(params, ordered)
 
@@ -715,7 +781,7 @@ class Stage(NarratedScene):
                     cue, mover, delay=cue.time - start, seed=motion_seed(self.spec.id, name, cue.kind, round(cue.time, 3), cue.arm),
                     scale=effect_scale(strength), star_color=self.theme.color("highlight"), effect_of=name,
                 )
-                self._add_motion_effect(effect, mover, behind=cue.kind == "speed_lines")
+                self._add_motion_effect(effect, mover, behind=cue.kind in ("speed_lines", "smoke"))
 
     def _add_motion_effect(self, effect: MotionEffect, mover: Mobject, *, behind: bool) -> None:
         """Put ``effect`` right in front of ``mover`` and the props it holds (``behind``: right
@@ -1031,6 +1097,15 @@ class Stage(NarratedScene):
         for prop_name, holder in self._held_before_entering(entering).items():   # waits off stage with its holder
             item, figure = self.props[prop_name], self.cast[holder]
             item.shift([float(figure.feet()[0] - item.feet()[0]), 0.0, 0.0])
+        #: the stage's water (``None``: none): its band over the ground, its front strip in front of
+        #: everything, the boats bobbing on it (DESIGN.md §69.53)
+        self.water = self._water()
+        if self.water is not None:
+            backdrop.append(self.water.back)
+            in_front.insert(0, self.water.front)
+            for prop in self.props.values():
+                if prop.is_vehicle and VEHICLES[prop.kind].medium == "water":
+                    self.water.float_boat(prop)
         # the light grades the set, not the stars, shadows, bubbles or text (DESIGN.md §69.31)
         mark_lit(*[m for m in backdrop if not isinstance(m, (StarField, WindowViews))], *in_front, *(mob for _, mob in on_stage))
         still, moving = self._shadows(placements)
@@ -1063,6 +1138,7 @@ class Stage(NarratedScene):
             return [FadeOut(self._entrance_cover()), *items]
 
         self._start_wind(placements)
+        self._start_water()
         self._start_depth_order()
         #: the set behind the characters (puddles go in it, DESIGN.md §69.39)
         self._backdrop = backdrop
@@ -1145,9 +1221,10 @@ class Stage(NarratedScene):
         """Manim's moving mobjects, or every mobject while the light changes during this
         animation (the grade then changes on every frame, so nothing can stay in the static
         image), or, while the wind may move something, everything from the first swaying prop or
-        trailing character on (DESIGN.md §69.32; the set behind it stays in the static image), and,
+        trailing character on (DESIGN.md §69.32; the set behind it stays in the static image),
         while a character walks in depth, everything from the first thing whose depth it passes
-        on (its place in the draw order changes, §69.44)."""
+        on (its place in the draw order changes, §69.44), and on a stage with water everything from
+        the first boat on (the waves and the bobbing move every frame, §69.53)."""
         moving = super().get_moving_mobjects(*animations)
         now = float(self.renderer.time)
         duration = getattr(self, "duration", None)
@@ -1158,6 +1235,7 @@ class Stage(NarratedScene):
             if light.changing(now, end):
                 return [*self.mobjects, *(m for m in moving if m not in self.mobjects)]
         redrawn = self._depth_crossers(animations) if hasattr(self, "_depth_walks") else set()
+        redrawn |= self._water_movers()
         blowing = getattr(self, "blowing", None)
         if blowing is not None:
             blowing.update(now)
@@ -1225,6 +1303,48 @@ class Stage(NarratedScene):
         if self.blowing is None or not self.blowing.moving(now, math.inf):
             self.remove_updater(self._wind_updater)
 
+    # ----- water (DESIGN.md §69.53) ----------------------------------------------------------------
+
+    def _water(self) -> StageWater | None:
+        """The stage's ``water`` (``None``: none), its waves drifting with the wind's way."""
+        p = self.params
+        span = p.water_span()
+        if span is None or p.water is None:
+            return None
+        left = -self.stage_width / 2
+        unit = p.size * min(self.frame_width, self.frame_height)
+        color = resolve_color(p.water.color, self.theme) if p.water.color is not None else WATER_COLOR
+        sign = -1.0 if wind_level(p.wind) < 0 else 1.0
+        return StageWater(left + span[0] * self.stage_width, left + span[1] * self.stage_width, self.feet_y_at(0.0),
+                          -self.frame_height / 2, unit, color, sign=sign)
+
+    def _start_water(self) -> None:
+        """The scene updater that moves the waves and bobs the boats on every frame (kept: Manim
+        removes an updater by identity)."""
+        if self.water is None:
+            return
+        self._water_updater = self._water_step
+        self.add_updater(self._water_updater)
+
+    def _water_step(self, dt: float) -> None:
+        """Scene updater: the waves and the boats (with their riders) for the scene time now."""
+        if self.water is not None:
+            self.water.update(float(self.renderer.time), self._riders_of)
+
+    def _riders_of(self, vehicle: Prop) -> list[RiderSeat]:
+        """The seats of the characters riding ``vehicle`` now."""
+        return [seat for seat, _ in getattr(self, "_riders", {}).values() if seat.vehicle is vehicle]
+
+    def _water_movers(self) -> set[int]:
+        """The ids of the family members the water moves on every frame: its front strip, the boats
+        and their riders."""
+        water = getattr(self, "water", None)
+        if water is None:
+            return set()
+        boats = [boat for boat, _ in water.boats]
+        riders = [seat.rider for boat in boats for seat in self._riders_of(boat)]
+        return {id(m) for mob in [water.front, *boats, *riders] for m in mob.get_family()}
+
     def _shadows(self, placements: list[StagePlacement]) -> tuple[StageShadows | None, StageShadows | None]:
         """The shadows (``shadows: true``): of the props on the ground that stay put (drawn
         with the backdrop, so they stay in Manim's static image), and of the characters and the
@@ -1239,8 +1359,8 @@ class Stage(NarratedScene):
         for place_at in placements:
             name = place_at.name
             if place_at.kind == "prop":
-                if lifts[name] > 0 or name in doors or self.props[name].kind in FLAT_PROPS:
-                    continue  # hangs in the sky or on a wall, is part of the room's wall, or lies flat
+                if lifts[name] > 0 or name in doors or self.props[name].kind in (*FLAT_PROPS, *WATER_VEHICLES):
+                    continue  # hangs in the sky or on a wall, is part of the room's wall, lies flat or floats
                 prop = self.props[name]
                 widths = {shape: prop.shape_width(shape) * PROP_SHADOW_WIDTH for shape in prop.shapes}
                 caster = ShadowCaster(prop, self.grounds[name], prop.width * PROP_SHADOW_WIDTH, prop.height, widths, grows=prop.is_vehicle)
@@ -1517,7 +1637,8 @@ def _played(action: str, options: Any, anim: Animation, start: float, seconds: f
     if isinstance(anim, Walk):
         return PlayedAction(action, start, seconds, heights=anim.heights, phases=anim.phases, step_length=anim.step_length)
     if isinstance(anim, Ride):
-        return PlayedAction(action, start, seconds, heights=anim.heights, phases=anim.phases, vehicle=anim.kind)
+        lands = 1.0 if anim.flies and anim.course.land else None   # a balloon or a toy rocket touching down (§69.53)
+        return PlayedAction(action, start, seconds, heights=anim.heights, phases=anim.phases, vehicle=anim.kind, lands=lands)
     if isinstance(anim, Jump):
         return PlayedAction(action, start, seconds, phases=anim.phases, lift=anim.lift)
     if isinstance(anim, PropMove):

@@ -635,8 +635,8 @@ Phases H–K. Examples may now be up to 10 KB (owner, after Step 116).
 - [x] Tests: seat points per vehicle, ride paths, rider attachment and detachment (no render) (`tests/test_cartoon_vehicles.py`: 21 without rendering, 2 tiny renders; stills checked by eye: a car with two riders riding right and into depth behind a tree, a cyclist pedalling both ways, four riders on a bus turning round, the CONFIG.md example)
 
 ### Step 119 — Vehicles, part 2: water and air
-- [ ] `boat` (bobbing on a water strip / the beach later), `hot-air balloon` (rising and drifting with the wind), `toy rocket` (a launch with smoke and a small arc; a toy, not a real spacecraft); flight and float paths seeded and pure
-- [ ] Tests: paths, wind drift, the riders follow
+- [x] `boat` (bobbing on a water strip / the beach later), `hot-air balloon` (rising and drifting with the wind), `toy rocket` (a launch with smoke and a small arc; a toy, not a real spacecraft); flight and float paths seeded and pure (props `boat`, `hot_air_balloon`, `toy_rocket`; stage param `water: true | {left, right, color}` with drifting waves, a front strip over the keels and boats bobbing (`cartoon/water.py`); pure `cartoon/vehicle_paths.py` (`Course`, `balloon_point`, `rocket_point`, `boat_bob`, `wave_offset`, `smoke_puffs`); the balloon rises 0.3 frame heights, drifts with the stage's wind and lands at `to`; the rocket arcs up with a smoke burst and trail (motion effect `smoke`), opens its parachute and lands softly; `ride_to` option `land: false` flies either away; validate: boat on the water, outdoors only (rooms refused), no depth off the ground, gone after flying away, nobody rides the toy rocket; new sounds `burner`, `launch`; `vehicles.png` regenerated (960×480); DESIGN §69.53)
+- [x] Tests: paths, wind drift, the riders follow (`tests/test_cartoon_water_air.py`: 25 without rendering, 1 tiny render; storyboards of a boat, a balloon in wind and two rockets checked by eye). Also fixed the 3 tests failing since Step 112 (`card` missing from their scene-type lists; CONFIG.md targets table gains `card`)
 
 ### Step 120 — Props that move by themselves, part 1: indoors
 - [ ] `clock` hands turning (real time from the scene clock, or a `time:`), `tv` flickering picture (`on: true`, an `switch_on` / `switch_off` action), `lamp` on / off lighting a soft glow around it (and the room's light where simple)
@@ -702,7 +702,6 @@ Bugs / correctness
 - [ ] `VideoPlan` and a rendered scene can disagree by a frame on a beat's start when `d + pad` lands on half a frame (the scene rounds the wait left after its animations) (Step 100)
 - [ ] `vidgen mcp`: files found by scanning a folder (`assets/sfx/`, `assets/icons/`, `audio/`) are not confined to the root; a link there can point outside (Step 102)
 - [ ] Lint `facing_away` takes the nearest character as the listener, so a speaker turned to the one it addresses farther away is reported (seen on a seated speaker in the Step 102 showcase draft) (Step 102)
-- [ ] `tests/test_builtin_scenes.py::test_every_builtin_is_registered` and two tests of `tests/test_actions_coverage.py` fail at HEAD ee5e160 too: their scene-type lists lack `card` (Step 112) (found in Step 118, not fixed)
 
 Quality (what an agent's video looks like)
 - [ ] `vidgen plan`: prose-derived bullet items are truncated sentences ("Every request that reaches database costs"); a closing sentence can be split between two scenes; icon search is English-only; no cues for `network` / `line_chart` / `pie` / `map` / `screenshot` / `video_clip`; nested list items dropped; an intro of 2+ sentences becomes its own `bullets` scene; TODO texts in English (Step 58)
@@ -743,6 +742,7 @@ Quality (what an agent's video looks like)
 - [ ] Mid-action stills only for walks, gestures, jumps and keyed moves (not `pose`, `emote`, `turn`, `look_at` or camera moves); the character sheet shows no left-facing view, blink or gesture (Step 83)
 - [ ] Foley: no panning by where the character stands, no depth / speed / ground variation, no landing sound, gestures and keyed moves silent; not listened to by a person (Step 86)
 - [ ] Vehicles: no doors open; a beat's `shot` does not follow a ride within the beat; a rider's feet show under a car's side for a moment while it climbs in; a prop a rider holds keeps its size during a ride in depth; no vehicle words in the screenplay grammar; ride sounds not listened to by a person (Step 118)
+- [ ] Water and air: a boat's ends are not checked against the water's edges (only its middle); `get_out` of a balloon stands the riders in front of the basket; no water in depth, no splash, no ride in depth on water or in the air; the balloon does not lean with the wind and the rocket's smoke does not drift; a balloon is 2.1 characters tall (a small stage `size` needed); `burner` / `launch` not listened to by a person (Step 119)
 
 Nice-to-have / performance
 - [ ] Stage: `follow` tracks x only, no vertical pan, layers are not action targets, a near image layer zoomed at the bottom can show a sliver; no `on: <prop>` (a prop's `lift` worked out by hand); particles have no `place: behind`, wind or ground stop; no per-scene opt-out of `cartoon_style` (Steps 74–77)

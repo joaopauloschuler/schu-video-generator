@@ -123,8 +123,11 @@ src/vidgen/
                           # room_drawing.py (draw_room, WindowViews, §69.42), cards.py (title
                           # cards: layout, burst rays, outlined text colours, §69.46; no manim),
                           # vehicles.py (seats, wheels, pedals, get-in reach, §69.52; no manim),
-                          # vehicle_drawing.py (the bicycle, car and bus, §69.52), riding.py
-                          # (Ride, riders on their seats, pedalling, §69.52); still.py also
+                          # vehicle_drawing.py (the bicycle, car, bus, boat, balloon and toy
+                          # rocket, §69.52-53), riding.py (Ride, riders on their seats,
+                          # pedalling, §69.52), vehicle_paths.py (waves, bobbing, balloon and
+                          # rocket paths, smoke, §69.53; no manim), water.py (a stage's water,
+                          # §69.53); still.py also
                           # draws the prop, furniture and vehicle galleries (§69.43), the look gallery
                           # (§69.47) and `vidgen character-sheet` (§69.16)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
@@ -883,6 +886,15 @@ crank=None)`, `Prop.is_vehicle`, `.prop_point`, `.unit`, `.standing_height`, `.t
 `StageFrame.vehicles`; `holding_problems(vehicles=None)`; `Stage.ride_in_depth`; actions
 `get_in`, `ride_to`, `get_out`; built-in sounds `bell`, `engine`, `brakes`; layout key `riding`.
 Compatible: a scene without vehicles renders as before (`props.png` is byte-identical).
+Step 119 (§69.53) adds `GROUND_VEHICLES`, `WATER_VEHICLES`, `AIR_VEHICLES`, `medium`,
+`character_unit`, `Course`, `balloon_point`, `rocket_point`, `boat_bob`, `wave_offset`,
+`smoke_puffs`, `BALLOON_ALTITUDE`, `BALLOON_DRIFT`, `ROCKET_APEX`, `WATER_COLOR` and
+`StageWater`; `VehicleSpec.medium` / `.stands`; `PROP_KINDS` gains `boat`, `hot_air_balloon`,
+`toy_rocket` (`PROP_SHAPES["toy_rocket"]`: `folded`, `chute`); `Prop.pose_at`, `.tilt`,
+`.afloat`, `.flight`; `Ride(rise=0, drift=0, away_y=None, seed=1)` and `Ride.course`;
+`StageFrame.water`; `holding_problems(water=None)`; the stage param `water`; the `ride_to`
+option `land`; motion effect `smoke`; built-in sounds `burner`, `launch`. Compatible: scenes
+without these vehicles or water render as before.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -8483,8 +8495,93 @@ layout dump and the prop checks work as for any prop; riding is a posture like s
 - **Not done here**: no door opening; a shot does not follow a ride within its beat (as for
   walks); a rider's feet show under a car's side for a moment while it climbs in; a prop a rider
   holds follows its hand but keeps its size during a ride in depth; no vehicles in the
-  screenplay grammar; water and air vehicles are Step 119. Tests:
+  screenplay grammar; water and air vehicles are Step 119 (§69.53). Tests:
   `tests/test_cartoon_vehicles.py`.
+
+### 69.53 Vehicles on the water and in the air (Step 119)
+
+A `boat` rides along a strip of water, a `hot_air_balloon` rises, drifts with the wind and lands,
+and a `toy_rocket` launches with smoke and floats down under a parachute (or flies off). They are
+vehicle props like those of §69.52 and reuse `get_in` / `ride_to` / `get_out`, seats, riders on
+updaters and the validate replay; only where they go differs.
+
+- **Geometry** (`cartoon/vehicles.py`): `VehicleSpec.medium` (`ground` / `water` / `air`;
+  `GROUND_VEHICLES`, `WATER_VEHICLES`, `AIR_VEHICLES`, `medium(kind)`) and `.stands` (riders stand
+  on the floor instead of sitting: `riding_state` returns the standing state). `boat` 0.58 of a
+  character tall, 1.9 long, 2 seats behind its side (seat line 0.2, floor 0.05), speed 2.5;
+  `hot_air_balloon` 2.1 tall, 2 riders standing in the basket (rim 0.5), speed 1.2; `toy_rocket`
+  0.55 tall, no seats (a toy: `get_in` to it is refused in `scene_problems`), speed 6.
+  `ROCKET_ASCENT_SHARE` 0.3 lives here (foley and paths share it). No wheels: `Ride` turns
+  wheels only for ground vehicles.
+- **Paths** (`cartoon/vehicle_paths.py`, pure, seeded): `Course(kind, start, end, rise, drift,
+  land, seed).at(share)` → the feet (x, y) and a turn (degrees about the feet). Ground and water:
+  straight, eased like a walk. `balloon_point`: rises `rise` over `BALLOON_RISE_SHARE` 0.3 of the
+  time while starting across (`smoothstep` up, cruise, `smoothstep` down to land at `end`), a
+  gentle seeded float (5 % of the altitude, twice) and a `drift` bulge `drift·sin(πs)` (largest
+  half-way, 0 at both ends, so it still lands at `to`); `land=False` keeps rising to `end` above
+  the frame. `rocket_point`: up an arc `x0 + across·v`, `y0 + apex·(2v − v²)` (`across` = 0.5 of
+  the way, `v` = 1 − (1 − u)², slowing to the top) over `ROCKET_ASCENT_SHARE`, the nose along the
+  tangent (blended in from upright over the first 30 %, level at the top), then down to `end`
+  (`smoothstep`) turning upright over `CHUTE_TURN` 0.25 and swaying `CHUTE_SWAY` 9° less and
+  less; `land=False`: `x0 + dx·v²`, `y0 + dy·v`, `v = s^1.6`, nose along the tangent.
+  `balloon_seconds` (way across + up and down at its speed), `rocket_seconds` (1.8 s landing /
+  0.6 s away plus the way at its speed). Water: `wave_offset(x, t, sign)` (two drifting sines, at
+  most `WAVE_HEIGHT` 0.035 character heights), `front_outline`, `boat_bob(t, phase)` (±0.025
+  character heights every 2.4 s, ±2.5°), `bob_phase(name)`. Smoke: `smoke_puffs(age, course,
+  seconds, size, seed)`: `SMOKE_BURST` 6 puffs rolling out both ways on the ground where it set
+  off, `SMOKE_TRAIL` 12 left where its tail was while the motor burns (`Course.powered()`: the
+  ascent, or 0.7 of a flight away), each growing and fading over `SMOKE_SECONDS` 1.1 s.
+- **Drawings** (`cartoon/vehicle_drawing.py`): a small open boat with an outboard motor at the
+  stern, a stripe and a dark gunwale; a balloon with a round envelope in two bands of gores
+  narrowing to its mouth, ropes, a burner and a wicker basket; a toy rocket with fins, a pointed
+  nose, a round window and a dark nozzle, in two shapes (`PROP_SHAPES["toy_rocket"]`: `folded`,
+  `chute`, its parachute open on four lines above it; `VehicleDrawing.shapes`). Every vehicle
+  prop now has an anchor; `Prop.pose_at(x, y, degrees)` undoes its `tilt` about the feet and sets
+  place and turn afresh. Original shapes; the rocket is a toy, not any real craft. Colours:
+  boat highlight / accent, balloon accent / secondary, rocket primary / accent. Gallery:
+  `docs/gallery/media/vehicles.png` now 960×480, 4 columns, 7 cells (the rocket twice).
+- **Water** (stage param `water: true | {left, right, color}`; `cartoon/water.py`
+  `StageWater`): a band from the frame's bottom to `WATERLINE` 0.12 character heights above the
+  ground line, between `left` and `right`, in the backdrop after the ground band; a front strip
+  with a wavy top `FRONT_DROP` 0.05 under the surface and a light crest line, put first in the
+  foreground (in front of the boats, over their keels). A scene updater (`_water_step`) moves the
+  waves and bobs each boat about where it rests (`Prop.afloat`), re-placing its riders after
+  (the riders' own updaters ran before it in the frame). Waves drift right, left when the stage's
+  `wind` is negative. `get_moving_mobjects` redraws from the first boat on (front strip, boats,
+  riders). Boats cast no shadow. Params checks: a boat needs water, its `at` on it, depth 0;
+  `water`, a boat, a balloon or a rocket in a `room` is refused ("stays outdoors").
+- **Rides** (`Ride(..., rise=, drift=, away_y=, seed=)`): a boat starts from `afloat` and
+  updates it; a flying vehicle's `Course` is built in `begin` (and in `__init__` for the run
+  time) from `prop_point(0, 0)`; `interpolate` calls `pose_at` on the course; a rocket shows its
+  `chute` from the top of a landing flight and `folded` at the touchdown. `Ride` leaves
+  `(course, seconds)` on `Prop.flight`. `RideTo._flight` (`scenes/riding.py`): the rise wanted
+  (`BALLOON_ALTITUDE` 0.3 / `ROCKET_APEX` 0.45 frame heights) capped so the top (a rocket with
+  its parachute: 2.2 × its height) stays `FLIGHT_MARGIN` 0.04 under the frame's top, at least
+  `LOWEST_RISE` 0.12; the drift `BALLOON_DRIFT` 1.2 character heights × the stage's wind level
+  then (balloon only); `land: false` → `away_y` above the frame (vehicle height + 0.3); seed from
+  the scene and the vehicle's name.
+- **Validate** (`holding_problems(water=)`, `StageFrame.water`): a boat's `to` off the water;
+  `depth` for a vehicle not on the ground; `land: false` for one not in the air; anything a later
+  action does with a vehicle that flew away or its riders ("'kit' flew away out of the frame
+  (...); it is gone for the scene"). The planner (`_riding`) marks them gone too.
+- **Foley and motion effects**: `RIDE_SOUNDS` boat `engine` (pitch +6, no brakes), balloon
+  `burner`, rocket `launch`; with `PlayedAction.lands` (a landing flight) a rocket's parachute
+  `pop` at `ROCKET_ASCENT_SHARE` and a soft `thud` at the touchdown (`TOUCHDOWN`). Two new
+  generated sounds in `sfx.py` (`burner`, `launch`; 21 → 23). `motion_effect_cues`: no dust or
+  speed lines on the water or in the air; a rocket's `smoke` cue (a new `MOTION_EFFECT_KINDS`
+  kind, drawn behind it by `MotionEffect._smoke` from `Prop.flight`, the `smoke` particles'
+  colour).
+- **Checked by eye** (scratch project, preview 854×480 storyboards): two riders climbing into a
+  boat on water from 0.35, motoring right, bobbing with waves crossing its keel; a balloon at
+  `size: 0.3` in a `windy` stage taking two standing riders up, drifting and landing at 0.75,
+  then both getting out; a toy rocket launching with a smoke burst and trail, its parachute
+  opening at the top, landing upright, and a second one flying off the top of the frame.
+- **Not done**: the boat's ends are not checked against the water's edges (only its middle);
+  `get_out` of a balloon puts the riders in front of the basket like a car's; no water in depth,
+  no splash, no riding in depth on water or in the air; the balloon does not lean with the wind;
+  smoke does not drift with the wind; a balloon's riders are as tall as on the ground, so the
+  balloon is 2.1 characters tall (authors use a small `size`). Tests:
+  `tests/test_cartoon_water_air.py`.
 
 ## 70. Render jobs: `--jobs auto` (Step 117)
 

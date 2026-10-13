@@ -5,8 +5,9 @@ cues of the built-in sound library (:mod:`vidgen.sfx`): footsteps on each footfa
 (``walk_to``, ``run_to``, ``enter``, ``exit``), a whoosh as a character enters and a swoosh as it leaves, a
 boing as a jump takes off, a thud where a thrown prop lands (``throw``), a pop on a surprised
 face (``emote`` / ``react``), a short sound as most effect symbols pop up (``effect``,
-:data:`EFFECT_SOUNDS`), and a bicycle's bell or an engine as a vehicle sets off and its brakes as
-it stops (``ride_to``, :data:`RIDE_SOUNDS`).
+:data:`EFFECT_SOUNDS`), and a bicycle's bell, an engine, a balloon's burner or a toy rocket's
+launch as a vehicle sets off, its brakes as it stops, and a soft thud where a balloon or a rocket
+lands (``ride_to``, :data:`RIDE_SOUNDS`).
 
 Footfalls follow the walk cycle of :func:`~vidgen.cartoon.acting.walk_cycle`: a foot lands each
 time the legs are furthest apart (half a step, :data:`~vidgen.cartoon.acting.STEP_LENGTH`
@@ -23,6 +24,7 @@ from dataclasses import dataclass, field
 
 from vidgen.cartoon.acting import STEP_LENGTH, WALK_EASE
 from vidgen.cartoon.motion import Phases
+from vidgen.cartoon.vehicles import ROCKET_ASCENT_SHARE
 
 #: Level (dB) of each sound tied to an action, under the library's level (about 7 dB under
 #: narration at 0): footsteps are the quietest, as they repeat.
@@ -43,8 +45,18 @@ LAST_STEP_MIN = 0.25
 WALKING_ACTIONS: frozenset[str] = frozenset({"walk_to", "run_to", "enter", "exit"})
 #: A ride's sounds (DESIGN.md §69.52), per vehicle: the sound as it sets off (``bell`` or
 #: ``engine``), its pitch (semitones) and gain (dB); then its brakes as it stops: pitch and gain.
-RIDE_SOUNDS: dict[str, tuple[str, float, float]] = {"bicycle": ("bell", 0.0, -6.0), "car": ("engine", 0.0, -5.0), "bus": ("engine", -5.0, -4.0)}
+#: A boat's outboard motor is a small engine, high; a balloon roars its burner, a toy rocket fizzes
+#: off (DESIGN.md §69.53).
+RIDE_SOUNDS: dict[str, tuple[str, float, float]] = {
+    "bicycle": ("bell", 0.0, -6.0), "car": ("engine", 0.0, -5.0), "bus": ("engine", -5.0, -4.0),
+    "boat": ("engine", 6.0, -8.0), "hot_air_balloon": ("burner", 0.0, -7.0), "toy_rocket": ("launch", 0.0, -5.0),
+}
+#: Brakes as it stops (pitch, gain); a vehicle not listed stops without them.
 BRAKES: dict[str, tuple[float, float]] = {"bicycle": (4.0, -12.0), "car": (0.0, -8.0), "bus": (-3.0, -7.0)}
+#: A landing balloon's basket and a toy rocket touching down: a soft thud (pitch, gain); the
+#: rocket's parachute opening: a pop (pitch, gain).
+TOUCHDOWN: dict[str, tuple[float, float]] = {"hot_air_balloon": (-2.0, -10.0), "toy_rocket": (6.0, -12.0)}
+CHUTE_POP = (-3.0, -8.0)
 #: An engine sounds for this share of the ride, at least / at most these seconds.
 ENGINE_SHARE = 0.8
 ENGINE_MIN_SECONDS = 0.8
@@ -136,18 +148,28 @@ def footfall_shares(heights: float, phases: Phases = Phases(), step_length: floa
 
 
 def ride_cues(played: PlayedAction) -> list[FoleyCue]:
-    """The sounds of a ``ride_to`` (DESIGN.md §69.52): as it sets off a bicycle's bell, or a car's
-    or a bus's engine for most of the ride (at least :data:`ENGINE_MIN_SECONDS`); its brakes ending
-    as it stops (:data:`RIDE_SOUNDS`)."""
+    """The sounds of a ``ride_to`` (DESIGN.md §69.52, §69.53): as it sets off a bicycle's bell, a
+    balloon's burner or a toy rocket's launch, or an engine (a car's, a bus's, a boat's motor) for
+    most of the ride (at least :data:`ENGINE_MIN_SECONDS`); its brakes ending as it stops
+    (:data:`BRAKES`); a rocket's parachute popping open at the top of a landing flight; a soft thud
+    as a balloon or a rocket touches down (``played.lands``: it lands)."""
     start, seconds = played.start, played.seconds
-    off, pitch, gain = RIDE_SOUNDS[played.vehicle or ""]
+    vehicle = played.vehicle or ""
+    off, pitch, gain = RIDE_SOUNDS[vehicle]
     if off == "engine":
         length = min(max(ENGINE_SHARE * seconds, ENGINE_MIN_SECONDS), ENGINE_MAX_SECONDS)
-        first = FoleyCue(start, "engine", gain, {"duration": round(length, 3), "pitch": pitch})
+        cues = [FoleyCue(start, "engine", gain, {"duration": round(length, 3), "pitch": pitch})]
     else:
-        first = FoleyCue(start, "bell", gain, {"pitch": pitch})
-    brakes_pitch, brakes_gain = BRAKES[played.vehicle or ""]
-    return [first, FoleyCue(start + seconds, "brakes", brakes_gain, {"pitch": brakes_pitch}, align="end")]
+        cues = [FoleyCue(start, off, gain, {"pitch": pitch})]
+    if vehicle in BRAKES:
+        brakes_pitch, brakes_gain = BRAKES[vehicle]
+        cues.append(FoleyCue(start + seconds, "brakes", brakes_gain, {"pitch": brakes_pitch}, align="end"))
+    if played.lands is not None and vehicle in TOUCHDOWN:
+        if vehicle == "toy_rocket":
+            cues.append(FoleyCue(start + ROCKET_ASCENT_SHARE * seconds, "pop", CHUTE_POP[1], {"pitch": CHUTE_POP[0]}))
+        thud_pitch, thud_gain = TOUCHDOWN[vehicle]
+        cues.append(FoleyCue(start + played.lands * seconds, "thud", thud_gain, {"pitch": thud_pitch}))
+    return cues
 
 
 def foley_cues(played: PlayedAction) -> list[FoleyCue]:

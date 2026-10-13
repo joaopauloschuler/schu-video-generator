@@ -25,6 +25,7 @@ from vidgen.cartoon.riding import RiderSeat, character_unit, pedal_soles, place_
 from vidgen.cartoon.seating import PostureError, Postures
 from vidgen.cartoon.vehicles import (
     GEAR,
+    GROUND_VEHICLES,
     GET_IN_REACH,
     VEHICLE_KINDS,
     VEHICLES,
@@ -54,13 +55,14 @@ HEAD_ABOVE_HIPS = 0.8
 
 
 def test_vehicles_are_props() -> None:
-    assert VEHICLE_KINDS == ("bicycle", "car", "bus") and set(VEHICLE_KINDS) <= set(PROP_KINDS)
+    assert GROUND_VEHICLES == ("bicycle", "car", "bus") and set(VEHICLE_KINDS) <= set(PROP_KINDS)
+    assert VEHICLE_KINDS == (*GROUND_VEHICLES, "boat", "hot_air_balloon", "toy_rocket")   # Step 119
     assert all(is_vehicle(kind) and PROP_HEIGHTS[kind] == VEHICLES[kind].height for kind in VEHICLE_KINDS)
     assert not is_vehicle("chair") and not is_vehicle(None)
-    assert [seat_count(kind) for kind in VEHICLE_KINDS] == [1, 2, 4]
+    assert [seat_count(kind) for kind in VEHICLE_KINDS] == [1, 2, 4, 2, 2, 0]
 
 
-@pytest.mark.parametrize("kind", VEHICLE_KINDS)
+@pytest.mark.parametrize("kind", GROUND_VEHICLES)
 def test_seats_lie_in_the_vehicle_and_heads_fit_under_the_roof(kind: str) -> None:
     spec = VEHICLES[kind]
     prop = draw_prop(kind, height=2.0, theme=Theme())

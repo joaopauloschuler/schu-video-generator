@@ -20,6 +20,7 @@ from __future__ import annotations
 import math
 import xml.etree.ElementTree as ET
 from collections.abc import Callable, Mapping, Sequence
+from typing import Any
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -94,7 +95,7 @@ PROP_HANGS: dict[str, float] = {"picture": 0.5, "clock": 0.85}
 FLAT_PROPS: frozenset[str] = frozenset({"rug"})
 #: Props drawn in more than one shape: kind -> its shape names, the first drawn unless the stage
 #: asks for another (``open: true``); the ``open`` / ``close`` actions switch them.
-PROP_SHAPES: dict[str, tuple[str, ...]] = {"door": ("closed", "open"), "umbrella": ("closed", "open")}
+PROP_SHAPES: dict[str, tuple[str, ...]] = {"door": ("closed", "open"), "umbrella": ("closed", "open"), "toy_rocket": ("folded", "chute")}
 #: Where a hand holds a prop, in prop units as drawn facing right, per (kind, shape) (``None``: a
 #: prop with one shape); a prop or shape not listed is held by its middle. A basket hangs from
 #: its handle; an open umbrella is held by its shaft above the hook.
@@ -121,6 +122,7 @@ PROP_COLORS: dict[str, tuple[str, str]] = {
     "picture": ("secondary", "primary"), "rug": ("accent", "highlight"), "houseplant": ("tertiary", "secondary"),
     "clock": ("#F4F6FA", "secondary"), "tv": ("secondary", "primary"), "desk": ("secondary", "accent"),
     "bicycle": ("primary", "accent"), "car": ("accent", "highlight"), "bus": ("highlight", "primary"),
+    "boat": ("highlight", "accent"), "hot_air_balloon": ("accent", "secondary"), "toy_rocket": ("primary", "accent"),
 }
 #: The glass of a house's window (light in every theme, like a character's eye whites).
 GLASS = "#D6EEF8"
@@ -205,7 +207,14 @@ class Prop(VGroup):
         self.crank_angle = 0.0
         #: The y of the ground line under it while it rides in depth (``None``: its stage's).
         self.ground_y: float | None = None
-        if shapes or self.grips or self.wheels:
+        #: How far a vehicle is turned about its feet now (degrees counterclockwise on screen: a
+        #: boat rocking, a toy rocket's nose along its way, DESIGN.md §69.53).
+        self.tilt = 0.0
+        #: Where a boat rests on the water (its feet before bobbing; ``None``: not afloat), and a
+        #: flying vehicle's last flight: its course and seconds (the rocket's smoke reads it).
+        self.afloat: tuple[float, float] | None = None
+        self.flight: tuple[Any, float] | None = None
+        if shapes or self.grips or self.wheels or kind in VEHICLES:
             self._anchor = anchor_mobject()   # drawn in prop units: the placement starts as the identity
             self.add(self._anchor)
         for shape, members in (shapes or {}).items():
@@ -312,6 +321,19 @@ class Prop(VGroup):
         """How tall it is built, times any scaling since (:attr:`unit`): its shadow grows and
         shrinks with it as it rides in depth."""
         return self.unit
+
+    def pose_at(self, x: float, y: float, degrees: float = 0.0) -> Prop:
+        """Put the middle of its foot as drawn (prop units (0, 0)) at (``x``, ``y``) on screen,
+        turned ``degrees`` (counterclockwise) about it: the :attr:`tilt` it had is undone first, so
+        each call sets the pose afresh (a boat bobbing, a balloon or a toy rocket flying)."""
+        pivot = self.prop_point(0.0, 0.0)
+        if self.tilt:
+            self.rotate(-np.radians(self.tilt), about_point=pivot)
+        self.shift(np.array([float(x), float(y), 0.0]) - pivot)
+        if degrees:
+            self.rotate(np.radians(degrees), about_point=np.array([float(x), float(y), 0.0]))
+        self.tilt = float(degrees)
+        return self
 
     def turn_wheels(self, degrees: float) -> Prop:
         """Turn its wheels ``degrees`` (counterclockwise as drawn facing right) about their axles,
@@ -869,7 +891,10 @@ def draw_prop(
         from vidgen.cartoon.vehicle_drawing import draw_vehicle
 
         vehicle = draw_vehicle(kind, paint)
-        prop = Prop(*vehicle.members, name=name or kind, kind=kind, facing=facing, wheels=vehicle.wheels, crank=vehicle.crank)
+        prop = Prop(*vehicle.members, name=name or kind, kind=kind, facing=facing, wheels=vehicle.wheels, crank=vehicle.crank,
+                    shapes=vehicle.shapes or None)
+        if shape is not None:
+            prop.show_shape(shape)
         return _finish(prop, height, character_height or height, facing)
     drawn = _DRAWERS[kind](paint)
     shapes = drawn if isinstance(drawn, dict) else None

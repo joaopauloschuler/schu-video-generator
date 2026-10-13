@@ -715,8 +715,8 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `sit_on` | on a `stage`: a character sits on a `chair`, `rock`, `box`, `sofa`, `armchair`, `bed` or `desk` (`to: chair`); its hips and knees bend | next to the prop; `stand_up` before it walks |
 | `lean_on` | on a `stage`: a character leans its back on a `tree`, `door`, `sign`, `lamp`, `house`, `bookshelf`, `counter` or `fridge` (`to: tree`) | next to the prop; `stand_up` before it walks |
 | `stand_up` | on a `stage`: a character gets up from where it sits or leans | |
-| `get_in` | on a `stage`: characters get in a `car` or a `bus` or on a `bicycle` (`to: car`); they ride with it until `get_out` | next to the vehicle; a bicycle seats 1, a car 2, a bus 4 |
-| `ride_to` | on a `stage`: a vehicle (or a rider: its vehicle) rides to a mark, an x or `{mark, depth}` with its riders, wheels turning | `get_in` first |
+| `get_in` | on a `stage`: characters get in a `car`, a `bus`, a `boat` or a `hot_air_balloon` or on a `bicycle` (`to: car`); they ride with it until `get_out` | next to the vehicle; a bicycle seats 1, a car, a boat and a balloon 2, a bus 4 |
+| `ride_to` | on a `stage`: a vehicle (or a rider: its vehicle) rides to a mark, an x or `{mark, depth}` with its riders, wheels turning; a boat along the water, a balloon or a `toy_rocket` flies there (`land: false`: away) | `get_in` first (a toy rocket: none) |
 | `get_out` | on a `stage`: riders get out of their vehicle where it is | |
 | `shot` | on a `stage`: the camera frames characters for the beat; write it as the beat's key `shot: closeup kit` (`wide`, `two_shot`, `medium`, `over_shoulder kit pip`); the next beat without one cuts back | a beat's dialogue line or reaction; not with a walk out of the framing |
 
@@ -981,9 +981,13 @@ into the set. `examples/cartoon_series/` shows it (CONFIG "Shared casts and sets
   beside it), `ride_to: car, to: right` (or `{mark, depth}`; the riders go along, a cyclist
   pedals), `get_out: [pip, kit]`; no walking while riding. They are big next to the characters
   (a bus is 3.2 characters long): give it a `scale` or the stage a smaller `size`
-  (`docs/CONFIG.md` "Vehicles").
+  (`docs/CONFIG.md` "Vehicles"). Outdoors only: a `boat` floats on the stage's `water: true` (or
+  `{left, right}`) and rides along it, bobbing; a `hot_air_balloon` (2 stand in its basket; 2.1
+  characters tall, so use `size: 0.3`) rises, drifts with the wind and lands at `to`; a
+  `toy_rocket` (nobody rides it) launches with smoke and floats down under a parachute to `to`.
+  `land: false` flies a balloon or a rocket out of the top of the frame, gone for the scene.
 - **Sound**: walks, entrances, exits, jumps, a `surprised` face and most effect symbols make their own sounds
-  (foley: footsteps, whoosh, boing, pop, an idea's ding; a thrown prop lands with a thud; a ride rings a bell or starts an engine and brakes), timed to the action,
+  (foley: footsteps, whoosh, boing, pop, an idea's ding; a thrown prop lands with a thud; a ride rings a bell or starts an engine and brakes, a balloon's burner roars, a toy rocket fizzes off), timed to the action,
   and rain plays a rain sound bed; `foley: false` (top level or a stage) turns them off. A beat's `sting: reveal | comic | sad` adds a short music sting
   (`reveal` as the beat starts, `comic` and `sad` in the pause after the line), ducked under the
   voice. One or two per cartoon, on the real punchline, or they stop being funny.
@@ -1202,7 +1206,7 @@ scenes:
 **Sound effects** (`vidgen list-sfx` describes each in words): `whoosh` (something moves in),
 `pop` (an item appears), `tick` (steps, counting), `click` (a UI click), `chime` (a key
 insight), `success` / `error` (a result), `riser` (tension before a reveal, `align: end`),
-`thud` (a big number lands), `swoosh`, `typing`; `footstep`, `boing`, `gasp`, `sigh`, `bell`, `engine`, `brakes` and the music stings
+`thud` (a big number lands), `swoosh`, `typing`; `footstep`, `boing`, `gasp`, `sigh`, `bell`, `engine`, `brakes`, `burner`, `launch` and the music stings
 `sting_reveal` / `sting_comic` / `sting_sad` are for cartoons (`vidgen guide cartoons`). Two or three per minute, on the moments that
 matter; `sfx: {auto: true}` adds soft ones to built-in reveals if you want a uniform feel.
 

@@ -85,7 +85,7 @@ scenes:
 | `layers.shapes.height` | `float` | `0.2` | Its height as a fraction of the frame's shorter side. |
 | `layers.shapes.color` | `color` | `'secondary'` | Fill colour (a theme token or #hex). |
 | `props` | `list[str \| StageProp]` |  | Props: a built-in prop's name, or {prop \| svg, name, at, depth, scale, lift, facing, color, detail, recolor, open, against}. |
-| `props.prop` | `'table' \| 'chair' \| 'tree' \| 'bush' \| 'house' \| 'door' \| 'lamp' \| 'sign' \| 'box' \| 'ball' \| 'cloud' \| 'sun' \| 'moon' \| 'rock' \| 'plant' \| 'laptop' \| 'cup' \| 'basket' \| 'umbrella' \| 'napkin' \| 'sofa' \| 'armchair' \| 'bed' \| 'bookshelf' \| 'counter' \| 'fridge' \| 'picture' \| 'rug' \| 'houseplant' \| 'clock' \| 'tv' \| 'desk' \| 'bicycle' \| 'car' \| 'bus' \| None` |  | A built-in prop: table, chair, tree, bush, house, door, lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup, basket, umbrella, napkin; furniture: sofa, armchair, bed, bookshelf, counter, fridge, picture, rug, houseplant, clock, tv, desk; vehicles: bicycle, car, bus. |
+| `props.prop` | `'table' \| 'chair' \| 'tree' \| 'bush' \| 'house' \| 'door' \| 'lamp' \| 'sign' \| 'box' \| 'ball' \| 'cloud' \| 'sun' \| 'moon' \| 'rock' \| 'plant' \| 'laptop' \| 'cup' \| 'basket' \| 'umbrella' \| 'napkin' \| 'sofa' \| 'armchair' \| 'bed' \| 'bookshelf' \| 'counter' \| 'fridge' \| 'picture' \| 'rug' \| 'houseplant' \| 'clock' \| 'tv' \| 'desk' \| 'bicycle' \| 'car' \| 'bus' \| 'boat' \| 'hot_air_balloon' \| 'toy_rocket' \| None` |  | A built-in prop: table, chair, tree, bush, house, door, lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup, basket, umbrella, napkin; furniture: sofa, armchair, bed, bookshelf, counter, fridge, picture, rug, houseplant, clock, tv, desk; vehicles: bicycle, car, bus, boat (on the stage's water), hot_air_balloon, toy_rocket. |
 | `props.svg` | `str \| None` |  | Instead of prop: an SVG file relative to the project folder (sanitised like any SVG), standing on the bottom edge of its viewBox. |
 | `props.name` | `str \| None` |  | Its name for actions and the layout dump; default: the prop's name (an SVG: the file name), then _2, _3... |
 | `props.at` | `str \| float` | `'centre'` | Where it stands: a mark or an x position from 0 (left edge) to 1 (right edge) of the stage. |
@@ -133,6 +133,10 @@ scenes:
 | `room.doors.scale` | `float` | `1.3` | Its height in the heights of a character standing at the wall. |
 | `room.doors.color` | `color \| None` |  | The door's colour (a theme token or #hex); default accent. |
 | `room.doors.detail` | `color \| None` |  | Its knob's colour; default highlight. |
+| `water` | `bool \| WaterStrip \| None` |  | A strip of water with waves at the front of the stage, for a boat to float on: true (the whole width) or {left, right, color} (marks or x from 0 to 1); outdoors only. |
+| `water.left` | `str \| float` | `0.0` | Where it starts: a mark or an x from 0 (left edge) to 1 (right edge) of the stage. |
+| `water.right` | `str \| float` | `1.0` | Where it ends: a mark or an x from 0 to 1, right of left. |
+| `water.color` | `color \| None` |  | The water's colour (a theme token or #hex); default a clear blue. |
 
 ## Targets
 

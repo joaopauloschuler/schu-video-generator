@@ -1,13 +1,17 @@
-"""The vehicles' drawings (DESIGN.md §69.52): a bicycle, a car and a bus from primitives, in the
-two colours of a prop (``main``: the frame or the body; ``detail``: the saddle and grips, or a
-stripe and the lights' surround) plus shades, the characters' ink, dark tyres and see-through
-glass. Original simple shapes, side on, the front on the right.
+"""The vehicles' drawings (DESIGN.md §69.52, §69.53): a bicycle, a car, a bus, a boat, a hot-air
+balloon and a toy rocket from primitives, in the two colours of a prop (``main``: the frame, the
+body, the hull or the envelope; ``detail``: the saddle and grips, a stripe, the basket or the nose
+and fins) plus shades, the characters' ink, dark tyres and see-through glass. Original simple
+shapes, side on, the front on the right; the toy rocket is a toy (fins, a round window, a
+parachute), not a copy of any real craft.
 
 Each is drawn in a character's heights (the measures of :data:`~vidgen.cartoon.vehicles.VEHICLES`)
 and scaled to prop units (top at 1). The parts that turn are returned apart: each wheel's spokes
 (or a car's hub bolts) about its axle, and a bicycle's cranks and pedals about the crank axle.
 The windows are drawn see-through (:data:`GLASS_OPACITY`) so riders sitting behind the side show
-in them; a car's and a bus's side hides the riders' lower bodies.
+in them; a car's, a bus's and a boat's side and a balloon's basket hide the riders' lower bodies.
+A toy rocket has two shapes (:data:`~vidgen.cartoon.props.PROP_SHAPES`): its parachute folded,
+and open above it.
 """
 
 from __future__ import annotations
@@ -18,7 +22,7 @@ import numpy as np
 from manim import ORIGIN, Circle, Line, VGroup, VMobject
 
 from vidgen.cartoon.character import OUTLINE_WIDTH
-from vidgen.cartoon.props import GLASS, TV_CASE, _arc, _circle, _handle, _Paint, _poly, _rect
+from vidgen.cartoon.props import GLASS, PROP_SHAPES, TV_CASE, _arc, _circle, _handle, _line, _Paint, _poly, _rect
 from vidgen.cartoon.vehicles import VEHICLES
 
 #: How opaque a vehicle's window glass is (riders behind it show through).
@@ -33,11 +37,13 @@ HEADLIGHT = "#FFF4C2"
 @dataclass
 class VehicleDrawing:
     """A vehicle drawn in prop units: its ``members`` (back to front) and the ones that turn:
-    each wheel's ``(group, axle)``, and a bicycle's ``crank`` ``(group, axle)``."""
+    each wheel's ``(group, axle)``, and a bicycle's ``crank`` ``(group, axle)``; ``shapes``: a
+    vehicle drawn in several shapes (a toy rocket) gets them instead of members."""
 
     members: list[VMobject]
     wheels: list[tuple[VMobject, tuple[float, float]]] = field(default_factory=list)
     crank: tuple[VMobject, tuple[float, float]] | None = None
+    shapes: dict[str, list[VMobject]] = field(default_factory=dict)
 
 
 def _glass(points: list[tuple[float, float]], p: _Paint) -> VMobject:
@@ -172,7 +178,75 @@ def _bus(p: _Paint) -> VehicleDrawing:
     return VehicleDrawing(members, _road_wheels("bus", p, members))
 
 
-_DRAWERS = {"bicycle": _bicycle, "car": _car, "bus": _bus}
+def _boat(p: _Paint) -> VehicleDrawing:
+    """A small open boat with an outboard motor at its stern (the left): its side is as high as a
+    seated rider's waist."""
+    hull = [(-0.8, 0.4), (-0.77, 0.07), (-0.6, 0.0), (0.42, 0.0), (0.66, 0.1), (0.8, 0.27), (0.88, 0.46), (0.0, 0.4)]
+    members: list[VMobject] = [
+        _rect(-0.91, 0.0, -0.86, 0.4, TV_CASE, p),                                      # the motor's leg
+        _poly([(-0.95, 0.0), (-0.84, 0.0), (-0.86, 0.05), (-0.93, 0.05)], TV_CASE, p),  # its foot
+        _poly(hull, p.main, p, round_by=0.02),
+        _poly([(-0.78, 0.27), (0.79, 0.27), (0.82, 0.33), (-0.785, 0.33)], p.detail, p, outline=False),   # a stripe
+        *_handle([(-0.8, 0.4), (0.0, 0.4), (0.88, 0.46)], p.dark(p.main), p, width=2.4),   # the gunwale's rim
+        _rect(-0.99, 0.38, -0.8, 0.58, p.detail, p, radius=0.04),                       # the motor's head
+        _rect(-0.97, 0.47, -0.82, 0.5, p.dark(p.detail), p, outline=False),
+        *_handle([(-0.82, 0.5), (-0.6, 0.53)], TV_CASE, p, width=2.0),                 # the tiller
+    ]
+    return VehicleDrawing(members)
+
+
+def _envelope_outline(cx: float, cy: float, r: float, mouth: float, mouth_y: float) -> list[tuple[float, float]]:
+    """A balloon's envelope: a circle about (``cx``, ``cy``) narrowing to a mouth ``mouth`` wide
+    at ``mouth_y``, counterclockwise."""
+    return [*_arc(cx, cy, r, -45, 225, 31), (cx - mouth / 2, mouth_y), (cx + mouth / 2, mouth_y)]
+
+
+def _hot_air_balloon(p: _Paint) -> VehicleDrawing:
+    """A wicker basket under a round envelope with two bands of gores (a lighter and a main one)
+    narrowing to its mouth, ropes and a small burner between them."""
+    outline = _envelope_outline(0.0, 1.62, 0.48, 0.34, 1.2)
+    members: list[VMobject] = [
+        *(_line(x0, 0.48, x1, 1.2, p.ink, 0.8 * OUTLINE_WIDTH) for x0, x1 in ((-0.34, -0.17), (-0.12, -0.06), (0.12, 0.06), (0.34, 0.17))),
+        _rect(-0.07, 1.08, 0.07, 1.2, TV_CASE, p, radius=0.015),                         # the burner
+        _poly(outline, p.main, p),
+        _poly([(0.62 * x, y) for x, y in outline], p.light(p.main), p, outline=False),
+        _poly([(0.24 * x, y) for x, y in outline], p.main, p, outline=False),
+        _rect(-0.17, 1.17, 0.17, 1.23, p.dark(p.main), p, radius=0.02),                  # the mouth's ring
+        _rect(-0.36, 0.0, 0.36, 0.48, p.detail, p, radius=0.04),                         # the basket
+        *(_line(-0.34, y, 0.34, y, p.dark(p.detail), 0.9 * OUTLINE_WIDTH) for y in (0.12, 0.24, 0.36)),
+        _rect(-0.39, 0.44, 0.39, 0.51, p.dark(p.detail), p, radius=0.02),               # its rim
+    ]
+    return VehicleDrawing(members)
+
+
+def _rocket_body(p: _Paint) -> list[VMobject]:
+    """A toy rocket standing on its fins: a round-topped body, a pointed nose, a round window and a
+    dark nozzle."""
+    return [
+        _poly([(-0.035, 0.07), (0.035, 0.07), (0.028, 0.03), (-0.028, 0.03)], TV_CASE, p),                   # the nozzle
+        _poly([(-0.052, 0.24), (-0.12, 0.05), (-0.12, 0.0), (-0.052, 0.07)], p.detail, p, round_by=0.008),   # the fins
+        _poly([(0.052, 0.24), (0.052, 0.07), (0.12, 0.0), (0.12, 0.05)], p.detail, p, round_by=0.008),
+        _rect(-0.055, 0.07, 0.055, 0.43, p.main, p, radius=0.02),
+        _poly([(-0.055, 0.42), (0.055, 0.42), (0.04, 0.48), (0.018, 0.53), (0.0, 0.55), (-0.018, 0.53), (-0.04, 0.48)], p.detail, p),
+        _circle(0.0, 0.31, 0.032, GLASS, p),
+        _rect(-0.012, 0.0, 0.012, 0.13, p.dark(p.detail), p, radius=0.006),                                 # the fin facing us
+    ]
+
+
+def _toy_rocket(p: _Paint) -> VehicleDrawing:
+    """A toy rocket, its parachute folded or open above it on four lines."""
+    canopy = [*_arc(0.0, 0.92, 0.26, 0, 180, 18), (-0.26, 0.92), (-0.13, 0.95), (0.0, 0.92), (0.13, 0.95), (0.26, 0.92)]
+    chute: list[VMobject] = [
+        *(_line(x, 0.93, 0.0, 0.55, p.ink, 0.7 * OUTLINE_WIDTH) for x in (-0.25, -0.09, 0.09, 0.25)),
+        _poly(canopy, p.light(p.detail), p),
+        _poly([*_arc(0.0, 0.92, 0.26, 65, 115, 6), (-0.09, 0.93), (0.09, 0.93)], p.detail, p, outline=False),
+        *_rocket_body(p),
+    ]
+    folded, opened = PROP_SHAPES["toy_rocket"]
+    return VehicleDrawing([], shapes={folded: _rocket_body(p), opened: chute})
+
+
+_DRAWERS = {"bicycle": _bicycle, "car": _car, "bus": _bus, "boat": _boat, "hot_air_balloon": _hot_air_balloon, "toy_rocket": _toy_rocket}
 
 
 def draw_vehicle(kind: str, paint: _Paint) -> VehicleDrawing:
@@ -180,7 +254,7 @@ def draw_vehicle(kind: str, paint: _Paint) -> VehicleDrawing:
     in prop units (its feet at the origin, its top at 1), as drawn facing right."""
     drawing = _DRAWERS[kind](paint)
     unit = 1.0 / VEHICLES[kind].height
-    VGroup(*drawing.members).scale(unit, about_point=ORIGIN)
+    VGroup(*drawing.members, *(m for members in drawing.shapes.values() for m in members)).scale(unit, about_point=ORIGIN)
     drawing.wheels = [(group, (x * unit, y * unit)) for group, (x, y) in drawing.wheels]
     if drawing.crank is not None:
         group, (x, y) = drawing.crank
