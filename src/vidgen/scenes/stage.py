@@ -1425,6 +1425,9 @@ class Stage(NarratedScene):
             on_stage.append((member.name, figure))
         for prop_name, holder in self._held_before_entering(entering).items():   # waits off stage with its holder
             item, figure = self.props[prop_name], self.cast[holder]
+            # the holder stands a hand and the prop further out, so the prop in its hand stays out of view
+            outward = 1.0 if figure.feet()[0] > (left + right) / 2 else -1.0
+            figure.shift([outward * (figure.width / 2 + item.width), 0.0, 0.0])
             item.shift([float(figure.feet()[0] - item.feet()[0]), 0.0, 0.0])
         #: the stage's water (``None``: none): its band over the ground, its front strip in front of
         #: everything, the boats bobbing on it (DESIGN.md §69.53)

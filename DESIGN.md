@@ -8935,8 +8935,8 @@ where no token fits every theme: `CANDLE_FLAME`, `LIGHT_FLAME`, `PAPER`, `PAGE_T
   from the table and opened in front of the reader.
 - **Not done**: no splash or watering sound (Step 128); drops do not wet or grow anything; a phone
   is answered with `switch_off` (no `answer` action, no voice in the handset); balloons let go are
-  gone for the scene; a held prop is not mirrored when its holder turns (§69.27), so a can held
-  by a character that turned pours the way its spout points. Tests:
+  gone for the scene; a held prop is not mirrored when its holder turns (§69.27); since Step 130
+  `pour` turns a can whose spout points behind its holder round in the hand first (§69.64). Tests:
   `tests/test_cartoon_small_props.py`.
 
 ### 69.57 More animals: fox, owl, frog, turtle, penguin (Step 123)
@@ -9458,6 +9458,36 @@ without them renders as before.
 - **Not done**: no time signature field (`Bed` has none; the 3/4 is in the description); nobody
   has listened to the beds (no audio playback here). Tests: `tests/test_music.py` (the
   parametrized bed tests now cover five beds; a score test for both new beds).
+
+### 69.64 Review of Phase L (Step 130)
+
+- **The example**: `examples/cartoon-rainbow-ride` (an original screenplay, `rainbow_ride.md`,
+  then a hand-edited `video.yaml`, 6 KB): a title `card` and `iris_in`; an orchard with a tree
+  with `fruit`, `birds`, a robot (`species: robot`, a screen face, on wheels, a `party_hat`)
+  holding a `watering_can` and pouring, an apple dropped on its head (`dizzy`), a fox (`fox`) who
+  gets on a `bicycle` and rides (bell, brakes), `laughing`, a gift picked up, a tint and rain with
+  two `lightning` strikes (thunder), `frightened`, the light back to day and a `rainbow`, the fox
+  riding on and the robot rolling out; a `crossfade` to an owl's (`owl`) room with a burning
+  `fireplace`, a running `clock`, a `kettle` switched on, a `knock` and two entrances through the
+  door (a creak), the gift given and opened (`blushing`, `tongue_out`), `night` and a `lamp`
+  switched on; `iris_out` on the robot and an end card; the automatic ambience (birdsong, rain,
+  fire, room tone) and the `cartoon` bed. End to end by the CLI and the MCP tools `screenplay` (also
+  with a `cast` of robots, foxes and owls), `cast`, `validate`, `direct`, `list_music`, `lint`
+  (`jobs: auto`), `storyboard`, `character_sheet`; lint clean at preview (word-count timing) and
+  with Kokoro audio. `tests/test_phase_l_review.py` repeats the cheap part.
+- **`vidgen screenplay` wrote an exit's edge as `side`**: `[X exits right.]` gave `{exit: x, side:
+  right}`, which `vidgen validate` refuses (`exit`'s edge option is `to`; `enter`'s is `side`), so
+  the draft of any screenplay with such a direction failed. It now writes `to` for an exit.
+- **A watering can poured backwards**: a held prop keeps the facing it was drawn with (§69.27), so a
+  character facing left poured onto its own feet with a can drawn spout right. `pour` now turns the
+  can round about its grip (`Prop.flip`, `facing`) when its spout points behind its holder.
+- **A prop held off stage showed at the edge**: a character waiting beyond the edge for its `enter`
+  stands half its width outside the view (§69.12), but a prop `hold` gives it (§69.50) is in its
+  hand in front of it, towards the stage: a gift showed at the right edge of the room. The construct
+  now puts such a holder a further half its width plus the prop's width outwards.
+- **Real narration**: Kokoro (narrator `bf_emma` 0.8 (0.85 read 3.58 words/s in one beat), the robot
+  `bm_fable` 0.85, the fox `af_bella` 0.8, the owl `af_heart` 0.75), rendered at 1280x720 with
+  `--jobs auto` (1 job under the 1500 MB cap): 93.9 s, −16.1 LUFS, true peak −1.9 dBTP.
 
 ## 70. Render jobs: `--jobs auto` (Step 117)
 

@@ -577,6 +577,13 @@ my_video/
   the camera behind and in front of the furniture, a close-up in the front view, evening fading to
   night, an iris out on the dog and an end card; about 70 s with Kokoro narration (no audio
   committed).
+- [examples/cartoon-rainbow-ride](examples/cartoon-rainbow-ride) — "The Rainbow Ride", a cartoon
+  from its screenplay (`rainbow_ride.md`) after hand editing: a robot on wheels in a party hat
+  watering an apple tree (an apple falls on its head: dizzy), a fox riding a bicycle, birds, a
+  passing storm with lightning, thunder and a rainbow, then an owl's cottage with a burning
+  fireplace, a steaming kettle, a running clock, a knock at the door, a gift opened (blushing) and a
+  lamp switched on at nightfall; birdsong, rain, fire and room-tone beds, the `cartoon` music bed;
+  about 94 s with Kokoro narration (no audio committed).
 - [docs/gallery](docs/gallery/README.md) — every built-in scene type rendered (16:9 and 9:16
   stills, a GIF each) with its YAML, params and targets; regenerate with `vidgen gallery`.
 - [docs/CONFIG.md](docs/CONFIG.md) — every config key and built-in scene type.

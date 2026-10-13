@@ -12291,3 +12291,111 @@ How to test
   tests/test_docs.py` (102 passed, 3 s), `tests/test_schema.py tests/test_config.py` (80 passed,
   77 s). Render tests of `test_music.py` not run (they use `calm`, unchanged). The full suite was
   not run.
+
+
+## Step 130 — Review of Phase L, with an example
+
+What was done
+- **Example** `examples/cartoon-rainbow-ride/` ("The Rainbow Ride", original): `rainbow_ride.md`
+  (front matter declares the three characters: Tibbo, a robot with a screen face on wheels in a
+  `party_hat`; Fern, a fox in a dotted dress; Nana, a round owl in a coat and scarf) and the
+  hand-edited `video.yaml` (2-line header, 6 KB, no audio). A silent title `card`, `iris_in` to an
+  orchard: Tibbo holds a `watering_can` and pours at a tree with `fruit`, `birds` cross, an apple
+  is dropped on his head (`dizzy`, stars, thud), Fern gets on a `bicycle` and rides over (bell,
+  brakes), laughs, Tibbo picks up a `gift`; a grey tint, rain (`until` the rainbow beat) and two
+  `lightning` strikes (bolt, thunder), Tibbo `frightened`; the light back to day, a `rainbow`, Fern
+  rides on and Tibbo rolls out right. `crossfade` to Nana's room: a burning `fireplace` (`"on":
+  true`) with a running `clock` above it, a `kettle` switched on, a `knock`, Fern and Tibbo (who
+  holds the gift from the start) enter through the door (creak), Tibbo gives the gift, steps back,
+  Nana opens it (`blushing`), Fern `tongue_out`, `night` and a `lamp` switched on; `iris_out` on
+  Tibbo and "The End". Automatic ambience (birdsong, rain, fire, room tone), the `cartoon` bed at
+  −4, speaker-coloured captions. Voices: narrator `bf_emma` 0.8, Tibbo `bm_fable` 0.85, Fern
+  `af_bella` 0.8, Nana `af_heart` 0.75 (only cached Kokoro voices; the screenplay's own pick
+  `bf_isabella` is not cached here).
+- **Checks**: `vidgen validate` ok; `vidgen lint` 0 findings at preview with word-count timing and
+  with Kokoro audio (first passes found: Fern and the bicycle cut at the right edge, tree / gift and
+  tree / watering can `prop_overlap`, two `facing_away`, a cut counter and door, a
+  `rushed_animation` in a 1.2 s line, `character_overlap` of Tibbo and Nana, then `narration_speed`
+  3.58 words/s with the narrator at 0.85: all fixed in the yaml). CLI: `screenplay` (also with
+  `vidgen cast --random 3 --species robot fox owl`), `direct`, `character-sheet --all`,
+  `storyboard`, `list-music`, `lint --jobs auto`. MCP (stdio, SDK client, `s130/mcp_run.py`):
+  `screenplay`, `validate`, `direct`, `cast`, `screenplay` with `cast`, `list_music`, `lint`
+  (`jobs: "auto"`: 1), `storyboard`, `character_sheet`: all ok.
+- **Real narration and render** (scratch copy `/home/claude/work/phase-l-review/proj`, kvenv312,
+  2500 MB cgroup, offline HF cache, `s130/tts.sh`): 16 beats; render 1280x720 30 fps with `--jobs
+  auto --frames-per-beat 3` in one command under the 1500 MB cap (191 s):
+  `jobs: 1 (auto: 1.3 GB available (cgroup memory.limit_in_bytes minus its use) / 1.5 GB per job =
+  0, 2 CPU cores)`; `/home/claude/work/phase-l-review/rainbow_ride.mp4`, 93.93 s, 10.5 MB, −16.1
+  LUFS integrated, true peak −1.9 dBTP.
+- **Stills by eye** (~90 frames from the MP4, tiled and cropped at full size): the can tilting
+  with drops falling ahead of Tibbo (after the fix), the apple falling onto his head with stars,
+  swirl eyes; Fern climbing on the saddle, pedalling, hands on the bar, the bicycle turned left;
+  birds; the tint, rain stopping under the tree, the bolt during a flash, Tibbo's wide eyes and
+  sweat; the rainbow fading in behind the tree and the hills; Tibbo rolling out past the bicycle
+  with speed lines; the room: flames and glow behind the logs, steam from the kettle, the clock's
+  hands, Fern and Tibbo fading in at the door (Tibbo behind Fern at depth 0.2, the gift in his hand,
+  dust as he stops), the gift passing to Nana and opening with sparkles in her hand, her blush,
+  the night grade with the lamp's glow; the iris closing on Tibbo; no vanishing or stray objects.
+- **Levels** (`s130/levels.py`: background = mix / gain − voice − sfx, the beds rebuilt with
+  `mix.plan_ambience` and taken out; LUFS before the +5.8 dB normalisation; correlation of the
+  music with the voice −0.05): narration −21.0 (orchard) / −21.5 (cottage); music under speech
+  −41.1 / −41.3, in pauses −33.6 / −32.5, on the cards −32.2 / −37.0; beds as mixed (ducked):
+  birdsong −38.5 and −40.2, rain −36.2, fire −37.9, room tone −46.1; foley −27.0 overall, loudest
+  −7.7 dBFS (the effect pops); played: splash (the pour), thud (the apple), beep ×2, bell ×2,
+  brakes ×2, thunder ×2, knock, creak, click ×2, swoosh, footsteps, pops. The fire bed's loop peaks
+  at −8.1 dBFS in single crackle samples (its loudest 50 ms −30.1 dBFS RMS): left as is, noted in
+  the Backlog.
+
+Fixes (tests in `tests/test_phase_l_review.py`, each failing at HEAD 7194db3 in a worktree)
+- `screenplay._predicate` (`enter` / `exit` directions): `[X exits right.]` wrote `{exit: x, side:
+  right}`; `exit`'s edge option is `to` (only `enter` has `side`), so `vidgen screenplay` reported
+  "unknown option 'side'" and exit code 1 for any screenplay with such a direction (the Step 91
+  tests pinned the wrong key; `tests/test_screenplay.py` updated).
+- `handling.Pour.apply`: a held prop keeps its drawn facing (§69.27), so a can drawn spout right,
+  held by a character facing left, poured onto its holder's feet; `pour` now flips the can about
+  its grip (`Prop.flip`, `facing`) when the spout points behind the holder.
+- `Stage` construct: a character waiting off stage for its `enter` stood half its width beyond
+  the edge, but a prop `hold` gave it before the entrance sits in its hand in front of it (towards
+  the stage), so the gift showed at the room's right edge; such a holder now stands a further half
+  its width plus the prop's width outwards.
+- Example-level: the fireplace's key is written `"on": true` (PyYAML, a YAML 1.1 reader, reads a
+  bare `on` as the key `true`, which `tests/test_schema.py`'s JSON Schema check refused; vidgen
+  itself takes both). CONFIG's `on` row says so.
+
+Docs
+- DESIGN new §69.64 and a note in §69.56's "Not done"; CONFIG (the `pour` bullet, the props `on`
+  row); README (the example in the list). Checked by `s130/docs_check.py`: every Phase L action,
+  prop, key, species, expression, sound, bed and `--jobs auto` is in CONFIG and DESIGN and nearly
+  all in the guide (the guide leaves out the `cheeks` / `bristles` part names and `look.robot`'s
+  dotted name, as intended for an author's overview); `AGENTS.md` is the guide's copy (the guide
+  needed no change). EXTENDING needed no change (no `vidgen.api` names changed).
+- Wheel (`pip wheel --no-deps --no-build-isolation` in kvenv312): all 451 tracked `src/vidgen`
+  files, the 27 Phase L modules among them, 223 data files.
+- Backlog: 5 lines (robots and costumes; expressions; set sounds and music; riding off the view;
+  `--jobs auto`), the "Small props" line updated.
+
+Files touched
+- New: `examples/cartoon-rainbow-ride/rainbow_ride.md`, `examples/cartoon-rainbow-ride/video.yaml`,
+  `tests/test_phase_l_review.py`.
+- `src/vidgen/screenplay.py`, `src/vidgen/scenes/handling.py`, `src/vidgen/scenes/stage.py`;
+  `tests/test_screenplay.py`; `DESIGN.md`, `docs/CONFIG.md`, `README.md`, `tasklist.md`.
+
+Public interfaces
+- No `vidgen.api` names. Behaviour: `vidgen screenplay` writes `to` for an exit's edge; `pour`
+  may turn the held can round; a holder waiting off stage stands further out.
+
+Known gaps
+- In the Backlog (5 new lines). Not listened to by a person; Whisper not run. The round owl in the
+  armchair hides it (Backlog "Furniture"); the hat hides Tibbo's antenna.
+
+How to test
+- `pytest tests/test_phase_l_review.py` (6 not-render ~24 s, 1 render ~4 s).
+- Run (one command at a time, under the 1500 MB cap): not render `tests/test_cartoon_[a-l]*.py`
+  (486 passed, 49 s), `tests/test_cartoon_[m-z]*.py` (598 passed, 62 s), `test_jobs test_music
+  test_sfx test_random_cast test_screenplay` (196 passed, 36 s), `test_phase_f/h/i/k/l_review` (42
+  passed, 64 s), `test_docs test_guide test_packaging` (104 passed, 2 s), `test_mcp test_includes
+  test_actions` (60 passed, 26 s), `test_phase_l_review test_docs test_guide` after the last edits
+  (108 passed, 23 s), `test_schema -k "rainbow or muffin or rain-check"` (3 passed; the rainbow one
+  failed before the quoted `"on"`); render: `tests/test_cartoon_[a-l]*.py` (27 passed, 34 s),
+  `[m-z]` (36 passed, 27 s), `test_jobs test_music test_sfx test_random_cast test_screenplay` (9
+  passed, 34 s), the phase reviews (6 passed, 34 s). The full suite was not run (not asked).

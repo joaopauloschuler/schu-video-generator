@@ -4703,7 +4703,7 @@ a `lift`. The furniture for [rooms](#rooms-room) has a gallery of its own there.
 | `recolor` | `none` | `svg` only: `theme` maps the picture's colours to the nearest theme colours |
 | `open` | `false` | `umbrella`, `door`, `book`, `letter` or `gift` only: `true` starts it open ([Umbrellas](#umbrellas-open-and-close), [rooms](#rooms-room), [small props](#everyday-small-props-let_go-pour)) |
 | `against` | none | `wall`: in a [room](#rooms-room), it stands with its back to the wall at the wall's depth (unless `depth` is given); a `picture` or `clock` in a room does so without it |
-| `on` | `false` | `tv`, `lamp`, `fireplace`, `kettle` or `phone` only: `true` starts it switched on (a phone: ringing) ([Clocks, televisions and lamps](#clocks-televisions-and-lamps-time-on-switch_on), [fireplaces and kettles](#fireplaces-and-kettles-on-switch_on), [small props](#everyday-small-props-let_go-pour)) |
+| `on` | `false` | `tv`, `lamp`, `fireplace`, `kettle` or `phone` only: `true` starts it switched on (a phone: ringing). vidgen also takes a bare `on: true`, which YAML 1.1 tools read as a key `true`; write `"on": true` where a YAML 1.1 tool or a JSON Schema check reads the file ([Clocks, televisions and lamps](#clocks-televisions-and-lamps-time-on-switch_on), [fireplaces and kettles](#fireplaces-and-kettles-on-switch_on), [small props](#everyday-small-props-let_go-pour)) |
 | `time` | none | `clock` only: the time it shows at the scene's start, `H:MM` or `H:MM:SS` (`"21:45"`); with `time` or `speed` the clock runs |
 | `speed` | `1` | `clock` only: how fast it runs, clock seconds per second (`1` real time, `60` a minute a second, up to `3600`) |
 | `fruit` | `false` | `tree` only: `true` hangs four fruits on it ([`drop_fruit`](#fruit-falling-from-a-tree-fruit-drop_fruit) lets one fall) |
@@ -5092,7 +5092,9 @@ furniture), drawn from simple shapes in the theme's colours:
   down, balloons stand on their weight.
 - A **watering can** pours with **`- pour: <character>`** (2 s): the can it holds tilts forward
   at the hand, water drops leave the spout and fall to the ground in front of it, and it comes back
-  up. `pour` needs a held prop that pours (a `watering_can`).
+  up. `pour` needs a held prop that pours (a `watering_can`). A can held by a character facing the
+  other way from its spout (held props are not mirrored with their holder) is turned round in the
+  hand as the pour starts, so it always pours ahead of its holder.
 - `letter` and `balloons` are light enough for [`blow_away`](#props-that-blow-away-blow_away).
 
 | action | options | |

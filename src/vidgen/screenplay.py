@@ -753,11 +753,12 @@ def _predicate(text: str, who: list[str], state: StageState) -> list[dict[str, A
                 state.x[name] = end
             return out
         if kind in ("enter", "exit"):
-            side = {"side": groups["side"].lower()} if groups.get("side") else {}
+            edge_name = groups["side"].lower() if groups.get("side") else None
+            side = {} if edge_name is None else {("side" if kind == "enter" else "to"): edge_name}   # exit's edge option is `to`
             seconds = 0.0
             for name in who:
                 here = _here(state, name)
-                edge = (0.0 if side["side"] == "left" else 1.0) if side else (0.0 if here < 0.5 else 1.0)
+                edge = (0.0 if edge_name == "left" else 1.0) if edge_name else (0.0 if here < 0.5 else 1.0)
                 seconds = max(seconds, _walk_time(state, edge, here, pace))
                 state.x[name] = state.home.get(name) if kind == "enter" else None
             return [{kind: target, **side, **speed, "_seconds": seconds}]

@@ -137,7 +137,7 @@ def test_direction_grammar() -> None:
         return [{k: v for k, v in a.items() if not k.startswith("_")} for group in found for a in group]
 
     assert first("Ash enters from the right") == [{"enter": "ash", "side": "right"}]
-    assert first("Ash leaves to the left quietly") == [{"exit": "ash", "side": "left"}]
+    assert first("Ash leaves to the left quietly") == [{"exit": "ash", "to": "left"}]   # exit's edge option is `to`
     assert first("Wren and Ash jump for joy") == [{"jump": ["wren", "ash"]}]
     assert first("They look at each other") == [{"look_at": "wren", "to": "ash"}, {"look_at": "ash", "to": "wren"}]
     assert first("Wren looks at the camera") == [{"look_at": "wren", "to": "camera"}]
@@ -267,7 +267,7 @@ def test_screenplay_project_builds_stage_scenes() -> None:
     assert shrug == {"gesture": "old_ash", "to": "shrug", "at": shrug["at"]} and 0.4 < shrug["at"] < 0.7
     todos = draft.beat_todos[0][2]
     assert any("The wind howls" in t for t in todos) and any("whispering" in t for t in todos)
-    assert porch_2["beats"][0]["actions"][0] == {"exit": "wren", "side": "left"}
+    assert porch_2["beats"][0]["actions"][0] == {"exit": "wren", "to": "left"}
     assert porch_2["beats"][0]["actions"][1]["jump"] == "old_ash" and porch_2["beats"][0]["actions"][1]["at"] >= 0.6   # after the last line
     assert draft.todo_count == 3                                                                   # bench, wind, whispering
 

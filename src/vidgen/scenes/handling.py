@@ -685,6 +685,10 @@ class Pour(_Handling):
             mobjects.insert(mobjects.index(prop) + 1 if prop in mobjects else len(mobjects), drops)
             spout = (lambda p=prop: p.prop_point(*WATERING_SPOUT))
             way = 1.0 if float(spout()[0]) >= float(prop.grip_point()[0]) else -1.0
+            if character.facing in ("left", "right") and way != (1.0 if character.facing == "right" else -1.0):
+                # held props are not mirrored with their holder: turn the can round in the hand so it pours ahead
+                prop.flip(np.array([0.0, 1.0, 0.0]), about_point=prop.grip_point())
+                prop.facing, way = character.facing, -way
             follow = (lambda c=character, h=hand: c.hand_point(h))
             anims.append(Pouring(prop, follow=follow, spout=spout))
             anims.append(WaterFlow(drops, spout=spout, direction=lambda w=way: w, ground=float(character.feet()[1]),
