@@ -175,7 +175,7 @@ it, DESIGN.md §69.44), and snapshot or restore a pose with `state()` / `set_sta
 Move and scale the character with Manim's own `move_to` / `shift` / `scale`; poses set afterwards
 land where it is. Named poses (`stand`, `pointing`, `waving`, `thinking`, `shrug`,
 `arms_crossed`, `sitting`) and expressions (`neutral`, `happy`, `sad`, `angry`, `surprised`,
-`worried`, `thinking`), plus the character's own (`names("pose")`, `names("expression")`), are
+`worried`, `thinking`, `laughing`, `blushing`, `tongue_out`, `crying`, `dizzy`, `frightened`), plus the character's own (`names("pose")`, `names("expression")`), are
 set at once with `set_pose(name)` / `set_expression(name)`, or animated part by part with
 `self.play(PoseChange(hero, pose="waving", expression="happy"), run_time=0.8)` (each part eases
 about its pivot, body first; `state=` takes any `CharacterState`). For a single part, call

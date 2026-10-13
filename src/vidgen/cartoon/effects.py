@@ -405,5 +405,7 @@ def piece_center(kind: str, index: int, seconds: float, facing: str) -> Point:
     return (_side(facing) * (piece.x + pose.dx), piece.y + pose.dy)
 
 
-#: The expression changes ``auto_direct`` marks with a symbol (DESIGN.md §69.40).
-EXPRESSION_EFFECTS: dict[str, str] = {"surprised": "exclaim", "thinking": "question", "angry": "anger"}
+#: The expression changes ``auto_direct`` marks with a symbol (DESIGN.md §69.40); since Step 125
+#: ``dizzy`` (stars) and ``frightened`` (sweat) too. ``crying`` gets none: its streams of tears
+#: are on the face already (the ``tear`` symbol is one drop beside the head, §69.59).
+EXPRESSION_EFFECTS: dict[str, str] = {"surprised": "exclaim", "thinking": "question", "angry": "anger", "dizzy": "stars", "frightened": "sweat"}

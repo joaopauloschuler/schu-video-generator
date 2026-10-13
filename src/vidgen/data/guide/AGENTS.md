@@ -873,6 +873,13 @@ In a 9:16 variant the camera follows the speaker across the landscape stage on i
 reaction shot. `look_at: camera` turns a character to the viewer for an aside. Put the reaction where it
 happens: `at: 0.8` lands it on the end of the line, not on its first word.
 
+**Expressions.** `neutral`, `happy`, `sad`, `angry`, `surprised`, `worried`, `thinking`, and the
+big ones: `laughing` (shoulders bouncing; it keeps laughing while it talks), `blushing`,
+`tongue_out`, `crying` (streams of tears, sobbing), `dizzy` (swirling eyes, swaying) and
+`frightened` (wide eyes, hair, fur or feathers standing up, shivering; a robot's antenna springs
+up). They work on people, animals and robots, side and front. `[laugh]` / `[giggle]` in a line
+make the speaker laugh. Save the big ones for the moments that earn them.
+
 **Effect symbols.** `- {effect: pip, to: idea}` pops a small symbol over a head for the beat: an
 `idea` bulb, a `question` or `exclaim` mark, a `sweat` drop, an `anger` mark, `sleep` Zs, `hearts`,
 dizzy `stars`, a `sparkle`, a `tear`. It follows the character, sounds with foley (`sound: false`
@@ -915,7 +922,8 @@ pause (`thinking`, `worried`, `surprised`...). The speaker gestures on the line'
 longest word counts; at most one per line), and a short punchy line
 right after a long one gets a close-up on its speaker (a short push-in, or a `shot: closeup` when
 the line is too short for it). A strong change of face gets its symbol (surprised an
-exclamation mark, thinking a question mark, angry an anger mark; one per line). Nothing it adds may cause an `off_stage`
+exclamation mark, thinking a question mark, angry an anger mark, dizzy stars, frightened a sweat
+drop; one per line). Nothing it adds may cause an `off_stage`
 or `facing_away` lint warning (it checks the stage's layout first). Actions you write win: a
 character with its own action in a beat gets nothing automatic there. So turn it on, then write only the moments that
 matter (the reaction shot, the punchline's look to camera). `vidgen direct` lists what it adds,

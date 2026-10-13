@@ -54,7 +54,7 @@ class StageCharacter(SceneParams):
     pose: str | None = None
     """The pose it starts in (stand, pointing, waving, thinking, shrug, arms_crossed, sitting, or its own); none: at rest."""
     expression: str | None = None
-    """The expression it starts with (neutral, happy, sad, angry, surprised, worried, thinking, or its own); none: at rest."""
+    """The expression it starts with (neutral, happy, sad, angry, surprised, worried, thinking, laughing, blushing, tongue_out, crying, dizzy, frightened, or its own); none: at rest."""
 
     @model_validator(mode="before")
     @classmethod

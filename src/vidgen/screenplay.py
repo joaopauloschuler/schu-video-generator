@@ -107,12 +107,19 @@ MARGIN = 0.1
 #: Manner words that mean a built-in expression or pose (besides their own names).
 MANNERS: dict[str, tuple[str, str]] = {
     **{w: ("expression", "happy") for w in ("glad", "cheerful", "excited", "delighted", "pleased", "proud", "smiling", "beaming")},
-    **{w: ("expression", "sad") for w in ("unhappy", "upset", "glum", "gloomy", "disappointed", "crying")},
+    **{w: ("expression", "sad") for w in ("unhappy", "upset", "glum", "gloomy", "disappointed")},
     **{w: ("expression", "angry") for w in ("cross", "annoyed", "furious", "mad", "grumpy", "irritated")},
     **{w: ("expression", "surprised") for w in ("shocked", "amazed", "astonished", "startled", "stunned")},
-    **{w: ("expression", "worried") for w in ("nervous", "anxious", "scared", "afraid", "uneasy", "frightened")},
+    **{w: ("expression", "worried") for w in ("nervous", "anxious", "uneasy")},
     **{w: ("expression", "thinking") for w in ("doubtful", "puzzled", "curious", "pondering", "unsure", "sceptical", "skeptical")},
     **{w: ("expression", "neutral") for w in ("calm", "flat", "deadpan")},
+    # Step 125 (DESIGN.md §69.59)
+    **{w: ("expression", "laughing") for w in ("laughs", "chuckling", "giggling", "amused", "in stitches")},
+    **{w: ("expression", "blushing") for w in ("embarrassed", "shy", "bashful", "flustered", "blushes")},
+    **{w: ("expression", "tongue_out") for w in ("cheeky", "teasing", "playful", "mocking", "sticking out tongue")},
+    **{w: ("expression", "crying") for w in ("sobbing", "weeping", "in tears", "tearful", "cries")},
+    **{w: ("expression", "dizzy") for w in ("dazed", "woozy", "giddy", "spinning")},
+    **{w: ("expression", "frightened") for w in ("scared", "afraid", "terrified", "panicked", "petrified", "fearful")},
     "arms crossed": ("pose", "arms_crossed"), "crossing arms": ("pose", "arms_crossed"), "pointing": ("pose", "pointing"),
     "waving": ("pose", "waving"), "shrugging": ("pose", "shrug"), "sitting": ("pose", "sitting"), "standing": ("pose", "stand"),
 }

@@ -56,7 +56,7 @@ scenes:
 | `characters.scale` | `float` | `1.0` | Its size relative to the stage's size (e.g. 0.8 for a child). |
 | `characters.facing` | `'auto' \| 'right' \| 'left' \| 'front'` | `'auto'` | Which way it looks; auto: towards the middle of the stage (right on the left half, left on the right half); front: at the viewer (its front view; an SVG character keeps its side). |
 | `characters.pose` | `str \| None` |  | The pose it starts in (stand, pointing, waving, thinking, shrug, arms_crossed, sitting, or its own); none: at rest. |
-| `characters.expression` | `str \| None` |  | The expression it starts with (neutral, happy, sad, angry, surprised, worried, thinking, or its own); none: at rest. |
+| `characters.expression` | `str \| None` |  | The expression it starts with (neutral, happy, sad, angry, surprised, worried, thinking, laughing, blushing, tongue_out, crying, dizzy, frightened, or its own); none: at rest. |
 | `size` | `float` | `0.45` | Height of a character at depth 0, as a fraction of the frame's shorter side. |
 | `idle` | `bool` | `True` | false: the characters do not breathe, sway or blink in this scene. |
 | `foley` | `bool \| None` |  | Sounds for the characters' actions (footsteps, whoosh on enter / exit, boing on jump, pop on a surprised face, a sound with most effect symbols): false for none in this scene; default: the video's foley (on). |

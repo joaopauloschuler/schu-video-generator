@@ -1,7 +1,8 @@
 """Cartoon characters as named vector parts with pivots (DESIGN.md §69).
 
 A :class:`Character` is a ``VGroup`` of parts (``head``, ``eyes``, ``brows``, ``mouth``, ``body``,
-``arm_left``, ``arm_right``, optional ``legs``, ``accessory`` and ``tail`` (an animal's, §69.48);
+``arm_left``, ``arm_right``, optional ``legs``, ``accessory``, ``tail`` (an animal's, §69.48),
+``antenna``, ``cape``, ``cheeks`` and ``bristles`` (§69.58, §69.59);
 arms and legs may come in two segments, ``arm_left`` + ``arm_left_lower``, ``leg_left`` +
 ``leg_left_lower``, ...: §69.26).
 Each part has one or more named shapes, a pivot, a parent and a draw order. Parts are drawn in
@@ -32,11 +33,16 @@ from manim import VGroup, VMobject
 from vidgen.cartoon.acting import PERSON_MOTION, SpeciesMotion, species_motion
 from vidgen.cartoon.idle import (
     ANTENNA_DIM_SHAPE,
+    BLINKLESS_EYES,
+    MOOD_SHAPES,
     IdleClock,
+    alternate_shape,
     antenna_light_on,
     antenna_sway_angle,
     breath_scale,
     idle_seed,
+    mood_motion,
+    shape_mood,
     sway_angle,
     tail_sway_angle,
 )
@@ -56,10 +62,10 @@ from vidgen.theme import Theme
 PART_NAMES: tuple[str, ...] = (
     "body", "legs", "leg_left", "leg_left_lower", "leg_right", "leg_right_lower",
     "arm_left", "arm_left_lower", "arm_right", "arm_right_lower", "head", "eyes", "brows", "mouth", "accessory", "tail",
-    "antenna", "cape",
+    "antenna", "cape", "cheeks", "bristles",
 )
-#: Parts every character has; the legs, the lower segments, ``accessory``, ``tail``, ``antenna``
-#: and ``cape`` are optional.
+#: Parts every character has; the legs, the lower segments, ``accessory``, ``tail``, ``antenna``,
+#: ``cape``, ``cheeks`` and ``bristles`` (a generated character's, DESIGN.md §69.59) are optional.
 REQUIRED_PARTS: tuple[str, ...] = ("body", "arm_left", "arm_right", "head", "eyes", "brows", "mouth")
 #: The legs drawn one leg each; a character draws its legs either so or as one ``legs`` part.
 SINGLE_LEG_PARTS: tuple[str, ...] = ("leg_left", "leg_left_lower", "leg_right", "leg_right_lower")
@@ -69,15 +75,18 @@ DEFAULT_PARENTS: dict[str, str | None] = {
     "body": None, "legs": "body", "leg_left": "body", "leg_left_lower": "leg_left", "leg_right": "body",
     "leg_right_lower": "leg_right", "arm_left": "body", "arm_left_lower": "arm_left", "arm_right": "body",
     "arm_right_lower": "arm_right", "head": "body", "eyes": "head", "brows": "head", "mouth": "head", "accessory": "head",
-    "tail": "body", "antenna": "head", "cape": "body",
+    "tail": "body", "antenna": "head", "cape": "body", "cheeks": "head", "bristles": "head",
 }
+#: Parts whose shape starts a mood (:data:`~vidgen.cartoon.idle.MOOD_SHAPES`).
+MOOD_PARTS: tuple[str, ...] = tuple(dict.fromkeys(part for part, _, _ in MOOD_SHAPES))
 #: Default draw order (low first). Facing right, ``arm_right`` is the far arm (behind the body)
 #: and ``leg_right`` the far leg; each lower segment is drawn over its upper one; a ``tail``
-#: comes out from behind everything but a ``cape``; a robot's ``antenna`` stands behind its head.
+#: comes out from behind everything but a ``cape``; a robot's ``antenna`` stands behind its head,
+#: ``bristles`` behind that; ``cheeks`` lie on the face under the eyes and mouth.
 DEFAULT_DRAW_ORDER: dict[str, int] = {
     "arm_right": 10, "arm_right_lower": 11, "leg_right": 16, "leg_right_lower": 17, "legs": 20,
     "leg_left": 22, "leg_left_lower": 23, "body": 30, "arm_left": 40, "arm_left_lower": 41, "head": 50,
-    "eyes": 60, "mouth": 60, "brows": 70, "accessory": 80, "tail": 5, "antenna": 49, "cape": 3,
+    "eyes": 60, "mouth": 60, "brows": 70, "accessory": 80, "tail": 5, "antenna": 49, "cape": 3, "cheeks": 55, "bristles": 48,
 }
 #: Draw order of the front view (DESIGN.md §69.44): both arms hang beside the body, in front of it.
 FRONT_DRAW_ORDER: dict[str, int] = {**DEFAULT_DRAW_ORDER, "arm_right": 42, "arm_right_lower": 43}
@@ -875,7 +884,9 @@ class Character(VGroup):
         """Breathe (the body scales a little), sway the head slightly, swish a ``tail``, wobble a
         robot's ``antenna`` and blink its light (:func:`~vidgen.cartoon.idle.antenna_light_on`) and blink
         (eyes ``closed``) at seeded random intervals of 2 to 6 s (``seed`` default: from the name;
-        :func:`~vidgen.cartoon.idle.blink_times`), from now, through an updater. The motion is a
+        :func:`~vidgen.cartoon.idle.blink_times`; not over eyes closed already), and add the
+        motion of the face's mood (sway, shiver, bounce; :func:`~vidgen.cartoon.idle.shape_mood`,
+        DESIGN.md §69.59), from now, through an updater. The motion is a
         layer on top of the poses: :meth:`state`, :meth:`set_state`, :class:`PoseChange` and
         :meth:`lip_sync` never see it. Its clock stops while Manim suspends the updaters (an
         animation playing on the character); :class:`PoseChange` ends a running blink."""
@@ -907,16 +918,34 @@ class Character(VGroup):
         if idle is None:
             return self
         idle.advance(dt)
-        self._set_overlay("body", PartPose(scale=breath_scale(idle.seconds, idle.seed)))
+        idle.set_mood(shape_mood({part: self._poses[part].shape for part in MOOD_PARTS if part in self._poses}))
+        mood = mood_motion(idle.mood_levels(), idle.seconds, idle.seed)
+        self._set_overlay("body", PartPose(angle=mood.body_angle, scale=breath_scale(idle.seconds, idle.seed), shift=mood.body_shift))
+        for legs in ("legs", "leg_left", "leg_right"):   # the legs stay upright under a swaying body
+            if legs in self._shapes:
+                upright = PartPose(angle=-mood.body_angle, shift=(-mood.body_shift[0], -mood.body_shift[1]))
+                self._set_overlay(legs, None if mood.is_still else upright)
         if "head" in self._shapes:
-            self._set_overlay("head", PartPose(angle=sway_angle(idle.seconds, idle.seed)))
+            self._set_overlay("head", PartPose(angle=sway_angle(idle.seconds, idle.seed) + mood.head_angle))
         if "tail" in self._shapes:
             self._set_overlay("tail", PartPose(angle=tail_sway_angle(idle.seconds, idle.seed)))
         if "antenna" in self._shapes:   # a robot's antenna wobbles on its spring, its light blinking
             dim = ANTENNA_DIM_SHAPE in self._shapes["antenna"] and not antenna_light_on(idle.seconds, idle.seed)
-            self._set_overlay("antenna", PartPose(angle=antenna_sway_angle(idle.seconds, idle.seed), shape=ANTENNA_DIM_SHAPE if dim else None))
-        if "closed" in self._shapes.get("eyes", {}):
-            self._set_overlay("eyes", PartPose(shape="closed") if idle.is_blinking else None)
+            self._set_overlay("antenna", PartPose(
+                angle=antenna_sway_angle(idle.seconds, idle.seed), scale=(1.0, mood.antenna_stretch), shape=ANTENNA_DIM_SHAPE if dim else None,
+            ))
+        if "bristles" in self._shapes:
+            self._set_overlay("bristles", None if mood.is_still else PartPose(scale=(1.0, mood.bristle_quiver)))
+        if "eyes" in self._shapes:
+            eyes = self._poses["eyes"].shape
+            if eyes in BLINKLESS_EYES:   # closed already, or swirling
+                swirl = alternate_shape("eyes", eyes, idle.seconds)
+                self._set_overlay("eyes", PartPose(shape=swirl) if swirl in self._shapes["eyes"] else None)
+            elif "closed" in self._shapes["eyes"]:
+                self._set_overlay("eyes", PartPose(shape="closed") if idle.is_blinking else None)
+        if "cheeks" in self._shapes:
+            running = alternate_shape("cheeks", self._poses["cheeks"].shape, idle.seconds)
+            self._set_overlay("cheeks", PartPose(shape=running) if running in self._shapes["cheeks"] else None)
         return self.refresh()
 
     # ----- wind (DESIGN.md §69.32) ----------------------------------------------------------

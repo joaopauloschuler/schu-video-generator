@@ -402,7 +402,8 @@ def beak_mouth(species: str, f: Frame, c: Mapping[str, str], w: float) -> tuple[
     """The ``mouth`` shapes and pivot (the hinge) of a species that talks with its beak
     (:data:`BEAKED`): ``smile`` the line at the beak's corner; ``open`` and the visemes the beak
     open by :data:`BEAK_OPENINGS` (side view: both halves turned apart about the hinge over the
-    dark inside; from the front a dark opening on the beak), ``M`` closed. Each shape is
+    dark inside; from the front a dark opening on the beak), ``M`` closed; the Step 125 shapes
+    ``laugh``, ``tongue`` and ``wavy`` (:func:`_beak_expression_shapes`). Each shape is
     symmetric about the hinge's line, so an expression's flipped mouth (a frown) still shows an
     open beak the right way up."""
     x, y, h, length = _beak_frame(species, f)
@@ -433,8 +434,45 @@ def beak_mouth(species: str, f: Frame, c: Mapping[str, str], w: float) -> tuple[
             outlined(polygon(_turned(lower, hinge, -half)), BEAK_COLOR, ink, w),
         )
     shapes["M"] = closed.set_stroke(ink, width=w)
-    order = ["smile", "open", "A", "E", "O", "U", "M", "F", "L", "W"]
+    shapes.update(_beak_expression_shapes(species, f, c, w))
+    order = ["smile", "open", "A", "E", "O", "U", "M", "F", "L", "W", "laugh", "tongue", "wavy"]
     return {name: shapes[name] for name in order}, hinge
+
+
+#: How far a beak opens laughing and with its tongue out (degrees, side view; DESIGN.md §69.59).
+BEAK_LAUGH_OPENING = 46.0
+BEAK_TONGUE_OPENING = 18.0
+
+
+def _beak_expression_shapes(species: str, f: Frame, c: Mapping[str, str], w: float) -> dict[str, VMobject]:
+    """A beak's Step 125 mouth shapes: ``laugh`` open wide with a pink tongue inside, ``tongue``
+    a little open with the tongue poking out past its tip, ``wavy`` the closed seam wobbling."""
+    x, y, h, length = _beak_frame(species, f)
+    r, ink, inside = f.p.head_radius, c["outline"], c["features"]
+    hinge = (x, y)
+    across, up = BEAKS[species][1][2] / BEAKS["bird"][1][2], BEAKS[species][1][1] / BEAKS["bird"][1][1]
+    if f.front:
+        laugh = VGroup(filled(Ellipse(width=0.36 * r * across, height=0.38 * r * up).move_to([x, y, 0]), inside),
+                       filled(Ellipse(width=0.22 * r * across, height=0.1 * r * up).move_to([x, y - 0.12 * r * up, 0]), PINK))
+        tongue = VGroup(filled(Ellipse(width=0.24 * r * across, height=0.08 * r * up).move_to([x, y, 0]), inside),
+                        outlined(Ellipse(width=0.16 * r * across, height=0.2 * r * up).move_to([x, y - 0.1 * r * up, 0]), PINK, ink, w * 0.6))
+        half = BEAKS[species][1][2] * r
+        seam = [(x - half + 2 * half * k / 16, y + 0.025 * r * math.sin(math.pi * k / 2)) for k in range(17)]
+    else:
+        upper, lower = _beak_halves(species, f)
+
+        def opened(degrees: float, extra: list[VMobject]) -> VGroup:
+            fan = [hinge, *(point_at(x, y, length, a) for a in np.linspace(-degrees / 2, degrees / 2, 7))]
+            return VGroup(filled(polygon(fan), inside), *extra,
+                          outlined(polygon(_turned(upper, hinge, degrees / 2)), BEAK_COLOR, ink, w),
+                          outlined(polygon(_turned(lower, hinge, -degrees / 2)), BEAK_COLOR, ink, w))
+
+        laugh = opened(BEAK_LAUGH_OPENING, [filled(Ellipse(width=0.5 * length, height=0.12 * r).move_to([x + 0.45 * length, y - 0.04 * r, 0]), PINK)])
+        poking = Ellipse(width=0.42 * length, height=0.13 * r).move_to([x + 0.95 * length, y - 0.02 * r, 0])
+        tongue = opened(BEAK_TONGUE_OPENING, [outlined(poking, PINK, ink, w * 0.6)])
+        seam = [(x + 0.6 * length * k / 16, y + 0.03 * r * math.sin(math.pi * k / 2)) for k in range(17)]
+    wavy = VMobject().set_points_smoothly([[px, py, 0.0] for px, py in seam]).set_fill(opacity=0).set_stroke(ink, width=w)
+    return {"laugh": laugh, "tongue": tongue, "wavy": wavy}
 
 
 # ----- hands, wings and a bird's feet ---------------------------------------------------------------
@@ -592,7 +630,9 @@ __all__ = [
     "BEAKED",
     "BEAKS",
     "BEAK_COLOR",
+    "BEAK_LAUGH_OPENING",
     "BEAK_OPENINGS",
+    "BEAK_TONGUE_OPENING",
     "FOX_TAIL",
     "FROG_EYE_RISE",
     "HEAD_SHAPES",

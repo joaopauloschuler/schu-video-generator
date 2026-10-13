@@ -11812,3 +11812,92 @@ How to test
   test_phase_k_review test_cartoon_small_props` (303, 75 s); render: `test_cartoon_outfits animals
   more_animals test_voice_sounds test_cartoon_foley test_cartoon_robots` (8, 9 s). The full suite
   was not run.
+
+
+## Step 125 — More expressions
+
+What was built
+- Six built-in expressions after the seven of Step 70 (whose entries are unchanged): `laughing`,
+  `blushing`, `tongue_out`, `crying`, `dizzy`, `frightened` (`cartoon/poses.py`), on every
+  generated look (people, furry animals, beaked animals, frogs / turtles, plate and screen robots),
+  side and front; SVG characters fall back through the shape lists.
+- Two optional expression parts (children of `head`): `cheeks` (order 55; `none` / `blush` /
+  `tears` / `tears_running`) and `bristles` (order 48, behind the head; `none` / `up`). `none`
+  draws nothing (one point, no fill area, no stroke: `expression_shapes.nothing`). New eye shapes
+  `laughing`, `wide`, `swirl`, `swirl_turned`; mouth `laugh`, `tongue`, `wavy` (beaks too). All
+  appended after the earlier shapes. Drawing in the new `cartoon/expression_shapes.py`; a beak's
+  in `animals._beak_expression_shapes`.
+- `bristles up`: hair crown in the hair colour (people with hair), fur tufts (cat, dog, bear,
+  rabbit, mouse, fox), feathers (bird, owl, penguin), fright lines (bald people, frog, turtle,
+  robots).
+- Moods (`idle.py`: `MOOD_SHAPES`, `shape_mood`, `MoodMotion`, `mood_motion`, `IdleClock.set_mood`
+  / `mood_levels`, `MOOD_SPRING` from Step 82's `Spring`): `swirl` eyes sway the body about the
+  hips (legs counter-turned, feet stay) and the head; `wide` eyes shiver and stretch a robot's
+  antenna (springing past full); `laugh` mouth / `tears` bounce the shoulders. Overlays in
+  `Character._idle_step`, never in `state()`. `BLINKLESS_EYES` never blink; `ALTERNATE_SHAPES`
+  turn swirls and run tears every 0.2 s.
+- Mappings: `[laugh]` / `[giggle]` → `laughing`; screenplay `MANNERS` (giggling, embarrassed /
+  shy, cheeky / teasing, sobbing / in tears, dazed / woozy, scared / afraid / terrified);
+  `EXPRESSION_EFFECTS` dizzy → stars, frightened → sweat.
+
+Files touched
+- New: `src/vidgen/cartoon/expression_shapes.py`, `tests/test_cartoon_expressions.py`.
+- `src/vidgen/config.py` (`ExpressionPart`), `cartoon/poses.py`, `cartoon/character.py`
+  (`PART_NAMES`, parents, draw order, `MOOD_PARTS`, `_idle_step`), `cartoon/generator.py`
+  (face shapes, cheeks, bristles, `EXPRESSION_ONLY` ignored by `_scaled_to_unit_height`),
+  `cartoon/animals.py` (beak shapes), `cartoon/idle.py`, `cartoon/cast.py` (`GENERATED_SHAPES`),
+  `cartoon/effects.py`, `cartoon/svg_look.py` (comment), `screenplay.py`, `voicesounds.py`,
+  `scenes/acting.py` / `scenes/stage.py` (descriptions).
+- Tests updated: `test_cartoon_outfits.py` (`drawing_digest` skips the Step 125 shapes / parts),
+  `test_cartoon_poses.py`, `test_cartoon_character.py`, `test_cartoon_generator.py`,
+  `test_cartoon_sheet.py`, `test_voice_sounds.py` (expected lists and counts).
+- Docs: `DESIGN.md` (§2 tree, §69.3, §69.40 note, new §69.59), `docs/CONFIG.md` (expressions,
+  shapes, table of the new ones, voice sound faces, manners, effect symbols), `docs/EXTENDING.md`,
+  `docs/gallery/stage.md`, the author guide (`src/vidgen/data/guide/AGENTS.md`, copied to
+  `AGENTS.md`).
+
+Public interfaces
+- No `vidgen.api` change. `PART_NAMES` (exported) gains `cheeks`, `bristles`;
+  `ExpressionPart` gains them (own `expressions:` may set them). Internal: `expression_shapes`,
+  the mood functions in `idle.py`, `generator.EXPRESSION_ONLY`, `animals.BEAK_LAUGH_OPENING` /
+  `BEAK_TONGUE_OPENING`.
+
+Decisions / deviations
+- New parts rather than new head shapes: the head is a pose part (a pose resets it), so hair
+  standing up and cheeks belong to the expression group. Ears standing up are drawn as fur tufts
+  behind the head (the ears are part of the head drawing; turning them would change every pinned
+  look).
+- The motion follows the shapes shown (not the expression's name), so it survives `state()`
+  snapshots, `PoseChange` and own expressions; it is part of the idle motion (none with
+  `idle: false`).
+- Pins: `drawing_digest` leaves out the Step 125 parts and shapes; every earlier pin (Steps
+  113 / 114 / 123) holds unchanged, so everything drawn before is byte-identical; figure heights
+  ignore the new shapes.
+- `[gasp]` stays `surprised`; `scared` / `afraid` / `crying` manners change face (frightened /
+  crying instead of worried / sad). The `tear` effect stays for directions (`[cries]`); `crying`
+  gets no automatic symbol.
+- `blend_poses` leaves `1 + (-0.9 - 1) × 1` as `-0.8999999999999999`; the transition test compares
+  with a tolerance (pre-existing float behaviour, not changed).
+- Searched first: no blush, tears, tongue or bristle drawing existed; reused `primitives`,
+  `animals` colours / beak frame, `robots.has_screen`, `Spring`, the idle overlay layer.
+
+Known gaps / TODOs
+- SVG characters have no `cheeks` / `bristles` and no new eye / mouth shapes (they fall back: no
+  blush, no tears, no mood motion unless their file names the shapes).
+- Hats stay on frightened heads (the spikes show round them); floppy ears do not lift.
+- A mood's spring restarts after a `PoseChange` (the clock is stopped during it), so the sway or
+  shiver begins as the change ends.
+- The mouth of small muzzles (cat, rabbit, mouse) shows `laugh` / `tongue` small at preview sizes.
+
+How to test
+- `pytest tests/test_cartoon_expressions.py` (52 not-render, ~15 s; 1 render at 160x90, ~3 s).
+- Also run, not render: `test_cartoon_outfits poses idle animals more_animals robots character
+  generator` (312 passed, 67 s), `test_cartoon_sheet stage depth wind acting moving holding
+  seating lint speed visemes motion test_random_cast` (210, 15 s), `test_phase_h/i/k_review
+  test_cartoon_style shots reframe lighting keyframes limbs spring test_guide test_schema
+  test_cartoon_effects motion_effects` (274, 114 s), last: `test_cartoon_expressions idle poses
+  test_screenplay test_voice_sounds test_cartoon_directing svg sheet effects` (231, 17 s),
+  `test_docs test_gallery test_guide test_schema test_actions_coverage test_config test_api
+  test_cartoon_acting` (233, 80 s); render: `test_voice_sounds`, `test_cartoon_idle poses robots
+  animals`, `test_cartoon_sheet` (all of it), `test_cartoon_stage` (all passed). The full suite
+  was not run.

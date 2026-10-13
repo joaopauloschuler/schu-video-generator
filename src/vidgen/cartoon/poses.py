@@ -57,6 +57,11 @@ POSES: dict[str, dict[str, PartPoseEntry]] = {
 }
 
 #: Built-in expressions. The rest mouth is a smile (``smile``), so a negative y scale makes a frown.
+#: Since Step 125 (DESIGN.md §69.59): ``laughing`` (eyes closed in arcs, a laughing mouth),
+#: ``blushing`` (``cheeks`` ``blush``), ``tongue_out``, ``crying`` (eyes squeezed, ``cheeks``
+#: ``tears``: streams), ``dizzy`` (``swirl`` eyes; the idle motion sways) and ``frightened``
+#: (``wide`` eyes, ``bristles`` ``up``; the idle motion shivers). Each lists fallback shapes, so
+#: a character without the new shapes (an SVG one) shows the nearest it has.
 EXPRESSIONS: dict[str, dict[str, PartPoseEntry]] = {
     "neutral": _p(mouth={"scale": [0.9, 0.35]}),
     "happy": _p(mouth={"scale": [1.15, 1.25]}, brows={"shift": [0, 0.01]}),
@@ -65,6 +70,21 @@ EXPRESSIONS: dict[str, dict[str, PartPoseEntry]] = {
     "surprised": _p(mouth={"shape": ["open", "O", "A"]}, brows={"shift": [0, 0.025]}, eyes={"scale": 1.2}),
     "worried": _p(mouth={"scale": [0.7, -0.45], "shift": [0, -0.004]}, brows={"shape": "sad", "shift": [0, 0.015]}, eyes={"scale": [1, 1.1]}),
     "thinking": _p(mouth={"scale": [0.6, 0.3], "shift": [0.01, 0]}, brows={"angle": -8, "shift": [0, 0.01]}, eyes={"shift": [0.008, 0.012]}),
+    "laughing": _p(eyes={"shape": ["laughing", "closed"]}, brows={"shift": [0, 0.018]}, mouth={"shape": ["laugh", "open", "A"]}),
+    "blushing": _p(
+        eyes={"scale": [1, 0.9], "shift": [0, -0.004]}, brows={"shape": "sad", "shift": [0, 0.008]}, mouth={"scale": [0.6, 0.6]},
+        cheeks={"shape": "blush"},
+    ),
+    "tongue_out": _p(eyes={"shape": ["laughing", "closed"]}, brows={"shift": [0, 0.012]}, mouth={"shape": ["tongue", "open", "A"]}),
+    "crying": _p(
+        eyes={"shape": ["laughing", "closed"], "scale": [1, -0.9]}, brows={"shape": "sad", "shift": [0, 0.012]},
+        mouth={"shape": ["open", "O", "A"], "scale": [1.1, 0.85]}, cheeks={"shape": "tears"},
+    ),
+    "dizzy": _p(eyes={"shape": "swirl"}, brows={"shift": [0, 0.014]}, mouth={"shape": ["wavy", "smile"], "scale": [0.9, 0.9]}),
+    "frightened": _p(
+        eyes={"shape": "wide", "scale": 1.15}, brows={"shape": "sad", "shift": [0, 0.03]}, mouth={"shape": ["wavy", "open", "O"]},
+        bristles={"shape": "up"},
+    ),
 }
 
 

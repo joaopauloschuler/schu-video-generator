@@ -397,12 +397,13 @@ class Turn(_Acting):
 @action("emote")
 class Emote(_Acting):
     """The target character changes its expression to ``to`` (neutral, happy, sad, angry,
-    surprised, worried, thinking, or its own); eyes, brows and mouth move one after another. It
+    surprised, worried, thinking, laughing, blushing, tongue_out, crying, dizzy, frightened, or its
+    own); eyes, brows and mouth move one after another. It
     keeps it (``until: <beat>``: back to the expression before)."""
 
     class Options(ActionOptions):
         to: str = Field(pattern=r"^[A-Za-z0-9_]+$")
-        """The expression: neutral, happy, sad, angry, surprised, worried, thinking, or the character's own."""
+        """The expression: neutral, happy, sad, angry, surprised, worried, thinking, laughing, blushing, tongue_out, crying, dizzy, frightened, or the character's own."""
 
     run_time = 0.5
     reversible = True
@@ -454,7 +455,7 @@ class React(_Acting):
 
     class Options(ActionOptions):
         expression: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_]+$")
-        """An expression: neutral, happy, sad, angry, surprised, worried, thinking, or the character's own."""
+        """An expression: neutral, happy, sad, angry, surprised, worried, thinking, laughing, blushing, tongue_out, crying, dizzy, frightened, or the character's own."""
         pose: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_]+$")
         """A pose: stand, pointing, waving, thinking, shrug, arms_crossed, sitting, or the character's own."""
 

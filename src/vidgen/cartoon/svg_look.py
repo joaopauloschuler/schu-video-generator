@@ -46,7 +46,8 @@ from vidgen.svgclean import CleanSvg, local, sanitize_svg, serialize
 if TYPE_CHECKING:
     from vidgen.cartoon.character import CharacterPart
 
-#: Every part name (the same as :data:`vidgen.cartoon.character.PART_NAMES`, kept here without manim).
+#: Every part name (:data:`vidgen.cartoon.character.PART_NAMES`, kept here without manim) but the
+#: generator's ``cheeks`` and ``bristles`` (DESIGN.md §69.59), whose rest shape draws nothing.
 SVG_PART_NAMES: tuple[str, ...] = (
     "body", "legs", "leg_left", "leg_left_lower", "leg_right", "leg_right_lower",
     "arm_left", "arm_left_lower", "arm_right", "arm_right_lower", "head", "eyes", "brows", "mouth", "accessory", "tail",

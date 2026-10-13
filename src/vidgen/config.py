@@ -413,12 +413,12 @@ class CharacterLook(_Strict):
 MotionSetting = Literal["lively", "calm", "none"]
 
 #: Parts a pose sets (DESIGN.md §69.3, the two-segment limbs §69.26, an animal's tail §69.48); the parts of an expression
-#: are :data:`ExpressionPart`.
+#: are :data:`ExpressionPart` (``cheeks``: a blush or tears; ``bristles``: hair or fur standing up, §69.59).
 PosePart = Literal[
     "body", "legs", "leg_left", "leg_left_lower", "leg_right", "leg_right_lower",
     "arm_left", "arm_left_lower", "arm_right", "arm_right_lower", "head", "accessory", "tail", "antenna", "cape",
 ]
-ExpressionPart = Literal["eyes", "brows", "mouth"]
+ExpressionPart = Literal["eyes", "brows", "mouth", "cheeks", "bristles"]
 
 
 class PartPoseEntry(_Strict):
@@ -465,7 +465,7 @@ class CharacterEntry(_Strict):
     poses: dict[Identifier, dict[PosePart, PartPoseEntry]] = Field(default_factory=dict)
     """The character's own poses (name -> part -> {angle, scale, shift, shape}); a built-in name is replaced."""
     expressions: dict[Identifier, dict[ExpressionPart, PartPoseEntry]] = Field(default_factory=dict)
-    """The character's own expressions (eyes, brows, mouth), like poses."""
+    """The character's own expressions (eyes, brows, mouth, cheeks, bristles), like poses."""
     idle: bool = True
     """Breathe, sway the head slightly and blink every 2 to 6 s on its own; false: hold still between actions."""
     cartoon_motion: MotionSetting | None = None

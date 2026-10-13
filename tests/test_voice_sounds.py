@@ -198,4 +198,4 @@ def test_breaths_play_and_laughs_show(make_project, tmp_path: Path) -> None:
     assert [(s, b, g) for s, b, _, g in voiced] == [("gasp", "park_b2", SOUND_GAIN_DB), ("sigh", "park_b2", SOUND_GAIN_DB)]
     assert voiced[0][2] < starts["park_b2"] < voiced[1][2]   # just before the line, then after it
     pip = scene.cast["pip"]
-    assert pip.state().parts["mouth"] == pip.posed_state(expression="happy").parts["mouth"]   # still laughing (last beat)
+    assert pip.state().parts["mouth"] == pip.posed_state(expression="laughing").parts["mouth"]   # still laughing (last beat)

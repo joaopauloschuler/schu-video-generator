@@ -80,7 +80,8 @@ src/vidgen/
                           # patterns, shoes, things worn on the body, §69.47), animals.py (species:
                           # heads, paws, wings, tails, a beak that talks, §69.48), robots.py (species
                           # robot: heads, screen face, antenna, joints, wheels, §69.58), costumes.py
-                          # (crown, wizard hat, party hat, cape, §69.58), contrast.py (how
+                          # (crown, wizard hat, party hat, cape, §69.58), expression_shapes.py
+                          # (Step 125 eyes, mouths, cheeks, hair standing up, §69.59), contrast.py (how
                           # clearly two looks differ, §69.49; no manim), primitives.py (the
                           # generator's shapes, trailing and outer-hair marks, outline maths), svg_look.py (look: {svg} -> parts by
                           # element ids, §69.2), still.py (`vidgen character --png`), poses.py (pose and
@@ -5343,9 +5344,11 @@ between two of them is the `PoseChange` animation.
 
 - **Tables** (`cartoon/poses.py`, no manim): `POSES` (`stand, pointing, waving, thinking, shrug,
   arms_crossed, sitting`) and `EXPRESSIONS` (`neutral, happy, sad, angry, surprised, worried,
-  thinking`), each name -> part -> `PartPoseEntry(angle, scale, shift, shape)` (the config model of
+  thinking`; since Step 125 `laughing, blushing, tongue_out, crying, dizzy, frightened`, §69.59),
+  each name -> part -> `PartPoseEntry(angle, scale, shift, shape)` (the config model of
   `poses:`, so built-in and own entries are one type). A pose sets `POSE_PARTS` (`body, legs,
-  arm_left, arm_right, head, accessory`), an expression `EXPRESSION_PARTS` (`eyes, brows, mouth`),
+  arm_left, arm_right, head, accessory`), an expression `EXPRESSION_PARTS` (`eyes, brows, mouth`;
+  since Step 125 `cheeks, bristles`),
   so one of each combines; the parts of its group an entry does not name go back to rest (`stand`
   is empty: everything at rest). Values are relative to the rest drawing: arms hang down, so
   `pointing` turns `arm_left` (the near arm facing right) +88°; `sitting` lowers `body` 0.1 and
@@ -7750,7 +7753,8 @@ head (`- effect: pip` + `to: idea`, the `to:` convention of §69.11).
 - **Automatic directing** (`cartoon/directing.py`, kind `effects`, last in `DIRECTING_KINDS`): at
   most one symbol per beat, for the first change of expression in it (written `emote` / `react`,
   a voice sound's face, then this beat's automatic reactions, recorded in `_SceneState.faces_now`)
-  to one of `EXPRESSION_EFFECTS` (surprised → exclaim, thinking → question, angry → anger), at the
+  to one of `EXPRESSION_EFFECTS` (surprised → exclaim, thinking → question, angry → anger; since
+  Step 125 dizzy → stars, frightened → sweat, §69.59), at the
   change's `at`, for a character on the stage; none in a beat with a written `effect`. Unlike the
   other passes it acts on a character a written `emote` / `react` targets: the symbol adds to that
   face and changes nothing the action set. Pasting `vidgen direct --print` makes it written, so
@@ -9011,6 +9015,74 @@ wheels are config errors. `animals.is_animal` is false for a robot; `SPECIES_WIT
   front). Every earlier look draws as before: Steps 113 / 114 pins in `tests/test_cartoon_animals.py`,
   Step 123 species pinned in `tests/test_cartoon_robots.py` (taken at 8dceb29). Tests:
   `tests/test_cartoon_robots.py`.
+
+### 69.59 More expressions (Step 125)
+
+Six built-in expressions join `poses.EXPRESSIONS` (after the seven of §69.3, whose entries are
+unchanged): `laughing`, `blushing`, `tongue_out`, `crying`, `dizzy`, `frightened`. They work on
+every generated look (people, animals with muzzles or beaks, robots with a plate or a screen),
+side and front, and fall back on SVG characters through their shape lists.
+
+- **Parts and shapes.** `ExpressionPart` gains two optional parts, both children of `head`
+  (`PART_NAMES`, `DEFAULT_PARENTS`; not in `SVG_PART_NAMES`): `cheeks` (draw order 55, over the
+  head under the eyes and mouth; shapes `none`, `blush`, `tears`, `tears_running`) and
+  `bristles` (48, behind the head and a robot's antenna; `none`, `up`). Their rest shape `none`
+  draws nothing (`expression_shapes.nothing`: one point, no fill area, no stroke, so dimming or
+  fading never shows it), so every expression that does not name them, the seven old ones
+  included, shows nothing there. The eyes gain `laughing` (an arc, closed), `wide` (a big white,
+  a small pupil; on a screen a glowing ring), `swirl` and `swirl_turned` (a spiral, turned half
+  round); the mouth `laugh` (open, flat on top, a pink tongue), `tongue` (a lip line and a tongue
+  hanging out, forward from the side) and `wavy`. All are appended after the earlier shapes
+  (`cast.GENERATED_SHAPES`), so the rest shapes and shape order of every part stay. Drawing:
+  `cartoon/expression_shapes.py` (called by the generator; eye and mouth shapes in the face's
+  colours, so a screen's glow), a beak's `laugh` / `tongue` / `wavy` in `animals.beak_mouth`
+  (`BEAK_LAUGH_OPENING` 46°, `BEAK_TONGUE_OPENING` 18°). Blush: `BLUSH_COLOR` at 0.7 opacity under
+  each eye (a screen: three glowing strokes); tears: `TEAR_COLOR` streams from under each eye down
+  to 0.72 head radii below the head's centre, with a drop (two lower in `tears_running`).
+  `bristles` `up`: a person with hair: a zigzag crown in the hair colour reaching 0.3 head radii
+  above the head part's top (hair, ears; at least 1.35 r); a furry animal (`FURRY`): fur tufts in
+  its colour on its head's ellipse; a bird, an owl, a penguin: five feathers in `fur_shade`;
+  anything else (a bald person, a frog, a turtle, a robot): four fright lines over the head.
+- **Sizes stay.** `generator._scaled_to_unit_height` ignores the Step 125 shapes
+  (`EXPRESSION_ONLY`), so hair standing up never shrinks a figure; `drawing_digest` in the tests
+  leaves them out, so every pin taken before (Steps 113, 114, 123) still holds for everything drawn
+  before.
+- **Expressions** (`EXPRESSIONS`): `laughing` eyes `laughing` (else `closed`), mouth `laugh`
+  (else `open`, `A`); `blushing` cheeks `blush`, a small smile, eyes lowered, brows `sad` raised a
+  little; `tongue_out` eyes `laughing`, mouth `tongue`; `crying` eyes `laughing` flipped (y
+  -0.9: squeezed), mouth `open` 1.1 × 0.85, cheeks `tears`, brows `sad`; `dizzy` eyes `swirl`,
+  mouth `wavy`; `frightened` eyes `wide` scaled 1.15, brows `sad` raised 0.03, mouth `wavy`,
+  bristles `up`. A `PoseChange` swaps the shapes at each part's half like any shape.
+- **Moods** (`idle.py`, no manim; applied by `Character._idle_step` as overlays, never in
+  `state()`): `shape_mood` picks the first of `MOOD_SHAPES` the pose shapes show (`eyes swirl` →
+  `sway`, `eyes wide` → `shiver`, `mouth laugh` / `cheeks tears` → `bounce`), so own expressions
+  using these shapes get the motion. `IdleClock.set_mood` / `mood_levels`: the new mood's strength
+  follows `MOOD_SPRING` (1.4 Hz, damping 0.45: about 20 % past full) from its strength at the
+  change, the old one dies away on the same spring (never below 0, dropped after
+  `MOOD_SETTLE_SECONDS`), so nothing jumps when an expression starts or ends (the clock stops
+  during a `PoseChange`; the mood starts after it). `mood_motion`: `sway` turns the body
+  `MOOD_SWAY_DEGREES` 4° about the hips every 1.8 s and the head 6° a quarter behind, the legs
+  turned back by the same overlay so the feet stay; `shiver` shakes the body 0.005 units at 13 Hz
+  (legs held back the same way), stretches a robot's `antenna` by `ANTENNA_FRIGHT_STRETCH` 0.35 of
+  its height (springing up past it) and makes `bristles` quiver; `bounce` lifts the body 0.008
+  units 4.5 times a second (the shoulders shake: laughing, sobbing). With `idle: false` there is no
+  mood motion (nor blinks).
+- **Eyes and tears.** No blink shows over `BLINKLESS_EYES` (`closed`, `laughing`, `swirl`,
+  `swirl_turned`); `ALTERNATE_SHAPES` swaps `swirl` ↔ `swirl_turned` and `tears` ↔
+  `tears_running` every `ALTERNATE_SECONDS` 0.2 s (overlays), so swirls turn and tears run.
+- **Speech.** Lip sync shows visemes over the expression's mouth and the expression's mouth
+  between words (§69.4), so a character laughs while talking: eyes `laughing`, the shoulders
+  bouncing, the mouth moving with the words.
+- **Mappings.** Voice sounds `[laugh]` and `[giggle]` give `laughing` (was `happy`; `[gasp]` stays
+  `surprised`); screenplay manners (`MANNERS`): the six names, and `giggling` / `amused` laughing,
+  `embarrassed` / `shy` / `bashful` blushing, `cheeky` / `teasing` tongue_out, `sobbing` /
+  `weeping` / `in tears` crying (was sad), `dazed` / `woozy` dizzy, `scared` / `afraid` /
+  `terrified` frightened (was worried); `EXPRESSION_EFFECTS` adds `dizzy` → `stars` and
+  `frightened` → `sweat`. `crying` has no symbol: the `tear` symbol (§69.40) is one drop beside
+  the head, kept for directions such as `[cries]`; the streams are part of the face. `react`,
+  `emote` and stage `expression` accept the new names (they read `Character.names`), and the
+  character sheet lists them and the new mouth shapes (it reads the tables).
+- Tests: `tests/test_cartoon_expressions.py`.
 
 ## 70. Render jobs: `--jobs auto` (Step 117)
 

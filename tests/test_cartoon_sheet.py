@@ -35,7 +35,7 @@ from vidgen.project import Project
 from vidgen.sheets import SheetStill, _label
 
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "svg_character"
-GENERATED_MOUTHS = ["smile", "open", "A", "E", "O", "U", "M", "F", "L", "W"]
+GENERATED_MOUTHS = ["smile", "open", "A", "E", "O", "U", "M", "F", "L", "W", "laugh", "tongue", "wavy"]   # the last three: Step 125
 
 
 # ----- the grid (no drawing) ------------------------------------------------------------------------
@@ -131,7 +131,7 @@ def test_character_sheet_command(tmp_path: Path, capsys: pytest.CaptureFixture[s
         assert [s["kind"] for s in sheet["sections"]] == ["pose", "expression", "mouth", *(["view"] if generated else [])]
     out = tmp_path / "pebble.png"
     assert main(["character-sheet", "pebble", str(root), "--output", str(out)]) == 0
-    assert out.is_file() and "7 poses, 7 expressions, 10 mouth shapes, 1 front view" in capsys.readouterr().out
+    assert out.is_file() and "7 poses, 13 expressions, 13 mouth shapes, 1 front view" in capsys.readouterr().out
     assert main(["character-sheet", "nobody", str(root)]) == 1
 
 

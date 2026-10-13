@@ -1295,8 +1295,10 @@ returns the sheets as pictures. Use it to check a character before writing its s
 
 Every character knows the same named **poses** (`stand`, `pointing`, `waving`, `thinking`,
 `shrug`, `arms_crossed`, `sitting`), which set the body, legs, arms, head and accessory, and
-**expressions** (`neutral`, `happy`, `sad`, `angry`, `surprised`, `worried`, `thinking`), which set
-the eyes, brows and mouth; a pose and an expression combine. A change from one to another is
+**expressions** (`neutral`, `happy`, `sad`, `angry`, `surprised`, `worried`, `thinking`,
+`laughing`, `blushing`, `tongue_out`, `crying`, `dizzy`, `frightened`), which set the eyes, brows
+and mouth (and the `cheeks` and `bristles` of a generated character, below); a pose and an
+expression combine. A change from one to another is
 animated part by part: each part turns, scales or slides about its pivot with its own easing,
 body first and face last (not a cross-fade). Parts a character does not have are skipped, so the
 names work on generated and SVG characters alike (an SVG without `brows_angry` frowns with its
@@ -1324,12 +1326,35 @@ characters:
 A pose may name `body`, `legs`, `leg_left`, `leg_left_lower`, `leg_right`, `leg_right_lower`,
 `arm_left`, `arm_left_lower`, `arm_right`, `arm_right_lower`, `head`, `accessory`, `tail` (an animal's), `antenna` (a robot's),
 `cape`; an expression
-`eyes`, `brows`, `mouth` (anything else is a config error). Parts of its group a pose or an
+`eyes`, `brows`, `mouth`, `cheeks`, `bristles` (anything else is a config error). Parts of its group a pose or an
 expression does not name go back to their rest pose. Generated characters have the shapes eyes
-`open` / `closed`, brows `default` / `angry` / `sad`, mouth `smile` / `open` and the lip-sync shapes
-`A E O U M F L W` ([below](#lip-sync)); an SVG character
-has the shapes its file names (`vidgen character NAME` lists them). `vidgen validate` reports a
+`open` / `closed` / `laughing` (closed in arcs) / `wide` (a big white, a small pupil) / `swirl` /
+`swirl_turned`, brows `default` / `angry` / `sad`, mouth `smile` / `open`, the lip-sync shapes
+`A E O U M F L W` ([below](#lip-sync)) and `laugh` / `tongue` / `wavy`, cheeks `none` (nothing
+drawn, the rest) / `blush` / `tears` / `tears_running`, and bristles `none` / `up` (behind the head:
+hair standing on end, fur or feathers on an animal, fright lines over a bald head, a frog, a
+turtle or a robot); a beak, a screen face and a muzzle draw each in their own way. An SVG character
+has the shapes its file names (`vidgen character NAME` lists them; no `cheeks` or `bristles`, so
+the new expressions fall back: `laughing` closes its eyes, `frightened` widens them). `vidgen validate` reports a
 `shape` the character does not have (none of the choices), and warns about a part it lacks.
+
+The six expressions added in Step 125 (DESIGN.md §69.59):
+
+| expression | face | while idling (`idle: true`) |
+|---|---|---|
+| `laughing` | eyes `laughing`, mouth `laugh` (open, a tongue inside), brows up | the shoulders bounce |
+| `blushing` | cheeks `blush`, a small smile, eyes a little lowered | |
+| `tongue_out` | eyes `laughing`, mouth `tongue` | |
+| `crying` | eyes squeezed (`laughing` flipped), mouth open, cheeks `tears` (streams from the eyes) | the shoulders bounce (sobs); the tears run |
+| `dizzy` | eyes `swirl`, mouth `wavy` | the body sways from the hips (the legs stay upright), the head lags; the swirls turn |
+| `frightened` | eyes `wide`, brows raised, mouth `wavy`, bristles `up` | the body shivers; a robot's antenna springs up |
+
+The motion comes from the shapes shown (own expressions get it too: `eyes: {shape: swirl}`
+sways), grows in and dies away on a spring, and is not part of the pose; closed eyes (`closed`,
+`laughing`, `swirl`) never blink. A speaking character keeps the expression's eyes while its
+mouth follows the words, and between words shows the expression's mouth (laughing while
+talking). The `tear` effect symbol ([effects](#effect-symbols-effect)) is one drop beside the head; the
+`crying` streams are on the face.
 
 ### Lip sync
 
@@ -2149,8 +2174,8 @@ beats:
 
   | sound | Kokoro, ElevenLabs (other models), OpenRouter | ElevenLabs `eleven_v3` | face on a stage |
   |---|---|---|---|
-  | `[laugh]` | `Ha ha ha!` | `[laughs]` (an audio tag) | `happy` |
-  | `[giggle]` | `Hee hee!` | `[giggles]` | `happy` |
+  | `[laugh]` | `Ha ha ha!` | `[laughs]` (an audio tag) | `laughing` |
+  | `[giggle]` | `Hee hee!` | `[giggles]` | `laughing` |
   | `[hmm]` | `Hmm.` | `Hmm.` | `thinking` |
   | `[groan]` | `Ugh.` | `[groans]` | `worried` |
   | `[gasp]` | at the line's start or end: the built-in `gasp` sound; inside it: `Hah!` | `[gasps]` | `surprised` |
@@ -5371,7 +5396,8 @@ writing each look:
   speech bubble or an automatic gesture of the speaker.
 - **Effect symbols.** A strong change of expression gets an [effect symbol](#effect-symbols-effect)
   over the head as it starts: `surprised` an `exclaim`, `thinking` a `question`, `angry` an
-  `anger` mark. At most one per line: the first such change in the beat (a written `emote` or
+  `anger` mark, `dizzy` `stars`, `frightened` `sweat` (`crying` none: its tears are on the
+  face). At most one per line: the first such change in the beat (a written `emote` or
   `react`, a [voice sound](#voice-sounds)'s face, then the automatic reactions), for a character
   on the stage; none in a beat with a written `effect`. The symbol is added also for a written
   `emote` / `react` (it adds to the face; the action itself is unchanged).
@@ -5460,7 +5486,9 @@ GUS (glad): There it is! [jumps] I left my song in that crate.
 - **Lines**: `NAME: text` (the name in capitals, several words allowed: `OLD ASH`); lines run on
   until a blank line. `NAME (manner): text`: manner words that name an expression or a pose
   (`happy`, `thinking`, `arms crossed`...) or a word for one (`doubtful` thinking, `glad`
-  happy, `nervous` worried, `cross` angry, `shocked` surprised...) become `react` for that line;
+  happy, `nervous` worried, `cross` angry, `shocked` surprised; since Step 125 `giggling`
+  laughing, `embarrassed` / `shy` blushing, `cheeky` / `teasing` tongue_out, `sobbing` / `in
+  tears` crying, `dazed` / `woozy` dizzy, `scared` / `afraid` / `terrified` frightened...) become `react` for that line;
   other words a `# TODO:`. A pronoun among them states the speaker's voice kind, for the voice
   and look it is given (once is enough, usually on the first line): `FEN (she): text` feminine,
   `BRAM (he, doubtful): text` masculine, `GUS (they): text` neutral (`she/her`, `he/him`,

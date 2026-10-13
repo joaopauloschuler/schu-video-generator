@@ -19,7 +19,7 @@ from vidgen.cartoon.cast import character_part_shapes
 from vidgen.cartoon.character import OUTER_HAIR_ATTRIBUTE, REQUIRED_PARTS, TRAIL_ATTRIBUTE, Character, build_character
 from vidgen.cartoon.clothes import pattern_tone
 from vidgen.cartoon.effect_symbols import crown_top, head_box
-from vidgen.cartoon.generator import TRAIL_WEIGHTS, generate_parts, resolve_proportions
+from vidgen.cartoon.generator import EXPRESSION_ONLY, TRAIL_WEIGHTS, generate_parts, resolve_proportions
 from vidgen.cartoon.primitives import clip_to_box, dot_centres, span_at
 from vidgen.cartoon.transition import walking_state
 from vidgen.config import HEAD_ACCESSORIES, SEATED_BODY_SHAPE, SKIRTED_OUTFITS, TOP_OF_HEAD, CharacterColors, CharacterEntry, CharacterLook
@@ -64,12 +64,19 @@ def _number_bytes(values: Any) -> bytes:
 
 def drawing_digest(look: CharacterLook, *, front: bool = False) -> str:
     """A digest of everything the generator draws for ``look``: every part's name, pivot, end,
-    parent, order and shapes, each drawn member's points, fill, stroke and trailing mark."""
+    parent, order and shapes, each drawn member's points, fill, stroke and trailing mark; the
+    Step 125 parts and shapes (``EXPRESSION_ONLY``, added after every earlier shape) left out,
+    so the pins taken before it still hold for everything drawn before it."""
     digest = hashlib.sha256()
     for part in generate_parts(look, PIN_COLORS, front=front):
+        new_shapes = EXPRESSION_ONLY.get(part.name, frozenset())
+        if set(part.shapes) <= new_shapes:
+            continue
         digest.update(repr((part.name, part.parent, part.order)).encode())
         digest.update(_number_bytes(part.pivot) + _number_bytes(part.end if part.end is not None else ()))
         for shape_name, shape in part.shapes.items():
+            if shape_name in new_shapes:
+                continue
             digest.update(shape_name.encode())
             for member in shape.family_members_with_points():
                 digest.update(_number_bytes(member.points))

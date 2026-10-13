@@ -43,7 +43,10 @@ def expected_pose(c: Character, part: str, setting: PartPoseEntry | None) -> Par
 
 def test_the_tables_name_the_step_70_entries() -> None:
     assert list(POSES) == ["stand", "pointing", "waving", "thinking", "shrug", "arms_crossed", "sitting"]
-    assert list(EXPRESSIONS) == ["neutral", "happy", "sad", "angry", "surprised", "worried", "thinking"]
+    assert list(EXPRESSIONS) == [
+        "neutral", "happy", "sad", "angry", "surprised", "worried", "thinking",
+        "laughing", "blushing", "tongue_out", "crying", "dizzy", "frightened",   # Step 125
+    ]
     assert all(set(parts) <= set(POSE_PARTS) for parts in POSES.values())
     assert all(set(parts) <= set(EXPRESSION_PARTS) for parts in EXPRESSIONS.values())
 
@@ -125,7 +128,7 @@ def test_own_poses_add_to_and_replace_the_built_in_ones() -> None:
     assert c.pose_of("mouth") == PartPose(0.0, (1.2, 0.6), (0.0, 0.0), "smile")
     assert pose_lines(CharacterEntry(name="pip", **OWN)) == [
         "  poses: stand, pointing, waving*, thinking, shrug, arms_crossed, sitting, bow*",
-        "  expressions: neutral, happy, sad, angry, surprised, worried, thinking, smug*",
+        "  expressions: neutral, happy, sad, angry, surprised, worried, thinking, laughing, blushing, tongue_out, crying, dizzy, frightened, smug*",
     ]
 
 
@@ -158,7 +161,7 @@ def test_validate_checks_own_pose_shapes_and_parts(make_project) -> None:
     problems = {p.location: p.message for p in project_problems(project)}
     assert problems == {
         "characters[0].expressions.grin.mouth.shape": "character 'sprout': part 'mouth' has no shape 'wide' (shapes: smile, A, E, O, M)",
-        "characters[1].expressions.grin.mouth.shape": "character 'pip': part 'mouth' has no shape 'wide' (shapes: smile, open, A, E, O, U, M, F, L, W)",
+        "characters[1].expressions.grin.mouth.shape": "character 'pip': part 'mouth' has no shape 'wide' (shapes: smile, open, A, E, O, U, M, F, L, W, laugh, tongue, wavy)",
     }
     warnings = validate_warnings(project)
     assert "characters[0].poses.tip.accessory: character 'sprout' has no accessory; this setting does nothing" in warnings

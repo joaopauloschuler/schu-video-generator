@@ -12,7 +12,8 @@ symmetric nose, hair and body, and temples on both sides of glasses. What is wor
 a turtle's shell and the species' proportions (``species``) by :mod:`vidgen.cartoon.animals`; a
 robot's head, antenna, joints, hands, feet or wheels and chest panel by
 :mod:`vidgen.cartoon.robots`; the costume pieces (crown, wizard hat, party hat, cape) by
-:mod:`vidgen.cartoon.costumes`.
+:mod:`vidgen.cartoon.costumes`; the Step 125 expressions' eye and mouth shapes and the ``cheeks``
+and ``bristles`` parts by :mod:`vidgen.cartoon.expression_shapes`.
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ from dataclasses import dataclass, fields, replace
 import numpy as np
 from manim import PI, Arc, Circle, Ellipse, Line, RoundedRectangle, VGroup, VMobject
 
-from vidgen.cartoon import animals, costumes, robots
+from vidgen.cartoon import animals, costumes, expression_shapes, robots
 from vidgen.cartoon.character import OUTLINE_WIDTH, TRAIL_ATTRIBUTE, CharacterPart
 from vidgen.cartoon.clothes import LIMB_WIDTH, body_shapes, limb_colors, shoe
 from vidgen.cartoon.primitives import (
@@ -385,8 +386,9 @@ def _open_eye(look: CharacterLook, x: float, f: Frame, c: Mapping[str, str], w: 
 
 
 def _face(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> list[CharacterPart]:
-    """Eyes (``open`` / ``closed``), brows (``default`` / ``angry`` / ``sad``) and mouth (``smile`` /
-    ``open`` and the viseme shapes ``A E O U M F L W``)."""
+    """Eyes (``open`` / ``closed`` and the Step 125 shapes), brows (``default`` / ``angry`` /
+    ``sad``), mouth (``smile`` / ``open``, the viseme shapes ``A E O U M F L W`` and the Step 125
+    shapes) and the ``cheeks`` (§69.59)."""
     r, fx = f.p.head_radius, f.face_x
     width, height = _eye_size(look, f)
     xs = _eye_xs(f)
@@ -394,6 +396,7 @@ def _face(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> list
         open_eyes = VGroup(*(robots.screen_eye(look.eyes, x, f.eye_y, width, height) for x in xs))
     else:
         open_eyes = VGroup(*(_open_eye(look, x, f, c, w) for x in xs))
+    more_eyes = expression_shapes.eye_shapes(look, xs, f.eye_y, width, height, r, c, w, EYE_WHITE)
     closed_y = f.eye_y - (0 if look.eyes == "sleepy" else 0.025 * r)
     closed_eyes = VGroup(*(Line([x - width * 0.6, closed_y, 0], [x + width * 0.6, closed_y, 0]).set_stroke(c["features"], width=w) for x in xs))
     brow_y = f.eye_y + height / 2 + animals.BROW_GAPS.get(look.species, 0.16) * r
@@ -424,12 +427,14 @@ def _face(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> list
         "A": opening(1.6, 0.42), "E": opening(1.8, 0.18), "O": opening(0.95, 0.36), "U": opening(0.6, 0.24),
         "M": closed, "F": opening(1.3, 0.08), "L": opening(1.2, 0.28), "W": opening(0.45, 0.18),
     }
-    mouth = CharacterPart("mouth", {"smile": smile, "open": opening(1.5, 0.35), **speech}, (mx, my - 0.4 * mr))
+    more_mouths = expression_shapes.mouth_shapes(mx, mouth_y, mouth_r, mr, f.front, c, w)
+    mouth = CharacterPart("mouth", {"smile": smile, "open": opening(1.5, 0.35), **speech, **more_mouths}, (mx, my - 0.4 * mr))
     if look.species in animals.BEAKED:   # it talks with its beak
         shapes, hinge = animals.beak_mouth(look.species, f, c, w)
         mouth = CharacterPart("mouth", shapes, hinge)
+    eye_bottom = f.eye_y - max(height, 0.3 * r * f.p.eye_size) / 2
     return [
-        CharacterPart("eyes", {"open": open_eyes, "closed": closed_eyes}, (fx, f.eye_y)),
+        CharacterPart("eyes", {"open": open_eyes, "closed": closed_eyes, **more_eyes}, (fx, f.eye_y)),
         # angry: the inner ends (toward the face's middle) low; sad: the inner ends high
         CharacterPart("brows", {
             "default": brows(-0.025, 0.025, -0.025, 0.025),
@@ -437,6 +442,7 @@ def _face(look: CharacterLook, f: Frame, c: Mapping[str, str], w: float) -> list
             "sad": brows(-0.05, 0.07, 0.07, -0.05),
         }, (fx, brow_y)),
         mouth,
+        expression_shapes.cheeks_part(look, f, xs, eye_bottom, c, w),
     ]
 
 
@@ -515,13 +521,15 @@ def generate_parts(
     if over_body:   # a robot's chest panel, a cape's ties and clasp (§69.58)
         for k, shape in enumerate(body.values()):
             shape.add(*(m if k == 0 else m.copy() for m in over_body))
+    head = _head(look, f, colors, w)
     parts = [
         *_legs(look, f, colors, w),
         CharacterPart("body", body, (0.0, f.body_bottom + 0.02)),
         *_arm("arm_left", 1.0, look, f, colors, w),
         *_arm("arm_right", -1.0, look, f, colors, w),
-        CharacterPart("head", {"default": _head(look, f, colors, w)}, (0.0, f.body_top - 0.02)),
+        CharacterPart("head", {"default": head}, (0.0, f.body_top - 0.02)),
         *_face(look, f, robots.face_colors(look, colors), w),
+        expression_shapes.bristles_part(look, f, float(head.get_top()[1]) - f.head_y, colors, w),
     ]
     worn = _worn_on_head(look, f, colors, w)
     if worn.submobjects:
@@ -534,10 +542,18 @@ def generate_parts(
     return _scaled_to_unit_height(parts)
 
 
+#: The Step 125 parts and shapes (DESIGN.md §69.59), which never set the figure's height (hair
+#: standing up reaches above it), so every look keeps the size it had before.
+EXPRESSION_ONLY: dict[str, frozenset[str]] = {
+    "eyes": frozenset(expression_shapes.EYE_SHAPES), "mouth": frozenset(expression_shapes.MOUTH_SHAPES),
+    "cheeks": frozenset(expression_shapes.CHEEK_SHAPES), "bristles": frozenset(expression_shapes.BRISTLE_SHAPES),
+}
+
+
 def _scaled_to_unit_height(parts: list[CharacterPart]) -> list[CharacterPart]:
-    """``parts`` scaled about the feet so the top of the figure (every shape) is at 1 (the
-    trailing pieces' pivots too)."""
-    top = max(shape.get_top()[1] for part in parts for shape in part.shapes.values())
+    """``parts`` scaled about the feet so the top of the figure (every shape but
+    :data:`EXPRESSION_ONLY`) is at 1 (the trailing pieces' pivots too)."""
+    top = max(shape.get_top()[1] for part in parts for name, shape in part.shapes.items() if name not in EXPRESSION_ONLY.get(part.name, ()))
     factor = 1.0 / top
     if math.isclose(factor, 1.0):
         return parts
@@ -557,6 +573,7 @@ def _scaled_to_unit_height(parts: list[CharacterPart]) -> list[CharacterPart]:
 __all__ = [
     "BODY_SIZES",
     "COLOR_KEYS",
+    "EXPRESSION_ONLY",
     "EYE_WHITE",
     "LIMB_WIDTH",
     "PROPORTION_FACTORS",

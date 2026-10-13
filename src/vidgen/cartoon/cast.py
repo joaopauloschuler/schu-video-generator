@@ -195,7 +195,10 @@ GENERATED_SHAPES: dict[str, list[str]] = {
     "body": ["default"], "leg_left": ["default"], "leg_left_lower": ["default"], "leg_right": ["default"],
     "leg_right_lower": ["default"], "arm_left": ["default"], "arm_left_lower": ["default"], "arm_right": ["default"],
     "arm_right_lower": ["default"], "head": ["default"],
-    "eyes": ["open", "closed"], "brows": ["default", "angry", "sad"], "mouth": ["smile", "open", "A", "E", "O", "U", "M", "F", "L", "W"],
+    "eyes": ["open", "closed", "laughing", "wide", "swirl", "swirl_turned"], "brows": ["default", "angry", "sad"],
+    "mouth": ["smile", "open", "A", "E", "O", "U", "M", "F", "L", "W", "laugh", "tongue", "wavy"],
+    # Step 125 (DESIGN.md §69.59): the rest shape ``none`` draws nothing
+    "cheeks": ["none", "blush", "tears", "tears_running"], "bristles": ["none", "up"],
 }
 
 

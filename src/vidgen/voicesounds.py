@@ -54,9 +54,9 @@ VOICE_SOUNDS: dict[str, VoiceSoundKind] = {
     for k in (
         VoiceSoundKind("gasp", "Hah!", "surprised", frozenset({"hah", "ha", "huh", "ah", "oh", "gasp", "gasps"}), "[gasps]", "gasp", "O"),
         VoiceSoundKind("hmm", "Hmm.", "thinking", frozenset({"hmm", "hm", "hmmm", "mm", "mmm", "mhm", "um", "uh"})),
-        VoiceSoundKind("laugh", "Ha ha ha!", "happy", frozenset({"ha", "haha", "hahaha", "hah", "heh", "laugh", "laughs", "laughing"}), "[laughs]"),
+        VoiceSoundKind("laugh", "Ha ha ha!", "laughing", frozenset({"ha", "haha", "hahaha", "hah", "heh", "laugh", "laughs", "laughing"}), "[laughs]"),
         VoiceSoundKind("sigh", "Haah.", "sad", frozenset({"haah", "hah", "ha", "ah", "ahh", "oh", "sigh", "sighs"}), "[sighs]", "sigh", "A"),
-        VoiceSoundKind("giggle", "Hee hee!", "happy", frozenset({"hee", "heehee", "hehe", "hihi", "he", "giggle", "giggles"}), "[giggles]"),
+        VoiceSoundKind("giggle", "Hee hee!", "laughing", frozenset({"hee", "heehee", "hehe", "hihi", "he", "giggle", "giggles"}), "[giggles]"),
         VoiceSoundKind("groan", "Ugh.", "worried", frozenset({"ugh", "uh", "argh", "groan", "groans"}), "[groans]"),
         VoiceSoundKind("beep", "Beep boop!", "happy", frozenset({"beep", "boop", "bleep", "bip", "beeps"}), None, "beep", "E"),
     )
