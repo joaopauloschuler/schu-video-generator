@@ -1,5 +1,6 @@
-"""Ambience (DESIGN.md §69.39): a generated sound bed under the scenes while something on screen
-lasts. One bed so far: ``rain``, under a stage's rain field while foley is on.
+"""Ambience (DESIGN.md §69.39, §69.55): a generated sound bed under the scenes while something on
+screen lasts: ``rain`` under a stage's rain field and ``fire`` (a crackle) while a fireplace burns,
+both while foley is on (:data:`BEDS`).
 
 The rain bed is a seamless 8 s stereo loop made with numpy only (no recordings, deterministic):
 a soft hiss (noise band-passed around 2.5 kHz), many small drop ticks (sparse impulses
@@ -15,6 +16,7 @@ from __future__ import annotations
 import math
 import zlib
 from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
 
@@ -25,7 +27,7 @@ from vidgen.loudness import integrated_loudness
 from vidgen.sfx import RATE, _band, _highpass, _lowpass
 
 #: The ambience beds a scene's timings may name (``ambience: [{bed, start, end}]``).
-AMBIENCE_BEDS = ("rain",)
+AMBIENCE_BEDS = ("rain", "fire")
 #: Integrated loudness (LUFS) of the rain bed before ducking: 4 dB under the music's
 #: (:data:`vidgen.music.MUSIC_LEVEL` -28), so about 11 dB under narration in its pauses.
 RAIN_LEVEL = -32.0
@@ -99,6 +101,65 @@ def rain_loop() -> np.ndarray:
     out = (x * 10 ** ((RAIN_LEVEL - integrated_loudness(x)) / 20)).astype(np.float32)
     out.setflags(write=False)
     return out
+
+
+#: Integrated loudness (LUFS) of the fire's crackle before ducking (a little under the rain: a
+#: fire is a small sound in a room), its ducking (as the rain's), its fades (s: it lights and goes
+#: out quicker than rain starts) and its loop's length (s).
+FIRE_LEVEL = -34.0
+FIRE_DUCK = RAIN_DUCK
+FIRE_FADE_IN = 0.6
+FIRE_FADE_OUT = 0.8
+FIRE_LOOP_SECONDS = 8.0
+
+
+def _ringing(impulses: np.ndarray, ring: np.ndarray) -> np.ndarray:
+    """Each impulse followed by ``ring``, around a circle (a ring past the end goes on at the
+    start), so the result loops without a seam."""
+    full = np.convolve(impulses, ring)
+    out = full[: len(impulses)].copy()
+    out[: len(full) - len(impulses)] += full[len(impulses) :]
+    return out
+
+
+@lru_cache(maxsize=1)
+def fire_loop() -> np.ndarray:
+    """The fire bed's seamless loop: float32 ``(n, 2)`` at :data:`RATE`, :data:`FIRE_LEVEL`
+    integrated loudness, read-only. Per channel a low soft roar (noise around 220 Hz with a slow
+    breath), many small crackles (sparse impulses around 3 kHz, each ringing a few milliseconds)
+    and fewer louder pops (around 1.2 kHz); numpy only, seeded, circular filters (no seam)."""
+    n = int(FIRE_LOOP_SECONDS * RATE)
+    rng = np.random.default_rng(zlib.crc32(b"ambience:fire"))
+    t = np.arange(n) / n
+    ring = np.exp(-np.arange(int(0.004 * RATE)) / (0.0012 * RATE))
+    channels = []
+    for _ in range(2):
+        roar = _circular(rng.standard_normal(n), lambda f: _band(f, 220.0, 1.2) * _highpass(f, 60.0))
+        breath = 1.0 + 0.25 * np.sin(2 * math.pi * 3 * t + rng.uniform(0, 2 * math.pi))
+        crackles = _circular(_ringing(_impulses(rng, n, int(9 * FIRE_LOOP_SECONDS)), ring), lambda f: _band(f, 3000.0, 0.9) * _lowpass(f, 9000.0))
+        pops = _circular(_ringing(_impulses(rng, n, int(1.5 * FIRE_LOOP_SECONDS)), ring), lambda f: _band(f, 1200.0, 0.6))
+        channels.append(0.5 * roar * breath + 0.45 * crackles + 0.35 * pops)
+    x = np.stack(channels, axis=1)
+    out = (x * 10 ** ((FIRE_LEVEL - integrated_loudness(x)) / 20)).astype(np.float32)
+    out.setflags(write=False)
+    return out
+
+
+@dataclass(frozen=True)
+class AmbienceBed:
+    """How a bed plays: its loop, its ducking under the narration and its fades (s)."""
+
+    loop: Callable[[], np.ndarray]
+    duck: DuckConfig
+    fade_in: float
+    fade_out: float
+
+
+#: Each bed of :data:`AMBIENCE_BEDS`.
+BEDS: dict[str, AmbienceBed] = {
+    "rain": AmbienceBed(rain_loop, RAIN_DUCK, RAIN_FADE_IN, RAIN_FADE_OUT),
+    "fire": AmbienceBed(fire_loop, FIRE_DUCK, FIRE_FADE_IN, FIRE_FADE_OUT),
+}
 
 
 class LoopSource:

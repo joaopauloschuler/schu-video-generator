@@ -250,16 +250,18 @@ class LayoutRecorder:
 
         from vidgen.cartoon.character import Character
         from vidgen.cartoon.effect_symbols import EffectSymbol
-        from vidgen.cartoon.living_drawing import PropGlow
+        from vidgen.cartoon.living_drawing import PropGlow, PropSteam
         from vidgen.cartoon.motion_effect_shapes import MotionEffect
+        from vidgen.cartoon.nature_drawing import FallenFruit, Flock
         from vidgen.cartoon.props import Prop
         from vidgen.cartoon.shading import StageShadows, StarField
         from vidgen.icon_mobject import Icon
         from vidgen.particle_field import ParticleField, Puddles
         from vidgen.vector_mobject import VectorPicture
 
-        # a stage's shadows, stars, puddles and glows: not placed by authors (§69.31, §69.39, §69.54)
-        if id(mob) in walk.seen or isinstance(mob, (StageShadows, StarField, Puddles, PropGlow)):
+        # a stage's shadows, stars, puddles, glows, steam, birds and fallen fruit: not placed by
+        # authors (§69.31, §69.39, §69.54, §69.55)
+        if id(mob) in walk.seen or isinstance(mob, (StageShadows, StarField, Puddles, PropGlow, PropSteam, Flock, FallenFruit)):
             return
         walk.seen.add(id(mob))
         name = walk.names.get(id(mob))

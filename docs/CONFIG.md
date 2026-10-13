@@ -2007,13 +2007,16 @@ symbols](#effect-symbols-effect) pop up (`idea` a short `chime` ding; `sound: fa
 as it sets off, or a car's, a bus's or a boat's `engine` for most of the ride, and `brakes`
 ending as a bicycle, a car or a bus stops; a balloon's `burner` and a toy rocket's `launch` as
 they set off, the rocket's parachute `pop`, and a soft `thud` where either lands; a `click` when
-a `tv` or a `lamp` is [switched on or off](#clocks-televisions-and-lamps-time-on-switch_on). Other
+a `tv`, a `lamp` or a `kettle` is [switched on or off](#clocks-televisions-and-lamps-time-on-switch_on)
+and a short `burner` whoosh when a `fireplace` is lit; a `thud` where a
+[fruit falls](#fruit-falling-from-a-tree-fruit-drop_fruit). Other
 actions are silent. They are ordinary sound effects (listed in `timings.json` `sfx`, mixed like the rest):
 `sfx: {gain}` sets their level with the others, and `assets/sfx/footstep.wav` (or `boing.wav`,
 ...) replaces a sound with your own. `foley: false` at the top level turns them off for the
 video, a stage's `foley: false` (or `true`) for that scene. Rain on a stage also plays a
 generated rain sound bed while it lasts, mixed with the music and ducked less
-([Rain on the ground](#rain-on-the-ground)); `foley: false` turns it off too.
+([Rain on the ground](#rain-on-the-ground)), and a burning fireplace a crackle bed
+([fireplaces](#fireplaces-and-kettles-on-switch_on)); `foley: false` turns them off too.
 
 **Music stings.** A beat's `sting` plays a short musical phrase on it:
 
@@ -4220,7 +4223,8 @@ never leaves the stage.
 | `shadows` | bool | `true` | soft [shadows](#light-and-shadows-light-shadows) on the ground under the characters and the props standing on it; `false`: none |
 | `wind` | number -1..1 \| `calm` \| `breeze` \| `windy` \| `gale` | `0` | [wind](#wind-wind) in gusts: trees, bushes, plants, signs and lamps sway, scarves, long hair, ponytails, braids, floppy or pointy ears, hats and caps trail, particles drift (`0.3` breeze .. `1` gale, blowing right; negative blows left); `0` changes nothing; the `wind` action changes it during the scene; `blow_away` blows a light prop away |
 | `water` | `true` \| mapping | none | a strip of [water](#water-and-air-vehicles-water-land) with waves at the front of the stage, for a `boat`: `true` (the whole width) or `{left, right, color}` (`left` / `right`: marks or x from 0 to 1; `color`: a theme token or #hex, default a clear blue); not in a `room` |
-| `room` | `true` \| mapping | none | an [indoor set](#rooms-room) instead of the sky and the ground band: a back wall, a floor, a skirting board, an optional ceiling, windows (their sky follows `light`) and doors (door props whose names are marks; `enter` / `exit` through them); not with `image`, `generate`, `background`, `ground_color`, `wind` or outdoor particles |
+| `room` | `true` \| mapping | none | an [indoor set](#rooms-room) instead of the sky and the ground band: a back wall, a floor, a skirting board, an optional ceiling, windows (their sky follows `light`) and doors (door props whose names are marks; `enter` / `exit` through them); not with `image`, `generate`, `background`, `ground_color`, `wind`, `birds` or outdoor particles |
+| `birds` | `true` \| number \| mapping | none | a [flock of birds](#birds-birds) crossing the sky, flapping: `true`, how many (`6`), or `{count, direction, height, start, seconds, seed}`; not in a `room` |
 
 | key (`characters[]`) | default | |
 |---|---|---|
@@ -4273,13 +4277,13 @@ a set's room and the scene's merge key by key).
   `door: <name>` brings a character in through it: the door opens (at once, if closed), the
   character fades in in the doorway over 0.35 s and walks to its mark; `exit` with `door:` walks
   it to the door, where it fades out, and then waits off stage. Doors cast no shadows.
-- **Indoors there is no weather**: `wind`, the `wind` action and `rain`, `snow`, `leaves` and
+- **Indoors there is no weather**: `wind`, the `wind` action, `birds` and `rain`, `snow`, `leaves` and
   `streaks` particles are refused (`vidgen validate`); sparkles, dust, confetti, smoke and bubbles
   work.
 - **Furniture** is built-in [props](#props): `sofa`, `armchair`, `bed`, `bookshelf`, `counter` (a
-  kitchen counter), `fridge`, `picture`, `rug`, `houseplant`, `clock`, `tv` (on a low cabinet)
-  and `desk` (with its chair), drawn as seen from the front of the room (a bed and a desk side
-  on, along the wall). A prop with **`against: wall`** stands with its back to the wall, at the
+  kitchen counter), `fridge`, `picture`, `rug`, `houseplant`, `clock`, `tv` (on a low cabinet),
+  `desk` (with its chair) and `fireplace` (a brick fireplace with a mantelpiece and logs), drawn as
+  seen from the front of the room (a bed and a desk side on, along the wall). A prop with **`against: wall`** stands with its back to the wall, at the
   wall's depth (its own `depth` when it gives one); such props do not push the wall back. A
   `picture` and a `clock` **hang on the wall** (0.5 and 0.85 of a character's height above the
   floor) and take the wall's depth without `against`. Characters sit on a `sofa` or a `bed` (two
@@ -4378,8 +4382,9 @@ Three props move by themselves (outdoors too):
 `on: true` starts a `tv` or a `lamp` switched on; `- switch_on: <prop>` and `- switch_off: <prop>`
 switch it at `at` of the beat (at once, with a `click` while `foley` is on). The lit screen, the
 lantern and the glows are never graded by the stage's light, so they shine at night. Other props
-take no `on`, `time` or `speed` (a config error), and the actions refuse them ("'sofa' cannot be
-switched on or off (props that can: lamp, tv)").
+take no `on`, `time` or `speed` (a config error) except a [`fireplace` or a
+`kettle`](#fireplaces-and-kettles-on-switch_on), and the actions refuse them ("'sofa' cannot be
+switched on or off (props that can: fireplace, kettle, lamp, tv)").
 
 Render cost: only the moving parts leave Manim's static picture of the set (the hands; the
 picture and the glow of a tv; a lamp's lantern and glow only in the animation where it is
@@ -4400,6 +4405,97 @@ animation as before. A clock, tv or lamp that never runs or comes on is drawn ex
   beats:
     - text: "Then Pip turned on the television."
       actions: [{switch_on: tv, at: 0.4}, {switch_off: lamp, at: 0.8}]
+```
+
+##### Fireplaces and kettles (`on`, `switch_on`)
+
+Two more props move by themselves while they are on (`on: true`, or `- switch_on: fireplace` /
+`- switch_off: kettle` at `at` of a beat):
+
+- A **`fireplace` that burns** (furniture: 0.75 of a character tall, `against: wall` in a room)
+  shows flames behind its front logs: five orange tongues and three yellow ones, each flickering
+  in height and wavering at its tip (seeded: the same in every render, another fireplace burns
+  differently), with a warm orange glow round the fire that flickers with them, drawn right behind
+  the fireplace. The flames and the glow shine at night (never graded by the light). With foley a
+  fire **crackles**: a generated crackle bed (a soft roar, small crackles and a few pops; a seamless
+  8 s loop at −34 LUFS, 2 dB under the rain bed, ducking under the narration like it) plays while
+  the fireplace burns in the scene, fading in over 0.6 s and out over 0.8 s, and lighting it
+  plays a short `burner` whoosh (it goes out silently). On a stage with `wind` (a fireplace
+  outdoors) the flames lean with the gusts.
+- A **`kettle` that is on** (0.15 of a character; put it on a `counter` with a `lift`, as for any
+  prop on furniture) puffs steam from its spout: soft white puffs that rise about two kettle
+  heights, grow, sway and fade, drifting with the wind outdoors. The steam is drawn right in front
+  of the kettle and graded by the light like the set; switching it plays a `click`.
+
+```yaml
+- id: cold_evening
+  type: stage
+  params:
+    light: night
+    room: {windows: [0.15]}
+    props:
+      - {prop: fireplace, at: 0.45, against: wall}
+      - {prop: counter, at: 0.82, against: wall}
+      - {prop: kettle, at: 0.8, depth: 0.4, lift: 0.17}   # on the counter
+    characters: [{name: pip, at: 0.62, depth: 0.15}]
+  beats:
+    - text: "Pip lit a fire and put the kettle on."
+      actions: [{switch_on: fireplace, at: 0.3}, {switch_on: kettle, at: 0.8}]
+```
+
+Render cost: as for a tv, the flames, the glow and the steam leave Manim's static picture while
+they burn or steam, with what is drawn over them. Measured on the room above at 854×480, 260
+frames: 16 415 Cairo draws and 6.6–7.1 s with both off, 31 846 draws and 10.4–11.4 s with both
+on all along (the large translucent glow costs the most).
+
+#### Fruit falling from a tree (`fruit`, `drop_fruit`)
+
+A `tree` with **`fruit: true`** carries four fruits (red, drawn on its crown; they sway with it
+in the wind). **`- drop_fruit: tree`** lets one fall: faster and faster, it hits the ground under
+the tree with a `thud` (foley), bounces once and lies there (speed lines follow it while
+`motion_effects` are on). With **`to: <character>`** it falls on that character's head (the fruit
+hanging above the head nearest it), bounces off to the side and lands beside the character, and
+**stars** circle the head for 1.6 s (the `stars` [effect symbol](#effect-symbols-effect)). The
+character must stand under the tree (nothing checks it: a fruit far from the head drifts sideways
+as it falls); when no fruit hangs above the head, the fruit falls to the ground instead. A tree
+has 4 fruits: `vidgen validate` reports a fifth `drop_fruit` of it, a tree without `fruit` and a
+target that is not a tree. A fallen fruit is not a prop (no target, not in the layout dump).
+
+```yaml
+- id: orchard
+  type: stage
+  params:
+    props: [{prop: tree, at: 0.3, fruit: true}]
+    characters: [{name: pip, at: 0.32}]
+  beats:
+    - text: "An apple fell, and then another one right on Pip's head."
+      actions: [{drop_fruit: tree, at: 0.2}, {drop_fruit: tree, to: pip, at: 0.6}]
+```
+
+#### Birds (`birds`)
+
+**`birds:`** sends a flock across the sky, from beyond one edge of the stage to beyond the other:
+a loose V of small dark birds, each beating its wings at its own rate (3–4.2 times a second) and
+gliding now and then, the flock bobbing a little (seeded: every render the same). `birds: true`
+is five birds; a number is how many (1–20); a mapping sets `count`, `direction` (`right` or
+`left`), `height` (0.5–0.97: how high, as a fraction of the frame height above its bottom edge;
+default 0.8), `start` (seconds into the scene; default 0.5), `seconds` (how long the crossing
+takes; default about 5 s per frame width) and `seed`. The **`birds` action** sends one from `at`
+of a beat (`- birds: 4`, `{birds: 3, direction: left, height: 0.9}`; the same keys but `start`).
+Birds fly behind the layers, the ground, the props and the characters (right after the sky), are
+graded by the light, and stay outdoors (a `room` refuses them). Only the birds and what is drawn
+over them leave Manim's static picture while they fly (a stage of 162 frames: 16 910 draws
+without birds, 17 990 with six).
+
+```yaml
+- id: evening_sky
+  type: stage
+  params:
+    birds: {count: 6, direction: left, start: 1}
+    characters: [pip]
+  beats:
+    - text: "Later, more birds flew home."
+      actions: [{birds: 3, at: 0.5}]
 ```
 
 #### Generated backgrounds (`cartoon_style`)
@@ -4463,7 +4559,7 @@ a `lift`. The furniture for [rooms](#rooms-room) has a gallery of its own there.
 
 | key (`props[]`) | default | |
 |---|---|---|
-| `prop` | — | a built-in prop: `table chair tree bush house door lamp sign box ball cloud sun moon rock plant laptop cup basket umbrella napkin`; [furniture](#rooms-room): `sofa armchair bed bookshelf counter fridge picture rug houseplant clock tv desk`; [vehicles](#vehicles-get_in-ride_to-get_out): `bicycle car bus`, [on water and in the air](#water-and-air-vehicles-water-land): `boat hot_air_balloon toy_rocket` |
+| `prop` | — | a built-in prop: `table chair tree bush house door lamp sign box ball cloud sun moon rock plant laptop cup basket umbrella napkin kettle`; [furniture](#rooms-room): `sofa armchair bed bookshelf counter fridge picture rug houseplant clock tv desk fireplace`; [vehicles](#vehicles-get_in-ride_to-get_out): `bicycle car bus`, [on water and in the air](#water-and-air-vehicles-water-land): `boat hot_air_balloon toy_rocket` |
 | `svg` | — | instead of `prop`: an SVG file relative to the project folder (sanitised like every SVG: no scripts, filters, embedded pictures or text), standing on the bottom edge of its `viewBox` |
 | `name` | the prop's name | its name for actions and the layout dump; an SVG's default is its file name (`assets/old_well.svg` -> `old_well`); repeats are numbered (`tree`, `tree_2`) |
 | `at` | `centre` | a mark or an x position from 0 to 1 of the stage |
@@ -4476,9 +4572,10 @@ a `lift`. The furniture for [rooms](#rooms-room) has a gallery of its own there.
 | `recolor` | `none` | `svg` only: `theme` maps the picture's colours to the nearest theme colours |
 | `open` | `false` | `umbrella` or `door` only: `true` starts it open ([Umbrellas](#umbrellas-open-and-close), [rooms](#rooms-room)) |
 | `against` | none | `wall`: in a [room](#rooms-room), it stands with its back to the wall at the wall's depth (unless `depth` is given); a `picture` or `clock` in a room does so without it |
-| `on` | `false` | `tv` or `lamp` only: `true` starts it switched on ([Clocks, televisions and lamps](#clocks-televisions-and-lamps-time-on-switch_on)) |
+| `on` | `false` | `tv`, `lamp`, `fireplace` or `kettle` only: `true` starts it switched on ([Clocks, televisions and lamps](#clocks-televisions-and-lamps-time-on-switch_on), [fireplaces and kettles](#fireplaces-and-kettles-on-switch_on)) |
 | `time` | none | `clock` only: the time it shows at the scene's start, `H:MM` or `H:MM:SS` (`"21:45"`); with `time` or `speed` the clock runs |
 | `speed` | `1` | `clock` only: how fast it runs, clock seconds per second (`1` real time, `60` a minute a second, up to `3600`) |
+| `fruit` | `false` | `tree` only: `true` hangs four fruits on it ([`drop_fruit`](#fruit-falling-from-a-tree-fruit-drop_fruit) lets one fall) |
 
 A picnic set: a `basket` (0.2 of a character, held by its handle), a `napkin` (small: 0.05, a
 checked cloth lying flat) and an `umbrella` (0.6), drawn closed or open.
@@ -5750,7 +5847,7 @@ the one key that names an action).
 
 | key | default | |
 |---|---|---|
-| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `switch_on`, `switch_off`, `sit_on`, `lean_on`, `stand_up`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect`, or a project action (`vidgen list-scenes` lists them) |
+| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `switch_on`, `switch_off`, `drop_fruit`, `birds`, `sit_on`, `lean_on`, `stand_up`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect`, or a project action (`vidgen list-scenes` lists them) |
 | `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one (`callout` with an `area` and `pan` with `to` need none) |
 | `at` | `0` | when, as a fraction of the beat's narration (`0` ≤ at < `1`) |
 | `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`, `callout`, `say`, `react`, `look_at`, `turn`, `emote`, `pose`: undone when it starts; `zoom`: the camera is back when it starts; `pan`: the camera moves back when it starts; `follow`: the camera stops following when it starts; `keyframes`, `move_along`: the target moves back) |
@@ -5794,7 +5891,7 @@ a title card, a `transform` of a bar).
 | `diagram` | `heading`, `node<N>`, `node:<id>`, `edge:<from>-><to>` | reveal, dim, highlight, zoom | also for `flowchart`; a node is its shape, icon and label (a `box` frames the shape), an edge its line, arrowhead and label; `highlight: [node:a, "edge:a->b", node:b]` marks a path; revealing an edge brings its nodes |
 | `process` | `heading`, `input`, `stage<N>`, `stage:<label>`, `connector<N>`, `loop`, `output`, `token` | reveal, dim, highlight, zoom | a stage is its card (a `box` frames it); `connector2` runs from stage 2 to 3; revealing a stage early shows it without moving the token; `highlight: token` with `style: flash` points at it |
 | `network` | `heading`, `layer<N>`, `layer:<label>`, `edges<N>`, `neuron<L>.<i>` | reveal, dim, highlight, zoom | a layer is its units, ellipsis, label and count; `edges1` joins layers 1 and 2; `neuron2.3` is unit 3 of layer 2 as drawn |
-| `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, effect, walk_to, run_to, enter, exit, gesture, jump, keyframes, move_along, pick_up, hold, put_down, give, throw, open, close, switch_on, switch_off, blow_away, sit_on, lean_on, stand_up, get_in, ride_to, get_out, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting), [moving](#moving), [prop](#props-in-hands) and [sitting](#sitting-and-leaning) actions and `get_in` / `get_out` take whole characters only, [`ride_to`](#vehicles-get_in-ride_to-get_out) a vehicle or its riders, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts, [`open` / `close`](#umbrellas-open-and-close) and [`switch_on` / `switch_off`](#clocks-televisions-and-lamps-time-on-switch_on) props |
+| `stage` | `<character>`, `<prop>`, `<character>.<part>` | say, look_at, turn, emote, pose, react, effect, walk_to, run_to, enter, exit, gesture, jump, keyframes, move_along, pick_up, hold, put_down, give, throw, open, close, switch_on, switch_off, drop_fruit, blow_away, sit_on, lean_on, stand_up, get_in, ride_to, get_out, dim, highlight, zoom, pan, follow | each character and each prop on the stage by its name (`dim: kit`, `zoom: pip`, `follow: pip`, `highlight: tree`), each part of a character as `kit.arm_left` (the parts it has); everything comes in at step 1 (a character with an `enter` action waits off stage until then); `pan` also takes a mark (`to: right`); the [acting](#speaking-and-acting), [moving](#moving), [prop](#props-in-hands) and [sitting](#sitting-and-leaning) actions and `get_in` / `get_out` take whole characters only, [`ride_to`](#vehicles-get_in-ride_to-get_out) a vehicle or its riders, [`keyframes` and `move_along`](#keyframes-and-motion-paths) characters, props and parts, [`open` / `close`](#umbrellas-open-and-close) and [`switch_on` / `switch_off`](#clocks-televisions-and-lamps-time-on-switch_on) props, [`drop_fruit`](#fruit-falling-from-a-tree-fruit-drop_fruit) a tree (`to`: a character); `birds` takes no target |
 
 `title` and `heading` stand for each other (the header band, see "Built-in scenes"): `highlight:
 title` works on a `bullets` heading. [Project scene types](EXTENDING.md#8-per-beat-actions-targets-and-custom-actions)
@@ -5823,7 +5920,9 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `keyframes`, `move_along` | see [Keyframes and motion paths](#keyframes-and-motion-paths) | move a `stage`'s character, prop or character part (`kit.arm_left`) through keys (`t`, `x`, `y`, `rotate`, `scale`, `ease`) or along a path of points |
 | `pick_up`, `hold`, `put_down`, `give`, `throw` | see [Props in hands](#props-in-hands) | a `stage`'s character takes a prop in its hand, puts it down, hands it to another character or throws it |
 | `open`, `close` | see [Umbrellas](#umbrellas-open-and-close) | a `stage`'s umbrella opens (held overhead) or closes |
-| `switch_on`, `switch_off` | as the target: the prop (`- switch_on: tv`) | on a `stage`: a `tv` or a `lamp` goes on or off at `at` (at once, with a click); see [Clocks, televisions and lamps](#clocks-televisions-and-lamps-time-on-switch_on). No `until`. |
+| `switch_on`, `switch_off` | as the target: the prop (`- switch_on: tv`) | on a `stage`: a `tv`, a `lamp`, a `fireplace` or a `kettle` goes on or off at `at` (at once, with a click; a fire lights with a whoosh); see [Clocks, televisions and lamps](#clocks-televisions-and-lamps-time-on-switch_on) and [fireplaces and kettles](#fireplaces-and-kettles-on-switch_on). No `until`. |
+| `drop_fruit` | `to` (a character; none: the ground) | on a `stage`: a fruit falls from the target tree (`fruit: true`), with a bounce and a thud, on a character's head with `to` (stars); see [Fruit falling from a tree](#fruit-falling-from-a-tree-fruit-drop_fruit) |
+| `birds` | as the target: how many (`- birds: 5`); `count`, `direction`, `height`, `seconds`, `seed` | on a `stage` outdoors: a flock of birds crosses the sky from `at`; see [Birds](#birds-birds). No `until`. |
 | `sit_on`, `lean_on`, `stand_up` | see [Sitting and leaning](#sitting-and-leaning) | a `stage`'s character sits on a chair, a rock, a box or furniture (a sofa, an armchair, a bed, a desk), leans on a tree, a door, a sign or furniture (a counter...), and stands up again |
 | `get_in`, `ride_to`, `get_out` | see [Vehicles](#vehicles-get_in-ride_to-get_out) | a `stage`'s character gets in a car, a bus, a boat or a balloon or on a bicycle, the vehicle rides (or flies) to a place with its riders, and they get out |
 | `shot` | `kind` (`wide`, `two_shot`, `medium`, `over_shoulder`, `closeup`), `move` (`false`) | what a beat's [`shot:`](#shots-shot) key writes, as an action: the camera frames the target characters of a `stage` from `at` to the beat's end. Write the key; the action is for a shot that starts later in the beat (`at`). |

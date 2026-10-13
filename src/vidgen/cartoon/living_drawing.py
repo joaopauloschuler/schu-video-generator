@@ -1,33 +1,45 @@
-"""Props that move by themselves, drawn and moved with manim (DESIGN.md §69.54); the maths is in
-:mod:`vidgen.cartoon.living`.
+"""Props that move by themselves, drawn and moved with manim (DESIGN.md §69.54, §69.55); the
+maths is in :mod:`vidgen.cartoon.living`.
 
 A prop drawn ``living`` (:func:`living_overlays`, added by ``draw_prop(..., living=True)``) gets
 the parts that change, tagged with :data:`LIVING_PART`: a running clock's second hand (its hour and
 minute hands are tagged in its drawing), a television's picture over its screen, a lamp's lit
-lantern. A :class:`LivingProp` sets them for a scene time on every frame; a lamp's or a
-television's :class:`PropGlow` is a mobject of its own, drawn right behind the prop (so the prop's
-box, shadow and layout stay as drawn) and never graded by the stage's light.
+lantern, a fireplace's flames (behind its front logs). A :class:`LivingProp` sets them for a scene
+time on every frame; a lamp's, a television's or a fireplace's :class:`PropGlow` is a mobject of
+its own, drawn right behind the prop (so the prop's box, shadow and layout stay as drawn) and
+never graded by the stage's light; a kettle's :class:`PropSteam` is one too, drawn right in front
+of it (the steam rises above the kettle's box).
 """
 
 from __future__ import annotations
 
+import math
+from collections.abc import Callable
+
 import numpy as np
 from manim import Circle, Mobject, VGroup, VMobject
 
-from vidgen.cartoon.character import OUTLINE_WIDTH
+from vidgen.cartoon.character import OUTLINE_WIDTH, one_pixel_stroke
 from vidgen.cartoon.living import (
     DRAWN_CLOCK_SECONDS,
     GLOWS,
     LIVING_PART,
+    STEAM_LEAN_MAX,
+    STEAM_PUFFS,
     Box,
     GlowSpec,
     clock_seconds,
+    fire_flicker,
+    flame_lean,
+    flame_shapes,
     glow_box,
     glow_rings,
     hand_angles,
     hand_tip,
     on_between,
     shows_second_hand,
+    steam_box,
+    steam_puffs,
     switch_between,
     switched_on,
     tv_picture,
@@ -35,7 +47,7 @@ from vidgen.cartoon.living import (
 )
 from vidgen.cartoon.props import Prop, _circle, _ellipse, _line, _Paint, _poly, _rect
 from vidgen.cartoon.room import darker
-from vidgen.cartoon.shading import LIT
+from vidgen.cartoon.shading import LIT, mark_lit
 
 #: Where a clock's hands turn (prop units) and how long each is.
 CLOCK_CENTRE = (0.0, 0.5)
@@ -45,6 +57,26 @@ HAND_LENGTHS: dict[str, float] = {"hour": 0.2, "minute": 0.3, "second": 0.34}
 SECOND_HAND = "#C8473E"
 LIT_LANTERN = "#FFE08A"
 LIT_CORE = "#FFF8E1"
+#: A fire's outer and inner tongues and the edge of the outer ones; a kettle's steam.
+FLAME_OUTER = "#F2762E"
+FLAME_INNER = "#FFD25A"
+FLAME_EDGE = "#C9472A"
+STEAM = "#F4F6FA"
+#: The steam puffs' faint edge: its colour, width (pixels) and opacity (a share of the puff's).
+STEAM_EDGE = "#AEB9C6"
+STEAM_EDGE_PIXELS = 1.5
+STEAM_EDGE_SHARE = 0.7
+
+
+def closed_curve(corners: np.ndarray) -> np.ndarray:
+    """A smooth closed curve through ``corners`` (n x 2) as Manim's cubic Bézier points (4 per
+    corner, n x 4 x 3 flattened, z 0): Catmull-Rom tangents, so each piece leaves a corner towards
+    the next one's neighbour (a flame redrawn on every frame, faster than ``set_points_smoothly``)."""
+    before, after, after2 = np.roll(corners, 1, axis=0), np.roll(corners, -1, axis=0), np.roll(corners, -2, axis=0)
+    pieces = np.stack([corners, corners + (after - before) / 6.0, after - (after2 - corners) / 6.0, after], axis=1)
+    out = np.zeros((len(corners) * 4, 3))
+    out[:, :2] = pieces.reshape(-1, 2)
+    return out
 
 
 def tag(mob: VMobject, part: str) -> VMobject:
@@ -72,6 +104,15 @@ def living_overlays(kind: str, paint: _Paint) -> list[VMobject]:
             tag(_poly([(-0.07, 0.8), (0.07, 0.8), (0.1, 0.92), (-0.1, 0.92)], LIT_LANTERN, paint), "lantern"),
             tag(_ellipse(0.0, 0.86, 0.09, 0.07, LIT_CORE, paint, outline=False), "lantern"),
         ]
+    if kind == "fireplace":
+        flames: list[VMobject] = []
+        for shape in flame_shapes(0.0, 0):
+            flame = VMobject()
+            flame.points = closed_curve(np.array(shape.points, dtype=float))
+            flame.set_fill(FLAME_INNER if shape.inner else FLAME_OUTER, opacity=1.0)
+            flame.set_stroke(FLAME_EDGE, width=0.0 if shape.inner else OUTLINE_WIDTH, opacity=0.0 if shape.inner else 1.0)
+            flames.append(tag(flame, "flame"))
+        return flames
     return []
 
 
@@ -119,14 +160,46 @@ class PropGlow(VGroup):
         return self
 
 
+class PropSteam(VGroup):
+    """A kettle's steam: :data:`~vidgen.cartoon.living.STEAM_PUFFS` soft discs placed by
+    :meth:`place`."""
+
+    def __init__(self, *, name: str) -> None:
+        super().__init__()
+        self.name = name
+        self._unit = Circle(radius=1.0).points.copy()
+        for _ in range(STEAM_PUFFS):
+            puff = VMobject()
+            puff.points = self._unit.copy()
+            puff.set_fill(STEAM, opacity=0.0)
+            puff.set_stroke(STEAM_EDGE, width=STEAM_EDGE_PIXELS * one_pixel_stroke(), opacity=0.0)
+            self.add(puff)
+
+    def place(self, puffs: list[tuple[float, float, float, float]]) -> PropSteam:
+        """Draw the puffs (x, y, radius in Manim units, opacity; a faint edge, so steam shows on a
+        pale sky too); the discs left over are hidden."""
+        for k, disc in enumerate(self.submobjects):
+            if k < len(puffs):
+                x, y, radius, opacity = puffs[k]
+                disc.points = self._unit * radius + np.array([x, y, 0.0])
+                disc.set_fill(opacity=opacity)
+                disc.set_stroke(opacity=STEAM_EDGE_SHARE * opacity)
+            else:
+                disc.set_fill(opacity=0.0)
+                disc.set_stroke(opacity=0.0)
+        return self
+
+
 class LivingProp:
     """A prop that moves by itself (drawn ``living``): a clock running from ``start`` (seconds
-    after midnight) at ``speed``, or a television or a lamp, ``on`` from the start, switched by
-    :meth:`switch`. ``seed`` varies a television's pictures; ``movable``: an action may move the
-    prop, so its glow follows it on every frame."""
+    after midnight) at ``speed``, or a television, a lamp, a fireplace or a kettle, ``on`` from the
+    start, switched by :meth:`switch`. ``seed`` varies a television's pictures, a fire's flicker
+    and a kettle's puffs; ``movable``: an action may move the prop, so its glow follows it on every
+    frame; ``wind``: the felt wind force at a scene time (a fire's flames and a kettle's steam lean
+    with it; ``None``: calm)."""
 
     def __init__(self, prop: Prop, *, start: float | None = None, speed: float = 1.0, on: bool = False, seed: int = 0,
-                 movable: bool = False) -> None:
+                 movable: bool = False, wind: Callable[[float], float] | None = None) -> None:
         self.prop = prop
         self.kind = prop.kind
         self.start = DRAWN_CLOCK_SECONDS if start is None else float(start)
@@ -134,18 +207,24 @@ class LivingProp:
         self.on = bool(on)
         self.seed = seed
         self.movable = movable
+        self.wind = wind
         #: Each switch: (scene time, on).
         self.switches: list[tuple[float, bool]] = []
         self.hands = {name: living_parts(prop, name) for name in HAND_LENGTHS} if self.kind == "clock" else {}
         if self.hands:
             _Shown(self.hands["second"]).show(shows_second_hand(self.speed))
-        self.overlays = living_parts(prop, "picture") + living_parts(prop, "lantern")
+        self.flames = living_parts(prop, "flame")
+        self.overlays = living_parts(prop, "picture") + living_parts(prop, "lantern") + self.flames
         self._shown = _Shown(self.overlays)
         spec = GLOWS.get(self.kind)
-        #: Its glow (``None``: a clock), drawn right behind it.
+        #: Its glow (``None``: a clock or a kettle), drawn right behind it.
         self.glow = PropGlow(spec, name=f"{prop.name}_glow") if spec is not None else None
-        for member in [m for mob in (self.movers() if self.kind != "clock" else []) for m in mob.get_family()]:
-            setattr(member, LIT, False)   # a lit screen or lamp shines at night too (§69.31's grade skips it); hands stay graded
+        #: A kettle's steam (``None``: another prop), drawn right in front of it.
+        self.steam = PropSteam(name=f"{prop.name}_steam") if self.kind == "kettle" else None
+        for member in [m for mob in (self.movers() if self.kind not in ("clock", "kettle") else []) for m in mob.get_family()]:
+            setattr(member, LIT, False)   # a lit screen, lamp or fire shines at night too (§69.31's grade skips it); hands stay graded
+        if self.steam is not None:
+            mark_lit(self.steam)   # steam is graded like the set
         self.update(0.0)
 
     def switch(self, on: bool, time: float) -> None:
@@ -164,22 +243,32 @@ class LivingProp:
         if switch_between(self.switches, start, end):
             return True
         on = on_between(self.on, self.switches, start, end)
-        return on and (self.kind == "tv" or self.movable)
+        return on and (self.kind in ("tv", "fireplace", "kettle") or self.movable)
 
     def movers(self) -> list[Mobject]:
-        """The mobjects it changes on every frame: the hands, or the picture / lantern and the glow."""
+        """The mobjects it changes on every frame: the hands, or the picture / lantern / flames
+        and the glow, or the steam."""
         if self.kind == "clock":
             return [m for members in self.hands.values() for m in members]
-        return [*self.overlays, *([self.glow] if self.glow is not None else [])]
+        return [*self.overlays, *(m for m in (self.glow, self.steam) if m is not None)]
 
-    def region(self) -> Box:
-        """The box of what it may change (Manim units): the prop and its glow."""
+    def region(self, start: float = 0.0, end: float = math.inf) -> Box:
+        """The box of what it may change (Manim units): the prop, its glow and its steam (the same
+        at any scene times ``start`` to ``end``)."""
         low, high = self.prop.get_corner(np.array([-1.0, -1.0, 0.0])), self.prop.get_corner(np.array([1.0, 1.0, 0.0]))
         box = (float(low[0]), float(low[1]), float(high[0]), float(high[1]))
-        if self.glow is None:
-            return box
-        x, y, radius = self._glow_place()
-        return union_box(box, glow_box(x, y, radius))
+        if self.glow is not None:
+            x, y, radius = self._glow_place()
+            box = union_box(box, glow_box(x, y, radius))
+        if self.steam is not None:   # with wind it may lean either way
+            boxes = [steam_box(0.0)] if self.wind is None else [steam_box(STEAM_LEAN_MAX), steam_box(-STEAM_LEAN_MAX)]
+            corners = self.prop.prop_points(np.array([[x, y, 0.0] for b in boxes for x in (b[0], b[2]) for y in (b[1], b[3])]))
+            box = union_box(box, (float(corners[:, 0].min()), float(corners[:, 1].min()), float(corners[:, 0].max()), float(corners[:, 1].max())))
+        return box
+
+    def _lean(self, now: float) -> float:
+        """The felt wind force at scene time ``now`` (0 without wind)."""
+        return float(self.wind(now)) if self.wind is not None else 0.0
 
     def _glow_place(self) -> tuple[float, float, float]:
         assert self.glow is not None
@@ -200,8 +289,34 @@ class LivingProp:
             for member, color in zip(self.overlays, picture.colors):
                 member.set_fill(darker(color, 1.0 - picture.brightness), opacity=1.0)
             strength = picture.brightness
+        if on and self.kind == "fireplace":
+            self._burn(now)
+            strength = fire_flicker(now, self.seed)
+        if self.steam is not None:
+            self._steam(now if on else None)
         if self.glow is not None:
             self.glow.place(*self._glow_place(), strength)
+
+    def _burn(self, now: float) -> None:
+        """The flames as they are at scene time ``now``, leaning with the wind."""
+        shapes = flame_shapes(now, self.seed, flame_lean(self._lean(now)))
+        curves = [closed_curve(np.array(shape.points, dtype=float)) for shape in shapes]
+        placed = self.prop.prop_points(np.vstack(curves))
+        at = 0
+        for flame, curve in zip(self.flames, curves):
+            flame.points = placed[at : at + len(curve)]
+            at += len(curve)
+
+    def _steam(self, now: float | None) -> None:
+        """The steam's puffs at scene time ``now`` (``None``: none, the kettle is off)."""
+        assert self.steam is not None
+        if now is None:
+            self.steam.place([])
+            return
+        puffs = steam_puffs(now, self.seed, self._lean(now))
+        middles = self.prop.prop_points(np.array([[p.x, p.y, 0.0] for p in puffs])) if puffs else np.zeros((0, 3))
+        unit = self.prop.unit
+        self.steam.place([(float(m[0]), float(m[1]), p.radius * unit, p.opacity) for m, p in zip(middles, puffs)])
 
     def _turn_hands(self, seconds: float) -> None:
         angles = hand_angles(seconds)
@@ -214,4 +329,4 @@ class LivingProp:
                 hand.set_points_as_corners(np.array([centre, [x, y, 0.0]]))
 
 
-__all__ = ["CLOCK_CENTRE", "HAND_LENGTHS", "LivingProp", "PropGlow", "living_overlays", "living_parts", "tag"]
+__all__ = ["CLOCK_CENTRE", "HAND_LENGTHS", "LivingProp", "PropGlow", "PropSteam", "living_overlays", "living_parts", "tag"]

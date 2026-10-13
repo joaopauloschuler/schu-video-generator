@@ -200,7 +200,7 @@ def test_a_tv_and_a_lamp_switch_on_and_off() -> None:
 @pytest.mark.parametrize(
     ("prop", "message"),
     [
-        ({"prop": "sofa", "on": True}, "on is for props that switch on (lamp, tv), not sofa"),
+        ({"prop": "sofa", "on": True}, "on is for props that switch on (fireplace, kettle, lamp, tv), not sofa"),
         ({"prop": "lamp", "time": "10:00"}, "time and speed are for a clock, not lamp"),
         ({"prop": "clock", "time": "25:00"}, "is not a clock time"),
         ({"prop": "clock", "speed": 0}, "greater than 0"),
@@ -231,7 +231,7 @@ def test_switch_actions_validate(make_project) -> None:
     assert check_project(room_project(make_project, params, good)) == []
     bad = [{"text": "Hm.", "actions": [{"switch_on": "sofa"}, {"switch_off": "pip"}, {"switch_on": "radio"}]}]
     problems = check_project(room_project(make_project, params, bad))
-    assert any("'sofa' cannot be switched on or off (props that can: lamp, tv)" in p for p in problems), problems
+    assert any("'sofa' cannot be switched on or off (props that can: fireplace, kettle, lamp, tv)" in p for p in problems), problems
     assert any("'pip' is not a prop; switch_off acts on props" in p for p in problems), problems
     assert any("radio" in p for p in problems), problems
 

@@ -11427,3 +11427,105 @@ How to test
   `test_cartoon_living props furniture room stage lighting depth speed parallax` (14 passed, 8 s),
   `test_introspect test_cartoon_lint wind water_air vehicles holding test_phase_k_review` (10
   passed, 15 s). The full suite was not run.
+
+## Step 121 — Props that move by themselves, part 2: fire, steam, nature
+
+What was built (DESIGN §69.55)
+- Pure maths: `cartoon/living.py` gains `flame_shapes(t, seed, lean)` (5 outer + 3 inner
+  `FlameShape` outlines, heights and tips flickering by seeded smooth noise), `flame_lean`,
+  `fire_flicker`, `steam_puffs(t, seed, lean)` / `steam_box`, `on_spans`, the fireplace's glow in
+  `GLOWS`; `SWITCHED_PROPS` = fireplace, kettle, lamp, tv. New `cartoon/nature.py`:
+  `FRUIT_SPOTS`, `drop_timing`, `drop_point` (gravity fall, one parabolic bounce, a turn),
+  `fruit_to_drop`, `flock_birds`, `wing_lift`, `bird_outline`, `FlockPlan` / `flock_plan`,
+  `bird_place`, `flock_box`.
+- Drawing: props `fireplace` (furniture, 0.75) and `kettle` (0.15) in `props.py`; `draw_prop(...,
+  fruit=True)` hangs 4 fruits on a tree (members tagged `FRUIT_INDEX`); `Prop.prop_points` (many
+  prop-unit points at once; `prop_point` uses it, same floats). `living_drawing.py`: flame
+  overlays before the front logs, `closed_curve` (vectorised Catmull-Rom, 0.7 ms a frame instead
+  of 5 ms), `PropSteam`, `LivingProp(wind=)` with `.flames`, `.steam`, `.region(start, end)`. New
+  `nature_drawing.py`: `Flock`, `wing_curve`, `FallenFruit` (moved by its skin's middle),
+  `FruitDrop` (a `PropMove` along `drop_point`, `lands_at` = impact), `hit_stars`.
+- Stage: prop key `fruit` (trees only), param `birds` (`StageBirds`; `FlockSettings` shared with
+  the action), refused in rooms; `_start_living` passes the felt wind (`_felt_wind`) to fireplaces
+  and kettles when the stage's wind may blow; glow before and steam after the prop in the
+  entrance; `_living_things` (living props + `flocks`) drive `_living_step` and
+  `_living_redrawn`; `add_flock` / `_put_in_sky` (right after the sky: `_sky_end`); `drop_fruit`,
+  `fruit_drop_seconds`, `_fruit_drop`, `_fruit_count_problems`; `switch_props` plays a `burner`
+  whoosh (−10 dB, 0.8 s) when a fireplace is lit, a click for the rest; `timings()` adds `fire`
+  beds from each burning fireplace's `on_spans` (with foley).
+- Actions (`scenes/nature_action.py`): `drop_fruit` (target a tree with fruit; `to` a character),
+  `birds` (non-animating, a number target is the count, `FlockSettings` options).
+- Sound: `ambience.py` `fire_loop()` (−34 LUFS seamless 8 s crackle), `AmbienceBed`, `BEDS`;
+  `mix.plan_ambience` loops over `AMBIENCE_BEDS` (rain unchanged).
+- Layout dump leaves out `PropSteam`, `Flock`, `FallenFruit`.
+
+Measured (DESIGN §69.55 has the table; scratch `s121/` in the scratchpad, `s120/measure_room.py`)
+- Nothing new used: the same raw frame hashes and Cairo draws as HEAD c8fad68 (a 162-frame outdoor
+  stage with trees, wind, leaves, a throw and a lamp on: 16 910 draws; Step 120's room with clock,
+  tv and lamp on: 266 frames, 32 665 draws).
+- A night room at 854×480, 260 frames: fireplace and kettle off 16 415 draws, 6.6–7.1 s wall;
+  both on all along 31 846 draws, 10.4–11.4 s (+50 to +63 %, mostly the fireplace's large
+  glow); redrawing everything from the first moving part: 35 551 draws, same frames. Birds
+  (6) on the outdoor stage: 17 990 draws, wall within the noise.
+
+Files touched
+- New: `src/vidgen/cartoon/nature.py`, `src/vidgen/cartoon/nature_drawing.py`,
+  `src/vidgen/scenes/nature_action.py`, `tests/test_cartoon_fire_nature.py`.
+- `src/vidgen/cartoon/living.py`, `living_drawing.py`, `props.py`, `src/vidgen/scenes/stage.py`,
+  `scenes/__init__.py`, `src/vidgen/ambience.py`, `src/vidgen/mix.py`, `src/vidgen/introspect.py`,
+  `src/vidgen/api.py`; guide `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md` (two action rows,
+  switch rows, a "Nature that moves" bullet, troubleshooting list).
+- Docs: `docs/CONFIG.md` (foley, stage param `birds`, rooms, new "Fireplaces and kettles",
+  "Fruit falling from a tree", "Birds", props rows `on` / `fruit`, action rows, `action` row,
+  targets row), `DESIGN.md` (§2 tree, §6.4, new §69.55), `docs/EXTENDING.md`,
+  `docs/gallery/stage.md` (params rows as `vidgen gallery` writes them),
+  `docs/gallery/media/props.png` (with the kettle) and `furniture.png` (with the fireplace, 5
+  columns), `tasklist.md` (ticks, a Backlog line).
+- Tests updated: `tests/test_actions.py` (action lists gain `birds`, `drop_fruit`),
+  `tests/test_cartoon_living.py` (the switched props' message), `tests/test_cartoon_props.py`
+  (40 props).
+
+Public interfaces
+- `vidgen.api` adds the names in DESIGN §6.4 (Step 121). Stage prop key `fruit`, `on` for
+  fireplace and kettle; stage param `birds`; actions `drop_fruit`, `birds`; ambience bed `fire`.
+  Compatible: nothing changes for a scene without them (checked by frame hashes).
+
+Decisions / deviations
+- A fireplace and a kettle are switched props like a lamp (off unless `on: true` or a
+  `switch_on`), so an unlit fireplace is plain furniture and costs nothing per frame.
+- "Crackle while visible": the bed plays while the fireplace burns in its scene (fades 0.6 / 0.8 s),
+  not by camera view.
+- A fallen fruit is a mobject of its own (`FallenFruit`), not a prop: no target, not in the layout
+  dump, so lint's prop rules do not see a fruit lying under its tree. The tree keeps the hidden
+  fruit's members (opacity 0).
+- `to:` on `drop_fruit` is not checked against where the character stands (it moves during a
+  scene); the fruit nearest above its head falls, else one falls to the ground.
+- The hit stars reuse Step 107's `stars` symbol and the motion-effect sweep (`done`).
+- Searched first: no flame, steam, fruit, flock or crackle drawing or bed existed (`grep -rlin
+  "flame\|steam\|fruit\|flock\|crackle"` in HEAD's `src/vidgen`: only the `launch` sound's
+  crackle of clicks and the `burner` description in `sfx.py`); reused
+  `LivingProp` / `PropGlow` / `redrawn_members`, `PropMove(path=)` and its `lands_at` thud,
+  `EffectSymbol("stars")`, `_add_motion_effect`, `felt_force`, `motion_seed`, the rain bed's
+  `_circular` / `_impulses` / `LoopSource` / `plan_ambience`, the `burner` and `click` sounds.
+
+Known gaps / TODOs (Backlog line "Fire, steam, nature")
+- No light on characters from the fire; a carried kettle's steam keeps its draw-order place; a
+  fallen fruit cannot be picked up; birds do not land; no screenplay words; the crackle was not
+  listened to by a person.
+
+How to test
+- `pytest tests/test_cartoon_fire_nature.py` (18 not-render 2.7 s, 2 render at 160x90 3.4 s).
+- Also run (not render): `test_cartoon_living test_api test_cartoon_props test_cartoon_furniture
+  test_cartoon_room test_cartoon_stage test_introspect test_cartoon_lighting test_cartoon_holding
+  test_cartoon_vehicles test_cartoon_water_air test_cartoon_depth test_cartoon_rain
+  test_cartoon_wind test_cartoon_effects test_cartoon_motion_effects test_cartoon_foley
+  test_music test_sfx test_cartoon_fire_nature` (476 passed, 42 s), `test_lint test_cartoon_lint
+  test_mcp test_cli test_json_output test_screenplay test_includes test_phase_k_review
+  test_cartoon_speed test_cartoon_sheet test_builtin_scenes test_extensions test_config
+  test_actions` (321 passed, 45 s), `test_docs test_guide test_schema test_gallery
+  test_actions_coverage` (184 passed, 86 s); render: `test_cartoon_fire_nature living props
+  furniture room stage rain` (13 passed, 10 s), `test_introspect test_cartoon_lint wind
+  water_air vehicles holding motion_effects lighting depth` (16 passed, 21 s). `vidgen lint` on
+  the two scratch projects: only author-caused findings; `vidgen render --preview` of the room
+  mixes the `fire` bed (report `ambience: [{bed: fire, start: 3.07, end: 17.33, duck: 5}]`). The
+  full suite was not run.

@@ -36,7 +36,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from vidgen import loudness
-from vidgen.ambience import RAIN_DUCK, RAIN_FADE_IN, RAIN_FADE_OUT, LoopSource, ambience_spans, rain_loop
+from vidgen.ambience import AMBIENCE_BEDS, BEDS, LoopSource, ambience_spans
 from vidgen.config import DuckConfig, MusicCue, SceneMusic
 from vidgen.errors import VidgenError
 from vidgen.music import Source, is_bed
@@ -334,23 +334,29 @@ def plan_music(project: Project, timings: dict[str, Any], total: int) -> list[Pl
 
 
 def plan_ambience(project: Project, timings: dict[str, Any], total: int) -> list[AmbiencePlacement]:
-    """Place the rain bed (DESIGN.md §69.39) in the video of ``total`` samples wherever a scene's
-    timings say it rains (``ambience``, joined across scenes): fading in over
-    :data:`~vidgen.ambience.RAIN_FADE_IN` from the rain's start, out over ``RAIN_FADE_OUT`` ending
-    at its end, and ducked under the narration by :data:`~vidgen.ambience.RAIN_DUCK`."""
-    spans = ambience_spans(timings, "rain")
-    if not spans:
-        return []
+    """Place the ambience beds (DESIGN.md §69.39, §69.55) in the video of ``total`` samples
+    wherever a scene's timings name one (``ambience``, joined across scenes): the rain bed while it
+    rains, the fire's crackle while a fireplace burns; each fades in from its span's start and out
+    ending at its end (:data:`~vidgen.ambience.BEDS`: the rain over
+    :data:`~vidgen.ambience.RAIN_FADE_IN` / ``RAIN_FADE_OUT``) and ducks under the narration (the
+    rain by :data:`~vidgen.ambience.RAIN_DUCK`)."""
     frames = total // FRAME + 2
     times = np.arange(frames) * FRAME / RATE
-    ducking = 10 ** (duck_curve(speech_spans(project, timings), frames, RAIN_DUCK) / 20)
-    source = LoopSource(rain_loop())
+    speech: list[tuple[float, float]] | None = None
     placements = []
-    for a, b in spans:
-        start, end = round(a * RATE), min(round(b * RATE), total)
-        if end > start:
-            gain = _fade_curve(times, a, b, RAIN_FADE_IN, RAIN_FADE_OUT) * ducking
-            placements.append(AmbiencePlacement("rain", start, end, source, gain, RAIN_DUCK.depth))
+    for name in AMBIENCE_BEDS:
+        spans = ambience_spans(timings, name)
+        if not spans:
+            continue
+        bed = BEDS[name]
+        speech = speech_spans(project, timings) if speech is None else speech
+        ducking = 10 ** (duck_curve(speech, frames, bed.duck) / 20)
+        source = LoopSource(bed.loop())
+        for a, b in spans:
+            start, end = round(a * RATE), min(round(b * RATE), total)
+            if end > start:
+                gain = _fade_curve(times, a, b, bed.fade_in, bed.fade_out) * ducking
+                placements.append(AmbiencePlacement(name, start, end, source, gain, bed.duck.depth))
     return placements
 
 

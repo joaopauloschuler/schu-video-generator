@@ -26,6 +26,9 @@ HILL_POINTS = 16
 #: the click of a switch (dB).
 REDRAW_MARGIN = 0.006
 SWITCH_CLICK_GAIN = -4.0
+#: A fireplace lighting: a short burner whoosh, its level (dB) and length (s).
+FIRE_LIGHT_GAIN = -10.0
+FIRE_LIGHT_SECONDS = 0.8
 
 IDENTIFIER_PATTERN = r"^[A-Za-z0-9_]+$"
 Identifier = Annotated[str, Field(pattern=IDENTIFIER_PATTERN)]
@@ -69,7 +72,7 @@ class StageProp(SceneParams):
     also_accepts: ClassVar[tuple[type, ...]] = (str,)
 
     prop: Literal[PROP_KINDS] | None = None  # type: ignore[valid-type]
-    """A built-in prop: table, chair, tree, bush, house, door, lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup, basket, umbrella, napkin; furniture: sofa, armchair, bed, bookshelf, counter, fridge, picture, rug, houseplant, clock, tv, desk; vehicles: bicycle, car, bus, boat (on the stage's water), hot_air_balloon, toy_rocket."""
+    """A built-in prop: table, chair, tree, bush, house, door, lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup, basket, umbrella, napkin, kettle; furniture: sofa, armchair, bed, bookshelf, counter, fridge, picture, rug, houseplant, clock, tv, desk, fireplace; vehicles: bicycle, car, bus, boat (on the stage's water), hot_air_balloon, toy_rocket."""
     svg: str | None = None
     """Instead of prop: an SVG file relative to the project folder (sanitised like any SVG), standing on the bottom edge of its viewBox."""
     name: Identifier | None = None
@@ -95,11 +98,13 @@ class StageProp(SceneParams):
     against: Literal["wall"] | None = None
     """wall: it stands with its back to the room's wall, at the wall's depth unless depth is given (a room only); a picture or a clock in a room hangs on the wall without it."""
     on: bool = False
-    """A tv or a lamp: true starts it switched on (a tv's picture changes and flickers, a lamp glows; the switch_on / switch_off actions change it)."""
+    """A tv, a lamp, a fireplace or a kettle: true starts it switched on (a tv's picture changes and flickers, a lamp glows, a fireplace burns and crackles, a kettle steams; the switch_on / switch_off actions change it)."""
     time: str | None = None
     """A clock: the time it shows at the scene's start, H:MM or H:MM:SS (default 10:10, as drawn); with time or speed the clock runs, its hands turning."""
     speed: float | None = Field(None, gt=0.0, le=MAX_CLOCK_SPEED)
     """A clock: how fast it runs, clock seconds per second (1 real time, the default; 60 a minute a second; up to 3600); with time or speed the clock runs."""
+    fruit: bool = False
+    """A tree: true hangs a few fruits on it (the drop_fruit action lets one fall)."""
 
     @model_validator(mode="before")
     @classmethod
@@ -133,6 +138,8 @@ class StageProp(SceneParams):
             raise ValueError(f"time and speed are for a clock, not {self.prop or 'an svg prop'}")
         if self.time is not None:
             parse_clock_time(self.time)
+        if self.fruit and self.prop != "tree":
+            raise ValueError(f"fruit is for a tree, not {self.prop or 'an svg prop'}")
         return self
 
     def runs(self) -> bool:
@@ -196,6 +203,46 @@ class StageParticles(ParticleSettings, SceneParams):
     def __get_pydantic_json_schema__(cls, core_schema: Any, handler: Any) -> dict[str, Any]:
         """A kind alone is also a particle setting (JSON Schema ``anyOf`` kind | object)."""
         return {"anyOf": [{"enum": list(PARTICLE_KINDS)}, handler(core_schema)]}
+
+
+class FlockSettings(SceneParams):
+    """A flock of birds crossing the sky (DESIGN.md §69.55): how many, which way, how high, how
+    fast and its seed."""
+
+    count: int = Field(FLOCK_COUNT, ge=1, le=MAX_BIRDS)
+    """How many birds (in a loose V)."""
+    direction: Literal["right", "left"] = "right"
+    """Which way they fly across the stage."""
+    height: float = Field(FLOCK_HEIGHT, ge=0.5, le=0.97)
+    """How high they fly: their height above the frame's bottom edge, as a fraction of the frame height."""
+    seconds: float | None = Field(None, gt=0.0, le=120.0)
+    """How long they take to cross the stage (from beyond one edge to beyond the other); default about 5 s per frame width of the stage."""
+    seed: int | None = None
+    """Varies the flock (their places, sizes and wing beats); default: one from the scene."""
+
+
+class StageBirds(FlockSettings):
+    """The stage's ``birds``: a flock crossing the sky from ``start``. ``true`` is a flock with the
+    defaults, a number is how many birds."""
+
+    also_accepts: ClassVar[tuple[type, ...]] = (bool, int)
+
+    start: float = Field(0.5, ge=0.0)
+    """When it sets off, seconds into the scene."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _plain(cls, data: Any) -> Any:
+        if data is False:
+            raise ValueError("birds: false is the default; leave birds out")
+        if data is True:
+            return {}
+        return {"count": data} if isinstance(data, int) else data
+
+    @classmethod
+    def __get_pydantic_json_schema__(cls, core_schema: Any, handler: Any) -> dict[str, Any]:
+        """``true`` or a count is also a flock (JSON Schema ``anyOf`` true | count | object)."""
+        return {"anyOf": [{"const": True}, {"type": "integer", "minimum": 1, "maximum": MAX_BIRDS}, handler(core_schema)]}
 
 
 class LayerShape(SceneParams):
@@ -397,8 +444,11 @@ class Stage(NarratedScene):
     the sky of the light, and doors (door props whose names are marks; ``enter`` and ``exit``
     through them); no wind or weather inside. Furniture (a sofa, a bed, a kitchen counter, a
     picture...) stands ``against: wall`` at the wall's depth; a picture and a clock hang on it.
-    A clock with a ``time`` or a ``speed`` runs; a tv ``on`` shows a flickering picture and a
-    lamp ``on`` glows (``switch_on`` / ``switch_off`` change them).
+    A clock with a ``time`` or a ``speed`` runs; a tv ``on`` shows a flickering picture, a
+    lamp ``on`` glows, a fireplace ``on`` burns and crackles, a kettle ``on`` steams
+    (``switch_on`` / ``switch_off`` change them). A tree with ``fruit`` carries fruits that
+    ``drop_fruit`` lets fall (on a character's head too); ``birds`` (or the ``birds`` action) send
+    a flock across the sky.
 
     A beat is spoken by the characters whose voice says it (their mouths move with it), or by
     the ones its ``say`` action names; the acting actions (``say``, ``look_at``, ``turn``,
@@ -482,7 +532,7 @@ class Stage(NarratedScene):
         layers: list[StageLayer] = []
         """Parallax layers: {place: background | middle | foreground, factor, image | shapes}."""
         props: list[StageProp] = []
-        """Props: a built-in prop's name, or {prop | svg, name, at, depth, scale, lift, facing, color, detail, recolor, open, against, on, time, speed}."""
+        """Props: a built-in prop's name, or {prop | svg, name, at, depth, scale, lift, facing, color, detail, recolor, open, against, on, time, speed, fruit}."""
         particles: list[StageParticles] = []
         """Particles over the whole scene, in front of everything: a kind (rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves, streaks) or {kind, density, area, color, seed, puddles}; rain ends on the ground with splashes, not under an open umbrella or a tree, and plays a rain sound with foley; for one beat use the particles action."""
         light: LightSetting = "day"
@@ -495,6 +545,8 @@ class Stage(NarratedScene):
         """An indoor set instead of the sky and the ground: true, or {wall, wallpaper (plain, stripes, dots), floor, flooring (boards, tiles, plain), skirting, ceiling, depth, windows, doors}; windows show the sky of the stage's light, doors are door props whose names are marks (enter / exit through them); no wind, rain, snow, leaves or streaks inside."""
         water: WaterStrip | None = None
         """A strip of water with waves at the front of the stage, for a boat to float on: true (the whole width) or {left, right, color} (marks or x from 0 to 1); outdoors only."""
+        birds: StageBirds | None = None
+        """A flock of birds crossing the sky, flapping: true, a number of birds, or {count, direction, height, start, seconds, seed}; outdoors only (the birds action sends one later)."""
 
         @model_validator(mode="after")
         def _check(self) -> SceneParams:
@@ -595,6 +647,8 @@ class Stage(NarratedScene):
                 raise ValueError(f"a room draws its own wall and floor: remove {', '.join(given)} (or the room)")
             if wind_level(self.wind) != 0.0:
                 raise ValueError("there is no wind in a room: remove wind (or the room)")
+            if self.birds is not None:
+                raise ValueError("birds fly outdoors: remove birds (or the room)")
             for k, item in enumerate(self.particles):
                 if item.kind in OUTDOOR_PARTICLES:
                     raise ValueError(f"particles[{k}]: {item.kind} stays outdoors; a room has none inside (sparkles, dust, confetti, smoke and bubbles work)")
@@ -704,12 +758,13 @@ class Stage(NarratedScene):
         down, a prop or spot too far without a walk, giving to someone not next to the giver, a
         seat taken, a walk of a character that sits, leans or rides, a full vehicle or one too far
         to get in (§69.52). Needs the active project (the video's frame); none without one."""
+        fruit = cls._fruit_count_problems(params, uses)
         try:
             project = current_project()
         except VidgenError:
-            return []
+            return fruit
         if not any(u.config.action in HANDLING_ACTIONS | POSTURE_ACTIONS | RIDING_ACTIONS for u in uses):
-            return []
+            return fruit
         frame = stage_frame(project, params)
         names = [c.name for c in params.characters] + params.prop_names()
         beats = [b.id for b in spec.beats]
@@ -732,7 +787,21 @@ class Stage(NarratedScene):
             vehicles={name: (kind, height) for name, (kind, height, _) in frame.vehicles.items()},
             water=frame.water,
         )
-        return problems + cls._calm_blow_problems(params, ordered)
+        return fruit + problems + cls._calm_blow_problems(params, ordered)
+
+    @staticmethod
+    def _fruit_count_problems(params: Any, uses: list[Any]) -> list[tuple[str, str]]:
+        """A ``drop_fruit`` of a tree whose fruits have all fallen (DESIGN.md §69.55)."""
+        dropped: dict[str, int] = {}
+        problems: list[tuple[str, str]] = []
+        for use in uses:
+            if use.config.action != "drop_fruit":
+                continue
+            for name in [n for n in params.prop_names() if any(fnmatchcase(n, p) for p in use.config.targets())]:
+                dropped[name] = dropped.get(name, 0) + 1
+                if dropped[name] == len(FRUIT_SPOTS) + 1:
+                    problems.append((f"{use.location}.target", f"'{name}' has {len(FRUIT_SPOTS)} fruits; they have all fallen by then"))
+        return problems
 
     @staticmethod
     def _calm_blow_problems(params: Any, ordered: list[Any]) -> list[tuple[str, str]]:
@@ -1012,11 +1081,14 @@ class Stage(NarratedScene):
 
     def timings(self) -> dict[str, Any]:
         """The scene's timings, plus ``ambience``: the rain sound bed from each rain field's start
-        to its end (the scene's end while it lasts), scene seconds (DESIGN.md §69.39)."""
+        to its end (the scene's end while it lasts, DESIGN.md §69.39) and the fire's crackle while
+        each fireplace burns (with foley, §69.55), scene seconds."""
         data = super().timings()
         end = float(self.renderer.time)
         spans = [(f.start, end if f.ended is None else min(f.ended, end)) for f in getattr(self, "_rain_fields", [])]
         beds = [{"bed": "rain", "start": round(a, 6), "end": round(b, 6)} for a, b in spans if b > a]
+        fires = [live for live in getattr(self, "living", {}).values() if live.kind == "fireplace"] if self._foley_on() else []
+        beds += [{"bed": "fire", "start": round(a, 6), "end": round(b, 6)} for live in fires for a, b in on_spans(live.on, live.switches, end)]
         if beds:
             data["ambience"] = beds
         return data
@@ -1165,8 +1237,8 @@ class Stage(NarratedScene):
                 if carried is not None:
                     items.append(carried)
                 else:
-                    glow = self.living[t.name].glow if t.name in self.living else None   # a lamp's or a tv's, right behind it (§69.54)
-                    shown += [glow, t.mobject] if glow is not None else [t.mobject]
+                    live = self.living.get(t.name)   # a glow right behind it, steam right in front (§69.54, §69.55)
+                    shown += [m for m in (live.glow if live else None, t.mobject, live.steam if live else None) if m is not None]
             self.add(*shown, *in_front)
             return [FadeOut(self._entrance_cover()), *items]
 
@@ -1175,6 +1247,10 @@ class Stage(NarratedScene):
         self._start_depth_order()
         #: the set behind the characters (puddles go in it, DESIGN.md §69.39)
         self._backdrop = backdrop
+        #: the flocks of birds in the sky (DESIGN.md §69.55), drawn right after the sky
+        self.flocks: list[Flock] = []
+        if p.birds is not None:
+            self.add_flock(p.birds, p.birds.start)
         #: the rain fields whose sound bed plays (foley on)
         self._rain_fields: list[ParticleField] = []
         #: the puddles under the rain fields with ``puddles: true``
@@ -1393,44 +1469,66 @@ class Stage(NarratedScene):
 
     def _start_living(self, names: set[str]) -> None:
         """A :class:`LivingProp` per prop of ``names`` (made after the light marks the props: its
-        moving parts and glow are not graded), and the scene updater that shows them for the scene
-        time on every frame."""
+        moving parts and glow are not graded; a fire's flames and a kettle's steam lean with the
+        stage's wind when it may blow), and the scene updater that shows them for the scene time on
+        every frame."""
         given = dict(zip(self.params.prop_names(), self.params.stage_props()))
         movable = self._movable_props() if names else set()
+        blows = wind_level(self.params.wind) != 0.0 or any(use.level() for use in self.action_uses("wind"))
+        wind = self._felt_wind if blows else None
         #: the props that move by themselves, by name (DESIGN.md §69.54)
         self.living: dict[str, LivingProp] = {}
         for name in sorted(names):
             prop = given[name]
             self.living[name] = LivingProp(
                 self.props[name], start=prop.clock_start() if prop.runs() else None, speed=prop.speed or 1.0, on=prop.on,
-                seed=motion_seed(self.spec.id, name), movable=name in movable,
+                seed=motion_seed(self.spec.id, name), movable=name in movable, wind=wind if prop.prop in ("fireplace", "kettle") else None,
             )
+        #: the scene updater, kept: Manim removes an updater by identity
+        self._living_updater = self._living_step
         if self.living:
-            #: the scene updater, kept: Manim removes an updater by identity
-            self._living_updater = self._living_step
             self.add_updater(self._living_updater)
 
+    def _felt_wind(self, now: float) -> float:
+        """The stage's felt wind force at scene time ``now`` (0 while calm)."""
+        blowing = getattr(self, "blowing", None)
+        return felt_force(blowing.wind.force(now)) if blowing is not None else 0.0
+
+    def _living_things(self) -> list[Any]:
+        """The props that move by themselves and the flocks of birds (DESIGN.md §69.54, §69.55)."""
+        return [*getattr(self, "living", {}).values(), *getattr(self, "flocks", [])]
+
     def _living_step(self, dt: float) -> None:
-        """Scene updater: every prop that moves by itself as it is at the scene time now."""
+        """Scene updater: every prop that moves by itself and every flock as it is at the scene
+        time now; it removes itself once only flocks that have flown away are left."""
         now = float(self.renderer.time)
         for live in self.living.values():
             live.update(now)
+        for flock in self.flocks:
+            flock.update_to(now)
+        if not self.living and all(flock.done(now) for flock in self.flocks):
+            self.remove_updater(self._living_updater)
 
     def switch_props(self, patterns: list[str], on: bool, time: float) -> None:
-        """Switch the tvs and lamps matching ``patterns`` on (or off) at scene ``time`` (the
-        ``switch_on`` / ``switch_off`` actions), with a click (foley)."""
+        """Switch the tvs, lamps, fireplaces and kettles matching ``patterns`` on (or off) at
+        scene ``time`` (the ``switch_on`` / ``switch_off`` actions), with a click (foley; a fire
+        lights with a burner's whoosh and goes out quietly)."""
         names = [name for name in getattr(self, "living", {}) if any(fnmatchcase(name, pat) for pat in patterns)]
         for name in names:
             self.living[name].switch(on, time)
-        if names and self._foley_on():
+        if not names or not self._foley_on():
+            return
+        if any(self.living[name].kind != "fireplace" for name in names):
             self.sfx("click", max(float(time), 0.0), gain=SWITCH_CLICK_GAIN)
+        if on and any(self.living[name].kind == "fireplace" for name in names):
+            self.sfx("burner", max(float(time), 0.0), gain=FIRE_LIGHT_GAIN, duration=FIRE_LIGHT_SECONDS)
 
     def _living_redrawn(self, moving: list[Mobject], start: float, end: float) -> list[Mobject]:
-        """``moving`` plus what props that move by themselves change between scene times
-        ``start`` and ``end`` (the hands, a picture, a glow) and every member drawn after those
-        that overlaps them (:func:`redrawn_members`); the rest of the set stays in Manim's static
-        image. In draw order."""
-        changing = [live for live in getattr(self, "living", {}).values() if live.changing(start, end)]
+        """``moving`` plus what props that move by themselves and flocks change between scene
+        times ``start`` and ``end`` (the hands, a picture, flames, a glow, steam, the birds) and
+        every member drawn after those that overlaps them (:func:`redrawn_members`); the rest of
+        the set stays in Manim's static image. In draw order."""
+        changing = [live for live in self._living_things() if live.changing(start, end)]
         if not changing:
             return moving
         family = self.get_mobject_family_members()
@@ -1441,9 +1539,125 @@ class Stage(NarratedScene):
         drawn = {id(m) for m in moving}
         after = [m for m in family[first:] if id(m) not in movers and id(m) not in drawn]
         boxes = [_box(m) for m in after]
-        kept = movers | drawn | {id(after[k]) for k in redrawn_members(boxes, [live.region() for live in changing], REDRAW_MARGIN * self.frame_height)}
+        regions = [live.region(start, end) for live in changing]
+        kept = movers | drawn | {id(after[k]) for k in redrawn_members(boxes, regions, REDRAW_MARGIN * self.frame_height)}
         known = {id(m) for m in family}
         return [m for m in family if id(m) in kept] + [m for m in moving if id(m) not in known]
+
+    # ----- birds and fruit (DESIGN.md §69.55) ------------------------------------------------------
+
+    def add_flock(self, settings: Any, start: float) -> Flock:
+        """A flock of birds (``settings``: count, direction, height, seconds, seed) crossing the
+        stage from scene time ``start`` (the ``birds`` param and action), drawn right after the sky
+        (behind the layers, the ground, the props and the characters) and graded by the light."""
+        left, right = self.camera_bounds()[:2]
+        seed = settings.seed if settings.seed is not None else motion_seed(self.spec.id, "birds", len(self.flocks))
+        plan = flock_plan(
+            float(start), seconds=settings.seconds, direction=1.0 if settings.direction == "right" else -1.0, left=left, right=right,
+            y=(settings.height - 0.5) * self.frame_height, span=BIRD_SPAN * self.frame_height, count=settings.count, seed=seed,
+            frame_width=self.frame_width,
+        )
+        flock = Flock(plan, name="birds" if not self.flocks else f"birds_{len(self.flocks) + 1}")
+        flock.update_to(float(self.renderer.time))
+        mark_lit(flock)
+        self.flocks.append(flock)
+        self._put_in_sky(flock)
+        if not any(f is self._living_updater for f in self.updaters):
+            self.add_updater(self._living_updater)
+        return flock
+
+    def _put_in_sky(self, mobject: Mobject) -> None:
+        """Put ``mobject`` right after the sky (the background and the stars): into the backdrop
+        while it has not come on screen yet (it comes in with it), else into the scene."""
+        sky_end = getattr(self, "_sky_end", 0)
+        on_screen = any(m in self.mobjects for m in [*self._backdrop, *self.cast.values(), *self.props.values()])
+        if not on_screen:
+            self._backdrop.insert(sky_end, mobject)
+            self._sky_end = sky_end + 1
+            return
+        sky = {id(m) for m in self._backdrop[:sky_end]}
+        shown = [k for k, m in enumerate(self.mobjects) if id(m) in sky]
+        self.mobjects.insert(max(shown) + 1 if shown else 0, mobject)
+
+    def _fruit_left(self, tree: str) -> list[int]:
+        """The fruits still on the tree ``tree`` (indices of :data:`FRUIT_SPOTS`)."""
+        if not hasattr(self, "_fallen"):
+            #: each tree's fallen fruits (DESIGN.md §69.55)
+            self._fallen: dict[str, set[int]] = {}
+        return [k for k in range(len(FRUIT_SPOTS)) if k not in self._fallen.get(tree, set())]
+
+    def _fruit_members(self, tree: str, index: int) -> list[VMobject]:
+        """The members of the tree ``tree``'s fruit ``index``, in drawing order."""
+        return [m for m in self.props[tree].get_family() if getattr(m, FRUIT_INDEX, None) == index]
+
+    def _fruit_drop(self, tree: str, onto: str | None) -> dict[str, Any] | None:
+        """How a fruit of ``tree`` drops (``onto``: the character it falls on): which fruit, where
+        it hits and ends (its middle), the bounce and the timing; ``None``: no fruit left. A fruit
+        aimed at a character falls on its head when one hangs above it, else beside it."""
+        left = self._fruit_left(tree)
+        if not left:
+            return None
+        fh = self.frame_height
+        figure = self.cast.get(onto) if onto is not None else None
+        middles = {k: self._fruit_middle(tree, k) for k in left}
+        xs = [middles[k][0] if k in middles else 0.0 for k in range(len(FRUIT_SPOTS))]
+        head = head_box(figure) if figure is not None else None
+        above = [k for k in left if head is not None and middles[k][1] > head[3] + middles[k][2]]
+        if head is not None and above:
+            x = (head[0] + head[2]) / 2
+            index = fruit_to_drop(above, near_x=x, xs=xs)
+            mx, my, radius = middles[index]
+            side = 1.0 if mx >= float(figure.feet()[0]) else -1.0
+            impact = (x, head[3] + radius)
+            end = (float(figure.feet()[0]) + side * HEAD_ASIDE * figure.character_height, float(figure.feet()[1]) + radius)
+            bounce = HEAD_BOUNCE * fh
+        else:
+            index = fruit_to_drop(left, near_x=float(figure.feet()[0]) if figure is not None else None, xs=xs)
+            mx, my, radius = middles[index]
+            ground = self.grounds.get(tree, float(self.props[tree].feet()[1]))
+            side = 1.0 if mx >= float(self.props[tree].feet()[0]) else -1.0
+            impact = (mx, ground + radius)
+            end = (mx + side * GROUND_ASIDE * fh, ground + radius)
+            bounce = GROUND_BOUNCE * fh
+        timing = drop_timing(max(my - impact[1], 0.0) / fh, bounce / fh)
+        return {"index": index, "impact": impact, "end": end, "bounce": bounce, "timing": timing, "hit": head is not None and bool(above)}
+
+    def _fruit_middle(self, tree: str, index: int) -> tuple[float, float, float]:
+        """Fruit ``index`` of ``tree`` on screen now: the middle of its skin (x, y; what a
+        :class:`PropMove` moves of a :class:`FallenFruit`) and its radius."""
+        skin = fruit_skin(self._fruit_members(tree, index))
+        middle = skin.get_center()
+        return float(middle[0]), float(middle[1]), float(skin.width) / 2
+
+    def fruit_drop_seconds(self, tree: str, onto: str | None) -> float | None:
+        """How long a ``drop_fruit`` of ``tree`` takes (``None``: no fruit left)."""
+        plan = self._fruit_drop(tree, onto)
+        return None if plan is None else plan["timing"].seconds
+
+    def drop_fruit(self, tree: str, onto: str | None = None) -> list[Animation]:
+        """A fruit of the tree ``tree`` falls (the ``drop_fruit`` action): the tree's fruit is
+        hidden and a :class:`FallenFruit` copy of it falls, hits the ground (or ``onto``'s head,
+        which then sees stars), bounces and lies still, drawn in front of the tree (and of the
+        character). The thud is foley (its ``lands_at``)."""
+        plan = self._fruit_drop(tree, onto)
+        if plan is None:
+            return []
+        index = plan["index"]
+        self._fallen.setdefault(tree, set()).add(index)
+        members = self._fruit_members(tree, index)
+        fruit = FallenFruit(members, fruit_of=tree, index=index, opacities=[(float(m.get_fill_opacity()), float(m.get_stroke_opacity())) for m in members])
+        for member in members:
+            member.set_fill(opacity=0.0)
+            member.set_stroke(opacity=0.0)
+        figure = self.cast.get(onto) if onto is not None else None
+        behind = [m for m in (self.props[tree], figure if plan["hit"] else None) if m is not None and m in self.mobjects]
+        at = max((self.mobjects.index(m) for m in behind), default=len(self.mobjects) - 1)
+        self.mobjects.insert(at + 1, fruit)
+        stars = None
+        if plan["hit"] and figure is not None:
+            stars = hit_stars(figure, color=self.theme.color("highlight"))
+            self._add_motion_effect(stars, figure, behind=False)
+        return [FruitDrop(fruit, impact=plan["impact"], end=plan["end"], timing=plan["timing"], bounce=plan["bounce"], stars=stars)]
 
     def _shadows(self, placements: list[StagePlacement]) -> tuple[StageShadows | None, StageShadows | None]:
         """The shadows (``shadows: true``): of the props on the ground that stay put (drawn
@@ -1530,7 +1744,7 @@ class Stage(NarratedScene):
         return draw_prop(
             prop.prop, height=height, theme=self.theme, name=name, main=prop.color, detail=prop.detail,
             facing=prop.facing, character_height=height / prop.height_factor(), shape="open" if prop.open else None,
-            living=living,
+            living=living, fruit=prop.fruit,
         )
 
     def _backdrop(self, layers: list[Mobject], heads: float | None = None) -> list[Mobject]:
@@ -1544,6 +1758,8 @@ class Stage(NarratedScene):
         if p.room is not None:  # the room's wall and floor instead of the sky and the ground (§69.42)
             return [*self._room().mobjects(), *layers]
         parts: list[Mobject] = []
+        #: how many of the backdrop's first members are its sky (a flock flies right after them)
+        self._sky_end = 0
         top = ground_top(p.ground, p.items())  # up to the deepest thing standing on it (§69.6)
         if p.has_picture():
             parts.append(self._picture())
@@ -1562,6 +1778,7 @@ class Stage(NarratedScene):
             box = (-fw / 2, fh / 2 - sky_share * fh, fw / 2, fh / 2)
             self.stars = StarField(stars, box, min(self.frame_width, self.frame_height))
             parts.append(self.stars)
+        self._sky_end = len(parts)
         parts += layers
         ground_color = p.ground_color
         if ground_color is None and not p.has_picture():

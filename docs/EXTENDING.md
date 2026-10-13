@@ -277,6 +277,13 @@ them for a scene time (`update(t)`, from a scene updater; `switch(on, time)`); i
 `hand_angles(seconds)`, `parse_clock_time("21:45")`, `tv_picture(t, seed)`, `glow_box`, and
 `redrawn_members(boxes, regions)` says which members drawn after a moving part must be redrawn
 with it. The `switch_on` / `switch_off` actions call `Stage.switch_props(patterns, on, time)`.
+A `fireplace` and a `kettle` drawn `living` burn and steam the same way (`flame_shapes(t, seed,
+lean)`, `steam_puffs(t, seed, lean)`; `LivingProp(..., wind=)` takes the felt wind force at a
+time, its `steam` is a `PropSteam` to add right after the prop); `on_spans` gives when one is on.
+Nature (DESIGN.md §69.55): `draw_prop("tree", ..., fruit=True)` tags each fruit's members with
+`FRUIT_INDEX`; `Stage.drop_fruit(tree, onto)` returns a `FruitDrop` (a `PropMove` of a
+`FallenFruit` along `drop_point`, its `lands_at` the thud); `Stage.add_flock(settings, start)`
+puts a `Flock` (`flock_plan`, `bird_place`) in the sky.
 `character(name)` breathes, sways its head and blinks on its own (unless `idle: false`):
 `stop_idle()` / `start_idle(seed=None)` turn that off and on; a blink never shows during a
 `PoseChange`. Before drawing your own scene for characters on a set, check whether the built-in

@@ -53,6 +53,7 @@ from vidgen.cartoon.character import (
     shape_drawing,
 )
 from vidgen.cartoon.living import LIVING_KINDS, LIVING_PART
+from vidgen.cartoon.nature import FRUIT_COLOR, FRUIT_RADIUS, FRUIT_SHINE, FRUIT_SPOTS, FRUIT_STALK
 from vidgen.cartoon.seating import (
     PROP_LEANS,
     PROP_SEATS,
@@ -73,11 +74,12 @@ from vidgen.theme import Theme
 #: room, their backs to its wall (a bed and a desk side on, along it).
 FURNITURE: tuple[str, ...] = (
     "sofa", "armchair", "bed", "bookshelf", "counter", "fridge", "picture", "rug", "houseplant", "clock", "tv", "desk",
+    "fireplace",
 )
 #: The built-in props.
 PROP_KINDS: tuple[str, ...] = (
     "table", "chair", "tree", "bush", "house", "door", "lamp", "sign", "box",
-    "ball", "cloud", "sun", "moon", "rock", "plant", "laptop", "cup", "basket", "umbrella", "napkin",
+    "ball", "cloud", "sun", "moon", "rock", "plant", "laptop", "cup", "basket", "umbrella", "napkin", "kettle",
     *FURNITURE, *VEHICLE_KINDS,
 )
 #: Each prop's height relative to a character's (the stage's ``size``) before its own ``scale``.
@@ -86,7 +88,7 @@ PROP_HEIGHTS: dict[str, float] = {
     "sign": 0.75, "box": 0.155, "ball": 0.18, "cloud": 0.35, "sun": 0.4, "moon": 0.35, "rock": 0.155,
     "plant": 0.4, "laptop": 0.14, "cup": 0.09, "basket": 0.2, "umbrella": 0.6, "napkin": 0.05,
     "sofa": 0.36, "armchair": 0.38, "bed": 0.34, "bookshelf": 0.9, "counter": 0.5, "fridge": 0.95,
-    "picture": 0.3, "rug": 0.06, "houseplant": 0.75, "clock": 0.2, "tv": 0.55, "desk": 0.42,
+    "picture": 0.3, "rug": 0.06, "houseplant": 0.75, "clock": 0.2, "tv": 0.55, "desk": 0.42, "fireplace": 0.75, "kettle": 0.15,
     **{kind: spec.height for kind, spec in VEHICLES.items()},
 }
 #: Props that hang on a wall: how far their bottom edge is above the floor, in the heights of a
@@ -122,6 +124,7 @@ PROP_COLORS: dict[str, tuple[str, str]] = {
     "bookshelf": ("secondary", "accent"), "counter": ("tertiary", "dim"), "fridge": ("#F4F6FA", "dim"),
     "picture": ("secondary", "primary"), "rug": ("accent", "highlight"), "houseplant": ("tertiary", "secondary"),
     "clock": ("#F4F6FA", "secondary"), "tv": ("secondary", "primary"), "desk": ("secondary", "accent"),
+    "fireplace": ("dim", "secondary"), "kettle": ("accent", "dim"),
     "bicycle": ("primary", "accent"), "car": ("accent", "highlight"), "bus": ("highlight", "primary"),
     "boat": ("highlight", "accent"), "hot_air_balloon": ("accent", "secondary"), "toy_rocket": ("primary", "accent"),
 }
@@ -131,6 +134,11 @@ GLASS = "#D6EEF8"
 #: is light (or dark) in every theme.
 CLOTH = "#F4F6FA"
 TV_CASE = "#2B2F3A"
+#: A fireplace's sooty hollow and its logs (fixed: dark and wooden in every theme).
+HEARTH_HOLLOW = "#2A1F1C"
+LOG_WOOD = "#7A4E2D"
+#: The attribute giving a tree's fruit member the index of its spot (:data:`FRUIT_SPOTS`).
+FRUIT_INDEX = "fruit_index"
 #: How much a shade darkens (towards black) or lightens (towards white) a colour.
 SHADE = 0.25
 LIGHT = 0.4
@@ -308,10 +316,16 @@ class Prop(VGroup):
     def prop_point(self, x: float, y: float) -> np.ndarray:
         """Where the point (``x``, ``y``) in prop units as drawn facing right is on screen now (its
         place, size and facing; a prop drawn with an anchor: shapes, a grip or wheels)."""
+        return self.prop_points(np.array([[float(x), float(y), 0.0]]))[0]
+
+    def prop_points(self, points: np.ndarray) -> np.ndarray:
+        """:meth:`prop_point` for many points at once: ``points`` (n x 3, prop units as drawn
+        facing right) where they are on screen now (n x 3, z 0)."""
         if self._anchor is None:
             raise VidgenError(f"prop '{self.name}' has no anchor to place points by")
-        placed = apply_matrix(anchor_placement(self._anchor), np.array([[float(x), float(y), 0.0]]))[0]
-        return np.array([placed[0], placed[1], 0.0])
+        placed = apply_matrix(anchor_placement(self._anchor), np.asarray(points, dtype=float))
+        placed[:, 2] = 0.0
+        return placed
 
     @property
     def unit(self) -> float:
@@ -658,6 +672,20 @@ def _napkin(p: _Paint) -> list[VMobject]:
     ]
 
 
+def _kettle(p: _Paint) -> list[VMobject]:
+    """A round-bellied kettle, its spout up to the right (the steam leaves its tip, DESIGN.md §69.55)."""
+    dark = p.dark(p.main)
+    return [
+        _poly([(0.3, 0.14), (0.42, 0.4), (0.69, 0.66), (0.63, 0.72), (0.34, 0.5), (0.24, 0.3)], p.main, p, round_by=0.02),
+        *_handle([(-0.3, 0.6), *_arc(0.0, 0.62, 0.3, 175, 5, 13)[1:-1], (0.3, 0.6)], p.detail, p),
+        _poly([(-0.42, 0.04), (0.42, 0.04), (0.37, 0.58), (-0.37, 0.58)], p.main, p, round_by=0.08),
+        _rect(-0.45, 0.0, 0.45, 0.08, dark, p, radius=0.03),
+        _poly([(-0.3, 0.57), *_arc(0.0, 0.57, 0.3, 180, 0, 11)[1:-1], (0.3, 0.57)], p.light(p.main), p),
+        _circle(0.0, 0.69, 0.05, p.detail, p),
+        _ellipse(-0.2, 0.36, 0.1, 0.22, p.light(p.main), p, angle=-10, outline=False),
+    ]
+
+
 # ----- furniture (DESIGN.md §69.43): seats at 0.14 of a character's height, below every generated
 # character's hips, so a sitter's hips rest on the seat line (§69.36) ---------------------------------
 
@@ -841,15 +869,55 @@ def _desk(p: _Paint) -> list[VMobject]:
     ]
 
 
+#: How many of a fireplace's last members are its front logs: a burning fire's flames go before
+#: them (they burn behind the logs, DESIGN.md §69.55).
+FIREPLACE_FRONT = 2
+
+
+def _fireplace(p: _Paint) -> list[VMobject]:
+    """A brick fireplace against the wall: a hearth, a surround with brick lines, an arched sooty
+    hollow, a mantelpiece and two logs in front."""
+    dark = p.dark(p.main)
+    arch = [(-0.42, 0.07), (0.42, 0.07), *((0.42 * math.cos(a), 0.4 + 0.26 * math.sin(a)) for a in np.linspace(0.0, math.pi, 13))]
+    bricks = [_line(-0.75, y, 0.75, y, dark, 1.2 * OUTLINE_WIDTH) for y in (0.27, 0.47, 0.67)]
+    bricks += [_line(x, y0, x, y0 + 0.2, dark, 1.2 * OUTLINE_WIDTH) for x, y0 in ((-0.6, 0.07), (0.58, 0.07), (-0.55, 0.47), (0.5, 0.47), (0.0, 0.67), (-0.4, 0.67), (0.4, 0.67))]
+    return [
+        _rect(-0.75, 0.05, 0.75, 0.88, p.main, p),
+        *bricks,
+        _poly(arch, HEARTH_HOLLOW, p),
+        _rect(-0.85, 0.0, 0.85, 0.07, dark, p, radius=0.02),
+        _rect(-0.9, 0.86, 0.9, 1.0, p.detail, p, radius=0.02),
+        _rect(-0.3, 0.07, 0.3, 0.15, LOG_WOOD, p, radius=0.04),
+        _poly([(-0.26, 0.09), (0.24, 0.19), (0.22, 0.25), (-0.28, 0.15)], p.light(LOG_WOOD), p, round_by=0.02),
+    ]
+
+
 _DRAWERS: dict[str, Callable[[_Paint], list[VMobject] | dict[str, list[VMobject]]]] = {
     "table": _table, "chair": _chair, "tree": _tree, "bush": _bush, "house": _house, "door": _door,
     "lamp": _lamp, "sign": _sign, "box": _box, "ball": _ball, "cloud": _cloud, "sun": _sun,
     "moon": _moon, "rock": _rock, "plant": _plant, "laptop": _laptop, "cup": _cup,
-    "basket": _basket, "umbrella": _umbrella, "napkin": _napkin,
+    "basket": _basket, "umbrella": _umbrella, "napkin": _napkin, "kettle": _kettle,
     "sofa": _sofa, "armchair": _armchair, "bed": _bed, "bookshelf": _bookshelf, "counter": _counter,
     "fridge": _fridge, "picture": _picture, "rug": _rug, "houseplant": _houseplant, "clock": _clock,
-    "tv": _tv, "desk": _desk,
+    "tv": _tv, "desk": _desk, "fireplace": _fireplace,
 }
+
+
+def _fruits(p: _Paint) -> list[VMobject]:
+    """A tree's fruits (DESIGN.md §69.55): at each of :data:`FRUIT_SPOTS` a round fruit with a
+    shine and a stalk, every member tagged with its spot's index (:data:`FRUIT_INDEX`)."""
+    members: list[VMobject] = []
+    for k, (x, y) in enumerate(FRUIT_SPOTS):
+        r = FRUIT_RADIUS
+        fruit = [
+            _line(x, y + 0.8 * r, x + 0.25 * r, y + 1.6 * r, FRUIT_STALK, 1.2 * OUTLINE_WIDTH),
+            _circle(x, y, r, FRUIT_COLOR, p),
+            _circle(x - 0.35 * r, y + 0.35 * r, 0.28 * r, FRUIT_SHINE, p, outline=False),
+        ]
+        for member in fruit:
+            setattr(member, FRUIT_INDEX, k)
+        members += fruit
+    return members
 
 
 # ----- building ---------------------------------------------------------------------------------
@@ -887,13 +955,15 @@ def draw_prop(
     character_height: float | None = None,
     shape: str | None = None,
     living: bool = False,
+    fruit: bool = False,
 ) -> Prop:
     """A built-in prop ``kind`` ``height`` Manim units tall, its feet at the origin, coloured
     ``main`` / ``detail`` (theme tokens or #hex; default :data:`PROP_COLORS`). Outlines are as
     wide as a character's ``character_height`` tall (default: ``height``), at least one pixel.
     ``shape``: which of its :data:`PROP_SHAPES` it shows (default: the first). ``living``: a
-    clock, television or lamp that moves by itself gets its moving parts and an anchor
-    (:func:`~vidgen.cartoon.living_drawing.living_overlays`, DESIGN.md §69.54)."""
+    clock, television, lamp, fireplace or kettle that moves by itself gets its moving parts and an
+    anchor (:func:`~vidgen.cartoon.living_drawing.living_overlays`, DESIGN.md §69.54, §69.55).
+    ``fruit``: a tree carries a few fruits (:func:`_fruits`)."""
     if kind not in _DRAWERS and kind not in VEHICLES:
         raise VidgenError(f"unknown prop '{kind}' (props: {', '.join(PROP_KINDS)})")
     if height <= 0:
@@ -914,7 +984,10 @@ def draw_prop(
     if living and isinstance(drawn, list):
         from vidgen.cartoon.living_drawing import living_overlays
 
-        drawn = [*drawn, *living_overlays(kind, paint)]
+        front = FIREPLACE_FRONT if kind == "fireplace" else 0   # flames burn behind the front logs
+        drawn = [*drawn[: len(drawn) - front], *living_overlays(kind, paint), *drawn[len(drawn) - front :]]
+    if fruit and kind == "tree" and isinstance(drawn, list):
+        drawn = [*drawn, *_fruits(paint)]
     prop = Prop(
         *([] if shapes is not None else drawn), name=name or kind, kind=kind, facing=facing,
         seat=mirrored_seat(PROP_SEATS.get(kind), facing), lean=mirrored_lean(PROP_LEANS.get(kind), facing),
@@ -973,6 +1046,7 @@ def read_svg_seat_and_lean(path: Path, *, where: str) -> tuple[tuple[float, floa
 
 __all__ = [
     "FLAT_PROPS",
+    "FRUIT_INDEX",
     "FURNITURE",
     "PROP_COLORS",
     "PROP_HANGS",

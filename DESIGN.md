@@ -129,7 +129,10 @@ src/vidgen/
                           # rocket paths, smoke, §69.53; no manim), water.py (a stage's water,
                           # §69.53), living.py (clock hands, a tv's picture and flicker, glows,
                           # switches, what is redrawn over moving parts, §69.54; no manim),
-                          # living_drawing.py (LivingProp, PropGlow, §69.54); still.py also
+                          # living_drawing.py (LivingProp, PropGlow, PropSteam, §69.54-55),
+                          # nature.py (fruit spots, a dropped fruit's fall and bounce, flocks of
+                          # birds, §69.55; no manim), nature_drawing.py (Flock, FallenFruit,
+                          # FruitDrop, hit_stars, §69.55); still.py also
                           # draws the prop, furniture and vehicle galleries (§69.43), the look gallery
                           # (§69.47) and `vidgen character-sheet` (§69.16)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
@@ -904,6 +907,16 @@ Step 120 (§69.54) adds `DRAWN_CLOCK_SECONDS`, `GLOWS`, `LIVING_KINDS`, `MAX_CLO
 prop keys `on`, `time`, `speed`; `Stage.living`, `Stage.switch_props`; actions `switch_on`,
 `switch_off`. Compatible: a scene without a running clock or a tv / lamp that comes on renders as
 before, pixel for pixel.
+Step 121 (§69.55) adds `FRUIT_INDEX`, `flame_shapes`, `on_spans`, `steam_puffs`, `PropSteam`,
+`BIRD_SPAN`, `FLOCK_COUNT`, `FLOCK_HEIGHT`, `FRUIT_SPOTS`, `GROUND_ASIDE`, `GROUND_BOUNCE`,
+`HEAD_ASIDE`, `HEAD_BOUNCE`, `MAX_BIRDS`, `bird_place`, `drop_point`, `drop_timing`,
+`flock_plan`, `fruit_to_drop`, `FallenFruit`, `Flock`, `FruitDrop`, `fruit_skin` and
+`hit_stars`; `PROP_KINDS` gains `kettle` and `fireplace` (furniture); `SWITCHED_PROPS` /
+`LIVING_KINDS` gain both; `draw_prop(fruit=False)`; `Prop.prop_points`; `LivingProp(wind=None)`,
+`LivingProp.steam`, `.flames`, `.region(start, end)`; the stage prop key `fruit`, the stage param
+`birds`; `Stage.flocks`, `.add_flock`, `.drop_fruit`, `.fruit_drop_seconds`; actions `drop_fruit`,
+`birds`; the ambience bed `fire`. Compatible: a scene without these renders as before, pixel for
+pixel.
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -8681,6 +8694,115 @@ run or come on, are drawn exactly as before.
   characters: the glow lies behind the lamp); a carried lamp's glow follows it but keeps its
   place in the draw order; no fade when switching (at once); a tv has no sound; the clock does
   not strike. Tests: `tests/test_cartoon_living.py`.
+
+### 69.55 Props that move by themselves, part 2: fire, steam, nature (Step 121)
+
+A `fireplace` burns, a `kettle` steams, a tree drops fruit and birds cross the sky. All of it is
+seeded and pure (the same in every render) and nothing changes for a scene that uses none of it.
+
+- **Fire and steam** (`cartoon/living.py`, no manim): `flame_shapes(t, seed, lean)` → 5 outer
+  and 3 inner `FlameShape`s (closed outlines in prop units: widest a fifth of the way up, pointed,
+  the middle bending to the tip); each height × (1 + `FLAME_FLICKER` 0.28 × noise), the tip
+  wavering by `FLAME_WAVER` 0.035 × noise, where the noise is three seeded sines of 1.3–5 Hz
+  (`_noise`, terms cached). `flame_lean(force)` = `FLAME_LEAN` 0.22 × felt force, at most
+  `FLAME_LEAN_MAX` 0.3. `fire_flicker(t, seed)` ∈ [0.75, 1]: the glow's strength. `GLOWS`
+  gains the fireplace's (`#FFA94D`, radius 1.05 prop units about (0, 0.32), 0.5).
+  `steam_puffs(t, seed, lean)`: `STEAM_PUFFS` 6 puffs, each rising `STEAM_RISE` 2 prop units over
+  `STEAM_SECONDS` 2.2 s from `STEAM_SPOUT` (0.66, 0.68), one after another (seeded jitter),
+  growing from radius 0.08 to 0.3, swaying, drifting away from the spout, opacity
+  `STEAM_OPACITY` 0.85 × min(1, 8 age) × (1 − age)^1.3; the felt wind force (at most
+  `STEAM_LEAN_MAX` 1.2) pushes them aside × age². `steam_box(lean)` bounds them.
+  `on_spans(on, switches, end)`: when a prop is on. `SWITCHED_PROPS` = fireplace, kettle, lamp, tv.
+- **Drawing** (`cartoon/props.py`, `cartoon/living_drawing.py`): `fireplace` (furniture, 0.75 of a
+  character; `dim` bricks, `secondary` mantel, a sooty arched hollow `HEARTH_HOLLOW`, two
+  `LOG_WOOD` logs in front, `FIREPLACE_FRONT` 2) and `kettle` (0.15; `accent` / `dim`; spout up to
+  the right). Drawn `living`, a fireplace gets 8 flame members (`LIVING_PART` `flame`, orange
+  `#F2762E` edged `#C9472A`, yellow `#FFD25A` inner ones) inserted before its front logs.
+  `LivingProp` burns them (`_burn`: all outlines through `closed_curve`, a vectorised Catmull-Rom
+  to Manim's cubic points, 0.7 ms a frame instead of 5 ms with `set_points_smoothly`, then one
+  `Prop.prop_points` for all), flickers the glow, and for a kettle places a `PropSteam` (6 discs
+  `#F4F6FA` with a faint `#AEB9C6` edge, so steam shows on a pale sky) drawn right after the
+  kettle and graded by the light (the flames and the glow are not). `LivingProp(wind=)` is the
+  stage's felt wind force (`Stage._felt_wind`) for a fireplace or a kettle when the stage's wind
+  may blow, else `None`. `changing`: a fireplace or kettle while on; `region(start, end)` adds
+  the glow box and the steam's box (both ways with wind).
+- **Fruit** (`cartoon/nature.py`): `FRUIT_SPOTS` (4 spots on the crown, prop units),
+  `FRUIT_RADIUS` 0.034, red `#D9473B`. `draw_prop("tree", fruit=True)` (stage key `fruit`, trees
+  only) appends stalk, skin and shine per fruit, each tagged `FRUIT_INDEX`; the tree's box is
+  unchanged. A drop: `drop_timing(fall, bounce)` (frame heights; `FRUIT_GRAVITY` 3.2 frame heights
+  / s²; the fall √(2h/g), the bounce 2√(2b/g); `impact` = the fall's share), `drop_point(u,
+  start, impact, end, hit_share, bounce)` (y ∝ time² to the impact, then a parabola `bounce`
+  high to `end`, turning `BOUNCE_TURN` 100° the way it rolls), `fruit_to_drop(left, near_x,
+  xs)`. `Stage.drop_fruit(tree, onto)` (the `drop_fruit` action): hides the tree's fruit (opacity
+  0; the tree stays in the static image), adds a `FallenFruit` (copies at their drawn opacities,
+  moved by its skin's middle, `grip_point`) right after the tree (and after the character it
+  hits) and plays a `FruitDrop` (a `PropMove` with `path`, `lands_at` = the impact: the `thud`
+  of §69.27's foley; speed lines as for a thrown prop). Without `to` it falls from its spot to the
+  tree's ground line and bounces `GROUND_BOUNCE` 0.05 frame heights, `GROUND_ASIDE` 0.04 away
+  from the trunk. With `to: <character>` the fruit nearest above the head (`head_box`'s top)
+  falls on it, bounces `HEAD_BOUNCE` 0.12 and lands `HEAD_ASIDE` 0.4 of the character's height
+  beside its feet, and `hit_stars` (Step 107's `stars` symbol, hidden until `FruitDrop` sets its
+  age to 0 at the impact, `HIT_STARS_SECONDS` 1.6 s, then shrinking, `done`) circles the head; it
+  goes into `Stage.motion_effects`, so the sweep takes it off. No fruit above the head: it falls to
+  the ground. Validate: a target that is not a tree or has no fruit, `to` not a character, a
+  fifth drop of a tree (`_fruit_count_problems`, in `action_sequence_problems` before its early
+  return).
+- **Birds** (`cartoon/nature.py`, `cartoon/nature_drawing.py`): `flock_birds(count, seed)` (a
+  loose V: rank `RANK_BEHIND` 1.3 spans behind, `RANK_ASIDE` 0.55 up or down, seeded jitter, size
+  0.85–1.15, wing beat 3–4.2 Hz), `wing_lift(t, bird)` (a sine with a glide `GLIDE_SHARE` 0.3 of
+  every `GLIDE_SECONDS` 2.6 s, wings held at 0.3), `bird_outline(lift, span)` (five corners: a
+  V up, an upturned V down), `flock_plan(start, seconds, direction, left, right, y, span, count,
+  seed, frame_width)` (default seconds: `FLOCK_SPEED` 0.2 frame widths a second over the stage and
+  a margin of the flock's length each side), `bird_place(plan, k, t)` (`None` outside its time),
+  `flock_box(plan, start, end)` (24 samples). `Flock` (two `wing_curve` cubics per bird,
+  `BIRD_INK` `#2E3440`, stroke 9 × span, at least a pixel; `update_to(t)`) is graded by the light
+  and drawn right after the sky (`Stage._sky_end`: the backdrop's background and stars), behind
+  the layers, ground, props and characters (`_put_in_sky`: into the backdrop before the set comes
+  in, else into the scene). Stage param `birds` (`StageBirds`: `true`, a count, or {count,
+  direction, height (0.5–0.97 of the frame height, 0.8), start (0.5 s), seconds, seed}) and the
+  non-animating action `birds` (`FlockSettings`; a number target is the count; cued at `at`),
+  both refused in a room. Default seed `motion_seed(scene, "birds", k)`.
+- **What is redrawn** (§69.54's rule, generalised): `_living_things` = the living props and the
+  flocks; each has `changing(start, end)`, `movers()` and `region(start, end)` (a flock: the box
+  of its birds during that time). The scene updater `_living_step` updates both (installed for a
+  living prop, or by `add_flock`) and removes itself once only flocks that have flown are left.
+- **Sound** (`ambience.py`, `mix.py`): `fire_loop()` (8 s stereo, numpy, `crc32("ambience:fire")`:
+  a roar of noise around 220 Hz with a 3-cycle breath, 9 crackles a second and 1.5 pops a second,
+  impulses ringing 4 ms (`_ringing`, circular) band-passed at 3 kHz and 1.2 kHz, circular filters)
+  at `FIRE_LEVEL` −34 LUFS. `BEDS` holds each bed's loop, duck (fire: `RAIN_DUCK`) and fades (fire
+  0.6 / 0.8 s); `plan_ambience` places every bed of `AMBIENCE_BEDS` (rain, fire) the same way
+  (rain unchanged). `Stage.timings()` adds `{bed: fire}` for each burning fireplace's `on_spans`
+  when foley is on. `switch_props` plays the `click` for the other props and a 0.8 s `burner` at
+  `FIRE_LIGHT_GAIN` −10 dB when a fireplace is lit.
+- **Layout dump**: `PropSteam`, `Flock` and `FallenFruit` are left out (not placed by authors).
+- **Measured** (scratch projects at preview 854×480, 15 fps, no audio, one process each under
+  the 1500 MB cap; Cairo draws counted around `Camera.display_vectorized`, raw frames hashed):
+
+  | render | frames | Cairo draws | wall (s) |
+  |---|---|---|---|
+  | a stage without the new things (trees, ball, lamp on, wind, leaves, a throw): HEAD c8fad68 / this step | 162 | 16 910 / 16 910 | 8.3 / 7.8–8.1 |
+  | Step 120's room with clock, tv and lamp on: HEAD / this step | 266 | 32 665 / 32 665 | 9.6 / 9.7 |
+  | a night room with a fireplace and a kettle, both off (2 runs) | 260 | 16 415 | 6.6–7.1 |
+  | the same, both on all along (4 runs; the first two before `closed_curve`) | 260 | 31 846 | 10.4–11.4 |
+  | the same, everything from the first moving part redrawn (for comparison) | 260 | 35 551 | 11.4 |
+  | the first stage with `birds: 6` (2 runs) | 162 | 17 990 | 7.5–8.2 |
+
+  The scenes without the new things give the same raw frame hashes as HEAD (all 162 and 266).
+  Fire and kettle on: 59 more draws a frame (flames 8, glow 12, steam 6, and the rug, armchair and
+  character in front of the glow), wall +3.3 to +4.4 s (+50 to +63 %): the fireplace's glow is a
+  large translucent disc stack. The overlap rule saved 3 705 draws over redrawing everything from
+  the first moving part, with the same frames. Birds: +1 080 draws, wall within the noise.
+- **Checked by eye** (scratch projects, preview frames): a night room with the fireplace lit in
+  beat 1 (flames behind the logs, the glow on the wall and floor) and the kettle switched on in
+  beat 2 (steam rising from the spout); an orchard with a breeze: a fruit falling and lying
+  under the tree, one falling on a character's head with the stars, the second tree's fruit, a
+  flock of five crossing to the right and three to the left, a burning fireplace and a steaming
+  kettle outdoors.
+- **Not done**: the fire lights no character; a fallen fruit cannot be picked up (it is not a
+  prop) and lies where it bounced; nothing checks that a `to:` character stands under the tree;
+  the crackle plays while the fireplace burns in the scene, also when the camera looks away; a
+  carried kettle's steam keeps its draw-order place; no birdsong (Step 128); birds do not land or
+  perch; a tree's fruit count is fixed (4). Tests: `tests/test_cartoon_fire_nature.py`.
 
 ## 70. Render jobs: `--jobs auto` (Step 117)
 
