@@ -1290,7 +1290,7 @@ class MusicCue(_Strict):
     model_config = ConfigDict(extra="forbid", use_attribute_docstrings=True, populate_by_name=True)
 
     source: str = Field(min_length=1)
-    """A built-in bed (calm, pulse, bright; vidgen list-music) or an audio file under the project (e.g. assets/music/theme.mp3)."""
+    """A built-in bed (calm, pulse, bright, cartoon, lullaby; vidgen list-music) or an audio file under the project (e.g. assets/music/theme.mp3)."""
     volume: float = Field(default=0.0, ge=-60, le=12)
     """Level change in dB (0: -28 LUFS, about 7 dB under typical narration before ducking)."""
     start: float = Field(default=0.0, ge=0)

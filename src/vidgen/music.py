@@ -1,12 +1,12 @@
-"""Background music (DESIGN.md §48): three procedurally generated ambient beds, the project's
+"""Background music (DESIGN.md §48, §69.63): five procedurally generated beds, the project's
 own music files, and the sources the mix reads from.
 
-A *bed* is a seamless loop made of a slowly evolving chord progression (numpy only, no
-recordings, deterministic): sustained pads are built with the PADsynth method (Nasca Octavian
+A *bed* is a seamless loop made of a chord progression (numpy only, no recordings, no samples,
+deterministic): sustained pads are built with the PADsynth method (Nasca Octavian
 Paul's algorithm, from ZynAddSubFX) — each chord's
 harmonics as narrow Gaussian bumps of a spectrum with seeded random phases, turned into a
-periodic wave by one inverse FFT — and cross-faded from chord to chord; plucked arpeggios and
-bells are added note by note. Everything is rendered *circularly* (notes running past the loop's
+periodic wave by one inverse FFT — and cross-faded from chord to chord; plucked arpeggios,
+pizzicato strings, bells, music-box tines and woodblocks are added note by note. Everything is rendered *circularly* (notes running past the loop's
 end continue at its start; the final filtering is a circular FFT filter), so the loop repeats
 without a seam. The loop is set to :data:`MUSIC_LEVEL` integrated loudness.
 
@@ -29,7 +29,7 @@ import numpy as np
 
 from vidgen.errors import VidgenError
 from vidgen.loudness import integrated_loudness
-from vidgen.sfx import RATE, _highpass, _lowpass, decode_audio, write_wav
+from vidgen.sfx import RATE, _band, _filtered, _highpass, _lowpass, decode_audio, write_wav
 
 if TYPE_CHECKING:
     from vidgen.config import MusicCue, VideoConfig
@@ -131,6 +131,40 @@ def _pluck(freq: float, n: int, tau: float, bright: float, lowpass: float) -> np
 def _bell(freq: float, n: int, tau: float, lowpass: float) -> np.ndarray:
     """A soft bell (glockenspiel-like): 2 ms strike, two quiet overtones."""
     return _partials(freq, n, tau, 0.002, ((1.0, 1.0, 1.0), (2.0, 0.28, 0.55), (3.0, 0.07, 0.35)), lowpass)
+
+
+def _pizzicato(freq: float, n: int, tau: float, lowpass: float) -> np.ndarray:
+    """A plucked string (pizzicato): 3 ms attack, a woody body of five harmonics, the upper ones
+    dying first."""
+    partials = ((1.0, 1.0, 1.0), (2.0, 0.45, 0.55), (3.0, 0.22, 0.4), (4.0, 0.1, 0.3), (5.0, 0.05, 0.25))
+    return _partials(freq, n, tau, 0.003, partials, lowpass)
+
+
+def _music_box(freq: float, n: int, tau: float, lowpass: float) -> np.ndarray:
+    """A music-box tine: 1.5 ms strike, a second tine 3.5 cents sharp (a slow shimmer of beats), a
+    faint octave and a short inharmonic ping at 5.4 times the pitch."""
+    partials = ((1.0, 1.0, 1.0), (1.002, 0.3, 0.9), (2.0, 0.1, 0.4), (5.4, 0.04, 0.08))
+    return _partials(freq, n, tau, 0.0015, partials, lowpass)
+
+
+def _woodblock(freq: float, lowpass: float) -> np.ndarray:
+    """A small woodblock tock (60 ms): a hollow tone with an inharmonic partial, 0.5 ms strike."""
+    return _partials(freq, int(0.06 * RATE), 0.018, 0.0005, ((1.0, 1.0, 1.0), (2.76, 0.3, 0.5)), lowpass)
+
+
+def _tick(rng: np.random.Generator) -> np.ndarray:
+    """A soft snare-like tick (80 ms): a noise burst around 2.2 kHz, nothing above ~3.5 kHz."""
+    t = np.arange(int(0.08 * RATE)) / RATE
+    burst = rng.standard_normal(len(t)) * np.exp(-t / 0.018) * (1 - np.exp(-t / 0.0008))
+    tick = _filtered(burst, lambda f: _band(f, 2200.0, 0.7) * _lowpass(f, 3500.0, 4))
+    tick[-int(0.01 * RATE) :] *= np.linspace(1, 0, int(0.01 * RATE))
+    return tick / np.abs(tick).max()
+
+
+def _add_panned(out: np.ndarray, start: int, sound: np.ndarray, pan: float) -> None:
+    """Add a mono ``sound`` to stereo ``out`` at ``start`` (circularly), ``pan`` -1 (left) to 1."""
+    for c, side in enumerate((1 - pan, 1 + pan)):
+        _circular_add(out[:, c], start, sound * side)
 
 
 # ----- the beds ------------------------------------------------------------------------------------
@@ -285,6 +319,147 @@ def _bright(rng: np.random.Generator) -> np.ndarray:
     return _finish(out)
 
 
+@dataclass(frozen=True)
+class _CartoonBar:
+    """One bar of the ``cartoon`` bed: its chord, the chord's voicing (pad and off-beat stabs),
+    the bass on beats 1 and 3 (and an optional pickup on the last eighth) and the melody in
+    eighth-note slots (``None``: rest)."""
+
+    chord: str
+    voicing: tuple[int, ...]
+    bass: tuple[int, int, int | None]
+    melody: tuple[int | None, ...]
+
+
+_ = None  # a rest in the melodies below
+_G, _C, _D7 = (55, 59, 62, 67), (55, 60, 64, 67), (54, 57, 60, 62)
+_EM, _A7, _AM = (55, 59, 64, 67), (55, 57, 61, 64), (57, 60, 64, 69)
+#: Six four-bar phrases in G major: A, A' (to the dominant), B (syncopated, lower), A an octave
+#: up, C (call and response with the woodblocks), a turnaround back to the top.
+_CARTOON_BARS = (
+    _CartoonBar("G", _G, (43, 50, _), (74, _, 79, _, 78, 79, 81, _)),
+    _CartoonBar("C", _C, (48, 43, _), (79, _, 76, _, 72, _, 76, 79)),
+    _CartoonBar("D7", _D7, (38, 45, _), (78, _, 81, 78, 74, _, 72, _)),
+    _CartoonBar("G", _G, (43, 50, 42), (71, 74, 79, _, 79, _, _, 74)),
+    _CartoonBar("G", _G, (43, 50, _), (74, _, 79, _, 78, 79, 83, _)),
+    _CartoonBar("Em", _EM, (40, 47, _), (83, _, 79, _, 76, _, 79, 83)),
+    _CartoonBar("A7", _A7, (45, 40, _), (81, _, 85, 81, 79, _, 76, _)),
+    _CartoonBar("D7", _D7, (38, 45, 47), (78, _, 74, _, 72, 74, 78, 81)),
+    _CartoonBar("C", _C, (48, 43, _), (76, _, _, 72, 79, _, _, 76)),
+    _CartoonBar("G/B", _G, (47, 43, _), (74, _, _, 71, 79, _, _, 74)),
+    _CartoonBar("Am", _AM, (45, 52, _), (72, _, 76, _, 81, _, 79, 76)),
+    _CartoonBar("D7", _D7, (38, 45, 42), (78, _, 74, _, 81, 79, 78, 76)),
+    _CartoonBar("G", _G, (43, 50, _), (79, _, 83, _, 81, 83, 86, _)),
+    _CartoonBar("C", _C, (48, 43, _), (84, _, 79, _, 76, _, 79, 84)),
+    _CartoonBar("D7", _D7, (38, 45, _), (81, _, 84, 81, 78, _, 74, _)),
+    _CartoonBar("G", _G, (43, 50, 47), (79, _, _, _, 71, _, 74, _)),
+    _CartoonBar("Em", _EM, (40, 47, _), (71, 74, 76, _, _, _, _, _)),
+    _CartoonBar("Am", _AM, (45, 52, _), (72, 76, 81, _, _, _, _, _)),
+    _CartoonBar("D7", _D7, (38, 45, _), (78, 81, 84, _, 81, _, 78, _)),
+    _CartoonBar("G", _G, (43, 50, 47), (79, _, 74, _, 71, _, _, _)),
+    _CartoonBar("C", _C, (48, 43, _), (76, _, 79, 76, 72, _, 76, _)),
+    _CartoonBar("D7", _D7, (38, 45, _), (78, _, 81, 78, 74, _, 78, _)),
+    _CartoonBar("G", _G, (43, 50, _), (79, _, 74, _, 71, 74, 79, _)),
+    _CartoonBar("D7", _D7, (38, 45, 42), (81, _, 78, _, 74, 76, 78, 76)),
+)
+#: Percussion per phrase, as eighth-note slots: (soft ticks, high woodblock, low woodblock).
+_CARTOON_PERCUSSION = (
+    ((2, 6), (7,), ()),
+    ((2, 6), (3, 7), (5,)),
+    ((6,), (), (3,)),
+    ((2, 6), (3, 7), (5,)),
+    ((2,), (4, 5), (6, 7)),
+    ((2, 6), (7,), (3,)),
+)
+
+
+def _cartoon(rng: np.random.Generator) -> np.ndarray:
+    lowpass = 4200.0
+    beat = RATE * 60 // 128  # 128 BPM
+    step = beat // 2
+    seg = 4 * beat  # a chord per bar
+    bars = _CARTOON_BARS
+    out = 0.1 * _pads([b.voicing for b in bars], [b.bass[0] for b in bars], seg, seg // 2, rng, air=0.15, air_cycles=1, lowpass=lowpass)
+    tick, wood_high, wood_low = _tick(rng), _woodblock(1250.0, lowpass), _woodblock(880.0, lowpass)
+    for i, bar in enumerate(bars):
+        start = i * seg
+        for k, note in enumerate(bar.melody):
+            if note is not None:
+                accent = 1.0 if k % 2 == 0 else 0.8
+                _add_panned(out, start + k * step, _pizzicato(_hz(note), int(1.2 * RATE), 0.2, lowpass) * 0.55 * accent, 0.2)
+        for k, note in zip((0, 4, 7), bar.bass):
+            if note is not None:
+                _add_panned(out, start + k * step, _pizzicato(_hz(note), int(1.5 * RATE), 0.32, lowpass) * (0.8 if k < 7 else 0.5), 0.0)
+        for k in (2, 6):  # "oom-pah": a short pizzicato chord on beats 2 and 4
+            for n, note in enumerate(bar.voicing[1:]):
+                _add_panned(out, start + k * step + 60 * n, _pizzicato(_hz(note), int(0.6 * RATE), 0.1, lowpass) * 0.2, -0.35)
+        ticks, high, low = _CARTOON_PERCUSSION[i // 4]
+        if i % 4 == 3:  # each phrase ends with a woodblock fill
+            ticks, high, low = (2,), (5, 7), (6,)
+        for k in ticks:
+            _add_panned(out, start + k * step, tick * 0.25, 0.0)
+        for k in high:
+            _add_panned(out, start + k * step, wood_high * 0.4, 0.4)
+        for k in low:
+            _add_panned(out, start + k * step, wood_low * 0.4, -0.4)
+    return _finish(out)
+
+
+@dataclass(frozen=True)
+class _LullabyBar:
+    """One bar of 3/4 of the ``lullaby`` bed: its chord, voicing (pad and music-box
+    accompaniment), bass note and melody as ``(note, beats)``."""
+
+    chord: str
+    voicing: tuple[int, ...]
+    bass: int
+    melody: tuple[tuple[int, int], ...]
+
+
+_F, _BB, _C7, _GM7 = (53, 57, 60, 65), (53, 58, 62, 65), (52, 55, 58, 60), (53, 58, 62, 67)
+#: Four 4-bar phrases in F major ending on C7, which leads back to the top.
+_LULLABY_BARS = (
+    _LullabyBar("F", _F, 41, ((81, 2), (79, 1))),
+    _LullabyBar("Bb/F", _BB, 41, ((77, 1), (82, 1), (81, 1))),
+    _LullabyBar("F", _F, 41, ((84, 2), (81, 1))),
+    _LullabyBar("C7", _C7, 36, ((79, 2), (76, 1))),
+    _LullabyBar("F", _F, 41, ((77, 1), (81, 1), (84, 1))),
+    _LullabyBar("Dm", (53, 57, 62, 65), 38, ((86, 2), (84, 1))),
+    _LullabyBar("Gm7", _GM7, 43, ((82, 1), (81, 1), (79, 1))),
+    _LullabyBar("C7", _C7, 36, ((79, 3),)),
+    _LullabyBar("Bb", _BB, 46, ((77, 1), (82, 1), (86, 1))),
+    _LullabyBar("F/A", _F, 45, ((84, 1), (81, 1), (77, 1))),
+    _LullabyBar("Gm7", _GM7, 43, ((82, 1), (79, 1), (77, 1))),
+    _LullabyBar("C7", _C7, 36, ((76, 2), (79, 1))),
+    _LullabyBar("F", _F, 41, ((81, 2), (84, 1))),
+    _LullabyBar("Dm7", (53, 57, 60, 62), 38, ((86, 1), (84, 1), (81, 1))),
+    _LullabyBar("Gm7", _GM7, 43, ((82, 2), (79, 1))),
+    _LullabyBar("C7", _C7, 36, ((76, 2), (72, 1))),
+)
+#: Broken-chord patterns (indices into the voicing an octave up) in eighths, one per phrase.
+_LULLABY_PATTERNS = ((0, 2, 1, 2, 3, 2), (0, 1, 2, 3, 2, 1), (0, 2, 1, 2, 3, 2), (0, 2, 3, 2, 1, 2))
+
+
+def _lullaby(rng: np.random.Generator) -> np.ndarray:
+    lowpass = 3600.0
+    beat = RATE * 60 // 64  # 64 BPM
+    seg = 3 * beat  # a chord per bar of 3/4
+    bars = _LULLABY_BARS
+    out = 0.22 * _pads([b.voicing for b in bars], [b.bass for b in bars], seg, seg // 3, rng, air=0.3, air_cycles=2, lowpass=lowpass)
+    for i, bar in enumerate(bars):
+        start = i * seg
+        _add_panned(out, start, _pluck(_hz(bar.bass), int(2.5 * RATE), 0.9, 0.2, lowpass) * 0.45, 0.0)
+        tones = [n + 12 for n in bar.voicing]
+        for k, idx in enumerate(_LULLABY_PATTERNS[i // 4]):
+            level = 0.2 if k == 0 else 0.14
+            _add_panned(out, start + k * beat // 2, _music_box(_hz(tones[idx]), int(2.0 * RATE), 0.7, lowpass) * level, -0.25)
+        at = start
+        for note, beats in bar.melody:
+            _add_panned(out, at, _music_box(_hz(note), int(3.0 * RATE), 1.3, lowpass) * 0.42, 0.2)
+            at += beats * beat
+    return _finish(out)
+
+
 #: The built-in beds, in listing order.
 BUILTIN_BEDS: dict[str, Bed] = {
     b.name: b
@@ -316,11 +491,35 @@ BUILTIN_BEDS: dict[str, Bed] = {
             "two bars (4 s). Rolled off above ~4.5 kHz; optimistic, friendly, never loud.",
             "launches, tutorials, upbeat social clips, positive results",
         ),
+        Bed(
+            "cartoon", _cartoon, 45.0, 128, "G major",
+            tuple(b.chord for b in _CARTOON_BARS),
+            "A playful, bouncy bed at 128 BPM in G major, 4/4: a staccato pizzicato-string melody "
+            "(B4 to D6, slightly right) on a short motif that comes back varied (an octave up, "
+            "towards the dominant, as call and response with the woodblocks), a plucked bass "
+            "bouncing root to fifth on beats 1 and 3 (D2 to E3), short pizzicato chords on beats 2 "
+            "and 4 (oom-pah), two woodblocks (high right, low left), soft snare-like noise ticks "
+            "and a faint pad; six 4-bar phrases, a chord per bar (I-IV-V7-I, ii and VI7 turns, "
+            "a turnaround back to the top). Rolled off above ~4 kHz; cheerful, light, mischievous, "
+            "never loud.",
+            "cartoons and stories for children, comic or light-hearted scenes, playful how-tos",
+        ),
+        Bed(
+            "lullaby", _lullaby, 45.0, 64, "F major",
+            tuple(b.chord for b in _LULLABY_BARS),
+            "A gentle, slow lullaby at 64 BPM in F major, 3/4 (waltz time, bars of 2.8 s): a "
+            "music-box melody of bell-like tines (C5 to D6, slightly right; a soft shimmer as each "
+            "note rings ~1.5 s) over a quieter music-box broken chord in eighth notes (E4 to G5, "
+            "slightly left), a warm soft pad and a low sine bass note on each bar's first beat "
+            "(C2 to Bb2); 16 bars, a chord per bar (I-IV-I-V7, ii, vi, IV turns, ending on V7 back "
+            "to the top). No percussion; rolled off above ~3.5 kHz; tender, dreamy, sleepy.",
+            "bedtime stories, soft or sentimental moments, endings, calm scenes for young children",
+        ),
     )
 }
 
 
-@lru_cache(maxsize=4)
+@lru_cache(maxsize=8)
 def bed_loop(name: str) -> np.ndarray:
     """A built-in bed's seamless loop: float32 ``(n, 2)`` at :data:`RATE`, :data:`MUSIC_LEVEL`
     integrated loudness, read-only; made once per process (about a second)."""

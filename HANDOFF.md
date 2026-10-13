@@ -12227,3 +12227,67 @@ How to test
   test_cartoon_small_props test_cartoon_water_air` (9, 10 s), `test_cartoon_moving
   test_cartoon_living test_cartoon_storm test_cartoon_lighting test_sfx test_music
   test_cartoon_sounds` (18, 43 s). The full suite was not run.
+
+
+## Step 129 — More music
+
+What was built
+- Two new built-in music beds in `src/vidgen/music.py`, made like `calm` / `pulse` / `bright`
+  (numpy only, no recordings, no samples, seeded `crc32("music:<name>")`, rendered circularly so
+  the loop tiles without a seam, `_finish`ed to `MUSIC_LEVEL` −28 LUFS integrated). Melodies are
+  original, written for vidgen as data in the module (no known tune, lullaby or theme).
+  - `cartoon`: 45 s, 24 bars of 4/4 at 128 BPM, G major. `_CARTOON_BARS` (`_CartoonBar`: chord,
+    voicing, bass on beats 1 / 3 + optional pickup, melody in eight eighth slots) as six 4-bar
+    phrases (A, A' to the dominant, B syncopated, A an octave up, C call and response with the
+    woodblocks, a turnaround back to the top). Pizzicato melody B4–D6, pizzicato bass D2–E3
+    bouncing root–fifth, oom-pah pizzicato chords on 2 and 4, woodblocks (1250 / 880 Hz) and
+    soft noise ticks per phrase (`_CARTOON_PERCUSSION`, a fill in each phrase's last bar), a
+    faint pad.
+  - `lullaby`: 45 s, 16 bars of 3/4 at 64 BPM, F major. `_LULLABY_BARS` (`_LullabyBar`: chord,
+    voicing, bass, melody as `(note, beats)`): a music-box melody C5–D6 over a music-box broken
+    chord in eighths (E4–G5, `_LULLABY_PATTERNS` per phrase), a soft pad, a low sine bass on
+    each bar's first beat; no percussion.
+  - New voices: `_pizzicato`, `_music_box` (a second tine 3.5 cents sharp for a slow shimmer),
+    `_woodblock`, `_tick` (filtered noise through `sfx._filtered` / `_band` / `_lowpass`);
+    `_add_panned`. `bed_loop`'s cache grows from 4 to 8 beds.
+  - `vidgen list-music` describes both (instruments, key, tempo, meter, chords, ranges, mood,
+    rolled-off frequency, use) through the existing `Bed` fields; no code change in the CLI.
+
+Evidence
+- Measured with the project's loudness code (`loudness.integrated_loudness`) on the WAVs written
+  by `vidgen list-music --render-dir` (scratchpad `s129/wav`, not committed): all five beds
+  −28.00 LUFS; peaks cartoon −14.4, lullaby −14.5 dBFS (calm −17.2, pulse −17.2, bright −16.3).
+  Energy above 5 kHz −53 / −49 dB, below 35 Hz −38 / −46 dB; channel correlation 0.88 / 0.60;
+  3 s windows −28.7 to −27.2 LUFS. Layers before levelling: cartoon plucks −7.9, pad −16.8,
+  woodblocks −23.1, ticks −30.3 LUFS; lullaby music box −9.2, pad −10.0, bass −16.3. Each bed
+  is made in about 1 s. Not listened to by a human (no playback here).
+
+Decisions / deviations
+- The seam test's level check (50 ms RMS before / after the seam within 1.5 dB) cannot hold for
+  a loop that starts on a downbeat with plucked attacks (cartoon +6.6 dB, lullaby +5.3 dB: the
+  first note's strike). For beds with a tempo, `test_bed_loop_seam_is_continuous` now asks that
+  the seam's change lies within the range of the same change at the loop's other beats (± 0.5
+  dB); `calm` keeps the 1.5 dB rule; the sample-step and tiled-read checks are unchanged.
+  Rotating the loop off the downbeat was rejected: `start: 0` should begin on the tune's top.
+- No time-signature field was added to `Bed`; the 3/4 is stated in the description.
+- Names checked against the ambience beds (`rain`, `fire`, `birdsong`, `city`, `room_tone`) and
+  the stings: no clash (separate namespaces, and no music bed shares a name with them).
+
+Files touched
+- `src/vidgen/music.py`, `src/vidgen/config.py` (the `source` docstring), `tests/test_music.py`.
+- Docs: `docs/CONFIG.md` (music row, beds table, `source` row), `README.md`, `DESIGN.md` (§48
+  pointer, new §69.63), guide `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md` (Music
+  paragraph), `examples/gallery/video.yaml` (a comment), `tasklist.md`.
+
+Public interfaces
+- Music sources `cartoon` and `lullaby` (config `music:`, `vidgen list-music`, MCP `list_music`).
+  Nothing added to `vidgen.api`.
+
+Known gaps / TODOs
+- Nobody has listened to the beds; no meter field; one loop each (no longer variants).
+
+How to test
+- `pytest -m "not render" tests/test_music.py` (32 passed, 28 s), `tests/test_guide.py
+  tests/test_docs.py` (102 passed, 3 s), `tests/test_schema.py tests/test_config.py` (80 passed,
+  77 s). Render tests of `test_music.py` not run (they use `calm`, unchanged). The full suite was
+  not run.

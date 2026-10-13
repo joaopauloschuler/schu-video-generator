@@ -1276,9 +1276,10 @@ scenes:
 ```
 
 **Music** (`vidgen list-music`): `calm` (serious, long narration), `pulse` (tech, data,
-walkthroughs), `bright` (launches, upbeat social). It is ducked under the voice automatically
-and the mix is normalised to −16 LUFS. Leave the defaults; turn it off over clips with their
-own sound (`music: false` on the scene).
+walkthroughs), `bright` (launches, upbeat social), `cartoon` (playful pizzicato: cartoons,
+comic scenes), `lullaby` (music box: bedtime stories, soft endings). It is ducked under the
+voice automatically and the mix is normalised to −16 LUFS. Leave the defaults; turn it off over
+clips with their own sound (`music: false` on the scene).
 
 ```yaml
 music: {source: calm, volume: -2}

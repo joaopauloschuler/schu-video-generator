@@ -3521,7 +3521,8 @@ the measured loudness, §48). `--jobs auto` (every command with `--jobs`) first 
   pre-check raises it. `music` / `audio` and a scene's `music` are not render-fingerprint
   inputs, nor are `music.py`, `mix.py`, `loudness.py` (music never changes pixels or timing).
 - **Beds** (`vidgen/music.py`, numpy only): `calm` (60 s, D major, no beat), `pulse` (40 s,
-  A minor, 96 BPM), `bright` (48 s, C major, 120 BPM). Pads by PADsynth: each chord's harmonics
+  A minor, 96 BPM), `bright` (48 s, C major, 120 BPM); Step 129 adds `cartoon` and `lullaby`
+  (§69.63). Pads by PADsynth: each chord's harmonics
   as Gaussian bumps (18–30 cents wide) with random phases in one spectrum, one inverse FFT → a
   periodic wave whose length divides the chord's segment; chords cross-fade with equal-power
   windows of 1.6 s; an airy layer an octave up swells with an LFO whose period divides the loop;
@@ -9416,6 +9417,47 @@ without them renders as before.
   are centred (not panned by the door's x); birdsong ignores snow and fog; a light action's
   fade counts as one instant (its middle); no listening by a human. Tests:
   `tests/test_cartoon_sounds.py` (13 without rendering, 2 tiny renders).
+
+### 69.63 More music: the `cartoon` and `lullaby` beds (Step 129)
+
+- **Searched first**: the beds of §48 (`music.py`: `_pads`, `_partials`, `_pluck`, `_bell`,
+  `_circular_add`, `_finish`, `BUILTIN_BEDS`, `bed_loop`), `sfx._filtered` / `_band` /
+  `_lowpass` for the noise tick. Both new beds are made the same way: numpy only, no recordings,
+  no samples, seeded `crc32("music:<name>")`, rendered circularly, `_finish`ed to `MUSIC_LEVEL`
+  −28 LUFS integrated. Original melodies written for vidgen (no known tune, lullaby or theme).
+- **New voices** (`music.py`): `_pizzicato` (3 ms attack, harmonics 1–5 at 1 / .45 / .22 / .1 /
+  .05, the upper ones decaying faster), `_music_box` (1.5 ms strike, a second tine 3.5 cents
+  sharp at 0.3 for a slow shimmer, a faint octave, a short ping at 5.4×), `_woodblock` (60 ms,
+  partials 1 and 2.76, 0.5 ms strike), `_tick` (80 ms noise burst, band around 2.2 kHz, 4th-order
+  low-pass at 3.5 kHz); `_add_panned` places a mono note in the stereo loop.
+- **`cartoon`** (45 s = 24 bars of 4/4 at 128 BPM, G major): the score is data, `_CARTOON_BARS`
+  (chord, voicing, bass on beats 1 / 3 and an optional pickup, melody in eight eighth slots) in
+  six 4-bar phrases: A (G C D7 G), A' towards the dominant (G Em A7 D7), B syncopated and lower
+  (C G/B Am D7), A an octave up, C a call and response with the woodblocks (Em Am D7 G), a
+  turnaround (C D7 G D7) whose last bar runs back into the top. Pizzicato melody B4–D6 (pan
+  +0.2, off-beats at 0.8), a pizzicato bass D2–E3 bouncing root–fifth, short pizzicato chords on
+  beats 2 and 4 (three notes spread by 60 samples, pan −0.35), percussion per phrase
+  (`_CARTOON_PERCUSSION`: ticks, a high woodblock 1250 Hz right, a low one 880 Hz left; each
+  phrase's fourth bar a fill), a pad at 0.1. Layers before levelling: plucks −7.9 LUFS, pad
+  −16.8, woodblocks −23.1, ticks −30.3.
+- **`lullaby`** (45 s = 16 bars of 3/4 at 64 BPM, F major): `_LULLABY_BARS` (chord, voicing,
+  bass, melody as `(note, beats)`); a music-box melody C5–D6 (pan +0.2), a music-box broken
+  chord in eighths an octave over the voicing (E4–G5, pan −0.25; one pattern per 4-bar phrase,
+  `_LULLABY_PATTERNS`), a soft `_pluck` bass C2–B♭2 on each bar's first beat, a pad at 0.22.
+  Layers: music box −9.2 LUFS, pad −10.0, bass −16.3.
+- **Measured** (`vidgen list-music --render-dir`, then `loudness.integrated_loudness`): both
+  −28.00 LUFS, peak −14.4 / −14.5 dBFS (the others −16.3 to −17.2); energy above 5 kHz −53 /
+  −49 dB, below 35 Hz −38 / −46 dB; channel correlation 0.88 / 0.60; 3 s windows −28.7 to −27.2 LUFS;
+  made in ~1 s each.
+- **Seam test changed**: the old check (50 ms RMS before and after the seam within 1.5 dB) holds
+  for a pad but not for a bed whose loop starts on a downbeat with plucked attacks (cartoon
+  +6.6 dB, lullaby +5.3 dB: the first note's strike). For beds with a tempo the test now asks
+  that the change at the seam lies within the range of that change at the loop's other beats
+  (± 0.5 dB); `calm` keeps the 1.5 dB rule. The sample-step and tiled-read checks are unchanged.
+  Rotating the loop off the downbeat was rejected: `start: 0` should begin on the top of the tune.
+- **Not done**: no time signature field (`Bed` has none; the 3/4 is in the description); nobody
+  has listened to the beds (no audio playback here). Tests: `tests/test_music.py` (the
+  parametrized bed tests now cover five beds; a score test for both new beds).
 
 ## 70. Render jobs: `--jobs auto` (Step 117)
 

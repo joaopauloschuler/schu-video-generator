@@ -108,10 +108,18 @@ def test_bed_loop_seam_is_continuous(name: str) -> None:
     steps = np.abs(np.diff(loop, axis=0))
     seam = np.abs(loop[0] - loop[-1])
     assert (seam <= np.quantile(steps, 0.999, axis=0)).all()  # the jump around the loop is an ordinary step
-    # the level runs on across the seam: 50 ms RMS just before and just after it within 1.5 dB
+    # the level runs on across the seam: 50 ms RMS just before and just after it within 1.5 dB,
+    # or, in a bed with a beat (the loop starts on a downbeat), within the range of that change
+    # at the loop's other beats
     w = RATE // 20
-    before, after = _rms(loop[-w:]), _rms(loop[:w])
-    assert abs(_db(after / before)) < 1.5
+    seam_db = _db(_rms(loop[:w]) / _rms(loop[-w:]))
+    tempo = music.BUILTIN_BEDS[name].tempo
+    if tempo is None:
+        assert abs(seam_db) < 1.5
+    else:
+        beat = RATE * 60 // tempo
+        beats_db = [_db(_rms(loop[b : b + w]) / _rms(loop[b - w : b])) for b in range(beat, len(loop) - w, beat)]
+        assert min(beats_db) - 0.5 < seam_db < max(beats_db) + 0.5
     # tiled, the source reads straight across the seam
     source = music.Source(MusicCue(source=name, start=1.0), ROOT)
     n = len(loop)
@@ -126,6 +134,32 @@ def test_bed_sources_differ_and_describe_themselves() -> None:
         assert len(bed.description) > 150 and bed.use and bed.key and bed.chords
     with pytest.raises(VidgenError, match="unknown music bed 'nope'"):
         music.bed_loop("nope")
+
+
+def test_cartoon_and_lullaby_scores_match_their_descriptions() -> None:
+    """Step 129: the scores behind the ``cartoon`` and ``lullaby`` beds (no audio made)."""
+    cartoon, lullaby = music.BUILTIN_BEDS["cartoon"], music.BUILTIN_BEDS["lullaby"]
+    bars = music._CARTOON_BARS
+    assert (cartoon.tempo, cartoon.key, lullaby.tempo, lullaby.key) == (128, "G major", 64, "F major")
+    # 24 bars of 4/4 at 128 BPM and 16 bars of 3/4 at 64 BPM: both 45 s loops
+    assert len(bars) * 4 * 60 / cartoon.tempo == cartoon.seconds == 45.0
+    assert len(music._LULLABY_BARS) * 3 * 60 / lullaby.tempo == lullaby.seconds == 45.0
+    assert cartoon.chords == tuple(b.chord for b in bars) and lullaby.chords == tuple(b.chord for b in music._LULLABY_BARS)
+    # the cartoon melody: eight eighth-note slots a bar, B4 to D6 as described, and no 4-bar
+    # phrase repeats another (the motif comes back varied)
+    notes = [n for b in bars for n in b.melody if n is not None]
+    assert all(len(b.melody) == 8 for b in bars) and (min(notes), max(notes)) == (71, 86)
+    phrases = [tuple(b.melody for b in bars[i : i + 4]) for i in range(0, len(bars), 4)]
+    assert len(set(phrases)) == len(phrases) == len(music._CARTOON_PERCUSSION)
+    bass = [n for b in bars for n in b.bass if n is not None]
+    assert (min(bass), max(bass)) == (38, 52)  # D2 to E3
+    # the lullaby: three beats a bar, melody C5 to D6, no two bars alike
+    melody = [m for b in music._LULLABY_BARS for m in b.melody]
+    assert all(sum(beats for _, beats in b.melody) == 3 for b in music._LULLABY_BARS)
+    assert (min(n for n, _ in melody), max(n for n, _ in melody)) == (72, 86)
+    assert len({b.melody for b in music._LULLABY_BARS}) == len(music._LULLABY_BARS)
+    for bed in (cartoon, lullaby):
+        assert f"{bed.tempo} BPM in {bed.key}" in bed.description
 
 
 # ----- music files ----------------------------------------------------------------------------------
@@ -334,7 +368,8 @@ def test_list_music(tmp_path: Path, make_project: Any, capsys: pytest.CaptureFix
     assert items["pulse"]["tempo"] == 96 and items["bright"]["tempo"] == 120
     theme = items["assets/music/theme.wav"]
     assert theme["origin"] == "project" and theme["duration"] == 2.0 and theme["description"] is None
-    assert Path(calm["preview"]) == previews / "calm.wav" and len(list(previews.glob("*.wav"))) == 3
+    assert items["cartoon"]["tempo"] == 128 and items["lullaby"]["key"] == "F major"
+    assert Path(calm["preview"]) == previews / "calm.wav" and len(list(previews.glob("*.wav"))) == len(music.BUILTIN_BEDS) == 5
     assert np.allclose(read_wav(previews / "calm.wav"), music.bed_loop("calm"), atol=1.5 / 32768)
     assert main(["list-music", str(root)]) == 0
     out = capsys.readouterr().out
