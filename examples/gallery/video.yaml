@@ -90,7 +90,7 @@ transition: crossfade # between scenes (docs/CONFIG.md "Transitions"): each scen
                       # over 0.5 s (the scenes overlap); the chapter cards below fade through a colour
 
 music:                # a generated ambient bed under the whole video (docs/CONFIG.md "Background music")
-  source: calm        # calm | pulse | bright (`vidgen list-music` describes them), or a file
+  source: calm        # calm | pulse | bright | cartoon | lullaby (`vidgen list-music`), or a file
   volume: -2
   duck: {depth: 12}   # 12 dB down while the narrator speaks (keyed off the narration only)
 # audio: {normalize: auto, target_lufs: -16}   # the default: a video with music is normalised to -16 LUFS

@@ -1,0 +1,134 @@
+# A robot, a fox on a bicycle and an owl's birthday: an orchard in a passing storm, then a cottage by the fire (rainbow_ride.md, hand-edited).
+# No audio committed: run `vidgen tts` (Kokoro, free).
+title: The Rainbow Ride
+format: {width: 1280, height: 720, fps: 30}
+preview: {width: 640, height: 360, fps: 15}
+theme: {preset: soft_pastel}
+voice: {provider: kokoro, voice: bf_emma, speed: 0.8}
+narration: {pad: 0.7}
+auto_direct: true
+voices:
+  tibbo_voice: {voice: bm_fable, label: Tibbo, speed: 0.85, color: secondary}
+  fern_voice: {voice: af_bella, label: Fern, speed: 0.8, color: primary}
+  nana_voice: {voice: af_heart, label: Nana, speed: 0.75, color: accent}
+characters:
+  - name: tibbo
+    voice: tibbo_voice
+    look: {species: robot, robot: {face: screen, moves_on: wheels}, eyes: round, accessories: [party_hat]}
+    colors: {skin: "#A7B4C2", clothes: "#E07A5F", accessory: "#F2C14E"}
+  - name: fern
+    voice: fern_voice
+    look: {species: fox, eyes: oval, outfit: dress, pattern: dots}
+    colors: {skin: "#D9733A", clothes: "#5B8C6E", trim: "#F4F6FA"}
+  - name: nana
+    voice: nana_voice
+    look: {species: owl, body: round, eyes: round, outfit: coat, accessories: [scarf]}
+    colors: {skin: "#8C6A4F", clothes: "#B48EAD", accessory: "#E8C547"}
+scenes:
+  - id: title
+    type: card
+    params: {text: "The Rainbow Ride"}
+    duration: 2.5
+  - id: orchard
+    type: stage
+    transition: iris_in
+    params:
+      background: ["#9CCBEA", "#E4F3FB"]
+      ground_color: tertiary
+      birds: {count: 5, start: 1}
+      props:
+        - {prop: tree, at: 0.28, depth: 0.3, fruit: true}
+        - {prop: gift, at: 0.46}
+        - {prop: watering_can, at: 0.4}
+        - {prop: bicycle, at: 0.78, facing: left}
+      characters: [{name: tibbo, at: 0.35, facing: left}, {name: fern, at: 0.87, facing: left}]
+    beats:
+      - text: "Every morning, Tibbo the robot watered the old apple tree."
+        actions: [{hold: tibbo, to: watering_can, at: 0}, {pour: tibbo, at: 0.35}]
+      - text: "And every morning, the old apple tree said thank you."
+        actions: [{drop_fruit: tree, to: tibbo, at: 0.55}]
+      - text: "[beep] Three apples. No. One apple. Spinning."
+        voice: tibbo_voice
+        actions: [{react: tibbo, expression: dizzy}, {put_down: tibbo, to: 0.31, at: 0.6}, {turn: tibbo, to: right, at: 0.85}]
+      - text: "Then Fern came down the lane on her bicycle."
+        actions:
+          - {get_in: fern, to: bicycle, at: 0}
+          - {ride_to: fern, to: 0.6, at: 0.35}
+      - text: "[laugh] Tibbo, you look like a spinning top! Hurry up. It is Nana's birthday!"
+        voice: fern_voice
+        actions: [{react: fern, expression: laughing}]
+      - text: "The present! I kept it safe all week."
+        voice: tibbo_voice
+        actions: [{react: tibbo, expression: happy}, {pick_up: tibbo, to: gift, at: 0.3}]
+      - text: "Just then, dark clouds rolled over the orchard."
+        actions:
+          - {action: light, tint: "#6B7890", strength: 0.45, run_time: 2}
+          - {particles: rain, at: 0.3, until: orchard_b9}
+          - {lightning: 0.8, at: 0.7, distance: 0.6}
+      - text: "Thunder! All my bolts are rattling!"
+        voice: tibbo_voice
+        actions: [{react: tibbo, expression: frightened}, {lightning: 0.15, at: 0.5, distance: 1.5}]
+      - text: "It is only a little shower. Look, a rainbow! It ends right over Nana's house."
+        voice: fern_voice
+        actions:
+          - {light: day, at: 0, run_time: 2}
+          - {react: fern, expression: happy}
+          - {rainbow: 0.62, at: 0.3, width: 0.8}
+      - text: "So off they went to the party, one pedalling and one rolling."
+        actions:
+          - {ride_to: fern, to: 0.88, at: 0.2}
+          - {exit: tibbo, to: right, at: 0.35}
+  - id: cottage
+    type: stage
+    transition: crossfade
+    params:
+      light: indoor
+      room: {wallpaper: dots, flooring: boards, windows: [0.45], doors: [0.13]}
+      props:
+        - {prop: clock, at: 0.8, time: "5:40"}
+        - {prop: fireplace, at: 0.8, against: wall, "on": true}
+        - {prop: table, at: 0.25, depth: 0.25}
+        - {prop: cake, at: 0.22, depth: 0.25, lift: 0.17}
+        - {prop: kettle, at: 0.28, depth: 0.25, lift: 0.17}
+        - {prop: armchair, at: 0.63, depth: 0.2}
+        - {prop: lamp, at: 0.94, depth: 0.25, scale: 0.6}
+        - {prop: gift, at: 0.13}
+      characters: [{name: nana, at: 0.63, depth: 0.2}, {name: fern, at: 0.36}, {name: tibbo, at: 0.51, depth: 0.2}]
+    beats:
+      - text: "At Nana Pell's cottage, the fire was crackling and the kettle was singing."
+        actions:
+          - {sit_on: nana, to: armchair, at: 0}
+          - {hold: tibbo, to: gift, at: 0}
+          - {switch_on: kettle, at: 0.3}
+          - {knock: door, at: 0.75}
+      - text: "Come in, my dears, come in! Mind the cake."
+        voice: nana_voice
+        actions:
+          - {react: nana, expression: happy}
+          - {enter: fern, door: door, at: 0.1}
+          - {enter: tibbo, door: door, at: 0.45}
+      - text: "Happy birthday, Nana! We brought you something. [beep]"
+        voice: tibbo_voice
+        actions: [{give: tibbo, to: nana, at: 0.2}]
+      - text: "A present for me? Oh, you two. You really should not have."
+        voice: nana_voice
+        actions:
+          - {walk_to: tibbo, to: {mark: 0.46, depth: 0.2}, at: 0}
+          - {react: nana, expression: blushing}
+          - {open: gift, at: 0.4}
+      - text: "Tibbo chose it all alone. Only one apple was harmed."
+        voice: fern_voice
+        actions: [{react: fern, expression: tongue_out}]
+      - text: "So they ate cake by the fire, while the evening grew dark outside."
+        actions:
+          - {light: night, at: 0.1, run_time: 3}
+          - {switch_on: lamp, at: 0.45}
+  - id: the_end
+    type: card
+    transition: {type: iris_out, character: tibbo}
+    params: {text: "The End"}
+    duration: 2.5
+output: rainbow_ride
+overlays: [{type: captions, speakers: color}]
+music:
+  - {source: cartoon, volume: -4}

@@ -6,7 +6,12 @@ Importing this package imports every scene module (add new modules to the import
 the built-in per-beat actions (``actions``: reveal, dim, highlight, zoom, pan, follow,
 transform; ``callout_action``: callout; ``sfx_action``: sfx;
 ``particles_action``: particles; ``acting``: say, look_at, turn, emote, pose, react; ``moving``: walk_to, enter,
-exit, gesture, jump; ``keyframes_action``: keyframes, move_along) and the
+exit, gesture, jump; ``keyframes_action``: keyframes, move_along; ``handling``: pick_up, hold,
+put_down, give, throw; ``sitting``: sit_on, lean_on, stand_up; ``riding``: get_in, ride_to, get_out;
+``shot_action``: shot;
+``light_action``: light; ``wind_action``: wind; ``effect_action``: effect; ``switch_action``:
+switch_on, switch_off; ``nature_action``: drop_fruit, birds; ``storm_action``: lightning,
+rainbow; ``knock_action``: knock) and the
 built-in overlays (``overlays``: lower_third, watermark; ``progress``: progress_bar,
 chapter_indicator; ``captions``: captions).
 """
@@ -18,21 +23,27 @@ from vidgen.scenes import (  # noqa: F401
     bullets,
     callout_action,
     captions,
+    card,
     chapter,
     code,
     code_walkthrough,
     comparison,
     diagram,
+    effect_action,
     end_card,
     equation,
     equation_derivation,
+    handling,
     heatmap,
     histogram,
     icon_grid,
     image,
     keyframes_action,
+    knock_action,
+    light_action,
     line_chart,
     moving,
+    nature_action,
     network,
     overlays,
     particles_action,
@@ -40,15 +51,21 @@ from vidgen.scenes import (  # noqa: F401
     process,
     progress,
     quote,
+    riding,
     scatter,
+    shot_action,
+    sitting,
     screenshot,
     sfx_action,
     stage,
     stat,
+    storm_action,
+    switch_action,
     table,
     text_card,
     timeline,
     title,
     video_clip,
+    wind_action,
     world_map,
 )

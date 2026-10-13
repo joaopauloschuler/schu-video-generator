@@ -135,8 +135,8 @@ def test_karaoke_captions_highlight_the_written_word_while_it_is_said(make_proje
     write_alignment(project.audio_dir, "a_b1", spoken, mp3.read_bytes(), alignment_of(spoken, step=0.1))
     (cap,) = built(project, "a", size=(180, 320))
     at = cap.at  # type: ignore[attr-defined]
-    assert cap.state(at + 1.2) == (0, 0)   # still "kay fye three": K-Phi-3
-    assert cap.state(at + 1.45) == (0, 1)  # "is"
+    assert cap.state(at + 1.2) == (0, (0,))   # still "kay fye three": K-Phi-3
+    assert cap.state(at + 1.45) == (0, (1,))  # "is"
     shown = [line.original_text for line in cap.built.submobjects[1].submobjects[1:]]  # type: ignore[attr-defined]
     assert " ".join(shown) == "K-Phi-3 is small."
 

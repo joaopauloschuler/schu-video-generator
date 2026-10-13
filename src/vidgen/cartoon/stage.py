@@ -18,8 +18,10 @@ from __future__ import annotations
 
 import difflib
 import math
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import PurePosixPath
 
 #: The built-in marks: name -> x (0 = left edge, 1 = right edge).
 MARKS: dict[str, float] = {"far_left": 0.1, "left": 0.25, "centre": 0.5, "right": 0.75, "far_right": 0.9}
@@ -40,7 +42,9 @@ MAX_ZOOM = 8.0
 @dataclass(frozen=True)
 class StageItem:
     """One thing to place: its name, kind (``character`` or ``prop``), mark or x, depth, own
-    scale and ``lift`` (how far above the ground line it hangs, a fraction of the frame height)."""
+    scale, ``lift`` (how far above the ground line it hangs, a fraction of the frame height) and
+    ``hang`` (how far above that it hangs on a wall, in the heights of a character of scale 1 at
+    its depth: a picture, a clock; DESIGN.md §69.43)."""
 
     name: str
     kind: str
@@ -48,6 +52,7 @@ class StageItem:
     depth: float = 0.0
     scale: float = 1.0
     lift: float = 0.0
+    hang: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -87,6 +92,29 @@ def mark_x(at: str | float, marks: Mapping[str, float] | None = None) -> float:
     if not 0.0 <= at <= 1.0:
         raise ValueError(f"x position {at} is outside the frame (use 0 = left edge to 1 = right edge)")
     return float(at)
+
+
+def numbered_names(entries: Sequence[tuple[str | None, str]]) -> list[str]:
+    """Each ``(own name, default name)`` entry's name: its own, else its default numbered from the
+    second use of that default on (``tree``, ``tree_2``): the names of a stage's props and layers."""
+    names: list[str] = []
+    count: dict[str, int] = {}
+    for own, default in entries:
+        if own is not None:
+            names.append(own)
+            continue
+        count[default] = count.get(default, 0) + 1
+        names.append(default + (f"_{count[default]}" if count[default] > 1 else ""))
+    return names
+
+
+def prop_default_name(prop: str | None, svg: str | None) -> str:
+    """A prop's default name: the built-in prop's name (``tree``), or the SVG's file name made an
+    identifier (``old_well``)."""
+    if prop is not None:
+        return prop
+    stem = re.sub(r"[^A-Za-z0-9_]+", "_", PurePosixPath(svg or "").stem).strip("_")
+    return stem or "prop"
 
 
 def depth_scale(depth: float) -> float:
@@ -136,6 +164,8 @@ def stage_layout(
     for i in draw_order([item.depth for item in items]):
         item = items[i]
         x = mark_x(item.at, marks)
+        unit = size * short_side * depth_scale(item.depth)   # a character's height at its depth
+        feet_x, feet_y = feet_point(x, item.depth, ground + item.lift, width, frame_height)
         placements.append(
             StagePlacement(
                 name=item.name,
@@ -143,7 +173,7 @@ def stage_layout(
                 index=i,
                 x_fraction=x,
                 depth=item.depth,
-                feet=feet_point(x, item.depth, ground + item.lift, width, frame_height),
+                feet=(feet_x, feet_y + item.hang * unit),
                 height=size * short_side * item.scale * depth_scale(item.depth),
             )
         )
@@ -154,6 +184,82 @@ def facing_towards_centre(x_fraction: float) -> str:
     """``right`` for a thing on the left half of the stage (or in the middle), else ``left``: so
     two characters on either side face each other."""
     return "right" if x_fraction <= 0.5 else "left"
+
+
+def facing_sign(facing: str, front: float = 1.0) -> float:
+    """+1 for a thing facing ``right``, -1 for ``left``, ``front`` for one facing the viewer
+    (``front``, DESIGN.md §69.44): which way "ahead of it" is on screen."""
+    return 1.0 if facing == "right" else -1.0 if facing == "left" else front
+
+
+# ----- walking in depth (DESIGN.md §69.44) -------------------------------------------------------
+
+#: How far a walk from depth 0 to depth 1 goes, in the walker's heights where it starts: a walk
+#: in depth takes about as long as a walk across the stage of that many heights.
+DEPTH_WALK_HEIGHTS = 2.0
+#: Depths closer than this count as the same depth (draw order, lint, validate).
+SAME_DEPTH = 1e-6
+
+
+def walk_destination(options: Mapping[str, object]) -> tuple[object, float | None]:
+    """``(place, depth)`` a ``walk_to`` / ``run_to`` goes to, from its options as written: ``to``
+    a mark or an x, or ``{mark, depth}``, and ``depth``; ``None``: where it is (that x, or that
+    depth)."""
+    to, depth = options.get("to"), options.get("depth")
+    if isinstance(to, Mapping):
+        to, depth = to.get("mark"), to.get("depth", depth)
+    return to, None if depth is None else float(depth)  # type: ignore[arg-type]
+
+
+def depth_walk_distance(dx: float, start_depth: float, end_depth: float, height: float) -> float:
+    """How far (Manim units) a walk goes that moves ``dx`` units across the stage and from
+    ``start_depth`` to ``end_depth``, for a walker ``height`` units tall where it starts: the x
+    move and the depth move (:data:`DEPTH_WALK_HEIGHTS` heights per unit of depth) at right
+    angles on the ground."""
+    return math.hypot(dx, (end_depth - start_depth) * DEPTH_WALK_HEIGHTS * height)
+
+
+def depth_along(start_depth: float, end_depth: float, share: float) -> float:
+    """The depth of a walker ``share`` (0..1) of the way along its walk (x and depth move
+    together, in a straight line on the ground)."""
+    share = min(max(share, 0.0), 1.0)
+    return start_depth + (end_depth - start_depth) * share
+
+
+def depth_crossings(start_depth: float, end_depth: float, others: Mapping[str, float]) -> list[tuple[float, str]]:
+    """``(share, name)`` for each of ``others`` (name -> depth) whose depth a walker going from
+    ``start_depth`` to ``end_depth`` passes, at the share (0..1) of its walk where its depth
+    equals that thing's and its place in the draw order changes; in walking order. A thing at the
+    start or end depth is not passed."""
+    span = end_depth - start_depth
+    if abs(span) <= SAME_DEPTH:
+        return []
+    found = []
+    for name, depth in others.items():
+        share = (depth - start_depth) / span
+        if 0.0 < share < 1.0 and abs(depth - start_depth) > SAME_DEPTH and abs(depth - end_depth) > SAME_DEPTH:
+            found.append((share, name))
+    return sorted(found)
+
+
+def depth_slot(depth: float, others: Sequence[tuple[float, bool]], current: int) -> int:
+    """Where a character at ``depth`` belongs among ``others`` (the other things on the stage in
+    drawing order, back to front: ``(depth, is_character)``), as the number of them drawn before
+    it, starting from ``current`` (where it is now): after everything deeper and after the props
+    at its depth (a character stands in front of a prop at the same depth, §69.8), before
+    everything nearer; among characters at its depth it keeps its place."""
+    low = 0
+    high = len(others)
+    for k, (other, is_character) in enumerate(others):
+        if other > depth + SAME_DEPTH or (abs(other - depth) <= SAME_DEPTH and not is_character):
+            low = k + 1
+    for k, (other, _) in enumerate(others):
+        if other < depth - SAME_DEPTH:
+            high = k
+            break
+    if low > high:   # the others are not in depth order themselves (a keyed move): after the deeper ones
+        return low
+    return min(max(current, low), high)
 
 
 def layer_transform(factor: float, camera_center: Sequence[float], zoom: float) -> tuple[float, tuple[float, float]]:
@@ -191,15 +297,22 @@ def layer_half_extent(
 
 __all__ = [
     "DEFAULT_FACTORS",
+    "DEPTH_WALK_HEIGHTS",
     "FAR_RISE",
     "FAR_SCALE",
     "LAYER_PLACES",
     "MARKS",
     "MAX_ZOOM",
+    "SAME_DEPTH",
     "StagePlacement",
     "StageItem",
+    "depth_along",
+    "depth_crossings",
     "depth_scale",
+    "depth_slot",
+    "depth_walk_distance",
     "draw_order",
+    "facing_sign",
     "facing_towards_centre",
     "feet_point",
     "ground_top",
@@ -209,4 +322,5 @@ __all__ = [
     "mark_x",
     "stage_layout",
     "unknown_mark_message",
+    "walk_destination",
 ]

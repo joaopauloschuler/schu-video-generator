@@ -5,7 +5,8 @@
 - a page header (title + one line saying what the times and stills mean);
 - per scene a header band ``N/M  id  ·  type  ·  beats  ·  time range``;
 - the stills in a grid, the stills of one beat side by side as a *block*, each labelled
-  ``beat @ time``, with the beat's narration (wrapped, trimmed with an ellipsis) under the block.
+  ``beat @ time``, with the beat's narration (wrapped, trimmed with an ellipsis) under the block
+  and, when automatic directing added actions to the beat, an ``auto: ...`` line listing them.
 
 Designed to be read by an AI agent opening the PNG: bounded width, font sizes proportional to
 the width, dark text on a light background, at most about ``width x max_height`` pixels per
@@ -22,6 +23,8 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
+from vidgen.cartoon.directing import auto_label
+from vidgen.config import ActionConfig
 from vidgen.fonts import FONTS_DIR
 
 Font = ImageFont.FreeTypeFont | ImageFont.ImageFont
@@ -55,7 +58,8 @@ BORDER = (120, 126, 138)
 class SheetStill:
     """One still on a sheet. ``time`` is in the video (``None`` if unknown), ``scene_time``
     from the scene start; ``text`` is the beat's narration (``None`` for a silent scene);
-    ``mid`` the actions a mid-action still shows half-way (``walk_to pip``; ``k`` is then 0)."""
+    ``mid`` the actions a mid-action still shows half-way (``walk_to pip``; ``k`` is then 0);
+    ``auto`` the actions automatic directing added to its beat (DESIGN.md §69.23)."""
 
     scene_id: str
     beat_id: str | None
@@ -66,6 +70,11 @@ class SheetStill:
     path: Path
     text: str | None
     mid: str | None = None
+    auto: tuple[ActionConfig, ...] = ()
+
+
+#: Lines under a beat's narration listing its automatic actions, at most.
+AUTO_LINES = 2
 
 
 @dataclass(frozen=True)
@@ -281,6 +290,9 @@ def _blocks(scene: SheetScene, m: _Metrics) -> list[_Block]:
                 if chunk[0].n > 1:
                     narration = f"{chunk[0].beat_id or scene.id}: {narration}"
                 text = wrap_text(m.narration, narration, _span(len(chunk), m), m.narration_lines)
+                if chunk[0].auto:
+                    added = "auto: " + "  \u00b7  ".join(auto_label(a) for a in chunk[0].auto)
+                    text += wrap_text(m.narration, added, _span(len(chunk), m), AUTO_LINES)
             blocks.append(_Block(chunk, text))
     return blocks
 

@@ -13,16 +13,20 @@ class Problem:
 
     ``location`` is a config path such as ``scenes[2].params.title`` (``""`` when the problem
     is not about one config value, e.g. an extension that fails to import); ``variant`` names
-    the variant whose (merged) config has the problem, ``None`` for the base config.
-    ``str(problem)`` is the line ``vidgen validate`` prints.
+    the variant whose (merged) config has the problem, ``None`` for the base config; ``file`` is
+    the ``include:`` file the value is written in (relative to the project, DESIGN.md §69.35),
+    ``None`` for the project's own config file. ``str(problem)`` is the line ``vidgen validate``
+    prints.
     """
 
     location: str
     message: str
     variant: str | None = None
+    file: str | None = None
 
     def __str__(self) -> str:
-        text = f"{self.location}: {self.message}" if self.location else self.message
+        where = f"{self.location} (in {self.file})" if self.file else self.location
+        text = f"{where}: {self.message}" if where else self.message
         return text if self.variant is None else f"[variant {self.variant}] {text}"
 
     def in_variant(self, variant: str | None) -> Problem:
@@ -30,8 +34,8 @@ class Problem:
         return replace(self, variant=variant)
 
     def to_json(self) -> dict[str, Any]:
-        """``{"location", "message", "variant"}`` (``location``/``variant`` may be ``null``)."""
-        return {"location": self.location or None, "message": self.message, "variant": self.variant}
+        """``{"location", "message", "variant", "file"}`` (all but ``message`` may be ``null``)."""
+        return {"location": self.location or None, "message": self.message, "variant": self.variant, "file": self.file}
 
 
 class VidgenError(Exception):

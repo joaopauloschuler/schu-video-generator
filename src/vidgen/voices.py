@@ -22,6 +22,7 @@ from vidgen.errors import Problem, VidgenError
 from vidgen.languages import elevenlabs_language_code
 
 if TYPE_CHECKING:
+    from vidgen.includes import Origin
     from vidgen.theme import Theme
 
 #: The name of the base voice (the ``voice:`` section) wherever a voice name is expected.
@@ -236,7 +237,14 @@ def voice_color_problems(config: VideoConfig, theme: Theme) -> list[Problem]:
     return problems
 
 
-def voice_warnings(config: VideoConfig) -> list[str]:
-    """Named voices no scene or beat uses (``vidgen validate`` warns)."""
+def voice_warnings(config: VideoConfig, origins: Mapping[str, Origin] | None = None) -> list[str]:
+    """Named voices no scene or beat uses (``vidgen validate`` warns). A voice written in an
+    included file (``origins``, §69.35) is not reported: a shared cast's episode may leave some out."""
+    from vidgen.includes import origin_of
+
     used = set(beat_voice_names(config).values())
-    return [f"voices: '{name}' is not used by any scene or beat" for name in config.voices if name not in used]
+    return [
+        f"voices: '{name}' is not used by any scene or beat"
+        for name in config.voices
+        if name not in used and origin_of(f"voices.{name}", origins or {}).file is None
+    ]

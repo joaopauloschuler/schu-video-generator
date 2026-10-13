@@ -11,14 +11,14 @@ from pydantic import ValidationError
 
 from conftest import minimal_config
 from vidgen import cli
-from vidgen.cartoon.cast import character_lines
+from vidgen.cartoon.cast import GENERATED_SHAPES, character_lines
 from vidgen.cartoon.character import OUTLINE_WIDTH, REQUIRED_PARTS, Character
 from vidgen.cartoon.generator import COLOR_KEYS, SEED_VARIATION, generate_parts, resolve_proportions
 from vidgen.config import CharacterColors, CharacterEntry, CharacterLook
 from vidgen.theme import Theme
 
-COLORS = dict(zip(COLOR_KEYS, ("#F2A541", "#58C4DD", "#1F2430", "#1F2430", "#FF6B6B", "#FFD166")))
-LOOK_FIELDS = ("body", "eyes", "nose", "hair", "ears")
+COLORS = dict(zip(COLOR_KEYS, ("#F2A541", "#58C4DD", "#1F2430", "#1F2430", "#FF6B6B", "#FFD166", "#838B98")))
+LOOK_FIELDS = ("body", "eyes", "nose", "hair", "ears", "proportions", "outfit", "pattern", "shoes", "facial_hair")
 
 
 def every_value() -> list[dict[str, Any]]:
@@ -42,7 +42,7 @@ def test_every_parameter_value_builds(values: dict[str, Any]) -> None:
     c = Character(generate_parts(CharacterLook(**values), COLORS), name="t", height=2.0)
     assert set(REQUIRED_PARTS) <= set(c.parts)
     assert c.get_bottom()[1] == pytest.approx(0) and c.get_top()[1] == pytest.approx(2.0)
-    assert c.shape_names("eyes") == ["open", "closed"] and c.shape_names("mouth") == ["smile", "open", "A", "E", "O", "U", "M", "F", "L", "W"]
+    assert c.shape_names("eyes") == GENERATED_SHAPES["eyes"] and c.shape_names("mouth") == GENERATED_SHAPES["mouth"]
     c.set_part("head", angle=20).face("left")   # posing still works on every look
 
 
@@ -109,7 +109,8 @@ def test_character_lines() -> None:
     lines = character_lines(entry, Theme())
     assert lines[0] == "character pip  (voice: ana)"
     assert "hair bun" in lines[1] and "accessories hat, bag, seed 2" in lines[1]
-    assert "skin #C68B59, clothes primary (#58C4DD)" in lines[2]
+    assert lines[2] == "  wears:  proportions adult, outfit plain, pattern none, shoes none, facial_hair none"
+    assert "skin #C68B59, clothes primary (#58C4DD)" in lines[3] and "trim dim (#838B98)" in lines[3]
 
 
 def cartoon_config(**look: Any) -> dict[str, Any]:

@@ -55,7 +55,10 @@ def test_problem_text_and_json() -> None:
     assert str(p) == "scenes[1].type: unknown scene type 'x'"
     assert str(p.in_variant("vertical")) == "[variant vertical] scenes[1].type: unknown scene type 'x'"
     assert str(Problem("", "boom")) == "boom"
-    assert Problem("", "boom", "v").to_json() == {"location": None, "message": "boom", "variant": "v"}
+    assert Problem("", "boom", "v").to_json() == {"location": None, "message": "boom", "variant": "v", "file": None}
+    included = Problem("characters[0].voice", "unknown voice", file="cast.yaml")      # Step 101
+    assert str(included.in_variant("v")) == "[variant v] characters[0].voice (in cast.yaml): unknown voice"
+    assert included.to_json()["file"] == "cast.yaml"
     exc = VidgenError("msg", problems=[p], details={"a": 1})
     assert str(exc) == "msg" and exc.problems == [p] and exc.details == {"a": 1}
     assert VidgenError("plain").problems == [] and VidgenError("plain").details == {}
@@ -150,7 +153,7 @@ def test_validate_json_broken_variant_is_a_problem(make_project, capsys: pytest.
 def test_validate_json_project_not_found(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     code, doc, _ = run_json(["validate", str(tmp_path / "missing"), "--json"], capsys)
     assert code == 1 and doc["project"] is None
-    assert doc["problems"] == [{"location": None, "message": f"project not found: {tmp_path / 'missing'}", "variant": None}]
+    assert doc["problems"] == [{"location": None, "message": f"project not found: {tmp_path / 'missing'}", "variant": None, "file": None}]
 
 
 CHECKS_EXT = """
@@ -287,7 +290,7 @@ def test_usage_error_json(capsys: pytest.CaptureFixture[str]) -> None:
 def test_usage_error_human(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["render", "--jobs", "x"]) == 2
     err = capsys.readouterr().err
-    assert err.startswith("usage: vidgen render") and "vidgen render: error: argument --jobs/-j: invalid int value: 'x'" in err
+    assert err.startswith("usage: vidgen render") and "vidgen render: error: argument --jobs/-j: invalid value: 'x' (a whole number, or auto)" in err
 
 
 def test_command_without_json_flag(capsys: pytest.CaptureFixture[str]) -> None:

@@ -15,6 +15,14 @@ by element ids:
 - ``data-pivot="x y"`` on a part's element sets its pivot, in the SVG's ``viewBox`` coordinates;
   without it the pivot is guessed from the part's box (:func:`default_pivot`).
 - Parts are drawn in the file's order; the figure is drawn facing right.
+- Arms and legs may come in two segments (DESIGN.md §69.26): ``arm_left`` is then the upper arm
+  and ``arm_left_lower`` the forearm and hand (pivot: the elbow); legs either as one ``legs`` or
+  as ``leg_left`` / ``leg_right``, each with an optional ``leg_left_lower`` (pivot: the knee).
+  A limb in one piece keeps working: its bend is shown folded.
+- ``id="tail"`` (optional, DESIGN.md §69.48) hangs from ``body`` and is drawn where the file
+  puts it; it swings on a spring as the figure sets off and stops, swishes while idle and turns
+  as a whole about its pivot (``data-pivot``: where it leaves the body) and trails in the wind
+  (§69.32) like a generated character's tail.
 
 Splitting (:func:`split_character_svg`) needs no manim, so ``vidgen validate`` can report
 problems and the actions a character cannot do (:mod:`vidgen.cartoon.cast`).
@@ -38,14 +46,23 @@ from vidgen.svgclean import CleanSvg, local, sanitize_svg, serialize
 if TYPE_CHECKING:
     from vidgen.cartoon.character import CharacterPart
 
-#: Every part name (the same as :data:`vidgen.cartoon.character.PART_NAMES`, kept here without manim).
-SVG_PART_NAMES: tuple[str, ...] = ("body", "legs", "arm_left", "arm_right", "head", "eyes", "brows", "mouth", "accessory")
+#: Every part name (:data:`vidgen.cartoon.character.PART_NAMES`, kept here without manim) but the
+#: generator's ``cheeks`` and ``bristles`` (DESIGN.md §69.59), whose rest shape draws nothing.
+SVG_PART_NAMES: tuple[str, ...] = (
+    "body", "legs", "leg_left", "leg_left_lower", "leg_right", "leg_right_lower",
+    "arm_left", "arm_left_lower", "arm_right", "arm_right_lower", "head", "eyes", "brows", "mouth", "accessory", "tail",
+    "antenna", "cape",
+)
+#: Legs drawn one each (``legs`` is both in one piece; a file has one kind).
+SVG_SINGLE_LEGS: tuple[str, ...] = ("leg_left", "leg_left_lower", "leg_right", "leg_right_lower")
+#: Parts whose default pivot is the top of their box (the hips, an elbow, a knee).
+_HANGING_PARTS = ("legs", *SVG_SINGLE_LEGS, "arm_left_lower", "arm_right_lower")
 #: The only part an imported character must have (shapes outside the named parts make it).
 SVG_REQUIRED_PARTS: tuple[str, ...] = ("body",)
 #: Names of the rest shapes (the element with the plain part id); other parts: ``rest``.
 REST_SHAPE_NAMES: dict[str, str] = {"eyes": "open", "mouth": "smile"}
 #: Parts whose pivot a figure should set with ``data-pivot`` (they turn; a guess may look wrong).
-TURNING_PARTS: tuple[str, ...] = ("head", "arm_left", "arm_right", "legs")
+TURNING_PARTS: tuple[str, ...] = ("head", "arm_left", "arm_right", "legs", *SVG_SINGLE_LEGS, "arm_left_lower", "arm_right_lower", "tail")
 #: Elements kept in every part's document (definitions, not drawn where they stand).
 _DEFINITIONS = {"defs", "symbol"}
 _OWNER = "data-vidgen-owner"
@@ -234,6 +251,12 @@ def split_character_svg(data: bytes, *, where: str) -> SvgCharacter:
             shapes.append(SvgShape(part, name.split("/", 1)[1], _shape_document(root, name, element_id), element_id))
     if not any(s.part == "body" for s in shapes):
         raise VidgenError(f"{where}: no body: give the body's element id=\"body\" (shapes outside the named parts also make the body)")
+    single = [part for part in SVG_SINGLE_LEGS if part in parts_in_order]
+    if "legs" in parts_in_order and single:
+        raise VidgenError(
+            f"{where}: 'legs' and {', '.join(single)}: draw the legs as one element id=\"legs\" or as leg_left / leg_right "
+            "(each with an optional _lower), not both"
+        )
     return SvgCharacter(tuple(shapes), {p: v for p, v in pivots.items() if p in parts_in_order}, report, tuple(warnings))
 
 
@@ -261,16 +284,18 @@ def pivot_warnings(svg: SvgCharacter, where: str) -> list[str]:
 
 def default_pivot(part: str, box: tuple[float, float, float, float], body_center_x: float) -> tuple[float, float]:
     """The pivot of a part without ``data-pivot``, from its box ``(left, bottom, right, top)`` in
-    character units: ``head`` and ``body`` the bottom centre, ``legs`` the top centre, an arm the
-    top corner nearer the body's centre (the shoulder), face parts and ``accessory`` the centre."""
+    character units: ``head`` and ``body`` the bottom centre, ``legs``, a single leg and a lower
+    segment the top centre (hip, knee, elbow), an arm the top corner nearer the body's centre (the
+    shoulder), a ``tail`` the bottom corner nearer it (where it leaves the body), face parts and
+    ``accessory`` the centre."""
     left, bottom, right, top = box
     if part in ("head", "body"):
         return (left + right) / 2, bottom
-    if part == "legs":
+    if part in _HANGING_PARTS:
         return (left + right) / 2, top
-    if part in ("arm_left", "arm_right"):
+    if part in ("arm_left", "arm_right", "tail"):
         nearer = left if abs(left - body_center_x) < abs(right - body_center_x) else right
-        return nearer, top
+        return nearer, top if part != "tail" else bottom
     return (left + right) / 2, (bottom + top) / 2
 
 
@@ -283,7 +308,7 @@ def _boxes(groups: dict[tuple[str, str], object]) -> Iterator[tuple[tuple[str, s
 
 def svg_character_parts(path: Path, *, where: str) -> list[CharacterPart]:
     """The character parts of the SVG file ``path`` (see the module doc), in character units:
-    the feet (the bottom of the rest shapes, under the middle of ``legs``, else of ``body``) at
+    the feet (the bottom of the rest shapes, under the middle of the legs, else of ``body``) at
     the origin, the top of the rest shapes at 1. Stroke widths are set for a character
     :data:`~vidgen.cartoon.character.REFERENCE_HEIGHT` tall. Warnings are logged."""
     import logging
@@ -292,6 +317,7 @@ def svg_character_parts(path: Path, *, where: str) -> list[CharacterPart]:
     from manim import VGroup
 
     from vidgen.cartoon.character import REFERENCE_HEIGHT, CharacterPart
+    from vidgen.cartoon.primitives import trailing
     from vidgen.vector_mobject import set_svg_stroke, svg_shapes
 
     svg = read_character_svg(path, where=where)
@@ -316,9 +342,10 @@ def svg_character_parts(path: Path, *, where: str) -> list[CharacterPart]:
     top = max(b[3] for b in boxes.values())
     if top - bottom <= 0:
         raise VidgenError(f"{where}: the figure has no height")
-    feet_part = "legs" if "legs" in part_shapes else "body"
-    feet_box = boxes[(feet_part, part_shapes[feet_part][0])]
-    feet = np.array([(feet_box[0] + feet_box[2]) / 2, bottom, 0.0])
+    leg_boxes = [box for (part, _), box in boxes.items() if part == "legs" or part in SVG_SINGLE_LEGS]
+    feet_boxes = leg_boxes or [boxes[("body", part_shapes["body"][0])]]
+    feet_x = (min(b[0] for b in feet_boxes) + max(b[2] for b in feet_boxes)) / 2
+    feet = np.array([feet_x, bottom, 0.0])
     unit = 1.0 / (top - bottom)
 
     def to_character(point_svg: tuple[float, float]) -> tuple[float, float]:
@@ -337,6 +364,9 @@ def svg_character_parts(path: Path, *, where: str) -> list[CharacterPart]:
         rest_key = (part, names[0])
         pivot = to_character(svg.pivots[part]) if part in svg.pivots else default_pivot(part, char_boxes[rest_key], body_center_x)
         parent = _parent_of(part, part_shapes)
+        if part == "tail":   # it trails in the wind about its pivot, like a generated tail
+            for name in names:
+                trailing(groups[(part, name)], pivot, "tail")
         parts.append(CharacterPart(part, {name: groups[(part, name)] for name in names}, pivot, parent=parent, order=order * 10))
     return parts
 

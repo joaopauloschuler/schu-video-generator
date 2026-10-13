@@ -60,14 +60,14 @@ INSTRUCTIONS = """\
 schu-video-generator (the `vidgen` command) makes narrated, animated videos from a project folder (video.yaml + assets). Paths are \
 relative to the server's root folder; nothing outside it can be read or written.
 Start with `guide` (topic "start" or "workflow"): it is the author guide. Usual loop: `plan` (from \
-an outline) or `init` -> edit video.yaml -> `validate` -> `storyboard` (look at the sheets it \
+an outline), `screenplay` (a cartoon from a screenplay; `cast` writes a well-contrasted cast for it) or `init` -> edit video.yaml -> `validate` -> `storyboard` (look at the sheets it \
 returns) -> `lint` -> fix -> repeat; then `tts` with dry_run=true (free), and only after the user \
 agreed to the cost `tts` with dry_run=false and confirm_cost=true (voice.provider kokoro is local and \
 free: no confirm_cost); then `render`. `schema` with \
 scene=TYPE gives one scene type's params as JSON Schema, `list_scenes` / `list_icons` / \
 `list_themes` / `list_sfx` / `list_music` what exists, `character_sheet` a cartoon character's \
-poses, expressions and mouth shapes. Every tool returns the command's JSON \
-document (`ok`, `warnings`, `error`...); a document with ok=false comes back as a tool error."""
+poses, expressions and mouth shapes, `direct` what auto_direct adds to a cartoon's beats. Every \
+tool returns the command's JSON document (`ok`, `warnings`, `error`...); a document with ok=false comes back as a tool error."""
 
 Progress = Callable[[str], Awaitable[None]]
 
@@ -281,9 +281,13 @@ def build_server(root: Path) -> Any:
     ]
     Variant = Annotated[str | None, Field(description="apply this named variant of video.yaml (e.g. vertical)")]
     Scenes = Annotated[list[str] | None, Field(description="only these scene ids")]
-    Jobs = Annotated[int, Field(ge=1, le=16, description="scenes rendered in parallel")]
+    Jobs = Annotated[
+        Annotated[int, Field(ge=1, le=16)] | Literal["auto"],
+        Field(description="scenes rendered in parallel; auto: as many as the available memory and CPU cores allow"),
+    ]
     Images = Annotated[int, Field(ge=0, le=MAX_IMAGES, description="pictures to return in this call (0: none)")]
     Offset = Annotated[int, Field(ge=0, description="first picture to return (to page through many)")]
+    from vidgen.config import Species
 
     # ----- guide, scaffolding --------------------------------------------------------------------
 
@@ -333,12 +337,66 @@ def build_server(root: Path) -> Any:
             source.write_text(markdown_text or "", encoding="utf-8")
             return answer(await call(ctx, args_of(["plan"], [str(source)], options)))
 
+    @tool("Make a cartoon project (stage scenes, characters with generated looks and voices, auto_direct on) "
+          "from a screenplay: # Scene: headings with set: lines, NAME (manner): lines, plain narrator paragraphs, "
+          "[stage directions]. Give input_path (a file under the root) or the text itself.", writes)
+    async def screenplay(
+        ctx: Context,
+        input_path: Annotated[str | None, Field(description="screenplay (.md or .txt) under the root")] = None,
+        screenplay_text: Annotated[str | None, Field(description="the screenplay itself (instead of input_path)")] = None,
+        out: Annotated[str | None, Field(description="project folder to create, or a .yaml file (default: named after the input; 'screenplay' for screenplay_text)")] = None,
+        cast: Annotated[str | None, Field(description="an include file under the root (characters, voices, sets) to reuse: the project includes it; set: NAME lines use its sets")] = None,
+        species: Annotated[list[Species] | None, Field(description="species of the undeclared characters (default: human; several: a mix)")] = None,
+        seed: Annotated[int, Field(description="seed of the random looks given once the built-in ones are used")] = 0,
+        force: Annotated[bool, Field(description="write into a non-empty folder / replace a config")] = False,
+    ) -> Any:
+        if (input_path is None) == (screenplay_text is None):
+            raise ToolError("give either input_path or screenplay_text")
+        options = {
+            "out": str(where(out, "out")) if out else None, "cast": str(where(cast, "cast")) if cast else None,
+            "species": species, "seed": seed, "force": force,
+        }
+        if input_path is not None:
+            return answer(await call(ctx, args_of(["screenplay"], [str(where(input_path, "input_path"))], options)))
+        if options["out"] is None:
+            options["out"] = str(policy.root / "screenplay")
+        with tempfile.TemporaryDirectory(prefix="vidgen-screenplay-") as folder:
+            source = Path(folder) / "screenplay.md"
+            source.write_text(screenplay_text or "", encoding="utf-8")
+            return answer(await call(ctx, args_of(["screenplay"], [str(source)], options)))
+
+    @tool("Write a cast of original characters that differ clearly (silhouette, colours, accessories, voice kind and "
+          "voice) as an include file: use it with include: in video.yaml or as screenplay's cast. The same seed gives "
+          "the same cast.", writes)
+    async def cast(
+        ctx: Context,
+        count: Annotated[int, Field(ge=1, le=24, description="how many characters")],
+        seed: Annotated[int, Field(description="the same seed gives the same cast")] = 0,
+        species: Annotated[list[Species] | None, Field(description="species to draw from (default: human; several: a mix)")] = None,
+        out: Annotated[str, Field(description="the .yaml file to write, relative to the root")] = "cast.yaml",
+        provider: Annotated[Literal["kokoro", "openrouter", "elevenlabs"], Field(description="the video's voice provider")] = "kokoro",
+        narrator: Annotated[str | None, Field(description="the narrator's voice, left out of the cast's (kokoro default: bf_emma)")] = None,
+        model: Annotated[str | None, Field(description="openrouter: the TTS model whose voices to use")] = None,
+        force: Annotated[bool, Field(description="replace an existing file")] = False,
+    ) -> Any:
+        options = {
+            "random": count, "seed": seed, "species": species, "out": str(where(out, "out")), "provider": provider,
+            "narrator": narrator, "model": model, "force": force,
+        }
+        return answer(await call(ctx, args_of(["cast"], [], options)))
+
     # ----- checking --------------------------------------------------------------------------------
 
     @tool("Check the project's video.yaml and every variant: problems with their location, estimated length, "
           "narration audio status, generated pictures. Run it after every edit.", read_only)
     async def validate(ctx: Context, project: Project = ".") -> Any:
         return answer(await call(ctx, args_of(["validate"], [str(where(project))])))
+
+    @tool("The actions auto_direct adds to the beats of the stage scenes (looks, reactions, gestures, close-ups), "
+          "without rendering: per scene and beat, each in the form to paste into the beat's actions: list and "
+          "edit (written actions win, so pasted ones replace the automatic ones).", read_only)
+    async def direct(ctx: Context, project: Project = ".", variant: Variant = None, scene: Scenes = None) -> Any:
+        return answer(await call(ctx, args_of(["direct"], [str(where(project))], {"variant": variant, "scene": scene})))
 
     @tool("The JSON Schema of one scene type's params (scene=TYPE, a few KB: what you normally want), or of the "
           "whole video.yaml (full=true) or of one scene item with every type (all_types=true): both are hundreds "

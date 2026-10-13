@@ -45,6 +45,30 @@ def is_part_target(name: str) -> bool:
     return "." in name
 
 
+#: The parts sitting, leaning and crouching set (the arms and the head keep their poses; §69.28).
+POSTURE_PARTS: tuple[str, ...] = ("body", "legs", "leg_left", "leg_left_lower", "leg_right", "leg_right_lower")
+
+
+def posture_parts(state: CharacterState) -> dict[str, PartPose]:
+    """The body's and legs' poses of ``state`` (:data:`POSTURE_PARTS` it has)."""
+    return {part: state.parts[part] for part in POSTURE_PARTS if part in state.parts}
+
+
+def is_posed(character: Character) -> bool:
+    """Whether ``character`` sits, leans (DESIGN.md §69.28) or rides a vehicle (§69.52): it keeps
+    its facing, body and legs then (a look turns only its head, a pose moves only its arms and
+    head)."""
+    return character.sitting_on is not None or character.leaning_on is not None or character.riding is not None
+
+
+def _kept_posture(character: Character, state: CharacterState) -> CharacterState:
+    """``state`` with ``character``'s facing, body and legs as they are now when it sits or leans."""
+    if not is_posed(character):
+        return state
+    now = character.state()
+    return CharacterState(now.facing, {**state.parts, **posture_parts(now)})
+
+
 def _characters(scene: NarratedScene, targets: list[Target], name: str) -> list[Character]:
     """The targets that are characters (others are logged and skipped; parts, which a pattern
     such as ``*`` also selects, silently)."""
@@ -171,10 +195,10 @@ class Say(_Acting):
         return anims
 
     def revert(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
-        """Stop the lip sync it started (not a later one) and fade the bubbles out."""
+        """Stop the lip sync it started (not a later one; once its line ends when the next
+        beat overlaps it) and fade the bubbles out."""
         for character, track in getattr(self, "speakers", []):
-            if character.lip_sync_track is track:
-                character.stop_lip_sync()
+            scene.end_lip_sync(character, track)
         return [fade_out(part) for bubble in getattr(self, "bubbles", []) for part in scene.on_screen_parts(bubble)]
 
     def _bubble(self, scene: NarratedScene, speaker: Character, text: str, targets: list[Target]) -> Callout:
@@ -183,6 +207,7 @@ class Say(_Acting):
         anchor = callout_area(head)
         avoid = label_avoid(scene, view, scale, targets, anchor)
         avoid += [b.extent() for b in self.bubbles]
+        avoid += [callout_area(m) for m in scene.mobjects if isinstance(m, EffectSymbol) and m.family_members_with_points()]   # §69.40
         made = speech_bubble(
             text, anchor, color=self.options.color, size=self.options.size, bounds=label_bounds(scene, view, scale),
             avoid=avoid, scale=scale, theme=scene.theme,
@@ -257,8 +282,8 @@ def _head_point(mob: Mobject) -> np.ndarray:
 class LookAt(_Acting):
     """The target character looks at ``to``: another character or a prop (by its name), a mark of
     the stage or an x from 0 (left) to 1 (right), or ``camera`` (the viewer). It turns that way
-    and tilts its head up or down towards it; ``camera`` turns the eyes to the viewer. It stays
-    so (``until: <beat>`` turns it back)."""
+    (not while it sits or leans) and tilts its head up or down towards it; ``camera`` turns the
+    eyes to the viewer. It stays so (``until: <beat>`` turns it back)."""
 
     class Options(ActionOptions):
         to: str | Annotated[float, Field(ge=0.0, le=1.0)]
@@ -311,7 +336,10 @@ class LookAt(_Acting):
         else:
             left, right = scene.camera_bounds()[:2]
             point = np.array([left + scene.camera_place(scene.params, to) * (right - left), start[1], 0.0])
-        return look_pose(float(point[0] - start[0]), float(point[1] - start[1]), character.facing)
+        dx = float(point[0] - start[0])
+        if is_posed(character):   # it sits or leans: it does not turn round, only tilts its head
+            dx = abs(dx) if character.facing == "right" else -abs(dx)
+        return look_pose(dx, float(point[1] - start[1]), character.facing)
 
 
 def looked_state(character: Character, look: LookPose) -> CharacterState:
@@ -327,12 +355,15 @@ def looked_state(character: Character, look: LookPose) -> CharacterState:
 
 @action("turn")
 class Turn(_Acting):
-    """The target character turns round (``to: left`` / ``right``: faces that way). It stays so
-    (``until: <beat>`` turns it back)."""
+    """The target character turns round (``to: left`` / ``right``: faces that way; ``front``:
+    faces the viewer, its front view with the head straight and the eyes ahead, narrowing as it
+    turns and swapping its shapes half-way; an
+    SVG character has no front view and keeps its side). It stays so (``until: <beat>`` turns it
+    back)."""
 
     class Options(ActionOptions):
-        to: Literal["left", "right"] | None = None
-        """left or right; default: the other way."""
+        to: Literal["left", "right", "front"] | None = None
+        """left, right or front (towards the viewer); default: the other way (from the front: the side it faced before)."""
 
     run_time = 0.4
     reversible = True
@@ -341,11 +372,16 @@ class Turn(_Acting):
         return self._target_characters(scene_cls, params)[1]
 
     def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
-        """Mirror each character that does not face ``to`` yet (halfway through)."""
+        """Mirror each character that does not face ``to`` yet, or turn it between its side and
+        its front (halfway through)."""
         anims = []
         for character in _characters(scene, targets, "turn"):
-            facing = self.options.to or ("left" if character.facing == "right" else "right")
-            if facing != character.facing:
+            facing = self.options.to or (character.side_facing if character.facing == "front" else "left" if character.facing == "right" else "right")
+            if facing == "front" and not character.has_front_view:
+                continue   # an SVG character keeps its side (vidgen validate warns)
+            if facing == "front" and facing != character.facing:   # a look's head angle would tilt it sideways
+                anims.append(self._change(character, looked_state(character, camera_look("front"))))
+            elif facing != character.facing:
                 state = character.state()
                 anims.append(self._change(character, CharacterState(facing, dict(state.parts))))
         return anims
@@ -361,12 +397,13 @@ class Turn(_Acting):
 @action("emote")
 class Emote(_Acting):
     """The target character changes its expression to ``to`` (neutral, happy, sad, angry,
-    surprised, worried, thinking, or its own); eyes, brows and mouth move one after another. It
+    surprised, worried, thinking, laughing, blushing, tongue_out, crying, dizzy, frightened, or its
+    own); eyes, brows and mouth move one after another. It
     keeps it (``until: <beat>``: back to the expression before)."""
 
     class Options(ActionOptions):
         to: str = Field(pattern=r"^[A-Za-z0-9_]+$")
-        """The expression: neutral, happy, sad, angry, surprised, worried, thinking, or the character's own."""
+        """The expression: neutral, happy, sad, angry, surprised, worried, thinking, laughing, blushing, tongue_out, crying, dizzy, frightened, or the character's own."""
 
     run_time = 0.5
     reversible = True
@@ -387,8 +424,9 @@ class Emote(_Acting):
 @action("pose")
 class PoseAction(_Acting):
     """The target character takes pose ``to`` (stand, pointing, waving, thinking, shrug,
-    arms_crossed, sitting, or its own); body, legs, arms and head move one after another. It
-    keeps it (``until: <beat>``: back to the pose before)."""
+    arms_crossed, sitting, or its own); body, legs, arms and head move one after another (only
+    arms and head while it sits or leans). It keeps it (``until: <beat>``: back to the pose
+    before)."""
 
     class Options(ActionOptions):
         to: str = Field(pattern=r"^[A-Za-z0-9_]+$")
@@ -402,7 +440,7 @@ class PoseAction(_Acting):
 
     def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
         """A :class:`PoseChange` to the pose on each character."""
-        return [self._change(c, c.posed_state(pose=self.options.to)) for c in _characters(scene, targets, "pose")]
+        return [self._change(c, _kept_posture(c, c.posed_state(pose=self.options.to))) for c in _characters(scene, targets, "pose")]
 
     def revert(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
         """Back to the pose before."""
@@ -417,7 +455,7 @@ class React(_Acting):
 
     class Options(ActionOptions):
         expression: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_]+$")
-        """An expression: neutral, happy, sad, angry, surprised, worried, thinking, or the character's own."""
+        """An expression: neutral, happy, sad, angry, surprised, worried, thinking, laughing, blushing, tongue_out, crying, dizzy, frightened, or the character's own."""
         pose: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_]+$")
         """A pose: stand, pointing, waving, thinking, shrug, arms_crossed, sitting, or the character's own."""
 
@@ -440,7 +478,7 @@ class React(_Acting):
     def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
         """A :class:`PoseChange` to the expression and pose on each character."""
         o = self.options
-        return [self._change(c, c.posed_state(pose=o.pose, expression=o.expression)) for c in _characters(scene, targets, "react")]
+        return [self._change(c, _kept_posture(c, c.posed_state(pose=o.pose, expression=o.expression))) for c in _characters(scene, targets, "react")]
 
     def revert(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
         """Back to the expression and pose before."""

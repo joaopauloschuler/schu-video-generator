@@ -14,8 +14,20 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from vidgen.cartoon.idle import ANTENNA_DIM_SHAPE
+from vidgen.cartoon.limbs import UPPER_OF
 from vidgen.cartoon.poses import EXPRESSION_PARTS, POSE_PARTS, chosen_shape, merged_table, unknown_name_message
-from vidgen.config import BeatConfig, CharacterEntry, PartPoseEntry, SceneConfig, VideoConfig
+from vidgen.config import (
+    HEAD_ACCESSORIES,
+    SEATED_BODY_SHAPE,
+    SKIRTED_OUTFITS,
+    SPECIES_WITHOUT_TAIL,
+    BeatConfig,
+    CharacterEntry,
+    PartPoseEntry,
+    SceneConfig,
+    VideoConfig,
+)
 from vidgen.errors import Problem, VidgenError
 from vidgen.theme import Theme
 from vidgen.voices import DEFAULT_VOICE
@@ -79,10 +91,17 @@ def character_lines(entry: CharacterEntry, theme: Theme, root: Path | None = Non
     for part, value in entry.colors.model_dump().items():
         resolved = theme.color(value)
         colors.append(f"{part} {value}" if resolved.lower() == value.lower() else f"{part} {value} ({resolved})")
+    species = "" if look.species == "human" else f"species {look.species}, "
+    if look.species == "robot":
+        robot = look.robot_look()
+        moving = "wheels" if robot.moves_on == "wheels" else "legs"
+        species = f"species robot ({robot.head} head, {robot.face} face, {'antenna, ' if robot.antenna else ''}{moving}), "
     return [
         f"character {entry.name}  (voice: {entry.voice or 'none'})",
-        f"  look:   body {look.body}, head_size {look.head_size:g}, eyes {look.eyes}, nose {look.nose}, hair {look.hair}, "
+        f"  look:   {species}body {look.body}, head_size {look.head_size:g}, eyes {look.eyes}, nose {look.nose}, hair {look.hair}, "
         f"ears {look.ears}, accessories {accessories}, seed {seed}",
+        f"  wears:  proportions {look.proportions}, outfit {look.outfit}, pattern {look.pattern}, shoes {look.shoes}, "
+        f"facial_hair {look.facial_hair}",
         f"  colors: {', '.join(colors)}",
     ]
 
@@ -169,10 +188,17 @@ def character_look_warnings(config: VideoConfig, root: Path) -> list[str]:
     return warnings
 
 
-#: Shape names of a generated character's parts (``cartoon/generator.py``); the first is the rest shape.
+#: Shape names of a generated character's parts (``cartoon/generator.py``); the first is the rest
+#: shape. A head accessory adds ``accessory``, an animal (``species``) a ``tail`` (not a frog), a
+#: robot an ``antenna`` (unless ``robot.antenna`` is false), a ``cape`` accessory a ``cape``.
 GENERATED_SHAPES: dict[str, list[str]] = {
-    "body": ["default"], "legs": ["default"], "arm_left": ["default"], "arm_right": ["default"], "head": ["default"],
-    "eyes": ["open", "closed"], "brows": ["default", "angry", "sad"], "mouth": ["smile", "open", "A", "E", "O", "U", "M", "F", "L", "W"],
+    "body": ["default"], "leg_left": ["default"], "leg_left_lower": ["default"], "leg_right": ["default"],
+    "leg_right_lower": ["default"], "arm_left": ["default"], "arm_left_lower": ["default"], "arm_right": ["default"],
+    "arm_right_lower": ["default"], "head": ["default"],
+    "eyes": ["open", "closed", "laughing", "wide", "swirl", "swirl_turned"], "brows": ["default", "angry", "sad"],
+    "mouth": ["smile", "open", "A", "E", "O", "U", "M", "F", "L", "W", "laugh", "tongue", "wavy"],
+    # Step 125 (DESIGN.md §69.59): the rest shape ``none`` draws nothing
+    "cheeks": ["none", "blush", "tears", "tears_running"], "bristles": ["none", "up"],
 }
 
 
@@ -184,8 +210,16 @@ def character_part_shapes(entry: CharacterEntry, root: Path) -> dict[str, list[s
 
         return read_character_svg(root / entry.look.svg, where=entry.look.svg).part_shapes()
     shapes = {part: list(names) for part, names in GENERATED_SHAPES.items()}
-    if {"glasses", "hat"} & set(entry.look.accessories):
+    if HEAD_ACCESSORIES & set(entry.look.accessories):
         shapes["accessory"] = ["default"]
+    if entry.look.outfit in SKIRTED_OUTFITS:
+        shapes["body"].append(SEATED_BODY_SHAPE)
+    if entry.look.species != "human" and entry.look.species not in SPECIES_WITHOUT_TAIL:
+        shapes["tail"] = ["default"]
+    if entry.look.species == "robot" and entry.look.robot_look().antenna:
+        shapes["antenna"] = ["default", ANTENNA_DIM_SHAPE]
+    if "cape" in entry.look.accessories:
+        shapes["cape"] = ["default"]
     return shapes
 
 
@@ -221,11 +255,12 @@ def character_pose_problems(config: VideoConfig, root: Path) -> list[Problem]:
 
 def character_pose_warnings(config: VideoConfig, root: Path) -> list[str]:
     """Parts named by the characters' own poses and expressions that the character does not have
-    (those settings do nothing)."""
+    (those settings do nothing; a lower arm or leg segment of a limb in one piece is shown folded,
+    DESIGN.md §69.26, so it is not reported)."""
     return [
         f"{where}: character '{entry.name}' has no {part}; this setting does nothing"
         for where, _, entry, part, _, shapes in _own_pose_parts(config, root)
-        if part not in shapes
+        if part not in shapes and UPPER_OF.get(part) not in shapes
     ]
 
 
@@ -325,6 +360,29 @@ def shared_voice_warnings(config: VideoConfig) -> list[str]:
         "mouths on a stage; add a say action to such beats to pick who speaks"
         for voice, names in owners.items() if len(names) > 1
     ]
+
+
+def front_view_warnings(config: VideoConfig) -> list[str]:
+    """A stage character with ``facing: front`` or a ``turn`` ``to: front`` of a character drawn
+    from an SVG file: it has no front view and keeps its side (DESIGN.md §69.44)."""
+    from fnmatch import fnmatchcase
+
+    svg = {entry.name for entry in config.characters if entry.look.svg is not None}
+    if not svg:
+        return []
+    warnings: list[str] = []
+    for i, scene in enumerate(config.scenes):
+        for k, member in enumerate(scene.params.get("characters") or []):
+            if isinstance(member, dict) and member.get("facing") == "front" and member.get("name") in svg:
+                warnings.append(f"scenes[{i}].params.characters[{k}]: character '{member['name']}' is drawn from an SVG file and has no front view; it faces its side")
+        for j, beat in enumerate(scene.beats):
+            for n, act in enumerate(beat.actions):
+                act = act.resolved(("turn",))
+                if act.action != "turn" or act.options.get("to") != "front":
+                    continue
+                for name in sorted(n for n in svg if any(fnmatchcase(n, p) for p in act.targets())):
+                    warnings.append(f"scenes[{i}].beats[{j}].actions[{n}]: character '{name}' is drawn from an SVG file and has no front view; the turn leaves it as it is")
+    return warnings
 
 
 def acting_warnings(project: Project) -> list[str]:

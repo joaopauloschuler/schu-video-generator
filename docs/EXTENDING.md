@@ -156,31 +156,47 @@ gives it an `enum` of the icon names.
 A character param is typed `CharacterName` (`who: CharacterName`, or `CharacterName | None`):
 `vidgen validate` checks the name against the video's [`characters:`](CONFIG.md#characters-characters)
 and suggests close names. In `construct`, `character(name, height=..., facing="right")` builds
-that character as a `Character`: a `VGroup` of named parts (`PART_NAMES`: `body`, `legs`,
-`arm_left`, `arm_right`, `head`, `eyes`, `brows`, `mouth`, `accessory`), drawn from its `look:`
-(body shape, hair, accessories...; every generated look has the same part and shape names), the
+that character as a `Character`: a `VGroup` of named parts (`PART_NAMES`: `body`, `legs` or
+`leg_left` / `leg_right`, `arm_left`, `arm_right`, `head`, `eyes`, `brows`, `mouth`, `accessory`,
+`tail`, `antenna`, `cape`; arms and single legs may have a lower segment, `arm_left_lower`, `leg_left_lower`, ...), drawn from its `look:`
+(body shape, hair, accessories, outfit, species...; every generated look has the same part and shape names,
+except the optional `accessory` part, an animal's `tail` (`look.species`; a frog and a robot have none), a
+robot's `antenna` (shapes `default` and `dim`), a `cape` (the accessory) and a `dress` or `coat`
+body's second shape `seated`, which `Character.seated` and the `sitting` pose show), the
 feet at the origin (`feet()`). A character drawn from an SVG file (`look: {svg: ...}`, CONFIG.md
 "Characters from SVG files") may lack parts and has its own shape names: check `has_part("arm_left")`
 and `shape_names("mouth")` before posing it; its outline width follows `height`. `vidgen character NAME --png` shows
 one still of it. Pose a part about its pivot with `set_part(part, angle=..., scale=..., shift=...,
 shape=...)` (degrees counterclockwise as drawn facing right; its child parts follow, e.g. the
 head carries the eyes), swap a shape with `swap("mouth", "open")`, mirror the whole character
-with `face("left")` / `turn()`, and snapshot or restore a pose with `state()` / `set_state()`.
+with `face("left")` / `turn()`, show a generated character's front view with `face("front")`
+(`has_front_view`; an SVG character keeps its side; `PoseChange(hero, facing="front")` turns to
+it, DESIGN.md §69.44), and snapshot or restore a pose with `state()` / `set_state()`.
 Move and scale the character with Manim's own `move_to` / `shift` / `scale`; poses set afterwards
 land where it is. Named poses (`stand`, `pointing`, `waving`, `thinking`, `shrug`,
 `arms_crossed`, `sitting`) and expressions (`neutral`, `happy`, `sad`, `angry`, `surprised`,
-`worried`, `thinking`), plus the character's own (`names("pose")`, `names("expression")`), are
+`worried`, `thinking`, `laughing`, `blushing`, `tongue_out`, `crying`, `dizzy`, `frightened`), plus the character's own (`names("pose")`, `names("expression")`), are
 set at once with `set_pose(name)` / `set_expression(name)`, or animated part by part with
 `self.play(PoseChange(hero, pose="waving", expression="happy"), run_time=0.8)` (each part eases
 about its pivot, body first; `state=` takes any `CharacterState`). For a single part, call
 `set_part` from an updater (`UpdateFromAlphaFunc(hero, lambda m, a: m.set_part("arm_left",
-angle=120 * a))`), not `.animate` (that would move points along straight lines). Lip sync:
+angle=120 * a))`), not `.animate` (that would move points along straight lines). Bend an arm so
+its hand is on a point with `hero.reach("left", point)` (the elbow bends naturally; `bend=-1` the
+other way) and a leg with `hero.plant("right", point)` (knee forward; needs `leg_left` /
+`leg_right`); `hand_point("left")` / `foot_point("right")` say where the hand or sole is now. An arm
+drawn in one piece (an older SVG) shows its elbow folded, so `reach` and the poses work on it
+too (DESIGN.md §69.26). Lip sync:
 inside `with self.narrate(0) as d:`, `self.speak(hero)` makes the mouth follow the beat's
 `VisemeTrack`, timed from the beat's start by the scene's clock (`hero.lip_sync(self.beat_visemes(0),
 clock=self.beat_clock())`), so it stays in step through a `PoseChange`; `stop_lip_sync()` ends it
-(the mouth shows its pose's shape again); `show_viseme("O")` shows one of `VISEMES` at once; a
+(the mouth shows its pose's shape again; after the beat, `self.end_lip_sync(hero, track)` ends
+it now or, when the next beat `overlap`s this line, once that beat ends, DESIGN.md §69.34); `show_viseme("O")` shows one of `VISEMES` at once; a
 character without a mouth is left alone. `Walk(hero, x)` walks it along the ground to `x`
-(`speed=`, units per second; `start_x=` / `park_x=` for an entrance or exit), `Gesture(hero,
+(`speed=`, units per second; `start_x=` / `park_x=` for an entrance or exit; `fade_in=` /
+`fade_out=` seconds to appear or vanish on the way, as through a door, `passage_fade`; `depth=`
+with `feet_y=` (the ground line's y at a depth) walks towards or away from the camera too,
+growing or shrinking, from `hero.stage_depth`, DESIGN.md §69.44; `carried=` the props it holds,
+which grow and fade with it; `opens_door=True` tells foley it opened a closed door: a creak), `Gesture(hero,
 "wave")` (`point`, `wave`, `shrug`, `nod`, `shake_head`) and `Jump(hero, 0.4)` play a motion and
 end in the pose; all three keep lip sync in step, and their timing is the pure functions
 `walk_seconds`, `enter_path`, `exit_path`, `offstage_x` (no manim). These four animations add
@@ -196,7 +212,7 @@ the damped spring the built-in follow-through uses: `spring.follow(x_of, seconds
 part on it is while it follows `x_of(seconds)` (pure, the same at any frame rate), so an updater
 can turn the part by `k * (spring.follow(x_of, t) - x_of(t))`; `step_response`, `overshoot()` and
 `settle_seconds()` help tune it (a damping ratio of 1 never overshoots). The built-in acting and moving
-actions (`say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `enter`, `exit`,
+actions (`say`, `look_at`, `turn`, `emote`, `pose`, `react`, `effect`, `walk_to`, `enter`, `exit`,
 `gesture`, `jump`) work on every target that is a `Character`, so register your characters as
 targets (`self.target(name, hero)`) to let a video's beats act on them.
 `KeyedMotion(mob, values_at, part=None)` moves any mobject (feet `x`, `y` on screen, `rotate`
@@ -208,6 +224,75 @@ them. The built-in `keyframes` and `move_along` actions (`src/vidgen/scenes/keyf
 act on a `stage`'s characters, props and part targets `<character>.<part>`; a scene of your own
 can register part targets the same way (`self.target("hero.arm_left", hero.parts["arm_left"])`)
 and set `target_patterns` to include `"<character>"` to accept those actions.
+The prop actions (`pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `blow_away`; `src/vidgen/scenes/handling.py`)
+need `"<prop>"` in `target_patterns` and `Prop` targets. Their pieces are exported:
+`ArmMove(character, [(share, {part: PartPose}), ...])` eases some parts through keys;
+`PropMove(prop, to=, follow=, leave=, arrive=, height=, rise=, turns=, path=)` carries a prop from a hand
+(`follow`, read every frame) to a point or another hand, on an arc with spin when `rise` > 0, or
+along `path(u, start, end) -> (x, y, degrees)` (`blow_away` passes `blown_point`);
+`character.reached_parts(hand, point)` gives the arm poses `reach` would set, and
+`hold_point(character.shoulder_point(hand), character.character_height, character.facing)` where
+a held prop sits. To keep a prop in a hand, give it an updater (`prop.add_updater(lambda m:
+m.shift(hero.hand_point("left") - m.grip_point()))`); never add it to the `Character` (its parts
+must not change). `prop.grip_point()` is where a hand holds it (a basket's handle, an open
+umbrella's shaft; else its middle), and `PropMove` moves a prop by that point. A prop with
+shapes (`prop.shapes`, a door's or an umbrella's `closed` / `open`) switches with `prop.show_shape(name)` or
+the animation `PropReshape(prop, shape, at=, height=, follow=)` (the `open` / `close` actions);
+`overhead_point(feet, height, facing)` is where a hand holds an open umbrella overhead.
+A room of your own (DESIGN.md §69.42): `room_geometry(...)`, `window_parts(...)` and
+`window_sky(light)` give the shapes and the sky outside (no manim), and `draw_room(geometry,
+room_colors(wall, floor), wallpaper=, flooring=, windows=[WindowLook(parts, frame, curtains)],
+sky=, short_side=, frame_area=)` draws them (its `views.show(sky)` recolours the windows'
+sky); mark the room lit (`mark_lit`) but not its `WindowViews`. On a `stage`, `Stage.door(name)`
+is a room's door prop. Furniture (§69.43) is `draw_prop` with a `FURNITURE` kind; a sofa's or a
+bed's places are `prop.seat_places` (`prop.seat_point(k)` on screen), and `PROP_HANGS` says how
+high a picture or a clock hangs (`StageItem(..., hang=)` places it with `stage_layout`).
+The `effect` action (`src/vidgen/scenes/effect_action.py`) works on every `Character` target. Its
+symbol is an `EffectSymbol(kind, color=, character_height=)` (kinds `EFFECT_KINDS`; the colour of
+`effect_color(kind, None, theme.color)` by default): `symbol.follow(hero, avoid=[boxes])` gives it
+an updater that keeps it on the head (`head_box(hero)`, spot chosen by `effect_spot`, clear of
+`avoid`) and moves it with its own clock (`pop_scale`, `piece_pose`); add it to the scene yourself
+(never to the `Character`), and set `symbol.leaving = symbol.age` to shrink it away.
+The sitting actions (`sit_on`, `lean_on`, `stand_up`; `src/vidgen/scenes/sitting.py`) build on
+`character.seated(state, seat)` (the hips on a seat `seat` character units high, the legs bent
+by the solver), `character.leaning(state)`, `character.lowered(state, drop, stoop=)` (a crouch,
+the feet kept) and `character.planted(state, soles)` (each leg's sole put at a point), all states
+not drawn; `BodyMove(character, keys, x=, facing=, soles=)` plays one (an `ArmMove` that also
+moves the feet's x and keeps the soles on the ground; `y=` eases the feet's y too). A `Prop`'s
+`seat_point()` and `lean_edges()` say where to sit and lean (`None` when it has none).
+The riding actions (`get_in`, `ride_to`, `get_out`; `src/vidgen/scenes/riding.py`) work on the
+vehicle props (`VEHICLE_KINDS`, geometry in `VEHICLES`): `RiderSeat(rider, vehicle, place,
+ratio)` with `place_rider(seat)` puts a rider on its seat where the vehicle is now (call it from
+an updater on the rider, never add the rider to the vehicle), `riding_state(rider, vehicle,
+place, state)` seats it (on a bicycle: leaning, feet on the pedals, hands on the handlebar), and
+`Ride(vehicle, x, seats=, speed=, depth=, feet_y=)` drives the vehicle with its riders, wheels
+turning (`Prop.turn_wheels`); `vehicle.prop_point(x, y)` maps the vehicle's prop units to the
+screen. A boat, a hot-air balloon and a toy rocket (`medium(kind)`: `water` / `air`) fly a
+`Course` instead (`Ride(..., rise=, drift=, away_y=, seed=)`; its pure points are
+`balloon_point` and `rocket_point`); `Prop.pose_at(x, y, degrees)` sets a vehicle's place and
+turn afresh, and `StageWater` draws a stage's water and bobs the boats on it (`boat_bob`).
+Props that move by themselves (DESIGN.md §69.54): `draw_prop("clock" | "tv" | "lamp", ...,
+living=True)` adds their moving parts, and `LivingProp(prop, start=, speed=, on=, seed=)` sets
+them for a scene time (`update(t)`, from a scene updater; `switch(on, time)`); its `glow` (a
+`PropGlow`, or `None`) is a mobject of its own to add right before the prop. The maths is pure:
+`hand_angles(seconds)`, `parse_clock_time("21:45")`, `tv_picture(t, seed)`, `glow_box`, and
+`redrawn_members(boxes, regions)` says which members drawn after a moving part must be redrawn
+with it. The `switch_on` / `switch_off` actions call `Stage.switch_props(patterns, on, time)`,
+the `knock` action `Stage.knock_on(patterns, time)` (any scene type with a `knock_on` method
+takes it).
+A `fireplace` and a `kettle` drawn `living` burn and steam the same way (`flame_shapes(t, seed,
+lean)`, `steam_puffs(t, seed, lean)`; `LivingProp(..., wind=)` takes the felt wind force at a
+time, its `steam` is a `PropSteam` to add right after the prop); `on_spans` gives when one is on.
+Nature (DESIGN.md §69.55): `draw_prop("tree", ..., fruit=True)` tags each fruit's members with
+`FRUIT_INDEX`; `Stage.drop_fruit(tree, onto)` returns a `FruitDrop` (a `PropMove` of a
+`FallenFruit` along `drop_point`, its `lands_at` the thud); `Stage.add_flock(settings, start)`
+puts a `Flock` (`flock_plan`, `bird_place`) in the sky.
+Small props (DESIGN.md §69.56): `SMALL_PROPS`; a `phone` drawn `living` rings while on
+(`LivingProp` redraws its whole drawing turned by `ring_shake(t, on_since(...))`; `ring_bursts`
+gives the times of the `phone` sounds). Balloons float with `PropMove(..., path=lambda u, a, b:
+float_point(u, a, b, seed=s))` to `float_end(start, top, force)`; a watering can pours with
+`Pouring(prop, follow=, spout=)` and `WaterFlow(WaterDrops(name=...), spout=, direction=, ground=,
+height=)` (`pour_tilt`, `pour_drops`; `prop.prop_point(*WATERING_SPOUT)` is the spout).
 `character(name)` breathes, sways its head and blinks on its own (unless `idle: false`):
 `stop_idle()` / `start_idle(seed=None)` turn that off and on; a blink never shows during a
 `PoseChange`. Before drawing your own scene for characters on a set, check whether the built-in
@@ -228,8 +313,25 @@ Particles: `particle_field(self, "snow", ParticleSettings(density=2))` builds a 
 for your scene (fewer at preview quality, `self.is_preview`) that moves on its own once added
 (`self.add(field)`) and fades out with `self.play(fade_out(field))`; `particle_states(particle_seeds(kind,
 count, seed), t)` gives the seeded positions without drawing anything.
+Light: `StageLight(self.camera, light_grade("night"))` grades, as the camera draws, whatever you
+pass to `mark_lit(...)` (leave text and bubbles unmarked: they keep their contrast);
+`.change(grade, start, seconds)` and `.update(scene_time)` fade it (redraw everything while it
+fades: return every mobject from `get_moving_mobjects`, as `stage` does). The maths is pure:
+`light_grade`, `tint_grade`, `blend_grades`, `light_at`, `grade_rgbas`, `grade_pixels`;
+`StageShadows([ShadowCaster(mob, ground_y, width, size)])` draws soft shadows (`follow()` in an
+updater for things that move), `StarField(night_stars(area_share), box, short_side)` stars.
+Wind: `Wind(0.6, seed=1)` is a pure, seeded wind (`.level(t)`, `.force(t, delay)`, `.change(level,
+start, seconds)`, `.blown(start, t)`); `sway_degrees(kind, force, t)` and `bent_points(points,
+degrees, foot_y, height)` bend a prop about its base, `trail_degrees(wind, t)` follows it on a
+spring for `Character.set_wind(degrees)` (turns the pieces a generated look marks with
+`TRAIL_ATTRIBUTE`: scarf end, long hair, bun, floppy / pointy ears, hat). `StageWind(wind,
+[SwayingProp(prop, kind, x_share)], characters, x_share)` does both for a scene time (`update`);
+a `ParticleField(..., wind=)` drifts with it. `felt_force(force)` is the force the swaying and
+trailing use (strong wind more than in proportion); `blown_point(share, start, end, rise=, seed=)`
+is a blown prop's seeded, gusty, tumbling path (`gusty_progress`, `blow_seconds(distance,
+level)`, `LIGHT_PROPS`), and `Holdings.drop(prop)` takes a prop out of whoever holds it.
 DESIGN.md §69 has the model, §69.3 the poses, §69.4 lip sync, §69.5 idle motion, §69.6 the
-stage, §69.7 layers and the camera, §69.8 props, §69.9 particles.
+stage, §69.7 layers and the camera, §69.8 props, §69.9 particles, §69.31 light and shadows, §69.32 wind.
 
 Params can nest: use another `SceneParams` class as a field type (also in lists). Theme tokens
 are checked inside nested models too, and `vidgen list-scenes` prints the nested fields. A nested
@@ -284,6 +386,14 @@ def validate_project(cls, params, project):
         problems.append(f"data: file not found: {params.data}")
     return problems
 ```
+
+Checks that need the beats' actions in order (what happened in an earlier beat) go in the
+classmethod `action_sequence_problems(spec, params, uses)`: `uses` are the scene's valid action
+uses (`use.beat`, `use.location` such as `beats[1].actions[0]`, `use.config`); return
+`(location, message)` pairs (`("beats[1].actions[0].to", "...")`). It runs in `vidgen validate`
+and before a render, once every action is valid; `current_project()` is the active project. The
+built-in `stage` replays its prop actions with `holding_problems` (a prop picked up from too far
+away, given to someone not next to the giver, a seat taken, a walk of a character that sits).
 
 **Layout regions.** Lay out in regions rather than raw coordinates, so one scene works at
 16:9, 1:1 and 9:16 (the frame's shorter side is always 8 units; 16:9 is 14.22 x 8, 9:16 is
@@ -610,7 +720,9 @@ pan=0.0, align="start", **params)` plays a built-in sound (`vidgen list-sfx`) or
 `play`); `params` are `duration`, `pitch` (semitones) and `intensity` (0–1). It takes no time and
 draws nothing: the sound is recorded in `self.sfx_log` (`SfxEvent`s, written to the scene's
 timings) and mixed into the video by `vidgen render`, sample-exact (not with `--no-audio`).
-Unknown sounds and bad values raise `VidgenError`. `self.sounds` is the scene's `SoundLibrary`
+Unknown sounds and bad values raise `VidgenError`. `self.sting(sting, time)` plays a music sting
+(`"reveal"`, `"comic"`, `"sad"` or a `StingCue(kind, gain=)`) at scene time `time`, ducked under the
+narration like a beat's `sting:` (the `card` scene's `sting` param uses it). `self.sounds` is the scene's `SoundLibrary`
 (`names()`, `knows(name)`); `synthesize(name, duration, pitch, intensity)` returns a built-in
 sound's samples (48 kHz mono float32) if you want to analyse or mix one yourself. A scene type
 that should make a sound when it starts with `sfx: {auto: true}` sets the class attribute
@@ -619,7 +731,40 @@ wants sounds tied to the beat actions overrides `action_foley(self, action, opti
 start, seconds)`: the action runner calls it for each built-in action as it starts playing, with
 its scene start time and the seconds it plays (after any shortening); the base class does
 nothing, `stage` plays its foley through the pure `foley_cues(PlayedAction(...))` (docs/CONFIG.md
-"Foley and music stings").
+"Foley and music stings"; `PlayedAction(prop=, through_door=, opens_door=, pours=)` for a door's
+creak and a watering can's splash, `wet_steps(cues, wet_from)` adds splashes under the steps on
+wet ground). A scene type's timings may name ambience beds (`ambience: [{bed, start, end}]`,
+scene seconds; the beds of `vidgen.ambience.AMBIENCE_BEDS`): `stage` picks its set's with the pure
+`set_ambience(setting, room=, lights=, rain=, end=)` (`SET_BEDS`; docs/CONFIG.md "Ambience and
+door sounds"). Right after it the runner calls `action_motion_effects` with the same
+arguments (nothing by default): `stage` turns each animation into `motion_effect_cues(...)` and
+adds a `MotionEffect(cue, mover, delay=, seed=motion_seed(...))` per cue (dust, speed lines,
+impact stars, a whoosh; docs/CONFIG.md "Motion effects"); `Walk(..., gait=RUNNING)` runs.
+`particles_started(self, field, settings)` hears of every particle
+field `particle_field` builds for the scene (before it is added; nothing by default): `stage`
+grows `Puddles` under rain and plays the rain sound bed. A scene with a method `rain_ground()`
+returning a `RainGround` (`rain_ground(ground, top, frame_height, shelters)` with `ShelterBox`es)
+gets rain that ends there with splashes (docs/CONFIG.md "Rain on the ground"); one with
+`snow_ground()` (the same, its shelters may also be `TopLine`s: a prop's upper edge) gets snow
+with `settle: true` that lands there (flakes lie a moment, `flake_floors`, `rest_flakes`). `stage`
+then grows a `SettledSnow` (a `SnowBlanket` and `SnowCap`s from `prop_top_line`, in
+`settle_amount(settled_seconds(...))` steps) and draws its `fog` as `StageFog` bands
+(`band_opacities`, `fog_cover`; docs/CONFIG.md "Snow that settles", "Fog"). Rain with
+`lightning` (`storm_every(settings)`) gets a `RainStorm` of seeded `Strike`s (`storm_strikes`) on
+the stage's `StageLight` (`strikes`, `storms`; `flash_grade`, `flash_level`), which also takes the
+`lightning` action's strikes (`Stage.strike_lightning`), with a `LightningBolt` (`bolt_paths`) and
+the `thunder` sound (`thunder_cue`, `thunder_delay`, `thunder_pan`); the `rainbow` action adds a
+`StageRainbow` (`Rainbow`, `rainbow_level`), and a `light` action with `move_sun` moves the
+stage's sun and moon as `SkyBody`s along the sky's path (`PathMove`, `path_point`, `place_for`),
+the `StageShadows` cast away from them (`shadow_cast`, `set_cast`; docs/CONFIG.md "Lightning and
+thunder", "Rainbows", "Light and shadows").
+A scene type that adds beat actions of its own (automatic directing) overrides the class method
+`auto_actions(cls, project, spec, params)` and returns `DirectedBeat(beat, actions)` items, each
+action made with `ActionConfig.automatic({...})`; they are appended after each beat's written
+actions before the actions are planned, and `vidgen direct` and the storyboard list them. The
+base class adds none; `stage` returns `stage_directions(project, spec, characters,
+params.auto_direct, stage_frame(project, params))` (its geometry, for the lint check of
+gestures and close-ups; docs/CONFIG.md "Automatic directing").
 
 ```python
 @scene("countdown")
@@ -648,6 +793,10 @@ class Countdown(NarratedScene):
   animation lasts `min(cap, fraction * slot)`, so a beat is never stretched by its animations.
 - `self.timeline()` is `narrate_all()` that also works for silent scenes (yields `(index, d)`;
   a silent scene yields one step of its `duration`).
+- When the next beat has `overlap` or `interrupt` (DESIGN.md §69.34), `narrate` yields the time
+  until that beat starts instead of `d`, and nothing is waited after it: call the next
+  `narrate` right after the block. `self.beat_window(i)` gives `body` (what is yielded),
+  `window` (until the next beat), `heard` (seconds of the voice) and the voice's `shape`.
 - `self.finish()` fades everything out over `self.outro` seconds (class attribute, default 0;
   the built-ins use 0.5). Set `outro` on your class and call `finish()` at the end of
   `construct()`; silent scenes then fade out within their `duration`. It fades vector
@@ -988,7 +1137,7 @@ class Checklist(NarratedScene):
 `needs_target = False` allows an action without `target`. `temporary = True` (with
 `reversible`) has the runner play `revert` so that it ends with the beat (or, with `until:`,
 with the beat before that one), like `zoom`; `moves_camera = True` keeps two such actions from
-playing at once; `after_camera = True` (the built-in `callout`) plays after a camera move due at
+playing at once and starts the action before the others due with it; `after_camera = True` (the built-in `callout`) plays after a camera move due at
 the same moment, so it is built for the new view; `target_options = ("into",)` names options whose values are target names
 (checked by `vidgen validate` like `target`; look them up with `scene.find_targets(name)`).
 `until_next_beat = True` (with `reversible`) undoes the action when the next beat starts unless
@@ -1008,7 +1157,8 @@ when it falls due (the built-in `walk_to`: the distance over its speed), or `Non
 its targets (the built-in `pan` and `follow`), so it plays together with another action on them
 that falls due at the same moment instead of before or after it.
 A scene type that lists action type names in its class attribute `mid_still_actions` (the
-built-in `stage`: `walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`) gets a
+built-in `stage`: `walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`,
+`pick_up`, `put_down`, `give`, `throw`, `sit_on`, `lean_on`, `stand_up`, `blow_away`, `get_in`, `ride_to`, `get_out`) gets a
 still half-way through each use of them whenever stills are taken (`vidgen storyboard`,
 `render --frames`), besides the beat ends (docs/CONFIG.md "Frame stills").
 The built-in `callout` action (`src/vidgen/scenes/callout_action.py`) is an example of all
@@ -1017,7 +1167,9 @@ and implements `cue(self, scene, time)` instead of `apply`: the runner calls it 
 starts with the scene time the use is due (`at`, on a frame), whatever the scene animates then;
 with `scene_targets = False` its `target` names something other than a scene target (checked by
 your `problems()`, not against the scene's targets). The built-in `sfx` action
-(`src/vidgen/scenes/sfx_action.py`) is both: `- sfx: pop` cues `scene.sfx("pop", time)`. The
+(`src/vidgen/scenes/sfx_action.py`) is both: `- sfx: pop` cues `scene.sfx("pop", time)`; so is
+the `light` action (`- light: night` cues the stage's `change_light`), and so are `lightning` and
+`rainbow` (`strike_lightning`, `show_rainbow`). The
 built-in `particles` action (`src/vidgen/scenes/particles_action.py`) also has `scene_targets =
 False` (`- particles: snow`), but animates: its `apply` adds a mobject that moves on its own and
 returns no animation.
@@ -1036,7 +1188,12 @@ stage moves its parallax layers so); both run as one scene updater after every a
 listener must place things from the camera alone: it also runs before each animation, and while
 the camera neither follows nor animates, Manim draws what comes before the first moving mobject
 once into a static image for that animation.
-`zoom` comes back to the view it started from. Animate the parts that are in the
+`zoom` comes back to the view it started from. A beat's `shot:` (DESIGN.md §69.29) works on a
+scene type with a `shot_framing(kind, names)` method returning `(ShotView, Shot)` (the built-in
+`stage`; the framing maths is `frame_shot` / `shot_figures` / `shot_view`); while a shot is on,
+`scene.camera_shot` holds what the layout dump records and `scene.shot_home` the view the next
+beat goes back to. On a stage wider than the frame the stage adds automatic `pan`s that keep
+the speaker in view (`reframe`, §69.30; `reframe_path` is the pure path). Animate the parts that are in the
 scene (`scene.on_screen_parts(t)`), not a group of them that was never added: Manim would add
 that group and draw its parts twice. New mobjects (like the marks above) are simply added by
 their animation. `vidgen list-scenes` lists your action with its options; `vidgen schema`
@@ -1153,11 +1310,13 @@ scene that shows the narration its own way):
   beat. `estimate_word_times(words, start, end)` is the estimate alone (by `syllables(word)`,
   with pauses after punctuation); `speech_bounds(path)` finds the speech in an audio file;
   `spoken_words(text)` counts spoken words (numbers, acronyms).
-  With a project `pronunciation:` (docs/CONFIG.md "Pronunciation") the MP3 says something else
-  than the written text: pass `spoken=project.pronunciation.apply(text)` (a `Spoken`: `text`,
-  `spoken`, `replacements`, `word_groups()`) as the last argument to get the written words timed
-  by their spoken form (`map_word_times(spoken, times)` does that mapping for times of the spoken
-  words). `project.pronunciation.say(text)` / `project.spoken_texts()` give what the TTS says.
+  With a project `pronunciation:` (docs/CONFIG.md "Pronunciation") or voice sounds (`[laugh]`,
+  docs/CONFIG.md "Voice sounds") the MP3 says something else than the written text: pass
+  `spoken=project.spoken(beat)` (a `Spoken`: `text`, `spoken`, `replacements`, `word_groups()`;
+  `project.pronunciation.apply(text)` for a text without sounds) as the last argument to get the
+  written words timed by their spoken form (`map_word_times(spoken, times)` does that mapping for
+  times of the spoken words). `project.spoken_texts()` gives what the TTS says per beat;
+  `beat.voice_sounds` lists a beat's sounds (their markers are not in `beat.text`).
 - `caption_cues(text, start, end, *, words=None, widths=None, space=1, max_width=42,
   max_lines=2, max_words=None, until=None, prefix="", prefix_width=None) -> [CaptionCue(start,
   end, lines, words, prefix)]`: the text cut at phrase boundaries into cues (`segment_cues`, costs

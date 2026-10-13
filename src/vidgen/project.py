@@ -1,21 +1,24 @@
-"""Project: locate and load a project's config, apply a variant, resolve paths (DESIGN.md §3)."""
+"""Project: locate and load a project's config (with its ``include:`` files), apply a variant, resolve paths (DESIGN.md §3)."""
 
 from __future__ import annotations
 
 import copy
 import json
 import os
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 from vidgen.config import BeatConfig, FormatConfig, SceneConfig, VideoConfig, VoiceConfig, parse_config
-from vidgen.errors import VidgenError
-from vidgen.pronunciation import Pronunciation, load_pronunciation
+from vidgen.errors import Problem, VidgenError
+from vidgen.includes import ConfigSource, Origin, after_variant, attributed, attributed_error, expand_sets, project_relative, read_project_config
+from vidgen.kokoro_voices import voice_parts
+from vidgen.pronunciation import Pronunciation, Spoken, load_pronunciation
 from vidgen.translation import TranslationReport, apply_translations, read_translation_file
 from vidgen.voices import audio_fields, beat_voice_names, resolve_voice, speaker_tags
+from vidgen.voicesounds import voiced_spoken
 
 CONFIG_NAMES: tuple[str, ...] = ("video.yaml", "video.yml", "video.json")
 #: Folder of the deliverables (MP4, SRT, chapter list, thumbnail) without ``output_dir:`` or ``--output-dir``.
@@ -74,22 +77,28 @@ def read_config_file(path: Path) -> Any:
 #: Environment variable naming a folder that every file a config refers to must lie in (set by
 #: ``vidgen mcp`` for the commands it runs: its ``--root``; DESIGN.md §63).
 CONFINE_ENV = "VIDGEN_CONFINE_ROOT"
-#: Config keys (anywhere in the config, variants included) whose string values are files or
-#: folders of the project: scene ``path`` / ``logo``, watermark and thumbnail ``image``, music
-#: ``source``, ``pronunciation_file``, ``translations``, ``extensions``, ``output_dir``.
-PATH_KEYS = frozenset({"path", "logo", "image", "source", "pronunciation_file", "translations", "extensions", "output_dir"})
+#: Config keys (anywhere in the config, variants and sets included) whose string values are
+#: files or folders of the project: scene ``path`` / ``logo``, watermark, thumbnail, stage and
+#: layer ``image``, music ``source``, ``pronunciation_file``, ``translations``, ``extensions``,
+#: ``output_dir``, a character's ``look.svg`` and a stage prop's ``svg``.
+PATH_KEYS = frozenset({"path", "logo", "image", "source", "pronunciation_file", "translations", "extensions", "output_dir", "svg"})
+#: Config key whose value may name a file among other words: a Kokoro ``voice`` (a blend
+#: ``af_bella,own.pt``) whose parts ending in ``.pt`` are voice files Kokoro reads from the
+#: current folder (DESIGN.md §68).
+VOICE_FILE_KEY = "voice"
 
 
 def confinement_problems(data: Any, root: Path, confine: Path) -> list[str]:
-    """Config locations whose file (a :data:`PATH_KEYS` value, relative to ``root``) resolves
-    outside ``confine`` — through an absolute path, ``..`` or a link. Values that are not paths
-    (a quote's ``source`` text, a music bed's name) resolve inside and pass."""
+    """Config locations whose file (a :data:`PATH_KEYS` value, relative to ``root``, or a ``.pt``
+    part of a ``voice``, relative to ``root`` and to the current folder) resolves outside
+    ``confine`` — through an absolute path, ``..`` or a link. Values that are not paths (a
+    quote's ``source`` text, a music bed's name, a voice name) resolve inside and pass."""
     confine = confine.resolve()
     problems: list[str] = []
 
-    def check(value: str, where: str) -> None:
+    def check(value: str, where: str, base: Path = root) -> None:
         try:
-            resolved = (root / value).resolve()
+            resolved = (base / value).resolve()
         except (OSError, ValueError):
             return
         if not resolved.is_relative_to(confine):
@@ -99,7 +108,12 @@ def confinement_problems(data: Any, root: Path, confine: Path) -> list[str]:
         if isinstance(node, Mapping):
             for key, value in node.items():
                 here = f"{where}.{key}" if where else str(key)
-                if key in PATH_KEYS and isinstance(value, str):
+                if key == VOICE_FILE_KEY and isinstance(value, str):
+                    for part in voice_parts(value):
+                        if part.endswith(".pt"):
+                            check(part, here)
+                            check(part, here, Path.cwd())
+                elif key in PATH_KEYS and isinstance(value, str):
                     check(value, here)
                 elif key in PATH_KEYS and isinstance(value, list) and all(isinstance(v, str) for v in value):
                     for k, v in enumerate(value):
@@ -111,7 +125,7 @@ def confinement_problems(data: Any, root: Path, confine: Path) -> list[str]:
                 walk(value, f"{where}[{k}]")
 
     walk(data, "")
-    return problems
+    return list(dict.fromkeys(problems))
 
 
 def _confine(data: Any, root: Path, source: str) -> None:
@@ -129,11 +143,20 @@ def _dump(config: VideoConfig) -> dict[str, Any]:
     return config.model_dump(mode="json", by_alias=True, exclude_none=True)
 
 
+def _parsed(data: Any, where: str, origins: Mapping[str, Origin]) -> VideoConfig:
+    """:func:`parse_config` with its problems placed where their values are written (DESIGN.md §69.35)."""
+    try:
+        return parse_config(data, where)
+    except VidgenError as exc:
+        raise attributed_error(exc, origins) from None
+
+
 def _translated(
-    config: VideoConfig, data: dict[str, Any], root: Path, where: str
+    data: dict[str, Any], root: Path, where: str, origins: Mapping[str, Origin]
 ) -> tuple[VideoConfig, tuple[dict[str, Any], VideoConfig], TranslationReport | None]:
-    """``config`` (validated from the raw ``data``) with its ``translations:`` file applied
+    """The config validated from the raw ``data`` with its ``translations:`` file applied
     (DESIGN.md §54): the translated config, the source ``(data, config)`` and the report."""
+    config = _parsed(data, where, origins)
     source = (data, config)
     if config.translations is None:
         return config, source, None
@@ -142,7 +165,7 @@ def _translated(
         return config, source, TranslationReport(rel, None, missing=True)
     doc = read_translation_file(root / rel, rel)
     translated, report = apply_translations(data, doc, rel)
-    return parse_config(translated, f"{where} with the translations of {rel}"), source, report
+    return _parsed(translated, f"{where} with the translations of {rel}", origins), source, report
 
 
 class Project:
@@ -157,6 +180,8 @@ class Project:
         base_config: VideoConfig | None = None,
         source: tuple[dict[str, Any], VideoConfig] | None = None,
         translation: TranslationReport | None = None,
+        included: ConfigSource | None = None,
+        origins: Mapping[str, Origin] | None = None,
     ) -> None:
         self.root = root
         self.config_file = config_file
@@ -169,6 +194,12 @@ class Project:
         self.source_data, self.source_config = source if source is not None else (_dump(config), config)
         #: What applying the ``translations:`` file did (``None`` without one).
         self.translation = translation
+        #: The ``include:`` files merged into the config (absolute, in merge order) and the files
+        #: they name (SVGs, pictures), DESIGN.md §69.35.
+        self.included_files: tuple[Path, ...] = included.files if included is not None else ()
+        self.files_named_by_includes: tuple[Path, ...] = included.named_files if included is not None else ()
+        #: Where values of the merged config are written (included files, sets), for :meth:`attributed`.
+        self.origins: dict[str, Origin] = dict(origins or {})
         #: How the narrator says terms (``pronunciation:`` + ``pronunciation_file``, DESIGN.md §45);
         #: loading reads the files, so a missing or invalid one is a :class:`VidgenError` here.
         self.pronunciation: Pronunciation = load_pronunciation(config, root)
@@ -183,7 +214,8 @@ class Project:
     def load(cls, path: str | Path = ".", variant: str | None = None, output_dir: str | Path | None = None) -> Project:
         """Load the project at ``path`` (directory or config file), optionally applying a variant.
 
-        The variant's overrides are deep-merged onto the raw config before validation.
+        The ``include:`` files are merged first and each stage's ``set:`` applied (DESIGN.md
+        §69.35); the variant's overrides are deep-merged onto the raw config before validation.
         ``output_dir`` (the CLI's ``--output-dir``; relative to the current directory) overrides
         where the deliverables go (:attr:`output_dir`).
         """
@@ -197,21 +229,25 @@ class Project:
         config_file = find_config_file(path).resolve()
         root = config_file.parent
         source = config_file.name
-        data = read_config_file(config_file)
+        confine = os.environ.get(CONFINE_ENV)
+        included = read_project_config(config_file, Path(confine) if confine else None)
+        data = included.data
         _confine(data, root, source)
-        base, base_source, base_report = _translated(parse_config(data, source), data, root, source)
+        base_data, base_origins = expand_sets(data, included.origins)
+        base, base_source, base_report = _translated(base_data, root, source, base_origins)
         if variant is None:
-            return cls(root, config_file, base, None, base, base_source, base_report)
+            return cls(root, config_file, base, None, base, base_source, base_report, included, base_origins)
         if variant not in base.variants:
             known = ", ".join(sorted(base.variants)) or "(none defined)"
             raise VidgenError(f"{source}: unknown variant '{variant}'; available variants: {known}")
-        data = deep_merge(data, base.variants[variant])
+        override = base.variants[variant]
+        data, origins = expand_sets(deep_merge(data, override), after_variant(included.origins, data, override))
         where = f"{source} (variant '{variant}')"
         try:
-            config, merged, report = _translated(parse_config(data, where), data, root, where)
+            config, merged, report = _translated(data, root, where, origins)
         except VidgenError as exc:
             raise VidgenError(str(exc), problems=[p.in_variant(variant) for p in exc.problems]) from None
-        return cls(root, config_file, config, variant, base, merged, report)
+        return cls(root, config_file, config, variant, base, merged, report, included, origins)
 
     def without_overlays(self) -> Project:
         """This project without any overlay (no video ``overlays``, every scene ``overlays:
@@ -220,9 +256,20 @@ class Project:
         scenes = [scene.model_copy(update={"overlays": False}) for scene in self.config.scenes]
         config = self.config.model_copy(update={"overlays": [], "scenes": scenes})
         bare = Project(self.root, self.config_file, config, self.variant, self.base_config, (self.source_data, self.source_config), self.translation)
+        bare.included_files, bare.files_named_by_includes, bare.origins = self.included_files, self.files_named_by_includes, self.origins
         bare.bare = True
         bare.output_dir_override = self.output_dir_override
         return bare
+
+    @property
+    def included_labels(self) -> list[str]:
+        """The ``include:`` files merged into the config, relative to the project folder."""
+        return [project_relative(path, self.root) for path in self.included_files]
+
+    def attributed(self, problems: Iterable[Problem]) -> list[Problem]:
+        """``problems`` placed where their values are written: an ``include:`` file (``file``),
+        a set's entry (``sets.NAME...``), the scene's own entry (:func:`vidgen.includes.attributed`)."""
+        return attributed(problems, self.origins)
 
     # ----- names and paths -------------------------------------------------------------------
 
@@ -288,10 +335,15 @@ class Project:
         mode = self.config.subtitles.speakers if mode is None else mode
         return {} if mode in ("off", "color") else speaker_tags(self.config)
 
+    def spoken(self, beat: BeatConfig) -> Spoken:
+        """What the TTS gets for ``beat``: its text with ``pronunciation`` applied and what its
+        voice says for its voice sounds (:func:`vidgen.voicesounds.voiced_spoken`)."""
+        spoken = self.pronunciation.apply(beat.text)
+        return voiced_spoken(spoken, beat.voice_sounds, self.beat_voice(beat.id)) if beat.voice_sounds else spoken
+
     def spoken_texts(self) -> dict[str, str]:
-        """Beat id -> the text the TTS gets for it (``pronunciation`` applied), in video order."""
-        say = self.pronunciation.say
-        return {beat.id: say(beat.text) for _, beat in self.beats()}
+        """Beat id -> the text the TTS gets for it (:meth:`spoken`), in video order."""
+        return {beat.id: self.spoken(beat).spoken for _, beat in self.beats()}
 
     @property
     def build_dir(self) -> Path:

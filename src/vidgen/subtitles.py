@@ -6,7 +6,8 @@ lines of ``width`` characters by :func:`vidgen.cues.segment_cues` — the same c
 spoken (the beat's first cue at the beat's start) and lasts until the next one; word times come
 from :func:`vidgen.speech.beat_word_times` (the TTS alignment, else an estimate within the
 MP3's speech, else over the beat). Cue ends are beat ends (the narration), not including the
-silence pad after a beat.
+silence pad after a beat. Where a beat overlaps the one before (DESIGN.md §69.34) both beats'
+cues have one line each and overlap in time: players show them together, one above the other.
 """
 
 from __future__ import annotations
@@ -15,9 +16,9 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import NamedTuple
 
-from vidgen.cues import caption_cues, split_cues
+from vidgen.cues import caption_cues, overlapping_beats, split_cues
 from vidgen.fileio import write_text_atomic
-from vidgen.pronunciation import Pronunciation
+from vidgen.pronunciation import Pronunciation, Spoken
 from vidgen.speech import WordTime, beat_word_times
 from vidgen.voices import speaker_prefix
 
@@ -65,11 +66,13 @@ def cues_from_timings(
     pronunciation: Pronunciation | None = None,
     speakers: Mapping[str, str] | None = None,
     language: str | None = None,
+    spoken: Mapping[str, Spoken] | None = None,
 ) -> list[Cue]:
     """All cues of a combined ``timings.json`` mapping (beat times are absolute); with
     ``audio_dir``, word times come from the beats' MP3s and alignments there. The cues show the
     written text; with ``pronunciation`` (the project's) the words are timed by their spoken
-    form, which is what the MP3s say. ``speakers`` (beat id -> label, see
+    form, which is what the MP3s say; ``spoken`` (beat id -> what the TTS got,
+    :meth:`vidgen.project.Project.spoken`, voice sounds included) wins over it for its beats. ``speakers`` (beat id -> label, see
     :meth:`vidgen.project.Project.speaker_tags`) names the speaker before those beats.
     ``language`` (default: the timings' ``language``, else English) chooses the break rules."""
     cues: list[Cue] = []
@@ -77,15 +80,22 @@ def cues_from_timings(
     if language is None:
         language = timings.get("language")
     for scene in timings["scenes"]:
-        for beat in scene["beats"]:
+        crowded = overlapping_beats([(beat["start"], beat["end"]) for beat in scene["beats"]])
+        for k, beat in enumerate(scene["beats"]):
             words = None
             if audio_dir is not None:
-                spoken = pronunciation.apply(beat["text"]) if pronunciation is not None else None
-                words = beat_word_times(audio_dir, beat["id"], beat["text"], beat["start"], beat["end"], spoken, language)
+                said = spoken.get(beat["id"]) if spoken is not None else None
+                if said is None and pronunciation is not None:
+                    said = pronunciation.apply(beat["text"])
+                words = beat_word_times(audio_dir, beat["id"], beat["text"], beat["start"], beat["end"], said, language)
+            lines = 1 if k in crowded else MAX_LINES   # two overlapping lines show one line each (§69.34)
             cues.extend(
-                beat_cues(beat["start"], beat["end"], beat["text"], words=words, speaker=speakers.get(beat["id"]), language=language)
+                beat_cues(
+                    beat["start"], beat["end"], beat["text"], max_lines=lines, words=words, speaker=speakers.get(beat["id"]),
+                    language=language,
+                )
             )
-    return cues
+    return sorted(cues, key=lambda cue: cue.start)
 
 
 def format_time(seconds: float) -> str:
@@ -113,10 +123,11 @@ def write_srt(
     pronunciation: Pronunciation | None = None,
     speakers: Mapping[str, str] | None = None,
     language: str | None = None,
+    spoken: Mapping[str, Spoken] | None = None,
 ) -> list[Cue]:
-    """Write the SRT for a combined timings mapping as UTF-8 (word times from ``audio_dir`` and
-    ``pronunciation``, speaker names ``speakers``, cue breaks for ``language``, see
+    """Write the SRT for a combined timings mapping as UTF-8 (word times from ``audio_dir``,
+    ``pronunciation`` and ``spoken``, speaker names ``speakers``, cue breaks for ``language``, see
     :func:`cues_from_timings`); returns the cues."""
-    cues = cues_from_timings(timings, audio_dir, pronunciation, speakers, language)
+    cues = cues_from_timings(timings, audio_dir, pronunciation, speakers, language, spoken)
     write_text_atomic(path, format_srt(cues))
     return cues

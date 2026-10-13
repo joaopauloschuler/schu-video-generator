@@ -1,4 +1,5 @@
-"""Particles: rain, snow, sparkles, dust, confetti, smoke and bubbles (DESIGN.md §69.9).
+"""Particles: rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves and wind streaks
+(DESIGN.md §69.9, §69.32).
 
 The motion is a pure function of a seed and the time, without manim, so it is tested without
 rendering: :func:`particle_seeds` draws each particle's start (position, size, speed, phase,
@@ -18,8 +19,8 @@ from typing import Literal
 
 import numpy as np
 
-#: The kinds of particles, in a fixed order (part of each kind's random stream).
-PARTICLE_KINDS = ("rain", "snow", "sparkles", "dust", "confetti", "smoke", "bubbles")
+#: The kinds of particles, in a fixed order (part of each kind's random stream; new kinds go last).
+PARTICLE_KINDS = ("rain", "snow", "sparkles", "dust", "confetti", "smoke", "bubbles", "leaves", "streaks")
 #: At most this many particles in one field, whatever the density and area.
 MAX_PARTICLES = 300
 #: Share of the particles drawn at preview quality.
@@ -27,7 +28,10 @@ PREVIEW_SHARE = 0.5
 #: Particles fade out within this share of the area next to its edges (no popping in or out).
 EDGE_FADE = 0.06
 
-Shape = Literal["streak", "dot", "star", "chip", "ring"]
+Shape = Literal["streak", "dot", "star", "chip", "ring", "leaf"]
+#: Particles of a kind with ``wind_shown`` are seen only while a stage's wind blows: fully from a
+#: force this much above ``wind_shown`` (wind streaks fade in as a gust builds).
+WIND_SHOWN_RAMP = 0.3
 
 
 @dataclass(frozen=True)
@@ -60,6 +64,9 @@ class ParticleKind:
     opacity: float
     #: Default colours: theme tokens, or hex where no token fits every theme (white snow).
     colors: tuple[str, ...]
+    #: Above 0: seen only while the wind's force is above this (:data:`WIND_SHOWN_RAMP`), lying
+    #: along the wind (streaks).
+    wind_shown: float = 0.0
 
 
 KINDS: dict[str, ParticleKind] = {
@@ -73,6 +80,21 @@ KINDS: dict[str, ParticleKind] = {
     ),
     "smoke": ParticleKind("dot", 24, (0.03, 0.055), -0.1, (0.7, 1.3), 0.0, False, 0.02, (0.1, 0.3), 0.0, 0.0, 2.2, 0.32, ("#B9BEC6",)),
     "bubbles": ParticleKind("ring", 30, (0.01, 0.025), -0.15, (0.7, 1.3), 0.0, False, 0.025, (0.5, 1.0), 0.0, 0.0, 1.0, 0.85, ("#CFE9FF",)),
+    # leaves tumble down slowly and blow far; streaks are faint lines along the wind, only in wind
+    "leaves": ParticleKind(
+        "leaf", 28, (0.015, 0.024), 0.09, (0.7, 1.3), 0.0, False, 0.04, (0.3, 0.7), 0.9, 0.0, 1.0, 1.0,
+        ("#7BAE4E", "#C9A23A", "#C2703D"),
+    ),
+    "streaks": ParticleKind(
+        "streak", 22, (0.04, 0.09), 0.0, (0.7, 1.3), 0.0, False, 0.012, (0.2, 0.4), 0.0, 1.4, 1.0, 0.7, ("#FFFFFF",), wind_shown=0.2,
+    ),
+}
+
+#: How fast each kind drifts with a stage's wind (DESIGN.md §69.32): shorter sides per second at
+#: force 1, times each particle's speed factor (light snow and confetti blow far, rain a little).
+WIND_DRIFT: dict[str, float] = {
+    "rain": 0.3, "snow": 0.35, "sparkles": 0.08, "dust": 0.4, "confetti": 0.3, "smoke": 0.25, "bubbles": 0.2,
+    "leaves": 0.6, "streaks": 1.6,
 }
 
 
@@ -154,25 +176,35 @@ def _edge_fade(u: np.ndarray) -> np.ndarray:
     return np.clip(np.minimum(u, 1.0 - u) / EDGE_FADE, 0.0, 1.0)
 
 
-def particle_states(seeds: ParticleSeeds, t: float, width: float = 1.0, height: float = 1.0) -> ParticleStates:
+def particle_states(
+    seeds: ParticleSeeds, t: float, width: float = 1.0, height: float = 1.0, *, blown: float = 0.0, wind: float = 0.0,
+) -> ParticleStates:
     """Where the particles are ``t`` seconds after they started, in an area ``width`` x
-    ``height`` shorter sides large. A particle leaving one edge comes back at the other."""
+    ``height`` shorter sides large. A particle leaving one edge comes back at the other. A
+    stage's wind (§69.32): ``blown`` is its force added up since they started (force × seconds;
+    each particle drifts :data:`WIND_DRIFT` × its speed factor × that to the right), ``wind`` its
+    force now (rain slants with it; streaks show only while it is above their ``wind_shown``)."""
     spec = particle_kind(seeds.kind)
     sway = spec.sway * np.sin(2 * math.pi * seeds.sway_hz * t + seeds.phase)
     y = np.mod(seeds.y + spec.fall * seeds.speed * t / height, 1.0)
-    x = np.mod(seeds.x + (seeds.drift * t + sway) / width, 1.0)
+    side = seeds.drift * t + sway
+    if blown:
+        side = side + WIND_DRIFT[seeds.kind] * np.abs(seeds.speed) * blown
+    x = np.mod(seeds.x + side / width, 1.0)
     size = seeds.size.copy()
     angle = np.zeros(len(seeds))
     flip = np.ones(len(seeds))
     opacity = np.full(len(seeds), spec.opacity) * _edge_fade(x)
     if spec.shape == "streak":  # along its fall: tilted by the wind
-        angle[:] = math.atan2(spec.drift, spec.fall)
+        angle[:] = math.atan2(spec.drift + WIND_DRIFT[seeds.kind] * wind, spec.fall)
     if spec.spin:
         turns = seeds.spin * t
         angle = seeds.phase + 2 * math.pi * turns
         flip = np.cos(2 * math.pi * 1.3 * turns + seeds.phase)
     if spec.twinkle:
         opacity *= np.sin(math.pi * np.mod(t / (spec.twinkle * seeds.speed) + seeds.phase / (2 * math.pi), 1.0)) ** 2
+    if spec.wind_shown:
+        opacity *= min(max((abs(wind) - spec.wind_shown) / WIND_SHOWN_RAMP, 0.0), 1.0)
     if spec.grow != 1.0:  # smoke: grows and thins out as it rises (life 0 at the bottom, 1 at the top)
         life = 1.0 - y
         size *= 1.0 + (spec.grow - 1.0) * life

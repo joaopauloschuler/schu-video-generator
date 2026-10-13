@@ -25,6 +25,7 @@ from vidgen.config import validation_problems
 from vidgen.describe import describe_params
 from vidgen.errors import Problem, VidgenError
 from vidgen.project import CONFIG_NAMES, Project, find_config_file
+from vidgen.render.jobs import AUTO as AUTO_JOBS, PER_JOB_BYTES, JobsChoice, choose_jobs
 from vidgen.sheets import DEFAULT_WIDTH as DEFAULT_SHEET_WIDTH
 from vidgen.theme import Theme
 
@@ -35,7 +36,7 @@ TEMPLATE_DOTFILES: tuple[str, ...] = ("gitignore",)
 JSON_COMMANDS: tuple[str, ...] = (
     "validate", "list-scenes", "list-themes", "list-icons", "list-sfx", "list-music", "render", "schema", "storyboard", "lint",
     "thumbnail", "export", "translate-template", "slides", "readback", "guide", "gallery", "plan",
-    "init", "tts", "imagegen", "character-sheet",
+    "init", "tts", "imagegen", "character-sheet", "direct", "screenplay", "cast",
 )
 
 #: What a command function returns: an exit code, or (with ``--json``) the JSON document.
@@ -142,6 +143,106 @@ def cmd_plan(args: argparse.Namespace) -> CommandResult:
     return 1 if problems else 0
 
 
+def cmd_screenplay(args: argparse.Namespace) -> CommandResult:
+    """Write a stage project from a screenplay (DESIGN.md §69.25)."""
+    from vidgen.plan_yaml import commented_yaml, write_project
+    from vidgen.random_cast import parse_species
+    from vidgen.screenplay import parse_screenplay, screenplay_project
+
+    source = Path(args.input)
+    if not source.is_file():
+        raise VidgenError(f"{source}: no such file (give a screenplay, e.g. story.md)")
+    try:
+        text = source.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise VidgenError(f"{source}: cannot read it as UTF-8 text: {exc}") from None
+    try:
+        play = parse_screenplay(text)
+    except VidgenError as exc:
+        raise VidgenError(f"{source}: {exc}") from None
+    output = Path(args.out) if args.out else Path(source.stem)
+    cast, include = None, None
+    if args.cast:
+        from vidgen.includes import project_relative, read_include_file
+
+        cast_file = Path(args.cast)
+        if not cast_file.is_file():
+            raise VidgenError(f"--cast {cast_file}: no such file (give an include file with characters, voices and sets)")
+        cast = read_include_file(cast_file)
+        folder = output.parent if output.suffix.lower() in (".yaml", ".yml") else output
+        include = project_relative(cast_file.resolve(), folder.resolve())
+    draft = screenplay_project(
+        play, source.stem.replace("_", " ").replace("-", " ").strip().capitalize() or "Untitled", cast, include,
+        species=parse_species(args.species), seed=args.seed,
+    )
+    header = [
+        f"# Written by `vidgen screenplay` from {source.name}: the screenplay's scenes as stage scenes, one",
+        "# beat per line. Characters without a declaration got a generated look and a voice; auto_direct adds",
+        "# the looks, reactions, gestures and close-ups. Check the # TODO: lines, then: vidgen validate,",
+        "# vidgen storyboard, vidgen lint (`vidgen guide cartoons`).",
+    ]
+    scene_notes = [list(todos) for todos in draft.scene_todos]
+    key_notes = {"characters": [f"generated: {', '.join(draft.generated)} (look and colours to adjust; `vidgen character-sheet --all`)"]} if draft.generated else {}
+    if draft.notes:
+        key_notes["voices" if "voices" in draft.config else "voice"] = [f"TODO: {n}" for n in draft.notes]
+    yaml_text = commented_yaml(draft.config, header, key_notes, scene_notes, draft.beat_todos)
+    result = write_project(yaml_text, output, force=args.force)
+    project = Project.load(result.config)
+    problems, _ = validate_all(project, keep_going=True)
+    if args.json:
+        return jsonout.screenplay_document(project, draft, result, problems)
+    beats = sum(len(s.get("beats", [])) for s in draft.config["scenes"])   # a silent card has none
+    print(
+        f"wrote {len(draft.config['scenes'])} scenes ({beats} beats), {len(project.config.characters)} characters, "
+        f"about {_format_seconds(project.estimated_duration())}; {draft.todo_count} TODOs to review (# TODO: in the config)"
+    )
+    print(f"{'created project in' if result.created else 'wrote'} {result.root if result.created else result.config}")
+    for problem in problems:
+        print(f"problem: {problem}", file=sys.stderr)
+    print("next: `vidgen character-sheet --all`, `vidgen direct`, `vidgen storyboard`, `vidgen lint`; then `vidgen tts`")
+    return 1 if problems else 0
+
+
+def cmd_cast(args: argparse.Namespace) -> CommandResult:
+    """Write a random, well-contrasted cast as an include file (DESIGN.md §69.49)."""
+    from vidgen.cartoon.contrast import MIN_CONTRAST
+    from vidgen.config import CharacterEntry
+    from vidgen.languages import normalize_language
+    from vidgen.random_cast import cast_yaml, parse_species, random_cast
+
+    species = parse_species(args.species)
+    try:
+        language = normalize_language(args.language) if args.language else None
+    except ValueError as exc:
+        raise VidgenError(f"--language: {exc}") from None
+    out = Path(args.out)
+    if out.suffix.lower() not in (".yaml", ".yml"):
+        raise VidgenError(f"--out {out}: give a .yaml file (the cast is an include file)")
+    if out.exists() and not args.force:
+        raise VidgenError(f"{out} already exists (use --force to replace it)")
+    voice = {"provider": args.provider, **({"voice": args.narrator} if args.narrator else {}), **({"model": args.model} if args.model else {})}
+    if args.provider == "kokoro" and not args.narrator:
+        voice["voice"] = "bf_emma"   # vidgen screenplay's narrator
+    cast = random_cast(args.random, args.seed, species=species, voice=voice, language=language)
+    for entry in cast.characters:   # what vidgen wrote must load (a bug otherwise, never the user's fault)
+        CharacterEntry.model_validate(entry)
+    command = f"vidgen cast --random {args.random} --seed {args.seed}" + (f" --species {' '.join(species)}" if species != ["human"] else "")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(cast_yaml(cast, command), encoding="utf-8")
+    if args.json:
+        return jsonout.cast_document(out, cast, args.seed, species, voice["provider"], MIN_CONTRAST)
+    print(f"wrote {len(cast.characters)} characters to {out} (lowest contrast between two: {cast.lowest_contrast:.2f}; lint look_alike warns below {MIN_CONTRAST:g})")
+    for entry in cast.characters:
+        look = entry["look"]
+        said = cast.voices[entry["voice"]].get("voice", "set by hand")
+        print(f"  {entry['name']:<6} {cast.kinds[entry['name']]:<9} voice {said:<12} {look.get('species', 'human')}, body {look['body']}, "
+              f"hair {look.get('hair', 'none')}, clothes {entry['colors']['clothes']}")
+    for note in cast.notes:
+        print(f"TODO: {note}", file=sys.stderr)
+    print(f"next: `include: [{out.name}]` in video.yaml or `vidgen screenplay STORY.md --cast {out}`; `vidgen character-sheet --all`")
+    return 0
+
+
 def project_problems(project: Project) -> list[Problem]:
     """Checks beyond config structure; returns the problems found (empty if none).
 
@@ -153,7 +254,8 @@ def project_problems(project: Project) -> list[Problem]:
     options, scene references; DESIGN.md §41); also checks the project's ``assets/icons``,
     the sounds of the scenes' ``sfx:`` lists (§47), the ``music:`` sources (§48), a designed
     ``thumbnail:``'s icon, image, preset and background (§53) and the ``characters:`` colours,
-    SVG files (§69) and the shapes of their own poses (§69.3).
+    SVG files (§69) and the shapes of their own poses (§69.3). Each problem points where its
+    value is written: an ``include:`` file, a set (§69.35).
     """
     from vidgen import extensions, registry
     from vidgen.actions import scene_actions
@@ -166,6 +268,7 @@ def project_problems(project: Project) -> list[Problem]:
     from vidgen.sfx import config_problems as sfx_problems
     from vidgen.thumbnail import thumbnail_problems
     from vidgen.transitions import color_problems as transition_color_problems
+    from vidgen.transitions import iris_problems
     from vidgen.voices import voice_color_problems
 
     problems: list[Problem] = []
@@ -206,6 +309,7 @@ def project_problems(project: Project) -> list[Problem]:
             problems.extend(character_look_problems(project.config, project.root))
             problems.extend(character_pose_problems(project.config, project.root))
             problems.extend(transition_color_problems(project.config, theme))
+            problems.extend(iris_problems(project.config))
             problems.extend(carry_problems(project.config))
             problems.extend(Problem(loc, message) for loc, message in sfx_problems(project.config, project.root))
             problems.extend(Problem(loc, message) for loc, message in music_problems(project.config, project.root))
@@ -213,7 +317,7 @@ def project_problems(project: Project) -> list[Problem]:
             problems.extend(Problem(loc, message) for loc, message in imagegen_problems(project))
     except VidgenError as exc:
         problems.extend(exc.problems or [Problem("", str(exc))])
-    return problems
+    return project.attributed(problems)
 
 
 def check_project(project: Project) -> list[str]:
@@ -303,11 +407,14 @@ def validate_warnings(project: Project) -> list[str]:
     and voices not in the bundled list and ``timestamps`` it cannot honour (§66), and SVG
     characters' unavailable actions and part warnings (§69.2), parts the characters' own
     poses name that they do not have (§69.3), characters sharing a voice and beat actions on a
-    character that lacks the parts they need (§69.11)."""
+    character that lacks the parts they need (§69.11), front views asked of SVG characters
+    (§69.44), and lines that overlap a line of their own voice
+    (§69.34)."""
     from vidgen.carry import carry_warnings
-    from vidgen.cartoon.cast import acting_warnings, character_look_warnings, character_pose_warnings, shared_voice_warnings
+    from vidgen.cartoon.cast import acting_warnings, character_look_warnings, character_pose_warnings, front_view_warnings, shared_voice_warnings
     from vidgen.chapter_export import chapter_warnings
     from vidgen.imagegen import imagegen_warnings
+    from vidgen.overlap import overlap_warnings
     from vidgen.transitions import transition_warnings
     from vidgen.translation import language_warnings, translation_warnings
     from vidgen.tts import tts_warnings
@@ -316,7 +423,7 @@ def validate_warnings(project: Project) -> list[str]:
     return (
         theme_warnings(project)
         + pronunciation_warnings(project)
-        + voice_warnings(project.config)
+        + voice_warnings(project.config, project.origins)
         + tts_warnings(project)
         + transition_warnings(project)
         + carry_warnings(project.config)
@@ -328,6 +435,8 @@ def validate_warnings(project: Project) -> list[str]:
         + character_pose_warnings(project.config, project.root)
         + shared_voice_warnings(project.config)
         + acting_warnings(project)
+        + front_view_warnings(project.config)
+        + overlap_warnings(project.config)
     )
 
 
@@ -369,6 +478,8 @@ def cmd_validate(args: argparse.Namespace) -> CommandResult:
     print(f"scenes:    {len(config.scenes)}")
     print(f"beats:     {n_beats}")
     print(f"duration:  ~{_format_seconds(project.estimated_duration())} (estimated from word count)")
+    if project.included_files:
+        print(f"included:  {', '.join(project.included_labels)}")
     if config.variants:
         print(f"variants:  {', '.join(config.variants)}")
     if config.voices:
@@ -717,6 +828,36 @@ def cmd_character_sheet(args: argparse.Namespace) -> CommandResult:
     for sheet in sheets:
         counts = ", ".join(f"{len(s.names)} {s.title}" for s in sheet.sections)
         print(f"character sheet: {sheet.path}  ({sheet.width}x{sheet.height}, {counts}, {sheet.bytes / 1e3:.0f} KB)")
+    return 0
+
+
+def cmd_direct(args: argparse.Namespace) -> CommandResult:
+    """Show the actions automatic directing (``auto_direct``) adds to the beats of the stage
+    scenes; with ``--print``, as YAML to paste into ``video.yaml`` (DESIGN.md §69.23)."""
+    from vidgen import extensions
+    from vidgen.cartoon.directing import auto_label, directions_yaml, project_directions
+
+    project = Project.load(args.project, variant=args.variant)
+    known = [s.id for s in project.config.scenes]
+    unknown = [sid for sid in args.scene if sid not in known]
+    if unknown:
+        raise VidgenError(f"unknown scene(s): {', '.join(unknown)}; scenes: {', '.join(known)}")
+    with extensions.project_session(project):
+        directed = project_directions(project, args.scene or None)
+    if args.json:
+        return jsonout.direct_document(project, directed)
+    if args.print:
+        print(directions_yaml(directed), end="")
+        return 0
+    if not directed:
+        print("auto_direct adds nothing: it is off (auto_direct: true turns it on), or no character speaks to another on a stage")
+        return 0
+    for scene_id, beats in directed.items():
+        count = sum(len(b.actions) for b in beats)
+        print(f"scene {scene_id}: {count} automatic action{'s' if count != 1 else ''}")
+        for beat in beats:
+            print(f"  {beat.beat}: {'  ·  '.join(auto_label(a) for a in beat.actions)}")
+    print("vidgen direct --print writes them as YAML to paste into video.yaml and edit")
     return 0
 
 
@@ -1175,6 +1316,13 @@ def build_parser() -> argparse.ArgumentParser:
     def json_arg(p: argparse.ArgumentParser) -> None:
         p.add_argument("--json", action="store_true", help="print one JSON document on stdout (see docs/CONFIG.md)")
 
+    def jobs_arg(p: argparse.ArgumentParser, what: str = "scenes", when: str = "") -> None:
+        p.add_argument(
+            "--jobs", "-j", type=_jobs_value, default=1, metavar="N|auto",
+            help=f"render N {what} in parallel{when}; auto: as many as the available memory "
+            f"({PER_JOB_BYTES / 1e9:.1f} GB each) and CPU cores allow (default: 1)",
+        )
+
     def output_dir_arg(p: argparse.ArgumentParser) -> None:
         p.add_argument(
             "--output-dir", metavar="DIR",
@@ -1197,6 +1345,27 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--language", metavar="TAG", help="language of the text (BCP-47, e.g. pt-BR): sentence and phrase rules, written as language:")
     p.add_argument("--force", action="store_true", help="write into a folder that is not empty, or replace an existing config")
     p.set_defaults(func=cmd_plan)
+
+    p = sub.add_parser("screenplay", help="a cartoon project from a screenplay: # Scene: headings, NAME: lines, [stage directions] (no AI)")
+    p.add_argument("input", help="the screenplay (.md or .txt)")
+    p.add_argument("--out", "-o", metavar="DIR|FILE", help="project folder to create, or a .yaml file to write (default: a folder named after INPUT)")
+    p.add_argument("--cast", metavar="FILE", help="reuse a cast: an include file (characters, voices, sets) the project includes; set: NAME lines use its sets")
+    p.add_argument("--species", nargs="+", action="extend", metavar="NAME", help="species of the undeclared characters: human (default), cat, dog, bird, bear, rabbit, mouse, fox, owl, frog, turtle, penguin, robot (several: a mix)")
+    p.add_argument("--seed", type=int, default=0, help="seed of the random looks undeclared characters get once the built-in ones are used (default: 0)")
+    p.add_argument("--force", action="store_true", help="write into a folder that is not empty, or replace an existing config")
+    p.set_defaults(func=cmd_screenplay)
+
+    p = sub.add_parser("cast", help="write a cast of characters that differ clearly (looks, colours, voices) as an include file (no AI)")
+    p.add_argument("--random", type=int, required=True, metavar="N", help="how many characters (1-24)")
+    p.add_argument("--seed", type=int, default=0, help="the same seed gives the same cast (default: 0)")
+    p.add_argument("--species", nargs="+", action="extend", metavar="NAME", help="human (default), cat, dog, bird, bear, rabbit, mouse, fox, owl, frog, turtle, penguin, robot (several: a mix)")
+    p.add_argument("--out", "-o", default="cast.yaml", metavar="FILE", help="the include file to write (default: cast.yaml)")
+    p.add_argument("--provider", choices=["kokoro", "openrouter", "elevenlabs"], default="kokoro", help="the video's voice provider (default: kokoro)")
+    p.add_argument("--narrator", metavar="VOICE", help="the narrator's voice, left out of the cast's (default for kokoro: bf_emma)")
+    p.add_argument("--model", metavar="NAME", help="openrouter: the TTS model whose voices to use")
+    p.add_argument("--language", metavar="TAG", help="the video's language (BCP-47): Kokoro voices of that language")
+    p.add_argument("--force", action="store_true", help="replace an existing file")
+    p.set_defaults(func=cmd_cast)
 
     p = sub.add_parser("guide", help="the author guide for AI agents making videos (workflow, pacing, scene types, ...)")
     p.add_argument("topic", nargs="?", metavar="TOPIC", help="print only this topic (vidgen guide --list shows them)")
@@ -1277,7 +1446,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--variant", metavar="NAME", help="apply a named variant")
     p.add_argument("--no-audio", action="store_true", help="render without narration audio")
     p.add_argument("--keep-going", action="store_true", help="continue after a scene fails")
-    p.add_argument("--jobs", "-j", type=int, default=1, metavar="N", help="render N scenes in parallel (default: 1)")
+    jobs_arg(p)
     p.add_argument("--frames", action="store_true", help="also save a PNG still at the end of each beat (build/.../frames/)")
     p.add_argument(
         "--frames-per-beat", type=int, metavar="N", help="save N evenly spaced stills per beat, the last at its end (implies --frames)"
@@ -1295,7 +1464,7 @@ def build_parser() -> argparse.ArgumentParser:
     quality.add_argument("--preview", action="store_true", help="use the preview format (the default)")
     quality.add_argument("--final", action="store_true", help="use the final format (slower)")
     p.add_argument("--width", type=int, default=DEFAULT_SHEET_WIDTH, metavar="PX", help=f"sheet width in pixels (default: {DEFAULT_SHEET_WIDTH})")
-    p.add_argument("--jobs", "-j", type=int, default=1, metavar="N", help="render N scenes in parallel (default: 1)")
+    jobs_arg(p)
     p.add_argument("--force", action="store_true", help="render the scenes again even if their stills are current")
     p.set_defaults(func=cmd_storyboard)
 
@@ -1308,7 +1477,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--at", type=float, metavar="SECONDS", help="with --scene: seconds into the beat (or the scene); default: the beat's end")
     p.add_argument("--no-overlays", action="store_true", help="with --scene: the frame without captions, watermark... (renders the scene again)")
     p.add_argument("--jpeg", action="store_true", help="also write <output>_thumbnail.jpg under 2 MB")
-    p.add_argument("--jobs", "-j", type=int, default=1, metavar="N", help="render N scenes in parallel when scenes must be rendered (default: 1)")
+    jobs_arg(p, when=" when scenes must be rendered")
     output_dir_arg(p)
     p.set_defaults(func=cmd_thumbnail)
 
@@ -1320,7 +1489,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--png", nargs="?", const="", metavar="FILE",
         help="write a still of the character to FILE (default: <project>/exports/character_<name>.png)",
     )
-    p.add_argument("--facing", choices=["right", "left"], default="right", help="which way the character faces in the still (default: right)")
+    p.add_argument("--facing", choices=["right", "left", "front"], default="right", help="which way the character faces in the still: right, left or front (its front view; default: right)")
     p.set_defaults(func=cmd_character)
 
     p = sub.add_parser(
@@ -1332,6 +1501,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--variant", metavar="NAME", help="apply a named variant")
     p.add_argument("--output", metavar="FILE", help="with NAME: write the sheet to FILE (default: <project>/exports/character_sheet_<name>.png)")
     p.set_defaults(func=cmd_character_sheet)
+
+    p = sub.add_parser("direct", help="show the looks and reactions auto_direct adds to the stage scenes' beats; --print writes them as YAML")
+    project_arg(p)
+    p.add_argument("--print", action="store_true", help="write the added actions as YAML to paste into video.yaml and edit")
+    p.add_argument("--scene", action="append", default=[], metavar="ID", help="only this scene (repeatable)")
+    p.add_argument("--variant", metavar="NAME", help="apply a named variant")
+    p.set_defaults(func=cmd_direct)
 
     p = sub.add_parser("slides", help="an HTML (or PDF) slide deck of the video's key frames, narration as speaker notes (exports/)")
     project_arg(p)
@@ -1356,7 +1532,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--output", "-o", metavar="FILE",
         help="write here instead of exports/<output>[_<variant>][_preview]_slides.html (PDF: _slides.pdf, _notes.pdf with --notes)",
     )
-    p.add_argument("--jobs", "-j", type=int, default=1, metavar="N", help="render N scenes in parallel (default: 1)")
+    jobs_arg(p)
     p.add_argument("--force", action="store_true", help="render the scenes again even if their stills are current")
     output_dir_arg(p)
     p.set_defaults(func=cmd_slides)
@@ -1384,7 +1560,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--formats", default="16:9,9:16", metavar="F,F", help="formats to render: 16:9, 9:16 (default: both)")
     p.add_argument("--theme", metavar="PRESET", help="render in this theme preset (default: the project's theme, or the default one)")
     p.add_argument("--clips", action=argparse.BooleanOptionalAction, default=True, help="also write a GIF of each scene (default: yes)")
-    p.add_argument("--jobs", "-j", type=int, default=1, metavar="N", help="render N scenes in parallel (default: 1)")
+    jobs_arg(p, what="samples")
     p.add_argument("--force", action="store_true", help="render the samples again even if their stills are current")
     p.set_defaults(func=cmd_gallery)
 
@@ -1399,7 +1575,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--fail-on", choices=["error", "warning", "info", "never"], help="lowest severity that fails (default: lint.fail_on, error)"
     )
-    p.add_argument("--jobs", "-j", type=int, default=1, metavar="N", help="render N scenes in parallel (default: 1)")
+    jobs_arg(p)
     p.add_argument("--force", action="store_true", help="render the scenes again even if their stills are current")
     p.set_defaults(func=cmd_lint)
 
@@ -1453,6 +1629,27 @@ def _cli_logging(collect: list[dict[str, Any]] | None = None) -> Iterator[None]:
         logger.propagate = saved[1]
 
 
+def _jobs_value(text: str) -> int | str:
+    """A ``--jobs`` value: a whole number (checked by the command) or ``auto``."""
+    if text == AUTO_JOBS:
+        return AUTO_JOBS
+    try:
+        return int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"invalid value: {text!r} (a whole number, or {AUTO_JOBS})") from None
+
+
+def _resolve_auto_jobs(args: argparse.Namespace) -> JobsChoice | None:
+    """Replace ``--jobs auto`` by the number :func:`choose_jobs` picks and print the choice and
+    its reason; ``None`` when the command has no ``--jobs`` or was given a number."""
+    if getattr(args, "jobs", None) != AUTO_JOBS:
+        return None
+    choice = choose_jobs()
+    args.jobs = choice.jobs
+    print(f"jobs: {choice.jobs} (auto: {choice.reason})", flush=True)
+    return choice
+
+
 def _print_json(doc: dict[str, Any]) -> None:
     print(jsonout.dumps(doc), flush=True)
 
@@ -1472,8 +1669,10 @@ def _run_json(func: Callable[[argparse.Namespace], CommandResult], args: argpars
     """Run a command with ``--json``: everything it prints goes to stderr, then its document (or
     the error document) is printed on stdout; exit code 0 if ``ok``, else 1."""
     warnings: list[dict[str, Any]] = []
+    jobs: JobsChoice | None = None
     try:
         with _cli_logging(warnings), redirect_stdout(sys.stderr):
+            jobs = _resolve_auto_jobs(args)
             doc = func(args)
     except VidgenError as exc:
         doc = jsonout.error_document(args.command, exc)
@@ -1485,6 +1684,8 @@ def _run_json(func: Callable[[argparse.Namespace], CommandResult], args: argpars
         doc = jsonout.envelope(args.command, False, error=error)
     assert isinstance(doc, dict)
     doc["warnings"] = warnings + doc["warnings"]
+    if jobs is not None:
+        doc["jobs"] = jobs.to_json()
     _print_json(doc)
     return 0 if doc["ok"] else 1
 
@@ -1507,6 +1708,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _run_json(args.func, args)
         try:
             with _cli_logging():
+                _resolve_auto_jobs(args)
                 result = args.func(args)
         except VidgenError as exc:
             print(f"error: {exc}", file=sys.stderr)

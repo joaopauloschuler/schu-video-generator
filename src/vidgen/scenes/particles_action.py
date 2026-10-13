@@ -1,5 +1,5 @@
-"""The ``particles`` beat action (DESIGN.md §69.9): rain, snow, sparkles, dust, confetti, smoke or
-bubbles over any scene type from ``at`` of a beat, written against ``vidgen.api`` only, like
+"""The ``particles`` beat action (DESIGN.md §69.9): rain, snow, sparkles, dust, confetti, smoke,
+bubbles, leaves or wind streaks over any scene type from ``at`` of a beat, written against ``vidgen.api`` only, like
 project actions. The ``stage`` scene's ``particles`` param shows the same fields for the whole
 scene."""
 
@@ -11,15 +11,19 @@ from vidgen.api import *
 
 @action("particles")
 class Particles(Action):
-    """Rain, snow, sparkles, dust, confetti, smoke or bubbles over the scene from `at` of the
-    beat: `- particles: snow`. They fade out when the next beat starts (`until: <beat>`: when
+    """Rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves or streaks (wind lines, seen
+    only while a stage's wind blows) over the scene from `at` of the beat: `- particles: snow`. They fade out when the next beat starts (`until: <beat>`: when
     that beat starts; `keep: true`: at the end of the scene); `run_time` is the fade out. Works
     on every scene type; seeded, so every render is the same. Options: density, area [x, y, w,
-    h] of the visible frame from its top-left corner, color (one or a list), seed."""
+    h] of the visible frame from its top-left corner, color (one or a list), seed, puddles (rain
+    on a stage: it ends on the ground with splashes, stops on open umbrellas and trees, plays a
+    rain sound with foley), lightning (rain on a stage: flashes and thunder at seeded times),
+    settle and settled (snow on a stage: it lands on the ground and the props and a white layer
+    grows there)."""
 
     class Options(ParticleSettings, ActionOptions):
         kind: ParticleKindName | None = None
-        """The particles, when not written as `- particles: KIND`: rain, snow, sparkles, dust, confetti, smoke or bubbles."""
+        """The particles, when not written as `- particles: KIND`: rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves or streaks."""
         keep: bool = False
         """true: they stay to the end of the scene."""
 
@@ -50,9 +54,20 @@ class Particles(Action):
             close = difflib.get_close_matches(names[0], PARTICLE_KINDS, n=1)
             hint = f"; did you mean '{close[0]}'?" if close else ""
             found.append(("target", f"unknown particles '{names[0]}'{hint} (kinds: {', '.join(PARTICLE_KINDS)})"))
+        if o.puddles and self.kind() != "rain":
+            found.append(("puddles", "puddles grow under rain only (- particles: rain, on a stage)"))
+        for problem in (settle_problem(self.kind(), o), storm_problem(self.kind(), o)):
+            if problem is not None:
+                found.append(problem)
         if o.keep and self.config.until is not None:
             found.append(("keep", "keep: stays to the scene's end, until: goes at a beat; give one of them"))
         return found
+
+    def scene_problems(self, scene_cls: type[NarratedScene], params: Any) -> list[tuple[str, str]]:
+        """Rain, snow, leaves and streaks stay out of a stage's room (DESIGN.md §69.42)."""
+        if getattr(params, "room", None) is not None and self.kind() in OUTDOOR_PARTICLES:
+            return [("target", f"{self.kind()} stays outdoors; a room has none inside (sparkles, dust, confetti, smoke and bubbles work)")]
+        return []
 
     def default_until(self, later: Any) -> str | None:
         """The next beat, unless ``keep``."""

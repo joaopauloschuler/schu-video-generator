@@ -25,22 +25,26 @@ from manim.utils.iterables import list_update
 from pydantic import AfterValidator, AliasChoices, BaseModel, ConfigDict, Field, GetJsonSchemaHandler, ValidationError, ValidationInfo
 
 from vidgen import carry, helpers, regions, runtime
-from vidgen.actions import TARGET_NAME, ActionRunner, Target, match_names, plan_actions
+from vidgen.actions import TARGET_NAME, ActionRunner, ActionUse, Target, match_names, plan_actions
 from vidgen.camera import Bounds, view_center_within
 from vidgen.capture import FrameCapture
+from vidgen.cartoon.directing import DirectedBeat, with_auto_actions
+from vidgen.cartoon.effect_symbols import head_box
 from vidgen.cartoon.visemes import VisemeTrack, beat_visemes
 from vidgen.layout import distribute
 from vidgen.overlay_layer import OverlayLayer
+from vidgen.overlap import BeatWindow, VoiceShape, beat_lines, beat_windows, shape_voice
 from vidgen.overlays import Overlay, avoid, mobject_region, scene_overlays
-from vidgen.config import DIRECTED_TRANSITIONS, ID_PATTERN, BeatConfig, SceneConfig, SfxCue, StingCue, validation_error_lines
+from vidgen.config import DIRECTED_TRANSITIONS, ID_PATTERN, IRIS_TRANSITIONS, BeatConfig, SceneConfig, SfxCue, StingCue, TransitionConfig, validation_error_lines
 from vidgen.errors import VidgenError
 from vidgen.imagegen import GenerateImage, generated_image
 from vidgen.project import Project
-from vidgen.sfx import AUTO_ACTION_SFX, STING_SOUNDS, SfxEvent, SoundLibrary, decode_audio, stereo, write_wav
+from vidgen.sfx import AUTO_ACTION_SFX, RATE, STING_SOUNDS, SfxEvent, SoundLibrary, decode_audio, stereo, write_wav
 from vidgen.speech import audio_duration
 from vidgen.theme import Theme
-from vidgen.transitions import ColorFade, has_transitions, resolve_color
+from vidgen.transitions import IRIS_HEAD_SCALE, ColorFade, IrisPoint, effective, has_transitions, resolve_color
 from vidgen.videoplan import TransitionSlot, VideoPlan
+from vidgen.voicesounds import SOUND_GAIN_DB, VOICE_SOUNDS, beat_sound_spans
 
 log = logging.getLogger("vidgen.scene")
 
@@ -210,8 +214,9 @@ def _animation_name(item: Any) -> str:
     return type(item).__name__
 
 
-def add_narration(scene: MovingCameraScene, path: Path) -> None:
-    """Add a narration file to ``scene``'s sound at the current time, at the file's own level.
+def add_narration(scene: MovingCameraScene, path: Path, shape: VoiceShape | None = None) -> None:
+    """Add a narration file to ``scene``'s sound at the current time, at the file's own level
+    (``shape``: dipped under an overlapping line or cut by an interruption, DESIGN.md §69.34).
 
     The file is decoded here and handed to Manim as a 48 kHz stereo WAV: a mono MP3 (what TTS
     providers return) plays on both channels unchanged, like the sound effects (DESIGN.md §47).
@@ -220,7 +225,8 @@ def add_narration(scene: MovingCameraScene, path: Path) -> None:
     """
     with tempfile.TemporaryDirectory(prefix="vidgen_voice_") as folder:
         wav = Path(folder) / "narration.wav"
-        write_wav(wav, stereo(decode_audio(path)))
+        samples = stereo(decode_audio(path))
+        write_wav(wav, samples if shape is None else shape_voice(samples, RATE, shape))
         scene.add_sound(str(wav))
 
 
@@ -267,6 +273,8 @@ class NarratedScene(MovingCameraScene):
             theme = runtime.current_theme() if active else Theme.for_format(self.project.config.theme, self.project.config.format)
         self.theme = theme
         self.params = type(self).parse_params(spec.params, scene_id=spec.id, theme=self.theme)
+        spec = with_auto_actions(spec, type(self).auto_actions(self.project, spec, self.params))
+        self.spec = spec  # with the actions automatic directing adds (DESIGN.md §69.23)
         problem = type(self).check_beat_count(len(spec.beats))
         if problem is not None:
             raise VidgenError(f"scene '{spec.id}': {problem}")
@@ -285,6 +293,11 @@ class NarratedScene(MovingCameraScene):
         #: Seconds a silent scene's code took before being held to its ``duration``.
         self.silent_busy: float | None = None
         self._durations: dict[str, float] = {}
+        self._windows: dict[str, BeatWindow] | None = None
+        #: Scene time until which the voice of the last beat narrated is heard (it may sound on
+        #: under the next beat, DESIGN.md §69.34), and the lip syncs left running meanwhile.
+        self._voice_until = 0.0
+        self._lingering: list[tuple[Any, Any]] = []
         self._current_beat: str | None = None
         self._beat_start = 0.0  # scene time the current beat's narration started
         self._requested: float | None = None
@@ -294,6 +307,12 @@ class NarratedScene(MovingCameraScene):
         self._sounds: SoundLibrary | None = None
         self._camera_follow: Callable[[], float] | None = None  # the x the camera follows (follow_with_camera)
         self._camera_listeners: list[Callable[[], None]] = []
+        #: The shot on screen (``shot:``, DESIGN.md §69.29) as the layout dump records it
+        #: (``{kind, subjects, near}``), ``None`` outside shots; set by the ``shot`` action.
+        self.camera_shot: dict[str, Any] | None = None
+        #: The camera's view before the shots and what it followed then (``(width, centre),
+        #: x_of``), where the camera goes back after them; set by the ``shot`` action.
+        self.shot_home: tuple[tuple[float, Any], Callable[[], float] | None] | None = None
         #: Whether the scene renders at preview quality (set by the render worker); scenes may
         #: draw less then, e.g. fewer particles.
         self.is_preview = False
@@ -374,7 +393,8 @@ class NarratedScene(MovingCameraScene):
         return t is not None and t.type in DIRECTED_TRANSITIONS and t.overlap > 0
 
     def _attach_color_fade(self) -> None:
-        """Fade the first / last frames from / to a colour for ``fade_color`` transitions (§49)."""
+        """Fade the first / last frames from / to a colour for ``fade_color`` transitions (§49),
+        or open / close them with an iris (§69.45)."""
         t_in, t_out = self.transition_in, self.transition_out
         frames_in = t_in.fade_in if t_in is not None else 0
         frames_out = t_out.fade_out if t_out is not None else 0
@@ -382,13 +402,41 @@ class NarratedScene(MovingCameraScene):
             return
         i = self._video_plan.index(self.spec.id)
         fade = ColorFade(
-            resolve_color(t_in.color, self.theme) if frames_in and t_in is not None else None,
+            resolve_color(t_in.color, self.theme, t_in.type) if frames_in and t_in is not None else None,
             frames_in,
-            resolve_color(t_out.color, self.theme) if frames_out and t_out is not None else None,
+            resolve_color(t_out.color, self.theme, t_out.type) if frames_out and t_out is not None else None,
             frames_out,
             round(self._video_plan.scene_duration(i) * config.frame_rate),
+            iris_in=self._iris_point(effective(self.project.config, i), own=True) if frames_in else None,
+            iris_out=self._iris_point(effective(self.project.config, i + 1), own=False) if frames_out else None,
         )
         fade.attach(self.renderer)  # outermost: overlays are drawn over the faded picture
+
+    def _iris_point(self, transition: TransitionConfig, *, own: bool) -> Callable[[int, int], IrisPoint] | None:
+        """Where an iris into (``own``) or out of this scene opens / closes, as a callable of
+        the frame's pixel size: its ``character``'s head or its ``at`` point when the iris
+        targets this scene (iris_in into it, iris_out out of it), else the frame's centre;
+        ``None`` for a fade_color."""
+        if transition.type not in IRIS_TRANSITIONS:
+            return None
+        targeted = (transition.type == "iris_in") == own
+        name = transition.character if targeted else None
+        at = transition.at if targeted and transition.at is not None else (0.5, 0.5)
+        def point(width: int, height: int) -> IrisPoint:
+            if name is None:
+                return IrisPoint(at[0] * width, at[1] * height)
+            figure = getattr(self, "cast", {}).get(name)   # looked up per frame: the cast is built in construct()
+            if figure is None:
+                raise VidgenError(f"scene '{self.spec.id}': the {transition.type} names '{name}', who is not on its stage")
+            frame = self.camera.frame
+            left, bottom, right, top = head_box(figure)
+            scale = width / frame.width
+            cx, cy = frame.get_center()[:2]
+            x = width / 2 + ((left + right) / 2 - cx) * scale
+            y = height / 2 - ((bottom + top) / 2 - cy) * scale
+            return IrisPoint(x, y, IRIS_HEAD_SCALE * math.hypot(right - left, top - bottom) / 2 * scale)
+
+        return point
 
     # ----- params ----------------------------------------------------------------------------
 
@@ -432,6 +480,23 @@ class NarratedScene(MovingCameraScene):
         empty list means no problems. Use the logger for warnings. Call ``super()`` to keep the
         checks of a parent class.
         """
+        return []
+
+    @classmethod
+    def action_sequence_problems(cls, spec: SceneConfig, params: Any, uses: list[ActionUse]) -> list[tuple[str, str]]:
+        """Problems of the scene's valid action ``uses`` taken in order (``stage``: a prop picked
+        up by someone who stands too far from it, a prop given to someone not next to the giver),
+        as ``(location, message)`` relative to the scene (``beats[1].actions[0].to``); reported by
+        ``vidgen validate`` and before a render. ``params`` are validated; the active project, if
+        any, is :func:`~vidgen.runtime.current_project`. Default: none."""
+        return []
+
+    @classmethod
+    def auto_actions(cls, project: Project, spec: SceneConfig, params: Any) -> list[DirectedBeat]:
+        """The actions automatic directing adds to the beats of ``spec`` (validated ``params``),
+        appended after each beat's own before the scene plans its actions (DESIGN.md §69.23).
+        Default: none (``stage``: looks and reactions with ``auto_direct``). Pure for a given
+        project: ``vidgen direct`` and the storyboard call it without rendering."""
         return []
 
     #: How many beats the scene type narrates: ``None`` (any number, the default), an ``int``
@@ -505,12 +570,25 @@ class NarratedScene(MovingCameraScene):
                 self._durations[b.id] = b.estimated_duration(self.project.config.narration.words_per_second)
         return self._durations[b.id]
 
+    def beat_window(self, beat: str | int | BeatConfig) -> BeatWindow:
+        """How long the beat lasts on the scene's clock (DESIGN.md §69.34): the seconds its
+        own animations get (``body``, what :meth:`narrate` yields), until the next beat starts
+        (``window``), how long its voice is heard (``heard``) and how it is mixed (``shape``).
+        Without ``overlap`` / ``interrupt`` on the next beat: ``d``, ``d + pad``, ``d``, as is."""
+        b = self.beat(beat)
+        if self._windows is None:
+            lines = beat_lines(self.project, self.beats, self.beat_duration)
+            self._windows = {x.id: w for x, w in zip(self.beats, beat_windows(lines, self.pad, config.frame_rate))}
+        return self._windows[b.id]
+
     def beat_visemes(self, beat: str | int | BeatConfig) -> VisemeTrack:
         """The beat's viseme track over its :meth:`beat_duration`, for
         :meth:`~vidgen.cartoon.character.Character.lip_sync` (stored by ``vidgen tts``, else
-        built from the spoken text; DESIGN.md §69.4)."""
+        built from the spoken text; DESIGN.md §69.4); cut where the next beat interrupts it."""
         b = self.beat(beat)
-        return beat_visemes(self.project, b.id, self.beat_duration(b))
+        track = beat_visemes(self.project, b.id, self.beat_duration(b))
+        cut = self.beat_window(b).shape.cut
+        return track if cut is None else track.until(cut)
 
     @property
     def current_beat(self) -> BeatConfig | None:
@@ -534,6 +612,23 @@ class NarratedScene(MovingCameraScene):
             raise VidgenError(f"scene '{self.spec.id}': speak() is called outside a beat")
         character.lip_sync(self.beat_visemes(beat), clock=self.beat_clock())
 
+    def end_lip_sync(self, character: Any, track: Any) -> None:
+        """End ``character``'s lip sync of ``track`` (the one a beat started; a later one is
+        left alone): now, or, while that beat's voice still sounds under the next beat (an
+        ``overlap``, DESIGN.md §69.34), when the beat narrated now ends."""
+        if character.lip_sync_track is not track:
+            return
+        if float(self.renderer.time) < self._voice_until - 1e-6:
+            self._lingering.append((character, track))
+        else:
+            character.stop_lip_sync()
+
+    def _stop_lingering(self) -> None:
+        for character, track in self._lingering:
+            if character.lip_sync_track is track:
+                character.stop_lip_sync()
+        self._lingering = []
+
     def beat_action_names(self, beat: str | int | BeatConfig) -> list[str]:
         """The action types the beat's ``actions`` use (validated), in order."""
         b = self.beat(beat)
@@ -551,33 +646,43 @@ class NarratedScene(MovingCameraScene):
 
         Starts the beat's audio now (unless ``audio=False``), yields its duration ``d`` and on
         exit waits until ``d + pad`` seconds have passed since entering. Records a
-        :class:`BeatTiming` in ``self.beat_log``.
+        :class:`BeatTiming` in ``self.beat_log``. When the next beat overlaps or interrupts this
+        one (DESIGN.md §69.34) it yields and waits the time until the next beat starts instead
+        (:meth:`beat_window`), and the voice is dipped or cut there.
         """
         b = self.beat(beat)
         if any(entry.beat_id == b.id for entry in self.beat_log):
             raise VidgenError(f"scene '{self.spec.id}': beat '{b.id}' is narrated twice")
         d = self.beat_duration(b)
+        window = self.beat_window(b)
         path = self.beat_audio(b)
         if path is not None and self.audio_enabled:
-            add_narration(self, path)
+            add_narration(self, path, None if window.shape.plain else window.shape)
         start = float(self.renderer.time)
         if self.capture is not None:
-            self.capture.begin_segment(b.id, round((d + self.pad) * config.frame_rate), include_end=False)
+            self.capture.begin_segment(b.id, round(window.window * config.frame_rate), include_end=False)
         self._current_beat = b.id
         self._beat_start = start
         if b.sting is not None:
-            self._add_sting(b.sting, start + (d if b.sting.placed_at == "end" else 0.0))
+            self.sting(b.sting, start + (window.heard if b.sting.placed_at == "end" else 0.0))
+        for span in beat_sound_spans(self.project, b, d):
+            cut = window.shape.cut
+            if span.generated and (cut is None or span.start < cut):   # a breath the TTS cannot say, in the silence before / after the line (§69.33)
+                sound = VOICE_SOUNDS[span.kind].sfx or ""
+                self._add_sfx(sound, max(start + span.start, 0.0), SOUND_GAIN_DB, 0.0, "start", {}, "voice sound")
         if self._actions is not None:
-            self._actions.start_beat(b.id, d, self.pad)
+            self._actions.start_beat(b.id, window.body, window.rest)
         try:
-            yield d
+            yield window.body
             self.beat_busy[b.id] = float(self.renderer.time) - start
-            self.wait_seconds(d + self.pad - (self.renderer.time - start))
+            self.wait_seconds(window.window - (self.renderer.time - start))
             if self._actions is not None:
                 self._actions.end_beat()
         finally:
             self._current_beat = None
-        self.beat_log.append(BeatTiming(b.id, start, start + d, b.text))
+        self._stop_lingering()   # the voice of the beat before has ended by now
+        self._voice_until = start + window.heard
+        self.beat_log.append(BeatTiming(b.id, start, start + window.heard, b.text))
         if self.capture is not None:
             self.capture.end_segment(b.id)
 
@@ -762,6 +867,7 @@ class NarratedScene(MovingCameraScene):
             self.hold()
         if self.transition_out is not None and self.transition_out.hold:
             self.wait_seconds(self.transition_out.hold / config.frame_rate)
+        self._stop_lingering()
         self._record_carry()
         narrated = {entry.beat_id for entry in self.beat_log}
         missing = [b.id for b in self.beats if b.id not in narrated]
@@ -834,10 +940,12 @@ class NarratedScene(MovingCameraScene):
         time = float(self.renderer.time) if at is None else at
         return self._add_sfx(sound, time, gain, pan, align, params, "sfx")
 
-    def _add_sting(self, sting: StingCue, time: float) -> None:
-        """Record the beat's music sting (DESIGN.md §69.19) at scene time ``time``: its built-in
-        sound (or the project's file of that name), ducked under the narration when mixed."""
-        self._add_sfx(STING_SOUNDS[sting.kind], time, sting.gain, 0.0, "start", {}, "sting", duck=True)
+    def sting(self, sting: StingCue | str, time: float) -> SfxEvent:
+        """Play a music sting (a beat's ``sting:``, DESIGN.md §69.19; a ``card``'s) at scene time
+        ``time``: its built-in sound (or the project's file of that name), ducked under the
+        narration when mixed. ``sting``: a :class:`StingCue` or its kind (``reveal``...)."""
+        cue = StingCue(kind=sting) if isinstance(sting, str) else sting  # type: ignore[arg-type]
+        return self._add_sfx(STING_SOUNDS[cue.kind], time, cue.gain, 0.0, "start", {}, "sting", duck=True)
 
     def _add_sfx(
         self, sound: str, time: float, gain: float, pan: float, align: str, params: Mapping[str, Any], where: str, duck: bool = False
@@ -868,6 +976,16 @@ class NarratedScene(MovingCameraScene):
         starts playing ``animations`` at scene time ``start`` for ``seconds`` (as played, after
         any shortening): the place for sounds tied to actions. Does nothing here; ``stage`` plays
         its foley (DESIGN.md §69.19)."""
+
+    def action_motion_effects(self, action: str, options: Any, animations: Sequence[Animation], start: float, seconds: float) -> None:
+        """Called by the action runner right after :meth:`action_foley`, with the same
+        arguments: the place for drawings tied to how actions move. Does nothing here; ``stage``
+        adds its motion effects (dust, speed lines, impact stars, whoosh arcs, DESIGN.md §69.41)."""
+
+    def particles_started(self, field: Any, settings: Any) -> None:
+        """Called by :func:`vidgen.particle_field.particle_field` with each new particle field
+        (not yet added) and its settings. Does nothing here; ``stage`` grows puddles under rain
+        and plays the rain sound bed (DESIGN.md §69.39)."""
 
     # ----- frame -----------------------------------------------------------------------------
 

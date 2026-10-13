@@ -487,6 +487,10 @@ def join_scenes(project: Project, preview: bool, no_audio: bool, ffmpeg: str) ->
         }
         if scene_sfx:
             entry["sfx"] = [e.to_json() for e in scene_sfx]
+        if timings.get("ambience"):  # a stage's rain bed (DESIGN.md §69.39), at video times
+            entry["ambience"] = [
+                {**bed, "start": round(offset + bed["start"], 6), "end": round(offset + bed["end"], 6)} for bed in timings["ambience"]
+            ]
         transition = transitions.effective(project.config, i)
         if transition.type != "cut":
             entry["transition"] = {"type": transition.type, "duration": transition.seconds, "overlap": round(overlaps[i] / fmt.fps, 6)}
@@ -582,7 +586,7 @@ def _overlaps(project: Project, fps: int, renders: list[tuple[Path, dict[str, An
     if not transitions.has_transitions(config):
         return [0] * len(renders)
     frames = [round(duration * fps) for _, _, duration in renders]
-    speech = [timings["beats"][-1]["end"] if timings["beats"] else None for _, timings, _ in renders]
+    speech = [max(b["end"] for b in timings["beats"]) if timings["beats"] else None for _, timings, _ in renders]
     overlaps = transitions.join_overlaps(config, fps, frames, speech)
     for i, spec in enumerate(config.scenes):
         t = transitions.effective(config, i)
@@ -731,7 +735,8 @@ def render_project(
         timings_file = project.render_dir(preview) / "timings.json"
         write_json(timings_file, timings)
         srt = project.srt_path(preview)
-        write_srt(srt, timings, project.audio_dir, project.pronunciation, project.speaker_tags(), project.config.language)
+        spoken = {beat.id: project.spoken(beat) for _, beat in project.beats() if beat.voice_sounds}
+        write_srt(srt, timings, project.audio_dir, project.pronunciation, project.speaker_tags(), project.config.language, spoken)
         chapters_file = write_chapter_list(project, preview, timings)
         index = write_frames_index(project, preview, timings, frames) if frames else None
         post: dict[str, Any] = {

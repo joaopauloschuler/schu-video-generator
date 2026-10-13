@@ -227,6 +227,10 @@ def test_pan_follow_and_zoom_geometry() -> None:
         frame.move_to(move.target_mobject.get_center())
         (back,) = pan_back.revert(scene, [])
         assert back.target_mobject.get_center()[0] == pytest.approx(FW)   # until: back to the view before
+        cut = use("pan", to="left", cut=True)
+        assert cut.apply(scene, []) == [] and frame.get_center()[0] == pytest.approx(-0.25 * 3 * FW)   # there at once
+        assert cut.run_time_for(scene, []) == 0.0
+        frame.move_to([FW, 0.0, 0.0])
 
         dot = Square(0.5).move_to([-12.0, -1.0, 0.0])
         follow = use("follow", target="t")

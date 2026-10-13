@@ -7,13 +7,15 @@ signal. ``narration_speed`` also measures the beats' MP3s.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterator
 from typing import Any
 
 import numpy as np
 
-from vidgen.config import AnimationOverrunRule, DeadAirRule, NarrationSpeedRule, RushedAnimationRule
+from vidgen.config import AnimationOverrunRule, DeadAirRule, NarrationSpeedRule, RushedAnimationRule, TalkedOverRule
 from vidgen.lint.rules import Issue, SceneContext, rule
+from vidgen.overlap import talked_over as talked_over_words
 from vidgen.speech import SILENCE_DB, speech_bounds, spoken_characters, spoken_words  # noqa: F401  (moved to vidgen.speech in Step 40)
 
 # ----- narration_speed --------------------------------------------------------------------------
@@ -129,17 +131,27 @@ def _plays(ctx: SceneContext, beat: str | None, after: float) -> str:
 
 @rule("animation_overrun", scope="scene")
 def animation_overrun(ctx: SceneContext, settings: AnimationOverrunRule) -> Iterator[Issue]:
-    """A beat's animations (and waits) take longer than its narration plus pad."""
+    """A beat's animations (and waits) take longer than its narration plus pad (or than the time
+    until the next beat, when that one overlaps it)."""
     pad = float(ctx.activity["pad"])
     for beat in ctx.beats:
         d = beat["end"] - beat["start"]
-        over = beat["busy"] - (d + pad)
+        window = beat.get("window")
+        over = beat["busy"] - (d + pad if window is None else window)
         if over <= settings.tolerance:
             continue
+        if window is None:
+            message = (
+                f"the beat's animations take {beat['busy']:.1f} s but its narration lasts {d:.1f} s "
+                f"(+{pad:g} s pad): {over:.1f} s of silence before the next beat"
+            )
+        else:
+            message = (
+                f"the beat's animations take {beat['busy']:.1f} s but the next beat, which overlaps it, "
+                f"was to start after {window:.1f} s: it starts {over:.1f} s late"
+            )
         yield Issue(
-            f"the beat's animations take {beat['busy']:.1f} s but its narration lasts {d:.1f} s "
-            f"(+{pad:g} s pad): {over:.1f} s of silence before the next beat; still running when the "
-            f"narration ends: {_plays(ctx, beat['id'], beat['end'])}",
+            f"{message}; still running when the narration ends: {_plays(ctx, beat['id'], beat['end'])}",
             None,
             value=round(over, 3),
             limit=settings.tolerance,
@@ -185,3 +197,67 @@ def rushed_animation(ctx: SceneContext, settings: RushedAnimationRule) -> Iterat
             beat=beat_id,
             time=plays[0]["start"],
         )
+
+
+# ----- talked_over ------------------------------------------------------------------------------
+
+
+@rule("talked_over", scope="scene")
+def talked_over(ctx: SceneContext, settings: TalkedOverRule) -> Iterator[Issue]:
+    """Whole words of a line spoken while the next beat, which overlaps it, already speaks, or
+    cut before they start by the next beat's interrupt."""
+    from vidgen.speech import beat_word_times
+
+    beats = ctx.beats
+    for before, beat in zip(beats, beats[1:]):
+        if beat.get("overlap") is None:
+            continue
+        if beat.get("interrupt"):
+            yield from _cut_words(ctx, before, beat)
+            continue
+        follower = beat["start"]
+        audio = ctx.audio_dir / f"{beat['id']}.mp3"
+        if beat["source"] == "audio" and audio.is_file():
+            follower += speech_bounds(audio)[0]
+        words = beat_word_times(ctx.audio_dir, before["id"], before["text"], before["start"], before["end"], language=ctx.language)
+        hidden = talked_over_words(words, follower, before["end"])
+        if not hidden:
+            continue
+        said = " ".join(w.text for w in hidden)
+        yield Issue(
+            f"beat {beat['id']} starts {beat['overlap']:g} s before the line of {before['id']} ends and speaks over "
+            f"its last word{'s' if len(hidden) > 1 else ''} \"{said}\": shorten the overlap (below "
+            f"{max(beat['overlap'] - (hidden[0].start - follower), 0.0):.2f} s here) or use interrupt: true to cut the line",
+            None,
+            value=len(hidden),
+            limit=0,
+            beat=before["id"],
+            time=round(hidden[0].start, 6),
+        )
+
+
+def _cut_words(ctx: SceneContext, before: dict[str, Any], beat: dict[str, Any]) -> Iterator[Issue]:
+    """The ``talked_over`` issue of an interrupt that cuts the line ``before`` ahead of whole
+    words (its ``end`` is the cut). Only for a line with audio: an estimate has no words to cut."""
+    from vidgen.speech import audio_duration, beat_word_times
+
+    audio = ctx.audio_dir / f"{before['id']}.mp3"
+    if before["source"] != "audio" or not audio.is_file():
+        return
+    cut = before["end"]
+    words = beat_word_times(ctx.audio_dir, before["id"], before["text"], before["start"], before["start"] + audio_duration(audio), language=ctx.language)
+    hidden = talked_over_words(words, cut, math.inf)
+    if not hidden:
+        return
+    said = " ".join(w.text for w in hidden)
+    lead = float(beat["overlap"])
+    yield Issue(
+        f"beat {beat['id']} interrupts the line of {before['id']} {lead:g} s before its speech ends and cuts "
+        f"its last word{'s' if len(hidden) > 1 else ''} \"{said}\" before {'they start' if len(hidden) > 1 else 'it starts'}: "
+        f"start it later (overlap below {max(lead - (hidden[0].start - cut), 0.0):.2f} s here) so at most the end of the last word is cut",
+        None,
+        value=len(hidden),
+        limit=0,
+        beat=before["id"],
+        time=round(hidden[0].start, 6),
+    )

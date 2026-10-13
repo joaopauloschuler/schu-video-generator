@@ -15,9 +15,16 @@ character (``vidgen.cartoon.character.Character``) one object of kind ``characte
 the character (its box covers every part; plus ``facing``, ``speaking``, ``face`` and the other
 keys the cartoon lint rules read, :func:`_character_keys`), the objects of a speech bubble carry
 ``bubble`` (the speaker's name), and a stage prop (``vidgen.cartoon.props.Prop``) one
-object of kind ``prop`` named after the prop; a particle field
+object of kind ``prop`` named after the prop (a held one also ``held_by`` and ``hand``; its box
+is not part of its holder's; one with shapes also ``shape``, an umbrella's ``closed`` or
+``open``); an effect symbol over a head (``vidgen.cartoon.effect_symbols.EffectSymbol``) one
+object of kind ``effect`` named after the symbol, with ``effect`` (the symbol) and ``effect_of``
+(the character); a motion effect (``vidgen.cartoon.motion_effect_shapes.MotionEffect``: dust,
+speed lines, impact stars, a whoosh) one object of kind ``motion_effect`` named after its kind,
+with ``motion_effect`` (the kind) and ``effect_of`` (the character or prop); a particle field
 (``vidgen.particle_field.ParticleField``) is one object of kind ``particles`` named after its
-kind. A group with no text or image anywhere
+kind; a stage's shadows and stars (``vidgen.cartoon.shading``) and puddles are left out. A group with no
+text or image anywhere
 inside is one ``group`` object (an axis' ticks, a network's edges); any other group is walked
 into. Parts at opacity 0 are not visible: they are left out of an object's box, and an object
 without visible parts is not recorded.
@@ -142,6 +149,7 @@ class LayoutRecorder:
                     "height": _r(camera.frame_height, 4),
                     "zoom": _r(config.frame_width / camera.frame_width, 4),
                 },
+                **({"shot": dict(scene.camera_shot)} if getattr(scene, "camera_shot", None) else {}),
                 "objects": objects,
                 "overlays": [
                     {"id": overlay.id, "type": overlay.config.type, "settled": settled, "skip": list(overlay.lint_skip)}
@@ -241,12 +249,23 @@ class LayoutRecorder:
         from manim.mobject.types.image_mobject import AbstractImageMobject
 
         from vidgen.cartoon.character import Character
+        from vidgen.cartoon.effect_symbols import EffectSymbol
+        from vidgen.cartoon.living_drawing import PropGlow, PropSteam
+        from vidgen.cartoon.motion_effect_shapes import MotionEffect
+        from vidgen.cartoon.nature_drawing import FallenFruit, Flock
+        from vidgen.cartoon.small_props_drawing import WaterDrops
         from vidgen.cartoon.props import Prop
+        from vidgen.cartoon.shading import StageShadows, StarField
+        from vidgen.cartoon.weather_drawing import FogBand, LightningBolt, Rainbow, SnowBlanket, SnowCap
         from vidgen.icon_mobject import Icon
-        from vidgen.particle_field import ParticleField
+        from vidgen.particle_field import ParticleField, Puddles
         from vidgen.vector_mobject import VectorPicture
 
-        if id(mob) in walk.seen:
+        # a stage's shadows, stars, puddles, glows, steam, birds, fallen fruit, poured water,
+        # settled snow, fog, lightning and rainbows: not placed by authors (§69.31, §69.39, §69.54,
+        # §69.55, §69.56, §69.60, §69.61)
+        unplaced = (StageShadows, StarField, Puddles, PropGlow, PropSteam, Flock, FallenFruit, WaterDrops, SnowBlanket, SnowCap, FogBand, LightningBolt, Rainbow)
+        if id(mob) in walk.seen or isinstance(mob, unplaced):
             return
         walk.seen.add(id(mob))
         name = walk.names.get(id(mob))
@@ -268,6 +287,22 @@ class LayoutRecorder:
             return
         if isinstance(mob, Prop):  # one prop, also an SVG one (not a vector picture inside)
             self._emit_parts(walk, mob, path, name or mob.name, "prop", [m for m in mob.get_family() if _drawn(m)])
+            if walk.objects and walk.objects[-1]["id"] == self._id(mob):
+                if mob.held_by is not None:
+                    walk.objects[-1].update({"held_by": mob.held_by, "hand": mob.hand})
+                if mob.shape is not None:
+                    walk.objects[-1]["shape"] = mob.shape
+                walk.objects[-1].update(_prop_keys(mob))
+            return
+        if isinstance(mob, EffectSymbol):  # one symbol over a head (§69.40)
+            self._emit_parts(walk, mob, path, name or mob.kind, "effect", [m for m in mob.get_family() if _drawn(m)])
+            if walk.objects and walk.objects[-1]["id"] == self._id(mob):
+                walk.objects[-1].update({"effect": mob.kind, "effect_of": mob.effect_of})
+            return
+        if isinstance(mob, MotionEffect):  # dust, speed lines, stars or a whoosh (§69.41)
+            self._emit_parts(walk, mob, path, name or mob.kind, "motion_effect", [m for m in mob.get_family() if _drawn(m)])
+            if walk.objects and walk.objects[-1]["id"] == self._id(mob):
+                walk.objects[-1].update({"motion_effect": mob.kind, "effect_of": mob.effect_of})
             return
         if isinstance(mob, ParticleField):  # one field of particles, named after its kind
             self._emit_parts(walk, mob, path, name or mob.name, "particles", [m for m in mob.get_family() if _drawn(m)])
@@ -358,14 +393,40 @@ class LayoutRecorder:
 def _character_keys(walk: _Walk, figure: Any) -> dict[str, Any]:
     """What the cartoon lint rules read about a character (DESIGN.md §69.17): ``facing``,
     ``speaking`` and, when they apply, ``face`` (its head's box), ``viseme`` (what its lip sync
-    shows), ``looked_at``, ``passage`` (``enter`` / ``exit`` under way) and ``walked_in``."""
+    shows), ``looked_at``, ``passage`` (``enter`` / ``exit`` under way), ``walked_in`` and
+    ``holding`` (hand -> prop name, §69.27), ``sitting_on`` / ``leaning_on`` (a prop name, §69.28),
+    ``riding`` (the vehicle it rides, §69.52),
+    ``depth`` (how far back it stands on a stage, when not at the front, §69.44)."""
     keys: dict[str, Any] = {"facing": figure.facing, "speaking": figure.lip_sync_track is not None}
+    depth = float(getattr(figure, "stage_depth", 0.0))
+    if depth > 0:
+        keys["depth"] = round(depth, 4)
     if figure.has_part("head"):
         boxes = [p.box for p in (_measure(walk, m) for m in figure.parts["head"].get_family()) if p is not None]
         if boxes:
             keys["face"] = [_r(min(b[0] for b in boxes)), _r(min(b[1] for b in boxes)), _r(max(b[2] for b in boxes)), _r(max(b[3] for b in boxes))]
-    optional = {"viseme": figure.spoken_viseme, "looked_at": figure.looked_at, "passage": figure.passage, "walked_in": figure.walked_in}
+    optional = {"viseme": figure.spoken_viseme, "looked_at": figure.looked_at, "passage": figure.passage, "walked_in": figure.walked_in,
+                "holding": dict(figure.holding) or None, "sitting_on": figure.sitting_on, "leaning_on": figure.leaning_on,
+                "riding": figure.riding}
     keys.update({key: value for key, value in optional.items() if value is not None})
+    return keys
+
+
+def _prop_keys(prop: Any) -> dict[str, Any]:
+    """What ``prop_overlap`` reads about a prop (DESIGN.md §69.51): ``prop`` (its kind: a
+    built-in prop's name or ``svg``), ``depth`` (how far back it stands, when not at the front, as
+    for a character), ``raised`` (lifted, or hanging on a wall) and ``flat`` (lying flat on the
+    floor, a rug), each only when true."""
+    from vidgen.cartoon.props import FLAT_PROPS
+
+    keys: dict[str, Any] = {"prop": prop.kind}
+    depth = float(getattr(prop, "stage_depth", 0.0))
+    if depth > 0:
+        keys["depth"] = round(depth, 4)
+    if prop.raised:
+        keys["raised"] = True
+    if prop.kind in FLAT_PROPS:
+        keys["flat"] = True
     return keys
 
 

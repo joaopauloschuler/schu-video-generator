@@ -20,11 +20,14 @@ from vidgen.cartoon.acting import (
     NOD_DEGREES,
     OFFSTAGE_GAP,
     POINT_DEGREES,
+    POINT_ELBOW,
     SHRUG_DEGREES,
+    SHRUG_ELBOW,
     STEP_LENGTH,
     WALK_EASE,
     WALK_SPEED,
     WAVE_DEGREES,
+    WAVE_ELBOW,
     enter_path,
     exit_path,
     gesture_moves,
@@ -109,13 +112,18 @@ def test_gestures_and_jumps() -> None:
         for t in (0.0, 1.0):
             assert all(m.weight == 0 and m.turn == pytest.approx(0, abs=1e-9) and m.shift == pytest.approx((0, 0), abs=1e-9)
                        for m in gesture_moves(kind, t).values()), (kind, t)
-    assert gesture_moves("point", 0.5) == {"arm_left": gesture_moves("point", 0.5)["arm_left"]}
+    assert set(gesture_moves("point", 0.5)) == {"arm_left", "arm_left_lower"}   # Step 92: the forearm too
     assert gesture_moves("point", 0.5)["arm_left"].angle == POINT_DEGREES
     assert gesture_moves("point", 0.5, "arm_right")["arm_right"].angle == -POINT_DEGREES   # the other side: mirrored
-    wave = [gesture_moves("wave", t)["arm_left"] for t in (0.3, 0.5, 0.6)]
-    assert all(m.angle == WAVE_DEGREES for m in wave) and len({round(m.turn, 3) for m in wave}) == 3   # to and fro
+    assert gesture_moves("point", 0.5, "arm_right")["arm_right_lower"].angle == -POINT_ELBOW
+    wave = [gesture_moves("wave", t)["arm_left_lower"] for t in (0.3, 0.5, 0.6)]   # the forearm waves about the elbow
+    assert all(m.angle == WAVE_ELBOW for m in wave) and len({round(m.turn, 3) for m in wave}) == 3   # to and fro
+    assert gesture_moves("wave", 0.5)["arm_left"].angle == WAVE_DEGREES
     shrug = gesture_moves("shrug", 0.5)
     assert (shrug["arm_left"].angle, shrug["arm_right"].angle) == (SHRUG_DEGREES, -SHRUG_DEGREES) and shrug["arm_left"].shift[1] > 0
+    assert (shrug["arm_left_lower"].angle, shrug["arm_right_lower"].angle) == (SHRUG_ELBOW, -SHRUG_ELBOW)
+    # an arm in one piece shows half the elbow: the angles of a one-piece arm before Step 92
+    assert POINT_DEGREES + POINT_ELBOW / 2 == 88 and WAVE_DEGREES + WAVE_ELBOW / 2 == 145 and SHRUG_DEGREES + SHRUG_ELBOW / 2 == 45
     assert gesture_moves("nod", 0.25)["head"].turn == pytest.approx(-NOD_DEGREES) and gesture_moves("nod", 0.5)["head"].turn == pytest.approx(0)
     shake = gesture_moves("shake_head", 0.375)
     assert shake["head"].shift[0] < 0 and shake["eyes"].shift == shake["head"].shift and gesture_moves("shake_head", 0.625)["head"].shift[0] > 0
@@ -175,7 +183,9 @@ def test_gesture_and_jump_come_back() -> None:
     wave = Gesture(c, "wave")
     wave.begin()
     wave.interpolate(0.5)
-    assert c.pose_of("arm_left").angle == pytest.approx(WAVE_DEGREES + gesture_moves("wave", 0.5)["arm_left"].turn)
+    moves = gesture_moves("wave", 0.5)
+    assert c.pose_of("arm_left").angle == pytest.approx(WAVE_DEGREES)
+    assert c.pose_of("arm_left_lower").angle == pytest.approx(WAVE_ELBOW + moves["arm_left_lower"].turn)
     wave.finish()
     assert c.state() == before
     feet = c.feet().copy()

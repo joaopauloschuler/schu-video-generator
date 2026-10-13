@@ -1,0 +1,28 @@
+# The places of the series: named stage sets. A stage scene picks one with set: NAME and may
+# override it in its params: its own keys win (light: night), marks merge, props / layers /
+# characters / particles add to the set's (a prop with name: equal to a set prop's name changes
+# that prop; props: [] clears them), and image / generate / background replace the set's backdrop.
+sets:
+  workshop:                                     # indoors: the bench on the left, the door on the right
+    background: ["#E9DCC9", "#F6EFE4"]
+    ground_color: "#C9A27A"
+    light: indoor
+    marks: {bench: 0.3, doorway: 0.86}
+    props:
+      - {prop: table, name: bench, at: bench}
+      - {prop: lamp, at: 0.1}
+      - {prop: door, at: doorway, depth: 0.3}
+      - {prop: box, name: crate, at: 0.62}
+
+  meadow:                                       # outdoors: hills at the back, a rock to sit on
+    background: ["#9CCBEA", "#E4F3FB"]
+    ground_color: tertiary
+    light: morning
+    marks: {rock_side: 0.38}
+    layers:
+      - {place: background, shapes: [{shape: hills, y: 0.18, width: 0.9, height: 0.22, color: secondary}]}
+    props:
+      - {prop: rock, at: 0.28}
+      - {prop: tree, at: 0.83, depth: 0.5}
+      - {prop: plant, at: 0.66}
+      - cloud

@@ -1,0 +1,211 @@
+# A cartoon about a music box (examples/screenplay, hand-edited).
+# No audio committed: run `vidgen tts` (Kokoro, free).
+title: The Humming Box
+format:
+  width: 1280
+  height: 720
+  fps: 30
+preview:
+  width: 640
+  height: 360
+  fps: 15
+theme:
+  preset: soft_pastel
+voice:
+  provider: kokoro
+  voice: bf_emma
+  speed: 0.8
+narration:
+  pad: 0.7
+auto_direct: true
+voices:
+  fen_voice:
+    voice: af_heart
+    label: Fen
+    speed: 0.75
+    color: primary
+  bram_voice:
+    voice: bm_fable
+    label: Bram
+    speed: 0.75
+    color: accent
+  gus_voice:
+    voice: am_fenrir
+    label: Gus
+    speed: 0.75
+    color: secondary
+characters:
+- name: fen
+  look:
+    body: round
+    head_size: 1.15
+    eyes: round
+    hair: bun
+    accessories:
+    - scarf
+  colors:
+    skin: '#F2C9A0'
+    clothes: primary
+    hair: '#6B4226'
+    accessory: accent
+  voice: fen_voice
+- name: bram
+  look:
+    body: tall
+    eyes: sleepy
+    nose: round
+    hair: short
+    ears: round
+    accessories:
+    - glasses
+  colors:
+    skin: '#B97A4E'
+    clothes: tertiary
+    hair: '#2B2B2B'
+  voice: bram_voice
+- name: gus
+  look:
+    body: square
+    head_size: 0.9
+    eyes: oval
+    nose: triangle
+    hair: spiky
+    ears: pointy
+    accessories:
+    - hat
+  colors:
+    skin: '#9BD3AE'
+    clothes: accent
+    hair: highlight
+    accessory: secondary
+  voice: gus_voice
+scenes:
+- id: yard
+  type: stage
+  params:
+    background:
+    - '#9CCBEA'
+    - '#E4F3FB'
+    ground_color: tertiary
+    props:
+    - prop: house
+      at: 0.18
+      depth: 0.6
+    - prop: box
+      name: crate
+      at: 0.6
+    - prop: tree
+      at: 0.84
+      depth: 0.5
+    characters:
+    - name: fen
+      at: left
+    - name: bram
+      at: right
+    light: sunset
+    wind: breeze
+  beats:
+  - text: On a quiet Sunday, Fen heard a sound that did not belong in the yard.
+  - text: '[gasp] Bram, listen! That box is humming a song.'
+    voice: fen_voice
+    actions: []
+  - text: Boxes do not hum, Fen. Boxes do not do *anything*.
+    voice: bram_voice
+    actions:
+    - walk_to: fen
+      to: 0.5
+    - look_at: fen
+      to: crate
+      at: 0.63
+    - gesture: fen
+      to: point
+      at: 0.78
+  - text: Then who is singing? Not me, and not you.
+    voice: fen_voice
+  - text: Fine. It is humming. I do not like it at all.
+    voice: bram_voice
+    actions:
+    - walk_to: bram
+      to: {mark: 0.76, depth: 0.5}
+    - lean_on: bram
+      to: tree
+      at: 0.6
+    overlap: 0.25
+    shot: two_shot fen bram
+  - text: Somewhere inside, the song went up a whole note.
+    actions:
+    - wind: windy
+      run_time: 2
+- id: reveal
+  type: stage
+  params:
+    background:
+    - '#9CCBEA'
+    - '#E4F3FB'
+    ground_color: tertiary
+    props:
+    - prop: house
+      at: 0.17
+      depth: 0.6
+    - prop: rock
+      at: 0.36
+    - prop: box
+      name: crate
+      at: 0.62
+    - prop: tree
+      at: 0.84
+      depth: 0.5
+    characters:
+    - name: fen
+      at: 0.55
+    - name: bram
+      at: 0.4
+    - name: gus
+      at: 0.74
+    light: sunset
+    wind: breeze
+  beats:
+  - text: '[laugh] There it is! I left my song in that crate this morning.'
+    voice: gus_voice
+    actions:
+    - enter: gus
+      side: right
+      to: 0.74
+    - sit_on: bram
+      to: rock
+  - text: You keep songs in boxes? Is that normal?
+    voice: bram_voice
+    actions:
+    - react: bram
+      pose: arms_crossed
+  - text: Only the loud ones. The quiet ones live in my hat.
+    voice: gus_voice
+    interrupt: true
+    actions:
+    - pick_up: gus
+      to: crate
+      at: 0.1
+    shot: closeup gus
+  - text: Can we keep a song in our crate too? Please?
+    voice: fen_voice
+    actions:
+    - walk_to: fen
+      to: 0.6
+    - give: gus
+      to: fen
+      at: 0.55
+    - react: fen
+      expression: happy
+      at: 0.8
+  - text: And that is how the yard got its very first song box.
+    actions:
+    - light: night
+      run_time: 3
+    - gesture: gus
+      to: nod
+      at: 0.5
+output: cartoon-music-box
+overlays:
+- type: captions
+  speakers: color
+music: {source: bright, volume: -2}

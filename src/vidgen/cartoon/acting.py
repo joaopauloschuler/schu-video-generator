@@ -1,6 +1,6 @@
 """The geometry and timing of the acting actions, worked out without manim: where a character
 looks (``look_at``, DESIGN.md §69.11), and how it walks, enters, leaves, gestures and jumps
-(``walk_to``, ``enter``, ``exit``, ``gesture``, ``jump``, §69.12).
+(``walk_to``, ``enter``, ``exit``, ``gesture``, ``jump``, §69.12; ``run_to``, §69.41).
 
 Angles are in degrees counterclockwise as drawn facing right (a character facing left is the
 mirror image, so a positive angle tilts the head up towards where it looks in both facings);
@@ -11,9 +11,10 @@ are in Manim units (the frame's shorter side is 8 units in every aspect).
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
-from vidgen.cartoon.motion import motion_ease
+from vidgen.cartoon.motion import Phases, motion_ease
+from vidgen.cartoon.stage import depth_crossings
 
 #: Largest head tilt (degrees) when looking up or down at something.
 LOOK_MAX_DEGREES = 20.0
@@ -39,18 +40,37 @@ class LookPose:
 def look_pose(dx: float, dy: float, facing: str) -> LookPose:
     """Looking at a point ``dx``, ``dy`` (Manim units) from the character's head: facing that
     way (kept when the point is within :data:`SAME_X`), the head tilted up or down towards it (at
-    most :data:`LOOK_MAX_DEGREES`) and the eyes a little forward, raised or lowered with the head."""
+    most :data:`LOOK_MAX_DEGREES`) and the eyes a little forward, raised or lowered with the head
+    (facing ``front``, straight above or below: the head stays upright, since its angle would tilt
+    it sideways in the front view, and only the eyes move up or down)."""
     if abs(dx) >= SAME_X:
         facing = "right" if dx > 0 else "left"
     angle = math.degrees(math.atan2(dy, max(abs(dx), SAME_X)))
     angle = max(-LOOK_MAX_DEGREES, min(LOOK_MAX_DEGREES, angle))
-    return LookPose(facing, angle, (LOOK_EYES_AHEAD, LOOK_EYES_AHEAD * angle / LOOK_MAX_DEGREES))
+    eyes_y = LOOK_EYES_AHEAD * angle / LOOK_MAX_DEGREES
+    if facing == "front":
+        return LookPose(facing, 0.0, (0.0, eyes_y))
+    return LookPose(facing, angle, (LOOK_EYES_AHEAD, eyes_y))
 
 
 def camera_look(facing: str) -> LookPose:
     """Looking at the camera (the viewer): the facing kept, the head straight, the eyes moved to
-    the middle of the face."""
-    return LookPose(facing, 0.0, (-CAMERA_EYES_BACK, 0.0))
+    the middle of the face (facing ``front`` they are there already)."""
+    return LookPose(facing, 0.0, (0.0 if facing == "front" else -CAMERA_EYES_BACK, 0.0))
+
+
+#: How much narrower (a share of its width) a character is half-way through turning between a
+#: side and the front (DESIGN.md §69.44): it narrows as it turns and widens again, the shapes
+#: swapping at the narrowest.
+TURN_SQUASH = 0.12
+
+
+def turn_squash(progress: float) -> float:
+    """The figure's width factor ``progress`` (0..1) of the way through a turn between a side and
+    the front: 1 at both ends, 1 - :data:`TURN_SQUASH` half-way."""
+    if progress <= 0.0 or progress >= 1.0:
+        return 1.0
+    return 1.0 - TURN_SQUASH * math.sin(math.pi * progress)
 
 
 # ----- walking (Step 79) ------------------------------------------------------------------------
@@ -65,10 +85,22 @@ STEP_LENGTH = 0.35
 #: Largest swing of the legs (degrees about the hips) and of the arms (about the shoulders).
 WALK_LEG_DEGREES = 10.0
 WALK_ARM_DEGREES = 16.0
+#: Legs drawn one each (§69.26): the largest swing of a thigh about its hip, and the largest bend
+#: of the knee of the leg swinging forward (as it passes the other).
+WALK_THIGH_DEGREES = 20.0
+WALK_KNEE_DEGREES = 40.0
+#: The elbows' bend while walking, and how much more an elbow bends as its arm swings forward.
+WALK_ELBOW_DEGREES = 10.0
+WALK_ELBOW_SWING = 20.0
 #: How much narrower the legs get as they pass each other in mid-step (a share of their width).
 WALK_LEG_SQUEEZE = 0.3
 #: How far the body rises in mid-step (character units).
 WALK_BOB = 0.02
+#: Seen from the front (``facing: front``, DESIGN.md §69.44) a leg stepping towards the camera
+#: looks shorter: its thigh and shin are drawn this share shorter at the walk's largest knee bend
+#: (the foot lifts); the arms swing out and in by this share of their swing.
+FRONT_STEP_SHORTEN = 0.25
+FRONT_ARM_SWING = 0.3
 #: Gap (Manim units) between a character waiting off stage and the edge it is beyond.
 OFFSTAGE_GAP = 0.25
 SIDES: tuple[str, ...] = ("left", "right")
@@ -101,31 +133,154 @@ def walk_amplitude(t: float) -> float:
     return min(1.0, t / WALK_EASE, (1.0 - t) / WALK_EASE)
 
 
+def walk_time_at(share: float) -> float:
+    """When (0..1, a share of the walk's moving time) a walk has covered ``share`` of its
+    distance: the inverse of :func:`walk_progress`."""
+    share = min(max(share, 0.0), 1.0)
+    r, top = WALK_EASE, 1.0 / (1.0 - WALK_EASE)
+    eased = 0.5 * top * r   # the distance covered while speeding up (and while slowing down)
+    if share < eased:
+        return math.sqrt(2.0 * share * r / top)
+    if share > 1.0 - eased:
+        return 1.0 - math.sqrt(2.0 * (1.0 - share) * r / top)
+    return share / top + r / 2
+
+
+def walk_share_seconds(share: float, run_time: float, phases: Phases = Phases()) -> float:
+    """Seconds into a walk of ``run_time`` seconds (with its ``cartoon_motion`` wind-up and
+    settle ``phases``) at which it has covered ``share`` of its distance."""
+    main = 1.0 - phases.before - phases.after
+    return (phases.before + walk_time_at(share) * main) * run_time
+
+
+def depth_switch_times(
+    start_depth: float, end_depth: float, others: dict[str, float], run_time: float, phases: Phases = Phases(),
+) -> list[tuple[float, str]]:
+    """``(seconds, name)``: when a walk from ``start_depth`` to ``end_depth`` lasting
+    ``run_time`` seconds passes the depth of each of ``others`` (name -> depth), so the walker
+    goes from being drawn behind it to in front of it, or the other way (DESIGN.md §69.44); in
+    walking order."""
+    return [(walk_share_seconds(share, run_time, phases), name) for share, name in depth_crossings(start_depth, end_depth, others)]
+
+
 @dataclass(frozen=True)
 class WalkCycle:
     """The walk's change to the pose at one moment: ``legs_angle`` and ``arm_angle`` (degrees,
     added to the legs' and the near arm's angles; the far arm swings the other way),
-    ``legs_width`` (the legs' x scale factor) and ``body_lift`` (character units)."""
+    ``legs_width`` (the legs' x scale factor) and ``body_lift`` (character units), for legs in
+    one piece. Legs drawn one each: ``thigh_angle`` (added to ``leg_left``; ``leg_right`` the
+    other way) and ``knee_bends`` (left, right; degrees each knee bends, the foot back). Arms in
+    two segments (or folded): ``elbow_bends`` (left, right; degrees, the hand forward). ``rock``:
+    degrees the body rocks over the foot it stands on (a waddle; 0 for a person)."""
 
     legs_angle: float
     legs_width: float
     arm_angle: float
     body_lift: float
+    thigh_angle: float = 0.0
+    knee_bends: tuple[float, float] = (0.0, 0.0)
+    elbow_bends: tuple[float, float] = (0.0, 0.0)
+    rock: float = 0.0
 
 
-def walk_cycle(steps: float, amplitude: float = 1.0) -> WalkCycle:
-    """The pose change after ``steps`` steps (a step every :data:`STEP_LENGTH` character heights
-    walked, so the feet keep pace with the ground), scaled by ``amplitude`` (0..1). Legs and arms
-    swing furthest one way at a footfall (half-way through a step) and the other way at the
-    next; between footfalls, as the legs pass each other, they are narrowest and the body is
-    highest."""
+@dataclass(frozen=True)
+class Gait:
+    """How a character moves its feet along the ground, as factors of a walk's: ``stride`` (the
+    step length, :data:`STEP_LENGTH` × it), ``swing`` (legs, thighs and arms), ``knee`` and
+    ``elbow`` (the bends), ``bob`` (the body's rise); ``lean``: degrees the body leans forward at
+    full speed (it builds up and fades with the speed); ``waddle``: degrees the body rocks from
+    one foot to the other with each step (a penguin's waddle, DESIGN.md §69.57); ``rolls``: it
+    rolls on wheels (a robot's, §69.58): no steps are heard."""
+
+    stride: float = 1.0
+    swing: float = 1.0
+    knee: float = 1.0
+    elbow: float = 1.0
+    bob: float = 1.0
+    lean: float = 0.0
+    waddle: float = 0.0
+    rolls: bool = False
+
+
+#: A walk, and a run (``run_to``, DESIGN.md §69.41): longer strides, bigger swings and bends, the
+#: body leaning forward.
+WALKING = Gait()
+RUNNING = Gait(stride=1.6, swing=1.5, knee=1.6, elbow=2.0, bob=2.0, lean=12.0)
+#: Running speed (Manim units per second) when a ``run_to`` gives none: about 1.7 of a stage
+#: character's heights per second.
+RUN_SPEED = 6.0
+
+
+@dataclass(frozen=True)
+class SpeciesMotion:
+    """How an animal moves unlike a person (DESIGN.md §69.57): its walking ``gait`` (a run keeps
+    :data:`RUNNING`'s with this gait's waddle), ``speed`` (a factor on the walking and running
+    speed when an action gives none) and ``jump`` (a factor on the jump height when ``jump`` gives
+    none)."""
+
+    gait: Gait = WALKING
+    speed: float = 1.0
+    jump: float = 1.0
+
+    def walking(self, gait: Gait) -> Gait:
+        """The gait to move with when an action asks for ``gait`` (:data:`WALKING` or
+        :data:`RUNNING`): this walk instead of a plain walk; a run with this walk's waddle; on
+        wheels this roll, leaning forward like a run."""
+        if gait == WALKING:
+            return self.gait
+        if self.gait.rolls:
+            return replace(self.gait, lean=gait.lean)
+        return gait if not self.gait.waddle else replace(gait, waddle=self.gait.waddle)
+
+
+#: The species that move their own way: a turtle plods slowly with short steps, a penguin
+#: waddles with short quick steps, a frog jumps higher, a robot walks with stiff knees and
+#: elbows. Every other look moves like a person.
+SPECIES_MOTIONS: dict[str, SpeciesMotion] = {
+    "turtle": SpeciesMotion(Gait(stride=0.7, swing=0.7, knee=0.6, elbow=0.6, bob=0.5), speed=0.4),
+    "penguin": SpeciesMotion(Gait(stride=0.55, swing=0.45, knee=0.35, elbow=0.3, bob=1.5, waddle=9.0), speed=0.7),
+    "frog": SpeciesMotion(jump=1.8),
+    "robot": SpeciesMotion(Gait(knee=0.5, elbow=0.4)),
+}
+#: A robot on wheels (DESIGN.md §69.58): it glides, legs and arms still, a little bump with each
+#: wheel turn.
+ROLLING_MOTION = SpeciesMotion(Gait(swing=0.0, knee=0.0, elbow=0.0, bob=0.25, rolls=True))
+#: A person's (and every species not in :data:`SPECIES_MOTIONS`).
+PERSON_MOTION = SpeciesMotion()
+
+
+def species_motion(species: str, *, wheels: bool = False) -> SpeciesMotion:
+    """How a look of ``species`` moves (:data:`SPECIES_MOTIONS`, else :data:`PERSON_MOTION`);
+    ``wheels``: it rolls on wheels (:data:`ROLLING_MOTION`)."""
+    if wheels:
+        return ROLLING_MOTION
+    return SPECIES_MOTIONS.get(species, PERSON_MOTION)
+
+
+def walk_cycle(steps: float, amplitude: float = 1.0, gait: Gait = WALKING) -> WalkCycle:
+    """The pose change after ``steps`` steps (a step every :data:`STEP_LENGTH` × ``gait.stride``
+    character heights walked, so the feet keep pace with the ground), scaled by ``amplitude``
+    (0..1) and ``gait``. Legs and arms swing furthest one way at a footfall (half-way through a
+    step) and the other way at the next; between footfalls, as the legs pass each other, they are
+    narrowest and the body is highest. Legs drawn one each: the knee of the leg swinging forward
+    bends most as it passes the other and is straight at the footfall; an elbow bends more as its
+    arm swings forward."""
     swing = math.sin(math.pi * steps)
+    forward = math.cos(math.pi * steps)  # > 0 while the left leg swings forward
     passing = 1.0 - swing * swing
+    sway, knee, elbow = amplitude * gait.swing, amplitude * gait.knee, amplitude * gait.elbow
     return WalkCycle(
-        legs_angle=WALK_LEG_DEGREES * swing * amplitude,
+        legs_angle=WALK_LEG_DEGREES * swing * sway,
         legs_width=1.0 - WALK_LEG_SQUEEZE * passing * amplitude,
-        arm_angle=WALK_ARM_DEGREES * swing * amplitude,
-        body_lift=WALK_BOB * passing * amplitude,
+        arm_angle=WALK_ARM_DEGREES * swing * sway,
+        body_lift=WALK_BOB * passing * amplitude * gait.bob,
+        thigh_angle=WALK_THIGH_DEGREES * swing * sway,
+        knee_bends=(WALK_KNEE_DEGREES * max(forward, 0.0) * knee, WALK_KNEE_DEGREES * max(-forward, 0.0) * knee),
+        elbow_bends=(
+            (WALK_ELBOW_DEGREES + WALK_ELBOW_SWING * max(swing, 0.0)) * elbow,
+            (WALK_ELBOW_DEGREES + WALK_ELBOW_SWING * max(-swing, 0.0)) * elbow,
+        ),
+        rock=gait.waddle * swing * amplitude,
     )
 
 
@@ -161,6 +316,21 @@ def exit_path(side: str | None, from_x: float, view: tuple[float, float], half_w
     return side, offstage_x(side, view[0], view[1], half_width)
 
 
+def passage_fade(seconds: float, run_time: float, fade_in: float = 0.0, fade_out: float = 0.0) -> float:
+    """How much of a walking character shows (0..1) ``seconds`` into a walk of ``run_time``
+    seconds that fades in over its first ``fade_in`` seconds and out over its last ``fade_out``
+    (each at most half the walk; smoothstep): a walk in or out through a door (DESIGN.md §69.42)."""
+    def ramp(t: float, length: float) -> float:
+        if length <= 0:
+            return 1.0
+        s = min(max(t / min(length, run_time / 2), 0.0), 1.0)
+        return s * s * (3.0 - 2.0 * s)
+
+    if run_time <= 0:
+        return 1.0 if fade_out <= 0 else 0.0
+    return min(ramp(seconds, fade_in), ramp(run_time - seconds, fade_out))
+
+
 # ----- gestures and jumps ------------------------------------------------------------------------------
 
 GESTURES: tuple[str, ...] = ("point", "wave", "shrug", "nod", "shake_head")
@@ -168,14 +338,20 @@ GESTURES: tuple[str, ...] = ("point", "wave", "shrug", "nod", "shake_head")
 GESTURE_SECONDS: dict[str, float] = {"point": 1.2, "wave": 1.6, "shrug": 1.0, "nod": 0.9, "shake_head": 1.1}
 #: Share of a gesture spent moving into it, and the same share moving back out.
 GESTURE_EASE = 0.25
-#: The near arm's angle (degrees, at rest it hangs down) for ``point`` and ``wave``, and how far
-#: a wave swings to and fro (three times).
-POINT_DEGREES = 88.0
-WAVE_DEGREES = 145.0
-WAVE_SWING = 20.0
+#: The near arm's angle (degrees, at rest it hangs down) for ``point`` and ``wave`` (the upper
+#: arm; the elbow bends ``POINT_ELBOW`` / ``WAVE_ELBOW`` more, the hand forward: an arm in one
+#: piece shows half the bend, 88° and 145°), and how far a wave swings to and fro (three times,
+#: the forearm about the elbow; an arm in one piece swings half as far).
+POINT_DEGREES = 82.0
+POINT_ELBOW = 12.0
+WAVE_DEGREES = 115.0
+WAVE_ELBOW = 60.0
+WAVE_SWING = 40.0
 WAVES = 3
-#: Both arms' angle for ``shrug`` (raised outwards), and how far the shoulders rise (character units).
-SHRUG_DEGREES = 45.0
+#: Both upper arms' angle for ``shrug`` (raised outwards), their elbows' bend (the forearms out)
+#: and how far the shoulders rise (character units).
+SHRUG_DEGREES = 15.0
+SHRUG_ELBOW = 60.0
 SHRUG_LIFT = 0.02
 #: How far the head dips in a nod (twice), and how far it moves (and the eyes with it, twice as
 #: far) to each side in a ``shake_head`` (twice), in degrees and character units.
@@ -211,22 +387,28 @@ def gesture_weight(t: float, strength: float = 0.0) -> float:
 
 def gesture_moves(kind: str, t: float, arm: str = "arm_left", strength: float = 0.0) -> dict[str, PartMove]:
     """The part changes of gesture ``kind`` at ``t`` (0..1). ``point`` and ``wave`` use ``arm``
-    (the near arm ``arm_left``, or ``arm_right`` when the character has no left arm: its angles
-    are mirrored, as it hangs on the other side), ``shrug`` both arms, ``nod`` and
+    and its forearm ``<arm>_lower`` (the near arm ``arm_left``, or ``arm_right`` when the
+    character has no left arm: its angles are mirrored, as it hangs on the other side), ``shrug``
+    both arms and forearms, ``nod`` and
     ``shake_head`` the head (and the eyes). ``strength``: the animation principles' anticipation
     and overshoot on the arms' ease in and out (:func:`gesture_weight`)."""
     if kind not in GESTURES:
         raise ValueError(f"unknown gesture {kind!r} (gestures: {', '.join(GESTURES)})")
     w = gesture_weight(t, strength)
     sign = 1.0 if arm == "arm_left" else -1.0
+    lower = f"{arm}_lower"
     if kind == "point":
-        return {arm: PartMove(sign * POINT_DEGREES, w)}
+        return {arm: PartMove(sign * POINT_DEGREES, w), lower: PartMove(sign * POINT_ELBOW, w)}
     if kind == "wave":
         held = min(max((t - GESTURE_EASE) / (1.0 - 2 * GESTURE_EASE), 0.0), 1.0)
-        return {arm: PartMove(sign * WAVE_DEGREES, w, sign * WAVE_SWING * w * math.sin(2 * math.pi * WAVES * held))}
+        swing = sign * WAVE_SWING * w * math.sin(2 * math.pi * WAVES * held)
+        return {arm: PartMove(sign * WAVE_DEGREES, w), lower: PartMove(sign * WAVE_ELBOW, w, swing)}
     if kind == "shrug":
         lift = (0.0, SHRUG_LIFT * w)
-        return {"arm_left": PartMove(SHRUG_DEGREES, w, shift=lift), "arm_right": PartMove(-SHRUG_DEGREES, w, shift=lift)}
+        return {
+            "arm_left": PartMove(SHRUG_DEGREES, w, shift=lift), "arm_left_lower": PartMove(SHRUG_ELBOW, w),
+            "arm_right": PartMove(-SHRUG_DEGREES, w, shift=lift), "arm_right_lower": PartMove(-SHRUG_ELBOW, w),
+        }
     if kind == "nod":
         return {"head": PartMove(turn=-NOD_DEGREES * math.sin(2 * math.pi * t) ** 2)}
     side = SHAKE_SHIFT * gesture_weight(t) * math.sin(4 * math.pi * t)
@@ -242,6 +424,9 @@ def jump_lift(t: float, height: float = JUMP_HEIGHT) -> float:
 
 __all__ = [
     "CAMERA_EYES_BACK",
+    "FRONT_ARM_SWING",
+    "FRONT_STEP_SHORTEN",
+    "TURN_SQUASH",
     "GESTURES",
     "GESTURE_SECONDS",
     "JUMP_HEIGHT",
@@ -249,14 +434,23 @@ __all__ = [
     "LOOK_EYES_AHEAD",
     "LOOK_MAX_DEGREES",
     "OFFSTAGE_GAP",
+    "PERSON_MOTION",
+    "ROLLING_MOTION",
+    "RUNNING",
+    "RUN_SPEED",
     "SAME_X",
     "SIDES",
+    "SPECIES_MOTIONS",
     "STEP_LENGTH",
+    "WALKING",
     "WALK_SPEED",
+    "Gait",
     "LookPose",
     "PartMove",
+    "SpeciesMotion",
     "WalkCycle",
     "camera_look",
+    "depth_switch_times",
     "enter_path",
     "exit_path",
     "gesture_moves",
@@ -265,8 +459,13 @@ __all__ = [
     "look_pose",
     "nearer_side",
     "offstage_x",
+    "passage_fade",
+    "species_motion",
+    "turn_squash",
     "walk_amplitude",
     "walk_cycle",
     "walk_progress",
     "walk_seconds",
+    "walk_share_seconds",
+    "walk_time_at",
 ]

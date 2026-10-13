@@ -153,7 +153,9 @@ layout on the word-count-timed preview, and commit `audio/` and `assets/generate
 be made again identically). Renders are slow but free: `storyboard`, `lint` and `render` re-render
 only the scenes that changed (`render` reuses the storyboard's renders of the same format;
 `--force` renders everything, e.g. after editing a file outside `assets/`); `--jobs N` renders
-several at once; preview while iterating.
+several at once, and `--jobs auto` picks N from the available memory (1.5 GB per job) and the CPU
+cores and prints why; never run two vidgen commands at once, and run Kokoro `tts` alone; preview
+while iterating.
 
 **JSON everywhere.** Every command but `mcp` takes `--json` (`validate`, `list-scenes`,
 `schema`, `storyboard`, `lint`, `render`, `tts`, `imagegen`, `plan`, `init`, ...): one document on
@@ -165,7 +167,8 @@ stdout, `{version, ok, warnings, ..., error?}`, exit code 0 exactly when `ok`. `
 commands are tools with the same JSON documents: `guide`, `plan`, `init`, `validate`, `schema`,
 `list_scenes`, `list_icons`, `list_themes`, `list_sfx`, `list_music`, `storyboard`, `lint`,
 `render`, `tts`, `imagegen`, `readback`, `slides`, `thumbnail`, `export`, `gallery`,
-`translate_template`, `character_sheet` (options in snake_case: `per_beat`, `fail_on`). Paths are
+`translate_template`, `character_sheet`, `direct`, `screenplay`, `cast` (options in snake_case: `per_beat`,
+`fail_on`). Paths are
 relative to the server's root folder. `storyboard` returns the contact sheets as images (look at
 them; page with `image_offset`), `thumbnail`, `gallery` and `character_sheet` their pictures. `render` previews by default. `tts` and
 `imagegen` are dry runs unless you pass `dry_run: false` and `confirm_cost: true`: run the dry
@@ -251,6 +254,11 @@ scenes:
   picture unless you set `fit: cover`.)
 - Phone apps cover the bottom ~15 % with their buttons: captions and lower thirds lift
   themselves above it; keep the key part of your own pictures and clips out of it.
+- **Cartoons** (`stage` scenes) in 9:16 keep their 16:9 stage: the narrow frame crops it and the
+  camera moves to whoever speaks (`reframe: speaker`, on by itself when the characters do not
+  fit in one view; a short reply holds the view; your own `pan` / `follow` / `zoom` / `shot`
+  win). `reframe: none` (top level or a stage's param) squeezes the whole stage into the frame
+  instead. `vidgen direct --variant social` lists the camera's moves.
 
 <!-- topic: scenes (also: chooser, types, scene-types) -->
 ## Choosing the scene type
@@ -290,7 +298,8 @@ project's own scene types, in its theme).
 | a derivation with reasons | `equation_derivation` | `title`, `steps`, `colors`, `result` |
 | a short listing (≤ 15 lines) | `code` | `title`, `code`, `path`, `highlight` |
 | a long file, explained part by part | `code_walkthrough` | `title`, `path`, `code`, `steps`, `excerpt` |
-| characters on a set (a cartoon) | `stage` | `characters`, `props`, `background`, `image`, `generate`, `marks`, `ground`, `layers`, `width`, `particles` |
+| characters on a set (a cartoon) | `stage` | `characters`, `props`, `background`, `image`, `generate`, `marks`, `ground`, `layers`, `width`, `particles`, `light`, `wind` |
+| a cartoon's title card, "Later that day…", "The End" | `card` | `text`, `subtitle`, `style`, `color`, `sting` |
 | thanks, links, call to action | `end_card` | `title`, `lines`, `icon`, `logo` |
 
 How beats drive scenes: each type splits its content into **reveal steps** and plays step *i*
@@ -593,7 +602,15 @@ scenes:
     beats: [{text: "Pip waves at an old friend across the park."}]
 ```
 
-A whole cartoon (characters, staging, shots, timing): `vidgen guide cartoons`.
+```yaml
+# cartoons
+- id: later
+  type: card                  # style: burst (rays turning), frame or plain
+  params: {text: "Later that day…", subtitle: "at the old mill", sting: comic}
+  duration: 2.5               # silent; or beats: to narrate it
+```
+
+A whole cartoon (characters, staging, shots, timing, title cards and irises): `vidgen guide cartoons`.
 
 **When to write a custom scene type** (a Python file in the project's `extensions/`, see
 `docs/EXTENDING.md`): when the idea is a specific drawing no built-in can express (a mechanism,
@@ -669,20 +686,48 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `reveal` | bring a later element in early | rarely: the default order is usually right |
 | `transform` | morph one target into another (`into`) | for equations and before / after |
 | `sfx` | a sound at that moment (`vidgen guide audio`) | the important moments only |
-| `particles` | rain, snow, sparkles, dust, confetti, smoke or bubbles over any scene (`- particles: confetti`; `density`, `area`, `keep: true` for the rest of the scene) | a mood or a celebration, not on dense text |
+| `particles` | rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves or streaks (wind lines) over any scene (`- particles: confetti`; `density`, `area`, `keep: true` for the rest of the scene) | a mood or a celebration, not on dense text |
+| `wind` | on a `stage`: fade the wind to `0.8` or `calm`, `breeze`, `windy`, `gale` (`- wind: gale`; `run_time` = the fade, 2 s) | a storm coming, a gust in the story |
+| `blow_away` | on a `stage`: the wind blows a light prop away, tumbling, out of a hand too (`- blow_away: napkin`; `to:` a mark to land there, else off the stage) | a gust in the story; napkin, umbrella, ball, cup, basket, box, letter, balloons only |
+| `light` | on a `stage`: fade the light to `morning`, `sunset`, `night`, `indoor` or `day` (`- light: night`; `run_time` = the fade, 2 s; `move_sun: true` moves a `sun` / `moon` prop across the sky, shadows turning) | when time passes in the story |
+| `lightning` | on a `stage`: the set flashes and a bolt strikes (`- lightning: right`; `distance: 2`: its thunder ~6 s later; in a room the windows flash) | a storm, a scare; rain with `lightning: true` strikes on its own |
+| `rainbow` | on a `stage` outdoors: a rainbow fades into the sky and stays (`- rainbow: centre`; `hide: true` fades it out) | after the rain |
+| `switch_on` | on a `stage`: a `tv`, `lamp`, `kettle` goes on, a `fireplace` burns, a `phone` rings (`- switch_on: tv`; a click with foley) | when someone in the story switches it on or lights the fire; when a call comes |
+| `switch_off` | on a `stage`: a `tv`, `lamp`, `kettle` or `fireplace` goes off, a `phone` stops ringing (`- switch_off: lamp`) | when someone in the story switches it off or answers |
+| `knock` | on a `stage`: someone knocks three times on a door (`- knock: front`; a room's door or a `door` prop; nobody needs to stand there) | a visitor in the story; the door then `open`s with a creak |
+| `let_go` | on a `stage`: a character lets go of the balloons it holds; they float away (`- let_go: pip`) | gone for the scene |
+| `pour` | on a `stage`: a character pours with the watering can it holds (`- pour: kit`, 2 s) | watering a plant |
+| `drop_fruit` | on a `stage`: a fruit falls from a tree with `fruit: true`, bounces, thuds (`- drop_fruit: tree`; `to: pip`: on pip's head, stars) | a comic moment; the character stands under the tree |
+| `birds` | on a `stage` outdoors: a flock crosses the sky (`- birds: 5`; `direction: left`) | a calm outdoor moment, time passing |
 | `say` | on a `stage`: pick who speaks the beat (`- say: kit`; `bubble: true` or a short text for a speech bubble) | without it the characters whose `voice` is the beat's voice speak; bubbles for short lines |
 | `look_at` | on a `stage`: a character looks at another, a prop, a mark or `camera` (`to:`) | when attention moves |
-| `turn` | on a `stage`: a character faces the other way (`to: left` / `right`) | |
+| `turn` | on a `stage`: a character faces the other way (`to: left` / `right`), or the viewer (`to: front`: its front view) | an SVG character has no front view |
 | `emote` | on a `stage`: change a character's expression (`to: happy`) | on the word that causes it (`at`) |
 | `pose` | on a `stage`: change a character's pose (`to: pointing`) | one pose change per beat |
 | `react` | on a `stage`: a listener's `expression` / `pose` for this beat only | the listener, not the speaker |
-| `walk_to` | on a `stage`: a character walks to a mark or x (`to:`; `speed`) | with `follow` on a wide stage; the walk takes its distance's time |
-| `enter` | on a `stage`: a character walks in from an edge (`side:`) to its mark (or `to:`) | it waits off stage until then |
-| `exit` | on a `stage`: a character walks out by an edge (`to: left` / `right`) | an `enter` brings it back |
-| `gesture` | on a `stage`: `to: point`, `wave`, `shrug`, `nod`, `shake_head` | on the word it goes with (`at`) |
+| `effect` | on a `stage`: a symbol over a character's head for this beat (`to: idea`, `question`, `exclaim`, `sweat`, `anger`, `sleep`, `hearts`, `stars`, `sparkle`, `tear`) | a feeling that should read at a glance; one per line |
+| `walk_to` | on a `stage`: a character walks to a mark or x (`to:`; `speed`), also towards or away from the camera (`depth: 0.4`, or `to: {mark: right, depth: 0.4}`) | with `follow` on a wide stage; the walk takes its distance's time |
+| `run_to` | on a `stage`: a character runs to a mark or x (`to:`; `speed`): longer strides, leaning forward, dust and speed lines | a hurry, a chase, an escape |
+| `enter` | on a `stage`: a character walks in from an edge (`side:`) or through a room's door (`door: door`) to its mark (or `to:`) | it waits off stage until then |
+| `exit` | on a `stage`: a character walks out by an edge (`to: left` / `right`) or through a room's door (`door: door`) | an `enter` brings it back |
+| `gesture` | on a `stage`: `to: point`, `wave`, `shrug`, `nod`, `shake_head`; `big: true` adds a whoosh arc | on the word it goes with (`at`) |
 | `jump` | on a `stage`: a character jumps (`height`) | joy or surprise |
 | `keyframes` | on a `stage`: move a character, prop or part (`kit.arm_left`) through `keys: [{t, x, y, rotate, scale, ease}]` (`t` seconds or `"40%"` of the beat) | motion no other action has; keep it short |
-| `move_along` | on a `stage`: move a character, prop or part along `path: [[x, y], ...]` (smooth curve; `speed`) | flying, floating, a thrown ball |
+| `move_along` | on a `stage`: move a character, prop or part along `path: [[x, y], ...]` (smooth curve; `speed`) | flying, floating |
+| `pick_up` | on a `stage`: a character reaches for a prop and holds it (`to: ball`; `hand`); it goes along with the hand | `walk_to` next to the prop first (`vidgen validate` says where) |
+| `hold` | on a `stage`: a character holds a prop from now on, without picking it up (`to: cup`) | a prop it has from the start (`at: 0`) |
+| `put_down` | on a `stage`: the held prop goes on the ground (`to:` a mark or x, default in front) | within reach |
+| `give` | on a `stage`: the held prop goes to another character (`to: kit`) | the two stand next to each other |
+| `throw` | on a `stage`: the held prop flies to a mark or x (`to:`; `spin`, `height`) and lands with a thud | |
+| `open` | on a `stage`: an `umbrella` or `door` prop opens (`- open: umbrella`); a held umbrella goes up over its holder's head | `open: true` in `props` starts it open |
+| `close` | on a `stage`: an open `umbrella` or `door` closes (`- close: door`); a held umbrella comes down to the hand | |
+| `sit_on` | on a `stage`: a character sits on a `chair`, `rock`, `box`, `sofa`, `armchair`, `bed` or `desk` (`to: chair`); its hips and knees bend | next to the prop; `stand_up` before it walks |
+| `lean_on` | on a `stage`: a character leans its back on a `tree`, `door`, `sign`, `lamp`, `house`, `bookshelf`, `counter` or `fridge` (`to: tree`) | next to the prop; `stand_up` before it walks |
+| `stand_up` | on a `stage`: a character gets up from where it sits or leans | |
+| `get_in` | on a `stage`: characters get in a `car`, a `bus`, a `boat` or a `hot_air_balloon` or on a `bicycle` (`to: car`); they ride with it until `get_out` | next to the vehicle; a bicycle seats 1, a car, a boat and a balloon 2, a bus 4 |
+| `ride_to` | on a `stage`: a vehicle (or a rider: its vehicle) rides to a mark, an x or `{mark, depth}` with its riders, wheels turning; a boat along the water, a balloon or a `toy_rocket` flies there (`land: false`: away) | `get_in` first (a toy rocket: none) |
+| `get_out` | on a `stage`: riders get out of their vehicle where it is | |
+| `shot` | on a `stage`: the camera frames characters for the beat; write it as the beat's key `shot: closeup kit` (`wide`, `two_shot`, `medium`, `over_shoulder kit pip`); the next beat without one cuts back | a beat's dialogue line or reaction; not with a walk out of the framing |
 
 ```yaml
 - id: speeds
@@ -704,7 +749,7 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 
 - `at` (0–1, a fraction of the beat) times the action to the word it belongs to; actions never
   make a beat longer.
-- The `stage` actions (`say` to `move_along`) take the character as the target and the new
+- The `stage` actions (`say` to `throw`) take the character as the target and the new
   state as `to:` (`- emote: kit` + `to: happy`). How to use them together for a cartoon:
   `vidgen guide cartoons`.
 - `until: <later beat id>` keeps a highlight / dim / callout on screen; without it a callout
@@ -726,9 +771,23 @@ the chart. Keep it small: 2–3 characters, one set per scene, 30–90 s.
 brand figure or logo: not its silhouette and colours, its name or catchphrase, an SVG traced
 from it, nor "in the style of" a studio in a `generate:` prompt or `cartoon_style`. If someone
 asks for one, say vidgen makes original characters and offer one with the same role.
-- Tell them apart at a glance: a different `body` (`round` vs `tall`), one signature item each
-  (`hat`, `scarf`, `glasses`, `bag`), clothes in different theme tokens. A good test: would
-  the two silhouettes, filled black, still differ?
+- Tell them apart at a glance: a different `body` (`round`, `tall`, `pear`, `triangle`...),
+  hair (`ponytail`, `braids`, `afro`, or bald with `facial_hair: beard`), one signature item
+  each (`hat`, `cap`, `bow`, `scarf`, `glasses`, `backpack`...), an `outfit` (`dress`,
+  `overalls`, `coat`, `shorts`, `apron`; second colour `colors.trim`) in different theme tokens,
+  maybe a `pattern` (`stripes`, `dots`) or `shoes`. A good test: would the two silhouettes,
+  filled black, still differ? A child: `proportions: kid` (or `tall_kid`) and a smaller `scale`
+  on the stage (about 0.7). An animal: `species: cat | dog | bird | bear | rabbit | mouse |
+  fox | owl | frog | turtle | penguin` (fur colour `colors.skin`: natural tones or theme tokens,
+  different for each; a turtle's shell `colors.hair`; it gets a `tail`, not a frog; a turtle
+  walks slowly, a penguin waddles, a frog jumps higher). A robot: `species: robot` with `robot:
+  {head: box | round, face: eyes | screen, antenna: true | false, moves_on: legs | wheels}` (no
+  hair; plating `colors.skin`; a screen face shows its mouth shapes; on wheels it rolls; a
+  `[beep]` in its lines). Costume pieces for anyone: `crown`, `wizard_hat`, `party_hat` (one
+  thing on top of the head, like `hat` or `cap`) and a `cape` that trails in the wind
+  (`docs/CONFIG.md` "Robots and costumes"). `vidgen character-sheet` shows every pose and the front view. `vidgen cast --random 4
+  [--seed S] [--species cat dog]` writes a cast chosen to differ (looks, colours, voice kinds
+  and voices, original names) for `include:`; lint `look_alike` warns when two look too alike.
 - Give each a want and a temper (the eager one, the doubter); their starting `pose` and
   `expression` say it before they speak. Short names, easy to say (the voice says them).
 - One voice each (`voices:` + `characters[].voice`), clearly different; keep the narrator's
@@ -741,7 +800,10 @@ asks for one, say vidgen makes original characters and offer one with the same r
   their heads free for speech bubbles.
 - **Depth**: what matters stands in front (`depth: 0`); the set goes back (`depth: 0.5`–`0.8`:
   higher, smaller, behind; the `ground_color` band reaches up to the deepest of them). Nothing in
-  front of a speaker's face (`hidden_speaker`).
+  front of a speaker's face (`hidden_speaker`). A character can walk in depth (`- {walk_to: kit,
+  to: {mark: 0.6, depth: 0.7}}`: it shrinks and passes behind what it walks by) and come forward
+  to speak (`depth: 0`). `facing: front` (or `- {turn: kit, to: front}`) turns a generated
+  character to the viewer, for a line said to the audience; it turns back with `turn`.
 - **The set**: things at the edges (a `house`, a `tree`), the middle free for the action.
   Props stay inside the frame: `far_left` / `far_right` cut a wide prop (`off_frame`). A
   drawn set is a gradient `background`, a `ground_color`, `layers` (`hills`) and props; a
@@ -752,21 +814,181 @@ asks for one, say vidgen makes original characters and offer one with the same r
 - **Room to move**: a walk takes the time its distance needs (about 4 s from `left` to `right`
   in 16:9), so give it a beat that long and end it on a free mark (`walk_overlap`). On a stage wider than
   the frame (`width: 2`), the camera goes along with `follow`.
+- **Light and mood**: `light: morning | sunset | night | indoor` (or `{tint, strength}`) grades
+  the whole set and the characters, never the bubbles or text; `night` adds stars on a colour
+  background. Time passing is a `- light: night` action (it fades, 2 s). Characters and props on
+  the ground get soft shadows on their own (`shadows: false` for none). `wind: breeze | windy |
+  gale` (or 0..1; negative blows left) sways trees and bushes, makes scarves, long hair, ears and
+  hats trail and particles drift; `- wind: gale` fades it in a beat. From `windy` on it shows
+  clearly; add `particles: [leaves, streaks]` so it reads at once. `- blow_away: napkin` blows a
+  light prop off the stage (or `to:` a mark), out of a hand too; the wind must blow then.
+- **Rain**: `particles: [rain]` (or `- particles: rain` from a beat) on a stage ends on the
+  ground with small splashes; an open umbrella (held or standing) and a tree's crown keep the
+  rain off whoever stands under them; `{kind: rain, puddles: true}` grows puddles. A generated
+  rain sound plays under it while it lasts, ducked less than music (off with `foley: false`).
+- **Snow and fog**: `{kind: snow, settle: true}` lands on the ground and on the props, where a
+  white layer grows (a blanket on the ground, caps on roofs, crowns, tables; full after 24 s at
+  density 1; thin under trees and open umbrellas); `settled: 30` starts it already white. `fog:
+  true` (or a density 0..1) lays fog in bands between the characters and props by depth: the
+  further back, the more hidden; it drifts slowly and with the wind. Both outdoors only.
+- **Storms, rainbows, sunsets**: `- lightning: right` flashes the set with a bolt there and plays
+  `thunder` after it (`distance: 2` km: ~6 s later, quieter; in a room the windows flash); rain
+  with `lightning: true` strikes every 8 s or so on its own. `- rainbow: centre` fades a rainbow in
+  behind the hills (after the rain). With a `sun` (or `moon`) prop, `{light: sunset, move_sun:
+  true, run_time: 4}` sinks the sun to the right while the light fades, the shadows stretching
+  away from it; `night` sets it and raises the moon.
+- **Indoors**: `room: {wallpaper: stripes, windows: [0.3], doors: [{at: 0.8}]}` (or `room:
+  true`) replaces the sky and ground with a wall, a floor (`flooring: boards | tiles`) and a
+  skirting board; windows show the sky of the stage's `light` (`indoor`: lamplight inside, evening
+  outside; `- light: night` darkens it and brings out stars), doors are `door` props whose name is
+  a mark: `- {enter: kit, door: door}` brings a character in through it, `exit` with `door:`
+  takes it out. No wind, rain or snow inside; a set (`sets:`) can be a room. Furniture props:
+  `sofa`, `armchair`, `bed`, `bookshelf`, `counter`, `fridge`, `picture`, `rug`, `houseplant`,
+  `clock`, `tv`, `desk`; `{prop: sofa, at: 0.3, against: wall}` stands it at the wall's depth
+  (`picture` and `clock` hang on the wall by themselves). Characters that sit on such furniture
+  stand at the wall's depth too (`depth: 0.4`, or walk there: `- {walk_to: dot, to: {mark: 0.42,
+  depth: 0.4}}`; `vidgen validate` says where); a sofa or a bed seats two.
+- **Props that move by themselves**: `{prop: clock, time: "21:45"}` runs (`speed: 60` = a minute
+  a second); `{prop: tv, on: true}` shows a flickering picture, `{prop: lamp, on: true}` glows;
+  `- switch_on: lamp` / `- switch_off: tv` switch them in a beat (with a click). A lamp at
+  `light: night` makes a warm spot, it does not light the whole room. A `fireplace` (furniture,
+  `against: wall`) burns with flickering flames, a warm glow and a crackle while `on`; a `kettle`
+  (on a `counter` with a `lift`) steams while `on`.
+- **Nature that moves**: `{prop: tree, fruit: true}` carries fruits and `- drop_fruit: tree` (`to:
+  pip` for a head, stars) lets one fall; `birds: true` (or `- birds: 4`) sends a flock across the
+  sky (outdoors only).
+- **Small props**: `cake`, `muffin`, `book`, `phone`, `letter`, `gift`, `balloons`, `vase`,
+  `watering_can` to hold, give and set on a table (`lift: 0.17` on a `table`). A book, a letter
+  and a gift `open` / `close` like an umbrella (held in front, not overhead). A `phone` that is on
+  rings (`on: true` or `- switch_on: phone`; it shakes in bursts with a trill, `- switch_off:
+  phone` answers it). Held balloons rise behind the head; `- let_go: pip` floats them away for
+  good. `- pour: kit` tilts the watering can kit holds and water drops fall.
 
-**Shot variety.** Change the shot every few beats, as a comic changes panels:
-- **wide** (the whole stage): the first beat of a scene, entrances, anything two characters do
-  together;
-- **medium / close-up**: `zoom` on one character (`scale: 1.5` medium, `2`–`2.5` close-up),
-  for the punchline or the reaction to it. It comes back by the beat's end (`until:` holds it);
-  about one per scene, or close-ups stop meaning anything;
+**Shot variety.** Change the shot every few beats, as a comic changes panels. A beat's `shot:`
+key cuts the camera to a framing of the characters for that beat; the next beat without one cuts
+back (`shot: {kind: closeup, of: kit, move: true}` eases instead):
+- **wide** (the whole stage, no `shot` or `shot: wide`): the first beat of a scene, entrances,
+  anything two characters do together;
+- **`two_shot`** (two characters, whole) and **`over_shoulder kit pip`** (kit seen past pip, who
+  stands cut at the edge): a dialogue, alternating the speaker's over-the-shoulder shots;
+- **`medium kit`** / **`closeup kit`** (hips up / head and shoulders): the punchline or the
+  reaction to it; about one close-up per scene, or close-ups stop meaning anything. A `zoom`
+  (`scale: 2`) pushes in and comes back within the beat instead of cutting;
 - **moving**: `pan` to a character or a mark (`- {action: pan, to: right}`) and `follow` a
-  character or a flying prop across a wide stage.
+  character or a flying prop across a wide stage (either ends a shot).
+A shot is framed where the characters stand as the beat starts and does not follow a walk.
+In a 9:16 variant the camera follows the speaker across the landscape stage on its own
+(`reframe`, see the `social` topic): write the dialogue for 16:9 and check `vidgen storyboard
+--variant ...`.
 
 **Reaction shots.** The listener's face is often the joke. While one character speaks, the other
 `react`s (`expression` and / or `pose`, for that beat only) and `look_at`s the speaker; `emote` and
-`pose` change them for good. A `zoom` on the listener while the other talks is the reaction
-shot. `look_at: camera` turns a character to the viewer for an aside. Put the reaction where it
+`pose` change them for good. A `shot: closeup` of the listener while the other talks is the
+reaction shot. `look_at: camera` turns a character to the viewer for an aside. Put the reaction where it
 happens: `at: 0.8` lands it on the end of the line, not on its first word.
+
+**Expressions.** `neutral`, `happy`, `sad`, `angry`, `surprised`, `worried`, `thinking`, and the
+big ones: `laughing` (shoulders bouncing; it keeps laughing while it talks), `blushing`,
+`tongue_out`, `crying` (streams of tears, sobbing), `dizzy` (swirling eyes, swaying) and
+`frightened` (wide eyes, hair, fur or feathers standing up, shivering; a robot's antenna springs
+up). They work on people, animals and robots, side and front. `[laugh]` / `[giggle]` in a line
+make the speaker laugh. Save the big ones for the moments that earn them.
+
+**Effect symbols.** `- {effect: pip, to: idea}` pops a small symbol over a head for the beat: an
+`idea` bulb, a `question` or `exclaim` mark, a `sweat` drop, an `anger` mark, `sleep` Zs, `hearts`,
+dizzy `stars`, a `sparkle`, a `tear`. It follows the character, sounds with foley (`sound: false`
+for none) and goes at the next beat (`until:` keeps it longer). Use one per line at most, on the
+moment the feeling lands (`at`); it says "she has an idea" without a word.
+
+**Title cards and irises.** A `card` scene is the cartoon's title card: the episode's name, a
+"Later that day…" between two scenes, "The End" (`style: burst`, `frame` or `plain`; `sting:
+reveal`, `comic` or `sad` as the text pops in). The classic way between them is an iris: a black
+circle closes on the scene before and opens on the next. `transition: {type: iris_out,
+character: pip}` closes on Pip's head (a pause on the face, then black); `{type: iris_in,
+character: kit}` opens on Kit in the scene it leads into; `at: [x, y]` (fractions of the frame
+from the top left) for a point, `color` for another colour. The other side opens or closes on
+the frame's centre. `iris_in` on the first scene opens the video.
+
+```yaml
+characters: [{name: pip, look: {body: bean}}, {name: kit, look: {body: tall}}]
+scenes:
+  - id: yard
+    type: stage
+    params: {characters: [{name: pip, at: left}]}
+    beats: [{text: "And that was the last Pip saw of the kite."}]
+  - id: later
+    type: card
+    params: {text: "Later that day…"}
+    duration: 2.5
+    transition: {type: iris_out, character: pip}
+  - id: hill
+    type: stage
+    params: {characters: [{name: kit, at: right}]}
+    transition: {type: iris_in, character: kit}
+    beats: [{text: "Up on the hill, Kit found something."}]
+```
+
+**Automatic directing.** `auto_direct: true` (top level, a stage's param or a beat's key) adds
+the routine looks and reactions for you: listeners `look_at` whoever speaks, the speaker looks at
+the one it answers, and after a line with `?`, a negation or `!` the listeners `react` in the
+pause (`thinking`, `worried`, `surprised`...). The speaker gestures on the line's stressed word
+(mark it `*word*`: the asterisks are not spoken or shown; or write it in CAPITALS; else the
+longest word counts; at most one per line), and a short punchy line
+right after a long one gets a close-up on its speaker (a short push-in, or a `shot: closeup` when
+the line is too short for it). A strong change of face gets its symbol (surprised an
+exclamation mark, thinking a question mark, angry an anger mark, dizzy stars, frightened a sweat
+drop; one per line). Nothing it adds may cause an `off_stage`
+or `facing_away` lint warning (it checks the stage's layout first). Actions you write win: a
+character with its own action in a beat gets nothing automatic there. So turn it on, then write only the moments that
+matter (the reaction shot, the punchline's look to camera). `vidgen direct` lists what it adds,
+`vidgen direct --print` writes it as YAML to paste into the beats and edit; the storyboard shows
+an `auto:` line under each beat.
+
+**From a screenplay.** When the story comes as a script, write it as a screenplay and let
+`vidgen screenplay story.md --out DIR` (MCP tool `screenplay`) make the project: one `stage`
+scene per `# Scene:` heading, one beat per line, a generated look and a voice for each character
+not declared in the front matter, `auto_direct: true`. Then refine the YAML as usual (check the
+`# TODO:` lines: directions and manners it could not map). `# Card: Later that day…` makes a
+title card (silent unless lines follow), coming in with an `iris_out`; the scene after it opens
+with an `iris_in`.
+
+```markdown
+---
+title: The Humming Box            # optional: video.yaml keys (voice, theme, characters...)
+---
+# Scene: yard
+set: background: day; props: box (crate) at 0.6, tree at 0.84; characters: fen at left, bram at right
+
+On a quiet Sunday, Fen heard a sound that did not belong in the yard.
+
+FEN (surprised): Bram, listen! That box is humming a song.
+
+[Fen walks to the crate and points at it.]
+
+BRAM: Boxes do not hum, Fen. Boxes do not do *anything*.
+```
+
+Indoors: `set: room: stripes, window at 0.3, door at right; props: sofa against the wall at 0.4,
+picture frame on the wall, rug at 0.5`. `NAME (manner):` turns an expression or pose word (`doubtful`, `glad`, `arms crossed`) into a
+`react`, and a pronoun there states the voice kind (`FEN (she):`, `BRAM (he, doubtful):`,
+`GUS (they):`; once per character is enough): the generated look and voice then suit it (without
+one, the voice follows the look's kind); a plain paragraph is the narrator; `[...]` maps walk / run to, enter, exit, jump, look
+at, point at, wave, nod, shrug and shake head, and effect symbols (`[Pip has an idea]`, `is
+confused`, `falls asleep`, `cries`...) (on its own line: at the next line's start; inside a
+line: at that word), except a voice sound such as `[laugh]` inside a line, which stays in the
+line. Undeclared characters get looks that differ from the others (`--species cat dog` for
+animals, `--seed` for other random ones). `docs/CONFIG.md` "Cartoons from a screenplay" has the
+whole format.
+
+**A series: one cast, shared sets.** Put the characters and their voices in `shared/cast.yaml`
+and the places in `shared/sets.yaml` (`sets: {meadow: {background, props, marks, light...}}`);
+each episode writes `include: [../shared/cast.yaml, ../shared/sets.yaml]` and a stage scene
+`set: meadow` with only what differs in its `params` (`light: sunset`, its characters). The
+scene's own params win; props, layers and characters add to the set's (`{name: tree, at: 0.3}`
+moves the set's tree); an episode's `characters:` entry of a cast name changes that character
+for the episode. `vidgen validate` names the file a problem is in; `vidgen screenplay story.md
+--cast shared/cast.yaml` writes an episode that includes the cast and turns `set: meadow` lines
+into the set. `examples/cartoon_series/` shows it (CONFIG "Shared casts and sets").
 
 **Comic timing.**
 - **Short lines**: one line per beat, one speaker per beat (the beat's `voice`), 6–12 words.
@@ -783,13 +1005,57 @@ happens: `at: 0.8` lands it on the end of the line, not on its first word.
   beat. Speech bubbles only for short lines (`bubble: "Up there!"`).
 - **Motion**: anticipation, squash and stretch, overshoot and follow-through are built in;
   `cartoon_motion: calm` (top level, a stage or a character) tones them down for a quiet story.
-  For a move no action has, `keyframes` and `move_along` move a character, a prop or one part
-  (`kit.arm_left`); `docs/CONFIG.md` "Keyframes and motion paths".
-- **Sound**: walks, entrances, exits, jumps and a `surprised` face make their own sounds
-  (foley: footsteps, whoosh, boing, pop), timed to the action; `foley: false` (top level or a
-  stage) turns them off. A beat's `sting: reveal | comic | sad` adds a short music sting
+  Motion effects come with them: dust where a `run_to` (or a fast walk) sets off and stops and
+  where a jump lands, speed lines behind runs and thrown or blown props, stars on a high jump's
+  landing, a whoosh arc on a `gesture` with `big: true`; `motion_effects: false` (top level or a
+  stage) turns them off. For a move no action has, `keyframes` and `move_along` move a character, a prop or one part
+  (`kit.arm_left`); `docs/CONFIG.md` "Keyframes and motion paths". Generated characters bend
+  at the elbows and knees: `arm_left` is the upper arm, `arm_left_lower` the forearm (its angle
+  is the elbow's bend), the legs are `leg_left` / `leg_right` (+ `_lower`); own poses can bend
+  them too (`docs/CONFIG.md` "Bending arms and legs").
+- **Props in hands**: `walk_to` next to a prop, `pick_up` it, walk with it, then `put_down`,
+  `give` (to a character standing next to it) or `throw` it; `hold` puts a prop in a hand at
+  the start. `vidgen validate` replays the scene and says when a prop is too far, held by
+  someone else or not held (`docs/CONFIG.md` "Props in hands"). A character crouches by
+  itself for a prop on the ground. For a picnic or the weather: `basket`, `napkin` and
+  `umbrella` props; `- open: umbrella` raises a held umbrella overhead, `- close: umbrella`.
+- **Sitting and leaning**: `sit_on: pip, to: chair` (a `chair`, `rock`, `box`, `sofa`,
+  `armchair`, `bed`, `desk`, or an SVG prop with `data-seat`), `lean_on: kit, to: tree` (a `tree`,
+  `door`, `sign`, `lamp`, `house`, `bookshelf`, `counter`, `fridge`, or an SVG prop with
+  `data-lean`), then `stand_up` before it walks, jumps or turns again. While it sits
+  or leans it can talk, gesture, emote and handle props; a look turns only its head. `vidgen
+  validate` says when the prop is too far, the seat taken, or a seated character walks
+  (`docs/CONFIG.md` "Sitting and leaning").
+- **Vehicles**: props `bicycle`, `car`, `bus`. `get_in: [pip, kit], to: car` (each must stand
+  beside it), `ride_to: car, to: right` (or `{mark, depth}`; the riders go along, a cyclist
+  pedals), `get_out: [pip, kit]`; no walking while riding. They are big next to the characters
+  (a bus is 3.2 characters long): give it a `scale` or the stage a smaller `size`
+  (`docs/CONFIG.md` "Vehicles"). Outdoors only: a `boat` floats on the stage's `water: true` (or
+  `{left, right}`) and rides along it, bobbing; a `hot_air_balloon` (2 stand in its basket; 2.1
+  characters tall, so use `size: 0.3`) rises, drifts with the wind and lands at `to`; a
+  `toy_rocket` (nobody rides it) launches with smoke and floats down under a parachute to `to`.
+  `land: false` flies a balloon or a rocket out of the top of the frame, gone for the scene.
+- **Sound**: walks, entrances, exits, jumps, a `surprised` face and most effect symbols make their own sounds
+  (foley: footsteps, whoosh, boing, pop, an idea's ding; a thrown prop lands with a thud; a ride rings a bell or starts an engine and brakes, a balloon's burner roars, a toy rocket fizzes off; a door creaks as it opens or closes; water splashes), timed to the action,
+  and rain plays a rain sound bed. Each stage also plays a quiet bed of its set: birdsong
+  outdoors by day (not at night, not in rain), a room tone in a room; `ambience: city` on a stage
+  names the street sounds instead (or `birdsong`, `room_tone`, a list), `ambience: false` none.
+  `foley: false` (top level or a stage) turns all of them off. A beat's `sting: reveal | comic | sad` adds a short music sting
   (`reveal` as the beat starts, `comic` and `sad` in the pause after the line), ducked under the
   voice. One or two per cartoon, on the real punchline, or they stop being funny.
+- **Voice sounds**: `[gasp]`, `[hmm]`, `[laugh]`, `[sigh]`, `[giggle]`, `[groan]`, `[beep]` in a line
+  (`text: "[gasp] The box is open! [laugh]"`) are made by the voice at that point (`Ha ha ha!`,
+  `Hmm.`; a gasp or sigh at the line's start or end is a generated breath, a beep a generated
+  robot chirp) and never shown in
+  captions; the speaker's mouth follows and its face changes (laugh happy, gasp surprised, sigh
+  sad) unless the beat's own `emote` / `react` sets it. A line needs words besides its sounds
+  (`docs/CONFIG.md` "Voice sounds").
+- **Talking at once**: `overlap: 0.4` on a beat starts it 0.4 s before the line before it ends
+  (both heard, both mouths move, captions show both lines); `interrupt: true` cuts that line off
+  where the beat starts (inside its last word, or `overlap` seconds before its end). Not on a
+  scene's first beat, and not on a line of the same voice. Keep overlaps short: `vidgen lint`
+  (`talked_over`) warns when whole words of the earlier line are lost under the new one or cut by
+  an interrupt (`docs/CONFIG.md` "Overlapping lines").
 
 **The loop for a cartoon.**
 1. `vidgen character-sheet NAME` (or `--all`): every pose, expression and mouth shape on one PNG.
@@ -801,7 +1067,7 @@ happens: `at: 0.8` lands it on the end of the line, not on its first word.
    through a walk, gesture, jump or path. Ask: is it clear who speaks? Are both faces visible,
    facing each other? Does the reaction read without the words? Is anything cut by the edge?
 4. `vidgen lint --json`: the cartoon rules `off_stage`, `character_overlap`, `walk_overlap`,
-   `bubble_overlap`, `facing_away`, `hidden_speaker` and `mouth_without_voice` (fixes in
+   `prop_overlap`, `bubble_overlap`, `facing_away`, `hidden_speaker`, `mouth_without_voice` and `look_alike` (fixes in
    `vidgen guide troubleshooting`).
 5. Voices: with Kokoro (`vidgen guide audio`) `vidgen tts` is free and writes the lip sync
    tracks; then storyboard and lint again, since real lines change the timing.
@@ -882,7 +1148,8 @@ Lint's `overlay_overlap` reports an overlay over scene text: give it `reserve: t
 **Transitions** (`transition:` per scene = the way into it, or video-wide). Default: cuts (every
 scene fades out by itself), which is right most of the time. `crossfade` (0.5 s) for a calm
 flow, `fade_color` into `chapter` cards to mark a new section, `push` / `wipe` sparingly (one
-style per video). Transitions never cover narration.
+style per video), `iris_out` / `iris_in` in cartoons (`vidgen guide cartoons`). Transitions
+never cover narration.
 
 ```yaml
 transition: crossfade
@@ -992,7 +1259,7 @@ scenes:
 **Sound effects** (`vidgen list-sfx` describes each in words): `whoosh` (something moves in),
 `pop` (an item appears), `tick` (steps, counting), `click` (a UI click), `chime` (a key
 insight), `success` / `error` (a result), `riser` (tension before a reveal, `align: end`),
-`thud` (a big number lands), `swoosh`, `typing`; `footstep`, `boing` and the music stings
+`thud` (a big number lands), `swoosh`, `typing`; `footstep`, `boing`, `gasp`, `sigh`, `beep`, `bell`, `engine`, `brakes`, `burner`, `launch`, `phone`, `thunder`, `creak`, `knock`, `splash` and the music stings
 `sting_reveal` / `sting_comic` / `sting_sad` are for cartoons (`vidgen guide cartoons`). Two or three per minute, on the moments that
 matter; `sfx: {auto: true}` adds soft ones to built-in reveals if you want a uniform feel.
 
@@ -1009,9 +1276,10 @@ scenes:
 ```
 
 **Music** (`vidgen list-music`): `calm` (serious, long narration), `pulse` (tech, data,
-walkthroughs), `bright` (launches, upbeat social). It is ducked under the voice automatically
-and the mix is normalised to −16 LUFS. Leave the defaults; turn it off over clips with their
-own sound (`music: false` on the scene).
+walkthroughs), `bright` (launches, upbeat social), `cartoon` (playful pizzicato: cartoons,
+comic scenes), `lullaby` (music box: bedtime stories, soft endings). It is ducked under the
+voice automatically and the mix is normalised to −16 LUFS. Leave the defaults; turn it off over
+clips with their own sound (`music: false` on the scene).
 
 ```yaml
 music: {source: calm, volume: -2}
@@ -1284,7 +1552,7 @@ scenes:
 | `duplicate beat id` | beat ids are unique in the whole video; rename one |
 | `unknown target 'x' ...; did you mean ... (targets: ...)` | pick a name from the list (labels are case-sensitive: `bar:4K`) |
 | `until 'x' is not a later beat of scene 'y'` | `until` names a later beat id of the same scene |
-| `unknown action 'x'` / `unknown option` | actions are `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along` |
+| `unknown action 'x'` / `unknown option` | actions are `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `let_go`, `pour`, `switch_on`, `switch_off`, `drop_fruit`, `birds`, `sit_on`, `lean_on`, `stand_up`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect` |
 | `labels has 2 entries but values has 3` | one value per label |
 | `unknown theme color 'x'` | use a token (`primary`, `highlight`...) or quoted hex `"#0B5FFF"`, or add it to `theme.colors` |
 | `invalid hex color` | `#RGB`, `#RRGGBB` or `#RRGGBBAA`, in quotes (YAML reads `#` as a comment) |
@@ -1309,16 +1577,19 @@ install; `vidgen validate` warns when it is missing.
 | `contrast` | text hard to read on its background | theme tokens instead of custom colours; another preset |
 | `overlay_overlap` | an overlay covers scene text | `reserve: true` on the overlay, or another corner / position |
 | `walk_overlap` | a character's walk ends on another character | walk it to another mark or x, or move the other one first |
-| `off_stage` | a character is cut by the edge of the view | another mark or x inside the view, or `pan` to it |
-| `character_overlap` | two characters stand on each other | marks further apart, or `walk_to` one away |
-| `bubble_overlap` | a speech bubble covers a face or another bubble | a shorter `bubble` text, characters further apart, or the lines in different beats |
+| `off_stage` | a character is cut by the edge of the view (in a `shot`: a character it frames is out of it) | another mark or x inside the view, or `pan` to it; in a shot, keep it from walking out or frame another shot |
+| `character_overlap` | two characters stand on each other (at about the same depth) | marks further apart, or `walk_to` one away (across, or in depth) |
+| `prop_overlap` | two props on the floor at about the same depth are drawn over each other (a room's door over the sofa against the wall) | another `at` for one (a door: its x in the room's `doors`), a smaller `scale`, or a `depth` that puts one in front; a picture or clock above furniture, a lifted prop and a rug are fine |
+| `bubble_overlap` | a speech bubble covers a face, another bubble or an effect symbol | a shorter `bubble` text, characters further apart, or the lines (or the line and the effect) in different beats |
 | `facing_away` | a speaker faces away from the one it talks to (last looked at, else the nearest) | `turn`, `look_at: <listener>`, or swap their marks |
 | `hidden_speaker` | something in front hides the speaker's face | move one of them, or a smaller `depth` for the speaker |
 | `mouth_without_voice` | a mouth still shows speech after the narration ended | `vidgen tts` again; in a custom scene, lip sync with `clock=self.beat_clock()` |
+| `look_alike` | two characters too alike to tell apart | change what the message names on the second (body, hair, species, clothes colour); or `vidgen cast --random N` |
 | `dead_air` | nothing moved for over 6 s | split the beat, add a reveal or an action, shorten a silent `duration` |
 | `narration_speed` | words per second outside 1.8–3.5 (English) | shorten or lengthen the beat's text; without audio it is only `info` (an estimate) |
 | `animation_overrun` | animations ran past the narration | a custom scene's animations are too long for the beat |
 | `rushed_animation` | animations squeezed into a short beat | merge two short beats, or reveal fewer things per beat |
+| `talked_over` | an `overlap` hides whole words of the line before, or an `interrupt` cuts them | a shorter `overlap` (none for an interrupt), or `interrupt: true` to cut the line |
 | `readback` | the audio does not say what the text says | add a `pronunciation:` entry, `vidgen tts`, check again |
 
 **Other things that go wrong**

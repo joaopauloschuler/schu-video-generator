@@ -65,3 +65,4 @@ params, the action targets and a GIF of the whole scene. Regenerate with `vidgen
 | type | stills | use it for |
 |---|---|---|
 | [`stage`](stage.md) | <a href="stage.md"><img src="media/stage-16x9.png" height="180" alt="stage at 16:9"> <img src="media/stage-9x16.png" height="180" alt="stage at 9:16"></a> | characters on a set (a cartoon) |
+| [`card`](card.md) | <a href="card.md"><img src="media/card-16x9.png" height="180" alt="card at 16:9"> <img src="media/card-9x16.png" height="180" alt="card at 9:16"></a> | a cartoon's title card, "Later that day…", "The End" |

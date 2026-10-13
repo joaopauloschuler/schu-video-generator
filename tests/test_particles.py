@@ -34,7 +34,7 @@ from vidgen.theme import Theme
 
 
 def test_every_kind_has_a_table_entry() -> None:
-    assert set(KINDS) == set(PARTICLE_KINDS) and len(PARTICLE_KINDS) == 7
+    assert set(KINDS) == set(PARTICLE_KINDS) and len(PARTICLE_KINDS) == 9
 
 
 @pytest.mark.parametrize("kind", PARTICLE_KINDS)

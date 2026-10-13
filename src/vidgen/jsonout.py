@@ -22,6 +22,7 @@ from vidgen.errors import Problem, VidgenError
 from vidgen.project import Project
 
 if TYPE_CHECKING:
+    from vidgen.cartoon.directing import DirectedBeat
     from vidgen.export import ExportResult
     from vidgen.gallery import GalleryResult
     from vidgen.guide import GuideTopic
@@ -32,6 +33,8 @@ if TYPE_CHECKING:
     from vidgen.deck import Deck
     from vidgen.plan import Plan
     from vidgen.plan_yaml import PlanResult
+    from vidgen.random_cast import RandomCast
+    from vidgen.screenplay import ScreenplayProject
     from vidgen.slides import SlidesResult
     from vidgen.slides_pdf import PdfResult
     from vidgen.thumbnail import ThumbnailResult
@@ -134,6 +137,7 @@ def validate_document(
     summary: dict[str, Any] = {
         "project": None,
         "config_file": None,
+        "included": [],
         "title": None,
         "language": None,
         "translations": None,
@@ -147,6 +151,7 @@ def validate_document(
         summary.update(
             project=_path(project.root),
             config_file=_path(project.config_file),
+            included=[_path(path) for path in project.included_files],
             title=project.config.title,
             language=project.config.language,
             translations=translation_json(project),
@@ -194,6 +199,67 @@ def images_json(project: Project, images: Iterable[SceneImage]) -> dict[str, Any
 
 
 # ----- init / tts / imagegen ---------------------------------------------------------------------
+
+
+def screenplay_document(
+    project: Project, draft: ScreenplayProject, result: PlanResult, problems: list[Problem], warnings: Iterable[Mapping[str, Any]] = ()
+) -> dict[str, Any]:
+    """The ``vidgen screenplay --json`` document: where the project went, its characters (which
+    ones were generated, their voices), every scene with its beats and TODOs, the video's notes
+    and the problems ``vidgen validate`` finds in it (``ok`` false when any)."""
+    scenes = [
+        {
+            "id": scene["id"],
+            "beats": len(scene.get("beats", [])),
+            "characters": [c["name"] for c in scene["params"].get("characters", [])],
+            "actions": sum(len(b.get("actions", [])) for b in scene.get("beats", [])),
+            "todos": [*todos, *(t for beat in beat_todos for t in beat)],
+        }
+        for scene, todos, beat_todos in zip(draft.config["scenes"], draft.scene_todos, draft.beat_todos)
+    ]
+    return envelope(
+        "screenplay",
+        not problems,
+        warnings,
+        project=_path(result.root),
+        config=_path(result.config),
+        created=result.created,
+        title=draft.config["title"],
+        characters=[{"name": c.name, "voice": c.voice, "generated": c.name in draft.generated} for c in project.config.characters],
+        scene_count=len(scenes),
+        beat_count=sum(s["beats"] for s in scenes),
+        estimated_duration=round(project.estimated_duration(), 2),
+        todo_count=draft.todo_count,
+        notes=list(draft.notes),
+        scenes=scenes,
+        problems=[p.to_json() for p in problems],
+    )
+
+
+def cast_document(
+    path: Path, cast: RandomCast, seed: int, species: Sequence[str], provider: str, minimum: float, warnings: Iterable[Mapping[str, Any]] = ()
+) -> dict[str, Any]:
+    """The ``vidgen cast --json`` document: the include file written and each character with its
+    voice kind, voice and look."""
+    return envelope(
+        "cast",
+        True,
+        warnings,
+        path=_path(path),
+        seed=seed,
+        species=list(species),
+        provider=provider,
+        lowest_contrast=cast.lowest_contrast,
+        min_contrast=minimum,
+        characters=[
+            {
+                "name": c["name"], "voice_kind": cast.kinds[c["name"]], "voice": c["voice"],
+                "provider_voice": cast.voices[c["voice"]].get("voice"), "look": c["look"], "colors": c["colors"],
+            }
+            for c in cast.characters
+        ],
+        notes=list(cast.notes),
+    )
 
 
 def init_document(target: Path, example: str, warnings: Iterable[Mapping[str, Any]] = ()) -> dict[str, Any]:
@@ -846,6 +912,7 @@ def storyboard_document(
                     "k": still.k,
                     "n": still.n,
                     "mid": still.mid,
+                    "auto": [a.shorthand() for a in still.auto],
                     "time": still.time,
                     "scene_time": still.scene_time,
                     "path": _path(still.path),
@@ -871,6 +938,19 @@ def storyboard_document(
         elapsed=round(elapsed, 3),
         sheets=sheets,
     )
+
+
+# ----- direct ----------------------------------------------------------------------------------------
+
+
+def direct_document(project: Project, directed: Mapping[str, Sequence[DirectedBeat]], warnings: Iterable[Mapping[str, Any]] = ()) -> dict[str, Any]:
+    """The ``vidgen direct --json`` document: per scene with automatic actions, per beat the
+    actions ``auto_direct`` adds, each as written in ``video.yaml`` (the shorthand form)."""
+    scenes = [
+        {"scene": scene_id, "beats": [{"beat": b.beat, "actions": [a.shorthand() for a in b.actions]} for b in beats]}
+        for scene_id, beats in directed.items()
+    ]
+    return envelope("direct", True, warnings, project=_path(project.root), variant=project.variant, scenes=scenes)
 
 
 # ----- character-sheet ---------------------------------------------------------------------------

@@ -51,11 +51,18 @@ def snapshot(c: Character) -> dict[str, np.ndarray]:
 
 def test_part_tree_and_draw_order() -> None:
     c = figure()
-    assert set(c.parts) == {*REQUIRED_PARTS, "legs"} and not c.has_part("accessory")
-    assert c.draw_order == ["arm_right", "legs", "body", "arm_left", "head", "eyes", "mouth", "brows"]
+    # Step 92: arms and legs in two segments (upper / lower), one leg each instead of one `legs`
+    limbs = {"arm_left_lower", "arm_right_lower", "leg_left", "leg_left_lower", "leg_right", "leg_right_lower"}
+    faces = {"cheeks", "bristles"}   # Step 125
+    assert set(c.parts) == {*REQUIRED_PARTS, *limbs, *faces} and not c.has_part("accessory") and not c.has_part("legs")
+    assert c.draw_order == [
+        "arm_right", "arm_right_lower", "leg_right", "leg_right_lower", "leg_left", "leg_left_lower", "body",
+        "arm_left", "arm_left_lower", "bristles", "head", "cheeks", "eyes", "mouth", "brows",
+    ]
+    assert c.parent_of("arm_left_lower") == "arm_left" and c.parent_of("leg_right_lower") == "leg_right" and c.parent_of("leg_left") == "body"
     assert c.submobjects[1:] == [c.parts[n] for n in c.draw_order]   # submobjects[0] is the anchor
     assert c.parent_of("body") is None and c.parent_of("mouth") == "head" and c.parent_of("arm_left") == "body"
-    assert c.shape_names("mouth")[:2] == ["smile", "open"] and c.shape_names("eyes") == ["open", "closed"]
+    assert c.shape_names("mouth")[:2] == ["smile", "open"] and c.shape_names("eyes")[:2] == ["open", "closed"]
     assert set(DEFAULT_PARENTS) == set(PART_NAMES)
 
 
@@ -68,8 +75,8 @@ def test_size_and_feet() -> None:
     ("change", "message"),
     [
         (lambda parts: [p for p in parts if p.name != "mouth"], "missing part(s) mouth"),
-        (lambda parts: [*parts, CharacterPart("tail", parts[0].shapes, (0, 0))], "unknown part(s) tail"),
-        (lambda parts: [*parts, parts[0]], "part 'legs' given twice"),
+        (lambda parts: [*parts, CharacterPart("wing", parts[0].shapes, (0, 0))], "unknown part(s) wing"),
+        (lambda parts: [*parts, parts[0]], "part 'leg_left' given twice"),
         (lambda parts: [*parts, CharacterPart("accessory", parts[0].shapes, (0, 0), parent="hat")], "hangs from 'hat'"),
         (lambda parts: [CharacterPart(p.name, p.shapes, p.pivot, parent="eyes") if p.name == "head" else p for p in parts], "hangs from itself"),
     ],
@@ -89,7 +96,7 @@ def test_rotating_a_part_moves_its_children_only() -> None:
     c.set_part("head", angle=25)
     after = snapshot(c)
     moved = {name for name in before if not np.allclose(before[name], after[name])}
-    assert moved == {"head", "eyes", "brows", "mouth"}
+    assert moved == {"head", "eyes", "brows", "mouth", "cheeks", "bristles"}
     assert np.allclose(c.pivot("head"), pivot)
     # a rotation about the pivot keeps every point's distance to it
     assert np.allclose(np.linalg.norm(before["head"] - pivot, axis=1), np.linalg.norm(after["head"] - pivot, axis=1))
@@ -155,7 +162,7 @@ def test_facing_left_mirrors_the_whole_character_about_the_feet() -> None:
         assert np.allclose(left[name][:, 0], 2 * x - right[name][:, 0]) and np.allclose(left[name][:, 1], right[name][:, 1])
     c.turn()
     assert c.facing == "right" and all(np.allclose(right[n], p) for n, p in snapshot(c).items())
-    with pytest.raises(VidgenError, match="right or left"):
+    with pytest.raises(VidgenError, match="right, left or front"):
         c.face("up")
 
 

@@ -1,0 +1,63 @@
+# Episode 2: the same cast and sets (include:), changed for this episode only: the meadow at
+# sunset in a breeze, the workshop at night, and Olla in a scarf for the cold.
+#   vidgen validate examples/cartoon_series/episode_2
+#   vidgen lint examples/cartoon_series/episode_2
+title: "Nib and Olla: The Weather Hat"
+output: weather_hat
+include: [../shared/cast.yaml, ../shared/sets.yaml]
+theme: {preset: soft_pastel}
+
+format: {width: 1920, height: 1080, fps: 30}
+preview: {width: 854, height: 480, fps: 15}
+
+voice: {provider: kokoro, voice: bf_emma, speed: 0.8}
+narration: {pad: 0.7}
+auto_direct: true
+
+characters:                                     # this episode only: the cast's olla, plus a scarf
+  - name: olla
+    look: {accessories: [hat, scarf]}
+
+scenes:
+  - id: hilltop
+    type: stage
+    set: meadow
+    params:
+      light: sunset                             # the set's morning light, changed for this scene
+      wind: breeze
+      props:
+        - {name: plant, at: 0.72}               # the set's plant, moved
+      characters:
+        - {name: olla, at: 0.36}
+        - {name: nib, at: 0.6, facing: left}
+    beats:
+      - text: "At sunset, Olla always checked the weather with her hat."
+      - text: "My hat says it will rain tonight."
+        voice: olla_voice
+        actions:
+          - {gesture: olla, to: point, at: 0.2}
+      - text: "Your hat says that every night."
+        voice: nib_voice
+        actions:
+          - {react: nib, pose: shrug, at: 0.4}
+      - text: "And one night, it will be right."
+        voice: olla_voice
+
+  - id: late
+    type: stage
+    set: workshop
+    params:
+      light: {tint: "#4A5A8C", strength: 0.6}   # night indoors: a dark blue grade (night itself adds stars)
+      characters:
+        - {name: nib, at: 0.42}
+        - {name: olla, at: 0.72}
+    beats:
+      - text: "That night, it rained on the workshop roof."
+      - text: "Olla, please. Do not say it. Not one word."
+        voice: nib_voice
+        actions:
+          - {emote: nib, to: worried}
+      - text: "I will not say it. My hat will."
+        voice: olla_voice
+        actions:
+          - {emote: olla, to: happy, at: 0.3}

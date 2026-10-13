@@ -1,4 +1,6 @@
-"""Step 75: props on a stage (built-in props from primitives, SVG props, placement like characters)."""
+"""Step 75: props on a stage (built-in props from primitives, SVG props, placement like characters).
+Step 103: basket, umbrella (closed and open shapes) and napkin; grips. Step 110's furniture is in
+``test_cartoon_furniture.py`` (each prop here builds, furniture included)."""
 
 from __future__ import annotations
 
@@ -10,11 +12,15 @@ import pytest
 from pydantic import ValidationError
 
 from test_cartoon_stage import render_with_layout, stage_params, stage_project
+from vidgen.cartoon.vehicles import VEHICLE_KINDS
 from vidgen.cartoon.props import (
+    FURNITURE,
     PROP_COLORS,
+    PROP_GRIPS,
     PROP_HEIGHTS,
     PROP_KINDS,
     PROP_LIFTS,
+    PROP_SHAPES,
     SVG_PROP_HEIGHT,
     Prop,
     _DRAWERS,
@@ -47,9 +53,49 @@ def fills(prop: Prop) -> set[str]:
 
 
 def test_tables_cover_every_prop() -> None:
-    assert len(PROP_KINDS) == 17 and len(set(PROP_KINDS)) == 17
-    assert set(PROP_HEIGHTS) == set(PROP_COLORS) == set(_DRAWERS) == set(PROP_KINDS)
-    assert set(PROP_LIFTS) <= set(PROP_KINDS)
+    assert len(PROP_KINDS) == 49 and len(set(PROP_KINDS)) == 49 and set(FURNITURE) <= set(PROP_KINDS)
+    assert set(PROP_HEIGHTS) == set(PROP_COLORS) == set(_DRAWERS) | set(VEHICLE_KINDS) == set(PROP_KINDS)   # vehicles: Steps 118, 119; fireplace, kettle: Step 121; small props: Step 122
+    assert set(PROP_LIFTS) <= set(PROP_KINDS) and set(PROP_SHAPES) <= set(PROP_KINDS)
+    assert all(kind in PROP_KINDS and (shape is None or shape in PROP_SHAPES[kind]) for kind, shape in PROP_GRIPS)
+
+
+def test_umbrella_shapes_swap_without_changing_its_family() -> None:
+    """Step 103: closed and open shapes; the hidden one has no points (DESIGN.md §69.37)."""
+    theme = Theme()
+    umbrella = draw_prop("umbrella", height=2.0, theme=theme).shift([1.0, -1.0, 0.0])
+    assert umbrella.shapes == ("closed", "open") and umbrella.shape == "closed" and umbrella.grip is None
+    family = umbrella.get_family()
+    closed_width, feet = umbrella.width, umbrella.feet()
+    assert umbrella.grip_point() == pytest.approx(umbrella.get_center())   # held by its middle
+    umbrella.show_shape("open")
+    assert umbrella.get_family() == family and umbrella.shape == "open"   # only points change (§69.22)
+    assert umbrella.height == pytest.approx(2.0, rel=0.02) and umbrella.width > 3 * closed_width
+    assert umbrella.feet()[1] == pytest.approx(feet[1], abs=1e-6) and abs(umbrella.feet()[0] - feet[0]) < 0.05
+    assert umbrella.grip_point()[:2] == pytest.approx([1.0, -1.0 + 0.16 * umbrella.height], abs=0.03)   # the shaft above the hook
+    assert umbrella.shape_width("open") == pytest.approx(umbrella.width) and umbrella.shape_width("closed") == pytest.approx(closed_width)
+    opened = draw_prop("umbrella", height=2.0, theme=theme, shape="open")
+    assert np.allclose(opened.shift([1.0, -1.0, 0.0]).get_all_points(), umbrella.get_all_points(), atol=2e-3)   # drawn open = opened (both shapes 1 prop unit tall)
+    umbrella.show_shape("closed")
+    assert umbrella.width == pytest.approx(closed_width)
+    assert fills(umbrella) == fills(draw_prop("umbrella", height=2.0, theme=theme))
+    with pytest.raises(VidgenError, match="no shape 'folded'"):
+        umbrella.show_shape("folded")
+    with pytest.raises(VidgenError, match="no shape 'open'"):
+        draw_prop("tree", height=1.0, theme=theme, shape="open")
+
+
+def test_grips_follow_size_and_facing() -> None:
+    basket = draw_prop("basket", height=1.0, theme=Theme())
+    assert basket.shapes == () and basket.grip == PROP_GRIPS[("basket", None)]
+    assert basket.grip_point()[:2] == pytest.approx(basket.get_top()[:2], abs=0.02)   # by the top of its handle
+    left = draw_prop("umbrella", height=1.0, theme=Theme(), shape="open", facing="left")
+    right = draw_prop("umbrella", height=1.0, theme=Theme(), shape="open")
+    assert left.grip_point()[0] == pytest.approx(-right.grip_point()[0]) and left.grip_point()[1] == pytest.approx(right.grip_point()[1])
+    width = right.width
+    copy = right.copy().scale(2.0, about_point=right.feet())
+    assert copy.grip_point()[1] == pytest.approx(2 * right.grip_point()[1])   # the anchor scales with it
+    copy.show_shape("closed")
+    assert right.shape == "open" and right.width == pytest.approx(width)   # a copy's shapes are its own
 
 
 @pytest.mark.parametrize("kind", PROP_KINDS)
@@ -77,8 +123,8 @@ def test_colours_facing_and_strokes() -> None:
     thin = draw_prop("cup", height=0.3, theme=theme, character_height=3.0)
     thick = draw_prop("cup", height=0.3, theme=theme, character_height=6.0)
     assert max(m.get_stroke_width() for m in thick.get_family()) == pytest.approx(2 * max(m.get_stroke_width() for m in thin.get_family()))
-    with pytest.raises(VidgenError, match="unknown prop 'sofa'"):
-        draw_prop("sofa", height=1.0, theme=theme)
+    with pytest.raises(VidgenError, match="unknown prop 'piano'"):
+        draw_prop("piano", height=1.0, theme=theme)
     with pytest.raises(VidgenError, match="facing"):
         draw_prop("box", height=1.0, theme=theme, facing="up")
 
@@ -117,7 +163,7 @@ def test_params_names_lift_and_targets() -> None:
 @pytest.mark.parametrize(
     "props,message",
     [
-        (["sofa"], "props.0"),
+        (["piano"], "props.0"),
         ([{"prop": "tree", "svg": "assets/a.svg"}], "one of the two"),
         ([{"at": "left"}], "one of the two"),
         ([{"svg": "assets/a.png"}], "not an .svg file"),
@@ -127,6 +173,7 @@ def test_params_names_lift_and_targets() -> None:
         ([{"prop": "ball", "name": "pip"}], "props\\[0\\]: 'pip' is also a character"),
         ([{"prop": "rock", "at": "middle"}], "props\\[0\\].at: unknown mark 'middle'"),
         ([{"prop": "rock", "lift": 2}], "less than or equal to 1"),
+        ([{"prop": "tree", "open": True}], "open is for props that open \\(door, umbrella, book, letter, gift\\), not tree"),
     ],
 )
 def test_bad_props(props: list[Any], message: str) -> None:

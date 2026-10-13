@@ -15,7 +15,7 @@ import difflib
 from collections.abc import Iterable, Mapping
 from typing import get_args
 
-from vidgen.config import ExpressionPart, PartPoseEntry, PosePart
+from vidgen.config import SEATED_BODY_SHAPE, ExpressionPart, PartPoseEntry, PosePart
 from vidgen.errors import VidgenError
 
 #: Parts a pose sets.
@@ -32,18 +32,36 @@ def _p(**settings: dict) -> dict[str, PartPoseEntry]:
 
 
 #: Built-in poses. Facing right, ``arm_left`` is the near arm (on the screen's right); arms hang
-#: down at rest, so +90 points it forward.
+#: down at rest, so +90 points it forward. ``arm_left`` turns the upper arm about the shoulder,
+#: ``arm_left_lower`` the forearm about the elbow (+: the hand forward); an arm in one piece
+#: shows the elbow folded (half the bend, shortened: :func:`~vidgen.cartoon.limbs.fold`), so each
+#: upper angle plus half its elbow is the angle a one-piece arm had before Step 92. ``legs`` (both
+#: legs in one piece) and ``leg_left`` / ``leg_right`` (+ ``_lower``, the knee: - bends the foot
+#: back) are alternatives: a character has one kind, the other entries are skipped.
 POSES: dict[str, dict[str, PartPoseEntry]] = {
     "stand": {},
-    "pointing": _p(arm_left={"angle": 88}, head={"angle": -3}),
-    "waving": _p(arm_left={"angle": 150}, head={"angle": 4}),
-    "thinking": _p(arm_left={"angle": 160, "scale": [1, 0.72]}, head={"angle": 7}),
-    "shrug": _p(arm_left={"angle": 45, "shift": [0, 0.02]}, arm_right={"angle": -45, "shift": [0, 0.02]}, head={"angle": 6}),
-    "arms_crossed": _p(arm_left={"angle": -65, "scale": [1, 0.8]}, arm_right={"angle": 65, "scale": [1, 0.8]}),
-    "sitting": _p(body={"shift": [0, -0.1]}, legs={"angle": 80}),
+    "pointing": _p(arm_left={"angle": 82}, arm_left_lower={"angle": 12}, head={"angle": -3}),
+    "waving": _p(arm_left={"angle": 115}, arm_left_lower={"angle": 70}, head={"angle": 4}),
+    "thinking": _p(arm_left={"angle": 110}, arm_left_lower={"angle": 100}, head={"angle": 7}),
+    "shrug": _p(
+        arm_left={"angle": 15, "shift": [0, 0.02]}, arm_left_lower={"angle": 60},
+        arm_right={"angle": -15, "shift": [0, 0.02]}, arm_right_lower={"angle": -60}, head={"angle": 6},
+    ),
+    "arms_crossed": _p(
+        arm_left={"angle": -15}, arm_left_lower={"angle": -80}, arm_right={"angle": 15}, arm_right_lower={"angle": 80},
+    ),
+    "sitting": _p(
+        body={"shift": [0, -0.1], "shape": SEATED_BODY_SHAPE}, legs={"angle": 80},
+        leg_left={"angle": 80}, leg_left_lower={"angle": -35}, leg_right={"angle": 75}, leg_right_lower={"angle": -35},
+    ),
 }
 
 #: Built-in expressions. The rest mouth is a smile (``smile``), so a negative y scale makes a frown.
+#: Since Step 125 (DESIGN.md §69.59): ``laughing`` (eyes closed in arcs, a laughing mouth),
+#: ``blushing`` (``cheeks`` ``blush``), ``tongue_out``, ``crying`` (eyes squeezed, ``cheeks``
+#: ``tears``: streams), ``dizzy`` (``swirl`` eyes; the idle motion sways) and ``frightened``
+#: (``wide`` eyes, ``bristles`` ``up``; the idle motion shivers). Each lists fallback shapes, so
+#: a character without the new shapes (an SVG one) shows the nearest it has.
 EXPRESSIONS: dict[str, dict[str, PartPoseEntry]] = {
     "neutral": _p(mouth={"scale": [0.9, 0.35]}),
     "happy": _p(mouth={"scale": [1.15, 1.25]}, brows={"shift": [0, 0.01]}),
@@ -52,6 +70,21 @@ EXPRESSIONS: dict[str, dict[str, PartPoseEntry]] = {
     "surprised": _p(mouth={"shape": ["open", "O", "A"]}, brows={"shift": [0, 0.025]}, eyes={"scale": 1.2}),
     "worried": _p(mouth={"scale": [0.7, -0.45], "shift": [0, -0.004]}, brows={"shape": "sad", "shift": [0, 0.015]}, eyes={"scale": [1, 1.1]}),
     "thinking": _p(mouth={"scale": [0.6, 0.3], "shift": [0.01, 0]}, brows={"angle": -8, "shift": [0, 0.01]}, eyes={"shift": [0.008, 0.012]}),
+    "laughing": _p(eyes={"shape": ["laughing", "closed"]}, brows={"shift": [0, 0.018]}, mouth={"shape": ["laugh", "open", "A"]}),
+    "blushing": _p(
+        eyes={"scale": [1, 0.9], "shift": [0, -0.004]}, brows={"shape": "sad", "shift": [0, 0.008]}, mouth={"scale": [0.6, 0.6]},
+        cheeks={"shape": "blush"},
+    ),
+    "tongue_out": _p(eyes={"shape": ["laughing", "closed"]}, brows={"shift": [0, 0.012]}, mouth={"shape": ["tongue", "open", "A"]}),
+    "crying": _p(
+        eyes={"shape": ["laughing", "closed"], "scale": [1, -0.9]}, brows={"shape": "sad", "shift": [0, 0.012]},
+        mouth={"shape": ["open", "O", "A"], "scale": [1.1, 0.85]}, cheeks={"shape": "tears"},
+    ),
+    "dizzy": _p(eyes={"shape": "swirl"}, brows={"shift": [0, 0.014]}, mouth={"shape": ["wavy", "smile"], "scale": [0.9, 0.9]}),
+    "frightened": _p(
+        eyes={"shape": "wide", "scale": 1.15}, brows={"shape": "sad", "shift": [0, 0.03]}, mouth={"shape": ["wavy", "open", "O"]},
+        bristles={"shape": "up"},
+    ),
 }
 
 

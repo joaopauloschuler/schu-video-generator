@@ -6,7 +6,8 @@ is rendered in its own process, so they cannot wait for the other scenes' render
 scene's length is *planned* from what fixes it (DESIGN.md §5):
 
 - a narrated beat lasts ``d + narration.pad`` rounded to whole frames, ``d`` being its MP3's
-  length (decoded, as the scene measures it) or, without audio, the word-count estimate;
+  length (decoded, as the scene measures it) or, without audio, the word-count estimate; one
+  the next beat overlaps or interrupts lasts until that beat starts (:mod:`vidgen.overlap`);
 - a narrated scene lasts its beats plus its type's ``outro`` (the fade-out of ``finish()``,
   Manim plays ``ceil(outro * fps)`` frames);
 - a silent scene lasts its ``duration``;
@@ -33,6 +34,7 @@ from typing import Any
 
 from vidgen.chapters import chapter_marks
 from vidgen.config import SceneConfig
+from vidgen.overlap import beat_lines, beat_windows
 from vidgen.project import Project
 from vidgen.transitions import effective, has_transitions, requested_frames, silent_tail
 
@@ -40,7 +42,8 @@ from vidgen.transitions import effective, has_transitions, requested_frames, sil
 @dataclass(frozen=True)
 class BeatSlot:
     """A beat as planned: ``start`` / ``end`` in seconds from its scene's start (``end`` is the
-    end of its narration, ``start + d``; the pad follows), and its text."""
+    end of its narration, ``start + d``, or where the next beat interrupts it; the pad follows,
+    or the next beat starts before it, DESIGN.md §69.34), and its text."""
 
     id: str
     start: float
@@ -53,7 +56,8 @@ class TransitionSlot:
     """The transition into a scene as planned (DESIGN.md §49), in frames of the plan's fps:
     ``overlap`` frames shared by the end of the scene before and the start of this one
     (crossfade, push, wipe), ``fade_out`` frames at the end of the scene before faded to ``color`` and
-    ``fade_in`` frames at the start of this one faded in from it (fade_color), ``hold`` frames
+    ``fade_in`` frames at the start of this one faded in from it (fade_color; an iris closes and
+    opens in them), ``hold`` frames
     the scene before is held longer so the transition covers no narration. ``seconds`` is the
     duration asked for; ``color`` as written (``None``: the theme's background)."""
 
@@ -183,11 +187,12 @@ class VideoPlan:
             pad = self.project.config.narration.pad
             frames = 0
             slots = []
-            for beat in self._specs[i].beats:
-                d = beat_seconds(self.project, beat.id, beat.text)
+            beats = self._specs[i].beats
+            lines = beat_lines(self.project, beats, lambda b: beat_seconds(self.project, b.id, b.text))
+            for beat, window in zip(beats, beat_windows(lines, pad, self.fps)):
                 start = frames / self.fps
-                slots.append(BeatSlot(beat.id, start, start + d, beat.text))
-                frames += self._frames(d + pad)
+                slots.append(BeatSlot(beat.id, start, start + window.heard, beat.text))
+                frames += self._frames(window.window)
             self._beats[i] = tuple(slots)
             self._narrated[i] = frames
         return self._beats[i]
@@ -211,7 +216,7 @@ class VideoPlan:
     def _speech_end(self, i: int) -> float | None:
         """Where scene ``i``'s narration ends (seconds from its start; ``None`` when silent)."""
         beats = self._scene_beats(i)
-        return beats[-1].end if beats else None
+        return max(b.end for b in beats) if beats else None
 
     def transition(self, i: int) -> TransitionSlot:
         """The planned transition into scene ``i`` (DESIGN.md §49; a cut for most scenes)."""
@@ -224,8 +229,8 @@ class VideoPlan:
                 want = requested_frames(t, self.fps)
                 own = self._own_frames(i)
                 overlap = min(want, own) if t.overlaps else 0
-                fade_in = min(want, own) if t.type == "fade_color" else 0
-                fade_out = want if t.type == "fade_color" and i > 0 else 0
+                fade_in = min(want, own) if t.through_color else 0
+                fade_out = want if t.through_color and i > 0 else 0
                 hold = 0
                 need = overlap + fade_out
                 if i > 0 and need:

@@ -8285,3 +8285,4117 @@ How to test
   `-m render tests/test_cartoon_*.py tests/test_phase_h_review.py` (17 passed); `-m render
   tests/test_builtin_scenes.py -k stage` (2 passed). The new mouth test failed for all six
   motions before the fix.
+
+## Step 89 — Automatic directing, part 1: looks and reactions
+
+What was built
+- `auto_direct: true | false | {looks, reactions, gestures, closeups}` on the video (default
+  `false`), a `stage` scene (param) and a beat (key); the nearest one wins
+  (`config.directing_kinds`); in a mapping a kind not given is on. `gestures` / `closeups` are
+  accepted and planned by nothing yet (Step 90).
+- Planner `src/vidgen/cartoon/directing.py` (no manim): `plan_directions(scene_id, cast, beats)
+  -> [DirectedBeat(beat, actions)]`, a pure function of `CastMember(name, can_look, can_emote)`
+  and `BeatInput(id, text, speakers, actions, kinds)`. One `_SceneState` walks the beats; each
+  kind is a pass in `_PASSES` (`looks`, `reactions`; Step 90 adds gestures / close-ups, Step 95
+  shots, as more passes and more input fields). Written actions are applied to the state first
+  (`enter` / `exit` presence, `look_at`, look-changing actions). A character targeted by a written
+  action of the beat gets nothing automatic in it (except the framing actions `say`, `zoom`,
+  `pan`, `follow`, `highlight`, `dim`, `callout`).
+  - Looks: listeners `look_at` the first speaker; the speaker its addressee (last other speaker,
+    else the one it addressed before, else the next other speaker, else the only other character
+    on stage); never a look the character already has; none without a head.
+  - Reactions: `line_cue` (`?` question, negation word, `!` exclaim, in that order) -> `react`
+    with `thinking`/`surprised`, `worried`/`sad`, `surprised`/`happy` at `at: 0.95` (in the pad);
+    picked by `random.Random("<scene>/<beat>/<character>")`, never the character's previous
+    automatic one; none without eyes / brows / mouth.
+- Tag and merge: `ActionConfig.automatic(data)` sets `auto`; `describe()` adds `(auto)`;
+  `shorthand()` gives the YAML form. `NarratedScene.auto_actions(project, spec, params)` (class
+  method, none by default) and `with_auto_actions(spec, directed)`; `NarratedScene.__init__`
+  merges them after the params are parsed, so `self.spec` / `self.beats` hold them before
+  `plan_actions` and the `ActionRunner`. `Stage.auto_actions` -> `stage_directions` (speakers as
+  `Stage.narrate` picks them; parts from `character_part_shapes`).
+- Visible: `vidgen direct [PROJECT] [--print] [--scene ID] [--variant] [--json]` (summary per
+  beat; `--print` YAML to paste; `direct_document`); storyboard sheets get an `auto: ...` line
+  under the beat's narration (`SheetStill.auto`), storyboard JSON frames an `auto` list.
+
+Files touched
+- New: `src/vidgen/cartoon/directing.py`, `tests/test_cartoon_directing.py`.
+- `src/vidgen/config.py` (`ActionConfig` tag / `shorthand`, `AutoDirect`, `AutoDirectSetting`,
+  `DIRECTING_KINDS`, `directing_kinds`, `BeatConfig.auto_direct`, `VideoConfig.auto_direct`),
+  `scene.py` (hook, merge), `scenes/stage.py` (param, hook), `api.py`, `cli.py` (`direct`),
+  `jsonout.py`, `sheets.py`, `storyboard.py`, `data/guide/AGENTS.md` (+ copy `AGENTS.md`:
+  "Automatic directing" paragraph in `cartoons`).
+- Tests updated: `tests/test_docs.py` (`AutoDirect` in `MODELS`).
+- Docs: `docs/CONFIG.md` (top-level row, beat paragraph, stage param row, new "Automatic
+  directing (`auto_direct`)", storyboard paragraph, storyboard JSON `auto`, `vidgen direct
+  --json`, JSON command lists), `DESIGN.md` (§2 tree, §6.4, new §69.23), `docs/EXTENDING.md`
+  (`auto_actions`), `README.md` (command row), `docs/gallery/stage.md` (param rows, as `vidgen
+  gallery` writes them; not re-rendered), `tasklist.md`.
+
+Public interfaces
+- `vidgen.api` adds `ActionConfig`, `AutoDirect`, `AutoDirectSetting`, `DirectedBeat`,
+  `stage_directions`; `NarratedScene.auto_actions`; `ActionConfig.automatic` / `.auto` /
+  `.shorthand()`. Config keys `auto_direct` (top level, stage param, beat). CLI `vidgen direct`
+  (+ `--json`). Storyboard JSON frames gain `auto`. All compatible.
+
+Decisions / deviations
+- The added actions are plain `look_at` / `react` uses merged into the scene's spec (not a new
+  animation path), so foley, the runner's batching and shortening, layout dump and lint see them.
+- "Explicit wins" is per character per beat: any written action targeting it (framing actions
+  aside). Pasting `vidgen direct --print` output therefore makes the planner add nothing more for
+  those beats (tested).
+- `?` gets `thinking` or `surprised` (two choices, so "never twice in a row" is possible); a plain
+  statement gets no reaction; narrator beats get nothing.
+- Seed from the scene / beat / character names, no seed key (renders repeat; Python's
+  `random.Random(str)` hashes with SHA-512, stable across processes).
+- `vidgen validate` does not check automatic actions (they are made only from built-in actions on
+  declared characters); a test runs `scene_actions` on the directed `examples/cartoon`.
+- Searched first: reused `beat_voice`, `speaking_characters`, `character_part_shapes`,
+  `missing_needs`, `ActionConfig.resolved` and the action runner; nothing planned actions
+  before.
+
+Known gaps / TODOs
+- Step 90: gestures, close-ups and the lint checks inside the planner (`facing_away`,
+  `bubble_overlap`, `off_stage`); `examples/cartoon` with `auto_direct` (today it would add one
+  look: its beats act on both characters). Step 95: shots as another pass.
+- English negation list only; a speaker with several listeners and no one answering looks at
+  nobody; a look aims where the speaker stands when it starts; no MCP tool for `direct`.
+
+How to test
+- `pytest tests/test_cartoon_directing.py` (14 not-render + 2 render at 160x90, ~5 s).
+- Also run (not render): `test_docs test_guide test_api test_storyboard test_cartoon_sheet
+  test_cartoon_acting test_cartoon_stage test_actions test_schema test_config` (287 with the new
+  file, 64 s), `test_json_output test_cli test_cartoon_moving test_cartoon_lint
+  test_builtin_scenes test_phase_h_review test_frames test_extensions test_actions_coverage`
+  (220, 10 s), `test_gallery test_translation test_mcp` (88, 18 s); render: `test_cartoon_directing
+  test_cartoon_stage test_cartoon_acting test_cartoon_moving test_storyboard
+  test_phase_h_review` (7, 45 s). By hand: a three-beat 480x270 stage with `auto_direct: true`:
+  `vidgen storyboard` shows the `auto:` lines and the reactions (kit surprised, pip sad),
+  `vidgen lint` 0 findings.
+
+## Step 90 — Automatic directing, part 2: gestures and close-ups
+
+What was built
+- Two passes in `src/vidgen/cartoon/directing.py` (`_PASSES`: `gestures`, `closeups`) and a lint
+  check of what the planner adds. `plan_directions(scene_id, cast, beats, stage=None)` stays
+  pure. New inputs: `CastMember.gestures`, `BeatInput.seconds` / `.words` (`WordTime`s from the
+  beat's start), `StageFrame` / `StagePlace` (the stage's geometry, Manim units) built by
+  `stage_frame(project, params)` with `stage_layout`; `Stage.auto_actions` passes it to
+  `stage_directions(..., stage)`.
+- The state follows each character's x and facing and the camera's x through written `enter`,
+  `walk_to`, `turn`, `look_at`, `move_along` / `keyframes`, `pan`, `follow`; automatic looks turn.
+- Lint check: `_still` predicts the beat's still as a lint `StillContext` (character boxes 0.21
+  heights to each side, arm reach 0.4 / 0.35 / 0.34, face from 0.5 heights: measured on the
+  generator's looks), `still_findings` runs the registered `off_stage` and `facing_away` rules;
+  a look, arm gesture or close-up is added only when it adds no finding. `bubble_overlap`: no
+  automatic action draws a bubble or moves a face, and close-ups skip bubble beats.
+- Gestures: `stressed_word` (`*word*`, else ALL CAPS, else the longest 6+ letter word by spoken
+  length, the last only when the speaker did not gesture in its previous line);
+  `gesture_choices` (word's own, line's, then seeded point / nod / shrug, last one last); first
+  allowed, fitting and safe choice; `at` puts the hold on the word, after an automatic look, and
+  ends within the narration (else none).
+- Close-ups: ≤ 5 words right after ≥ 8, `zoom` scale 2 on the speaker; 0.5 s moves if both fit in
+  80 % of the line, else a 0.03 s cut (a 0.5 s move into a 0.8 s line was shortened by the runner
+  and tripped `rushed_animation`); not after a close-up / written zoom, not with written moves,
+  a bubble, the speaker's automatic gesture, or while following.
+- MCP tool `direct` (read-only, `vidgen direct --json`; `variant`, `scene`).
+
+Files touched
+- `src/vidgen/cartoon/directing.py`, `src/vidgen/scenes/stage.py` (`auto_actions` passes the
+  geometry; docs), `src/vidgen/api.py` (`StageFrame`, `StagePlace`, `stage_frame`),
+  `src/vidgen/config.py` (`AutoDirect` docs), `src/vidgen/mcp_server.py` (`direct`, instructions),
+  `src/vidgen/data/guide/AGENTS.md` + `AGENTS.md`, `docs/CONFIG.md`, `docs/EXTENDING.md`,
+  `docs/gallery/stage.md` (param rows as `vidgen gallery` writes them), `README.md`, `DESIGN.md`
+  (§2 tree, §6.4, §69.23 notes, MCP tool list, new §69.24), `tasklist.md`.
+- Tests: `tests/test_cartoon_directing.py` (14 new not-render tests, 1 render test; the example
+  test now expects moss's `shake_head` in yard_expert), `tests/test_mcp.py` (`direct` tool).
+
+Public interfaces
+- `vidgen.api` adds `StageFrame`, `StagePlace`, `stage_frame`; `stage_directions` gains optional
+  `stage`; `CastMember.gestures`, `BeatInput.seconds` / `.words` (defaults keep Step 89 calls
+  working). MCP tool `direct`. `auto_direct.gestures` / `.closeups` now act.
+
+Decisions / deviations
+- The lint check reuses the rules themselves on a predicted still (no copy of their geometry).
+  Without a `StageFrame` (or while following) looks are unchecked (as Step 89), arm gestures and
+  close-ups are not added; head gestures always pass.
+- "Capitalised" = all capitals (2+ letters), not a capital first letter (names would trigger).
+- `*word*` is read but not stripped from the text (would touch TTS, alignments, captions and
+  bubbles): ticked [~].
+- examples/cartoon left unchanged. Scratch copies (preview 854x480, `vidgen lint --fail-on
+  warning`): with `auto_direct: true` it adds a look (hill_told) and a `shake_head`
+  (yard_expert); 0 findings. A copy keeping only walks / enter / move_along / follow / pan / jump /
+  particles (and hill_told cut to "Told you.") gets 13 automatic actions (looks, reactions, two
+  shrugs, one cut close-up); 0 findings after the cut fix; frames checked by eye.
+- Searched first: reused `stage_layout`, `mark_x`, `facing_towards_centre`, `view_center_within`,
+  `look_pose`, `nearer_side`, `GESTURE_*`, `ACTION_NEEDS` / `missing_needs`, `beat_word_times`,
+  `frame_size` and the lint `RULES`.
+
+Known gaps / TODOs
+- Asterisks of `*word*` stay in the text; English word lists; the close-up waits for changes to
+  its speaker at the beat's start (the undoing of its reaction of the beat before); a written
+  `zoom` with `until` is not followed; depth and props are not in the predicted stills; Step 95
+  moves close-ups to shots.
+
+How to test
+- `pytest tests/test_cartoon_directing.py` (28 not-render + 3 render, ~7 s).
+- Also run: not render `test_docs test_guide test_api test_gallery test_schema test_config
+  test_mcp` (210, 75 s), `test_cartoon_stage test_cartoon_acting test_cartoon_moving
+  test_cartoon_lint test_phase_h_review test_storyboard test_json_output test_cli test_actions
+  test_extensions` (163, 8 s); render `test_cartoon_stage test_cartoon_directing` (4, 6 s),
+  `test_phase_h_review test_mcp` (3, 33 s).
+
+
+## Step 91 — Screenplay format
+
+What was built
+- `vidgen screenplay FILE [--out DIR|FILE.yaml] [--force] [--json]` (`cli.cmd_screenplay`) and MCP
+  tool `screenplay` (`input_path` or `screenplay_text`, `out`, `force`): a stage project from a
+  screenplay, no AI. New module `src/vidgen/screenplay.py` (no manim):
+  - `parse_screenplay(text) -> Screenplay(title, front, scenes)`: YAML front matter (top-level
+    keys, not `scenes`), `# Title`, `# Scene: NAME` (any level), `set:` lines, `NAME (manner):
+    line` (capitals; lines run on to a blank line; inline `[...]` become directions at that word
+    with the speaker as subject), narrator paragraphs / `NARRATOR:`, `[...]` directions, HTML
+    comments skipped; errors name the line.
+  - `parse_set`: `background` (sky words `SKIES`, colours / gradient, image file), `props`
+    (`kind (name) at place`, default slots, house / tree get depth), `marks`, `characters`.
+  - `direction_actions` (grammar `_VERBS`): walk / go / run to (mark, x, beside a prop or a
+    character), enter / exit [side], jump, look at (incl. camera, each other), point at, wave,
+    nod, shrug, shake head; subjects by name (multi-word names also by their last word), pronouns;
+    clauses after `and`; unmatched sentences -> beat `# TODO:`. Actions in a beat are timed one
+    after another from estimated lengths (walk distance, gesture / look / jump seconds).
+  - `manner_actions`: built-in expression / pose names and `MANNERS` words -> `react`.
+  - `screenplay_project`: declared (front matter) characters kept; others get `LOOKS[k]` (six
+    looks differing in body, hair, eyes, ears, accessories, colours) and `<id>_voice` with label;
+    `assign_voices`: Kokoro by accent and gender (narrator's kind last), OpenRouter's listed
+    voices, ElevenLabs a TODO. Defaults: soft_pastel, Kokoro `bf_emma` 0.85, pad 0.7,
+    `auto_direct: true`.
+- Writer shared with `vidgen plan`: `plan_yaml.commented_yaml` (comments above keys, scenes and
+  now beats; load-back check) and `write_project` (scaffold + write); `plan_yaml` / `write_plan`
+  use them, output byte-identical (compared on examples/plan/outline.md).
+- Step 90 gap fixed: `BeatConfig` takes `*word*` asterisks out of `text` (`config.EMPHASIS`,
+  `strip_emphasis`) and keeps `marked_text` (private attr). Every reader of `beat.text` (TTS and
+  its hash, captions, SRT, bubbles, readback, lint, slides) gets the plain text; unmarked beats
+  are unchanged. `directing._beat_words` relabels the word times with the written words and
+  `stage_directions` passes `marked_text`, so the planner still sees `*word*`. The scene
+  fingerprint adds `emphasis` when a scene has marks.
+- Sample: `examples/screenplay/humming_box.md` (original story, three original characters).
+
+Files touched
+- New: `src/vidgen/screenplay.py`, `tests/test_screenplay.py`, `examples/screenplay/humming_box.md`.
+- `src/vidgen/cli.py` (`cmd_screenplay`, parser, `JSON_COMMANDS`), `jsonout.py`
+  (`screenplay_document`), `mcp_server.py` (tool, instructions), `plan_yaml.py` (refactor),
+  `config.py` (emphasis), `cartoon/directing.py` (marked words), `render/fingerprint.py`.
+- Docs: `docs/CONFIG.md` (beat text, auto_direct gestures, new "Cartoons from a screenplay",
+  JSON list and `vidgen screenplay --json`), `DESIGN.md` (§2 tree, MCP tools, §69.24 emphasis,
+  new §69.25), `README.md` (feature, command row, example), guide `cartoons` (+ `AGENTS.md` copy),
+  `tasklist.md` (Step 90 box now [x], Step 91 [x]).
+- Tests: `tests/test_cartoon_directing.py` (3 emphasis tests: strip, pinned hashes, planner),
+  `tests/test_mcp.py` (`screenplay` tool).
+
+Public interfaces
+- CLI `vidgen screenplay` (+ `--json`), MCP tool `screenplay`; `BeatConfig.marked_text`,
+  `config.strip_emphasis` / `EMPHASIS`; `plan_yaml.commented_yaml`, `write_project`. Nothing
+  added to `vidgen.api`.
+
+Decisions / deviations
+- One place for the strip: the config model, so nothing downstream changes; audio hashes of
+  beats without asterisks are pinned (Kokoro and ElevenLabs keys in the new test).
+- A manner `react` (or any written action) touches the speaker, so auto_direct adds no gesture
+  for it in that line; the sample leaves the manner off its `*anything*` line.
+- Stage directions on their own line act at the next line's start (after the last line: at 0.6
+  of it), a choice the format note in CONFIG.md states.
+- Front matter instead of CLI options for voice provider, theme, format and declared characters.
+
+Known gaps / TODOs
+- English grammar and manner words only; no sit / hold / prop moves / shots (Steps 93-95);
+  walking to a character aims where it stands at the beat's start; ElevenLabs voices not chosen.
+
+How to test
+- `pytest tests/test_screenplay.py` (15, ~2 s). Also run (not render): `test_plan test_config
+  test_schema test_cartoon_directing test_screenplay` (190, 59 s), `test_tts test_tts_kokoro
+  test_captions test_readback test_translation test_api test_cartoon_acting test_storyboard
+  test_json_output test_cli` (255 + 2 skipped, 17 s), `test_docs test_guide` (99, 2 s), `test_mcp`
+  (15, 25 s); render: `test_cartoon_directing -m render` (3, 7 s). By hand: the sample to a
+  scratch project, `vidgen lint` (preview) 0 findings, `vidgen direct` 18 automatic actions,
+  storyboard checked by eye.
+
+
+## Step 92 — Bending arms and legs
+
+What was built
+- `src/vidgen/cartoon/limbs.py` (no manim): `LIMBS` (upper -> lower part), `UPPER_OF`, `HANDS` /
+  `FEET` (side -> limb), `solve_two_bone(root, target, upper, lower, bend) -> TwoBone(direction,
+  bend, reached)` (law of cosines; `ELBOW_BEND` +1 = counterclockwise as drawn facing right, the
+  natural elbow; `KNEE_BEND` -1, the knee forward; too far: straight at it; too near: folded),
+  `fold(bend)` (one-piece limb: half the turn, chord length, at least `FOLD_MIN_LENGTH` 0.6),
+  `TIMING_GROUP`, `wrap_degrees`.
+- Parts (design): `arm_left` / `arm_right` keep their names as the upper arm; new
+  `arm_left_lower` / `arm_right_lower` (forearm + hand, pivot the elbow, parent the upper arm).
+  Legs: `legs` stays (both legs in one piece, SVGs); new `leg_left` / `leg_right` (thigh, pivot
+  the hip, parent body) + optional `leg_left_lower` / `leg_right_lower` (shin, pivot the knee).
+  `legs` together with single legs is a `VidgenError` (Character and SVG split). Generated
+  characters now have single legs and two-segment arms (capsule segments, `LIMB_WIDTH` 0.08,
+  joints half-way), no `legs`. `CharacterPart.end` (hand middle / sole). Default parents walk up
+  to a present part.
+- `Character`: `reach(hand, point, bend=+1)`, `plant(foot, point, bend=-1)`, `hand_point(hand)`
+  (for Step 93's held props), `foot_point(foot)`, `sole_height(state=None)`, `grounded(state,
+  level=0)`. A one-piece limb (`arm_left` without `arm_left_lower`, e.g. sprout) keeps a pose for
+  the missing lower part (`state()`, `pose_of`, `set_part`; not in `parts` / `has_part`), shown
+  folded on the one piece (`_fold_matrix` in `_world`), so poses, gestures, walks and `reach` work
+  on it unchanged in code.
+- Poses: `pointing` 82 + elbow 12, `waving` 115 + 70, `thinking` 110 + 100, `shrug` ±15 + ±60,
+  `arms_crossed` ∓15 + ∓80, `sitting` thighs 80 / 75 and knees −35 (feet forward on the ground)
+  plus the old `legs: 80` for one-piece legs. Upper + half the elbow is the old one-piece angle
+  (88, 150, 160, 45; arms_crossed −55 vs −65).
+- Gestures (`gesture_moves`): `point` / `wave` / `shrug` also move `<arm>_lower`
+  (`POINT_DEGREES` 82 + `POINT_ELBOW` 12, `WAVE_DEGREES` 115 + `WAVE_ELBOW` 60 with the 40° wave
+  about the elbow, `SHRUG_DEGREES` 15 + `SHRUG_ELBOW` 60).
+- Walk: `WalkCycle` gains `thigh_angle`, `knee_bends`, `elbow_bends` (`WALK_THIGH_DEGREES` 20,
+  `WALK_KNEE_DEGREES` 40 on the leg swinging forward, max at passing, straight at the footfall;
+  elbows 10 + 20 swinging forward). `walking_state` uses them for single legs (one-piece `legs`
+  as before, `WALK_BOB` only there). `Walk` keeps the lower sole at its starting height
+  (`grounded`, when within `GROUND_TOLERANCE` 0.02 of the ground), so the body dips at the
+  footfall.
+- `part_windows` gives lower segments their upper part's window and single legs the `legs`
+  window: pose-change timing unchanged.
+- SVG: new ids (longest part name wins), default pivots top centre for single legs and lower
+  segments, `TURNING_PARTS` extended, feet under all leg parts. `config.PosePart` and so
+  `POSE_PARTS`, keyframe part targets and the schema list the new parts. `cast.GENERATED_SHAPES`
+  updated; `character_pose_warnings` does not warn about a folded lower segment.
+
+Checked by eye (scratch stills: every pose, the gestures at their peak, five walk phases, facing
+right and left, on the default look, a tall long-haired look with bag and scarf, and sprout;
+`vidgen character-sheet --all` on copies of `examples/cartoon` and `examples/svg_character`; a
+storyboard of the cartoon copy, mid-walk stills show the knee bend with a foot on the ground;
+`vidgen lint --fail-on warning` on that copy: 0 findings). Sprout's raised hand in `waving` /
+`thinking` / `wave` is behind its head, as before Step 92 (its file draws `arm_left` before
+`head`).
+
+Files touched
+- New: `src/vidgen/cartoon/limbs.py`, `tests/test_cartoon_limbs.py`.
+- `src/vidgen/cartoon/character.py`, `generator.py`, `poses.py`, `acting.py`, `transition.py`,
+  `svg_look.py`, `cast.py`, `src/vidgen/config.py` (`PosePart`).
+- Docs: `DESIGN.md` (§2 tree, §6.4, §69 parts, new §69.26), `docs/CONFIG.md` (new "Bending arms
+  and legs", pose parts, SVG id table and pivots, keyframe parts), `docs/EXTENDING.md`, guide
+  `cartoons` (+ `AGENTS.md` copy), `tasklist.md`.
+- Tests updated, each because of the design change: `tests/test_cartoon_character.py` (the
+  generated part set and draw order now have the six limb parts and no `legs`; the "given twice"
+  case names `leg_left`, now the first part), `tests/test_cartoon_moving.py` (point / wave / shrug
+  now move the forearm: the wave's to-and-fro is on `arm_left_lower`, new constants; added the
+  check that upper + half the elbow equals the old angles), `tests/test_cartoon_poses.py`
+  (`pointing` is 82 + 12, `shrug`'s `arm_right` −15 + −60; the arc test checks the elbow's arc
+  about the shoulder and the hand's about the elbow, since the hand is on the forearm now).
+
+Public interfaces
+- `vidgen.api`: no new names. `PART_NAMES` gains six names; `CharacterPart.end`; `Character`
+  methods above; `WalkCycle` fields (defaults); gesture constants changed meaning (upper arm).
+  Incompatible for generated characters only: no `legs` part (an own pose's `legs:` does
+  nothing, validate warns; a `kit.legs` keyframe target is an unknown part). An SVG id
+  `arm_left_lower` now names a part instead of arm_left's shape `lower`.
+
+Decisions / deviations
+- Folded lower segments instead of separate one-piece pose values: one table and one code path
+  for both kinds; the price is a slightly shorter bent one-piece arm (waving 0.82, shrug 0.87).
+- Grounding replaces the fixed bob for single legs (a fixed bob made the feet float at passing).
+- `GESTURE_REACH` (Step 90's planner) re-measured: no reach grew, kept.
+- Searched first: no IK / solver / limb code existed (`grep -rni "solve\|ik\b\|elbow\|knee"
+  src/vidgen`); reused `PartPose`, `_world`, `part_windows`, `walk_cycle`, `gesture_moves`.
+
+Known gaps / TODOs
+- No knees in `Jump`; no follow-through on forearms; no YAML action for `reach` / `plant` (Steps
+  93 / 94 use the methods). `docs/gallery/stage.md` media not regenerated (its characters' rest
+  look changed only at the sleeve / leg ends). SVG `data-end` (an explicit hand point) not added:
+  the farthest point of the arm is used.
+
+How to test
+- `pytest tests/test_cartoon_limbs.py` (24, ~2.5 s, no render).
+- Also run: not render `tests/test_cartoon_*.py test_phase_h_review test_docs test_guide test_api
+  test_config test_screenplay` (583, 18 s), `test_schema test_gallery test_builtin_scenes
+  test_actions test_lint test_storyboard` (240, 65 s); render `tests/test_cartoon_*.py
+  test_phase_h_review` (20, 32 s), `test_builtin_scenes -k stage` (2, 2.5 s).
+
+## Step 93 — Interacting with props
+
+What was built
+- Five beat actions in the new `src/vidgen/scenes/handling.py` (against `vidgen.api` only, on the
+  `_Acting` base: targets are characters): `pick_up` (`to`: a prop, `hand`), `hold` (`to`, `hand`:
+  in the hand from now on without picking up, for a prop it has from the start), `put_down` (`to`:
+  a mark / x, default just in front; `prop`), `give` (`to`: a character; `prop`, `hand` of the
+  receiver), `throw` (`to`: a mark / x; `prop`, `height` 0.5 heights, `spin` 1 turn). Run times
+  1.2 / 0.4 / 1.0 / 1.2 s, a throw 0.5 s + flight by distance (`run_time_for`).
+- Pure module `src/vidgen/cartoon/holding.py` (no manim): `Holdings` (prop -> (character, hand);
+  `take`, `release`, `give`, `hands`, `holder`, `free_hand`, `held_prop`; refusals are
+  `HoldingError` with the fix in the message), geometry (`hold_point` in front of the shoulder,
+  `held_height` ≤ 0.4 holder heights, `put_down_x`, `throw_point` parabola, `spin_degrees`,
+  `throw_seconds`, `throw_release_share`) and `holding_problems(steps, characters=, props=,
+  place_x=, to_fraction=, entering=)`, the replay `vidgen validate` runs.
+- Animations in `cartoon/transition.py`: `ArmMove(character, keys)` (parts eased through
+  `(share, {part: PartPose})` keys) and `PropMove(prop, to=, follow=, leave=, arrive=, height=,
+  rise=, turns=, lands=)` (from a hand to a point or another hand, arc + spin, drawn from its start
+  points so it lands upright; `lands_at` for foley).
+- Attaching (the Step 88 invariant kept): a held prop is never added to its `Character`; an
+  updater puts its middle at `hand_point(hand)` each frame and it is moved in `scene.mobjects` to
+  right after its holder. `Character.reached_parts(hand, point)` (the poses `reach` sets, without
+  setting them; `reach` now uses it via `_limb_poses`), `Character.shoulder_point(hand)`,
+  `Character.holding`; `Prop.height_factor` (set by the stage), `Prop.held_by`, `Prop.hand`.
+- Validate: `scene_problems` checks names (prop of the stage, character on the stage and not the
+  giver, a place). New hook `NarratedScene.action_sequence_problems(spec, params, uses)` (default
+  none), called by `scene_actions` once every use is valid (so `vidgen validate` and the render's
+  `plan_actions`); `Stage` replays its actions in play order with `stage_frame`'s geometry:
+  pick-up / put-down beyond 0.75 heights, give beyond 1.2 heights or to someone off stage (each
+  with the `walk_to: <who>, to: <x>` that fixes it), a prop held by another, a full hand, nothing
+  held, two held and no `prop`, `keyframes` / `move_along` of a held prop.
+- Layout dump: a held prop's object gets `held_by` / `hand`, its holder's `holding` ({hand: prop});
+  the character's box stays the figure only.
+- Foley: `PlayedAction.lands` -> a `thud` (`LANDING_GAIN` −4 dB) where a thrown prop lands
+  (`Stage.action_foley` passes `PropMove.lands_at`).
+- Planner (`cartoon/directing.py`): the state follows written prop actions (`Holdings`, where a
+  put-down / thrown prop stands; `look_at` a held prop aims at its holder); no arm gesture with a
+  holding hand (`GESTURE_HANDS`; `CastMember.near_hand`, from the parts); prop actions count as
+  moves for close-ups. `Stage.mid_still_actions` gains `pick_up`, `put_down`, `give`, `throw`.
+
+Files touched
+- New: `src/vidgen/cartoon/holding.py`, `src/vidgen/scenes/handling.py`, `tests/test_cartoon_holding.py`.
+- `src/vidgen/actions.py` (hook call), `scene.py` (hook), `api.py`, `scenes/__init__.py`,
+  `scenes/stage.py`, `cartoon/character.py`, `cartoon/props.py`, `cartoon/transition.py`,
+  `cartoon/foley.py`, `cartoon/directing.py`, `introspect.py`, guide `cartoons` / actions table /
+  troubleshooting (`src/vidgen/data/guide/AGENTS.md` + `AGENTS.md`).
+- Docs: `docs/CONFIG.md` (new "Props in hands", action / run_time / targets rows, layout keys,
+  foley, auto_direct notes), `DESIGN.md` (§2 tree, §6.4, §69.8 pointer, new §69.27),
+  `docs/EXTENDING.md` (`action_sequence_problems`, prop animations), `tasklist.md`.
+- Tests updated (new action names only): `tests/test_actions.py` (action name lists),
+  `tests/test_cartoon_sheet.py` (`mid_still_actions`).
+
+Public interfaces
+- `vidgen.api` adds `ArmMove`, `PropMove`, `Holdings`, `HoldingError`, `HandlingStep`,
+  `holding_problems`, `hold_point`, `held_height`, `put_down_x`, `throw_seconds`,
+  `throw_release_share`, `HAND_ORDER`, `HANDLING_ACTIONS` and timing constants (DESIGN §6.4).
+  `NarratedScene.action_sequence_problems`; `Character.reached_parts`, `.shoulder_point`,
+  `.holding`; `Prop.height_factor`, `.held_by`, `.hand`; `PlayedAction.lands`;
+  `CastMember.near_hand`. New built-in actions and layout keys. All compatible.
+
+Decisions / deviations
+- "Attached to the character" is an updater, not a submobject: adding the prop to the `Character`
+  would change its family (Step 88's fix) and its box in the layout dump / lint.
+- "Drawn at the right depth": right after the holder in `scene.mobjects`, not a z-index (a
+  z-index would also put it in front of characters nearer the camera).
+- Sequence checks need the beats in order, which `scene_problems` cannot see: hence the new hook
+  rather than a stage-only special case in `cli.py`.
+- `hold` was not specified; it is "holds it from now on without the pick-up motion" (no distance
+  check), the way to start a scene with a prop in hand.
+- No crouch: a prop on the ground is below the generated arms' reach (0.23 heights from a shoulder
+  at 0.56); the arm reaches straight for it and the prop rises into the hand.
+- Searched first: no hand / carry / throw code existed (`grep -rn "pick_up\|hold\|throw\|carry"
+  src/vidgen`: only unrelated words); reused `reach` / `hand_point` (Step 92), `_Acting`,
+  `_place_x`, `stage_frame`, `PlayedAction` / `foley_cues`, the `thud` sound, `blend_poses`,
+  `throw` arc math new.
+
+Known gaps / TODOs
+- A held prop is not mirrored when its holder turns; written gestures / poses of the holding arm
+  move it (allowed); `dim` / `highlight` on a held prop pause its following during that animation;
+  no `on: <prop>`; the screenplay grammar has no prop verbs; give turns both characters at once
+  (no turn animation). Not listened to by a human (the thud timing is checked in the render test).
+
+How to test
+- `pytest tests/test_cartoon_holding.py` (9 not-render + 1 render at 160x90, ~3 s).
+- Also run (not render): `tests/test_cartoon_*.py test_api test_actions test_introspect test_lint
+  test_phase_h_review` (514), `test_docs test_guide test_actions_coverage test_schema` (166, 60 s),
+  `test_builtin_scenes test_gallery test_storyboard test_screenplay test_extensions
+  test_json_output test_cli test_sfx test_config` (300, 14 s); render: `tests/test_cartoon_*.py`
+  (20, 14 s), `test_phase_h_review test_builtin_scenes -k "stage or review"` (3, 20 s). By hand: a
+  four-beat scratch stage (pick up, carry, give, throw, pick up a box and put it down): `vidgen
+  validate` ok, `vidgen storyboard` checked by eye (arm bends to the hold point, ball in hand while
+  walking, mid-throw ball in the air, lands at far_left), `vidgen lint` only author-caused findings.
+
+## Step 94 — Sitting and leaning
+
+What was built
+- Three beat actions in the new `src/vidgen/scenes/sitting.py` (against `vidgen.api` only, on the
+  `_Acting` base): `sit_on` (`to`: a prop with a seat; 1.0 s), `lean_on` (`to`: a prop with lean
+  edges; 0.8 s), `stand_up` (0.8 s). One character per `sit_on` / `lean_on` (the first target).
+- Pure module `src/vidgen/cartoon/seating.py` (no manim): `PROP_SEATS` (chair, rock, box: the
+  middle of the seat line in prop units), `PROP_LEANS` (tree, door, sign, lamp, house: left /
+  right edges), `SEAT_BACKS` (chair: a sitter faces its way), `Postures` + `PostureError` (one
+  sitter per seat, several leaners, `pinned` refuses walk_to / enter / exit / jump / turn /
+  move_along / keyframes while posed), `seated_sole`, `crouch_drop`, `crouch_stoop`,
+  `svg_seat_and_lean`, `mirrored_seat` / `mirrored_lean`, constants.
+- `Prop`: `seat`, `lean` (mirrored with its facing), `seat_point()`, `lean_edges()`; built-in
+  props get them from the tables, SVG props from `data-seat="x y"` / `data-lean="left right"`
+  on `<svg>` (viewBox coordinates; `read_svg_seat_and_lean` for validate).
+- `Character` (states, not drawn): `seated(state, seat)` (body bottom on the seat, legs planted
+  with the solver: shin down to the ground in front or hanging; one-piece `legs` turned forward
+  to the ground, else 80°), `leaning(state, degrees=12)`, `lowered(state, drop, stoop=, soles=)`
+  (crouch, feet kept; one-piece legs shortened), `planted(state, soles)`, `sole_points`,
+  `part_box`, `limb_rest`, `hip_height`; `reached_parts(..., state=)`; attributes
+  `sitting_on` / `leaning_on`. `_limb_poses` now works in character units with given poses, one
+  solver path for `reach`, `plant`, `reached_parts`, `planted`.
+- `BodyMove(character, keys, x=, facing=, soles=)` in `cartoon/transition.py`: an `ArmMove` that
+  also faces, eases the feet's x and re-plants the soles every frame.
+- Crouch (Step 93's gap): `handling.crouch` / `_reach_low`: `pick_up` and `put_down` play a
+  `BodyMove` (crouched at the reach share, standing at the end, soles kept) when the arm cannot
+  reach the prop top / the spot from the standing shoulder.
+- While posed (`acting.is_posed`): `look_at` tilts the head without turning, `pose` / `react`
+  keep body and legs, `give` / `throw` do not turn it, no crouch.
+- Validate: `_Posture.scene_problems` (prop exists and has a seat / lean edges);
+  `holding_problems` also replays postures (seat taken, prop held, too far with the walk_to fix,
+  stand_up with nothing, pinned actions, pick_up / keyed move of a prop in use).
+  `Stage.action_sequence_problems` runs it for handling or posture actions.
+- Planner: `_SceneState.postures`, `_pose` follows written sit_on / lean_on / stand_up
+  (`StageFrame.seat_facings` from `stage_frame`), `_turn_to` does not turn a posed character,
+  `_behind` skips a look at a speaker behind it; the three actions are in `MOVING_ACTIONS` and
+  `LOOK_CHANGING`. Storyboards show them half-way. Layout dump: `sitting_on` / `leaning_on`.
+
+Checked by eye: a scratch project (`vidgen validate`, `vidgen storyboard`, `vidgen lint`) with a
+tall generated look (kit) and sprout: sitting on a chair, a rock and a box (kit's short legs hang
+from the chair and the box; sprout's one-piece legs reach the ground from the rock, stick out on
+the chair), leaning on a tree, a door and a sign board, standing up over the feet, crouching to
+pick up and put down a box (kit) and a ball (sprout, shortened legs). Lint: only one
+author-caused `walk_overlap`.
+
+Files touched
+- New: `src/vidgen/cartoon/seating.py`, `src/vidgen/scenes/sitting.py`, `tests/test_cartoon_seating.py`.
+- `src/vidgen/cartoon/character.py`, `props.py`, `transition.py`, `holding.py`, `directing.py`,
+  `src/vidgen/scenes/acting.py`, `handling.py`, `stage.py`, `scenes/__init__.py`, `introspect.py`,
+  `api.py`, guide (`src/vidgen/data/guide/AGENTS.md` + `AGENTS.md`).
+- Docs: `docs/CONFIG.md` (new "Sitting and leaning", crouch paragraph in "Props in hands", action /
+  run_time / target / layout rows, Props pointer), `DESIGN.md` (§2 tree, §6.4, §69.27 gap, new
+  §69.28), `docs/EXTENDING.md`, `tasklist.md`.
+- Tests updated: `tests/test_actions.py` (action name lists), `tests/test_cartoon_sheet.py`
+  (`mid_still_actions`), `tests/test_cartoon_holding.py` (picking up a cup from the ground now
+  crouches: `BodyMove` instead of `ArmMove`).
+
+Public interfaces
+- `vidgen.api` adds `BodyMove`, `Postures`, `PostureError`, `PROP_SEATS`, `PROP_LEANS`,
+  `SEAT_BACKS`, `POSTURE_ACTIONS`, `SIT_SECONDS`, `LEAN_SECONDS`, `STAND_UP_SECONDS`,
+  `CROUCH_MIN`, `crouch_drop`, `crouch_stoop`, `read_svg_seat_and_lean`; the Character / Prop /
+  StageFrame additions above. New built-in actions and layout keys. All compatible.
+
+Decisions / deviations
+- `holding_problems` keeps its name but also replays postures: one replay keeps positions and
+  holdings consistent (sitting moves the character to the prop; a held box cannot be sat on).
+- Lean edges are x only (the back touches the edge where it is); also `lamp` and `house`.
+- Stand up "over its feet": the feet x moves to the soles' middle, so the feet stay on screen.
+- A seated / leaning character keeps its facing rather than flipping (a chair's back or the
+  leaned-on prop would end up on the wrong side); walks etc. are validate errors, not automatic
+  stand-ups.
+- Searched first: no sit / lean / crouch code existed (`grep -rni "sit_on\|lean\|crouch\|seat"
+  src/vidgen`: only Jump's whole-figure crouch); reused the Step 92 solver (`_limb_poses`,
+  `grounded`), `ArmMove`, `_Acting`, `_prop`, `stage_frame`, `holding_problems`, the sanitiser.
+
+Known gaps / TODOs
+- No sitting on the ground or a table; a seat at another depth than the character is not
+  refused; no arm on the prop while leaning; no foley for sitting; the screenplay grammar has no
+  sit / lean verbs; a point beside (not below) the shoulder is still reached only as far as the
+  arm goes.
+
+How to test
+- `pytest tests/test_cartoon_seating.py` (12 not-render + 1 render at 160x90, ~3 s).
+- Also run (not render): `tests/test_cartoon_*.py test_actions test_introspect test_lint
+  test_phase_h_review test_builtin_scenes test_gallery test_storyboard test_screenplay
+  test_extensions test_json_output test_cli test_config` (750, 26 s), `test_docs test_guide
+  test_schema test_actions_coverage test_api` (176, 61 s); render: `tests/test_cartoon_*.py` (21,
+  14 s), `test_phase_h_review test_builtin_scenes -k "stage or review"` (3, 21 s).
+
+## Step 95 — Shots within a scene
+
+What was built
+- Beat key `shot:` on `stage` scenes: `closeup kit`, `medium kit`, `two_shot [a b]`,
+  `over_shoulder kit [near]`, `wide`, or `{kind, of, move, run_time}` (`config.ShotConfig`,
+  `SHOT_NAMES` checks how many names each kind takes; `run_time` only with `move`). The camera
+  cuts to the framing as the beat starts (`move: true`: eases, 1.0 s) and holds it to the beat's
+  end; the next beat without a shot goes back to the view before the shots (eased if the last
+  shot eased).
+- Framing maths, no manim (`src/vidgen/cartoon/shots.py`): `ShotFigure`, `ShotView`, `Shot`,
+  `frame_shot(kind, subjects, frame_width=, frame_height=, bounds=, near=)` (wide: scale 1 on the
+  subjects' middle; two_shot: both boxes + 0.1 padding; medium / closeup: `SHOT_SPANS` from the
+  head's top, `LOOK_ROOM` 0.1 in front of the face; over_shoulder: subject at `SUBJECT_AT` 0.66 of
+  the width from the near side, the near one's middle on the edge, scale between 1 and the
+  close-up's), kept in the stage by `view_center_within`, at most `MAX_ZOOM` 8;
+  `shot_figures(kind, named, present, speakers=, looked_at=)` fills in missing names;
+  `shot_view`.
+- `shot` action (`src/vidgen/scenes/shot_action.py`, on `_Acting`): the key becomes it
+  (`ShotConfig.action()`). `actions.beat_action_list(spec, known)` (now the list `scene_actions`
+  validates and plans) puts each beat's key first and inserts a `shot` without a kind (back) at
+  the start of a beat after a shot's beat. A cut sets the camera frame directly (no animation,
+  since the runner plays a batch for its longest run time); `move` returns a `MoveCamera`.
+  `Stage.shot_framing(kind, names)` gives the view from the characters now (feet inside the stage;
+  head top from the `head` / `accessory` parts; new `Character.standing_height`;
+  `Stage.beat_speakers`). `NarratedScene.camera_shot` / `shot_home` hold the shot for the layout
+  dump and the view to go back to; `pan` / `follow` end a shot (`scenes/actions.end_shot`).
+- Layout dump frames in a shot get `shot: {kind, subjects, near}`. Lint `off_stage` in a shot
+  (not `wide`) checks only its subjects (face in medium / over_shoulder / closeup, whole box in
+  two_shot, also when zoomed or wholly outside); the near character and others may be cut.
+- Planner (`cartoon/directing.py`): the close-up that was a 0.03 s zoom cut in and back is now a
+  `shot` of kind `closeup` of the speaker (checked with `_closeup_shot` on a predicted still with
+  the shot); the eased 0.5 s zoom stays. `shot` is a framing action and a move (no automatic
+  close-up in or right after a beat with a written shot); in a beat with a written shot the passes
+  check looks and gestures on the shot's view. `directions_yaml` prints an automatic shot as the
+  beat's `shot: closeup kit` line (`actions:` only when others remain); `auto_label` reads
+  `shot closeup kit`. `CLOSEUP_CUT_SECONDS` removed; `FIGURE_HALF_WIDTH` now lives in `shots.py`.
+
+Checked by eye: a scratch copy of examples/cartoon with an over-the-shoulder, a two-shot (with a
+walk: the ½ still is inside the shot), a close-up with a speech bubble (bubble sized and placed
+for the shot), an eased two-shot taken over by a `follow`, a close-up on the wide stage with the
+hills layer and dust, an over-the-shoulder with the default near character: `vidgen validate` ok,
+`vidgen storyboard` (preview) looked right, `vidgen lint` 0 findings (after making `pan` / `follow`
+end a shot: before, the written `follow` in a two-shot beat left both subjects out of the dump's
+shot). A three-beat scratch dialogue with `auto_direct: true`: `vidgen direct --print` writes
+`shot: closeup moss` for the short reply, the storyboard shows it, lint 0 findings.
+
+Files touched
+- New: `src/vidgen/cartoon/shots.py`, `src/vidgen/scenes/shot_action.py`, `tests/test_cartoon_shots.py`.
+- `src/vidgen/config.py` (`ShotKind`, `SHOT_NAMES`, `ShotConfig`, `BeatConfig.shot`, docstrings of
+  `AutoDirect.closeups` / `OffStageRule`), `actions.py` (`beat_action_list`), `scene.py`
+  (`camera_shot`, `shot_home`), `scenes/stage.py` (`shot_framing`, `beat_speakers`, docstring),
+  `scenes/actions.py` (`end_shot`), `scenes/__init__.py`, `cartoon/character.py`
+  (`standing_height`), `cartoon/directing.py`, `introspect.py`, `lint/cartoon_rules.py`, `api.py`,
+  guide (`src/vidgen/data/guide/AGENTS.md` + `AGENTS.md`: shot variety, reaction shots, auto
+  close-ups, actions table row, troubleshooting row).
+- Docs: `docs/CONFIG.md` (beat keys, new "Shots (`shot:`)", actions row, `off_stage` row,
+  auto_direct close-ups and `--print`, layout `shot`), `DESIGN.md` (§2 tree, §6.4, §69.17 /
+  §69.23 / §69.24 / §69.25 pointers, new §69.29), `docs/EXTENDING.md` (camera paragraph),
+  `docs/gallery/stage.md` (the `auto_direct.closeups` row, as `vidgen gallery` writes it),
+  `tasklist.md`.
+- Tests updated: `tests/test_actions.py` (action name lists gain `shot`),
+  `tests/test_cartoon_directing.py` (the quick close-up is now a shot; the render test expects
+  `shot closeup kit`), `tests/test_docs.py` (`ShotConfig` in `MODELS`).
+
+Public interfaces
+- `vidgen.api` adds `ShotConfig`, `SHOT_NAMES`, `SHOT_KINDS`, `SHOT_MOVE_SECONDS`, `Shot`,
+  `ShotFigure`, `ShotView`, `frame_shot`, `shot_figures`, `shot_view`. `BeatConfig.shot`; built-in
+  action `shot`; `Character.standing_height`; `NarratedScene.camera_shot` / `shot_home`;
+  `Stage.shot_framing`, `Stage.beat_speakers`; `actions.beat_action_list`; layout key `shot`.
+  Compatible, except that `auto_direct` now writes a short line's close-up as a `shot` (renders of
+  such beats change) and `directing.CLOSEUP_CUT_SECONDS` is gone.
+
+Decisions / deviations
+- The key is sugar for a `shot` action, so validation, the runner, batching with other actions,
+  `at`, mid stills and the planner's "written actions win" all reuse the action path; the action
+  form is documented for a shot later in a beat. Back-to-the-view is an inserted `shot` without a
+  kind, not `until` / `temporary` (a temporary revert would play at the end of the pad, and two
+  shots in a row would cut back and forth).
+- A shot lasts its beat (shot / reverse shot is one key per beat); it does not follow a walk.
+- "Lint off_stage allows the near character": done by making `off_stage` shot-aware (only the
+  framed characters are checked), which also catches a close-up that cuts its subject's face.
+  Without a shot, a zoomed still is still skipped.
+- Over-the-shoulder in 2D: the characters are flat and side-on, so the near one is magnified with
+  the subject, not drawn larger; on far-apart marks (`left` / `right`) the shot is only ~1.3x.
+- "Where cleaner": only the cut close-up became a shot; the eased push-in zoom stays a `zoom`.
+- Searched first: reused `view_center_within`, `MoveCamera`, `_MoveThenFollow`, `camera_view`,
+  `_Acting._target_characters`, the planner's predicted stills and `still_findings`; no framing
+  code existed besides `zoom`'s fit.
+
+Known gaps / TODOs
+- Step 96 (vertical reframing) can reuse `frame_shot`; the screenplay grammar has no shots; a
+  seated character's head top comes from its parts at render time but from its standing height
+  in the planner; a `pan` / `follow` in a shot ends it rather than reframing; the deprecation
+  warning of Manim's `set_width` in the existing `MoveCamera` is untouched.
+
+How to test
+- `pytest tests/test_cartoon_shots.py` (13 not-render + 1 render at 160x90, ~4 s).
+- Also run: not render `test_cartoon_shots test_cartoon_directing test_cartoon_lint test_actions
+  test_docs test_guide test_api test_config test_gallery` (215, 4 s), `test_guide test_schema
+  test_cartoon_stage test_cartoon_acting test_cartoon_moving test_cartoon_parallax
+  test_introspect test_lint test_storyboard test_json_output test_cli test_mcp
+  test_actions_coverage test_cartoon_seating test_cartoon_holding test_phase_h_review
+  test_screenplay test_builtin_scenes test_extensions test_cartoon_sheet` (502, 94 s); render
+  `test_cartoon_shots test_cartoon_directing test_cartoon_parallax test_cartoon_lint
+  test_cartoon_stage test_actions_coverage` (70, 38 s), `test_phase_h_review test_introspect
+  test_storyboard` (4, 50 s), `test_builtin_scenes -k stage test_cartoon_seating
+  test_cartoon_holding test_cartoon_acting test_cartoon_moving` (6, 4 s).
+
+## Step 96 — Vertical cartoons follow the speaker
+
+What was built
+- `reframe: speaker | none` on the video (`VideoConfig.reframe`) and as a `stage` param (the
+  stage's wins); not given: `speaker` when the stage's characters, at their start marks, do not
+  fit in one view (`directing.stage_reframes`).
+- While a stage reframes in a frame narrower than 16:9 (9:16, 1:1), it is laid out as wide as the
+  16:9 frame of the same short side (`reframe.stage_base_width`; `Stage.stage_width` and
+  `stage_frame` use it), so the narrow frame crops the landscape stage. 16:9 is unchanged.
+- `src/vidgen/cartoon/reframe.py` (no manim): `reframe_path(beats, frame_width=, bounds=,
+  start_x=) -> [CameraMove(beat, x, seconds)]`, a pure function of `ReframeBeat(id, speakers,
+  seconds, figures, camera, camera_x, bubble)` / `ReframeFigure(name, x, half_width, facing,
+  start_x)`. The camera moves only when the first speaker (line >= `REPLY_HOLD_SECONDS` 1.5 s;
+  a shorter reply holds the view) is not wholly in view: it eases `REFRAME_SECONDS` 1.0 to the
+  nearest view that shows the speaker (both ends of its walk if they fit) with 0.1 look room and
+  cuts no other character; a cut (`seconds` 0) in the first beat and in a beat with a speech
+  bubble. Before the first line, beat 1 cuts to the scene's first speaker. Written `pan` sets the
+  camera, `follow` suspends reframing until a known `pan`, `zoom` / `shot` beats are left alone.
+- `directing.plan_reframe(cast, beats, stage)` builds the inputs with the planner's state
+  (`_start_state`, new, shared with `plan_directions`; `_follow_written`) and writes automatic
+  `pan` actions (`to` 4 decimals, `run_time`, or `cut: true`). `stage_directions(...,
+  reframe=)` puts them first and hands them to `plan_directions` as written; `Stage.auto_actions`
+  passes `stage_reframes`. They show in `vidgen direct` / `--print` and the storyboard's `auto:`
+  line (`auto_label` writes `pan 0.3062 cut`). `directing_used` is true for any stage that may
+  reframe.
+- `pan` gains `cut: true` (moves the frame at once in `apply`, `run_time_for` 0), so a speech
+  bubble due with it is built for the new view.
+- Runner (`actions.ActionRunner._phases`): camera moves due together with other actions now come
+  first in the batch order (they start at their `at`; an automatic pan appended after a walk and
+  a gesture of one character used to wait for the walk).
+
+Checked by hand: a scratch copy of examples/cartoon with a `vertical` variant (1080x1920, preview
+270x480). `vidgen direct --variant vertical`: yard gets 4 pans (cut to dot, ease to moss, ease
+along dot's walk, cut to moss for his bubble; the written zoom of yard_aside wins), hill none
+(both start within one view, so it keeps the squeezed layout). `vidgen storyboard` looked right.
+`vidgen lint --variant vertical`: 1 warning, `off_stage` in hill_count (the written `follow` of the
+kite leaves moss 96 % out); HEAD without this step gives the same warning plus two `off_frame`
+tree warnings. Not lint clean, so the variant is not added to the committed example. The
+committed example (16:9) is unchanged: `vidgen direct` adds nothing, lint 0 findings.
+
+Files touched
+- New: `src/vidgen/cartoon/reframe.py`, `tests/test_cartoon_reframe.py`.
+- `src/vidgen/config.py` (`ReframeSetting`, `VideoConfig.reframe`), `cartoon/directing.py`,
+  `scenes/stage.py` (param, `stage_width`, `auto_actions`, docstring), `scenes/actions.py` (`pan`
+  `cut`), `actions.py` (batch order), `api.py`, guide (`src/vidgen/data/guide/AGENTS.md` + copy
+  `AGENTS.md`: `social` bullet, `cartoons` shot paragraph).
+- Docs: `docs/CONFIG.md` (top-level row, stage param rows, `pan` row, new "Vertical cartoons
+  (`reframe`)"), `DESIGN.md` (§2 tree, §6.4, §69.7 / §69.23 pointers, new §69.30),
+  `docs/EXTENDING.md` (`moves_camera`, camera paragraph), `docs/gallery/stage.md` (the `reframe`
+  and `width` rows as `vidgen gallery` writes them; stills not re-rendered), `tasklist.md`.
+- Tests updated: `tests/test_cartoon_parallax.py` (`pan` with `cut`).
+
+Public interfaces
+- `vidgen.api` adds `ReframeSetting`, `REFRAME_SECONDS`, `REPLY_HOLD_SECONDS`, `CameraMove`,
+  `ReframeBeat`, `ReframeFigure`, `reframe_needed`, `reframe_path`, `stage_base_width`,
+  `plan_reframe`, `stage_reframes`; `stage_directions` keyword `reframe`; `pan` option `cut`;
+  config keys `reframe` (top level, stage param).
+- Behaviour change: a stage whose characters do not fit in one view gets automatic pans (also in
+  16:9 on a wide stage), and in 9:16 / 1:1 such a stage is laid out at 16:9 width. `reframe:
+  none` gives the old behaviour.
+
+Decisions / deviations
+- The 9:16 stage was already squeezed into the frame (marks are fractions of the frame width), so
+  in 9:16 the characters always fit and there was nothing to follow. Reframing therefore lays the
+  stage out at 16:9 width in a narrower frame; the default ("frame narrower than the view needed
+  to show all characters") is measured on that layout.
+- Hold threshold: 1.5 s of narration (about four words); `REFRAME_SECONDS` 1.0 fits in 80 % of
+  any line that moves the camera, so there is no "too short to ease" case.
+- Moves are automatic `pan` actions (not a camera track inside the stage), so validation, the
+  runner, the storyboard, `vidgen direct --print` and "written actions win" reuse the action
+  path; pasting them makes them written.
+- The camera moves only when the speaker is out of view (no re-centring on every line), and
+  never for a narrator beat except to frame the first speaker at the start.
+
+Known gaps / TODOs
+- x only: no zoom on the speaker in a tall frame (characters stay small, 25 % of a 9:16 frame's
+  height); props and non-speaking walkers are not framed; an `enter`'s side is predicted from
+  the written camera; a `follow` with `until` still suspends reframing for the rest of the scene.
+- examples/cartoon's 9:16 variant needs the hill scene's `follow` changed before it lints clean.
+
+How to test
+- `pytest tests/test_cartoon_reframe.py` (11, no render, ~2 s).
+- Also run: not render `test_cartoon_reframe test_cartoon_parallax test_cartoon_directing
+  test_cartoon_shots test_actions test_actions_coverage test_api test_cartoon_stage
+  test_cartoon_lint test_storyboard` (197, 5 s), `test_docs test_guide test_schema test_config
+  test_gallery test_cli test_json_output test_mcp test_screenplay test_phase_h_review
+  test_builtin_scenes test_extensions test_introspect test_cartoon_seating test_cartoon_holding
+  test_cartoon_acting test_cartoon_moving` (456, 91 s); render `test_cartoon_parallax
+  test_cartoon_shots test_cartoon_directing test_cartoon_stage test_actions_coverage
+  test_cartoon_lint` (70, 44 s), `test_cartoon_moving test_cartoon_acting test_cartoon_seating
+  test_cartoon_holding test_phase_h_review test_storyboard test_introspect` (8, 48 s).
+
+## Step 97 — Lighting and mood
+
+What was built
+- `src/vidgen/cartoon/lighting.py` (no manim): `LightGrade(multiply, glow, stars, shadow)` (a
+  channel becomes `clip(c * multiply + glow)`, alpha unchanged), `tint_grade`, `light_grade`
+  (presets `day`, `morning`, `sunset`, `night`, `indoor`; `PRESET_LIGHTS`), `blend_grades`,
+  `grade_rgbas`, `grade_pixels`, `LightChange` + `light_at` (fades, smoothstep, a change during
+  another continues from where it is) + `light_changing`, `night_stars` (the sparkles' seeded
+  stream), `shadow_ellipse` (depth from the caster's size, shrinks and fades above the ground).
+- `src/vidgen/cartoon/shading.py`: `CustomLight` / `LightSetting` / `resolve_light`; `mark_lit`;
+  `StageLight` wraps the scene camera's `get_fill_rgbas`, `get_stroke_rgbas` and
+  `display_image_mobject` and grades only mobjects marked lit (the backdrop, layers, props,
+  characters), so speech bubbles, callouts, particles, captions and text keep the theme's
+  colours and contrast; `StarField` (static stars with the sparkle's shape); `Shadow`,
+  `ShadowCaster`, `StageShadows`.
+- `stage` params `light` (default `day`: nothing installed) and `shadows` (default `true`). A lit
+  stage without a picture / `background` gets a `background` rectangle in the theme's background
+  colour (graded). Shadows: props that no action can move in one static group in the backdrop;
+  characters and props named by `pick_up` / `hold` / `keyframes` / `move_along` in a group with an
+  updater, faded in just before the first of them. `Stage.change_light`, `_light_step` (scene
+  updater while changes are pending), `get_moving_mobjects` (everything only while a change
+  falls in the animation, so the set stays in Manim's static image otherwise; Step 87).
+- `light` beat action (`src/vidgen/scenes/light_action.py`): `- light: night` or `tint` +
+  `strength`; `animates = False` (cued at its `at`, never stretches a batch), `run_time` = the
+  fade (2 s), not reversible; validate: unknown preset (did-you-mean), given twice, none, not a
+  stage scene.
+- Layout dump: shadows and stars are left out (`introspect`).
+- `particle_field._unit_shape` -> public `particle_shape` (now used by the stars).
+
+Checked by eye (scratch copies of `examples/cartoon`, preview storyboards): each preset on both
+stages; the hill fading to `sunset` and then to `night` (3 s) with confetti; a picture
+background at night. The bubble stays white, stars show behind the cloud and hills, dot's jump
+shadow shrinks, the flying kite's shadow fades. `vidgen lint` on the night and the fading copies:
+0 findings. Timing (yard storyboard, preview): `day` 12.5–13.1 s vs HEAD 12.3–13.0 s; `night`
+13.4 s (after making `grade_rgbas` cheap: 8.8 -> 1.8 µs a call).
+
+Files touched
+- New: `src/vidgen/cartoon/lighting.py`, `src/vidgen/cartoon/shading.py`,
+  `src/vidgen/scenes/light_action.py`, `tests/test_cartoon_lighting.py`.
+- `src/vidgen/scenes/stage.py`, `scenes/__init__.py`, `api.py`, `introspect.py`,
+  `particle_field.py`, guide (`src/vidgen/data/guide/AGENTS.md` + `AGENTS.md`: chooser row,
+  actions row, troubleshooting list, "Light and mood" bullet in `cartoons`).
+- Docs: `docs/CONFIG.md` (stage rows, new "Light and shadows", actions table, `action` and
+  `run_time` rows), `DESIGN.md` (§2 tree, §6.4, new §69.31), `docs/EXTENDING.md`,
+  `docs/gallery/stage.md` (the `light` / `shadows` rows as `vidgen gallery` writes them; stills
+  not re-rendered), `tasklist.md`.
+- Tests updated: `tests/test_actions.py` (action name lists gain `light`; `higlight` now also
+  suggests `light`).
+
+Public interfaces
+- `vidgen.api` adds the names listed in DESIGN §6.4 (Step 97). New built-in action `light`;
+  stage params `light`, `shadows`; `Stage.change_light`, `Stage.light`, `.stars`, `.shadows`,
+  `.base_light`. Behaviour change: every stage draws soft shadows (`shadows: false` for the old
+  picture); a stage with `light: day` and no `light` action is otherwise drawn as before.
+
+Decisions / deviations
+- Grading at draw time (a camera wrapper) instead of recolouring mobjects: no colour bookkeeping,
+  later colour changes (`dim`, `highlight`, expressions) stay right, and bubbles / text are
+  excluded by not being marked. The price is a little work per drawn lit shape (~5 % on `yard`).
+- A multiply alone turns a blue sky grey at sunset, so presets have a small additive glow;
+  `{tint, strength}` is the plain multiply the task asked for.
+- `light` is a non-animating action: its fade runs on the scene clock, independent of the
+  runner's batches (an animation would have been stretched to the longest action of its batch).
+  `run_time` cannot be 0 (ActionConfig), so "at once" is a short `run_time`.
+- Stars do not twinkle: a moving field behind the set would take the whole set out of the
+  static image. They reuse the sparkles' seeds and shape, not a `ParticleField`.
+- Shadows of things that can move are drawn in one group before the first of them (not before
+  each), which keeps the back of the set static; a shadow can then lie over the foot of a prop
+  standing at the same depth just before it in the list (not seen in the stills).
+- Searched first: no grade / shadow / star code existed (`git grep -ni "shadow\|tint\|grade"
+  src/vidgen`: "soft shadows" in prompt words, a video clip's opacity / tint modulation, a chart's
+  faint tint, Kokoro voice grades); reused
+  `hex_rgb`, `particle_count` / `particle_seeds` / the sparkle shape, `CHARACTER_INK`,
+  `resolve_color`, `self.grounds`, the action machinery of `sfx` (cue).
+
+Known gaps / TODOs
+- Particles are not graded; no stars over a picture background; stars do not twinkle; shadows
+  do not stretch with a low sun; a lamp prop does not light anything; `light` is not a top-level
+  or variant setting (Step 101's `sets:` may carry it); the gallery stills were not re-rendered.
+
+How to test
+- `pytest tests/test_cartoon_lighting.py` (6 not-render + 2 render at 160x90, ~3 s).
+- Also run: not render `test_api test_actions test_cartoon_stage test_cartoon_props
+  test_particles test_introspect test_lint test_cartoon_lint test_cartoon_parallax
+  test_cartoon_speed test_extensions test_cartoon_holding test_cartoon_shots` (251, 8 s),
+  `test_actions test_docs test_guide test_schema test_builtin_scenes test_actions_coverage
+  test_gallery test_phase_h_review test_cartoon_directing test_cartoon_reframe
+  test_cartoon_seating test_cartoon_sheet` (375, 66 s), `test_docs test_guide test_api
+  test_cartoon_lighting test_gallery` (127, 4 s); render `test_cartoon_stage test_cartoon_props
+  test_cartoon_parallax test_cartoon_lint test_cartoon_acting test_cartoon_moving
+  test_cartoon_holding test_cartoon_seating test_cartoon_shots test_cartoon_speed test_particles
+  test_cartoon_lighting test_cartoon_keyframes test_cartoon_foley` (16, 11 s), `test_introspect
+  test_phase_h_review test_cartoon_directing test_cartoon_sheet` (7, 34 s), `test_builtin_scenes
+  test_actions_coverage -k stage` (3, 3 s). The full suite was not run.
+
+## Step 98 — Wind
+
+What was built
+- `src/vidgen/cartoon/wind.py` (no manim): `wind_level` (signed -1..1 or `WIND_LEVELS` calm /
+  breeze / windy / gale), `gust(t, seed)` (two-octave smooth value noise, splitmix64 knots),
+  `Wind(base, seed)` (`level`, `force(t, delay)`, `delay(x_share, t)`, `change`, `blowing`,
+  `blown(start, t)` cached trapezoids), `WindChange`, `SWAYS` + `sway_degrees`, `bent_points`
+  (bend about the base, quadratic), `trail_degrees` (force through `TRAIL_SPRING` 1.2 Hz ζ 0.3 +
+  flutter), `wind_seed`, `wind_phase`, `WindSetting`.
+- `src/vidgen/cartoon/windblown.py`: `SwayingProp`, `StageWind` (update for a scene time,
+  `moving`, `particle_push`).
+- Characters: hair and ears are drawn inside `head`, the scarf inside `body`, the hat in
+  `accessory`. Instead of new parts, the generator marks members with `TRAIL_ATTRIBUTE`
+  (`wind_trail` = pivot, weight; `TRAIL_WEIGHTS`): scarf end, long hair, bun, pointy and floppy
+  ears, hat. `Character.set_wind(degrees)` turns them about their pivots in `refresh` (signed
+  so the free end goes downwind, mirrored when facing left); `has_trails`, `wind`. Not part of
+  `state()`; 0 takes the old code path.
+- Stage param `wind` and the `wind` beat action (`scenes/wind_action.py`, non-animating like
+  `light`; `- wind: 0.8` works because `ActionConfig.target` keeps a number as text and the schema
+  shorthand accepts a number for actions with `number_target`). `Stage._start_wind` installs
+  nothing when every level is 0; else `StageWind` + a scene updater; `get_moving_mobjects`
+  returns the family from the first swaying prop / trailing character on while the wind may move
+  something (including the spring's 2.65 s memory), and removes the updater after.
+- Particles: `WIND_DRIFT`, `particle_states(..., blown, wind)`, `ParticleField(wind=)`,
+  `particle_field` reads the scene's `particle_wind` (so `particles` actions drift too).
+- Shared fades: `lighting.fade_at` / `changing` (generic), `light_at` / `light_changing` call
+  them; `LightChange.value`; `Spring.memory_seconds`.
+
+Evidence
+- `wind: 0`: scratch copy of `examples/cartoon` with `wind: 0` on both stages, 160x90 5 fps, frame
+  hashes equal to the unchanged copy rendered by HEAD 868914f in a worktree (yard 147 frames,
+  hill 127). The render test does the same for `wind: 0` + `- wind: calm` vs no wind.
+- Cost (854x480, 15 fps, no audio, 2 runs): yard 11.5 / 10.9 s -> 12.8 / 12.8 s with `windy`;
+  hill 13.2 / 12.9 s -> 13.8 / 14.3 s with `gale`. `trail_degrees` ~0.4 ms per character per frame.
+- Stills checked by eye (yard windy): the tree crown leans and moves, dot's scarf end and moss's
+  hat move downwind; `vidgen validate` of the windy copy: ok.
+
+Files touched
+- New: `src/vidgen/cartoon/wind.py`, `cartoon/windblown.py`, `scenes/wind_action.py`,
+  `tests/test_cartoon_wind.py`.
+- `cartoon/character.py`, `generator.py`, `lighting.py`, `spring.py`, `particles.py`,
+  `particle_field.py`, `scenes/stage.py`, `scenes/__init__.py`, `actions.py`, `config.py`,
+  `schema.py`, `api.py`, guide (+ `AGENTS.md` copy), `docs/CONFIG.md` (row, "Wind", action rows),
+  `docs/EXTENDING.md`, `docs/gallery/stage.md` (param row), `DESIGN.md` (§2, §6.4, §69.31 note,
+  new §69.32), `tasklist.md`. Tests updated: `tests/test_actions.py` (action name lists gain `wind`).
+
+Public interfaces
+- `vidgen.api` adds the names in DESIGN §6.4 (Step 98). New action `wind`, stage param `wind`.
+  All compatible.
+
+Decisions / deviations
+- Trailing pieces are marked members inside existing parts, not new parts (no change to part
+  names, poses, sheets, SVG ids, the look cache). Round ears, short / spiky / curly hair and
+  glasses do not trail; SVG characters have no marks.
+- Props bend (quadratic shear about the base) rather than rotate, so the base stays planted.
+- Direction is the sign of the level (task asked 0..1; negative blows left).
+- Searched first: no wind / gust / noise code existed (`grep -rni "wind\b\|gust\|noise" src/vidgen`:
+  only prose and the example's comments); reused `fade_at` (generalised from `light_at`), `Spring`,
+  `idle_seed`, the `light` action pattern and Step 87's static-image hook.
+
+Known gaps / TODOs
+- No wind relative to a walking character; held / SVG props, layers and picture backgrounds do not
+  move; no top-level `wind`; the example is unchanged (no `wind:` in `examples/cartoon`).
+- Found, not fixed (Step 97): `Stage` removes `self._light_step` with a fresh bound method;
+  Manim's `Scene.remove_updater` compares by identity, so the light updater is never removed
+  (the wind keeps its bound method in `_wind_updater`).
+
+How to test
+- `pytest tests/test_cartoon_wind.py` (11 not-render + 2 render, ~6 s).
+- Also run (not render): `test_cartoon_lighting test_particles test_cartoon_spring
+  test_cartoon_motion test_cartoon_character test_cartoon_generator test_cartoon_stage
+  test_cartoon_props test_cartoon_limbs test_cartoon_speed test_api test_docs test_guide
+  test_config test_actions` (358 with the wind file, 12 s), `test_actions test_schema
+  test_introspect test_gallery test_actions_coverage test_builtin_scenes test_cartoon_sheet
+  test_cartoon_holding test_cartoon_seating test_cartoon_directing test_lint test_cartoon_lint
+  test_mcp test_extensions` (354, 89 s); render: `test_cartoon_wind test_cartoon_lighting
+  test_particles test_cartoon_stage test_cartoon_props test_cartoon_character
+  test_cartoon_generator test_cartoon_motion test_cartoon_speed test_cartoon_parallax
+  test_cartoon_holding test_cartoon_seating` (15, 8 s). The full suite was not run.
+
+## Step 99 — Non-speech voice sounds
+
+What was built
+- `src/vidgen/voicesounds.py` (no manim): `VOICE_SOUNDS` (`gasp hmm laugh sigh giggle groan`:
+  said form, ElevenLabs v3 tag, built-in sfx, expression, mouth viseme, words a transcript
+  shows), `SOUND_MARKER` (`[laugh]` / `[laughs]`, any case), `take_out_sounds`, `VoiceSound(kind,
+  word)`, `sound_voicing`, `voiced_spoken`, `SoundSpan`, `sound_spans`, `beat_sound_spans`,
+  `heard_sound_words`, `is_voice_sound`, `SOUND_GAP` 0.05 s, `SOUND_GAIN_DB` +6.
+- One place for the markers: `BeatConfig`'s validator takes them out of `text` (before the
+  `*word*` strip) into `voice_sounds`; `marked_text` keeps emphasis only (same words). A text of
+  sounds only is a config error. Other brackets stay in the text.
+- What each voice says (`Project.spoken(beat)`, `spoken_texts` built from it; `Spoken.inserted`
+  adds the sound's words after their word, owned by no written word): `eleven_v3*` models get
+  audio tags (`[laughs]`, `[gasps]`...); Kokoro, other ElevenLabs models and OpenRouter say
+  `Ha ha ha!`, `Hee hee!`, `Hmm.`, `Ugh.`; `gasp` / `sigh` at a line's start or end are new
+  built-in generated sounds `gasp` / `sigh` (`sfx.py`, 18 built-ins now) mixed in the silence
+  before / after the line (recorded by `NarratedScene.narrate` as beat sound effects), so the
+  audio and its hash stay as without the marker; inside a line they are said `Hah!` / `Haah.`.
+- Mouth: said sounds are in the viseme track like words; `beat_visemes` lays generated ones over
+  it (`visemes.with_cues`: gasp `O`, sigh `A`). Face: `directing.sound_reactions` (run first by
+  `stage_directions`, whatever `auto_direct` says) adds a `react` with the first sound's
+  expression at its time for each speaker that can emote and that no written `emote` / `react`
+  acts on. `stage_directions`' cast and speaker code moved into `_stage_cast` / `_beat_speakers`
+  (shared).
+- Captions (`scenes/captions.py`) and the SRT (`write_srt(..., spoken=)` from the pipeline) time
+  the written words with `Project.spoken`; `directing._beat_words` too for beats with sounds.
+  Readback compares the line without sounds and skips heard sound words
+  (`compare_beat(..., skip_heard=)`, `readback._compare`).
+- Screenplay: inside a line a known sound marker stays in the line's text; every other `[...]`
+  is a stage direction; a `[laugh]` on its own line stays a direction. Fingerprint:
+  `voice_sounds` per beat.
+- Step 97 bug found by Step 98, fixed: the light fade's scene updater was never removed
+  (`remove_updater` compares by identity and `Stage` passed a fresh bound method; also the
+  removal only ran in `get_moving_mobjects`, i.e. when a new animation started, so a fade ending
+  inside a long wait kept it). Now `_start_light` keeps the bound method in `_light_updater`
+  (as the wind does) and `_light_step` removes itself once every change is over.
+  `test_sunset_to_night_keeps_the_bubble_readable` asserts no bound `_light_step` remains (it
+  failed before the fix).
+
+Evidence
+- Real Kokoro (`af_heart`, the scratchpad venv, 2.5 GB cap): raw pipeline: `Ha ha ha!` 0.73 s,
+  `Hee hee!` 0.43 s, `Hmm.` 0.28 s, `Ugh.` 0.33 s, `Hah!` 0.23 s, `Haaah.` 0.28 s; a pause from
+  `…` is 0.05 s and from `...` 0.11 s (too short for a 0.35 s gasp, hence generated breaths only at
+  line edges). `vidgen tts` on a 3-beat scratch stage (`s99/kproj`): says `Ha ha ha! That is
+  funny.` (2.30 s; the laugh spans 0.00–1.10 s, mouth `A`), `Well Hmm. I wonder.` (hmm 0.53–0.85
+  s, mouth `M`), `Oh no, it fell!` for `[gasp] Oh no, it fell!` (gasp generated −0.05–0.30 s,
+  ending at the speech start, mouth `O`); alignments stored; Whisper not needed. `vidgen
+  direct` lists `react pip happy / thinking / surprised`. Not listened to by a human.
+
+Files touched
+- New: `src/vidgen/voicesounds.py`, `tests/test_voice_sounds.py`.
+- `config.py`, `project.py`, `pronunciation.py`, `sfx.py`, `scene.py`, `subtitles.py`,
+  `readback.py`, `screenplay.py`, `render/pipeline.py`, `render/fingerprint.py`,
+  `scenes/captions.py`, `scenes/stage.py` (docstring; light updater), `cartoon/visemes.py`,
+  `cartoon/directing.py`; guide (+ `AGENTS.md` copy: cartoons "Voice sounds" bullet, screenplay
+  note, sound list); `docs/CONFIG.md` (beat text, sounds table, new "Voice sounds", readback,
+  screenplay), `docs/EXTENDING.md`, `DESIGN.md` (§2 tree, §6.4, §69.31, §69.32 note, new
+  §69.33), `tasklist.md`; `tests/test_cartoon_lighting.py` (updater assertion).
+
+Public interfaces
+- No new `vidgen.api` names. `BeatConfig.voice_sounds`, `Project.spoken`, `Spoken.inserted`,
+  `compare_beat(skip_heard=)`, `cues_from_timings` / `write_srt(spoken=)`; `stage_directions`
+  also returns the sound reactions. Built-in sounds `gasp`, `sigh`.
+
+Decisions / deviations
+- Per provider: text where the TTS can say it, tags for ElevenLabs v3, generated breaths only at
+  a line's edges (no TTS here makes a pause long enough inside a line; measured). Beats without
+  markers keep their spoken text, hashes (pinned) and fingerprints.
+- The face is an automatic `react` (one per beat, the first sound's), so `vidgen direct` shows it
+  and pasting it makes it written; a written `emote` / `react` on the speaker wins.
+- Searched first: no marker, interjection or breath code existed (`grep -rni "\[laugh\|gasp\|
+  sigh\|giggle" src/vidgen`); reused `Spoken` / `word_groups` / `map_word_times`,
+  `beat_word_times`, the sfx machinery (`_add_sfx`, project sound overrides), `react`, the
+  directing passes and the `strip_emphasis` pattern.
+
+Known gaps / TODOs
+- ElevenLabs v3 tags (`[giggles]`, `[groans]` especially) and OpenRouter models were not tried
+  against the real services (no API calls). One face per beat; a `surprised` react from a gasp
+  also gets the foley `pop`; a sound alone on a line is not possible (a beat needs words).
+- Found, not fixed: the wind's updater (`Stage._wind_updater`) is likewise removed only in
+  `get_moving_mobjects`, i.e. when an animation starts after the wind calmed down.
+
+How to test
+- `pytest tests/test_voice_sounds.py` (7 not-render + 1 render at 160x90, ~3 s).
+- Also run (not render): `test_sfx test_config test_pronunciation test_readback test_subtitles
+  test_captions test_tts test_tts_kokoro test_cartoon_visemes test_screenplay test_guide test_docs
+  test_cartoon_foley test_voices` with the new file (428 + 2 skipped, 20 s); `test_cartoon_directing
+  test_schema test_cartoon_acting test_cartoon_stage test_storyboard test_json_output test_cli
+  test_lint test_cartoon_lint test_api test_translation test_cartoon_reframe test_cartoon_lighting`
+  (298, 65 s); `test_chapter_export test_chapters_progress test_imagegen test_overlays
+  test_push_wipe_carry test_regions test_thumbnail_export test_transitions test_mcp test_actions
+  test_scene` (205, 50 s); render: `test_voice_sounds test_cartoon_lighting test_cartoon_acting
+  test_cartoon_directing test_cartoon_visemes test_cartoon_foley test_cartoon_wind test_captions
+  test_sfx` (18, 33 s). The full suite was not run.
+
+## Step 100 — Overlapping speech and interruptions
+
+What was built
+- Beat keys `overlap: S` (seconds the beat starts before the previous beat's speech ends; `>= 0`)
+  and `interrupt: true` (cuts the previous line where the beat starts, 0.05 s fade; without
+  `overlap` it starts `INTERRUPT_LEAD` 0.5 s before that line's speech ends). Config errors: either
+  key on a scene's first beat (lines overlap only within a scene), `interrupt` with `overlap: 0`.
+  `vidgen validate` warns about an overlap of a line of the same voice (`overlap_warnings`).
+- `src/vidgen/overlap.py` (no manim): `SpokenLine`, `BeatWindow(body, rest, heard, shape)`,
+  `beat_windows(lines, pad, fps)`, `VoiceShape` (`cut` / `dip_from`, `gain`), `shape_voice`,
+  `beat_lines` (reads the MP3's speech end only for a beat the next one joins),
+  `beat_speech_end`, `has_joins`, `talked_over`, `overlap_warnings`; constants `INTERRUPT_LEAD`,
+  `INTERRUPT_FADE`, `OVERLAP_DIP_DB` (3 dB), `DIP_RAMP` (0.1 s), `MIN_WINDOW` (0.2 s).
+- Timeline: `NarratedScene.beat_window(beat)` and `VideoPlan._scene_beats` use the same
+  function; `narrate` yields `body` (the time until the next beat when it joins, else `d`), gives
+  the action runner `(body, rest)`, waits to `window`, records `end = start + heard` (an
+  interrupted beat ends at the cut), captures `window` of frames, puts an `end` sting at `heard`,
+  drops a generated voice sound after a cut. A joined window is in whole frames, so the cut is
+  where the next beat really starts.
+- Mix: `add_narration(scene, path, shape=None)` shapes the decoded WAV (dip from where the
+  later line starts, or cut + fade) before Manim adds it; plain beats are not touched.
+- Mouths: `NarratedScene.end_lip_sync(character, track)` stops a lip sync now or, while the
+  beat's voice still sounds under the next beat, when the next beat ends (`_lingering`);
+  `Stage.narrate` and `Say.revert` use it. `beat_visemes` of an interrupted beat is
+  `VisemeTrack.until(cut)`.
+- Captions: `cues.overlapping_beats`, `cues.CueStack`, `cues.stack_cues` (`MAX_STACK` 2). The
+  `captions` overlay draws both lines on one plate while both sound (one-line cues for beats that
+  overlap; earlier line on top; each in its speaker's colour; karaoke highlights the current word
+  of each line, state `(caption, (word, ...))`). SRT: overlapping beats get one-line cues, cues
+  may overlap in time, sorted by start.
+- Directing: `BeatInput.next_joins`; a joined beat gets `seconds = body` and only the words
+  heard before the next beat; no listener reaction after it; a voice-sound face after a cut is
+  left out.
+- Lint: activity beats gain `window` / `overlap` / `interrupt` (only when set);
+  `animation_overrun` measures the window; new rule `talked_over` (`TalkedOverRule`, warning):
+  words of the earlier line spoken entirely after the overlapping beat's speech starts.
+- Fingerprint: the keys are left out of the scene dump while unset and added as `joins` when set
+  (scene, overlay inputs, next transition), so existing renders stay valid.
+- Speech end of a scene (`pipeline._overlaps`, `storyboard`, `VideoPlan._speech_end`) is the latest
+  beat end, not the last beat's.
+- Step 99's finding fixed: `Stage._wind_step` removes the wind's scene updater itself once
+  `blowing.moving(now, inf)` is false (as the light does), not only when the next animation
+  starts; `test_wind_updater_removes_itself_once_calm` (it failed before: the updater stayed).
+
+Evidence
+- Pinned (`tests/test_overlap_pinned.py`, values recorded on HEAD e312f91 before any change):
+  VideoPlan beat slots and scene starts, `scene.timings()` of a rendered 3-beat card, and every
+  WAV Manim receives with tone MP3s equal to the plain `stereo(decode_audio(mp3))` at the beat's
+  start. Passes unchanged after the step.
+- Scratch copy of `examples/cartoon` with `overlap: 0.4` on yard_box, `interrupt: true` on
+  hill_flew and `captions` (speakers: color): `vidgen validate` ok, preview render 35 s, `vidgen
+  lint` 0 findings; the SRT has overlapping one-line cues (8.400 --> 10.989 under 06.260 -->
+  08.779), hill_count ends at 34.6 = hill_flew's start; a frame at 8.6 s shows both lines
+  stacked in Dot's and Moss's colours (checked by eye). No audio (estimates); real Kokoro not run.
+
+Files touched
+- New: `src/vidgen/overlap.py`, `tests/test_overlap.py`, `tests/test_overlap_pinned.py`.
+- `src/vidgen/config.py` (beat keys and checks, `TalkedOverRule`, rule lists), `scene.py`,
+  `videoplan.py`, `cues.py`, `subtitles.py`, `scenes/captions.py`, `scenes/stage.py` (lip sync
+  end, wind fix), `scenes/acting.py`, `cartoon/visemes.py`, `cartoon/directing.py`,
+  `activity.py`, `lint/timing_rules.py`, `render/fingerprint.py`, `render/pipeline.py`,
+  `storyboard.py`, `cli.py`, `api.py`; guide (+ `AGENTS.md` copy: "Talking at once" bullet,
+  `talked_over` row); `docs/CONFIG.md` (beat keys, "Overlapping lines", lint table / defaults,
+  activity keys), `docs/EXTENDING.md`, `DESIGN.md` (§2, §6.4, §17, §69.32 note, new §69.34),
+  `tasklist.md`.
+- Tests updated: `tests/test_captions.py` and `tests/test_voices.py` (karaoke state is now
+  `(caption, (word,))`, `_cues[k].parts[0].glyphs`), `tests/test_cartoon_acting.py` (its
+  `FakeScene` gains `end_lip_sync`).
+
+Public interfaces
+- `vidgen.api` adds `CueStack`, `stack_cues`, `overlapping_beats`. `NarratedScene.beat_window`,
+  `NarratedScene.end_lip_sync`, `VisemeTrack.until`, `add_narration(..., shape=)`,
+  `BeatInput.next_joins`, beat keys `overlap` / `interrupt`, lint rule `talked_over`. Compatible
+  except the captions overlay's karaoke state shape (internal to the overlay).
+
+Decisions / deviations
+- The overlap is measured from the earlier line's speech end (trailing silence cut), not from
+  its MP3's end: with 0.2–0.5 s of trailing silence an `overlap: 0.3` would otherwise overlap
+  nothing. `overlap: 0` therefore means "right as the speech ends, no pad".
+- The voice is shaped for the planned start of the next beat (computed up front), not for where
+  a custom scene actually calls the next `narrate`; built-in scenes call it right away.
+- "Small gain dip": only the earlier voice dips (3 dB); the new line leads at full level.
+- Captions stack at most two lines (one each) so the caption is as tall as a two-line cue; the
+  interrupted line's cue still shows its whole text until the cut.
+- `talked_over` ignores `interrupt` (cutting words is its purpose).
+- Searched first: no overlap / interrupt code existed (`grep -rni "overlap" src/vidgen` only
+  found transitions, layout and lint geometry); reused `speech_bounds`, `beat_word_times`,
+  `caption_cues`, `decode_audio` / `stereo` / `write_wav`, the light updater pattern.
+
+Known gaps / TODOs
+- Found, not fixed: `VideoPlan` and a rendered scene can disagree by a frame on a beat's start
+  when `d + pad` lands on half a frame (pinned test: plan 2.0 s, render 1.8 s for card_b2 at 5
+  fps), because the scene rounds the remaining wait after its animations; pre-existing.
+- No screenplay syntax for overlaps; no per-beat dip / fade settings; the earlier line's
+  captions show its full text even when cut. Real Kokoro / ElevenLabs audio not tried.
+
+How to test
+- `pytest tests/test_overlap.py tests/test_overlap_pinned.py` (15 not-render + 3 render, ~5 s).
+- Also run (not render): `test_captions test_subtitles test_timing_lint test_lint test_config
+  test_api test_cartoon_visemes test_voice_sounds test_cartoon_directing test_cartoon_acting
+  test_cartoon_wind test_scene` (with the new files 223, 9 s), `test_docs test_guide
+  test_schema test_introspect test_storyboard test_transitions test_chapters_progress
+  test_chapter_export test_overlays test_voices test_readback test_thumbnail_export
+  test_push_wipe_carry test_cartoon_foley test_cartoon_lint test_cartoon_stage test_actions`
+  (387, 94 s), `test_render test_cli test_builtin_scenes test_review4 test_translation
+  test_screenplay test_json_output` (238, 8 s); render: `test_cartoon_wind test_cartoon_acting
+  test_captions test_cartoon_directing test_voice_sounds test_scene test_voices test_overlap
+  test_overlap_pinned test_cartoon_lighting` (20, 26 s), `test_cartoon_lint test_timing_lint
+  test_introspect test_cartoon_stage test_cartoon_foley test_subtitles` (5, 16 s). The full suite
+  was not run.
+
+
+## Step 101 — Reusable casts and sets
+
+What was built
+- `include:` (top level; a file name or a list): YAML / JSON files, relative to the file that
+  names them, holding only `include`, `characters`, `voices` and `sets`. New module
+  `src/vidgen/includes.py` (no manim): `read_project_config` reads the tree depth first (a file's
+  includes before it; a file reached twice merged once) and merges with `merge_config`: mappings key
+  by key, `characters` entries by name (a later entry's keys win, new names added), anything else
+  replaces; the project's own config last. File paths in an included file (`look.svg`, a set's
+  `image`, `layers[].image`, `props[].svg`) are rewritten relative to the project and collected.
+  Errors name the chain: `video.yaml -> ../shared/sets.yaml -> loop.yaml: include '...' makes a
+  cycle: ...` / `not found (looked for ...)` / not .yaml / other keys / outside the MCP root.
+- `sets:` (top level, name -> stage params) and the scene key `set: NAME`: `expand_sets` /
+  `apply_set` start the scene's params from the set before validation. Rules: `image` /
+  `generate` / `background` are one choice (a scene giving one drops the set's three); mappings
+  (`marks`) merge; `characters`, `props`, `layers`, `particles` add to the set's (set first); a
+  scene entry with an explicit name equal to a set entry's own or default name (`tree`, `tree_2`)
+  changes that entry (its keys win); `[]` clears; anything else replaces. Unknown set: config
+  problem with did-you-mean (`set_reference_problems`, run by `parse_config`).
+- Where problems are written: `Origin(file, location)` per moved location (`Project.origins`);
+  `attributed` rewrites a problem's longest recorded prefix: a set's value -> `sets.NAME...` in its
+  file (repeats from other scenes dropped), a character merged by name -> its index in its file, a
+  scene entry appended after the set's -> its index in the scene. Applied to config errors in
+  `Project._load` (message rebuilt) and in `cli.project_problems`. `Problem.file` (JSON `file`,
+  `null` = the project's config); line `characters[0].voice (in ../shared/cast.yaml): ...`.
+- `vidgen validate` prints `included:`; `--json` adds `included`. Fingerprint: `include`, `sets`
+  and the scene's `set` left out of the dumps (expanded params carry the set; unused sets change
+  nothing; existing renders stay valid), plus `included_files` stats of files the includes name
+  outside `assets/`. TTS hashes and imagegen keys already use the merged config (tested).
+- `vidgen screenplay --cast FILE` (MCP `cast`): `read_include_file`; the project gets `include:
+  [<path from the project folder>]`, the cast's characters count as declared and keep their voices,
+  a `set:` line starting with a cast set name writes `set: NAME` (no default sky; the set's marks,
+  props and character places count for placing and directions).
+- Refactor: `numbered_names` / `prop_default_name` in `cartoon/stage.py` (exported by
+  `vidgen.api`) now name the stage's props and layers and the set merge's entries (one copy).
+- `examples/cartoon_series/`: `shared/cast.yaml` (nib, olla, two Kokoro voices), `shared/sets.yaml`
+  (`workshop`, `meadow`), `episode_1` (2 scenes, 8 beats) and `episode_2` (2 scenes, 7 beats;
+  overrides light, wind, a set prop's place and olla's accessories). Original story and characters.
+
+Files touched
+- New: `src/vidgen/includes.py`, `tests/test_includes.py`, `examples/cartoon_series/**`.
+- `src/vidgen/errors.py` (`Problem.file`), `config.py` (`include`, `sets`, `SceneConfig.set`,
+  `include_files`, variants may not contain `include`), `project.py` (loader, `origins`,
+  `included_files`, `files_named_by_includes`, `included_labels`, `attributed`), `cli.py`
+  (attribution, `included:` line, `--cast`), `jsonout.py` (`included`; screenplay `characters` from
+  the loaded project), `mcp_server.py` (`cast`), `render/fingerprint.py`, `screenplay.py`,
+  `cartoon/stage.py`, `scenes/stage.py`, `api.py`.
+- Docs: `docs/CONFIG.md` (top-level rows, scene `set`, new "Shared casts and sets", screenplay
+  `--cast`, JSON `file` / `included`), `DESIGN.md` (§2, §6.4, §11 problems, MCP, new §69.35),
+  `README.md`, guide `cartoons` (+ `AGENTS.md` copy), `tasklist.md`.
+- Tests updated: `tests/test_json_output.py` (`to_json` has `file`).
+
+Decisions / deviations
+- Paths inside an included file are relative to that file (a shared folder is self-contained);
+  the loader rewrites them, so the rest of vidgen sees project-relative paths.
+- Included files may hold only characters / voices / sets (+ include), as the task names;
+  theme, voice and the rest stay per episode.
+- A problem's location is rewritten to where the value is written instead of carrying the
+  merged location plus a note: an agent can edit it directly. Warnings (strings) are not
+  attributed. No YAML line numbers: the loader uses `yaml.safe_load`.
+- Scene entries match set entries only by an explicit name, so a second unnamed `tree` stays a
+  second tree; set entries match by their own or default (numbered) name, as the stage names them.
+- Searched first: `deep_merge` (variants) kept as is; no include / set code existed; prop and layer
+  naming was in `scenes/stage.py` only and is now shared.
+
+Known gaps / TODOs
+- Unused sets are not validated on their own (only through the scenes that use them).
+- `svg` values are not in `project.PATH_KEYS`, so `vidgen mcp` confinement does not check an SVG
+  path (pre-existing; include files themselves are checked).
+- Generated screenplay voices may repeat a cast voice; no `set:` inheritance (a set based on a set).
+
+How to test
+- `pytest tests/test_includes.py` (24 not-render, 3 s).
+- Also run (not render): `test_project test_config test_json_output test_schema test_docs test_api
+  test_cli test_cartoon_props test_cartoon_parallax test_cartoon_stage test_storyboard test_mcp
+  test_translation test_voices test_imagegen` (450, 90 s), `test_guide test_docs test_includes
+  test_screenplay test_mcp test_cartoon_holding test_cartoon_seating test_cartoon_wind test_tts
+  test_cartoon_directing` (252, 29 s); render: `test_cartoon_props test_cartoon_stage` (3, 3 s).
+- By hand: `vidgen validate` both episodes ok; `vidgen lint` at preview on scratch copies: 0
+  findings each (after moving the meadow's tree to 0.83, lengthening one line and using a tint
+  instead of `night` indoors); stills checked by eye. Full suite not run.
+
+## Step 102 — Review of Phase I
+
+What was done
+- End to end (scratch copies): `vidgen screenplay examples/screenplay/humming_box.md` -> project ->
+  `validate`, `direct` (18 automatic actions), `storyboard`, `lint` (0 findings),
+  `character-sheet --all`, `render --preview` (53 s); `examples/cartoon` with `auto_direct: true`
+  (`direct`: a look and a head shake; lint 0); `examples/cartoon_series` episode 1 and 2
+  (`validate` with `included:`, `direct`, `lint` 0 each, sheets, a storyboard, a preview render).
+  Through `vidgen mcp` (stdio, the SDK's client): `screenplay` (also with `cast`), `validate`,
+  `direct`, `character_sheet`, `lint`.
+- Fixes (DESIGN §69.36):
+  - **Captions on an automatically directed stage crashed** (`ValueError: SceneConfig(...) is
+    not in list`): `overlays.scene_overlays` found the scene with `list.index(spec)`, but a stage
+    with `auto_direct` renders a copy of its spec with the automatic actions merged. Now by id.
+  - **Seats**: every built-in seat (chair / box 0.27, rock 0.2 of a character's height) was above
+    every generated character's hips (0.15–0.24), so a seated character sat higher than it stood,
+    feet hanging, and looked as if standing on the prop. `PROP_HEIGHTS`: chair 0.5 -> 0.26, box
+    0.3 -> 0.155, rock 0.22 -> 0.155 (seats at 0.14); `Character.seated` puts the hips
+    (`_hips_y`, the first leg part's pivot) on the seat line instead of the body's lowest point.
+    Boxes and rocks are drawn smaller everywhere (examples/cartoon and both episodes still lint
+    clean).
+  - **Stars beside heads**: `Stage.construct` builds the backdrop after the layout; the stars end
+    `STAR_HEAD_ROOM` (0.04 of the frame height, new, exported) above the highest character's head.
+  - **`vidgen mcp` confinement** (Step 101's gap): `svg` in `project.PATH_KEYS` (character
+    `look.svg`, stage and set prop `svg`); `.pt` parts of a Kokoro `voice` checked against the
+    project folder and the current folder (`VOICE_FILE_KEY`, `kokoro_voices.voice_parts`);
+    `includes.read_include_file` (`--cast`) confines the cast's own includes under
+    `VIDGEN_CONFINE_ROOT`. Problems are de-duplicated.
+  - **Unused shared voices**: `voices.voice_warnings(config, origins)` skips voices written in an
+    included file (an episode made with `screenplay --cast` warned about every cast voice).
+- Showcase (real narration): a scratch copy of the screenplay project with captions (speaker
+  colours), sunset light fading to night, breeze then `wind: windy`, `[gasp]` and `[laugh]`, an
+  overlap (0.3 s), an interrupt, a two-shot and a close-up, leaning on the tree, sitting on a rock,
+  a crate picked up and given. `vidgen tts` with Kokoro (3.12 venv, 2500 MB cgroup, 42 s for 11
+  beats; bm_fable / am_fenrir fetched into the scratchpad's HF cache); at the generated speed 0.85
+  `narration_speed` warned on 5 beats, so the copy uses 0.75 / 0.8 (lint 0 findings). Rendered at
+  1280x720 30 fps in one command (79 s, again 82 s after the fixes):
+  `/home/claude/work/phase-i-review/showcase.mp4` (57.6 s, 4.6 MB, −21.0 LUFS).
+- Stills checked by eye (about 30): feet on the ground while walking, seated (after the fix: hips
+  on the rock, knees bent) and leaning; the crate in Gus's hand in the close-up and in Fen's after
+  `give`; shadows under characters and props, none under the held crate; captions stack Fen's and
+  Bram's lines in their colours during the overlap and both mouths move; the interrupt cuts at the
+  next line's start; night grade leaves captions white; no stray parts. Wind is subtle (the tree
+  Bram leans on does not sway, by design). Whisper transcription: skipped (the owner's call).
+- Docs: README (cartoon feature line, MCP tool list gains `screenplay`), CONFIG.md (MCP tools and
+  folder rule, `sit_on`, `night` stars), DESIGN (§6.4 Step 102, §63 confinement, §69.8 sizes, §69.28
+  `seated`, §69.31 stars, new §69.36), EXTENDING (`seated`), guide MCP tool list (+ `AGENTS.md`).
+  Checked by grep: every Phase I action, beat / scene / top-level key, command, MCP tool, lint
+  rule and voice-sound marker is in CONFIG.md, DESIGN.md and the guide. `docs/gallery/stage.md`
+  media regenerated (`vidgen gallery --types stage`: shadows; the page text unchanged).
+- Wheel (`pip wheel . --no-build-isolation` in the 3.12 venv): all 19 Phase I modules and all 223
+  tracked `vidgen/data` files are in it (Phase I added no data files).
+- Backlog: 3 bug lines and 13 quality lines for Phase I gaps (Steps 89–102); the "arms rigid, no
+  knees" line trimmed (Step 92 did it).
+
+Files touched
+- `src/vidgen/overlays.py`, `cartoon/character.py`, `cartoon/props.py`, `cartoon/lighting.py`,
+  `scenes/stage.py`, `project.py`, `includes.py`, `voices.py`, `cli.py`, `api.py`; docs above;
+  `docs/gallery/media/stage-*`; `tasklist.md`; new `tests/test_phase_i_review.py`; updated
+  `tests/test_cartoon_seating.py` (hips on the seat line, the seated body's bottom a little below
+  it; on the stage the feet stay on the ground and the head goes down, instead of the feet hanging).
+
+Public interfaces
+- `vidgen.api` adds `STAR_HEAD_ROOM`. `PROP_HEIGHTS` values for chair / box / rock;
+  `Character.seated` semantics (hips on the seat); `project.PATH_KEYS` gains `svg`,
+  `project.VOICE_FILE_KEY`; `voices.voice_warnings(config, origins=None)`.
+
+How to test
+- `pytest -m "not render" tests/test_cartoon_*.py tests/test_overlap*.py tests/test_includes.py
+  tests/test_screenplay.py tests/test_voice_sounds.py tests/test_phase_i_review.py` (570 passed,
+  21 s; 3 seating failures before the test update, all from the seat change); `-m "not render"
+  test_cartoon_seating test_docs test_guide test_api test_gallery test_project test_review4
+  test_voices test_overlays test_captions` (215, 17 s); `-m "not render" test_mcp
+  test_json_output test_cli` (46, 28 s); render: the Phase I files above (31, 26 s; one seating
+  assertion updated), `test_phase_h_review test_mcp test_captions test_overlays` (16, 55 s),
+  `test_builtin_scenes test_gallery -k "stage or gallery"` (3, 10 s). The render test of
+  `test_phase_i_review.py` fails with the old `overlays.py`. Full suite not run (not asked).
+
+## Step 102 follow-up — Voices that suit the looks; interrupts that cut whole words
+
+What was built (the owner's two findings on the Phase I showcase)
+- **Voices vs looks** (`screenplay.py`): `vidgen screenplay` chose looks and voices separately, so
+  Fen (bun, scarf, round) got `bm_fable` and Bram (tall, short hair, glasses) `af_heart`. Each of
+  the six `LOOKS` now has a `voice_kind` (`VOICE_KINDS` feminine / masculine / neutral: two of
+  each); the kind is not written to `video.yaml`. A screenplay states a kind with a pronoun in a
+  line's brackets: `FEN (she): ...`, `BRAM (he, doubtful): ...`, `GUS (they): ...` (`she/her`...
+  too; `PRONOUN_KINDS`, `_pronoun_kind` takes it out of the manner; `Line.voice_kind`), or with
+  `voice_kind:` on a front matter character (taken out of the entry). `_stated_kinds`: two
+  kinds for one character, a pronoun on the narrator, an unknown kind are `VidgenError`s naming
+  the line. `_pick_look`: a stated kind gets the least used look of that kind (then neutral,
+  then any); without one the least used look in order (as before; `seed` when a look repeats).
+  `assign_voices(voice, language, kinds)` (a count still works) -> `_kokoro_picks`: a voice of
+  the kind's gender (neutral: the gender used less so far), least used group, then least used
+  accent; without kinds the same order as before. OpenRouter: in turn (no genders known);
+  ElevenLabs: still a TODO note, which now names each character's kind. Declared and cast
+  characters keep their entries and voices.
+- **Interrupt without overlap** (`overlap.py`): it started `INTERRUPT_LEAD` 0.5 s before the
+  earlier line's speech end and cut "normal" in "Is that normal?". Now
+  `SpokenLine.lead_after(earlier)` starts it `INTERRUPT_WORD_SHARE` 0.7 into the earlier line's
+  last word (`SpokenLine.last_word`, `beat_last_word`: the stored alignment of what the TTS said,
+  new `speech.stored_word_times`, which `beat_word_times` now uses too); without stored times
+  `INTERRUPT_LEAD` is 0.2 s. `BeatWindow.next_lead` (the lead used); the activity file's
+  `overlap` of such a beat is that lead.
+- **Lint** (`lint/timing_rules.py`): `talked_over` also reports an interrupt (with or without
+  `overlap`) that cuts a line with audio before whole words start (`_cut_words`: words timed over
+  the whole MP3, `talked_over(words, cut, inf)`), with the overlap below which they are heard.
+
+Showcase v2
+- Scratch copy `r102/show`: `fen_voice` `af_heart`, `bram_voice` `bm_fable` (speeds kept at
+  0.75). `vidgen tts` (Kokoro venv, 2500 MB cgroup) re-voiced the 6 beats of Fen and Bram; the
+  other 5 were up to date. Render 1280x720 30 fps: 35.8 + 42.8 s,
+  `/home/claude/work/phase-i-review/showcase_v2.mp4` (57.80 s, -21.1 LUFS).
+- "Is that normal?" (reveal_b2, 37.633 s): stored times say "normal?" 3.013–4.775 s, the MP3's
+  level shows the word at 3.0–3.62 s and a -40 dB tail to 4.57 s; the cut is at 4.233 s
+  (41.867 s in the video). In the MP4 "normal" sounds at 40.65–41.25 s (about -15 dB), then the
+  quiet tail, the fade at 41.87 s, Gus from 42.05 s: the word is heard whole. Six stills checked
+  by eye (Fen and Bram talking, the two-shot, Bram on the rock, the close-up of Gus).
+
+Files touched
+- `src/vidgen/screenplay.py`, `overlap.py`, `speech.py`, `activity.py`, `lint/timing_rules.py`,
+  `config.py` (`TalkedOverRule` docstring); `docs/CONFIG.md` (screenplay lines and characters,
+  overlapping lines, lint table), `DESIGN.md` (§69.25, §69.34), guide (+ `AGENTS.md` copy),
+  `tasklist.md` (follow-up line, 3 Backlog lines); tests `tests/test_screenplay.py` (+5),
+  `tests/test_overlap.py` (+3, one assertion follows `INTERRUPT_LEAD`).
+
+Decisions
+- The pronoun goes in the manner brackets (no new syntax; `(doubtful)` and other manners are
+  unchanged, a pronoun is never a manner word). Neutral looks balance genders across the cast.
+- Kokoro's alignment stretches the last word over the trailing tail, so the cut lands after the
+  audible word (late, never early); the speech end from `speech_bounds` is unchanged.
+- Searched first: no voice-kind code existed; `beat_word_times` held the alignment read, now
+  shared through `stored_word_times`; `talked_over` reused for the interrupt check.
+
+Known gaps
+- Only Kokoro picks by kind; declared characters' looks are not read for a kind.
+- Pre-existing, not fixed: `test_pronunciation.py::test_karaoke_captions_highlight_the_written_word_while_it_is_said`
+  fails on HEAD 0ad8eee as well (karaoke state shape from Step 100); in the Backlog.
+
+How to test
+- `pytest -m "not render" tests/test_screenplay.py tests/test_overlap.py tests/test_overlap_pinned.py
+  tests/test_includes.py tests/test_cartoon_lint.py tests/test_cartoon_directing.py
+  tests/test_phase_i_review.py tests/test_timing_lint.py tests/test_captions.py
+  tests/test_voice_sounds.py tests/test_cartoon_visemes.py tests/test_pronunciation.py
+  tests/test_guide.py tests/test_docs.py` (316 passed, 1 pre-existing failure, 11 s); `-m "not
+  render" test_mcp test_json_output test_tts_kokoro test_tts_openrouter` (102 passed, 1 skipped,
+  34 s); render: `test_overlap test_overlap_pinned test_cartoon_lint test_cartoon_directing
+  test_phase_i_review test_timing_lint` (9, 18 s), `test_screenplay test_includes test_mcp
+  test_json_output` (4, 32 s). Full suite not run.
+
+## Fix — karaoke pronunciation test after Step 100
+
+The test, not the code: `Captions.state` returns `(caption, (word, ...))` (one word index per
+overlapping part) since Step 100, and with a pronunciation the karaoke still shows the written
+words timed by the respelled audio (same word indices as before). Only
+`tests/test_pronunciation.py::test_karaoke_captions_highlight_the_written_word_while_it_is_said`
+used the old `(caption, word)` shape (grep of tests/); it now expects `(0, (0,))` / `(0, (1,))`.
+Backlog line removed. How to test: `pytest tests/test_pronunciation.py tests/test_captions.py
+tests/test_voices.py tests/test_overlap.py tests/test_overlap_pinned.py` (78 non-render, 7 render passed).
+
+## Step 103 — Props: basket, umbrella, napkin
+
+What was built
+- Three built-in props in `src/vidgen/cartoon/props.py` (primitives, theme colours, original
+  drawings): `basket` (0.2 of a character; `secondary` wicker, `accent` cloth, arched handle),
+  `umbrella` (0.6; `primary` canopy, `dim` shaft and hook; closed and open shapes), `napkin`
+  (0.05; light `#F4F6FA` cloth with `accent` checks, lying flat). `PROP_KINDS` has 20 props.
+- Props with shapes (`PROP_SHAPES = {"umbrella": ("closed", "open")}`): a drawer may return a
+  dict of shapes; `Prop(shapes=...)` keeps every shape in its family, the hidden ones without
+  points (the Step 88 live-copy rule), and `Prop.show_shape(name)` redraws the other shape from
+  its prop-unit points through an invisible anchor that moves, scales and mirrors with the prop
+  (`character.anchor_mobject` / `anchor_placement` / `apply_matrix`, factored out of `Character`,
+  which uses them too). `Prop.shape`, `shapes`, `shape_width`; `draw_prop(..., shape=)`.
+- Grips (`PROP_GRIPS`): a basket is held by the top of its handle (it hangs below the hand), an
+  open umbrella by its shaft above the hook; other props by their middle. `Prop.grip`,
+  `Prop.grip_point()`. The follow updater, `PropMove` (moves and scales about the grip) and
+  `put_down` / `throw` targets (`_standing_grip`) go through it; `pick_up` reaches for the grip.
+  `Prop.feet()` of a prop with an anchor is below the anchor's origin (no sideways slide when an
+  umbrella opens on the ground).
+- Overhead (`cartoon/holding.py`): `OVERHEAD_SHAPES` (`open`), `overhead_point(feet, height,
+  facing)` (0.08 heights in front of the feet, 0.6 up), `OVERHEAD_HEIGHT` 0.85 (`held_height(...,
+  overhead=True)`, not capped at 0.4). A prop held overhead is drawn right before its holder (the
+  shaft behind the head, the canopy above it).
+- Actions `open` / `close` (choice: actions on the prop, `- open: umbrella`, not a `hold` option,
+  so a standing umbrella can open too and a held one can open later in the scene): 0.6 s, the
+  shape switches half-way (`PropReshape` in `cartoon/transition.py`, which also keeps the grip at
+  the hand because Manim pauses the prop's follow updater while it is animated); a held one gets
+  an `ArmMove` to the overhead / hold point and its new held size. Validate: a target that is not
+  a prop, or a prop that cannot (`'tree' cannot open (props that can: umbrella)`). Stage prop key
+  `open: true` (umbrella only; else a config error).
+- Shadows: `ShadowCaster.widths` per shape; props targeted by `open` / `close` are movable (their
+  shadow follows and narrows when they close). Layout dump: `shape` on a prop with shapes.
+- Prop gallery still `docs/gallery/media/props.png` regenerated (20.8 KB): 20 props plus
+  `umbrella (open)`, 4 rows.
+
+Checked by eye: the gallery at 1920x1080; a scratch stage (`vidgen validate`, `vidgen storyboard`,
+`vidgen lint`) where dot holds the umbrella and opens it (canopy over the bun, shaft behind the
+head), walks with it, hands it open to moss (moss holds it overhead), moss picks up the basket by
+its handle and puts it down, a spare umbrella starts open and closes on the ground (its shadow
+narrows). Lint: one author-caused `rushed_animation` (too many steps in a 2.7 s beat). Geometry of
+the overhead hold measured for every body (round, tall, square, bean) at head sizes 0.6 / 1.0 /
+1.6 with a bun: canopy rim 1.02–1.09 heights up (head top 1.0), canopy −0.34..+0.50 heights about
+the feet.
+
+Files touched
+- `src/vidgen/cartoon/props.py`, `holding.py`, `transition.py`, `character.py` (anchor helpers,
+  `_apply` -> `apply_matrix`), `shading.py`, `still.py`, `src/vidgen/scenes/handling.py`,
+  `scenes/stage.py`, `introspect.py`, `api.py`.
+- Docs: `docs/CONFIG.md` (props table and picnic line, new "Umbrellas: open and close",
+  action / run_time / targets / actions rows, layout `shape`), `DESIGN.md` (§6.4, §69.8, new
+  §69.37), `docs/EXTENDING.md`, `docs/gallery/stage.md` (props rows as `vidgen gallery` writes
+  them), `docs/gallery/media/props.png`, guide (`src/vidgen/data/guide/AGENTS.md` + `AGENTS.md`:
+  action rows, props-in-hands bullet, troubleshooting list), `tasklist.md`.
+- Tests: `tests/test_cartoon_props.py`, `tests/test_cartoon_holding.py`, `tests/test_actions.py`
+  (action name lists gain `close` / `open`).
+
+Public interfaces
+- `vidgen.api` adds `PROP_SHAPES`, `PROP_GRIPS`, `PropReshape`, `OVERHEAD_SHAPES`,
+  `OVERHEAD_FORWARD`, `OVERHEAD_HAND`, `OVERHEAD_HEIGHT`, `RESHAPE_SECONDS`, `RESHAPE_SHARE`,
+  `overhead_point`; `Prop`, `draw_prop`, `held_height`, `ShadowCaster` gain the keywords above.
+  New built-in actions `open`, `close`; stage prop key `open`; layout key `shape`. Compatible:
+  props without a grip are moved and held by their middle as before.
+
+Decisions / deviations
+- Both umbrella shapes are one prop unit tall, so `height_factor` and every size rule hold for
+  either shape; the open one on the ground stands on its hook.
+- The open umbrella is held upright (no tilt): the hand reaches for a point near the chest, the
+  shaft long enough that the canopy clears the head of every generated look, at the price of an
+  umbrella larger in the hand (0.85) than standing (0.6).
+- Searched first: no multi-shape prop or grip code existed (`grep -rn "shape\|grip" src/vidgen/cartoon/props.py
+  src/vidgen/scenes/handling.py`: none); reused the character's live-copy approach and anchor
+  maths (now shared helpers), `_carry`, `ArmMove`, `PropMove`, `_held`, the shadow casters.
+
+Known gaps / TODOs
+- No in-between opening animation (the shape switches at once); the planner does not count
+  `open` / `close` as moves; a closed umbrella is held upright by its middle; wind does not move
+  a held umbrella or blow the napkin away (Step 104); rain falls through the canopy (Step 105).
+
+How to test
+- `pytest tests/test_cartoon_props.py tests/test_cartoon_holding.py` (54 not-render + 4 render, 5 s).
+- Also run (not render): `tests/test_cartoon_*.py test_api test_actions test_introspect test_lint
+  test_phase_h_review test_phase_i_review test_includes test_screenplay` (633, 25 s),
+  `test_docs test_guide test_schema test_actions_coverage test_gallery test_builtin_scenes
+  test_extensions` (314 passed, 65 s; the 2 failures, a YAML snippet and a combined guide row,
+  were fixed and `test_docs test_guide` re-run: 100 passed); render: `test_cartoon_stage test_cartoon_lighting
+  test_cartoon_seating test_cartoon_speed test_cartoon_wind test_cartoon_acting
+  test_cartoon_moving test_introspect` (9, 12 s), `test_phase_i_review test_phase_h_review
+  test_cartoon_sheet test_cartoon_directing` (7, 30 s). Full suite not run.
+
+## Step 104 — Visible wind and props that blow away
+
+What was built
+- Stronger wind (`src/vidgen/cartoon/wind.py`): `felt_force(f) = f × (1 + WIND_BOOST 2 × |f|)`
+  drives `sway_degrees` and `trail_degrees` (spring input and flutter); `trail_degrees` is softly
+  limited (`TRAIL_LIMIT` 80 × tanh); `SWAYS` tree 5 → 8°, bush 4 → 6, plant 9 → 12, sign 1.5 →
+  2, lamp 1.2 → 1.5; `TRAIL_WEIGHTS` (`generator.py`) long hair 0.55 → 0.7, bun 0.35 → 0.4, hat
+  0.3 → 0.35.
+- Particle kinds `leaves` (new shape `leaf`, tumbling like confetti, drift 0.6) and `streaks`
+  (wind lines: the `streak` shape with `fall` 0 lies along the wind; `ParticleKind.wind_shown`
+  0.2 hides them below that force, so never on a calm stage). Appended to `PARTICLE_KINDS` last.
+- `blow_away` beat action (`scenes/handling.py`, `BlowAway`): `- blow_away: napkin` tumbles a
+  light prop (`LIGHT_PROPS`: napkin, umbrella, ball, cup, basket, box; SVG props too) along the
+  pure seeded path `blown_point` (`gusty_progress`: monotone gusty progress; arc + bobs never
+  under the straight line; whole tumbling turns, so it lands upright) downwind off the stage, or
+  `to:` a mark where it lands at its standing size. Held: `Holdings.drop`, detached (dump agrees),
+  the arm goes back down. Played by `PropMove(..., path=)` (new keyword). Duration
+  `blow_seconds(distance, level)`.
+- Validate: heavy prop / not a prop / bad `to` (`scene_problems`); `holding_problems` drops the
+  holder, refuses a prop someone sits on, and reports any later use of a prop blown off stage;
+  `Stage._calm_blow_problems`: no `to` while the wind is calm. Directing planner follows it
+  (`MOVING_ACTIONS`, `Holdings.drop`). `mid_still_actions` and `_movable_props` include it.
+
+Evidence
+- Angles over 30 s (seed 5, mean / max |°|, before → after): tree breeze 1.1/1.7 → 2.5/4.1,
+  windy 2.1/3.3 → 6.4/10.9, gale 3.6/5.5 → 14.1/24.5; scarf end windy 12.5/18.5 → 23.0/37.0, gale
+  20.9/30.9 → 46.3/69.4; long hair windy 5.7/8.5 → ~13/22.
+- Stills by eye (scratch stage, 854x480): before, windy and gale looked almost still; after, the
+  tree bends at windy and leans hard at a gale, hair / ears / scarf stream, leaves and streaks
+  read at once (streaks absent at breeze). A blow_away scene: the napkin tumbles off right, a gust
+  takes the open umbrella out of dot's hand and it lands upright at 0.8.
+- `wind: 0`: scratch copy of `examples/cartoon` with `wind: 0`, 160x90 5 fps: frame hashes equal
+  to HEAD 837eb8b in a worktree (yard 147, hill 127). The Step 98 hash test passes.
+- `vidgen validate` / `vidgen lint` on the scratch project: ok; lint only the author's tree at
+  0.85 cut off at the edge.
+
+Files touched
+- `src/vidgen/cartoon/wind.py`, `generator.py`, `holding.py`, `transition.py`, `directing.py`,
+  `src/vidgen/particles.py`, `particle_field.py`, `scenes/handling.py`, `scenes/stage.py`,
+  `scenes/particles_action.py`, `api.py`.
+- Docs: `docs/CONFIG.md` (particles kinds / counts / colours, wind section numbers, new "Props that
+  blow away", stage `wind` row, action / run_time / targets / actions rows), `DESIGN.md` (§2
+  tree, §6.4, §69.9 / §69.32 pointers, new §69.38), `docs/EXTENDING.md`, `docs/gallery/stage.md`
+  (rows as `vidgen gallery` writes them), guide (`src/vidgen/data/guide/AGENTS.md` + `AGENTS.md`),
+  `tasklist.md`.
+- Tests: `tests/test_cartoon_wind.py` (+6 not-render, +1 render; sway test uses `felt_force`),
+  `tests/test_particles.py` (9 kinds), `tests/test_actions.py` (action lists),
+  `tests/test_cartoon_sheet.py` (`mid_still_actions`).
+
+Public interfaces
+- `vidgen.api` adds `LIGHT_PROPS`, `blow_seconds`, `blown_point`, `felt_force`, `gusty_progress`;
+  `PropMove(path=)`, `Holdings.drop`, `HANDLING_ACTIONS` gains `blow_away`, `PARTICLE_KINDS`
+  gains `leaves`, `streaks`, `ParticleKind.wind_shown`. New built-in action `blow_away`.
+  Changed on purpose: windy stages render differently (more sway / trail); calm ones do not.
+
+Decisions / deviations
+- Leaves and streaks are particle kinds the author adds, not an automatic effect (an automatic
+  field would change the layout dump and lint of every windy stage).
+- Without `to` and with a calm wind the prop would still go right; validate reports it instead.
+- A prop blown off stage is gone for the scene (validate refuses later uses).
+- Searched first: no blow / tumble / gusty-path code existed (`grep -rn "blow\|tumble" src/vidgen`:
+  none); reused `gust`, `wind_phase`, `wind_seed`, `PropMove`, `_standing_grip`, `_held` /
+  `detach`, `Holdings`, the particle model's spin / twinkle / streak angle.
+
+Known gaps / TODOs
+- No open-umbrella tug or flip (optional, left out); long hair turns as one piece (at a gale its
+  far side swings out); no sound for a blown prop; a blown prop does not bounce on landing.
+
+How to test
+- `pytest tests/test_cartoon_wind.py` (17 not-render + 3 render, ~10 s).
+- Also run: not render `test_cartoon_wind test_particles test_cartoon_holding test_actions
+  test_api test_cartoon_directing test_cartoon_stage test_cartoon_props test_cartoon_seating
+  test_cartoon_generator test_cartoon_character test_cartoon_lint test_cartoon_sheet test_lint
+  test_introspect` (298 passed + the sheet fix), `test_cartoon_sheet test_docs test_guide
+  test_schema test_actions_coverage test_gallery` (186, 63 s), `test_phase_h_review
+  test_phase_i_review test_screenplay test_includes test_mcp test_extensions test_builtin_scenes`
+  (210, 31 s); render `test_cartoon_wind test_particles test_cartoon_holding test_cartoon_sheet`
+  (9, 7 s), `test_cartoon_stage test_cartoon_props test_cartoon_directing test_cartoon_seating
+  test_cartoon_lighting test_cartoon_character test_cartoon_generator` (11, 10 s). Full suite not run.
+
+## Step 105 — Rain on the ground
+
+What was built
+- Pure model `src/vidgen/cartoon/rain.py` (no manim, Manim units, `y` up): `rain_ground(ground,
+  top, frame_height, shelters)` → `RainGround` (landing band from `LANDING_FRONT` 0.05 frame
+  heights in front of the ground line up to `ground_top`); per-drop seeded landing shares and
+  splash spreads (`landing_shares`, `default_rng([seed, 105])`, so Step 76's drop positions are
+  unchanged); `ShelterBox(left, right, top, feet).covers` and `drop_floors` (drops landing behind
+  `SHELTER_REACH` 0.1 frame heights in front of a shelter's feet stop at its top);
+  `drop_landings` (falling / splashing / age / slide back along the slant); `splash_shapes` (ring
+  + two droplets over `SPLASH_SECONDS` 0.3, depth-scaled); `puddle_spots` / `puddle_count` (4 per
+  frame width) / `puddle_growth` (full at 10 s); `prop_shelter` (`SHELTER_PROPS`: tree, open
+  umbrella).
+- `particle_field.py`: `ParticleField(ground=, seed=)`: a rain field with a ground hides drops past
+  their floor and draws all splashes as one extra `VMobject` child (`splashes`); `drops`, `ended`
+  (set by its fade out). `ParticleSettings.puddles` (default false). `Puddles` (ellipses that grow
+  with the rain's seconds and stay). `particle_field` passes the scene's `rain_ground` for rain
+  and calls the new hook `NarratedScene.particles_started(field, settings)`.
+- `scenes/stage.py`: `Stage.rain_ground()` (shelters from the props' drawn bounds each frame; a
+  held umbrella's feet = its holder's), `particles_started` (keeps rain fields for the bed when
+  foley is on; lays puddles behind the characters, lit), `_lay_on_ground`, `_foley_on` (shared
+  with `action_foley`), `timings()` adds `ambience: [{bed: rain, start, end}]`. `puddles` on a
+  kind other than rain: a config error (stage param) / validate problem (action).
+- Sound: `src/vidgen/ambience.py` (`rain_loop()`: seamless 8 s stereo numpy loop, hiss + drop
+  ticks + plops, circular FFT filters, `RAIN_LEVEL` −32 LUFS; `RAIN_DUCK` 5 dB / 0.4 / 1.0 / 1.5;
+  fades 1.5 s; `merge_spans` / `ambience_spans`, `JOIN_GAP` 0.25 s; `LoopSource`). `mix.py`:
+  `AmbiencePlacement`, `plan_ambience` (on the music track), `MixReport.ambience` (JSON key only
+  when a bed played); a bed makes the mix be written but does not trigger `normalize: auto`.
+  `render/pipeline.py`: scenes' `ambience` shifted to video times in the combined timings.
+- Layout dump leaves `Puddles` out (introspect).
+
+Evidence
+- Stills by eye (scratch stage 854x480: dot picks up and opens an umbrella, moss under a tree at
+  depth 0.3, bush at 0.6, breeze, rain 1.5 + puddles): umbrella and tree columns dry, splashes read
+  as small light marks on the ground band, puddles under the characters, rain falls on dot before
+  the umbrella opens. Two changes after looking: splashes 1.5× larger and opacity 0.85 (they were
+  barely visible), `SHELTER_REACH` 0.05 → 0.1 (drops landing just in front of the tree crossed its
+  crown and moss's hat on screen).
+- Bed level: loop −32.0 LUFS, peak −14.9 dBFS (−2.9 before capping the Pareto tick amplitudes),
+  62 % of the energy at 1–4 kHz. The scratch project's 20 s word-count preview (every beat counts
+  as speech, so ducked all along): −37.5 LUFS integrated; per second −36.4..−38.3 (the swell),
+  −45.5 in the first and −44.5 in the last second (fades). Not listened to by a human.
+- Render cost, same 20 s rain stage at preview (120 drops): HEAD 518e142 14.2 s, this step 14.3 s,
+  with puddles 14.8 s; the dry stage 10.3 s.
+
+Files touched
+- New: `src/vidgen/cartoon/rain.py`, `src/vidgen/ambience.py`, `tests/test_cartoon_rain.py`.
+- `src/vidgen/particle_field.py`, `scenes/stage.py`, `scenes/particles_action.py`, `scene.py`,
+  `mix.py`, `render/pipeline.py`, `introspect.py`, `api.py`.
+- Docs: `docs/CONFIG.md` (particles `puddles` row, new "Rain on the ground", foley sentence, stage
+  `particles` row, action row), `DESIGN.md` (§2 tree, §6.4, §69.9 pointer, new §69.39),
+  `docs/EXTENDING.md` (`particles_started`, `rain_ground`), `docs/gallery/stage.md` (rows as the
+  param docs now say), guide (`src/vidgen/data/guide/AGENTS.md` + `AGENTS.md`: "Rain" bullet,
+  sound bullet), `tasklist.md`.
+
+Public interfaces
+- `vidgen.api` adds `Puddles`, `RainGroundSource`, `RainGround`, `ShelterBox`, `SHELTER_PROPS`,
+  `SPLASH_SECONDS`, `drop_floors`, `drop_landings`, `landing_lines`, `prop_shelter`,
+  `puddle_count`, `puddle_growth`, `puddle_spots`, `rain_ground`, `splash_shapes`. Compatible:
+  `ParticleSettings.puddles`, `ParticleField(ground=, seed=)`, `NarratedScene.particles_started`.
+  Timings: scene `ambience`, mix report `ambience`. Changed on purpose: rain on a stage.
+
+Decisions / deviations
+- Drops are hidden past their floor rather than recycled at it, so camera moves never make them
+  jump; a hidden drop reappears when it wraps to the top (Step 76's cycle).
+- Shelters cover a whole column (behind and a little in front of their feet): drops are drawn in
+  front of everything, so depth-true rain in front of a crown read as rain through it.
+- The bed is on the music track (fades and ducking like music), not an SFX event: it lasts as long
+  as the rain and needs its own ducking depth. Stage only (foley is a stage thing).
+- Searched first: no ground / landing / puddle / ambience code existed (`grep -rn "splash\|puddle\|
+  ambience\|shelter" src/vidgen`: none); reused `ground_top`, `depth_scale`, `FAR_RISE`, the
+  particle model and field, `duck_curve`, `speech_spans`, `_fade_curve`, `MusicTrack`,
+  `integrated_loudness`, the sfx filters, `mark_lit`.
+
+Known gaps / TODOs
+- A drop landing behind a character still crosses it on screen; no rain on roofs or tables;
+  puddles neither reflect nor ripple; one bed intensity for any density; snow does not settle.
+
+How to test
+- `pytest tests/test_cartoon_rain.py` (13 not-render + 2 render, ~6 s).
+- Also run: not render `test_particles test_cartoon_wind test_api test_actions test_music
+  test_cartoon_foley test_introspect test_cartoon_stage test_cartoon_props test_cartoon_holding
+  test_sfx` (265, 32 s), `test_docs test_guide test_schema test_gallery test_actions_coverage
+  test_extensions test_builtin_scenes test_json_output` (337, 68 s), `test_overlap
+  test_overlap_pinned test_scene test_phase_h_review test_phase_i_review test_cartoon_directing
+  test_cartoon_sheet test_lint test_config test_cartoon_lint` (133, 9 s); render `test_particles
+  test_cartoon_stage test_cartoon_wind test_cartoon_foley test_cartoon_lighting test_cartoon_props
+  test_cartoon_holding test_cartoon_rain` (15, 10 s), `test_music test_overlap test_overlap_pinned
+  test_introspect test_scene` (12, 28 s). Full suite not run.
+
+
+## Step 106 — The "Rain Check" cartoon example
+
+What was built
+- `examples/cartoon-rain-check/rain_check.md`: an original screenplay (Pip, she; Juno, he, very
+  sure of his forecast; a narrator), four scenes: meadow (the forecast, a cloud drifts in behind
+  Juno), picnic (two rocks, a sandwich in a napkin handed over, wind, the napkin blown out of
+  Juno's hand, a close-up on Pip), storm (rain, the light goes grey, the run to the tree, an
+  overlap "It is just a little shower!" / "It is a storm, Juno!", Pip interrupts "Juno. Your
+  umbrella.", he opens it under the tree and a gust takes it), night (the rain runs out, stars,
+  "Tomorrow will be sunny. I checked." in a close-up with a comic sting, a pull-back as the rain
+  comes back).
+- `examples/cartoon-rain-check/video.yaml`: `vidgen screenplay` draft hand-edited (2-line header,
+  compact): one `sets: meadow` (sky, ground, tree at 0.8) used by all four scenes; props basket,
+  umbrella (held closed from the start, `open`, `blow_away`), napkin (`hold`, `give`,
+  `blow_away`), cloud (`keyframes`), rocks (`sit_on`); wind 0.15 → `windy` with leaves and
+  streaks, `gale` for the gust; rain with puddles from a beat (`keep: true`), a grey `light` tint,
+  `light: night` with stars; speaker-coloured captions; music cues `bright` (meadow–picnic, −2)
+  then `calm` (storm–night, −6, 2 dB under the rain bed). 1280x720 30 fps, preview 640x360 15 fps.
+  Narrator `bf_emma` 0.75, Pip `af_heart` 0.75, Juno `am_fenrir` 0.7.
+- README example list entry.
+
+Fixes found on the way (with tests)
+- Schema: `shot: {kind: closeup, of: juno, move: true}` (one name, as CONFIG documents and
+  `ShotConfig._from_words` accepts) failed `vidgen schema` validation, which wanted a list.
+  `config._name_or_names_schema` makes `of` a name or a list
+  (`tests/test_schema.py::test_shot_mapping_may_name_one_character`; the examples' schema test
+  caught it).
+- Screenplay: "[Pip runs to the tree. Juno runs to the tree.]" sent both to the same x
+  (`walk_overlap`). `screenplay._target_x` now tries the other side of the prop / character,
+  then a `CHARACTER_GAP` further out, when another character stands within `CHARACTER_GAP` of the
+  spot (`tests/test_screenplay.py::test_two_walks_to_one_prop_end_apart`). DESIGN §69.25 and
+  CONFIG's screenplay grammar say so.
+
+Evidence
+- `vidgen validate`: ok. `vidgen lint` at preview (word-count timing): 0 findings (first pass had
+  the tree / cloud cut at the edges, a rushed react, Pip facing away at night; fixed in the yaml).
+- Real Kokoro (scratch copy, kvenv312, 2500 MB cgroup, offline HF cache): 20 beats; at narrator
+  0.8 / Juno 0.75 `narration_speed` warned on 4 beats (3.57–3.72 words/s; one list line 1.64), so
+  0.75 / 0.7 and the list line rephrased: lint 0 findings.
+- Render 1280x720 30 fps with `--frames-per-beat 3` (one command, 157 s for the 4 scenes):
+  `/home/claude/work/rain-check/rain_check.mp4`, 93.93 s, 11.5 MB, −16.1 LUFS integrated, true
+  peak −1.9 dBTP, volumedetect max −1.7 dB.
+- Stills by eye (~60): feet on the ground walking and standing; seated on the rocks (the low rock
+  hides behind the body); basket in Pip's hand by its handle, napkin in Pip's then Juno's hand;
+  napkin tumbling over the tree; umbrella overhead above Juno's hat, then flying off up-right;
+  rain ends on the ground with splashes, stops on the crown (dry under it), puddles; leaves and
+  streaks while windy; storm grey; stars at night, rain gone in night_b2 and back in night_b4;
+  captions in speaker colours, both lines stacked during the overlap.
+- Levels (stems: `mix.wav` / its gain − narration − sfx, correlation with narration −0.05; pre-
+  normalisation LUFS, +5.4 dB in the MP4): narration −20.8; background under speech −40.4 meadow,
+  −39.9 picnic, −36.0 storm (rain, ducked 5 dB, dominates), −39.4 night; in pauses −30.2 / −31.0
+  / −31.2 / −33.5; the rain spans −35.0 / −34.6 / −38.1. So music sits ~19 dB under the voice,
+  the rain ~15 dB under it, and in the storm the music is below the rain.
+
+Files touched
+- New: `examples/cartoon-rain-check/rain_check.md`, `examples/cartoon-rain-check/video.yaml`.
+- `src/vidgen/screenplay.py`, `src/vidgen/config.py`; `tests/test_screenplay.py`,
+  `tests/test_schema.py`; `DESIGN.md` (§69.25), `docs/CONFIG.md` (screenplay grammar),
+  `README.md`, `tasklist.md` (Step 106, one Backlog line).
+
+Known gaps
+- About 94 s, longer than the planned 70 s (Kokoro at 0.7–0.75 plus 0.7 s pads on 20 beats).
+- Rain started by the night scene's first-beat action begins after the set's 1 s fade-in, so
+  the rain bed dips at the storm → night cut (Backlog). Seated characters on a rock read weakly.
+- Not listened to by a person; Whisper not run.
+
+How to test
+- `pytest -m "not render" tests/test_screenplay.py tests/test_schema.py tests/test_config.py
+  tests/test_cartoon_shots.py tests/test_json_output.py tests/test_docs.py tests/test_guide.py
+  tests/test_mcp.py` (all passed: 20, 79 with config, 108 with shots/json/docs/screenplay, 61 with
+  mcp/guide). `vidgen validate` / `vidgen lint examples/cartoon-rain-check`. Full suite not run.
+
+## Step 107 — Effect symbols over characters
+
+What was built
+- Beat action `effect` (`src/vidgen/scenes/effect_action.py`, against `vidgen.api`): `- effect:
+  pip` + `to: sweat | anger | idea | question | exclaim | sleep | hearts | stars | sparkle | tear`,
+  options `color` (theme token or hex; default the symbol's token) and `sound` (`true`). Run time
+  0.4 (the pop); reversible, `until_next_beat`; `alters_targets = False` (plays in one batch with
+  the character's other actions). The symbol pops in with a bounce, follows the head every frame,
+  keeps moving, and shrinks away at the next beat (or its `until` beat).
+- Pure geometry in `src/vidgen/cartoon/effects.py`: `EFFECT_KINDS`, `EFFECT_STYLES` (spot, size in
+  head heights, theme token), `effect_pieces` (closed outlines from circles, ellipses, stars, a
+  drop and heart curve, explicit `!` / `Z` polygons and `thick_path` bands), `spot_at` /
+  `effect_spot` (spots `above front back corner ring eye` from the head's box and facing, a hat's
+  top lifting `above` / `ring`, `ALTERNATE_SPOTS` when a bubble is in the way), `pop_scale`
+  (Step 82 `Spring` 3 Hz ζ 0.35 blended with an eased grow by `cartoon_motion`), `exit_scale`,
+  `piece_pose` / `piece_center` (drip, pulse, rock, shake, rising Zs, bobbing hearts, orbiting
+  stars, twinkle, running tear), `EXPRESSION_EFFECTS`.
+- Drawing in `src/vidgen/cartoon/effect_symbols.py`: `EffectSymbol` (a `VGroup` per piece, redrawn
+  from stored points each frame; tiny members get no points), `follow(character, avoid=)` (a dt
+  updater), `head_box`, `crown_top`, `eye_point`, `effect_color`. Never added to the `Character`.
+- Foley (`cartoon/foley.py`): `PlayedAction.effect`, `EFFECT_SOUNDS` (built-in sounds only:
+  `chime` short ding for idea, high `chime` for sparkle, `pop` at four pitches, a short `thud` for
+  anger; sleep, stars, tear silent); `Stage.action_foley` passes the kind unless `sound: false`.
+- Layout dump: kind `effect` with `effect` and `effect_of`; `describe` and `lint_ignore` know it.
+  Lint: `bubble_overlap` also reports a bubble covering a symbol; `hidden_speaker` skips symbols.
+  A symbol placed while a bubble is on screen takes another spot; `Say._bubble` avoids symbols.
+- `auto_direct` kind `effects` (`DIRECTING_KINDS`, `AutoDirect.effects`): `_plan_effects` adds at
+  most one symbol per beat for the first change to surprised / thinking / angry (written `emote` /
+  `react`, a voice sound's face, then the automatic reactions via `_SceneState.faces_now`), none
+  with a written `effect`.
+- Screenplay: `_EFFECT_VERBS` (has an idea, is confused, is startled, sweats, is angry, falls
+  asleep, falls in love, sees stars, sparkles, cries...) map to `effect` actions.
+
+Files touched
+- New: `src/vidgen/cartoon/effects.py`, `src/vidgen/cartoon/effect_symbols.py`,
+  `src/vidgen/scenes/effect_action.py`, `tests/test_cartoon_effects.py`.
+- `src/vidgen/api.py`, `scenes/__init__.py`, `scenes/acting.py` (bubble avoids symbols),
+  `scenes/stage.py` (foley, docstrings), `cartoon/foley.py`, `cartoon/directing.py`, `config.py`
+  (`DIRECTING_KINDS`, `AutoDirect.effects`, docstrings), `introspect.py`, `lint/cartoon_rules.py`,
+  `lint/layout_rules.py` (`describe`), `lint/run.py` (`lint_ignore`), `screenplay.py`.
+- Docs: `docs/CONFIG.md` (new "Effect symbols (`effect`)", actions rows and lists, auto_direct,
+  screenplay grammar, foley, layout keys, lint rows, `lint_ignore`), guide
+  `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md` (actions row, "Effect symbols" paragraph,
+  auto_direct, screenplay, sound, troubleshooting), `DESIGN.md` (§2 tree, §6.4, §69.23 note, new
+  §69.40), `docs/EXTENDING.md`, `docs/gallery/stage.md` (param rows as written by the docstrings),
+  `tasklist.md`.
+- Tests updated: `tests/test_actions.py` (action name lists), `tests/test_cartoon_directing.py`
+  (kinds; the example and the dialogue now get an `effect`), `tests/test_mcp.py` (`direct` on the
+  example gains `effect moss exclaim`).
+
+Public interfaces
+- `vidgen.api` adds `EFFECT_KINDS`, `EFFECT_SECONDS`, `EFFECT_STYLES`, `EXPRESSION_EFFECTS`,
+  `EffectSpot`, `EffectSymbol`, `effect_color`, `effect_spot`, `head_box`, `piece_pose`,
+  `pop_scale`. New built-in action `effect`; `AutoDirect.effects`; `PlayedAction.effect`; layout
+  kind `effect`. Behaviour change: `auto_direct: true` now adds symbols (`{effects: false}` for the
+  old output); `examples/cartoon-rain-check`, `cartoon-music-box` and `cartoon_series/episode_1`
+  get 1-4 automatic symbols each.
+
+Decisions / deviations
+- The effects pass acts on a character a written `emote` / `react` targets (other passes leave
+  such characters alone): the task asks for a symbol "with a strong expression change", which is
+  most often a written one; the symbol changes nothing the action set. A written `effect` in the
+  beat stops it.
+- Shapes are drawn as filled outlines (strokes turned into bands by `thick_path`), not font glyphs
+  or Manim strokes, so they scale with the head and outline like the characters; shapes are never
+  mirrored, only their places and tilts.
+- Water symbols use `primary` (a theme token) rather than a fixed blue, as the task asks for theme
+  colours; with an ink outline they read on any background.
+- The symbol keeps the spot it chose when the effect started (no jumping when a bubble comes
+  later); the bubble avoids it instead.
+- Searched first: reused `Spring` (pop), `smoothstep`, `_Acting` / `_characters`, the foley path
+  (`action_foley`, `foley_cues`), `callout_area`, the bubble placement's `avoid` list, the
+  planner's passes and the screenplay's predicate grammar; no symbol or emote-mark code existed
+  (`grep -rni "sweat\|idea\|symbol" src/vidgen/cartoon src/vidgen/scenes`: none).
+
+Evidence
+- Stills of all ten symbols on `dot` (generated, bun), `moss` (generated, hat and glasses) and the
+  SVG `sprout`, facing right and left (scratch sheets at 3200x1040): fixed on the way the hat
+  covering symbols above the head (`crown_top`), a broken mitred `Z` (now one polygon), thin
+  anger / `!` shapes and small sleep / stars / sparkle sizes.
+- A scratch copy of `examples/cartoon` with six written effects and `auto_direct: true`
+  (preview 854x480): storyboard checked by eye (bulb, sparkle after the walk, exclamation mark
+  following moss's jump, Zs, tear, sweat); `vidgen lint` first gave `bubble_overlap` (anger mark
+  under moss's bubble) and `rushed_animation` (the effect waiting for a `react`); after
+  `ALTERNATE_SPOTS` for `corner` and `alters_targets = False`: 0 findings.
+- Scratch copies linted at preview: `cartoon-rain-check` (4 scenes) 0 findings, `cartoon-music-box`
+  0, `cartoon_series/episode_1` 0 (episode 2 gets no symbol). Stills of storm_b4 and reveal_b4
+  looked right (symbols not graded by the storm's tint).
+
+Known gaps / TODOs
+- A cycling symbol (tear, Zs) can be between cycles at a still; symbols have no depth sort (always
+  in front); no symbols for props; an `effect` and a `surprised` face both pop (two sounds).
+- Not listened to by a person.
+
+How to test
+- `pytest tests/test_cartoon_effects.py` (46 not-render + 1 render at 160x90, ~6 s).
+- Also run (not render): `test_guide test_docs test_gallery test_actions test_cartoon_directing`
+  (163, 4 s), `test_schema test_introspect test_lint test_cartoon_lint test_cartoon_stage
+  test_cartoon_foley test_screenplay test_cartoon_acting test_api test_config test_extensions
+  test_cartoon_lighting test_cartoon_shots test_cartoon_reframe` (255, 70 s), `test_json_output
+  test_cli test_mcp test_builtin_scenes test_phase_h_review test_phase_i_review test_storyboard
+  test_cartoon_sheet test_actions_coverage` (211, 36 s, after the `test_mcp` update); render:
+  `test_cartoon_effects test_cartoon_acting test_cartoon_directing test_cartoon_foley
+  test_cartoon_lint test_cartoon_lighting` (9, 11 s), `test_introspect test_phase_i_review
+  test_screenplay` (2, 12 s). The full suite was not run.
+
+## Step 108 — Motion effects
+
+What was built
+- Pure `src/vidgen/cartoon/motion_effects.py`: `motion_effect_cues(played, strength)` ->
+  `MotionEffectCue(kind, time, seconds, toward, arm)` for one animation as it played: a walk
+  (`walk_to`, `run_to`, `enter`, `exit`) with top speed >= `FAST_SPEED` 1.15 heights/s gets dust
+  back at set-off (not for `enter`), speed lines near full speed, dust forward at the stop (not
+  for `exit`); a jump gets dust at the landing and `impact` stars from `HARD_LANDING` 0.7
+  heights; a flying `PropMove` (throw, blow_away) gets speed lines from leave to arrive; a
+  `gesture` with `big: true` (point, wave; shrug both hands) gets a `whoosh`. Strength 0
+  (`cartoon_motion: none`) gives nothing. Shapes: `dust_puffs`, `speed_lines`, `impact_stars`,
+  `arc_band`, `fade`; `motion_seed` (crc32), `effect_scale` (calm 0.76).
+- `src/vidgen/cartoon/motion_effect_shapes.py`: `MotionEffect` (a `VGroup` pool redrawn by a dt
+  updater; dust / stars stay where they rose; speed lines follow a character's back or a prop's
+  motion; the whoosh follows the hand about the shoulder). Never added to a character, not lit.
+- Runner: `ActionRunner._run` calls the new hook `NarratedScene.action_motion_effects` right after
+  `action_foley`. `Stage.action_motion_effects` adds the effects (`motion_effects` stage param,
+  else top-level `motion_effects`, default true), inserts each right after its mover and its held
+  props (speed lines right before it), and a scene updater `_motion_sweep` takes finished ones off.
+  Foley and effects share `_played` (builds the `PlayedAction`).
+- `run_to` (`scenes/moving.py`, subclass of `WalkTo`): `Walk(gait=RUNNING)`; `Gait` /
+  `WALKING` / `RUNNING` / `RUN_SPEED` 6 in `cartoon/acting.py`; `walk_cycle(steps, amplitude,
+  gait)`; `Walk.step_length` (foley footfalls via `footfall_shares(..., step_length)` and
+  `PlayedAction.step_length`); body lean 12° × walk amplitude. `gesture` option `big`.
+- `run_to` added wherever `walk_to` counts as a walk: `WALKING_ACTIONS` (foley), directing's
+  `LOOK_CHANGING`, `MOVING_ACTIONS` and state replay, `holding_problems` replay, `PINNED_ACTIONS`,
+  `Stage.mid_still_actions`.
+- Layout dump kind `motion_effect` (`motion_effect`, `effect_of`); lint `describe`; `off_frame`,
+  `covered_text`, `hidden_speaker` skip it.
+
+Files touched
+- New: `src/vidgen/cartoon/motion_effects.py`, `src/vidgen/cartoon/motion_effect_shapes.py`,
+  `tests/test_cartoon_motion_effects.py`.
+- `src/vidgen/actions.py`, `scene.py`, `api.py`, `config.py`, `introspect.py`,
+  `scenes/stage.py`, `scenes/moving.py`, `cartoon/acting.py`, `cartoon/transition.py`,
+  `cartoon/foley.py`, `cartoon/directing.py`, `cartoon/holding.py`, `cartoon/seating.py`,
+  `lint/layout_rules.py`, `lint/cartoon_rules.py`, guide `src/vidgen/data/guide/AGENTS.md` + copy
+  `AGENTS.md`.
+- Docs: `docs/CONFIG.md` (top-level and stage rows, `run_to` and `big` in Moving, new "Motion
+  effects (`motion_effects`)", action lists, run times, targets, foley, layout kinds, mid stills),
+  `DESIGN.md` (§2 tree, §6.4, new §69.41), `docs/EXTENDING.md` (hook), `docs/gallery/stage.md`
+  (param row, hand-added as the docstring reads), `tasklist.md`.
+- Tests updated: `tests/test_actions.py` (action name lists), `tests/test_cartoon_sheet.py`
+  (`mid_still_actions`).
+
+Public interfaces
+- `vidgen.api` adds `MOTION_EFFECT_KINDS`, `FAST_SPEED`, `HARD_LANDING`, `MotionEffectCue`,
+  `MotionEffect`, `effect_scale`, `motion_effect_cues`, `motion_seed`, `motion_strength`,
+  `resolve_motion`, `Gait`, `WALKING`, `RUNNING`, `RUN_SPEED`. `Walk(gait=)`, `.gait`,
+  `.step_length`; `PlayedAction` fields `step_length`, `lift`, `gesture`, `big`, `flight`;
+  `footfall_shares(step_length=)`; hook `NarratedScene.action_motion_effects`; config
+  `motion_effects` (top level, stage). New action `run_to`, gesture option `big`.
+- Changed on purpose: with `cartoon_motion` lively / calm, jumps now land in dust (stars from 0.7
+  heights), fast walks / throws / blown props get speed lines. Default-speed walks are unchanged.
+
+Decisions / deviations
+- `calm` keeps the effects, drawn smaller (0.6 + 0.4 × strength), as `calm` is "the same motion
+  smaller" (§69.13); only `none` turns them off.
+- "Fast" is measured in the character's own heights per second (what the viewer sees), from the
+  walk as played, so a walk sped up by a short beat can become fast.
+- No sounds for motion effects: foley already has footsteps, boing and thud.
+- Dust and stars are drawn in front of the mover (after its held props), speed lines behind.
+  Found by `test_cartoon_holding`: inserting right after the mover broke "a held prop is right
+  after its holder".
+- The lean is part of the run's gait, so a run leans also with `cartoon_motion: none`.
+- Searched first: no speed-line / run code existed (`git grep -il "speed.line\|run_to\|whoosh
+  arc" 7faf60e -- src/vidgen`: none; dust exists only as a particle kind, whoosh as a sound);
+  reused `PlayedAction`,
+  the foley hook pattern, `thick_path`, `_circle`, `_star`, `_counterclockwise`, `smoothstep`,
+  `feet_of`, the dust particles' colour, the effect symbols' outline width and `_light_updater`'s
+  kept-updater pattern.
+
+Evidence
+- Stills by eye from a scratch preview (854x480, 15 fps): run with long strides and lean, three
+  lines behind, dust at set-off and stop; a 0.9-height jump landing in dust and stars; whoosh
+  arcs behind a big wave; lines behind a thrown ball (at first specks: fixed with
+  `PROP_LINE_UNIT`); dust and stars at first too small (enlarged). `vidgen lint` on it: only the
+  author's tree at the edge. `vidgen lint` on a scratch copy of `examples/cartoon-rain-check`:
+  0 findings.
+- Pixel identity: the same scene with `motion_effects: false` (fast `walk_to`s, a high jump, a
+  throw, gestures) rendered at preview, and at HEAD 7faf60e in a worktree without the key: the
+  two videos' 350 frames have the same `framemd5`.
+
+Known gaps / TODOs
+- No dust where a thrown prop lands; no effects for `keyframes` / `move_along`; `big` does not
+  enlarge the gesture; the screenplay's `runs to` still writes `walk_to`; dust at a stop can
+  still be on screen in the beat-end still. Not looked at in 9:16 or a night light.
+
+How to test
+- `pytest tests/test_cartoon_motion_effects.py` (11 not-render + 2 render at 160x90, ~5 s).
+- Also run (not render): `test_actions test_cartoon_sheet test_cartoon_moving test_cartoon_motion
+  test_cartoon_foley test_cartoon_effects test_cartoon_holding test_cartoon_seating
+  test_cartoon_directing test_cartoon_lint test_lint test_introspect test_api test_config` with
+  the new file (252, 8 s), `test_docs test_guide test_gallery test_schema test_actions_coverage
+  test_extensions` (206, 65 s), `test_screenplay test_phase_h_review test_phase_i_review
+  test_json_output test_cli test_mcp test_builtin_scenes test_storyboard test_cartoon_stage
+  test_cartoon_wind test_cartoon_acting test_cartoon_limbs test_cartoon_keyframes test_sfx` (376,
+  42 s); render: the cartoon files above + wind / lint / sheet (14, 12 s; holding re-run after the
+  fix), `test_introspect test_phase_h_review test_phase_i_review test_cartoon_directing
+  test_cartoon_seating test_cartoon_stage test_cartoon_lighting test_screenplay` (10, 36 s),
+  `test_builtin_scenes test_actions_coverage -k "stage or jump or walk"` (7, 4 s). The full suite
+  was not run.
+
+## Step 109 — Rooms (indoor sets), part 1
+
+What was built
+- Pure `src/vidgen/cartoon/room.py`: `wall_depth` (given `room.depth`, else the larger of
+  `WALL_DEPTH` 0.4 and the deepest thing standing on the floor), `room_geometry` (wall, floor up
+  to the wall line `ground + FAR_RISE × depth`, skirting, optional ceiling band; the *wall unit*
+  = a character's height at the wall), `wallpaper_stripes` / `wallpaper_dots`, `floor_rows` /
+  `floor_lines` (boards with staggered joints, tiles spreading towards the front, plain),
+  `window_parts` (frame, glass, bars, sill, rod, two curtains), `shade` / `darker` / `lighter`,
+  `WindowSky` + `WINDOW_SKIES` + `window_sky(light)` (per preset; `indoor` = evening outside; a
+  tint multiplies the day's sky), `SkyChange` / `sky_at` / `blend_skies` (fades with §69.31's
+  `fade_at`).
+- `src/vidgen/cartoon/room_drawing.py`: `draw_room(...)` → `RoomDrawing(back, views, front)`;
+  `WindowViews` (sky gradient + a `StarField` per window, `show(sky)`), `RoomColors` /
+  `room_colors`, `WindowLook`.
+- Stage param `room` (`StageRoom`, `RoomWindow`, `RoomDoor`; `room: true`; a mark or an x alone
+  is a window / door). The room replaces the picture / colour, the open-sky stars and the
+  ground band; layers still draw after it. Everything but the window views is lit; `_room` keeps
+  the sky outside, `change_light` adds a `SkyChange`, `_show_light` shows `sky_at(...)`.
+- Doors: the `door` prop has shapes `closed` / `open` (`PROP_SHAPES`; live copies as the
+  umbrella, Step 103). `Params.stage_props()` = props + one door prop per room door at the wall's
+  depth (scale `DOOR_SCALE` 1.3); `prop_names`, `items`, `door_names`, `stage_marks` (a door's
+  name is a mark), `wall_depth`. Used by the construct, `camera_place`, `stage_frame` /
+  `stage_reframes` (directing), the reshape / blow-away / seating checks. Doors cast no shadow.
+- `enter` / `exit` option `door` (`scenes/moving.py`): opens the door (at once), then
+  `Walk(start_x=door, fade_in=DOOR_FADE_SECONDS)` / `Walk(door, park_x=..., fade_out=...)`, at
+  least twice the fade long; validate: unknown door (lists the room's), `side` / `to` with
+  `door`. `Walk(fade_in=, fade_out=)` scales every member's fill / stroke alphas by the pure
+  `passage_fade` (acting.py), sets `Character.shown` (new, 1 by default), restores them after
+  parking; `ShadowCaster` multiplies the shadow by `shown`.
+- No weather inside: `room` with `wind` ≠ 0 or rain / snow / leaves / streaks particles is a
+  config error; the `wind` action and such a `particles` action are validate problems
+  (`scene_problems`). `room` with `image` / `generate` / `background` / `ground_color` is a
+  config error.
+- Sets (`includes.apply_set`): a scene's `room` drops the set's `image` / `generate` /
+  `background` / `ground_color`; a scene's backdrop drops the set's `room` (`ROOM_KEY`); rooms
+  merge key by key.
+- Prop gallery still `docs/gallery/media/props.png` regenerated (21.3 KB): now with `door (open)`.
+
+Files touched
+- New: `src/vidgen/cartoon/room.py`, `src/vidgen/cartoon/room_drawing.py`, `tests/test_cartoon_room.py`.
+- `src/vidgen/scenes/stage.py`, `scenes/moving.py`, `scenes/handling.py`, `scenes/sitting.py`,
+  `scenes/wind_action.py`, `scenes/particles_action.py`, `cartoon/props.py`, `cartoon/transition.py`,
+  `cartoon/acting.py`, `cartoon/character.py` (`shown`), `cartoon/shading.py`, `cartoon/directing.py`,
+  `includes.py`, `api.py`.
+- Docs: `docs/CONFIG.md` (stage `room` row, new "Rooms (`room`)", `enter` / `exit` rows, props
+  `open` row, umbrellas paragraph), `DESIGN.md` (§2 tree, §6.4, §69.37 gallery line, new §69.42),
+  `docs/EXTENDING.md`, `docs/gallery/stage.md` (param rows as `vidgen gallery` writes them; stills
+  not re-rendered), `docs/gallery/media/props.png`, guide (`src/vidgen/data/guide/AGENTS.md` +
+  `AGENTS.md`: `enter` / `exit` / `open` / `close` rows, "Indoors" bullet), `tasklist.md`.
+- Tests updated: `tests/test_cartoon_props.py`, `tests/test_cartoon_holding.py` (the "props that
+  can open" lists gain `door`).
+
+Public interfaces
+- `vidgen.api` adds the names in DESIGN §6.4 (Step 109). Stage param `room`; `enter` / `exit`
+  option `door`; `Walk(fade_in=, fade_out=)`; `Character.shown`; `Stage.door(name)`,
+  `Stage.window_views`; `door` prop shapes. Compatible: a stage without `room` renders as before.
+
+Decisions / deviations
+- "Skirting line at the ground line": the skirting is where the floor meets the wall, at the
+  wall's depth (default 0.4, behind everything on the floor), not at the depth-0 ground line,
+  so characters and props at a depth stand on the floor in front of the wall (§69.22's rule).
+- The window shows the sky *outside* (its own colours per light, not graded by the room's
+  light); `indoor` means lamplight inside, so the window shows an evening sky with a few stars.
+- Doors are `door` props (so `open` / `close`, `lean_on`, the layout dump and the props'
+  validation reuse Step 103's code), and their names are marks (`stage_marks`), not entries
+  added to `marks` (the params stay as written, fingerprints included).
+- Entering through a door is a fade in the doorway at the character's own depth (no walking in
+  depth until Step 111); the door opens at once (no `PropReshape`: a second animation in an
+  `enter` would give it a second whoosh in foley).
+- Wind and weather indoors: refused rather than ignored, with a message naming what works.
+  Rain through windows was left out (an animated window behind the characters makes the whole
+  set "moving" for Manim, §69.20).
+- Default colours are fixed hex (cream wall, wood floor, white frames) like the cloud's white:
+  no theme token is light and warm in every preset; authors pass tokens.
+- Searched first: no room / wall / window / skirting code existed (`git grep -il "skirting\|wallpaper\|
+  window_sky\|room_geometry" c3054e8 -- src/vidgen`: none); reused `FAR_RISE`, `depth_scale`,
+  `ground_top`, `numbered_names`, `fade_at`, `grade_rgbas` / `tint_grade`, `night_stars`,
+  `StarField`, `mark_lit`, the `door` prop and `show_shape`, `hex_rgb` / `rgb_hex` / `blend` /
+  `relative_luminance`, `one_pixel_stroke`.
+
+Evidence
+- Stills by eye (`vidgen storyboard`, scratch projects at preview 854×480): a striped room with
+  boards, a table, a window and a door: moss enters through the door (half-way: fading in in the
+  open doorway), dot leaves through it (fading out, shadow fading with her); `sunset` (dots,
+  tiles, ceiling, an open door facing left; the window sky blue over orange); `night` (dark sky
+  with stars, room graded blue); `indoor`, then `- light: night` (evening blue, then night sky);
+  a 2-frame-wide `morning` room with a close-up shot, automatic reframing pans, a door used as a
+  mark and `lean_on: front`; its 9:16 variant. `vidgen lint`: 0 findings on the first project,
+  one author-caused `rushed_animation` on the second.
+- Unchanged outdoors: a copy of `examples/cartoon` with a `door` prop added, rendered at 160×90 /
+  5 fps by this step and by HEAD c3054e8 (worktree): all 274 frames have the same `framemd5`
+  except frames 255–270, which also differ between two renders of HEAD (as do 185–189 and
+  230–234 between those two HEAD runs; the known non-reproducible encodes of §69.21).
+
+Known gaps / TODOs
+- Found, not fixed (fails at HEAD c3054e8 too): `tests/test_includes.py::test_screenplay_reuses_a_cast`
+  (`walk_to` x 0.86, the test expects < 0.62).
+- No rain / snow through windows; no door sound (an entrance through a door still plays the
+  `enter` whoosh); the screenplay's `set:` lines do not name rooms (Step 110); windows are not
+  checked against the ceiling or the frame's top; one vanishing point at the stage's middle for
+  tiles (a wide stage's edges slant strongly).
+
+How to test
+- `pytest tests/test_cartoon_room.py` (26 not-render + 1 render at 160x90, ~2 s).
+- Also run: not render `test_cartoon_props test_cartoon_stage test_cartoon_holding
+  test_cartoon_seating test_cartoon_moving test_cartoon_directing test_cartoon_lighting
+  test_includes test_actions test_api test_cartoon_shots test_cartoon_reframe test_particles
+  test_cartoon_wind test_cartoon_parallax test_cartoon_acting test_cartoon_rain
+  test_cartoon_motion_effects test_cartoon_foley` (352 + the 2 updated messages, 9 s; 1 failure
+  pre-existing, above), `test_docs test_guide test_schema test_gallery test_api test_config
+  test_includes test_cartoon_room` (249 passed + the same pre-existing failure, 66 s),
+  `test_introspect test_lint test_cartoon_lint test_builtin_scenes test_actions_coverage
+  test_screenplay test_json_output test_mcp test_extensions test_cartoon_sheet
+  test_phase_h_review test_phase_i_review test_storyboard test_cartoon_effects
+  test_cartoon_keyframes test_cartoon_character test_cartoon_generator` (405, 41 s); render
+  `test_cartoon_props test_cartoon_stage test_cartoon_moving test_cartoon_lighting
+  test_cartoon_holding test_cartoon_seating test_cartoon_parallax test_cartoon_rain
+  test_cartoon_motion_effects test_cartoon_wind` (17, 13 s), `test_cartoon_props
+  test_cartoon_shots test_cartoon_directing test_cartoon_sheet test_cartoon_effects
+  test_cartoon_foley test_cartoon_acting test_cartoon_keyframes` (12, 13 s), `test_introspect
+  test_phase_h_review test_phase_i_review test_builtin_scenes test_actions_coverage -k "stage or
+  introspect or review or walk or enter"` (10, 33 s). The full suite was not run.
+
+## Step 110 — Rooms, part 2: furniture
+
+What was built
+- Twelve built-in furniture props in `src/vidgen/cartoon/props.py` (`FURNITURE`, part of
+  `PROP_KINDS`, now 32): `sofa` 0.36, `armchair` 0.38, `bed` 0.34 (side on, headboard on the
+  left as drawn facing right), `bookshelf` 0.9, `counter` 0.5 (kitchen counter), `fridge` 0.95,
+  `picture` 0.3, `rug` 0.06, `houseplant` 0.75, `clock` 0.2, `tv` 0.55 (on a low cabinet), `desk`
+  0.42 (side on, with its chair). Primitives, two theme colours each plus shades and the ink;
+  fixed light / dark hex where no token fits every theme (`CLOTH`, `TV_CASE`, the fridge and
+  clock face `#F4F6FA`). Drawings are centred on x 0.
+- Seats (`cartoon/seating.py`): `PROP_SEATS` gains sofa, armchair, bed, desk, all at 0.14 of a
+  character's height like chair / box / rock (Step 102's rule: hips on the seat line, knees bent,
+  feet on the floor). `SEAT_PLACES` (sofa, bed: two places); `SEAT_BACKS` gains `desk`;
+  `PROP_LEANS` gains bookshelf, counter, fridge. `Postures.sit(character, prop, places=1,
+  prefer=())` returns the place taken (`Postures.places`); "'sofa' is full: ..." when no place is
+  free. `Prop.seat_places`, `Prop.seat_point(place=None)`, `mirrored_places`. `sit_on` takes the
+  free place nearest to the character; `holding_problems(seat_places=)` and the planner
+  (`StageFrame.seat_places`) count places.
+- Against the wall (`scenes/stage.py`): stage prop key `against: wall` (a room only, else a
+  config error). `StageProp.on_wall()` (against the wall, or a hanging prop, without its own
+  `depth`); `Params.stage_props()` returns such props at the wall's depth; they are not counted
+  by `wall_depth` (no circularity, they never push the wall back). `StageProp.item(name)` builds
+  the stage item (shared by `items()` and `_floor_items()`).
+- Hanging: `PROP_HANGS` (picture 0.5, clock 0.85 character heights above the floor);
+  `StageItem.hang` (default 0) added to the feet's y by `stage_layout`. Hanging props and
+  `FLAT_PROPS` (`rug`) cast no shadow.
+- Gallery: `still.write_props_png(..., kinds=None, columns=6)`; default kinds = all but the
+  furniture, so `docs/gallery/media/props.png` is byte-identical (checked by md5); new
+  `docs/gallery/media/furniture.png` (16 KB, 4×3) shown in CONFIG.md "Rooms".
+- Screenplay (`screenplay.py`): `set:` part `room` (alone, or `stripes`, `dots`, `plain`,
+  `boards`, `tiles`, `ceiling`, `window [at place]`, `[open] door [(name)] [at place]`), props
+  `against the wall` / `on the wall`, `PROP_WORDS` (couch, bookcase, kitchen counter,
+  refrigerator, picture frame, carpet, plant pot, wall clock, television, desk with chair...). A
+  room drops the default sky / ground colour; a written background beside a room and `against`
+  without a room are dropped with a TODO.
+
+Fix (not Step 110's code): `tests/test_includes.py::test_screenplay_reuses_a_cast` failed since
+Step 106 (94c6149), not 107: bisected with a worktree (passes at a241a74, fails at 94c6149, the
+only commit between them touching `screenplay.py`). Step 106 made screenplay walks to a prop avoid
+spots within a character's gap of other characters (`_target_x`). In the test the set places
+olla at the rock (0.62) and pip stands at centre (0.5), so 0.52, 0.72 and 0.38 are taken and
+0.86 is the first free spot: the code does what Step 106 intended; the test (written for the
+old "the walker's side" rule) now expects 0.86, with the reason in a comment.
+
+Files touched
+- New: `tests/test_cartoon_furniture.py`, `docs/gallery/media/furniture.png`.
+- `src/vidgen/cartoon/props.py`, `seating.py`, `stage.py` (`StageItem.hang`), `holding.py`,
+  `directing.py`, `still.py`, `src/vidgen/scenes/stage.py`, `scenes/sitting.py`,
+  `src/vidgen/screenplay.py`, `src/vidgen/api.py`.
+- Docs: `docs/CONFIG.md` (Rooms: furniture paragraph, gallery, example; props table and
+  `against` row; Sitting and leaning rows; actions row; screenplay `set:`), `DESIGN.md` (§2 tree,
+  §6.4, §69.8, §69.28, §69.42 gap line, new §69.43), `docs/EXTENDING.md`,
+  `docs/gallery/stage.md` (props row), guide `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md`
+  (`sit_on` / `lean_on` rows, Indoors bullet, sitting bullet, screenplay indoors line),
+  `tasklist.md`.
+- Tests updated: `tests/test_cartoon_props.py` (32 kinds; the unknown-prop example is now
+  `piano`), `tests/test_cartoon_seating.py` (seat list and message), `tests/test_includes.py`
+  (above).
+
+Public interfaces
+- `vidgen.api` adds `FURNITURE`, `PROP_HANGS`, `FLAT_PROPS`, `SEAT_PLACES`; `StageItem(hang=)`;
+  `Prop(seat_places=)`, `Prop.seat_point(place=)`; `Postures.sit(..., places, prefer) -> int`,
+  `Postures.places`; `StageFrame.seat_places`; `holding_problems(seat_places=)`; stage prop key
+  `against`. All defaults keep old behaviour.
+
+Decisions / deviations
+- "Plant pot" is `houseplant` (a tall indoor plant in a round pot): the existing `plant` is
+  already a small potted plant. "Kitchen counter" is `counter`, "picture frame" `picture`, "desk
+  with chair" `desk` (the screenplay accepts the long words).
+- "Back to the wall" is how the furniture is drawn (seen from the front of the room; a bed and
+  a desk side on along the wall), not a new facing.
+- `against: wall` with its own `depth`: the depth wins (in front of the wall), as the task says
+  "at the room's wall depth (or a given depth)". A picture / clock in a room goes to the wall
+  without `against` (they hang on it).
+- Sofa and bed seat two (else two characters on a sofa, the obvious use, would be refused).
+- Hanging height is in character heights at the prop's depth (`hang`), not frame heights
+  (`lift`), so it holds in 9:16 and at any depth.
+- The napkin keeps its shadow (it flies); only the rug lies flat without one.
+- Searched first: no furniture, multi-place seat or wall-hanging code existed (`git grep -il
+  "sofa\|against\|hang" acabc65 -- src/vidgen/cartoon src/vidgen/scenes/stage.py`: only the
+  "unknown prop 'sofa'" test example); reused `draw_prop`, the seat / lean tables and
+  `Postures`, `stage_props()` (Step 109's single list of props), `wall_depth`, `stage_layout`,
+  `write_props_png`, the screenplay's `_item` grammar.
+
+Evidence
+- Furniture gallery at 1920×1080 checked by eye (the rug made deeper, the bed's headboard
+  wider after the first look). A scratch project (`vidgen validate`, `vidgen storyboard`,
+  `vidgen lint` at preview 854×480): a striped living room in `indoor` light with a bookshelf, a
+  sofa with dot and moss sitting side by side, a picture above it, fen in the armchair, a clock,
+  a houseplant, a rug, a door; a tiled studio with a ceiling: fen leaning on the counter's end,
+  moss at the desk facing it, dot on the bed's edge, a tv, a fridge, a rug. Hips on the seats,
+  feet on the floor. Lint: 3 `off_frame` warnings for props I put at the frame's edges.
+
+Known gaps / TODOs
+- Sitting on furniture from another depth (characters stand at the wall's depth; Step 111 walks
+  in depth); lying on a bed; a prop on another (tv on a counter: `lift` by hand); the
+  screenplay has no sit / lean verbs and no door marks in directions.
+
+How to test
+- `pytest tests/test_cartoon_furniture.py` (11 not-render + 2 render at 160x90 / 192x108, ~5 s).
+- Also run (not render): `test_cartoon_props test_cartoon_seating test_cartoon_room
+  test_cartoon_stage test_cartoon_holding test_cartoon_directing test_cartoon_moving
+  test_cartoon_lighting test_cartoon_shots test_cartoon_reframe test_cartoon_wind
+  test_cartoon_rain test_cartoon_parallax test_includes test_screenplay test_actions test_api`
+  with the new file (368 passed, 10 s), `test_docs test_guide test_schema test_gallery
+  test_config test_introspect test_lint test_cartoon_lint test_phase_h_review
+  test_phase_i_review` (253, 75 s), `test_mcp test_json_output test_cli test_builtin_scenes
+  test_actions_coverage test_extensions test_storyboard test_cartoon_sheet` (221, 28 s); render:
+  `test_cartoon_furniture test_cartoon_props test_cartoon_seating test_cartoon_room
+  test_cartoon_stage test_cartoon_holding test_cartoon_lighting test_cartoon_moving
+  test_cartoon_parallax test_cartoon_wind test_cartoon_rain` (18, 12 s), `test_cartoon_directing
+  test_screenplay test_includes test_phase_i_review test_introspect` (5, 17 s). The full suite
+  was not run.
+
+## Step 111 — Moving in depth, and a front view
+
+What was built
+- Walks in depth: `walk_to` / `run_to` take `depth` (0..1) or `to: {mark, depth}` (`WalkPlace`
+  in `scenes/moving.py`); `to` may be left out (walk only in depth). Pure geometry in
+  `cartoon/stage.py`: `depth_walk_distance` (x and depth at right angles, a unit of depth =
+  `DEPTH_WALK_HEIGHTS` 2 of the walker's heights), `depth_along`, `depth_crossings`,
+  `depth_slot` (draw-order place: after deeper things and props at its depth, before nearer
+  ones, characters at its depth keep their order), `walk_destination` (raw options),
+  `facing_sign`. In `cartoon/acting.py`: `walk_time_at` (inverse of `walk_progress`),
+  `walk_share_seconds`, `depth_switch_times` (the draw-order switch time), `turn_squash`.
+- `Walk(..., depth=, feet_y=, carried=)`: feet on the ground line of the current depth, the
+  figure (and its stroke widths, and held props) scaled about its feet by the depth scale each
+  frame; `Character.stage_depth` / `ground_y` follow (`depth` is Manim's z-size property: not
+  usable). Facing is kept for a walk only in depth.
+- Stage (`scenes/stage.py`): `feet_y_at`, `walk_in_depth` (also moves `grounds[name]`), a scene
+  updater `_draw_order_step` (installed by a walk in depth, or from the start with a front-facing
+  character or a `turn` to the front) that re-sorts the walker (with its held props) in
+  `scene.mobjects` and refreshes Manim's `moving_mobjects` mid-play, keeps the moving shadows
+  before the first moving caster; `get_moving_mobjects` redraws everything from the first thing
+  a walk in depth passes. Props carry `stage_depth`; put-down / thrown props take the holder's.
+- Shadows: `ShadowCaster(grows=)`, ground from the caster's `ground_y`.
+- Front view: `generate_parts(look, colors, front=True)` (face centred, pupils ahead, symmetric
+  nose / fringe / long hair / bun / bean body, a temple each side); `look_parts(..., front=)`
+  (cache key includes the view, cache 32); `Character(..., front=parts)` keeps a `_View` per
+  view, both views' live copies in each part's `VGroup` (family fixed, §69.22), facing `front`
+  switches view and part order (`FRONT_DRAW_ORDER`, `order_changes`), `has_front_view`,
+  `side_facing`; `build_character` gives generated characters a front view. `PoseChange` turning
+  to / from the front narrows by `turn_squash` and swaps at half; `turn` `to: front`; stage
+  character `facing: front`; `vidgen character --facing front`. Walking facing front:
+  `walking_state(..., "front")` shortens the stepping leg, sways the arms, no lean.
+  `sit_on` uses `side_facing`; a crouch (`_reach_low`) turns a front-facing character to its side.
+- Validate: `holding_problems(depths=)` (from new `StageFrame.depths`) tracks walks in depth and
+  reports `sit_on` / `lean_on` / `pick_up` / `give` more than `DEPTH_REACH` 0.05 apart in depth,
+  with the `walk_to: {mark, depth}` fix; walk problems (neither `to` nor `depth`, depth twice,
+  behind a room's wall); `cast.front_view_warnings` (SVG characters asked to face front).
+- Lint / layout: layout key `depth` (above 0); `character_overlap` / `walk_overlap` skip pairs
+  `DEPTH_APART` 0.15 apart; the planner's predicted stills carry start depths; `StageFrame.place_x`
+  and the planner read `{mark, depth}`. `facing_sign` in effects, effect symbols, holding,
+  motion effects (front like right), shots and reframe (front: no look room).
+
+Files touched
+- New: `tests/test_cartoon_depth.py`.
+- `src/vidgen/cartoon/stage.py`, `acting.py`, `character.py`, `generator.py`, `transition.py`,
+  `shading.py`, `holding.py`, `directing.py`, `cast.py`, `effects.py`, `effect_symbols.py`,
+  `motion_effect_shapes.py`, `reframe.py`, `shots.py`; `src/vidgen/scenes/stage.py`,
+  `moving.py`, `acting.py`, `sitting.py`, `handling.py`; `src/vidgen/introspect.py`,
+  `lint/cartoon_rules.py`, `cli.py`, `api.py`; guide `src/vidgen/data/guide/AGENTS.md` + copy
+  `AGENTS.md`.
+- Docs: `docs/CONFIG.md` (new "Walking in depth and the front view", stage `facing` row, `turn`,
+  `walk_to`, `run_to` rows, layout `depth` / `facing` rows, lint rows, `vidgen character`),
+  `DESIGN.md` (§6.4, pointers in §69, §69.12, §69.43, new §69.44), `docs/EXTENDING.md`,
+  `docs/gallery/stage.md` (the `characters.facing` row), `tasklist.md`.
+- Tests updated: `tests/test_cartoon_character.py` (facing error message),
+  `tests/test_cartoon_speed.py` (a look is drawn twice: side and front).
+
+Public interfaces
+- `vidgen.api` adds `DEPTH_WALK_HEIGHTS`, `SAME_DEPTH`, `depth_scale`, `depth_slot`,
+  `depth_walk_distance`, `facing_sign`, `walk_destination`. `Walk(depth=, feet_y=, carried=)`,
+  `Walk.to_depth`; `Character(front=)`, facing `front`, `has_front_view`, `side_facing`,
+  `order_changes`, `stage_depth`, `ground_y`; `ShadowCaster(grows=)`; `StageFrame.depths`;
+  `holding_problems(depths=)`; `generate_parts(front=)`, `look_parts(front=)`; options
+  `walk_to` / `run_to` `depth` and `to: {mark, depth}` (`to` no longer required), `turn` `to:
+  front`, stage character `facing: front`; layout key `depth`. All compatible.
+
+Decisions / deviations
+- Validate asks for the walk (rather than `sit_on` walking there itself): one place to fix,
+  and the replay already knows the geometry.
+- A walk only in depth keeps the side view (walking on the spot while growing): no back view
+  exists; facing front it steps towards the camera.
+- The front view is a second set of drawings in the same `Character` (not a separate figure),
+  so state, poses, visemes, part targets and the family stay one; the pose tables already move
+  both arms symmetrically on screen, so no angle mirroring is needed.
+- Manim draws during a `play` from the list it made at the start; reordering `scene.mobjects`
+  alone would show only at the next `play`, hence the scene updater that refreshes that list.
+- Searched first: no depth-walk, draw-order re-sort or front-view code existed (`git grep -n
+  "depth" src/vidgen/cartoon/transition.py src/vidgen/scenes/moving.py`: none; the generator
+  had one view); reused `depth_scale`, `feet_point`, `walk_progress`, `Phases`, `scale_strokes`,
+  `PoseChange`'s half-way swap, `holding_problems`, `_too_far`'s message style, the stage's
+  `get_moving_mobjects` override.
+
+Evidence
+- Scratch project (preview 854×480, `vidgen storyboard` with 3 and 5 stills per beat): dot
+  walking away past a tree at depth 0.5 (in front, then behind, shrinking, shadow under the
+  trunk), behind moss at depth 0.5, back to the front; moss walking towards the camera in front
+  of a box; dot facing front talking (lip sync) and waving; moss turning to the front and both
+  turning back; in a room dot walking to the sofa at the wall's depth and sitting, moss facing
+  front stepping towards the camera. `vidgen character --png --facing front` for both looks.
+  `vidgen lint`: 0 findings. `vidgen validate` of a cross-depth `sit_on`: the problem with
+  `{mark: 0.42, depth: 0.4}`, and that walk then validates.
+
+Known gaps / TODOs
+- No back view; `enter` / `exit` at a depth; a speech bubble keeps its size and offset while its
+  speaker walks in depth; the planner (directing, reframing) uses start depths and sizes; the
+  turn's mid-play part reorder needs the stage's updater (other scene types reorder at the next
+  `play`).
+- `tests/test_cartoon_lighting.py::test_sunset_to_night_keeps_the_bubble_readable` fails when run
+  with `-m render` on that file alone ("unknown scene type 'stage'"), also at HEAD (558ebb7):
+  an order dependency of that test, not this step; it passes when the whole file runs.
+
+How to test
+- `pytest tests/test_cartoon_depth.py` (16 not-render + 1 render at 160x90, ~3 s).
+- Also run (not render): the cartoon files (character, generator, poses, acting, moving,
+  speed, stage, seating, holding, furniture, svg, idle, visemes: 270 passed, 13 s; lint,
+  directing, shots, reframe, effects, motion_effects, lighting, room, wind, keyframes, props,
+  parallax, motion + `test_lint test_introspect test_actions test_api`: 361 passed, 10 s),
+  `test_docs test_schema test_guide test_config` (179, 65 s), `test_gallery test_guide
+  test_docs test_schema test_builtin_scenes test_actions_coverage` (293, 67 s),
+  `test_screenplay test_storyboard test_mcp test_json_output test_cli test_extensions
+  test_includes test_cartoon_sheet test_phase_h_review test_phase_i_review test_translation
+  test_cartoon_rain test_cartoon_style test_cartoon_foley` (250, 36 s); render: the cartoon
+  files in two batches (12 + 15 passed, plus the lighting test above), `test_cartoon_directing
+  test_introspect test_cartoon_depth` (5, 15 s), `test_builtin_scenes test_actions_coverage -k
+  stage` (3, 3 s). The full suite was not run.
+
+
+## Step 112 — Cartoon transitions and title cards
+
+What was built
+- **Iris transitions** `iris_out` / `iris_in` (DESIGN §69.45): `transition: {type: iris_out,
+  character: pip}` closes a black circle on Pip's head in the scene before (it eases to a circle
+  round the head, pauses there, then closes), then the next scene opens from the frame's centre;
+  `iris_in` closes the scene before on its centre and opens on a character (or `at: [x, y]`) of the
+  scene it leads into. Keys `character` / `at` (not both; `at` in frame fractions from the top
+  left), `color` (default black), `duration` (default 1.2 s, half closing, half opening). `iris_in`
+  on the first scene opens the video; `iris_out` there is a config error. `vidgen validate`
+  reports a `character` not on that stage (`transitions.iris_problems`).
+- **How**: an iris is a `fade_color` with a circular mask. `ColorFade` takes `iris_in` / `iris_out`
+  callables (`(width, height) -> IrisPoint(x, y, hold)`) and replaces the uniform blend of the
+  fade frames by the disc (`iris_radius`, `iris_full_radius`, `iris_coverage`, pure, in
+  `transitions.py`). `NarratedScene._iris_point` asks for the character's head (`head_box` of
+  `self.cast[name]` through the camera frame) on every masked frame, so the circle follows it.
+  Plan, holds, silent tails, fingerprints: the fade_color contract (`TransitionConfig.through_color`
+  replaced the `type == "fade_color"` tests).
+- **`card` scene type** (DESIGN §69.46, `scenes/card.py`; pure layout and colours in
+  `cartoon/cards.py`): `text`, `subtitle`, `style: burst | frame | plain`, `color` (default
+  `primary`), `text_color` / `outline_color` (default: white or the dark ink, whichever reads
+  better on the card, outlined in the other), `spin`, `sting` (as the text pops in). Silent with
+  `duration` or narrated. The text pops in with a bounce (`pop_scale`, strength 0.5); the burst
+  grows and turns slowly.
+- **Screenplay**: `# Card: Later that day…` (any level) is a `card` scene: silent for 2.5 s, or
+  one beat per line under it; `[directions]` there become TODOs; `set:` under it is an error.
+  After another scene it comes in with `iris_out`; the scene after a card gets `iris_in`.
+- **Gallery**: a `card` snippet and chooser row in the guide's scenes topic; `docs/gallery/card.md`
+  plus `media/card-16x9|9x16.png|gif` (184 KB) from `vidgen gallery --types card`; README index
+  gains the row.
+- **Fix (predates Step 111)**: `tests/test_cartoon_lighting.py::test_sunset_to_night_keeps_the_bubble_readable`
+  failed alone with `-m render` ("unknown scene type 'stage' (known types: none)"). Cause: the test
+  called `registry.get("stage")` (to patch `outro`) before anything had imported the built-in
+  scene modules; in a whole-file run the earlier `test_validate_light_actions_and_param` imported
+  them through `check_project`. The test now calls `extensions.load_builtins()` first (idempotent).
+  Alone with `-m render`: 2 passed; whole file: 8 passed.
+
+Files touched
+- New: `src/vidgen/cartoon/cards.py`, `src/vidgen/scenes/card.py`, `tests/test_cartoon_cards.py`,
+  `docs/gallery/card.md`, `docs/gallery/media/card-16x9.png`, `card-16x9.gif`, `card-9x16.png`,
+  `card-9x16.gif`.
+- `src/vidgen/config.py` (types, keys, `IRIS_TRANSITIONS`, `COLOR_TRANSITIONS`, `TransitionType`,
+  `through_color`, first-scene check), `transitions.py` (frames, colour, iris maths, `IrisPoint`,
+  `ColorFade` irises, `iris_scene`, `iris_problems`), `videoplan.py`, `scene.py` (`_iris_point`,
+  public `sting`), `cli.py` (validate), `api.py` (exports), `scenes/__init__.py`, `screenplay.py`
+  (`# Card:`, `_add_card`, `_scene_id`, `CARD_SECONDS`), `jsonout.py` (screenplay JSON with
+  silent cards).
+- Tests: `tests/test_cartoon_lighting.py` (the fix).
+- Docs: `src/vidgen/data/guide/AGENTS.md` + `AGENTS.md` (chooser row, card snippet, cartoons
+  "Title cards and irises", screenplay `# Card:`, transitions line), `docs/CONFIG.md`
+  (transitions table and keys, an iris example, `### card`, screenplay headings, carry note),
+  `docs/EXTENDING.md` (`self.sting`), `DESIGN.md` (tree, Step 112 API note, §69.45, §69.46),
+  `docs/gallery/README.md`, `tasklist.md`.
+
+Public interfaces added / changed
+- `vidgen.api`: `BURST_SPIN`, `CARD_STYLES`, `CardLayout`, `burst_ray_color`, `burst_rays`,
+  `card_layout`, `card_outline_width`, `card_text_inks`, `StingCue`, `StingSetting`;
+  `NarratedScene.sting(sting, time)` (public; was the private `_add_sting`).
+- Config: transition types `iris_out`, `iris_in`, keys `character`, `at`; `color` now also for
+  the irises. Scene type `card`. Screenplay `# Card:` headings.
+- `transitions.resolve_color(color, theme, kind="fade_color")`, `ColorFade(..., iris_in=None,
+  iris_out=None)` (compatible).
+
+Decisions / deviations
+- **The irises are drawn in the renders, not with an FFmpeg filter at the join.** The step (and the
+  brief) pictured an `xfade` path tested on 6.1 / 7.1 / 8.x and the head position read from the
+  layout dump. Through a colour, an iris needs only one picture at a time, exactly like
+  `fade_color`, which §49 already draws inside the renders. Doing it there keeps the fade_color
+  timing contract (no overlap, the next scene's narration never starts under black), follows a
+  moving head on every frame from the live character (the layout dump is only written for
+  stills), shows in storyboards and stills, and leaves the join a cut, so no FFmpeg version can
+  break it. An `xfade` custom expression was rejected: an overlapping iris hides the next scene's
+  first frames while it speaks, the worker would have to record the head position, and the
+  expression's planes depend on the pixel format FFmpeg negotiates. Checked: the render + join
+  test (with a crossfade in the same video, so the irises sit inside an `xfade` run) passes with
+  FFmpeg 6.1.1 (system), 7.1.5 and 8.1.3 (the Step 64 builds in the scratchpad, first on PATH).
+  "Tests: transition filter graphs": there is no new filter graph; the test checks the join's
+  concat list keeps the iris boundaries as cuts inside the run.
+- Semantics: one boundary = close then open; the type picks which side has the target. The key
+  is `character`, not `on` (PyYAML reads a bare `on:` key as `True`).
+- The card's outline is a layer of glyph-shaped VMobjects behind the text, not a background
+  stroke (a per-glyph stroke covered the letter before it); the burst grows by an
+  `UpdateFromAlphaFunc` because Manim's `GrowFromCenter` re-adds the burst over the text.
+- A card's `sting` with `at: end` is an error (a beat's own sting does that).
+- The screenplay adds the irises around cards by default (a card between scenes is the cartoon
+  flow); authors can change them in the YAML.
+- Fingerprints: a scene next to a transition renders again once (the transition's dump gains
+  `character` and `at`), as when Step 47 added `direction` / `soft`.
+
+Known gaps / TODOs
+- `wipe_star` (optional) not done; no iris shape but a circle; no iris on a prop; the screenplay's
+  `iris_out` closes on the centre, not on the last speaker.
+- A wide card wraps "Later that day…" onto two lines at the start size before shrinking (fit_text
+  wraps first); fine by eye, a one-line preference could come later.
+- Not listened to: the card's sting is the existing built-in sound.
+
+How to test
+- `pytest tests/test_cartoon_cards.py` (17 not-render in 1.7 s; 2 render: the card with lint's
+  contrast / off_frame rules, the stage -iris_out-> card -iris_in-> stage -crossfade-> card video
+  through the join, ~12 s). With another FFmpeg first on PATH:
+  `env PATH=<dir with ffmpeg>:$PATH pytest tests/test_cartoon_cards.py::test_irises_through_the_join`
+  (passed with 7.1.5 in 11.1 s and 8.1.3 in 10.9 s; 6.1.1 in 11.7 s).
+- Also run, not render: `test_guide test_gallery test_docs test_api test_schema
+  test_cartoon_cards` (197 passed + 1 after recopying the guide, 69 s), `test_transitions
+  test_push_wipe_carry test_screenplay test_config test_json_output test_plan test_cartoon_foley
+  test_sfx test_cli test_includes test_ffmpeg_version` (294 passed, 14 s); render:
+  `test_transitions` (4, 14 s), `test_cartoon_foley test_sfx test_cartoon_cards
+  test_cartoon_lighting` (10, 27 s), `test_cartoon_lighting` whole (8, 3 s). By hand: `vidgen
+  render` and `vidgen lint` (0 findings) of a 4-scene iris / card project at 320x180, contact
+  sheets checked by eye; `vidgen screenplay` on a story with two cards (valid, irises written).
+  The full suite was not run.
+
+## Step 113 — More characters, part 1: bodies and clothes
+
+What was built
+- **Look parameters** (`config.CharacterLook`): `body` gains `pear` and `triangle`; `hair` gains
+  `ponytail`, `braids`, `afro`; `accessories` gain `bow`, `cap`, `backpack`, `necklace` (hat and
+  cap together: config error); new `proportions: adult | kid | tall_kid`, `outfit: plain | dress |
+  overalls | coat | shorts | apron`, `pattern: none | stripes | dots`, `shoes: none | shoes |
+  boots`, `facial_hair: none | moustache | beard`. `CharacterColors.trim` (default `dim`): the
+  outfit's second cloth. Constants `HEAD_ACCESSORIES`, `SKIRTED_OUTFITS`, `SEATED_BODY_SHAPE`.
+- **Drawing** (all primitives, a side and a front drawing each): `cartoon/primitives.py` (moved
+  from the generator and made public: `outlined`, `filled`, `point_at`, `arc_points`, `polygon`,
+  `trailing`, `TRAIL_WEIGHTS`; new `outer_hair`, `outline_polygon`, `clip_to_box`, `span_at`,
+  `dot_centres`), `cartoon/clothes.py` (`body_shapes`, `limb_colors`, `shoe`, `pattern_tone`; the
+  bag and scarf moved here unchanged), `cartoon/generator.py` (new bodies, `PROPORTION_FACTORS`,
+  `SHOULDER_SHARES`, hair, facial hair, cap, bow; `_Frame` is now `Frame`).
+- **Clothes on limbs** (Step 92): sleeves and trouser legs colour the upper / lower segments
+  (`limb_colors`), shoes are in the shin group with the sole at 0. **Skirts on the body**: a
+  dress's skirt and a coat's tails hang from `body`; such a body has a second shape `seated` (the
+  cloth as a wedge over the lap), which `Character.seated` (so `sit_on`) and the `sitting` pose
+  (`shape: seated`, falling back to the rest shape for every other character) show.
+- **Seats** (Steps 94 / 102): `Character.seated` already puts the hips on the seat whatever the
+  legs; tested for kid, tall kid, pear and triangle at seats 0.14 and 0.2 (a kid at stage scale 0.7).
+  A kid's figure is still 1 tall; its size on stage is the stage character's `scale`.
+- **Wind** (Steps 72 / 98 / 104): ponytail 0.9, braids 0.6, cap 0.25, a necklace's pendant 0.5
+  trail. **Effect symbols** (Step 107): afro, ponytail, braids and beard are marked
+  `OUTER_HAIR_ATTRIBUTE` (in `character.py`); `head_box` leaves them out, `crown_top` counts the
+  higher of the accessory and them (symbols go above an afro or a cap). Unmarked looks take the
+  old code path. Motion effects (Step 108) need nothing: they go by the character's box.
+- **Sheets and docs**: `vidgen character-sheet` ends with a `view` section (`front`) for
+  generated characters (1148 x 1082 px now); `vidgen character` prints a `wears:` line;
+  `still.write_looks_png` draws looks side and front: `docs/gallery/media/looks.png` (51 KB).
+- **Screenplay** (Step 91): `LOOKS` 6 → 11 (pear + ponytail + dress feminine, triangle + beard +
+  coat + cap masculine, bean + afro + overalls + backpack neutral, square + braids + apron + bow
+  feminine, round + moustache + shorts masculine).
+
+Files touched
+- New: `src/vidgen/cartoon/clothes.py`, `src/vidgen/cartoon/primitives.py`,
+  `tests/test_cartoon_outfits.py`, `docs/gallery/media/looks.png`.
+- `src/vidgen/config.py`, `cartoon/generator.py`, `cartoon/character.py`, `cartoon/cast.py`,
+  `cartoon/poses.py`, `cartoon/effect_symbols.py`, `cartoon/still.py`, `screenplay.py`.
+- Docs: `docs/CONFIG.md` (look and colour tables, clothes paragraph and gallery picture, sheet
+  size and JSON `view` kind, screenplay looks, wind row), `DESIGN.md` (§2 tree, §69.1 note, §69.25
+  looks, new §69.47), `docs/EXTENDING.md` (shape names), guide `cartoons` bullet + `AGENTS.md` copy,
+  `tasklist.md`.
+- Tests updated: `tests/test_cartoon_generator.py` (7 colours, the new look fields in "every value
+  builds", the `wears:` line moves colours to line 4), `tests/test_cartoon_sheet.py` (a generated
+  character's sheet ends with the `view` section), `tests/test_screenplay.py` (a third "she" now
+  gets the new ponytail look instead of the bun again with a seed; five "she"s repeat the bun at
+  the fifth).
+
+Public interfaces
+- No `vidgen.api` change. YAML: the look keys and `colors.trim` above. JSON: character-sheet
+  section kind `view`. Internal: `generator.Frame`, `PROPORTION_FACTORS`, `SHOULDER_SHARES`,
+  `COLOR_KEYS` (+ `trim`), the clothes / primitives modules, `still.write_looks_png`,
+  `WHOLE_FIGURE_KINDS`, `character.OUTER_HAIR_ATTRIBUTE`.
+
+Decisions / deviations
+- `outfit` (not `clothes`): `colors.clothes` already names a colour; `proportions` (not `build`):
+  "build" is the cache folder's word.
+- Kids are not drawn shorter: every figure is 1 tall, so seats, reach, lint and the planner keep
+  one character unit; the stage's existing `scale` makes a kid small (documented: 0.7 / 0.85).
+  No kid is in the screenplay's `LOOKS` for that reason (a screenplay stage has no scale).
+- The skirt is not on the legs (so the legs walk under it and it never splits); seated, the body
+  swaps to the `seated` shape. A pattern is a tone of its cloth (no new colour key); shoes use
+  `colors.accessory`.
+- Searched first: no clothes or polygon-clipping code existed (`git grep -i "stripe\|clip_"
+  src/vidgen/cartoon`: the room's wallpaper stripes and dots, boxes laid on a rectangular wall
+  with no clipping to a shape, and one prop's stripe polygon); reused
+  `relative_luminance` / `hex_rgb` (lint), `interpolate_color`, `seated_sole`, the trailing marks.
+
+Evidence
+- Pinned: the drawing digests of eight earlier looks (the default, the six screenplay looks, one
+  with every accessory and a seed), side and front, are unchanged (taken at 095b596 before any
+  edit). `vidgen character dot --png` (examples/cartoon) and `juno --facing front`
+  (examples/cartoon-rain-check) are byte-identical to HEAD's. The character sheets of dot, moss,
+  pip and juno differ only by the added front view, the subtitle and the 64-colour palette
+  (max 78 levels summed over RGB in the cells above).
+- By eye: three grids of 4 looks (pear dress dots ponytail necklace; triangle coat beard cap
+  boots; bean overalls stripes afro backpack; square apron braids bow; shorts moustache; two kids;
+  a tall kid; dotted coat with braids, hat and scarf; striped dress with a bag; pear apron beard;
+  the default) side, walking, on a chair, sitting pose, front, front walking, front waving; a
+  scratch stage (`windy`, sit_on, walk_to, run_to, turn, idea / question effects) storyboarded at
+  preview: hips on the chair, skirt over the lap, braids and ponytail trailing, symbols above the
+  cap and the kid's head; lint found only the scratch layout's own `off_frame` / `facing_away`.
+
+Known gaps / TODOs
+- Stripes and dots are on the body's cloth and a skirt, not on sleeves or trouser legs.
+- The seated skirt wedge is one shape for every seat height (a kid's level thighs show a little
+  of the wedge below them); from the front the seated skirt is just shorter and wider.
+- Coat lapels from the side are small; the necklace's beads are tiny below about 200 px tall.
+- A kid's default stage size is not automatic (the author sets `scale`).
+
+How to test
+- `pytest tests/test_cartoon_outfits.py` (54 not-render + 3 render, ~22 s).
+- Also run, not render: `test_cartoon_generator test_cartoon_character test_cartoon_sheet
+  test_cartoon_wind test_cartoon_effects test_cartoon_seating test_cartoon_depth
+  test_cartoon_speed test_cartoon_poses test_cartoon_svg test_screenplay` (239 passed, 15 s),
+  `test_docs test_schema test_guide test_config test_api` (191, 67 s), `test_mcp
+  test_json_output test_includes test_phase_i_review test_phase_h_review test_cartoon_furniture
+  test_cartoon_holding test_cartoon_directing test_cartoon_lint test_cartoon_acting
+  test_cartoon_moving test_introspect test_cartoon_idle test_cartoon_visemes` (273, 56 s); render:
+  `test_cartoon_sheet test_cartoon_generator test_cartoon_seating test_cartoon_effects
+  test_cartoon_wind` (8, 10 s), `test_cartoon_depth test_cartoon_character test_cartoon_poses
+  test_screenplay test_phase_h_review` (4, 23 s), `test_cartoon_lint test_cartoon_directing
+  test_cartoon_furniture test_cartoon_holding test_cartoon_acting test_cartoon_moving` (10, 13
+  s), `-k "sheet or character or screenplay"` on `test_mcp test_json_output test_phase_i_review
+  test_includes` (1, 10 s). The full suite was not run.
+
+## Step 114 — More characters, part 2: original animal characters
+
+What was built
+- **`look.species`** (`config.Species`): `human` (default) or `cat`, `dog`, `bird`, `bear`,
+  `rabbit`, `mouse`. `ears`, `nose` or `facial_hair` other than `none` with an animal is a config
+  error (`config.SPECIES_OWN_KEYS`). Hair, accessories, bodies, outfits, proportions all still apply.
+- **Drawing** (`src/vidgen/cartoon/animals.py`, called from `generator.py`, side and front): head
+  ellipses (`HEAD_SHAPES`; a mouse's head drawn out into a snout from the side, `MOUSE_SNOUT`), ears
+  (cat triangles with a lining, rabbit long ears, mouse big ovals set back on the sides, bear
+  rounds, a bird's three-feather crest, a dog's long ears beside / over the head), muzzles in
+  `fur_tint`, noses (`PINK` or the ink), whiskers, a dog's snout, a bird's beak (`BEAK_COLOR`);
+  round `paw`s; a bird's `wing` arms (feather colour whatever the sleeves) and thin bare shins with
+  toes (`bird_shin`). Ears, snouts and beaks are marked `OUTER_HAIR_ATTRIBUTE`, so effect symbols
+  go by the head and above tall ears. Designs are generic animals in the look's colours.
+- **Mouth / lip sync**: `mouth_place` puts the human mouth (all shapes, scaled) on the muzzle or
+  under the snout; a bird's `mouth` is `beak_mouth` (hinge pivot; visemes open the beak by
+  `BEAK_OPENINGS`; every shape symmetric about the hinge's line so a frown's negative y scale keeps
+  an open beak upright).
+- **`tail` part** (`PART_NAMES`, `PosePart`, `DEFAULT_PARENTS` body, draw order 5): `tail_part`
+  (`TAIL_LINES` through `keyframes.path_curve` into the new `primitives.tapered_band`; bear stub,
+  rabbit puff, bird fan). Follow-through on the Step 82 spring (`motion.follow_angles` key `tail`,
+  `FOLLOW_TAIL_DEGREES` 45, limit 30), `transition.WALK_TAIL_SWING` 0.5 in `walking_state`, idle
+  swish (`idle.tail_sway_angle`, `TAIL_SWAY_SECONDS` 2.6, `TAIL_SWAY_DEGREES` 5; an idle overlay),
+  wind (`TRAIL_WEIGHTS` `tail` 0.8, `feathers` 0.4, `long_ears` 0.3). SVG `id="tail"`: default pivot
+  the bottom corner nearer the body, in `TURNING_PARTS`, marked trailing by `svg_character_parts`.
+- `cast.character_part_shapes` adds `tail` for animals (validate, part targets `tib.tail`, sheets);
+  `vidgen character` prints `species X, ` on the look line for an animal.
+- Gallery still `docs/gallery/media/animals.png` (30 KB, `still.write_looks_png`, six species).
+
+Files touched
+- New: `src/vidgen/cartoon/animals.py`, `tests/test_cartoon_animals.py`, `docs/gallery/media/animals.png`.
+- `src/vidgen/config.py`, `cartoon/generator.py`, `cartoon/character.py`, `cartoon/primitives.py`,
+  `cartoon/motion.py`, `cartoon/transition.py`, `cartoon/idle.py`, `cartoon/cast.py`,
+  `cartoon/svg_look.py`.
+- Docs: `docs/CONFIG.md` (`species` row, `skin` row, new "Animal characters (`species`)" with the
+  picture, pose / keyframe part lists, SVG id table, pivot guess, wind), `DESIGN.md` (§2 tree, §69
+  parts, new §69.48), `docs/EXTENDING.md` (part names), guide `cartoons` bullet + `AGENTS.md` copy,
+  `tasklist.md`.
+- Test updated: `tests/test_cartoon_character.py` (`test_bad_part_sets` used `tail` as its unknown
+  part name; now `wing`, since `tail` is a part).
+
+Public interfaces
+- No `vidgen.api` names added. `PART_NAMES` gains `tail` (at the end, so pose-change order and
+  draw-order ties of other parts are unchanged); `config.PosePart` gains `tail`; `follow_angles`
+  returns a `tail` key. YAML: `look.species`. Internal: `cartoon/animals.*`,
+  `primitives.tapered_band`, `idle.tail_sway_angle`, `transition.WALK_TAIL_SWING`,
+  `motion.FOLLOW_TAIL_*`, `config.SPECIES_OWN_KEYS`.
+
+Decisions / deviations
+- The tail is a real part (not only a wind-marked member like hair): SVG naming, poses, keyframes
+  and the follow-through spring need a pivot of its own. It also carries the wind mark.
+- Voice kinds: the screenplay's `LOOKS` stay human; adding animals there would turn the 12th
+  undeclared character of a screenplay into an animal. An animal has no voice kind of its own
+  (either fits) unless the screenplay states one. Random animal casts are Step 115 (`--species`).
+- Animals keep the human body and clothes (cartoon animals dressed); fixed natural colours for
+  beaks, pink noses and a mouse's tail (like `EYE_WHITE`).
+- Searched first: no species / tail / beak / paw code existed (`git grep -n -i "tail\b\|beak\|paw\|species" src/vidgen/cartoon`:
+  only "tails" of a coat and "detail"); reused `path_curve` (Catmull-Rom), `trailing` /
+  `outer_hair` marks, `limb_colors`, the idle overlay layer, `follow_angles` / `accented_state`.
+
+Evidence
+- Human drawings unchanged: digests of the 8 looks pinned in Step 113 and of 7 Step 113 looks
+  (screenplay 7–11, kid, tall kid; taken at 96dfd2b before any edit), side and front.
+- Stills checked by eye (scratch grids 240 x 340 px cells): each species side, front, waving,
+  walking, talking `A` / `O`, sad while talking, seated, in wind (40°), walking and talking from the
+  front. Fixed on the way: a dog's side ear hidden behind the head (now drawn over it), a mouse's
+  cone snout (now the head's own shape), a too small beak, round tails hidden behind the body.
+
+Known gaps / TODOs
+- No still of effect symbols on animals was checked by eye (tested: `head_box` / `crown_top`
+  leave the ears out); the cat's tail is cut at the left edge of `animals.png`'s first cell.
+- A bird's wings ignore sleeves; bird toes are not drawn under shoes; no back view of tails.
+- Mouse and rabbit tails do not wag with walking from the front (side only).
+
+How to test
+- `pytest tests/test_cartoon_animals.py` (40 not-render + 1 render at 160x90, ~11 s).
+- Also run, not render: `test_cartoon_character test_cartoon_generator test_cartoon_poses
+  test_cartoon_motion test_cartoon_spring test_cartoon_wind test_cartoon_outfits test_cartoon_svg
+  test_cartoon_idle test_cartoon_effects test_cartoon_depth test_cartoon_seating
+  test_cartoon_keyframes test_cartoon_moving test_cartoon_acting test_cartoon_speed
+  test_cartoon_visemes` (418, 34 s), `test_config test_docs test_schema test_api test_guide
+  test_screenplay test_cartoon_sheet test_cartoon_holding test_cartoon_directing` (284, 69 s),
+  `test_docs test_guide test_cartoon_animals test_cartoon_character test_gallery test_cartoon_lint
+  test_introspect test_mcp` (211, 35 s); render: `test_cartoon_animals test_cartoon_outfits
+  test_cartoon_wind test_cartoon_character test_cartoon_svg test_cartoon_motion test_cartoon_poses
+  test_cartoon_idle` (11, 9 s). The full suite was not run.
+
+## Step 115 — A random, well-contrasted cast
+
+What was built
+- **Contrast score** (`src/vidgen/cartoon/contrast.py`, pure, no manim): `look_features(look,
+  colors, theme)` -> `LookFeatures` (silhouette values, four colours resolved and in CIELAB, a set of
+  details; `None` for an svg look); `contrast_score(a, b)` 0 (the same) .. 1 = silhouette 0.45
+  (body 0.25, hair 0.2, species 0.15, hat / cap / bow 0.1, proportions 0.1, head size 0.1, ears
+  0.05, dress / coat 0.05) + colour 0.4 (CIEDE2000 / 30, capped: clothes 0.4, skin 0.3, hair 0.2,
+  accessory 0.1) + accessories 0.15 (Jaccard distance of accessories, facial hair, pattern, shoes,
+  eyes, nose). `compare` -> `PairContrast` with what the two share (by weight) and advice (`give
+  'ben' another colors.clothes, colors.skin, look.body`). `MIN_CONTRAST` 0.35.
+- **Lint `look_alike`** (scene rule in `lint/cartoon_rules.py`, `config.LookAlikeRule.min_contrast`
+  0.35, warning): every two generated characters on the video's stages (`character_pairs`),
+  reported once per pair at the first beat of the scene where the later one first appears;
+  `lint/run.py` fills `SceneContext.character_pairs` (new field) with the project's theme.
+- **Generator** (`src/vidgen/random_cast.py`, no manim): `random_look` (every choice through
+  `Random(seed).random()`; hex colour lists; `KIND_EXCLUDES` so a look suits its voice kind; adult
+  only), `pick_looks` (curated looks first while they keep `MIN_CONTRAST`, else the best of
+  `CANDIDATES` 48 random looks by the lowest contrast to the others: greedy maximin),
+  `balanced_kinds`, `random_cast` (kinds, looks and names on separate streams so a bigger cast of
+  a seed starts with the smaller one; names per kind from `NAMES`; voices by
+  `screenplay.assign_voices`), `cast_yaml` (via `plan_yaml.commented_yaml`, which now also writes
+  a mapping without `scenes`), `parse_species`.
+- **`vidgen cast --random N [--seed S] [--species ...] [--out cast.yaml] [--provider] [--narrator]
+  [--model] [--language] [--force] [--json]`** (`cli.cmd_cast`, `jsonout.cast_document`), MCP tool
+  `cast` (`count`, `seed`, `species`, `out`, `provider`, `narrator`, `model`, `force`).
+- **Screenplay**: `screenplay_project(..., species=, seed=)` and `vidgen screenplay --species
+  --seed` (MCP `species`, `seed`): `_generated_looks` (replaces `_pick_look`) calls `pick_looks`
+  with `LOOKS` as curated looks (when `human` is a species), the declared and cast characters as
+  existing ones and the front matter theme.
+
+Files touched
+- New: `src/vidgen/cartoon/contrast.py`, `src/vidgen/random_cast.py`, `tests/test_random_cast.py`.
+- `src/vidgen/config.py` (`look_alike` in `LINT_RULES` / `RuleName`, `LookAlikeRule`, `LintRules`),
+  `lint/cartoon_rules.py`, `lint/rules.py`, `lint/run.py`, `screenplay.py`, `plan_yaml.py`,
+  `cli.py`, `jsonout.py`, `mcp_server.py`.
+- Docs: `docs/CONFIG.md` (screenplay options and looks, new "A random cast (`vidgen cast`)", lint
+  table row and defaults block, shared casts line, MCP tools, `vidgen cast --json`), `DESIGN.md`
+  (§2 tree, §8 CLI, MCP tools, §69.17, §69.25, new §69.49), `README.md` (feature, command rows, MCP
+  list), guide (MCP list, characters bullet, screenplay paragraph, cartoon lint rules,
+  troubleshooting row) + `AGENTS.md` copy, `tasklist.md`.
+- Tests updated: `tests/test_screenplay.py` (one pin, see below), `tests/test_mcp.py` (`cast` in
+  the tool set; `cast` and `screenplay` with `species` / `seed` in the screenplay session test).
+
+Public interfaces
+- No `vidgen.api` change. CLI `vidgen cast` (+ `--json`), `vidgen screenplay --species --seed`;
+  MCP tool `cast`; lint rule `look_alike` (`lint.rules.look_alike.min_contrast`);
+  `SceneContext.character_pairs`; `screenplay_project` keyword arguments `species`, `seed`;
+  `commented_yaml` accepts a config without `scenes`.
+
+Decisions / deviations
+- Video-level rule as a scene rule: lint has only still and scene scopes, so the pair is tied to
+  the scene where the later character first appears (one finding per pair, `lint_ignore` by that
+  scene). The finding has no `objects` (`object_json` needs layout keys); names are in the message.
+- Random looks use hex colours (not tokens), so a cast reads the same in every theme; the curated
+  `LOOKS` keep their tokens and are compared in the project's theme.
+- Kids are not drawn (they need the stage's `scale`, Step 113); names are chosen per voice kind.
+- Screenplay pins: casts of up to 11 without a colliding declared character get the same looks as
+  before (`test_generated_looks_and_voices_suit_each_other`'s first pins unchanged). Updated pin: a
+  fifth stated "she" got the bun again with `seed: 4`; it now gets the first unused neutral look
+  (spiky hair, hat), since no look repeats any more.
+- Searched first: `lint/color.py` had `lab` and `delta_e` (CIEDE2000; reused); no contrast-between-
+  characters, random-look or name code existed; voices reuse `assign_voices`.
+
+Evidence
+- The 11 `LOOKS` in soft_pastel score 0.49..0.84 against each other; the example casts (cartoon,
+  music box, rain check, both series episodes) 0.70..0.84, so `look_alike` finds nothing there.
+- Random casts seen (seeds 1, 2, 3 and 7; 3 to 12 characters; humans and animal mixes): lowest
+  contrast 0.64..0.81; the test asserts at least 0.55 for seeds 0..3 at 8 characters, and a
+  clearly lower sum with no choice (1 candidate).
+- Stills checked by eye: two 8-character casts (seed 1 humans; seed 2 human / cat / rabbit / bird)
+  side and front: every pair tells apart at a glance by outline and colours.
+
+Known gaps / TODOs
+- The score compares parameters, not drawn pixels (two different hair styles of the same colour
+  may still look close from far away); eyes / nose count as details only.
+- `vidgen cast` has no `--theme` (the cast uses hex colours); a screenplay's random looks ignore
+  `--seed` until the 11 built-in looks are used up.
+- `look_alike` does not compare characters drawn from SVG files.
+
+How to test
+- `pytest tests/test_random_cast.py` (15 not-render, ~3 s).
+- Also run, not render: `test_random_cast test_screenplay test_lint test_cartoon_lint
+  test_cartoon_outfits test_plan test_includes` (211, 20 s), `test_docs test_guide
+  test_json_output test_schema test_config test_cli test_phase_i_review test_phase_h_review` (231,
+  93 s), `test_mcp` (15, 26 s); render: `test_screenplay test_cartoon_lint test_lint` (2, 4 s),
+  `test_phase_h_review test_phase_i_review test_includes` (2, 24 s). The full suite was not run.
+
+## Step 116 — Review of Phase K, with an indoor example
+
+What was done
+- **Example** `examples/cartoon-muffin-mystery/` ("The Muffin Mystery", original): `muffin_mystery.md`
+  (front matter declares the dog Crumb; Mira and Olen generated, then restyled) and the
+  hand-edited `video.yaml` (2-line header, compact, no audio): a silent title `card`, `iris_in`
+  into the evening, one `sets: home` room (stripes, boards, a window, a door at 0.13; sofa and
+  counter / fridge against the wall, a picture and a clock on it, an armchair at depth 0.2, a rug),
+  Crumb (`species: dog`) sitting in the armchair with hearts and Zs, Mira (pear, ponytail, apron)
+  walking to the front and back behind the armchair and out through the door, `indoor` light
+  fading to night; a crossfade to the morning: Olen (tall, sleepy eyes, striped pyjamas) comes in
+  through the door holding the "missing" basket, an exclamation mark, a sparkle, `run_to` the
+  counter behind Mira, `?` from `auto_direct`, Crumb sweats and jumps, Mira points, Olen walks to
+  the front, Crumb runs in depth behind him, "Well. Case closed." in a front-view close-up with a
+  comic sting, Olen gives Crumb the basket (hearts), `iris_out` on Crumb, "The End" card. Captions
+  in speaker colours, `bright` bed at −4. Voices: narrator `bf_emma` 0.8, Mira `af_heart` 0.75,
+  Olen `am_fenrir` 0.75, Crumb `bm_fable` 0.8.
+- **Checks**: `vidgen validate` ok; `vidgen lint` 0 findings at preview with word-count timing and
+  with Kokoro audio (first passes found: the door and fridge cut at the edges, two `facing_away`, a
+  `walk_overlap`, Mira at 3.52 words/s at 0.8, a `rushed_animation` from a run in a short beat:
+  fixed in the yaml). CLI: `screenplay` (also with `vidgen cast --random 4 --species dog human`),
+  `direct`, `character-sheet --all`, `storyboard`. MCP (stdio, SDK client): `screenplay`, `validate`,
+  `direct`, `cast`, `screenplay` with `cast`, `lint`, `storyboard`, `character_sheet`: all ok.
+- **Real narration and render** (scratch copy, kvenv312, 2500 MB cgroup, offline HF cache; a
+  script file): 12 beats; render 1280x720 30 fps with `--frames-per-beat 3` in one command (167 s):
+  `/home/claude/work/phase-k-review/muffin_mystery.mp4`, 69.93 s, −16.2 LUFS integrated, true peak
+  −1.9 dBTP.
+- **Stills by eye** (~70 at 720p plus frames from the MP4): feet on the floor walking and
+  standing, on the armchair (hips on the seat; the round dog hides most of the chair), basket on
+  the counter's top (`lift` 0.185); furniture depth order (Mira behind the armchair and Crumb, Olen
+  running behind Mira at the wall's depth, Crumb running towards the camera behind Olen; shadows
+  under them); effect symbols on the dog's head (hearts above the ears, Zs in front, sweat at the
+  back, `!` above) and on the people; the front view talking in the close-up (mouth shapes
+  change, head upright after the fix); the title card's iris closing on the centre and opening on
+  the room; the iris closing on Crumb's face, then opening on the end card; Mira fading out and
+  Olen (with the basket, after the fix) fading in at the door.
+- **Levels** (stems from `build/final/padded`: music = mix / gain − `voice.wav` − `sfx.wav`,
+  correlation with the voice −0.09; LUFS before the +5.4 dB normalisation): narration −20.8; music
+  under speech −42.3 (evening) / −40.3 (morning), in pauses −33.3 / −33.2, on the cards −33.9 /
+  −36.4; foley −29.4 overall, loudest −7.7 dBFS (the `!` pop). The limiter took up to 4.7 dB off 20
+  of 1398 50-ms windows (Olen's loudest syllables, `am_fenrir`).
+
+Fixes (with tests in `tests/test_phase_k_review.py`)
+- `cli.cmd_screenplay`: the text summary did `len(s["beats"])`; a silent `card` (only `duration`)
+  has none → `KeyError` after writing the file. Now `s.get("beats", [])` and "N scenes" (not "N
+  stage scenes"). `--json` was already right.
+- `Stage._held_before_entering` + construct: a `hold` at the start by a character waiting off
+  stage for its `enter` flew the prop from its spot to off stage in view (and showed it during the
+  set's fade-in); the prop now starts beside its holder off stage.
+- `Walk` fades the props in `carried` with `fade_in` / `fade_out`; `enter` / `exit` with `door`
+  pass the props the character holds (`moving._carried`, shared with walks in depth).
+- `turn` `to: front` ends with `camera_look("front")` (head straight); `look_pose` facing front
+  keeps the head angle 0 and moves only the eyes (a head angle rolls the front view sideways).
+
+Docs
+- DESIGN new §69.50; CONFIG (`look_at`, `turn`, `hold`, `enter` / `exit` rows); EXTENDING (`Walk`
+  `carried=`); README (cartoon scene types line, screenplay command row, the example in the list);
+  `docs/gallery/stage.md` regenerated by `vidgen gallery --types stage` (the `props.prop` row gains
+  the furniture and a `props.against` row appears, both missing since Step 110; stills and GIFs
+  byte-identical); the `card` page and media regenerated identical. Checked by grep: Phase K
+  actions, keys, commands, MCP tools and lint rules are in CONFIG, DESIGN and the guide; `AGENTS.md`
+  is the guide's copy (the guide needed no change).
+- Wheel (`pip wheel --no-deps --no-build-isolation` in kvenv312): all 426 tracked `src/vidgen`
+  files, the 14 Phase K modules among them, 223 data files.
+- Backlog: 8 lines for Phase K gaps (Steps 107–116).
+
+Files touched
+- New: `examples/cartoon-muffin-mystery/muffin_mystery.md`, `examples/cartoon-muffin-mystery/video.yaml`,
+  `tests/test_phase_k_review.py`.
+- `src/vidgen/cli.py`, `scenes/stage.py`, `scenes/moving.py`, `scenes/acting.py`,
+  `scenes/handling.py` (docstring), `cartoon/transition.py`, `cartoon/acting.py`; `DESIGN.md`,
+  `docs/CONFIG.md`, `docs/EXTENDING.md`, `README.md`, `docs/gallery/stage.md`, `tasklist.md`.
+
+Public interfaces
+- No `vidgen.api` names added. Behaviour: `look_pose(..., "front")` returns head angle 0;
+  `turn` to the front straightens the head; `Walk(carried=)` also fades; `vidgen screenplay`'s
+  text summary says "N scenes".
+
+Known gaps
+- In the Backlog (8 lines). Not listened to by a person; Whisper not run.
+
+How to test
+- `pytest tests/test_phase_k_review.py` (8 not-render, ~8 s).
+- Run: not render `tests/test_cartoon_*.py test_random_cast test_screenplay test_includes
+  test_phase_f_review test_phase_h_review test_phase_i_review test_phase_k_review` (882 passed,
+  85 s), `test_docs test_guide test_gallery test_schema test_cli test_json_output test_actions
+  test_push_wipe_carry` (250, 79 s), `test_mcp` (15, 29 s); render: the cartoon files in two
+  batches (27, 39 s; 16, 13 s), `test_random_cast test_screenplay test_includes test_phase_*_review`
+  (5, 37 s). The full suite was not run (not asked).
+
+## Step 116a — Fix furniture vanishing during camera moves and the door overlapping the sofa
+
+What was done (two faults the owner saw in `muffin_mystery.mp4`; DESIGN §69.51)
+- **Furniture vanished at 0:12** while Mira walked from the wall (depth 0.4) to the front. Cause:
+  not the camera (it did not move; the frames keep the same framing) but the draw-order updater of
+  Step 111. `Stage.get_moving_mobjects` marks as moving everything from the first thing a walk in
+  depth passes, measured from the walker's depth now; `_draw_order_step` rebuilt Manim's
+  `moving_mobjects` mid-play when Mira crossed the armchair, and by then the props at the wall's
+  depth were no longer "passed", so they left the list while not being in the static image Manim
+  drew when the animation began. Fix: `Stage._moving_in_order` keeps everything the list had plus
+  what moves now, in the current draw order.
+- **Door over the sofa (and counter over the fridge)**: example layout changed (door 0.13, sofa
+  0.325 with scale 0.9, picture 0.26, counter 0.745, fridge 0.925, basket 0.74; the screenplay's
+  `set:` lines too). New lint rule `prop_overlap` (warning, `min_overlap` 0.15): props standing on
+  the floor at depths < 0.15 apart overlapping side by side; lifted / hung (`raised`), flat (rug)
+  and held props are left out. Layout dump keys on props: `prop`, `depth`, `raised`, `flat`;
+  `Prop.raised` set by the stage. On the old layout it reports sofa/door (50%) and counter/fridge
+  (38%), merged over the beats; the new layout lints clean (all rules, Kokoro audio). The other
+  stage examples (rain check, svg_character, series 1 and 2, cartoon) give no `prop_overlap`.
+- **Show-through during the opening fade**: the stage faded each thing in on its own (FadeIn per
+  backdrop part, shadow group, character, prop). The entrance now adds them all at once under a
+  background-coloured cover that fades out (`Stage._entrance_cover`), so the set fades in as one
+  picture, under an `iris_in` too. Carried copies (`carry:`) still move in.
+
+Files touched
+- `src/vidgen/scenes/stage.py`, `src/vidgen/cartoon/props.py` (`raised`), `src/vidgen/introspect.py`
+  (`_prop_keys`), `src/vidgen/lint/cartoon_rules.py` (`prop_overlap`), `src/vidgen/config.py`
+  (`PropOverlapRule`, rule lists); `examples/cartoon-muffin-mystery/video.yaml`, `muffin_mystery.md`;
+  tests `test_cartoon_depth.py`, `test_cartoon_lint.py`, `test_cartoon_room.py`; docs `DESIGN.md`
+  (§69.51), `docs/CONFIG.md` (rules table, lint defaults, layout keys), guide + `AGENTS.md`
+  (troubleshooting row, cartoon rules list), `tasklist.md` (a Backlog line).
+
+Public interfaces
+- Lint rule `prop_overlap` (`lint.rules.prop_overlap.min_overlap`); layout dump prop keys `prop`,
+  `depth`, `raised`, `flat`; `Prop.raised`. No `vidgen.api` names. Behaviour: the stage's opening
+  fade is one picture; renders of every stage scene change in their first second.
+
+Evidence
+- Tests that fail before the fix (checked by stashing `scenes/stage.py`):
+  `test_props_at_the_depth_a_walker_leaves_stay_drawn` (door and fridge missing from frame 1.6 s
+  on) and `test_the_set_fades_in_as_one_picture` (4.7% of the pixels off the common blend, limit 1%).
+- Re-rendered the scratch copy (`/home/claude/work/phase-k-review/proj`, its Kokoro audio reused) at
+  1280x720: `/home/claude/work/phase-k-review/muffin_mystery_v2.mp4`, 69.93 s, −16.2 LUFS. By eye:
+  `look/sheet12_v2.png` (11.4–12.5 s at 10 fps) and `look/walk_v2.png` (10–19 s) keep every piece
+  of furniture through the walk; `look/t03_v2.png` (0:03, under the iris) shows no show-through
+  and the door clear of the sofa; `look/all_v2.png` (every 5.5 s) looks right.
+
+Known gaps
+- Backlog line "Stage fades and props": the scene's fade out still fades each thing on its own;
+  `prop_overlap` checks beat-end stills and boxes only; found, not fixed: `examples/cartoon-music-box`
+  fails `vidgen validate` at HEAD too (a `lean_on` the tree across depths). Gallery stage media not
+  regenerated (only their first second's fade frames would change).
+
+How to test
+- `pytest -m "not render" tests/test_cartoon_*.py tests/test_phase_k_review.py tests/test_lint.py
+  tests/test_introspect.py` (832, 62 s); `tests/test_guide.py tests/test_docs.py tests/test_schema.py
+  tests/test_config.py` (182, 79 s); render: `tests/test_cartoon_[a-l]*.py` (21, 26 s),
+  `tests/test_cartoon_[m-z]*.py` (24, 15 s), `test_phase_k_review test_lint test_introspect
+  test_phase_h_review` (3, 28 s). The full suite was not run.
+
+## Step 117 — `--jobs auto`
+
+What was built (DESIGN §70)
+- `vidgen/render/jobs.py` (new; nothing similar existed: searched `jobs`, `meminfo`, `cpu_count`,
+  `cgroup` in `src/vidgen/`): `jobs_for(available_bytes, cores, per_job_bytes)` = min(memory ÷
+  per job, cores), at least 1, 1 when memory is unknown; `choose_jobs()` → `JobsChoice(jobs,
+  cores, per_job_bytes, memory)` with `reason` and `to_json()`; `available_memory()` per OS:
+  Linux `/proc/meminfo` `MemAvailable` or, when smaller, the cgroup headroom (`cgroup_headroom`:
+  the process's memory cgroup and its parents, v2 `memory.max` / v1 `memory.limit_in_bytes`,
+  limit − (usage − inactive file cache)); Windows `GlobalMemoryStatusEx.ullAvailPhys` (ctypes);
+  macOS `vm_stat` free + inactive pages; other systems → unknown → 1. Swap never counted. Cores:
+  `os.sched_getaffinity` where present, else `os.cpu_count()`. `PER_JOB_BYTES` = 1.5 GB.
+- CLI: `--jobs` of `render`, `storyboard`, `lint`, `thumbnail`, `slides`, `gallery` now takes `N` or
+  `auto` (one `jobs_arg` helper in `build_parser` replaces the six definitions; `_jobs_value`).
+  `main` and `_run_json` call `_resolve_auto_jobs` before the command: `auto` becomes the number,
+  the CLI prints `jobs: N (auto: <reason>)` (stdout; stderr with `--json`), and a `--json`
+  document gets a `jobs` object (also on an error document). The usage error for a bad value is
+  now `invalid value: 'x' (a whole number, or auto)` (was argparse's `invalid int value`).
+- MCP: the `Jobs` parameter type accepts an int 1–16 or `"auto"` (default 1, unchanged).
+
+Measurements (the per-job figure), one scene render at a time (`--jobs 1 --no-audio`), in a fresh
+cgroup-v1 memory group capped at 1500 MB, `memory.stat` polled every 50 ms (script kept in the
+scratchpad, `step117/measure_peak.py`); 1920x1080 by editing a scratch copy's `format:`:
+
+| example | format | peak RSS of the group | largest process | incl. page cache | wall |
+|---|---|---|---|---|---|
+| cartoon-muffin-mystery | 640x360 @ 15 | 291 MiB | 252 MiB | 439 MiB | 53 s |
+| cartoon-muffin-mystery | 1920x1080 @ 30 | 756 MiB | 717 MiB | 995 MiB | 191 s |
+| cartoon-rain-check | 640x360 @ 15 | 288 MiB | 246 MiB | 557 MiB | 56 s |
+| cartoon-rain-check | 1920x1080 @ 30 | 790 MiB | 752 MiB | 1104 MiB | 195 s |
+
+Decision: 1.5 GB per job (about 1.8 × the largest peak, 0.83 GB), not the task list's default
+3 GB: the measurements do not support 3 GB, which would halve the jobs on an 8 GB machine. Not
+covered: formats above 1080p (memory grows with pixels; about 2.5 GB at 4K by the two points
+above); CONFIG.md says to give `--jobs N` there. No cgroup was hit (failcnt 0). Check run: `vidgen
+render examples/minimal --preview --no-audio --jobs auto` (scratch copy) under the 1500 MB cap
+printed `jobs: 1 (auto: 1.5 GB available (cgroup memory.limit_in_bytes minus its use) / 1.5 GB per
+job = 1, 2 CPU cores)` and rendered 11 scenes; uncapped here it chooses 2 (6.2 GB, 2 cores).
+
+Proposed change to docs/CODING-AND-COMMUNICATION-GUIDE.md rule 7 (not applied; the owner decides).
+Replace the first bullet's "and `--jobs 1` for vidgen commands." with:
+
+> and `--jobs 1` or `--jobs auto` for vidgen commands, never a fixed N above 1. `--jobs auto`
+> reads the memory the cap leaves (cgroup `memory.max`), so under `MemoryMax=1500M` it renders
+> one scene at a time; it allows 1.5 GB per scene render (a 1080p cartoon scene peaks at about
+> 0.8 GB). Kokoro `vidgen tts` (about 2.2 GB) runs alone, never next to a render or a test run.
+
+Files touched
+- New: `src/vidgen/render/jobs.py`, `tests/test_jobs.py`.
+- `src/vidgen/cli.py`, `src/vidgen/mcp_server.py`; tests `tests/test_json_output.py` (new usage
+  message), `tests/test_mcp.py` (`--jobs=auto` pass-through, render tool schema).
+- Docs: `docs/CONFIG.md` (new section "Parallel renders (`--jobs`)", option tables, synopses, JSON
+  envelope `jobs`), `README.md`, guide `src/vidgen/data/guide/AGENTS.md` + `AGENTS.md`,
+  `docs/COOKBOOK.md` (`--jobs 4` → `--jobs auto`, not named by the step: a fixed 4 is what the
+  step replaces), `DESIGN.md` (§2 layout, §5.2, §8, new §70), `tasklist.md`.
+
+Public interfaces
+- CLI `--jobs auto`; JSON envelope key `jobs` (only with `--jobs auto`; schema version unchanged,
+  keys are only added); MCP `jobs: "auto"`. No `vidgen.api` names; Python functions still take an
+  int.
+
+Known gaps
+- A cgroup CPU quota (`cpu.max`) is not read: in a container limited by quota but not affinity,
+  `auto` may count more cores than it gets (memory still bounds it).
+- The per-job figure is one constant, not scaled by the format's pixel count.
+- Windows and macOS readings are tested with mocks only (no such machine here).
+
+How to test
+- `pytest -q tests/test_jobs.py` (24 passed, 2.0 s); `pytest -m "not render" tests/test_json_output.py
+  tests/test_mcp.py tests/test_cli.py` (46 passed, 4 deselected, 29.5 s); `tests/test_docs.py
+  tests/test_guide.py tests/test_packaging.py` (104 passed, 2.4 s). All under the 1500 MB cap. No
+  render tests changed or run; the full suite was not run.
+
+## Step 118 — Vehicles, part 1: on the ground
+
+What was built (DESIGN §69.52)
+- Three built-in vehicle props `bicycle` (0.38 of a character, 1 rider), `car` (1.12 tall, 1.9
+  long, 2 riders), `bus` (1.45 tall, 3.2 long, a driver and 3 passengers): pure geometry in the
+  new `src/vidgen/cartoon/vehicles.py` (`VEHICLES` → `VehicleSpec`: seats, seat line, floor,
+  wheels, half length, speed, a bicycle's crank and grip; `seat_origin`, `seated_height`,
+  `get_in_gap`, `place_order`, `wheel_degrees`, `crank_degrees`, `pedal_points`, `ride_facing`),
+  drawings in `cartoon/vehicle_drawing.py` (original side views from primitives, theme colours,
+  see-through windows, spokes / hub bolts and cranks that turn). `Prop(wheels=, crank=)`,
+  `Prop.turn_wheels`, `.prop_point`, `.unit`, `.standing_height`, `.is_vehicle`.
+- Riding in `cartoon/riding.py`: `RiderSeat` + `place_rider` (a rider follows its seat by an
+  updater, never added to the vehicle; scales with it in depth), `riding_state` (seated; on a
+  bicycle leaning, feet planted on the pedals with the limb solver, hands on the handlebar),
+  `Ride` (turns round, eases like a walk, scales in depth, turns the wheels, pedals).
+  `BodyMove(y=)` eases the feet's y.
+- Actions in `scenes/riding.py`: `get_in` (characters, `to` a vehicle; nearest free seat; drawn
+  behind a car / bus side, on a bicycle), `ride_to` (a vehicle or a rider; `to` a place or
+  `{mark, depth}`, `depth`, `speed`), `get_out` (stands beside its seat, in front of the vehicle).
+  `Character.riding`; riding counts as posed (`is_posed`). `Postures.ride` / `get_out` /
+  `riders`; riders cannot walk, sit or stand up before `get_out`.
+- Stage: vehicles are movable props when a `ride_to` is used (shadow follows and grows); riders
+  cast no shadow; the depth draw-order keeper moves a vehicle with its riders (`_moving_block`,
+  `ride_in_depth`, `_depth_crossers` knows `Ride`); mid stills for the three actions.
+- Validate (`holding_problems(vehicles=)`, `StageFrame.vehicles`): not a vehicle (naming the
+  stage's), full, too far beyond its end or at another depth (with the `walk_to`), `ride_to` of a
+  character that rides nothing, `get_out` without `get_in`, walking / sitting / `stand_up` while
+  riding, a vehicle picked up, a ridden vehicle moved by keys.
+- Foley: `PlayedAction.vehicle`, `foley.ride_cues` (bicycle `bell`; car / bus `engine` for 0.8 of
+  the ride; `brakes` ending at the stop); new generated sounds `bell`, `engine`, `brakes` in
+  `sfx.py`. Motion effects: a ride counts like a walk (dust at the vehicle's back / front end,
+  speed lines from its back end).
+- Planner (`directing._riding`): riders' x and facing follow their vehicle (looks, close-ups,
+  `reframe`); the actions are `LOOK_CHANGING` and `MOVING_ACTIONS`. `follow` of a vehicle or a
+  rider works as it was (the camera reads the box / feet each frame).
+- Lint / layout: key `riding`; `character_overlap` / `walk_overlap` skip riders of one vehicle;
+  `hidden_speaker` ignores a rider's own vehicle.
+- Gallery still `docs/gallery/media/vehicles.png` (720×240, 9.7 KB) in CONFIG.md "Vehicles";
+  `props.png` leaves vehicles out and is byte-identical (md5 checked).
+
+Files touched
+- New: `src/vidgen/cartoon/vehicles.py`, `cartoon/vehicle_drawing.py`, `cartoon/riding.py`,
+  `src/vidgen/scenes/riding.py`, `tests/test_cartoon_vehicles.py`, `docs/gallery/media/vehicles.png`.
+- `src/vidgen/cartoon/props.py`, `seating.py`, `holding.py`, `directing.py`, `foley.py`,
+  `motion_effects.py`, `motion_effect_shapes.py`, `shading.py`, `still.py`, `transition.py`,
+  `character.py`; `src/vidgen/scenes/stage.py`, `scenes/acting.py`, `scenes/__init__.py`;
+  `src/vidgen/sfx.py`, `introspect.py`, `lint/cartoon_rules.py`, `api.py`; guide
+  `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md` (action rows, Vehicles bullet, sounds).
+- Docs: `docs/CONFIG.md` (new "Vehicles", props / actions / run_time / targets / layout rows,
+  sounds table, foley), `DESIGN.md` (§2 tree, §6.4, new §69.52), `docs/EXTENDING.md`,
+  `docs/gallery/stage.md` (props row, by hand as `vidgen gallery` writes it), `tasklist.md`
+  (ticks, 2 Backlog lines).
+- Tests updated: `tests/test_cartoon_props.py` (35 kinds), `tests/test_actions.py` (action name
+  lists), `tests/test_cartoon_sheet.py` (mid stills).
+
+Public interfaces
+- `vidgen.api` adds the names in DESIGN §6.4 (Step 118). Actions `get_in`, `ride_to`, `get_out`;
+  props `bicycle`, `car`, `bus`; sounds `bell`, `engine`, `brakes` (`vidgen list-sfx`: 18 → 21
+  built-in sounds); layout key `riding`. Compatible: scenes without vehicles render as before.
+
+Decisions / deviations
+- Vehicles are props, riding a posture: placing, depth, shadows, light, layout dump and the
+  replay of `vidgen validate` reuse the prop and posture code; `ride_to` targets the vehicle (or
+  a rider, meaning its vehicle).
+- "A car/bus has doors or hides the lower body": the side hides it (riders drawn before the
+  vehicle, windows see-through); no door animation. Getting out puts the rider in front of the
+  vehicle (stepping out towards the camera), at its seat's x.
+- Sizes are true to the characters (a bus is 3.2 characters long); docs tell authors to use
+  `scale` or a smaller stage `size`. The bicycle's saddle is at 0.255 of a character: short
+  generated legs reach towards the low pedal as far as they go.
+- A vehicle turns round at once when it rides the other way (a cut), like a walker's facing.
+- `bell` / `engine` / `brakes` are added now (Step 128 also lists a bicycle bell and an engine
+  hum; it can reuse them).
+- Searched first: no vehicle, wheel or rider code existed (`grep -rni "vehicle\|wheel\|ride"
+  src/vidgen`: only unrelated words); reused props' primitives (`_rect`, `_handle`, `_arc`,
+  anchors), `Postures`, `holding_problems`' replay and messages, `Character.seated` /
+  `planted` / `reached_parts`, `BodyMove`, `walk_seconds` / `walk_progress`,
+  `depth_walk_distance`, `depth_slot`, `PlayedAction`, `motion_effect_cues`, `_bell` in sfx.
+
+Evidence
+- Storyboards (preview 854×480; scratch projects in the scratchpad `s118/proj`, `s118/proj2`):
+  two riders getting in a car (heads in the windows, legs hidden), riding right, then to depth
+  0.7 behind a tree, getting out in front of it; a cyclist on the saddle, leaning, feet on the
+  pedals, hands on the bar, riding right and back left (the bicycle turned round); four riders
+  (one a cat) getting on a bus facing left, the bus turning and riding right with dust and speed
+  lines; the CONFIG.md example (validates, storyboard looks right, `vidgen lint`: only the
+  scratch cast's `look_alike`). The validate message in CONFIG.md is real output.
+
+Known gaps / TODOs (Backlog line "Vehicles")
+- No doors; a beat's `shot` does not follow a ride within the beat; a rider's feet show under a
+  car's side for a moment while it climbs in; a held prop keeps its size during a ride in depth;
+  no screenplay words; ride sounds not listened to by a person.
+- Found, not fixed (fail at HEAD ee5e160 too, worktree check): `tests/test_builtin_scenes.py::
+  test_every_builtin_is_registered`, `tests/test_actions_coverage.py::
+  test_every_builtin_type_has_targets_and_the_docs_table_matches` and
+  `::test_a_type_without_targets_rejects_actions` (their scene-type lists lack `card`).
+
+How to test
+- `pytest tests/test_cartoon_vehicles.py` (21 not-render + 2 render, ~4 s).
+- Also run (not render): `tests/test_cartoon_*.py test_lint test_introspect test_phase_k_review
+  test_phase_i_review test_phase_h_review` (875 passed, 82 s), `test_docs test_guide` (102),
+  `test_schema test_gallery test_config test_actions_coverage` (3 failed: the 2 pre-existing
+  above and the guide's sound list, fixed and re-run), `test_cli test_json_output test_screenplay
+  test_builtin_scenes test_storyboard test_extensions test_includes test_random_cast
+  test_overlays` (261 passed, 1 pre-existing failure), `test_mcp test_api test_packaging` (27);
+  render: `test_cartoon_depth holding seating motion_effects foley props furniture lighting stage
+  room vehicles` (18 passed, 12 s), `test_cartoon_lint directing sheet moving acting
+  test_introspect test_sfx test_phase_k_review` (14 passed, 34 s). The full suite was not run.
+
+## Step 119 — Vehicles, part 2: water and air
+
+What was built (DESIGN §69.53)
+- Three vehicle props: `boat` (0.58 of a character tall, 1.9 long, 2 seated riders behind its
+  side, an outboard motor), `hot_air_balloon` (2.1 tall, 2 riders standing in the basket),
+  `toy_rocket` (0.55 tall, nobody rides it; shapes `folded` / `chute`). `VehicleSpec.medium`
+  (`ground` / `water` / `air`) and `.stands`; `GROUND_VEHICLES`, `WATER_VEHICLES`,
+  `AIR_VEHICLES`, `medium()`; `ROCKET_ASCENT_SHARE` in `cartoon/vehicles.py`.
+- Pure, seeded paths in the new `cartoon/vehicle_paths.py`: `Course(...).at(share)` (feet and
+  turn), `balloon_point` (rise 30 % of the time, cruise with a float, land; a wind `drift` bulge
+  that is 0 at both ends; `land=False` keeps rising), `rocket_point` (arc up with the nose along
+  the tangent, parachute descent turning upright, or away out of the frame), `balloon_seconds`,
+  `rocket_seconds`, `wave_offset`, `front_outline`, `boat_bob`, `bob_phase`, `smoke_puffs`.
+- Stage param `water: true | {left, right, color}` (`WaterStrip`); `cartoon/water.py`
+  `StageWater` draws the band (backdrop) and the wavy front strip (first foreground item, over the
+  keels) and, from a scene updater, moves the waves and bobs the boats (`Prop.afloat`), re-placing
+  their riders. Boats cast no shadow; the redraw set includes the water's movers.
+- `Prop.pose_at(x, y, degrees)` / `.tilt`; every vehicle prop has an anchor; `Ride(rise=, drift=,
+  away_y=, seed=)` flies a `Course` for water and air kinds (ground rides unchanged), switches the
+  rocket's parachute, leaves `Prop.flight`. `ride_to` option `land` (`false`: a balloon or rocket
+  flies out of the top of the frame); `RideTo._flight` caps the rise so the top stays in the frame
+  and takes the drift from the stage's wind level.
+- Validate: Params refuse a boat without water / off it / not at depth 0, and water, a boat, a
+  balloon or a rocket in a room; `get_in` to a toy rocket is refused; the replay
+  (`holding_problems(water=)`, `StageFrame.water`) refuses a boat's `to` off the water, `depth`
+  off the ground, `land: false` on the ground or water, and any later use of a vehicle that flew
+  away and its riders. The planner drops flown riders.
+- Foley: boat `engine` (pitch +6, no brakes), balloon `burner`, rocket `launch`, its parachute
+  `pop` and a soft `thud` at a touchdown (`PlayedAction.lands`). New generated sounds `burner`
+  and `launch` in `sfx.py` (21 → 23 built-in sounds). Motion effects: none for water / air rides
+  except the rocket's `smoke` (new kind, drawn behind it).
+- `docs/gallery/media/vehicles.png` regenerated: 960×480, 4 columns, 7 cells (rocket twice),
+  19.7 KB; `docs/gallery/stage.md` rows for `props.prop` and `water` (as `_param_rows` writes them).
+
+Pre-existing failures fixed (from Step 118's note)
+- `tests/test_builtin_scenes.py`: `card` added to `BUILTINS` and `SAMPLES`; the "examples use
+  every type" check counts `card` with `stage` (it is in the cartoon examples).
+  `tests/test_actions_coverage.py`: `SAMPLES["card"]` and `card` in the "types with targets"
+  message; `docs/CONFIG.md`'s targets table gains a `card` row (`text`, `subtitle`, `burst`,
+  `frame`). The lists stay written out (not derived), as the tests compare them on purpose.
+  Backlog line removed.
+
+Files touched
+- New: `src/vidgen/cartoon/vehicle_paths.py`, `src/vidgen/cartoon/water.py`,
+  `tests/test_cartoon_water_air.py`.
+- `src/vidgen/cartoon/vehicles.py`, `vehicle_drawing.py`, `riding.py`, `props.py`, `holding.py`,
+  `directing.py`, `foley.py`, `motion_effects.py`, `motion_effect_shapes.py`;
+  `src/vidgen/scenes/stage.py`, `scenes/riding.py`; `src/vidgen/sfx.py`, `src/vidgen/api.py`;
+  guide `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md`.
+- Docs: `docs/CONFIG.md` (new "Water and air vehicles", `water` param row, props row, `ride_to`
+  options, sounds, foley, motion effects, targets table `card`), `DESIGN.md` (§2 tree, §6.4,
+  new §69.53), `docs/EXTENDING.md`, `docs/gallery/stage.md`, `docs/gallery/media/vehicles.png`,
+  `tasklist.md` (ticks, Backlog: card line removed, water-and-air line added).
+- Tests updated: `tests/test_cartoon_vehicles.py` (kinds, ground-only seat test),
+  `tests/test_cartoon_props.py` (38 kinds), `tests/test_builtin_scenes.py`,
+  `tests/test_actions_coverage.py`.
+
+Public interfaces
+- `vidgen.api` adds the names listed in DESIGN §6.4 (Step 119). Prop kinds `boat`,
+  `hot_air_balloon`, `toy_rocket`; stage param `water`; `ride_to` option `land`; motion effect
+  `smoke`; sounds `burner`, `launch`. Compatible: scenes without them render as before.
+
+Decisions / deviations
+- One action set for every vehicle: `ride_to` launches a toy rocket too (no `launch` action);
+  the rocket has no seats (a toy, not a craft to ride).
+- The water is a front strip only (depth 0); boats float at depth 0 and do not ride in depth.
+- `to` is required as for ground rides; the wind bows a balloon's way aside but it lands at `to`
+  (without `to` it would land somewhere `vidgen validate` cannot predict).
+- Flown-away vehicles and riders are "gone" in the replay; on screen they stay above the frame.
+- Searched first: no water, boat, balloon, flight or smoke-trail code existed (`grep -rni
+  "water\|boat\|balloon\|rocket\|smoke" src/vidgen`: only the `smoke` particles and unrelated
+  words); reused `walk_progress`, `smoothstep`, `idle_seed` / `wind_seed`, `Wind.level`, the
+  prop shapes (`show_shape`), `Puff`, `MotionEffect`, the smoke particles' colour, `_param_rows`.
+
+Evidence
+- Storyboards at preview 854×480 (scratch project `s119/proj` in the scratchpad), checked by eye:
+  two riders climbing into a boat on water from 0.35, motoring right, waves crossing the keel and
+  the boat bobbing; a balloon at `size: 0.3` with `wind: windy` lifting two standing riders,
+  drifting and landing at 0.75, both getting out; a toy rocket launching with a smoke burst and
+  trail, its parachute opening at the top, landing upright; a second rocket flying off the top.
+  The vehicles gallery still checked at 1920×960 and 960×480.
+
+Known gaps / TODOs (Backlog line "Water and air")
+- A boat's ends are not checked against the water's edges; `get_out` of a balloon stands the
+  riders in front of the basket; no water in depth, no splash; the balloon does not lean with the
+  wind and the smoke does not drift; the balloon is 2.1 characters tall; the new sounds were not
+  listened to by a person. Render cost of a stage with water: everything from the first boat on is
+  redrawn every frame (not measured).
+
+How to test
+- `pytest tests/test_cartoon_water_air.py` (25 not-render + 1 render, ~3 s).
+- Also run (not render): `tests/test_cartoon_*.py test_sfx test_guide test_docs test_api
+  test_voice_sounds test_lint test_introspect test_schema test_gallery test_config test_actions
+  test_actions_coverage test_builtin_scenes test_phase_k_review test_phase_i_review
+  test_phase_h_review` (1347 passed, 177 s); render: `test_cartoon_vehicles motion_effects props
+  foley stage room depth` (12 passed, 9 s), the `card` renders of `test_builtin_scenes` /
+  `test_actions_coverage` (5 passed). The full suite was not run.
+
+## Step 120 — Props that move by themselves, part 1: indoors
+
+What was built (DESIGN §69.54)
+- Pure `src/vidgen/cartoon/living.py`: clock maths (`parse_clock_time`, `clock_seconds`,
+  `hand_angles` clockwise from twelve, `hand_tip`, `shows_second_hand`, `DRAWN_CLOCK_SECONDS`
+  10:10, `MAX_CLOCK_SPEED` 3600), switches (`switched_on`, `switch_between`, `on_between`), a
+  tv's picture (`tv_shot`, `tv_flicker`, `tv_picture`, `TV_PALETTES`, seeded by `random.Random` of
+  a text key), glows (`GLOWS`, `glow_rings`, `glow_box`, `union_box`, `boxes_overlap`) and
+  `redrawn_members(boxes, regions, margin)` (which members drawn after a moving part must be
+  redrawn with it, transitively). `LIVING_KINDS`, `SWITCHED_PROPS`, `LIVING_PART`.
+- `src/vidgen/cartoon/living_drawing.py`: `living_overlays` (a clock's red second hand, a tv's
+  4-part picture over its screen, a lamp's lit lantern), `LivingProp` (sets the hands, the
+  picture, the lantern and the glow for a scene time; `switch`, `changing`, `movers`, `region`),
+  `PropGlow` (12 rings, its own mobject right before the prop, not graded, left out of the layout
+  dump). `draw_prop(..., living=True)` adds the overlays and an anchor (`Prop(anchored=True)`);
+  the clock's hour and minute hands are tagged in its drawing (no change to how it looks).
+- Stage: prop keys `on` (tv, lamp), `time`, `speed` (clock); a bare YAML `on` key (read as
+  `true` by YAML 1.1) is taken as `on`. Only running clocks and tvs / lamps that are `on` or named
+  by a `switch_on` are drawn living (`_living_names`); `_start_living` and the scene updater
+  `_living_step`; glows enter with their props; `switch_props` (+ `click` foley);
+  `get_moving_mobjects` ends with `_living_redrawn` (the moving parts plus overlapping members
+  after them; the rest stays in Manim's static image).
+- Actions `switch_on` / `switch_off` (`src/vidgen/scenes/switch_action.py`), non-animating like
+  `light`; validate refuses non-props and props that do not switch.
+
+Measured (DESIGN §69.54 has the table; scratch project `s120/proj` and `s120/proj_on` in the
+scratchpad, `s120/measure_room.py`): a night room at preview 854×480, 266 frames: HEAD 118b1b9
+20 358 Cairo draws, 2.9–3.1 s drawing, 6.6–6.9 s wall; this step with nothing on: the same 266
+raw frame hashes and draws; with a clock running in real time, a tv and a lamp on: 32 665
+draws, in alternating pairs drawing +1.1 to +1.5 s, wall +1.7 to +2.3 s (+23 to +31 %).
+Redrawing everything from the clock on instead gives the same frames with 1 506 more draws; a
+logging run showed the overlap rule added no member besides the moving parts in this room.
+
+Files touched
+- New: `src/vidgen/cartoon/living.py`, `src/vidgen/cartoon/living_drawing.py`,
+  `src/vidgen/scenes/switch_action.py`, `tests/test_cartoon_living.py`.
+- `src/vidgen/cartoon/props.py`, `src/vidgen/scenes/stage.py`, `src/vidgen/scenes/__init__.py`,
+  `src/vidgen/introspect.py`, `src/vidgen/api.py`; guide `src/vidgen/data/guide/AGENTS.md` + copy
+  `AGENTS.md` (two action rows, "Props that move by themselves" bullet, troubleshooting list).
+- Docs: `docs/CONFIG.md` (props rows `on` / `time` / `speed`, new "Clocks, televisions and
+  lamps", actions rows, `action` row, targets row, foley), `DESIGN.md` (§2 tree, §6.4, new
+  §69.54), `docs/EXTENDING.md`, `docs/gallery/stage.md` (props rows as `vidgen gallery` writes
+  them), `tasklist.md` (ticks, a Backlog line).
+- Tests updated: `tests/test_actions.py` (action name lists gain `switch_off`, `switch_on`).
+
+Public interfaces
+- `vidgen.api` adds the names in DESIGN §6.4 (Step 120). `Prop(anchored=False)`,
+  `draw_prop(living=False)`; stage prop keys `on`, `time`, `speed`; `Stage.living`,
+  `Stage.switch_props`; actions `switch_on`, `switch_off`. Compatible: nothing changes for a scene
+  without a running clock or a tv / lamp that comes on.
+
+Decisions / deviations
+- A clock runs only with `time` or `speed` (a clock without them stays as drawn, so existing
+  scenes such as the muffin-mystery room keep their pixels and render cost); `time` is the start,
+  the scene clock drives it.
+- "The room's light where simple": the lamp's glow lies right behind the lamp, so it brightens
+  the wall, the window, the floor and what stands behind it; the room's grade is not changed and
+  characters in front are not lit (a lit character would need per-character grading).
+- Moving parts are redrawn by overlap, not "everything from the first moving part on" (§69.20):
+  correct because Manim draws the moving list over the static image in draw order; a member
+  after a moving part that overlaps it (or overlaps one already redrawn) is redrawn too.
+- Switching is instant (a click), like a light switch; `run_time` is not used.
+- Searched first: no running clock, tv flicker, prop glow or switch code existed (`git grep -in
+  "flicker\|switch_on" 118b1b9 -- src/vidgen`: only a speed line's length flicker and a viseme
+  comment; "glow" only as `LightGrade.glow`, an additive grade term); reused `draw_prop` and its primitives, the anchor helpers, `darker`, `mark_lit` /
+  `LIT`, `motion_seed`, the `light` action's non-animating pattern, the scene-updater pattern of
+  the water / wind (kept bound method), `click` from sfx.
+
+Known gaps / TODOs (Backlog line "Living props")
+- No room light falloff or lit characters; instant switches (no fade); a carried lamp's glow
+  keeps its draw-order place; no tv sound, no clock strike; no screenplay words. A scene with a
+  living prop keeps a scene updater all along (Manim then renders every frame, no static waits;
+  with idle characters it did anyway).
+
+How to test
+- `pytest tests/test_cartoon_living.py` (25 not-render + 2 render at 160x90, ~4 s).
+- Also run (not render): `test_cartoon_living test_actions test_api test_cartoon_props
+  test_cartoon_furniture test_cartoon_room test_cartoon_stage test_introspect
+  test_cartoon_lighting test_cartoon_holding test_cartoon_vehicles test_cartoon_water_air
+  test_cartoon_depth` (270 passed, 9 s), `test_docs test_guide test_schema test_gallery
+  test_actions_coverage test_builtin_scenes test_extensions test_config` (342 passed and 2 failed:
+  a CONFIG snippet and a combined guide row, fixed; `test_docs test_guide` re-run: 102 passed),
+  `test_lint test_cartoon_lint test_mcp test_cli test_json_output test_screenplay test_includes
+  test_phase_k_review test_cartoon_speed test_cartoon_sheet` (140 passed, 39 s); render:
+  `test_cartoon_living props furniture room stage lighting depth speed parallax` (14 passed, 8 s),
+  `test_introspect test_cartoon_lint wind water_air vehicles holding test_phase_k_review` (10
+  passed, 15 s). The full suite was not run.
+
+## Step 121 — Props that move by themselves, part 2: fire, steam, nature
+
+What was built (DESIGN §69.55)
+- Pure maths: `cartoon/living.py` gains `flame_shapes(t, seed, lean)` (5 outer + 3 inner
+  `FlameShape` outlines, heights and tips flickering by seeded smooth noise), `flame_lean`,
+  `fire_flicker`, `steam_puffs(t, seed, lean)` / `steam_box`, `on_spans`, the fireplace's glow in
+  `GLOWS`; `SWITCHED_PROPS` = fireplace, kettle, lamp, tv. New `cartoon/nature.py`:
+  `FRUIT_SPOTS`, `drop_timing`, `drop_point` (gravity fall, one parabolic bounce, a turn),
+  `fruit_to_drop`, `flock_birds`, `wing_lift`, `bird_outline`, `FlockPlan` / `flock_plan`,
+  `bird_place`, `flock_box`.
+- Drawing: props `fireplace` (furniture, 0.75) and `kettle` (0.15) in `props.py`; `draw_prop(...,
+  fruit=True)` hangs 4 fruits on a tree (members tagged `FRUIT_INDEX`); `Prop.prop_points` (many
+  prop-unit points at once; `prop_point` uses it, same floats). `living_drawing.py`: flame
+  overlays before the front logs, `closed_curve` (vectorised Catmull-Rom, 0.7 ms a frame instead
+  of 5 ms), `PropSteam`, `LivingProp(wind=)` with `.flames`, `.steam`, `.region(start, end)`. New
+  `nature_drawing.py`: `Flock`, `wing_curve`, `FallenFruit` (moved by its skin's middle),
+  `FruitDrop` (a `PropMove` along `drop_point`, `lands_at` = impact), `hit_stars`.
+- Stage: prop key `fruit` (trees only), param `birds` (`StageBirds`; `FlockSettings` shared with
+  the action), refused in rooms; `_start_living` passes the felt wind (`_felt_wind`) to fireplaces
+  and kettles when the stage's wind may blow; glow before and steam after the prop in the
+  entrance; `_living_things` (living props + `flocks`) drive `_living_step` and
+  `_living_redrawn`; `add_flock` / `_put_in_sky` (right after the sky: `_sky_end`); `drop_fruit`,
+  `fruit_drop_seconds`, `_fruit_drop`, `_fruit_count_problems`; `switch_props` plays a `burner`
+  whoosh (−10 dB, 0.8 s) when a fireplace is lit, a click for the rest; `timings()` adds `fire`
+  beds from each burning fireplace's `on_spans` (with foley).
+- Actions (`scenes/nature_action.py`): `drop_fruit` (target a tree with fruit; `to` a character),
+  `birds` (non-animating, a number target is the count, `FlockSettings` options).
+- Sound: `ambience.py` `fire_loop()` (−34 LUFS seamless 8 s crackle), `AmbienceBed`, `BEDS`;
+  `mix.plan_ambience` loops over `AMBIENCE_BEDS` (rain unchanged).
+- Layout dump leaves out `PropSteam`, `Flock`, `FallenFruit`.
+
+Measured (DESIGN §69.55 has the table; scratch `s121/` in the scratchpad, `s120/measure_room.py`)
+- Nothing new used: the same raw frame hashes and Cairo draws as HEAD c8fad68 (a 162-frame outdoor
+  stage with trees, wind, leaves, a throw and a lamp on: 16 910 draws; Step 120's room with clock,
+  tv and lamp on: 266 frames, 32 665 draws).
+- A night room at 854×480, 260 frames: fireplace and kettle off 16 415 draws, 6.6–7.1 s wall;
+  both on all along 31 846 draws, 10.4–11.4 s (+50 to +63 %, mostly the fireplace's large
+  glow); redrawing everything from the first moving part: 35 551 draws, same frames. Birds
+  (6) on the outdoor stage: 17 990 draws, wall within the noise.
+
+Files touched
+- New: `src/vidgen/cartoon/nature.py`, `src/vidgen/cartoon/nature_drawing.py`,
+  `src/vidgen/scenes/nature_action.py`, `tests/test_cartoon_fire_nature.py`.
+- `src/vidgen/cartoon/living.py`, `living_drawing.py`, `props.py`, `src/vidgen/scenes/stage.py`,
+  `scenes/__init__.py`, `src/vidgen/ambience.py`, `src/vidgen/mix.py`, `src/vidgen/introspect.py`,
+  `src/vidgen/api.py`; guide `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md` (two action rows,
+  switch rows, a "Nature that moves" bullet, troubleshooting list).
+- Docs: `docs/CONFIG.md` (foley, stage param `birds`, rooms, new "Fireplaces and kettles",
+  "Fruit falling from a tree", "Birds", props rows `on` / `fruit`, action rows, `action` row,
+  targets row), `DESIGN.md` (§2 tree, §6.4, new §69.55), `docs/EXTENDING.md`,
+  `docs/gallery/stage.md` (params rows as `vidgen gallery` writes them),
+  `docs/gallery/media/props.png` (with the kettle) and `furniture.png` (with the fireplace, 5
+  columns), `tasklist.md` (ticks, a Backlog line).
+- Tests updated: `tests/test_actions.py` (action lists gain `birds`, `drop_fruit`),
+  `tests/test_cartoon_living.py` (the switched props' message), `tests/test_cartoon_props.py`
+  (40 props).
+
+Public interfaces
+- `vidgen.api` adds the names in DESIGN §6.4 (Step 121). Stage prop key `fruit`, `on` for
+  fireplace and kettle; stage param `birds`; actions `drop_fruit`, `birds`; ambience bed `fire`.
+  Compatible: nothing changes for a scene without them (checked by frame hashes).
+
+Decisions / deviations
+- A fireplace and a kettle are switched props like a lamp (off unless `on: true` or a
+  `switch_on`), so an unlit fireplace is plain furniture and costs nothing per frame.
+- "Crackle while visible": the bed plays while the fireplace burns in its scene (fades 0.6 / 0.8 s),
+  not by camera view.
+- A fallen fruit is a mobject of its own (`FallenFruit`), not a prop: no target, not in the layout
+  dump, so lint's prop rules do not see a fruit lying under its tree. The tree keeps the hidden
+  fruit's members (opacity 0).
+- `to:` on `drop_fruit` is not checked against where the character stands (it moves during a
+  scene); the fruit nearest above its head falls, else one falls to the ground.
+- The hit stars reuse Step 107's `stars` symbol and the motion-effect sweep (`done`).
+- Searched first: no flame, steam, fruit, flock or crackle drawing or bed existed (`grep -rlin
+  "flame\|steam\|fruit\|flock\|crackle"` in HEAD's `src/vidgen`: only the `launch` sound's
+  crackle of clicks and the `burner` description in `sfx.py`); reused
+  `LivingProp` / `PropGlow` / `redrawn_members`, `PropMove(path=)` and its `lands_at` thud,
+  `EffectSymbol("stars")`, `_add_motion_effect`, `felt_force`, `motion_seed`, the rain bed's
+  `_circular` / `_impulses` / `LoopSource` / `plan_ambience`, the `burner` and `click` sounds.
+
+Known gaps / TODOs (Backlog line "Fire, steam, nature")
+- No light on characters from the fire; a carried kettle's steam keeps its draw-order place; a
+  fallen fruit cannot be picked up; birds do not land; no screenplay words; the crackle was not
+  listened to by a person.
+
+How to test
+- `pytest tests/test_cartoon_fire_nature.py` (18 not-render 2.7 s, 2 render at 160x90 3.4 s).
+- Also run (not render): `test_cartoon_living test_api test_cartoon_props test_cartoon_furniture
+  test_cartoon_room test_cartoon_stage test_introspect test_cartoon_lighting test_cartoon_holding
+  test_cartoon_vehicles test_cartoon_water_air test_cartoon_depth test_cartoon_rain
+  test_cartoon_wind test_cartoon_effects test_cartoon_motion_effects test_cartoon_foley
+  test_music test_sfx test_cartoon_fire_nature` (476 passed, 42 s), `test_lint test_cartoon_lint
+  test_mcp test_cli test_json_output test_screenplay test_includes test_phase_k_review
+  test_cartoon_speed test_cartoon_sheet test_builtin_scenes test_extensions test_config
+  test_actions` (321 passed, 45 s), `test_docs test_guide test_schema test_gallery
+  test_actions_coverage` (184 passed, 86 s); render: `test_cartoon_fire_nature living props
+  furniture room stage rain` (13 passed, 10 s), `test_introspect test_cartoon_lint wind
+  water_air vehicles holding motion_effects lighting depth` (16 passed, 21 s). `vidgen lint` on
+  the two scratch projects: only author-caused findings; `vidgen render --preview` of the room
+  mixes the `fire` bed (report `ambience: [{bed: fire, start: 3.07, end: 17.33, duck: 5}]`). The
+  full suite was not run.
+
+## Step 122 — Everyday small props
+
+What was built (DESIGN §69.56)
+- Nine built-in props in `src/vidgen/cartoon/props.py` (`SMALL_PROPS`, in `PROP_KINDS` after
+  `kettle`, now 49 kinds): `cake`, `muffin`, `book`, `phone`, `letter`, `gift`, `balloons`, `vase`,
+  `watering_can`. Original primitives in theme colours (fixed hex for flames, paper, stems...).
+  `ball` already existed (Step 75): skipped.
+- `book`, `letter`, `gift` have `closed` / `open` shapes (`PROP_SHAPES`), so the existing `open`
+  / `close` actions and `open: true` work on them. A letter's `closed` shape is the sealed
+  envelope (the task's "folded"): one shape name for every prop the `close` action knows.
+- Held: `OVERHEAD_PROPS` (umbrella only) — an open book / letter / gift stays at the hold point
+  (`is_overhead` checks the kind). `FULL_SIZE_HELD` (balloons): `held_height(full_size=True)`,
+  drawn right before the holder (behind the head). Grips: balloons by the strings' knot, the can
+  by its handle.
+- Phone: a switched living prop (`SWITCHED_PROPS` gains `phone`; on = ringing), reusing Step
+  120's machinery: lit screen + amber ring lines as living overlays; `LivingProp` redraws the
+  whole phone turned by `ring_shake` (bursts of 1 s every 2 s, 13 Hz, ±10°) from its prop-unit
+  drawing (`Prop.drawn_points`, new; absolute, so holding / moving it never accumulates a turn).
+  New generated sound `phone` (sfx.py) at each burst (`Stage._ring_sounds`, after `finish`, with
+  foley, −6 dB); switching a phone on plays no click. Decision: the ring sound is done now (a
+  simple trill); Step 128 may refine it.
+- Balloons: new action `let_go` (character target, `prop`): released, arm down, `PropMove` along
+  pure `float_point` (speed-up, sway, lean) to `float_end` (above the stage, drifting with the felt
+  wind), 1–6 s. Gone for the scene (validate). `put_down` keeps working (they stand on their weight).
+- Watering can: new action `pour` (chosen over "while held and gestured": explicit and timed; 2 s):
+  `Pouring` tilts the can about its grip at the hand (`pour_tilt`), `WaterFlow` places drops from
+  `pour_drops` on a `WaterDrops` inserted after the can and removed at the end (`remover`).
+  New modules `cartoon/small_props.py` (pure) and `cartoon/small_props_drawing.py`.
+- Validate: `holding_problems(kinds=)` — `let_go` of a prop that does not float, `pour` with one
+  that does not pour, use after floating away; `prop` options checked by kind. `LIGHT_PROPS` gains
+  `letter`, `balloons`.
+- Gallery: `write_props_png` default leaves `SMALL_PROPS` out (`props.png` byte-identical, checked);
+  new `docs/gallery/media/small_props.png` (960×540, 21 KB, 4×3) in CONFIG.md.
+- Fix on the way (not asked, needed for balloons): `_moving_block` in `scenes/stage.py` also takes
+  props held right *before* a walker (overhead umbrella, balloons), so they keep their draw-order
+  place during a walk in depth.
+
+Evidence
+- Scratch `s122/yard` (storyboard, preview render, frame crops): cake held then put down, muffin /
+  phone / book / vase on a table (`lift`), phone ringing (tilts, ring lines, lit screen) and
+  picked up, balloons behind the head floating away in a breeze, gift opened in the hand, can
+  tilted with drops falling, book picked up and opened. `vidgen validate` ok; `vidgen lint`: one
+  author-caused `prop_overlap`. Fixed after looking: the gift's closed body was shared with the
+  open shape (vanished), balloon strings invisible on a dark theme, balloons covering the face,
+  ring lines too faint, open gift taller than closed.
+- Unused features: raw frame md5s and Cairo draw counts equal to HEAD a0ad843 (worktree) for
+  Step 121's orchard (231 frames) and Step 120's room with clock / tv / lamp (266 frames).
+
+Files touched
+- New: `src/vidgen/cartoon/small_props.py`, `src/vidgen/cartoon/small_props_drawing.py`,
+  `tests/test_cartoon_small_props.py`, `docs/gallery/media/small_props.png`.
+- `src/vidgen/cartoon/props.py`, `living.py`, `living_drawing.py`, `holding.py`, `wind.py`
+  (`LIGHT_PROPS`), `still.py`, `src/vidgen/scenes/handling.py`, `scenes/stage.py`,
+  `src/vidgen/sfx.py`, `src/vidgen/introspect.py`, `src/vidgen/api.py`.
+- Docs: `docs/CONFIG.md` (props table, new "Everyday small props", sounds table, foley, actions,
+  `action` / `run_time` rows, blow_away list, switch message), `DESIGN.md` (§2 tree, §6.4, §69.37
+  pointer, new §69.56), `docs/EXTENDING.md`, `docs/gallery/stage.md` (3 rows as `vidgen gallery`
+  writes them), guide `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md`, `tasklist.md` (ticks,
+  a Backlog line).
+- Tests updated (messages / lists only): `test_cartoon_props.py` (49 kinds, open message),
+  `test_cartoon_living.py`, `test_cartoon_fire_nature.py` (switched list), `test_cartoon_holding.py`
+  (open list), `test_cartoon_wind.py` (light list), `test_actions.py` (action names),
+  `test_cartoon_sheet.py` (`mid_still_actions` + `let_go`, `pour`).
+
+Public interfaces
+- `vidgen.api` adds the names in DESIGN §6.4 (Step 122); actions `let_go`, `pour`; sound `phone`.
+  Compatible: scenes without them render as before (checked by raw frames).
+
+Known gaps / TODOs (Backlog line "Small props")
+- No pouring sound, water wets nothing; no `answer` action (use `switch_off`); floated balloons are
+  gone; a held can is not mirrored when its holder turns; screenplay has no words for them.
+
+How to test
+- `pytest tests/test_cartoon_small_props.py` (17 not-render + 1 render, ~4 s).
+- Also run (not render): 18 cartoon / api / actions / sfx files (437, 4 message updates, re-run
+  121 passed), `test_docs test_guide test_schema test_gallery test_actions_coverage` (184; the
+  guide's sound list fixed, `test_guide test_docs` re-run 102 passed), `test_lint test_cartoon_lint
+  test_mcp test_cli test_json_output test_screenplay test_includes test_phase_k_review
+  test_cartoon_speed test_builtin_scenes test_extensions test_config test_cartoon_room
+  test_cartoon_lighting test_cartoon_effects test_cartoon_motion_effects test_cartoon_foley` (388
+  passed, 46 s); render: `small_props living fire_nature props holding depth wind` (14, 11 s),
+  `introspect cartoon_lint vehicles furniture stage phase_k_review` (7, 13 s). Full suite not run.
+
+## Step 123 — More animals
+
+What was built
+- **Five species** (`config.Species` + `fox`, `owl`, `frog`, `turtle`, `penguin`), drawn in
+  `src/vidgen/cartoon/animals.py`, side and front: a fox (tall lined ears, a snout grown out of
+  the head with a dark nose at its tip, a light jaw / cheek ruffs and muzzle, a bushy tail with a
+  light tip); an owl (two tufts of slim feathers, big eyes in light discs, a short beak, a bird's
+  wings and bare shins, a short fan of tail feathers); a frog (wide flat head lowered onto the
+  shoulders, eyes high in bulges behind the head, brows on the bulges, a wide mouth, long legs,
+  flat feet with toe pads, no tail); a turtle (light chin, short legs, a shell in `colors.hair` at
+  the back of the `body` part: a dome with plates from the side, a rim round the body from the
+  front; a short tail behind it); a penguin (light face patch, a beak, flippers, short legs, flat
+  orange feet, one stubby tail feather). Proportions per species (`SPECIES_PROPORTIONS`), beaks
+  per species (`BEAKS`, `BEAKED`), wings (`WINGED`), `flipper`, `flat_foot`, `shell`,
+  `patch_tint`, `species_frame`, `BROW_GAPS`; `primitives.tapered_band(profile=...)`.
+- **Lip sync**: fox, frog and turtle use the human mouth on the snout / face (`MOUTH_PLACES`,
+  `FRONT_MOUTH_PLACES`); owl and penguin talk with their beak (`beak_mouth(species, ...)`, front
+  openings scaled to the beak).
+- **Moving** (`cartoon/acting.py`): `SpeciesMotion` / `SPECIES_MOTIONS` / `species_motion`;
+  `Gait.waddle`, `WalkCycle.rock`; `transition.walking_state` rocks a waddling body (`SIDE_ROCK`
+  0.5 from the side), legs kept upright; `Walk` walks the species' gait (step length and
+  footsteps follow); `Character.species_motion` (set by `build_character`). `scenes/moving.py`:
+  `walk_to`, `run_to`, `enter`, `exit` without a written `speed` go at the species' factor (turtle
+  0.4, penguin 0.7); `jump` without `height` goes 1.8 × higher for a frog.
+- **Cast**: `contrast.species_difference` (bird / owl / penguin and cat / fox 0.5 apart); a
+  turtle's hair colour counts without hair; `random_cast.SPECIES_COLORS`, `SHELL_COLORS`.
+- **Gallery**: `still.write_looks_png` moves a figure back inside its character's cell;
+  `docs/gallery/media/more_animals.png` (720×420, 25 KB).
+
+Files touched
+- New: `tests/test_cartoon_more_animals.py`, `docs/gallery/media/more_animals.png`.
+- `src/vidgen/cartoon/animals.py`, `generator.py`, `primitives.py`, `acting.py`, `transition.py`,
+  `character.py`, `cast.py`, `contrast.py`, `still.py`; `src/vidgen/config.py`,
+  `scenes/moving.py`, `random_cast.py`, `cli.py` (`--species` help).
+- Docs: `docs/CONFIG.md` (look and colour tables, "Animal characters" five more species with an
+  example and the picture, `vidgen cast --species`), `DESIGN.md` §69.57, `docs/EXTENDING.md`
+  (a frog has no tail), guide characters bullet + `AGENTS.md` copy, `tasklist.md`.
+- Test updated: `tests/test_cartoon_animals.py` (Step 114 species pinned; muzzle, beak and wind
+  tests also run on the new species).
+
+Public interfaces
+- No `vidgen.api` change. YAML: the five `species` values; `colors.hair` is a turtle's shell.
+  Internal: `animals.*` above, `config.SPECIES_WITHOUT_TAIL`, `acting.SpeciesMotion`,
+  `SPECIES_MOTIONS`, `PERSON_MOTION`, `species_motion`, `Gait.waddle`, `WalkCycle.rock`,
+  `transition.SIDE_ROCK`, `Character.species_motion`, `contrast.SPECIES_FAMILIES`,
+  `species_difference`, `random_cast.SPECIES_COLORS`, `SHELL_COLORS`.
+
+Decisions / deviations
+- A written `speed` / `height` wins: the action checks `model_fields_set`, so the option's schema
+  default stays 2.5 / 6 / 0.4 (no schema change) and people walk exactly as before.
+- The shell is part of the `body` part (drawn first), not a new part: it moves with the body and
+  needs no pivot; its colour is `colors.hair` (turtles have no hair by default) rather than a new
+  colour key.
+- Waddle = the body part turning about its pivot with the legs turned back: no new transform;
+  from the side half of it, so it reads as a rock forward and back.
+- The animals still was not redrawn (its cast is not recorded); a second still shows the new
+  species. `write_looks_png` now keeps figures inside their cells, so a redraw would not cut the
+  cat's tail.
+- Searched first: no gait-per-character, waddle, shell, flipper or species-speed code existed
+  (`git grep -i "waddle\|flipper\|SpeciesMotion"` in `src/vidgen` and `"shell"` in
+  `src/vidgen/cartoon` at ddfeaf6: no match); reused `wing`, `bird_shin`, `beak_mouth`, `tapered_band`, `path_curve`,
+  `fur_tint` / `fur_shade`, `outer_hair` / `trailing`, `Gait`.
+
+Evidence
+- Pins: the 15 human looks (Steps 113 / 114) and 7 Step 114 animal looks (taken at ddfeaf6
+  before any edit), side and front, unchanged.
+- Stills checked by eye (scratch grids, 150 × 210 px and 300 × 420 px cells): each new species side,
+  front, waving, walking (two phases), talking `A` / `O`, sad and talking, seated, wind 40°, front
+  walking, front talking, surprised. Fixed on the way: a fox snout that read as a beak (now grown
+  out of the head), owl tufts that read as cat ears, frog bulges that read as glasses and a gap
+  under its head, frog brows floating above the bulges, a turtle `Walk` that kept a person's step
+  length. A `vidgen storyboard` of the five on a windy stage (`--per-beat 3`): idea / question /
+  exclaim symbols above the ears, tufts and bulges, the frog's high jump with landing stars, the
+  turtle walking to a chair and sitting, the penguin waddling, the owl turning to the front, the
+  fox's tail trailing.
+
+Known gaps / TODOs
+- The screenplay still plans a turtle's or penguin's walk at a person's speed (the walk then
+  fills the beat's time).
+- A backpack's pack is drawn over a turtle's shell; the shell hides most of a small chair.
+- An owl's beak is short, so its lip-sync openings are small; no back view of shells or tails.
+
+How to test
+- `pytest tests/test_cartoon_more_animals.py tests/test_cartoon_animals.py` (76 not-render,
+  17 s; 2 render, 4 s).
+- Also run, not render: `test_cartoon_character generator poses motion spring wind outfits svg
+  idle effects depth seating keyframes moving acting speed visemes limbs motion_effects
+  test_random_cast` (468 passed, 33 s), `test_docs test_schema test_guide test_config test_api
+  test_cli` (202, 79 s), `test_mcp test_screenplay test_cartoon_lint test_cartoon_sheet
+  test_cartoon_vehicles test_cartoon_foley test_phase_k_review test_cartoon_holding
+  test_cartoon_directing` (131, 35 s); render: `test_cartoon_outfits moving motion_effects depth`
+  (8, 7 s). The full suite was not run.
+
+## Step 124 — Robots and costumes
+
+What was built
+- **`species: robot`** (`config.Species`) with **`look.robot`** (`config.RobotLook`: `head` box |
+  round, `face` eyes | screen, `antenna` true | false, `moves_on` legs | wheels;
+  `CharacterLook.robot_look()` gives the defaults). Config errors: `hair`, `ears`, `nose`,
+  `facial_hair` with a robot (`ROBOT_OWN_KEYS`), `robot` on another species, shoes on wheels.
+- **Drawing** (`src/vidgen/cartoon/robots.py`, side and front): neck, side bolts, a rounded box or
+  ball head, a light face plate (`eyes`) or a dark screen (`screen`) on which the eyes, brows and
+  every mouth shape glow (`SCREEN_GLOW`, via `face_colors` and `screen_eye`); joint bolts at
+  shoulders, elbows and knees, gripper hands, block feet, or a strut and a wheel per leg (the sole
+  still at 0); a chest panel of lights. Plain outfits leave the limbs in the plating
+  (`colors.skin`); other outfits colour them as on people.
+- **New parts** `antenna` (parent head, order 49; shapes `default` / `dim`; socket, coil spring,
+  ball light in `colors.accessory`) and `cape` (parent body, order 3) at the end of `PART_NAMES`,
+  `PosePart`, `SVG_PART_NAMES`. Both swing on the Step 82 spring (`follow_angles` keys `antenna`,
+  `cape`), trail in the wind (`TRAIL_WEIGHTS` `antenna` 0.35, `cape` 0.9); the antenna wobbles and
+  its light blinks while idle (`idle.antenna_sway_angle`, `antenna_light_on`); the cape flutters
+  back with each step (`transition.WALK_CAPE_FLUTTER`). `crown_top` counts the antenna, so effect
+  symbols go above it.
+- **Moving**: a legged robot walks with stiff knees and elbows (`SPECIES_MOTIONS["robot"]`); on
+  wheels `ROLLING_MOTION` (`Gait.rolls`, no swing; a run leans), `species_motion(species, wheels=)`;
+  `PlayedAction.rolls` (from `Walk.gait`) plays no footsteps.
+- **Costume pieces** (`src/vidgen/cartoon/costumes.py`; `Accessory` + `crown`, `wizard_hat`,
+  `party_hat`, `cape`): the three hats in the `accessory` part (`HEADWEAR_DRAWINGS`; a wizard hat
+  and a party hat trail), the `cape` part plus a clasp on the body (`cape_clasp`). One piece on
+  top of the head: `config.TOP_OF_HEAD` (hat, cap, crown, wizard_hat, party_hat), message
+  generalised (the hat-and-cap text unchanged).
+- **Voice**: `[beep]` voice sound (said `Beep boop!`, face happy, viseme `E`) and the generated
+  built-in sound `beep` (0.4 s) at a line's start or end. Voices work as usual.
+- **Cast / contrast**: `character_part_shapes` knows `antenna` and `cape`; `vidgen character`
+  prints `species robot (box head, eyes face, antenna, legs)`; `contrast.HEADWEAR` + the three
+  hats, robot build details; `random_cast` robots (`SPECIES_COLORS["robot"]`, `ROBOT_CHOICES`),
+  `--species robot` (cli help).
+- Gallery still `docs/gallery/media/robots.png` (960×420, 32 KB; four robots, four costumed looks).
+
+Files touched
+- New: `src/vidgen/cartoon/robots.py`, `src/vidgen/cartoon/costumes.py`,
+  `tests/test_cartoon_robots.py`, `docs/gallery/media/robots.png`.
+- `src/vidgen/config.py`, `cartoon/generator.py`, `cartoon/character.py`, `cartoon/animals.py`
+  (`is_animal` false for a robot), `cartoon/idle.py`, `cartoon/motion.py`, `cartoon/transition.py`,
+  `cartoon/acting.py`, `cartoon/foley.py`, `cartoon/cast.py`, `cartoon/contrast.py`,
+  `cartoon/primitives.py`, `cartoon/svg_look.py`, `cartoon/effect_symbols.py`, `scenes/stage.py`
+  (`_played` passes `rolls`), `random_cast.py`, `voicesounds.py`, `sfx.py`, `cli.py` (help).
+- Docs: `docs/CONFIG.md` (look / colour rows, new "Robots and costumes" with the picture, part
+  lists, SVG id row, wind, sounds table, voice sounds, `vidgen cast --species`), `DESIGN.md` (§2
+  tree, §6.4 note, §69 parts, new §69.58), `docs/EXTENDING.md` (parts), guide + `AGENTS.md` copy,
+  `tasklist.md`.
+- Tests updated: `tests/test_cartoon_outfits.py` (`sampled_looks` now also draws the costume
+  pieces and keeps one piece on top of the head), `tests/test_voice_sounds.py` (`beep` among the
+  generated voice sounds).
+
+Public interfaces
+- No new `vidgen.api` names; `PART_NAMES` gains `antenna`, `cape` at its end (DESIGN §6.4). YAML:
+  `species: robot`, `look.robot`, the four accessories, `[beep]`; pose / keyframe parts `antenna`,
+  `cape`. Built-in sound `beep`. Internal: `robots.*`, `costumes.*`, `config.RobotLook`,
+  `ROBOT_OWN_KEYS`, `TOP_OF_HEAD`, `idle.ANTENNA_*`, `antenna_sway_angle`, `antenna_light_on`,
+  `motion.FOLLOW_ANTENNA_*`, `FOLLOW_CAPE_*`, `transition.WALK_CAPE_FLUTTER`, `acting.ROLLING_MOTION`,
+  `Gait.rolls`, `PlayedAction.rolls`, `random_cast.ROBOT_CHOICES`.
+
+Decisions / deviations
+- Antenna and cape are real parts (not only wind-marked members) so the follow-through spring,
+  idle overlays, poses and keyframes can move them about their own pivots, as the tail does.
+- Wheels keep the two-segment legs (a strut and a wheel instead of a shin and foot), so sitting,
+  planting and grounding need no new code; the wheels do not spin (a plain tyre and hub), the
+  robot glides.
+- Robot design kept generic: box or ball heads, no dome, no binocular eyes, no gold humanoid; the
+  round screen head reads a little like a helmet (acceptable, generic).
+- Costume pieces are never drawn by `random_look` (existing seeded casts keep their picks); the
+  beep is said `Beep boop!` by ElevenLabs v3 too (no audio tag for it).
+- Searched first: no robot, screen-face, costume or cape code existed (`git grep -n -i -w
+  "robot\|robots\|crown\|cape\|antenna" 8dceb29 -- src/vidgen/cartoon`: only a hat's and a tree's
+  "crown" and the effect symbols' `crown_top`; wheels only on vehicles, `vehicle_drawing.py`, not
+  a character's part); reused `tapered_band`, `path_curve`,
+  `clip_to_box`, `fur_shade` / `fur_tint`, `trailing`, `limb_colors`, `shoe`, `Gait`, the idle
+  overlay layer and the voice-sound machinery.
+
+Evidence
+- Pins: the 15 human looks and 7 Step 114 animals (`test_cartoon_animals.py`) and the 5 Step 123
+  species (new pins, taken at 8dceb29 before any edit), side and front, unchanged.
+- Stills checked by eye (scratch grids, 150 × 260 and 300 × 520 px cells): every robot kind side
+  and front, screen talking `A`, surprised, sad from the front, walking, rolling, seated on wheels,
+  wind 40°, a dimmed and turned antenna; crown, wizard hat, party hat, a caped cat; a caped
+  character in wind (side and front), walking, seated. Fixed on the way: a side bolt hidden behind
+  the face plate (moved back). A `vidgen storyboard` (`--per-beat 3`, preview) of two robots, a
+  crowned girl in a cape and a frog in a wizard hat on a breezy stage: a robot rolling over, an
+  idea symbol (then fixed to go above the antenna), the cape flying as she runs, the frog's jump,
+  a robot walking to a chair and sitting, the antenna light blinking in the idle stills.
+
+Known gaps / TODOs
+- Wheels do not turn while rolling; a wheeled robot has no rolling sound (Step 128 may add one).
+- An SVG character's `antenna` / `cape` swing on the spring but are not marked to trail in the wind.
+- Robots have no hum while idle (only the light blinks); the beep was not listened to by a human.
+
+How to test
+- `pytest tests/test_cartoon_robots.py` (39 not-render + 1 render at 160x90, ~18 s).
+- Also run, not render: `test_cartoon_character generator poses motion spring wind svg idle effects
+  depth seating keyframes moving acting speed visemes limbs motion_effects test_random_cast
+  test_voice_sounds test_sfx test_cartoon_foley` (524 passed, 27 s), `test_cartoon_animals
+  more_animals outfits` (130, 29 s), `test_docs test_guide test_schema test_config test_api
+  test_cli` (202, 76 s), `test_mcp test_screenplay test_cartoon_lint test_cartoon_sheet
+  test_gallery test_introspect test_json_output test_cartoon_holding test_cartoon_directing
+  test_cartoon_vehicles test_cartoon_animals test_cartoon_more_animals test_cartoon_robots
+  test_phase_k_review test_cartoon_small_props` (303, 75 s); render: `test_cartoon_outfits animals
+  more_animals test_voice_sounds test_cartoon_foley test_cartoon_robots` (8, 9 s). The full suite
+  was not run.
+
+
+## Step 125 — More expressions
+
+What was built
+- Six built-in expressions after the seven of Step 70 (whose entries are unchanged): `laughing`,
+  `blushing`, `tongue_out`, `crying`, `dizzy`, `frightened` (`cartoon/poses.py`), on every
+  generated look (people, furry animals, beaked animals, frogs / turtles, plate and screen robots),
+  side and front; SVG characters fall back through the shape lists.
+- Two optional expression parts (children of `head`): `cheeks` (order 55; `none` / `blush` /
+  `tears` / `tears_running`) and `bristles` (order 48, behind the head; `none` / `up`). `none`
+  draws nothing (one point, no fill area, no stroke: `expression_shapes.nothing`). New eye shapes
+  `laughing`, `wide`, `swirl`, `swirl_turned`; mouth `laugh`, `tongue`, `wavy` (beaks too). All
+  appended after the earlier shapes. Drawing in the new `cartoon/expression_shapes.py`; a beak's
+  in `animals._beak_expression_shapes`.
+- `bristles up`: hair crown in the hair colour (people with hair), fur tufts (cat, dog, bear,
+  rabbit, mouse, fox), feathers (bird, owl, penguin), fright lines (bald people, frog, turtle,
+  robots).
+- Moods (`idle.py`: `MOOD_SHAPES`, `shape_mood`, `MoodMotion`, `mood_motion`, `IdleClock.set_mood`
+  / `mood_levels`, `MOOD_SPRING` from Step 82's `Spring`): `swirl` eyes sway the body about the
+  hips (legs counter-turned, feet stay) and the head; `wide` eyes shiver and stretch a robot's
+  antenna (springing past full); `laugh` mouth / `tears` bounce the shoulders. Overlays in
+  `Character._idle_step`, never in `state()`. `BLINKLESS_EYES` never blink; `ALTERNATE_SHAPES`
+  turn swirls and run tears every 0.2 s.
+- Mappings: `[laugh]` / `[giggle]` → `laughing`; screenplay `MANNERS` (giggling, embarrassed /
+  shy, cheeky / teasing, sobbing / in tears, dazed / woozy, scared / afraid / terrified);
+  `EXPRESSION_EFFECTS` dizzy → stars, frightened → sweat.
+
+Files touched
+- New: `src/vidgen/cartoon/expression_shapes.py`, `tests/test_cartoon_expressions.py`.
+- `src/vidgen/config.py` (`ExpressionPart`), `cartoon/poses.py`, `cartoon/character.py`
+  (`PART_NAMES`, parents, draw order, `MOOD_PARTS`, `_idle_step`), `cartoon/generator.py`
+  (face shapes, cheeks, bristles, `EXPRESSION_ONLY` ignored by `_scaled_to_unit_height`),
+  `cartoon/animals.py` (beak shapes), `cartoon/idle.py`, `cartoon/cast.py` (`GENERATED_SHAPES`),
+  `cartoon/effects.py`, `cartoon/svg_look.py` (comment), `screenplay.py`, `voicesounds.py`,
+  `scenes/acting.py` / `scenes/stage.py` (descriptions).
+- Tests updated: `test_cartoon_outfits.py` (`drawing_digest` skips the Step 125 shapes / parts),
+  `test_cartoon_poses.py`, `test_cartoon_character.py`, `test_cartoon_generator.py`,
+  `test_cartoon_sheet.py`, `test_voice_sounds.py` (expected lists and counts).
+- Docs: `DESIGN.md` (§2 tree, §69.3, §69.40 note, new §69.59), `docs/CONFIG.md` (expressions,
+  shapes, table of the new ones, voice sound faces, manners, effect symbols), `docs/EXTENDING.md`,
+  `docs/gallery/stage.md`, the author guide (`src/vidgen/data/guide/AGENTS.md`, copied to
+  `AGENTS.md`).
+
+Public interfaces
+- No `vidgen.api` change. `PART_NAMES` (exported) gains `cheeks`, `bristles`;
+  `ExpressionPart` gains them (own `expressions:` may set them). Internal: `expression_shapes`,
+  the mood functions in `idle.py`, `generator.EXPRESSION_ONLY`, `animals.BEAK_LAUGH_OPENING` /
+  `BEAK_TONGUE_OPENING`.
+
+Decisions / deviations
+- New parts rather than new head shapes: the head is a pose part (a pose resets it), so hair
+  standing up and cheeks belong to the expression group. Ears standing up are drawn as fur tufts
+  behind the head (the ears are part of the head drawing; turning them would change every pinned
+  look).
+- The motion follows the shapes shown (not the expression's name), so it survives `state()`
+  snapshots, `PoseChange` and own expressions; it is part of the idle motion (none with
+  `idle: false`).
+- Pins: `drawing_digest` leaves out the Step 125 parts and shapes; every earlier pin (Steps
+  113 / 114 / 123) holds unchanged, so everything drawn before is byte-identical; figure heights
+  ignore the new shapes.
+- `[gasp]` stays `surprised`; `scared` / `afraid` / `crying` manners change face (frightened /
+  crying instead of worried / sad). The `tear` effect stays for directions (`[cries]`); `crying`
+  gets no automatic symbol.
+- `blend_poses` leaves `1 + (-0.9 - 1) × 1` as `-0.8999999999999999`; the transition test compares
+  with a tolerance (pre-existing float behaviour, not changed).
+- Searched first: no blush, tears, tongue or bristle drawing existed; reused `primitives`,
+  `animals` colours / beak frame, `robots.has_screen`, `Spring`, the idle overlay layer.
+
+Known gaps / TODOs
+- SVG characters have no `cheeks` / `bristles` and no new eye / mouth shapes (they fall back: no
+  blush, no tears, no mood motion unless their file names the shapes).
+- Hats stay on frightened heads (the spikes show round them); floppy ears do not lift.
+- A mood's spring restarts after a `PoseChange` (the clock is stopped during it), so the sway or
+  shiver begins as the change ends.
+- The mouth of small muzzles (cat, rabbit, mouse) shows `laugh` / `tongue` small at preview sizes.
+
+How to test
+- `pytest tests/test_cartoon_expressions.py` (52 not-render, ~15 s; 1 render at 160x90, ~3 s).
+- Also run, not render: `test_cartoon_outfits poses idle animals more_animals robots character
+  generator` (312 passed, 67 s), `test_cartoon_sheet stage depth wind acting moving holding
+  seating lint speed visemes motion test_random_cast` (210, 15 s), `test_phase_h/i/k_review
+  test_cartoon_style shots reframe lighting keyframes limbs spring test_guide test_schema
+  test_cartoon_effects motion_effects` (274, 114 s), last: `test_cartoon_expressions idle poses
+  test_screenplay test_voice_sounds test_cartoon_directing svg sheet effects` (231, 17 s),
+  `test_docs test_gallery test_guide test_schema test_actions_coverage test_config test_api
+  test_cartoon_acting` (233, 80 s); render: `test_voice_sounds`, `test_cartoon_idle poses robots
+  animals`, `test_cartoon_sheet` (all of it), `test_cartoon_stage` (all passed). The full suite
+  was not run.
+
+## Step 126 — More weather, part 1: snow and fog
+
+What was built (DESIGN §69.60)
+- Snow that settles: `ParticleSettings.settle` (snow only) and `settled` (seconds of snowfall
+  already lying, needs `settle`), on the stage param and the `particles` action
+  (`particle_field.settle_problem`). `particle_field` gives such a field the scene's
+  `snow_ground` (`Stage.snow_ground()`: rain's landing band, open umbrellas as `ShelterBox`es and
+  the `TopLine` of every still prop on the ground, taken once by `Stage._snow_tops()` from its
+  drawing). Pure `cartoon/snow.py`: `curve_segments` / `top_line` (a prop's upper edge in 28
+  columns), `flake_floors`, `rest_flakes` (a flake lies 0.5 s on its floor, fading),
+  `settled_seconds` (0.5 s steps, frozen when the snow stops), `settle_amount` (full after 24 s at
+  density 1), `blanket_outline` / `edge_lumps` / `blanket_cover`, `bare_patches`, `cap_thickness`
+  (only where the line is at most 45° steep), `cap_outlines`, `cap_full_thickness`.
+- Drawing (`cartoon/weather_drawing.py`): `SnowBlanket` (holes under trees and standing open
+  umbrellas, thin snow in them), `SnowCap`, `SettledSnow` (redraws only when a step passes),
+  `FogBand`, `StageFog`, `prop_top_line`, `polygon_points`, `paths_points`.
+- Stage: `particles_started` → `_settle_snow` (blanket laid like puddles, before the water's band
+  when there is water; a cap right after each still prop, none on swaying kinds when the wind may
+  blow; all lit), `_put_after_prop` / `_after_props` (the entrance adds a cap right after its prop),
+  `_shelter_of` (shared by `rain_ground` and `snow_ground`), `_watch_living`, `snow_layers`.
+- Fog: stage param `fog` (`StageFogSetting`: `true`, a density, or {density, color, drift, seed};
+  refused in a room; `false` is an error like `birds: false`). Pure `cartoon/fog.py`: five bands at
+  depths 1, 0.8, 0.6, 0.4, 0.2 (`band_opacities`, `fog_cover`), each a haze to the frame top and
+  two wavy banks (`FOG_LAYER_SHARES`, `band_outlines`, `band_box`), drifting (`fog_shift`, nearer
+  bands faster, plus the wind's `blown`). `Stage._fog()`; `_sort_fog()` puts each band right before
+  the first character / prop at its depth or nearer (entrance; every frame of a walk in depth via
+  `_draw_order_step`, and `_depth_crossers` adds the bands a walker passes).
+- Redraw: `_living_things` / `_living_step` include the snow layers and the fog (§69.54's rule).
+- Layout dump leaves out `SnowBlanket`, `SnowCap`, `FogBand`.
+
+Measured (scratch `s126/` in the scratchpad; table in DESIGN §69.60)
+- Nothing new used: HEAD e3e8e3d and this step give the same 277 raw frame hashes and the same
+  Cairo draws on a snowy meadow without `settle` (48 224) and on the same with rain and puddles
+  (62 416).
+- A growing layer: 54 427 draws (+13 %), wall 12.9 s vs 11.6 s (+11 %); a full layer from the
+  start: +210 draws, wall within the noise. Fog in a breeze: 23 296 vs 20 521 draws, 9.9 vs 8.9 s
+  (+12 %); still fog on a calm stage with a walk in depth: 9.4 vs 8.3 s.
+
+Checked by eye (preview frames): snowy meadow by day (caps on roof, chimney, crown, table, rock;
+lumpy blanket edge; thin snow under the tree and the umbrella) and at night (bluish layer, white
+flakes); foggy forest in a breeze with characters at 0, 0.45, 0.9, one walking to the front out of
+the fog; foggy night street at density 0.8. Fixed on the way: dips in top lines (white spikes on a
+roof: points per curve missed long edges; now segment crossings), plain holes showing a dark
+theme ground as black ellipses (now thin snow), `FogBand.depth` clashing with Manim's
+`Mobject.depth` (renamed `stage_depth`), deep tree crowns crisp over fogged trunks (haze layer).
+`vidgen validate` ok and `vidgen lint` on the fog project: only author-caused `off_frame`.
+
+Files touched
+- New: `src/vidgen/cartoon/snow.py`, `src/vidgen/cartoon/fog.py`,
+  `src/vidgen/cartoon/weather_drawing.py`, `tests/test_cartoon_snow_fog.py`.
+- `src/vidgen/particle_field.py`, `src/vidgen/scenes/stage.py`, `src/vidgen/scenes/particles_action.py`,
+  `src/vidgen/introspect.py`, `src/vidgen/api.py`; guide `src/vidgen/data/guide/AGENTS.md` + copy
+  `AGENTS.md` ("Snow and fog" bullet).
+- Docs: `docs/CONFIG.md` (stage rows `particles` / `room` / `fog`, particles keys `settle` /
+  `settled`, validate sentence, new "Snow that settles (`settle`)" and "Fog (`fog`)", rooms'
+  weather bullet, the `particles` action row), `DESIGN.md` (§2 tree, §6.4, new §69.60),
+  `docs/EXTENDING.md`, `docs/gallery/stage.md` (rows as the docstrings read), `tasklist.md` (ticks,
+  two Backlog lines).
+
+Public interfaces
+- `vidgen.api` adds the names in DESIGN §6.4 (Step 126). `ParticleSettings.settle` / `.settled`;
+  stage param `fog`; `Stage.snow_ground`, `Stage.snow_layers`, `Stage.fog`. A `RainGround`'s
+  shelters may be `TopLine`s for snow (rain still builds only boxes). Compatible: nothing changes
+  without `settle` or `fog` (frame hashes above).
+
+Decisions / deviations
+- Settling is opt-in (`settle: true`, like `puddles`), so existing snow keeps its pixels; flakes
+  land only with it.
+- The layer grows in 0.5 s steps (linear in seconds × density), so it is redrawn only in
+  animations where a step passes; it never melts.
+- Snow does not need shelter boxes for trees: a tree's top line stops flakes on its crown; under a
+  tree and a standing open umbrella the blanket is thin instead of bare (bare showed the dark
+  ground of a dark theme as holes).
+- Fog bands are real members of the draw order between things (not a grade), so a walker in depth
+  passes in and out of them; equal-colour translucent shapes make their order among themselves
+  irrelevant.
+- Searched first: no fog code existed (`grep -rliw fog --include=*.py` in e3e8e3d's
+  `src/vidgen`: nothing; "settle" there is only the springs' overshoot and settle) and no snow
+  layer or top-line code (snow was only a particle kind and `OUTDOOR_PARTICLES`);
+  reused rain's landing band, `ShelterBox`, `prop_shelter`, `landing_shares` / `landing_lines`,
+  `_lay_on_ground`, `depth_scale`, `FAR_RISE`, `mark_lit`, `motion_seed`, `particle_wind`,
+  §69.54's living-thing redraw (`union_box`, `_living_redrawn`) and the depth-walk ordering.
+
+Known gaps / TODOs (Backlog line "Snow and fog")
+- No footprints; no caps on swaying props in wind, characters or held props; no melting; no `fog`
+  action and no fog through windows; still fog with a walk in depth costs ~13 %; no screenplay
+  words. A pre-existing glitch seen while checking (Backlog bug line): a character walking in depth
+  to behind a house leaves a faint outline over it (HEAD's frames are the same).
+
+How to test
+- `pytest tests/test_cartoon_snow_fog.py` (16 not-render 2.7 s, 2 render at 160x90 4.1 s).
+- Also run (not render): `test_particles test_cartoon_rain test_cartoon_stage test_api
+  test_actions test_introspect test_cartoon_wind test_cartoon_living test_cartoon_fire_nature
+  test_cartoon_depth test_cartoon_props test_cartoon_room test_cartoon_lighting` with the new file
+  (295 passed, 15 s), `test_docs test_guide test_schema test_gallery test_actions_coverage
+  test_config test_extensions` (230 passed, 82 s), `test_builtin_scenes test_json_output test_lint
+  test_cartoon_lint test_mcp test_cli test_phase_k_review test_cartoon_vehicles
+  test_cartoon_water_air test_cartoon_holding` (259 passed, 41 s); render: `test_cartoon_snow_fog
+  test_particles test_cartoon_rain test_cartoon_stage test_cartoon_wind test_cartoon_living
+  test_cartoon_fire_nature` (14 passed, 13 s), `test_cartoon_depth test_introspect
+  test_cartoon_lighting test_cartoon_room test_cartoon_water_air test_cartoon_holding` (10 passed,
+  15 s). The full suite was not run.
+
+## Step 127 — More weather, part 2: lightning, rainbow, moving sun and moon
+
+What was built (DESIGN §69.61)
+- Lightning: pure `cartoon/storm.py` (`Strike` with seeded `strike_pulses`, `level`, `end`;
+  `flash_level`, `flashing`, `flash_grade` (half way to `#EEF2FF` at full), `flash_strength`,
+  `thunder_delay` (km / 0.343), `thunder_cue` (gain, duration, intensity, pitch by distance),
+  `thunder_pan`, `bolt_paths`, `storm_strikes`, `RainStorm`). `StageLight` gains `strikes`,
+  `storms`, `flash_share`, `flash`, `strikes_until`; it grades the flash in `update` and counts
+  flashes in `changing` / `settled`. New action `lightning` (`scenes/storm_action.py`: target a
+  mark or an x, `distance`, `bolt`, `seed`; non-animating) → `Stage.strike_lightning`: the flash,
+  a `LightningBolt` right after the sky (outdoors), the new generated sound `thunder` (sfx.py) after
+  the delay (foley). In a room: the window skies flash (`room.flash_sky`) and the room half as
+  much; no bolt. Rain with `lightning: true | seconds` (`ParticleSettings.lightning`,
+  `storm_problem`, `storm_every`) strikes at seeded times (`Stage.particles_started` →
+  `RainStorm`; thunder cued after the scene played, those starting before its end).
+- Rainbow: `rainbow_bands`, `RainbowChange`, `rainbow_level`; `Rainbow`, `StageRainbow` (a thing
+  that moves by itself); action `rainbow` (target where, `width`, `opacity`, `hide`; outdoors
+  only) → `Stage.show_rainbow` / `hide_rainbows`, right after the sky, lit.
+- Sun and moon: pure `cartoon/sun_path.py` (`PATH_PLACES`, `wrap_share`, `path_blend` (forward
+  only), `PathMove`, `path_share_at`, `path_point`, `elevation`, `shadow_cast`, `cast_shadow`);
+  `SkyBody` (weather_drawing.py); the `light` action's option `move_sun` (validate: a preset,
+  outdoors, a sun or moon prop) → `Stage.change_light(..., move_sun=True)` adds a `PathMove` per
+  body. With `move_sun` in a scene, `_start_sky_path` puts the sun and moon on the arc from the
+  start and the entrance moves them right after the sky; `_sky_step` (in `_light_step` and
+  `get_moving_mobjects`) places them, sets `StageShadows.set_cast` from the body that shows most
+  and shows the bolt.
+- Layout dump leaves out `LightningBolt` and `Rainbow`.
+
+Bug fixed (Backlog line from Step 126, removed)
+- "A character walking in depth to behind a house leaves a faint outline of itself over the
+  house": reproduced on a copy of Step 126's snowy meadow at preview (frame 270 of 277). A check
+  comparing every written frame with the scene drawn whole in its draw order found them equal, so
+  neither the depth walk's order rebuild, `_moving_in_order` nor Manim's static image was at
+  fault: the house's opacity was 0.98 in that frame. The frame is in the scene's 0.5 s outro, where
+  `NarratedScene.finish` → `clear_all` fades every mobject on its own, so the fading house showed
+  mira behind it. `Stage.finish` now fades in a background-coloured cover (`_cover`, renamed from
+  `_entrance_cover`) above everything (z index) and then removes every mobject; with a transition
+  other than a cut, or a next scene carrying a target, it is `NarratedScene.finish` as before. Test
+  `test_a_character_behind_a_house_does_not_show_through_it_as_the_scene_fades_out`
+  (tests/test_cartoon_depth.py): the outro frames with pip hidden behind the house equal those
+  without pip; before the fix they differed by 54 levels. The Quality Backlog line "Stage fades
+  and props" now only keeps the carried case.
+- Also fixed (found while checking): while the light changed during an animation,
+  `get_moving_mobjects` appended moving parts of characters again after `self.mobjects`, so they
+  were drawn over the entrance cover (`[*self.mobjects, *(m for m in moving if m not in
+  self.mobjects)]` compared top-level mobjects only; it now skips any family member).
+
+Measured (scratch `s127/`, preview 854×480 15 fps, no audio, `s127/measure.py`)
+- Without the new things the raw frames equal HEAD 4f2dc6e's but for the 7 outro frames (meadow
+  270/277 equal, rainy stage 230/237).
+- Rainy stage with 2 `lightning` actions, `lightning: 4` on the rain and a `rainbow`: 43 423 vs
+  38 039 Cairo draws, 11.1 vs 9.0 s wall (+22 %); dusk with `move_sun` vs the same light changes
+  without: 7.0 vs 6.8 s (noise: a light change redraws everything anyway); a room with one
+  lightning: 2.5 vs 2.2 s. Every frame of these renders equals the scene drawn whole
+  (`s127/ghost_check.py`).
+
+Checked by eye (preview frames): a day and a night storm (washed-out flash, the bolt behind the
+tree), the rainbow behind the house and hills, dusk to night (the sun sinking right behind the
+hills, shadows stretching left, the moon rising behind the house and at the top at night), a
+room's windows flashing. `vidgen validate` ok; `vidgen lint` of the scratch project: only
+author-caused `off_frame`.
+
+Files touched
+- New: `src/vidgen/cartoon/storm.py`, `src/vidgen/cartoon/sun_path.py`,
+  `src/vidgen/scenes/storm_action.py`, `tests/test_cartoon_storm.py`.
+- `src/vidgen/scenes/stage.py`, `scenes/light_action.py`, `scenes/particles_action.py`,
+  `scenes/__init__.py`, `cartoon/shading.py`, `cartoon/weather_drawing.py`, `cartoon/room.py`,
+  `particle_field.py`, `sfx.py`, `introspect.py`, `api.py`; guide
+  `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md`.
+- Docs: `docs/CONFIG.md` (particles `lightning`, the `thunder` sound row, "Lightning and thunder",
+  "Rainbows", `move_sun` under "Light and shadows", rooms' weather bullet, action rows),
+  `DESIGN.md` (§2, §6.4, §69.51 note, new §69.61), `docs/EXTENDING.md`, `docs/gallery/stage.md`
+  (particles row), `tasklist.md`.
+- Tests updated: `tests/test_actions.py` (action name lists gain `lightning`, `rainbow`),
+  `tests/test_cartoon_depth.py` (the outro test).
+
+Public interfaces
+- `vidgen.api` adds the names in DESIGN §6.4 (Step 127). New actions `lightning`, `rainbow`;
+  `light` option `move_sun`; particles key `lightning`; built-in sound `thunder`;
+  `Stage.change_light(setting, start, seconds, *, move_sun=False)`. Behaviour change: a stage's
+  outro fades out as one picture and the scene ends empty, as before.
+
+Decisions / deviations
+- `move_sun` on the `light` action instead of a `sun_path` action: the sun's place always goes
+  with a light (sunset, night), and both fade together over the same `run_time`.
+- The sun and moon follow presets' places on one forward path; with `move_sun` in a scene they
+  stand on that path from the start (their `at` / `lift` ignored), so the shadows can turn from
+  the first frame. Without it nothing about them changes.
+- The flash is part of the light's grade (no white overlay), so speech bubbles and text keep
+  their contrast; the bolt is not graded.
+- Searched first: no lightning / thunder / rainbow / sun path code (`grep -rniw
+  "lightning\|thunder\|rainbow\|sun_path" src/vidgen` at 4f2dc6e: only the icon set's
+  `cloud-lightning` / `rainbow` icons and their search words); reused `fade_at`,
+  `changing`, `StageLight` and its listeners, `_put_in_sky`, the living-thing redraw,
+  `blend_skies`, `mark_x`, `motion_seed`, `ground_top`, `shadow_ellipse`, the sfx machinery.
+
+Known gaps / TODOs (Backlog line "Lightning, rainbows, the sun's path")
+- The bolt strikes only the horizon; clouds are not lit; storm thunder after the scene's end is
+  dropped; the sun and moon move only with a light change and keep their size; long shadows only
+  stretch (no skew); an animation with a flash in it is redrawn whole.
+
+How to test
+- `pytest tests/test_cartoon_storm.py` (13 not-render ~2 s, 2 render at 160x90 ~3 s);
+  `pytest tests/test_cartoon_depth.py -k fades_out` (render, ~3 s).
+- Also run (not render): `test_particles test_cartoon_rain test_cartoon_stage test_api
+  test_actions test_introspect test_cartoon_wind test_cartoon_living test_cartoon_fire_nature
+  test_cartoon_depth test_cartoon_props test_cartoon_room test_cartoon_lighting
+  test_cartoon_snow_fog test_sfx` with the new file (404 passed, 23 s), `test_docs test_guide
+  test_schema test_gallery test_actions_coverage test_config test_extensions` (230 passed, 81 s);
+  render (after the last change): `test_cartoon_storm` (with its not-render tests: 15 passed, 3 s),
+  `test_cartoon_depth test_cartoon_room test_cartoon_lighting test_cartoon_snow_fog
+  test_cartoon_rain test_cartoon_stage test_cartoon_living test_cartoon_fire_nature
+  test_cartoon_wind test_particles test_introspect` (22 passed, 23 s), `test_cartoon_holding
+  test_cartoon_water_air test_cartoon_vehicles test_cartoon_small_props test_cartoon_props
+  test_cartoon_parallax test_cartoon_acting test_cartoon_moving test_cartoon_keyframes
+  test_cartoon_foley test_cartoon_motion_effects test_cartoon_seating test_cartoon_effects` (17
+  passed, 15 s), `test_cartoon_shots test_cartoon_furniture test_cartoon_cards test_overlap
+  test_includes test_translation test_cartoon_robots test_cartoon_expressions
+  test_cartoon_more_animals test_cartoon_animals test_cartoon_outfits test_cartoon_style
+  test_cartoon_directing test_random_cast test_cartoon_motion test_frames` (23 passed, 82 s),
+  `test_builtin_scenes test_actions_coverage test_phase_k_review test_cartoon_sheet
+  test_phase_i_review test_phase_h_review test_gallery test_cartoon_lint -k "stage or review or
+  sheet or gallery or lint"` (9 passed, 38 s). The full suite was not run.
+
+## Step 128 — More sounds
+
+What was built
+- Three new generated built-in sounds in `src/vidgen/sfx.py` (numpy, seeded per name, no
+  recordings; 29 sounds now): `creak` (a door hinge: stick-slip pulses gliding 45 → 110 → 70 Hz
+  through wood bands), `knock` (three raps 0.19 s apart), `splash` (burst + plunk + droplets; low
+  intensity = mostly droplets). `bell` (bicycle bell), `engine` (the engine hum) and `phone` (the
+  ring, Step 122) already existed: kept unchanged, not duplicated.
+- Set beds in `src/vidgen/ambience.py`: `birdsong_loop` (20 s), `city_loop` (16 s),
+  `room_tone_loop` (8 s), seamless, seeded, at −36 / −35 / −46 LUFS, ducking 4 / 5 / 0 dB, fades
+  2 s in / 1.5 s out; `AMBIENCE_BEDS` / `BEDS` gain them, so `mix.plan_ambience` and the mix report
+  take them as they took rain and fire. `_leveled` now levels every loop (rain and fire unchanged).
+- Pure `set_ambience(setting, room=, lights=, rain=, end=)`: `False` none; a list of bed names for
+  the whole scene; `True` = automatic: a room → `room_tone`; outdoors → `birdsong` while the light
+  is `day` / `morning` (a light change counts half-way through its fade; tints, sunset, night,
+  indoor: none), never in rain nor 2 s after it, spans < 2 s dropped; `city` only when named.
+- Config: top-level `ambience: bool = True`; stage param `ambience: auto | birdsong | city |
+  room_tone | [list] | true | false` (none: the video's). `Stage.set_beds`, `Stage.light_marks`;
+  `Stage.timings()` adds the set beds after rain / fire. Everything stays under `foley`.
+- Door foley (`cartoon/foley.py` `door_cues`): `open` of a door → `creak`; `close` → shorter
+  higher `creak` + `thud` when it shuts (at `RESHAPE_SHARE`); `enter` / `exit` through a room
+  door → no whoosh / swoosh (it fades in the doorway: the Step 109 gap), plus a `creak` when the
+  door was closed (`Walk(opens_door=)`, set in `scenes/moving.py` by `_door_closed`).
+- Water: a boat's `ride_to` adds a soft `splash`; a `pour` (its `WaterFlow`) a long soft splash
+  while the water runs; `wet_steps` adds a tiny splash under each footstep once puddles lie
+  (`Stage.puddles`' first start).
+- New action `knock` (`scenes/knock_action.py`, non-animating like `switch_on`): `- knock: front`
+  on a door prop (a room's door or a `door` prop) → `Stage.knock_on` plays `knock` (−3 dB) with
+  foley; validate names the stage's doors.
+
+Compatibility decision (please read)
+- Automatic ambience is **on by default** (top-level `ambience: true`). Re-rendering an existing
+  project changes its sound: outdoor stages by day gain birdsong, rooms a quiet room tone, door
+  passages creak instead of whooshing, boat rides splash, pours splash, steps in puddles splash.
+  Pixels are unchanged (no drawing code changed). `ambience: false` at the top level restores the
+  earlier beds (only rain and fire); `foley: false` silences all. "Only for new projects" was
+  rejected: nothing marks a project as new except a key `vidgen new` would write, and authors
+  writing YAML by hand would never get the feature the step asks to be automatic.
+
+Evidence
+- `tests/test_cartoon_sounds.py`: 13 without rendering (each sound deterministic incl. params;
+  knock = 3 onsets 0.19 s apart; creak / splash / bed bands; each bed loop seamless, cached,
+  re-made identical, at its level ±0.1 LU, peak < −15 dBFS; the `set_ambience` rules; the stage's
+  setting resolution; placement and ducking; door / water / wet-step cues; knock validation), 2 tiny
+  renders (a room: knock, 3 creaks, 1 thud, no whoosh, `room_tone` all along; a park turning to
+  night: birdsong until the light change's middle; `ambience: false`: none).
+- Measured (`scratchpad s128/measure.py`, loudest 400 ms at intensity 0 / 0.5 / 1): creak −30.0 /
+  −27.6 / −27.4 LUFS (peak −9 dBFS limited), knock −30.0 / −27.0 / −24.0 (peak −12.1 at 0.5),
+  splash −30.0 / −27.0 / −26.4 (peak −10.3); beds integrated: birdsong −36.0 (peak −23.4), city
+  −35.0 (−23.1), room tone −46.0 (−34.1); loops made in 0.13–0.6 s once per process.
+- A 28 s scratch project (`s128/proj`: park day → night, a room with knock / open / exit through
+  the back door / close, a street with `ambience: city`) rendered with `vidgen render --preview`
+  (15 s): mix report lists birdsong 0–7.5 s, room_tone 10.9–22.4 s, city 22.4–28.3 s; in the mix
+  (word-count timing, ducked all along) birdsong −38.2 LUFS, room + foley −30.5, city −41.3;
+  sfx: knock, pop, creak (open), creak (exit through the closed back door), footsteps, creak +
+  thud (close). Not listened to by a human (no audio playback here; no matplotlib for spectrograms).
+
+Files touched
+- New: `src/vidgen/scenes/knock_action.py`, `tests/test_cartoon_sounds.py`.
+- `src/vidgen/sfx.py`, `ambience.py`, `config.py`, `api.py`, `cartoon/foley.py`,
+  `cartoon/transition.py` (`Walk(opens_door=)`), `scenes/stage.py`, `scenes/moving.py`,
+  `scenes/__init__.py`.
+- Tests updated: `test_actions.py` (action lists gain `knock`), `test_cartoon_water_air.py` (a
+  boat now also splashes), `test_cartoon_rain.py` / `test_cartoon_fire_nature.py` (filter the
+  rain / fire bed: other beds now play beside them).
+- Docs: `docs/CONFIG.md` (top-level `ambience`, stage `ambience` row, sounds table, foley
+  paragraph, new "Ambience and door sounds (`ambience`, `knock`)", action rows / lists),
+  `docs/EXTENDING.md`, `docs/gallery/stage.md` (rows as `_param_rows` writes them),
+  `DESIGN.md` (§2 tree, §6.4 Step 128 names, new §69.62), guide
+  (`src/vidgen/data/guide/AGENTS.md` + `AGENTS.md`: `knock` row, cartoon Sound bullet, sounds
+  list), `tasklist.md`.
+
+Public interfaces
+- `vidgen.api` adds `SET_BEDS`, `set_ambience`, `wet_steps`; `PlayedAction.prop`,
+  `.through_door`, `.opens_door`, `.pours`; `Walk(opens_door=False)`. Config: top-level
+  `ambience`, stage param `ambience`, action `knock`. Sounds `creak`, `knock`, `splash`; beds
+  `birdsong`, `city`, `room_tone` (timings / mix report `ambience`).
+
+Known gaps / TODOs
+- No door shake or character animation on a knock; knock and creaks are centred (not panned);
+  no splash on getting into / out of a boat or a fruit into water; birdsong ignores snow and fog;
+  a light fade counts as one instant; nobody has listened to the new sounds.
+
+How to test
+- `pytest tests/test_cartoon_sounds.py` (13 not-render, 5 s; 2 render, 3 s).
+- Also run, not render: `test_sfx test_cartoon_foley test_cartoon_rain test_cartoon_fire_nature
+  test_actions test_api test_music test_cartoon_room test_cartoon_small_props
+  test_cartoon_water_air` (268, 34 s; the one boat failure fixed after), `test_cartoon_water_air
+  test_docs test_guide test_schema test_gallery test_config test_actions_coverage
+  test_cartoon_moving test_cartoon_living test_includes` (293 + the guide failure fixed after, 87
+  s), `test_guide test_docs test_sfx test_cartoon_sounds test_cartoon_water_air test_actions
+  test_api test_extensions` (301, 17 s), `test_cartoon_storm test_cartoon_lighting
+  test_cartoon_holding test_cartoon_motion_effects test_cartoon_vehicles test_cartoon_foley
+  test_cartoon_rain test_cartoon_fire_nature test_cartoon_stage` (125, 6 s); render
+  `test_cartoon_rain test_cartoon_fire_nature test_cartoon_room test_cartoon_foley
+  test_cartoon_small_props test_cartoon_water_air` (9, 10 s), `test_cartoon_moving
+  test_cartoon_living test_cartoon_storm test_cartoon_lighting test_sfx test_music
+  test_cartoon_sounds` (18, 43 s). The full suite was not run.
+
+
+## Step 129 — More music
+
+What was built
+- Two new built-in music beds in `src/vidgen/music.py`, made like `calm` / `pulse` / `bright`
+  (numpy only, no recordings, no samples, seeded `crc32("music:<name>")`, rendered circularly so
+  the loop tiles without a seam, `_finish`ed to `MUSIC_LEVEL` −28 LUFS integrated). Melodies are
+  original, written for vidgen as data in the module (no known tune, lullaby or theme).
+  - `cartoon`: 45 s, 24 bars of 4/4 at 128 BPM, G major. `_CARTOON_BARS` (`_CartoonBar`: chord,
+    voicing, bass on beats 1 / 3 + optional pickup, melody in eight eighth slots) as six 4-bar
+    phrases (A, A' to the dominant, B syncopated, A an octave up, C call and response with the
+    woodblocks, a turnaround back to the top). Pizzicato melody B4–D6, pizzicato bass D2–E3
+    bouncing root–fifth, oom-pah pizzicato chords on 2 and 4, woodblocks (1250 / 880 Hz) and
+    soft noise ticks per phrase (`_CARTOON_PERCUSSION`, a fill in each phrase's last bar), a
+    faint pad.
+  - `lullaby`: 45 s, 16 bars of 3/4 at 64 BPM, F major. `_LULLABY_BARS` (`_LullabyBar`: chord,
+    voicing, bass, melody as `(note, beats)`): a music-box melody C5–D6 over a music-box broken
+    chord in eighths (E4–G5, `_LULLABY_PATTERNS` per phrase), a soft pad, a low sine bass on
+    each bar's first beat; no percussion.
+  - New voices: `_pizzicato`, `_music_box` (a second tine 3.5 cents sharp for a slow shimmer),
+    `_woodblock`, `_tick` (filtered noise through `sfx._filtered` / `_band` / `_lowpass`);
+    `_add_panned`. `bed_loop`'s cache grows from 4 to 8 beds.
+  - `vidgen list-music` describes both (instruments, key, tempo, meter, chords, ranges, mood,
+    rolled-off frequency, use) through the existing `Bed` fields; no code change in the CLI.
+
+Evidence
+- Measured with the project's loudness code (`loudness.integrated_loudness`) on the WAVs written
+  by `vidgen list-music --render-dir` (scratchpad `s129/wav`, not committed): all five beds
+  −28.00 LUFS; peaks cartoon −14.4, lullaby −14.5 dBFS (calm −17.2, pulse −17.2, bright −16.3).
+  Energy above 5 kHz −53 / −49 dB, below 35 Hz −38 / −46 dB; channel correlation 0.88 / 0.60;
+  3 s windows −28.7 to −27.2 LUFS. Layers before levelling: cartoon plucks −7.9, pad −16.8,
+  woodblocks −23.1, ticks −30.3 LUFS; lullaby music box −9.2, pad −10.0, bass −16.3. Each bed
+  is made in about 1 s. Not listened to by a human (no playback here).
+
+Decisions / deviations
+- The seam test's level check (50 ms RMS before / after the seam within 1.5 dB) cannot hold for
+  a loop that starts on a downbeat with plucked attacks (cartoon +6.6 dB, lullaby +5.3 dB: the
+  first note's strike). For beds with a tempo, `test_bed_loop_seam_is_continuous` now asks that
+  the seam's change lies within the range of the same change at the loop's other beats (± 0.5
+  dB); `calm` keeps the 1.5 dB rule; the sample-step and tiled-read checks are unchanged.
+  Rotating the loop off the downbeat was rejected: `start: 0` should begin on the tune's top.
+- No time-signature field was added to `Bed`; the 3/4 is stated in the description.
+- Names checked against the ambience beds (`rain`, `fire`, `birdsong`, `city`, `room_tone`) and
+  the stings: no clash (separate namespaces, and no music bed shares a name with them).
+
+Files touched
+- `src/vidgen/music.py`, `src/vidgen/config.py` (the `source` docstring), `tests/test_music.py`.
+- Docs: `docs/CONFIG.md` (music row, beds table, `source` row), `README.md`, `DESIGN.md` (§48
+  pointer, new §69.63), guide `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md` (Music
+  paragraph), `examples/gallery/video.yaml` (a comment), `tasklist.md`.
+
+Public interfaces
+- Music sources `cartoon` and `lullaby` (config `music:`, `vidgen list-music`, MCP `list_music`).
+  Nothing added to `vidgen.api`.
+
+Known gaps / TODOs
+- Nobody has listened to the beds; no meter field; one loop each (no longer variants).
+
+How to test
+- `pytest -m "not render" tests/test_music.py` (32 passed, 28 s), `tests/test_guide.py
+  tests/test_docs.py` (102 passed, 3 s), `tests/test_schema.py tests/test_config.py` (80 passed,
+  77 s). Render tests of `test_music.py` not run (they use `calm`, unchanged). The full suite was
+  not run.
+
+
+## Step 130 — Review of Phase L, with an example
+
+What was done
+- **Example** `examples/cartoon-rainbow-ride/` ("The Rainbow Ride", original): `rainbow_ride.md`
+  (front matter declares the three characters: Tibbo, a robot with a screen face on wheels in a
+  `party_hat`; Fern, a fox in a dotted dress; Nana, a round owl in a coat and scarf) and the
+  hand-edited `video.yaml` (2-line header, 6 KB, no audio). A silent title `card`, `iris_in` to an
+  orchard: Tibbo holds a `watering_can` and pours at a tree with `fruit`, `birds` cross, an apple
+  is dropped on his head (`dizzy`, stars, thud), Fern gets on a `bicycle` and rides over (bell,
+  brakes), laughs, Tibbo picks up a `gift`; a grey tint, rain (`until` the rainbow beat) and two
+  `lightning` strikes (bolt, thunder), Tibbo `frightened`; the light back to day, a `rainbow`, Fern
+  rides on and Tibbo rolls out right. `crossfade` to Nana's room: a burning `fireplace` (`"on":
+  true`) with a running `clock` above it, a `kettle` switched on, a `knock`, Fern and Tibbo (who
+  holds the gift from the start) enter through the door (creak), Tibbo gives the gift, steps back,
+  Nana opens it (`blushing`), Fern `tongue_out`, `night` and a `lamp` switched on; `iris_out` on
+  Tibbo and "The End". Automatic ambience (birdsong, rain, fire, room tone), the `cartoon` bed at
+  −4, speaker-coloured captions. Voices: narrator `bf_emma` 0.8, Tibbo `bm_fable` 0.85, Fern
+  `af_bella` 0.8, Nana `af_heart` 0.75 (only cached Kokoro voices; the screenplay's own pick
+  `bf_isabella` is not cached here).
+- **Checks**: `vidgen validate` ok; `vidgen lint` 0 findings at preview with word-count timing and
+  with Kokoro audio (first passes found: Fern and the bicycle cut at the right edge, tree / gift and
+  tree / watering can `prop_overlap`, two `facing_away`, a cut counter and door, a
+  `rushed_animation` in a 1.2 s line, `character_overlap` of Tibbo and Nana, then `narration_speed`
+  3.58 words/s with the narrator at 0.85: all fixed in the yaml). CLI: `screenplay` (also with
+  `vidgen cast --random 3 --species robot fox owl`), `direct`, `character-sheet --all`,
+  `storyboard`, `list-music`, `lint --jobs auto`. MCP (stdio, SDK client, `s130/mcp_run.py`):
+  `screenplay`, `validate`, `direct`, `cast`, `screenplay` with `cast`, `list_music`, `lint`
+  (`jobs: "auto"`: 1), `storyboard`, `character_sheet`: all ok.
+- **Real narration and render** (scratch copy `/home/claude/work/phase-l-review/proj`, kvenv312,
+  2500 MB cgroup, offline HF cache, `s130/tts.sh`): 16 beats; render 1280x720 30 fps with `--jobs
+  auto --frames-per-beat 3` in one command under the 1500 MB cap (191 s):
+  `jobs: 1 (auto: 1.3 GB available (cgroup memory.limit_in_bytes minus its use) / 1.5 GB per job =
+  0, 2 CPU cores)`; `/home/claude/work/phase-l-review/rainbow_ride.mp4`, 93.93 s, 10.5 MB, −16.1
+  LUFS integrated, true peak −1.9 dBTP.
+- **Stills by eye** (~90 frames from the MP4, tiled and cropped at full size): the can tilting
+  with drops falling ahead of Tibbo (after the fix), the apple falling onto his head with stars,
+  swirl eyes; Fern climbing on the saddle, pedalling, hands on the bar, the bicycle turned left;
+  birds; the tint, rain stopping under the tree, the bolt during a flash, Tibbo's wide eyes and
+  sweat; the rainbow fading in behind the tree and the hills; Tibbo rolling out past the bicycle
+  with speed lines; the room: flames and glow behind the logs, steam from the kettle, the clock's
+  hands, Fern and Tibbo fading in at the door (Tibbo behind Fern at depth 0.2, the gift in his hand,
+  dust as he stops), the gift passing to Nana and opening with sparkles in her hand, her blush,
+  the night grade with the lamp's glow; the iris closing on Tibbo; no vanishing or stray objects.
+- **Levels** (`s130/levels.py`: background = mix / gain − voice − sfx, the beds rebuilt with
+  `mix.plan_ambience` and taken out; LUFS before the +5.8 dB normalisation; correlation of the
+  music with the voice −0.05): narration −21.0 (orchard) / −21.5 (cottage); music under speech
+  −41.1 / −41.3, in pauses −33.6 / −32.5, on the cards −32.2 / −37.0; beds as mixed (ducked):
+  birdsong −38.5 and −40.2, rain −36.2, fire −37.9, room tone −46.1; foley −27.0 overall, loudest
+  −7.7 dBFS (the effect pops); played: splash (the pour), thud (the apple), beep ×2, bell ×2,
+  brakes ×2, thunder ×2, knock, creak, click ×2, swoosh, footsteps, pops. The fire bed's loop peaks
+  at −8.1 dBFS in single crackle samples (its loudest 50 ms −30.1 dBFS RMS): left as is, noted in
+  the Backlog.
+
+Fixes (tests in `tests/test_phase_l_review.py`, each failing at HEAD 7194db3 in a worktree)
+- `screenplay._predicate` (`enter` / `exit` directions): `[X exits right.]` wrote `{exit: x, side:
+  right}`; `exit`'s edge option is `to` (only `enter` has `side`), so `vidgen screenplay` reported
+  "unknown option 'side'" and exit code 1 for any screenplay with such a direction (the Step 91
+  tests pinned the wrong key; `tests/test_screenplay.py` updated).
+- `handling.Pour.apply`: a held prop keeps its drawn facing (§69.27), so a can drawn spout right,
+  held by a character facing left, poured onto its holder's feet; `pour` now flips the can about
+  its grip (`Prop.flip`, `facing`) when the spout points behind the holder.
+- `Stage` construct: a character waiting off stage for its `enter` stood half its width beyond
+  the edge, but a prop `hold` gave it before the entrance sits in its hand in front of it (towards
+  the stage), so the gift showed at the room's right edge; such a holder now stands a further half
+  its width plus the prop's width outwards.
+- Example-level: the fireplace's key is written `"on": true` (PyYAML, a YAML 1.1 reader, reads a
+  bare `on` as the key `true`, which `tests/test_schema.py`'s JSON Schema check refused; vidgen
+  itself takes both). CONFIG's `on` row says so.
+
+Docs
+- DESIGN new §69.64 and a note in §69.56's "Not done"; CONFIG (the `pour` bullet, the props `on`
+  row); README (the example in the list). Checked by `s130/docs_check.py`: every Phase L action,
+  prop, key, species, expression, sound, bed and `--jobs auto` is in CONFIG and DESIGN and nearly
+  all in the guide (the guide leaves out the `cheeks` / `bristles` part names and `look.robot`'s
+  dotted name, as intended for an author's overview); `AGENTS.md` is the guide's copy (the guide
+  needed no change). EXTENDING needed no change (no `vidgen.api` names changed).
+- Wheel (`pip wheel --no-deps --no-build-isolation` in kvenv312): all 451 tracked `src/vidgen`
+  files, the 27 Phase L modules among them, 223 data files.
+- Backlog: 5 lines (robots and costumes; expressions; set sounds and music; riding off the view;
+  `--jobs auto`), the "Small props" line updated.
+
+Files touched
+- New: `examples/cartoon-rainbow-ride/rainbow_ride.md`, `examples/cartoon-rainbow-ride/video.yaml`,
+  `tests/test_phase_l_review.py`.
+- `src/vidgen/screenplay.py`, `src/vidgen/scenes/handling.py`, `src/vidgen/scenes/stage.py`;
+  `tests/test_screenplay.py`; `DESIGN.md`, `docs/CONFIG.md`, `README.md`, `tasklist.md`.
+
+Public interfaces
+- No `vidgen.api` names. Behaviour: `vidgen screenplay` writes `to` for an exit's edge; `pour`
+  may turn the held can round; a holder waiting off stage stands further out.
+
+Known gaps
+- In the Backlog (5 new lines). Not listened to by a person; Whisper not run. The round owl in the
+  armchair hides it (Backlog "Furniture"); the hat hides Tibbo's antenna.
+
+How to test
+- `pytest tests/test_phase_l_review.py` (6 not-render ~24 s, 1 render ~4 s).
+- Run (one command at a time, under the 1500 MB cap): not render `tests/test_cartoon_[a-l]*.py`
+  (486 passed, 49 s), `tests/test_cartoon_[m-z]*.py` (598 passed, 62 s), `test_jobs test_music
+  test_sfx test_random_cast test_screenplay` (196 passed, 36 s), `test_phase_f/h/i/k/l_review` (42
+  passed, 64 s), `test_docs test_guide test_packaging` (104 passed, 2 s), `test_mcp test_includes
+  test_actions` (60 passed, 26 s), `test_phase_l_review test_docs test_guide` after the last edits
+  (108 passed, 23 s), `test_schema -k "rainbow or muffin or rain-check"` (3 passed; the rainbow one
+  failed before the quoted `"on"`); render: `tests/test_cartoon_[a-l]*.py` (27 passed, 34 s),
+  `[m-z]` (36 passed, 27 s), `test_jobs test_music test_sfx test_random_cast test_screenplay` (9
+  passed, 34 s), the phase reviews (6 passed, 34 s). The full suite was not run (not asked).

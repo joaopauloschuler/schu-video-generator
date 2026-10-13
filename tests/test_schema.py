@@ -72,6 +72,18 @@ def test_template_validates_against_builtin_schema(builtin_schema: dict[str, Any
     assert errors(builtin_schema, data) == []
 
 
+def test_shot_mapping_may_name_one_character(builtin_schema: dict[str, Any]) -> None:
+    """Step 106: `shot: {kind: closeup, of: juno, move: true}` validated but the schema wanted a list."""
+    beat = {"text": "Hi.", "shot": {"kind": "closeup", "of": "kit", "move": True}}
+    data = {"title": "T", "scenes": [{"id": "s", "type": "stage", "params": {"characters": ["kit"]}, "beats": [beat]}],
+            "characters": [{"name": "kit"}]}
+    assert errors(builtin_schema, data) == []
+    beat["shot"]["of"] = ["kit"]
+    assert errors(builtin_schema, data) == []
+    beat["shot"]["of"] = 3
+    assert errors(builtin_schema, data) != []
+
+
 def test_extension_types_are_not_in_builtin_schema(builtin_schema: dict[str, Any]) -> None:
     data = load_yaml(ROOT / "examples" / "kphi3" / "video.yaml")
     assert any("is not one of" in e for e in errors(builtin_schema, data))

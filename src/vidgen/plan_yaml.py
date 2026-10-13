@@ -1,4 +1,6 @@
-"""``vidgen plan`` output: the draft as a commented ``video.yaml`` and a project folder (DESIGN.md §61).
+"""``vidgen plan`` output: the draft as a commented ``video.yaml`` and a project folder (DESIGN.md §61);
+``vidgen screenplay`` writes its project with the same functions (:func:`commented_yaml`,
+:func:`write_project`; §69.25).
 
 :func:`plan_yaml` writes the config by hand rather than with a YAML dumper, so that every scene
 can carry its ``# plan:`` reason and ``# TODO:`` lines and the layout reads like the examples
@@ -14,6 +16,7 @@ import json
 import re
 import shutil
 import textwrap
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -148,45 +151,69 @@ def _entry(head: str, value: Any, indent: int) -> list[str]:
 
 
 def _comment(prefix: str, text: str, indent: int, width: int = 100) -> list[str]:
-    """A comment ``# prefix text`` wrapped at ``width``."""
+    """A comment ``# prefix text`` (``# text`` without a prefix) wrapped at ``width``."""
     pad = " " * indent
     return textwrap.wrap(
-        f"{prefix} {text}", width, initial_indent=f"{pad}# ", subsequent_indent=f"{pad}#   ", break_long_words=False, break_on_hyphens=False
+        f"{prefix} {text}" if prefix else text, width, initial_indent=f"{pad}# ", subsequent_indent=f"{pad}#   ", break_long_words=False, break_on_hyphens=False
     )
+
+
+def commented_yaml(
+    config: dict[str, Any],
+    header: Sequence[str] = (),
+    key_comments: Mapping[str, Sequence[str]] | None = None,
+    scene_comments: Sequence[Sequence[str]] = (),
+    beat_comments: Sequence[Sequence[Sequence[str]]] = (),
+) -> str:
+    """``config`` (a ``video.yaml`` mapping, or an include file's without ``scenes``) as YAML
+    text with comments: the ``header`` lines (``# ...`` as given) on top, ``key_comments``
+    (top-level key -> comment texts) above their keys, and per scene its ``scene_comments`` above
+    it and, per beat, its ``beat_comments``; a comment text is wrapped as ``# <text>``. The text
+    is checked to load back to exactly ``config``."""
+    out = list(header)
+    for key, value in config.items():
+        if key == "scenes":
+            continue
+        for text in (key_comments or {}).get(key, ()):
+            out.extend(_comment("", text, 0))
+        out.extend(_entry(f"{key}:", value, 0))
+    out.append("")
+    if "scenes" in config:
+        out.append("scenes:")
+    for k, entry in enumerate(config.get("scenes", [])):
+        for text in scene_comments[k] if k < len(scene_comments) else ():
+            out.extend(_comment("", text, 2))
+        notes = beat_comments[k] if k < len(beat_comments) else ()
+        if not any(notes):
+            out.extend(_block([entry], 2))
+        else:
+            out.extend(_block([{key: value for key, value in entry.items() if key != "beats"}], 2))
+            out.append("    beats:")
+            for j, beat in enumerate(entry["beats"]):
+                for text in notes[j] if j < len(notes) else ():
+                    out.extend(_comment("", text, 6))
+                out.extend(_block([beat], 6))
+        out.append("")
+    text = "\n".join(out).rstrip("\n") + "\n"
+    if yaml.safe_load(text) != config:  # a bug in the writer, never the user's fault
+        raise AssertionError("vidgen wrote YAML that does not load back to the config it meant")
+    return text
 
 
 def plan_yaml(plan: Plan, fmt: str = "16:9", preset: str = "dark_tech", source: str = "") -> str:
     """The commented ``video.yaml`` of ``plan`` (see the module doc)."""
-    config = plan_config(plan, fmt, preset)
     origin = f" from {source}" if source else ""
-    out = [
+    header = [
         f"# Draft written by `vidgen plan`{origin}: a deterministic starting point, not a finished video.",
         "# Every scene says why it got its type (plan) and what to check (TODO). Refine the",
         "# narration and the on-screen texts, then: vidgen validate, vidgen storyboard, vidgen lint.",
         "# How to make a good video (pacing, scene types): `vidgen guide` (AGENTS.md)",
     ]
     for note in plan.notes:
-        out.extend(_comment("TODO:", note, 0))
-    for key, value in config.items():
-        if key == "scenes":
-            continue
-        if key == "overlays":
-            out.append(f"# plan: narration over {CHAPTER_SECONDS / 60:.0f} minutes -> chapter cards and a progress bar")
-        out.extend(_entry(f"{key}:", value, 0))
-    out.append("")
-    out.append("scenes:")
-    for scene, entry in zip(plan.scenes, config["scenes"]):
-        if scene.reason:
-            out.extend(_comment("plan:", scene.reason, 2))
-        for todo in scene.todos:
-            out.extend(_comment("TODO:", todo, 2))
-        out.extend(_block([entry], 2))
-        out.append("")
-    text = "\n".join(out).rstrip("\n") + "\n"
-    loaded = yaml.safe_load(text)
-    if loaded != config:  # a bug in the writer, never the user's fault
-        raise AssertionError("vidgen plan wrote YAML that does not load back to the planned config")
-    return text
+        header.extend(_comment("TODO:", note, 0))
+    overlays = [f"plan: narration over {CHAPTER_SECONDS / 60:.0f} minutes -> chapter cards and a progress bar"]
+    scenes = [[*([f"plan: {s.reason}"] if s.reason else []), *(f"TODO: {t}" for t in s.todos)] for s in plan.scenes]
+    return commented_yaml(plan_config(plan, fmt, preset), header, {"overlays": overlays}, scenes)
 
 
 @dataclass
@@ -201,9 +228,15 @@ class PlanResult:
 
 
 def write_plan(plan: Plan, output: Path, *, fmt: str = "16:9", preset: str = "dark_tech", source: str = "", force: bool = False) -> PlanResult:
-    """Write ``plan`` to ``output``: a folder (scaffolded like ``vidgen init`` when new or empty;
-    its ``video.yaml``) or a ``.yaml`` / ``.yml`` file. An existing config is replaced only with
-    ``force``; pictures go to ``assets/`` beside the config."""
+    """Write ``plan`` to ``output`` (see :func:`write_project`)."""
+    return write_project(plan_yaml(plan, fmt, preset, source), output, assets=plan.assets, force=force)
+
+
+def write_project(text: str, output: Path, *, assets: Mapping[str, Path] | None = None, force: bool = False) -> PlanResult:
+    """Write the config ``text`` to ``output``: a folder (scaffolded like ``vidgen init`` when
+    new or empty; its ``video.yaml``) or a ``.yaml`` / ``.yml`` file. An existing config is
+    replaced only with ``force``; ``assets`` (project path -> source file) are copied beside the
+    config."""
     from vidgen.cli import scaffold_project
 
     if output.suffix.lower() in (".yaml", ".yml"):
@@ -223,9 +256,8 @@ def write_plan(plan: Plan, output: Path, *, fmt: str = "16:9", preset: str = "da
         created = empty
         if empty:
             scaffold_project(root)
-    text = plan_yaml(plan, fmt, preset, source)
     copied = []
-    for rel, src in plan.assets.items():
+    for rel, src in (assets or {}).items():
         target = root / rel
         target.parent.mkdir(parents=True, exist_ok=True)
         if not target.exists() or force:

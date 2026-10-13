@@ -1,0 +1,130 @@
+# An indoor cartoon: a dog, a basket of muffins and a sleepy detective (muffin_mystery.md, hand-edited).
+# No audio committed: run `vidgen tts` (Kokoro, free).
+title: The Muffin Mystery
+format: {width: 1280, height: 720, fps: 30}
+preview: {width: 640, height: 360, fps: 15}
+theme: {preset: soft_pastel}
+voice: {provider: kokoro, voice: bf_emma, speed: 0.8}
+narration: {pad: 0.7}
+auto_direct: true
+voices:
+  crumb_voice: {voice: bm_fable, label: Crumb, speed: 0.8, color: secondary}
+  mira_voice: {voice: af_heart, label: Mira, speed: 0.75, color: primary}
+  olen_voice: {voice: am_fenrir, label: Olen, speed: 0.75, color: accent}
+characters:
+  - name: crumb
+    voice: crumb_voice
+    look: {species: dog, body: round, head_size: 1.15, eyes: round, accessories: [scarf]}
+    colors: {skin: "#C8935A", clothes: "#5B8C6E", accessory: "#E8C547"}
+  - name: mira
+    voice: mira_voice
+    look: {body: pear, eyes: oval, hair: ponytail, outfit: apron}
+    colors: {skin: "#F2C9A0", clothes: primary, trim: "#F4F6FA", hair: "#8A4B2A"}
+  - name: olen
+    voice: olen_voice
+    look: {body: tall, eyes: sleepy, nose: round, hair: short, ears: round, pattern: stripes, accessories: [glasses]}
+    colors: {skin: "#B97A4E", clothes: "#7DA0C8", hair: "#2B2B2B"}
+sets:
+  home:
+    room: {wallpaper: stripes, flooring: boards, windows: [0.5], doors: [0.13]}
+    props:
+      - {prop: sofa, at: 0.325, against: wall, scale: 0.9}
+      - {prop: picture, at: 0.26}
+      - {prop: clock, at: 0.66}
+      - {prop: armchair, at: 0.36, depth: 0.2}
+      - {prop: rug, at: 0.4, depth: 0.15}
+      - {prop: counter, at: 0.745, against: wall}
+      - {prop: fridge, at: 0.925, against: wall}
+scenes:
+  - id: title
+    type: card
+    params: {text: "The Muffin Mystery"}
+    duration: 2.5
+  - id: evening
+    type: stage
+    transition: iris_in
+    set: home
+    params:
+      light: indoor
+      props: [{prop: basket, at: 0.74, depth: 0.4, lift: 0.185}]
+      characters: [{name: mira, at: 0.68, depth: 0.4}, {name: crumb, at: 0.36, depth: 0.2}]
+    beats:
+      - text: "On Saturday evening, Mira baked a basket of blueberry muffins."
+        actions: [{sit_on: crumb, to: armchair, at: 0}]
+      - text: "These are for the picnic tomorrow. Nobody eats one tonight. Not even you, Crumb."
+        voice: mira_voice
+        actions:
+          - {react: mira, expression: happy}
+          - {walk_to: mira, to: {mark: 0.56, depth: 0}, at: 0.3}
+      - text: "Who, me? I am a very good dog."
+        voice: crumb_voice
+        actions: [{effect: crumb, to: hearts, at: 0.3}]
+      - text: "So the whole house went to bed, and the muffins waited on the counter, all alone."
+        actions:
+          - {walk_to: mira, to: {mark: 0.16, depth: 0.4}, at: 0}
+          - {exit: mira, door: door, at: 0.45}
+          - {light: night, at: 0.6, run_time: 2}
+          - {effect: crumb, to: sleep, at: 0.7}
+  - id: morning
+    type: stage
+    transition: crossfade
+    set: home
+    params:
+      light: morning
+      props: [{prop: basket, at: 0.12, depth: 0.4}]
+      characters: [{name: mira, at: 0.55, facing: left}, {name: crumb, at: 0.36, depth: 0.2}, {name: olen, at: 0.2, depth: 0.4}]
+    beats:
+      - text: "In the morning, Olen came down for breakfast, still half asleep."
+        actions:
+          - {sit_on: crumb, to: armchair, at: 0}
+          - {effect: crumb, to: sleep, at: 0}
+          - {hold: olen, to: basket, at: 0}
+          - {enter: olen, door: door, at: 0.3}
+      - text: "Olen! The muffins are gone! The whole basket!"
+        voice: mira_voice
+        actions:
+          - {react: mira, expression: surprised}
+          - {effect: mira, to: exclaim}
+          - {stand_up: crumb, at: 0.4}
+      - text: "Leave this to me. I am a detective."
+        voice: olen_voice
+        actions: [{effect: olen, to: sparkle, at: 0.5}]
+      - text: "An empty counter. Crumbs on the floor. And one dog who looks very guilty."
+        voice: olen_voice
+        actions:
+          - {run_to: olen, to: 0.72, at: 0}
+          - {react: olen, expression: thinking, at: 0.45}
+          - {look_at: olen, to: crumb, at: 0.7}
+      - text: "I was asleep! I only dreamed about muffins!"
+        voice: crumb_voice
+        actions:
+          - {look_at: crumb, to: olen}
+          - {react: crumb, expression: worried}
+          - {effect: crumb, to: sweat}
+          - {jump: crumb, height: 0.5, at: 0.4}
+      - text: "Olen. What is that in your hand?"
+        voice: mira_voice
+        actions:
+          - {look_at: mira, to: olen}
+          - {gesture: mira, to: point, at: 0.2}
+          - {walk_to: olen, to: {mark: 0.7, depth: 0}, at: 0.3}
+          - {look_at: olen, to: basket, at: 0.85}
+          - {run_to: crumb, to: {mark: 0.84, depth: 0}, at: 0.6}
+      - text: "Well. Case closed."
+        voice: olen_voice
+        sting: comic
+        shot: {kind: closeup, of: olen}
+        actions: [{turn: olen, to: front}]
+      - text: "Crumb got the first muffin anyway."
+        actions:
+          - {give: olen, to: crumb, at: 0.3}
+          - {effect: crumb, to: hearts, at: 0.7}
+  - id: the_end
+    type: card
+    transition: {type: iris_out, character: crumb}
+    params: {text: "The End"}
+    duration: 2.5
+output: muffin_mystery
+overlays: [{type: captions, speakers: color}]
+music:
+  - {source: bright, volume: -4}

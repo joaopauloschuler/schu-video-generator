@@ -66,6 +66,11 @@ class Spring:
         omega, zeta = self.angular_frequency, self.damping_ratio
         return omega * (zeta - math.sqrt(zeta * zeta - 1.0)) if zeta > 1.0 and not self.is_critical else zeta * omega
 
+    @property
+    def memory_seconds(self) -> float:
+        """How far back :meth:`follow` looks: a target constant for that long gives exactly it."""
+        return _WINDOW_DECAYS / self.decay_rate
+
     def step_response(self, seconds: float) -> float:
         """Where the spring is ``seconds`` after its target jumps from 0 to 1, starting at rest at
         0 (0 before; tends to 1; past 1 only when under-damped)."""
@@ -117,7 +122,7 @@ class Spring:
         """Where a part on this spring is at ``seconds`` while it follows ``target`` (a function
         of seconds from 0), the part at rest at ``target(0)`` before 0. Pure: the same at every
         frame rate. ``target`` is not read before 0 (unless ``seconds`` is)."""
-        span = min(max(seconds, 0.0), _WINDOW_DECAYS / self.decay_rate)
+        span = min(max(seconds, 0.0), self.memory_seconds)
         slices = min(_MAX_SLICES, max(_MIN_SLICES, math.ceil(span * self.angular_frequency * _SLICES_PER_RADIAN)))
         step = span / slices
         total, weighed = 0.0, 0.0

@@ -1,0 +1,57 @@
+# Episode 1 of a short series: the cast and the sets come from ../shared (include:), so every
+# episode draws Nib, Olla, the workshop and the meadow the same way. No audio is committed: this
+# works on the word-count-timed preview until `vidgen tts`.
+#   vidgen validate examples/cartoon_series/episode_1    # "included: ../shared/cast.yaml, ../shared/sets.yaml"
+#   vidgen storyboard examples/cartoon_series/episode_1
+#   vidgen lint examples/cartoon_series/episode_1
+title: "Nib and Olla: The Clock with No Hands"
+output: clock_no_hands
+include: [../shared/cast.yaml, ../shared/sets.yaml]
+theme: {preset: soft_pastel}
+
+format: {width: 1920, height: 1080, fps: 30}
+preview: {width: 854, height: 480, fps: 15}
+
+voice: {provider: kokoro, voice: bf_emma, speed: 0.8}   # the narrator
+narration: {pad: 0.7}
+auto_direct: true                                       # looks, reactions, gestures, close-ups
+
+scenes:
+  - id: bench
+    type: stage
+    set: workshop
+    params:
+      characters:
+        - {name: nib, at: 0.4}
+        - {name: olla, at: 0.75, pose: arms_crossed}
+    beats:
+      - text: "In the workshop, Nib had finished something new."
+      - text: "Olla, look. A clock with no hands!"
+        voice: nib_voice
+        actions:
+          - {jump: nib, at: 0.1}
+      - text: "Then how does it tell the time?"
+        voice: olla_voice
+      - text: "It does not. It tells you it is *now*. Every time."
+        voice: nib_voice
+        actions:
+          - {gesture: nib, to: point, at: 0.3}
+
+  - id: outside
+    type: stage
+    set: meadow
+    params:
+      characters:
+        - {name: nib, at: 0.48}
+        - {name: olla, at: rock_side}
+    beats:
+      - text: "They took the clock outside, to be sure."
+        actions:
+          - {sit_on: olla, to: rock}
+      - text: "Is it still now out here?"
+        voice: olla_voice
+      - text: "Still now. It has never once been wrong."
+        voice: nib_voice
+        actions:
+          - {emote: nib, to: happy}
+      - text: "Olla had to admit, that was more than most clocks could say."

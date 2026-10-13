@@ -165,6 +165,7 @@ def test_cli_args() -> None:
     args = cli_args(["lint"], ["/p"], {"scene": ["a", "-b"], "final": True, "force": False, "variant": None, "jobs": 2, "rule": []})
     assert args == ["lint", "/p", "--scene=a", "--scene=-b", "--final", "--jobs=2", "--json"]
     assert cli_args(["guide"]) == ["guide", "--json"]
+    assert cli_args(["render"], ["/p"], {"jobs": "auto"}) == ["render", "/p", "--jobs=auto", "--json"]
     with pytest.raises(VidgenError, match="may not start with '-'"):
         cli_args(["guide"], ["--list"])
 
@@ -203,7 +204,7 @@ def test_page_of() -> None:
 TOOLS = {
     "guide", "init", "plan", "validate", "schema", "lint", "storyboard", "list_scenes", "list_icons", "list_themes", "list_sfx",
     "list_music", "render", "tts", "imagegen", "readback", "slides", "thumbnail", "export", "gallery", "translate_template",
-    "character_sheet",
+    "character_sheet", "direct", "screenplay", "cast",
 }
 
 
@@ -279,6 +280,8 @@ def test_server_tools_guide_and_resources(tmp_path: Path) -> None:
         schema = attr(tts, "input_schema", "inputSchema")
         assert schema["properties"]["dry_run"]["default"] is True and schema["properties"]["confirm_cost"]["default"] is False
         assert "ctx" not in schema["properties"] and "COSTS MONEY" in tts.description
+        jobs = attr(next(t for t in tools if t.name == "render"), "input_schema", "inputSchema")["properties"]["jobs"]
+        assert jobs["default"] == 1 and "auto" in json.dumps(jobs) and '"maximum": 16' in json.dumps(jobs)
 
         doc = doc_of(await client.call_tool("guide", {"topic": "start"}))
         assert doc["command"] == "guide" and doc["topic"] == "start" and doc["text"].startswith("## ")
@@ -356,6 +359,40 @@ def test_server_storyboard_and_lint_return_pictures(tmp_path: Path) -> None:
 
         doc = doc_of(await client.call_tool("lint", {"project": "proj", "fail_on": "never"}))
         assert doc["command"] == "lint" and doc["stills"] == 2 and doc["rendered"] == []  # the storyboard's stills reused
+
+    run_session(tmp_path, body)
+
+
+def test_server_direct_returns_the_automatic_actions(tmp_path: Path) -> None:
+    example = Path(__file__).resolve().parents[1] / "examples" / "cartoon"
+    data = yaml.safe_load((example / "video.yaml").read_text(encoding="utf-8"))
+    (tmp_path / "toon").mkdir()
+    (tmp_path / "toon" / "video.yaml").write_text(yaml.safe_dump({**data, "auto_direct": True}, sort_keys=False), encoding="utf-8")
+
+    async def body(client: Any) -> None:
+        doc = doc_of(await client.call_tool("direct", {"project": "toon", "scene": ["hill"]}))
+        assert doc["command"] == "direct" and doc["scenes"] == [{"scene": "hill", "beats": [
+            {"beat": "hill_flew", "actions": [{"effect": "moss", "to": "exclaim", "at": 0.2}]},   # Step 107: moss's written surprise
+            {"beat": "hill_told", "actions": [{"look_at": "moss", "to": "dot"}]},
+        ]}]
+
+    run_session(tmp_path, body)
+
+
+def test_server_screenplay_writes_a_project(tmp_path: Path) -> None:
+    text = "# Scene: yard\nPIP: Is that a kite?\n[Kit jumps.]\nKIT (doubtful): It is a box.\n"
+
+    async def body(client: Any) -> None:
+        doc = doc_of(await client.call_tool("screenplay", {"screenplay_text": text, "out": "toon"}))
+        assert doc["command"] == "screenplay" and doc["scenes"][0]["characters"] == ["pip", "kit"]
+        assert (tmp_path / "toon" / "video.yaml").is_file()
+        assert "give either" in error_text(await client.call_tool("screenplay", {"out": "toon"}))
+        # Step 115: a random cast (species repeated as --species=..., seed 0 passed), then a screenplay drawing cats
+        cast = doc_of(await client.call_tool("cast", {"count": 2, "species": ["cat", "dog"], "out": "shared/cast.yaml"}))
+        assert cast["command"] == "cast" and cast["species"] == ["cat", "dog"] and (tmp_path / "shared" / "cast.yaml").is_file()
+        assert "outside the folder" in error_text(await client.call_tool("cast", {"count": 2, "out": "../cast.yaml"}))
+        cats = doc_of(await client.call_tool("screenplay", {"screenplay_text": text, "out": "cats", "species": ["cat"], "seed": 3}))
+        assert cats["ok"] and "species: cat" in (tmp_path / "cats" / "video.yaml").read_text(encoding="utf-8")
 
     run_session(tmp_path, body)
 

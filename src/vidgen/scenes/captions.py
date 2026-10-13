@@ -5,7 +5,8 @@ and ``karaoke`` (a few big words at a time, the word being spoken highlighted wi
 scale pop: vertical / social videos). Word times come from the TTS provider's alignment when
 it stored one next to the MP3, else they are estimated within the MP3's speech
 (``beat_word_times``). The overlay reads the scene's planned beats, so a caption changes
-exactly where the narration does.
+exactly where the narration does. Where a beat overlaps the one before (DESIGN.md §69.34),
+both lines show while both sound: one line each, the earlier above (``stack_cues``).
 """
 
 import logging
@@ -40,15 +41,23 @@ STYLE_DEFAULTS: dict[str, dict[str, Any]] = {
 
 
 @dataclass
+class _Part:
+    """One beat's cue in a caption as built: its word start times, and for each word its line
+    (in the caption) and glyph indices in that line's ``Text`` (``None`` when glyphs cannot be
+    told apart)."""
+
+    word_starts: list[float]
+    glyphs: list[tuple[int, list[int]] | None]
+
+
+@dataclass
 class _Cue:
-    """A caption as built: scene-time ``start`` / ``end``, word start times, and for each word
-    its line and glyph indices in that line's ``Text`` (``None`` when glyphs cannot be told
-    apart)."""
+    """A caption as built: scene-time ``start`` / ``end`` and its parts (one cue, or two stacked
+    while two lines overlap)."""
 
     start: float
     end: float
-    word_starts: list[float]
-    glyphs: list[tuple[int, list[int]] | None]
+    parts: list[_Part]
 
 
 def _glyph_map(mob: Mobject, line: str) -> list[list[int]] | None:
@@ -209,10 +218,11 @@ class Captions(Overlay):
 
     # ----- cues ------------------------------------------------------------------------------
 
-    def _cue_texts(self, size: float, weight: str, max_width: float) -> list[tuple[CaptionCue, str | None]]:
+    def _cue_texts(self, size: float, weight: str, max_width: float) -> list[tuple[int, CaptionCue, str | None]]:
         """The scene's cues (scene times; each shown until the next starts, the last of a beat
-        until the next beat, the scene's last until the scene ends), each with the name of its
-        beat's voice (``None``: the base voice)."""
+        until the next beat (or its own end when the next overlaps it), the scene's last until
+        the scene ends), each with its beat's index and the name of its voice (``None``: the
+        base voice). Beats that overlap get one-line cues."""
         scene = self.context.scene
         widths: dict[str, float] = {}
 
@@ -229,19 +239,21 @@ class Captions(Overlay):
         language = project.config.language  # where cues break, how words are timed (§54)
         out = []
         beats = scene.beats
+        crowded = overlapping_beats([(beat.start, beat.end) for beat in beats])
         for k, beat in enumerate(beats):
-            until = beats[k + 1].start if k + 1 < len(beats) else scene.duration
-            # The written words, timed by the audio of their spoken form (pronunciation, §45).
-            spoken = project.pronunciation.apply(beat.text)
+            until = max(beats[k + 1].start, beat.end) if k + 1 < len(beats) else scene.duration
+            # The written words, timed by the audio of their spoken form (pronunciation, §45;
+            # voice sounds, §69.33).
+            spoken = project.spoken(project.beat(beat.id))
             words = beat_word_times(audio, beat.id, beat.text, beat.start, beat.end, spoken, language)
             prefix = speaker_prefix(tags[beat.id]) if beat.id in tags else ""
             tag_width = sum(width(w) for w in prefix.split()) + space * (len(prefix.split()) - 1) if prefix else None
             cues = caption_cues(
                 beat.text, beat.start, beat.end, words=words, widths=[width(w) for w in beat.text.split()], space=space,
-                max_width=max_width, max_lines=self._setting("max_lines"), max_words=self._setting("max_words"), until=until,
+                max_width=max_width, max_lines=1 if k in crowded else self._setting("max_lines"), max_words=self._setting("max_words"), until=until,
                 prefix=prefix, prefix_width=tag_width, language=language,
             )
-            out.extend((cue, voices.get(beat.id)) for cue in cues)
+            out.extend((k, cue, voices.get(beat.id)) for cue in cues)
         return out
 
     # ----- look ------------------------------------------------------------------------------
@@ -254,10 +266,10 @@ class Captions(Overlay):
             return Region(safe.x0, safe.y0 + lift * safe.height, safe.x1, safe.y1)
         return safe
 
-    def _lines(self, lines: Sequence[str], size: float, weight: str, color: str, max_width: float, pitch: float) -> list[Mobject]:
-        """The lines as ``Text``s centred on x = 0, their baselines ``pitch`` apart (shrunk
-        together when a word is wider than ``max_width``)."""
-        mobs = [T(line, size, color, weight, disable_ligatures=True) for line in lines]
+    def _lines(self, lines: Sequence[str], size: float, weight: str, colors: Sequence[str], max_width: float, pitch: float) -> list[Mobject]:
+        """The lines as ``Text``s (each in its colour) centred on x = 0, their baselines
+        ``pitch`` apart (shrunk together when a word is wider than ``max_width``)."""
+        mobs = [T(line, size, color, weight, disable_ligatures=True) for line, color in zip(lines, colors)]
         if self.options.background is None:
             for mob in mobs:
                 mob.set_stroke(current_theme().background, width=max(size / 8, 2), background=True)
@@ -294,15 +306,20 @@ class Captions(Overlay):
         self._cues: list[_Cue] = []
         group = VGroup(band)
         colored = self.speakers in ("color", "both")
-        for cue, speaker in self._cue_texts(size, weight, max_width):
-            line_color = self._speaker_color.get(speaker, color) if colored else color
-            lines = self._lines(cue.lines, size, weight, line_color, max_width, pitch)
-            tag_words = len(cue.prefix.split())
-            tag_glyphs = _glyph_map(lines[0], cue.lines[0]) if tag_words else None
-            if tag_glyphs is not None:   # the "Label:" tag in the speaker's colour
-                VGroup(*(lines[0].submobjects[i] for g in tag_glyphs[:tag_words] for i in g)).set_fill(
-                    self._speaker_color.get(speaker, color)
-                )
+        entries = self._cue_texts(size, weight, max_width)
+        speakers = {id(cue): speaker for _, cue, speaker in entries}
+        for stack in stack_cues([(k, cue) for k, cue, _ in entries]):
+            texts: list[str] = []
+            colors: list[str] = []
+            firsts: list[int] = []
+            for _, cue in stack.parts:   # the earlier line on top (§69.34)
+                firsts.append(len(texts))
+                texts += cue.lines
+                colors += [self._speaker_color.get(speakers[id(cue)], color) if colored else color] * len(cue.lines)
+            lines = self._lines(texts, size, weight, colors, max_width, pitch)
+            parts: list[_Part] = []
+            for (_, cue), first in zip(stack.parts, firsts):
+                parts.append(self._part(cue, lines, first, self._speaker_color.get(speakers[id(cue)], color)))
             block = VGroup(*lines)
             mob: Mobject = block
             if o.background is not None:
@@ -310,45 +327,57 @@ class Captions(Overlay):
                 plate.set_fill(resolve_color(o.background), opacity=opacity).set_stroke(width=0).move_to(block)
                 mob = VGroup(plate, *lines)
             place(mob, slot, fit="none", align=o.position)
-            glyphs: list[tuple[int, list[int]] | None] = []
-            for k, line in enumerate(cue.lines):
-                found = _glyph_map(lines[k], line)
-                entries: list[tuple[int, list[int]] | None] = [(k, g) for g in found] if found is not None else [None] * len(line.split(" "))
-                glyphs.extend(entries[tag_words:] if k == 0 else entries)   # the tag is not a spoken word
-            self._cues.append(_Cue(cue.start, cue.end, [w.start for w in cue.words], glyphs))
+            self._cues.append(_Cue(stack.start, stack.end, parts))
             group.add(mob)
         self._starts = [c.start for c in self._cues]
         self._plated = o.background is not None
         return group
 
+    @staticmethod
+    def _part(cue: CaptionCue, lines: Sequence[Mobject], first: int, tag_color: str) -> _Part:
+        """The cue whose lines are ``lines[first:]`` as built: its "Label:" tag in the speaker's
+        colour, its words' start times and glyphs."""
+        tag_words = len(cue.prefix.split())
+        tag_glyphs = _glyph_map(lines[first], cue.lines[0]) if tag_words else None
+        if tag_glyphs is not None:   # the "Label:" tag in the speaker's colour
+            VGroup(*(lines[first].submobjects[i] for g in tag_glyphs[:tag_words] for i in g)).set_fill(tag_color)
+        glyphs: list[tuple[int, list[int]] | None] = []
+        for k, line in enumerate(cue.lines):
+            found = _glyph_map(lines[first + k], line)
+            entries: list[tuple[int, list[int]] | None] = [(first + k, g) for g in found] if found is not None else [None] * len(line.split(" "))
+            glyphs.extend(entries[tag_words:] if k == 0 else entries)   # the tag is not a spoken word
+        return _Part([w.start for w in cue.words], glyphs)
+
     # ----- time ------------------------------------------------------------------------------
 
     def state(self, t: float) -> Hashable | None:
-        """The cue shown at video time ``t`` (its index), with karaoke the word being spoken:
-        ``(cue, word)`` (``word`` -1 before the first word)."""
+        """The caption shown at video time ``t`` (its index), with karaoke the word being spoken
+        in each of its parts: ``(caption, (word, ...))`` (``word`` -1 before the first word)."""
         st = t - self.context.scene.start
         k = bisect_right(self._starts, st + 1e-9) - 1
         if k < 0 or st >= self._cues[k].end - 1e-9:
             return None
         if not self.karaoke:
             return k
-        return (k, bisect_right(self._cues[k].word_starts, st + 1e-9) - 1)
+        return (k, tuple(bisect_right(part.word_starts, st + 1e-9) - 1 for part in self._cues[k].parts))
 
     def pose(self, mobject: Mobject, state: Hashable) -> Mobject:
         if not self.karaoke:
             return mobject.submobjects[1 + int(state)]  # type: ignore[call-overload]
-        k, word = state  # type: ignore[misc]
+        k, words = state  # type: ignore[misc]
         cue = mobject.submobjects[1 + k]
-        place_of = self._cues[k].glyphs[word] if 0 <= word < len(self._cues[k].glyphs) else None
-        if place_of is None:
-            return cue
-        copy = cue.copy()
-        line_index, indices = place_of
-        line = copy.submobjects[line_index + (1 if self._plated else 0)]
-        chars = VGroup(*(line.submobjects[i] for i in indices))
-        chars.set_fill(self._highlight)
-        # grow by at most POP_ROOM of a space on each side, so it never touches its neighbours
-        pop = min(self.options.pop, 1 + 2 * POP_ROOM * self._space / max(chars.width, 1e-6))
-        if pop > 1:
-            chars.scale(pop)
-        return copy
+        copy: Mobject | None = None
+        for part, word in zip(self._cues[k].parts, words):
+            place_of = part.glyphs[word] if 0 <= word < len(part.glyphs) else None
+            if place_of is None:
+                continue
+            copy = cue.copy() if copy is None else copy
+            line_index, indices = place_of
+            line = copy.submobjects[line_index + (1 if self._plated else 0)]
+            chars = VGroup(*(line.submobjects[i] for i in indices))
+            chars.set_fill(self._highlight)
+            # grow by at most POP_ROOM of a space on each side, so it never touches its neighbours
+            pop = min(self.options.pop, 1 + 2 * POP_ROOM * self._space / max(chars.width, 1e-6))
+            if pop > 1:
+                chars.scale(pop)
+        return cue if copy is None else copy

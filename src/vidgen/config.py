@@ -31,6 +31,7 @@ from pydantic import (
 
 from vidgen.errors import Problem, VidgenError
 from vidgen.languages import LANGUAGE_TAG_PATTERN, normalize_language
+from vidgen.voicesounds import VoiceSound, take_out_sounds
 
 ID_PATTERN = r"^[A-Za-z0-9_]+$"
 HEX_COLOR_PATTERN = r"^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$"
@@ -267,7 +268,7 @@ class CharacterColors(_Strict):
     """``colors`` of a character (DESIGN.md §69): theme tokens or hex colours of its parts."""
 
     skin: ColorRef = "secondary"
-    """Head, ears, nose and hands (skin or fur)."""
+    """Head, ears, nose and hands (skin; an animal's fur or feathers, its muzzle and tail tints of it)."""
     clothes: ColorRef = "primary"
     """Body and legs."""
     outline: ColorRef = CHARACTER_INK
@@ -277,15 +278,57 @@ class CharacterColors(_Strict):
     hair: ColorRef = "accent"
     """Hair (look.hair)."""
     accessory: ColorRef = "highlight"
-    """Hat, scarf and bag (look.accessories); glasses use outline."""
+    """Hat, cap, bow, scarf, bag, backpack, necklace (look.accessories) and shoes (look.shoes); glasses use outline."""
+    trim: ColorRef = "dim"
+    """The second clothes colour (look.outfit): trousers under a coat, shorts, the shirt under overalls, an apron."""
 
 
-BodyShape = Literal["round", "tall", "square", "bean"]
+BodyShape = Literal["round", "tall", "square", "bean", "pear", "triangle"]
 EyeStyle = Literal["dot", "oval", "round", "sleepy"]
 NoseStyle = Literal["none", "dot", "round", "triangle"]
-HairStyle = Literal["none", "short", "spiky", "long", "bun", "curly"]
+HairStyle = Literal["none", "short", "spiky", "long", "bun", "curly", "ponytail", "braids", "afro"]
 EarStyle = Literal["none", "round", "pointy", "floppy"]
-Accessory = Literal["glasses", "hat", "scarf", "bag"]
+Accessory = Literal[
+    "glasses", "hat", "scarf", "bag", "bow", "cap", "backpack", "necklace", "crown", "wizard_hat", "party_hat", "cape",
+]
+ProportionStyle = Literal["adult", "kid", "tall_kid"]
+Outfit = Literal["plain", "dress", "overalls", "coat", "shorts", "apron"]
+ClothesPattern = Literal["none", "stripes", "dots"]
+ShoeStyle = Literal["none", "shoes", "boots"]
+FacialHair = Literal["none", "moustache", "beard"]
+Species = Literal["human", "cat", "dog", "bird", "bear", "rabbit", "mouse", "fox", "owl", "frog", "turtle", "penguin", "robot"]
+#: Look keys an animal or a robot (``species`` other than ``human``) draws its own way, so they
+#: are not given with it (DESIGN.md §69.48); a robot has no hair either (§69.58).
+SPECIES_OWN_KEYS: tuple[str, ...] = ("ears", "nose", "facial_hair")
+ROBOT_OWN_KEYS: tuple[str, ...] = (*SPECIES_OWN_KEYS, "hair")
+#: Species drawn without a ``tail`` part (DESIGN.md §69.57, §69.58).
+SPECIES_WITHOUT_TAIL: frozenset[str] = frozenset({"frog", "robot"})
+#: Accessories worn on the head: they make the optional ``accessory`` part (DESIGN.md §69.1,
+#: the costume pieces §69.58).
+HEAD_ACCESSORIES: frozenset[str] = frozenset({"glasses", "hat", "bow", "cap", "crown", "wizard_hat", "party_hat"})
+#: Accessories worn on top of the head: a look wears at most one of them.
+TOP_OF_HEAD: tuple[str, ...] = ("hat", "cap", "crown", "wizard_hat", "party_hat")
+RobotHead = Literal["box", "round"]
+RobotFace = Literal["eyes", "screen"]
+RobotMoves = Literal["legs", "wheels"]
+
+
+class RobotLook(_Strict):
+    """``look.robot``: how a ``species: robot`` is built (DESIGN.md §69.58)."""
+
+    head: RobotHead = "box"
+    """box (a rounded box) or round."""
+    face: RobotFace = "eyes"
+    """eyes (eyes and a mouth on a light face plate) or screen (a dark screen showing glowing eyes and mouth shapes)."""
+    antenna: bool = True
+    """An antenna on a spring with a light on top (it wobbles, blinks while idle and trails in the wind)."""
+    moves_on: RobotMoves = "legs"
+    """legs (it walks), or wheels (it rolls: no steps, no footsteps)."""
+#: Outfits with a skirt or coat tails hanging from the body: their ``body`` part has a second
+#: shape, ``seated``, the cloth over the lap (DESIGN.md §69.47).
+SKIRTED_OUTFITS: frozenset[str] = frozenset({"dress", "coat"})
+#: The name of that shape: a seated character shows it (``Character.seated``, the ``sitting`` pose).
+SEATED_BODY_SHAPE = "seated"
 
 
 class CharacterLook(_Strict):
@@ -295,7 +338,7 @@ class CharacterLook(_Strict):
     from an SVG file split into parts by element ids instead (§69.2)."""
 
     body: BodyShape = "round"
-    """Body shape: round, tall, square or bean."""
+    """Body shape: round, tall, square, bean, pear (narrow shoulders, wide hips) or triangle (broad shoulders)."""
     head_size: float = Field(1.0, ge=0.6, le=1.6)
     """Head size relative to the default head (0.6 to 1.6)."""
     eyes: EyeStyle = "dot"
@@ -303,11 +346,25 @@ class CharacterLook(_Strict):
     nose: NoseStyle = "none"
     """Nose: none, dot, round or triangle."""
     hair: HairStyle = "none"
-    """Hair: none, short, spiky, long, bun or curly (colour: colors.hair)."""
+    """Hair: none, short, spiky, long, bun, curly, ponytail, braids or afro (colour: colors.hair)."""
     ears: EarStyle = "none"
     """Ears: none, round, pointy or floppy (skin colour)."""
     accessories: list[Accessory] = Field(default_factory=list)
-    """Any of glasses, hat, scarf, bag (each at most once)."""
+    """Any of glasses, hat, scarf, bag, bow, cap, backpack, necklace and the costume pieces crown, wizard_hat, party_hat, cape (each at most once; one of hat, cap, crown, wizard_hat, party_hat)."""
+    proportions: ProportionStyle = "adult"
+    """adult, kid (big head, short body and legs) or tall_kid (lankier); pair a kid with the stage's scale (e.g. 0.7)."""
+    outfit: Outfit = "plain"
+    """plain (one colour), dress, overalls, coat, shorts or apron (second colour: colors.trim)."""
+    pattern: ClothesPattern = "none"
+    """none, stripes or dots on the clothes (a lighter or darker tone of their colour)."""
+    shoes: ShoeStyle = "none"
+    """none, shoes or boots (colour: colors.accessory)."""
+    facial_hair: FacialHair = "none"
+    """none, moustache or beard (with a moustache; colour: colors.hair; hair: none for bald)."""
+    species: Species = "human"
+    """human, or an original animal: cat, dog, bird, bear, rabbit, mouse, fox, owl, frog, turtle, penguin (its own head, ears, muzzle or beak, paws, wings or flippers, a tail but a frog's, a turtle's shell; fur colour: colors.skin, a shell: colors.hair); or robot (see robot; plating: colors.skin)."""
+    robot: RobotLook | None = None
+    """species robot only: {head: box | round, face: eyes | screen, antenna: true | false, moves_on: legs | wheels}; default a box head, eyes, an antenna, legs."""
     seed: int | None = None
     """A number that varies the proportions a little (same seed, same figure); none: no variation."""
     svg: str | None = Field(default=None, min_length=1)
@@ -319,6 +376,10 @@ class CharacterLook(_Strict):
         repeated = sorted({a for a in value if value.count(a) > 1})
         if repeated:
             raise ValueError(f"accessory listed twice: {', '.join(repeated)}")
+        on_top = [a for a in TOP_OF_HEAD if a in value]
+        if len(on_top) > 1:
+            listed = f"{', '.join(on_top[:-1])} and {on_top[-1]} are {'both' if len(on_top) == 2 else 'all'}"
+            raise ValueError(f"{listed} worn on top of the head: choose one")
         return value
 
     @model_validator(mode="after")
@@ -328,16 +389,36 @@ class CharacterLook(_Strict):
             raise ValueError(f"svg draws the character from the file; {', '.join(generator_keys)} only apply to the generator (remove them or svg)")
         if self.svg is not None and not self.svg.lower().endswith(".svg"):
             raise ValueError(f"svg must name an .svg file, not {self.svg!r}")
+        if self.species == "robot":
+            own = [key for key in ROBOT_OWN_KEYS if key in self.model_fields_set and getattr(self, key) != "none"]
+            if own:
+                raise ValueError(f"a robot draws its own head and face and has no hair; remove {', '.join(own)} (or use another species)")
+            if self.robot is not None and self.robot.moves_on == "wheels" and self.shoes != "none":
+                raise ValueError("a robot on wheels wears no shoes; remove shoes (or use robot: {moves_on: legs})")
+            return self
+        if self.robot is not None:
+            raise ValueError(f"robot only applies to species: robot (this look is a {self.species}); remove robot or set species: robot")
+        own = [key for key in SPECIES_OWN_KEYS if key in self.model_fields_set and getattr(self, key) != "none"]
+        if self.species != "human" and own:
+            raise ValueError(f"a {self.species} draws its own ears, nose and face; remove {', '.join(own)} (or use species: human)")
         return self
 
+    def robot_look(self) -> RobotLook:
+        """``robot``, or the default robot (a box head, eyes, an antenna, legs) when not given."""
+        return self.robot if self.robot is not None else RobotLook()
 
-#: Parts a pose sets (DESIGN.md §69.3); the parts of an expression are :data:`ExpressionPart`.
+
 #: How strongly characters move with the animation principles (anticipation, squash and
 #: stretch, overshoot and settle, follow-through; DESIGN.md §69.13): ``cartoon_motion:``.
 MotionSetting = Literal["lively", "calm", "none"]
 
-PosePart = Literal["body", "legs", "arm_left", "arm_right", "head", "accessory"]
-ExpressionPart = Literal["eyes", "brows", "mouth"]
+#: Parts a pose sets (DESIGN.md §69.3, the two-segment limbs §69.26, an animal's tail §69.48); the parts of an expression
+#: are :data:`ExpressionPart` (``cheeks``: a blush or tears; ``bristles``: hair or fur standing up, §69.59).
+PosePart = Literal[
+    "body", "legs", "leg_left", "leg_left_lower", "leg_right", "leg_right_lower",
+    "arm_left", "arm_left_lower", "arm_right", "arm_right_lower", "head", "accessory", "tail", "antenna", "cape",
+]
+ExpressionPart = Literal["eyes", "brows", "mouth", "cheeks", "bristles"]
 
 
 class PartPoseEntry(_Strict):
@@ -378,13 +459,13 @@ class CharacterEntry(_Strict):
     voice: Identifier | None = None
     """Who speaks for this character: a name from voices (or default: the base voice); none: the character does not speak."""
     look: CharacterLook = Field(default_factory=CharacterLook)
-    """How the character is drawn: body shape, head size, eyes, nose, hair, ears, accessories, seed; or svg: a file split into parts."""
+    """How the character is drawn: body shape, head size, eyes, nose, hair, ears, accessories, proportions, outfit, pattern, shoes, facial hair, species, seed; or svg: a file split into parts."""
     colors: CharacterColors = Field(default_factory=CharacterColors)
-    """Part colours {skin, clothes, outline, features, hair, accessory}: theme tokens or hex (not used by an svg look)."""
+    """Part colours {skin, clothes, outline, features, hair, accessory, trim}: theme tokens or hex (not used by an svg look)."""
     poses: dict[Identifier, dict[PosePart, PartPoseEntry]] = Field(default_factory=dict)
     """The character's own poses (name -> part -> {angle, scale, shift, shape}); a built-in name is replaced."""
     expressions: dict[Identifier, dict[ExpressionPart, PartPoseEntry]] = Field(default_factory=dict)
-    """The character's own expressions (eyes, brows, mouth), like poses."""
+    """The character's own expressions (eyes, brows, mouth, cheeks, bristles), like poses."""
     idle: bool = True
     """Breathe, sway the head slightly and blink every 2 to 6 s on its own; false: hold still between actions."""
     cartoon_motion: MotionSetting | None = None
@@ -501,14 +582,17 @@ LINT_RULES: tuple[str, ...] = (
     "walk_overlap",
     "off_stage",
     "character_overlap",
+    "prop_overlap",
     "bubble_overlap",
     "facing_away",
     "hidden_speaker",
     "mouth_without_voice",
+    "look_alike",
     "narration_speed",
     "dead_air",
     "animation_overrun",
     "rushed_animation",
+    "talked_over",
     "readback",
 )
 RuleName = Literal[
@@ -524,14 +608,17 @@ RuleName = Literal[
     "walk_overlap",
     "off_stage",
     "character_overlap",
+    "prop_overlap",
     "bubble_overlap",
     "facing_away",
     "hidden_speaker",
     "mouth_without_voice",
+    "look_alike",
     "narration_speed",
     "dead_air",
     "animation_overrun",
     "rushed_animation",
+    "talked_over",
     "readback",
 ]
 #: Severity of a lint finding; ``off`` disables a rule.
@@ -633,7 +720,7 @@ class WalkOverlapRule(RuleConfig):
 
 
 class OffStageRule(RuleConfig):
-    """``off_stage``: a character partly outside the view (not while it enters or exits)."""
+    """``off_stage``: a character partly outside the view (not while it enters or exits); in a shot, a character the shot frames."""
 
     min_hidden: Fraction = 0.05
     """Share of the character's box outside the view from which it is reported."""
@@ -646,11 +733,18 @@ class CharacterOverlapRule(RuleConfig):
     """Share of the narrower character's width the two must share side by side to be reported."""
 
 
+class PropOverlapRule(RuleConfig):
+    """``prop_overlap``: two props standing on the floor at about the same depth drawn over each other (a door and the sofa against the wall)."""
+
+    min_overlap: Fraction = 0.15
+    """Share of the narrower prop's width the two must share side by side to be reported."""
+
+
 class BubbleOverlapRule(RuleConfig):
-    """``bubble_overlap``: a speech bubble covering a character's face or another bubble."""
+    """``bubble_overlap``: a speech bubble covering a character's face, another bubble or an effect symbol."""
 
     min_overlap: Fraction = 0.1
-    """Share of the face's box (or of the smaller bubble's box) the bubble must cover to be reported."""
+    """Share of the face's box (or of the smaller bubble's box, or of the effect symbol's box) the bubble must cover to be reported."""
 
 
 class FacingAwayRule(RuleConfig):
@@ -666,6 +760,13 @@ class HiddenSpeakerRule(RuleConfig):
 
 class MouthWithoutVoiceRule(RuleConfig):
     """``mouth_without_voice``: a character's lip sync showing a speech shape while no narration is heard."""
+
+
+class LookAlikeRule(RuleConfig):
+    """``look_alike``: two generated characters of the video too alike to tell apart at a glance (DESIGN.md §69.49)."""
+
+    min_contrast: float = Field(default=0.35, ge=0, le=1)
+    """Lowest acceptable contrast score of two characters (0 the same look, 1 fully different: silhouette, colours, accessories)."""
 
 
 class NarrationSpeedRule(RuleConfig):
@@ -722,6 +823,11 @@ class RushedAnimationRule(RuleConfig):
     """Shortest acceptable run time (seconds) of an animation `play_steps` had to shorten."""
 
 
+class TalkedOverRule(RuleConfig):
+    """``talked_over``: a beat's ``overlap`` starts so early that whole words of the line before are spoken under it,
+    or its ``interrupt`` cuts that line before whole words."""
+
+
 class ReadbackRule(RuleConfig):
     """``readback``: a beat whose audio, transcribed by `vidgen readback`, differs from its text."""
 
@@ -756,6 +862,8 @@ class LintRules(_Strict):
     """A character partly outside the view, not entering or exiting (default: warning)."""
     character_overlap: CharacterOverlapRule = Field(default_factory=CharacterOverlapRule)
     """Two characters standing on each other (default: warning)."""
+    prop_overlap: PropOverlapRule = Field(default_factory=PropOverlapRule)
+    """Two props on the floor at about the same depth drawn over each other (default: warning)."""
     bubble_overlap: BubbleOverlapRule = Field(default_factory=BubbleOverlapRule)
     """A speech bubble covering a face or another bubble (default: warning)."""
     facing_away: FacingAwayRule = Field(default_factory=FacingAwayRule)
@@ -764,6 +872,8 @@ class LintRules(_Strict):
     """A speaking character whose face is hidden by something in front of it (default: warning)."""
     mouth_without_voice: MouthWithoutVoiceRule = Field(default_factory=MouthWithoutVoiceRule)
     """A mouth moving with lip sync while no narration is heard (default: warning)."""
+    look_alike: LookAlikeRule = Field(default_factory=LookAlikeRule)
+    """Two characters of the video that look too alike (default: warning)."""
     narration_speed: NarrationSpeedRule = Field(default_factory=NarrationSpeedRule)
     """Narration too fast or too slow (default: warning; info for beats without audio)."""
     dead_air: DeadAirRule = Field(default_factory=DeadAirRule)
@@ -772,6 +882,8 @@ class LintRules(_Strict):
     """Animations running past the narration (default: warning)."""
     rushed_animation: RushedAnimationRule = Field(default_factory=RushedAnimationRule)
     """Animations shortened to fit a too short beat (default: warning)."""
+    talked_over: TalkedOverRule = Field(default_factory=TalkedOverRule)
+    """Whole words of a line spoken under the next beat's overlap (default: warning)."""
     readback: ReadbackRule = Field(default_factory=ReadbackRule)
     """Audio heard differently from its text, from the transcripts `vidgen readback` stored (default: warning; nothing without them)."""
 
@@ -831,6 +943,20 @@ class ActionConfig(BaseModel):
     """Seconds the action's animation takes (default: the action's own); shortened to fit the beat."""
 
     _shorthand: dict[str, Any] | None = PrivateAttr(default=None)
+    _auto: bool = PrivateAttr(default=False)
+
+    @classmethod
+    def automatic(cls, data: dict[str, Any]) -> ActionConfig:
+        """An action that automatic directing adds (``auto_direct``, DESIGN.md §69.23), not the
+        config: :attr:`auto` is true."""
+        made = cls.model_validate(data)
+        made._auto = True
+        return made
+
+    @property
+    def auto(self) -> bool:
+        """Whether automatic directing added this action (it is not in the config)."""
+        return self._auto
 
     @model_validator(mode="wrap")
     @classmethod
@@ -855,6 +981,12 @@ class ActionConfig(BaseModel):
         model._shorthand = dict(data)
         return model
 
+    @field_validator("target", mode="before")
+    @classmethod
+    def _number_text(cls, value: Any) -> Any:
+        """A number as the target (``- wind: 0.6``) is kept as its text; the action reads it."""
+        return str(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else value
+
     def resolved(self, known: Collection[str]) -> ActionConfig:
         """This action, or — for a shorthand whose first key is not a known action but exactly
         one other key is (keys sorted by a tool) — the action that key names."""
@@ -877,8 +1009,20 @@ class ActionConfig(BaseModel):
         return [self.target] if isinstance(self.target, str) else list(self.target)
 
     def describe(self) -> str:
-        """``highlight item3`` (for messages)."""
-        return " ".join([self.action, *self.targets()])
+        """``highlight item3`` (for messages); ``look_at kit (auto)`` for an automatic action."""
+        return " ".join([self.action, *self.targets(), *(["(auto)"] if self._auto else [])])
+
+    def shorthand(self) -> dict[str, Any]:
+        """The action as written in ``video.yaml``: ``{NAME: TARGET, ...options}`` (``at``,
+        ``until`` and ``run_time`` only when set)."""
+        data: dict[str, Any] = {self.action: self.target} if self.target is not None else {"action": self.action}
+        data.update(self.options)
+        if self.at:
+            data["at"] = self.at
+        for key in ("until", "run_time"):
+            if getattr(self, key) is not None:
+                data[key] = getattr(self, key)
+        return data
 
 
 #: Keys every overlay entry has; any other key of an entry is an option of its overlay type.
@@ -996,6 +1140,119 @@ def _sting(value: str | StingCue) -> StingCue:
 StingSetting = Annotated[Union[StingKind, StingCue], AfterValidator(_sting)]
 
 
+#: The framings of a beat's ``shot:`` (DESIGN.md §69.29; :data:`vidgen.cartoon.shots.SHOT_KINDS`).
+ShotKind = Literal["wide", "two_shot", "medium", "over_shoulder", "closeup"]
+#: How many characters each framing names: (fewest, most); fewer than the most are filled in
+#: when the shot is framed (:func:`vidgen.cartoon.shots.shot_figures`).
+SHOT_NAMES: dict[str, tuple[int, int]] = {"wide": (0, 0), "two_shot": (0, 2), "medium": (1, 1), "over_shoulder": (1, 2), "closeup": (1, 1)}
+
+
+def _name_or_names_schema(schema: dict[str, Any]) -> None:
+    """JSON Schema of a list of names that may also be written as one name (``of: kit``), which a
+    model's ``before`` validator turns into a list."""
+    names = {key: schema.pop(key) for key in ("type", "items") if key in schema}
+    schema["anyOf"] = [names["items"], names]
+
+
+class ShotConfig(_Strict):
+    """A beat's camera framing on a stage (``shot:``): ``closeup kit`` or ``{kind, of, move,
+    run_time}``. It cuts to the framing as the beat starts (eases with ``move: true``) and holds
+    for the beat; the next beat without a shot goes back to the view before the shots."""
+
+    kind: ShotKind
+    """wide (everyone, no zoom), two_shot (two characters, whole), medium (one from the hips up), over_shoulder (one seen past another, who stands cut by the frame's edge) or closeup (head and shoulders)."""
+    of: list[Identifier] = Field(default_factory=list, json_schema_extra=_name_or_names_schema)
+    """The characters it frames: none for wide; two_shot two (default: the speaker and the one nearest it); medium and closeup one; over_shoulder the one seen, then the near one (default: the one it looks at, else the nearest)."""
+    move: bool = False
+    """true: the camera eases to the framing (and back after the beat) instead of cutting."""
+    run_time: PositiveFloat | None = None
+    """Seconds of the move with move: true (default 1.0)."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _from_words(cls, data: Any) -> Any:
+        """``"over_shoulder kit pip"`` -> ``{kind: over_shoulder, of: [kit, pip]}``; ``of`` may be one name."""
+        if isinstance(data, str):
+            kind, *names = data.split()
+            return {"kind": kind, "of": names}
+        if isinstance(data, dict) and isinstance(data.get("of"), str):
+            return {**data, "of": [data["of"]]}
+        return data
+
+    @model_validator(mode="after")
+    def _check_names(self) -> ShotConfig:
+        fewest, most = SHOT_NAMES[self.kind]
+        if not fewest <= len(self.of) <= most:
+            wanted = "no character" if most == 0 else f"{fewest} to {most} characters" if fewest != most else f"{most} character"
+            raise ValueError(f"a {self.kind} shot names {wanted}, got {len(self.of)} ({' '.join(self.of) or 'none'})")
+        if len(set(self.of)) != len(self.of):
+            raise ValueError(f"a {self.kind} shot names a character twice ({' '.join(self.of)})")
+        if self.run_time is not None and not self.move:
+            raise ValueError("run_time is for a shot with move: true (a cut takes no time)")
+        return self
+
+    def action(self) -> ActionConfig:
+        """The ``shot`` action this key stands for (at the beat's start)."""
+        data: dict[str, Any] = {"action": "shot", "kind": self.kind}
+        if self.of:
+            data["target"] = list(self.of)
+        if self.move:
+            data["move"] = True
+        if self.run_time is not None:
+            data["run_time"] = self.run_time
+        return ActionConfig.model_validate(data)
+
+
+def _shot_words_schema(schema: dict[str, Any]) -> None:
+    """JSON Schema of a beat's ``shot:``: also the words form (``"two_shot kit pip"``), which
+    :meth:`ShotConfig._from_words` reads but the generated schema does not list."""
+    words = {"type": "string", "pattern": r"^\s*(wide|two_shot|medium|over_shoulder|closeup)(\s+\S+)*\s*$"}
+    schema.setdefault("anyOf", []).insert(0, words)
+
+
+#: The kinds of automatic directing (``auto_direct:``; DESIGN.md §69.23), in planning order.
+DIRECTING_KINDS: tuple[str, ...] = ("looks", "reactions", "gestures", "closeups", "effects")
+
+
+class AutoDirect(_Strict):
+    """Which kinds of automatic directing a stage scene gets (``auto_direct: {...}``); a kind not
+    given is on. Actions written in a beat always win over automatic ones."""
+
+    looks: bool = True
+    """Listeners turn and look at whoever speaks; the speaker looks at the one it talks to."""
+    reactions: bool = True
+    """Listeners react in the pause after a line with an expression chosen from its punctuation and words (! surprised or happy, ? thinking, a negation worried)."""
+    gestures: bool = True
+    """The speaker gestures on a line's stressed word (*word*, an all-capitals word, else a long one): at most one per line, from the gestures its parts allow."""
+    closeups: bool = True
+    """A short punchy line right after a long one gets a close-up (a zoom on the speaker, or a closeup shot when the line is too short for the zoom's moves): never two beats in a row, never during a walk, a camera move or a written shot."""
+    effects: bool = True
+    """A strong change of expression gets an effect symbol over the head (surprised: exclaim, thinking: question, angry: anger): at most one per line, none in a beat with a written effect."""
+
+
+#: ``auto_direct:`` on the video, a stage scene or a beat: ``true`` (every kind), ``false``
+#: (none) or ``{looks, reactions, gestures, closeups, effects}``; the nearest one wins.
+AutoDirectSetting = Union[bool, AutoDirect]
+
+
+#: ``reframe:`` on the video or a stage scene (DESIGN.md §69.30): ``speaker`` (the camera keeps
+#: whoever speaks in view on a stage wider than the frame) or ``none``; not given: ``speaker``
+#: when the stage's characters do not fit in one view.
+ReframeSetting = Literal["speaker", "none"]
+
+
+def directing_kinds(*settings: AutoDirectSetting | None) -> frozenset[str]:
+    """The kinds of automatic directing on, from settings nearest first (a beat's, its scene's,
+    the video's): the first one given wins; none given: off."""
+    for setting in settings:
+        if setting is None:
+            continue
+        if isinstance(setting, bool):
+            return frozenset(DIRECTING_KINDS) if setting else frozenset()
+        return frozenset(kind for kind in DIRECTING_KINDS if getattr(setting, kind))
+    return frozenset()
+
+
 class SfxConfig(_Strict):
     """Video-wide sound effect settings (DESIGN.md §47)."""
 
@@ -1033,7 +1290,7 @@ class MusicCue(_Strict):
     model_config = ConfigDict(extra="forbid", use_attribute_docstrings=True, populate_by_name=True)
 
     source: str = Field(min_length=1)
-    """A built-in bed (calm, pulse, bright; vidgen list-music) or an audio file under the project (e.g. assets/music/theme.mp3)."""
+    """A built-in bed (calm, pulse, bright, cartoon, lullaby; vidgen list-music) or an audio file under the project (e.g. assets/music/theme.mp3)."""
     volume: float = Field(default=0.0, ge=-60, le=12)
     """Level change in dB (0: -28 LUFS, about 7 dB under typical narration before ducking)."""
     start: float = Field(default=0.0, ge=0)
@@ -1173,43 +1430,66 @@ class ThumbnailConfig(_Strict):
         return "frame" if self.scene is not None else "design"
 
 
-#: Transition types (DESIGN.md §49, §50).
-TRANSITION_TYPES = ("cut", "crossfade", "fade_color", "push", "wipe")
+#: Transition types (DESIGN.md §49, §50, §69.45).
+TRANSITION_TYPES = ("cut", "crossfade", "fade_color", "push", "wipe", "iris_out", "iris_in")
 #: Transitions that overlap the two scenes (both pictures are on screen at once).
 OVERLAPPING_TRANSITIONS = ("crossfade", "push", "wipe")
 #: Transitions that move a picture or an edge in a ``direction`` (DESIGN.md §50).
 DIRECTED_TRANSITIONS = ("push", "wipe")
+#: Cartoon irises (DESIGN.md §69.45): a circle closes on the scene before, then opens on the next.
+IRIS_TRANSITIONS = ("iris_out", "iris_in")
+#: Transitions through a colour, inside the renders: the scene before ends in it, the next
+#: scene starts from it (no overlap; fade_color and the irises).
+COLOR_TRANSITIONS = ("fade_color", *IRIS_TRANSITIONS)
 #: Seconds of a transition when its entry gives no ``duration``.
-TRANSITION_DURATIONS = {"cut": 0.0, "crossfade": 0.5, "fade_color": 1.0, "push": 0.6, "wipe": 0.6}
+TRANSITION_DURATIONS = {"cut": 0.0, "crossfade": 0.5, "fade_color": 1.0, "push": 0.6, "wipe": 0.6, "iris_out": 1.2, "iris_in": 1.2}
 #: Directions of a push or wipe: where the pictures (push) or the edge (wipe) move.
 TransitionDirection = Literal["left", "right", "up", "down"]
+#: A transition's ``type`` as written.
+TransitionType = Literal["cut", "crossfade", "fade_color", "push", "wipe", "iris_out", "iris_in"]
 
 
 class TransitionConfig(_Strict):
-    """How the video passes into a scene from the one before it (DESIGN.md §49, §50)."""
+    """How the video passes into a scene from the one before it (DESIGN.md §49, §50, §69.45)."""
 
-    type: Literal["cut", "crossfade", "fade_color", "push", "wipe"] = "cut"
-    """cut: straight to the next scene (the default: the scene before fades out by itself); crossfade: the two scenes blend; fade_color: the picture fades to a colour and the next scene fades in from it; push: the next scene slides in and pushes the previous one out; wipe: an edge sweeps across, uncovering the next scene."""
+    type: TransitionType = "cut"
+    """cut: straight to the next scene (the default: the scene before fades out by itself); crossfade: the two scenes blend; fade_color: the picture fades to a colour and the next scene fades in from it; push: the next scene slides in and pushes the previous one out; wipe: an edge sweeps across, uncovering the next scene; iris_out: a circle closes on a character or point of the scene before, then opens on the next scene; iris_in: a circle closes on the scene before, then opens on a character or point of the next scene."""
     duration: float | None = Field(default=None, gt=0, le=5)
-    """Seconds of the transition (default: crossfade 0.5, fade_color 1.0 split evenly between fading out and in, push and wipe 0.6)."""
+    """Seconds of the transition (default: crossfade 0.5, fade_color 1.0 split evenly between fading out and in, push and wipe 0.6, iris_out and iris_in 1.2 split evenly between closing and opening)."""
     color: ColorRef | None = None
-    """fade_color only: a theme colour token or hex (default: the theme's background)."""
+    """fade_color, iris_out, iris_in only: a theme colour token or hex (default: the theme's background for fade_color, black for an iris)."""
     direction: TransitionDirection | None = None
     """push / wipe only: where the pictures (push) or the edge (wipe) move: left, right, up or down (default: left in a wide or square frame, up in a tall one: the next scene comes in from the right / from below)."""
     soft: bool | None = None
     """wipe only: a soft (blurred) edge instead of a hard one (default false)."""
+    character: str | None = None
+    """iris_out / iris_in only: the character the circle closes on (iris_out: one of the scene before, its head as the scene ends) or opens on (iris_in: one of this scene, its head as it starts); it pauses around the head (default: the point at)."""
+    at: tuple[float, float] | None = None
+    """iris_out / iris_in only: the point [x, y] the circle closes on (iris_out) or opens on (iris_in), as fractions of the frame from its top-left corner (default: the centre); the other side of the iris uses the centre."""
 
     @model_validator(mode="after")
     def _keys_of_type(self) -> TransitionConfig:
         if self.type == "cut" and self.duration is not None:
             raise ValueError("a cut has no duration")
-        if self.type != "fade_color" and self.color is not None:
-            raise ValueError(f"color is only for fade_color, not {self.type}")
+        if self.type not in COLOR_TRANSITIONS and self.color is not None:
+            raise ValueError(f"color is only for fade_color, iris_out and iris_in, not {self.type}")
         if self.type not in DIRECTED_TRANSITIONS and self.direction is not None:
             raise ValueError(f"direction is only for push and wipe, not {self.type}")
         if self.type != "wipe" and self.soft is not None:
             raise ValueError(f"soft is only for wipe, not {self.type}")
+        for key in ("character", "at"):
+            if self.type not in IRIS_TRANSITIONS and getattr(self, key) is not None:
+                raise ValueError(f"{key} is only for iris_out and iris_in, not {self.type}")
+        if self.character is not None and self.at is not None:
+            raise ValueError("an iris closes on a character or a point (at), not both")
+        if self.at is not None and not all(0.0 <= v <= 1.0 for v in self.at):
+            raise ValueError(f"at {list(self.at)}: x and y are fractions of the frame, from 0 to 1")
         return self
+
+    @property
+    def through_color(self) -> bool:
+        """Whether the scene before ends in a colour the next one starts from (fade_color, iris)."""
+        return self.type in COLOR_TRANSITIONS
 
     @property
     def overlaps(self) -> bool:
@@ -1226,10 +1506,8 @@ def _transition(value: str | TransitionConfig) -> TransitionConfig:
     return TransitionConfig(type=value) if isinstance(value, str) else value  # type: ignore[arg-type]
 
 
-#: A ``transition:`` value: a type name, or {type, duration, color, direction, soft}.
-TransitionSetting = Annotated[
-    Union[Literal["cut", "crossfade", "fade_color", "push", "wipe"], TransitionConfig], AfterValidator(_transition)
-]
+#: A ``transition:`` value: a type name, or {type, duration, color, direction, soft, character, at}.
+TransitionSetting = Annotated[Union[TransitionType, TransitionConfig], AfterValidator(_transition)]
 
 #: ``carry:`` entry: ``name`` or ``"name -> other"`` (a target of the scene before -> one of this scene).
 CARRY_ARROW = "->"
@@ -1286,19 +1564,71 @@ class ChapterConfig(_Strict):
     """Its number as shown (1, or text such as "Part II"); default its position among the chapters."""
 
 
+#: ``*word*`` (or ``*a few words*``) in a beat's text: stressed by its speaker (DESIGN.md §69.24).
+EMPHASIS = re.compile(r"(?<![\w*])\*(?=[^\s*])([^*\n]*?[^\s*])\*(?![\w*])")
+
+
+def strip_emphasis(text: str) -> str:
+    """``text`` without the asterisks of its ``*word*`` emphasis marks (words and spaces kept)."""
+    return EMPHASIS.sub(r"\1", text)
+
+
 class BeatConfig(_Strict):
-    """One narrated sentence/paragraph. ``id`` is filled in by :class:`SceneConfig` if omitted."""
+    """One narrated sentence/paragraph. ``id`` is filled in by :class:`SceneConfig` if omitted.
+    ``text`` is what is spoken and shown: the voice sound markers (``[laugh]``,
+    :mod:`vidgen.voicesounds`) are taken out of it here and kept in :attr:`voice_sounds`, then
+    the ``*word*`` emphasis marks (:func:`strip_emphasis`), kept in :attr:`marked_text` for
+    automatic directing."""
 
     id: Identifier
     """Unique in the whole video (names audio/<id>.mp3); default <scene id>_b<n> (1-based)."""
     text: str = Field(min_length=1)
-    """What the narrator says; also the subtitle."""
+    """What the narrator says; also the subtitle. *word* stresses a word (its speaker gestures on it with auto_direct); the asterisks are not spoken or shown. [gasp] [hmm] [laugh] [sigh] [giggle] [groan] are voice sounds at that point (not shown)."""
+
+    _marked_text: str | None = PrivateAttr(default=None)
+    _voice_sounds: tuple[VoiceSound, ...] = PrivateAttr(default=())
+
+    @model_validator(mode="after")
+    def _take_out_marks(self) -> BeatConfig:
+        text, self._voice_sounds = take_out_sounds(self.text)
+        if not text.strip():
+            raise ValueError("text: has only voice sounds; a beat needs words to say besides [gasp], [laugh]...")
+        plain = strip_emphasis(text)
+        if plain != text:
+            self._marked_text = text
+        self.text = plain
+        return self
+
+    @property
+    def marked_text(self) -> str:
+        """The text with its ``*word*`` emphasis marks (voice sound markers taken out: the same
+        words as :attr:`text`)."""
+        return self._marked_text or self.text
+
+    @property
+    def voice_sounds(self) -> tuple[VoiceSound, ...]:
+        """The voice sounds of the text, each after its number of words of :attr:`text`."""
+        return self._voice_sounds
     actions: list[ActionConfig] = Field(default_factory=list)
     """Per-beat actions on the scene's targets (reveal, dim, highlight, ...), run during this beat."""
     voice: Identifier | None = None
     """Who says this beat: a name from voices (or default: the base voice); default the scene's voice."""
     sting: StingSetting | None = None
     """A short music sting on this beat: reveal, comic or sad, or {kind, at: start | end, gain}; ducked under the narration."""
+    auto_direct: AutoDirectSetting | None = None
+    """On a stage scene: automatic looks and reactions for this beat (true, false or {looks, reactions, gestures, closeups, effects}); default: the scene's, else the video's."""
+    shot: ShotConfig | None = Field(default=None, json_schema_extra=_shot_words_schema)
+    """On a stage scene: the camera's framing for this beat (wide, two_shot, medium KIT, over_shoulder KIT [NEAR], closeup KIT, or {kind, of, move, run_time}); a cut as the beat starts, back to the view before at the next beat without one."""
+    overlap: float | None = Field(default=None, ge=0)
+    """Seconds this beat starts before the previous beat's speech ends: both lines are heard (the earlier a little lower) and both mouths move; not on a scene's first beat."""
+    interrupt: bool = False
+    """This beat cuts the previous beat's line where it starts (a short fade; its mouth stops); starts overlap seconds (default 0.5) before that line's speech ends; not on a scene's first beat."""
+
+    @model_validator(mode="after")
+    def _check_interrupt(self) -> BeatConfig:
+        if self.interrupt and self.overlap == 0:
+            raise ValueError("interrupt: true with overlap: 0 cuts nothing; give the seconds it starts before the line ends (or leave overlap out: 0.5)")
+        return self
 
     def estimated_duration(self, words_per_second: float) -> float:
         """Speech duration estimated from the word count (no padding)."""
@@ -1336,9 +1666,11 @@ class SceneConfig(_Strict):
     music: bool | SceneMusic = True
     """Background music during this scene: false for none (it fades out before the scene and back in after it), or {volume: dB} to change its level here."""
     transition: TransitionSetting | None = None
-    """How the video passes into this scene from the one before: cut, crossfade, fade_color, push, wipe or {type, duration, color, direction, soft}; default the video's transition."""
+    """How the video passes into this scene from the one before: cut, crossfade, fade_color, push, wipe, iris_out, iris_in or {type, duration, color, direction, soft, character, at}; default the video's transition."""
     carry: CarrySetting = Field(default_factory=list)
     """Objects of the scene before that this scene starts with, where they were (a match cut): its target names, or 'NAME -> NAME' to move one into a target of this scene (default: the target of the same name)."""
+    set: Identifier | None = None
+    """A stage scene's set: a name from sets: whose params (background, layers, props, marks, light...) this scene starts from; its own params win."""
 
     @model_validator(mode="before")
     @classmethod
@@ -1365,6 +1697,9 @@ class SceneConfig(_Strict):
             raise ValueError("'duration' is only allowed on silent scenes (scenes without beats)")
         beat_ids = {beat.id for beat in self.beats}
         order = [beat.id for beat in self.beats]
+        if self.beats and (self.beats[0].overlap is not None or self.beats[0].interrupt):
+            key = "overlap" if self.beats[0].overlap is not None else "interrupt"
+            raise ValueError(f"beats[0] {key}: the first beat of scene '{self.id}' has no beat before it to overlap or interrupt (a scene's lines overlap only within the scene)")
         for j, beat in enumerate(self.beats):
             for action in beat.actions:
                 if action.until is not None and action.until not in order[j + 1 :]:
@@ -1403,6 +1738,10 @@ class VideoConfig(_Strict):
     """Final render resolution and frame rate."""
     preview: FormatConfig = Field(default_factory=_preview_format)
     """Resolution and frame rate of `vidgen render --preview`."""
+    include: Annotated[str, Field(min_length=1)] | list[Annotated[str, Field(min_length=1)]] = Field(default_factory=list)
+    """YAML / JSON files (relative to this file, e.g. cast.yaml or ../shared/sets.yaml) whose characters, voices and sets this config starts from; this config's own entries win (a character of the same name: its keys win)."""
+    sets: dict[Identifier, dict[str, Any]] = Field(default_factory=dict)
+    """Named stage sets (name: stage params such as background, layers, props, marks, light, wind, ground_color, width) that a stage scene uses with set: NAME and may override."""
     variants: dict[Identifier, dict[str, Any]] = Field(default_factory=dict)
     """Named overrides deep-merged onto this config (mappings merge, lists and scalars replace)."""
     theme: ThemeConfig = Field(default_factory=ThemeConfig)
@@ -1438,7 +1777,7 @@ class VideoConfig(_Strict):
     audio: AudioConfig = Field(default_factory=AudioConfig)
     """The final mix: loudness normalisation {normalize, target_lufs, true_peak}."""
     transition: TransitionSetting | None = None
-    """Default transition between scenes (cut, crossfade, fade_color, push, wipe or {type, duration, color, direction, soft}); a scene's transition wins."""
+    """Default transition between scenes (cut, crossfade, fade_color, push, wipe, iris_out, iris_in or {type, duration, color, direction, soft, character, at}); a scene's transition wins."""
     chapters: ChaptersConfig = Field(default_factory=ChaptersConfig)
     """What the render writes about the chapters: MP4 chapter entries, the YouTube list <output>_chapters.txt, the intro chapter at 0:00 {metadata, youtube, intro}."""
     metadata: MetadataConfig = Field(default_factory=MetadataConfig)
@@ -1452,9 +1791,17 @@ class VideoConfig(_Strict):
     cartoon_style: str | None = Field(default=None, min_length=1)
     """Style words added to every generate: prompt of stage scenes, so a cartoon's backgrounds look alike, e.g. "flat colours, thick outlines, soft shadows"; part of the picture's cache key."""
     foley: bool = True
-    """Sounds for the characters' actions on stage scenes: footsteps on walks, a whoosh on enter / exit, a boing on jump, a pop on a surprised face; false: none (a stage's foley param wins)."""
+    """Sounds for the characters' actions on stage scenes: footsteps on walks, a whoosh on enter / exit, a boing on jump, a pop on a surprised face, a sound with most effect symbols; false: none (a stage's foley param wins)."""
+    ambience: bool = True
+    """A sound bed chosen from each stage scene's set while foley is on: a room tone in a room, birdsong outdoors while the light is day or morning and it does not rain; false: none unless a stage's ambience param names one."""
+    auto_direct: AutoDirectSetting = False
+    """Automatic directing on stage scenes: listeners look at whoever speaks and react after lines (true, false or {looks, reactions, gestures, closeups, effects}); a stage's or a beat's setting wins; actions written in a beat always win."""
+    reframe: ReframeSetting | None = None
+    """On stage scenes wider than the frame (a 9:16 variant crops the landscape stage): speaker moves the camera to whoever speaks, easing between speakers and holding during short replies; none: only the beats' own pan / follow / zoom / shot move it; default: speaker when the characters do not fit in one view (a stage's reframe param wins)."""
     cartoon_motion: MotionSetting | None = None
     """Animation principles for every character (anticipation, squash and stretch, overshoot and settle, follow-through): lively, calm or none; a stage's or a character's own setting wins; default lively."""
+    motion_effects: bool = True
+    """Motion effects on stage scenes, added on their own while cartoon_motion is lively or calm (smaller): dust where a run sets off and stops and where a jump lands, speed lines behind runs, fast walks and thrown or blown props, impact stars on a hard landing, a whoosh arc on a big gesture; false: none (a stage's motion_effects param wins)."""
     scenes: list[SceneConfig] = Field(min_length=1)
     """The scenes in order (at least one); scene ids and beat ids must be unique."""
 
@@ -1462,8 +1809,9 @@ class VideoConfig(_Strict):
     @classmethod
     def _variants_cannot_nest(cls, value: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
         for name, override in value.items():
-            if "variants" in override:
-                raise ValueError(f"variant '{name}' must not contain 'variants'")
+            for key in ("variants", "include"):
+                if key in override:
+                    raise ValueError(f"variant '{name}' must not contain '{key}'")
         return value
 
     @field_validator("voices")
@@ -1506,6 +1854,11 @@ class VideoConfig(_Strict):
         return value
 
     @property
+    def include_files(self) -> list[str]:
+        """``include`` as a list (empty when unset)."""
+        return [self.include] if isinstance(self.include, str) else list(self.include)
+
+    @property
     def pronunciation_files(self) -> list[str]:
         """``pronunciation_file`` as a list (empty when unset)."""
         value = self.pronunciation_file
@@ -1535,9 +1888,10 @@ class VideoConfig(_Strict):
         if self.thumbnail is not None:
             problems += self.thumbnail_problems(self.thumbnail)
         first = self.scenes[0].transition
-        if first is not None and first.overlaps:
+        if first is not None and (first.overlaps or first.type == "iris_out"):
             problems.append(
-                f"scenes[0].transition: the first scene has no scene before it to {first.type} from (fade_color fades it in from a colour)"
+                f"scenes[0].transition: the first scene has no scene before it to {first.type} from "
+                "(fade_color fades it in from a colour, iris_in opens on it)"
             )
         if self.scenes[0].carry:
             problems.append("scenes[0].carry: the first scene has no scene before it to carry objects from")
@@ -1650,9 +2004,10 @@ def parse_config(data: Any, source: str = "video.yaml") -> VideoConfig:
         config = VideoConfig.model_validate(data)
     except ValidationError as exc:
         raise VidgenError(format_validation_error(exc, source, VideoConfig), problems=validation_problems(exc, model=VideoConfig, noun="key")) from None
+    from vidgen.includes import set_reference_problems
     from vidgen.voices import voice_provider_problems, voice_reference_problems
 
-    problems = voice_reference_problems(config) + voice_provider_problems(config)
+    problems = voice_reference_problems(config) + voice_provider_problems(config) + set_reference_problems(config)
     if problems:
         lines = [f"{source}: invalid config", *(f"  {problem}" for problem in problems)]
         raise VidgenError("\n".join(lines), problems=problems)

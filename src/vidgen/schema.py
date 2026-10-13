@@ -335,6 +335,9 @@ def _action_defs(actions: list[ActionType], tokens: dict[str, list[str]]) -> dic
         option_props = options.get("properties", {})
         required = list(options.get("required", []))  # options without a default (transform's into)
         keys = {key: {} for key in ACTION_KEYS}
+        target = copy.deepcopy(common["target"])
+        if entry.cls.number_target:  # the shorthand ``- wind: 0.6``
+            target = {"description": target.get("description", ""), "anyOf": [{"type": "number"}, *target["anyOf"]]}
         then: dict[str, Any] = {"properties": {**keys, **option_props}, "additionalProperties": False}
         if required:
             then["required"] = required
@@ -345,7 +348,7 @@ def _action_defs(actions: list[ActionType], tokens: dict[str, list[str]]) -> dic
                 "title": f"{entry.name} (shorthand)",
                 "type": "object",
                 "required": [entry.name, *required],
-                "properties": {entry.name: copy.deepcopy(common["target"]), **rest, **option_props},
+                "properties": {entry.name: target, **rest, **option_props},
                 "additionalProperties": False,
             }
         )

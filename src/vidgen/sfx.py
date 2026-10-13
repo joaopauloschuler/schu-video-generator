@@ -388,6 +388,154 @@ def _boing(s: Synth) -> np.ndarray:
     return tone * _decay(t, 0.003, 0.16 * scale)
 
 
+_RING_PARTIALS = ((1.0, 1.0, 1.0), (2.76, 0.5, 0.55), (5.4, 0.25, 0.3), (8.93, 0.1, 0.18))
+
+
+def _ring(s: Synth) -> np.ndarray:
+    # a bicycle bell, "ring-ring": two quick strikes of a small bright bell, its partials beating
+    scale = s.duration / 0.7
+    out = np.zeros(s.n)
+    for start in (0.0, 0.13):
+        k = int(start * scale * RATE)
+        out[k:] += _bell(s.n - k, 2350 * s.ratio, s.intensity, 0.22 * scale, _RING_PARTIALS)
+    return out * (1 + 0.25 * np.sin(2 * np.pi * 18 * s.t))
+
+
+def _engine(s: Synth) -> np.ndarray:
+    # a small engine starting and running: a buzzy low tone (firing pulses) revving up over the
+    # first fifth and settling, with a little rumble noise
+    u = s.u
+    rev = 1 + 0.55 * _bump(np.clip(u / 0.4, 0.0, 1.0), 0.5)
+    freq = 42 * s.ratio * rev
+    tone = _harmonic_tone(_tone(freq, s.n), 0.7 + 0.2 * s.intensity, 14, 0.7)
+    tone *= 1 + 0.35 * np.sin(_tone(freq / 2, s.n))   # uneven firing
+    rumble = _normalized(_filtered(s.rng.standard_normal(s.n), lambda f: _band(f, 180 * s.ratio, 1.2)))
+    body = _filtered(_normalized(tone) + 0.25 * rumble, lambda f: _lowpass(f, 1400 * s.ratio, 2))
+    return body * _fades(s.n, 0.06, 0.25)
+
+
+def _brakes(s: Synth) -> np.ndarray:
+    # brakes squealing to a stop: a thin tone near 2.1 kHz wavering and falling a little, over a
+    # soft scrape of noise, swelling and stopping short
+    u = s.u
+    freq = 2100 * s.ratio * (1 - 0.06 * u) * (1 + 0.012 * np.sin(2 * np.pi * 9 * s.t))
+    squeal = np.sin(_tone(freq, s.n)) + 0.3 * np.sin(2 * _tone(freq, s.n))
+    scrape = _normalized(_filtered(s.rng.standard_normal(s.n), lambda f: _band(f, 1500 * s.ratio, 1.0)))
+    return (squeal + (0.25 + 0.3 * s.intensity) * scrape) * _bump(u, 0.6) * _fades(s.n, 0.02, 0.04)
+
+
+def _burner(s: Synth) -> np.ndarray:
+    # a hot-air balloon's gas burner: a deep breathy roar (noise around 450 Hz, low-passed at
+    # 1.4 kHz) catching at once, fluttering a little at 9 Hz, held and dying away at the end
+    roar = _normalized(_filtered(s.rng.standard_normal(s.n), lambda f: _band(f, 450 * s.ratio, 1.6) * _lowpass(f, 1400 * s.ratio, 2)))
+    hiss = _normalized(_filtered(s.rng.standard_normal(s.n), lambda f: _band(f, 2600 * s.ratio, 0.8)))
+    flutter = 1 + 0.12 * np.sin(2 * np.pi * 9 * s.t)
+    return (roar + (0.08 + 0.12 * s.intensity) * hiss) * flutter * _fades(s.n, 0.03, 0.3)
+
+
+def _launch(s: Synth) -> np.ndarray:
+    # a toy rocket taking off: a soft low "whump" as it lights, then a fizzing hiss whose band
+    # climbs from ~1.5 to ~5 kHz with a crackle of tiny clicks, fading out as it flies away
+    t, u = s.t, s.u
+    whump = np.sin(_tone(75 * s.ratio * (1 + np.exp(-t / 0.04)), s.n)) * _decay(t, 0.002, 0.08)
+    fizz = _normalized(_sweep(s.rng.standard_normal(s.n), lambda v: 1500 * s.ratio * (5000 / 1500) ** v, 0.7))
+    crackle = np.where(s.rng.random(s.n) < 0.004, s.rng.standard_normal(s.n), 0.0)
+    crackle = _normalized(_filtered(crackle, lambda f: _band(f, 3500 * s.ratio, 1.0)))
+    body = (fizz + (0.2 + 0.3 * s.intensity) * crackle) * np.clip(u / 0.06, 0.0, 1.0) * (1 - u) ** 1.5
+    return 0.8 * whump + body
+
+
+def _phone(s: Synth) -> np.ndarray:
+    # a phone ringing, "brring-brring": a soft electronic trill (a tone flipping between ~1.1 and
+    # ~1.4 kHz 20 times a second) in two pulses, 0-42 % and 50-92 % of its length
+    t, u = s.t, s.u
+    flip = 0.5 + 0.5 * np.tanh(6.0 * np.sin(2 * np.pi * 20 * t))
+    phase = _tone(1100 * s.ratio * (1 + 0.27 * flip), s.n)
+    tone = np.sin(phase) + (0.15 + 0.3 * s.intensity) * np.sin(2 * phase)
+    edge = 0.02
+    gate = sum(np.clip((u - a) / edge, 0.0, 1.0) * np.clip((b - u) / edge, 0.0, 1.0) for a, b in ((0.0, 0.42), (0.5, 0.92)))
+    return tone * gate
+
+
+def _beep(s: Synth) -> np.ndarray:
+    # a friendly robot chirp, "bee-boop": two soft electronic notes (7 harmonics), ~1.3 kHz with a
+    # quick upward blip at its start, then ~880 Hz; the first 42 % and the last 52 % of the length
+    u = s.u
+    high = (u < 0.42).astype(float)
+    freq = s.ratio * np.where(u < 0.45, 1320.0 * (1 + 0.08 * np.exp(-s.t / 0.015)), 880.0)
+    tone = _harmonic_tone(_tone(freq, s.n), 0.35 + 0.2 * s.intensity, 7, 1.0)
+    edge = 0.03
+    gate = np.clip(u / edge, 0, 1) * np.clip((0.42 - u) / edge, 0, 1) * high + np.clip((u - 0.48) / edge, 0, 1) * np.clip((1.0 - u) / edge, 0, 1)
+    return tone * gate
+
+
+def _thunder(s: Synth) -> np.ndarray:
+    # thunder: a crack of bright noise at the start (stronger with intensity: a near strike), then
+    # a deep rumble (noise low-passed near 120 Hz) rolling in three to five seeded swells and dying
+    # away over the whole length
+    t, u = s.t, s.u
+    crack = _normalized(_filtered(s.rng.standard_normal(s.n), lambda f: _band(f, 1800 * s.ratio, 1.4))) * _decay(t, 0.002, 0.06)
+    rumble = _normalized(_filtered(s.rng.standard_normal(s.n), lambda f: _lowpass(f, 120 * s.ratio, 2) * _highpass(f, 28.0, 2)))
+    swells = np.zeros(s.n)
+    for _ in range(3 + int(s.rng.integers(0, 3))):
+        middle, width = s.rng.uniform(0.05, 0.6), s.rng.uniform(0.08, 0.25)
+        swells += s.rng.uniform(0.5, 1.0) * np.exp(-(((u - middle) / width) ** 2))
+    roll = (0.35 + swells) * np.clip(u / 0.03, 0.0, 1.0) * (1 - u) ** 1.2
+    return 1.6 * s.intensity * crack + rumble * roll
+
+
+def _creak(s: Synth) -> np.ndarray:
+    # a door's hinge creaking: stick-slip pulses whose rate glides from ~45 up to ~110 Hz and back
+    # to ~70 with a seeded wobble, each pulse ringing a wooden body (~550 Hz, ~1.3 kHz, ~2.6 kHz)
+    t, u = s.t, s.u
+    wobble = 1 + 0.1 * np.sin(2 * np.pi * 3.3 * t + s.rng.uniform(0, 2 * np.pi)) + 0.05 * np.sin(2 * np.pi * 7.9 * t + s.rng.uniform(0, 2 * np.pi))
+    rate = s.ratio * (45 + 65 * np.sin(np.pi * np.clip(u, 0, 1) ** 0.7) - 20 * u) * wobble
+    cycles = np.floor(np.cumsum(rate) / RATE)
+    pulses = np.zeros(s.n)
+    slips = np.nonzero(np.diff(cycles) > 0)[0] + 1
+    pulses[slips] = s.rng.uniform(0.6, 1.0, len(slips))
+    r = s.ratio
+    body = _filtered(pulses, lambda f: _band(f, 550 * r, 0.3) + 0.8 * _band(f, 1300 * r, 0.25) + (0.25 + 0.5 * s.intensity) * _band(f, 2600 * r, 0.25))
+    return body * _bump(u, 0.35)
+
+
+def _knock(s: Synth) -> np.ndarray:
+    # knock-knock-knock: three knuckle raps on a wooden door 190 ms apart, each a dull hollow
+    # thump (~190 and ~410 Hz, ringing ~30 ms) with a short bright tap (noise around 1.5 kHz)
+    scale = s.duration / 0.75
+    out = np.zeros(s.n)
+    for start, amp in ((0.0, 1.0), (0.19, 0.85), (0.38, 0.95)):
+        a = int(start * scale * RATE)
+        m = s.n - a
+        t = np.arange(m) / RATE
+        tap = _normalized(_filtered(s.rng.standard_normal(m), lambda f: _band(f, 1500 * s.ratio * 2 ** (s.intensity - 0.5), 0.8))) * _decay(t, 0.0003, 0.004)
+        thump = np.sin(_tone(190 * s.ratio * (1 + 0.15 * np.exp(-t / 0.006)), m)) * _decay(t, 0.0008, 0.035)
+        hollow = 0.5 * np.sin(_tone(410 * s.ratio, m)) * _decay(t, 0.0008, 0.02)
+        out[a:] += amp * (thump + hollow + (0.35 + 0.4 * s.intensity) * tap)
+    return out
+
+
+def _splash(s: Synth) -> np.ndarray:
+    # something dropping into water: a burst of bright noise (around 2.5 kHz, ~70 ms) with a low
+    # "plunk" gliding up from ~250 to ~600 Hz, then droplets falling back (tiny rising blips at
+    # 1-3 kHz, thinning out) and a fading fizz; intensity sets the burst against the droplets
+    t, u = s.t, s.u
+    scale = s.duration / 0.6
+    burst = _normalized(_filtered(s.rng.standard_normal(s.n), lambda f: _band(f, 2500 * s.ratio, 1.2) * _highpass(f, 300 * s.ratio, 2)))
+    burst *= _decay(t, 0.003, 0.07 * min(scale, 1.5))
+    plunk = np.sin(_tone(250 * s.ratio * (1 + 1.4 * (1 - np.exp(-t / 0.02))), s.n)) * _decay(t, 0.002, 0.05)
+    drops = np.zeros(s.n)
+    blip = int(0.03 * RATE)
+    for _ in range(int(18 * s.duration) + 4):
+        a = int(s.rng.uniform(0.04, 1.0) ** 1.5 * (s.n - blip))
+        tt = np.arange(blip) / RATE
+        f0 = s.rng.uniform(1000, 3000) * s.ratio
+        drops[a : a + blip] += s.rng.uniform(0.2, 1.0) * np.sin(_tone(f0 * (1 + 0.6 * tt / 0.03), blip)) * _decay(tt, 0.0005, 0.008)
+    fizz = _normalized(_filtered(s.rng.standard_normal(s.n), lambda f: _band(f, 4000 * s.ratio, 1.0))) * (1 - u) ** 2
+    impact = 0.35 + 1.3 * s.intensity
+    return impact * (burst + 0.4 * plunk) + 0.5 * drops + 0.12 * fizz
+
+
 def _harmonic_tone(phase: np.ndarray, brightness: np.ndarray | float, harmonics: int, tilt: float) -> np.ndarray:
     """A tone of ``harmonics`` partials of ``phase``: partial ``h`` at ``brightness ** (h - 1) /
     h ** tilt`` (brightness 0..1, constant or per sample: a brass or muted-horn timbre)."""
@@ -447,6 +595,32 @@ def _sting_sad(s: Synth) -> np.ndarray:
         bright = 0.2 + (0.3 + 0.25 * s.intensity) * opening
         out[a : a + m] += _harmonic_tone(_tone(freq_curve, m), bright, 10, 0.5) * _fades(m, 0.025, 0.4 if last else 0.06)
     return _filtered(out, lambda f: _lowpass(f, 3000 * s.ratio, 2))
+
+
+def _breath(s: Synth, formants: Sequence[tuple[float, float, float]], glide: float) -> np.ndarray:
+    """Breath noise through ``(Hz, octaves wide, amplitude)`` formants whose centres move by the
+    factor ``glide`` over the sound (a mouth shape rather than a pitch)."""
+    noise = s.rng.standard_normal(s.n)
+    out = np.zeros(s.n)
+    for freq, width, amplitude in formants:
+        band = _sweep(noise, lambda u, f=freq: f * s.ratio * glide**u, width)
+        out += amplitude * _normalized(band)
+    return out
+
+
+def _gasp(s: Synth) -> np.ndarray:
+    # a sharp breath in through an open mouth ("hah"): loudest after ~50 ms, cut off at the end
+    body = _breath(s, ((1100.0, 0.45, 1.0), (1750.0, 0.4, 0.7), (2900.0, 0.5, 0.35 + 0.3 * s.intensity)), 1.25)
+    return body * _bump(s.u, 0.12) ** 0.5
+
+
+def _sigh(s: Synth) -> np.ndarray:
+    # a long breath out ("haaah"): breathy noise of an open "ah" with a faint low hum falling
+    # from ~190 to ~130 Hz, swelling early and trailing off
+    body = _breath(s, ((750.0, 0.5, 1.0), (1200.0, 0.45, 0.6), (2600.0, 0.6, 0.15 + 0.2 * s.intensity)), 0.85)
+    hum = _harmonic_tone(_tone(190 * s.ratio * (130 / 190) ** s.u, s.n), 0.45, 6, 1.0)
+    hum = _filtered(hum, lambda f: _lowpass(f, 900 * s.ratio, 2))
+    return (body + 0.25 * _normalized(hum)) * _bump(s.u, 0.2)
 
 
 @dataclass(frozen=True)
@@ -543,6 +717,95 @@ BUILTIN_SOUNDS: dict[str, BuiltinSound] = {
             "A cartoon spring: a twangy tone gliding up from ~140 Hz to ~260 Hz with a fast 12 Hz "
             "wobble that dies away, decaying over about its length.",
             "a jump, a bounce, something springy (stage jumps play it: foley)",
+        ),
+        BuiltinSound(
+            "bell", _ring, 0.7, (0.3, 2.0),
+            "A bicycle bell, 'ring-ring': two quick strikes 130 ms apart of a small bright bell at "
+            "~2.35 kHz with inharmonic overtones, a fast shimmer, each ringing out in ~0.2 s.",
+            "a bicycle setting off (a stage's bicycle ride_to plays it: foley), a doorbell-like call",
+        ),
+        BuiltinSound(
+            "engine", _engine, 1.6, (0.5, 8.0),
+            "A small engine starting and running: a buzzy low tone (~42 Hz with many harmonics and "
+            "uneven firing pulses) revving up over the first fifth, settling, with a soft rumble "
+            "around 180 Hz; fades in and out.",
+            "a car or a bus setting off (a stage's ride_to plays it for most of the ride: foley)",
+        ),
+        BuiltinSound(
+            "brakes", _brakes, 0.5, (0.2, 1.5),
+            "Brakes squealing to a stop: a thin tone near 2.1 kHz wavering and falling a little, "
+            "over a soft scrape of noise, swelling and stopping short.",
+            "a vehicle stopping (a stage's ride_to plays it as the vehicle stops: foley)",
+        ),
+        BuiltinSound(
+            "burner", _burner, 1.2, (0.4, 4.0),
+            "A gas burner's roar: deep breathy noise around 450 Hz (low-passed at 1.4 kHz) with a "
+            "faint hiss near 2.6 kHz, catching at once, fluttering a little at 9 Hz, dying away "
+            "over the last 0.3 s.",
+            "a hot-air balloon rising (a stage's balloon ride_to plays it: foley), a gas flame",
+        ),
+        BuiltinSound(
+            "launch", _launch, 1.0, (0.4, 3.0),
+            "A toy rocket taking off: a soft low 'whump' (~75 Hz falling) as it lights, then a "
+            "fizzing hiss whose band climbs from ~1.5 to ~5 kHz with a crackle of tiny clicks, "
+            "fading out as it flies away.",
+            "a toy rocket or a firework launching (a stage's toy_rocket ride_to plays it: foley)",
+        ),
+        BuiltinSound(
+            "phone", _phone, 1.0, (0.4, 3.0),
+            "A phone ringing, 'brring-brring': a soft electronic trill (a tone flipping between ~1.1 "
+            "and ~1.4 kHz 20 times a second) in two pulses of about 0.4 s with a short gap.",
+            "a phone ringing (a stage's phone plays it at each burst of rings while it is on: foley)",
+        ),
+        BuiltinSound(
+            "thunder", _thunder, 3.0, (1.0, 8.0),
+            "Thunder: a crack of bright noise around 1.8 kHz at the start (stronger with intensity, "
+            "as from a near strike), then a deep rumble (noise below ~120 Hz) rolling in three to "
+            "five swells over the first 60% and dying away over its whole length.",
+            "a storm (a stage's lightning action and rain with lightning play it after the flash, "
+            "later, quieter, longer and lower the farther the strike: foley)",
+        ),
+        BuiltinSound(
+            "creak", _creak, 0.9, (0.3, 3.0),
+            "A door's hinge creaking: a rough, buzzy squeak of stick-slip pulses whose rate glides "
+            "from ~45 up to ~110 Hz and back to ~70 Hz with a wobble, coloured by a wooden body "
+            "(~550 Hz, ~1.3 kHz, ~2.6 kHz), swelling early and fading out.",
+            "a door opening or closing (a stage's open / close of a door and an enter / exit through "
+            "a closed one play it: foley), an old chair, a spooky moment",
+        ),
+        BuiltinSound(
+            "knock", _knock, 0.75, (0.3, 2.0),
+            "Knock-knock-knock: three knuckle raps on a wooden door 190 ms apart, each a dull hollow "
+            "thump (~190 and ~410 Hz, ringing ~30 ms) with a short bright tap around 1.5 kHz.",
+            "someone at the door (a stage's knock action plays it: foley)",
+        ),
+        BuiltinSound(
+            "splash", _splash, 0.6, (0.2, 3.0),
+            "Something dropping into water: a burst of bright noise around 2.5 kHz (~70 ms) with a "
+            "low 'plunk' gliding up from ~250 to ~600 Hz, then droplets falling back (tiny rising "
+            "blips at 1-3 kHz, thinning out) and a fading fizz; at low intensity mostly droplets.",
+            "water (a boat setting off, a watering can pouring, steps in puddles play it: foley), "
+            "something falling into a pond",
+        ),
+        BuiltinSound(
+            "gasp", _gasp, 0.35, (0.15, 1.0),
+            "A sharp breath in through an open mouth, 'hah': unvoiced breath noise in three bands "
+            "(~1.1, ~1.75 and ~2.9 kHz) rising a little, at its loudest after ~50 ms, held, then cut "
+            "off quickly at the end.",
+            "a character's surprise (a beat's [gasp] at the start or end of a line plays it)",
+        ),
+        BuiltinSound(
+            "sigh", _sigh, 0.9, (0.4, 2.5),
+            "A long breath out, 'haaah': breathy noise shaped like an open 'ah' (~750 Hz and "
+            "~1.2 kHz, falling a little) with a faint low hum gliding from ~190 to ~130 Hz, swelling "
+            "over the first fifth and trailing off.",
+            "tiredness, relief or giving up (a beat's [sigh] at the start or end of a line plays it)",
+        ),
+        BuiltinSound(
+            "beep", _beep, 0.4, (0.2, 1.2),
+            "A friendly robot chirp, 'bee-boop': two soft electronic notes, ~1.3 kHz (with a quick "
+            "upward blip as it starts) then ~880 Hz, the first 42% and the last 52% of its length.",
+            "a robot's voice sound (a beat's [beep] at the start or end of a line plays it), a gadget",
         ),
         BuiltinSound(
             "sting_reveal", _sting_reveal, 1.4, (0.6, 4.0),
