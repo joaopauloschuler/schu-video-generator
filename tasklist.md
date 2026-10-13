@@ -684,6 +684,70 @@ Phases H–K. Examples may now be up to 10 KB (owner, after Step 116).
 
 ---
 
+## Phase M — Housekeeping, a cartoon host, voices with feeling, drafts, sets, styles, dubbing
+
+Same rules as Phases H–L. The owner approved every item (after Step 130), including a full
+test-suite run.
+
+### Step 131 — Full test suite
+- [ ] Run the whole suite (owner asked), in file groups so each command stays under the memory cap and 300 s timeout (non-render groups, then render groups, one at a time); record every failure, its cause and the step that introduced it; fix them (code or out-of-date tests, with reasons); re-run the failing groups; record per-group times and the total in HANDOFF; flag tests slower than 10 s
+- [ ] Any test that cannot run here (missing optional extras, network) listed with the reason
+
+### Step 132 — Release 0.3.0
+- [ ] Version 0.3.0 everywhere it is stated (package metadata, `vidgen --version`, docs); `CHANGELOG.md` summarising 0.2.0 → 0.3.0 by theme (cartoons, characters, stages, acting, directing, screenplays, weather, sound, music, jobs, …) with breaking or behaviour changes listed first (e.g. default ambience, generated legs part, interrupt timing); wheel and sdist build, installed into a fresh venv, `vidgen --version` / `validate` / a tiny render there
+- [ ] `docs/WINDOWS-CHECK.md`: a short checklist for the owner to run on Windows (install, Kokoro extra, fonts, a preview render of a cartoon example, MiKTeX prompts), with what to report back; no tag, no push
+
+### Step 133 — A cartoon host for explainers, part 1: on any scene
+- [ ] `host:` (top level, per scene, or off) puts a character beside the content of any scene type (bullets, charts, code, diagrams, images…): a side and size, the content's layout region shrinks to make room (reuse regions / reserve), on a plain floor line or no floor; the narrator voice or the host's own voice speaks with lip sync; idle, blinks, expressions
+- [ ] Layout dump / lint know the host (no overlap with content, captions, overlays)
+- [ ] Tests: the region split, placement per format (16:9, 9:16, 1:1), lint
+
+### Step 134 — A cartoon host, part 2: pointing and reacting
+- [ ] The host points at any action target of the scene (`host_point: <target>`, the arm and a look turning to it; a gesture line or not), reacts (`host_react: happy`), walks to the other side between beats, enters / exits; `auto_direct` for hosts: look at what the narration highlights, point at a newly revealed item, react to results (a chart going up → happy), at most one move per beat
+- [ ] An example `examples/host-explainer/` (a short original explainer with a host)
+- [ ] Tests: pointing geometry to targets, planner rules
+
+### Step 135 — Voices with feeling, part 1: Kokoro
+- [ ] A line's manner (`emotion:` beat key; screenplay `(excited)` etc.) maps to prosody for Kokoro: speed, pitch shift (ffmpeg, formant-friendly within small ranges), energy (gain), pauses at commas; optional voice blending (`voice: af_heart+af_bella 0.6`) if Kokoro supports it; in the audio hash; documented emotion table
+- [ ] Tests: the mapping (pure), hash changes, a real Kokoro check in the Kokoro venv (durations / pitch measured)
+
+### Step 136 — Voices with feeling, part 2: other providers
+- [ ] The same `emotion:` becomes ElevenLabs v3 audio tags or voice settings (stability / style), and OpenRouter `instructions` text for models that take them; mocked; unchanged hashes without `emotion`
+- [ ] Tests: the mapping per provider (mocked requests)
+
+### Step 137 — Fast drafts
+- [ ] `vidgen render --draft`: low frame rate (~8 fps) and size (426x240), no idle / blink / wind / shadows / motion effects / particles / weather animation / flat lighting, timings unchanged; separate build folder and output name; measured speed-up on the cartoon examples
+- [ ] Tests: the draft settings, outputs never mixed with real renders
+
+### Step 138 — Animatic
+- [ ] `vidgen animatic`: storyboard stills (beat ends and half-way stills) timed to the narration (or word-count timing), with captions and audio, joined with ffmpeg only (no Manim); seconds to make; also an MCP tool
+- [ ] Tests: the still timing plan, a tiny animatic
+
+### Step 139 — Ready-made sets, part 1: outdoors
+- [ ] Built-in sets usable with `set: <name>` (like project `sets:`, overridable): `city_street` (shop fronts, streetlamp, bench, bus stop, a road), `park` (fountain, flowers, fence, path), `beach` (sea with waves using the water strip, sand, a beach umbrella, shells), `forest` (trees at depths, mushrooms, a log), `snowy_hills` (settled snow, pines); new props they need; matching light / ambience; a sets gallery still
+- [ ] Tests: each set builds, overrides work, marks sensible
+
+### Step 140 — Ready-made sets, part 2: indoors
+- [ ] `classroom` (blackboard, desks, chairs), `kitchen` (counter, fridge, kettle, table), `shop` (counter, shelves with goods, a till), `living_room`, `bedroom`; rooms with doors and windows; gallery still
+- [ ] Tests: each set builds, seats and lean points work
+
+### Step 141 — Flag badly spoken words
+- [ ] `vidgen readback` (optional faster-whisper extra) flags words recognised with low confidence or with unusual gaps, per beat, with timestamps and a suggestion (respell with pronunciation, change the voice / speed); `lint` can include it (`--readback`); JSON / MCP
+- [ ] Tests with mocked recognition results; PyAV 19 decoding handled (decode with ffmpeg)
+
+### Step 142 — Drawing style switch
+- [ ] `cartoon_style_draw:` (name to settle) per video: outline weight (thin / normal / bold), colour mode (flat / soft shading), texture (none / paper / storybook grain over the frame, seeded and static); applies to characters, props, sets; characters' look unchanged otherwise; gallery stills of each style
+- [ ] Tests: style parameters reach the drawings, texture deterministic, render cost measured
+
+### Step 143 — Dubbing
+- [ ] Translations (existing `translations`) for cartoons: per-language voices for each character (voice kind kept), lip sync from each language's audio, bubbles / captions / cards translated, timings per language (overlaps re-checked), one command renders every language; a translated example variant
+- [ ] Tests: per-language voice assignment, timing, lint per language
+
+### Step 144 — Review of Phase M
+- [ ] End to end: the host explainer example, a dubbed cartoon, drafts and animatics of two examples, sets and styles; real Kokoro narration with emotions on one example rendered at 720p and checked by eye; targeted tests, then the full suite again (owner asked in Step 131's phase); docs consistency; Phase M gaps moved to the Backlog
+
+---
+
 ## Backlog (after Step 60)
 
 Not done in the roadmap; each is one line, with where it came from. Bugs first, then quality,
