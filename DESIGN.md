@@ -132,8 +132,10 @@ src/vidgen/
                           # living_drawing.py (LivingProp, PropGlow, PropSteam, §69.54-55),
                           # nature.py (fruit spots, a dropped fruit's fall and bounce, flocks of
                           # birds, §69.55; no manim), nature_drawing.py (Flock, FallenFruit,
-                          # FruitDrop, hit_stars, §69.55); still.py also
-                          # draws the prop, furniture and vehicle galleries (§69.43), the look gallery
+                          # FruitDrop, hit_stars, §69.55), small_props.py (balloons floating away,
+                          # a pour's tilt and drops, §69.56; no manim), small_props_drawing.py
+                          # (Pouring, WaterFlow, WaterDrops, §69.56); still.py also
+                          # draws the prop, furniture, small-prop and vehicle galleries (§69.43), the look gallery
                           # (§69.47) and `vidgen character-sheet` (§69.16)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
@@ -917,6 +919,15 @@ Step 121 (§69.55) adds `FRUIT_INDEX`, `flame_shapes`, `on_spans`, `steam_puffs`
 `birds`; `Stage.flocks`, `.add_flock`, `.drop_fruit`, `.fruit_drop_seconds`; actions `drop_fruit`,
 `birds`; the ambience bed `fire`. Compatible: a scene without these renders as before, pixel for
 pixel.
+Step 122 (§69.56) adds `SMALL_PROPS`, `WATERING_SPOUT`, `OVERHEAD_PROPS`, `FULL_SIZE_HELD`,
+`FLOATING_PROPS`, `POURING_PROPS`, `POUR_SECONDS`, `Drop`, `float_end`, `float_point`,
+`float_seconds`, `pour_drops`, `pour_flow`, `pour_tilt`, `Pouring`, `WaterDrops`, `WaterFlow`,
+`RING_BURST`, `RING_PERIOD`, `RING_TILT`, `on_since`, `ring_burst`, `ring_bursts` and
+`ring_shake`; `PROP_KINDS` gains nine small props; `PROP_SHAPES` gains `book`, `letter`, `gift`;
+`SWITCHED_PROPS` / `LIVING_KINDS` gain `phone`; `LIGHT_PROPS` gains `letter`, `balloons`;
+`Prop.drawn_points`, `Prop.anchor`; `held_height(full_size=False)`; `holding_problems(kinds=None)`;
+`HANDLING_ACTIONS` gains `let_go`, `pour`; actions `let_go`, `pour`; built-in sound `phone`.
+Compatible: a scene without them renders as before (`props.png` is byte-identical).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -7503,7 +7514,7 @@ prop with more than one shape, and a prop held somewhere other than its middle.
   for `put_down` / `throw`), `pick_up` reaches for the grip when there is one (else the top).
   `Prop.feet()` of a prop with an anchor is the bottom edge below the anchor's origin (the tip or
   hook), the same for each shape, so opening on the ground does not slide it sideways.
-- **Overhead** (`cartoon/holding.py`): a prop showing an `OVERHEAD_SHAPES` shape (`open`) is held
+- **Overhead** (`cartoon/holding.py`): an `OVERHEAD_PROPS` prop (an umbrella; §69.56) showing an `OVERHEAD_SHAPES` shape (`open`) is held
   with the hand at `overhead_point(feet, height, facing)`, `OVERHEAD_FORWARD` 0.08 heights in
   front of the feet and `OVERHEAD_HAND` 0.6 above them, and is `OVERHEAD_HEIGHT` 0.85 of the
   holder tall (`held_height(..., overhead=True)`, not capped at 0.4). Measured on every body
@@ -8803,6 +8814,83 @@ seeded and pure (the same in every render) and nothing changes for a scene that 
   the crackle plays while the fireplace burns in the scene, also when the camera looks away; a
   carried kettle's steam keeps its draw-order place; no birdsong (Step 128); birds do not land or
   perch; a tree's fruit count is fixed (4). Tests: `tests/test_cartoon_fire_nature.py`.
+
+### 69.56 Everyday small props (Step 122)
+
+Nine small props to hold, give, open and set on a table, a phone that rings, balloons that float
+away and a watering can that pours. Original simple shapes in the theme's colours (fixed hex only
+where no token fits every theme: `CANDLE_FLAME`, `LIGHT_FLAME`, `PAPER`, `PAGE_TEXT`, `STEM`,
+`FLOWER_HEART`, `BALLOON_STRING`, a phone's dark case `#2B2F3A`).
+
+- **Props** (`cartoon/props.py`, `SMALL_PROPS`, in `PROP_KINDS` after `kettle`): `cake` 0.22 (two
+  tiers, icing, three candles; `accent` / `highlight`), `muffin` 0.08 (`secondary` top, `accent`
+  case), `book` 0.13 (`primary` / `highlight`), `phone` 0.13, `letter` 0.08 (`PAPER` / `accent`),
+  `gift` 0.2 (`primary` / `highlight`), `balloons` 1.1 (three on strings tied to a weight;
+  `accent`, `highlight` and a lighter `accent`), `vase` 0.32 (`primary` vase, `accent` flowers),
+  `watering_can` 0.22 (`tertiary` / `highlight`). `book`, `letter` and `gift` have the shapes
+  `closed` / `open` (`PROP_SHAPES`, §69.37's live copies, both shapes one prop unit tall), so the
+  `open` / `close` actions and `open: true` work on them unchanged; each shape has its own
+  members. Grips (`PROP_GRIPS`): balloons by `BALLOON_KNOT` (0, 0.07), the strings' end above the
+  weight; a watering can by `WATERING_GRIP` (−0.05, 0.75), the top of its handle;
+  `WATERING_SPOUT` (0.7, 0.64) is the rose.
+- **Held** (`cartoon/holding.py`, `scenes/handling.py`): `OVERHEAD_PROPS` = {umbrella}: only an open
+  umbrella goes overhead (`is_overhead` checks the kind too), an open book, letter or gift stays at
+  the hold point. `FULL_SIZE_HELD` = {balloons}: `held_height(..., full_size=True)` keeps their size
+  (not `HOLD_MAX_HEIGHT`), and they are drawn right before the holder (behind the head, like an
+  overhead umbrella). `_moving_block` now also takes the props held right *before* a walker (an
+  overhead umbrella, balloons), so they keep their place when it walks in depth.
+- **A ringing phone** (`cartoon/living.py`, `living_drawing.py`): `phone` is in `SWITCHED_PROPS`;
+  on = ringing. Drawn `living`, it gets a lit screen (`LIT_SCREEN`, a caller's head and shoulders;
+  `LIVING_PART` `screen`, never graded) and four amber ring lines (`RING_LINE` `#E8A33D`, two each
+  side about `PHONE_CENTRE`, `ring`). `on_since(on, switches, t)` is when the current on span
+  began; `ring_burst(t, since)`: a burst of `RING_BURST` 1 s every `RING_PERIOD` 2 s;
+  `ring_shake(t, since)` = `RING_TILT` 10° × sin(2π × 13 Hz) eased over 0.08 s at both ends of a
+  burst, 0 between. `LivingProp` keeps the phone's whole drawing (every member with points but the
+  anchor) in prop units (`Prop.drawn_points`, the inverse of `prop_points`) and redraws it turned
+  about `PHONE_CENTRE` through the anchor on every frame while it rings (absolute, so a held phone
+  or a `PropMove` never accumulates a turn); its `movers` are the whole drawing, its `region` the
+  box grown by sin 10° of its height. `Stage._ring_sounds` (after `finish`, with foley) records a
+  `phone` sound (`PHONE_RING_GAIN` −6 dB) at each `ring_bursts(on_spans(...))`; switching a phone
+  on plays no `click` (switching it off does).
+- **Balloons let go** (`cartoon/small_props.py`, no manim): `FLOATING_PROPS` = {balloons}.
+  `float_end(start, top, force)`: up to `top` (the stage's top + the prop's height + 0.3) and
+  `FLOAT_DRIFT` 0.6 × force sideways per unit risen (force: the felt wind now, `felt_force`);
+  `float_progress(share)` speeds up from rest over `FLOAT_SPEED_UP` 0.25 then rises evenly;
+  `float_point(share, start, end, seed)` adds a seeded sway (`FLOAT_SWAY` 0.12 units, 2 swings,
+  none at the ends) and a lean of up to `FLOAT_LEAN` 8°; `float_seconds(rise)` = rise / 1.6 × 1.25,
+  1–6 s. The `let_go` action (character target, `prop`) releases the prop, brings the arm back
+  (`LET_GO_ARM_SHARE` 0.3) and plays `PropMove(path=float_point)`; the prop is detached and stays
+  above the frame.
+- **Pouring** (`small_props.py`, `small_props_drawing.py`): `POURING_PROPS` = {watering_can}.
+  `pour_tilt(share)`: 0 → 1 → 0 of `POUR_TILT` 40°, cosine ramps over `POUR_RAMP` 0.2 at each end;
+  `pour_flow(seconds)`: the water runs while the tilt is past `POUR_FLOWS` 0.7; `pour_drops(t,
+  flow, spout, ground, height, direction, seed)`: `DROP_RATE` 22 drops a second, each thrown
+  forward `DROP_AHEAD` 0.35 heights/s, falling at `DROP_GRAVITY` 4 heights/s², radius 0.012 heights
+  (± 30 % seeded), kept while above the ground. The `pour` action (character target, `prop`,
+  `POUR_SECONDS` 2 s) plays `Pouring` (the can redrawn from its starting points turned about its
+  grip, clockwise when the spout points right, the grip at the hand every frame) and `WaterFlow` on
+  a `WaterDrops` (40 discs, `#8FD3F4` edged `#3E86B5`, graded) inserted right after the can and
+  removed when the flow ends (`remover`). The layout dump leaves `WaterDrops` out.
+- **Validate**: `holding_problems(kinds=)` (prop → kind): `let_go` needs a held prop that floats
+  (else "'cake' does not float away ...; put_down it instead") and makes it gone for the scene
+  (a later pick_up, open, ... is reported); `pour` needs a held prop that pours. Each action's
+  `prop` option is checked against the kinds in `scene_problems`. `LIGHT_PROPS` gains `letter` and
+  `balloons`.
+- **Sound** (`sfx.py`): built-in `phone` (1 s, 0.4–3): a tone flipping between ~1.1 and ~1.4 kHz
+  20 times a second in two pulses (0–42 % and 50–92 %). Step 128's phone ring may refine it.
+- **Gallery**: `write_props_png` leaves `SMALL_PROPS` out by default (`props.png` byte-identical);
+  `write_props_png(..., kinds=SMALL_PROPS, columns=4)` → `docs/gallery/media/small_props.png`
+  (960×540, 21 KB), in CONFIG.md "Everyday small props".
+- **Checked by eye** (scratch `s122/yard`, storyboard and preview frames): a cake held, then put
+  down; a muffin, phone, book and vase on a table; the phone ringing (tilts, ring lines, lit
+  screen) and picked up; held balloons behind the head, floating away with a breeze; a gift
+  picked up and opened in the hand; a watering can held, tilted, drops falling; a book picked up
+  from the table and opened in front of the reader.
+- **Not done**: no splash or watering sound (Step 128); drops do not wet or grow anything; a phone
+  is answered with `switch_off` (no `answer` action, no voice in the handset); balloons let go are
+  gone for the scene; a held prop is not mirrored when its holder turns (§69.27), so a can held
+  by a character that turned pours the way its spout points. Tests:
+  `tests/test_cartoon_small_props.py`.
 
 ## 70. Render jobs: `--jobs auto` (Step 117)
 

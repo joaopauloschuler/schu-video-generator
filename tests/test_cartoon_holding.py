@@ -334,7 +334,7 @@ def test_validate_open_and_close(make_project) -> None:
     bad = prop_project(make_project, [{"text": "Hello.", "actions": [{"open": "tree"}, {"close": "pip"}, {"open": "kite"}]}], props)
     problems = check_project(bad)
     where = "scenes[0].beats[0].actions"
-    assert f"{where}[0].target: 'tree' cannot open (props that can: door, umbrella)" in problems
+    assert f"{where}[0].target: 'tree' cannot open (props that can: book, door, gift, letter, umbrella)" in problems
     assert f"{where}[1].target: 'pip' is not a prop; close acts on props (- close: <prop>)" in problems
     assert any(p.startswith(f"{where}[2].target: unknown target 'kite'") for p in problems), problems
 

@@ -316,7 +316,7 @@ def test_validate_blow_away(make_project) -> None:
     bad = prop_project(make_project, [{"text": "Hello.", "actions": [{"wind": "gale"}, {"blow_away": "tree"}, {"blow_away": "pip"},
                                                                      {"blow_away": "napkin", "to": "nowhere"}]}], props)
     problems = check_project(bad)
-    assert f"{where}[1].target: 'tree' (tree) is too heavy to blow away (props that can: ball, basket, box, cup, napkin, umbrella, or an svg prop)" in problems
+    assert f"{where}[1].target: 'tree' (tree) is too heavy to blow away (props that can: ball, balloons, basket, box, cup, letter, napkin, umbrella, or an svg prop)" in problems
     assert f"{where}[2].target: 'pip' is not a prop; blow_away acts on props (- blow_away: <prop>)" in problems
     assert any(p.startswith(f"{where}[3].to: unknown mark 'nowhere'") for p in problems), problems
     held = prop_project(make_project, [

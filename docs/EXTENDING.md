@@ -284,6 +284,12 @@ Nature (DESIGN.md §69.55): `draw_prop("tree", ..., fruit=True)` tags each fruit
 `FRUIT_INDEX`; `Stage.drop_fruit(tree, onto)` returns a `FruitDrop` (a `PropMove` of a
 `FallenFruit` along `drop_point`, its `lands_at` the thud); `Stage.add_flock(settings, start)`
 puts a `Flock` (`flock_plan`, `bird_place`) in the sky.
+Small props (DESIGN.md §69.56): `SMALL_PROPS`; a `phone` drawn `living` rings while on
+(`LivingProp` redraws its whole drawing turned by `ring_shake(t, on_since(...))`; `ring_bursts`
+gives the times of the `phone` sounds). Balloons float with `PropMove(..., path=lambda u, a, b:
+float_point(u, a, b, seed=s))` to `float_end(start, top, force)`; a watering can pours with
+`Pouring(prop, follow=, spout=)` and `WaterFlow(WaterDrops(name=...), spout=, direction=, ground=,
+height=)` (`pour_tilt`, `pour_drops`; `prop.prop_point(*WATERING_SPOUT)` is the spout).
 `character(name)` breathes, sways its head and blinks on its own (unless `idle: false`):
 `stop_idle()` / `start_idle(seed=None)` turn that off and on; a blink never shows during a
 `PoseChange`. Before drawing your own scene for characters on a set, check whether the built-in

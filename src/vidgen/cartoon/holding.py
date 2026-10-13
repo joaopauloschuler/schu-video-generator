@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from vidgen.cartoon.seating import LEAN_REACH, SIT_REACH, PostureError, Postures
+from vidgen.cartoon.small_props import FLOATING_PROPS, POURING_PROPS
 from vidgen.cartoon.stage import depth_scale, facing_sign, walk_destination
 from vidgen.cartoon.vehicles import GET_IN_REACH, get_in_gap, medium, seat_count
 
@@ -68,14 +69,21 @@ THROW_SPIN = 1
 THROW_FLIGHT_MIN = 0.45
 THROW_FLIGHT_PER_UNIT = 0.06
 THROW_FLIGHT_MAX = 1.6
-#: The actions that hand props around or take one out of a hand (``blow_away``, DESIGN.md §69.32).
-HANDLING_ACTIONS: frozenset[str] = frozenset({"pick_up", "hold", "put_down", "give", "throw", "blow_away"})
+#: The actions that hand props around, use one in a hand (``pour``) or take one out of a hand
+#: (``blow_away``, DESIGN.md §69.32; ``let_go``, §69.56).
+HANDLING_ACTIONS: frozenset[str] = frozenset({"pick_up", "hold", "put_down", "give", "throw", "blow_away", "let_go", "pour"})
 #: A prop showing one of these shapes (an open umbrella) is held overhead (DESIGN.md §69.37): the
 #: hand ``OVERHEAD_FORWARD`` of its holder's heights in front of the feet and ``OVERHEAD_HAND``
 #: above them (where every generated look's arm reaches, or nearly), the prop
 #: ``OVERHEAD_HEIGHT`` holder heights tall (not :data:`HOLD_MAX_HEIGHT`), so an umbrella's canopy
 #: is above the head of every generated look and wide enough to cover it.
 OVERHEAD_SHAPES: frozenset[str] = frozenset({"open"})
+#: The props held overhead in an :data:`OVERHEAD_SHAPES` shape (an open book, letter or gift is
+#: held in front like any prop, DESIGN.md §69.56).
+OVERHEAD_PROPS: frozenset[str] = frozenset({"umbrella"})
+#: Props held at their full size, not made smaller than :data:`HOLD_MAX_HEIGHT` (balloons rise
+#: above the hand on their strings).
+FULL_SIZE_HELD: frozenset[str] = frozenset({"balloons"})
 OVERHEAD_FORWARD = 0.08
 OVERHEAD_HAND = 0.6
 OVERHEAD_HEIGHT = 0.85
@@ -175,13 +183,13 @@ def hold_point(shoulder: Sequence[float], height: float, facing: str) -> tuple[f
     return float(shoulder[0]) + ahead, float(shoulder[1]) - HOLD_DROP * height
 
 
-def held_height(height_factor: float, holder_height: float, *, overhead: bool = False) -> float:
+def held_height(height_factor: float, holder_height: float, *, overhead: bool = False, full_size: bool = False) -> float:
     """How tall a prop is in a hand: its height next to the holder (``height_factor`` of the
-    holder's height), at most :data:`HOLD_MAX_HEIGHT` of it; held ``overhead``:
-    :data:`OVERHEAD_HEIGHT` of it."""
+    holder's height), at most :data:`HOLD_MAX_HEIGHT` of it unless ``full_size``
+    (:data:`FULL_SIZE_HELD`); held ``overhead``: :data:`OVERHEAD_HEIGHT` of it."""
     if overhead:
         return OVERHEAD_HEIGHT * holder_height
-    return min(height_factor, HOLD_MAX_HEIGHT) * holder_height
+    return (height_factor if full_size else min(height_factor, HOLD_MAX_HEIGHT)) * holder_height
 
 
 def overhead_point(feet: Sequence[float], height: float, facing: str) -> tuple[float, float]:
@@ -356,6 +364,7 @@ def holding_problems(
     depths: Mapping[str, float] | None = None,
     vehicles: Mapping[str, tuple[str, float]] | None = None,
     water: tuple[float, float] | None = None,
+    kinds: Mapping[str, str | None] | None = None,
 ) -> list[tuple[str, str]]:
     """Replay a stage scene's actions (``steps`` in play order) through :class:`Holdings`,
     :class:`~vidgen.cartoon.seating.Postures` and the characters' positions; ``(location,
@@ -380,7 +389,10 @@ def holding_problems(
     stand up before it gets out, and a vehicle cannot be picked up or moved by keys while ridden.
     ``water``: the x (Manim units) from and to which the stage's water goes (DESIGN.md §69.53): a
     boat rides there only; only vehicles on the ground ride in depth; a balloon or a toy rocket
-    that flies away (``land: false``) is gone for the scene with its riders."""
+    that flies away (``land: false``) is gone for the scene with its riders. ``kinds``: prop ->
+    its built-in kind (``None``: an SVG prop; DESIGN.md §69.56): ``let_go`` needs a held prop that
+    floats (:data:`~vidgen.cartoon.small_props.FLOATING_PROPS`), which is then gone for the scene;
+    ``pour`` needs a held one that pours (:data:`~vidgen.cartoon.small_props.POURING_PROPS`)."""
     holdings = Holdings()
     postures = Postures()
     where = _Positions(
@@ -411,11 +423,10 @@ def holding_problems(
         return f"{users[0]} {verb} on '{prop}' then; stand_up first (- stand_up: {users[0]})"
 
     def blown_off(prop: str) -> str | None:
-        if prop not in gone:
-            return None
-        return f"'{prop}' blew away off stage ({gone[prop]}); blow it to: a mark instead to use it again"
+        return gone.get(prop)
 
-    #: props a ``blow_away`` without ``to`` took off stage -> where that action is
+    #: props a ``blow_away`` without ``to`` took off stage or a ``let_go`` floated away -> why
+    #: they cannot be used any more
     gone: dict[str, str] = {}
     #: vehicles that flew away out of the frame, and their riders -> where that ride is
     flown: dict[str, str] = {}
@@ -534,6 +545,18 @@ def holding_problems(
                     where.x[prop] = spot
                     if who in where.depth:
                         where.depth[prop] = where.depth[who]
+                elif step.action in ("let_go", "pour"):
+                    prop, _ = holdings.held_prop(who, o.get("prop"))
+                    kind = (kinds or {}).get(prop)
+                    if step.action == "let_go" and kind not in FLOATING_PROPS:
+                        problems.append((f"{step.location}.target", f"'{prop}' does not float away (props that do: "
+                                         f"{', '.join(sorted(FLOATING_PROPS))}); put_down it instead (- put_down: {who})"))
+                    elif step.action == "let_go":
+                        holdings.release(who, prop)
+                        gone[prop] = f"'{prop}' floated away out of the frame ({step.location}); it is gone for the scene"
+                    elif kind not in POURING_PROPS:
+                        problems.append((f"{step.location}.target", f"'{prop}' does not pour (props that do: "
+                                         f"{', '.join(sorted(POURING_PROPS))}); {who} must hold one"))
             except (HoldingError, PostureError) as exc:
                 key = "prop" if step.action in ("put_down", "throw", "give") and o.get("prop") is not None else "target"
                 problems.append((f"{step.location}.{key}", str(exc)))
@@ -549,7 +572,7 @@ def holding_problems(
                 holdings.drop(prop)
                 where.x[prop] = place_x(o["to"]) if o.get("to") is not None else None
                 if o.get("to") is None:
-                    gone[prop] = step.location
+                    gone[prop] = f"'{prop}' blew away off stage ({step.location}); blow it to: a mark instead to use it again"
             elif step.action in ("move_along", "keyframes") and holder is not None:
                 problems.append((f"{step.location}.target", f"'{prop}' is held by {holder[0]} then; put_down or throw it first"))
             elif step.action in ("move_along", "keyframes") and in_use(prop) is not None:

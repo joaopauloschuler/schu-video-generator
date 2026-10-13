@@ -445,6 +445,18 @@ def _launch(s: Synth) -> np.ndarray:
     return 0.8 * whump + body
 
 
+def _phone(s: Synth) -> np.ndarray:
+    # a phone ringing, "brring-brring": a soft electronic trill (a tone flipping between ~1.1 and
+    # ~1.4 kHz 20 times a second) in two pulses, 0-42 % and 50-92 % of its length
+    t, u = s.t, s.u
+    flip = 0.5 + 0.5 * np.tanh(6.0 * np.sin(2 * np.pi * 20 * t))
+    phase = _tone(1100 * s.ratio * (1 + 0.27 * flip), s.n)
+    tone = np.sin(phase) + (0.15 + 0.3 * s.intensity) * np.sin(2 * phase)
+    edge = 0.02
+    gate = sum(np.clip((u - a) / edge, 0.0, 1.0) * np.clip((b - u) / edge, 0.0, 1.0) for a, b in ((0.0, 0.42), (0.5, 0.92)))
+    return tone * gate
+
+
 def _harmonic_tone(phase: np.ndarray, brightness: np.ndarray | float, harmonics: int, tilt: float) -> np.ndarray:
     """A tone of ``harmonics`` partials of ``phase``: partial ``h`` at ``brightness ** (h - 1) /
     h ** tilt`` (brightness 0..1, constant or per sample: a brass or muted-horn timbre)."""
@@ -659,6 +671,12 @@ BUILTIN_SOUNDS: dict[str, BuiltinSound] = {
             "fizzing hiss whose band climbs from ~1.5 to ~5 kHz with a crackle of tiny clicks, "
             "fading out as it flies away.",
             "a toy rocket or a firework launching (a stage's toy_rocket ride_to plays it: foley)",
+        ),
+        BuiltinSound(
+            "phone", _phone, 1.0, (0.4, 3.0),
+            "A phone ringing, 'brring-brring': a soft electronic trill (a tone flipping between ~1.1 "
+            "and ~1.4 kHz 20 times a second) in two pulses of about 0.4 s with a short gap.",
+            "a phone ringing (a stage's phone plays it at each burst of rings while it is on: foley)",
         ),
         BuiltinSound(
             "gasp", _gasp, 0.35, (0.15, 1.0),

@@ -12,7 +12,8 @@ bottom edge, so a stage places it like a character (``stage_layout``). A door an
 drawn in two shapes, closed and open (:data:`PROP_SHAPES`, :meth:`Prop.show_shape`); a basket and an open
 umbrella are held by a grip (:data:`PROP_GRIPS`, :meth:`Prop.grip_point`), DESIGN.md §69.37.
 The :data:`FURNITURE` furnishes a room (§69.43); a picture and a clock hang on its wall
-(:data:`PROP_HANGS`).
+(:data:`PROP_HANGS`). The :data:`SMALL_PROPS` are everyday things to hold (§69.56): a book, a
+letter and a gift open too.
 """
 
 from __future__ import annotations
@@ -76,11 +77,13 @@ FURNITURE: tuple[str, ...] = (
     "sofa", "armchair", "bed", "bookshelf", "counter", "fridge", "picture", "rug", "houseplant", "clock", "tv", "desk",
     "fireplace",
 )
+#: The everyday small props (DESIGN.md §69.56): things to hold, give, open and put on a table.
+SMALL_PROPS: tuple[str, ...] = ("cake", "muffin", "book", "phone", "letter", "gift", "balloons", "vase", "watering_can")
 #: The built-in props.
 PROP_KINDS: tuple[str, ...] = (
     "table", "chair", "tree", "bush", "house", "door", "lamp", "sign", "box",
     "ball", "cloud", "sun", "moon", "rock", "plant", "laptop", "cup", "basket", "umbrella", "napkin", "kettle",
-    *FURNITURE, *VEHICLE_KINDS,
+    *SMALL_PROPS, *FURNITURE, *VEHICLE_KINDS,
 )
 #: Each prop's height relative to a character's (the stage's ``size``) before its own ``scale``.
 PROP_HEIGHTS: dict[str, float] = {
@@ -89,6 +92,8 @@ PROP_HEIGHTS: dict[str, float] = {
     "plant": 0.4, "laptop": 0.14, "cup": 0.09, "basket": 0.2, "umbrella": 0.6, "napkin": 0.05,
     "sofa": 0.36, "armchair": 0.38, "bed": 0.34, "bookshelf": 0.9, "counter": 0.5, "fridge": 0.95,
     "picture": 0.3, "rug": 0.06, "houseplant": 0.75, "clock": 0.2, "tv": 0.55, "desk": 0.42, "fireplace": 0.75, "kettle": 0.15,
+    "cake": 0.22, "muffin": 0.08, "book": 0.13, "phone": 0.13, "letter": 0.08, "gift": 0.2, "balloons": 1.1, "vase": 0.32,
+    "watering_can": 0.22,
     **{kind: spec.height for kind, spec in VEHICLES.items()},
 }
 #: Props that hang on a wall: how far their bottom edge is above the floor, in the heights of a
@@ -98,12 +103,23 @@ PROP_HANGS: dict[str, float] = {"picture": 0.5, "clock": 0.85}
 FLAT_PROPS: frozenset[str] = frozenset({"rug"})
 #: Props drawn in more than one shape: kind -> its shape names, the first drawn unless the stage
 #: asks for another (``open: true``); the ``open`` / ``close`` actions switch them.
-PROP_SHAPES: dict[str, tuple[str, ...]] = {"door": ("closed", "open"), "umbrella": ("closed", "open"), "toy_rocket": ("folded", "chute")}
+PROP_SHAPES: dict[str, tuple[str, ...]] = {
+    "door": ("closed", "open"), "umbrella": ("closed", "open"), "toy_rocket": ("folded", "chute"),
+    "book": ("closed", "open"), "letter": ("closed", "open"), "gift": ("closed", "open"),
+}
+#: Where a balloons' strings meet (prop units): a hand holds them there, just above the weight.
+BALLOON_KNOT = (0.0, 0.07)
+#: A watering can's grip (the top of its handle) and the middle of its spout's rose (prop units, as
+#: drawn facing right): the ``pour`` action tilts it about the grip, the water leaves the rose.
+WATERING_GRIP = (-0.05, 0.75)
+WATERING_SPOUT = (0.7, 0.64)
 #: Where a hand holds a prop, in prop units as drawn facing right, per (kind, shape) (``None``: a
 #: prop with one shape); a prop or shape not listed is held by its middle. A basket hangs from
-#: its handle; an open umbrella is held by its shaft above the hook.
+#: its handle; an open umbrella is held by its shaft above the hook; balloons by their strings, a
+#: watering can by its handle.
 PROP_GRIPS: dict[tuple[str, str | None], tuple[float, float]] = {
     ("basket", None): (0.0, 0.94), ("umbrella", "open"): (0.0, 0.16),
+    ("balloons", None): BALLOON_KNOT, ("watering_can", None): WATERING_GRIP,
 }
 #: Height of an SVG prop relative to a character's, before its own ``scale``.
 SVG_PROP_HEIGHT = 0.5
@@ -125,6 +141,9 @@ PROP_COLORS: dict[str, tuple[str, str]] = {
     "picture": ("secondary", "primary"), "rug": ("accent", "highlight"), "houseplant": ("tertiary", "secondary"),
     "clock": ("#F4F6FA", "secondary"), "tv": ("secondary", "primary"), "desk": ("secondary", "accent"),
     "fireplace": ("dim", "secondary"), "kettle": ("accent", "dim"),
+    "cake": ("accent", "highlight"), "muffin": ("secondary", "accent"), "book": ("primary", "highlight"),
+    "phone": ("#2B2F3A", "primary"), "letter": ("#FBF8EF", "accent"), "gift": ("primary", "highlight"),
+    "balloons": ("accent", "highlight"), "vase": ("primary", "accent"), "watering_can": ("tertiary", "highlight"),
     "bicycle": ("primary", "accent"), "car": ("accent", "highlight"), "bus": ("highlight", "primary"),
     "boat": ("highlight", "accent"), "hot_air_balloon": ("accent", "secondary"), "toy_rocket": ("primary", "accent"),
 }
@@ -137,6 +156,16 @@ TV_CASE = "#2B2F3A"
 #: A fireplace's sooty hollow and its logs (fixed: dark and wooden in every theme).
 HEARTH_HOLLOW = "#2A1F1C"
 LOG_WOOD = "#7A4E2D"
+#: Small props (DESIGN.md §69.56), fixed where no theme token fits every theme: a candle's flame
+#: and its bright core, a page and the lines written on it, green stems and leaves, a flower's heart.
+CANDLE_FLAME = "#FFB547"
+LIGHT_FLAME = "#FFF1B8"
+PAPER = "#FBF8EF"
+PAGE_TEXT = "#8A8F99"
+STEM = "#4E8A3E"
+FLOWER_HEART = "#F6C945"
+#: Balloon strings: a mid grey that shows on light and dark backgrounds.
+BALLOON_STRING = "#9AA0AA"
 #: The attribute giving a tree's fruit member the index of its spot (:data:`FRUIT_SPOTS`).
 FRUIT_INDEX = "fruit_index"
 #: How much a shade darkens (towards black) or lightens (towards white) a colour.
@@ -326,6 +355,20 @@ class Prop(VGroup):
         placed = apply_matrix(anchor_placement(self._anchor), np.asarray(points, dtype=float))
         placed[:, 2] = 0.0
         return placed
+
+    def drawn_points(self, points: np.ndarray) -> np.ndarray:
+        """The inverse of :meth:`prop_points`: ``points`` on screen now (n x 3) in prop units as
+        drawn facing right (n x 3, z 0)."""
+        if self._anchor is None:
+            raise VidgenError(f"prop '{self.name}' has no anchor to place points by")
+        drawn = apply_matrix(np.linalg.inv(anchor_placement(self._anchor)), np.asarray(points, dtype=float))
+        drawn[:, 2] = 0.0
+        return drawn
+
+    @property
+    def anchor(self) -> VMobject | None:
+        """Its invisible anchor (``None``: it has none), which maps prop units to the screen."""
+        return self._anchor
 
     @property
     def unit(self) -> float:
@@ -686,6 +729,195 @@ def _kettle(p: _Paint) -> list[VMobject]:
     ]
 
 
+# ----- everyday small props (DESIGN.md §69.56) ----------------------------------------------------
+
+
+def _icing(left: float, right: float, top: float, drip: float, p: _Paint) -> VMobject:
+    """A band of white icing on a cake's tier: flat at ``top``, its lower edge dripping down to
+    ``drip`` every other step."""
+    steps = 10
+    edge = [(right - (right - left) * k / steps, top - 0.05 - (drip if k % 2 else 0.0)) for k in range(steps + 1)]
+    return _poly([(left, top), (right, top), *edge], CLOTH, p, round_by=0.015)
+
+
+def _cake(p: _Paint) -> list[VMobject]:
+    """A two-tier cake on a plate, icing dripping down each tier, three candles alight."""
+    candles = (-0.2, 0.0, 0.2)
+    return [
+        _rect(-0.2, 0.0, 0.2, 0.05, p.dark(p.detail), p, radius=0.01),
+        _ellipse(0.0, 0.06, 1.5, 0.1, CLOTH, p),
+        _rect(-0.6, 0.08, 0.6, 0.44, p.main, p, radius=0.04),
+        *[_circle(x, 0.2, 0.035, p.detail, p, outline=False) for x in (-0.4, -0.2, 0.0, 0.2, 0.4)],
+        _icing(-0.62, 0.62, 0.45, 0.06, p),
+        _rect(-0.4, 0.45, 0.4, 0.7, p.main, p, radius=0.04),
+        _icing(-0.42, 0.42, 0.72, 0.05, p),
+        *[_rect(x - 0.03, 0.72, x + 0.03, 0.87, p.detail, p) for x in candles],
+        *[_ellipse(x, 0.93, 0.07, 0.13, CANDLE_FLAME, p, outline=False) for x in candles],
+        *[_ellipse(x, 0.915, 0.03, 0.06, LIGHT_FLAME, p, outline=False) for x in candles],
+    ]
+
+
+def _muffin(p: _Paint) -> list[VMobject]:
+    """A muffin: a domed top over a ridged paper case, a few berries."""
+    ridges = [_line(x, 0.03, x * 1.25, 0.47, p.dark(p.detail), 1.2 * OUTLINE_WIDTH) for x in (-0.24, -0.08, 0.08, 0.24)]
+    return [
+        _poly([(-0.36, 0.0), (0.36, 0.0), (0.46, 0.5), (-0.46, 0.5)], p.detail, p, round_by=0.03),
+        *ridges,
+        _blob([(0.0, 0.64, 0.36), (-0.3, 0.56, 0.22), (0.3, 0.56, 0.22)], p.main, p, flat_bottom=0.46),
+        _ellipse(-0.14, 0.8, 0.18, 0.08, p.light(p.main), p, angle=15, outline=False),
+        *[_circle(x, y, 0.045, p.dark(p.dark(p.main)), p, outline=False) for x, y in ((-0.25, 0.6), (0.06, 0.7), (0.26, 0.58), (0.12, 0.88))],
+    ]
+
+
+def _book(p: _Paint) -> dict[str, list[VMobject]]:
+    """Closed: upright, its cover towards the viewer (the spine on the left); open: both pages
+    spread towards the viewer, lines of text on them."""
+    dark = p.dark(p.main)
+    closed = [
+        _rect(-0.36, 0.0, 0.36, 1.0, p.main, p, radius=0.03),
+        _rect(-0.36, 0.0, -0.25, 1.0, dark, p, radius=0.02),
+        _rect(-0.14, 0.6, 0.26, 0.8, p.detail, p, radius=0.02),
+        _line(-0.1, 0.5, 0.22, 0.5, p.light(p.main), 1.5 * OUTLINE_WIDTH),
+        _line(-0.1, 0.42, 0.12, 0.42, p.light(p.main), 1.5 * OUTLINE_WIDTH),
+    ]
+    text = [_line(side * 0.1, y, side * (0.62 - 0.1 * (k % 2)), y + 0.04, PAGE_TEXT, 1.2 * OUTLINE_WIDTH)
+            for side in (-1, 1) for k, y in enumerate((0.78, 0.66, 0.54, 0.42, 0.3))]
+    opened = [
+        _poly([(-0.8, 0.04), (0.0, 0.0), (0.8, 0.04), (0.8, 0.96), (0.0, 0.92), (-0.8, 0.96)], p.main, p),
+        _poly([(-0.75, 0.09), (0.0, 0.04), (0.0, 0.94), (-0.75, 1.0)], PAPER, p),
+        _poly([(0.75, 0.09), (0.0, 0.04), (0.0, 0.94), (0.75, 1.0)], PAPER, p),
+        *text,
+        _poly([(0.5, 0.97), (0.56, 0.975), (0.56, 0.84), (0.53, 0.87), (0.5, 0.84)], p.detail, p, outline=False),
+    ]
+    return {"closed": closed, "open": opened}
+
+
+def _phone(p: _Paint) -> list[VMobject]:
+    """A mobile phone, its screen towards the viewer."""
+    return [
+        _rect(-0.27, 0.0, 0.27, 1.0, p.main, p, radius=0.07),
+        _rect(-0.22, 0.1, 0.22, 0.88, p.detail, p, radius=0.02),
+        _poly([(-0.2, 0.86), (-0.04, 0.86), (-0.2, 0.62)], p.light(p.detail), p, outline=False),
+        _rect(-0.07, 0.925, 0.07, 0.945, p.light(p.main), p, outline=False),
+        _circle(0.0, 0.05, 0.025, p.light(p.main), p, outline=False),
+    ]
+
+
+def _letter(p: _Paint) -> dict[str, list[VMobject]]:
+    """Closed: a sealed envelope (flap down, a seal and a stamp); open: the sheet unfolded, its
+    two folds showing, lines of writing and a signature."""
+    fold = p.dark(p.main)
+    closed = [
+        _rect(-0.75, 0.0, 0.75, 1.0, p.main, p, radius=0.02),
+        _poly([(-0.75, 0.0), (0.0, 0.48), (0.75, 0.0)], p.main, p),
+        _poly([(-0.75, 1.0), (0.0, 0.42), (0.75, 1.0)], p.light(fold), p),
+        _circle(0.0, 0.44, 0.09, p.detail, p),
+        _rect(0.46, 0.68, 0.66, 0.92, p.detail, p),
+        _rect(0.5, 0.72, 0.62, 0.88, p.light(p.detail), p, outline=False),
+    ]
+    writing = [_line(-0.3, y, 0.3 - 0.12 * (k % 3 == 2), y, PAGE_TEXT, 1.2 * OUTLINE_WIDTH) for k, y in enumerate((0.86, 0.78, 0.7, 0.58, 0.5, 0.42, 0.3))]
+    signature = VMobject().set_points_smoothly([np.array([x, 0.14 + 0.04 * math.sin(9 * x), 0.0]) for x in np.linspace(0.02, 0.3, 9)])
+    opened = [
+        _rect(-0.4, 0.0, 0.4, 1.0, p.main, p),
+        _line(-0.4, 0.34, 0.4, 0.34, fold, OUTLINE_WIDTH), _line(-0.4, 0.67, 0.4, 0.67, fold, OUTLINE_WIDTH),
+        *writing,
+        signature.set_fill(opacity=0).set_stroke(p.detail, width=1.5 * OUTLINE_WIDTH),
+    ]
+    return {"closed": closed, "open": opened}
+
+
+def _star(cx: float, cy: float, r: float, fill: str, p: _Paint) -> VMobject:
+    """A four-pointed sparkle about (``cx``, ``cy``), ``r`` from its middle to a tip."""
+    points = [(cx + (r if k % 2 == 0 else 0.3 * r) * math.cos(math.pi * k / 4 + math.pi / 2),
+               cy + (r if k % 2 == 0 else 0.3 * r) * math.sin(math.pi * k / 4 + math.pi / 2)) for k in range(8)]
+    return _poly(points, fill, p, outline=False)
+
+
+def _gift(p: _Paint) -> dict[str, list[VMobject]]:
+    """Closed: a wrapped box with a ribbon and a bow on its lid; open: the lid leaning on its
+    side, sparkles rising out of the box."""
+    dark = p.dark(p.main)
+
+    def body() -> list[VMobject]:   # each shape has its own members (§69.37)
+        return [
+            _rect(-0.5, 0.0, 0.5, 0.62, p.main, p),
+            _rect(-0.07, 0.0, 0.07, 0.62, p.detail, p, outline=False),
+            _rect(-0.5, 0.27, 0.5, 0.37, p.detail, p, outline=False),
+        ]
+
+    closed = [
+        *body(),
+        _rect(-0.55, 0.6, 0.55, 0.78, p.main, p, radius=0.02),
+        _rect(-0.07, 0.6, 0.07, 0.78, p.detail, p, outline=False),
+        _poly([(-0.03, 0.8), (-0.16, 0.66), (-0.1, 0.64), (0.0, 0.78)], p.dark(p.detail), p),
+        _poly([(0.03, 0.8), (0.16, 0.66), (0.1, 0.64), (0.0, 0.78)], p.dark(p.detail), p),
+        _ellipse(-0.15, 0.88, 0.28, 0.18, p.detail, p, angle=25),
+        _ellipse(0.15, 0.88, 0.28, 0.18, p.detail, p, angle=-25),
+        _circle(0.0, 0.82, 0.055, p.light(p.detail), p),
+    ]
+    lid = VGroup(_rect(-0.55, -0.09, 0.55, 0.09, p.main, p, radius=0.02), _rect(-0.07, -0.09, 0.07, 0.09, p.detail, p, outline=False))
+    lid.rotate(math.radians(50)).move_to([0.78, 0.48, 0.0])   # leaning on the box: as tall as the closed gift
+    opened = [
+        _poly([(-0.5, 0.62), (0.5, 0.62), (0.44, 0.68), (-0.44, 0.68)], dark, p),
+        *lid.submobjects,
+        *body(),
+        _star(-0.18, 0.84, 0.1, p.light(p.detail), p),
+        _star(0.1, 0.91, 0.07, p.light(p.detail), p),
+        _star(0.26, 0.78, 0.06, p.light(p.detail), p),
+    ]
+    return {"closed": closed, "open": opened}
+
+
+def _balloons(p: _Paint) -> list[VMobject]:
+    """Three balloons on strings tied to a small weight (the third in a lighter shade)."""
+    balloons = ((-0.17, 0.81, p.main), (0.17, 0.84, p.detail), (0.0, 0.71, p.light(p.main)))
+    strings: list[VMobject] = []
+    drawn: list[VMobject] = []
+    kx, ky = BALLOON_KNOT
+    for k, (x, y, color) in enumerate(balloons):
+        bottom = y - 0.18
+        path = [np.array([x + (kx - x) * u + 0.025 * math.sin(math.pi * 2 * u + k), bottom + (ky - bottom) * u, 0.0]) for u in np.linspace(0.0, 1.0, 7)]
+        strings.append(VMobject().set_points_smoothly(path).set_fill(opacity=0).set_stroke(BALLOON_STRING, width=OUTLINE_WIDTH))
+        drawn += [
+            _ellipse(x, y, 0.3, 0.36, color, p),
+            _poly([(x - 0.03, bottom - 0.035), (x + 0.03, bottom - 0.035), (x, bottom + 0.01)], color, p),
+            _ellipse(x - 0.07, y + 0.08, 0.06, 0.1, WHITE.to_hex(), p, angle=25, outline=False),
+        ]
+    return [*strings, _rect(-0.06, 0.0, 0.06, 0.06, p.dark(p.detail), p, radius=0.015), *drawn]
+
+
+def _vase(p: _Paint) -> list[VMobject]:
+    """A round vase with three flowers on green stems and two leaves."""
+    flowers = ((-0.2, 0.8), (0.03, 0.89), (0.22, 0.76))
+    stems = [_line(x * 0.25, 0.46, x, y - 0.04, STEM, 1.5 * OUTLINE_WIDTH) for x, y in flowers]
+    leaves = [_ellipse(-0.13, 0.58, 0.07, 0.16, STEM, p, angle=40), _ellipse(0.14, 0.6, 0.07, 0.16, STEM, p, angle=-40)]
+    blooms: list[VMobject] = []
+    for x, y in flowers:
+        blooms += [_circle(x + 0.06 * math.cos(a), y + 0.06 * math.sin(a), 0.05, p.detail, p) for a in np.linspace(math.pi / 2, math.pi / 2 + 2 * math.pi, 5, endpoint=False)]
+        blooms.append(_circle(x, y, 0.035, FLOWER_HEART, p))
+    return [
+        *stems, *leaves, *blooms,
+        _poly([(-0.16, 0.0), (0.16, 0.0), (0.25, 0.18), (0.12, 0.4), (0.14, 0.46), (-0.14, 0.46), (-0.12, 0.4), (-0.25, 0.18)], p.main, p, round_by=0.04),
+        _rect(-0.16, 0.44, 0.16, 0.49, p.dark(p.main), p, radius=0.01),
+        _ellipse(-0.12, 0.2, 0.05, 0.14, p.light(p.main), p, angle=-10, outline=False),
+    ]
+
+
+def _watering_can(p: _Paint) -> list[VMobject]:
+    """A watering can: a round-shouldered body, a long spout up to the right with a rose, a
+    handle arching over the top."""
+    dark = p.dark(p.main)
+    return [
+        *_handle(_arc(-0.05, 0.5, 0.25, 180, 0, 13), p.main, p),
+        _poly([(0.24, 0.1), (0.3, 0.26), (0.66, 0.6), (0.7, 0.54)], p.main, p),
+        _ellipse(*WATERING_SPOUT, 0.08, 0.18, dark, p, angle=-35),
+        _rect(-0.38, 0.0, 0.32, 0.5, p.main, p, radius=0.08),
+        _rect(-0.38, 0.18, 0.32, 0.27, p.detail, p, outline=False),
+        _ellipse(-0.03, 0.5, 0.5, 0.08, dark, p),
+        _ellipse(-0.24, 0.36, 0.08, 0.16, p.light(p.main), p, outline=False),
+    ]
+
+
 # ----- furniture (DESIGN.md §69.43): seats at 0.14 of a character's height, below every generated
 # character's hips, so a sitter's hips rest on the seat line (§69.36) ---------------------------------
 
@@ -897,6 +1129,8 @@ _DRAWERS: dict[str, Callable[[_Paint], list[VMobject] | dict[str, list[VMobject]
     "lamp": _lamp, "sign": _sign, "box": _box, "ball": _ball, "cloud": _cloud, "sun": _sun,
     "moon": _moon, "rock": _rock, "plant": _plant, "laptop": _laptop, "cup": _cup,
     "basket": _basket, "umbrella": _umbrella, "napkin": _napkin, "kettle": _kettle,
+    "cake": _cake, "muffin": _muffin, "book": _book, "phone": _phone, "letter": _letter, "gift": _gift,
+    "balloons": _balloons, "vase": _vase, "watering_can": _watering_can,
     "sofa": _sofa, "armchair": _armchair, "bed": _bed, "bookshelf": _bookshelf, "counter": _counter,
     "fridge": _fridge, "picture": _picture, "rug": _rug, "houseplant": _houseplant, "clock": _clock,
     "tv": _tv, "desk": _desk, "fireplace": _fireplace,
@@ -1055,7 +1289,9 @@ __all__ = [
     "PROP_LIFTS",
     "PROP_GRIPS",
     "PROP_SHAPES",
+    "SMALL_PROPS",
     "SVG_PROP_HEIGHT",
+    "WATERING_SPOUT",
     "Prop",
     "draw_prop",
     "prop_colors",

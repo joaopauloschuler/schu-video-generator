@@ -1957,6 +1957,7 @@ writes them as WAV files to listen to):
 | `brakes` | 0.5 s (0.2–1.5) | brakes squealing to a stop: a thin wavering tone near 2.1 kHz over a soft scrape | a vehicle stopping |
 | `burner` | 1.2 s (0.4–4) | a gas burner's roar: deep breathy noise around 450 Hz with a faint hiss, fluttering at 9 Hz, dying away at the end | a hot-air balloon rising |
 | `launch` | 1.0 s (0.4–3) | a toy rocket taking off: a soft low "whump", then a fizzing hiss climbing ~1.5 → ~5 kHz with a crackle, fading out | a toy rocket or a firework launching |
+| `phone` | 1.0 s (0.4–3) | a phone ringing, "brring-brring": a soft electronic trill (a tone flipping between ~1.1 and ~1.4 kHz 20 times a second) in two pulses of about 0.4 s | a ringing [phone](#everyday-small-props-let_go-pour) (each burst of rings) |
 | `gasp` | 0.35 s (0.15–1) | a sharp breath in, "hah": breath noise around 1.1, 1.75 and 2.9 kHz, loudest after ~50 ms, cut off | surprise ([`[gasp]`](#voice-sounds) at a line's start or end) |
 | `sigh` | 0.9 s (0.4–2.5) | a long breath out, "haaah": breathy "ah" noise with a faint hum falling ~190 → ~130 Hz, trailing off | tiredness, relief ([`[sigh]`](#voice-sounds) at a line's start or end) |
 | `sting_reveal` | 1.4 s (0.6–4) | a "ta-da": a brassy pickup note, then a bright C major chord with a soft bell | a reveal ([`sting: reveal`](#foley-and-music-stings)) |
@@ -2008,7 +2009,8 @@ as it sets off, or a car's, a bus's or a boat's `engine` for most of the ride, a
 ending as a bicycle, a car or a bus stops; a balloon's `burner` and a toy rocket's `launch` as
 they set off, the rocket's parachute `pop`, and a soft `thud` where either lands; a `click` when
 a `tv`, a `lamp` or a `kettle` is [switched on or off](#clocks-televisions-and-lamps-time-on-switch_on)
-and a short `burner` whoosh when a `fireplace` is lit; a `thud` where a
+and a short `burner` whoosh when a `fireplace` is lit; a `phone` trill at each burst of rings of a
+[ringing phone](#everyday-small-props-let_go-pour) (a `click` when it is switched off); a `thud` where a
 [fruit falls](#fruit-falling-from-a-tree-fruit-drop_fruit). Other
 actions are silent. They are ordinary sound effects (listed in `timings.json` `sfx`, mixed like the rest):
 `sfx: {gain}` sets their level with the others, and `assets/sfx/footstep.wav` (or `boing.wav`,
@@ -4383,8 +4385,9 @@ Three props move by themselves (outdoors too):
 switch it at `at` of the beat (at once, with a `click` while `foley` is on). The lit screen, the
 lantern and the glows are never graded by the stage's light, so they shine at night. Other props
 take no `on`, `time` or `speed` (a config error) except a [`fireplace` or a
-`kettle`](#fireplaces-and-kettles-on-switch_on), and the actions refuse them ("'sofa' cannot be
-switched on or off (props that can: fireplace, kettle, lamp, tv)").
+`kettle`](#fireplaces-and-kettles-on-switch_on) and a ringing [`phone`](#everyday-small-props-let_go-pour),
+and the actions refuse them ("'sofa' cannot be switched on or off (props that can: fireplace,
+kettle, lamp, phone, tv)").
 
 Render cost: only the moving parts leave Manim's static picture of the set (the hands; the
 picture and the glow of a tv; a lamp's lantern and glow only in the animation where it is
@@ -4559,7 +4562,7 @@ a `lift`. The furniture for [rooms](#rooms-room) has a gallery of its own there.
 
 | key (`props[]`) | default | |
 |---|---|---|
-| `prop` | — | a built-in prop: `table chair tree bush house door lamp sign box ball cloud sun moon rock plant laptop cup basket umbrella napkin kettle`; [furniture](#rooms-room): `sofa armchair bed bookshelf counter fridge picture rug houseplant clock tv desk fireplace`; [vehicles](#vehicles-get_in-ride_to-get_out): `bicycle car bus`, [on water and in the air](#water-and-air-vehicles-water-land): `boat hot_air_balloon toy_rocket` |
+| `prop` | — | a built-in prop: `table chair tree bush house door lamp sign box ball cloud sun moon rock plant laptop cup basket umbrella napkin kettle`; [small things](#everyday-small-props-let_go-pour): `cake muffin book phone letter gift balloons vase watering_can`; [furniture](#rooms-room): `sofa armchair bed bookshelf counter fridge picture rug houseplant clock tv desk fireplace`; [vehicles](#vehicles-get_in-ride_to-get_out): `bicycle car bus`, [on water and in the air](#water-and-air-vehicles-water-land): `boat hot_air_balloon toy_rocket` |
 | `svg` | — | instead of `prop`: an SVG file relative to the project folder (sanitised like every SVG: no scripts, filters, embedded pictures or text), standing on the bottom edge of its `viewBox` |
 | `name` | the prop's name | its name for actions and the layout dump; an SVG's default is its file name (`assets/old_well.svg` -> `old_well`); repeats are numbered (`tree`, `tree_2`) |
 | `at` | `centre` | a mark or an x position from 0 to 1 of the stage |
@@ -4570,9 +4573,9 @@ a `lift`. The furniture for [rooms](#rooms-room) has a gallery of its own there.
 | `color` | per prop | its main colour (a theme token or `#hex`): a tree's leaves (`tertiary`), a chair (`accent`)... |
 | `detail` | per prop | its second colour: a tree's trunk, a house's roof, a laptop's screen... |
 | `recolor` | `none` | `svg` only: `theme` maps the picture's colours to the nearest theme colours |
-| `open` | `false` | `umbrella` or `door` only: `true` starts it open ([Umbrellas](#umbrellas-open-and-close), [rooms](#rooms-room)) |
+| `open` | `false` | `umbrella`, `door`, `book`, `letter` or `gift` only: `true` starts it open ([Umbrellas](#umbrellas-open-and-close), [rooms](#rooms-room), [small props](#everyday-small-props-let_go-pour)) |
 | `against` | none | `wall`: in a [room](#rooms-room), it stands with its back to the wall at the wall's depth (unless `depth` is given); a `picture` or `clock` in a room does so without it |
-| `on` | `false` | `tv`, `lamp`, `fireplace` or `kettle` only: `true` starts it switched on ([Clocks, televisions and lamps](#clocks-televisions-and-lamps-time-on-switch_on), [fireplaces and kettles](#fireplaces-and-kettles-on-switch_on)) |
+| `on` | `false` | `tv`, `lamp`, `fireplace`, `kettle` or `phone` only: `true` starts it switched on (a phone: ringing) ([Clocks, televisions and lamps](#clocks-televisions-and-lamps-time-on-switch_on), [fireplaces and kettles](#fireplaces-and-kettles-on-switch_on), [small props](#everyday-small-props-let_go-pour)) |
 | `time` | none | `clock` only: the time it shows at the scene's start, `H:MM` or `H:MM:SS` (`"21:45"`); with `time` or `speed` the clock runs |
 | `speed` | `1` | `clock` only: how fast it runs, clock seconds per second (`1` real time, `60` a minute a second, up to `3600`) |
 | `fruit` | `false` | `tree` only: `true` hangs four fruits on it ([`drop_fruit`](#fruit-falling-from-a-tree-fruit-drop_fruit) lets one fall) |
@@ -4906,8 +4909,8 @@ the prop is the target:
 
 An open umbrella stays open when it is picked up, held, given (the receiver holds it overhead),
 put down (it stands on its hook) or thrown. `vidgen validate` reports `open` / `close` on a prop
-that cannot open (`'tree' cannot open (props that can: door, umbrella)`) or on a character. The layout
-dump records `shape` (`closed` or `open`) on an umbrella or a door. A `door` prop opens and closes the same way (half-way through, where it stands): the doorway dark, the leaf swung towards the viewer on its hinge side.
+that cannot open (`'tree' cannot open (props that can: book, door, gift, letter, umbrella)`) or on a character. The layout
+dump records `shape` (`closed` or `open`) on a prop that opens. A `door` prop opens and closes the same way (half-way through, where it stands): the doorway dark, the leaf swung towards the viewer on its hinge side.
 
 ```yaml
 scenes:
@@ -4924,6 +4927,74 @@ scenes:
       - text: "The sun is back."
         actions:
           - {close: umbrella}
+```
+
+##### Everyday small props (`let_go`, `pour`)
+
+Nine small things to hold, give, put down and set on a table (`lift`, as for any prop on
+furniture), drawn from simple shapes in the theme's colours:
+
+![The small props in the default theme](gallery/media/small_props.png)
+
+| prop | usual height | |
+|---|---|---|
+| `cake` | 0.22 | two tiers on a plate, icing dripping, three candles alight |
+| `muffin` | 0.08 | a domed top over a ridged paper case |
+| `book` | 0.13 | closed (upright, its cover to the viewer) or open (both pages spread); `open` / `close` |
+| `phone` | 0.13 | a mobile phone; `on: true` or `- switch_on: phone` makes it **ring** (below) |
+| `letter` | 0.08 | closed (a sealed envelope) or open (the sheet unfolded, written on); `open` / `close` |
+| `gift` | 0.2 | closed (wrapped, a bow on the lid) or open (the lid leaning on it, sparkles rising); `open` / `close` |
+| `balloons` | 1.1 | three balloons on strings tied to a small weight; `let_go` floats them away |
+| `vase` | 0.32 | a vase with three flowers |
+| `watering_can` | 0.22 | held by its handle; `pour` waters |
+
+- A **book, a letter or a gift** opens and closes like an umbrella (`- open: gift`, `open: true`
+  in `props`), standing or in a hand; held open, it stays in front of its holder (only an open
+  umbrella goes overhead).
+- A **phone that is on rings**: from when it comes on, a burst of rings every 2 s, each 1 s long,
+  in which the phone shakes (13 times a second, up to 10° either way), amber ring lines show on
+  both sides and its screen lights up (it shines at night). It rings in a hand too. With foley each
+  burst plays the built-in `phone` sound (a soft electronic trill, −6 dB). `- switch_off: phone`
+  (answering it) stops it with a `click`.
+- **Balloons** are held by their strings at their full size (not made smaller like other held
+  props), rising behind the holder's head. **`- let_go: <character>`** opens the hand: the arm
+  comes down and the balloons float up out of the frame, speeding up, swaying and drifting with the
+  stage's wind (gone for the scene: `vidgen validate` reports a later use). The action takes 1–6 s,
+  by how far they rise. `let_go` is for props that float (balloons); `put_down` the others. Put
+  down, balloons stand on their weight.
+- A **watering can** pours with **`- pour: <character>`** (2 s): the can it holds tilts forward
+  at the hand, water drops leave the spout and fall to the ground in front of it, and it comes back
+  up. `pour` needs a held prop that pours (a `watering_can`).
+- `letter` and `balloons` are light enough for [`blow_away`](#props-that-blow-away-blow_away).
+
+| action | options | |
+|---|---|---|
+| `let_go` | `prop` (which one, when it holds two) | the character lets go of the balloons it holds: they float up and away. |
+| `pour` | `prop` | the character tilts the watering can it holds and water pours out. |
+
+```yaml
+scenes:
+  - id: party
+    type: stage
+    params:
+      props:
+        - {prop: table, at: 0.5}
+        - {prop: cake, at: 0.5, lift: 0.17}       # on the table
+        - {prop: phone, at: 0.58, lift: 0.17}
+        - {prop: balloons, at: 0.25}
+        - {prop: gift, at: 0.7}
+      characters: [{name: pip, at: 0.25}, {name: kit, at: 0.75}]
+    beats:
+      - text: "The phone rings, and Pip lets the balloons go."
+        actions:
+          - {hold: pip, to: balloons, at: 0}
+          - {switch_on: phone, at: 0.2}
+          - {let_go: pip, at: 0.5}
+      - text: "Kit opens the present."
+        actions:
+          - {pick_up: kit, to: gift}
+          - {open: gift, at: 0.5}
+          - {switch_off: phone, at: 0.8}
 ```
 
 #### Sitting and leaning
@@ -5706,7 +5777,7 @@ holder's). A prop someone holds is blown out of the hand: the hand lets go at on
 goes back down and the holder holds nothing from then on (the layout dump and `vidgen validate`
 agree). It takes longer the farther it goes and the lighter the wind (from the middle of a 16:9
 stage to off its edge: 1.6 s in a gale, 2.9 s when windy; at most 6 s); `run_time` sets it. Light props only: `napkin`,
-`umbrella` (open or closed), `ball`, `cup`, `basket`, `box`, and SVG props.
+`umbrella` (open or closed), `ball`, `cup`, `basket`, `box`, `letter`, `balloons`, and SVG props.
 
 `vidgen validate` reports a heavy prop (`'tree' (tree) is too heavy to blow away`), a target
 that is not a prop, an unknown `to`, a `blow_away` without `to` while the stage's wind is calm
@@ -5847,11 +5918,11 @@ the one key that names an action).
 
 | key | default | |
 |---|---|---|
-| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `switch_on`, `switch_off`, `drop_fruit`, `birds`, `sit_on`, `lean_on`, `stand_up`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect`, or a project action (`vidgen list-scenes` lists them) |
+| `action` | required | `reveal`, `dim`, `highlight`, `zoom`, `pan`, `follow`, `transform`, `callout`, `sfx`, `particles`, `say`, `look_at`, `turn`, `emote`, `pose`, `react`, `walk_to`, `run_to`, `enter`, `exit`, `gesture`, `jump`, `keyframes`, `move_along`, `pick_up`, `hold`, `put_down`, `give`, `throw`, `open`, `close`, `let_go`, `pour`, `switch_on`, `switch_off`, `drop_fruit`, `birds`, `sit_on`, `lean_on`, `stand_up`, `get_in`, `ride_to`, `get_out`, `light`, `wind`, `blow_away`, `effect`, or a project action (`vidgen list-scenes` lists them) |
 | `target` | required | a target name, a list of names, or a pattern with `*` / `?` (`bar:*`, `item?`) that must match at least one (`callout` with an `area` and `pan` with `to` need none) |
 | `at` | `0` | when, as a fraction of the beat's narration (`0` ≤ at < `1`) |
 | `until` | none | a later beat of the same scene: the action lasts until that beat (`dim`, `highlight`, `callout`, `say`, `react`, `look_at`, `turn`, `emote`, `pose`: undone when it starts; `zoom`: the camera is back when it starts; `pan`: the camera moves back when it starts; `follow`: the camera stops following when it starts; `keyframes`, `move_along`: the target moves back) |
-| `run_time` | the action's | seconds the animation takes (`reveal` / `callout` / `pose` 0.8, `dim` / `highlight` / `react` 0.6, `zoom` / `transform` / `follow` 1.0, `pan` 1.5, `look_at` / `emote` 0.5, `say` (the bubble) / `turn` / `effect` (the pop) 0.4, `jump` 0.6, `gesture` per gesture (1.2 for `point`), `walk_to` / `run_to` / `enter` / `exit` as long as the distance needs at their `speed`, `keyframes` until its last key, `move_along` 2.0 or its path's length at its `speed`, `pick_up` / `give` 1.2, `put_down` / `sit_on` 1.0, `lean_on` / `stand_up` 0.8, `get_in` 1.0, `get_out` 0.9, `ride_to` as long as the distance needs at its `speed`, `hold` 0.4, `open` / `close` 0.6, `throw` 0.95–2.1 by the distance, `light` / `wind` 2.0 (the fade), `blow_away` by the distance and the wind (0.6–6); a zoom takes as long again to come back) |
+| `run_time` | the action's | seconds the animation takes (`reveal` / `callout` / `pose` 0.8, `dim` / `highlight` / `react` 0.6, `zoom` / `transform` / `follow` 1.0, `pan` 1.5, `look_at` / `emote` 0.5, `say` (the bubble) / `turn` / `effect` (the pop) 0.4, `jump` 0.6, `gesture` per gesture (1.2 for `point`), `walk_to` / `run_to` / `enter` / `exit` as long as the distance needs at their `speed`, `keyframes` until its last key, `move_along` 2.0 or its path's length at its `speed`, `pick_up` / `give` 1.2, `put_down` / `sit_on` 1.0, `lean_on` / `stand_up` 0.8, `get_in` 1.0, `get_out` 0.9, `ride_to` as long as the distance needs at its `speed`, `hold` 0.4, `open` / `close` 0.6, `throw` 0.95–2.1 by the distance, `light` / `wind` 2.0 (the fade), `blow_away` by the distance and the wind (0.6–6), `let_go` by how far the balloons rise (1–6), `pour` 2.0; a zoom takes as long again to come back) |
 
 **Targets** depend on the scene type (`vidgen list-scenes` prints them as `targets:`). Every
 built-in type has some; `<N>` counts from 1 (`item1`, `item2`...), `<text>`/`<label>`/`<name>`
@@ -5920,7 +5991,9 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `keyframes`, `move_along` | see [Keyframes and motion paths](#keyframes-and-motion-paths) | move a `stage`'s character, prop or character part (`kit.arm_left`) through keys (`t`, `x`, `y`, `rotate`, `scale`, `ease`) or along a path of points |
 | `pick_up`, `hold`, `put_down`, `give`, `throw` | see [Props in hands](#props-in-hands) | a `stage`'s character takes a prop in its hand, puts it down, hands it to another character or throws it |
 | `open`, `close` | see [Umbrellas](#umbrellas-open-and-close) | a `stage`'s umbrella opens (held overhead) or closes |
-| `switch_on`, `switch_off` | as the target: the prop (`- switch_on: tv`) | on a `stage`: a `tv`, a `lamp`, a `fireplace` or a `kettle` goes on or off at `at` (at once, with a click; a fire lights with a whoosh); see [Clocks, televisions and lamps](#clocks-televisions-and-lamps-time-on-switch_on) and [fireplaces and kettles](#fireplaces-and-kettles-on-switch_on). No `until`. |
+| `switch_on`, `switch_off` | as the target: the prop (`- switch_on: tv`) | on a `stage`: a `tv`, a `lamp`, a `fireplace`, a `kettle` or a `phone` (ringing) goes on or off at `at` (at once, with a click; a fire lights with a whoosh, a phone starts ringing); see [Clocks, televisions and lamps](#clocks-televisions-and-lamps-time-on-switch_on), [fireplaces and kettles](#fireplaces-and-kettles-on-switch_on) and [small props](#everyday-small-props-let_go-pour). No `until`. |
+| `let_go` | as the target: the character (`- let_go: pip`); `prop` | on a `stage`: the character lets go of the balloons it holds and they float away out of the frame, drifting with the wind ([small props](#everyday-small-props-let_go-pour)). No `until`. |
+| `pour` | as the target: the character (`- pour: kit`); `prop` | on a `stage`: the watering can the character holds tilts and pours water drops to the ground (2 s) ([small props](#everyday-small-props-let_go-pour)). No `until`. |
 | `drop_fruit` | `to` (a character; none: the ground) | on a `stage`: a fruit falls from the target tree (`fruit: true`), with a bounce and a thud, on a character's head with `to` (stars); see [Fruit falling from a tree](#fruit-falling-from-a-tree-fruit-drop_fruit) |
 | `birds` | as the target: how many (`- birds: 5`); `count`, `direction`, `height`, `seconds`, `seed` | on a `stage` outdoors: a flock of birds crosses the sky from `at`; see [Birds](#birds-birds). No `until`. |
 | `sit_on`, `lean_on`, `stand_up` | see [Sitting and leaning](#sitting-and-leaning) | a `stage`'s character sits on a chair, a rock, a box or furniture (a sofa, an armchair, a bed, a desk), leans on a tree, a door, a sign or furniture (a counter...), and stands up again |

@@ -29,6 +29,8 @@ SWITCH_CLICK_GAIN = -4.0
 #: A fireplace lighting: a short burner whoosh, its level (dB) and length (s).
 FIRE_LIGHT_GAIN = -10.0
 FIRE_LIGHT_SECONDS = 0.8
+#: The level of a ringing phone's ``phone`` sound (dB), one per burst of rings.
+PHONE_RING_GAIN = -6.0
 
 IDENTIFIER_PATTERN = r"^[A-Za-z0-9_]+$"
 Identifier = Annotated[str, Field(pattern=IDENTIFIER_PATTERN)]
@@ -72,7 +74,7 @@ class StageProp(SceneParams):
     also_accepts: ClassVar[tuple[type, ...]] = (str,)
 
     prop: Literal[PROP_KINDS] | None = None  # type: ignore[valid-type]
-    """A built-in prop: table, chair, tree, bush, house, door, lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup, basket, umbrella, napkin, kettle; furniture: sofa, armchair, bed, bookshelf, counter, fridge, picture, rug, houseplant, clock, tv, desk, fireplace; vehicles: bicycle, car, bus, boat (on the stage's water), hot_air_balloon, toy_rocket."""
+    """A built-in prop: table, chair, tree, bush, house, door, lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup, basket, umbrella, napkin, kettle; small things: cake, muffin, book, phone, letter, gift, balloons, vase, watering_can; furniture: sofa, armchair, bed, bookshelf, counter, fridge, picture, rug, houseplant, clock, tv, desk, fireplace; vehicles: bicycle, car, bus, boat (on the stage's water), hot_air_balloon, toy_rocket."""
     svg: str | None = None
     """Instead of prop: an SVG file relative to the project folder (sanitised like any SVG), standing on the bottom edge of its viewBox."""
     name: Identifier | None = None
@@ -94,11 +96,11 @@ class StageProp(SceneParams):
     recolor: Literal["none", "theme"] = "none"
     """With svg: theme maps the picture's colours to the nearest theme colours; none keeps them."""
     open: bool = False
-    """An umbrella or a door: true starts it open (the open / close actions change it later)."""
+    """An umbrella, a door, a book, a letter or a gift: true starts it open (the open / close actions change it later)."""
     against: Literal["wall"] | None = None
     """wall: it stands with its back to the room's wall, at the wall's depth unless depth is given (a room only); a picture or a clock in a room hangs on the wall without it."""
     on: bool = False
-    """A tv, a lamp, a fireplace or a kettle: true starts it switched on (a tv's picture changes and flickers, a lamp glows, a fireplace burns and crackles, a kettle steams; the switch_on / switch_off actions change it)."""
+    """A tv, a lamp, a fireplace, a kettle or a phone: true starts it switched on (a tv's picture changes and flickers, a lamp glows, a fireplace burns and crackles, a kettle steams, a phone rings and shakes; the switch_on / switch_off actions change it)."""
     time: str | None = None
     """A clock: the time it shows at the scene's start, H:MM or H:MM:SS (default 10:10, as drawn); with time or speed the clock runs, its hands turning."""
     speed: float | None = Field(None, gt=0.0, le=MAX_CLOCK_SPEED)
@@ -445,8 +447,10 @@ class Stage(NarratedScene):
     through them); no wind or weather inside. Furniture (a sofa, a bed, a kitchen counter, a
     picture...) stands ``against: wall`` at the wall's depth; a picture and a clock hang on it.
     A clock with a ``time`` or a ``speed`` runs; a tv ``on`` shows a flickering picture, a
-    lamp ``on`` glows, a fireplace ``on`` burns and crackles, a kettle ``on`` steams
-    (``switch_on`` / ``switch_off`` change them). A tree with ``fruit`` carries fruits that
+    lamp ``on`` glows, a fireplace ``on`` burns and crackles, a kettle ``on`` steams, a phone
+    ``on`` rings (``switch_on`` / ``switch_off`` change them). Small things to hold: a cake, a
+    muffin, a book and a letter and a gift (they ``open`` and ``close``), balloons (``let_go``
+    floats them away), a vase of flowers and a watering can (``pour``). A tree with ``fruit`` carries fruits that
     ``drop_fruit`` lets fall (on a character's head too); ``birds`` (or the ``birds`` action) send
     a flock across the sky.
 
@@ -486,7 +490,7 @@ class Stage(NarratedScene):
     #: Storyboard stills also show these actions half-way through (DESIGN.md §69.16).
     mid_still_actions = frozenset({
         "walk_to", "run_to", "enter", "exit", "gesture", "jump", "keyframes", "move_along", "pick_up", "put_down", "give", "throw",
-        "sit_on", "lean_on", "stand_up", "blow_away", "get_in", "ride_to", "get_out",
+        "sit_on", "lean_on", "stand_up", "blow_away", "get_in", "ride_to", "get_out", "let_go", "pour",
     })
 
     @classmethod
@@ -786,6 +790,7 @@ class Stage(NarratedScene):
             depths=frame.depths,
             vehicles={name: (kind, height) for name, (kind, height, _) in frame.vehicles.items()},
             water=frame.water,
+            kinds={name: p.prop for name, p in zip(params.prop_names(), params.stage_props())},
         )
         return fruit + problems + cls._calm_blow_problems(params, ordered)
 
@@ -1266,6 +1271,7 @@ class Stage(NarratedScene):
             self.light.on_change(self._show_light)
         self.reveal([entrance], fraction=0.6, cap=1.0)
         self.finish()
+        self._ring_sounds()
 
     def _entrance_cover(self) -> Rectangle:
         """A rectangle of the background colour over everything, larger than the view and kept
@@ -1510,18 +1516,30 @@ class Stage(NarratedScene):
             self.remove_updater(self._living_updater)
 
     def switch_props(self, patterns: list[str], on: bool, time: float) -> None:
-        """Switch the tvs, lamps, fireplaces and kettles matching ``patterns`` on (or off) at
-        scene ``time`` (the ``switch_on`` / ``switch_off`` actions), with a click (foley; a fire
-        lights with a burner's whoosh and goes out quietly)."""
+        """Switch the tvs, lamps, fireplaces, kettles and phones matching ``patterns`` on (or off)
+        at scene ``time`` (the ``switch_on`` / ``switch_off`` actions), with a click (foley; a fire
+        lights with a burner's whoosh and goes out quietly, a phone starts ringing without one:
+        its rings are :meth:`_ring_sounds`)."""
         names = [name for name in getattr(self, "living", {}) if any(fnmatchcase(name, pat) for pat in patterns)]
         for name in names:
             self.living[name].switch(on, time)
         if not names or not self._foley_on():
             return
-        if any(self.living[name].kind != "fireplace" for name in names):
+        if any(self.living[name].kind not in ("fireplace", *(("phone",) if on else ())) for name in names):
             self.sfx("click", max(float(time), 0.0), gain=SWITCH_CLICK_GAIN)
         if on and any(self.living[name].kind == "fireplace" for name in names):
             self.sfx("burner", max(float(time), 0.0), gain=FIRE_LIGHT_GAIN, duration=FIRE_LIGHT_SECONDS)
+
+    def _ring_sounds(self) -> None:
+        """A ``phone`` sound at each burst of rings of each phone while it rings in the scene
+        (foley; DESIGN.md §69.56), once the scene has played (its end ends a ring left on)."""
+        if not self._foley_on():
+            return
+        end = float(self.renderer.time)
+        for live in getattr(self, "living", {}).values():
+            if live.kind == "phone":
+                for time in ring_bursts(on_spans(live.on, live.switches, end)):
+                    self.sfx("phone", time, gain=PHONE_RING_GAIN)
 
     def _living_redrawn(self, moving: list[Mobject], start: float, end: float) -> list[Mobject]:
         """``moving`` plus what props that move by themselves and flocks change between scene
@@ -1936,15 +1954,18 @@ class Stage(NarratedScene):
 
 def _moving_block(scene: Any, mover: Mobject) -> list[Mobject]:
     """``mover`` with what moves with it in ``scene``'s draw order: a walker and the props right
-    after it that it holds; a vehicle, its riders and the props they hold (DESIGN.md §69.52)."""
+    after it (or right before it: an open umbrella, balloons) that it holds; a vehicle, its riders
+    and the props they hold (DESIGN.md §69.52)."""
     at = next((k for k, m in enumerate(scene.mobjects) if m is mover), None)
     if at is None:
         return []
     if isinstance(mover, Character):
-        end = at + 1
+        start, end = at, at + 1
+        while start > 0 and getattr(scene.mobjects[start - 1], "held_by", None) == mover.name:
+            start -= 1
         while end < len(scene.mobjects) and getattr(scene.mobjects[end], "held_by", None) == mover.name:
             end += 1
-        return scene.mobjects[at:end]
+        return scene.mobjects[start:end]
     riders = {name for name, figure in scene.cast.items() if getattr(figure, "riding", None) == getattr(mover, "name", None)}
     return [m for m in scene.mobjects if m is mover or (isinstance(m, Character) and m.name in riders) or getattr(m, "held_by", None) in riders]
 

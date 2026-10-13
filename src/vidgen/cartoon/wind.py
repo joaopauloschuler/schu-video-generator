@@ -261,7 +261,7 @@ def bent_points(points: np.ndarray, degrees: float, foot_y: float, height: float
 # ----- props that blow away (the ``blow_away`` action) ---------------------------------------------
 
 #: The built-in props light enough for ``blow_away`` (an SVG prop may too: the author knows).
-LIGHT_PROPS: frozenset[str] = frozenset({"napkin", "umbrella", "ball", "cup", "basket", "box"})
+LIGHT_PROPS: frozenset[str] = frozenset({"napkin", "umbrella", "ball", "cup", "basket", "box", "letter", "balloons"})
 #: A blown prop's speed along the stage: Manim units per second at felt force 1 (:func:`felt_force`;
 #: at least :data:`BLOW_SLOWEST` of it in a light wind), plus :data:`BLOW_MIN_SECONDS` to get going;
 #: at most :data:`BLOW_MAX_SECONDS` in all.

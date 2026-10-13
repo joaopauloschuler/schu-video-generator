@@ -4,7 +4,8 @@ maths is in :mod:`vidgen.cartoon.living`.
 A prop drawn ``living`` (:func:`living_overlays`, added by ``draw_prop(..., living=True)``) gets
 the parts that change, tagged with :data:`LIVING_PART`: a running clock's second hand (its hour and
 minute hands are tagged in its drawing), a television's picture over its screen, a lamp's lit
-lantern, a fireplace's flames (behind its front logs). A :class:`LivingProp` sets them for a scene
+lantern, a fireplace's flames (behind its front logs), a phone's lit screen and ring lines (the
+whole phone shakes while it rings). A :class:`LivingProp` sets them for a scene
 time on every frame; a lamp's, a television's or a fireplace's :class:`PropGlow` is a mobject of
 its own, drawn right behind the prop (so the prop's box, shadow and layout stay as drawn) and
 never graded by the stage's light; a kettle's :class:`PropSteam` is one too, drawn right in front
@@ -24,6 +25,7 @@ from vidgen.cartoon.living import (
     DRAWN_CLOCK_SECONDS,
     GLOWS,
     LIVING_PART,
+    RING_TILT,
     STEAM_LEAN_MAX,
     STEAM_PUFFS,
     Box,
@@ -37,6 +39,9 @@ from vidgen.cartoon.living import (
     hand_angles,
     hand_tip,
     on_between,
+    on_since,
+    ring_burst,
+    ring_shake,
     shows_second_hand,
     steam_box,
     steam_puffs,
@@ -66,6 +71,12 @@ STEAM = "#F4F6FA"
 STEAM_EDGE = "#AEB9C6"
 STEAM_EDGE_PIXELS = 1.5
 STEAM_EDGE_SHARE = 0.7
+#: A ringing phone (DESIGN.md §69.56): its lit screen, the middle it shakes about, the ring lines
+#: beside it (prop units) and their colour (amber: it shows on light and dark backgrounds).
+LIT_SCREEN = "#E3F4FF"
+PHONE_CENTRE = (0.0, 0.6)
+RING_RADII = (0.4, 0.54)
+RING_LINE = "#E8A33D"
 
 
 def closed_curve(corners: np.ndarray) -> np.ndarray:
@@ -103,6 +114,20 @@ def living_overlays(kind: str, paint: _Paint) -> list[VMobject]:
         return [
             tag(_poly([(-0.07, 0.8), (0.07, 0.8), (0.1, 0.92), (-0.1, 0.92)], LIT_LANTERN, paint), "lantern"),
             tag(_ellipse(0.0, 0.86, 0.09, 0.07, LIT_CORE, paint, outline=False), "lantern"),
+        ]
+    if kind == "phone":
+        rings: list[VMobject] = []
+        for side in (-1.0, 1.0):
+            for radius in RING_RADII:
+                x, y = PHONE_CENTRE
+                points = [np.array([x + side * radius * math.cos(a), y + radius * math.sin(a), 0.0]) for a in np.linspace(-0.5, 0.5, 7)]
+                arc = VMobject().set_points_smoothly(points).set_fill(opacity=0).set_stroke(RING_LINE, width=2.5 * OUTLINE_WIDTH)
+                rings.append(tag(arc, "ring"))
+        return [
+            tag(_rect(-0.22, 0.1, 0.22, 0.88, LIT_SCREEN, paint, radius=0.02), "screen"),
+            tag(_ellipse(0.0, 0.36, 0.28, 0.2, paint.detail, paint, outline=False), "screen"),
+            tag(_circle(0.0, 0.6, 0.09, paint.detail, paint, outline=False), "screen"),
+            *rings,
         ]
     if kind == "fireplace":
         flames: list[VMobject] = []
@@ -192,8 +217,8 @@ class PropSteam(VGroup):
 
 class LivingProp:
     """A prop that moves by itself (drawn ``living``): a clock running from ``start`` (seconds
-    after midnight) at ``speed``, or a television, a lamp, a fireplace or a kettle, ``on`` from the
-    start, switched by :meth:`switch`. ``seed`` varies a television's pictures, a fire's flicker
+    after midnight) at ``speed``, or a television, a lamp, a fireplace, a kettle or a phone (on:
+    ringing), ``on`` from the start, switched by :meth:`switch`. ``seed`` varies a television's pictures, a fire's flicker
     and a kettle's puffs; ``movable``: an action may move the prop, so its glow follows it on every
     frame; ``wind``: the felt wind force at a scene time (a fire's flames and a kettle's steam lean
     with it; ``None``: calm)."""
@@ -214,14 +239,20 @@ class LivingProp:
         if self.hands:
             _Shown(self.hands["second"]).show(shows_second_hand(self.speed))
         self.flames = living_parts(prop, "flame")
-        self.overlays = living_parts(prop, "picture") + living_parts(prop, "lantern") + self.flames
+        self.overlays = living_parts(prop, "picture") + living_parts(prop, "lantern") + self.flames + living_parts(prop, "screen")
         self._shown = _Shown(self.overlays)
+        #: A phone's ring lines, shown in each burst of rings, and its whole drawing in prop
+        #: units (each member with points but the anchor), redrawn turned as it shakes (§69.56).
+        self.rings = living_parts(prop, "ring")
+        self._rings = _Shown(self.rings)
+        anchor = prop.anchor
+        self._body = [(m, prop.drawn_points(m.points)) for m in prop.family_members_with_points() if m is not anchor] if self.kind == "phone" else []
         spec = GLOWS.get(self.kind)
-        #: Its glow (``None``: a clock or a kettle), drawn right behind it.
+        #: Its glow (``None``: a clock, a kettle or a phone), drawn right behind it.
         self.glow = PropGlow(spec, name=f"{prop.name}_glow") if spec is not None else None
         #: A kettle's steam (``None``: another prop), drawn right in front of it.
         self.steam = PropSteam(name=f"{prop.name}_steam") if self.kind == "kettle" else None
-        for member in [m for mob in (self.movers() if self.kind not in ("clock", "kettle") else []) for m in mob.get_family()]:
+        for member in [m for mob in (self.movers() if self.kind not in ("clock", "kettle", "phone") else self.overlays) for m in mob.get_family()]:
             setattr(member, LIT, False)   # a lit screen, lamp or fire shines at night too (§69.31's grade skips it); hands stay graded
         if self.steam is not None:
             mark_lit(self.steam)   # steam is graded like the set
@@ -243,13 +274,15 @@ class LivingProp:
         if switch_between(self.switches, start, end):
             return True
         on = on_between(self.on, self.switches, start, end)
-        return on and (self.kind in ("tv", "fireplace", "kettle") or self.movable)
+        return on and (self.kind in ("tv", "fireplace", "kettle", "phone") or self.movable)
 
     def movers(self) -> list[Mobject]:
         """The mobjects it changes on every frame: the hands, or the picture / lantern / flames
-        and the glow, or the steam."""
+        and the glow, or the steam, or a ringing phone's whole drawing."""
         if self.kind == "clock":
             return [m for members in self.hands.values() for m in members]
+        if self.kind == "phone":
+            return [m for m, _ in self._body]
         return [*self.overlays, *(m for m in (self.glow, self.steam) if m is not None)]
 
     def region(self, start: float = 0.0, end: float = math.inf) -> Box:
@@ -257,6 +290,9 @@ class LivingProp:
         at any scene times ``start`` to ``end``)."""
         low, high = self.prop.get_corner(np.array([-1.0, -1.0, 0.0])), self.prop.get_corner(np.array([1.0, 1.0, 0.0]))
         box = (float(low[0]), float(low[1]), float(high[0]), float(high[1]))
+        if self._body:   # a shaking phone's corners swing out a little
+            grow = math.sin(math.radians(RING_TILT)) * float(self.prop.height)
+            box = (box[0] - grow, box[1] - grow, box[2] + grow, box[3] + grow)
         if self.glow is not None:
             x, y, radius = self._glow_place()
             box = union_box(box, glow_box(x, y, radius))
@@ -280,6 +316,12 @@ class LivingProp:
         """Show it as it is at scene time ``now``."""
         if self.kind == "clock":
             self._turn_hands(clock_seconds(self.start, self.speed, now))
+            return
+        if self.kind == "phone":
+            since = on_since(self.on, self.switches, now)
+            self._shown.show(since is not None)
+            self._rings.show(ring_burst(now, since))
+            self._shake(ring_shake(now, since))
             return
         on = self.is_on(now)
         self._shown.show(on)
@@ -317,6 +359,21 @@ class LivingProp:
         middles = self.prop.prop_points(np.array([[p.x, p.y, 0.0] for p in puffs])) if puffs else np.zeros((0, 3))
         unit = self.prop.unit
         self.steam.place([(float(m[0]), float(m[1]), p.radius * unit, p.opacity) for m, p in zip(middles, puffs)])
+
+    def _shake(self, degrees: float) -> None:
+        """A phone's drawing turned ``degrees`` (counterclockwise as drawn facing right) about
+        :data:`PHONE_CENTRE`, where it is now."""
+        cos, sin = math.cos(math.radians(degrees)), math.sin(math.radians(degrees))
+        x, y = PHONE_CENTRE
+        drawn = np.vstack([points for _, points in self._body])
+        turned = drawn.copy()
+        turned[:, 0] = x + (drawn[:, 0] - x) * cos - (drawn[:, 1] - y) * sin
+        turned[:, 1] = y + (drawn[:, 0] - x) * sin + (drawn[:, 1] - y) * cos
+        placed = self.prop.prop_points(turned)
+        at = 0
+        for member, points in self._body:
+            member.points = placed[at : at + len(points)]
+            at += len(points)
 
     def _turn_hands(self, seconds: float) -> None:
         angles = hand_angles(seconds)

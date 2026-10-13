@@ -79,15 +79,15 @@ def write_props_png(
     columns: int = GALLERY_COLUMNS,
 ) -> Path:
     """Draw the built-in props ``kinds`` (default: the ones that are not
-    :data:`~vidgen.cartoon.props.FURNITURE` or vehicles) in ``theme``, each in a cell of a ``columns`` wide
+    :data:`~vidgen.cartoon.props.FURNITURE`, :data:`~vidgen.cartoon.props.SMALL_PROPS` or vehicles) in ``theme``, each in a cell of a ``columns`` wide
     grid with its name below (a prop with more shapes once per shape, :data:`PROP_SHAPES`), on
     the theme background, and write a ``width`` x ``height`` PNG to ``path`` (folders are
     created; colours reduced to a 64-colour palette, so the file is small enough for the docs)."""
     from manim import Camera, Text, VGroup, tempconfig
 
-    from vidgen.cartoon.props import FURNITURE, PROP_KINDS, PROP_SHAPES, VEHICLE_KINDS, draw_prop
+    from vidgen.cartoon.props import FURNITURE, PROP_KINDS, PROP_SHAPES, SMALL_PROPS, VEHICLE_KINDS, draw_prop
 
-    chosen = [kind for kind in PROP_KINDS if kind not in (*FURNITURE, *VEHICLE_KINDS)] if kinds is None else list(kinds)
+    chosen = [kind for kind in PROP_KINDS if kind not in (*FURNITURE, *SMALL_PROPS, *VEHICLE_KINDS)] if kinds is None else list(kinds)
     shown = [(kind, shape) for kind in chosen for shape in PROP_SHAPES.get(kind, (None,))]
     frame_width, frame_height = frame_size(width, height)
     rows = -(-len(shown) // columns)

@@ -223,7 +223,7 @@ def test_wings_flap_and_glide() -> None:
     ("params", "message"),
     [
         ({"props": [{"prop": "bush", "fruit": True}]}, "fruit is for a tree, not bush"),
-        ({"props": [{"prop": "sofa", "on": True}]}, "on is for props that switch on (fireplace, kettle, lamp, tv), not sofa"),
+        ({"props": [{"prop": "sofa", "on": True}]}, "on is for props that switch on (fireplace, kettle, lamp, phone, tv), not sofa"),
         ({"room": True, "birds": True}, "birds fly outdoors"),
         ({"birds": False}, "birds: false is the default"),
         ({"birds": MAX_BIRDS + 1}, f"less than or equal to {MAX_BIRDS}"),

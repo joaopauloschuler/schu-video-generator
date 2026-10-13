@@ -4,7 +4,8 @@ A wall ``clock`` that runs turns its hands from the scene clock (:func:`clock_se
 :func:`hand_angles`); a ``tv`` that is on shows a picture that changes every second or two and
 flickers (:func:`tv_picture`); a ``lamp`` that is on glows (:data:`GLOWS`, :func:`glow_rings`); a
 ``fireplace`` that is on burns, its flames flickering and leaning with the wind
-(:func:`flame_shapes`, :func:`fire_flicker`); a ``kettle`` that is on steams (:func:`steam_puffs`).
+(:func:`flame_shapes`, :func:`fire_flicker`); a ``kettle`` that is on steams (:func:`steam_puffs`);
+a ``phone`` that is on rings in bursts, shaking (:func:`ring_shake`, DESIGN.md §69.56).
 These are on or off from the start and the ``switch_on`` / ``switch_off`` actions change them
 (:func:`switched_on`, :func:`on_spans`). Only what changes is redrawn on each frame: the moving
 parts and what is drawn over them (:func:`redrawn_members`); the rest of the set stays in Manim's
@@ -19,8 +20,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import lru_cache
 
-#: The props a ``switch_on`` / ``switch_off`` action and the stage key ``on`` act on.
-SWITCHED_PROPS: tuple[str, ...] = ("fireplace", "kettle", "lamp", "tv")
+#: The props a ``switch_on`` / ``switch_off`` action and the stage key ``on`` act on (a phone
+#: that is on rings, DESIGN.md §69.56).
+SWITCHED_PROPS: tuple[str, ...] = ("fireplace", "kettle", "lamp", "phone", "tv")
 #: The props that can move by themselves: a running clock and the switched ones.
 LIVING_KINDS: tuple[str, ...] = ("clock", *SWITCHED_PROPS)
 #: The attribute naming a living part of a prop's drawing (``hour``, ``minute``, ``second``,
@@ -106,6 +108,14 @@ STEAM_RADIUS = (0.08, 0.3)
 STEAM_OPACITY = 0.85
 STEAM_LEAN = 0.9
 STEAM_LEAN_MAX = 1.2
+#: A ringing phone (DESIGN.md §69.56): from when it starts ringing, a burst of ``RING_BURST`` s
+#: every ``RING_PERIOD`` s, in which it shakes ``RING_SHAKE_HZ`` times a second up to
+#: ``RING_TILT`` degrees either way about its middle (easing in and out over ``RING_EASE`` s).
+RING_PERIOD = 2.0
+RING_BURST = 1.0
+RING_SHAKE_HZ = 13.0
+RING_TILT = 10.0
+RING_EASE = 0.08
 
 
 @lru_cache(maxsize=256)
@@ -207,6 +217,53 @@ def on_spans(on_at_start: bool, switches: Sequence[tuple[float, bool]], end: flo
     if since is not None:
         spans.append((since, end))
     return [(a, b) for a, b in spans if b > a]
+
+
+# ----- a ringing phone ----------------------------------------------------------------------------
+
+
+def on_since(on_at_start: bool, switches: Sequence[tuple[float, bool]], now: float) -> float | None:
+    """When the span in which a prop is on at scene time ``now`` began (0 when on from the start;
+    ``None``: it is off then)."""
+    if not switched_on(on_at_start, switches, now):
+        return None
+    since = 0.0 if on_at_start else None
+    state = on_at_start
+    for time, on in sorted((s for s in switches if s[0] <= now), key=lambda s: s[0]):
+        if on and not state:
+            since = float(time)
+        state = on
+    return since
+
+
+def ring_burst(now: float, since: float | None) -> bool:
+    """Whether a phone ringing since scene time ``since`` (``None``: not ringing) is in a burst of
+    rings at ``now`` (the first burst starts at ``since``)."""
+    return since is not None and now >= since and (now - since) % RING_PERIOD < RING_BURST
+
+
+def ring_shake(now: float, since: float | None) -> float:
+    """How far (degrees, counterclockwise) a phone ringing since ``since`` is turned at scene time
+    ``now``: a fast shake of up to :data:`RING_TILT` during each burst, eased in and out; 0
+    between bursts and when it does not ring."""
+    if not ring_burst(now, since):
+        return 0.0
+    assert since is not None
+    into = (now - since) % RING_PERIOD
+    ease = min(into, RING_BURST - into, RING_EASE) / RING_EASE
+    return RING_TILT * ease * math.sin(2.0 * math.pi * RING_SHAKE_HZ * into)
+
+
+def ring_bursts(spans: Sequence[tuple[float, float]]) -> list[float]:
+    """The scene times at which the bursts of rings start while a phone rings over ``spans``
+    (:func:`on_spans`): a ring sound plays at each."""
+    starts: list[float] = []
+    for start, end in spans:
+        k = 0
+        while start + k * RING_PERIOD < end:
+            starts.append(start + k * RING_PERIOD)
+            k += 1
+    return starts
 
 
 # ----- a television's picture -------------------------------------------------------------------
@@ -412,6 +469,9 @@ __all__ = [
     "LIVING_KINDS",
     "LIVING_PART",
     "MAX_CLOCK_SPEED",
+    "RING_BURST",
+    "RING_PERIOD",
+    "RING_TILT",
     "SECOND_HAND_MAX_SPEED",
     "STEAM_LEAN_MAX",
     "STEAM_PUFFS",
@@ -437,9 +497,13 @@ __all__ = [
     "hand_angles",
     "hand_tip",
     "on_between",
+    "on_since",
     "on_spans",
     "parse_clock_time",
     "redrawn_members",
+    "ring_burst",
+    "ring_bursts",
+    "ring_shake",
     "shows_second_hand",
     "steam_box",
     "steam_puffs",

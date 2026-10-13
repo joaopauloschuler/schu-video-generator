@@ -1,6 +1,8 @@
 """Prop beat actions (DESIGN.md §69.27): ``pick_up``, ``hold``, ``put_down``, ``give`` and
 ``throw`` on the characters and props of a ``stage``, ``open`` / ``close`` on its props
-(an umbrella, §69.37) and ``blow_away`` (the wind takes a light prop, out of a hand too, §69.32).
+(an umbrella, §69.37; a book, a letter, a gift, §69.56), ``blow_away`` (the wind takes a light
+prop, out of a hand too, §69.32), ``let_go`` (held balloons float away) and ``pour`` (a held
+watering can pours water, §69.56).
 Written against ``vidgen.api`` only, like project actions.
 
 Who holds what is a :class:`Holdings` on the scene. A held prop is not added to its character
@@ -78,8 +80,8 @@ def _arm(character: Character, hand: str) -> dict[str, PartPose]:
 
 def is_overhead(prop: Prop, shape: str | None = None) -> bool:
     """Whether ``prop`` is held overhead when it shows ``shape`` (default: the shape it shows; an
-    open umbrella, :data:`OVERHEAD_SHAPES`)."""
-    return (shape or prop.shape) in OVERHEAD_SHAPES
+    open umbrella, :data:`OVERHEAD_PROPS` in :data:`OVERHEAD_SHAPES`)."""
+    return prop.kind in OVERHEAD_PROPS and (shape or prop.shape) in OVERHEAD_SHAPES
 
 
 def _carry(character: Character, hand: str, overhead: bool = False) -> dict[str, PartPose]:
@@ -138,7 +140,7 @@ def _standing_height(prop: Prop, character: Character) -> float:
 def _in_hand_height(prop: Prop, character: Character, overhead: bool = False) -> float:
     """How tall ``prop`` is in ``character``'s hand (:func:`held_height`)."""
     factor = prop.height_factor if prop.height_factor is not None else prop.height / character.character_height
-    return held_height(factor, character.character_height, overhead=overhead)
+    return held_height(factor, character.character_height, overhead=overhead, full_size=prop.kind in FULL_SIZE_HELD)
 
 
 def _standing_grip(prop: Prop, x: float, ground: float, height: float) -> list[float]:
@@ -150,7 +152,8 @@ def _standing_grip(prop: Prop, x: float, ground: float, height: float) -> list[f
 
 def _draw_beside(scene: NarratedScene, prop: Prop, character: Character, overhead: bool) -> None:
     """Draw ``prop`` right after ``character`` (in front of it, behind later ones), or right
-    before it when it is held ``overhead`` (the shaft behind the head, the canopy above it)."""
+    before it when it is held ``overhead`` (the shaft behind the head, the canopy above it) or
+    rises behind the head (balloons)."""
     mobjects = getattr(scene, "mobjects", [])
     if prop not in mobjects or character not in mobjects:
         return
@@ -170,7 +173,7 @@ def attach(scene: NarratedScene, prop: Prop, character: Character, hand: str, ar
     prop.keyed_feet = None
     character.holding[hand] = prop.name
     _held(scene)[prop.name] = _Held(character, hand, follow, arm_before, standing)
-    _draw_beside(scene, prop, character, is_overhead(prop))
+    _draw_beside(scene, prop, character, is_overhead(prop) or prop.kind in FULL_SIZE_HELD)   # balloons rise behind the head
 
 
 def detach(scene: NarratedScene, prop: Prop) -> _Held | None:
@@ -508,7 +511,7 @@ class BlowAway(Action):
     """The wind blows the target prop away (`- blow_away: napkin`): it tumbles along a gusty
     path, out of a holder's hand too, downwind and off the stage, or to `to` (a mark or an x of
     the stage), where it lands upright at its full size. Light props only (napkin, umbrella,
-    ball, cup, basket, box, or an SVG prop); faster in a stronger wind. Without `to` the stage's
+    ball, cup, basket, box, letter, balloons, or an SVG prop); faster in a stronger wind. Without `to` the stage's
     wind must blow then (vidgen validate checks); a prop blown off stage is gone for the scene."""
 
     class Options(ActionOptions):
@@ -581,6 +584,111 @@ class BlowAway(Action):
             anims.append(PropMove(prop, to=end, follow=follow, height=height,
                                   path=lambda u, a, b, rise=rise, seed=seed: blown_point(u, a, b, rise=rise, seed=seed)))
             detach(scene, prop)
+        return anims
+
+
+def _kind_problems(params: Any, name: str | None, kinds: frozenset[str], verb: str) -> list[tuple[str, str]]:
+    """A ``prop`` option naming a prop whose kind is not one of ``kinds`` (which ``verb``)."""
+    found = dict(zip(params.prop_names(), (p.prop for p in params.stage_props())))
+    if name is None or name not in found or found[name] in kinds:
+        return []
+    return [("prop", f"'{name}' ({found[name] or 'an svg prop'}) does not {verb} (props that do: {', '.join(sorted(kinds))})")]
+
+
+#: Share of a ``let_go`` by which the empty arm is back down.
+LET_GO_ARM_SHARE = 0.3
+
+
+@action("let_go")
+class LetGo(_Handling):
+    """The target character lets go of the balloons it holds (`- let_go: kit`; ``prop``: which,
+    when it holds two): they float up out of the frame, swaying, drifting with the stage's wind,
+    and are gone for the scene; its arm goes back down. Only props that float (balloons):
+    put_down the others."""
+
+    class Options(ActionOptions):
+        prop: str | None = None
+        """Which prop, when it holds two."""
+
+    run_time = 3.0
+    prop_option = "prop"
+
+    def scene_problems(self, scene_cls: type[NarratedScene], params: Any) -> list[tuple[str, str]]:
+        problems = super().scene_problems(scene_cls, params)
+        return problems + _kind_problems(params, self.options.prop, FLOATING_PROPS, "float away")
+
+    @staticmethod
+    def _end(scene: NarratedScene, prop: Prop) -> tuple[float, float]:
+        """Where ``prop``'s grip ends: above the stage, downwind (:func:`float_end`)."""
+        start = prop.grip_point()
+        top = scene.camera_bounds()[3] + float(prop.height) + 0.3
+        blowing = getattr(scene, "blowing", None)
+        force = felt_force(blowing.wind.level(float(scene.renderer.time))) if blowing is not None else 0.0
+        return float_end((float(start[0]), float(start[1])), top, force)
+
+    def run_time_for(self, scene: NarratedScene, targets: list[Target]) -> float | None:
+        """By how far the balloons rise (:func:`float_seconds`)."""
+        for character in _characters(scene, targets, "let_go")[:1]:
+            try:
+                name, _ = holdings(scene).held_prop(character.name, self.options.prop)
+            except HoldingError:
+                return None
+            prop = _prop(scene, name)
+            return float_seconds(self._end(scene, prop)[1] - float(prop.grip_point()[1]))
+        return None
+
+    def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
+        """The hand opens, the arm comes down, the balloons float away."""
+        anims: list[Animation] = []
+        for character in _characters(scene, targets, "let_go")[:1]:
+            name, hand = holdings(scene).release(character.name, self.options.prop)
+            prop = _prop(scene, name)
+            end = self._end(scene, prop)
+            held = _held(scene).get(name)
+            back = held.arm_before if held is not None else _arm(character, hand)
+            anims.append(ArmMove(character, [(LET_GO_ARM_SHARE, back)]))
+            seed = wind_seed(f"{scene.spec.id}:{name}:let_go")
+            anims.append(PropMove(prop, to=list(end), path=lambda u, a, b, seed=seed: float_point(u, a, b, seed=seed)))
+            detach(scene, prop)
+        return anims
+
+
+@action("pour")
+class Pour(_Handling):
+    """The target character pours with the watering can it holds (`- pour: kit`; ``prop``:
+    which, when it holds two): the can tilts forward at its hand, water drops leave the spout and
+    fall to the ground in front of it, then the can comes back up. Only props that pour (a
+    watering_can)."""
+
+    class Options(ActionOptions):
+        prop: str | None = None
+        """Which prop, when it holds two."""
+
+    run_time = POUR_SECONDS
+    prop_option = "prop"
+
+    def scene_problems(self, scene_cls: type[NarratedScene], params: Any) -> list[tuple[str, str]]:
+        problems = super().scene_problems(scene_cls, params)
+        return problems + _kind_problems(params, self.options.prop, POURING_PROPS, "pour")
+
+    def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
+        """Tilt the can at the hand; water runs from its spout to the ground."""
+        anims: list[Animation] = []
+        for character in _characters(scene, targets, "pour")[:1]:
+            name, hand = holdings(scene).held_prop(character.name, self.options.prop)
+            prop = _prop(scene, name)
+            if prop.kind not in POURING_PROPS:
+                raise VidgenError(f"scene '{scene.spec.id}': '{name}' does not pour (props that do: {', '.join(sorted(POURING_PROPS))})")
+            drops = WaterDrops(name=f"{name}_water")
+            mark_lit(drops)
+            mobjects = scene.mobjects
+            mobjects.insert(mobjects.index(prop) + 1 if prop in mobjects else len(mobjects), drops)
+            spout = (lambda p=prop: p.prop_point(*WATERING_SPOUT))
+            way = 1.0 if float(spout()[0]) >= float(prop.grip_point()[0]) else -1.0
+            follow = (lambda c=character, h=hand: c.hand_point(h))
+            anims.append(Pouring(prop, follow=follow, spout=spout))
+            anims.append(WaterFlow(drops, spout=spout, direction=lambda w=way: w, ground=float(character.feet()[1]),
+                                   height=character.character_height, seed=wind_seed(f"{scene.spec.id}:{name}:pour")))
         return anims
 
 

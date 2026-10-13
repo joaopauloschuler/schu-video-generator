@@ -11529,3 +11529,86 @@ How to test
   the two scratch projects: only author-caused findings; `vidgen render --preview` of the room
   mixes the `fire` bed (report `ambience: [{bed: fire, start: 3.07, end: 17.33, duck: 5}]`). The
   full suite was not run.
+
+## Step 122 — Everyday small props
+
+What was built (DESIGN §69.56)
+- Nine built-in props in `src/vidgen/cartoon/props.py` (`SMALL_PROPS`, in `PROP_KINDS` after
+  `kettle`, now 49 kinds): `cake`, `muffin`, `book`, `phone`, `letter`, `gift`, `balloons`, `vase`,
+  `watering_can`. Original primitives in theme colours (fixed hex for flames, paper, stems...).
+  `ball` already existed (Step 75): skipped.
+- `book`, `letter`, `gift` have `closed` / `open` shapes (`PROP_SHAPES`), so the existing `open`
+  / `close` actions and `open: true` work on them. A letter's `closed` shape is the sealed
+  envelope (the task's "folded"): one shape name for every prop the `close` action knows.
+- Held: `OVERHEAD_PROPS` (umbrella only) — an open book / letter / gift stays at the hold point
+  (`is_overhead` checks the kind). `FULL_SIZE_HELD` (balloons): `held_height(full_size=True)`,
+  drawn right before the holder (behind the head). Grips: balloons by the strings' knot, the can
+  by its handle.
+- Phone: a switched living prop (`SWITCHED_PROPS` gains `phone`; on = ringing), reusing Step
+  120's machinery: lit screen + amber ring lines as living overlays; `LivingProp` redraws the
+  whole phone turned by `ring_shake` (bursts of 1 s every 2 s, 13 Hz, ±10°) from its prop-unit
+  drawing (`Prop.drawn_points`, new; absolute, so holding / moving it never accumulates a turn).
+  New generated sound `phone` (sfx.py) at each burst (`Stage._ring_sounds`, after `finish`, with
+  foley, −6 dB); switching a phone on plays no click. Decision: the ring sound is done now (a
+  simple trill); Step 128 may refine it.
+- Balloons: new action `let_go` (character target, `prop`): released, arm down, `PropMove` along
+  pure `float_point` (speed-up, sway, lean) to `float_end` (above the stage, drifting with the felt
+  wind), 1–6 s. Gone for the scene (validate). `put_down` keeps working (they stand on their weight).
+- Watering can: new action `pour` (chosen over "while held and gestured": explicit and timed; 2 s):
+  `Pouring` tilts the can about its grip at the hand (`pour_tilt`), `WaterFlow` places drops from
+  `pour_drops` on a `WaterDrops` inserted after the can and removed at the end (`remover`).
+  New modules `cartoon/small_props.py` (pure) and `cartoon/small_props_drawing.py`.
+- Validate: `holding_problems(kinds=)` — `let_go` of a prop that does not float, `pour` with one
+  that does not pour, use after floating away; `prop` options checked by kind. `LIGHT_PROPS` gains
+  `letter`, `balloons`.
+- Gallery: `write_props_png` default leaves `SMALL_PROPS` out (`props.png` byte-identical, checked);
+  new `docs/gallery/media/small_props.png` (960×540, 21 KB, 4×3) in CONFIG.md.
+- Fix on the way (not asked, needed for balloons): `_moving_block` in `scenes/stage.py` also takes
+  props held right *before* a walker (overhead umbrella, balloons), so they keep their draw-order
+  place during a walk in depth.
+
+Evidence
+- Scratch `s122/yard` (storyboard, preview render, frame crops): cake held then put down, muffin /
+  phone / book / vase on a table (`lift`), phone ringing (tilts, ring lines, lit screen) and
+  picked up, balloons behind the head floating away in a breeze, gift opened in the hand, can
+  tilted with drops falling, book picked up and opened. `vidgen validate` ok; `vidgen lint`: one
+  author-caused `prop_overlap`. Fixed after looking: the gift's closed body was shared with the
+  open shape (vanished), balloon strings invisible on a dark theme, balloons covering the face,
+  ring lines too faint, open gift taller than closed.
+- Unused features: raw frame md5s and Cairo draw counts equal to HEAD a0ad843 (worktree) for
+  Step 121's orchard (231 frames) and Step 120's room with clock / tv / lamp (266 frames).
+
+Files touched
+- New: `src/vidgen/cartoon/small_props.py`, `src/vidgen/cartoon/small_props_drawing.py`,
+  `tests/test_cartoon_small_props.py`, `docs/gallery/media/small_props.png`.
+- `src/vidgen/cartoon/props.py`, `living.py`, `living_drawing.py`, `holding.py`, `wind.py`
+  (`LIGHT_PROPS`), `still.py`, `src/vidgen/scenes/handling.py`, `scenes/stage.py`,
+  `src/vidgen/sfx.py`, `src/vidgen/introspect.py`, `src/vidgen/api.py`.
+- Docs: `docs/CONFIG.md` (props table, new "Everyday small props", sounds table, foley, actions,
+  `action` / `run_time` rows, blow_away list, switch message), `DESIGN.md` (§2 tree, §6.4, §69.37
+  pointer, new §69.56), `docs/EXTENDING.md`, `docs/gallery/stage.md` (3 rows as `vidgen gallery`
+  writes them), guide `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md`, `tasklist.md` (ticks,
+  a Backlog line).
+- Tests updated (messages / lists only): `test_cartoon_props.py` (49 kinds, open message),
+  `test_cartoon_living.py`, `test_cartoon_fire_nature.py` (switched list), `test_cartoon_holding.py`
+  (open list), `test_cartoon_wind.py` (light list), `test_actions.py` (action names),
+  `test_cartoon_sheet.py` (`mid_still_actions` + `let_go`, `pour`).
+
+Public interfaces
+- `vidgen.api` adds the names in DESIGN §6.4 (Step 122); actions `let_go`, `pour`; sound `phone`.
+  Compatible: scenes without them render as before (checked by raw frames).
+
+Known gaps / TODOs (Backlog line "Small props")
+- No pouring sound, water wets nothing; no `answer` action (use `switch_off`); floated balloons are
+  gone; a held can is not mirrored when its holder turns; screenplay has no words for them.
+
+How to test
+- `pytest tests/test_cartoon_small_props.py` (17 not-render + 1 render, ~4 s).
+- Also run (not render): 18 cartoon / api / actions / sfx files (437, 4 message updates, re-run
+  121 passed), `test_docs test_guide test_schema test_gallery test_actions_coverage` (184; the
+  guide's sound list fixed, `test_guide test_docs` re-run 102 passed), `test_lint test_cartoon_lint
+  test_mcp test_cli test_json_output test_screenplay test_includes test_phase_k_review
+  test_cartoon_speed test_builtin_scenes test_extensions test_config test_cartoon_room
+  test_cartoon_lighting test_cartoon_effects test_cartoon_motion_effects test_cartoon_foley` (388
+  passed, 46 s); render: `small_props living fire_nature props holding depth wind` (14, 11 s),
+  `introspect cartoon_lint vehicles furniture stage phase_k_review` (7, 13 s). Full suite not run.
