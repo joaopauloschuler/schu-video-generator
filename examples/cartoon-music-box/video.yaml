@@ -126,7 +126,7 @@ scenes:
     voice: bram_voice
     actions:
     - walk_to: bram
-      to: 0.76
+      to: {mark: 0.76, depth: 0.5}
     - lean_on: bram
       to: tree
       at: 0.6
