@@ -1130,7 +1130,8 @@ frame's shorter side for a character 3/8 of it tall), and is never thinner than 
 **A quick look**: `vidgen character NAME` prints the character's look and colours (each token
 with the colour it resolves to); `--png [FILE]` also writes one still of it on the theme
 background, in the video's aspect ratio with its shorter side 720 px (default file:
-`exports/character_<name>.png`; `--facing left` mirrors it; `--variant NAME` applies a variant).
+`exports/character_<name>.png`; `--facing left` mirrors it, `--facing front` shows its
+[front view](#walking-in-depth-and-the-front-view); `--variant NAME` applies a variant).
 
 **Character sheet**: `vidgen character-sheet [NAME] [PROJECT]` draws every pose (the whole
 figure, rest face), every expression and every mouth shape (close-ups of the head) of a
@@ -4136,7 +4137,7 @@ never leaves the stage.
 | `at` | `centre` | a mark or an x position from 0 to 1 |
 | `depth` | `0` | 0 (front, on the ground line) to 1 (back: higher up, smaller, drawn behind) |
 | `scale` | `1` | size relative to `size` (e.g. `0.8` for a child), up to 3 |
-| `facing` | `auto` | `auto` (towards the middle), `right` or `left` |
+| `facing` | `auto` | `auto` (towards the middle), `right`, `left` or `front` (at the viewer: its [front view](#walking-in-depth-and-the-front-view); a character drawn from an SVG keeps its side, towards the middle) |
 | `pose` | none | the [pose](#poses-and-expressions) it starts in (`waving`, its own `bow`, ...); none: at rest |
 | `expression` | none | the [expression](#poses-and-expressions) it starts with (`happy`, ...); none: at rest |
 
@@ -4407,7 +4408,7 @@ kit`), and several may share a beat (each waits for the one before on the same c
 |---|---|---|
 | `say` | `bubble` (`false`; `true`: the beat's text, or a short text), `color` (`#FFFFFF`), `size` (`caption`) | the character speaks this beat; `bubble` draws a speech bubble above its head (where there is room, clear of text and other characters) with a tail towards it. Both last until the next beat starts (`until: <beat>`: until that beat starts). |
 | `look_at` | `to` (required: a character or prop of the scene, a mark, an x 0–1, or `camera`) | turns towards it and tilts the head up or down (at most 20°); `camera` turns the eyes to the viewer. Stays so. |
-| `turn` | `to` (`left` \| `right`; default: the other way) | faces the other way (a mirror at half time). Stays so. |
+| `turn` | `to` (`left` \| `right` \| `front`; default: the other way, from the front the side it faced before) | faces the other way (a mirror at half time), or turns between its side and the viewer ([front view](#walking-in-depth-and-the-front-view)): it narrows as it turns, swapping its shapes half-way. Stays so. |
 | `emote` | `to` (required: an expression) | changes the expression (eyes, brows, mouth ease one after another). Stays so. |
 | `pose` | `to` (required: a pose) | takes the pose (body, legs, arms, head ease one after another). Stays so. |
 | `react` | `expression` and / or `pose` | a listener's reaction for this beat: undone when the next beat starts. |
@@ -4503,8 +4504,8 @@ as targets and the new state as an option:
 
 | action | options | |
 |---|---|---|
-| `walk_to` | `to` (required: a mark or an x 0–1 of the stage), `speed` (`2.5`) | walks along the ground to that place, facing the way it goes, legs, arms and body moving in step; it speeds up, walks at `speed` units per second (the frame's shorter side is 8 units; a character is about 3.6 tall at `size: 0.45`) and slows down. It takes as long as the distance needs: about 3.3 s from `left` to `right` of a 16:9 stage (7.1 units), plus the wind-up and settle of [`cartoon_motion`](#animation-principles-cartoon_motion). Stays there. |
-| `run_to` | `to` (required), `speed` (`6`) | runs there: a `walk_to` at running speed with steps 1.6 times as long, legs and arms swinging 1.5 times as far, knees and elbows bending more and the body leaning forward 12° at full speed (also with `cartoon_motion: none`). About 1.4 s from `left` to `right` of a 16:9 stage, plus the wind-up and settle. Footsteps follow the longer strides; with [motion effects](#motion-effects-motion_effects) dust puffs up where it sets off and stops and speed lines trail it. |
+| `walk_to` | `to` (a mark or an x 0–1 of the stage, or `{mark, depth}`), `depth` (0 front .. 1 back; default: its depth now), `speed` (`2.5`); `to` or `depth` | walks along the ground to that place (and depth: [walking in depth](#walking-in-depth-and-the-front-view)), facing the way it goes, legs, arms and body moving in step; it speeds up, walks at `speed` units per second (the frame's shorter side is 8 units; a character is about 3.6 tall at `size: 0.45`) and slows down. It takes as long as the distance needs: about 3.3 s from `left` to `right` of a 16:9 stage (7.1 units), plus the wind-up and settle of [`cartoon_motion`](#animation-principles-cartoon_motion). Stays there. |
+| `run_to` | `to`, `depth` (as `walk_to`), `speed` (`6`) | runs there: a `walk_to` at running speed with steps 1.6 times as long, legs and arms swinging 1.5 times as far, knees and elbows bending more and the body leaning forward 12° at full speed (also with `cartoon_motion: none`). About 1.4 s from `left` to `right` of a 16:9 stage, plus the wind-up and settle. Footsteps follow the longer strides; with [motion effects](#motion-effects-motion_effects) dust puffs up where it sets off and stops and speed lines trail it. |
 | `enter` | `side` (`left` \| `right`; default: the edge nearer where it goes), `door` (instead of `side`: a [room](#rooms-room)'s door by name), `to` (a mark or x; default its own `at`), `speed` | walks in from just beyond that edge of what the camera shows, or through the door (it opens; the character fades in in the doorway over 0.35 s). A character with an `enter` action waits off stage (beyond the stage's edge) from the start of the scene until then. |
 | `exit` | `to` (`left` \| `right`; default: the nearer edge), `door` (instead of `to`: a room's door by name), `speed` | walks out beyond that edge of what the camera shows, or to the door (it opens) where it fades out over 0.35 s, then waits off stage (an `enter` brings it back). A camera `follow`ing it stops (and stays). |
 | `gesture` | `to` (required: `point`, `wave`, `shrug`, `nod`, `shake_head`), `big` (`false`) | `big: true`: a sweeping gesture, a whoosh arc trailing the hand of a `point`, `wave` or `shrug` ([motion effects](#motion-effects-motion_effects)). The gesture, then back to its pose: `point` raises the near arm forward, `wave` raises it and waves three times, `shrug` raises both arms, `nod` dips the head twice, `shake_head` moves the head (and eyes) side to side twice. 1.2 s (`point`), 1.6 (`wave`), 1.0 (`shrug`), 0.9 (`nod`), 1.1 (`shake_head`). |
@@ -4543,6 +4544,63 @@ scenes:
         actions:
           - {jump: pip}
           - {exit: kit, to: right, at: 0.4}
+```
+
+#### Walking in depth and the front view
+
+`walk_to` and `run_to` also walk towards or away from the camera: `depth` (or `to: {mark,
+depth}`) is where the character ends up, from `0` (the front: the ground line, full size) to
+`1` (the back: higher up, 0.55 of the size), like a stage character's own `depth`. x and depth
+change together in a straight line on the ground; the character grows or shrinks as it goes
+(its outlines and whatever it holds with it), its shadow follows it on the ground, and it passes
+behind or in front of the characters and props it walks by at the moment its depth passes theirs
+(at the same depth a character stands in front of a prop). Walking from depth 0 to 1 is as far as
+walking two of its heights across the stage, so it takes about as long. Walking only in depth
+it keeps its facing (a side view walks on the spot as it grows or shrinks; facing `front` it
+steps towards the camera, a leg lifting with each step); with an x it faces the way it goes. In
+a [room](#rooms-room) a walk may not go behind the wall (`vidgen validate`).
+
+`facing: front` (a stage character's start, or `turn: <name>, to: front`) shows a generated
+character's **front view**: the same parts and shapes seen from the front, the face in the
+middle of the head with the pupils looking ahead, a symmetric nose, hair and body, both arms
+beside the body and in front of it (glasses get a temple on each side). Poses, expressions,
+gestures, lip sync, blinking, looks, wind and effect symbols work in it; a turn between the side
+and the front narrows the figure towards the middle of the turn and swaps the shapes there, then
+widens it again (0.4 s). `look_at` something beside it turns it to its side; `look_at: camera`
+keeps the front. Sitting, leaning, crouching (to pick up or put down something low) and walks
+across are drawn from the side: they turn it to its side.
+A character drawn from an [SVG file](#characters-from-svg-files) has no front view: it keeps
+its side (`vidgen validate` warns).
+
+`vidgen validate` reports a `sit_on`, `lean_on`, `pick_up` or `give` across depths (further
+apart than 0.05): the character must first walk to the prop's or the other character's depth,
+with the `walk_to` that does it:
+
+```
+scenes[0].beats[1].actions[0].to: dot stands at depth 0 and 'sofa' at depth 0.4; walk_to first (- walk_to: dot, to: {mark: 0.42, depth: 0.4})
+```
+
+A prop put down or thrown lands at its holder's depth. The [layout dump](#layout-dump-buildlayoutscenejson)
+gives each character away from the front its `depth`; `vidgen lint`'s `character_overlap` and
+`walk_overlap` leave out two characters 0.15 or more apart in depth (one stands behind the
+other; `hidden_speaker` still reports a speaker hidden that way).
+
+```yaml
+scenes:
+  - id: den
+    type: stage
+    params:
+      room: {wallpaper: stripes, depth: 0.4}
+      props: [{prop: sofa, at: centre, against: wall}]
+      characters: [{name: dot, at: left}, {name: moss, at: right, depth: 0.3, facing: front}]
+    beats:
+      - text: "Dot walks back to the sofa, past Moss."
+        actions:
+          - {walk_to: dot, to: {mark: 0.45, depth: 0.4}}
+      - text: "She sits down, and Moss steps towards us to tell us why."
+        actions:
+          - {sit_on: dot, to: sofa}
+          - {walk_to: moss, depth: 0, at: 0.3}
 ```
 
 #### Props in hands
@@ -5907,7 +5965,8 @@ Each object:
 | other kinds: `fill`, `stroke` | `{color, opacity}` / `{color, opacity, width_px}` of the largest visible part, or `null` |
 | `icon` only: `icon` | the icon's name (`cpu`); its `bbox` is what it draws, not its padded design box |
 | `character` only: `walked_in` | the beat in which its last walk (`walk_to`, `enter`) ended; absent before it walks (read by the `walk_overlap` rule) |
-| `character` only: `facing`, `speaking` | `left` or `right`; whether its lip sync runs (it speaks this beat) |
+| `character` only: `facing`, `speaking` | `left`, `right` or `front`; whether its lip sync runs (it speaks this beat) |
+| `character` only: `depth` | how far back it stands on the stage (0..1), absent at the front (0); read by `character_overlap` and `walk_overlap` |
 | `character` only: `face` | the box of its head (with hair and ears), absent without a `head` part |
 | `character` only: `viseme`, `looked_at`, `passage` | when they apply: the viseme its lip sync shows (`rest` between words), the `to` of its last `look_at` (a name, a mark or `camera`), and `enter` / `exit` while it walks in or out |
 | `character` only: `holding` | the props in its hands, `{hand: prop}` (`{"left": "ball"}`); absent while it holds nothing ([Props in hands](#props-in-hands)) |
@@ -6027,9 +6086,9 @@ across the screen's width). Objects fainter than `lint.min_opacity` are ignored 
 | `contrast` | warning | text whose WCAG contrast ratio with its `backdrop` is below `min_ratio` (4.5, WCAG AA), `large_ratio` (3) for text with a cap height of at least `large_size`, or `dimmed_ratio` (2) for text faded on purpose (opacity below 1, e.g. previous bullets); the text colour is blended with the backdrop at the text's opacity, every colour of a multi-coloured text is checked. A code listing's line numbers are not checked |
 | `max_words` | warning | more than `max_words` words (tokens with a letter) of visible `text` objects in one still; code and math do not count |
 | `overlay_overlap` | warning | an [overlay](#overlays) whose box (all its objects) covers at least `min_overlap` of the box of a scene text or icon. `text_overlap` and `covered_text` leave an overlay over scene text to this rule; overlays of a type with a `lint_skip` (the watermark: `contrast`) are not checked by those rules |
-| `walk_overlap` | warning | a character whose walk (`walk_to`, `enter`) ended in the still's beat sharing at least `min_overlap` of the narrower character's width with another character: it stopped on the other's place. Only characters that walked in that beat are checked (the layout dump's `walked_in`); see [Moving](#moving) |
+| `walk_overlap` | warning | a character whose walk (`walk_to`, `enter`) ended in the still's beat sharing at least `min_overlap` of the narrower character's width with another character: it stopped on the other's place. Only characters that walked in that beat are checked (the layout dump's `walked_in`), and not two 0.15 or more apart in depth (one behind the other); see [Moving](#moving) |
 | `off_stage` | warning | a character with at least `min_hidden` of its box outside the view (the frame, or what a `pan` / `follow` shows) and part of it inside. Not reported: characters wholly outside (waiting to enter, gone), while it walks in or out (`enter`, `exit`), and while the camera is zoomed in. In a [shot](#shots-shot) (other than `wide`) only the characters it frames are checked, wholly outside too: their face in a `medium`, `over_shoulder` or `closeup` shot, their whole box in a `two_shot`; the near character of an `over_shoulder` shot and characters the shot does not frame may be cut. Fix: put it on a mark inside the view, or pan to it (in a shot: keep it from walking out, or frame another shot) |
-| `character_overlap` | warning | two characters at rest whose boxes share at least `min_overlap` of the narrower one's width. A character that walked in the still's beat is `walk_overlap`'s. Fix: marks further apart, or walk one away |
+| `character_overlap` | warning | two characters at rest whose boxes share at least `min_overlap` of the narrower one's width, at depths less than 0.15 apart (further apart one stands behind the other: [walking in depth](#walking-in-depth-and-the-front-view)). A character that walked in the still's beat is `walk_overlap`'s. Fix: marks further apart, or walk one away (across, or in depth) |
 | `bubble_overlap` | warning | a speech bubble (`say` with `bubble`) covering at least `min_overlap` of a character's face box (its speaker's too), of the smaller of two bubbles, or of an [effect symbol](#effect-symbols-effect)'s box. Fix: a shorter `bubble` text, the characters further apart, or the two lines (or the line and the effect) in different beats |
 | `facing_away` | warning | a speaking character facing away from the one it talks to: the character it last looked at (`look_at`), else the nearest one; not checked after `look_at: camera` (it talks to the viewer). Fix: `turn`, `look_at: <listener>`, or swap their marks |
 | `hidden_speaker` | warning | a speaking character with at least `min_hidden` of its face box covered by things drawn in front of it (a character or prop nearer the camera, a foreground layer, an overlay; not an effect symbol). The characters are drawn side-on and face left or right, so they never turn their back: this is the case where the viewer cannot see who talks. Fix: move one of them, or a smaller `depth` for the speaker |

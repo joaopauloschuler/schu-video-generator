@@ -54,7 +54,7 @@ scenes:
 | `characters.at` | `str \| float` | `'centre'` | Where it stands: a mark (far_left, left, centre, right, far_right, or the stage's own marks) or an x position from 0 (left edge) to 1 (right edge). |
 | `characters.depth` | `float` | `0.0` | 0 = on the ground line at full size; up to 1 = at the back of the stage, higher up and 0.55 x the size; deeper characters are drawn behind. |
 | `characters.scale` | `float` | `1.0` | Its size relative to the stage's size (e.g. 0.8 for a child). |
-| `characters.facing` | `'auto' \| 'right' \| 'left'` | `'auto'` | Which way it looks; auto: towards the middle of the stage (right on the left half, left on the right half). |
+| `characters.facing` | `'auto' \| 'right' \| 'left' \| 'front'` | `'auto'` | Which way it looks; auto: towards the middle of the stage (right on the left half, left on the right half); front: at the viewer (its front view; an SVG character keeps its side). |
 | `characters.pose` | `str \| None` |  | The pose it starts in (stand, pointing, waving, thinking, shrug, arms_crossed, sitting, or its own); none: at rest. |
 | `characters.expression` | `str \| None` |  | The expression it starts with (neutral, happy, sad, angry, surprised, worried, thinking, or its own); none: at rest. |
 | `size` | `float` | `0.45` | Height of a character at depth 0, as a fraction of the frame's shorter side. |

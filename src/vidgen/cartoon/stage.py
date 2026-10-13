@@ -186,6 +186,82 @@ def facing_towards_centre(x_fraction: float) -> str:
     return "right" if x_fraction <= 0.5 else "left"
 
 
+def facing_sign(facing: str, front: float = 1.0) -> float:
+    """+1 for a thing facing ``right``, -1 for ``left``, ``front`` for one facing the viewer
+    (``front``, DESIGN.md §69.44): which way "ahead of it" is on screen."""
+    return 1.0 if facing == "right" else -1.0 if facing == "left" else front
+
+
+# ----- walking in depth (DESIGN.md §69.44) -------------------------------------------------------
+
+#: How far a walk from depth 0 to depth 1 goes, in the walker's heights where it starts: a walk
+#: in depth takes about as long as a walk across the stage of that many heights.
+DEPTH_WALK_HEIGHTS = 2.0
+#: Depths closer than this count as the same depth (draw order, lint, validate).
+SAME_DEPTH = 1e-6
+
+
+def walk_destination(options: Mapping[str, object]) -> tuple[object, float | None]:
+    """``(place, depth)`` a ``walk_to`` / ``run_to`` goes to, from its options as written: ``to``
+    a mark or an x, or ``{mark, depth}``, and ``depth``; ``None``: where it is (that x, or that
+    depth)."""
+    to, depth = options.get("to"), options.get("depth")
+    if isinstance(to, Mapping):
+        to, depth = to.get("mark"), to.get("depth", depth)
+    return to, None if depth is None else float(depth)  # type: ignore[arg-type]
+
+
+def depth_walk_distance(dx: float, start_depth: float, end_depth: float, height: float) -> float:
+    """How far (Manim units) a walk goes that moves ``dx`` units across the stage and from
+    ``start_depth`` to ``end_depth``, for a walker ``height`` units tall where it starts: the x
+    move and the depth move (:data:`DEPTH_WALK_HEIGHTS` heights per unit of depth) at right
+    angles on the ground."""
+    return math.hypot(dx, (end_depth - start_depth) * DEPTH_WALK_HEIGHTS * height)
+
+
+def depth_along(start_depth: float, end_depth: float, share: float) -> float:
+    """The depth of a walker ``share`` (0..1) of the way along its walk (x and depth move
+    together, in a straight line on the ground)."""
+    share = min(max(share, 0.0), 1.0)
+    return start_depth + (end_depth - start_depth) * share
+
+
+def depth_crossings(start_depth: float, end_depth: float, others: Mapping[str, float]) -> list[tuple[float, str]]:
+    """``(share, name)`` for each of ``others`` (name -> depth) whose depth a walker going from
+    ``start_depth`` to ``end_depth`` passes, at the share (0..1) of its walk where its depth
+    equals that thing's and its place in the draw order changes; in walking order. A thing at the
+    start or end depth is not passed."""
+    span = end_depth - start_depth
+    if abs(span) <= SAME_DEPTH:
+        return []
+    found = []
+    for name, depth in others.items():
+        share = (depth - start_depth) / span
+        if 0.0 < share < 1.0 and abs(depth - start_depth) > SAME_DEPTH and abs(depth - end_depth) > SAME_DEPTH:
+            found.append((share, name))
+    return sorted(found)
+
+
+def depth_slot(depth: float, others: Sequence[tuple[float, bool]], current: int) -> int:
+    """Where a character at ``depth`` belongs among ``others`` (the other things on the stage in
+    drawing order, back to front: ``(depth, is_character)``), as the number of them drawn before
+    it, starting from ``current`` (where it is now): after everything deeper and after the props
+    at its depth (a character stands in front of a prop at the same depth, §69.8), before
+    everything nearer; among characters at its depth it keeps its place."""
+    low = 0
+    high = len(others)
+    for k, (other, is_character) in enumerate(others):
+        if other > depth + SAME_DEPTH or (abs(other - depth) <= SAME_DEPTH and not is_character):
+            low = k + 1
+    for k, (other, _) in enumerate(others):
+        if other < depth - SAME_DEPTH:
+            high = k
+            break
+    if low > high:   # the others are not in depth order themselves (a keyed move): after the deeper ones
+        return low
+    return min(max(current, low), high)
+
+
 def layer_transform(factor: float, camera_center: Sequence[float], zoom: float) -> tuple[float, tuple[float, float]]:
     """``(scale, (dx, dy))``: how to move a layer drawn for the camera's home view (centre at the
     origin, zoom 1) so that, seen through a camera at ``camera_center`` (x, y) with ``zoom``
@@ -221,15 +297,22 @@ def layer_half_extent(
 
 __all__ = [
     "DEFAULT_FACTORS",
+    "DEPTH_WALK_HEIGHTS",
     "FAR_RISE",
     "FAR_SCALE",
     "LAYER_PLACES",
     "MARKS",
     "MAX_ZOOM",
+    "SAME_DEPTH",
     "StagePlacement",
     "StageItem",
+    "depth_along",
+    "depth_crossings",
     "depth_scale",
+    "depth_slot",
+    "depth_walk_distance",
     "draw_order",
+    "facing_sign",
     "facing_towards_centre",
     "feet_point",
     "ground_top",
@@ -239,4 +322,5 @@ __all__ = [
     "mark_x",
     "stage_layout",
     "unknown_mark_message",
+    "walk_destination",
 ]

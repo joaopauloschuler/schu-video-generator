@@ -18,7 +18,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from vidgen.camera import Bounds, view_center_within
-from vidgen.cartoon.stage import MAX_ZOOM
+from vidgen.cartoon.stage import MAX_ZOOM, facing_sign
 from vidgen.config import SHOT_NAMES
 
 #: The framings, from the widest (the keys of :data:`~vidgen.config.SHOT_NAMES`: how many
@@ -101,7 +101,7 @@ def _clamp(value: float, low: float, high: float) -> float:
 
 
 def _sign(facing: str) -> float:
-    return 1.0 if facing == "right" else -1.0
+    return facing_sign(facing, front=0.0)
 
 
 def _one(subject: ShotFigure, kind: str, frame_width: float, frame_height: float) -> tuple[float, float, float]:

@@ -222,10 +222,16 @@ from vidgen.cartoon.props import (  # noqa: E402
 )
 from vidgen.cartoon.stage import (  # noqa: E402
     DEFAULT_FACTORS,
+    DEPTH_WALK_HEIGHTS,
     LAYER_PLACES,
     MARKS,
+    SAME_DEPTH,
     StageItem,
     StagePlacement,
+    depth_scale,
+    depth_slot,
+    depth_walk_distance,
+    facing_sign,
     facing_towards_centre,
     feet_point,
     ground_top,
@@ -235,6 +241,7 @@ from vidgen.cartoon.stage import (  # noqa: E402
     numbered_names,
     prop_default_name,
     stage_layout,
+    walk_destination,
 )
 from vidgen.camera import view_center_within  # noqa: E402
 from vidgen.cartoon.shots import SHOT_KINDS, SHOT_MOVE_SECONDS, Shot, ShotFigure, ShotView, frame_shot, shot_figures, shot_view  # noqa: E402
@@ -673,6 +680,13 @@ VIDGEN_NAMES: tuple[str, ...] = (
     "StageItem",
     "StagePlacement",
     "facing_towards_centre",
+    "DEPTH_WALK_HEIGHTS",
+    "SAME_DEPTH",
+    "depth_scale",
+    "depth_slot",
+    "depth_walk_distance",
+    "facing_sign",
+    "walk_destination",
     "mark_x",
     "numbered_names",
     "prop_default_name",

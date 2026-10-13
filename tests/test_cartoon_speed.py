@@ -54,11 +54,12 @@ def test_part_drawings_are_made_once_per_look(counted: list[CharacterLook]) -> N
     first = build_character(pip, theme=theme, height=2.0)
     first.set_pose("pointing").set_expression("surprised")
     build_character(posed, theme=theme, height=4.0, facing="left").set_pose("lean")
-    assert counted == [LOOK]   # other name, voice, poses, height, facing and state: the same drawings
+    assert counted == [LOOK, LOOK]   # its side and front view; other name, voice, poses, height, facing and state: the same drawings
     build_character(CharacterEntry(name="pip", look=LOOK.model_copy(update={"ears": "round"})), theme=theme)
-    assert len(counted) == 2
+    assert len(counted) == 4
     colors = {part: resolve_color(value, theme) for part, value in pip.colors.model_dump().items()}
-    assert look_parts(LOOK, colors) is look_parts(LOOK, dict(colors)) and len(counted) == 2
+    assert look_parts(LOOK, colors) is look_parts(LOOK, dict(colors)) and len(counted) == 4
+    assert look_parts(LOOK, colors, front=True) is not look_parts(LOOK, colors) and len(counted) == 4
 
 
 def test_look_cache_keeps_the_newest_looks(counted: list[CharacterLook], monkeypatch: pytest.MonkeyPatch) -> None:

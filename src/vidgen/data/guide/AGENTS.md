@@ -681,12 +681,12 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `light` | on a `stage`: fade the light to `morning`, `sunset`, `night`, `indoor` or `day` (`- light: night`; `run_time` = the fade, 2 s) | when time passes in the story |
 | `say` | on a `stage`: pick who speaks the beat (`- say: kit`; `bubble: true` or a short text for a speech bubble) | without it the characters whose `voice` is the beat's voice speak; bubbles for short lines |
 | `look_at` | on a `stage`: a character looks at another, a prop, a mark or `camera` (`to:`) | when attention moves |
-| `turn` | on a `stage`: a character faces the other way (`to: left` / `right`) | |
+| `turn` | on a `stage`: a character faces the other way (`to: left` / `right`), or the viewer (`to: front`: its front view) | an SVG character has no front view |
 | `emote` | on a `stage`: change a character's expression (`to: happy`) | on the word that causes it (`at`) |
 | `pose` | on a `stage`: change a character's pose (`to: pointing`) | one pose change per beat |
 | `react` | on a `stage`: a listener's `expression` / `pose` for this beat only | the listener, not the speaker |
 | `effect` | on a `stage`: a symbol over a character's head for this beat (`to: idea`, `question`, `exclaim`, `sweat`, `anger`, `sleep`, `hearts`, `stars`, `sparkle`, `tear`) | a feeling that should read at a glance; one per line |
-| `walk_to` | on a `stage`: a character walks to a mark or x (`to:`; `speed`) | with `follow` on a wide stage; the walk takes its distance's time |
+| `walk_to` | on a `stage`: a character walks to a mark or x (`to:`; `speed`), also towards or away from the camera (`depth: 0.4`, or `to: {mark: right, depth: 0.4}`) | with `follow` on a wide stage; the walk takes its distance's time |
 | `run_to` | on a `stage`: a character runs to a mark or x (`to:`; `speed`): longer strides, leaning forward, dust and speed lines | a hurry, a chase, an escape |
 | `enter` | on a `stage`: a character walks in from an edge (`side:`) or through a room's door (`door: door`) to its mark (or `to:`) | it waits off stage until then |
 | `exit` | on a `stage`: a character walks out by an edge (`to: left` / `right`) or through a room's door (`door: door`) | an `enter` brings it back |
@@ -763,7 +763,10 @@ asks for one, say vidgen makes original characters and offer one with the same r
   their heads free for speech bubbles.
 - **Depth**: what matters stands in front (`depth: 0`); the set goes back (`depth: 0.5`–`0.8`:
   higher, smaller, behind; the `ground_color` band reaches up to the deepest of them). Nothing in
-  front of a speaker's face (`hidden_speaker`).
+  front of a speaker's face (`hidden_speaker`). A character can walk in depth (`- {walk_to: kit,
+  to: {mark: 0.6, depth: 0.7}}`: it shrinks and passes behind what it walks by) and come forward
+  to speak (`depth: 0`). `facing: front` (or `- {turn: kit, to: front}`) turns a generated
+  character to the viewer, for a line said to the audience; it turns back with `turn`.
 - **The set**: things at the edges (a `house`, a `tree`), the middle free for the action.
   Props stay inside the frame: `far_left` / `far_right` cut a wide prop (`off_frame`). A
   drawn set is a gradient `background`, a `ground_color`, `layers` (`hills`) and props; a
@@ -795,7 +798,8 @@ asks for one, say vidgen makes original characters and offer one with the same r
   `sofa`, `armchair`, `bed`, `bookshelf`, `counter`, `fridge`, `picture`, `rug`, `houseplant`,
   `clock`, `tv`, `desk`; `{prop: sofa, at: 0.3, against: wall}` stands it at the wall's depth
   (`picture` and `clock` hang on the wall by themselves). Characters that sit on such furniture
-  stand at the wall's depth too (`depth: 0.4`); a sofa or a bed seats two.
+  stand at the wall's depth too (`depth: 0.4`, or walk there: `- {walk_to: dot, to: {mark: 0.42,
+  depth: 0.4}}`; `vidgen validate` says where); a sofa or a bed seats two.
 
 **Shot variety.** Change the shot every few beats, as a comic changes panels. A beat's `shot:`
 key cuts the camera to a framing of the characters for that beat; the next beat without one cuts
@@ -1456,7 +1460,7 @@ install; `vidgen validate` warns when it is missing.
 | `overlay_overlap` | an overlay covers scene text | `reserve: true` on the overlay, or another corner / position |
 | `walk_overlap` | a character's walk ends on another character | walk it to another mark or x, or move the other one first |
 | `off_stage` | a character is cut by the edge of the view (in a `shot`: a character it frames is out of it) | another mark or x inside the view, or `pan` to it; in a shot, keep it from walking out or frame another shot |
-| `character_overlap` | two characters stand on each other | marks further apart, or `walk_to` one away |
+| `character_overlap` | two characters stand on each other (at about the same depth) | marks further apart, or `walk_to` one away (across, or in depth) |
 | `bubble_overlap` | a speech bubble covers a face, another bubble or an effect symbol | a shorter `bubble` text, characters further apart, or the lines (or the line and the effect) in different beats |
 | `facing_away` | a speaker faces away from the one it talks to (last looked at, else the nearest) | `turn`, `look_at: <listener>`, or swap their marks |
 | `hidden_speaker` | something in front hides the speaker's face | move one of them, or a smaller `depth` for the speaker |

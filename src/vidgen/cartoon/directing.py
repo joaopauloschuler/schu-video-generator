@@ -35,7 +35,7 @@ from vidgen.cartoon.holding import HoldingError, Holdings, put_down_x
 from vidgen.cartoon.reframe import ReframeBeat, ReframeFigure, reframe_needed, reframe_path, stage_base_width
 from vidgen.cartoon.seating import SEAT_BACKS, SEAT_PLACES, PostureError, Postures
 from vidgen.cartoon.shots import FIGURE_HALF_WIDTH, Shot, ShotFigure, ShotView, shot_figures, shot_view
-from vidgen.cartoon.stage import mark_x
+from vidgen.cartoon.stage import facing_sign, mark_x, walk_destination
 from vidgen.config import DIRECTING_KINDS, ActionConfig, AutoDirectSetting, BeatConfig, ReframeSetting, SceneConfig, directing_kinds
 
 if TYPE_CHECKING:
@@ -162,8 +162,9 @@ class StageFrame:
     """A stage's geometry as the planner's lint check sees it (Manim units, no rendering): the
     frame's size, the stage's width, the x the camera's view is centred on at the start, each
     character's :class:`StagePlace`, each prop's x, the stage's own marks and the facing of each
-    prop with a seat back (a character sitting on it faces that way, DESIGN.md §69.28), and how
-    many sit side by side on each prop that seats more than one (§69.43)."""
+    prop with a seat back (a character sitting on it faces that way, DESIGN.md §69.28), how
+    many sit side by side on each prop that seats more than one (§69.43), and the depth each
+    character and prop starts at (§69.44)."""
 
     frame_width: float
     frame_height: float
@@ -174,6 +175,7 @@ class StageFrame:
     marks: Mapping[str, float] = field(default_factory=dict)
     seat_facings: Mapping[str, str] = field(default_factory=dict)
     seat_places: Mapping[str, int] = field(default_factory=dict)
+    depths: Mapping[str, float] = field(default_factory=dict)
 
     @property
     def bounds(self) -> Bounds:
@@ -181,7 +183,10 @@ class StageFrame:
         return (-self.stage_width / 2, self.stage_width / 2, -self.frame_height / 2, self.frame_height / 2)
 
     def place_x(self, place: Any) -> float | None:
-        """A mark or an x (0..1) of the stage in Manim units (``None``: neither)."""
+        """A mark or an x (0..1) of the stage in Manim units, or a walk's ``{mark, depth}``'s mark
+        (``None``: none of these)."""
+        if isinstance(place, Mapping):
+            place = place.get("mark")
         if not isinstance(place, (str, int, float)) or isinstance(place, bool):
             return None
         try:
@@ -307,6 +312,7 @@ def _still(state: _SceneState, beat: _Beat, *, view: tuple[float, float, float] 
             "kind": "character", "name": name, "order": order, "bbox": box(x0, feet, x1, feet + h),
             "face": box(x - FIGURE_HALF_WIDTH * h, feet + FACE_BOTTOM * h, x + FIGURE_HALF_WIDTH * h, feet + h),
             "facing": facing, "speaking": name in beat.speakers, "looked_at": state.looking.get(name),
+            "depth": frame.depths.get(name, 0.0),
         })
     layout = {"width": frame.frame_width * _PX, "height": frame.frame_height * _PX}
     camera = {"zoom": scale if zoomed else 1.0, "center": [cx, cy]}
@@ -358,7 +364,7 @@ def _behind(state: _SceneState, name: str, to: Any) -> bool:
     here, there = state.x.get(name), _target_x(state, to)
     if state.postures.of(name) is None or here is None or there is None:
         return False
-    return (there - here) * (1.0 if state.facing.get(name, "right") == "right" else -1.0) < 0
+    return (there - here) * facing_sign(state.facing.get(name, "right"), front=0.0) < 0
 
 
 # ----- the passes ------------------------------------------------------------------------------------
@@ -745,8 +751,10 @@ def _follow_written(state: _SceneState, beat: BeatInput, names: Sequence[str]) -
         elif act.action == "exit":
             state.present -= targets
         elif act.action in ("walk_to", "run_to"):
+            place = walk_destination(options)[0]
             for name in targets:
-                _walk(state, name, state.frame.place_x(options.get("to")) if state.frame is not None else None)
+                to_x = state.x.get(name) if place is None else state.frame.place_x(place) if state.frame is not None else None
+                _walk(state, name, to_x)
         elif act.action in ("move_along", "keyframes"):
             for name in _named([p for p in act.targets() if "." not in p], names):
                 state.x[name] = None
@@ -928,7 +936,8 @@ def stage_frame(project: Project, params: Any) -> StageFrame:
         facing = facing_towards_centre(placed.x_fraction) if facing == "auto" else facing
         places[placed.name] = StagePlace(placed.feet[0], placed.feet[1], placed.height, facing)
     camera_x = (mark_x(params.camera_at, params.stage_marks()) - 0.5) * stage_width
-    return StageFrame(frame_width, frame_height, stage_width, camera_x, places, props, params.stage_marks(), seat_facings, seat_places)
+    depths = {placed.name: placed.depth for placed in placements}
+    return StageFrame(frame_width, frame_height, stage_width, camera_x, places, props, params.stage_marks(), seat_facings, seat_places, depths)
 
 
 def stage_reframes(project: Project, params: Any) -> bool:

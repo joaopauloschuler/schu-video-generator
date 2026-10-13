@@ -105,7 +105,7 @@ class SitOn(_Posture):
             seat = prop.seat_point(place if prop.seat_places else None)
             before = character.state()
             seated = character.seated(before, float(seat[1] - character.feet()[1]) / character.character_height)
-            facing = prop.facing if prop.kind in SEAT_BACKS else character.facing
+            facing = prop.facing if prop.kind in SEAT_BACKS else character.side_facing   # sitting is drawn from the side (§69.44)
             anims.append(BodyMove(character, [(1.0, posture_parts(seated))], x=float(seat[0]), facing=facing,
                                   soles=character.sole_points(seated) or None))
             _posed(scene)[character.name] = posture_parts(before)

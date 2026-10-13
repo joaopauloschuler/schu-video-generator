@@ -360,10 +360,11 @@ def validate_warnings(project: Project) -> list[str]:
     and voices not in the bundled list and ``timestamps`` it cannot honour (§66), and SVG
     characters' unavailable actions and part warnings (§69.2), parts the characters' own
     poses name that they do not have (§69.3), characters sharing a voice and beat actions on a
-    character that lacks the parts they need (§69.11), and lines that overlap a line of their own voice
+    character that lacks the parts they need (§69.11), front views asked of SVG characters
+    (§69.44), and lines that overlap a line of their own voice
     (§69.34)."""
     from vidgen.carry import carry_warnings
-    from vidgen.cartoon.cast import acting_warnings, character_look_warnings, character_pose_warnings, shared_voice_warnings
+    from vidgen.cartoon.cast import acting_warnings, character_look_warnings, character_pose_warnings, front_view_warnings, shared_voice_warnings
     from vidgen.chapter_export import chapter_warnings
     from vidgen.imagegen import imagegen_warnings
     from vidgen.overlap import overlap_warnings
@@ -387,6 +388,7 @@ def validate_warnings(project: Project) -> list[str]:
         + character_pose_warnings(project.config, project.root)
         + shared_voice_warnings(project.config)
         + acting_warnings(project)
+        + front_view_warnings(project.config)
         + overlap_warnings(project.config)
     )
 
@@ -1419,7 +1421,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--png", nargs="?", const="", metavar="FILE",
         help="write a still of the character to FILE (default: <project>/exports/character_<name>.png)",
     )
-    p.add_argument("--facing", choices=["right", "left"], default="right", help="which way the character faces in the still (default: right)")
+    p.add_argument("--facing", choices=["right", "left", "front"], default="right", help="which way the character faces in the still: right, left or front (its front view; default: right)")
     p.set_defaults(func=cmd_character)
 
     p = sub.add_parser(

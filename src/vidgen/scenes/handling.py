@@ -114,8 +114,12 @@ def crouch(character: Character, hand: str, point: Any) -> CharacterState | None
 
 def _reach_low(character: Character, hand: str, point: Any, share: float, back: dict[str, PartPose]) -> Animation:
     """The arm reaching ``point`` at ``share`` of the action and going to ``back`` at its end,
-    crouching for a low point (:func:`crouch`) and rising again."""
+    crouching for a low point (:func:`crouch`) and rising again (from its side: a character
+    facing the front turns to its side first, DESIGN.md §69.44)."""
     low = crouch(character, hand, point)
+    if low is not None and character.facing == "front":
+        character.face(character.side_facing)
+        low = crouch(character, hand, point)
     reach = character.reached_parts(hand, point, state=low)
     if low is None:
         return ArmMove(character, [(share, reach), (1.0, back)])
@@ -297,6 +301,7 @@ class PutDown(_Handling):
         for character in _characters(scene, targets, "put_down")[:1]:
             name, hand = holdings(scene).release(character.name, self.options.prop)
             prop = _prop(scene, name)
+            prop.stage_depth = character.stage_depth   # it lands at its holder's depth (DESIGN.md §69.44)
             held = _held(scene).get(name)
             feet = character.feet()
             x = _place_x(scene, self.options.to) if self.options.to is not None else put_down_x(float(feet[0]), character.character_height, character.facing)
@@ -403,6 +408,7 @@ class Throw(_Handling):
         for character in _characters(scene, targets, "throw")[:1]:
             name, hand = holdings(scene).release(character.name, self.options.prop)
             prop = _prop(scene, name)
+            prop.stage_depth = character.stage_depth   # it lands at its holder's depth (DESIGN.md §69.44)
             held = _held(scene).get(name)
             feet = character.feet()
             x = _place_x(scene, self.options.to)

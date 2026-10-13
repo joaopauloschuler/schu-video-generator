@@ -3,7 +3,10 @@
 Every figure is built from primitives (circles, ellipses, rounded rectangles, polygons and lines)
 in character units (origin between the feet, ``y`` up), then scaled so its top is at 1. The
 proportions come from :func:`resolve_proportions` (numbers only): the look's values, varied a little
-by ``seed``. Facing right, the face sits a little to the right and the nose points right.
+by ``seed``. Facing right, the face sits a little to the right and the nose points right. The
+front view (``front=True``, DESIGN.md §69.44) draws the same parts and shapes with the face in the
+middle of the head, the pupils looking ahead, a symmetric nose, hair and body, and temples on both
+sides of glasses.
 """
 
 from __future__ import annotations
@@ -115,13 +118,16 @@ class _Frame:
     head_y: float
     face_x: float
     eye_y: float
+    front: bool = False
 
     @classmethod
-    def of(cls, p: Proportions) -> _Frame:
+    def of(cls, p: Proportions, front: bool = False) -> _Frame:
+        """Where things go for proportions ``p``; ``front``: the front view (the face centred)."""
         body_bottom = p.leg_length - 0.06
         body_top = body_bottom + p.body_height
         head_y = body_top + p.head_radius - 0.02
-        return cls(p, body_bottom, body_top, 0.0, head_y, 0.125 * p.head_radius, head_y + 0.15 * p.head_radius)
+        face_x = 0.0 if front else 0.125 * p.head_radius
+        return cls(p, body_bottom, body_top, 0.0, head_y, face_x, head_y + 0.15 * p.head_radius, front)
 
 
 def _body_shape(look: CharacterLook, f: _Frame) -> VMobject:
@@ -133,13 +139,14 @@ def _body_shape(look: CharacterLook, f: _Frame) -> VMobject:
         return RoundedRectangle(width=p.body_width, height=p.body_height, corner_radius=p.body_width * 0.4).move_to(center)
     if look.body == "square":
         return RoundedRectangle(width=p.body_width, height=p.body_height, corner_radius=0.05).move_to(center)
-    # bean: an oval pinched in at the back, a little wider at the bottom
+    # bean: an oval pinched in at the back (not from the front), a little wider at the bottom
     half_w, half_h = p.body_width / 2, p.body_height / 2
+    pinch = 0.0 if f.front else 0.22
     points = []
     for k in range(40):
         t = 2 * PI * k / 40
         x, y = math.cos(t), math.sin(t)
-        width = 1.0 + 0.12 * (-y) - (0.22 * math.exp(-((t - PI) ** 2) / 0.25))
+        width = 1.0 + 0.12 * (-y) - (pinch * math.exp(-((t - PI) ** 2) / 0.25))
         points.append([x * half_w * width, center[1] + y * half_h])
     return _polygon(points)
 
@@ -212,6 +219,8 @@ def _hair_cap(look: CharacterLook, f: _Frame) -> Polygon:
     radii = [1.35 * r if k % 2 else 1.0 * r for k in range(19)] if look.hair == "spiky" else [1.06 * r] * 25
     outer = _arc_points(cx, cy, radii, -10, 190)
     fringe = [(-0.92, -0.15), (-0.7, 0.45), (-0.3, 0.62), (0.05, 0.55), (0.45, 0.7), (0.85, 0.4), (0.98, -0.05)]
+    if f.front:   # symmetric: parted in the middle
+        fringe = [(-0.97, -0.1), (-0.75, 0.42), (-0.35, 0.62), (0.0, 0.5), (0.35, 0.62), (0.75, 0.42), (0.97, -0.1)]
     return _polygon([*outer, *((cx + a * r, cy + b * r) for a, b in fringe)])
 
 
@@ -219,10 +228,12 @@ def _hair_back(look: CharacterLook, f: _Frame) -> list[VMobject]:
     r, cx, cy = f.p.head_radius, f.head_x, f.head_y
     if look.hair == "long":
         top = _arc_points(cx, cy, [1.1 * r] * 25, 0, 180)
-        hair = _polygon([*top, (cx - 1.15 * r, cy - 1.3 * r), (cx - 0.5 * r, cy - 1.4 * r), (cx + 1.05 * r, cy - 1.25 * r)])
+        ends = [(-1.12, -1.28), (0.0, -1.38), (1.12, -1.28)] if f.front else [(-1.15, -1.3), (-0.5, -1.4), (1.05, -1.25)]
+        hair = _polygon([*top, *((cx + a * r, cy + b * r) for a, b in ends)])
         return [_trailing(hair, (cx, cy + 0.4 * r), "long")]
     if look.hair == "bun":
-        return [_trailing(Circle(radius=0.38 * r).move_to([cx - 0.15 * r, cy + 1.18 * r, 0]), (cx - 0.15 * r, cy + 0.85 * r), "bun")]
+        bun_x = cx if f.front else cx - 0.15 * r
+        return [_trailing(Circle(radius=0.38 * r).move_to([bun_x, cy + 1.18 * r, 0]), (bun_x, cy + 0.85 * r), "bun")]
     if look.hair == "curly":
         return [Circle(radius=0.32 * r).move_to([x, y, 0]) for x, y in _arc_points(cx, cy, [0.95 * r] * 12, -20, 200)]
     return []
@@ -246,13 +257,16 @@ def _ears(look: CharacterLook, f: _Frame) -> list[VMobject]:
 
 
 def _nose(look: CharacterLook, f: _Frame, c: Mapping[str, str], w: float) -> list[VMobject]:
-    r, x, y = f.p.head_radius, f.face_x + 0.05 * f.p.head_radius, f.head_y - 0.1 * f.p.head_radius
+    r, y = f.p.head_radius, f.head_y - 0.1 * f.p.head_radius
+    x = f.face_x + (0.0 if f.front else 0.05 * r)
     if look.nose == "dot":
         return [_filled(Ellipse(width=0.12 * r, height=0.09 * r).move_to([x, y, 0]), c["features"])]
     if look.nose == "round":
         return [_outlined(Circle(radius=0.1 * r).move_to([x, y, 0]), c["skin"], c["outline"], w)]
     if look.nose == "triangle":
-        return [_outlined(_polygon([(x - 0.04 * r, y + 0.11 * r), (x + 0.24 * r, y - 0.09 * r), (x - 0.04 * r, y - 0.09 * r)]), c["skin"], c["outline"], w)]
+        corners = [(x, y + 0.11 * r), (x + 0.1 * r, y - 0.09 * r), (x - 0.1 * r, y - 0.09 * r)] if f.front else \
+            [(x - 0.04 * r, y + 0.11 * r), (x + 0.24 * r, y - 0.09 * r), (x - 0.04 * r, y - 0.09 * r)]
+        return [_outlined(_polygon(corners), c["skin"], c["outline"], w)]
     return []
 
 
@@ -279,7 +293,7 @@ def _eye_xs(f: _Frame) -> tuple[float, float]:
 
 def _open_eye(look: CharacterLook, x: float, f: _Frame, c: Mapping[str, str], w: float) -> VGroup:
     width, height = _eye_size(look, f)
-    y, look_x = f.eye_y, 0.15 * width  # pupils look a little to the right
+    y, look_x = f.eye_y, 0.0 if f.front else 0.15 * width  # pupils look a little to the right (from the front: ahead)
     if look.eyes == "dot":
         return VGroup(_filled(Ellipse(width=width, height=height).move_to([x, y, 0]), c["features"]))
     if look.eyes == "sleepy":
@@ -348,7 +362,10 @@ def _worn_on_head(look: CharacterLook, f: _Frame, c: Mapping[str, str], w: float
         lenses = [Circle(radius=lens_r).move_to([x, f.eye_y, 0]).set_fill(EYE_WHITE, opacity=0.15).set_stroke(c["outline"], width=w) for x in (back_x, front_x)]
         bridge = Line([back_x + lens_r, f.eye_y, 0], [front_x - lens_r, f.eye_y, 0]).set_stroke(c["outline"], width=w)
         temple = Line([back_x - lens_r, f.eye_y, 0], [cx - 0.97 * r, f.eye_y + 0.05 * r, 0]).set_stroke(c["outline"], width=w)
-        group.add(temple, *lenses, bridge)
+        temples = [temple]
+        if f.front:   # one on each side
+            temples.append(Line([front_x + lens_r, f.eye_y, 0], [cx + 0.97 * r, f.eye_y + 0.05 * r, 0]).set_stroke(c["outline"], width=w))
+        group.add(*temples, *lenses, bridge)
     if "hat" in look.accessories:
         brim_y = cy + 0.72 * r
         crown = RoundedRectangle(width=1.4 * r, height=0.9 * r, corner_radius=0.15 * r).move_to([cx, brim_y + 0.45 * r, 0])
@@ -359,12 +376,15 @@ def _worn_on_head(look: CharacterLook, f: _Frame, c: Mapping[str, str], w: float
     return group
 
 
-def generate_parts(look: CharacterLook, colors: Mapping[str, str], *, outline_width: float = OUTLINE_WIDTH) -> list[CharacterPart]:
+def generate_parts(
+    look: CharacterLook, colors: Mapping[str, str], *, outline_width: float = OUTLINE_WIDTH, front: bool = False,
+) -> list[CharacterPart]:
     """The parts of the figure ``look`` describes, in character units with its top at 1.
     ``colors`` maps every key of :data:`COLOR_KEYS` to a Manim colour; ``outline_width`` is the
-    stroke width of outlines and feature lines (the :class:`Character` scales it with its height).
+    stroke width of outlines and feature lines (the :class:`Character` scales it with its height);
+    ``front``: its front view, the same parts and shapes seen from the front (DESIGN.md §69.44).
     The same look always gives the same shapes."""
-    f = _Frame.of(resolve_proportions(look))
+    f = _Frame.of(resolve_proportions(look), front)
     w = outline_width
     parts = [
         *_legs(f, colors, w),

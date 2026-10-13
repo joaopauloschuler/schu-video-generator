@@ -161,7 +161,7 @@ def test_facing_left_mirrors_the_whole_character_about_the_feet() -> None:
         assert np.allclose(left[name][:, 0], 2 * x - right[name][:, 0]) and np.allclose(left[name][:, 1], right[name][:, 1])
     c.turn()
     assert c.facing == "right" and all(np.allclose(right[n], p) for n, p in snapshot(c).items())
-    with pytest.raises(VidgenError, match="right or left"):
+    with pytest.raises(VidgenError, match="right, left or front"):
         c.face("up")
 
 

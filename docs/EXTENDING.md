@@ -166,7 +166,9 @@ and `shape_names("mouth")` before posing it; its outline width follows `height`.
 one still of it. Pose a part about its pivot with `set_part(part, angle=..., scale=..., shift=...,
 shape=...)` (degrees counterclockwise as drawn facing right; its child parts follow, e.g. the
 head carries the eyes), swap a shape with `swap("mouth", "open")`, mirror the whole character
-with `face("left")` / `turn()`, and snapshot or restore a pose with `state()` / `set_state()`.
+with `face("left")` / `turn()`, show a generated character's front view with `face("front")`
+(`has_front_view`; an SVG character keeps its side; `PoseChange(hero, facing="front")` turns to
+it, DESIGN.md §69.44), and snapshot or restore a pose with `state()` / `set_state()`.
 Move and scale the character with Manim's own `move_to` / `shift` / `scale`; poses set afterwards
 land where it is. Named poses (`stand`, `pointing`, `waving`, `thinking`, `shrug`,
 `arms_crossed`, `sitting`) and expressions (`neutral`, `happy`, `sad`, `angry`, `surprised`,
@@ -188,7 +190,9 @@ clock=self.beat_clock())`), so it stays in step through a `PoseChange`; `stop_li
 it now or, when the next beat `overlap`s this line, once that beat ends, DESIGN.md §69.34); `show_viseme("O")` shows one of `VISEMES` at once; a
 character without a mouth is left alone. `Walk(hero, x)` walks it along the ground to `x`
 (`speed=`, units per second; `start_x=` / `park_x=` for an entrance or exit; `fade_in=` /
-`fade_out=` seconds to appear or vanish on the way, as through a door, `passage_fade`), `Gesture(hero,
+`fade_out=` seconds to appear or vanish on the way, as through a door, `passage_fade`; `depth=`
+with `feet_y=` (the ground line's y at a depth) walks towards or away from the camera too,
+growing or shrinking, from `hero.stage_depth`, DESIGN.md §69.44), `Gesture(hero,
 "wave")` (`point`, `wave`, `shrug`, `nod`, `shake_head`) and `Jump(hero, 0.4)` play a motion and
 end in the pose; all three keep lip sync in step, and their timing is the pure functions
 `walk_seconds`, `enter_path`, `exit_path`, `offstage_x` (no manim). These four animations add

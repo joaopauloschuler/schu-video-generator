@@ -354,12 +354,14 @@ def looked_state(character: Character, look: LookPose) -> CharacterState:
 
 @action("turn")
 class Turn(_Acting):
-    """The target character turns round (``to: left`` / ``right``: faces that way). It stays so
-    (``until: <beat>`` turns it back)."""
+    """The target character turns round (``to: left`` / ``right``: faces that way; ``front``:
+    faces the viewer, its front view, narrowing as it turns and swapping its shapes half-way; an
+    SVG character has no front view and keeps its side). It stays so (``until: <beat>`` turns it
+    back)."""
 
     class Options(ActionOptions):
-        to: Literal["left", "right"] | None = None
-        """left or right; default: the other way."""
+        to: Literal["left", "right", "front"] | None = None
+        """left, right or front (towards the viewer); default: the other way (from the front: the side it faced before)."""
 
     run_time = 0.4
     reversible = True
@@ -368,10 +370,13 @@ class Turn(_Acting):
         return self._target_characters(scene_cls, params)[1]
 
     def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
-        """Mirror each character that does not face ``to`` yet (halfway through)."""
+        """Mirror each character that does not face ``to`` yet, or turn it between its side and
+        its front (halfway through)."""
         anims = []
         for character in _characters(scene, targets, "turn"):
-            facing = self.options.to or ("left" if character.facing == "right" else "right")
+            facing = self.options.to or (character.side_facing if character.facing == "front" else "left" if character.facing == "right" else "right")
+            if facing == "front" and not character.has_front_view:
+                continue   # an SVG character keeps its side (vidgen validate warns)
             if facing != character.facing:
                 state = character.state()
                 anims.append(self._change(character, CharacterState(facing, dict(state.parts))))

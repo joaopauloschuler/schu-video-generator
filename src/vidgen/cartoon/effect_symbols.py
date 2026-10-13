@@ -29,6 +29,7 @@ from vidgen.cartoon.effects import (
     pop_scale,
     spot_at,
 )
+from vidgen.cartoon.stage import facing_sign
 from vidgen.config import CHARACTER_INK
 
 #: Fills of the shapes besides the symbol's colour (``main``).
@@ -100,7 +101,7 @@ class EffectSymbol(VGroup):
     def place(self, spot: EffectSpot, facing: str, strength: float = 1.0) -> EffectSymbol:
         """Draw every piece for its pose at :attr:`age` (popped in with ``cartoon_motion``
         ``strength``, shrinking once leaving) with the symbol's middle and height ``spot``."""
-        side = 1.0 if facing == "right" else -1.0
+        side = facing_sign(facing)
         whole = pop_scale(self.age, strength)
         if self.leaving is not None:
             whole *= exit_scale(self.age - self.leaving)

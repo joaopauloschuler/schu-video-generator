@@ -10398,3 +10398,118 @@ How to test
   test_cartoon_parallax test_cartoon_wind test_cartoon_rain` (18, 12 s), `test_cartoon_directing
   test_screenplay test_includes test_phase_i_review test_introspect` (5, 17 s). The full suite
   was not run.
+
+## Step 111 — Moving in depth, and a front view
+
+What was built
+- Walks in depth: `walk_to` / `run_to` take `depth` (0..1) or `to: {mark, depth}` (`WalkPlace`
+  in `scenes/moving.py`); `to` may be left out (walk only in depth). Pure geometry in
+  `cartoon/stage.py`: `depth_walk_distance` (x and depth at right angles, a unit of depth =
+  `DEPTH_WALK_HEIGHTS` 2 of the walker's heights), `depth_along`, `depth_crossings`,
+  `depth_slot` (draw-order place: after deeper things and props at its depth, before nearer
+  ones, characters at its depth keep their order), `walk_destination` (raw options),
+  `facing_sign`. In `cartoon/acting.py`: `walk_time_at` (inverse of `walk_progress`),
+  `walk_share_seconds`, `depth_switch_times` (the draw-order switch time), `turn_squash`.
+- `Walk(..., depth=, feet_y=, carried=)`: feet on the ground line of the current depth, the
+  figure (and its stroke widths, and held props) scaled about its feet by the depth scale each
+  frame; `Character.stage_depth` / `ground_y` follow (`depth` is Manim's z-size property: not
+  usable). Facing is kept for a walk only in depth.
+- Stage (`scenes/stage.py`): `feet_y_at`, `walk_in_depth` (also moves `grounds[name]`), a scene
+  updater `_draw_order_step` (installed by a walk in depth, or from the start with a front-facing
+  character or a `turn` to the front) that re-sorts the walker (with its held props) in
+  `scene.mobjects` and refreshes Manim's `moving_mobjects` mid-play, keeps the moving shadows
+  before the first moving caster; `get_moving_mobjects` redraws everything from the first thing
+  a walk in depth passes. Props carry `stage_depth`; put-down / thrown props take the holder's.
+- Shadows: `ShadowCaster(grows=)`, ground from the caster's `ground_y`.
+- Front view: `generate_parts(look, colors, front=True)` (face centred, pupils ahead, symmetric
+  nose / fringe / long hair / bun / bean body, a temple each side); `look_parts(..., front=)`
+  (cache key includes the view, cache 32); `Character(..., front=parts)` keeps a `_View` per
+  view, both views' live copies in each part's `VGroup` (family fixed, §69.22), facing `front`
+  switches view and part order (`FRONT_DRAW_ORDER`, `order_changes`), `has_front_view`,
+  `side_facing`; `build_character` gives generated characters a front view. `PoseChange` turning
+  to / from the front narrows by `turn_squash` and swaps at half; `turn` `to: front`; stage
+  character `facing: front`; `vidgen character --facing front`. Walking facing front:
+  `walking_state(..., "front")` shortens the stepping leg, sways the arms, no lean.
+  `sit_on` uses `side_facing`; a crouch (`_reach_low`) turns a front-facing character to its side.
+- Validate: `holding_problems(depths=)` (from new `StageFrame.depths`) tracks walks in depth and
+  reports `sit_on` / `lean_on` / `pick_up` / `give` more than `DEPTH_REACH` 0.05 apart in depth,
+  with the `walk_to: {mark, depth}` fix; walk problems (neither `to` nor `depth`, depth twice,
+  behind a room's wall); `cast.front_view_warnings` (SVG characters asked to face front).
+- Lint / layout: layout key `depth` (above 0); `character_overlap` / `walk_overlap` skip pairs
+  `DEPTH_APART` 0.15 apart; the planner's predicted stills carry start depths; `StageFrame.place_x`
+  and the planner read `{mark, depth}`. `facing_sign` in effects, effect symbols, holding,
+  motion effects (front like right), shots and reframe (front: no look room).
+
+Files touched
+- New: `tests/test_cartoon_depth.py`.
+- `src/vidgen/cartoon/stage.py`, `acting.py`, `character.py`, `generator.py`, `transition.py`,
+  `shading.py`, `holding.py`, `directing.py`, `cast.py`, `effects.py`, `effect_symbols.py`,
+  `motion_effect_shapes.py`, `reframe.py`, `shots.py`; `src/vidgen/scenes/stage.py`,
+  `moving.py`, `acting.py`, `sitting.py`, `handling.py`; `src/vidgen/introspect.py`,
+  `lint/cartoon_rules.py`, `cli.py`, `api.py`; guide `src/vidgen/data/guide/AGENTS.md` + copy
+  `AGENTS.md`.
+- Docs: `docs/CONFIG.md` (new "Walking in depth and the front view", stage `facing` row, `turn`,
+  `walk_to`, `run_to` rows, layout `depth` / `facing` rows, lint rows, `vidgen character`),
+  `DESIGN.md` (§6.4, pointers in §69, §69.12, §69.43, new §69.44), `docs/EXTENDING.md`,
+  `docs/gallery/stage.md` (the `characters.facing` row), `tasklist.md`.
+- Tests updated: `tests/test_cartoon_character.py` (facing error message),
+  `tests/test_cartoon_speed.py` (a look is drawn twice: side and front).
+
+Public interfaces
+- `vidgen.api` adds `DEPTH_WALK_HEIGHTS`, `SAME_DEPTH`, `depth_scale`, `depth_slot`,
+  `depth_walk_distance`, `facing_sign`, `walk_destination`. `Walk(depth=, feet_y=, carried=)`,
+  `Walk.to_depth`; `Character(front=)`, facing `front`, `has_front_view`, `side_facing`,
+  `order_changes`, `stage_depth`, `ground_y`; `ShadowCaster(grows=)`; `StageFrame.depths`;
+  `holding_problems(depths=)`; `generate_parts(front=)`, `look_parts(front=)`; options
+  `walk_to` / `run_to` `depth` and `to: {mark, depth}` (`to` no longer required), `turn` `to:
+  front`, stage character `facing: front`; layout key `depth`. All compatible.
+
+Decisions / deviations
+- Validate asks for the walk (rather than `sit_on` walking there itself): one place to fix,
+  and the replay already knows the geometry.
+- A walk only in depth keeps the side view (walking on the spot while growing): no back view
+  exists; facing front it steps towards the camera.
+- The front view is a second set of drawings in the same `Character` (not a separate figure),
+  so state, poses, visemes, part targets and the family stay one; the pose tables already move
+  both arms symmetrically on screen, so no angle mirroring is needed.
+- Manim draws during a `play` from the list it made at the start; reordering `scene.mobjects`
+  alone would show only at the next `play`, hence the scene updater that refreshes that list.
+- Searched first: no depth-walk, draw-order re-sort or front-view code existed (`git grep -n
+  "depth" src/vidgen/cartoon/transition.py src/vidgen/scenes/moving.py`: none; the generator
+  had one view); reused `depth_scale`, `feet_point`, `walk_progress`, `Phases`, `scale_strokes`,
+  `PoseChange`'s half-way swap, `holding_problems`, `_too_far`'s message style, the stage's
+  `get_moving_mobjects` override.
+
+Evidence
+- Scratch project (preview 854×480, `vidgen storyboard` with 3 and 5 stills per beat): dot
+  walking away past a tree at depth 0.5 (in front, then behind, shrinking, shadow under the
+  trunk), behind moss at depth 0.5, back to the front; moss walking towards the camera in front
+  of a box; dot facing front talking (lip sync) and waving; moss turning to the front and both
+  turning back; in a room dot walking to the sofa at the wall's depth and sitting, moss facing
+  front stepping towards the camera. `vidgen character --png --facing front` for both looks.
+  `vidgen lint`: 0 findings. `vidgen validate` of a cross-depth `sit_on`: the problem with
+  `{mark: 0.42, depth: 0.4}`, and that walk then validates.
+
+Known gaps / TODOs
+- No back view; `enter` / `exit` at a depth; a speech bubble keeps its size and offset while its
+  speaker walks in depth; the planner (directing, reframing) uses start depths and sizes; the
+  turn's mid-play part reorder needs the stage's updater (other scene types reorder at the next
+  `play`).
+- `tests/test_cartoon_lighting.py::test_sunset_to_night_keeps_the_bubble_readable` fails when run
+  with `-m render` on that file alone ("unknown scene type 'stage'"), also at HEAD (558ebb7):
+  an order dependency of that test, not this step; it passes when the whole file runs.
+
+How to test
+- `pytest tests/test_cartoon_depth.py` (16 not-render + 1 render at 160x90, ~3 s).
+- Also run (not render): the cartoon files (character, generator, poses, acting, moving,
+  speed, stage, seating, holding, furniture, svg, idle, visemes: 270 passed, 13 s; lint,
+  directing, shots, reframe, effects, motion_effects, lighting, room, wind, keyframes, props,
+  parallax, motion + `test_lint test_introspect test_actions test_api`: 361 passed, 10 s),
+  `test_docs test_schema test_guide test_config` (179, 65 s), `test_gallery test_guide
+  test_docs test_schema test_builtin_scenes test_actions_coverage` (293, 67 s),
+  `test_screenplay test_storyboard test_mcp test_json_output test_cli test_extensions
+  test_includes test_cartoon_sheet test_phase_h_review test_phase_i_review test_translation
+  test_cartoon_rain test_cartoon_style test_cartoon_foley` (250, 36 s); render: the cartoon
+  files in two batches (12 + 15 passed, plus the lighting test above), `test_cartoon_directing
+  test_introspect test_cartoon_depth` (5, 15 s), `test_builtin_scenes test_actions_coverage -k
+  stage` (3, 3 s). The full suite was not run.

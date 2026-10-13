@@ -165,15 +165,18 @@ class StarField(VGroup):
 @dataclass
 class ShadowCaster:
     """What casts a shadow: ``mobject`` (with ``feet()``; a prop with ``held_by`` set casts none),
-    the y of its ``ground`` line, its shadow's ``width`` and its ``size`` (height, the unit of how
-    high it is off the ground). ``widths``: the shadow's width per shape a prop with shapes shows
-    (an umbrella closed or open; a shape not listed: ``width``)."""
+    the y of its ``ground`` line (a character's own ``ground_y`` wins: it walks in depth), its
+    shadow's ``width`` and its ``size`` (height, the unit of how high it is off the ground).
+    ``widths``: the shadow's width per shape a prop with shapes shows (an umbrella closed or open;
+    a shape not listed: ``width``). ``grows``: width and size follow the caster's
+    ``standing_height`` (a character growing or shrinking as it walks in depth, DESIGN.md §69.44)."""
 
     mobject: Any
     ground: float
     width: float
     size: float
     widths: Mapping[str, float] = field(default_factory=dict)
+    grows: bool = False
 
     def ellipse(self, strength: float) -> ShadowEllipse:
         """Its shadow now (:func:`~vidgen.cartoon.lighting.shadow_ellipse`), as faint as its caster
@@ -182,7 +185,12 @@ class ShadowCaster:
         held = getattr(self.mobject, "held_by", None) is not None
         width = self.widths.get(getattr(self.mobject, "shape", None) or "", self.width)
         shown = float(getattr(self.mobject, "shown", 1.0))
-        return shadow_ellipse(x, self.ground, width, above=y - self.ground, size=self.size, strength=0.0 if held else strength * shown)
+        own = getattr(self.mobject, "ground_y", None)
+        ground = self.ground if own is None else float(own)
+        factor = float(self.mobject.standing_height) / self.size if self.grows and self.size > 0 else 1.0
+        return shadow_ellipse(
+            x, ground, width * factor, above=y - ground, size=self.size * factor, strength=0.0 if held else strength * shown,
+        )
 
 
 class Shadow(VGroup):

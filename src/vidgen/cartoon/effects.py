@@ -22,6 +22,7 @@ from functools import lru_cache
 
 from vidgen.cartoon.motion import smoothstep
 from vidgen.cartoon.spring import Spring
+from vidgen.cartoon.stage import facing_sign
 
 #: The effect symbols, in the order the docs list them.
 EFFECT_KINDS: tuple[str, ...] = ("sweat", "anger", "idea", "question", "exclaim", "sleep", "hearts", "stars", "sparkle", "tear")
@@ -98,7 +99,7 @@ class EffectSpot:
 
 
 def _side(facing: str) -> float:
-    return 1.0 if facing == "right" else -1.0
+    return facing_sign(facing)
 
 
 def spot_at(spot: str, kind: str, head: Box, facing: str, eye: Sequence[float] | None = None, crown: float | None = None) -> EffectSpot:

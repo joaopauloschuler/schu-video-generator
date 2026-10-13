@@ -24,6 +24,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal
 
+from vidgen.cartoon.stage import facing_sign
+
 #: ``reframe:`` values: ``speaker`` (the camera keeps the speaker in view), ``none`` (it moves only
 #: as the beats' own camera actions say).
 REFRAME_MODES: tuple[str, ...] = ("speaker", "none")
@@ -129,7 +131,7 @@ def _view_for(
     left, right = speaker.span()
     if right - left > view_width:
         left, right = speaker.box()
-    ideal = (left + right) / 2 + (1.0 if speaker.facing == "right" else -1.0) * REFRAME_LOOK_ROOM * view_width
+    ideal = (left + right) / 2 + facing_sign(speaker.facing, front=0.0) * REFRAME_LOOK_ROOM * view_width
     lo, hi = max(low, right - view_width / 2), min(high, left + view_width / 2)
     if lo > hi:
         return min(max(ideal, low), high)

@@ -847,6 +847,14 @@ place taken, `Postures.places`; `StageFrame.seat_places`; `holding_problems(seat
 Stage prop key `against`; stage params' `stage_props()` puts props against the wall at its
 depth. Compatible: every default keeps the old behaviour and output (the prop gallery
 `props.png` is byte-identical).
+Step 111 (§69.44) adds `DEPTH_WALK_HEIGHTS`, `SAME_DEPTH`, `depth_scale`, `depth_slot`,
+`depth_walk_distance`, `facing_sign` and `walk_destination`; `Walk(depth=None, feet_y=None,
+carried=())`, `Walk.to_depth`; `Character(front=None)`, facing `front`, `has_front_view`,
+`side_facing`, `order_changes`, `stage_depth`, `ground_y`; `ShadowCaster(grows=False)` (its
+ground from the caster's `ground_y`); `StageFrame.depths`; `holding_problems(depths=None)`;
+`walk_to` / `run_to` options `depth` and `to: {mark, depth}`; `turn` `to: front`; stage
+character `facing: front`; layout key `depth`. Compatible: a scene without them renders as
+before (a generated character also carries its front view's hidden shapes).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -5095,6 +5103,7 @@ take `CharacterName` options.
 - **Facing**: `face("left")` mirrors the whole character about the vertical line through its
   feet (in character units, before the placement); `turn()` toggles. The draw order is kept (a
   mirror image), and part names keep their meaning (the left arm stays `arm_left`).
+  `face("front")` shows the front view (Step 111, §69.44).
 - **API**: `set_part(part, angle=, scale=, shift=, shape=)` (values not given keep the pose),
   `swap(part, shape)`, `reset(part=None)`, `face`, `turn`, `state()` → `CharacterState(facing,
   parts)`, `set_state(state)`, `pose_of`, `shape_names`, `parent_of`, `has_part`, `draw_order`,
@@ -5841,7 +5850,8 @@ new state an option (`- walk_to: pip` + `to: door`; `- gesture: kit` + `to: wave
   (`NarratedScene.action_uses("enter")`, the new method listing a scene's validated uses of an
   action type) start parked beyond the stage's edge on the side of their first `enter` (else the
   edge nearer their mark) and fade in there with the set (unseen); `off_frame` ignores objects
-  wholly outside. A walk keeps the character's depth (feet y), so the draw order never changes.
+  wholly outside. A walk keeps the character's depth (feet y), so the draw order never changes
+  (a walk in depth changes both: Step 111, §69.44).
 - **Speech bubble follows its speaker** (fixes §69.11's gap): `follow_speaker(bubble, speaker)`
   (`scenes/acting.py`) adds an updater keeping the bubble at its offset from the speaker's feet,
   so it moves with a walk or jump (it is not clamped to the view).
@@ -5852,7 +5862,8 @@ new state an option (`- walk_to: pip` + `to: door`; `- gesture: kit` + `to: wave
   `walked_in` is that beat and whose box shares at least `min_overlap` of the narrower width with
   another character's is reported (`character 'pip' ends its walk on character 'kit' (60% ...)`),
   a pair that both walked once.
-- **Not done here**: changing depth while walking (`walk_to` keeps the depth); a path or curve
+- **Not done here**: changing depth while walking (`walk_to` keeps the depth; Step 111 adds
+  `depth`, §69.44); a path or curve
   is `move_along` (§69.14, not a walk); foley is §69.19 (anticipation, squash and follow-through: §69.13); a single `legs`
   part cannot step leg by leg (the cycle turns and narrows the pair); `enter` teleports a
   character that is on screen to the edge first; an `exit` with a camera that keeps moving can
@@ -7893,6 +7904,101 @@ shots work as for any prop.
   sitting on its edge). Hips on the seats, feet on the floor. `vidgen lint`: only the author's
   props cut at the frame's edges.
 - **Not done here**: sitting on furniture from another depth (characters stand at the wall's
-  depth to use it; walking in depth is Step 111); lying on a bed; a prop on another (a tv on a
+  depth to use it; Step 111 walks there in depth, and `vidgen validate` asks for that walk,
+  §69.44); lying on a bed; a prop on another (a tv on a
   counter: `lift` by hand); door marks in the screenplay's directions ("walks to the door").
   Tests: `tests/test_cartoon_furniture.py`.
+
+### 69.44 Moving in depth, and a front view (Step 111)
+
+Characters stood at one depth all scene and showed only their side. Now they walk towards and
+away from the camera, and turn to face the viewer.
+
+- **Depth paths** (pure, `cartoon/stage.py`): `walk_to` / `run_to` take `depth` (0..1) or `to:
+  {mark, depth}` (`WalkPlace` in `scenes/moving.py`; `walk_destination(options)` reads the raw
+  options for the planner and `vidgen validate`). x and depth move together in a straight line:
+  `depth_along(start, end, share)` is the depth at a share of the distance, and
+  `depth_walk_distance(dx, start, end, height)` the length, a unit of depth counting
+  `DEPTH_WALK_HEIGHTS` (2) of the walker's heights where it starts (`hypot`). The run time is
+  `walk_seconds` of that length (plus `cartoon_motion`'s wind-up and settle), so a walk across
+  is unchanged. Missing `to` keeps the x, missing `depth` the depth; one of them is required,
+  the depth only once (a validate problem), and in a room not behind the wall
+  (`wall_depth()`).
+- **The walk** (`Walk(..., depth=, feet_y=, carried=)`): every frame the walker's depth is
+  `depth_along` of the share walked (`walk_progress`), its feet on `feet_y(depth)` (the stage's
+  `feet_y_at`: `feet_point`'s ground line there), and it is scaled about its feet by
+  `depth_scale(depth) / depth_scale(previous)`, its stroke widths by the same factor
+  (`scale_strokes`, no floor, so a walk back restores them), and so are the props it holds
+  (`carried`, about their grip). `Character.stage_depth` and `ground_y` follow (not `depth`:
+  that is Manim's z-size property, whose setter rescales). A walk only in depth keeps the
+  facing; the walk cycle counts steps along the whole path. The action passes the props whose
+  `held_by` is the walker and calls `Stage.walk_in_depth`, which also moves `grounds[name]`
+  (the `keyframes` y 0) to the new depth.
+- **Draw order** (pure: `depth_crossings(start, end, others)` → the shares where the walker's
+  depth passes another's, `acting.depth_switch_times(...)` → the seconds, through the inverse
+  `walk_time_at` of `walk_progress` and the `cartoon_motion` phases; `depth_slot(depth, others,
+  current)` → where a character at a depth goes among the others, back to front: after the deeper
+  ones and the props at its depth, before the nearer ones, keeping its place among characters at
+  its depth). Manim lists the mobjects it draws when an animation begins (`moving_mobjects`, a
+  flat family list), so reordering `scene.mobjects` alone shows only at the next `play`. The
+  stage therefore runs a scene updater while a walk in depth is under way (`_draw_order_step`,
+  installed by `walk_in_depth`, or from the start when a character faces or turns to the front):
+  each frame it moves the walker, with the props right after it that it holds, to its
+  `depth_slot` (`_keep_depth_order`), keeps the moving shadows group before the first thing whose
+  shadow it draws (`_shadows_first`: the walker's shadow lies under a tree it walks behind), and,
+  when anything moved or a character's parts changed order, sets `scene.moving_mobjects` again
+  from `get_moving_and_static_mobjects`. `get_moving_mobjects` redraws, during a walk in depth,
+  everything from the first character or prop whose depth it passes (`_depth_crossers`), so the
+  static image never holds something the walker goes behind. A put-down or thrown prop takes its
+  holder's `stage_depth`.
+- **Shadows**: `ShadowCaster.ellipse` takes the ground from the caster's `ground_y` when it has
+  one, and with `grows` (the stage's characters) scales the shadow by `standing_height / size`.
+- **Front view** (`generate_parts(look, colors, front=True)`, `look_parts(..., front=)`, cached
+  per view): the same parts and shape names as the side view; the face centred (`face_x` 0), the
+  pupils ahead, the triangle nose symmetric, the fringe parted in the middle, long hair and the
+  bun symmetric, the bean body without its back pinch, a temple each side of glasses.
+  `Character(..., front=parts)` checks the parts and shape names match (`_check_front`) and keeps
+  one `_View` per view (shapes, drawings, members, pivots, limbs, order, trailing pieces); each
+  part's `VGroup` holds both views' live copies (side first), only the shown one has points, so
+  the family never changes (§69.22). Facing `front` (`FACINGS`) activates the front view: no
+  mirror, `FRONT_DRAW_ORDER` (both arms in front of the body). Switching views hides what the
+  other showed and reorders the parts (`submobjects`), counted by `order_changes` (the stage's
+  updater then refreshes Manim's list). Poses, expressions, visemes, blinks and gestures use the
+  same entries: the pose tables already move the two arms symmetrically on screen.
+  `side_facing` remembers the side; `turn()` from the front goes back to it. A character without
+  a front view (an SVG one) ignores `front`; `cast.front_view_warnings` (in `vidgen validate`)
+  warns for a stage character `facing: front` or a `turn` `to: front` of one.
+- **Turning**: `PoseChange` between a side and the front swaps the view at half (like the mirror)
+  and narrows the figure about its feet by `turn_squash(progress)` (1 at the ends, 1 −
+  `TURN_SQUASH` 0.12 half-way). `turn` takes `to: front` (default from the front: `side_facing`).
+- **Walking facing front**: `walking_state(..., "front")` keeps the legs from swinging sideways:
+  a leg drawn one each is shortened (thigh and shin y scale, by `FRONT_STEP_SHORTEN` 0.25 at the
+  largest knee bend) so its foot lifts, one-piece legs narrow, the body bobs, the arms sway
+  together by `FRONT_ARM_SWING` 0.3 of the swing; no lean or follow-through (they would tilt
+  sideways). Sitting (`sit_on` keeps `side_facing`), leaning and crouching (`_reach_low` turns a
+  front-facing character to its side first) are drawn from the side.
+- **Facing in the pure modules**: `facing_sign(facing, front=1.0)`: effect symbols, held props,
+  motion effects treat the front like `right`; shots and reframing leave no look room in front of
+  a front-facing face (`front=0`); `look_pose` / `camera_look` keep the eyes centred from the
+  front; the planner never sees a speaker behind a front-facing posed character.
+- **Validate and lint**: `holding_problems(depths=)` (from `StageFrame.depths`, every character
+  and prop's start depth) follows walks in depth (a character's height scales with
+  `depth_scale`) and reports a `sit_on`, `lean_on`, `pick_up` or `give` across more than
+  `DEPTH_REACH` (0.05) with the walk that fixes it (`- walk_to: dot, to: {mark: 0.42, depth:
+  0.4}`); `StageFrame.place_x` and the planner read `{mark, depth}`. The layout dump writes a
+  character's `depth` when it is above 0; `character_overlap` and `walk_overlap` skip pairs
+  `DEPTH_APART` (0.15) or more apart in depth, also in the planner's predicted stills (start
+  depths).
+- **Checked by eye** (a scratch project at preview 854×480, `vidgen storyboard`, 3 and 5
+  stills per beat): dot walking away past a tree at depth 0.5 (in front of it, then behind it,
+  shrinking, her shadow under the trunk), behind moss at depth 0.5, and back to the front facing
+  her side; moss walking towards the camera in front of a box; dot facing front, talking (lip
+  sync), waving; moss turning to the front and both turning back; in a room dot walking back to
+  the sofa at the wall's depth and sitting on it, and moss facing front stepping towards the
+  camera (a lifted foot each step). Stills of `vidgen character --png --facing front` for both
+  looks. `vidgen lint`: no findings.
+- **Not done here**: a back view (walking away facing front walks backwards: keep the side);
+  `enter` / `exit` at a depth; a speech bubble does not resize with its speaker; the planner
+  (automatic directing, reframing) keeps each character's start depth and size; sitting on the
+  ground or lying, from the front.
+  Tests: `tests/test_cartoon_depth.py`.

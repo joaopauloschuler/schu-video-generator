@@ -13,7 +13,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from vidgen.cartoon.motion import motion_ease
+from vidgen.cartoon.motion import Phases, motion_ease
+from vidgen.cartoon.stage import depth_crossings
 
 #: Largest head tilt (degrees) when looking up or down at something.
 LOOK_MAX_DEGREES = 20.0
@@ -39,18 +40,34 @@ class LookPose:
 def look_pose(dx: float, dy: float, facing: str) -> LookPose:
     """Looking at a point ``dx``, ``dy`` (Manim units) from the character's head: facing that
     way (kept when the point is within :data:`SAME_X`), the head tilted up or down towards it (at
-    most :data:`LOOK_MAX_DEGREES`) and the eyes a little forward, raised or lowered with the head."""
+    most :data:`LOOK_MAX_DEGREES`) and the eyes a little forward, raised or lowered with the head
+    (facing ``front``, straight above or below: the eyes stay in the middle)."""
     if abs(dx) >= SAME_X:
         facing = "right" if dx > 0 else "left"
     angle = math.degrees(math.atan2(dy, max(abs(dx), SAME_X)))
     angle = max(-LOOK_MAX_DEGREES, min(LOOK_MAX_DEGREES, angle))
-    return LookPose(facing, angle, (LOOK_EYES_AHEAD, LOOK_EYES_AHEAD * angle / LOOK_MAX_DEGREES))
+    ahead = 0.0 if facing == "front" else LOOK_EYES_AHEAD
+    return LookPose(facing, angle, (ahead, LOOK_EYES_AHEAD * angle / LOOK_MAX_DEGREES))
 
 
 def camera_look(facing: str) -> LookPose:
     """Looking at the camera (the viewer): the facing kept, the head straight, the eyes moved to
-    the middle of the face."""
-    return LookPose(facing, 0.0, (-CAMERA_EYES_BACK, 0.0))
+    the middle of the face (facing ``front`` they are there already)."""
+    return LookPose(facing, 0.0, (0.0 if facing == "front" else -CAMERA_EYES_BACK, 0.0))
+
+
+#: How much narrower (a share of its width) a character is half-way through turning between a
+#: side and the front (DESIGN.md §69.44): it narrows as it turns and widens again, the shapes
+#: swapping at the narrowest.
+TURN_SQUASH = 0.12
+
+
+def turn_squash(progress: float) -> float:
+    """The figure's width factor ``progress`` (0..1) of the way through a turn between a side and
+    the front: 1 at both ends, 1 - :data:`TURN_SQUASH` half-way."""
+    if progress <= 0.0 or progress >= 1.0:
+        return 1.0
+    return 1.0 - TURN_SQUASH * math.sin(math.pi * progress)
 
 
 # ----- walking (Step 79) ------------------------------------------------------------------------
@@ -76,6 +93,11 @@ WALK_ELBOW_SWING = 20.0
 WALK_LEG_SQUEEZE = 0.3
 #: How far the body rises in mid-step (character units).
 WALK_BOB = 0.02
+#: Seen from the front (``facing: front``, DESIGN.md §69.44) a leg stepping towards the camera
+#: looks shorter: its thigh and shin are drawn this share shorter at the walk's largest knee bend
+#: (the foot lifts); the arms swing out and in by this share of their swing.
+FRONT_STEP_SHORTEN = 0.25
+FRONT_ARM_SWING = 0.3
 #: Gap (Manim units) between a character waiting off stage and the edge it is beyond.
 OFFSTAGE_GAP = 0.25
 SIDES: tuple[str, ...] = ("left", "right")
@@ -106,6 +128,36 @@ def walk_amplitude(t: float) -> float:
     body move then (0 at the start and the end, so the walk starts and ends in the pose)."""
     t = min(max(t, 0.0), 1.0)
     return min(1.0, t / WALK_EASE, (1.0 - t) / WALK_EASE)
+
+
+def walk_time_at(share: float) -> float:
+    """When (0..1, a share of the walk's moving time) a walk has covered ``share`` of its
+    distance: the inverse of :func:`walk_progress`."""
+    share = min(max(share, 0.0), 1.0)
+    r, top = WALK_EASE, 1.0 / (1.0 - WALK_EASE)
+    eased = 0.5 * top * r   # the distance covered while speeding up (and while slowing down)
+    if share < eased:
+        return math.sqrt(2.0 * share * r / top)
+    if share > 1.0 - eased:
+        return 1.0 - math.sqrt(2.0 * (1.0 - share) * r / top)
+    return share / top + r / 2
+
+
+def walk_share_seconds(share: float, run_time: float, phases: Phases = Phases()) -> float:
+    """Seconds into a walk of ``run_time`` seconds (with its ``cartoon_motion`` wind-up and
+    settle ``phases``) at which it has covered ``share`` of its distance."""
+    main = 1.0 - phases.before - phases.after
+    return (phases.before + walk_time_at(share) * main) * run_time
+
+
+def depth_switch_times(
+    start_depth: float, end_depth: float, others: dict[str, float], run_time: float, phases: Phases = Phases(),
+) -> list[tuple[float, str]]:
+    """``(seconds, name)``: when a walk from ``start_depth`` to ``end_depth`` lasting
+    ``run_time`` seconds passes the depth of each of ``others`` (name -> depth), so the walker
+    goes from being drawn behind it to in front of it, or the other way (DESIGN.md §69.44); in
+    walking order."""
+    return [(walk_share_seconds(share, run_time, phases), name) for share, name in depth_crossings(start_depth, end_depth, others)]
 
 
 @dataclass(frozen=True)
@@ -316,6 +368,9 @@ def jump_lift(t: float, height: float = JUMP_HEIGHT) -> float:
 
 __all__ = [
     "CAMERA_EYES_BACK",
+    "FRONT_ARM_SWING",
+    "FRONT_STEP_SHORTEN",
+    "TURN_SQUASH",
     "GESTURES",
     "GESTURE_SECONDS",
     "JUMP_HEIGHT",
@@ -335,6 +390,7 @@ __all__ = [
     "PartMove",
     "WalkCycle",
     "camera_look",
+    "depth_switch_times",
     "enter_path",
     "exit_path",
     "gesture_moves",
@@ -344,8 +400,11 @@ __all__ = [
     "nearer_side",
     "offstage_x",
     "passage_fade",
+    "turn_squash",
     "walk_amplitude",
     "walk_cycle",
     "walk_progress",
     "walk_seconds",
+    "walk_share_seconds",
+    "walk_time_at",
 ]

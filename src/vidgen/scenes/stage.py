@@ -38,8 +38,8 @@ class StageCharacter(SceneParams):
     """0 = on the ground line at full size; up to 1 = at the back of the stage, higher up and 0.55 x the size; deeper characters are drawn behind."""
     scale: float = Field(1.0, gt=0.0, le=3.0)
     """Its size relative to the stage's size (e.g. 0.8 for a child)."""
-    facing: Literal["auto", "right", "left"] = "auto"
-    """Which way it looks; auto: towards the middle of the stage (right on the left half, left on the right half)."""
+    facing: Literal["auto", "right", "left", "front"] = "auto"
+    """Which way it looks; auto: towards the middle of the stage (right on the left half, left on the right half); front: at the viewer (its front view; an SVG character keeps its side)."""
     pose: str | None = None
     """The pose it starts in (stand, pointing, waving, thinking, shrug, arms_crossed, sitting, or its own); none: at rest."""
     expression: str | None = None
@@ -632,6 +632,7 @@ class Stage(NarratedScene):
             to_fraction=lambda x: min(max((x - left) / frame.stage_width, 0.0), 1.0),
             entering=[n for u in uses if u.config.action == "enter" for n in matched(u)],
             seat_places=frame.seat_places,
+            depths=frame.depths,
         )
         return problems + cls._calm_blow_problems(params, ordered)
 
@@ -742,6 +743,102 @@ class Stage(NarratedScene):
             self.motion_effects = [e for e in self.motion_effects if not e.done]
         if not self.motion_effects:
             self.remove_updater(self._motion_sweep)
+
+    # ----- walking in depth, the front view (DESIGN.md §69.44) -------------------------------------
+
+    def feet_y_at(self, depth: float) -> float:
+        """The y (Manim units) of the ground line at ``depth``: where feet stand there."""
+        return feet_point(0.5, depth, self.params.ground, self.frame_width, self.frame_height)[1]
+
+    def walk_in_depth(self, character: Character, walk: Walk) -> None:
+        """``character`` walks in depth with ``walk``: its place in the draw order follows its
+        depth on every frame (:meth:`_keep_depth_order`), and the ground line under it is its
+        new depth's once it stops (the ``keyframes`` y 0)."""
+        self.grounds[character.name] = self.feet_y_at(walk.to_depth)
+        self._depth_walks.append((character, walk))
+        self._watch_draw_order()
+
+    def _start_depth_order(self) -> None:
+        """Watch the draw order from the start when a walk in depth or a turn to the front may
+        change it (a character facing front, or a turn to it, :meth:`_watch_draw_order`)."""
+        #: the walks in depth under way: (character, walk)
+        self._depth_walks: list[tuple[Character, Walk]] = []
+        #: each character's :attr:`Character.order_changes` when last looked at
+        self._part_orders = {name: c.order_changes for name, c in self.cast.items()}
+        #: the scene updater keeping the draw order, kept: Manim removes an updater by identity
+        self._order_updater = self._draw_order_step
+        fronts = any(c.facing == "front" for c in self.params.characters) or any(u.options.to == "front" for u in self.action_uses("turn"))
+        if fronts:
+            self._watch_draw_order()
+
+    def _watch_draw_order(self) -> None:
+        if not any(f is self._order_updater for f in self.updaters):
+            self.add_updater(self._order_updater)
+
+    def _draw_order_step(self, dt: float) -> None:
+        """Scene updater: each walker in depth goes behind or in front of the others as its depth
+        passes theirs, and what Manim draws during the animation playing now follows a changed
+        order (a walker's, or a character's parts' after a turn between its side and its front)."""
+        changed = False
+        for character, walk in self._depth_walks:
+            changed |= self._keep_depth_order(character)
+        self._depth_walks = [(c, w) for c, w in self._depth_walks if abs(c.stage_depth - w.to_depth) > SAME_DEPTH]
+        for name, figure in self.cast.items():
+            if self._part_orders.get(name) != figure.order_changes:
+                self._part_orders[name] = figure.order_changes
+                changed = True
+        if changed and getattr(self, "animations", None):
+            # Manim lists what it draws when an animation begins; keep that list in the new order
+            self.moving_mobjects = self.get_moving_and_static_mobjects(self.animations)[0]
+
+    def _keep_depth_order(self, walker: Character) -> bool:
+        """Move ``walker`` (with the props it holds) to its place among the characters and props
+        for its depth now (:func:`depth_slot`), the moving shadows before the first thing whose
+        shadow they draw; whether it moved."""
+        things = {id(m) for m in [*self.cast.values(), *self.props.values()] if getattr(m, "held_by", None) is None}
+        block_at = next((k for k, m in enumerate(self.mobjects) if m is walker), None)
+        if block_at is None:
+            return False
+        end = block_at + 1
+        while end < len(self.mobjects) and getattr(self.mobjects[end], "held_by", None) == walker.name:
+            end += 1
+        block = self.mobjects[block_at:end]
+        rest = self.mobjects[:block_at] + self.mobjects[end:]
+        others = [m for m in rest if id(m) in things]
+        current = sum(1 for m in self.mobjects[:block_at] if id(m) in things)
+        slot = depth_slot(walker.stage_depth, [(float(getattr(m, "stage_depth", 0.0)), isinstance(m, Character)) for m in others], current)
+        if slot == current:
+            return False
+        at = rest.index(others[slot]) if slot < len(others) else len(rest)
+        self.mobjects[:] = rest[:at] + block + rest[at:]
+        self._shadows_first()
+        return True
+
+    def _shadows_first(self) -> None:
+        """Keep the shadows of the things that move drawn before all of them (they lie on the
+        ground under everyone)."""
+        moving = getattr(self, "_moving_shadows", None)
+        if moving is None or moving not in self.mobjects:
+            return
+        casters = {id(c.mobject) for c in moving.casters}
+        first = next((k for k, m in enumerate(self.mobjects) if id(m) in casters), None)
+        if first is not None and self.mobjects.index(moving) > first:
+            self.mobjects.remove(moving)
+            self.mobjects.insert(first, moving)
+
+    def _depth_crossers(self, animations: tuple[Animation, ...]) -> set[int]:
+        """The ids of the family members of the walkers in depth among ``animations`` and of
+        every character and prop whose depth they pass (Manim must redraw all of them on every
+        frame, since their order changes)."""
+        found: set[int] = set()
+        things = [*self.cast.values(), *self.props.values()]
+        for anim in animations:
+            if not isinstance(anim, Walk) or anim.to_depth is None:
+                continue
+            low, high = sorted((float(anim.mobject.stage_depth), anim.to_depth))
+            for thing in [anim.mobject, *(t for t in things if low - SAME_DEPTH <= float(getattr(t, "stage_depth", 0.0)) <= high + SAME_DEPTH)]:
+                found |= {id(m) for m in thing.get_family()}
+        return found
 
     # ----- rain on the ground (DESIGN.md §69.39) --------------------------------------------------
 
@@ -885,12 +982,16 @@ class Stage(NarratedScene):
                 item = self._prop(place_at.name, props[place_at.name], place_at.height)
                 item.height_factor = props[place_at.name].height_factor()
                 item.shift(np.array([*place_at.feet, 0.0]) - item.feet())
+                item.stage_depth = place_at.depth   # its place in the draw order (walks in depth, §69.44)
                 self.props[place_at.name] = item
                 on_stage.append((place_at.name, item))
                 continue
             member = members[place_at.name]
-            facing = facing_towards_centre(place_at.x_fraction) if member.facing == "auto" else member.facing
+            facing = facing_towards_centre(place_at.x_fraction) if member.facing in ("auto", "front") else member.facing
             figure = character(member.name, height=place_at.height, facing=facing, motion=p.cartoon_motion)
+            if member.facing == "front":
+                figure.face("front")   # an SVG character keeps its side, towards the middle (§69.44)
+            figure.stage_depth, figure.ground_y = place_at.depth, self.grounds[place_at.name]
             if member.pose is not None:
                 figure.set_pose(member.pose)
             if member.expression is not None:
@@ -925,6 +1026,7 @@ class Stage(NarratedScene):
             return [FadeIn(part) for part in backdrop] + items + [FadeIn(m) for m in in_front]
 
         self._start_wind(placements)
+        self._start_depth_order()
         #: the set behind the characters (puddles go in it, DESIGN.md §69.39)
         self._backdrop = backdrop
         #: the rain fields whose sound bed plays (foley on)
@@ -996,7 +1098,9 @@ class Stage(NarratedScene):
         """Manim's moving mobjects, or every mobject while the light changes during this
         animation (the grade then changes on every frame, so nothing can stay in the static
         image), or, while the wind may move something, everything from the first swaying prop or
-        trailing character on (DESIGN.md §69.32; the set behind it stays in the static image)."""
+        trailing character on (DESIGN.md §69.32; the set behind it stays in the static image), and,
+        while a character walks in depth, everything from the first thing whose depth it passes
+        on (its place in the draw order changes, §69.44)."""
         moving = super().get_moving_mobjects(*animations)
         now = float(self.renderer.time)
         duration = getattr(self, "duration", None)
@@ -1006,17 +1110,18 @@ class Stage(NarratedScene):
             light.update(now)
             if light.changing(now, end):
                 return [*self.mobjects, *(m for m in moving if m not in self.mobjects)]
+        redrawn = self._depth_crossers(animations) if hasattr(self, "_depth_walks") else set()
         blowing = getattr(self, "blowing", None)
-        if blowing is None:
-            return moving
-        blowing.update(now)
-        if not blowing.moving(now, end):
-            if not blowing.moving(now, math.inf):
+        if blowing is not None:
+            blowing.update(now)
+            if blowing.moving(now, end):
+                redrawn |= {id(m) for mob in blowing.mobjects() for m in mob.get_family()}
+            elif not blowing.moving(now, math.inf):
                 self.remove_updater(self._wind_updater)
+        if not redrawn:
             return moving
         family = self.get_mobject_family_members()
-        blown = {id(m) for mob in blowing.mobjects() for m in mob.get_family()}
-        first = next((k for k, m in enumerate(family) if id(m) in blown), len(family))
+        first = next((k for k, m in enumerate(family) if id(m) in redrawn), len(family))
         return list_update(family[first:], moving)
 
     # ----- wind (DESIGN.md §69.32) ----------------------------------------------------------------
@@ -1095,12 +1200,14 @@ class Stage(NarratedScene):
                 (moving if name in movable else still).append(caster)
             else:
                 figure = self.cast[name]
-                moving.append(ShadowCaster(figure, self.grounds[name], SHADOW_WIDTH * figure.standing_height, figure.standing_height))
+                moving.append(ShadowCaster(figure, self.grounds[name], SHADOW_WIDTH * figure.standing_height, figure.standing_height, grows=True))
         strength = self.base_light.shadow
         groups = [StageShadows(casters, strength) if casters else None for casters in (still, moving)]
         if groups[1] is not None:
             groups[1].add_updater(lambda m: m.follow())
         self.shadows = [g for g in groups if g is not None]
+        #: the shadows of the things that may move (kept drawn before them, §69.44)
+        self._moving_shadows = groups[1]
         return groups[0], groups[1]
 
     def _movable_props(self) -> set[str]:

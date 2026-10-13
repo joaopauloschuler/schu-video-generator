@@ -9,14 +9,28 @@ speed (:meth:`Action.run_time_for`) plus the wind-up and settle of the character
 ``cartoon_motion`` (§69.13), shortened like any action when its beat has less time.
 """
 
+import logging
 from typing import Annotated, Any, Literal
 
 from vidgen.api import *
 
 from .acting import _Acting, _characters
 
+log = logging.getLogger("vidgen.actions")
+
 #: Where a walk goes: a mark of the stage, or an x from 0 (left edge) to 1 (right edge).
 Place = str | Annotated[float, Field(ge=0.0, le=1.0)]
+#: How far back a walk goes on the stage (0 front .. 1 back).
+Depth = Annotated[float, Field(ge=0.0, le=1.0)]
+
+
+class WalkPlace(ActionOptions):
+    """Where a walk goes on the stage: a mark or an x, and a depth (DESIGN.md §69.44)."""
+
+    mark: Place | None = None
+    """A mark (left, centre, right, ... or the stage's own) or an x from 0 (left edge) to 1 (right edge); default: where it is."""
+    depth: Depth | None = None
+    """How far back: 0 = the front (the ground line, full size) .. 1 = the back of the stage; default: its depth now."""
 
 
 def _place_x(scene: NarratedScene, place: str | float) -> float:
@@ -63,27 +77,69 @@ class _Moving(_Acting):
         return problems
 
 
+def _walk_problems(params: Any, to: Any, depth: float | None) -> list[tuple[str, str]]:
+    """A walk names where it goes (``to`` or ``depth``), its depth once, and, in a room, not
+    behind the wall (DESIGN.md §69.44)."""
+    inner = to.depth if isinstance(to, WalkPlace) else None
+    if to is None and depth is None:
+        return [("to", "say where it walks: to (a mark or an x, or {mark, depth}) and / or depth")]
+    if isinstance(to, WalkPlace) and to.mark is None and to.depth is None:
+        return [("to", "give the place a mark and / or a depth: {mark: right, depth: 0.4}")]
+    if inner is not None and depth is not None:
+        return [("depth", "give the depth once: in to ({mark, depth}) or as depth, not both")]
+    wall = params.wall_depth() if hasattr(params, "wall_depth") else None
+    going = inner if inner is not None else depth
+    if wall is not None and going is not None and going > wall + SAME_DEPTH:
+        return [("depth", f"depth {going} is behind the room's wall (at depth {wall}); walk to at most {wall}")]
+    return []
+
+
 @action("walk_to")
 class WalkTo(_Moving):
     """The target character walks along the ground to ``to`` (a mark of the stage, or an x from 0
     = left to 1 = right), facing the way it goes, at ``speed`` (Manim units per second; the frame's
-    shorter side is 8). It takes as long as the distance needs (``run_time`` sets it instead); a
-    beat shorter than that speeds it up. It stays there."""
+    shorter side is 8). ``depth`` (or ``to: {mark, depth}``) walks it towards (smaller) or away
+    from (larger) the camera too: it grows or shrinks, its shadow with it, and passes in front of
+    or behind the others on the way; walking only in depth it keeps its facing (``facing: front``:
+    it steps towards the camera). It takes as long as the distance needs (``run_time`` sets it
+    instead); a beat shorter than that speeds it up. It stays there."""
 
     class Options(ActionOptions):
-        to: Place
-        """Where it walks: a mark (left, centre, right, ... or the stage's own) or an x from 0 (left edge) to 1 (right edge) of the stage."""
+        to: WalkPlace | Place | None = None
+        """Where it walks: a mark (left, centre, right, ... or the stage's own), an x from 0 (left edge) to 1 (right edge) of the stage, or {mark, depth}; default: where it is (with depth)."""
+        depth: Depth | None = None
+        """How far back it walks to: 0 = the front (the ground line, full size) .. 1 = the back of the stage, smaller; default: its depth now."""
         speed: float = Field(WALK_SPEED, gt=0.0, le=20.0)
         """Walking speed in units per second (the frame's shorter side is 8 units; a stage character is about 3.6 tall)."""
 
     run_time = 2.0
 
+    def _destination(self) -> tuple[Any, float | None]:
+        """Where it goes (a mark or an x; ``None``: its x now) and to what depth (``None``: its own)."""
+        to = self.options.to
+        if isinstance(to, WalkPlace):
+            return to.mark, to.depth if to.depth is not None else self.options.depth
+        return to, self.options.depth
+
     def scene_problems(self, scene_cls: type[NarratedScene], params: Any) -> list[tuple[str, str]]:
-        return self._place_problems(scene_cls, params, self.options.to)
+        place = self._destination()[0]
+        return self._place_problems(scene_cls, params, place) + _walk_problems(params, self.options.to, self.options.depth)
+
+    def _goal(self, scene: NarratedScene, character: Character) -> tuple[float, float | None]:
+        """The x it walks to and its depth there (``None``: no walk in depth on this scene)."""
+        place, depth = self._destination()
+        x = _feet_x(character) if place is None else _place_x(scene, place)
+        if depth is not None and not hasattr(scene, "feet_y_at"):
+            log.warning("scene '%s': %s depth needs a stage; it walks across only", scene.spec.id, self.label)
+            depth = None
+        return x, depth
 
     def run_time_for(self, scene: NarratedScene, targets: list[Target]) -> float | None:
-        x = _place_x(scene, self.options.to)
-        times = [_walk_time(c, x - _feet_x(c), self.options.speed) for c in _characters(scene, targets, self.label)]
+        times = []
+        for c in _characters(scene, targets, self.label):
+            x, depth = self._goal(scene, c)
+            far = abs(x - _feet_x(c)) if depth is None else depth_walk_distance(x - _feet_x(c), c.stage_depth, depth, c.character_height)
+            times.append(_walk_time(c, far, self.options.speed))
         return max(times, default=None)
 
     #: Its action name (in log messages) and how it moves its feet (a run: :data:`RUNNING`).
@@ -91,13 +147,21 @@ class WalkTo(_Moving):
     gait = WALKING
 
     def apply(self, scene: NarratedScene, targets: list[Target]) -> list[Animation]:
-        """A :class:`Walk` to the place for each character not there yet."""
-        x = _place_x(scene, self.options.to)
+        """A :class:`Walk` to the place (and depth) for each character not there yet."""
         anims: list[Animation] = []
         for character in _characters(scene, targets, self.label):
-            if abs(x - _feet_x(character)) > 1e-6:
+            x, depth = self._goal(scene, character)
+            deeper = depth is not None and abs(depth - character.stage_depth) > SAME_DEPTH
+            if abs(x - _feet_x(character)) <= 1e-6 and not deeper:
+                continue
+            if not deeper:
                 anims.append(Walk(character, x, speed=self.options.speed, gait=self.gait))
-                _ended_walk(scene, character)
+            else:
+                carried = [p for p in getattr(scene, "props", {}).values() if getattr(p, "held_by", None) == character.name]
+                walk = Walk(character, x, speed=self.options.speed, gait=self.gait, depth=depth, feet_y=scene.feet_y_at, carried=carried)
+                anims.append(walk)
+                scene.walk_in_depth(character, walk)
+            _ended_walk(scene, character)
         return anims
 
 
@@ -109,8 +173,10 @@ class RunTo(WalkTo):
     it sets off and stops and speed lines trail it."""
 
     class Options(ActionOptions):
-        to: Place
-        """Where it runs: a mark (left, centre, right, ... or the stage's own) or an x from 0 (left edge) to 1 (right edge) of the stage."""
+        to: WalkPlace | Place | None = None
+        """Where it runs: a mark (left, centre, right, ... or the stage's own), an x from 0 (left edge) to 1 (right edge) of the stage, or {mark, depth}; default: where it is (with depth)."""
+        depth: Depth | None = None
+        """How far back it runs to: 0 = the front (the ground line, full size) .. 1 = the back of the stage, smaller; default: its depth now."""
         speed: float = Field(RUN_SPEED, gt=0.0, le=20.0)
         """Running speed in units per second (the frame's shorter side is 8 units; a stage character is about 3.6 tall)."""
 

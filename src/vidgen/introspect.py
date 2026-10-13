@@ -386,8 +386,12 @@ def _character_keys(walk: _Walk, figure: Any) -> dict[str, Any]:
     """What the cartoon lint rules read about a character (DESIGN.md §69.17): ``facing``,
     ``speaking`` and, when they apply, ``face`` (its head's box), ``viseme`` (what its lip sync
     shows), ``looked_at``, ``passage`` (``enter`` / ``exit`` under way), ``walked_in`` and
-    ``holding`` (hand -> prop name, §69.27), ``sitting_on`` / ``leaning_on`` (a prop name, §69.28)."""
+    ``holding`` (hand -> prop name, §69.27), ``sitting_on`` / ``leaning_on`` (a prop name, §69.28),
+    ``depth`` (how far back it stands on a stage, when not at the front, §69.44)."""
     keys: dict[str, Any] = {"facing": figure.facing, "speaking": figure.lip_sync_track is not None}
+    depth = float(getattr(figure, "stage_depth", 0.0))
+    if depth > 0:
+        keys["depth"] = round(depth, 4)
     if figure.has_part("head"):
         boxes = [p.box for p in (_measure(walk, m) for m in figure.parts["head"].get_family()) if p is not None]
         if boxes:

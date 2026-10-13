@@ -30,6 +30,7 @@ from vidgen.cartoon.motion_effects import (
     speed_lines,
 )
 from vidgen.cartoon.transition import feet_of
+from vidgen.cartoon.stage import facing_sign
 from vidgen.config import CHARACTER_INK
 from vidgen.particles import KINDS as PARTICLE_SPECS
 
@@ -141,7 +142,7 @@ class MotionEffect(VGroup):
         self._anchor = np.array(feet_of(self.mover), dtype=float)
         self._size = self._mover_height()
         if isinstance(self.mover, Character):
-            self._direction = np.array([1.0 if self.mover.facing == "right" else -1.0, 0.0])
+            self._direction = np.array([facing_sign(self.mover.facing), 0.0])
 
     def _dust(self, age: float) -> int:
         h, side = self._size * self.size_factor, float(self._direction[0])
@@ -165,7 +166,7 @@ class MotionEffect(VGroup):
         """The way the mover goes now (unit vector) and the middle of its back edge."""
         mover = self.mover
         if isinstance(mover, Character):
-            ahead = np.array([1.0 if mover.facing == "right" else -1.0, 0.0])
+            ahead = np.array([facing_sign(mover.facing), 0.0])
             back = mover.get_left()[0] if ahead[0] > 0 else mover.get_right()[0]
             return ahead, np.array([float(back), float(mover.feet()[1]) + 0.45 * self._size])
         middle = np.array(mover.get_center()[:2], dtype=float)

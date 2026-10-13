@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from vidgen.cartoon.seating import LEAN_REACH, SIT_REACH, PostureError, Postures
+from vidgen.cartoon.stage import depth_scale, facing_sign, walk_destination
 
 #: The hands, the near one (``left``, drawn in front of the body) first: a hand is taken in this
 #: order when the action does not name one.
@@ -41,6 +42,9 @@ GIVE_REACH = 1.2
 PUT_DOWN_AHEAD = 0.35
 #: Where a ``walk_to`` suggestion stands the character: this many heights from the prop's x.
 STAND_BESIDE = 0.4
+#: How far apart in depth (0..1) a character and the prop it sits or leans on, picks up or the
+#: character it gives to may be (DESIGN.md §69.44): further, and it must walk to that depth first.
+DEPTH_REACH = 0.05
 #: Seconds of each action, and the share of it at which the hand reaches the prop (``pick_up``,
 #: ``give``) or the spot (``put_down``), and at which a put-down prop stands on the ground.
 PICK_UP_SECONDS = 1.2
@@ -166,7 +170,7 @@ class Holdings:
 def hold_point(shoulder: Sequence[float], height: float, facing: str) -> tuple[float, float]:
     """Where a held prop's middle (and the hand) is: :data:`HOLD_FORWARD` heights in front of
     the holding arm's ``shoulder`` (screen) and :data:`HOLD_DROP` below it."""
-    ahead = HOLD_FORWARD * height * (1.0 if facing == "right" else -1.0)
+    ahead = HOLD_FORWARD * height * facing_sign(facing)
     return float(shoulder[0]) + ahead, float(shoulder[1]) - HOLD_DROP * height
 
 
@@ -182,13 +186,13 @@ def held_height(height_factor: float, holder_height: float, *, overhead: bool = 
 def overhead_point(feet: Sequence[float], height: float, facing: str) -> tuple[float, float]:
     """Where the hand holding a prop overhead is: :data:`OVERHEAD_FORWARD` heights in front of
     the holder's ``feet`` (screen) and :data:`OVERHEAD_HAND` above them."""
-    ahead = OVERHEAD_FORWARD * height * (1.0 if facing == "right" else -1.0)
+    ahead = OVERHEAD_FORWARD * height * facing_sign(facing)
     return float(feet[0]) + ahead, float(feet[1]) + OVERHEAD_HAND * height
 
 
 def put_down_x(feet_x: float, height: float, facing: str) -> float:
     """Where ``put_down`` without ``to`` puts a prop: :data:`PUT_DOWN_AHEAD` heights in front."""
-    return feet_x + PUT_DOWN_AHEAD * height * (1.0 if facing == "right" else -1.0)
+    return feet_x + PUT_DOWN_AHEAD * height * facing_sign(facing)
 
 
 def throw_flight_seconds(distance: float) -> float:
@@ -241,12 +245,37 @@ class HandlingStep:
 
 @dataclass
 class _Positions:
-    """Each character's and prop's feet x (``None``: not known), the characters' heights, and
-    who is on stage."""
+    """Each character's and prop's feet x (``None``: not known), the characters' heights, who is
+    on stage, and each one's depth (§69.44)."""
 
     x: dict[str, float | None]
-    heights: Mapping[str, float]
+    heights: dict[str, float]
     present: set[str]
+    depth: dict[str, float] = field(default_factory=dict)
+
+    def walk_depth(self, who: str, depth: float | None) -> None:
+        """``who`` walks to ``depth`` (``None``: it keeps its own): its height changes with it."""
+        if depth is None or who not in self.depth:
+            return
+        self.heights[who] *= depth_scale(depth) / depth_scale(self.depth[who])
+        self.depth[who] = depth
+
+
+def _other_depth(where: _Positions, who: str, what: str, name: str, fraction: Callable[[float], float]) -> str | None:
+    """A problem when ``who`` and ``name`` (a prop, or a character) stand at depths further apart
+    than :data:`DEPTH_REACH`, with the ``walk_to`` (to that depth, beside it) that fixes it."""
+    mine, theirs = where.depth.get(who), where.depth.get(name)
+    if mine is None or theirs is None or abs(mine - theirs) <= DEPTH_REACH:
+        return None
+    x, here = where.x.get(name), where.x.get(who)
+    if x is None:
+        mark = ""
+    else:
+        side = -1.0 if here is None or here <= x else 1.0
+        height = where.heights[who] * depth_scale(theirs) / depth_scale(mine)
+        mark = f"mark: {fraction(x + side * STAND_BESIDE * height):.2f}, "
+    return (f"{who} stands at depth {mine:g} and {what} at depth {theirs:g}; walk_to first "
+            f"(- walk_to: {who}, to: {{{mark}depth: {theirs:g}}})")
 
 
 def _too_far(who: str, what: str, gap: float, height: float, reach: float, fix: str) -> str | None:
@@ -264,6 +293,7 @@ def holding_problems(
     to_fraction: Callable[[float], float],
     entering: Sequence[str] = (),
     seat_places: Mapping[str, int] | None = None,
+    depths: Mapping[str, float] | None = None,
 ) -> list[tuple[str, str]]:
     """Replay a stage scene's actions (``steps`` in play order) through :class:`Holdings`,
     :class:`~vidgen.cartoon.seating.Postures` and the characters' positions; ``(location,
@@ -277,10 +307,15 @@ def holding_problems(
     and one blown off stage (no ``to``) cannot be used again. ``characters``: name -> (feet x, height); ``props``: name ->
     x; ``place_x`` a mark or x of the stage in Manim units (``None``: neither); ``to_fraction`` an
     x back to 0..1 of the stage; ``entering``: characters off stage until their first ``enter``;
-    ``seat_places``: prop -> how many sit on it side by side (a sofa: 2; default 1)."""
+    ``seat_places``: prop -> how many sit on it side by side (a sofa: 2; default 1); ``depths``:
+    character or prop -> its depth at the start (DESIGN.md §69.44): sitting, leaning, picking up
+    and giving at another depth (beyond :data:`DEPTH_REACH`) need a ``walk_to`` to that depth
+    first; a put-down or thrown prop is at its holder's depth."""
     holdings = Holdings()
     postures = Postures()
-    where = _Positions({n: x for n, (x, _) in characters.items()}, {n: h for n, (_, h) in characters.items()}, set(characters) - set(entering))
+    where = _Positions(
+        {n: x for n, (x, _) in characters.items()}, {n: h for n, (_, h) in characters.items()}, set(characters) - set(entering), dict(depths or {}),
+    )
     where.x.update(props)
     problems: list[tuple[str, str]] = []
 
@@ -326,6 +361,10 @@ def holding_problems(
                         problems.append((f"{step.location}.to", f"'{prop}' is held by {holder[0]} then; put_down it first"))
                         continue
                     reach = SIT_REACH if step.action == "sit_on" else LEAN_REACH
+                    deeper = _other_depth(where, who, f"'{prop}'", prop, to_fraction)
+                    if deeper is not None:
+                        problems.append((f"{step.location}.to", deeper))
+                        continue
                     if here is not None and x_of(prop) is not None:
                         message = _too_far(who, f"'{prop}'", x_of(prop) - here, height, reach, beside(who, x_of(prop)))
                         if message is not None:
@@ -344,7 +383,10 @@ def holding_problems(
                 elif step.action == "exit":
                     where.present.discard(who)
                 elif step.action in ("walk_to", "run_to"):
-                    where.x[who] = place_x(o.get("to"))
+                    place, depth = walk_destination(o)
+                    if place is not None:
+                        where.x[who] = place_x(place)
+                    where.walk_depth(who, depth)
                 elif step.action in ("move_along", "keyframes"):
                     where.x[who] = None
                 elif step.action in ("pick_up", "hold"):
@@ -354,6 +396,11 @@ def holding_problems(
                     if in_use(prop) is not None:
                         problems.append((f"{step.location}.to", in_use(prop)))
                         continue
+                    if step.action == "pick_up" and holdings.holder(prop) is None:
+                        deeper = _other_depth(where, who, f"'{prop}'", prop, to_fraction)
+                        if deeper is not None:
+                            problems.append((f"{step.location}.to", deeper))
+                            continue
                     if step.action == "pick_up" and here is not None and holdings.holder(prop) is None and x_of(prop) is not None:
                         message = _too_far(who, f"'{prop}'", x_of(prop) - here, height, PICK_UP_REACH, beside(who, x_of(prop)))
                         if message is not None:
@@ -367,6 +414,10 @@ def holding_problems(
                     there = where.x.get(other)
                     if other not in where.present:
                         problems.append((f"{step.location}.to", f"{other} is not on stage then; enter it first"))
+                        continue
+                    deeper = _other_depth(where, who, other, other, to_fraction)
+                    if deeper is not None:
+                        problems.append((f"{step.location}.to", deeper))
                         continue
                     if here is not None and there is not None:
                         message = _too_far(who, other, there - here, height, GIVE_REACH, f"they must stand next to each other: {beside(who, there)}")
@@ -384,6 +435,8 @@ def holding_problems(
                             continue
                     holdings.release(who, prop)
                     where.x[prop] = spot
+                    if who in where.depth:
+                        where.depth[prop] = where.depth[who]
             except (HoldingError, PostureError) as exc:
                 key = "prop" if step.action in ("put_down", "throw", "give") and o.get("prop") is not None else "target"
                 problems.append((f"{step.location}.{key}", str(exc)))

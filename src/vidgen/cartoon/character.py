@@ -64,7 +64,12 @@ DEFAULT_DRAW_ORDER: dict[str, int] = {
     "leg_left": 22, "leg_left_lower": 23, "body": 30, "arm_left": 40, "arm_left_lower": 41, "head": 50,
     "eyes": 60, "mouth": 60, "brows": 70, "accessory": 80,
 }
-FACINGS: tuple[str, ...] = ("right", "left")
+#: Draw order of the front view (DESIGN.md §69.44): both arms hang beside the body, in front of it.
+FRONT_DRAW_ORDER: dict[str, int] = {**DEFAULT_DRAW_ORDER, "arm_right": 42, "arm_right_lower": 43}
+#: The ways a character can face: to the right or left of the screen (its side view; left is the
+#: mirror image), or the viewer (``front``: its front view, when it has one).
+FACINGS: tuple[str, ...] = ("right", "left", "front")
+SIDE_FACINGS: tuple[str, ...] = ("right", "left")
 #: Outline width of parts drawn for a character :data:`REFERENCE_HEIGHT` tall (Manim stroke width).
 OUTLINE_WIDTH = 4.0
 #: The height (Manim units) at which a character's strokes keep the widths its parts were drawn with.
@@ -143,8 +148,33 @@ class _Limb:
     end: np.ndarray
 
 
+@dataclass
+class _View:
+    """One way the figure is drawn, its side or its front (DESIGN.md §69.44): per part its shapes
+    (the templates of the live copies), their drawings, the drawn members of each shape's live
+    copy, the pivots, the limbs' rest geometry, the draw order and the trailing pieces."""
+
+    shapes: dict[str, dict[str, VMobject]]
+    drawings: dict[str, dict[str, tuple[np.ndarray, ...]]]
+    pivots: dict[str, np.ndarray]
+    order: list[str]
+    members: dict[str, dict[str, list[VMobject]]] = field(default_factory=dict)
+    limbs: dict[str, _Limb] = field(default_factory=dict)
+    trails: dict[str, dict[str, list[tuple[np.ndarray, float] | None]]] = field(default_factory=dict)
+
+
 def _known(names: Iterable[str]) -> str:
     return ", ".join(names)
+
+
+def _check_front(side: Mapping[str, CharacterPart], front: Mapping[str, CharacterPart], who: str) -> None:
+    """The front view draws the same parts with the same shapes (names, rest shape first) as the
+    side view; raises :class:`VidgenError` otherwise."""
+    if set(front) != set(side):
+        raise VidgenError(f"character '{who}': the front view's parts ({_known(sorted(front))}) differ from the side view's ({_known(sorted(side))})")
+    for name, spec in side.items():
+        if list(front[name].shapes) != list(spec.shapes):
+            raise VidgenError(f"character '{who}': part '{name}' has shapes {_known(front[name].shapes)} in the front view, {_known(spec.shapes)} at the side")
 
 
 def _check_parts(specs: Mapping[str, CharacterPart], who: str, required: Iterable[str]) -> dict[str, str | None]:
@@ -216,6 +246,29 @@ def apply_matrix(matrix: np.ndarray, points: np.ndarray) -> np.ndarray:
     return out
 
 
+def _limb_geometry(upper: str, specs: Mapping[str, CharacterPart], view: _View) -> _Limb:
+    """The rest geometry in ``view`` of the limb whose upper part is ``upper``: the end given by
+    its last segment, else the drawn point farthest from the root; the joint at the lower part's
+    pivot, else half-way."""
+    lower = LIMBS[upper]
+    root = view.pivots[upper]
+    last = lower if lower in specs else upper
+    if specs[last].end is not None:
+        end = np.array(specs[last].end, dtype=float)
+    else:
+        drawn = [points[:, :2] for part in (upper, lower) if part in specs for points in view.drawings[part][next(iter(specs[part].shapes))]]
+        stacked = np.concatenate(drawn) if drawn else root[None, :]
+        end = stacked[int(np.argmax(np.linalg.norm(stacked - root, axis=1)))]
+    joint = view.pivots[lower] if lower in specs else (root + end) / 2
+    return _Limb(root, np.array(joint, dtype=float), np.array(end, dtype=float))
+
+
+def _hide_members(members: Iterable[VMobject]) -> None:
+    """Take the points off ``members`` (they stay in the family, not drawn)."""
+    for member in members:
+        member.points = np.zeros((0, 3))
+
+
 def anchor_mobject(unit: float = 1.0) -> VMobject:
     """An invisible triangle at the origin, :data:`_ANCHOR_SIDE` ``unit`` s wide: added to a
     group, it moves, scales and mirrors with it, so :func:`anchor_placement` can map the units
@@ -245,13 +298,16 @@ class Character(VGroup):
     needs only ``body``, §69.2). ``poses`` / ``expressions`` are the character's own entries
     (name -> part -> :class:`~vidgen.config.PartPoseEntry`), added to the built-in tables (§69.3).
     ``motion`` is its ``cartoon_motion`` setting (``lively``, ``calm``, ``none``; §69.13), read by
-    the animations of :mod:`vidgen.cartoon.transition`.
+    the animations of :mod:`vidgen.cartoon.transition`. ``front``: the same parts with the same
+    shapes drawn from the front (§69.44), shown while it faces ``front`` (without them it keeps
+    its side view then).
 
     ``parts`` maps each part name to its live ``VGroup``: one child per shape, in
-    :meth:`shape_names` order, all kept for the character's life; the shapes not shown have no
-    points (so Manim draws only the shown one). Its family never changes, so an animation that
-    lists the character's family when it begins draws every frame what is shown, where it is
-    (a swapped-out mouth is never left behind, DESIGN.md §69.22).
+    :meth:`shape_names` order (then the front view's), all kept for the character's life; the
+    shapes not shown have no points (so Manim draws only the shown one). Its family never changes,
+    so an animation that lists the character's family when it begins draws every frame what is
+    shown, where it is (a swapped-out mouth is never left behind, DESIGN.md §69.22); only the
+    parts' order changes when it turns between its side and its front (:attr:`order_changes`).
     """
 
     def __init__(
@@ -266,47 +322,50 @@ class Character(VGroup):
         poses: PoseTable | None = None,
         expressions: PoseTable | None = None,
         motion: str = DEFAULT_MOTION,
+        front: Iterable[CharacterPart] | None = None,
     ) -> None:
         super().__init__()
         try:
             motion_strength(motion)
         except ValueError as exc:
             raise VidgenError(f"character '{name}': {exc}") from None
-        specs: dict[str, CharacterPart] = {}
-        for spec in parts:
-            if spec.name in specs:
-                raise VidgenError(f"character '{name}': part '{spec.name}' given twice")
-            specs[spec.name] = spec
+        views: dict[str, dict[str, CharacterPart]] = {}
+        for view, given in (("side", parts), ("front", front)):
+            if given is None:
+                continue
+            specs: dict[str, CharacterPart] = {}
+            for spec in given:
+                if spec.name in specs:
+                    raise VidgenError(f"character '{name}': part '{spec.name}' given twice")
+                specs[spec.name] = spec
+            views[view] = specs
+        specs = views["side"]
         self._parents = _check_parts(specs, name, required)
+        if "front" in views:
+            _check_front(specs, views["front"], name)
         if height <= 0:
             raise VidgenError(f"character '{name}': height must be positive, got {height}")
         self.name = name
         self.voice = voice
-        self.facing = self._checked_facing(facing)
+        facing = self._checked_facing(facing)
+        self.facing = "right"   # the side view is built first; :meth:`_set_facing` below
+        self._side = "right"    # the side it faces, or faced before turning to the front
+        #: How many times its parts' draw order has changed (a turn between its side and its front
+        #: redraws the arms in another order, DESIGN.md §69.44); a stage watches it.
+        self.order_changes = 0
         #: The ``cartoon_motion`` setting its animations use (anticipation, squash and stretch,
         #: overshoot, follow-through; DESIGN.md §69.13).
         self.motion = motion
         self._squash = (1.0, 1.0)  # the whole figure's scale about its feet (squash and stretch)
         self._own_entries: dict[str, PoseTable] = {"pose": dict(poses or {}), "expression": dict(expressions or {})}
-        self._shapes = {n: {k: v.copy() for k, v in s.shapes.items()} for n, s in specs.items()}
         stroke_factor, stroke_floor = height / REFERENCE_HEIGHT, one_pixel_stroke()
-        for shapes in self._shapes.values():
-            for shape in shapes.values():
-                scale_strokes(shape, stroke_factor, stroke_floor)
-        # each shape's drawing as point arrays, so a redraw only transforms them (DESIGN.md §69.20)
-        self._drawings = {n: {k: shape_drawing(v) for k, v in s.items()} for n, s in self._shapes.items()}
-        #: part -> shape -> the members of that shape's live copy that are drawn (have points
-        #: when shown), in the order of its drawing
-        self._members: dict[str, dict[str, list[VMobject]]] = {}
-        self._pivots = {n: np.array(s.pivot, dtype=float) for n, s in specs.items()}
+        #: the side view and, when it has one, the front view (DESIGN.md §69.44)
+        self._views = {view: self._made_view(view_specs, view, stroke_factor, stroke_floor) for view, view_specs in views.items()}
+        self._view = "side"
+        self._activate(self._views["side"])
         #: lower segments of limbs drawn in one piece: they have a pose (the joint's bend) but no
         #: shapes; the upper part shows the bend folded (:func:`~vidgen.cartoon.limbs.fold`)
         self._folded = {lower for upper, lower in LIMBS.items() if upper in specs and lower not in specs}
-        self._limbs = {upper: self._limb_geometry(upper, specs) for upper in LIMBS if upper in specs}
-        self._order = sorted(
-            specs,
-            key=lambda n: (specs[n].order if specs[n].order is not None else DEFAULT_DRAW_ORDER[n], PART_NAMES.index(n)),
-        )
         self._tree_order = sorted(specs, key=self._depth)
         self._poses = {n: PartPose() for n in [*specs, *sorted(self._folded)]}
         self._overlays: dict[str, PartPose] = {}  # idle motion on top of the poses (:meth:`start_idle`)
@@ -333,26 +392,47 @@ class Character(VGroup):
         #: recorded in the layout dump), ``None`` while it stands (DESIGN.md §69.28).
         self.sitting_on: str | None = None
         self.leaning_on: str | None = None
+        #: How far back it stands on a stage (0 front .. 1 back; set by the stage and by walks in
+        #: depth, DESIGN.md §69.44), and the y of the ground line there (``None``: not on a stage).
+        self.stage_depth = 0.0
+        self.ground_y: float | None = None
         self._anchor = anchor_mobject(height)
         self.parts: dict[str, VGroup] = {}
         for part_name in self._order:
-            copies = {shape: drawing.copy() for shape, drawing in self._shapes[part_name].items()}
-            self._members[part_name] = {shape: copy.family_members_with_points() for shape, copy in copies.items()}
-            self.parts[part_name] = VGroup(*copies.values())
-            for shape in list(copies)[1:]:  # the rest shape shows
-                self._hide(part_name, shape)
-        #: part -> shape -> per drawn member, its trailing pivot and signed weight (``None``: not a
-        #: trailing piece); only parts and shapes with one (DESIGN.md §69.32)
-        self._trails = self._trailing_members()
+            copies: list[VMobject] = []
+            for view_name, view in self._views.items():
+                made = {shape: drawing.copy() for shape, drawing in view.shapes[part_name].items()}
+                view.members[part_name] = {shape: copy.family_members_with_points() for shape, copy in made.items()}
+                shown = 1 if view_name == "side" else 0   # the side's rest shape shows
+                for shape in list(made)[shown:]:
+                    _hide_members(view.members[part_name][shape])
+                copies += made.values()
+            self.parts[part_name] = VGroup(*copies)
+        for view in self._views.values():
+            #: part -> shape -> per drawn member, its trailing pivot and signed weight (``None``:
+            #: not a trailing piece); only parts and shapes with one (DESIGN.md §69.32)
+            view.trails = self._trailing_members(view)
+        self._activate(self._views["side"])   # with its trailing pieces now
         self.add(self._anchor, *(self.parts[n] for n in self._order))
+        self._set_facing(facing)
         self.refresh()
 
     # ----- queries --------------------------------------------------------------------------
 
     @property
     def draw_order(self) -> list[str]:
-        """Part names from the back to the front."""
+        """Part names from the back to the front (in the view shown now)."""
         return list(self._order)
+
+    @property
+    def has_front_view(self) -> bool:
+        """Whether it can face ``front`` (a generated character; an SVG one keeps its side view)."""
+        return "front" in self._views
+
+    @property
+    def side_facing(self) -> str:
+        """``right`` or ``left``: the way it faces, or, facing ``front``, the way it faced before."""
+        return self._side
 
     def has_part(self, part: str) -> bool:
         """True if the character has ``part``."""
@@ -495,18 +575,21 @@ class Character(VGroup):
         return self.refresh()
 
     def face(self, direction: str) -> Character:
-        """Face ``right`` or ``left``: facing left is the mirror image of the whole character
-        about the vertical line through its feet."""
-        self.facing = self._checked_facing(direction)
+        """Face ``right``, ``left`` or ``front``: facing left is the mirror image of the whole
+        character about the vertical line through its feet; ``front`` shows its front view (a
+        character without one keeps facing its side, DESIGN.md §69.44)."""
+        self._set_facing(direction)
         return self.refresh()
 
     def turn(self) -> Character:
-        """Face the other way."""
+        """Face the other way (from the front: the side it faced before)."""
+        if self.facing == "front":
+            return self.face(self._side)
         return self.face("left" if self.facing == "right" else "right")
 
     def set_state(self, state: CharacterState) -> Character:
         """Apply a :meth:`state` snapshot (parts it does not name keep their pose)."""
-        self.facing = self._checked_facing(state.facing)
+        self._set_facing(state.facing)
         for part, pose in state.parts.items():
             self._store_pose(self._posed_name(part), pose)
         return self.refresh()
@@ -837,7 +920,7 @@ class Character(VGroup):
                 for live, points in zip(self._live_members(name), self._drawings[name][shape]):
                     live.points = apply_matrix(matrix, points)
                 continue
-            turn = self._wind if self.facing == "right" else -self._wind   # the mirror turns it back
+            turn = -self._wind if self.facing == "left" else self._wind   # the mirror turns it back
             for live, points, trail in zip(self._live_members(name), self._drawings[name][shape], trails):
                 bent = matrix if trail is None else matrix @ PartPose(angle=turn * trail[1]).matrix(trail[0])
                 live.points = apply_matrix(bent, points)
@@ -845,15 +928,66 @@ class Character(VGroup):
 
     # ----- internals ------------------------------------------------------------------------
 
-    def _trailing_members(self) -> dict[str, dict[str, list[tuple[np.ndarray, float] | None]]]:
-        """Per part and shape, each drawn member's trailing pivot and weight, signed so a positive
-        turn moves its free end to the right as drawn facing right: + for a piece hanging below its
-        pivot (a scarf's end), - for one standing above it (a hat, pointy ears)."""
+    def _made_view(self, specs: Mapping[str, CharacterPart], view: str, stroke_factor: float, stroke_floor: float) -> _View:
+        """The :class:`_View` of ``specs``: its shapes copied with their strokes scaled, their
+        drawings, pivots, draw order (``view`` ``front``: :data:`FRONT_DRAW_ORDER` for parts
+        without their own) and limbs; the live copies' members are added by the constructor."""
+        shapes = {n: {k: v.copy() for k, v in s.shapes.items()} for n, s in specs.items()}
+        for part_shapes in shapes.values():
+            for shape in part_shapes.values():
+                scale_strokes(shape, stroke_factor, stroke_floor)
+        defaults = FRONT_DRAW_ORDER if view == "front" else DEFAULT_DRAW_ORDER
+        made = _View(
+            shapes=shapes,
+            # each shape's drawing as point arrays, so a redraw only transforms them (DESIGN.md §69.20)
+            drawings={n: {k: shape_drawing(v) for k, v in s.items()} for n, s in shapes.items()},
+            pivots={n: np.array(s.pivot, dtype=float) for n, s in specs.items()},
+            order=sorted(specs, key=lambda n: (specs[n].order if specs[n].order is not None else defaults[n], PART_NAMES.index(n))),
+        )
+        made.limbs = {upper: _limb_geometry(upper, specs, made) for upper in LIMBS if upper in specs}
+        return made
+
+    def _activate(self, view: _View) -> None:
+        """Draw from ``view`` from now on (its shapes, drawings, members, pivots, limbs, order,
+        trailing pieces)."""
+        self._shapes, self._drawings, self._pivots = view.shapes, view.drawings, view.pivots
+        #: part -> shape -> the members of that shape's live copy that are drawn (have points
+        #: when shown), in the order of its drawing
+        self._members = view.members
+        self._limbs, self._order, self._trails = view.limbs, view.order, view.trails
+
+    def _set_facing(self, direction: str) -> None:
+        """Face ``direction`` (not redrawn): the front view for ``front`` (a character without one
+        keeps its side), the side view mirrored or not for ``left`` / ``right``."""
+        direction = self._checked_facing(direction)
+        if direction == "front" and not self.has_front_view:
+            return
+        self._use_view("front" if direction == "front" else "side")
+        self.facing = direction
+        if direction != "front":
+            self._side = direction
+
+    def _use_view(self, view: str) -> None:
+        """Switch to the ``side`` or ``front`` view: hide what the other shows, put the parts in
+        this view's draw order (not redrawn)."""
+        if view == self._view:
+            return
+        for part in self.parts:
+            _hide_members(self._live_members(part))
+        self._view = view
+        self._activate(self._views[view])
+        self.submobjects = [self._anchor, *(self.parts[n] for n in self._order)]
+        self.order_changes += 1
+
+    def _trailing_members(self, view: _View) -> dict[str, dict[str, list[tuple[np.ndarray, float] | None]]]:
+        """Per part and shape of ``view``, each drawn member's trailing pivot and weight, signed so
+        a positive turn moves its free end to the right as drawn facing right: + for a piece
+        hanging below its pivot (a scarf's end), - for one standing above it (a hat, pointy ears)."""
         found: dict[str, dict[str, list[tuple[np.ndarray, float] | None]]] = {}
-        for part, shapes in self._members.items():
+        for part, shapes in view.members.items():
             for shape, members in shapes.items():
                 row: list[tuple[np.ndarray, float] | None] = []
-                for member, points in zip(members, self._drawings[part][shape]):
+                for member, points in zip(members, view.drawings[part][shape]):
                     trail = getattr(member, TRAIL_ATTRIBUTE, None)
                     if trail is None or not len(points):
                         row.append(None)
@@ -873,22 +1007,6 @@ class Character(VGroup):
     def _posed_name(self, part: str) -> str:
         """``part`` if it has a pose: a part, or the lower segment of a limb drawn in one piece."""
         return part if part in self._folded else self._part_name(part)
-
-    def _limb_geometry(self, upper: str, specs: Mapping[str, CharacterPart]) -> _Limb:
-        """The rest geometry of the limb whose upper part is ``upper``: the end given by its last
-        segment, else the drawn point farthest from the root; the joint at the lower part's pivot,
-        else half-way."""
-        lower = LIMBS[upper]
-        root = self._pivots[upper]
-        last = lower if lower in specs else upper
-        if specs[last].end is not None:
-            end = np.array(specs[last].end, dtype=float)
-        else:
-            drawn = [points[:, :2] for part in (upper, lower) if part in specs for points in self._drawings[part][next(iter(specs[part].shapes))]]
-            stacked = np.concatenate(drawn) if drawn else root[None, :]
-            end = stacked[int(np.argmax(np.linalg.norm(stacked - root, axis=1)))]
-        joint = self._pivots[lower] if lower in specs else (root + end) / 2
-        return _Limb(root, np.array(joint, dtype=float), np.array(end, dtype=float))
 
     def _limb_of(self, names: dict[str, str], side: str, what: str) -> str:
         try:
@@ -964,7 +1082,7 @@ class Character(VGroup):
     @staticmethod
     def _checked_facing(direction: str) -> str:
         if direction not in FACINGS:
-            raise VidgenError(f"facing must be right or left, not {direction!r}")
+            raise VidgenError(f"facing must be right, left or front, not {direction!r}")
         return direction
 
     def _depth(self, part: str) -> int:
@@ -1015,8 +1133,7 @@ class Character(VGroup):
 
     def _hide(self, part: str, shape: str) -> None:
         """Take the points off ``shape``'s live copy (it stays in the family, not drawn)."""
-        for member in self._members[part][shape]:
-            member.points = np.zeros((0, 3))
+        _hide_members(self._members[part][shape])
 
     def _show_shape(self, part: str, before: str) -> None:
         """Hide the shape ``before`` when ``part`` now shows another; the next :meth:`refresh`
@@ -1050,29 +1167,30 @@ class Character(VGroup):
 
 # ----- characters of the config ------------------------------------------------------------
 
-#: How many generated looks' part drawings :func:`look_parts` keeps (the oldest is dropped).
-LOOK_CACHE_SIZE = 16
+#: How many part drawings (one look's side or front view each) :func:`look_parts` keeps (the oldest is dropped).
+LOOK_CACHE_SIZE = 32
 _look_cache: OrderedDict[str, list[CharacterPart]] = OrderedDict()
 
 
-def look_key(look: CharacterLook, colors: Mapping[str, Any]) -> str:
+def look_key(look: CharacterLook, colors: Mapping[str, Any], front: bool = False) -> str:
     """The key of a generated look's part drawings in :func:`look_parts`: the ``look``
-    parameters and the resolved ``colors``. A character's poses, expressions, name, voice and
-    state are not in it: they never change a part's drawing, only how it is transformed."""
+    parameters, the resolved ``colors`` and the view (``front``). A character's poses,
+    expressions, name, voice and state are not in it: they never change a part's drawing, only
+    how it is transformed."""
     resolved = {part: str(color) for part, color in sorted(colors.items())}
-    return json.dumps([look.model_dump(mode="json"), resolved], sort_keys=True)
+    return json.dumps([look.model_dump(mode="json"), resolved, front], sort_keys=True)
 
 
-def look_parts(look: CharacterLook, colors: Mapping[str, Any]) -> list[CharacterPart]:
-    """The generator's parts for ``look`` in ``colors`` (:func:`~vidgen.cartoon.generator.generate_parts`),
-    drawn once per :func:`look_key` and shared: a :class:`Character` copies the shapes it is
-    given, so callers must not change them."""
+def look_parts(look: CharacterLook, colors: Mapping[str, Any], front: bool = False) -> list[CharacterPart]:
+    """The generator's parts for ``look`` in ``colors`` (:func:`~vidgen.cartoon.generator.generate_parts`;
+    ``front``: its front view), drawn once per :func:`look_key` and shared: a :class:`Character`
+    copies the shapes it is given, so callers must not change them."""
     from vidgen.cartoon.generator import generate_parts
 
-    key = look_key(look, colors)
+    key = look_key(look, colors, front)
     parts = _look_cache.get(key)
     if parts is None:
-        parts = generate_parts(look, colors)
+        parts = generate_parts(look, colors, front=front)
         _look_cache[key] = parts
         while len(_look_cache) > LOOK_CACHE_SIZE:
             _look_cache.popitem(last=False)
@@ -1112,7 +1230,7 @@ def build_character(
         colors = {part: resolve_color(value, theme) for part, value in entry.colors.model_dump().items()}
         built = Character(
             look_parts(entry.look, colors), name=entry.name, height=height, facing=facing, voice=entry.voice,
-            poses=entry.poses, expressions=entry.expressions, motion=motion,
+            poses=entry.poses, expressions=entry.expressions, motion=motion, front=look_parts(entry.look, colors, front=True),
         )
     return built.start_idle() if entry.idle else built
 

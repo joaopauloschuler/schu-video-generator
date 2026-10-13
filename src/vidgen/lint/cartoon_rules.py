@@ -29,6 +29,13 @@ from vidgen.lint.rules import Bbox, Issue, StillContext, rule
 
 #: Points per side of the grid on which :func:`_covered_share` samples a face.
 _FACE_SAMPLES = 12
+#: Characters whose depths (the layout dump's ``depth``, 0 when absent) differ by this much or
+#: more stand one behind the other, not on each other (DESIGN.md §69.44).
+DEPTH_APART = 0.15
+
+
+def _apart_in_depth(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    return abs(float(a.get("depth", 0.0)) - float(b.get("depth", 0.0))) >= DEPTH_APART
 
 
 def _figures(ctx: StillContext) -> list[dict[str, Any]]:
@@ -65,15 +72,15 @@ def _covered_share(box: Bbox, covers: list[Bbox]) -> float:
 
 @rule("walk_overlap")
 def walk_overlap(ctx: StillContext, settings: WalkOverlapRule) -> Iterator[Issue]:
-    """A character's walk (``walk_to``, ``enter``) ends on another character."""
+    """A character's walk (``walk_to``, ``enter``) ends on another character at about its depth."""
     figures = _figures(ctx)
     beat = ctx.frame.get("beat")
     for k, walker in enumerate(figures):
         if beat is None or walker.get("walked_in") != beat:
             continue
         for j, other in enumerate(figures):
-            if other is walker or (j < k and other.get("walked_in") == beat):
-                continue  # a pair that both walked is reported once
+            if other is walker or (j < k and other.get("walked_in") == beat) or _apart_in_depth(walker, other):
+                continue  # a pair that both walked is reported once; one behind the other is fine
             share = _side_share(object_box(walker), object_box(other))
             if share is None or share < settings.min_overlap:
                 continue
@@ -150,10 +157,13 @@ def off_stage(ctx: StillContext, settings: OffStageRule) -> Iterator[Issue]:
 
 @rule("character_overlap")
 def character_overlap(ctx: StillContext, settings: CharacterOverlapRule) -> Iterator[Issue]:
-    """Two characters stand on each other at rest (a walk that ends so is ``walk_overlap``'s)."""
+    """Two characters stand on each other at rest (a walk that ends so is ``walk_overlap``'s); not
+    two at depths :data:`DEPTH_APART` or more apart (one stands behind the other)."""
     beat = ctx.frame.get("beat")
     resting = [obj for obj in _figures(ctx) if not obj.get("passage") and (beat is None or obj.get("walked_in") != beat)]
     for a, b in combinations(resting, 2):
+        if _apart_in_depth(a, b):
+            continue
         share = _side_share(object_box(a), object_box(b))
         if share is None or share < settings.min_overlap:
             continue

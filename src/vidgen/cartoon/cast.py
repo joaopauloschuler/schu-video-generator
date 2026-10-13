@@ -331,6 +331,29 @@ def shared_voice_warnings(config: VideoConfig) -> list[str]:
     ]
 
 
+def front_view_warnings(config: VideoConfig) -> list[str]:
+    """A stage character with ``facing: front`` or a ``turn`` ``to: front`` of a character drawn
+    from an SVG file: it has no front view and keeps its side (DESIGN.md §69.44)."""
+    from fnmatch import fnmatchcase
+
+    svg = {entry.name for entry in config.characters if entry.look.svg is not None}
+    if not svg:
+        return []
+    warnings: list[str] = []
+    for i, scene in enumerate(config.scenes):
+        for k, member in enumerate(scene.params.get("characters") or []):
+            if isinstance(member, dict) and member.get("facing") == "front" and member.get("name") in svg:
+                warnings.append(f"scenes[{i}].params.characters[{k}]: character '{member['name']}' is drawn from an SVG file and has no front view; it faces its side")
+        for j, beat in enumerate(scene.beats):
+            for n, act in enumerate(beat.actions):
+                act = act.resolved(("turn",))
+                if act.action != "turn" or act.options.get("to") != "front":
+                    continue
+                for name in sorted(n for n in svg if any(fnmatchcase(n, p) for p in act.targets())):
+                    warnings.append(f"scenes[{i}].beats[{j}].actions[{n}]: character '{name}' is drawn from an SVG file and has no front view; the turn leaves it as it is")
+    return warnings
+
+
 def acting_warnings(project: Project) -> list[str]:
     """Each beat action that acts on a character lacking the parts it needs
     (:meth:`Action.character_needs <vidgen.actions.Action.character_needs>`, :data:`ACTION_NEEDS`):
