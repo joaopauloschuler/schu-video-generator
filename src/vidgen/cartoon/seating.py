@@ -20,17 +20,29 @@ from __future__ import annotations
 
 import math
 import xml.etree.ElementTree as ET
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 #: The seat of each built-in prop that has one: the middle of its seat line, (x, y) in prop units
 #: as drawn facing right (a chair's back is on its left: a character sitting on it faces right).
-PROP_SEATS: dict[str, tuple[float, float]] = {"chair": (0.1, 0.54), "rock": (0.0, 0.9), "box": (-0.1, 0.9)}
-#: Props with a back: a character sitting on one faces the way the prop faces.
-SEAT_BACKS: frozenset[str] = frozenset({"chair"})
+#: Every seat line is 0.14 of a character's height above the ground (the prop's height times the
+#: seat's y), below every generated character's hips (DESIGN.md §69.36).
+PROP_SEATS: dict[str, tuple[float, float]] = {
+    "chair": (0.1, 0.54), "rock": (0.0, 0.9), "box": (-0.1, 0.9),
+    "sofa": (0.0, 0.39), "armchair": (0.0, 0.37), "bed": (0.15, 0.41), "desk": (-0.64, 0.333),
+}
+#: Seats with more than one place: the x of each place on the seat line (prop units as drawn
+#: facing right); one sitter per place (DESIGN.md §69.43).
+SEAT_PLACES: dict[str, tuple[float, ...]] = {"sofa": (-0.6, 0.6), "bed": (-0.45, 0.75)}
+#: Props with a back: a character sitting on one faces the way the prop faces (a desk's chair
+#: faces the desk).
+SEAT_BACKS: frozenset[str] = frozenset({"chair", "desk"})
 #: The edges a character leans its back on, (left x, right x) in prop units as drawn facing right:
-#: a tree's trunk, a door's frame, a sign's board, a lamp's post, a house's wall.
+#: a tree's trunk, a door's frame, a sign's board, a lamp's post, a house's wall, the sides of a
+#: bookshelf, a kitchen counter and a fridge.
 PROP_LEANS: dict[str, tuple[float, float]] = {
     "tree": (-0.08, 0.08), "door": (-0.3, 0.3), "sign": (-0.4, 0.36), "lamp": (-0.04, 0.04), "house": (-0.5, 0.5),
+    "bookshelf": (-0.34, 0.34), "counter": (-1.1, 1.1), "fridge": (-0.3, 0.3),
 }
 #: How far (in the character's heights, between its feet's x and the prop's) a character can sit
 #: down on a prop or lean on it without walking first.
@@ -65,9 +77,11 @@ class PostureError(ValueError):
 
 @dataclass
 class Postures:
-    """Who sits or leans on which prop: character -> (``sitting`` | ``leaning``, prop)."""
+    """Who sits or leans on which prop: character -> (``sitting`` | ``leaning``, prop), and the
+    place on the seat each sitter took (character -> index)."""
 
     held: dict[str, tuple[str, str]] = field(default_factory=dict)
+    places: dict[str, int] = field(default_factory=dict)
 
     def of(self, character: str) -> tuple[str, str] | None:
         """``(posture, prop)`` of ``character``, or ``None`` (it stands)."""
@@ -83,13 +97,20 @@ class Postures:
             verb = "sits on" if now[0] == "sitting" else "leans on"
             raise PostureError(f"{character} {verb} '{now[1]}' then; stand_up first (- stand_up: {character})")
 
-    def sit(self, character: str, prop: str) -> None:
-        """``character`` sits down on ``prop`` (one character per seat)."""
+    def sit(self, character: str, prop: str, places: int = 1, prefer: Sequence[int] = ()) -> int:
+        """``character`` sits down on ``prop``, whose seat has ``places`` places (one character
+        each), in the first free one of ``prefer`` (default: in order); the place it took."""
         self._free(character)
         sitting = [who for who in self.on(prop) if self.held[who][0] == "sitting"]
-        if sitting:
-            raise PostureError(f"'{prop}' is taken: {sitting[0]} sits on it then")
+        taken = {self.places.get(who, 0) for who in sitting}
+        free = [k for k in [*prefer, *range(places)] if 0 <= k < places and k not in taken]
+        if not free:
+            if places == 1:
+                raise PostureError(f"'{prop}' is taken: {sitting[0]} sits on it then")
+            raise PostureError(f"'{prop}' is full: {' and '.join(sitting)} sit on it then")
         self.held[character] = ("sitting", prop)
+        self.places[character] = free[0]
+        return free[0]
 
     def lean(self, character: str, prop: str) -> None:
         """``character`` leans its back on ``prop`` (several may lean on one prop)."""
@@ -99,6 +120,7 @@ class Postures:
     def stand(self, character: str) -> tuple[str, str]:
         """``character`` stands up; what it did: ``(posture, prop)``."""
         now = self.held.pop(character, None)
+        self.places.pop(character, None)
         if now is None:
             raise PostureError(f"{character} neither sits nor leans then; stand_up follows a sit_on or a lean_on")
         return now
@@ -117,6 +139,11 @@ def mirrored_seat(seat: tuple[float, float] | None, facing: str) -> tuple[float,
     if seat is None or facing == "right":
         return seat
     return -seat[0], seat[1]
+
+
+def mirrored_places(places: Sequence[float], facing: str) -> tuple[float, ...]:
+    """A seat's places (:data:`SEAT_PLACES`) as drawn facing right, for a prop facing ``facing``."""
+    return tuple(places) if facing == "right" else tuple(-x for x in places)
 
 
 def mirrored_lean(lean: tuple[float, float] | None, facing: str) -> tuple[float, float] | None:
@@ -202,12 +229,14 @@ __all__ = [
     "Postures",
     "SEATED_LEGS_DEGREES",
     "SEAT_BACKS",
+    "SEAT_PLACES",
     "SIT_REACH",
     "SIT_SECONDS",
     "STAND_UP_SECONDS",
     "crouch_drop",
     "crouch_stoop",
     "mirrored_lean",
+    "mirrored_places",
     "mirrored_seat",
     "seated_sole",
     "svg_seat_and_lean",

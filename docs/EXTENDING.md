@@ -236,7 +236,9 @@ A room of your own (DESIGN.md §69.42): `room_geometry(...)`, `window_parts(...)
 room_colors(wall, floor), wallpaper=, flooring=, windows=[WindowLook(parts, frame, curtains)],
 sky=, short_side=, frame_area=)` draws them (its `views.show(sky)` recolours the windows'
 sky); mark the room lit (`mark_lit`) but not its `WindowViews`. On a `stage`, `Stage.door(name)`
-is a room's door prop.
+is a room's door prop. Furniture (§69.43) is `draw_prop` with a `FURNITURE` kind; a sofa's or a
+bed's places are `prop.seat_places` (`prop.seat_point(k)` on screen), and `PROP_HANGS` says how
+high a picture or a clock hangs (`StageItem(..., hang=)` places it with `stage_layout`).
 The `effect` action (`src/vidgen/scenes/effect_action.py`) works on every `Character` target. Its
 symbol is an `EffectSymbol(kind, color=, character_height=)` (kinds `EFFECT_KINDS`; the colour of
 `effect_color(kind, None, theme.color)` by default): `symbol.follow(hero, avoid=[boxes])` gives it

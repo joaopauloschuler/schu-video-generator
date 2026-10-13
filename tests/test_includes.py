@@ -331,7 +331,9 @@ def test_screenplay_reuses_a_cast(tmp_path: Path) -> None:
     assert {"name": "olla", "at": "shore"} not in scene["params"]["characters"]   # only who is in the scene
     first, second = scene["beats"]
     assert first["voice"] == "nib_voice"
-    assert second["actions"][0]["walk_to"] == "nib" and second["actions"][0]["to"] < 0.62   # beside the set's rock
+    # to the set's rock (0.62), where the set's olla stands; pip stands at centre (0.5): both sides
+    # of the rock and 0.38 are within a character's gap of one of them, so a gap further out (Step 106)
+    assert second["actions"][0]["walk_to"] == "nib" and second["actions"][0]["to"] == 0.86
 
 
 def test_screenplay_cli_with_cast_validates(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

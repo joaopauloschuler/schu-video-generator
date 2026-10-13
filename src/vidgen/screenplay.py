@@ -65,6 +65,19 @@ GROUNDS: dict[str, str] = {"night": "#2E4A3A", "indoors": "#C9A27A"}
 BACKDROP_PROPS: dict[str, float] = {"house": 0.6, "tree": 0.5}
 #: Where props without ``at`` go, in turn (the middle stays free for the characters).
 PROP_SLOTS: tuple[float, ...] = (0.85, 0.15, 0.65, 0.35)
+#: Other words for built-in props in a ``set:`` line.
+PROP_WORDS: dict[str, str] = {
+    "couch": "sofa", "settee": "sofa", "easy chair": "armchair", "bookcase": "bookshelf", "shelf": "bookshelf",
+    "kitchen counter": "counter", "worktop": "counter", "refrigerator": "fridge", "picture frame": "picture",
+    "painting": "picture", "carpet": "rug", "plant pot": "houseplant", "potted plant": "houseplant",
+    "wall clock": "clock", "television": "tv", "desk with chair": "desk", "desk and chair": "desk",
+}
+#: The words of a ``room:`` part of a ``set:`` line besides windows and doors.
+ROOM_WORDS: dict[str, tuple[str, str | bool]] = {
+    "stripes": ("wallpaper", "stripes"), "striped": ("wallpaper", "stripes"), "dots": ("wallpaper", "dots"),
+    "dotted": ("wallpaper", "dots"), "plain": ("wallpaper", "plain"), "boards": ("flooring", "boards"),
+    "tiles": ("flooring", "tiles"), "tiled": ("flooring", "tiles"), "ceiling": ("ceiling", True),
+}
 #: Marks for 1-5 characters on a stage, in order of appearance.
 PLACES: dict[int, tuple[str, ...]] = {
     1: ("centre",), 2: ("left", "right"), 3: ("left", "centre", "right"),
@@ -385,17 +398,49 @@ def _item(text: str) -> tuple[str, str | None, str | float | None]:
     return _ARTICLES.sub("", found.group("what").strip()).lower(), (found.group("name") or "").strip() or None, _place(at) if at else None
 
 
+_AGAINST_WALL = re.compile(r"\s*\b(?:against|on)\s+(?:the\s+)?(?:back\s+)?wall\b", re.IGNORECASE)
+
+
+def _room(text: str, design: SetDesign) -> None:
+    """A ``room`` part of a ``set:`` line into ``design.params["room"]``: nothing (a room with the
+    defaults), or comma separated :data:`ROOM_WORDS`, ``window [at place]`` and ``[open] door
+    [(name)] [at place]`` (DESIGN.md §69.43)."""
+    room: dict[str, Any] = {}
+    for entry in (e.strip() for e in text.split(",") if e.strip()):
+        what, name, at = _item(entry)
+        opened = what.startswith("open ")
+        what = what.removeprefix("open ")
+        if what in ROOM_WORDS and name is None and at is None:
+            key, word = ROOM_WORDS[what]
+            room[key] = word
+        elif what == "window" and name is None and not opened:
+            room.setdefault("windows", []).append(at if at is not None else "centre")
+        elif what == "door":
+            door: dict[str, Any] = {"at": at if at is not None else "right"}
+            if name:
+                door["name"] = re.sub(r"\W+", "_", name.lower()).strip("_")
+            if opened:
+                door["open"] = True
+            room.setdefault("doors", []).append(door if len(door) > 1 else door["at"])
+        else:
+            design.todos.append(f"set: room {entry!r} is not {', '.join(ROOM_WORDS)}, a window or a door")
+    design.params["room"] = room or True
+
+
 def parse_set(text: str, known_characters: Mapping[str, str], sets: Mapping[str, Any] | None = None) -> SetDesign:
     """A ``set:`` text: ``;``-separated ``key: value`` parts (the colon is optional): ``background``
     (a word of :data:`SKIES`, a theme colour / hex or two of them for a gradient, or a picture
-    file: ``image``), ``props`` (``kind [(name)] [at place]``, comma separated), ``marks``
-    (``name x``) and ``characters`` (``name at place``; names as in ``known_characters``,
-    lower-case written name -> character id). A first part naming one of ``sets`` (``set: pond;
-    props: ball``) starts from that set: no default sky, its marks and characters' places count."""
+    file: ``image``), ``room`` (an indoor set instead: :func:`_room`), ``props`` (``kind [(name)]
+    [at place] [against the wall]``, comma separated; kinds also by :data:`PROP_WORDS`),
+    ``marks`` (``name x``) and ``characters`` (``name at place``; names as in
+    ``known_characters``, lower-case written name -> character id). A first part naming one of
+    ``sets`` (``set: pond; props: ball``) starts from that set: no default sky, its marks and
+    characters' places count."""
     from vidgen.cartoon.props import PROP_KINDS
 
     design = SetDesign({})
     sky = "day"
+    asked_sky = ""   # a sky word the line gives
     used: dict[str, int] = {}
     slot = 0
     parts = [p.strip() for p in text.split(";")]
@@ -422,15 +467,19 @@ def parse_set(text: str, known_characters: Mapping[str, str], sets: Mapping[str,
                 continue
             colors = [c.strip() for c in re.split(r",|\s+to\s+", value) if c.strip()]
             if value.lower() in SKIES:
-                sky = value.lower()
+                sky = asked_sky = value.lower()
             elif colors and all(re.fullmatch(r"#?[A-Za-z0-9_]+", c) for c in colors):
                 design.params["background"] = colors[0] if len(colors) == 1 else colors
                 sky = ""
             else:
                 design.todos.append(f"set: background {value!r} is not a sky ({', '.join(SKIES)}), a colour or a picture file")
+        elif key == "room":
+            _room(value, design)
         elif key == "props":
             for entry in (e for e in value.split(",") if e.strip()):
-                kind, name, at = _item(entry)
+                walled = _AGAINST_WALL.search(entry) is not None
+                kind, name, at = _item(_AGAINST_WALL.sub("", entry))
+                kind = PROP_WORDS.get(kind, kind)
                 if kind not in PROP_KINDS:
                     design.todos.append(f"set: prop {entry.strip()!r} is not a built-in prop ({', '.join(PROP_KINDS)}); use svg: for your own")
                     continue
@@ -441,7 +490,9 @@ def parse_set(text: str, known_characters: Mapping[str, str], sets: Mapping[str,
                 if name:
                     prop["name"] = re.sub(r"\W+", "_", name.lower()).strip("_")
                 prop["at"] = at
-                if kind in BACKDROP_PROPS:
+                if walled:
+                    prop["against"] = "wall"
+                elif kind in BACKDROP_PROPS:
                     prop["depth"] = BACKDROP_PROPS[kind]
                 used[kind] = used.get(kind, 0) + 1
                 own = prop.get("name") or (kind if used[kind] == 1 else f"{kind}_{used[kind]}")
@@ -462,11 +513,22 @@ def parse_set(text: str, known_characters: Mapping[str, str], sets: Mapping[str,
                     continue
                 design.placed[known_characters[who]] = at if at is not None else "centre"
         else:
-            design.todos.append(f"set: {part!r} is not background, props, marks or characters")
-    if "image" not in design.params and sky:
+            design.todos.append(f"set: {part!r} is not background, room, props, marks or characters")
+    indoors = design.stage_params().get("room") is not None
+    if "room" in design.params:
+        given = [k for k in ("image", "background") if k in design.params or (k == "background" and asked_sky)]
+        if given:
+            design.todos.append(f"set: a room draws its own wall and floor; {' and '.join(given)} left out")
+        for k in given:
+            design.params.pop(k, None)
+    elif "image" not in design.params and sky:
         design.params["background"] = SKIES[sky]
-    if "image" not in design.params and design.set_name is None:
+    if "image" not in design.params and design.set_name is None and not indoors:
         design.params["ground_color"] = GROUNDS.get(sky, "tertiary")
+    for prop in design.params.get("props", []):
+        if prop.get("against") and not indoors:
+            prop.pop("against")
+            design.todos.append(f"set: {prop['prop']} against the wall needs a room (room: ...)")
     marks = design.stage_params().get("marks")
     for name, at in design.placed.items():
         try:
@@ -966,7 +1028,7 @@ def _add_scene(
         if at is None:
             at = free.pop(0) if free else round((k + 1) / (len(cast) + 1), 2)
         placed.append({"name": name, "at": at})
-    order = ("image", "background", "ground_color", "marks", "props")
+    order = ("image", "background", "ground_color", "room", "marks", "props")
     by_set = {e["name"]: e.get("at", "centre") for e in map(_as_member, design.set_params.get("characters") or []) if e}
     written = [p for p in placed if by_set.get(p["name"]) != p["at"]]   # the set already places the others
     params = {**{k: design.params[k] for k in order if k in design.params}, "characters": written}

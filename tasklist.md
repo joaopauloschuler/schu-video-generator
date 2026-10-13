@@ -582,9 +582,10 @@ changes and a wider range of original characters. Same rules as Phases H–J.
 - [x] Tests: room geometry, window sky colour per light, door marks (`tests/test_cartoon_room.py`: 26 without rendering, 1 tiny render; stills checked by eye: day, sunset, night, indoor then night, a character entering and one leaving through the door, a 2-wide room with a close-up and reframing, 9:16)
 
 ### Step 110 — Rooms, part 2: furniture
-- [ ] Built-in props: sofa, armchair, bed, bookshelf, kitchen counter, fridge, picture frame, rug, plant pot, clock, tv, desk with chair; seat / lean points where sensible; props can stand against the wall (`against: wall`) at a depth
-- [ ] Prop gallery still updated (small); screenplay `set:` lines can name a room and furniture
-- [ ] Tests: each builds, seat points, against-wall placement
+- [x] Built-in props: sofa, armchair, bed, bookshelf, kitchen counter, fridge, picture frame, rug, plant pot, clock, tv, desk with chair; seat / lean points where sensible; props can stand against the wall (`against: wall`) at a depth (`FURNITURE`: `sofa armchair bed bookshelf counter fridge picture rug houseplant clock tv desk`; `houseplant` is the tall potted plant, `plant` stays the small one; every seat line at 0.14 of a character, below the hips; sofa and bed seat two (`SEAT_PLACES`, the nearer free place); desk faces its sitter to it; lean on bookshelf, counter, fridge; `against: wall` = the wall's depth unless `depth` is given, never pushes the wall back; picture and clock hang on the wall (`PROP_HANGS`, `StageItem.hang`); rug and hanging props cast no shadow; DESIGN §69.43)
+- [x] Prop gallery still updated (small); screenplay `set:` lines can name a room and furniture (a second still `docs/gallery/media/furniture.png`, 16 KB, in CONFIG.md "Rooms"; `props.png` unchanged, byte-identical; `set: room: stripes, window at 0.3, [open] door (name) at right; props: couch against the wall at 0.4`, other words for furniture)
+- [x] Tests: each builds, seat points, against-wall placement (`tests/test_cartoon_furniture.py`: 11 without rendering, 2 tiny renders; stills checked by eye: a living room with two on the sofa and one in the armchair, a studio with one leaning on the counter, one at the desk and one on the bed's edge)
+- [x] Fixed on the way: `tests/test_includes.py::test_screenplay_reuses_a_cast` failed since Step 106 (94c6149: screenplay walks avoid other characters); the test now expects the spot clear of the set's olla and of pip
 
 ### Step 111 — Moving in depth
 - [ ] `walk_to` with `depth:` (towards or away from the camera) scaling smoothly, draw order changing mid-walk, shadows following; `to: {mark, depth}`

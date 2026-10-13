@@ -1,5 +1,6 @@
 """Step 75: props on a stage (built-in props from primitives, SVG props, placement like characters).
-Step 103: basket, umbrella (closed and open shapes) and napkin; grips."""
+Step 103: basket, umbrella (closed and open shapes) and napkin; grips. Step 110's furniture is in
+``test_cartoon_furniture.py`` (each prop here builds, furniture included)."""
 
 from __future__ import annotations
 
@@ -12,6 +13,7 @@ from pydantic import ValidationError
 
 from test_cartoon_stage import render_with_layout, stage_params, stage_project
 from vidgen.cartoon.props import (
+    FURNITURE,
     PROP_COLORS,
     PROP_GRIPS,
     PROP_HEIGHTS,
@@ -50,7 +52,7 @@ def fills(prop: Prop) -> set[str]:
 
 
 def test_tables_cover_every_prop() -> None:
-    assert len(PROP_KINDS) == 20 and len(set(PROP_KINDS)) == 20
+    assert len(PROP_KINDS) == 32 and len(set(PROP_KINDS)) == 32 and set(FURNITURE) <= set(PROP_KINDS)
     assert set(PROP_HEIGHTS) == set(PROP_COLORS) == set(_DRAWERS) == set(PROP_KINDS)
     assert set(PROP_LIFTS) <= set(PROP_KINDS) and set(PROP_SHAPES) <= set(PROP_KINDS)
     assert all(kind in PROP_KINDS and (shape is None or shape in PROP_SHAPES[kind]) for kind, shape in PROP_GRIPS)
@@ -120,8 +122,8 @@ def test_colours_facing_and_strokes() -> None:
     thin = draw_prop("cup", height=0.3, theme=theme, character_height=3.0)
     thick = draw_prop("cup", height=0.3, theme=theme, character_height=6.0)
     assert max(m.get_stroke_width() for m in thick.get_family()) == pytest.approx(2 * max(m.get_stroke_width() for m in thin.get_family()))
-    with pytest.raises(VidgenError, match="unknown prop 'sofa'"):
-        draw_prop("sofa", height=1.0, theme=theme)
+    with pytest.raises(VidgenError, match="unknown prop 'piano'"):
+        draw_prop("piano", height=1.0, theme=theme)
     with pytest.raises(VidgenError, match="facing"):
         draw_prop("box", height=1.0, theme=theme, facing="up")
 
@@ -160,7 +162,7 @@ def test_params_names_lift_and_targets() -> None:
 @pytest.mark.parametrize(
     "props,message",
     [
-        (["sofa"], "props.0"),
+        (["piano"], "props.0"),
         ([{"prop": "tree", "svg": "assets/a.svg"}], "one of the two"),
         ([{"at": "left"}], "one of the two"),
         ([{"svg": "assets/a.png"}], "not an .svg file"),

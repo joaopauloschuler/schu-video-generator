@@ -74,19 +74,24 @@ def write_character_png(
 GALLERY_COLUMNS = 6
 
 
-def write_props_png(theme: Theme, path: Path, *, width: int = 960, height: int = 540) -> Path:
-    """Draw every built-in prop (:data:`~vidgen.cartoon.props.PROP_KINDS`) in ``theme``, each
-    in a cell with its name below (a prop with more shapes once per shape, :data:`PROP_SHAPES`),
-    on the theme background, and write a ``width`` x ``height`` PNG to ``path`` (folders are
+def write_props_png(
+    theme: Theme, path: Path, *, width: int = 960, height: int = 540, kinds: Sequence[str] | None = None,
+    columns: int = GALLERY_COLUMNS,
+) -> Path:
+    """Draw the built-in props ``kinds`` (default: the ones that are not
+    :data:`~vidgen.cartoon.props.FURNITURE`) in ``theme``, each in a cell of a ``columns`` wide
+    grid with its name below (a prop with more shapes once per shape, :data:`PROP_SHAPES`), on
+    the theme background, and write a ``width`` x ``height`` PNG to ``path`` (folders are
     created; colours reduced to a 64-colour palette, so the file is small enough for the docs)."""
     from manim import Camera, Text, VGroup, tempconfig
 
-    from vidgen.cartoon.props import PROP_KINDS, PROP_SHAPES, draw_prop
+    from vidgen.cartoon.props import FURNITURE, PROP_KINDS, PROP_SHAPES, draw_prop
 
-    shown = [(kind, shape) for kind in PROP_KINDS for shape in PROP_SHAPES.get(kind, (None,))]
+    chosen = [kind for kind in PROP_KINDS if kind not in FURNITURE] if kinds is None else list(kinds)
+    shown = [(kind, shape) for kind in chosen for shape in PROP_SHAPES.get(kind, (None,))]
     frame_width, frame_height = frame_size(width, height)
-    rows = -(-len(shown) // GALLERY_COLUMNS)
-    cell_w, cell_h = frame_width / GALLERY_COLUMNS, frame_height / rows
+    rows = -(-len(shown) // columns)
+    cell_w, cell_h = frame_width / columns, frame_height / rows
     settings = {
         "pixel_width": width, "pixel_height": height, "frame_width": frame_width, "frame_height": frame_height,
         "background_color": theme.background,
@@ -94,7 +99,7 @@ def write_props_png(theme: Theme, path: Path, *, width: int = 960, height: int =
     with tempconfig(settings):
         cells = VGroup()
         for k, (kind, shape) in enumerate(shown):
-            row, column = divmod(k, GALLERY_COLUMNS)
+            row, column = divmod(k, columns)
             left, top = -frame_width / 2 + column * cell_w, frame_height / 2 - row * cell_h
             prop = draw_prop(kind, height=0.6 * cell_h, theme=theme, character_height=1.2 * cell_h, shape=shape)
             if prop.width > 0.8 * cell_w:

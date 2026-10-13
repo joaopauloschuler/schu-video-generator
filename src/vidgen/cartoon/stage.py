@@ -42,7 +42,9 @@ MAX_ZOOM = 8.0
 @dataclass(frozen=True)
 class StageItem:
     """One thing to place: its name, kind (``character`` or ``prop``), mark or x, depth, own
-    scale and ``lift`` (how far above the ground line it hangs, a fraction of the frame height)."""
+    scale, ``lift`` (how far above the ground line it hangs, a fraction of the frame height) and
+    ``hang`` (how far above that it hangs on a wall, in the heights of a character of scale 1 at
+    its depth: a picture, a clock; DESIGN.md §69.43)."""
 
     name: str
     kind: str
@@ -50,6 +52,7 @@ class StageItem:
     depth: float = 0.0
     scale: float = 1.0
     lift: float = 0.0
+    hang: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -161,6 +164,8 @@ def stage_layout(
     for i in draw_order([item.depth for item in items]):
         item = items[i]
         x = mark_x(item.at, marks)
+        unit = size * short_side * depth_scale(item.depth)   # a character's height at its depth
+        feet_x, feet_y = feet_point(x, item.depth, ground + item.lift, width, frame_height)
         placements.append(
             StagePlacement(
                 name=item.name,
@@ -168,7 +173,7 @@ def stage_layout(
                 index=i,
                 x_fraction=x,
                 depth=item.depth,
-                feet=feet_point(x, item.depth, ground + item.lift, width, frame_height),
+                feet=(feet_x, feet_y + item.hang * unit),
                 height=size * short_side * item.scale * depth_scale(item.depth),
             )
         )

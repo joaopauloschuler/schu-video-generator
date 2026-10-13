@@ -84,7 +84,7 @@ scenes:
 | `layers.shapes.width` | `float` | `0.3` | Its width as a fraction of the frame's shorter side (hills: the width of one hill). |
 | `layers.shapes.height` | `float` | `0.2` | Its height as a fraction of the frame's shorter side. |
 | `layers.shapes.color` | `color` | `'secondary'` | Fill colour (a theme token or #hex). |
-| `props` | `list[str \| StageProp]` |  | Props: a built-in prop's name, or {prop \| svg, name, at, depth, scale, lift, facing, color, detail, recolor, open}. |
+| `props` | `list[str \| StageProp]` |  | Props: a built-in prop's name, or {prop \| svg, name, at, depth, scale, lift, facing, color, detail, recolor, open, against}. |
 | `props.prop` | `'table' \| 'chair' \| 'tree' \| 'bush' \| 'house' \| 'door' \| 'lamp' \| 'sign' \| 'box' \| 'ball' \| 'cloud' \| 'sun' \| 'moon' \| 'rock' \| 'plant' \| 'laptop' \| 'cup' \| 'basket' \| 'umbrella' \| 'napkin' \| None` |  | A built-in prop: table, chair, tree, bush, house, door, lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup, basket, umbrella, napkin. |
 | `props.svg` | `str \| None` |  | Instead of prop: an SVG file relative to the project folder (sanitised like any SVG), standing on the bottom edge of its viewBox. |
 | `props.name` | `str \| None` |  | Its name for actions and the layout dump; default: the prop's name (an SVG: the file name), then _2, _3... |

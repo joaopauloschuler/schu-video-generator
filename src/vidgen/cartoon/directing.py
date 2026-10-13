@@ -33,7 +33,7 @@ from vidgen.cartoon.acting import GESTURE_EASE, GESTURE_SECONDS, GESTURES, look_
 from vidgen.cartoon.effects import EXPRESSION_EFFECTS
 from vidgen.cartoon.holding import HoldingError, Holdings, put_down_x
 from vidgen.cartoon.reframe import ReframeBeat, ReframeFigure, reframe_needed, reframe_path, stage_base_width
-from vidgen.cartoon.seating import SEAT_BACKS, PostureError, Postures
+from vidgen.cartoon.seating import SEAT_BACKS, SEAT_PLACES, PostureError, Postures
 from vidgen.cartoon.shots import FIGURE_HALF_WIDTH, Shot, ShotFigure, ShotView, shot_figures, shot_view
 from vidgen.cartoon.stage import mark_x
 from vidgen.config import DIRECTING_KINDS, ActionConfig, AutoDirectSetting, BeatConfig, ReframeSetting, SceneConfig, directing_kinds
@@ -162,7 +162,8 @@ class StageFrame:
     """A stage's geometry as the planner's lint check sees it (Manim units, no rendering): the
     frame's size, the stage's width, the x the camera's view is centred on at the start, each
     character's :class:`StagePlace`, each prop's x, the stage's own marks and the facing of each
-    prop with a seat back (a character sitting on it faces that way, DESIGN.md §69.28)."""
+    prop with a seat back (a character sitting on it faces that way, DESIGN.md §69.28), and how
+    many sit side by side on each prop that seats more than one (§69.43)."""
 
     frame_width: float
     frame_height: float
@@ -172,6 +173,7 @@ class StageFrame:
     props: Mapping[str, float] = field(default_factory=dict)
     marks: Mapping[str, float] = field(default_factory=dict)
     seat_facings: Mapping[str, str] = field(default_factory=dict)
+    seat_places: Mapping[str, int] = field(default_factory=dict)
 
     @property
     def bounds(self) -> Bounds:
@@ -715,7 +717,10 @@ def _pose(state: _SceneState, action: str, targets: set[str], options: Mapping[s
             if action == "stand_up":
                 state.postures.stand(name)
                 continue
-            (state.postures.sit if action == "sit_on" else state.postures.lean)(name, prop)
+            if action == "sit_on":
+                state.postures.sit(name, prop, state.frame.seat_places.get(prop, 1) if state.frame is not None else 1)
+            else:
+                state.postures.lean(name, prop)
         except PostureError:
             continue
         here = state.x.get(name)
@@ -912,6 +917,7 @@ def stage_frame(project: Project, params: Any) -> StageFrame:
     )
     facings = {c.name: c.facing for c in params.characters}
     seat_facings = {name: p.facing for name, p in zip(params.prop_names(), params.stage_props()) if p.prop in SEAT_BACKS}
+    seat_places = {name: len(SEAT_PLACES[p.prop]) for name, p in zip(params.prop_names(), params.stage_props()) if p.prop in SEAT_PLACES}
     places: dict[str, StagePlace] = {}
     props: dict[str, float] = {}
     for placed in placements:
@@ -922,7 +928,7 @@ def stage_frame(project: Project, params: Any) -> StageFrame:
         facing = facing_towards_centre(placed.x_fraction) if facing == "auto" else facing
         places[placed.name] = StagePlace(placed.feet[0], placed.feet[1], placed.height, facing)
     camera_x = (mark_x(params.camera_at, params.stage_marks()) - 0.5) * stage_width
-    return StageFrame(frame_width, frame_height, stage_width, camera_x, places, props, params.stage_marks(), seat_facings)
+    return StageFrame(frame_width, frame_height, stage_width, camera_x, places, props, params.stage_marks(), seat_facings, seat_places)
 
 
 def stage_reframes(project: Project, params: Any) -> bool:

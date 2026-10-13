@@ -10284,3 +10284,117 @@ How to test
   test_cartoon_foley test_cartoon_acting test_cartoon_keyframes` (12, 13 s), `test_introspect
   test_phase_h_review test_phase_i_review test_builtin_scenes test_actions_coverage -k "stage or
   introspect or review or walk or enter"` (10, 33 s). The full suite was not run.
+
+## Step 110 — Rooms, part 2: furniture
+
+What was built
+- Twelve built-in furniture props in `src/vidgen/cartoon/props.py` (`FURNITURE`, part of
+  `PROP_KINDS`, now 32): `sofa` 0.36, `armchair` 0.38, `bed` 0.34 (side on, headboard on the
+  left as drawn facing right), `bookshelf` 0.9, `counter` 0.5 (kitchen counter), `fridge` 0.95,
+  `picture` 0.3, `rug` 0.06, `houseplant` 0.75, `clock` 0.2, `tv` 0.55 (on a low cabinet), `desk`
+  0.42 (side on, with its chair). Primitives, two theme colours each plus shades and the ink;
+  fixed light / dark hex where no token fits every theme (`CLOTH`, `TV_CASE`, the fridge and
+  clock face `#F4F6FA`). Drawings are centred on x 0.
+- Seats (`cartoon/seating.py`): `PROP_SEATS` gains sofa, armchair, bed, desk, all at 0.14 of a
+  character's height like chair / box / rock (Step 102's rule: hips on the seat line, knees bent,
+  feet on the floor). `SEAT_PLACES` (sofa, bed: two places); `SEAT_BACKS` gains `desk`;
+  `PROP_LEANS` gains bookshelf, counter, fridge. `Postures.sit(character, prop, places=1,
+  prefer=())` returns the place taken (`Postures.places`); "'sofa' is full: ..." when no place is
+  free. `Prop.seat_places`, `Prop.seat_point(place=None)`, `mirrored_places`. `sit_on` takes the
+  free place nearest to the character; `holding_problems(seat_places=)` and the planner
+  (`StageFrame.seat_places`) count places.
+- Against the wall (`scenes/stage.py`): stage prop key `against: wall` (a room only, else a
+  config error). `StageProp.on_wall()` (against the wall, or a hanging prop, without its own
+  `depth`); `Params.stage_props()` returns such props at the wall's depth; they are not counted
+  by `wall_depth` (no circularity, they never push the wall back). `StageProp.item(name)` builds
+  the stage item (shared by `items()` and `_floor_items()`).
+- Hanging: `PROP_HANGS` (picture 0.5, clock 0.85 character heights above the floor);
+  `StageItem.hang` (default 0) added to the feet's y by `stage_layout`. Hanging props and
+  `FLAT_PROPS` (`rug`) cast no shadow.
+- Gallery: `still.write_props_png(..., kinds=None, columns=6)`; default kinds = all but the
+  furniture, so `docs/gallery/media/props.png` is byte-identical (checked by md5); new
+  `docs/gallery/media/furniture.png` (16 KB, 4×3) shown in CONFIG.md "Rooms".
+- Screenplay (`screenplay.py`): `set:` part `room` (alone, or `stripes`, `dots`, `plain`,
+  `boards`, `tiles`, `ceiling`, `window [at place]`, `[open] door [(name)] [at place]`), props
+  `against the wall` / `on the wall`, `PROP_WORDS` (couch, bookcase, kitchen counter,
+  refrigerator, picture frame, carpet, plant pot, wall clock, television, desk with chair...). A
+  room drops the default sky / ground colour; a written background beside a room and `against`
+  without a room are dropped with a TODO.
+
+Fix (not Step 110's code): `tests/test_includes.py::test_screenplay_reuses_a_cast` failed since
+Step 106 (94c6149), not 107: bisected with a worktree (passes at a241a74, fails at 94c6149, the
+only commit between them touching `screenplay.py`). Step 106 made screenplay walks to a prop avoid
+spots within a character's gap of other characters (`_target_x`). In the test the set places
+olla at the rock (0.62) and pip stands at centre (0.5), so 0.52, 0.72 and 0.38 are taken and
+0.86 is the first free spot: the code does what Step 106 intended; the test (written for the
+old "the walker's side" rule) now expects 0.86, with the reason in a comment.
+
+Files touched
+- New: `tests/test_cartoon_furniture.py`, `docs/gallery/media/furniture.png`.
+- `src/vidgen/cartoon/props.py`, `seating.py`, `stage.py` (`StageItem.hang`), `holding.py`,
+  `directing.py`, `still.py`, `src/vidgen/scenes/stage.py`, `scenes/sitting.py`,
+  `src/vidgen/screenplay.py`, `src/vidgen/api.py`.
+- Docs: `docs/CONFIG.md` (Rooms: furniture paragraph, gallery, example; props table and
+  `against` row; Sitting and leaning rows; actions row; screenplay `set:`), `DESIGN.md` (§2 tree,
+  §6.4, §69.8, §69.28, §69.42 gap line, new §69.43), `docs/EXTENDING.md`,
+  `docs/gallery/stage.md` (props row), guide `src/vidgen/data/guide/AGENTS.md` + copy `AGENTS.md`
+  (`sit_on` / `lean_on` rows, Indoors bullet, sitting bullet, screenplay indoors line),
+  `tasklist.md`.
+- Tests updated: `tests/test_cartoon_props.py` (32 kinds; the unknown-prop example is now
+  `piano`), `tests/test_cartoon_seating.py` (seat list and message), `tests/test_includes.py`
+  (above).
+
+Public interfaces
+- `vidgen.api` adds `FURNITURE`, `PROP_HANGS`, `FLAT_PROPS`, `SEAT_PLACES`; `StageItem(hang=)`;
+  `Prop(seat_places=)`, `Prop.seat_point(place=)`; `Postures.sit(..., places, prefer) -> int`,
+  `Postures.places`; `StageFrame.seat_places`; `holding_problems(seat_places=)`; stage prop key
+  `against`. All defaults keep old behaviour.
+
+Decisions / deviations
+- "Plant pot" is `houseplant` (a tall indoor plant in a round pot): the existing `plant` is
+  already a small potted plant. "Kitchen counter" is `counter`, "picture frame" `picture`, "desk
+  with chair" `desk` (the screenplay accepts the long words).
+- "Back to the wall" is how the furniture is drawn (seen from the front of the room; a bed and
+  a desk side on along the wall), not a new facing.
+- `against: wall` with its own `depth`: the depth wins (in front of the wall), as the task says
+  "at the room's wall depth (or a given depth)". A picture / clock in a room goes to the wall
+  without `against` (they hang on it).
+- Sofa and bed seat two (else two characters on a sofa, the obvious use, would be refused).
+- Hanging height is in character heights at the prop's depth (`hang`), not frame heights
+  (`lift`), so it holds in 9:16 and at any depth.
+- The napkin keeps its shadow (it flies); only the rug lies flat without one.
+- Searched first: no furniture, multi-place seat or wall-hanging code existed (`git grep -il
+  "sofa\|against\|hang" acabc65 -- src/vidgen/cartoon src/vidgen/scenes/stage.py`: only the
+  "unknown prop 'sofa'" test example); reused `draw_prop`, the seat / lean tables and
+  `Postures`, `stage_props()` (Step 109's single list of props), `wall_depth`, `stage_layout`,
+  `write_props_png`, the screenplay's `_item` grammar.
+
+Evidence
+- Furniture gallery at 1920×1080 checked by eye (the rug made deeper, the bed's headboard
+  wider after the first look). A scratch project (`vidgen validate`, `vidgen storyboard`,
+  `vidgen lint` at preview 854×480): a striped living room in `indoor` light with a bookshelf, a
+  sofa with dot and moss sitting side by side, a picture above it, fen in the armchair, a clock,
+  a houseplant, a rug, a door; a tiled studio with a ceiling: fen leaning on the counter's end,
+  moss at the desk facing it, dot on the bed's edge, a tv, a fridge, a rug. Hips on the seats,
+  feet on the floor. Lint: 3 `off_frame` warnings for props I put at the frame's edges.
+
+Known gaps / TODOs
+- Sitting on furniture from another depth (characters stand at the wall's depth; Step 111 walks
+  in depth); lying on a bed; a prop on another (tv on a counter: `lift` by hand); the
+  screenplay has no sit / lean verbs and no door marks in directions.
+
+How to test
+- `pytest tests/test_cartoon_furniture.py` (11 not-render + 2 render at 160x90 / 192x108, ~5 s).
+- Also run (not render): `test_cartoon_props test_cartoon_seating test_cartoon_room
+  test_cartoon_stage test_cartoon_holding test_cartoon_directing test_cartoon_moving
+  test_cartoon_lighting test_cartoon_shots test_cartoon_reframe test_cartoon_wind
+  test_cartoon_rain test_cartoon_parallax test_includes test_screenplay test_actions test_api`
+  with the new file (368 passed, 10 s), `test_docs test_guide test_schema test_gallery
+  test_config test_introspect test_lint test_cartoon_lint test_phase_h_review
+  test_phase_i_review` (253, 75 s), `test_mcp test_json_output test_cli test_builtin_scenes
+  test_actions_coverage test_extensions test_storyboard test_cartoon_sheet` (221, 28 s); render:
+  `test_cartoon_furniture test_cartoon_props test_cartoon_seating test_cartoon_room
+  test_cartoon_stage test_cartoon_holding test_cartoon_lighting test_cartoon_moving
+  test_cartoon_parallax test_cartoon_wind test_cartoon_rain` (18, 12 s), `test_cartoon_directing
+  test_screenplay test_includes test_phase_i_review test_introspect` (5, 17 s). The full suite
+  was not run.

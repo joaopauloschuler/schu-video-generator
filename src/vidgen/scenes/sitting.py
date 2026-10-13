@@ -78,10 +78,11 @@ class _Posture(_Acting):
 
 @action("sit_on")
 class SitOn(_Posture):
-    """The target character sits down on the prop ``to`` (a chair, a rock, a box, or an SVG prop
-    with data-seat): it moves onto the seat, its body lowers onto the seat line and its hips and
-    knees bend, the feet on the ground in front (hanging from a high seat). On a chair it faces the
-    way the chair faces. It stays seated (it keeps its facing; looks turn only its head) until a
+    """The target character sits down on the prop ``to`` (a chair, a rock, a box, a sofa, an
+    armchair, a bed, a desk's chair, or an SVG prop with data-seat): it moves onto the seat (on a
+    sofa or a bed, the free place nearest to it; two sit side by side), its body lowers onto the
+    seat line and its hips and knees bend, the feet on the ground in front (hanging from a high
+    seat). On a chair or at a desk it faces the way the prop faces. It stays seated (it keeps its facing; looks turn only its head) until a
     stand_up; it cannot walk, jump or turn before. It must be next to the prop (vidgen validate
     says where to walk_to first)."""
 
@@ -96,10 +97,12 @@ class SitOn(_Posture):
         anims: list[Animation] = []
         for character in _characters(scene, targets, "sit_on")[:1]:
             prop = _prop(scene, self.options.to)
-            seat = prop.seat_point()
-            if seat is None:
+            if prop.seat is None:
                 raise VidgenError(f"scene '{scene.spec.id}': '{prop.name}' has no seat")
-            postures(scene).sit(character.name, prop.name)
+            here = float(character.feet()[0])
+            nearest = sorted(range(len(prop.seat_places)), key=lambda k: abs(float(prop.seat_point(k)[0]) - here))
+            place = postures(scene).sit(character.name, prop.name, max(len(prop.seat_places), 1), nearest)
+            seat = prop.seat_point(place if prop.seat_places else None)
             before = character.state()
             seated = character.seated(before, float(seat[1] - character.feet()[1]) / character.character_height)
             facing = prop.facing if prop.kind in SEAT_BACKS else character.facing
@@ -113,7 +116,7 @@ class SitOn(_Posture):
 @action("lean_on")
 class LeanOn(_Posture):
     """The target character leans its back on the prop ``to`` (a tree, a door, a sign, a lamp, a
-    house, or an SVG prop with data-lean), on the side of it where it stands: it turns its back to
+    house, a bookshelf, a counter, a fridge, or an SVG prop with data-lean), on the side of it where it stands: it turns its back to
     the prop, steps against its edge and leans back, the feet forward. It stays so (it keeps its
     facing; looks turn only its head) until a stand_up; it cannot walk, jump or turn before. It
     must be next to the prop (vidgen validate says where to walk_to first)."""

@@ -11,6 +11,8 @@ Either way the result is a :class:`Prop`: one group whose :meth:`Prop.feet` is t
 bottom edge, so a stage places it like a character (``stage_layout``). A door and an umbrella are
 drawn in two shapes, closed and open (:data:`PROP_SHAPES`, :meth:`Prop.show_shape`); a basket and an open
 umbrella are held by a grip (:data:`PROP_GRIPS`, :meth:`Prop.grip_point`), DESIGN.md §69.37.
+The :data:`FURNITURE` furnishes a room (§69.43); a picture and a clock hang on its wall
+(:data:`PROP_HANGS`).
 """
 
 from __future__ import annotations
@@ -49,24 +51,45 @@ from vidgen.cartoon.character import (
     scale_strokes,
     shape_drawing,
 )
-from vidgen.cartoon.seating import PROP_LEANS, PROP_SEATS, mirrored_lean, mirrored_seat, svg_seat_and_lean
+from vidgen.cartoon.seating import (
+    PROP_LEANS,
+    PROP_SEATS,
+    SEAT_PLACES,
+    mirrored_lean,
+    mirrored_places,
+    mirrored_seat,
+    svg_seat_and_lean,
+)
 from vidgen.config import CHARACTER_INK
 from vidgen.errors import VidgenError
 from vidgen.helpers import resolve_color
 from vidgen.svgclean import CleanSvg
 from vidgen.theme import Theme
 
+#: The furniture among the built-in props (DESIGN.md §69.43): drawn as seen from the front of a
+#: room, their backs to its wall (a bed and a desk side on, along it).
+FURNITURE: tuple[str, ...] = (
+    "sofa", "armchair", "bed", "bookshelf", "counter", "fridge", "picture", "rug", "houseplant", "clock", "tv", "desk",
+)
 #: The built-in props.
 PROP_KINDS: tuple[str, ...] = (
     "table", "chair", "tree", "bush", "house", "door", "lamp", "sign", "box",
     "ball", "cloud", "sun", "moon", "rock", "plant", "laptop", "cup", "basket", "umbrella", "napkin",
+    *FURNITURE,
 )
 #: Each prop's height relative to a character's (the stage's ``size``) before its own ``scale``.
 PROP_HEIGHTS: dict[str, float] = {
     "table": 0.42, "chair": 0.26, "tree": 1.7, "bush": 0.35, "house": 1.6, "door": 1.0, "lamp": 1.5,
     "sign": 0.75, "box": 0.155, "ball": 0.18, "cloud": 0.35, "sun": 0.4, "moon": 0.35, "rock": 0.155,
     "plant": 0.4, "laptop": 0.14, "cup": 0.09, "basket": 0.2, "umbrella": 0.6, "napkin": 0.05,
+    "sofa": 0.36, "armchair": 0.38, "bed": 0.34, "bookshelf": 0.9, "counter": 0.5, "fridge": 0.95,
+    "picture": 0.3, "rug": 0.06, "houseplant": 0.75, "clock": 0.2, "tv": 0.55, "desk": 0.42,
 }
+#: Props that hang on a wall: how far their bottom edge is above the floor, in the heights of a
+#: character standing where they are (on top of any ``lift``).
+PROP_HANGS: dict[str, float] = {"picture": 0.5, "clock": 0.85}
+#: Props lying flat on the floor, which cast no shadow (a rug).
+FLAT_PROPS: frozenset[str] = frozenset({"rug"})
 #: Props drawn in more than one shape: kind -> its shape names, the first drawn unless the stage
 #: asks for another (``open: true``); the ``open`` / ``close`` actions switch them.
 PROP_SHAPES: dict[str, tuple[str, ...]] = {"door": ("closed", "open"), "umbrella": ("closed", "open")}
@@ -91,9 +114,17 @@ PROP_COLORS: dict[str, tuple[str, str]] = {
     "moon": ("highlight", "dim"), "rock": ("dim", "dim"), "plant": ("tertiary", "accent"),
     "laptop": ("dim", "primary"), "cup": ("primary", "secondary"), "basket": ("secondary", "accent"),
     "umbrella": ("primary", "dim"), "napkin": ("#F4F6FA", "accent"),
+    "sofa": ("primary", "highlight"), "armchair": ("accent", "highlight"), "bed": ("secondary", "primary"),
+    "bookshelf": ("secondary", "accent"), "counter": ("tertiary", "dim"), "fridge": ("#F4F6FA", "dim"),
+    "picture": ("secondary", "primary"), "rug": ("accent", "highlight"), "houseplant": ("tertiary", "secondary"),
+    "clock": ("#F4F6FA", "secondary"), "tv": ("secondary", "primary"), "desk": ("secondary", "accent"),
 }
 #: The glass of a house's window (light in every theme, like a character's eye whites).
 GLASS = "#D6EEF8"
+#: Light cloth (a bed's sheet and pillow) and a television's dark case: fixed, as no theme token
+#: is light (or dark) in every theme.
+CLOTH = "#F4F6FA"
+TV_CASE = "#2B2F3A"
 #: How much a shade darkens (towards black) or lightens (towards white) a colour.
 SHADE = 0.25
 LIGHT = 0.4
@@ -125,6 +156,8 @@ class Prop(VGroup):
     ``held_by`` / ``hand``: the character holding it and which hand (DESIGN.md §69.27).
     ``seat`` / ``lean``: the middle of its seat line (x, y) and the edges a character leans its
     back on (left x, right x), in prop units as it faces (``None``: it has none; DESIGN.md §69.28).
+    ``seat_places``: the x of each place on a seat for more than one sitter (a sofa, a bed), prop
+    units as it faces (empty: one place, the seat's middle; §69.43).
 
     ``shapes`` (DESIGN.md §69.37): a prop drawn in several shapes (a door or an umbrella closed and open)
     gets them instead of ``drawn``, shape name -> its members, the first shown. Every shape stays
@@ -138,6 +171,7 @@ class Prop(VGroup):
         seat: tuple[float, float] | None = None, lean: tuple[float, float] | None = None,
         shapes: Mapping[str, Sequence[VMobject]] | None = None,
         grips: Mapping[str | None, tuple[float, float]] | None = None,
+        seat_places: Sequence[float] = (),
     ) -> None:
         super().__init__(*drawn)
         self.name = name
@@ -148,6 +182,7 @@ class Prop(VGroup):
         self.hand: str | None = None
         self.seat = seat
         self.lean = lean
+        self.seat_places = tuple(seat_places)
         self.grips = dict(grips or {})
         #: The shape it shows (``None``: a prop with one shape).
         self.shape: str | None = None
@@ -219,11 +254,13 @@ class Prop(VGroup):
             bottom[0] = self._anchor.points[0][0]
         return bottom
 
-    def seat_point(self) -> np.ndarray | None:
-        """The middle of its seat line on screen now (``None``: it has no seat)."""
+    def seat_point(self, place: int | None = None) -> np.ndarray | None:
+        """The middle of its seat line on screen now, or of its ``place`` (an index of
+        :attr:`seat_places`) on the seat line (``None``: it has no seat)."""
         if self.seat is None:
             return None
-        return self.feet() + np.array([self.seat[0], self.seat[1], 0.0]) * self.height
+        x = self.seat[0] if place is None else self.seat_places[place]
+        return self.feet() + np.array([x, self.seat[1], 0.0]) * self.height
 
     def lean_edges(self) -> tuple[float, float] | None:
         """The x on screen of the edges a character leans on, left and right (``None``: none)."""
@@ -537,11 +574,192 @@ def _napkin(p: _Paint) -> list[VMobject]:
     ]
 
 
+# ----- furniture (DESIGN.md §69.43): seats at 0.14 of a character's height, below every generated
+# character's hips, so a sitter's hips rest on the seat line (§69.36) ---------------------------------
+
+
+def _upholstered(p: _Paint, half: float, arm: float, seat: float, cushions: int) -> list[VMobject]:
+    """A sofa or an armchair from the front: a back with ``cushions`` cushions, a base, as many
+    seat cushions whose tops are the seat line at ``seat``, and two arms; ``half`` the half width,
+    ``arm`` an arm's width (prop units)."""
+    dark, light = p.dark(p.main), p.light(p.main)
+    inner = half - arm
+    edges = np.linspace(-inner, inner, cushions + 1)
+    gap = 0.02
+    back = [_rect(-inner - 0.04, seat - 0.08, inner + 0.04, 1.0, p.main, p, radius=0.12)]
+    back += [_rect(a + gap, seat + 0.04, b - gap, 0.9, light, p, radius=0.08) for a, b in zip(edges, edges[1:])]
+    base = _rect(-half, 0.07, half, seat - 0.08, dark, p)
+    seats = [_rect(a + gap, seat - 0.12, b - gap, seat, p.main, p, radius=0.04) for a, b in zip(edges, edges[1:])]
+    arms = [_rect(x0, 0.07, x1, seat + 0.24, p.main, p, radius=0.09) for x0, x1 in ((-half, -inner), (inner, half))]
+    feet = [_rect(x - 0.05, 0.0, x + 0.05, 0.08, p.dark(dark), p) for x in (-half + 0.12, half - 0.12)]
+    return [*feet, *back, base, *seats, *arms]
+
+
+def _sofa(p: _Paint) -> list[VMobject]:
+    pillow = _poly([(-1.12, 0.4), (-0.84, 0.36), (-0.8, 0.62), (-1.08, 0.66)], p.detail, p, round_by=0.05)
+    drawn = _upholstered(p, 1.45, 0.3, 0.39, 2)
+    return [*drawn[:-2], pillow, *drawn[-2:]]
+
+
+def _armchair(p: _Paint) -> list[VMobject]:
+    drawn = _upholstered(p, 0.62, 0.22, 0.37, 1)
+    button = _circle(0.0, 0.66, 0.05, p.detail, p)
+    return [*drawn[:4], button, *drawn[4:]]
+
+
+def _bed(p: _Paint) -> list[VMobject]:
+    """Side on, along the wall: the headboard on the left as drawn facing right."""
+    blanket = _poly([(-0.85, 0.2), (1.52, 0.2), (1.52, 0.41), (-0.85, 0.43)], p.detail, p, round_by=0.03)
+    fold = _rect(-0.85, 0.2, -0.62, 0.45, p.light(p.detail), p, radius=0.02)
+    return [
+        _rect(-1.55, 0.1, 1.55, 0.26, p.dark(p.main), p),
+        _rect(-1.5, 0.24, 1.5, 0.41, CLOTH, p, radius=0.05),
+        _rect(-1.44, 0.38, -0.96, 0.58, CLOTH, p, radius=0.09),
+        blanket, fold,
+        _rect(-1.7, 0.0, -1.44, 1.0, p.main, p, radius=0.1),
+        _rect(-1.64, 0.5, -1.5, 0.88, p.light(p.main), p, radius=0.05, outline=False),
+        _rect(1.46, 0.0, 1.7, 0.62, p.main, p, radius=0.08),
+    ]
+
+
+def _books(p: _Paint, left: float, right: float, floor: float, top: float, seed: int) -> list[VMobject]:
+    """A row of upright books from ``left`` to ``right`` on a shelf at ``floor``, at most ``top`` high
+    (widths, heights and colours in a fixed order shifted by ``seed``; a gap left at the end)."""
+    widths = (0.07, 0.05, 0.09, 0.06, 0.08, 0.05, 0.07)
+    heights = (0.92, 0.78, 1.0, 0.85, 0.7, 0.95, 0.82)
+    colors = (p.detail, p.light(p.detail), p.dark(p.detail), p.light(p.main), p.dark(p.main))
+    books: list[VMobject] = []
+    x, k = left, seed
+    while x + widths[k % len(widths)] <= right - 0.08:
+        w, h = widths[k % len(widths)], heights[(k * 3) % len(heights)] * (top - floor)
+        books.append(_rect(x, floor, x + w, floor + h, colors[k % len(colors)], p))
+        x, k = x + w, k + 1
+    return books
+
+
+def _bookshelf(p: _Paint) -> list[VMobject]:
+    shelves = (0.05, 0.36, 0.67)
+    drawn = [_rect(-0.34, 0.0, 0.34, 1.0, p.main, p), _rect(-0.29, 0.05, 0.29, 0.95, p.dark(p.main), p)]
+    for k, y in enumerate(shelves):
+        drawn += _books(p, -0.29, 0.29, y + 0.03, y + 0.27, 2 * k)
+        drawn.append(_rect(-0.29, y, 0.29, y + 0.03, p.main, p))
+    return drawn
+
+
+def _counter(p: _Paint) -> list[VMobject]:
+    """A kitchen counter: cupboards under drawers and a worktop."""
+    light = p.light(p.main)
+    doors = ((-0.95, -0.34), (-0.3, 0.3), (0.34, 0.95))
+    drawn = [_rect(-0.95, 0.0, 0.95, 0.06, p.dark(p.main), p), _rect(-1.0, 0.05, 1.0, 0.88, p.main, p)]
+    for x0, x1 in doors:
+        drawn += [_rect(x0, 0.1, x1, 0.62, light, p, radius=0.02), _rect(x0, 0.66, x1, 0.82, light, p, radius=0.02)]
+        drawn += [_circle((x0 + x1) / 2, 0.74, 0.025, p.detail, p), _circle(x1 - 0.07, 0.5, 0.025, p.detail, p)]
+    return [*drawn, _rect(-1.1, 0.87, 1.1, 1.0, p.detail, p, radius=0.02)]
+
+
+def _fridge(p: _Paint) -> list[VMobject]:
+    return [
+        _rect(-0.26, 0.0, -0.2, 0.03, p.dark(p.detail), p), _rect(0.2, 0.0, 0.26, 0.03, p.dark(p.detail), p),
+        _rect(-0.3, 0.02, 0.3, 1.0, p.main, p, radius=0.05),
+        _line(-0.3, 0.68, 0.3, 0.68, p.ink),
+        _rect(0.2, 0.74, 0.24, 0.92, p.detail, p, radius=0.015), _rect(0.2, 0.38, 0.24, 0.62, p.detail, p, radius=0.015),
+        _poly([(-0.18, 0.46), (-0.04, 0.48), (-0.06, 0.6), (-0.2, 0.58)], p.light(p.detail), p),
+        _circle(-0.11, 0.59, 0.02, p.detail, p),
+    ]
+
+
+def _picture(p: _Paint) -> list[VMobject]:
+    """A framed picture of a hill under a sun."""
+    canvas = p.light(p.detail)
+    hill = [(-0.53 + 1.06 * k / 16, 0.12 + 0.34 * math.sin(math.pi * k / 16) ** 1.5) for k in range(17)]
+    return [
+        _rect(-0.65, 0.0, 0.65, 1.0, p.main, p),
+        _rect(-0.53, 0.12, 0.53, 0.88, canvas, p),
+        _circle(0.25, 0.64, 0.1, p.light(p.main), p, outline=False),
+        _poly(hill, p.detail, p, outline=False),
+    ]
+
+
+def _rug(p: _Paint) -> list[VMobject]:
+    """An oval rug lying on the floor, seen nearly edge on."""
+    return [
+        _ellipse(0.0, 0.5, 20.0, 1.0, p.detail, p),
+        _ellipse(0.0, 0.5, 16.6, 0.74, p.main, p, outline=False),
+        _ellipse(0.0, 0.5, 10.0, 0.42, p.light(p.main), p, outline=False),
+    ]
+
+
+def _houseplant(p: _Paint) -> list[VMobject]:
+    """A tall plant with broad leaves in a round pot."""
+    dark = p.dark(p.main)
+    leaves = [
+        _ellipse(-0.26, 0.58, 0.2, 0.44, dark, p, angle=48), _ellipse(0.27, 0.6, 0.2, 0.44, dark, p, angle=-50),
+        _ellipse(-0.13, 0.76, 0.19, 0.44, p.main, p, angle=20), _ellipse(0.15, 0.74, 0.19, 0.44, p.main, p, angle=-24),
+        _ellipse(0.0, 0.8, 0.18, 0.4, p.main, p),
+    ]
+    veins = [_line(0.0, 0.62, 0.0, 0.96, dark), _line(-0.06, 0.6, -0.2, 0.92, dark), _line(0.06, 0.6, 0.22, 0.9, dark)]
+    return [
+        *leaves[:2], *leaves[2:], *veins,
+        _poly([(-0.2, 0.0), (0.2, 0.0), (0.27, 0.3), (-0.27, 0.3)], p.detail, p, round_by=0.03),
+        _rect(-0.3, 0.28, 0.3, 0.35, p.dark(p.detail), p, radius=0.02),
+    ]
+
+
+def _clock(p: _Paint) -> list[VMobject]:
+    """A round wall clock at ten past ten."""
+    ticks = [
+        _line(0.0 + 0.33 * math.cos(a), 0.5 + 0.33 * math.sin(a), 0.0 + 0.4 * math.cos(a), 0.5 + 0.4 * math.sin(a), p.ink, 1.5 * OUTLINE_WIDTH)
+        for a in (math.pi * k / 2 for k in range(4))
+    ]
+    hour, minute = math.radians(150), math.radians(30)
+    return [
+        _circle(0.0, 0.5, 0.5, p.detail, p),
+        _circle(0.0, 0.5, 0.41, p.main, p),
+        *ticks,
+        _line(0.0, 0.5, 0.2 * math.cos(hour), 0.5 + 0.2 * math.sin(hour), p.ink, 2.5 * OUTLINE_WIDTH),
+        _line(0.0, 0.5, 0.3 * math.cos(minute), 0.5 + 0.3 * math.sin(minute), p.ink, 2.0 * OUTLINE_WIDTH),
+        _circle(0.0, 0.5, 0.04, p.ink, p, outline=False),
+    ]
+
+
+def _tv(p: _Paint) -> list[VMobject]:
+    """A television on a low cabinet."""
+    return [
+        _rect(-0.7, 0.0, -0.62, 0.05, p.dark(p.main), p), _rect(0.62, 0.0, 0.7, 0.05, p.dark(p.main), p),
+        _rect(-0.75, 0.04, 0.75, 0.34, p.main, p, radius=0.02),
+        _line(0.0, 0.07, 0.0, 0.31, p.ink),
+        _circle(-0.08, 0.19, 0.022, p.light(p.main), p), _circle(0.08, 0.19, 0.022, p.light(p.main), p),
+        _rect(-0.07, 0.33, 0.07, 0.41, TV_CASE, p),
+        _rect(-0.62, 0.4, 0.62, 1.0, TV_CASE, p, radius=0.04),
+        _rect(-0.55, 0.46, 0.55, 0.94, p.detail, p),
+        _poly([(-0.5, 0.9), (-0.3, 0.9), (-0.5, 0.7)], p.light(p.detail), p, outline=False),
+    ]
+
+
+def _desk(p: _Paint) -> list[VMobject]:
+    """Side on: a desk with a chair pulled up to it, the chair's back on the left as drawn facing
+    right (a sitter faces the desk)."""
+    wood, chair = p.dark(p.main), p.dark(p.detail)
+    return [
+        _rect(-0.15, 0.0, -0.05, 0.9, wood, p),
+        _rect(0.5, 0.0, 0.95, 0.9, p.main, p),
+        _line(0.5, 0.6, 0.95, 0.6, p.ink), _line(0.5, 0.3, 0.95, 0.3, p.ink),
+        _circle(0.6, 0.75, 0.025, p.light(p.main), p), _circle(0.6, 0.45, 0.025, p.light(p.main), p),
+        _rect(-0.2, 0.88, 0.95, 1.0, p.main, p, radius=0.02),
+        _rect(-0.92, 0.0, -0.86, 0.31, chair, p), _rect(-0.42, 0.0, -0.36, 0.31, chair, p),
+        _rect(-0.95, 0.29, -0.84, 0.82, p.detail, p, radius=0.03),
+        _rect(-0.95, 0.27, -0.33, 0.333, p.detail, p, radius=0.02),
+    ]
+
+
 _DRAWERS: dict[str, Callable[[_Paint], list[VMobject] | dict[str, list[VMobject]]]] = {
     "table": _table, "chair": _chair, "tree": _tree, "bush": _bush, "house": _house, "door": _door,
     "lamp": _lamp, "sign": _sign, "box": _box, "ball": _ball, "cloud": _cloud, "sun": _sun,
     "moon": _moon, "rock": _rock, "plant": _plant, "laptop": _laptop, "cup": _cup,
     "basket": _basket, "umbrella": _umbrella, "napkin": _napkin,
+    "sofa": _sofa, "armchair": _armchair, "bed": _bed, "bookshelf": _bookshelf, "counter": _counter,
+    "fridge": _fridge, "picture": _picture, "rug": _rug, "houseplant": _houseplant, "clock": _clock,
+    "tv": _tv, "desk": _desk,
 }
 
 
@@ -595,6 +813,7 @@ def draw_prop(
         *([] if shapes is not None else drawn), name=name or kind, kind=kind, facing=facing,
         seat=mirrored_seat(PROP_SEATS.get(kind), facing), lean=mirrored_lean(PROP_LEANS.get(kind), facing),
         shapes=shapes, grips={s: g for (k, s), g in PROP_GRIPS.items() if k == kind},
+        seat_places=mirrored_places(SEAT_PLACES.get(kind, ()), facing),
     )
     if shape is not None:
         prop.show_shape(shape)
@@ -647,7 +866,10 @@ def read_svg_seat_and_lean(path: Path, *, where: str) -> tuple[tuple[float, floa
 
 
 __all__ = [
+    "FLAT_PROPS",
+    "FURNITURE",
     "PROP_COLORS",
+    "PROP_HANGS",
     "PROP_HEIGHTS",
     "PROP_KINDS",
     "PROP_LIFTS",

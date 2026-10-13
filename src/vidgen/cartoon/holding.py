@@ -263,6 +263,7 @@ def holding_problems(
     place_x: Callable[[Any], float | None],
     to_fraction: Callable[[float], float],
     entering: Sequence[str] = (),
+    seat_places: Mapping[str, int] | None = None,
 ) -> list[tuple[str, str]]:
     """Replay a stage scene's actions (``steps`` in play order) through :class:`Holdings`,
     :class:`~vidgen.cartoon.seating.Postures` and the characters' positions; ``(location,
@@ -275,7 +276,8 @@ def holding_problems(
     while someone sits or leans on it; ``blow_away`` (§69.32) takes a prop out of whoever's hand,
     and one blown off stage (no ``to``) cannot be used again. ``characters``: name -> (feet x, height); ``props``: name ->
     x; ``place_x`` a mark or x of the stage in Manim units (``None``: neither); ``to_fraction`` an
-    x back to 0..1 of the stage; ``entering``: characters off stage until their first ``enter``."""
+    x back to 0..1 of the stage; ``entering``: characters off stage until their first ``enter``;
+    ``seat_places``: prop -> how many sit on it side by side (a sofa: 2; default 1)."""
     holdings = Holdings()
     postures = Postures()
     where = _Positions({n: x for n, (x, _) in characters.items()}, {n: h for n, (_, h) in characters.items()}, set(characters) - set(entering))
@@ -329,7 +331,10 @@ def holding_problems(
                         if message is not None:
                             problems.append((f"{step.location}.to", message))
                             continue
-                    (postures.sit if step.action == "sit_on" else postures.lean)(who, prop)
+                    if step.action == "sit_on":
+                        postures.sit(who, prop, (seat_places or {}).get(prop, 1))
+                    else:
+                        postures.lean(who, prop)
                     where.x[who] = x_of(prop)
                 elif step.action == "stand_up":
                     postures.stand(who)

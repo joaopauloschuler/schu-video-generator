@@ -701,8 +701,8 @@ prints each type's targets (`bar:<label>`, `item<N>`, `node:<id>`, `point:<serie
 | `throw` | on a `stage`: the held prop flies to a mark or x (`to:`; `spin`, `height`) and lands with a thud | |
 | `open` | on a `stage`: an `umbrella` or `door` prop opens (`- open: umbrella`); a held umbrella goes up over its holder's head | `open: true` in `props` starts it open |
 | `close` | on a `stage`: an open `umbrella` or `door` closes (`- close: door`); a held umbrella comes down to the hand | |
-| `sit_on` | on a `stage`: a character sits on a `chair`, `rock` or `box` (`to: chair`); its hips and knees bend | next to the prop; `stand_up` before it walks |
-| `lean_on` | on a `stage`: a character leans its back on a `tree`, `door`, `sign`, `lamp` or `house` (`to: tree`) | next to the prop; `stand_up` before it walks |
+| `sit_on` | on a `stage`: a character sits on a `chair`, `rock`, `box`, `sofa`, `armchair`, `bed` or `desk` (`to: chair`); its hips and knees bend | next to the prop; `stand_up` before it walks |
+| `lean_on` | on a `stage`: a character leans its back on a `tree`, `door`, `sign`, `lamp`, `house`, `bookshelf`, `counter` or `fridge` (`to: tree`) | next to the prop; `stand_up` before it walks |
 | `stand_up` | on a `stage`: a character gets up from where it sits or leans | |
 | `shot` | on a `stage`: the camera frames characters for the beat; write it as the beat's key `shot: closeup kit` (`wide`, `two_shot`, `medium`, `over_shoulder kit pip`); the next beat without one cuts back | a beat's dialogue line or reaction; not with a walk out of the framing |
 
@@ -791,7 +791,11 @@ asks for one, say vidgen makes original characters and offer one with the same r
   skirting board; windows show the sky of the stage's `light` (`indoor`: lamplight inside, evening
   outside; `- light: night` darkens it and brings out stars), doors are `door` props whose name is
   a mark: `- {enter: kit, door: door}` brings a character in through it, `exit` with `door:`
-  takes it out. No wind, rain or snow inside; a set (`sets:`) can be a room.
+  takes it out. No wind, rain or snow inside; a set (`sets:`) can be a room. Furniture props:
+  `sofa`, `armchair`, `bed`, `bookshelf`, `counter`, `fridge`, `picture`, `rug`, `houseplant`,
+  `clock`, `tv`, `desk`; `{prop: sofa, at: 0.3, against: wall}` stands it at the wall's depth
+  (`picture` and `clock` hang on the wall by themselves). Characters that sit on such furniture
+  stand at the wall's depth too (`depth: 0.4`); a sofa or a bed seats two.
 
 **Shot variety.** Change the shot every few beats, as a comic changes panels. A beat's `shot:`
 key cuts the camera to a framing of the characters for that beat; the next beat without one cuts
@@ -859,7 +863,8 @@ FEN (surprised): Bram, listen! That box is humming a song.
 BRAM: Boxes do not hum, Fen. Boxes do not do *anything*.
 ```
 
-`NAME (manner):` turns an expression or pose word (`doubtful`, `glad`, `arms crossed`) into a
+Indoors: `set: room: stripes, window at 0.3, door at right; props: sofa against the wall at 0.4,
+picture frame on the wall, rug at 0.5`. `NAME (manner):` turns an expression or pose word (`doubtful`, `glad`, `arms crossed`) into a
 `react`, and a pronoun there states the voice kind (`FEN (she):`, `BRAM (he, doubtful):`,
 `GUS (they):`; once per character is enough): the generated look and voice then suit it (without
 one, the voice follows the look's kind); a plain paragraph is the narrator; `[...]` maps walk / run to, enter, exit, jump, look
@@ -907,9 +912,10 @@ into the set. `examples/cartoon_series/` shows it (CONFIG "Shared casts and sets
   someone else or not held (`docs/CONFIG.md` "Props in hands"). A character crouches by
   itself for a prop on the ground. For a picnic or the weather: `basket`, `napkin` and
   `umbrella` props; `- open: umbrella` raises a held umbrella overhead, `- close: umbrella`.
-- **Sitting and leaning**: `sit_on: pip, to: chair` (a `chair`, `rock`, `box`, or an SVG prop
-  with `data-seat`), `lean_on: kit, to: tree` (a `tree`, `door`, `sign`, `lamp`, `house`, or an
-  SVG prop with `data-lean`), then `stand_up` before it walks, jumps or turns again. While it sits
+- **Sitting and leaning**: `sit_on: pip, to: chair` (a `chair`, `rock`, `box`, `sofa`,
+  `armchair`, `bed`, `desk`, or an SVG prop with `data-seat`), `lean_on: kit, to: tree` (a `tree`,
+  `door`, `sign`, `lamp`, `house`, `bookshelf`, `counter`, `fridge`, or an SVG prop with
+  `data-lean`), then `stand_up` before it walks, jumps or turns again. While it sits
   or leans it can talk, gesture, emote and handle props; a look turns only its head. `vidgen
   validate` says when the prop is too far, the seat taken, or a seated character walks
   (`docs/CONFIG.md` "Sitting and leaning").

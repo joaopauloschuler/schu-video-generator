@@ -4184,6 +4184,22 @@ a set's room and the scene's merge key by key).
 - **Indoors there is no weather**: `wind`, the `wind` action and `rain`, `snow`, `leaves` and
   `streaks` particles are refused (`vidgen validate`); sparkles, dust, confetti, smoke and bubbles
   work.
+- **Furniture** is built-in [props](#props): `sofa`, `armchair`, `bed`, `bookshelf`, `counter` (a
+  kitchen counter), `fridge`, `picture`, `rug`, `houseplant`, `clock`, `tv` (on a low cabinet)
+  and `desk` (with its chair), drawn as seen from the front of the room (a bed and a desk side
+  on, along the wall). A prop with **`against: wall`** stands with its back to the wall, at the
+  wall's depth (its own `depth` when it gives one); such props do not push the wall back. A
+  `picture` and a `clock` **hang on the wall** (0.5 and 0.85 of a character's height above the
+  floor) and take the wall's depth without `against`. Characters sit on a `sofa` or a `bed` (two
+  side by side: each `sit_on` takes the free place nearer to the character), an `armchair` or at
+  a `desk` (facing the desk), and lean on a `counter`, `fridge` or `bookshelf`
+  ([Sitting and leaning](#sitting-and-leaning)); every seat is at the height of a `chair`'s, so the
+  hips rest on it. To sit on furniture against the wall, a character stands at the wall's depth
+  too (`depth: 0.4` by default; moving in depth comes later). Furniture casts shadows like any
+  prop; a `rug` (lying flat, at the depth of the characters standing on it) and the props on the
+  wall cast none.
+
+![The furniture in the default theme](gallery/media/furniture.png)
 
 | key (`room`) | default | |
 |---|---|---|
@@ -4230,6 +4246,24 @@ a set's room and the scene's merge key by key).
       actions:
         - {exit: pip, door: door}       # the door stays open (- close: door shuts it)
         - {light: night, at: 0.5}       # the windows' sky fades to night, stars come out
+- id: living_room
+  type: stage
+  params:
+    room: {wallpaper: stripes, windows: [0.5], doors: [0.94]}
+    props:
+      - {prop: bookshelf, at: 0.06, against: wall}
+      - {prop: sofa, at: 0.3, against: wall}
+      - {prop: picture, at: 0.3}        # hangs on the wall above the sofa
+      - {prop: counter, at: 0.75, against: wall}
+      - {prop: rug, at: 0.45, depth: 0.15}
+    characters:                         # at the wall's depth (0.4), to sit on the sofa
+      - {name: pip, at: 0.2, depth: 0.4}
+      - {name: kit, at: 0.42, depth: 0.4}
+  beats:
+    - text: "They sit down together."
+      actions:
+        - {sit_on: pip, to: sofa}       # the place nearer to pip
+        - {sit_on: kit, to: sofa}       # the other place
 ```
 
 #### Generated backgrounds (`cartoon_style`)
@@ -4286,13 +4320,14 @@ or an SVG file of your own. A prop stands on a mark or x position like a charact
 same depth a character is drawn in front of a prop. Its size follows the stage's `size`: each
 prop has a usual height next to a character (a `tree` is 1.7 characters tall, a `table` 0.42, a
 `cup` 0.09, an SVG prop 0.5), times its own `scale`. `cloud`, `sun` and `moon` hang in the sky
-(`lift: 0.5`); other props stand on the ground unless given a `lift`.
+(`lift: 0.5`); `picture` and `clock` hang on a wall; other props stand on the ground unless given
+a `lift`. The furniture for [rooms](#rooms-room) has a gallery of its own there.
 
 ![Every built-in prop in the default theme](gallery/media/props.png)
 
 | key (`props[]`) | default | |
 |---|---|---|
-| `prop` | — | a built-in prop: `table chair tree bush house door lamp sign box ball cloud sun moon rock plant laptop cup basket umbrella napkin` |
+| `prop` | — | a built-in prop: `table chair tree bush house door lamp sign box ball cloud sun moon rock plant laptop cup basket umbrella napkin`; [furniture](#rooms-room): `sofa armchair bed bookshelf counter fridge picture rug houseplant clock tv desk` |
 | `svg` | — | instead of `prop`: an SVG file relative to the project folder (sanitised like every SVG: no scripts, filters, embedded pictures or text), standing on the bottom edge of its `viewBox` |
 | `name` | the prop's name | its name for actions and the layout dump; an SVG's default is its file name (`assets/old_well.svg` -> `old_well`); repeats are numbered (`tree`, `tree_2`) |
 | `at` | `centre` | a mark or an x position from 0 to 1 of the stage |
@@ -4304,6 +4339,7 @@ prop has a usual height next to a character (a `tree` is 1.7 characters tall, a 
 | `detail` | per prop | its second colour: a tree's trunk, a house's roof, a laptop's screen... |
 | `recolor` | `none` | `svg` only: `theme` maps the picture's colours to the nearest theme colours |
 | `open` | `false` | `umbrella` or `door` only: `true` starts it open ([Umbrellas](#umbrellas-open-and-close), [rooms](#rooms-room)) |
+| `against` | none | `wall`: in a [room](#rooms-room), it stands with its back to the wall at the wall's depth (unless `depth` is given); a `picture` or `clock` in a room does so without it |
 
 A picnic set: a `basket` (0.2 of a character, held by its handle), a `napkin` (small: 0.05, a
 checked cloth lying flat) and an `umbrella` (0.6), drawn closed or open.
@@ -4326,9 +4362,10 @@ colour as `background`, the band as `ground`, each layer by its name and each pa
 one object of kind `particles` named after its kind. Characters speak and act through beat
 actions ([Speaking and acting](#speaking-and-acting)), walk, enter, leave, gesture and jump
 through others ([Moving](#moving)), pick up, carry, put down, hand over and throw props
-([Props in hands](#props-in-hands)), and sit on a `chair`, `rock` or `box` and lean on a `tree`,
-`door`, `sign`, `lamp` or `house` ([Sitting and leaning](#sitting-and-leaning); an SVG prop gives
-`data-seat` / `data-lean`).
+([Props in hands](#props-in-hands)), and sit on a `chair`, `rock`, `box`, `sofa`, `armchair`,
+`bed` or `desk` and lean on a `tree`, `door`, `sign`, `lamp`, `house`, `bookshelf`, `counter` or
+`fridge` ([Sitting and leaning](#sitting-and-leaning); an SVG prop gives `data-seat` /
+`data-lean`).
 
 ```yaml
 characters:
@@ -4602,8 +4639,8 @@ character is the target; `to` names the prop:
 
 | action | options | |
 |---|---|---|
-| `sit_on` | `to` (required: a prop with a seat: `chair`, `rock`, `box`, or an SVG prop with `data-seat`) | the character moves onto the seat, its body lowers until its hips are on the seat line and its hips and knees bend: the feet on the ground in front (the built-in seats are lower than any generated character's hips), or hanging when an SVG prop's seat is higher than its legs are long (legs in one piece turn forward to the ground, or stick out). On a `chair` it faces the way the chair faces (its back to the chair's back); on a rock or a box it keeps its facing. 1.0 s. It must stand next to the prop (within 0.75 of its heights). One character per seat. |
-| `lean_on` | `to` (required: a prop with lean edges: `tree`, `door`, `sign`, `lamp`, `house`, or an SVG prop with `data-lean`) | the character turns its back to the prop (on the side of it where it stands), steps against its edge (the trunk, the door's frame, the sign's board, the lamp's post, the wall) and leans back 12°, the feet forward on the ground. 0.8 s. It must stand within 1.0 of its heights of the prop. Several characters may lean on one prop. |
+| `sit_on` | `to` (required: a prop with a seat: `chair`, `rock`, `box`, `sofa`, `armchair`, `bed`, `desk`, or an SVG prop with `data-seat`) | the character moves onto the seat, its body lowers until its hips are on the seat line and its hips and knees bend: the feet on the ground in front (the built-in seats are lower than any generated character's hips), or hanging when an SVG prop's seat is higher than its legs are long (legs in one piece turn forward to the ground, or stick out). On a `chair` or at a `desk` it faces the way the prop faces (its back to the chair's back); on the others it keeps its facing. 1.0 s. It must stand next to the prop (within 0.75 of its heights). One character per seat; a `sofa` and a `bed` seat two side by side (each takes the free place nearer to it). |
+| `lean_on` | `to` (required: a prop with lean edges: `tree`, `door`, `sign`, `lamp`, `house`, `bookshelf`, `counter`, `fridge`, or an SVG prop with `data-lean`) | the character turns its back to the prop (on the side of it where it stands), steps against its edge (the trunk, the door's frame, the sign's board, the lamp's post, the wall, the furniture's side) and leans back 12°, the feet forward on the ground. 0.8 s. It must stand within 1.0 of its heights of the prop. Several characters may lean on one prop. |
 | `stand_up` | none | the character stands up from where it sits or leans, over its feet: its body and legs go back to how they were before. 0.8 s. |
 
 While a character sits or leans it keeps its place and its facing: it cannot `walk_to`, `exit`,
@@ -4618,7 +4655,7 @@ at a speaker behind it, and no close-up is added in a beat with `sit_on`, `lean_
 `stand_up`.
 
 `vidgen validate` plays the scene's actions in order (with the props in hands) and reports a prop
-without a seat or lean edges, a seat already taken, a prop someone holds, a prop too far away
+without a seat or lean edges, a seat already taken (a sofa full), a prop someone holds, a prop too far away
 (with the `walk_to` that fixes it), a `stand_up` with nothing to stand up from, and a walk, jump,
 turn or keyed move of a character that sits or leans:
 
@@ -4841,10 +4878,16 @@ GUS (glad): There it is! [jumps] I left my song in that crate.
   level; `Scene:` may be left out) starts a scene, its id from the name (`yard`, then `yard_2`).
 - **`set:`** (right under the heading; `;`-separated, the colons optional): `background` a sky
   (`day`, `night`, `dusk`, `dawn`, `indoors`; default `day`), a colour or `a to b` (a gradient), or
-  a picture file (`image`); `props` built-in props, `kind (name) at place` (a mark or an x;
-  without `at` they go to 0.85, 0.15, 0.65, 0.35; a house or tree goes back, `depth`); `marks`
-  `name x`; `characters` `name at place`. Characters the set does not place stand on the marks
-  in the order they appear (`left`, `right`; three: `left`, `centre`, `right`...).
+  a picture file (`image`); `room` an [indoor set](#rooms-room) instead (alone: the defaults;
+  else comma separated `stripes`, `dots`, `plain`, `boards`, `tiles`, `ceiling`, `window [at
+  place]`, `[open] door [(name)] [at place]`: `room: stripes, window at 0.3, door at right`);
+  `props` built-in props, `kind (name) at place` (a mark or an x; without `at` they go to 0.85,
+  0.15, 0.65, 0.35; a house or tree goes back, `depth`), `against the wall` (or `on the wall`)
+  for `against: wall` in a room; other words for furniture: `couch`, `bookcase`, `kitchen
+  counter`, `refrigerator`, `picture frame`, `carpet`, `plant pot`, `wall clock`, `television`,
+  `desk with chair`...; `marks` `name x`; `characters` `name at place`. Characters the set does
+  not place stand on the marks in the order they appear (`left`, `right`; three: `left`,
+  `centre`, `right`...).
 - **Lines**: `NAME: text` (the name in capitals, several words allowed: `OLD ASH`); lines run on
   until a blank line. `NAME (manner): text`: manner words that name an expression or a pose
   (`happy`, `thinking`, `arms crossed`...) or a word for one (`doubtful` thinking, `glad`
@@ -5395,7 +5438,7 @@ can declare their own targets; a type without any rejects actions in `vidgen val
 | `keyframes`, `move_along` | see [Keyframes and motion paths](#keyframes-and-motion-paths) | move a `stage`'s character, prop or character part (`kit.arm_left`) through keys (`t`, `x`, `y`, `rotate`, `scale`, `ease`) or along a path of points |
 | `pick_up`, `hold`, `put_down`, `give`, `throw` | see [Props in hands](#props-in-hands) | a `stage`'s character takes a prop in its hand, puts it down, hands it to another character or throws it |
 | `open`, `close` | see [Umbrellas](#umbrellas-open-and-close) | a `stage`'s umbrella opens (held overhead) or closes |
-| `sit_on`, `lean_on`, `stand_up` | see [Sitting and leaning](#sitting-and-leaning) | a `stage`'s character sits on a chair, a rock or a box, leans on a tree, a door or a sign, and stands up again |
+| `sit_on`, `lean_on`, `stand_up` | see [Sitting and leaning](#sitting-and-leaning) | a `stage`'s character sits on a chair, a rock, a box or furniture (a sofa, an armchair, a bed, a desk), leans on a tree, a door, a sign or furniture (a counter...), and stands up again |
 | `shot` | `kind` (`wide`, `two_shot`, `medium`, `over_shoulder`, `closeup`), `move` (`false`) | what a beat's [`shot:`](#shots-shot) key writes, as an action: the camera frames the target characters of a `stage` from `at` to the beat's end. Write the key; the action is for a shot that starts later in the beat (`at`). |
 
 `dim`, `highlight`, `zoom` and `transform` act on targets on screen; a target not shown yet is

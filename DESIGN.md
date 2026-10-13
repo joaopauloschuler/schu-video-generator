@@ -116,7 +116,8 @@ src/vidgen/
                           # motion_effect_shapes.py (MotionEffect, §69.41), room.py (rooms:
                           # wall, floor, windows, the sky outside, §69.42; no manim),
                           # room_drawing.py (draw_room, WindowViews, §69.42); still.py also
-                          # draws the prop gallery and `vidgen character-sheet` (§69.16)
+                          # draws the prop and furniture galleries (§69.43) and
+                          # `vidgen character-sheet` (§69.16)
   iconlist.py             # `vidgen list-icons`: listing, JSON, contact sheet, docs/ICONS.md (§22, §23)
   registry.py             # scene-type and action-type registry
   actions.py              # per-beat actions: Target, Action, validation, ActionRunner (§26)
@@ -838,6 +839,14 @@ prop gains the shapes `closed` / `open` (`PROP_SHAPES`). New stage param `room`;
 `exit` option `door`; `Stage.door(name)`, `Stage.window_views`; stage params' `stage_props()`,
 `stage_marks()`, `door_names()`, `wall_depth()`. Compatible: a stage without `room` renders as
 before (a `door` prop draws its closed shape as it did).
+Step 110 (§69.43) adds `FURNITURE`, `PROP_HANGS`, `FLAT_PROPS` and `SEAT_PLACES`; `PROP_KINDS`
+gains twelve furniture props, `PROP_SEATS` / `PROP_LEANS` / `SEAT_BACKS` their seats and lean
+edges; `StageItem(hang=0.0)`; `Prop(seat_places=())`, `Prop.seat_places`,
+`Prop.seat_point(place=None)`; `Postures.sit(character, prop, places=1, prefer=())` returns the
+place taken, `Postures.places`; `StageFrame.seat_places`; `holding_problems(seat_places=None)`.
+Stage prop key `against`; stage params' `stage_props()` puts props against the wall at its
+depth. Compatible: every default keeps the old behaviour and output (the prop gallery
+`props.png` is byte-identical).
 Anything not exported from `vidgen.api` is internal and may change.
 
 ### 6.5 Refinements (Step 2)
@@ -5554,7 +5563,7 @@ They are placed by the same `stage_layout` as the characters and sort with them 
 
 - **Built-in props** (`cartoon/props.py`): `PROP_KINDS = table, chair, tree, bush, house, door,
   lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup` (and `basket, umbrella,
-  napkin` since Step 103, §69.37). Each is drawn in *prop
+  napkin` since Step 103, §69.37; twelve pieces of furniture since Step 110, §69.43). Each is drawn in *prop
   units* (feet at the origin, `y` up, top at 1) from rectangles, rounded rectangles, circles,
   ellipses, polygons (some with rounded corners), lines and `Union`s of circles (a tree's crown,
   a bush, a cloud: one outline). Colours: two per prop, `main` and `detail` (`PROP_COLORS`, theme
@@ -6782,13 +6791,13 @@ The target is the character; `to` is the prop.
   `PROP_SEATS` (the middle of the seat line: chair (0.1, 0.54), rock (0, 0.9), box (−0.1, 0.9)),
   `PROP_LEANS` (the left and right x a back leans on: tree ±0.08 (the trunk), door ±0.3, sign
   (−0.4, 0.36) (the board), lamp ±0.04, house ±0.5), `SEAT_BACKS` (`chair`: a sitter faces the way
-  it faces). `Prop` keeps `seat` / `lean` mirrored with its facing (`mirrored_seat`,
+  it faces); the furniture's seats and lean edges are in §69.43. `Prop` keeps `seat` / `lean` mirrored with its facing (`mirrored_seat`,
   `mirrored_lean`); `seat_point()` / `lean_edges()` give them on screen. An SVG prop gives
   `data-seat="x y"` / `data-lean="left right"` on its `<svg>` element in `viewBox` coordinates
   (the sanitiser keeps them; `svg_seat_and_lean`, `read_svg_seat_and_lean`; a bad value is a
   `VidgenError`).
 - **State**: `Postures` maps character -> (`sitting` | `leaning`, prop): `sit` (one sitter per
-  prop), `lean` (several may lean on one), `stand`, `pinned(character, action)` (refuses
+  prop; per place on a sofa or a bed since Step 110, §69.43), `lean` (several may lean on one), `stand`, `pinned(character, action)` (refuses
   `PINNED_ACTIONS`: `walk_to`, `enter`, `exit`, `jump`, `turn`, `move_along`, `keyframes` while it
   sits or leans); each refusal is a `PostureError` saying what to do (`pip sits on 'chair' then;
   stand_up first (- stand_up: pip)`). The stage keeps one (`Stage.postures`), `vidgen validate`
@@ -7819,6 +7828,71 @@ of the sky and the ground band; everything else on the stage stays as it is.
   night` (evening blue, then night); a 2-frame-wide room in `morning` with a close-up and
   automatic reframing pans, and its 9:16 variant. `vidgen lint` on both projects: 0 findings
   (one author-caused `rushed_animation`).
-- **Not done here** (Step 110 adds furniture): rain or snow through the windows; a door's own
-  sound; walking in depth through a door; screenplay `set:` lines naming a room.
+- **Not done here** (Step 110 adds furniture and the screenplay's rooms, §69.43): rain or snow
+  through the windows; a door's own sound; walking in depth through a door.
   Tests: `tests/test_cartoon_room.py`.
+
+### 69.43 Furniture (Step 110)
+
+Rooms need furniture that characters use: sit on, lean on, stand in front of. All of it is
+built-in props (§69.8), so placing, sizing, colours, the layout dump, lint, shadows, the light and
+shots work as for any prop.
+
+- **The props** (`cartoon/props.py`, `FURNITURE`): `sofa` 0.36, `armchair` 0.38, `bed` 0.34,
+  `bookshelf` 0.9, `counter` 0.5 (a kitchen counter: cupboards, drawers, a worktop), `fridge`
+  0.95, `picture` 0.3 (a framed hill and sun), `rug` 0.06 (an oval seen nearly edge on, 20
+  prop units wide), `houseplant` 0.75 (broad leaves in a round pot; the older `plant` stays the
+  small one), `clock` 0.2 (ten past ten), `tv` 0.55 (on a low cabinet), `desk` 0.42 (with its
+  chair); heights relative to a character (`PROP_HEIGHTS`). Primitives, two theme colours each
+  (`PROP_COLORS`) plus shades and the ink, except fixed light colours where no token is light in
+  every theme: the fridge and the clock's face (`#F4F6FA`), a bed's sheet and pillow (`CLOTH`),
+  a television's case (`TV_CASE`). Drawn as seen from the front of the room, their backs to its
+  wall; a bed and a desk side on, along it (headboard / chair on the left as drawn facing
+  right). Every drawing's box is centred on x 0, so a prop's feet are its middle. Original simple
+  shapes; nothing imitates a known design. Gallery: `still.write_props_png(..., kinds=FURNITURE,
+  columns=4)` → `docs/gallery/media/furniture.png` (16 KB, 4×3), shown in CONFIG.md "Rooms";
+  `props.png` keeps the other props (`kinds` default: everything but `FURNITURE`; the file is
+  byte-identical to Step 109's).
+- **Seats** (`cartoon/seating.py`): every built-in seat line is at **0.14 of a character's
+  height** (the prop's height × the seat's y), the rule of §69.36: below every generated
+  character's hips, so `Character.seated` puts the hips on the line with the knees bent and the
+  feet on the floor. `PROP_SEATS` gains sofa (0, 0.39), armchair (0, 0.37), bed (0.15, 0.41), desk
+  (−0.64, 0.333: its chair); `SEAT_BACKS` gains `desk` (the sitter faces the desk).
+  `SEAT_PLACES` (sofa ±0.6, bed −0.45 / 0.75 prop units): a seat with more than one place seats
+  one character per place. `Prop.seat_places` (mirrored with the facing,
+  `mirrored_places`), `Prop.seat_point(place)`. `Postures.sit(character, prop, places,
+  prefer)` takes the first free place in `prefer`, then in order, and returns it
+  (`Postures.places`); a full seat is a `PostureError` ("'sofa' is full: pip and kit sit on it
+  then"; one place keeps "'chair' is taken: ..."). `sit_on` prefers the place nearest to the
+  character's feet. `holding_problems(seat_places=)` and the planner (`StageFrame.seat_places`,
+  from `stage_frame`) count the places. `PROP_LEANS` gains bookshelf, counter and fridge (their
+  sides).
+- **Against the wall** (`scenes/stage.py`): `StageProp.against: wall | None`. In a room, a prop
+  `on_wall()` (`against: wall`, or a prop that hangs, without a `depth` of its own) is put at the
+  wall's depth by `Params.stage_props()` (a copy with `depth` set), which every reader of the
+  props already uses (§69.42); such props are left out of `wall_depth`'s "deepest thing on the
+  floor", so they never push the wall back. A given `depth` wins (in front of the wall; behind it
+  is the room's config error). `against: wall` without a room is a config error.
+- **Hanging on the wall**: `PROP_HANGS` (picture 0.5, clock 0.85): how far above the floor the
+  prop's bottom edge is, in the heights of a character at its depth. `StageItem.hang` (new,
+  default 0) is added by `stage_layout` to the feet's y (`hang × size × short side × depth
+  scale`), so the height is right in 16:9, 9:16 and at any depth, unlike `lift` (frame heights).
+  Hanging props cast no shadow; nor does a prop in `FLAT_PROPS` (`rug`). (The napkin keeps its
+  shadow: it can fly.)
+- **Screenplay** (`screenplay.py`): `set:` gains `room` (alone: `room: true`; else comma
+  separated `ROOM_WORDS`, `window [at place]`, `[open] door [(name)] [at place]`); a room drops the
+  sky / ground colour defaults (a written background is left out with a TODO). Props take
+  `against the wall` / `on the wall` (→ `against: wall`; without a room it is left out with a
+  TODO) and other words (`PROP_WORDS`: couch, bookcase, kitchen counter, refrigerator, picture
+  frame, carpet, plant pot, wall clock, television...). No sit / lean verbs yet (§69.28's gap).
+- **Checked by eye** (scratch project at preview 854×480, `vidgen storyboard`, `indoor` light): a
+  striped living room with a bookshelf, a sofa (two characters sitting side by side, each on the
+  place nearer to it), a picture above it, an armchair (a third sitting), a clock, a houseplant, a
+  rug and a door; a tiled studio with a ceiling, a fridge, a counter (a character leaning on its
+  end), a television, a desk (a character sitting on its chair, facing it) and a bed (a character
+  sitting on its edge). Hips on the seats, feet on the floor. `vidgen lint`: only the author's
+  props cut at the frame's edges.
+- **Not done here**: sitting on furniture from another depth (characters stand at the wall's
+  depth to use it; walking in depth is Step 111); lying on a bed; a prop on another (a tv on a
+  counter: `lift` by hand); door marks in the screenplay's directions ("walks to the door").
+  Tests: `tests/test_cartoon_furniture.py`.

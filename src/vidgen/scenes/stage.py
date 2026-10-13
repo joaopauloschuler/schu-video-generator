@@ -63,7 +63,7 @@ class StageProp(SceneParams):
     also_accepts: ClassVar[tuple[type, ...]] = (str,)
 
     prop: Literal[PROP_KINDS] | None = None  # type: ignore[valid-type]
-    """A built-in prop: table, chair, tree, bush, house, door, lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup, basket, umbrella, napkin."""
+    """A built-in prop: table, chair, tree, bush, house, door, lamp, sign, box, ball, cloud, sun, moon, rock, plant, laptop, cup, basket, umbrella, napkin; furniture: sofa, armchair, bed, bookshelf, counter, fridge, picture, rug, houseplant, clock, tv, desk."""
     svg: str | None = None
     """Instead of prop: an SVG file relative to the project folder (sanitised like any SVG), standing on the bottom edge of its viewBox."""
     name: Identifier | None = None
@@ -86,6 +86,8 @@ class StageProp(SceneParams):
     """With svg: theme maps the picture's colours to the nearest theme colours; none keeps them."""
     open: bool = False
     """An umbrella or a door: true starts it open (the open / close actions change it later)."""
+    against: Literal["wall"] | None = None
+    """wall: it stands with its back to the room's wall, at the wall's depth unless depth is given (a room only); a picture or a clock in a room hangs on the wall without it."""
 
     @model_validator(mode="before")
     @classmethod
@@ -127,6 +129,20 @@ class StageProp(SceneParams):
         if self.lift is not None:
             return self.lift
         return PROP_LIFTS.get(self.prop or "", 0.0)
+
+    def resolved_hang(self) -> float:
+        """How far up a wall it hangs, in a character's heights (:data:`PROP_HANGS`, else 0)."""
+        return PROP_HANGS.get(self.prop or "", 0.0)
+
+    def on_wall(self) -> bool:
+        """Whether, in a room, it takes the wall's depth: ``against: wall``, or a prop that hangs
+        on a wall, without a ``depth`` of its own."""
+        wall = self.against == "wall" or (self.against is None and self.resolved_hang() > 0)
+        return wall and "depth" not in self.model_fields_set
+
+    def item(self, name: str) -> StageItem:
+        """It as a stage item (:func:`~vidgen.cartoon.stage.stage_layout`)."""
+        return StageItem(name, "prop", self.at, self.depth, self.height_factor(), self.resolved_lift(), self.resolved_hang())
 
 
 class StageParticles(ParticleSettings, SceneParams):
@@ -327,7 +343,8 @@ class Stage(NarratedScene):
     ``streaks`` particles show it more); ``blow_away`` blows a light prop off the stage or to a
     mark, out of a hand too. ``room`` makes it an indoor set: a wall, a floor, windows showing
     the sky of the light, and doors (door props whose names are marks; ``enter`` and ``exit``
-    through them); no wind or weather inside.
+    through them); no wind or weather inside. Furniture (a sofa, a bed, a kitchen counter, a
+    picture...) stands ``against: wall`` at the wall's depth; a picture and a clock hang on it.
 
     A beat is spoken by the characters whose voice says it (their mouths move with it), or by
     the ones its ``say`` action names; the acting actions (``say``, ``look_at``, ``turn``,
@@ -347,8 +364,9 @@ class Stage(NarratedScene):
     The ``keyframes`` and ``move_along`` actions move a character, a prop or a character's part
     by keys or along a path. Characters handle props with ``pick_up``, ``hold``, ``put_down``,
     ``give`` and ``throw``: a held prop goes along with its holder's hand (they crouch for a low
-    one). They sit on a chair, a rock or a box with ``sit_on``, lean on a tree, a door or a sign
-    with ``lean_on``, and get up with ``stand_up``.
+    one). They sit on a chair, a rock, a box, a sofa, an armchair, a bed or at a desk with
+    ``sit_on``, lean on a tree, a door, a sign or a counter with ``lean_on``, and get up with
+    ``stand_up``.
 
     Action targets: each character and each prop by its name; each part of a character as
     ``<character>.<part>`` (``kit.arm_left``).
@@ -406,7 +424,7 @@ class Stage(NarratedScene):
         layers: list[StageLayer] = []
         """Parallax layers: {place: background | middle | foreground, factor, image | shapes}."""
         props: list[StageProp] = []
-        """Props: a built-in prop's name, or {prop | svg, name, at, depth, scale, lift, facing, color, detail, recolor, open}."""
+        """Props: a built-in prop's name, or {prop | svg, name, at, depth, scale, lift, facing, color, detail, recolor, open, against}."""
         particles: list[StageParticles] = []
         """Particles over the whole scene, in front of everything: a kind (rain, snow, sparkles, dust, confetti, smoke, bubbles, leaves, streaks) or {kind, density, area, color, seed, puddles}; rain ends on the ground with splashes, not under an open umbrella or a tree, and plays a rain sound with foley; for one beat use the particles action."""
         light: LightSetting = "day"
@@ -456,6 +474,8 @@ class Stage(NarratedScene):
                     mark_x(prop.at, marks)
                 except ValueError as exc:
                     raise ValueError(f"props[{k}].at: {exc}") from None
+                if prop.against == "wall" and self.room is None:
+                    raise ValueError(f"props[{k}]: against: wall needs a room (room: true) to stand against")
             if self.room is not None:
                 self._check_room()
             return self
@@ -496,11 +516,10 @@ class Stage(NarratedScene):
                     raise ValueError(f"room.doors[{k}]: '{name}' is also the name of a character or another prop; give the door another name")
 
         def _floor_items(self) -> list[StageItem]:
-            """The props (without the room's doors) and the characters, as stage items."""
-            props = [
-                StageItem(name, "prop", prop.at, prop.depth, prop.height_factor(), prop.resolved_lift())
-                for prop, name in zip(self.props, numbered_names([(p.name, p.default_name()) for p in self.props]))
-            ]
+            """The props (without the room's doors and the props that take the wall's depth) and
+            the characters, as stage items."""
+            names = numbered_names([(p.name, p.default_name()) for p in self.props])
+            props = [prop.item(name) for prop, name in zip(self.props, names) if not prop.on_wall()]
             return props + [StageItem(c.name, "character", c.at, c.depth, c.scale) for c in self.characters]
 
         def wall_depth(self) -> float | None:
@@ -508,11 +527,12 @@ class Stage(NarratedScene):
             return None if self.room is None else wall_depth(self._floor_items(), self.room.depth)
 
         def stage_props(self) -> list[StageProp]:
-            """The props, then the room's doors as ``door`` props standing at its wall."""
+            """The props (in a room, those against its wall at its depth, DESIGN.md §69.43), then
+            the room's doors as ``door`` props standing at its wall."""
             if self.room is None:
                 return list(self.props)
             depth = self.wall_depth()
-            return [*self.props, *(
+            return [*(p.model_copy(update={"depth": depth}) if p.on_wall() else p for p in self.props), *(
                 StageProp(prop="door", name=door.name, at=door.at, depth=depth, scale=door.scale, facing=door.facing,
                           color=door.color, detail=door.detail, open=door.open)
                 for door in self.room.doors
@@ -547,10 +567,7 @@ class Stage(NarratedScene):
             """The props, then the characters, as stage items (for
             :func:`~vidgen.cartoon.stage.stage_layout`; at the same depth a character is drawn in
             front of a prop)."""
-            props = [
-                StageItem(name, "prop", prop.at, prop.depth, prop.height_factor(), prop.resolved_lift())
-                for prop, name in zip(self.stage_props(), self.prop_names())
-            ]
+            props = [prop.item(name) for prop, name in zip(self.stage_props(), self.prop_names())]
             return props + [StageItem(c.name, "character", c.at, c.depth, c.scale) for c in self.characters]
 
     @classmethod
@@ -614,6 +631,7 @@ class Stage(NarratedScene):
             place_x=frame.place_x,
             to_fraction=lambda x: min(max((x - left) / frame.stage_width, 0.0), 1.0),
             entering=[n for u in uses if u.config.action == "enter" for n in matched(u)],
+            seat_places=frame.seat_places,
         )
         return problems + cls._calm_blow_problems(params, ordered)
 
@@ -1061,7 +1079,7 @@ class Stage(NarratedScene):
         props an action may move (placed under them on every frame)."""
         if not self.params.shadows:
             return None, None
-        lifts = {item.name: item.lift for item in self.params.items()}
+        lifts = {item.name: item.lift + item.hang for item in self.params.items()}
         movable = self._movable_props()
         doors = set(self.params.door_names())
         still: list[ShadowCaster] = []
@@ -1069,8 +1087,8 @@ class Stage(NarratedScene):
         for place_at in placements:
             name = place_at.name
             if place_at.kind == "prop":
-                if lifts[name] > 0 or name in doors:
-                    continue  # hangs in the sky, or is part of the room's wall
+                if lifts[name] > 0 or name in doors or self.props[name].kind in FLAT_PROPS:
+                    continue  # hangs in the sky or on a wall, is part of the room's wall, or lies flat
                 prop = self.props[name]
                 widths = {shape: prop.shape_width(shape) * PROP_SHADOW_WIDTH for shape in prop.shapes}
                 caster = ShadowCaster(prop, self.grounds[name], prop.width * PROP_SHADOW_WIDTH, prop.height, widths)
