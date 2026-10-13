@@ -154,7 +154,11 @@ systemd-run --user --scope -p MemoryMax=1500M -p MemorySwapMax=0 --quiet \
 ```
 
 - One heavy command at a time. Never two in parallel, never in the background while another
-  runs, never `pytest -n` (xdist), and `--jobs 1` for vidgen commands.
+  runs, never `pytest -n` (xdist), and `--jobs 1` or `--jobs auto` for vidgen commands, never a
+  fixed N above 1. `--jobs auto` reads the memory the cap leaves (cgroup `memory.max`), so under
+  `MemoryMax=1500M` it renders one scene at a time; it allows 1.5 GB per scene render (a 1080p
+  cartoon scene peaks at about 0.8 GB). Kokoro `vidgen tts` (about 2.2 GB) runs alone, never next
+  to a render or a test run.
 - A command killed by the cap or the timeout is a **result**: report it ("killed at 1.5 GB",
   "timed out after 300 s"). Do not retry with higher limits without the user's agreement.
 - `ulimit -v` is not a substitute: numpy, PyAV and torch reserve far more virtual memory than they
